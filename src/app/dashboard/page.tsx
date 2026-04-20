@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { getUser } from "@/lib/auth";
 import { useEffect, useState } from "react";
+
+import ExerciseList from "@/components/ExerciseList";
+
 export default function DashboardPage() {
 	const router = useRouter();
 	const [loading, setLoading] = useState(true);
@@ -23,6 +26,7 @@ export default function DashboardPage() {
 		<div className="min-h-screen p-8">
 			<h1>Header: Guitar Pal</h1>
 			<p>Welcome to your online guitar studio space</p>
+			<ExerciseList />
 		</div>
 	);
 }

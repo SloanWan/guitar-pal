@@ -19,6 +19,7 @@ import { CircleX } from "lucide-react";
 
 import { useState, useEffect } from "react";
 import { Exercise } from "@/types/database";
+import { CATEGORIES } from "@/types/database";
 import { createExercise, getExercises, deleteExercise } from "@/lib/exercises";
 
 export default function ExerciseList() {
@@ -60,14 +61,6 @@ export default function ExerciseList() {
 				</CardHeader>
 				<CardContent className="space-y-4">
 					<div className="space-y-2">
-						<Label>Name</Label>
-						<Input
-							placeholder="e.g. C Major Scale"
-							value={title}
-							onChange={(e) => setTitle(e.target.value)}
-						/>
-					</div>
-					<div className="space-y-2">
 						<Label>Category</Label>
 						<Select
 							value={category}
@@ -79,13 +72,23 @@ export default function ExerciseList() {
 							<SelectContent>
 								<SelectGroup>
 									<SelectLabel>Exercise Category</SelectLabel>
-									<SelectItem value="chord">Chord</SelectItem>
-									<SelectItem value="scale">Scale</SelectItem>
-									<SelectItem value="fingering">Fingering</SelectItem>
-									<SelectItem value="strumming">Strumming</SelectItem>
+									{CATEGORIES.map((cat) => (
+										<SelectItem key={cat} value={cat}>
+											{cat.charAt(0).toUpperCase() +
+												cat.slice(1).replace("_", " ")}
+										</SelectItem>
+									))}
 								</SelectGroup>
 							</SelectContent>
 						</Select>
+					</div>
+					<div className="space-y-2">
+						<Label>Name</Label>
+						<Input
+							placeholder="e.g. C Major Scale"
+							value={title}
+							onChange={(e) => setTitle(e.target.value)}
+						/>
 					</div>
 					<div className="space-y-2">
 						<Label>Description (optional)</Label>

@@ -289,12 +289,12 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 			</div>
 
 			{/* Header */}
-			<header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border">
+			<header className="relative flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border">
 				<Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}>
 					<ArrowLeft className="size-4" />
 					<span className="hidden sm:inline">Dashboard</span>
 				</Button>
-				<div className="text-center">
+				<div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
 					<p className="text-sm font-medium">{routine.title}</p>
 					<p className="text-xs text-muted-foreground">
 						Exercise {currentExerciseIndex + 1} of {routineExercises.length}

@@ -2,7 +2,7 @@ import ExerciseList from "@/components/ExerciseList";
 import RoutineList from "@/components/RoutineList";
 import LogoutButton from "@/components/LogoutButton";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { Music } from "lucide-react";
+import { Guitar } from "lucide-react";
 
 export default async function DashboardPage() {
 	const supabase = await createSupabaseServer();
@@ -17,7 +17,7 @@ export default async function DashboardPage() {
 				<div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						<div className="flex items-center justify-center size-7 rounded-lg bg-amber-100 text-amber-700">
-							<Music className="size-4" />
+							<Guitar className="size-4" />
 						</div>
 						<span className="font-semibold text-sm tracking-tight">Guitar Pal</span>
 					</div>

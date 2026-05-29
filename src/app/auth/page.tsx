@@ -3,7 +3,7 @@
 import { signIn, signUp } from "@/lib/auth";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Music } from "lucide-react";
+import { Guitar } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,11 +42,13 @@ export default function AuthPage() {
 				{/* Brand mark */}
 				<div className="flex flex-col items-center gap-3 text-center">
 					<div className="flex items-center justify-center size-12 rounded-xl bg-amber-100 text-amber-700">
-						<Music className="size-6" />
+						<Guitar className="size-6" />
 					</div>
 					<div>
 						<h1 className="text-xl font-semibold tracking-tight">Guitar Pal</h1>
-						<p className="text-sm text-muted-foreground">Your personal practice studio</p>
+						<p className="text-sm text-muted-foreground">
+							Your personal practice studio
+						</p>
 					</div>
 				</div>
 
@@ -83,8 +85,14 @@ export default function AuthPage() {
 										onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
 									/>
 								</div>
-								{error && <p className="text-destructive text-sm">{error.message}</p>}
-								<Button className="w-full" onClick={handleSignIn} disabled={loading}>
+								{error && (
+									<p className="text-destructive text-sm">{error.message}</p>
+								)}
+								<Button
+									className="w-full"
+									onClick={handleSignIn}
+									disabled={loading}
+								>
 									{loading ? "Signing in..." : "Sign In"}
 								</Button>
 							</TabsContent>
@@ -109,8 +117,14 @@ export default function AuthPage() {
 										onKeyDown={(e) => e.key === "Enter" && handleSignUp()}
 									/>
 								</div>
-								{error && <p className="text-destructive text-sm">{error.message}</p>}
-								<Button className="w-full" onClick={handleSignUp} disabled={loading}>
+								{error && (
+									<p className="text-destructive text-sm">{error.message}</p>
+								)}
+								<Button
+									className="w-full"
+									onClick={handleSignUp}
+									disabled={loading}
+								>
 									{loading ? "Creating account..." : "Create Account"}
 								</Button>
 							</TabsContent>

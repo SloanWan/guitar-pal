@@ -9,7 +9,7 @@ export default function Home() {
 				>
 					sign in
 				</a>{" "}
-				to access your dashboard and start building your guitar practice routines.
+				to access your dashboard and start building your guitar practice routines!
 			</main>
 		</div>
 	);

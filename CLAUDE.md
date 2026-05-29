@@ -27,12 +27,14 @@ No test suite is configured yet.
 **Auth flow:** `/auth` page handles sign-in/sign-up via `src/lib/auth.ts`. The dashboard is a server component that reads the user via `createSupabaseServer()`. Feature components are client components that call `getUser()` themselves if needed. There is no middleware-based route protection.
 
 **Two Supabase clients:**
+
 - `src/lib/supabase.ts` — `createClient()` via `createBrowserClient`, used in client components and all lib query functions
 - `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components (e.g. `dashboard/page.tsx`)
 
 Env vars required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 **Data layer:** `src/lib/` contains thin Supabase query functions — no ORM, no server actions. All DB calls happen client-side. Tables:
+
 - `exercises`, `routines`, `routine_exercises` (join table with `order_index` and `duration_minutes`)
 - `practice_logs` — immutable records written at end of a session (fields: `routine_id`, `routine_name`, `duration_minutes`, `rating`, `notes`, `completed_at`)
 - `exercise_logs` — per-exercise records (fields: `exercise_id`, `exercise_name`, `duration_minutes`, `reps`, `notes`, `logged_at`)

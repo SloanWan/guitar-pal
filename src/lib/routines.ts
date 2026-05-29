@@ -32,6 +32,13 @@ export async function getRoutines(): Promise<Routine[]> {
 	return data;
 }
 
+export async function getRoutineById(id: string): Promise<Routine> {
+	const supabase = createClient();
+	const { data, error } = await supabase.from("routines").select("*").eq("id", id).single();
+	if (error) throw error;
+	return data;
+}
+
 export async function addExerciseToRoutine(
 	routineId: string,
 	exerciseId: string,

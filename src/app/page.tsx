@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Music, Guitar } from "lucide-react";
+import { Guitar } from "lucide-react";
 
 export default function Home() {
 	return (

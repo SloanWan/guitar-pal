@@ -25,13 +25,21 @@ export async function proxy(request: NextRequest) {
 		data: { user },
 	} = await supabase.auth.getUser();
 
-	if (!user && !request.nextUrl.pathname.startsWith("/auth")) {
+	if (!user && !request.nextUrl.pathname.startsWith("/auth") && request.nextUrl.pathname != "/") {
 		return NextResponse.redirect(new URL("/auth", request.url));
+	}
+	if (user) {
+		if (request.nextUrl.pathname.startsWith("/auth")) {
+			return NextResponse.redirect(new URL("/dashboard", request.url));
+		}
+		if (request.nextUrl.pathname === "/") {
+			return NextResponse.redirect(new URL("/dashboard", request.url));
+		}
 	}
 
 	return response;
 }
 
 export const config = {
-	matcher: ["/dashboard/:path*", "/session/:path*"],
+	matcher: ["/dashboard/:path*", "/session/:path*", "/", "/auth/:path*"],
 };

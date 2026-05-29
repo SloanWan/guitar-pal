@@ -1,5 +1,6 @@
 import ExerciseList from "@/components/ExerciseList";
 import RoutineList from "@/components/RoutineList";
+import LogoutButton from "@/components/LogoutButton";
 
 import { createSupabaseServer } from "@/lib/supabase-server";
 
@@ -12,7 +13,10 @@ export default async function DashboardPage() {
 
 	return (
 		<div className="min-h-screen p-8 space-y-6">
-			<h1 className="text-xl">Guitar Pal</h1>
+			<header className="flex justify-between">
+				<h1 className="text-xl">Guitar Pal</h1>
+				<LogoutButton />
+			</header>
 			<p>Welcome to your online guitar studio space</p>
 			<p>
 				Hello, <b>{user?.email}</b> :)

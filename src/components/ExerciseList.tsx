@@ -3,47 +3,54 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
 	Select,
 	SelectContent,
 	SelectGroup,
 	SelectItem,
-	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-
-import { CircleX } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { useState, useEffect } from "react";
-import { Exercise } from "@/types/database";
-import { CATEGORIES } from "@/types/database";
+import { Exercise, CATEGORIES } from "@/types/database";
 import { createExercise, getExercises, deleteExercise } from "@/lib/exercises";
 
+const CATEGORY_LABELS: Record<string, string> = {
+	chord: "Chord",
+	chord_change: "Chord Change",
+	picking: "Picking",
+	scale: "Scale",
+	strumming: "Strumming",
+	fingering: "Fingering",
+	ear_training: "Ear Training",
+	arpeggio: "Arpeggio",
+	theory: "Theory",
+	song: "Song",
+};
+
 export default function ExerciseList() {
+	const [showForm, setShowForm] = useState(false);
 	const [title, setTitle] = useState("");
-	const [category, setCategory] = useState<Exercise["category"]>("chord"); // set default category to "chord"
+	const [category, setCategory] = useState<Exercise["category"]>("chord");
 	const [description, setDescription] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [exercises, setExercises] = useState<Exercise[]>([]);
 
 	useEffect(() => {
-		getExercises()
-			.then(setExercises)
-			.catch((error) => {
-				console.error("Error fetching exercises:", error);
-			});
+		getExercises().then(setExercises).catch(console.error);
 	}, []);
 
 	async function handleAddExercise() {
 		if (!title.trim()) return;
 		setLoading(true);
 		const exercise = await createExercise(title, category, description || null);
-		setExercises((prev) => [exercise, ...prev]); // add new exercise to the top of the list
+		setExercises((prev) => [exercise, ...prev]);
 		setTitle("");
 		setDescription("");
+		setShowForm(false);
 		setLoading(false);
 	}
 
@@ -53,81 +60,152 @@ export default function ExerciseList() {
 	}
 
 	return (
-		<div className="space-y-6">
-			{/* create exercise */}
-			<Card>
-				<CardHeader>
-					<CardTitle>Add Exercise Items</CardTitle>
-				</CardHeader>
-				<CardContent className="space-y-4">
-					<div className="space-y-2">
-						<Label>Category</Label>
-						<Select
-							value={category}
-							onValueChange={(value) => setCategory(value as Exercise["category"])}
-						>
-							<SelectTrigger>
-								<SelectValue placeholder="Select a category" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectGroup>
-									<SelectLabel>Exercise Category</SelectLabel>
-									{CATEGORIES.map((cat) => (
-										<SelectItem key={cat} value={cat}>
-											{cat.charAt(0).toUpperCase() +
-												cat.slice(1).replace("_", " ")}
-										</SelectItem>
-									))}
-								</SelectGroup>
-							</SelectContent>
-						</Select>
-					</div>
-					<div className="space-y-2">
-						<Label>Name</Label>
-						<Input
-							placeholder="e.g. C Major Scale"
-							value={title}
-							onChange={(e) => setTitle(e.target.value)}
-						/>
-					</div>
-					<div className="space-y-2">
-						<Label>Description (optional)</Label>
-						<Input
-							placeholder="e.g. Summary of this exercise..."
-							value={description}
-							onChange={(e) => setDescription(e.target.value)}
-						/>
-					</div>
-					<Button disabled={loading} onClick={handleAddExercise}>
-						{loading ? "Adding..." : "Add Exercise"}
-					</Button>
-				</CardContent>
-			</Card>
+		<div className="space-y-4">
+			{/* Section header */}
+			<div className="flex items-center justify-between">
+				<div>
+					<h2 className="text-base font-semibold">Exercises</h2>
+					<p className="text-xs text-muted-foreground">{exercises.length} total</p>
+				</div>
+				<Button
+					size="sm"
+					variant={showForm ? "secondary" : "default"}
+					onClick={() => setShowForm((v) => !v)}
+				>
+					<Plus className="size-3.5" />
+					Add Exercise
+				</Button>
+			</div>
 
-			{/* display all exersices */}
-			<Card>
-				<CardHeader>
-					<CardTitle>All Exercises</CardTitle>
-				</CardHeader>
-				<CardContent className="space-y-4">
-					{exercises.map((exercise) => (
-						<Card key={exercise.id}>
-							<CardContent className="flex justify-between">
-								<div className="flex gap-2 capitalize">
-									<div>{exercise.category}:</div>
-									<div>{exercise.title}</div>
+			{/* Collapsible add form */}
+			<AnimatePresence initial={false}>
+				{showForm && (
+					<motion.div
+						initial={{ height: 0, opacity: 0 }}
+						animate={{ height: "auto", opacity: 1 }}
+						exit={{ height: 0, opacity: 0 }}
+						transition={{ duration: 0.2, ease: "easeInOut" }}
+						style={{ overflow: "hidden" }}
+					>
+						<div className="rounded-xl border border-border bg-card p-4 space-y-3">
+							<div className="grid grid-cols-2 gap-3">
+								<div className="space-y-1.5">
+									<Label className="text-xs">Category</Label>
+									<Select
+										value={category}
+										onValueChange={(v) =>
+											setCategory(v as Exercise["category"])
+										}
+									>
+										<SelectTrigger className="h-8 text-xs">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectGroup>
+												{CATEGORIES.map((cat) => (
+													<SelectItem
+														key={cat}
+														value={cat}
+														className="text-xs"
+													>
+														{CATEGORY_LABELS[cat]}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										</SelectContent>
+									</Select>
+								</div>
+								<div className="space-y-1.5">
+									<Label className="text-xs">Name</Label>
+									<Input
+										className="h-8 text-xs"
+										placeholder="e.g. C Major Scale"
+										value={title}
+										onChange={(e) => setTitle(e.target.value)}
+										onKeyDown={(e) =>
+											e.key === "Enter" && handleAddExercise()
+										}
+									/>
+								</div>
+							</div>
+							<div className="space-y-1.5">
+								<Label className="text-xs">
+									Description{" "}
+									<span className="text-muted-foreground">(optional)</span>
+								</Label>
+								<Input
+									className="h-8 text-xs"
+									placeholder="Brief description..."
+									value={description}
+									onChange={(e) => setDescription(e.target.value)}
+								/>
+							</div>
+							<div className="flex justify-end gap-2">
+								<Button
+									size="sm"
+									variant="outline"
+									onClick={() => setShowForm(false)}
+								>
+									Cancel
+								</Button>
+								<Button
+									size="sm"
+									disabled={loading || !title.trim()}
+									onClick={handleAddExercise}
+								>
+									{loading ? "Adding..." : "Add"}
+								</Button>
+							</div>
+						</div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* Exercise list */}
+			<div className="rounded-xl border border-border bg-card overflow-hidden">
+				{exercises.length === 0 ? (
+					<div className="px-4 py-10 text-center text-sm text-muted-foreground">
+						No exercises yet. Add one to get started.
+					</div>
+				) : (
+					<AnimatePresence initial={false}>
+						{exercises.map((exercise, i) => (
+							<motion.div
+								key={exercise.id}
+								initial={{ opacity: 0, y: -8 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{ opacity: 0, x: -16 }}
+								transition={{ duration: 0.15 }}
+								className={`flex items-center justify-between px-4 py-3 ${
+									i < exercises.length - 1 ? "border-b border-border" : ""
+								}`}
+							>
+								<div className="flex items-center gap-3 min-w-0">
+									<span className="shrink-0 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+										{CATEGORY_LABELS[exercise.category]}
+									</span>
+									<span className="text-sm font-medium truncate">
+										{exercise.title}
+									</span>
+									{exercise.description && (
+										<span className="text-xs text-muted-foreground truncate hidden sm:block">
+											{exercise.description}
+										</span>
+									)}
 								</div>
 								<Button
+									size="icon-sm"
+									variant="ghost"
 									onClick={() => handleDeleteExercise(exercise.id)}
-									variant="destructive"
+									className="shrink-0 text-muted-foreground hover:text-destructive"
 								>
-									<CircleX />
+									<Trash2 className="size-3.5" />
 								</Button>
-							</CardContent>
-						</Card>
-					))}
-				</CardContent>
-			</Card>
+							</motion.div>
+						))}
+					</AnimatePresence>
+				)}
+			</div>
 		</div>
 	);
 }

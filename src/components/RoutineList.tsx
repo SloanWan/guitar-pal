@@ -14,6 +14,7 @@ import {
 import { CircleX, ChevronRight, ChevronDown } from "lucide-react";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 import {
 	createRoutine,
@@ -40,6 +41,8 @@ export default function RoutineList() {
 	const [duration, setDuration] = useState<number | "">("");
 
 	const filteredExercises = allExercises.filter((ex) => ex.category === selectedCategory);
+
+	const router = useRouter();
 
 	useEffect(() => {
 		getRoutines().then(setRoutines);
@@ -160,6 +163,17 @@ export default function RoutineList() {
 												<ChevronRight size={16} />
 											)}
 											{routine.title}
+											<Button
+												size="sm"
+												variant="secondary"
+												onClick={(e) => {
+													e.stopPropagation();
+													router.push(`/session/${routine.id}`);
+												}}
+												className="cursor-pointer hover:bg-gray-300/50"
+											>
+												Start Session
+											</Button>
 										</div>
 										<Button
 											// note: BIG FIX HERE: we need to stop propagation to prevent triggering the select routine when trying to delete

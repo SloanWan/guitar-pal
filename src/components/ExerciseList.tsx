@@ -58,6 +58,22 @@ export default function ExerciseList({
 	const [category, setCategory] = useState<Exercise["category"]>("chord");
 	const [description, setDescription] = useState("");
 	const [loading, setLoading] = useState(false);
+	const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+	const presentCategories = CATEGORIES.filter((cat) =>
+		exercises.some((e) => e.category === cat)
+	);
+
+	// Clear filter if the active category disappears from the list
+	useEffect(() => {
+		if (activeCategory && !presentCategories.includes(activeCategory as Exercise["category"])) {
+			setActiveCategory(null);
+		}
+	}, [exercises]);
+
+	const filteredExercises = activeCategory
+		? exercises.filter((e) => e.category === activeCategory)
+		: exercises;
 
 	async function handleAddExercise() {
 		if (!title.trim()) return;
@@ -176,15 +192,48 @@ export default function ExerciseList({
 				)}
 			</AnimatePresence>
 
+			{/* Category filter bar */}
+			{presentCategories.length > 0 && (
+				<div className="flex flex-wrap gap-1.5">
+					<button
+						onClick={() => setActiveCategory(null)}
+						className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+							activeCategory === null
+								? "bg-primary text-primary-foreground"
+								: "border border-border text-muted-foreground hover:bg-muted"
+						}`}
+					>
+						All
+					</button>
+					{presentCategories.map((cat) => (
+						<button
+							key={cat}
+							onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+							className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+								activeCategory === cat
+									? CATEGORY_COLORS[cat]
+									: "border border-border text-muted-foreground hover:bg-muted"
+							}`}
+						>
+							{CATEGORY_LABELS[cat]}
+						</button>
+					))}
+				</div>
+			)}
+
 			{/* Exercise list */}
 			<div className="rounded-xl border border-border bg-card overflow-hidden">
 				{exercises.length === 0 ? (
 					<div className="px-4 py-10 text-center text-sm text-muted-foreground">
 						No exercises yet. Add one to get started.
 					</div>
+				) : filteredExercises.length === 0 ? (
+					<div className="px-4 py-10 text-center text-sm text-muted-foreground">
+						No exercises in this category.
+					</div>
 				) : (
 					<AnimatePresence initial={false}>
-						{exercises.map((exercise, i) => (
+						{filteredExercises.map((exercise, i) => (
 							<motion.div
 								key={exercise.id}
 								initial={{ opacity: 0, y: -8 }}
@@ -192,7 +241,7 @@ export default function ExerciseList({
 								exit={{ opacity: 0, x: -16 }}
 								transition={{ duration: 0.15 }}
 								className={`flex items-center justify-between px-4 py-3 ${
-									i < exercises.length - 1 ? "border-b border-border" : ""
+									i < filteredExercises.length - 1 ? "border-b border-border" : ""
 								}`}
 							>
 								<div className="flex items-center gap-3 min-w-0">

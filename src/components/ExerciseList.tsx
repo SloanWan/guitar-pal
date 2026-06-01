@@ -31,23 +31,27 @@ const CATEGORY_LABELS: Record<string, string> = {
 	song: "Song",
 };
 
-export default function ExerciseList() {
+export default function ExerciseList({
+	exercises,
+	onExerciseChange,
+	onAddExercise,
+}: {
+	exercises: Exercise[];
+	onExerciseChange: () => void;
+	onAddExercise: (exercise: Exercise) => void;
+}) {
 	const [showForm, setShowForm] = useState(false);
 	const [title, setTitle] = useState("");
 	const [category, setCategory] = useState<Exercise["category"]>("chord");
 	const [description, setDescription] = useState("");
 	const [loading, setLoading] = useState(false);
-	const [exercises, setExercises] = useState<Exercise[]>([]);
-
-	useEffect(() => {
-		getExercises().then(setExercises).catch(console.error);
-	}, []);
 
 	async function handleAddExercise() {
 		if (!title.trim()) return;
 		setLoading(true);
-		const exercise = await createExercise(title, category, description || null);
-		setExercises((prev) => [exercise, ...prev]);
+		const newExercise = await createExercise(title, category, description || null);
+		// onExerciseChange();
+		onAddExercise(newExercise);
 		setTitle("");
 		setDescription("");
 		setShowForm(false);
@@ -56,7 +60,7 @@ export default function ExerciseList() {
 
 	async function handleDeleteExercise(id: string) {
 		await deleteExercise(id);
-		setExercises((prev) => prev.filter((e) => e.id !== id));
+		onExerciseChange();
 	}
 
 	return (
@@ -122,9 +126,7 @@ export default function ExerciseList() {
 										placeholder="e.g. C Major Scale"
 										value={title}
 										onChange={(e) => setTitle(e.target.value)}
-										onKeyDown={(e) =>
-											e.key === "Enter" && handleAddExercise()
-										}
+										onKeyDown={(e) => e.key === "Enter" && handleAddExercise()}
 									/>
 								</div>
 							</div>

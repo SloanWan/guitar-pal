@@ -31,6 +31,19 @@ const CATEGORY_LABELS: Record<string, string> = {
 	song: "Song",
 };
 
+const CATEGORY_COLORS: Record<string, string> = {
+	chord: "bg-amber-100 text-amber-800",
+	chord_change: "bg-orange-100 text-orange-800",
+	picking: "bg-green-100 text-green-800",
+	scale: "bg-blue-100 text-blue-800",
+	strumming: "bg-purple-100 text-purple-800",
+	fingering: "bg-pink-100 text-pink-800",
+	ear_training: "bg-cyan-100 text-cyan-800",
+	arpeggio: "bg-indigo-100 text-indigo-800",
+	theory: "bg-gray-100 text-gray-800",
+	song: "bg-red-100 text-red-800",
+};
+
 export default function ExerciseList({
 	exercises,
 	onExerciseChange,
@@ -45,6 +58,22 @@ export default function ExerciseList({
 	const [category, setCategory] = useState<Exercise["category"]>("chord");
 	const [description, setDescription] = useState("");
 	const [loading, setLoading] = useState(false);
+	const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+	const presentCategories = CATEGORIES.filter((cat) =>
+		exercises.some((e) => e.category === cat)
+	);
+
+	// Clear filter if the active category disappears from the list
+	useEffect(() => {
+		if (activeCategory && !presentCategories.includes(activeCategory as Exercise["category"])) {
+			setActiveCategory(null);
+		}
+	}, [exercises]);
+
+	const filteredExercises = activeCategory
+		? exercises.filter((e) => e.category === activeCategory)
+		: exercises;
 
 	async function handleAddExercise() {
 		if (!title.trim()) return;
@@ -163,27 +192,69 @@ export default function ExerciseList({
 				)}
 			</AnimatePresence>
 
+			{/* Category filter bar */}
+			{presentCategories.length > 0 && (
+				<div className="flex flex-wrap gap-1.5">
+					<button
+						onClick={() => setActiveCategory(null)}
+						style={{ transition: "background-color 150ms ease, color 150ms ease" }}
+						className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+							activeCategory === null
+								? "bg-primary text-primary-foreground"
+								: "border border-border text-muted-foreground hover:bg-muted"
+						}`}
+					>
+						All
+					</button>
+					{presentCategories.map((cat) => (
+						<button
+							key={cat}
+							onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+							style={{ transition: "background-color 150ms ease, color 150ms ease" }}
+							className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+								activeCategory === cat
+									? CATEGORY_COLORS[cat]
+									: "border border-border text-muted-foreground hover:bg-muted"
+							}`}
+						>
+							{CATEGORY_LABELS[cat]}
+						</button>
+					))}
+				</div>
+			)}
+
 			{/* Exercise list */}
 			<div className="rounded-xl border border-border bg-card overflow-hidden">
 				{exercises.length === 0 ? (
 					<div className="px-4 py-10 text-center text-sm text-muted-foreground">
 						No exercises yet. Add one to get started.
 					</div>
+				) : filteredExercises.length === 0 ? (
+					<div className="px-4 py-10 text-center text-sm text-muted-foreground">
+						No exercises in this category.
+					</div>
 				) : (
-					<AnimatePresence initial={false}>
-						{exercises.map((exercise, i) => (
+					<AnimatePresence initial={false} mode="popLayout">
+						{filteredExercises.map((exercise, i) => (
 							<motion.div
 								key={exercise.id}
+								layoutId={exercise.id}
+								layout
 								initial={{ opacity: 0, y: -8 }}
 								animate={{ opacity: 1, y: 0 }}
 								exit={{ opacity: 0, x: -16 }}
-								transition={{ duration: 0.15 }}
+								transition={{
+									duration: 0.15,
+									layout: { type: "spring", stiffness: 500, damping: 35 },
+								}}
 								className={`flex items-center justify-between px-4 py-3 ${
-									i < exercises.length - 1 ? "border-b border-border" : ""
+									i < filteredExercises.length - 1 ? "border-b border-border" : ""
 								}`}
 							>
 								<div className="flex items-center gap-3 min-w-0">
-									<span className="shrink-0 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+									<span
+										className={`shrink-0 inline-flex items-center rounded-md ${CATEGORY_COLORS[exercise.category]} px-2 py-0.5 text-xs font-medium`}
+									>
 										{CATEGORY_LABELS[exercise.category]}
 									</span>
 									<span className="text-sm font-medium truncate">

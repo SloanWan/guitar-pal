@@ -22,7 +22,6 @@ import {
 	getRoutineExercises,
 	addExerciseToRoutine,
 } from "@/lib/routines";
-import { getExercises } from "@/lib/exercises";
 import { Routine, RoutineExercise, Exercise, CATEGORIES } from "@/types/database";
 
 type RoutineExerciseWithExercise = RoutineExercise & { exercise: Exercise };
@@ -40,7 +39,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 	song: "Song",
 };
 
-export default function RoutineList() {
+export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 	const [showForm, setShowForm] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [title, setTitle] = useState("");
@@ -50,17 +49,15 @@ export default function RoutineList() {
 		Record<string, RoutineExerciseWithExercise[]>
 	>({});
 	const [loadingExercises, setLoadingExercises] = useState<string | null>(null);
-	const [allExercises, setAllExercises] = useState<Exercise[]>([]);
 	const [selectedCategory, setSelectedCategory] = useState<Exercise["category"] | "">("");
 	const [selectedExerciseId, setSelectedExerciseId] = useState<string>("");
 	const [duration, setDuration] = useState<number | "">("");
 
 	const router = useRouter();
-	const filteredExercises = allExercises.filter((ex) => ex.category === selectedCategory);
+	const filteredExercises = exercises.filter((ex) => ex.category === selectedCategory);
 
 	useEffect(() => {
 		getRoutines().then(setRoutines);
-		getExercises().then(setAllExercises);
 	}, []);
 
 	async function handleAddRoutine() {
@@ -91,8 +88,8 @@ export default function RoutineList() {
 		if (!routineExercisesMap[routine.id]) {
 			setLoadingExercises(routine.id);
 			try {
-				const exercises = await getRoutineExercises(routine.id);
-				setRoutineExercisesMap((prev) => ({ ...prev, [routine.id]: exercises }));
+				const routineExercises = await getRoutineExercises(routine.id);
+				setRoutineExercisesMap((prev) => ({ ...prev, [routine.id]: routineExercises }));
 			} catch (error) {
 				console.error("Error fetching routine exercises:", error);
 			} finally {
@@ -114,8 +111,8 @@ export default function RoutineList() {
 
 	async function handleAddExerciseToRoutine(routineId: string) {
 		if (!selectedExerciseId || !duration) return;
-		const exercises = routineExercisesMap[routineId] || [];
-		const orderIdx = exercises.length;
+		const currentRoutineExercises = routineExercisesMap[routineId] || [];
+		const orderIdx = currentRoutineExercises.length;
 		try {
 			const newRE = await addExerciseToRoutine(
 				routineId,
@@ -123,7 +120,7 @@ export default function RoutineList() {
 				duration as number,
 				orderIdx,
 			);
-			const exercise = allExercises.find((ex) => ex.id === selectedExerciseId);
+			const exercise = exercises.find((ex) => ex.id === selectedExerciseId);
 			if (!exercise) return;
 			setRoutineExercisesMap((prev) => ({
 				...prev,
@@ -207,8 +204,8 @@ export default function RoutineList() {
 					<AnimatePresence initial={false}>
 						{routines.map((routine, i) => {
 							const isExpanded = expandedId === routine.id;
-							const exercises = routineExercisesMap[routine.id] || [];
-							const totalMins = exercises.reduce(
+							const routineExercises = routineExercisesMap[routine.id] || [];
+							const totalMins = routineExercises.reduce(
 								(sum, re) => sum + re.duration_minutes,
 								0,
 							);
@@ -216,7 +213,9 @@ export default function RoutineList() {
 							return (
 								<motion.div
 									key={routine.id}
-									className={i < routines.length - 1 ? "border-b border-border" : ""}
+									className={
+										i < routines.length - 1 ? "border-b border-border" : ""
+									}
 								>
 									{/* Routine header row */}
 									<div
@@ -232,9 +231,9 @@ export default function RoutineList() {
 											<span className="text-sm font-medium truncate">
 												{routine.title}
 											</span>
-											{exercises.length > 0 && (
+											{routineExercises.length > 0 && (
 												<span className="text-xs text-muted-foreground shrink-0">
-													{exercises.length} ex · {totalMins}m
+													{routineExercises.length} ex · {totalMins}m
 												</span>
 											)}
 										</div>
@@ -280,9 +279,9 @@ export default function RoutineList() {
 														<p className="text-xs text-muted-foreground pt-3">
 															Loading...
 														</p>
-													) : exercises.length > 0 ? (
+													) : routineExercises.length > 0 ? (
 														<div className="space-y-1.5 pt-3">
-															{exercises.map((re) => (
+															{routineExercises.map((re) => (
 																<div
 																	key={re.id}
 																	className="flex items-center justify-between text-xs"
@@ -296,7 +295,9 @@ export default function RoutineList() {
 																				]
 																			}
 																		</span>
-																		<span>{re.exercise.title}</span>
+																		<span>
+																			{re.exercise.title}
+																		</span>
 																	</div>
 																	<div className="flex items-center gap-1 text-muted-foreground">
 																		<Clock className="size-3" />
@@ -345,7 +346,9 @@ export default function RoutineList() {
 															</Select>
 															<Select
 																value={selectedExerciseId}
-																onValueChange={setSelectedExerciseId}
+																onValueChange={
+																	setSelectedExerciseId
+																}
 																disabled={
 																	!selectedCategory ||
 																	filteredExercises.length === 0
@@ -383,7 +386,9 @@ export default function RoutineList() {
 																placeholder="Duration (min)"
 																value={duration}
 																onChange={(e) =>
-																	setDuration(Number(e.target.value))
+																	setDuration(
+																		Number(e.target.value),
+																	)
 																}
 															/>
 															<Button

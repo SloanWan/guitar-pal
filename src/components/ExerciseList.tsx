@@ -31,6 +31,19 @@ const CATEGORY_LABELS: Record<string, string> = {
 	song: "Song",
 };
 
+const CATEGORY_COLORS: Record<string, string> = {
+	chord: "bg-amber-100 text-amber-800",
+	chord_change: "bg-orange-100 text-orange-800",
+	picking: "bg-green-100 text-green-800",
+	scale: "bg-blue-100 text-blue-800",
+	strumming: "bg-purple-100 text-purple-800",
+	fingering: "bg-pink-100 text-pink-800",
+	ear_training: "bg-cyan-100 text-cyan-800",
+	arpeggio: "bg-indigo-100 text-indigo-800",
+	theory: "bg-gray-100 text-gray-800",
+	song: "bg-red-100 text-red-800",
+};
+
 export default function ExerciseList({
 	exercises,
 	onExerciseChange,
@@ -183,7 +196,9 @@ export default function ExerciseList({
 								}`}
 							>
 								<div className="flex items-center gap-3 min-w-0">
-									<span className="shrink-0 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+									<span
+										className={`shrink-0 inline-flex items-center rounded-md ${CATEGORY_COLORS[exercise.category]} px-2 py-0.5 text-xs font-medium`}
+									>
 										{CATEGORY_LABELS[exercise.category]}
 									</span>
 									<span className="text-sm font-medium truncate">

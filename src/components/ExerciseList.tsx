@@ -197,7 +197,8 @@ export default function ExerciseList({
 				<div className="flex flex-wrap gap-1.5">
 					<button
 						onClick={() => setActiveCategory(null)}
-						className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+						style={{ transition: "background-color 150ms ease, color 150ms ease" }}
+						className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
 							activeCategory === null
 								? "bg-primary text-primary-foreground"
 								: "border border-border text-muted-foreground hover:bg-muted"
@@ -209,7 +210,8 @@ export default function ExerciseList({
 						<button
 							key={cat}
 							onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-							className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+							style={{ transition: "background-color 150ms ease, color 150ms ease" }}
+							className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
 								activeCategory === cat
 									? CATEGORY_COLORS[cat]
 									: "border border-border text-muted-foreground hover:bg-muted"
@@ -232,14 +234,19 @@ export default function ExerciseList({
 						No exercises in this category.
 					</div>
 				) : (
-					<AnimatePresence initial={false}>
+					<AnimatePresence initial={false} mode="popLayout">
 						{filteredExercises.map((exercise, i) => (
 							<motion.div
 								key={exercise.id}
+								layoutId={exercise.id}
+								layout
 								initial={{ opacity: 0, y: -8 }}
 								animate={{ opacity: 1, y: 0 }}
 								exit={{ opacity: 0, x: -16 }}
-								transition={{ duration: 0.15 }}
+								transition={{
+									duration: 0.15,
+									layout: { type: "spring", stiffness: 500, damping: 35 },
+								}}
 								className={`flex items-center justify-between px-4 py-3 ${
 									i < filteredExercises.length - 1 ? "border-b border-border" : ""
 								}`}

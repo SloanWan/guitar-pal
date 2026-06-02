@@ -82,9 +82,7 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 	const currentExercise = routineExercises[currentExerciseIndex];
 	const nextExercise = routineExercises[currentExerciseIndex + 1] || null;
 	const progressPct =
-		routineExercises.length > 0
-			? (currentExerciseIndex / routineExercises.length) * 100
-			: 0;
+		routineExercises.length > 0 ? (currentExerciseIndex / routineExercises.length) * 100 : 0;
 
 	useEffect(() => {
 		if (status !== "running" || secondsLeft <= 0) return;
@@ -100,6 +98,13 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 		return () => clearInterval(id);
 	}, [status, secondsLeft, nextExercise]);
 
+	function handleExtendTime() {
+		setSecondsLeft((s) => s + 30);
+	}
+	function handleReduceTime() {
+		setSecondsLeft((s) => Math.max(0, s - 30));
+	}
+
 	function handlePauseContinue() {
 		setStatus((s) => (s === "running" ? "paused" : "running"));
 	}
@@ -113,11 +118,15 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 		}
 	}
 	function handleRepeat() {
-		setSecondsLeft(currentExercise?.duration_minutes ? currentExercise.duration_minutes * 60 : 0);
+		setSecondsLeft(
+			currentExercise?.duration_minutes ? currentExercise.duration_minutes * 60 : 0,
+		);
 		setStatus("idle");
 	}
 	function handleReset() {
-		setSecondsLeft(currentExercise?.duration_minutes ? currentExercise.duration_minutes * 60 : 0);
+		setSecondsLeft(
+			currentExercise?.duration_minutes ? currentExercise.duration_minutes * 60 : 0,
+		);
 		setStatus("idle");
 	}
 
@@ -342,6 +351,24 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 					>
 						{formatTime(secondsLeft)}
 					</p>
+					<div className="flex items-center justify-center gap-2 mt-3">
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={handleReduceTime}
+							disabled={secondsLeft <= 30}
+						>
+							−30s
+						</Button>
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={handleExtendTime}
+						>
+							+30s
+						</Button>
+					</div>
+
 					<p className="text-xs text-muted-foreground mt-2 capitalize">
 						{status === "idle"
 							? "Ready"
@@ -356,7 +383,12 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 				{/* Controls */}
 				<div className="flex items-center gap-4">
 					{status === "completed" ? (
-						<Button size="icon-lg" variant="outline" onClick={handleRepeat} title="Repeat exercise">
+						<Button
+							size="icon-lg"
+							variant="outline"
+							onClick={handleRepeat}
+							title="Repeat exercise"
+						>
 							<Repeat className="size-5" />
 						</Button>
 					) : (

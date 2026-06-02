@@ -60,9 +60,7 @@ export default function ExerciseList({
 	const [loading, setLoading] = useState(false);
 	const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
-	const presentCategories = CATEGORIES.filter((cat) =>
-		exercises.some((e) => e.category === cat)
-	);
+	const presentCategories = CATEGORIES.filter((cat) => exercises.some((e) => e.category === cat));
 
 	// Clear filter if the active category disappears from the list
 	useEffect(() => {

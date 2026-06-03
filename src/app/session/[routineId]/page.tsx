@@ -253,7 +253,7 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 							className="flex-1"
 							onClick={() => router.push("/dashboard")}
 						>
-							Skip &amp; exit
+							Skip &amp; Exit
 						</Button>
 						<Button
 							className="flex-1"
@@ -360,11 +360,7 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 						>
 							−30s
 						</Button>
-						<Button
-							size="sm"
-							variant="outline"
-							onClick={handleExtendTime}
-						>
+						<Button size="sm" variant="outline" onClick={handleExtendTime}>
 							+30s
 						</Button>
 					</div>

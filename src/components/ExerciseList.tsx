@@ -20,6 +20,7 @@ import {
 	createExercise,
 	getExercises,
 	deleteExercise,
+	removeAllRoutineExercisesByExerciseId,
 	getRoutineNamesForExercise,
 } from "@/lib/exercises";
 
@@ -81,6 +82,7 @@ export default function ExerciseList({
 
 	async function handleConfirmDelete() {
 		if (!pendingDelete) return;
+		await removeAllRoutineExercisesByExerciseId(pendingDelete.id);
 		await deleteExercise(pendingDelete.id);
 		setPendingDelete(null);
 		onExerciseChange();

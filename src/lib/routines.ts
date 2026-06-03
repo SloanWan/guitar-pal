@@ -14,13 +14,13 @@ export async function createRoutine(title: string): Promise<Routine> {
 		.select()
 		.single();
 
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 export async function deleteRoutine(id: string): Promise<void> {
 	const supabase = createClient();
 	const { error } = await supabase.from("routines").delete().eq("id", id);
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 }
 export async function getRoutines(): Promise<Routine[]> {
 	const supabase = createClient();
@@ -28,14 +28,14 @@ export async function getRoutines(): Promise<Routine[]> {
 		.from("routines")
 		.select("*")
 		.order("created_at", { ascending: false });
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 
 export async function getRoutineById(id: string): Promise<Routine> {
 	const supabase = createClient();
 	const { data, error } = await supabase.from("routines").select("*").eq("id", id).single();
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 
@@ -56,13 +56,13 @@ export async function addExerciseToRoutine(
 		})
 		.select()
 		.single();
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 export async function removeExerciseFromRoutine(id: string): Promise<void> {
 	const supabase = createClient();
 	const { error } = await supabase.from("routine_exercises").delete().eq("id", id);
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 }
 export async function updateRoutineExerciseDuration(
 	id: string,
@@ -73,7 +73,7 @@ export async function updateRoutineExerciseDuration(
 		.from("routine_exercises")
 		.update({ duration_minutes: durationMinutes })
 		.eq("id", id);
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 }
 export async function swapRoutineExerciseOrder(id1: string, id2: string): Promise<void> {
 	const supabase = createClient();
@@ -82,8 +82,8 @@ export async function swapRoutineExerciseOrder(id1: string, id2: string): Promis
 			supabase.from("routine_exercises").select("*").eq("id", id1).single(),
 			supabase.from("routine_exercises").select("*").eq("id", id2).single(),
 		]);
-	if (error1) throw error1;
-	if (error2) throw error2;
+	if (error1) throw new Error(error1.message);
+	if (error2) throw new Error(error2.message);
 
 	const [{ error: updateError1 }, { error: updateError2 }] = await Promise.all([
 		supabase
@@ -95,8 +95,8 @@ export async function swapRoutineExerciseOrder(id1: string, id2: string): Promis
 			.update({ order_index: exercise1.order_index })
 			.eq("id", id2),
 	]);
-	if (updateError1) throw updateError1;
-	if (updateError2) throw updateError2;
+	if (updateError1) throw new Error(updateError1.message);
+	if (updateError2) throw new Error(updateError2.message);
 }
 export async function getRoutineExercises(
 	routineId: string,
@@ -107,6 +107,6 @@ export async function getRoutineExercises(
 		.select("*, exercise:exercises(*)") // Select all fields from routine_exercises and join exercise table
 		.eq("routine_id", routineId)
 		.order("order_index", { ascending: true });
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }

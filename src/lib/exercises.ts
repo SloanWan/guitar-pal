@@ -22,14 +22,22 @@ export async function createExercise(
 		})
 		.select() // return the inserted row
 		.single(); // we expect only one row to be inserted
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 
 export async function deleteExercise(exerciseId: string): Promise<void> {
 	const supabase = createClient();
 	const { error } = await supabase.from("exercises").delete().eq("id", exerciseId);
-	if (error) throw error;
+	if (error) throw new Error(error.message);
+}
+export async function removeAllRoutineExercisesByExerciseId(exerciseId: string): Promise<void> {
+	const supabase = createClient();
+	const { error } = await supabase
+		.from("routine_exercises")
+		.delete()
+		.eq("exercise_id", exerciseId);
+	if (error) throw new Error(error.message);
 }
 
 export async function getExercises(): Promise<Exercise[]> {
@@ -38,7 +46,7 @@ export async function getExercises(): Promise<Exercise[]> {
 		.from("exercises")
 		.select("*") // select all columns
 		.order("created_at", { ascending: false });
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 
@@ -48,7 +56,7 @@ export async function getRoutineNamesForExercise(exerciseId: string): Promise<st
 		.from("routine_exercises")
 		.select("routines(title)")
 		.eq("exercise_id", exerciseId);
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return (data as unknown as { routines: { title: string } }[]).map(
 		(item) => item.routines.title,
 	);

@@ -33,7 +33,7 @@ export async function createPracticeLog({
 		.select() // return the inserted row
 		.single(); // we expect only one row to be inserted
 
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 
@@ -43,7 +43,7 @@ export async function getPracticeLogs(): Promise<PracticeLog[]> {
 		.from("practice_logs")
 		.select("*")
 		.order("completed_at", { ascending: false });
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 

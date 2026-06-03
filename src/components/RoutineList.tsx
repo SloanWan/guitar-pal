@@ -413,7 +413,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 					</DialogHeader>
 
 					{/* Exercise rows */}
-					<div className="space-y-1 min-h-0">
+					<div className="divide-y divide-border min-h-0">
 						{dialogExercises.length === 0 ? (
 							<p className="text-xs text-muted-foreground">No exercises yet.</p>
 						) : (
@@ -425,7 +425,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 										animate={{ opacity: 1, y: 0 }}
 										exit={{ opacity: 0, y: 8 }}
 										transition={{ duration: 0.15 }}
-										className="flex items-start gap-2"
+										className="flex items-center gap-2 py-1.5"
 									>
 										<span
 											className={`inline-flex items-center rounded-md ${CATEGORY_COLORS[re.exercise.category]} px-1.5 py-0.5 text-[10px] font-medium shrink-0`}
@@ -468,6 +468,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 													dialogExercises[i - 1].id,
 												)
 											}
+											className="hover:text-emerald-600!"
 										>
 											<ArrowUp className="size-3.5" />
 										</Button>
@@ -482,6 +483,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 													dialogExercises[i + 1].id,
 												)
 											}
+											className="hover:text-amber-600!"
 										>
 											<ArrowDown className="size-3.5" />
 										</Button>
@@ -505,9 +507,9 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 					</div>
 
 					{/* Add exercise */}
-					<div className="space-y-2 pt-2 border-t border-border">
-						<p className="text-xs font-medium text-muted-foreground">Add exercise</p>
-						<div className="flex gap-2">
+					<div className="space-y-2 pt-2 border-border">
+						<p className="text-sm font-medium text-muted-foreground">Add exercise</p>
+						<div className="flex gap-2 text-xs">
 							<Select
 								value={selectedCategory}
 								onValueChange={(v) => {
@@ -515,12 +517,12 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 									setSelectedExerciseId("");
 								}}
 							>
-								<SelectTrigger className="h-7 text-xs">
+								<SelectTrigger className="h-7">
 									<SelectValue placeholder="Category" />
 								</SelectTrigger>
 								<SelectContent>
 									{CATEGORIES.map((cat) => (
-										<SelectItem key={cat} value={cat} className="text-xs">
+										<SelectItem key={cat} value={cat}>
 											{CATEGORY_LABELS[cat]}
 										</SelectItem>
 									))}
@@ -531,7 +533,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 								onValueChange={setSelectedExerciseId}
 								disabled={!selectedCategory || filteredExercises.length === 0}
 							>
-								<SelectTrigger className="h-7 text-xs max-w-60 sm:max-w-100 overflow-hidden text-ellipsis">
+								<SelectTrigger className="h-7 max-w-60 sm:max-w-100 overflow-hidden text-ellipsis">
 									<SelectValue
 										placeholder={
 											!selectedCategory
@@ -544,7 +546,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 								</SelectTrigger>
 								<SelectContent>
 									{filteredExercises.map((ex) => (
-										<SelectItem key={ex.id} value={ex.id} className="text-xs">
+										<SelectItem key={ex.id} value={ex.id}>
 											{ex.title}
 										</SelectItem>
 									))}

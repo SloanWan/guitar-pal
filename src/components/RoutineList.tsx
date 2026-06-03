@@ -101,10 +101,6 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 			setExpandedId(null);
 			return;
 		}
-		// Reset add-exercise selectors when switching routines
-		setSelectedCategory("");
-		setSelectedExerciseId("");
-		setDuration("");
 		setExpandedId(routine.id);
 		if (!routineExercisesMap[routine.id]) {
 			setLoadingExercises(routine.id);
@@ -348,11 +344,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 												transition={{ duration: 0.2, ease: "easeInOut" }}
 												style={{ overflow: "hidden" }}
 											>
-												<div
-													className="px-4 pb-4 space-y-3 border-t border-border bg-muted/20"
-													onClick={(e) => e.stopPropagation()}
-												>
-													{/* Exercise list */}
+												<div className="px-4 pb-4 border-t border-border bg-muted/20">
 													{loadingExercises === routine.id ? (
 														<p className="text-xs text-muted-foreground pt-3">
 															Loading...
@@ -368,22 +360,13 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 																		<span
 																			className={`inline-flex items-center rounded-md ${CATEGORY_COLORS[re.exercise.category]} px-1.5 py-0.5 text-[10px] font-medium`}
 																		>
-																			{
-																				CATEGORY_LABELS[
-																					re.exercise
-																						.category
-																				]
-																			}
+																			{CATEGORY_LABELS[re.exercise.category]}
 																		</span>
-																		<span>
-																			{re.exercise.title}
-																		</span>
+																		<span>{re.exercise.title}</span>
 																	</div>
 																	<div className="flex items-center gap-1 text-muted-foreground">
 																		<Clock className="size-3" />
-																		<span>
-																			{re.duration_minutes}m
-																		</span>
+																		<span>{re.duration_minutes}m</span>
 																	</div>
 																</div>
 															))}
@@ -393,101 +376,6 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 															No exercises added yet.
 														</p>
 													)}
-
-													{/* Add exercise */}
-													<div className="space-y-2 pt-1">
-														<p className="text-xs font-medium text-muted-foreground">
-															Add exercise
-														</p>
-														<div className="grid grid-cols-2 gap-2">
-															<Select
-																value={selectedCategory}
-																onValueChange={(v) => {
-																	setSelectedCategory(
-																		v as Exercise["category"],
-																	);
-																	setSelectedExerciseId("");
-																}}
-															>
-																<SelectTrigger className="h-7 text-xs">
-																	<SelectValue placeholder="Category" />
-																</SelectTrigger>
-																<SelectContent>
-																	{CATEGORIES.map((cat) => (
-																		<SelectItem
-																			key={cat}
-																			value={cat}
-																			className="text-xs"
-																		>
-																			{CATEGORY_LABELS[cat]}
-																		</SelectItem>
-																	))}
-																</SelectContent>
-															</Select>
-															<Select
-																value={selectedExerciseId}
-																onValueChange={
-																	setSelectedExerciseId
-																}
-																disabled={
-																	!selectedCategory ||
-																	filteredExercises.length === 0
-																}
-															>
-																<SelectTrigger className="h-7 text-xs">
-																	<SelectValue
-																		placeholder={
-																			!selectedCategory
-																				? "Pick category first"
-																				: filteredExercises.length ===
-																					  0
-																					? "None in category"
-																					: "Exercise"
-																		}
-																	/>
-																</SelectTrigger>
-																<SelectContent>
-																	{filteredExercises.map((ex) => (
-																		<SelectItem
-																			key={ex.id}
-																			value={ex.id}
-																			className="text-xs"
-																		>
-																			{ex.title}
-																		</SelectItem>
-																	))}
-																</SelectContent>
-															</Select>
-														</div>
-														<div className="flex gap-2">
-															<Input
-																type="number"
-																className="h-7 text-xs"
-																placeholder="Duration (min)"
-																value={duration}
-																onChange={(e) =>
-																	setDuration(
-																		Number(e.target.value),
-																	)
-																}
-															/>
-															<Button
-																size="sm"
-																disabled={
-																	!selectedCategory ||
-																	!selectedExerciseId ||
-																	!duration
-																}
-																onClick={() =>
-																	handleAddExerciseToRoutine(
-																		routine.id,
-																	)
-																}
-															>
-																Add
-															</Button>
-														</div>
-													</div>
 												</div>
 											</motion.div>
 										)}

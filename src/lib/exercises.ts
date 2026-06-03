@@ -49,7 +49,6 @@ export async function getRoutineNamesForExercise(exerciseId: string): Promise<st
 		.select("routines(title)")
 		.eq("exercise_id", exerciseId);
 	if (error) throw error;
-	// console.log(data);
 	return (data as unknown as { routines: { title: string } }[]).map(
 		(item) => item.routines.title,
 	);

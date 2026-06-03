@@ -10,7 +10,17 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Play, ChevronRight, ChevronDown, Clock } from "lucide-react";
+import {
+	Plus,
+	Trash2,
+	Play,
+	ChevronRight,
+	ChevronDown,
+	Clock,
+	Pencil,
+	ArrowUp,
+	ArrowDown,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useState, useEffect } from "react";
@@ -21,23 +31,21 @@ import {
 	deleteRoutine,
 	getRoutineExercises,
 	addExerciseToRoutine,
+	removeExerciseFromRoutine,
+	updateRoutineExerciseDuration,
+	swapRoutineExerciseOrder,
 } from "@/lib/routines";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { Routine, RoutineExercise, Exercise, CATEGORIES } from "@/types/database";
+import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/constants";
 
 type RoutineExerciseWithExercise = RoutineExercise & { exercise: Exercise };
-
-const CATEGORY_LABELS: Record<string, string> = {
-	chord: "Chord",
-	chord_change: "Chord Change",
-	picking: "Picking",
-	scale: "Scale",
-	strumming: "Strumming",
-	fingering: "Fingering",
-	ear_training: "Ear Training",
-	arpeggio: "Arpeggio",
-	theory: "Theory",
-	song: "Song",
-};
 
 export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 	const [showForm, setShowForm] = useState(false);
@@ -53,19 +61,32 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 	const [selectedExerciseId, setSelectedExerciseId] = useState<string>("");
 	const [duration, setDuration] = useState<number | "">("");
 
+	const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
+
 	const router = useRouter();
 	const filteredExercises = exercises.filter((ex) => ex.category === selectedCategory);
+
+	const editingRoutine = routines.find((r) => r.id === editingRoutineId) ?? null;
+	const dialogExercises = editingRoutineId ? (routineExercisesMap[editingRoutineId] ?? []) : [];
 
 	useEffect(() => {
 		getRoutines().then(setRoutines);
 	}, []);
+
+	// Fetch exercises for dialog if not yet loaded
+	useEffect(() => {
+		if (!editingRoutineId || routineExercisesMap[editingRoutineId]) return;
+		getRoutineExercises(editingRoutineId).then((exs) =>
+			setRoutineExercisesMap((prev) => ({ ...prev, [editingRoutineId]: exs })),
+		);
+	}, [editingRoutineId]);
 
 	async function handleAddRoutine() {
 		if (!title.trim()) return;
 		setLoading(true);
 		try {
 			const routine = await createRoutine(title);
-			setRoutines((prev) => [...prev, routine]);
+			setRoutines((prev) => [routine, ...prev]);
 			setTitle("");
 			setShowForm(false);
 		} catch (error) {
@@ -80,10 +101,6 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 			setExpandedId(null);
 			return;
 		}
-		// Reset add-exercise selectors when switching routines
-		setSelectedCategory("");
-		setSelectedExerciseId("");
-		setDuration("");
 		setExpandedId(routine.id);
 		if (!routineExercisesMap[routine.id]) {
 			setLoadingExercises(routine.id);
@@ -107,6 +124,51 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 		} catch (error) {
 			console.error("Error deleting routine:", error);
 		}
+	}
+
+	async function handleRemoveExerciseFromRoutine(routineId: string, routineExerciseId: string) {
+		await removeExerciseFromRoutine(routineExerciseId);
+		setRoutineExercisesMap((prev) => ({
+			...prev,
+			[routineId]: prev[routineId].filter((re) => re.id !== routineExerciseId),
+		}));
+	}
+
+	async function handleUpdateDuration(
+		routineId: string,
+		routineExerciseId: string,
+		mins: number,
+	) {
+		await updateRoutineExerciseDuration(routineExerciseId, mins);
+		setRoutineExercisesMap((prev) => ({
+			...prev,
+			[routineId]: prev[routineId].map((re) =>
+				re.id === routineExerciseId ? { ...re, duration_minutes: mins } : re,
+			),
+		}));
+	}
+
+	async function handleSwapOrder(routineId: string, idA: string, idB: string) {
+		await swapRoutineExerciseOrder(idA, idB);
+		setRoutineExercisesMap((prev) => {
+			const list = prev[routineId];
+			const a = list.find((re) => re.id === idA)!;
+			const b = list.find((re) => re.id === idB)!;
+			const aOrder = a.order_index;
+			const updated = list.map((re) => {
+				if (re.id === idA) return { ...re, order_index: b.order_index };
+				if (re.id === idB) return { ...re, order_index: aOrder };
+				return re;
+			});
+			return { ...prev, [routineId]: updated.sort((x, y) => x.order_index - y.order_index) };
+		});
+	}
+
+	function closeDialog() {
+		setEditingRoutineId(null);
+		setSelectedCategory("");
+		setSelectedExerciseId("");
+		setDuration("");
 	}
 
 	async function handleAddExerciseToRoutine(routineId: string) {
@@ -213,6 +275,10 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 							return (
 								<motion.div
 									key={routine.id}
+									layout
+									transition={{
+										layout: { type: "spring", stiffness: 500, damping: 35 },
+									}}
 									className={
 										i < routines.length - 1 ? "border-b border-border" : ""
 									}
@@ -252,6 +318,18 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 											<Button
 												size="icon-sm"
 												variant="ghost"
+												onClick={(e) => {
+													e.stopPropagation();
+													setEditingRoutineId(routine.id);
+												}}
+												className="text-muted-foreground"
+												title="Edit"
+											>
+												<Pencil className="size-3.5" />
+											</Button>
+											<Button
+												size="icon-sm"
+												variant="ghost"
 												onClick={(e) => handleDeleteRoutine(e, routine.id)}
 												className="text-muted-foreground hover:text-destructive"
 											>
@@ -270,11 +348,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 												transition={{ duration: 0.2, ease: "easeInOut" }}
 												style={{ overflow: "hidden" }}
 											>
-												<div
-													className="px-4 pb-4 space-y-3 border-t border-border bg-muted/20"
-													onClick={(e) => e.stopPropagation()}
-												>
-													{/* Exercise list */}
+												<div className="px-4 pb-4 border-t border-border bg-muted/20">
 													{loadingExercises === routine.id ? (
 														<p className="text-xs text-muted-foreground pt-3">
 															Loading...
@@ -287,7 +361,9 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 																	className="flex items-center justify-between text-xs"
 																>
 																	<div className="flex items-center gap-2">
-																		<span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+																		<span
+																			className={`inline-flex items-center rounded-md ${CATEGORY_COLORS[re.exercise.category]} px-1.5 py-0.5 text-[10px] font-medium`}
+																		>
 																			{
 																				CATEGORY_LABELS[
 																					re.exercise
@@ -313,101 +389,6 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 															No exercises added yet.
 														</p>
 													)}
-
-													{/* Add exercise */}
-													<div className="space-y-2 pt-1">
-														<p className="text-xs font-medium text-muted-foreground">
-															Add exercise
-														</p>
-														<div className="grid grid-cols-2 gap-2">
-															<Select
-																value={selectedCategory}
-																onValueChange={(v) => {
-																	setSelectedCategory(
-																		v as Exercise["category"],
-																	);
-																	setSelectedExerciseId("");
-																}}
-															>
-																<SelectTrigger className="h-7 text-xs">
-																	<SelectValue placeholder="Category" />
-																</SelectTrigger>
-																<SelectContent>
-																	{CATEGORIES.map((cat) => (
-																		<SelectItem
-																			key={cat}
-																			value={cat}
-																			className="text-xs"
-																		>
-																			{CATEGORY_LABELS[cat]}
-																		</SelectItem>
-																	))}
-																</SelectContent>
-															</Select>
-															<Select
-																value={selectedExerciseId}
-																onValueChange={
-																	setSelectedExerciseId
-																}
-																disabled={
-																	!selectedCategory ||
-																	filteredExercises.length === 0
-																}
-															>
-																<SelectTrigger className="h-7 text-xs">
-																	<SelectValue
-																		placeholder={
-																			!selectedCategory
-																				? "Pick category first"
-																				: filteredExercises.length ===
-																					  0
-																					? "None in category"
-																					: "Exercise"
-																		}
-																	/>
-																</SelectTrigger>
-																<SelectContent>
-																	{filteredExercises.map((ex) => (
-																		<SelectItem
-																			key={ex.id}
-																			value={ex.id}
-																			className="text-xs"
-																		>
-																			{ex.title}
-																		</SelectItem>
-																	))}
-																</SelectContent>
-															</Select>
-														</div>
-														<div className="flex gap-2">
-															<Input
-																type="number"
-																className="h-7 text-xs"
-																placeholder="Duration (min)"
-																value={duration}
-																onChange={(e) =>
-																	setDuration(
-																		Number(e.target.value),
-																	)
-																}
-															/>
-															<Button
-																size="sm"
-																disabled={
-																	!selectedCategory ||
-																	!selectedExerciseId ||
-																	!duration
-																}
-																onClick={() =>
-																	handleAddExerciseToRoutine(
-																		routine.id,
-																	)
-																}
-															>
-																Add
-															</Button>
-														</div>
-													</div>
 												</div>
 											</motion.div>
 										)}
@@ -418,6 +399,185 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 					</AnimatePresence>
 				)}
 			</div>
+
+			{/* Edit routine dialog */}
+			<Dialog
+				open={editingRoutineId !== null}
+				onOpenChange={(open: boolean) => {
+					if (!open) closeDialog();
+				}}
+			>
+				<DialogContent className="max-w-md sm:max-w-xl">
+					<DialogHeader>
+						<DialogTitle className="text-base">{editingRoutine?.title}</DialogTitle>
+					</DialogHeader>
+
+					{/* Exercise rows */}
+					<div className="divide-y divide-border min-h-0">
+						{dialogExercises.length === 0 ? (
+							<p className="text-xs text-muted-foreground">No exercises yet.</p>
+						) : (
+							<AnimatePresence initial={false}>
+								{dialogExercises.map((re, i) => (
+									<motion.div
+										key={re.id}
+										initial={{ opacity: 0, y: 8 }}
+										animate={{ opacity: 1, y: 0 }}
+										exit={{ opacity: 0, y: 8 }}
+										transition={{ duration: 0.15 }}
+										className="flex items-center gap-2 py-1.5"
+									>
+										<span
+											className={`inline-flex items-center rounded-md ${CATEGORY_COLORS[re.exercise.category]} px-1.5 py-0.5 text-[10px] font-medium shrink-0`}
+										>
+											{CATEGORY_LABELS[re.exercise.category]}
+										</span>
+										<span className="text-sm flex-1 w-30 sm:w-60 overflow-hidden text-ellipsis">
+											{re.exercise.title}
+										</span>
+										<div className="flex items-center gap-2">
+											<Input
+												key={re.id + re.duration_minutes}
+												type="number"
+												className="h-7 text-xs w-14 shrink-0"
+												defaultValue={re.duration_minutes}
+												// onBlur: update duration if changed and >0, only if value is different to avoid unnecessary API calls
+												onBlur={(e) => {
+													const val = Number(e.target.value);
+													if (val > 0 && val !== re.duration_minutes) {
+														handleUpdateDuration(
+															editingRoutineId!,
+															re.id,
+															val,
+														);
+													}
+												}}
+											/>
+											<span className="text-xs text-muted-foreground shrink-0">
+												m
+											</span>
+										</div>
+										<Button
+											size="icon-sm"
+											variant="ghost"
+											disabled={i === 0}
+											onClick={() =>
+												handleSwapOrder(
+													editingRoutineId!,
+													re.id,
+													dialogExercises[i - 1].id,
+												)
+											}
+											className="hover:text-emerald-600!"
+										>
+											<ArrowUp className="size-3.5" />
+										</Button>
+										<Button
+											size="icon-sm"
+											variant="ghost"
+											disabled={i === dialogExercises.length - 1}
+											onClick={() =>
+												handleSwapOrder(
+													editingRoutineId!,
+													re.id,
+													dialogExercises[i + 1].id,
+												)
+											}
+											className="hover:text-amber-600!"
+										>
+											<ArrowDown className="size-3.5" />
+										</Button>
+										<Button
+											size="icon-sm"
+											variant="ghost"
+											onClick={() =>
+												handleRemoveExerciseFromRoutine(
+													editingRoutineId!,
+													re.id,
+												)
+											}
+											className="text-muted-foreground hover:text-destructive"
+										>
+											<Trash2 className="size-3.5" />
+										</Button>
+									</motion.div>
+								))}
+							</AnimatePresence>
+						)}
+					</div>
+
+					{/* Add exercise */}
+					<div className="space-y-2 pt-2 border-border">
+						<p className="text-sm font-medium text-muted-foreground">Add exercise</p>
+						<div className="flex gap-2 text-xs">
+							<Select
+								value={selectedCategory}
+								onValueChange={(v) => {
+									setSelectedCategory(v as Exercise["category"]);
+									setSelectedExerciseId("");
+								}}
+							>
+								<SelectTrigger className="h-7">
+									<SelectValue placeholder="Category" />
+								</SelectTrigger>
+								<SelectContent>
+									{CATEGORIES.map((cat) => (
+										<SelectItem key={cat} value={cat}>
+											{CATEGORY_LABELS[cat]}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<Select
+								value={selectedExerciseId}
+								onValueChange={setSelectedExerciseId}
+								disabled={!selectedCategory || filteredExercises.length === 0}
+							>
+								<SelectTrigger className="h-7 max-w-60 sm:max-w-100 overflow-hidden text-ellipsis">
+									<SelectValue
+										placeholder={
+											!selectedCategory
+												? "Pick category first"
+												: filteredExercises.length === 0
+													? "None in category"
+													: "Exercise"
+										}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									{filteredExercises.map((ex) => (
+										<SelectItem key={ex.id} value={ex.id}>
+											{ex.title}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="flex gap-2">
+							<Input
+								type="number"
+								className="h-7 text-xs w-50"
+								placeholder="Duration (min)"
+								value={duration}
+								onChange={(e) => setDuration(Number(e.target.value))}
+							/>
+							<Button
+								size="sm"
+								disabled={!selectedCategory || !selectedExerciseId || !duration}
+								onClick={() => handleAddExerciseToRoutine(editingRoutineId!)}
+							>
+								Add
+							</Button>
+						</div>
+					</div>
+
+					<DialogFooter>
+						<Button variant="outline" onClick={closeDialog}>
+							Close
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

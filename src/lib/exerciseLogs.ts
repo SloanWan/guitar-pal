@@ -31,7 +31,7 @@ export async function createExerciseLog({
 		})
 		.select() // return the inserted row
 		.single(); // we expect only one row to be inserted
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }
 
@@ -41,6 +41,6 @@ export async function getExerciseLogs(): Promise<ExerciseLog[]> {
 		.from("exercise_logs")
 		.select("*")
 		.order("logged_at", { ascending: false });
-	if (error) throw error;
+	if (error) throw new Error(error.message);
 	return data;
 }

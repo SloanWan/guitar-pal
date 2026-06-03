@@ -86,7 +86,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 		setLoading(true);
 		try {
 			const routine = await createRoutine(title);
-			setRoutines((prev) => [...prev, routine]);
+			setRoutines((prev) => [routine, ...prev]);
 			setTitle("");
 			setShowForm(false);
 		} catch (error) {
@@ -275,6 +275,10 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 							return (
 								<motion.div
 									key={routine.id}
+									layout
+									transition={{
+										layout: { type: "spring", stiffness: 500, damping: 35 },
+									}}
 									className={
 										i < routines.length - 1 ? "border-b border-border" : ""
 									}

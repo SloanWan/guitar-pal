@@ -360,13 +360,22 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 																		<span
 																			className={`inline-flex items-center rounded-md ${CATEGORY_COLORS[re.exercise.category]} px-1.5 py-0.5 text-[10px] font-medium`}
 																		>
-																			{CATEGORY_LABELS[re.exercise.category]}
+																			{
+																				CATEGORY_LABELS[
+																					re.exercise
+																						.category
+																				]
+																			}
 																		</span>
-																		<span>{re.exercise.title}</span>
+																		<span>
+																			{re.exercise.title}
+																		</span>
 																	</div>
 																	<div className="flex items-center gap-1 text-muted-foreground">
 																		<Clock className="size-3" />
-																		<span>{re.duration_minutes}m</span>
+																		<span>
+																			{re.duration_minutes}m
+																		</span>
 																	</div>
 																</div>
 															))}
@@ -494,7 +503,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 					{/* Add exercise */}
 					<div className="space-y-2 pt-2 border-t border-border">
 						<p className="text-xs font-medium text-muted-foreground">Add exercise</p>
-						<div className="grid grid-cols-2 gap-2">
+						<div className="flex gap-2">
 							<Select
 								value={selectedCategory}
 								onValueChange={(v) => {
@@ -518,7 +527,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 								onValueChange={setSelectedExerciseId}
 								disabled={!selectedCategory || filteredExercises.length === 0}
 							>
-								<SelectTrigger className="h-7 text-xs">
+								<SelectTrigger className="h-7 text-xs max-w-60 sm:max-w-100 overflow-hidden text-ellipsis">
 									<SelectValue
 										placeholder={
 											!selectedCategory
@@ -541,7 +550,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 						<div className="flex gap-2">
 							<Input
 								type="number"
-								className="h-7 text-xs"
+								className="h-7 text-xs w-50"
 								placeholder="Duration (min)"
 								value={duration}
 								onChange={(e) => setDuration(Number(e.target.value))}

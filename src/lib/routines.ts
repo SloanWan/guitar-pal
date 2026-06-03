@@ -64,6 +64,40 @@ export async function removeExerciseFromRoutine(id: string): Promise<void> {
 	const { error } = await supabase.from("routine_exercises").delete().eq("id", id);
 	if (error) throw error;
 }
+export async function updateRoutineExerciseDuration(
+	id: string,
+	durationMinutes: number,
+): Promise<void> {
+	const supabase = createClient();
+	const { error } = await supabase
+		.from("routine_exercises")
+		.update({ duration_minutes: durationMinutes })
+		.eq("id", id);
+	if (error) throw error;
+}
+export async function swapRoutineExerciseOrder(id1: string, id2: string): Promise<void> {
+	const supabase = createClient();
+	const [{ data: exercise1, error: error1 }, { data: exercise2, error: error2 }] =
+		await Promise.all([
+			supabase.from("routine_exercises").select("*").eq("id", id1).single(),
+			supabase.from("routine_exercises").select("*").eq("id", id2).single(),
+		]);
+	if (error1) throw error1;
+	if (error2) throw error2;
+
+	const [{ error: updateError1 }, { error: updateError2 }] = await Promise.all([
+		supabase
+			.from("routine_exercises")
+			.update({ order_index: exercise2.order_index })
+			.eq("id", id1),
+		supabase
+			.from("routine_exercises")
+			.update({ order_index: exercise1.order_index })
+			.eq("id", id2),
+	]);
+	if (updateError1) throw updateError1;
+	if (updateError2) throw updateError2;
+}
 export async function getRoutineExercises(
 	routineId: string,
 ): Promise<(RoutineExercise & { exercise: Exercise })[]> {

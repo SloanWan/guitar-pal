@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
 	createRoutine,
@@ -41,6 +41,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
+	DialogDescription,
 } from "@/components/ui/dialog";
 import { Routine, RoutineExercise, Exercise, CATEGORIES } from "@/types/database";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/constants";
@@ -72,6 +73,15 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 	useEffect(() => {
 		getRoutines().then(setRoutines);
 	}, []);
+
+	const previousExercisesLength = useRef(exercises.length);
+	useEffect(() => {
+		if (exercises.length < previousExercisesLength.current) {
+			setRoutineExercisesMap({});
+			setExpandedId(null);
+		}
+		previousExercisesLength.current = exercises.length;
+	}, [exercises]);
 
 	// Fetch exercises for dialog if not yet loaded
 	useEffect(() => {
@@ -410,6 +420,9 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 				<DialogContent className="max-w-md sm:max-w-xl">
 					<DialogHeader>
 						<DialogTitle className="text-base">{editingRoutine?.title}</DialogTitle>
+						<DialogDescription className="sr-only">
+							Manage exercises in this routine
+						</DialogDescription>
 					</DialogHeader>
 
 					{/* Exercise rows */}
@@ -509,7 +522,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 					{/* Add exercise */}
 					<div className="space-y-2 pt-2 border-border">
 						<p className="text-sm font-medium text-muted-foreground">Add exercise</p>
-						<div className="flex gap-2 text-xs">
+						<div className="flex gap-2">
 							<Select
 								value={selectedCategory}
 								onValueChange={(v) => {
@@ -517,7 +530,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 									setSelectedExerciseId("");
 								}}
 							>
-								<SelectTrigger className="h-7">
+								<SelectTrigger className="h-7 text-[12px]">
 									<SelectValue placeholder="Category" />
 								</SelectTrigger>
 								<SelectContent>
@@ -533,7 +546,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 								onValueChange={setSelectedExerciseId}
 								disabled={!selectedCategory || filteredExercises.length === 0}
 							>
-								<SelectTrigger className="h-7 max-w-60 sm:max-w-100 overflow-hidden text-ellipsis">
+								<SelectTrigger className="h-7 text-[12px] max-w-60 sm:max-w-100 overflow-hidden text-ellipsis">
 									<SelectValue
 										placeholder={
 											!selectedCategory
@@ -556,7 +569,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 						<div className="flex gap-2">
 							<Input
 								type="number"
-								className="h-7 text-xs w-50"
+								className="h-7 text-[11px] w-50"
 								placeholder="Duration (min)"
 								value={duration}
 								onChange={(e) => setDuration(Number(e.target.value))}
@@ -565,6 +578,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 								size="sm"
 								disabled={!selectedCategory || !selectedExerciseId || !duration}
 								onClick={() => handleAddExerciseToRoutine(editingRoutineId!)}
+								className="w-20 disabled:pointer-events-auto disabled:cursor-not-allowed hover:enabled:bg-amber-700!"
 							>
 								Add
 							</Button>

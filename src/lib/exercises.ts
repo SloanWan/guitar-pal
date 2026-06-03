@@ -41,3 +41,16 @@ export async function getExercises(): Promise<Exercise[]> {
 	if (error) throw error;
 	return data;
 }
+
+export async function getRoutineNamesForExercise(exerciseId: string): Promise<string[]> {
+	const supabase = createClient();
+	const { data, error } = await supabase
+		.from("routine_exercises")
+		.select("routines(title)")
+		.eq("exercise_id", exerciseId);
+	if (error) throw error;
+	// console.log(data);
+	return (data as unknown as { routines: { title: string } }[]).map(
+		(item) => item.routines.title,
+	);
+}

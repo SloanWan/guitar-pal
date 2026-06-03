@@ -16,7 +16,12 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import { useState, useEffect } from "react";
 import { Exercise, CATEGORIES } from "@/types/database";
-import { createExercise, getExercises, deleteExercise } from "@/lib/exercises";
+import {
+	createExercise,
+	getExercises,
+	deleteExercise,
+	getRoutineNamesForExercise,
+} from "@/lib/exercises";
 
 const CATEGORY_LABELS: Record<string, string> = {
 	chord: "Chord",
@@ -59,6 +64,10 @@ export default function ExerciseList({
 	const [description, setDescription] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [activeCategory, setActiveCategory] = useState<string | null>(null);
+	const [pendingDelete, setPendingDelete] = useState<{
+		id: string;
+		routineNames: string[];
+	} | null>(null);
 
 	const presentCategories = CATEGORIES.filter((cat) => exercises.some((e) => e.category === cat));
 
@@ -77,7 +86,6 @@ export default function ExerciseList({
 		if (!title.trim()) return;
 		setLoading(true);
 		const newExercise = await createExercise(title, category, description || null);
-		// onExerciseChange();
 		onAddExercise(newExercise);
 		setTitle("");
 		setDescription("");
@@ -86,7 +94,19 @@ export default function ExerciseList({
 	}
 
 	async function handleDeleteExercise(id: string) {
-		await deleteExercise(id);
+		const routineNames = await getRoutineNamesForExercise(id);
+		if (routineNames.length > 0) {
+			setPendingDelete({ id, routineNames });
+		} else {
+			await deleteExercise(id);
+			onExerciseChange();
+		}
+	}
+
+	async function handleConfirmDelete() {
+		if (!pendingDelete) return;
+		await deleteExercise(pendingDelete.id);
+		setPendingDelete(null);
 		onExerciseChange();
 	}
 
@@ -245,33 +265,98 @@ export default function ExerciseList({
 									duration: 0.15,
 									layout: { type: "spring", stiffness: 500, damping: 35 },
 								}}
-								className={`flex items-center justify-between px-4 py-3 ${
+								className={
 									i < filteredExercises.length - 1 ? "border-b border-border" : ""
-								}`}
+								}
 							>
-								<div className="flex items-center gap-3 min-w-0">
-									<span
-										className={`shrink-0 inline-flex items-center rounded-md ${CATEGORY_COLORS[exercise.category]} px-2 py-0.5 text-xs font-medium`}
-									>
-										{CATEGORY_LABELS[exercise.category]}
-									</span>
-									<span className="text-sm font-medium truncate">
-										{exercise.title}
-									</span>
-									{exercise.description && (
-										<span className="text-xs text-muted-foreground truncate hidden sm:block">
-											{exercise.description}
+								{/* Exercise row */}
+								<div className="flex items-center justify-between px-4 py-3">
+									<div className="flex items-center gap-3 min-w-0">
+										<span
+											className={`shrink-0 inline-flex items-center rounded-md ${CATEGORY_COLORS[exercise.category]} px-2 py-0.5 text-xs font-medium`}
+										>
+											{CATEGORY_LABELS[exercise.category]}
 										</span>
-									)}
+										<span className="text-sm font-medium truncate">
+											{exercise.title}
+										</span>
+										{exercise.description && (
+											<span className="text-xs text-muted-foreground truncate hidden sm:block">
+												{exercise.description}
+											</span>
+										)}
+									</div>
+									<Button
+										size="icon-sm"
+										variant="ghost"
+										onClick={() =>
+											pendingDelete?.id === exercise.id
+												? setPendingDelete(null)
+												: handleDeleteExercise(exercise.id)
+										}
+										className="shrink-0 text-muted-foreground hover:text-destructive"
+									>
+										<Trash2 className="size-3.5" />
+									</Button>
 								</div>
-								<Button
-									size="icon-sm"
-									variant="ghost"
-									onClick={() => handleDeleteExercise(exercise.id)}
-									className="shrink-0 text-muted-foreground hover:text-destructive"
-								>
-									<Trash2 className="size-3.5" />
-								</Button>
+
+								{/* Inline deletion warning */}
+								<AnimatePresence initial={false}>
+									{pendingDelete?.id === exercise.id && (
+										<motion.div
+											initial={{ height: 0, opacity: 0 }}
+											animate={{ height: "auto", opacity: 1 }}
+											exit={{ height: 0, opacity: 0 }}
+											transition={{ duration: 0.2, ease: "easeInOut" }}
+											style={{ overflow: "hidden" }}
+										>
+											<div className="border-t border-border px-4 py-3 space-y-2 bg-muted/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+												<div className="space-y-1">
+													<p className="text-xs text-muted-foreground">
+														This exercise is used in{" "}
+														<span className="font-medium text-foreground border border-red-200 bg-red-100/50 px-1 rounded">
+															{pendingDelete.routineNames.length === 1
+																? pendingDelete.routineNames[0]
+																: pendingDelete.routineNames
+																		.slice(0, -1)
+																		.join(", ") +
+																	" and " +
+																	pendingDelete.routineNames.at(
+																		-1,
+																	)}
+														</span>
+														.
+													</p>
+													<p className="text-xs text-muted-foreground">
+														Deleting it will remove it from{" "}
+														{pendingDelete.routineNames.length === 1
+															? "that routine"
+															: "those routines"}{" "}
+														too.
+													</p>
+												</div>
+												<div className="flex gap-2">
+													<Button
+														size="sm"
+														variant="outline"
+														className="h-7 text-xs"
+														onClick={() => setPendingDelete(null)}
+													>
+														Cancel
+													</Button>
+													<Button
+														size="sm"
+														variant="destructive"
+														className="h-7 text-xs"
+														onClick={handleConfirmDelete}
+													>
+														Delete anyway
+													</Button>
+												</div>
+											</div>
+										</motion.div>
+									)}
+								</AnimatePresence>
 							</motion.div>
 						))}
 					</AnimatePresence>

@@ -1,7 +1,7 @@
 import { Guitar } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import LogoutButton from "./LogoutButton";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { createSupabaseServer } from "@/lib/supabase-server";
 
 export default async function NavBar() {
@@ -13,7 +13,7 @@ export default async function NavBar() {
 	return (
 		<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
 			<div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-				<Link href="/dashboard" className="flex items-center gap-2">
+				<Link href="/" className="flex items-center gap-2">
 					<div className="flex items-center justify-center size-7 rounded-lg bg-amber-100 text-amber-700">
 						<Guitar className="size-4" />
 					</div>

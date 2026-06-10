@@ -7,7 +7,7 @@ import { Music, Rows4 } from "lucide-react";
 
 const links = [
 	{ href: "/chords", label: "Chords Library", Icon: Music },
-	{ href: "/strum", label: "Strumming Machine", Icon: Rows4 },
+	{ href: "/strum", label: "Strumming Playground", Icon: Rows4 },
 ];
 
 export default function NavLinks() {

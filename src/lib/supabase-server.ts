@@ -1,3 +1,5 @@
+// "use server";
+
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -12,9 +14,13 @@ export async function createSupabaseServer() {
 					return cookieStore.getAll();
 				},
 				setAll(cookiesToSet) {
-					cookiesToSet.forEach(({ name, value, options }) =>
-						cookieStore.set(name, value, options),
-					);
+					try {
+						cookiesToSet.forEach(({ name, value, options }) =>
+							cookieStore.set(name, value, options),
+						);
+					} catch {
+						// In case we're in an environment where cookies can't be set (like during static generation), we can ignore the error.
+					}
 				},
 			},
 		},

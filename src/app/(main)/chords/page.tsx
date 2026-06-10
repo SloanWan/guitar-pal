@@ -1,6 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
 import ChordsView from "@/components/ChordsView";
-import NavBar from "@/components/NavBar";
 
 export default async function ChordsPage() {
 	const supabase = await createSupabaseServer();
@@ -36,7 +35,6 @@ export default async function ChordsPage() {
 
 	return (
 		<div className="min-h-screen bg-background">
-			<NavBar />
 			<div className="container mx-auto py-8 text-center">
 				{/* <h1 className="text-4xl font-bold mb-8">Guitar Chords</h1> */}
 				<ChordsView

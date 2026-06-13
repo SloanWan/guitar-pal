@@ -3,6 +3,7 @@
 import StepGrid from "@/components/strum/StepGrid";
 import StepGridCard from "@/components/strum/StepGridCard";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
+import PlayControls from "@/components/strum/PlayControls";
 
 import { useState } from "react";
 
@@ -40,14 +41,12 @@ export default function StrumPage() {
 				<div className="flex flex-col items-center gap-4">
 					<div>Current Pattern</div>
 					<div>
-						<StepGridCard
-							beats={selectedPattern.beats}
-							name={selectedPattern.name}
-							activeCell={null}
-						/>
+						<StepGridCard pattern={selectedPattern} activeCell={null} />
 					</div>
 				</div>
-				<div>controls</div>
+				<div>
+					<PlayControls pattern={selectedPattern} />
+				</div>
 			</div>
 		</div>
 	);

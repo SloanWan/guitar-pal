@@ -1,32 +1,26 @@
-import { Beat } from "@/lib/strumPatterns";
+import { Beat, StrumPattern } from "@/lib/strumPatterns";
 
-import { MoveDown, MoveUp, X, Dot } from "lucide-react";
-import { Card, CardContent, CardTitle, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardTitle, CardHeader, CardDescription } from "@/components/ui/card";
 import StepGrid from "./StepGrid";
 
 export default function StepGridCard({
-	beats,
-	name,
+	pattern,
 	activeCell,
-	size = "md",
-	showLabels = true,
 }: {
-	beats: Beat[];
-	name: string;
+	pattern: StrumPattern;
 	activeCell: {
 		beatIdx: number;
 		cellIdx: number;
 	} | null;
-	size?: "sm" | "md"; // default md
-	showLabels?: boolean; // default true
 }) {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle className="capitalize">{name}</CardTitle>
+				<CardTitle className="capitalize">{pattern.name}</CardTitle>
+				<CardDescription>{pattern.description}</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<StepGrid beats={beats} activeCell={null} />
+				<StepGrid beats={pattern.beats} activeCell={null} />
 			</CardContent>
 		</Card>
 	);

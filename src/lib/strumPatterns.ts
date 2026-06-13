@@ -87,4 +87,26 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 		],
 		description: "DUD D D D",
 	},
+	{
+		id: "test1",
+		name: "test1",
+		beats: [
+			["D", "UG"],
+			["D", "U"],
+			["DG", "U"],
+			["D", "UG"],
+		],
+		description: "D DU UD",
+	},
+	{
+		id: "test2",
+		name: "test2",
+		beats: [
+			["D", "UG"],
+			["D", "U"],
+			["DG", "U"],
+			["D", "UG"],
+		],
+		description: "D DU UD",
+	},
 ];

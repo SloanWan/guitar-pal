@@ -2,7 +2,7 @@
 
 import StepGrid from "@/components/strum/StepGrid";
 import StepGridCard from "@/components/strum/StepGridCard";
-import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
+import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
 
 import { useState } from "react";
 
@@ -17,10 +17,12 @@ const MAX_BPM = 220;
 export default function StrumPage() {
 	const [selectedPattern, setSelectedPattern] = useState(PRESET_STRUM_PATTERNS[0]);
 	const [bpm, setBpm] = useState(80);
+	const [tickMode, setTickMode] = useState<TickMode>("quarter");
 
 	const { isPlaying, start, stop, currBeat, currCell } = useAudioEngine(
 		selectedPattern.beats,
 		bpm,
+		tickMode,
 	);
 
 	function handleHitPlayAndPause() {
@@ -29,6 +31,11 @@ export default function StrumPage() {
 		} else {
 			start();
 		}
+	}
+
+	function handleSelectPattern(pattern: StrumPattern) {
+		stop();
+		setSelectedPattern(pattern);
 	}
 
 	return (
@@ -41,7 +48,7 @@ export default function StrumPage() {
 						return (
 							<div
 								key={patternIdx}
-								onClick={() => setSelectedPattern(pattern)}
+								onClick={() => handleSelectPattern(pattern)}
 								className={`${selectedPattern.id === pattern.id ? "bg-amber-100" : ""} cursor-pointer border rounded-md p-3 hover:bg-amber-100/50 transition-all duration-300`}
 							>
 								<div className="capitalize text-[12px]">{pattern.name}</div>
@@ -71,9 +78,39 @@ export default function StrumPage() {
 				{/* Controls Section */}
 				<div className="w-160">
 					<Card>
-						<CardHeader className="flex justify-center">
-							<CardAction onClick={handleHitPlayAndPause} className="">
+						<CardHeader className="w-full flex flex-col items-center">
+							<CardAction onClick={handleHitPlayAndPause} className="w-full">
 								{isPlaying ? <CirclePause size={48} /> : <CirclePlay size={48} />}
+							</CardAction>
+							<CardAction>
+								<Button
+									onClick={() => {
+										setTickMode("quarter");
+									}}
+									variant={`${tickMode === "quarter" ? "default" : "secondary"}`}
+									className="cursor-pointer"
+								>
+									1/4
+								</Button>
+								<Button
+									onClick={() => {
+										setTickMode("eighth");
+									}}
+									variant={`${tickMode === "eighth" ? "default" : "secondary"}`}
+									className="cursor-pointer"
+								>
+									1/8
+								</Button>
+								<Button
+									onClick={() => {
+										setTickMode("sixteenth");
+									}}
+									variant={`${tickMode === "sixteenth" ? "default" : "secondary"}`}
+									className="cursor-pointer"
+								>
+									1/16
+								</Button>
+								{/* <Button>1/3</Button> */}
 							</CardAction>
 						</CardHeader>
 						<CardContent className="flex flex-col items-center gap-3">

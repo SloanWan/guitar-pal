@@ -1,8 +1,9 @@
 import { Beat } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
+import { TickMode } from "@/lib/strumPatterns";
 
-export function useAudioEngine(beats: Beat[], bpm: number) {
+export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
 	const schedulerRef = useRef<number | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
@@ -12,6 +13,15 @@ export function useAudioEngine(beats: Beat[], bpm: number) {
 	const currBeatIdxref = useRef(0);
 	const currCellIdxRef = useRef(0);
 	const nextCellTimeRef = useRef(0);
+	const bpmRef = useRef(bpm);
+	const tickModeRef = useRef(tickMode);
+
+	useEffect(() => {
+		bpmRef.current = bpm;
+	}, [bpm]);
+	useEffect(() => {
+		tickModeRef.current = tickMode;
+	}, [tickMode]);
 
 	function start() {
 		if (!audioCtxRef.current) {
@@ -38,13 +48,22 @@ export function useAudioEngine(beats: Beat[], bpm: number) {
 
 	function scheduler() {
 		const ctx = audioCtxRef.current!;
-		const secondsPerBeat = 60 / bpm;
+		const secondsPerBeat = 60 / bpmRef.current;
 
 		while (nextCellTimeRef.current < ctx.currentTime + 0.1) {
 			const beat = beats[currBeatIdxref.current];
+			// const paddedLength = beat.length === 3 ? 3 : 4;
 			const secondsPerCell = secondsPerBeat / beat.length;
 
-			playTick(nextCellTimeRef.current);
+			const shouldNotTick =
+				(tickModeRef.current === "quarter" && currCellIdxRef.current != 0) ||
+				(tickModeRef.current === "eighth" &&
+					beat.length === 4 &&
+					(currCellIdxRef.current === 1 || currCellIdxRef.current === 3));
+
+			if (!shouldNotTick) {
+				playTick(nextCellTimeRef.current);
+			}
 			setCurrBeat(currBeatIdxref.current);
 			setCurrCell(currCellIdxRef.current);
 

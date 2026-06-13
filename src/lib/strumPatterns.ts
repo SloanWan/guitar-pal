@@ -2,6 +2,8 @@ export type StepValue = "D" | "U" | "X" | "" | "DG" | "UG" | "D3" | "U3";
 
 export type Beat = StepValue[]; // length = 1|2|3|4
 
+export type TickMode = "quarter" | "eighth" | "sixteenth";
+
 export interface StrumPattern {
 	id: string;
 	name: string;

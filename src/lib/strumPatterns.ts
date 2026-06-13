@@ -65,4 +65,26 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 		],
 		description: "Billie Ilish",
 	},
+	{
+		id: "3-4 test",
+		name: "hualala",
+		beats: [
+			["D", "UG", "DG"],
+			["D", "U", "D"],
+			["D", "UG", "DG"],
+			["D", "U", "D"],
+		],
+		description: "Billie Ilish",
+	},
+	{
+		id: "4-4 triplet on 1 and 3",
+		name: "triplet on 1+3",
+		beats: [
+			["D3", "U3", "D3"],
+			["D", "UG"],
+			["D3", "U3", "D3"],
+			["D", "UG"],
+		],
+		description: "DUD D D D",
+	},
 ];

@@ -15,11 +15,11 @@ export default function StepGridCard({
 }) {
 	return (
 		<Card>
-			<CardHeader>
+			<CardHeader className="border-b mx-2 text-left">
 				<CardTitle className="capitalize">{pattern.name}</CardTitle>
 				<CardDescription>{pattern.description}</CardDescription>
 			</CardHeader>
-			<CardContent>
+			<CardContent className="flex flex-col items-center">
 				<StepGrid beats={pattern.beats} activeCell={null} />
 			</CardContent>
 		</Card>

@@ -38,13 +38,13 @@ export default function StrumPage() {
 			{/* main practice section */}
 			<div className="flex-1 flex flex-col gap-4 items-center pt-5">
 				{/* pattern display */}
-				<div className="flex flex-col items-center gap-4">
+				<div className="w-full flex flex-col items-center gap-4">
 					<div>Current Pattern</div>
-					<div>
+					<div className="w-160">
 						<StepGridCard pattern={selectedPattern} activeCell={null} />
 					</div>
 				</div>
-				<div>
+				<div className="w-160">
 					<PlayControls pattern={selectedPattern} />
 				</div>
 			</div>

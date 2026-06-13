@@ -12,7 +12,7 @@ export default function StrumPage() {
 				<div>NavBar: playground | library</div>
 				<div>
 					<h2>Strumming Patterns</h2>
-					<div className="flex flex-col items-center capitalize gap-4">
+					<div className="flex flex-col items-center gap-4">
 						{PRESET_STRUM_PATTERNS.map((pattern, patternIdx) => {
 							return (
 								<div key={patternIdx}>

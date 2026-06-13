@@ -49,6 +49,12 @@ export default function StepGrid({
 	const containerGap = isSm ? "gap-1" : "gap-2";
 	const labelFontSize = isSm ? "text-[8px]" : "text-[12px]";
 
+	// Map audio engine cellIdx to padded display index
+	function getPaddedCellIdx(beatLength: number, cellIdx: number) {
+		if (beatLength === 2) return cellIdx * 2;
+		return cellIdx;
+	}
+
 	return (
 		<div>
 			{/* container for the whole bar */}
@@ -62,16 +68,28 @@ export default function StepGrid({
 								? [beat[0], "G", beat[1], "G"]
 								: beat;
 					const isTriplet = beat.length === 3;
+					const isActiveBeat = activeCell?.beatIdx === beatIdx;
 					return (
 						// match each cell in this beat
 						<div className="flex flex-col gap-2" key={beatIdx}>
 							<div
-								className={`flex ${beatWidth} border rounded-sm justify-between ${beatPy}`}
+								className={`flex ${beatWidth} border rounded-sm justify-between ${beatPy} ${isActiveBeat ? "border-amber-400 bg-amber-50" : ""}`}
 							>
 								{paddedCells.map((cell, cellIdx) => {
 									const Icon =
 										CELL_ARROW_MAP[cell as keyof typeof CELL_ARROW_MAP];
-									return <Icon key={cellIdx} />;
+									const isActiveCell =
+										isActiveBeat &&
+										cellIdx ===
+											getPaddedCellIdx(beat.length, activeCell!.cellIdx);
+									return (
+										<div
+											key={cellIdx}
+											className={`rounded-sm ${isActiveCell ? "text-amber-700" : ""}`}
+										>
+											<Icon />
+										</div>
+									);
 								})}
 							</div>
 							{showLabels && (

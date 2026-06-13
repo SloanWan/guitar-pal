@@ -3,12 +3,33 @@
 import StepGrid from "@/components/strum/StepGrid";
 import StepGridCard from "@/components/strum/StepGridCard";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
-import PlayControls from "@/components/strum/PlayControls";
 
 import { useState } from "react";
 
+import { useAudioEngine } from "@/components/strum/useAudioEngine";
+import { Card, CardHeader, CardContent, CardAction } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Plus, Minus, CirclePlay, CirclePause } from "lucide-react";
+
+const MIN_BPM = 40;
+const MAX_BPM = 220;
+
 export default function StrumPage() {
 	const [selectedPattern, setSelectedPattern] = useState(PRESET_STRUM_PATTERNS[0]);
+	const [bpm, setBpm] = useState(80);
+
+	const { isPlaying, start, stop, currBeat, currCell } = useAudioEngine(
+		selectedPattern.beats,
+		bpm,
+	);
+
+	function handleHitPlayAndPause() {
+		if (isPlaying) {
+			stop();
+		} else {
+			start();
+		}
+	}
 
 	return (
 		<div className="h-[calc(100vh-3.5rem)] flex overflow-hidden">
@@ -41,11 +62,63 @@ export default function StrumPage() {
 				<div className="w-full flex flex-col items-center gap-4">
 					<div>Current Pattern</div>
 					<div className="w-160">
-						<StepGridCard pattern={selectedPattern} activeCell={null} />
+						<StepGridCard
+							pattern={selectedPattern}
+							activeCell={{ beatIdx: currBeat, cellIdx: currCell }}
+						/>
 					</div>
 				</div>
+				{/* Controls Section */}
 				<div className="w-160">
-					<PlayControls pattern={selectedPattern} />
+					<Card>
+						<CardHeader className="flex justify-center">
+							<CardAction onClick={handleHitPlayAndPause} className="">
+								{isPlaying ? <CirclePause size={48} /> : <CirclePlay size={48} />}
+							</CardAction>
+						</CardHeader>
+						<CardContent className="flex flex-col items-center gap-3">
+							{/* BPM Slider */}
+							<input
+								type="range"
+								min={MIN_BPM}
+								max={MAX_BPM}
+								value={bpm}
+								onChange={(e) => setBpm(Number(e.target.value))}
+								className="w-full"
+							/>
+							{/* add/reduce buttons */}
+							<div className="w-full flex justify-between items-center">
+								<Button
+									onClick={() => {
+										if (bpm - 10 >= MIN_BPM) {
+											setBpm(bpm - 10);
+										} else {
+											setBpm(MIN_BPM);
+										}
+									}}
+								>
+									<Minus />
+								</Button>
+								<span className="flex flex-col items-center gap-1">
+									<span className="text-[24px]">{bpm}</span>
+									<span>BPM</span>
+								</span>
+								<Button
+									onClick={() => {
+										if (bpm + 10 <= MAX_BPM) {
+											setBpm(bpm + 10);
+										} else {
+											setBpm(MAX_BPM);
+										}
+									}}
+								>
+									<Plus />
+								</Button>
+							</div>
+							{/* tap tempo */}
+							<Button>Tap Tempooo</Button>
+						</CardContent>
+					</Card>
 				</div>
 			</div>
 		</div>

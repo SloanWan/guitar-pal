@@ -20,7 +20,7 @@ export default function StepGridCard({
 				<CardDescription>{pattern.description}</CardDescription>
 			</CardHeader>
 			<CardContent className="flex flex-col items-center">
-				<StepGrid beats={pattern.beats} activeCell={null} />
+				<StepGrid beats={pattern.beats} activeCell={activeCell} />
 			</CardContent>
 		</Card>
 	);

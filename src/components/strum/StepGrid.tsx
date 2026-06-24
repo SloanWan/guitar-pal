@@ -1,7 +1,6 @@
 import { Beat } from "@/lib/strumPatterns";
 
 import { MoveDown, MoveUp, X, Dot } from "lucide-react";
-import { Card, CardContent, CardTitle, CardHeader } from "@/components/ui/card";
 
 const BEAT_LABELS = {
 	1: (beatIdx: number) => [`${beatIdx + 1}`, "", "+", ""],
@@ -9,6 +8,12 @@ const BEAT_LABELS = {
 	3: (_beatIdx: number) => ["tri", "p", "let"],
 	4: (beatIdx: number) => [`${beatIdx + 1}`, "e", "+", "a"],
 };
+
+// Maps audio engine cellIdx to padded display index (2-cell beats are padded to 4 slots)
+function getPaddedCellIdx(beatLength: number, cellIdx: number) {
+	if (beatLength === 2) return cellIdx * 2;
+	return cellIdx;
+}
 
 export default function StepGrid({
 	beats,
@@ -49,71 +54,58 @@ export default function StepGrid({
 	const containerGap = isSm ? "gap-1" : "gap-2";
 	const labelFontSize = isSm ? "text-[8px]" : "text-[12px]";
 
-	// Map audio engine cellIdx to padded display index
-	function getPaddedCellIdx(beatLength: number, cellIdx: number) {
-		if (beatLength === 2) return cellIdx * 2;
-		return cellIdx;
-	}
-
 	return (
-		<div>
-			{/* container for the whole bar */}
-			<div className={`flex ${containerGap}`}>
-				{/* map each beat */}
-				{beats.map((beat, beatIdx) => {
-					const paddedCells =
-						beat.length === 1
-							? [beat[0], "G", "UG", "G"]
-							: beat.length === 2
-								? [beat[0], "G", beat[1], "G"]
-								: beat;
-					const isTriplet = beat.length === 3;
-					const isActiveBeat = activeCell?.beatIdx === beatIdx;
-					return (
-						// match each cell in this beat
-						<div className="flex flex-col gap-2" key={beatIdx}>
-							<div
-								className={`flex ${beatWidth} border rounded-sm justify-between ${beatPy} ${isActiveBeat ? "border-amber-400 bg-amber-50" : ""}`}
-							>
-								{paddedCells.map((cell, cellIdx) => {
-									const Icon =
-										CELL_ARROW_MAP[cell as keyof typeof CELL_ARROW_MAP];
-									const isActiveCell =
-										isActiveBeat &&
-										cellIdx ===
-											getPaddedCellIdx(beat.length, activeCell!.cellIdx);
+		<div className={`flex ${containerGap}`}>
+			{beats.map((beat, beatIdx) => {
+				const paddedCells =
+					beat.length === 1
+						? [beat[0], "G", "UG", "G"]
+						: beat.length === 2
+							? [beat[0], "G", beat[1], "G"]
+							: beat;
+				const isTriplet = beat.length === 3;
+				const isActiveBeat = activeCell?.beatIdx === beatIdx;
+				return (
+					<div className="flex flex-col gap-2" key={beatIdx}>
+						<div
+							className={`flex ${beatWidth} border rounded-sm justify-between ${beatPy} ${isActiveBeat ? "border-amber-400 bg-amber-50" : ""}`}
+						>
+							{paddedCells.map((cell, cellIdx) => {
+								const Icon = CELL_ARROW_MAP[cell as keyof typeof CELL_ARROW_MAP];
+								const isActiveCell =
+									isActiveBeat &&
+									cellIdx === getPaddedCellIdx(beat.length, activeCell!.cellIdx);
+								return (
+									<div
+										key={cellIdx}
+										className={`rounded-sm ${isActiveCell ? "text-amber-700" : ""}`}
+									>
+										<Icon />
+									</div>
+								);
+							})}
+						</div>
+						{showLabels && (
+							<div className={`flex ${beatWidth} justify-between`}>
+								{paddedCells.map((_, cellIdx) => {
+									const label =
+										BEAT_LABELS[beat.length as keyof typeof BEAT_LABELS](
+											beatIdx,
+										)[cellIdx];
 									return (
 										<div
+											className={`${isTriplet ? tripletCss : eighthCss} ${labelFontSize}`}
 											key={cellIdx}
-											className={`rounded-sm ${isActiveCell ? "text-amber-700" : ""}`}
 										>
-											<Icon />
+											{label}
 										</div>
 									);
 								})}
 							</div>
-							{showLabels && (
-								<div className={`flex ${beatWidth} justify-between`}>
-									{paddedCells.map((_, cellIdx) => {
-										const label =
-											BEAT_LABELS[beat.length as keyof typeof BEAT_LABELS](
-												beatIdx,
-											)[cellIdx];
-										return (
-											<div
-												className={`${isTriplet ? tripletCss : eighthCss} ${labelFontSize}`}
-												key={cellIdx}
-											>
-												{label}
-											</div>
-										);
-									})}
-								</div>
-							)}
-						</div>
-					);
-				})}
-			</div>
+						)}
+					</div>
+				);
+			})}
 		</div>
 	);
 }

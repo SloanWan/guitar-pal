@@ -1,4 +1,4 @@
-import { Beat, StrumPattern } from "@/lib/strumPatterns";
+import { StrumPattern } from "@/lib/strumPatterns";
 
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from "@/components/ui/card";
 import StepGrid from "./StepGrid";

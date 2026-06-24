@@ -1,7 +1,6 @@
-import { Beat } from "@/lib/strumPatterns";
+import { Beat, TickMode } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
-import { TickMode, StepValue } from "@/lib/strumPatterns";
 
 export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
@@ -32,7 +31,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		scheduler();
 	}
 
-	function playTick(time: number, stepValue: StepValue) {
+	function playTick(time: number) {
 		const ctx = audioCtxRef.current!;
 		const osc = ctx.createOscillator();
 		const gain = ctx.createGain();
@@ -52,8 +51,6 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 
 		while (nextCellTimeRef.current < ctx.currentTime + 0.1) {
 			const beat = beats[currBeatIdxref.current];
-			const cellValue = beat[currCellIdxRef.current];
-			// const paddedLength = beat.length === 3 ? 3 : 4;
 			const secondsPerCell = secondsPerBeat / beat.length;
 
 			const shouldNotTick =
@@ -63,7 +60,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 					(currCellIdxRef.current === 1 || currCellIdxRef.current === 3));
 
 			if (!shouldNotTick) {
-				playTick(nextCellTimeRef.current, cellValue);
+				playTick(nextCellTimeRef.current);
 			}
 			setCurrBeat(currBeatIdxref.current);
 			setCurrCell(currCellIdxRef.current);

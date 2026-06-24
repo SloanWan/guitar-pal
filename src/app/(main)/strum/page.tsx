@@ -4,7 +4,7 @@ import StepGrid from "@/components/strum/StepGrid";
 import StepGridCard from "@/components/strum/StepGridCard";
 import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { Card, CardHeader, CardContent, CardAction } from "@/components/ui/card";
@@ -19,17 +19,34 @@ export default function StrumPage() {
 	const [bpm, setBpm] = useState(80);
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
 
-	useEffect(() => {
-		const saved = localStorage.getItem("lastStrumPattern");
-		const found = PRESET_STRUM_PATTERNS.find((p) => p.id === saved);
-		if (found) setSelectedPattern(found);
-	}, []);
-
 	const { isPlaying, start, stop, currBeat, currCell } = useAudioEngine(
 		selectedPattern.beats,
 		bpm,
 		tickMode,
 	);
+
+	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
+	const tapTimesRef = useRef<number[]>([]);
+	useEffect(() => {
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.code === "Space") {
+				e.preventDefault();
+				if (spaceMode === "playPause") {
+					handleHitPlayAndPause();
+				} else {
+					handleTapTempo();
+				}
+			}
+		}
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [isPlaying, spaceMode]);
+
+	useEffect(() => {
+		const saved = localStorage.getItem("lastStrumPattern");
+		const found = PRESET_STRUM_PATTERNS.find((p) => p.id === saved);
+		if (found) setSelectedPattern(found);
+	}, []);
 
 	function handleHitPlayAndPause() {
 		if (isPlaying) {
@@ -45,16 +62,25 @@ export default function StrumPage() {
 		localStorage.setItem("lastStrumPattern", pattern.id);
 	}
 
-	useEffect(() => {
-		function handleKeyDown(e: KeyboardEvent) {
-			if (e.code === "Space") {
-				e.preventDefault();
-				handleHitPlayAndPause();
-			}
+	function handleTapTempo() {
+		const now = performance.now();
+		const taps = tapTimesRef.current;
+
+		if (taps.length > 0 && now - taps[taps.length - 1] > 2000) {
+			tapTimesRef.current = [];
 		}
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isPlaying]);
+
+		tapTimesRef.current = [...tapTimesRef.current, now].slice(-8);
+
+		if (tapTimesRef.current.length < 2) return;
+
+		const intervals = tapTimesRef.current
+			.slice(1)
+			.map((t, i) => t - tapTimesRef.current[i]);
+		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+		const newBpm = Math.round(60000 / avgInterval);
+		setBpm(Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm)));
+	}
 
 	return (
 		<div className="h-[calc(100vh-3.5rem)] flex overflow-hidden">
@@ -171,7 +197,19 @@ export default function StrumPage() {
 								</Button>
 							</div>
 							{/* tap tempo */}
-							<Button>Tap Tempooo</Button>
+							<div className="flex flex-col gap-2">
+								<Button onClick={handleTapTempo}>Tap Tempo</Button>
+								<Button
+									variant="secondary"
+									onClick={() =>
+										setSpaceMode((m) =>
+											m === "playPause" ? "tapTempo" : "playPause",
+										)
+									}
+								>
+									Space: {spaceMode === "playPause" ? "Play/Pause" : "Tap Tempo"}
+								</Button>
+							</div>
 						</CardContent>
 					</Card>
 				</div>

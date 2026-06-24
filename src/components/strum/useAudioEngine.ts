@@ -8,12 +8,14 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [currBeat, setCurrBeat] = useState(0);
 	const [currCell, setCurrCell] = useState(0);
+	const [nextPlayEmptyCell, setNextPlayEmptyCell] = useState(false);
 
 	const currBeatIdxref = useRef(0);
 	const currCellIdxRef = useRef(0);
 	const nextCellTimeRef = useRef(0);
 	const bpmRef = useRef(bpm);
 	const tickModeRef = useRef(tickMode);
+	const nextPlatEmptyCellRef = useRef(false);
 
 	useEffect(() => {
 		bpmRef.current = bpm;
@@ -51,7 +53,10 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 
 		while (nextCellTimeRef.current < ctx.currentTime + 0.1) {
 			const beat = beats[currBeatIdxref.current];
-			const secondsPerCell = secondsPerBeat / beat.length;
+			const secondsPerCell =
+				beat.length === 2 && tickModeRef.current === "sixteenth"
+					? secondsPerBeat / 4
+					: secondsPerBeat / beat.length;
 
 			const shouldNotTick =
 				(tickModeRef.current === "quarter" && currCellIdxRef.current != 0) ||
@@ -65,7 +70,18 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			setCurrBeat(currBeatIdxref.current);
 			setCurrCell(currCellIdxRef.current);
 
-			currCellIdxRef.current += 1;
+			if (tickModeRef.current === "sixteenth" && beat.length === 2) {
+				if (!nextPlatEmptyCellRef.current) {
+					nextPlatEmptyCellRef.current = true;
+				} else {
+					nextPlatEmptyCellRef.current = false;
+					currCellIdxRef.current += 1;
+				}
+				setNextPlayEmptyCell(nextPlatEmptyCellRef.current);
+			} else {
+				currCellIdxRef.current += 1;
+			}
+
 			if (currCellIdxRef.current >= beat.length) {
 				currCellIdxRef.current = 0;
 				currBeatIdxref.current = (currBeatIdxref.current + 1) % beats.length;
@@ -83,6 +99,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		}
 		currBeatIdxref.current = 0;
 		currCellIdxRef.current = 0;
+		nextPlatEmptyCellRef.current = false;
 		setCurrBeat(0);
 		setCurrCell(0);
 		setIsPlaying(false);

@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { Card, CardHeader, CardContent, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Plus, Minus, CirclePlay, CirclePause } from "lucide-react";
 
 const MIN_BPM = 40;
@@ -74,9 +75,7 @@ export default function StrumPage() {
 
 		if (tapTimesRef.current.length < 2) return;
 
-		const intervals = tapTimesRef.current
-			.slice(1)
-			.map((t, i) => t - tapTimesRef.current[i]);
+		const intervals = tapTimesRef.current.slice(1).map((t, i) => t - tapTimesRef.current[i]);
 		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
 		const newBpm = Math.round(60000 / avgInterval);
 		setBpm(Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm)));
@@ -246,28 +245,43 @@ export default function StrumPage() {
 							</div>
 
 							{/* tap tempo */}
-							<div className="w-full flex gap-2">
+							<div className="flex flex-col items-center gap-3">
 								<Button
 									onClick={handleTapTempo}
-									className="flex-1 h-9 text-sm font-semibold cursor-pointer"
+									className="h-9 px-8 text-sm font-semibold cursor-pointer"
 									style={{ backgroundColor: "#4A6FA5", color: "white" }}
 								>
 									Tap Tempo
 								</Button>
-								<Button
-									variant="secondary"
-									className="flex-1 h-9 text-sm font-medium cursor-pointer text-slate-600"
-									onClick={() =>
-										setSpaceMode((m) =>
-											m === "playPause" ? "tapTempo" : "playPause",
-										)
-									}
-								>
-									Space:{" "}
-									<span className="font-semibold">
-										{spaceMode === "playPause" ? "Play/Pause" : "Tap Tempo"}
+								<div className="flex items-center gap-2.5">
+									<span
+										className={`text-xs font-medium transition-colors duration-200 ${
+											spaceMode === "playPause"
+												? "text-[#4A6FA5] font-semibold"
+												: "text-slate-400"
+										}`}
+									>
+										Play/Pause
 									</span>
-								</Button>
+									<Switch
+										checked={spaceMode === "tapTempo"}
+										onCheckedChange={() =>
+											setSpaceMode((m) =>
+												m === "playPause" ? "tapTempo" : "playPause",
+											)
+										}
+										className="data-checked:bg-[#4A6FA5] data-unchecked:bg-[#B8CDE0]"
+									/>
+									<span
+										className={`text-xs font-medium transition-colors duration-200 ${
+											spaceMode === "tapTempo"
+												? "text-[#4A6FA5] font-semibold"
+												: "text-slate-400"
+										}`}
+									>
+										Tap Tempo
+									</span>
+								</div>
 							</div>
 						</CardContent>
 					</Card>

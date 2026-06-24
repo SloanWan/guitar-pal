@@ -152,7 +152,7 @@ export default function StrumPage() {
 							</CardAction>
 
 							{/* Tick mode */}
-							<CardAction className="flex gap-2">
+							<CardAction className="flex gap-2 w-full justify-center">
 								<Button
 									onClick={() => setTickMode("quarter")}
 									variant={tickMode === "quarter" ? "default" : "secondary"}
@@ -270,7 +270,7 @@ export default function StrumPage() {
 												m === "playPause" ? "tapTempo" : "playPause",
 											)
 										}
-										className="data-checked:bg-[#4A6FA5] data-unchecked:bg-[#B8CDE0]"
+										className="data-[state=checked]:bg-[#4A6FA5] data-[state=unchecked]:bg-[#4A6FA5]"
 									/>
 									<span
 										className={`text-xs font-medium transition-colors duration-200 ${

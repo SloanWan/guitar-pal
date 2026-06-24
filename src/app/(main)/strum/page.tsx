@@ -19,6 +19,12 @@ export default function StrumPage() {
 	const [bpm, setBpm] = useState(80);
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
 
+	useEffect(() => {
+		const saved = localStorage.getItem("lastStrumPattern");
+		const found = PRESET_STRUM_PATTERNS.find((p) => p.id === saved);
+		if (found) setSelectedPattern(found);
+	}, []);
+
 	const { isPlaying, start, stop, currBeat, currCell } = useAudioEngine(
 		selectedPattern.beats,
 		bpm,
@@ -36,6 +42,7 @@ export default function StrumPage() {
 	function handleSelectPattern(pattern: StrumPattern) {
 		stop();
 		setSelectedPattern(pattern);
+		localStorage.setItem("lastStrumPattern", pattern.id);
 	}
 
 	useEffect(() => {

@@ -14,12 +14,16 @@ export default function StepGridCard({
 	} | null;
 }) {
 	return (
-		<Card>
-			<CardHeader className="border-b mx-2 text-left">
-				<CardTitle className="capitalize">{pattern.name}</CardTitle>
-				<CardDescription>{pattern.description}</CardDescription>
+		<Card className="shadow-sm border-slate-200">
+			<CardHeader className="border-b border-slate-100 px-5 py-4">
+				<CardTitle className="capitalize text-base font-semibold text-slate-800">
+					{pattern.name}
+				</CardTitle>
+				<CardDescription className="text-xs text-slate-400 mt-0.5">
+					{pattern.description}
+				</CardDescription>
 			</CardHeader>
-			<CardContent className="flex flex-col items-center">
+			<CardContent className="flex flex-col items-center px-5 py-5">
 				<StepGrid beats={pattern.beats} activeCell={activeCell} />
 			</CardContent>
 		</Card>

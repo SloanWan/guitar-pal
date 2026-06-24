@@ -68,7 +68,11 @@ export default function StepGrid({
 				return (
 					<div className="flex flex-col gap-2" key={beatIdx}>
 						<div
-							className={`flex ${beatWidth} border rounded-sm justify-between ${beatPy} ${isActiveBeat ? "border-amber-400 bg-amber-50" : ""}`}
+							className={`flex ${beatWidth} border rounded-sm justify-between ${beatPy} transition-colors duration-100 ${
+								isActiveBeat
+									? "border-[#4A6FA5]/50 bg-[#EEF2F7]"
+									: "border-slate-200"
+							}`}
 						>
 							{paddedCells.map((cell, cellIdx) => {
 								const Icon = CELL_ARROW_MAP[cell as keyof typeof CELL_ARROW_MAP];
@@ -78,7 +82,9 @@ export default function StepGrid({
 								return (
 									<div
 										key={cellIdx}
-										className={`rounded-sm ${isActiveCell ? "text-amber-700" : ""}`}
+										className={`rounded-sm transition-colors duration-100 ${
+											isActiveCell ? "text-[#4A6FA5]" : ""
+										}`}
 									>
 										<Icon />
 									</div>
@@ -94,7 +100,7 @@ export default function StepGrid({
 										)[cellIdx];
 									return (
 										<div
-											className={`${isTriplet ? tripletCss : eighthCss} ${labelFontSize}`}
+											className={`${isTriplet ? tripletCss : eighthCss} ${labelFontSize} text-slate-400`}
 											key={cellIdx}
 										>
 											{label}

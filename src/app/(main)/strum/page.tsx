@@ -83,19 +83,32 @@ export default function StrumPage() {
 	}
 
 	return (
-		<div className="h-[calc(100vh-3.5rem)] flex overflow-hidden">
+		<div className="h-[calc(100vh-3.5rem)] flex overflow-hidden bg-slate-50">
 			{/* strumming patterns library on the side */}
-			<div className="w-80 h-full border-r flex flex-col">
-				<h2 className="w-full py-4 text-center shrink-0 border-b">Strumming Library</h2>
-				<div className="w-full px-4 py-3 flex-1 overflow-y-auto flex flex-col gap-3">
+			<div className="w-72 h-full border-r border-slate-200 bg-white flex flex-col shrink-0">
+				<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+					Strumming Library
+				</h2>
+				<div className="w-full px-3 py-3 flex-1 overflow-y-auto flex flex-col gap-1.5">
 					{PRESET_STRUM_PATTERNS.map((pattern, patternIdx) => {
+						const isSelected = selectedPattern.id === pattern.id;
 						return (
 							<div
 								key={patternIdx}
 								onClick={() => handleSelectPattern(pattern)}
-								className={`${selectedPattern.id === pattern.id ? "bg-amber-100" : ""} cursor-pointer border rounded-md p-3 hover:bg-amber-100/50 transition-all duration-300`}
+								className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
+									isSelected
+										? "bg-[#EEF2F7] border-l-[#4A6FA5]"
+										: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
+								}`}
 							>
-								<div className="capitalize text-[12px]">{pattern.name}</div>
+								<div
+									className={`capitalize text-[11px] font-semibold mb-2 transition-colors duration-200 ${
+										isSelected ? "text-[#4A6FA5]" : "text-slate-500"
+									}`}
+								>
+									{pattern.name}
+								</div>
 								<StepGrid
 									beats={pattern.beats}
 									activeCell={null}
@@ -107,11 +120,14 @@ export default function StrumPage() {
 					})}
 				</div>
 			</div>
+
 			{/* main practice section */}
-			<div className="flex-1 flex flex-col gap-4 items-center pt-5">
+			<div className="flex-1 flex flex-col gap-6 items-center pt-8 pb-6 overflow-y-auto">
 				{/* pattern display */}
-				<div className="w-full flex flex-col items-center gap-4">
-					<div>Current Pattern</div>
+				<div className="w-full flex flex-col items-center gap-3">
+					<div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						Current Pattern
+					</div>
 					<div className="w-160">
 						<StepGridCard
 							pattern={selectedPattern}
@@ -119,45 +135,66 @@ export default function StrumPage() {
 						/>
 					</div>
 				</div>
+
 				{/* Controls Section */}
 				<div className="w-160">
-					<Card>
-						<CardHeader className="w-full flex flex-col items-center">
-							<CardAction onClick={handleHitPlayAndPause} className="w-full">
-								{isPlaying ? <CirclePause size={48} /> : <CirclePlay size={48} />}
+					<Card className="shadow-sm border-slate-200">
+						<CardHeader className="w-full flex flex-col items-center gap-3 pt-5 pb-4">
+							{/* Play / Pause */}
+							<CardAction
+								onClick={handleHitPlayAndPause}
+								className="flex justify-center w-full cursor-pointer text-[#4A6FA5] hover:text-[#3A5A8A] transition-all duration-150 active:scale-95"
+							>
+								{isPlaying ? (
+									<CirclePause size={60} strokeWidth={1.5} />
+								) : (
+									<CirclePlay size={60} strokeWidth={1.5} />
+								)}
 							</CardAction>
-							<CardAction>
+
+							{/* Tick mode */}
+							<CardAction className="flex gap-2">
 								<Button
-									onClick={() => {
-										setTickMode("quarter");
-									}}
-									variant={`${tickMode === "quarter" ? "default" : "secondary"}`}
-									className="cursor-pointer"
+									onClick={() => setTickMode("quarter")}
+									variant={tickMode === "quarter" ? "default" : "secondary"}
+									className="cursor-pointer h-8 px-4 text-xs font-semibold"
+									style={
+										tickMode === "quarter"
+											? { backgroundColor: "#4A6FA5", color: "white" }
+											: {}
+									}
 								>
 									1/4
 								</Button>
 								<Button
-									onClick={() => {
-										setTickMode("eighth");
-									}}
-									variant={`${tickMode === "eighth" ? "default" : "secondary"}`}
-									className="cursor-pointer"
+									onClick={() => setTickMode("eighth")}
+									variant={tickMode === "eighth" ? "default" : "secondary"}
+									className="cursor-pointer h-8 px-4 text-xs font-semibold"
+									style={
+										tickMode === "eighth"
+											? { backgroundColor: "#4A6FA5", color: "white" }
+											: {}
+									}
 								>
 									1/8
 								</Button>
 								<Button
-									onClick={() => {
-										setTickMode("sixteenth");
-									}}
-									variant={`${tickMode === "sixteenth" ? "default" : "secondary"}`}
-									className="cursor-pointer"
+									onClick={() => setTickMode("sixteenth")}
+									variant={tickMode === "sixteenth" ? "default" : "secondary"}
+									className="cursor-pointer h-8 px-4 text-xs font-semibold"
+									style={
+										tickMode === "sixteenth"
+											? { backgroundColor: "#4A6FA5", color: "white" }
+											: {}
+									}
 								>
 									1/16
 								</Button>
 								{/* <Button>1/3</Button> */}
 							</CardAction>
 						</CardHeader>
-						<CardContent className="flex flex-col items-center gap-3">
+
+						<CardContent className="flex flex-col items-center gap-5 pb-6">
 							{/* BPM Slider */}
 							<input
 								type="range"
@@ -165,11 +202,14 @@ export default function StrumPage() {
 								max={MAX_BPM}
 								value={bpm}
 								onChange={(e) => setBpm(Number(e.target.value))}
-								className="w-full"
+								className="w-full accent-[#4A6FA5] cursor-pointer"
 							/>
-							{/* add/reduce buttons */}
+
+							{/* add/reduce buttons + BPM display */}
 							<div className="w-full flex justify-between items-center">
 								<Button
+									variant="outline"
+									className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-[#4A6FA5] hover:text-[#4A6FA5] transition-colors duration-150"
 									onClick={() => {
 										if (bpm - 10 >= MIN_BPM) {
 											setBpm(bpm - 10);
@@ -178,13 +218,21 @@ export default function StrumPage() {
 										}
 									}}
 								>
-									<Minus />
+									<Minus size={16} />
 								</Button>
-								<span className="flex flex-col items-center gap-1">
-									<span className="text-[24px]">{bpm}</span>
-									<span>BPM</span>
+
+								<span className="flex flex-col items-center gap-0.5">
+									<span className="text-5xl font-bold tracking-tight text-[#4A6FA5]">
+										{bpm}
+									</span>
+									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+										BPM
+									</span>
 								</span>
+
 								<Button
+									variant="outline"
+									className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-[#4A6FA5] hover:text-[#4A6FA5] transition-colors duration-150"
 									onClick={() => {
 										if (bpm + 10 <= MAX_BPM) {
 											setBpm(bpm + 10);
@@ -193,21 +241,32 @@ export default function StrumPage() {
 										}
 									}}
 								>
-									<Plus />
+									<Plus size={16} />
 								</Button>
 							</div>
+
 							{/* tap tempo */}
-							<div className="flex flex-col gap-2">
-								<Button onClick={handleTapTempo}>Tap Tempo</Button>
+							<div className="w-full flex gap-2">
+								<Button
+									onClick={handleTapTempo}
+									className="flex-1 h-9 text-sm font-semibold cursor-pointer"
+									style={{ backgroundColor: "#4A6FA5", color: "white" }}
+								>
+									Tap Tempo
+								</Button>
 								<Button
 									variant="secondary"
+									className="flex-1 h-9 text-sm font-medium cursor-pointer text-slate-600"
 									onClick={() =>
 										setSpaceMode((m) =>
 											m === "playPause" ? "tapTempo" : "playPause",
 										)
 									}
 								>
-									Space: {spaceMode === "playPause" ? "Play/Pause" : "Tap Tempo"}
+									Space:{" "}
+									<span className="font-semibold">
+										{spaceMode === "playPause" ? "Play/Pause" : "Tap Tempo"}
+									</span>
 								</Button>
 							</div>
 						</CardContent>

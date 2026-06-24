@@ -4,7 +4,7 @@ import StepGrid from "@/components/strum/StepGrid";
 import StepGridCard from "@/components/strum/StepGridCard";
 import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { Card, CardHeader, CardContent, CardAction } from "@/components/ui/card";
@@ -37,6 +37,17 @@ export default function StrumPage() {
 		stop();
 		setSelectedPattern(pattern);
 	}
+
+	useEffect(() => {
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.code === "Space") {
+				e.preventDefault();
+				handleHitPlayAndPause();
+			}
+		}
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [isPlaying]);
 
 	return (
 		<div className="h-[calc(100vh-3.5rem)] flex overflow-hidden">

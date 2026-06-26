@@ -23,7 +23,7 @@ export default function NavLinks() {
 						variant="ghost"
 						size="sm"
 						aria-label={label}
-						className={`rounded-full text-sm font-medium px-2 nav:px-4 py-1.5 h-auto ${
+						className={`rounded-full text-sm font-medium px-2 nav:px-4 py-1.5 h-auto transition-all duration-200 ${
 							isActive
 								? "bg-background text-foreground shadow-sm hover:bg-background"
 								: "text-muted-foreground hover:text-foreground hover:bg-transparent"

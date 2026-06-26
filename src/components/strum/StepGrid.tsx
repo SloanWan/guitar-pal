@@ -70,7 +70,7 @@ export default function StepGrid({
 						<div
 							className={`flex ${beatWidth} border rounded-sm justify-between ${beatPy} transition-colors duration-100 ${
 								isActiveBeat
-									? "border-[#4A6FA5]/50 bg-[#EEF2F7]"
+									? "border-denim/50 bg-denim-tint"
 									: "border-slate-200"
 							}`}
 						>
@@ -83,7 +83,7 @@ export default function StepGrid({
 									<div
 										key={cellIdx}
 										className={`rounded-sm transition-colors duration-100 ${
-											isActiveCell ? "text-[#4A6FA5]" : ""
+											isActiveCell ? "text-denim" : ""
 										}`}
 									>
 										<Icon />

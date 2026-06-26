@@ -47,27 +47,43 @@
 	--radius-2xl: calc(var(--radius) * 1.8);
 	--radius-3xl: calc(var(--radius) * 2.2);
 	--radius-4xl: calc(var(--radius) * 2.6);
+	/* Denim palette — use these as Tailwind classes: text-denim, bg-denim-tint, border-denim-border, etc. */
+	--color-denim: var(--denim);
+	--color-denim-light: var(--denim-light);
+	--color-denim-dark: var(--denim-dark);
+	--color-denim-tint: var(--denim-tint);
+	--color-denim-border: var(--denim-border);
 }
 
 :root {
+	/* ── Denim palette ─────────────────────────────────────────────────
+	   Change these four values to retheme the entire site.
+	   Use as Tailwind classes: text-denim, bg-denim-tint, border-denim-border, etc.
+	   ────────────────────────────────────────────────────────────────── */
+	--denim:        oklch(0.48 0.09 249);   /* #4A6FA5  active / main */
+	--denim-light:  oklch(0.60 0.07 248);   /* #6B8CAE  muted / hover rings */
+	--denim-dark:   oklch(0.40 0.09 249);   /* #3A5A8A  deep hover */
+	--denim-tint:   oklch(0.965 0.013 252); /* #EEF2F7  bg tint */
+	--denim-border: oklch(0.855 0.030 248); /* #C5D4E3  borders */
+
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
 	--card: oklch(1 0 0);
 	--card-foreground: oklch(0.145 0 0);
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
+	--primary: var(--denim);
 	--primary-foreground: oklch(0.985 0 0);
 	--secondary: oklch(0.97 0 0);
 	--secondary-foreground: oklch(0.205 0 0);
 	--muted: oklch(0.97 0 0);
 	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
+	--accent: var(--denim-tint);
+	--accent-foreground: oklch(0.30 0.07 248);
 	--destructive: oklch(0.577 0.245 27.325);
 	--border: oklch(0.922 0 0);
 	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
+	--ring: var(--denim-light);
 	--chart-1: oklch(0.87 0 0);
 	--chart-2: oklch(0.556 0 0);
 	--chart-3: oklch(0.439 0 0);
@@ -85,24 +101,26 @@
 }
 
 .dark {
+	/* Denim overrides for dark mode */
+	--denim:        oklch(0.65 0.07 248);
+	--denim-tint:   oklch(0.25 0.025 248);
+	--denim-border: oklch(1 0 0 / 10%);
+
 	--background: oklch(0.145 0 0);
 	--foreground: oklch(0.985 0 0);
 	--card: oklch(0.205 0 0);
 	--card-foreground: oklch(0.985 0 0);
 	--popover: oklch(0.205 0 0);
 	--popover-foreground: oklch(0.985 0 0);
-	--primary: oklch(0.922 0 0);
-	--primary-foreground: oklch(0.205 0 0);
+	--primary-foreground: oklch(0.145 0 0);
 	--secondary: oklch(0.269 0 0);
 	--secondary-foreground: oklch(0.985 0 0);
 	--muted: oklch(0.269 0 0);
 	--muted-foreground: oklch(0.708 0 0);
-	--accent: oklch(0.269 0 0);
 	--accent-foreground: oklch(0.985 0 0);
 	--destructive: oklch(0.704 0.191 22.216);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
 	--chart-1: oklch(0.87 0 0);
 	--chart-2: oklch(0.556 0 0);
 	--chart-3: oklch(0.439 0 0);
@@ -110,7 +128,7 @@
 	--chart-5: oklch(0.269 0 0);
 	--sidebar: oklch(0.205 0 0);
 	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
+	--sidebar-primary: var(--denim-light);
 	--sidebar-primary-foreground: oklch(0.985 0 0);
 	--sidebar-accent: oklch(0.269 0 0);
 	--sidebar-accent-foreground: oklch(0.985 0 0);

@@ -97,13 +97,13 @@ export default function StrumPage() {
 								onClick={() => handleSelectPattern(pattern)}
 								className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
 									isSelected
-										? "bg-[#EEF2F7] border-l-[#4A6FA5]"
+										? "bg-denim-tint border-l-denim"
 										: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
 								}`}
 							>
 								<div
 									className={`capitalize text-[11px] font-semibold mb-2 transition-colors duration-200 ${
-										isSelected ? "text-[#4A6FA5]" : "text-slate-500"
+										isSelected ? "text-denim" : "text-slate-500"
 									}`}
 								>
 									{pattern.name}
@@ -124,9 +124,6 @@ export default function StrumPage() {
 			<div className="flex-1 flex flex-col gap-6 items-center pt-8 pb-6 overflow-y-auto">
 				{/* pattern display */}
 				<div className="w-full flex flex-col items-center gap-3">
-					<div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-						Current Pattern
-					</div>
 					<div className="w-160">
 						<StepGridCard
 							pattern={selectedPattern}
@@ -142,7 +139,7 @@ export default function StrumPage() {
 							{/* Play / Pause */}
 							<CardAction
 								onClick={handleHitPlayAndPause}
-								className="flex justify-center w-full cursor-pointer text-[#4A6FA5] hover:text-[#3A5A8A] transition-all duration-150 active:scale-95"
+								className="flex justify-center w-full cursor-pointer text-denim hover:text-denim-dark transition-all duration-150 active:scale-95"
 							>
 								{isPlaying ? (
 									<CirclePause size={60} strokeWidth={1.5} />
@@ -156,10 +153,10 @@ export default function StrumPage() {
 								<Button
 									onClick={() => setTickMode("quarter")}
 									variant={tickMode === "quarter" ? "default" : "secondary"}
-									className="cursor-pointer h-8 px-4 text-xs font-semibold"
+									className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
 									style={
 										tickMode === "quarter"
-											? { backgroundColor: "#4A6FA5", color: "white" }
+											? { backgroundColor: "var(--denim)", color: "white" }
 											: {}
 									}
 								>
@@ -168,10 +165,10 @@ export default function StrumPage() {
 								<Button
 									onClick={() => setTickMode("eighth")}
 									variant={tickMode === "eighth" ? "default" : "secondary"}
-									className="cursor-pointer h-8 px-4 text-xs font-semibold"
+									className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
 									style={
 										tickMode === "eighth"
-											? { backgroundColor: "#4A6FA5", color: "white" }
+											? { backgroundColor: "var(--denim)", color: "white" }
 											: {}
 									}
 								>
@@ -180,10 +177,10 @@ export default function StrumPage() {
 								<Button
 									onClick={() => setTickMode("sixteenth")}
 									variant={tickMode === "sixteenth" ? "default" : "secondary"}
-									className="cursor-pointer h-8 px-4 text-xs font-semibold"
+									className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
 									style={
 										tickMode === "sixteenth"
-											? { backgroundColor: "#4A6FA5", color: "white" }
+											? { backgroundColor: "var(--denim)", color: "white" }
 											: {}
 									}
 								>
@@ -201,14 +198,14 @@ export default function StrumPage() {
 								max={MAX_BPM}
 								value={bpm}
 								onChange={(e) => setBpm(Number(e.target.value))}
-								className="w-full accent-[#4A6FA5] cursor-pointer"
+								className="w-full accent-denim cursor-pointer"
 							/>
 
 							{/* add/reduce buttons + BPM display */}
 							<div className="w-full flex justify-between items-center">
 								<Button
 									variant="outline"
-									className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-[#4A6FA5] hover:text-[#4A6FA5] transition-colors duration-150"
+									className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
 									onClick={() => {
 										if (bpm - 10 >= MIN_BPM) {
 											setBpm(bpm - 10);
@@ -221,7 +218,7 @@ export default function StrumPage() {
 								</Button>
 
 								<span className="flex flex-col items-center gap-0.5">
-									<span className="text-5xl font-bold tracking-tight text-[#4A6FA5]">
+									<span className="text-5xl font-bold tracking-tight text-denim">
 										{bpm}
 									</span>
 									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
@@ -231,7 +228,7 @@ export default function StrumPage() {
 
 								<Button
 									variant="outline"
-									className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-[#4A6FA5] hover:text-[#4A6FA5] transition-colors duration-150"
+									className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
 									onClick={() => {
 										if (bpm + 10 <= MAX_BPM) {
 											setBpm(bpm + 10);
@@ -248,8 +245,8 @@ export default function StrumPage() {
 							<div className="flex flex-col items-center gap-3">
 								<Button
 									onClick={handleTapTempo}
-									className="h-9 px-8 text-sm font-semibold cursor-pointer"
-									style={{ backgroundColor: "#4A6FA5", color: "white" }}
+									className="h-9 px-8 text-sm font-semibold cursor-pointer transition-all duration-150"
+									style={{ backgroundColor: "var(--denim)", color: "white" }}
 								>
 									Tap Tempo
 								</Button>
@@ -257,7 +254,7 @@ export default function StrumPage() {
 									<span
 										className={`text-xs font-medium transition-colors duration-200 ${
 											spaceMode === "playPause"
-												? "text-[#4A6FA5] font-semibold"
+												? "text-denim font-semibold"
 												: "text-slate-400"
 										}`}
 									>
@@ -270,12 +267,12 @@ export default function StrumPage() {
 												m === "playPause" ? "tapTempo" : "playPause",
 											)
 										}
-										className="data-[state=checked]:bg-[#4A6FA5] data-[state=unchecked]:bg-[#4A6FA5]"
+										className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-denim"
 									/>
 									<span
 										className={`text-xs font-medium transition-colors duration-200 ${
 											spaceMode === "tapTempo"
-												? "text-[#4A6FA5] font-semibold"
+												? "text-denim font-semibold"
 												: "text-slate-400"
 										}`}
 									>

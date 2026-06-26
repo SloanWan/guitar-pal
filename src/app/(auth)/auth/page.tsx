@@ -41,7 +41,7 @@ export default function AuthPage() {
 			<div className="w-full max-w-sm space-y-6">
 				{/* Brand mark */}
 				<div className="flex flex-col items-center gap-3 text-center">
-					<div className="flex items-center justify-center size-12 rounded-xl bg-amber-100 text-amber-700">
+					<div className="flex items-center justify-center size-12 rounded-xl bg-denim-tint text-denim">
 						<Guitar className="size-6" />
 					</div>
 					<div>

@@ -15,7 +15,7 @@ export default async function NavBar() {
 		<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
 			<div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
 				<Link href="/" className="flex items-center gap-2">
-					<div className="flex items-center justify-center size-7 rounded-lg bg-amber-100 text-amber-700">
+					<div className="flex items-center justify-center size-7 rounded-lg bg-denim-tint text-denim">
 						<Guitar className="size-4" />
 					</div>
 					<span className="font-semibold text-sm tracking-tight hidden sm:block">

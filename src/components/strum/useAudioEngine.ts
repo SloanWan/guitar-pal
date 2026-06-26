@@ -1,6 +1,14 @@
-import { Beat, TickMode } from "@/lib/strumPatterns";
+import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
+
+const STRUM_PARAMS: Partial<Record<StepValue, { freq: number; gain: number }>> = {
+	D:  { freq: 800,  gain: 0.4 },
+	D3: { freq: 800,  gain: 0.4 },
+	U:  { freq: 1800, gain: 0.2 },
+	U3: { freq: 1800, gain: 0.2 },
+	X:  { freq: 400,  gain: 0.5 },
+};
 
 export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
@@ -8,7 +16,10 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [currBeat, setCurrBeat] = useState(0);
 	const [currCell, setCurrCell] = useState(0);
-	const [nextPlayEmptyCell, setNextPlayEmptyCell] = useState(false);
+
+	const [strumEnabled, setStrumEnabled] = useState(true);
+	const [strumGain, setStrumGain] = useState(1.0);
+	const [metronomeGain, setMetronomeGain] = useState(0.3);
 
 	const currBeatIdxref = useRef(0);
 	const currCellIdxRef = useRef(0);
@@ -16,13 +27,15 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const bpmRef = useRef(bpm);
 	const tickModeRef = useRef(tickMode);
 	const nextPlatEmptyCellRef = useRef(false);
+	const strumEnabledRef = useRef(strumEnabled);
+	const strumGainRef = useRef(strumGain);
+	const metronomeGainRef = useRef(metronomeGain);
 
-	useEffect(() => {
-		bpmRef.current = bpm;
-	}, [bpm]);
-	useEffect(() => {
-		tickModeRef.current = tickMode;
-	}, [tickMode]);
+	useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+	useEffect(() => { tickModeRef.current = tickMode; }, [tickMode]);
+	useEffect(() => { strumEnabledRef.current = strumEnabled; }, [strumEnabled]);
+	useEffect(() => { strumGainRef.current = strumGain; }, [strumGain]);
+	useEffect(() => { metronomeGainRef.current = metronomeGain; }, [metronomeGain]);
 
 	function start() {
 		if (!audioCtxRef.current) {
@@ -41,10 +54,40 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		osc.connect(gain).connect(ctx.destination);
 
 		osc.frequency.value = 800;
-		gain.gain.value = 0.3;
+		gain.gain.value = metronomeGainRef.current;
 
 		osc.start(time);
 		osc.stop(time + 0.05);
+	}
+
+	function playStrum(time: number, type: StepValue): void {
+		if (!strumEnabledRef.current) return;
+		const params = STRUM_PARAMS[type];
+		if (!params) return; // "", "DG", "UG" → silent
+
+		const ctx = audioCtxRef.current!;
+
+		const bufferSize = Math.floor(ctx.sampleRate * 0.1);
+		const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+		const data = buffer.getChannelData(0);
+		for (let i = 0; i < bufferSize; i++) {
+			data[i] = Math.random() * 2 - 1;
+		}
+
+		const source = ctx.createBufferSource();
+		source.buffer = buffer;
+
+		const filter = ctx.createBiquadFilter();
+		filter.type = "bandpass";
+		filter.frequency.value = params.freq;
+
+		const gain = ctx.createGain();
+		gain.gain.value = params.gain * strumGainRef.current;
+		gain.gain.setTargetAtTime(0, time, 0.03);
+
+		source.connect(filter).connect(gain).connect(ctx.destination);
+		source.start(time);
+		source.stop(time + 0.15);
 	}
 
 	function scheduler() {
@@ -67,6 +110,16 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			if (!shouldNotTick) {
 				playTick(nextCellTimeRef.current);
 			}
+
+			// For 2-cell beats in sixteenth mode, alternate between real cells and
+			// empty subdivisions — skip strumming on the empty subdivisions.
+			const isEmptySubdivision =
+				tickModeRef.current === "sixteenth" &&
+				beat.length === 2 &&
+				nextPlatEmptyCellRef.current;
+			const beatType: StepValue = isEmptySubdivision ? "" : beat[currCellIdxRef.current];
+			playStrum(nextCellTimeRef.current, beatType);
+
 			setCurrBeat(currBeatIdxref.current);
 			setCurrCell(currCellIdxRef.current);
 
@@ -77,7 +130,6 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 					nextPlatEmptyCellRef.current = false;
 					currCellIdxRef.current += 1;
 				}
-				setNextPlayEmptyCell(nextPlatEmptyCellRef.current);
 			} else {
 				currCellIdxRef.current += 1;
 			}
@@ -105,5 +157,17 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		setIsPlaying(false);
 	}
 
-	return { isPlaying, currBeat, currCell, start, stop };
+	return {
+		isPlaying,
+		currBeat,
+		currCell,
+		start,
+		stop,
+		strumEnabled,
+		setStrumEnabled,
+		strumGain,
+		setStrumGain,
+		metronomeGain,
+		setMetronomeGain,
+	};
 }

@@ -20,11 +20,19 @@ export default function StrumPage() {
 	const [bpm, setBpm] = useState(80);
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
 
-	const { isPlaying, start, stop, currBeat, currCell } = useAudioEngine(
-		selectedPattern.beats,
-		bpm,
-		tickMode,
-	);
+	const {
+		isPlaying,
+		start,
+		stop,
+		currBeat,
+		currCell,
+		strumEnabled,
+		setStrumEnabled,
+		strumGain,
+		setStrumGain,
+		metronomeGain,
+		setMetronomeGain,
+	} = useAudioEngine(selectedPattern.beats, bpm, tickMode);
 
 	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
 	const tapTimesRef = useRef<number[]>([]);
@@ -278,6 +286,64 @@ export default function StrumPage() {
 									>
 										Tap Tempo
 									</span>
+								</div>
+							</div>
+
+							{/* Sound Controls */}
+							<div className="w-full flex flex-col gap-4 pt-2 border-t border-slate-100">
+								{/* Guitar sound toggle */}
+								<div className="flex items-center justify-between">
+									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+										Guitar Sound
+									</span>
+									<Switch
+										checked={strumEnabled}
+										onCheckedChange={setStrumEnabled}
+										className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+									/>
+								</div>
+
+								{/* Metronome volume */}
+								<div className="flex flex-col gap-1.5">
+									<div className="flex justify-between items-center">
+										<span className="text-xs text-slate-400">Metronome</span>
+										<span className="text-xs tabular-nums text-slate-400">
+											{Math.round(metronomeGain * 100)}%
+										</span>
+									</div>
+									<input
+										type="range"
+										min={0}
+										max={1}
+										step={0.01}
+										value={metronomeGain}
+										onChange={(e) => setMetronomeGain(Number(e.target.value))}
+										className="w-full accent-denim cursor-pointer"
+									/>
+								</div>
+
+								{/* Guitar strum volume */}
+								<div
+									className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
+										!strumEnabled ? "opacity-40" : ""
+									}`}
+								>
+									<div className="flex justify-between items-center">
+										<span className="text-xs text-slate-400">Guitar</span>
+										<span className="text-xs tabular-nums text-slate-400">
+											{Math.round(strumGain * 100)}%
+										</span>
+									</div>
+									<input
+										type="range"
+										min={0}
+										max={2}
+										step={0.01}
+										value={strumGain}
+										onChange={(e) => setStrumGain(Number(e.target.value))}
+										disabled={!strumEnabled}
+										className="w-full accent-denim cursor-pointer"
+									/>
 								</div>
 							</div>
 						</CardContent>

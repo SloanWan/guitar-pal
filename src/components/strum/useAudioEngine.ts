@@ -3,11 +3,11 @@ import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 import { useRef, useEffect, useState } from "react";
 
 const STRUM_PARAMS: Partial<Record<StepValue, { freq: number; gain: number }>> = {
-	D:  { freq: 800,  gain: 2.5 },
-	D3: { freq: 800,  gain: 2.5 },
-	U:  { freq: 1800, gain: 1.2 },
+	D: { freq: 800, gain: 2.5 },
+	D3: { freq: 800, gain: 2.5 },
+	U: { freq: 1800, gain: 1.2 },
 	U3: { freq: 1800, gain: 1.2 },
-	X:  { freq: 400,  gain: 2.8 },
+	X: { freq: 400, gain: 2.8 },
 };
 
 export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
@@ -22,6 +22,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const [metronomeEnabled, setMetronomeEnabled] = useState(true);
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
 	const [accentEnabled, setAccentEnabled] = useState(true);
+	const [playOnce, setPlayOnce] = useState(false);
 
 	const isPlayingRef = useRef(false);
 	const beatsRef = useRef(beats);
@@ -37,16 +38,38 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const metronomeEnabledRef = useRef(metronomeEnabled);
 	const metronomeGainRef = useRef(metronomeGain);
 	const accentEnabledRef = useRef(accentEnabled);
+	const playOnceRef = useRef(playOnce);
 
-	useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-	useEffect(() => { beatsRef.current = beats; }, [beats]);
-	useEffect(() => { bpmRef.current = bpm; }, [bpm]);
-	useEffect(() => { tickModeRef.current = tickMode; }, [tickMode]);
-	useEffect(() => { strumEnabledRef.current = strumEnabled; }, [strumEnabled]);
-	useEffect(() => { strumGainRef.current = strumGain; }, [strumGain]);
-	useEffect(() => { metronomeEnabledRef.current = metronomeEnabled; }, [metronomeEnabled]);
-	useEffect(() => { metronomeGainRef.current = metronomeGain; }, [metronomeGain]);
-	useEffect(() => { accentEnabledRef.current = accentEnabled; }, [accentEnabled]);
+	useEffect(() => {
+		isPlayingRef.current = isPlaying;
+	}, [isPlaying]);
+	useEffect(() => {
+		beatsRef.current = beats;
+	}, [beats]);
+	useEffect(() => {
+		bpmRef.current = bpm;
+	}, [bpm]);
+	useEffect(() => {
+		tickModeRef.current = tickMode;
+	}, [tickMode]);
+	useEffect(() => {
+		strumEnabledRef.current = strumEnabled;
+	}, [strumEnabled]);
+	useEffect(() => {
+		strumGainRef.current = strumGain;
+	}, [strumGain]);
+	useEffect(() => {
+		metronomeEnabledRef.current = metronomeEnabled;
+	}, [metronomeEnabled]);
+	useEffect(() => {
+		metronomeGainRef.current = metronomeGain;
+	}, [metronomeGain]);
+	useEffect(() => {
+		accentEnabledRef.current = accentEnabled;
+	}, [accentEnabled]);
+	useEffect(() => {
+		playOnceRef.current = playOnce;
+	}, [playOnce]);
 
 	function start() {
 		if (!audioCtxRef.current) {
@@ -153,6 +176,10 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			if (currCellIdxRef.current >= beat.length) {
 				currCellIdxRef.current = 0;
 				currBeatIdxref.current = (currBeatIdxref.current + 1) % beatsRef.current.length;
+				if (playOnceRef.current && currBeatIdxref.current === 0) {
+					stop();
+					return;
+				}
 			}
 
 			nextCellTimeRef.current += secondsPerCell;
@@ -176,13 +203,19 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	function handleSetStrumEnabled(value: boolean) {
 		strumEnabledRef.current = value;
 		setStrumEnabled(value);
-		if (isPlayingRef.current) { stop(); start(); }
+		if (isPlayingRef.current) {
+			stop();
+			start();
+		}
 	}
 
 	function handleSetMetronomeEnabled(value: boolean) {
 		metronomeEnabledRef.current = value;
 		setMetronomeEnabled(value);
-		if (isPlayingRef.current) { stop(); start(); }
+		if (isPlayingRef.current) {
+			stop();
+			start();
+		}
 	}
 
 	return {
@@ -201,5 +234,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		setMetronomeGain,
 		accentEnabled,
 		setAccentEnabled,
+		playOnce,
+		setPlayOnce,
 	};
 }

@@ -23,6 +23,9 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
 	const [accentEnabled, setAccentEnabled] = useState(true);
 
+	const isPlayingRef = useRef(false);
+	const beatsRef = useRef(beats);
+
 	const currBeatIdxref = useRef(0);
 	const currCellIdxRef = useRef(0);
 	const nextCellTimeRef = useRef(0);
@@ -35,6 +38,8 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const metronomeGainRef = useRef(metronomeGain);
 	const accentEnabledRef = useRef(accentEnabled);
 
+	useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+	useEffect(() => { beatsRef.current = beats; }, [beats]);
 	useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 	useEffect(() => { tickModeRef.current = tickMode; }, [tickMode]);
 	useEffect(() => { strumEnabledRef.current = strumEnabled; }, [strumEnabled]);
@@ -102,7 +107,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		const secondsPerBeat = 60 / bpmRef.current;
 
 		while (nextCellTimeRef.current < ctx.currentTime + 0.1) {
-			const beat = beats[currBeatIdxref.current];
+			const beat = beatsRef.current[currBeatIdxref.current];
 			const secondsPerCell =
 				beat.length === 2 && tickModeRef.current === "sixteenth"
 					? secondsPerBeat / 4
@@ -147,7 +152,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 
 			if (currCellIdxRef.current >= beat.length) {
 				currCellIdxRef.current = 0;
-				currBeatIdxref.current = (currBeatIdxref.current + 1) % beats.length;
+				currBeatIdxref.current = (currBeatIdxref.current + 1) % beatsRef.current.length;
 			}
 
 			nextCellTimeRef.current += secondsPerCell;
@@ -168,6 +173,18 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		setIsPlaying(false);
 	}
 
+	function handleSetStrumEnabled(value: boolean) {
+		strumEnabledRef.current = value;
+		setStrumEnabled(value);
+		if (isPlayingRef.current) { stop(); start(); }
+	}
+
+	function handleSetMetronomeEnabled(value: boolean) {
+		metronomeEnabledRef.current = value;
+		setMetronomeEnabled(value);
+		if (isPlayingRef.current) { stop(); start(); }
+	}
+
 	return {
 		isPlaying,
 		currBeat,
@@ -175,11 +192,11 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		start,
 		stop,
 		strumEnabled,
-		setStrumEnabled,
+		setStrumEnabled: handleSetStrumEnabled,
 		strumGain,
 		setStrumGain,
 		metronomeEnabled,
-		setMetronomeEnabled,
+		setMetronomeEnabled: handleSetMetronomeEnabled,
 		metronomeGain,
 		setMetronomeGain,
 		accentEnabled,

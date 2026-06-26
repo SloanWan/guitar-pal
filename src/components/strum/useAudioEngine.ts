@@ -22,6 +22,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const [metronomeEnabled, setMetronomeEnabled] = useState(true);
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
 	const [accentEnabled, setAccentEnabled] = useState(true);
+	const [playOnce, setPlayOnce] = useState(false);
 
 	const isPlayingRef = useRef(false);
 	const beatsRef = useRef(beats);
@@ -37,6 +38,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const metronomeEnabledRef = useRef(metronomeEnabled);
 	const metronomeGainRef = useRef(metronomeGain);
 	const accentEnabledRef = useRef(accentEnabled);
+	const playOnceRef = useRef(playOnce);
 
 	useEffect(() => {
 		isPlayingRef.current = isPlaying;
@@ -65,6 +67,9 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	useEffect(() => {
 		accentEnabledRef.current = accentEnabled;
 	}, [accentEnabled]);
+	useEffect(() => {
+		playOnceRef.current = playOnce;
+	}, [playOnce]);
 
 	function start() {
 		if (!audioCtxRef.current) {
@@ -171,6 +176,10 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			if (currCellIdxRef.current >= beat.length) {
 				currCellIdxRef.current = 0;
 				currBeatIdxref.current = (currBeatIdxref.current + 1) % beatsRef.current.length;
+				if (playOnceRef.current && currBeatIdxref.current === 0) {
+					stop();
+					return;
+				}
 			}
 
 			nextCellTimeRef.current += secondsPerCell;
@@ -225,5 +234,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		setMetronomeGain,
 		accentEnabled,
 		setAccentEnabled,
+		playOnce,
+		setPlayOnce,
 	};
 }

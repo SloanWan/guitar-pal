@@ -35,6 +35,8 @@ export default function StrumPage() {
 		setMetronomeGain,
 		accentEnabled,
 		setAccentEnabled,
+		playOnce,
+		setPlayOnce,
 	} = useAudioEngine(selectedPattern.beats, bpm, tickMode);
 
 	const [showLibrary, setShowLibrary] = useState(false);
@@ -294,6 +296,18 @@ export default function StrumPage() {
 						</div>
 					</div>
 
+					{/* Play once */}
+					<div className="flex items-center justify-between px-1">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Play once
+						</span>
+						<Switch
+							checked={playOnce}
+							onCheckedChange={setPlayOnce}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+						/>
+					</div>
+
 					{/* Sound — collapsible */}
 					<div className="rounded-xl border border-slate-100 overflow-hidden">
 						<button
@@ -477,6 +491,18 @@ export default function StrumPage() {
 								Tap Tempo
 							</span>
 						</div>
+					</div>
+
+					{/* Play once */}
+					<div className="flex items-center justify-between">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Play once
+						</span>
+						<Switch
+							checked={playOnce}
+							onCheckedChange={setPlayOnce}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+						/>
 					</div>
 
 					{/* Divider */}

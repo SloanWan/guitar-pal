@@ -3,11 +3,11 @@ import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 import { useRef, useEffect, useState } from "react";
 
 const STRUM_PARAMS: Partial<Record<StepValue, { freq: number; gain: number }>> = {
-	D:  { freq: 800,  gain: 0.4 },
-	D3: { freq: 800,  gain: 0.4 },
-	U:  { freq: 1800, gain: 0.2 },
-	U3: { freq: 1800, gain: 0.2 },
-	X:  { freq: 400,  gain: 0.5 },
+	D:  { freq: 800,  gain: 2.5 },
+	D3: { freq: 800,  gain: 2.5 },
+	U:  { freq: 1800, gain: 1.2 },
+	U3: { freq: 1800, gain: 1.2 },
+	X:  { freq: 400,  gain: 2.8 },
 };
 
 export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
@@ -19,7 +19,9 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 
 	const [strumEnabled, setStrumEnabled] = useState(true);
 	const [strumGain, setStrumGain] = useState(1.0);
-	const [metronomeGain, setMetronomeGain] = useState(0.3);
+	const [metronomeEnabled, setMetronomeEnabled] = useState(true);
+	const [metronomeGain, setMetronomeGain] = useState(0.15);
+	const [accentEnabled, setAccentEnabled] = useState(true);
 
 	const currBeatIdxref = useRef(0);
 	const currCellIdxRef = useRef(0);
@@ -29,13 +31,17 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const nextPlatEmptyCellRef = useRef(false);
 	const strumEnabledRef = useRef(strumEnabled);
 	const strumGainRef = useRef(strumGain);
+	const metronomeEnabledRef = useRef(metronomeEnabled);
 	const metronomeGainRef = useRef(metronomeGain);
+	const accentEnabledRef = useRef(accentEnabled);
 
 	useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 	useEffect(() => { tickModeRef.current = tickMode; }, [tickMode]);
 	useEffect(() => { strumEnabledRef.current = strumEnabled; }, [strumEnabled]);
 	useEffect(() => { strumGainRef.current = strumGain; }, [strumGain]);
+	useEffect(() => { metronomeEnabledRef.current = metronomeEnabled; }, [metronomeEnabled]);
 	useEffect(() => { metronomeGainRef.current = metronomeGain; }, [metronomeGain]);
+	useEffect(() => { accentEnabledRef.current = accentEnabled; }, [accentEnabled]);
 
 	function start() {
 		if (!audioCtxRef.current) {
@@ -46,15 +52,16 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		scheduler();
 	}
 
-	function playTick(time: number) {
+	function playTick(time: number, isAccent: boolean) {
+		if (!metronomeEnabledRef.current) return;
 		const ctx = audioCtxRef.current!;
 		const osc = ctx.createOscillator();
 		const gain = ctx.createGain();
 
 		osc.connect(gain).connect(ctx.destination);
 
-		osc.frequency.value = 800;
-		gain.gain.value = metronomeGainRef.current;
+		osc.frequency.value = isAccent ? 1200 : 800;
+		gain.gain.value = isAccent ? metronomeGainRef.current * 1.5 : metronomeGainRef.current;
 
 		osc.start(time);
 		osc.stop(time + 0.05);
@@ -67,7 +74,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 
 		const ctx = audioCtxRef.current!;
 
-		const bufferSize = Math.floor(ctx.sampleRate * 0.1);
+		const bufferSize = Math.floor(ctx.sampleRate * 0.2);
 		const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
 		const data = buffer.getChannelData(0);
 		for (let i = 0; i < bufferSize; i++) {
@@ -87,7 +94,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 
 		source.connect(filter).connect(gain).connect(ctx.destination);
 		source.start(time);
-		source.stop(time + 0.15);
+		source.stop(time + 0.25);
 	}
 
 	function scheduler() {
@@ -108,7 +115,11 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 					(currCellIdxRef.current === 1 || currCellIdxRef.current === 3));
 
 			if (!shouldNotTick) {
-				playTick(nextCellTimeRef.current);
+				const isAccent =
+					accentEnabledRef.current &&
+					currBeatIdxref.current === 0 &&
+					currCellIdxRef.current === 0;
+				playTick(nextCellTimeRef.current, isAccent);
 			}
 
 			// For 2-cell beats in sixteenth mode, alternate between real cells and
@@ -167,7 +178,11 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		setStrumEnabled,
 		strumGain,
 		setStrumGain,
+		metronomeEnabled,
+		setMetronomeEnabled,
 		metronomeGain,
 		setMetronomeGain,
+		accentEnabled,
+		setAccentEnabled,
 	};
 }

@@ -7,7 +7,6 @@ import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatter
 import { useState, useEffect, useRef } from "react";
 
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
-import { Card, CardHeader, CardContent, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Minus, CirclePlay, CirclePause } from "lucide-react";
@@ -30,8 +29,12 @@ export default function StrumPage() {
 		setStrumEnabled,
 		strumGain,
 		setStrumGain,
+		metronomeEnabled,
+		setMetronomeEnabled,
 		metronomeGain,
 		setMetronomeGain,
+		accentEnabled,
+		setAccentEnabled,
 	} = useAudioEngine(selectedPattern.beats, bpm, tickMode);
 
 	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
@@ -91,7 +94,7 @@ export default function StrumPage() {
 
 	return (
 		<div className="h-[calc(100vh-3.5rem)] flex overflow-hidden bg-slate-50">
-			{/* strumming patterns library on the side */}
+			{/* Left sidebar — pattern library */}
 			<div className="w-72 h-full border-r border-slate-200 bg-white flex flex-col shrink-0">
 				<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
 					Strumming Library
@@ -128,226 +131,246 @@ export default function StrumPage() {
 				</div>
 			</div>
 
-			{/* main practice section */}
-			<div className="flex-1 flex flex-col gap-6 items-center pt-8 pb-6 overflow-y-auto">
-				{/* pattern display */}
-				<div className="w-full flex flex-col items-center gap-3">
-					<div className="w-160">
-						<StepGridCard
-							pattern={selectedPattern}
-							activeCell={{ beatIdx: currBeat, cellIdx: currCell }}
+			{/* Center — StepGrid, vertically and horizontally centered */}
+			<div className="flex-1 flex items-center justify-center overflow-hidden px-8">
+				<div className="w-160">
+					<StepGridCard
+						pattern={selectedPattern}
+						activeCell={{ beatIdx: currBeat, cellIdx: currCell }}
+					/>
+				</div>
+			</div>
+
+			{/* Right panel — all controls */}
+			<div className="w-70 h-full border-l border-slate-200 bg-white flex flex-col shrink-0">
+				<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+					Controls
+				</h2>
+				<div className="flex-1 overflow-y-auto flex flex-col gap-5 px-5 py-5">
+					{/* Play / Pause */}
+					<div
+						onClick={handleHitPlayAndPause}
+						className="flex justify-center cursor-pointer text-denim hover:text-denim-dark transition-all duration-150 active:scale-95"
+					>
+						{isPlaying ? (
+							<CirclePause size={60} strokeWidth={1.5} />
+						) : (
+							<CirclePlay size={60} strokeWidth={1.5} />
+						)}
+					</div>
+
+					{/* BPM slider */}
+					<input
+						type="range"
+						min={MIN_BPM}
+						max={MAX_BPM}
+						value={bpm}
+						onChange={(e) => setBpm(Number(e.target.value))}
+						className="w-full accent-denim cursor-pointer"
+					/>
+
+					{/* ±10 BPM + display */}
+					<div className="flex justify-between items-center">
+						<Button
+							variant="outline"
+							className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
+							onClick={() => setBpm(Math.max(MIN_BPM, bpm - 10))}
+						>
+							<Minus size={16} />
+						</Button>
+						<span className="flex flex-col items-center gap-0.5">
+							<span className="text-5xl font-bold tracking-tight text-denim">
+								{bpm}
+							</span>
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+								BPM
+							</span>
+						</span>
+						<Button
+							variant="outline"
+							className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
+							onClick={() => setBpm(Math.min(MAX_BPM, bpm + 10))}
+						>
+							<Plus size={16} />
+						</Button>
+					</div>
+
+					{/* Tap Tempo */}
+					<div className="flex flex-col items-center gap-3">
+						<Button
+							onClick={handleTapTempo}
+							className="h-9 px-8 text-sm font-semibold cursor-pointer transition-all duration-150"
+							style={{ backgroundColor: "var(--denim)", color: "white" }}
+						>
+							Tap Tempo
+						</Button>
+						<div className="flex items-center gap-2.5">
+							<span
+								className={`text-xs font-medium transition-colors duration-200 ${
+									spaceMode === "playPause"
+										? "text-denim font-semibold"
+										: "text-slate-400"
+								}`}
+							>
+								Play/Pause
+							</span>
+							<Switch
+								checked={spaceMode === "tapTempo"}
+								onCheckedChange={() =>
+									setSpaceMode((m) =>
+										m === "playPause" ? "tapTempo" : "playPause",
+									)
+								}
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-denim"
+							/>
+							<span
+								className={`text-xs font-medium transition-colors duration-200 ${
+									spaceMode === "tapTempo"
+										? "text-denim font-semibold"
+										: "text-slate-400"
+								}`}
+							>
+								Tap Tempo
+							</span>
+						</div>
+					</div>
+
+					{/* Divider */}
+					<div className="border-t border-slate-100" />
+
+					{/* Metronome toggle */}
+					<div className="flex items-center justify-between">
+						<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+							Metronome
+						</span>
+						<Switch
+							checked={metronomeEnabled}
+							onCheckedChange={setMetronomeEnabled}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
 						/>
 					</div>
-				</div>
 
-				{/* Controls Section */}
-				<div className="w-160">
-					<Card className="shadow-sm border-slate-200">
-						<CardHeader className="w-full flex flex-col items-center gap-3 pt-5 pb-4">
-							{/* Play / Pause */}
-							<CardAction
-								onClick={handleHitPlayAndPause}
-								className="flex justify-center w-full cursor-pointer text-denim hover:text-denim-dark transition-all duration-150 active:scale-95"
-							>
-								{isPlaying ? (
-									<CirclePause size={60} strokeWidth={1.5} />
-								) : (
-									<CirclePlay size={60} strokeWidth={1.5} />
-								)}
-							</CardAction>
+					{/* Tick mode */}
+					<div
+						className={`flex gap-2 justify-center transition-opacity duration-200 ${!metronomeEnabled ? "opacity-40" : ""}`}
+					>
+						<Button
+							onClick={() => setTickMode("quarter")}
+							variant={tickMode === "quarter" ? "default" : "secondary"}
+							disabled={!metronomeEnabled}
+							className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
+							style={
+								tickMode === "quarter"
+									? { backgroundColor: "var(--denim)", color: "white" }
+									: {}
+							}
+						>
+							1/4
+						</Button>
+						<Button
+							onClick={() => setTickMode("eighth")}
+							variant={tickMode === "eighth" ? "default" : "secondary"}
+							disabled={!metronomeEnabled}
+							className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
+							style={
+								tickMode === "eighth"
+									? { backgroundColor: "var(--denim)", color: "white" }
+									: {}
+							}
+						>
+							1/8
+						</Button>
+						<Button
+							onClick={() => setTickMode("sixteenth")}
+							variant={tickMode === "sixteenth" ? "default" : "secondary"}
+							disabled={!metronomeEnabled}
+							className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
+							style={
+								tickMode === "sixteenth"
+									? { backgroundColor: "var(--denim)", color: "white" }
+									: {}
+							}
+						>
+							1/16
+						</Button>
+					</div>
 
-							{/* Tick mode */}
-							<CardAction className="flex gap-2 w-full justify-center">
-								<Button
-									onClick={() => setTickMode("quarter")}
-									variant={tickMode === "quarter" ? "default" : "secondary"}
-									className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-									style={
-										tickMode === "quarter"
-											? { backgroundColor: "var(--denim)", color: "white" }
-											: {}
-									}
-								>
-									1/4
-								</Button>
-								<Button
-									onClick={() => setTickMode("eighth")}
-									variant={tickMode === "eighth" ? "default" : "secondary"}
-									className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-									style={
-										tickMode === "eighth"
-											? { backgroundColor: "var(--denim)", color: "white" }
-											: {}
-									}
-								>
-									1/8
-								</Button>
-								<Button
-									onClick={() => setTickMode("sixteenth")}
-									variant={tickMode === "sixteenth" ? "default" : "secondary"}
-									className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-									style={
-										tickMode === "sixteenth"
-											? { backgroundColor: "var(--denim)", color: "white" }
-											: {}
-									}
-								>
-									1/16
-								</Button>
-								{/* <Button>1/3</Button> */}
-							</CardAction>
-						</CardHeader>
+					{/* Accent beat 1 toggle */}
+					<div
+						className={`flex items-center justify-between ${!metronomeEnabled ? "opacity-40" : ""}`}
+					>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Accent beat 1
+						</span>
+						<Switch
+							checked={accentEnabled}
+							disabled={!metronomeEnabled}
+							onCheckedChange={setAccentEnabled}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+						/>
+					</div>
 
-						<CardContent className="flex flex-col items-center gap-5 pb-6">
-							{/* BPM Slider */}
-							<input
-								type="range"
-								min={MIN_BPM}
-								max={MAX_BPM}
-								value={bpm}
-								onChange={(e) => setBpm(Number(e.target.value))}
-								className="w-full accent-denim cursor-pointer"
-							/>
+					{/* Metronome volume */}
+					<div className="flex flex-col gap-1.5">
+						<div
+							className={`flex justify-between items-center ${
+								!strumEnabled ? "opacity-40" : ""
+							}"`}
+						>
+							<span className="text-xs text-slate-400">Volume</span>
+							<span className="text-xs tabular-nums text-slate-400">
+								{Math.round(metronomeGain * 100)}%
+							</span>
+						</div>
+						<input
+							type="range"
+							min={0}
+							max={1}
+							step={0.01}
+							value={metronomeGain}
+							disabled={!metronomeEnabled}
+							onChange={(e) => setMetronomeGain(Number(e.target.value))}
+							className="w-full accent-denim cursor-pointer"
+						/>
+					</div>
 
-							{/* add/reduce buttons + BPM display */}
-							<div className="w-full flex justify-between items-center">
-								<Button
-									variant="outline"
-									className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
-									onClick={() => {
-										if (bpm - 10 >= MIN_BPM) {
-											setBpm(bpm - 10);
-										} else {
-											setBpm(MIN_BPM);
-										}
-									}}
-								>
-									<Minus size={16} />
-								</Button>
+					<div className="border-t border-slate-100" />
 
-								<span className="flex flex-col items-center gap-0.5">
-									<span className="text-5xl font-bold tracking-tight text-denim">
-										{bpm}
-									</span>
-									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-										BPM
-									</span>
-								</span>
+					{/* Strum sound toggle */}
+					<div className="flex items-center justify-between">
+						<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+							Strum Sound
+						</span>
+						<Switch
+							checked={strumEnabled}
+							onCheckedChange={setStrumEnabled}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+						/>
+					</div>
 
-								<Button
-									variant="outline"
-									className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
-									onClick={() => {
-										if (bpm + 10 <= MAX_BPM) {
-											setBpm(bpm + 10);
-										} else {
-											setBpm(MAX_BPM);
-										}
-									}}
-								>
-									<Plus size={16} />
-								</Button>
-							</div>
-
-							{/* tap tempo */}
-							<div className="flex flex-col items-center gap-3">
-								<Button
-									onClick={handleTapTempo}
-									className="h-9 px-8 text-sm font-semibold cursor-pointer transition-all duration-150"
-									style={{ backgroundColor: "var(--denim)", color: "white" }}
-								>
-									Tap Tempo
-								</Button>
-								<div className="flex items-center gap-2.5">
-									<span
-										className={`text-xs font-medium transition-colors duration-200 ${
-											spaceMode === "playPause"
-												? "text-denim font-semibold"
-												: "text-slate-400"
-										}`}
-									>
-										Play/Pause
-									</span>
-									<Switch
-										checked={spaceMode === "tapTempo"}
-										onCheckedChange={() =>
-											setSpaceMode((m) =>
-												m === "playPause" ? "tapTempo" : "playPause",
-											)
-										}
-										className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-denim"
-									/>
-									<span
-										className={`text-xs font-medium transition-colors duration-200 ${
-											spaceMode === "tapTempo"
-												? "text-denim font-semibold"
-												: "text-slate-400"
-										}`}
-									>
-										Tap Tempo
-									</span>
-								</div>
-							</div>
-
-							{/* Sound Controls */}
-							<div className="w-full flex flex-col gap-4 pt-2 border-t border-slate-100">
-								{/* Guitar sound toggle */}
-								<div className="flex items-center justify-between">
-									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-										Guitar Sound
-									</span>
-									<Switch
-										checked={strumEnabled}
-										onCheckedChange={setStrumEnabled}
-										className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
-									/>
-								</div>
-
-								{/* Metronome volume */}
-								<div className="flex flex-col gap-1.5">
-									<div className="flex justify-between items-center">
-										<span className="text-xs text-slate-400">Metronome</span>
-										<span className="text-xs tabular-nums text-slate-400">
-											{Math.round(metronomeGain * 100)}%
-										</span>
-									</div>
-									<input
-										type="range"
-										min={0}
-										max={1}
-										step={0.01}
-										value={metronomeGain}
-										onChange={(e) => setMetronomeGain(Number(e.target.value))}
-										className="w-full accent-denim cursor-pointer"
-									/>
-								</div>
-
-								{/* Guitar strum volume */}
-								<div
-									className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
-										!strumEnabled ? "opacity-40" : ""
-									}`}
-								>
-									<div className="flex justify-between items-center">
-										<span className="text-xs text-slate-400">Guitar</span>
-										<span className="text-xs tabular-nums text-slate-400">
-											{Math.round(strumGain * 100)}%
-										</span>
-									</div>
-									<input
-										type="range"
-										min={0}
-										max={2}
-										step={0.01}
-										value={strumGain}
-										onChange={(e) => setStrumGain(Number(e.target.value))}
-										disabled={!strumEnabled}
-										className="w-full accent-denim cursor-pointer"
-									/>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
+					{/* Guitar strum volume */}
+					<div
+						className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
+							!strumEnabled ? "opacity-40" : ""
+						}`}
+					>
+						<div className="flex justify-between items-center">
+							<span className="text-xs text-slate-400">Volume</span>
+							<span className="text-xs tabular-nums text-slate-400">
+								{Math.round(strumGain * 100)}%
+							</span>
+						</div>
+						<input
+							type="range"
+							min={0}
+							max={2}
+							step={0.01}
+							value={strumGain}
+							onChange={(e) => setStrumGain(Number(e.target.value))}
+							disabled={!strumEnabled}
+							className="w-full accent-denim cursor-pointer"
+						/>
+					</div>
 				</div>
 			</div>
 		</div>

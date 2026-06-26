@@ -36,7 +36,7 @@ export default function Home() {
 			<NavBar />
 
 			{/* Hero */}
-			<section className="flex flex-col items-center justify-center text-center px-4 py-24 sm:py-36 bg-background">
+			<section className="flex flex-col items-center justify-center text-center px-4 py-27 bg-background">
 				<div className="flex items-center justify-center size-16 rounded-2xl bg-denim-tint text-denim mb-8">
 					<Guitar className="size-8" />
 				</div>

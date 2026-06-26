@@ -31,31 +31,25 @@ export default function StepGrid({
 }) {
 	const isSm = size === "sm";
 
-	// sm: cells are w-3 (12px), 4 cells × 12px = w-12 beat; gap-1 between beats → 4×48+3×4 ≈ 200px total
-	const tripletCss = isSm
-		? "w-4 flex justify-center"
-		: "w-6 nav:w-12 flex justify-center px-auto";
-	const eighthCss = isSm ? "w-3 flex justify-center" : "w-8 nav:w-9 flex justify-center px-auto";
-
-	const CELL_ARROW_MAP = {
-		D: () => <MoveDown className={eighthCss} />,
-		U: () => <MoveUp className={eighthCss} />,
-		X: () => <X className={eighthCss} />,
-		G: () => <div className={isSm ? "w-3" : "w-9"}></div>,
-		DG: () => <MoveDown className={eighthCss} color="#cfcfcf" />,
-		UG: () => <MoveUp className={eighthCss} color="#cfcfcf" />,
-		D3: () => <MoveDown className={tripletCss} />,
-		U3: () => <MoveUp className={tripletCss} />,
-		"": () => <Dot className={eighthCss} />,
-	};
-
-	const beatWidth = isSm ? "w-12" : "w-24 nav:w-36";
+	const iconCls = isSm ? "size-3" : "size-4 md:size-5";
 	const beatPy = isSm ? "py-1" : "py-2";
 	const containerGap = isSm ? "gap-1" : "gap-2";
 	const labelFontSize = isSm ? "text-[8px]" : "text-[12px]";
 
+	const CELL_ARROW_MAP = {
+		D: () => <MoveDown className={iconCls} />,
+		U: () => <MoveUp className={iconCls} />,
+		X: () => <X className={iconCls} />,
+		G: () => <></>,
+		DG: () => <MoveDown className={iconCls} color="#cfcfcf" />,
+		UG: () => <MoveUp className={iconCls} color="#cfcfcf" />,
+		D3: () => <MoveDown className={iconCls} />,
+		U3: () => <MoveUp className={iconCls} />,
+		"": () => <Dot className={iconCls} />,
+	};
+
 	return (
-		<div className={`flex ${containerGap}`}>
+		<div className={`flex w-full ${containerGap}`}>
 			{beats.map((beat, beatIdx) => {
 				const paddedCells =
 					beat.length === 1
@@ -66,9 +60,9 @@ export default function StepGrid({
 				const isTriplet = beat.length === 3;
 				const isActiveBeat = activeCell?.beatIdx === beatIdx;
 				return (
-					<div className="flex flex-col gap-2" key={beatIdx}>
+					<div className="flex flex-col gap-2 flex-1" key={beatIdx}>
 						<div
-							className={`flex ${beatWidth} border rounded-sm justify-between ${beatPy} transition-colors duration-100 ${
+							className={`flex border rounded-sm ${beatPy} transition-colors duration-100 ${
 								isActiveBeat
 									? "border-denim/50 bg-denim-tint"
 									: "border-slate-200"
@@ -82,7 +76,7 @@ export default function StepGrid({
 								return (
 									<div
 										key={cellIdx}
-										className={`rounded-sm transition-colors duration-100 ${
+										className={`flex-1 flex justify-center items-center rounded-sm transition-colors duration-100 ${
 											isActiveCell ? "text-denim" : ""
 										}`}
 									>
@@ -92,7 +86,7 @@ export default function StepGrid({
 							})}
 						</div>
 						{showLabels && (
-							<div className={`flex ${beatWidth} justify-between`}>
+							<div className="flex">
 								{paddedCells.map((_, cellIdx) => {
 									const label =
 										BEAT_LABELS[beat.length as keyof typeof BEAT_LABELS](
@@ -100,7 +94,7 @@ export default function StepGrid({
 										)[cellIdx];
 									return (
 										<div
-											className={`${isTriplet ? tripletCss : eighthCss} ${labelFontSize} text-slate-400`}
+											className={`flex-1 flex justify-center ${labelFontSize} text-slate-400`}
 											key={cellIdx}
 										>
 											{label}

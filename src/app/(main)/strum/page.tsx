@@ -20,6 +20,7 @@ import {
 	Star,
 	Trash2,
 	Loader2,
+	Pencil,
 } from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
 import { useUser } from "@/hooks/useUser";
@@ -58,10 +59,12 @@ export default function StrumPage() {
 		patternsLoading,
 		favouriteIds,
 		handleSaveCustomPattern,
+		handleEditCustomPattern,
 		handleDeleteCustomPattern,
 		handleToggleFavourite,
 	} = useStrumPatterns(user, loading);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
+	const [editingPattern, setEditingPattern] = useState<StrumPattern | null>(null);
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [soundExpanded, setSoundExpanded] = useState(false);
 	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
@@ -261,6 +264,16 @@ export default function StrumPage() {
 																				: ""
 																		}
 																	/>
+																</button>
+																<button
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		setEditingPattern(pattern);
+																		setCreateModalOpen(true);
+																	}}
+																	className="p-0.5 rounded transition-colors text-slate-300 hover:text-denim"
+																>
+																	<Pencil size={12} />
 																</button>
 																<button
 																	onClick={(e) => {
@@ -918,8 +931,19 @@ export default function StrumPage() {
 
 			<CreatePatternModal
 				open={createModalOpen}
-				onClose={() => setCreateModalOpen(false)}
-				onSave={handleSaveCustomPattern}
+				onClose={() => {
+					setCreateModalOpen(false);
+					setEditingPattern(null);
+				}}
+				onSave={(pattern) => {
+					if (editingPattern) {
+						handleEditCustomPattern(pattern);
+						if (selectedPattern.id === pattern.id) setSelectedPattern(pattern);
+					} else {
+						handleSaveCustomPattern(pattern);
+					}
+				}}
+				editPattern={editingPattern ?? undefined}
 				user={user}
 			/>
 		</div>

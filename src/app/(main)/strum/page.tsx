@@ -9,7 +9,8 @@ import { useState, useEffect, useRef } from "react";
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Minus, CirclePlay, CirclePause, X, ChevronDown, Star } from "lucide-react";
+import { Plus, Minus, CirclePlay, CirclePause, X, ChevronDown, Star, Trash2 } from "lucide-react";
+import CreatePatternModal from "@/components/strum/CreatePatternModal";
 
 const MIN_BPM = 40;
 const MAX_BPM = 220;
@@ -39,6 +40,8 @@ export default function StrumPage() {
 		setPlayOnce,
 	} = useAudioEngine(selectedPattern.beats, bpm, tickMode);
 
+	const [customPatterns, setCustomPatterns] = useState<StrumPattern[]>([]);
+	const [createModalOpen, setCreateModalOpen] = useState(false);
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [soundExpanded, setSoundExpanded] = useState(false);
 	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
@@ -67,6 +70,27 @@ export default function StrumPage() {
 		const found = PRESET_STRUM_PATTERNS.find((p) => p.id === saved);
 		if (found) setSelectedPattern(found);
 	}, []);
+
+	useEffect(() => {
+		try {
+			const saved = localStorage.getItem("customStrumPatterns");
+			if (saved) setCustomPatterns(JSON.parse(saved) as StrumPattern[]);
+		} catch {
+			// ignore malformed data
+		}
+	}, []);
+
+	function handleSaveCustomPattern(pattern: StrumPattern) {
+		const updated = [...customPatterns, pattern];
+		setCustomPatterns(updated);
+		localStorage.setItem("customStrumPatterns", JSON.stringify(updated));
+	}
+
+	function handleDeleteCustomPattern(id: string) {
+		const updated = customPatterns.filter((p) => p.id !== id);
+		setCustomPatterns(updated);
+		localStorage.setItem("customStrumPatterns", JSON.stringify(updated));
+	}
 
 	function handleHitPlayAndPause() {
 		if (isPlaying) {
@@ -115,7 +139,7 @@ export default function StrumPage() {
 					</h2>
 					<div className="flex items-center gap-1">
 						<button
-							onClick={() => console.log("Create pattern")}
+							onClick={() => setCreateModalOpen(true)}
 							className="text-xs font-semibold text-denim px-2 py-1 rounded hover:bg-denim-tint transition-colors"
 						>
 							+ Create
@@ -155,6 +179,119 @@ export default function StrumPage() {
 
 				{/* Scrollable sections */}
 				<div className="w-full flex-1 overflow-y-auto flex flex-col">
+					{/* My Patterns section */}
+					{(() => {
+						const visibleCustom =
+							activeTab === "favourites"
+								? customPatterns.filter((p) => favouriteIds.includes(p.id))
+								: customPatterns;
+						if (activeTab === "favourites" && visibleCustom.length === 0) return null;
+						return (
+							<div>
+								<button
+									onClick={() => setMyPatternsOpen((v) => !v)}
+									className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-50"
+								>
+									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+										My Patterns
+									</span>
+									<ChevronDown
+										size={13}
+										className={`text-slate-400 transition-transform duration-200 ${
+											myPatternsOpen ? "" : "-rotate-90"
+										}`}
+									/>
+								</button>
+								{myPatternsOpen && (
+									<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
+										{visibleCustom.length === 0 ? (
+											<p className="text-[11px] text-slate-400 px-1">
+												No custom patterns yet
+											</p>
+										) : (
+											visibleCustom.map((pattern, idx) => {
+												const isSelected =
+													selectedPattern.id === pattern.id;
+												const isFav = favouriteIds.includes(pattern.id);
+												return (
+													<div
+														key={idx}
+														onClick={() => handleSelectPattern(pattern)}
+														className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
+															isSelected
+																? "bg-denim-tint border-l-denim"
+																: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
+														}`}
+													>
+														<div className="flex items-center justify-between mb-2">
+															<span
+																className={`capitalize text-[11px] font-semibold transition-colors duration-200 ${
+																	isSelected
+																		? "text-denim"
+																		: "text-slate-500"
+																}`}
+															>
+																{pattern.name}
+															</span>
+															<div className="flex items-center gap-1">
+																<button
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		setFavouriteIds((prev) =>
+																			prev.includes(
+																				pattern.id,
+																			)
+																				? prev.filter(
+																						(id) =>
+																							id !==
+																							pattern.id,
+																					)
+																				: [
+																						...prev,
+																						pattern.id,
+																					],
+																		);
+																	}}
+																	className="p-0.5 rounded transition-colors text-slate-300 hover:text-amber-400"
+																>
+																	<Star
+																		size={12}
+																		className={
+																			isFav
+																				? "fill-amber-400 text-amber-400"
+																				: ""
+																		}
+																	/>
+																</button>
+																<button
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		handleDeleteCustomPattern(
+																			pattern.id,
+																		);
+																	}}
+																	className="p-0.5 rounded transition-colors text-slate-300 hover:text-red-500"
+																>
+																	<Trash2 size={12} />
+																</button>
+															</div>
+														</div>
+														<StepGrid
+															beats={pattern.beats}
+															activeCell={null}
+															size="sm"
+															showLabels={false}
+														/>
+													</div>
+												);
+											})
+										)}
+									</div>
+								)}
+							</div>
+						);
+					})()}
+
 					{/* Presets section */}
 					{(() => {
 						const visiblePresets =
@@ -163,10 +300,10 @@ export default function StrumPage() {
 								: PRESET_STRUM_PATTERNS;
 						if (visiblePresets.length === 0) return null;
 						return (
-							<div>
+							<div className="">
 								<button
 									onClick={() => setPresetsOpen((v) => !v)}
-									className="flex items-center justify-between w-full px-4 py-2.5"
+									className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-100"
 								>
 									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
 										Presets
@@ -179,7 +316,7 @@ export default function StrumPage() {
 									/>
 								</button>
 								{presetsOpen && (
-									<div className="px-3 pb-3 flex flex-col gap-1.5">
+									<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
 										{visiblePresets.map((pattern, idx) => {
 											const isSelected = selectedPattern.id === pattern.id;
 											const isFav = favouriteIds.includes(pattern.id);
@@ -242,33 +379,6 @@ export default function StrumPage() {
 							</div>
 						);
 					})()}
-
-					{/* My Patterns section — only shown in All tab */}
-					{activeTab === "all" && (
-						<div>
-							<button
-								onClick={() => setMyPatternsOpen((v) => !v)}
-								className="flex items-center justify-between w-full px-4 py-2.5"
-							>
-								<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-									My Patterns
-								</span>
-								<ChevronDown
-									size={13}
-									className={`text-slate-400 transition-transform duration-200 ${
-										myPatternsOpen ? "" : "-rotate-90"
-									}`}
-								/>
-							</button>
-							{myPatternsOpen && (
-								<div className="px-4 pb-3">
-									<p className="text-[11px] text-slate-400">
-										No custom patterns yet
-									</p>
-								</div>
-							)}
-						</div>
-					)}
 				</div>
 			</div>
 
@@ -807,6 +917,12 @@ export default function StrumPage() {
 			>
 				Library
 			</button>
+
+			<CreatePatternModal
+				open={createModalOpen}
+				onClose={() => setCreateModalOpen(false)}
+				onSave={handleSaveCustomPattern}
+			/>
 		</div>
 	);
 }

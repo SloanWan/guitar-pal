@@ -87,7 +87,7 @@ src/
 ├── types/
 │   └── database.ts              # CATEGORIES const array, Category type, Exercise, Routine, RoutineExercise, PracticeLog, ExerciseLog types
 │
-└── proxy.ts                     # Contains Next.js middleware-shaped auth routing logic — NOT executed (see Critical Known Issues)
+└── proxy.ts                     # Next.js middleware (Next.js 16 uses proxy.ts, not middleware.ts): auth routing guards
 ```
 
 ---
@@ -203,7 +203,7 @@ fingers     jsonb  (array of finger numbers per string)
 - **Browser client** (`createClient()` in `src/lib/supabase.ts`): used in all client components and all lib functions. Created fresh on each call — `createBrowserClient` returns a singleton internally.
 - **Server client** (`createSupabaseServer()` in `src/lib/supabase-server.ts`): used only in server components (`dashboard/page.tsx`, `chords/page.tsx`, `NavBar.tsx`). Reads and writes cookies for session management.
 - **`useUser` hook**: subscribes to `onAuthStateChange` in addition to an initial `getUser()` call, so the client reacts to sign-in/sign-out without a page reload.
-- **No middleware.** Route protection does not exist at the Next.js edge. The `/dashboard` and `/session/:id` pages have no server-side redirect for unauthenticated users — they simply render empty because Supabase RLS returns no rows. See Critical Known Issues.
+- **Middleware (`src/proxy.ts`):** In Next.js 16, `proxy.ts` is the middleware entry point. It guards `/dashboard` and `/session/:path*` against unauthenticated access, redirecting to `/`. See the Routing and Auth Guard section for full rules.
 
 ---
 
@@ -332,12 +332,15 @@ Low-time indicator: timer text turns `text-amber-500` when `secondsLeft <= 10` a
 
 ## Routing and Auth Guard
 
-**There is no active middleware.** `src/proxy.ts` contains Next.js middleware logic (including `export const config = { matcher: [...] }`) but is named `proxy.ts` instead of `middleware.ts` and is therefore never executed by Next.js. If you need to add middleware, rename this file to `src/middleware.ts` or create a new one. The logic inside `proxy.ts` would:
+**`src/proxy.ts` is the Next.js 16 middleware file.** In Next.js 16, the middleware entry point is named `proxy.ts` rather than `middleware.ts`. It runs at the edge on every matched request.
 
-- Redirect unauthenticated users from `/dashboard` and `/session/:path*` to `/`.
-- Redirect authenticated users from `/` and `/auth` to `/dashboard`.
+Matcher: `["/dashboard/:path*", "/session/:path*", "/", "/auth/:path*"]`
 
-Until that file is renamed, the app relies on Supabase RLS returning empty result sets for unauthenticated requests. The dashboard renders empty silently; it does not show a sign-in prompt.
+Routing rules:
+
+- Unauthenticated + not `/auth` + not `/` → redirect to `/`.
+- Authenticated + `/auth` → redirect to `/dashboard`.
+- Authenticated + `/` → redirect to `/dashboard`. This means logged-in users never see the marketing home page — they are immediately sent to the dashboard.
 
 Auth redirect on `/auth` page: after sign-in/sign-up, redirects to `?redirect` param or defaults to `/dashboard`.
 
@@ -423,23 +426,19 @@ Dark mode variants of these vars are defined in `globals.css` under `.dark`.
 
 ## Critical Known Issues / Gotchas
 
-1. **`src/proxy.ts` is dead code.** It will never execute as middleware because it is not named `middleware.ts`. If route protection (redirect unauthenticated users from dashboard/session) is desired, rename it to `src/middleware.ts`. Review the matcher and logic before enabling — it currently redirects `/` to `/dashboard` for logged-in users which would break the marketing page.
+1. **Chord Library is an iframe.** `ChordsView.tsx` ignores all props and renders a third-party embed. The server-side Supabase query in `chords/page.tsx` and the `chords.ts` server action are wasted on every page load. The `@tombatossals/chords-db` npm package is installed but unused.
 
-2. **Chord Library is an iframe.** `ChordsView.tsx` ignores all props and renders a third-party embed. The server-side Supabase query in `chords/page.tsx` and the `chords.ts` server action are wasted on every page load. The `@tombatossals/chords-db` npm package is installed but unused.
+2. **Practice history has no UI.** `getPracticeLogs()` exists in `practiceLogs.ts` and data is written after each session, but no component ever calls it or renders the history.
 
-3. **Practice history has no UI.** `getPracticeLogs()` exists in `practiceLogs.ts` and data is written after each session, but no component ever calls it or renders the history.
+3. **Exercise logs are fully disconnected.** `exerciseLogs.ts` defines `createExerciseLog` and `getExerciseLogs`. Neither is imported anywhere in the UI.
 
-4. **Exercise logs are fully disconnected.** `exerciseLogs.ts` defines `createExerciseLog` and `getExerciseLogs`. Neither is imported anywhere in the UI.
+4. **`target_bpm` and `stage` on exercises are orphaned.** Both fields exist in the `Exercise` type and presumably in the database, but no form sets them and no UI displays them.
 
-5. **`target_bpm` and `stage` on exercises are orphaned.** Both fields exist in the `Exercise` type and presumably in the database, but no form sets them and no UI displays them.
+5. **`swapRoutineExerciseOrder` is not atomic.** It does two fetches and two updates without a transaction. A network failure mid-swap leaves `order_index` in an inconsistent state. Consider a Supabase RPC function if this becomes a problem.
 
-6. **`swapRoutineExerciseOrder` is not atomic.** It does two fetches and two updates without a transaction. A network failure mid-swap leaves `order_index` in an inconsistent state. Consider a Supabase RPC function if this becomes a problem.
+6. **No optimistic updates on routine editing.** Duration changes and exercise additions in the edit dialog wait for the network round-trip before updating UI (except removes, which update state immediately). The UX is acceptable but could be improved.
 
-7. **No optimistic updates on routine editing.** Duration changes and exercise additions in the edit dialog wait for the network round-trip before updating UI (except removes, which update state immediately). The UX is acceptable but could be improved.
-
-8. **`ChordsView` state is set but unused.** The component declares `key`, `suffix`, `voicings`, `voicingIndex` state from props but only uses none of them (all render output is the iframe). This dead state can be cleaned up when the native chord UI is implemented.
-
-9. **Custom pattern creator cannot author ghost or triplet cells.** The `STEP_CYCLE` in `CreatePatternModal` only cycles through `["", "D", "U", "X"]`. Patterns containing `DG`, `UG`, `D3`, or `U3` display correctly but can only originate from the preset array.
+7. **`ChordsView` state is set but unused.** The component declares `key`, `suffix`, `voicings`, `voicingIndex` state from props but only uses none of them (all render output is the iframe). This dead state can be cleaned up when the native chord UI is implemented.
 
 ---
 
@@ -450,8 +449,4 @@ These are inferred from scaffolded-but-unused code and obvious gaps:
 - **Practice history page** — render `getPracticeLogs()` results, ideally with calendar heatmap or weekly summary.
 - **Exercise log UI** — wire up `createExerciseLog` and `getExerciseLogs`; perhaps a per-exercise progress view.
 - **Native chord library** — replace iframe with a proper browsing UI using the `chords` + `chord_voicings` Supabase tables and/or `@tombatossals/chords-db` for offline use.
-- **Route protection** — rename/activate `proxy.ts` as `middleware.ts` so unauthenticated users can't reach `/dashboard` or `/session/:id`.
-- **`target_bpm` on exercises** — add a BPM goal field to the exercise form; could integrate with the strumming machine.
-- **`stage` on exercises** — unclear intent; possibly a spaced-repetition difficulty level.
 - **Atomic reordering** — replace the two-update `swapRoutineExerciseOrder` with a Supabase RPC.
-- **Ghost / triplet cell authoring** — extend the pattern creator to allow `DG`, `UG`, `D3`, `U3`.

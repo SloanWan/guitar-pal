@@ -1,7 +1,7 @@
 "use client";
 
 import { signIn, signUp } from "@/lib/auth";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Guitar } from "lucide-react";
 
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export default function AuthPage() {
+function AuthPageInner() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<Error | null>(null);
@@ -135,5 +135,13 @@ export default function AuthPage() {
 				</Card>
 			</div>
 		</div>
+	);
+}
+
+export default function AuthPage() {
+	return (
+		<Suspense fallback={null}>
+			<AuthPageInner />
+		</Suspense>
 	);
 }

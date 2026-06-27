@@ -20,6 +20,7 @@ import {
 	Star,
 	Trash2,
 	Loader2,
+	Pencil,
 } from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
 import { useUser } from "@/hooks/useUser";
@@ -28,7 +29,7 @@ const MIN_BPM = 40;
 const MAX_BPM = 220;
 
 export default function StrumPage() {
-	const [selectedPattern, setSelectedPattern] = useState(PRESET_STRUM_PATTERNS[0]);
+	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(PRESET_STRUM_PATTERNS[0]);
 	const [bpm, setBpm] = useState(80);
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
 
@@ -50,7 +51,7 @@ export default function StrumPage() {
 		setAccentEnabled,
 		playOnce,
 		setPlayOnce,
-	} = useAudioEngine(selectedPattern.beats, bpm, tickMode);
+	} = useAudioEngine(selectedPattern?.beats ?? PRESET_STRUM_PATTERNS[0].beats, bpm, tickMode);
 
 	const { user, loading } = useUser();
 	const {
@@ -58,10 +59,12 @@ export default function StrumPage() {
 		patternsLoading,
 		favouriteIds,
 		handleSaveCustomPattern,
+		handleEditCustomPattern,
 		handleDeleteCustomPattern,
 		handleToggleFavourite,
 	} = useStrumPatterns(user, loading);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
+	const [editingPattern, setEditingPattern] = useState<StrumPattern | null>(null);
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [soundExpanded, setSoundExpanded] = useState(false);
 	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
@@ -92,10 +95,19 @@ export default function StrumPage() {
 		if (found) setSelectedPattern(found);
 	}, []);
 
+	useEffect(() => {
+		if (patternsLoading || !selectedPattern) return;
+		if (PRESET_STRUM_PATTERNS.some((p) => p.id === selectedPattern.id)) return;
+		if (!customPatterns.some((p) => p.id === selectedPattern.id)) {
+			stop();
+			setSelectedPattern(null);
+		}
+	}, [customPatterns, patternsLoading]);
+
 	function handleHitPlayAndPause() {
 		if (isPlaying) {
 			stop();
-		} else {
+		} else if (selectedPattern) {
 			start();
 		}
 	}
@@ -218,7 +230,7 @@ export default function StrumPage() {
 										) : (
 											visibleCustom.map((pattern, idx) => {
 												const isSelected =
-													selectedPattern.id === pattern.id;
+													selectedPattern?.id === pattern.id;
 												const isFav = favouriteIds.includes(pattern.id);
 												return (
 													<div
@@ -261,6 +273,16 @@ export default function StrumPage() {
 																				: ""
 																		}
 																	/>
+																</button>
+																<button
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		setEditingPattern(pattern);
+																		setCreateModalOpen(true);
+																	}}
+																	className="p-0.5 rounded transition-colors text-slate-300 hover:text-denim"
+																>
+																	<Pencil size={12} />
 																</button>
 																<button
 																	onClick={(e) => {
@@ -324,7 +346,7 @@ export default function StrumPage() {
 								{presetsOpen && (
 									<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
 										{visiblePresets.map((pattern, idx) => {
-											const isSelected = selectedPattern.id === pattern.id;
+											const isSelected = selectedPattern?.id === pattern.id;
 											const isFav = favouriteIds.includes(pattern.id);
 											return (
 												<div
@@ -391,10 +413,16 @@ export default function StrumPage() {
 			{/* Center — StepGrid */}
 			<div className="md:flex-1 flex items-center justify-center px-4 md:px-8 py-6 md:py-0 md:overflow-hidden">
 				<div className="w-full max-w-160">
-					<StepGridCard
-						pattern={selectedPattern}
-						activeCell={{ beatIdx: currBeat, cellIdx: currCell }}
-					/>
+					{selectedPattern ? (
+						<StepGridCard
+							pattern={selectedPattern}
+							activeCell={{ beatIdx: currBeat, cellIdx: currCell }}
+						/>
+					) : (
+						<p className="text-slate-400 text-sm text-center">
+							Choose a pattern from the library
+						</p>
+					)}
 				</div>
 			</div>
 
@@ -412,7 +440,7 @@ export default function StrumPage() {
 							<div className="flex flex-col items-center gap-4">
 								<div
 									onClick={handleHitPlayAndPause}
-									className="cursor-pointer text-denim hover:text-denim-dark transition-all duration-150 active:scale-95"
+									className={`transition-all duration-150 active:scale-95 ${selectedPattern ? "cursor-pointer text-denim hover:text-denim-dark" : "opacity-30 pointer-events-none text-denim"}`}
 								>
 									{isPlaying ? (
 										<CirclePause size={52} strokeWidth={1.5} />
@@ -671,7 +699,7 @@ export default function StrumPage() {
 					{/* Play / Pause */}
 					<div
 						onClick={handleHitPlayAndPause}
-						className="flex justify-center cursor-pointer text-denim hover:text-denim-dark transition-all duration-150 active:scale-95"
+						className={`flex justify-center transition-all duration-150 active:scale-95 ${selectedPattern ? "cursor-pointer text-denim hover:text-denim-dark" : "opacity-30 pointer-events-none text-denim"}`}
 					>
 						{isPlaying ? (
 							<CirclePause size={60} strokeWidth={1.5} />
@@ -918,8 +946,19 @@ export default function StrumPage() {
 
 			<CreatePatternModal
 				open={createModalOpen}
-				onClose={() => setCreateModalOpen(false)}
-				onSave={handleSaveCustomPattern}
+				onClose={() => {
+					setCreateModalOpen(false);
+					setEditingPattern(null);
+				}}
+				onSave={(pattern) => {
+					if (editingPattern) {
+						handleEditCustomPattern(pattern);
+						if (selectedPattern?.id === pattern.id) setSelectedPattern(pattern);
+					} else {
+						handleSaveCustomPattern(pattern);
+					}
+				}}
+				editPattern={editingPattern ?? undefined}
 				user={user}
 			/>
 		</div>

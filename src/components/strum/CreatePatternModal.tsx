@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -41,17 +41,28 @@ export default function CreatePatternModal({
 	onClose,
 	onSave,
 	user,
+	editPattern,
 }: {
 	open: boolean;
 	onClose: () => void;
 	onSave: (pattern: StrumPattern) => void;
 	user: User | null;
+	editPattern?: StrumPattern;
 }) {
 	const router = useRouter();
 	const [name, setName] = useState("");
 	const [beats, setBeats] = useState<Beat[]>(EMPTY_BEATS);
 	const [nameError, setNameError] = useState(false);
 	const [showSignInPrompt, setShowSignInPrompt] = useState(false);
+
+	useEffect(() => {
+		if (open) {
+			setName(editPattern?.name ?? "");
+			setBeats(editPattern?.beats ?? EMPTY_BEATS);
+			setNameError(false);
+			setShowSignInPrompt(false);
+		}
+	}, [open]);
 
 	function handleCellClick(beatIdx: number, cellIdx: number) {
 		setBeats((prev) =>
@@ -81,10 +92,10 @@ export default function CreatePatternModal({
 
 	function buildPattern(): StrumPattern {
 		return {
-			id: crypto.randomUUID(),
+			id: editPattern?.id ?? crypto.randomUUID(),
 			name: name.trim(),
 			beats,
-			description: "",
+			description: editPattern?.description ?? "",
 		};
 	}
 
@@ -93,7 +104,7 @@ export default function CreatePatternModal({
 			setNameError(true);
 			return;
 		}
-		if (!user) {
+		if (!user && !editPattern) {
 			setShowSignInPrompt(true);
 			return;
 		}
@@ -118,7 +129,7 @@ export default function CreatePatternModal({
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
 			<DialogContent className="max-w-120 w-full">
 				<DialogHeader>
-					<DialogTitle>Create pattern</DialogTitle>
+					<DialogTitle>{editPattern ? "Edit pattern" : "Create pattern"}</DialogTitle>
 				</DialogHeader>
 
 				<div className="flex flex-col gap-5">
@@ -221,7 +232,7 @@ export default function CreatePatternModal({
 								onClick={handleSave}
 								style={{ backgroundColor: "var(--denim)", color: "white" }}
 							>
-								Save pattern
+								{editPattern ? "Save changes" : "Save pattern"}
 							</Button>
 						</>
 					)}

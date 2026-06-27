@@ -161,6 +161,28 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		}
 	}
 
+	function handleEditCustomPattern(updated: StrumPattern) {
+		const next = customPatterns.map((p) => (p.id === updated.id ? updated : p));
+		setCustomPatterns(next);
+		if (user) {
+			(async () => {
+				try {
+					const supabase = createClient();
+					const { error } = await supabase
+						.from("user_strum_patterns")
+						.update({ name: updated.name, beats: updated.beats, description: updated.description })
+						.eq("pattern_id", updated.id)
+						.eq("user_id", user.id);
+					if (error) throw new Error(error.message);
+				} catch (e) {
+					console.error(e);
+				}
+			})();
+		} else {
+			localStorage.setItem("customStrumPatterns", JSON.stringify(next));
+		}
+	}
+
 	function handleDeleteCustomPattern(id: string) {
 		const updated = customPatterns.filter((p) => p.id !== id);
 		setCustomPatterns(updated);
@@ -218,6 +240,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		patternsLoading,
 		favouriteIds,
 		handleSaveCustomPattern,
+		handleEditCustomPattern,
 		handleDeleteCustomPattern,
 		handleToggleFavourite,
 	};

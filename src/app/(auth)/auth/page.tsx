@@ -1,8 +1,8 @@
 "use client";
 
 import { signIn, signUp } from "@/lib/auth";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Guitar } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,19 +11,21 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export default function AuthPage() {
+function AuthPageInner() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<Error | null>(null);
 	const [loading, setLoading] = useState(false);
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const redirect = searchParams.get("redirect") ?? "/dashboard";
 
 	async function handleSignIn() {
 		setLoading(true);
 		setError(null);
 		const { error } = await signIn(email, password);
 		if (error) setError(error);
-		else router.push("/dashboard");
+		else router.push(redirect);
 		setLoading(false);
 	}
 
@@ -32,7 +34,7 @@ export default function AuthPage() {
 		setError(null);
 		const { error } = await signUp(email, password);
 		if (error) setError(error);
-		else router.push("/dashboard");
+		else router.push(redirect);
 		setLoading(false);
 	}
 
@@ -133,5 +135,13 @@ export default function AuthPage() {
 				</Card>
 			</div>
 		</div>
+	);
+}
+
+export default function AuthPage() {
+	return (
+		<Suspense fallback={null}>
+			<AuthPageInner />
+		</Suspense>
 	);
 }

@@ -7,10 +7,22 @@ import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatter
 import { useState, useEffect, useRef } from "react";
 
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
+import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Minus, CirclePlay, CirclePause, X, ChevronDown, Star, Trash2 } from "lucide-react";
+import {
+	Plus,
+	Minus,
+	CirclePlay,
+	CirclePause,
+	X,
+	ChevronDown,
+	Star,
+	Trash2,
+	Loader2,
+} from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
+import { useUser } from "@/hooks/useUser";
 
 const MIN_BPM = 40;
 const MAX_BPM = 220;
@@ -40,18 +52,27 @@ export default function StrumPage() {
 		setPlayOnce,
 	} = useAudioEngine(selectedPattern.beats, bpm, tickMode);
 
-	const [customPatterns, setCustomPatterns] = useState<StrumPattern[]>([]);
+	const { user, loading } = useUser();
+	const {
+		customPatterns,
+		patternsLoading,
+		favouriteIds,
+		handleSaveCustomPattern,
+		handleDeleteCustomPattern,
+		handleToggleFavourite,
+	} = useStrumPatterns(user, loading);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [soundExpanded, setSoundExpanded] = useState(false);
 	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
-	const [favouriteIds, setFavouriteIds] = useState<string[]>([]);
 	const [presetsOpen, setPresetsOpen] = useState(true);
 	const [myPatternsOpen, setMyPatternsOpen] = useState(true);
 	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
 	const tapTimesRef = useRef<number[]>([]);
+
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
+			if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 			if (e.code === "Space") {
 				e.preventDefault();
 				if (spaceMode === "playPause") {
@@ -70,27 +91,6 @@ export default function StrumPage() {
 		const found = PRESET_STRUM_PATTERNS.find((p) => p.id === saved);
 		if (found) setSelectedPattern(found);
 	}, []);
-
-	useEffect(() => {
-		try {
-			const saved = localStorage.getItem("customStrumPatterns");
-			if (saved) setCustomPatterns(JSON.parse(saved) as StrumPattern[]);
-		} catch {
-			// ignore malformed data
-		}
-	}, []);
-
-	function handleSaveCustomPattern(pattern: StrumPattern) {
-		const updated = [...customPatterns, pattern];
-		setCustomPatterns(updated);
-		localStorage.setItem("customStrumPatterns", JSON.stringify(updated));
-	}
-
-	function handleDeleteCustomPattern(id: string) {
-		const updated = customPatterns.filter((p) => p.id !== id);
-		setCustomPatterns(updated);
-		localStorage.setItem("customStrumPatterns", JSON.stringify(updated));
-	}
 
 	function handleHitPlayAndPause() {
 		if (isPlaying) {
@@ -204,7 +204,14 @@ export default function StrumPage() {
 								</button>
 								{myPatternsOpen && (
 									<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
-										{visibleCustom.length === 0 ? (
+										{patternsLoading ? (
+											<div className="flex justify-center py-4">
+												<Loader2
+													size={16}
+													className="animate-spin text-slate-300"
+												/>
+											</div>
+										) : visibleCustom.length === 0 ? (
 											<p className="text-[11px] text-slate-400 px-1">
 												No custom patterns yet
 											</p>
@@ -225,31 +232,23 @@ export default function StrumPage() {
 													>
 														<div className="flex items-center justify-between mb-2">
 															<span
-																className={`capitalize text-[11px] font-semibold transition-colors duration-200 ${
+																className={`text-[11px] font-semibold transition-colors duration-200 ${
 																	isSelected
 																		? "text-denim"
 																		: "text-slate-500"
 																}`}
 															>
-																{pattern.name}
+																{pattern.name.replace(
+																	/\b\w/g,
+																	(c) => c.toUpperCase(),
+																)}
 															</span>
 															<div className="flex items-center gap-1">
 																<button
 																	onClick={(e) => {
 																		e.stopPropagation();
-																		setFavouriteIds((prev) =>
-																			prev.includes(
-																				pattern.id,
-																			)
-																				? prev.filter(
-																						(id) =>
-																							id !==
-																							pattern.id,
-																					)
-																				: [
-																						...prev,
-																						pattern.id,
-																					],
+																		handleToggleFavourite(
+																			pattern.id,
 																		);
 																	}}
 																	className="p-0.5 rounded transition-colors text-slate-300 hover:text-amber-400"
@@ -291,6 +290,13 @@ export default function StrumPage() {
 							</div>
 						);
 					})()}
+
+					{/* Favourites sign-in nudge */}
+					{activeTab === "favourites" && !user && (
+						<p className="text-xs text-slate-400 text-center px-4 py-3">
+							Sign in to sync your favourites across devices.
+						</p>
+					)}
 
 					{/* Presets section */}
 					{(() => {
@@ -343,15 +349,7 @@ export default function StrumPage() {
 														<button
 															onClick={(e) => {
 																e.stopPropagation();
-																setFavouriteIds((prev) =>
-																	prev.includes(pattern.id)
-																		? prev.filter(
-																				(id) =>
-																					id !==
-																					pattern.id,
-																			)
-																		: [...prev, pattern.id],
-																);
+																handleToggleFavourite(pattern.id);
 															}}
 															className="p-0.5 rounded transition-colors text-slate-300 hover:text-amber-400"
 														>
@@ -850,7 +848,7 @@ export default function StrumPage() {
 						<div
 							className={`flex justify-between items-center ${
 								!strumEnabled ? "opacity-40" : ""
-							}"`}
+							}`}
 						>
 							<span className="text-xs text-slate-400">Volume</span>
 							<span className="text-xs tabular-nums text-slate-400">
@@ -922,6 +920,7 @@ export default function StrumPage() {
 				open={createModalOpen}
 				onClose={() => setCreateModalOpen(false)}
 				onSave={handleSaveCustomPattern}
+				user={user}
 			/>
 		</div>
 	);

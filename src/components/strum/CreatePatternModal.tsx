@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import {
 	Dialog,
 	DialogContent,
@@ -38,14 +40,18 @@ export default function CreatePatternModal({
 	open,
 	onClose,
 	onSave,
+	user,
 }: {
 	open: boolean;
 	onClose: () => void;
 	onSave: (pattern: StrumPattern) => void;
+	user: User | null;
 }) {
+	const router = useRouter();
 	const [name, setName] = useState("");
 	const [beats, setBeats] = useState<Beat[]>(EMPTY_BEATS);
 	const [nameError, setNameError] = useState(false);
+	const [showSignInPrompt, setShowSignInPrompt] = useState(false);
 
 	function handleCellClick(beatIdx: number, cellIdx: number) {
 		setBeats((prev) =>
@@ -73,17 +79,30 @@ export default function CreatePatternModal({
 		);
 	}
 
+	function buildPattern(): StrumPattern {
+		return {
+			id: crypto.randomUUID(),
+			name: name.trim(),
+			beats,
+			description: "",
+		};
+	}
+
 	function handleSave() {
 		if (!name.trim()) {
 			setNameError(true);
 			return;
 		}
-		onSave({
-			id: crypto.randomUUID(),
-			name: name.trim(),
-			beats,
-			description: "",
-		});
+		if (!user) {
+			setShowSignInPrompt(true);
+			return;
+		}
+		onSave(buildPattern());
+		handleClose();
+	}
+
+	function handleSaveLocally() {
+		onSave(buildPattern());
 		handleClose();
 	}
 
@@ -91,6 +110,7 @@ export default function CreatePatternModal({
 		setName("");
 		setBeats(EMPTY_BEATS);
 		setNameError(false);
+		setShowSignInPrompt(false);
 		onClose();
 	}
 
@@ -166,22 +186,45 @@ export default function CreatePatternModal({
 						</div>
 					</div>
 
-					{/* Warning */}
-					<p className="text-[11px] text-red-600">
-						Saved locally. Clear browser data and your patterns will be lost.
-					</p>
+					{/* Sign-in prompt — shown when user is not logged in and tries to save */}
+					{showSignInPrompt && (
+						<div className="rounded-lg border border-denim/20 bg-denim-tint/50 px-4 py-3">
+							<p className="text-sm text-slate-700">
+								Sign in to keep your patterns safe across devices.
+							</p>
+						</div>
+					)}
 				</div>
 
 				<DialogFooter>
-					<Button variant="outline" onClick={handleClose}>
-						Cancel
-					</Button>
-					<Button
-						onClick={handleSave}
-						style={{ backgroundColor: "var(--denim)", color: "white" }}
-					>
-						Save pattern
-					</Button>
+					{showSignInPrompt ? (
+						<>
+							<Button variant="outline" onClick={handleSaveLocally}>
+								Save locally anyway
+							</Button>
+							<Button
+								onClick={() => {
+									onSave(buildPattern());
+									router.push("/auth?redirect=/strum");
+								}}
+								style={{ backgroundColor: "var(--denim)", color: "white" }}
+							>
+								Sign in
+							</Button>
+						</>
+					) : (
+						<>
+							<Button variant="outline" onClick={handleClose}>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleSave}
+								style={{ backgroundColor: "var(--denim)", color: "white" }}
+							>
+								Save pattern
+							</Button>
+						</>
+					)}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

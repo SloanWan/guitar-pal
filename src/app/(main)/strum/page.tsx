@@ -21,6 +21,7 @@ import {
 	Trash2,
 	Loader2,
 	Pencil,
+	SquareMenu,
 } from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
 import { useUser } from "@/hooks/useUser";
@@ -29,7 +30,9 @@ const MIN_BPM = 40;
 const MAX_BPM = 220;
 
 export default function StrumPage() {
-	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(PRESET_STRUM_PATTERNS[0]);
+	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(
+		PRESET_STRUM_PATTERNS[0],
+	);
 	const [bpm, setBpm] = useState(80);
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
 
@@ -75,7 +78,8 @@ export default function StrumPage() {
 
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
-			if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+			if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+				return;
 			if (e.code === "Space") {
 				e.preventDefault();
 				if (spaceMode === "playPause") {
@@ -412,7 +416,7 @@ export default function StrumPage() {
 
 			{/* Center — StepGrid */}
 			<div className="md:flex-1 flex items-center justify-center px-4 md:px-8 py-6 md:py-0 md:overflow-hidden">
-				<div className="w-full max-w-160">
+				<div className="relative w-full max-w-160">
 					{selectedPattern ? (
 						<StepGridCard
 							pattern={selectedPattern}
@@ -422,6 +426,15 @@ export default function StrumPage() {
 						<p className="text-slate-400 text-sm text-center">
 							Choose a pattern from the library
 						</p>
+					)}
+					{!showLibrary && (
+						<button
+							onClick={() => setShowLibrary(true)}
+							className="absolute top-2 right-2 z-50 lg:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-200 active:scale-95"
+							style={{ backgroundColor: "var(--denim)" }}
+						>
+							<SquareMenu />
+						</button>
 					)}
 				</div>
 			</div>
@@ -934,15 +947,6 @@ export default function StrumPage() {
 					</div>
 				</div>
 			</div>
-
-			{/* Floating library button — visible on mobile and tablet only */}
-			<button
-				onClick={() => setShowLibrary(true)}
-				className={`fixed bottom-6 left-4 z-50 lg:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-full px-4 py-2.5 shadow-lg transition-all duration-150 active:scale-95 ${showLibrary ? "opacity-0 pointer-events-none" : ""}`}
-				style={{ backgroundColor: "var(--denim)" }}
-			>
-				Library
-			</button>
 
 			<CreatePatternModal
 				open={createModalOpen}

@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Minus, CirclePlay, CirclePause, X, ChevronDown } from "lucide-react";
+import { Plus, Minus, CirclePlay, CirclePause, X, ChevronDown, Star } from "lucide-react";
 
 const MIN_BPM = 40;
 const MAX_BPM = 220;
@@ -41,6 +41,10 @@ export default function StrumPage() {
 
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [soundExpanded, setSoundExpanded] = useState(false);
+	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
+	const [favouriteIds, setFavouriteIds] = useState<string[]>([]);
+	const [presetsOpen, setPresetsOpen] = useState(true);
+	const [myPatternsOpen, setMyPatternsOpen] = useState(true);
 	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
 	const tapTimesRef = useRef<number[]>([]);
 	useEffect(() => {
@@ -104,46 +108,167 @@ export default function StrumPage() {
 					showLibrary ? "translate-x-0" : "-translate-x-full"
 				}`}
 			>
+				{/* Header */}
 				<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-slate-200">
 					<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
 						Strumming Library
 					</h2>
+					<div className="flex items-center gap-1">
+						<button
+							onClick={() => console.log("Create pattern")}
+							className="text-xs font-semibold text-denim px-2 py-1 rounded hover:bg-denim-tint transition-colors"
+						>
+							+ Create
+						</button>
+						<button
+							onClick={() => setShowLibrary(false)}
+							className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+						>
+							<X size={18} />
+						</button>
+					</div>
+				</div>
+
+				{/* Tab bar */}
+				<div className="flex shrink-0 border-b border-slate-200">
 					<button
-						onClick={() => setShowLibrary(false)}
-						className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+						onClick={() => setActiveTab("all")}
+						className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
+							activeTab === "all"
+								? "text-denim border-denim"
+								: "text-slate-400 border-transparent hover:text-slate-600"
+						}`}
 					>
-						<X size={18} />
+						All
+					</button>
+					<button
+						onClick={() => setActiveTab("favourites")}
+						className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
+							activeTab === "favourites"
+								? "text-denim border-denim"
+								: "text-slate-400 border-transparent hover:text-slate-600"
+						}`}
+					>
+						Favourites
 					</button>
 				</div>
-				<div className="w-full px-3 py-3 flex-1 overflow-y-auto flex flex-col gap-1.5">
-					{PRESET_STRUM_PATTERNS.map((pattern, patternIdx) => {
-						const isSelected = selectedPattern.id === pattern.id;
+
+				{/* Scrollable sections */}
+				<div className="w-full flex-1 overflow-y-auto flex flex-col">
+					{/* Presets section */}
+					{(() => {
+						const visiblePresets =
+							activeTab === "favourites"
+								? PRESET_STRUM_PATTERNS.filter((p) => favouriteIds.includes(p.id))
+								: PRESET_STRUM_PATTERNS;
+						if (visiblePresets.length === 0) return null;
 						return (
-							<div
-								key={patternIdx}
-								onClick={() => handleSelectPattern(pattern)}
-								className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
-									isSelected
-										? "bg-denim-tint border-l-denim"
-										: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
-								}`}
-							>
-								<div
-									className={`capitalize text-[11px] font-semibold mb-2 transition-colors duration-200 ${
-										isSelected ? "text-denim" : "text-slate-500"
-									}`}
+							<div>
+								<button
+									onClick={() => setPresetsOpen((v) => !v)}
+									className="flex items-center justify-between w-full px-4 py-2.5"
 								>
-									{pattern.name}
-								</div>
-								<StepGrid
-									beats={pattern.beats}
-									activeCell={null}
-									size="sm"
-									showLabels={false}
-								/>
+									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+										Presets
+									</span>
+									<ChevronDown
+										size={13}
+										className={`text-slate-400 transition-transform duration-200 ${
+											presetsOpen ? "" : "-rotate-90"
+										}`}
+									/>
+								</button>
+								{presetsOpen && (
+									<div className="px-3 pb-3 flex flex-col gap-1.5">
+										{visiblePresets.map((pattern, idx) => {
+											const isSelected = selectedPattern.id === pattern.id;
+											const isFav = favouriteIds.includes(pattern.id);
+											return (
+												<div
+													key={idx}
+													onClick={() => handleSelectPattern(pattern)}
+													className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
+														isSelected
+															? "bg-denim-tint border-l-denim"
+															: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
+													}`}
+												>
+													<div className="flex items-center justify-between mb-2">
+														<span
+															className={`capitalize text-[11px] font-semibold transition-colors duration-200 ${
+																isSelected
+																	? "text-denim"
+																	: "text-slate-500"
+															}`}
+														>
+															{pattern.name}
+														</span>
+														<button
+															onClick={(e) => {
+																e.stopPropagation();
+																setFavouriteIds((prev) =>
+																	prev.includes(pattern.id)
+																		? prev.filter(
+																				(id) =>
+																					id !==
+																					pattern.id,
+																			)
+																		: [...prev, pattern.id],
+																);
+															}}
+															className="p-0.5 rounded transition-colors text-slate-300 hover:text-amber-400"
+														>
+															<Star
+																size={12}
+																className={
+																	isFav
+																		? "fill-amber-400 text-amber-400"
+																		: ""
+																}
+															/>
+														</button>
+													</div>
+													<StepGrid
+														beats={pattern.beats}
+														activeCell={null}
+														size="sm"
+														showLabels={false}
+													/>
+												</div>
+											);
+										})}
+									</div>
+								)}
 							</div>
 						);
-					})}
+					})()}
+
+					{/* My Patterns section — only shown in All tab */}
+					{activeTab === "all" && (
+						<div>
+							<button
+								onClick={() => setMyPatternsOpen((v) => !v)}
+								className="flex items-center justify-between w-full px-4 py-2.5"
+							>
+								<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+									My Patterns
+								</span>
+								<ChevronDown
+									size={13}
+									className={`text-slate-400 transition-transform duration-200 ${
+										myPatternsOpen ? "" : "-rotate-90"
+									}`}
+								/>
+							</button>
+							{myPatternsOpen && (
+								<div className="px-4 pb-3">
+									<p className="text-[11px] text-slate-400">
+										No custom patterns yet
+									</p>
+								</div>
+							)}
+						</div>
+					)}
 				</div>
 			</div>
 

@@ -157,7 +157,7 @@ export default function StrumPage() {
 
 			{/* Center — StepGrid */}
 			<div className="md:flex-1 flex items-center justify-center px-4 md:px-8 py-6 md:py-0 md:overflow-hidden">
-				<div className="w-full max-w-[40rem]">
+				<div className="w-full max-w-160">
 					<StepGridCard
 						pattern={selectedPattern}
 						activeCell={{ beatIdx: currBeat, cellIdx: currCell }}

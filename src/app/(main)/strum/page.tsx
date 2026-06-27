@@ -98,7 +98,6 @@ export default function StrumPage() {
 
 	return (
 		<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">
-
 			{/* Left sidebar — lg: static; below lg: slide-in overlay */}
 			<div
 				className={`fixed inset-y-0 left-0 z-40 w-72 h-full border-r border-slate-200 bg-white flex flex-col shrink-0 transition-transform duration-200 ease-in-out lg:relative lg:inset-auto lg:z-auto lg:translate-x-0 ${
@@ -244,7 +243,14 @@ export default function StrumPage() {
 										variant={tickMode === "quarter" ? "default" : "secondary"}
 										disabled={!metronomeEnabled}
 										className="flex-1 h-8 px-0 text-xs font-semibold transition-all duration-150"
-										style={tickMode === "quarter" ? { backgroundColor: "var(--denim)", color: "white" } : {}}
+										style={
+											tickMode === "quarter"
+												? {
+														backgroundColor: "var(--denim)",
+														color: "white",
+													}
+												: {}
+										}
 									>
 										1/4
 									</Button>
@@ -253,7 +259,14 @@ export default function StrumPage() {
 										variant={tickMode === "eighth" ? "default" : "secondary"}
 										disabled={!metronomeEnabled}
 										className="flex-1 h-8 px-0 text-xs font-semibold transition-all duration-150"
-										style={tickMode === "eighth" ? { backgroundColor: "var(--denim)", color: "white" } : {}}
+										style={
+											tickMode === "eighth"
+												? {
+														backgroundColor: "var(--denim)",
+														color: "white",
+													}
+												: {}
+										}
 									>
 										1/8
 									</Button>
@@ -262,7 +275,14 @@ export default function StrumPage() {
 										variant={tickMode === "sixteenth" ? "default" : "secondary"}
 										disabled={!metronomeEnabled}
 										className="flex-1 h-8 px-0 text-xs font-semibold transition-all duration-150"
-										style={tickMode === "sixteenth" ? { backgroundColor: "var(--denim)", color: "white" } : {}}
+										style={
+											tickMode === "sixteenth"
+												? {
+														backgroundColor: "var(--denim)",
+														color: "white",
+													}
+												: {}
+										}
 									>
 										1/16
 									</Button>
@@ -272,7 +292,9 @@ export default function StrumPage() {
 								<div className="flex items-center gap-2">
 									<span
 										className={`text-xs font-medium transition-colors duration-200 ${
-											spaceMode === "playPause" ? "text-denim font-semibold" : "text-slate-400"
+											spaceMode === "playPause"
+												? "text-denim font-semibold"
+												: "text-slate-400"
 										}`}
 									>
 										Play/Pause
@@ -280,13 +302,17 @@ export default function StrumPage() {
 									<Switch
 										checked={spaceMode === "tapTempo"}
 										onCheckedChange={() =>
-											setSpaceMode((m) => m === "playPause" ? "tapTempo" : "playPause")
+											setSpaceMode((m) =>
+												m === "playPause" ? "tapTempo" : "playPause",
+											)
 										}
 										className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-denim"
 									/>
 									<span
 										className={`text-xs font-medium transition-colors duration-200 ${
-											spaceMode === "tapTempo" ? "text-denim font-semibold" : "text-slate-400"
+											spaceMode === "tapTempo"
+												? "text-denim font-semibold"
+												: "text-slate-400"
 										}`}
 									>
 										Tap
@@ -336,7 +362,9 @@ export default function StrumPage() {
 									/>
 								</div>
 								{/* Accent beat 1 */}
-								<div className={`flex items-center justify-between ${!metronomeEnabled ? "opacity-40" : ""}`}>
+								<div
+									className={`flex items-center justify-between ${!metronomeEnabled ? "opacity-40" : ""}`}
+								>
 									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
 										Accent beat 1
 									</span>
@@ -350,7 +378,9 @@ export default function StrumPage() {
 								{/* Metronome volume */}
 								<div className="flex flex-col gap-1.5">
 									<div className="flex justify-between items-center">
-										<span className="text-xs text-slate-400">Metronome vol.</span>
+										<span className="text-xs text-slate-400">
+											Metronome vol.
+										</span>
 										<span className="text-xs tabular-nums text-slate-400">
 											{Math.round(metronomeGain * 100)}%
 										</span>

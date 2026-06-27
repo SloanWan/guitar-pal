@@ -2,7 +2,7 @@
 
 import { signIn, signUp } from "@/lib/auth";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Guitar } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -17,13 +17,15 @@ export default function AuthPage() {
 	const [error, setError] = useState<Error | null>(null);
 	const [loading, setLoading] = useState(false);
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const redirect = searchParams.get("redirect") ?? "/dashboard";
 
 	async function handleSignIn() {
 		setLoading(true);
 		setError(null);
 		const { error } = await signIn(email, password);
 		if (error) setError(error);
-		else router.push("/dashboard");
+		else router.push(redirect);
 		setLoading(false);
 	}
 
@@ -32,7 +34,7 @@ export default function AuthPage() {
 		setError(null);
 		const { error } = await signUp(email, password);
 		if (error) setError(error);
-		else router.push("/dashboard");
+		else router.push(redirect);
 		setLoading(false);
 	}
 

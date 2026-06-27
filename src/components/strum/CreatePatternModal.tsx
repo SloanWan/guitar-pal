@@ -96,7 +96,7 @@ export default function CreatePatternModal({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="max-w-[480px] w-full">
+			<DialogContent className="max-w-120 w-full">
 				<DialogHeader>
 					<DialogTitle>Create pattern</DialogTitle>
 				</DialogHeader>

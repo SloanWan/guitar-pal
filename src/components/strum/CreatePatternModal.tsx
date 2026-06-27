@@ -27,7 +27,12 @@ function StepIcon({ step }: { step: StepValue }) {
 	return <Dot className="size-4" />;
 }
 
-const EMPTY_BEATS: Beat[] = [["", ""], ["", ""], ["", ""], ["", ""]];
+const EMPTY_BEATS: Beat[] = [
+	["", ""],
+	["", ""],
+	["", ""],
+	["", ""],
+];
 
 export default function CreatePatternModal({
 	open,
@@ -47,9 +52,7 @@ export default function CreatePatternModal({
 			prev.map((beat, bi) =>
 				bi !== beatIdx
 					? beat
-					: (beat.map((cell, ci) =>
-							ci === cellIdx ? cycleStep(cell) : cell,
-						) as Beat),
+					: (beat.map((cell, ci) => (ci === cellIdx ? cycleStep(cell) : cell)) as Beat),
 			),
 		);
 	}
@@ -57,9 +60,7 @@ export default function CreatePatternModal({
 	function addCell(beatIdx: number) {
 		setBeats((prev) =>
 			prev.map((beat, bi) =>
-				bi === beatIdx && beat.length < 4
-					? ([...beat, ""] as Beat)
-					: beat,
+				bi === beatIdx && beat.length < 4 ? ([...beat, ""] as Beat) : beat,
 			),
 		);
 	}
@@ -67,9 +68,7 @@ export default function CreatePatternModal({
 	function removeCell(beatIdx: number) {
 		setBeats((prev) =>
 			prev.map((beat, bi) =>
-				bi === beatIdx && beat.length > 2
-					? (beat.slice(0, -1) as Beat)
-					: beat,
+				bi === beatIdx && beat.length > 2 ? (beat.slice(0, -1) as Beat) : beat,
 			),
 		);
 	}
@@ -168,7 +167,7 @@ export default function CreatePatternModal({
 					</div>
 
 					{/* Warning */}
-					<p className="text-[11px] text-slate-400">
+					<p className="text-[11px] text-red-600">
 						Saved locally. Clear browser data and your patterns will be lost.
 					</p>
 				</div>

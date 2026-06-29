@@ -3,11 +3,12 @@
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Music, Rows4 } from "lucide-react";
+import { Music, Rows4, Hand } from "lucide-react";
 
 const links = [
 	{ href: "/chords", label: "Chords Library", Icon: Music },
 	{ href: "/strum", label: "Strumming Playground", Icon: Rows4 },
+	{ href: "/fingerpick", label: "Fingerpicking", Icon: Hand },
 ];
 
 export default function NavLinks() {

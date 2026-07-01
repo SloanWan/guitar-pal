@@ -38,7 +38,7 @@ export default async function ChordsPage() {
 			<div className="container mx-auto py-8 text-center">
 				{/* <h1 className="text-4xl font-bold mb-8">Guitar Chords</h1> */}
 				<ChordsView
-					initialChord={initialChord}
+					initialChord={initialChord ?? undefined}
 					roots={roots}
 					rootSuffixMap={rootSuffixMap}
 				/>

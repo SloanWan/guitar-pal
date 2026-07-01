@@ -96,7 +96,7 @@ export default function StrumPage() {
 	useEffect(() => {
 		const saved = localStorage.getItem("lastStrumPattern");
 		const found = PRESET_STRUM_PATTERNS.find((p) => p.id === saved);
-		if (found) setSelectedPattern(found);
+		if (found) queueMicrotask(() => setSelectedPattern(found));
 	}, []);
 
 	useEffect(() => {
@@ -104,7 +104,7 @@ export default function StrumPage() {
 		if (PRESET_STRUM_PATTERNS.some((p) => p.id === selectedPattern.id)) return;
 		if (!customPatterns.some((p) => p.id === selectedPattern.id)) {
 			stop();
-			setSelectedPattern(null);
+			queueMicrotask(() => setSelectedPattern(null));
 		}
 	}, [customPatterns, patternsLoading]);
 

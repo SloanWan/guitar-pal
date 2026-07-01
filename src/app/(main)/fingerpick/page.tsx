@@ -131,12 +131,13 @@ export default function FingerpickPage() {
 	const [pattern] = useState<FingerpickPattern>(PRESET_FINGERPICK_PATTERN);
 
 	// Desktop (≥768 px): 4 measures per row; mobile: 2.
-	// Default to 4 (desktop) for SSR; corrected on the client in the effect below.
-	const [measuresPerRow, setMeasuresPerRow] = useState(4);
+	// Default to 4 for SSR; corrected on the client via the initial matchMedia check.
+	const [measuresPerRow, setMeasuresPerRow] = useState<number>(() =>
+		typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches ? 4 : 2
+	);
 
 	useEffect(() => {
 		const mq = window.matchMedia("(min-width: 768px)");
-		setMeasuresPerRow(mq.matches ? 4 : 2);
 		const handler = (e: MediaQueryListEvent) => setMeasuresPerRow(e.matches ? 4 : 2);
 		mq.addEventListener("change", handler);
 		return () => mq.removeEventListener("change", handler);
@@ -144,15 +145,19 @@ export default function FingerpickPage() {
 
 	// Each entry carries the row's measures and the 1-indexed measure number for
 	// its first cell, so TabStaveRow can label measures correctly.
-	const rows = useMemo(() => {
-		const groups = groupMeasuresIntoRows(pattern.measures, measuresPerRow);
-		let start = 1;
-		return groups.map((rowMeasures) => {
-			const entry = { measures: rowMeasures, startMeasureNumber: start };
-			start += rowMeasures.length;
-			return entry;
-		});
-	}, [pattern.measures, measuresPerRow]);
+	const rows = useMemo(
+		() =>
+			groupMeasuresIntoRows(pattern.measures, measuresPerRow).reduce<
+				Array<{ measures: Measure[]; startMeasureNumber: number }>
+			>((acc, rowMeasures) => {
+				const prev = acc.at(-1);
+				const startMeasureNumber = prev
+					? prev.startMeasureNumber + prev.measures.length
+					: 1;
+				return [...acc, { measures: rowMeasures, startMeasureNumber }];
+			}, []),
+		[pattern.measures, measuresPerRow]
+	);
 
 	return (
 		<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">

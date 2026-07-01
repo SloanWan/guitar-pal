@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 
-export default function ChordsView({ initialChord, roots, rootSuffixMap }: any) {
+export default function ChordsView({ initialChord, roots, rootSuffixMap }: {
+	initialChord?: { root: string; suffix: string; chord_voicings: unknown[] };
+	roots?: unknown;
+	rootSuffixMap?: unknown;
+}) {
 	const [key, setKey] = useState(initialChord?.root);
 	const [suffix, setSuffix] = useState(initialChord?.suffix);
 	const [voicings, setVoicings] = useState(initialChord?.chord_voicings);

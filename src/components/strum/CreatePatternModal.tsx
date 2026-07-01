@@ -56,12 +56,13 @@ export default function CreatePatternModal({
 	const [showSignInPrompt, setShowSignInPrompt] = useState(false);
 
 	useEffect(() => {
-		if (open) {
+		if (!open) return;
+		queueMicrotask(() => {
 			setName(editPattern?.name ?? "");
 			setBeats(editPattern?.beats ?? EMPTY_BEATS);
 			setNameError(false);
 			setShowSignInPrompt(false);
-		}
+		});
 	}, [open]);
 
 	function handleCellClick(beatIdx: number, cellIdx: number) {

@@ -12,7 +12,6 @@ export default function DashboardContent() {
 	const [allExercises, setAllExercises] = useState<Exercise[]>([]);
 
 	useEffect(() => {
-		setLoading(true);
 		getExercises()
 			.then(setAllExercises)
 			.catch(console.error)

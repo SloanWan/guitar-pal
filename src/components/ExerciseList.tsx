@@ -50,9 +50,9 @@ export default function ExerciseList({
 
 	// Clear filter if the active category disappears from the list
 	useEffect(() => {
-		if (activeCategory && !presentCategories.includes(activeCategory as Exercise["category"])) {
-			setActiveCategory(null);
-		}
+		if (!activeCategory) return;
+		if (presentCategories.includes(activeCategory as Exercise["category"])) return;
+		queueMicrotask(() => setActiveCategory(null));
 	}, [exercises]);
 
 	const filteredExercises = activeCategory

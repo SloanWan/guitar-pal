@@ -11,8 +11,6 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 
 	useEffect(() => {
 		if (loading || user) return;
-		setCustomPatterns([]);
-		setFavouriteIds([]);
 		let localPatterns: StrumPattern[] = [];
 		try {
 			const saved = localStorage.getItem("customStrumPatterns");
@@ -20,8 +18,6 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		} catch {
 			// ignore malformed data
 		}
-		setCustomPatterns(localPatterns);
-		setPatternsLoading(false);
 		let localFavIds: string[] = [];
 		try {
 			const savedFavs = localStorage.getItem("favouritePatternIds");
@@ -29,7 +25,11 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		} catch {
 			// ignore malformed data
 		}
-		setFavouriteIds(localFavIds);
+		queueMicrotask(() => {
+			setCustomPatterns(localPatterns);
+			setFavouriteIds(localFavIds);
+			setPatternsLoading(false);
+		});
 	}, [user, loading]);
 
 	useEffect(() => {

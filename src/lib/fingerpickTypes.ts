@@ -28,16 +28,3 @@ export type FingerpickPattern = {
 	timeSignature: [number, number];
 };
 
-// Pure function mapping duration to relative column width (quarter = 1× base unit).
-const DURATION_WIDTH_MULTIPLIERS: Record<Duration, number> = {
-	whole: 4,
-	half: 2,
-	quarter: 1,
-	eighth: 0.5,
-	sixteenth: 0.25,
-	rest: 1,
-};
-
-export function durationToWidthMultiplier(duration: Duration): number {
-	return DURATION_WIDTH_MULTIPLIERS[duration];
-}

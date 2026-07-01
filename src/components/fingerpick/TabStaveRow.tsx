@@ -56,7 +56,7 @@ interface VexFlowRenderData {
 //
 //   Input: slot { duration:"rest", strings all silent }
 //   Output: notes=[GhostNote({ duration:"q" })], connectors=[]
-export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
+function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	const notes: StemmableNote[] = [];
 	// posIndexMaps[slotIdx].get(stringIdx) = index in that TabNote's positions array.
 	// Used to build firstIndexes/lastIndexes for connectors.

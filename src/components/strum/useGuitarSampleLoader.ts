@@ -121,9 +121,9 @@ export const MUTED_MAX_DURATION_S = 0.08;
 
 /**
  * Fraction of the cell duration used as the gain-decay time constant.
- * At 4τ the note has decayed to ~2% of its initial volume, fitting within the cell.
+ * Exported so tests can reference it without duplicating the literal.
  */
-const DECAY_TC_FRACTION = 0.25;
+export const DECAY_TIME_CONSTANT_RATIO = 0.8;
 
 /**
  * Minimum gain-decay time constant (s).
@@ -180,14 +180,26 @@ export function parsePresetFromJs(text: string, varName: string): WafPreset {
 
 	for (let i = jsStart; i < text.length; i++) {
 		const ch = text[i];
-		if (escape) { escape = false; continue; }
-		if (ch === "\\" && inString) { escape = true; continue; }
-		if (ch === '"') { inString = !inString; continue; }
+		if (escape) {
+			escape = false;
+			continue;
+		}
+		if (ch === "\\" && inString) {
+			escape = true;
+			continue;
+		}
+		if (ch === '"') {
+			inString = !inString;
+			continue;
+		}
 		if (inString) continue;
 		if (ch === "{") depth++;
 		else if (ch === "}") {
 			depth--;
-			if (depth === 0) { jsEnd = i; break; }
+			if (depth === 0) {
+				jsEnd = i;
+				break;
+			}
 		}
 	}
 
@@ -284,9 +296,7 @@ async function _decodeZone(zone: WafZone, ctx: AudioContext): Promise<AudioBuffe
  * originalPitch is nearest to the target if no range matches.
  */
 export function findZoneForMidi(preset: WafPreset, midiNote: number): WafZone {
-	const exact = preset.zones.find(
-		(z) => z.keyRangeLow <= midiNote && midiNote <= z.keyRangeHigh,
-	);
+	const exact = preset.zones.find((z) => z.keyRangeLow <= midiNote && midiNote <= z.keyRangeHigh);
 	if (exact) return exact;
 
 	if (preset.zones.length === 0) {
@@ -295,8 +305,7 @@ export function findZoneForMidi(preset: WafPreset, midiNote: number): WafZone {
 
 	return [...preset.zones].sort(
 		(a, b) =>
-			Math.abs(a.originalPitch / 100 - midiNote) -
-			Math.abs(b.originalPitch / 100 - midiNote),
+			Math.abs(a.originalPitch / 100 - midiNote) - Math.abs(b.originalPitch / 100 - midiNote),
 	)[0];
 }
 
@@ -331,9 +340,8 @@ function _scheduleNote(
 	}
 
 	// Decay starts immediately at `when` (guitar-pluck model: no hold phase).
-	// τ = noteDuration × 0.25 so the note reaches ~2% at 4τ, fitting within the cell.
-	// Floor of MIN_DECAY_TC_S prevents click-like transitions at fast tempos.
-	const decayTimeConstant = Math.max(noteDuration * DECAY_TC_FRACTION, MIN_DECAY_TC_S);
+	// Floor of MIN_DECAY_TC_S prevents click-like transitions at very fast tempos.
+	const decayTimeConstant = Math.max(noteDuration * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S);
 
 	const gainNode = ctx.createGain();
 	gainNode.gain.setValueAtTime(volume, when);
@@ -345,7 +353,9 @@ function _scheduleNote(
 	source.stop(when + noteDuration + SOURCE_STOP_BUFFER_S);
 
 	_activeSources.add(source);
-	source.onended = () => { _activeSources.delete(source); };
+	source.onended = () => {
+		_activeSources.delete(source);
+	};
 }
 
 // ─── Preset loading ────────────────────────────────────────────────────────────
@@ -431,10 +441,7 @@ export function triggerStrum(
 	if (!preset) return;
 
 	// Up strum: high-to-low sweep; down and muted: low-to-high sweep.
-	const pitches =
-		type === "up"
-			? [...STRUM_PITCHES].sort((a, b) => b - a)
-			: [...STRUM_PITCHES];
+	const pitches = type === "up" ? [...STRUM_PITCHES].sort((a, b) => b - a) : [...STRUM_PITCHES];
 
 	// Muted strums cap at MUTED_MAX_DURATION_S regardless of tempo.
 	const effectiveDuration =
@@ -451,7 +458,16 @@ export function triggerStrum(
 		if (adjustedDuration <= 0) continue;
 
 		const volume = Math.pow(0.9, i); // slight taper toward the sweep end
-		_scheduleNote(ctx, target, zone, zone.buffer, when + noteOffset, pitches[i], adjustedDuration, volume);
+		_scheduleNote(
+			ctx,
+			target,
+			zone,
+			zone.buffer,
+			when + noteOffset,
+			pitches[i],
+			adjustedDuration,
+			volume,
+		);
 	}
 }
 
@@ -461,7 +477,11 @@ export function triggerStrum(
  */
 export function cancelStrums(): void {
 	for (const source of _activeSources) {
-		try { source.stop(); } catch { /* already ended */ }
+		try {
+			source.stop();
+		} catch {
+			/* already ended */
+		}
 	}
 	_activeSources.clear();
 }
@@ -471,10 +491,7 @@ export function cancelStrums(): void {
  * Retained as a stub so useAudioEngine.ts compiles unchanged until 53-b
  * replaces the AudioBuffer-based scheduler with triggerStrum.
  */
-export function getStrumBuffer(
-	_type: StrumSoundType,
-	_ctx: AudioContext,
-): Promise<AudioBuffer> {
+export function getStrumBuffer(_type: StrumSoundType, _ctx: AudioContext): Promise<AudioBuffer> {
 	return Promise.reject(
 		new SampleLoadError(
 			"getStrumBuffer is deprecated — use preloadStrumPresets + triggerStrum",

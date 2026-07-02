@@ -6,6 +6,7 @@ import {
 	triggerStrum,
 	cancelStrums,
 	STRUM_PITCHES,
+	DECAY_TIME_CONSTANT_RATIO,
 	MUTED_MAX_DURATION_S,
 	MIN_DECAY_TC_S,
 	SOURCE_STOP_BUFFER_S,
@@ -486,26 +487,27 @@ describe("triggerStrum — duration and decay time constant scaling", () => {
 	it("scales decay τ proportionally at slow tempo (60 BPM, 1-cell beat → 1.0 s/cell)", () => {
 		const { ctx, mockGain } = setupSingleZonePreset();
 		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
-		// String 0: adjustedDuration = 1.0, τ = max(1.0 × 0.25, MIN_DECAY_TC_S) = 0.25
+		// String 0: adjustedDuration = 1.0, τ = max(1.0 × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)
 		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
-		expect(tau).toBeCloseTo(Math.max(1.0 * 0.25, MIN_DECAY_TC_S), 5);
+		expect(tau).toBeCloseTo(Math.max(1.0 * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S), 5);
 	});
 
 	it("scales decay τ proportionally at normal tempo (120 BPM, 4-cell beat → 0.125 s/cell)", () => {
 		const { ctx, mockGain } = setupSingleZonePreset();
 		triggerStrum("down", ctx, {} as AudioNode, 0, 0.125);
-		// String 0: adjustedDuration = 0.125, τ = max(0.125 × 0.25, 0.03) = 0.03125
+		// String 0: adjustedDuration = 0.125, τ = max(0.125 × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)
 		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
-		expect(tau).toBeCloseTo(Math.max(0.125 * 0.25, MIN_DECAY_TC_S), 5);
+		expect(tau).toBeCloseTo(Math.max(0.125 * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S), 5);
 	});
 
-	it("clamps decay τ to MIN_DECAY_TC_S at fast tempo (180 BPM, 4-cell beat → ~0.0833 s/cell)", () => {
+	it("scales decay τ proportionally at fast tempo (180 BPM, 4-cell beat → ~0.0833 s/cell)", () => {
 		const { ctx, mockGain } = setupSingleZonePreset();
 		const fastCellDur = 60 / 180 / 4; // ~0.0833 s
 		triggerStrum("down", ctx, {} as AudioNode, 0, fastCellDur);
-		// String 0: adjustedDuration ≈ 0.0833, τ = max(0.0208, 0.03) = 0.03 (floor)
+		// With DECAY_TIME_CONSTANT_RATIO = 0.8: τ = max(0.0833 × 0.8, 0.03) = 0.0667 (ratio-scaled,
+		// not floor-clamped — the floor only kicks in below ~0.0375 s/cell, i.e. ≈400+ BPM).
 		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
-		expect(tau).toBeCloseTo(MIN_DECAY_TC_S, 5);
+		expect(tau).toBeCloseTo(Math.max(fastCellDur * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S), 5);
 	});
 
 	it("schedules every string to stop at when + noteDuration + SOURCE_STOP_BUFFER_S (stagger cancels out)", () => {

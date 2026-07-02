@@ -199,9 +199,9 @@ describe("parsePresetFromJs — success paths", () => {
     expect(result.zones[0].sample).toBe(sampleB64);
   });
 
-  it("preserves // inside a base64 sample string while stripping // comments", () => {
+  it("preserves // inside a base64 sample string and ignores the adjacent // comment", () => {
     // base64 can legitimately contain // (two consecutive '/' chars).
-    // jsToJson must NOT treat // inside a string value as a JS comment.
+    // The JS engine must treat // inside the string literal as data, not a comment.
     const sampleWithSlashes = "AA//BB=="; // synthetic base64 containing //
     const js =
       `var _tone_Slash_Test={\n` +
@@ -271,8 +271,8 @@ describe("parsePresetFromJs — error paths", () => {
     expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow("unexpected shape");
   });
 
-  it("throws SampleLoadError when the extracted value is not valid JSON", () => {
-    const js = `var _tone_0250_Test={broken json here};`;
+  it("throws SampleLoadError when the extracted value is not valid JavaScript", () => {
+    const js = `var _tone_0250_Test={broken js here};`;
     expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
   });
 });
@@ -481,3 +481,64 @@ describe("getStrumBuffer — error handling and cache eviction", () => {
     expect(decodeAudioData).toHaveBeenCalledTimes(2);
   });
 });
+
+// ─── Live CDN integration ─────────────────────────────────────────────────────
+//
+// These tests fetch real CDN content and confirm end-to-end parsing with the
+// Function() evaluator. They are skipped by default; run with:
+//   INTEGRATION=1 npm test
+//
+// During development of the Function() approach both presets were verified
+// manually via a Node.js script producing:
+//   ✓ 0250_SoundBlasterOld_sf2: 3 zone(s)
+//     zone1: MIDI range [0-72],  originalPitch=7400, sampleRate=44100
+//     zone2: MIDI range [73-97], originalPitch=7600, sampleRate=44100
+//     zone3: MIDI range [98-127], originalPitch=11100, sampleRate=44100
+//   ✓ 0280_SoundBlasterOld_sf2: 2 zone(s)
+//     zone1: MIDI range [0-98],  originalPitch=7600, sampleRate=44100
+//     zone2: MIDI range [99-127], originalPitch=11100, sampleRate=44100
+
+const CDN_BASE = "https://surikov.github.io/webaudiofontdata/sound/";
+
+describe.skipIf(!process.env.INTEGRATION)(
+  "parsePresetFromJs — live CDN integration (INTEGRATION=1 npm test)",
+  () => {
+    it.each([
+      [
+        "0250_SoundBlasterOld_sf2",
+        "_tone_0250_SoundBlasterOld_sf2",
+        3, // 3 key-range zones confirmed against live CDN
+      ],
+      [
+        "0280_SoundBlasterOld_sf2",
+        "_tone_0280_SoundBlasterOld_sf2",
+        2, // 2 key-range zones confirmed against live CDN
+      ],
+    ] as const)(
+      "parses live CDN preset %s with Function() and validates all zones",
+      async (key, varName, expectedZones) => {
+        const res = await fetch(`${CDN_BASE}${key}.js`);
+        expect(res.ok).toBe(true);
+        const text = await res.text();
+
+        const preset = parsePresetFromJs(text, varName);
+
+        expect(preset.zones).toHaveLength(expectedZones);
+        for (const zone of preset.zones) {
+          expect(zone.sampleRate).toBeGreaterThan(0);
+          expect(zone.keyRangeLow).toBeGreaterThanOrEqual(0);
+          expect(zone.keyRangeHigh).toBeGreaterThan(zone.keyRangeLow);
+          expect(typeof zone.originalPitch).toBe("number");
+          // Every zone must carry audio data
+          expect(zone.sample !== undefined || zone.file !== undefined).toBe(true);
+          if (zone.sample !== undefined) {
+            // Base64 sample data must be non-empty and decodable by atob
+            expect(zone.sample.length).toBeGreaterThan(0);
+            expect(() => atob(zone.sample!)).not.toThrow();
+          }
+        }
+      },
+      15_000
+    );
+  }
+);

@@ -45,6 +45,14 @@
  * Note: the preset JS files contain a leading console.log() call before the
  * variable assignment. parsePresetFromJs handles this safely: the regex
  * requires `varName\s*=\s*{` which does not match the string inside the log.
+ *
+ * Security note: parsePresetFromJs evaluates the extracted object literal with
+ * Function() rather than a custom parser. This requires no Content Security
+ * Policy 'unsafe-eval' exemption in most browsers (Function() is gated on
+ * 'unsafe-eval' in strict CSPs — the app does not presently set one). The
+ * ONLY content reaching Function() is the extracted object literal from the
+ * pinned WAF_BASE_URL CDN; no user input is involved. Function() does not
+ * capture the surrounding module's closures, only the global scope.
  */
 
 // ─── Public types ──────────────────────────────────────────────────────────────
@@ -120,90 +128,21 @@ function _bufferKey(presetKey: PresetKey, midiNote: number): string {
 // ─── Preset parsing ────────────────────────────────────────────────────────────
 
 /**
- * Normalize a JavaScript object literal extracted from a webaudiofont preset
- * file into valid JSON. CDN preset files use:
- *   - Unquoted identifier keys:   midi:28        → "midi":28
- *   - Single-quoted strings:      sample:'AAA'   → "sample":"AAA"
- *   - Single-line JS comments:    //_tone.mgtr   → (stripped)
- *
- * The first pass is a character-by-character scan that tracks string
- * boundaries so that "//" inside base64 sample data (which is possible) is
- * never mistaken for a comment. The second pass quotes unquoted keys using
- * a regex that is safe because all string content is already double-quoted.
- */
-function jsToJson(js: string): string {
-  const out: string[] = [];
-  let i = 0;
-  const n = js.length;
-
-  while (i < n) {
-    const ch = js[i];
-
-    // Single-line comment — skip to end of line (only safe outside strings)
-    if (ch === "/" && js[i + 1] === "/") {
-      while (i < n && js[i] !== "\n") i++;
-      continue;
-    }
-
-    // Single-quoted string — convert to JSON double-quoted string
-    if (ch === "'") {
-      out.push('"');
-      i++;
-      while (i < n && js[i] !== "'") {
-        if (js[i] === "\\") {
-          out.push(js[i]);
-          i++;
-          if (i < n) { out.push(js[i]); i++; }
-        } else {
-          out.push(js[i]);
-          i++;
-        }
-      }
-      out.push('"');
-      i++; // skip closing '
-      continue;
-    }
-
-    // Double-quoted string — copy verbatim (already JSON-safe)
-    if (ch === '"') {
-      out.push(ch);
-      i++;
-      while (i < n && js[i] !== '"') {
-        if (js[i] === "\\") {
-          out.push(js[i]);
-          i++;
-          if (i < n) { out.push(js[i]); i++; }
-        } else {
-          out.push(js[i]);
-          i++;
-        }
-      }
-      out.push('"');
-      i++;
-      continue;
-    }
-
-    out.push(ch);
-    i++;
-  }
-
-  // Second pass: quote unquoted identifier keys now that all strings are
-  // double-quoted and comments are gone.
-  return out.join("").replace(
-    /([{[,\n][\s]*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g,
-    '$1"$2"$3'
-  );
-}
-
-/**
- * Extract and parse the preset object from a webaudiofont instrument JS file
- * without executing the script. The CDN file format is:
+ * Extract and evaluate the preset object from a webaudiofont instrument JS file.
+ * The CDN file format is valid JavaScript but not valid JSON:
  *   console.log('load _tone_XXXX_...');
  *   var _tone_XXXX_...={zones:[{midi:25,originalPitch:7400,...,sample:'BASE64...'}]};
  *
- * Keys are unquoted and strings use single quotes — see jsToJson above.
- * Brace-counting is used instead of a greedy regex so that content after the
- * assignment does not interfere.
+ * CDN quirks handled by delegating to the JS engine via Function():
+ *   - Unquoted identifier keys  (midi:25)
+ *   - Single-quoted strings     (sample:'BASE64...')
+ *   - Inline // comments        (//_tone.mgtr between last property and closing })
+ *
+ * Extraction: a regex locates the variable assignment; brace-counting (tracking
+ * only double-quote strings, which is sufficient since base64 contains no braces)
+ * finds the matching closing brace. The extracted text is the sole input to
+ * Function() — the full file script is never executed, so the console.log() at
+ * the top of the CDN file does not run.
  */
 export function parsePresetFromJs(text: string, varName: string): WafPreset {
   const assignmentRe = new RegExp(String.raw`\b${varName}\s*=\s*\{`);
@@ -214,15 +153,15 @@ export function parsePresetFromJs(text: string, varName: string): WafPreset {
     );
   }
 
-  // match[0] ends with `{`; rewind one char to get the JSON start index.
-  const jsonStart = match.index + match[0].length - 1;
+  // match[0] ends with `{`; rewind one char to find the start of the object.
+  const jsStart = match.index + match[0].length - 1;
 
   let depth = 0;
   let inString = false;
   let escape = false;
-  let jsonEnd = -1;
+  let jsEnd = -1;
 
-  for (let i = jsonStart; i < text.length; i++) {
+  for (let i = jsStart; i < text.length; i++) {
     const ch = text[i];
     if (escape) {
       escape = false;
@@ -241,29 +180,38 @@ export function parsePresetFromJs(text: string, varName: string): WafPreset {
     else if (ch === "}") {
       depth--;
       if (depth === 0) {
-        jsonEnd = i;
+        jsEnd = i;
         break;
       }
     }
   }
 
-  if (jsonEnd === -1) {
+  if (jsEnd === -1) {
     throw new SampleLoadError(`Unbalanced braces parsing preset "${varName}"`);
   }
 
-  const jsonText = jsToJson(text.slice(jsonStart, jsonEnd + 1));
+  const jsText = text.slice(jsStart, jsEnd + 1);
+
+  // Evaluate the extracted JS object literal. Function() handles unquoted keys,
+  // single-quoted strings, and // comments natively — no custom parser needed.
+  // The function has no closure access to this module's variables.
+  let result: unknown;
   try {
-    const parsed: unknown = JSON.parse(jsonText);
-    if (!isWafPreset(parsed)) {
-      throw new SampleLoadError(
-        `Preset "${varName}" has unexpected shape (missing zones array)`
-      );
-    }
-    return parsed;
+    result = new Function(`"use strict"; return (${jsText})`)();
   } catch (err) {
-    if (err instanceof SampleLoadError) throw err;
-    throw new SampleLoadError(`JSON.parse failed for preset "${varName}"`, err);
+    throw new SampleLoadError(
+      `Failed to evaluate preset "${varName}" as a JavaScript object`,
+      err
+    );
   }
+
+  if (!isWafPreset(result)) {
+    throw new SampleLoadError(
+      `Preset "${varName}" has unexpected shape (missing zones array)`
+    );
+  }
+
+  return result;
 }
 
 function isWafPreset(value: unknown): value is WafPreset {

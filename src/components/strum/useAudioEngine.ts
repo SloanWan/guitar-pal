@@ -114,6 +114,14 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			}
 			activeSourcesRef.current = [];
 			cancelStrums();
+			if (audioCtxRef.current) {
+				try {
+					audioCtxRef.current.close();
+				} catch {
+					// already closed
+				}
+				audioCtxRef.current = null;
+			}
 		};
 	}, []);
 
@@ -123,13 +131,15 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			window.clearTimeout(schedulerRef.current);
 			schedulerRef.current = null;
 		}
-		if (!audioCtxRef.current) {
-			audioCtxRef.current = new AudioContext();
+		if (audioCtxRef.current) {
+			try {
+				audioCtxRef.current.close();
+			} catch {
+				// already closed
+			}
 		}
+		audioCtxRef.current = new AudioContext();
 		const ctx = audioCtxRef.current;
-		// if (ctx.state === "suspended") {
-		// 	ctx.resume();
-		// }
 
 		preloadStrumPresets(ctx).catch((err: unknown) => {
 			console.error("[useAudioEngine] Failed to preload strum presets:", err);

@@ -8,7 +8,7 @@ This document is a complete reference for an AI assistant working on this codeba
 
 **Guitar Pal** is a web-based guitar practice studio targeting beginner-to-intermediate self-taught guitarists. The core loop is: create exercises → assemble them into routines → run timed practice sessions → log the result. A strumming machine with real-time audio playback and a chord library are standalone tools alongside the core loop.
 
-**Current state:** Active development, no test suite. All features work. The chord library UI is an iframe embed (native UI was started but not completed — see Known Issues). Practice logs are written but never displayed. The exercise log table exists but has no UI at all.
+**Current state:** Active development. A Vitest suite (3 files, 76 active tests + 2 skipped CDN integration tests) covers `useGuitarSampleLoader` (preset parsing, scheduling, decay constants), `useAudioEngine` (`_resolveStrumBuffer`), and `fingerpickToVexFlow` (note/beam/connector output). UI components and Supabase-connected flows have no automated coverage. All features work. The chord library UI is an iframe embed (native UI was started but not completed — see Known Issues). Practice logs are written but never displayed. The exercise log table exists but has no UI at all.
 
 ---
 
@@ -27,8 +27,9 @@ This document is a complete reference for an AI assistant working on this codeba
 | Auth + Database     | Supabase (`@supabase/ssr`)                 | 0.10.x  |
 | Fonts               | Geist Sans + Geist Mono (next/font/google) | —       |
 | Language            | TypeScript (strict mode)                   | 5.x     |
+| Guitar sample data  | webaudiofontdata CDN (runtime fetch, no npm pkg) | GPL-3.0 |
 
-**No test suite is configured.** No ORM. No server actions (except `src/lib/chords.ts` which uses `"use server"` but the result is unused). All DB calls happen client-side via the browser Supabase client.
+A Vitest test suite covers selected modules (strum engine and fingerpick functions); UI components and Supabase flows have no automated coverage. No ORM. No server actions (except `src/lib/chords.ts` which uses `"use server"` but the result is unused). All DB calls happen client-side via the browser Supabase client.
 
 ---
 
@@ -65,7 +66,11 @@ src/
 │   │   ├── StepGridCard.tsx     # Card wrapper around StepGrid with pattern name + description
 │   │   ├── CreatePatternModal.tsx # Dialog for creating/editing custom patterns
 │   │   ├── useAudioEngine.ts    # Web Audio API scheduler, all playback logic
-│   │   └── useStrumPatterns.ts  # Custom pattern + favourites state, localStorage/Supabase sync
+│   │   ├── useGuitarSampleLoader.ts # webaudiofontdata CDN preset fetching/parsing, multi-string strum scheduling
+│   │   ├── useStrumPatterns.ts  # Custom pattern + favourites state, localStorage/Supabase sync
+│   │   └── __tests__/
+│   │       ├── useAudioEngine.test.ts        # _resolveStrumBuffer unit tests (10 tests)
+│   │       └── useGuitarSampleLoader.test.ts # Preset parsing, scheduling, decay constants (49 active + 2 skipped)
 │   └── ui/                      # shadcn primitives: button, card, dialog, input, label, select, switch, tabs, sonner
 │
 ├── hooks/
@@ -237,15 +242,22 @@ StepValue semantics:
 - `D3` / `U3` — triplet (same sound as D/U, used when beat.length === 3)
 - `""` — rest (metronome ticks only)
 
-**Audio engine** (`src/components/strum/useAudioEngine.ts`):
+**Audio engine** (`src/components/strum/useAudioEngine.ts`, `src/components/strum/useGuitarSampleLoader.ts`):
 
 - Uses the Web Audio API directly — no library.
-- Scheduler pattern: `setTimeout`-based lookahead loop (100ms lookahead window, 25ms reschedule interval).
+- Scheduler pattern: `setTimeout`-based lookahead loop (100 ms lookahead window, 25 ms reschedule interval).
 - All mutable state that the scheduler reads lives in `useRef` (not `useState`) to avoid stale closures. The matching `useState` values are kept for React renders only. Refs: `bpmRef`, `beatsRef`, `tickModeRef`, `strumEnabledRef`, `strumGainRef`, `metronomeEnabledRef`, `metronomeGainRef`, `accentEnabledRef`, `playOnceRef`.
 - **Do not read ref.current values inside React render logic.** Only refs are safe to read inside the scheduler closure.
-- Strum sounds are synthesised: white noise buffer (0.2s) → BiquadFilter (bandpass) → GainNode with exponential decay. No audio sample files.
-- Strum audio params per type: `D`/`D3` → 800Hz, gain 2.5; `U`/`U3` → 1800Hz, gain 1.2; `X` → 400Hz, gain 2.8. `DG`, `UG`, `""` → silent.
-- Metronome: OscillatorNode, 1200Hz accented / 800Hz normal, 50ms duration.
+- **Strum sounds use real guitar samples** fetched at runtime from the webaudiofontdata CDN (`https://surikov.github.io/webaudiofontdata/sound/`). All sample logic lives in `useGuitarSampleLoader.ts`:
+  - Two GM presets: `0250_SoundBlasterOld_sf2` (acoustic steel guitar — used for `D`/`D3` down-strum and `U`/`U3` up-strum) and `0280_SoundBlasterOld_sf2` (muted electric guitar — used for `X`).
+  - Fixed C major open chord voicing: MIDI pitches [48 C3, 52 E3, 55 G3, 60 C4, 64 E4] (exported as `STRUM_PITCHES`). Low E string is not played.
+  - `preloadStrumPresets(ctx)` — async, called once on playback start. Fetches and parses both preset JS files (unquoted-key JS object format, evaluated via `new Function()`), then decodes all zones used by `STRUM_PITCHES` into `AudioBuffer`s. Results are cached in module-level `Map`s for synchronous scheduler access.
+  - `triggerStrum(type, ctx, target, when, noteDuration)` — synchronous. Schedules one `AudioBufferSourceNode` per string (5 total) with 10 ms per-string stagger and 0.9× volume taper per string. Down strum: low→high pitch order; up strum: high→low. Playback rate per note: `2^((100×midiPitch − baseDetune) / 1200)` where `baseDetune = originalPitch − 100×coarseTune − fineTune`.
+  - Decay envelope per note: `gainNode.gain.setTargetAtTime(0, when, τ)` where `τ = max(noteDuration × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)`. Constants (from source): `DECAY_TIME_CONSTANT_RATIO = 0.8`, `MIN_DECAY_TC_S = 0.03 s`, `SOURCE_STOP_BUFFER_S = 0.05 s`. Muted strums additionally cap `noteDuration` at `MUTED_MAX_DURATION_S = 0.08 s`.
+  - `cancelStrums()` — stops all tracked `AudioBufferSourceNode`s immediately. Called on manual stop and component unmount.
+- Each scheduler tick creates a per-strum `GainNode` (gain = `strumGainRef.current`) that connects `triggerStrum`'s output to `ctx.destination`.
+- `DG`, `UG`, and `""` step values produce no strum sound (scheduler calls are gated by `STEP_TO_SOUND` mapping in `useAudioEngine.ts`).
+- Metronome: `OscillatorNode`, 1200 Hz accented / 800 Hz normal, 50 ms duration.
 - `setStrumEnabled` and `setMetronomeEnabled` stop and restart playback so the ref update propagates immediately.
 - `sixteenth` tick mode with a 2-cell beat interleaves real cells with empty subdivisions (alternating via `nextPlatEmptyCellRef`).
 - BPM range: 40–220. Tap tempo uses up to 8 recent taps, resets after 2 seconds of inactivity.
@@ -439,6 +451,8 @@ Dark mode variants of these vars are defined in `globals.css` under `.dark`.
 6. **No optimistic updates on routine editing.** Duration changes and exercise additions in the edit dialog wait for the network round-trip before updating UI (except removes, which update state immediately). The UX is acceptable but could be improved.
 
 7. **`ChordsView` state is set but unused.** The component declares `key`, `suffix`, `voicings`, `voicingIndex` state from props but only uses none of them (all render output is the iframe). This dead state can be cleaned up when the native chord UI is implemented.
+
+8. **jsdom has no real Canvas / text-measurement implementation.** VexFlow internally calls `Canvas.measureText()` to compute notation layout. Under jsdom, `measureText()` returns zero widths for all strings, so `fingerpickToVexFlow` tests cannot meaningfully assert pixel-level layout (note x-positions, stave widths). Tests are therefore written against the output object graph (note types, beam groups, connectors) rather than rendered geometry. Tracked as a separate GitHub issue.
 
 ---
 

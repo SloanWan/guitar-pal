@@ -3,7 +3,7 @@
 import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
-import { preloadStrumPresets, triggerStrum, cancelStrums, type StrumSoundType } from "./useGuitarSampleLoader";
+import { preloadStrumPresets, triggerStrum, cancelStrums, SOURCE_STOP_BUFFER_S, type StrumSoundType } from "./useGuitarSampleLoader";
 
 // Maps strum step values to the corresponding sample type.
 // DG, UG, and "" are intentionally absent — they produce no strum sound.
@@ -112,6 +112,11 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	}, []);
 
 	function start() {
+		// Cancel any deferred cancelStrums scheduled by a previous play-once pass.
+		if (schedulerRef.current !== null) {
+			window.clearTimeout(schedulerRef.current);
+			schedulerRef.current = null;
+		}
 		if (!audioCtxRef.current) {
 			audioCtxRef.current = new AudioContext();
 		}
@@ -206,7 +211,25 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 				currCellIdxRef.current = 0;
 				currBeatIdxref.current = (currBeatIdxref.current + 1) % beatsRef.current.length;
 				if (playOnceRef.current && currBeatIdxref.current === 0) {
-					stop();
+					// Do not call stop() here: it would invoke cancelStrums() synchronously,
+					// killing the just-scheduled last-note sources before they play.
+					// Instead, defer cancelStrums() until the last note has finished decaying.
+					// Re-using schedulerRef means a manual stop() click still cancels this via
+					// its existing window.clearTimeout(schedulerRef.current) call.
+					const delaySec =
+						Math.max(0, nextCellTimeRef.current - ctx.currentTime) +
+						secondsPerCell +
+						SOURCE_STOP_BUFFER_S;
+					schedulerRef.current = window.setTimeout(() => {
+						cancelStrums();
+						schedulerRef.current = null;
+					}, delaySec * 1000);
+					currBeatIdxref.current = 0;
+					currCellIdxRef.current = 0;
+					nextPlatEmptyCellRef.current = false;
+					setCurrBeat(0);
+					setCurrCell(0);
+					setIsPlaying(false);
 					return;
 				}
 			}

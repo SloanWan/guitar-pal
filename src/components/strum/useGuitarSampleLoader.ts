@@ -150,6 +150,7 @@ const _activeSources = new Set<AudioBufferSourceNode>();
 
 /**
  * Extract and evaluate the preset object from a webaudiofont instrument JS file.
+ * (insert for triggering CD)
  * The CDN file format is valid JavaScript but not valid JSON:
  *   console.log('load _tone_XXXX_...');
  *   var _tone_XXXX_...={zones:[{midi:25,originalPitch:7400,...,sample:'BASE64...'}]};

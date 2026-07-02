@@ -31,6 +31,7 @@ A pre-commit hook (`.husky/pre-commit`) runs `tsc --noEmit`, `npm run lint`, and
 **Auth flow:** `/auth` page handles sign-in/sign-up via `src/lib/auth.ts`. `src/proxy.ts` is the Next.js 16 middleware entry point (named `proxy.ts`, not `middleware.ts`) and guards `/dashboard/:path*` and `/session/:path*` against unauthenticated access. Authenticated users are redirected away from `/auth` and `/` to `/dashboard`.
 
 **Two Supabase clients:**
+
 - `src/lib/supabase.ts` — `createClient()` via `createBrowserClient`, used in client components and all lib query functions
 - `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components (e.g. `dashboard/page.tsx`, `chords/page.tsx`)
 
@@ -39,6 +40,7 @@ Never mix the two clients — `createSupabaseServer()` throws at runtime in clie
 Env vars required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 **Data layer:** `src/lib/` contains thin Supabase query functions — no ORM, no server actions (except an unused one in `chords.ts`). All DB calls happen client-side. Lib functions throw on Supabase error rather than returning null. Tables:
+
 - `exercises`, `routines`, `routine_exercises` (join table with `order_index` and `duration_minutes`)
 - `practice_logs` — immutable records written at end of a session
 - `exercise_logs` — per-exercise records (currently unused by any UI)
@@ -48,11 +50,13 @@ Env vars required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 Types defined in `src/types/database.ts`.
 
 **Strumming machine audio engine** (`src/components/strum/`):
+
 - `useAudioEngine.ts` — setTimeout-based lookahead scheduler (100 ms window, 25 ms reschedule). All scheduler-read state lives in `useRef`, never `useState`, to avoid stale closures and re-render-triggered timing drift. Do not read `ref.current` values inside React render logic.
 - `useGuitarSampleLoader.ts` — fetches and parses WebAudioFont preset data from the pinned CDN (`surikov.github.io/webaudiofontdata`). Presets are JS object literals, not strict JSON — parsed via sandboxed `new Function()` evaluation, not `JSON.parse` or a hand-rolled tokenizer (this was tried and repeatedly broke on real CDN content — do not reintroduce a custom parser). Exposes `triggerStrum(type, ctx, target, when, noteDuration)`, which directly schedules one `AudioBufferSourceNode` per string (5 strings, 10 ms stagger, 0.9× volume taper) using the Web Audio API with a fixed C-major voicing (MIDI [48, 52, 55, 60, 64]). The `WebAudioFontPlayer` class is not used. Down strum: low→high pitch order; up strum: high→low. Exposes `preloadStrumPresets(ctx)` (call once on playback start) and `cancelStrums()` (call on stop and unmount).
 - Note duration/decay must scale with the current BPM/beat interval (`noteDuration = secondsPerCell`) — a fixed duration causes audible overlap between consecutive strums at any tempo.
 
 **Fingerpicking feature** (`src/lib/fingerpickTypes.ts`, `src/lib/fingerpickToVexFlow.ts`, `src/components/fingerpick/`):
+
 - Data model in `fingerpickTypes.ts`: `FingerpickPattern` → `Measure[]` → `BeatSlot[]`. Each `BeatSlot` holds 6 `StringFret` entries (fret, technique, tied, muted flags) and a `Duration`. `Technique` covers hammer-on, pull-off, slide-up, slide-down.
 - `fingerpickToVexFlow.ts` converts a `Measure` into VexFlow `TabNote`, `GhostNote`, `TabTie`, `TabSlide`, and `Beam` objects for stave rendering.
 - `TabStaveRow.tsx` renders a row of tab staves using those VexFlow objects.

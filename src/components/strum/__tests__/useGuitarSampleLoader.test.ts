@@ -1,544 +1,620 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import {
-  parsePresetFromJs,
-  findZoneForMidi,
-  getStrumBuffer,
-  _resetCachesForTesting,
-  _pcmSampleToBuffer,
-  SampleLoadError,
+	parsePresetFromJs,
+	findZoneForMidi,
+	triggerStrum,
+	cancelStrums,
+	STRUM_PITCHES,
+	MUTED_MAX_DURATION_S,
+	MIN_DECAY_TC_S,
+	SOURCE_STOP_BUFFER_S,
+	_resetCachesForTesting,
+	_setReadyPresetForTesting,
+	_pcmSampleToBuffer,
+	SampleLoadError,
 } from "@/components/strum/useGuitarSampleLoader";
 import type { WafPreset, WafZone } from "@/components/strum/useGuitarSampleLoader";
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
 
 function makeZone(overrides: Partial<WafZone> = {}): WafZone {
-  return {
-    keyRangeLow: 48,
-    keyRangeHigh: 65,
-    originalPitch: 6000, // MIDI 60
-    coarseTune: 0,
-    fineTune: 0,
-    loopStart: 0,
-    loopEnd: 0,
-    sampleRate: 44100,
-    file: btoa("fake-audio-data"),
-    ...overrides,
-  };
+	return {
+		keyRangeLow: 0,
+		keyRangeHigh: 127,
+		originalPitch: 6000,
+		coarseTune: 0,
+		fineTune: 0,
+		loopStart: 0,
+		loopEnd: 0,
+		sampleRate: 44100,
+		file: btoa("fake-audio-data"),
+		...overrides,
+	};
 }
 
 function makePreset(zones: WafZone[] = [makeZone()]): WafPreset {
-  return { zones };
+	return { zones };
 }
 
-// Minimal valid preset JSON for the steel guitar variable
 const VALID_ZONE_JSON =
-  '{"keyRangeLow":0,"keyRangeHigh":127,"originalPitch":6000,' +
-  '"coarseTune":0,"fineTune":0,"loopStart":0,"loopEnd":0,' +
-  `"sampleRate":44100,"file":"${btoa("fake-audio")}"}`;
+	'{"keyRangeLow":0,"keyRangeHigh":127,"originalPitch":6000,' +
+	'"coarseTune":0,"fineTune":0,"loopStart":0,"loopEnd":0,' +
+	`"sampleRate":44100,"file":"${btoa("fake-audio")}"}`;
 
 function mockPresetJs(varName: string): string {
-  return `if(typeof module!=="undefined")module.exports={};var ${varName}={"zones":[${VALID_ZONE_JSON}]};`;
+	return `if(typeof module!=="undefined")module.exports={};var ${varName}={"zones":[${VALID_ZONE_JSON}]};`;
 }
 
 function makeFakeBuffer(): AudioBuffer {
-  return {} as AudioBuffer;
+	return {} as AudioBuffer;
 }
 
-function makeMockCtx(fakeBuffer?: AudioBuffer) {
-  const buf = fakeBuffer ?? makeFakeBuffer();
-  const decodeAudioData = vi.fn(() => Promise.resolve(buf));
-  const ctx = { decodeAudioData } as unknown as AudioContext;
-  return { ctx, decodeAudioData, buf };
+/** Build a mock AudioContext that records BufferSource creation for strum tests. */
+function makeMockStrumCtx() {
+	type MockSource = {
+		buffer: AudioBuffer | null;
+		playbackRate: { value: number };
+		loop: boolean;
+		loopStart: number;
+		loopEnd: number;
+		start: ReturnType<typeof vi.fn>;
+		stop: ReturnType<typeof vi.fn>;
+		onended: (() => void) | null;
+		connect: ReturnType<typeof vi.fn>;
+	};
+
+	const sources: MockSource[] = [];
+
+	const mockGain = {
+		gain: { setValueAtTime: vi.fn(), setTargetAtTime: vi.fn() },
+		connect: vi.fn().mockReturnThis(),
+	};
+
+	const ctx = {
+		createBufferSource: vi.fn(() => {
+			const source: MockSource = {
+				buffer: null,
+				playbackRate: { value: 1 },
+				loop: false,
+				loopStart: 0,
+				loopEnd: 0,
+				start: vi.fn(),
+				stop: vi.fn(),
+				onended: null,
+				connect: vi.fn().mockReturnValue(mockGain),
+			};
+			sources.push(source);
+			return source;
+		}),
+		createGain: vi.fn(() => mockGain),
+		currentTime: 0,
+	} as unknown as AudioContext;
+
+	return { ctx, sources, mockGain };
 }
 
 // ─── _pcmSampleToBuffer ───────────────────────────────────────────────────────
 
-/**
- * Build a base64-encoded 16-bit LE PCM string from an array of sample pairs.
- * Each element of `bytePairs` is [lo, hi] for one 16-bit sample.
- */
 function makePcmBase64(bytePairs: [number, number][]): string {
-  const bytes = bytePairs.flatMap(([lo, hi]) => [lo, hi]);
-  return btoa(String.fromCharCode(...bytes));
+	const bytes = bytePairs.flatMap(([lo, hi]) => [lo, hi]);
+	return btoa(String.fromCharCode(...bytes));
 }
 
-function makePcmCtx(sampleCount: number): {
-  ctx: AudioContext;
-  float32: Float32Array;
-} {
-  const float32 = new Float32Array(sampleCount);
-  const mockBuffer = { getChannelData: () => float32 } as unknown as AudioBuffer;
-  const ctx = { createBuffer: vi.fn(() => mockBuffer) } as unknown as AudioContext;
-  return { ctx, float32 };
+function makePcmCtx(sampleCount: number) {
+	const float32 = new Float32Array(sampleCount);
+	const mockBuffer = { getChannelData: () => float32 } as unknown as AudioBuffer;
+	const ctx = { createBuffer: vi.fn(() => mockBuffer) } as unknown as AudioContext;
+	return { ctx, float32 };
 }
 
 describe("_pcmSampleToBuffer — 16-bit LE PCM decoding", () => {
-  it("decodes a positive value correctly", () => {
-    // [0x01, 0x00] → n = 0*256 + 1 = 1 → float = 1/32768
-    const b64 = makePcmBase64([[0x01, 0x00]]);
-    const { ctx, float32 } = makePcmCtx(1);
-    _pcmSampleToBuffer(b64, 44100, ctx);
-    expect(float32[0]).toBeCloseTo(1 / 32768, 5);
-  });
+	it("decodes a positive value correctly", () => {
+		const b64 = makePcmBase64([[0x01, 0x00]]);
+		const { ctx, float32 } = makePcmCtx(1);
+		_pcmSampleToBuffer(b64, 44100, ctx);
+		expect(float32[0]).toBeCloseTo(1 / 32768, 5);
+	});
 
-  it("decodes the maximum positive value (32767) correctly", () => {
-    // [0xFF, 0x7F] → n = 127*256 + 255 = 32767 → float ≈ 0.99997
-    const b64 = makePcmBase64([[0xff, 0x7f]]);
-    const { ctx, float32 } = makePcmCtx(1);
-    _pcmSampleToBuffer(b64, 44100, ctx);
-    expect(float32[0]).toBeCloseTo(32767 / 32768, 5);
-  });
+	it("decodes the maximum positive value (32767) correctly", () => {
+		const b64 = makePcmBase64([[0xff, 0x7f]]);
+		const { ctx, float32 } = makePcmCtx(1);
+		_pcmSampleToBuffer(b64, 44100, ctx);
+		expect(float32[0]).toBeCloseTo(32767 / 32768, 5);
+	});
 
-  it("wraps values >= 32768 to negative (signed conversion)", () => {
-    // [0x00, 0x80] → n = 128*256 + 0 = 32768 → n -= 65536 → -32768 → float = -1.0
-    const b64 = makePcmBase64([[0x00, 0x80]]);
-    const { ctx, float32 } = makePcmCtx(1);
-    _pcmSampleToBuffer(b64, 44100, ctx);
-    expect(float32[0]).toBe(-1.0);
-  });
+	it("wraps values >= 32768 to negative (signed conversion)", () => {
+		const b64 = makePcmBase64([[0x00, 0x80]]);
+		const { ctx, float32 } = makePcmCtx(1);
+		_pcmSampleToBuffer(b64, 44100, ctx);
+		expect(float32[0]).toBe(-1.0);
+	});
 
-  it("decodes -1 (0xFFFF) to the smallest negative float", () => {
-    // [0xFF, 0xFF] → n = 255*256 + 255 = 65535 → n -= 65536 → -1 → float = -1/32768
-    const b64 = makePcmBase64([[0xff, 0xff]]);
-    const { ctx, float32 } = makePcmCtx(1);
-    _pcmSampleToBuffer(b64, 44100, ctx);
-    expect(float32[0]).toBeCloseTo(-1 / 32768, 5);
-  });
+	it("decodes -1 (0xFFFF) to the smallest negative float", () => {
+		const b64 = makePcmBase64([[0xff, 0xff]]);
+		const { ctx, float32 } = makePcmCtx(1);
+		_pcmSampleToBuffer(b64, 44100, ctx);
+		expect(float32[0]).toBeCloseTo(-1 / 32768, 5);
+	});
 
-  it("decodes a silence sample (0x0000) to exactly 0.0", () => {
-    const b64 = makePcmBase64([[0x00, 0x00]]);
-    const { ctx, float32 } = makePcmCtx(1);
-    _pcmSampleToBuffer(b64, 44100, ctx);
-    expect(float32[0]).toBe(0);
-  });
+	it("decodes a silence sample (0x0000) to exactly 0.0", () => {
+		const b64 = makePcmBase64([[0x00, 0x00]]);
+		const { ctx, float32 } = makePcmCtx(1);
+		_pcmSampleToBuffer(b64, 44100, ctx);
+		expect(float32[0]).toBe(0);
+	});
 
-  it("decodes multiple samples independently", () => {
-    // [0x01, 0x00, 0x00, 0x80] → [1, -32768] → [1/32768, -1.0]
-    const b64 = makePcmBase64([
-      [0x01, 0x00],
-      [0x00, 0x80],
-    ]);
-    const { ctx, float32 } = makePcmCtx(2);
-    _pcmSampleToBuffer(b64, 44100, ctx);
-    expect(float32[0]).toBeCloseTo(1 / 32768, 5);
-    expect(float32[1]).toBe(-1.0);
-  });
+	it("decodes multiple samples independently", () => {
+		const b64 = makePcmBase64([[0x01, 0x00], [0x00, 0x80]]);
+		const { ctx, float32 } = makePcmCtx(2);
+		_pcmSampleToBuffer(b64, 44100, ctx);
+		expect(float32[0]).toBeCloseTo(1 / 32768, 5);
+		expect(float32[1]).toBe(-1.0);
+	});
 
-  it("passes the correct sampleRate to createBuffer", () => {
-    const b64 = makePcmBase64([[0x00, 0x00]]);
-    const float32 = new Float32Array(1);
-    const mockBuffer = { getChannelData: () => float32 } as unknown as AudioBuffer;
-    const createBuffer = vi.fn(() => mockBuffer);
-    const ctx = { createBuffer } as unknown as AudioContext;
-    _pcmSampleToBuffer(b64, 22050, ctx);
-    expect(createBuffer).toHaveBeenCalledWith(1, 1, 22050);
-  });
+	it("passes the correct sampleRate to createBuffer", () => {
+		const b64 = makePcmBase64([[0x00, 0x00]]);
+		const float32 = new Float32Array(1);
+		const mockBuffer = { getChannelData: () => float32 } as unknown as AudioBuffer;
+		const createBuffer = vi.fn(() => mockBuffer);
+		const ctx = { createBuffer } as unknown as AudioContext;
+		_pcmSampleToBuffer(b64, 22050, ctx);
+		expect(createBuffer).toHaveBeenCalledWith(1, 1, 22050);
+	});
 });
 
 // ─── parsePresetFromJs ─────────────────────────────────────────────────────────
 
 describe("parsePresetFromJs — success paths", () => {
-  it("parses a valid preset assignment", () => {
-    const js = mockPresetJs("_tone_0250_Test");
-    const result = parsePresetFromJs(js, "_tone_0250_Test");
-    expect(result.zones).toHaveLength(1);
-    expect(result.zones[0].originalPitch).toBe(6000);
-  });
+	it("parses a valid preset assignment", () => {
+		const js = mockPresetJs("_tone_0250_Test");
+		const result = parsePresetFromJs(js, "_tone_0250_Test");
+		expect(result.zones).toHaveLength(1);
+		expect(result.zones[0].originalPitch).toBe(6000);
+	});
 
-  it("handles whitespace around the assignment operator", () => {
-    const js = `var _tone_0250_Test = {"zones":[${VALID_ZONE_JSON}]};`;
-    const result = parsePresetFromJs(js, "_tone_0250_Test");
-    expect(result.zones).toHaveLength(1);
-  });
+	it("handles whitespace around the assignment operator", () => {
+		const js = `var _tone_0250_Test = {"zones":[${VALID_ZONE_JSON}]};`;
+		const result = parsePresetFromJs(js, "_tone_0250_Test");
+		expect(result.zones).toHaveLength(1);
+	});
 
-  it("handles multi-zone presets", () => {
-    const js = `var _tone_Test={"zones":[${VALID_ZONE_JSON},${VALID_ZONE_JSON}]};`;
-    const result = parsePresetFromJs(js, "_tone_Test");
-    expect(result.zones).toHaveLength(2);
-  });
+	it("handles multi-zone presets", () => {
+		const js = `var _tone_Test={"zones":[${VALID_ZONE_JSON},${VALID_ZONE_JSON}]};`;
+		const result = parsePresetFromJs(js, "_tone_Test");
+		expect(result.zones).toHaveLength(2);
+	});
 
-  it("correctly selects the target variable when multiple assignments appear", () => {
-    const otherPreset = `{"zones":[]}`;
-    const js =
-      `var _tone_OTHER=${otherPreset};` +
-      `var _tone_0250_Test={"zones":[${VALID_ZONE_JSON}]};`;
-    const result = parsePresetFromJs(js, "_tone_0250_Test");
-    expect(result.zones).toHaveLength(1);
-  });
+	it("correctly selects the target variable when multiple assignments appear", () => {
+		const js =
+			`var _tone_OTHER={"zones":[]};` +
+			`var _tone_0250_Test={"zones":[${VALID_ZONE_JSON}]};`;
+		const result = parsePresetFromJs(js, "_tone_0250_Test");
+		expect(result.zones).toHaveLength(1);
+	});
 
-  it("parses real CDN format: unquoted keys, single-quoted strings, leading comma, JS comment", () => {
-    // Mirrors actual webaudiofontdata CDN files — valid JS, NOT valid JSON.
-    // CDN files include a //-comment after the last zone property and before
-    // the closing brace, e.g. //_tone.mgtr on the line after sample:'...'.
-    const sampleB64 = btoa("fake-pcm-data");
-    const js =
-      `console.log('load _tone_CDN_Test');\n` +
-      `var _tone_CDN_Test={\n` +
-      `\tzones:[\n` +
-      `\t\t{\n` +
-      `\t\t\tmidi:25\n` +
-      `\t\t\t,originalPitch:6000\n` +
-      `\t\t\t,keyRangeLow:0\n` +
-      `\t\t\t,keyRangeHigh:127\n` +
-      `\t\t\t,coarseTune:0\n` +
-      `\t\t\t,fineTune:-46\n` +
-      `\t\t\t,loopStart:0\n` +
-      `\t\t\t,loopEnd:0\n` +
-      `\t\t\t,sampleRate:44100\n` +
-      `\t\t\t,ahdsr:true\n` +
-      `\t\t\t,sample:'${sampleB64}'\n` +
-      `\t\t\t//_tone.mgtr\n` +
-      `\t\t}\n` +
-      `\t]\n` +
-      `};`;
-    const result = parsePresetFromJs(js, "_tone_CDN_Test");
-    expect(result.zones).toHaveLength(1);
-    expect(result.zones[0].originalPitch).toBe(6000);
-    expect(result.zones[0].fineTune).toBe(-46);
-    expect(result.zones[0].sample).toBe(sampleB64);
-  });
+	it("parses real CDN format: unquoted keys, single-quoted strings, leading comma, JS comment", () => {
+		const sampleB64 = btoa("fake-pcm-data");
+		const js =
+			`console.log('load _tone_CDN_Test');\n` +
+			`var _tone_CDN_Test={\n` +
+			`\tzones:[\n` +
+			`\t\t{\n` +
+			`\t\t\tmidi:25\n` +
+			`\t\t\t,originalPitch:6000\n` +
+			`\t\t\t,keyRangeLow:0\n` +
+			`\t\t\t,keyRangeHigh:127\n` +
+			`\t\t\t,coarseTune:0\n` +
+			`\t\t\t,fineTune:-46\n` +
+			`\t\t\t,loopStart:0\n` +
+			`\t\t\t,loopEnd:0\n` +
+			`\t\t\t,sampleRate:44100\n` +
+			`\t\t\t,ahdsr:true\n` +
+			`\t\t\t,sample:'${sampleB64}'\n` +
+			`\t\t\t//_tone.mgtr\n` +
+			`\t\t}\n` +
+			`\t]\n` +
+			`};`;
+		const result = parsePresetFromJs(js, "_tone_CDN_Test");
+		expect(result.zones).toHaveLength(1);
+		expect(result.zones[0].originalPitch).toBe(6000);
+		expect(result.zones[0].fineTune).toBe(-46);
+		expect(result.zones[0].sample).toBe(sampleB64);
+	});
 
-  it("preserves // inside a base64 sample string and ignores the adjacent // comment", () => {
-    // base64 can legitimately contain // (two consecutive '/' chars).
-    // The JS engine must treat // inside the string literal as data, not a comment.
-    const sampleWithSlashes = "AA//BB=="; // synthetic base64 containing //
-    const js =
-      `var _tone_Slash_Test={\n` +
-      `\tzones:[{keyRangeLow:0,keyRangeHigh:127,originalPitch:6000,` +
-      `coarseTune:0,fineTune:0,loopStart:0,loopEnd:0,sampleRate:44100,` +
-      `sample:'${sampleWithSlashes}'\n` +
-      `//_tone.comment\n` +
-      `}]\n` +
-      `};`;
-    const result = parsePresetFromJs(js, "_tone_Slash_Test");
-    expect(result.zones[0].sample).toBe(sampleWithSlashes);
-  });
+	it("preserves // inside a base64 sample string and ignores the adjacent // comment", () => {
+		const sampleWithSlashes = "AA//BB==";
+		const js =
+			`var _tone_Slash_Test={\n` +
+			`\tzones:[{keyRangeLow:0,keyRangeHigh:127,originalPitch:6000,` +
+			`coarseTune:0,fineTune:0,loopStart:0,loopEnd:0,sampleRate:44100,` +
+			`sample:'${sampleWithSlashes}'\n` +
+			`//_tone.comment\n` +
+			`}]\n` +
+			`};`;
+		const result = parsePresetFromJs(js, "_tone_Slash_Test");
+		expect(result.zones[0].sample).toBe(sampleWithSlashes);
+	});
 
-  it("parses multi-zone CDN format with a // comment after each zone's sample", () => {
-    // Matches the actual structure of 0250/0280 CDN files: two zones, each
-    // with a //-comment between the last property and the closing brace.
-    const s1 = btoa("zone-one-pcm");
-    const s2 = btoa("zone-two-pcm");
-    const js =
-      `console.log('load _tone_Multi_Test');\n` +
-      `var _tone_Multi_Test={\n` +
-      `\tzones:[\n` +
-      `\t\t{\n` +
-      `\t\t\tmidi:25,originalPitch:6000,keyRangeLow:0,keyRangeHigh:72,\n` +
-      `\t\t\tcoarseTune:0,fineTune:0,loopStart:0,loopEnd:0,sampleRate:44100,\n` +
-      `\t\t\tsample:'${s1}'\n` +
-      `\t\t\t//_tone.zone1\n` +
-      `\t\t}\n` +
-      `\t\t,{\n` +
-      `\t\t\tmidi:25,originalPitch:8000,keyRangeLow:73,keyRangeHigh:127,\n` +
-      `\t\t\tcoarseTune:0,fineTune:0,loopStart:0,loopEnd:0,sampleRate:44100,\n` +
-      `\t\t\tsample:'${s2}'\n` +
-      `\t\t\t//_tone.zone2\n` +
-      `\t\t}\n` +
-      `\t]\n` +
-      `};`;
-    const result = parsePresetFromJs(js, "_tone_Multi_Test");
-    expect(result.zones).toHaveLength(2);
-    expect(result.zones[0].sample).toBe(s1);
-    expect(result.zones[1].sample).toBe(s2);
-    expect(result.zones[1].originalPitch).toBe(8000);
-  });
+	it("parses multi-zone CDN format with a // comment after each zone's sample", () => {
+		const s1 = btoa("zone-one-pcm");
+		const s2 = btoa("zone-two-pcm");
+		const js =
+			`console.log('load _tone_Multi_Test');\n` +
+			`var _tone_Multi_Test={\n` +
+			`\tzones:[\n` +
+			`\t\t{\n` +
+			`\t\t\tmidi:25,originalPitch:6000,keyRangeLow:0,keyRangeHigh:72,\n` +
+			`\t\t\tcoarseTune:0,fineTune:0,loopStart:0,loopEnd:0,sampleRate:44100,\n` +
+			`\t\t\tsample:'${s1}'\n` +
+			`\t\t\t//_tone.zone1\n` +
+			`\t\t}\n` +
+			`\t\t,{\n` +
+			`\t\t\tmidi:25,originalPitch:8000,keyRangeLow:73,keyRangeHigh:127,\n` +
+			`\t\t\tcoarseTune:0,fineTune:0,loopStart:0,loopEnd:0,sampleRate:44100,\n` +
+			`\t\t\tsample:'${s2}'\n` +
+			`\t\t\t//_tone.zone2\n` +
+			`\t\t}\n` +
+			`\t]\n` +
+			`};`;
+		const result = parsePresetFromJs(js, "_tone_Multi_Test");
+		expect(result.zones).toHaveLength(2);
+		expect(result.zones[0].sample).toBe(s1);
+		expect(result.zones[1].sample).toBe(s2);
+		expect(result.zones[1].originalPitch).toBe(8000);
+	});
 });
 
 describe("parsePresetFromJs — error paths", () => {
-  it("throws SampleLoadError when the variable is not found", () => {
-    const js = mockPresetJs("_tone_OTHER");
-    expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
-    expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow("not found");
-  });
+	it("throws SampleLoadError when the variable is not found", () => {
+		const js = mockPresetJs("_tone_OTHER");
+		expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
+		expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow("not found");
+	});
 
-  it("does not match a variable whose name is a prefix of the target", () => {
-    // _tone_0250_Test is a prefix of _tone_0250_TestLong — must not match
-    const js = `var _tone_0250_TestLong={"zones":[${VALID_ZONE_JSON}]};`;
-    expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
-  });
+	it("does not match a variable whose name is a prefix of the target", () => {
+		const js = `var _tone_0250_TestLong={"zones":[${VALID_ZONE_JSON}]};`;
+		expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
+	});
 
-  it("throws SampleLoadError for unbalanced braces", () => {
-    const js = `var _tone_0250_Test={"zones":[{`;
-    expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
-    expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow("Unbalanced");
-  });
+	it("throws SampleLoadError for unbalanced braces", () => {
+		const js = `var _tone_0250_Test={"zones":[{`;
+		expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
+		expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow("Unbalanced");
+	});
 
-  it("throws SampleLoadError when the extracted value lacks a zones array", () => {
-    const js = `var _tone_0250_Test={"notZones":true};`;
-    expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
-    expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow("unexpected shape");
-  });
+	it("throws SampleLoadError when the extracted value lacks a zones array", () => {
+		const js = `var _tone_0250_Test={"notZones":true};`;
+		expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
+		expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow("unexpected shape");
+	});
 
-  it("throws SampleLoadError when the extracted value is not valid JavaScript", () => {
-    const js = `var _tone_0250_Test={broken js here};`;
-    expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
-  });
+	it("throws SampleLoadError when the extracted value is not valid JavaScript", () => {
+		const js = `var _tone_0250_Test={broken js here};`;
+		expect(() => parsePresetFromJs(js, "_tone_0250_Test")).toThrow(SampleLoadError);
+	});
 });
 
 // ─── findZoneForMidi ──────────────────────────────────────────────────────────
 
 describe("findZoneForMidi — key-range matching", () => {
-  it("returns the zone whose key range contains the MIDI note", () => {
-    const zone = makeZone({ keyRangeLow: 48, keyRangeHigh: 65 });
-    expect(findZoneForMidi(makePreset([zone]), 52)).toBe(zone);
-  });
+	it("returns the zone whose key range contains the MIDI note", () => {
+		const zone = makeZone({ keyRangeLow: 48, keyRangeHigh: 65 });
+		expect(findZoneForMidi(makePreset([zone]), 52)).toBe(zone);
+	});
 
-  it("matches on the lower boundary (keyRangeLow)", () => {
-    const zone = makeZone({ keyRangeLow: 52, keyRangeHigh: 65 });
-    expect(findZoneForMidi(makePreset([zone]), 52)).toBe(zone);
-  });
+	it("matches on the lower boundary (keyRangeLow)", () => {
+		const zone = makeZone({ keyRangeLow: 52, keyRangeHigh: 65 });
+		expect(findZoneForMidi(makePreset([zone]), 52)).toBe(zone);
+	});
 
-  it("matches on the upper boundary (keyRangeHigh)", () => {
-    const zone = makeZone({ keyRangeLow: 48, keyRangeHigh: 52 });
-    expect(findZoneForMidi(makePreset([zone]), 52)).toBe(zone);
-  });
+	it("matches on the upper boundary (keyRangeHigh)", () => {
+		const zone = makeZone({ keyRangeLow: 48, keyRangeHigh: 52 });
+		expect(findZoneForMidi(makePreset([zone]), 52)).toBe(zone);
+	});
 
-  it("returns the first matching zone when multiple ranges overlap", () => {
-    const z1 = makeZone({ keyRangeLow: 40, keyRangeHigh: 65 });
-    const z2 = makeZone({ keyRangeLow: 50, keyRangeHigh: 70 });
-    expect(findZoneForMidi(makePreset([z1, z2]), 55)).toBe(z1);
-  });
+	it("returns the first matching zone when multiple ranges overlap", () => {
+		const z1 = makeZone({ keyRangeLow: 40, keyRangeHigh: 65 });
+		const z2 = makeZone({ keyRangeLow: 50, keyRangeHigh: 70 });
+		expect(findZoneForMidi(makePreset([z1, z2]), 55)).toBe(z1);
+	});
 });
 
 describe("findZoneForMidi — nearest-pitch fallback", () => {
-  it("falls back to the zone with originalPitch closest to the target MIDI note", () => {
-    // low zone covers 36-48, originalPitch 4200 (MIDI 42)
-    // high zone covers 65-80, originalPitch 7200 (MIDI 72)
-    // Target MIDI 52: |42-52|=10 < |72-52|=20 → low zone wins
-    const low = makeZone({ keyRangeLow: 36, keyRangeHigh: 48, originalPitch: 4200 });
-    const high = makeZone({ keyRangeLow: 65, keyRangeHigh: 80, originalPitch: 7200 });
-    expect(findZoneForMidi(makePreset([low, high]), 52)).toBe(low);
-  });
+	it("falls back to the zone with originalPitch closest to the target MIDI note", () => {
+		const low = makeZone({ keyRangeLow: 36, keyRangeHigh: 48, originalPitch: 4200 });
+		const high = makeZone({ keyRangeLow: 65, keyRangeHigh: 80, originalPitch: 7200 });
+		expect(findZoneForMidi(makePreset([low, high]), 52)).toBe(low);
+	});
 
-  it("picks the higher-pitch zone when it is nearer", () => {
-    const low = makeZone({ keyRangeLow: 36, keyRangeHigh: 45, originalPitch: 3600 });
-    const high = makeZone({ keyRangeLow: 70, keyRangeHigh: 80, originalPitch: 7800 });
-    // Target MIDI 68: |36-68|=32 vs |78-68|=10 → high wins
-    expect(findZoneForMidi(makePreset([low, high]), 68)).toBe(high);
-  });
+	it("picks the higher-pitch zone when it is nearer", () => {
+		const low = makeZone({ keyRangeLow: 36, keyRangeHigh: 45, originalPitch: 3600 });
+		const high = makeZone({ keyRangeLow: 70, keyRangeHigh: 80, originalPitch: 7800 });
+		expect(findZoneForMidi(makePreset([low, high]), 68)).toBe(high);
+	});
 
-  it("throws SampleLoadError when preset has no zones", () => {
-    expect(() => findZoneForMidi({ zones: [] }, 60)).toThrow(SampleLoadError);
-    expect(() => findZoneForMidi({ zones: [] }, 60)).toThrow("no zones");
-  });
+	it("throws SampleLoadError when preset has no zones", () => {
+		expect(() => findZoneForMidi({ zones: [] }, 60)).toThrow(SampleLoadError);
+		expect(() => findZoneForMidi({ zones: [] }, 60)).toThrow("no zones");
+	});
 });
 
-// ─── getStrumBuffer — caching and error handling ──────────────────────────────
+// ─── triggerStrum ─────────────────────────────────────────────────────────────
 
-describe("getStrumBuffer — caching", () => {
-  beforeEach(() => {
-    _resetCachesForTesting();
-    vi.restoreAllMocks();
-  });
+describe("triggerStrum — multi-string strum scheduling", () => {
+	beforeEach(() => {
+		_resetCachesForTesting();
+	});
 
-  it("returns the same Promise object on repeated calls (no duplicate work)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(mockPresetJs("_tone_0250_SoundBlasterOld_sf2")),
-    } as unknown as Response);
+	it("silently no-ops when the preset has not been preloaded", () => {
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
+		expect(sources).toHaveLength(0);
+	});
 
-    const { ctx } = makeMockCtx();
-    const p1 = getStrumBuffer("down", ctx);
-    const p2 = getStrumBuffer("down", ctx);
+	it("creates one AudioBufferSourceNode per chord pitch (5 total for a full voicing)", () => {
+		const fakeBuffer = makeFakeBuffer();
+		const preset = makePreset([makeZone({ buffer: fakeBuffer })]);
+		_setReadyPresetForTesting("steelGuitar", preset);
 
-    expect(p1).toBe(p2);
-    await p1;
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
 
-  it("issues a single fetch for two sound types sharing the same preset", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(mockPresetJs("_tone_0250_SoundBlasterOld_sf2")),
-    } as unknown as Response);
+		expect(sources).toHaveLength(STRUM_PITCHES.length);
+	});
 
-    const { ctx, decodeAudioData } = makeMockCtx();
-    await getStrumBuffer("down", ctx);
-    await getStrumBuffer("up", ctx);
+	it("staggers note start times by 10 ms per string", () => {
+		const fakeBuffer = makeFakeBuffer();
+		const preset = makePreset([makeZone({ buffer: fakeBuffer })]);
+		_setReadyPresetForTesting("steelGuitar", preset);
 
-    // "down" and "up" both use steelGuitar → only one fetch
-    expect(fetch).toHaveBeenCalledTimes(1);
-    // But they map to different MIDI notes → two separate decodes
-    expect(decodeAudioData).toHaveBeenCalledTimes(2);
-  });
+		const { ctx, sources } = makeMockStrumCtx();
+		const WHEN = 1.0;
+		triggerStrum("down", ctx, {} as AudioNode, WHEN, 1.0);
 
-  it("issues a separate fetch for a sound type using a different preset", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(mockPresetJs("_tone_0250_SoundBlasterOld_sf2")),
-      } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(mockPresetJs("_tone_0280_SoundBlasterOld_sf2")),
-      } as unknown as Response);
+		for (let i = 0; i < sources.length; i++) {
+			expect(sources[i].start).toHaveBeenCalledWith(WHEN + i * 0.01);
+		}
+	});
 
-    const { ctx } = makeMockCtx();
-    await getStrumBuffer("down", ctx);
-    await getStrumBuffer("muted", ctx);
+	it("down uses ascending pitch order (low E → high E sweep)", () => {
+		const pitchesScheduled: number[] = [];
+		const zone = makeZone({
+			buffer: makeFakeBuffer(),
+			originalPitch: 6000,
+			coarseTune: 0,
+			fineTune: 0,
+		});
+		const preset = makePreset([zone]);
+		_setReadyPresetForTesting("steelGuitar", preset);
 
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
 
-  it("concurrent calls share one in-flight request (no race duplication)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(mockPresetJs("_tone_0250_SoundBlasterOld_sf2")),
-    } as unknown as Response);
+		// Each source's playbackRate reflects the pitch it plays at; lower pitch → lower rate
+		const rates = sources.map((s) => s.playbackRate.value);
+		for (let i = 1; i < rates.length; i++) {
+			expect(rates[i]).toBeGreaterThan(rates[i - 1]);
+		}
+		void pitchesScheduled; // type-check only
+	});
 
-    const { ctx, decodeAudioData } = makeMockCtx();
-    const [r1, r2, r3] = await Promise.all([
-      getStrumBuffer("down", ctx),
-      getStrumBuffer("down", ctx),
-      getStrumBuffer("down", ctx),
-    ]);
+	it("up uses descending pitch order (high E → low E sweep)", () => {
+		const zone = makeZone({ buffer: makeFakeBuffer(), originalPitch: 6000, coarseTune: 0, fineTune: 0 });
+		const preset = makePreset([zone]);
+		_setReadyPresetForTesting("steelGuitar", preset);
 
-    expect(r1).toBe(r2);
-    expect(r2).toBe(r3);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(decodeAudioData).toHaveBeenCalledTimes(1);
-  });
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerStrum("up", ctx, {} as AudioNode, 0, 1.0);
+
+		const rates = sources.map((s) => s.playbackRate.value);
+		for (let i = 1; i < rates.length; i++) {
+			expect(rates[i]).toBeLessThan(rates[i - 1]);
+		}
+	});
+
+	it("muted effective duration is capped at MUTED_MAX_DURATION_S even when noteDuration is larger", () => {
+		const fakeBuffer = makeFakeBuffer();
+		const steelPreset = makePreset([makeZone({ buffer: fakeBuffer })]);
+		const mutedPreset = makePreset([makeZone({ buffer: fakeBuffer })]);
+		_setReadyPresetForTesting("steelGuitar", steelPreset);
+		_setReadyPresetForTesting("mutedGuitar", mutedPreset);
+
+		// Both receive the same generous noteDuration; muted must still stop early.
+		const { ctx: ctxDown, sources: downSources } = makeMockStrumCtx();
+		triggerStrum("down", ctxDown, {} as AudioNode, 0, 1.0);
+
+		const { ctx: ctxMuted, sources: mutedSources } = makeMockStrumCtx();
+		triggerStrum("muted", ctxMuted, {} as AudioNode, 0, 1.0);
+
+		const downStopTime = (downSources[0].stop as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
+		const mutedStopTime = (mutedSources[0].stop as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
+		expect(mutedStopTime).toBeCloseTo(0 + MUTED_MAX_DURATION_S + SOURCE_STOP_BUFFER_S, 5);
+		expect(mutedStopTime).toBeLessThan(downStopTime);
+	});
+
+	it("uses the steelGuitar preset for down/up and mutedGuitar for muted", () => {
+		const steelBuffer = { _id: "steel" } as unknown as AudioBuffer;
+		const mutedBuffer = { _id: "muted" } as unknown as AudioBuffer;
+		const steelPreset = makePreset([makeZone({ buffer: steelBuffer })]);
+		const mutedPreset = makePreset([makeZone({ buffer: mutedBuffer })]);
+		_setReadyPresetForTesting("steelGuitar", steelPreset);
+		_setReadyPresetForTesting("mutedGuitar", mutedPreset);
+
+		const { ctx: ctxDown, sources: downSrcs } = makeMockStrumCtx();
+		triggerStrum("down", ctxDown, {} as AudioNode, 0, 1.0);
+		expect(downSrcs[0].buffer).toBe(steelBuffer);
+
+		const { ctx: ctxUp, sources: upSrcs } = makeMockStrumCtx();
+		triggerStrum("up", ctxUp, {} as AudioNode, 0, 1.0);
+		expect(upSrcs[0].buffer).toBe(steelBuffer);
+
+		const { ctx: ctxMuted, sources: mutedSrcs } = makeMockStrumCtx();
+		triggerStrum("muted", ctxMuted, {} as AudioNode, 0, 1.0);
+		expect(mutedSrcs[0].buffer).toBe(mutedBuffer);
+	});
+
+	it("skips notes whose zone has no decoded buffer", () => {
+		// Only the first zone has a buffer; second zone is undecoded
+		const decodedZone = makeZone({ keyRangeLow: 0, keyRangeHigh: 60, buffer: makeFakeBuffer() });
+		const undecodedZone = makeZone({ keyRangeLow: 61, keyRangeHigh: 127 }); // no buffer
+		const preset = makePreset([decodedZone, undecodedZone]);
+		_setReadyPresetForTesting("steelGuitar", preset);
+
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
+
+		// STRUM_PITCHES = [48, 52, 55, 60, 64]
+		// 48–60 fall in decodedZone; 64 falls in undecodedZone → 4 sources created
+		expect(sources.length).toBe(4);
+	});
 });
 
-describe("getStrumBuffer — error handling and cache eviction", () => {
-  beforeEach(() => {
-    _resetCachesForTesting();
-    vi.restoreAllMocks();
-  });
+// ─── triggerStrum — duration and decay time constant scaling ──────────────────
 
-  it("throws SampleLoadError on network failure", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
-    const { ctx } = makeMockCtx();
-    await expect(getStrumBuffer("down", ctx)).rejects.toThrow(SampleLoadError);
-    await expect(getStrumBuffer("down", ctx)).rejects.toThrow("Network error");
-  });
+describe("triggerStrum — duration and decay time constant scaling", () => {
+	beforeEach(() => {
+		_resetCachesForTesting();
+	});
 
-  it("throws SampleLoadError on non-2xx HTTP response", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: false,
-      status: 404,
-    } as unknown as Response);
-    const { ctx } = makeMockCtx();
-    await expect(getStrumBuffer("down", ctx)).rejects.toMatchObject({
-      name: "SampleLoadError",
-      message: expect.stringContaining("404"),
-    });
-  });
+	function setupSingleZonePreset(presetKey: "steelGuitar" | "mutedGuitar" = "steelGuitar") {
+		const preset = makePreset([makeZone({ buffer: makeFakeBuffer() })]);
+		_setReadyPresetForTesting(presetKey, preset);
+		return makeMockStrumCtx();
+	}
 
-  it("throws SampleLoadError when decodeAudioData fails", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(mockPresetJs("_tone_0250_SoundBlasterOld_sf2")),
-    } as unknown as Response);
+	it("scales decay τ proportionally at slow tempo (60 BPM, 1-cell beat → 1.0 s/cell)", () => {
+		const { ctx, mockGain } = setupSingleZonePreset();
+		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
+		// String 0: adjustedDuration = 1.0, τ = max(1.0 × 0.25, MIN_DECAY_TC_S) = 0.25
+		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
+		expect(tau).toBeCloseTo(Math.max(1.0 * 0.25, MIN_DECAY_TC_S), 5);
+	});
 
-    const decodeAudioData = vi.fn().mockRejectedValue(new Error("bad encoding"));
-    const ctx = { decodeAudioData } as unknown as AudioContext;
+	it("scales decay τ proportionally at normal tempo (120 BPM, 4-cell beat → 0.125 s/cell)", () => {
+		const { ctx, mockGain } = setupSingleZonePreset();
+		triggerStrum("down", ctx, {} as AudioNode, 0, 0.125);
+		// String 0: adjustedDuration = 0.125, τ = max(0.125 × 0.25, 0.03) = 0.03125
+		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
+		expect(tau).toBeCloseTo(Math.max(0.125 * 0.25, MIN_DECAY_TC_S), 5);
+	});
 
-    await expect(getStrumBuffer("down", ctx)).rejects.toMatchObject({
-      name: "SampleLoadError",
-      message: expect.stringContaining("decodeAudioData"),
-    });
-  });
+	it("clamps decay τ to MIN_DECAY_TC_S at fast tempo (180 BPM, 4-cell beat → ~0.0833 s/cell)", () => {
+		const { ctx, mockGain } = setupSingleZonePreset();
+		const fastCellDur = 60 / 180 / 4; // ~0.0833 s
+		triggerStrum("down", ctx, {} as AudioNode, 0, fastCellDur);
+		// String 0: adjustedDuration ≈ 0.0833, τ = max(0.0208, 0.03) = 0.03 (floor)
+		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
+		expect(tau).toBeCloseTo(MIN_DECAY_TC_S, 5);
+	});
 
-  it("evicts a failed preset so the next call retries the fetch", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockRejectedValueOnce(new Error("transient failure"))
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(mockPresetJs("_tone_0250_SoundBlasterOld_sf2")),
-      } as unknown as Response);
+	it("schedules every string to stop at when + noteDuration + SOURCE_STOP_BUFFER_S (stagger cancels out)", () => {
+		const { ctx, sources } = setupSingleZonePreset();
+		const WHEN = 2.0;
+		const NOTE_DUR = 0.5;
+		triggerStrum("down", ctx, {} as AudioNode, WHEN, NOTE_DUR);
+		expect(sources).toHaveLength(STRUM_PITCHES.length);
+		for (const source of sources) {
+			const stopTime = (source.stop as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
+			expect(stopTime).toBeCloseTo(WHEN + NOTE_DUR + SOURCE_STOP_BUFFER_S, 5);
+		}
+	});
 
-    const { ctx } = makeMockCtx();
+	it("decay starts immediately at the note onset (setTargetAtTime startTime === source.start time)", () => {
+		const { ctx, sources, mockGain } = setupSingleZonePreset();
+		const WHEN = 1.5;
+		triggerStrum("down", ctx, {} as AudioNode, WHEN, 0.5);
+		// String 0 fires at WHEN + 0; setTargetAtTime should also start at WHEN + 0
+		const startTime = (sources[0].start as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
+		const decayStart = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][1] as number;
+		expect(decayStart).toBeCloseTo(startTime, 5);
+	});
 
-    await expect(getStrumBuffer("down", ctx)).rejects.toThrow(SampleLoadError);
-    // Second call should succeed because the failed preset was evicted
-    await expect(getStrumBuffer("down", ctx)).resolves.toBeDefined();
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
+	it("muted clamps effective duration to MUTED_MAX_DURATION_S; all sources stop at that boundary", () => {
+		const { ctx, sources } = setupSingleZonePreset("mutedGuitar");
+		const WHEN = 0;
+		triggerStrum("muted", ctx, {} as AudioNode, WHEN, 1.0); // large noteDuration, muted cap applies
+		expect(sources.length).toBeGreaterThan(0);
+		for (const source of sources) {
+			const stopTime = (source.stop as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
+			expect(stopTime).toBeCloseTo(WHEN + MUTED_MAX_DURATION_S + SOURCE_STOP_BUFFER_S, 5);
+		}
+	});
 
-  it("evicts a failed buffer so the next call re-decodes", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(mockPresetJs("_tone_0250_SoundBlasterOld_sf2")),
-    } as unknown as Response);
+	it("muted uses the minimum of noteDuration and MUTED_MAX_DURATION_S when noteDuration is smaller", () => {
+		const { ctx, sources } = setupSingleZonePreset("mutedGuitar");
+		const shortDur = 0.04; // shorter than MUTED_MAX_DURATION_S
+		triggerStrum("muted", ctx, {} as AudioNode, 0, shortDur);
+		expect(sources.length).toBeGreaterThan(0);
+		const stopTime = (sources[0].stop as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
+		expect(stopTime).toBeCloseTo(0 + shortDur + SOURCE_STOP_BUFFER_S, 5);
+	});
+});
 
-    const fakeBuffer = makeFakeBuffer();
-    const decodeAudioData = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("first decode fails"))
-      .mockResolvedValueOnce(fakeBuffer);
-    const ctx = { decodeAudioData } as unknown as AudioContext;
+// ─── cancelStrums ─────────────────────────────────────────────────────────────
 
-    await expect(getStrumBuffer("down", ctx)).rejects.toThrow(SampleLoadError);
-    const result = await getStrumBuffer("down", ctx);
+describe("cancelStrums", () => {
+	beforeEach(() => {
+		_resetCachesForTesting();
+	});
 
-    expect(result).toBe(fakeBuffer);
-    // Preset was cached after first (successful) fetch, so fetch is called only once
-    expect(fetch).toHaveBeenCalledTimes(1);
-    // Buffer decode was attempted twice
-    expect(decodeAudioData).toHaveBeenCalledTimes(2);
-  });
+	it("stops all active source nodes", () => {
+		const fakeBuffer = makeFakeBuffer();
+		const preset = makePreset([makeZone({ buffer: fakeBuffer })]);
+		_setReadyPresetForTesting("steelGuitar", preset);
+
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
+		expect(sources.length).toBeGreaterThan(0);
+
+		// Clear the scheduled-stop calls from triggerStrum so we can isolate cancelStrums
+		sources.forEach((s) => (s.stop as ReturnType<typeof vi.fn>).mockClear());
+
+		cancelStrums();
+
+		sources.forEach((s) => expect(s.stop).toHaveBeenCalled());
+	});
+
+	it("is idempotent — calling twice does not throw", () => {
+		expect(() => { cancelStrums(); cancelStrums(); }).not.toThrow();
+	});
 });
 
 // ─── Live CDN integration ─────────────────────────────────────────────────────
 //
-// These tests fetch real CDN content and confirm end-to-end parsing with the
-// Function() evaluator. They are skipped by default; run with:
-//   INTEGRATION=1 npm test
-//
-// During development of the Function() approach both presets were verified
-// manually via a Node.js script producing:
-//   ✓ 0250_SoundBlasterOld_sf2: 3 zone(s)
-//     zone1: MIDI range [0-72],  originalPitch=7400, sampleRate=44100
-//     zone2: MIDI range [73-97], originalPitch=7600, sampleRate=44100
-//     zone3: MIDI range [98-127], originalPitch=11100, sampleRate=44100
-//   ✓ 0280_SoundBlasterOld_sf2: 2 zone(s)
-//     zone1: MIDI range [0-98],  originalPitch=7600, sampleRate=44100
-//     zone2: MIDI range [99-127], originalPitch=11100, sampleRate=44100
+// Skipped by default. Run with: INTEGRATION=1 npm test
 
 const CDN_BASE = "https://surikov.github.io/webaudiofontdata/sound/";
 
 describe.skipIf(!process.env.INTEGRATION)(
-  "parsePresetFromJs — live CDN integration (INTEGRATION=1 npm test)",
-  () => {
-    it.each([
-      [
-        "0250_SoundBlasterOld_sf2",
-        "_tone_0250_SoundBlasterOld_sf2",
-        3, // 3 key-range zones confirmed against live CDN
-      ],
-      [
-        "0280_SoundBlasterOld_sf2",
-        "_tone_0280_SoundBlasterOld_sf2",
-        2, // 2 key-range zones confirmed against live CDN
-      ],
-    ] as const)(
-      "parses live CDN preset %s with Function() and validates all zones",
-      async (key, varName, expectedZones) => {
-        const res = await fetch(`${CDN_BASE}${key}.js`);
-        expect(res.ok).toBe(true);
-        const text = await res.text();
+	"parsePresetFromJs — live CDN integration (INTEGRATION=1 npm test)",
+	() => {
+		it.each([
+			["0250_SoundBlasterOld_sf2", "_tone_0250_SoundBlasterOld_sf2", 3],
+			["0280_SoundBlasterOld_sf2", "_tone_0280_SoundBlasterOld_sf2", 2],
+		] as const)(
+			"parses live CDN preset %s with Function() and validates all zones",
+			async (key, varName, expectedZones) => {
+				const res = await fetch(`${CDN_BASE}${key}.js`);
+				expect(res.ok).toBe(true);
+				const text = await res.text();
 
-        const preset = parsePresetFromJs(text, varName);
+				const preset = parsePresetFromJs(text, varName);
 
-        expect(preset.zones).toHaveLength(expectedZones);
-        for (const zone of preset.zones) {
-          expect(zone.sampleRate).toBeGreaterThan(0);
-          expect(zone.keyRangeLow).toBeGreaterThanOrEqual(0);
-          expect(zone.keyRangeHigh).toBeGreaterThan(zone.keyRangeLow);
-          expect(typeof zone.originalPitch).toBe("number");
-          // Every zone must carry audio data
-          expect(zone.sample !== undefined || zone.file !== undefined).toBe(true);
-          if (zone.sample !== undefined) {
-            // Base64 sample data must be non-empty and decodable by atob
-            expect(zone.sample.length).toBeGreaterThan(0);
-            expect(() => atob(zone.sample!)).not.toThrow();
-          }
-        }
-      },
-      15_000
-    );
-  }
+				expect(preset.zones).toHaveLength(expectedZones);
+				for (const zone of preset.zones) {
+					expect(zone.sampleRate).toBeGreaterThan(0);
+					expect(zone.keyRangeLow).toBeGreaterThanOrEqual(0);
+					expect(zone.keyRangeHigh).toBeGreaterThan(zone.keyRangeLow);
+					expect(typeof zone.originalPitch).toBe("number");
+					expect(zone.sample !== undefined || zone.file !== undefined).toBe(true);
+					if (zone.sample !== undefined) {
+						expect(zone.sample.length).toBeGreaterThan(0);
+						expect(() => atob(zone.sample!)).not.toThrow();
+					}
+				}
+			},
+			15_000,
+		);
+	},
 );

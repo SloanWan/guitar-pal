@@ -3,7 +3,7 @@
 import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
-import { getStrumBuffer, type StrumSoundType } from "./useGuitarSampleLoader";
+import { preloadStrumPresets, triggerStrum, cancelStrums, type StrumSoundType } from "./useGuitarSampleLoader";
 
 // Maps strum step values to the corresponding sample type.
 // DG, UG, and "" are intentionally absent — they produce no strum sound.
@@ -14,16 +14,6 @@ const STEP_TO_SOUND: Partial<Record<StepValue, StrumSoundType>> = {
 	U3: "up",
 	X: "muted",
 };
-
-// Exponential-decay time constants (seconds) per strum type, applied from the
-// scheduled hit time. Muted strums decay faster to preserve their percussive character.
-const STRUM_DECAY: Record<StrumSoundType, number> = {
-	down: 0.15,
-	up: 0.12,
-	muted: 0.04,
-};
-
-const SOUND_TYPES: readonly StrumSoundType[] = ["down", "up", "muted"];
 
 /**
  * Resolves a StepValue and a buffer map to a concrete AudioBuffer (or null).
@@ -69,8 +59,6 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const accentEnabledRef = useRef(accentEnabled);
 	const playOnceRef = useRef(playOnce);
 
-	// Resolved AudioBuffers, populated asynchronously when playback starts.
-	const sampleBuffersRef = useRef<Partial<Record<StrumSoundType, AudioBuffer>>>({});
 	// Active source nodes tracked for cleanup on stop() and unmount.
 	const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
 
@@ -119,6 +107,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 				}
 			}
 			activeSourcesRef.current = [];
+			cancelStrums();
 		};
 	}, []);
 
@@ -128,20 +117,8 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		}
 		const ctx = audioCtxRef.current;
 
-		// Warm the sample cache. Buffers land in sampleBuffersRef for synchronous
-		// access inside the scheduler closure. If a buffer is still pending when a
-		// beat fires, that hit is skipped silently (see _resolveStrumBuffer). On
-		// subsequent plays the module-level cache resolves instantly.
-		SOUND_TYPES.forEach((type) => {
-			if (!sampleBuffersRef.current[type]) {
-				getStrumBuffer(type, ctx)
-					.then((buf) => {
-						sampleBuffersRef.current[type] = buf;
-					})
-					.catch((err: unknown) => {
-						console.error(`[useAudioEngine] Failed to load "${type}" strum sample:`, err);
-					});
-			}
+		preloadStrumPresets(ctx).catch((err: unknown) => {
+			console.error("[useAudioEngine] Failed to preload strum presets:", err);
 		});
 
 		nextCellTimeRef.current = ctx.currentTime;
@@ -164,31 +141,17 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		osc.stop(time + 0.05);
 	}
 
-	function playStrum(time: number, type: StepValue): void {
+	function playStrum(time: number, type: StepValue, secondsPerCell: number): void {
 		if (!strumEnabledRef.current) return;
 
 		const soundType = STEP_TO_SOUND[type];
-		if (!soundType) return; // silent step (DG, UG, "") — no strum sound
-
-		const buf = sampleBuffersRef.current[soundType];
-		if (!buf) return; // sample still loading or failed — skip silently
+		if (!soundType) return;
 
 		const ctx = audioCtxRef.current!;
-		const source = ctx.createBufferSource();
-		source.buffer = buf;
-
 		const gainNode = ctx.createGain();
 		gainNode.gain.value = strumGainRef.current;
-		gainNode.gain.setTargetAtTime(0, time, STRUM_DECAY[soundType]);
-
-		source.connect(gainNode).connect(ctx.destination);
-		source.start(time);
-		source.stop(time + 0.5);
-
-		activeSourcesRef.current.push(source);
-		source.onended = () => {
-			activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
-		};
+		gainNode.connect(ctx.destination);
+		triggerStrum(soundType, ctx, gainNode, time, secondsPerCell);
 	}
 
 	function scheduler() {
@@ -223,7 +186,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 				beat.length === 2 &&
 				nextPlatEmptyCellRef.current;
 			const beatType: StepValue = isEmptySubdivision ? "" : beat[currCellIdxRef.current];
-			playStrum(nextCellTimeRef.current, beatType);
+			playStrum(nextCellTimeRef.current, beatType, secondsPerCell);
 
 			setCurrBeat(currBeatIdxref.current);
 			setCurrCell(currCellIdxRef.current);
@@ -266,6 +229,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			}
 		}
 		activeSourcesRef.current = [];
+		cancelStrums();
 		currBeatIdxref.current = 0;
 		currCellIdxRef.current = 0;
 		nextPlatEmptyCellRef.current = false;

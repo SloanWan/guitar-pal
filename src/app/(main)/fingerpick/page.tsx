@@ -133,7 +133,7 @@ export default function FingerpickPage() {
 	// Desktop (≥768 px): 4 measures per row; mobile: 2.
 	// Default to 4 for SSR; corrected on the client via the initial matchMedia check.
 	const [measuresPerRow, setMeasuresPerRow] = useState<number>(() =>
-		typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches ? 4 : 2
+		typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches ? 4 : 2,
 	);
 
 	useEffect(() => {
@@ -156,7 +156,7 @@ export default function FingerpickPage() {
 					: 1;
 				return [...acc, { measures: rowMeasures, startMeasureNumber }];
 			}, []),
-		[pattern.measures, measuresPerRow]
+		[pattern.measures, measuresPerRow],
 	);
 
 	return (

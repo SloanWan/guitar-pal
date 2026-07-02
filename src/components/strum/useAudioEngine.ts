@@ -1,14 +1,33 @@
+"use client";
+
 import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
+import { preloadStrumPresets, triggerStrum, cancelStrums, SOURCE_STOP_BUFFER_S, type StrumSoundType } from "./useGuitarSampleLoader";
 
-const STRUM_PARAMS: Partial<Record<StepValue, { freq: number; gain: number }>> = {
-	D: { freq: 800, gain: 2.5 },
-	D3: { freq: 800, gain: 2.5 },
-	U: { freq: 1800, gain: 1.2 },
-	U3: { freq: 1800, gain: 1.2 },
-	X: { freq: 400, gain: 2.8 },
+// Maps strum step values to the corresponding sample type.
+// DG, UG, and "" are intentionally absent — they produce no strum sound.
+const STEP_TO_SOUND: Partial<Record<StepValue, StrumSoundType>> = {
+	D: "down",
+	D3: "down",
+	U: "up",
+	U3: "up",
+	X: "muted",
 };
+
+/**
+ * Resolves a StepValue and a buffer map to a concrete AudioBuffer (or null).
+ * Returns null if the step is silent (DG, UG, ""), or if the sample has not
+ * yet finished loading. Exported for unit testing only.
+ */
+export function _resolveStrumBuffer(
+	step: StepValue,
+	buffers: Partial<Record<StrumSoundType, AudioBuffer>>
+): AudioBuffer | null {
+	const soundType = STEP_TO_SOUND[step];
+	if (!soundType) return null;
+	return buffers[soundType] ?? null;
+}
 
 export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
@@ -39,6 +58,9 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const metronomeGainRef = useRef(metronomeGain);
 	const accentEnabledRef = useRef(accentEnabled);
 	const playOnceRef = useRef(playOnce);
+
+	// Active source nodes tracked for cleanup on stop() and unmount.
+	const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
 
 	useEffect(() => {
 		isPlayingRef.current = isPlaying;
@@ -71,11 +93,40 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		playOnceRef.current = playOnce;
 	}, [playOnce]);
 
+	// Cancel in-flight audio on unmount to prevent dangling source nodes.
+	useEffect(() => {
+		return () => {
+			if (schedulerRef.current !== null) {
+				window.clearTimeout(schedulerRef.current);
+			}
+			for (const source of activeSourcesRef.current) {
+				try {
+					source.stop();
+				} catch {
+					// node may have already ended naturally
+				}
+			}
+			activeSourcesRef.current = [];
+			cancelStrums();
+		};
+	}, []);
+
 	function start() {
+		// Cancel any deferred cancelStrums scheduled by a previous play-once pass.
+		if (schedulerRef.current !== null) {
+			window.clearTimeout(schedulerRef.current);
+			schedulerRef.current = null;
+		}
 		if (!audioCtxRef.current) {
 			audioCtxRef.current = new AudioContext();
 		}
-		nextCellTimeRef.current = audioCtxRef.current.currentTime;
+		const ctx = audioCtxRef.current;
+
+		preloadStrumPresets(ctx).catch((err: unknown) => {
+			console.error("[useAudioEngine] Failed to preload strum presets:", err);
+		});
+
+		nextCellTimeRef.current = ctx.currentTime;
 		setIsPlaying(true);
 		scheduler();
 	}
@@ -95,34 +146,17 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		osc.stop(time + 0.05);
 	}
 
-	function playStrum(time: number, type: StepValue): void {
+	function playStrum(time: number, type: StepValue, secondsPerCell: number): void {
 		if (!strumEnabledRef.current) return;
-		const params = STRUM_PARAMS[type];
-		if (!params) return; // "", "DG", "UG" → silent
+
+		const soundType = STEP_TO_SOUND[type];
+		if (!soundType) return;
 
 		const ctx = audioCtxRef.current!;
-
-		const bufferSize = Math.floor(ctx.sampleRate * 0.2);
-		const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-		const data = buffer.getChannelData(0);
-		for (let i = 0; i < bufferSize; i++) {
-			data[i] = Math.random() * 2 - 1;
-		}
-
-		const source = ctx.createBufferSource();
-		source.buffer = buffer;
-
-		const filter = ctx.createBiquadFilter();
-		filter.type = "bandpass";
-		filter.frequency.value = params.freq;
-
-		const gain = ctx.createGain();
-		gain.gain.value = params.gain * strumGainRef.current;
-		gain.gain.setTargetAtTime(0, time, 0.03);
-
-		source.connect(filter).connect(gain).connect(ctx.destination);
-		source.start(time);
-		source.stop(time + 0.25);
+		const gainNode = ctx.createGain();
+		gainNode.gain.value = strumGainRef.current;
+		gainNode.connect(ctx.destination);
+		triggerStrum(soundType, ctx, gainNode, time, secondsPerCell);
 	}
 
 	function scheduler() {
@@ -157,7 +191,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 				beat.length === 2 &&
 				nextPlatEmptyCellRef.current;
 			const beatType: StepValue = isEmptySubdivision ? "" : beat[currCellIdxRef.current];
-			playStrum(nextCellTimeRef.current, beatType);
+			playStrum(nextCellTimeRef.current, beatType, secondsPerCell);
 
 			setCurrBeat(currBeatIdxref.current);
 			setCurrCell(currCellIdxRef.current);
@@ -177,7 +211,25 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 				currCellIdxRef.current = 0;
 				currBeatIdxref.current = (currBeatIdxref.current + 1) % beatsRef.current.length;
 				if (playOnceRef.current && currBeatIdxref.current === 0) {
-					stop();
+					// Do not call stop() here: it would invoke cancelStrums() synchronously,
+					// killing the just-scheduled last-note sources before they play.
+					// Instead, defer cancelStrums() until the last note has finished decaying.
+					// Re-using schedulerRef means a manual stop() click still cancels this via
+					// its existing window.clearTimeout(schedulerRef.current) call.
+					const delaySec =
+						Math.max(0, nextCellTimeRef.current - ctx.currentTime) +
+						secondsPerCell +
+						SOURCE_STOP_BUFFER_S;
+					schedulerRef.current = window.setTimeout(() => {
+						cancelStrums();
+						schedulerRef.current = null;
+					}, delaySec * 1000);
+					currBeatIdxref.current = 0;
+					currCellIdxRef.current = 0;
+					nextPlatEmptyCellRef.current = false;
+					setCurrBeat(0);
+					setCurrCell(0);
+					setIsPlaying(false);
 					return;
 				}
 			}
@@ -192,6 +244,15 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		if (schedulerRef.current) {
 			window.clearTimeout(schedulerRef.current as number);
 		}
+		for (const source of activeSourcesRef.current) {
+			try {
+				source.stop();
+			} catch {
+				// node may have already ended naturally
+			}
+		}
+		activeSourcesRef.current = [];
+		cancelStrums();
 		currBeatIdxref.current = 0;
 		currCellIdxRef.current = 0;
 		nextPlatEmptyCellRef.current = false;

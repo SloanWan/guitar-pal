@@ -74,6 +74,7 @@ export default function StrumPage() {
 	const [presetsOpen, setPresetsOpen] = useState(true);
 	const [myPatternsOpen, setMyPatternsOpen] = useState(true);
 	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
+	const [mutHintDismissed, setMutHintDismissed] = useState(false);
 	const tapTimesRef = useRef<number[]>([]);
 
 	useEffect(() => {
@@ -446,6 +447,20 @@ export default function StrumPage() {
 				</h2>
 				{/* Mobile controls — compact 2-column grid + collapsible sound section */}
 				<div className="flex flex-col gap-3 p-4 md:hidden">
+					{!mutHintDismissed && (
+						<div className="flex items-center justify-center w-full gap-2">
+							<p className="text-xs text-slate-400">
+								No sound? Check your phone&apos;s mute switch.
+							</p>
+							<button
+								onClick={() => setMutHintDismissed(true)}
+								className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
+								aria-label="Dismiss hint"
+							>
+								<X size={14} />
+							</button>
+						</div>
+					)}
 					{/* Main grid card */}
 					<div className="rounded-xl border border-slate-100 p-4">
 						<div className="grid grid-cols-2 gap-4">

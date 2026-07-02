@@ -1,14 +1,43 @@
+"use client";
+
 import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
+import { getStrumBuffer, type StrumSoundType } from "./useGuitarSampleLoader";
 
-const STRUM_PARAMS: Partial<Record<StepValue, { freq: number; gain: number }>> = {
-	D: { freq: 800, gain: 2.5 },
-	D3: { freq: 800, gain: 2.5 },
-	U: { freq: 1800, gain: 1.2 },
-	U3: { freq: 1800, gain: 1.2 },
-	X: { freq: 400, gain: 2.8 },
+// Maps strum step values to the corresponding sample type.
+// DG, UG, and "" are intentionally absent — they produce no strum sound.
+const STEP_TO_SOUND: Partial<Record<StepValue, StrumSoundType>> = {
+	D: "down",
+	D3: "down",
+	U: "up",
+	U3: "up",
+	X: "muted",
 };
+
+// Exponential-decay time constants (seconds) per strum type, applied from the
+// scheduled hit time. Muted strums decay faster to preserve their percussive character.
+const STRUM_DECAY: Record<StrumSoundType, number> = {
+	down: 0.15,
+	up: 0.12,
+	muted: 0.04,
+};
+
+const SOUND_TYPES: readonly StrumSoundType[] = ["down", "up", "muted"];
+
+/**
+ * Resolves a StepValue and a buffer map to a concrete AudioBuffer (or null).
+ * Returns null if the step is silent (DG, UG, ""), or if the sample has not
+ * yet finished loading. Exported for unit testing only.
+ */
+export function _resolveStrumBuffer(
+	step: StepValue,
+	buffers: Partial<Record<StrumSoundType, AudioBuffer>>
+): AudioBuffer | null {
+	const soundType = STEP_TO_SOUND[step];
+	if (!soundType) return null;
+	return buffers[soundType] ?? null;
+}
 
 export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
@@ -39,6 +68,11 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const metronomeGainRef = useRef(metronomeGain);
 	const accentEnabledRef = useRef(accentEnabled);
 	const playOnceRef = useRef(playOnce);
+
+	// Resolved AudioBuffers, populated asynchronously when playback starts.
+	const sampleBuffersRef = useRef<Partial<Record<StrumSoundType, AudioBuffer>>>({});
+	// Active source nodes tracked for cleanup on stop() and unmount.
+	const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
 
 	useEffect(() => {
 		isPlayingRef.current = isPlaying;
@@ -71,11 +105,46 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		playOnceRef.current = playOnce;
 	}, [playOnce]);
 
+	// Cancel in-flight audio on unmount to prevent dangling source nodes.
+	useEffect(() => {
+		return () => {
+			if (schedulerRef.current !== null) {
+				window.clearTimeout(schedulerRef.current);
+			}
+			for (const source of activeSourcesRef.current) {
+				try {
+					source.stop();
+				} catch {
+					// node may have already ended naturally
+				}
+			}
+			activeSourcesRef.current = [];
+		};
+	}, []);
+
 	function start() {
 		if (!audioCtxRef.current) {
 			audioCtxRef.current = new AudioContext();
 		}
-		nextCellTimeRef.current = audioCtxRef.current.currentTime;
+		const ctx = audioCtxRef.current;
+
+		// Warm the sample cache. Buffers land in sampleBuffersRef for synchronous
+		// access inside the scheduler closure. If a buffer is still pending when a
+		// beat fires, that hit is skipped silently (see _resolveStrumBuffer). On
+		// subsequent plays the module-level cache resolves instantly.
+		SOUND_TYPES.forEach((type) => {
+			if (!sampleBuffersRef.current[type]) {
+				getStrumBuffer(type, ctx)
+					.then((buf) => {
+						sampleBuffersRef.current[type] = buf;
+					})
+					.catch((err: unknown) => {
+						console.error(`[useAudioEngine] Failed to load "${type}" strum sample:`, err);
+					});
+			}
+		});
+
+		nextCellTimeRef.current = ctx.currentTime;
 		setIsPlaying(true);
 		scheduler();
 	}
@@ -97,32 +166,29 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 
 	function playStrum(time: number, type: StepValue): void {
 		if (!strumEnabledRef.current) return;
-		const params = STRUM_PARAMS[type];
-		if (!params) return; // "", "DG", "UG" → silent
+
+		const soundType = STEP_TO_SOUND[type];
+		if (!soundType) return; // silent step (DG, UG, "") — no strum sound
+
+		const buf = sampleBuffersRef.current[soundType];
+		if (!buf) return; // sample still loading or failed — skip silently
 
 		const ctx = audioCtxRef.current!;
-
-		const bufferSize = Math.floor(ctx.sampleRate * 0.2);
-		const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-		const data = buffer.getChannelData(0);
-		for (let i = 0; i < bufferSize; i++) {
-			data[i] = Math.random() * 2 - 1;
-		}
-
 		const source = ctx.createBufferSource();
-		source.buffer = buffer;
+		source.buffer = buf;
 
-		const filter = ctx.createBiquadFilter();
-		filter.type = "bandpass";
-		filter.frequency.value = params.freq;
+		const gainNode = ctx.createGain();
+		gainNode.gain.value = strumGainRef.current;
+		gainNode.gain.setTargetAtTime(0, time, STRUM_DECAY[soundType]);
 
-		const gain = ctx.createGain();
-		gain.gain.value = params.gain * strumGainRef.current;
-		gain.gain.setTargetAtTime(0, time, 0.03);
-
-		source.connect(filter).connect(gain).connect(ctx.destination);
+		source.connect(gainNode).connect(ctx.destination);
 		source.start(time);
-		source.stop(time + 0.25);
+		source.stop(time + 0.5);
+
+		activeSourcesRef.current.push(source);
+		source.onended = () => {
+			activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
+		};
 	}
 
 	function scheduler() {
@@ -192,6 +258,14 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		if (schedulerRef.current) {
 			window.clearTimeout(schedulerRef.current as number);
 		}
+		for (const source of activeSourcesRef.current) {
+			try {
+				source.stop();
+			} catch {
+				// node may have already ended naturally
+			}
+		}
+		activeSourcesRef.current = [];
 		currBeatIdxref.current = 0;
 		currCellIdxRef.current = 0;
 		nextPlatEmptyCellRef.current = false;

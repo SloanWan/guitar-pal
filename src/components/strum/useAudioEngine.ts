@@ -127,9 +127,9 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			audioCtxRef.current = new AudioContext();
 		}
 		const ctx = audioCtxRef.current;
-		if (ctx.state === "suspended") {
-			ctx.resume();
-		}
+		// if (ctx.state === "suspended") {
+		// 	ctx.resume();
+		// }
 
 		preloadStrumPresets(ctx).catch((err: unknown) => {
 			console.error("[useAudioEngine] Failed to preload strum presets:", err);

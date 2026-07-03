@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   chordVoicingToVexChords,
+  selectStandardVoicing,
   type ChordVoicing,
 } from "@/lib/chordVoicingToVexChords";
 
@@ -170,5 +171,43 @@ describe("chordVoicingToVexChords — edge cases", () => {
   it("produces exactly 6 chord entries", () => {
     const result = chordVoicingToVexChords(voicing({}));
     expect(result.chord).toHaveLength(6);
+  });
+});
+
+// ─── selectStandardVoicing ────────────────────────────────────────────────────
+
+describe("selectStandardVoicing", () => {
+  it("returns null for empty array", () => {
+    expect(selectStandardVoicing([])).toBeNull();
+  });
+
+  it("returns the only voicing when array has one entry", () => {
+    const v = voicing({ id: "a" });
+    expect(selectStandardVoicing([v])).toBe(v);
+  });
+
+  it("returns the voicing labelled 'Standard' when present", () => {
+    const std = voicing({ id: "s", label: "Standard", start_fret: 7 });
+    const low = voicing({ id: "l", label: null, start_fret: 1 });
+    expect(selectStandardVoicing([low, std])).toBe(std);
+  });
+
+  it("prefers 'Standard' label over a lower start_fret", () => {
+    const std = voicing({ id: "s", label: "Standard", start_fret: 12 });
+    const open = voicing({ id: "o", label: null, start_fret: 1 });
+    expect(selectStandardVoicing([open, std])).toBe(std);
+  });
+
+  it("returns lowest start_fret when no 'Standard' label exists", () => {
+    const hi = voicing({ id: "h", start_fret: 9 });
+    const lo = voicing({ id: "l", start_fret: 2 });
+    const mid = voicing({ id: "m", start_fret: 5 });
+    expect(selectStandardVoicing([hi, mid, lo])).toBe(lo);
+  });
+
+  it("returns first voicing when all share the same start_fret and none labelled Standard", () => {
+    const a = voicing({ id: "a", start_fret: 3 });
+    const b = voicing({ id: "b", start_fret: 3 });
+    expect(selectStandardVoicing([a, b])).toBe(a);
   });
 });

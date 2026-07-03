@@ -3,7 +3,13 @@
 import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
-import { preloadStrumPresets, triggerStrum, cancelStrums, SOURCE_STOP_BUFFER_S, type StrumSoundType } from "./useGuitarSampleLoader";
+import {
+	preloadStrumPresets,
+	triggerStrum,
+	cancelStrums,
+	SOURCE_STOP_BUFFER_S,
+	type StrumSoundType,
+} from "./useGuitarSampleLoader";
 
 // Maps strum step values to the corresponding sample type.
 // DG, UG, and "" are intentionally absent — they produce no strum sound.
@@ -22,7 +28,7 @@ const STEP_TO_SOUND: Partial<Record<StepValue, StrumSoundType>> = {
  */
 export function _resolveStrumBuffer(
 	step: StepValue,
-	buffers: Partial<Record<StrumSoundType, AudioBuffer>>
+	buffers: Partial<Record<StrumSoundType, AudioBuffer>>,
 ): AudioBuffer | null {
 	const soundType = STEP_TO_SOUND[step];
 	if (!soundType) return null;
@@ -108,6 +114,14 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			}
 			activeSourcesRef.current = [];
 			cancelStrums();
+			if (audioCtxRef.current) {
+				try {
+					audioCtxRef.current.close();
+				} catch {
+					// already closed
+				}
+				audioCtxRef.current = null;
+			}
 		};
 	}, []);
 
@@ -117,9 +131,14 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 			window.clearTimeout(schedulerRef.current);
 			schedulerRef.current = null;
 		}
-		if (!audioCtxRef.current) {
-			audioCtxRef.current = new AudioContext();
+		if (audioCtxRef.current) {
+			try {
+				audioCtxRef.current.close();
+			} catch {
+				// already closed
+			}
 		}
+		audioCtxRef.current = new AudioContext();
 		const ctx = audioCtxRef.current;
 
 		preloadStrumPresets(ctx).catch((err: unknown) => {

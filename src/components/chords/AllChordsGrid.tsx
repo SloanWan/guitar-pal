@@ -13,7 +13,11 @@ import {
 	selectStandardVoicing,
 	chordVoicingToVexChords,
 } from "@/lib/chordVoicingToVexChords";
-import BrowseGrid, { type BrowseSection, type BrowseCard } from "@/components/chords/BrowseGrid";
+import BrowseGrid, {
+	type BrowseSection,
+	type BrowseSubsection,
+	type BrowseCard,
+} from "@/components/chords/BrowseGrid";
 import { Button } from "@/components/ui/button";
 
 type Grouping = "root-first" | "category-first";
@@ -59,26 +63,36 @@ function buildRootFirst(allChords: ChordWithVoicings[]): BrowseSection[] {
 }
 
 function buildCategoryFirst(allChords: ChordWithVoicings[]): BrowseSection[] {
-	const sections: BrowseSection[] = CHORD_SUFFIX_CATEGORIES.flatMap(
-		({ category, suffixes }) => {
+	// Preserve the DB root order (alphabetical from .order("root"))
+	const rootOrder = [...new Set(allChords.map((c) => c.root))];
+
+	function rootSubsections(
+		filterFn: (c: ChordWithVoicings) => boolean,
+	): BrowseSubsection[] {
+		return rootOrder.flatMap((root) => {
 			const cards = allChords
-				.filter((c) => suffixes.includes(c.suffix))
+				.filter((c) => c.root === root && filterFn(c))
 				.flatMap((c) => {
-					const card = toCard(c, "root-suffix");
+					const card = toCard(c, "suffix");
 					return card ? [card] : [];
 				});
-			return cards.length > 0 ? [{ label: category, cards }] : [];
+			return cards.length > 0 ? [{ label: root, cards }] : [];
+		});
+	}
+
+	const sections: BrowseSection[] = CHORD_SUFFIX_CATEGORIES.flatMap(
+		({ category, suffixes }) => {
+			const subs = rootSubsections((c) => suffixes.includes(c.suffix));
+			return subs.length > 0 ? [{ label: category, cards: [], subsections: subs }] : [];
 		},
 	);
 
-	const slashCards = allChords
-		.filter((c) => isSlashChord(c.suffix) && !EXCLUDED_SUFFIXES.includes(c.suffix))
-		.flatMap((c) => {
-			const card = toCard(c, "root-suffix");
-			return card ? [card] : [];
-		});
-
-	if (slashCards.length > 0) sections.push({ label: "Slash Chords", cards: slashCards });
+	const slashSubs = rootSubsections(
+		(c) => isSlashChord(c.suffix) && !EXCLUDED_SUFFIXES.includes(c.suffix),
+	);
+	if (slashSubs.length > 0) {
+		sections.push({ label: "Slash Chords", cards: [], subsections: slashSubs });
+	}
 
 	return sections;
 }

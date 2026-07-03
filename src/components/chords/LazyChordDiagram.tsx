@@ -42,7 +42,7 @@ export default function LazyChordDiagram({ def, label, compact, onClick }: Props
 			<div
 				ref={rootRef}
 				style={{ width: COMPACT_W, height: COMPACT_H }}
-				className="flex-shrink-0 rounded-lg border border-denim-border bg-denim-tint"
+				className="shrink-0 rounded-lg border border-denim-border bg-denim-tint"
 			/>
 		);
 	}
@@ -50,13 +50,13 @@ export default function LazyChordDiagram({ def, label, compact, onClick }: Props
 	return (
 		<div
 			ref={rootRef}
-			className="group relative flex-shrink-0 cursor-pointer"
+			className="group relative shrink-0 cursor-pointer"
 			onClick={onClick}
 			role="button"
 			aria-label={`${label} — click to see all voicings`}
 		>
 			<ChordDiagram def={def} label={label} compact={compact} />
-			<div className="pointer-events-none absolute inset-0 flex items-end justify-center rounded-lg pb-2 opacity-0 transition-opacity group-hover:opacity-100">
+			<div className="pointer-events-none absolute inset-0 flex items-start justify-center rounded-lg pt-2 opacity-0 transition-opacity group-hover:opacity-100">
 				<span className="rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
 					Click to see all voicings
 				</span>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { VexChordDef } from "@/lib/chordVoicingToVexChords";
+import MusicalText from "@/components/MusicalText";
 
 interface Props {
 	def: VexChordDef;
@@ -35,7 +36,7 @@ export default function ChordDiagram({ def, label, compact = false }: Props) {
 	return (
 		<div className="flex flex-col items-center gap-1 rounded-lg border border-denim-border bg-denim-tint p-3">
 			<div ref={containerRef} />
-			<span className="text-xs font-medium text-denim">{label}</span>
+			<span className="text-xs font-medium text-denim"><MusicalText text={label} /></span>
 		</div>
 	);
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { rootToSlug } from "@/lib/chordSlug";
+import MusicalText from "@/components/MusicalText";
 
 export const metadata: Metadata = {
   title: "Guitar Chord Charts | Guitar Pal",
@@ -31,7 +32,7 @@ export default async function ChordsPage() {
                 href={`/chords/${rootToSlug(root)}`}
                 className="inline-flex items-center rounded-md border border-denim-border bg-denim-tint px-4 py-2 text-sm font-medium text-denim transition-colors hover:bg-denim hover:text-white"
               >
-                {root}
+                <MusicalText text={root} />
               </Link>
             ))}
           </div>

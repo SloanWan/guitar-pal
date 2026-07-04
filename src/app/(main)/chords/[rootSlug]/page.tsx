@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getChordsByRoot } from "@/lib/chords";
 import { slugToRoot, suffixToSlug } from "@/lib/chordSlug";
 import { buildRootSections } from "@/lib/chordBrowseSections";
+import MusicalText from "@/components/MusicalText";
 import BrowseGrid from "@/components/chords/BrowseGrid";
 
 type Props = { params: Promise<{ rootSlug: string }> };
@@ -37,7 +38,7 @@ export default async function RootPage({ params }: Props) {
             >
               ← All Roots
             </Link>
-            <h1 className="text-2xl font-semibold">{root} Chords</h1>
+            <h1 className="text-2xl font-semibold"><MusicalText text={root} /> Chords</h1>
             <Link
               href="/chords/all"
               className="text-sm text-muted-foreground hover:text-foreground"

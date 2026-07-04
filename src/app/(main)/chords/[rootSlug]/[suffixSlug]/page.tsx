@@ -5,6 +5,7 @@ import { getChord } from "@/lib/chords";
 import { slugToRoot, slugToSuffix } from "@/lib/chordSlug";
 import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
 import ChordDetailView, { type VoicingCard } from "@/components/chords/ChordDetailView";
+import MusicalText from "@/components/MusicalText";
 
 type Props = { params: Promise<{ rootSlug: string; suffixSlug: string }> };
 
@@ -45,10 +46,10 @@ export default async function ChordDetailPage({ params }: Props) {
               href={`/chords/${rootSlug}`}
               className="text-sm text-muted-foreground hover:text-foreground"
             >
-              ← {root} Chords
+              ← <MusicalText text={root} /> Chords
             </Link>
             <h1 className="text-2xl font-semibold">
-              {root} {suffix}
+              <MusicalText text={root} /> <MusicalText text={suffix} />
             </h1>
             <Link
               href="/chords/all"

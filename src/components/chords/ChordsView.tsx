@@ -23,6 +23,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import MusicalText from "@/components/MusicalText";
 
 type ViewMode = "detail" | "root-overview" | "all-chords";
 
@@ -101,7 +102,7 @@ export default function ChordsView({ initialChord, roots, rootSuffixMap }: Props
 					variant={viewMode === "root-overview" ? "default" : "outline"}
 					onClick={() => setViewMode("root-overview")}
 				>
-					Show All ({root})
+					Show All (<MusicalText text={root} />)
 				</Button>
 				<Button
 					size="sm"
@@ -125,7 +126,7 @@ export default function ChordsView({ initialChord, roots, rootSuffixMap }: Props
 								<SelectContent>
 									{roots.map((r) => (
 										<SelectItem key={r} value={r}>
-											{r}
+											<MusicalText text={r} />
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -144,7 +145,7 @@ export default function ChordsView({ initialChord, roots, rootSuffixMap }: Props
 												<SelectLabel>{category}</SelectLabel>
 												{suffixes.map((s) => (
 													<SelectItem key={s} value={s}>
-														{s}
+														<MusicalText text={s} />
 													</SelectItem>
 												))}
 											</SelectGroup>
@@ -177,7 +178,7 @@ export default function ChordsView({ initialChord, roots, rootSuffixMap }: Props
 														: "rounded px-2 py-0.5 text-xs border border-denim-border text-denim transition-colors hover:bg-denim-tint"
 												}
 											>
-												{s}
+												<MusicalText text={s} />
 											</button>
 										))}
 									</div>
@@ -215,7 +216,7 @@ export default function ChordsView({ initialChord, roots, rootSuffixMap }: Props
 						<SelectContent>
 							{roots.map((r) => (
 								<SelectItem key={r} value={r}>
-									{r}
+									<MusicalText text={r} />
 								</SelectItem>
 							))}
 						</SelectContent>

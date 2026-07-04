@@ -79,6 +79,7 @@ Types defined in `src/types/database.ts`.
 - **Issue-driven:** confirm a GitHub issue exists before writing code for a new feature. Ask if one doesn't appear to exist.
 - **Small PRs:** resolve one issue at a time, broken into the smallest deployable chunks.
 - **Don't over-engineer:** don't extract components or abstractions with no current reuse value.
+- **Don't commit on behalf of me:**: do not commit changes until i specify so
 
 ## Constraints (apply to every task unless explicitly told otherwise)
 

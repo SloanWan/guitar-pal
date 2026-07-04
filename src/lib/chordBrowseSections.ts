@@ -74,7 +74,7 @@ export function buildRootSections(
     return suffs.flatMap((s) => {
       const chord = byRoot.get(s);
       if (!chord) return [];
-      const card = makeCard(chord, "suffix", buildHref);
+      const card = makeCard(chord, "root-suffix", buildHref);
       return card ? [card] : [];
     });
   }
@@ -103,7 +103,7 @@ export function buildAllChordsRootFirst(
     const cards = orderedSuffixes.flatMap((s) => {
       const chord = forRoot.find((c) => c.suffix === s);
       if (!chord) return [];
-      const card = makeCard(chord, "suffix", buildHref);
+      const card = makeCard(chord, "root-suffix", buildHref);
       return card ? [card] : [];
     });
     return cards.length > 0 ? [{ label: root, cards }] : [];
@@ -123,7 +123,7 @@ export function buildAllChordsCategories(
       const cards = allChords
         .filter((c) => c.root === root && filterFn(c))
         .flatMap((c) => {
-          const card = makeCard(c, "suffix", buildHref);
+          const card = makeCard(c, "root-suffix", buildHref);
           return card ? [card] : [];
         });
       return cards.length > 0 ? [{ label: root, cards }] : [];

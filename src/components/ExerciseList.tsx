@@ -18,7 +18,6 @@ import { useState, useEffect } from "react";
 import { Exercise, CATEGORIES } from "@/types/database";
 import {
 	createExercise,
-	getExercises,
 	deleteExercise,
 	removeAllRoutineExercisesByExerciseId,
 	getRoutineNamesForExercise,

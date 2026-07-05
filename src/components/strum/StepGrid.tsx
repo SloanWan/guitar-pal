@@ -57,15 +57,13 @@ export default function StepGrid({
 						: beat.length === 2
 							? [beat[0], "G", beat[1], "G"]
 							: beat;
-				const isTriplet = beat.length === 3;
+				// const isTriplet = beat.length === 3;
 				const isActiveBeat = activeCell?.beatIdx === beatIdx;
 				return (
 					<div className="flex flex-col gap-2 flex-1" key={beatIdx}>
 						<div
 							className={`flex border rounded-sm ${beatPy} transition-colors duration-100 ${
-								isActiveBeat
-									? "border-denim/50 bg-denim-tint"
-									: "border-slate-200"
+								isActiveBeat ? "border-denim/50 bg-denim-tint" : "border-slate-200"
 							}`}
 						>
 							{paddedCells.map((cell, cellIdx) => {

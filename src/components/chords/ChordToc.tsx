@@ -68,7 +68,6 @@ export default function ChordToc({ sections }: Props) {
 					className={cn(
 						"flex items-center rounded py-0.5 transition-colors",
 						entry.level === 2 && "ml-3",
-						w,
 					)}
 				>
 					{/* Collapsed state: short horizontal line segment */}

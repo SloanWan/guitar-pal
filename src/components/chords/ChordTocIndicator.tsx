@@ -23,9 +23,7 @@ export default function ChordTocIndicator({ sections }: Props) {
 		const ids = entries.map((e) => e.id);
 		const observer = new IntersectionObserver(
 			(ioEntries) => {
-				const entering = ioEntries
-					.filter((e) => e.isIntersecting)
-					.map((e) => e.target.id);
+				const entering = ioEntries.filter((e) => e.isIntersecting).map((e) => e.target.id);
 				if (entering.length > 0) {
 					const topmost = ids.find((id) => entering.includes(id));
 					if (topmost) setActiveId(topmost);
@@ -48,7 +46,7 @@ export default function ChordTocIndicator({ sections }: Props) {
 
 	return (
 		<nav
-			className="fixed right-0 top-0 z-30 h-full w-5 flex flex-col py-10 divide-y divide-border/40 lg:hidden"
+			className="fixed right-4.5 top-1/2 z-30 -translate-y-1/2 w-14 flex flex-col lg:hidden"
 			aria-label="Chord sections"
 		>
 			{entries.map(({ id, label }) => {
@@ -57,18 +55,20 @@ export default function ChordTocIndicator({ sections }: Props) {
 					<button
 						key={id}
 						type="button"
-						className="flex-1 flex items-center justify-end"
+						className="h-7 flex items-center justify-end pr-1 overflow-hidden"
 						onClick={() => scrollTo(id)}
 						aria-label={`Jump to ${label}`}
 					>
 						<span
 							className={cn(
-								"block rounded-l-sm transition-all duration-200 ease-in-out",
+								"truncate text-right transition-all duration-200 ease-in-out",
 								isActive
-									? "w-2.5 h-8 bg-denim"
-									: "w-1.5 h-5 bg-muted-foreground/25",
+									? "text-[10px] sm:text-[11px] font-semibold text-denim"
+									: "text-[8px] sm:text-[9px] font-normal text-muted-foreground/35",
 							)}
-						/>
+						>
+							{label}
+						</span>
 					</button>
 				);
 			})}

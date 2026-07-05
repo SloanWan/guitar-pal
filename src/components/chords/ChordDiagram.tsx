@@ -10,7 +10,7 @@ interface Props {
 	compact?: boolean;
 }
 
-const REGULAR = { width: 140, height: 160, showTuning: true };
+const REGULAR = { width: 160, height: 200, showTuning: true };
 const COMPACT = { width: 100, height: 120, showTuning: false };
 
 export default function ChordDiagram({ def, label, compact = false }: Props) {
@@ -36,7 +36,9 @@ export default function ChordDiagram({ def, label, compact = false }: Props) {
 	return (
 		<div className="flex flex-col items-center gap-1 rounded-lg border border-denim-border bg-denim-tint p-3">
 			<div ref={containerRef} />
-			<span className="text-xs font-medium text-denim"><MusicalText text={label} /></span>
+			<span className="text-xs font-medium text-denim">
+				<MusicalText text={label} />
+			</span>
 		</div>
 	);
 }

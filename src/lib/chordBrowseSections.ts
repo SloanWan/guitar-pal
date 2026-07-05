@@ -100,14 +100,24 @@ export function buildAllChordsRootFirst(
     const suffixes = forRoot.map((c) => c.suffix);
     const groups = groupSuffixes(suffixes);
     const slashSuffs = getSlashSuffixes(suffixes);
-    const orderedSuffixes = [...groups.flatMap((g) => g.suffixes), ...slashSuffs];
-    const cards = orderedSuffixes.flatMap((s) => {
-      const chord = forRoot.find((c) => c.suffix === s);
-      if (!chord) return [];
-      const card = makeCard(chord, "root-suffix", buildHref);
-      return card ? [card] : [];
-    });
-    return cards.length > 0 ? [{ label: root, cards }] : [];
+
+    function makeCards(suffs: readonly string[]): BrowseCard[] {
+      return suffs.flatMap((s) => {
+        const chord = forRoot.find((c) => c.suffix === s);
+        if (!chord) return [];
+        const card = makeCard(chord, "root-suffix", buildHref);
+        return card ? [card] : [];
+      });
+    }
+
+    const subsections: BrowseSubsection[] = [
+      ...groups
+        .map(({ category, suffixes: gs }) => ({ label: category, cards: makeCards(gs) }))
+        .filter((s) => s.cards.length > 0),
+      ...(slashSuffs.length > 0 ? [{ label: "Slash Chords", cards: makeCards(slashSuffs) }] : []),
+    ];
+
+    return subsections.length > 0 ? [{ label: root, cards: [], subsections }] : [];
   });
 }
 

@@ -6,20 +6,22 @@ const ALL_ROOTS = [
   "A", "Ab", "B", "Bb", "C", "C#", "D", "Db", "E", "Eb", "F", "F#", "G", "Gb",
 ];
 
-// All 39 taxonomy suffixes from CHORD_SUFFIX_CATEGORIES
+// All taxonomy suffixes from CHORD_SUFFIX_CATEGORIES (grows as new suffixes are discovered)
 const TAXONOMY_SUFFIXES = [
   // Major
-  "major", "6", "69", "add9", "maj7", "maj9", "maj11", "maj13", "maj7#5", "maj7b5",
+  "major", "6", "69", "add9", "add11", "maj7", "maj7sus2", "maj9", "maj11", "maj13", "maj7#5", "maj7b5",
   // Minor
   "minor", "m6", "m69", "madd9", "m7", "m9", "m11", "mmaj7", "mmaj9", "mmaj11", "mmaj7b5",
   // Dominant 7th
   "7", "9", "11", "13", "7#9", "7b5", "7b9", "9#11", "9b5", "alt",
   // Suspended
-  "sus2", "sus4", "7sus4",
+  "sus", "sus2", "sus4", "sus2sus4", "7sus4",
   // Diminished
   "dim", "dim7",
   // Augmented
   "aug", "aug7", "aug9",
+  // Power Chord
+  "5",
 ];
 
 // Excluded suffix
@@ -88,6 +90,17 @@ describe("slash chord (minor) suffix slug round-trip", () => {
   }
 });
 
+// ─── Compound slash chord round-trip (m9/X) ──────────────────────────────────
+
+describe("compound slash chord (m9/X) suffix slug round-trip", () => {
+  for (const bass of ["A", "B", "E"]) {
+    const suffix = `m9/${bass}`;
+    it(`${suffix} → slug → ${suffix}`, () => {
+      expect(slugToSuffix(suffixToSlug(suffix))).toBe(suffix);
+    });
+  }
+});
+
 // ─── Suffix known slugs ──────────────────────────────────────────────────────
 
 describe("suffixToSlug known values", () => {
@@ -100,6 +113,9 @@ describe("suffixToSlug known values", () => {
   it("m/C → m-over-c", () => expect(suffixToSlug("m/C")).toBe("m-over-c"));
   it("m/C# → m-over-c-sharp", () => expect(suffixToSlug("m/C#")).toBe("m-over-c-sharp"));
   it("m/Bb → m-over-bb", () => expect(suffixToSlug("m/Bb")).toBe("m-over-bb"));
+  it("m9/A → m9-over-a", () => expect(suffixToSlug("m9/A")).toBe("m9-over-a"));
+  it("m9/B → m9-over-b", () => expect(suffixToSlug("m9/B")).toBe("m9-over-b"));
+  it("m9/E → m9-over-e", () => expect(suffixToSlug("m9/E")).toBe("m9-over-e"));
   // Plain suffixes starting with 'm' are NOT slash chords
   it("m7 → m7 (not treated as slash chord)", () => expect(suffixToSlug("m7")).toBe("m7"));
   it("mmaj7 → mmaj7 (not treated as slash chord)", () => expect(suffixToSlug("mmaj7")).toBe("mmaj7"));
@@ -112,6 +128,9 @@ describe("slugToSuffix known values", () => {
   it("over-e → /E", () => expect(slugToSuffix("over-e")).toBe("/E"));
   it("m-over-c → m/C", () => expect(slugToSuffix("m-over-c")).toBe("m/C"));
   it("m-over-c-sharp → m/C#", () => expect(slugToSuffix("m-over-c-sharp")).toBe("m/C#"));
+  it("m9-over-a → m9/A", () => expect(slugToSuffix("m9-over-a")).toBe("m9/A"));
+  it("m9-over-b → m9/B", () => expect(slugToSuffix("m9-over-b")).toBe("m9/B"));
+  it("m9-over-e → m9/E", () => expect(slugToSuffix("m9-over-e")).toBe("m9/E"));
   it("m7 → m7 (not decoded as slash chord)", () => expect(slugToSuffix("m7")).toBe("m7"));
   it("mmaj7 → mmaj7 (not decoded as slash chord)", () => expect(slugToSuffix("mmaj7")).toBe("mmaj7"));
 });

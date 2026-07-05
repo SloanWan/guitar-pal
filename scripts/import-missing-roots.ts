@@ -94,7 +94,7 @@ type TruthRow = Omit<ProjectVoicing, "label">;
 
 const C_MAJOR_GROUND_TRUTH: TruthRow[] = [
 	{ start_fret: 1, frets: "x32010", fingers: "032010", barre_fret: null, capo: false },
-	{ start_fret: 3, frets: "113331", fingers: "112341", barre_fret: 1, capo: true },
+	{ start_fret: 3, frets: "x13331", fingers: "012341", barre_fret: 1, capo: true },
 	{ start_fret: 5, frets: "xx1114", fingers: "001114", barre_fret: 1, capo: false },
 	{ start_fret: 8, frets: "133211", fingers: "134211", barre_fret: 1, capo: true },
 ];
@@ -115,19 +115,20 @@ function calibrate(data: GuitarJson): boolean {
 			ok = false;
 			continue;
 		}
+		let positionFailed = false;
 		for (const field of ["start_fret", "frets", "fingers", "barre_fret", "capo"] as const) {
 			if (got[field] !== truth[field]) {
 				console.error(
 					`  [FAIL] Voicing ${i} "${field}": expected ${JSON.stringify(truth[field])}, got ${JSON.stringify(got[field])}`,
 				);
 				ok = false;
+				positionFailed = true;
 			}
 		}
-	}
-
-	if (!ok) {
-		console.error("\n  Raw first position from source for debugging:");
-		console.error(JSON.stringify(cMajor.positions[0], null, 2));
+		if (positionFailed) {
+			console.error(`  Raw position ${i} from source for debugging:`);
+			console.error(JSON.stringify(cMajor.positions[i], null, 2));
+		}
 	}
 
 	return ok;
@@ -143,8 +144,8 @@ async function importRoot(
 ): Promise<void> {
 	const chords = data.chords[tombKey];
 	if (!chords || chords.length === 0) {
-		console.warn(`  No data found for key "${tombKey}" — skipping ${projectRoot}.`);
-		return;
+		console.error(`  [ERROR] No chords found for source key "${tombKey}" (${projectRoot}). Key mismatch or empty data — aborting.`);
+		process.exit(1);
 	}
 
 	let chordCount = 0;

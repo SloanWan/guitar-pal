@@ -1,34 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { ROOT_CHROMATIC_ORDER, sortRoots } from "@/lib/chordSuffixes";
+import { ROOT_CHROMATIC_ORDER, sortRoots, isSlashChord } from "@/lib/chordSuffixes";
 
-// All 14 roots present in the chords table after C# and F# are imported.
-const ALL_14_ROOTS = [
-  "A", "Ab", "B", "Bb", "C", "C#", "D", "Db", "E", "Eb", "F", "F#", "G", "Gb",
+// All 12 roots present in the chords table (no Db/Gb — sourced spelling is C#/F#).
+const ALL_12_ROOTS = [
+  "A", "Ab", "B", "Bb", "C", "C#", "D", "E", "Eb", "F", "F#", "G",
 ];
 
 describe("ROOT_CHROMATIC_ORDER", () => {
-  it("contains exactly the 14 expected roots", () => {
-    expect([...ROOT_CHROMATIC_ORDER].sort()).toEqual([...ALL_14_ROOTS].sort());
+  it("contains exactly the 12 expected roots", () => {
+    expect([...ROOT_CHROMATIC_ORDER].sort()).toEqual([...ALL_12_ROOTS].sort());
+  });
+
+  it("contains no Db or Gb entries", () => {
+    expect(ROOT_CHROMATIC_ORDER).not.toContain("Db");
+    expect(ROOT_CHROMATIC_ORDER).not.toContain("Gb");
   });
 
   it("follows chromatic pitch order", () => {
     expect(ROOT_CHROMATIC_ORDER).toEqual([
-      "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "Bb", "B",
+      "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
     ]);
   });
 });
 
 describe("sortRoots", () => {
-  it("returns all 14 roots in chromatic order regardless of input order", () => {
-    expect(sortRoots(ALL_14_ROOTS)).toEqual([
-      "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "Bb", "B",
-    ]);
-  });
-
-  it("sorts a flat-only subset correctly", () => {
-    // Pre-C# import state: no C# or F#
-    expect(sortRoots(["A", "Ab", "B", "Bb", "C", "D", "Db", "E", "Eb", "F", "G", "Gb"])).toEqual([
-      "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
+  it("returns all 12 roots in chromatic order regardless of input order", () => {
+    expect(sortRoots(ALL_12_ROOTS)).toEqual([
+      "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
     ]);
   });
 
@@ -47,4 +45,16 @@ describe("sortRoots", () => {
     expect(result[0]).toBe("C");
     expect(result.slice(1)).toEqual(expect.arrayContaining(["X", "Y"]));
   });
+});
+
+describe("isSlashChord", () => {
+  it("detects simple slash chord /E", () => expect(isSlashChord("/E")).toBe(true));
+  it("detects simple slash chord m/C", () => expect(isSlashChord("m/C")).toBe(true));
+  it("detects compound slash chord m9/A", () => expect(isSlashChord("m9/A")).toBe(true));
+  it("detects compound slash chord m9/B", () => expect(isSlashChord("m9/B")).toBe(true));
+  it("detects compound slash chord m9/E", () => expect(isSlashChord("m9/E")).toBe(true));
+  it("returns false for plain suffix m9", () => expect(isSlashChord("m9")).toBe(false));
+  it("returns false for plain suffix m7", () => expect(isSlashChord("m7")).toBe(false));
+  it("returns false for plain suffix major", () => expect(isSlashChord("major")).toBe(false));
+  it("returns false for plain suffix mmaj7", () => expect(isSlashChord("mmaj7")).toBe(false));
 });

@@ -1,7 +1,6 @@
-// Chromatic pitch order for all 14 roots present in the chords table.
-// Two chromatic positions carry both enharmonic spellings (C#/Db, F#/Gb).
+// Chromatic pitch order for all 12 roots in the chords table.
 export const ROOT_CHROMATIC_ORDER: readonly string[] = [
-  "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "Bb", "B",
+  "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
 ];
 
 const ROOT_INDEX = new Map(ROOT_CHROMATIC_ORDER.map((r, i) => [r, i]));
@@ -20,12 +19,13 @@ export interface SuffixCategoryDef {
 }
 
 export const CHORD_SUFFIX_CATEGORIES: readonly SuffixCategoryDef[] = [
-  { category: "Major",        suffixes: ["major","6","69","add9","maj7","maj9","maj11","maj13","maj7#5","maj7b5"] },
+  { category: "Major",        suffixes: ["major","6","69","add9","add11","maj7","maj7sus2","maj9","maj11","maj13","maj7#5","maj7b5"] },
   { category: "Minor",        suffixes: ["minor","m6","m69","madd9","m7","m9","m11","mmaj7","mmaj9","mmaj11","mmaj7b5"] },
   { category: "Dominant 7th", suffixes: ["7","9","11","13","7#9","7b5","7b9","9#11","9b5","alt"] },
-  { category: "Suspended",    suffixes: ["sus2","sus4","7sus4"] },
+  { category: "Suspended",    suffixes: ["sus","sus2","sus4","sus2sus4","7sus4"] },
   { category: "Diminished",   suffixes: ["dim","dim7"] },
   { category: "Augmented",    suffixes: ["aug","aug7","aug9"] },
+  { category: "Power Chord",  suffixes: ["5"] },
 ];
 
 // Slash chords / inversions detected by pattern — separate axis from chord quality,
@@ -36,7 +36,7 @@ export const CHORD_SUFFIX_CATEGORIES: readonly SuffixCategoryDef[] = [
 export const EXCLUDED_SUFFIXES: readonly string[] = ["7sg"];
 
 export function isSlashChord(suffix: string): boolean {
-  return suffix.startsWith("/") || suffix.startsWith("m/");
+  return suffix.includes("/");
 }
 
 // Returns the category name for a suffix, or null if it belongs to none.

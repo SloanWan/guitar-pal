@@ -60,7 +60,7 @@ export default function ChordToc({ sections }: Props) {
 		// edges stay pinned while their left edges advance as width grows.
 		return (
 			<nav
-				className="group fixed right-2 top-1/2 z-30 hidden -translate-y-1/2 flex-col items-end gap-[3px] lg:flex w-[115px]"
+				className="group fixed right-2 top-1/2 z-30 hidden -translate-y-1/2 flex-col items-end gap-1 lg:flex w-28"
 				aria-label="Chord sections"
 			>
 				{orderedRoots.map((root) => {

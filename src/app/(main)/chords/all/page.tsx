@@ -9,7 +9,7 @@ import { rootToSlug, suffixToSlug } from "@/lib/chordSlug";
 import { buildAllChordsRootFirst, buildAllChordsCategories } from "@/lib/chordBrowseSections";
 import BrowseGrid from "@/components/chords/BrowseGrid";
 import ChordToc from "@/components/chords/ChordToc";
-import ChordTocMobile from "@/components/chords/ChordTocMobile";
+import ChordTocIndicator from "@/components/chords/ChordTocIndicator";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -36,7 +36,7 @@ export default async function AllChordsPage({ searchParams }: Props) {
 	return (
 		<>
 			<ChordToc sections={sections} />
-			<ChordTocMobile sections={sections} />
+			<ChordTocIndicator sections={sections} />
 			<div className="h-full bg-background">
 				<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 					<div className="flex flex-col items-center gap-6">

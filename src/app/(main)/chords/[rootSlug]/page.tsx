@@ -6,6 +6,8 @@ import { slugToRoot, suffixToSlug } from "@/lib/chordSlug";
 import { buildRootSections } from "@/lib/chordBrowseSections";
 import MusicalText from "@/components/MusicalText";
 import BrowseGrid from "@/components/chords/BrowseGrid";
+import ChordToc from "@/components/chords/ChordToc";
+import ChordTocIndicator from "@/components/chords/ChordTocIndicator";
 
 type Props = { params: Promise<{ rootSlug: string }> };
 
@@ -28,6 +30,9 @@ export default async function RootPage({ params }: Props) {
 	);
 
 	return (
+		<>
+		<ChordToc sections={sections} />
+		<ChordTocIndicator sections={sections} />
 		<div className="h-full bg-background">
 			<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 				<div className="flex flex-col items-center gap-6">
@@ -52,5 +57,6 @@ export default async function RootPage({ params }: Props) {
 				</div>
 			</div>
 		</div>
+		</>
 	);
 }

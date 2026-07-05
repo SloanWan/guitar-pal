@@ -119,7 +119,7 @@ export default function ChordToc({ sections }: Props) {
 	// ── Category-first: existing thin-line Notion-style outline ──────────────
 	return (
 		<nav
-			className="group fixed right-2 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-1 rounded-lg p-2 transition-colors hover:bg-background/95 hover:shadow-sm lg:flex"
+			className="group fixed right-2 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-1 rounded-lg p-2 transition-all duration-200 ease-in-out hover:bg-background/95 hover:shadow-sm lg:flex"
 			aria-label="Chord sections"
 		>
 			{entries.map((entry) => (
@@ -128,14 +128,13 @@ export default function ChordToc({ sections }: Props) {
 					type="button"
 					onClick={() => scrollTo(entry.id)}
 					aria-label={`Jump to ${entry.label}`}
-					className={cn(
-						"flex items-center rounded py-0.5 transition-colors",
-						entry.level === 2 && "ml-3",
-					)}
+					className={cn("flex items-center rounded py-0.5", entry.level === 2 && "ml-3")}
 				>
+					{/* Line — shrinks away as sidebar expands */}
 					<span
 						className={cn(
-							"block rounded-full transition-colors group-hover:hidden",
+							"block shrink-0 rounded-full transition-all duration-200 ease-in-out",
+							"group-hover:w-0 group-hover:opacity-0",
 							entry.level === 1 ? "h-0.5 w-5" : "h-[1.5px] w-3",
 							displayActiveId === entry.id
 								? "bg-denim"
@@ -144,9 +143,12 @@ export default function ChordToc({ sections }: Props) {
 									: "bg-muted-foreground/25",
 						)}
 					/>
+					{/* Label — fades and slides in as line retreats */}
 					<span
 						className={cn(
-							"hidden whitespace-nowrap text-xs group-hover:block",
+							"overflow-hidden whitespace-nowrap text-xs",
+							"transition-all duration-400 ease-in-out",
+							"max-w-0 opacity-0 group-hover:max-w-50 group-hover:opacity-100 group-hover:mr-5",
 							entry.level === 1
 								? "font-medium text-muted-foreground hover:text-foreground"
 								: "text-muted-foreground/60 hover:text-muted-foreground",

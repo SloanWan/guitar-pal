@@ -39,7 +39,7 @@ export default async function ChordDetailPage({ params }: Props) {
 
 	return (
 		<div className="h-full bg-background flex flex-col">
-			<div className="container mx-auto py-8 flex flex-col flex-1">
+			<div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col flex-1">
 				<div className="flex flex-col items-center gap-6 flex-1">
 					<div className="flex w-full items-center justify-between">
 						<Link

@@ -29,7 +29,7 @@ export default async function RootPage({ params }: Props) {
 
 	return (
 		<div className="h-full bg-background">
-			<div className="container mx-auto py-8">
+			<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 				<div className="flex flex-col items-center gap-6">
 					<div className="flex w-full items-center justify-between">
 						<Link

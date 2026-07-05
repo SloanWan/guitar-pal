@@ -1,47 +1,50 @@
+import Link from "next/link";
+import type { Metadata } from "next";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import ChordsView from "@/components/ChordsView";
+import { rootToSlug } from "@/lib/chordSlug";
+import { sortRoots } from "@/lib/chordSuffixes";
+import MusicalText from "@/components/MusicalText";
+
+export const metadata: Metadata = {
+	title: "Guitar Chord Charts | Guitar Pal",
+	description: "Browse guitar chord diagrams by root note or quality.",
+};
 
 export default async function ChordsPage() {
 	const supabase = await createSupabaseServer();
-
-	const { data: allChords } = await supabase.from("chords").select("root, suffix").order("root");
-
-	const { data: initialChord } = await supabase
-		.from("chords")
-		.select(
-			`
-      id, root, suffix,
-      chord_voicings (
-        id, label, start_fret, barre_fret, capo, frets, fingers
-      )
-    `,
-		)
-		.eq("root", "C")
-		.eq("suffix", "major")
-		.single();
-
-	const roots = [...new Set(allChords?.map((c) => c.root) ?? [])];
-	const rootSuffixMap =
-		allChords?.reduce(
-			(acc, chord) => {
-				if (!acc[chord.root]) {
-					acc[chord.root] = [];
-				}
-				acc[chord.root].push(chord.suffix);
-				return acc;
-			},
-			{} as Record<string, string[]>,
-		) ?? {};
+	const { data } = await supabase.from("chords").select("root");
+	const roots = sortRoots([...new Set(data?.map((c) => c.root) ?? [])]);
 
 	return (
-		<div className="min-h-screen bg-background">
-			<div className="container mx-auto py-8 text-center">
-				{/* <h1 className="text-4xl font-bold mb-8">Guitar Chords</h1> */}
-				<ChordsView
-					initialChord={initialChord ?? undefined}
-					roots={roots}
-					rootSuffixMap={rootSuffixMap}
-				/>
+		<div className="h-full bg-background">
+			<div className="container mx-auto py-8">
+				<div className="flex flex-col items-center gap-10">
+					<div className="flex flex-col items-center gap-2 text-center">
+						<h1 className="text-2xl font-semibold">Guitar Chords</h1>
+						<p className="text-sm text-muted-foreground pt-2">
+							Select a root note to browse chord shapes.
+						</p>
+					</div>
+
+					<div className="flex flex-wrap justify-center gap-2">
+						{roots.map((root) => (
+							<Link
+								key={root}
+								href={`/chords/${rootToSlug(root)}`}
+								className="inline-flex items-center rounded-md border border-denim-border bg-denim-tint px-4 py-2 text-sm font-medium text-denim transition-colors hover:bg-denim hover:text-white"
+							>
+								<MusicalText text={root} />
+							</Link>
+						))}
+					</div>
+
+					<Link
+						href="/chords/all"
+						className="text-sm text-muted-foreground underline hover:text-foreground"
+					>
+						Browse All Chords →
+					</Link>
+				</div>
 			</div>
 		</div>
 	);

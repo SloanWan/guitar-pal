@@ -8,6 +8,7 @@ import {
   getSlashSuffixes,
   isSlashChord,
   EXCLUDED_SUFFIXES,
+  sortRoots,
 } from "@/lib/chordSuffixes";
 import {
   selectStandardVoicing,
@@ -93,7 +94,7 @@ export function buildAllChordsRootFirst(
   allChords: ChordData[],
   buildHref?: (root: string, suffix: string) => string,
 ): BrowseSection[] {
-  const rootOrder = [...new Set(allChords.map((c) => c.root))];
+  const rootOrder = sortRoots([...new Set(allChords.map((c) => c.root))]);
   return rootOrder.flatMap((root) => {
     const forRoot = allChords.filter((c) => c.root === root);
     const suffixes = forRoot.map((c) => c.suffix);
@@ -114,7 +115,7 @@ export function buildAllChordsCategories(
   allChords: ChordData[],
   buildHref?: (root: string, suffix: string) => string,
 ): BrowseSection[] {
-  const rootOrder = [...new Set(allChords.map((c) => c.root))];
+  const rootOrder = sortRoots([...new Set(allChords.map((c) => c.root))]);
 
   function rootSubsections(
     filterFn: (c: ChordData) => boolean,

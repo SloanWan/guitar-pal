@@ -1,3 +1,19 @@
+// Chromatic pitch order for all 14 roots present in the chords table.
+// Two chromatic positions carry both enharmonic spellings (C#/Db, F#/Gb).
+export const ROOT_CHROMATIC_ORDER: readonly string[] = [
+  "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "Bb", "B",
+];
+
+const ROOT_INDEX = new Map(ROOT_CHROMATIC_ORDER.map((r, i) => [r, i]));
+
+// Sorts an array of root strings into chromatic pitch order.
+// Roots absent from ROOT_CHROMATIC_ORDER sort to the end (stable relative order).
+export function sortRoots(roots: readonly string[]): string[] {
+  return [...roots].sort(
+    (a, b) => (ROOT_INDEX.get(a) ?? 999) - (ROOT_INDEX.get(b) ?? 999),
+  );
+}
+
 export interface SuffixCategoryDef {
   readonly category: string;
   readonly suffixes: readonly string[];

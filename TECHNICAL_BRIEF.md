@@ -56,7 +56,9 @@ src/
 │   │   │   └── [rootSlug]/
 │   │   │       ├── page.tsx     # Per-root: suffixes grouped by category, with desktop + mobile TOC
 │   │   │       └── [suffixSlug]/page.tsx  # Chord detail: voicing grid, fret/note-name label toggle
-│   │   └── strum/page.tsx       # Client component: full strumming machine page
+│   │   ├── strum/page.tsx       # Client component: full strumming machine page
+│   │   └── fingerpick/
+│   │       └── page.tsx         # Client component: TAB viewer with pattern library and controls scaffold
 │   └── session/
 │       └── [routineId]/page.tsx # Client component: full practice session page
 │
@@ -85,6 +87,10 @@ src/
 │   │   └── __tests__/
 │   │       ├── useAudioEngine.test.ts        # _resolveStrumBuffer unit tests (10 tests)
 │   │       └── useGuitarSampleLoader.test.ts # Preset parsing, scheduling, decay constants (49 active + 2 skipped)
+│   ├── fingerpick/
+│   │   ├── TabStaveRow.tsx      # VexFlow TAB renderer; one row of measures per SVG context; ResizeObserver-driven
+│   │   └── __tests__/
+│   │       └── fingerpickToVexFlow.test.ts  # 22 tests: duration mapping, note types, technique connectors, beam grouping
 │   └── ui/                      # shadcn primitives: button, card, dialog, input, label, select, switch, tabs, sonner
 │
 ├── hooks/
@@ -106,6 +112,8 @@ src/
 │   ├── chordToc.ts              # tocSectionId, buildToc — shared anchor ID scheme for TOC and scroll-spy
 │   ├── musicalNotation.ts       # parseMusicalText — pure display parser (not for slugs/metadata)
 │   ├── strumPatterns.ts         # StepValue / Beat / TickMode types, StrumPattern interface, PRESET_STRUM_PATTERNS array
+│   ├── fingerpickTypes.ts       # FingerpickPattern / Measure / BeatSlot / StringFret / Technique / Duration types
+│   ├── fingerpickToVexFlow.ts   # Pure adapter: Measure → VexFlowRenderData (TabNote / GhostNote / TabTie / TabSlide arrays)
 │   ├── constants.ts             # CATEGORY_LABELS and CATEGORY_COLORS records
 │   └── utils.ts                 # shadcn cn() utility
 │
@@ -303,6 +311,90 @@ StepValue semantics:
 - 2-cell beats are padded to 4 display columns using ghost values; the `getPaddedCellIdx` function maps the audio engine's `cellIdx` to the padded display index.
 - Beat labels: 1-cell → `["1", "", "+", ""]`; 2-cell → `["1", "", "+", ""]`; 3-cell → `["tri", "p", "let"]`; 4-cell → `["1", "e", "+", "a"]`.
 - `size="sm"` variant used in library sidebar previews (smaller icons, no labels).
+
+---
+
+### Fingerpicking Page (`/fingerpick`)
+
+**Files:** `src/app/(main)/fingerpick/page.tsx`, `src/components/fingerpick/TabStaveRow.tsx`, `src/lib/fingerpickToVexFlow.ts`, `src/lib/fingerpickTypes.ts`
+
+**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). Both the library sidebar and controls panel are scaffolded but not yet wired; they show "coming soon" placeholders.
+
+**Data model** (`src/lib/fingerpickTypes.ts`):
+
+```ts
+type Duration = "whole" | "half" | "quarter" | "eighth" | "sixteenth" | "rest";
+
+type Technique = "hammer-on" | "pull-off" | "slide-up" | "slide-down" | null;
+
+type StringFret = {
+    fret: number | null;   // null = string not in play for this slot
+    technique: Technique;  // technique applied from the previous slot
+    tied: boolean;         // ties this note to the same string in the previous slot
+    muted: boolean;        // renders as "x" (palm mute / dead note)
+};
+
+type BeatSlot = {
+    id: string;
+    duration: Duration;
+    strings: [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret];
+};
+
+type Measure      = { id: string; slots: BeatSlot[] };
+
+type FingerpickPattern = {
+    id: string;
+    name: string;
+    measures: Measure[];
+    bpm: number;
+    timeSignature: [number, number];
+};
+```
+
+String index `0` = high e; index `5` = low E. All four `Technique` values (`hammer-on`, `pull-off`, `slide-up`, `slide-down`) are implemented. Techniques such as bend, vibrato, and harmonics are not in the type — they are backlogged.
+
+**Adapter** (`src/lib/fingerpickToVexFlow.ts`):
+
+`fingerpickToVexFlow(measure: Measure): VexFlowRenderData` — pure function, no DOM access. VexFlow note constructors are DOM-free.
+
+```ts
+interface VexFlowRenderData {
+    notes: StemmableNote[];                   // one TabNote or GhostNote per BeatSlot
+    connectors: Array<TabTie | TabSlide>;     // per-string technique connectors between adjacent slots
+}
+```
+
+Conversion rules:
+
+- A rest slot, or a slot where all strings are silent (all `fret === null` and no `muted`), produces a `GhostNote`.
+- Otherwise, a `TabNote` is produced. Each active string (non-null fret or `muted: true`) contributes one position. Muted strings use `fret: "x"`. VexFlow string numbers are 1-indexed: `str = stringIdx + 1`.
+- Connectors are generated between adjacent slots that share a string with a non-null `technique` or `tied: true`:
+  - `hammer-on` → `TabTie.createHammeron()` (renders "H", returns a `TabTie` instance)
+  - `pull-off` → `TabTie.createPulloff()` (renders "P", returns a `TabTie` instance)
+  - `slide-up` → `TabSlide.createSlideUp()` (returns a `TabSlide` instance)
+  - `slide-down` → `TabSlide.createSlideDown()` (returns a `TabSlide` instance)
+  - `tied: true` → `new TabTie(...)` (plain sustain arc)
+
+**Rendering** (`src/components/fingerpick/TabStaveRow.tsx`):
+
+A `"use client"` component that renders one row of measures into a single VexFlow SVG context (SVG backend).
+
+- A `ResizeObserver` on the container div drives all rendering — it fires on mount with the initial `clientWidth` and on every resize. `requestAnimationFrame` debounces rapid events. The observer is disconnected and the container cleared on unmount.
+- Layout: `CLEF_WIDTH = 15 px` left offset, `RIGHT_PAD = 15 px` right padding. The remaining width is divided equally across measures; the last stave absorbs any rounding remainder.
+- Only the first stave in each row gets `addTabGlyph()` (the "TAB" clef glyph) — standard notation convention. Staves 2…N suppress their left barline (`Barline.type.NONE`) to avoid double barlines at measure boundaries.
+- Measure numbers are rendered when `startMeasureNumber` is provided (1-indexed; `FingerpickPage` increments per row).
+- Beams: `Beam.applyAndGetBeams(voice, -1)` is applied after notes are added to the voice (stem direction `−1` = down). Connectors and beams are drawn after `voice.draw()`.
+- Font: `"Geist Mono", ui-monospace, monospace` at `10pt`.
+
+`FingerpickPage` uses a `matchMedia("(min-width: 768px)")` listener to switch between **4 measures per row on desktop** and **2 measures per row on mobile**, defaulting to 4 on the server. Rows are computed in a pure helper `groupMeasuresIntoRows(measures, perRow)` that chunks the flat `measures` array. The page currently renders a single hardcoded `PRESET_FINGERPICK_PATTERN` ("Technique Showcase") that exercises all five duration values and all four technique types across five measures.
+
+**Audio playback:**
+
+Not yet implemented — the controls panel is a "coming soon" placeholder. The strum machine's WebAudioFont-based pipeline (`useGuitarSampleLoader.ts`: CDN preset fetching, `new Function()` evaluation, per-string `AudioBufferSourceNode` scheduling) is the established pattern in this codebase and is the intended model for a future fingerpick audio implementation.
+
+**Testing:**
+
+`fingerpickToVexFlow.ts` has 22 unit tests in `src/components/fingerpick/__tests__/fingerpickToVexFlow.test.ts`, covering: `VEX_DURATION` key mapping (6 cases), silent and rest slots producing `GhostNote` (3 cases), single-note `TabNote` construction and VexFlow string-index mapping (5 cases), all four technique connectors and tied notes (5 cases), and beam grouping via `Beam.applyAndGetBeams` (3 cases). Tests assert against output object types and graph structure — not rendered pixel positions — because jsdom lacks a real Canvas/text-measurement implementation (see Known Issue #8).
 
 ---
 

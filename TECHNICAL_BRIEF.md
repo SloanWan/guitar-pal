@@ -8,7 +8,7 @@ This document is a complete reference for an AI assistant working on this codeba
 
 **Guitar Pal** is a web-based guitar practice studio targeting beginner-to-intermediate self-taught guitarists. The core loop is: create exercises → assemble them into routines → run timed practice sessions → log the result. A strumming machine with real-time audio playback and a chord library are standalone tools alongside the core loop.
 
-**Current state:** Active development. A Vitest suite (3 files, 76 active tests + 2 skipped CDN integration tests) covers `useGuitarSampleLoader` (preset parsing, scheduling, decay constants), `useAudioEngine` (`_resolveStrumBuffer`), and `fingerpickToVexFlow` (note/beam/connector output). UI components and Supabase-connected flows have no automated coverage. All features work. The chord library UI is an iframe embed (native UI was started but not completed — see Known Issues). Practice logs are written but never displayed. The exercise log table exists but has no UI at all.
+**Current state:** Active development. A Vitest suite (8 files) covers the strum engine (`useGuitarSampleLoader`, `useAudioEngine`), fingerpick rendering (`fingerpickToVexFlow`), and the chord library utilities (`chordVoicingToVexChords`, `chordSuffixes`, `chordSlug`, `musicalNotation`, `MusicalText`). UI components and Supabase-connected flows have no automated coverage. All features work. Practice logs are written but never displayed. The exercise log table exists but has no UI at all.
 
 ---
 
@@ -16,20 +16,22 @@ This document is a complete reference for an AI assistant working on this codeba
 
 | Layer               | Technology                                 | Version |
 | ------------------- | ------------------------------------------ | ------- |
-| Framework           | Next.js (App Router)                       | 16.2.4  |
+| Framework           | Next.js (App Router)                       | 16.2.10 |
 | UI library          | React                                      | 19.2.7  |
 | Styling             | Tailwind CSS v4                            | 4.x     |
 | Component library   | shadcn/ui (radix-nova style)               | 4.x     |
 | Primitive UI        | Radix UI (via shadcn)                      | 1.x     |
 | Icons               | lucide-react                               | 1.x     |
 | Animations          | framer-motion                              | 12.x    |
+| Chord diagrams      | vexchords                                  | 1.x     |
+| Chord data source   | @tombatossals/chords-db                    | 0.5.x   |
 | Toast notifications | sonner                                     | 2.x     |
 | Auth + Database     | Supabase (`@supabase/ssr`)                 | 0.10.x  |
 | Fonts               | Geist Sans + Geist Mono (next/font/google) | —       |
 | Language            | TypeScript (strict mode)                   | 5.x     |
 | Guitar sample data  | webaudiofontdata CDN (runtime fetch, no npm pkg) | GPL-3.0 |
 
-A Vitest test suite covers selected modules (strum engine and fingerpick functions); UI components and Supabase flows have no automated coverage. No ORM. No server actions (except `src/lib/chords.ts` which uses `"use server"` but the result is unused). All DB calls happen client-side via the browser Supabase client.
+A Vitest test suite covers selected modules (strum engine, fingerpick renderer, and chord library utilities); UI components and Supabase flows have no automated coverage. No ORM. `src/lib/chords.ts` uses `"use server"` and its functions are called by the chord page server components. All other DB calls happen client-side via the browser Supabase client.
 
 ---
 
@@ -48,7 +50,12 @@ src/
 │   ├── (main)/
 │   │   ├── layout.tsx           # Adds <NavBar /> above all main-area pages
 │   │   ├── dashboard/page.tsx   # Server component: reads user, renders DashboardContent
-│   │   ├── chords/page.tsx      # Server component: queries chord + voicing data, renders ChordsView
+│   │   ├── chords/
+│   │   │   ├── page.tsx         # Landing: root-picker grid + "Browse All Chords" link
+│   │   │   ├── all/page.tsx     # All chords; ?group=category toggles root-first / category-first
+│   │   │   └── [rootSlug]/
+│   │   │       ├── page.tsx     # Per-root: suffixes grouped by category, with desktop + mobile TOC
+│   │   │       └── [suffixSlug]/page.tsx  # Chord detail: voicing grid, fret/note-name label toggle
 │   │   └── strum/page.tsx       # Client component: full strumming machine page
 │   └── session/
 │       └── [routineId]/page.tsx # Client component: full practice session page
@@ -60,7 +67,14 @@ src/
 │   ├── DashboardContent.tsx     # Client wrapper: fetches exercises, passes to ExerciseList + RoutineList
 │   ├── ExerciseList.tsx         # Exercise CRUD: list, filter, add form, delete with routine warning
 │   ├── RoutineList.tsx          # Routine CRUD: list, expand, edit dialog, start session
-│   ├── ChordsView.tsx           # Currently just renders an <iframe> from guitarapp.com (see Known Issues)
+│   ├── MusicalText.tsx          # Renders ♭/♯ symbols inline; driven by parseMusicalText
+│   ├── chords/
+│   │   ├── BrowseGrid.tsx       # Renders BrowseSection[] as grouped heading + card-grid blocks
+│   │   ├── ChordDetailView.tsx  # Voicing grid with fret/note-name label toggle (detail page)
+│   │   ├── ChordDiagram.tsx     # vexchords ChordBox wrapper; SSR-safe dynamic import; compact + regular sizes
+│   │   ├── ChordToc.tsx         # Desktop sidebar: piano-key (root-first) or thin-line hover-expand (category-first)
+│   │   ├── ChordTocIndicator.tsx # Mobile/tablet: persistent right-edge scroll indicator, always visible
+│   │   └── LazyChordDiagram.tsx # IntersectionObserver-gated ChordDiagram for browse grids (300 px rootMargin)
 │   ├── strum/
 │   │   ├── StepGrid.tsx         # Pure display: renders beat/cell grid with live highlight
 │   │   ├── StepGridCard.tsx     # Card wrapper around StepGrid with pattern name + description
@@ -84,13 +98,20 @@ src/
 │   ├── routines.ts              # createRoutine, getRoutines, getRoutineById, deleteRoutine, addExerciseToRoutine, removeExerciseFromRoutine, updateRoutineExerciseDuration, swapRoutineExerciseOrder, getRoutineExercises
 │   ├── practiceLogs.ts          # createPracticeLog, getPracticeLogs (getPracticeLogs has no UI caller)
 │   ├── exerciseLogs.ts          # createExerciseLog, getExerciseLogs (neither has a UI caller)
-│   ├── chords.ts                # getChord() server action — queries chords + chord_voicings (result unused by current UI)
+│   ├── chords.ts                # "use server" — getChord, getChordsByRoot, getAllChordsWithVoicings
+│   ├── chordVoicingToVexChords.ts # ChordVoicing → VexChordDef adapter; barre detection; selectStandardVoicing
+│   ├── chordSuffixes.ts         # ROOT_CHROMATIC_ORDER, CHORD_SUFFIX_CATEGORIES, EXCLUDED_SUFFIXES, groupSuffixes, sortRoots
+│   ├── chordSlug.ts             # Bidirectional slug encoding: rootToSlug/slugToRoot, suffixToSlug/slugToSuffix
+│   ├── chordBrowseSections.ts   # BrowseSection/Card/Subsection types; three section builders
+│   ├── chordToc.ts              # tocSectionId, buildToc — shared anchor ID scheme for TOC and scroll-spy
+│   ├── musicalNotation.ts       # parseMusicalText — pure display parser (not for slugs/metadata)
 │   ├── strumPatterns.ts         # StepValue / Beat / TickMode types, StrumPattern interface, PRESET_STRUM_PATTERNS array
 │   ├── constants.ts             # CATEGORY_LABELS and CATEGORY_COLORS records
 │   └── utils.ts                 # shadcn cn() utility
 │
 ├── types/
-│   └── database.ts              # CATEGORIES const array, Category type, Exercise, Routine, RoutineExercise, PracticeLog, ExerciseLog types
+│   ├── database.ts              # CATEGORIES const array, Category type, Exercise, Routine, RoutineExercise, PracticeLog, ExerciseLog types
+│   └── vexchords.d.ts           # Module declaration shim for vexchords (no official TS typings)
 │
 └── proxy.ts                     # Next.js middleware (Next.js 16 uses proxy.ts, not middleware.ts): auth routing guards
 ```
@@ -287,9 +308,68 @@ StepValue semantics:
 
 ### Chord Library (`/chords`)
 
-**Files:** `src/app/(main)/chords/page.tsx`, `src/components/ChordsView.tsx`, `src/lib/chords.ts`
+**Routes:**
 
-**Current state:** The server component queries the `chords` and `chord_voicings` tables and passes the data as props to `ChordsView`. However, `ChordsView` ignores all props and renders only an `<iframe src="https://guitarapp.com/chords/embedtool?root=Csharp&theme=system">`. The native chord browsing UI has not been implemented. The `@tombatossals/chords-db` npm package is installed but unused.
+| Route | File | Description |
+| ----- | ---- | ----------- |
+| `/chords` | `chords/page.tsx` | Landing: chromatic root-picker buttons + "Browse All Chords →" link |
+| `/chords/all` | `chords/all/page.tsx` | All chords; `?group=category` toggles root-first / category-first grouping |
+| `/chords/[rootSlug]` | `chords/[rootSlug]/page.tsx` | Per-root: all suffixes grouped by category; desktop + mobile TOC |
+| `/chords/[rootSlug]/[suffixSlug]` | `chords/[rootSlug]/[suffixSlug]/page.tsx` | Chord detail: voicing grid with fret/note-name label toggle |
+
+All four routes are server components using `createSupabaseServer()`. The `/chords/all` and `/chords/[rootSlug]` pages pass chord data to client-side rendering components (`BrowseGrid`, `ChordToc`, `ChordTocIndicator`) via props.
+
+**Data layer:**
+
+`src/lib/chords.ts` (`"use server"`) exposes three server actions:
+- `getAllChordsWithVoicings()` — full table scan ordered by root then suffix; used by `/chords/all`.
+- `getChordsByRoot(root)` — filters by root; used by `/chords/[rootSlug]`.
+- `getChord(root, suffix)` — single chord with all voicings; used by `/chords/[rootSlug]/[suffixSlug]`.
+
+The `chords` table covers all 12 chromatic roots (C, C#, D, Eb, E, F, F#, G, Ab, A, Bb, B). Data was imported from `@tombatossals/chords-db`. C# and F# voicings were backfilled post-import using `scripts/import-missing-roots.ts`, which reads the `Csharp`/`Fsharp` JSON keys from the package, calibrates `start_fret` relative encoding against a known-good C major reference position, and upserts via the service-role key.
+
+**Adapter / utility layer:**
+
+- **`src/lib/chordVoicingToVexChords.ts`** — Pure adapter (no DOM/React). Converts a `ChordVoicing` DB row (6-char `frets`/`fingers` strings, relative `start_fret`, optional `barre_fret`/`capo`) into a `VexChordDef` for the vexchords `ChordBox`. Barre detection: `capo=true` → full 6-string barre; otherwise finds all non-muted strings sharing the `barre_fret` digit and computes `fromString`/`toString` span. Also exports `selectStandardVoicing` (returns the "Standard"-labelled voicing, or the one with the lowest `start_fret` as fallback).
+
+- **`src/lib/chordSuffixes.ts`** — Root ordering and suffix taxonomy.
+  - `ROOT_CHROMATIC_ORDER`: `["C","C#","D","Eb","E","F","F#","G","Ab","A","Bb","B"]` — single source of truth for display order everywhere.
+  - `CHORD_SUFFIX_CATEGORIES`: 7 named categories (Major, Minor, Dominant 7th, Suspended, Diminished, Augmented, Power Chord), each with an ordered `suffixes` list. Slash chords are a separate dimension, detected by `isSlashChord(suffix)` (`suffix.includes("/")`).
+  - `EXCLUDED_SUFFIXES`: `["7sg"]` — three mislabelled C7 voicings in the DB; excluded at the UI layer only. See Known Issues.
+  - `groupSuffixes(available)` — intersects an available-suffix array with the taxonomy in taxonomy order, filtering out excluded and slash suffixes.
+  - `getSlashSuffixes(available)` — returns slash chords from available, minus excluded.
+  - `sortRoots(roots)` — sorts an array of root strings into chromatic pitch order.
+
+- **`src/lib/chordSlug.ts`** — Bidirectional URL-safe encoding. `#` → `-sharp-` (trailing `-` stripped); `/` in slash-chord suffixes → `-over-` with the bass note re-encoded via `rootToSlug` (e.g. `m9/A` → `m9-over-a`, bare `/E` → `over-e`). Decoding is the exact inverse; handles both the leading-`over-` and mid-`-over-` cases.
+
+- **`src/lib/chordBrowseSections.ts`** — Pure data-shaping layer. Exports `BrowseCard`, `BrowseSubsection`, `BrowseSection` types and three builders:
+  - `buildRootSections(chords, buildHref?)` — for `/chords/[rootSlug]`; flat sections, one per category.
+  - `buildAllChordsRootFirst(allChords, buildHref?)` — for `/chords/all` root-first; one section per root, each with category subsections.
+  - `buildAllChordsCategories(allChords, buildHref?)` — for `/chords/all` category-first; one section per category, each with root subsections.
+
+- **`src/lib/chordToc.ts`** — Shared anchor ID scheme. `tocSectionId(label)` lowercases, replaces `#` with `-sharp`, collapses spaces to hyphens, strips other non-alphanumerics. `buildToc(sections)` returns level-1 `TocEntry[]` (one per top-level section) consumed by both `ChordToc` and `ChordTocIndicator`.
+
+- **`src/lib/musicalNotation.ts`** + **`src/components/MusicalText.tsx`** — `parseMusicalText(text)` splits a string into plain-text and `♭`/`♯` symbol segments (replacing `b` → ♭ and `#` → ♯). `MusicalText` renders those segments as inline JSX. Display-only — not used for URL slugs or `<title>`/`<meta>` content.
+
+**Navigation components:**
+
+- **`ChordToc.tsx`** (desktop, `hidden lg:flex`, fixed right edge) — Derives mode by checking whether `sections[0].label` is in `ROOT_CHROMATIC_ORDER`:
+  - *Root-first*: piano-key sidebar (`w-28`). On group hover, white keys expand to full `w-28` and black keys to `w-18`; both grow leftward within the fixed container (`items-end`). Labels fade in on hover. Active key: `bg-denim/70`.
+  - *Category-first*: thin-line Notion-style outline. A coloured line per entry shrinks and fades on group hover as a text label slides in from the right. Active entry: `text-denim`.
+
+- **`ChordTocIndicator.tsx`** (mobile/tablet, `lg:hidden`, fixed right edge, always visible) — One `h-7` button per top-level section; nav sizes to content height and is centred vertically via `top-1/2 -translate-y-1/2`. Text labels horizontal; active entry gets a larger font and `text-denim`. `IntersectionObserver` scroll-spy with `rootMargin: "0px 0px -70% 0px"`. Clicking smooth-scrolls to the target section. Replaces the earlier floating-button + Dialog (`ChordTocMobile`, now deleted).
+
+**Rendering components:**
+
+- **`ChordDiagram.tsx`** — Client component. Dynamically imports `vexchords` (`import("vexchords").then(({ ChordBox }) => ...)`) so it and its SVG.js dependency never enter the SSR bundle. Two size presets: `REGULAR` (160 × 200 px, `showTuning: true`) for the detail page; `COMPACT` (100 × 120 px) for browse grids. Each render clears the container div then calls `box.draw(def)`.
+
+- **`LazyChordDiagram.tsx`** — `IntersectionObserver`-gated mount guard (300 px `rootMargin`) for browse grids. Renders a fixed-size placeholder skeleton until the element enters the viewport (`COMPACT_W=126, COMPACT_H=168 px`), then mounts `ChordDiagram`. Accepts `href` (wraps in `<Link>`) or `onClick` callback. Shows a hover tooltip ("Click to see all voicings").
+
+- **`BrowseGrid.tsx`** — Renders a `BrowseSection[]` as stacked heading + card-grid blocks, handling both flat (`cards` array) and nested (`subsections`) section shapes.
+
+- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Shows all voicings for a single chord using full-size `ChordDiagram` components, with a fret/note-name label toggle.
+
+**Attribution:** `@tombatossals/chords-db` (MIT) and `vexchords` are in `package.json`. `THIRD_PARTY_LICENSES.md` at the repo root and an in-app footer credit are not yet present — see Backlog.
 
 ---
 
@@ -438,19 +518,19 @@ Dark mode variants of these vars are defined in `globals.css` under `.dark`.
 
 ## Critical Known Issues / Gotchas
 
-1. **Chord Library is an iframe.** `ChordsView.tsx` ignores all props and renders a third-party embed. The server-side Supabase query in `chords/page.tsx` and the `chords.ts` server action are wasted on every page load. The `@tombatossals/chords-db` npm package is installed but unused.
+1. **Practice history has no UI.** `getPracticeLogs()` exists in `practiceLogs.ts` and data is written after each session, but no component ever calls it or renders the history.
 
-2. **Practice history has no UI.** `getPracticeLogs()` exists in `practiceLogs.ts` and data is written after each session, but no component ever calls it or renders the history.
+2. **Exercise logs are fully disconnected.** `exerciseLogs.ts` defines `createExerciseLog` and `getExerciseLogs`. Neither is imported anywhere in the UI.
 
-3. **Exercise logs are fully disconnected.** `exerciseLogs.ts` defines `createExerciseLog` and `getExerciseLogs`. Neither is imported anywhere in the UI.
+3. **`target_bpm` and `stage` on exercises are orphaned.** Both fields exist in the `Exercise` type and presumably in the database, but no form sets them and no UI displays them.
 
-4. **`target_bpm` and `stage` on exercises are orphaned.** Both fields exist in the `Exercise` type and presumably in the database, but no form sets them and no UI displays them.
+4. **`swapRoutineExerciseOrder` is not atomic.** It does two fetches and two updates without a transaction. A network failure mid-swap leaves `order_index` in an inconsistent state. Consider a Supabase RPC function if this becomes a problem.
 
-5. **`swapRoutineExerciseOrder` is not atomic.** It does two fetches and two updates without a transaction. A network failure mid-swap leaves `order_index` in an inconsistent state. Consider a Supabase RPC function if this becomes a problem.
+5. **No optimistic updates on routine editing.** Duration changes and exercise additions in the edit dialog wait for the network round-trip before updating UI (except removes, which update state immediately). The UX is acceptable but could be improved.
 
-6. **No optimistic updates on routine editing.** Duration changes and exercise additions in the edit dialog wait for the network round-trip before updating UI (except removes, which update state immediately). The UX is acceptable but could be improved.
+6. **`ChordsView.tsx`, `AllChordsGrid.tsx`, and `RootOverviewGrid.tsx` are orphaned dead code.** These three files in `src/components/chords/` are a leftover from an earlier in-place native-UI prototype that predates the current App Router route structure. None are imported by any page or active component. They can be deleted.
 
-7. **`ChordsView` state is set but unused.** The component declares `key`, `suffix`, `voicings`, `voicingIndex` state from props but only uses none of them (all render output is the iframe). This dead state can be cleaned up when the native chord UI is implemented.
+7. **`7sg` suffix data is mislabelled.** Three rows in the `chords` table under root `C` with suffix `7sg` are actually mislabelled C7 voicings. They are silently excluded at the UI layer via `EXCLUDED_SUFFIXES` in `chordSuffixes.ts` but remain in the database. A one-off delete or correction is the clean fix.
 
 8. **jsdom has no real Canvas / text-measurement implementation.** VexFlow internally calls `Canvas.measureText()` to compute notation layout. Under jsdom, `measureText()` returns zero widths for all strings, so `fingerpickToVexFlow` tests cannot meaningfully assert pixel-level layout (note x-positions, stave widths). Tests are therefore written against the output object graph (note types, beam groups, connectors) rather than rendered geometry. Tracked as a separate GitHub issue.
 
@@ -462,5 +542,5 @@ These are inferred from scaffolded-but-unused code and obvious gaps:
 
 - **Practice history page** — render `getPracticeLogs()` results, ideally with calendar heatmap or weekly summary.
 - **Exercise log UI** — wire up `createExerciseLog` and `getExerciseLogs`; perhaps a per-exercise progress view.
-- **Native chord library** — replace iframe with a proper browsing UI using the `chords` + `chord_voicings` Supabase tables and/or `@tombatossals/chords-db` for offline use.
+- **Third-party attribution** — add `THIRD_PARTY_LICENSES.md` at the repo root and an in-app footer credit linking to the `tombatossals/chords-db` and `vexchords` GitHub repos. Both are currently declared in `package.json` but have no in-app attribution.
 - **Atomic reordering** — replace the two-update `swapRoutineExerciseOrder` with a Supabase RPC.

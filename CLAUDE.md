@@ -73,6 +73,7 @@ Types defined in `src/types/database.ts`.
 - `CATEGORY_COLORS` is centrally managed in `src/lib/constants.ts`; styling uses Tailwind v4 arbitrary value syntax `bg-[#hex]`.
 - Brand color (denim): `#4A6FA5` (denim — active/main), `#6B8CAE` (denim-light — muted/rings), `#EEF2F7` (denim-tint — bg), `#3A5A8A` (denim-dark — deep hover). Use Tailwind class names (`text-denim`, `bg-denim-tint`, `border-denim-border`, etc.), not raw hex.
 - **All code, comments, and commit messages must be in English** — no Chinese identifiers, comments, or commit messages, regardless of what language the requirement was discussed in.
+- **Animation: CSS first, framer-motion for state-driven only** — pure hover/visual interactions use plain CSS `:hover` + `transition`, not `framer-motion`. Reserve `framer-motion` for animations that must be orchestrated by React state or data changes (list enter/exit, value-driven transitions). Reaching for a JS animation library for static hover effects is over-engineering.
 
 ## Development Principles
 
@@ -80,6 +81,8 @@ Types defined in `src/types/database.ts`.
 - **Small PRs:** resolve one issue at a time, broken into the smallest deployable chunks.
 - **Don't over-engineer:** don't extract components or abstractions with no current reuse value.
 - **Don't commit on behalf of me:**: do not commit changes until i specify so
+- **One-time migration scripts** live in `/scripts`, excluded from `tsconfig.json`'s type-check scope. Before writing to the database, calibrate the transform logic against a small set of known ground-truth rows already in the database — abort if calibration fails. Safe to delete after a successful run; not covered by the "core logic needs unit tests" constraint.
+- **Verify third-party field semantics before writing adapters** — when integrating an external dataset or API, pull a small sample of real rows (at least one simple case and one edge case) and reverse-verify each field's meaning against known-correct values before writing any transform code. Semantics guessed wrong produce silent bugs rather than compile/runtime errors, making them more expensive to catch later.
 
 ## Constraints (apply to every task unless explicitly told otherwise)
 

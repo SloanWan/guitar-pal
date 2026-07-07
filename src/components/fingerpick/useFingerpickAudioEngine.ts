@@ -298,9 +298,6 @@ export function useFingerpickAudioEngine() {
 		const voices = perStringVoicesRef.current;
 		return () => {
 			isPlayingRef.current = false;
-			// Reading timer refs at cleanup time is intentional: we cancel whatever
-			// timers are live at unmount, not the ones that existed at mount.
-			// eslint-disable-next-line react-hooks/exhaustive-deps
 			_shutdownEngine(voices, [scheduleTimerRef.current, endTimerRef.current]);
 			ctxRef.current?.close();
 		};

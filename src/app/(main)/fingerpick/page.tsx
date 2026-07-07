@@ -144,6 +144,13 @@ export default function FingerpickPage() {
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 	const [bpm, setBpm] = useState<number>(PRESET_FINGERPICK_PATTERN.bpm);
 	const tapTimesRef = useRef<number[]>([]);
+	// Tracks the latest BPM value during slider drag so onPointerUp reads the
+	// correct final value regardless of React batching.
+	const dragBpmRef = useRef(PRESET_FINGERPICK_PATTERN.bpm);
+	// True while the user has the slider thumb pressed (drag gesture in progress).
+	const isDraggingSliderRef = useRef(false);
+	// True if playback was active when the drag started (so we resume on release).
+	const wasPlayingRef = useRef(false);
 
 	const {
 		isLoaded,
@@ -189,10 +196,46 @@ export default function FingerpickPage() {
 		}
 	}
 
+	// Used by ±10 buttons and tap tempo — always reschedules immediately.
 	function handleBpmChange(newBpm: number) {
 		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm));
 		setBpm(clamped);
 		applyBpmChange(clamped);
+	}
+
+	// Slider-specific handlers that decouple drag ticks from rescheduling.
+	function handleSliderChange(rawValue: number) {
+		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, rawValue));
+		setBpm(clamped);
+		dragBpmRef.current = clamped;
+		if (!isDraggingSliderRef.current) {
+			// Keyboard arrow key on a focused slider — reschedule immediately.
+			applyBpmChange(clamped);
+		}
+		// During pointer drag: display updates but rescheduling is deferred to pointer up.
+	}
+
+	function handleSliderPointerDown() {
+		isDraggingSliderRef.current = true;
+		wasPlayingRef.current = isPlaying;
+		if (isPlaying) {
+			// Silence audio immediately; saves elapsed position in pausedAtRef so
+			// handleSliderPointerUp can resume from the exact same musical position.
+			pause();
+		}
+	}
+
+	function handleSliderPointerUp() {
+		isDraggingSliderRef.current = false;
+		const finalBpm = dragBpmRef.current;
+		const shouldResume = wasPlayingRef.current;
+		wasPlayingRef.current = false;
+		// applyBpmChange converts pausedAtRef (old-BPM elapsed) to the new-BPM
+		// equivalent position; resume() then picks up that converted value.
+		applyBpmChange(finalBpm);
+		if (shouldResume) {
+			resume();
+		}
 	}
 
 	function handleTapTempo() {
@@ -219,7 +262,7 @@ export default function FingerpickPage() {
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (
-				e.target instanceof HTMLInputElement ||
+				(e.target instanceof HTMLInputElement && e.target.type !== "range") ||
 				e.target instanceof HTMLSelectElement ||
 				e.target instanceof HTMLTextAreaElement
 			)
@@ -385,7 +428,9 @@ export default function FingerpickPage() {
 						min={MIN_BPM}
 						max={MAX_BPM}
 						value={bpm}
-						onChange={(e) => handleBpmChange(Number(e.target.value))}
+						onChange={(e) => handleSliderChange(Number(e.target.value))}
+						onPointerDown={handleSliderPointerDown}
+						onPointerUp={handleSliderPointerUp}
 						className="w-full accent-denim cursor-pointer"
 					/>
 

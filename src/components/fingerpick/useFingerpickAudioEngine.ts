@@ -559,7 +559,14 @@ export function useFingerpickAudioEngine() {
 		return { ...position, passIndex, elapsed };
 	}
 
-	/** Toggle metronome; immediately cancels already-scheduled ticks when disabling. */
+	/**
+	 * Toggle metronome on/off mid-playback.
+	 *
+	 * Disabling: cancels all pre-scheduled oscillators immediately.
+	 * Enabling mid-pass: reschedules remaining beats of the current pass from the
+	 * current elapsed position — clicks start at the next upcoming beat, not the
+	 * next loop pass.
+	 */
 	function handleSetMetronomeEnabled(enabled: boolean): void {
 		metronomeEnabledRef.current = enabled;
 		setMetronomeEnabled(enabled);
@@ -572,6 +579,16 @@ export function useFingerpickAudioEngine() {
 				}
 			}
 			allMetronomeSourcesRef.current.clear();
+		} else if (isPlayingRef.current) {
+			const ctx = ctxRef.current;
+			if (!ctx) return;
+			const progress = getPlaybackProgress();
+			const passIndex = progress?.passIndex ?? 0;
+			const elapsed = progress?.elapsed ?? 0;
+			const passOffset =
+				startTimeRef.current +
+				computeLoopOffset(passIndex, patternDurationRef.current, loopGapRef.current);
+			scheduleMetronomePass(passOffset, elapsed);
 		}
 	}
 

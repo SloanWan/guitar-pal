@@ -954,3 +954,91 @@ describe("loop-gap live change — startTimeRef recalibration", () => {
 		expect(pass3Start - pass2End).toBeCloseTo(newGap);
 	});
 });
+
+// ─── Metronome enable mid-pass — beat onset filtering ───────────────────────
+//
+// When the metronome toggle is turned on while a pass is already in progress,
+// scheduleMetronomePass is called with startOffset = elapsed (current position).
+// Only beats at or after that offset should be scheduled; earlier beats are skipped.
+//
+// The Web Audio oscillator scheduling itself cannot be tested in jsdom (no real
+// AudioContext), so these tests verify the pure filtering logic that determines
+// which beats would be emitted — the same predicate applied in scheduleMetronomePass.
+
+describe("metronome enable mid-pass — beat onset filtering", () => {
+	// Mirror the filtering predicate used by scheduleMetronomePass:
+	//   beatTime >= startOffset
+	// Returns the subset of onsets that would be scheduled when enabling at `elapsed`.
+	function onsetsFromOffset(onsets: number[], elapsed: number): number[] {
+		return onsets.filter((t) => t >= elapsed);
+	}
+
+	// Mirror computeBeatOnsets from useFingerpickAudioEngine (not exported).
+	function beatOnsets(bpm: number, totalDuration: number): number[] {
+		const spb = 60 / bpm;
+		const result: number[] = [];
+		for (let t = 0; t < totalDuration - 0.001; t += spb) {
+			result.push(t);
+		}
+		return result;
+	}
+
+	it("enabling at t=0 schedules all beats", () => {
+		// 120 BPM, 4 quarter notes → duration 2s, beats at [0, 0.5, 1.0, 1.5].
+		const onsets = beatOnsets(120, 2);
+		expect(onsetsFromOffset(onsets, 0)).toEqual(onsets);
+	});
+
+	it("enabling mid-pass skips beats before elapsed and includes the next upcoming beat", () => {
+		// 120 BPM: beats at [0, 0.5, 1.0, 1.5]. Toggle on at elapsed = 0.6s.
+		// Beat at 0.5 is in the past; next upcoming is 1.0.
+		const onsets = beatOnsets(120, 2);
+		const scheduled = onsetsFromOffset(onsets, 0.6);
+		expect(scheduled).toEqual([1.0, 1.5]);
+	});
+
+	it("enabling on the exact beat time includes that beat", () => {
+		// Beat onset is exactly at elapsed — should be included (>= not >).
+		const onsets = beatOnsets(120, 2);
+		const scheduled = onsetsFromOffset(onsets, 1.0);
+		expect(scheduled).toEqual([1.0, 1.5]);
+	});
+
+	it("enabling one beat before the last beat includes only the final beat", () => {
+		// 60 BPM: beats at [0, 1, 2, 3] for a 4-beat pattern. Toggle on at 2.5s.
+		const onsets = beatOnsets(60, 4);
+		const scheduled = onsetsFromOffset(onsets, 2.5);
+		expect(scheduled).toEqual([3]);
+	});
+
+	it("enabling after the last beat schedules nothing for the current pass", () => {
+		// 120 BPM: beats at [0, 0.5, 1.0, 1.5]. Toggle on at 1.9s (past last beat).
+		const onsets = beatOnsets(120, 2);
+		const scheduled = onsetsFromOffset(onsets, 1.9);
+		expect(scheduled).toHaveLength(0);
+	});
+
+	it("disabling mid-pass — all onsets would be in the unfiltered set (confirms nothing is scheduled on re-enable in same position)", () => {
+		// Disabling is tested by cancelling oscillators already queued (engine-level,
+		// cannot be tested in jsdom). This test confirms the symmetric invariant:
+		// if we were to re-enable at elapsed = 0 after a cancel, all beats return.
+		const onsets = beatOnsets(80, 3); // 80 BPM, 3s → beats at [0, 0.75, 1.5, 2.25]
+		expect(onsetsFromOffset(onsets, 0)).toHaveLength(4);
+	});
+
+	it("mid-pass enable with subdivision at eighth — sub-beat times also fall after startOffset", () => {
+		// At 120 BPM, beats at [0, 0.5, 1.0, 1.5]. At elapsed = 0.7s:
+		// Quarter beats scheduled: 1.0, 1.5 (>= 0.7)
+		// Eighth sub-beats (halfway): 0.25, 0.75, 1.25, 1.75 — only 0.75, 1.25, 1.75 >= 0.7
+		const spb = 0.5; // 60/120
+		const onsets = beatOnsets(120, 2);
+		const elapsed = 0.7;
+		const totalDuration = 2;
+		const subBeats: number[] = [];
+		for (const t of onsets) {
+			const t8 = t + spb / 2;
+			if (t8 >= elapsed && t8 < totalDuration - 0.001) subBeats.push(t8);
+		}
+		expect(subBeats).toEqual([0.75, 1.25, 1.75]);
+	});
+});

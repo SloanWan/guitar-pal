@@ -1,0 +1,540 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+import {
+	fingerpickPatternToScheduleEvents,
+	getTotalPatternDuration,
+	computeLoopOffset,
+	getProgressAtTime,
+	stealVoice,
+	_shutdownEngine,
+	OPEN_STRING_MIDI,
+	VOICE_STEAL_FADE_TAU,
+	VOICE_STEAL_STOP_BUFFER,
+} from "@/lib/fingerpickScheduler";
+import type { FingerpickPattern, BeatSlot, StringFret, Duration } from "@/lib/fingerpickTypes";
+
+// ─── Test helpers ─────────────────────────────────────────────────────────────
+
+function strings6(
+	overrides: Record<number, Partial<StringFret>> = {},
+): [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret] {
+	const make = (i: number): StringFret => ({
+		fret: null,
+		technique: null,
+		tied: false,
+		muted: false,
+		...(overrides[i] ?? {}),
+	});
+	return [make(0), make(1), make(2), make(3), make(4), make(5)];
+}
+
+function slot(
+	id: string,
+	duration: Duration,
+	strOverrides: Record<number, Partial<StringFret>> = {},
+): BeatSlot {
+	return { id, duration, strings: strings6(strOverrides) };
+}
+
+function pattern(bpm: number, slots: BeatSlot[]): FingerpickPattern {
+	return {
+		id: "p",
+		name: "test",
+		bpm,
+		timeSignature: [4, 4],
+		measures: [{ id: "m1", slots }],
+	};
+}
+
+function multiMeasurePattern(bpm: number, slotsPerMeasure: BeatSlot[][]): FingerpickPattern {
+	return {
+		id: "p",
+		name: "test",
+		bpm,
+		timeSignature: [4, 4],
+		measures: slotsPerMeasure.map((slots, i) => ({ id: `m${i}`, slots })),
+	};
+}
+
+// ─── fingerpickPatternToScheduleEvents ───────────────────────────────────────
+
+describe("fingerpickPatternToScheduleEvents — BPM / timing math", () => {
+	it("quarter note at 120 BPM = 0.5 s duration", () => {
+		const p = pattern(120, [slot("s1", "quarter", { 5: { fret: 0 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		expect(ev.time).toBeCloseTo(0);
+		expect(ev.duration).toBeCloseTo(0.5);
+	});
+
+	it("eighth note at 120 BPM = 0.25 s duration", () => {
+		const p = pattern(120, [slot("s1", "eighth", { 5: { fret: 0 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		expect(ev.duration).toBeCloseTo(0.25);
+	});
+
+	it("whole note at 60 BPM = 4 s duration", () => {
+		const p = pattern(60, [slot("s1", "whole", { 5: { fret: 0 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 60);
+		expect(ev.duration).toBeCloseTo(4);
+	});
+
+	it("sixteenth note at 240 BPM = 0.0625 s duration", () => {
+		const p = pattern(240, [slot("s1", "sixteenth", { 5: { fret: 0 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 240);
+		expect(ev.duration).toBeCloseTo(0.0625);
+	});
+
+	it("second slot starts after first slot's duration elapses", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 5: { fret: 0 } }),
+			slot("s2", "eighth", { 5: { fret: 2 } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		// s1 at 0.0, s2 at 0.5 (one quarter = 0.5 s at 120 BPM)
+		expect(events[0].time).toBeCloseTo(0);
+		expect(events[1].time).toBeCloseTo(0.5);
+	});
+
+	it("events accumulate correctly across three different durations", () => {
+		// quarter(0) → eighth(0.5) → sixteenth(0.75) at 120 BPM
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 0 } }),
+			slot("s2", "eighth", { 0: { fret: 0 } }),
+			slot("s3", "sixteenth", { 0: { fret: 0 } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events[0].time).toBeCloseTo(0);
+		expect(events[1].time).toBeCloseTo(0.5);
+		expect(events[2].time).toBeCloseTo(0.75);
+	});
+
+	it("rest slot advances time but produces no event", () => {
+		// quarter(0) → rest → quarter (appears at 0.5 + rest duration)
+		const p = pattern(120, [
+			slot("s1", "quarter", { 5: { fret: 0 } }),
+			slot("s2", "rest"), // no strings active, duration = quarter = 0.5 s
+			slot("s3", "quarter", { 5: { fret: 2 } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(2);
+		expect(events[0].time).toBeCloseTo(0);
+		expect(events[1].time).toBeCloseTo(1.0); // 0.5 + 0.5
+	});
+
+	it("time offset continues correctly across multiple measures", () => {
+		// Two measures of [quarter, quarter] at 120 BPM
+		const p = multiMeasurePattern(120, [
+			[slot("s1", "quarter", { 0: { fret: 0 } }), slot("s2", "quarter", { 0: { fret: 2 } })],
+			[slot("s3", "quarter", { 0: { fret: 3 } }), slot("s4", "quarter", { 0: { fret: 5 } })],
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events[0].time).toBeCloseTo(0);
+		expect(events[1].time).toBeCloseTo(0.5);
+		expect(events[2].time).toBeCloseTo(1.0); // second measure starts at 1.0 s
+		expect(events[3].time).toBeCloseTo(1.5);
+	});
+
+	it("measureIndex and slotIndex are correctly stamped on each event", () => {
+		const p = multiMeasurePattern(120, [
+			[slot("s1", "quarter", { 0: { fret: 0 } })],
+			[slot("s2", "quarter", { 0: { fret: 0 } })],
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events[0]).toMatchObject({ measureIndex: 0, slotIndex: 0 });
+		expect(events[1]).toMatchObject({ measureIndex: 1, slotIndex: 0 });
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — MIDI resolution", () => {
+	it("string 5 open (low E) resolves to MIDI 40", () => {
+		const p = pattern(120, [slot("s1", "quarter", { 5: { fret: 0 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		expect(ev.midi).toBe(OPEN_STRING_MIDI[5]); // 40
+		expect(ev.midi).toBe(40);
+	});
+
+	it("string 0 fret 7 (high e) resolves to MIDI 64 + 7 = 71", () => {
+		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 7 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		expect(ev.midi).toBe(64 + 7);
+	});
+
+	it("string 4 (A) fret 2 resolves to MIDI 45 + 2 = 47", () => {
+		const p = pattern(120, [slot("s1", "quarter", { 4: { fret: 2 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		expect(ev.midi).toBe(47);
+	});
+
+	it("muted open string (fret null) resolves to open-string MIDI", () => {
+		// fret === null, muted === true → pitch = open-string MIDI (dead open note)
+		const p = pattern(120, [slot("s1", "quarter", { 3: { muted: true } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		expect(ev.midi).toBe(OPEN_STRING_MIDI[3]); // D3 = 50
+		expect(ev.muted).toBe(true);
+	});
+
+	it("muted fretted string resolves to that fret's MIDI pitch, not open-string", () => {
+		// fret === 5, muted === true → pitch = open + 5, NOT open-string
+		// (palm-muted note at fret 5 has the same pitch as unmuted fret 5)
+		const p = pattern(120, [slot("s1", "quarter", { 3: { fret: 5, muted: true } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		expect(ev.midi).toBe(OPEN_STRING_MIDI[3] + 5); // 50 + 5 = 55
+		expect(ev.muted).toBe(true);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — tied / silent strings", () => {
+	it("tied string produces no event (sustain — no re-attack)", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 5 } }),
+			slot("s2", "quarter", { 0: { fret: 5, tied: true } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		// Only one event: the initial pluck; the tied slot produces nothing.
+		expect(events).toHaveLength(1);
+		expect(events[0].time).toBeCloseTo(0);
+	});
+
+	it("slot with all strings silent produces no events", () => {
+		const p = pattern(120, [slot("s1", "quarter")]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(0);
+	});
+
+	it("multiple active strings in one slot produce one event per active string", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 0 }, 2: { fret: 2 }, 4: { fret: 0 } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(3);
+		expect(events.map((e) => e.stringIndex).sort()).toEqual([0, 2, 4]);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — technique events", () => {
+	it("hammer-on technique is carried on the event", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 0 } }),
+			slot("s2", "quarter", { 0: { fret: 2, technique: "hammer-on" } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events[1].technique).toBe("hammer-on");
+	});
+
+	it("slide-down technique is carried on the event", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 3: { fret: 7 } }),
+			slot("s2", "quarter", { 3: { fret: 5, technique: "slide-down" } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events[1].technique).toBe("slide-down");
+	});
+});
+
+// ─── getTotalPatternDuration ─────────────────────────────────────────────────
+
+describe("getTotalPatternDuration", () => {
+	it("four quarter notes at 120 BPM = 2.0 s", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 0 } }),
+			slot("s2", "quarter", { 0: { fret: 0 } }),
+			slot("s3", "quarter", { 0: { fret: 0 } }),
+			slot("s4", "quarter", { 0: { fret: 0 } }),
+		]);
+		expect(getTotalPatternDuration(p, 120)).toBeCloseTo(2.0);
+	});
+
+	it("one whole note at 60 BPM = 4.0 s", () => {
+		const p = pattern(60, [slot("s1", "whole", { 5: { fret: 0 } })]);
+		expect(getTotalPatternDuration(p, 60)).toBeCloseTo(4.0);
+	});
+
+	it("mixed durations sum correctly", () => {
+		// half(2) + quarter(1) + eighth(0.5) at 120 BPM = (2+1+0.5) × 0.5 = 1.75 s
+		const p = pattern(120, [
+			slot("s1", "half", { 0: { fret: 0 } }),
+			slot("s2", "quarter", { 0: { fret: 0 } }),
+			slot("s3", "eighth", { 0: { fret: 0 } }),
+		]);
+		expect(getTotalPatternDuration(p, 120)).toBeCloseTo(1.75);
+	});
+
+	it("rest slots contribute to total duration", () => {
+		// quarter(0.5) + rest(0.5) at 120 BPM = 1.0 s
+		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 0 } }), slot("s2", "rest")]);
+		expect(getTotalPatternDuration(p, 120)).toBeCloseTo(1.0);
+	});
+});
+
+// ─── computeLoopOffset ───────────────────────────────────────────────────────
+
+describe("computeLoopOffset", () => {
+	it("pass 0 always returns 0", () => {
+		expect(computeLoopOffset(0, 2.0, 5)).toBe(0);
+		expect(computeLoopOffset(0, 2.0, 0)).toBe(0);
+	});
+
+	it("pass 1 with no gap = patternDuration", () => {
+		expect(computeLoopOffset(1, 2.0, 0)).toBeCloseTo(2.0);
+	});
+
+	it("pass 2 with 5 s gap = 2 × (patternDuration + gap)", () => {
+		// pass 2, pattern=2s, gap=5s: 2 × (2 + 5) = 14 s
+		expect(computeLoopOffset(2, 2.0, 5)).toBeCloseTo(14.0);
+	});
+
+	it("pass 3 with 10 s gap = 3 × (patternDuration + gap)", () => {
+		expect(computeLoopOffset(3, 4.0, 10)).toBeCloseTo(42.0);
+	});
+
+	it("seamless loop (gap = 0): offsets are multiples of patternDuration", () => {
+		const dur = 1.5;
+		for (let i = 0; i < 5; i++) {
+			expect(computeLoopOffset(i, dur, 0)).toBeCloseTo(i * dur);
+		}
+	});
+});
+
+// ─── getProgressAtTime ───────────────────────────────────────────────────────
+
+describe("getProgressAtTime", () => {
+	const events = fingerpickPatternToScheduleEvents(
+		multiMeasurePattern(120, [
+			// measure 0: quarter + quarter
+			[slot("s1", "quarter", { 0: { fret: 0 } }), slot("s2", "quarter", { 0: { fret: 0 } })],
+			// measure 1: quarter
+			[slot("s3", "quarter", { 0: { fret: 0 } })],
+		]),
+		120,
+	);
+	// At 120 BPM quarter = 0.5 s: events at t=0, t=0.5, t=1.0
+
+	it("returns null for empty event list", () => {
+		expect(getProgressAtTime([], 0)).toBeNull();
+	});
+
+	it("returns null for negative elapsed", () => {
+		expect(getProgressAtTime(events, -0.1)).toBeNull();
+	});
+
+	it("elapsed=0 returns the first slot", () => {
+		const p = getProgressAtTime(events, 0);
+		expect(p).toEqual({ measureIndex: 0, slotIndex: 0 });
+	});
+
+	it("elapsed just before second event still returns first slot", () => {
+		const p = getProgressAtTime(events, 0.49);
+		expect(p).toEqual({ measureIndex: 0, slotIndex: 0 });
+	});
+
+	it("elapsed at second event returns second slot", () => {
+		const p = getProgressAtTime(events, 0.5);
+		expect(p).toEqual({ measureIndex: 0, slotIndex: 1 });
+	});
+
+	it("elapsed in second measure returns correct measureIndex", () => {
+		const p = getProgressAtTime(events, 1.0);
+		expect(p).toEqual({ measureIndex: 1, slotIndex: 0 });
+	});
+
+	it("elapsed past all events returns last slot", () => {
+		const p = getProgressAtTime(events, 999);
+		expect(p).toEqual({ measureIndex: 1, slotIndex: 0 });
+	});
+});
+
+// ─── stealVoice — voice stealing logic ───────────────────────────────────────
+
+function makeMockVoice() {
+	return {
+		gainNode: {
+			gain: {
+				cancelScheduledValues: vi.fn(),
+				setTargetAtTime: vi.fn(),
+			},
+		},
+		source: {
+			stop: vi.fn(),
+		},
+	};
+}
+
+describe("stealVoice — same-string cut", () => {
+	let voices: Map<number, ReturnType<typeof makeMockVoice>>;
+
+	beforeEach(() => {
+		voices = new Map();
+	});
+
+	it("no-ops when the string has no active voice", () => {
+		const newVoice = makeMockVoice();
+		// stealVoice should not throw and should not touch newVoice
+		stealVoice(voices, 0, 1.0);
+		expect(newVoice.gainNode.gain.cancelScheduledValues).not.toHaveBeenCalled();
+	});
+
+	it("calls cancelScheduledValues at `when` on the previous voice's gain", () => {
+		const prev = makeMockVoice();
+		voices.set(2, prev as ReturnType<typeof makeMockVoice>);
+
+		stealVoice(voices, 2, 1.5);
+
+		expect(prev.gainNode.gain.cancelScheduledValues).toHaveBeenCalledWith(1.5);
+	});
+
+	it("calls setTargetAtTime(0, when, VOICE_STEAL_FADE_TAU) on the previous gain", () => {
+		const prev = makeMockVoice();
+		voices.set(3, prev);
+
+		stealVoice(voices, 3, 2.0);
+
+		expect(prev.gainNode.gain.setTargetAtTime).toHaveBeenCalledWith(
+			0,
+			2.0,
+			VOICE_STEAL_FADE_TAU,
+		);
+	});
+
+	it("calls source.stop at when + VOICE_STEAL_STOP_BUFFER", () => {
+		const prev = makeMockVoice();
+		voices.set(1, prev);
+
+		stealVoice(voices, 1, 3.0);
+
+		expect(prev.source.stop).toHaveBeenCalledWith(3.0 + VOICE_STEAL_STOP_BUFFER);
+	});
+
+	it("removes the stolen voice from the map", () => {
+		const prev = makeMockVoice();
+		voices.set(0, prev);
+
+		stealVoice(voices, 0, 1.0);
+
+		expect(voices.has(0)).toBe(false);
+	});
+});
+
+describe("stealVoice — cross-string independence", () => {
+	it("stealing string N does not affect voices on other strings", () => {
+		const voices = new Map<number, ReturnType<typeof makeMockVoice>>();
+		const voiceA = makeMockVoice();
+		const voiceB = makeMockVoice();
+		const voiceC = makeMockVoice();
+		voices.set(0, voiceA);
+		voices.set(2, voiceB);
+		voices.set(4, voiceC);
+
+		// Steal only string 2
+		stealVoice(voices, 2, 1.0);
+
+		// String 2 stolen
+		expect(voiceB.gainNode.gain.setTargetAtTime).toHaveBeenCalled();
+		expect(voiceB.source.stop).toHaveBeenCalled();
+
+		// Strings 0 and 4 untouched
+		expect(voiceA.gainNode.gain.setTargetAtTime).not.toHaveBeenCalled();
+		expect(voiceA.source.stop).not.toHaveBeenCalled();
+		expect(voiceC.gainNode.gain.setTargetAtTime).not.toHaveBeenCalled();
+		expect(voiceC.source.stop).not.toHaveBeenCalled();
+
+		// Strings 0 and 4 still in map
+		expect(voices.has(0)).toBe(true);
+		expect(voices.has(4)).toBe(true);
+	});
+
+	it("sequential steals on the same string use correct `when` each time", () => {
+		const voices = new Map<number, ReturnType<typeof makeMockVoice>>();
+
+		const v1 = makeMockVoice();
+		voices.set(5, v1);
+		stealVoice(voices, 5, 1.0);
+
+		const v2 = makeMockVoice();
+		voices.set(5, v2);
+		stealVoice(voices, 5, 1.5);
+
+		expect(v1.gainNode.gain.setTargetAtTime).toHaveBeenCalledWith(0, 1.0, VOICE_STEAL_FADE_TAU);
+		expect(v2.gainNode.gain.setTargetAtTime).toHaveBeenCalledWith(0, 1.5, VOICE_STEAL_FADE_TAU);
+	});
+});
+
+// ─── _shutdownEngine — unmount cleanup ───────────────────────────────────────
+
+describe("_shutdownEngine — stops all voices and clears timers on unmount", () => {
+	it("calls source.stop() on every active voice", () => {
+		const v0 = { source: { stop: vi.fn() } };
+		const v3 = { source: { stop: vi.fn() } };
+		const voices = new Map([
+			[0, v0],
+			[3, v3],
+		]);
+
+		_shutdownEngine(voices, []);
+
+		expect(v0.source.stop).toHaveBeenCalledOnce();
+		expect(v3.source.stop).toHaveBeenCalledOnce();
+	});
+
+	it("clears the voices map so the engine holds no dangling references", () => {
+		const voices = new Map([[2, { source: { stop: vi.fn() } }]]);
+
+		_shutdownEngine(voices, []);
+
+		expect(voices.size).toBe(0);
+	});
+
+	it("calls clearTimeout for each non-null timer ID", () => {
+		vi.useFakeTimers();
+		const id1 = setTimeout(() => {}, 5000);
+		const id2 = setTimeout(() => {}, 3000);
+		const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+
+		_shutdownEngine(new Map(), [id1, id2]);
+
+		expect(clearSpy).toHaveBeenCalledWith(id1);
+		expect(clearSpy).toHaveBeenCalledWith(id2);
+		vi.useRealTimers();
+	});
+
+	it("skips null timer IDs without throwing", () => {
+		vi.useFakeTimers();
+		const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+
+		expect(() => _shutdownEngine(new Map(), [null, null])).not.toThrow();
+		expect(clearSpy).not.toHaveBeenCalled();
+		vi.useRealTimers();
+	});
+
+	it("does not throw when a source was already stopped", () => {
+		const alreadyStopped = {
+			source: {
+				stop: vi.fn().mockImplementation(() => {
+					throw new DOMException("The source is not started", "InvalidStateError");
+				}),
+			},
+		};
+		const voices = new Map([[1, alreadyStopped]]);
+
+		expect(() => _shutdownEngine(voices, [])).not.toThrow();
+	});
+
+	it("stops voices before clearing the map (all six strings mid-playback)", () => {
+		const stopOrder: number[] = [];
+		const voices = new Map(
+			[0, 1, 2, 3, 4, 5].map((i) => [
+				i,
+				{
+					source: {
+						stop: vi.fn().mockImplementation(() => stopOrder.push(i)),
+					},
+				},
+			]),
+		);
+
+		_shutdownEngine(voices, []);
+
+		// All 6 strings were stopped and the map is now empty.
+		expect(stopOrder).toHaveLength(6);
+		expect(voices.size).toBe(0);
+	});
+});

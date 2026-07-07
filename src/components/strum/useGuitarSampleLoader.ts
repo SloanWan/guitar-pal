@@ -652,6 +652,43 @@ export function getBufferForMidi(type: FingerpickSoundType, midi: number): Audio
 	return zone.buffer;
 }
 
+// ─── Fingerpick note data ─────────────────────────────────────────────────────
+
+export interface FingerpickNoteData {
+	buffer: AudioBuffer;
+	/** Playback rate to sound at the target MIDI pitch using the matched zone. */
+	playbackRate: number;
+}
+
+/**
+ * Synchronously return the decoded AudioBuffer and correct playback rate for a
+ * MIDI pitch in a fingerpick preset.
+ *
+ * Playback rate formula (same as webaudiofont queueWaveTable):
+ *   baseDetune   = originalPitch − 100 × coarseTune − fineTune
+ *   playbackRate = 2 ^ ((100 × midiPitch − baseDetune) / 1200)
+ *
+ * Throws SampleLoadError if the preset is not loaded or the zone has no buffer.
+ */
+export function getFingerpickNoteData(type: FingerpickSoundType, midi: number): FingerpickNoteData {
+	const preset = _readyFingerpickPresets.get(type);
+	if (!preset) {
+		throw new SampleLoadError(
+			`Fingerpick preset "${type}" not loaded — call preloadFingerpickPresets first`,
+		);
+	}
+	const zone = findZoneForMidi(preset, midi);
+	if (!zone.buffer) {
+		throw new SampleLoadError(
+			`No decoded buffer for MIDI ${midi} in fingerpick preset "${type}" — ` +
+				`MIDI ${midi} was likely outside the preload range [${FINGERPICK_MIDI_LOW}–${FINGERPICK_MIDI_HIGH}]`,
+		);
+	}
+	const baseDetune = zone.originalPitch - 100.0 * zone.coarseTune - zone.fineTune;
+	const playbackRate = Math.pow(2, (100.0 * midi - baseDetune) / 1200.0);
+	return { buffer: zone.buffer, playbackRate };
+}
+
 // ─── Fingerpick testing exports ───────────────────────────────────────────────
 
 /** For testing only — clears all fingerpick in-memory caches. */

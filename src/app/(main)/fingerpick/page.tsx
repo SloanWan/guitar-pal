@@ -3,7 +3,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { FingerpickPattern, StringFret, Measure } from "@/lib/fingerpickTypes";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
-import { X, SquareMenu } from "lucide-react";
+import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
+import { Button } from "@/components/ui/button";
+import { CirclePlay, CircleStop, X, SquareMenu } from "lucide-react";
 
 // ── StringFret factory helpers ──────────────────────────────────────────────
 // Reduce the verbosity of the required { fret, technique, tied, muted } shape.
@@ -126,9 +128,27 @@ function groupMeasuresIntoRows(measures: Measure[], perRow: number): Measure[][]
 	return rows;
 }
 
+const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
+type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
+
 export default function FingerpickPage() {
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [pattern] = useState<FingerpickPattern>(PRESET_FINGERPICK_PATTERN);
+	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
+
+	const { isLoaded, isPlaying, load, play, stop } = useFingerpickAudioEngine();
+
+	// Preload presets on mount so the first Play is instant.
+	// load() is stable in intent but re-created each render; the empty-dep array
+	// is intentional — we only want one preload call per page mount.
+	useEffect(() => {
+		void load();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	function handlePlay() {
+		play(pattern, { loop: true, loopGapSeconds: loopGap });
+	}
 
 	// Desktop (≥768 px): 4 measures per row; mobile: 2.
 	// Default to 4 for SSR; corrected on the client via the initial matchMedia check.
@@ -240,8 +260,65 @@ export default function FingerpickPage() {
 				<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
 					Controls
 				</h2>
-				<div className="flex-1 flex items-center justify-center">
-					<p className="text-xs text-slate-400 text-center px-4">Controls coming soon</p>
+
+				<div className="flex flex-col gap-6 p-5">
+					{/* BPM display */}
+					<div className="flex flex-col items-center gap-0.5">
+						<span className="text-5xl font-bold tracking-tight text-denim">
+							{pattern.bpm}
+						</span>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							BPM
+						</span>
+					</div>
+
+					{/* Playback */}
+					<div className="flex flex-col gap-2">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Playback
+						</span>
+						<div
+							onClick={isPlaying ? stop : handlePlay}
+							className={`flex items-center justify-center transition-all duration-150 active:scale-95 ${
+								isLoaded
+									? "cursor-pointer text-denim hover:text-denim-dark"
+									: "opacity-30 pointer-events-none text-denim"
+							}`}
+						>
+							{isPlaying ? (
+								<CircleStop size={56} strokeWidth={1.5} />
+							) : (
+								<CirclePlay size={56} strokeWidth={1.5} />
+							)}
+						</div>
+						{!isLoaded && (
+							<p className="text-[10px] text-slate-400 text-center">Loading samples…</p>
+						)}
+					</div>
+
+					{/* Loop gap */}
+					<div className="flex flex-col gap-2">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Loop Gap
+						</span>
+						<div className="flex gap-1">
+							{LOOP_GAP_OPTIONS.map((gap) => (
+								<Button
+									key={gap}
+									variant={loopGap === gap ? "default" : "outline"}
+									onClick={() => setLoopGap(gap)}
+									className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
+									style={
+										loopGap === gap
+											? { backgroundColor: "var(--denim)", color: "white" }
+											: undefined
+									}
+								>
+									{gap}s
+								</Button>
+							))}
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>

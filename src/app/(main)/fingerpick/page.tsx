@@ -172,6 +172,7 @@ export default function FingerpickPage() {
 		noteGain,
 		setNoteGain,
 		applyBpmChange,
+		applyLoopGapChange,
 	} = useFingerpickAudioEngine();
 
 	// Preload presets on mount so the first Play is instant.
@@ -479,7 +480,10 @@ export default function FingerpickPage() {
 								<Button
 									key={gap}
 									variant={loopGap === gap ? "default" : "outline"}
-									onClick={() => setLoopGap(gap)}
+									onClick={() => {
+										setLoopGap(gap);
+										applyLoopGapChange(gap);
+									}}
 									className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
 									style={
 										loopGap === gap

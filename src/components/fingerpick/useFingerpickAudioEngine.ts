@@ -685,6 +685,53 @@ export function useFingerpickAudioEngine() {
 		// Stopped: no-op — page's bpm state drives the next play() call.
 	}
 
+	/**
+	 * Change the loop gap mid-playback.
+	 *
+	 * - Playing + looping: recalibrates startTimeRef so computeLoopOffset() still
+	 *   maps the current passIndex/elapsed to ctx.currentTime with the new gap, then
+	 *   resets the scheduling timer so the next pass is queued at the right moment.
+	 *   No audio sources are cancelled — notes already scheduled for the current pass
+	 *   continue unaffected; only the inter-pass spacing changes.
+	 * - Paused: updates loopGapRef so resume() picks up the new gap.
+	 * - Stopped / not looping: no-op — play() re-reads loopGapSeconds from options.
+	 */
+	function applyLoopGapChange(newLoopGapSeconds: number): void {
+		if (!isPlayingRef.current || !loopRef.current) {
+			loopGapRef.current = newLoopGapSeconds;
+			return;
+		}
+
+		const ctx = ctxRef.current;
+		if (!ctx) return;
+
+		// Capture position BEFORE mutating loopGapRef (getPlaybackProgress reads it).
+		const progress = getPlaybackProgress();
+		const passIndex = progress?.passIndex ?? 0;
+		const elapsed = progress?.elapsed ?? 0;
+
+		loopGapRef.current = newLoopGapSeconds;
+
+		// Recalibrate startTimeRef so the new loopGap maps passIndex/elapsed correctly.
+		const patternDuration = patternDurationRef.current;
+		startTimeRef.current =
+			ctx.currentTime -
+			computeLoopOffset(passIndex, patternDuration, newLoopGapSeconds) -
+			elapsed;
+
+		// Cancel the old scheduling timer (computed with the old gap) and set a new
+		// one based on how much time remains in the current pass.
+		if (scheduleTimerRef.current !== null) {
+			clearTimeout(scheduleTimerRef.current);
+		}
+		const remainingInPass = patternDuration - elapsed;
+		const msUntilNext = Math.max(0, (remainingInPass - SCHEDULE_LOOKAHEAD_S) * 1000);
+		scheduleTimerRef.current = setTimeout(() => {
+			if (!isPlayingRef.current) return;
+			schedulePassAndQueue(passIndex + 1);
+		}, msUntilNext);
+	}
+
 	/** Update note volume — takes effect immediately via the master gain node. */
 	function handleSetNoteGain(value: number): void {
 		noteGainRef.current = value;
@@ -726,6 +773,7 @@ export function useFingerpickAudioEngine() {
 		stop,
 		getPlaybackProgress,
 		applyBpmChange,
+		applyLoopGapChange,
 		metronomeEnabled,
 		setMetronomeEnabled: handleSetMetronomeEnabled,
 		metronomeSubdivision,

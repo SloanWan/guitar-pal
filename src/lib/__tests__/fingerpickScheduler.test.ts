@@ -837,3 +837,120 @@ describe("computeLoopOffset — uses updated pattern duration after BPM change",
 		}
 	});
 });
+
+// ─── Loop-gap live change — startTimeRef recalibration math ─────────────────
+//
+// applyLoopGapChange recalibrates startTimeRef so that
+//   startTimeNew + computeLoopOffset(passIndex, dur, newGap) + elapsed === ctx.currentTime
+// This block verifies the math in isolation: given an old gap, a captured position,
+// and a new gap, the recalibrated startTime must satisfy the above identity and
+// must place the next pass's first event exactly newGap seconds after the pass ends.
+
+describe("loop-gap live change — startTimeRef recalibration", () => {
+	// Simulate the recalibration performed by applyLoopGapChange.
+	function recalibrate(
+		ctxNow: number,
+		passIndex: number,
+		elapsed: number,
+		patternDuration: number,
+		newGap: number,
+	): number {
+		return ctxNow - computeLoopOffset(passIndex, patternDuration, newGap) - elapsed;
+	}
+
+	it("recalibrated startTime satisfies position identity", () => {
+		// Playback started at T=0, 4-quarter pattern at 120 BPM → dur = 2s, oldGap = 0.
+		// Midway through pass 1 (elapsed = 1s, so ctxNow = 0 + 1*(2+0) + 1 = 3s).
+		const patternDuration = 2;
+		const passIndex = 1;
+		const elapsed = 1;
+		const ctxNow = passIndex * (patternDuration + 0) + elapsed; // = 3
+
+		const newGap = 5;
+		const newStart = recalibrate(ctxNow, passIndex, elapsed, patternDuration, newGap);
+
+		// Identity: newStart + computeLoopOffset(passIndex, dur, newGap) + elapsed === ctxNow
+		expect(newStart + computeLoopOffset(passIndex, patternDuration, newGap) + elapsed).toBeCloseTo(
+			ctxNow,
+		);
+	});
+
+	it("next pass is placed exactly newGap seconds after current pass ends, for gap 0→5", () => {
+		// Pattern: 2s, oldGap = 0. Currently at pass 0, elapsed = 0.5s. ctxNow = 0.5.
+		const dur = 2;
+		const passIndex = 0;
+		const elapsed = 0.5;
+		const ctxNow = elapsed; // pass 0 started at T=0
+
+		const newGap = 5;
+		const newStart = recalibrate(ctxNow, passIndex, elapsed, dur, newGap);
+		// Pass 1 offset from newStart:
+		const pass1Offset = newStart + computeLoopOffset(1, dur, newGap);
+		// Pass 0 ends at ctxNow + (dur - elapsed):
+		const pass0End = ctxNow + (dur - elapsed);
+		// The gap between pass 0 end and pass 1 first event should be newGap.
+		expect(pass1Offset - pass0End).toBeCloseTo(newGap);
+	});
+
+	it("next pass is placed exactly newGap seconds after current pass ends, for gap 5→10", () => {
+		// Pattern: 3s, oldGap = 5. Currently at pass 2, elapsed = 1s.
+		// ctxNow = 2*(3+5) + 1 = 17s.
+		const dur = 3;
+		const passIndex = 2;
+		const elapsed = 1;
+		const ctxNow = passIndex * (dur + 5) + elapsed; // = 17
+
+		const newGap = 10;
+		const newStart = recalibrate(ctxNow, passIndex, elapsed, dur, newGap);
+		const pass2End = newStart + computeLoopOffset(passIndex, dur, newGap) + dur;
+		const pass3Start = newStart + computeLoopOffset(passIndex + 1, dur, newGap);
+		expect(pass3Start - pass2End).toBeCloseTo(newGap);
+	});
+
+	it("gap 0 produces seamless (zero-gap) transitions after live change back to 0", () => {
+		const dur = 1.5;
+		const passIndex = 0;
+		const elapsed = 0.3;
+		const ctxNow = elapsed;
+
+		const newGap = 0;
+		const newStart = recalibrate(ctxNow, passIndex, elapsed, dur, newGap);
+		const pass1Start = newStart + computeLoopOffset(1, dur, newGap);
+		const pass0End = newStart + computeLoopOffset(0, dur, newGap) + dur;
+		expect(pass1Start - pass0End).toBeCloseTo(0);
+	});
+
+	it("recalibration is consistent across all three gap options (0, 5, 10)", () => {
+		// 4-second pattern, captured at pass 0 elapsed = 1s, ctxNow = 1s.
+		const dur = 4;
+		const passIndex = 0;
+		const elapsed = 1;
+		const ctxNow = elapsed;
+
+		for (const gap of [0, 5, 10]) {
+			const newStart = recalibrate(ctxNow, passIndex, elapsed, dur, gap);
+			const pass1Start = newStart + computeLoopOffset(1, dur, gap);
+			const pass0End = newStart + computeLoopOffset(0, dur, gap) + dur;
+			expect(pass1Start - pass0End).toBeCloseTo(gap);
+		}
+	});
+
+	it("BPM change followed by gap change preserves next-pass spacing", () => {
+		// Pattern at 80 BPM → 3s duration.  BPM changed to 160 → 1.5s duration.
+		// Then gap changed from 0 to 5s, currently at pass 1, elapsed = 0.3s.
+		// ctxNow (in the new-BPM world) = 1*(1.5+0) + 0.3 = 1.8s after new startTime.
+		const dur = 1.5; // duration after BPM change
+		const passIndex = 1;
+		const elapsed = 0.3;
+		const startTimeAfterBpmChange = 0; // arbitrary
+		const ctxNow = startTimeAfterBpmChange + computeLoopOffset(passIndex, dur, 0) + elapsed;
+		// ctxNow = 0 + 1.5 + 0.3 = 1.8
+
+		const newGap = 5;
+		const newStart = recalibrate(ctxNow, passIndex, elapsed, dur, newGap);
+		const pass2End = newStart + computeLoopOffset(passIndex + 1, dur, newGap) + dur;
+		const pass3Start = newStart + computeLoopOffset(passIndex + 2, dur, newGap);
+		// Each subsequent transition should also be spaced by newGap.
+		expect(pass3Start - pass2End).toBeCloseTo(newGap);
+	});
+});

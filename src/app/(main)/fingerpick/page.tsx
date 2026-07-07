@@ -5,7 +5,7 @@ import { FingerpickPattern, StringFret, Measure } from "@/lib/fingerpickTypes";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { Button } from "@/components/ui/button";
-import { CirclePlay, CircleStop, X, SquareMenu } from "lucide-react";
+import { CirclePlay, CirclePause, CircleStop, X, SquareMenu } from "lucide-react";
 
 // ── StringFret factory helpers ──────────────────────────────────────────────
 // Reduce the verbosity of the required { fret, technique, tied, muted } shape.
@@ -136,7 +136,8 @@ export default function FingerpickPage() {
 	const [pattern] = useState<FingerpickPattern>(PRESET_FINGERPICK_PATTERN);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 
-	const { isLoaded, isPlaying, load, play, stop } = useFingerpickAudioEngine();
+	const { isLoaded, isPlaying, isPaused, load, play, pause, resume, stop } =
+		useFingerpickAudioEngine();
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -148,6 +149,16 @@ export default function FingerpickPage() {
 
 	function handlePlay() {
 		play(pattern, { loop: true, loopGapSeconds: loopGap });
+	}
+
+	function handlePlayPause() {
+		if (isPlaying) {
+			pause();
+		} else if (isPaused) {
+			resume();
+		} else {
+			handlePlay();
+		}
 	}
 
 	// Desktop (≥768 px): 4 measures per row; mobile: 2.
@@ -277,8 +288,9 @@ export default function FingerpickPage() {
 						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
 							Playback
 						</span>
+						{/* Play / Pause toggle */}
 						<div
-							onClick={isPlaying ? stop : handlePlay}
+							onClick={isLoaded ? handlePlayPause : undefined}
 							className={`flex items-center justify-center transition-all duration-150 active:scale-95 ${
 								isLoaded
 									? "cursor-pointer text-denim hover:text-denim-dark"
@@ -286,11 +298,21 @@ export default function FingerpickPage() {
 							}`}
 						>
 							{isPlaying ? (
-								<CircleStop size={56} strokeWidth={1.5} />
+								<CirclePause size={56} strokeWidth={1.5} />
 							) : (
 								<CirclePlay size={56} strokeWidth={1.5} />
 							)}
 						</div>
+						{/* Stop button — shown while playing or paused */}
+						{(isPlaying || isPaused) && (
+							<button
+								onClick={stop}
+								className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors duration-150 text-xs font-medium"
+							>
+								<CircleStop size={16} strokeWidth={1.5} />
+								Stop
+							</button>
+						)}
 						{!isLoaded && (
 							<p className="text-[10px] text-slate-400 text-center">Loading samples…</p>
 						)}

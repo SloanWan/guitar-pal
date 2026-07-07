@@ -538,3 +538,120 @@ describe("_shutdownEngine — stops all voices and clears timers on unmount", ()
 		expect(voices.size).toBe(0);
 	});
 });
+
+// ─── _shutdownEngine — allSources (pre-scheduled intermediate notes) ──────────
+//
+// Root cause of the pause-doesn't-stop bug:
+//   schedulePass() pre-schedules ALL events for a pass synchronously via
+//   source.start(futureTimestamp). Voice stealing means perStringVoicesRef only
+//   holds the LAST source per string after the loop; all intermediate sources
+//   are pre-scheduled but no longer tracked in the voices map. stop() / pause()
+//   must cancel ALL pre-scheduled sources, not just the last-per-string subset.
+
+describe("_shutdownEngine — allSources stops every pre-scheduled source immediately", () => {
+	it("stops all sources in the Set, including intermediate sources not in the voices map", () => {
+		// Simulates: 3 events on string 0 were pre-scheduled.
+		// Voice stealing means only the last source (src3) lives in the voices map.
+		// Sources src1 and src2 were stolen but source.start(futureT) already called.
+		const src1 = { stop: vi.fn() };
+		const src2 = { stop: vi.fn() };
+		const src3 = { stop: vi.fn() };
+
+		// voices map only holds the last-scheduled voice (as the engine does after schedulePass)
+		const voices = new Map([[0, { source: src3 }]]);
+		const allSources: Set<{ stop: (when?: number) => void }> = new Set([src1, src2, src3]);
+
+		_shutdownEngine(voices, [], allSources);
+
+		// ALL three sources must be stopped — not just the one in the voices map
+		expect(src1.stop).toHaveBeenCalledOnce();
+		expect(src2.stop).toHaveBeenCalledOnce();
+		expect(src3.stop).toHaveBeenCalledOnce();
+	});
+
+	it("clears the allSources Set after shutdown", () => {
+		const src = { stop: vi.fn() };
+		const voices = new Map([[0, { source: src }]]);
+		const allSources: Set<{ stop: (when?: number) => void }> = new Set([src]);
+
+		_shutdownEngine(voices, [], allSources);
+
+		expect(allSources.size).toBe(0);
+	});
+
+	it("clears the voices map after shutdown", () => {
+		const src = { stop: vi.fn() };
+		const voices = new Map([[0, { source: src }]]);
+		const allSources: Set<{ stop: (when?: number) => void }> = new Set([src]);
+
+		_shutdownEngine(voices, [], allSources);
+
+		expect(voices.size).toBe(0);
+	});
+
+	it("does not throw when a pre-scheduled source was already ended before stop() is called", () => {
+		const alreadyEnded = {
+			stop: vi.fn().mockImplementation(() => {
+				throw new DOMException("The source is not started", "InvalidStateError");
+			}),
+		};
+		const voices = new Map([[0, { source: alreadyEnded }]]);
+		const allSources: Set<{ stop: (when?: number) => void }> = new Set([alreadyEnded]);
+
+		expect(() => _shutdownEngine(voices, [], allSources)).not.toThrow();
+	});
+
+	it("pausing at various mid-pattern points: stops all sources regardless of how many were pre-scheduled per string", () => {
+		// Simulates pausing mid-pass with 4 events on string 3 already pre-scheduled.
+		// Only the last source (src4) is in the voices map; src1–src3 are
+		// pre-scheduled intermediates that the pause must cancel immediately.
+		const makeSource = () => ({ stop: vi.fn() });
+		const src1 = makeSource();
+		const src2 = makeSource();
+		const src3 = makeSource();
+		const src4 = makeSource();
+
+		const voices = new Map([[3, { source: src4 }]]);
+		const allSources: Set<{ stop: (when?: number) => void }> = new Set([
+			src1,
+			src2,
+			src3,
+			src4,
+		]);
+
+		_shutdownEngine(voices, [], allSources);
+
+		// All 4 pre-scheduled sources are stopped; the engine is fully silent.
+		expect(src1.stop).toHaveBeenCalledOnce();
+		expect(src2.stop).toHaveBeenCalledOnce();
+		expect(src3.stop).toHaveBeenCalledOnce();
+		expect(src4.stop).toHaveBeenCalledOnce();
+		expect(allSources.size).toBe(0);
+		expect(voices.size).toBe(0);
+	});
+
+	it("handles multiple strings: stops all sources across all 6 strings", () => {
+		// Simulate all 6 strings having 2 pre-scheduled events each (12 total sources).
+		// Only the last source per string lives in the voices map (6 sources).
+		const allSrc: { stop: ReturnType<typeof vi.fn> }[] = Array.from({ length: 12 }, () => ({
+			stop: vi.fn(),
+		}));
+		// Last source for each string (indices 1, 3, 5, 7, 9, 11)
+		const voices = new Map(
+			[0, 1, 2, 3, 4, 5].map((stringIdx) => [
+				stringIdx,
+				{ source: allSrc[stringIdx * 2 + 1] },
+			]),
+		);
+		const allSources: Set<{ stop: (when?: number) => void }> = new Set(allSrc);
+
+		_shutdownEngine(voices, [], allSources);
+
+		// Every one of the 12 pre-scheduled sources must be stopped.
+		for (const src of allSrc) {
+			expect(src.stop).toHaveBeenCalledOnce();
+		}
+		expect(allSources.size).toBe(0);
+		expect(voices.size).toBe(0);
+	});
+});

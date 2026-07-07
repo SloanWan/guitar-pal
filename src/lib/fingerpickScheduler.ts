@@ -184,21 +184,39 @@ export function stealVoice(
 
 /**
  * Stop all active voices and clear any pending scheduling timers.
- * Called by both stop() and the useEffect cleanup in useFingerpickAudioEngine.
+ * Called by both stop/pause and the useEffect cleanup in useFingerpickAudioEngine.
  * Exported so it can be unit-tested without a React render context.
+ *
+ * @param allSources - When provided, every source in this Set is stopped and the
+ *   Set is cleared. This covers intermediate pre-scheduled sources that are no
+ *   longer tracked in `voices` (i.e. notes that were voice-stolen by later events
+ *   but whose source.start(futureTimestamp) was already handed to the Web Audio
+ *   scheduler). When omitted, falls back to stopping only the `voices` map entries.
  */
 export function _shutdownEngine(
 	voices: Map<number, { source: { stop: (when?: number) => void } }>,
 	timerIds: (ReturnType<typeof setTimeout> | null)[],
+	allSources?: Set<{ stop: (when?: number) => void }>,
 ): void {
 	for (const id of timerIds) {
 		if (id !== null) clearTimeout(id);
 	}
-	for (const voice of voices.values()) {
-		try {
-			voice.source.stop();
-		} catch {
-			/* already ended */
+	if (allSources) {
+		for (const src of allSources) {
+			try {
+				src.stop();
+			} catch {
+				/* already ended */
+			}
+		}
+		allSources.clear();
+	} else {
+		for (const voice of voices.values()) {
+			try {
+				voice.source.stop();
+			} catch {
+				/* already ended */
+			}
 		}
 	}
 	voices.clear();

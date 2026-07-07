@@ -139,6 +139,29 @@ export function computeLoopOffset(
 }
 
 /**
+ * Find the start time (seconds from pass start) of the first event whose
+ * measureIndex and slotIndex both match. Returns 0 if not found (safe fallback
+ * to the beginning of the pattern).
+ *
+ * Used when changing BPM mid-playback: given the current musical position
+ * (measureIndex / slotIndex derived from the old-BPM event list), this returns
+ * the corresponding absolute time in the recomputed new-BPM event list so
+ * scheduling can resume from the same musical position at the new tempo.
+ */
+export function findSlotStartTime(
+	events: ScheduleEvent[],
+	measureIndex: number,
+	slotIndex: number,
+): number {
+	for (const event of events) {
+		if (event.measureIndex === measureIndex && event.slotIndex === slotIndex) {
+			return event.time;
+		}
+	}
+	return 0;
+}
+
+/**
  * Return the measure/slot index of the event most recently started at `elapsed`
  * seconds into a single pass. Returns null if no events have started yet.
  */

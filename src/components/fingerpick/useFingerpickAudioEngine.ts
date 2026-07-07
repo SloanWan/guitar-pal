@@ -8,6 +8,7 @@ import {
 	getTotalPatternDuration,
 	computeLoopOffset,
 	getProgressAtTime,
+	findSlotStartTime,
 	stealVoice,
 	_shutdownEngine,
 	type ScheduleEvent,
@@ -45,6 +46,8 @@ const METRONOME_NORMAL_FREQ = 800;
 const METRONOME_ACCENT_GAIN_MULT = 1.5;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
+
+export type MetronomeSubdivision = "quarter" | "eighth" | "sixteenth";
 
 export interface PlayOptions {
 	loop?: boolean;
@@ -120,6 +123,8 @@ export function useFingerpickAudioEngine() {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [isPaused, setIsPaused] = useState(false);
 	const [metronomeEnabled, setMetronomeEnabled] = useState(false);
+	const [metronomeSubdivision, setMetronomeSubdivision] =
+		useState<MetronomeSubdivision>("quarter");
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
 	const [accentEnabled, setAccentEnabled] = useState(true);
 	const [noteGain, setNoteGain] = useState(1.0);
@@ -141,6 +146,9 @@ export function useFingerpickAudioEngine() {
 	/** All scheduled metronome OscillatorNodes — cancelled on pause/stop. */
 	const allMetronomeSourcesRef = useRef<Set<OscillatorNode>>(new Set());
 
+	/** Pattern stored at play() time — needed to recompute events on BPM change. */
+	const patternRef = useRef<FingerpickPattern | null>(null);
+
 	// Playback state (all refs — never read during React render)
 	const isPlayingRef = useRef(false);
 	const startTimeRef = useRef(0);
@@ -157,16 +165,21 @@ export function useFingerpickAudioEngine() {
 
 	// Metronome / sound state refs (read in scheduler callbacks, never in React render)
 	const metronomeEnabledRef = useRef(false);
+	const metronomeSubdivisionRef = useRef<MetronomeSubdivision>("quarter");
 	const metronomeGainRef = useRef(0.15);
 	const accentEnabledRef = useRef(true);
 	const noteGainRef = useRef(1.0);
 	const beatOnsetsRef = useRef<number[]>([]);
+	const secondsPerBeatRef = useRef(0);
 	const timeSignatureRef = useRef<[number, number]>([4, 4]);
 
 	// Sync state → refs so scheduler closures always read the latest value.
 	useEffect(() => {
 		metronomeEnabledRef.current = metronomeEnabled;
 	}, [metronomeEnabled]);
+	useEffect(() => {
+		metronomeSubdivisionRef.current = metronomeSubdivision;
+	}, [metronomeSubdivision]);
 	useEffect(() => {
 		metronomeGainRef.current = metronomeGain;
 	}, [metronomeGain]);
@@ -280,6 +293,10 @@ export function useFingerpickAudioEngine() {
 	/**
 	 * Schedule metronome ticks for one pass, skipping ticks before startOffset.
 	 * Beat accent follows time-signature grouping: beat index 0, N, 2N, … are accented.
+	 * Subdivision density is controlled by metronomeSubdivisionRef:
+	 *   "quarter"   — one click per beat
+	 *   "eighth"    — beat + halfway point (2 clicks per beat, sub-beat non-accented)
+	 *   "sixteenth" — beat + ¼, ½, ¾ of beat (4 clicks per beat, only beat accented)
 	 */
 	function scheduleMetronomePass(passOffset: number, startOffset: number = 0): void {
 		const ctx = ctxRef.current;
@@ -287,14 +304,42 @@ export function useFingerpickAudioEngine() {
 
 		const beatsPerMeasure = timeSignatureRef.current[0];
 		const onsets = beatOnsetsRef.current;
+		const subdivision = metronomeSubdivisionRef.current;
+		const spb = secondsPerBeatRef.current;
+		const totalDuration = patternDurationRef.current;
 
 		for (let i = 0; i < onsets.length; i++) {
 			const beatTime = onsets[i];
-			if (beatTime < startOffset) continue;
-			const when = passOffset + beatTime;
-			if (when < ctx.currentTime) continue;
-			const isAccent = accentEnabledRef.current && i % beatsPerMeasure === 0;
-			scheduleTick(ctx, when, isAccent);
+			const isAccentBeat = accentEnabledRef.current && i % beatsPerMeasure === 0;
+
+			// Beat (quarter-note) tick — always scheduled
+			if (beatTime >= startOffset) {
+				const when = passOffset + beatTime;
+				if (when >= ctx.currentTime) scheduleTick(ctx, when, isAccentBeat);
+			}
+
+			// Eighth-note sub-beat (halfway between this beat and the next)
+			if (subdivision === "eighth" || subdivision === "sixteenth") {
+				const t8 = beatTime + spb / 2;
+				if (t8 >= startOffset && t8 < totalDuration - 0.001) {
+					const when = passOffset + t8;
+					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
+				}
+			}
+
+			// Sixteenth-note sub-beats (¼ and ¾ of the beat)
+			if (subdivision === "sixteenth") {
+				const t16a = beatTime + spb / 4;
+				const t16b = beatTime + (spb * 3) / 4;
+				if (t16a >= startOffset && t16a < totalDuration - 0.001) {
+					const when = passOffset + t16a;
+					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
+				}
+				if (t16b >= startOffset && t16b < totalDuration - 0.001) {
+					const when = passOffset + t16b;
+					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
+				}
+			}
 		}
 	}
 
@@ -388,12 +433,14 @@ export function useFingerpickAudioEngine() {
 		}
 
 		const bpm = pattern.bpm;
+		patternRef.current = pattern;
 		eventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm);
 		patternDurationRef.current = getTotalPatternDuration(pattern, bpm);
 		loopRef.current = options.loop ?? false;
 		loopGapRef.current = options.loopGapSeconds ?? 0;
 		timeSignatureRef.current = pattern.timeSignature;
 		beatOnsetsRef.current = computeBeatOnsets(pattern, bpm);
+		secondsPerBeatRef.current = 60 / bpm;
 		startTimeRef.current = ctx.currentTime;
 		pausedAtRef.current = null;
 		pausedPassIndexRef.current = 0;
@@ -537,6 +584,107 @@ export function useFingerpickAudioEngine() {
 		}
 	}
 
+	/**
+	 * Change subdivision density. If playing with metronome on, cancels the
+	 * remaining pre-scheduled ticks for the current pass and immediately
+	 * reschedules them at the new density — so the change takes effect within
+	 * the current bar rather than waiting for the next loop pass.
+	 */
+	function handleSetMetronomeSubdivision(value: MetronomeSubdivision): void {
+		metronomeSubdivisionRef.current = value;
+		setMetronomeSubdivision(value);
+
+		if (!isPlayingRef.current || !metronomeEnabledRef.current) return;
+		const ctx = ctxRef.current;
+		if (!ctx) return;
+
+		// Cancel all pending metronome oscillators, then reschedule the current
+		// pass's remaining beats from the current playback position.
+		for (const osc of allMetronomeSourcesRef.current) {
+			try {
+				osc.stop();
+			} catch {
+				/* already ended */
+			}
+		}
+		allMetronomeSourcesRef.current.clear();
+
+		const progress = getPlaybackProgress();
+		const passIndex = progress?.passIndex ?? 0;
+		const elapsed = progress?.elapsed ?? 0;
+		const passOffset =
+			startTimeRef.current +
+			computeLoopOffset(passIndex, patternDurationRef.current, loopGapRef.current);
+		scheduleMetronomePass(passOffset, elapsed);
+	}
+
+	/**
+	 * Change playback BPM and reschedule audio seamlessly from the current musical
+	 * position.
+	 *
+	 * - Playing: cancels all pre-scheduled sources (reusing the same allSourcesRef-
+	 *   based mechanism from pause), finds the current slot via getProgressAtTime,
+	 *   maps it to its new-BPM start time via findSlotStartTime, then restarts
+	 *   scheduling from that position — no audible restart or jump.
+	 * - Paused: converts the saved pausedAt offset to the equivalent new-BPM time so
+	 *   resume() plays from the same musical position at the new tempo.
+	 * - Stopped: no-op — the page's bpm state is picked up on the next play() call.
+	 */
+	function applyBpmChange(newBpm: number): void {
+		const pattern = patternRef.current;
+		if (!pattern) return;
+
+		const newEvents = fingerpickPatternToScheduleEvents(pattern, newBpm);
+		const newPatternDuration = getTotalPatternDuration(pattern, newBpm);
+		const newBeatOnsets = computeBeatOnsets(pattern, newBpm);
+		secondsPerBeatRef.current = 60 / newBpm;
+
+		if (isPlayingRef.current) {
+			const progress = getPlaybackProgress();
+			const passIndex = progress?.passIndex ?? 0;
+
+			clearTimers();
+			cancelAllSources();
+
+			const newPausedAt = progress
+				? findSlotStartTime(newEvents, progress.measureIndex, progress.slotIndex)
+				: 0;
+
+			eventsRef.current = newEvents;
+			patternDurationRef.current = newPatternDuration;
+			beatOnsetsRef.current = newBeatOnsets;
+
+			const ctx = ctxRef.current;
+			if (!ctx) return;
+
+			const totalElapsedAtPosition =
+				computeLoopOffset(passIndex, newPatternDuration, loopGapRef.current) + newPausedAt;
+			startTimeRef.current = ctx.currentTime - totalElapsedAtPosition;
+
+			schedulePassAndQueue(passIndex, newPausedAt);
+
+			if (!loopRef.current) {
+				const remainingMs = (newPatternDuration - newPausedAt + SOURCE_STOP_BUFFER_S) * 1000;
+				endTimerRef.current = setTimeout(() => {
+					isPlayingRef.current = false;
+					setIsPlaying(false);
+				}, remainingMs);
+			}
+		} else if (pausedAtRef.current !== null) {
+			// Paused: convert the saved elapsed position to new-BPM time.
+			const position = getProgressAtTime(eventsRef.current, pausedAtRef.current);
+			const newPausedAt = position
+				? findSlotStartTime(newEvents, position.measureIndex, position.slotIndex)
+				: 0;
+
+			pausedAtRef.current = newPausedAt;
+			eventsRef.current = newEvents;
+			patternDurationRef.current = newPatternDuration;
+			beatOnsetsRef.current = newBeatOnsets;
+		}
+		// Stopped: no-op — page's bpm state drives the next play() call.
+	}
+
 	/** Update note volume — takes effect immediately via the master gain node. */
 	function handleSetNoteGain(value: number): void {
 		noteGainRef.current = value;
@@ -577,8 +725,11 @@ export function useFingerpickAudioEngine() {
 		resume,
 		stop,
 		getPlaybackProgress,
+		applyBpmChange,
 		metronomeEnabled,
 		setMetronomeEnabled: handleSetMetronomeEnabled,
+		metronomeSubdivision,
+		setMetronomeSubdivision: handleSetMetronomeSubdivision,
 		metronomeGain,
 		setMetronomeGain: handleSetMetronomeGain,
 		accentEnabled,

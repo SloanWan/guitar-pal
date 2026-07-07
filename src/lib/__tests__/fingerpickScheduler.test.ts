@@ -5,6 +5,7 @@ import {
 	getTotalPatternDuration,
 	computeLoopOffset,
 	getProgressAtTime,
+	findSlotStartTime,
 	stealVoice,
 	_shutdownEngine,
 	OPEN_STRING_MIDI,
@@ -653,5 +654,186 @@ describe("_shutdownEngine — allSources stops every pre-scheduled source immedi
 		}
 		expect(allSources.size).toBe(0);
 		expect(voices.size).toBe(0);
+	});
+});
+
+// ─── findSlotStartTime ───────────────────────────────────────────────────────
+
+describe("findSlotStartTime — maps (measureIndex, slotIndex) to its absolute time", () => {
+	it("returns the start time of the target slot", () => {
+		// quarter(0s) + quarter(0.5s) at 120 BPM → s2 starts at 0.5 s
+		const p = multiMeasurePattern(120, [
+			[
+				slot("s1", "quarter", { 0: { fret: 0 } }),
+				slot("s2", "quarter", { 0: { fret: 2 } }),
+			],
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(findSlotStartTime(events, 0, 0)).toBeCloseTo(0);
+		expect(findSlotStartTime(events, 0, 1)).toBeCloseTo(0.5);
+	});
+
+	it("returns 0 when the slot is not present in the event list", () => {
+		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 0 } })]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		// measureIndex 99 never appears
+		expect(findSlotStartTime(events, 99, 0)).toBe(0);
+	});
+
+	it("returns 0 for an empty event list", () => {
+		expect(findSlotStartTime([], 0, 0)).toBe(0);
+	});
+
+	it("returns the slot start time when multiple events share the slot (multi-string)", () => {
+		// Slot s1 fires on strings 0, 2, 4 simultaneously — all three events carry
+		// the same time; findSlotStartTime should return that shared time.
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 0 }, 2: { fret: 2 }, 4: { fret: 0 } }),
+			slot("s2", "quarter", { 0: { fret: 3 } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		// All three s1 events have time ≈ 0.
+		expect(findSlotStartTime(events, 0, 0)).toBeCloseTo(0);
+		// s2 is at 0.5 s.
+		expect(findSlotStartTime(events, 0, 1)).toBeCloseTo(0.5);
+	});
+
+	it("locates slots correctly across two measures", () => {
+		// Two measures of two quarter notes each at 120 BPM
+		// m0s0=0, m0s1=0.5, m1s0=1.0, m1s1=1.5
+		const p = multiMeasurePattern(120, [
+			[
+				slot("s1", "quarter", { 0: { fret: 0 } }),
+				slot("s2", "quarter", { 0: { fret: 2 } }),
+			],
+			[
+				slot("s3", "quarter", { 0: { fret: 3 } }),
+				slot("s4", "quarter", { 0: { fret: 5 } }),
+			],
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(findSlotStartTime(events, 1, 0)).toBeCloseTo(1.0);
+		expect(findSlotStartTime(events, 1, 1)).toBeCloseTo(1.5);
+	});
+});
+
+// ─── BPM change position conversion ─────────────────────────────────────────
+//
+// The live-BPM-change mechanism uses getProgressAtTime (old events, elapsed) →
+// {measureIndex, slotIndex} → findSlotStartTime (new events) to map the current
+// musical position to its absolute time in the recomputed schedule.
+
+describe("BPM change — position conversion via getProgressAtTime + findSlotStartTime", () => {
+	// Helper: build a 4-quarter-note single-measure pattern at given BPM.
+	function fourQuarters(bpm: number) {
+		return pattern(bpm, [
+			slot("s1", "quarter", { 0: { fret: 0 } }),
+			slot("s2", "quarter", { 0: { fret: 2 } }),
+			slot("s3", "quarter", { 0: { fret: 3 } }),
+			slot("s4", "quarter", { 0: { fret: 5 } }),
+		]);
+	}
+
+	it("doubling BPM halves every slot start time", () => {
+		const oldEvents = fingerpickPatternToScheduleEvents(fourQuarters(80), 80);
+		const newEvents = fingerpickPatternToScheduleEvents(fourQuarters(160), 160);
+
+		// At 80 BPM, quarter = 0.75 s → s2 starts at 0.75 s.
+		// At 160 BPM, quarter = 0.375 s → s2 starts at 0.375 s.
+		const pos = getProgressAtTime(oldEvents, 0.75); // exactly at s2
+		expect(pos).toEqual({ measureIndex: 0, slotIndex: 1 });
+
+		const newTime = findSlotStartTime(newEvents, pos!.measureIndex, pos!.slotIndex);
+		expect(newTime).toBeCloseTo(0.375); // halved
+	});
+
+	it("halving BPM doubles every slot start time", () => {
+		const oldEvents = fingerpickPatternToScheduleEvents(fourQuarters(120), 120);
+		const newEvents = fingerpickPatternToScheduleEvents(fourQuarters(60), 60);
+
+		// At 120 BPM, quarter = 0.5 s → s3 starts at 1.0 s.
+		// At 60 BPM, quarter = 1.0 s → s3 starts at 2.0 s.
+		const pos = getProgressAtTime(oldEvents, 1.0); // exactly at s3
+		expect(pos).toEqual({ measureIndex: 0, slotIndex: 2 });
+
+		const newTime = findSlotStartTime(newEvents, pos!.measureIndex, pos!.slotIndex);
+		expect(newTime).toBeCloseTo(2.0); // doubled
+	});
+
+	it("mid-slot elapsed maps to the start of that slot in the new schedule", () => {
+		// Change BPM while partway through slot s2 (between s2 and s3 onsets).
+		const oldEvents = fingerpickPatternToScheduleEvents(fourQuarters(80), 80);
+		const newEvents = fingerpickPatternToScheduleEvents(fourQuarters(120), 120);
+
+		// At 80 BPM, s2=0.75s, s3=1.5s. Elapsed=1.0 → still in s2.
+		const pos = getProgressAtTime(oldEvents, 1.0);
+		expect(pos).toEqual({ measureIndex: 0, slotIndex: 1 });
+
+		// In new 120-BPM schedule, s2 = 0.5 s.
+		const newTime = findSlotStartTime(newEvents, pos!.measureIndex, pos!.slotIndex);
+		expect(newTime).toBeCloseTo(0.5);
+	});
+
+	it("BPM change while paused returns start of the paused slot in new schedule", () => {
+		// Simulates: paused at elapsed=1.1 s in 80-BPM schedule (in slot s2).
+		const oldEvents = fingerpickPatternToScheduleEvents(fourQuarters(80), 80);
+		const newEvents = fingerpickPatternToScheduleEvents(fourQuarters(160), 160);
+
+		const pos = getProgressAtTime(oldEvents, 1.1); // s2 started at 0.75 s
+		expect(pos).toEqual({ measureIndex: 0, slotIndex: 1 });
+
+		const newPausedAt = findSlotStartTime(newEvents, pos!.measureIndex, pos!.slotIndex);
+		// At 160 BPM s2 = 0.375 s; no restart from 0 (seamless BPM change).
+		expect(newPausedAt).toBeCloseTo(0.375);
+	});
+
+	it("BPM change at elapsed=0 (beginning) maps to t=0 in new schedule", () => {
+		const oldEvents = fingerpickPatternToScheduleEvents(fourQuarters(80), 80);
+		const newEvents = fingerpickPatternToScheduleEvents(fourQuarters(120), 120);
+
+		const pos = getProgressAtTime(oldEvents, 0);
+		expect(pos).toEqual({ measureIndex: 0, slotIndex: 0 });
+
+		const newTime = findSlotStartTime(newEvents, pos!.measureIndex, pos!.slotIndex);
+		expect(newTime).toBeCloseTo(0);
+	});
+});
+
+// ─── Loop-gap timing after BPM change ────────────────────────────────────────
+
+describe("computeLoopOffset — uses updated pattern duration after BPM change", () => {
+	it("loop pass offsets scale with the new BPM pattern duration", () => {
+		// Four quarter notes: 80 BPM = 3.0 s duration, 160 BPM = 1.5 s duration.
+		const p80 = pattern(80, [
+			slot("s1", "quarter", { 0: { fret: 0 } }),
+			slot("s2", "quarter", { 0: { fret: 0 } }),
+			slot("s3", "quarter", { 0: { fret: 0 } }),
+			slot("s4", "quarter", { 0: { fret: 0 } }),
+		]);
+		const p160 = { ...p80, bpm: 160 };
+
+		const dur80 = getTotalPatternDuration(p80, 80);
+		const dur160 = getTotalPatternDuration(p160, 160);
+
+		expect(dur80).toBeCloseTo(3.0);
+		expect(dur160).toBeCloseTo(1.5);
+
+		const loopGap = 2;
+		// After BPM change: pass 1 should use new duration.
+		expect(computeLoopOffset(1, dur160, loopGap)).toBeCloseTo(3.5); // 1 × (1.5 + 2)
+		expect(computeLoopOffset(2, dur160, loopGap)).toBeCloseTo(7.0); // 2 × (1.5 + 2)
+
+		// Old pass 1 offset for reference
+		expect(computeLoopOffset(1, dur80, loopGap)).toBeCloseTo(5.0); // 1 × (3 + 2)
+	});
+
+	it("seamless loop (gap=0) offsets are exact multiples of new pattern duration", () => {
+		const p = pattern(160, [slot("s1", "whole", { 0: { fret: 0 } })]);
+		const dur = getTotalPatternDuration(p, 160); // whole at 160 BPM = 4 × (60/160) = 1.5 s
+		expect(dur).toBeCloseTo(1.5);
+
+		for (let i = 0; i < 4; i++) {
+			expect(computeLoopOffset(i, dur, 0)).toBeCloseTo(i * dur);
+		}
 	});
 });

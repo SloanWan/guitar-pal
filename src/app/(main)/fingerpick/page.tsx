@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { FingerpickPattern, StringFret, Measure } from "@/lib/fingerpickTypes";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
-import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
+import {
+	useFingerpickAudioEngine,
+	type MetronomeSubdivision,
+} from "@/components/fingerpick/useFingerpickAudioEngine";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { CirclePlay, CirclePause, CircleStop, X, SquareMenu } from "lucide-react";
+import { CirclePlay, CirclePause, CircleStop, X, SquareMenu, Plus, Minus } from "lucide-react";
 
 // ── StringFret factory helpers ──────────────────────────────────────────────
 // Reduce the verbosity of the required { fret, technique, tied, muted } shape.
@@ -153,12 +156,15 @@ export default function FingerpickPage() {
 		stop,
 		metronomeEnabled,
 		setMetronomeEnabled,
+		metronomeSubdivision,
+		setMetronomeSubdivision,
 		metronomeGain,
 		setMetronomeGain,
 		accentEnabled,
 		setAccentEnabled,
 		noteGain,
 		setNoteGain,
+		applyBpmChange,
 	} = useFingerpickAudioEngine();
 
 	// Preload presets on mount so the first Play is instant.
@@ -183,6 +189,12 @@ export default function FingerpickPage() {
 		}
 	}
 
+	function handleBpmChange(newBpm: number) {
+		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm));
+		setBpm(clamped);
+		applyBpmChange(clamped);
+	}
+
 	function handleTapTempo() {
 		const now = performance.now();
 		const taps = tapTimesRef.current;
@@ -199,8 +211,8 @@ export default function FingerpickPage() {
 			.slice(1)
 			.map((t, i) => t - tapTimesRef.current[i]);
 		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-		const newBpm = Math.round(60000 / avgInterval);
-		setBpm(Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm)));
+		const rawBpm = Math.round(60000 / avgInterval);
+		handleBpmChange(rawBpm);
 	}
 
 	// Spacebar toggles Play/Pause. Skips when focus is inside a text/select element.
@@ -223,17 +235,17 @@ export default function FingerpickPage() {
 	}, [isPlaying, isPaused, isLoaded, bpm, loopGap]);
 
 	// Desktop (≥768 px): 4 measures per row; mobile: 2.
-	// Default to 4 for SSR; corrected on the client via the initial matchMedia check.
-	const [measuresPerRow, setMeasuresPerRow] = useState<number>(() =>
-		typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches ? 4 : 2,
+	// useSyncExternalStore handles SSR (server snapshot = 4) and client updates
+	// (media query change callbacks) without a setState-in-effect pattern.
+	const measuresPerRow = useSyncExternalStore(
+		(onStoreChange) => {
+			const mq = window.matchMedia("(min-width: 768px)");
+			mq.addEventListener("change", onStoreChange);
+			return () => mq.removeEventListener("change", onStoreChange);
+		},
+		() => (window.matchMedia("(min-width: 768px)").matches ? 4 : 2),
+		() => 4,
 	);
-
-	useEffect(() => {
-		const mq = window.matchMedia("(min-width: 768px)");
-		const handler = (e: MediaQueryListEvent) => setMeasuresPerRow(e.matches ? 4 : 2);
-		mq.addEventListener("change", handler);
-		return () => mq.removeEventListener("change", handler);
-	}, []);
 
 	// Each entry carries the row's measures and the 1-indexed measure number for
 	// its first cell, so TabStaveRow can label measures correctly.
@@ -367,14 +379,40 @@ export default function FingerpickPage() {
 						</p>
 					)}
 
-					{/* BPM display */}
-					<div className="flex flex-col items-center gap-0.5">
-						<span className="text-5xl font-bold tracking-tight text-denim">
-							{bpm}
-						</span>
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-							BPM
-						</span>
+					{/* BPM slider */}
+					<input
+						type="range"
+						min={MIN_BPM}
+						max={MAX_BPM}
+						value={bpm}
+						onChange={(e) => handleBpmChange(Number(e.target.value))}
+						className="w-full accent-denim cursor-pointer"
+					/>
+
+					{/* ±10 BPM + display */}
+					<div className="flex justify-between items-center">
+						<Button
+							variant="outline"
+							className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
+							onClick={() => handleBpmChange(bpm - 10)}
+						>
+							<Minus size={16} />
+						</Button>
+						<div className="flex flex-col items-center gap-0.5">
+							<span className="text-5xl font-bold tracking-tight text-denim">
+								{bpm}
+							</span>
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+								BPM
+							</span>
+						</div>
+						<Button
+							variant="outline"
+							className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
+							onClick={() => handleBpmChange(bpm + 10)}
+						>
+							<Plus size={16} />
+						</Button>
 					</div>
 
 					{/* Tap Tempo */}
@@ -439,6 +477,41 @@ export default function FingerpickPage() {
 							onCheckedChange={setAccentEnabled}
 							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
 						/>
+					</div>
+
+					{/* Subdivision density */}
+					<div
+						className={`flex flex-col gap-2 transition-opacity duration-200 ${
+							!metronomeEnabled ? "opacity-40" : ""
+						}`}
+					>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Subdivision
+						</span>
+						<div className="flex gap-1">
+							{(
+								[
+									{ value: "quarter", label: "1/4" },
+									{ value: "eighth", label: "1/8" },
+									{ value: "sixteenth", label: "1/16" },
+								] satisfies { value: MetronomeSubdivision; label: string }[]
+							).map(({ value, label }) => (
+								<Button
+									key={value}
+									variant={metronomeSubdivision === value ? "default" : "outline"}
+									disabled={!metronomeEnabled}
+									onClick={() => setMetronomeSubdivision(value)}
+									className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
+									style={
+										metronomeSubdivision === value
+											? { backgroundColor: "var(--denim)", color: "white" }
+											: undefined
+									}
+								>
+									{label}
+								</Button>
+							))}
+						</div>
 					</div>
 
 					{/* Metronome volume */}

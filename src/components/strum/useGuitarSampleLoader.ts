@@ -524,3 +524,146 @@ export function _resetCachesForTesting(): void {
 export function _setReadyPresetForTesting(presetKey: PresetKey, preset: WafPreset): void {
 	_readyPresets.set(presetKey, preset);
 }
+
+// ─── Fingerpick preset configuration ─────────────────────────────────────────
+
+/**
+ * Tone types for the fingerpick audio engine.
+ *   "pluck" → LK Acoustic Steel (0250_LK_AcousticSteel_SF2_file)
+ *   "muted" → FluidR3 Muted Guitar (0280_FluidR3_GM_sf2_file)
+ *
+ * Deliberately distinct from StrumSoundType to prevent accidental cross-use
+ * with the strumming machine's SoundBlaster presets.
+ */
+export type FingerpickSoundType = "pluck" | "muted";
+
+/** Full guitar range preloaded for the fingerpick engine (open E2 → 20th fret E5). */
+export const FINGERPICK_MIDI_LOW = 40;
+export const FINGERPICK_MIDI_HIGH = 76;
+
+const FINGERPICK_PRESET_DEFS: Record<FingerpickSoundType, { key: string; varName: string }> = {
+	pluck: {
+		key: "0250_LK_AcousticSteel_SF2_file",
+		varName: "_tone_0250_LK_AcousticSteel_SF2_file",
+	},
+	muted: {
+		key: "0280_FluidR3_GM_sf2_file",
+		varName: "_tone_0280_FluidR3_GM_sf2_file",
+	},
+};
+
+// ─── Fingerpick module-level state ────────────────────────────────────────────
+
+const _fingerpickPresetCache = new Map<FingerpickSoundType, Promise<WafPreset>>();
+const _readyFingerpickPresets = new Map<FingerpickSoundType, WafPreset>();
+
+// ─── Fingerpick preset loading (internal) ─────────────────────────────────────
+
+function _loadFingerpickPreset(type: FingerpickSoundType): Promise<WafPreset> {
+	const cached = _fingerpickPresetCache.get(type);
+	if (cached) return cached;
+
+	const def = FINGERPICK_PRESET_DEFS[type];
+	const url = `${WAF_BASE_URL}${def.key}.js`;
+
+	const promise = (async (): Promise<WafPreset> => {
+		let response: Response;
+		try {
+			response = await fetch(url);
+		} catch (err) {
+			throw new SampleLoadError(
+				`Network error fetching fingerpick preset "${type}" from ${url}`,
+				err,
+			);
+		}
+		if (!response.ok) {
+			throw new SampleLoadError(
+				`HTTP ${response.status} fetching fingerpick preset "${type}" from ${url}`,
+			);
+		}
+		const text = await response.text();
+		return parsePresetFromJs(text, def.varName);
+	})();
+
+	_fingerpickPresetCache.set(type, promise);
+	promise.catch(() => _fingerpickPresetCache.delete(type));
+	return promise;
+}
+
+// ─── Fingerpick public API ────────────────────────────────────────────────────
+
+/**
+ * Fetch, parse, and decode both fingerpick guitar presets across the full guitar
+ * range (MIDI 40–76). Call once before the first getBufferForMidi invocation.
+ *
+ * Presets loaded:
+ *   "pluck" → 0250_LK_AcousticSteel_SF2_file (LK Acoustic Steel, GM 25)
+ *   "muted" → 0280_FluidR3_GM_sf2_file (FluidR3 Muted Guitar, GM 28)
+ *
+ * Caching follows the same pattern as preloadStrumPresets: in-flight fetches are
+ * deduplicated by _fingerpickPresetCache; decoded buffers are stored on zone.buffer
+ * and the ready preset is stored in _readyFingerpickPresets for synchronous access.
+ */
+export async function preloadFingerpickPresets(ctx: AudioContext): Promise<void> {
+	const types: FingerpickSoundType[] = ["pluck", "muted"];
+	const midiRange = Array.from(
+		{ length: FINGERPICK_MIDI_HIGH - FINGERPICK_MIDI_LOW + 1 },
+		(_, i) => FINGERPICK_MIDI_LOW + i,
+	);
+	await Promise.all(
+		types.map(async (type) => {
+			const preset = await _loadFingerpickPreset(type);
+			const decoded = new Set<WafZone>();
+			for (const midi of midiRange) {
+				const zone = findZoneForMidi(preset, midi);
+				if (!decoded.has(zone)) {
+					decoded.add(zone);
+					zone.buffer = await _decodeZone(zone, ctx);
+				}
+			}
+			_readyFingerpickPresets.set(type, preset);
+		}),
+	);
+}
+
+/**
+ * Synchronously return the decoded AudioBuffer for an arbitrary MIDI pitch.
+ * Throws SampleLoadError if preloadFingerpickPresets has not resolved, or if
+ * the zone covering the requested pitch has no decoded buffer (i.e. the pitch
+ * was outside FINGERPICK_MIDI_LOW–FINGERPICK_MIDI_HIGH during preload).
+ *
+ * Intended as an infrastructure helper for the fingerpick audio engine — callers
+ * do not need to know about zone internals or the preset structure.
+ */
+export function getBufferForMidi(type: FingerpickSoundType, midi: number): AudioBuffer {
+	const preset = _readyFingerpickPresets.get(type);
+	if (!preset) {
+		throw new SampleLoadError(
+			`Fingerpick preset "${type}" not loaded — call preloadFingerpickPresets first`,
+		);
+	}
+	const zone = findZoneForMidi(preset, midi);
+	if (!zone.buffer) {
+		throw new SampleLoadError(
+			`No decoded buffer for MIDI ${midi} in fingerpick preset "${type}" — ` +
+				`MIDI ${midi} was likely outside the preload range [${FINGERPICK_MIDI_LOW}–${FINGERPICK_MIDI_HIGH}]`,
+		);
+	}
+	return zone.buffer;
+}
+
+// ─── Fingerpick testing exports ───────────────────────────────────────────────
+
+/** For testing only — clears all fingerpick in-memory caches. */
+export function _resetFingerpickCachesForTesting(): void {
+	_fingerpickPresetCache.clear();
+	_readyFingerpickPresets.clear();
+}
+
+/** For testing only — injects a fingerpick preset without preloadFingerpickPresets. */
+export function _setReadyFingerpickPresetForTesting(
+	type: FingerpickSoundType,
+	preset: WafPreset,
+): void {
+	_readyFingerpickPresets.set(type, preset);
+}

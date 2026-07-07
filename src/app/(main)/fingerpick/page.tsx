@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { FingerpickPattern, StringFret, Measure } from "@/lib/fingerpickTypes";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { CirclePlay, CirclePause, CircleStop, X, SquareMenu } from "lucide-react";
 
 // ── StringFret factory helpers ──────────────────────────────────────────────
@@ -131,13 +132,34 @@ function groupMeasuresIntoRows(measures: Measure[], perRow: number): Measure[][]
 const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
 type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
 
+const MIN_BPM = 40;
+const MAX_BPM = 220;
+
 export default function FingerpickPage() {
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [pattern] = useState<FingerpickPattern>(PRESET_FINGERPICK_PATTERN);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
+	const [bpm, setBpm] = useState<number>(PRESET_FINGERPICK_PATTERN.bpm);
+	const tapTimesRef = useRef<number[]>([]);
 
-	const { isLoaded, isPlaying, isPaused, load, play, pause, resume, stop } =
-		useFingerpickAudioEngine();
+	const {
+		isLoaded,
+		isPlaying,
+		isPaused,
+		load,
+		play,
+		pause,
+		resume,
+		stop,
+		metronomeEnabled,
+		setMetronomeEnabled,
+		metronomeGain,
+		setMetronomeGain,
+		accentEnabled,
+		setAccentEnabled,
+		noteGain,
+		setNoteGain,
+	} = useFingerpickAudioEngine();
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -148,7 +170,7 @@ export default function FingerpickPage() {
 	}, []);
 
 	function handlePlay() {
-		play(pattern, { loop: true, loopGapSeconds: loopGap });
+		play({ ...pattern, bpm }, { loop: true, loopGapSeconds: loopGap });
 	}
 
 	function handlePlayPause() {
@@ -160,6 +182,45 @@ export default function FingerpickPage() {
 			handlePlay();
 		}
 	}
+
+	function handleTapTempo() {
+		const now = performance.now();
+		const taps = tapTimesRef.current;
+
+		if (taps.length > 0 && now - taps[taps.length - 1] > 2000) {
+			tapTimesRef.current = [];
+		}
+
+		tapTimesRef.current = [...tapTimesRef.current, now].slice(-8);
+
+		if (tapTimesRef.current.length < 2) return;
+
+		const intervals = tapTimesRef.current
+			.slice(1)
+			.map((t, i) => t - tapTimesRef.current[i]);
+		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+		const newBpm = Math.round(60000 / avgInterval);
+		setBpm(Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm)));
+	}
+
+	// Spacebar toggles Play/Pause. Skips when focus is inside a text/select element.
+	useEffect(() => {
+		function handleKeyDown(e: KeyboardEvent) {
+			if (
+				e.target instanceof HTMLInputElement ||
+				e.target instanceof HTMLSelectElement ||
+				e.target instanceof HTMLTextAreaElement
+			)
+				return;
+			if (e.code === "Space") {
+				e.preventDefault();
+				handlePlayPause();
+			}
+		}
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isPlaying, isPaused, isLoaded, bpm, loopGap]);
 
 	// Desktop (≥768 px): 4 measures per row; mobile: 2.
 	// Default to 4 for SSR; corrected on the client via the initial matchMedia check.
@@ -233,7 +294,7 @@ export default function FingerpickPage() {
 					<div className="mb-4 shrink-0">
 						<h1 className="text-lg font-semibold text-slate-700">{pattern.name}</h1>
 						<p className="text-xs text-slate-400 uppercase tracking-wider mt-0.5">
-							{pattern.bpm} BPM &middot; {pattern.timeSignature[0]}/
+							{bpm} BPM &middot; {pattern.timeSignature[0]}/
 							{pattern.timeSignature[1]}
 						</p>
 					</div>
@@ -272,51 +333,58 @@ export default function FingerpickPage() {
 					Controls
 				</h2>
 
-				<div className="flex flex-col gap-6 p-5">
+				<div className="flex flex-col gap-5 px-5 py-5 overflow-y-auto">
+					{/* Play / Pause toggle */}
+					<div
+						onClick={isLoaded ? handlePlayPause : undefined}
+						className={`flex items-center justify-center transition-all duration-150 active:scale-95 ${
+							isLoaded
+								? "cursor-pointer text-denim hover:text-denim-dark"
+								: "opacity-30 pointer-events-none text-denim"
+						}`}
+					>
+						{isPlaying ? (
+							<CirclePause size={56} strokeWidth={1.5} />
+						) : (
+							<CirclePlay size={56} strokeWidth={1.5} />
+						)}
+					</div>
+
+					{/* Stop button — shown while playing or paused */}
+					{(isPlaying || isPaused) && (
+						<button
+							onClick={stop}
+							className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors duration-150 text-xs font-medium"
+						>
+							<CircleStop size={16} strokeWidth={1.5} />
+							Stop
+						</button>
+					)}
+
+					{!isLoaded && (
+						<p className="text-[10px] text-slate-400 text-center">
+							Loading samples…
+						</p>
+					)}
+
 					{/* BPM display */}
 					<div className="flex flex-col items-center gap-0.5">
 						<span className="text-5xl font-bold tracking-tight text-denim">
-							{pattern.bpm}
+							{bpm}
 						</span>
 						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
 							BPM
 						</span>
 					</div>
 
-					{/* Playback */}
-					<div className="flex flex-col gap-2">
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-							Playback
-						</span>
-						{/* Play / Pause toggle */}
-						<div
-							onClick={isLoaded ? handlePlayPause : undefined}
-							className={`flex items-center justify-center transition-all duration-150 active:scale-95 ${
-								isLoaded
-									? "cursor-pointer text-denim hover:text-denim-dark"
-									: "opacity-30 pointer-events-none text-denim"
-							}`}
-						>
-							{isPlaying ? (
-								<CirclePause size={56} strokeWidth={1.5} />
-							) : (
-								<CirclePlay size={56} strokeWidth={1.5} />
-							)}
-						</div>
-						{/* Stop button — shown while playing or paused */}
-						{(isPlaying || isPaused) && (
-							<button
-								onClick={stop}
-								className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors duration-150 text-xs font-medium"
-							>
-								<CircleStop size={16} strokeWidth={1.5} />
-								Stop
-							</button>
-						)}
-						{!isLoaded && (
-							<p className="text-[10px] text-slate-400 text-center">Loading samples…</p>
-						)}
-					</div>
+					{/* Tap Tempo */}
+					<Button
+						onClick={handleTapTempo}
+						className="h-9 w-full text-sm font-semibold cursor-pointer transition-all duration-150"
+						style={{ backgroundColor: "var(--denim)", color: "white" }}
+					>
+						Tap Tempo
+					</Button>
 
 					{/* Loop gap */}
 					<div className="flex flex-col gap-2">
@@ -340,6 +408,84 @@ export default function FingerpickPage() {
 								</Button>
 							))}
 						</div>
+					</div>
+
+					<div className="border-t border-slate-100" />
+
+					{/* Metronome toggle */}
+					<div className="flex items-center justify-between">
+						<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+							Metronome
+						</span>
+						<Switch
+							checked={metronomeEnabled}
+							onCheckedChange={setMetronomeEnabled}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+						/>
+					</div>
+
+					{/* Accent beat 1 toggle */}
+					<div
+						className={`flex items-center justify-between transition-opacity duration-200 ${
+							!metronomeEnabled ? "opacity-40" : ""
+						}`}
+					>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Accent beat 1
+						</span>
+						<Switch
+							checked={accentEnabled}
+							disabled={!metronomeEnabled}
+							onCheckedChange={setAccentEnabled}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+						/>
+					</div>
+
+					{/* Metronome volume */}
+					<div
+						className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
+							!metronomeEnabled ? "opacity-40" : ""
+						}`}
+					>
+						<div className="flex justify-between items-center">
+							<span className="text-xs text-slate-400">Metronome vol.</span>
+							<span className="text-xs tabular-nums text-slate-400">
+								{Math.round(metronomeGain * 100)}%
+							</span>
+						</div>
+						<input
+							type="range"
+							min={0}
+							max={1}
+							step={0.01}
+							value={metronomeGain}
+							disabled={!metronomeEnabled}
+							onChange={(e) => setMetronomeGain(Number(e.target.value))}
+							className="w-full accent-denim cursor-pointer"
+						/>
+					</div>
+
+					<div className="border-t border-slate-100" />
+
+					{/* Note sound section */}
+					<div className="flex flex-col gap-1.5">
+						<div className="flex justify-between items-center">
+							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+								Note Sound
+							</span>
+							<span className="text-xs tabular-nums text-slate-400">
+								{Math.round(noteGain * 100)}%
+							</span>
+						</div>
+						<input
+							type="range"
+							min={0}
+							max={2}
+							step={0.01}
+							value={noteGain}
+							onChange={(e) => setNoteGain(Number(e.target.value))}
+							className="w-full accent-denim cursor-pointer"
+						/>
 					</div>
 				</div>
 			</div>

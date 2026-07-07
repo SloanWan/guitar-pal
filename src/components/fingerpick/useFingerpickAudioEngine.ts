@@ -39,6 +39,11 @@ const MIN_DECAY_TC_S = 0.03;
 /** Source stop margin past note end — lets the envelope tail off cleanly. */
 const SOURCE_STOP_BUFFER_S = 0.05;
 
+const METRONOME_TICK_DURATION_S = 0.05;
+const METRONOME_ACCENT_FREQ = 1200;
+const METRONOME_NORMAL_FREQ = 800;
+const METRONOME_ACCENT_GAIN_MULT = 1.5;
+
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface PlayOptions {
@@ -61,6 +66,19 @@ export interface FingerpickPlaybackProgress {
 interface ActiveVoice extends VoiceHandle {
 	gainNode: GainNode;
 	source: AudioBufferSourceNode;
+}
+
+// ─── Beat onset helper ────────────────────────────────────────────────────────
+
+/** Quarter-note beat onset times (seconds from pass start) for the given pattern and BPM. */
+function computeBeatOnsets(pattern: FingerpickPattern, bpm: number): number[] {
+	const secondsPerBeat = 60 / bpm;
+	const totalDuration = getTotalPatternDuration(pattern, bpm);
+	const onsets: number[] = [];
+	for (let t = 0; t < totalDuration - 0.001; t += secondsPerBeat) {
+		onsets.push(t);
+	}
+	return onsets;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -88,6 +106,11 @@ interface ActiveVoice extends VoiceHandle {
  *  tracked separately in allSourcesRef so that pause/stop can cancel ALL of them
  *  immediately, not just the last-per-string subset.
  *
+ * Metronome:
+ *  Oscillator-based clicks scheduled at quarter-note beat boundaries, routed
+ *  through a dedicated gain node (metronomeGainNodeRef) so volume changes take
+ *  effect immediately without re-scheduling.
+ *
  * Progress:
  *  getPlaybackProgress() is a synchronous getter — call it from requestAnimationFrame
  *  in the consumer to drive cursor highlighting without causing re-renders here.
@@ -96,10 +119,16 @@ export function useFingerpickAudioEngine() {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [isPaused, setIsPaused] = useState(false);
+	const [metronomeEnabled, setMetronomeEnabled] = useState(false);
+	const [metronomeGain, setMetronomeGain] = useState(0.15);
+	const [accentEnabled, setAccentEnabled] = useState(true);
+	const [noteGain, setNoteGain] = useState(1.0);
 
 	// AudioContext and routing
 	const ctxRef = useRef<AudioContext | null>(null);
 	const masterGainRef = useRef<GainNode | null>(null);
+	/** Shared output node for all metronome oscillators — allows live volume control. */
+	const metronomeGainNodeRef = useRef<GainNode | null>(null);
 
 	// Per-string voice map — keyed by string index 0-5
 	const perStringVoicesRef = useRef<Map<number, ActiveVoice>>(new Map());
@@ -108,6 +137,9 @@ export function useFingerpickAudioEngine() {
 	// Superset of perStringVoicesRef's sources; contains intermediate (voice-stolen)
 	// sources that are pre-scheduled but no longer in the last-voice map.
 	const allSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+
+	/** All scheduled metronome OscillatorNodes — cancelled on pause/stop. */
+	const allMetronomeSourcesRef = useRef<Set<OscillatorNode>>(new Set());
 
 	// Playback state (all refs — never read during React render)
 	const isPlayingRef = useRef(false);
@@ -123,16 +155,45 @@ export function useFingerpickAudioEngine() {
 	const pausedAtRef = useRef<number | null>(null); // elapsed seconds within pass
 	const pausedPassIndexRef = useRef<number>(0);
 
+	// Metronome / sound state refs (read in scheduler callbacks, never in React render)
+	const metronomeEnabledRef = useRef(false);
+	const metronomeGainRef = useRef(0.15);
+	const accentEnabledRef = useRef(true);
+	const noteGainRef = useRef(1.0);
+	const beatOnsetsRef = useRef<number[]>([]);
+	const timeSignatureRef = useRef<[number, number]>([4, 4]);
+
+	// Sync state → refs so scheduler closures always read the latest value.
+	useEffect(() => {
+		metronomeEnabledRef.current = metronomeEnabled;
+	}, [metronomeEnabled]);
+	useEffect(() => {
+		metronomeGainRef.current = metronomeGain;
+	}, [metronomeGain]);
+	useEffect(() => {
+		accentEnabledRef.current = accentEnabled;
+	}, [accentEnabled]);
+	useEffect(() => {
+		noteGainRef.current = noteGain;
+	}, [noteGain]);
+
 	// ─── AudioContext lifecycle ──────────────────────────────────────────────
 
 	function ensureContext(): AudioContext {
 		if (!ctxRef.current || ctxRef.current.state === "closed") {
 			const ctx = new AudioContext();
+
 			const master = ctx.createGain();
-			master.gain.value = NORMAL_GAIN;
+			master.gain.value = NORMAL_GAIN * noteGainRef.current;
 			master.connect(ctx.destination);
-			ctxRef.current = ctx;
 			masterGainRef.current = master;
+
+			const metronomeNode = ctx.createGain();
+			metronomeNode.gain.value = metronomeGainRef.current;
+			metronomeNode.connect(ctx.destination);
+			metronomeGainNodeRef.current = metronomeNode;
+
+			ctxRef.current = ctx;
 		}
 		return ctxRef.current;
 	}
@@ -193,6 +254,50 @@ export function useFingerpickAudioEngine() {
 		};
 	}
 
+	// ─── Metronome scheduling ────────────────────────────────────────────────
+
+	function scheduleTick(ctx: AudioContext, when: number, isAccent: boolean): void {
+		const metronomeNode = metronomeGainNodeRef.current;
+		if (!metronomeNode) return;
+
+		const osc = ctx.createOscillator();
+		// Route through a per-tick gain so accent multiplier is preserved independently
+		// of the shared metronomeGainNode (which handles live volume control).
+		const accentGain = ctx.createGain();
+		accentGain.gain.value = isAccent ? METRONOME_ACCENT_GAIN_MULT : 1.0;
+
+		osc.frequency.value = isAccent ? METRONOME_ACCENT_FREQ : METRONOME_NORMAL_FREQ;
+		osc.connect(accentGain).connect(metronomeNode);
+		osc.start(when);
+		osc.stop(when + METRONOME_TICK_DURATION_S);
+
+		allMetronomeSourcesRef.current.add(osc);
+		osc.onended = () => {
+			allMetronomeSourcesRef.current.delete(osc);
+		};
+	}
+
+	/**
+	 * Schedule metronome ticks for one pass, skipping ticks before startOffset.
+	 * Beat accent follows time-signature grouping: beat index 0, N, 2N, … are accented.
+	 */
+	function scheduleMetronomePass(passOffset: number, startOffset: number = 0): void {
+		const ctx = ctxRef.current;
+		if (!ctx || !metronomeEnabledRef.current) return;
+
+		const beatsPerMeasure = timeSignatureRef.current[0];
+		const onsets = beatOnsetsRef.current;
+
+		for (let i = 0; i < onsets.length; i++) {
+			const beatTime = onsets[i];
+			if (beatTime < startOffset) continue;
+			const when = passOffset + beatTime;
+			if (when < ctx.currentTime) continue;
+			const isAccent = accentEnabledRef.current && i % beatsPerMeasure === 0;
+			scheduleTick(ctx, when, isAccent);
+		}
+	}
+
 	/**
 	 * Schedule events for a pass starting at `offset` (absolute AudioContext time
 	 * for this pass's t=0), skipping events with time < `startOffset` (for resume).
@@ -223,6 +328,7 @@ export function useFingerpickAudioEngine() {
 		const offset = startTimeRef.current + computeLoopOffset(passIndex, patternDuration, loopGap);
 
 		schedulePass(offset, passStartOffset);
+		scheduleMetronomePass(offset, passStartOffset);
 
 		if (loopRef.current) {
 			const passEndAbsolute = offset + patternDuration;
@@ -237,15 +343,22 @@ export function useFingerpickAudioEngine() {
 		}
 	}
 
-	// ─── Stop all pre-scheduled audio ────────────────────────────────────────
+	// ─── Cancel helpers ──────────────────────────────────────────────────────
 
 	/**
-	 * Cancel ALL pre-scheduled AudioBufferSourceNodes (not just the last per string)
-	 * and clear both tracking collections. This is what actually silences the audio
-	 * immediately regardless of how many events were handed to the Web Audio scheduler.
+	 * Cancel ALL pre-scheduled AudioBufferSourceNodes and OscillatorNodes
+	 * and clear both tracking collections.
 	 */
 	function cancelAllSources(): void {
 		_shutdownEngine(perStringVoicesRef.current, [], allSourcesRef.current);
+		for (const osc of allMetronomeSourcesRef.current) {
+			try {
+				osc.stop();
+			} catch {
+				/* already ended */
+			}
+		}
+		allMetronomeSourcesRef.current.clear();
 	}
 
 	function clearTimers(): void {
@@ -279,6 +392,8 @@ export function useFingerpickAudioEngine() {
 		patternDurationRef.current = getTotalPatternDuration(pattern, bpm);
 		loopRef.current = options.loop ?? false;
 		loopGapRef.current = options.loopGapSeconds ?? 0;
+		timeSignatureRef.current = pattern.timeSignature;
+		beatOnsetsRef.current = computeBeatOnsets(pattern, bpm);
 		startTimeRef.current = ctx.currentTime;
 		pausedAtRef.current = null;
 		pausedPassIndexRef.current = 0;
@@ -397,17 +512,78 @@ export function useFingerpickAudioEngine() {
 		return { ...position, passIndex, elapsed };
 	}
 
+	/** Toggle metronome; immediately cancels already-scheduled ticks when disabling. */
+	function handleSetMetronomeEnabled(enabled: boolean): void {
+		metronomeEnabledRef.current = enabled;
+		setMetronomeEnabled(enabled);
+		if (!enabled) {
+			for (const osc of allMetronomeSourcesRef.current) {
+				try {
+					osc.stop();
+				} catch {
+					/* already ended */
+				}
+			}
+			allMetronomeSourcesRef.current.clear();
+		}
+	}
+
+	/** Update metronome volume — takes effect immediately via the shared gain node. */
+	function handleSetMetronomeGain(value: number): void {
+		metronomeGainRef.current = value;
+		setMetronomeGain(value);
+		if (metronomeGainNodeRef.current && ctxRef.current?.state !== "closed") {
+			metronomeGainNodeRef.current.gain.value = value;
+		}
+	}
+
+	/** Update note volume — takes effect immediately via the master gain node. */
+	function handleSetNoteGain(value: number): void {
+		noteGainRef.current = value;
+		setNoteGain(value);
+		if (masterGainRef.current && ctxRef.current?.state !== "closed") {
+			masterGainRef.current.gain.value = NORMAL_GAIN * value;
+		}
+	}
+
 	// ─── Cleanup ─────────────────────────────────────────────────────────────
 
 	useEffect(() => {
 		const voices = perStringVoicesRef.current;
 		const allSources = allSourcesRef.current;
+		const allMetronomeSources = allMetronomeSourcesRef.current;
 		return () => {
 			isPlayingRef.current = false;
 			_shutdownEngine(voices, [scheduleTimerRef.current, endTimerRef.current], allSources);
+			for (const osc of allMetronomeSources) {
+				try {
+					osc.stop();
+				} catch {
+					/* already ended */
+				}
+			}
+			allMetronomeSources.clear();
 			ctxRef.current?.close();
 		};
 	}, []);
 
-	return { isLoaded, isPlaying, isPaused, load, play, pause, resume, stop, getPlaybackProgress };
+	return {
+		isLoaded,
+		isPlaying,
+		isPaused,
+		load,
+		play,
+		pause,
+		resume,
+		stop,
+		getPlaybackProgress,
+		metronomeEnabled,
+		setMetronomeEnabled: handleSetMetronomeEnabled,
+		metronomeGain,
+		setMetronomeGain: handleSetMetronomeGain,
+		accentEnabled,
+		setAccentEnabled,
+		noteGain,
+		setNoteGain: handleSetNoteGain,
+	};
 }

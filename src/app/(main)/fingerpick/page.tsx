@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { FingerpickPattern, StringFret, Measure } from "@/lib/fingerpickTypes";
 import {
 	fingerpickPatternToScheduleEvents,
 	findSlotStartTime,
 	type ScheduleEvent,
 } from "@/lib/fingerpickScheduler";
-import TabStaveRow from "@/components/fingerpick/TabStaveRow";
+import TabStaveRow, { computeMeasureMinWidth, CLEF_WIDTH } from "@/components/fingerpick/TabStaveRow";
+import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 import {
 	useFingerpickAudioEngine,
 	type MetronomeSubdivision,
@@ -261,18 +262,52 @@ const PRESET_FINGERPICK_PATTERN: FingerpickPattern = {
 	],
 };
 
-// groupMeasuresIntoRows — pure function.
-// Splits a flat measures array into row-sized chunks for layout.
-//
-// Unit-test examples:
-//   groupMeasuresIntoRows([m1,m2,m3,m4,m5], 4) → [[m1,m2,m3,m4],[m5]]
-//   groupMeasuresIntoRows([m1,m2,m3],       2) → [[m1,m2],[m3]]
-//   groupMeasuresIntoRows([],               4) → []
-//   groupMeasuresIntoRows([m1],             4) → [[m1]]
-function groupMeasuresIntoRows(measures: Measure[], perRow: number): Measure[][] {
-	const rows: Measure[][] = [];
-	for (let i = 0; i < measures.length; i += perRow) {
-		rows.push(measures.slice(i, i + perRow));
+// Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
+function hoPoConnectorCount(measure: Measure): number {
+	return measure.slots.reduce(
+		(count, slot) =>
+			count +
+			slot.strings.filter((sf) => sf.technique === "hammer-on" || sf.technique === "pull-off")
+				.length,
+		0,
+	);
+}
+
+// Gap between the last row's SVG right edge and the container edge — pure page-level visual choice.
+const ROW_TRAILING_PAD = 15;
+
+// Greedy row packer: each measure's minimum width drives wrapping.
+// Returns one inner array per row; each entry is the stretched stave width for that measure.
+// Rows are scaled to fill exactly (containerWidth − CLEF_WIDTH − ROW_TRAILING_PAD).
+function computeAllMeasureWidths(measures: Measure[], containerWidth: number): number[][] {
+	// Precompute render data once per measure to avoid double adapter calls.
+	const renderData = measures.map((m) => fingerpickToVexFlow(m));
+	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
+	const widthsFirst = renderData.map((rd, i) =>
+		computeMeasureMinWidth(rd.notes, true, hoPoConnectorCount(measures[i])),
+	);
+	const widthsNonFirst = renderData.map((rd, i) =>
+		computeMeasureMinWidth(rd.notes, false, hoPoConnectorCount(measures[i])),
+	);
+
+	const rows: number[][] = [];
+	let i = 0;
+	while (i < measures.length) {
+		// Always include at least one measure per row.
+		const rowWidths: number[] = [widthsFirst[i]];
+		let rowWidth = widthsFirst[i];
+		i++;
+		// Pack subsequent measures until the next one would overflow the stave area.
+		while (i < measures.length) {
+			const w = widthsNonFirst[i];
+			if (rowWidth + w > staveSpace) break;
+			rowWidths.push(w);
+			rowWidth += w;
+			i++;
+		}
+		// Stretch widths proportionally so every row fills the container edge-to-edge.
+		const scale = staveSpace / rowWidth;
+		rows.push(rowWidths.map((w) => w * scale));
 	}
 	return rows;
 }
@@ -295,6 +330,8 @@ export default function FingerpickPage() {
 	const [bpm, setBpm] = useState<number>(PRESET_FINGERPICK_PATTERN.bpm);
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
+	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
+	const [containerWidth, setContainerWidth] = useState(0);
 	const tapTimesRef = useRef<number[]>([]);
 	// Tracks the latest BPM value during slider drag so onPointerUp reads the
 	// correct final value regardless of React batching.
@@ -338,7 +375,9 @@ export default function FingerpickPage() {
 	// Tracks the last row that was scrolled into view; -1 = none yet.
 	const lastScrolledRowRef = useRef(-1);
 	// Mirrors `rows` for the RAF closure without needing it as a dep (synced below).
-	const rowsRef = useRef<Array<{ measures: Measure[]; startMeasureNumber: number }>>([]);
+	const rowsRef = useRef<
+		Array<{ measures: Measure[]; startMeasureNumber: number; widths: number[] }>
+	>([]);
 	// One DOM ref per row wrapper div (indexed to match `rows`).
 	const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
 	// Always-current getter: `getPlaybackProgress` is recreated each render but all
@@ -369,6 +408,19 @@ export default function FingerpickPage() {
 	useEffect(() => {
 		void load();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	// Track the tab viewer's pixel width so the greedy layout can pack measures.
+	useEffect(() => {
+		const container = tabViewerRef.current;
+		if (!container) return;
+		const observer = new ResizeObserver((entries) => {
+			const entry = entries[0];
+			if (!entry) return;
+			setContainerWidth(Math.floor(entry.contentRect.width));
+		});
+		observer.observe(container);
+		return () => observer.disconnect();
 	}, []);
 
 	function handlePlay() {
@@ -750,11 +802,10 @@ export default function FingerpickPage() {
 			const t0 = t0Event?.time ?? elapsed;
 			const nextEvent = events.find((e) => e.time > t0);
 
-			// Linear interpolation target: cursor should be between x0 and x1
-			// in proportion to elapsed time within the current note's interval.
-			// Guard: only move forward (x1 >= x0); when x1 < x0 the next note wraps
-			// to a new row and direct interpolation would move the cursor leftward —
-			// hold at x0 until the row transition naturally repositions it.
+			// Linear interpolation target: cursor moves between x0 (current note) and x1
+			// (next note) in proportion to elapsed time within the current note's interval.
+			// When x1 < x0 the next note is on a different row; substitute the current
+			// measure's right edge as x1 so the cursor keeps drifting rightward.
 			let targetX = x0;
 			if (nextEvent) {
 				const nextEl = container.querySelector<SVGElement>(
@@ -763,12 +814,25 @@ export default function FingerpickPage() {
 				if (nextEl) {
 					const nRect = nextEl.getBoundingClientRect();
 					const x1 = nRect.left - containerRect.left + nRect.width / 2;
+					const frac = Math.max(0, Math.min(1, (elapsed - t0) / (nextEvent.time - t0)));
 					if (x1 >= x0) {
-						const frac = Math.max(
-							0,
-							Math.min(1, (elapsed - t0) / (nextEvent.time - t0)),
-						);
 						targetX = x0 + (x1 - x0) * frac;
+					} else {
+						// next note is on a different row — drift to measure right edge
+						const stavesvg = container.querySelector<SVGElement>(
+							`svg[data-stave-${measureIndex}-x]`,
+						);
+						if (stavesvg) {
+							const staveSvgRect = stavesvg.getBoundingClientRect();
+							const sx = parseFloat(
+								stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0",
+							);
+							const sw = parseFloat(
+								stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0",
+							);
+							const measureRight = staveSvgRect.left - containerRect.left + sx + sw;
+							targetX = x0 + (measureRight - x0) * frac;
+						}
 					}
 				}
 			}
@@ -806,6 +870,7 @@ export default function FingerpickPage() {
 					}
 				}
 				lastScrolledRowRef.current = rowIdx;
+				prevTimestampRef.current = 0;
 				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 			}
 
@@ -862,34 +927,19 @@ export default function FingerpickPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isPlaying, isPaused, isLoaded, bpm, loopGap]);
 
-	// Desktop (≥768 px): 4 measures per row; mobile: 2.
-	// useSyncExternalStore handles SSR (server snapshot = 4) and client updates
-	// (media query change callbacks) without a setState-in-effect pattern.
-	const measuresPerRow = useSyncExternalStore(
-		(onStoreChange) => {
-			const mq = window.matchMedia("(min-width: 768px)");
-			mq.addEventListener("change", onStoreChange);
-			return () => mq.removeEventListener("change", onStoreChange);
-		},
-		() => (window.matchMedia("(min-width: 768px)").matches ? 4 : 2),
-		() => 4,
-	);
-
-	// Each entry carries the row's measures and the 1-indexed measure number for
-	// its first cell, so TabStaveRow can label measures correctly.
-	const rows = useMemo(
-		() =>
-			groupMeasuresIntoRows(pattern.measures, measuresPerRow).reduce<
-				Array<{ measures: Measure[]; startMeasureNumber: number }>
-			>((acc, rowMeasures) => {
-				const prev = acc.at(-1);
-				const startMeasureNumber = prev
-					? prev.startMeasureNumber + prev.measures.length
-					: 1;
-				return [...acc, { measures: rowMeasures, startMeasureNumber }];
-			}, []),
-		[pattern.measures, measuresPerRow],
-	);
+	// Greedy row layout driven by content width; guard: render nothing until the
+	// ResizeObserver fires with the real container width on mount.
+	const rows = useMemo(() => {
+		if (containerWidth === 0) return [];
+		const widthRows = computeAllMeasureWidths(pattern.measures, containerWidth);
+		let offset = 0;
+		return widthRows.map((rowWidths) => {
+			const start = offset;
+			const rowMeasures = pattern.measures.slice(start, start + rowWidths.length);
+			offset += rowWidths.length;
+			return { measures: rowMeasures, startMeasureNumber: start + 1, widths: rowWidths };
+		});
+	}, [pattern.measures, containerWidth]);
 
 	// Keep refs in sync with the latest render values so the RAF closure never goes stale.
 	// useEffect (not inline assignment) satisfies react-hooks/refs; the one-frame lag
@@ -955,7 +1005,7 @@ export default function FingerpickPage() {
 					    position:relative anchors the cursor overlay div. */}
 					<div
 						ref={tabViewerRef}
-						className="relative min-h-0 overflow-y-auto bg-white rounded-xl border border-slate-100 cursor-pointer"
+						className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto bg-white rounded-xl border border-slate-100 cursor-pointer"
 						onClick={handleTabClick}
 					>
 						{/* Measure background highlight — updated only on measure transitions. */}
@@ -995,7 +1045,7 @@ export default function FingerpickPage() {
 										measures={row.measures}
 										startMeasureNumber={row.startMeasureNumber}
 										startMeasureIndex={row.startMeasureNumber - 1}
-										rowCapacity={measuresPerRow}
+										measureWidths={row.widths}
 									/>
 								</div>
 							))}

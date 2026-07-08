@@ -122,6 +122,8 @@ export function useFingerpickAudioEngine() {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [isPaused, setIsPaused] = useState(false);
+	const [playOnce, setPlayOnce] = useState(true);
+	const playOnceRef = useRef(true);
 	const [metronomeEnabled, setMetronomeEnabled] = useState(false);
 	const [metronomeSubdivision, setMetronomeSubdivision] =
 		useState<MetronomeSubdivision>("quarter");
@@ -174,6 +176,9 @@ export function useFingerpickAudioEngine() {
 	const timeSignatureRef = useRef<[number, number]>([4, 4]);
 
 	// Sync state → refs so scheduler closures always read the latest value.
+	useEffect(() => {
+		playOnceRef.current = playOnce;
+	}, [playOnce]);
 	useEffect(() => {
 		metronomeEnabledRef.current = metronomeEnabled;
 	}, [metronomeEnabled]);
@@ -383,6 +388,15 @@ export function useFingerpickAudioEngine() {
 			);
 			scheduleTimerRef.current = setTimeout(() => {
 				if (!isPlayingRef.current) return;
+				if (playOnceRef.current) {
+					// Play-once: let the already-scheduled audio finish (SCHEDULE_LOOKAHEAD_S
+					// seconds remain at this point), then set state to stopped.
+					endTimerRef.current = setTimeout(() => {
+						isPlayingRef.current = false;
+						setIsPlaying(false);
+					}, (SCHEDULE_LOOKAHEAD_S + SOURCE_STOP_BUFFER_S) * 1000);
+					return;
+				}
 				schedulePassAndQueue(passIndex + 1); // subsequent passes always full
 			}, msUntilNext);
 		}
@@ -783,6 +797,8 @@ export function useFingerpickAudioEngine() {
 		isLoaded,
 		isPlaying,
 		isPaused,
+		playOnce,
+		setPlayOnce,
 		load,
 		play,
 		pause,

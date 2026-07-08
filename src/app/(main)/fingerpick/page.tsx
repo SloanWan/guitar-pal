@@ -175,6 +175,8 @@ export default function FingerpickPage() {
 	const [pattern] = useState<FingerpickPattern>(PRESET_FINGERPICK_PATTERN);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 	const [bpm, setBpm] = useState<number>(PRESET_FINGERPICK_PATTERN.bpm);
+	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
+	const [cursorResetTick, setCursorResetTick] = useState(0);
 	const tapTimesRef = useRef<number[]>([]);
 	// Tracks the latest BPM value during slider drag so onPointerUp reads the
 	// correct final value regardless of React batching.
@@ -188,6 +190,8 @@ export default function FingerpickPage() {
 		isLoaded,
 		isPlaying,
 		isPaused,
+		playOnce,
+		setPlayOnce,
 		load,
 		play,
 		pause,
@@ -244,6 +248,11 @@ export default function FingerpickPage() {
 
 	function handlePlay() {
 		play({ ...pattern, bpm }, { loop: true, loopGapSeconds: loopGap });
+	}
+
+	function handleStop() {
+		stop();
+		setCursorResetTick((t) => t + 1);
 	}
 
 	function handlePlayPause() {
@@ -372,6 +381,56 @@ export default function FingerpickPage() {
 		return () => cancelAnimationFrame(rafId);
 	}, []);
 
+	// When Stop is pressed, cursorResetTick increments and this effect re-runs the
+	// same rAF retry loop used on mount — scroll container to top first so the
+	// cursor lands in the visible area, then reposition to measure 0 / slot 0.
+	// cursorResetTick starts at 0 (mount); the guard skips the initial run so the
+	// mount effect handles first positioning without a double-trigger.
+	useEffect(() => {
+		if (cursorResetTick === 0) return;
+		let rafId: number;
+		function resetToInitial() {
+			const playhead = cursorRef.current;
+			const measureHL = measureHighlightRef.current;
+			const container = tabViewerRef.current;
+			if (!playhead || !container) {
+				rafId = requestAnimationFrame(resetToInitial);
+				return;
+			}
+			container.scrollTop = 0;
+			const noteEl = container.querySelector<SVGElement>(
+				'[data-measure-index="0"][data-slot-index="0"]',
+			);
+			const svgEl = noteEl?.closest("svg");
+			if (!noteEl || !svgEl) {
+				rafId = requestAnimationFrame(resetToInitial);
+				return;
+			}
+			const containerRect = container.getBoundingClientRect();
+			const noteRect = noteEl.getBoundingClientRect();
+			const svgRect = svgEl.getBoundingClientRect();
+			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+			const top = svgRect.top - containerRect.top + container.scrollTop;
+			playhead.style.top = `${top}px`;
+			playhead.style.height = `${svgRect.height}px`;
+			playhead.style.transform = `translateX(${Math.round(x0 - 1)}px)`;
+			if (measureHL) {
+				const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
+				if (stavesvg) {
+					const staveSvgRect = stavesvg.getBoundingClientRect();
+					const sx = parseFloat(stavesvg.getAttribute("data-stave-0-x") ?? "0");
+					const sw = parseFloat(stavesvg.getAttribute("data-stave-0-w") ?? "0");
+					measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
+					measureHL.style.width = `${sw}px`;
+					measureHL.style.top = `${top}px`;
+					measureHL.style.height = `${svgRect.height}px`;
+				}
+			}
+		}
+		rafId = requestAnimationFrame(resetToInitial);
+		return () => cancelAnimationFrame(rafId);
+	}, [cursorResetTick]);
+
 	// ── Playback cursor RAF loop ─────────────────────────────────────────────
 	// Starts when isPlaying becomes true; stopped on pause/stop or unmount.
 	// All cursor updates go through direct DOM mutation — no React setState.
@@ -381,12 +440,13 @@ export default function FingerpickPage() {
 				cancelAnimationFrame(rafRef.current);
 				rafRef.current = undefined;
 			}
-			// Cursor stays visible at its last position (requirement 1).
-			// Reset guards so the next play re-triggers positioning and snaps the
-			// smoothed x to target on the first frame (avoids catch-up slide).
+			// Reset guards so the next play re-triggers row/measure positioning and
+			// snaps renderedX to targetX on the first frame (avoids catch-up slide).
 			lastScrolledRowRef.current = -1;
 			lastMeasureIdxRef.current = -1;
 			prevTimestampRef.current = 0;
+			// Pause: cursor stays frozen at current position.
+			// Stop: handled by the cursorResetTick effect above.
 			return;
 		}
 
@@ -655,6 +715,7 @@ export default function FingerpickPage() {
 										measures={row.measures}
 										startMeasureNumber={row.startMeasureNumber}
 										startMeasureIndex={row.startMeasureNumber - 1}
+										rowCapacity={measuresPerRow}
 									/>
 								</div>
 							))}
@@ -713,7 +774,7 @@ export default function FingerpickPage() {
 					{/* Stop button — shown while playing or paused */}
 					{(isPlaying || isPaused) && (
 						<button
-							onClick={stop}
+							onClick={handleStop}
 							className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors duration-150 text-xs font-medium"
 						>
 							<CircleStop size={16} strokeWidth={1.5} />
@@ -772,8 +833,24 @@ export default function FingerpickPage() {
 						Tap Tempo
 					</Button>
 
-					{/* Loop gap */}
-					<div className="flex flex-col gap-2">
+					{/* Play once */}
+					<div className="flex items-center justify-between">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Play once
+						</span>
+						<Switch
+							checked={playOnce}
+							onCheckedChange={setPlayOnce}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+						/>
+					</div>
+
+					{/* Loop gap — disabled/greyed when play-once is active */}
+					<div
+						className={`flex flex-col gap-2 transition-opacity duration-200 ${
+							playOnce ? "opacity-40 pointer-events-none" : ""
+						}`}
+					>
 						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
 							Loop Gap
 						</span>
@@ -782,13 +859,14 @@ export default function FingerpickPage() {
 								<Button
 									key={gap}
 									variant={loopGap === gap ? "default" : "outline"}
+									disabled={playOnce}
 									onClick={() => {
 										setLoopGap(gap);
 										applyLoopGapChange(gap);
 									}}
 									className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
 									style={
-										loopGap === gap
+										loopGap === gap && !playOnce
 											? { backgroundColor: "var(--denim)", color: "white" }
 											: undefined
 									}

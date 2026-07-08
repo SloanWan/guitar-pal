@@ -10,7 +10,7 @@ import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
 const CLEF_WIDTH = 15;
 const RIGHT_PAD = 15;
-const SVG_HEIGHT = 180;
+const SVG_HEIGHT = 200;
 const STAVE_Y = 10;
 
 interface TabStaveRowProps {
@@ -18,9 +18,23 @@ interface TabStaveRowProps {
 	measures: Measure[];
 	/** Measure number for the first measure in this row (1-indexed). */
 	startMeasureNumber?: number;
+	/** 0-indexed global measure index for this row's first measure; enables cursor data attributes. */
+	startMeasureIndex?: number;
+	/**
+	 * Maximum measures per row at the current breakpoint (e.g. 4 on desktop, 2 on mobile).
+	 * Used to compute a fixed per-measure width so all rows — including a partial last row
+	 * that has fewer measures — render each measure at the same width rather than
+	 * stretching partial-row measures to fill the container.
+	 */
+	rowCapacity?: number;
 }
 
-export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRowProps) {
+export default function TabStaveRow({
+	measures,
+	startMeasureNumber,
+	startMeasureIndex,
+	rowCapacity,
+}: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -35,12 +49,23 @@ export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRo
 			div.innerHTML = "";
 
 			const n = measures.length;
-			// totalStaveWidth fills the container; floor to int so positions stay on pixels.
-			const totalStaveWidth = Math.max(n * 50, containerWidth - CLEF_WIDTH - RIGHT_PAD);
-			const perMeasureWidth = Math.floor(totalStaveWidth / n);
+			// capacity = max measures that fit in a full row at this breakpoint.
+			// Using capacity (not n) for per-measure width keeps all rows — including a
+			// partial last row with fewer measures — at the same fixed measure width.
+			const capacity = rowCapacity ?? n;
+			const isFullRow = n === capacity;
+			const totalStaveWidth = Math.max(capacity * 50, containerWidth - CLEF_WIDTH - RIGHT_PAD);
+			const perMeasureWidth = Math.floor(totalStaveWidth / capacity);
+
+			// For a full row the SVG fills the container (last stave absorbs pixel remainder).
+			// For a partial row the SVG is sized to exactly the rendered content; the remaining
+			// container space stays blank rather than stretching measures to fill it.
+			const svgWidth = isFullRow
+				? containerWidth
+				: CLEF_WIDTH + n * perMeasureWidth + RIGHT_PAD;
 
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
-			renderer.resize(containerWidth, SVG_HEIGHT);
+			renderer.resize(svgWidth, SVG_HEIGHT);
 			const ctx = renderer.getContext();
 			ctx.setFont({ family: "'Geist Mono', ui-monospace, monospace", size: "10pt" });
 
@@ -52,9 +77,12 @@ export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRo
 			//   right barline shows.
 			const staves = measures.map((_, i) => {
 				const x = CLEF_WIDTH + i * perMeasureWidth;
-				// Last stave absorbs rounding remainder so the row fills the container.
+				// For a full row, the last stave absorbs the floor-division pixel remainder so
+				// the row fills the container edge-to-edge. Partial rows use a fixed
+				// perMeasureWidth for every stave — no remainder absorption — so the unused
+				// portion of the container stays blank rather than stretching the last stave.
 				const w =
-					i === n - 1
+					isFullRow && i === n - 1
 						? Math.max(50, totalStaveWidth - perMeasureWidth * (n - 1))
 						: perMeasureWidth;
 				const stave = new TabStave(x, STAVE_Y, w);
@@ -71,9 +99,25 @@ export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRo
 				return stave;
 			});
 
+			// Store each stave's note-area bounds so the cursor can position the measure
+			// background highlight without knowing the layout math inside this function.
+			if (startMeasureIndex !== undefined) {
+				const svgEl = div.querySelector("svg");
+				if (svgEl) {
+					staves.forEach((stave, i) => {
+						const g = startMeasureIndex + i;
+						svgEl.setAttribute(`data-stave-${g}-x`, String(stave.getNoteStartX()));
+						svgEl.setAttribute(
+							`data-stave-${g}-w`,
+							String(stave.getNoteEndX() - stave.getNoteStartX()),
+						);
+					});
+				}
+			}
+
 			// Format and draw notes for each measure against its own stave.
 			measures.forEach((measure, i) => {
-				const { notes, connectors } = fingerpickToVexFlow(measure);
+				const { notes, connectors, tuplets } = fingerpickToVexFlow(measure);
 				const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 				voice.addTickables(notes);
 				const noteWidth = staves[i].getNoteEndX() - staves[i].getNoteStartX() - 10;
@@ -83,6 +127,20 @@ export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRo
 				voice.draw(ctx, staves[i]);
 				connectors.forEach((c) => c.setContext(ctx).draw());
 				beams.forEach((b) => b.setContext(ctx).draw());
+				tuplets.forEach((t) => t.setContext(ctx).draw());
+
+				// Tag each note's SVG element so the cursor RAF loop can query by
+				// global measure/slot index and resolve screen coordinates via getBoundingClientRect.
+				if (startMeasureIndex !== undefined) {
+					const globalMeasureIdx = startMeasureIndex + i;
+					notes.forEach((note, j) => {
+						const el = note.getSVGElement();
+						if (el) {
+							el.setAttribute("data-measure-index", String(globalMeasureIdx));
+							el.setAttribute("data-slot-index", String(j));
+						}
+					});
+				}
 			});
 		};
 
@@ -104,7 +162,7 @@ export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRo
 			if (rafId !== undefined) cancelAnimationFrame(rafId);
 			div.innerHTML = "";
 		};
-	}, [measures, startMeasureNumber]);
+	}, [measures, startMeasureNumber, startMeasureIndex, rowCapacity]);
 
 	return <div ref={containerRef} className="font-mono w-full" />;
 }

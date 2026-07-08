@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { FingerpickPattern, StringFret, Measure } from "@/lib/fingerpickTypes";
+import {
+	fingerpickPatternToScheduleEvents,
+	findSlotStartTime,
+	type ScheduleEvent,
+} from "@/lib/fingerpickScheduler";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import {
 	useFingerpickAudioEngine,
@@ -113,6 +118,146 @@ const PRESET_FINGERPICK_PATTERN: FingerpickPattern = {
 			id: "m5",
 			slots: [{ id: "s23", duration: "whole", strings: [S(), S(), N(0), S(), S(), S()] }],
 		},
+
+		// ── m6: rest + 4 sixteenths + triplet + 4 sixteenths ─────────────
+		// beat 1: quarter rest
+		// beat 2: four sixteenth notes on high-e
+		// beat 3: eighth-note triplet on B string (3 notes in 1 beat)
+		// beat 4: four sixteenth notes on G string
+		{
+			id: "m6",
+			slots: [
+				{ id: "s24", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "s25", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
+				{ id: "s26", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
+				{ id: "s27", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
+				{ id: "s28", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
+				{ id: "s29", duration: "eighth-triplet", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "s30", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
+				{ id: "s31", duration: "eighth-triplet", strings: [S(), N(5), S(), S(), S(), S()] },
+				{ id: "s32", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "s33", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "s34", duration: "sixteenth", strings: [S(), S(), N(4), S(), S(), S()] },
+				{ id: "s35", duration: "sixteenth", strings: [S(), S(), N(5), S(), S(), S()] },
+			],
+		},
+
+		// ── m7: eighth-note hammer-on / pull-off drill on G string ───────────
+		{
+			id: "m7",
+			slots: [
+				{ id: "s36", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "s37", duration: "eighth", strings: [S(), S(), Hn(2), S(), S(), S()] },
+				{ id: "s38", duration: "eighth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "s39", duration: "eighth", strings: [S(), S(), Po(0), S(), S(), S()] },
+				{ id: "s40", duration: "eighth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "s41", duration: "eighth", strings: [S(), S(), Hn(4), S(), S(), S()] },
+				{ id: "s42", duration: "eighth", strings: [S(), S(), N(4), S(), S(), S()] },
+				{ id: "s43", duration: "eighth", strings: [S(), S(), Po(2), S(), S(), S()] },
+			],
+		},
+
+		// ── m8: slide-up / tied / slide-down on A string (4 quarters) ────────
+		{
+			id: "m8",
+			slots: [
+				{ id: "s44", duration: "quarter", strings: [S(), S(), S(), S(), N(0), S()] },
+				{ id: "s45", duration: "quarter", strings: [S(), S(), S(), S(), Su(5), S()] },
+				{ id: "s46", duration: "quarter", strings: [S(), S(), S(), S(), Ti(5), S()] },
+				{ id: "s47", duration: "quarter", strings: [S(), S(), S(), S(), Sd(2), S()] },
+			],
+		},
+
+		// ── m9: half on E-low + 4 eighths ascending on high-e ────────────────
+		{
+			id: "m9",
+			slots: [
+				{ id: "s48", duration: "half", strings: [S(), S(), S(), S(), S(), N(3)] },
+				{ id: "s49", duration: "eighth", strings: [N(5), S(), S(), S(), S(), S()] },
+				{ id: "s50", duration: "eighth", strings: [N(7), S(), S(), S(), S(), S()] },
+				{ id: "s51", duration: "eighth", strings: [N(8), S(), S(), S(), S(), S()] },
+				{ id: "s52", duration: "eighth", strings: [N(10), S(), S(), S(), S(), S()] },
+			],
+		},
+
+		// ── m10: 16 sixteenth notes — ascending / descending run on high-e ───
+		{
+			id: "m10",
+			slots: [
+				{ id: "s53", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
+				{ id: "s54", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
+				{ id: "s55", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
+				{ id: "s56", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
+				{ id: "s57", duration: "sixteenth", strings: [N(12), S(), S(), S(), S(), S()] },
+				{ id: "s58", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
+				{ id: "s59", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
+				{ id: "s60", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
+				{ id: "s61", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
+				{ id: "s62", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
+				{ id: "s63", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
+				{ id: "s64", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
+				{ id: "s65", duration: "sixteenth", strings: [N(12), S(), S(), S(), S(), S()] },
+				{ id: "s66", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
+				{ id: "s67", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
+				{ id: "s68", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
+			],
+		},
+
+		// ── m11: triplet groove — 4 beats of eighth-triplets on B string ──────
+		{
+			id: "m11",
+			slots: [
+				{ id: "s69", duration: "eighth-triplet", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "s70", duration: "eighth-triplet", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "s71", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
+				{ id: "s72", duration: "eighth-triplet", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "s73", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
+				{ id: "s74", duration: "eighth-triplet", strings: [S(), N(5), S(), S(), S(), S()] },
+				{ id: "s75", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
+				{ id: "s76", duration: "eighth-triplet", strings: [S(), N(5), S(), S(), S(), S()] },
+				{ id: "s77", duration: "eighth-triplet", strings: [S(), N(7), S(), S(), S(), S()] },
+				{ id: "s78", duration: "eighth-triplet", strings: [S(), N(5), S(), S(), S(), S()] },
+				{ id: "s79", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
+				{ id: "s80", duration: "eighth-triplet", strings: [S(), N(1), S(), S(), S(), S()] },
+			],
+		},
+
+		// ── m12: multi-string chordal quarters ───────────────────────────────
+		{
+			id: "m12",
+			slots: [
+				{ id: "s81", duration: "quarter", strings: [N(0), S(), N(0), S(), N(0), S()] },
+				{ id: "s82", duration: "quarter", strings: [N(1), S(), N(0), S(), N(2), S()] },
+				{ id: "s83", duration: "quarter", strings: [N(0), S(), N(0), S(), N(0), S()] },
+				{ id: "s84", duration: "quarter", strings: [S(), N(0), S(), N(2), S(), N(3)] },
+			],
+		},
+
+		// ── m13: muted riff on E-low — quarter + quarter + eighth + eighth + quarter ──
+		{
+			id: "m13",
+			slots: [
+				{ id: "s85", duration: "quarter", strings: [S(), S(), S(), S(), S(), Mx()] },
+				{ id: "s86", duration: "quarter", strings: [S(), S(), S(), S(), S(), N(3)] },
+				{ id: "s87", duration: "eighth", strings: [S(), S(), S(), S(), S(), Mx()] },
+				{ id: "s88", duration: "eighth", strings: [S(), S(), S(), S(), S(), N(5)] },
+				{ id: "s89", duration: "quarter", strings: [S(), S(), S(), S(), S(), N(7)] },
+			],
+		},
+
+		// ── m14: grand finale — quarter + 2 eighths (h/p) + quarter (slide) + triplet ──
+		{
+			id: "m14",
+			slots: [
+				{ id: "s90", duration: "quarter", strings: [N(5), S(), S(), S(), S(), S()] },
+				{ id: "s91", duration: "eighth", strings: [S(), S(), S(), Hn(2), S(), S()] },
+				{ id: "s92", duration: "eighth", strings: [S(), S(), S(), Po(0), S(), S()] },
+				{ id: "s93", duration: "quarter", strings: [S(), S(), S(), S(), Su(5), S()] },
+				{ id: "s94", duration: "eighth-triplet", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "s95", duration: "eighth-triplet", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "s96", duration: "eighth-triplet", strings: [S(), S(), N(4), S(), S(), S()] },
+			],
+		},
 	],
 };
 
@@ -138,11 +283,18 @@ type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
 const MIN_BPM = 40;
 const MAX_BPM = 220;
 
+// Higher = tighter/snappier following, lower = smoother/more lag.
+// At 20, steady-state lag behind a constant-velocity target is ~v/20 px/s — barely
+// perceptible on dense sixteenth-note runs (~8 px) and invisible on slower material.
+const CURSOR_LAMBDA = 20;
+
 export default function FingerpickPage() {
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [pattern] = useState<FingerpickPattern>(PRESET_FINGERPICK_PATTERN);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 	const [bpm, setBpm] = useState<number>(PRESET_FINGERPICK_PATTERN.bpm);
+	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
+	const [cursorResetTick, setCursorResetTick] = useState(0);
 	const tapTimesRef = useRef<number[]>([]);
 	// Tracks the latest BPM value during slider drag so onPointerUp reads the
 	// correct final value regardless of React batching.
@@ -156,11 +308,14 @@ export default function FingerpickPage() {
 		isLoaded,
 		isPlaying,
 		isPaused,
+		playOnce,
+		setPlayOnce,
 		load,
 		play,
 		pause,
 		resume,
 		stop,
+		getPlaybackProgress,
 		metronomeEnabled,
 		setMetronomeEnabled,
 		metronomeSubdivision,
@@ -173,7 +328,40 @@ export default function FingerpickPage() {
 		setNoteGain,
 		applyBpmChange,
 		applyLoopGapChange,
+		seekToNote,
 	} = useFingerpickAudioEngine();
+
+	// ── Cursor / scroll refs ────────────────────────────────────────────────
+	const tabViewerRef = useRef<HTMLDivElement>(null);
+	const cursorRef = useRef<HTMLDivElement>(null);
+	const rafRef = useRef<number | undefined>(undefined);
+	// Tracks the last row that was scrolled into view; -1 = none yet.
+	const lastScrolledRowRef = useRef(-1);
+	// Mirrors `rows` for the RAF closure without needing it as a dep (synced below).
+	const rowsRef = useRef<Array<{ measures: Measure[]; startMeasureNumber: number }>>([]);
+	// One DOM ref per row wrapper div (indexed to match `rows`).
+	const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+	// Always-current getter: `getPlaybackProgress` is recreated each render but all
+	// versions close over the same audio engine refs, so any version is correct.
+	const playbackGetterRef = useRef(getPlaybackProgress);
+	// Measure background highlight overlay.
+	const measureHighlightRef = useRef<HTMLDivElement>(null);
+	// Tracks the last measure index the highlight was positioned at; -1 = none yet.
+	const lastMeasureIdxRef = useRef(-1);
+	// Schedule events mirroring the audio engine's event list — provides per-note
+	// t0/t1 timestamps for the note-to-note interpolation in the RAF loop.
+	const scheduleEventsRef = useRef<ScheduleEvent[]>([]);
+	// Exponential-smoothed cursor x — chases targetX every frame so velocity changes
+	// at note boundaries don't cause visible stutter.
+	const renderedXRef = useRef(0);
+	// Previous rAF timestamp; 0 = first frame of new playback (snap instead of smooth).
+	const prevTimestampRef = useRef(0);
+	// Tracks the loop pass index so a pass boundary triggers a cursor snap rather
+	// than a slow exponential chase from the last note back to the first.
+	const lastPassIndexRef = useRef(0);
+	// Note to seek to on the next play() — set by click-to-seek while stopped,
+	// consumed by handlePlay() and cleared by handleStop().
+	const pendingSeekRef = useRef<{ measureIndex: number; slotIndex: number } | null>(null);
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -184,7 +372,18 @@ export default function FingerpickPage() {
 	}, []);
 
 	function handlePlay() {
-		play({ ...pattern, bpm }, { loop: true, loopGapSeconds: loopGap });
+		const pending = pendingSeekRef.current;
+		pendingSeekRef.current = null;
+		const startOffset = pending
+			? findSlotStartTime(scheduleEventsRef.current, pending.measureIndex, pending.slotIndex)
+			: 0;
+		play({ ...pattern, bpm }, { loop: true, loopGapSeconds: loopGap }, startOffset);
+	}
+
+	function handleStop() {
+		stop();
+		pendingSeekRef.current = null;
+		setCursorResetTick((t) => t + 1);
 	}
 
 	function handlePlayPause() {
@@ -251,13 +450,398 @@ export default function FingerpickPage() {
 
 		if (tapTimesRef.current.length < 2) return;
 
-		const intervals = tapTimesRef.current
-			.slice(1)
-			.map((t, i) => t - tapTimesRef.current[i]);
+		const intervals = tapTimesRef.current.slice(1).map((t, i) => t - tapTimesRef.current[i]);
 		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
 		const rawBpm = Math.round(60000 / avgInterval);
 		handleBpmChange(rawBpm);
 	}
+
+	// ── Click-to-seek ───────────────────────────────────────────────────────────
+
+	// Snaps the cursor and measure-highlight overlays directly to a note element.
+	// Used on seek (discrete user-initiated jump) — bypasses exponential smoothing.
+	function snapCursorToNote(noteEl: SVGElement, measureIndex: number): void {
+		const playhead = cursorRef.current;
+		const measureHL = measureHighlightRef.current;
+		const container = tabViewerRef.current;
+		if (!playhead || !container) return;
+
+		const svgEl = noteEl.closest<SVGElement>("svg");
+		if (!svgEl) return;
+
+		const containerRect = container.getBoundingClientRect();
+		const noteRect = noteEl.getBoundingClientRect();
+		const svgRect = svgEl.getBoundingClientRect();
+
+		const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+		const top = svgRect.top - containerRect.top + container.scrollTop;
+
+		// Snap rendered position so the next RAF tick also snaps (prevTimestampRef = 0
+		// is the existing signal for "first frame of playback — snap, don't chase").
+		renderedXRef.current = x0;
+		prevTimestampRef.current = 0;
+
+		playhead.style.transform = `translateX(${Math.round(x0 - 3)}px)`;
+		playhead.style.top = `${top}px`;
+		playhead.style.height = `${svgRect.height}px`;
+		playhead.style.display = "block";
+
+		if (measureHL) {
+			const stavesvg = container.querySelector<SVGElement>(
+				`svg[data-stave-${measureIndex}-x]`,
+			);
+			if (stavesvg) {
+				const staveSvgRect = stavesvg.getBoundingClientRect();
+				const sx = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0");
+				const sw = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0");
+				measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
+				measureHL.style.width = `${sw}px`;
+				measureHL.style.top = `${top}px`;
+				measureHL.style.height = `${svgRect.height}px`;
+				measureHL.style.display = "block";
+			}
+		}
+
+		// Prevent the RAF loop from re-triggering row/measure transition logic on
+		// the very next tick (which would redundantly reposition the overlays).
+		lastMeasureIdxRef.current = measureIndex;
+		const rowIdx = rowsRef.current.findIndex((row) => {
+			const s = row.startMeasureNumber - 1;
+			return measureIndex >= s && measureIndex < s + row.measures.length;
+		});
+		if (rowIdx !== -1) lastScrolledRowRef.current = rowIdx;
+	}
+
+	// Clicking anywhere in the tab viewer seeks to the nearest note in the clicked
+	// row (nearest by x-distance). Clicks outside all rows clamp to the nearest row.
+	function handleTabClick(e: React.MouseEvent<HTMLDivElement>): void {
+		const container = tabViewerRef.current;
+		if (!container) return;
+
+		const noteEls = Array.from(
+			container.querySelectorAll<SVGElement>("[data-measure-index][data-slot-index]"),
+		);
+		if (noteEls.length === 0) return;
+
+		const allSvgs = Array.from(container.querySelectorAll<SVGElement>("svg"));
+		if (allSvgs.length === 0) return;
+
+		const clickYVp = e.clientY;
+		const clickXVp = e.clientX;
+
+		// Find the row SVG the click landed in by viewport Y.
+		let targetSvg = allSvgs.find((svg) => {
+			const r = svg.getBoundingClientRect();
+			return clickYVp >= r.top && clickYVp <= r.bottom;
+		});
+
+		// Click was between or outside rows — clamp to nearest by Y distance.
+		if (!targetSvg) {
+			let minDist = Infinity;
+			for (const svg of allSvgs) {
+				const r = svg.getBoundingClientRect();
+				const dist = Math.min(Math.abs(clickYVp - r.top), Math.abs(clickYVp - r.bottom));
+				if (dist < minDist) {
+					minDist = dist;
+					targetSvg = svg;
+				}
+			}
+		}
+		if (!targetSvg) return;
+
+		// Notes in the target row only.
+		const rowNotes = noteEls.filter((el) => targetSvg!.contains(el));
+		if (rowNotes.length === 0) return;
+
+		// Nearest note by X distance.
+		let nearestEl: SVGElement | null = null;
+		let minXDist = Infinity;
+		for (const el of rowNotes) {
+			const r = el.getBoundingClientRect();
+			const dist = Math.abs(r.left + r.width / 2 - clickXVp);
+			if (dist < minXDist) {
+				minXDist = dist;
+				nearestEl = el;
+			}
+		}
+		if (!nearestEl) return;
+
+		const measureIndex = parseInt(nearestEl.getAttribute("data-measure-index") ?? "0", 10);
+		const slotIndex = parseInt(nearestEl.getAttribute("data-slot-index") ?? "0", 10);
+
+		if (isPlaying || isPaused) {
+			// Audio engine handles the reschedule (playing) or saved-position update (paused).
+			seekToNote(measureIndex, slotIndex);
+		} else {
+			// Stopped: record the target so handlePlay() starts from here.
+			pendingSeekRef.current = { measureIndex, slotIndex };
+		}
+		snapCursorToNote(nearestEl, measureIndex);
+	}
+
+	// Mirror the audio engine's event list so the RAF loop has per-note timestamps
+	// for interpolation. Recomputed whenever BPM changes (same trigger as applyBpmChange).
+	useEffect(() => {
+		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm);
+	}, [pattern, bpm]);
+
+	// Position cursor and measure highlight at the very first note as soon as the
+	// SVG data attributes are available (TabStaveRow renders asynchronously via
+	// ResizeObserver + rAF, so we retry each frame until the DOM is ready).
+	useEffect(() => {
+		let rafId: number;
+		function tryInitialPosition() {
+			const playhead = cursorRef.current;
+			const measureHL = measureHighlightRef.current;
+			const container = tabViewerRef.current;
+			if (!playhead || !container) {
+				rafId = requestAnimationFrame(tryInitialPosition);
+				return;
+			}
+			const noteEl = container.querySelector<SVGElement>(
+				'[data-measure-index="0"][data-slot-index="0"]',
+			);
+			const svgEl = noteEl?.closest("svg");
+			if (!noteEl || !svgEl) {
+				rafId = requestAnimationFrame(tryInitialPosition);
+				return;
+			}
+			const containerRect = container.getBoundingClientRect();
+			const noteRect = noteEl.getBoundingClientRect();
+			const svgRect = svgEl.getBoundingClientRect();
+			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+			const top = svgRect.top - containerRect.top + container.scrollTop;
+
+			playhead.style.top = `${top}px`;
+			playhead.style.height = `${svgRect.height}px`;
+			playhead.style.transform = `translateX(${Math.round(x0 - 3)}px)`;
+			playhead.style.display = "block";
+
+			if (measureHL) {
+				const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
+				if (stavesvg) {
+					const staveSvgRect = stavesvg.getBoundingClientRect();
+					const sx = parseFloat(stavesvg.getAttribute("data-stave-0-x") ?? "0");
+					const sw = parseFloat(stavesvg.getAttribute("data-stave-0-w") ?? "0");
+					measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
+					measureHL.style.width = `${sw}px`;
+					measureHL.style.top = `${top}px`;
+					measureHL.style.height = `${svgRect.height}px`;
+					measureHL.style.display = "block";
+				}
+			}
+		}
+		rafId = requestAnimationFrame(tryInitialPosition);
+		return () => cancelAnimationFrame(rafId);
+	}, []);
+
+	// When Stop is pressed, cursorResetTick increments and this effect re-runs the
+	// same rAF retry loop used on mount — scroll container to top first so the
+	// cursor lands in the visible area, then reposition to measure 0 / slot 0.
+	// cursorResetTick starts at 0 (mount); the guard skips the initial run so the
+	// mount effect handles first positioning without a double-trigger.
+	useEffect(() => {
+		if (cursorResetTick === 0) return;
+		let rafId: number;
+		function resetToInitial() {
+			const playhead = cursorRef.current;
+			const measureHL = measureHighlightRef.current;
+			const container = tabViewerRef.current;
+			if (!playhead || !container) {
+				rafId = requestAnimationFrame(resetToInitial);
+				return;
+			}
+			container.scrollTop = 0;
+			const noteEl = container.querySelector<SVGElement>(
+				'[data-measure-index="0"][data-slot-index="0"]',
+			);
+			const svgEl = noteEl?.closest("svg");
+			if (!noteEl || !svgEl) {
+				rafId = requestAnimationFrame(resetToInitial);
+				return;
+			}
+			const containerRect = container.getBoundingClientRect();
+			const noteRect = noteEl.getBoundingClientRect();
+			const svgRect = svgEl.getBoundingClientRect();
+			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+			const top = svgRect.top - containerRect.top + container.scrollTop;
+			playhead.style.top = `${top}px`;
+			playhead.style.height = `${svgRect.height}px`;
+			playhead.style.transform = `translateX(${Math.round(x0 - 3)}px)`;
+			if (measureHL) {
+				const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
+				if (stavesvg) {
+					const staveSvgRect = stavesvg.getBoundingClientRect();
+					const sx = parseFloat(stavesvg.getAttribute("data-stave-0-x") ?? "0");
+					const sw = parseFloat(stavesvg.getAttribute("data-stave-0-w") ?? "0");
+					measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
+					measureHL.style.width = `${sw}px`;
+					measureHL.style.top = `${top}px`;
+					measureHL.style.height = `${svgRect.height}px`;
+				}
+			}
+		}
+		rafId = requestAnimationFrame(resetToInitial);
+		return () => cancelAnimationFrame(rafId);
+	}, [cursorResetTick]);
+
+	// ── Playback cursor RAF loop ─────────────────────────────────────────────
+	// Starts when isPlaying becomes true; stopped on pause/stop or unmount.
+	// All cursor updates go through direct DOM mutation — no React setState.
+	useEffect(() => {
+		if (!isPlaying) {
+			if (rafRef.current !== undefined) {
+				cancelAnimationFrame(rafRef.current);
+				rafRef.current = undefined;
+			}
+			// Reset guards so the next play re-triggers row/measure positioning and
+			// snaps renderedX to targetX on the first frame (avoids catch-up slide).
+			lastScrolledRowRef.current = -1;
+			lastMeasureIdxRef.current = -1;
+			prevTimestampRef.current = 0;
+			lastPassIndexRef.current = 0;
+			// Pause: cursor stays frozen at current position.
+			// Stop: handled by the cursorResetTick effect above.
+			return;
+		}
+
+		function tick(timestamp: number) {
+			const playhead = cursorRef.current;
+			const measureHL = measureHighlightRef.current;
+			const container = tabViewerRef.current;
+			if (!playhead || !container) {
+				rafRef.current = requestAnimationFrame(tick);
+				return;
+			}
+
+			const progress = playbackGetterRef.current();
+			if (!progress) {
+				rafRef.current = requestAnimationFrame(tick);
+				return;
+			}
+
+			const { measureIndex, slotIndex, elapsed, passIndex } = progress;
+			const events = scheduleEventsRef.current;
+			const currentRows = rowsRef.current;
+
+			// Loop pass boundary: snap cursor instead of smoothly chasing from the
+			// last note of the previous pass back to the first note of the new pass.
+			if (passIndex !== lastPassIndexRef.current) {
+				lastPassIndexRef.current = passIndex;
+				prevTimestampRef.current = 0;
+			}
+
+			const noteEl = container.querySelector<SVGElement>(
+				`[data-measure-index="${measureIndex}"][data-slot-index="${slotIndex}"]`,
+			);
+			if (!noteEl) {
+				rafRef.current = requestAnimationFrame(tick);
+				return;
+			}
+
+			const containerRect = container.getBoundingClientRect();
+			const noteRect = noteEl.getBoundingClientRect();
+			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+
+			// Find the schedule event for the current note and the next event after it.
+			const t0Event = events.find(
+				(e) => e.measureIndex === measureIndex && e.slotIndex === slotIndex,
+			);
+			const t0 = t0Event?.time ?? elapsed;
+			const nextEvent = events.find((e) => e.time > t0);
+
+			// Linear interpolation target: cursor should be between x0 and x1
+			// in proportion to elapsed time within the current note's interval.
+			// Guard: only move forward (x1 >= x0); when x1 < x0 the next note wraps
+			// to a new row and direct interpolation would move the cursor leftward —
+			// hold at x0 until the row transition naturally repositions it.
+			let targetX = x0;
+			if (nextEvent) {
+				const nextEl = container.querySelector<SVGElement>(
+					`[data-measure-index="${nextEvent.measureIndex}"][data-slot-index="${nextEvent.slotIndex}"]`,
+				);
+				if (nextEl) {
+					const nRect = nextEl.getBoundingClientRect();
+					const x1 = nRect.left - containerRect.left + nRect.width / 2;
+					if (x1 >= x0) {
+						const frac = Math.max(
+							0,
+							Math.min(1, (elapsed - t0) / (nextEvent.time - t0)),
+						);
+						targetX = x0 + (x1 - x0) * frac;
+					}
+				}
+			}
+
+			// Exponential smoothing: rendered position chases target continuously so
+			// per-note velocity changes never cause a visible decelerate/accelerate stutter.
+			// First frame of a new playback session: snap directly to avoid a catch-up slide.
+			const prevTime = prevTimestampRef.current;
+			if (prevTime === 0) {
+				renderedXRef.current = targetX;
+			} else {
+				const dt = (timestamp - prevTime) / 1000;
+				renderedXRef.current +=
+					(targetX - renderedXRef.current) * (1 - Math.exp(-CURSOR_LAMBDA * dt));
+			}
+			prevTimestampRef.current = timestamp;
+
+			playhead.style.transform = `translateX(${Math.round(renderedXRef.current - 3)}px)`;
+
+			// Row transition: update vertical position for both overlays and auto-scroll.
+			const rowIdx = currentRows.findIndex((row) => {
+				const s = row.startMeasureNumber - 1;
+				return measureIndex >= s && measureIndex < s + row.measures.length;
+			});
+			if (rowIdx !== -1 && rowIdx !== lastScrolledRowRef.current) {
+				const svgEl = noteEl.closest("svg");
+				const svgRect = svgEl?.getBoundingClientRect();
+				if (svgRect) {
+					const top = svgRect.top - containerRect.top + container.scrollTop;
+					playhead.style.top = `${top}px`;
+					playhead.style.height = `${svgRect.height}px`;
+					if (measureHL) {
+						measureHL.style.top = `${top}px`;
+						measureHL.style.height = `${svgRect.height}px`;
+					}
+				}
+				lastScrolledRowRef.current = rowIdx;
+				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+			}
+
+			// Measure transition: update the measure background highlight.
+			if (measureIndex !== lastMeasureIdxRef.current) {
+				lastMeasureIdxRef.current = measureIndex;
+				if (measureHL) {
+					const stavesvg = container.querySelector<SVGElement>(
+						`svg[data-stave-${measureIndex}-x]`,
+					);
+					if (stavesvg) {
+						const svgRect = stavesvg.getBoundingClientRect();
+						const sx = parseFloat(
+							stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0",
+						);
+						const sw = parseFloat(
+							stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0",
+						);
+						measureHL.style.left = `${svgRect.left - containerRect.left + sx}px`;
+						measureHL.style.width = `${sw}px`;
+						measureHL.style.display = "block";
+					}
+				}
+			}
+
+			rafRef.current = requestAnimationFrame(tick);
+		}
+
+		rafRef.current = requestAnimationFrame(tick);
+		return () => {
+			if (rafRef.current !== undefined) {
+				cancelAnimationFrame(rafRef.current);
+				rafRef.current = undefined;
+			}
+		};
+	}, [isPlaying]);
 
 	// Spacebar toggles Play/Pause. Skips when focus is inside a text/select element.
 	useEffect(() => {
@@ -307,6 +891,17 @@ export default function FingerpickPage() {
 		[pattern.measures, measuresPerRow],
 	);
 
+	// Keep refs in sync with the latest render values so the RAF closure never goes stale.
+	// useEffect (not inline assignment) satisfies react-hooks/refs; the one-frame lag
+	// is harmless — getPlaybackProgress reads audio engine refs (never React state), and
+	// rows changes only on resize/pattern edit, not mid-playback.
+	useEffect(() => {
+		rowsRef.current = rows;
+	}, [rows]);
+	useEffect(() => {
+		playbackGetterRef.current = getPlaybackProgress;
+	}, [getPlaybackProgress]);
+
 	return (
 		<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">
 			{/* Left sidebar — lg: static; below lg: slide-in overlay */}
@@ -350,22 +945,59 @@ export default function FingerpickPage() {
 					<div className="mb-4 shrink-0">
 						<h1 className="text-lg font-semibold text-slate-700">{pattern.name}</h1>
 						<p className="text-xs text-slate-400 uppercase tracking-wider mt-0.5">
-							{bpm} BPM &middot; {pattern.timeSignature[0]}/
-							{pattern.timeSignature[1]}
+							{bpm} BPM &middot; {pattern.timeSignature[0]}/{pattern.timeSignature[1]}
 						</p>
 					</div>
 
 					{/* min-h-0 lets Flexbox shrink this child so overflow-y-auto scrolls.
 					    Each TabStaveRow is a full-width row of measures rendered into one
-					    VexFlow context; the row count and width are driven by the viewport. */}
-					<div className="min-h-0 overflow-y-auto bg-white rounded-xl border border-slate-100">
+					    VexFlow context; the row count and width are driven by the viewport.
+					    position:relative anchors the cursor overlay div. */}
+					<div
+						ref={tabViewerRef}
+						className="relative min-h-0 overflow-y-auto bg-white rounded-xl border border-slate-100 cursor-pointer"
+						onClick={handleTabClick}
+					>
+						{/* Measure background highlight — updated only on measure transitions. */}
+						<div
+							ref={measureHighlightRef}
+							aria-hidden="true"
+							className="absolute pointer-events-none"
+							style={{
+								display: "none",
+								backgroundColor: "rgba(74, 111, 165, 0.07)",
+								borderRadius: 3,
+							}}
+						/>
+						{/* Playhead line — sits BEFORE the SVG rows in DOM order so it renders
+						    behind VexFlow note numbers; translateX updated every RAF frame. */}
+						<div
+							ref={cursorRef}
+							aria-hidden="true"
+							className="absolute pointer-events-none"
+							style={{
+								display: "none",
+								width: 6,
+								left: 0,
+								backgroundColor: "rgba(74, 111, 165, 0.5)",
+								borderRadius: 5,
+							}}
+						/>
 						<div className="flex flex-col">
-							{rows.map((row) => (
-								<TabStaveRow
+							{rows.map((row, rowIdx) => (
+								<div
 									key={row.measures[0].id}
-									measures={row.measures}
-									startMeasureNumber={row.startMeasureNumber}
-								/>
+									ref={(el) => {
+										rowRefs.current[rowIdx] = el;
+									}}
+								>
+									<TabStaveRow
+										measures={row.measures}
+										startMeasureNumber={row.startMeasureNumber}
+										startMeasureIndex={row.startMeasureNumber - 1}
+										rowCapacity={measuresPerRow}
+									/>
+								</div>
 							))}
 						</div>
 					</div>
@@ -409,18 +1041,16 @@ export default function FingerpickPage() {
 					{/* Stop button — shown while playing or paused */}
 					{(isPlaying || isPaused) && (
 						<button
-							onClick={stop}
-							className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors duration-150 text-xs font-medium"
+							onClick={handleStop}
+							className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 hover:cursor-pointer transition-colors duration-200 text-xs font-medium"
 						>
 							<CircleStop size={16} strokeWidth={1.5} />
-							Stop
+							Stop and back to start
 						</button>
 					)}
 
 					{!isLoaded && (
-						<p className="text-[10px] text-slate-400 text-center">
-							Loading samples…
-						</p>
+						<p className="text-[10px] text-slate-400 text-center">Loading samples…</p>
 					)}
 
 					{/* BPM slider */}
@@ -470,8 +1100,24 @@ export default function FingerpickPage() {
 						Tap Tempo
 					</Button>
 
-					{/* Loop gap */}
-					<div className="flex flex-col gap-2">
+					{/* Play once */}
+					<div className="flex items-center justify-between">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Play once
+						</span>
+						<Switch
+							checked={playOnce}
+							onCheckedChange={setPlayOnce}
+							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+						/>
+					</div>
+
+					{/* Loop gap — disabled/greyed when play-once is active */}
+					<div
+						className={`flex flex-col gap-2 transition-opacity duration-200 ${
+							playOnce ? "opacity-40 pointer-events-none" : ""
+						}`}
+					>
 						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
 							Loop Gap
 						</span>
@@ -480,13 +1126,14 @@ export default function FingerpickPage() {
 								<Button
 									key={gap}
 									variant={loopGap === gap ? "default" : "outline"}
+									disabled={playOnce}
 									onClick={() => {
 										setLoopGap(gap);
 										applyLoopGapChange(gap);
 									}}
 									className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
 									style={
-										loopGap === gap
+										loopGap === gap && !playOnce
 											? { backgroundColor: "var(--denim)", color: "white" }
 											: undefined
 									}
@@ -495,6 +1142,27 @@ export default function FingerpickPage() {
 								</Button>
 							))}
 						</div>
+					</div>
+
+					{/* Note sound section */}
+					<div className="flex flex-col gap-1.5">
+						<div className="flex justify-between items-center">
+							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+								Note Sound
+							</span>
+							<span className="text-xs tabular-nums text-slate-400">
+								{Math.round(noteGain * 100)}%
+							</span>
+						</div>
+						<input
+							type="range"
+							min={0}
+							max={2}
+							step={0.01}
+							value={noteGain}
+							onChange={(e) => setNoteGain(Number(e.target.value))}
+							className="w-full accent-denim cursor-pointer"
+						/>
 					</div>
 
 					<div className="border-t border-slate-100" />
@@ -588,27 +1256,6 @@ export default function FingerpickPage() {
 					</div>
 
 					<div className="border-t border-slate-100" />
-
-					{/* Note sound section */}
-					<div className="flex flex-col gap-1.5">
-						<div className="flex justify-between items-center">
-							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-								Note Sound
-							</span>
-							<span className="text-xs tabular-nums text-slate-400">
-								{Math.round(noteGain * 100)}%
-							</span>
-						</div>
-						<input
-							type="range"
-							min={0}
-							max={2}
-							step={0.01}
-							value={noteGain}
-							onChange={(e) => setNoteGain(Number(e.target.value))}
-							className="w-full accent-denim cursor-pointer"
-						/>
-					</div>
 				</div>
 			</div>
 		</div>

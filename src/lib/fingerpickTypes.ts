@@ -1,4 +1,4 @@
-export type Duration = "whole" | "half" | "quarter" | "eighth" | "sixteenth" | "rest";
+export type Duration = "whole" | "half" | "quarter" | "eighth" | "eighth-triplet" | "sixteenth" | "rest";
 
 export type Technique = "hammer-on" | "pull-off" | "slide-up" | "slide-down" | null;
 

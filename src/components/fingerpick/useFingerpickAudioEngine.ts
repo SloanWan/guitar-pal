@@ -433,7 +433,7 @@ export function useFingerpickAudioEngine() {
 
 	// ─── Public API ──────────────────────────────────────────────────────────
 
-	function play(pattern: FingerpickPattern, options: PlayOptions = {}): void {
+	function play(pattern: FingerpickPattern, options: PlayOptions = {}, startOffset: number = 0): void {
 		if (!isLoaded) return;
 		if (isPlayingRef.current || isPaused) {
 			// Clear any existing playback/pause before starting fresh.
@@ -455,17 +455,17 @@ export function useFingerpickAudioEngine() {
 		timeSignatureRef.current = pattern.timeSignature;
 		beatOnsetsRef.current = computeBeatOnsets(pattern, bpm);
 		secondsPerBeatRef.current = 60 / bpm;
-		startTimeRef.current = ctx.currentTime;
+		startTimeRef.current = ctx.currentTime - startOffset;
 		pausedAtRef.current = null;
 		pausedPassIndexRef.current = 0;
 		isPlayingRef.current = true;
 		setIsPlaying(true);
 		setIsPaused(false);
 
-		schedulePassAndQueue(0);
+		schedulePassAndQueue(0, startOffset);
 
 		if (!loopRef.current) {
-			const doneAfterMs = (patternDurationRef.current + SOURCE_STOP_BUFFER_S) * 1000;
+			const doneAfterMs = (patternDurationRef.current - startOffset + SOURCE_STOP_BUFFER_S) * 1000;
 			endTimerRef.current = setTimeout(() => {
 				isPlayingRef.current = false;
 				setIsPlaying(false);
@@ -763,6 +763,47 @@ export function useFingerpickAudioEngine() {
 		}, msUntilNext);
 	}
 
+	/**
+	 * Jump playback to the note at the given measure/slot index.
+	 *
+	 * - Playing: cancels all pre-scheduled sources and reschedules from the new
+	 *   position — same seek+reschedule mechanism used by applyBpmChange.
+	 * - Paused: updates the saved pause position so resume() plays from the new note.
+	 * - Stopped: no-op — the caller handles this via a pending-seek ref + play().
+	 */
+	function seekToNote(measureIndex: number, slotIndex: number): void {
+		if (isPlayingRef.current) {
+			const progress = getPlaybackProgress();
+			const passIndex = progress?.passIndex ?? 0;
+
+			clearTimers();
+			cancelAllSources();
+
+			const ctx = ctxRef.current;
+			if (!ctx) return;
+
+			const newTime = findSlotStartTime(eventsRef.current, measureIndex, slotIndex);
+			const totalElapsed =
+				computeLoopOffset(passIndex, patternDurationRef.current, loopGapRef.current) + newTime;
+			startTimeRef.current = ctx.currentTime - totalElapsed;
+
+			schedulePassAndQueue(passIndex, newTime);
+
+			if (!loopRef.current) {
+				const remainingMs =
+					(patternDurationRef.current - newTime + SOURCE_STOP_BUFFER_S) * 1000;
+				endTimerRef.current = setTimeout(() => {
+					isPlayingRef.current = false;
+					setIsPlaying(false);
+				}, remainingMs);
+			}
+		} else if (pausedAtRef.current !== null) {
+			// Paused: update saved position for resume(); reset to pass 0 for a clean seek.
+			pausedAtRef.current = findSlotStartTime(eventsRef.current, measureIndex, slotIndex);
+			pausedPassIndexRef.current = 0;
+		}
+	}
+
 	/** Update note volume — takes effect immediately via the master gain node. */
 	function handleSetNoteGain(value: number): void {
 		noteGainRef.current = value;
@@ -807,6 +848,7 @@ export function useFingerpickAudioEngine() {
 		getPlaybackProgress,
 		applyBpmChange,
 		applyLoopGapChange,
+		seekToNote,
 		metronomeEnabled,
 		setMetronomeEnabled: handleSetMetronomeEnabled,
 		metronomeSubdivision,

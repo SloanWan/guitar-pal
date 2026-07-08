@@ -1,17 +1,23 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Renderer, TabStave, Voice, Formatter, Beam, Barline } from "vexflow";
+import { Renderer, TabStave, Voice, Formatter, Beam, Barline, StemmableNote } from "vexflow";
 
 import { Measure } from "@/lib/fingerpickTypes";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 
 // Layout constants — not props because they are fixed design decisions, not data.
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
-const CLEF_WIDTH = 15;
+export const CLEF_WIDTH = 15;
+// Extra pixels appended to svgWidth so the 1px end-barline stroke is not clipped at the SVG boundary.
+const BARLINE_CLIP_MARGIN = 3;
 const RIGHT_PAD = 15;
 const SVG_HEIGHT = 200;
 const STAVE_Y = 10;
+const TAB_GLYPH_WIDTH = 40;
+const TECHNIQUE_CONNECTOR_PAD = 20;
+const MIN_MEASURE_WIDTH = 180;
+const HO_PO_EXTRA_WIDTH = 35;
 
 interface TabStaveRowProps {
 	/** One "row" worth of measures rendered into a single VexFlow context. */
@@ -20,72 +26,61 @@ interface TabStaveRowProps {
 	startMeasureNumber?: number;
 	/** 0-indexed global measure index for this row's first measure; enables cursor data attributes. */
 	startMeasureIndex?: number;
-	/**
-	 * Maximum measures per row at the current breakpoint (e.g. 4 on desktop, 2 on mobile).
-	 * Used to compute a fixed per-measure width so all rows — including a partial last row
-	 * that has fewer measures — render each measure at the same width rather than
-	 * stretching partial-row measures to fill the container.
-	 */
-	rowCapacity?: number;
+	/** Per-measure stave widths in the same order as `measures`, computed by the greedy layout pass. */
+	measureWidths: number[];
+}
+
+// No DOM side-effects — Formatter.preCalculateMinTotalWidth operates on Tickable objects only.
+export function computeMeasureMinWidth(
+	notes: StemmableNote[],
+	isFirstInRow: boolean,
+	techniqueCount: number,
+): number {
+	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
+	voice.addTickables(notes);
+	const notesWidth = new Formatter().preCalculateMinTotalWidth([voice]);
+	const raw =
+		(isFirstInRow ? TAB_GLYPH_WIDTH : 0) +
+		notesWidth +
+		TECHNIQUE_CONNECTOR_PAD +
+		techniqueCount * HO_PO_EXTRA_WIDTH +
+		RIGHT_PAD;
+	return Math.max(MIN_MEASURE_WIDTH, raw);
 }
 
 export default function TabStaveRow({
 	measures,
 	startMeasureNumber,
 	startMeasureIndex,
-	rowCapacity,
+	measureWidths,
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		const div = containerRef.current;
-		if (!div || measures.length === 0) return;
+		if (!div || measures.length === 0 || measureWidths.length === 0) return;
 
 		let rafId: number | undefined;
 		let cancelled = false;
 
-		const renderToWidth = (containerWidth: number) => {
-			if (cancelled || containerWidth < 1) return;
+		const renderToWidth = () => {
+			if (cancelled) return;
 			div.innerHTML = "";
 
-			const n = measures.length;
-			// capacity = max measures that fit in a full row at this breakpoint.
-			// Using capacity (not n) for per-measure width keeps all rows — including a
-			// partial last row with fewer measures — at the same fixed measure width.
-			const capacity = rowCapacity ?? n;
-			const isFullRow = n === capacity;
-			const totalStaveWidth = Math.max(capacity * 50, containerWidth - CLEF_WIDTH - RIGHT_PAD);
-			const perMeasureWidth = Math.floor(totalStaveWidth / capacity);
-
-			// For a full row the SVG fills the container (last stave absorbs pixel remainder).
-			// For a partial row the SVG is sized to exactly the rendered content; the remaining
-			// container space stays blank rather than stretching measures to fill it.
-			const svgWidth = isFullRow
-				? containerWidth
-				: CLEF_WIDTH + n * perMeasureWidth + RIGHT_PAD;
+			// SVG width = CLEF_WIDTH + stave content + margin so the end-barline isn't clipped.
+			const svgWidth = CLEF_WIDTH + measureWidths.reduce((a, b) => a + b, 0) + BARLINE_CLIP_MARGIN;
 
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
 			renderer.resize(svgWidth, SVG_HEIGHT);
 			const ctx = renderer.getContext();
 			ctx.setFont({ family: "'Geist Mono', ui-monospace, monospace", size: "10pt" });
 
-			// Draw all staves first so their note-region bounds are available when
-			// we format voices below.
-			// • Only the first stave gets addTabGlyph() — standard notation convention.
-			// • Staves 2…N suppress their left barline (Barline.type.NONE) so there is
-			//   no double barline at measure boundaries — only the preceding stave's
-			//   right barline shows.
+			// Draw staves, accumulating x from per-measure widths.
+			let staveX = CLEF_WIDTH;
 			const staves = measures.map((_, i) => {
-				const x = CLEF_WIDTH + i * perMeasureWidth;
-				// For a full row, the last stave absorbs the floor-division pixel remainder so
-				// the row fills the container edge-to-edge. Partial rows use a fixed
-				// perMeasureWidth for every stave — no remainder absorption — so the unused
-				// portion of the container stays blank rather than stretching the last stave.
-				const w =
-					isFullRow && i === n - 1
-						? Math.max(50, totalStaveWidth - perMeasureWidth * (n - 1))
-						: perMeasureWidth;
-				const stave = new TabStave(x, STAVE_Y, w);
+				const w = measureWidths[i];
+				const stave = new TabStave(staveX, STAVE_Y, w);
+				staveX += w;
 				if (i === 0) {
 					stave.addTabGlyph();
 				} else {
@@ -99,8 +94,7 @@ export default function TabStaveRow({
 				return stave;
 			});
 
-			// Store each stave's note-area bounds so the cursor can position the measure
-			// background highlight without knowing the layout math inside this function.
+			// Write note-area bounds for the cursor measure-highlight overlay.
 			if (startMeasureIndex !== undefined) {
 				const svgEl = div.querySelector("svg");
 				if (svgEl) {
@@ -122,15 +116,12 @@ export default function TabStaveRow({
 				voice.addTickables(notes);
 				const noteWidth = staves[i].getNoteEndX() - staves[i].getNoteStartX() - 10;
 				new Formatter().joinVoices([voice]).format([voice], noteWidth);
-				// Beams must be applied before voice.draw so stem directions are set.
 				const beams = Beam.applyAndGetBeams(voice, -1);
 				voice.draw(ctx, staves[i]);
 				connectors.forEach((c) => c.setContext(ctx).draw());
 				beams.forEach((b) => b.setContext(ctx).draw());
 				tuplets.forEach((t) => t.setContext(ctx).draw());
 
-				// Tag each note's SVG element so the cursor RAF loop can query by
-				// global measure/slot index and resolve screen coordinates via getBoundingClientRect.
 				if (startMeasureIndex !== undefined) {
 					const globalMeasureIdx = startMeasureIndex + i;
 					notes.forEach((note, j) => {
@@ -144,16 +135,12 @@ export default function TabStaveRow({
 			});
 		};
 
-		// ResizeObserver drives rendering — fires on mount with the row's initial
-		// clientWidth and again on any resize. rAF debounces rapid events.
-		const observer = new ResizeObserver((entries) => {
-			const entry = entries[0];
-			if (!entry) return;
-			const width = Math.floor(entry.contentRect.width);
+		// Initial render; ResizeObserver re-renders on container size changes.
+		rafId = requestAnimationFrame(renderToWidth);
+		const observer = new ResizeObserver(() => {
 			if (rafId !== undefined) cancelAnimationFrame(rafId);
-			rafId = requestAnimationFrame(() => renderToWidth(width));
+			rafId = requestAnimationFrame(renderToWidth);
 		});
-
 		observer.observe(div);
 
 		return () => {
@@ -162,7 +149,7 @@ export default function TabStaveRow({
 			if (rafId !== undefined) cancelAnimationFrame(rafId);
 			div.innerHTML = "";
 		};
-	}, [measures, startMeasureNumber, startMeasureIndex, rowCapacity]);
+	}, [measures, startMeasureNumber, startMeasureIndex, measureWidths]);
 
 	return <div ref={containerRef} className="font-mono w-full" />;
 }

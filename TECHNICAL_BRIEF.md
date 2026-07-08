@@ -316,9 +316,9 @@ StepValue semantics:
 
 ### Fingerpicking Page (`/fingerpick`)
 
-**Files:** `src/app/(main)/fingerpick/page.tsx`, `src/components/fingerpick/TabStaveRow.tsx`, `src/lib/fingerpickToVexFlow.ts`, `src/lib/fingerpickTypes.ts`
+**Files:** `src/app/(main)/fingerpick/page.tsx`, `src/components/fingerpick/TabStaveRow.tsx`, `src/components/fingerpick/useFingerpickAudioEngine.ts`, `src/lib/fingerpickScheduler.ts`, `src/lib/fingerpickToVexFlow.ts`, `src/lib/fingerpickTypes.ts`
 
-**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). Both the library sidebar and controls panel are scaffolded but not yet wired; they show "coming soon" placeholders.
+**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). The library sidebar shows a "coming soon" placeholder. The controls panel is fully implemented.
 
 **Data model** (`src/lib/fingerpickTypes.ts`):
 
@@ -361,6 +361,7 @@ String index `0` = high e; index `5` = low E. All four `Technique` values (`hamm
 interface VexFlowRenderData {
     notes: StemmableNote[];                   // one TabNote or GhostNote per BeatSlot
     connectors: Array<TabTie | TabSlide>;     // per-string technique connectors between adjacent slots
+    tuplets: Tuplet[];                        // one Tuplet wrapper per group of 3 eighth-triplet notes
 }
 ```
 
@@ -379,18 +380,94 @@ Conversion rules:
 
 A `"use client"` component that renders one row of measures into a single VexFlow SVG context (SVG backend).
 
+Props: `measures`, `startMeasureNumber?` (1-indexed display label), `startMeasureIndex?` (0-indexed global measure index — enables cursor data attributes), `rowCapacity?` (max measures per full row at the current breakpoint — used to lock per-measure width on partial rows).
+
 - A `ResizeObserver` on the container div drives all rendering — it fires on mount with the initial `clientWidth` and on every resize. `requestAnimationFrame` debounces rapid events. The observer is disconnected and the container cleared on unmount.
-- Layout: `CLEF_WIDTH = 15 px` left offset, `RIGHT_PAD = 15 px` right padding. The remaining width is divided equally across measures; the last stave absorbs any rounding remainder.
+- Layout: `CLEF_WIDTH = 15 px` left offset, `RIGHT_PAD = 15 px` right padding. Per-measure width is computed from `rowCapacity` (not `measures.length`) so a partial last row uses the same fixed measure width as full rows rather than stretching to fill the container.
 - Only the first stave in each row gets `addTabGlyph()` (the "TAB" clef glyph) — standard notation convention. Staves 2…N suppress their left barline (`Barline.type.NONE`) to avoid double barlines at measure boundaries.
 - Measure numbers are rendered when `startMeasureNumber` is provided (1-indexed; `FingerpickPage` increments per row).
-- Beams: `Beam.applyAndGetBeams(voice, -1)` is applied after notes are added to the voice (stem direction `−1` = down). Connectors and beams are drawn after `voice.draw()`.
+- After drawing staves, when `startMeasureIndex` is set: writes `data-stave-{g}-x` and `data-stave-{g}-w` (note-region left offset and width in SVG coordinates) onto the SVG element for each global measure index `g`. The cursor uses these to position the measure-background highlight without recomputing layout math.
+- Beams: `Beam.applyAndGetBeams(voice, -1)` is applied after notes are added to the voice (stem direction `−1` = down). Tuplets, connectors, and beams are all drawn after `voice.draw()`.
+- After drawing notes, when `startMeasureIndex` is set: writes `data-measure-index` (global) and `data-slot-index` onto each note's SVG element. The cursor RAF loop queries these attributes to locate the note element for the current playback position.
 - Font: `"Geist Mono", ui-monospace, monospace` at `10pt`.
 
-`FingerpickPage` uses a `matchMedia("(min-width: 768px)")` listener to switch between **4 measures per row on desktop** and **2 measures per row on mobile**, defaulting to 4 on the server. Rows are computed in a pure helper `groupMeasuresIntoRows(measures, perRow)` that chunks the flat `measures` array. The page currently renders a single hardcoded `PRESET_FINGERPICK_PATTERN` ("Technique Showcase") that exercises all five duration values and all four technique types across five measures.
+`FingerpickPage` uses `useSyncExternalStore` with a `matchMedia("(min-width: 768px)")` subscription to switch between **4 measures per row on desktop** and **2 measures per row on mobile**, with a server snapshot of 4. Rows are computed in a pure helper `groupMeasuresIntoRows(measures, perRow)`. The page renders a single hardcoded `PRESET_FINGERPICK_PATTERN` ("Technique Showcase") — 14 measures covering all six duration values (whole, half, quarter, eighth, sixteenth, eighth-triplet), all four technique types, muted notes, and multi-string chordal slots.
 
-**Audio playback:**
+**Sample loading (`useGuitarSampleLoader.ts` additions):**
 
-Not yet implemented — the controls panel is a "coming soon" placeholder. The strum machine's WebAudioFont-based pipeline (`useGuitarSampleLoader.ts`: CDN preset fetching, `new Function()` evaluation, per-string `AudioBufferSourceNode` scheduling) is the established pattern in this codebase and is the intended model for a future fingerpick audio implementation.
+Two new presets are loaded exclusively for the fingerpick engine, distinct from the strum machine's SoundBlaster presets:
+
+- `"pluck"` → `0250_LK_AcousticSteel_SF2_file` (LK Acoustic Steel, GM 25)
+- `"muted"` → `0280_FluidR3_GM_sf2_file` (FluidR3 Muted Guitar, GM 28)
+
+`preloadFingerpickPresets(ctx: AudioContext): Promise<void>` — fetches and parses both presets, then decodes all zones needed for the full guitar range MIDI 40–76 (open E2 to 20th-fret E4 on the high-e string). Caching follows the same in-flight deduplication pattern used by `preloadStrumPresets`.
+
+`getFingerpickNoteData(type, midi): { buffer, playbackRate }` — synchronous lookup after preload. Playback rate: `2^((100×midi − baseDetune) / 1200)` using the zone's `originalPitch`, `coarseTune`, `fineTune` — identical formula to the strum engine.
+
+**Scheduler** (`src/lib/fingerpickScheduler.ts`):
+
+Pure, DOM-free module containing all timing primitives. Key exports:
+
+- `ScheduleEvent` — `{ time, duration, stringIndex, midi, technique, muted, measureIndex, slotIndex }`. `time` is absolute seconds from pattern start.
+- `VoiceHandle` — duck-typed interface (`gainNode.gain.{cancelScheduledValues, setTargetAtTime}`, `source.stop`) so voice-stealing tests can inject mocks without a real `AudioContext`.
+- `fingerpickPatternToScheduleEvents(pattern, bpm)` — converts the pattern into a flat, time-sorted `ScheduleEvent[]`. Rest slots and tied strings produce no events. Pitch = `OPEN_STRING_MIDI[stringIndex] + fret` (fret takes priority over muted for pitch; the `muted` flag only drives preset selection and envelope shaping).
+- `getTotalPatternDuration(pattern, bpm)` — sum of all slot durations in seconds.
+- `computeLoopOffset(passIndex, patternDuration, loopGapSeconds)` — `passIndex × (patternDuration + loopGapSeconds)`.
+- `getProgressAtTime(events, elapsed)` — returns `{ measureIndex, slotIndex }` of the event most recently started at `elapsed` seconds; used by the RAF cursor loop.
+- `findSlotStartTime(events, measureIndex, slotIndex)` — given a musical position, returns its absolute time in an event list; used when changing BPM to map the old-BPM position to the new-BPM timeline.
+- `stealVoice(voices, stringIndex, when)` — cancels scheduled gain automation, applies a 5 ms τ fade-out, and stops the source; exported for unit testing without a real `AudioContext`.
+- `_shutdownEngine(voices, timerIds, allSources?)` — stops all tracked sources and clears timers; exported for testing.
+
+**Audio engine** (`src/components/fingerpick/useFingerpickAudioEngine.ts`):
+
+Self-contained hook. Lifecycle: `load()` → `play(pattern, options, startOffset?)` → `pause()` / `resume()` → `stop()`. Cleanup runs in `useEffect` return.
+
+- **AudioContext lifecycle:** `ensureContext()` creates a fresh context (closing any existing one first) — avoids zombie-context suspension after idle/backgrounding. Both the master gain node (`masterGainRef`) and the dedicated metronome gain node (`metronomeGainNodeRef`) are created here and persist across pause/resume cycles.
+- **Precomputed schedule:** `fingerpickPatternToScheduleEvents()` is called once at `play()` time and again on every `applyBpmChange()`. All events for a pass are handed to the Web Audio scheduler synchronously at play/resume time.
+- **Per-string voice stealing:** `perStringVoicesRef: Map<number, ActiveVoice>` holds the last active voice per string. A new note on string N calls `stealVoice()` (5 ms τ fade, immediate stop) before starting the new source.
+- **`allSourcesRef: Set<AudioBufferSourceNode>`** — superset of `perStringVoicesRef` sources; also contains intermediate sources that were voice-stolen by later events in the same scheduling pass but whose `source.start(futureTimestamp)` was already handed to the Web Audio scheduler. Pause/stop cancels all of them. Each source removes itself via `onended`.
+- **`allMetronomeSourcesRef: Set<OscillatorNode>`** — same pattern for metronome oscillators.
+- **Loop scheduling:** `schedulePassAndQueue(passIndex, passStartOffset?)` schedules a full pass synchronously then queues the next pass via `setTimeout` firing `SCHEDULE_LOOKAHEAD_S = 0.3 s` before the current pass ends.
+- **`applyBpmChange(newBpm)`:** If playing — cancels all sources, finds the current musical position via `getProgressAtTime`, maps it to the new-BPM timeline via `findSlotStartTime`, then reschedules from that position (no audible restart). If paused — converts `pausedAtRef` to the equivalent new-BPM time. If stopped — no-op.
+- **`applyLoopGapChange(newLoopGapSeconds)`:** If playing and looping — recalibrates `startTimeRef` so `computeLoopOffset` remains consistent, resets the scheduling timer with the corrected delay. No audio cancellation — notes already playing in the current pass are unaffected.
+- **`seekToNote(measureIndex, slotIndex)`:** If playing — cancels all sources and reschedules from the target note (same seek-and-reschedule mechanism as `applyBpmChange`). If paused — updates `pausedAtRef` so `resume()` plays from there.
+- **`getPlaybackProgress()`:** Synchronous getter returning `{ measureIndex, slotIndex, passIndex, elapsed }`. Called from the page's rAF loop without triggering re-renders.
+- **Metronome:** Oscillator-based. 1200 Hz accented / 800 Hz normal / 50 ms duration. Routed through a dedicated `metronomeGainNodeRef` (shared gain node) for live volume control without rescheduling. `handleSetMetronomeEnabled(true)` mid-pass immediately reschedules the remaining beats of the current pass from the current elapsed position. `handleSetMetronomeSubdivision` cancels all pending oscillators and reschedules the current pass at the new density (quarter / eighth / sixteenth).
+- **Note envelope:** Gain decay per note: `setTargetAtTime(0, when, max(duration × 0.8, 0.03 s))`. Technique notes (hammer-on, pull-off, slide) use a reduced gain (`TECHNIQUE_GAIN = 0.5`) to simulate legato dynamics.
+
+**Controls panel** (`src/app/(main)/fingerpick/page.tsx`):
+
+Fully implemented; no longer a placeholder. Controls (right panel, `md:w-55 lg:w-70`):
+
+- **Play/Pause** toggle (CirclePlay / CirclePause, 56 px icons); becomes a Stop button (`CircleStop`) while playing or paused.
+- **BPM slider** (40–220). Drag gesture: `onPointerDown` pauses playback and records `wasPlayingRef`; `onChange` updates display and `dragBpmRef` only; `onPointerUp` calls `applyBpmChange(dragBpmRef.current)` then resumes if `wasPlayingRef`. Keyboard arrow keys on the focused slider reschedule immediately (no pointer-down guard active).
+- **±10 BPM buttons** and large BPM display.
+- **Tap Tempo** — up to 8 taps, resets after 2 s idle; computes average interval and calls `applyBpmChange`.
+- **Play Once** toggle (Switch) — if on, loop machinery schedules only one pass then stops.
+- **Loop Gap** selector (0 s / 5 s / 10 s pill buttons) — greyed/disabled while Play Once is active; calls `applyLoopGapChange` immediately on change.
+- **Note Sound** volume slider (0–200%).
+- **Metronome** toggle, **Accent Beat 1** toggle, **Subdivision** (1/4 / 1/8 / 1/16 pill buttons), **Metronome volume** slider — all greyed when metronome is off.
+- **Spacebar** keybinding toggles Play/Pause; skipped when focus is inside a text input, select, or textarea.
+
+**Cursor / Playhead** (`src/app/(main)/fingerpick/page.tsx`):
+
+Two overlay `div`s absolutely positioned inside `tabViewerRef` (the scrollable TAB viewer):
+
+- `cursorRef` — a 6 px-wide vertical line (`rgba(74,111,165,0.5)`). Horizontal position updated every rAF frame. Vertical position and height updated only on row transitions.
+- `measureHighlightRef` — a full-stave-height background block (`rgba(74,111,165,0.07)`). Width and left position updated only on measure transitions, read from `data-stave-{measureIndex}-x/w` attributes.
+
+**rAF loop** (starts when `isPlaying` → `true`, stops when `false`; all updates via direct DOM mutation):
+
+1. Calls `getPlaybackProgress()` to get `{ measureIndex, slotIndex, elapsed, passIndex }`.
+2. Queries `[data-measure-index="${measureIndex}"][data-slot-index="${slotIndex}"]` to find the current note element and reads its `getBoundingClientRect` centre as `x0`.
+3. Finds the next event in `scheduleEventsRef` with `time > t0`, queries its note element for `x1`. Computes `frac = (elapsed − t0) / (t1 − t0)` and `targetX = x0 + (x1 − x0) × frac`. Guard: if `x1 < x0` (next note is on a different/earlier row), holds `targetX = x0` to prevent leftward drift during row wraps.
+4. Applies exponential smoothing: `renderedX += (targetX − renderedX) × (1 − exp(−λ·Δt))` with `λ = 20`. First frame of each playback session (`prevTimestampRef = 0`) snaps directly to avoid a catch-up slide. Loop-pass boundaries (detected via `passIndex` change) also reset `prevTimestampRef` to force a snap.
+5. **Row transition** (when `rowIdx ≠ lastScrolledRowRef`): updates vertical `top`/`height` of both overlays; calls `rowRefs.current[rowIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' })`.
+6. **Measure transition** (when `measureIndex ≠ lastMeasureIdxRef`): reads `data-stave-{measureIndex}-x/w` from the SVG element to reposition `measureHighlightRef`.
+
+**Click-to-seek:** `onClick` on the tab viewer hit-tests all `[data-measure-index][data-slot-index]` elements in the clicked row's SVG (clamping to the nearest row by Y distance when the click lands between rows), picks the nearest note by X distance, then: calls `seekToNote(measureIndex, slotIndex)` if playing or paused; sets `pendingSeekRef` if stopped (consumed by `handlePlay()`); and calls `snapCursorToNote()` to immediately reposition both overlays bypassing exponential smoothing (`renderedXRef` and `prevTimestampRef` are reset to force a snap on the next tick).
+
+**Initial and post-Stop cursor position:** A rAF retry loop polls until TabStaveRow's ResizeObserver+rAF render completes (data attributes appear in DOM), then positions both overlays at `[data-measure-index="0"][data-slot-index="0"]`. On Stop, `cursorResetTick` state increments, triggering a dedicated `useEffect` that scrolls the container to the top before re-running the same positioning loop.
 
 **Testing:**
 

@@ -16,7 +16,7 @@ export default async function ChordsPage() {
 	const roots = sortRoots([...new Set(data?.map((c) => c.root) ?? [])]);
 
 	return (
-		<div className="h-full bg-background">
+		<div className="flex-1 bg-background">
 			<div className="container mx-auto py-8">
 				<div className="flex flex-col items-center gap-10">
 					<div className="flex flex-col items-center gap-2 text-center">

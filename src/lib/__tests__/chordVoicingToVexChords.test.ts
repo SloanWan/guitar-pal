@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   chordVoicingToVexChords,
+  decodeVoicingStrings,
   selectStandardVoicing,
   type ChordVoicing,
 } from "@/lib/chordVoicingToVexChords";
@@ -171,6 +172,73 @@ describe("chordVoicingToVexChords — edge cases", () => {
   it("produces exactly 6 chord entries", () => {
     const result = chordVoicingToVexChords(voicing({}));
     expect(result.chord).toHaveLength(6);
+  });
+});
+
+// ─── decodeVoicingStrings ─────────────────────────────────────────────────────
+
+describe("decodeVoicingStrings — open C major", () => {
+  // frets="x32010", fingers="032010", start_fret=1
+  const decoded = decodeVoicingStrings(
+    voicing({ start_fret: 1, barre_fret: null, capo: false, frets: "x32010", fingers: "032010" })
+  );
+
+  it("returns 6 entries", () => {
+    expect(decoded).toHaveLength(6);
+  });
+
+  it("string index 0 (low E) is muted", () => {
+    expect(decoded[0]).toEqual({ stringIndex: 0, absoluteFret: "x", finger: 0 });
+  });
+
+  it("string index 1 (A) has absolute fret 3", () => {
+    expect(decoded[1]).toEqual({ stringIndex: 1, absoluteFret: 3, finger: 3 });
+  });
+
+  it("string index 2 (D) has absolute fret 2", () => {
+    expect(decoded[2]).toEqual({ stringIndex: 2, absoluteFret: 2, finger: 2 });
+  });
+
+  it("string index 3 (G) is open (absoluteFret 0)", () => {
+    expect(decoded[3]).toEqual({ stringIndex: 3, absoluteFret: 0, finger: 0 });
+  });
+
+  it("string index 4 (B) has absolute fret 1", () => {
+    expect(decoded[4]).toEqual({ stringIndex: 4, absoluteFret: 1, finger: 1 });
+  });
+
+  it("string index 5 (high e) is open", () => {
+    expect(decoded[5]).toEqual({ stringIndex: 5, absoluteFret: 0, finger: 0 });
+  });
+});
+
+describe("decodeVoicingStrings — C major barre @ fret 8 (E-shape)", () => {
+  // frets="133211", start_fret=8: diagram-relative 1 → absolute 8, 3 → 10, 2 → 9
+  const decoded = decodeVoicingStrings(
+    voicing({ start_fret: 8, barre_fret: 1, capo: true, frets: "133211", fingers: "134211" })
+  );
+
+  it("string index 0 (low E) has absolute fret 8", () => {
+    expect(decoded[0].absoluteFret).toBe(8);
+  });
+
+  it("string index 1 (A) has absolute fret 10", () => {
+    expect(decoded[1].absoluteFret).toBe(10);
+  });
+
+  it("string index 3 (G) has absolute fret 9", () => {
+    expect(decoded[3].absoluteFret).toBe(9);
+  });
+});
+
+describe("decodeVoicingStrings — open string stays 0 regardless of start_fret", () => {
+  it("start_fret=5, fret='0' → absoluteFret=0 (open, not 4)", () => {
+    const decoded = decodeVoicingStrings(
+      voicing({ start_fret: 5, frets: "000000", fingers: "000000" })
+    );
+    for (const s of decoded) {
+      expect(s.absoluteFret).toBe(0);
+    }
   });
 });
 

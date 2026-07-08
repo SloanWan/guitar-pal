@@ -18,9 +18,11 @@ interface TabStaveRowProps {
 	measures: Measure[];
 	/** Measure number for the first measure in this row (1-indexed). */
 	startMeasureNumber?: number;
+	/** 0-indexed global measure index for this row's first measure; enables cursor data attributes. */
+	startMeasureIndex?: number;
 }
 
-export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRowProps) {
+export default function TabStaveRow({ measures, startMeasureNumber, startMeasureIndex }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -83,6 +85,19 @@ export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRo
 				voice.draw(ctx, staves[i]);
 				connectors.forEach((c) => c.setContext(ctx).draw());
 				beams.forEach((b) => b.setContext(ctx).draw());
+
+				// Tag each note's SVG element so the cursor RAF loop can query by
+				// global measure/slot index and resolve screen coordinates via getBoundingClientRect.
+				if (startMeasureIndex !== undefined) {
+					const globalMeasureIdx = startMeasureIndex + i;
+					notes.forEach((note, j) => {
+						const el = note.getSVGElement();
+						if (el) {
+							el.setAttribute("data-measure-index", String(globalMeasureIdx));
+							el.setAttribute("data-slot-index", String(j));
+						}
+					});
+				}
 			});
 		};
 
@@ -104,7 +119,7 @@ export default function TabStaveRow({ measures, startMeasureNumber }: TabStaveRo
 			if (rafId !== undefined) cancelAnimationFrame(rafId);
 			div.innerHTML = "";
 		};
-	}, [measures, startMeasureNumber]);
+	}, [measures, startMeasureNumber, startMeasureIndex]);
 
 	return <div ref={containerRef} className="font-mono w-full" />;
 }

@@ -161,6 +161,7 @@ export default function FingerpickPage() {
 		pause,
 		resume,
 		stop,
+		getPlaybackProgress,
 		metronomeEnabled,
 		setMetronomeEnabled,
 		metronomeSubdivision,
@@ -174,6 +175,20 @@ export default function FingerpickPage() {
 		applyBpmChange,
 		applyLoopGapChange,
 	} = useFingerpickAudioEngine();
+
+	// ── Cursor / scroll refs ────────────────────────────────────────────────
+	const tabViewerRef = useRef<HTMLDivElement>(null);
+	const cursorRef = useRef<HTMLDivElement>(null);
+	const rafRef = useRef<number | undefined>(undefined);
+	// Tracks the last row that was scrolled into view; -1 = none yet.
+	const lastScrolledRowRef = useRef(-1);
+	// Mirrors `rows` for the RAF closure without needing it as a dep (synced below).
+	const rowsRef = useRef<Array<{ measures: Measure[]; startMeasureNumber: number }>>([]);
+	// One DOM ref per row wrapper div (indexed to match `rows`).
+	const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+	// Always-current getter: `getPlaybackProgress` is recreated each render but all
+	// versions close over the same audio engine refs, so any version is correct.
+	const playbackGetterRef = useRef(getPlaybackProgress);
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -259,6 +274,88 @@ export default function FingerpickPage() {
 		handleBpmChange(rawBpm);
 	}
 
+	// ── Playback cursor RAF loop ─────────────────────────────────────────────
+	// Starts when isPlaying becomes true; stopped on pause/stop or unmount.
+	// All cursor updates go through direct DOM mutation — no React setState.
+	useEffect(() => {
+		if (!isPlaying) {
+			if (rafRef.current !== undefined) {
+				cancelAnimationFrame(rafRef.current);
+				rafRef.current = undefined;
+			}
+			if (cursorRef.current) cursorRef.current.style.display = "none";
+			lastScrolledRowRef.current = -1;
+			return;
+		}
+
+		function tick() {
+			const cursor = cursorRef.current;
+			const container = tabViewerRef.current;
+			if (!cursor || !container) {
+				rafRef.current = requestAnimationFrame(tick);
+				return;
+			}
+
+			const progress = playbackGetterRef.current();
+			if (!progress) {
+				cursor.style.display = "none";
+				rafRef.current = requestAnimationFrame(tick);
+				return;
+			}
+
+			const { measureIndex, slotIndex } = progress;
+
+			const noteEl = container.querySelector<SVGElement>(
+				`[data-measure-index="${measureIndex}"][data-slot-index="${slotIndex}"]`,
+			);
+			if (!noteEl) {
+				cursor.style.display = "none";
+				rafRef.current = requestAnimationFrame(tick);
+				return;
+			}
+
+			// Position cursor relative to the scrollable content area.
+			const containerRect = container.getBoundingClientRect();
+			const noteRect = noteEl.getBoundingClientRect();
+			// Use the note's parent SVG for height/top so the cursor spans the full stave.
+			const svgEl = noteEl.closest("svg");
+			const svgRect = svgEl ? svgEl.getBoundingClientRect() : noteRect;
+
+			const top = svgRect.top - containerRect.top + container.scrollTop;
+			const noteCenterX = noteRect.left - containerRect.left + noteRect.width / 2;
+			const cursorWidth = Math.max(noteRect.width + 8, 24);
+
+			cursor.style.display = "block";
+			cursor.style.top = `${top}px`;
+			cursor.style.height = `${svgRect.height}px`;
+			cursor.style.left = `${noteCenterX - cursorWidth / 2}px`;
+			cursor.style.width = `${cursorWidth}px`;
+
+			// Auto-scroll: when the active measure moves to a new row, scroll that
+			// row wrapper into view. block:"nearest" avoids unnecessary scrolling and
+			// won't fight with the fixed mobile controls bar at the bottom.
+			const currentRows = rowsRef.current;
+			const rowIdx = currentRows.findIndex((row) => {
+				const start = row.startMeasureNumber - 1;
+				return measureIndex >= start && measureIndex < start + row.measures.length;
+			});
+			if (rowIdx !== -1 && rowIdx !== lastScrolledRowRef.current) {
+				lastScrolledRowRef.current = rowIdx;
+				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+			}
+
+			rafRef.current = requestAnimationFrame(tick);
+		}
+
+		rafRef.current = requestAnimationFrame(tick);
+		return () => {
+			if (rafRef.current !== undefined) {
+				cancelAnimationFrame(rafRef.current);
+				rafRef.current = undefined;
+			}
+		};
+	}, [isPlaying]);
+
 	// Spacebar toggles Play/Pause. Skips when focus is inside a text/select element.
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
@@ -306,6 +403,17 @@ export default function FingerpickPage() {
 			}, []),
 		[pattern.measures, measuresPerRow],
 	);
+
+	// Keep refs in sync with the latest render values so the RAF closure never goes stale.
+	// useEffect (not inline assignment) satisfies react-hooks/refs; the one-frame lag
+	// is harmless — getPlaybackProgress reads audio engine refs (never React state), and
+	// rows changes only on resize/pattern edit, not mid-playback.
+	useEffect(() => {
+		rowsRef.current = rows;
+	}, [rows]);
+	useEffect(() => {
+		playbackGetterRef.current = getPlaybackProgress;
+	}, [getPlaybackProgress]);
 
 	return (
 		<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">
@@ -357,15 +465,38 @@ export default function FingerpickPage() {
 
 					{/* min-h-0 lets Flexbox shrink this child so overflow-y-auto scrolls.
 					    Each TabStaveRow is a full-width row of measures rendered into one
-					    VexFlow context; the row count and width are driven by the viewport. */}
-					<div className="min-h-0 overflow-y-auto bg-white rounded-xl border border-slate-100">
+					    VexFlow context; the row count and width are driven by the viewport.
+					    position:relative anchors the cursor overlay div. */}
+					<div
+						ref={tabViewerRef}
+						className="relative min-h-0 overflow-y-auto bg-white rounded-xl border border-slate-100"
+					>
+						{/* Cursor highlight — repositioned each RAF tick via direct DOM mutation.
+						    display:none initially; the RAF loop toggles it during playback. */}
+						<div
+							ref={cursorRef}
+							aria-hidden="true"
+							className="absolute pointer-events-none rounded-sm"
+							style={{
+								display: "none",
+								backgroundColor: "rgba(74, 111, 165, 0.15)",
+								borderLeft: "2px solid rgba(74, 111, 165, 0.55)",
+							}}
+						/>
 						<div className="flex flex-col">
-							{rows.map((row) => (
-								<TabStaveRow
+							{rows.map((row, rowIdx) => (
+								<div
 									key={row.measures[0].id}
-									measures={row.measures}
-									startMeasureNumber={row.startMeasureNumber}
-								/>
+									ref={(el) => {
+										rowRefs.current[rowIdx] = el;
+									}}
+								>
+									<TabStaveRow
+										measures={row.measures}
+										startMeasureNumber={row.startMeasureNumber}
+										startMeasureIndex={row.startMeasureNumber - 1}
+									/>
+								</div>
 							))}
 						</div>
 					</div>

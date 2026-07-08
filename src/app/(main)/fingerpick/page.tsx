@@ -1042,10 +1042,10 @@ export default function FingerpickPage() {
 					{(isPlaying || isPaused) && (
 						<button
 							onClick={handleStop}
-							className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors duration-150 text-xs font-medium"
+							className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 hover:cursor-pointer transition-colors duration-200 text-xs font-medium"
 						>
 							<CircleStop size={16} strokeWidth={1.5} />
-							Stop
+							Stop and back to start
 						</button>
 					)}
 
@@ -1144,6 +1144,27 @@ export default function FingerpickPage() {
 						</div>
 					</div>
 
+					{/* Note sound section */}
+					<div className="flex flex-col gap-1.5">
+						<div className="flex justify-between items-center">
+							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+								Note Sound
+							</span>
+							<span className="text-xs tabular-nums text-slate-400">
+								{Math.round(noteGain * 100)}%
+							</span>
+						</div>
+						<input
+							type="range"
+							min={0}
+							max={2}
+							step={0.01}
+							value={noteGain}
+							onChange={(e) => setNoteGain(Number(e.target.value))}
+							className="w-full accent-denim cursor-pointer"
+						/>
+					</div>
+
 					<div className="border-t border-slate-100" />
 
 					{/* Metronome toggle */}
@@ -1235,27 +1256,6 @@ export default function FingerpickPage() {
 					</div>
 
 					<div className="border-t border-slate-100" />
-
-					{/* Note sound section */}
-					<div className="flex flex-col gap-1.5">
-						<div className="flex justify-between items-center">
-							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-								Note Sound
-							</span>
-							<span className="text-xs tabular-nums text-slate-400">
-								{Math.round(noteGain * 100)}%
-							</span>
-						</div>
-						<input
-							type="range"
-							min={0}
-							max={2}
-							step={0.01}
-							value={noteGain}
-							onChange={(e) => setNoteGain(Number(e.target.value))}
-							className="w-full accent-denim cursor-pointer"
-						/>
-					</div>
 				</div>
 			</div>
 		</div>

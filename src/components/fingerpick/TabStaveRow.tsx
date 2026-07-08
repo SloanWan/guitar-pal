@@ -10,7 +10,7 @@ import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
 const CLEF_WIDTH = 15;
 const RIGHT_PAD = 15;
-const SVG_HEIGHT = 180;
+const SVG_HEIGHT = 200;
 const STAVE_Y = 10;
 
 interface TabStaveRowProps {
@@ -22,7 +22,11 @@ interface TabStaveRowProps {
 	startMeasureIndex?: number;
 }
 
-export default function TabStaveRow({ measures, startMeasureNumber, startMeasureIndex }: TabStaveRowProps) {
+export default function TabStaveRow({
+	measures,
+	startMeasureNumber,
+	startMeasureIndex,
+}: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -73,9 +77,25 @@ export default function TabStaveRow({ measures, startMeasureNumber, startMeasure
 				return stave;
 			});
 
+			// Store each stave's note-area bounds so the cursor can position the measure
+			// background highlight without knowing the layout math inside this function.
+			if (startMeasureIndex !== undefined) {
+				const svgEl = div.querySelector("svg");
+				if (svgEl) {
+					staves.forEach((stave, i) => {
+						const g = startMeasureIndex + i;
+						svgEl.setAttribute(`data-stave-${g}-x`, String(stave.getNoteStartX()));
+						svgEl.setAttribute(
+							`data-stave-${g}-w`,
+							String(stave.getNoteEndX() - stave.getNoteStartX()),
+						);
+					});
+				}
+			}
+
 			// Format and draw notes for each measure against its own stave.
 			measures.forEach((measure, i) => {
-				const { notes, connectors } = fingerpickToVexFlow(measure);
+				const { notes, connectors, tuplets } = fingerpickToVexFlow(measure);
 				const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 				voice.addTickables(notes);
 				const noteWidth = staves[i].getNoteEndX() - staves[i].getNoteStartX() - 10;
@@ -85,6 +105,7 @@ export default function TabStaveRow({ measures, startMeasureNumber, startMeasure
 				voice.draw(ctx, staves[i]);
 				connectors.forEach((c) => c.setContext(ctx).draw());
 				beams.forEach((b) => b.setContext(ctx).draw());
+				tuplets.forEach((t) => t.setContext(ctx).draw());
 
 				// Tag each note's SVG element so the cursor RAF loop can query by
 				// global measure/slot index and resolve screen coordinates via getBoundingClientRect.

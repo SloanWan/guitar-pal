@@ -3,6 +3,7 @@ import {
 	TabNotePosition,
 	TabTie,
 	TabSlide,
+	Tuplet,
 	GhostNote,
 	StemmableNote,
 } from "vexflow";
@@ -14,6 +15,9 @@ export const VEX_DURATION: Record<Duration, string> = {
 	half: "h",
 	quarter: "q",
 	eighth: "8",
+	// Tuplet notes use the underlying undivided duration ("8"); the Tuplet wrapper
+	// adjusts tick values for correct Formatter spacing and draws the bracket.
+	"eighth-triplet": "8",
 	sixteenth: "16",
 	rest: "q",
 };
@@ -21,6 +25,7 @@ export const VEX_DURATION: Record<Duration, string> = {
 export interface VexFlowRenderData {
 	notes: StemmableNote[];
 	connectors: Array<TabTie | TabSlide>;
+	tuplets: Tuplet[];
 }
 
 // Pure, deterministic mapping from a Measure to VexFlow note objects.
@@ -100,5 +105,25 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		});
 	}
 
-	return { notes, connectors };
+	// Group consecutive "eighth-triplet" slots into sets of 3 and wrap each group in
+	// a Tuplet. This adjusts each note's tick value (3 → 2 eighths) so the Formatter
+	// spaces the measure correctly, and draws the bracket above the staff.
+	const tuplets: Tuplet[] = [];
+	let si = 0;
+	while (si < measure.slots.length) {
+		if (measure.slots[si].duration === "eighth-triplet") {
+			const groupStart = si;
+			while (si < measure.slots.length && measure.slots[si].duration === "eighth-triplet") {
+				si++;
+			}
+			for (let j = groupStart; j < si; j += 3) {
+				const group = notes.slice(j, j + 3);
+				if (group.length === 3) tuplets.push(new Tuplet(group));
+			}
+		} else {
+			si++;
+		}
+	}
+
+	return { notes, connectors, tuplets };
 }

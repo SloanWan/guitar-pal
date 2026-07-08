@@ -52,6 +52,7 @@ const DURATION_BEATS: Record<Duration, number> = {
 	half: 2,
 	quarter: 1,
 	eighth: 0.5,
+	"eighth-triplet": 1 / 3,
 	sixteenth: 0.25,
 	rest: 1,
 };

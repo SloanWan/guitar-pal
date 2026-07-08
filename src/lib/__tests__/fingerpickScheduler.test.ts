@@ -85,6 +85,27 @@ describe("fingerpickPatternToScheduleEvents — BPM / timing math", () => {
 		expect(ev.duration).toBeCloseTo(0.0625);
 	});
 
+	it("eighth-triplet at 120 BPM = 1/6 s duration (3 notes in the time of 2 eighths)", () => {
+		const p = pattern(120, [slot("s1", "eighth-triplet", { 5: { fret: 0 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		// 1 beat = 0.5 s at 120 BPM; triplet eighth = 1/3 beat = 0.5/3 ≈ 0.1667 s
+		expect(ev.duration).toBeCloseTo(1 / 6);
+	});
+
+	it("three eighth-triplets sum to exactly 1 beat", () => {
+		const p = pattern(60, [
+			slot("s1", "eighth-triplet", { 0: { fret: 0 } }),
+			slot("s2", "eighth-triplet", { 0: { fret: 2 } }),
+			slot("s3", "eighth-triplet", { 0: { fret: 3 } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 60);
+		// At 60 BPM: each triplet eighth = 1/3 s; three = 1 s = 1 beat
+		expect(events[0].time).toBeCloseTo(0);
+		expect(events[1].time).toBeCloseTo(1 / 3);
+		expect(events[2].time).toBeCloseTo(2 / 3);
+		expect(getTotalPatternDuration(p, 60)).toBeCloseTo(1);
+	});
+
 	it("second slot starts after first slot's duration elapses", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 5: { fret: 0 } }),

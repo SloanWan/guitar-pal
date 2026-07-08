@@ -536,9 +536,9 @@ The `chords` table covers all 12 chromatic roots (C, C#, D, Eb, E, F, F#, G, Ab,
 
 - **`BrowseGrid.tsx`** — Renders a `BrowseSection[]` as stacked heading + card-grid blocks, handling both flat (`cards` array) and nested (`subsections`) section shapes.
 
-- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Shows all voicings for a single chord using full-size `ChordDiagram` components, with a fret/note-name label toggle.
+- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Shows all voicings for a single chord using full-size `ChordDiagram` components. Each voicing card has a Play button: MIDI pitches are computed server-side via `chordVoicingToMidi()` (which calls the same `decodeVoicingStrings()` extractor used internally by `chordVoicingToVexChords` — no duplicated fret math), then played client-side using the fingerpick engine's `pluck` preset (`0250_LK_AcousticSteel_SF2_file`), not the strum page's SoundBlasterOld presets. The preset is lazy-loaded on the first play click (not on page mount); subsequent plays in the same session are instant via the module-level cache in `useGuitarSampleLoader.ts`.
 
-**Attribution:** `@tombatossals/chords-db` (MIT) and `vexchords` are in `package.json`. `THIRD_PARTY_LICENSES.md` at the repo root and an in-app footer credit are not yet present — see Backlog.
+**Attribution:** `@tombatossals/chords-db` (MIT) and `vexchords` are in `package.json`. An in-app footer credit for `@tombatossals/chords-db`, `vexchords`, and WebAudioFont is present on all Chord Library pages. `THIRD_PARTY_LICENSES.md` at the repo root is still not present — see Backlog.
 
 ---
 
@@ -711,5 +711,5 @@ These are inferred from scaffolded-but-unused code and obvious gaps:
 
 - **Practice history page** — render `getPracticeLogs()` results, ideally with calendar heatmap or weekly summary.
 - **Exercise log UI** — wire up `createExerciseLog` and `getExerciseLogs`; perhaps a per-exercise progress view.
-- **Third-party attribution** — add `THIRD_PARTY_LICENSES.md` at the repo root and an in-app footer credit linking to the `tombatossals/chords-db` and `vexchords` GitHub repos. Both are currently declared in `package.json` but have no in-app attribution.
+- **Third-party attribution** — add `THIRD_PARTY_LICENSES.md` at the repo root (in-app footer credit for the Chord Library pages is already present).
 - **Atomic reordering** — replace the two-update `swapRoutineExerciseOrder` with a Supabase RPC.

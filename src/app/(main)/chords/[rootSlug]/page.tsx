@@ -33,7 +33,7 @@ export default async function RootPage({ params }: Props) {
 		<>
 		<ChordToc sections={sections} />
 		<ChordTocIndicator sections={sections} />
-		<div className="h-full bg-background">
+		<div className="flex-1 bg-background">
 			<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 				<div className="flex flex-col items-center gap-6">
 					<div className="flex w-full items-center justify-between">

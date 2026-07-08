@@ -26,42 +26,56 @@ export interface VexChordDef {
   barres: VexBarre[];
 }
 
+/**
+ * Per-string decoded data with absolute guitar fret numbers.
+ * stringIndex 0 = string 6 (low E), stringIndex 5 = string 1 (high e).
+ * absoluteFret 0 = open string; positive = actual fret on the guitar neck; "x" = muted.
+ * DB frets chars are diagram-relative (offset within the diagram starting at start_fret),
+ * so absolute = start_fret - 1 + relFret for non-zero frets.
+ */
+export interface DecodedString {
+  stringIndex: number;
+  absoluteFret: number | "x";
+  finger: number;
+}
+
 // Pure adapter — no DOM, no React deps.
 // frets/fingers are 6-char strings: index 0 = string 6 (low E), index 5 = string 1 (high e).
-// Fret chars are relative to start_fret (vexchords' own offset convention) — passed through as-is.
-export function chordVoicingToVexChords(voicing: ChordVoicing): VexChordDef {
-  const { frets, fingers, start_fret, barre_fret, capo } = voicing;
-
-  const chord: VexChordEntry[] = [];
-  for (let i = 0; i < 6; i++) {
-    const stringNum = 6 - i;
+// Fret chars are diagram-relative (vexchords' position offset convention).
+export function decodeVoicingStrings(voicing: ChordVoicing): DecodedString[] {
+  const { frets, fingers, start_fret } = voicing;
+  return Array.from({ length: 6 }, (_, i) => {
     const fretChar = frets[i];
-    const fingerNum = parseInt(fingers[i], 10);
+    const finger = parseInt(fingers[i], 10);
+    if (fretChar === "x") return { stringIndex: i, absoluteFret: "x" as const, finger };
+    const relFret = parseInt(fretChar, 10);
+    const absoluteFret = relFret === 0 ? 0 : start_fret - 1 + relFret;
+    return { stringIndex: i, absoluteFret, finger };
+  });
+}
 
-    if (fretChar === "x") {
-      chord.push([stringNum, "x"]);
-    } else {
-      const fretVal = parseInt(fretChar, 10);
-      if (fingerNum > 0) {
-        chord.push([stringNum, fretVal, String(fingerNum)]);
-      } else {
-        chord.push([stringNum, fretVal]);
-      }
-    }
-  }
+export function chordVoicingToVexChords(voicing: ChordVoicing): VexChordDef {
+  const { start_fret, barre_fret, capo } = voicing;
+  const decoded = decodeVoicingStrings(voicing);
+
+  const chord: VexChordEntry[] = decoded.map(({ stringIndex, absoluteFret, finger }) => {
+    const stringNum = 6 - stringIndex;
+    if (absoluteFret === "x") return [stringNum, "x"];
+    // Convert absolute fret back to diagram-relative for VexChords
+    const diagramFret = absoluteFret === 0 ? 0 : absoluteFret - start_fret + 1;
+    if (finger > 0) return [stringNum, diagramFret, String(finger)];
+    return [stringNum, diagramFret];
+  });
 
   const barres: VexBarre[] = [];
   if (barre_fret !== null) {
     if (capo) {
       barres.push({ fromString: 6, toString: 1, fret: barre_fret });
     } else {
-      // Find all non-muted strings that share the barre_fret digit value
-      const matchingStrings: number[] = [];
-      for (let i = 0; i < 6; i++) {
-        if (frets[i] !== "x" && parseInt(frets[i], 10) === barre_fret) {
-          matchingStrings.push(6 - i);
-        }
-      }
+      const absBarreFret = start_fret - 1 + barre_fret;
+      const matchingStrings = decoded
+        .filter(({ absoluteFret }) => absoluteFret !== "x" && absoluteFret === absBarreFret)
+        .map(({ stringIndex }) => 6 - stringIndex);
       if (matchingStrings.length > 0) {
         barres.push({
           fromString: Math.max(...matchingStrings),

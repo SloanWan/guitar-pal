@@ -4,14 +4,18 @@ import {
 	parsePresetFromJs,
 	findZoneForMidi,
 	triggerStrum,
+	triggerChordPreview,
 	cancelStrums,
 	STRUM_PITCHES,
+	CHORD_PREVIEW_DURATION_S,
 	DECAY_TIME_CONSTANT_RATIO,
 	MUTED_MAX_DURATION_S,
 	MIN_DECAY_TC_S,
 	SOURCE_STOP_BUFFER_S,
 	_resetCachesForTesting,
 	_setReadyPresetForTesting,
+	_resetFingerpickCachesForTesting,
+	_setReadyFingerpickPresetForTesting,
 	_pcmSampleToBuffer,
 	SampleLoadError,
 } from "@/components/strum/useGuitarSampleLoader";
@@ -579,6 +583,103 @@ describe("cancelStrums", () => {
 
 	it("is idempotent — calling twice does not throw", () => {
 		expect(() => { cancelStrums(); cancelStrums(); }).not.toThrow();
+	});
+});
+
+// ─── triggerChordPreview ──────────────────────────────────────────────────────
+
+describe("triggerChordPreview", () => {
+	beforeEach(() => {
+		_resetCachesForTesting();
+		_resetFingerpickCachesForTesting();
+	});
+
+	it("silently no-ops when the fingerpick pluck preset has not been preloaded", () => {
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerChordPreview([48, 52, 55], ctx, {} as AudioNode, 0);
+		expect(sources).toHaveLength(0);
+	});
+
+	it("creates one AudioBufferSourceNode per pitch", () => {
+		const fakeBuffer = makeFakeBuffer();
+		const preset = makePreset([makeZone({ buffer: fakeBuffer })]);
+		_setReadyFingerpickPresetForTesting("pluck", preset);
+
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerChordPreview([48, 52, 55, 60, 64], ctx, {} as AudioNode, 0);
+
+		expect(sources).toHaveLength(5);
+	});
+
+	it("plays pitches in ascending order (low-to-high) regardless of input order", () => {
+		const zone = makeZone({ buffer: makeFakeBuffer(), originalPitch: 6000, coarseTune: 0, fineTune: 0 });
+		const preset = makePreset([zone]);
+		_setReadyFingerpickPresetForTesting("pluck", preset);
+
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerChordPreview([64, 48, 55], ctx, {} as AudioNode, 0);
+
+		const rates = sources.map((s) => s.playbackRate.value);
+		for (let i = 1; i < rates.length; i++) {
+			expect(rates[i]).toBeGreaterThan(rates[i - 1]);
+		}
+	});
+
+	it("staggers note start times by 10 ms per note", () => {
+		const fakeBuffer = makeFakeBuffer();
+		const preset = makePreset([makeZone({ buffer: fakeBuffer })]);
+		_setReadyFingerpickPresetForTesting("pluck", preset);
+
+		const { ctx, sources } = makeMockStrumCtx();
+		const WHEN = 1.0;
+		triggerChordPreview([48, 52, 55], ctx, {} as AudioNode, WHEN);
+
+		for (let i = 0; i < sources.length; i++) {
+			expect(sources[i].start).toHaveBeenCalledWith(WHEN + i * 0.01);
+		}
+	});
+
+	it("stops all sources at when + CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S", () => {
+		const fakeBuffer = makeFakeBuffer();
+		const preset = makePreset([makeZone({ buffer: fakeBuffer })]);
+		_setReadyFingerpickPresetForTesting("pluck", preset);
+
+		const { ctx, sources } = makeMockStrumCtx();
+		const WHEN = 0.5;
+		triggerChordPreview([48, 52, 55], ctx, {} as AudioNode, WHEN);
+
+		for (const source of sources) {
+			const stopTime = (source.stop as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
+			expect(stopTime).toBeCloseTo(WHEN + CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S, 5);
+		}
+	});
+
+	it("skips pitches whose zone has no decoded buffer", () => {
+		const decodedZone = makeZone({ keyRangeLow: 0, keyRangeHigh: 60, buffer: makeFakeBuffer() });
+		const undecodedZone = makeZone({ keyRangeLow: 61, keyRangeHigh: 127 });
+		const preset = makePreset([decodedZone, undecodedZone]);
+		_setReadyFingerpickPresetForTesting("pluck", preset);
+
+		const { ctx, sources } = makeMockStrumCtx();
+		triggerChordPreview([48, 55, 64], ctx, {} as AudioNode, 0);
+
+		// 48 and 55 → decodedZone; 64 → undecodedZone → 2 sources
+		expect(sources).toHaveLength(2);
+	});
+
+	it("does not touch the strum steelGuitar preset — triggerStrum still works independently", () => {
+		const pluckBuffer = { _id: "pluck" } as unknown as AudioBuffer;
+		const strumBuffer = { _id: "strum" } as unknown as AudioBuffer;
+		_setReadyFingerpickPresetForTesting("pluck", makePreset([makeZone({ buffer: pluckBuffer })]));
+		_setReadyPresetForTesting("steelGuitar", makePreset([makeZone({ buffer: strumBuffer })]));
+
+		const { ctx: previewCtx, sources: previewSrcs } = makeMockStrumCtx();
+		triggerChordPreview([48], previewCtx, {} as AudioNode, 0);
+		expect(previewSrcs[0].buffer).toBe(pluckBuffer);
+
+		const { ctx: strumCtx, sources: strumSrcs } = makeMockStrumCtx();
+		triggerStrum("down", strumCtx, {} as AudioNode, 0, 1.0);
+		expect(strumSrcs[0].buffer).toBe(strumBuffer);
 	});
 });
 

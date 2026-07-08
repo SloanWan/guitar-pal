@@ -488,6 +488,44 @@ export function cancelStrums(): void {
 	_activeSources.clear();
 }
 
+/** Sustain duration (s) for chord preview playback. */
+export const CHORD_PREVIEW_DURATION_S = 2.0;
+
+/**
+ * Synchronously trigger a chord preview using the steel guitar preset already loaded
+ * for D/U strums. Notes are played low-to-high with the same 10 ms per-string stagger
+ * as triggerStrum. Silently no-ops if preloadStrumPresets has not yet resolved.
+ *
+ * Added to _activeSources so cancelStrums() stops preview notes too.
+ *
+ * @param pitches  - MIDI pitch values for each string to play (any order; sorted internally).
+ * @param ctx      - AudioContext (managed by the caller).
+ * @param target   - Destination AudioNode.
+ * @param when     - Absolute AudioContext time in seconds.
+ */
+export function triggerChordPreview(
+	pitches: readonly number[],
+	ctx: AudioContext,
+	target: AudioNode,
+	when: number,
+): void {
+	const preset = _readyFingerpickPresets.get("pluck");
+	if (!preset) return;
+
+	const sorted = [...pitches].sort((a, b) => a - b);
+
+	for (let i = 0; i < sorted.length; i++) {
+		const zone = findZoneForMidi(preset, sorted[i]);
+		if (!zone.buffer) continue;
+
+		const noteOffset = i * STRUM_STAGGER_S;
+		const adjustedDuration = CHORD_PREVIEW_DURATION_S - noteOffset;
+		if (adjustedDuration <= 0) continue;
+
+		_scheduleNote(ctx, target, zone, zone.buffer, when + noteOffset, sorted[i], adjustedDuration, 0.7);
+	}
+}
+
 /**
  * @deprecated Use preloadStrumPresets + triggerStrum instead.
  * Retained as a stub so useAudioEngine.ts compiles unchanged until 53-b
@@ -508,9 +546,10 @@ export function getStrumBuffer(_type: StrumSoundType, _ctx: AudioContext): Promi
 export function useGuitarSampleLoader(): {
 	preloadStrumPresets: typeof preloadStrumPresets;
 	triggerStrum: typeof triggerStrum;
+	triggerChordPreview: typeof triggerChordPreview;
 	cancelStrums: typeof cancelStrums;
 } {
-	return { preloadStrumPresets, triggerStrum, cancelStrums };
+	return { preloadStrumPresets, triggerStrum, triggerChordPreview, cancelStrums };
 }
 
 /** For testing only — clears all in-memory caches and active sources. */

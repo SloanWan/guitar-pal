@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getChord } from "@/lib/chords";
 import { slugToRoot, slugToSuffix } from "@/lib/chordSlug";
 import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import ChordDetailView, { type VoicingCard } from "@/components/chords/ChordDetailView";
 import MusicalText from "@/components/MusicalText";
 
@@ -35,10 +36,11 @@ export default async function ChordDetailPage({ params }: Props) {
 		id: v.id,
 		label: v.label ?? `Pos. ${v.start_fret}`,
 		def: chordVoicingToVexChords(v),
+		pitches: chordVoicingToMidi(v).map(({ midi }) => midi),
 	}));
 
 	return (
-		<div className="h-full bg-background flex flex-col">
+		<div className="flex-1 bg-background flex flex-col">
 			<div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col flex-1">
 				<div className="flex flex-col items-center gap-6 flex-1">
 					<div className="flex w-full items-center justify-between">

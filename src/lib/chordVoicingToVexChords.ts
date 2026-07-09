@@ -89,11 +89,4 @@ export function chordVoicingToVexChords(voicing: ChordVoicing): VexChordDef {
   return { chord, position: start_fret, barres };
 }
 
-// Returns the voicing labelled "Standard", or the voicing with the lowest start_fret
-// when no "Standard" label exists. Returns null for an empty array.
-export function selectStandardVoicing(voicings: ChordVoicing[]): ChordVoicing | null {
-  if (voicings.length === 0) return null;
-  const standard = voicings.find((v) => v.label === "Standard");
-  if (standard) return standard;
-  return voicings.reduce((min, v) => (v.start_fret < min.start_fret ? v : min));
-}
+export { selectStandardVoicing } from "@/lib/selectStandardVoicing";

@@ -23,7 +23,6 @@ This document is a complete reference for an AI assistant working on this codeba
 | Primitive UI        | Radix UI (via shadcn)                      | 1.x     |
 | Icons               | lucide-react                               | 1.x     |
 | Animations          | framer-motion                              | 12.x    |
-| Chord diagrams      | vexchords                                  | 1.x     |
 | Chord data source   | @tombatossals/chords-db                    | 0.5.x   |
 | Toast notifications | sonner                                     | 2.x     |
 | Auth + Database     | Supabase (`@supabase/ssr`)                 | 0.10.x  |
@@ -526,7 +525,7 @@ The `chords` table covers all 12 chromatic roots (C, C#, D, Eb, E, F, F#, G, Ab,
 
 **Adapter / utility layer:**
 
-- **`src/lib/chordVoicingToVexChords.ts`** — Pure adapter (no DOM/React). Converts a `ChordVoicing` DB row (6-char `frets`/`fingers` strings, relative `start_fret`, optional `barre_fret`/`capo`) into a `VexChordDef` for the vexchords `ChordBox`. Barre detection: `capo=true` → full 6-string barre; otherwise finds all non-muted strings sharing the `barre_fret` digit and computes `fromString`/`toString` span. Also exports `selectStandardVoicing` (returns the "Standard"-labelled voicing, or the one with the lowest `start_fret` as fallback) and `decodeVoicingStrings` (returns `DecodedString[]` with absolute guitar fret numbers, used by `chordVoicingToMidi`).
+- **`src/lib/selectStandardVoicing.ts`** — Exports `selectStandardVoicing()` only: returns the "Standard"-labelled voicing, or the one with the lowest `start_fret` as fallback. VexChordDef conversion logic removed.
 
 - **`src/lib/chordVoicingToMidi.ts`** — Pure function. Converts a `ChordVoicing` into `ChordMidiNote[]` (one entry per non-muted string) using `decodeVoicingStrings` and `GUITAR_OPEN_MIDI` (standard tuning open-string pitches: `[40, 45, 50, 55, 59, 64]`, index 0 = low E). Called by `chords/[rootSlug]/[suffixSlug]/page.tsx` (server component) to compute pitches passed to `ChordDetailView`.
 
@@ -559,15 +558,17 @@ The `chords` table covers all 12 chromatic roots (C, C#, D, Eb, E, F, F#, G, Ab,
 
 **Rendering components:**
 
-- **`ChordDiagram.tsx`** — Client component. Dynamically imports `vexchords` (`import("vexchords").then(({ ChordBox }) => ...)`) so it and its SVG.js dependency never enter the SSR bundle. Two size presets: `REGULAR` (160 × 200 px, `showTuning: true`) for the detail page; `COMPACT` (100 × 120 px) for browse grids. Each render clears the container div then calls `box.draw(def)`.
+- **`ChordDiagram.tsx`** — Client component. Wraps `ChordDiagramSVG`; accepts `frets`, `fingers`, `startFret`, `barreFret`, `mode` (`'fingers' | 'noteNames' | 'fretboard'`, default `'fingers'`), `rootMidi`, and `size` (`'regular' | 'compact'`). `REGULAR` (160×200px) for detail page; `COMPACT` (100×120px) for browse grids. No longer uses vexchords.
+
+- **`ChordDiagramSVG.tsx`** — Pure SVG React component. Renders chord diagrams with three display modes. Barre span computed from repeated finger numbers in the `fingers[]` array (not all strings at `barreFret`). Root note highlighted in denim blue when `rootMidi` is provided. Fretboard mode renders white dots + dark gray text for non-fretted cells. Note name calculation: `(OPEN_STRING_MIDI[stringIndex] + absoluteFret) % 12`, standard tuning offsets `[40,45,50,55,59,64]`.
 
 - **`LazyChordDiagram.tsx`** — `IntersectionObserver`-gated mount guard (300 px `rootMargin`) for browse grids. Renders a fixed-size placeholder skeleton until the element enters the viewport (`COMPACT_W=126, COMPACT_H=168 px`), then mounts `ChordDiagram`. Accepts `href` (wraps in `<Link>`) or `onClick` callback. Shows a hover tooltip ("Click to see all voicings").
 
 - **`BrowseGrid.tsx`** — Renders a `BrowseSection[]` as stacked heading + card-grid blocks, handling both flat (`cards` array) and nested (`subsections`) section shapes.
 
-- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Shows all voicings for a single chord using full-size `ChordDiagram` components. Each voicing card has a Play button: MIDI pitches are pre-computed server-side via `chordVoicingToMidi()` and passed in as the `pitches` prop of each `VoicingCard`. Client-side playback calls `triggerChordPreview(pitches, ctx, destination, currentTime)` from `useGuitarSampleLoader`, which uses the `pluck` preset (`0250_LK_AcousticSteel_SF2_file`). `preloadFingerpickPresets` is lazy-loaded on the first play click (not on page mount); subsequent plays in the same session are instant via the module-level cache in `useGuitarSampleLoader.ts`.
+- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Three-mode segmented pill toggle (123/ABC/Grid) controls display mode across all voicing cards. Clicking a card opens a voicing detail modal (blur backdrop, enlarged diagram, keyboard navigation ArrowLeft/Right/Escape, touch swipe, spacebar playback). Ripple hover effect on cards using denim-tint. `rootMidi` derived from chord root string and passed to each `ChordDiagram`.
 
-**Attribution:** `@tombatossals/chords-db` (MIT) and `vexchords` are in `package.json`. The in-app footer credit for `@tombatossals/chords-db`, `vexchords`, and WebAudioFont is rendered by `src/app/(main)/chords/layout.tsx`, which wraps all `/chords/**` routes. `THIRD_PARTY_LICENSES.md` at the repo root is still not present — see Backlog.
+**Attribution:** `@tombatossals/chords-db` (MIT) is in `package.json`. The in-app footer credit for `@tombatossals/chords-db` and WebAudioFont is rendered by `src/app/(main)/chords/layout.tsx`, which wraps all `/chords/**` routes. `THIRD_PARTY_LICENSES.md` at the repo root is still not present — see Backlog.
 
 ---
 

@@ -148,3 +148,63 @@ hammer-on / pull-off / slide-up / slide-down 四种技法，覆盖初学到中�
 - Why not just add a ScheduleEvent for rest slots? (answer: rest slots produce GhostNotes with no audio; adding fake events would corrupt the timing data used for BPM reschedule and seek — cleaner to handle the display layer separately)
 - How does the rest-slot drift know where to drift toward? (answer: queries the first non-rest note's DOM element via getBoundingClientRect at runtime — no precomputation needed, no layout dependency)
 - How do you prevent auto-scroll from triggering hide-on-scroll? (answer: isAutoScrollingRef flag + CustomEvent to NavBar, both checked at the top of the scroll listener before any hide logic runs)
+
+---
+
+## Issue #29 — Custom SVG Chord Diagram Renderer with Note Toggle
+
+### What was built
+Replaced third-party library vexchords with a custom SVG renderer, added a three-mode note display toggle, root note highlighting, full-fretboard mode, and a voicing detail modal.
+
+### Technical highlights
+
+**Why we dropped vexchords:**
+- `fingers` param is typed `number[]` — no way to render custom text (note names) inside dots
+- Barre renders as a single bar with no per-string dot overlay support
+- No extensibility for root highlighting or fretboard mode
+- Custom SVG is zero-dependency and fully controllable
+
+**ChordDiagramSVG design:**
+- Pure SVG React component, `size="regular" | "compact"`
+- Three-mode prop: `"fingers"` / `"noteNames"` / `"fretboard"`
+- Note name calculation: `(OPEN_STRING_MIDI[stringIndex] + absoluteFret) % 12`, standard tuning MIDI offsets [40,45,50,55,59,64]
+- Barre span: find the finger number that repeats across strings at barreFret in the `fingers[]` array — only those strings get the barre bar. Prevents incorrectly grouping independent fingers that happen to share the same fret (a data quality issue in tombatossals/chords-db)
+- Root highlight: `rootMidi % 12 === notePitchClass` → denim blue fill
+- Fretboard mode: non-fretted cells get white dot + dark gray text, subordinate to dark fretted dots
+
+**Data layer cleanup:**
+- Removed VexChordDef conversion logic from `chordVoicingToVexChords.ts`, kept `selectStandardVoicing()`, renamed file to `selectStandardVoicing.ts`
+- Removed vexchords from package.json and deleted `vexchords.d.ts`
+- Removed vexchords attribution from chords layout footer
+
+**Voicing detail modal:**
+- Click any voicing card to open a full-screen blurred modal with enlarged diagram
+- Three-mode toggle maintains its own independent state
+- Keyboard: ArrowLeft/Right to navigate voicings, Escape to close
+- Touch swipe: horizontal delta > 50px and vertical < 30px triggers navigation
+- Spacebar triggers playback; button shows playing state until `onended`
+- Pure Tailwind + CSS transitions, no framer-motion
+
+**Data quality finding:**
+- tombatossals/chords-db marks `barre_fret` on voicings where multiple strings share a fret position but are played with independent fingers — not a true barre
+- Handled at render layer via finger number repeat validation; no DB changes needed
+
+### Rejected approaches
+- **Type coercion on vexchords fingers**: pass strings as `unknown as number[]` → rejected, dot size too small for two-character note names (e.g. F#)
+- **Note name row below diagram**: render a span row under each diagram → rejected, forces eye movement between diagram and labels, feels disconnected
+- **Global min-width**: fix narrow-screen layout issues → rejected, sub-375px devices are negligible; component-level responsive fixes are more appropriate
+
+### Product perspective
+- Build vs buy: vexchords hit its ceiling for an educational use case; self-rendering cost is low (chord diagrams have a small set of primitives), long-term maintainability is higher
+- Three-mode toggle (123/ABC/Grid) reduces cognitive load — users opt in to note names rather than having them forced on
+- Voicing modal addresses the information density problem of the compact browse grid — users can inspect any voicing in detail without leaving the page
+- Ripple hover effect signals card interactivity, reducing friction in the discovery path
+
+### One-liner for interviews
+"We replaced vexchords with a custom SVG renderer to unlock three-mode note display and root highlighting — and in the process discovered and handled a barre misclassification issue in the upstream chord database at the render layer, keeping our data clean without any DB migrations."
+
+### Follow-up questions to expect
+- Why SVG over Canvas? (SVG DOM is React-state-driven; no manual clearRect/redraw cycle needed)
+- How does the barre span validation work exactly?
+- Does fretboard mode account for capo? (Not yet — capo shifts the open string pitch, note names would be off)
+- How does swipe navigation avoid conflicting with page scroll? (30px vertical threshold filters scroll intent)

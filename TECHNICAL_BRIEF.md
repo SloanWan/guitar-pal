@@ -331,7 +331,7 @@ StepValue semantics:
 
 **Files:** `src/app/(main)/fingerpick/page.tsx`, `src/components/fingerpick/TabStaveRow.tsx`, `src/components/fingerpick/useFingerpickAudioEngine.ts`, `src/lib/fingerpickScheduler.ts`, `src/lib/fingerpickToVexFlow.ts`, `src/lib/fingerpickTypes.ts`
 
-**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). The library sidebar shows a "coming soon" placeholder. The controls panel is fully implemented on desktop. On mobile/tablet (below md breakpoint), controls move to a unified fixed-bottom drawer.
+**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). The library sidebar shows a "coming soon" placeholder. The controls panel is fully implemented on desktop. On mobile/tablet (below md breakpoint), controls move to a unified fixed-bottom drawer. On mobile/tablet (below `md`), a hide-on-scroll behaviour is active: scrolling down hides the NavBar (`translateY(-100%)`), the fixed bottom drawer (`translateY(100%)`), and the pattern library floating button (`opacity-0`). Scrolling up ≥ 40px restores all three. Tapping anywhere on the TAB viewer also restores all three — implemented via a `CustomEvent ('fingerpick-controls-restore')` dispatched from `handleTabClick` and listened to in `NavBar.tsx`. The scroll listener targets `tabViewerRef` on desktop and `window` on mobile, selected by `window.innerWidth >= 768` at listener-attach time.
 
 **Data model** (`src/lib/fingerpickTypes.ts`):
 
@@ -467,7 +467,7 @@ A single `fixed bottom-0 left-0 right-0 z-30` container replaces the right-panel
 - **Main bar (always visible):** BPM number (tap-to-open vertical slider popover, `fixed`-positioned via `getBoundingClientRect` to avoid overflow clipping), Loop/Once segmented pill control, Metronome icon toggle (`text-denim` when active), ChevronUp/Down toggle, Stop + Play/Pause flush right.
 - **Collapsible panel:** Animates via `max-height` transition with cubic-bezier `(0.32, 0.72, 0, 1)`. Contains: Tap Tempo, BPM horizontal slider (synced to main BPM state), Note Sound volume, Accent Beat 1, Subdivision pills, Metronome volume, Loop Gap pills.
 
-Scroll isolation: `onWheel` and `onTouchMove` with `stopPropagation()` on the drawer. A `z-20` transparent backdrop intercepts TAB-area clicks when the panel is open (preventing accidental seek). Drag handle uses `touch-action: none` + `setPointerCapture` to suppress Chrome pull-to-refresh while tracking downward drag to close.
+Scroll isolation: `onWheel` and `onTouchMove` with `stopPropagation()` on the drawer. A `z-20` transparent backdrop intercepts TAB-area clicks when the panel is open (preventing accidental seek). Drag handle uses `touch-action: none` + `setPointerCapture` to suppress Chrome pull-to-refresh while tracking downward drag to close. Hide-on-scroll: the drawer container has `transition-transform duration-300 ease-out`; `controlsVisible` state drives `translateY(0)` ↔ `translateY(100%)`. `controlsVisibleRef` mirrors the state for use inside the scroll listener closure without stale-closure issues.
 
 **Cursor / Playhead** (`src/app/(main)/fingerpick/page.tsx`):
 
@@ -490,6 +490,8 @@ Single-note measure fix: when `!nextEvent || nextEvent.measureIndex !== measureI
 **Click-to-seek:** `onClick` on the tab viewer hit-tests all `[data-measure-index][data-slot-index]` elements in the clicked row's SVG (clamping to the nearest row by Y distance when the click lands between rows), picks the nearest note by X distance, then: calls `seekToNote(measureIndex, slotIndex)` if playing or paused; sets `pendingSeekRef` if stopped (consumed by `handlePlay()`); and calls `snapCursorToNote()` to immediately reposition both overlays bypassing exponential smoothing (`renderedXRef` and `prevTimestampRef` are reset to force a snap on the next tick).
 
 **Initial and post-Stop cursor position:** A rAF retry loop polls until TabStaveRow's ResizeObserver+rAF render completes (data attributes appear in DOM), then positions both overlays at `[data-measure-index="0"][data-slot-index="0"]`. On Stop, `cursorResetTick` state increments, triggering a dedicated `useEffect` that scrolls the container to the top before re-running the same positioning loop.
+
+Known bug (open issue): on mobile, natural playback end causes the page to scroll to top. Root cause: `lastScrolledRowRef` reset in `isPlaying` cleanup triggers `scrollIntoView` on row 0 via the next RAF tick. Fix attempts reverted; tracked as a GitHub issue.
 
 **Testing:**
 

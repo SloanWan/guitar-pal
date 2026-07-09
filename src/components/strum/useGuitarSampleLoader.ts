@@ -88,8 +88,8 @@ const WAF_BASE_URL = "https://surikov.github.io/webaudiofontdata/sound/";
 
 const PRESET_DEFS = {
 	steelGuitar: {
-		key: "0250_SoundBlasterOld_sf2",
-		varName: "_tone_0250_SoundBlasterOld_sf2",
+		key: "0250_LK_AcousticSteel_SF2_file",
+		varName: "_tone_0250_LK_AcousticSteel_SF2_file",
 	},
 	mutedGuitar: {
 		key: "0280_Chaos_sf2_file",

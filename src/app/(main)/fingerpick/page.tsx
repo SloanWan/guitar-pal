@@ -1102,26 +1102,6 @@ export default function FingerpickPage() {
 
 			// Measure transition: update the measure background highlight.
 			if (measureIndex !== lastMeasureIdxRef.current) {
-				// If the new measure's first ScheduleEvent is not slot 0, slot 0 is a rest
-				// and has no DOM element. Snap the cursor to the measure's note-start x so
-				// it doesn't stall at the previous measure's right edge.
-				const firstEventInNewMeasure = events.find((e) => e.measureIndex === measureIndex);
-				if (firstEventInNewMeasure && firstEventInNewMeasure.slotIndex !== 0) {
-					const stavesvg = container.querySelector<SVGElement>(
-						`svg[data-stave-${measureIndex}-x]`,
-					);
-					if (stavesvg) {
-						const staveSvgRect = stavesvg.getBoundingClientRect();
-						const sx = parseFloat(
-							stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0",
-						);
-						const snapX = staveSvgRect.left - containerRect.left + sx + container.scrollLeft;
-						renderedXRef.current = snapX;
-						prevTimestampRef.current = 0;
-						playhead.style.transform = `translateX(${Math.round(snapX - 3)}px)`;
-					}
-				}
-
 				lastMeasureIdxRef.current = measureIndex;
 				if (measureHL) {
 					const stavesvg = container.querySelector<SVGElement>(

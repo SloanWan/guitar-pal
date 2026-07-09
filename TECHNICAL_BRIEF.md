@@ -278,7 +278,7 @@ StepValue semantics:
 - All mutable state that the scheduler reads lives in `useRef` (not `useState`) to avoid stale closures. The matching `useState` values are kept for React renders only. Refs: `bpmRef`, `beatsRef`, `tickModeRef`, `strumEnabledRef`, `strumGainRef`, `metronomeEnabledRef`, `metronomeGainRef`, `accentEnabledRef`, `playOnceRef`.
 - **Do not read ref.current values inside React render logic.** Only refs are safe to read inside the scheduler closure.
 - **Strum sounds use real guitar samples** fetched at runtime from the webaudiofontdata CDN (`https://surikov.github.io/webaudiofontdata/sound/`). All sample logic lives in `useGuitarSampleLoader.ts`:
-  - Two GM presets: `0250_SoundBlasterOld_sf2` (acoustic steel guitar — used for `D`/`D3` down-strum and `U`/`U3` up-strum) and `0280_SoundBlasterOld_sf2` (muted electric guitar — used for `X`).
+  - Two GM presets: `0250_LK_AcousticSteel_SF2_file` (LK Acoustic Steel — used for `D`/`D3` down-strum and `U`/`U3` up-strum) and `0280_Chaos_sf2_file` (Chaos muted guitar — used for `X`). Both presets match the sample library source used by the fingerpick engine for cross-page audio consistency.
   - Fixed C major open chord voicing: MIDI pitches [48 C3, 52 E3, 55 G3, 60 C4, 64 E4] (exported as `STRUM_PITCHES`). Low E string is not played.
   - `preloadStrumPresets(ctx)` — async, called once on playback start. Fetches and parses both preset JS files (unquoted-key JS object format, evaluated via `new Function()`), then decodes all zones used by `STRUM_PITCHES` into `AudioBuffer`s. Results are cached in module-level `Map`s for synchronous scheduler access.
   - `triggerStrum(type, ctx, target, when, noteDuration)` — synchronous. Schedules one `AudioBufferSourceNode` per string (5 total) with 10 ms per-string stagger and 0.9× volume taper per string. Down strum: low→high pitch order; up strum: high→low. Playback rate per note: `2^((100×midiPitch − baseDetune) / 1200)` where `baseDetune = originalPitch − 100×coarseTune − fineTune`.
@@ -395,7 +395,7 @@ Props: `measures`, `measureWidths: number[]` (one entry per measure — the pre-
 
 **Sample loading (`useGuitarSampleLoader.ts` additions):**
 
-Two new presets are loaded exclusively for the fingerpick engine, distinct from the strum machine's SoundBlaster presets:
+Two presets are loaded exclusively for the fingerpick engine (shared sample library source with the strum machine):
 
 - `"pluck"` → `0250_LK_AcousticSteel_SF2_file` (LK Acoustic Steel, GM 25)
 - `"muted"` → `0280_FluidR3_GM_sf2_file` (FluidR3 Muted Guitar, GM 28)

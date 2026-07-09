@@ -17,16 +17,11 @@ const ROOT_PC: Record<string, number> = {
 	A: 9, "A#": 10, Bb: 10, B: 11,
 };
 
-const NEXT_MODE: Record<DiagramMode, DiagramMode> = {
-	fingers: "noteNames",
-	noteNames: "fretboard",
-	fretboard: "fingers",
-};
-
-const NEXT_LABEL: Record<DiagramMode, string> = {
-	fingers: "ABC",
-	noteNames: "Grid",
-	fretboard: "123",
+const MODES: DiagramMode[] = ["fingers", "noteNames", "fretboard"];
+const MODE_LABELS: Record<DiagramMode, string> = {
+	fingers: "123",
+	noteNames: "ABC",
+	fretboard: "Grid",
 };
 
 export interface VoicingCard {
@@ -76,12 +71,26 @@ export default function ChordDetailView({ voicings, root }: Props) {
 
 	return (
 		<div className="flex flex-col items-center gap-6">
-			<button
-				onClick={() => setMode(m => NEXT_MODE[m])}
-				className="px-4 py-2 bg-denim text-white rounded text-sm font-medium hover:bg-denim-dark transition-colors"
-			>
-				{NEXT_LABEL[mode]}
-			</button>
+			<div className="relative inline-flex overflow-hidden rounded-full border border-denim-border bg-denim-tint">
+				<div
+					className="absolute top-0 h-full rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out"
+					style={{
+						width: "33.333%",
+						transform: `translateX(${MODES.indexOf(mode) * 100}%)`,
+					}}
+				/>
+				{MODES.map((m) => (
+					<button
+						key={m}
+						onClick={() => setMode(m)}
+						className={`relative z-10 px-5 py-2 text-sm font-medium text-center transition-colors duration-200 ${
+							mode === m ? "text-denim" : "text-denim-light"
+						}`}
+					>
+						{MODE_LABELS[m]}
+					</button>
+				))}
+			</div>
 			<div className="flex flex-wrap justify-center gap-4">
 				{voicings.map(({ id, label, def, pitches }) => (
 					<div key={id} className="flex flex-col items-center gap-2">

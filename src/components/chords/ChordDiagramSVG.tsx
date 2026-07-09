@@ -7,7 +7,7 @@ const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"] as con
 const STRING_LABELS = ["E","A","D","G","B","e"] as const;
 
 // SVG layout (px, "regular" size)
-// viewBox: 0 0 160 158
+// viewBox: 0 0 184 158
 // Strings (vertical): x = LEFT + s * STR_SPACING  (s = 0..5, low E → high e)
 //   LEFT=32, STR_SPACING=24 → x = 32, 56, 80, 104, 128, 152
 // Fret lines (horizontal): y = TOP + n * FRET_H  (n = 0..5)
@@ -18,16 +18,17 @@ const STRING_LABELS = ["E","A","D","G","B","e"] as const;
 // Open-string dot (noteNames/fretboard): circle centered at OPEN_DOT_Y = TOP - 14 = 14
 //   — bottom of circle at y=22, nut rect top at y=23, 1px clear
 // String labels: y = TOP + 5*FRET_H + 14 = 152
-// LEFT=32 gives consistent left margin. Fret number label (textAnchor="end", x=LEFT-12=20)
-//   ends at x=20, 4px clear of leftmost barre/dot edge at strX(0)-DOT_R = 24.
+// LEFT=32 gives consistent left/right margin (W - 2*LEFT = 120 = 5*STR_SPACING).
+// Fret number label (textAnchor="end", x=LEFT-12=20) ends at x=20, 4px clear of
+//   leftmost barre/dot edge at strX(0)-DOT_R = 24.
 
-const W = 160;
+const W = 184;
 const LEFT = 32;
 const TOP = 28;
 const FRET_H = 22;
 const NUM_FRETS = 5;
 const H = TOP + NUM_FRETS * FRET_H + 20;
-const STR_SPACING = (W - LEFT - 8) / 5; // (160-32-8)/5 = 24
+const STR_SPACING = (W - 2 * LEFT) / 5; // (184-64)/5 = 24
 const DOT_R = 8;
 const OPEN_DOT_Y = TOP - 14; // open-string dot center in noteNames/fretboard mode
 
@@ -167,10 +168,8 @@ export default function ChordDiagramSVG({
         const name = NOTE_NAMES[pitchClass(s, absoluteFret)];
         return (
           <g key={`ghost-${s}-${visualFret}`}>
-            <circle cx={x} cy={cy} r={DOT_R} fill="#ececec" />
-            <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} fill="#bbb" fontWeight="bold">
-              {name}
-            </text>
+            <circle cx={x} cy={cy} r={DOT_R} fill="white" />
+            <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} fill="#6b7280" fontWeight="bold">{name}</text>
           </g>
         );
       })}
@@ -196,10 +195,8 @@ export default function ChordDiagramSVG({
         const name = NOTE_NAMES[pitchClass(s, barreAbsoluteFret)];
         return (
           <g key={`barre-row-${s}`}>
-            <circle cx={x} cy={cy} r={DOT_R} fill="#ececec" />
-            <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} fill="#bbb" fontWeight="bold">
-              {name}
-            </text>
+            <circle cx={x} cy={cy} r={DOT_R} fill="white" />
+            <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} fill="#6b7280" fontWeight="bold">{name}</text>
           </g>
         );
       })}

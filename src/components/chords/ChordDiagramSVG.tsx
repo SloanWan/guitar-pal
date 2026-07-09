@@ -89,14 +89,29 @@ export default function ChordDiagramSVG({
     return NOTE_NAMES[pitchClass(s, fret)];
   }
 
-  // Barre span: leftmost and rightmost string whose absolute fret equals barreFret
+  // Barre span: find the finger number used on ≥2 strings at barreFret (the barre
+  // finger), then take the leftmost/rightmost of those strings as the bar edges.
+  // Strings at barreFret with a unique finger number are individual dots, not part
+  // of the barre bar.
   let barreMin = -1;
   let barreMax = -1;
   if (barreFret != null) {
+    const fingerCount = new Map<number, number>();
     for (let s = 0; s < 6; s++) {
-      if (frets[s] === barreFret) {
-        if (barreMin === -1) barreMin = s;
-        barreMax = s;
+      if (frets[s] === barreFret && fingers[s] > 0) {
+        fingerCount.set(fingers[s], (fingerCount.get(fingers[s]) ?? 0) + 1);
+      }
+    }
+    let barreFinger = -1;
+    for (const [f, count] of fingerCount) {
+      if (count >= 2) { barreFinger = f; break; }
+    }
+    if (barreFinger >= 0) {
+      for (let s = 0; s < 6; s++) {
+        if (frets[s] === barreFret && fingers[s] === barreFinger) {
+          if (barreMin === -1) barreMin = s;
+          barreMax = s;
+        }
       }
     }
   }

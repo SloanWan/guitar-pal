@@ -4,6 +4,7 @@ import LogoutButton from "./LogoutButton";
 import NavLinks from "./NavLinks";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import NavBarScrollWrapper from "./NavBarScrollWrapper";
 
 export default async function NavBar() {
 	const supabase = await createSupabaseServer();
@@ -12,7 +13,8 @@ export default async function NavBar() {
 	} = await supabase.auth.getUser();
 
 	return (
-		<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
+		<NavBarScrollWrapper>
+		<header className="border-b border-border bg-background/80 backdrop-blur-sm">
 			<div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
 				<Link href="/" className="flex items-center gap-2">
 					<div className="flex items-center justify-center size-7 rounded-lg bg-denim-tint text-denim">
@@ -44,5 +46,6 @@ export default async function NavBar() {
 				</div>
 			</div>
 		</header>
+		</NavBarScrollWrapper>
 	);
 }

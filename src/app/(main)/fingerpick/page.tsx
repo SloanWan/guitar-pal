@@ -424,12 +424,19 @@ export default function FingerpickPage() {
 	// Drag handle drag-to-close gesture refs.
 	const handleDragStartYRef = useRef(0);
 	const handleIsDraggingRef = useRef(false);
+	// Hide-on-scroll state for mobile controls and NavBar.
+	const [controlsVisible, setControlsVisible] = useState(true);
+	const controlsVisibleRef = useRef(true);
+	const lastScrollYRef = useRef(0);
+	const scrollUpDistanceRef = useRef(0);
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
 	// is intentional — we only want one preload call per page mount.
 	useEffect(() => {
 		void load();
+		document.body.classList.add("fingerpick-page");
+		return () => document.body.classList.remove("fingerpick-page");
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -444,6 +451,40 @@ export default function FingerpickPage() {
 		});
 		observer.observe(container);
 		return () => observer.disconnect();
+	}, []);
+
+	// Hide mobile controls bar (and NavBar via body class) when the user scrolls down;
+	// restore after 40 px of upward scroll.
+	useEffect(() => {
+		const isDesktop = window.innerWidth >= 768;
+		// Desktop: scroll source is the tab viewer; mobile: the main scroll container.
+		const target: Element | null = isDesktop
+			? tabViewerRef.current
+			: document.querySelector("main");
+		if (!target) return;
+
+		function handleScroll() {
+			const currentY = (target as HTMLElement).scrollTop;
+			const delta = currentY - lastScrollYRef.current;
+			lastScrollYRef.current = currentY;
+
+			if (delta > 0) {
+				scrollUpDistanceRef.current = 0;
+				if (controlsVisibleRef.current) {
+					controlsVisibleRef.current = false;
+					setControlsVisible(false);
+				}
+			} else {
+				scrollUpDistanceRef.current += Math.abs(delta);
+				if (scrollUpDistanceRef.current >= 40 && !controlsVisibleRef.current) {
+					controlsVisibleRef.current = true;
+					setControlsVisible(true);
+				}
+			}
+		}
+
+		target.addEventListener("scroll", handleScroll, { passive: true });
+		return () => target.removeEventListener("scroll", handleScroll);
 	}, []);
 
 	function handlePlay() {
@@ -613,6 +654,12 @@ export default function FingerpickPage() {
 	// Clicking anywhere in the tab viewer seeks to the nearest note in the clicked
 	// row (nearest by x-distance). Clicks outside all rows clamp to the nearest row.
 	function handleTabClick(e: React.MouseEvent<HTMLDivElement>): void {
+		// Restore controls visibility on any tab interaction.
+		setControlsVisible(true);
+		controlsVisibleRef.current = true;
+		scrollUpDistanceRef.current = 0;
+		window.dispatchEvent(new CustomEvent("fingerpick-controls-restore"));
+
 		const container = tabViewerRef.current;
 		if (!container) return;
 
@@ -1078,6 +1125,7 @@ export default function FingerpickPage() {
 					    position:relative anchors the cursor overlay div. */}
 						<div
 							ref={tabViewerRef}
+							data-tab-viewer
 							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto bg-white rounded-xl border border-slate-100 cursor-pointer"
 							onClick={handleTabClick}
 						>
@@ -1129,7 +1177,11 @@ export default function FingerpickPage() {
 						{!showLibrary && (
 							<button
 								onClick={() => setShowLibrary(true)}
-								className="fixed top-17 right-4 z-30 md:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-200 active:scale-95"
+								className={`fixed top-17 right-4 z-30 md:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-300 active:scale-95 ${
+									controlsVisible
+										? "opacity-100 pointer-events-auto"
+										: "opacity-0 pointer-events-none"
+								}`}
 								style={{ backgroundColor: "var(--denim)" }}
 							>
 								<SquareMenu />
@@ -1426,7 +1478,8 @@ export default function FingerpickPage() {
 
 			{/* ── Unified mobile drawer ────────────────────────────────────────── */}
 			<div
-				className="md:hidden fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl bg-white border-t border-slate-300 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] overflow-hidden"
+				className="md:hidden fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl bg-white border-t border-slate-300 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] overflow-hidden transition-transform duration-300 ease-out"
+				style={{ transform: controlsVisible ? "translateY(0)" : "translateY(100%)" }}
 				onPointerDown={(e) => {
 					if (!bpmButtonRef.current?.contains(e.target as Node)) {
 						setShowBpmPopover(false);
@@ -1672,15 +1725,12 @@ export default function FingerpickPage() {
 					</div>
 
 					{/* Loop / Once segmented control */}
-					<div className="relative flex h-8 items-center rounded-full bg-slate-200 p-0.5 shrink-0">
+					<div className="relative flex h-8 items-center rounded-full bg-slate-200 p-0.5 overflow-hidden shrink-0">
 						{/* Sliding pill */}
 						<div
-							className="absolute inset-0.5 w-[calc(50%-2px)] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out"
-							style={{
-								transform: playOnce
-									? "translateX(calc(100% + 4px))"
-									: "translateX(0)",
-							}}
+							className={`absolute inset-y-0.5 left-0 w-1/2 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
+								playOnce ? "translate-x-full" : "translate-x-0"
+							}`}
 						/>
 						<button
 							onClick={() => setPlayOnce(false)}

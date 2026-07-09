@@ -2,6 +2,7 @@
 
 import StepGrid from "@/components/strum/StepGrid";
 import StepGridCard from "@/components/strum/StepGridCard";
+import BpmSlider from "@/components/strum/BpmSlider";
 import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
 
 import { useState, useEffect, useRef } from "react";
@@ -513,13 +514,14 @@ export default function StrumPage() {
 											<Plus size={14} />
 										</Button>
 									</div>
-									<input
-										type="range"
+									<BpmSlider
+										bpm={bpm}
 										min={MIN_BPM}
 										max={MAX_BPM}
-										value={bpm}
-										onChange={(e) => setBpm(Number(e.target.value))}
-										className="w-full accent-denim cursor-pointer"
+										isPlaying={isPlaying}
+										setBpm={setBpm}
+										start={start}
+										stop={stop}
 									/>
 								</div>
 
@@ -737,13 +739,14 @@ export default function StrumPage() {
 					</div>
 
 					{/* BPM slider */}
-					<input
-						type="range"
+					<BpmSlider
+						bpm={bpm}
 						min={MIN_BPM}
 						max={MAX_BPM}
-						value={bpm}
-						onChange={(e) => setBpm(Number(e.target.value))}
-						className="w-full accent-denim cursor-pointer"
+						isPlaying={isPlaying}
+						setBpm={setBpm}
+						start={start}
+						stop={stop}
 					/>
 
 					{/* ±10 BPM + display */}

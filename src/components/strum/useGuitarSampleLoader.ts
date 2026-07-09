@@ -88,12 +88,12 @@ const WAF_BASE_URL = "https://surikov.github.io/webaudiofontdata/sound/";
 
 const PRESET_DEFS = {
 	steelGuitar: {
-		key: "0250_SoundBlasterOld_sf2",
-		varName: "_tone_0250_SoundBlasterOld_sf2",
+		key: "0250_LK_AcousticSteel_SF2_file",
+		varName: "_tone_0250_LK_AcousticSteel_SF2_file",
 	},
 	mutedGuitar: {
-		key: "0280_SoundBlasterOld_sf2",
-		varName: "_tone_0280_SoundBlasterOld_sf2",
+		key: "0280_Chaos_sf2_file",
+		varName: "_tone_0280_Chaos_sf2_file",
 	},
 } as const;
 
@@ -123,7 +123,7 @@ export const MUTED_MAX_DURATION_S = 0.08;
  * Fraction of the cell duration used as the gain-decay time constant.
  * Exported so tests can reference it without duplicating the literal.
  */
-export const DECAY_TIME_CONSTANT_RATIO = 0.8;
+export const DECAY_TIME_CONSTANT_RATIO = 1;
 
 /**
  * Minimum gain-decay time constant (s).
@@ -522,7 +522,16 @@ export function triggerChordPreview(
 		const adjustedDuration = CHORD_PREVIEW_DURATION_S - noteOffset;
 		if (adjustedDuration <= 0) continue;
 
-		_scheduleNote(ctx, target, zone, zone.buffer, when + noteOffset, sorted[i], adjustedDuration, 0.7);
+		_scheduleNote(
+			ctx,
+			target,
+			zone,
+			zone.buffer,
+			when + noteOffset,
+			sorted[i],
+			adjustedDuration,
+			0.7,
+		);
 	}
 }
 

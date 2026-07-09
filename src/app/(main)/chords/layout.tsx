@@ -2,7 +2,7 @@ export default function ChordsLayout({ children }: { children: React.ReactNode }
 	return (
 		<div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
 			{children}
-			<p className="mt-auto py-3 text-center text-xs text-muted-foreground border-t border-border">
+			<p className="mt-auto py-3 text-center text-[10px] md:text-xs text-muted-foreground border-t border-border">
 				voicing data via{" "}
 				<a
 					href="https://github.com/tombatossals/chords-db"

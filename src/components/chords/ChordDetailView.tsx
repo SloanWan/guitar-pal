@@ -68,6 +68,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 	const preloadRef = useRef<Promise<void> | null>(null);
 	const [isPreloading, setIsPreloading] = useState(false);
 	const playingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
 	const activeVoicing = voicings[activeIndex];
 
@@ -120,6 +121,24 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 	const goNext = useCallback(
 		() => setActiveIndex((i) => Math.min(i + 1, voicings.length - 1)),
 		[voicings.length],
+	);
+
+	const handleTouchStart = useCallback((e: React.TouchEvent) => {
+		touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+	}, []);
+
+	const handleTouchEnd = useCallback(
+		(e: React.TouchEvent) => {
+			if (!touchStartRef.current) return;
+			const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+			const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+			touchStartRef.current = null;
+			if (Math.abs(dx) > 50 && Math.abs(dy) < 30) {
+				if (dx < 0) goNext();
+				else goPrev();
+			}
+		},
+		[goNext, goPrev],
 	);
 
 	useEffect(() => {
@@ -249,6 +268,8 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 						modalOpen ? "opacity-100 scale-100" : "opacity-0 scale-95"
 					}`}
 					onClick={(e) => e.stopPropagation()}
+					onTouchStart={handleTouchStart}
+					onTouchEnd={handleTouchEnd}
 				>
 					<button
 						onClick={closeModal}
@@ -271,14 +292,14 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 						<p className="text-sm text-muted-foreground">{activeVoicing.label}</p>
 					</div>
 
-					<div className="relative flex items-center justify-center w-full">
+					<div className="relative flex items-center justify-center w-full px-10 sm:px-14">
 						<button
 							onClick={goPrev}
 							disabled={activeIndex === 0}
-							className="absolute left-0 top-1/2 -translate-y-1/2 p-2 rounded-full border border-denim-border text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+							className="absolute left-0 top-1/2 -translate-y-1/2 p-1 sm:p-2 rounded-full border border-denim-border text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 							aria-label="Previous voicing"
 						>
-							<ChevronLeft className="h-5 w-5" />
+							<ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
 						</button>
 						<ChordDiagram
 							def={activeVoicing.def}
@@ -290,10 +311,10 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 						<button
 							onClick={goNext}
 							disabled={activeIndex === voicings.length - 1}
-							className="absolute right-0 top-1/2 -translate-y-1/2 p-2 rounded-full border border-denim-border text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+							className="absolute right-0 top-1/2 -translate-y-1/2 p-1 sm:p-2 rounded-full border border-denim-border text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 							aria-label="Next voicing"
 						>
-							<ChevronRight className="h-5 w-5" />
+							<ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
 						</button>
 					</div>
 

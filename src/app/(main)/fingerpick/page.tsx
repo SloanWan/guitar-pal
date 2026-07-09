@@ -15,7 +15,7 @@ import {
 } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { CirclePlay, CirclePause, CircleStop, X, SquareMenu, Plus, Minus } from "lucide-react";
+import { CirclePlay, CirclePause, CircleStop, X, SquareMenu, Plus, Minus, ChevronUp, Metronome } from "lucide-react";
 
 // ── StringFret factory helpers ──────────────────────────────────────────────
 // Reduce the verbosity of the required { fret, technique, tied, muted } shape.
@@ -330,6 +330,8 @@ export default function FingerpickPage() {
 	const [bpm, setBpm] = useState<number>(PRESET_FINGERPICK_PATTERN.bpm);
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
+	const [showSheet, setShowSheet] = useState(false);
+	const [showBpmPopover, setShowBpmPopover] = useState(false);
 	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
 	const [containerWidth, setContainerWidth] = useState(0);
 	const tapTimesRef = useRef<number[]>([]);
@@ -401,6 +403,15 @@ export default function FingerpickPage() {
 	// Note to seek to on the next play() — set by click-to-seek while stopped,
 	// consumed by handlePlay() and cleared by handleStop().
 	const pendingSeekRef = useRef<{ measureIndex: number; slotIndex: number } | null>(null);
+	// Bottom bar drag-to-open-sheet gesture refs.
+	const bottomBarDragStartYRef = useRef<number>(0);
+	const bottomBarIsDraggingRef = useRef<boolean>(false);
+	// Expanded sheet drag-to-close gesture refs.
+	const sheetDragStartYRef = useRef<number>(0);
+	const sheetIsDraggingRef = useRef<boolean>(false);
+	// BPM popover anchor + panel refs for click-outside detection.
+	const bpmButtonRef = useRef<HTMLButtonElement>(null);
+	const bpmPopoverRef = useRef<HTMLDivElement>(null);
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -506,6 +517,46 @@ export default function FingerpickPage() {
 		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
 		const rawBpm = Math.round(60000 / avgInterval);
 		handleBpmChange(rawBpm);
+	}
+
+	// ── Bottom bar / sheet gesture handlers ─────────────────────────────────────
+
+	function handleBottomBarPointerDown(e: React.PointerEvent) {
+		if ((e.target as HTMLElement).closest("button, input")) return;
+		bottomBarDragStartYRef.current = e.clientY;
+		bottomBarIsDraggingRef.current = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function handleBottomBarPointerMove(e: React.PointerEvent) {
+		if (!bottomBarIsDraggingRef.current) return;
+		if (e.clientY - bottomBarDragStartYRef.current < -40) {
+			bottomBarIsDraggingRef.current = false;
+			setShowSheet(true);
+		}
+	}
+
+	function handleBottomBarPointerUp() {
+		bottomBarIsDraggingRef.current = false;
+	}
+
+	function handleSheetPointerDown(e: React.PointerEvent) {
+		if ((e.target as HTMLElement).closest("input")) return;
+		sheetDragStartYRef.current = e.clientY;
+		sheetIsDraggingRef.current = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function handleSheetPointerMove(e: React.PointerEvent) {
+		if (!sheetIsDraggingRef.current) return;
+		if (e.clientY - sheetDragStartYRef.current > 40) {
+			sheetIsDraggingRef.current = false;
+			setShowSheet(false);
+		}
+	}
+
+	function handleSheetPointerUp() {
+		sheetIsDraggingRef.current = false;
 	}
 
 	// ── Click-to-seek ───────────────────────────────────────────────────────────
@@ -737,6 +788,23 @@ export default function FingerpickPage() {
 		return () => cancelAnimationFrame(rafId);
 	}, [cursorResetTick]);
 
+	// Close BPM popover on click outside the button + panel.
+	useEffect(() => {
+		if (!showBpmPopover) return;
+		function handlePointerDown(e: PointerEvent) {
+			if (
+				bpmPopoverRef.current &&
+				!bpmPopoverRef.current.contains(e.target as Node) &&
+				bpmButtonRef.current &&
+				!bpmButtonRef.current.contains(e.target as Node)
+			) {
+				setShowBpmPopover(false);
+			}
+		}
+		document.addEventListener("pointerdown", handlePointerDown);
+		return () => document.removeEventListener("pointerdown", handlePointerDown);
+	}, [showBpmPopover]);
+
 	// ── Playback cursor RAF loop ─────────────────────────────────────────────
 	// Starts when isPlaying becomes true; stopped on pause/stop or unmount.
 	// All cursor updates go through direct DOM mutation — no React setState.
@@ -953,6 +1021,7 @@ export default function FingerpickPage() {
 	}, [getPlaybackProgress]);
 
 	return (
+		<>
 		<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">
 			{/* Left sidebar — lg: static; below lg: slide-in overlay */}
 			<div
@@ -1033,7 +1102,7 @@ export default function FingerpickPage() {
 								borderRadius: 5,
 							}}
 						/>
-						<div className="flex flex-col">
+						<div className="flex flex-col pb-20 md:pb-0">
 							{rows.map((row, rowIdx) => (
 								<div
 									key={row.measures[0].id}
@@ -1066,7 +1135,7 @@ export default function FingerpickPage() {
 			</div>
 
 			{/* Right panel — controls */}
-			<div className="w-full border-t border-slate-200 bg-white md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex flex-col">
+			<div className="hidden md:flex w-full border-t border-slate-200 bg-white md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
 				<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
 					Controls
 				</h2>
@@ -1309,5 +1378,291 @@ export default function FingerpickPage() {
 				</div>
 			</div>
 		</div>
+
+		{/* ── Sheet backdrop — mobile/tablet only ───────────────────────────── */}
+		<div
+			aria-hidden="true"
+			className={`md:hidden fixed inset-0 z-40 bg-black/20 transition-opacity duration-300 ease-out ${
+				showSheet ? "opacity-100" : "opacity-0 pointer-events-none"
+			}`}
+			onClick={() => setShowSheet(false)}
+		/>
+
+		{/* ── Swipe-up expanded sheet — mobile/tablet only ──────────────────── */}
+		<div
+			className={`md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl border-t border-slate-200 overflow-y-auto transition-transform duration-300 ease-out ${
+				showSheet ? "translate-y-0" : "translate-y-full"
+			}`}
+			style={{ maxHeight: "75vh" }}
+			onPointerDown={handleSheetPointerDown}
+			onPointerMove={handleSheetPointerMove}
+			onPointerUp={handleSheetPointerUp}
+		>
+			{/* Drag handle */}
+			<div className="flex justify-center pt-3 pb-1 shrink-0">
+				<div className="w-10 h-1 rounded-full bg-slate-300" />
+			</div>
+
+			<div className="flex flex-col gap-5 px-5 py-4 pb-8">
+				{/* Tap Tempo */}
+				<Button
+					onClick={handleTapTempo}
+					className="h-9 w-full text-sm font-semibold cursor-pointer transition-all duration-150"
+					style={{ backgroundColor: "var(--denim)", color: "white" }}
+				>
+					Tap Tempo
+				</Button>
+
+				{/* Note Sound volume */}
+				<div className="flex flex-col gap-1.5">
+					<div className="flex justify-between items-center">
+						<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+							Note Sound
+						</span>
+						<span className="text-xs tabular-nums text-slate-400">
+							{Math.round(noteGain * 100)}%
+						</span>
+					</div>
+					<input
+						type="range"
+						min={0}
+						max={2}
+						step={0.01}
+						value={noteGain}
+						onChange={(e) => setNoteGain(Number(e.target.value))}
+						className="w-full accent-denim cursor-pointer"
+					/>
+				</div>
+
+				<div className="border-t border-slate-100" />
+
+				{/* Accent beat 1 */}
+				<div
+					className={`flex items-center justify-between transition-opacity duration-200 ${
+						!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
+					}`}
+				>
+					<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						Accent beat 1
+					</span>
+					<Switch
+						checked={accentEnabled}
+						disabled={!metronomeEnabled}
+						onCheckedChange={setAccentEnabled}
+						className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+					/>
+				</div>
+
+				{/* Subdivision */}
+				<div
+					className={`flex flex-col gap-2 transition-opacity duration-200 ${
+						!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
+					}`}
+				>
+					<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						Subdivision
+					</span>
+					<div className="flex gap-1">
+						{(
+							[
+								{ value: "quarter", label: "1/4" },
+								{ value: "eighth", label: "1/8" },
+								{ value: "sixteenth", label: "1/16" },
+							] satisfies { value: MetronomeSubdivision; label: string }[]
+						).map(({ value, label }) => (
+							<Button
+								key={value}
+								variant={metronomeSubdivision === value ? "default" : "outline"}
+								disabled={!metronomeEnabled}
+								onClick={() => setMetronomeSubdivision(value)}
+								className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
+								style={
+									metronomeSubdivision === value
+										? { backgroundColor: "var(--denim)", color: "white" }
+										: undefined
+								}
+							>
+								{label}
+							</Button>
+						))}
+					</div>
+				</div>
+
+				{/* Metronome volume */}
+				<div
+					className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
+						!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
+					}`}
+				>
+					<div className="flex justify-between items-center">
+						<span className="text-xs text-slate-400">Metronome vol.</span>
+						<span className="text-xs tabular-nums text-slate-400">
+							{Math.round(metronomeGain * 100)}%
+						</span>
+					</div>
+					<input
+						type="range"
+						min={0}
+						max={1}
+						step={0.01}
+						value={metronomeGain}
+						disabled={!metronomeEnabled}
+						onChange={(e) => setMetronomeGain(Number(e.target.value))}
+						className="w-full accent-denim cursor-pointer"
+					/>
+				</div>
+
+				<div className="border-t border-slate-100" />
+
+				{/* Loop Gap */}
+				<div
+					className={`flex flex-col gap-2 transition-opacity duration-200 ${
+						playOnce ? "opacity-40 pointer-events-none" : ""
+					}`}
+				>
+					<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						Loop Gap
+					</span>
+					<div className="flex gap-1">
+						{LOOP_GAP_OPTIONS.map((gap) => (
+							<Button
+								key={gap}
+								variant={loopGap === gap ? "default" : "outline"}
+								disabled={playOnce}
+								onClick={() => {
+									setLoopGap(gap);
+									applyLoopGapChange(gap);
+								}}
+								className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
+								style={
+									loopGap === gap && !playOnce
+										? { backgroundColor: "var(--denim)", color: "white" }
+										: undefined
+								}
+							>
+								{gap}s
+							</Button>
+						))}
+					</div>
+				</div>
+			</div>
+		</div>
+
+		{/* ── Fixed bottom controls bar — mobile/tablet only ────────────────── */}
+		<div
+			className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 flex items-center gap-1.5 px-3 py-2"
+			onPointerDown={handleBottomBarPointerDown}
+			onPointerMove={handleBottomBarPointerMove}
+			onPointerUp={handleBottomBarPointerUp}
+		>
+			{/* BPM display — tap to open vertical slider popover */}
+			<div className="relative shrink-0">
+				<button
+					ref={bpmButtonRef}
+					onClick={() => setShowBpmPopover((v) => !v)}
+					className="flex flex-col items-center leading-none px-1"
+				>
+					<span className="text-xl font-bold text-denim">{bpm}</span>
+					<span className="text-[8px] font-semibold uppercase tracking-widest text-slate-400">
+						BPM
+					</span>
+				</button>
+				{/* BPM vertical slider popover */}
+				{showBpmPopover && (
+					<div
+						ref={bpmPopoverRef}
+						className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white rounded-xl border border-slate-200 shadow-lg px-4 py-4 flex items-center justify-center"
+					>
+						<input
+							type="range"
+							min={MIN_BPM}
+							max={MAX_BPM}
+							value={bpm}
+							onChange={(e) => handleSliderChange(Number(e.target.value))}
+							onPointerDown={handleSliderPointerDown}
+							onPointerUp={handleSliderPointerUp}
+							style={
+								{
+									writingMode: "vertical-lr",
+									direction: "rtl",
+									height: 120,
+								} as React.CSSProperties
+							}
+							className="accent-denim cursor-pointer"
+						/>
+					</div>
+				)}
+			</div>
+
+			{/* Loop / Once segmented control */}
+			<div className="relative flex h-8 items-center rounded-full bg-slate-200 p-0.5 shrink-0">
+				{/* Sliding pill */}
+				<div
+					className="absolute inset-0.5 w-[calc(50%-2px)] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out"
+					style={{ transform: playOnce ? "translateX(calc(100% + 4px))" : "translateX(0)" }}
+				/>
+				<button
+					onClick={() => setPlayOnce(false)}
+					className={`relative z-10 px-3 h-full rounded-full text-xs font-semibold transition-colors duration-150 ${
+						!playOnce ? "text-slate-700" : "text-slate-400"
+					}`}
+				>
+					Loop
+				</button>
+				<button
+					onClick={() => setPlayOnce(true)}
+					className={`relative z-10 px-3 h-full rounded-full text-xs font-semibold transition-colors duration-150 ${
+						playOnce ? "text-slate-700" : "text-slate-400"
+					}`}
+				>
+					Once
+				</button>
+			</div>
+
+			{/* Metronome toggle */}
+			<button
+				onClick={() => setMetronomeEnabled(!metronomeEnabled)}
+				className={`p-1.5 rounded-full transition-colors duration-150 shrink-0 ${
+					metronomeEnabled ? "text-denim" : "text-slate-400"
+				}`}
+			>
+				<Metronome size={20} />
+			</button>
+
+			{/* Chevron-up — opens expanded sheet */}
+			<button
+				onClick={() => setShowSheet(true)}
+				className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 transition-colors duration-150 shrink-0"
+			>
+				<ChevronUp size={20} />
+			</button>
+
+			{/* Stop + Play/Pause — flush right */}
+			<div className="ml-auto flex items-center gap-0.5 shrink-0">
+				<button
+					onClick={handleStop}
+					className={`p-1 text-slate-500 transition-colors duration-150 ${
+						isPlaying || isPaused ? "visible" : "invisible"
+					}`}
+				>
+					<CircleStop size={28} strokeWidth={1.5} />
+				</button>
+				<div
+					onClick={isLoaded ? handlePlayPause : undefined}
+					className={`transition-all duration-150 active:scale-95 ${
+						isLoaded
+							? "cursor-pointer text-denim hover:text-denim-dark"
+							: "opacity-30 pointer-events-none text-denim"
+					}`}
+				>
+					{isPlaying ? (
+						<CirclePause size={40} strokeWidth={1.5} />
+					) : (
+						<CirclePlay size={40} strokeWidth={1.5} />
+					)}
+				</div>
+			</div>
+		</div>
+		</>
 	);
 }

@@ -16,8 +16,8 @@ const SVG_HEIGHT = 200;
 const STAVE_Y = 10;
 const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
-const MIN_MEASURE_WIDTH = 180;
-const HO_PO_EXTRA_WIDTH = 35;
+const MIN_MEASURE_WIDTH = 120;
+const HO_PO_EXTRA_WIDTH = 25;
 
 interface TabStaveRowProps {
 	/** One "row" worth of measures rendered into a single VexFlow context. */
@@ -68,7 +68,8 @@ export default function TabStaveRow({
 			div.innerHTML = "";
 
 			// SVG width = CLEF_WIDTH + stave content + margin so the end-barline isn't clipped.
-			const svgWidth = CLEF_WIDTH + measureWidths.reduce((a, b) => a + b, 0) + BARLINE_CLIP_MARGIN;
+			const svgWidth =
+				CLEF_WIDTH + measureWidths.reduce((a, b) => a + b, 0) + BARLINE_CLIP_MARGIN;
 
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
 			renderer.resize(svgWidth, SVG_HEIGHT);

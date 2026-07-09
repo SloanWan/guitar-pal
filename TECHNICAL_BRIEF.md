@@ -8,7 +8,7 @@ This document is a complete reference for an AI assistant working on this codeba
 
 **Guitar Pal** is a web-based guitar practice studio targeting beginner-to-intermediate self-taught guitarists. The core loop is: create exercises → assemble them into routines → run timed practice sessions → log the result. A strumming machine with real-time audio playback and a chord library are standalone tools alongside the core loop.
 
-**Current state:** Active development. A Vitest suite (8 files) covers the strum engine (`useGuitarSampleLoader`, `useAudioEngine`), fingerpick rendering (`fingerpickToVexFlow`), and the chord library utilities (`chordVoicingToVexChords`, `chordSuffixes`, `chordSlug`, `musicalNotation`, `MusicalText`). UI components and Supabase-connected flows have no automated coverage. All features work. Practice logs are written but never displayed. The exercise log table exists but has no UI at all.
+**Current state:** Active development. A Vitest suite (11 files) covers the strum engine (`useGuitarSampleLoader`, `useAudioEngine`, `fingerpickPresets`), fingerpick rendering (`fingerpickToVexFlow`), the fingerpick scheduler (`fingerpickScheduler`), and the chord library utilities (`chordVoicingToVexChords`, `chordVoicingToMidi`, `chordSuffixes`, `chordSlug`, `musicalNotation`, `MusicalText`). UI components and Supabase-connected flows have no automated coverage. All features work. Practice logs are written but never displayed. The exercise log table exists but has no UI at all.
 
 ---
 
@@ -51,6 +51,7 @@ src/
 │   │   ├── layout.tsx           # Adds <NavBar /> above all main-area pages
 │   │   ├── dashboard/page.tsx   # Server component: reads user, renders DashboardContent
 │   │   ├── chords/
+│   │   │   ├── layout.tsx       # Chord library shell: wraps children + attribution footer (vexchords, tombatossals, WebAudioFont)
 │   │   │   ├── page.tsx         # Landing: root-picker grid + "Browse All Chords" link
 │   │   │   ├── all/page.tsx     # All chords; ?group=category toggles root-first / category-first
 │   │   │   └── [rootSlug]/
@@ -59,6 +60,10 @@ src/
 │   │   ├── strum/page.tsx       # Client component: full strumming machine page
 │   │   └── fingerpick/
 │   │       └── page.tsx         # Client component: TAB viewer with pattern library and controls scaffold
+│   ├── dev/
+│   │   ├── audio-diagnostic/page.tsx      # Throwaway: multi-preset pitch audition tool
+│   │   ├── muted-preset-audition/page.tsx # Throwaway: compares muted guitar presets
+│   │   └── strum-preset-audition/page.tsx # Throwaway: compares strum guitar presets
 │   └── session/
 │       └── [routineId]/page.tsx # Client component: full practice session page
 │
@@ -70,6 +75,8 @@ src/
 │   ├── ExerciseList.tsx         # Exercise CRUD: list, filter, add form, delete with routine warning
 │   ├── RoutineList.tsx          # Routine CRUD: list, expand, edit dialog, start session
 │   ├── MusicalText.tsx          # Renders ♭/♯ symbols inline; driven by parseMusicalText
+│   ├── __tests__/
+│   │   └── MusicalText.test.tsx # 6 tests: parseMusicalText symbol rendering
 │   ├── chords/
 │   │   ├── BrowseGrid.tsx       # Renders BrowseSection[] as grouped heading + card-grid blocks
 │   │   ├── ChordDetailView.tsx  # Voicing grid with fret/note-name label toggle (detail page)
@@ -82,15 +89,18 @@ src/
 │   │   ├── StepGridCard.tsx     # Card wrapper around StepGrid with pattern name + description
 │   │   ├── CreatePatternModal.tsx # Dialog for creating/editing custom patterns
 │   │   ├── useAudioEngine.ts    # Web Audio API scheduler, all playback logic
+│   │   ├── BpmSlider.tsx        # Custom div-based BPM slider with genre tick marks and segment hover tooltips
 │   │   ├── useGuitarSampleLoader.ts # webaudiofontdata CDN preset fetching/parsing, multi-string strum scheduling
 │   │   ├── useStrumPatterns.ts  # Custom pattern + favourites state, localStorage/Supabase sync
 │   │   └── __tests__/
 │   │       ├── useAudioEngine.test.ts        # _resolveStrumBuffer unit tests (10 tests)
-│   │       └── useGuitarSampleLoader.test.ts # Preset parsing, scheduling, decay constants (49 active + 2 skipped)
+│   │       ├── useGuitarSampleLoader.test.ts # Preset parsing, scheduling, decay constants, triggerChordPreview (50 active + 2 skipped)
+│   │       └── fingerpickPresets.test.ts     # getBufferForMidi, findZoneForMidi, fingerpick cache helpers (16 active + 2 skipped)
 │   ├── fingerpick/
 │   │   ├── TabStaveRow.tsx      # VexFlow TAB renderer; one row of measures per SVG context; ResizeObserver-driven
+│   │   ├── useFingerpickAudioEngine.ts # Self-contained playback hook; lifecycle play/pause/resume/stop; BPM-seek; per-string voice stealing
 │   │   └── __tests__/
-│   │       └── fingerpickToVexFlow.test.ts  # 22 tests: duration mapping, note types, technique connectors, beam grouping
+│   │       └── fingerpickToVexFlow.test.ts  # 23 tests: duration mapping, note types, technique connectors, beam grouping
 │   └── ui/                      # shadcn primitives: button, card, dialog, input, label, select, switch, tabs, sonner
 │
 ├── hooks/
@@ -105,7 +115,8 @@ src/
 │   ├── practiceLogs.ts          # createPracticeLog, getPracticeLogs (getPracticeLogs has no UI caller)
 │   ├── exerciseLogs.ts          # createExerciseLog, getExerciseLogs (neither has a UI caller)
 │   ├── chords.ts                # "use server" — getChord, getChordsByRoot, getAllChordsWithVoicings
-│   ├── chordVoicingToVexChords.ts # ChordVoicing → VexChordDef adapter; barre detection; selectStandardVoicing
+│   ├── chordVoicingToVexChords.ts # ChordVoicing → VexChordDef adapter; barre detection; selectStandardVoicing; exports decodeVoicingStrings
+│   ├── chordVoicingToMidi.ts    # ChordVoicing → ChordMidiNote[]; uses decodeVoicingStrings; exports GUITAR_OPEN_MIDI, chordVoicingToMidi
 │   ├── chordSuffixes.ts         # ROOT_CHROMATIC_ORDER, CHORD_SUFFIX_CATEGORIES, EXCLUDED_SUFFIXES, groupSuffixes, sortRoots
 │   ├── chordSlug.ts             # Bidirectional slug encoding: rootToSlug/slugToRoot, suffixToSlug/slugToSuffix
 │   ├── chordBrowseSections.ts   # BrowseSection/Card/Subsection types; three section builders
@@ -115,7 +126,8 @@ src/
 │   ├── fingerpickTypes.ts       # FingerpickPattern / Measure / BeatSlot / StringFret / Technique / Duration types
 │   ├── fingerpickToVexFlow.ts   # Pure adapter: Measure → VexFlowRenderData (TabNote / GhostNote / TabTie / TabSlide arrays)
 │   ├── constants.ts             # CATEGORY_LABELS and CATEGORY_COLORS records
-│   └── utils.ts                 # shadcn cn() utility
+│   ├── utils.ts                 # shadcn cn() utility
+│   └── __tests__/               # chordSlug, chordSuffixes, chordVoicingToMidi, chordVoicingToVexChords, fingerpickScheduler, musicalNotation
 │
 ├── types/
 │   ├── database.ts              # CATEGORIES const array, Category type, Exercise, Routine, RoutineExercise, PracticeLog, ExerciseLog types
@@ -278,18 +290,19 @@ StepValue semantics:
 - All mutable state that the scheduler reads lives in `useRef` (not `useState`) to avoid stale closures. The matching `useState` values are kept for React renders only. Refs: `bpmRef`, `beatsRef`, `tickModeRef`, `strumEnabledRef`, `strumGainRef`, `metronomeEnabledRef`, `metronomeGainRef`, `accentEnabledRef`, `playOnceRef`.
 - **Do not read ref.current values inside React render logic.** Only refs are safe to read inside the scheduler closure.
 - **Strum sounds use real guitar samples** fetched at runtime from the webaudiofontdata CDN (`https://surikov.github.io/webaudiofontdata/sound/`). All sample logic lives in `useGuitarSampleLoader.ts`:
-  - Two GM presets: `0250_SoundBlasterOld_sf2` (acoustic steel guitar — used for `D`/`D3` down-strum and `U`/`U3` up-strum) and `0280_SoundBlasterOld_sf2` (muted electric guitar — used for `X`).
+  - Two GM presets: `0250_LK_AcousticSteel_SF2_file` (LK Acoustic Steel — used for `D`/`D3` down-strum and `U`/`U3` up-strum) and `0280_Chaos_sf2_file` (Chaos muted guitar — used for `X`). Both presets match the sample library source used by the fingerpick engine for cross-page audio consistency.
   - Fixed C major open chord voicing: MIDI pitches [48 C3, 52 E3, 55 G3, 60 C4, 64 E4] (exported as `STRUM_PITCHES`). Low E string is not played.
   - `preloadStrumPresets(ctx)` — async, called once on playback start. Fetches and parses both preset JS files (unquoted-key JS object format, evaluated via `new Function()`), then decodes all zones used by `STRUM_PITCHES` into `AudioBuffer`s. Results are cached in module-level `Map`s for synchronous scheduler access.
   - `triggerStrum(type, ctx, target, when, noteDuration)` — synchronous. Schedules one `AudioBufferSourceNode` per string (5 total) with 10 ms per-string stagger and 0.9× volume taper per string. Down strum: low→high pitch order; up strum: high→low. Playback rate per note: `2^((100×midiPitch − baseDetune) / 1200)` where `baseDetune = originalPitch − 100×coarseTune − fineTune`.
-  - Decay envelope per note: `gainNode.gain.setTargetAtTime(0, when, τ)` where `τ = max(noteDuration × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)`. Constants (from source): `DECAY_TIME_CONSTANT_RATIO = 0.8`, `MIN_DECAY_TC_S = 0.03 s`, `SOURCE_STOP_BUFFER_S = 0.05 s`. Muted strums additionally cap `noteDuration` at `MUTED_MAX_DURATION_S = 0.08 s`.
+  - Decay envelope per note: `gainNode.gain.setTargetAtTime(0, when, τ)` where `τ = max(noteDuration × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)`. Constants (from source): `DECAY_TIME_CONSTANT_RATIO = 1`, `MIN_DECAY_TC_S = 0.03 s`, `SOURCE_STOP_BUFFER_S = 0.05 s`. Muted strums additionally cap `noteDuration` at `MUTED_MAX_DURATION_S = 0.08 s`.
   - `cancelStrums()` — stops all tracked `AudioBufferSourceNode`s immediately. Called on manual stop and component unmount.
+  - `triggerChordPreview(pitches, ctx, target, when)` — synchronous. Plays MIDI pitches ascending (low→high), 10 ms stagger per note, fixed `CHORD_PREVIEW_DURATION_S = 2.0 s` duration. Uses the fingerpick `pluck` preset (`0250_LK_AcousticSteel_SF2_file`); no-ops silently if the preset has not yet been loaded. Called by `ChordDetailView` to play voicing previews.
 - Each scheduler tick creates a per-strum `GainNode` (gain = `strumGainRef.current`) that connects `triggerStrum`'s output to `ctx.destination`.
 - `DG`, `UG`, and `""` step values produce no strum sound (scheduler calls are gated by `STEP_TO_SOUND` mapping in `useAudioEngine.ts`).
 - Metronome: `OscillatorNode`, 1200 Hz accented / 800 Hz normal, 50 ms duration.
 - `setStrumEnabled` and `setMetronomeEnabled` stop and restart playback so the ref update propagates immediately.
 - `sixteenth` tick mode with a 2-cell beat interleaves real cells with empty subdivisions (alternating via `nextPlatEmptyCellRef`).
-- BPM range: 40–220. Tap tempo uses up to 8 recent taps, resets after 2 seconds of inactivity.
+- BPM range: 40–220. Tap tempo uses up to 8 recent taps, resets after 2 seconds of inactivity. The BPM input is a fully custom `div`-based slider (`src/components/strum/BpmSlider.tsx`) — the native `<input type="range">` was replaced to support genre tick marks. 9 ticks at fixed BPM values (60 / 75 / 90 / 100 / 110 / 120 / 130 / 140 / 160) are rendered as dot markers on the track; hovering a segment between ticks shows a genre label tooltip (Slow Practice / Folk / Ballad / Pop Blues / Funk / Pop Rock / Rock / Jazz Hard Rock / Fast Rock). Tick dots change colour depending on whether they fall inside or outside the filled portion. Clicking a tick jumps BPM directly. Drag-pause-then-resume and onPointerUp blur behaviours are preserved.
 
 **Custom pattern sync** (`src/components/strum/useStrumPatterns.ts`):
 
@@ -318,7 +331,7 @@ StepValue semantics:
 
 **Files:** `src/app/(main)/fingerpick/page.tsx`, `src/components/fingerpick/TabStaveRow.tsx`, `src/components/fingerpick/useFingerpickAudioEngine.ts`, `src/lib/fingerpickScheduler.ts`, `src/lib/fingerpickToVexFlow.ts`, `src/lib/fingerpickTypes.ts`
 
-**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). The library sidebar shows a "coming soon" placeholder. The controls panel is fully implemented.
+**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). The library sidebar shows a "coming soon" placeholder. The controls panel is fully implemented on desktop. On mobile/tablet (below md breakpoint), controls move to a unified fixed-bottom drawer. On mobile/tablet (below `md`), a hide-on-scroll behaviour is active: scrolling down hides the NavBar (`translateY(-100%)`), the fixed bottom drawer (`translateY(100%)`), and the pattern library floating button (`opacity-0`). Scrolling up ≥ 40px restores all three. Tapping anywhere on the TAB viewer also restores all three — implemented via a `CustomEvent ('fingerpick-controls-restore')` dispatched from `handleTabClick` and listened to in `NavBar.tsx`. The scroll listener targets `tabViewerRef` on desktop and `window` on mobile, selected by `window.innerWidth >= 768` at listener-attach time.
 
 **Data model** (`src/lib/fingerpickTypes.ts`):
 
@@ -395,7 +408,7 @@ Props: `measures`, `measureWidths: number[]` (one entry per measure — the pre-
 
 **Sample loading (`useGuitarSampleLoader.ts` additions):**
 
-Two new presets are loaded exclusively for the fingerpick engine, distinct from the strum machine's SoundBlaster presets:
+Two presets are loaded exclusively for the fingerpick engine (shared sample library source with the strum machine):
 
 - `"pluck"` → `0250_LK_AcousticSteel_SF2_file` (LK Acoustic Steel, GM 25)
 - `"muted"` → `0280_FluidR3_GM_sf2_file` (FluidR3 Muted Guitar, GM 28)
@@ -413,7 +426,8 @@ Pure, DOM-free module containing all timing primitives. Key exports:
 - `fingerpickPatternToScheduleEvents(pattern, bpm)` — converts the pattern into a flat, time-sorted `ScheduleEvent[]`. Rest slots and tied strings produce no events. Pitch = `OPEN_STRING_MIDI[stringIndex] + fret` (fret takes priority over muted for pitch; the `muted` flag only drives preset selection and envelope shaping).
 - `getTotalPatternDuration(pattern, bpm)` — sum of all slot durations in seconds.
 - `computeLoopOffset(passIndex, patternDuration, loopGapSeconds)` — `passIndex × (patternDuration + loopGapSeconds)`.
-- `getProgressAtTime(events, elapsed)` — returns `{ measureIndex, slotIndex }` of the event most recently started at `elapsed` seconds; used by the RAF cursor loop.
+- `getProgressAtTime(events, elapsed, boundaries?)` — returns `{ measureIndex, slotIndex }` of the event most recently started at `elapsed` seconds. Optional `boundaries?: MeasureBoundary[]` parameter: when provided, if `elapsed` has crossed into a later measure than the last fired event (e.g. a measure whose first slot is a rest/GhostNote), returns `{ measureIndex, slotIndex: 0 }` for that measure rather than holding the previous measure's last event. Used by the RAF cursor loop.
+- `computeMeasureBoundaries(pattern, bpm)` — returns `MeasureBoundary[]` (one entry per measure with its absolute start time in seconds). Recomputed in `FingerpickPage` whenever `pattern` or `bpm` changes, stored in `measureBoundariesRef`, and passed to `getProgressAtTime` in the RAF tick.
 - `findSlotStartTime(events, measureIndex, slotIndex)` — given a musical position, returns its absolute time in an event list; used when changing BPM to map the old-BPM position to the new-BPM timeline.
 - `stealVoice(voices, stringIndex, when)` — cancels scheduled gain automation, applies a 5 ms τ fade-out, and stops the source; exported for unit testing without a real `AudioContext`.
 - `_shutdownEngine(voices, timerIds, allSources?)` — stops all tracked sources and clears timers; exported for testing.
@@ -449,6 +463,13 @@ Fully implemented; no longer a placeholder. Controls (right panel, `md:w-55 lg:w
 - **Metronome** toggle, **Accent Beat 1** toggle, **Subdivision** (1/4 / 1/8 / 1/16 pill buttons), **Metronome volume** slider — all greyed when metronome is off.
 - **Spacebar** keybinding toggles Play/Pause; skipped when focus is inside a text input, select, or textarea.
 
+**Mobile controls drawer (below `md` breakpoint only):**
+A single `fixed bottom-0 left-0 right-0 z-30` container replaces the right-panel controls on mobile. Two stacked children:
+- **Main bar (always visible):** BPM number (tap-to-open vertical slider popover, `fixed`-positioned via `getBoundingClientRect` to avoid overflow clipping), Loop/Once segmented pill control, Metronome icon toggle (`text-denim` when active), ChevronUp/Down toggle, Stop + Play/Pause flush right.
+- **Collapsible panel:** Animates via `max-height` transition with cubic-bezier `(0.32, 0.72, 0, 1)`. Contains: Tap Tempo, BPM horizontal slider (synced to main BPM state), Note Sound volume, Accent Beat 1, Subdivision pills, Metronome volume, Loop Gap pills.
+
+Scroll isolation: `onWheel` and `onTouchMove` with `stopPropagation()` on the drawer. A `z-20` transparent backdrop intercepts TAB-area clicks when the panel is open (preventing accidental seek). Drag handle uses `touch-action: none` + `setPointerCapture` to suppress Chrome pull-to-refresh while tracking downward drag to close. Hide-on-scroll: the drawer container has `transition-transform duration-300 ease-out`; `controlsVisible` state drives `translateY(0)` ↔ `translateY(100%)`. `controlsVisibleRef` mirrors the state for use inside the scroll listener closure without stale-closure issues. Auto-scroll (triggered by the RAF row-transition `scrollIntoView`) does not trigger hide: `isAutoScrollingRef` is set `true` before `scrollIntoView` and cleared after 500ms; both the page scroll listener and `NavBar.tsx`'s scroll listener check this flag and skip the hide logic. `NavBar.tsx` is notified via `CustomEvent('fingerpick-autoscroll-start/end')`.
+
 **Cursor / Playhead** (`src/app/(main)/fingerpick/page.tsx`):
 
 Two overlay `div`s absolutely positioned inside `tabViewerRef` (the scrollable TAB viewer):
@@ -465,13 +486,19 @@ Two overlay `div`s absolutely positioned inside `tabViewerRef` (the scrollable T
 5. **Row transition** (when `rowIdx ≠ lastScrolledRowRef`): updates vertical `top`/`height` of both overlays; calls `rowRefs.current[rowIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' })`; resets `prevTimestampRef.current = 0` to force a snap on the next frame (prevents leftward smoothing from the previous row's x position).
 6. **Measure transition** (when `measureIndex ≠ lastMeasureIdxRef`): reads `data-stave-{measureIndex}-x/w` from the SVG element to reposition `measureHighlightRef`.
 
+Single-note measure fix: when `!nextEvent || nextEvent.measureIndex !== measureIndex` (`isLastNoteInMeasure`), the cursor drifts to the measure's right edge using `t0Event.duration` (actual scheduled note duration in seconds) rather than the gap to the next event, ensuring correct cursor velocity on whole-note and other terminal-note measures.
+
+Rest-slot cursor drift: when `getProgressAtTime` returns a `slotIndex` whose DOM element does not exist (GhostNote/rest), the RAF tick falls back to a drift interpolation path: reads the measure left edge from `data-stave-{measureIndex}-x`, queries the first non-rest note's element via `[data-measure-index][data-slot-index]` to get `x1`, computes `frac = restElapsed / restDuration` from `measureBoundariesRef` start times, and applies the same exponential smoothing to drift the cursor from the measure left edge toward `x1` over the rest slot's duration. Falls back to a static snap if the target element is not yet in the DOM.
+
 **Click-to-seek:** `onClick` on the tab viewer hit-tests all `[data-measure-index][data-slot-index]` elements in the clicked row's SVG (clamping to the nearest row by Y distance when the click lands between rows), picks the nearest note by X distance, then: calls `seekToNote(measureIndex, slotIndex)` if playing or paused; sets `pendingSeekRef` if stopped (consumed by `handlePlay()`); and calls `snapCursorToNote()` to immediately reposition both overlays bypassing exponential smoothing (`renderedXRef` and `prevTimestampRef` are reset to force a snap on the next tick).
 
-**Initial and post-Stop cursor position:** A rAF retry loop polls until TabStaveRow's ResizeObserver+rAF render completes (data attributes appear in DOM), then positions both overlays at `[data-measure-index="0"][data-slot-index="0"]`. On Stop, `cursorResetTick` state increments, triggering a dedicated `useEffect` that scrolls the container to the top before re-running the same positioning loop.
+**Initial and post-Stop cursor position:** A rAF retry loop polls until TabStaveRow's ResizeObserver+rAF render completes (data attributes appear in DOM), then positions both overlays at `[data-measure-index="0"][data-slot-index="0"]`. On Stop, `cursorResetTick` state increments, triggering a dedicated `useEffect` that re-runs (without scrolling — scroll position is preserved) the same positioning loop.
+
+Known bug (open issue): on mobile, natural playback end causes the page to scroll to top. Root cause: `lastScrolledRowRef` reset in `isPlaying` cleanup triggers `scrollIntoView` on row 0 via the next RAF tick. Fix attempts reverted; tracked as a GitHub issue.
 
 **Testing:**
 
-`fingerpickToVexFlow.ts` has 22 unit tests in `src/components/fingerpick/__tests__/fingerpickToVexFlow.test.ts`, covering: `VEX_DURATION` key mapping (6 cases), silent and rest slots producing `GhostNote` (3 cases), single-note `TabNote` construction and VexFlow string-index mapping (5 cases), all four technique connectors and tied notes (5 cases), and beam grouping via `Beam.applyAndGetBeams` (3 cases). Tests assert against output object types and graph structure — not rendered pixel positions — because jsdom lacks a real Canvas/text-measurement implementation (see Known Issue #8).
+`fingerpickToVexFlow.ts` has 23 unit tests in `src/components/fingerpick/__tests__/fingerpickToVexFlow.test.ts`, covering: `VEX_DURATION` key mapping (6 cases), silent and rest slots producing `GhostNote` (3 cases), single-note `TabNote` construction and VexFlow string-index mapping (5 cases), all four technique connectors and tied notes plus the no-connector baseline (6 cases), and beam grouping via `Beam.applyAndGetBeams` (3 cases). Tests assert against output object types and graph structure — not rendered pixel positions — because jsdom lacks a real Canvas/text-measurement implementation (see Known Issue #8).
 
 ---
 
@@ -499,7 +526,9 @@ The `chords` table covers all 12 chromatic roots (C, C#, D, Eb, E, F, F#, G, Ab,
 
 **Adapter / utility layer:**
 
-- **`src/lib/chordVoicingToVexChords.ts`** — Pure adapter (no DOM/React). Converts a `ChordVoicing` DB row (6-char `frets`/`fingers` strings, relative `start_fret`, optional `barre_fret`/`capo`) into a `VexChordDef` for the vexchords `ChordBox`. Barre detection: `capo=true` → full 6-string barre; otherwise finds all non-muted strings sharing the `barre_fret` digit and computes `fromString`/`toString` span. Also exports `selectStandardVoicing` (returns the "Standard"-labelled voicing, or the one with the lowest `start_fret` as fallback).
+- **`src/lib/chordVoicingToVexChords.ts`** — Pure adapter (no DOM/React). Converts a `ChordVoicing` DB row (6-char `frets`/`fingers` strings, relative `start_fret`, optional `barre_fret`/`capo`) into a `VexChordDef` for the vexchords `ChordBox`. Barre detection: `capo=true` → full 6-string barre; otherwise finds all non-muted strings sharing the `barre_fret` digit and computes `fromString`/`toString` span. Also exports `selectStandardVoicing` (returns the "Standard"-labelled voicing, or the one with the lowest `start_fret` as fallback) and `decodeVoicingStrings` (returns `DecodedString[]` with absolute guitar fret numbers, used by `chordVoicingToMidi`).
+
+- **`src/lib/chordVoicingToMidi.ts`** — Pure function. Converts a `ChordVoicing` into `ChordMidiNote[]` (one entry per non-muted string) using `decodeVoicingStrings` and `GUITAR_OPEN_MIDI` (standard tuning open-string pitches: `[40, 45, 50, 55, 59, 64]`, index 0 = low E). Called by `chords/[rootSlug]/[suffixSlug]/page.tsx` (server component) to compute pitches passed to `ChordDetailView`.
 
 - **`src/lib/chordSuffixes.ts`** — Root ordering and suffix taxonomy.
   - `ROOT_CHROMATIC_ORDER`: `["C","C#","D","Eb","E","F","F#","G","Ab","A","Bb","B"]` — single source of truth for display order everywhere.
@@ -536,9 +565,9 @@ The `chords` table covers all 12 chromatic roots (C, C#, D, Eb, E, F, F#, G, Ab,
 
 - **`BrowseGrid.tsx`** — Renders a `BrowseSection[]` as stacked heading + card-grid blocks, handling both flat (`cards` array) and nested (`subsections`) section shapes.
 
-- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Shows all voicings for a single chord using full-size `ChordDiagram` components. Each voicing card has a Play button: MIDI pitches are computed server-side via `chordVoicingToMidi()` (which calls the same `decodeVoicingStrings()` extractor used internally by `chordVoicingToVexChords` — no duplicated fret math), then played client-side using the fingerpick engine's `pluck` preset (`0250_LK_AcousticSteel_SF2_file`), not the strum page's SoundBlasterOld presets. The preset is lazy-loaded on the first play click (not on page mount); subsequent plays in the same session are instant via the module-level cache in `useGuitarSampleLoader.ts`.
+- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Shows all voicings for a single chord using full-size `ChordDiagram` components. Each voicing card has a Play button: MIDI pitches are pre-computed server-side via `chordVoicingToMidi()` and passed in as the `pitches` prop of each `VoicingCard`. Client-side playback calls `triggerChordPreview(pitches, ctx, destination, currentTime)` from `useGuitarSampleLoader`, which uses the `pluck` preset (`0250_LK_AcousticSteel_SF2_file`). `preloadFingerpickPresets` is lazy-loaded on the first play click (not on page mount); subsequent plays in the same session are instant via the module-level cache in `useGuitarSampleLoader.ts`.
 
-**Attribution:** `@tombatossals/chords-db` (MIT) and `vexchords` are in `package.json`. An in-app footer credit for `@tombatossals/chords-db`, `vexchords`, and WebAudioFont is present on all Chord Library pages. `THIRD_PARTY_LICENSES.md` at the repo root is still not present — see Backlog.
+**Attribution:** `@tombatossals/chords-db` (MIT) and `vexchords` are in `package.json`. The in-app footer credit for `@tombatossals/chords-db`, `vexchords`, and WebAudioFont is rendered by `src/app/(main)/chords/layout.tsx`, which wraps all `/chords/**` routes. `THIRD_PARTY_LICENSES.md` at the repo root is still not present — see Backlog.
 
 ---
 

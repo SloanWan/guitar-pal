@@ -67,6 +67,7 @@ export default function ChordDiagramSVG({
   startFret,
   barreFret,
   mode = "fingers",
+  size = "regular",
   rootMidi,
 }: ChordDiagramSVGProps) {
   const rootPitchClass = rootMidi !== undefined ? rootMidi % 12 : -1;
@@ -132,8 +133,11 @@ export default function ChordDiagramSVG({
   const nutY = fretLineY(0);
   const noteFontSize = mode === "fingers" ? 9 : 7;
 
+  const svgW = size === "compact" ? 100 : W;
+  const svgH = size === "compact" ? Math.round(H * 100 / W) : H;
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox={`0 0 ${W} ${H}`} width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg">
       {/* Nut: thick filled rect when startFret===1; thin line + fret number otherwise */}
       {startFret === 1 ? (
         <rect x={LEFT} y={nutY - 5} width={5 * STR_SPACING} height={5} fill="#1a1a1a" rx={1} />

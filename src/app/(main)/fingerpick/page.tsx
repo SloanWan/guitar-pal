@@ -1396,14 +1396,17 @@ export default function FingerpickPage() {
 			)}
 
 			{/* ── Unified mobile drawer ────────────────────────────────────────── */}
-			<div className="md:hidden fixed bottom-0 left-0 right-0 z-30">
+			<div className="md:hidden fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl bg-white border-t border-slate-300 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] overflow-hidden">
 				{/* Expandable controls panel — max-height transition reveals/hides content */}
 				<div
-					className={`bg-white overflow-hidden transition-[max-height] duration-300 ease-out ${
+					className={`bg-white overflow-hidden transition-[max-height] duration-[400ms] ease-[cubic-bezier(0.32,0.72,0,1)] ${
 						showSheet ? "max-h-[calc(33.333vh-56px)] overflow-y-auto" : "max-h-0"
 					}`}
 				>
-					<div className="border-t border-slate-200 flex flex-col gap-5 px-5 py-4 pb-6">
+					<div className="flex justify-center pt-2.5 pb-1 shrink-0">
+						<div className="w-9 h-1 rounded-full bg-slate-300" />
+					</div>
+					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
 						{/* Tap Tempo */}
 						<Button
 							onClick={handleTapTempo}
@@ -1554,9 +1557,11 @@ export default function FingerpickPage() {
 					</div>
 				</div>
 
+				<div className="border-t border-slate-200" />
+
 				{/* Always-visible bottom bar */}
 				<div
-					className="bg-white border-t border-slate-200 flex items-center gap-1.5 px-3 py-2"
+					className="bg-white/95 backdrop-blur-sm flex items-center gap-1.5 px-3 py-2"
 					onPointerDown={handleBottomBarPointerDown}
 					onPointerMove={handleBottomBarPointerMove}
 					onPointerUp={handleBottomBarPointerUp}

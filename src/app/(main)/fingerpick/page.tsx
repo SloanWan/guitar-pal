@@ -591,7 +591,7 @@ export default function FingerpickPage() {
 		const noteRect = noteEl.getBoundingClientRect();
 		const svgRect = svgEl.getBoundingClientRect();
 
-		const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+		const x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
 		const top = svgRect.top - containerRect.top + container.scrollTop;
 
 		// Snap rendered position so the next RAF tick also snaps (prevTimestampRef = 0
@@ -727,7 +727,7 @@ export default function FingerpickPage() {
 			const containerRect = container.getBoundingClientRect();
 			const noteRect = noteEl.getBoundingClientRect();
 			const svgRect = svgEl.getBoundingClientRect();
-			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+			const x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
 			const top = svgRect.top - containerRect.top + container.scrollTop;
 
 			playhead.style.top = `${top}px`;
@@ -769,7 +769,6 @@ export default function FingerpickPage() {
 				rafId = requestAnimationFrame(resetToInitial);
 				return;
 			}
-			container.scrollTop = 0;
 			const noteEl = container.querySelector<SVGElement>(
 				'[data-measure-index="0"][data-slot-index="0"]',
 			);
@@ -781,11 +780,13 @@ export default function FingerpickPage() {
 			const containerRect = container.getBoundingClientRect();
 			const noteRect = noteEl.getBoundingClientRect();
 			const svgRect = svgEl.getBoundingClientRect();
-			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+			const x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
 			const top = svgRect.top - containerRect.top + container.scrollTop;
 			playhead.style.top = `${top}px`;
 			playhead.style.height = `${svgRect.height}px`;
 			playhead.style.transform = `translateX(${Math.round(x0 - 3)}px)`;
+			renderedXRef.current = x0;
+			prevTimestampRef.current = 0;
 			if (measureHL) {
 				const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
 				if (stavesvg) {
@@ -802,23 +803,6 @@ export default function FingerpickPage() {
 		rafId = requestAnimationFrame(resetToInitial);
 		return () => cancelAnimationFrame(rafId);
 	}, [cursorResetTick]);
-
-	// Close BPM popover on click outside the button + panel.
-	useEffect(() => {
-		if (!showBpmPopover) return;
-		function handlePointerDown(e: PointerEvent) {
-			if (
-				bpmPopoverRef.current &&
-				!bpmPopoverRef.current.contains(e.target as Node) &&
-				bpmButtonRef.current &&
-				!bpmButtonRef.current.contains(e.target as Node)
-			) {
-				setShowBpmPopover(false);
-			}
-		}
-		document.addEventListener("pointerdown", handlePointerDown);
-		return () => document.removeEventListener("pointerdown", handlePointerDown);
-	}, [showBpmPopover]);
 
 	// ── Playback cursor RAF loop ─────────────────────────────────────────────
 	// Starts when isPlaying becomes true; stopped on pause/stop or unmount.
@@ -885,12 +869,29 @@ export default function FingerpickPage() {
 			const t0 = t0Event?.time ?? elapsed;
 			const nextEvent = events.find((e) => e.time > t0);
 
-			// Linear interpolation target: cursor moves between x0 (current note) and x1
-			// (next note) in proportion to elapsed time within the current note's interval.
-			// When x1 < x0 the next note is on a different row; substitute the current
-			// measure's right edge as x1 so the cursor keeps drifting rightward.
+			// True when this is the last note in its measure or the last note overall —
+			// drift to the measure's right edge rather than interpolating toward the next note.
+			const isLastNoteInMeasure = !nextEvent || nextEvent.measureIndex !== measureIndex;
+
 			let targetX = x0;
-			if (nextEvent) {
+			if (isLastNoteInMeasure) {
+				const lastEvent = events[events.length - 1];
+				const noteDuration = t0Event?.duration ?? (lastEvent ? Math.max(0.1, lastEvent.time - t0 + 0.5) : 1);
+				const frac = Math.max(0, Math.min(1, (elapsed - t0) / noteDuration));
+				const stavesvg = container.querySelector<SVGElement>(
+					`svg[data-stave-${measureIndex}-x]`,
+				);
+				if (stavesvg) {
+					const staveSvgRect = stavesvg.getBoundingClientRect();
+					const sx = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0");
+					const sw = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0");
+					const measureRight = staveSvgRect.left - containerRect.left + sx + sw;
+					targetX = x0 + (measureRight - x0) * frac;
+				}
+			} else if (nextEvent) {
+				// Interpolate between consecutive notes in the same measure.
+				// When x1 < x0 the next note is on a different row; substitute the current
+				// measure's right edge as x1 so the cursor keeps drifting rightward.
 				const nextEl = container.querySelector<SVGElement>(
 					`[data-measure-index="${nextEvent.measureIndex}"][data-slot-index="${nextEvent.slotIndex}"]`,
 				);

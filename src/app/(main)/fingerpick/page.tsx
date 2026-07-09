@@ -471,6 +471,7 @@ export default function FingerpickPage() {
 		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, rawValue));
 		setBpm(clamped);
 		dragBpmRef.current = clamped;
+		navigator.vibrate?.(10);
 		if (!isDraggingSliderRef.current) {
 			// Keyboard arrow key on a focused slider — reschedule immediately.
 			applyBpmChange(clamped);
@@ -517,6 +518,7 @@ export default function FingerpickPage() {
 		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
 		const rawBpm = Math.round(60000 / avgInterval);
 		handleBpmChange(rawBpm);
+		navigator.vibrate?.(10);
 	}
 
 	// ── Bottom bar / sheet gesture handlers ─────────────────────────────────────
@@ -939,7 +941,7 @@ export default function FingerpickPage() {
 				}
 				lastScrolledRowRef.current = rowIdx;
 				prevTimestampRef.current = 0;
-				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "center" });
 			}
 
 			// Measure transition: update the measure background highlight.
@@ -1125,7 +1127,7 @@ export default function FingerpickPage() {
 					{!showLibrary && (
 						<button
 							onClick={() => setShowLibrary(true)}
-							className="absolute top-0 right-0 lg:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-200 active:scale-95"
+							className="fixed top-[calc(3.5rem+0.75rem)] right-4 z-30 md:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-200 active:scale-95"
 							style={{ backgroundColor: "var(--denim)" }}
 						>
 							<SquareMenu />
@@ -1279,7 +1281,7 @@ export default function FingerpickPage() {
 							max={2}
 							step={0.01}
 							value={noteGain}
-							onChange={(e) => setNoteGain(Number(e.target.value))}
+							onChange={(e) => { setNoteGain(Number(e.target.value)); navigator.vibrate?.(10); }}
 							className="w-full accent-denim cursor-pointer"
 						/>
 					</div>
@@ -1369,7 +1371,7 @@ export default function FingerpickPage() {
 							step={0.01}
 							value={metronomeGain}
 							disabled={!metronomeEnabled}
-							onChange={(e) => setMetronomeGain(Number(e.target.value))}
+							onChange={(e) => { setMetronomeGain(Number(e.target.value)); navigator.vibrate?.(10); }}
 							className="w-full accent-denim cursor-pointer"
 						/>
 					</div>
@@ -1429,7 +1431,7 @@ export default function FingerpickPage() {
 						max={2}
 						step={0.01}
 						value={noteGain}
-						onChange={(e) => setNoteGain(Number(e.target.value))}
+						onChange={(e) => { setNoteGain(Number(e.target.value)); navigator.vibrate?.(10); }}
 						className="w-full accent-denim cursor-pointer"
 					/>
 				</div>
@@ -1507,7 +1509,7 @@ export default function FingerpickPage() {
 						step={0.01}
 						value={metronomeGain}
 						disabled={!metronomeEnabled}
-						onChange={(e) => setMetronomeGain(Number(e.target.value))}
+						onChange={(e) => { setMetronomeGain(Number(e.target.value)); navigator.vibrate?.(10); }}
 						className="w-full accent-denim cursor-pointer"
 					/>
 				</div>
@@ -1560,7 +1562,7 @@ export default function FingerpickPage() {
 				<button
 					ref={bpmButtonRef}
 					onClick={() => setShowBpmPopover((v) => !v)}
-					className="flex flex-col items-center leading-none px-1"
+					className="w-14 flex flex-col items-center leading-none text-center"
 				>
 					<span className="text-xl font-bold text-denim">{bpm}</span>
 					<span className="text-[8px] font-semibold uppercase tracking-widest text-slate-400">

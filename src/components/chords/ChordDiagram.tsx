@@ -1,13 +1,13 @@
 "use client";
 
 import type { VexChordDef } from "@/lib/chordVoicingToVexChords";
-import ChordDiagramSVG, { type DiagramMode } from "@/components/chords/ChordDiagramSVG";
+import ChordDiagramSVG, { type DiagramMode, type DiagramSize } from "@/components/chords/ChordDiagramSVG";
 import MusicalText from "@/components/MusicalText";
 
 interface Props {
 	def: VexChordDef;
 	label: string;
-	compact?: boolean;
+	size?: DiagramSize;
 	mode?: DiagramMode;
 	rootMidi?: number;
 }
@@ -44,7 +44,7 @@ function toSVGProps(def: VexChordDef): {
 export default function ChordDiagram({
 	def,
 	label,
-	compact = false,
+	size = "regular",
 	mode = "fingers",
 	rootMidi,
 }: Props) {
@@ -56,7 +56,7 @@ export default function ChordDiagram({
 				{...svgProps}
 				mode={mode}
 				rootMidi={rootMidi}
-				size={compact ? "compact" : "regular"}
+				size={size}
 			/>
 			<span className="text-xs font-medium text-denim">
 				<MusicalText text={label} />

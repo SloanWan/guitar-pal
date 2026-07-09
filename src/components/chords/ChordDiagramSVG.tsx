@@ -45,6 +45,9 @@ function noteCenterY(visualFret: number): number {
 }
 
 export type DiagramMode = "fingers" | "noteNames" | "fretboard";
+export type DiagramSize = "compact" | "regular" | "large";
+
+const LARGE_W = 256;
 
 export interface ChordDiagramSVGProps {
   frets: number[];
@@ -52,7 +55,7 @@ export interface ChordDiagramSVGProps {
   startFret: number;
   barreFret?: number | null;
   mode?: DiagramMode;
-  size?: "regular" | "compact";
+  size?: DiagramSize;
   rootMidi?: number;
 }
 
@@ -134,8 +137,8 @@ export default function ChordDiagramSVG({
   const nutY = fretLineY(0);
   const noteFontSize = mode === "fingers" ? 9 : 7;
 
-  const svgW = size === "compact" ? 100 : W;
-  const svgH = size === "compact" ? Math.round(H * 100 / W) : H;
+  const svgW = size === "compact" ? 100 : size === "large" ? LARGE_W : W;
+  const svgH = size === "compact" ? Math.round(H * 100 / W) : size === "large" ? Math.round(H * LARGE_W / W) : H;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg">

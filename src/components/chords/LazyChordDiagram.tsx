@@ -3,24 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ChordDiagram from "@/components/chords/ChordDiagram";
+import type { DiagramSize } from "@/components/chords/ChordDiagramSVG";
 import type { VexChordDef } from "@/lib/chordVoicingToVexChords";
 
 interface Props {
   def: VexChordDef;
   label: string;
-  compact?: boolean;
+  size?: DiagramSize;
   // Provide one of: href (Link-based navigation) or onClick (callback-based)
   href?: string;
   onClick?: () => void;
 }
 
-// Must match the outer card dimensions of <ChordDiagram compact> to prevent layout shift:
-// border(1) + p-3(12) + SVG-w(100) + p-3(12) + border(1) = 126
-// border(1) + p-3(12) + SVG-h(120) + gap-1(4) + text-xs line(18) + p-3(12) + border(1) = 168
-const COMPACT_W = 126;
-const COMPACT_H = 168;
+// Placeholder dimensions per size to prevent layout shift before IntersectionObserver fires.
+// Outer card = border(1) + p-3(12) + SVG + p-3(12) + border(1) wide;
+//              border(1) + p-3(12) + SVG + gap-1(4) + text-xs(18) + p-3(12) + border(1) tall.
+const PLACEHOLDER: Record<DiagramSize, { w: number; h: number }> = {
+  compact: { w: 126, h: 168 },  // SVG: 100 × 86
+  regular: { w: 210, h: 240 },  // SVG: 184 × 158
+  large:   { w: 282, h: 302 },  // SVG: 256 × 220
+};
 
-export default function LazyChordDiagram({ def, label, compact, href, onClick }: Props) {
+export default function LazyChordDiagram({ def, label, size = "compact", href, onClick }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -44,7 +48,7 @@ export default function LazyChordDiagram({ def, label, compact, href, onClick }:
     return (
       <div
         ref={rootRef}
-        style={{ width: COMPACT_W, height: COMPACT_H }}
+        style={{ width: PLACEHOLDER[size].w, height: PLACEHOLDER[size].h }}
         className="shrink-0 rounded-lg border border-denim-border bg-denim-tint"
       />
     );
@@ -66,7 +70,7 @@ export default function LazyChordDiagram({ def, label, compact, href, onClick }:
           className="group relative block"
           aria-label={`${label} — click to see all voicings`}
         >
-          <ChordDiagram def={def} label={label} compact={compact} />
+          <ChordDiagram def={def} label={label} size={size} />
           {tooltip}
         </Link>
       </div>
@@ -81,7 +85,7 @@ export default function LazyChordDiagram({ def, label, compact, href, onClick }:
       role="button"
       aria-label={`${label} — click to see all voicings`}
     >
-      <ChordDiagram def={def} label={label} compact={compact} />
+      <ChordDiagram def={def} label={label} size={size} />
       {tooltip}
     </div>
   );

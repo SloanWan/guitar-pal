@@ -350,7 +350,10 @@ export default function FingerpickPage() {
 	const [showBpmPopover, setShowBpmPopover] = useState(false);
 	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
 	const [containerWidth, setContainerWidth] = useState(0);
-	const [bpmPopoverPos, setBpmPopoverPos] = useState<{ bottom: number; left: number }>({ bottom: 0, left: 0 });
+	const [bpmPopoverPos, setBpmPopoverPos] = useState<{ bottom: number; left: number }>({
+		bottom: 0,
+		left: 0,
+	});
 	const bpmButtonRef = useRef<HTMLButtonElement>(null);
 	const tapTimesRef = useRef<number[]>([]);
 	// Tracks the latest BPM value during slider drag so onPointerUp reads the
@@ -908,11 +911,16 @@ export default function FingerpickPage() {
 			if (!noteEl) {
 				// Slot has no DOM element (rest/GhostNote) — drift cursor from measure left
 				// edge toward the first non-rest note's position over the rest's duration.
-				const stavesvg = container.querySelector<SVGElement>(`svg[data-stave-${measureIndex}-x]`);
+				const stavesvg = container.querySelector<SVGElement>(
+					`svg[data-stave-${measureIndex}-x]`,
+				);
 				if (stavesvg) {
 					const staveSvgRect = stavesvg.getBoundingClientRect();
-					const sx = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0");
-					const snapX = staveSvgRect.left - containerRect.left + sx + container.scrollLeft;
+					const sx = parseFloat(
+						stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0",
+					);
+					const snapX =
+						staveSvgRect.left - containerRect.left + sx + container.scrollLeft;
 
 					const firstNonRestEvent = events.find((e) => e.measureIndex === measureIndex);
 					const measureBoundary = measureBoundariesRef.current.find(
@@ -932,7 +940,8 @@ export default function FingerpickPage() {
 								containerRect.left +
 								firstNonRestRect.width / 2 +
 								container.scrollLeft;
-							const measureStart = measureBoundary?.startTime ?? firstNonRestEvent.time;
+							const measureStart =
+								measureBoundary?.startTime ?? firstNonRestEvent.time;
 							const restDuration = firstNonRestEvent.time - measureStart;
 							const restElapsed = elapsed - measureStart;
 							const frac =
@@ -951,7 +960,8 @@ export default function FingerpickPage() {
 						} else {
 							const dt = (timestamp - prevTime) / 1000;
 							renderedXRef.current +=
-								(driftX - renderedXRef.current) * (1 - Math.exp(-CURSOR_LAMBDA * dt));
+								(driftX - renderedXRef.current) *
+								(1 - Math.exp(-CURSOR_LAMBDA * dt));
 						}
 						prevTimestampRef.current = timestamp;
 					} else {
@@ -963,7 +973,9 @@ export default function FingerpickPage() {
 					if (measureIndex !== lastMeasureIdxRef.current) {
 						lastMeasureIdxRef.current = measureIndex;
 						if (measureHL) {
-							const sw = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0");
+							const sw = parseFloat(
+								stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0",
+							);
 							measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
 							measureHL.style.width = `${sw}px`;
 							measureHL.style.display = "block";
@@ -982,7 +994,10 @@ export default function FingerpickPage() {
 								measureHL.style.height = `${svgRect.height}px`;
 							}
 							lastScrolledRowRef.current = rowIdx;
-							rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "center" });
+							rowRefs.current[rowIdx]?.scrollIntoView({
+								behavior: "smooth",
+								block: "center",
+							});
 						}
 					}
 				}
@@ -1562,7 +1577,7 @@ export default function FingerpickPage() {
 			{/* BPM vertical slider popover — fixed so it escapes the drawer's overflow context */}
 			{showBpmPopover && (
 				<div
-					className="md:hidden fixed z-[60] bg-white rounded-xl border border-slate-200 shadow-lg px-4 py-4 flex items-center justify-center -translate-x-1/2"
+					className="md:hidden fixed z-60 bg-white rounded-xl border border-slate-200 shadow-lg px-4 py-4 flex items-center justify-center -translate-x-1/2"
 					style={{ bottom: bpmPopoverPos.bottom, left: bpmPopoverPos.left }}
 				>
 					<input
@@ -1573,7 +1588,13 @@ export default function FingerpickPage() {
 						onChange={(e) => handleSliderChange(Number(e.target.value))}
 						onPointerDown={handleSliderPointerDown}
 						onPointerUp={handleSliderPointerUp}
-						style={{ writingMode: "vertical-lr", direction: "rtl", height: 120 } as React.CSSProperties}
+						style={
+							{
+								writingMode: "vertical-lr",
+								direction: "rtl",
+								height: 120,
+							} as React.CSSProperties
+						}
 						className="accent-denim cursor-pointer"
 					/>
 				</div>
@@ -1637,7 +1658,9 @@ export default function FingerpickPage() {
 								<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
 									BPM
 								</span>
-								<span className="text-xs tabular-nums text-denim font-semibold">{bpm}</span>
+								<span className="text-xs tabular-nums text-denim font-semibold">
+									{bpm}
+								</span>
 							</div>
 							<input
 								type="range"

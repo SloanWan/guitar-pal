@@ -82,6 +82,7 @@ src/
 │   │   ├── StepGridCard.tsx     # Card wrapper around StepGrid with pattern name + description
 │   │   ├── CreatePatternModal.tsx # Dialog for creating/editing custom patterns
 │   │   ├── useAudioEngine.ts    # Web Audio API scheduler, all playback logic
+│   │   ├── BpmSlider.tsx        # Custom div-based BPM slider with genre tick marks and segment hover tooltips
 │   │   ├── useGuitarSampleLoader.ts # webaudiofontdata CDN preset fetching/parsing, multi-string strum scheduling
 │   │   ├── useStrumPatterns.ts  # Custom pattern + favourites state, localStorage/Supabase sync
 │   │   └── __tests__/
@@ -289,7 +290,7 @@ StepValue semantics:
 - Metronome: `OscillatorNode`, 1200 Hz accented / 800 Hz normal, 50 ms duration.
 - `setStrumEnabled` and `setMetronomeEnabled` stop and restart playback so the ref update propagates immediately.
 - `sixteenth` tick mode with a 2-cell beat interleaves real cells with empty subdivisions (alternating via `nextPlatEmptyCellRef`).
-- BPM range: 40–220. Tap tempo uses up to 8 recent taps, resets after 2 seconds of inactivity.
+- BPM range: 40–220. Tap tempo uses up to 8 recent taps, resets after 2 seconds of inactivity. The BPM input is a fully custom `div`-based slider (`src/components/strum/BpmSlider.tsx`) — the native `<input type="range">` was replaced to support genre tick marks. 9 ticks at fixed BPM values (60 / 75 / 90 / 100 / 110 / 120 / 130 / 140 / 160) are rendered as dot markers on the track; hovering a segment between ticks shows a genre label tooltip (Slow Practice / Folk / Ballad / Pop Blues / Funk / Pop Rock / Rock / Jazz Hard Rock / Fast Rock). Tick dots change colour depending on whether they fall inside or outside the filled portion. Clicking a tick jumps BPM directly. Drag-pause-then-resume and onPointerUp blur behaviours are preserved.
 
 **Custom pattern sync** (`src/components/strum/useStrumPatterns.ts`):
 

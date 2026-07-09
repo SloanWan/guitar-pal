@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { TabNote, GhostNote, TabTie, TabSlide, Voice, Beam } from "vexflow";
+import { TabNote, GhostNote, TabTie, TabSlide, Voice, Beam, GraceNoteGroup } from "vexflow";
 
 import { fingerpickToVexFlow, VEX_DURATION } from "@/lib/fingerpickToVexFlow";
-import type { BeatSlot, Measure, StringFret, Duration } from "@/lib/fingerpickTypes";
+import type { BeatSlot, Measure, StringFret, Duration, Technique } from "@/lib/fingerpickTypes";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -233,5 +233,61 @@ describe("beam grouping via Beam.applyAndGetBeams", () => {
 		);
 		const beams = Beam.applyAndGetBeams(voiceFrom(notes), -1);
 		expect(beams).toHaveLength(1);
+	});
+});
+
+// ─── New Duration values ──────────────────────────────────────────────────────
+
+describe("VEX_DURATION — new Duration values", () => {
+	it.each([
+		["32nd", "32"],
+		["dotted-quarter", "qd"],
+		["dotted-eighth", "8d"],
+		["sixteenth-triplet", "16"],
+	] as const)('maps "%s" → "%s"', (dur, expected) => {
+		expect(VEX_DURATION[dur]).toBe(expected);
+	});
+});
+
+// ─── New Technique values ─────────────────────────────────────────────────────
+
+describe("fingerpickToVexFlow — new technique values", () => {
+	const newTechniques: Technique[] = [
+		"bend-full", "bend-half", "bend-quarter", "bend-release",
+		"pre-bend", "pre-bend-release", "vibrato", "vibrato-wide",
+		"vibrato-bar", "tapping", "trill", "harmonic-natural",
+		"harmonic-artificial", "whammy-dive", "whammy-pull",
+		"pick-scrape", "grace-note",
+	];
+
+	it.each(newTechniques)("technique %s does not throw", (technique) => {
+		expect(() =>
+			fingerpickToVexFlow(
+				measure([
+					beatSlot("s1", "quarter", { 0: { fret: 0 } }),
+					beatSlot("s2", "quarter", { 0: { fret: 2, technique } }),
+				])
+			)
+		).not.toThrow();
+	});
+});
+
+// ─── isGraceNote ──────────────────────────────────────────────────────────────
+
+describe("fingerpickToVexFlow — isGraceNote", () => {
+	it("isGraceNote slot is excluded from notes[] and attaches a GraceNoteGroup to the following TabNote", () => {
+		const graceSlot: BeatSlot = {
+			id: "g1",
+			duration: "eighth",
+			strings: strings6({ 0: { fret: 5 } }),
+			isGraceNote: true,
+		};
+		const { notes } = fingerpickToVexFlow(
+			measure([graceSlot, beatSlot("s1", "eighth", { 0: { fret: 7 } })])
+		);
+		expect(notes).toHaveLength(1);
+		expect(notes[0]).toBeInstanceOf(TabNote);
+		const modifiers = (notes[0] as TabNote).getModifiers();
+		expect(modifiers.some((m) => m instanceof GraceNoteGroup)).toBe(true);
 	});
 });

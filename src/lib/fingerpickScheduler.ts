@@ -21,6 +21,10 @@ export interface ScheduleEvent {
 	muted: boolean;
 	measureIndex: number;
 	slotIndex: number;
+	/** Propagated from StringFret for audio shaping — all optional to preserve backward compat. */
+	ghostNote?: boolean;
+	accent?: boolean;
+	staccato?: boolean;
 }
 
 /**
@@ -117,6 +121,9 @@ export function fingerpickPatternToScheduleEvents(
 						muted: sf.muted,
 						measureIndex,
 						slotIndex,
+						...(sf.ghostNote && { ghostNote: true }),
+						...(sf.accent && { accent: true }),
+						...(sf.staccato && { staccato: true }),
 					});
 				});
 			}

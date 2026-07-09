@@ -254,6 +254,7 @@ describe("VEX_DURATION — new Duration values", () => {
 		["32nd", "32"],
 		["dotted-quarter", "qd"],
 		["dotted-eighth", "8d"],
+		["eighth-triplet", "8"],
 		["sixteenth-triplet", "16"],
 	] as const)('maps "%s" → "%s"', (dur, expected) => {
 		expect(VEX_DURATION[dur]).toBe(expected);
@@ -300,6 +301,46 @@ describe("fingerpickToVexFlow — isGraceNote", () => {
 		expect(notes[0]).toBeInstanceOf(TabNote);
 		const modifiers = (notes[0] as TabNote).getModifiers();
 		expect(modifiers.some((m) => m instanceof GraceNoteGroup)).toBe(true);
+	});
+});
+
+// ─── Tuplet grouping ──────────────────────────────────────────────────────────
+
+describe("fingerpickToVexFlow — eighth-triplet tuplets", () => {
+	it("three consecutive eighth-triplet slots produce one Tuplet", () => {
+		const { tuplets } = fingerpickToVexFlow(
+			measure([
+				beatSlot("t1", "eighth-triplet", { 0: { fret: 5 } }),
+				beatSlot("t2", "eighth-triplet", { 0: { fret: 7 } }),
+				beatSlot("t3", "eighth-triplet", { 0: { fret: 9 } }),
+			])
+		);
+		expect(tuplets).toHaveLength(1);
+	});
+
+	it("six consecutive eighth-triplet slots produce two Tuplets", () => {
+		const { tuplets } = fingerpickToVexFlow(
+			measure([
+				beatSlot("t1", "eighth-triplet", { 0: { fret: 5 } }),
+				beatSlot("t2", "eighth-triplet", { 0: { fret: 7 } }),
+				beatSlot("t3", "eighth-triplet", { 0: { fret: 9 } }),
+				beatSlot("t4", "eighth-triplet", { 0: { fret: 5 } }),
+				beatSlot("t5", "eighth-triplet", { 0: { fret: 7 } }),
+				beatSlot("t6", "eighth-triplet", { 0: { fret: 9 } }),
+			])
+		);
+		expect(tuplets).toHaveLength(2);
+	});
+
+	it("three consecutive sixteenth-triplet slots produce one Tuplet", () => {
+		const { tuplets } = fingerpickToVexFlow(
+			measure([
+				beatSlot("t1", "sixteenth-triplet", { 0: { fret: 5 } }),
+				beatSlot("t2", "sixteenth-triplet", { 0: { fret: 7 } }),
+				beatSlot("t3", "sixteenth-triplet", { 0: { fret: 9 } }),
+			])
+		);
+		expect(tuplets).toHaveLength(1);
 	});
 });
 

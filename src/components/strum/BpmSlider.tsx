@@ -148,7 +148,7 @@ export default function BpmSlider({
 			>
 				{/* Fill */}
 				<div
-					className="absolute inset-y-0 left-0 rounded-full pointer-events-none bg-[var(--denim)]"
+					className="absolute inset-y-0 left-0 rounded-full pointer-events-none bg-denim"
 					style={{ width: `${percent}%` }}
 				/>
 
@@ -179,12 +179,14 @@ export default function BpmSlider({
 								type="button"
 								tabIndex={-1}
 								onClick={() => applyBpmChange(tick.bpm)}
-								className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 focus:outline-none"
+								className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 focus:outline-none z-5"
 							>
 								<span
-									className={`block w-[5px] h-[5px] rounded-full transition-colors duration-150 ${
-										tp <= percent ? "bg-[var(--denim)]" : "bg-slate-300"
-									}`}
+									className="block w-2 h-2 rounded-full"
+									style={{
+										backgroundColor:
+											tick.bpm <= bpm ? "var(--denim-dark)" : "var(--denim)",
+									}}
 								/>
 							</button>
 						</div>
@@ -193,7 +195,7 @@ export default function BpmSlider({
 
 				{/* Thumb */}
 				<div
-					className="absolute top-1/2 z-10 w-4 h-4 rounded-full border-2 border-white shadow-sm cursor-grab active:cursor-grabbing bg-[var(--denim)]"
+					className="absolute top-1/2 z-10 w-4 h-4 rounded-full border-2 border-white shadow-sm cursor-grab active:cursor-grabbing bg-denim"
 					style={{
 						left: `${percent}%`,
 						transform: "translate(-50%, -50%)",

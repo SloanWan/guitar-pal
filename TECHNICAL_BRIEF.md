@@ -319,7 +319,7 @@ StepValue semantics:
 
 **Files:** `src/app/(main)/fingerpick/page.tsx`, `src/components/fingerpick/TabStaveRow.tsx`, `src/components/fingerpick/useFingerpickAudioEngine.ts`, `src/lib/fingerpickScheduler.ts`, `src/lib/fingerpickToVexFlow.ts`, `src/lib/fingerpickTypes.ts`
 
-**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). The library sidebar shows a "coming soon" placeholder. The controls panel is fully implemented.
+**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). The library sidebar shows a "coming soon" placeholder. The controls panel is fully implemented on desktop. On mobile/tablet (below md breakpoint), controls move to a unified fixed-bottom drawer.
 
 **Data model** (`src/lib/fingerpickTypes.ts`):
 
@@ -450,6 +450,13 @@ Fully implemented; no longer a placeholder. Controls (right panel, `md:w-55 lg:w
 - **Metronome** toggle, **Accent Beat 1** toggle, **Subdivision** (1/4 / 1/8 / 1/16 pill buttons), **Metronome volume** slider — all greyed when metronome is off.
 - **Spacebar** keybinding toggles Play/Pause; skipped when focus is inside a text input, select, or textarea.
 
+**Mobile controls drawer (below `md` breakpoint only):**
+A single `fixed bottom-0 left-0 right-0 z-30` container replaces the right-panel controls on mobile. Two stacked children:
+- **Main bar (always visible):** BPM number (tap-to-open vertical slider popover, `fixed`-positioned via `getBoundingClientRect` to avoid overflow clipping), Loop/Once segmented pill control, Metronome icon toggle (`text-denim` when active), ChevronUp/Down toggle, Stop + Play/Pause flush right.
+- **Collapsible panel:** Animates via `max-height` transition with cubic-bezier `(0.32, 0.72, 0, 1)`. Contains: Tap Tempo, BPM horizontal slider (synced to main BPM state), Note Sound volume, Accent Beat 1, Subdivision pills, Metronome volume, Loop Gap pills.
+
+Scroll isolation: `onWheel` and `onTouchMove` with `stopPropagation()` on the drawer. A `z-20` transparent backdrop intercepts TAB-area clicks when the panel is open (preventing accidental seek). Drag handle uses `touch-action: none` + `setPointerCapture` to suppress Chrome pull-to-refresh while tracking downward drag to close.
+
 **Cursor / Playhead** (`src/app/(main)/fingerpick/page.tsx`):
 
 Two overlay `div`s absolutely positioned inside `tabViewerRef` (the scrollable TAB viewer):
@@ -465,6 +472,8 @@ Two overlay `div`s absolutely positioned inside `tabViewerRef` (the scrollable T
 4. Applies exponential smoothing: `renderedX += (targetX − renderedX) × (1 − exp(−λ·Δt))` with `λ = 20`. First frame of each playback session (`prevTimestampRef = 0`) snaps directly to avoid a catch-up slide. Loop-pass boundaries (detected via `passIndex` change) also reset `prevTimestampRef` to force a snap.
 5. **Row transition** (when `rowIdx ≠ lastScrolledRowRef`): updates vertical `top`/`height` of both overlays; calls `rowRefs.current[rowIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' })`; resets `prevTimestampRef.current = 0` to force a snap on the next frame (prevents leftward smoothing from the previous row's x position).
 6. **Measure transition** (when `measureIndex ≠ lastMeasureIdxRef`): reads `data-stave-{measureIndex}-x/w` from the SVG element to reposition `measureHighlightRef`.
+
+Single-note measure fix: when `!nextEvent || nextEvent.measureIndex !== measureIndex` (`isLastNoteInMeasure`), the cursor drifts to the measure's right edge using `t0Event.duration` (actual scheduled note duration in seconds) rather than the gap to the next event, ensuring correct cursor velocity on whole-note and other terminal-note measures.
 
 **Click-to-seek:** `onClick` on the tab viewer hit-tests all `[data-measure-index][data-slot-index]` elements in the clicked row's SVG (clamping to the nearest row by Y distance when the click lands between rows), picks the nearest note by X distance, then: calls `seekToNote(measureIndex, slotIndex)` if playing or paused; sets `pendingSeekRef` if stopped (consumed by `handlePlay()`); and calls `snapCursorToNote()` to immediately reposition both overlays bypassing exponential smoothing (`renderedXRef` and `prevTimestampRef` are reset to force a snap on the next tick).
 

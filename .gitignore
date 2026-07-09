@@ -40,8 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# personal docs
-INTERVIEW_NOTES.md
-
 # claude code
 .claude/

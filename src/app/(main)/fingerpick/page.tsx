@@ -7,7 +7,10 @@ import {
 	findSlotStartTime,
 	type ScheduleEvent,
 } from "@/lib/fingerpickScheduler";
-import TabStaveRow, { computeMeasureMinWidth, CLEF_WIDTH } from "@/components/fingerpick/TabStaveRow";
+import TabStaveRow, {
+	computeMeasureMinWidth,
+	CLEF_WIDTH,
+} from "@/components/fingerpick/TabStaveRow";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 import {
 	useFingerpickAudioEngine,
@@ -15,7 +18,17 @@ import {
 } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { CirclePlay, CirclePause, CircleStop, X, SquareMenu, Plus, Minus } from "lucide-react";
+import {
+	CirclePlay,
+	CirclePause,
+	CircleStop,
+	X,
+	SquareMenu,
+	Plus,
+	Minus,
+	ChevronUp,
+	Metronome,
+} from "lucide-react";
 
 // ── StringFret factory helpers ──────────────────────────────────────────────
 // Reduce the verbosity of the required { fret, technique, tied, muted } shape.
@@ -330,6 +343,8 @@ export default function FingerpickPage() {
 	const [bpm, setBpm] = useState<number>(PRESET_FINGERPICK_PATTERN.bpm);
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
+	const [showSheet, setShowSheet] = useState(false);
+	const [showBpmPopover, setShowBpmPopover] = useState(false);
 	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
 	const [containerWidth, setContainerWidth] = useState(0);
 	const tapTimesRef = useRef<number[]>([]);
@@ -401,6 +416,15 @@ export default function FingerpickPage() {
 	// Note to seek to on the next play() — set by click-to-seek while stopped,
 	// consumed by handlePlay() and cleared by handleStop().
 	const pendingSeekRef = useRef<{ measureIndex: number; slotIndex: number } | null>(null);
+	// Bottom bar drag-to-open-sheet gesture refs.
+	const bottomBarDragStartYRef = useRef<number>(0);
+	const bottomBarIsDraggingRef = useRef<boolean>(false);
+	// Expanded sheet drag-to-close gesture refs.
+	const sheetDragStartYRef = useRef<number>(0);
+	const sheetIsDraggingRef = useRef<boolean>(false);
+	// BPM popover anchor + panel refs for click-outside detection.
+	const bpmButtonRef = useRef<HTMLButtonElement>(null);
+	const bpmPopoverRef = useRef<HTMLDivElement>(null);
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -460,6 +484,7 @@ export default function FingerpickPage() {
 		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, rawValue));
 		setBpm(clamped);
 		dragBpmRef.current = clamped;
+		navigator.vibrate?.(10);
 		if (!isDraggingSliderRef.current) {
 			// Keyboard arrow key on a focused slider — reschedule immediately.
 			applyBpmChange(clamped);
@@ -506,6 +531,47 @@ export default function FingerpickPage() {
 		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
 		const rawBpm = Math.round(60000 / avgInterval);
 		handleBpmChange(rawBpm);
+		navigator.vibrate?.(10);
+	}
+
+	// ── Bottom bar / sheet gesture handlers ─────────────────────────────────────
+
+	function handleBottomBarPointerDown(e: React.PointerEvent) {
+		if ((e.target as HTMLElement).closest("button, input")) return;
+		bottomBarDragStartYRef.current = e.clientY;
+		bottomBarIsDraggingRef.current = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function handleBottomBarPointerMove(e: React.PointerEvent) {
+		if (!bottomBarIsDraggingRef.current) return;
+		if (e.clientY - bottomBarDragStartYRef.current < -40) {
+			bottomBarIsDraggingRef.current = false;
+			setShowSheet(true);
+		}
+	}
+
+	function handleBottomBarPointerUp() {
+		bottomBarIsDraggingRef.current = false;
+	}
+
+	function handleSheetPointerDown(e: React.PointerEvent) {
+		if ((e.target as HTMLElement).closest("input")) return;
+		sheetDragStartYRef.current = e.clientY;
+		sheetIsDraggingRef.current = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function handleSheetPointerMove(e: React.PointerEvent) {
+		if (!sheetIsDraggingRef.current) return;
+		if (e.clientY - sheetDragStartYRef.current > 40) {
+			sheetIsDraggingRef.current = false;
+			setShowSheet(false);
+		}
+	}
+
+	function handleSheetPointerUp() {
+		sheetIsDraggingRef.current = false;
 	}
 
 	// ── Click-to-seek ───────────────────────────────────────────────────────────
@@ -525,7 +591,7 @@ export default function FingerpickPage() {
 		const noteRect = noteEl.getBoundingClientRect();
 		const svgRect = svgEl.getBoundingClientRect();
 
-		const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+		const x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
 		const top = svgRect.top - containerRect.top + container.scrollTop;
 
 		// Snap rendered position so the next RAF tick also snaps (prevTimestampRef = 0
@@ -661,7 +727,7 @@ export default function FingerpickPage() {
 			const containerRect = container.getBoundingClientRect();
 			const noteRect = noteEl.getBoundingClientRect();
 			const svgRect = svgEl.getBoundingClientRect();
-			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+			const x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
 			const top = svgRect.top - containerRect.top + container.scrollTop;
 
 			playhead.style.top = `${top}px`;
@@ -703,7 +769,6 @@ export default function FingerpickPage() {
 				rafId = requestAnimationFrame(resetToInitial);
 				return;
 			}
-			container.scrollTop = 0;
 			const noteEl = container.querySelector<SVGElement>(
 				'[data-measure-index="0"][data-slot-index="0"]',
 			);
@@ -715,11 +780,13 @@ export default function FingerpickPage() {
 			const containerRect = container.getBoundingClientRect();
 			const noteRect = noteEl.getBoundingClientRect();
 			const svgRect = svgEl.getBoundingClientRect();
-			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
+			const x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
 			const top = svgRect.top - containerRect.top + container.scrollTop;
 			playhead.style.top = `${top}px`;
 			playhead.style.height = `${svgRect.height}px`;
 			playhead.style.transform = `translateX(${Math.round(x0 - 3)}px)`;
+			renderedXRef.current = x0;
+			prevTimestampRef.current = 0;
 			if (measureHL) {
 				const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
 				if (stavesvg) {
@@ -802,12 +869,29 @@ export default function FingerpickPage() {
 			const t0 = t0Event?.time ?? elapsed;
 			const nextEvent = events.find((e) => e.time > t0);
 
-			// Linear interpolation target: cursor moves between x0 (current note) and x1
-			// (next note) in proportion to elapsed time within the current note's interval.
-			// When x1 < x0 the next note is on a different row; substitute the current
-			// measure's right edge as x1 so the cursor keeps drifting rightward.
+			// True when this is the last note in its measure or the last note overall —
+			// drift to the measure's right edge rather than interpolating toward the next note.
+			const isLastNoteInMeasure = !nextEvent || nextEvent.measureIndex !== measureIndex;
+
 			let targetX = x0;
-			if (nextEvent) {
+			if (isLastNoteInMeasure) {
+				const lastEvent = events[events.length - 1];
+				const noteDuration = t0Event?.duration ?? (lastEvent ? Math.max(0.1, lastEvent.time - t0 + 0.5) : 1);
+				const frac = Math.max(0, Math.min(1, (elapsed - t0) / noteDuration));
+				const stavesvg = container.querySelector<SVGElement>(
+					`svg[data-stave-${measureIndex}-x]`,
+				);
+				if (stavesvg) {
+					const staveSvgRect = stavesvg.getBoundingClientRect();
+					const sx = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0");
+					const sw = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0");
+					const measureRight = staveSvgRect.left - containerRect.left + sx + sw;
+					targetX = x0 + (measureRight - x0) * frac;
+				}
+			} else if (nextEvent) {
+				// Interpolate between consecutive notes in the same measure.
+				// When x1 < x0 the next note is on a different row; substitute the current
+				// measure's right edge as x1 so the cursor keeps drifting rightward.
 				const nextEl = container.querySelector<SVGElement>(
 					`[data-measure-index="${nextEvent.measureIndex}"][data-slot-index="${nextEvent.slotIndex}"]`,
 				);
@@ -871,7 +955,7 @@ export default function FingerpickPage() {
 				}
 				lastScrolledRowRef.current = rowIdx;
 				prevTimestampRef.current = 0;
-				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "center" });
 			}
 
 			// Measure transition: update the measure background highlight.
@@ -953,194 +1037,406 @@ export default function FingerpickPage() {
 	}, [getPlaybackProgress]);
 
 	return (
-		<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">
-			{/* Left sidebar — lg: static; below lg: slide-in overlay */}
-			<div
-				className={`fixed inset-y-0 left-0 z-40 w-72 h-full border-r border-slate-200 bg-white flex flex-col shrink-0 transition-transform duration-200 ease-in-out lg:relative lg:inset-auto lg:z-auto lg:translate-x-0 ${
-					showLibrary ? "translate-x-0" : "-translate-x-full"
-				}`}
-			>
-				<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-slate-200">
-					<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-						Pattern Library
-					</h2>
-					<button
-						onClick={() => setShowLibrary(false)}
-						className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-					>
-						<X size={18} />
-					</button>
-				</div>
-				<div className="flex-1 flex items-center justify-center">
-					<p className="text-xs text-slate-400 text-center px-4">
-						Pattern library coming soon
-					</p>
-				</div>
-			</div>
-
-			{/* Backdrop — tap outside to close library on mobile/tablet */}
-			{showLibrary && (
+		<>
+			<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">
+				{/* Left sidebar — lg: static; below lg: slide-in overlay */}
 				<div
-					className="fixed inset-0 z-30 bg-black/20 lg:hidden"
-					onClick={() => setShowLibrary(false)}
-				/>
-			)}
+					className={`fixed inset-y-0 left-0 z-40 w-72 h-full border-r border-slate-200 bg-white flex flex-col shrink-0 transition-transform duration-200 ease-in-out lg:relative lg:inset-auto lg:z-auto lg:translate-x-0 ${
+						showLibrary ? "translate-x-0" : "-translate-x-full"
+					}`}
+				>
+					<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-slate-200">
+						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+							Pattern Library
+						</h2>
+						<button
+							onClick={() => setShowLibrary(false)}
+							className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+						>
+							<X size={18} />
+						</button>
+					</div>
+					<div className="flex-1 flex items-center justify-center">
+						<p className="text-xs text-slate-400 text-center px-4">
+							Pattern library coming soon
+						</p>
+					</div>
+				</div>
 
-			{/* Centre — TAB viewer
+				{/* Backdrop — tap outside to close library on mobile/tablet */}
+				{showLibrary && (
+					<div
+						className="fixed inset-0 z-30 bg-black/20 lg:hidden"
+						onClick={() => setShowLibrary(false)}
+					/>
+				)}
+
+				{/* Centre — TAB viewer
 			    md: fixed-height column → inner wrapper fills it (flex-1 + min-h-0)
 			    → title is shrink-0 → measures scroll vertically inside min-h-0 container.
 			    Mobile: no height constraint, page scroll handles overflow naturally. */}
-			<div className="md:flex-1 flex flex-col px-4 md:px-8 py-6 md:py-8 md:overflow-hidden">
-				<div className="relative w-full max-w-4xl mx-auto flex flex-col min-h-0 md:flex-1">
-					<div className="mb-4 shrink-0">
-						<h1 className="text-lg font-semibold text-slate-700">{pattern.name}</h1>
-						<p className="text-xs text-slate-400 uppercase tracking-wider mt-0.5">
-							{bpm} BPM &middot; {pattern.timeSignature[0]}/{pattern.timeSignature[1]}
-						</p>
-					</div>
+				<div className="md:flex-1 flex flex-col px-4 md:px-8 py-6 md:py-8 md:overflow-hidden">
+					<div className="relative w-full max-w-4xl mx-auto flex flex-col min-h-0 md:flex-1">
+						<div className="mb-4 shrink-0">
+							<h1 className="text-lg font-semibold text-slate-700">{pattern.name}</h1>
+							<p className="text-xs text-slate-400 uppercase tracking-wider mt-0.5">
+								{bpm} BPM &middot; {pattern.timeSignature[0]}/
+								{pattern.timeSignature[1]}
+							</p>
+						</div>
 
-					{/* min-h-0 lets Flexbox shrink this child so overflow-y-auto scrolls.
+						{/* min-h-0 lets Flexbox shrink this child so overflow-y-auto scrolls.
 					    Each TabStaveRow is a full-width row of measures rendered into one
 					    VexFlow context; the row count and width are driven by the viewport.
 					    position:relative anchors the cursor overlay div. */}
-					<div
-						ref={tabViewerRef}
-						className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto bg-white rounded-xl border border-slate-100 cursor-pointer"
-						onClick={handleTabClick}
-					>
-						{/* Measure background highlight — updated only on measure transitions. */}
 						<div
-							ref={measureHighlightRef}
-							aria-hidden="true"
-							className="absolute pointer-events-none"
-							style={{
-								display: "none",
-								backgroundColor: "rgba(74, 111, 165, 0.07)",
-								borderRadius: 3,
-							}}
-						/>
-						{/* Playhead line — sits BEFORE the SVG rows in DOM order so it renders
-						    behind VexFlow note numbers; translateX updated every RAF frame. */}
-						<div
-							ref={cursorRef}
-							aria-hidden="true"
-							className="absolute pointer-events-none"
-							style={{
-								display: "none",
-								width: 6,
-								left: 0,
-								backgroundColor: "rgba(74, 111, 165, 0.5)",
-								borderRadius: 5,
-							}}
-						/>
-						<div className="flex flex-col">
-							{rows.map((row, rowIdx) => (
-								<div
-									key={row.measures[0].id}
-									ref={(el) => {
-										rowRefs.current[rowIdx] = el;
-									}}
-								>
-									<TabStaveRow
-										measures={row.measures}
-										startMeasureNumber={row.startMeasureNumber}
-										startMeasureIndex={row.startMeasureNumber - 1}
-										measureWidths={row.widths}
-									/>
-								</div>
-							))}
-						</div>
-					</div>
-
-					{/* Mobile library toggle */}
-					{!showLibrary && (
-						<button
-							onClick={() => setShowLibrary(true)}
-							className="absolute top-0 right-0 lg:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-200 active:scale-95"
-							style={{ backgroundColor: "var(--denim)" }}
+							ref={tabViewerRef}
+							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto bg-white rounded-xl border border-slate-100 cursor-pointer"
+							onClick={handleTabClick}
 						>
-							<SquareMenu />
-						</button>
-					)}
+							{/* Measure background highlight — updated only on measure transitions. */}
+							<div
+								ref={measureHighlightRef}
+								aria-hidden="true"
+								className="absolute pointer-events-none"
+								style={{
+									display: "none",
+									backgroundColor: "rgba(74, 111, 165, 0.07)",
+									borderRadius: 3,
+								}}
+							/>
+							{/* Playhead line — sits BEFORE the SVG rows in DOM order so it renders
+						    behind VexFlow note numbers; translateX updated every RAF frame. */}
+							<div
+								ref={cursorRef}
+								aria-hidden="true"
+								className="absolute pointer-events-none"
+								style={{
+									display: "none",
+									width: 6,
+									left: 0,
+									backgroundColor: "rgba(74, 111, 165, 0.5)",
+									borderRadius: 5,
+								}}
+							/>
+							<div className="flex flex-col pb-20 md:pb-0">
+								{rows.map((row, rowIdx) => (
+									<div
+										key={row.measures[0].id}
+										ref={(el) => {
+											rowRefs.current[rowIdx] = el;
+										}}
+									>
+										<TabStaveRow
+											measures={row.measures}
+											startMeasureNumber={row.startMeasureNumber}
+											startMeasureIndex={row.startMeasureNumber - 1}
+											measureWidths={row.widths}
+										/>
+									</div>
+								))}
+							</div>
+						</div>
+
+						{/* Mobile library toggle */}
+						{!showLibrary && (
+							<button
+								onClick={() => setShowLibrary(true)}
+								className="fixed top-17 right-4 z-30 md:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-200 active:scale-95"
+								style={{ backgroundColor: "var(--denim)" }}
+							>
+								<SquareMenu />
+							</button>
+						)}
+					</div>
+				</div>
+
+				{/* Right panel — controls */}
+				<div className="hidden md:flex w-full border-t border-slate-200 bg-white md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
+					<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+						Controls
+					</h2>
+
+					<div className="flex flex-col gap-5 px-5 py-5 overflow-y-auto">
+						{/* Play / Pause toggle */}
+						<div
+							onClick={isLoaded ? handlePlayPause : undefined}
+							className={`flex items-center justify-center transition-all duration-150 active:scale-95 ${
+								isLoaded
+									? "cursor-pointer text-denim hover:text-denim-dark"
+									: "opacity-30 pointer-events-none text-denim"
+							}`}
+						>
+							{isPlaying ? (
+								<CirclePause size={56} strokeWidth={1.5} />
+							) : (
+								<CirclePlay size={56} strokeWidth={1.5} />
+							)}
+						</div>
+
+						{/* Stop button — shown while playing or paused */}
+						{(isPlaying || isPaused) && (
+							<button
+								onClick={handleStop}
+								className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 hover:cursor-pointer transition-colors duration-200 text-xs font-medium"
+							>
+								<CircleStop size={16} strokeWidth={1.5} />
+								Stop and back to start
+							</button>
+						)}
+
+						{!isLoaded && (
+							<p className="text-[10px] text-slate-400 text-center">
+								Loading samples…
+							</p>
+						)}
+
+						{/* BPM slider */}
+						<input
+							type="range"
+							min={MIN_BPM}
+							max={MAX_BPM}
+							value={bpm}
+							onChange={(e) => handleSliderChange(Number(e.target.value))}
+							onPointerDown={handleSliderPointerDown}
+							onPointerUp={handleSliderPointerUp}
+							className="w-full accent-denim cursor-pointer"
+						/>
+
+						{/* ±10 BPM + display */}
+						<div className="flex justify-between items-center">
+							<Button
+								variant="outline"
+								className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
+								onClick={() => handleBpmChange(bpm - 10)}
+							>
+								<Minus size={16} />
+							</Button>
+							<div className="flex flex-col items-center gap-0.5">
+								<span className="text-5xl font-bold tracking-tight text-denim">
+									{bpm}
+								</span>
+								<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+									BPM
+								</span>
+							</div>
+							<Button
+								variant="outline"
+								className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
+								onClick={() => handleBpmChange(bpm + 10)}
+							>
+								<Plus size={16} />
+							</Button>
+						</div>
+
+						{/* Tap Tempo */}
+						<Button
+							onClick={handleTapTempo}
+							className="h-9 w-full text-sm font-semibold cursor-pointer transition-all duration-150"
+							style={{ backgroundColor: "var(--denim)", color: "white" }}
+						>
+							Tap Tempo
+						</Button>
+
+						{/* Play once */}
+						<div className="flex items-center justify-between">
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+								Play once
+							</span>
+							<Switch
+								checked={playOnce}
+								onCheckedChange={setPlayOnce}
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+							/>
+						</div>
+
+						{/* Loop gap — disabled/greyed when play-once is active */}
+						<div
+							className={`flex flex-col gap-2 transition-opacity duration-200 ${
+								playOnce ? "opacity-40 pointer-events-none" : ""
+							}`}
+						>
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+								Loop Gap
+							</span>
+							<div className="flex gap-1">
+								{LOOP_GAP_OPTIONS.map((gap) => (
+									<Button
+										key={gap}
+										variant={loopGap === gap ? "default" : "outline"}
+										disabled={playOnce}
+										onClick={() => {
+											setLoopGap(gap);
+											applyLoopGapChange(gap);
+										}}
+										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
+										style={
+											loopGap === gap && !playOnce
+												? {
+														backgroundColor: "var(--denim)",
+														color: "white",
+													}
+												: undefined
+										}
+									>
+										{gap}s
+									</Button>
+								))}
+							</div>
+						</div>
+
+						{/* Note sound section */}
+						<div className="flex flex-col gap-1.5">
+							<div className="flex justify-between items-center">
+								<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+									Note Sound
+								</span>
+								<span className="text-xs tabular-nums text-slate-400">
+									{Math.round(noteGain * 100)}%
+								</span>
+							</div>
+							<input
+								type="range"
+								min={0}
+								max={2}
+								step={0.01}
+								value={noteGain}
+								onChange={(e) => {
+									setNoteGain(Number(e.target.value));
+									navigator.vibrate?.(10);
+								}}
+								className="w-full accent-denim cursor-pointer"
+							/>
+						</div>
+
+						<div className="border-t border-slate-100" />
+
+						{/* Metronome toggle */}
+						<div className="flex items-center justify-between">
+							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+								Metronome
+							</span>
+							<Switch
+								checked={metronomeEnabled}
+								onCheckedChange={setMetronomeEnabled}
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+							/>
+						</div>
+
+						{/* Accent beat 1 toggle */}
+						<div
+							className={`flex items-center justify-between transition-opacity duration-200 ${
+								!metronomeEnabled ? "opacity-40" : ""
+							}`}
+						>
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+								Accent beat 1
+							</span>
+							<Switch
+								checked={accentEnabled}
+								disabled={!metronomeEnabled}
+								onCheckedChange={setAccentEnabled}
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+							/>
+						</div>
+
+						{/* Subdivision density */}
+						<div
+							className={`flex flex-col gap-2 transition-opacity duration-200 ${
+								!metronomeEnabled ? "opacity-40" : ""
+							}`}
+						>
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+								Subdivision
+							</span>
+							<div className="flex gap-1">
+								{(
+									[
+										{ value: "quarter", label: "1/4" },
+										{ value: "eighth", label: "1/8" },
+										{ value: "sixteenth", label: "1/16" },
+									] satisfies { value: MetronomeSubdivision; label: string }[]
+								).map(({ value, label }) => (
+									<Button
+										key={value}
+										variant={
+											metronomeSubdivision === value ? "default" : "outline"
+										}
+										disabled={!metronomeEnabled}
+										onClick={() => setMetronomeSubdivision(value)}
+										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
+										style={
+											metronomeSubdivision === value
+												? {
+														backgroundColor: "var(--denim)",
+														color: "white",
+													}
+												: undefined
+										}
+									>
+										{label}
+									</Button>
+								))}
+							</div>
+						</div>
+
+						{/* Metronome volume */}
+						<div
+							className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
+								!metronomeEnabled ? "opacity-40" : ""
+							}`}
+						>
+							<div className="flex justify-between items-center">
+								<span className="text-xs text-slate-400">Metronome vol.</span>
+								<span className="text-xs tabular-nums text-slate-400">
+									{Math.round(metronomeGain * 100)}%
+								</span>
+							</div>
+							<input
+								type="range"
+								min={0}
+								max={1}
+								step={0.01}
+								value={metronomeGain}
+								disabled={!metronomeEnabled}
+								onChange={(e) => {
+									setMetronomeGain(Number(e.target.value));
+									navigator.vibrate?.(10);
+								}}
+								className="w-full accent-denim cursor-pointer"
+							/>
+						</div>
+
+						<div className="border-t border-slate-100" />
+					</div>
 				</div>
 			</div>
 
-			{/* Right panel — controls */}
-			<div className="w-full border-t border-slate-200 bg-white md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex flex-col">
-				<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-					Controls
-				</h2>
+			{/* ── Sheet backdrop — mobile/tablet only ───────────────────────────── */}
+			<div
+				aria-hidden="true"
+				className={`md:hidden fixed inset-0 z-40 bg-black/20 transition-opacity duration-300 ease-out ${
+					showSheet ? "opacity-100" : "opacity-0 pointer-events-none"
+				}`}
+				onClick={() => setShowSheet(false)}
+			/>
 
-				<div className="flex flex-col gap-5 px-5 py-5 overflow-y-auto">
-					{/* Play / Pause toggle */}
-					<div
-						onClick={isLoaded ? handlePlayPause : undefined}
-						className={`flex items-center justify-center transition-all duration-150 active:scale-95 ${
-							isLoaded
-								? "cursor-pointer text-denim hover:text-denim-dark"
-								: "opacity-30 pointer-events-none text-denim"
-						}`}
-					>
-						{isPlaying ? (
-							<CirclePause size={56} strokeWidth={1.5} />
-						) : (
-							<CirclePlay size={56} strokeWidth={1.5} />
-						)}
-					</div>
+			{/* ── Swipe-up expanded sheet — mobile/tablet only ──────────────────── */}
+			<div
+				className={`md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl border-t border-slate-200 overflow-y-auto transition-transform duration-300 ease-out ${
+					showSheet ? "translate-y-0" : "translate-y-full"
+				}`}
+				style={{ maxHeight: "75vh" }}
+				onPointerDown={handleSheetPointerDown}
+				onPointerMove={handleSheetPointerMove}
+				onPointerUp={handleSheetPointerUp}
+			>
+				{/* Drag handle */}
+				<div className="flex justify-center pt-3 pb-1 shrink-0">
+					<div className="w-10 h-1 rounded-full bg-slate-300" />
+				</div>
 
-					{/* Stop button — shown while playing or paused */}
-					{(isPlaying || isPaused) && (
-						<button
-							onClick={handleStop}
-							className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 hover:cursor-pointer transition-colors duration-200 text-xs font-medium"
-						>
-							<CircleStop size={16} strokeWidth={1.5} />
-							Stop and back to start
-						</button>
-					)}
-
-					{!isLoaded && (
-						<p className="text-[10px] text-slate-400 text-center">Loading samples…</p>
-					)}
-
-					{/* BPM slider */}
-					<input
-						type="range"
-						min={MIN_BPM}
-						max={MAX_BPM}
-						value={bpm}
-						onChange={(e) => handleSliderChange(Number(e.target.value))}
-						onPointerDown={handleSliderPointerDown}
-						onPointerUp={handleSliderPointerUp}
-						className="w-full accent-denim cursor-pointer"
-					/>
-
-					{/* ±10 BPM + display */}
-					<div className="flex justify-between items-center">
-						<Button
-							variant="outline"
-							className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
-							onClick={() => handleBpmChange(bpm - 10)}
-						>
-							<Minus size={16} />
-						</Button>
-						<div className="flex flex-col items-center gap-0.5">
-							<span className="text-5xl font-bold tracking-tight text-denim">
-								{bpm}
-							</span>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-								BPM
-							</span>
-						</div>
-						<Button
-							variant="outline"
-							className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
-							onClick={() => handleBpmChange(bpm + 10)}
-						>
-							<Plus size={16} />
-						</Button>
-					</div>
-
+				<div className="flex flex-col gap-5 px-5 py-4 pb-8">
 					{/* Tap Tempo */}
 					<Button
 						onClick={handleTapTempo}
@@ -1150,51 +1446,7 @@ export default function FingerpickPage() {
 						Tap Tempo
 					</Button>
 
-					{/* Play once */}
-					<div className="flex items-center justify-between">
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-							Play once
-						</span>
-						<Switch
-							checked={playOnce}
-							onCheckedChange={setPlayOnce}
-							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
-						/>
-					</div>
-
-					{/* Loop gap — disabled/greyed when play-once is active */}
-					<div
-						className={`flex flex-col gap-2 transition-opacity duration-200 ${
-							playOnce ? "opacity-40 pointer-events-none" : ""
-						}`}
-					>
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-							Loop Gap
-						</span>
-						<div className="flex gap-1">
-							{LOOP_GAP_OPTIONS.map((gap) => (
-								<Button
-									key={gap}
-									variant={loopGap === gap ? "default" : "outline"}
-									disabled={playOnce}
-									onClick={() => {
-										setLoopGap(gap);
-										applyLoopGapChange(gap);
-									}}
-									className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
-									style={
-										loopGap === gap && !playOnce
-											? { backgroundColor: "var(--denim)", color: "white" }
-											: undefined
-									}
-								>
-									{gap}s
-								</Button>
-							))}
-						</div>
-					</div>
-
-					{/* Note sound section */}
+					{/* Note Sound volume */}
 					<div className="flex flex-col gap-1.5">
 						<div className="flex justify-between items-center">
 							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
@@ -1210,29 +1462,20 @@ export default function FingerpickPage() {
 							max={2}
 							step={0.01}
 							value={noteGain}
-							onChange={(e) => setNoteGain(Number(e.target.value))}
+							onChange={(e) => {
+								setNoteGain(Number(e.target.value));
+								navigator.vibrate?.(10);
+							}}
 							className="w-full accent-denim cursor-pointer"
 						/>
 					</div>
 
 					<div className="border-t border-slate-100" />
 
-					{/* Metronome toggle */}
-					<div className="flex items-center justify-between">
-						<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-							Metronome
-						</span>
-						<Switch
-							checked={metronomeEnabled}
-							onCheckedChange={setMetronomeEnabled}
-							className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
-						/>
-					</div>
-
-					{/* Accent beat 1 toggle */}
+					{/* Accent beat 1 */}
 					<div
 						className={`flex items-center justify-between transition-opacity duration-200 ${
-							!metronomeEnabled ? "opacity-40" : ""
+							!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
 						}`}
 					>
 						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
@@ -1246,10 +1489,10 @@ export default function FingerpickPage() {
 						/>
 					</div>
 
-					{/* Subdivision density */}
+					{/* Subdivision */}
 					<div
 						className={`flex flex-col gap-2 transition-opacity duration-200 ${
-							!metronomeEnabled ? "opacity-40" : ""
+							!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
 						}`}
 					>
 						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
@@ -1284,7 +1527,7 @@ export default function FingerpickPage() {
 					{/* Metronome volume */}
 					<div
 						className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
-							!metronomeEnabled ? "opacity-40" : ""
+							!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
 						}`}
 					>
 						<div className="flex justify-between items-center">
@@ -1300,14 +1543,167 @@ export default function FingerpickPage() {
 							step={0.01}
 							value={metronomeGain}
 							disabled={!metronomeEnabled}
-							onChange={(e) => setMetronomeGain(Number(e.target.value))}
+							onChange={(e) => {
+								setMetronomeGain(Number(e.target.value));
+								navigator.vibrate?.(10);
+							}}
 							className="w-full accent-denim cursor-pointer"
 						/>
 					</div>
 
 					<div className="border-t border-slate-100" />
+
+					{/* Loop Gap */}
+					<div
+						className={`flex flex-col gap-2 transition-opacity duration-200 ${
+							playOnce ? "opacity-40 pointer-events-none" : ""
+						}`}
+					>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Loop Gap
+						</span>
+						<div className="flex gap-1">
+							{LOOP_GAP_OPTIONS.map((gap) => (
+								<Button
+									key={gap}
+									variant={loopGap === gap ? "default" : "outline"}
+									disabled={playOnce}
+									onClick={() => {
+										setLoopGap(gap);
+										applyLoopGapChange(gap);
+									}}
+									className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
+									style={
+										loopGap === gap && !playOnce
+											? { backgroundColor: "var(--denim)", color: "white" }
+											: undefined
+									}
+								>
+									{gap}s
+								</Button>
+							))}
+						</div>
+					</div>
 				</div>
 			</div>
-		</div>
+
+			{/* ── Fixed bottom controls bar — mobile/tablet only ────────────────── */}
+			<div
+				className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 flex items-center gap-1.5 px-3 py-2"
+				onPointerDown={handleBottomBarPointerDown}
+				onPointerMove={handleBottomBarPointerMove}
+				onPointerUp={handleBottomBarPointerUp}
+			>
+				{/* BPM display — tap to open vertical slider popover */}
+				<div className="relative shrink-0">
+					<button
+						ref={bpmButtonRef}
+						onClick={() => setShowBpmPopover((v) => !v)}
+						className="w-14 flex flex-col items-center leading-none text-center"
+					>
+						<span className="text-xl font-bold text-denim">{bpm}</span>
+						<span className="text-[8px] font-semibold uppercase tracking-widest text-slate-400">
+							BPM
+						</span>
+					</button>
+					{/* BPM vertical slider popover */}
+					{showBpmPopover && (
+						<div
+							ref={bpmPopoverRef}
+							className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white rounded-xl border border-slate-200 shadow-lg px-4 py-4 flex items-center justify-center"
+						>
+							<input
+								type="range"
+								min={MIN_BPM}
+								max={MAX_BPM}
+								value={bpm}
+								onChange={(e) => handleSliderChange(Number(e.target.value))}
+								onPointerDown={handleSliderPointerDown}
+								onPointerUp={handleSliderPointerUp}
+								style={
+									{
+										writingMode: "vertical-lr",
+										direction: "rtl",
+										height: 120,
+									} as React.CSSProperties
+								}
+								className="accent-denim cursor-pointer"
+							/>
+						</div>
+					)}
+				</div>
+
+				{/* Loop / Once segmented control */}
+				<div className="relative flex h-8 items-center rounded-full bg-slate-200 p-0.5 shrink-0">
+					{/* Sliding pill */}
+					<div
+						className="absolute inset-0.5 w-[calc(50%-2px)] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out"
+						style={{
+							transform: playOnce ? "translateX(calc(100% + 4px))" : "translateX(0)",
+						}}
+					/>
+					<button
+						onClick={() => setPlayOnce(false)}
+						className={`relative z-10 px-3 h-full rounded-full text-xs font-semibold transition-colors duration-150 ${
+							!playOnce ? "text-slate-700" : "text-slate-400"
+						}`}
+					>
+						Loop
+					</button>
+					<button
+						onClick={() => setPlayOnce(true)}
+						className={`relative z-10 px-3 h-full rounded-full text-xs font-semibold transition-colors duration-150 ${
+							playOnce ? "text-slate-700" : "text-slate-400"
+						}`}
+					>
+						Once
+					</button>
+				</div>
+
+				{/* Metronome toggle */}
+				<button
+					onClick={() => setMetronomeEnabled(!metronomeEnabled)}
+					className={`p-1.5 rounded-full transition-colors duration-150 shrink-0 ${
+						metronomeEnabled ? "text-denim" : "text-slate-400"
+					}`}
+				>
+					<Metronome size={20} />
+				</button>
+
+				{/* Chevron-up — opens expanded sheet */}
+				<button
+					onClick={() => setShowSheet(true)}
+					className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 transition-colors duration-150 shrink-0"
+				>
+					<ChevronUp size={20} />
+				</button>
+
+				{/* Stop + Play/Pause — flush right */}
+				<div className="ml-auto flex items-center gap-0.5 shrink-0">
+					<button
+						onClick={handleStop}
+						className={`p-1 text-slate-500 transition-colors duration-150 ${
+							isPlaying || isPaused ? "visible" : "invisible"
+						}`}
+					>
+						<CircleStop size={28} strokeWidth={1.5} />
+					</button>
+					<div
+						onClick={isLoaded ? handlePlayPause : undefined}
+						className={`transition-all duration-150 active:scale-95 ${
+							isLoaded
+								? "cursor-pointer text-denim hover:text-denim-dark"
+								: "opacity-30 pointer-events-none text-denim"
+						}`}
+					>
+						{isPlaying ? (
+							<CirclePause size={40} strokeWidth={1.5} />
+						) : (
+							<CirclePlay size={40} strokeWidth={1.5} />
+						)}
+					</div>
+				</div>
+			</div>
+		</>
 	);
 }

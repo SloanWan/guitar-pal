@@ -86,12 +86,12 @@ export default function ChordDiagramSVG({
     return NOTE_NAMES[pitchClass(s, fret)];
   }
 
-  // Barre span: leftmost and rightmost non-muted string
+  // Barre span: leftmost and rightmost string whose absolute fret equals barreFret
   let barreMin = -1;
   let barreMax = -1;
   if (barreFret != null) {
     for (let s = 0; s < 6; s++) {
-      if (frets[s] !== -1) {
+      if (frets[s] === barreFret) {
         if (barreMin === -1) barreMin = s;
         barreMax = s;
       }

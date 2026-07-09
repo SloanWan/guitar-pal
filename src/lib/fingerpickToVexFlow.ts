@@ -8,6 +8,10 @@ import {
 	StemmableNote,
 	GraceNote,
 	GraceNoteGroup,
+	Annotation,
+	AnnotationVerticalJustify,
+	Tremolo,
+	Vibrato,
 } from "vexflow";
 
 import { Measure, Duration } from "@/lib/fingerpickTypes";
@@ -90,6 +94,57 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			tabNote.addModifier(new GraceNoteGroup(pendingGraceNotes));
 			pendingGraceNotes = [];
 		}
+
+		// Accumulate per-slot renderable modifiers from active StringFret flags.
+		let slotStaccato = false;
+		let slotAccent = false;
+		let slotPickStroke: "down" | "up" | undefined;
+		let slotTremolo: "8th" | "16th" | "32nd" | undefined;
+		let slotVibrato = false;
+		let slotVibratoWide = false;
+		slot.strings.forEach((sf) => {
+			if (sf.fret === null && !sf.muted) return;
+			if (sf.staccato) slotStaccato = true;
+			if (sf.accent) slotAccent = true;
+			if (!slotPickStroke && sf.pickStroke) slotPickStroke = sf.pickStroke;
+			if (!slotTremolo && sf.tremoloPickingSpeed) slotTremolo = sf.tremoloPickingSpeed;
+			if (sf.technique === "vibrato") slotVibrato = true;
+			if (sf.technique === "vibrato-wide") slotVibratoWide = true;
+		});
+		if (slotStaccato) {
+			tabNote.addModifier(
+				new Annotation(".").setVerticalJustification(AnnotationVerticalJustify.TOP),
+			);
+		}
+		if (slotAccent) {
+			tabNote.addModifier(
+				new Annotation(">").setVerticalJustification(AnnotationVerticalJustify.TOP),
+			);
+		}
+		if (slotPickStroke) {
+			tabNote.addModifier(
+				new Annotation(slotPickStroke === "down" ? "⊓" : "V").setVerticalJustification(
+					AnnotationVerticalJustify.TOP,
+				),
+			);
+		}
+		if (slotTremolo) {
+			const slashes = slotTremolo === "8th" ? 1 : slotTremolo === "16th" ? 2 : 3;
+			tabNote.addModifier(new Tremolo(slashes));
+		}
+		// Vibrato constructor calls setVibratoWidth(), which measures glyph width via
+		// the canvas API. In non-browser environments (jsdom, Node) it throws because
+		// getWidth() returns 0. Wrap in try-catch so the adapter stays test-safe.
+		if (slotVibratoWide || slotVibrato) {
+			try {
+				const vib = new Vibrato();
+				if (slotVibratoWide) vib.setVibratoWidth(40);
+				tabNote.addModifier(vib);
+			} catch {
+				// No canvas context (jsdom / SSR) — skip modifier; renders correctly in browser.
+			}
+		}
+
 		const noteIdx = notes.length;
 		notes.push(tabNote);
 		posIndexMaps.push(posMap);

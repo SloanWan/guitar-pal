@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { TabNote, GhostNote, TabTie, TabSlide, Voice, Beam, GraceNoteGroup } from "vexflow";
+import {
+	TabNote,
+	GhostNote,
+	TabTie,
+	TabSlide,
+	Voice,
+	Beam,
+	GraceNoteGroup,
+	Annotation,
+	Tremolo,
+	Vibrato,
+} from "vexflow";
 
 import { fingerpickToVexFlow, VEX_DURATION } from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, Measure, StringFret, Duration, Technique } from "@/lib/fingerpickTypes";
@@ -289,5 +300,91 @@ describe("fingerpickToVexFlow — isGraceNote", () => {
 		expect(notes[0]).toBeInstanceOf(TabNote);
 		const modifiers = (notes[0] as TabNote).getModifiers();
 		expect(modifiers.some((m) => m instanceof GraceNoteGroup)).toBe(true);
+	});
+});
+
+// ─── Note modifiers (B1) ──────────────────────────────────────────────────────
+
+describe("fingerpickToVexFlow — note modifiers", () => {
+	it("staccato: true attaches an Annotation modifier to the TabNote", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, staccato: true } })])
+		);
+		expect(notes[0]).toBeInstanceOf(TabNote);
+		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
+	});
+
+	it("accent: true attaches an Annotation modifier to the TabNote", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, accent: true } })])
+		);
+		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
+	});
+
+	it("pickStroke: 'down' attaches an Annotation modifier to the TabNote", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, pickStroke: "down" } })])
+		);
+		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
+	});
+
+	it("pickStroke: 'up' attaches an Annotation modifier to the TabNote", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, pickStroke: "up" } })])
+		);
+		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
+	});
+
+	it("tremoloPickingSpeed: '8th' attaches a Tremolo(1) modifier", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, tremoloPickingSpeed: "8th" } })])
+		);
+		const tremolo = notes[0].getModifiers().find((m) => m instanceof Tremolo) as
+			| (Tremolo & { num: number })
+			| undefined;
+		expect(tremolo).toBeDefined();
+		expect(tremolo!.num).toBe(1);
+	});
+
+	it("tremoloPickingSpeed: '16th' attaches a Tremolo(2) modifier", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, tremoloPickingSpeed: "16th" } })])
+		);
+		const tremolo = notes[0].getModifiers().find((m) => m instanceof Tremolo) as
+			| (Tremolo & { num: number })
+			| undefined;
+		expect(tremolo).toBeDefined();
+		expect(tremolo!.num).toBe(2);
+	});
+
+	it("tremoloPickingSpeed: '32nd' attaches a Tremolo(3) modifier", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, tremoloPickingSpeed: "32nd" } })])
+		);
+		const tremolo = notes[0].getModifiers().find((m) => m instanceof Tremolo) as
+			| (Tremolo & { num: number })
+			| undefined;
+		expect(tremolo).toBeDefined();
+		expect(tremolo!.num).toBe(3);
+	});
+
+	// Vibrato constructor calls setVibratoWidth() which needs a real canvas context;
+	// in jsdom getWidth() returns 0 and throws. These tests require a browser-native runner.
+	it.skip("technique 'vibrato' attaches a Vibrato modifier to the TabNote [needs canvas]", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, technique: "vibrato" } })])
+		);
+		expect(notes[0].getModifiers().some((m) => m instanceof Vibrato)).toBe(true);
+	});
+
+	it.skip("technique 'vibrato-wide' attaches a Vibrato modifier with width > 20 [needs canvas]", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, technique: "vibrato-wide" } })])
+		);
+		const vibrato = notes[0].getModifiers().find((m) => m instanceof Vibrato) as
+			| (Vibrato & { renderOptions: { width: number } })
+			| undefined;
+		expect(vibrato).toBeDefined();
+		expect(vibrato!.renderOptions.width).toBeGreaterThan(20);
 	});
 });

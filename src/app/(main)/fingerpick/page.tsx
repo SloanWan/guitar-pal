@@ -347,6 +347,8 @@ export default function FingerpickPage() {
 	const [showBpmPopover, setShowBpmPopover] = useState(false);
 	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
 	const [containerWidth, setContainerWidth] = useState(0);
+	const [bpmPopoverPos, setBpmPopoverPos] = useState<{ bottom: number; left: number }>({ bottom: 0, left: 0 });
+	const bpmButtonRef = useRef<HTMLButtonElement>(null);
 	const tapTimesRef = useRef<number[]>([]);
 	// Tracks the latest BPM value during slider drag so onPointerUp reads the
 	// correct final value regardless of React batching.
@@ -419,6 +421,9 @@ export default function FingerpickPage() {
 	// Bottom bar drag-to-open-sheet gesture refs.
 	const bottomBarDragStartYRef = useRef<number>(0);
 	const bottomBarIsDraggingRef = useRef<boolean>(false);
+	// Drag handle drag-to-close gesture refs.
+	const handleDragStartYRef = useRef(0);
+	const handleIsDraggingRef = useRef(false);
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -702,7 +707,8 @@ export default function FingerpickPage() {
 			const containerRect = container.getBoundingClientRect();
 			const noteRect = noteEl.getBoundingClientRect();
 			const svgRect = svgEl.getBoundingClientRect();
-			const x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
+			const x0 =
+				noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
 			const top = svgRect.top - containerRect.top + container.scrollTop;
 
 			playhead.style.top = `${top}px`;
@@ -755,7 +761,8 @@ export default function FingerpickPage() {
 			const containerRect = container.getBoundingClientRect();
 			const noteRect = noteEl.getBoundingClientRect();
 			const svgRect = svgEl.getBoundingClientRect();
-			const x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
+			const x0 =
+				noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
 			const top = svgRect.top - containerRect.top + container.scrollTop;
 			playhead.style.top = `${top}px`;
 			playhead.style.height = `${svgRect.height}px`;
@@ -851,15 +858,20 @@ export default function FingerpickPage() {
 			let targetX = x0;
 			if (isLastNoteInMeasure) {
 				const lastEvent = events[events.length - 1];
-				const noteDuration = t0Event?.duration ?? (lastEvent ? Math.max(0.1, lastEvent.time - t0 + 0.5) : 1);
+				const noteDuration =
+					t0Event?.duration ?? (lastEvent ? Math.max(0.1, lastEvent.time - t0 + 0.5) : 1);
 				const frac = Math.max(0, Math.min(1, (elapsed - t0) / noteDuration));
 				const stavesvg = container.querySelector<SVGElement>(
 					`svg[data-stave-${measureIndex}-x]`,
 				);
 				if (stavesvg) {
 					const staveSvgRect = stavesvg.getBoundingClientRect();
-					const sx = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0");
-					const sw = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0");
+					const sx = parseFloat(
+						stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0",
+					);
+					const sw = parseFloat(
+						stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0",
+					);
 					const measureRight = staveSvgRect.left - containerRect.left + sx + sw;
 					targetX = x0 + (measureRight - x0) * frac;
 				}
@@ -1387,23 +1399,65 @@ export default function FingerpickPage() {
 				</div>
 			</div>
 
+			{/* BPM vertical slider popover — fixed so it escapes the drawer's overflow context */}
+			{showBpmPopover && (
+				<div
+					className="md:hidden fixed z-[60] bg-white rounded-xl border border-slate-200 shadow-lg px-4 py-4 flex items-center justify-center -translate-x-1/2"
+					style={{ bottom: bpmPopoverPos.bottom, left: bpmPopoverPos.left }}
+				>
+					<input
+						type="range"
+						min={MIN_BPM}
+						max={MAX_BPM}
+						value={bpm}
+						onChange={(e) => handleSliderChange(Number(e.target.value))}
+						onPointerDown={handleSliderPointerDown}
+						onPointerUp={handleSliderPointerUp}
+						style={{ writingMode: "vertical-lr", direction: "rtl", height: 120 } as React.CSSProperties}
+						className="accent-denim cursor-pointer"
+					/>
+				</div>
+			)}
+
 			{/* Backdrop — intercepts taps outside the drawer to close it without triggering tab seek */}
 			{showSheet && (
-				<div
-					className="md:hidden fixed inset-0 z-20"
-					onClick={() => setShowSheet(false)}
-				/>
+				<div className="md:hidden fixed inset-0 z-20" onClick={() => setShowSheet(false)} />
 			)}
 
 			{/* ── Unified mobile drawer ────────────────────────────────────────── */}
-			<div className="md:hidden fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl bg-white border-t border-slate-300 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] overflow-hidden">
+			<div
+				className="md:hidden fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl bg-white border-t border-slate-300 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] overflow-hidden"
+				onPointerDown={(e) => {
+					if (!bpmButtonRef.current?.contains(e.target as Node)) {
+						setShowBpmPopover(false);
+					}
+				}}
+			>
 				{/* Expandable controls panel — max-height transition reveals/hides content */}
 				<div
-					className={`bg-white overflow-hidden transition-[max-height] duration-[400ms] ease-[cubic-bezier(0.32,0.72,0,1)] ${
+					className={`bg-white overflow-hidden transition-[max-height] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
 						showSheet ? "max-h-[calc(33.333vh-56px)] overflow-y-auto" : "max-h-0"
 					}`}
 				>
-					<div className="flex justify-center pt-2.5 pb-1 shrink-0">
+					<div
+						className="flex justify-center pt-2.5 pb-1 shrink-0"
+						style={{ touchAction: "none" }}
+						onPointerDown={(e) => {
+							handleDragStartYRef.current = e.clientY;
+							handleIsDraggingRef.current = true;
+							e.currentTarget.setPointerCapture(e.pointerId);
+						}}
+						onPointerMove={(e) => {
+							if (!handleIsDraggingRef.current) return;
+							if (e.clientY - handleDragStartYRef.current > 40) {
+								handleIsDraggingRef.current = false;
+								setShowSheet(false);
+							}
+						}}
+						onPointerUp={() => {
+							handleIsDraggingRef.current = false;
+						}}
+					>
 						<div className="w-9 h-1 rounded-full bg-slate-300" />
 					</div>
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
@@ -1415,6 +1469,26 @@ export default function FingerpickPage() {
 						>
 							Tap Tempo
 						</Button>
+
+						{/* BPM slider */}
+						<div className="flex flex-col gap-1.5">
+							<div className="flex justify-between items-center">
+								<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+									BPM
+								</span>
+								<span className="text-xs tabular-nums text-denim font-semibold">{bpm}</span>
+							</div>
+							<input
+								type="range"
+								min={MIN_BPM}
+								max={MAX_BPM}
+								value={bpm}
+								onChange={(e) => handleSliderChange(Number(e.target.value))}
+								onPointerDown={handleSliderPointerDown}
+								onPointerUp={handleSliderPointerUp}
+								className="w-full accent-denim cursor-pointer"
+							/>
+						</div>
 
 						{/* Note Sound volume */}
 						<div className="flex flex-col gap-1.5">
@@ -1478,13 +1552,18 @@ export default function FingerpickPage() {
 								).map(({ value, label }) => (
 									<Button
 										key={value}
-										variant={metronomeSubdivision === value ? "default" : "outline"}
+										variant={
+											metronomeSubdivision === value ? "default" : "outline"
+										}
 										disabled={!metronomeEnabled}
 										onClick={() => setMetronomeSubdivision(value)}
 										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
 										style={
 											metronomeSubdivision === value
-												? { backgroundColor: "var(--denim)", color: "white" }
+												? {
+														backgroundColor: "var(--denim)",
+														color: "white",
+													}
 												: undefined
 										}
 									>
@@ -1545,7 +1624,10 @@ export default function FingerpickPage() {
 										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
 										style={
 											loopGap === gap && !playOnce
-												? { backgroundColor: "var(--denim)", color: "white" }
+												? {
+														backgroundColor: "var(--denim)",
+														color: "white",
+													}
 												: undefined
 										}
 									>
@@ -1569,7 +1651,17 @@ export default function FingerpickPage() {
 					{/* BPM display — tap to open vertical slider popover */}
 					<div className="relative shrink-0">
 						<button
-							onClick={() => setShowBpmPopover((v) => !v)}
+							ref={bpmButtonRef}
+							onClick={() => {
+								const rect = bpmButtonRef.current?.getBoundingClientRect();
+								if (rect) {
+									setBpmPopoverPos({
+										bottom: window.innerHeight - rect.top + 8,
+										left: rect.left + rect.width / 2,
+									});
+								}
+								setShowBpmPopover((v) => !v);
+							}}
 							className="w-14 flex flex-col items-center leading-none text-center"
 						>
 							<span className="text-xl font-bold text-denim">{bpm}</span>
@@ -1577,28 +1669,6 @@ export default function FingerpickPage() {
 								BPM
 							</span>
 						</button>
-						{/* BPM vertical slider popover */}
-						{showBpmPopover && (
-							<div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white rounded-xl border border-slate-200 shadow-lg px-4 py-4 flex items-center justify-center">
-								<input
-									type="range"
-									min={MIN_BPM}
-									max={MAX_BPM}
-									value={bpm}
-									onChange={(e) => handleSliderChange(Number(e.target.value))}
-									onPointerDown={handleSliderPointerDown}
-									onPointerUp={handleSliderPointerUp}
-									style={
-										{
-											writingMode: "vertical-lr",
-											direction: "rtl",
-											height: 120,
-										} as React.CSSProperties
-									}
-									className="accent-denim cursor-pointer"
-								/>
-							</div>
-						)}
 					</div>
 
 					{/* Loop / Once segmented control */}
@@ -1607,7 +1677,9 @@ export default function FingerpickPage() {
 						<div
 							className="absolute inset-0.5 w-[calc(50%-2px)] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out"
 							style={{
-								transform: playOnce ? "translateX(calc(100% + 4px))" : "translateX(0)",
+								transform: playOnce
+									? "translateX(calc(100% + 4px))"
+									: "translateX(0)",
 							}}
 						/>
 						<button

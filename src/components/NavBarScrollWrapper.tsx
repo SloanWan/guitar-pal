@@ -14,7 +14,16 @@ export default function NavBarScrollWrapper({ children }: { children: React.Reac
 		const mainEl = document.querySelector("main");
 		if (!mainEl) return;
 
+		const navAutoScrollingRef = { current: false };
+
+		function handleAutoScrollStart() { navAutoScrollingRef.current = true; }
+		function handleAutoScrollEnd() { navAutoScrollingRef.current = false; }
+
+		window.addEventListener("fingerpick-autoscroll-start", handleAutoScrollStart);
+		window.addEventListener("fingerpick-autoscroll-end", handleAutoScrollEnd);
+
 		function handleScroll() {
+			if (navAutoScrollingRef.current) return;
 			if (!document.body.classList.contains("fingerpick-page")) {
 				// Navigated away — ensure NavBar is visible.
 				if (!navVisibleRef.current) {
@@ -55,6 +64,8 @@ export default function NavBarScrollWrapper({ children }: { children: React.Reac
 		return () => {
 			mainEl.removeEventListener("scroll", handleScroll);
 			window.removeEventListener("fingerpick-controls-restore", handleRestore);
+			window.removeEventListener("fingerpick-autoscroll-start", handleAutoScrollStart);
+			window.removeEventListener("fingerpick-autoscroll-end", handleAutoScrollEnd);
 		};
 	}, []);
 

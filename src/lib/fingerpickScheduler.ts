@@ -2,6 +2,12 @@ import type { FingerpickPattern, Duration, Technique } from "@/lib/fingerpickTyp
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
+export interface MeasureBoundary {
+	measureIndex: number;
+	/** Absolute seconds from pattern start. */
+	startTime: number;
+}
+
 export interface ScheduleEvent {
 	/** Absolute seconds from pattern start. */
 	time: number;
@@ -165,10 +171,15 @@ export function findSlotStartTime(
 /**
  * Return the measure/slot index of the event most recently started at `elapsed`
  * seconds into a single pass. Returns null if no events have started yet.
+ *
+ * When `boundaries` is provided, elapsed time that has crossed into a later
+ * measure than the last fired event (e.g. a measure that starts with a rest)
+ * returns slot 0 of that measure instead of stalling at the previous event.
  */
 export function getProgressAtTime(
 	events: ScheduleEvent[],
 	elapsed: number,
+	boundaries?: MeasureBoundary[],
 ): { measureIndex: number; slotIndex: number } | null {
 	if (events.length === 0 || elapsed < 0) return null;
 	let result: { measureIndex: number; slotIndex: number } | null = null;
@@ -176,7 +187,40 @@ export function getProgressAtTime(
 		if (event.time > elapsed) break;
 		result = { measureIndex: event.measureIndex, slotIndex: event.slotIndex };
 	}
+
+	if (boundaries) {
+		let boundaryMeasureIndex = result?.measureIndex ?? 0;
+		for (const b of boundaries) {
+			if (b.startTime <= elapsed) {
+				boundaryMeasureIndex = b.measureIndex;
+			} else {
+				break;
+			}
+		}
+		if (boundaryMeasureIndex > (result?.measureIndex ?? -1)) {
+			return { measureIndex: boundaryMeasureIndex, slotIndex: 0 };
+		}
+	}
+
 	return result;
+}
+
+/** Absolute start time (seconds from pattern start) for each measure. */
+export function computeMeasureBoundaries(
+	pattern: FingerpickPattern,
+	bpm: number,
+): MeasureBoundary[] {
+	const secondsPerBeat = 60 / bpm;
+	const boundaries: MeasureBoundary[] = [];
+	let currentTime = 0;
+	for (let measureIndex = 0; measureIndex < pattern.measures.length; measureIndex++) {
+		boundaries.push({ measureIndex, startTime: currentTime });
+		const measure = pattern.measures[measureIndex];
+		for (const slot of measure.slots) {
+			currentTime += DURATION_BEATS[slot.duration] * secondsPerBeat;
+		}
+	}
+	return boundaries;
 }
 
 // ─── Voice stealing ───────────────────────────────────────────────────────────

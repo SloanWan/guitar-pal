@@ -5,7 +5,10 @@ import { FingerpickPattern, StringFret, Measure } from "@/lib/fingerpickTypes";
 import {
 	fingerpickPatternToScheduleEvents,
 	findSlotStartTime,
+	getProgressAtTime,
+	computeMeasureBoundaries,
 	type ScheduleEvent,
+	type MeasureBoundary,
 } from "@/lib/fingerpickScheduler";
 import TabStaveRow, {
 	computeMeasureMinWidth,
@@ -407,6 +410,8 @@ export default function FingerpickPage() {
 	// Schedule events mirroring the audio engine's event list — provides per-note
 	// t0/t1 timestamps for the note-to-note interpolation in the RAF loop.
 	const scheduleEventsRef = useRef<ScheduleEvent[]>([]);
+	// Measure start times for boundary-aware progress tracking (rest-at-start fix).
+	const measureBoundariesRef = useRef<MeasureBoundary[]>([]);
 	// Exponential-smoothed cursor x — chases targetX every frame so velocity changes
 	// at note boundaries don't cause visible stutter.
 	const renderedXRef = useRef(0);
@@ -429,6 +434,9 @@ export default function FingerpickPage() {
 	const controlsVisibleRef = useRef(true);
 	const lastScrollYRef = useRef(0);
 	const scrollUpDistanceRef = useRef(0);
+	// True while the RAF loop's scrollIntoView is in flight; suppresses the
+	// scroll listener so auto-scroll never triggers the hide behaviour.
+	const isAutoScrollingRef = useRef(false);
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -464,6 +472,7 @@ export default function FingerpickPage() {
 		if (!target) return;
 
 		function handleScroll() {
+			if (isAutoScrollingRef.current) return;
 			const currentY = (target as HTMLElement).scrollTop;
 			const delta = currentY - lastScrollYRef.current;
 			lastScrollYRef.current = currentY;
@@ -728,6 +737,7 @@ export default function FingerpickPage() {
 	// for interpolation. Recomputed whenever BPM changes (same trigger as applyBpmChange).
 	useEffect(() => {
 		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm);
+		measureBoundariesRef.current = computeMeasureBoundaries(pattern, bpm);
 	}, [pattern, bpm]);
 
 	// Position cursor and measure highlight at the very first note as soon as the
@@ -868,7 +878,17 @@ export default function FingerpickPage() {
 				return;
 			}
 
-			const { measureIndex, slotIndex, elapsed, passIndex } = progress;
+			const { elapsed, passIndex } = progress;
+			const position = getProgressAtTime(
+				scheduleEventsRef.current,
+				elapsed,
+				measureBoundariesRef.current,
+			);
+			if (!position) {
+				rafRef.current = requestAnimationFrame(tick);
+				return;
+			}
+			const { measureIndex, slotIndex } = position;
 			const events = scheduleEventsRef.current;
 			const currentRows = rowsRef.current;
 
@@ -879,15 +899,97 @@ export default function FingerpickPage() {
 				prevTimestampRef.current = 0;
 			}
 
+			const containerRect = container.getBoundingClientRect();
+
 			const noteEl = container.querySelector<SVGElement>(
 				`[data-measure-index="${measureIndex}"][data-slot-index="${slotIndex}"]`,
 			);
+
 			if (!noteEl) {
+				// Slot has no DOM element (rest/GhostNote) — drift cursor from measure left
+				// edge toward the first non-rest note's position over the rest's duration.
+				const stavesvg = container.querySelector<SVGElement>(`svg[data-stave-${measureIndex}-x]`);
+				if (stavesvg) {
+					const staveSvgRect = stavesvg.getBoundingClientRect();
+					const sx = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0");
+					const snapX = staveSvgRect.left - containerRect.left + sx + container.scrollLeft;
+
+					const firstNonRestEvent = events.find((e) => e.measureIndex === measureIndex);
+					const measureBoundary = measureBoundariesRef.current.find(
+						(b) => b.measureIndex === measureIndex,
+					);
+
+					let driftX = snapX;
+					let didDrift = false;
+					if (firstNonRestEvent) {
+						const firstNonRestEl = container.querySelector<SVGElement>(
+							`[data-measure-index="${measureIndex}"][data-slot-index="${firstNonRestEvent.slotIndex}"]`,
+						);
+						if (firstNonRestEl) {
+							const firstNonRestRect = firstNonRestEl.getBoundingClientRect();
+							const x1 =
+								firstNonRestRect.left -
+								containerRect.left +
+								firstNonRestRect.width / 2 +
+								container.scrollLeft;
+							const measureStart = measureBoundary?.startTime ?? firstNonRestEvent.time;
+							const restDuration = firstNonRestEvent.time - measureStart;
+							const restElapsed = elapsed - measureStart;
+							const frac =
+								restDuration > 0
+									? Math.max(0, Math.min(1, restElapsed / restDuration))
+									: 0;
+							driftX = snapX + (x1 - snapX) * frac;
+							didDrift = true;
+						}
+					}
+
+					if (didDrift) {
+						const prevTime = prevTimestampRef.current;
+						if (prevTime === 0) {
+							renderedXRef.current = driftX;
+						} else {
+							const dt = (timestamp - prevTime) / 1000;
+							renderedXRef.current +=
+								(driftX - renderedXRef.current) * (1 - Math.exp(-CURSOR_LAMBDA * dt));
+						}
+						prevTimestampRef.current = timestamp;
+					} else {
+						renderedXRef.current = snapX;
+						prevTimestampRef.current = 0;
+					}
+					playhead.style.transform = `translateX(${Math.round(renderedXRef.current - 3)}px)`;
+
+					if (measureIndex !== lastMeasureIdxRef.current) {
+						lastMeasureIdxRef.current = measureIndex;
+						if (measureHL) {
+							const sw = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0");
+							measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
+							measureHL.style.width = `${sw}px`;
+							measureHL.style.display = "block";
+						}
+						const rowIdx = currentRows.findIndex((row) => {
+							const s = row.startMeasureNumber - 1;
+							return measureIndex >= s && measureIndex < s + row.measures.length;
+						});
+						if (rowIdx !== -1 && rowIdx !== lastScrolledRowRef.current) {
+							const svgRect = stavesvg.getBoundingClientRect();
+							const top = svgRect.top - containerRect.top + container.scrollTop;
+							playhead.style.top = `${top}px`;
+							playhead.style.height = `${svgRect.height}px`;
+							if (measureHL) {
+								measureHL.style.top = `${top}px`;
+								measureHL.style.height = `${svgRect.height}px`;
+							}
+							lastScrolledRowRef.current = rowIdx;
+							rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "center" });
+						}
+					}
+				}
 				rafRef.current = requestAnimationFrame(tick);
 				return;
 			}
 
-			const containerRect = container.getBoundingClientRect();
 			const noteRect = noteEl.getBoundingClientRect();
 			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
 
@@ -989,11 +1091,37 @@ export default function FingerpickPage() {
 				}
 				lastScrolledRowRef.current = rowIdx;
 				prevTimestampRef.current = 0;
+				isAutoScrollingRef.current = true;
+				window.dispatchEvent(new CustomEvent("fingerpick-autoscroll-start"));
 				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "center" });
+				setTimeout(() => {
+					isAutoScrollingRef.current = false;
+					window.dispatchEvent(new CustomEvent("fingerpick-autoscroll-end"));
+				}, 500);
 			}
 
 			// Measure transition: update the measure background highlight.
 			if (measureIndex !== lastMeasureIdxRef.current) {
+				// If the new measure's first ScheduleEvent is not slot 0, slot 0 is a rest
+				// and has no DOM element. Snap the cursor to the measure's note-start x so
+				// it doesn't stall at the previous measure's right edge.
+				const firstEventInNewMeasure = events.find((e) => e.measureIndex === measureIndex);
+				if (firstEventInNewMeasure && firstEventInNewMeasure.slotIndex !== 0) {
+					const stavesvg = container.querySelector<SVGElement>(
+						`svg[data-stave-${measureIndex}-x]`,
+					);
+					if (stavesvg) {
+						const staveSvgRect = stavesvg.getBoundingClientRect();
+						const sx = parseFloat(
+							stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0",
+						);
+						const snapX = staveSvgRect.left - containerRect.left + sx + container.scrollLeft;
+						renderedXRef.current = snapX;
+						prevTimestampRef.current = 0;
+						playhead.style.transform = `translateX(${Math.round(snapX - 3)}px)`;
+					}
+				}
+
 				lastMeasureIdxRef.current = measureIndex;
 				if (measureHL) {
 					const stavesvg = container.querySelector<SVGElement>(

@@ -28,7 +28,7 @@ function CardRow({
 					key={card.key}
 					def={card.def}
 					label={card.label}
-					compact
+					size="compact"
 					href={card.href}
 					onClick={card.href ? undefined : () => onSelectChord?.(card.root, card.suffix)}
 				/>

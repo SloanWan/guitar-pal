@@ -519,6 +519,7 @@ export default function StrumPage() {
 										max={MAX_BPM}
 										value={bpm}
 										onChange={(e) => setBpm(Number(e.target.value))}
+										onPointerUp={(e) => e.currentTarget.blur()}
 										className="w-full accent-denim cursor-pointer"
 									/>
 								</div>
@@ -743,6 +744,7 @@ export default function StrumPage() {
 						max={MAX_BPM}
 						value={bpm}
 						onChange={(e) => setBpm(Number(e.target.value))}
+						onPointerUp={(e) => e.currentTarget.blur()}
 						className="w-full accent-denim cursor-pointer"
 					/>
 

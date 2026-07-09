@@ -8,7 +8,7 @@ This document is a complete reference for an AI assistant working on this codeba
 
 **Guitar Pal** is a web-based guitar practice studio targeting beginner-to-intermediate self-taught guitarists. The core loop is: create exercises → assemble them into routines → run timed practice sessions → log the result. A strumming machine with real-time audio playback and a chord library are standalone tools alongside the core loop.
 
-**Current state:** Active development. A Vitest suite (8 files) covers the strum engine (`useGuitarSampleLoader`, `useAudioEngine`), fingerpick rendering (`fingerpickToVexFlow`), and the chord library utilities (`chordVoicingToVexChords`, `chordSuffixes`, `chordSlug`, `musicalNotation`, `MusicalText`). UI components and Supabase-connected flows have no automated coverage. All features work. Practice logs are written but never displayed. The exercise log table exists but has no UI at all.
+**Current state:** Active development. A Vitest suite (11 files) covers the strum engine (`useGuitarSampleLoader`, `useAudioEngine`, `fingerpickPresets`), fingerpick rendering (`fingerpickToVexFlow`), the fingerpick scheduler (`fingerpickScheduler`), and the chord library utilities (`chordVoicingToVexChords`, `chordVoicingToMidi`, `chordSuffixes`, `chordSlug`, `musicalNotation`, `MusicalText`). UI components and Supabase-connected flows have no automated coverage. All features work. Practice logs are written but never displayed. The exercise log table exists but has no UI at all.
 
 ---
 
@@ -51,6 +51,7 @@ src/
 │   │   ├── layout.tsx           # Adds <NavBar /> above all main-area pages
 │   │   ├── dashboard/page.tsx   # Server component: reads user, renders DashboardContent
 │   │   ├── chords/
+│   │   │   ├── layout.tsx       # Chord library shell: wraps children + attribution footer (vexchords, tombatossals, WebAudioFont)
 │   │   │   ├── page.tsx         # Landing: root-picker grid + "Browse All Chords" link
 │   │   │   ├── all/page.tsx     # All chords; ?group=category toggles root-first / category-first
 │   │   │   └── [rootSlug]/
@@ -59,6 +60,10 @@ src/
 │   │   ├── strum/page.tsx       # Client component: full strumming machine page
 │   │   └── fingerpick/
 │   │       └── page.tsx         # Client component: TAB viewer with pattern library and controls scaffold
+│   ├── dev/
+│   │   ├── audio-diagnostic/page.tsx      # Throwaway: multi-preset pitch audition tool
+│   │   ├── muted-preset-audition/page.tsx # Throwaway: compares muted guitar presets
+│   │   └── strum-preset-audition/page.tsx # Throwaway: compares strum guitar presets
 │   └── session/
 │       └── [routineId]/page.tsx # Client component: full practice session page
 │
@@ -70,6 +75,8 @@ src/
 │   ├── ExerciseList.tsx         # Exercise CRUD: list, filter, add form, delete with routine warning
 │   ├── RoutineList.tsx          # Routine CRUD: list, expand, edit dialog, start session
 │   ├── MusicalText.tsx          # Renders ♭/♯ symbols inline; driven by parseMusicalText
+│   ├── __tests__/
+│   │   └── MusicalText.test.tsx # 6 tests: parseMusicalText symbol rendering
 │   ├── chords/
 │   │   ├── BrowseGrid.tsx       # Renders BrowseSection[] as grouped heading + card-grid blocks
 │   │   ├── ChordDetailView.tsx  # Voicing grid with fret/note-name label toggle (detail page)
@@ -87,11 +94,13 @@ src/
 │   │   ├── useStrumPatterns.ts  # Custom pattern + favourites state, localStorage/Supabase sync
 │   │   └── __tests__/
 │   │       ├── useAudioEngine.test.ts        # _resolveStrumBuffer unit tests (10 tests)
-│   │       └── useGuitarSampleLoader.test.ts # Preset parsing, scheduling, decay constants (49 active + 2 skipped)
+│   │       ├── useGuitarSampleLoader.test.ts # Preset parsing, scheduling, decay constants, triggerChordPreview (50 active + 2 skipped)
+│   │       └── fingerpickPresets.test.ts     # getBufferForMidi, findZoneForMidi, fingerpick cache helpers (16 active + 2 skipped)
 │   ├── fingerpick/
 │   │   ├── TabStaveRow.tsx      # VexFlow TAB renderer; one row of measures per SVG context; ResizeObserver-driven
+│   │   ├── useFingerpickAudioEngine.ts # Self-contained playback hook; lifecycle play/pause/resume/stop; BPM-seek; per-string voice stealing
 │   │   └── __tests__/
-│   │       └── fingerpickToVexFlow.test.ts  # 22 tests: duration mapping, note types, technique connectors, beam grouping
+│   │       └── fingerpickToVexFlow.test.ts  # 23 tests: duration mapping, note types, technique connectors, beam grouping
 │   └── ui/                      # shadcn primitives: button, card, dialog, input, label, select, switch, tabs, sonner
 │
 ├── hooks/
@@ -106,7 +115,8 @@ src/
 │   ├── practiceLogs.ts          # createPracticeLog, getPracticeLogs (getPracticeLogs has no UI caller)
 │   ├── exerciseLogs.ts          # createExerciseLog, getExerciseLogs (neither has a UI caller)
 │   ├── chords.ts                # "use server" — getChord, getChordsByRoot, getAllChordsWithVoicings
-│   ├── chordVoicingToVexChords.ts # ChordVoicing → VexChordDef adapter; barre detection; selectStandardVoicing
+│   ├── chordVoicingToVexChords.ts # ChordVoicing → VexChordDef adapter; barre detection; selectStandardVoicing; exports decodeVoicingStrings
+│   ├── chordVoicingToMidi.ts    # ChordVoicing → ChordMidiNote[]; uses decodeVoicingStrings; exports GUITAR_OPEN_MIDI, chordVoicingToMidi
 │   ├── chordSuffixes.ts         # ROOT_CHROMATIC_ORDER, CHORD_SUFFIX_CATEGORIES, EXCLUDED_SUFFIXES, groupSuffixes, sortRoots
 │   ├── chordSlug.ts             # Bidirectional slug encoding: rootToSlug/slugToRoot, suffixToSlug/slugToSuffix
 │   ├── chordBrowseSections.ts   # BrowseSection/Card/Subsection types; three section builders
@@ -116,7 +126,8 @@ src/
 │   ├── fingerpickTypes.ts       # FingerpickPattern / Measure / BeatSlot / StringFret / Technique / Duration types
 │   ├── fingerpickToVexFlow.ts   # Pure adapter: Measure → VexFlowRenderData (TabNote / GhostNote / TabTie / TabSlide arrays)
 │   ├── constants.ts             # CATEGORY_LABELS and CATEGORY_COLORS records
-│   └── utils.ts                 # shadcn cn() utility
+│   ├── utils.ts                 # shadcn cn() utility
+│   └── __tests__/               # chordSlug, chordSuffixes, chordVoicingToMidi, chordVoicingToVexChords, fingerpickScheduler, musicalNotation
 │
 ├── types/
 │   ├── database.ts              # CATEGORIES const array, Category type, Exercise, Routine, RoutineExercise, PracticeLog, ExerciseLog types
@@ -283,8 +294,9 @@ StepValue semantics:
   - Fixed C major open chord voicing: MIDI pitches [48 C3, 52 E3, 55 G3, 60 C4, 64 E4] (exported as `STRUM_PITCHES`). Low E string is not played.
   - `preloadStrumPresets(ctx)` — async, called once on playback start. Fetches and parses both preset JS files (unquoted-key JS object format, evaluated via `new Function()`), then decodes all zones used by `STRUM_PITCHES` into `AudioBuffer`s. Results are cached in module-level `Map`s for synchronous scheduler access.
   - `triggerStrum(type, ctx, target, when, noteDuration)` — synchronous. Schedules one `AudioBufferSourceNode` per string (5 total) with 10 ms per-string stagger and 0.9× volume taper per string. Down strum: low→high pitch order; up strum: high→low. Playback rate per note: `2^((100×midiPitch − baseDetune) / 1200)` where `baseDetune = originalPitch − 100×coarseTune − fineTune`.
-  - Decay envelope per note: `gainNode.gain.setTargetAtTime(0, when, τ)` where `τ = max(noteDuration × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)`. Constants (from source): `DECAY_TIME_CONSTANT_RATIO = 0.8`, `MIN_DECAY_TC_S = 0.03 s`, `SOURCE_STOP_BUFFER_S = 0.05 s`. Muted strums additionally cap `noteDuration` at `MUTED_MAX_DURATION_S = 0.08 s`.
+  - Decay envelope per note: `gainNode.gain.setTargetAtTime(0, when, τ)` where `τ = max(noteDuration × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)`. Constants (from source): `DECAY_TIME_CONSTANT_RATIO = 1`, `MIN_DECAY_TC_S = 0.03 s`, `SOURCE_STOP_BUFFER_S = 0.05 s`. Muted strums additionally cap `noteDuration` at `MUTED_MAX_DURATION_S = 0.08 s`.
   - `cancelStrums()` — stops all tracked `AudioBufferSourceNode`s immediately. Called on manual stop and component unmount.
+  - `triggerChordPreview(pitches, ctx, target, when)` — synchronous. Plays MIDI pitches ascending (low→high), 10 ms stagger per note, fixed `CHORD_PREVIEW_DURATION_S = 2.0 s` duration. Uses the fingerpick `pluck` preset (`0250_LK_AcousticSteel_SF2_file`); no-ops silently if the preset has not yet been loaded. Called by `ChordDetailView` to play voicing previews.
 - Each scheduler tick creates a per-strum `GainNode` (gain = `strumGainRef.current`) that connects `triggerStrum`'s output to `ctx.destination`.
 - `DG`, `UG`, and `""` step values produce no strum sound (scheduler calls are gated by `STEP_TO_SOUND` mapping in `useAudioEngine.ts`).
 - Metronome: `OscillatorNode`, 1200 Hz accented / 800 Hz normal, 50 ms duration.
@@ -481,7 +493,7 @@ Single-note measure fix: when `!nextEvent || nextEvent.measureIndex !== measureI
 
 **Testing:**
 
-`fingerpickToVexFlow.ts` has 22 unit tests in `src/components/fingerpick/__tests__/fingerpickToVexFlow.test.ts`, covering: `VEX_DURATION` key mapping (6 cases), silent and rest slots producing `GhostNote` (3 cases), single-note `TabNote` construction and VexFlow string-index mapping (5 cases), all four technique connectors and tied notes (5 cases), and beam grouping via `Beam.applyAndGetBeams` (3 cases). Tests assert against output object types and graph structure — not rendered pixel positions — because jsdom lacks a real Canvas/text-measurement implementation (see Known Issue #8).
+`fingerpickToVexFlow.ts` has 23 unit tests in `src/components/fingerpick/__tests__/fingerpickToVexFlow.test.ts`, covering: `VEX_DURATION` key mapping (6 cases), silent and rest slots producing `GhostNote` (3 cases), single-note `TabNote` construction and VexFlow string-index mapping (5 cases), all four technique connectors and tied notes plus the no-connector baseline (6 cases), and beam grouping via `Beam.applyAndGetBeams` (3 cases). Tests assert against output object types and graph structure — not rendered pixel positions — because jsdom lacks a real Canvas/text-measurement implementation (see Known Issue #8).
 
 ---
 
@@ -509,7 +521,9 @@ The `chords` table covers all 12 chromatic roots (C, C#, D, Eb, E, F, F#, G, Ab,
 
 **Adapter / utility layer:**
 
-- **`src/lib/chordVoicingToVexChords.ts`** — Pure adapter (no DOM/React). Converts a `ChordVoicing` DB row (6-char `frets`/`fingers` strings, relative `start_fret`, optional `barre_fret`/`capo`) into a `VexChordDef` for the vexchords `ChordBox`. Barre detection: `capo=true` → full 6-string barre; otherwise finds all non-muted strings sharing the `barre_fret` digit and computes `fromString`/`toString` span. Also exports `selectStandardVoicing` (returns the "Standard"-labelled voicing, or the one with the lowest `start_fret` as fallback).
+- **`src/lib/chordVoicingToVexChords.ts`** — Pure adapter (no DOM/React). Converts a `ChordVoicing` DB row (6-char `frets`/`fingers` strings, relative `start_fret`, optional `barre_fret`/`capo`) into a `VexChordDef` for the vexchords `ChordBox`. Barre detection: `capo=true` → full 6-string barre; otherwise finds all non-muted strings sharing the `barre_fret` digit and computes `fromString`/`toString` span. Also exports `selectStandardVoicing` (returns the "Standard"-labelled voicing, or the one with the lowest `start_fret` as fallback) and `decodeVoicingStrings` (returns `DecodedString[]` with absolute guitar fret numbers, used by `chordVoicingToMidi`).
+
+- **`src/lib/chordVoicingToMidi.ts`** — Pure function. Converts a `ChordVoicing` into `ChordMidiNote[]` (one entry per non-muted string) using `decodeVoicingStrings` and `GUITAR_OPEN_MIDI` (standard tuning open-string pitches: `[40, 45, 50, 55, 59, 64]`, index 0 = low E). Called by `chords/[rootSlug]/[suffixSlug]/page.tsx` (server component) to compute pitches passed to `ChordDetailView`.
 
 - **`src/lib/chordSuffixes.ts`** — Root ordering and suffix taxonomy.
   - `ROOT_CHROMATIC_ORDER`: `["C","C#","D","Eb","E","F","F#","G","Ab","A","Bb","B"]` — single source of truth for display order everywhere.
@@ -546,9 +560,9 @@ The `chords` table covers all 12 chromatic roots (C, C#, D, Eb, E, F, F#, G, Ab,
 
 - **`BrowseGrid.tsx`** — Renders a `BrowseSection[]` as stacked heading + card-grid blocks, handling both flat (`cards` array) and nested (`subsections`) section shapes.
 
-- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Shows all voicings for a single chord using full-size `ChordDiagram` components. Each voicing card has a Play button: MIDI pitches are computed server-side via `chordVoicingToMidi()` (which calls the same `decodeVoicingStrings()` extractor used internally by `chordVoicingToVexChords` — no duplicated fret math), then played client-side using the fingerpick engine's `pluck` preset (`0250_LK_AcousticSteel_SF2_file`), not the strum page's SoundBlasterOld presets. The preset is lazy-loaded on the first play click (not on page mount); subsequent plays in the same session are instant via the module-level cache in `useGuitarSampleLoader.ts`.
+- **`ChordDetailView.tsx`** — Voicing grid for the detail page. Shows all voicings for a single chord using full-size `ChordDiagram` components. Each voicing card has a Play button: MIDI pitches are pre-computed server-side via `chordVoicingToMidi()` and passed in as the `pitches` prop of each `VoicingCard`. Client-side playback calls `triggerChordPreview(pitches, ctx, destination, currentTime)` from `useGuitarSampleLoader`, which uses the `pluck` preset (`0250_LK_AcousticSteel_SF2_file`). `preloadFingerpickPresets` is lazy-loaded on the first play click (not on page mount); subsequent plays in the same session are instant via the module-level cache in `useGuitarSampleLoader.ts`.
 
-**Attribution:** `@tombatossals/chords-db` (MIT) and `vexchords` are in `package.json`. An in-app footer credit for `@tombatossals/chords-db`, `vexchords`, and WebAudioFont is present on all Chord Library pages. `THIRD_PARTY_LICENSES.md` at the repo root is still not present — see Backlog.
+**Attribution:** `@tombatossals/chords-db` (MIT) and `vexchords` are in `package.json`. The in-app footer credit for `@tombatossals/chords-db`, `vexchords`, and WebAudioFont is rendered by `src/app/(main)/chords/layout.tsx`, which wraps all `/chords/**` routes. `THIRD_PARTY_LICENSES.md` at the repo root is still not present — see Backlog.
 
 ---
 

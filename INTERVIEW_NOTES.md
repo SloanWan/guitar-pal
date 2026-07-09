@@ -148,3 +148,56 @@ hammer-on / pull-off / slide-up / slide-down 四种技法，覆盖初学到中�
 - Why not just add a ScheduleEvent for rest slots? (answer: rest slots produce GhostNotes with no audio; adding fake events would corrupt the timing data used for BPM reschedule and seek — cleaner to handle the display layer separately)
 - How does the rest-slot drift know where to drift toward? (answer: queries the first non-rest note's DOM element via getBoundingClientRect at runtime — no precomputation needed, no layout dependency)
 - How do you prevent auto-scroll from triggering hide-on-scroll? (answer: isAutoScrollingRef flag + CustomEvent to NavBar, both checked at the top of the scroll listener before any hide logic runs)
+
+---
+
+## Issue #88 — TAB Data Model Expansion
+
+**What was built:**
+Extended `fingerpickTypes.ts` with 17 new Technique values, 4 new Duration values,
+8 new optional StringFret fields, and `isGraceNote` on BeatSlot.
+Updated `fingerpickScheduler.ts` with exact fractional beat durations for dotted/triplet/32nd values.
+Updated `fingerpickToVexFlow.ts` with VexFlow duration string mappings and GraceNote support.
+22 new tests added; 416 total passing.
+
+**PM decision & rationale:**
+Data model expansion was deliberately sequenced *before* the AI TAB recognition epic.
+The type system is the schema contract between AI output and VexFlow rendering —
+any technique the AI recognizes but the schema can't represent gets silently dropped.
+Doing this first eliminates that class of data loss entirely.
+
+**Key technical decisions:**
+- `bendTarget?: number` uses semitone units (full=2, half=1, quarter=0.5) rather than
+  string labels — keeps the field machine-readable for future audio pitch-shifting use.
+- Grace note slots use a fixed 1/32-beat scheduling duration and do not advance
+  `currentTime`, preserving barline alignment of subsequent slots.
+- New Technique values are silent pass-through in `fingerpickToVexFlow.ts` —
+  rendering deferred to Issue B, but the adapter never throws on unknown values.
+- `slotNoteIndex[]` mapping introduced to keep `notes[]` and connector/tuplet loops
+  aligned when grace note slots (which produce no TabNote) are interspersed.
+- `jsonb` storage means zero database migration needed — new StringFret fields
+  serialize naturally when user-created pattern storage is built later.
+
+**Rejected approaches:**
+- Considered adding technique rendering (bend arrows, vibrato brackets) in this same
+  issue — rejected to keep the PR small and avoid blocking on VexFlow BendAnnotation
+  API experimentation, which carries real unknowns.
+- Considered string labels for bendTarget ("full"/"half") — rejected in favor of
+  numeric semitones for machine-readability.
+
+**AI TAB recognition dependency note:**
+During the TAB recognition epic, the AI prompt should instruct the model to return
+an `"unknown"` marker (not silently omit) for any TAB symbol it cannot map to the
+current schema. This creates a visible backlog of missing symbols rather than
+silent data loss.
+
+**Interview talking points:**
+- Sequencing: why data model before AI feature (schema contract argument)
+- Build vs. buy judgment: chose numeric bendTarget over string labels for
+  forward compatibility with audio pitch-shifting
+- Zero-migration jsonb strategy for schema evolution
+
+**Potential interview follow-up questions:**
+- "How would you handle a TAB symbol the AI recognizes but your schema doesn't support yet?"
+- "Why not build the VexFlow rendering at the same time?"
+- "How does jsonb affect your ability to query or validate data at the database level?"

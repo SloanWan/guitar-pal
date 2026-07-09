@@ -336,21 +336,43 @@ StepValue semantics:
 **Data model** (`src/lib/fingerpickTypes.ts`):
 
 ```ts
-type Duration = "whole" | "half" | "quarter" | "eighth" | "sixteenth" | "rest";
+type Duration =
+  | "whole" | "half" | "quarter" | "eighth" | "sixteenth" | "rest"
+  | "32nd"
+  | "dotted-quarter" | "dotted-eighth"
+  | "eighth-triplet" | "sixteenth-triplet";
 
-type Technique = "hammer-on" | "pull-off" | "slide-up" | "slide-down" | null;
+type Technique =
+  | "hammer-on" | "pull-off" | "slide-up" | "slide-down"
+  | "bend-full" | "bend-half" | "bend-quarter"
+  | "bend-release" | "pre-bend" | "pre-bend-release"
+  | "vibrato" | "vibrato-wide" | "vibrato-bar"
+  | "tapping" | "trill"
+  | "harmonic-natural" | "harmonic-artificial"
+  | "whammy-dive" | "whammy-pull"
+  | "pick-scrape" | "grace-note"
+  | null;
 
 type StringFret = {
-    fret: number | null;   // null = string not in play for this slot
-    technique: Technique;  // technique applied from the previous slot
-    tied: boolean;         // ties this note to the same string in the previous slot
-    muted: boolean;        // renders as "x" (palm mute / dead note)
+  fret: number | null;
+  technique: Technique;
+  tied: boolean;
+  muted: boolean;
+  bendTarget?: number;          // semitones: full=2, half=1, quarter=0.5
+  palmMute?: boolean;
+  letRing?: boolean;
+  staccato?: boolean;
+  accent?: boolean;
+  ghostNote?: boolean;          // bracketed note (7)
+  tremoloPickingSpeed?: "8th" | "16th" | "32nd";
+  pickStroke?: "down" | "up";
 };
 
 type BeatSlot = {
-    id: string;
-    duration: Duration;
-    strings: [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret];
+  id: string;
+  duration: Duration;
+  isGraceNote?: boolean;        // fixed 1/32-beat scheduling; does not advance barline
+  strings: [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret];
 };
 
 type Measure      = { id: string; slots: BeatSlot[] };
@@ -423,7 +445,7 @@ Pure, DOM-free module containing all timing primitives. Key exports:
 
 - `ScheduleEvent` — `{ time, duration, stringIndex, midi, technique, muted, measureIndex, slotIndex }`. `time` is absolute seconds from pattern start.
 - `VoiceHandle` — duck-typed interface (`gainNode.gain.{cancelScheduledValues, setTargetAtTime}`, `source.stop`) so voice-stealing tests can inject mocks without a real `AudioContext`.
-- `fingerpickPatternToScheduleEvents(pattern, bpm)` — converts the pattern into a flat, time-sorted `ScheduleEvent[]`. Rest slots and tied strings produce no events. Pitch = `OPEN_STRING_MIDI[stringIndex] + fret` (fret takes priority over muted for pitch; the `muted` flag only drives preset selection and envelope shaping).
+- `fingerpickPatternToScheduleEvents(pattern, bpm)` — converts the pattern into a flat, time-sorted `ScheduleEvent[]`. Rest slots and tied strings produce no events. Pitch = `OPEN_STRING_MIDI[stringIndex] + fret` (fret takes priority over muted for pitch; the `muted` flag only drives preset selection and envelope shaping). Duration beat multipliers: dotted values = 1.5×, triplet values = 2/3×, 32nd = 0.5× sixteenth. Grace note slots use a fixed 1/32-beat duration and do not advance `currentTime`.
 - `getTotalPatternDuration(pattern, bpm)` — sum of all slot durations in seconds.
 - `computeLoopOffset(passIndex, patternDuration, loopGapSeconds)` — `passIndex × (patternDuration + loopGapSeconds)`.
 - `getProgressAtTime(events, elapsed, boundaries?)` — returns `{ measureIndex, slotIndex }` of the event most recently started at `elapsed` seconds. Optional `boundaries?: MeasureBoundary[]` parameter: when provided, if `elapsed` has crossed into a later measure than the last fired event (e.g. a measure whose first slot is a rest/GhostNote), returns `{ measureIndex, slotIndex: 0 }` for that measure rather than holding the previous measure's last event. Used by the RAF cursor loop.

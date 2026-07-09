@@ -16,7 +16,7 @@ const SVG_HEIGHT = 200;
 const STAVE_Y = 10;
 const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
-const MIN_MEASURE_WIDTH = 150;
+const MIN_MEASURE_WIDTH = 120;
 const HO_PO_EXTRA_WIDTH = 25;
 
 interface TabStaveRowProps {

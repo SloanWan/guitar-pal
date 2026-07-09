@@ -15,9 +15,23 @@ import {
 } from "@/components/strum/useGuitarSampleLoader";
 
 const ROOT_PC: Record<string, number> = {
-	C: 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3,
-	E: 4, F: 5, "F#": 6, Gb: 6, G: 7, "G#": 8, Ab: 8,
-	A: 9, "A#": 10, Bb: 10, B: 11,
+	C: 0,
+	"C#": 1,
+	Db: 1,
+	D: 2,
+	"D#": 3,
+	Eb: 3,
+	E: 4,
+	F: 5,
+	"F#": 6,
+	Gb: 6,
+	G: 7,
+	"G#": 8,
+	Ab: 8,
+	A: 9,
+	"A#": 10,
+	Bb: 10,
+	B: 11,
 };
 
 const MODES: DiagramMode[] = ["fingers", "noteNames", "fretboard"];
@@ -48,6 +62,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const [modalMode, setModalMode] = useState<DiagramMode>("fingers");
 	const [isPlaying, setIsPlaying] = useState(false);
+	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
 	const ctxRef = useRef<AudioContext | null>(null);
 	const preloadRef = useRef<Promise<void> | null>(null);
@@ -78,11 +93,19 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 
 		if (playingTimerRef.current !== null) clearTimeout(playingTimerRef.current);
 		setIsPlaying(true);
-		triggerChordPreview(pitches, ctxRef.current, ctxRef.current.destination, ctxRef.current.currentTime);
-		playingTimerRef.current = setTimeout(() => {
-			setIsPlaying(false);
-			playingTimerRef.current = null;
-		}, (CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000);
+		triggerChordPreview(
+			pitches,
+			ctxRef.current,
+			ctxRef.current.destination,
+			ctxRef.current.currentTime,
+		);
+		playingTimerRef.current = setTimeout(
+			() => {
+				setIsPlaying(false);
+				playingTimerRef.current = null;
+			},
+			(CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000,
+		);
 	}, []);
 
 	const openModal = useCallback((index: number) => {
@@ -93,9 +116,9 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 
 	const closeModal = useCallback(() => setModalOpen(false), []);
 
-	const goPrev = useCallback(() => setActiveIndex(i => Math.max(i - 1, 0)), []);
+	const goPrev = useCallback(() => setActiveIndex((i) => Math.max(i - 1, 0)), []);
 	const goNext = useCallback(
-		() => setActiveIndex(i => Math.min(i + 1, voicings.length - 1)),
+		() => setActiveIndex((i) => Math.min(i + 1, voicings.length - 1)),
 		[voicings.length],
 	);
 
@@ -114,30 +137,34 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 		return () => window.removeEventListener("keydown", handler);
 	}, [modalOpen, goPrev, goNext, closeModal, handlePlay, activeVoicing]);
 
-	const handleRipple = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+	const createRipple = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
 		const card = e.currentTarget;
 		const rect = card.getBoundingClientRect();
 		const x = e.clientX - rect.left;
 		const y = e.clientY - rect.top;
-		const size = Math.max(rect.width, rect.height);
+		const diameter = Math.sqrt(rect.width ** 2 + rect.height ** 2) * 2;
 
 		const ripple = document.createElement("div");
-		ripple.style.cssText = [
-			"position:absolute",
-			`left:${x}px`,
-			`top:${y}px`,
-			`width:${size}px`,
-			`height:${size}px`,
-			`margin-left:${-size / 2}px`,
-			`margin-top:${-size / 2}px`,
-			"border-radius:50%",
-			"background:var(--color-denim-tint)",
-			"animation:ripple-expand 600ms ease-out forwards",
-			"pointer-events:none",
-			"z-index:0",
-		].join(";");
-		ripple.addEventListener("animationend", () => ripple.remove());
+		Object.assign(ripple.style, {
+			position: "absolute",
+			left: `${x}px`,
+			top: `${y}px`,
+			width: "0px",
+			height: "0px",
+			borderRadius: "50%",
+			backgroundColor: "var(--denim-light)",
+			transform: "translate(-50%, -50%)",
+			pointerEvents: "none",
+		});
 		card.appendChild(ripple);
+		const anim = ripple.animate(
+			[
+				{ width: "0px", height: "0px", opacity: 0.3 },
+				{ width: `${diameter}px`, height: `${diameter}px`, opacity: 0 },
+			],
+			{ duration: 600, easing: "ease-out" },
+		);
+		anim.addEventListener("finish", () => ripple.remove());
 	}, []);
 
 	if (voicings.length === 0) {
@@ -146,8 +173,6 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 
 	return (
 		<>
-			<style>{`@keyframes ripple-expand { from { transform: scale(0); opacity: 0.15; } to { transform: scale(2.5); opacity: 0; } }`}</style>
-
 			<div className="flex flex-col items-center gap-6">
 				<div className="relative inline-flex overflow-hidden rounded-full border border-denim-border bg-denim-tint">
 					<div
@@ -173,12 +198,22 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 					{voicings.map(({ id, label, def, pitches }, index) => (
 						<div
 							key={id}
-							className="relative overflow-hidden flex flex-col items-center gap-2 cursor-pointer"
-							onMouseEnter={handleRipple}
+							className="flex flex-col items-center gap-2 cursor-pointer"
 							onClick={() => openModal(index)}
 						>
-							<div className="relative z-10 flex flex-col items-center gap-2">
-								<ChordDiagram def={def} label={label} mode={mode} rootMidi={rootMidi} />
+							<div className="flex flex-col items-center gap-2">
+								<ChordDiagram
+									def={def}
+									label={label}
+									mode={mode}
+									rootMidi={rootMidi}
+									isHovered={hoveredIndex === index}
+									onMouseEnter={(e) => {
+										setHoveredIndex(index);
+										createRipple(e);
+									}}
+									onMouseLeave={() => setHoveredIndex(null)}
+								/>
 								<Button
 									size="sm"
 									variant="outline"
@@ -226,7 +261,12 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 					<div className="flex flex-col items-center gap-1">
 						<h2 className="text-xl font-semibold text-denim">
 							{root && <MusicalText text={root} />}
-							{suffix && <> <MusicalText text={suffix} /></>}
+							{suffix && (
+								<>
+									{" "}
+									<MusicalText text={suffix} />
+								</>
+							)}
 						</h2>
 						<p className="text-sm text-muted-foreground">{activeVoicing.label}</p>
 					</div>

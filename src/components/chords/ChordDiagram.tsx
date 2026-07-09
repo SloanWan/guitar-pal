@@ -1,7 +1,10 @@
 "use client";
 
 import type { VexChordDef } from "@/lib/chordVoicingToVexChords";
-import ChordDiagramSVG, { type DiagramMode, type DiagramSize } from "@/components/chords/ChordDiagramSVG";
+import ChordDiagramSVG, {
+	type DiagramMode,
+	type DiagramSize,
+} from "@/components/chords/ChordDiagramSVG";
 import MusicalText from "@/components/MusicalText";
 
 interface Props {
@@ -10,6 +13,9 @@ interface Props {
 	size?: DiagramSize;
 	mode?: DiagramMode;
 	rootMidi?: number;
+	onMouseEnter?: (e: React.MouseEvent<HTMLDivElement>) => void;
+	onMouseLeave?: (e: React.MouseEvent<HTMLDivElement>) => void;
+	isHovered?: boolean;
 }
 
 function toSVGProps(def: VexChordDef): {
@@ -35,8 +41,7 @@ function toSVGProps(def: VexChordDef): {
 		}
 	}
 
-	const barreFret =
-		def.barres.length > 0 ? def.barres[0].fret + def.position - 1 : null;
+	const barreFret = def.barres.length > 0 ? def.barres[0].fret + def.position - 1 : null;
 
 	return { frets, fingers, startFret: def.position, barreFret };
 }
@@ -47,17 +52,19 @@ export default function ChordDiagram({
 	size = "regular",
 	mode = "fingers",
 	rootMidi,
+	onMouseEnter,
+	onMouseLeave,
+	isHovered = false,
 }: Props) {
 	const svgProps = toSVGProps(def);
 
 	return (
-		<div className="flex flex-col items-center gap-1 rounded-lg border border-denim-border bg-denim-tint p-3">
-			<ChordDiagramSVG
-				{...svgProps}
-				mode={mode}
-				rootMidi={rootMidi}
-				size={size}
-			/>
+		<div
+			className={`relative overflow-hidden flex flex-col items-center gap-1 rounded-lg border border-denim-border p-3 transition-colors duration-300 ${isHovered ? "bg-denim-light/10" : "bg-denim-tint"}`}
+			onMouseEnter={onMouseEnter}
+			onMouseLeave={onMouseLeave}
+		>
+			<ChordDiagramSVG {...svgProps} mode={mode} rootMidi={rootMidi} size={size} />
 			<span className="text-xs font-medium text-denim">
 				<MusicalText text={label} />
 			</span>

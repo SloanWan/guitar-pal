@@ -61,7 +61,7 @@ export default async function ChordDetailPage({ params }: Props) {
 						</Link>
 					</div>
 					<div className="flex-1 flex items-center justify-center w-full pb-[10%]">
-						<ChordDetailView voicings={voicings} />
+						<ChordDetailView voicings={voicings} root={root} />
 					</div>
 				</div>
 			</div>

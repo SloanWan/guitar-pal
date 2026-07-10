@@ -65,6 +65,7 @@ export type Measure = {
 export type FingerpickPattern = {
 	id: string;
 	name: string;
+	description?: string;
 	measures: Measure[];
 	bpm: number;
 	timeSignature: [number, number];

@@ -267,7 +267,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			onClick={onClose}
 		>
 			<div
-				className={`relative bg-white rounded-2xl shadow-xl flex flex-col overflow-x-hidden overflow-y-auto overscroll-contain max-md:max-h-[80dvh] mx-4 w-72 transition-all duration-200 ${
+				className={`relative bg-white rounded-2xl shadow-xl flex flex-col overflow-x-hidden overflow-y-auto overscroll-contain touch-pan-y max-md:max-h-[80dvh] mx-4 w-72 transition-all duration-200 ${
 					open ? "opacity-100 scale-100" : "opacity-0 scale-95"
 				}`}
 				style={{ maxWidth: "calc(100vw - 2rem)" }}

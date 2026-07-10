@@ -94,6 +94,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	const ctxRef = useRef<AudioContext | null>(null);
 	const preloadRef = useRef<Promise<void> | null>(null);
 	const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const voicingPanelRef = useRef<HTMLDivElement>(null);
 	const [isPreloading, setIsPreloading] = useState(false);
 	const [playingVoicingId, setPlayingVoicingId] = useState<string | null>(null);
 
@@ -131,6 +132,15 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			ctxRef.current?.close().catch(() => undefined);
 		};
 	}, []);
+
+	// Auto-scroll to voicing panel when phase 2 activates
+	useEffect(() => {
+		if (!phase2) return;
+		const timer = setTimeout(() => {
+			voicingPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+		}, 100);
+		return () => clearTimeout(timer);
+	}, [phase2]);
 
 	// When root or category changes: find available suffixes, update selectedSuffix
 	useEffect(() => {
@@ -257,7 +267,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			onClick={onClose}
 		>
 			<div
-				className={`relative bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden mx-4 w-72 transition-all duration-200 ${
+				className={`relative bg-white rounded-2xl shadow-xl flex flex-col overflow-x-hidden overflow-y-auto max-md:max-h-[80dvh] mx-4 w-72 transition-all duration-200 ${
 					open ? "opacity-100 scale-100" : "opacity-0 scale-95"
 				}`}
 				style={{ maxWidth: "calc(100vw - 2rem)" }}
@@ -361,6 +371,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 				{/* Voicing panel — expands downward on phase2 */}
 				<div
+					ref={voicingPanelRef}
 					className="overflow-hidden"
 					style={{
 						maxHeight: phase2 ? "500px" : "0px",

@@ -185,7 +185,7 @@ export default function BpmSlider({
 									className="block w-2 h-2 rounded-full"
 									style={{
 										backgroundColor:
-											tick.bpm <= bpm ? "var(--denim-dark)" : "var(--denim)",
+											tick.bpm <= bpm ? "var(--denim)" : "#9ca3af",
 									}}
 								/>
 							</button>

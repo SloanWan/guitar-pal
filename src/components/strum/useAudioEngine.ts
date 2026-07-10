@@ -35,7 +35,12 @@ export function _resolveStrumBuffer(
 	return buffers[soundType] ?? null;
 }
 
-export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
+export function useAudioEngine(
+	beats: Beat[],
+	bpm: number,
+	tickMode: TickMode,
+	chordMidiPitches?: readonly number[] | null,
+) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
 	const schedulerRef = useRef<number | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
@@ -64,6 +69,7 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	const metronomeGainRef = useRef(metronomeGain);
 	const accentEnabledRef = useRef(accentEnabled);
 	const playOnceRef = useRef(playOnce);
+	const chordMidiPitchesRef = useRef(chordMidiPitches);
 
 	// Active source nodes tracked for cleanup on stop() and unmount.
 	const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
@@ -98,6 +104,9 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 	useEffect(() => {
 		playOnceRef.current = playOnce;
 	}, [playOnce]);
+	useEffect(() => {
+		chordMidiPitchesRef.current = chordMidiPitches;
+	}, [chordMidiPitches]);
 
 	// Cancel in-flight audio on unmount to prevent dangling source nodes.
 	useEffect(() => {
@@ -175,7 +184,14 @@ export function useAudioEngine(beats: Beat[], bpm: number, tickMode: TickMode) {
 		const gainNode = ctx.createGain();
 		gainNode.gain.value = strumGainRef.current;
 		gainNode.connect(ctx.destination);
-		triggerStrum(soundType, ctx, gainNode, time, secondsPerCell);
+		triggerStrum(
+			soundType,
+			ctx,
+			gainNode,
+			time,
+			secondsPerCell,
+			chordMidiPitchesRef.current ?? undefined,
+		);
 	}
 
 	function scheduler() {

@@ -369,7 +369,7 @@ export default function FingerpickEditModal({
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
 			<DialogContent
 				showCloseButton={false}
-				className="max-w-[min(95vw,1100px)] w-full max-h-[90vh] overflow-y-auto"
+				className="w-full max-w-[min(96vw,1400px)] sm:max-w-[min(96vw,1400px)] max-h-[90vh] overflow-y-auto"
 				onEscapeKeyDown={(e) => {
 					if (techMenu || selectedColumns.size > 0) {
 						e.preventDefault();
@@ -465,7 +465,10 @@ export default function FingerpickEditModal({
 				</div>
 
 				{/* ── Grid ──────────────────────────────────────────────────────── */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+				{/* auto-fill packs as many ~19rem columns as fit: 4 across on a wide
+				    desktop, fewer as the modal narrows, and measures (plus the add
+				    tile) wrap to the next line once a row is full. */}
+				<div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-4">
 					{working.measures.map((measure, measureIndex) => {
 						const n = measure.slots.length;
 						return (
@@ -491,7 +494,9 @@ export default function FingerpickEditModal({
 								<div
 									className="grid gap-0.5 items-center"
 									style={{
-										gridTemplateColumns: `1.25rem repeat(${n}, minmax(1.75rem, 1fr))`,
+										// minmax(0, 1fr) lets cells shrink to fit the measure block so a
+										// dense measure never overflows its column.
+										gridTemplateColumns: `1.25rem repeat(${n}, minmax(0, 1fr))`,
 									}}
 								>
 									{/* String rows */}
@@ -668,7 +673,7 @@ function StringRow({
 							onSelect(cell);
 							onContextMenuCell(cell, e.clientX, e.clientY, e.currentTarget);
 						}}
-						className={`relative h-7 flex items-center justify-center rounded font-mono text-xs transition-colors ${
+						className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center rounded font-mono text-xs transition-colors ${
 							isSelected
 								? "bg-denim-tint ring-1 ring-denim text-denim"
 								: "hover:bg-slate-50 text-slate-600"

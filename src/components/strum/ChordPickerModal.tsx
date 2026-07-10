@@ -257,15 +257,15 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			onClick={onClose}
 		>
 			<div
-				className={`relative bg-white rounded-2xl shadow-xl flex overflow-hidden mx-4 transition-all duration-200 ${
+				className={`relative bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden mx-4 w-72 transition-all duration-200 ${
 					open ? "opacity-100 scale-100" : "opacity-0 scale-95"
 				}`}
-				style={{ maxHeight: "90vh", maxWidth: "calc(100vw - 2rem)" }}
+				style={{ maxWidth: "calc(100vw - 2rem)" }}
 				onClick={(e) => e.stopPropagation()}
 			>
-				{/* Left panel: piano + categories */}
-				<div className="flex flex-col gap-4 p-6 w-72 shrink-0 overflow-y-auto">
-					<div className="flex items-center justify-between shrink-0">
+				{/* Piano + category panel */}
+				<div className="flex flex-col gap-4 p-6">
+					<div className="flex items-center justify-between">
 						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
 							Pick a chord
 						</h2>
@@ -279,7 +279,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 					</div>
 
 					{/* Piano keyboard */}
-					<div className="relative h-16 w-full select-none shrink-0">
+					<div className="relative h-16 w-full select-none">
 						{/* White keys */}
 						<div className="absolute inset-0 flex gap-px">
 							{WHITE_KEYS.map((k) => (
@@ -359,15 +359,18 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 					)}
 				</div>
 
-				{/* Right panel: voicing selector — slides in on phase2 */}
+				{/* Voicing panel — expands downward on phase2 */}
 				<div
-					className="overflow-hidden transition-[width] duration-300 ease-in-out border-l border-slate-100"
-					style={{ width: phase2 ? "288px" : "0px" }}
+					className="overflow-hidden"
+					style={{
+						maxHeight: phase2 ? "500px" : "0px",
+						transition: "max-height 350ms cubic-bezier(0.32, 0.72, 0, 1)",
+					}}
 				>
-					<div className="w-72 h-full flex flex-col gap-4 p-6 overflow-hidden">
+					<div className="flex flex-col gap-4 px-6 pb-6 pt-4 border-t border-slate-100">
 						{/* Suffix tabs */}
 						{availableSuffixes.length > 1 && (
-							<div className="flex flex-wrap gap-1 shrink-0">
+							<div className="flex flex-wrap gap-1">
 								{availableSuffixes.map((s) => (
 									<button
 										key={s}
@@ -386,19 +389,19 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 						{/* Chord name */}
 						{selectedRoot && selectedSuffix && (
-							<p className="text-sm font-semibold text-slate-700 shrink-0">
+							<p className="text-sm font-semibold text-slate-700">
 								{selectedRoot} {selectedSuffix}
 							</p>
 						)}
 
-						{/* Voicing cards */}
-						<div className="flex-1 overflow-y-auto min-h-0">
+						{/* Voicing cards — horizontal scroll, ~1.5 cards visible */}
+						<div>
 							{loadingVoicings ? (
-								<div className="flex justify-center py-8">
+								<div className="flex justify-center py-6">
 									<Loader2 size={18} className="animate-spin text-slate-300" />
 								</div>
 							) : voicings.length === 0 ? (
-								<p className="text-xs text-slate-400 text-center py-8">
+								<p className="text-xs text-slate-400 text-center py-6">
 									No voicings found
 								</p>
 							) : (
@@ -411,7 +414,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 											<div
 												key={v.id}
 												onClick={() => setSelectedVoicingId(v.id)}
-												className={`shrink-0 flex flex-col items-center gap-1.5 cursor-pointer rounded-lg p-2 border-2 transition-all ${
+												className={`w-36 shrink-0 flex flex-col items-center gap-1.5 cursor-pointer rounded-lg p-2 border-2 transition-all ${
 													isSelected
 														? "border-denim shadow-md"
 														: "border-transparent hover:border-slate-200"
@@ -450,7 +453,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 						</div>
 
 						{/* Confirm / Clear buttons */}
-						<div className="flex gap-2 shrink-0">
+						<div className="flex gap-2">
 							{initialChord && (
 								<button
 									onClick={() => onConfirm(null)}

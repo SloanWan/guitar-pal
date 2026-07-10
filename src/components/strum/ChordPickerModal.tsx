@@ -276,7 +276,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				onTouchMove={(e) => e.stopPropagation()}
 			>
 				{/* Piano + category panel */}
-				<div className="flex flex-col gap-4 p-6">
+				<div className="flex flex-col gap-4 p-6 shrink-0">
 					<div className="flex items-center justify-between">
 						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
 							Pick a chord
@@ -374,7 +374,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				{/* Voicing panel — expands downward on phase2 */}
 				<div
 					ref={voicingPanelRef}
-					className="overflow-hidden"
+					className="overflow-hidden shrink-0"
 					style={{
 						maxHeight: phase2 ? "500px" : "0px",
 						transition: "max-height 350ms cubic-bezier(0.32, 0.72, 0, 1)",

@@ -267,7 +267,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			onClick={onClose}
 		>
 			<div
-				className={`relative bg-white rounded-2xl shadow-xl flex flex-col overflow-x-hidden overflow-y-auto overscroll-contain touch-pan-y max-md:max-h-[80dvh] mx-4 w-72 transition-all duration-200 ${
+				className={`relative bg-white rounded-2xl shadow-xl flex flex-col md:flex-row max-md:overflow-x-hidden max-md:overflow-y-auto max-md:overscroll-contain max-md:touch-pan-y max-md:max-h-[80dvh] md:overflow-hidden mx-4 max-md:w-72 transition-all duration-200 ${
 					open ? "opacity-100 scale-100" : "opacity-0 scale-95"
 				}`}
 				style={{ maxWidth: "calc(100vw - 2rem)" }}
@@ -276,7 +276,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				onTouchMove={(e) => e.stopPropagation()}
 			>
 				{/* Piano + category panel */}
-				<div className="flex flex-col gap-4 p-6 shrink-0">
+				<div className="flex flex-col gap-4 p-6 shrink-0 md:w-72">
 					<div className="flex items-center justify-between">
 						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
 							Pick a chord
@@ -371,16 +371,16 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 					)}
 				</div>
 
-				{/* Voicing panel — expands downward on phase2 */}
+				{/* Voicing panel — expands downward on mobile, rightward on desktop */}
 				<div
 					ref={voicingPanelRef}
-					className="overflow-hidden shrink-0"
+					className={`overflow-hidden shrink-0 ${phase2 ? "max-md:max-h-[500px] md:max-w-[320px]" : "max-md:max-h-0 md:max-w-0"}`}
 					style={{
-						maxHeight: phase2 ? "500px" : "0px",
-						transition: "max-height 350ms cubic-bezier(0.32, 0.72, 0, 1)",
+						transition:
+							"max-height 350ms cubic-bezier(0.32, 0.72, 0, 1), max-width 350ms cubic-bezier(0.32, 0.72, 0, 1)",
 					}}
 				>
-					<div className="flex flex-col gap-4 px-6 pb-6 pt-4 border-t border-slate-100">
+					<div className="flex flex-col gap-4 px-6 pb-6 pt-4 border-t border-slate-100 md:border-t-0 md:border-l md:w-80 md:h-full md:justify-center">
 						{/* Suffix tabs */}
 						{availableSuffixes.length > 1 && (
 							<div className="flex flex-wrap gap-1">
@@ -444,7 +444,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 															void handlePlay(v);
 														}}
 														disabled={isPreloading}
-														className={`transition-colors ${
+														className={`transition-all duration-150 hover:-translate-y-0.5 ${
 															isPlaying
 																? "text-denim-dark"
 																: "text-denim hover:text-denim-dark"

@@ -109,15 +109,68 @@ const HAMMER_PULL_MEASURE: Measure = {
 	],
 };
 
-const SLIDE_TIE_MEASURE: Measure = {
-	id: "slide-tie",
+// ── Slide demo measures ───────────────────────────────────────────────────────
+// Destination model: the slide technique is placed on the note you ARRIVE AT,
+// matching the StringFret type comment ("technique used to arrive at this note
+// from the previous slot"). This causes VexFlow to draw the connector from the
+// source note to the destination note, and tells the scheduler to consume the
+// destination into a slideChain (no separate pluck at the destination pitch).
+
+// M1: short slide-up (B string, 5→7) followed by a normal note.
+const SLIDE_M1: Measure = {
+	id: "slide-m1",
 	slots: [
-		{ id: "st1", duration: "quarter", strings: [S(), S(), S(), S(), N(3), S()] },
-		{ id: "st2", duration: "quarter", strings: [S(), S(), S(), S(), Su(7), S()] },
-		{ id: "st3", duration: "quarter", strings: [S(), S(), S(), S(), Ti(7), S()] },
-		{ id: "st4", duration: "quarter", strings: [S(), S(), S(), S(), Sd(5), S()] },
+		// Source: pick at fret 5 (no technique)
+		{ id: "sl1-1", duration: "quarter", strings: [S(), N(5),   S(), S(), S(), S()] },
+		// Destination: arrived at fret 7 via slide-up → renders 5/7 connector
+		{ id: "sl1-2", duration: "quarter", strings: [S(), Su(7),  S(), S(), S(), S()] },
+		// Normal note (new pick)
+		{ id: "sl1-3", duration: "half",    strings: [S(), N(5),   S(), S(), S(), S()] },
 	],
 };
+
+// M2: long slide-up (B string, 5→12).
+const SLIDE_M2: Measure = {
+	id: "slide-m2",
+	slots: [
+		{ id: "sl2-1", duration: "half", strings: [S(), N(5),   S(), S(), S(), S()] },
+		{ id: "sl2-2", duration: "half", strings: [S(), Su(12), S(), S(), S(), S()] },
+	],
+};
+
+// M3: slide-down (B string, 9→7) followed by a normal note.
+const SLIDE_M3: Measure = {
+	id: "slide-m3",
+	slots: [
+		// Source: pick at fret 9
+		{ id: "sl3-1", duration: "quarter", strings: [S(), N(9),  S(), S(), S(), S()] },
+		// Destination: arrived at fret 7 via slide-down → renders 9\7 connector
+		{ id: "sl3-2", duration: "quarter", strings: [S(), Sd(7), S(), S(), S(), S()] },
+		// Normal note
+		{ id: "sl3-3", duration: "half",    strings: [S(), N(9),  S(), S(), S(), S()] },
+	],
+};
+
+// M4: simultaneous single slides on str0 (e) and a chain on str1 (B: 5→9→5),
+// plus a single slide on str2 (G). Demonstrates that one ScheduleEvent on str1
+// carries slideChain of length 2, producing two connected slide lines.
+const SLIDE_M4: Measure = {
+	id: "slide-m4",
+	slots: [
+		// str0: source 7 (single slide); str1: source 5 (chain start: 5→9→5)
+		{ id: "sl4-1", duration: "eighth", strings: [N(7),  N(5),  S(),   S(), S(), S()] },
+		// str0: arrived at 12 via slide-up (7→12); str1: chain dest1 — arrived at 9 via slide-up (5→9)
+		{ id: "sl4-2", duration: "eighth", strings: [Su(12), Su(9), S(),   S(), S(), S()] },
+		// str1: chain dest2 — arrived at 5 via slide-down (9→5); str2: source 7 (new single slide)
+		{ id: "sl4-3", duration: "eighth", strings: [S(),   Sd(5), N(7),  S(), S(), S()] },
+		// str2: arrived at 9 via slide-up (7→9)
+		{ id: "sl4-4", duration: "eighth", strings: [S(),   S(),   Su(9), S(), S(), S()] },
+		// Silence — lets the str1 chain ring out
+		{ id: "sl4-5", duration: "half",   strings: [S(),   S(),   S(),   S(), S(), S()] },
+	],
+};
+
+const SLIDE_MEASURES = [SLIDE_M1, SLIDE_M2, SLIDE_M3, SLIDE_M4];
 
 // ── Duration demo measures ────────────────────────────────────────────────────
 // Each measure demonstrates a single Duration value using string 0 (high e).
@@ -329,7 +382,7 @@ const GROUPS: { label: string; measures: Measure[] }[] = [
 	{ label: "Tremolo Picking: 8th (1 slash) · 16th (2) · 32nd (3) · plain", measures: [TREMOLO_MEASURE] },
 	{ label: "Vibrato (half 1) and Vibrato-Wide (half 2)", measures: [VIBRATO_MEASURE] },
 	{ label: "Techniques regression: Hammer-On, Pull-Off", measures: [HAMMER_PULL_MEASURE] },
-	{ label: "Techniques regression: Slide-Up, Tied, Slide-Down", measures: [SLIDE_TIE_MEASURE] },
+	{ label: "Slide", measures: SLIDE_MEASURES },
 	{ label: "Duration: whole", measures: [WHOLE_DUR_MEASURE] },
 	{ label: "Duration: half", measures: [HALF_DUR_MEASURE] },
 	{ label: "Duration: quarter", measures: [QUARTER_DUR_MEASURE] },
@@ -386,10 +439,10 @@ const GROUP_METAS: Record<string, GroupMeta> = {
 		en: "Hammer-on: fret a note without picking — produces a softer attack. Pull-off: pluck the string by lifting a finger. All techniques use reduced gain (×0.5) to simulate the softer legato attack.",
 		zh: "击弦（hammer-on）：不拨弦直接按压琴弦发音，音量更柔。勾弦（pull-off）：通过抬指拨动琴弦。两者均使用 0.5 倍音量模拟连奏的柔和起音。",
 	},
-	"Techniques regression: Slide-Up, Tied, Slide-Down": {
-		status: "⚡ Simplified",
-		en: "Slide smoothly from one fret to another. Currently rendered correctly but audio plays as a normal pluck — pitch glide will be added in a future issue.",
-		zh: "从一个品位平滑滑向另一个品位。目前渲染正确，但音频仍为普通拨弦，音高滑动将在后续 issue 中实现。",
+	"Slide": {
+		status: "⏳ Not yet implemented",
+		en: "Slide moves from one fret to another by keeping the finger pressed and gliding along the string without re-picking. Pitch glide audio is not yet implemented — currently plays as a normal pluck. A dedicated issue will research the correct sample-based approach.",
+		zh: "滑音通过保持手指按压并沿琴弦滑动来改变音高，无需重新拨弦。音高滑动的音频尚未实现，目前以普通拨弦代替。将通过独立 issue 研究正确的基于采样的实现方案。",
 	},
 	"Duration: whole": {
 		status: "✅ Fully implemented",
@@ -460,6 +513,7 @@ const GROUP_BPM: Record<string, number> = {
 
 /** Chinese section label shown when lang = "zh". */
 const GROUP_LABEL_ZH: Record<string, string> = {
+	"Slide": "滑音",
 	"Stress Test — Dense Mixed Techniques": "压力测试 — 密集混合技法",
 };
 

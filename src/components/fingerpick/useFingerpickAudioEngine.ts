@@ -46,6 +46,7 @@ const MIN_DECAY_TC_S = 0.03;
 /** Source stop margin past note end — lets the envelope tail off cleanly. */
 const SOURCE_STOP_BUFFER_S = 0.05;
 
+
 const METRONOME_TICK_DURATION_S = 0.05;
 const METRONOME_ACCENT_FREQ = 1200;
 const METRONOME_NORMAL_FREQ = 800;
@@ -249,12 +250,6 @@ export function useFingerpickAudioEngine() {
 		// Steal (fade + stop) any ringing voice on this string.
 		stealVoice(perStringVoicesRef.current, event.stringIndex, when);
 
-		const source = ctx.createBufferSource();
-		source.buffer = noteData.buffer;
-		source.playbackRate.value = noteData.playbackRate;
-
-		const gainNode = ctx.createGain();
-
 		// Gain: ghost overrides everything; otherwise technique sets base, accent boosts on top.
 		let volume: number;
 		if (event.ghostNote) {
@@ -271,20 +266,25 @@ export function useFingerpickAudioEngine() {
 			volume = NORMAL_GAIN;
 		}
 		if (event.accent) volume *= ACCENT_MULTIPLIER;
-		gainNode.gain.setValueAtTime(volume, when);
 
 		// Staccato shortens the sounding duration to 20% of the slot duration.
-		// The scheduler still advances time by the full slot duration, so note spacing is unaffected.
 		const noteDuration = event.staccato ? event.duration * 0.2 : event.duration;
-		const decayTc = Math.max(noteDuration * DECAY_TC_RATIO, MIN_DECAY_TC_S);
+
+		const source = ctx.createBufferSource();
+		source.buffer = noteData.buffer;
+
+		const effectiveDuration = noteDuration;
+		source.playbackRate.value = noteData.playbackRate;
+
+		const gainNode = ctx.createGain();
+		gainNode.gain.setValueAtTime(volume, when);
+		const decayTc = Math.max(effectiveDuration * DECAY_TC_RATIO, MIN_DECAY_TC_S);
 		gainNode.gain.setTargetAtTime(0, when, decayTc);
 
 		source.connect(gainNode).connect(target);
 		source.start(when);
-		source.stop(when + noteDuration + SOURCE_STOP_BUFFER_S);
+		source.stop(when + effectiveDuration + SOURCE_STOP_BUFFER_S);
 
-		// Track in BOTH maps: voices (last-per-string, for voice stealing) and
-		// allSources (every source, so stop/pause can cancel all of them).
 		allSourcesRef.current.add(source);
 		const voice: ActiveVoice = { gainNode, source };
 		perStringVoicesRef.current.set(event.stringIndex, voice);

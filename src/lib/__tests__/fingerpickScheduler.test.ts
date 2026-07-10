@@ -243,13 +243,114 @@ describe("fingerpickPatternToScheduleEvents — technique events", () => {
 		expect(events[1].technique).toBe("hammer-on");
 	});
 
-	it("slide-down technique is carried on the event", () => {
+	it("slide-down destination emits its own event with technique='slide-down'", () => {
+		// Destination model: technique on the note you arrive at (s2), not the source (s1).
+		// Both source and destination emit separate events; audio plays as normal pluck.
 		const p = pattern(120, [
 			slot("s1", "quarter", { 3: { fret: 7 } }),
 			slot("s2", "quarter", { 3: { fret: 5, technique: "slide-down" } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(2);
+		expect(events[0].stringIndex).toBe(3);
+		expect(events[0].midi).toBe(OPEN_STRING_MIDI[3] + 7); // source pitch
+		expect(events[0].technique).toBeNull();
+		expect(events[1].midi).toBe(OPEN_STRING_MIDI[3] + 5); // destination pitch
 		expect(events[1].technique).toBe("slide-down");
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
+	it("slide-up destination emits its own event with technique='slide-up'", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 5 } }),
+			slot("s2", "quarter", { 0: { fret: 7, technique: "slide-up" } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(2);
+		expect(events[0].midi).toBe(OPEN_STRING_MIDI[0] + 5);
+		expect(events[0].technique).toBeNull();
+		expect(events[1].midi).toBe(OPEN_STRING_MIDI[0] + 7);
+		expect(events[1].technique).toBe("slide-up");
+	});
+
+	it("chained slides (5→9→5): all three slots emit separate events", () => {
+		const p = pattern(120, [
+			slot("s1", "eighth", { 1: { fret: 5 } }),
+			slot("s2", "eighth", { 1: { fret: 9, technique: "slide-up" } }),
+			slot("s3", "half",   { 1: { fret: 5, technique: "slide-down" } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(3);
+		expect(events[0].midi).toBe(OPEN_STRING_MIDI[1] + 5);
+		expect(events[1].midi).toBe(OPEN_STRING_MIDI[1] + 9);
+		expect(events[1].technique).toBe("slide-up");
+		expect(events[2].midi).toBe(OPEN_STRING_MIDI[1] + 5);
+		expect(events[2].technique).toBe("slide-down");
+	});
+
+	it("slide destination followed by a normal note: all three slots emit events", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 2: { fret: 3 } }),
+			slot("s2", "quarter", { 2: { fret: 7, technique: "slide-up" } }),
+			slot("s3", "quarter", { 2: { fret: 5 } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(3);
+		expect(events[0].midi).toBe(OPEN_STRING_MIDI[2] + 3);
+		expect(events[1].midi).toBe(OPEN_STRING_MIDI[2] + 7);
+		expect(events[1].technique).toBe("slide-up");
+		expect(events[2].midi).toBe(OPEN_STRING_MIDI[2] + 5);
+		expect(events[2].technique).toBeNull();
+	});
+
+	it("slide destination on str0 does not suppress str3 events in the same slot", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 5 }, 3: { fret: 2 } }),
+			slot("s2", "quarter", { 0: { fret: 9, technique: "slide-up" }, 3: { fret: 4 } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		// str0 s1, str3 s1, str0 s2, str3 s2 = 4 events
+		expect(events).toHaveLength(4);
+		const str0Events = events.filter((e) => e.stringIndex === 0);
+		const str3Events = events.filter((e) => e.stringIndex === 3);
+		expect(str0Events).toHaveLength(2);
+		expect(str0Events[1].technique).toBe("slide-up");
+		expect(str3Events).toHaveLength(2);
+	});
+
+	it("slide destination across a measure boundary emits its own event in the correct measure", () => {
+		const p = multiMeasurePattern(120, [
+			[slot("s1", "quarter", { 4: { fret: 0 } })],
+			[slot("s2", "quarter", { 4: { fret: 5, technique: "slide-up" } })],
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(2);
+		expect(events[0].measureIndex).toBe(0);
+		expect(events[1].measureIndex).toBe(1);
+		expect(events[1].midi).toBe(OPEN_STRING_MIDI[4] + 5);
+		expect(events[1].technique).toBe("slide-up");
+	});
+
+	it("a note without slide technique emits normally with no slideChain field", () => {
+		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 5 } })]);
+		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
+		expect(ev.technique).toBeNull();
+		expect((ev as Record<string, unknown>)["slideChain"]).toBeUndefined();
+	});
+
+	it("each slide destination event has the correct duration at 120 BPM", () => {
+		// eighth(0.25s) → quarter(0.5s) → half(1.0s)
+		const p = pattern(120, [
+			slot("s1", "eighth",  { 0: { fret: 5 } }),
+			slot("s2", "quarter", { 0: { fret: 7, technique: "slide-up" } }),
+			slot("s3", "half",    { 0: { fret: 9, technique: "slide-up" } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(3);
+		expect(events[0].duration).toBeCloseTo(0.25); // eighth at 120 BPM
+		expect(events[1].duration).toBeCloseTo(0.5);  // quarter at 120 BPM
+		expect(events[2].duration).toBeCloseTo(1.0);  // half at 120 BPM
 	});
 });
 

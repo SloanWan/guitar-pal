@@ -21,6 +21,10 @@ export interface ScheduleEvent {
 	muted: boolean;
 	measureIndex: number;
 	slotIndex: number;
+	/** Propagated from StringFret for audio shaping — all optional to preserve backward compat. */
+	ghostNote?: boolean;
+	accent?: boolean;
+	staccato?: boolean;
 }
 
 /**
@@ -57,9 +61,13 @@ const DURATION_BEATS: Record<Duration, number> = {
 	whole: 4,
 	half: 2,
 	quarter: 1,
+	"dotted-quarter": 1.5,
 	eighth: 0.5,
+	"dotted-eighth": 0.75,
 	"eighth-triplet": 1 / 3,
 	sixteenth: 0.25,
+	"sixteenth-triplet": 1 / 6,
+	"32nd": 0.125,
 	rest: 1,
 };
 
@@ -89,7 +97,10 @@ export function fingerpickPatternToScheduleEvents(
 		const measure = pattern.measures[measureIndex];
 		for (let slotIndex = 0; slotIndex < measure.slots.length; slotIndex++) {
 			const slot = measure.slots[slotIndex];
-			const slotDuration = DURATION_BEATS[slot.duration] * secondsPerBeat;
+			// Grace notes use a fixed 1/32-beat duration and do not advance currentTime.
+			const slotDuration = slot.isGraceNote
+				? DURATION_BEATS["32nd"] * secondsPerBeat
+				: DURATION_BEATS[slot.duration] * secondsPerBeat;
 
 			if (slot.duration !== "rest") {
 				slot.strings.forEach((sf, stringIndex) => {
@@ -110,11 +121,16 @@ export function fingerpickPatternToScheduleEvents(
 						muted: sf.muted,
 						measureIndex,
 						slotIndex,
+						...(sf.ghostNote && { ghostNote: true }),
+						...(sf.accent && { accent: true }),
+						...(sf.staccato && { staccato: true }),
 					});
 				});
 			}
 
-			currentTime += slotDuration;
+			if (!slot.isGraceNote) {
+				currentTime += slotDuration;
+			}
 		}
 	}
 

@@ -6,6 +6,12 @@ import {
 	Tuplet,
 	GhostNote,
 	StemmableNote,
+	GraceNote,
+	GraceNoteGroup,
+	Annotation,
+	AnnotationVerticalJustify,
+	Tremolo,
+	Vibrato,
 } from "vexflow";
 
 import { Measure, Duration } from "@/lib/fingerpickTypes";
@@ -14,11 +20,15 @@ export const VEX_DURATION: Record<Duration, string> = {
 	whole: "w",
 	half: "h",
 	quarter: "q",
+	"dotted-quarter": "qd",
 	eighth: "8",
-	// Tuplet notes use the underlying undivided duration ("8"); the Tuplet wrapper
+	"dotted-eighth": "8d",
+	// Tuplet notes use the underlying undivided duration; the Tuplet wrapper
 	// adjusts tick values for correct Formatter spacing and draws the bracket.
 	"eighth-triplet": "8",
 	sixteenth: "16",
+	"sixteenth-triplet": "16",
+	"32nd": "32",
 	rest: "q",
 };
 
@@ -32,15 +42,30 @@ export interface VexFlowRenderData {
 // No DOM access — VexFlow note constructors are DOM-free.
 export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	const notes: StemmableNote[] = [];
-	// posIndexMaps[slotIdx].get(stringIdx) = index in that TabNote's positions array.
+	// posIndexMaps[noteIdx].get(stringIdx) = index in that TabNote's positions array.
+	// Indexed parallel to notes[], not to measure.slots[].
 	const posIndexMaps: Map<number, number>[] = [];
+	// Maps slot index → notes[] index (null for grace-note slots).
+	const slotNoteIndex: (number | null)[] = [];
+	let pendingGraceNotes: GraceNote[] = [];
 
-	for (const slot of measure.slots) {
+	for (let slotIdx = 0; slotIdx < measure.slots.length; slotIdx++) {
+		const slot = measure.slots[slotIdx];
 		const duration = VEX_DURATION[slot.duration];
 
+		if (slot.isGraceNote) {
+			// Collect as a pending modifier; does not produce a standalone Voice tickable.
+			pendingGraceNotes.push(new GraceNote({ keys: ["e/4"], duration: "8", slash: true }));
+			slotNoteIndex.push(null);
+			continue;
+		}
+
 		if (slot.duration === "rest") {
+			pendingGraceNotes = [];
+			const noteIdx = notes.length;
 			notes.push(new GhostNote({ duration }));
 			posIndexMaps.push(new Map());
+			slotNoteIndex.push(noteIdx);
 			continue;
 		}
 
@@ -56,25 +81,96 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		});
 
 		if (positions.length === 0) {
+			pendingGraceNotes = [];
+			const noteIdx = notes.length;
 			notes.push(new GhostNote({ duration }));
 			posIndexMaps.push(new Map());
+			slotNoteIndex.push(noteIdx);
 			continue;
 		}
 
-		notes.push(new TabNote({ positions, duration }, true));
+		const tabNote = new TabNote({ positions, duration }, true);
+		if (pendingGraceNotes.length > 0) {
+			tabNote.addModifier(new GraceNoteGroup(pendingGraceNotes));
+			pendingGraceNotes = [];
+		}
+
+		// Accumulate per-slot renderable modifiers from active StringFret flags.
+		let slotStaccato = false;
+		let slotAccent = false;
+		let slotPickStroke: "down" | "up" | undefined;
+		let slotTremolo: "8th" | "16th" | "32nd" | undefined;
+		let slotVibrato = false;
+		let slotVibratoWide = false;
+		slot.strings.forEach((sf) => {
+			if (sf.fret === null && !sf.muted) return;
+			if (sf.staccato) slotStaccato = true;
+			if (sf.accent) slotAccent = true;
+			if (!slotPickStroke && sf.pickStroke) slotPickStroke = sf.pickStroke;
+			if (!slotTremolo && sf.tremoloPickingSpeed) slotTremolo = sf.tremoloPickingSpeed;
+			if (sf.technique === "vibrato") slotVibrato = true;
+			if (sf.technique === "vibrato-wide") slotVibratoWide = true;
+		});
+		if (slotStaccato) {
+			tabNote.addModifier(
+				new Annotation(".").setVerticalJustification(AnnotationVerticalJustify.TOP),
+			);
+		}
+		if (slotAccent) {
+			tabNote.addModifier(
+				new Annotation(">").setVerticalJustification(AnnotationVerticalJustify.TOP),
+			);
+		}
+		if (slotPickStroke) {
+			tabNote.addModifier(
+				new Annotation(slotPickStroke === "down" ? "⊓" : "V").setVerticalJustification(
+					AnnotationVerticalJustify.TOP,
+				),
+			);
+		}
+		if (slotTremolo) {
+			const slashes = slotTremolo === "8th" ? 1 : slotTremolo === "16th" ? 2 : 3;
+			tabNote.addModifier(new Tremolo(slashes));
+		}
+		// Vibrato constructor calls setVibratoWidth(), which measures glyph width via
+		// the canvas API. In non-browser environments (jsdom, Node) it throws because
+		// getWidth() returns 0. Wrap in try-catch so the adapter stays test-safe.
+		if (slotVibratoWide || slotVibrato) {
+			try {
+				const vib = new Vibrato();
+				if (slotVibratoWide) vib.setVibratoWidth(40);
+				tabNote.addModifier(vib);
+			} catch {
+				// No canvas context (jsdom / SSR) — skip modifier; renders correctly in browser.
+			}
+		}
+
+		const noteIdx = notes.length;
+		notes.push(tabNote);
 		posIndexMaps.push(posMap);
+		slotNoteIndex.push(noteIdx);
 	}
 
 	const connectors: Array<TabTie | TabSlide> = [];
 
 	for (let i = 1; i < measure.slots.length; i++) {
 		const slot = measure.slots[i];
-		if (slot.duration === "rest") continue;
+		if (slot.duration === "rest" || slot.isGraceNote) continue;
 
-		const prevNote = notes[i - 1];
-		const currNote = notes[i];
-		const prevPosMap = posIndexMaps[i - 1];
-		const currPosMap = posIndexMaps[i];
+		const currNoteIdx = slotNoteIndex[i];
+		if (currNoteIdx === null || currNoteIdx === undefined) continue;
+
+		// Walk back to find the nearest preceding non-grace slot.
+		let prevSlotIdx = i - 1;
+		while (prevSlotIdx >= 0 && slotNoteIndex[prevSlotIdx] === null) prevSlotIdx--;
+		if (prevSlotIdx < 0) continue;
+		const prevNoteIdx = slotNoteIndex[prevSlotIdx];
+		if (prevNoteIdx === null || prevNoteIdx === undefined) continue;
+
+		const prevNote = notes[prevNoteIdx];
+		const currNote = notes[currNoteIdx];
+		const prevPosMap = posIndexMaps[prevNoteIdx];
+		const currPosMap = posIndexMaps[currNoteIdx];
 
 		slot.strings.forEach((sf, stringIdx) => {
 			if (sf.fret === null && !sf.tied) return;
@@ -102,22 +198,28 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			} else if (sf.technique === "slide-down") {
 				connectors.push(TabSlide.createSlideDown(tieNotes));
 			}
+			// New technique values: no VexFlow connector yet — silent pass-through.
 		});
 	}
 
-	// Group consecutive "eighth-triplet" slots into sets of 3 and wrap each group in
-	// a Tuplet. This adjusts each note's tick value (3 → 2 eighths) so the Formatter
-	// spaces the measure correctly, and draws the bracket above the staff.
+	// Group consecutive triplet slots (eighth-triplet or sixteenth-triplet) into
+	// sets of 3, each wrapped in a Tuplet. The Tuplet adjusts tick values so the
+	// Formatter spaces the measure correctly and draws the bracket above the staff.
 	const tuplets: Tuplet[] = [];
 	let si = 0;
 	while (si < measure.slots.length) {
-		if (measure.slots[si].duration === "eighth-triplet") {
+		const slotDuration = measure.slots[si].duration;
+		if (slotDuration === "eighth-triplet" || slotDuration === "sixteenth-triplet") {
 			const groupStart = si;
-			while (si < measure.slots.length && measure.slots[si].duration === "eighth-triplet") {
+			while (si < measure.slots.length && measure.slots[si].duration === slotDuration) {
 				si++;
 			}
 			for (let j = groupStart; j < si; j += 3) {
-				const group = notes.slice(j, j + 3);
+				const group: StemmableNote[] = [];
+				for (let k = j; k < j + 3 && k < si; k++) {
+					const noteIdx = slotNoteIndex[k];
+					if (noteIdx !== null && noteIdx !== undefined) group.push(notes[noteIdx]);
+				}
 				if (group.length === 3) tuplets.push(new Tuplet(group));
 			}
 		} else {

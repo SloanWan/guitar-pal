@@ -28,8 +28,14 @@ const SCHEDULE_LOOKAHEAD_S = 0.3;
 /** Base gain for a normal pluck (no technique). */
 const NORMAL_GAIN = 0.8;
 
-/** Reduced gain for technique notes (hammer-on, pull-off, slide) — MVP legato sim. */
+/** Reduced gain for legato technique notes (hammer-on, pull-off, trill). */
 const TECHNIQUE_GAIN = 0.5;
+/** Gain for tapping notes — slightly softer than a normal pick attack. */
+const TAPPING_GAIN = 0.8;
+/** Gain for ghost notes (parenthesised/bracketed notes). */
+const GHOST_GAIN = 0.3;
+/** Accent boost multiplier applied on top of the technique-derived base gain. */
+const ACCENT_MULTIPLIER = 1.3;
 
 /** Fraction of slot duration used as gain-decay time constant. */
 const DECAY_TC_RATIO = 0.8;
@@ -248,15 +254,34 @@ export function useFingerpickAudioEngine() {
 		source.playbackRate.value = noteData.playbackRate;
 
 		const gainNode = ctx.createGain();
-		const volume = event.technique !== null ? TECHNIQUE_GAIN : NORMAL_GAIN;
+
+		// Gain: ghost overrides everything; otherwise technique sets base, accent boosts on top.
+		let volume: number;
+		if (event.ghostNote) {
+			volume = GHOST_GAIN;
+		} else if (
+			event.technique === "hammer-on" ||
+			event.technique === "pull-off" ||
+			event.technique === "trill"
+		) {
+			volume = TECHNIQUE_GAIN;
+		} else if (event.technique === "tapping") {
+			volume = TAPPING_GAIN;
+		} else {
+			volume = NORMAL_GAIN;
+		}
+		if (event.accent) volume *= ACCENT_MULTIPLIER;
 		gainNode.gain.setValueAtTime(volume, when);
 
-		const decayTc = Math.max(event.duration * DECAY_TC_RATIO, MIN_DECAY_TC_S);
+		// Staccato shortens the sounding duration to 20% of the slot duration.
+		// The scheduler still advances time by the full slot duration, so note spacing is unaffected.
+		const noteDuration = event.staccato ? event.duration * 0.2 : event.duration;
+		const decayTc = Math.max(noteDuration * DECAY_TC_RATIO, MIN_DECAY_TC_S);
 		gainNode.gain.setTargetAtTime(0, when, decayTc);
 
 		source.connect(gainNode).connect(target);
 		source.start(when);
-		source.stop(when + event.duration + SOURCE_STOP_BUFFER_S);
+		source.stop(when + noteDuration + SOURCE_STOP_BUFFER_S);
 
 		// Track in BOTH maps: voices (last-per-string, for voice stealing) and
 		// allSources (every source, so stop/pause can cancel all of them).

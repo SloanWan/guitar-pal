@@ -25,6 +25,7 @@ import {
 	SquareMenu,
 } from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
+import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import { useUser } from "@/hooks/useUser";
 
 const MIN_BPM = 40;
@@ -36,6 +37,7 @@ export default function StrumPage() {
 	);
 	const [bpm, setBpm] = useState(80);
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
+	const [selectedChord, setSelectedChord] = useState<ConfirmedChord | null>(null);
 
 	const {
 		isPlaying,
@@ -55,7 +57,12 @@ export default function StrumPage() {
 		setAccentEnabled,
 		playOnce,
 		setPlayOnce,
-	} = useAudioEngine(selectedPattern?.beats ?? PRESET_STRUM_PATTERNS[0].beats, bpm, tickMode);
+	} = useAudioEngine(
+		selectedPattern?.beats ?? PRESET_STRUM_PATTERNS[0].beats,
+		bpm,
+		tickMode,
+		selectedChord?.pitches,
+	);
 
 	const { user, loading } = useUser();
 	const {
@@ -423,6 +430,8 @@ export default function StrumPage() {
 						<StepGridCard
 							pattern={selectedPattern}
 							activeCell={{ beatIdx: currBeat, cellIdx: currCell }}
+							selectedChord={selectedChord}
+							onChordChange={setSelectedChord}
 						/>
 					) : (
 						<p className="text-slate-400 text-sm text-center">

@@ -414,6 +414,13 @@ export async function preloadStrumPresets(ctx: AudioContext): Promise<void> {
 					zone.buffer = await _decodeZone(zone, ctx);
 				}
 			}
+			// Decode all remaining zones so any chord voicing pitch works.
+			for (const zone of preset.zones) {
+				if (!decoded.has(zone)) {
+					decoded.add(zone);
+					zone.buffer = await _decodeZone(zone, ctx);
+				}
+			}
 			_readyPresets.set(key, preset);
 		}),
 	);
@@ -438,12 +445,17 @@ export function triggerStrum(
 	target: AudioNode,
 	when: number,
 	noteDuration: number,
+	customPitches?: readonly number[],
 ): void {
 	const preset = _readyPresets.get(STRUM_PRESET[type]);
 	if (!preset) return;
 
+	const basePitches = customPitches && customPitches.length > 0 ? customPitches : STRUM_PITCHES;
 	// Up strum: high-to-low sweep; down and muted: low-to-high sweep.
-	const pitches = type === "up" ? [...STRUM_PITCHES].sort((a, b) => b - a) : [...STRUM_PITCHES];
+	const pitches =
+		type === "up"
+			? [...basePitches].sort((a, b) => b - a)
+			: [...basePitches].sort((a, b) => a - b);
 
 	// Muted strums cap at MUTED_MAX_DURATION_S regardless of tempo.
 	const effectiveDuration =

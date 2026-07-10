@@ -259,7 +259,7 @@ fingers     jsonb  (array of finger numbers per string)
 
 **Files:** `src/app/(main)/strum/page.tsx`, `src/components/strum/*`
 
-**Layout:** Three-column on desktop (library sidebar left | StepGridCard centre | controls right). On mobile: hidden library (slide-in overlay), StepGridCard, controls stacked below. Responsive breakpoints: `lg` for sidebar always-visible, `md` for two-column controls layout.
+**Layout:** Three-column on desktop (library sidebar left | StepGridCard centre | controls right). On mobile: hidden library (slide-in overlay), StepGridCard vertically centered in remaining viewport space, controls moved to a unified fixed-bottom drawer matching the fingerpick page pattern.
 
 **Pattern data model** (`src/lib/strumPatterns.ts`):
 
@@ -303,6 +303,10 @@ StepValue semantics:
 - `setStrumEnabled` and `setMetronomeEnabled` stop and restart playback so the ref update propagates immediately.
 - `sixteenth` tick mode with a 2-cell beat interleaves real cells with empty subdivisions (alternating via `nextPlatEmptyCellRef`).
 - BPM range: 40–220. Tap tempo uses up to 8 recent taps, resets after 2 seconds of inactivity. The BPM input is a fully custom `div`-based slider (`src/components/strum/BpmSlider.tsx`) — the native `<input type="range">` was replaced to support genre tick marks. 9 ticks at fixed BPM values (60 / 75 / 90 / 100 / 110 / 120 / 130 / 140 / 160) are rendered as dot markers on the track; hovering a segment between ticks shows a genre label tooltip (Slow Practice / Folk / Ballad / Pop Blues / Funk / Pop Rock / Rock / Jazz Hard Rock / Fast Rock). Tick dots change colour depending on whether they fall inside or outside the filled portion. Clicking a tick jumps BPM directly. Drag-pause-then-resume and onPointerUp blur behaviours are preserved.
+- **BPM slider snap:** during pointer drag, raw BPM value snaps to the nearest tick (`SNAP_THRESHOLD = 4 BPM`) with a `snapLocked` ref preventing jitter at the boundary. Keyboard arrow keys bypass snap. Tick dot color: denim blue for ticks ≤ current BPM, gray for ticks > current BPM.
+- **Mobile fixed-bottom drawer (below `md` breakpoint):** two-layer structure mirroring fingerpick page. Main bar (always visible): BPM tap popover, Loop/Once segmented pill, Metronome toggle, Stop + Play/Pause. Collapsible panel: Tap Tempo, BPM horizontal slider, Strum volume, Accent Beat 1, Metronome volume, Loop Gap pills. Hide-on-scroll behaviour with `controlsVisibleRef` pattern. `touch-action: none` + `setPointerCapture` on drag handle suppresses pull-to-refresh.
+
+**Chord picker (`ChordPickerModal`):** Two-phase modal. Phase 1: piano keyboard root selector (12 keys) + category grid (`CHORD_SUFFIX_CATEGORIES`, 7 categories with example suffix helper text). Phase 2 triggers when both selections are made — desktop expands horizontally (voicing panel to the right, width transition); mobile expands vertically (voicing panel below, `max-h-[80dvh]` + `overflow-y-auto` + `overscroll-contain` + `touch-pan-y` for scroll isolation). Voicing panel: horizontal scrollable `ChordDiagramSVG` compact cards, ~1.5 cards visible. Confirmed chord voicing → `chordVoicingToMidi` → dynamic MIDI pitches passed to `useAudioEngine` replacing hardcoded `STRUM_PITCHES`. Falls back to C major when no chord selected. Voicings fetched client-side via browser Supabase client.
 
 **Custom pattern sync** (`src/components/strum/useStrumPatterns.ts`):
 

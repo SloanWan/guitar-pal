@@ -275,3 +275,125 @@ silent data loss.
 - "How would you handle a TAB symbol the AI recognizes but your schema doesn't support yet?"
 - "Why not build the VexFlow rendering at the same time?"
 - "How does jsonb affect your ability to query or validate data at the database level?"
+
+---
+
+## Issue #83 + #91 — Strum Page Mobile Redesign & Chord Picker Modal
+
+### What was built
+Redesigned the strum page mobile UI to match the fingerpick page's fixed-bottom drawer pattern, and added a chord picker modal allowing users to select any chord from the library and hear it played with the current strum pattern.
+
+### Technical highlights
+
+**Fixed-bottom drawer (mobile):**
+- Two-layer structure: persistent main bar (BPM tap popover, Loop/Once pill, Metronome toggle, Play/Stop) + collapsible panel (Tap Tempo, BPM slider, volumes, Accent, Loop Gap)
+- max-height CSS transition with cubic-bezier(0.32, 0.72, 0, 1) for smooth panel animation
+- controlsVisibleRef pattern mirrors state for use inside scroll listener closure — avoids stale closure issues
+- Hide-on-scroll: translateY(100%) on scroll down, restored on scroll up or StepGridCard tap
+- touch-action: none + setPointerCapture on drag handle suppresses Chrome pull-to-refresh
+- navigator.vibrate?.(10) haptic feedback on Play/Pause toggle
+
+**BPM slider improvements:**
+- Tick dot color: denim blue for ticks ≤ current BPM, lighter gray for ticks > current BPM — visual filled-track metaphor without a native range input
+- Magnetic snap-to-tick: during pointer drag, if raw BPM value is within SNAP_THRESHOLD=4 of any tick, snaps to that tick. snapLocked ref prevents jitter at snap boundary — only releases when raw value diverges by > SNAP_THRESHOLD. Keyboard arrow keys bypass snap entirely.
+
+**ChordPickerModal:**
+- Two-phase UI: Phase 1 shows piano keyboard root selector (12 keys, black/white layout, denim highlight on selected) + chord category grid (7 categories with example suffix helper text). Phase 2 triggers when both selections are made.
+- Desktop Phase 2: voicing panel expands horizontally to the right via width transition. Modal width grows, left side stays fixed.
+- Mobile Phase 2: voicing panel expands vertically below category grid. max-h-[80dvh] + overflow-y-auto + overscroll-contain + touch-pan-y ensures native scroll isolation — background page does not scroll when user scrolls inside modal.
+- Auto-scroll to voicing panel on Phase 2 trigger via scrollIntoView with 100ms delay to allow DOM render.
+- Voicing panel: horizontal scrollable row showing ~1.5 cards in view, selected voicing gets border-denim + shadow-md, each card has Play button with hover:bg-denim-dark + hover:-translate-y-0.5 micro-interaction.
+- Dynamic MIDI pitches: confirmed chord voicing → chordVoicingToMidi → passed to useAudioEngine, replacing hardcoded C major STRUM_PITCHES. Falls back to C major when no chord selected.
+- Fetches voicings client-side via browser Supabase client — does not call "use server" functions from client component.
+
+### Rejected approaches
+- **Pattern library floating button overlap fix via z-index**: too fragile, root cause is layout not stacking order → solved by repositioning StepGridCard to vertically centered in remaining viewport space
+- **Global min-width for narrow screens**: sub-375px edge case not worth the mobile UX tradeoff
+- **onTouchMove stopPropagation alone for scroll isolation**: insufficient in Chrome devtools simulator; touch-action: pan-y at CSS level is the correct primitive — tells browser natively that vertical touch drag should scroll this element
+
+### Product perspective
+- Aligning strum and fingerpick mobile UI patterns reduces cognitive switching cost for users moving between pages
+- Chord picker unlocks the core learning loop: user picks a chord progression concept → hears it with real guitar strum timbre → practices it. Previously locked to C major.
+- Magnetic BPM snap reduces friction when targeting common practice tempos (60/90/120 BPM are the most pedagogically useful)
+- Modal scroll isolation is a subtle but important mobile UX detail — broken scroll containment is one of the most common complaints in web apps on iOS
+
+### One-liner for interviews
+"We redesigned the strum page mobile UI with a fixed-bottom drawer matching our fingerpick page pattern, and added a chord picker with a piano keyboard UI, voicing selection, and dynamic audio — so users can finally hear their strum patterns with a real chord instead of a hardcoded C major."
+
+### Follow-up questions to expect
+- How does the magnetic BPM snap avoid jitter at the boundary? (snapLocked ref — only releases when raw value diverges by > threshold)
+- Why touch-action: pan-y instead of just stopPropagation? (CSS-level hint to browser vs JS event interception — browser makes scroll decision before JS fires)
+- How does chord selection wire into the audio engine? (chordVoicingToMidi → dynamic pitches prop → useAudioEngine replaces STRUM_PITCHES)
+- Why fetch voicings client-side instead of using the server action? (server actions use "use server" and cannot be called from client components directly in this architecture)
+
+---
+
+## Issue #87 — Fingerpick Pattern Library Panel
+
+**Shipped:** Preset selection, favourites (localStorage guest + Supabase logged-in + merge-on-login), tabbed collapsible sidebar, cursor reset on pattern switch.
+
+**Technical decisions:**
+- `useFingerpickPatterns.ts` mirrors `useStrumPatterns.ts` exactly — same merge-on-login pattern, same localStorage key convention, same Supabase table shape (`user_favourite_fingerpick_patterns`: composite PK on `user_id` + `pattern_id`, RLS-protected)
+- Favourites store ID strings only (not pattern content) — preset data lives in the compiled bundle, so localStorage footprint is negligible even when custom patterns are added later
+- Hook API designed with explicit TODO extension point for custom patterns; storage logic intentionally not implemented until the create-flow issue
+- Cursor reset on pattern switch reuses the existing `cursorResetTick` mechanism (incremented on Stop) rather than adding new state — one-line fix by wrapping `setSelectedPattern` to also call `stop()` and increment the tick
+- Sidebar structure (All/Favourites tabs, My Patterns + Presets collapsible sections, sign-in nudge) mirrors strum page exactly for UX consistency; Favourites tab shows both sections filtered to favourited items, with empty states per section
+
+**Preset patterns added:**
+- Travis Picking (12 measures, 3 progressive phases: alternating bass → melody + hammer-on → pinch)
+- Arpeggio (12 measures: p-i-m-a forward → reverse → classical 8-note p-i-m-i-a-i-m-i)
+- Waltz (12 measures, 3/4: basic bass-chord → hammer-on/pull-off ornaments → dotted-quarter subdivision)
+- Celtic Fingerstyle (8 measures, dotted-eighth + sixteenth mixed rhythm, hammer-on/pull-off/slide-up/ghost notes)
+
+**Blocked dependency resolved:** #87 was blocked on #88 (type system expansion) because realistic preset patterns needed the new Technique and Duration values. Landed immediately after #88 merged.
+
+**Scope boundary held:** Custom pattern localStorage/Supabase storage explicitly deferred to create-flow issue. `description?: string` added to `FingerpickPattern` type to support library card display.
+
+**Interview one-liner:** Designed a full pattern library with guest/auth favourites sync, made the deliberate call to scope out custom pattern storage, and designed the hook API with a clean extension point so the create-flow issue requires no refactor.
+
+**Possible follow-up questions:**
+- Why mirror `useStrumPatterns` instead of abstracting a shared hook? (YAGNI — two instances don't justify abstraction yet; the patterns differ enough in data shape that a generic hook would be over-engineered)
+- How does merge-on-login work? (Read localStorage IDs → upsert to Supabase → clear localStorage → Sonner toast if any migrated)
+- Why store only IDs in localStorage and not full pattern data? (Preset content is in the bundle; custom patterns will be stored separately in their own key when the create-flow lands)
+
+---
+
+## Issue #88 — TAB Data Model, Rendering & Dev Page
+
+**What was built:**
+Full expansion of the TAB type system and VexFlow rendering pipeline to cover professional-grade guitar TAB notation, plus a bilingual dev page for visual and audio verification.
+
+**Scope:**
+- 17 new Technique values, 4 new Duration values, 8 new StringFret fields, `isGraceNote` on BeatSlot
+- VexFlow modifiers: staccato, accent, pick stroke, tremolo picking, vibrato, tapping ("T"), trill ("tr~~~"), GraceTabNote
+- Technique-aware audio gain ladder in `useFingerpickAudioEngine`
+- Low-pass filter (2000Hz) for hammer-on/pull-off/trill to approximate legato attack without pick transient
+- `/dev/tab-notation` page: per-section Play buttons, bilingual EN/ZH descriptions, status badges (✅/⚡/⏳), language toggle, stress-test section
+- 427 tests passing at close
+
+**Key PM decision:**
+Data model expansion was sequenced before the AI TAB recognition epic. The type system is the schema contract between AI output and VexFlow rendering — gaps here cause silent data loss at recognition time, not loud errors. Doing this first eliminates that entire class of bugs.
+
+**Deliberately deferred with tracked issues:**
+- Bend family rendering + audio → Issue B2
+- Slide audio → dedicated research issue (sample-based pitch glide fundamentally incompatible with pluck samples; linear and exponential ramp both tried and reverted)
+- Hammer-on/pull-off/trill/tapping audio refinement → dedicated issue (low-pass filter approximation insufficient; needs better sample or envelope research)
+- Grace note rendering + audio → dedicated issue (GraceTabNote sizing unsolved; voice stealing causes silence)
+
+**Key technical decisions:**
+- `bendTarget?: number` in semitones (not string labels) — machine-readable for future audio pitch-shifting
+- Grace note slots use fixed 1/32-beat scheduling duration, do not advance `currentTime` — preserves barline alignment
+- Low-pass filter nodes created per-note, not tracked in refs — GC handles cleanup via `source.onended`
+- Vibrato modifier wrapped in try-catch — VexFlow Vibrato constructor requires canvas context, throws in jsdom; 2 tests skipped with documented reason
+- Slide audio removed after two implementation attempts (linear ramp, exponential ramp) both produced mechanical artifacts; root cause is pick attack transient in sample that cannot be removed post-hoc
+
+**Interview talking points:**
+- Schema-first approach: why data model before AI feature
+- Build vs. buy: numeric `bendTarget` for forward audio compatibility
+- Honest status tracking: dev page status badges reflect real implementation state, not aspirational state
+- When to stop: slide audio and legato audio reverted rather than shipped in broken state
+
+**Potential interview follow-up questions:**
+- "How would you handle a TAB symbol the AI recognizes but your schema doesn't support yet?"
+- "Why did you revert the slide audio instead of shipping the approximation?"
+- "How does the low-pass filter approach differ from having a dedicated legato sample?"

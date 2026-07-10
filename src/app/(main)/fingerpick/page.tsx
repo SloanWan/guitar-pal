@@ -99,8 +99,16 @@ const CURSOR_LAMBDA = 20;
 
 export default function FingerpickPage() {
 	const { user, loading } = useUser();
-	const { patterns, selectedPattern, setSelectedPattern, favouriteIds, toggleFavourite } =
-		useFingerpickPatterns(user, loading);
+	const {
+		patterns,
+		customPatterns,
+		selectedPattern,
+		setSelectedPattern,
+		favouriteIds,
+		toggleFavourite,
+		saveCustomPattern,
+		deleteCustomPattern,
+	} = useFingerpickPatterns(user, loading);
 
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
@@ -973,10 +981,13 @@ export default function FingerpickPage() {
 				>
 					<FingerpickPatternLibrary
 						patterns={patterns}
+						customPatterns={customPatterns}
 						selectedPattern={selectedPattern}
 						setSelectedPattern={handleSelectPattern}
 						favouriteIds={favouriteIds}
 						toggleFavourite={toggleFavourite}
+						onSaveCustom={saveCustomPattern}
+						onDeleteCustom={deleteCustomPattern}
 						onClose={() => setShowLibrary(false)}
 						user={user}
 					/>

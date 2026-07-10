@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import { createClient } from "@/lib/supabase";
+import {
+	loadUserFingerpickPatterns,
+	saveUserFingerpickPattern,
+	deleteUserFingerpickPattern,
+	mergeLocalFingerpickPatternsToSupabase,
+} from "@/lib/fingerpickPatternSync";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 
@@ -11,10 +17,11 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 	const [selectedPattern, setSelectedPattern] = useState<FingerpickPattern>(
 		PRESET_FINGERPICK_PATTERNS[0],
 	);
+	const [customPatterns, setCustomPatterns] = useState<FingerpickPattern[]>([]);
 	const [favouriteIds, setFavouriteIds] = useState<string[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 
-	// Logged-out path: read favourites from localStorage.
+	// Logged-out path: read favourites and custom patterns from localStorage.
 	useEffect(() => {
 		if (loading || user) return;
 		let localFavIds: string[] = [];
@@ -24,13 +31,19 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 		} catch {
 			// ignore malformed data
 		}
-		queueMicrotask(() => {
-			setFavouriteIds(localFavIds);
-			setIsLoading(false);
-		});
+		const supabase = createClient();
+		loadUserFingerpickPatterns(supabase, null)
+			.then((patterns) => {
+				setCustomPatterns(patterns);
+			})
+			.catch((e) => console.error(e))
+			.finally(() => {
+				setFavouriteIds(localFavIds);
+				setIsLoading(false);
+			});
 	}, [user, loading]);
 
-	// Logged-in path: merge any localStorage favourites into Supabase, then load.
+	// Logged-in path: merge any localStorage data into Supabase, then load.
 	useEffect(() => {
 		if (!user) return;
 		const currentUser = user;
@@ -39,6 +52,7 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 			const supabase = createClient();
 			let merged = false;
 
+			// Merge favourites.
 			const savedFavs = localStorage.getItem(LOCAL_STORAGE_KEY);
 			if (savedFavs) {
 				try {
@@ -63,6 +77,24 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 				}
 			}
 
+			// Merge custom patterns.
+			try {
+				const migratedCount = await mergeLocalFingerpickPatternsToSupabase(
+					supabase,
+					currentUser,
+				);
+				if (migratedCount > 0) merged = true;
+			} catch (e) {
+				console.error(e);
+			}
+
+			try {
+				const patterns = await loadUserFingerpickPatterns(supabase, currentUser);
+				setCustomPatterns(patterns);
+			} catch (e) {
+				console.error(e);
+			}
+
 			const { data: favs } = await supabase
 				.from("user_favourite_fingerpick_patterns")
 				.select("pattern_id")
@@ -71,11 +103,12 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 			setIsLoading(false);
 
 			if (merged) {
-				toast("Your fingerpick favourites have been synced to your account.");
+				toast("Your fingerpick patterns have been synced to your account.");
 			}
 		}
 
 		mergeAndReload();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [user?.id]);
 
 	function toggleFavourite(patternId: string) {
@@ -111,17 +144,49 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 		}
 	}
 
-	// TODO: Add custom pattern storage here in a future issue.
-	// Custom patterns would follow the same localStorage/Supabase sync pattern
-	// as useStrumPatterns, using a `user_fingerpick_patterns` table.
-	const patterns = PRESET_FINGERPICK_PATTERNS;
+	// Insert or update a custom pattern (create + edit both route here).
+	function saveCustomPattern(pattern: FingerpickPattern) {
+		setCustomPatterns((prev) => {
+			const idx = prev.findIndex((p) => p.id === pattern.id);
+			if (idx === -1) return [...prev, pattern];
+			return prev.map((p) => (p.id === pattern.id ? pattern : p));
+		});
+		if (selectedPattern.id === pattern.id) setSelectedPattern(pattern);
+		(async () => {
+			try {
+				const supabase = createClient();
+				await saveUserFingerpickPattern(supabase, user, pattern);
+			} catch (e) {
+				console.error(e);
+			}
+		})();
+	}
+
+	function deleteCustomPattern(patternId: string) {
+		setCustomPatterns((prev) => prev.filter((p) => p.id !== patternId));
+		if (selectedPattern.id === patternId) setSelectedPattern(PRESET_FINGERPICK_PATTERNS[0]);
+		(async () => {
+			try {
+				const supabase = createClient();
+				await deleteUserFingerpickPattern(supabase, user, patternId);
+			} catch (e) {
+				console.error(e);
+			}
+		})();
+	}
+
+	// Presets plus any user-created patterns; presets stay first.
+	const patterns = [...PRESET_FINGERPICK_PATTERNS, ...customPatterns];
 
 	return {
 		patterns,
+		customPatterns,
 		selectedPattern,
 		setSelectedPattern,
 		favouriteIds,
 		toggleFavourite,
+		saveCustomPattern,
+		deleteCustomPattern,
 		isLoading,
 	};
 }

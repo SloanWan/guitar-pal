@@ -281,7 +281,20 @@ export function useFingerpickAudioEngine() {
 		const decayTc = Math.max(effectiveDuration * DECAY_TC_RATIO, MIN_DECAY_TC_S);
 		gainNode.gain.setTargetAtTime(0, when, decayTc);
 
-		source.connect(gainNode).connect(target);
+		const isLegato =
+			event.technique === "hammer-on" ||
+			event.technique === "pull-off" ||
+			event.technique === "trill";
+
+		if (isLegato) {
+			const filter = ctx.createBiquadFilter();
+			filter.type = "lowpass";
+			filter.frequency.value = 2000;
+			filter.Q.value = 0.7;
+			source.connect(filter).connect(gainNode).connect(target);
+		} else {
+			source.connect(gainNode).connect(target);
+		}
 		source.start(when);
 		source.stop(when + effectiveDuration + SOURCE_STOP_BUFFER_S);
 

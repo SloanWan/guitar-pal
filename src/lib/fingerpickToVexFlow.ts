@@ -102,6 +102,8 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		let slotTremolo: "8th" | "16th" | "32nd" | undefined;
 		let slotVibrato = false;
 		let slotVibratoWide = false;
+		let slotTapping = false;
+		let slotTrill = false;
 		slot.strings.forEach((sf) => {
 			if (sf.fret === null && !sf.muted) return;
 			if (sf.staccato) slotStaccato = true;
@@ -110,6 +112,8 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			if (!slotTremolo && sf.tremoloPickingSpeed) slotTremolo = sf.tremoloPickingSpeed;
 			if (sf.technique === "vibrato") slotVibrato = true;
 			if (sf.technique === "vibrato-wide") slotVibratoWide = true;
+			if (sf.technique === "tapping") slotTapping = true;
+			if (sf.technique === "trill") slotTrill = true;
 		});
 		if (slotStaccato) {
 			tabNote.addModifier(
@@ -143,6 +147,20 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			} catch {
 				// No canvas context (jsdom / SSR) — skip modifier; renders correctly in browser.
 			}
+		}
+		if (slotTapping) {
+			tabNote.addModifier(
+				new Annotation("T")
+					.setVerticalJustification(AnnotationVerticalJustify.TOP)
+					.setFont("Geist Mono, monospace", 10),
+			);
+		}
+		if (slotTrill) {
+			tabNote.addModifier(
+				new Annotation("tr~~~")
+					.setVerticalJustification(AnnotationVerticalJustify.TOP)
+					.setFont("Geist Mono, monospace", 10),
+			);
 		}
 
 		const noteIdx = notes.length;

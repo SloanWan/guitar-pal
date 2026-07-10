@@ -42,6 +42,7 @@ const VibW = (fret: number): StringFret => ({
 	fret, technique: "vibrato-wide", tied: false, muted: false,
 });
 const Tap = (fret: number): StringFret => ({ fret, technique: "tapping", tied: false, muted: false });
+const Trl = (fret: number): StringFret => ({ fret, technique: "trill", tied: false, muted: false });
 
 // ── Measure definitions ───────────────────────────────────────────────────────
 // Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
@@ -106,6 +107,25 @@ const HAMMER_PULL_MEASURE: Measure = {
 		{ id: "hp2", duration: "quarter", strings: [S(), S(), S(), Hn(2), S(), S()] },
 		{ id: "hp3", duration: "quarter", strings: [S(), S(), S(), N(2), S(), S()] },
 		{ id: "hp4", duration: "quarter", strings: [S(), S(), S(), Po(0), S(), S()] },
+	],
+};
+
+const TAPPING_MEASURE: Measure = {
+	id: "tapping",
+	slots: [
+		{ id: "tap1", duration: "quarter", strings: [Tap(12), S(), S(), S(), S(), S()] },
+		{ id: "tap2", duration: "quarter", strings: [S(), Tap(14), S(), S(), S(), S()] },
+		{ id: "tap3", duration: "quarter", strings: [Tap(12), S(), S(), S(), S(), S()] },
+		{ id: "tap4", duration: "quarter", strings: [S(), Tap(10), S(), S(), S(), S()] },
+	],
+};
+
+const TRILL_MEASURE: Measure = {
+	id: "trill",
+	slots: [
+		{ id: "tr1", duration: "quarter", strings: [N(5), S(), S(), S(), S(), S()] },
+		{ id: "tr2", duration: "quarter", strings: [Trl(7), S(), S(), S(), S(), S()] },
+		{ id: "tr3", duration: "half", strings: [N(5), S(), S(), S(), S(), S()] },
 	],
 };
 
@@ -381,7 +401,9 @@ const GROUPS: { label: string; measures: Measure[] }[] = [
 	{ label: "Pick Stroke: Down (⊓) and Up (V) alternating", measures: [PICK_STROKE_MEASURE] },
 	{ label: "Tremolo Picking: 8th (1 slash) · 16th (2) · 32nd (3) · plain", measures: [TREMOLO_MEASURE] },
 	{ label: "Vibrato (half 1) and Vibrato-Wide (half 2)", measures: [VIBRATO_MEASURE] },
-	{ label: "Techniques regression: Hammer-On, Pull-Off", measures: [HAMMER_PULL_MEASURE] },
+	{ label: "Techniques: Hammer-On, Pull-Off", measures: [HAMMER_PULL_MEASURE] },
+	{ label: "Techniques: Tapping", measures: [TAPPING_MEASURE] },
+	{ label: "Techniques: Trill", measures: [TRILL_MEASURE] },
 	{ label: "Slide", measures: SLIDE_MEASURES },
 	{ label: "Duration: whole", measures: [WHOLE_DUR_MEASURE] },
 	{ label: "Duration: half", measures: [HALF_DUR_MEASURE] },
@@ -434,10 +456,20 @@ const GROUP_METAS: Record<string, GroupMeta> = {
 		en: "Vibrato is a repeated small pitch fluctuation that makes a note sing. Wide vibrato is an exaggerated version. Audio simulation is planned for a future issue.",
 		zh: "颤音是对音符音高进行小幅反复波动，让音符更有歌唱感。大幅颤音是其夸张版本。音频模拟计划在后续 issue 中实现。",
 	},
-	"Techniques regression: Hammer-On, Pull-Off": {
-		status: "✅ Fully implemented",
-		en: "Hammer-on: fret a note without picking — produces a softer attack. Pull-off: pluck the string by lifting a finger. All techniques use reduced gain (×0.5) to simulate the softer legato attack.",
-		zh: "击弦（hammer-on）：不拨弦直接按压琴弦发音，音量更柔。勾弦（pull-off）：通过抬指拨动琴弦。两者均使用 0.5 倍音量模拟连奏的柔和起音。",
+	"Techniques: Hammer-On, Pull-Off": {
+		status: "⚡ Partially implemented — needs further refinement",
+		en: "Hammer-on and pull-off sound without picking. Currently approximated using a low-pass filter (cutoff 2000 Hz) to reduce the pick transient, with gain ×0.5. The result is softer than a normal pluck but does not fully replicate the legato attack. Needs further audio research.",
+		zh: "击弦和勾弦无需拨弦发音。目前用低通滤波器（截止 2000 Hz）降低拨弦瞬态，增益 ×0.5 近似模拟。效果比普通拨弦柔和，但尚未完全还原连奏音色，需进一步优化。",
+	},
+	"Techniques: Tapping": {
+		status: "⚡ Partially implemented — needs further refinement",
+		en: "Tapping uses a picking-hand finger to strike the fretboard. Currently uses the same pluck sample with gain ×0.8 and no filter. The percussive character is approximated but the sample attack does not match real tapping. Needs further audio research.",
+		zh: "点弦用拨弦手手指敲击指板。目前使用相同的拨弦采样，增益 ×0.8，不加滤波。打击感近似但采样起音与真实点弦不符，需进一步优化。",
+	},
+	"Techniques: Trill": {
+		status: "⚡ Partially implemented — needs further refinement",
+		en: "Trill rapidly alternates between two frets using hammer-on and pull-off. Currently uses the same low-pass filter approach as hammer-on. Audio does not simulate the rapid alternation — only the initial note sounds. Needs further audio research.",
+		zh: "颤弦在两个品位间快速交替击弦和勾弦。目前与击弦使用相同的低通滤波近似，音频不模拟快速交替，只发出起始音。需进一步优化。",
 	},
 	"Slide": {
 		status: "⏳ Not yet implemented",

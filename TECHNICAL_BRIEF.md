@@ -62,7 +62,8 @@ src/
 │   ├── dev/
 │   │   ├── audio-diagnostic/page.tsx      # Throwaway: multi-preset pitch audition tool
 │   │   ├── muted-preset-audition/page.tsx # Throwaway: compares muted guitar presets
-│   │   └── strum-preset-audition/page.tsx # Throwaway: compares strum guitar presets
+│   │   ├── strum-preset-audition/page.tsx # Throwaway: compares strum guitar presets
+│   │   └── tab-notation/page.tsx          # TAB notation dev page: all Duration values, all renderable Technique values, StringFret modifiers, stress-test measure; Play buttons (useFingerpickAudioEngine, BPM 80/120), bilingual EN/ZH descriptions, audio status badges (✅/⚡/⏳), language toggle
 │   └── session/
 │       └── [routineId]/page.tsx # Client component: full practice session page
 │
@@ -357,12 +358,12 @@ type StringFret = {
   technique: Technique;
   tied: boolean;
   muted: boolean;
-  bendTarget?: number;          // semitones: full=2, half=1, quarter=0.5
+  bendTarget?: number;
   palmMute?: boolean;
   letRing?: boolean;
   staccato?: boolean;
   accent?: boolean;
-  ghostNote?: boolean;          // bracketed note (7)
+  ghostNote?: boolean;
   tremoloPickingSpeed?: "8th" | "16th" | "32nd";
   pickStroke?: "down" | "up";
 };
@@ -370,7 +371,7 @@ type StringFret = {
 type BeatSlot = {
   id: string;
   duration: Duration;
-  isGraceNote?: boolean;        // fixed 1/32-beat scheduling; does not advance barline
+  isGraceNote?: boolean;
   strings: [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret];
 };
 
@@ -409,6 +410,16 @@ Conversion rules:
   - `slide-up` → `TabSlide.createSlideUp()` (returns a `TabSlide` instance)
   - `slide-down` → `TabSlide.createSlideDown()` (returns a `TabSlide` instance)
   - `tied: true` → `new TabTie(...)` (plain sustain arc)
+
+New modifiers applied per TabNote:
+- staccato → Annotation(".")
+- accent → Annotation(">")
+- pickStroke "down"/"up" → Annotation("⊓"/"V")
+- tremoloPickingSpeed → Tremolo(1/2/3 slashes)
+- vibrato / vibrato-wide → Vibrato() (width 20/40; try-catch for jsdom)
+- technique "tapping" → Annotation("T")
+- technique "trill" → Annotation("tr~~~")
+- isGraceNote slots → GraceTabNote, flushed as GraceNoteGroup onto next TabNote
 
 **Rendering** (`src/components/fingerpick/TabStaveRow.tsx`):
 
@@ -469,6 +480,21 @@ Self-contained hook. Lifecycle: `load()` → `play(pattern, options, startOffset
 - **`getPlaybackProgress()`:** Synchronous getter returning `{ measureIndex, slotIndex, passIndex, elapsed }`. Called from the page's rAF loop without triggering re-renders.
 - **Metronome:** Oscillator-based. 1200 Hz accented / 800 Hz normal / 50 ms duration. Routed through a dedicated `metronomeGainNodeRef` (shared gain node) for live volume control without rescheduling. `handleSetMetronomeEnabled(true)` mid-pass immediately reschedules the remaining beats of the current pass from the current elapsed position. `handleSetMetronomeSubdivision` cancels all pending oscillators and reschedules the current pass at the new density (quarter / eighth / sixteenth).
 - **Note envelope:** Gain decay per note: `setTargetAtTime(0, when, max(duration × 0.8, 0.03 s))`. Technique notes (hammer-on, pull-off, slide) use a reduced gain (`TECHNIQUE_GAIN = 0.5`) to simulate legato dynamics.
+
+Technique-aware gain ladder (applied per ScheduleEvent):
+- ghostNote: true → gain × 0.3
+- hammer-on / pull-off / trill → gain × 0.5 + low-pass filter (2000Hz, Q 0.7)
+- tapping → gain × 0.8
+- accent: true → gain × 1.3
+- staccato: true → noteDuration × 0.2
+
+New Duration values handled in DURATION_BEATS:
+- dotted = 1.5×, triplet = 2/3×, 32nd = 0.5× sixteenth
+- Grace note slots: fixed 1/32 beat, do not advance currentTime
+
+Slide audio: removed pending dedicated research issue.
+Legato technique audio (hammer-on, pull-off, trill, tapping): partially
+implemented, pending dedicated research issue.
 
 **Controls panel** (`src/app/(main)/fingerpick/page.tsx`):
 

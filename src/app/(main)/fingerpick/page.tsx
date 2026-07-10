@@ -28,7 +28,6 @@ import {
 	CirclePlay,
 	CirclePause,
 	CircleStop,
-	X,
 	SquareMenu,
 	Plus,
 	Minus,
@@ -971,23 +970,14 @@ export default function FingerpickPage() {
 						showLibrary ? "translate-x-0" : "-translate-x-full"
 					}`}
 				>
-					<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-slate-200">
-						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-							Pattern Library
-						</h2>
-						<button
-							onClick={() => setShowLibrary(false)}
-							className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-						>
-							<X size={18} />
-						</button>
-					</div>
 					<FingerpickPatternLibrary
 						patterns={patterns}
 						selectedPattern={selectedPattern}
 						setSelectedPattern={handleSelectPattern}
 						favouriteIds={favouriteIds}
 						toggleFavourite={toggleFavourite}
+						onClose={() => setShowLibrary(false)}
+						user={user}
 					/>
 				</div>
 

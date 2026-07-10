@@ -7,6 +7,7 @@ import {
 	Voice,
 	Beam,
 	GraceNoteGroup,
+	GraceTabNote,
 	Annotation,
 	Tremolo,
 	Vibrato,
@@ -287,7 +288,7 @@ describe("fingerpickToVexFlow — new technique values", () => {
 // ─── isGraceNote ──────────────────────────────────────────────────────────────
 
 describe("fingerpickToVexFlow — isGraceNote", () => {
-	it("isGraceNote slot is excluded from notes[] and attaches a GraceNoteGroup to the following TabNote", () => {
+	it("isGraceNote slot is excluded from notes[] and attaches a GraceNoteGroup of GraceTabNotes to the following TabNote", () => {
 		const graceSlot: BeatSlot = {
 			id: "g1",
 			duration: "eighth",
@@ -300,7 +301,9 @@ describe("fingerpickToVexFlow — isGraceNote", () => {
 		expect(notes).toHaveLength(1);
 		expect(notes[0]).toBeInstanceOf(TabNote);
 		const modifiers = (notes[0] as TabNote).getModifiers();
-		expect(modifiers.some((m) => m instanceof GraceNoteGroup)).toBe(true);
+		const group = modifiers.find((m) => m instanceof GraceNoteGroup) as GraceNoteGroup | undefined;
+		expect(group).toBeDefined();
+		expect(group!.getGraceNotes()[0]).toBeInstanceOf(GraceTabNote);
 	});
 });
 

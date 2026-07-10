@@ -6,8 +6,9 @@ import {
 	Tuplet,
 	GhostNote,
 	StemmableNote,
-	GraceNote,
+	GraceTabNote,
 	GraceNoteGroup,
+	Element as VexElement,
 	Annotation,
 	AnnotationVerticalJustify,
 	Tremolo,
@@ -47,7 +48,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	const posIndexMaps: Map<number, number>[] = [];
 	// Maps slot index → notes[] index (null for grace-note slots).
 	const slotNoteIndex: (number | null)[] = [];
-	let pendingGraceNotes: GraceNote[] = [];
+	let pendingGraceNotes: GraceTabNote[] = [];
 
 	for (let slotIdx = 0; slotIdx < measure.slots.length; slotIdx++) {
 		const slot = measure.slots[slotIdx];
@@ -55,7 +56,26 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 
 		if (slot.isGraceNote) {
 			// Collect as a pending modifier; does not produce a standalone Voice tickable.
-			pendingGraceNotes.push(new GraceNote({ keys: ["e/4"], duration: "8", slash: true }));
+			const gracePositions: TabNotePosition[] = [];
+			slot.strings.forEach((sf, stringIdx) => {
+				if (sf.fret === null && !sf.muted) return;
+				const fret: number | string = sf.muted ? "x" : (sf.fret ?? 0);
+				gracePositions.push({ str: stringIdx + 1, fret });
+			});
+			if (gracePositions.length > 0) {
+				const gtn = new GraceTabNote({ positions: gracePositions, duration: "8" });
+				// GraceTabNote.fontScale = 2/3 exists in VexFlow metrics but
+				// TabNote.drawPositions() renders fret text via per-position Element
+				// objects typed as 'TabNote.text' — fontScale is never applied there.
+				// Scale each fret element's font manually to match the 2/3 intent.
+				// GraceTabNote has no stem, so there is no acciaccatura slash to add;
+				// GraceNoteGroup's showSlur param handles the optional tie arc only.
+				type GtnPrivate = { fretElement: VexElement[]; width: number };
+				const priv = gtn as unknown as GtnPrivate;
+				priv.fretElement.forEach((el) => el.setFontSize(6));
+				priv.width = priv.fretElement.reduce((max, el) => Math.max(max, el.getWidth()), 0);
+				pendingGraceNotes.push(gtn);
+			}
 			slotNoteIndex.push(null);
 			continue;
 		}

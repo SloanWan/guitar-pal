@@ -299,15 +299,22 @@ export function useFingerpickAudioEngine() {
 		source.stop(when + effectiveDuration + SOURCE_STOP_BUFFER_S);
 
 		allSourcesRef.current.add(source);
-		const voice: ActiveVoice = { gainNode, source };
-		perStringVoicesRef.current.set(event.stringIndex, voice);
-
-		source.onended = () => {
-			allSourcesRef.current.delete(source);
-			if (perStringVoicesRef.current.get(event.stringIndex) === voice) {
-				perStringVoicesRef.current.delete(event.stringIndex);
-			}
-		};
+		// Grace notes (very short duration) are not registered in perStringVoicesRef so the
+		// following note on the same string does not steal and immediately silence them.
+		if (event.duration >= 0.1) {
+			const voice: ActiveVoice = { gainNode, source };
+			perStringVoicesRef.current.set(event.stringIndex, voice);
+			source.onended = () => {
+				allSourcesRef.current.delete(source);
+				if (perStringVoicesRef.current.get(event.stringIndex) === voice) {
+					perStringVoicesRef.current.delete(event.stringIndex);
+				}
+			};
+		} else {
+			source.onended = () => {
+				allSourcesRef.current.delete(source);
+			};
+		}
 	}
 
 	// ─── Metronome scheduling ────────────────────────────────────────────────

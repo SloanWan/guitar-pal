@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 
+const SNAP_THRESHOLD = 4;
+
 const BPM_TICKS = [
 	{ bpm: 60, label: "Slow Practice" },
 	{ bpm: 75, label: "Folk" },
@@ -38,6 +40,7 @@ export default function BpmSlider({
 	const wasPlayingRef = useRef(false);
 	const dragBpmRef = useRef(bpm);
 	const isDraggingRef = useRef(false);
+	const snapLockedRef = useRef<number | null>(null);
 	const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
 
 	const toPercent = (value: number) => ((value - min) / (max - min)) * 100;
@@ -75,14 +78,35 @@ export default function BpmSlider({
 		wasPlayingRef.current = isPlaying;
 		if (isPlaying) stop();
 		dragBpmRef.current = bpm;
+		snapLockedRef.current = null;
 		setHoveredSegment(null);
 	}
 
 	function handlePointerMove(e: React.PointerEvent<HTMLDivElement>): void {
 		if (!isDraggingRef.current) return;
-		const newBpm = bpmFromPointer(e.clientX);
-		dragBpmRef.current = newBpm;
-		setBpm(newBpm);
+		const rawBpm = bpmFromPointer(e.clientX);
+
+		let snappedBpm = rawBpm;
+		const locked = snapLockedRef.current;
+		if (locked !== null) {
+			if (Math.abs(rawBpm - locked) > SNAP_THRESHOLD) {
+				snapLockedRef.current = null;
+			} else {
+				snappedBpm = locked;
+			}
+		}
+		if (snapLockedRef.current === null) {
+			const nearestTick = BPM_TICKS.find(
+				(t) => Math.abs(rawBpm - t.bpm) <= SNAP_THRESHOLD
+			);
+			if (nearestTick) {
+				snapLockedRef.current = nearestTick.bpm;
+				snappedBpm = nearestTick.bpm;
+			}
+		}
+
+		dragBpmRef.current = snappedBpm;
+		setBpm(snappedBpm);
 	}
 
 	function handlePointerUp(): void {

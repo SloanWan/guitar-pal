@@ -528,12 +528,12 @@ export default function StrumPage() {
 					/>
 				)}
 
-				{/* Center — StepGrid; pb-20 clears the fixed bottom drawer on mobile */}
+				{/* Center — StepGrid; on mobile occupies exactly the space between navbar and drawer */}
 				<div
-					className="md:flex-1 flex items-center justify-center px-4 md:px-8 pt-6 pb-24 md:py-0 md:pb-0 md:overflow-hidden"
+					className="h-[calc(100dvh-3.5rem-3.5rem)] md:h-auto md:flex-1 flex items-center justify-center px-4 md:px-8 md:py-0 md:overflow-hidden"
 					onClick={restoreControls}
 				>
-					<div className="relative w-full max-w-160">
+					<div className="w-full max-w-160">
 						{selectedPattern ? (
 							<StepGridCard
 								pattern={selectedPattern}
@@ -545,22 +545,6 @@ export default function StrumPage() {
 							<p className="text-slate-400 text-sm text-center">
 								Choose a pattern from the library
 							</p>
-						)}
-						{!showLibrary && (
-							<button
-								onClick={(e) => {
-									e.stopPropagation();
-									setShowLibrary(true);
-								}}
-								className={`absolute top-2 right-2 z-50 lg:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-300 active:scale-95 ${
-									controlsVisible
-										? "opacity-100 pointer-events-auto"
-										: "opacity-0 pointer-events-none"
-								}`}
-								style={{ backgroundColor: "var(--denim)" }}
-							>
-								<SquareMenu />
-							</button>
 						)}
 					</div>
 				</div>
@@ -812,6 +796,21 @@ export default function StrumPage() {
 				</div>
 			</div>
 
+			{/* Library toggle — fixed below navbar, mobile only */}
+			{!showLibrary && (
+				<button
+					onClick={() => setShowLibrary(true)}
+					className={`fixed top-17 right-4 z-30 md:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-300 active:scale-95 ${
+						controlsVisible
+							? "opacity-100 pointer-events-auto"
+							: "opacity-0 pointer-events-none"
+					}`}
+					style={{ backgroundColor: "var(--denim)" }}
+				>
+					<SquareMenu />
+				</button>
+			)}
+
 			{/* BPM vertical slider popover — fixed so it escapes the drawer's overflow context */}
 			{showBpmPopover && (
 				<div
@@ -887,22 +886,6 @@ export default function StrumPage() {
 					</div>
 
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
-						{/* Mute hint */}
-						{!mutHintDismissed && (
-							<div className="flex items-center justify-center w-full gap-2">
-								<p className="text-xs text-slate-400">
-									No sound? Check your phone&apos;s mute switch.
-								</p>
-								<button
-									onClick={() => setMutHintDismissed(true)}
-									className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
-									aria-label="Dismiss hint"
-								>
-									<X size={14} />
-								</button>
-							</div>
-						)}
-
 						{/* Tap Tempo */}
 						<Button
 							onClick={handleTapTempo}
@@ -1049,6 +1032,22 @@ export default function StrumPage() {
 						</div>
 					</div>
 				</div>
+
+				{/* Mute hint — above the bottom bar, covered when the panel expands */}
+				{!mutHintDismissed && (
+					<div className="flex items-center justify-center gap-2 px-4 py-1.5 border-t border-slate-100">
+						<p className="text-xs text-slate-400">
+							No sound? Check your phone&apos;s mute switch.
+						</p>
+						<button
+							onClick={() => setMutHintDismissed(true)}
+							className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
+							aria-label="Dismiss hint"
+						>
+							<X size={14} />
+						</button>
+					</div>
+				)}
 
 				<div className="border-t border-slate-200" />
 

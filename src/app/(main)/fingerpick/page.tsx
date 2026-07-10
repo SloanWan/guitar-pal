@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { FingerpickPattern, StringFret, Measure } from "@/lib/fingerpickTypes";
+import { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
+import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
+import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
+import { useUser } from "@/hooks/useUser";
 import {
 	fingerpickPatternToScheduleEvents,
 	findSlotStartTime,
@@ -25,7 +28,6 @@ import {
 	CirclePlay,
 	CirclePause,
 	CircleStop,
-	X,
 	SquareMenu,
 	Plus,
 	Minus,
@@ -33,250 +35,6 @@ import {
 	Metronome,
 } from "lucide-react";
 
-// ── StringFret factory helpers ──────────────────────────────────────────────
-// Reduce the verbosity of the required { fret, technique, tied, muted } shape.
-const S = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
-const N = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false });
-const Hn = (fret: number): StringFret => ({
-	fret,
-	technique: "hammer-on",
-	tied: false,
-	muted: false,
-});
-const Po = (fret: number): StringFret => ({
-	fret,
-	technique: "pull-off",
-	tied: false,
-	muted: false,
-});
-const Su = (fret: number): StringFret => ({
-	fret,
-	technique: "slide-up",
-	tied: false,
-	muted: false,
-});
-const Sd = (fret: number): StringFret => ({
-	fret,
-	technique: "slide-down",
-	tied: false,
-	muted: false,
-});
-const Ti = (fret: number): StringFret => ({ fret, technique: null, tied: true, muted: false });
-const Mx = (): StringFret => ({ fret: null, technique: null, tied: false, muted: true });
-
-// ── Preset pattern ─────────────────────────────────────────────────────────
-// Exercises every supported technique and all five duration values in one pattern.
-//
-// m1 — quarter notes: normal frets + muted ("x") note
-// m2 — eighth notes + beams: hammer-on (h) and pull-off (p) on D string
-// m3 — quarter notes: slide-up (/), tied arc, slide-down (\) on A string
-// m4 — half + quarter rest + four sixteenth notes on high-e (exercises half, rest, sixteenth)
-// m5 — single whole note on G string (exercises whole)
-//
-// Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
-const PRESET_FINGERPICK_PATTERN: FingerpickPattern = {
-	id: "technique-showcase",
-	name: "Technique Showcase",
-	bpm: 80,
-	timeSignature: [4, 4],
-	measures: [
-		// ── m1: quarter notes — normal frets, muted note ────────────────
-		{
-			id: "m1",
-			slots: [
-				{ id: "s01", duration: "quarter", strings: [S(), S(), S(), S(), S(), N(5)] },
-				{ id: "s02", duration: "quarter", strings: [S(), S(), S(), S(), S(), Mx()] },
-				{ id: "s03", duration: "quarter", strings: [S(), S(), S(), S(), N(0), S()] },
-				{ id: "s04", duration: "quarter", strings: [S(), S(), S(), S(), N(2), S()] },
-			],
-		},
-
-		// ── m2: eighth notes — beams, hammer-on, pull-off on D string ────
-		{
-			id: "m2",
-			slots: [
-				{ id: "s05", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
-				{ id: "s06", duration: "eighth", strings: [S(), S(), S(), Hn(2), S(), S()] },
-				{ id: "s07", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
-				{ id: "s08", duration: "eighth", strings: [S(), S(), S(), Po(0), S(), S()] },
-				{ id: "s09", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
-				{ id: "s10", duration: "eighth", strings: [S(), S(), S(), Hn(2), S(), S()] },
-				{ id: "s11", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
-				{ id: "s12", duration: "eighth", strings: [S(), S(), S(), Po(0), S(), S()] },
-			],
-		},
-
-		// ── m3: quarter notes — slide-up, tied arc, slide-down on A ──────
-		{
-			id: "m3",
-			slots: [
-				{ id: "s13", duration: "quarter", strings: [S(), S(), S(), S(), N(0), S()] },
-				{ id: "s14", duration: "quarter", strings: [S(), S(), S(), S(), Su(5), S()] },
-				{ id: "s15", duration: "quarter", strings: [S(), S(), S(), S(), Ti(5), S()] },
-				{ id: "s16", duration: "quarter", strings: [S(), S(), S(), S(), Sd(0), S()] },
-			],
-		},
-
-		// ── m4: half + rest + 4 sixteenth notes (2 + 1 + 1 = 4 beats) ───
-		{
-			id: "m4",
-			slots: [
-				{ id: "s17", duration: "half", strings: [N(5), S(), S(), S(), S(), S()] },
-				{ id: "s18", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
-				{ id: "s19", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
-				{ id: "s20", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
-				{ id: "s21", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
-				{ id: "s22", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
-			],
-		},
-
-		// ── m5: whole note — G string open (4 beats) ─────────────────────
-		{
-			id: "m5",
-			slots: [{ id: "s23", duration: "whole", strings: [S(), S(), N(0), S(), S(), S()] }],
-		},
-
-		// ── m6: rest + 4 sixteenths + triplet + 4 sixteenths ─────────────
-		// beat 1: quarter rest
-		// beat 2: four sixteenth notes on high-e
-		// beat 3: eighth-note triplet on B string (3 notes in 1 beat)
-		// beat 4: four sixteenth notes on G string
-		{
-			id: "m6",
-			slots: [
-				{ id: "s24", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
-				{ id: "s25", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
-				{ id: "s26", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
-				{ id: "s27", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
-				{ id: "s28", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
-				{ id: "s29", duration: "eighth-triplet", strings: [S(), N(0), S(), S(), S(), S()] },
-				{ id: "s30", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
-				{ id: "s31", duration: "eighth-triplet", strings: [S(), N(5), S(), S(), S(), S()] },
-				{ id: "s32", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
-				{ id: "s33", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
-				{ id: "s34", duration: "sixteenth", strings: [S(), S(), N(4), S(), S(), S()] },
-				{ id: "s35", duration: "sixteenth", strings: [S(), S(), N(5), S(), S(), S()] },
-			],
-		},
-
-		// ── m7: eighth-note hammer-on / pull-off drill on G string ───────────
-		{
-			id: "m7",
-			slots: [
-				{ id: "s36", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
-				{ id: "s37", duration: "eighth", strings: [S(), S(), Hn(2), S(), S(), S()] },
-				{ id: "s38", duration: "eighth", strings: [S(), S(), N(2), S(), S(), S()] },
-				{ id: "s39", duration: "eighth", strings: [S(), S(), Po(0), S(), S(), S()] },
-				{ id: "s40", duration: "eighth", strings: [S(), S(), N(2), S(), S(), S()] },
-				{ id: "s41", duration: "eighth", strings: [S(), S(), Hn(4), S(), S(), S()] },
-				{ id: "s42", duration: "eighth", strings: [S(), S(), N(4), S(), S(), S()] },
-				{ id: "s43", duration: "eighth", strings: [S(), S(), Po(2), S(), S(), S()] },
-			],
-		},
-
-		// ── m8: slide-up / tied / slide-down on A string (4 quarters) ────────
-		{
-			id: "m8",
-			slots: [
-				{ id: "s44", duration: "quarter", strings: [S(), S(), S(), S(), N(0), S()] },
-				{ id: "s45", duration: "quarter", strings: [S(), S(), S(), S(), Su(5), S()] },
-				{ id: "s46", duration: "quarter", strings: [S(), S(), S(), S(), Ti(5), S()] },
-				{ id: "s47", duration: "quarter", strings: [S(), S(), S(), S(), Sd(2), S()] },
-			],
-		},
-
-		// ── m9: half on E-low + 4 eighths ascending on high-e ────────────────
-		{
-			id: "m9",
-			slots: [
-				{ id: "s48", duration: "half", strings: [S(), S(), S(), S(), S(), N(3)] },
-				{ id: "s49", duration: "eighth", strings: [N(5), S(), S(), S(), S(), S()] },
-				{ id: "s50", duration: "eighth", strings: [N(7), S(), S(), S(), S(), S()] },
-				{ id: "s51", duration: "eighth", strings: [N(8), S(), S(), S(), S(), S()] },
-				{ id: "s52", duration: "eighth", strings: [N(10), S(), S(), S(), S(), S()] },
-			],
-		},
-
-		// ── m10: 16 sixteenth notes — ascending / descending run on high-e ───
-		{
-			id: "m10",
-			slots: [
-				{ id: "s53", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
-				{ id: "s54", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
-				{ id: "s55", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
-				{ id: "s56", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
-				{ id: "s57", duration: "sixteenth", strings: [N(12), S(), S(), S(), S(), S()] },
-				{ id: "s58", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
-				{ id: "s59", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
-				{ id: "s60", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
-				{ id: "s61", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
-				{ id: "s62", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
-				{ id: "s63", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
-				{ id: "s64", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
-				{ id: "s65", duration: "sixteenth", strings: [N(12), S(), S(), S(), S(), S()] },
-				{ id: "s66", duration: "sixteenth", strings: [N(10), S(), S(), S(), S(), S()] },
-				{ id: "s67", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
-				{ id: "s68", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
-			],
-		},
-
-		// ── m11: triplet groove — 4 beats of eighth-triplets on B string ──────
-		{
-			id: "m11",
-			slots: [
-				{ id: "s69", duration: "eighth-triplet", strings: [S(), N(0), S(), S(), S(), S()] },
-				{ id: "s70", duration: "eighth-triplet", strings: [S(), N(1), S(), S(), S(), S()] },
-				{ id: "s71", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
-				{ id: "s72", duration: "eighth-triplet", strings: [S(), N(0), S(), S(), S(), S()] },
-				{ id: "s73", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
-				{ id: "s74", duration: "eighth-triplet", strings: [S(), N(5), S(), S(), S(), S()] },
-				{ id: "s75", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
-				{ id: "s76", duration: "eighth-triplet", strings: [S(), N(5), S(), S(), S(), S()] },
-				{ id: "s77", duration: "eighth-triplet", strings: [S(), N(7), S(), S(), S(), S()] },
-				{ id: "s78", duration: "eighth-triplet", strings: [S(), N(5), S(), S(), S(), S()] },
-				{ id: "s79", duration: "eighth-triplet", strings: [S(), N(3), S(), S(), S(), S()] },
-				{ id: "s80", duration: "eighth-triplet", strings: [S(), N(1), S(), S(), S(), S()] },
-			],
-		},
-
-		// ── m12: multi-string chordal quarters ───────────────────────────────
-		{
-			id: "m12",
-			slots: [
-				{ id: "s81", duration: "quarter", strings: [N(0), S(), N(0), S(), N(0), S()] },
-				{ id: "s82", duration: "quarter", strings: [N(1), S(), N(0), S(), N(2), S()] },
-				{ id: "s83", duration: "quarter", strings: [N(0), S(), N(0), S(), N(0), S()] },
-				{ id: "s84", duration: "quarter", strings: [S(), N(0), S(), N(2), S(), N(3)] },
-			],
-		},
-
-		// ── m13: muted riff on E-low — quarter + quarter + eighth + eighth + quarter ──
-		{
-			id: "m13",
-			slots: [
-				{ id: "s85", duration: "quarter", strings: [S(), S(), S(), S(), S(), Mx()] },
-				{ id: "s86", duration: "quarter", strings: [S(), S(), S(), S(), S(), N(3)] },
-				{ id: "s87", duration: "eighth", strings: [S(), S(), S(), S(), S(), Mx()] },
-				{ id: "s88", duration: "eighth", strings: [S(), S(), S(), S(), S(), N(5)] },
-				{ id: "s89", duration: "quarter", strings: [S(), S(), S(), S(), S(), N(7)] },
-			],
-		},
-
-		// ── m14: grand finale — quarter + 2 eighths (h/p) + quarter (slide) + triplet ──
-		{
-			id: "m14",
-			slots: [
-				{ id: "s90", duration: "quarter", strings: [N(5), S(), S(), S(), S(), S()] },
-				{ id: "s91", duration: "eighth", strings: [S(), S(), S(), Hn(2), S(), S()] },
-				{ id: "s92", duration: "eighth", strings: [S(), S(), S(), Po(0), S(), S()] },
-				{ id: "s93", duration: "quarter", strings: [S(), S(), S(), S(), Su(5), S()] },
-				{ id: "s94", duration: "eighth-triplet", strings: [S(), S(), N(0), S(), S(), S()] },
-				{ id: "s95", duration: "eighth-triplet", strings: [S(), S(), N(2), S(), S(), S()] },
-				{ id: "s96", duration: "eighth-triplet", strings: [S(), S(), N(4), S(), S(), S()] },
-			],
-		},
-	],
-};
 
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
 function hoPoConnectorCount(measure: Measure): number {
@@ -340,10 +98,13 @@ const MAX_BPM = 220;
 const CURSOR_LAMBDA = 20;
 
 export default function FingerpickPage() {
+	const { user, loading } = useUser();
+	const { patterns, selectedPattern, setSelectedPattern, favouriteIds, toggleFavourite } =
+		useFingerpickPatterns(user, loading);
+
 	const [showLibrary, setShowLibrary] = useState(false);
-	const [pattern] = useState<FingerpickPattern>(PRESET_FINGERPICK_PATTERN);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
-	const [bpm, setBpm] = useState<number>(PRESET_FINGERPICK_PATTERN.bpm);
+	const [bpm, setBpm] = useState<number>(selectedPattern.bpm);
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
 	const [showSheet, setShowSheet] = useState(false);
@@ -358,7 +119,7 @@ export default function FingerpickPage() {
 	const tapTimesRef = useRef<number[]>([]);
 	// Tracks the latest BPM value during slider drag so onPointerUp reads the
 	// correct final value regardless of React batching.
-	const dragBpmRef = useRef(PRESET_FINGERPICK_PATTERN.bpm);
+	const dragBpmRef = useRef(selectedPattern.bpm);
 	// True while the user has the slider thumb pressed (drag gesture in progress).
 	const isDraggingSliderRef = useRef(false);
 	// True if playback was active when the drag started (so we resume on release).
@@ -499,13 +260,21 @@ export default function FingerpickPage() {
 		return () => target.removeEventListener("scroll", handleScroll);
 	}, []);
 
+	function handleSelectPattern(p: FingerpickPattern) {
+		stop();
+		setSelectedPattern(p);
+		setBpm(p.bpm);
+		dragBpmRef.current = p.bpm;
+		setCursorResetTick((t) => t + 1);
+	}
+
 	function handlePlay() {
 		const pending = pendingSeekRef.current;
 		pendingSeekRef.current = null;
 		const startOffset = pending
 			? findSlotStartTime(scheduleEventsRef.current, pending.measureIndex, pending.slotIndex)
 			: 0;
-		play({ ...pattern, bpm }, { loop: true, loopGapSeconds: loopGap }, startOffset);
+		play({ ...selectedPattern, bpm }, { loop: true, loopGapSeconds: loopGap }, startOffset);
 	}
 
 	function handleStop() {
@@ -737,11 +506,11 @@ export default function FingerpickPage() {
 	}
 
 	// Mirror the audio engine's event list so the RAF loop has per-note timestamps
-	// for interpolation. Recomputed whenever BPM changes (same trigger as applyBpmChange).
+	// for interpolation. Recomputed whenever BPM or pattern changes.
 	useEffect(() => {
-		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm);
-		measureBoundariesRef.current = computeMeasureBoundaries(pattern, bpm);
-	}, [pattern, bpm]);
+		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(selectedPattern, bpm);
+		measureBoundariesRef.current = computeMeasureBoundaries(selectedPattern, bpm);
+	}, [selectedPattern, bpm]);
 
 	// Position cursor and measure highlight at the very first note as soon as the
 	// SVG data attributes are available (TabStaveRow renders asynchronously via
@@ -1172,15 +941,15 @@ export default function FingerpickPage() {
 	// ResizeObserver fires with the real container width on mount.
 	const rows = useMemo(() => {
 		if (containerWidth === 0) return [];
-		const widthRows = computeAllMeasureWidths(pattern.measures, containerWidth);
+		const widthRows = computeAllMeasureWidths(selectedPattern.measures, containerWidth);
 		let offset = 0;
 		return widthRows.map((rowWidths) => {
 			const start = offset;
-			const rowMeasures = pattern.measures.slice(start, start + rowWidths.length);
+			const rowMeasures = selectedPattern.measures.slice(start, start + rowWidths.length);
 			offset += rowWidths.length;
 			return { measures: rowMeasures, startMeasureNumber: start + 1, widths: rowWidths };
 		});
-	}, [pattern.measures, containerWidth]);
+	}, [selectedPattern.measures, containerWidth]);
 
 	// Keep refs in sync with the latest render values so the RAF closure never goes stale.
 	// useEffect (not inline assignment) satisfies react-hooks/refs; the one-frame lag
@@ -1202,22 +971,15 @@ export default function FingerpickPage() {
 						showLibrary ? "translate-x-0" : "-translate-x-full"
 					}`}
 				>
-					<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-slate-200">
-						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-							Pattern Library
-						</h2>
-						<button
-							onClick={() => setShowLibrary(false)}
-							className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-						>
-							<X size={18} />
-						</button>
-					</div>
-					<div className="flex-1 flex items-center justify-center">
-						<p className="text-xs text-slate-400 text-center px-4">
-							Pattern library coming soon
-						</p>
-					</div>
+					<FingerpickPatternLibrary
+						patterns={patterns}
+						selectedPattern={selectedPattern}
+						setSelectedPattern={handleSelectPattern}
+						favouriteIds={favouriteIds}
+						toggleFavourite={toggleFavourite}
+						onClose={() => setShowLibrary(false)}
+						user={user}
+					/>
 				</div>
 
 				{/* Backdrop — tap outside to close library on mobile/tablet */}
@@ -1235,10 +997,10 @@ export default function FingerpickPage() {
 				<div className="md:flex-1 flex flex-col px-4 md:px-8 py-6 md:py-8 md:overflow-hidden">
 					<div className="relative w-full max-w-4xl mx-auto flex flex-col min-h-0 md:flex-1">
 						<div className="mb-4 shrink-0">
-							<h1 className="text-lg font-semibold text-slate-700">{pattern.name}</h1>
+							<h1 className="text-lg font-semibold text-slate-700">{selectedPattern.name}</h1>
 							<p className="text-xs text-slate-400 uppercase tracking-wider mt-0.5">
-								{bpm} BPM &middot; {pattern.timeSignature[0]}/
-								{pattern.timeSignature[1]}
+								{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
+								{selectedPattern.timeSignature[1]}
 							</p>
 						</div>
 

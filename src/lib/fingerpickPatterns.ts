@@ -4,12 +4,15 @@ import { FingerpickPattern, StringFret, BeatSlot, Measure } from "./fingerpickTy
 const S = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
 const N = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false });
 const NR = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false, letRing: true });
+const HnR = (fret: number): StringFret => ({ fret, technique: "hammer-on", tied: false, muted: false, letRing: true });
 const Hn = (fret: number): StringFret => ({ fret, technique: "hammer-on", tied: false, muted: false });
 const Po = (fret: number): StringFret => ({ fret, technique: "pull-off", tied: false, muted: false });
 const Su = (fret: number): StringFret => ({ fret, technique: "slide-up", tied: false, muted: false });
 const Sd = (fret: number): StringFret => ({ fret, technique: "slide-down", tied: false, muted: false });
 const Ti = (fret: number): StringFret => ({ fret, technique: null, tied: true, muted: false });
 const Mx = (): StringFret => ({ fret: null, technique: null, tied: false, muted: true });
+const Ng = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false, ghostNote: true });
+const NRA = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false, letRing: true, accent: true });
 
 // ── Technique Showcase ─────────────────────────────────────────────────────
 // Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
@@ -216,19 +219,50 @@ const TECHNIQUE_SHOWCASE: FingerpickPattern = {
 
 // ── Travis Picking ──────────────────────────────────────────────────────────
 // Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
-// Thumb alternates E-low (index 5) on beats 1/3 and A (index 4) on beats 2/4.
-// Melody picks B string (index 1, fret 1) and high-e (index 0, fret 0) on off-beats.
-function makeTravisPickingMeasure(n: number): Measure {
+// Phase 1 (m1–4): alternating bass only — E-low on odd slots, A on even slots.
+// Phase 2 (m5–8): add melody on B (idx 1) at slots 3/7 and high-e (idx 0) at slot 5.
+// Phase 3 (m9–12): pinch on slot 1 (bass E + high-e) and slot 5 (bass E + B).
+function makeTravisP1Measure(n: number): Measure {
 	const p = `travis-m${n}`;
 	const slots: BeatSlot[] = [
 		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
-		{ id: `${p}-2`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
-		{ id: `${p}-3`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
-		{ id: `${p}-4`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
 		{ id: `${p}-5`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
-		{ id: `${p}-6`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
-		{ id: `${p}-7`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
-		{ id: `${p}-8`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: `${p}-7`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+	];
+	return { id: p, slots };
+}
+
+function makeTravisP2Measure(n: number): Measure {
+	const p = `travis-m${n}`;
+	const slots: BeatSlot[] = [
+		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), HnR(0), S(), S(), S(), N(0)] },
+		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: `${p}-5`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: `${p}-7`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), N(0)] },
+		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+	];
+	return { id: p, slots };
+}
+
+function makeTravisP3Measure(n: number): Measure {
+	const p = `travis-m${n}`;
+	const slots: BeatSlot[] = [
+		{ id: `${p}-1`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), N(0)] },
+		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: `${p}-5`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), N(0)] },
+		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: `${p}-7`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
 	];
 	return { id: p, slots };
 }
@@ -239,13 +273,19 @@ const TRAVIS_PICKING: FingerpickPattern = {
 	description: "Alternating bass thumb with melody picks on the off-beats",
 	bpm: 100,
 	timeSignature: [4, 4],
-	measures: [1, 2, 3, 4].map(makeTravisPickingMeasure),
+	measures: [
+		...[1, 2, 3, 4].map(makeTravisP1Measure),
+		...[5, 6, 7, 8].map(makeTravisP2Measure),
+		...[9, 10, 11, 12].map(makeTravisP3Measure),
+	],
 };
 
 // ── Arpeggio ────────────────────────────────────────────────────────────────
-// p-i-m-a: E-low (index 5), G (index 2), B (index 1, fret 1), high-e (index 0)
-// letRing on all notes so they sustain into each other.
-function makeArpeggioMeasure(n: number): Measure {
+// Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
+// Phase 1 (m1–4): forward p-i-m-a — bass, G, B, high-e (repeat ×2 per measure).
+// Phase 2 (m5–8): reverse p-a-m-i — bass, high-e, B, G (repeat ×2 per measure).
+// Phase 3 (m9–12): classical p-i-m-i-a-i-m-i — bass then G-B-G-e-G-B-G.
+function makeArpeggioP1Measure(n: number): Measure {
 	const p = `arpeggio-m${n}`;
 	const slots: BeatSlot[] = [
 		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
@@ -260,25 +300,80 @@ function makeArpeggioMeasure(n: number): Measure {
 	return { id: p, slots };
 }
 
+function makeArpeggioP2Measure(n: number): Measure {
+	const p = `arpeggio-m${n}`;
+	const slots: BeatSlot[] = [
+		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
+		{ id: `${p}-2`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
+		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
+		{ id: `${p}-5`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
+		{ id: `${p}-6`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-7`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
+		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
+	];
+	return { id: p, slots };
+}
+
+function makeArpeggioP3Measure(n: number): Measure {
+	const p = `arpeggio-m${n}`;
+	const slots: BeatSlot[] = [
+		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
+		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
+		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
+		{ id: `${p}-5`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
+		{ id: `${p}-7`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
+		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
+	];
+	return { id: p, slots };
+}
+
 const ARPEGGIO: FingerpickPattern = {
 	id: "arpeggio",
 	name: "Arpeggio",
 	description: "Classical p-i-m-a arpeggio — bass followed by treble strings in turn",
 	bpm: 80,
 	timeSignature: [4, 4],
-	measures: [1, 2, 3, 4].map(makeArpeggioMeasure),
+	measures: [
+		...[1, 2, 3, 4].map(makeArpeggioP1Measure),
+		...[5, 6, 7, 8].map(makeArpeggioP2Measure),
+		...[9, 10, 11, 12].map(makeArpeggioP3Measure),
+	],
 };
 
 // ── Waltz ───────────────────────────────────────────────────────────────────
-// Beat 1: bass on E-low (index 5, fret 0)
-// Beat 2: G+B+e chord (index 2 fret 0, index 1 fret 1 via hammer-on, index 0 fret 0)
-// Beat 3: same chord repeated without hammer-on
-function makeWaltzMeasure(n: number): Measure {
+// Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
+// Phase 1 (m1–4): basic bass-chord-chord in 3/4.
+// Phase 2 (m5–8): add hammer-on (slot 2 B string) and pull-off (slot 3 G string).
+// Phase 3 (m9–12): dotted-quarter + eighth subdivision; keep hammer-on; slot 3 high-e letRing.
+function makeWaltzP1Measure(n: number): Measure {
+	const p = `waltz-m${n}`;
+	const slots: BeatSlot[] = [
+		{ id: `${p}-1`, duration: "quarter", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-2`, duration: "quarter", strings: [N(0), N(1), N(0), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "quarter", strings: [N(0), N(1), N(0), S(), S(), S()] },
+	];
+	return { id: p, slots };
+}
+
+function makeWaltzP2Measure(n: number): Measure {
 	const p = `waltz-m${n}`;
 	const slots: BeatSlot[] = [
 		{ id: `${p}-1`, duration: "quarter", strings: [S(), S(), S(), S(), S(), N(0)] },
 		{ id: `${p}-2`, duration: "quarter", strings: [N(0), Hn(1), N(0), S(), S(), S()] },
-		{ id: `${p}-3`, duration: "quarter", strings: [N(0), N(1), N(0), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "quarter", strings: [N(0), N(1), Po(0), S(), S(), S()] },
+	];
+	return { id: p, slots };
+}
+
+function makeWaltzP3Measure(n: number): Measure {
+	const p = `waltz-m${n}`;
+	const slots: BeatSlot[] = [
+		{ id: `${p}-1`, duration: "dotted-quarter", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-2`, duration: "eighth", strings: [N(0), Hn(1), N(0), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "quarter", strings: [NR(0), N(1), N(0), S(), S(), S()] },
 	];
 	return { id: p, slots };
 }
@@ -289,7 +384,97 @@ const WALTZ: FingerpickPattern = {
 	description: "Bass-chord waltz in 3/4 — thumb on beat 1, chord strum on beats 2 and 3",
 	bpm: 120,
 	timeSignature: [3, 4],
-	measures: [1, 2, 3, 4].map(makeWaltzMeasure),
+	measures: [
+		...[1, 2, 3, 4].map(makeWaltzP1Measure),
+		...[5, 6, 7, 8].map(makeWaltzP2Measure),
+		...[9, 10, 11, 12].map(makeWaltzP3Measure),
+	],
+};
+
+// ── Celtic Fingerstyle ──────────────────────────────────────────────────────
+// Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
+// Celtic-flavoured fingerstyle over open Em/Am shapes with ornamental techniques.
+// Rhythm per measure: dotted-eighth + sixteenth + eighth + eighth + dotted-eighth + sixteenth + quarter = 4 beats.
+function makeCelticBaseMeasure(n: number): Measure {
+	const p = `celtic-m${n}`;
+	return {
+		id: p,
+		slots: [
+			{ id: `${p}-1`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+			{ id: `${p}-2`, duration: "sixteenth",     strings: [S(), S(), N(2), S(), S(), S()] },
+			{ id: `${p}-3`, duration: "eighth",         strings: [S(), NR(0), S(), S(), S(), S()] },
+			{ id: `${p}-4`, duration: "eighth",         strings: [S(), S(), Hn(2), S(), S(), S()] },
+			{ id: `${p}-5`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+			{ id: `${p}-6`, duration: "sixteenth",     strings: [S(), N(1), S(), S(), S(), S()] },
+			{ id: `${p}-7`, duration: "quarter",        strings: [NR(0), NR(0), NR(2), S(), S(), S()] },
+		],
+	};
+}
+
+function makeCelticPulloffMeasure(n: number): Measure {
+	const p = `celtic-m${n}`;
+	return {
+		id: p,
+		slots: [
+			{ id: `${p}-1`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+			{ id: `${p}-2`, duration: "sixteenth",     strings: [S(), S(), N(2), S(), S(), S()] },
+			{ id: `${p}-3`, duration: "eighth",         strings: [S(), NR(0), S(), S(), S(), S()] },
+			{ id: `${p}-4`, duration: "eighth",         strings: [S(), S(), Po(0), S(), S(), S()] },
+			{ id: `${p}-5`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), N(2), S()] },
+			{ id: `${p}-6`, duration: "sixteenth",     strings: [S(), Ng(0), S(), S(), S(), S()] },
+			{ id: `${p}-7`, duration: "quarter",        strings: [NR(0), NR(0), NR(2), S(), S(), S()] },
+		],
+	};
+}
+
+function makeCelticSlideMeasure(n: number): Measure {
+	const p = `celtic-m${n}`;
+	return {
+		id: p,
+		slots: [
+			{ id: `${p}-1`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+			{ id: `${p}-2`, duration: "sixteenth",     strings: [S(), S(), S(), Su(2), S(), S()] },
+			{ id: `${p}-3`, duration: "eighth",         strings: [S(), S(), NR(2), S(), S(), S()] },
+			{ id: `${p}-4`, duration: "eighth",         strings: [S(), N(0), S(), S(), S(), S()] },
+			{ id: `${p}-5`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), N(0), S()] },
+			{ id: `${p}-6`, duration: "sixteenth",     strings: [S(), S(), Hn(0), S(), S(), S()] },
+			{ id: `${p}-7`, duration: "quarter",        strings: [NRA(0), NRA(1), NRA(2), S(), S(), S()] },
+		],
+	};
+}
+
+function makeCelticClimaxMeasure(n: number): Measure {
+	const p = `celtic-m${n}`;
+	return {
+		id: p,
+		slots: [
+			{ id: `${p}-1`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+			{ id: `${p}-2`, duration: "sixteenth",     strings: [S(), S(), Hn(2), S(), S(), S()] },
+			{ id: `${p}-3`, duration: "eighth",         strings: [S(), NR(0), S(), S(), S(), S()] },
+			{ id: `${p}-4`, duration: "eighth",         strings: [S(), S(), Po(0), S(), S(), S()] },
+			{ id: `${p}-5`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), N(2), S()] },
+			{ id: `${p}-6`, duration: "sixteenth",     strings: [S(), Su(1), S(), S(), S(), S()] },
+			{ id: `${p}-7`, duration: "quarter",        strings: [NRA(0), NRA(0), NRA(2), NRA(2), S(), S()] },
+		],
+	};
+}
+
+const CELTIC_FINGERSTYLE: FingerpickPattern = {
+	id: "celtic-fingerstyle",
+	name: "Celtic Fingerstyle",
+	description: "Celtic-flavoured fingerstyle with ornamental techniques over Em/Am shapes",
+	bpm: 95,
+	timeSignature: [4, 4],
+	measures: [
+		makeCelticBaseMeasure(1),
+		makeCelticBaseMeasure(2),
+		makeCelticPulloffMeasure(3),
+		makeCelticPulloffMeasure(4),
+		makeCelticSlideMeasure(5),
+		makeCelticSlideMeasure(6),
+		makeCelticClimaxMeasure(7),
+		makeCelticClimaxMeasure(8),
+	],
 };
 
 export const PRESET_FINGERPICK_PATTERNS: FingerpickPattern[] = [
@@ -297,4 +482,5 @@ export const PRESET_FINGERPICK_PATTERNS: FingerpickPattern[] = [
 	TRAVIS_PICKING,
 	ARPEGGIO,
 	WALTZ,
+	CELTIC_FINGERSTYLE,
 ];

@@ -2,7 +2,10 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 
-import TabStaveRow, { computeMeasureMinWidth, CLEF_WIDTH } from "@/components/fingerpick/TabStaveRow";
+import TabStaveRow, {
+	computeMeasureMinWidth,
+	CLEF_WIDTH,
+} from "@/components/fingerpick/TabStaveRow";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 import type { FingerpickPattern, Measure, StringFret } from "@/lib/fingerpickTypes";
@@ -11,37 +14,99 @@ import type { FingerpickPattern, Measure, StringFret } from "@/lib/fingerpickTyp
 
 const S = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
 const N = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false });
-const Hn = (fret: number): StringFret => ({ fret, technique: "hammer-on", tied: false, muted: false });
-const Po = (fret: number): StringFret => ({ fret, technique: "pull-off", tied: false, muted: false });
-const Su = (fret: number): StringFret => ({ fret, technique: "slide-up", tied: false, muted: false });
-const Sd = (fret: number): StringFret => ({ fret, technique: "slide-down", tied: false, muted: false });
+const Hn = (fret: number): StringFret => ({
+	fret,
+	technique: "hammer-on",
+	tied: false,
+	muted: false,
+});
+const Po = (fret: number): StringFret => ({
+	fret,
+	technique: "pull-off",
+	tied: false,
+	muted: false,
+});
+const Su = (fret: number): StringFret => ({
+	fret,
+	technique: "slide-up",
+	tied: false,
+	muted: false,
+});
+const Sd = (fret: number): StringFret => ({
+	fret,
+	technique: "slide-down",
+	tied: false,
+	muted: false,
+});
 const Ti = (fret: number): StringFret => ({ fret, technique: null, tied: true, muted: false });
 const Sta = (fret: number): StringFret => ({
-	fret, technique: null, tied: false, muted: false, staccato: true,
+	fret,
+	technique: null,
+	tied: false,
+	muted: false,
+	staccato: true,
 });
 const Acc = (fret: number): StringFret => ({
-	fret, technique: null, tied: false, muted: false, accent: true,
+	fret,
+	technique: null,
+	tied: false,
+	muted: false,
+	accent: true,
 });
 const Pd = (fret: number): StringFret => ({
-	fret, technique: null, tied: false, muted: false, pickStroke: "down",
+	fret,
+	technique: null,
+	tied: false,
+	muted: false,
+	pickStroke: "down",
 });
 const Pu = (fret: number): StringFret => ({
-	fret, technique: null, tied: false, muted: false, pickStroke: "up",
+	fret,
+	technique: null,
+	tied: false,
+	muted: false,
+	pickStroke: "up",
 });
 const Tr8 = (fret: number): StringFret => ({
-	fret, technique: null, tied: false, muted: false, tremoloPickingSpeed: "8th",
+	fret,
+	technique: null,
+	tied: false,
+	muted: false,
+	tremoloPickingSpeed: "8th",
 });
 const Tr16 = (fret: number): StringFret => ({
-	fret, technique: null, tied: false, muted: false, tremoloPickingSpeed: "16th",
+	fret,
+	technique: null,
+	tied: false,
+	muted: false,
+	tremoloPickingSpeed: "16th",
 });
 const Tr32 = (fret: number): StringFret => ({
-	fret, technique: null, tied: false, muted: false, tremoloPickingSpeed: "32nd",
+	fret,
+	technique: null,
+	tied: false,
+	muted: false,
+	tremoloPickingSpeed: "32nd",
 });
-const Vib = (fret: number): StringFret => ({ fret, technique: "vibrato", tied: false, muted: false });
+const Vib = (fret: number): StringFret => ({
+	fret,
+	technique: "vibrato",
+	tied: false,
+	muted: false,
+});
 const VibW = (fret: number): StringFret => ({
-	fret, technique: "vibrato-wide", tied: false, muted: false,
+	fret,
+	technique: "vibrato-wide",
+	tied: false,
+	muted: false,
 });
-const Tap = (fret: number): StringFret => ({ fret, technique: "tapping", tied: false, muted: false });
+const Tap = (fret: number): StringFret => ({
+	fret,
+	technique: "tapping",
+	tied: false,
+	muted: false,
+});
+const Trl = (fret: number): StringFret => ({ fret, technique: "trill", tied: false, muted: false });
 
 // ── Measure definitions ───────────────────────────────────────────────────────
 // Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
@@ -49,15 +114,42 @@ const Tap = (fret: number): StringFret => ({ fret, technique: "tapping", tied: f
 const GRACE_NOTE_MEASURE: Measure = {
 	id: "grace",
 	slots: [
+		// Grace note before eighth note (most common usage)
 		{
-			id: "g1", duration: "eighth",
-			strings: [N(5), S(), S(), S(), S(), S()],
+			id: "g1",
+			duration: "eighth",
 			isGraceNote: true,
+			strings: [N(5), S(), S(), S(), S(), S()],
 		},
-		{ id: "g2", duration: "quarter", strings: [N(7), S(), S(), S(), S(), S()] },
-		{ id: "g3", duration: "quarter", strings: [N(5), S(), S(), S(), S(), S()] },
-		{ id: "g4", duration: "quarter", strings: [N(7), S(), S(), S(), S(), S()] },
-		{ id: "g5", duration: "quarter", strings: [N(8), S(), S(), S(), S(), S()] },
+		{
+			id: "g2",
+			duration: "eighth",
+			strings: [N(7), S(), S(), S(), S(), S()],
+		},
+		// Grace note before quarter note
+		{
+			id: "g3",
+			duration: "eighth",
+			isGraceNote: true,
+			strings: [N(9), S(), S(), S(), S(), S()],
+		},
+		{
+			id: "g4",
+			duration: "quarter",
+			strings: [N(12), S(), S(), S(), S(), S()],
+		},
+		// Grace note on different string
+		{
+			id: "g5",
+			duration: "eighth",
+			isGraceNote: true,
+			strings: [S(), N(7), S(), S(), S(), S()],
+		},
+		{
+			id: "g6",
+			duration: "quarter",
+			strings: [S(), N(9), S(), S(), S(), S()],
+		},
 	],
 };
 
@@ -109,15 +201,87 @@ const HAMMER_PULL_MEASURE: Measure = {
 	],
 };
 
-const SLIDE_TIE_MEASURE: Measure = {
-	id: "slide-tie",
+const TAPPING_MEASURE: Measure = {
+	id: "tapping",
 	slots: [
-		{ id: "st1", duration: "quarter", strings: [S(), S(), S(), S(), N(3), S()] },
-		{ id: "st2", duration: "quarter", strings: [S(), S(), S(), S(), Su(7), S()] },
-		{ id: "st3", duration: "quarter", strings: [S(), S(), S(), S(), Ti(7), S()] },
-		{ id: "st4", duration: "quarter", strings: [S(), S(), S(), S(), Sd(5), S()] },
+		{ id: "tap1", duration: "quarter", strings: [Tap(12), S(), S(), S(), S(), S()] },
+		{ id: "tap2", duration: "quarter", strings: [S(), Tap(14), S(), S(), S(), S()] },
+		{ id: "tap3", duration: "quarter", strings: [Tap(12), S(), S(), S(), S(), S()] },
+		{ id: "tap4", duration: "quarter", strings: [S(), Tap(10), S(), S(), S(), S()] },
 	],
 };
+
+const TRILL_MEASURE: Measure = {
+	id: "trill",
+	slots: [
+		{ id: "tr1", duration: "quarter", strings: [N(5), S(), S(), S(), S(), S()] },
+		{ id: "tr2", duration: "quarter", strings: [Trl(7), S(), S(), S(), S(), S()] },
+		{ id: "tr3", duration: "half", strings: [N(5), S(), S(), S(), S(), S()] },
+	],
+};
+
+// ── Slide demo measures ───────────────────────────────────────────────────────
+// Destination model: the slide technique is placed on the note you ARRIVE AT,
+// matching the StringFret type comment ("technique used to arrive at this note
+// from the previous slot"). This causes VexFlow to draw the connector from the
+// source note to the destination note, and tells the scheduler to consume the
+// destination into a slideChain (no separate pluck at the destination pitch).
+
+// M1: short slide-up (B string, 5→7) followed by a normal note.
+const SLIDE_M1: Measure = {
+	id: "slide-m1",
+	slots: [
+		// Source: pick at fret 5 (no technique)
+		{ id: "sl1-1", duration: "quarter", strings: [S(), N(5), S(), S(), S(), S()] },
+		// Destination: arrived at fret 7 via slide-up → renders 5/7 connector
+		{ id: "sl1-2", duration: "quarter", strings: [S(), Su(7), S(), S(), S(), S()] },
+		// Normal note (new pick)
+		{ id: "sl1-3", duration: "half", strings: [S(), N(5), S(), S(), S(), S()] },
+	],
+};
+
+// M2: long slide-up (B string, 5→12).
+const SLIDE_M2: Measure = {
+	id: "slide-m2",
+	slots: [
+		{ id: "sl2-1", duration: "half", strings: [S(), N(5), S(), S(), S(), S()] },
+		{ id: "sl2-2", duration: "half", strings: [S(), Su(12), S(), S(), S(), S()] },
+	],
+};
+
+// M3: slide-down (B string, 9→7) followed by a normal note.
+const SLIDE_M3: Measure = {
+	id: "slide-m3",
+	slots: [
+		// Source: pick at fret 9
+		{ id: "sl3-1", duration: "quarter", strings: [S(), N(9), S(), S(), S(), S()] },
+		// Destination: arrived at fret 7 via slide-down → renders 9\7 connector
+		{ id: "sl3-2", duration: "quarter", strings: [S(), Sd(7), S(), S(), S(), S()] },
+		// Normal note
+		{ id: "sl3-3", duration: "half", strings: [S(), N(9), S(), S(), S(), S()] },
+	],
+};
+
+// M4: simultaneous single slides on str0 (e) and a chain on str1 (B: 5→9→5),
+// plus a single slide on str2 (G). Demonstrates that one ScheduleEvent on str1
+// carries slideChain of length 2, producing two connected slide lines.
+const SLIDE_M4: Measure = {
+	id: "slide-m4",
+	slots: [
+		// str0: source 7 (single slide); str1: source 5 (chain start: 5→9→5)
+		{ id: "sl4-1", duration: "eighth", strings: [N(7), N(5), S(), S(), S(), S()] },
+		// str0: arrived at 12 via slide-up (7→12); str1: chain dest1 — arrived at 9 via slide-up (5→9)
+		{ id: "sl4-2", duration: "eighth", strings: [Su(12), Su(9), S(), S(), S(), S()] },
+		// str1: chain dest2 — arrived at 5 via slide-down (9→5); str2: source 7 (new single slide)
+		{ id: "sl4-3", duration: "eighth", strings: [S(), Sd(5), N(7), S(), S(), S()] },
+		// str2: arrived at 9 via slide-up (7→9)
+		{ id: "sl4-4", duration: "eighth", strings: [S(), S(), Su(9), S(), S(), S()] },
+		// Silence — lets the str1 chain ring out
+		{ id: "sl4-5", duration: "half", strings: [S(), S(), S(), S(), S(), S()] },
+	],
+};
+
+const SLIDE_MEASURES = [SLIDE_M1, SLIDE_M2, SLIDE_M3, SLIDE_M4];
 
 // ── Duration demo measures ────────────────────────────────────────────────────
 // Each measure demonstrates a single Duration value using string 0 (high e).
@@ -248,25 +412,25 @@ const STRESS_M1: Measure = {
 	id: "stress-m1",
 	slots: [
 		// Beat 1: hammer-on and pull-off on str0
-		{ id: "sm1-1",  duration: "sixteenth", strings: [N(5),    S(), S(), S(), S(), S()] },
-		{ id: "sm1-2",  duration: "sixteenth", strings: [Hn(7),   S(), S(), S(), S(), S()] },
-		{ id: "sm1-3",  duration: "sixteenth", strings: [N(9),    S(), S(), S(), S(), S()] },
-		{ id: "sm1-4",  duration: "sixteenth", strings: [Po(7),   S(), S(), S(), S(), S()] },
+		{ id: "sm1-1", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
+		{ id: "sm1-2", duration: "sixteenth", strings: [Hn(7), S(), S(), S(), S(), S()] },
+		{ id: "sm1-3", duration: "sixteenth", strings: [N(9), S(), S(), S(), S(), S()] },
+		{ id: "sm1-4", duration: "sixteenth", strings: [Po(7), S(), S(), S(), S(), S()] },
 		// Beat 2: accent + hammer-on across str0/str1
-		{ id: "sm1-5",  duration: "sixteenth", strings: [S(),     N(7),  S(), S(), S(), S()] },
-		{ id: "sm1-6",  duration: "sixteenth", strings: [Acc(9),  S(),   S(), S(), S(), S()] },
-		{ id: "sm1-7",  duration: "sixteenth", strings: [S(),     Hn(9), S(), S(), S(), S()] },
-		{ id: "sm1-8",  duration: "sixteenth", strings: [S(),     N(12), S(), S(), S(), S()] },
+		{ id: "sm1-5", duration: "sixteenth", strings: [S(), N(7), S(), S(), S(), S()] },
+		{ id: "sm1-6", duration: "sixteenth", strings: [Acc(9), S(), S(), S(), S(), S()] },
+		{ id: "sm1-7", duration: "sixteenth", strings: [S(), Hn(9), S(), S(), S(), S()] },
+		{ id: "sm1-8", duration: "sixteenth", strings: [S(), N(12), S(), S(), S(), S()] },
 		// Beat 3: staccato burst and accent
-		{ id: "sm1-9",  duration: "sixteenth", strings: [Sta(12), S(),   S(), S(), S(), S()] },
-		{ id: "sm1-10", duration: "sixteenth", strings: [S(),     Sta(10), S(), S(), S(), S()] },
-		{ id: "sm1-11", duration: "sixteenth", strings: [S(),     S(),   N(9), S(), S(), S()] },
-		{ id: "sm1-12", duration: "sixteenth", strings: [Acc(14), S(),   S(), S(), S(), S()] },
+		{ id: "sm1-9", duration: "sixteenth", strings: [Sta(12), S(), S(), S(), S(), S()] },
+		{ id: "sm1-10", duration: "sixteenth", strings: [S(), Sta(10), S(), S(), S(), S()] },
+		{ id: "sm1-11", duration: "sixteenth", strings: [S(), S(), N(9), S(), S(), S()] },
+		{ id: "sm1-12", duration: "sixteenth", strings: [Acc(14), S(), S(), S(), S(), S()] },
 		// Beat 4: pull-off and fill
-		{ id: "sm1-13", duration: "sixteenth", strings: [N(14),   S(), S(), S(), S(), S()] },
-		{ id: "sm1-14", duration: "sixteenth", strings: [Po(12),  S(), S(), S(), S(), S()] },
-		{ id: "sm1-15", duration: "sixteenth", strings: [S(),     N(9), S(), S(), S(), S()] },
-		{ id: "sm1-16", duration: "sixteenth", strings: [N(12),   S(), S(), S(), S(), S()] },
+		{ id: "sm1-13", duration: "sixteenth", strings: [N(14), S(), S(), S(), S(), S()] },
+		{ id: "sm1-14", duration: "sixteenth", strings: [Po(12), S(), S(), S(), S(), S()] },
+		{ id: "sm1-15", duration: "sixteenth", strings: [S(), N(9), S(), S(), S(), S()] },
+		{ id: "sm1-16", duration: "sixteenth", strings: [N(12), S(), S(), S(), S(), S()] },
 	],
 };
 
@@ -274,23 +438,28 @@ const STRESS_M2: Measure = {
 	id: "stress-m2",
 	slots: [
 		// Grace note (no rhythmic advance)
-		{ id: "sm2-gr",  duration: "eighth",  strings: [N(7), S(), S(), S(), S(), S()], isGraceNote: true },
+		{
+			id: "sm2-gr",
+			duration: "eighth",
+			strings: [N(7), S(), S(), S(), S(), S()],
+			isGraceNote: true,
+		},
 		// 8 × 32nd = 1 beat: rapid alternation str0/str1
-		{ id: "sm2-1",   duration: "32nd",    strings: [N(5),  S(),    S(), S(), S(), S()] },
-		{ id: "sm2-2",   duration: "32nd",    strings: [S(),   N(7),   S(), S(), S(), S()] },
-		{ id: "sm2-3",   duration: "32nd",    strings: [N(7),  S(),    S(), S(), S(), S()] },
-		{ id: "sm2-4",   duration: "32nd",    strings: [S(),   N(9),   S(), S(), S(), S()] },
-		{ id: "sm2-5",   duration: "32nd",    strings: [N(9),  S(),    S(), S(), S(), S()] },
-		{ id: "sm2-6",   duration: "32nd",    strings: [S(),   N(12),  S(), S(), S(), S()] },
-		{ id: "sm2-7",   duration: "32nd",    strings: [N(12), S(),    S(), S(), S(), S()] },
-		{ id: "sm2-8",   duration: "32nd",    strings: [S(),   N(10),  S(), S(), S(), S()] },
+		{ id: "sm2-1", duration: "32nd", strings: [N(5), S(), S(), S(), S(), S()] },
+		{ id: "sm2-2", duration: "32nd", strings: [S(), N(7), S(), S(), S(), S()] },
+		{ id: "sm2-3", duration: "32nd", strings: [N(7), S(), S(), S(), S(), S()] },
+		{ id: "sm2-4", duration: "32nd", strings: [S(), N(9), S(), S(), S(), S()] },
+		{ id: "sm2-5", duration: "32nd", strings: [N(9), S(), S(), S(), S(), S()] },
+		{ id: "sm2-6", duration: "32nd", strings: [S(), N(12), S(), S(), S(), S()] },
+		{ id: "sm2-7", duration: "32nd", strings: [N(12), S(), S(), S(), S(), S()] },
+		{ id: "sm2-8", duration: "32nd", strings: [S(), N(10), S(), S(), S(), S()] },
 		// Slide-up pair (2 × eighth = 1 beat)
-		{ id: "sm2-9",   duration: "eighth",  strings: [N(9),   S(), S(), S(), S(), S()] },
-		{ id: "sm2-10",  duration: "eighth",  strings: [Su(12), S(), S(), S(), S(), S()] },
+		{ id: "sm2-9", duration: "eighth", strings: [N(9), S(), S(), S(), S(), S()] },
+		{ id: "sm2-10", duration: "eighth", strings: [Su(12), S(), S(), S(), S(), S()] },
 		// Tremolo quarter on str2 (1 beat)
-		{ id: "sm2-11",  duration: "quarter", strings: [S(), S(), Tr16(9), S(), S(), S()] },
+		{ id: "sm2-11", duration: "quarter", strings: [S(), S(), Tr16(9), S(), S(), S()] },
 		// Closing quarter str1 (1 beat)
-		{ id: "sm2-12",  duration: "quarter", strings: [S(), N(9), S(), S(), S(), S()] },
+		{ id: "sm2-12", duration: "quarter", strings: [S(), N(9), S(), S(), S(), S()] },
 	],
 };
 
@@ -298,14 +467,14 @@ const STRESS_M3: Measure = {
 	id: "stress-m3",
 	slots: [
 		// 8 × eighth = 4 beats: tapping and staccato alternating
-		{ id: "sm3-1", duration: "eighth", strings: [N(7),    S(),    S(), S(), S(), S()] },
-		{ id: "sm3-2", duration: "eighth", strings: [Tap(12), S(),    S(), S(), S(), S()] },
-		{ id: "sm3-3", duration: "eighth", strings: [S(),     N(9),   S(), S(), S(), S()] },
-		{ id: "sm3-4", duration: "eighth", strings: [S(),     Tap(14), S(), S(), S(), S()] },
-		{ id: "sm3-5", duration: "eighth", strings: [Sta(7),  S(),    S(), S(), S(), S()] },
-		{ id: "sm3-6", duration: "eighth", strings: [S(),     S(),    N(9), S(), S(), S()] },
-		{ id: "sm3-7", duration: "eighth", strings: [Tap(15), S(),    S(), S(), S(), S()] },
-		{ id: "sm3-8", duration: "eighth", strings: [S(),     Sta(7), S(), S(), S(), S()] },
+		{ id: "sm3-1", duration: "eighth", strings: [N(7), S(), S(), S(), S(), S()] },
+		{ id: "sm3-2", duration: "eighth", strings: [Tap(12), S(), S(), S(), S(), S()] },
+		{ id: "sm3-3", duration: "eighth", strings: [S(), N(9), S(), S(), S(), S()] },
+		{ id: "sm3-4", duration: "eighth", strings: [S(), Tap(14), S(), S(), S(), S()] },
+		{ id: "sm3-5", duration: "eighth", strings: [Sta(7), S(), S(), S(), S(), S()] },
+		{ id: "sm3-6", duration: "eighth", strings: [S(), S(), N(9), S(), S(), S()] },
+		{ id: "sm3-7", duration: "eighth", strings: [Tap(15), S(), S(), S(), S(), S()] },
+		{ id: "sm3-8", duration: "eighth", strings: [S(), Sta(7), S(), S(), S(), S()] },
 	],
 };
 
@@ -313,9 +482,9 @@ const STRESS_M4: Measure = {
 	id: "stress-m4",
 	slots: [
 		// 4 quarters: source → hammer-on → pull-off → accented close
-		{ id: "sm4-1", duration: "quarter", strings: [N(9),    S(), S(), S(), S(), S()] },
-		{ id: "sm4-2", duration: "quarter", strings: [Hn(12),  S(), S(), S(), S(), S()] },
-		{ id: "sm4-3", duration: "quarter", strings: [Po(9),   S(), S(), S(), S(), S()] },
+		{ id: "sm4-1", duration: "quarter", strings: [N(9), S(), S(), S(), S(), S()] },
+		{ id: "sm4-2", duration: "quarter", strings: [Hn(12), S(), S(), S(), S(), S()] },
+		{ id: "sm4-3", duration: "quarter", strings: [Po(9), S(), S(), S(), S(), S()] },
 		{ id: "sm4-4", duration: "quarter", strings: [Acc(12), S(), S(), S(), S(), S()] },
 	],
 };
@@ -326,19 +495,30 @@ const GROUPS: { label: string; measures: Measure[] }[] = [
 	{ label: "Grace Note (grace note before regular note)", measures: [GRACE_NOTE_MEASURE] },
 	{ label: "Staccato (·) and Accent (>) — notes 2 and 3", measures: [STACCATO_ACCENT_MEASURE] },
 	{ label: "Pick Stroke: Down (⊓) and Up (V) alternating", measures: [PICK_STROKE_MEASURE] },
-	{ label: "Tremolo Picking: 8th (1 slash) · 16th (2) · 32nd (3) · plain", measures: [TREMOLO_MEASURE] },
+	{
+		label: "Tremolo Picking: 8th (1 slash) · 16th (2) · 32nd (3) · plain",
+		measures: [TREMOLO_MEASURE],
+	},
 	{ label: "Vibrato (half 1) and Vibrato-Wide (half 2)", measures: [VIBRATO_MEASURE] },
-	{ label: "Techniques regression: Hammer-On, Pull-Off", measures: [HAMMER_PULL_MEASURE] },
-	{ label: "Techniques regression: Slide-Up, Tied, Slide-Down", measures: [SLIDE_TIE_MEASURE] },
+	{ label: "Techniques: Hammer-On, Pull-Off", measures: [HAMMER_PULL_MEASURE] },
+	{ label: "Techniques: Tapping", measures: [TAPPING_MEASURE] },
+	{ label: "Techniques: Trill", measures: [TRILL_MEASURE] },
+	{ label: "Slide", measures: SLIDE_MEASURES },
 	{ label: "Duration: whole", measures: [WHOLE_DUR_MEASURE] },
 	{ label: "Duration: half", measures: [HALF_DUR_MEASURE] },
 	{ label: "Duration: quarter", measures: [QUARTER_DUR_MEASURE] },
 	{ label: "Duration: dotted-quarter (1.5 beats)", measures: [DOTTED_QUARTER_DUR_MEASURE] },
 	{ label: "Duration: eighth", measures: [EIGHTH_DUR_MEASURE] },
 	{ label: "Duration: dotted-eighth (0.75 beats)", measures: [DOTTED_EIGHTH_DUR_MEASURE] },
-	{ label: "Duration: eighth-triplet (3 per beat, 2 groups shown)", measures: [EIGHTH_TRIPLET_DUR_MEASURE] },
+	{
+		label: "Duration: eighth-triplet (3 per beat, 2 groups shown)",
+		measures: [EIGHTH_TRIPLET_DUR_MEASURE],
+	},
 	{ label: "Duration: sixteenth", measures: [SIXTEENTH_DUR_MEASURE] },
-	{ label: "Duration: sixteenth-triplet (3 per half-beat, 2 groups shown)", measures: [SIXTEENTH_TRIPLET_DUR_MEASURE] },
+	{
+		label: "Duration: sixteenth-triplet (3 per half-beat, 2 groups shown)",
+		measures: [SIXTEENTH_TRIPLET_DUR_MEASURE],
+	},
 	{ label: "Duration: 32nd (8 notes = 1 beat)", measures: [THIRTY_SECOND_DUR_MEASURE] },
 	{ label: "Duration: rest", measures: [REST_DUR_MEASURE] },
 	{
@@ -357,9 +537,9 @@ interface GroupMeta {
 
 const GROUP_METAS: Record<string, GroupMeta> = {
 	"Grace Note (grace note before regular note)": {
-		status: "✅ Fully implemented",
-		en: "A grace note is a quick ornamental note played just before the main note, with no fixed rhythmic value.",
-		zh: "装饰音是在主音符前快速演奏的短促装饰音，没有固定时值。",
+		status: "⏳ Half implemented",
+		en: "A grace note is a quick ornamental note played just before the main note, with no fixed rhythmic value. Both rendering (small-size fret number) and audio (ultra-short pluck without voice stealing) need further work. Deferred — not required for the current simple TAB target scope.",
+		zh: "装饰音是在主音符前快速演奏的短促音符，无固定时值。渲染（小号品位数字）和音频（极短发音不触发声部抢占）均需进一步完善。暂缓实现——当前目标曲谱范围暂不涉及此技法。",
 	},
 	"Staccato (·) and Accent (>) — notes 2 and 3": {
 		status: "✅ Fully implemented",
@@ -381,15 +561,25 @@ const GROUP_METAS: Record<string, GroupMeta> = {
 		en: "Vibrato is a repeated small pitch fluctuation that makes a note sing. Wide vibrato is an exaggerated version. Audio simulation is planned for a future issue.",
 		zh: "颤音是对音符音高进行小幅反复波动，让音符更有歌唱感。大幅颤音是其夸张版本。音频模拟计划在后续 issue 中实现。",
 	},
-	"Techniques regression: Hammer-On, Pull-Off": {
-		status: "✅ Fully implemented",
-		en: "Hammer-on: fret a note without picking — produces a softer attack. Pull-off: pluck the string by lifting a finger. All techniques use reduced gain (×0.5) to simulate the softer legato attack.",
-		zh: "击弦（hammer-on）：不拨弦直接按压琴弦发音，音量更柔。勾弦（pull-off）：通过抬指拨动琴弦。两者均使用 0.5 倍音量模拟连奏的柔和起音。",
+	"Techniques: Hammer-On, Pull-Off": {
+		status: "⚡ Partially implemented — needs further refinement",
+		en: "Hammer-on and pull-off sound without picking. Currently approximated using a low-pass filter (cutoff 2000 Hz) to reduce the pick transient, with gain ×0.5. The result is softer than a normal pluck but does not fully replicate the legato attack. Needs further audio research.",
+		zh: "击弦和勾弦无需拨弦发音。目前用低通滤波器（截止 2000 Hz）降低拨弦瞬态，增益 ×0.5 近似模拟。效果比普通拨弦柔和，但尚未完全还原连奏音色，需进一步优化。",
 	},
-	"Techniques regression: Slide-Up, Tied, Slide-Down": {
-		status: "⚡ Simplified",
-		en: "Slide smoothly from one fret to another. Currently rendered correctly but audio plays as a normal pluck — pitch glide will be added in a future issue.",
-		zh: "从一个品位平滑滑向另一个品位。目前渲染正确，但音频仍为普通拨弦，音高滑动将在后续 issue 中实现。",
+	"Techniques: Tapping": {
+		status: "⚡ Partially implemented — needs further refinement",
+		en: "Tapping uses a picking-hand finger to strike the fretboard. Currently uses the same pluck sample with gain ×0.8 and no filter. The percussive character is approximated but the sample attack does not match real tapping. Needs further audio research.",
+		zh: "点弦用拨弦手手指敲击指板。目前使用相同的拨弦采样，增益 ×0.8，不加滤波。打击感近似但采样起音与真实点弦不符，需进一步优化。",
+	},
+	"Techniques: Trill": {
+		status: "⚡ Partially implemented — needs further refinement",
+		en: "Trill rapidly alternates between two frets using hammer-on and pull-off. Currently uses the same low-pass filter approach as hammer-on. Audio does not simulate the rapid alternation — only the initial note sounds. Needs further audio research.",
+		zh: "颤弦在两个品位间快速交替击弦和勾弦。目前与击弦使用相同的低通滤波近似，音频不模拟快速交替，只发出起始音。需进一步优化。",
+	},
+	Slide: {
+		status: "⏳ Not yet implemented",
+		en: "Slide moves from one fret to another by keeping the finger pressed and gliding along the string without re-picking. Pitch glide audio is not yet implemented — currently plays as a normal pluck. A dedicated issue will research the correct sample-based approach.",
+		zh: "滑音通过保持手指按压并沿琴弦滑动来改变音高，无需重新拨弦。音高滑动的音频尚未实现，目前以普通拨弦代替。将通过独立 issue 研究正确的基于采样的实现方案。",
 	},
 	"Duration: whole": {
 		status: "✅ Fully implemented",
@@ -460,6 +650,7 @@ const GROUP_BPM: Record<string, number> = {
 
 /** Chinese section label shown when lang = "zh". */
 const GROUP_LABEL_ZH: Record<string, string> = {
+	Slide: "滑音",
 	"Stress Test — Dense Mixed Techniques": "压力测试 — 密集混合技法",
 };
 
@@ -471,9 +662,8 @@ function techniqueConnectorCount(measure: Measure): number {
 	return measure.slots.reduce(
 		(count, slot) =>
 			count +
-			slot.strings.filter(
-				(sf) => sf.technique === "hammer-on" || sf.technique === "pull-off",
-			).length,
+			slot.strings.filter((sf) => sf.technique === "hammer-on" || sf.technique === "pull-off")
+				.length,
 		0,
 	);
 }
@@ -502,7 +692,9 @@ export default function TabNotationDevPage() {
 
 	// Preload audio presets once on mount so the first Play click is instant.
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	useEffect(() => { void engine.load(); }, []);
+	useEffect(() => {
+		void engine.load();
+	}, []);
 
 	// Derive the effective playing section from both state and the engine's isPlaying flag.
 	// When the play-once pass ends, isPlaying goes false, which auto-clears the active button
@@ -558,8 +750,9 @@ export default function TabNotationDevPage() {
 				</button>
 			</div>
 			<p className="text-xs text-slate-400 mb-8">
-				Visual verification for B1 modifiers: grace notes, staccato, accent, pick stroke, tremolo,
-				vibrato. Regression: hammer-on, pull-off, slide-up, tie, slide-down. Duration rendering.
+				Visual verification for B1 modifiers: grace notes, staccato, accent, pick stroke,
+				tremolo, vibrato. Regression: hammer-on, pull-off, slide-up, tie, slide-down.
+				Duration rendering.
 			</p>
 
 			{groups.map(({ label, measures, widths }) => {

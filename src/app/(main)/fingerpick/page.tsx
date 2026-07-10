@@ -265,6 +265,7 @@ export default function FingerpickPage() {
 		setSelectedPattern(p);
 		setBpm(p.bpm);
 		dragBpmRef.current = p.bpm;
+		setCursorResetTick((t) => t + 1);
 	}
 
 	function handlePlay() {

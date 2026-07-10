@@ -69,7 +69,7 @@ export default function FingerpickPatternLibrary({
 	user,
 }: FingerpickPatternLibraryProps) {
 	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
-	const [favouritesOpen, setFavouritesOpen] = useState(true);
+	const [myPatternsOpen, setMyPatternsOpen] = useState(true);
 	const [presetsOpen, setPresetsOpen] = useState(true);
 
 	const visiblePresets =
@@ -116,85 +116,76 @@ export default function FingerpickPatternLibrary({
 
 			{/* Scrollable content */}
 			<div className="w-full flex-1 overflow-y-auto flex flex-col">
-				{/* Favourites section — only on favourites tab when there are any */}
-				{activeTab === "favourites" && favouriteIds.length > 0 && (
-					<div>
-						<button
-							onClick={() => setFavouritesOpen((v) => !v)}
-							className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-50"
-						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-								Favourites
-							</span>
-							<ChevronDown
-								size={13}
-								className={`text-slate-400 transition-transform duration-200 ${
-									favouritesOpen ? "" : "-rotate-90"
-								}`}
-							/>
-						</button>
-						{favouritesOpen && (
-							<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
-								{patterns
-									.filter((p) => favouriteIds.includes(p.id))
-									.map((pattern) => (
-										<PatternCard
-											key={pattern.id}
-											pattern={pattern}
-											isSelected={selectedPattern.id === pattern.id}
-											isFav={true}
-											onSelect={() => setSelectedPattern(pattern)}
-											onToggleFav={() => toggleFavourite(pattern.id)}
-										/>
-									))}
-							</div>
-						)}
-					</div>
-				)}
+				{/* My Patterns section */}
+				<div>
+					<button
+						onClick={() => setMyPatternsOpen((v) => !v)}
+						className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-50"
+					>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							My Patterns
+						</span>
+						<ChevronDown
+							size={13}
+							className={`text-slate-400 transition-transform duration-200 ${
+								myPatternsOpen ? "" : "-rotate-90"
+							}`}
+						/>
+					</button>
+					{myPatternsOpen && (
+						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
+							{activeTab === "all" ? (
+								<p className="text-[11px] text-slate-400 px-1">No custom patterns yet</p>
+							) : (
+								<p className="text-[11px] text-slate-400 px-1">No custom favourites yet</p>
+							)}
+							{/* TODO: render custom patterns here once create flow (future issue) is implemented */}
+						</div>
+					)}
+				</div>
+
+				{/* Presets section */}
+				<div>
+					<button
+						onClick={() => setPresetsOpen((v) => !v)}
+						className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-100"
+					>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							Presets
+						</span>
+						<ChevronDown
+							size={13}
+							className={`text-slate-400 transition-transform duration-200 ${
+								presetsOpen ? "" : "-rotate-90"
+							}`}
+						/>
+					</button>
+					{presetsOpen && (
+						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
+							{visiblePresets.length === 0 ? (
+								<p className="text-[11px] text-slate-400 px-1">No preset favourites yet</p>
+							) : (
+								visiblePresets.map((pattern) => (
+									<PatternCard
+										key={pattern.id}
+										pattern={pattern}
+										isSelected={selectedPattern.id === pattern.id}
+										isFav={favouriteIds.includes(pattern.id)}
+										onSelect={() => setSelectedPattern(pattern)}
+										onToggleFav={() => toggleFavourite(pattern.id)}
+									/>
+								))
+							)}
+						</div>
+					)}
+				</div>
 
 				{/* Sign-in nudge */}
-				{activeTab === "favourites" && !user && (
+				{!user && (
 					<p className="text-xs text-slate-400 text-center px-4 py-3">
 						Sign in to sync your favourites across devices.
 					</p>
 				)}
-
-				{/* Presets section */}
-				{(() => {
-					if (visiblePresets.length === 0) return null;
-					return (
-						<div>
-							<button
-								onClick={() => setPresetsOpen((v) => !v)}
-								className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-100"
-							>
-								<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-									Presets
-								</span>
-								<ChevronDown
-									size={13}
-									className={`text-slate-400 transition-transform duration-200 ${
-										presetsOpen ? "" : "-rotate-90"
-									}`}
-								/>
-							</button>
-							{presetsOpen && (
-								<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
-									{visiblePresets.map((pattern) => (
-										<PatternCard
-											key={pattern.id}
-											pattern={pattern}
-											isSelected={selectedPattern.id === pattern.id}
-											isFav={favouriteIds.includes(pattern.id)}
-											onSelect={() => setSelectedPattern(pattern)}
-											onToggleFav={() => toggleFavourite(pattern.id)}
-										/>
-									))}
-								</div>
-							)}
-						</div>
-					);
-				})()}
 			</div>
 		</>
 	);

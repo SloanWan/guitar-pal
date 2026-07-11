@@ -645,7 +645,7 @@ export default function FingerpickEditModal({
 	const columnPopup = (
 		<div
 			ref={popupRef}
-			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-[60] w-max max-w-[15rem] rounded-lg border border-slate-200 bg-white shadow-lg p-2 flex flex-col gap-2`}
+			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-60 w-max max-w-60 rounded-lg border border-slate-200 bg-white shadow-lg p-2 flex flex-col gap-2`}
 		>
 			<div className="flex gap-1">
 				{DURATION_PICKER.map((d) => {
@@ -807,7 +807,7 @@ export default function FingerpickEditModal({
 			<DialogContent
 				showCloseButton={false}
 				style={dynamicStyle}
-				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-[var(--fp-w)] lg:max-w-[min(var(--fp-w),96vw)] max-h-[90vh] overflow-y-auto pb-0"
+				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[90vh] overflow-y-auto pb-0"
 				onKeyDown={(e) => {
 					// Undo/redo scoped to the modal (not window) to avoid clashing with
 					// the page. Skip text fields so their native undo keeps working.
@@ -946,7 +946,7 @@ export default function FingerpickEditModal({
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
 				    count (2→4, --fp-cols) in step with the dynamic modal width, so
 				    measures fill each row and the extra (add) tile wraps below. */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:[grid-template-columns:repeat(var(--fp-cols),minmax(0,1fr))] gap-4">
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4">
 					{working.measures.map((measure, measureIndex) => {
 						const beatLabels = computeBeatLabels(measure.slots, working.timeSignature);
 						const beatGroups = computeBeatGroups(measure.slots, working.timeSignature);
@@ -1315,7 +1315,7 @@ export default function FingerpickEditModal({
 				{techMenu && (
 					<div
 						ref={techMenuRef}
-						className="absolute z-[60] rounded-lg border border-slate-200 bg-white shadow-lg py-1 min-w-40 text-sm"
+						className="absolute z-60 rounded-lg border border-slate-200 bg-white shadow-lg py-1 min-w-40 text-sm"
 						style={{ top: techMenu.y, left: techMenu.x }}
 					>
 						{(() => {

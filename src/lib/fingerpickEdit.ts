@@ -220,6 +220,135 @@ export function moveCell(pattern: FingerpickPattern, cell: Cell, direction: Dire
 	return cell;
 }
 
+// ── Beat position labels ─────────────────────────────────────────────────────
+
+// Rhythmic value of each Duration in ticks, where one whole note = 96 ticks. 96
+// is divisible by 3, so triplet values stay integral. A rest carries no inherent
+// length in the data model, so it is treated as a quarter-beat's worth of time.
+const TICKS_PER_WHOLE = 96;
+
+const DURATION_TICKS: Record<Duration, number> = {
+	whole: 96,
+	half: 48,
+	quarter: 24,
+	"dotted-quarter": 36,
+	eighth: 12,
+	"dotted-eighth": 18,
+	"eighth-triplet": 8,
+	sixteenth: 6,
+	"sixteenth-triplet": 4,
+	"32nd": 3,
+	rest: 24,
+};
+
+// Standard counting syllables for a single beat subdivided into `subdivisions`
+// equal parts. Index 0 is always the beat number itself. Unknown subdivision
+// counts fall back to numbering only the downbeat.
+function subdivisionSequence(subdivisions: number, beatLabel: string): string[] {
+	switch (subdivisions) {
+		case 1:
+			return [beatLabel];
+		case 2:
+			return [beatLabel, "+"];
+		case 3:
+			return [beatLabel, "trip", "let"];
+		case 4:
+			return [beatLabel, "e", "+", "a"];
+		case 6:
+			return [beatLabel, "trip", "let", "+", "trip", "let"];
+		case 8:
+			return [beatLabel, "ta", "e", "ta", "+", "ta", "a", "ta"];
+		default: {
+			const seq = new Array<string>(subdivisions).fill("");
+			seq[0] = beatLabel;
+			return seq;
+		}
+	}
+}
+
+// Compute the beat-position label for every slot in a measure. The beat unit is
+// derived from the time signature denominator (/4 → quarter, /8 → eighth). Slots
+// are grouped by the beat their onset falls in: a lone slot in a beat is labelled
+// with the beat number ("1", "2", …); a beat holding several onsets is subdivided
+// to the finest value present and labelled with counting syllables (e.g. quarter
+// → sixteenths gives "1 e + a"). A note spanning multiple beats is labelled with
+// its starting beat number and simply leaves the beats it covers unlabelled.
+//
+// The returned array is always the same length as `slots` — exactly one label per
+// slot — so callers can render one label under each column.
+export function computeBeatLabels(
+	slots: BeatSlot[],
+	timeSignature: [number, number],
+): string[] {
+	const denominator = timeSignature[1];
+	const beatTicks = TICKS_PER_WHOLE / denominator; // quarter = 24, eighth = 12
+
+	const labels = new Array<string>(slots.length).fill("");
+
+	// Assign each slot to the beat its onset (cumulative start tick) falls in.
+	const beats = new Map<number, { slotIndex: number; startTick: number }[]>();
+	let cursor = 0;
+	slots.forEach((slot, i) => {
+		const beatIndex = Math.floor(cursor / beatTicks);
+		const group = beats.get(beatIndex);
+		if (group) group.push({ slotIndex: i, startTick: cursor });
+		else beats.set(beatIndex, [{ slotIndex: i, startTick: cursor }]);
+		cursor += DURATION_TICKS[slot.duration];
+	});
+
+	for (const [beatIndex, group] of beats) {
+		const beatLabel = String(beatIndex + 1);
+		if (group.length === 1) {
+			labels[group[0].slotIndex] = beatLabel;
+			continue;
+		}
+		// Several onsets share this beat: subdivide to the finest value present.
+		const beatStart = beatIndex * beatTicks;
+		const smallest = Math.min(
+			...group.map((g) => DURATION_TICKS[slots[g.slotIndex].duration]),
+		);
+		const subdivisions = Math.max(2, Math.round(beatTicks / smallest));
+		const seq = subdivisionSequence(subdivisions, beatLabel);
+		for (const g of group) {
+			const idx = Math.round((g.startTick - beatStart) / smallest);
+			labels[g.slotIndex] = idx >= 0 && idx < seq.length ? seq[idx] : "";
+		}
+	}
+
+	return labels;
+}
+
+// Group slot indices by the beat their onset falls in, using the same beat unit
+// as computeBeatLabels (time signature denominator: /4 → quarter, /8 → eighth).
+// Each returned inner array lists the slot indices belonging to one beat, in
+// order. Beats are returned in playing order and every slot appears in exactly
+// one group, so the flattened result is [0, 1, …, slots.length - 1].
+// Example: 4/4 [quarter, eighth, eighth, quarter, quarter] → [[0], [1, 2], [3], [4]].
+export function computeBeatGroups(
+	slots: BeatSlot[],
+	timeSignature: [number, number],
+): number[][] {
+	const denominator = timeSignature[1];
+	const beatTicks = TICKS_PER_WHOLE / denominator; // quarter = 24, eighth = 12
+
+	const groups: number[][] = [];
+	let current: number[] | null = null;
+	let currentBeat = -1;
+	let cursor = 0;
+	slots.forEach((slot, i) => {
+		const beatIndex = Math.floor(cursor / beatTicks);
+		if (!current || beatIndex !== currentBeat) {
+			current = [];
+			groups.push(current);
+			currentBeat = beatIndex;
+		}
+		current.push(i);
+		cursor += DURATION_TICKS[slot.duration];
+	});
+
+	return groups;
+}
+
 // ── Slot / measure structural edits ─────────────────────────────────────────
 
 function groupTargetsByMeasure(targets: SlotTarget[]): Map<number, Set<number>> {
@@ -340,4 +469,223 @@ export function deleteMeasure(
 ): FingerpickPattern {
 	if (pattern.measures.length <= 1) return pattern;
 	return { ...pattern, measures: pattern.measures.filter((_, mi) => mi !== measureIndex) };
+}
+
+// ── Duration arithmetic (capacity model) ─────────────────────────────────────
+//
+// Rhythmic value of each Duration measured in thirty-second notes (the common
+// unit). A rest carries no inherent length in the data model, so — like the beat
+// label logic — it is treated as a quarter's worth of time for capacity purposes.
+// Triplet values are not integral in this unit; they are not offered by the
+// split/merge UI but are given their exact fractional weight so sums stay honest.
+export const DURATION_UNITS: Record<Duration, number> = {
+	whole: 32,
+	half: 16,
+	quarter: 8,
+	"dotted-quarter": 12,
+	eighth: 4,
+	"dotted-eighth": 6,
+	"eighth-triplet": 8 / 3,
+	sixteenth: 2,
+	"sixteenth-triplet": 4 / 3,
+	"32nd": 1,
+	rest: 8,
+};
+
+// Total capacity of a measure in thirty-second-note units. 4/4 → 32, 3/4 → 24,
+// 6/8 → 24 (numerator × 32/denominator).
+export function measureCapacity(timeSignature: [number, number]): number {
+	const [numerator, denominator] = timeSignature;
+	return numerator * (32 / denominator);
+}
+
+export function slotDurationUnits(duration: Duration): number {
+	return DURATION_UNITS[duration];
+}
+
+export function usedUnits(slots: BeatSlot[]): number {
+	return slots.reduce((sum, slot) => sum + slotDurationUnits(slot.duration), 0);
+}
+
+export function remainingUnits(slots: BeatSlot[], timeSignature: [number, number]): number {
+	return measureCapacity(timeSignature) - usedUnits(slots);
+}
+
+// A slot "has data" when any string is sounding (a fret) or muted. Techniques and
+// ties never exist without an underlying fret, so a fret/mute test is sufficient.
+export function slotHasStringData(slot: BeatSlot): boolean {
+	return slot.strings.some((sf) => sf.fret !== null || sf.muted);
+}
+
+function cloneStrings(strings: BeatSlot["strings"]): BeatSlot["strings"] {
+	return strings.map((sf) => ({ ...sf })) as BeatSlot["strings"];
+}
+
+// ── Split / merge / reset / remap (measure-level, immutable) ──────────────────
+
+// Split a slot into N sub-slots of `targetDuration`. The first sub-slot inherits
+// the original string data; the rest are empty. N is chosen to cover the original
+// slot's duration; any extra units the sub-slots add beyond the original must fit
+// in the measure's remaining capacity. Returns the measures unchanged when the
+// target is not smaller than the current slot or capacity would be exceeded.
+export function splitSlot(
+	measures: Measure[],
+	measureIndex: number,
+	slotIndex: number,
+	targetDuration: Duration,
+	timeSignature: [number, number],
+): Measure[] {
+	const measure = measures[measureIndex];
+	if (!measure) return measures;
+	const slot = measure.slots[slotIndex];
+	if (!slot) return measures;
+
+	const currentUnits = slotDurationUnits(slot.duration);
+	const targetUnits = slotDurationUnits(targetDuration);
+	if (targetUnits >= currentUnits) return measures; // target must be smaller
+
+	const count = Math.ceil(currentUnits / targetUnits);
+	const extra = count * targetUnits - currentUnits;
+	if (extra > remainingUnits(measure.slots, timeSignature)) return measures; // over capacity
+
+	const subSlots: BeatSlot[] = [];
+	for (let i = 0; i < count; i++) {
+		if (i === 0) {
+			subSlots.push({
+				id: crypto.randomUUID(),
+				duration: targetDuration,
+				strings: cloneStrings(slot.strings),
+			});
+		} else {
+			subSlots.push(makeEmptySlot(targetDuration));
+		}
+	}
+
+	const newSlots = [
+		...measure.slots.slice(0, slotIndex),
+		...subSlots,
+		...measure.slots.slice(slotIndex + 1),
+	];
+	return measures.map((m, mi) => (mi === measureIndex ? { ...m, slots: newSlots } : m));
+}
+
+export type MergeResult =
+	| { type: "ok"; measures: Measure[] }
+	| { type: "confirm"; affectedSlotCount: number; pendingMeasures: Measure[] };
+
+// Merge the slot at `slotIndex` with the following slots whose durations sum
+// exactly to `targetDuration`, into a single slot of that duration. The first
+// slot's string data is kept; the rest is discarded. When any of the discarded
+// slots carried data, the caller is asked to confirm (the merge is still computed
+// and returned as `pendingMeasures`). Returns an unchanged `ok` result when the
+// merge is not valid (not enough following slots, or durations don't line up).
+export function mergeSlots(
+	measures: Measure[],
+	measureIndex: number,
+	slotIndex: number,
+	targetDuration: Duration,
+	// Part of the shared split/merge/reset/remap signature; the merge validates
+	// purely against the existing slot durations so capacity is not consulted here.
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	timeSignature: [number, number],
+): MergeResult {
+	const measure = measures[measureIndex];
+	if (!measure) return { type: "ok", measures };
+
+	const targetUnits = slotDurationUnits(targetDuration);
+	let sum = 0;
+	let end = slotIndex;
+	while (end < measure.slots.length && sum < targetUnits) {
+		sum += slotDurationUnits(measure.slots[end].duration);
+		end++;
+	}
+	const consumed = end - slotIndex;
+	// Need an exact fit spanning at least the current slot plus one following slot.
+	if (sum !== targetUnits || consumed < 2) return { type: "ok", measures };
+
+	const first = measure.slots[slotIndex];
+	const merged: BeatSlot = {
+		id: crypto.randomUUID(),
+		duration: targetDuration,
+		strings: cloneStrings(first.strings),
+	};
+	const newSlots = [
+		...measure.slots.slice(0, slotIndex),
+		merged,
+		...measure.slots.slice(end),
+	];
+	const pendingMeasures = measures.map((m, mi) =>
+		mi === measureIndex ? { ...m, slots: newSlots } : m,
+	);
+
+	const discarded = measure.slots.slice(slotIndex + 1, end);
+	const affectedSlotCount = discarded.filter(slotHasStringData).length;
+	if (affectedSlotCount > 0) {
+		return { type: "confirm", affectedSlotCount, pendingMeasures };
+	}
+	return { type: "ok", measures: pendingMeasures };
+}
+
+export type ResetResult =
+	| { type: "ok"; measures: Measure[] }
+	| { type: "confirm"; measures: Measure[] };
+
+// Replace every slot in a measure with (capacity / targetDuration) fresh empty
+// slots. When the measure already holds string data, the reset is returned as a
+// `confirm` result so the caller can offer a keep-data (remap) alternative before
+// clearing.
+export function resetMeasure(
+	measures: Measure[],
+	measureIndex: number,
+	targetDuration: Duration,
+	timeSignature: [number, number],
+): ResetResult {
+	const measure = measures[measureIndex];
+	if (!measure) return { type: "ok", measures };
+
+	const count = Math.max(
+		1,
+		Math.round(measureCapacity(timeSignature) / slotDurationUnits(targetDuration)),
+	);
+	const newSlots = Array.from({ length: count }, () => makeEmptySlot(targetDuration));
+	const newMeasures = measures.map((m, mi) =>
+		mi === measureIndex ? { ...m, slots: newSlots } : m,
+	);
+
+	const hasData = measure.slots.some(slotHasStringData);
+	return { type: hasData ? "confirm" : "ok", measures: newMeasures };
+}
+
+// Rebuild a measure at a new uniform duration while preserving existing string
+// data by position in time. Each new slot is claimed by the first existing slot
+// whose onset falls within it: on a split (target smaller) the leading sub-slot
+// keeps the data and the rest are empty; on a merge (target larger) the first of
+// the merged slots wins and the others are discarded.
+export function remapMeasure(
+	measures: Measure[],
+	measureIndex: number,
+	targetDuration: Duration,
+	timeSignature: [number, number],
+): Measure[] {
+	const measure = measures[measureIndex];
+	if (!measure) return measures;
+
+	const targetUnits = slotDurationUnits(targetDuration);
+	const count = Math.max(1, Math.round(measureCapacity(timeSignature) / targetUnits));
+	const newSlots = Array.from({ length: count }, () => makeEmptySlot(targetDuration));
+
+	const claimed = new Set<number>();
+	let cursor = 0;
+	for (const old of measure.slots) {
+		const index = Math.floor(cursor / targetUnits);
+		if (index < count && !claimed.has(index)) {
+			if (slotHasStringData(old)) {
+				newSlots[index] = { ...newSlots[index], strings: cloneStrings(old.strings) };
+			}
+			claimed.add(index);
+		}
+		cursor += slotDurationUnits(old.duration);
+	}
+
+	return measures.map((m, mi) => (mi === measureIndex ? { ...m, slots: newSlots } : m));
 }

@@ -17,9 +17,20 @@ import {
 	addSlotToMeasure,
 	addMeasure,
 	deleteMeasure,
+	computeBeatLabels,
+	computeBeatGroups,
 	clampFret,
+	measureCapacity,
+	slotDurationUnits,
+	usedUnits,
+	remainingUnits,
+	splitSlot,
+	mergeSlots,
+	resetMeasure,
+	remapMeasure,
 	type Cell,
 } from "@/lib/fingerpickEdit";
+import type { Duration, Measure, StringFret } from "@/lib/fingerpickTypes";
 
 // A 2-measure pattern with distinct slot counts for boundary-wrap tests.
 function twoMeasurePattern(): FingerpickPattern {
@@ -262,5 +273,221 @@ describe("measure structural edits", () => {
 
 		const single = deleteMeasure(p, 0);
 		expect(single.measures).toHaveLength(1);
+	});
+});
+
+describe("computeBeatLabels", () => {
+	const slotsOf = (durations: Duration[]) => durations.map((d) => makeEmptySlot(d));
+
+	it("labels four quarter notes 1-4 in 4/4", () => {
+		const slots = slotsOf(["quarter", "quarter", "quarter", "quarter"]);
+		expect(computeBeatLabels(slots, [4, 4])).toEqual(["1", "2", "3", "4"]);
+	});
+
+	it("subdivides a beat holding two eighths in mixed quarter+eighth 4/4", () => {
+		const slots = slotsOf(["quarter", "eighth", "eighth", "quarter", "quarter"]);
+		expect(computeBeatLabels(slots, [4, 4])).toEqual(["1", "2", "+", "3", "4"]);
+	});
+
+	it("labels sixteenths as 1 e + a within each beat in 4/4", () => {
+		const slots = slotsOf(Array<Duration>(16).fill("sixteenth"));
+		expect(computeBeatLabels(slots, [4, 4])).toEqual([
+			"1", "e", "+", "a",
+			"2", "e", "+", "a",
+			"3", "e", "+", "a",
+			"4", "e", "+", "a",
+		]);
+	});
+
+	it("uses eighth-note beats numbered 1-6 in 6/8", () => {
+		const slots = slotsOf(Array<Duration>(6).fill("eighth"));
+		expect(computeBeatLabels(slots, [6, 8])).toEqual(["1", "2", "3", "4", "5", "6"]);
+	});
+
+	it("subdivides an eighth beat into two sixteenths as 1 + in 6/8", () => {
+		const slots = slotsOf(["sixteenth", "sixteenth"]);
+		expect(computeBeatLabels(slots, [6, 8])).toEqual(["1", "+"]);
+	});
+
+	it("labels a whole note spanning the measure with its starting beat only", () => {
+		expect(computeBeatLabels(slotsOf(["whole"]), [4, 4])).toEqual(["1"]);
+	});
+
+	it("skips the beats a half note covers, labelling only its onset", () => {
+		const slots = slotsOf(["half", "quarter", "quarter"]);
+		expect(computeBeatLabels(slots, [4, 4])).toEqual(["1", "3", "4"]);
+	});
+});
+
+describe("computeBeatGroups", () => {
+	const slotsOf = (durations: Duration[]) => durations.map((d) => makeEmptySlot(d));
+
+	it("groups a mixed quarter+eighth measure by beat in 4/4", () => {
+		const slots = slotsOf(["quarter", "eighth", "eighth", "quarter", "quarter"]);
+		expect(computeBeatGroups(slots, [4, 4])).toEqual([[0], [1, 2], [3], [4]]);
+	});
+
+	it("puts a beat-spanning half note in its own group and covers no other beat", () => {
+		const slots = slotsOf(["half", "quarter", "quarter"]);
+		expect(computeBeatGroups(slots, [4, 4])).toEqual([[0], [1], [2]]);
+	});
+
+	it("uses eighth-note beats in 6/8", () => {
+		const slots = slotsOf(["eighth", "sixteenth", "sixteenth", "eighth"]);
+		expect(computeBeatGroups(slots, [6, 8])).toEqual([[0], [1, 2], [3]]);
+	});
+});
+
+// ── Duration capacity + split/merge/reset/remap ─────────────────────────────
+
+// A slot of the given duration with a fret on the top string (marks it as data).
+function slotWith(duration: Duration, fret: number): ReturnType<typeof makeEmptySlot> {
+	const slot = makeEmptySlot(duration);
+	const strings = slot.strings.map((sf, i) =>
+		i === 0 ? ({ ...sf, fret } as StringFret) : sf,
+	) as ReturnType<typeof makeEmptySlot>["strings"];
+	return { ...slot, strings };
+}
+
+const measuresOf = (slots: ReturnType<typeof makeEmptySlot>[]): Measure[] => [
+	{ id: "m0", slots },
+];
+
+const firstFret = (measures: Measure[], slotIndex: number): number | null =>
+	measures[0].slots[slotIndex].strings[0].fret;
+
+describe("measureCapacity", () => {
+	it("returns 32/24/24 for 4/4, 3/4 and 6/8", () => {
+		expect(measureCapacity([4, 4])).toBe(32);
+		expect(measureCapacity([3, 4])).toBe(24);
+		expect(measureCapacity([6, 8])).toBe(24);
+	});
+});
+
+describe("duration unit helpers", () => {
+	it("slotDurationUnits maps the common durations", () => {
+		expect(slotDurationUnits("whole")).toBe(32);
+		expect(slotDurationUnits("quarter")).toBe(8);
+		expect(slotDurationUnits("eighth")).toBe(4);
+		expect(slotDurationUnits("sixteenth")).toBe(2);
+		expect(slotDurationUnits("rest")).toBe(8);
+	});
+
+	it("usedUnits and remainingUnits sum against capacity", () => {
+		const slots = [makeEmptySlot("quarter"), makeEmptySlot("eighth")];
+		expect(usedUnits(slots)).toBe(12);
+		expect(remainingUnits(slots, [4, 4])).toBe(20);
+	});
+});
+
+describe("splitSlot", () => {
+	it("splits a quarter into two eighths, first keeps data", () => {
+		const measures = measuresOf([
+			slotWith("quarter", 5),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const out = splitSlot(measures, 0, 0, "eighth", [4, 4]);
+		expect(out[0].slots).toHaveLength(5);
+		expect(out[0].slots[0].duration).toBe("eighth");
+		expect(out[0].slots[1].duration).toBe("eighth");
+		expect(firstFret(out, 0)).toBe(5);
+		expect(firstFret(out, 1)).toBeNull();
+	});
+
+	it("rejects a split that would exceed measure capacity", () => {
+		const measures = measuresOf([slotWith("whole", 3)]);
+		// dotted-quarter (12u) does not divide a whole (32u); covering it needs 36u,
+		// 4 over a full 4/4 measure — must be rejected and returned unchanged.
+		const out = splitSlot(measures, 0, 0, "dotted-quarter", [4, 4]);
+		expect(out).toEqual(measures);
+		expect(out[0].slots).toHaveLength(1);
+	});
+});
+
+describe("mergeSlots", () => {
+	it("merges two eighths into a quarter without confirmation when empty", () => {
+		const measures = measuresOf([
+			slotWith("eighth", 2),
+			makeEmptySlot("eighth"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const res = mergeSlots(measures, 0, 0, "quarter", [4, 4]);
+		expect(res.type).toBe("ok");
+		if (res.type === "ok") {
+			expect(res.measures[0].slots).toHaveLength(4);
+			expect(res.measures[0].slots[0].duration).toBe("quarter");
+			expect(res.measures[0].slots[0].strings[0].fret).toBe(2);
+		}
+	});
+
+	it("asks for confirmation when a discarded slot carries data", () => {
+		const measures = measuresOf([
+			slotWith("eighth", 2),
+			slotWith("eighth", 7),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const res = mergeSlots(measures, 0, 0, "quarter", [4, 4]);
+		expect(res.type).toBe("confirm");
+		if (res.type === "confirm") {
+			expect(res.affectedSlotCount).toBe(1);
+			expect(res.pendingMeasures[0].slots).toHaveLength(4);
+			expect(res.pendingMeasures[0].slots[0].strings[0].fret).toBe(2);
+		}
+	});
+});
+
+describe("resetMeasure", () => {
+	it("applies immediately when the measure is empty", () => {
+		const measures = measuresOf([makeEmptySlot("quarter"), makeEmptySlot("quarter")]);
+		const res = resetMeasure(measures, 0, "eighth", [4, 4]);
+		expect(res.type).toBe("ok");
+		expect(res.measures[0].slots).toHaveLength(8);
+		expect(res.measures[0].slots.every((s) => s.duration === "eighth")).toBe(true);
+	});
+
+	it("requests confirmation when the measure holds data", () => {
+		const measures = measuresOf([slotWith("quarter", 4), makeEmptySlot("quarter")]);
+		const res = resetMeasure(measures, 0, "quarter", [4, 4]);
+		expect(res.type).toBe("confirm");
+		expect(res.measures[0].slots).toHaveLength(4);
+		expect(res.measures[0].slots.every((s) => !s.strings.some((x) => x.fret !== null))).toBe(true);
+	});
+});
+
+describe("remapMeasure", () => {
+	it("keeps leading data when splitting to a smaller duration", () => {
+		const measures = measuresOf([
+			slotWith("quarter", 6),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const out = remapMeasure(measures, 0, "eighth", [4, 4]);
+		expect(out[0].slots).toHaveLength(8);
+		expect(firstFret(out, 0)).toBe(6);
+		expect(firstFret(out, 1)).toBeNull();
+	});
+
+	it("keeps the first slot and discards merged data when merging to a larger duration", () => {
+		const measures = measuresOf([
+			slotWith("eighth", 6),
+			slotWith("eighth", 9),
+			makeEmptySlot("eighth"),
+			makeEmptySlot("eighth"),
+			makeEmptySlot("eighth"),
+			makeEmptySlot("eighth"),
+			makeEmptySlot("eighth"),
+			makeEmptySlot("eighth"),
+		]);
+		const out = remapMeasure(measures, 0, "quarter", [4, 4]);
+		expect(out[0].slots).toHaveLength(4);
+		expect(firstFret(out, 0)).toBe(6); // first eighth's data kept
+		expect(firstFret(out, 1)).toBeNull(); // second eighth (9) discarded, not carried
 	});
 });

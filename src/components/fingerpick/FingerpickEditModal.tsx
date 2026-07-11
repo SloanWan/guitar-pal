@@ -10,6 +10,8 @@ import {
 	ArrowLeftToLine,
 	ArrowRightToLine,
 	Merge,
+	Undo2,
+	Redo2,
 	X as XIcon,
 } from "lucide-react";
 import type { Duration, FingerpickPattern, Measure, StringFret } from "@/lib/fingerpickTypes";
@@ -143,6 +145,9 @@ const GRID_GAP_REM = 1; // gap-4 between measure blocks
 const MODAL_CHROME_REM = 2; // DialogContent p-4 (left + right)
 const TWO_DIGIT_WINDOW_MS = 800;
 const LONG_PRESS_MS = 500;
+// Maximum number of pattern snapshots retained for undo/redo. Older snapshots
+// are dropped from the front once this is exceeded.
+const HISTORY_LIMIT = 50;
 
 const cellKey = (c: Cell) => `${c.measureIndex}:${c.slotIndex}:${c.stringIndex}`;
 const columnKey = (t: SlotTarget) => `${t.measureIndex}:${t.slotIndex}`;
@@ -183,8 +188,19 @@ export default function FingerpickEditModal({
 	// with unsaved edits. Rendered in the header in place of the close button.
 	const [discardConfirm, setDiscardConfirm] = useState(false);
 
+	// Undo/redo history. `history` holds every committed pattern snapshot (the
+	// initial state plus one entry per edit); `historyIndex` points at the entry
+	// currently shown in `working`. Undo/redo move the index and restore that
+	// snapshot; a fresh edit truncates any redo tail before appending.
+	const [history, setHistory] = useState<FingerpickPattern[]>([]);
+	const [historyIndex, setHistoryIndex] = useState(0);
+
 	// Latest working pattern for keyboard handlers (avoids stale-closure nav).
 	const workingRef = useRef(working);
+	// Ref mirrors of the history state so commit/undo/redo can read the latest
+	// values without stale closures (and without re-creating the callbacks).
+	const historyRef = useRef<FingerpickPattern[]>([]);
+	const historyIndexRef = useRef(0);
 	// Serialized snapshot of the pattern taken when the modal opened. Comparing
 	// the live pattern against this detects unsaved edits (see isDirty) without
 	// having to flag every individual mutation site.
@@ -203,6 +219,54 @@ export default function FingerpickEditModal({
 		workingRef.current = working;
 	}, [working]);
 
+	// Keep the history refs in step with their state.
+	useEffect(() => {
+		historyRef.current = history;
+	}, [history]);
+	useEffect(() => {
+		historyIndexRef.current = historyIndex;
+	}, [historyIndex]);
+
+	// Apply a draft mutation and record it for undo/redo. Every draft-mutating
+	// operation goes through here: it derives the next pattern from the current
+	// one, drops any redo tail, appends the snapshot (capped at HISTORY_LIMIT),
+	// and advances the index.
+	const commit = useCallback(
+		(updater: (prev: FingerpickPattern) => FingerpickPattern) => {
+			const prev = workingRef.current;
+			const next = updater(prev);
+			if (next === prev) return;
+			setWorking(next);
+			const idx = historyIndexRef.current;
+			setHistory((h) => {
+				const base = h.slice(0, idx + 1);
+				base.push(next);
+				return base.length > HISTORY_LIMIT ? base.slice(base.length - HISTORY_LIMIT) : base;
+			});
+			setHistoryIndex((i) => Math.min(i + 1, HISTORY_LIMIT - 1));
+		},
+		[],
+	);
+
+	const undo = useCallback(() => {
+		const i = historyIndexRef.current;
+		if (i <= 0) return;
+		const ni = i - 1;
+		setHistoryIndex(ni);
+		setWorking(historyRef.current[ni]);
+	}, []);
+
+	const redo = useCallback(() => {
+		const i = historyIndexRef.current;
+		if (i >= historyRef.current.length - 1) return;
+		const ni = i + 1;
+		setHistoryIndex(ni);
+		setWorking(historyRef.current[ni]);
+	}, []);
+
+	const canUndo = historyIndex > 0;
+	const canRedo = historyIndex < history.length - 1;
+
 	// Clear any pending long-press timer on unmount.
 	useEffect(() => {
 		return () => {
@@ -216,6 +280,8 @@ export default function FingerpickEditModal({
 		queueMicrotask(() => {
 			const next = initialPattern ? clonePatternForEdit(initialPattern) : makeDefaultPattern();
 			setWorking(next);
+			setHistory([next]);
+			setHistoryIndex(0);
 			pristineRef.current = JSON.stringify(next);
 			setSelectedCell(null);
 			setHoveredCell(null);
@@ -269,13 +335,13 @@ export default function FingerpickEditModal({
 		}
 		if (key === "Backspace" || key === "Delete") {
 			e.preventDefault();
-			setWorking((prev) => setInactive(prev, cell));
+			commit((prev) => setInactive(prev, cell));
 			pendingDigitRef.current = null;
 			return;
 		}
 		if (key === "x" || key === "X") {
 			e.preventDefault();
-			setWorking((prev) => toggleMuted(prev, cell));
+			commit((prev) => toggleMuted(prev, cell));
 			pendingDigitRef.current = null;
 			return;
 		}
@@ -288,18 +354,18 @@ export default function FingerpickEditModal({
 			if (pend && pend.key === ck && now - pend.time < TWO_DIGIT_WINDOW_MS) {
 				const combined = pend.digit * 10 + digit;
 				if (combined <= MAX_FRET) {
-					setWorking((prev) => setFret(prev, cell, combined));
+					commit((prev) => setFret(prev, cell, combined));
 					pendingDigitRef.current = null;
 				} else {
-					setWorking((prev) => setFret(prev, cell, digit));
+					commit((prev) => setFret(prev, cell, digit));
 					pendingDigitRef.current = { key: ck, digit, time: now };
 				}
 			} else {
-				setWorking((prev) => setFret(prev, cell, digit));
+				commit((prev) => setFret(prev, cell, digit));
 				pendingDigitRef.current = { key: ck, digit, time: now };
 			}
 		}
-	}, []);
+	}, [commit]);
 
 	// ── Technique context menu ───────────────────────────────────────────────
 
@@ -337,7 +403,7 @@ export default function FingerpickEditModal({
 	function applyTechnique(technique: NonNullable<StringFret["technique"]> | null) {
 		if (!techMenu) return;
 		const cell = techMenu.cell;
-		setWorking((prev) => setTechnique(prev, cell, technique));
+		commit((prev) => setTechnique(prev, cell, technique));
 		setTechMenu(null);
 	}
 
@@ -357,12 +423,12 @@ export default function FingerpickEditModal({
 	}
 
 	function applyDuration(duration: Duration) {
-		setWorking((prev) => setSlotsDuration(prev, columnTargets(), duration));
+		commit((prev) => setSlotsDuration(prev, columnTargets(), duration));
 	}
 
 	function applyStructural(op: "before" | "after" | "duplicate" | "delete") {
 		const targets = columnTargets();
-		setWorking((prev) => {
+		commit((prev) => {
 			if (op === "duplicate") return duplicateSlots(prev, targets);
 			if (op === "delete") return deleteSlots(prev, targets);
 			return insertSlots(prev, targets, op);
@@ -374,7 +440,7 @@ export default function FingerpickEditModal({
 	// Replace a measure's slots via a Measure[] transform (split/merge/reset/remap
 	// all operate on the measure array, not the whole pattern).
 	function applyMeasures(measures: Measure[]) {
-		setWorking((prev) => ({ ...prev, measures }));
+		commit((prev) => ({ ...prev, measures }));
 	}
 
 	// ── Split / merge / replace-with-whole (single selected column) ──────────
@@ -706,6 +772,16 @@ export default function FingerpickEditModal({
 				showCloseButton={false}
 				style={dynamicStyle}
 				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-[var(--fp-w)] lg:max-w-[min(var(--fp-w),96vw)] max-h-[90vh] overflow-y-auto"
+				onKeyDown={(e) => {
+					// Undo/redo scoped to the modal (not window) to avoid clashing with
+					// the page. Skip text fields so their native undo keeps working.
+					if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+					const tag = (e.target as HTMLElement).tagName;
+					if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+					e.preventDefault();
+					if (e.shiftKey) redo();
+					else undo();
+				}}
 				onEscapeKeyDown={(e) => {
 					if (techMenu || selectedColumns.size > 0) {
 						e.preventDefault();
@@ -719,31 +795,51 @@ export default function FingerpickEditModal({
 					<h2 className="font-heading text-base font-medium text-slate-700">
 						{initialPattern ? "Edit pattern" : "New pattern"}
 					</h2>
-					{discardConfirm ? (
-						<div className="flex items-center gap-2">
-							<span className="text-xs text-slate-600">Discard changes?</span>
-							<button
-								onClick={() => setDiscardConfirm(false)}
-								className="h-8 px-3 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-							>
-								Keep editing
-							</button>
-							<button
-								onClick={doClose}
-								className="h-8 px-3 rounded-md text-xs font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors"
-							>
-								Discard
-							</button>
-						</div>
-					) : (
+					<div className="flex items-center gap-1">
 						<button
-							onClick={requestClose}
-							aria-label="Close"
-							className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+							onClick={undo}
+							disabled={!canUndo}
+							aria-label="Undo"
+							title="Undo (⌘Z)"
+							className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
 						>
-							<XIcon size={18} />
+							<Undo2 size={16} />
 						</button>
-					)}
+						<button
+							onClick={redo}
+							disabled={!canRedo}
+							aria-label="Redo"
+							title="Redo (⌘⇧Z)"
+							className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+						>
+							<Redo2 size={16} />
+						</button>
+						{discardConfirm ? (
+							<div className="flex items-center gap-2">
+								<span className="text-xs text-slate-600">Discard changes?</span>
+								<button
+									onClick={() => setDiscardConfirm(false)}
+									className="h-8 px-3 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+								>
+									Keep editing
+								</button>
+								<button
+									onClick={doClose}
+									className="h-8 px-3 rounded-md text-xs font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors"
+								>
+									Discard
+								</button>
+							</div>
+						) : (
+							<button
+								onClick={requestClose}
+								aria-label="Close"
+								className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+							>
+								<XIcon size={18} />
+							</button>
+						)}
+					</div>
 				</div>
 
 				{/* ── Metadata bar ──────────────────────────────────────────────── */}
@@ -755,7 +851,7 @@ export default function FingerpickEditModal({
 						<input
 							type="text"
 							value={working.name}
-							onChange={(e) => setWorking((p) => ({ ...p, name: e.target.value }))}
+							onChange={(e) => commit((p) => ({ ...p, name: e.target.value }))}
 							placeholder="Pattern name"
 							className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40 ${
 								nameValid ? "border-slate-200" : "border-red-300"
@@ -772,7 +868,7 @@ export default function FingerpickEditModal({
 							max={MAX_BPM}
 							value={working.bpm}
 							onChange={(e) =>
-								setWorking((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))
+								commit((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))
 							}
 							className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
 						/>
@@ -785,7 +881,7 @@ export default function FingerpickEditModal({
 							value={`${working.timeSignature[0]}/${working.timeSignature[1]}`}
 							onChange={(e) => {
 								const ts = TIME_SIGNATURES.find((t) => t.label === e.target.value);
-								if (ts) setWorking((p) => ({ ...p, timeSignature: ts.value }));
+								if (ts) commit((p) => ({ ...p, timeSignature: ts.value }));
 							}}
 							className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
 						>
@@ -803,7 +899,7 @@ export default function FingerpickEditModal({
 						<input
 							type="text"
 							value={working.description ?? ""}
-							onChange={(e) => setWorking((p) => ({ ...p, description: e.target.value }))}
+							onChange={(e) => commit((p) => ({ ...p, description: e.target.value }))}
 							placeholder="Optional"
 							className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
 						/>
@@ -839,7 +935,7 @@ export default function FingerpickEditModal({
 										Measure {measureIndex + 1}
 									</span>
 									<button
-										onClick={() => setWorking((p) => deleteMeasure(p, measureIndex))}
+										onClick={() => commit((p) => deleteMeasure(p, measureIndex))}
 										disabled={working.measures.length <= 1}
 										aria-label="Delete measure"
 										title="Delete measure"
@@ -1051,7 +1147,7 @@ export default function FingerpickEditModal({
 
 					{/* Add measure block */}
 					<button
-						onClick={() => setWorking((p) => addMeasure(p))}
+						onClick={() => commit((p) => addMeasure(p))}
 						className="rounded-lg border border-dashed border-slate-300 min-h-32 flex items-center justify-center gap-1.5 text-sm text-slate-400 hover:border-denim hover:text-denim transition-colors"
 					>
 						<Plus size={16} /> Add measure

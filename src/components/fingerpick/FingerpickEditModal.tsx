@@ -179,9 +179,16 @@ export default function FingerpickEditModal({
 		measureIndex: number;
 		targetDuration: Duration;
 	} | null>(null);
+	// Inline "Discard changes?" confirmation shown when the user tries to close
+	// with unsaved edits. Rendered in the header in place of the close button.
+	const [discardConfirm, setDiscardConfirm] = useState(false);
 
 	// Latest working pattern for keyboard handlers (avoids stale-closure nav).
 	const workingRef = useRef(working);
+	// Serialized snapshot of the pattern taken when the modal opened. Comparing
+	// the live pattern against this detects unsaved edits (see isDirty) without
+	// having to flag every individual mutation site.
+	const pristineRef = useRef<string>("");
 	// Two-digit fret entry buffer.
 	const pendingDigitRef = useRef<{ key: string; digit: number; time: number } | null>(null);
 	// Focusable cell buttons, keyed by cellKey.
@@ -207,13 +214,16 @@ export default function FingerpickEditModal({
 	useEffect(() => {
 		if (!open) return;
 		queueMicrotask(() => {
-			setWorking(initialPattern ? clonePatternForEdit(initialPattern) : makeDefaultPattern());
+			const next = initialPattern ? clonePatternForEdit(initialPattern) : makeDefaultPattern();
+			setWorking(next);
+			pristineRef.current = JSON.stringify(next);
 			setSelectedCell(null);
 			setHoveredCell(null);
 			setSelectedColumns(new Set());
 			setTechMenu(null);
 			setPopupConfirm(null);
 			setPresetConfirm(null);
+			setDiscardConfirm(false);
 			pendingDigitRef.current = null;
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -647,6 +657,25 @@ export default function FingerpickEditModal({
 		</div>
 	);
 
+	// ── Close guard ───────────────────────────────────────────────────────────
+
+	// True when the live pattern differs from the snapshot taken on open (i.e.
+	// there are unsaved edits — fret, slot, duration or metadata changes).
+	const isDirty = () => JSON.stringify(workingRef.current) !== pristineRef.current;
+
+	// Clear the confirmation and actually close.
+	function doClose() {
+		setDiscardConfirm(false);
+		onClose();
+	}
+
+	// Entry point for every close affordance (header button, outside click,
+	// Escape). Guards against discarding unsaved edits with an inline confirm.
+	function requestClose() {
+		if (isDirty()) setDiscardConfirm(true);
+		else doClose();
+	}
+
 	// ── Metadata edits ────────────────────────────────────────────────────────
 
 	function handleSave() {
@@ -672,7 +701,7 @@ export default function FingerpickEditModal({
 	} as React.CSSProperties;
 
 	return (
-		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && requestClose()}>
 			<DialogContent
 				showCloseButton={false}
 				style={dynamicStyle}
@@ -690,13 +719,31 @@ export default function FingerpickEditModal({
 					<h2 className="font-heading text-base font-medium text-slate-700">
 						{initialPattern ? "Edit pattern" : "New pattern"}
 					</h2>
-					<button
-						onClick={onClose}
-						aria-label="Close"
-						className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-					>
-						<XIcon size={18} />
-					</button>
+					{discardConfirm ? (
+						<div className="flex items-center gap-2">
+							<span className="text-xs text-slate-600">Discard changes?</span>
+							<button
+								onClick={() => setDiscardConfirm(false)}
+								className="h-8 px-3 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+							>
+								Keep editing
+							</button>
+							<button
+								onClick={doClose}
+								className="h-8 px-3 rounded-md text-xs font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors"
+							>
+								Discard
+							</button>
+						</div>
+					) : (
+						<button
+							onClick={requestClose}
+							aria-label="Close"
+							className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+						>
+							<XIcon size={18} />
+						</button>
+					)}
 				</div>
 
 				{/* ── Metadata bar ──────────────────────────────────────────────── */}

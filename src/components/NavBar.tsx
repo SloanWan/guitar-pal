@@ -1,4 +1,3 @@
-import { Guitar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LogoutButton from "./LogoutButton";
 import NavLinks from "./NavLinks";
@@ -18,7 +17,21 @@ export default async function NavBar() {
 			<div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
 				<Link href="/" className="flex items-center gap-2">
 					<div className="flex items-center justify-center size-7 rounded-lg bg-denim-tint text-denim">
-						<Guitar className="size-4" />
+						<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								className="size-4"
+								aria-hidden="true"
+							>
+								<path
+									d="M3 4h18M3 7.2h18M3 10.4h18M3 13.6h18M3 16.8h18M3 20h18"
+									stroke="currentColor"
+									strokeWidth="1.5"
+									strokeLinecap="square"
+								/>
+								<rect x="14" y="2" width="2" height="20" fill="#4A6FA5" />
+							</svg>
 					</div>
 					<span className="font-semibold text-sm tracking-tight hidden sm:block">
 						Guitar Pal

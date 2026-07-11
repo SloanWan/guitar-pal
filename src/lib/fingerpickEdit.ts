@@ -163,9 +163,26 @@ export function setTechnique(
 	cell: Cell,
 	technique: Technique,
 ): FingerpickPattern {
+	// Technique and tied are mutually exclusive on a string+slot: setting a
+	// technique clears any tie.
 	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) => ({
 		...sf,
 		technique,
+		tied: technique !== null ? false : sf.tied,
+	}));
+}
+
+// Toggle the tied flag on a cell. Tied and technique are mutually exclusive, so
+// setting tied clears the technique. Clearing tied leaves the technique alone.
+export function setTied(
+	pattern: FingerpickPattern,
+	cell: Cell,
+	tied: boolean,
+): FingerpickPattern {
+	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) => ({
+		...sf,
+		tied,
+		technique: tied ? null : sf.technique,
 	}));
 }
 
@@ -469,6 +486,41 @@ export function deleteMeasure(
 ): FingerpickPattern {
 	if (pattern.measures.length <= 1) return pattern;
 	return { ...pattern, measures: pattern.measures.filter((_, mi) => mi !== measureIndex) };
+}
+
+// Deep-clone the measure at `measureIndex` and insert the copy immediately after
+// it. The clone gets a fresh measure id and fresh ids for every slot so it never
+// aliases the original. No-op when the index is out of range. Measure numbers are
+// derived from position, so they update automatically for the caller.
+export function cloneMeasure(measures: Measure[], measureIndex: number): Measure[] {
+	const measure = measures[measureIndex];
+	if (!measure) return measures;
+	const cloned: Measure = {
+		id: crypto.randomUUID(),
+		slots: measure.slots.map(cloneSlotWithNewId),
+	};
+	return [
+		...measures.slice(0, measureIndex + 1),
+		cloned,
+		...measures.slice(measureIndex + 1),
+	];
+}
+
+// Swap the measures at `indexA` and `indexB`. No-op when the indices are equal or
+// either falls outside the array (used by the reorder arrow buttons).
+export function swapMeasures(measures: Measure[], indexA: number, indexB: number): Measure[] {
+	if (
+		indexA === indexB ||
+		indexA < 0 ||
+		indexB < 0 ||
+		indexA >= measures.length ||
+		indexB >= measures.length
+	) {
+		return measures;
+	}
+	const next = [...measures];
+	[next[indexA], next[indexB]] = [next[indexB], next[indexA]];
+	return next;
 }
 
 // ── Duration arithmetic (capacity model) ─────────────────────────────────────

@@ -7,6 +7,8 @@ import {
 	Plus,
 	Copy,
 	Trash2,
+	ArrowLeft,
+	ArrowRight,
 	ArrowLeftToLine,
 	ArrowRightToLine,
 	Merge,
@@ -22,6 +24,7 @@ import {
 	setInactive,
 	toggleMuted,
 	setTechnique,
+	setTied,
 	moveCell,
 	hasPreviousNoteOnString,
 	setSlotsDuration,
@@ -30,6 +33,8 @@ import {
 	deleteSlots,
 	addMeasure,
 	deleteMeasure,
+	cloneMeasure,
+	swapMeasures,
 	computeBeatLabels,
 	computeBeatGroups,
 	slotDurationUnits,
@@ -231,22 +236,19 @@ export default function FingerpickEditModal({
 	// operation goes through here: it derives the next pattern from the current
 	// one, drops any redo tail, appends the snapshot (capped at HISTORY_LIMIT),
 	// and advances the index.
-	const commit = useCallback(
-		(updater: (prev: FingerpickPattern) => FingerpickPattern) => {
-			const prev = workingRef.current;
-			const next = updater(prev);
-			if (next === prev) return;
-			setWorking(next);
-			const idx = historyIndexRef.current;
-			setHistory((h) => {
-				const base = h.slice(0, idx + 1);
-				base.push(next);
-				return base.length > HISTORY_LIMIT ? base.slice(base.length - HISTORY_LIMIT) : base;
-			});
-			setHistoryIndex((i) => Math.min(i + 1, HISTORY_LIMIT - 1));
-		},
-		[],
-	);
+	const commit = useCallback((updater: (prev: FingerpickPattern) => FingerpickPattern) => {
+		const prev = workingRef.current;
+		const next = updater(prev);
+		if (next === prev) return;
+		setWorking(next);
+		const idx = historyIndexRef.current;
+		setHistory((h) => {
+			const base = h.slice(0, idx + 1);
+			base.push(next);
+			return base.length > HISTORY_LIMIT ? base.slice(base.length - HISTORY_LIMIT) : base;
+		});
+		setHistoryIndex((i) => Math.min(i + 1, HISTORY_LIMIT - 1));
+	}, []);
 
 	const undo = useCallback(() => {
 		const i = historyIndexRef.current;
@@ -278,7 +280,9 @@ export default function FingerpickEditModal({
 	useEffect(() => {
 		if (!open) return;
 		queueMicrotask(() => {
-			const next = initialPattern ? clonePatternForEdit(initialPattern) : makeDefaultPattern();
+			const next = initialPattern
+				? clonePatternForEdit(initialPattern)
+				: makeDefaultPattern();
 			setWorking(next);
 			setHistory([next]);
 			setHistoryIndex(0);
@@ -324,48 +328,51 @@ export default function FingerpickEditModal({
 
 	// ── Cell keyboard editing ──────────────────────────────────────────────────
 
-	const handleCellKeyDown = useCallback((e: React.KeyboardEvent, cell: Cell) => {
-		const key = e.key;
-		const dir = ARROW_DIRECTIONS[key];
-		if (dir) {
-			e.preventDefault();
-			setSelectedCell(moveCell(workingRef.current, cell, dir));
-			pendingDigitRef.current = null;
-			return;
-		}
-		if (key === "Backspace" || key === "Delete") {
-			e.preventDefault();
-			commit((prev) => setInactive(prev, cell));
-			pendingDigitRef.current = null;
-			return;
-		}
-		if (key === "x" || key === "X") {
-			e.preventDefault();
-			commit((prev) => toggleMuted(prev, cell));
-			pendingDigitRef.current = null;
-			return;
-		}
-		if (/^[0-9]$/.test(key)) {
-			e.preventDefault();
-			const digit = Number(key);
-			const ck = cellKey(cell);
-			const now = Date.now();
-			const pend = pendingDigitRef.current;
-			if (pend && pend.key === ck && now - pend.time < TWO_DIGIT_WINDOW_MS) {
-				const combined = pend.digit * 10 + digit;
-				if (combined <= MAX_FRET) {
-					commit((prev) => setFret(prev, cell, combined));
-					pendingDigitRef.current = null;
+	const handleCellKeyDown = useCallback(
+		(e: React.KeyboardEvent, cell: Cell) => {
+			const key = e.key;
+			const dir = ARROW_DIRECTIONS[key];
+			if (dir) {
+				e.preventDefault();
+				setSelectedCell(moveCell(workingRef.current, cell, dir));
+				pendingDigitRef.current = null;
+				return;
+			}
+			if (key === "Backspace" || key === "Delete") {
+				e.preventDefault();
+				commit((prev) => setInactive(prev, cell));
+				pendingDigitRef.current = null;
+				return;
+			}
+			if (key === "x" || key === "X") {
+				e.preventDefault();
+				commit((prev) => toggleMuted(prev, cell));
+				pendingDigitRef.current = null;
+				return;
+			}
+			if (/^[0-9]$/.test(key)) {
+				e.preventDefault();
+				const digit = Number(key);
+				const ck = cellKey(cell);
+				const now = Date.now();
+				const pend = pendingDigitRef.current;
+				if (pend && pend.key === ck && now - pend.time < TWO_DIGIT_WINDOW_MS) {
+					const combined = pend.digit * 10 + digit;
+					if (combined <= MAX_FRET) {
+						commit((prev) => setFret(prev, cell, combined));
+						pendingDigitRef.current = null;
+					} else {
+						commit((prev) => setFret(prev, cell, digit));
+						pendingDigitRef.current = { key: ck, digit, time: now };
+					}
 				} else {
 					commit((prev) => setFret(prev, cell, digit));
 					pendingDigitRef.current = { key: ck, digit, time: now };
 				}
-			} else {
-				commit((prev) => setFret(prev, cell, digit));
-				pendingDigitRef.current = { key: ck, digit, time: now };
 			}
-		}
-	}, [commit]);
+		},
+		[commit],
+	);
 
 	// ── Technique context menu ───────────────────────────────────────────────
 
@@ -400,10 +407,25 @@ export default function FingerpickEditModal({
 		}
 	}
 
-	function applyTechnique(technique: NonNullable<StringFret["technique"]> | null) {
+	function applyTechnique(technique: NonNullable<StringFret["technique"]>) {
 		if (!techMenu) return;
 		const cell = techMenu.cell;
 		commit((prev) => setTechnique(prev, cell, technique));
+		setTechMenu(null);
+	}
+
+	function applyTied() {
+		if (!techMenu) return;
+		const cell = techMenu.cell;
+		commit((prev) => setTied(prev, cell, true));
+		setTechMenu(null);
+	}
+
+	// Clear both technique and tied on the target cell.
+	function applyClearTechnique() {
+		if (!techMenu) return;
+		const cell = techMenu.cell;
+		commit((prev) => setTied(setTechnique(prev, cell, null), cell, false));
 		setTechMenu(null);
 	}
 
@@ -480,7 +502,12 @@ export default function FingerpickEditModal({
 	}
 
 	function requestReplaceWithWhole(target: SlotTarget) {
-		const res = resetMeasure(working.measures, target.measureIndex, "whole", working.timeSignature);
+		const res = resetMeasure(
+			working.measures,
+			target.measureIndex,
+			"whole",
+			working.timeSignature,
+		);
 		if (res.type === "confirm") {
 			setPopupConfirm({ kind: "whole", pendingMeasures: res.measures });
 		} else {
@@ -544,21 +571,26 @@ export default function FingerpickEditModal({
 	})();
 
 	// The column popup is anchored below the first selected column's selector.
-	const firstSelectedColumnKey =
+	const firstSelectedColumn: SlotTarget | null =
 		selectedColumns.size > 0
-			? columnKey(
-					[...selectedColumns]
-						.map(parseColumnKey)
-						.sort(
-							(a, b) => a.measureIndex - b.measureIndex || a.slotIndex - b.slotIndex,
-						)[0],
-				)
+			? [...selectedColumns]
+					.map(parseColumnKey)
+					.sort((a, b) => a.measureIndex - b.measureIndex || a.slotIndex - b.slotIndex)[0]
 			: null;
+	const firstSelectedColumnKey = firstSelectedColumn ? columnKey(firstSelectedColumn) : null;
+
+	// Anchor direction: columns in the left half of their measure open the popup to
+	// the right (default); columns in the right half open it to the left so it never
+	// spills past the rightmost measure's edge.
+	const popupOpensLeft = (() => {
+		if (!firstSelectedColumn) return false;
+		const totalSlots = working.measures[firstSelectedColumn.measureIndex]?.slots.length ?? 0;
+		return firstSelectedColumn.slotIndex >= totalSlots / 2;
+	})();
 
 	// Split/merge/whole controls act on a single slot. When exactly one column is
 	// selected, derive that slot's split targets and merge target from live state.
-	const singleTarget: SlotTarget | null =
-		selectedColumns.size === 1 ? columnTargets()[0] : null;
+	const singleTarget: SlotTarget | null = selectedColumns.size === 1 ? columnTargets()[0] : null;
 
 	const singleMeasure = singleTarget ? working.measures[singleTarget.measureIndex] : null;
 	const singleSlot =
@@ -574,7 +606,8 @@ export default function FingerpickEditModal({
 					if (targetUnits >= currentUnits || currentUnits % targetUnits !== 0) return [];
 					const count = currentUnits / targetUnits;
 					const extra = count * targetUnits - currentUnits; // 0 for even splits
-					if (extra > remainingUnits(singleMeasure.slots, working.timeSignature)) return [];
+					if (extra > remainingUnits(singleMeasure.slots, working.timeSignature))
+						return [];
 					return [{ duration: d, count }];
 				})
 			: [];
@@ -582,7 +615,7 @@ export default function FingerpickEditModal({
 	// Merge target: the next larger note value, valid only when the following
 	// slots line up to exactly fill it.
 	const mergeTarget: Duration | null = singleSlot
-		? NEXT_LARGER_DURATION[singleSlot.duration] ?? null
+		? (NEXT_LARGER_DURATION[singleSlot.duration] ?? null)
 		: null;
 	const canMerge = (() => {
 		if (!singleTarget || !singleMeasure || !mergeTarget) return false;
@@ -606,15 +639,13 @@ export default function FingerpickEditModal({
 	const measureHasContent =
 		!!singleMeasure &&
 		(singleMeasure.slots.length > 1 ||
-			singleMeasure.slots.some((s) =>
-				s.strings.some((sf) => sf.fret !== null || sf.muted),
-			) ||
+			singleMeasure.slots.some((s) => s.strings.some((sf) => sf.fret !== null || sf.muted)) ||
 			singleMeasure.slots[0]?.duration !== "whole");
 
 	const columnPopup = (
 		<div
 			ref={popupRef}
-			className="absolute top-full left-0 mt-1.5 z-[60] w-max max-w-[15rem] rounded-lg border border-slate-200 bg-white shadow-lg p-2 flex flex-col gap-2"
+			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-[60] w-max max-w-[15rem] rounded-lg border border-slate-200 bg-white shadow-lg p-2 flex flex-col gap-2`}
 		>
 			<div className="flex gap-1">
 				{DURATION_PICKER.map((d) => {
@@ -624,7 +655,11 @@ export default function FingerpickEditModal({
 							key={d.value}
 							onClick={() => applyDuration(d.value)}
 							disabled={disabled}
-							title={disabled ? "Whole note must be the only slot in the measure" : d.value}
+							title={
+								disabled
+									? "Whole note must be the only slot in the measure"
+									: d.value
+							}
 							className={`h-7 w-7 rounded font-mono text-xs font-semibold transition-colors ${
 								selectedDuration === d.value
 									? "bg-denim text-white"
@@ -760,7 +795,8 @@ export default function FingerpickEditModal({
 	// stop (extra measures wrap). Below lg the static md:2 / sm:1 layout applies.
 	// width = cols × (block + gap) + horizontal chrome (all rem).
 	const lgCols = Math.min(Math.max(working.measures.length, 2), 4);
-	const modalWidthRem = lgCols * MEASURE_BLOCK_REM + (lgCols - 1) * GRID_GAP_REM + MODAL_CHROME_REM;
+	const modalWidthRem =
+		lgCols * MEASURE_BLOCK_REM + (lgCols - 1) * GRID_GAP_REM + MODAL_CHROME_REM;
 	const dynamicStyle = {
 		"--fp-w": `${modalWidthRem}rem`,
 		"--fp-cols": String(lgCols),
@@ -771,7 +807,7 @@ export default function FingerpickEditModal({
 			<DialogContent
 				showCloseButton={false}
 				style={dynamicStyle}
-				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-[var(--fp-w)] lg:max-w-[min(var(--fp-w),96vw)] max-h-[90vh] overflow-y-auto"
+				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-[var(--fp-w)] lg:max-w-[min(var(--fp-w),96vw)] max-h-[90vh] overflow-y-auto pb-0"
 				onKeyDown={(e) => {
 					// Undo/redo scoped to the modal (not window) to avoid clashing with
 					// the page. Skip text fields so their native undo keeps working.
@@ -904,14 +940,6 @@ export default function FingerpickEditModal({
 							className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
 						/>
 					</div>
-					<Button
-						onClick={handleSave}
-						disabled={!nameValid}
-						className="h-10 disabled:opacity-40"
-						style={{ backgroundColor: "var(--denim)", color: "white" }}
-					>
-						Save
-					</Button>
 				</div>
 
 				{/* ── Grid ──────────────────────────────────────────────────────── */}
@@ -931,11 +959,67 @@ export default function FingerpickEditModal({
 								className="rounded-lg border border-slate-200 p-3 flex flex-col gap-2"
 							>
 								<div className="flex items-center justify-between">
-									<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-										Measure {measureIndex + 1}
-									</span>
+									<div className="flex items-center gap-2">
+										<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+											Measure {measureIndex + 1}
+										</span>
+										<button
+											onClick={() =>
+												commit((p) => ({
+													...p,
+													measures: cloneMeasure(
+														p.measures,
+														measureIndex,
+													),
+												}))
+											}
+											aria-label="Copy measure"
+											title="Copy measure"
+											className="flex items-center justify-center text-slate-400 hover:text-denim transition-colors"
+										>
+											<Copy size={14} />
+										</button>
+										<button
+											onClick={() =>
+												commit((p) => ({
+													...p,
+													measures: swapMeasures(
+														p.measures,
+														measureIndex,
+														measureIndex - 1,
+													),
+												}))
+											}
+											disabled={measureIndex === 0}
+											aria-label="Move measure left"
+											title="Move measure left"
+											className="flex items-center justify-center text-slate-400 hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 transition-colors"
+										>
+											<ArrowLeft size={14} />
+										</button>
+										<button
+											onClick={() =>
+												commit((p) => ({
+													...p,
+													measures: swapMeasures(
+														p.measures,
+														measureIndex,
+														measureIndex + 1,
+													),
+												}))
+											}
+											disabled={measureIndex === working.measures.length - 1}
+											aria-label="Move measure right"
+											title="Move measure right"
+											className="flex items-center justify-center text-slate-400 hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 transition-colors"
+										>
+											<ArrowRight size={14} />
+										</button>
+									</div>
 									<button
-										onClick={() => commit((p) => deleteMeasure(p, measureIndex))}
+										onClick={() =>
+											commit((p) => deleteMeasure(p, measureIndex))
+										}
 										disabled={working.measures.length <= 1}
 										aria-label="Delete measure"
 										title="Delete measure"
@@ -974,12 +1058,17 @@ export default function FingerpickEditModal({
 													// stays equal width across the whole measure.
 													flexGrow: group.length,
 													flexBasis: 0,
-													backgroundColor: l1Active ? HOVER_L1_BG : undefined,
+													backgroundColor: l1Active
+														? HOVER_L1_BG
+														: undefined,
 												}}
 											>
 												{group.map((slotIndex) => {
 													const slot = measure.slots[slotIndex];
-													const key = columnKey({ measureIndex, slotIndex });
+													const key = columnKey({
+														measureIndex,
+														slotIndex,
+													});
 													const columnSelected = selectedColumns.has(key);
 													return (
 														<div
@@ -993,21 +1082,31 @@ export default function FingerpickEditModal({
 																	stringIndex,
 																};
 																const ck = cellKey(cell);
-																const sf = slot.strings[stringIndex];
+																const sf =
+																	slot.strings[stringIndex];
 																const isSelected =
 																	selectedCell != null &&
-																	selectedCell.measureIndex === measureIndex &&
-																	selectedCell.slotIndex === slotIndex &&
-																	selectedCell.stringIndex === stringIndex;
+																	selectedCell.measureIndex ===
+																		measureIndex &&
+																	selectedCell.slotIndex ===
+																		slotIndex &&
+																	selectedCell.stringIndex ===
+																		stringIndex;
 																const glyph = sf.technique
 																	? TECHNIQUE_GLYPH[sf.technique]
 																	: undefined;
+																// Muted cells can't be tied — treat
+																// a tied+muted cell as untied here.
+																const tiedDisplay =
+																	sf.tied && !sf.muted;
 																const l2Alpha =
 																	hoverInMeasure != null
-																		? (hoverInMeasure.slotIndex === slotIndex
+																		? (hoverInMeasure.slotIndex ===
+																			slotIndex
 																				? HOVER_L2_ALPHA
 																				: 0) +
-																			(hoverInMeasure.stringIndex === stringIndex
+																			(hoverInMeasure.stringIndex ===
+																			stringIndex
 																				? HOVER_L2_ALPHA
 																				: 0)
 																		: 0;
@@ -1015,11 +1114,25 @@ export default function FingerpickEditModal({
 																	<button
 																		key={ck}
 																		ref={(el) => {
-																			if (el) cellRefs.current.set(ck, el);
-																			else cellRefs.current.delete(ck);
+																			if (el)
+																				cellRefs.current.set(
+																					ck,
+																					el,
+																				);
+																			else
+																				cellRefs.current.delete(
+																					ck,
+																				);
 																		}}
-																		onClick={() => setSelectedCell(cell)}
-																		onKeyDown={(e) => handleCellKeyDown(e, cell)}
+																		onClick={() =>
+																			setSelectedCell(cell)
+																		}
+																		onKeyDown={(e) =>
+																			handleCellKeyDown(
+																				e,
+																				cell,
+																			)
+																		}
 																		onMouseEnter={() =>
 																			setHoveredCell({
 																				measureIndex,
@@ -1028,10 +1141,17 @@ export default function FingerpickEditModal({
 																			})
 																		}
 																		onPointerDown={(e) =>
-																			handleCellPointerDown(cell, e)
+																			handleCellPointerDown(
+																				cell,
+																				e,
+																			)
 																		}
-																		onPointerUp={cancelLongPress}
-																		onPointerLeave={cancelLongPress}
+																		onPointerUp={
+																			cancelLongPress
+																		}
+																		onPointerLeave={
+																			cancelLongPress
+																		}
 																		onContextMenu={(e) => {
 																			e.preventDefault();
 																			setSelectedCell(cell);
@@ -1044,7 +1164,12 @@ export default function FingerpickEditModal({
 																		}}
 																		style={
 																			l2Alpha > 0
-																				? { backgroundColor: hoverAxisBg(l2Alpha) }
+																				? {
+																						backgroundColor:
+																							hoverAxisBg(
+																								l2Alpha,
+																							),
+																					}
 																				: undefined
 																		}
 																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center rounded font-mono text-xs transition-colors ${
@@ -1058,6 +1183,16 @@ export default function FingerpickEditModal({
 																			<span className="absolute top-0 right-0.5 text-[8px] leading-none text-denim">
 																				{glyph}
 																			</span>
+																		)}
+																		{tiedDisplay && (
+																			<span
+																				aria-hidden
+																				className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 rounded-t-full border-t-2"
+																				style={{
+																					borderColor:
+																						"rgba(74, 111, 165, 0.5)",
+																				}}
+																			/>
 																		)}
 																	</button>
 																);
@@ -1073,7 +1208,10 @@ export default function FingerpickEditModal({
 																<button
 																	data-column-selector
 																	onClick={() =>
-																		toggleColumn({ measureIndex, slotIndex })
+																		toggleColumn({
+																			measureIndex,
+																			slotIndex,
+																		})
 																	}
 																	aria-label={`Select column ${slotIndex + 1}`}
 																	className={`h-3.5 w-3.5 rounded-full border transition-colors ${
@@ -1082,7 +1220,8 @@ export default function FingerpickEditModal({
 																			: "border-slate-300 hover:border-denim"
 																	}`}
 																/>
-																{key === firstSelectedColumnKey && columnPopup}
+																{key === firstSelectedColumnKey &&
+																	columnPopup}
 															</div>
 
 															{/* Beat position label */}
@@ -1156,9 +1295,21 @@ export default function FingerpickEditModal({
 
 				<p className="text-[11px] text-slate-400">
 					Click a cell then use arrow keys to move, number keys to set a fret,{" "}
-					<span className="font-mono">x</span> to mute, Backspace to clear. Right-click (or
-					long-press) a cell for techniques.
+					<span className="font-mono">x</span> to mute, Backspace to clear. Right-click
+					(or long-press) a cell for techniques.
 				</p>
+
+				{/* ── Footer (pinned to the bottom of the scroll area) ───────────── */}
+				<div className="sticky bottom-0 z-55 -mx-4 flex items-center justify-end gap-2 rounded-b-xl border-t border-slate-200 bg-white px-4 py-3">
+					<Button
+						onClick={handleSave}
+						disabled={!nameValid}
+						className="h-9 disabled:opacity-40"
+						style={{ backgroundColor: "var(--denim)", color: "white" }}
+					>
+						Save
+					</Button>
+				</div>
 
 				{/* ── Technique context menu (absolute within the content box) ───── */}
 				{techMenu && (
@@ -1167,23 +1318,43 @@ export default function FingerpickEditModal({
 						className="absolute z-[60] rounded-lg border border-slate-200 bg-white shadow-lg py-1 min-w-40 text-sm"
 						style={{ top: techMenu.y, left: techMenu.x }}
 					>
-						{TECHNIQUE_OPTIONS.map((opt) => {
+						{(() => {
 							const enabled = hasPreviousNoteOnString(working, techMenu.cell);
 							return (
-								<button
-									key={opt.value}
-									disabled={!enabled}
-									onClick={() => applyTechnique(opt.value)}
-									title={enabled ? undefined : "No previous note on this string"}
-									className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-								>
-									{opt.label}
-								</button>
+								<>
+									{TECHNIQUE_OPTIONS.map((opt) => (
+										<button
+											key={opt.value}
+											disabled={!enabled}
+											onClick={() => applyTechnique(opt.value)}
+											title={
+												enabled
+													? undefined
+													: "No previous note on this string"
+											}
+											className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+										>
+											{opt.label}
+										</button>
+									))}
+									<button
+										disabled={!enabled}
+										onClick={applyTied}
+										title={
+											enabled
+												? undefined
+												: "No previous note on this string to tie from"
+										}
+										className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+									>
+										Tied (⌒)
+									</button>
+								</>
 							);
-						})}
+						})()}
 						<div className="border-t border-slate-100 my-1" />
 						<button
-							onClick={() => applyTechnique(null)}
+							onClick={applyClearTechnique}
 							className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint transition-colors"
 						>
 							Clear
@@ -1214,7 +1385,9 @@ function PopupIconButton({
 			title={title}
 			aria-label={title}
 			className={`h-7 w-7 flex items-center justify-center rounded text-slate-500 transition-colors ${
-				danger ? "hover:bg-red-50 hover:text-red-500" : "hover:bg-denim-tint hover:text-denim"
+				danger
+					? "hover:bg-red-50 hover:text-red-500"
+					: "hover:bg-denim-tint hover:text-denim"
 			}`}
 		>
 			{children}

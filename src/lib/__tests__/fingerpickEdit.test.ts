@@ -7,6 +7,7 @@ import {
 	setInactive,
 	toggleMuted,
 	setTechnique,
+	setTied,
 	moveCell,
 	previousSlotFret,
 	hasPreviousNoteOnString,
@@ -17,6 +18,8 @@ import {
 	addSlotToMeasure,
 	addMeasure,
 	deleteMeasure,
+	cloneMeasure,
+	swapMeasures,
 	computeBeatLabels,
 	computeBeatGroups,
 	clampFret,
@@ -121,6 +124,46 @@ describe("StringFret edits", () => {
 		const before = structuredClone(p);
 		setFret(p, cell, 9);
 		expect(p).toEqual(before);
+	});
+});
+
+describe("tied / technique mutual exclusion", () => {
+	const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 5 };
+
+	it("setTied(true) clears any existing technique", () => {
+		let p = setFret(makeDefaultPattern(), cell, 5);
+		p = setTechnique(p, cell, "hammer-on");
+		p = setTied(p, cell, true);
+		const sf = p.measures[0].slots[1].strings[5];
+		expect(sf.tied).toBe(true);
+		expect(sf.technique).toBeNull();
+	});
+
+	it("setTechnique(non-null) clears any existing tie", () => {
+		let p = setFret(makeDefaultPattern(), cell, 5);
+		p = setTied(p, cell, true);
+		p = setTechnique(p, cell, "pull-off");
+		const sf = p.measures[0].slots[1].strings[5];
+		expect(sf.technique).toBe("pull-off");
+		expect(sf.tied).toBe(false);
+	});
+
+	it("clearing both leaves technique null and tied false", () => {
+		let p = setFret(makeDefaultPattern(), cell, 5);
+		p = setTied(p, cell, true);
+		// Clear = setTechnique(null) then setTied(false), as wired in the menu.
+		p = setTied(setTechnique(p, cell, null), cell, false);
+		const sf = p.measures[0].slots[1].strings[5];
+		expect(sf.technique).toBeNull();
+		expect(sf.tied).toBe(false);
+	});
+
+	it("greys out (no previous note) when the prior slot has no note on the string", () => {
+		// No note anywhere: previous slot on this string is inactive → cannot tie.
+		expect(hasPreviousNoteOnString(makeDefaultPattern(), cell)).toBe(false);
+		// With a note in the previous slot on the same string, tying is allowed.
+		const p = setFret(makeDefaultPattern(), { ...cell, slotIndex: 0 }, 3);
+		expect(hasPreviousNoteOnString(p, cell)).toBe(true);
 	});
 });
 
@@ -273,6 +316,46 @@ describe("measure structural edits", () => {
 
 		const single = deleteMeasure(p, 0);
 		expect(single.measures).toHaveLength(1);
+	});
+});
+
+describe("cloneMeasure", () => {
+	it("inserts a deep clone after the source with fresh measure and slot ids", () => {
+		let p = twoMeasurePattern();
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 4);
+		const out = cloneMeasure(p.measures, 0);
+		expect(out).toHaveLength(3);
+		// Clone sits immediately after the source.
+		const source = out[0];
+		const clone = out[1];
+		expect(out[2].id).toBe("m1");
+		// Same shape and data...
+		expect(clone.slots).toHaveLength(source.slots.length);
+		expect(clone.slots[0].strings[5].fret).toBe(4);
+		// ...but brand-new ids at every level.
+		expect(clone.id).not.toBe(source.id);
+		expect(clone.slots.every((s, i) => s.id !== source.slots[i].id)).toBe(true);
+	});
+
+	it("returns the input unchanged for an out-of-range index", () => {
+		const measures = twoMeasurePattern().measures;
+		expect(cloneMeasure(measures, 9)).toBe(measures);
+	});
+});
+
+describe("swapMeasures", () => {
+	it("swaps two measures", () => {
+		const measures = twoMeasurePattern().measures;
+		const out = swapMeasures(measures, 0, 1);
+		expect(out[0].id).toBe("m1");
+		expect(out[1].id).toBe("m0");
+	});
+
+	it("is a no-op for equal or out-of-range indices", () => {
+		const measures = twoMeasurePattern().measures;
+		expect(swapMeasures(measures, 1, 1)).toBe(measures);
+		expect(swapMeasures(measures, 0, 5)).toBe(measures);
+		expect(swapMeasures(measures, -1, 0)).toBe(measures);
 	});
 });
 

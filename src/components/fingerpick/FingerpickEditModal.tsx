@@ -88,6 +88,11 @@ const ARROW_DIRECTIONS: Record<string, Direction> = {
 
 const MIN_BPM = 40;
 const MAX_BPM = 220;
+
+// Desktop dynamic-width geometry (rem). Modal width = cols × (block + gap) + chrome.
+const MEASURE_BLOCK_REM = 19; // per-measure block target width
+const GRID_GAP_REM = 1; // gap-4 between measure blocks
+const MODAL_CHROME_REM = 2; // DialogContent p-4 (left + right)
 const TWO_DIGIT_WINDOW_MS = 800;
 const LONG_PRESS_MS = 500;
 
@@ -365,11 +370,22 @@ export default function FingerpickEditModal({
 
 	const nameValid = working.name.trim().length > 0;
 
+	// Dynamic desktop (lg+) width: grow with measure count, 2 → 4 columns, then
+	// stop (extra measures wrap). Below lg the static md:2 / sm:1 layout applies.
+	// width = cols × (block + gap) + horizontal chrome (all rem).
+	const lgCols = Math.min(Math.max(working.measures.length, 2), 4);
+	const modalWidthRem = lgCols * MEASURE_BLOCK_REM + (lgCols - 1) * GRID_GAP_REM + MODAL_CHROME_REM;
+	const dynamicStyle = {
+		"--fp-w": `${modalWidthRem}rem`,
+		"--fp-cols": String(lgCols),
+	} as React.CSSProperties;
+
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
 			<DialogContent
 				showCloseButton={false}
-				className="w-full max-w-[min(96vw,1400px)] sm:max-w-[min(96vw,1400px)] max-h-[90vh] overflow-y-auto"
+				style={dynamicStyle}
+				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-[var(--fp-w)] lg:max-w-[min(var(--fp-w),96vw)] max-h-[90vh] overflow-y-auto"
 				onEscapeKeyDown={(e) => {
 					if (techMenu || selectedColumns.size > 0) {
 						e.preventDefault();
@@ -465,10 +481,10 @@ export default function FingerpickEditModal({
 				</div>
 
 				{/* ── Grid ──────────────────────────────────────────────────────── */}
-				{/* auto-fill packs as many ~19rem columns as fit: 4 across on a wide
-				    desktop, fewer as the modal narrows, and measures (plus the add
-				    tile) wrap to the next line once a row is full. */}
-				<div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-4">
+				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
+				    count (2→4, --fp-cols) in step with the dynamic modal width, so
+				    measures fill each row and the extra (add) tile wraps below. */}
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:[grid-template-columns:repeat(var(--fp-cols),minmax(0,1fr))] gap-4">
 					{working.measures.map((measure, measureIndex) => {
 						const n = measure.slots.length;
 						return (

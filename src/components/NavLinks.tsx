@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Music, Rows4, Hand } from "lucide-react";
 
@@ -15,29 +14,30 @@ export default function NavLinks() {
 	const pathname = usePathname();
 
 	return (
-		<div className="bg-muted rounded-full px-1 py-1 flex gap-1">
+		<nav className="flex gap-0.5">
 			{links.map(({ href, label, Icon }) => {
 				const isActive = pathname === href;
 				return (
-					<Button
+					<Link
 						key={href}
-						variant="ghost"
-						size="sm"
+						href={href}
 						aria-label={label}
-						className={`rounded-full text-sm font-medium px-2 nav:px-4 py-1.5 h-auto transition-all duration-200 ${
+						aria-current={isActive ? "page" : undefined}
+						className={`flex items-center gap-2 border px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 nav:px-3 ${
 							isActive
-								? "bg-background text-foreground shadow-sm hover:bg-background"
-								: "text-muted-foreground hover:text-foreground hover:bg-transparent"
+								? "border-line-strong bg-raise text-denim-accent"
+								: "border-transparent text-ink-dim hover:text-ink"
 						}`}
-						asChild
 					>
-						<Link href={href} className="flex items-center gap-2">
-							<Icon className="size-4 shrink-0" />
-							<span className="hidden nav:inline">{label}</span>
-						</Link>
-					</Button>
+						<Icon
+							className="size-4 shrink-0"
+							strokeWidth={1.5}
+							strokeLinecap="square"
+						/>
+						<span className="hidden nav:inline">{label}</span>
+					</Link>
 				);
 			})}
-		</div>
+		</nav>
 	);
 }

@@ -397,3 +397,50 @@ Data model expansion was sequenced before the AI TAB recognition epic. The type 
 - "How would you handle a TAB symbol the AI recognizes but your schema doesn't support yet?"
 - "Why did you revert the slide audio instead of shipping the approximation?"
 - "How does the low-pass filter approach differ from having a dedicated legato sample?"
+
+---
+
+## #98 Fingerpick Pattern Edit Modal
+
+**Date:** 2026-07-11
+**Milestone:** Fingerpicking page
+
+### What was built
+A full-featured create/edit modal for fingerpick patterns, grid-based UI with two interaction modes: single-cell focus (arrow keys + number entry) for fret editing, and column-selector buttons (multi-select) for slot-level operations. The completed pattern is a standard FingerpickPattern that feeds directly into the existing fingerpickToVexFlow → TabStaveRow → VexFlow render pipeline — no conversion layer needed.
+
+### Key decisions
+
+**Grid UI over VexFlow interaction layer** — edit state lives in a plain HTML grid, not an interactive VexFlow overlay. VexFlow remains render-only. Keeps edit and render concerns cleanly separated; avoids coupling the rendering pipeline to edit interactions.
+
+**Pure editing logic in `fingerpickEdit.ts`** — all cell navigation, fret mutation, slot/measure structural ops, split/merge, beat group computation, clone, swap extracted to a pure module with 30+ unit tests. Modal component is thin UI only. Mirrors the fingerpickScheduler.ts vs useFingerpickAudioEngine.ts separation pattern.
+
+**Time-signature-aware measure capacity** — slot operations enforce a hard cap (4/4 = 32 units of thirty-second notes). Split/merge preserve data: first sub-slot inherits original data, merged slots discard with inline confirmation if data would be lost. Quick preset (All ♩/♪/♬) offers remap vs clear choice.
+
+**Popup anchor flip** — column popup opens right in the left half of a measure, left in the right half. Prevents overflow without dynamic modal width calculation.
+
+**Tied note via right-click menu** — tied and technique are mutually exclusive per string+slot, enforced in setTied/setTechnique. Integrated into the existing context menu alongside H/P/↑/↓, not a separate UI surface.
+
+**`fingerpickPatternSync.ts` mirrors strum sync pattern** — localStorage for guest, Supabase upsert for logged-in, merge-on-login with Sonner toast. No Supabase migration file — table created directly in dashboard via SQL.
+
+**Undo/Redo as history stack** — pure function architecture makes this natural: every mutation returns new state, history = state[]. Capped at 50 entries. Cmd+Z / Cmd+Shift+Z scoped to modal container, not window.
+
+**Two-layer hover highlighting** — L1 (beat group, subtle) derived from computeBeatGroups; L2 (slot column + string row, stronger) on hovered cell. Helps users orient in mixed-duration measures. rgba inline styles to avoid class collision with selected-cell denim border.
+
+### What was deferred
+- In-modal preview playback (Issue A — depends on #98 merge)
+- Duration beam group SVG icons replacing text labels (backlog)
+- Measure drag-and-drop reorder (backlog — arrow buttons as temporary impl)
+- Onboarding tour (global feature, backlog)
+- TAB playback slight stuttering with user-created patterns (backlog)
+
+### Interview talking points
+- "I separated edit state from render state — the grid editor owns a draft FingerpickPattern, VexFlow only sees confirmed data. No conversion layer: the modal output is the same type the audio engine and renderer already consume."
+- "Extracted all mutation logic to a pure testable module before writing UI — 30+ tests covering navigation, two-digit fret entry, slot split/merge with data preservation, beat group computation, and tied/technique mutual exclusivity."
+- "Time-signature-aware capacity enforcement: the editor treats a measure as a fixed bucket of thirty-second-note units. Split and merge operations validate against remaining capacity before mutating, so users can't accidentally overflow a measure."
+- "Undo/redo fell out naturally from the pure function architecture — every edit returns new state, so history is just a state array. Zero additional complexity in the mutation layer."
+
+### Follow-up questions to expect
+- How does the edit modal integrate with the AI parse flow in Issue #99?
+- Why not make VexFlow interactive instead of a separate grid?
+- How do you handle the impedance mismatch between grid edit state and TAB render state?
+- What happens if a user creates a pattern with techniques the audio engine doesn't support yet?

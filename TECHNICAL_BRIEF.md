@@ -514,6 +514,69 @@ Fully implemented; no longer a placeholder. Controls (right panel, `md:w-55 lg:w
 - **Metronome** toggle, **Accent Beat 1** toggle, **Subdivision** (1/4 / 1/8 / 1/16 pill buttons), **Metronome volume** slider — all greyed when metronome is off.
 - **Spacebar** keybinding toggles Play/Pause; skipped when focus is inside a text input, select, or textarea.
 
+**Pattern create/edit modal (`src/components/fingerpick/FingerpickEditModal.tsx`):**
+
+Grid-based modal for creating and editing user fingerpick patterns. Shared component
+used by the pattern library (edit existing) and [+ New Pattern] entry point. Output
+is a standard FingerpickPattern — feeds directly into fingerpickToVexFlow → TabStaveRow
+with no conversion layer.
+
+Props: `open`, `pattern: FingerpickPattern | null` (null = new), `onClose`, `onSave(pattern)`.
+
+Grid layout: one block per measure; responsive (lg: 3/row, md: 2/row, sm: 1/row);
+modal width grows from 2→4 measures/row dynamically. String labels e B G D A E
+(top→bottom, stringIndex 0–5). Two interaction modes:
+
+- **Single-cell focus** — arrow keys navigate across strings and slots (wraps at measure
+  boundaries); number keys set fret (two-digit entry within 800ms); `x` = muted;
+  Backspace/Delete = inactive. Right-click (desktop) / long-press 500ms (mobile) opens
+  technique context menu: H / P / ↑ / ↓ / Tied (⌒) / Clear. Tied and technique are
+  mutually exclusive per string+slot, enforced in setTied/setTechnique.
+
+- **Column-selector** — circular button below each slot column; multi-select across
+  measures. Popup anchor flips left/right based on column position in measure (left half
+  → opens right, right half → opens left). Popup: duration picker, split/merge ops,
+  insert/duplicate/delete. Whole note disabled if measure has other content.
+
+Measure constraints: total duration fixed by time signature (4/4 = 32 thirty-second-note
+units). Split preserves data (first sub-slot inherits, rest empty). Merge confirms if
+data would be lost. Quick preset row (All ♩/♪/♬) per measure with remap-vs-clear choice.
+
+Beat position labels below column selectors: derived from `computeBeatLabels`
+(1 2 3 4 / 1 + 2 + / 1 e + a etc.), updating reactively after every mutation.
+
+Two-layer hover highlighting: L1 beat group (subtle, from `computeBeatGroups`);
+L2 slot column + string row (stronger). rgba inline styles to avoid class collision
+with selected-cell styling.
+
+Measure-level operations: copy (clone with new ids, insert after), reorder (← →
+arrow buttons, drag-and-drop deferred), delete (disabled if only 1 measure).
+
+Undo/Redo: Cmd+Z / Cmd+Shift+Z, history stack capped at 50 entries, scoped to modal
+container. Unsaved changes guard: isDirty flag, inline confirmation on Cancel/close.
+Save pinned to bottom-right footer, always visible without scrolling.
+
+**Pattern sync (`src/lib/fingerpickPatternSync.ts`):**
+
+Mirrors useStrumPatterns localStorage↔Supabase pattern. Exports:
+`loadUserFingerpickPatterns`, `saveUserFingerpickPattern` (upsert),
+`deleteUserFingerpickPattern` (also cascade-deletes from
+user_favourite_fingerpick_patterns — fix for orphaned favourite records),
+`mergeLocalFingerpickPatternsToSupabase`. Guest key: `customFingerpickPatterns`.
+Merge-on-login shows Sonner toast if migrated count > 0.
+
+Supabase table: `user_fingerpick_patterns` — columns: `user_id`, `pattern_id`, `name`,
+`description`, `bpm`, `time_signature` (jsonb), `measures` (jsonb), `created_at`.
+PK: `(user_id, pattern_id)`. RLS: `auth.uid() = user_id`.
+
+**Pure editing logic (`src/lib/fingerpickEdit.ts`):**
+
+All mutation logic extracted as pure functions (no React, no DOM). Key exports:
+`splitSlot`, `mergeSlots`, `resetMeasure`, `remapMeasure`, `cloneMeasure`,
+`swapMeasures`, `setTechnique`, `setTied`, `computeBeatLabels`, `computeBeatGroups`,
+`measureCapacity`, `fillBeat` (removed — superseded by split/merge constraints).
+30+ unit tests in `src/lib/__tests__/fingerpickEdit.test.ts`.
+
 **Mobile controls drawer (below `md` breakpoint only):**
 A single `fixed bottom-0 left-0 right-0 z-30` container replaces the right-panel controls on mobile. Two stacked children:
 - **Main bar (always visible):** BPM number (tap-to-open vertical slider popover, `fixed`-positioned via `getBoundingClientRect` to avoid overflow clipping), Loop/Once segmented pill control, Metronome icon toggle (`text-denim` when active), ChevronUp/Down toggle, Stop + Play/Pause flush right.

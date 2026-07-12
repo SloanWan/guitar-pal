@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Music, Rows4, Hand } from "lucide-react";
 
@@ -15,29 +14,43 @@ export default function NavLinks() {
 	const pathname = usePathname();
 
 	return (
-		<div className="bg-muted rounded-full px-1 py-1 flex gap-1">
+		<nav className="flex divide-x divide-line-strong border border-line-strong">
 			{links.map(({ href, label, Icon }) => {
 				const isActive = pathname === href;
+				/* Latched = pressed-in: recessed via bg color difference only
+				   (no inset shadow), content statically sunk 1px. */
+				const sink = isActive ? "translate-y-px" : "";
 				return (
-					<Button
+					<Link
 						key={href}
-						variant="ghost"
-						size="sm"
+						href={href}
 						aria-label={label}
-						className={`rounded-full text-sm font-medium px-2 nav:px-4 py-1.5 h-auto transition-all duration-200 ${
+						aria-current={isActive ? "page" : undefined}
+						className={`flex items-center gap-2 whitespace-nowrap px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 motion-safe:active:translate-y-px active:bg-denim-tint active:duration-(--dur-switch) nav:px-3 ${
 							isActive
-								? "bg-background text-foreground shadow-sm hover:bg-background"
-								: "text-muted-foreground hover:text-foreground hover:bg-transparent"
+								? "bg-surface font-medium text-denim-accent"
+								: "text-ink hover:text-denim-accent"
 						}`}
-						asChild
 					>
-						<Link href={href} className="flex items-center gap-2">
-							<Icon className="size-4 shrink-0" />
-							<span className="hidden nav:inline">{label}</span>
-						</Link>
-					</Button>
+						<Icon
+							className={`size-4 shrink-0 ${sink}`}
+							strokeWidth={1.5}
+							strokeLinecap="square"
+						/>
+						{/* LED exists only alongside the text label; in icon-only
+						    mode the latch state alone carries the active semantic. */}
+						<span
+							className={`hidden size-1.5 rounded-full transition-[background,box-shadow] duration-200 nav:inline-block ${
+								isActive
+									? "bg-denim-accent shadow-[var(--glow-led)]"
+									: "bg-ink-faint"
+							}`}
+							aria-hidden="true"
+						/>
+						<span className={`hidden nav:inline ${sink}`}>{label}</span>
+					</Link>
 				);
 			})}
-		</div>
+		</nav>
 	);
 }

@@ -14,27 +14,40 @@ export default function NavLinks() {
 	const pathname = usePathname();
 
 	return (
-		<nav className="flex gap-0.5">
+		<nav className="flex divide-x divide-line-strong border border-line-strong">
 			{links.map(({ href, label, Icon }) => {
 				const isActive = pathname === href;
+				/* Latched = pressed-in: recessed via bg color difference only
+				   (no inset shadow), content statically sunk 1px. */
+				const sink = isActive ? "translate-y-px" : "";
 				return (
 					<Link
 						key={href}
 						href={href}
 						aria-label={label}
 						aria-current={isActive ? "page" : undefined}
-						className={`flex items-center gap-2 border px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 nav:px-3 ${
+						className={`flex items-center gap-2 whitespace-nowrap px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 active:bg-denim-tint nav:px-3 ${
 							isActive
-								? "border-line-strong bg-raise text-denim-accent"
-								: "border-transparent text-ink-dim hover:text-ink"
+								? "bg-surface font-medium text-denim-accent"
+								: "text-ink hover:text-denim-accent"
 						}`}
 					>
 						<Icon
-							className="size-4 shrink-0"
+							className={`size-4 shrink-0 ${sink}`}
 							strokeWidth={1.5}
 							strokeLinecap="square"
 						/>
-						<span className="hidden nav:inline">{label}</span>
+						{/* LED exists only alongside the text label; in icon-only
+						    mode the latch state alone carries the active semantic. */}
+						<span
+							className={`hidden size-1.5 rounded-full transition-[background,box-shadow] duration-200 nav:inline-block ${
+								isActive
+									? "bg-denim-accent shadow-[var(--glow-led)]"
+									: "bg-ink-faint"
+							}`}
+							aria-hidden="true"
+						/>
+						<span className={`hidden nav:inline ${sink}`}>{label}</span>
 					</Link>
 				);
 			})}

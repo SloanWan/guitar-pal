@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { Moon, Sun } from "lucide-react";
 
 type Theme = "dark" | "light";
 
@@ -19,8 +20,9 @@ function getTheme(): Theme {
 	return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
 
-function getServerTheme(): Theme | null {
-	return null;
+function getServerTheme(): Theme {
+	// Dark is the token default on :root; the boot script overrides before paint.
+	return "dark";
 }
 
 function applyTheme(next: Theme): void {
@@ -28,40 +30,34 @@ function applyTheme(next: Theme): void {
 	localStorage.setItem(THEME_STORAGE_KEY, next);
 }
 
-const segmentBase =
-	"px-2 py-1.5 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1";
-
 export default function ThemeToggle() {
-	// Visual active state is pure CSS via the data-theme-bound `dark:` variant,
-	// so SSR markup matches the client; the store only drives aria-pressed.
-	const theme = useSyncExternalStore(
-		subscribeToTheme,
-		getTheme,
-		getServerTheme,
-	);
+	// Icon visibility is pure CSS via the data-theme-bound `dark:` variant, so SSR
+	// markup matches the client (both icons render; CSS reveals exactly one). The
+	// store only drives the accessible pressed state and the click target.
+	const theme = useSyncExternalStore(subscribeToTheme, getTheme, getServerTheme);
 
 	return (
-		<div
-			role="group"
-			aria-label="Switch color theme"
-			className="flex border border-line-strong font-mono text-[9px] tracking-[0.1em]"
+		<button
+			type="button"
+			aria-label="Toggle dark mode"
+			aria-pressed={theme === "dark"}
+			onClick={() => applyTheme(theme === "dark" ? "light" : "dark")}
+			className="flex size-9 items-center justify-center border border-line-strong text-ink-dim transition-colors duration-150 hover:border-denim hover:text-denim-accent active:border-denim active:bg-denim-tint focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 		>
-			<button
-				type="button"
-				aria-pressed={theme === null ? undefined : theme === "dark"}
-				onClick={() => applyTheme("dark")}
-				className={`${segmentBase} text-ink-faint dark:bg-raise dark:text-denim-accent`}
-			>
-				DARK
-			</button>
-			<button
-				type="button"
-				aria-pressed={theme === null ? undefined : theme === "light"}
-				onClick={() => applyTheme("light")}
-				className={`${segmentBase} border-l border-line-strong bg-raise text-denim-accent dark:bg-transparent dark:text-ink-faint`}
-			>
-				LIGHT
-			</button>
-		</div>
+			{/* Convention: the icon shows the theme the click switches TO — Sun in
+			    dark mode (click → light), Moon in light mode (click → dark). */}
+			<Sun
+				className="hidden size-[18px] dark:block"
+				strokeWidth={1.5}
+				strokeLinecap="square"
+				aria-hidden="true"
+			/>
+			<Moon
+				className="block size-[18px] dark:hidden"
+				strokeWidth={1.5}
+				strokeLinecap="square"
+				aria-hidden="true"
+			/>
+		</button>
 	);
 }

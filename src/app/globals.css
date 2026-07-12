@@ -349,3 +349,24 @@
 		transition: background var(--dur-theme), color var(--dur-theme);
 	}
 }
+
+/* ============================================================================
+   KEYFRAMES — consumed via animate-[…] arbitrary utilities. Every consumer
+   must pair with motion-reduce:animate-none (decorative motion dies under
+   prefers-reduced-motion, per direction §6.7).
+   ========================================================================= */
+@keyframes tabscroll {
+	from { transform: translateX(0); }
+	to { transform: translateX(-50%); }
+}
+@keyframes tabscroll-rev {
+	from { transform: translateX(-50%); }
+	to { transform: translateX(0); }
+}
+@keyframes blink {
+	50% { opacity: 0; }
+}
+@keyframes ledbreathe {
+	0%, 100% { opacity: 1; box-shadow: var(--glow-led); }
+	50% { opacity: 0.45; box-shadow: var(--glow-led-dim); }
+}

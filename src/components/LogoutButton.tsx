@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LogOut } from "lucide-react";
@@ -23,9 +22,18 @@ export default function LogoutButton() {
 	}
 
 	return (
-		<Button variant="ghost" size="sm" onClick={handleLogout} disabled={loading}>
-			<LogOut className="size-4" />
-			<span>{loading ? "Logging out..." : "Logout"}</span>
-		</Button>
+		<button
+			type="button"
+			onClick={handleLogout}
+			disabled={loading}
+			className="flex items-center gap-2 border border-line-strong px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent motion-safe:active:translate-y-px active:border-denim active:bg-denim-tint active:duration-(--dur-switch) disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+		>
+			<LogOut
+				className="size-3.5 shrink-0"
+				strokeWidth={1.5}
+				strokeLinecap="square"
+			/>
+			<span>{loading ? "Logging out…" : "Logout"}</span>
+		</button>
 	);
 }

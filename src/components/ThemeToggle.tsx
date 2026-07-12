@@ -42,22 +42,29 @@ export default function ThemeToggle() {
 			aria-label="Toggle dark mode"
 			aria-pressed={theme === "dark"}
 			onClick={() => applyTheme(theme === "dark" ? "light" : "dark")}
-			className="flex size-9 items-center justify-center border border-line-strong text-ink-dim transition-colors duration-150 hover:border-denim hover:text-denim-accent active:border-denim active:bg-denim-tint focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+			className="flex size-9 items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent motion-safe:active:translate-y-px active:border-denim active:bg-denim-tint active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 		>
-			{/* Convention: the icon shows the theme the click switches TO — Sun in
-			    dark mode (click → light), Moon in light mode (click → dark). */}
-			<Sun
-				className="hidden size-[18px] dark:block"
-				strokeWidth={1.5}
-				strokeLinecap="square"
-				aria-hidden="true"
-			/>
-			<Moon
-				className="block size-[18px] dark:hidden"
-				strokeWidth={1.5}
-				strokeLinecap="square"
-				aria-hidden="true"
-			/>
+			{/* Mechanical two-sided flip driven purely by [data-theme] (SSR-safe,
+			    no mount-flash): the container rotates and backface-visibility swaps
+			    Sun↔Moon at the 90° midpoint so it reads as a relay switch, not a
+			    cross-fade. The visible icon shows the theme the click switches TO —
+			    Sun in dark (→ light), Moon in light (→ dark). */}
+			<span className="block size-[18px] [perspective:420px]">
+				<span className="relative block size-[18px] rotate-y-180 transform-3d transition-transform duration-(--dur-theme) ease-out motion-reduce:transition-none dark:rotate-y-0">
+					<Sun
+						className="absolute inset-0 size-[18px] backface-hidden"
+						strokeWidth={1.5}
+						strokeLinecap="square"
+						aria-hidden="true"
+					/>
+					<Moon
+						className="absolute inset-0 size-[18px] rotate-y-180 backface-hidden"
+						strokeWidth={1.5}
+						strokeLinecap="square"
+						aria-hidden="true"
+					/>
+				</span>
+			</span>
 		</button>
 	);
 }

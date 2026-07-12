@@ -26,7 +26,7 @@ export default function NavLinks() {
 						href={href}
 						aria-label={label}
 						aria-current={isActive ? "page" : undefined}
-						className={`flex items-center gap-2 whitespace-nowrap px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 active:bg-denim-tint nav:px-3 ${
+						className={`flex items-center gap-2 whitespace-nowrap px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 motion-safe:active:translate-y-px active:bg-denim-tint active:duration-(--dur-switch) nav:px-3 ${
 							isActive
 								? "bg-surface font-medium text-denim-accent"
 								: "text-ink hover:text-denim-accent"

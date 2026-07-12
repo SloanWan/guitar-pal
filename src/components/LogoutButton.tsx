@@ -26,7 +26,7 @@ export default function LogoutButton() {
 			type="button"
 			onClick={handleLogout}
 			disabled={loading}
-			className="flex items-center gap-2 border border-line-strong px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-150 hover:border-denim hover:text-denim-accent active:border-denim active:bg-denim-tint disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+			className="flex items-center gap-2 border border-line-strong px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent motion-safe:active:translate-y-px active:border-denim active:bg-denim-tint active:duration-(--dur-switch) disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 		>
 			<LogOut
 				className="size-3.5 shrink-0"

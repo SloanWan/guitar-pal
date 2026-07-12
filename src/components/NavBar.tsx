@@ -57,7 +57,7 @@ export default async function NavBar() {
 						// Sign-up stays reachable via the auth page tabs.
 						<Link
 							href="/auth"
-							className="border border-denim bg-transparent px-[18px] py-2 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-colors duration-150 hover:bg-denim hover:text-on-denim active:bg-denim-tint active:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+							className="border border-denim bg-transparent px-[18px] py-2 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 						>
 							Sign In
 						</Link>

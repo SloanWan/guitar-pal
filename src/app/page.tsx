@@ -35,14 +35,38 @@ const STRIP_FRONT: TabStripSpec = {
 	num: "var(--denim)",
 	barlines: [200, 400, 600, 800, 1000, 1200, 1400, 1599],
 	notes: [
-		[30, 84, "3"], [70, 42, "0"], [110, 28, "1"], [150, 14, "0"],
-		[240, 70, "2"], [280, 56, "2"], [320, 42, "0"], [360, 28, "1"],
-		[430, 84, "0"], [470, 56, "2"], [510, 28, "1"], [550, 14, "0"],
-		[640, 70, "3"], [680, 42, "0"], [720, 28, "0"], [760, 56, "2"],
-		[830, 84, "5"], [870, 42, "7"], [910, 28, "5"], [950, 14, "7"],
-		[1040, 70, "2"], [1080, 56, "4"], [1120, 42, "2"], [1160, 28, "3"],
-		[1230, 84, "0"], [1270, 42, "2"], [1310, 28, "3"], [1350, 56, "2"],
-		[1440, 70, "2"], [1480, 42, "0"], [1520, 28, "1"], [1560, 14, "0"],
+		[30, 84, "3"],
+		[70, 42, "0"],
+		[110, 28, "1"],
+		[150, 14, "0"],
+		[240, 70, "2"],
+		[280, 56, "2"],
+		[320, 42, "0"],
+		[360, 28, "1"],
+		[430, 84, "0"],
+		[470, 56, "2"],
+		[510, 28, "1"],
+		[550, 14, "0"],
+		[640, 70, "3"],
+		[680, 42, "0"],
+		[720, 28, "0"],
+		[760, 56, "2"],
+		[830, 84, "5"],
+		[870, 42, "7"],
+		[910, 28, "5"],
+		[950, 14, "7"],
+		[1040, 70, "2"],
+		[1080, 56, "4"],
+		[1120, 42, "2"],
+		[1160, 28, "3"],
+		[1230, 84, "0"],
+		[1270, 42, "2"],
+		[1310, 28, "3"],
+		[1350, 56, "2"],
+		[1440, 70, "2"],
+		[1480, 42, "0"],
+		[1520, 28, "1"],
+		[1560, 14, "0"],
 	],
 };
 
@@ -51,12 +75,30 @@ const STRIP_BACK: TabStripSpec = {
 	num: "var(--tab-num-2)",
 	barlines: [266, 533, 800, 1066, 1333, 1599],
 	notes: [
-		[40, 56, "0"], [100, 42, "2"], [160, 28, "2"], [220, 14, "0"],
-		[300, 84, "3"], [360, 56, "2"], [420, 42, "0"], [480, 28, "0"],
-		[580, 70, "0"], [640, 42, "2"], [700, 28, "3"], [760, 14, "2"],
-		[840, 84, "1"], [900, 56, "3"], [960, 42, "3"], [1020, 28, "1"],
-		[1100, 70, "2"], [1160, 42, "4"], [1220, 28, "4"], [1280, 14, "2"],
-		[1370, 84, "0"], [1430, 56, "1"], [1490, 42, "0"], [1550, 28, "2"],
+		[40, 56, "0"],
+		[100, 42, "2"],
+		[160, 28, "2"],
+		[220, 14, "0"],
+		[300, 84, "3"],
+		[360, 56, "2"],
+		[420, 42, "0"],
+		[480, 28, "0"],
+		[580, 70, "0"],
+		[640, 42, "2"],
+		[700, 28, "3"],
+		[760, 14, "2"],
+		[840, 84, "1"],
+		[900, 56, "3"],
+		[960, 42, "3"],
+		[1020, 28, "1"],
+		[1100, 70, "2"],
+		[1160, 42, "4"],
+		[1220, 28, "4"],
+		[1280, 14, "2"],
+		[1370, 84, "0"],
+		[1430, 56, "1"],
+		[1490, 42, "0"],
+		[1550, 28, "2"],
 	],
 };
 
@@ -94,6 +136,7 @@ interface Feature {
 	tag: string;
 	title: string;
 	description: string;
+	href: string;
 	icon: ReactNode;
 }
 
@@ -110,9 +153,10 @@ const ICON_PROPS = {
 const FEATURES: readonly Feature[] = [
 	{
 		tag: "TOOL_01",
-		title: "Strumming Machine",
+		title: "Strum Machine",
 		description:
-			"Program down, up, and muted strums on a step grid. Real sampled acoustic guitar with a metronome that subdivides down to sixteenths. Save your own patterns.",
+			"Real guitar samples, tap tempo, and a genre-tuned BPM dial — practice strum patterns that actually sound like a guitar.",
+		href: "/strum",
 		icon: (
 			<svg {...ICON_PROPS}>
 				<path className="stroke-denim-accent" d="M4 6h16M4 12h16M4 18h16" />
@@ -122,9 +166,10 @@ const FEATURES: readonly Feature[] = [
 	},
 	{
 		tag: "TOOL_02",
-		title: "Fingerpicking Player",
+		title: "Fingerpick Studio",
 		description:
-			"Full TAB notation with a live playback cursor. Loop a passage, drag the tempo mid-playback, tap anywhere to seek. Travis picking to Celtic fingerstyle, built in.",
+			"A TAB player with hammer-ons, pull-offs, and slides rendered note by note. Follow the cursor, loop any passage, slow it down.",
+		href: "/fingerpick",
 		icon: (
 			<svg {...ICON_PROPS}>
 				<path className="stroke-denim-accent" d="M3 7h18M3 12h18M3 17h18" />
@@ -138,7 +183,8 @@ const FEATURES: readonly Feature[] = [
 		tag: "TOOL_03",
 		title: "Chord Library",
 		description:
-			"Every root, every suffix, every voicing — with diagrams you can hear. Tap a shape to play it back with real string-by-string sample audio before you commit fingers to frets.",
+			"Every open and barre voicing across all 12 roots — played back string by string so you can hear it before you fret it.",
+		href: "/chords",
 		icon: (
 			<svg {...ICON_PROPS}>
 				<path className="stroke-denim-accent" d="M5 3v18M9 3v18M13 3v18M17 3v18" />
@@ -151,7 +197,7 @@ const FEATURES: readonly Feature[] = [
 ];
 
 const HERO_META: readonly { value: string; label: string }[] = [
-	{ value: "2,000+", label: "CHORD VOICINGS" },
+	{ value: "2,200+", label: "CHORD VOICINGS" },
 	{ value: "REAL", label: "GUITAR SAMPLES" },
 	{ value: "40–220", label: "BPM RANGE" },
 	{ value: "FREE", label: "IN THE BROWSER" },
@@ -168,7 +214,7 @@ export default function Home() {
 					{/* Animated TAB notation background — confirmed keeper, do not shrink */}
 					<div
 						aria-hidden="true"
-						className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-16 opacity-50 [-webkit-mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)] [mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)]"
+						className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-16 opacity-50 [-webkit-mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)] mask-[linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)]"
 					>
 						<div className="flex w-max animate-[tabscroll_60s_linear_infinite] motion-reduce:animate-none">
 							<TabStripSvg spec={STRIP_FRONT} />
@@ -180,31 +226,30 @@ export default function Home() {
 						</div>
 					</div>
 
-					<div className="relative z-2 mx-auto w-full max-w-[1200px] px-8 pt-35 pb-25 max-sm:px-5 max-sm:pt-30 max-sm:pb-20">
+					<div className="relative z-2 mx-auto w-full max-w-300 px-(--gutter) pt-5 pb-8 max-sm:pt-18 max-sm:pb-20">
 						{/* Hero badge — the landing page's one LED (system online) */}
 						<span
 							className={`${EYEBROW} inline-flex items-center gap-2.5 border border-[rgba(74,111,165,0.45)] px-3.5 py-2`}
 						>
 							<span
 								aria-hidden="true"
-								className="size-1.5 flex-none animate-[ledbreathe_2.4s_ease-in-out_infinite] rounded-full bg-denim-accent shadow-[var(--glow-led)] motion-reduce:animate-none"
+								className="size-1.5 flex-none animate-[ledbreathe_2.4s_ease-in-out_infinite] rounded-full bg-denim-accent shadow-(--glow-led) motion-reduce:animate-none"
 							/>
 							Practice studio for self-taught guitarists
 						</span>
 
-						<h1 className="mt-5 max-w-[14ch] font-mono text-[length:var(--text-hero-size)] leading-[var(--text-hero-lh)] font-bold tracking-[var(--text-hero-ls)]">
-							Guitar practice,{" "}
-							<span className="text-denim-accent">engineered.</span>
+						<h1 className="mt-5 max-w-[14ch] font-mono text-(length:--text-hero-size) leading-(--text-hero-lh) font-bold tracking-(--text-hero-ls)">
+							Guitar practice, <span className="text-denim-accent">engineered.</span>
 							<span
 								aria-hidden="true"
 								className="inline-block h-[0.9em] w-[0.55ch] animate-[blink_1.1s_steps(1)_infinite] bg-denim align-text-bottom motion-reduce:animate-none"
 							/>
 						</h1>
 
-						<p className="mt-7 max-w-[52ch] text-[length:var(--text-body-lede)] text-ink-dim">
-							Strumming machine, fingerpicking TAB player, and a full chord
-							library — one precise, no-nonsense workspace for building real
-							technique. No streaks. No gamification. Just the tools.
+						<p className="mt-7 max-w-[52ch] text-(length:--text-body-lede) text-ink-dim">
+							Strumming machine, fingerpicking TAB player, and a full chord library —
+							one precise, no-nonsense workspace for building real technique. No
+							streaks. No gamification. Just the tools.
 						</p>
 
 						<div className="mt-11 flex flex-wrap gap-4">
@@ -227,85 +272,172 @@ export default function Home() {
 				</section>
 
 				{/* Features */}
-				<section className="border-b border-line py-[110px] max-sm:py-20">
-					<div className="mx-auto max-w-[1200px] px-8 max-sm:px-5">
+				<section className="border-b border-line py-27.5 max-sm:py-20">
+					<div className="mx-auto max-w-300 px-(--gutter)">
 						<div className="mb-16">
 							<span className={EYEBROW}>{"// Toolkit"}</span>
-							<h2 className="mt-3.5 font-mono text-[length:var(--text-h2-size)] font-bold tracking-[var(--text-h2-ls)]">
+							<h2 className="mt-3.5 font-mono text-(length:--text-h2-size) font-bold tracking-(--text-h2-ls)">
 								Three instruments.
 								<br />
 								One interface.
 							</h2>
 						</div>
 						<div className="grid grid-cols-3 border border-line max-[900px]:grid-cols-1">
-							{FEATURES.map(({ tag, title, description, icon }) => (
-								<div
+							{FEATURES.map(({ tag, title, description, href, icon }) => (
+								<Link
 									key={tag}
-									className="group relative border-r border-line px-8 pt-10 pb-12 transition-colors duration-200 last:border-r-0 hover:bg-raise max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:last:border-b-0"
+									href={href}
+									className="group relative block border-r border-line px-8 pt-10 pb-12 transition-colors duration-200 last:border-r-0 hover:bg-raise focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-denim-accent max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:last:border-b-0"
 								>
 									<span className="absolute top-4 right-4 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-ink-faint">
 										{/* Dormant LED powers on with the card — teaches LED = active */}
 										<span
 											aria-hidden="true"
-											className="size-1.5 flex-none rounded-full bg-ink-faint transition-[background-color,box-shadow] duration-200 group-hover:bg-denim-accent group-hover:shadow-[var(--glow-led)]"
+											className="size-1.5 flex-none rounded-full bg-ink-faint transition-[background-color,box-shadow] duration-200 group-hover:bg-denim-accent group-hover:shadow-(--glow-led)"
 										/>
 										{tag}
 									</span>
 									<div className="mb-7 flex size-12 items-center justify-center border border-line-strong transition-colors duration-200 group-hover:border-denim">
 										{icon}
 									</div>
-									<h3 className="mb-3 font-mono text-[length:var(--text-h3-size)] font-medium tracking-[0.02em]">
+									<h3 className="mb-3 font-mono text-(length:--text-h3-size) font-medium tracking-[0.02em]">
 										{title}
 									</h3>
-									<p className="text-[length:var(--text-body-card)] text-ink-dim">
+									<p className="text-(length:--text-body-card) text-ink-dim">
 										{description}
 									</p>
-								</div>
+								</Link>
 							))}
 						</div>
 					</div>
 				</section>
 
 				{/* CTA band — no bottom border by design */}
-				<section className="py-[110px] max-sm:py-20">
-					<div className="mx-auto max-w-[1200px] px-8 max-sm:px-5">
-						<span className={EYEBROW}>{"// No install. No account required."}</span>
-						<h2 className="mt-4 max-w-[22ch] font-mono text-[clamp(26px,3.6vw,44px)] font-bold tracking-[var(--text-h2-ls)]">
-							Open the browser.
+				<section className="py-27.5 max-sm:py-20">
+					<div className="mx-auto max-w-300 px-(--gutter)">
+						<span className={EYEBROW}>{"// Free account, no install"}</span>
+						<h2 className="mt-4 max-w-[22ch] font-mono text-[clamp(26px,3.6vw,44px)] font-bold tracking-(--text-h2-ls)">
+							Save your patterns.
 							<br />
-							Pick up the guitar.
+							Practice from any browser.
 						</h2>
-						<Link href="/strum" className={`${BTN_PRIMARY} mt-9`}>
-							Launch Guitar Pal →
+						<p className="mt-6 max-w-[56ch] text-(length:--text-body-lede) text-ink-dim">
+							Guitar Pal runs entirely in the browser — no downloads, no plugins.
+							Create a free account to save custom strum and fingerpick patterns, mark
+							favourites, and pick up practice from any device.
+						</p>
+						<Link href="/auth" className={`${BTN_PRIMARY} mt-9`}>
+							Create Free Account →
 						</Link>
 					</div>
 				</section>
 			</main>
 
 			{/* Footer — no LEDs by design */}
-			<footer className="border-t border-line pt-9 pb-12 font-mono text-[11.5px] tracking-[0.06em] text-ink-faint">
-				<div className="mx-auto flex max-w-[1200px] flex-wrap items-baseline justify-between gap-6 px-8 max-sm:px-5">
-					<span>GUITAR_PAL © {new Date().getFullYear()}</span>
-					<div className="flex gap-6">
-						<Link href="/strum" className={FOOTER_LINK}>
-							STRUM
-						</Link>
-						<Link href="/fingerpick" className={FOOTER_LINK}>
-							FINGERPICK
-						</Link>
-						<Link href="/chords" className={FOOTER_LINK}>
-							CHORDS
-						</Link>
-						<a
-							href="https://github.com/SloanWan/guitar-pal"
-							target="_blank"
-							rel="noopener noreferrer"
-							className={FOOTER_LINK}
-						>
-							GITHUB
-						</a>
+			<footer className="border-t border-line font-mono text-[11.5px] tracking-[0.06em] text-ink-faint">
+				<div className="mx-auto grid max-w-300 grid-cols-[1.6fr_1fr_1.2fr] gap-10 px-(--gutter) pt-14 pb-10 max-[900px]:grid-cols-2 max-sm:grid-cols-1 max-sm:gap-9 max-sm:pt-10">
+					{/* Brand */}
+					<div className="max-w-[34ch] max-[900px]:col-span-2 max-sm:col-span-1">
+						<span className="flex items-center gap-2 text-ink">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								className="size-6"
+								aria-hidden="true"
+							>
+								<path
+									d="M3 4h18M3 7.2h18M3 10.4h18M3 13.6h18M3 16.8h18M3 20h18"
+									stroke="currentColor"
+									strokeWidth="1.5"
+									strokeLinecap="square"
+								/>
+								<rect x="14" y="2" width="2" height="20" fill="#4A6FA5" />
+							</svg>
+							<span className="text-[13px] font-bold tracking-[0.06em]">
+								GUITAR_PAL
+							</span>
+						</span>
+						<p className="mt-4 max-w-[30ch] leading-relaxed text-ink-dim">
+							A browser-based practice studio for self-taught guitarists.
+						</p>
 					</div>
-					<span>BUILT WITH VEXFLOW / WEBAUDIOFONT</span>
+
+					{/* Product */}
+					<nav aria-label="Product">
+						<span className="mb-4 block text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+							Product
+						</span>
+						<ul className="flex flex-col gap-3 text-ink-dim">
+							<li>
+								<Link href="/chords" className={FOOTER_LINK}>
+									Chords
+								</Link>
+							</li>
+							<li>
+								<Link href="/strum" className={FOOTER_LINK}>
+									Strum
+								</Link>
+							</li>
+							<li>
+								<Link href="/fingerpick" className={FOOTER_LINK}>
+									Fingerpick
+								</Link>
+							</li>
+							<li>
+								<Link href="/dashboard" className={FOOTER_LINK}>
+									Dashboard
+								</Link>
+							</li>
+						</ul>
+					</nav>
+
+					{/* Built With — attribution reused from chords/layout.tsx */}
+					<div>
+						<span className="mb-4 block text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+							Built With
+						</span>
+						<ul className="flex flex-col gap-3 text-ink-dim">
+							<li>
+								TAB rendering via{" "}
+								<a
+									href="https://github.com/0xfe/vexflow"
+									target="_blank"
+									rel="noopener noreferrer"
+									className={`text-ink ${FOOTER_LINK}`}
+								>
+									VexFlow
+								</a>
+							</li>
+							<li>
+								audio samples via{" "}
+								<a
+									href="https://github.com/surikov/webaudiofont"
+									target="_blank"
+									rel="noopener noreferrer"
+									className={`text-ink ${FOOTER_LINK}`}
+								>
+									WebAudioFont
+								</a>
+							</li>
+							<li>
+								voicing data via{" "}
+								<a
+									href="https://github.com/tombatossals/chords-db"
+									target="_blank"
+									rel="noopener noreferrer"
+									className={`text-ink ${FOOTER_LINK}`}
+								>
+									@tombatossals/chords-db
+								</a>
+							</li>
+						</ul>
+					</div>
+				</div>
+
+				{/* Bottom row */}
+				<div className="border-t border-line">
+					<div className="mx-auto max-w-300 px-(--gutter) py-5">© 2026 Guitar Pal</div>
 				</div>
 			</footer>
 		</div>

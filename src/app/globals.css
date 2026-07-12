@@ -64,16 +64,16 @@
    2. COLOR — light ("editorial paper", not washed-out dark)
    ------------------------------------------------------------------------- */
 [data-theme="light"] {
-	--bg:        #F4F4F1;  /* warm paper — never pure white */
-	--bg-panel:  #EDEDE9;
+	--bg:        #F5F7FA;  /* cool denim-tinted white — never pure white */
+	--bg-panel:  #EBEFF5;
 	--bg-raise:  #E4E4DF;
 
 	--ink:       #141414;
 	--ink-dim:   #63635E;
 	--ink-faint: #A5A5A0;
 
-	--line:        #DDDDD7;
-	--line-strong: #C6C6C0;
+	--line:        #D7D9DD;
+	--line-strong: #C0C2C6;
 
 	--denim:        #4A6FA5;                 /* unchanged — the anchor            */
 	--denim-accent: #35507A;                 /* DARKER than base on light — contrast-safe text variant, not a bug */
@@ -171,6 +171,29 @@
 	   landing section padding 110px (80px ≤640px) ·
 	   container max-width 1200px, padding 0 32px (0 20px ≤640px) */
 }
+
+/* ----------------------------------------------------------------------------
+   4b. HORIZONTAL GUTTERS — the shared page inset used by the marketing nav's
+   inner container AND every landing section, so their content edges line up at
+   every width. The named tiers document the scale; a single responsive
+   `--gutter` is what markup consumes (as `px-(--gutter)`) — one value to change,
+   and nav/section edges can never drift apart. Steps grow across the project
+   breakpoints (layout-specs §1): base 20px / 32px desktop matches the v3 spec
+   container inset; 640/900/1024 add intermediate breathing room.
+   ------------------------------------------------------------------------- */
+:root {
+	--gutter-sm:  20px;  /* base   (<640px) — spec container inset          */
+	--gutter-md:  24px;  /* ≥640px                                          */
+	--gutter-lg:  32px;  /* ≥768px — spec desktop container inset           */
+	--gutter-xl:  40px;  /* ≥900px                                          */
+	--gutter-2xl: 48px;  /* ≥1024px+                                        */
+
+	--gutter: var(--gutter-sm);  /* the value markup consumes; bumped per @media below */
+}
+@media (min-width:  640px) { :root { --gutter: var(--gutter-md);  } }
+@media (min-width:  768px) { :root { --gutter: var(--gutter-lg);  } }
+@media (min-width:  900px) { :root { --gutter: var(--gutter-xl);  } }
+@media (min-width: 1024px) { :root { --gutter: var(--gutter-2xl); } }
 
 /* ----------------------------------------------------------------------------
    5. RADIUS — there is no radius scale

@@ -14,7 +14,7 @@ export default async function NavBar() {
 	return (
 		<NavBarScrollWrapper>
 		<header className="h-12 flex-none border-b border-line bg-panel">
-			<div className="grid h-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4">
+			<div className="mx-auto grid h-full w-full max-w-300 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-(--gutter)">
 				<Link
 					href="/"
 					className="flex min-w-0 items-center gap-2 justify-self-start text-ink focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"

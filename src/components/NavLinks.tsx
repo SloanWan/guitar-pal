@@ -41,9 +41,7 @@ export default function NavLinks() {
 						    mode the latch state alone carries the active semantic. */}
 						<span
 							className={`hidden size-1.5 rounded-full transition-[background,box-shadow] duration-200 nav:inline-block ${
-								isActive
-									? "bg-denim-accent shadow-[var(--glow-led)]"
-									: "bg-ink-faint"
+								isActive ? "bg-denim-accent shadow-(--glow-led)" : "bg-ink-faint"
 							}`}
 							aria-hidden="true"
 						/>

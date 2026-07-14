@@ -226,7 +226,7 @@ export default function Home() {
 						</div>
 					</div>
 
-					<div className="relative z-2 mx-auto w-full max-w-300 px-(--gutter) pt-5 pb-8 max-sm:pt-18 max-sm:pb-20">
+					<div className="relative z-2 mx-auto w-full max-w-300 px-(--gutter) pt-5 pb-8 max-sm:pt-10 max-sm:pb-20">
 						{/* Hero badge — the landing page's one LED (system online) */}
 						<span
 							className={`${EYEBROW} inline-flex items-center gap-2.5 border border-[rgba(74,111,165,0.45)] px-3.5 py-2`}
@@ -272,7 +272,7 @@ export default function Home() {
 				</section>
 
 				{/* Features */}
-				<section className="border-b border-line py-27.5 max-sm:py-20">
+				<section className="border-b border-line py-27.5 max-sm:py-10">
 					<div className="mx-auto max-w-300 px-(--gutter)">
 						<div className="mb-16">
 							<span className={EYEBROW}>{"// Toolkit"}</span>
@@ -313,7 +313,7 @@ export default function Home() {
 				</section>
 
 				{/* CTA band — no bottom border by design */}
-				<section className="py-27.5 max-sm:py-20">
+				<section className="py-25 max-sm:py-10">
 					<div className="mx-auto max-w-300 px-(--gutter)">
 						<span className={EYEBROW}>{"// Free account, no install"}</span>
 						<h2 className="mt-4 max-w-[22ch] font-mono text-[clamp(26px,3.6vw,44px)] font-bold tracking-(--text-h2-ls)">

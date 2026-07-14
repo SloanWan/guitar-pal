@@ -30,70 +30,70 @@
 :root,
 [data-theme="dark"] {
 	/* Surfaces */
-	--bg:        #0F0F0F;  /* page background; readout insets; button fill base */
-	--bg-panel:  #141414;  /* sidebars, top bars, control racks, bottom bars    */
-	--bg-raise:  #1A1A1A;  /* hover states, active nav tabs, active toggle seg  */
+	--bg: #0f0f0f; /* page background; readout insets; button fill base */
+	--bg-panel: #141414; /* sidebars, top bars, control racks, bottom bars    */
+	--bg-raise: #1a1a1a; /* hover states, active nav tabs, active toggle seg  */
 
 	/* Ink */
-	--ink:       #F0F0F0;  /* primary text, active fret numbers, slider thumbs  */
-	--ink-dim:   #8A8A8A;  /* secondary text, inactive-row notation, ctl labels */
-	--ink-faint: #4D4D4D;  /* module labels, placeholders, ticks, dormant LEDs  */
+	--ink: #f0f0f0; /* primary text, active fret numbers, slider thumbs  */
+	--ink-dim: #8a8a8a; /* secondary text, inactive-row notation, ctl labels */
+	--ink-faint: #4d4d4d; /* module labels, placeholders, ticks, dormant LEDs  */
 
 	/* Lines */
-	--line:        #262626; /* structural hairlines: dividers, card grids       */
+	--line: #262626; /* structural hairlines: dividers, card grids       */
 	--line-strong: #333333; /* interactive borders, stave lines, rulers         */
 
 	/* Accent (denim) */
-	--denim:        #4A6FA5;                 /* fills. IDENTICAL both themes — the anchor */
-	--denim-accent: #6E93C9;                 /* accent text/strokes on this bg (lighter on dark) */
-	--denim-tint:   rgba(74, 111, 165, 0.12);  /* selected list-item bg; press-flash fill   */
-	--denim-glow:   rgba(110, 147, 201, 0.55); /* playhead + LED box-shadow color           */
+	--denim: #4a6fa5; /* fills. IDENTICAL both themes — the anchor */
+	--denim-accent: #6e93c9; /* accent text/strokes on this bg (lighter on dark) */
+	--denim-tint: rgba(74, 111, 165, 0.12); /* selected list-item bg; press-flash fill   */
+	--denim-glow: rgba(110, 147, 201, 0.55); /* playhead + LED box-shadow color           */
 	--readout-glow: rgba(110, 147, 201, 0.35); /* text-shadow color on large readouts       */
-	--measure-hl:   rgba(74, 111, 165, 0.07);  /* current-measure block in TAB viewer       */
+	--measure-hl: rgba(74, 111, 165, 0.07); /* current-measure block in TAB viewer       */
 
 	/* Utility */
-	--btn-on-denim: #F0F0F0;                 /* text/icons on denim fills (NEVER --ink)   */
-	--thumb:        #F0F0F0;                 /* slider thumb fill                         */
-	--nav-bg:       rgba(15, 15, 15, 0.88);  /* fixed marketing nav + backdrop-blur(8px)  */
-	--backdrop:     rgba(0, 0, 0, 0.55);     /* mobile drawer scrim                       */
-	--tab-line-2:   #1F1F1F;                 /* landing hero: recessed TAB strip lines    */
-	--tab-num-2:    #3A4A63;                 /* landing hero: recessed TAB strip numbers  */
+	--btn-on-denim: #f0f0f0; /* text/icons on denim fills (NEVER --ink)   */
+	--thumb: #f0f0f0; /* slider thumb fill                         */
+	--nav-bg: rgba(15, 15, 15, 0.88); /* fixed marketing nav + backdrop-blur(8px)  */
+	--backdrop: rgba(0, 0, 0, 0.55); /* mobile drawer scrim                       */
+	--tab-line-2: #1f1f1f; /* landing hero: recessed TAB strip lines    */
+	--tab-num-2: #3a4a63; /* landing hero: recessed TAB strip numbers  */
 }
 
 /* ----------------------------------------------------------------------------
    2. COLOR — light ("editorial paper", not washed-out dark)
    ------------------------------------------------------------------------- */
 [data-theme="light"] {
-	--bg:        #F5F7FA;  /* cool denim-tinted white — never pure white */
-	--bg-panel:  #EBEFF5;
-	--bg-raise:  #E4E4DF;
+	--bg: #f5f7fa; /* cool denim-tinted white — never pure white */
+	--bg-panel: #ebeff5;
+	--bg-raise: #e4e4df;
 
-	--ink:       #141414;
-	--ink-dim:   #63635E;
-	--ink-faint: #A5A5A0;
+	--ink: #141414;
+	--ink-dim: #63635e;
+	--ink-faint: #a5a5a0;
 
-	--line:        #D7D9DD;
-	--line-strong: #C0C2C6;
+	--line: #d7d9dd;
+	--line-strong: #c0c2c6;
 
-	--denim:        #4A6FA5;                 /* unchanged — the anchor            */
-	--denim-accent: #35507A;                 /* DARKER than base on light — contrast-safe text variant, not a bug */
-	--denim-tint:   rgba(74, 111, 165, 0.10);
-	--denim-glow:   rgba(74, 111, 165, 0.45); /* glows read weaker on light — reduced */
+	--denim: #4a6fa5; /* unchanged — the anchor            */
+	--denim-accent: #35507a; /* DARKER than base on light — contrast-safe text variant, not a bug */
+	--denim-tint: rgba(74, 111, 165, 0.1);
+	--denim-glow: rgba(74, 111, 165, 0.45); /* glows read weaker on light — reduced */
 	--readout-glow: rgba(74, 111, 165, 0.25);
-	--measure-hl:   rgba(74, 111, 165, 0.08);
+	--measure-hl: rgba(74, 111, 165, 0.08);
 
-	--btn-on-denim: #F4F4F1;
-	--thumb:        #141414;
-	--nav-bg:       rgba(244, 244, 241, 0.88);
-	--backdrop:     rgba(20, 20, 20, 0.35);
-	--tab-line-2:   #E6E6E1;
-	--tab-num-2:    #A9BAD3;
+	--btn-on-denim: #f4f4f1;
+	--thumb: #141414;
+	--nav-bg: rgba(244, 244, 241, 0.88);
+	--backdrop: rgba(20, 20, 20, 0.35);
+	--tab-line-2: #e6e6e1;
+	--tab-num-2: #a9bad3;
 }
 
 /* Text selection is fixed across BOTH themes */
 ::selection {
 	background: var(--denim);
-	color: #F0F0F0;
+	color: #f0f0f0;
 }
 
 /* ----------------------------------------------------------------------------
@@ -106,59 +106,69 @@
    provides --font-jbmono and --font-grotesk.
    ------------------------------------------------------------------------- */
 :root {
-	--mono: var(--font-jbmono), ui-monospace, monospace;   /* 400 / 500 / 700 */
-	--sans: var(--font-grotesk), system-ui, sans-serif;    /* 400 / 500 / 600 */
+	--mono: var(--font-jbmono), ui-monospace, monospace; /* 400 / 500 / 700 */
+	--sans: var(--font-grotesk), system-ui, sans-serif; /* 400 / 500 / 600 */
 
 	/* Display */
-	--text-hero-size: clamp(40px, 6.5vw, 84px);  /* mono 700 */
+	--text-hero-size: clamp(40px, 6.5vw, 84px); /* mono 700 */
 	--text-hero-lh: 1.04;
 	--text-hero-ls: -0.03em;
 
-	--text-h2-size: clamp(26px, 3.4vw, 40px);    /* mono 700; CTA-band variant clamp(26px, 3.6vw, 44px) */
+	--text-h2-size: clamp(
+		26px,
+		3.4vw,
+		40px
+	); /* mono 700; CTA-band variant clamp(26px, 3.6vw, 44px) */
 	--text-h2-ls: -0.02em;
 
 	/* Readouts */
-	--text-readout-size: 44px;                   /* mono 700, lh 1, ls -0.02em, zero-padded */
+	--text-readout-size: 44px; /* mono 700, lh 1, ls -0.02em, zero-padded */
 	--text-readout-ls: -0.02em;
-	--text-readout-mobile-size: 24px;            /* mono 700, lh 1 */
+	--text-readout-mobile-size: 24px; /* mono 700, lh 1 */
 
 	/* Headings in components */
-	--text-h3-size: 16px;                        /* mono 500, ls 0.02em (card h3)      */
-	--text-h4-size: 14px;                        /* mono 500, ls 0.02em (step h4)      */
+	--text-h3-size: 16px; /* mono 500, ls 0.02em (card h3)      */
+	--text-h4-size: 14px; /* mono 500, ls 0.02em (step h4)      */
 
 	/* Body — Space Grotesk 400, lh 1.55, no tracking */
-	--text-body-landing: 16px;                   /* landing base                        */
-	--text-body-lede: 17px;                      /* hero lede                           */
-	--text-body-card: 14.5px;                    /* feature card prose                  */
-	--text-body-step: 13.5px;                    /* step prose                          */
-	--text-body-app: 14px;                       /* app base                            */
-	--text-body-list: 13px;                      /* list items (weight 500 for titles)  */
+	--text-body-landing: 16px; /* landing base                        */
+	--text-body-lede: 17px; /* hero lede                           */
+	--text-body-card: 14.5px; /* feature card prose                  */
+	--text-body-step: 13.5px; /* step prose                          */
+	--text-body-app: 14px; /* app base                            */
+	--text-body-list: 13px; /* list items (weight 500 for titles)  */
 
 	/* Labels — JetBrains Mono 400, UPPERCASE */
-	--text-nav-size: 12px;      --text-nav-ls: 0.08em;      /* marketing nav links      */
-	--text-nav-app-size: 11px;                              /* app topbar nav           */
-	--text-btn-size: 13px;      --text-btn-ls: 0.08em;      /* buttons (nav CTA: 12px)  */
-	--text-eyebrow-size: 11px;  --text-eyebrow-ls: 0.18em;  /* eyebrows / hero badge    */
-	--text-module-size: 9px;    --text-module-ls: 0.2em;    /* rack module labels (9–10px, 0.18–0.2em) */
-	--text-meta-size: 10px;     --text-meta-ls: 0.06em;     /* metadata rows (10–12px)  */
-	--text-micro-size: 8px;     --text-micro-ls: 0.08em;    /* slider scale rows        */
-	--text-unit-ls: 0.28em;                                 /* BPM unit label ("BPM")   */
-	--text-tabnum-size: 13px;                               /* TAB fret numbers (SVG); 700 for current note */
+	--text-nav-size: 12px;
+	--text-nav-ls: 0.08em; /* marketing nav links      */
+	--text-nav-app-size: 11px; /* app topbar nav           */
+	--text-btn-size: 13px;
+	--text-btn-ls: 0.08em; /* buttons (nav CTA: 12px)  */
+	--text-eyebrow-size: 11px;
+	--text-eyebrow-ls: 0.18em; /* eyebrows / hero badge    */
+	--text-module-size: 9px;
+	--text-module-ls: 0.2em; /* rack module labels (9–10px, 0.18–0.2em) */
+	--text-meta-size: 10px;
+	--text-meta-ls: 0.06em; /* metadata rows (10–12px)  */
+	--text-micro-size: 8px;
+	--text-micro-ls: 0.08em; /* slider scale rows        */
+	--text-unit-ls: 0.28em; /* BPM unit label ("BPM")   */
+	--text-tabnum-size: 13px; /* TAB fret numbers (SVG); 700 for current note */
 }
 
 /* ----------------------------------------------------------------------------
    4. SPACING — 4px base, 13 steps
    ------------------------------------------------------------------------- */
 :root {
-	--space-1:  4px;
-	--space-2:  8px;
-	--space-3:  12px;
-	--space-4:  16px;
-	--space-5:  20px;
-	--space-6:  24px;
-	--space-7:  28px;
-	--space-8:  32px;
-	--space-9:  40px;
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 20px;
+	--space-6: 24px;
+	--space-7: 28px;
+	--space-8: 32px;
+	--space-9: 40px;
 	--space-10: 48px;
 	--space-11: 64px;
 	--space-12: 80px;
@@ -182,25 +192,41 @@
    container inset; 640/900/1024 add intermediate breathing room.
    ------------------------------------------------------------------------- */
 :root {
-	--gutter-sm:  20px;  /* base   (<640px) — spec container inset          */
-	--gutter-md:  24px;  /* ≥640px                                          */
-	--gutter-lg:  32px;  /* ≥768px — spec desktop container inset           */
-	--gutter-xl:  40px;  /* ≥900px                                          */
-	--gutter-2xl: 48px;  /* ≥1024px+                                        */
+	--gutter-sm: 20px; /* base   (<640px) — spec container inset          */
+	--gutter-md: 24px; /* ≥640px                                          */
+	--gutter-lg: 32px; /* ≥768px — spec desktop container inset           */
+	--gutter-xl: 40px; /* ≥900px                                          */
+	--gutter-2xl: 48px; /* ≥1024px+                                        */
 
-	--gutter: var(--gutter-sm);  /* the value markup consumes; bumped per @media below */
+	--gutter: var(--gutter-sm); /* the value markup consumes; bumped per @media below */
 }
-@media (min-width:  640px) { :root { --gutter: var(--gutter-md);  } }
-@media (min-width:  768px) { :root { --gutter: var(--gutter-lg);  } }
-@media (min-width:  900px) { :root { --gutter: var(--gutter-xl);  } }
-@media (min-width: 1024px) { :root { --gutter: var(--gutter-2xl); } }
+@media (min-width: 640px) {
+	:root {
+		--gutter: var(--gutter-md);
+	}
+}
+@media (min-width: 768px) {
+	:root {
+		--gutter: var(--gutter-lg);
+	}
+}
+@media (min-width: 900px) {
+	:root {
+		--gutter: var(--gutter-xl);
+	}
+}
+@media (min-width: 1024px) {
+	:root {
+		--gutter: var(--gutter-2xl);
+	}
+}
 
 /* ----------------------------------------------------------------------------
    5. RADIUS — there is no radius scale
    ------------------------------------------------------------------------- */
 :root {
-	--radius: 0px;        /* every component. No exceptions… (0px, not 0 — shadcn bridge value) */
-	--radius-led: 50%;    /* …except the LED. LEDs are round. Intentional.       */
+	--radius: 0px; /* every component. No exceptions… (0px, not 0 — shadcn bridge value) */
+	--radius-led: 50%; /* …except the LED. LEDs are round. Intentional.       */
 }
 
 /* ----------------------------------------------------------------------------
@@ -208,23 +234,23 @@
    All three signal "live/active".
    ------------------------------------------------------------------------- */
 :root {
-	--glow-playhead: 0 0 8px 2px var(--denim-glow);   /* box-shadow on .playhead      */
-	--glow-led:      0 0 6px 1px var(--denim-glow);   /* box-shadow on .led.on        */
-	--glow-led-dim:  0 0 2px 0 var(--denim-glow);     /* pulse/breathe trough frame   */
-	--glow-readout:  0 0 14px var(--readout-glow);    /* TEXT-shadow on .bpm-value    */
+	--glow-playhead: 0 0 8px 2px var(--denim-glow); /* box-shadow on .playhead      */
+	--glow-led: 0 0 6px 1px var(--denim-glow); /* box-shadow on .led.on        */
+	--glow-led-dim: 0 0 2px 0 var(--denim-glow); /* pulse/breathe trough frame   */
+	--glow-readout: 0 0 14px var(--readout-glow); /* TEXT-shadow on .bpm-value    */
 }
 
 /* ----------------------------------------------------------------------------
    7. MOTION
    ------------------------------------------------------------------------- */
 :root {
-	--dur-switch: 0.12s;                              /* switch block slide (left, background) */
-	--dur-hover:  0.15s;                              /* border-color / color / background hovers */
-	--dur-theme:  0.2s;                               /* theme transition: body background+color; LED on/off */
-	--dur-drawer: 0.25s;                              /* drawers & collapsibles */
-	--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);    /* pairs with --dur-drawer */
+	--dur-switch: 0.12s; /* switch block slide (left, background) */
+	--dur-hover: 0.15s; /* border-color / color / background hovers */
+	--dur-theme: 0.2s; /* theme transition: body background+color; LED on/off */
+	--dur-drawer: 0.25s; /* drawers & collapsibles */
+	--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* pairs with --dur-drawer */
 
-	--beat-dur: 0.625s;   /* THE BEAT CLOCK. JS writes 60/bpm + "s" on every BPM
+	--beat-dur: 0.625s; /* THE BEAT CLOCK. JS writes 60/bpm + "s" on every BPM
 	                         change; metronome LED pulse consumes it. Fallback
 	                         0.625s = 96 BPM. */
 
@@ -244,23 +270,23 @@
 :root {
 	/* Chrome heights / widths */
 	--h-nav-marketing: 56px;
-	--h-topbar-app:    48px;
-	--h-control:       44px;    /* every interactive topbar control (nav links,
+	--h-topbar-app: 48px;
+	--h-control: 35px; /* every interactive topbar control (nav links,
 	                               theme toggle, auth button, menu trigger) shares
 	                               this ONE height at every width — never emergent
 	                               from padding+font. 44px also meets the minimum
 	                               touch-target size, so icon-only controls are
 	                               tap-safe without a separate mobile rule.       */
 	--h-viewer-toolbar: 44px;
-	--h-bottombar:     60px;
+	--h-bottombar: 60px;
 	--h-transport-btn: 52px;
-	--w-sidebar:       248px;   /* pattern library (desktop) */
-	--w-rack:          288px;   /* control rack              */
-	--w-drawer:        260px;   /* mobile slide-in library   */
+	--w-sidebar: 248px; /* pattern library (desktop) */
+	--w-rack: 288px; /* control rack              */
+	--w-drawer: 260px; /* mobile slide-in library   */
 
 	/* Component metrics */
-	--border-w: 1px;            /* ALL structural + interactive borders          */
-	--selected-edge-w: 2px;     /* selected list-item left edge                  */
+	--border-w: 1px; /* ALL structural + interactive borders          */
+	--selected-edge-w: 2px; /* selected list-item left edge                  */
 	--slider-track-h: 3px;
 	--slider-thumb-w: 10px;
 	--slider-thumb-h: 18px;
@@ -269,8 +295,8 @@
 	--switch-w: 40px;
 	--switch-h: 20px;
 	--switch-block-w: 15px;
-	--switch-block-h: 14px;     /* travel: left 2px → 21px                       */
-	--icon-stroke: 1.5px;       /* all icons; stroke-linecap: square             */
+	--switch-block-h: 14px; /* travel: left 2px → 21px                       */
+	--icon-stroke: 1.5px; /* all icons; stroke-linecap: square             */
 	--playhead-w: 2px;
 	--led-size: 6px;
 
@@ -278,7 +304,7 @@
 	--z-nav: 50;
 	--z-drawer: 45;
 	--z-backdrop: 44;
-	--z-bottombar: 40;   /* also mobile FAB */
+	--z-bottombar: 40; /* also mobile FAB */
 }
 
 /* ----------------------------------------------------------------------------
@@ -300,14 +326,21 @@
    so a single :root declaration covers both themes).
    ========================================================================= */
 :root {
-	--background: var(--bg);        --foreground: var(--ink);
-	--card: var(--bg-panel);        --card-foreground: var(--ink);
-	--popover: var(--bg-panel);     --popover-foreground: var(--ink);
-	--primary: var(--denim);        --primary-foreground: var(--btn-on-denim);
-	--muted: var(--bg-raise);       --muted-foreground: var(--ink-dim);
-	--accent: var(--denim-tint);    --accent-foreground: var(--denim-accent);
-	--border: var(--line);          --input: var(--line-strong);
-	--ring: var(--denim-accent);    /* --radius: 0px lives in section 5 above */
+	--background: var(--bg);
+	--foreground: var(--ink);
+	--card: var(--bg-panel);
+	--card-foreground: var(--ink);
+	--popover: var(--bg-panel);
+	--popover-foreground: var(--ink);
+	--primary: var(--denim);
+	--primary-foreground: var(--btn-on-denim);
+	--muted: var(--bg-raise);
+	--muted-foreground: var(--ink-dim);
+	--accent: var(--denim-tint);
+	--accent-foreground: var(--denim-accent);
+	--border: var(--line);
+	--input: var(--line-strong);
+	--ring: var(--denim-accent); /* --radius: 0px lives in section 5 above */
 
 	/* TEMPORARY bridge extensions — not part of the v3 token set. These vars
 	   are still read by un-migrated components (button/input/switch/select,
@@ -331,7 +364,9 @@
 
 	--font-mono: var(--mono);
 	--font-sans: var(--sans);
-	--font-heading: var(--mono);  /* v3 display/heading type is mono; bridges un-migrated font-heading usage */
+	--font-heading: var(
+		--mono
+	); /* v3 display/heading type is mono; bridges un-migrated font-heading usage */
 
 	/* Semantic utilities: bg-surface, bg-panel, bg-raise, text-ink, text-ink-dim,
 	   text-ink-faint, border-line, border-line-strong, bg-denim,
@@ -349,7 +384,7 @@
 	--color-denim-tint: var(--denim-tint);
 	--color-on-denim: var(--btn-on-denim);
 
-	--radius-none: 0;   /* and nothing else — do not define a radius scale */
+	--radius-none: 0; /* and nothing else — do not define a radius scale */
 
 	/* shadcn bridge utilities (bg-background, text-muted-foreground, …) for
 	   un-migrated components — remove alongside the bridge block above. */
@@ -380,7 +415,9 @@
 	body {
 		@apply bg-background text-foreground font-sans;
 		-webkit-font-smoothing: antialiased;
-		transition: background var(--dur-theme), color var(--dur-theme);
+		transition:
+			background var(--dur-theme),
+			color var(--dur-theme);
 	}
 }
 
@@ -390,17 +427,34 @@
    prefers-reduced-motion, per direction §6.7).
    ========================================================================= */
 @keyframes tabscroll {
-	from { transform: translateX(0); }
-	to { transform: translateX(-50%); }
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
 }
 @keyframes tabscroll-rev {
-	from { transform: translateX(-50%); }
-	to { transform: translateX(0); }
+	from {
+		transform: translateX(-50%);
+	}
+	to {
+		transform: translateX(0);
+	}
 }
 @keyframes blink {
-	50% { opacity: 0; }
+	50% {
+		opacity: 0;
+	}
 }
 @keyframes ledbreathe {
-	0%, 100% { opacity: 1; box-shadow: var(--glow-led); }
-	50% { opacity: 0.45; box-shadow: var(--glow-led-dim); }
+	0%,
+	100% {
+		opacity: 1;
+		box-shadow: var(--glow-led);
+	}
+	50% {
+		opacity: 0.45;
+		box-shadow: var(--glow-led-dim);
+	}
 }

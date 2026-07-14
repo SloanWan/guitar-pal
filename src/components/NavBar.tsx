@@ -1,5 +1,6 @@
 import LogoutButton from "./LogoutButton";
 import NavLinks from "./NavLinks";
+import NavBarMenu from "./NavBarMenu";
 import ThemeToggle from "./ThemeToggle";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
@@ -42,26 +43,33 @@ export default async function NavBar() {
 					</span>
 				</Link>
 				<NavLinks />
-				<div className="flex min-w-0 items-center gap-3 justify-self-end">
-					<ThemeToggle />
-					{user ? (
-						<>
-							<span className="hidden min-w-0 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint md:block">
-								{user?.email}
-							</span>
-							<LogoutButton />
-						</>
-					) : (
-						// Single nav-CTA: transparent, denim border, denim-accent
-						// text; hover fills denim; :active press-flashes denim-tint.
-						// Sign-up stays reachable via the auth page tabs.
-						<Link
-							href="/auth"
-							className="border border-denim bg-transparent px-[18px] py-2 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-						>
-							Sign In
-						</Link>
-					)}
+				<div className="flex min-w-0 items-center justify-self-end">
+					{/* ≥ nav: controls sit inline in the topbar. */}
+					<div className="hidden min-w-0 items-center gap-3 nav:flex">
+						<ThemeToggle />
+						{user ? (
+							<>
+								<span className="min-w-0 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+									{user?.email}
+								</span>
+								<LogoutButton />
+							</>
+						) : (
+							// Single nav-CTA: transparent, denim border, denim-accent
+							// text; hover fills denim; :active press-flashes denim-tint.
+							// Sign-up stays reachable via the auth page tabs.
+							<Link
+								href="/auth"
+								className="flex h-(--h-control) items-center border border-denim bg-transparent px-[18px] font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+							>
+								Sign In
+							</Link>
+						)}
+					</div>
+					{/* < nav: the toggle + auth collapse into one menu trigger. */}
+					<div className="nav:hidden">
+						<NavBarMenu userEmail={user?.email ?? null} />
+					</div>
 				</div>
 			</div>
 		</header>

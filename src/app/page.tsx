@@ -204,8 +204,13 @@ const HERO_META: readonly { value: string; label: string }[] = [
 ];
 
 export default function Home() {
+	// shrink-0 on the root div: it's a flex item of the h-full flex-col <body>. Without
+	// it, flex-shrink collapses the div to one viewport (its min-h-full minimum) while
+	// the taller content overflows and the window scrolls — which caps the sticky NavBar's
+	// containing block at one screen, so it scrolls away past the fold. shrink-0 lets the
+	// div grow to full content height, restoring sticky.
 	return (
-		<div className="flex min-h-full flex-col">
+		<div className="flex min-h-full shrink-0 flex-col">
 			<NavBar />
 
 			<main>

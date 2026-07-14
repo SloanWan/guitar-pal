@@ -222,6 +222,12 @@
 	/* Chrome heights / widths */
 	--h-nav-marketing: 56px;
 	--h-topbar-app:    48px;
+	--h-control:       44px;    /* every interactive topbar control (nav links,
+	                               theme toggle, auth button, menu trigger) shares
+	                               this ONE height at every width — never emergent
+	                               from padding+font. 44px also meets the minimum
+	                               touch-target size, so icon-only controls are
+	                               tap-safe without a separate mobile rule.       */
 	--h-viewer-toolbar: 44px;
 	--h-bottombar:     60px;
 	--h-transport-btn: 52px;
@@ -293,7 +299,12 @@
    TAILWIND THEME — semantic utilities over the tokens
    ========================================================================= */
 @theme inline {
-	--breakpoint-nav: 50rem;
+	/* The topbar-collapse trigger (used ONLY by NavBar + NavLinks). Set to the
+	   width the full-mode topbar actually needs: wordmark + three full nav-link
+	   labels + inline theme/auth measure ~867px, so below this the center grid
+	   column would overflow into the side columns. 56rem/896px clears that band
+	   with a small buffer; under it, controls consolidate into the menu trigger. */
+	--breakpoint-nav: 56rem;
 
 	--font-mono: var(--mono);
 	--font-sans: var(--sans);

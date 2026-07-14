@@ -42,7 +42,7 @@ export default function ThemeToggle() {
 			aria-label="Toggle dark mode"
 			aria-pressed={theme === "dark"}
 			onClick={() => applyTheme(theme === "dark" ? "light" : "dark")}
-			className="flex size-9 items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent motion-safe:active:translate-y-px active:border-denim active:bg-denim-tint active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+			className="flex size-(--h-control) items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent motion-safe:active:translate-y-px active:border-denim active:bg-denim-tint active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 		>
 			{/* Mechanical two-sided flip driven purely by [data-theme] (SSR-safe,
 			    no mount-flash): the container rotates and backface-visibility swaps

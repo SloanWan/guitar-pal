@@ -271,13 +271,13 @@
 	/* Chrome heights / widths */
 	--h-nav-marketing: 56px;
 	--h-topbar-app: 48px;
-	--h-control: 35px; /* every interactive topbar control (nav links,
+	--h-control: 38px; /* every interactive topbar control (nav links,
 	                               theme toggle, auth button, menu trigger) shares
 	                               this ONE height at every width — never emergent
 	                               from padding+font. 44px also meets the minimum
 	                               touch-target size, so icon-only controls are
 	                               tap-safe without a separate mobile rule.       */
-	--h-viewer-toolbar: 44px;
+	--h-viewer-toolbar: 45px;
 	--h-bottombar: 60px;
 	--h-transport-btn: 52px;
 	--w-sidebar: 248px; /* pattern library (desktop) */

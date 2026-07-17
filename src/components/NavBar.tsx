@@ -14,7 +14,7 @@ export default async function NavBar() {
 
 	return (
 		<NavBarScrollWrapper>
-			<header className="h-12 flex-none border-b border-line bg-panel">
+			<header className="h-13 flex-none border-b border-line bg-panel">
 				<div className="mx-auto grid h-full w-full max-w-300 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-(--gutter)">
 					<Link
 						href="/"
@@ -60,7 +60,7 @@ export default async function NavBar() {
 								// Sign-up stays reachable via the auth page tabs.
 								<Link
 									href="/auth"
-									className="flex h-(--h-control) items-center border border-denim bg-transparent px-[18px] font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+									className="flex h-(--h-control) items-center border border-denim bg-transparent px-4.5 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 								>
 									Sign In
 								</Link>

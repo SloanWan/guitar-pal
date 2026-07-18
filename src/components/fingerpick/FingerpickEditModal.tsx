@@ -1478,7 +1478,7 @@ export default function FingerpickEditModal({
 							onClick={applyClearTechnique}
 							className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint transition-colors"
 						>
-							Clear
+							Clear technique
 						</button>
 					</div>
 				)}

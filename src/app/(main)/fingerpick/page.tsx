@@ -22,15 +22,11 @@ import {
 	useFingerpickAudioEngine,
 	type MetronomeSubdivision,
 } from "@/components/fingerpick/useFingerpickAudioEngine";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
 	CirclePlay,
 	CirclePause,
 	CircleStop,
 	SquareMenu,
-	Plus,
-	Minus,
 	ChevronUp,
 	Metronome,
 } from "lucide-react";
@@ -92,10 +88,328 @@ type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
 const MIN_BPM = 40;
 const MAX_BPM = 220;
 
+// BPM fader tick marks: genre reference tempos. `PERCENTS` are the fixed v3
+// visual positions on the 40–220 track; `VALUES` are the exact BPM each tick
+// snaps to when clicked; `LABELS` are the genre tooltip shown while hovering the
+// segment around each tick.
+const BPM_TICK_PERCENTS = [11, 19, 28, 33, 39, 44, 50, 56, 67];
+const BPM_TICK_VALUES = [60, 75, 90, 100, 110, 120, 130, 140, 160];
+const BPM_TICK_LABELS = [
+	"Slow Practice",
+	"Folk",
+	"Ballad",
+	"Pop / Blues",
+	"Funk",
+	"Pop / Rock",
+	"Rock",
+	"Jazz / Hard Rock",
+	"Fast Rock",
+];
+
 // Higher = tighter/snappier following, lower = smoother/more lag.
 // At 20, steady-state lag behind a constant-velocity target is ~v/20 px/s — barely
 // perceptible on dense sixteenth-note runs (~8 px) and invisible on slower material.
 const CURSOR_LAMBDA = 20;
+
+// ── v3 control primitives ────────────────────────────────────────────────
+// Presentational hardware-panel controls scoped to the fingerpick controls
+// rack / mobile drawer. Colors are fixed (slate/denim) rather than theme
+// tokens because this workspace renders on a fixed light panel surface.
+
+interface FaderProps {
+	min: number;
+	max: number;
+	step: number;
+	value: number;
+	onValue: (value: number) => void;
+	onDragStart?: () => void;
+	onDragEnd?: () => void;
+	// Tick positions as track-width percentages (0–100).
+	ticks: number[];
+	// Snap targets parallel to `ticks`; when set, each tick becomes clickable and
+	// jumps the value directly to its target.
+	tickValues?: number[];
+	// Labels parallel to `ticks`; when set, hovering a tick's segment shows a tooltip.
+	tickLabels?: string[];
+	// Scale labels rendered space-between beneath the track.
+	scale: string[];
+	disabled?: boolean;
+	ariaLabel: string;
+}
+
+// Hardware fader: 3px track, denim fill, knurled 10×18 thumb, semantic ticks
+// and a scale row. Draggable via pointer capture; keyboard arrows/page keys.
+function Fader({
+	min,
+	max,
+	step,
+	value,
+	onValue,
+	onDragStart,
+	onDragEnd,
+	ticks,
+	tickValues,
+	tickLabels,
+	scale,
+	disabled,
+	ariaLabel,
+}: FaderProps) {
+	const trackRef = useRef<HTMLDivElement>(null);
+	const draggingRef = useRef(false);
+	const [hoveredTick, setHoveredTick] = useState<number | null>(null);
+	const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+
+	// Segment around tick i spans the midpoints to its neighbours (first starts at
+	// 0%, last ends at 100%). Returns the tick index whose segment contains p, or null.
+	function segmentIndexAt(p: number): number | null {
+		if (!tickLabels) return null;
+		for (let i = 0; i < ticks.length; i++) {
+			const start = i === 0 ? 0 : (ticks[i - 1] + ticks[i]) / 2;
+			const end = i === ticks.length - 1 ? 100 : (ticks[i] + ticks[i + 1]) / 2;
+			if (p >= start && p < end) return i;
+		}
+		return null;
+	}
+	function handleTrackMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+		if (draggingRef.current || !tickLabels) return;
+		const el = trackRef.current;
+		if (!el) return;
+		const rect = el.getBoundingClientRect();
+		const p = rect.width > 0 ? ((e.clientX - rect.left) / rect.width) * 100 : 0;
+		const next = segmentIndexAt(p);
+		setHoveredTick((prev) => (prev === next ? prev : next));
+	}
+	function handleTrackMouseLeave() {
+		setHoveredTick(null);
+	}
+
+	function snap(raw: number): number {
+		const clamped = Math.min(max, Math.max(min, raw));
+		const stepped = Math.round((clamped - min) / step) * step + min;
+		return Math.min(max, Math.max(min, stepped));
+	}
+	// Magnetic tick snapping: if raw maps within ~3% of the range of a tick value,
+	// snap to that tick so the thumb visibly "catches" on ticks while dragging.
+	function magnetize(raw: number): number {
+		if (!tickValues) return raw;
+		const threshold = (max - min) * 0.03;
+		let best = raw;
+		let bestDist = threshold;
+		for (const tv of tickValues) {
+			const d = Math.abs(raw - tv);
+			if (d <= bestDist) {
+				bestDist = d;
+				best = tv;
+			}
+		}
+		return best;
+	}
+	function valueFromClientX(clientX: number): number {
+		const el = trackRef.current;
+		if (!el) return value;
+		const rect = el.getBoundingClientRect();
+		const p = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+		return magnetize(snap(min + p * (max - min)));
+	}
+	function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+		if (disabled) return;
+		draggingRef.current = true;
+		setHoveredTick(null);
+		e.currentTarget.setPointerCapture(e.pointerId);
+		onDragStart?.();
+		onValue(valueFromClientX(e.clientX));
+	}
+	function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+		if (!draggingRef.current) return;
+		onValue(valueFromClientX(e.clientX));
+	}
+	function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+		if (!draggingRef.current) return;
+		draggingRef.current = false;
+		e.currentTarget.releasePointerCapture(e.pointerId);
+		onDragEnd?.();
+	}
+	function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+		if (disabled) return;
+		let next: number;
+		switch (e.key) {
+			case "ArrowLeft":
+			case "ArrowDown":
+				next = value - step;
+				break;
+			case "ArrowRight":
+			case "ArrowUp":
+				next = value + step;
+				break;
+			case "PageDown":
+				next = value - step * 10;
+				break;
+			case "PageUp":
+				next = value + step * 10;
+				break;
+			default:
+				return;
+		}
+		e.preventDefault();
+		onValue(snap(next));
+	}
+
+	return (
+		<div className={`select-none ${disabled ? "pointer-events-none" : ""}`}>
+			<div
+				role="slider"
+				aria-label={ariaLabel}
+				aria-valuemin={min}
+				aria-valuemax={max}
+				aria-valuenow={Math.round(value)}
+				tabIndex={disabled ? -1 : 0}
+				onPointerDown={handlePointerDown}
+				onPointerMove={handlePointerMove}
+				onPointerUp={handlePointerUp}
+				onKeyDown={handleKeyDown}
+				className="relative flex h-7 cursor-ew-resize touch-none items-center select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-denim"
+			>
+				<div
+					ref={trackRef}
+					className="relative h-[3px] w-full touch-none select-none bg-slate-300"
+					onMouseMove={handleTrackMouseMove}
+					onMouseLeave={handleTrackMouseLeave}
+				>
+					<div
+						className="absolute inset-y-0 left-0 bg-denim"
+						style={{ width: `${pct}%` }}
+					/>
+					{/* Genre tooltip — shown while hovering a tick's segment */}
+					{hoveredTick !== null && tickLabels && (
+						<div
+							className="pointer-events-none absolute z-20 -translate-x-1/2 whitespace-nowrap rounded bg-slate-700 px-1.5 py-0.5 text-[10px] text-white"
+							style={{
+								left: `${ticks[hoveredTick]}%`,
+								bottom: "calc(100% + 10px)",
+							}}
+						>
+							{tickLabels[hoveredTick]}
+						</div>
+					)}
+					<div
+						className="absolute top-1/2 h-[18px] w-[10px] -translate-x-1/2 -translate-y-1/2 border border-white bg-slate-700"
+						style={{ left: `${pct}%` }}
+					>
+						<span
+							aria-hidden="true"
+							className="absolute inset-x-[2px] inset-y-[4px]"
+							style={{
+								background:
+									"repeating-linear-gradient(90deg, #fff 0 1px, transparent 1px 3px)",
+							}}
+						/>
+					</div>
+					<div aria-hidden="true" className="absolute inset-x-0 top-full h-[6px]">
+						{ticks.map((t) => (
+							<span
+								key={t}
+								className="absolute top-[2px] h-[4px] w-px bg-slate-400"
+								style={{ left: `${t}%` }}
+							/>
+						))}
+					</div>
+					{/* Click-to-snap hit areas over each tick — stop propagation so pressing
+					    a tick jumps to its value instead of starting a track drag. */}
+					{tickValues &&
+						ticks.map((t, i) => (
+							<button
+								key={t}
+								type="button"
+								tabIndex={-1}
+								aria-hidden="true"
+								onPointerDown={(e) => e.stopPropagation()}
+								onClick={() => onValue(tickValues[i])}
+								className="absolute top-full h-[10px] w-4 -translate-x-1/2 cursor-pointer touch-none select-none focus:outline-none"
+								style={{ left: `${t}%` }}
+							/>
+						))}
+				</div>
+			</div>
+			<div className="mt-2 flex justify-between font-mono text-[8px] tracking-[0.08em] text-slate-400">
+				{scale.map((s, i) => (
+					<span key={i}>{s}</span>
+				))}
+			</div>
+		</div>
+	);
+}
+
+interface RockerProps {
+	checked: boolean;
+	onChange: (checked: boolean) => void;
+	disabled?: boolean;
+	ariaLabel: string;
+}
+
+// Hardware rocker switch: 40×20 bordered outer, 15×14 sliding block. A sliding
+// rectangle — never a pill with a circle.
+function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps) {
+	return (
+		<button
+			type="button"
+			role="switch"
+			aria-checked={checked}
+			aria-label={ariaLabel}
+			disabled={disabled}
+			onClick={() => onChange(!checked)}
+			className={`relative h-5 w-10 shrink-0 border transition-colors duration-100 disabled:cursor-not-allowed ${
+				checked ? "border-denim" : "border-slate-300"
+			}`}
+		>
+			<span
+				aria-hidden="true"
+				className={`absolute top-[2px] h-[14px] w-[15px] transition-all duration-100 ${
+					checked ? "left-[21px] bg-denim" : "left-[2px] bg-slate-400"
+				}`}
+			/>
+		</button>
+	);
+}
+
+interface SegmentedOption {
+	value: string;
+	label: string;
+}
+interface SegmentedProps {
+	options: readonly SegmentedOption[];
+	value: string;
+	onChange: (value: string) => void;
+	disabled?: boolean;
+}
+
+// Segmented pills: hairline-bordered row, exactly one denim-filled active
+// segment. Used for loop gap, subdivision, and the mobile Loop/Once control.
+function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
+	return (
+		<div
+			className={`flex border border-slate-300 ${
+				disabled ? "pointer-events-none" : ""
+			}`}
+		>
+			{options.map((opt, i) => {
+				const on = opt.value === value;
+				return (
+					<button
+						key={opt.value}
+						type="button"
+						disabled={disabled}
+						onClick={() => onChange(opt.value)}
+						className={`flex-1 py-[7px] font-mono text-[10px] tracking-[0.08em] uppercase transition-colors ${
+							i > 0 ? "border-l border-slate-300" : ""
+						} ${on ? "bg-denim text-on-denim" : "text-slate-500 hover:text-denim"}`}
+					>
+						{opt.label}
+					</button>
+				);
+			})}
+		</div>
+	);
+}
 
 export default function FingerpickPage() {
 	const { user, loading } = useUser();
@@ -1088,261 +1402,253 @@ export default function FingerpickPage() {
 
 				{/* Right panel — controls */}
 				<div className="hidden md:flex w-full border-t border-slate-200 bg-white md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
-					<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+					<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-slate-400">
 						Controls
 					</h2>
 
-					<div className="flex flex-col gap-5 px-5 py-5 overflow-y-auto">
-						{/* Play / Pause toggle */}
-						<div
-							onClick={isLoaded ? handlePlayPause : undefined}
-							className={`flex items-center justify-center transition-all duration-150 active:scale-95 ${
-								isLoaded
-									? "cursor-pointer text-denim hover:text-denim-dark"
-									: "opacity-30 pointer-events-none text-denim"
-							}`}
-						>
-							{isPlaying ? (
-								<CirclePause size={56} strokeWidth={1.5} />
-							) : (
-								<CirclePlay size={56} strokeWidth={1.5} />
+					<div className="flex flex-col overflow-y-auto">
+						{/* TRANSPORT */}
+						<div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								<span>Transport</span>
+								<span>Space</span>
+							</div>
+							<div className="flex gap-2">
+								<button
+									type="button"
+									onClick={isLoaded ? handlePlayPause : undefined}
+									disabled={!isLoaded}
+									aria-label={isPlaying ? "Pause" : "Play"}
+									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
+								>
+									{isPlaying ? (
+										<CirclePause size={20} strokeWidth={1.5} />
+									) : (
+										<CirclePlay size={20} strokeWidth={1.5} />
+									)}
+								</button>
+								<button
+									type="button"
+									onClick={handleStop}
+									disabled={!isPlaying && !isPaused}
+									aria-label="Stop and return to start"
+									className="flex h-13 flex-1 items-center justify-center border border-slate-300 text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint disabled:pointer-events-none disabled:opacity-30"
+								>
+									<CircleStop size={20} strokeWidth={1.5} />
+								</button>
+							</div>
+							{!isLoaded && (
+								<p className="text-center font-mono text-[10px] tracking-wide text-slate-400">
+									Loading samples…
+								</p>
 							)}
 						</div>
 
-						{/* Stop button — shown while playing or paused */}
-						{(isPlaying || isPaused) && (
-							<button
-								onClick={handleStop}
-								className="flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 hover:cursor-pointer transition-colors duration-200 text-xs font-medium"
-							>
-								<CircleStop size={16} strokeWidth={1.5} />
-								Stop and back to start
-							</button>
-						)}
-
-						{!isLoaded && (
-							<p className="text-[10px] text-slate-400 text-center">
-								Loading samples…
-							</p>
-						)}
-
-						{/* BPM slider */}
-						<input
-							type="range"
-							min={MIN_BPM}
-							max={MAX_BPM}
-							value={bpm}
-							onChange={(e) => handleSliderChange(Number(e.target.value))}
-							onPointerDown={handleSliderPointerDown}
-							onPointerUp={handleSliderPointerUp}
-							className="w-full accent-denim cursor-pointer"
-						/>
-
-						{/* ±10 BPM + display */}
-						<div className="flex justify-between items-center">
-							<Button
-								variant="outline"
-								className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
-								onClick={() => handleBpmChange(bpm - 10)}
-							>
-								<Minus size={16} />
-							</Button>
-							<div className="flex flex-col items-center gap-0.5">
-								<span className="text-5xl font-bold tracking-tight text-denim">
-									{bpm}
-								</span>
-								<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-									BPM
-								</span>
+						{/* TEMPO */}
+						<div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								<span>Tempo</span>
+								<span>40–220</span>
 							</div>
-							<Button
-								variant="outline"
-								className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
-								onClick={() => handleBpmChange(bpm + 10)}
-							>
-								<Plus size={16} />
-							</Button>
-						</div>
-
-						{/* Tap Tempo */}
-						<Button
-							onClick={handleTapTempo}
-							className="h-9 w-full text-sm font-semibold cursor-pointer transition-all duration-150"
-							style={{ backgroundColor: "var(--denim)", color: "white" }}
-						>
-							Tap Tempo
-						</Button>
-
-						{/* Play once */}
-						<div className="flex items-center justify-between">
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-								Play once
-							</span>
-							<Switch
-								checked={playOnce}
-								onCheckedChange={setPlayOnce}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
-							/>
-						</div>
-
-						{/* Loop gap — disabled/greyed when play-once is active */}
-						<div
-							className={`flex flex-col gap-2 transition-opacity duration-200 ${
-								playOnce ? "opacity-40 pointer-events-none" : ""
-							}`}
-						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-								Loop Gap
-							</span>
-							<div className="flex gap-1">
-								{LOOP_GAP_OPTIONS.map((gap) => (
-									<Button
-										key={gap}
-										variant={loopGap === gap ? "default" : "outline"}
-										disabled={playOnce}
-										onClick={() => {
-											setLoopGap(gap);
-											applyLoopGapChange(gap);
-										}}
-										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
-										style={
-											loopGap === gap && !playOnce
-												? {
-														backgroundColor: "var(--denim)",
-														color: "white",
-													}
-												: undefined
-										}
+							{/* BPM readout with LCD segment-ghost */}
+							<div className="border border-slate-300 px-0 pt-3 pb-2 text-center">
+								<span className="relative inline-block font-mono text-[44px] font-bold leading-none tracking-[-0.02em] text-denim [text-shadow:var(--glow-readout)]">
+									<span
+										aria-hidden="true"
+										className="absolute inset-0 opacity-[0.09]"
 									>
-										{gap}s
-									</Button>
+										888
+									</span>
+									<span className="relative">{String(bpm).padStart(3, "0")}</span>
+								</span>
+								<div className="mt-1.5 font-mono text-[9px] tracking-[0.28em] text-slate-400">
+									BPM
+								</div>
+							</div>
+							<Fader
+								min={MIN_BPM}
+								max={MAX_BPM}
+								step={1}
+								value={bpm}
+								onValue={handleSliderChange}
+								onDragStart={handleSliderPointerDown}
+								onDragEnd={handleSliderPointerUp}
+								ticks={BPM_TICK_PERCENTS}
+								tickValues={BPM_TICK_VALUES}
+								tickLabels={BPM_TICK_LABELS}
+								scale={["40", "130", "220"]}
+								ariaLabel="Tempo in BPM"
+							/>
+							{/* Steppers: −10 / −1 / TAP / +1 / +10 */}
+							<div className="flex gap-2">
+								{(
+									[
+										{ label: "−10", delta: -10 },
+										{ label: "−1", delta: -1 },
+									] as const
+								).map(({ label, delta }) => (
+									<button
+										key={label}
+										type="button"
+										onClick={() => handleBpmChange(bpm + delta)}
+										className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									>
+										{label}
+									</button>
+								))}
+								<button
+									type="button"
+									onClick={handleTapTempo}
+									className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+								>
+									TAP
+								</button>
+								{(
+									[
+										{ label: "+1", delta: 1 },
+										{ label: "+10", delta: 10 },
+									] as const
+								).map(({ label, delta }) => (
+									<button
+										key={label}
+										type="button"
+										onClick={() => handleBpmChange(bpm + delta)}
+										className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									>
+										{label}
+									</button>
 								))}
 							</div>
 						</div>
 
-						{/* Note sound section */}
-						<div className="flex flex-col gap-1.5">
-							<div className="flex justify-between items-center">
-								<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-									Note Sound
-								</span>
-								<span className="text-xs tabular-nums text-slate-400">
-									{Math.round(noteGain * 100)}%
-								</span>
+						{/* LOOP */}
+						<div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								<span>Loop</span>
 							</div>
-							<input
-								type="range"
+							<div className="flex items-center justify-between">
+								<span className="font-mono text-[11px] tracking-[0.06em] text-slate-500">
+									Play once
+								</span>
+								<Rocker
+									checked={playOnce}
+									onChange={setPlayOnce}
+									ariaLabel="Play once"
+								/>
+							</div>
+							<div className={playOnce ? "opacity-40" : ""}>
+								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+									Loop gap
+								</div>
+								<Segmented
+									options={LOOP_GAP_OPTIONS.map((gap) => ({
+										value: String(gap),
+										label: `${gap}S`,
+									}))}
+									value={String(loopGap)}
+									onChange={(v) => {
+										const gap = Number(v) as LoopGapSeconds;
+										setLoopGap(gap);
+										applyLoopGapChange(gap);
+									}}
+									disabled={playOnce}
+								/>
+							</div>
+						</div>
+
+						{/* NOTE SOUND */}
+						<div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								<span>Note Sound</span>
+								<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
+							</div>
+							<Fader
 								min={0}
 								max={2}
 								step={0.01}
 								value={noteGain}
-								onChange={(e) => {
-									setNoteGain(Number(e.target.value));
+								onValue={(v) => {
+									setNoteGain(v);
 									navigator.vibrate?.(10);
 								}}
-								className="w-full accent-denim cursor-pointer"
+								ticks={[0, 25, 50, 75, 100]}
+								tickValues={[0, 0.5, 1, 1.5, 2]}
+								scale={["0", "100", "200"]}
+								ariaLabel="Note volume"
 							/>
 						</div>
 
-						<div className="border-t border-slate-100" />
-
-						{/* Metronome toggle */}
-						<div className="flex items-center justify-between">
-							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-								Metronome
-							</span>
-							<Switch
-								checked={metronomeEnabled}
-								onCheckedChange={setMetronomeEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
-							/>
-						</div>
-
-						{/* Accent beat 1 toggle */}
-						<div
-							className={`flex items-center justify-between transition-opacity duration-200 ${
-								!metronomeEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-								Accent beat 1
-							</span>
-							<Switch
-								checked={accentEnabled}
-								disabled={!metronomeEnabled}
-								onCheckedChange={setAccentEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
-							/>
-						</div>
-
-						{/* Subdivision density */}
-						<div
-							className={`flex flex-col gap-2 transition-opacity duration-200 ${
-								!metronomeEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-								Subdivision
-							</span>
-							<div className="flex gap-1">
-								{(
-									[
-										{ value: "quarter", label: "1/4" },
-										{ value: "eighth", label: "1/8" },
-										{ value: "sixteenth", label: "1/16" },
-									] satisfies { value: MetronomeSubdivision; label: string }[]
-								).map(({ value, label }) => (
-									<Button
-										key={value}
-										variant={
-											metronomeSubdivision === value ? "default" : "outline"
-										}
-										disabled={!metronomeEnabled}
-										onClick={() => setMetronomeSubdivision(value)}
-										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
-										style={
-											metronomeSubdivision === value
-												? {
-														backgroundColor: "var(--denim)",
-														color: "white",
-													}
-												: undefined
-										}
-									>
-										{label}
-									</Button>
-								))}
-							</div>
-						</div>
-
-						{/* Metronome volume */}
-						<div
-							className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
-								!metronomeEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<div className="flex justify-between items-center">
-								<span className="text-xs text-slate-400">Metronome vol.</span>
-								<span className="text-xs tabular-nums text-slate-400">
+						{/* METRONOME */}
+						<div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								<span>Metronome</span>
+								<span className="tabular-nums">
 									{Math.round(metronomeGain * 100)}%
 								</span>
 							</div>
-							<input
-								type="range"
-								min={0}
-								max={1}
-								step={0.01}
-								value={metronomeGain}
-								disabled={!metronomeEnabled}
-								onChange={(e) => {
-									setMetronomeGain(Number(e.target.value));
-									navigator.vibrate?.(10);
-								}}
-								className="w-full accent-denim cursor-pointer"
-							/>
+							<div className="flex items-center justify-between">
+								<span className="font-mono text-[11px] tracking-[0.06em] text-slate-500">
+									Enabled
+								</span>
+								<Rocker
+									checked={metronomeEnabled}
+									onChange={setMetronomeEnabled}
+									ariaLabel="Metronome"
+								/>
+							</div>
+							<div
+								className={`flex items-center justify-between ${
+									!metronomeEnabled ? "opacity-40" : ""
+								}`}
+							>
+								<span className="font-mono text-[11px] tracking-[0.06em] text-slate-500">
+									Accent beat 1
+								</span>
+								<Rocker
+									checked={accentEnabled}
+									onChange={setAccentEnabled}
+									disabled={!metronomeEnabled}
+									ariaLabel="Accent beat 1"
+								/>
+							</div>
+							<div className={!metronomeEnabled ? "opacity-40" : ""}>
+								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+									Subdivision
+								</div>
+								<Segmented
+									options={[
+										{ value: "quarter", label: "1/4" },
+										{ value: "eighth", label: "1/8" },
+										{ value: "sixteenth", label: "1/16" },
+									]}
+									value={metronomeSubdivision}
+									onChange={(v) =>
+										setMetronomeSubdivision(v as MetronomeSubdivision)
+									}
+									disabled={!metronomeEnabled}
+								/>
+							</div>
+							<div className={!metronomeEnabled ? "opacity-40" : ""}>
+								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+									Metronome vol.
+								</div>
+								<Fader
+									min={0}
+									max={1}
+									step={0.01}
+									value={metronomeGain}
+									onValue={(v) => {
+										setMetronomeGain(v);
+										navigator.vibrate?.(10);
+									}}
+									ticks={[0, 25, 50, 75, 100]}
+									tickValues={[0, 0.25, 0.5, 0.75, 1]}
+									scale={["0", "50", "100"]}
+									disabled={!metronomeEnabled}
+									ariaLabel="Metronome volume"
+								/>
+							</div>
 						</div>
-
-						<div className="border-t border-slate-100" />
 					</div>
 				</div>
 			</div>
@@ -1416,182 +1722,170 @@ export default function FingerpickPage() {
 						<div className="w-9 h-1 rounded-full bg-slate-300" />
 					</div>
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
-						{/* Tap Tempo */}
-						<Button
-							onClick={handleTapTempo}
-							className="h-9 w-full text-sm font-semibold cursor-pointer transition-all duration-150"
-							style={{ backgroundColor: "var(--denim)", color: "white" }}
-						>
-							Tap Tempo
-						</Button>
-
-						{/* BPM slider */}
-						<div className="flex flex-col gap-1.5">
-							<div className="flex justify-between items-center">
-								<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-									BPM
-								</span>
-								<span className="text-xs tabular-nums text-denim font-semibold">
-									{bpm}
-								</span>
+						{/* Tempo — steppers + fader */}
+						<div className="flex flex-col gap-3">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								<span>Tempo</span>
+								<span className="tabular-nums text-denim">{bpm}</span>
 							</div>
-							<input
-								type="range"
+							<div className="flex gap-2">
+								{(
+									[
+										{ label: "−10", delta: -10 },
+										{ label: "−1", delta: -1 },
+									] as const
+								).map(({ label, delta }) => (
+									<button
+										key={label}
+										type="button"
+										onClick={() => handleBpmChange(bpm + delta)}
+										className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									>
+										{label}
+									</button>
+								))}
+								<button
+									type="button"
+									onClick={handleTapTempo}
+									className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+								>
+									TAP
+								</button>
+								{(
+									[
+										{ label: "+1", delta: 1 },
+										{ label: "+10", delta: 10 },
+									] as const
+								).map(({ label, delta }) => (
+									<button
+										key={label}
+										type="button"
+										onClick={() => handleBpmChange(bpm + delta)}
+										className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									>
+										{label}
+									</button>
+								))}
+							</div>
+							<Fader
 								min={MIN_BPM}
 								max={MAX_BPM}
+								step={1}
 								value={bpm}
-								onChange={(e) => handleSliderChange(Number(e.target.value))}
-								onPointerDown={handleSliderPointerDown}
-								onPointerUp={handleSliderPointerUp}
-								className="w-full accent-denim cursor-pointer"
+								onValue={handleSliderChange}
+								onDragStart={handleSliderPointerDown}
+								onDragEnd={handleSliderPointerUp}
+								ticks={BPM_TICK_PERCENTS}
+								tickValues={BPM_TICK_VALUES}
+								tickLabels={BPM_TICK_LABELS}
+								scale={["40", "130", "220"]}
+								ariaLabel="Tempo in BPM"
 							/>
 						</div>
 
 						{/* Note Sound volume */}
-						<div className="flex flex-col gap-1.5">
-							<div className="flex justify-between items-center">
-								<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-									Note Sound
-								</span>
-								<span className="text-xs tabular-nums text-slate-400">
-									{Math.round(noteGain * 100)}%
-								</span>
+						<div className="flex flex-col gap-3">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								<span>Note Sound</span>
+								<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
 							</div>
-							<input
-								type="range"
+							<Fader
 								min={0}
 								max={2}
 								step={0.01}
 								value={noteGain}
-								onChange={(e) => {
-									setNoteGain(Number(e.target.value));
+								onValue={(v) => {
+									setNoteGain(v);
 									navigator.vibrate?.(10);
 								}}
-								className="w-full accent-denim cursor-pointer"
+								ticks={[0, 25, 50, 75, 100]}
+								tickValues={[0, 0.5, 1, 1.5, 2]}
+								scale={["0", "100", "200"]}
+								ariaLabel="Note volume"
 							/>
 						</div>
 
-						<div className="border-t border-slate-100" />
+						<div className="border-t border-slate-200" />
 
 						{/* Accent beat 1 */}
 						<div
-							className={`flex items-center justify-between transition-opacity duration-200 ${
-								!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
+							className={`flex items-center justify-between ${
+								!metronomeEnabled ? "opacity-40" : ""
 							}`}
 						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							<span className="font-mono text-[11px] tracking-[0.06em] text-slate-500">
 								Accent beat 1
 							</span>
-							<Switch
+							<Rocker
 								checked={accentEnabled}
+								onChange={setAccentEnabled}
 								disabled={!metronomeEnabled}
-								onCheckedChange={setAccentEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+								ariaLabel="Accent beat 1"
 							/>
 						</div>
 
 						{/* Subdivision */}
-						<div
-							className={`flex flex-col gap-2 transition-opacity duration-200 ${
-								!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
-							}`}
-						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<div className={!metronomeEnabled ? "opacity-40" : ""}>
+							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
 								Subdivision
-							</span>
-							<div className="flex gap-1">
-								{(
-									[
-										{ value: "quarter", label: "1/4" },
-										{ value: "eighth", label: "1/8" },
-										{ value: "sixteenth", label: "1/16" },
-									] satisfies { value: MetronomeSubdivision; label: string }[]
-								).map(({ value, label }) => (
-									<Button
-										key={value}
-										variant={
-											metronomeSubdivision === value ? "default" : "outline"
-										}
-										disabled={!metronomeEnabled}
-										onClick={() => setMetronomeSubdivision(value)}
-										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
-										style={
-											metronomeSubdivision === value
-												? {
-														backgroundColor: "var(--denim)",
-														color: "white",
-													}
-												: undefined
-										}
-									>
-										{label}
-									</Button>
-								))}
 							</div>
+							<Segmented
+								options={[
+									{ value: "quarter", label: "1/4" },
+									{ value: "eighth", label: "1/8" },
+									{ value: "sixteenth", label: "1/16" },
+								]}
+								value={metronomeSubdivision}
+								onChange={(v) => setMetronomeSubdivision(v as MetronomeSubdivision)}
+								disabled={!metronomeEnabled}
+							/>
 						</div>
 
 						{/* Metronome volume */}
-						<div
-							className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
-								!metronomeEnabled ? "opacity-40 pointer-events-none" : ""
-							}`}
-						>
-							<div className="flex justify-between items-center">
-								<span className="text-xs text-slate-400">Metronome vol.</span>
-								<span className="text-xs tabular-nums text-slate-400">
+						<div className={!metronomeEnabled ? "opacity-40" : ""}>
+							<div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								<span>Metronome vol.</span>
+								<span className="tabular-nums">
 									{Math.round(metronomeGain * 100)}%
 								</span>
 							</div>
-							<input
-								type="range"
+							<Fader
 								min={0}
 								max={1}
 								step={0.01}
 								value={metronomeGain}
-								disabled={!metronomeEnabled}
-								onChange={(e) => {
-									setMetronomeGain(Number(e.target.value));
+								onValue={(v) => {
+									setMetronomeGain(v);
 									navigator.vibrate?.(10);
 								}}
-								className="w-full accent-denim cursor-pointer"
+								ticks={[0, 25, 50, 75, 100]}
+								tickValues={[0, 0.25, 0.5, 0.75, 1]}
+								scale={["0", "50", "100"]}
+								disabled={!metronomeEnabled}
+								ariaLabel="Metronome volume"
 							/>
 						</div>
 
-						<div className="border-t border-slate-100" />
+						<div className="border-t border-slate-200" />
 
 						{/* Loop Gap */}
-						<div
-							className={`flex flex-col gap-2 transition-opacity duration-200 ${
-								playOnce ? "opacity-40 pointer-events-none" : ""
-							}`}
-						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-								Loop Gap
-							</span>
-							<div className="flex gap-1">
-								{LOOP_GAP_OPTIONS.map((gap) => (
-									<Button
-										key={gap}
-										variant={loopGap === gap ? "default" : "outline"}
-										disabled={playOnce}
-										onClick={() => {
-											setLoopGap(gap);
-											applyLoopGapChange(gap);
-										}}
-										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
-										style={
-											loopGap === gap && !playOnce
-												? {
-														backgroundColor: "var(--denim)",
-														color: "white",
-													}
-												: undefined
-										}
-									>
-										{gap}s
-									</Button>
-								))}
+						<div className={playOnce ? "opacity-40" : ""}>
+							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-400">
+								Loop gap
 							</div>
+							<Segmented
+								options={LOOP_GAP_OPTIONS.map((gap) => ({
+									value: String(gap),
+									label: `${gap}S`,
+								}))}
+								value={String(loopGap)}
+								onChange={(v) => {
+									const gap = Number(v) as LoopGapSeconds;
+									setLoopGap(gap);
+									applyLoopGapChange(gap);
+								}}
+								disabled={playOnce}
+							/>
 						</div>
 					</div>
 				</div>
@@ -1619,49 +1913,49 @@ export default function FingerpickPage() {
 								}
 								setShowBpmPopover((v) => !v);
 							}}
-							className="w-14 flex flex-col items-center leading-none text-center"
+							className="flex w-14 flex-col items-center text-center leading-none"
 						>
-							<span className="text-xl font-bold text-denim">{bpm}</span>
-							<span className="text-[8px] font-semibold uppercase tracking-widest text-slate-400">
+							<span className="font-mono text-[24px] font-bold leading-none text-denim">
+								{bpm}
+							</span>
+							<span className="mt-[3px] font-mono text-[8px] uppercase tracking-[0.24em] text-slate-400">
 								BPM
 							</span>
 						</button>
 					</div>
 
-					{/* Loop / Once segmented control */}
-					<div className="relative flex h-8 items-center rounded-full bg-slate-200 p-0.5 overflow-hidden shrink-0">
-						{/* Sliding pill */}
-						<div
-							className={`absolute inset-y-0.5 left-0 w-1/2 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
-								playOnce ? "translate-x-full" : "translate-x-0"
-							}`}
-						/>
+					{/* Loop / Once segmented pill */}
+					<div className="flex shrink-0 border border-slate-300">
 						<button
 							onClick={() => setPlayOnce(false)}
-							className={`relative z-10 px-3 h-full rounded-full text-xs font-semibold transition-colors duration-150 ${
-								!playOnce ? "text-slate-700" : "text-slate-400"
+							className={`px-3 py-[7px] font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
+								!playOnce ? "bg-denim text-on-denim" : "text-slate-500"
 							}`}
 						>
 							Loop
 						</button>
 						<button
 							onClick={() => setPlayOnce(true)}
-							className={`relative z-10 px-3 h-full rounded-full text-xs font-semibold transition-colors duration-150 ${
-								playOnce ? "text-slate-700" : "text-slate-400"
+							className={`border-l border-slate-300 px-3 py-[7px] font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
+								playOnce ? "bg-denim text-on-denim" : "text-slate-500"
 							}`}
 						>
 							Once
 						</button>
 					</div>
 
-					{/* Metronome toggle */}
+					{/* Metronome icon toggle */}
 					<button
 						onClick={() => setMetronomeEnabled(!metronomeEnabled)}
-						className={`p-1.5 rounded-full transition-colors duration-150 shrink-0 ${
-							metronomeEnabled ? "text-denim" : "text-slate-400"
+						aria-label="Metronome"
+						aria-pressed={metronomeEnabled}
+						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors ${
+							metronomeEnabled
+								? "border-denim text-denim"
+								: "border-slate-300 text-slate-400"
 						}`}
 					>
-						<Metronome size={20} />
+						<Metronome size={18} />
 					</button>
 
 					{/* Chevron — toggles the controls panel open/closed */}

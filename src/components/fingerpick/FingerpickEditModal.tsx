@@ -147,7 +147,7 @@ type HoveredCell = { measureIndex: number; slotIndex: number; stringIndex: numbe
 // Desktop dynamic-width geometry (rem). Modal width = cols × (block + gap) + chrome.
 const MEASURE_BLOCK_REM = 19; // per-measure block target width
 const GRID_GAP_REM = 1; // gap-4 between measure blocks
-const MODAL_CHROME_REM = 2; // DialogContent p-4 (left + right)
+const MODAL_CHROME_REM = 2; // measure grid's own px-4 (left + right)
 const TWO_DIGIT_WINDOW_MS = 800;
 const LONG_PRESS_MS = 500;
 // Maximum number of pattern snapshots retained for undo/redo. Older snapshots
@@ -807,7 +807,7 @@ export default function FingerpickEditModal({
 			<DialogContent
 				showCloseButton={false}
 				style={dynamicStyle}
-				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] overflow-y-auto pb-0"
+				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] lg:max-h-[90vh] overflow-y-auto p-0"
 				onKeyDown={(e) => {
 					// Undo/redo scoped to the modal (not window) to avoid clashing with
 					// the page. Skip text fields so their native undo keeps working.
@@ -827,7 +827,7 @@ export default function FingerpickEditModal({
 				}}
 			>
 				{/* ── Header ─────────────────────────────────────────────────────── */}
-				<div className="flex items-center justify-between">
+				<div className="sticky top-0 z-55 flex items-center justify-between rounded-t-xl border-b border-slate-200 bg-white px-4 py-3">
 					<h2 className="font-heading text-base font-medium text-slate-700">
 						{initialPattern ? "Edit pattern" : "New pattern"}
 					</h2>
@@ -879,7 +879,7 @@ export default function FingerpickEditModal({
 				</div>
 
 				{/* ── Metadata bar ──────────────────────────────────────────────── */}
-				<div className="flex flex-wrap items-end gap-3">
+				<div className="flex flex-wrap items-end gap-3 px-4">
 					<div className="flex flex-col gap-1 min-w-40 flex-1">
 						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
 							Name
@@ -946,7 +946,7 @@ export default function FingerpickEditModal({
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
 				    count (2→4, --fp-cols) in step with the dynamic modal width, so
 				    measures fill each row and the extra (add) tile wraps below. */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4">
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4">
 					{working.measures.map((measure, measureIndex) => {
 						const beatLabels = computeBeatLabels(measure.slots, working.timeSignature);
 						const beatGroups = computeBeatGroups(measure.slots, working.timeSignature);
@@ -1293,14 +1293,14 @@ export default function FingerpickEditModal({
 					</button>
 				</div>
 
-				<p className="text-[11px] text-slate-400">
+				<p className="px-4 text-[11px] text-slate-400">
 					Click a cell then use arrow keys to move, number keys to set a fret,{" "}
 					<span className="font-mono">x</span> to mute, Backspace to clear. Right-click
 					(or long-press) a cell for techniques.
 				</p>
 
 				{/* ── Footer (pinned to the bottom of the scroll area) ───────────── */}
-				<div className="sticky bottom-0 z-55 -mx-4 flex items-center justify-end gap-2 rounded-b-xl border-t border-slate-200 bg-white px-4 py-3">
+				<div className="sticky bottom-0 z-55 flex items-center justify-end gap-2 rounded-b-xl border-t border-slate-200 bg-white px-4 py-3">
 					<Button
 						onClick={handleSave}
 						disabled={!nameValid}

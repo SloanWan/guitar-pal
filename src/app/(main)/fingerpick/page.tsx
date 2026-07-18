@@ -1281,7 +1281,7 @@ export default function FingerpickPage() {
 
 	return (
 		<>
-			<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">
+			<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-workspace">
 				{/* Left sidebar — lg: static; below lg: slide-in overlay */}
 				<div
 					className={`fixed inset-y-0 left-0 z-40 w-72 h-full border-r border-line bg-sidebar flex flex-col shrink-0 transition-transform duration-200 ease-in-out lg:relative lg:inset-auto lg:z-auto lg:translate-x-0 ${
@@ -1317,10 +1317,10 @@ export default function FingerpickPage() {
 				<div className="md:flex-1 flex flex-col px-4 md:px-8 py-6 md:py-8 md:overflow-hidden">
 					<div className="relative w-full max-w-4xl mx-auto flex flex-col min-h-0 md:flex-1">
 						<div className="mb-4 shrink-0">
-							<h1 className="text-lg font-semibold text-slate-700">
+							<h1 className="text-lg font-semibold text-tab-title">
 								{selectedPattern.name}
 							</h1>
-							<p className="text-xs text-slate-400 uppercase tracking-wider mt-0.5">
+							<p className="text-xs text-tab-meta uppercase tracking-wider mt-0.5">
 								{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
 								{selectedPattern.timeSignature[1]}
 							</p>
@@ -1333,7 +1333,7 @@ export default function FingerpickPage() {
 						<div
 							ref={tabViewerRef}
 							data-tab-viewer
-							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto bg-white rounded-xl border border-slate-100 cursor-pointer"
+							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto bg-tab-viewer rounded-xl border border-tab-viewer-border cursor-pointer"
 							onClick={handleTabClick}
 						>
 							{/* Measure background highlight — updated only on measure transitions. */}
@@ -1343,7 +1343,7 @@ export default function FingerpickPage() {
 								className="absolute pointer-events-none"
 								style={{
 									display: "none",
-									backgroundColor: "rgba(74, 111, 165, 0.07)",
+									backgroundColor: "var(--measure-hl)",
 									borderRadius: 3,
 								}}
 							/>
@@ -1399,7 +1399,7 @@ export default function FingerpickPage() {
 
 				{/* Right panel — controls */}
 				<div className="hidden md:flex w-full border-t border-line bg-popover md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
-					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-ink-faint">
+					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-ink-dim">
 						Controls
 					</h2>
 

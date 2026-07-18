@@ -38,11 +38,16 @@
 	--sidebar-bg: var(--bg-panel); /* fingerpick pattern library sidebar — decoupled from --bg-panel; dark keeps parity (#141414) */
 	--sidebar-header-1-bg: var(--bg-panel); /* "My Patterns" section header row — near-invisible against sidebar-bg */
 	--sidebar-header-2-bg: #1a1a1a; /* "Presets" section header row — subtly offset from header-1 so the two remain distinguishable */
+	--tab-viewer-bg: var(--bg-panel); /* fingerpick TAB viewer container surface — decoupled from --bg-panel; dark keeps parity (#141414) */
+	--tab-viewer-border: var(--line); /* fingerpick TAB viewer container border — decoupled from --line; dark keeps parity (#262626) */
+	--workspace-bg: var(--bg); /* fingerpick outer workspace wrapper (behind all panels) — decoupled from --bg; dark keeps parity (#0f0f0f) */
 
 	/* Ink */
 	--ink: #f0f0f0; /* primary text, active fret numbers, slider thumbs  */
 	--ink-dim: #8a8a8a; /* secondary text, inactive-row notation, ctl labels */
 	--ink-faint: #4d4d4d; /* module labels, placeholders, ticks, dormant LEDs  */
+	--tab-title-ink: var(--ink); /* fingerpick TAB viewer pattern-name heading — decoupled from --ink; dark keeps parity */
+	--tab-meta-ink: var(--ink-dim); /* fingerpick TAB viewer BPM/time-signature meta row — decoupled from --ink-dim; dark keeps parity */
 
 	/* Lines */
 	--line: #262626; /* structural hairlines: dividers, card grids       */
@@ -78,10 +83,15 @@
 	--sidebar-bg: #ffffff; /* fingerpick pattern library sidebar — extracted from its current bg-white; visually unchanged */
 	--sidebar-header-1-bg: #f8fafc; /* "My Patterns" header — original near-invisible off-white tint */
 	--sidebar-header-2-bg: #f1f5f9; /* "Presets" header — original near-invisible off-white tint, one step down from header-1 */
+	--tab-viewer-bg: #ffffff; /* fingerpick TAB viewer surface — extracted from its current bg-white; visually unchanged */
+	--tab-viewer-border: #f1f5f9; /* fingerpick TAB viewer border — extracted from its current border-slate-100; visually unchanged */
+	--workspace-bg: #f8fafc; /* fingerpick outer workspace wrapper — extracted from its current bg-slate-50; visually unchanged */
 
 	--ink: #141414;
 	--ink-dim: #63635e;
 	--ink-faint: #a5a5a0;
+	--tab-title-ink: #334155; /* fingerpick TAB viewer pattern-name heading — extracted from its current text-slate-700; visually unchanged */
+	--tab-meta-ink: #94a3b8; /* fingerpick TAB viewer BPM/time-signature meta row — extracted from its current text-slate-400; visually unchanged */
 
 	--line: #d7d9dd;
 	--line-strong: #c0c2c6;
@@ -390,6 +400,11 @@
 	--color-sidebar-header-1: var(--sidebar-header-1-bg); /* bg-sidebar-header-1 — "My Patterns" row */
 	--color-sidebar-header-2: var(--sidebar-header-2-bg); /* bg-sidebar-header-2 — "Presets" row */
 	--color-sidebar-hover: var(--sidebar-hover-bg); /* bg-sidebar-hover — pattern-card hover fill */
+	--color-tab-viewer: var(--tab-viewer-bg); /* bg-tab-viewer — fingerpick TAB viewer container */
+	--color-tab-viewer-border: var(--tab-viewer-border); /* border-tab-viewer-border */
+	--color-workspace: var(--workspace-bg); /* bg-workspace — fingerpick outer workspace wrapper */
+	--color-tab-title: var(--tab-title-ink); /* text-tab-title — pattern-name heading */
+	--color-tab-meta: var(--tab-meta-ink); /* text-tab-meta — BPM/time-signature meta row */
 	--color-raise: var(--bg-raise);
 	--color-ink: var(--ink);
 	--color-ink-dim: var(--ink-dim);

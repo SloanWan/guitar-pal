@@ -33,6 +33,8 @@
 	--bg: #0f0f0f; /* page background; readout insets; button fill base */
 	--bg-panel: #141414; /* sidebars, top bars, control racks, bottom bars    */
 	--bg-raise: #1a1a1a; /* hover states, active nav tabs, active toggle seg  */
+	--modal-bg: var(--bg-panel); /* dialog/popover surface — decoupled from --bg-panel so modals can diverge from sidebars/racks; dark keeps parity (#141414) */
+	--topbar-bg: var(--bg-panel); /* app topbar surface — decoupled from --bg-panel; dark keeps parity (#141414) */
 
 	/* Ink */
 	--ink: #f0f0f0; /* primary text, active fret numbers, slider thumbs  */
@@ -67,6 +69,8 @@
 	--bg: #f5f7fa; /* cool denim-tinted white — never pure white */
 	--bg-panel: #ebeff5;
 	--bg-raise: #e4e4df;
+	--modal-bg: #ffffff; /* dialogs/popovers read as pure white on light — decoupled from --bg-panel (#ebeff5) */
+	--topbar-bg: #ebeff5; /* app topbar — extracted from --bg-panel at its current value; visually unchanged */
 
 	--ink: #141414;
 	--ink-dim: #63635e;
@@ -330,7 +334,7 @@
 	--foreground: var(--ink);
 	--card: var(--bg-panel);
 	--card-foreground: var(--ink);
-	--popover: var(--bg-panel);
+	--popover: var(--modal-bg);
 	--popover-foreground: var(--ink);
 	--primary: var(--denim);
 	--primary-foreground: var(--btn-on-denim);
@@ -373,6 +377,7 @@
 	   text-denim-accent, bg-denim-tint, text-on-denim */
 	--color-surface: var(--bg);
 	--color-panel: var(--bg-panel);
+	--color-topbar: var(--topbar-bg); /* app topbar surface — bg-topbar, decoupled from bg-panel */
 	--color-raise: var(--bg-raise);
 	--color-ink: var(--ink);
 	--color-ink-dim: var(--ink-dim);

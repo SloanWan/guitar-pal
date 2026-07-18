@@ -44,13 +44,13 @@ function PatternCard({
 			className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
 				isSelected
 					? "bg-denim-tint border-l-denim"
-					: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
+					: "border-l-transparent hover:bg-sidebar-hover hover:border-l-line-strong"
 			}`}
 		>
 			<div className="flex items-center justify-between mb-1">
 				<span
 					className={`text-[11px] font-semibold transition-colors duration-200 ${
-						isSelected ? "text-denim" : "text-slate-500"
+						isSelected ? "text-denim" : "text-ink-dim"
 					}`}
 				>
 					{pattern.name}
@@ -62,7 +62,7 @@ function PatternCard({
 								e.stopPropagation();
 								onEdit();
 							}}
-							className="p-0.5 rounded transition-colors text-slate-300 hover:text-denim"
+							className="p-0.5 rounded transition-colors text-ink-dim hover:text-denim"
 							aria-label="Edit pattern"
 						>
 							<Pencil size={14} />
@@ -74,7 +74,7 @@ function PatternCard({
 								e.stopPropagation();
 								onDelete();
 							}}
-							className="p-0.5 rounded transition-colors text-slate-300 hover:text-red-500"
+							className="p-0.5 rounded transition-colors text-ink-dim hover:text-red-500"
 							aria-label="Delete pattern"
 						>
 							<Trash2 size={14} />
@@ -85,7 +85,7 @@ function PatternCard({
 							e.stopPropagation();
 							onToggleFav();
 						}}
-						className="p-0.5 rounded transition-colors text-slate-300 hover:text-amber-400"
+						className="p-0.5 rounded transition-colors text-ink-dim hover:text-amber-400"
 						aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
 					>
 						<Star size={12} className={isFav ? "fill-amber-400 text-amber-400" : ""} />
@@ -93,7 +93,7 @@ function PatternCard({
 				</div>
 			</div>
 			{pattern.description && (
-				<p className="text-[10px] text-slate-400 leading-snug">{pattern.description}</p>
+				<p className="text-[10px] text-ink-dim leading-snug">{pattern.description}</p>
 			)}
 		</div>
 	);
@@ -140,8 +140,8 @@ export default function FingerpickPatternLibrary({
 	return (
 		<>
 			{/* Header strip */}
-			<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-slate-200">
-				<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+			<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-line">
+				<h2 className="text-[11px] font-semibold uppercase tracking-widest text-ink-dim">
 					Fingerpick Library
 				</h2>
 				<div className="flex items-center gap-1">
@@ -153,7 +153,7 @@ export default function FingerpickPatternLibrary({
 					</button>
 					<button
 						onClick={onClose}
-						className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+						className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-ink-dim hover:bg-raise hover:text-ink transition-colors"
 					>
 						<X size={18} />
 					</button>
@@ -161,13 +161,13 @@ export default function FingerpickPatternLibrary({
 			</div>
 
 			{/* Tab bar */}
-			<div className="flex shrink-0 border-b border-slate-200">
+			<div className="flex shrink-0 border-b border-line">
 				<button
 					onClick={() => setActiveTab("all")}
 					className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
 						activeTab === "all"
 							? "text-denim border-denim"
-							: "text-slate-400 border-transparent hover:text-slate-600"
+							: "text-ink-dim border-transparent hover:text-ink"
 					}`}
 				>
 					All
@@ -177,7 +177,7 @@ export default function FingerpickPatternLibrary({
 					className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
 						activeTab === "favourites"
 							? "text-denim border-denim"
-							: "text-slate-400 border-transparent hover:text-slate-600"
+							: "text-ink-dim border-transparent hover:text-ink"
 					}`}
 				>
 					Favourites
@@ -190,14 +190,14 @@ export default function FingerpickPatternLibrary({
 				<div>
 					<button
 						onClick={() => setMyPatternsOpen((v) => !v)}
-						className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-50"
+						className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-1"
 					>
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 							My Patterns
 						</span>
 						<ChevronDown
 							size={13}
-							className={`text-slate-400 transition-transform duration-200 ${
+							className={`text-ink-dim transition-transform duration-200 ${
 								myPatternsOpen ? "" : "-rotate-90"
 							}`}
 						/>
@@ -205,7 +205,7 @@ export default function FingerpickPatternLibrary({
 					{myPatternsOpen && (
 						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
 							{visibleCustom.length === 0 ? (
-								<p className="text-[11px] text-slate-400 px-1">
+								<p className="text-[11px] text-ink-dim px-1">
 									{activeTab === "all"
 										? "No custom patterns yet"
 										: "No custom favourites yet"}
@@ -232,14 +232,14 @@ export default function FingerpickPatternLibrary({
 				<div>
 					<button
 						onClick={() => setPresetsOpen((v) => !v)}
-						className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-100"
+						className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-2"
 					>
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 							Presets
 						</span>
 						<ChevronDown
 							size={13}
-							className={`text-slate-400 transition-transform duration-200 ${
+							className={`text-ink-dim transition-transform duration-200 ${
 								presetsOpen ? "" : "-rotate-90"
 							}`}
 						/>
@@ -247,7 +247,7 @@ export default function FingerpickPatternLibrary({
 					{presetsOpen && (
 						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
 							{visiblePresets.length === 0 ? (
-								<p className="text-[11px] text-slate-400 px-1">No preset favourites yet</p>
+								<p className="text-[11px] text-ink-dim px-1">No preset favourites yet</p>
 							) : (
 								visiblePresets.map((pattern) => (
 									<PatternCard
@@ -266,7 +266,7 @@ export default function FingerpickPatternLibrary({
 
 				{/* Sign-in nudge */}
 				{!user && (
-					<p className="text-xs text-slate-400 text-center px-4 py-3">
+					<p className="text-xs text-ink-dim text-center px-4 py-3">
 						Sign in to sync your patterns and favourites across devices.
 					</p>
 				)}

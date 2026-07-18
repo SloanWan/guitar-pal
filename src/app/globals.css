@@ -35,6 +35,9 @@
 	--bg-raise: #1a1a1a; /* hover states, active nav tabs, active toggle seg  */
 	--modal-bg: var(--bg-panel); /* dialog/popover surface — decoupled from --bg-panel so modals can diverge from sidebars/racks; dark keeps parity (#141414) */
 	--topbar-bg: var(--bg-panel); /* app topbar surface — decoupled from --bg-panel; dark keeps parity (#141414) */
+	--sidebar-bg: var(--bg-panel); /* fingerpick pattern library sidebar — decoupled from --bg-panel; dark keeps parity (#141414) */
+	--sidebar-header-1-bg: var(--bg-panel); /* "My Patterns" section header row — near-invisible against sidebar-bg */
+	--sidebar-header-2-bg: #1a1a1a; /* "Presets" section header row — subtly offset from header-1 so the two remain distinguishable */
 
 	/* Ink */
 	--ink: #f0f0f0; /* primary text, active fret numbers, slider thumbs  */
@@ -49,6 +52,7 @@
 	--denim: #4a6fa5; /* fills. IDENTICAL both themes — the anchor */
 	--denim-accent: #6e93c9; /* accent text/strokes on this bg (lighter on dark) */
 	--denim-tint: rgba(74, 111, 165, 0.12); /* selected list-item bg; press-flash fill   */
+	--sidebar-hover-bg: rgba(74, 111, 165, 0.06); /* pattern-card hover fill — lighter than denim-tint so hover reads weaker than selected */
 	--denim-glow: rgba(110, 147, 201, 0.55); /* playhead + LED box-shadow color           */
 	--readout-glow: rgba(110, 147, 201, 0.35); /* text-shadow color on large readouts       */
 	--measure-hl: rgba(74, 111, 165, 0.07); /* current-measure block in TAB viewer       */
@@ -71,6 +75,9 @@
 	--bg-raise: #e4e4df;
 	--modal-bg: #ffffff; /* dialogs/popovers read as pure white on light — decoupled from --bg-panel (#ebeff5) */
 	--topbar-bg: #ebeff5; /* app topbar — extracted from --bg-panel at its current value; visually unchanged */
+	--sidebar-bg: #ffffff; /* fingerpick pattern library sidebar — extracted from its current bg-white; visually unchanged */
+	--sidebar-header-1-bg: #f8fafc; /* "My Patterns" header — original near-invisible off-white tint */
+	--sidebar-header-2-bg: #f1f5f9; /* "Presets" header — original near-invisible off-white tint, one step down from header-1 */
 
 	--ink: #141414;
 	--ink-dim: #63635e;
@@ -82,6 +89,7 @@
 	--denim: #4a6fa5; /* unchanged — the anchor            */
 	--denim-accent: #35507a; /* DARKER than base on light — contrast-safe text variant, not a bug */
 	--denim-tint: rgba(74, 111, 165, 0.1);
+	--sidebar-hover-bg: rgba(74, 111, 165, 0.05); /* pattern-card hover fill — lighter than denim-tint so hover reads weaker than selected */
 	--denim-glow: rgba(74, 111, 165, 0.45); /* glows read weaker on light — reduced */
 	--readout-glow: rgba(74, 111, 165, 0.25);
 	--measure-hl: rgba(74, 111, 165, 0.08);
@@ -378,6 +386,10 @@
 	--color-surface: var(--bg);
 	--color-panel: var(--bg-panel);
 	--color-topbar: var(--topbar-bg); /* app topbar surface — bg-topbar, decoupled from bg-panel */
+	--color-sidebar: var(--sidebar-bg); /* fingerpick pattern library surface — bg-sidebar, decoupled from bg-panel */
+	--color-sidebar-header-1: var(--sidebar-header-1-bg); /* bg-sidebar-header-1 — "My Patterns" row */
+	--color-sidebar-header-2: var(--sidebar-header-2-bg); /* bg-sidebar-header-2 — "Presets" row */
+	--color-sidebar-hover: var(--sidebar-hover-bg); /* bg-sidebar-hover — pattern-card hover fill */
 	--color-raise: var(--bg-raise);
 	--color-ink: var(--ink);
 	--color-ink-dim: var(--ink-dim);

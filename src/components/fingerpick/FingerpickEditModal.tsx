@@ -218,6 +218,16 @@ export default function FingerpickEditModal({
 	const techMenuRef = useRef<HTMLDivElement>(null);
 	// Long-press timer for the mobile technique menu.
 	const longPressRef = useRef<number | null>(null);
+	// Set true when the long-press timer opens the technique menu, so the tap's
+	// trailing pointerup/click doesn't also select the cell and pop the keyboard.
+	const longPressFiredRef = useRef(false);
+	// Pointer type of the most recent cell pointerdown. Drives whether selecting a
+	// cell focuses the button (desktop keyboard nav) or the hidden numeric input
+	// (touch → native numeric keyboard).
+	const lastPointerTypeRef = useRef<string>("mouse");
+	// Shared off-screen numeric input, focused on a touch tap so mobile devices can
+	// type a fret — there is no physical keyboard to drive handleCellKeyDown.
+	const hiddenInputRef = useRef<HTMLInputElement>(null);
 
 	// Keep the nav ref pointing at the latest working pattern.
 	useEffect(() => {
@@ -299,10 +309,16 @@ export default function FingerpickEditModal({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
-	// Move DOM focus to the selected cell so keyboard navigation stays live.
+	// Move DOM focus to the selected cell so keyboard navigation stays live. On
+	// touch, focus the hidden numeric input instead so the native numeric keyboard
+	// opens and the cell button doesn't steal focus back.
 	useEffect(() => {
 		if (!selectedCell) return;
-		cellRefs.current.get(cellKey(selectedCell))?.focus();
+		if (lastPointerTypeRef.current === "touch") {
+			hiddenInputRef.current?.focus();
+		} else {
+			cellRefs.current.get(cellKey(selectedCell))?.focus();
+		}
 	}, [selectedCell]);
 
 	// Close popups on any outside pointer press.
@@ -328,6 +344,30 @@ export default function FingerpickEditModal({
 
 	// ── Cell keyboard editing ──────────────────────────────────────────────────
 
+	// Apply a single typed digit to a cell's fret, honouring the two-digit entry
+	// window: a second digit within TWO_DIGIT_WINDOW_MS combines with the first
+	// when the result is ≤ MAX_FRET, otherwise it starts a fresh single-digit
+	// entry. Shared by physical-keyboard editing (handleCellKeyDown) and the touch
+	// numeric input so both paths behave identically.
+	const applyFretDigit = useCallback(
+		(cell: Cell, digit: number) => {
+			const ck = cellKey(cell);
+			const now = Date.now();
+			const pend = pendingDigitRef.current;
+			if (pend && pend.key === ck && now - pend.time < TWO_DIGIT_WINDOW_MS) {
+				const combined = pend.digit * 10 + digit;
+				if (combined <= MAX_FRET) {
+					commit((prev) => setFret(prev, cell, combined));
+					pendingDigitRef.current = null;
+					return;
+				}
+			}
+			commit((prev) => setFret(prev, cell, digit));
+			pendingDigitRef.current = { key: ck, digit, time: now };
+		},
+		[commit],
+	);
+
 	const handleCellKeyDown = useCallback(
 		(e: React.KeyboardEvent, cell: Cell) => {
 			const key = e.key;
@@ -352,26 +392,10 @@ export default function FingerpickEditModal({
 			}
 			if (/^[0-9]$/.test(key)) {
 				e.preventDefault();
-				const digit = Number(key);
-				const ck = cellKey(cell);
-				const now = Date.now();
-				const pend = pendingDigitRef.current;
-				if (pend && pend.key === ck && now - pend.time < TWO_DIGIT_WINDOW_MS) {
-					const combined = pend.digit * 10 + digit;
-					if (combined <= MAX_FRET) {
-						commit((prev) => setFret(prev, cell, combined));
-						pendingDigitRef.current = null;
-					} else {
-						commit((prev) => setFret(prev, cell, digit));
-						pendingDigitRef.current = { key: ck, digit, time: now };
-					}
-				} else {
-					commit((prev) => setFret(prev, cell, digit));
-					pendingDigitRef.current = { key: ck, digit, time: now };
-				}
+				applyFretDigit(cell, Number(key));
 			}
 		},
-		[commit],
+		[commit, applyFretDigit],
 	);
 
 	// ── Technique context menu ───────────────────────────────────────────────
@@ -390,14 +414,66 @@ export default function FingerpickEditModal({
 	}
 
 	function handleCellPointerDown(cell: Cell, e: React.PointerEvent) {
+		lastPointerTypeRef.current = e.pointerType;
 		if (e.pointerType !== "touch") return;
+		// Suppress the OS long-press text/element selection before our long-press
+		// timer opens the technique menu. touch-action: manipulation on the button
+		// still lets scroll gestures through, so this doesn't block page scroll.
+		e.preventDefault();
+		longPressFiredRef.current = false;
 		const x = e.clientX;
 		const y = e.clientY;
 		const anchorEl = e.currentTarget as HTMLElement;
-		longPressRef.current = window.setTimeout(
-			() => openTechMenu(cell, x, y, anchorEl),
-			LONG_PRESS_MS,
+		longPressRef.current = window.setTimeout(() => {
+			longPressFiredRef.current = true;
+			openTechMenu(cell, x, y, anchorEl);
+		}, LONG_PRESS_MS);
+	}
+
+	// Touch tap release: select the cell and open the native numeric keyboard by
+	// focusing the shared hidden input. Skipped when the long-press already opened
+	// the technique menu. Focus must happen here (inside the tap gesture) — iOS
+	// Safari ignores a focus() deferred to a later effect.
+	function handleCellPointerUp(cell: Cell, e: React.PointerEvent) {
+		cancelLongPress();
+		if (e.pointerType !== "touch") return;
+		if (longPressFiredRef.current) {
+			longPressFiredRef.current = false;
+			return;
+		}
+		setSelectedCell(cell);
+		const input = hiddenInputRef.current;
+		if (!input) return;
+		// Park the invisible input over the tapped cell (same content-relative maths
+		// as openTechMenu) so focusing it doesn't jump-scroll the dialog.
+		const content = (e.currentTarget as HTMLElement).closest<HTMLElement>(
+			'[data-slot="dialog-content"]',
 		);
+		if (content) {
+			const rect = content.getBoundingClientRect();
+			input.style.top = `${e.clientY - rect.top + content.scrollTop}px`;
+			input.style.left = `${e.clientX - rect.left + content.scrollLeft}px`;
+		}
+		input.focus();
+	}
+
+	// Native numeric keyboard input (touch). Each keystroke arrives as an onChange;
+	// take the last typed character, route it through the shared digit logic, and
+	// reset the field so the next keystroke starts fresh.
+	function handleHiddenNumericInput(e: React.ChangeEvent<HTMLInputElement>) {
+		const cell = selectedCell;
+		const raw = e.currentTarget.value;
+		e.currentTarget.value = "";
+		if (!cell) return;
+		const lastChar = raw.slice(-1);
+		if (!/^[0-9]$/.test(lastChar)) return;
+		applyFretDigit(cell, Number(lastChar));
+	}
+
+	// Reset the hidden input and pending two-digit buffer (on blur / Enter / Done).
+	function resetHiddenNumericInput() {
+		pendingDigitRef.current = null;
+		if (hiddenInputRef.current) hiddenInputRef.current.value = "";
 	}
 
 	function cancelLongPress() {
@@ -946,7 +1022,7 @@ export default function FingerpickEditModal({
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
 				    count (2→4, --fp-cols) in step with the dynamic modal width, so
 				    measures fill each row and the extra (add) tile wraps below. */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4">
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4 select-none">
 					{working.measures.map((measure, measureIndex) => {
 						const beatLabels = computeBeatLabels(measure.slots, working.timeSignature);
 						const beatGroups = computeBeatGroups(measure.slots, working.timeSignature);
@@ -1124,9 +1200,23 @@ export default function FingerpickEditModal({
 																					ck,
 																				);
 																		}}
-																		onClick={() =>
-																			setSelectedCell(cell)
-																		}
+																		onClick={() => {
+																			// Touch selection +
+																			// keyboard focus is
+																			// handled in
+																			// handleCellPointerUp so
+																			// focus() lands inside
+																			// the tap gesture (iOS
+																			// requirement); the
+																			// trailing click is a
+																			// no-op here.
+																			if (
+																				lastPointerTypeRef.current ===
+																				"touch"
+																			)
+																				return;
+																			setSelectedCell(cell);
+																		}}
 																		onKeyDown={(e) =>
 																			handleCellKeyDown(
 																				e,
@@ -1146,8 +1236,11 @@ export default function FingerpickEditModal({
 																				e,
 																			)
 																		}
-																		onPointerUp={
-																			cancelLongPress
+																		onPointerUp={(e) =>
+																			handleCellPointerUp(
+																				cell,
+																				e,
+																			)
 																		}
 																		onPointerLeave={
 																			cancelLongPress
@@ -1172,7 +1265,7 @@ export default function FingerpickEditModal({
 																					}
 																				: undefined
 																		}
-																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center rounded font-mono text-xs transition-colors ${
+																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center rounded font-mono text-xs transition-colors select-none touch-manipulation ${
 																			isSelected
 																				? "bg-denim-tint ring-1 ring-denim text-denim"
 																				: "hover:bg-slate-50 text-slate-600"
@@ -1310,6 +1403,27 @@ export default function FingerpickEditModal({
 						Save
 					</Button>
 				</div>
+
+				{/* Off-screen numeric input: focused on a touch tap to summon the
+				    native numeric keyboard for fret entry. Invisible and
+				    non-interactive; the keyboard writes through
+				    handleHiddenNumericInput. Positioned over the tapped cell at
+				    focus time to avoid a jump-scroll. */}
+				<input
+					ref={hiddenInputRef}
+					type="number"
+					inputMode="numeric"
+					pattern="[0-9]*"
+					aria-hidden
+					tabIndex={-1}
+					onChange={handleHiddenNumericInput}
+					onBlur={resetHiddenNumericInput}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") e.currentTarget.blur();
+					}}
+					className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
+					style={{ top: 0, left: 0 }}
+				/>
 
 				{/* ── Technique context menu (absolute within the content box) ───── */}
 				{techMenu && (

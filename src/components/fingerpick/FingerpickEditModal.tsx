@@ -515,6 +515,25 @@ export default function FingerpickEditModal({
 		}, LONG_PRESS_MS);
 	}
 
+	// Position the touch mute button just below the given cell. Anchored to the
+	// cell button's own bounding rect (via cellRefs), converted into the dialog
+	// content box's coordinate space with the same getBoundingClientRect + scroll
+	// offset maths as openTechMenu — so it stays centred beneath the cell rather
+	// than tracking the tap point. Clears the anchor if the cell has no live ref.
+	function positionTouchMute(cell: Cell, content: HTMLElement) {
+		const cellEl = cellRefs.current.get(cellKey(cell));
+		if (!cellEl) {
+			setTouchMute(null);
+			return;
+		}
+		const contentRect = content.getBoundingClientRect();
+		const cellRect = cellEl.getBoundingClientRect();
+		setTouchMute({
+			top: cellRect.bottom - contentRect.top + content.scrollTop,
+			left: cellRect.left + cellRect.width / 2 - contentRect.left + content.scrollLeft,
+		});
+	}
+
 	// Touch tap release: select the cell and open the native numeric keyboard by
 	// focusing the shared hidden input. Skipped when the long-press already opened
 	// the technique menu. Focus must happen here (inside the tap gesture) — iOS
@@ -547,8 +566,9 @@ export default function FingerpickEditModal({
 			const left = e.clientX - rect.left + content.scrollLeft;
 			input.style.top = `${top}px`;
 			input.style.left = `${left}px`;
-			// Anchor the touch mute button just below the tapped cell.
-			setTouchMute({ top, left });
+			// Anchor the touch mute button to the tapped cell's own box (centred just
+			// below it), not the tap point, so it always lands in the same spot.
+			positionTouchMute(cell, content);
 		}
 		input.focus();
 	}
@@ -976,6 +996,15 @@ export default function FingerpickEditModal({
 	}
 
 	const nameValid = working.name.trim().length > 0;
+
+	// The selected cell's live string data, used to gate the touch mute button:
+	// an already-muted cell needs no mute affordance, so the button is hidden
+	// until the cell is un-muted (or a different, non-muted cell is selected).
+	const selectedStringFret: StringFret | null = selectedCell
+		? (working.measures[selectedCell.measureIndex]?.slots[selectedCell.slotIndex]?.strings[
+				selectedCell.stringIndex
+			] ?? null)
+		: null;
 
 	// Dynamic desktop (lg+) width: grow with measure count, 2 → 4 columns, then
 	// stop (extra measures wrap). Below lg the static md:2 / sm:1 layout applies.
@@ -1600,20 +1629,22 @@ export default function FingerpickEditModal({
 
 				{/* Touch mute button: the native numeric keyboard can't type "x", so
 				    give touch users a tappable way to mute the selected string. Uses
-				    the same toggleMuted commit as the desktop "x" key. Anchored just
-				    below the tapped cell (the "x" glyph is the tab mute notation). */}
-				{touchMute && selectedCell && (
+				    the same toggleMuted commit as the desktop "x" key. Centred just
+				    below the selected cell (the "x" glyph is the tab mute notation).
+				    Hidden while the selected cell is already muted — it reappears once
+				    the cell is un-muted or a different, non-muted cell is selected. */}
+				{touchMute && selectedCell && !selectedStringFret?.muted && (
 					<button
 						onClick={() => {
 							if (selectedCell) commit((prev) => toggleMuted(prev, selectedCell));
 						}}
 						aria-label="Mute string"
 						title="Mute string"
-						className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
+						className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink hover:bg-denim-tint hover:text-denim active:bg-denim-tint transition-colors"
 						style={{
 							top: touchMute.top,
 							left: touchMute.left,
-							transform: "translate(-50%, 1.25rem)",
+							transform: "translate(-50%, 6px)",
 						}}
 					>
 						<XIcon size={14} />

@@ -241,6 +241,10 @@ export default function FingerpickEditModal({
 	// on a touch device. Rendered only while a cell is selected; gives touch users a
 	// way to mute a string (there is no "x" key on the native numeric keyboard).
 	const [touchMute, setTouchMute] = useState<{ top: number; left: number } | null>(null);
+	// True while the hidden numeric input holds focus (i.e. the native fret-entry
+	// keyboard is up). The touch mute button belongs to that same "keyboard active"
+	// interaction, so it is shown only while this is true and hidden on blur.
+	const [isFretInputFocused, setIsFretInputFocused] = useState(false);
 	// Whether the editing-help popover (anchored to the footer "?" button) is open.
 	const [hintOpen, setHintOpen] = useState(false);
 
@@ -1610,7 +1614,11 @@ export default function FingerpickEditModal({
 					aria-hidden
 					tabIndex={-1}
 					onChange={handleHiddenNumericInput}
-					onBlur={resetHiddenNumericInput}
+					onFocus={() => setIsFretInputFocused(true)}
+					onBlur={() => {
+						setIsFretInputFocused(false);
+						resetHiddenNumericInput();
+					}}
 					onKeyDown={(e) => {
 						if (e.key === "Enter") {
 							e.currentTarget.blur();
@@ -1633,8 +1641,13 @@ export default function FingerpickEditModal({
 				    below the selected cell (the "x" glyph is the tab mute notation).
 				    Hidden while the selected cell is already muted — it reappears once
 				    the cell is un-muted or a different, non-muted cell is selected. */}
-				{touchMute && selectedCell && !selectedStringFret?.muted && (
+				{touchMute && selectedCell && isFretInputFocused && !selectedStringFret?.muted && (
 					<button
+						// Keep the hidden input focused when pressing this button: without
+						// it, the button steals focus, blurs the input, and the resulting
+						// isFretInputFocused=false would unmount the button before its
+						// onClick fires. Preserving focus also keeps the keyboard up.
+						onMouseDown={(e) => e.preventDefault()}
 						onClick={() => {
 							if (selectedCell) commit((prev) => toggleMuted(prev, selectedCell));
 						}}

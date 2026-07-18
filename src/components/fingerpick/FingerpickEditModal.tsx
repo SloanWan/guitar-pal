@@ -807,7 +807,7 @@ export default function FingerpickEditModal({
 			<DialogContent
 				showCloseButton={false}
 				style={dynamicStyle}
-				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[90vh] overflow-y-auto pb-0"
+				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] overflow-y-auto pb-0"
 				onKeyDown={(e) => {
 					// Undo/redo scoped to the modal (not window) to avoid clashing with
 					// the page. Skip text fields so their native undo keeps working.

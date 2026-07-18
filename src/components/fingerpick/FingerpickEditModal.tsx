@@ -728,10 +728,10 @@ export default function FingerpickEditModal({
 	const columnPopup = (
 		<div
 			ref={popupRef}
-			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-60 w-max max-w-60 rounded-lg border border-slate-200 bg-white shadow-lg p-2 flex flex-col gap-2`}
+			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2`}
 		>
-			<div className="flex gap-1">
-				{DURATION_PICKER.map((d) => {
+			<div className="flex border border-line-strong">
+				{DURATION_PICKER.map((d, i) => {
 					const disabled = d.value === "whole" && wholeDisabled;
 					return (
 						<button
@@ -743,11 +743,13 @@ export default function FingerpickEditModal({
 									? "Whole note must be the only slot in the measure"
 									: d.value
 							}
-							className={`h-7 w-7 rounded font-mono text-xs font-semibold transition-colors ${
+							className={`h-7 flex-1 px-2 font-mono text-xs font-semibold transition-colors ${
+								i > 0 ? "border-l border-line-strong" : ""
+							} ${
 								selectedDuration === d.value
-									? "bg-denim text-white"
-									: "text-slate-500 hover:bg-denim-tint"
-							} disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
+									? "bg-denim text-on-denim"
+									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+							} disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-dim`}
 						>
 							{d.label}
 						</button>
@@ -757,10 +759,10 @@ export default function FingerpickEditModal({
 
 			{/* Split / merge (single column only) */}
 			{singleTarget && !popupConfirm && (splitOptions.length > 0 || canMerge) && (
-				<div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2">
+				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
 					{splitOptions.length > 0 && (
 						<div className="flex flex-wrap items-center gap-1">
-							<span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+							<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 								Split
 							</span>
 							{splitOptions.map(({ duration, count }) => (
@@ -768,7 +770,7 @@ export default function FingerpickEditModal({
 									key={duration}
 									onClick={() => applySplit(singleTarget, duration)}
 									title={`Split into ${count} × ${duration}`}
-									className="flex items-center gap-0.5 h-7 px-1.5 rounded text-xs text-slate-600 hover:bg-denim-tint hover:text-denim transition-colors"
+									className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 								>
 									{count}×<DurationIcon duration={duration} />
 								</button>
@@ -779,7 +781,7 @@ export default function FingerpickEditModal({
 						<button
 							onClick={() => requestMerge(singleTarget, mergeTarget)}
 							title={`Merge into ${mergeTarget}`}
-							className="flex items-center gap-1 h-7 px-1.5 rounded text-xs text-slate-600 hover:bg-denim-tint hover:text-denim transition-colors"
+							className="flex items-center gap-1 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 						>
 							<Merge size={13} /> Merge → <DurationIcon duration={mergeTarget} />
 						</button>
@@ -789,10 +791,10 @@ export default function FingerpickEditModal({
 
 			{/* Replace whole measure with a single whole note (single column only) */}
 			{singleTarget && measureHasContent && !popupConfirm && (
-				<div className="border-t border-slate-100 pt-2">
+				<div className="border-t border-line pt-2">
 					<button
 						onClick={() => requestReplaceWithWhole(singleTarget)}
-						className="flex items-center gap-1 h-7 px-1.5 rounded text-xs text-slate-600 hover:bg-denim-tint hover:text-denim transition-colors"
+						className="flex items-center gap-1 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 					>
 						Replace with <DurationIcon duration="whole" />
 					</button>
@@ -801,8 +803,8 @@ export default function FingerpickEditModal({
 
 			{/* Inline confirmation for a destructive merge / whole-replace */}
 			{popupConfirm && (
-				<div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2">
-					<span className="text-[11px] text-slate-600">
+				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
+					<span className="text-[11px] text-ink-dim">
 						{popupConfirm.kind === "merge"
 							? `This will discard data from ${popupConfirm.affectedSlotCount} slot(s). Continue?`
 							: "This will replace the measure's content. Continue?"}
@@ -810,13 +812,13 @@ export default function FingerpickEditModal({
 					<div className="flex gap-1">
 						<button
 							onClick={() => setPopupConfirm(null)}
-							className="h-7 px-2 rounded text-xs text-slate-500 hover:bg-slate-100 transition-colors"
+							className="h-7 px-2 text-xs text-ink-dim hover:bg-raise active:bg-denim-tint transition-colors"
 						>
 							Cancel
 						</button>
 						<button
 							onClick={confirmPopup}
-							className="h-7 px-2 rounded text-xs font-semibold text-white bg-denim hover:bg-denim-dark transition-colors"
+							className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
 						>
 							Confirm
 						</button>
@@ -824,7 +826,7 @@ export default function FingerpickEditModal({
 				</div>
 			)}
 
-			<div className="flex gap-1 border-t border-slate-100 pt-2">
+			<div className="flex gap-1 border-t border-line pt-2">
 				<PopupIconButton title="Insert before" onClick={() => applyStructural("before")}>
 					<ArrowLeftToLine size={14} />
 				</PopupIconButton>
@@ -910,8 +912,8 @@ export default function FingerpickEditModal({
 				}}
 			>
 				{/* ── Header ─────────────────────────────────────────────────────── */}
-				<div className="sticky top-0 z-55 flex items-center justify-between rounded-t-xl border-b border-slate-200 bg-white px-4 py-3">
-					<h2 className="font-heading text-base font-medium text-slate-700">
+				<div className="sticky top-0 z-55 flex items-center justify-between border-b border-line bg-popover px-4 py-3">
+					<h2 className="font-heading text-base font-medium text-ink">
 						{initialPattern ? "Edit pattern" : "New pattern"}
 					</h2>
 					<div className="flex items-center gap-1">
@@ -920,7 +922,7 @@ export default function FingerpickEditModal({
 							disabled={!canUndo}
 							aria-label="Undo"
 							title="Undo (⌘Z)"
-							className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+							className="h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink active:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-dim transition-colors"
 						>
 							<Undo2 size={16} />
 						</button>
@@ -929,22 +931,22 @@ export default function FingerpickEditModal({
 							disabled={!canRedo}
 							aria-label="Redo"
 							title="Redo (⌘⇧Z)"
-							className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+							className="h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink active:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-dim transition-colors"
 						>
 							<Redo2 size={16} />
 						</button>
 						{discardConfirm ? (
 							<div className="flex items-center gap-2">
-								<span className="text-xs text-slate-600">Discard changes?</span>
+								<span className="text-xs text-ink-dim">Discard changes?</span>
 								<button
 									onClick={() => setDiscardConfirm(false)}
-									className="h-8 px-3 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+									className="h-8 px-3 text-xs font-medium text-ink-dim hover:bg-raise active:bg-denim-tint transition-colors"
 								>
 									Keep editing
 								</button>
 								<button
 									onClick={doClose}
-									className="h-8 px-3 rounded-md text-xs font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors"
+									className="h-8 px-3 text-xs font-semibold text-white bg-destructive hover:bg-destructive/90 transition-colors"
 								>
 									Discard
 								</button>
@@ -953,7 +955,7 @@ export default function FingerpickEditModal({
 							<button
 								onClick={requestClose}
 								aria-label="Close"
-								className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+								className="h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink active:bg-denim-tint transition-colors"
 							>
 								<XIcon size={18} />
 							</button>
@@ -964,7 +966,7 @@ export default function FingerpickEditModal({
 				{/* ── Metadata bar ──────────────────────────────────────────────── */}
 				<div className="flex flex-wrap items-end gap-3 px-4">
 					<div className="flex flex-col gap-1 min-w-40 flex-1">
-						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Name
 						</label>
 						<input
@@ -972,13 +974,13 @@ export default function FingerpickEditModal({
 							value={working.name}
 							onChange={(e) => commit((p) => ({ ...p, name: e.target.value }))}
 							placeholder="Pattern name"
-							className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40 ${
-								nameValid ? "border-slate-200" : "border-red-300"
+							className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-denim/40 ${
+								nameValid ? "border-line-strong" : "border-destructive"
 							}`}
 						/>
 					</div>
 					<div className="flex flex-col gap-1 w-24">
-						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							BPM
 						</label>
 						<input
@@ -989,11 +991,11 @@ export default function FingerpickEditModal({
 							onChange={(e) =>
 								commit((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))
 							}
-							className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus:ring-2 focus:ring-denim/40"
 						/>
 					</div>
 					<div className="flex flex-col gap-1 w-24">
-						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Time Sig.
 						</label>
 						<select
@@ -1002,7 +1004,7 @@ export default function FingerpickEditModal({
 								const ts = TIME_SIGNATURES.find((t) => t.label === e.target.value);
 								if (ts) commit((p) => ({ ...p, timeSignature: ts.value }));
 							}}
-							className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-2 py-2 font-mono text-sm text-ink focus:outline-none focus:ring-2 focus:ring-denim/40"
 						>
 							{TIME_SIGNATURES.map((t) => (
 								<option key={t.label} value={t.label}>
@@ -1012,7 +1014,7 @@ export default function FingerpickEditModal({
 						</select>
 					</div>
 					<div className="flex flex-col gap-1 min-w-40 flex-1">
-						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Description
 						</label>
 						<input
@@ -1020,7 +1022,7 @@ export default function FingerpickEditModal({
 							value={working.description ?? ""}
 							onChange={(e) => commit((p) => ({ ...p, description: e.target.value }))}
 							placeholder="Optional"
-							className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-denim/40"
 						/>
 					</div>
 				</div>
@@ -1039,11 +1041,11 @@ export default function FingerpickEditModal({
 							<div
 								key={measure.id}
 								onMouseLeave={() => setHoveredCell(null)}
-								className="rounded-lg border border-slate-200 p-3 flex flex-col gap-2"
+								className="border border-line p-3 flex flex-col gap-2"
 							>
 								<div className="flex items-center justify-between">
 									<div className="flex items-center gap-2">
-										<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 											Measure {measureIndex + 1}
 										</span>
 										<button
@@ -1058,7 +1060,7 @@ export default function FingerpickEditModal({
 											}
 											aria-label="Copy measure"
 											title="Copy measure"
-											className="flex items-center justify-center text-slate-400 hover:text-denim transition-colors"
+											className="flex items-center justify-center text-ink-dim hover:text-denim transition-colors"
 										>
 											<Copy size={14} />
 										</button>
@@ -1076,7 +1078,7 @@ export default function FingerpickEditModal({
 											disabled={measureIndex === 0}
 											aria-label="Move measure left"
 											title="Move measure left"
-											className="flex items-center justify-center text-slate-400 hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 transition-colors"
+											className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
 										>
 											<ArrowLeft size={14} />
 										</button>
@@ -1094,7 +1096,7 @@ export default function FingerpickEditModal({
 											disabled={measureIndex === working.measures.length - 1}
 											aria-label="Move measure right"
 											title="Move measure right"
-											className="flex items-center justify-center text-slate-400 hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 transition-colors"
+											className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
 										>
 											<ArrowRight size={14} />
 										</button>
@@ -1106,7 +1108,7 @@ export default function FingerpickEditModal({
 										disabled={working.measures.length <= 1}
 										aria-label="Delete measure"
 										title="Delete measure"
-										className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+										className="flex items-center gap-1 text-[10px] text-ink-dim hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 									>
 										<XIcon size={12} /> Delete
 									</button>
@@ -1121,7 +1123,7 @@ export default function FingerpickEditModal({
 										{STRING_LABELS.map((label, stringIndex) => (
 											<div
 												key={stringIndex}
-												className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-slate-400"
+												className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
 											>
 												{label}
 											</div>
@@ -1135,7 +1137,7 @@ export default function FingerpickEditModal({
 										return (
 											<div
 												key={groupIndex}
-												className="flex flex-1 gap-0.5 rounded"
+												className="flex flex-1 gap-0.5"
 												style={{
 													// Grow proportionally to slot count so every slot column
 													// stays equal width across the whole measure.
@@ -1272,11 +1274,11 @@ export default function FingerpickEditModal({
 																					}
 																				: undefined
 																		}
-																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center rounded font-mono text-xs transition-colors select-none touch-manipulation ${
+																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center font-mono text-xs transition-colors select-none touch-manipulation ${
 																			isSelected
 																				? "bg-denim-tint ring-1 ring-denim text-denim"
-																				: "hover:bg-slate-50 text-slate-600"
-																		} ${sf.fret === null && !sf.muted ? "text-slate-300" : ""}`}
+																				: "hover:bg-raise text-ink-dim"
+																		} ${sf.fret === null && !sf.muted ? "text-ink-faint" : ""}`}
 																	>
 																		{cellDisplay(sf)}
 																		{glyph && (
@@ -1299,7 +1301,7 @@ export default function FingerpickEditModal({
 															})}
 
 															{/* Duration label */}
-															<div className="text-center text-[9px] font-mono text-slate-400 leading-none">
+															<div className="text-center text-[9px] font-mono text-ink-faint leading-none">
 																{DURATION_ABBREV[slot.duration]}
 															</div>
 
@@ -1314,10 +1316,10 @@ export default function FingerpickEditModal({
 																		})
 																	}
 																	aria-label={`Select column ${slotIndex + 1}`}
-																	className={`h-3.5 w-3.5 rounded-full border transition-colors ${
+																	className={`h-3.5 w-3.5 border transition-colors ${
 																		columnSelected
 																			? "bg-denim border-denim"
-																			: "border-slate-300 hover:border-denim"
+																			: "border-line-strong hover:border-denim"
 																	}`}
 																/>
 																{key === firstSelectedColumnKey &&
@@ -1337,8 +1339,8 @@ export default function FingerpickEditModal({
 								</div>
 
 								{/* Quick preset row: fill the whole measure with one note value. */}
-								<div className="flex items-center gap-1 border-t border-slate-100 pt-2">
-									<span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-0.5">
+								<div className="flex items-center gap-1 border-t border-line pt-2">
+									<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
 										All
 									</span>
 									{(["quarter", "eighth", "sixteenth"] as const).map((d) => (
@@ -1346,7 +1348,7 @@ export default function FingerpickEditModal({
 											key={d}
 											onClick={() => requestPreset(measureIndex, d)}
 											title={`Fill measure with ${d} notes`}
-											className="flex items-center justify-center h-7 w-8 rounded border border-slate-200 text-slate-600 hover:border-denim hover:text-denim transition-colors"
+											className="flex items-center justify-center h-7 w-8 border border-line-strong text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
 										>
 											<DurationIcon duration={d} />
 										</button>
@@ -1354,26 +1356,26 @@ export default function FingerpickEditModal({
 								</div>
 
 								{presetConfirm && presetConfirm.measureIndex === measureIndex && (
-									<div className="flex flex-col gap-1.5 rounded border border-slate-200 bg-slate-50 p-2">
-										<span className="text-[11px] text-slate-600">
+									<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
+										<span className="text-[11px] text-ink-dim">
 											Keep existing data (remap) or clear?
 										</span>
 										<div className="flex gap-1">
 											<button
 												onClick={applyPresetRemap}
-												className="h-7 px-2 rounded text-xs font-semibold text-white bg-denim hover:bg-denim-dark transition-colors"
+												className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
 											>
 												Remap
 											</button>
 											<button
 												onClick={applyPresetClear}
-												className="h-7 px-2 rounded text-xs text-slate-600 hover:bg-slate-200 transition-colors"
+												className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
 											>
 												Clear
 											</button>
 											<button
 												onClick={() => setPresetConfirm(null)}
-												className="h-7 px-2 rounded text-xs text-slate-500 hover:bg-slate-200 transition-colors"
+												className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
 											>
 												Cancel
 											</button>
@@ -1387,25 +1389,24 @@ export default function FingerpickEditModal({
 					{/* Add measure block */}
 					<button
 						onClick={() => commit((p) => addMeasure(p))}
-						className="rounded-lg border border-dashed border-slate-300 min-h-32 flex items-center justify-center gap-1.5 text-sm text-slate-400 hover:border-denim hover:text-denim transition-colors"
+						className="border border-dashed border-line-strong min-h-32 flex items-center justify-center gap-1.5 text-sm text-ink-dim hover:border-denim hover:text-denim transition-colors"
 					>
 						<Plus size={16} /> Add measure
 					</button>
 				</div>
 
-				<p className="px-4 text-[11px] text-slate-400">
+				<p className="px-4 text-[11px] text-ink-dim">
 					Click a cell then use arrow keys to move, number keys to set a fret,{" "}
 					<span className="font-mono">x</span> to mute, Backspace to clear. Right-click
 					(or long-press) a cell for techniques.
 				</p>
 
 				{/* ── Footer (pinned to the bottom of the scroll area) ───────────── */}
-				<div className="sticky bottom-0 z-55 flex items-center justify-end gap-2 rounded-b-xl border-t border-slate-200 bg-white px-4 py-3">
+				<div className="sticky bottom-0 z-55 flex items-center justify-end gap-2 border-t border-line bg-popover px-4 py-3">
 					<Button
 						onClick={handleSave}
 						disabled={!nameValid}
-						className="h-9 disabled:opacity-40"
-						style={{ backgroundColor: "var(--denim)", color: "white" }}
+						className="h-9 bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
 					>
 						Save
 					</Button>
@@ -1436,7 +1437,7 @@ export default function FingerpickEditModal({
 				{techMenu && (
 					<div
 						ref={techMenuRef}
-						className="absolute z-60 rounded-lg border border-slate-200 bg-white shadow-lg py-1 min-w-40 text-sm"
+						className="absolute z-60 border border-line-strong bg-popover py-1 min-w-40 text-sm"
 						style={{ top: techMenu.y, left: techMenu.x }}
 					>
 						{(() => {
@@ -1453,7 +1454,7 @@ export default function FingerpickEditModal({
 													? undefined
 													: "No previous note on this string"
 											}
-											className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+											className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
 										>
 											{opt.label}
 										</button>
@@ -1466,17 +1467,17 @@ export default function FingerpickEditModal({
 												? undefined
 												: "No previous note on this string to tie from"
 										}
-										className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+										className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
 									>
 										Tied (⌒)
 									</button>
 								</>
 							);
 						})()}
-						<div className="border-t border-slate-100 my-1" />
+						<div className="border-t border-line my-1" />
 						<button
 							onClick={applyClearTechnique}
-							className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint transition-colors"
+							className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 						>
 							Clear technique
 						</button>
@@ -1505,9 +1506,9 @@ function PopupIconButton({
 			onClick={onClick}
 			title={title}
 			aria-label={title}
-			className={`h-7 w-7 flex items-center justify-center rounded text-slate-500 transition-colors ${
+			className={`h-7 w-7 flex items-center justify-center text-ink-dim transition-colors active:bg-denim-tint ${
 				danger
-					? "hover:bg-red-50 hover:text-red-500"
+					? "hover:bg-raise hover:text-destructive"
 					: "hover:bg-denim-tint hover:text-denim"
 			}`}
 		>

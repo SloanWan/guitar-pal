@@ -69,6 +69,11 @@
 	--backdrop: rgba(0, 0, 0, 0.55); /* mobile drawer scrim                       */
 	--tab-line-2: #1f1f1f; /* landing hero: recessed TAB strip lines    */
 	--tab-num-2: #3a4a63; /* landing hero: recessed TAB strip numbers  */
+
+	/* Destructive — muted brick red, NOT neon. Low chroma so it reads calm on
+	   the near-black panel; still clearly red for delete/discard affordances.
+	   Theme-aware (deeper on light) like every other color token. */
+	--destructive: oklch(0.585 0.13 25);
 }
 
 /* ----------------------------------------------------------------------------
@@ -110,6 +115,8 @@
 	--backdrop: rgba(20, 20, 20, 0.35);
 	--tab-line-2: #e6e6e1;
 	--tab-num-2: #a9bad3;
+
+	--destructive: oklch(0.53 0.17 27); /* deeper on light for contrast on paper white */
 }
 
 /* Text selection is fixed across BOTH themes */
@@ -370,7 +377,8 @@
 	   component migration, then delete this block. */
 	--secondary: var(--bg-raise);
 	--secondary-foreground: var(--ink);
-	--destructive: oklch(0.577 0.245 27.325);
+	/* --destructive is defined per-theme in the color blocks above (muted red,
+	   dark/light aware) — not here, so the theme values are not overridden. */
 }
 
 /* ============================================================================

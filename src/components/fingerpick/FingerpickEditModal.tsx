@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 	Merge,
 	Undo2,
 	Redo2,
+	CircleHelp,
 	X as XIcon,
 } from "lucide-react";
 import type { Duration, FingerpickPattern, Measure, StringFret } from "@/lib/fingerpickTypes";
@@ -161,6 +162,21 @@ const parseColumnKey = (key: string): SlotTarget => {
 	return { measureIndex: m, slotIndex: s };
 };
 
+// Fine-pointer (mouse/trackpad → physical keyboard) capability, read via
+// useSyncExternalStore so the editing hint tracks it without a setState-in-effect.
+function subscribeFinePointer(callback: () => void): () => void {
+	if (typeof window === "undefined" || !window.matchMedia) return () => {};
+	const mq = window.matchMedia("(pointer: fine)");
+	mq.addEventListener("change", callback);
+	return () => mq.removeEventListener("change", callback);
+}
+const getFinePointerSnapshot = (): boolean =>
+	typeof window !== "undefined" && !!window.matchMedia
+		? window.matchMedia("(pointer: fine)").matches
+		: true;
+// SSR/first paint assumes desktop; hydration corrects it from the real media query.
+const getFinePointerServerSnapshot = (): boolean => true;
+
 function cellDisplay(sf: StringFret): string {
 	if (sf.muted) return "x";
 	if (sf.fret !== null) return String(sf.fret);
@@ -192,6 +208,19 @@ export default function FingerpickEditModal({
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
 	const [discardConfirm, setDiscardConfirm] = useState(false);
+	// True when the device has a fine pointer (mouse/trackpad → physical keyboard
+	// likely). Drives which editing hint to show.
+	const hasFinePointer = useSyncExternalStore(
+		subscribeFinePointer,
+		getFinePointerSnapshot,
+		getFinePointerServerSnapshot,
+	);
+	// Content-relative position of the touch mute button, set when a cell is tapped
+	// on a touch device. Rendered only while a cell is selected; gives touch users a
+	// way to mute a string (there is no "x" key on the native numeric keyboard).
+	const [touchMute, setTouchMute] = useState<{ top: number; left: number } | null>(null);
+	// Whether the editing-help popover (anchored to the footer "?" button) is open.
+	const [hintOpen, setHintOpen] = useState(false);
 
 	// Undo/redo history. `history` holds every committed pattern snapshot (the
 	// initial state plus one entry per edit); `historyIndex` points at the entry
@@ -216,6 +245,7 @@ export default function FingerpickEditModal({
 	const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 	const popupRef = useRef<HTMLDivElement>(null);
 	const techMenuRef = useRef<HTMLDivElement>(null);
+	const hintRef = useRef<HTMLDivElement>(null);
 	// Long-press timer for the mobile technique menu.
 	const longPressRef = useRef<number | null>(null);
 	// Set true when the long-press timer opens the technique menu, so the tap's
@@ -299,11 +329,13 @@ export default function FingerpickEditModal({
 			pristineRef.current = JSON.stringify(next);
 			setSelectedCell(null);
 			setHoveredCell(null);
+			setTouchMute(null);
 			setSelectedColumns(new Set());
 			setTechMenu(null);
 			setPopupConfirm(null);
 			setPresetConfirm(null);
 			setDiscardConfirm(false);
+			setHintOpen(false);
 			pendingDigitRef.current = null;
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -323,7 +355,7 @@ export default function FingerpickEditModal({
 
 	// Close popups on any outside pointer press.
 	useEffect(() => {
-		if (selectedColumns.size === 0 && !techMenu) return;
+		if (selectedColumns.size === 0 && !techMenu && !hintOpen) return;
 		function handlePointerDown(e: PointerEvent) {
 			const target = e.target as HTMLElement;
 			if (techMenu && !techMenuRef.current?.contains(target)) {
@@ -337,10 +369,19 @@ export default function FingerpickEditModal({
 				setSelectedColumns(new Set());
 				setPopupConfirm(null);
 			}
+			// Dismiss the hint popover, except when the "?" trigger is pressed — its
+			// own click handler toggles it (so pressing it while open closes it).
+			if (
+				hintOpen &&
+				!hintRef.current?.contains(target) &&
+				!target.closest("[data-hint-trigger]")
+			) {
+				setHintOpen(false);
+			}
 		}
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
-	}, [selectedColumns, techMenu]);
+	}, [selectedColumns, techMenu, hintOpen]);
 
 	// ── Cell keyboard editing ──────────────────────────────────────────────────
 
@@ -458,8 +499,12 @@ export default function FingerpickEditModal({
 		);
 		if (content) {
 			const rect = content.getBoundingClientRect();
-			input.style.top = `${e.clientY - rect.top + content.scrollTop}px`;
-			input.style.left = `${e.clientX - rect.left + content.scrollLeft}px`;
+			const top = e.clientY - rect.top + content.scrollTop;
+			const left = e.clientX - rect.left + content.scrollLeft;
+			input.style.top = `${top}px`;
+			input.style.left = `${left}px`;
+			// Anchor the touch mute button just below the tapped cell.
+			setTouchMute({ top, left });
 		}
 		input.focus();
 	}
@@ -1224,6 +1269,7 @@ export default function FingerpickEditModal({
 																				"touch"
 																			)
 																				return;
+																			setTouchMute(null);
 																			setSelectedCell(cell);
 																		}}
 																		onKeyDown={(e) =>
@@ -1395,14 +1441,67 @@ export default function FingerpickEditModal({
 					</button>
 				</div>
 
-				<p className="px-4 text-[11px] text-ink-dim">
-					Click a cell then use arrow keys to move, number keys to set a fret,{" "}
-					<span className="font-mono">x</span> to mute, Backspace to clear. Right-click
-					(or long-press) a cell for techniques.
-				</p>
-
 				{/* ── Footer (pinned to the bottom of the scroll area) ───────────── */}
-				<div className="sticky bottom-0 z-55 flex items-center justify-end gap-2 border-t border-line bg-popover px-4 py-3">
+				<div className="sticky bottom-0 z-55 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
+					{/* Editing help: "?" toggles a popover with the input-appropriate hint.
+					    Anchored above the icon (footer sits at the bottom) and left-aligned
+					    from the leftmost button so it never spills past the modal edges. */}
+					<div className="relative">
+						{/* LED-style feedback (§1.2 / §5.11): the glyph itself carries all
+						    state — no background box, border, or shadow on the button.
+						    Dormant (ink-faint) when closed; lit (denim-accent + soft glow)
+						    on hover and while the popover is open; a quick scale-down on
+						    press stands in for §5.1's momentary-flash on bare chrome. */}
+						<button
+							data-hint-trigger
+							onClick={() => setHintOpen((v) => !v)}
+							aria-label="Editing help"
+							aria-expanded={hintOpen}
+							title="Editing help"
+							className={`h-8 w-8 flex items-center justify-center transition duration-150 ease-out motion-reduce:transition-none active:scale-[0.92] ${
+								hintOpen
+									? "text-denim-accent [filter:drop-shadow(0_0_4px_var(--denim-glow))]"
+									: "text-ink-faint hover:text-denim-accent hover:[filter:drop-shadow(0_0_4px_var(--denim-glow))]"
+							}`}
+						>
+							<CircleHelp size={18} />
+						</button>
+						{/* Kept mounted (not conditionally rendered) so the fade+scale plays
+						    on close as well as open. Visibility/interaction is gated by the
+						    opacity/pointer-events classes; reduced-motion users skip the
+						    transition and get an instant toggle (§6.7). Show/hide state and
+						    outside-click dismissal are unchanged — driven by hintOpen. */}
+						<div
+							ref={hintRef}
+							aria-hidden={!hintOpen}
+							className={`absolute bottom-full left-0 mb-2 z-60 w-max max-w-xs origin-bottom-left border border-line-strong bg-popover p-3 flex flex-col gap-1 text-[11px] leading-relaxed text-ink-dim transition duration-150 ease-out motion-reduce:transition-none ${
+								hintOpen
+									? "opacity-100 scale-100"
+									: "pointer-events-none opacity-0 scale-[0.96]"
+							}`}
+						>
+							{hasFinePointer ? (
+									<>
+										<p>
+											Click a cell, then use arrow keys to move, number
+											keys to set a fret,{" "}
+											<span className="font-mono">X</span> to mute, or
+											Backspace to clear.
+										</p>
+										<p>Right-click a cell for techniques.</p>
+									</>
+								) : (
+									<>
+										<p>
+											Tap a cell to select it, then use the number pad to
+											set a fret, the mute button to mute, or Backspace
+											to clear.
+										</p>
+										<p>Long-press a cell for techniques.</p>
+									</>
+								)}
+						</div>
+					</div>
 					<Button
 						onClick={handleSave}
 						disabled={!nameValid}
@@ -1427,11 +1526,42 @@ export default function FingerpickEditModal({
 					onChange={handleHiddenNumericInput}
 					onBlur={resetHiddenNumericInput}
 					onKeyDown={(e) => {
-						if (e.key === "Enter") e.currentTarget.blur();
+						if (e.key === "Enter") {
+							e.currentTarget.blur();
+							return;
+						}
+						// The native numeric keyboard has no "x"; its Backspace clears
+						// the selected cell (mirrors the physical-keyboard path).
+						if (e.key === "Backspace" || e.key === "Delete") {
+							if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
+							pendingDigitRef.current = null;
+						}
 					}}
 					className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
 					style={{ top: 0, left: 0 }}
 				/>
+
+				{/* Touch mute button: the native numeric keyboard can't type "x", so
+				    give touch users a tappable way to mute the selected string. Uses
+				    the same toggleMuted commit as the desktop "x" key. Anchored just
+				    below the tapped cell (the "x" glyph is the tab mute notation). */}
+				{touchMute && selectedCell && (
+					<button
+						onClick={() => {
+							if (selectedCell) commit((prev) => toggleMuted(prev, selectedCell));
+						}}
+						aria-label="Mute string"
+						title="Mute string"
+						className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
+						style={{
+							top: touchMute.top,
+							left: touchMute.left,
+							transform: "translate(-50%, 1.25rem)",
+						}}
+					>
+						<XIcon size={14} />
+					</button>
+				)}
 
 				{/* ── Technique context menu (absolute within the content box) ───── */}
 				{techMenu && (

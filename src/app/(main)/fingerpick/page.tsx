@@ -31,7 +31,6 @@ import {
 	Metronome,
 } from "lucide-react";
 
-
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
 function hoPoConnectorCount(measure: Measure): number {
 	return measure.slots.reduce(
@@ -271,7 +270,7 @@ function Fader({
 			>
 				<div
 					ref={trackRef}
-					className="relative h-[3px] w-full touch-none select-none bg-slate-300"
+					className="relative h-0.75 w-full touch-none select-none bg-slate-300"
 					onMouseMove={handleTrackMouseMove}
 					onMouseLeave={handleTrackMouseLeave}
 				>
@@ -292,23 +291,23 @@ function Fader({
 						</div>
 					)}
 					<div
-						className="absolute top-1/2 h-[18px] w-[10px] -translate-x-1/2 -translate-y-1/2 border border-white bg-slate-700"
+						className="absolute top-1/2 h-4.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border border-white bg-slate-700"
 						style={{ left: `${pct}%` }}
 					>
 						<span
 							aria-hidden="true"
-							className="absolute inset-x-[2px] inset-y-[4px]"
+							className="absolute inset-x-0.5 inset-y-1"
 							style={{
 								background:
 									"repeating-linear-gradient(90deg, #fff 0 1px, transparent 1px 3px)",
 							}}
 						/>
 					</div>
-					<div aria-hidden="true" className="absolute inset-x-0 top-full h-[6px]">
+					<div aria-hidden="true" className="absolute inset-x-0 top-full h-1.5">
 						{ticks.map((t) => (
 							<span
 								key={t}
-								className="absolute top-[2px] h-[4px] w-px bg-slate-400"
+								className="absolute top-0.5 h-1 w-px bg-slate-400"
 								style={{ left: `${t}%` }}
 							/>
 						))}
@@ -324,7 +323,7 @@ function Fader({
 								aria-hidden="true"
 								onPointerDown={(e) => e.stopPropagation()}
 								onClick={() => onValue(tickValues[i])}
-								className="absolute top-full h-[10px] w-4 -translate-x-1/2 cursor-pointer touch-none select-none focus:outline-none"
+								className="absolute top-full h-2.5 w-4 -translate-x-1/2 cursor-pointer touch-none select-none focus:outline-none"
 								style={{ left: `${t}%` }}
 							/>
 						))}
@@ -363,8 +362,8 @@ function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps) {
 		>
 			<span
 				aria-hidden="true"
-				className={`absolute top-[2px] h-[14px] w-[15px] transition-all duration-100 ${
-					checked ? "left-[21px] bg-denim" : "left-[2px] bg-slate-400"
+				className={`absolute top-0.5 h-3.5 w-3.5 transition-all duration-100 ${
+					checked ? "left-5 bg-denim" : "left-0.5 bg-slate-400"
 				}`}
 			/>
 		</button>
@@ -386,11 +385,7 @@ interface SegmentedProps {
 // segment. Used for loop gap, subdivision, and the mobile Loop/Once control.
 function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
 	return (
-		<div
-			className={`flex border border-slate-300 ${
-				disabled ? "pointer-events-none" : ""
-			}`}
-		>
+		<div className={`flex border border-slate-300 ${disabled ? "pointer-events-none" : ""}`}>
 			{options.map((opt, i) => {
 				const on = opt.value === value;
 				return (
@@ -399,7 +394,7 @@ function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
 						type="button"
 						disabled={disabled}
 						onClick={() => onChange(opt.value)}
-						className={`flex-1 py-[7px] font-mono text-[10px] tracking-[0.08em] uppercase transition-colors ${
+						className={`flex-1 py-1.5 font-mono text-[10px] tracking-[0.08em] uppercase transition-colors ${
 							i > 0 ? "border-l border-slate-300" : ""
 						} ${on ? "bg-denim text-on-denim" : "text-slate-500 hover:text-denim"}`}
 					>
@@ -1322,7 +1317,9 @@ export default function FingerpickPage() {
 				<div className="md:flex-1 flex flex-col px-4 md:px-8 py-6 md:py-8 md:overflow-hidden">
 					<div className="relative w-full max-w-4xl mx-auto flex flex-col min-h-0 md:flex-1">
 						<div className="mb-4 shrink-0">
-							<h1 className="text-lg font-semibold text-slate-700">{selectedPattern.name}</h1>
+							<h1 className="text-lg font-semibold text-slate-700">
+								{selectedPattern.name}
+							</h1>
 							<p className="text-xs text-slate-400 uppercase tracking-wider mt-0.5">
 								{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
 								{selectedPattern.timeSignature[1]}
@@ -1452,7 +1449,7 @@ export default function FingerpickPage() {
 							</div>
 							{/* BPM readout with LCD segment-ghost */}
 							<div className="border border-slate-300 px-0 pt-3 pb-2 text-center">
-								<span className="relative inline-block font-mono text-[44px] font-bold leading-none tracking-[-0.02em] text-denim [text-shadow:var(--glow-readout)]">
+								<span className="relative inline-block font-mono text-[44px] font-bold leading-none tracking-[-0.02em] text-denim text-shadow-(--glow-readout)">
 									<span
 										aria-hidden="true"
 										className="absolute inset-0 opacity-[0.09]"
@@ -1491,7 +1488,7 @@ export default function FingerpickPage() {
 										key={label}
 										type="button"
 										onClick={() => handleBpmChange(bpm + delta)}
-										className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										className="flex-1 border border-slate-300 py-1.5 font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 									>
 										{label}
 									</button>
@@ -1499,7 +1496,7 @@ export default function FingerpickPage() {
 								<button
 									type="button"
 									onClick={handleTapTempo}
-									className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									className="flex-1 border border-slate-300 py-1.5 font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 								>
 									TAP
 								</button>
@@ -1513,7 +1510,7 @@ export default function FingerpickPage() {
 										key={label}
 										type="button"
 										onClick={() => handleBpmChange(bpm + delta)}
-										className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										className="flex-1 border border-slate-300 py-1.5 font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 									>
 										{label}
 									</button>
@@ -1739,7 +1736,7 @@ export default function FingerpickPage() {
 										key={label}
 										type="button"
 										onClick={() => handleBpmChange(bpm + delta)}
-										className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										className="flex-1 border border-slate-300 py-1.75 font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 									>
 										{label}
 									</button>
@@ -1747,7 +1744,7 @@ export default function FingerpickPage() {
 								<button
 									type="button"
 									onClick={handleTapTempo}
-									className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									className="flex-1 border border-slate-300 py-1.75 font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 								>
 									TAP
 								</button>
@@ -1761,7 +1758,7 @@ export default function FingerpickPage() {
 										key={label}
 										type="button"
 										onClick={() => handleBpmChange(bpm + delta)}
-										className="flex-1 border border-slate-300 py-[7px] font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										className="flex-1 border border-slate-300 py-1.75 font-mono text-[11px] text-slate-500 transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 									>
 										{label}
 									</button>
@@ -1918,7 +1915,7 @@ export default function FingerpickPage() {
 							<span className="font-mono text-[24px] font-bold leading-none text-denim">
 								{bpm}
 							</span>
-							<span className="mt-[3px] font-mono text-[8px] uppercase tracking-[0.24em] text-slate-400">
+							<span className="mt-0.75 font-mono text-[8px] uppercase tracking-[0.24em] text-slate-400">
 								BPM
 							</span>
 						</button>
@@ -1928,7 +1925,7 @@ export default function FingerpickPage() {
 					<div className="flex shrink-0 border border-slate-300">
 						<button
 							onClick={() => setPlayOnce(false)}
-							className={`px-3 py-[7px] font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
+							className={`px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
 								!playOnce ? "bg-denim text-on-denim" : "text-slate-500"
 							}`}
 						>
@@ -1936,7 +1933,7 @@ export default function FingerpickPage() {
 						</button>
 						<button
 							onClick={() => setPlayOnce(true)}
-							className={`border-l border-slate-300 px-3 py-[7px] font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
+							className={`border-l border-slate-300 px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
 								playOnce ? "bg-denim text-on-denim" : "text-slate-500"
 							}`}
 						>

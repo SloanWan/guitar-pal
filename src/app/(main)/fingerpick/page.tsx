@@ -1384,7 +1384,7 @@ export default function FingerpickPage() {
 						{!showLibrary && (
 							<button
 								onClick={() => setShowLibrary(true)}
-								className={`fixed top-17 right-4 z-30 md:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-300 active:scale-95 ${
+								className={`absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-300 active:scale-95 ${
 									controlsVisible
 										? "opacity-100 pointer-events-auto"
 										: "opacity-0 pointer-events-none"

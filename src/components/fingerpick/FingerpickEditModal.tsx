@@ -442,6 +442,13 @@ export default function FingerpickEditModal({
 			return;
 		}
 		setSelectedCell(cell);
+		// Touch has no hover, so drive the same L1/L2 row/column highlight off the
+		// tapped cell. Only on touch — desktop keeps hover and selection independent.
+		setHoveredCell({
+			measureIndex: cell.measureIndex,
+			slotIndex: cell.slotIndex,
+			stringIndex: cell.stringIndex,
+		});
 		const input = hiddenInputRef.current;
 		if (!input) return;
 		// Park the invisible input over the tapped cell (same content-relative maths

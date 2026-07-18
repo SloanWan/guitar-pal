@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import {
+	useState,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useCallback,
+	useSyncExternalStore,
+} from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -177,6 +184,21 @@ const getFinePointerSnapshot = (): boolean =>
 // SSR/first paint assumes desktop; hydration corrects it from the real media query.
 const getFinePointerServerSnapshot = (): boolean => true;
 
+// iMessage-style spring "pop": an easeOutBack overshoot curve that scales past the
+// target before settling. Driven via the Web Animations API for the Save press and
+// the hint-popover entrance. Read prefers-reduced-motion at call time so both
+// effects can fall back to an instant, animation-free state change (§6.7).
+const SPRING_POP_EASING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
+const prefersReducedMotion = (): boolean =>
+	typeof window !== "undefined" &&
+	!!window.matchMedia &&
+	window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// useLayoutEffect on the client so the popover spring's first frame is the one that
+// paints (no flash of the settled state); useEffect on the server to avoid the
+// "useLayoutEffect does nothing on the server" warning.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 function cellDisplay(sf: StringFret): string {
 	if (sf.muted) return "x";
 	if (sf.fret !== null) return String(sf.fret);
@@ -246,6 +268,10 @@ export default function FingerpickEditModal({
 	const popupRef = useRef<HTMLDivElement>(null);
 	const techMenuRef = useRef<HTMLDivElement>(null);
 	const hintRef = useRef<HTMLDivElement>(null);
+	// Save button node, for the spring-pop press feedback.
+	const saveButtonRef = useRef<HTMLButtonElement>(null);
+	// Previous hintOpen value, so the entrance spring fires only on false→true.
+	const prevHintOpenRef = useRef(false);
 	// Long-press timer for the mobile technique menu.
 	const longPressRef = useRef<number | null>(null);
 	// Set true when the long-press timer opens the technique menu, so the tap's
@@ -382,6 +408,24 @@ export default function FingerpickEditModal({
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
 	}, [selectedColumns, techMenu, hintOpen]);
+
+	// Hint popover entrance: spring-pop (scale in from 0.85 with overshoot past 1.0,
+	// plus the opacity fade) only on the false→true transition. Closing keeps the
+	// plain CSS fade/shrink from the element's transition classes. Skipped entirely
+	// for prefers-reduced-motion, leaving the instant class-driven toggle.
+	useIsomorphicLayoutEffect(() => {
+		const wasOpen = prevHintOpenRef.current;
+		prevHintOpenRef.current = hintOpen;
+		if (!hintOpen || wasOpen) return;
+		if (prefersReducedMotion()) return;
+		hintRef.current?.animate(
+			[
+				{ opacity: 0, transform: "scale(0.85)" },
+				{ opacity: 1, transform: "scale(1)" },
+			],
+			{ duration: 250, easing: SPRING_POP_EASING },
+		);
+	}, [hintOpen]);
 
 	// ── Cell keyboard editing ──────────────────────────────────────────────────
 
@@ -911,6 +955,18 @@ export default function FingerpickEditModal({
 
 	function handleSave() {
 		if (!working.name.trim()) return;
+		// Spring-pop the button as the save fires (skip for reduced-motion). Pure
+		// transform, so no reflow; the save/close flow below is unchanged.
+		if (!prefersReducedMotion()) {
+			saveButtonRef.current?.animate(
+				[
+					{ transform: "scale(1)" },
+					{ transform: "scale(1.08)" },
+					{ transform: "scale(1)" },
+				],
+				{ duration: 300, easing: SPRING_POP_EASING },
+			);
+		}
 		onSave({
 			...working,
 			name: working.name.trim(),
@@ -1460,49 +1516,50 @@ export default function FingerpickEditModal({
 							title="Editing help"
 							className={`h-8 w-8 flex items-center justify-center transition duration-150 ease-out motion-reduce:transition-none active:scale-[0.92] ${
 								hintOpen
-									? "text-denim-accent [filter:drop-shadow(0_0_4px_var(--denim-glow))]"
-									: "text-ink-faint hover:text-denim-accent hover:[filter:drop-shadow(0_0_4px_var(--denim-glow))]"
+									? "text-denim-accent filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
+									: "text-ink-faint hover:text-denim-accent hover:filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
 							}`}
 						>
 							<CircleHelp size={18} />
 						</button>
-						{/* Kept mounted (not conditionally rendered) so the fade+scale plays
-						    on close as well as open. Visibility/interaction is gated by the
-						    opacity/pointer-events classes; reduced-motion users skip the
-						    transition and get an instant toggle (§6.7). Show/hide state and
-						    outside-click dismissal are unchanged — driven by hintOpen. */}
+						{/* Kept mounted (not conditionally rendered) so the exit transition
+						    plays on close. Entrance is a spring-pop run via the Web Animations
+						    API (see the layout effect above); close is the plain CSS fade/shrink
+						    from the classes below. Visibility/interaction is gated by the
+						    opacity/pointer-events classes; reduced-motion users skip both and
+						    get an instant toggle (§6.7). Show/hide state and outside-click
+						    dismissal are unchanged — driven by hintOpen. */}
 						<div
 							ref={hintRef}
 							aria-hidden={!hintOpen}
-							className={`absolute bottom-full left-0 mb-2 z-60 w-max max-w-xs origin-bottom-left border border-line-strong bg-popover p-3 flex flex-col gap-1 text-[11px] leading-relaxed text-ink-dim transition duration-150 ease-out motion-reduce:transition-none ${
+							className={`absolute bottom-full left-0 mb-2 z-60 w-max max-w-xs origin-bottom-left border border-line-strong bg-surface p-3 flex flex-col gap-1 text-[11px] leading-relaxed text-ink-dim transition duration-150 ease-out motion-reduce:transition-none ${
 								hintOpen
 									? "opacity-100 scale-100"
 									: "pointer-events-none opacity-0 scale-[0.96]"
 							}`}
 						>
 							{hasFinePointer ? (
-									<>
-										<p>
-											Click a cell, then use arrow keys to move, number
-											keys to set a fret,{" "}
-											<span className="font-mono">X</span> to mute, or
-											Backspace to clear.
-										</p>
-										<p>Right-click a cell for techniques.</p>
-									</>
-								) : (
-									<>
-										<p>
-											Tap a cell to select it, then use the number pad to
-											set a fret, the mute button to mute, or Backspace
-											to clear.
-										</p>
-										<p>Long-press a cell for techniques.</p>
-									</>
-								)}
+								<>
+									<p>
+										Click a cell, then use arrow keys to move, number keys to
+										set a fret, <span className="font-mono">X</span> to mute, or
+										Backspace to clear.
+									</p>
+									<p>Right-click a cell for techniques.</p>
+								</>
+							) : (
+								<>
+									<p>
+										Tap a cell to select it, then use the number pad to set a
+										fret, the mute button to mute, or Backspace to clear.
+									</p>
+									<p>Long-press a cell for techniques.</p>
+								</>
+							)}
 						</div>
 					</div>
 					<Button
+						ref={saveButtonRef}
 						onClick={handleSave}
 						disabled={!nameValid}
 						className="h-9 bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"

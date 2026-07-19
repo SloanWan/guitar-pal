@@ -1,0 +1,335 @@
+"use client";
+
+import { PRESET_STRUM_PATTERNS, StrumPattern } from "@/lib/strumPatterns";
+import { User } from "@supabase/supabase-js";
+import { ChevronDown, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import StepGrid from "./StepGrid";
+
+interface StrumPatternLibraryProps {
+	customPatterns: StrumPattern[];
+	patternsLoading: boolean;
+	selectedPattern: StrumPattern | null;
+	onSelectPattern: (pattern: StrumPattern) => void;
+	favouriteIds: string[];
+	onToggleFavourite: (patternId: string) => void;
+	onCreate: () => void;
+	onEditPattern: (pattern: StrumPattern) => void;
+	onDeletePattern: (patternId: string) => void;
+	onClose: () => void;
+	user: User | null;
+}
+
+interface PatternCardProps {
+	pattern: StrumPattern;
+	isSelected: boolean;
+	isFav: boolean;
+	onSelect: () => void;
+	onToggleFav: () => void;
+	onEdit?: () => void;
+	onDelete?: () => void;
+}
+
+function PatternCard({
+	pattern,
+	isSelected,
+	isFav,
+	onSelect,
+	onToggleFav,
+	onEdit,
+	onDelete,
+}: PatternCardProps) {
+	return (
+		<button
+			type="button"
+			onClick={onSelect}
+			className={`w-full text-left cursor-pointer px-3.5 py-2.5 border-l-2 border-b border-line transition-all duration-200 ${
+				isSelected
+					? "bg-denim-tint border-l-denim"
+					: "border-l-transparent hover:bg-sidebar-hover hover:border-l-line-strong"
+			}`}
+		>
+			<div className="flex items-center justify-between mb-2">
+				<span
+					className={`capitalize text-[13px] font-medium transition-colors duration-200 ${
+						isSelected ? "text-denim-accent" : "text-ink"
+					}`}
+				>
+					{pattern.name}
+				</span>
+				<div className="flex items-center gap-0.5">
+					{onEdit && (
+						<span
+							role="button"
+							tabIndex={0}
+							onClick={(e) => {
+								e.stopPropagation();
+								onEdit();
+							}}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									e.stopPropagation();
+									onEdit();
+								}
+							}}
+							className="p-0.5 transition-colors text-ink-dim hover:text-denim cursor-pointer"
+							aria-label="Edit pattern"
+						>
+							<Pencil size={14} />
+						</span>
+					)}
+					{onDelete && (
+						<span
+							role="button"
+							tabIndex={0}
+							onClick={(e) => {
+								e.stopPropagation();
+								onDelete();
+							}}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									e.stopPropagation();
+									onDelete();
+								}
+							}}
+							className="p-0.5 transition-colors text-ink-dim hover:text-destructive cursor-pointer"
+							aria-label="Delete pattern"
+						>
+							<Trash2 size={14} />
+						</span>
+					)}
+					<span
+						role="button"
+						tabIndex={0}
+						onClick={(e) => {
+							e.stopPropagation();
+							onToggleFav();
+						}}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								e.stopPropagation();
+								onToggleFav();
+							}
+						}}
+						className="p-0.5 transition-colors text-ink-faint hover:text-favorite-active cursor-pointer"
+						aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
+					>
+						<Star
+							size={12}
+							className={isFav ? "fill-favorite-active text-favorite-active" : ""}
+						/>
+					</span>
+				</div>
+			</div>
+			{pattern.description && (
+				<p className="mb-2 text-[10px] text-ink-dim leading-snug">{pattern.description}</p>
+			)}
+			<StepGrid beats={pattern.beats} activeCell={null} size="sm" showLabels={false} />
+		</button>
+	);
+}
+
+export default function StrumPatternLibrary({
+	customPatterns,
+	patternsLoading,
+	selectedPattern,
+	onSelectPattern,
+	favouriteIds,
+	onToggleFavourite,
+	onCreate,
+	onEditPattern,
+	onDeletePattern,
+	onClose,
+	user,
+}: StrumPatternLibraryProps) {
+	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
+	const [myPatternsOpen, setMyPatternsOpen] = useState(true);
+	const [presetsOpen, setPresetsOpen] = useState(true);
+	const [filter, setFilter] = useState("");
+
+	const query = filter.trim().toLowerCase();
+	const matchesFilter = (p: StrumPattern) => p.name.toLowerCase().includes(query);
+
+	const tabPresets =
+		activeTab === "favourites"
+			? PRESET_STRUM_PATTERNS.filter((p) => favouriteIds.includes(p.id))
+			: PRESET_STRUM_PATTERNS;
+	const tabCustom =
+		activeTab === "favourites"
+			? customPatterns.filter((p) => favouriteIds.includes(p.id))
+			: customPatterns;
+
+	const visiblePresets = query ? tabPresets.filter(matchesFilter) : tabPresets;
+	const visibleCustom = query ? tabCustom.filter(matchesFilter) : tabCustom;
+
+	return (
+		<>
+			{/* Header strip */}
+			<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-line">
+				<h2 className="text-[10px] font-normal uppercase tracking-[0.18em] text-ink">
+					Strumming Library
+				</h2>
+				<div className="flex items-center gap-1">
+					<button
+						onClick={onCreate}
+						className="flex items-center gap-1 h-8 px-2 text-[11px] font-semibold text-denim hover:bg-denim-tint transition-colors"
+					>
+						<Plus size={14} /> New Pattern
+					</button>
+					<button
+						onClick={onClose}
+						className="lg:hidden h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink transition-colors"
+					>
+						<X size={18} />
+					</button>
+				</div>
+			</div>
+
+			{/* Tab bar */}
+			<div className="flex shrink-0 border-b border-line">
+				<button
+					onClick={() => setActiveTab("all")}
+					className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
+						activeTab === "all"
+							? "text-denim border-denim"
+							: "text-ink-dim border-transparent hover:text-ink"
+					}`}
+				>
+					All
+				</button>
+				<button
+					onClick={() => setActiveTab("favourites")}
+					className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
+						activeTab === "favourites"
+							? "text-denim border-denim"
+							: "text-ink-dim border-transparent hover:text-ink"
+					}`}
+				>
+					Favourites
+				</button>
+			</div>
+
+			{/* Filter */}
+			<div className="shrink-0 border-b border-line px-3 py-2.5">
+				<div className="relative">
+					<input
+						type="text"
+						value={filter}
+						onChange={(e) => setFilter(e.target.value)}
+						placeholder="> filter patterns…"
+						aria-label="Filter patterns"
+						className="w-full border border-line-strong bg-surface pl-3 pr-8 py-1.5 font-mono text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+					/>
+					{filter && (
+						<button
+							onClick={() => setFilter("")}
+							className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-ink-faint hover:text-ink transition-colors"
+							aria-label="Clear filter"
+						>
+							<X size={14} />
+						</button>
+					)}
+				</div>
+			</div>
+
+			{/* Scrollable content */}
+			<div className="w-full flex-1 overflow-y-auto flex flex-col">
+				{/* My Patterns section */}
+				<div>
+					<button
+						onClick={() => setMyPatternsOpen((v) => !v)}
+						className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-1"
+					>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
+							My Patterns
+						</span>
+						<ChevronDown
+							size={13}
+							className={`text-ink-dim transition-transform duration-200 ${
+								myPatternsOpen ? "" : "-rotate-90"
+							}`}
+						/>
+					</button>
+					{myPatternsOpen && (
+						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
+							{patternsLoading ? (
+								<div className="flex justify-center py-4">
+									<Loader2 size={16} className="animate-spin text-ink-faint" />
+								</div>
+							) : visibleCustom.length === 0 ? (
+								<p className="text-[11px] text-ink-dim px-1">
+									{query
+										? "No matches"
+										: activeTab === "all"
+											? "No custom patterns yet"
+											: "No custom favourites yet"}
+								</p>
+							) : (
+								visibleCustom.map((pattern) => (
+									<PatternCard
+										key={pattern.id}
+										pattern={pattern}
+										isSelected={selectedPattern?.id === pattern.id}
+										isFav={favouriteIds.includes(pattern.id)}
+										onSelect={() => onSelectPattern(pattern)}
+										onToggleFav={() => onToggleFavourite(pattern.id)}
+										onEdit={() => onEditPattern(pattern)}
+										onDelete={() => onDeletePattern(pattern.id)}
+									/>
+								))
+							)}
+						</div>
+					)}
+				</div>
+
+				{/* Presets section */}
+				<div>
+					<button
+						onClick={() => setPresetsOpen((v) => !v)}
+						className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-2"
+					>
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
+							Presets
+						</span>
+						<ChevronDown
+							size={13}
+							className={`text-ink-dim transition-transform duration-200 ${
+								presetsOpen ? "" : "-rotate-90"
+							}`}
+						/>
+					</button>
+					{presetsOpen && (
+						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
+							{visiblePresets.length === 0 ? (
+								<p className="text-[11px] text-ink-dim px-1">
+									{query ? "No matches" : "No preset favourites yet"}
+								</p>
+							) : (
+								visiblePresets.map((pattern) => (
+									<PatternCard
+										key={pattern.id}
+										pattern={pattern}
+										isSelected={selectedPattern?.id === pattern.id}
+										isFav={favouriteIds.includes(pattern.id)}
+										onSelect={() => onSelectPattern(pattern)}
+										onToggleFav={() => onToggleFavourite(pattern.id)}
+									/>
+								))
+							)}
+						</div>
+					)}
+				</div>
+
+				{/* Sign-in nudge */}
+				{!user && (
+					<p className="text-xs text-ink-dim text-center px-4 py-3">
+						Sign in to sync your patterns and favourites across devices.
+					</p>
+				)}
+			</div>
+		</>
+	);
+}

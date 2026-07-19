@@ -1,31 +1,22 @@
 "use client";
 
-import StepGrid from "@/components/strum/StepGrid";
 import StepGridCard from "@/components/strum/StepGridCard";
 import BpmSlider from "@/components/strum/BpmSlider";
+import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
 import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
 
 import { useState, useEffect, useRef } from "react";
 
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
-	Plus,
-	Minus,
 	CirclePlay,
 	CirclePause,
 	CircleStop,
-	X,
-	ChevronDown,
 	ChevronUp,
-	Star,
-	Trash2,
-	Loader2,
-	Pencil,
 	SquareMenu,
 	Metronome,
+	X,
 } from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
 import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
@@ -36,6 +27,299 @@ const MAX_BPM = 220;
 
 const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
 type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
+
+// ── v3 control primitives ────────────────────────────────────────────────
+// Presentational hardware-panel controls ported verbatim from the fingerpick
+// controls rack / mobile drawer. Colors are driven by the v3 design tokens
+// (bg-panel, bg-ink, bg-denim, …) so they track the active theme.
+
+interface FaderProps {
+	min: number;
+	max: number;
+	step: number;
+	value: number;
+	onValue: (value: number) => void;
+	onDragStart?: () => void;
+	onDragEnd?: () => void;
+	// Tick positions as track-width percentages (0–100).
+	ticks: number[];
+	// Snap targets parallel to `ticks`; when set, each tick becomes clickable and
+	// jumps the value directly to its target.
+	tickValues?: number[];
+	// Labels parallel to `ticks`; when set, hovering a tick's segment shows a tooltip.
+	tickLabels?: string[];
+	// Scale labels rendered space-between beneath the track.
+	scale: string[];
+	disabled?: boolean;
+	ariaLabel: string;
+}
+
+// Hardware fader: 3px track, denim fill, knurled 10×18 thumb, semantic ticks
+// and a scale row. Draggable via pointer capture; keyboard arrows/page keys.
+function Fader({
+	min,
+	max,
+	step,
+	value,
+	onValue,
+	onDragStart,
+	onDragEnd,
+	ticks,
+	tickValues,
+	tickLabels,
+	scale,
+	disabled,
+	ariaLabel,
+}: FaderProps) {
+	const trackRef = useRef<HTMLDivElement>(null);
+	const draggingRef = useRef(false);
+	const [hoveredTick, setHoveredTick] = useState<number | null>(null);
+	const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+
+	// Segment around tick i spans the midpoints to its neighbours (first starts at
+	// 0%, last ends at 100%). Returns the tick index whose segment contains p, or null.
+	function segmentIndexAt(p: number): number | null {
+		if (!tickLabels) return null;
+		for (let i = 0; i < ticks.length; i++) {
+			const start = i === 0 ? 0 : (ticks[i - 1] + ticks[i]) / 2;
+			const end = i === ticks.length - 1 ? 100 : (ticks[i] + ticks[i + 1]) / 2;
+			if (p >= start && p < end) return i;
+		}
+		return null;
+	}
+	function handleTrackMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+		if (draggingRef.current || !tickLabels) return;
+		const el = trackRef.current;
+		if (!el) return;
+		const rect = el.getBoundingClientRect();
+		const p = rect.width > 0 ? ((e.clientX - rect.left) / rect.width) * 100 : 0;
+		const next = segmentIndexAt(p);
+		setHoveredTick((prev) => (prev === next ? prev : next));
+	}
+	function handleTrackMouseLeave() {
+		setHoveredTick(null);
+	}
+
+	function snap(raw: number): number {
+		const clamped = Math.min(max, Math.max(min, raw));
+		const stepped = Math.round((clamped - min) / step) * step + min;
+		return Math.min(max, Math.max(min, stepped));
+	}
+	// Magnetic tick snapping: if raw maps within ~3% of the range of a tick value,
+	// snap to that tick so the thumb visibly "catches" on ticks while dragging.
+	function magnetize(raw: number): number {
+		if (!tickValues) return raw;
+		const threshold = (max - min) * 0.03;
+		let best = raw;
+		let bestDist = threshold;
+		for (const tv of tickValues) {
+			const d = Math.abs(raw - tv);
+			if (d <= bestDist) {
+				bestDist = d;
+				best = tv;
+			}
+		}
+		return best;
+	}
+	function valueFromClientX(clientX: number): number {
+		const el = trackRef.current;
+		if (!el) return value;
+		const rect = el.getBoundingClientRect();
+		const p = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+		return magnetize(snap(min + p * (max - min)));
+	}
+	function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+		if (disabled) return;
+		draggingRef.current = true;
+		setHoveredTick(null);
+		e.currentTarget.setPointerCapture(e.pointerId);
+		onDragStart?.();
+		onValue(valueFromClientX(e.clientX));
+	}
+	function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+		if (!draggingRef.current) return;
+		onValue(valueFromClientX(e.clientX));
+	}
+	function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+		if (!draggingRef.current) return;
+		draggingRef.current = false;
+		e.currentTarget.releasePointerCapture(e.pointerId);
+		onDragEnd?.();
+	}
+	function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+		if (disabled) return;
+		let next: number;
+		switch (e.key) {
+			case "ArrowLeft":
+			case "ArrowDown":
+				next = value - step;
+				break;
+			case "ArrowRight":
+			case "ArrowUp":
+				next = value + step;
+				break;
+			case "PageDown":
+				next = value - step * 10;
+				break;
+			case "PageUp":
+				next = value + step * 10;
+				break;
+			default:
+				return;
+		}
+		e.preventDefault();
+		onValue(snap(next));
+	}
+
+	return (
+		<div className={`select-none ${disabled ? "pointer-events-none" : ""}`}>
+			<div
+				role="slider"
+				aria-label={ariaLabel}
+				aria-valuemin={min}
+				aria-valuemax={max}
+				aria-valuenow={Math.round(value)}
+				tabIndex={disabled ? -1 : 0}
+				onPointerDown={handlePointerDown}
+				onPointerMove={handlePointerMove}
+				onPointerUp={handlePointerUp}
+				onKeyDown={handleKeyDown}
+				className="relative flex h-7 cursor-ew-resize touch-none items-center select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-denim"
+			>
+				<div
+					ref={trackRef}
+					className="relative h-0.75 w-full touch-none select-none bg-line-strong"
+					onMouseMove={handleTrackMouseMove}
+					onMouseLeave={handleTrackMouseLeave}
+				>
+					<div className="absolute inset-y-0 left-0 bg-denim" style={{ width: `${pct}%` }} />
+					{/* Genre tooltip — shown while hovering a tick's segment */}
+					{hoveredTick !== null && tickLabels && (
+						<div
+							className="pointer-events-none absolute z-20 -translate-x-1/2 whitespace-nowrap bg-(--modal-bg) border border-line px-1.5 py-0.5 text-[10px] text-ink"
+							style={{
+								left: `${ticks[hoveredTick]}%`,
+								bottom: "calc(100% + 10px)",
+							}}
+						>
+							{tickLabels[hoveredTick]}
+						</div>
+					)}
+					<div
+						className="absolute top-1/2 h-4.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border border-panel bg-ink"
+						style={{ left: `${pct}%` }}
+					>
+						<span
+							aria-hidden="true"
+							className="absolute inset-x-0.5 inset-y-1"
+							style={{
+								background:
+									"repeating-linear-gradient(90deg, var(--bg-panel) 0 1px, transparent 1px 3px)",
+							}}
+						/>
+					</div>
+					<div aria-hidden="true" className="absolute inset-x-0 top-full h-1.5">
+						{ticks.map((t) => (
+							<span
+								key={t}
+								className="absolute top-0.5 h-1 w-px bg-ink-faint"
+								style={{ left: `${t}%` }}
+							/>
+						))}
+					</div>
+					{/* Click-to-snap hit areas over each tick — stop propagation so pressing
+					    a tick jumps to its value instead of starting a track drag. */}
+					{tickValues &&
+						ticks.map((t, i) => (
+							<button
+								key={t}
+								type="button"
+								tabIndex={-1}
+								aria-hidden="true"
+								onPointerDown={(e) => e.stopPropagation()}
+								onClick={() => onValue(tickValues[i])}
+								className="absolute top-full h-2.5 w-4 -translate-x-1/2 cursor-pointer touch-none select-none focus:outline-none"
+								style={{ left: `${t}%` }}
+							/>
+						))}
+				</div>
+			</div>
+			<div className="mt-2 flex justify-between font-mono text-[8px] tracking-[0.08em] text-ink-faint">
+				{scale.map((s, i) => (
+					<span key={i}>{s}</span>
+				))}
+			</div>
+		</div>
+	);
+}
+
+interface RockerProps {
+	checked: boolean;
+	onChange: (checked: boolean) => void;
+	disabled?: boolean;
+	ariaLabel: string;
+}
+
+// Hardware rocker switch: 40×20 bordered outer, 15×14 sliding block. A sliding
+// rectangle — never a pill with a circle.
+function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps) {
+	return (
+		<button
+			type="button"
+			role="switch"
+			aria-checked={checked}
+			aria-label={ariaLabel}
+			disabled={disabled}
+			onClick={() => onChange(!checked)}
+			className={`relative h-5 w-10 shrink-0 border transition-colors duration-100 disabled:cursor-not-allowed ${
+				checked ? "border-denim" : "border-line-strong"
+			}`}
+		>
+			<span
+				aria-hidden="true"
+				className={`absolute top-0.5 h-3.5 w-3.5 transition-all duration-100 ${
+					checked ? "left-5 bg-denim-accent" : "left-0.5 bg-ink-faint"
+				}`}
+			/>
+		</button>
+	);
+}
+
+interface SegmentedOption {
+	value: string;
+	label: string;
+}
+interface SegmentedProps {
+	options: readonly SegmentedOption[];
+	value: string;
+	onChange: (value: string) => void;
+	disabled?: boolean;
+}
+
+// Segmented pills: hairline-bordered row, exactly one denim-filled active
+// segment. Used for tick mode, loop gap, spacebar mode and the mobile Loop/Once.
+function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
+	return (
+		<div className={`flex border border-line-strong ${disabled ? "pointer-events-none" : ""}`}>
+			{options.map((opt, i) => {
+				const on = opt.value === value;
+				return (
+					<button
+						key={opt.value}
+						type="button"
+						disabled={disabled}
+						onClick={() => onChange(opt.value)}
+						className={`flex-1 py-1.5 font-mono text-[10px] tracking-[0.08em] uppercase transition-colors ${
+							i > 0 ? "border-l border-line-strong" : ""
+						} ${on ? "bg-denim text-on-denim" : "text-ink-dim hover:text-denim"}`}
+					>
+						{opt.label}
+					</button>
+				);
+			})}
+		</div>
+	);
+}
 
 export default function StrumPage() {
 	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(
@@ -83,9 +367,6 @@ export default function StrumPage() {
 	const [createModalOpen, setCreateModalOpen] = useState(false);
 	const [editingPattern, setEditingPattern] = useState<StrumPattern | null>(null);
 	const [showLibrary, setShowLibrary] = useState(false);
-	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
-	const [presetsOpen, setPresetsOpen] = useState(true);
-	const [myPatternsOpen, setMyPatternsOpen] = useState(true);
 	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
 	const [mutHintDismissed, setMutHintDismissed] = useState(false);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
@@ -198,6 +479,10 @@ export default function StrumPage() {
 		localStorage.setItem("lastStrumPattern", pattern.id);
 	}
 
+	function stepBpm(delta: number) {
+		setBpm(Math.min(MAX_BPM, Math.max(MIN_BPM, bpm + delta)));
+	}
+
 	function handleTapTempo() {
 		const now = performance.now();
 		const taps = tapTimesRef.current;
@@ -214,6 +499,7 @@ export default function StrumPage() {
 		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
 		const newBpm = Math.round(60000 / avgInterval);
 		setBpm(Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm)));
+		navigator.vibrate?.(10);
 	}
 
 	function handleSliderPointerDown() {
@@ -262,262 +548,25 @@ export default function StrumPage() {
 						showLibrary ? "translate-x-0" : "-translate-x-full"
 					}`}
 				>
-					{/* Header */}
-					<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-line">
-						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-ink-dim">
-							Strumming Library
-						</h2>
-						<div className="flex items-center gap-1">
-							<button
-								onClick={() => setCreateModalOpen(true)}
-								className="text-xs font-semibold text-denim px-2 py-1 hover:bg-denim-tint transition-colors"
-							>
-								+ Create
-							</button>
-							<button
-								onClick={() => setShowLibrary(false)}
-								className="lg:hidden h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink transition-colors"
-							>
-								<X size={18} />
-							</button>
-						</div>
-					</div>
-
-					{/* Tab bar */}
-					<div className="flex shrink-0 border-b border-line">
-						<button
-							onClick={() => setActiveTab("all")}
-							className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
-								activeTab === "all"
-									? "text-denim border-denim"
-									: "text-ink-dim border-transparent hover:text-ink"
-							}`}
-						>
-							All
-						</button>
-						<button
-							onClick={() => setActiveTab("favourites")}
-							className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
-								activeTab === "favourites"
-									? "text-denim border-denim"
-									: "text-ink-dim border-transparent hover:text-ink"
-							}`}
-						>
-							Favourites
-						</button>
-					</div>
-
-					{/* Scrollable sections */}
-					<div className="w-full flex-1 overflow-y-auto flex flex-col">
-						{/* My Patterns section */}
-						{(() => {
-							const visibleCustom =
-								activeTab === "favourites"
-									? customPatterns.filter((p) => favouriteIds.includes(p.id))
-									: customPatterns;
-							if (activeTab === "favourites" && visibleCustom.length === 0) return null;
-							return (
-								<div>
-									<button
-										onClick={() => setMyPatternsOpen((v) => !v)}
-										className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-1"
-									>
-										<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
-											My Patterns
-										</span>
-										<ChevronDown
-											size={13}
-											className={`text-ink-dim transition-transform duration-200 ${
-												myPatternsOpen ? "" : "-rotate-90"
-											}`}
-										/>
-									</button>
-									{myPatternsOpen && (
-										<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
-											{patternsLoading ? (
-												<div className="flex justify-center py-4">
-													<Loader2
-														size={16}
-														className="animate-spin text-ink-faint"
-													/>
-												</div>
-											) : visibleCustom.length === 0 ? (
-												<p className="text-[11px] text-ink-dim px-1">
-													No custom patterns yet
-												</p>
-											) : (
-												visibleCustom.map((pattern, idx) => {
-													const isSelected =
-														selectedPattern?.id === pattern.id;
-													const isFav = favouriteIds.includes(pattern.id);
-													return (
-														<div
-															key={idx}
-															onClick={() => handleSelectPattern(pattern)}
-															className={`cursor-pointer px-3 py-2.5 border-l-2 transition-all duration-200 ${
-																isSelected
-																	? "bg-denim-tint border-l-denim"
-																	: "border-l-transparent hover:bg-sidebar-hover hover:border-l-line-strong"
-															}`}
-														>
-															<div className="flex items-center justify-between mb-2">
-																<span
-																	className={`text-[11px] font-semibold transition-colors duration-200 ${
-																		isSelected
-																			? "text-denim"
-																			: "text-ink"
-																	}`}
-																>
-																	{pattern.name.replace(
-																		/\b\w/g,
-																		(c) => c.toUpperCase(),
-																	)}
-																</span>
-																<div className="flex items-center gap-1">
-																	<button
-																		onClick={(e) => {
-																			e.stopPropagation();
-																			handleToggleFavourite(
-																				pattern.id,
-																			);
-																		}}
-																		className="p-0.5 transition-colors text-ink-faint hover:text-favorite-active"
-																	>
-																		<Star
-																			size={12}
-																			className={
-																				isFav
-																					? "fill-favorite-active text-favorite-active"
-																					: ""
-																			}
-																		/>
-																	</button>
-																	<button
-																		onClick={(e) => {
-																			e.stopPropagation();
-																			setEditingPattern(pattern);
-																			setCreateModalOpen(true);
-																		}}
-																		className="p-0.5 transition-colors text-ink-faint hover:text-denim"
-																	>
-																		<Pencil size={12} />
-																	</button>
-																	<button
-																		onClick={(e) => {
-																			e.stopPropagation();
-																			handleDeleteCustomPattern(
-																				pattern.id,
-																			);
-																		}}
-																		className="p-0.5 transition-colors text-ink-faint hover:text-destructive"
-																	>
-																		<Trash2 size={12} />
-																	</button>
-																</div>
-															</div>
-															<StepGrid
-																beats={pattern.beats}
-																activeCell={null}
-																size="sm"
-																showLabels={false}
-															/>
-														</div>
-													);
-												})
-											)}
-										</div>
-									)}
-								</div>
-							);
-						})()}
-
-						{/* Favourites sign-in nudge */}
-						{activeTab === "favourites" && !user && (
-							<p className="text-xs text-ink-dim text-center px-4 py-3">
-								Sign in to sync your favourites across devices.
-							</p>
-						)}
-
-						{/* Presets section */}
-						{(() => {
-							const visiblePresets =
-								activeTab === "favourites"
-									? PRESET_STRUM_PATTERNS.filter((p) => favouriteIds.includes(p.id))
-									: PRESET_STRUM_PATTERNS;
-							if (visiblePresets.length === 0) return null;
-							return (
-								<div className="">
-									<button
-										onClick={() => setPresetsOpen((v) => !v)}
-										className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-2"
-									>
-										<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
-											Presets
-										</span>
-										<ChevronDown
-											size={13}
-											className={`text-ink-dim transition-transform duration-200 ${
-												presetsOpen ? "" : "-rotate-90"
-											}`}
-										/>
-									</button>
-									{presetsOpen && (
-										<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
-											{visiblePresets.map((pattern, idx) => {
-												const isSelected = selectedPattern?.id === pattern.id;
-												const isFav = favouriteIds.includes(pattern.id);
-												return (
-													<div
-														key={idx}
-														onClick={() => handleSelectPattern(pattern)}
-														className={`cursor-pointer px-3 py-2.5 border-l-2 transition-all duration-200 ${
-															isSelected
-																? "bg-denim-tint border-l-denim"
-																: "border-l-transparent hover:bg-sidebar-hover hover:border-l-line-strong"
-														}`}
-													>
-														<div className="flex items-center justify-between mb-2">
-															<span
-																className={`capitalize text-[11px] font-semibold transition-colors duration-200 ${
-																	isSelected
-																		? "text-denim"
-																		: "text-ink"
-																}`}
-															>
-																{pattern.name}
-															</span>
-															<button
-																onClick={(e) => {
-																	e.stopPropagation();
-																	handleToggleFavourite(pattern.id);
-																}}
-																className="p-0.5 transition-colors text-ink-faint hover:text-favorite-active"
-															>
-																<Star
-																	size={12}
-																	className={
-																		isFav
-																			? "fill-favorite-active text-favorite-active"
-																			: ""
-																	}
-																/>
-															</button>
-														</div>
-														<StepGrid
-															beats={pattern.beats}
-															activeCell={null}
-															size="sm"
-															showLabels={false}
-														/>
-													</div>
-												);
-											})}
-										</div>
-									)}
-								</div>
-							);
-						})()}
-					</div>
+					<StrumPatternLibrary
+						customPatterns={customPatterns}
+						patternsLoading={patternsLoading}
+						selectedPattern={selectedPattern}
+						onSelectPattern={handleSelectPattern}
+						favouriteIds={favouriteIds}
+						onToggleFavourite={handleToggleFavourite}
+						onCreate={() => {
+							setEditingPattern(null);
+							setCreateModalOpen(true);
+						}}
+						onEditPattern={(pattern) => {
+							setEditingPattern(pattern);
+							setCreateModalOpen(true);
+						}}
+						onDeletePattern={handleDeleteCustomPattern}
+						onClose={() => setShowLibrary(false)}
+						user={user}
+					/>
 				</div>
 
 				{/* Backdrop — tap outside to close library on mobile/tablet */}
@@ -551,240 +600,263 @@ export default function StrumPage() {
 
 				{/* Right panel — desktop controls only */}
 				<div className="hidden md:flex w-full border-t border-line bg-popover md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
-					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line text-[11px] font-semibold uppercase tracking-widest text-ink-dim">
+					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-ink-dim">
 						Controls
 					</h2>
-					<div className="flex flex-col gap-5 px-5 py-5 flex-1 overflow-y-auto">
-						{/* Play / Pause */}
-						<div
-							onClick={handleHitPlayAndPause}
-							className={`flex justify-center transition-all duration-150 active:scale-95 ${selectedPattern ? "cursor-pointer text-denim hover:text-denim-accent" : "opacity-30 pointer-events-none text-denim"}`}
-						>
-							{isPlaying ? (
-								<CirclePause size={60} strokeWidth={1.5} />
-							) : (
-								<CirclePlay size={60} strokeWidth={1.5} />
-							)}
-						</div>
 
-						{/* BPM slider */}
-						<BpmSlider
-							bpm={bpm}
-							min={MIN_BPM}
-							max={MAX_BPM}
-							isPlaying={isPlaying}
-							setBpm={setBpm}
-							start={start}
-							stop={stop}
-						/>
-
-						{/* ±10 BPM + display */}
-						<div className="flex justify-between items-center">
-							<Button
-								variant="outline"
-								className="h-10 w-10 p-0 border-line-strong hover:border-denim hover:text-denim transition-colors duration-150"
-								onClick={() => setBpm(Math.max(MIN_BPM, bpm - 10))}
-							>
-								<Minus size={16} />
-							</Button>
-							<span className="flex flex-col items-center gap-0.5">
-								<span className="text-5xl font-bold tracking-tight text-denim">
-									{bpm}
-								</span>
-								<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
-									BPM
-								</span>
-							</span>
-							<Button
-								variant="outline"
-								className="h-10 w-10 p-0 border-line-strong hover:border-denim hover:text-denim transition-colors duration-150"
-								onClick={() => setBpm(Math.min(MAX_BPM, bpm + 10))}
-							>
-								<Plus size={16} />
-							</Button>
-						</div>
-
-						{/* Tap Tempo */}
-						<div className="flex flex-col items-center gap-3">
-							<Button
-								onClick={handleTapTempo}
-								className="h-9 px-8 text-sm font-semibold cursor-pointer transition-all duration-150"
-							>
-								Tap Tempo
-							</Button>
-							<div className="flex items-center gap-2.5">
-								<span
-									className={`text-xs font-medium transition-colors duration-200 ${
-										spaceMode === "playPause"
-											? "text-denim font-semibold"
-											: "text-ink-dim"
-									}`}
+					<div className="flex flex-col overflow-y-auto">
+						{/* TRANSPORT */}
+						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								<span>Transport</span>
+								<span>Space</span>
+							</div>
+							<div className="flex gap-2">
+								<button
+									type="button"
+									onClick={handleHitPlayAndPause}
+									disabled={!selectedPattern}
+									aria-label={isPlaying ? "Pause" : "Play"}
+									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
 								>
-									Play/Pause
-								</span>
-								<Switch
-									checked={spaceMode === "tapTempo"}
-									onCheckedChange={() =>
-										setSpaceMode((m) =>
-											m === "playPause" ? "tapTempo" : "playPause",
-										)
-									}
-									className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-denim"
+									{isPlaying ? (
+										<CirclePause size={20} strokeWidth={1.5} />
+									) : (
+										<CirclePlay size={20} strokeWidth={1.5} />
+									)}
+								</button>
+								<button
+									type="button"
+									onClick={stop}
+									disabled={!isPlaying}
+									aria-label="Stop and return to start"
+									className="flex h-13 flex-1 items-center justify-center border border-line-strong text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint disabled:pointer-events-none disabled:opacity-30"
+								>
+									<CircleStop size={20} strokeWidth={1.5} />
+								</button>
+							</div>
+							<div>
+								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									Spacebar
+								</div>
+								<Segmented
+									options={[
+										{ value: "playPause", label: "Play/Pause" },
+										{ value: "tapTempo", label: "Tap" },
+									]}
+									value={spaceMode}
+									onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
 								/>
-								<span
-									className={`text-xs font-medium transition-colors duration-200 ${
-										spaceMode === "tapTempo"
-											? "text-denim font-semibold"
-											: "text-ink-dim"
-									}`}
-								>
-									Tap Tempo
-								</span>
 							</div>
 						</div>
 
-						{/* Play once */}
-						<div className="flex items-center justify-between">
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
-								Play once
-							</span>
-							<Switch
-								checked={playOnce}
-								onCheckedChange={setPlayOnce}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
+						{/* TEMPO */}
+						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								<span>Tempo</span>
+								<span>40–220</span>
+							</div>
+							{/* BPM readout with LCD segment-ghost */}
+							<div className="border border-line-strong px-0 pt-3 pb-2 text-center">
+								<span className="relative inline-block font-mono text-[44px] font-bold leading-none tracking-[-0.02em] text-denim text-shadow-(--glow-readout)">
+									<span aria-hidden="true" className="absolute inset-0 opacity-[0.09]">
+										888
+									</span>
+									<span className="relative">{String(bpm).padStart(3, "0")}</span>
+								</span>
+								<div className="mt-1.5 font-mono text-[9px] tracking-[0.28em] text-ink-faint">
+									BPM
+								</div>
+							</div>
+							<BpmSlider
+								bpm={bpm}
+								min={MIN_BPM}
+								max={MAX_BPM}
+								isPlaying={isPlaying}
+								setBpm={setBpm}
+								start={start}
+								stop={stop}
 							/>
+							{/* Steppers: −10 / −1 / TAP / +1 / +10 */}
+							<div className="flex gap-2">
+								{(
+									[
+										{ label: "−10", delta: -10 },
+										{ label: "−1", delta: -1 },
+									] as const
+								).map(({ label, delta }) => (
+									<button
+										key={label}
+										type="button"
+										onClick={() => stepBpm(delta)}
+										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									>
+										{label}
+									</button>
+								))}
+								<button
+									type="button"
+									onClick={handleTapTempo}
+									className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+								>
+									TAP
+								</button>
+								{(
+									[
+										{ label: "+1", delta: 1 },
+										{ label: "+10", delta: 10 },
+									] as const
+								).map(({ label, delta }) => (
+									<button
+										key={label}
+										type="button"
+										onClick={() => stepBpm(delta)}
+										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									>
+										{label}
+									</button>
+								))}
+							</div>
 						</div>
 
-						{/* Divider */}
-						<div className="border-t border-line" />
-
-						{/* Metronome toggle */}
-						<div className="flex items-center justify-between">
-							<span className="text-[11px] font-bold uppercase tracking-widest text-ink-dim">
-								Metronome
-							</span>
-							<Switch
-								checked={metronomeEnabled}
-								onCheckedChange={setMetronomeEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
-							/>
+						{/* LOOP */}
+						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								<span>Loop</span>
+							</div>
+							<div className="flex items-center justify-between">
+								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
+									Play once
+								</span>
+								<Rocker checked={playOnce} onChange={setPlayOnce} ariaLabel="Play once" />
+							</div>
+							<div className={playOnce ? "opacity-40" : ""}>
+								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									Loop gap
+								</div>
+								<Segmented
+									options={LOOP_GAP_OPTIONS.map((gap) => ({
+										value: String(gap),
+										label: `${gap}S`,
+									}))}
+									value={String(loopGap)}
+									onChange={(v) => setLoopGap(Number(v) as LoopGapSeconds)}
+									disabled={playOnce}
+								/>
+							</div>
 						</div>
 
-						{/* Tick mode */}
-						<div
-							className={`flex gap-2 justify-center transition-opacity duration-200 ${!metronomeEnabled ? "opacity-40" : ""}`}
-						>
-							<Button
-								onClick={() => setTickMode("quarter")}
-								variant={tickMode === "quarter" ? "default" : "secondary"}
-								disabled={!metronomeEnabled}
-								className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-							>
-								1/4
-							</Button>
-							<Button
-								onClick={() => setTickMode("eighth")}
-								variant={tickMode === "eighth" ? "default" : "secondary"}
-								disabled={!metronomeEnabled}
-								className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-							>
-								1/8
-							</Button>
-							<Button
-								onClick={() => setTickMode("sixteenth")}
-								variant={tickMode === "sixteenth" ? "default" : "secondary"}
-								disabled={!metronomeEnabled}
-								className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-							>
-								1/16
-							</Button>
+						{/* STRUM SOUND */}
+						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								<span>Strum Sound</span>
+								<span className="tabular-nums">{Math.round(strumGain * 100)}%</span>
+							</div>
+							<div className="flex items-center justify-between">
+								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
+									Enabled
+								</span>
+								<Rocker
+									checked={strumEnabled}
+									onChange={setStrumEnabled}
+									ariaLabel="Strum sound"
+								/>
+							</div>
+							<div className={!strumEnabled ? "opacity-40" : ""}>
+								<Fader
+									min={0}
+									max={2}
+									step={0.01}
+									value={strumGain}
+									onValue={(v) => {
+										setStrumGain(v);
+										navigator.vibrate?.(10);
+									}}
+									ticks={[0, 25, 50, 75, 100]}
+									tickValues={[0, 0.5, 1, 1.5, 2]}
+									scale={["0", "100", "200"]}
+									disabled={!strumEnabled}
+									ariaLabel="Strum volume"
+								/>
+							</div>
 						</div>
 
-						{/* Accent beat 1 toggle */}
-						<div
-							className={`flex items-center justify-between ${!metronomeEnabled ? "opacity-40" : ""}`}
-						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
-								Accent beat 1
-							</span>
-							<Switch
-								checked={accentEnabled}
-								disabled={!metronomeEnabled}
-								onCheckedChange={setAccentEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
-							/>
-						</div>
-
-						{/* Metronome volume */}
-						<div className="flex flex-col gap-1.5">
+						{/* METRONOME */}
+						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								<span>Metronome</span>
+								<span className="tabular-nums">{Math.round(metronomeGain * 100)}%</span>
+							</div>
+							<div className="flex items-center justify-between">
+								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
+									Enabled
+								</span>
+								<Rocker
+									checked={metronomeEnabled}
+									onChange={setMetronomeEnabled}
+									ariaLabel="Metronome"
+								/>
+							</div>
 							<div
-								className={`flex justify-between items-center ${
+								className={`flex items-center justify-between ${
 									!metronomeEnabled ? "opacity-40" : ""
 								}`}
 							>
-								<span className="text-xs text-ink-dim">Volume</span>
-								<span className="text-xs tabular-nums text-ink-dim">
-									{Math.round(metronomeGain * 100)}%
+								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
+									Accent beat 1
 								</span>
+								<Rocker
+									checked={accentEnabled}
+									onChange={setAccentEnabled}
+									disabled={!metronomeEnabled}
+									ariaLabel="Accent beat 1"
+								/>
 							</div>
-							<input
-								type="range"
-								min={0}
-								max={1}
-								step={0.01}
-								value={metronomeGain}
-								disabled={!metronomeEnabled}
-								onChange={(e) => setMetronomeGain(Number(e.target.value))}
-								className="w-full accent-denim cursor-pointer"
-							/>
-						</div>
-
-						<div className="border-t border-line" />
-
-						{/* Strum sound toggle */}
-						<div className="flex items-center justify-between">
-							<span className="text-[11px] font-bold uppercase tracking-widest text-ink-dim">
-								Strum Sound
-							</span>
-							<Switch
-								checked={strumEnabled}
-								onCheckedChange={setStrumEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
-							/>
-						</div>
-
-						{/* Guitar strum volume */}
-						<div
-							className={`flex flex-col gap-1.5 transition-opacity duration-200 ${
-								!strumEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<div className="flex justify-between items-center">
-								<span className="text-xs text-ink-dim">Volume</span>
-								<span className="text-xs tabular-nums text-ink-dim">
-									{Math.round(strumGain * 100)}%
-								</span>
+							<div className={!metronomeEnabled ? "opacity-40" : ""}>
+								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									Subdivision
+								</div>
+								<Segmented
+									options={[
+										{ value: "quarter", label: "1/4" },
+										{ value: "eighth", label: "1/8" },
+										{ value: "sixteenth", label: "1/16" },
+									]}
+									value={tickMode}
+									onChange={(v) => setTickMode(v as TickMode)}
+									disabled={!metronomeEnabled}
+								/>
 							</div>
-							<input
-								type="range"
-								min={0}
-								max={2}
-								step={0.01}
-								value={strumGain}
-								onChange={(e) => setStrumGain(Number(e.target.value))}
-								disabled={!strumEnabled}
-								className="w-full accent-denim cursor-pointer"
-							/>
+							<div className={!metronomeEnabled ? "opacity-40" : ""}>
+								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									Metronome vol.
+								</div>
+								<Fader
+									min={0}
+									max={1}
+									step={0.01}
+									value={metronomeGain}
+									onValue={(v) => {
+										setMetronomeGain(v);
+										navigator.vibrate?.(10);
+									}}
+									ticks={[0, 25, 50, 75, 100]}
+									tickValues={[0, 0.25, 0.5, 0.75, 1]}
+									scale={["0", "50", "100"]}
+									disabled={!metronomeEnabled}
+									ariaLabel="Metronome volume"
+								/>
+							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 
-			{/* Library toggle — fixed below navbar, mobile only */}
+			{/* Library toggle — fixed below navbar, mobile/tablet only */}
 			{!showLibrary && (
 				<button
 					onClick={() => setShowLibrary(true)}
-					className={`fixed top-17 right-4 z-30 md:hidden flex items-center gap-2 bg-denim text-on-denim text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
+					className={`fixed top-17 right-4 z-30 lg:hidden flex items-center gap-2 bg-denim text-on-denim text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
 						controlsVisible
 							? "opacity-100 pointer-events-auto"
 							: "opacity-0 pointer-events-none"
@@ -869,23 +941,50 @@ export default function StrumPage() {
 					</div>
 
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
-						{/* Tap Tempo */}
-						<Button
-							onClick={handleTapTempo}
-							className="h-9 w-full text-sm font-semibold cursor-pointer transition-all duration-150"
-						>
-							Tap Tempo
-						</Button>
-
-						{/* BPM slider */}
-						<div className="flex flex-col gap-1.5">
-							<div className="flex justify-between items-center">
-								<span className="text-[11px] font-bold uppercase tracking-widest text-ink-dim">
-									BPM
-								</span>
-								<span className="text-xs tabular-nums text-denim font-semibold">
-									{bpm}
-								</span>
+						{/* Tempo — steppers + fader */}
+						<div className="flex flex-col gap-3">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								<span>Tempo</span>
+								<span className="tabular-nums text-denim">{bpm}</span>
+							</div>
+							<div className="flex gap-2">
+								{(
+									[
+										{ label: "−10", delta: -10 },
+										{ label: "−1", delta: -1 },
+									] as const
+								).map(({ label, delta }) => (
+									<button
+										key={label}
+										type="button"
+										onClick={() => stepBpm(delta)}
+										className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									>
+										{label}
+									</button>
+								))}
+								<button
+									type="button"
+									onClick={handleTapTempo}
+									className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+								>
+									TAP
+								</button>
+								{(
+									[
+										{ label: "+1", delta: 1 },
+										{ label: "+10", delta: 10 },
+									] as const
+								).map(({ label, delta }) => (
+									<button
+										key={label}
+										type="button"
+										onClick={() => stepBpm(delta)}
+										className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+									>
+										{label}
+									</button>
+								))}
 							</div>
 							<BpmSlider
 								bpm={bpm}
@@ -898,27 +997,26 @@ export default function StrumPage() {
 							/>
 						</div>
 
-						{/* Strum volume */}
-						<div
-							className={`flex flex-col gap-1.5 transition-opacity duration-200 ${!strumEnabled ? "opacity-40" : ""}`}
-						>
-							<div className="flex justify-between items-center">
-								<span className="text-[11px] font-bold uppercase tracking-widest text-ink-dim">
-									Strum Sound
-								</span>
-								<span className="text-xs tabular-nums text-ink-dim">
-									{Math.round(strumGain * 100)}%
-								</span>
+						{/* Strum Sound volume */}
+						<div className={`flex flex-col gap-3 ${!strumEnabled ? "opacity-40" : ""}`}>
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								<span>Strum Sound</span>
+								<span className="tabular-nums">{Math.round(strumGain * 100)}%</span>
 							</div>
-							<input
-								type="range"
+							<Fader
 								min={0}
 								max={2}
 								step={0.01}
 								value={strumGain}
-								onChange={(e) => setStrumGain(Number(e.target.value))}
+								onValue={(v) => {
+									setStrumGain(v);
+									navigator.vibrate?.(10);
+								}}
+								ticks={[0, 25, 50, 75, 100]}
+								tickValues={[0, 0.5, 1, 1.5, 2]}
+								scale={["0", "100", "200"]}
 								disabled={!strumEnabled}
-								className="w-full accent-denim cursor-pointer"
+								ariaLabel="Strum volume"
 							/>
 						</div>
 
@@ -926,86 +1024,92 @@ export default function StrumPage() {
 
 						{/* Accent beat 1 */}
 						<div
-							className={`flex items-center justify-between transition-opacity duration-200 ${!metronomeEnabled ? "opacity-40 pointer-events-none" : ""}`}
+							className={`flex items-center justify-between ${
+								!metronomeEnabled ? "opacity-40" : ""
+							}`}
 						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
+							<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
 								Accent beat 1
 							</span>
-							<Switch
+							<Rocker
 								checked={accentEnabled}
+								onChange={setAccentEnabled}
 								disabled={!metronomeEnabled}
-								onCheckedChange={setAccentEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
+								ariaLabel="Accent beat 1"
+							/>
+						</div>
+
+						{/* Subdivision */}
+						<div className={!metronomeEnabled ? "opacity-40" : ""}>
+							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								Subdivision
+							</div>
+							<Segmented
+								options={[
+									{ value: "quarter", label: "1/4" },
+									{ value: "eighth", label: "1/8" },
+									{ value: "sixteenth", label: "1/16" },
+								]}
+								value={tickMode}
+								onChange={(v) => setTickMode(v as TickMode)}
+								disabled={!metronomeEnabled}
 							/>
 						</div>
 
 						{/* Metronome volume */}
-						<div
-							className={`flex flex-col gap-1.5 transition-opacity duration-200 ${!metronomeEnabled ? "opacity-40 pointer-events-none" : ""}`}
-						>
-							<div className="flex justify-between items-center">
-								<span className="text-xs text-ink-dim">Metronome vol.</span>
-								<span className="text-xs tabular-nums text-ink-dim">
-									{Math.round(metronomeGain * 100)}%
-								</span>
+						<div className={!metronomeEnabled ? "opacity-40" : ""}>
+							<div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								<span>Metronome vol.</span>
+								<span className="tabular-nums">{Math.round(metronomeGain * 100)}%</span>
 							</div>
-							<input
-								type="range"
+							<Fader
 								min={0}
 								max={1}
 								step={0.01}
 								value={metronomeGain}
+								onValue={(v) => {
+									setMetronomeGain(v);
+									navigator.vibrate?.(10);
+								}}
+								ticks={[0, 25, 50, 75, 100]}
+								tickValues={[0, 0.25, 0.5, 0.75, 1]}
+								scale={["0", "50", "100"]}
 								disabled={!metronomeEnabled}
-								onChange={(e) => setMetronomeGain(Number(e.target.value))}
-								className="w-full accent-denim cursor-pointer"
+								ariaLabel="Metronome volume"
 							/>
 						</div>
 
 						<div className="border-t border-line" />
 
 						{/* Loop Gap — greyed when Play Once active */}
-						<div
-							className={`flex flex-col gap-2 transition-opacity duration-200 ${playOnce ? "opacity-40 pointer-events-none" : ""}`}
-						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
-								Loop Gap
-							</span>
-							<div className="flex gap-1">
-								{LOOP_GAP_OPTIONS.map((gap) => (
-									<Button
-										key={gap}
-										variant={loopGap === gap ? "default" : "outline"}
-										disabled={playOnce}
-										onClick={() => setLoopGap(gap)}
-										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
-									>
-										{gap}s
-									</Button>
-								))}
+						<div className={playOnce ? "opacity-40" : ""}>
+							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								Loop gap
 							</div>
+							<Segmented
+								options={LOOP_GAP_OPTIONS.map((gap) => ({
+									value: String(gap),
+									label: `${gap}S`,
+								}))}
+								value={String(loopGap)}
+								onChange={(v) => setLoopGap(Number(v) as LoopGapSeconds)}
+								disabled={playOnce}
+							/>
 						</div>
 
-						{/* Space bar mode */}
-						<div className="flex items-center gap-2">
-							<span
-								className={`text-xs font-medium transition-colors duration-200 ${spaceMode === "playPause" ? "text-denim font-semibold" : "text-ink-dim"}`}
-							>
-								Play/Pause
-							</span>
-							<Switch
-								checked={spaceMode === "tapTempo"}
-								onCheckedChange={() =>
-									setSpaceMode((m) =>
-										m === "playPause" ? "tapTempo" : "playPause",
-									)
-								}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-denim"
+						{/* Spacebar mode */}
+						<div>
+							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								Spacebar
+							</div>
+							<Segmented
+								options={[
+									{ value: "playPause", label: "Play/Pause" },
+									{ value: "tapTempo", label: "Tap" },
+								]}
+								value={spaceMode}
+								onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
 							/>
-							<span
-								className={`text-xs font-medium transition-colors duration-200 ${spaceMode === "tapTempo" ? "text-denim font-semibold" : "text-ink-dim"}`}
-							>
-								Tap
-							</span>
 						</div>
 					</div>
 				</div>
@@ -1049,10 +1153,12 @@ export default function StrumPage() {
 								}
 								setShowBpmPopover((v) => !v);
 							}}
-							className="w-14 flex flex-col items-center leading-none text-center"
+							className="flex w-14 flex-col items-center text-center leading-none"
 						>
-							<span className="text-xl font-bold text-denim">{bpm}</span>
-							<span className="text-[8px] font-semibold uppercase tracking-widest text-ink-faint">
+							<span className="font-mono text-[24px] font-bold leading-none text-denim">
+								{bpm}
+							</span>
+							<span className="mt-0.75 font-mono text-[8px] uppercase tracking-[0.24em] text-ink-faint">
 								BPM
 							</span>
 						</button>
@@ -1062,7 +1168,7 @@ export default function StrumPage() {
 					<div className="flex shrink-0 border border-line-strong">
 						<button
 							onClick={() => setPlayOnce(false)}
-							className={`px-3 h-8 text-xs font-semibold transition-colors duration-150 ${
+							className={`px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
 								!playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
 							}`}
 						>
@@ -1070,7 +1176,7 @@ export default function StrumPage() {
 						</button>
 						<button
 							onClick={() => setPlayOnce(true)}
-							className={`border-l border-line-strong px-3 h-8 text-xs font-semibold transition-colors duration-150 ${
+							className={`border-l border-line-strong px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
 								playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
 							}`}
 						>
@@ -1081,13 +1187,15 @@ export default function StrumPage() {
 					{/* Metronome icon toggle */}
 					<button
 						onClick={() => setMetronomeEnabled(!metronomeEnabled)}
-						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors duration-150 ${
+						aria-label="Metronome"
+						aria-pressed={metronomeEnabled}
+						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors ${
 							metronomeEnabled
 								? "border-denim text-denim"
 								: "border-line-strong text-ink-faint"
 						}`}
 					>
-						<Metronome size={20} />
+						<Metronome size={18} />
 					</button>
 
 					{/* Chevron — toggles the controls panel */}
@@ -1113,16 +1221,14 @@ export default function StrumPage() {
 						</button>
 						<div
 							onClick={handleHitPlayAndPause}
-							className={`transition-all duration-150 active:scale-95 ${
-								selectedPattern
-									? "cursor-pointer text-denim hover:text-denim-accent"
-									: "opacity-30 pointer-events-none text-denim"
+							className={`flex h-11 w-11 items-center justify-center bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
+								selectedPattern ? "cursor-pointer" : "opacity-30 pointer-events-none"
 							}`}
 						>
 							{isPlaying ? (
-								<CirclePause size={40} strokeWidth={1.5} />
+								<CirclePause size={22} strokeWidth={1.5} />
 							) : (
-								<CirclePlay size={40} strokeWidth={1.5} />
+								<CirclePlay size={22} strokeWidth={1.5} />
 							)}
 						</div>
 					</div>

@@ -33,11 +33,19 @@
 	--bg: #0f0f0f; /* page background; readout insets; button fill base */
 	--bg-panel: #141414; /* sidebars, top bars, control racks, bottom bars    */
 	--bg-raise: #1a1a1a; /* hover states, active nav tabs, active toggle seg  */
+	--modal-bg: var(--bg-panel); /* dialog/popover surface — decoupled from --bg-panel so modals can diverge from sidebars/racks; dark keeps parity (#141414) */
+	--topbar-bg: var(--bg-panel); /* app topbar surface — decoupled from --bg-panel; dark keeps parity (#141414) */
+	--sidebar-bg: var(--bg-panel); /* fingerpick pattern library sidebar — decoupled from --bg-panel; dark keeps parity (#141414) */
+	--sidebar-header-1-bg: var(--bg-panel); /* "My Patterns" section header row — near-invisible against sidebar-bg */
+	--sidebar-header-2-bg: #1a1a1a; /* "Presets" section header row — subtly offset from header-1 so the two remain distinguishable */
+	--workspace-bg: var(--bg); /* fingerpick outer workspace wrapper (behind all panels) — decoupled from --bg; dark keeps parity (#0f0f0f) */
 
 	/* Ink */
 	--ink: #f0f0f0; /* primary text, active fret numbers, slider thumbs  */
 	--ink-dim: #8a8a8a; /* secondary text, inactive-row notation, ctl labels */
 	--ink-faint: #4d4d4d; /* module labels, placeholders, ticks, dormant LEDs  */
+	--tab-title-ink: var(--ink); /* fingerpick TAB viewer pattern-name heading — decoupled from --ink; dark keeps parity */
+	--tab-meta-ink: var(--ink-dim); /* fingerpick TAB viewer BPM/time-signature meta row — decoupled from --ink-dim; dark keeps parity */
 
 	/* Lines */
 	--line: #262626; /* structural hairlines: dividers, card grids       */
@@ -47,6 +55,7 @@
 	--denim: #4a6fa5; /* fills. IDENTICAL both themes — the anchor */
 	--denim-accent: #6e93c9; /* accent text/strokes on this bg (lighter on dark) */
 	--denim-tint: rgba(74, 111, 165, 0.12); /* selected list-item bg; press-flash fill   */
+	--sidebar-hover-bg: rgba(74, 111, 165, 0.06); /* pattern-card hover fill — lighter than denim-tint so hover reads weaker than selected */
 	--denim-glow: rgba(110, 147, 201, 0.55); /* playhead + LED box-shadow color           */
 	--readout-glow: rgba(110, 147, 201, 0.35); /* text-shadow color on large readouts       */
 	--measure-hl: rgba(74, 111, 165, 0.07); /* current-measure block in TAB viewer       */
@@ -58,6 +67,16 @@
 	--backdrop: rgba(0, 0, 0, 0.55); /* mobile drawer scrim                       */
 	--tab-line-2: #1f1f1f; /* landing hero: recessed TAB strip lines    */
 	--tab-num-2: #3a4a63; /* landing hero: recessed TAB strip numbers  */
+
+	/* Favourite star — amber, kept off the denim system by design. Fixed value
+	   (Tailwind amber-400) in both themes; the star reads amber on dark and light
+	   alike. Inactive state reuses --ink-dim (no separate token). */
+	--favorite-active: oklch(82.8% 0.189 84.429);
+
+	/* Destructive — muted brick red, NOT neon. Low chroma so it reads calm on
+	   the near-black panel; still clearly red for delete/discard affordances.
+	   Theme-aware (deeper on light) like every other color token. */
+	--destructive: oklch(0.585 0.13 25);
 }
 
 /* ----------------------------------------------------------------------------
@@ -67,10 +86,18 @@
 	--bg: #f5f7fa; /* cool denim-tinted white — never pure white */
 	--bg-panel: #ebeff5;
 	--bg-raise: #e4e4df;
+	--modal-bg: #ffffff; /* dialogs/popovers read as pure white on light — decoupled from --bg-panel (#ebeff5) */
+	--topbar-bg: #ebeff5; /* app topbar — extracted from --bg-panel at its current value; visually unchanged */
+	--sidebar-bg: #ffffff; /* fingerpick pattern library sidebar — extracted from its current bg-white; visually unchanged */
+	--sidebar-header-1-bg: #f8fafc; /* "My Patterns" header — original near-invisible off-white tint */
+	--sidebar-header-2-bg: #f1f5f9; /* "Presets" header — original near-invisible off-white tint, one step down from header-1 */
+	--workspace-bg: #f8fafc; /* fingerpick outer workspace wrapper — extracted from its current bg-slate-50; visually unchanged */
 
 	--ink: #141414;
 	--ink-dim: #63635e;
 	--ink-faint: #a5a5a0;
+	--tab-title-ink: #334155; /* fingerpick TAB viewer pattern-name heading — extracted from its current text-slate-700; visually unchanged */
+	--tab-meta-ink: #94a3b8; /* fingerpick TAB viewer BPM/time-signature meta row — extracted from its current text-slate-400; visually unchanged */
 
 	--line: #d7d9dd;
 	--line-strong: #c0c2c6;
@@ -78,6 +105,7 @@
 	--denim: #4a6fa5; /* unchanged — the anchor            */
 	--denim-accent: #35507a; /* DARKER than base on light — contrast-safe text variant, not a bug */
 	--denim-tint: rgba(74, 111, 165, 0.1);
+	--sidebar-hover-bg: rgba(74, 111, 165, 0.05); /* pattern-card hover fill — lighter than denim-tint so hover reads weaker than selected */
 	--denim-glow: rgba(74, 111, 165, 0.45); /* glows read weaker on light — reduced */
 	--readout-glow: rgba(74, 111, 165, 0.25);
 	--measure-hl: rgba(74, 111, 165, 0.08);
@@ -88,6 +116,9 @@
 	--backdrop: rgba(20, 20, 20, 0.35);
 	--tab-line-2: #e6e6e1;
 	--tab-num-2: #a9bad3;
+	--favorite-active: oklch(82.8% 0.189 84.429); /* Tailwind amber-400 — same as dark; star stays amber */
+
+	--destructive: oklch(0.53 0.17 27); /* deeper on light for contrast on paper white */
 }
 
 /* Text selection is fixed across BOTH themes */
@@ -330,7 +361,7 @@
 	--foreground: var(--ink);
 	--card: var(--bg-panel);
 	--card-foreground: var(--ink);
-	--popover: var(--bg-panel);
+	--popover: var(--modal-bg);
 	--popover-foreground: var(--ink);
 	--primary: var(--denim);
 	--primary-foreground: var(--btn-on-denim);
@@ -348,7 +379,8 @@
 	   component migration, then delete this block. */
 	--secondary: var(--bg-raise);
 	--secondary-foreground: var(--ink);
-	--destructive: oklch(0.577 0.245 27.325);
+	/* --destructive is defined per-theme in the color blocks above (muted red,
+	   dark/light aware) — not here, so the theme values are not overridden. */
 }
 
 /* ============================================================================
@@ -373,6 +405,14 @@
 	   text-denim-accent, bg-denim-tint, text-on-denim */
 	--color-surface: var(--bg);
 	--color-panel: var(--bg-panel);
+	--color-topbar: var(--topbar-bg); /* app topbar surface — bg-topbar, decoupled from bg-panel */
+	--color-sidebar: var(--sidebar-bg); /* fingerpick pattern library surface — bg-sidebar, decoupled from bg-panel */
+	--color-sidebar-header-1: var(--sidebar-header-1-bg); /* bg-sidebar-header-1 — "My Patterns" row */
+	--color-sidebar-header-2: var(--sidebar-header-2-bg); /* bg-sidebar-header-2 — "Presets" row */
+	--color-sidebar-hover: var(--sidebar-hover-bg); /* bg-sidebar-hover — pattern-card hover fill */
+	--color-workspace: var(--workspace-bg); /* bg-workspace — fingerpick outer workspace wrapper */
+	--color-tab-title: var(--tab-title-ink); /* text-tab-title — pattern-name heading */
+	--color-tab-meta: var(--tab-meta-ink); /* text-tab-meta — BPM/time-signature meta row */
 	--color-raise: var(--bg-raise);
 	--color-ink: var(--ink);
 	--color-ink-dim: var(--ink-dim);
@@ -383,6 +423,7 @@
 	--color-denim-accent: var(--denim-accent);
 	--color-denim-tint: var(--denim-tint);
 	--color-on-denim: var(--btn-on-denim);
+	--color-favorite-active: var(--favorite-active); /* text-favorite-active / fill-favorite-active — amber favourite star */
 
 	--radius-none: 0; /* and nothing else — do not define a radius scale */
 

@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import {
+	useState,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useCallback,
+	useSyncExternalStore,
+} from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +21,7 @@ import {
 	Merge,
 	Undo2,
 	Redo2,
+	CircleHelp,
 	X as XIcon,
 } from "lucide-react";
 import type { Duration, FingerpickPattern, Measure, StringFret } from "@/lib/fingerpickTypes";
@@ -136,9 +144,12 @@ const MAX_BPM = 220;
 // Two-layer hover highlight tints (denim #4A6FA5). Applied via inline
 // backgroundColor rather than Tailwind classes so they never collide with the
 // selected-cell denim ring/tint classes. L1 is a subtle wash over the whole beat
-// group; L2 is a stronger per-axis tint on the hovered slot column and string row
-// (they sum on the hovered cell itself, giving a brighter cross centre).
-const HOVER_L1_BG = "rgba(74, 111, 165, 0.06)";
+// group — it reuses the shared --sidebar-hover-bg token (the same denim wash the
+// pattern library uses for row hover). L2 is a stronger per-axis tint on the
+// hovered slot column and string row (they sum on the hovered cell itself, giving
+// a brighter cross centre); its 0.14 alpha has no token equivalent, so it stays a
+// raw rgba.
+const HOVER_L1_BG = "var(--sidebar-hover-bg)";
 const HOVER_L2_ALPHA = 0.14;
 const hoverAxisBg = (alpha: number): string => `rgba(74, 111, 165, ${alpha})`;
 
@@ -147,7 +158,7 @@ type HoveredCell = { measureIndex: number; slotIndex: number; stringIndex: numbe
 // Desktop dynamic-width geometry (rem). Modal width = cols × (block + gap) + chrome.
 const MEASURE_BLOCK_REM = 19; // per-measure block target width
 const GRID_GAP_REM = 1; // gap-4 between measure blocks
-const MODAL_CHROME_REM = 2; // DialogContent p-4 (left + right)
+const MODAL_CHROME_REM = 2; // measure grid's own px-4 (left + right)
 const TWO_DIGIT_WINDOW_MS = 800;
 const LONG_PRESS_MS = 500;
 // Maximum number of pattern snapshots retained for undo/redo. Older snapshots
@@ -160,6 +171,36 @@ const parseColumnKey = (key: string): SlotTarget => {
 	const [m, s] = key.split(":").map(Number);
 	return { measureIndex: m, slotIndex: s };
 };
+
+// Fine-pointer (mouse/trackpad → physical keyboard) capability, read via
+// useSyncExternalStore so the editing hint tracks it without a setState-in-effect.
+function subscribeFinePointer(callback: () => void): () => void {
+	if (typeof window === "undefined" || !window.matchMedia) return () => {};
+	const mq = window.matchMedia("(pointer: fine)");
+	mq.addEventListener("change", callback);
+	return () => mq.removeEventListener("change", callback);
+}
+const getFinePointerSnapshot = (): boolean =>
+	typeof window !== "undefined" && !!window.matchMedia
+		? window.matchMedia("(pointer: fine)").matches
+		: true;
+// SSR/first paint assumes desktop; hydration corrects it from the real media query.
+const getFinePointerServerSnapshot = (): boolean => true;
+
+// iMessage-style spring "pop": an easeOutBack overshoot curve that scales past the
+// target before settling. Driven via the Web Animations API for the Save press and
+// the hint-popover entrance. Read prefers-reduced-motion at call time so both
+// effects can fall back to an instant, animation-free state change (§6.7).
+const SPRING_POP_EASING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
+const prefersReducedMotion = (): boolean =>
+	typeof window !== "undefined" &&
+	!!window.matchMedia &&
+	window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// useLayoutEffect on the client so the popover spring's first frame is the one that
+// paints (no flash of the settled state); useEffect on the server to avoid the
+// "useLayoutEffect does nothing on the server" warning.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 function cellDisplay(sf: StringFret): string {
 	if (sf.muted) return "x";
@@ -192,6 +233,23 @@ export default function FingerpickEditModal({
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
 	const [discardConfirm, setDiscardConfirm] = useState(false);
+	// True when the device has a fine pointer (mouse/trackpad → physical keyboard
+	// likely). Drives which editing hint to show.
+	const hasFinePointer = useSyncExternalStore(
+		subscribeFinePointer,
+		getFinePointerSnapshot,
+		getFinePointerServerSnapshot,
+	);
+	// Content-relative position of the touch mute button, set when a cell is tapped
+	// on a touch device. Rendered only while a cell is selected; gives touch users a
+	// way to mute a string (there is no "x" key on the native numeric keyboard).
+	const [touchMute, setTouchMute] = useState<{ top: number; left: number } | null>(null);
+	// True while the hidden numeric input holds focus (i.e. the native fret-entry
+	// keyboard is up). The touch mute button belongs to that same "keyboard active"
+	// interaction, so it is shown only while this is true and hidden on blur.
+	const [isFretInputFocused, setIsFretInputFocused] = useState(false);
+	// Whether the editing-help popover (anchored to the footer "?" button) is open.
+	const [hintOpen, setHintOpen] = useState(false);
 
 	// Undo/redo history. `history` holds every committed pattern snapshot (the
 	// initial state plus one entry per edit); `historyIndex` points at the entry
@@ -216,8 +274,23 @@ export default function FingerpickEditModal({
 	const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 	const popupRef = useRef<HTMLDivElement>(null);
 	const techMenuRef = useRef<HTMLDivElement>(null);
+	const hintRef = useRef<HTMLDivElement>(null);
+	// Save button node, for the spring-pop press feedback.
+	const saveButtonRef = useRef<HTMLButtonElement>(null);
+	// Previous hintOpen value, so the entrance spring fires only on false→true.
+	const prevHintOpenRef = useRef(false);
 	// Long-press timer for the mobile technique menu.
 	const longPressRef = useRef<number | null>(null);
+	// Set true when the long-press timer opens the technique menu, so the tap's
+	// trailing pointerup/click doesn't also select the cell and pop the keyboard.
+	const longPressFiredRef = useRef(false);
+	// Pointer type of the most recent cell pointerdown. Drives whether selecting a
+	// cell focuses the button (desktop keyboard nav) or the hidden numeric input
+	// (touch → native numeric keyboard).
+	const lastPointerTypeRef = useRef<string>("mouse");
+	// Shared off-screen numeric input, focused on a touch tap so mobile devices can
+	// type a fret — there is no physical keyboard to drive handleCellKeyDown.
+	const hiddenInputRef = useRef<HTMLInputElement>(null);
 
 	// Keep the nav ref pointing at the latest working pattern.
 	useEffect(() => {
@@ -289,25 +362,33 @@ export default function FingerpickEditModal({
 			pristineRef.current = JSON.stringify(next);
 			setSelectedCell(null);
 			setHoveredCell(null);
+			setTouchMute(null);
 			setSelectedColumns(new Set());
 			setTechMenu(null);
 			setPopupConfirm(null);
 			setPresetConfirm(null);
 			setDiscardConfirm(false);
+			setHintOpen(false);
 			pendingDigitRef.current = null;
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
-	// Move DOM focus to the selected cell so keyboard navigation stays live.
+	// Move DOM focus to the selected cell so keyboard navigation stays live. On
+	// touch, focus the hidden numeric input instead so the native numeric keyboard
+	// opens and the cell button doesn't steal focus back.
 	useEffect(() => {
 		if (!selectedCell) return;
-		cellRefs.current.get(cellKey(selectedCell))?.focus();
+		if (lastPointerTypeRef.current === "touch") {
+			hiddenInputRef.current?.focus();
+		} else {
+			cellRefs.current.get(cellKey(selectedCell))?.focus();
+		}
 	}, [selectedCell]);
 
 	// Close popups on any outside pointer press.
 	useEffect(() => {
-		if (selectedColumns.size === 0 && !techMenu) return;
+		if (selectedColumns.size === 0 && !techMenu && !hintOpen) return;
 		function handlePointerDown(e: PointerEvent) {
 			const target = e.target as HTMLElement;
 			if (techMenu && !techMenuRef.current?.contains(target)) {
@@ -321,12 +402,63 @@ export default function FingerpickEditModal({
 				setSelectedColumns(new Set());
 				setPopupConfirm(null);
 			}
+			// Dismiss the hint popover, except when the "?" trigger is pressed — its
+			// own click handler toggles it (so pressing it while open closes it).
+			if (
+				hintOpen &&
+				!hintRef.current?.contains(target) &&
+				!target.closest("[data-hint-trigger]")
+			) {
+				setHintOpen(false);
+			}
 		}
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
-	}, [selectedColumns, techMenu]);
+	}, [selectedColumns, techMenu, hintOpen]);
+
+	// Hint popover entrance: spring-pop (scale in from 0.85 with overshoot past 1.0,
+	// plus the opacity fade) only on the false→true transition. Closing keeps the
+	// plain CSS fade/shrink from the element's transition classes. Skipped entirely
+	// for prefers-reduced-motion, leaving the instant class-driven toggle.
+	useIsomorphicLayoutEffect(() => {
+		const wasOpen = prevHintOpenRef.current;
+		prevHintOpenRef.current = hintOpen;
+		if (!hintOpen || wasOpen) return;
+		if (prefersReducedMotion()) return;
+		hintRef.current?.animate(
+			[
+				{ opacity: 0, transform: "scale(0.85)" },
+				{ opacity: 1, transform: "scale(1)" },
+			],
+			{ duration: 250, easing: SPRING_POP_EASING },
+		);
+	}, [hintOpen]);
 
 	// ── Cell keyboard editing ──────────────────────────────────────────────────
+
+	// Apply a single typed digit to a cell's fret, honouring the two-digit entry
+	// window: a second digit within TWO_DIGIT_WINDOW_MS combines with the first
+	// when the result is ≤ MAX_FRET, otherwise it starts a fresh single-digit
+	// entry. Shared by physical-keyboard editing (handleCellKeyDown) and the touch
+	// numeric input so both paths behave identically.
+	const applyFretDigit = useCallback(
+		(cell: Cell, digit: number) => {
+			const ck = cellKey(cell);
+			const now = Date.now();
+			const pend = pendingDigitRef.current;
+			if (pend && pend.key === ck && now - pend.time < TWO_DIGIT_WINDOW_MS) {
+				const combined = pend.digit * 10 + digit;
+				if (combined <= MAX_FRET) {
+					commit((prev) => setFret(prev, cell, combined));
+					pendingDigitRef.current = null;
+					return;
+				}
+			}
+			commit((prev) => setFret(prev, cell, digit));
+			pendingDigitRef.current = { key: ck, digit, time: now };
+		},
+		[commit],
+	);
 
 	const handleCellKeyDown = useCallback(
 		(e: React.KeyboardEvent, cell: Cell) => {
@@ -352,26 +484,10 @@ export default function FingerpickEditModal({
 			}
 			if (/^[0-9]$/.test(key)) {
 				e.preventDefault();
-				const digit = Number(key);
-				const ck = cellKey(cell);
-				const now = Date.now();
-				const pend = pendingDigitRef.current;
-				if (pend && pend.key === ck && now - pend.time < TWO_DIGIT_WINDOW_MS) {
-					const combined = pend.digit * 10 + digit;
-					if (combined <= MAX_FRET) {
-						commit((prev) => setFret(prev, cell, combined));
-						pendingDigitRef.current = null;
-					} else {
-						commit((prev) => setFret(prev, cell, digit));
-						pendingDigitRef.current = { key: ck, digit, time: now };
-					}
-				} else {
-					commit((prev) => setFret(prev, cell, digit));
-					pendingDigitRef.current = { key: ck, digit, time: now };
-				}
+				applyFretDigit(cell, Number(key));
 			}
 		},
-		[commit],
+		[commit, applyFretDigit],
 	);
 
 	// ── Technique context menu ───────────────────────────────────────────────
@@ -390,14 +506,97 @@ export default function FingerpickEditModal({
 	}
 
 	function handleCellPointerDown(cell: Cell, e: React.PointerEvent) {
+		lastPointerTypeRef.current = e.pointerType;
 		if (e.pointerType !== "touch") return;
+		// Suppress the OS long-press text/element selection before our long-press
+		// timer opens the technique menu. touch-action: manipulation on the button
+		// still lets scroll gestures through, so this doesn't block page scroll.
+		e.preventDefault();
+		longPressFiredRef.current = false;
 		const x = e.clientX;
 		const y = e.clientY;
 		const anchorEl = e.currentTarget as HTMLElement;
-		longPressRef.current = window.setTimeout(
-			() => openTechMenu(cell, x, y, anchorEl),
-			LONG_PRESS_MS,
+		longPressRef.current = window.setTimeout(() => {
+			longPressFiredRef.current = true;
+			openTechMenu(cell, x, y, anchorEl);
+		}, LONG_PRESS_MS);
+	}
+
+	// Position the touch mute button just below the given cell. Anchored to the
+	// cell button's own bounding rect (via cellRefs), converted into the dialog
+	// content box's coordinate space with the same getBoundingClientRect + scroll
+	// offset maths as openTechMenu — so it stays centred beneath the cell rather
+	// than tracking the tap point. Clears the anchor if the cell has no live ref.
+	function positionTouchMute(cell: Cell, content: HTMLElement) {
+		const cellEl = cellRefs.current.get(cellKey(cell));
+		if (!cellEl) {
+			setTouchMute(null);
+			return;
+		}
+		const contentRect = content.getBoundingClientRect();
+		const cellRect = cellEl.getBoundingClientRect();
+		setTouchMute({
+			top: cellRect.bottom - contentRect.top + content.scrollTop,
+			left: cellRect.left + cellRect.width / 2 - contentRect.left + content.scrollLeft,
+		});
+	}
+
+	// Touch tap release: select the cell and open the native numeric keyboard by
+	// focusing the shared hidden input. Skipped when the long-press already opened
+	// the technique menu. Focus must happen here (inside the tap gesture) — iOS
+	// Safari ignores a focus() deferred to a later effect.
+	function handleCellPointerUp(cell: Cell, e: React.PointerEvent) {
+		cancelLongPress();
+		if (e.pointerType !== "touch") return;
+		if (longPressFiredRef.current) {
+			longPressFiredRef.current = false;
+			return;
+		}
+		setSelectedCell(cell);
+		// Touch has no hover, so drive the same L1/L2 row/column highlight off the
+		// tapped cell. Only on touch — desktop keeps hover and selection independent.
+		setHoveredCell({
+			measureIndex: cell.measureIndex,
+			slotIndex: cell.slotIndex,
+			stringIndex: cell.stringIndex,
+		});
+		const input = hiddenInputRef.current;
+		if (!input) return;
+		// Park the invisible input over the tapped cell (same content-relative maths
+		// as openTechMenu) so focusing it doesn't jump-scroll the dialog.
+		const content = (e.currentTarget as HTMLElement).closest<HTMLElement>(
+			'[data-slot="dialog-content"]',
 		);
+		if (content) {
+			const rect = content.getBoundingClientRect();
+			const top = e.clientY - rect.top + content.scrollTop;
+			const left = e.clientX - rect.left + content.scrollLeft;
+			input.style.top = `${top}px`;
+			input.style.left = `${left}px`;
+			// Anchor the touch mute button to the tapped cell's own box (centred just
+			// below it), not the tap point, so it always lands in the same spot.
+			positionTouchMute(cell, content);
+		}
+		input.focus();
+	}
+
+	// Native numeric keyboard input (touch). Each keystroke arrives as an onChange;
+	// take the last typed character, route it through the shared digit logic, and
+	// reset the field so the next keystroke starts fresh.
+	function handleHiddenNumericInput(e: React.ChangeEvent<HTMLInputElement>) {
+		const cell = selectedCell;
+		const raw = e.currentTarget.value;
+		e.currentTarget.value = "";
+		if (!cell) return;
+		const lastChar = raw.slice(-1);
+		if (!/^[0-9]$/.test(lastChar)) return;
+		applyFretDigit(cell, Number(lastChar));
+	}
+
+	// Reset the hidden input and pending two-digit buffer (on blur / Enter / Done).
+	function resetHiddenNumericInput() {
+		pendingDigitRef.current = null;
+		if (hiddenInputRef.current) hiddenInputRef.current.value = "";
 	}
 
 	function cancelLongPress() {
@@ -645,10 +844,10 @@ export default function FingerpickEditModal({
 	const columnPopup = (
 		<div
 			ref={popupRef}
-			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-60 w-max max-w-60 rounded-lg border border-slate-200 bg-white shadow-lg p-2 flex flex-col gap-2`}
+			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2`}
 		>
-			<div className="flex gap-1">
-				{DURATION_PICKER.map((d) => {
+			<div className="flex border border-line-strong">
+				{DURATION_PICKER.map((d, i) => {
 					const disabled = d.value === "whole" && wholeDisabled;
 					return (
 						<button
@@ -660,11 +859,13 @@ export default function FingerpickEditModal({
 									? "Whole note must be the only slot in the measure"
 									: d.value
 							}
-							className={`h-7 w-7 rounded font-mono text-xs font-semibold transition-colors ${
+							className={`h-7 flex-1 px-2 font-mono text-xs font-semibold transition-colors ${
+								i > 0 ? "border-l border-line-strong" : ""
+							} ${
 								selectedDuration === d.value
-									? "bg-denim text-white"
-									: "text-slate-500 hover:bg-denim-tint"
-							} disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
+									? "bg-denim text-on-denim"
+									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+							} disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-dim`}
 						>
 							{d.label}
 						</button>
@@ -674,10 +875,10 @@ export default function FingerpickEditModal({
 
 			{/* Split / merge (single column only) */}
 			{singleTarget && !popupConfirm && (splitOptions.length > 0 || canMerge) && (
-				<div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2">
+				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
 					{splitOptions.length > 0 && (
 						<div className="flex flex-wrap items-center gap-1">
-							<span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+							<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 								Split
 							</span>
 							{splitOptions.map(({ duration, count }) => (
@@ -685,7 +886,7 @@ export default function FingerpickEditModal({
 									key={duration}
 									onClick={() => applySplit(singleTarget, duration)}
 									title={`Split into ${count} × ${duration}`}
-									className="flex items-center gap-0.5 h-7 px-1.5 rounded text-xs text-slate-600 hover:bg-denim-tint hover:text-denim transition-colors"
+									className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 								>
 									{count}×<DurationIcon duration={duration} />
 								</button>
@@ -696,7 +897,7 @@ export default function FingerpickEditModal({
 						<button
 							onClick={() => requestMerge(singleTarget, mergeTarget)}
 							title={`Merge into ${mergeTarget}`}
-							className="flex items-center gap-1 h-7 px-1.5 rounded text-xs text-slate-600 hover:bg-denim-tint hover:text-denim transition-colors"
+							className="flex items-center gap-1 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 						>
 							<Merge size={13} /> Merge → <DurationIcon duration={mergeTarget} />
 						</button>
@@ -706,10 +907,10 @@ export default function FingerpickEditModal({
 
 			{/* Replace whole measure with a single whole note (single column only) */}
 			{singleTarget && measureHasContent && !popupConfirm && (
-				<div className="border-t border-slate-100 pt-2">
+				<div className="border-t border-line pt-2">
 					<button
 						onClick={() => requestReplaceWithWhole(singleTarget)}
-						className="flex items-center gap-1 h-7 px-1.5 rounded text-xs text-slate-600 hover:bg-denim-tint hover:text-denim transition-colors"
+						className="flex items-center gap-1 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 					>
 						Replace with <DurationIcon duration="whole" />
 					</button>
@@ -718,8 +919,8 @@ export default function FingerpickEditModal({
 
 			{/* Inline confirmation for a destructive merge / whole-replace */}
 			{popupConfirm && (
-				<div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2">
-					<span className="text-[11px] text-slate-600">
+				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
+					<span className="text-[11px] text-ink-dim">
 						{popupConfirm.kind === "merge"
 							? `This will discard data from ${popupConfirm.affectedSlotCount} slot(s). Continue?`
 							: "This will replace the measure's content. Continue?"}
@@ -727,13 +928,13 @@ export default function FingerpickEditModal({
 					<div className="flex gap-1">
 						<button
 							onClick={() => setPopupConfirm(null)}
-							className="h-7 px-2 rounded text-xs text-slate-500 hover:bg-slate-100 transition-colors"
+							className="h-7 px-2 text-xs text-ink-dim hover:bg-raise active:bg-denim-tint transition-colors"
 						>
 							Cancel
 						</button>
 						<button
 							onClick={confirmPopup}
-							className="h-7 px-2 rounded text-xs font-semibold text-white bg-denim hover:bg-denim-dark transition-colors"
+							className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
 						>
 							Confirm
 						</button>
@@ -741,7 +942,7 @@ export default function FingerpickEditModal({
 				</div>
 			)}
 
-			<div className="flex gap-1 border-t border-slate-100 pt-2">
+			<div className="flex gap-1 border-t border-line pt-2">
 				<PopupIconButton title="Insert before" onClick={() => applyStructural("before")}>
 					<ArrowLeftToLine size={14} />
 				</PopupIconButton>
@@ -781,6 +982,18 @@ export default function FingerpickEditModal({
 
 	function handleSave() {
 		if (!working.name.trim()) return;
+		// Spring-pop the button as the save fires (skip for reduced-motion). Pure
+		// transform, so no reflow; the save/close flow below is unchanged.
+		if (!prefersReducedMotion()) {
+			saveButtonRef.current?.animate(
+				[
+					{ transform: "scale(1)" },
+					{ transform: "scale(1.08)" },
+					{ transform: "scale(1)" },
+				],
+				{ duration: 300, easing: SPRING_POP_EASING },
+			);
+		}
 		onSave({
 			...working,
 			name: working.name.trim(),
@@ -790,6 +1003,15 @@ export default function FingerpickEditModal({
 	}
 
 	const nameValid = working.name.trim().length > 0;
+
+	// The selected cell's live string data, used to gate the touch mute button:
+	// an already-muted cell needs no mute affordance, so the button is hidden
+	// until the cell is un-muted (or a different, non-muted cell is selected).
+	const selectedStringFret: StringFret | null = selectedCell
+		? (working.measures[selectedCell.measureIndex]?.slots[selectedCell.slotIndex]?.strings[
+				selectedCell.stringIndex
+			] ?? null)
+		: null;
 
 	// Dynamic desktop (lg+) width: grow with measure count, 2 → 4 columns, then
 	// stop (extra measures wrap). Below lg the static md:2 / sm:1 layout applies.
@@ -807,7 +1029,7 @@ export default function FingerpickEditModal({
 			<DialogContent
 				showCloseButton={false}
 				style={dynamicStyle}
-				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[90vh] overflow-y-auto pb-0"
+				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] lg:max-h-[90vh] overflow-y-auto p-0"
 				onKeyDown={(e) => {
 					// Undo/redo scoped to the modal (not window) to avoid clashing with
 					// the page. Skip text fields so their native undo keeps working.
@@ -827,8 +1049,8 @@ export default function FingerpickEditModal({
 				}}
 			>
 				{/* ── Header ─────────────────────────────────────────────────────── */}
-				<div className="flex items-center justify-between">
-					<h2 className="font-heading text-base font-medium text-slate-700">
+				<div className="sticky top-0 z-55 flex items-center justify-between border-b border-line bg-popover px-4 py-3">
+					<h2 className="font-heading text-base font-medium text-ink">
 						{initialPattern ? "Edit pattern" : "New pattern"}
 					</h2>
 					<div className="flex items-center gap-1">
@@ -837,7 +1059,7 @@ export default function FingerpickEditModal({
 							disabled={!canUndo}
 							aria-label="Undo"
 							title="Undo (⌘Z)"
-							className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+							className="h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink active:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-dim transition-colors"
 						>
 							<Undo2 size={16} />
 						</button>
@@ -846,22 +1068,22 @@ export default function FingerpickEditModal({
 							disabled={!canRedo}
 							aria-label="Redo"
 							title="Redo (⌘⇧Z)"
-							className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+							className="h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink active:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-dim transition-colors"
 						>
 							<Redo2 size={16} />
 						</button>
 						{discardConfirm ? (
 							<div className="flex items-center gap-2">
-								<span className="text-xs text-slate-600">Discard changes?</span>
+								<span className="text-xs text-ink-dim">Discard changes?</span>
 								<button
 									onClick={() => setDiscardConfirm(false)}
-									className="h-8 px-3 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+									className="h-8 px-3 text-xs font-medium text-ink-dim hover:bg-raise active:bg-denim-tint transition-colors"
 								>
 									Keep editing
 								</button>
 								<button
 									onClick={doClose}
-									className="h-8 px-3 rounded-md text-xs font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors"
+									className="h-8 px-3 text-xs font-semibold text-white bg-destructive hover:bg-destructive/90 transition-colors"
 								>
 									Discard
 								</button>
@@ -870,7 +1092,7 @@ export default function FingerpickEditModal({
 							<button
 								onClick={requestClose}
 								aria-label="Close"
-								className="h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+								className="h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink active:bg-denim-tint transition-colors"
 							>
 								<XIcon size={18} />
 							</button>
@@ -879,9 +1101,9 @@ export default function FingerpickEditModal({
 				</div>
 
 				{/* ── Metadata bar ──────────────────────────────────────────────── */}
-				<div className="flex flex-wrap items-end gap-3">
+				<div className="flex flex-wrap items-end gap-3 px-4">
 					<div className="flex flex-col gap-1 min-w-40 flex-1">
-						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Name
 						</label>
 						<input
@@ -889,13 +1111,13 @@ export default function FingerpickEditModal({
 							value={working.name}
 							onChange={(e) => commit((p) => ({ ...p, name: e.target.value }))}
 							placeholder="Pattern name"
-							className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40 ${
-								nameValid ? "border-slate-200" : "border-red-300"
+							className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
+								nameValid ? "border-line-strong" : "border-destructive"
 							}`}
 						/>
 					</div>
 					<div className="flex flex-col gap-1 w-24">
-						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							BPM
 						</label>
 						<input
@@ -906,11 +1128,11 @@ export default function FingerpickEditModal({
 							onChange={(e) =>
 								commit((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))
 							}
-							className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						/>
 					</div>
 					<div className="flex flex-col gap-1 w-24">
-						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Time Sig.
 						</label>
 						<select
@@ -919,7 +1141,7 @@ export default function FingerpickEditModal({
 								const ts = TIME_SIGNATURES.find((t) => t.label === e.target.value);
 								if (ts) commit((p) => ({ ...p, timeSignature: ts.value }));
 							}}
-							className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-2 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						>
 							{TIME_SIGNATURES.map((t) => (
 								<option key={t.label} value={t.label}>
@@ -929,7 +1151,7 @@ export default function FingerpickEditModal({
 						</select>
 					</div>
 					<div className="flex flex-col gap-1 min-w-40 flex-1">
-						<label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Description
 						</label>
 						<input
@@ -937,7 +1159,7 @@ export default function FingerpickEditModal({
 							value={working.description ?? ""}
 							onChange={(e) => commit((p) => ({ ...p, description: e.target.value }))}
 							placeholder="Optional"
-							className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						/>
 					</div>
 				</div>
@@ -946,7 +1168,7 @@ export default function FingerpickEditModal({
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
 				    count (2→4, --fp-cols) in step with the dynamic modal width, so
 				    measures fill each row and the extra (add) tile wraps below. */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4">
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4 select-none">
 					{working.measures.map((measure, measureIndex) => {
 						const beatLabels = computeBeatLabels(measure.slots, working.timeSignature);
 						const beatGroups = computeBeatGroups(measure.slots, working.timeSignature);
@@ -956,11 +1178,11 @@ export default function FingerpickEditModal({
 							<div
 								key={measure.id}
 								onMouseLeave={() => setHoveredCell(null)}
-								className="rounded-lg border border-slate-200 p-3 flex flex-col gap-2"
+								className="border border-line p-3 flex flex-col gap-2"
 							>
 								<div className="flex items-center justify-between">
 									<div className="flex items-center gap-2">
-										<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 											Measure {measureIndex + 1}
 										</span>
 										<button
@@ -975,7 +1197,7 @@ export default function FingerpickEditModal({
 											}
 											aria-label="Copy measure"
 											title="Copy measure"
-											className="flex items-center justify-center text-slate-400 hover:text-denim transition-colors"
+											className="flex items-center justify-center text-ink-dim hover:text-denim transition-colors"
 										>
 											<Copy size={14} />
 										</button>
@@ -993,7 +1215,7 @@ export default function FingerpickEditModal({
 											disabled={measureIndex === 0}
 											aria-label="Move measure left"
 											title="Move measure left"
-											className="flex items-center justify-center text-slate-400 hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 transition-colors"
+											className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
 										>
 											<ArrowLeft size={14} />
 										</button>
@@ -1011,7 +1233,7 @@ export default function FingerpickEditModal({
 											disabled={measureIndex === working.measures.length - 1}
 											aria-label="Move measure right"
 											title="Move measure right"
-											className="flex items-center justify-center text-slate-400 hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 transition-colors"
+											className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
 										>
 											<ArrowRight size={14} />
 										</button>
@@ -1023,7 +1245,7 @@ export default function FingerpickEditModal({
 										disabled={working.measures.length <= 1}
 										aria-label="Delete measure"
 										title="Delete measure"
-										className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+										className="flex items-center gap-1 text-[10px] text-ink-dim hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 									>
 										<XIcon size={12} /> Delete
 									</button>
@@ -1038,7 +1260,7 @@ export default function FingerpickEditModal({
 										{STRING_LABELS.map((label, stringIndex) => (
 											<div
 												key={stringIndex}
-												className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-slate-400"
+												className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
 											>
 												{label}
 											</div>
@@ -1052,7 +1274,7 @@ export default function FingerpickEditModal({
 										return (
 											<div
 												key={groupIndex}
-												className="flex flex-1 gap-0.5 rounded"
+												className="flex flex-1 gap-0.5"
 												style={{
 													// Grow proportionally to slot count so every slot column
 													// stays equal width across the whole measure.
@@ -1124,9 +1346,24 @@ export default function FingerpickEditModal({
 																					ck,
 																				);
 																		}}
-																		onClick={() =>
-																			setSelectedCell(cell)
-																		}
+																		onClick={() => {
+																			// Touch selection +
+																			// keyboard focus is
+																			// handled in
+																			// handleCellPointerUp so
+																			// focus() lands inside
+																			// the tap gesture (iOS
+																			// requirement); the
+																			// trailing click is a
+																			// no-op here.
+																			if (
+																				lastPointerTypeRef.current ===
+																				"touch"
+																			)
+																				return;
+																			setTouchMute(null);
+																			setSelectedCell(cell);
+																		}}
 																		onKeyDown={(e) =>
 																			handleCellKeyDown(
 																				e,
@@ -1146,8 +1383,11 @@ export default function FingerpickEditModal({
 																				e,
 																			)
 																		}
-																		onPointerUp={
-																			cancelLongPress
+																		onPointerUp={(e) =>
+																			handleCellPointerUp(
+																				cell,
+																				e,
+																			)
 																		}
 																		onPointerLeave={
 																			cancelLongPress
@@ -1172,11 +1412,11 @@ export default function FingerpickEditModal({
 																					}
 																				: undefined
 																		}
-																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center rounded font-mono text-xs transition-colors ${
+																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center font-mono text-xs transition-colors select-none touch-manipulation ${
 																			isSelected
 																				? "bg-denim-tint ring-1 ring-denim text-denim"
-																				: "hover:bg-slate-50 text-slate-600"
-																		} ${sf.fret === null && !sf.muted ? "text-slate-300" : ""}`}
+																				: "hover:bg-raise text-ink-dim"
+																		} ${sf.fret === null && !sf.muted ? "text-ink-faint" : ""}`}
 																	>
 																		{cellDisplay(sf)}
 																		{glyph && (
@@ -1187,7 +1427,7 @@ export default function FingerpickEditModal({
 																		{tiedDisplay && (
 																			<span
 																				aria-hidden
-																				className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 rounded-t-full border-t-2"
+																				className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 border-t-2"
 																				style={{
 																					borderColor:
 																						"rgba(74, 111, 165, 0.5)",
@@ -1199,7 +1439,7 @@ export default function FingerpickEditModal({
 															})}
 
 															{/* Duration label */}
-															<div className="text-center text-[9px] font-mono text-slate-400 leading-none">
+															<div className="text-center text-[9px] font-mono text-ink-faint leading-none">
 																{DURATION_ABBREV[slot.duration]}
 															</div>
 
@@ -1214,10 +1454,10 @@ export default function FingerpickEditModal({
 																		})
 																	}
 																	aria-label={`Select column ${slotIndex + 1}`}
-																	className={`h-3.5 w-3.5 rounded-full border transition-colors ${
+																	className={`h-3.5 w-3.5 border transition-colors ${
 																		columnSelected
 																			? "bg-denim border-denim"
-																			: "border-slate-300 hover:border-denim"
+																			: "border-line-strong hover:border-denim"
 																	}`}
 																/>
 																{key === firstSelectedColumnKey &&
@@ -1237,8 +1477,8 @@ export default function FingerpickEditModal({
 								</div>
 
 								{/* Quick preset row: fill the whole measure with one note value. */}
-								<div className="flex items-center gap-1 border-t border-slate-100 pt-2">
-									<span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-0.5">
+								<div className="flex items-center gap-1 border-t border-line pt-2">
+									<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
 										All
 									</span>
 									{(["quarter", "eighth", "sixteenth"] as const).map((d) => (
@@ -1246,7 +1486,7 @@ export default function FingerpickEditModal({
 											key={d}
 											onClick={() => requestPreset(measureIndex, d)}
 											title={`Fill measure with ${d} notes`}
-											className="flex items-center justify-center h-7 w-8 rounded border border-slate-200 text-slate-600 hover:border-denim hover:text-denim transition-colors"
+											className="flex items-center justify-center h-7 w-8 border border-line-strong text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
 										>
 											<DurationIcon duration={d} />
 										</button>
@@ -1254,26 +1494,26 @@ export default function FingerpickEditModal({
 								</div>
 
 								{presetConfirm && presetConfirm.measureIndex === measureIndex && (
-									<div className="flex flex-col gap-1.5 rounded border border-slate-200 bg-slate-50 p-2">
-										<span className="text-[11px] text-slate-600">
+									<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
+										<span className="text-[11px] text-ink-dim">
 											Keep existing data (remap) or clear?
 										</span>
 										<div className="flex gap-1">
 											<button
 												onClick={applyPresetRemap}
-												className="h-7 px-2 rounded text-xs font-semibold text-white bg-denim hover:bg-denim-dark transition-colors"
+												className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
 											>
 												Remap
 											</button>
 											<button
 												onClick={applyPresetClear}
-												className="h-7 px-2 rounded text-xs text-slate-600 hover:bg-slate-200 transition-colors"
+												className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
 											>
 												Clear
 											</button>
 											<button
 												onClick={() => setPresetConfirm(null)}
-												className="h-7 px-2 rounded text-xs text-slate-500 hover:bg-slate-200 transition-colors"
+												className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
 											>
 												Cancel
 											</button>
@@ -1287,35 +1527,151 @@ export default function FingerpickEditModal({
 					{/* Add measure block */}
 					<button
 						onClick={() => commit((p) => addMeasure(p))}
-						className="rounded-lg border border-dashed border-slate-300 min-h-32 flex items-center justify-center gap-1.5 text-sm text-slate-400 hover:border-denim hover:text-denim transition-colors"
+						className="border border-dashed border-line-strong min-h-32 flex items-center justify-center gap-1.5 text-sm text-ink-dim hover:border-denim hover:text-denim transition-colors"
 					>
 						<Plus size={16} /> Add measure
 					</button>
 				</div>
 
-				<p className="text-[11px] text-slate-400">
-					Click a cell then use arrow keys to move, number keys to set a fret,{" "}
-					<span className="font-mono">x</span> to mute, Backspace to clear. Right-click
-					(or long-press) a cell for techniques.
-				</p>
-
 				{/* ── Footer (pinned to the bottom of the scroll area) ───────────── */}
-				<div className="sticky bottom-0 z-55 -mx-4 flex items-center justify-end gap-2 rounded-b-xl border-t border-slate-200 bg-white px-4 py-3">
+				<div className="sticky bottom-0 z-55 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
+					{/* Editing help: "?" toggles a popover with the input-appropriate hint.
+					    Anchored above the icon (footer sits at the bottom) and left-aligned
+					    from the leftmost button so it never spills past the modal edges. */}
+					<div className="relative">
+						{/* LED-style feedback (§1.2 / §5.11): the glyph itself carries all
+						    state — no background box, border, or shadow on the button.
+						    Dormant (ink-faint) when closed; lit (denim-accent + soft glow)
+						    on hover and while the popover is open; a quick scale-down on
+						    press stands in for §5.1's momentary-flash on bare chrome. */}
+						<button
+							data-hint-trigger
+							onClick={() => setHintOpen((v) => !v)}
+							aria-label="Editing help"
+							aria-expanded={hintOpen}
+							title="Editing help"
+							className={`h-8 w-8 flex items-center justify-center transition duration-150 ease-out motion-reduce:transition-none active:scale-[0.92] ${
+								hintOpen
+									? "text-denim-accent filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
+									: "text-ink-faint hover:text-denim-accent hover:filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
+							}`}
+						>
+							<CircleHelp size={18} />
+						</button>
+						{/* Kept mounted (not conditionally rendered) so the exit transition
+						    plays on close. Entrance is a spring-pop run via the Web Animations
+						    API (see the layout effect above); close is the plain CSS fade/shrink
+						    from the classes below. Visibility/interaction is gated by the
+						    opacity/pointer-events classes; reduced-motion users skip both and
+						    get an instant toggle (§6.7). Show/hide state and outside-click
+						    dismissal are unchanged — driven by hintOpen. */}
+						<div
+							ref={hintRef}
+							aria-hidden={!hintOpen}
+							className={`absolute bottom-full left-0 mb-2 z-60 w-max max-w-xs origin-bottom-left border border-line-strong bg-surface p-3 flex flex-col gap-1 text-[11px] leading-relaxed text-ink-dim transition duration-150 ease-out motion-reduce:transition-none ${
+								hintOpen
+									? "opacity-100 scale-100"
+									: "pointer-events-none opacity-0 scale-[0.96]"
+							}`}
+						>
+							{hasFinePointer ? (
+								<>
+									<p>
+										Click a cell, then use arrow keys to move, number keys to
+										set a fret, <span className="font-mono">X</span> to mute, or
+										Backspace to clear.
+									</p>
+									<p>Right-click a cell for techniques.</p>
+								</>
+							) : (
+								<>
+									<p>
+										Tap a cell to select it, then use the number pad to set a
+										fret, the mute button to mute, or Backspace to clear.
+									</p>
+									<p>Long-press a cell for techniques.</p>
+								</>
+							)}
+						</div>
+					</div>
 					<Button
+						ref={saveButtonRef}
 						onClick={handleSave}
 						disabled={!nameValid}
-						className="h-9 disabled:opacity-40"
-						style={{ backgroundColor: "var(--denim)", color: "white" }}
+						className="h-9 bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
 					>
 						Save
 					</Button>
 				</div>
 
+				{/* Off-screen numeric input: focused on a touch tap to summon the
+				    native numeric keyboard for fret entry. Invisible and
+				    non-interactive; the keyboard writes through
+				    handleHiddenNumericInput. Positioned over the tapped cell at
+				    focus time to avoid a jump-scroll. */}
+				<input
+					ref={hiddenInputRef}
+					type="number"
+					inputMode="numeric"
+					pattern="[0-9]*"
+					aria-hidden
+					tabIndex={-1}
+					onChange={handleHiddenNumericInput}
+					onFocus={() => setIsFretInputFocused(true)}
+					onBlur={() => {
+						setIsFretInputFocused(false);
+						resetHiddenNumericInput();
+					}}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") {
+							e.currentTarget.blur();
+							return;
+						}
+						// The native numeric keyboard has no "x"; its Backspace clears
+						// the selected cell (mirrors the physical-keyboard path).
+						if (e.key === "Backspace" || e.key === "Delete") {
+							if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
+							pendingDigitRef.current = null;
+						}
+					}}
+					className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
+					style={{ top: 0, left: 0 }}
+				/>
+
+				{/* Touch mute button: the native numeric keyboard can't type "x", so
+				    give touch users a tappable way to mute the selected string. Uses
+				    the same toggleMuted commit as the desktop "x" key. Centred just
+				    below the selected cell (the "x" glyph is the tab mute notation).
+				    Hidden while the selected cell is already muted — it reappears once
+				    the cell is un-muted or a different, non-muted cell is selected. */}
+				{touchMute && selectedCell && isFretInputFocused && !selectedStringFret?.muted && (
+					<button
+						// Keep the hidden input focused when pressing this button: without
+						// it, the button steals focus, blurs the input, and the resulting
+						// isFretInputFocused=false would unmount the button before its
+						// onClick fires. Preserving focus also keeps the keyboard up.
+						onMouseDown={(e) => e.preventDefault()}
+						onClick={() => {
+							if (selectedCell) commit((prev) => toggleMuted(prev, selectedCell));
+						}}
+						aria-label="Mute string"
+						title="Mute string"
+						className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink hover:bg-denim-tint hover:text-denim active:bg-denim-tint transition-colors"
+						style={{
+							top: touchMute.top,
+							left: touchMute.left,
+							transform: "translate(-50%, 6px)",
+						}}
+					>
+						<XIcon size={14} />
+					</button>
+				)}
+
 				{/* ── Technique context menu (absolute within the content box) ───── */}
 				{techMenu && (
 					<div
 						ref={techMenuRef}
-						className="absolute z-60 rounded-lg border border-slate-200 bg-white shadow-lg py-1 min-w-40 text-sm"
+						className="absolute z-60 border border-line-strong bg-popover py-1 min-w-40 text-sm"
 						style={{ top: techMenu.y, left: techMenu.x }}
 					>
 						{(() => {
@@ -1332,7 +1688,7 @@ export default function FingerpickEditModal({
 													? undefined
 													: "No previous note on this string"
 											}
-											className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+											className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
 										>
 											{opt.label}
 										</button>
@@ -1345,19 +1701,19 @@ export default function FingerpickEditModal({
 												? undefined
 												: "No previous note on this string to tie from"
 										}
-										className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+										className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
 									>
 										Tied (⌒)
 									</button>
 								</>
 							);
 						})()}
-						<div className="border-t border-slate-100 my-1" />
+						<div className="border-t border-line my-1" />
 						<button
 							onClick={applyClearTechnique}
-							className="w-full text-left px-3 py-1.5 text-slate-600 hover:bg-denim-tint transition-colors"
+							className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 						>
-							Clear
+							Clear technique
 						</button>
 					</div>
 				)}
@@ -1384,9 +1740,9 @@ function PopupIconButton({
 			onClick={onClick}
 			title={title}
 			aria-label={title}
-			className={`h-7 w-7 flex items-center justify-center rounded text-slate-500 transition-colors ${
+			className={`h-7 w-7 flex items-center justify-center text-ink-dim transition-colors active:bg-denim-tint ${
 				danger
-					? "hover:bg-red-50 hover:text-red-500"
+					? "hover:bg-raise hover:text-destructive"
 					: "hover:bg-denim-tint hover:text-denim"
 			}`}
 		>

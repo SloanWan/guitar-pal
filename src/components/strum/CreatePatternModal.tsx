@@ -128,12 +128,12 @@ export default function CreatePatternModal({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="max-w-120 w-full">
-				<DialogHeader>
+			<DialogContent className="max-w-120 w-full flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0">
+				<DialogHeader className="shrink-0 p-4 pb-0">
 					<DialogTitle>{editPattern ? "Edit pattern" : "Create pattern"}</DialogTitle>
 				</DialogHeader>
 
-				<div className="flex flex-col gap-5">
+				<div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4 min-h-0">
 					{/* Name input */}
 					<div className="flex flex-col gap-1.5">
 						<label className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
@@ -208,7 +208,7 @@ export default function CreatePatternModal({
 					)}
 				</div>
 
-				<DialogFooter>
+				<DialogFooter className="mx-0 mb-0 shrink-0">
 					{showSignInPrompt ? (
 						<>
 							<Button variant="outline" onClick={handleSaveLocally}>

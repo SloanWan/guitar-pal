@@ -30,6 +30,63 @@ interface TabStaveRowProps {
 	measureWidths: number[];
 }
 
+// VexFlow's SVG backend emits colors as literal presentation attributes
+// (black stave lines/fret numbers, a white occlusion patch behind each fret
+// number) inherited from the root <svg>'s fill="black"/stroke="black" — it has
+// no theme awareness. This walks the finished render and overwrites those
+// attributes with theme-aware custom properties, per the design system's
+// .sline/.fnum/.clef/.tech/.tech-arc token map. Runs after every draw() call;
+// never touches note construction, layout, or the data-* cursor attributes.
+function applyStaveTheme(svgEl: SVGSVGElement): void {
+	svgEl.querySelectorAll<SVGPathElement>("g.vf-stave > path").forEach((el) => {
+		el.setAttribute("stroke", "var(--line-strong)");
+	});
+	svgEl.querySelectorAll<SVGRectElement>("g.vf-stavebarline > rect").forEach((el) => {
+		el.setAttribute("fill", "var(--line-strong)");
+	});
+	svgEl.querySelectorAll<SVGTextElement>("g.vf-clef text").forEach((el) => {
+		el.setAttribute("fill", "var(--ink-faint)");
+	});
+	svgEl.querySelectorAll<SVGGElement>("g.vf-tabnote").forEach((noteGroup) => {
+		noteGroup.querySelectorAll("text").forEach((el) => el.setAttribute("fill", "var(--ink)"));
+		// Occlusion patch behind each fret number (masks the stave line
+		// passing through it) — hardcoded white by VexFlow; must track the
+		// actual surface behind the viewer so it doesn't show as a faint
+		// square. The card wrapper was removed, so that surface is now the
+		// workspace background, not the (former card) tab-viewer background.
+		noteGroup
+			.querySelectorAll("rect")
+			.forEach((el) => el.setAttribute("fill", "var(--workspace-bg)"));
+	});
+	svgEl.querySelectorAll<SVGPathElement>("g.vf-stem path").forEach((el) => {
+		el.setAttribute("stroke", "var(--ink)");
+	});
+	svgEl.querySelectorAll<SVGPathElement>("g.vf-beam path").forEach((el) => {
+		el.setAttribute("fill", "var(--ink)");
+	});
+	svgEl.querySelectorAll<SVGTextElement>("g.vf-tuplet text").forEach((el) => {
+		el.setAttribute("fill", "var(--ink)");
+	});
+	// Tie / hammer-on / pull-off connectors: closed filled arc shapes (stroke: none).
+	svgEl.querySelectorAll<SVGPathElement>("g.vf-stavetie path").forEach((el) => {
+		el.setAttribute("fill", "var(--ink)");
+	});
+	// Slide connectors and measure-number/technique-annotation text are all
+	// emitted as bare elements directly under <svg> (VexFlow opens no group
+	// for them). Slides are the only ungrouped <path fill="none">; technique
+	// letters (H/P/sl./staccato/accent/…) are ungrouped <text> without a
+	// local font-size, while measure numbers (TabStave.setMeasure) are
+	// ungrouped <text> at the fixed 8pt VexFlow uses for that label.
+	Array.from(svgEl.children).forEach((child) => {
+		if (child.tagName === "path" && child.getAttribute("fill") === "none") {
+			child.setAttribute("stroke", "var(--ink)");
+		} else if (child.tagName === "text") {
+			const isMeasureNumber = child.getAttribute("font-size") === "8pt";
+			child.setAttribute("fill", isMeasureNumber ? "var(--ink-faint)" : "var(--ink)");
+		}
+	});
+}
+
 // No DOM side-effects — Formatter.preCalculateMinTotalWidth operates on Tickable objects only.
 export function computeMeasureMinWidth(
 	notes: StemmableNote[],
@@ -74,7 +131,7 @@ export default function TabStaveRow({
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
 			renderer.resize(svgWidth, SVG_HEIGHT);
 			const ctx = renderer.getContext();
-			ctx.setFont({ family: "'Geist Mono', ui-monospace, monospace", size: "10pt" });
+			ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
 
 			// Draw staves, accumulating x from per-measure widths.
 			let staveX = CLEF_WIDTH;
@@ -134,6 +191,9 @@ export default function TabStaveRow({
 					});
 				}
 			});
+
+			const svgEl = div.querySelector("svg");
+			if (svgEl) applyStaveTheme(svgEl);
 		};
 
 		// Initial render; ResizeObserver re-renders on container size changes.

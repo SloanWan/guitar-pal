@@ -38,64 +38,99 @@ function PatternCard({
 	onEdit,
 	onDelete,
 }: PatternCardProps) {
+	const meta = `${pattern.measures.length} BARS · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${pattern.bpm} BPM`;
 	return (
-		<div
+		<button
+			type="button"
 			onClick={onSelect}
-			className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
+			className={`w-full text-left cursor-pointer px-3.5 py-2.5 border-l-2 border-b border-line transition-all duration-200 ${
 				isSelected
 					? "bg-denim-tint border-l-denim"
-					: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
+					: "border-l-transparent hover:bg-sidebar-hover hover:border-l-line-strong"
 			}`}
 		>
 			<div className="flex items-center justify-between mb-1">
 				<span
-					className={`text-[11px] font-semibold transition-colors duration-200 ${
-						isSelected ? "text-denim" : "text-slate-500"
+					className={`text-[13px] font-medium transition-colors duration-200 ${
+						isSelected ? "text-denim-accent" : "text-ink"
 					}`}
 				>
 					{pattern.name}
 				</span>
 				<div className="flex items-center gap-0.5">
 					{onEdit && (
-						<button
+						<span
+							role="button"
+							tabIndex={0}
 							onClick={(e) => {
 								e.stopPropagation();
 								onEdit();
 							}}
-							className="p-0.5 rounded transition-colors text-slate-300 hover:text-denim"
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									e.stopPropagation();
+									onEdit();
+								}
+							}}
+							className="p-0.5 transition-colors text-ink-dim hover:text-denim cursor-pointer"
 							aria-label="Edit pattern"
 						>
 							<Pencil size={14} />
-						</button>
+						</span>
 					)}
 					{onDelete && (
-						<button
+						<span
+							role="button"
+							tabIndex={0}
 							onClick={(e) => {
 								e.stopPropagation();
 								onDelete();
 							}}
-							className="p-0.5 rounded transition-colors text-slate-300 hover:text-red-500"
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									e.stopPropagation();
+									onDelete();
+								}
+							}}
+							className="p-0.5 transition-colors text-ink-dim hover:text-destructive cursor-pointer"
 							aria-label="Delete pattern"
 						>
 							<Trash2 size={14} />
-						</button>
+						</span>
 					)}
-					<button
+					<span
+						role="button"
+						tabIndex={0}
 						onClick={(e) => {
 							e.stopPropagation();
 							onToggleFav();
 						}}
-						className="p-0.5 rounded transition-colors text-slate-300 hover:text-amber-400"
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								e.stopPropagation();
+								onToggleFav();
+							}
+						}}
+						className="p-0.5 transition-colors text-ink-faint hover:text-favorite-active cursor-pointer"
 						aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
 					>
-						<Star size={12} className={isFav ? "fill-amber-400 text-amber-400" : ""} />
-					</button>
+						<Star
+							size={12}
+							className={isFav ? "fill-favorite-active text-favorite-active" : ""}
+						/>
+					</span>
 				</div>
 			</div>
+			<p className="font-mono text-[10px] tracking-[0.06em] uppercase text-ink-faint">
+				{meta}
+			</p>
 			{pattern.description && (
-				<p className="text-[10px] text-slate-400 leading-snug">{pattern.description}</p>
+				<p className="mt-1 text-[10px] text-ink-dim leading-snug">{pattern.description}</p>
 			)}
-		</div>
+		</button>
 	);
 }
 
@@ -116,16 +151,23 @@ export default function FingerpickPatternLibrary({
 	const [presetsOpen, setPresetsOpen] = useState(true);
 	const [editModalOpen, setEditModalOpen] = useState(false);
 	const [editingPattern, setEditingPattern] = useState<FingerpickPattern | null>(null);
+	const [filter, setFilter] = useState("");
 
 	const customIds = new Set(customPatterns.map((p) => p.id));
 	const presets = patterns.filter((p) => !customIds.has(p.id));
 
-	const visiblePresets =
+	const query = filter.trim().toLowerCase();
+	const matchesFilter = (p: FingerpickPattern) => p.name.toLowerCase().includes(query);
+
+	const tabPresets =
 		activeTab === "favourites" ? presets.filter((p) => favouriteIds.includes(p.id)) : presets;
-	const visibleCustom =
+	const tabCustom =
 		activeTab === "favourites"
 			? customPatterns.filter((p) => favouriteIds.includes(p.id))
 			: customPatterns;
+
+	const visiblePresets = query ? tabPresets.filter(matchesFilter) : tabPresets;
+	const visibleCustom = query ? tabCustom.filter(matchesFilter) : tabCustom;
 
 	function openNewPattern() {
 		setEditingPattern(null);
@@ -140,20 +182,20 @@ export default function FingerpickPatternLibrary({
 	return (
 		<>
 			{/* Header strip */}
-			<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-slate-200">
-				<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-					Fingerpick Library
+			<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-line">
+				<h2 className="text-[10px] font-normal uppercase tracking-[0.18em] text-ink">
+					Pattern Library
 				</h2>
 				<div className="flex items-center gap-1">
 					<button
 						onClick={openNewPattern}
-						className="flex items-center gap-1 h-8 px-2 rounded-md text-[11px] font-semibold text-denim hover:bg-denim-tint transition-colors"
+						className="flex items-center gap-1 h-8 px-2 text-[11px] font-semibold text-denim hover:bg-denim-tint transition-colors"
 					>
 						<Plus size={14} /> New Pattern
 					</button>
 					<button
 						onClick={onClose}
-						className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+						className="lg:hidden h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink transition-colors"
 					>
 						<X size={18} />
 					</button>
@@ -161,13 +203,13 @@ export default function FingerpickPatternLibrary({
 			</div>
 
 			{/* Tab bar */}
-			<div className="flex shrink-0 border-b border-slate-200">
+			<div className="flex shrink-0 border-b border-line">
 				<button
 					onClick={() => setActiveTab("all")}
 					className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
 						activeTab === "all"
 							? "text-denim border-denim"
-							: "text-slate-400 border-transparent hover:text-slate-600"
+							: "text-ink-dim border-transparent hover:text-ink"
 					}`}
 				>
 					All
@@ -177,11 +219,34 @@ export default function FingerpickPatternLibrary({
 					className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
 						activeTab === "favourites"
 							? "text-denim border-denim"
-							: "text-slate-400 border-transparent hover:text-slate-600"
+							: "text-ink-dim border-transparent hover:text-ink"
 					}`}
 				>
 					Favourites
 				</button>
+			</div>
+
+			{/* Filter */}
+			<div className="shrink-0 border-b border-line px-3 py-2.5">
+				<div className="relative">
+					<input
+						type="text"
+						value={filter}
+						onChange={(e) => setFilter(e.target.value)}
+						placeholder="> filter patterns…"
+						aria-label="Filter patterns"
+						className="w-full border border-line-strong bg-surface pl-3 pr-8 py-1.5 font-mono text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+					/>
+					{filter && (
+						<button
+							onClick={() => setFilter("")}
+							className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-ink-faint hover:text-ink transition-colors"
+							aria-label="Clear filter"
+						>
+							<X size={14} />
+						</button>
+					)}
+				</div>
 			</div>
 
 			{/* Scrollable content */}
@@ -190,25 +255,27 @@ export default function FingerpickPatternLibrary({
 				<div>
 					<button
 						onClick={() => setMyPatternsOpen((v) => !v)}
-						className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-50"
+						className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-1"
 					>
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 							My Patterns
 						</span>
 						<ChevronDown
 							size={13}
-							className={`text-slate-400 transition-transform duration-200 ${
+							className={`text-ink-dim transition-transform duration-200 ${
 								myPatternsOpen ? "" : "-rotate-90"
 							}`}
 						/>
 					</button>
 					{myPatternsOpen && (
-						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
+						<div className="px-3 pb-3 pt-3 flex flex-col">
 							{visibleCustom.length === 0 ? (
-								<p className="text-[11px] text-slate-400 px-1">
-									{activeTab === "all"
-										? "No custom patterns yet"
-										: "No custom favourites yet"}
+								<p className="text-[11px] text-ink-dim px-1">
+									{query
+										? "No matches"
+										: activeTab === "all"
+											? "No custom patterns yet"
+											: "No custom favourites yet"}
 								</p>
 							) : (
 								visibleCustom.map((pattern) => (
@@ -232,22 +299,24 @@ export default function FingerpickPatternLibrary({
 				<div>
 					<button
 						onClick={() => setPresetsOpen((v) => !v)}
-						className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-100"
+						className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-2"
 					>
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 							Presets
 						</span>
 						<ChevronDown
 							size={13}
-							className={`text-slate-400 transition-transform duration-200 ${
+							className={`text-ink-dim transition-transform duration-200 ${
 								presetsOpen ? "" : "-rotate-90"
 							}`}
 						/>
 					</button>
 					{presetsOpen && (
-						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
+						<div className="px-3 pb-3 pt-3 flex flex-col">
 							{visiblePresets.length === 0 ? (
-								<p className="text-[11px] text-slate-400 px-1">No preset favourites yet</p>
+								<p className="text-[11px] text-ink-dim px-1">
+									{query ? "No matches" : "No preset favourites yet"}
+								</p>
 							) : (
 								visiblePresets.map((pattern) => (
 									<PatternCard
@@ -266,7 +335,7 @@ export default function FingerpickPatternLibrary({
 
 				{/* Sign-in nudge */}
 				{!user && (
-					<p className="text-xs text-slate-400 text-center px-4 py-3">
+					<p className="text-xs text-ink-dim text-center px-4 py-3">
 						Sign in to sync your patterns and favourites across devices.
 					</p>
 				)}

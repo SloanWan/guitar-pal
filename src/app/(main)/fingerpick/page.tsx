@@ -199,6 +199,7 @@ export default function FingerpickPage() {
 	const [cursorResetTick, setCursorResetTick] = useState(0);
 	const [showSheet, setShowSheet] = useState(false);
 	const [showBpmPopover, setShowBpmPopover] = useState(false);
+	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
 	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
 	const [containerWidth, setContainerWidth] = useState(0);
 	const [bpmPopoverPos, setBpmPopoverPos] = useState<{ bottom: number; left: number }>({
@@ -1008,7 +1009,7 @@ export default function FingerpickPage() {
 		};
 	}, [isPlaying]);
 
-	// Spacebar toggles Play/Pause. Skips when focus is inside a text/select element.
+	// Spacebar routes to play/pause or tap-tempo depending on spaceMode.
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (
@@ -1019,13 +1020,17 @@ export default function FingerpickPage() {
 				return;
 			if (e.code === "Space") {
 				e.preventDefault();
-				handlePlayPause();
+				if (spaceMode === "playPause") {
+					handlePlayPause();
+				} else {
+					handleTapTempo();
+				}
 			}
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isPlaying, isPaused, isLoaded, bpm, loopGap]);
+	}, [isPlaying, isPaused, isLoaded, bpm, loopGap, spaceMode]);
 
 	// Greedy row layout driven by content width; guard: render nothing until the
 	// ResizeObserver fires with the real container width on mount.
@@ -1189,16 +1194,21 @@ export default function FingerpickPage() {
 
 				{/* Right panel — controls */}
 				<div className="hidden md:flex w-full border-t border-line bg-popover md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
-					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-ink-dim">
+					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-denim">
 						Controls
 					</h2>
 
 					<div className="flex flex-col overflow-y-auto">
 						{/* TRANSPORT */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Transport</span>
-								<span>Space</span>
+								<span
+									className={`transition-opacity duration-150 ${spaceMode === "playPause" ? "opacity-100" : "opacity-0"}`}
+									aria-hidden={spaceMode !== "playPause"}
+								>
+									Space
+								</span>
 							</div>
 							<div className="flex gap-2">
 								<button
@@ -1229,11 +1239,24 @@ export default function FingerpickPage() {
 									Loading samples…
 								</p>
 							)}
+							<div>
+								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									Spacebar
+								</div>
+								<Segmented
+									options={[
+										{ value: "playPause", label: "Play/Pause" },
+										{ value: "tapTempo", label: "Tap" },
+									]}
+									value={spaceMode}
+									onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
+								/>
+							</div>
 						</div>
 
 						{/* TEMPO */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Tempo</span>
 								<span>40–220</span>
 							</div>
@@ -1267,50 +1290,67 @@ export default function FingerpickPage() {
 								ariaLabel="Tempo in BPM"
 							/>
 							{/* Steppers: −10 / −1 / TAP / +1 / +10 */}
-							<div className="flex gap-2">
-								{(
-									[
-										{ label: "−10", delta: -10 },
-										{ label: "−1", delta: -1 },
-									] as const
-								).map(({ label, delta }) => (
+							<div className="flex flex-col">
+								<div className="flex gap-2">
+									{(
+										[
+											{ label: "−10", delta: -10 },
+											{ label: "−1", delta: -1 },
+										] as const
+									).map(({ label, delta }) => (
+										<button
+											key={label}
+											type="button"
+											onClick={() => handleBpmChange(bpm + delta)}
+											className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										>
+											{label}
+										</button>
+									))}
 									<button
-										key={label}
 										type="button"
-										onClick={() => handleBpmChange(bpm + delta)}
+										onClick={handleTapTempo}
 										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 									>
-										{label}
+										TAP
 									</button>
-								))}
-								<button
-									type="button"
-									onClick={handleTapTempo}
-									className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-								>
-									TAP
-								</button>
-								{(
-									[
-										{ label: "+1", delta: 1 },
-										{ label: "+10", delta: 10 },
-									] as const
-								).map(({ label, delta }) => (
-									<button
-										key={label}
-										type="button"
-										onClick={() => handleBpmChange(bpm + delta)}
-										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-									>
-										{label}
-									</button>
-								))}
+									{(
+										[
+											{ label: "+1", delta: 1 },
+											{ label: "+10", delta: 10 },
+										] as const
+									).map(({ label, delta }) => (
+										<button
+											key={label}
+											type="button"
+											onClick={() => handleBpmChange(bpm + delta)}
+											className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										>
+											{label}
+										</button>
+									))}
+								</div>
+								{/* Fixed-height row reserves space for the TAP→Space hint so switching modes causes no layout shift */}
+								<div className="flex gap-2 h-4">
+									<div className="flex-1" />
+									<div className="flex-1" />
+									<div className="flex-1 flex items-center justify-center">
+										<span
+											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
+											aria-hidden="true"
+										>
+											space
+										</span>
+									</div>
+									<div className="flex-1" />
+									<div className="flex-1" />
+								</div>
 							</div>
 						</div>
 
 						{/* LOOP */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Loop</span>
 							</div>
 							<div className="flex items-center justify-between">
@@ -1345,7 +1385,7 @@ export default function FingerpickPage() {
 
 						{/* NOTE SOUND */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Note Sound</span>
 								<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
 							</div>
@@ -1367,7 +1407,7 @@ export default function FingerpickPage() {
 
 						{/* METRONOME */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Metronome</span>
 								<span className="tabular-nums">
 									{Math.round(metronomeGain * 100)}%
@@ -1511,48 +1551,65 @@ export default function FingerpickPage() {
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
 						{/* Tempo — steppers + fader */}
 						<div className="flex flex-col gap-3">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Tempo</span>
 								<span className="tabular-nums text-denim">{bpm}</span>
 							</div>
-							<div className="flex gap-2">
-								{(
-									[
-										{ label: "−10", delta: -10 },
-										{ label: "−1", delta: -1 },
-									] as const
-								).map(({ label, delta }) => (
+							<div className="flex flex-col">
+								<div className="flex gap-2">
+									{(
+										[
+											{ label: "−10", delta: -10 },
+											{ label: "−1", delta: -1 },
+										] as const
+									).map(({ label, delta }) => (
+										<button
+											key={label}
+											type="button"
+											onClick={() => handleBpmChange(bpm + delta)}
+											className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										>
+											{label}
+										</button>
+									))}
 									<button
-										key={label}
 										type="button"
-										onClick={() => handleBpmChange(bpm + delta)}
+										onClick={handleTapTempo}
 										className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 									>
-										{label}
+										TAP
 									</button>
-								))}
-								<button
-									type="button"
-									onClick={handleTapTempo}
-									className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-								>
-									TAP
-								</button>
-								{(
-									[
-										{ label: "+1", delta: 1 },
-										{ label: "+10", delta: 10 },
-									] as const
-								).map(({ label, delta }) => (
-									<button
-										key={label}
-										type="button"
-										onClick={() => handleBpmChange(bpm + delta)}
-										className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-									>
-										{label}
-									</button>
-								))}
+									{(
+										[
+											{ label: "+1", delta: 1 },
+											{ label: "+10", delta: 10 },
+										] as const
+									).map(({ label, delta }) => (
+										<button
+											key={label}
+											type="button"
+											onClick={() => handleBpmChange(bpm + delta)}
+											className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										>
+											{label}
+										</button>
+									))}
+								</div>
+								{/* Fixed-height row reserves space for the TAP→Space hint */}
+								<div className="flex gap-2 h-4">
+									<div className="flex-1" />
+									<div className="flex-1" />
+									<div className="flex-1 flex items-center justify-center">
+										<span
+											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
+											aria-hidden="true"
+										>
+											space
+										</span>
+									</div>
+									<div className="flex-1" />
+									<div className="flex-1" />
+								</div>
 							</div>
 							<Fader
 								min={MIN_BPM}
@@ -1572,7 +1629,7 @@ export default function FingerpickPage() {
 
 						{/* Note Sound volume */}
 						<div className="flex flex-col gap-3">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Note Sound</span>
 								<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
 							</div>
@@ -1672,6 +1729,21 @@ export default function FingerpickPage() {
 									applyLoopGapChange(gap);
 								}}
 								disabled={playOnce}
+							/>
+						</div>
+
+						{/* Spacebar mode */}
+						<div>
+							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								Spacebar
+							</div>
+							<Segmented
+								options={[
+									{ value: "playPause", label: "Play/Pause" },
+									{ value: "tapTempo", label: "Tap" },
+								]}
+								value={spaceMode}
+								onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
 							/>
 						</div>
 					</div>

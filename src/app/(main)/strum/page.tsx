@@ -404,14 +404,14 @@ export default function StrumPage() {
 
 				{/* Right panel — desktop controls only */}
 				<div className="hidden md:flex w-full border-t border-line bg-popover md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
-					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-ink-dim">
+					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-denim">
 						Controls
 					</h2>
 
 					<div className="flex flex-col overflow-y-auto">
 						{/* TRANSPORT */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Transport</span>
 								<span
 									className={`transition-opacity duration-150 ${spaceMode === "playPause" ? "opacity-100" : "opacity-0"}`}
@@ -452,7 +452,7 @@ export default function StrumPage() {
 
 						{/* TEMPO */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Tempo</span>
 								<span>40–220</span>
 							</div>
@@ -543,7 +543,7 @@ export default function StrumPage() {
 
 						{/* LOOP */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Loop</span>
 							</div>
 							<div className="flex items-center justify-between">
@@ -570,7 +570,7 @@ export default function StrumPage() {
 
 						{/* STRUM SOUND */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Strum Sound</span>
 								<span className="tabular-nums">{Math.round(strumGain * 100)}%</span>
 							</div>
@@ -605,7 +605,7 @@ export default function StrumPage() {
 
 						{/* METRONOME */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Metronome</span>
 								<span className="tabular-nums">{Math.round(metronomeGain * 100)}%</span>
 							</div>
@@ -751,7 +751,7 @@ export default function StrumPage() {
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
 						{/* Tempo — steppers + fader */}
 						<div className="flex flex-col gap-3">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Tempo</span>
 								<span className="tabular-nums text-denim">{bpm}</span>
 							</div>
@@ -829,7 +829,7 @@ export default function StrumPage() {
 
 						{/* Strum Sound volume */}
 						<div className={`flex flex-col gap-3 ${!strumEnabled ? "opacity-40" : ""}`}>
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Strum Sound</span>
 								<span className="tabular-nums">{Math.round(strumGain * 100)}%</span>
 							</div>

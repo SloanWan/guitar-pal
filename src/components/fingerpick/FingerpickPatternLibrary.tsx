@@ -257,7 +257,7 @@ export default function FingerpickPatternLibrary({
 						onClick={() => setMyPatternsOpen((v) => !v)}
 						className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-1"
 					>
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-denim">
 							My Patterns
 						</span>
 						<ChevronDown
@@ -301,7 +301,7 @@ export default function FingerpickPatternLibrary({
 						onClick={() => setPresetsOpen((v) => !v)}
 						className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-2"
 					>
-						<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
+						<span className="text-[10px] font-semibold uppercase tracking-widest text-denim">
 							Presets
 						</span>
 						<ChevronDown

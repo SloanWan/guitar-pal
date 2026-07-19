@@ -1,7 +1,6 @@
 "use client";
 
 import StepGridCard from "@/components/strum/StepGridCard";
-import BpmSlider from "@/components/strum/BpmSlider";
 import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
 import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
 
@@ -11,7 +10,6 @@ import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import {
 	CirclePlay,
-	CirclePause,
 	CircleStop,
 	ChevronUp,
 	SquareMenu,
@@ -21,6 +19,7 @@ import {
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
 import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import { useUser } from "@/hooks/useUser";
+import Fader from "@/components/ui/Fader";
 
 const MIN_BPM = 40;
 const MAX_BPM = 220;
@@ -28,230 +27,22 @@ const MAX_BPM = 220;
 const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
 type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
 
-// ── v3 control primitives ────────────────────────────────────────────────
-// Presentational hardware-panel controls ported verbatim from the fingerpick
-// controls rack / mobile drawer. Colors are driven by the v3 design tokens
-// (bg-panel, bg-ink, bg-denim, …) so they track the active theme.
-
-interface FaderProps {
-	min: number;
-	max: number;
-	step: number;
-	value: number;
-	onValue: (value: number) => void;
-	onDragStart?: () => void;
-	onDragEnd?: () => void;
-	// Tick positions as track-width percentages (0–100).
-	ticks: number[];
-	// Snap targets parallel to `ticks`; when set, each tick becomes clickable and
-	// jumps the value directly to its target.
-	tickValues?: number[];
-	// Labels parallel to `ticks`; when set, hovering a tick's segment shows a tooltip.
-	tickLabels?: string[];
-	// Scale labels rendered space-between beneath the track.
-	scale: string[];
-	disabled?: boolean;
-	ariaLabel: string;
-}
-
-// Hardware fader: 3px track, denim fill, knurled 10×18 thumb, semantic ticks
-// and a scale row. Draggable via pointer capture; keyboard arrows/page keys.
-function Fader({
-	min,
-	max,
-	step,
-	value,
-	onValue,
-	onDragStart,
-	onDragEnd,
-	ticks,
-	tickValues,
-	tickLabels,
-	scale,
-	disabled,
-	ariaLabel,
-}: FaderProps) {
-	const trackRef = useRef<HTMLDivElement>(null);
-	const draggingRef = useRef(false);
-	const [hoveredTick, setHoveredTick] = useState<number | null>(null);
-	const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-
-	// Segment around tick i spans the midpoints to its neighbours (first starts at
-	// 0%, last ends at 100%). Returns the tick index whose segment contains p, or null.
-	function segmentIndexAt(p: number): number | null {
-		if (!tickLabels) return null;
-		for (let i = 0; i < ticks.length; i++) {
-			const start = i === 0 ? 0 : (ticks[i - 1] + ticks[i]) / 2;
-			const end = i === ticks.length - 1 ? 100 : (ticks[i] + ticks[i + 1]) / 2;
-			if (p >= start && p < end) return i;
-		}
-		return null;
-	}
-	function handleTrackMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-		if (draggingRef.current || !tickLabels) return;
-		const el = trackRef.current;
-		if (!el) return;
-		const rect = el.getBoundingClientRect();
-		const p = rect.width > 0 ? ((e.clientX - rect.left) / rect.width) * 100 : 0;
-		const next = segmentIndexAt(p);
-		setHoveredTick((prev) => (prev === next ? prev : next));
-	}
-	function handleTrackMouseLeave() {
-		setHoveredTick(null);
-	}
-
-	function snap(raw: number): number {
-		const clamped = Math.min(max, Math.max(min, raw));
-		const stepped = Math.round((clamped - min) / step) * step + min;
-		return Math.min(max, Math.max(min, stepped));
-	}
-	// Magnetic tick snapping: if raw maps within ~3% of the range of a tick value,
-	// snap to that tick so the thumb visibly "catches" on ticks while dragging.
-	function magnetize(raw: number): number {
-		if (!tickValues) return raw;
-		const threshold = (max - min) * 0.03;
-		let best = raw;
-		let bestDist = threshold;
-		for (const tv of tickValues) {
-			const d = Math.abs(raw - tv);
-			if (d <= bestDist) {
-				bestDist = d;
-				best = tv;
-			}
-		}
-		return best;
-	}
-	function valueFromClientX(clientX: number): number {
-		const el = trackRef.current;
-		if (!el) return value;
-		const rect = el.getBoundingClientRect();
-		const p = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
-		return magnetize(snap(min + p * (max - min)));
-	}
-	function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-		if (disabled) return;
-		draggingRef.current = true;
-		setHoveredTick(null);
-		e.currentTarget.setPointerCapture(e.pointerId);
-		onDragStart?.();
-		onValue(valueFromClientX(e.clientX));
-	}
-	function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
-		if (!draggingRef.current) return;
-		onValue(valueFromClientX(e.clientX));
-	}
-	function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
-		if (!draggingRef.current) return;
-		draggingRef.current = false;
-		e.currentTarget.releasePointerCapture(e.pointerId);
-		onDragEnd?.();
-	}
-	function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-		if (disabled) return;
-		let next: number;
-		switch (e.key) {
-			case "ArrowLeft":
-			case "ArrowDown":
-				next = value - step;
-				break;
-			case "ArrowRight":
-			case "ArrowUp":
-				next = value + step;
-				break;
-			case "PageDown":
-				next = value - step * 10;
-				break;
-			case "PageUp":
-				next = value + step * 10;
-				break;
-			default:
-				return;
-		}
-		e.preventDefault();
-		onValue(snap(next));
-	}
-
-	return (
-		<div className={`select-none ${disabled ? "pointer-events-none" : ""}`}>
-			<div
-				role="slider"
-				aria-label={ariaLabel}
-				aria-valuemin={min}
-				aria-valuemax={max}
-				aria-valuenow={Math.round(value)}
-				tabIndex={disabled ? -1 : 0}
-				onPointerDown={handlePointerDown}
-				onPointerMove={handlePointerMove}
-				onPointerUp={handlePointerUp}
-				onKeyDown={handleKeyDown}
-				className="relative flex h-7 cursor-ew-resize touch-none items-center select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-denim"
-			>
-				<div
-					ref={trackRef}
-					className="relative h-0.75 w-full touch-none select-none bg-line-strong"
-					onMouseMove={handleTrackMouseMove}
-					onMouseLeave={handleTrackMouseLeave}
-				>
-					<div className="absolute inset-y-0 left-0 bg-denim" style={{ width: `${pct}%` }} />
-					{/* Genre tooltip — shown while hovering a tick's segment */}
-					{hoveredTick !== null && tickLabels && (
-						<div
-							className="pointer-events-none absolute z-20 -translate-x-1/2 whitespace-nowrap bg-(--modal-bg) border border-line px-1.5 py-0.5 text-[10px] text-ink"
-							style={{
-								left: `${ticks[hoveredTick]}%`,
-								bottom: "calc(100% + 10px)",
-							}}
-						>
-							{tickLabels[hoveredTick]}
-						</div>
-					)}
-					<div
-						className="absolute top-1/2 h-4.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border border-panel bg-ink"
-						style={{ left: `${pct}%` }}
-					>
-						<span
-							aria-hidden="true"
-							className="absolute inset-x-0.5 inset-y-1"
-							style={{
-								background:
-									"repeating-linear-gradient(90deg, var(--bg-panel) 0 1px, transparent 1px 3px)",
-							}}
-						/>
-					</div>
-					<div aria-hidden="true" className="absolute inset-x-0 top-full h-1.5">
-						{ticks.map((t) => (
-							<span
-								key={t}
-								className="absolute top-0.5 h-1 w-px bg-ink-faint"
-								style={{ left: `${t}%` }}
-							/>
-						))}
-					</div>
-					{/* Click-to-snap hit areas over each tick — stop propagation so pressing
-					    a tick jumps to its value instead of starting a track drag. */}
-					{tickValues &&
-						ticks.map((t, i) => (
-							<button
-								key={t}
-								type="button"
-								tabIndex={-1}
-								aria-hidden="true"
-								onPointerDown={(e) => e.stopPropagation()}
-								onClick={() => onValue(tickValues[i])}
-								className="absolute top-full h-2.5 w-4 -translate-x-1/2 cursor-pointer touch-none select-none focus:outline-none"
-								style={{ left: `${t}%` }}
-							/>
-						))}
-				</div>
-			</div>
-			<div className="mt-2 flex justify-between font-mono text-[8px] tracking-[0.08em] text-ink-faint">
-				{scale.map((s, i) => (
-					<span key={i}>{s}</span>
-				))}
-			</div>
-		</div>
-	);
-}
+// BPM fader tick marks: genre reference tempos. `PERCENTS` are the fixed v3
+// visual positions on the 40–220 track; `VALUES` are the exact BPM each tick
+// snaps to when clicked; `LABELS` are the genre tooltip shown while hovering.
+const BPM_TICK_PERCENTS = [11, 19, 28, 33, 39, 44, 50, 56, 67];
+const BPM_TICK_VALUES = [60, 75, 90, 100, 110, 120, 130, 140, 160];
+const BPM_TICK_LABELS = [
+	"Slow Practice",
+	"Folk",
+	"Ballad",
+	"Pop / Blues",
+	"Funk",
+	"Pop / Rock",
+	"Rock",
+	"Jazz / Hard Rock",
+	"Fast Rock",
+];
 
 interface RockerProps {
 	checked: boolean;
@@ -579,9 +370,22 @@ export default function StrumPage() {
 
 				{/* Center — StepGrid; on mobile occupies exactly the space between navbar and drawer */}
 				<div
-					className="h-[calc(100dvh-3.5rem-3.5rem)] md:h-auto md:flex-1 flex items-center justify-center px-4 md:px-8 md:py-0 md:overflow-hidden"
+					className="relative h-[calc(100dvh-3.5rem-3.5rem)] md:h-auto md:flex-1 flex items-center justify-center px-4 md:px-8 md:py-0 md:overflow-hidden"
 					onClick={restoreControls}
 				>
+					{/* Library toggle — scoped to centre column, 768–1024 px only */}
+					{!showLibrary && (
+						<button
+							onClick={(e) => { e.stopPropagation(); setShowLibrary(true); }}
+							className={`absolute top-3 right-3 z-10 lg:hidden flex items-center bg-denim text-on-denim px-2 py-2 transition-all duration-300 active:scale-95 ${
+								controlsVisible
+									? "opacity-100 pointer-events-auto"
+									: "opacity-0 pointer-events-none"
+							}`}
+						>
+							<SquareMenu />
+						</button>
+					)}
 					<div className="w-full max-w-160">
 						{selectedPattern ? (
 							<StepGridCard
@@ -609,30 +413,26 @@ export default function StrumPage() {
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 								<span>Transport</span>
-								<span>Space</span>
+								<span
+									className={`transition-opacity duration-150 ${spaceMode === "playPause" ? "opacity-100" : "opacity-0"}`}
+									aria-hidden={spaceMode !== "playPause"}
+								>
+									Space
+								</span>
 							</div>
 							<div className="flex gap-2">
 								<button
 									type="button"
 									onClick={handleHitPlayAndPause}
 									disabled={!selectedPattern}
-									aria-label={isPlaying ? "Pause" : "Play"}
-									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
+									aria-label={isPlaying ? "Stop" : "Play"}
+									className="flex h-13 w-full items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
 								>
 									{isPlaying ? (
-										<CirclePause size={20} strokeWidth={1.5} />
+										<CircleStop size={20} strokeWidth={1.5} />
 									) : (
 										<CirclePlay size={20} strokeWidth={1.5} />
 									)}
-								</button>
-								<button
-									type="button"
-									onClick={stop}
-									disabled={!isPlaying}
-									aria-label="Stop and return to start"
-									className="flex h-13 flex-1 items-center justify-center border border-line-strong text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint disabled:pointer-events-none disabled:opacity-30"
-								>
-									<CircleStop size={20} strokeWidth={1.5} />
 								</button>
 							</div>
 							<div>
@@ -668,54 +468,76 @@ export default function StrumPage() {
 									BPM
 								</div>
 							</div>
-							<BpmSlider
-								bpm={bpm}
+							<Fader
 								min={MIN_BPM}
 								max={MAX_BPM}
-								isPlaying={isPlaying}
-								setBpm={setBpm}
-								start={start}
-								stop={stop}
+								step={1}
+								value={bpm}
+								onValue={setBpm}
+								onDragStart={handleSliderPointerDown}
+								onDragEnd={handleSliderPointerUp}
+								ticks={BPM_TICK_PERCENTS}
+								tickValues={BPM_TICK_VALUES}
+								tickLabels={BPM_TICK_LABELS}
+								scale={["40", "130", "220"]}
+								ariaLabel="Tempo in BPM"
 							/>
 							{/* Steppers: −10 / −1 / TAP / +1 / +10 */}
-							<div className="flex gap-2">
-								{(
-									[
-										{ label: "−10", delta: -10 },
-										{ label: "−1", delta: -1 },
-									] as const
-								).map(({ label, delta }) => (
+							<div className="flex flex-col">
+								<div className="flex gap-2">
+									{(
+										[
+											{ label: "−10", delta: -10 },
+											{ label: "−1", delta: -1 },
+										] as const
+									).map(({ label, delta }) => (
+										<button
+											key={label}
+											type="button"
+											onClick={() => stepBpm(delta)}
+											className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										>
+											{label}
+										</button>
+									))}
 									<button
-										key={label}
 										type="button"
-										onClick={() => stepBpm(delta)}
+										onClick={handleTapTempo}
 										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 									>
-										{label}
+										TAP
 									</button>
-								))}
-								<button
-									type="button"
-									onClick={handleTapTempo}
-									className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-								>
-									TAP
-								</button>
-								{(
-									[
-										{ label: "+1", delta: 1 },
-										{ label: "+10", delta: 10 },
-									] as const
-								).map(({ label, delta }) => (
-									<button
-										key={label}
-										type="button"
-										onClick={() => stepBpm(delta)}
-										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-									>
-										{label}
-									</button>
-								))}
+									{(
+										[
+											{ label: "+1", delta: 1 },
+											{ label: "+10", delta: 10 },
+										] as const
+									).map(({ label, delta }) => (
+										<button
+											key={label}
+											type="button"
+											onClick={() => stepBpm(delta)}
+											className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										>
+											{label}
+										</button>
+									))}
+								</div>
+								{/* Fixed-height row reserves space for the TAP→Space hint so switching modes causes no layout shift */}
+								<div className="flex gap-2 h-4">
+									<div className="flex-1" />
+									<div className="flex-1" />
+									<div className="flex-1 flex items-center justify-center">
+										<span
+											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
+											aria-hidden="true"
+										>
+											space
+										</span>
+									</div>
+									<div className="flex-1" />
+									<div className="flex-1" />
+								</div>
 							</div>
 						</div>
 
@@ -852,20 +674,6 @@ export default function StrumPage() {
 				</div>
 			</div>
 
-			{/* Library toggle — fixed below navbar, mobile/tablet only */}
-			{!showLibrary && (
-				<button
-					onClick={() => setShowLibrary(true)}
-					className={`fixed top-17 right-4 z-30 lg:hidden flex items-center gap-2 bg-denim text-on-denim text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
-						controlsVisible
-							? "opacity-100 pointer-events-auto"
-							: "opacity-0 pointer-events-none"
-					}`}
-				>
-					<SquareMenu />
-				</button>
-			)}
-
 			{/* BPM vertical slider popover — fixed so it escapes the drawer's overflow context */}
 			{showBpmPopover && (
 				<div
@@ -947,53 +755,75 @@ export default function StrumPage() {
 								<span>Tempo</span>
 								<span className="tabular-nums text-denim">{bpm}</span>
 							</div>
-							<div className="flex gap-2">
-								{(
-									[
-										{ label: "−10", delta: -10 },
-										{ label: "−1", delta: -1 },
-									] as const
-								).map(({ label, delta }) => (
+							<div className="flex flex-col">
+								<div className="flex gap-2">
+									{(
+										[
+											{ label: "−10", delta: -10 },
+											{ label: "−1", delta: -1 },
+										] as const
+									).map(({ label, delta }) => (
+										<button
+											key={label}
+											type="button"
+											onClick={() => stepBpm(delta)}
+											className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										>
+											{label}
+										</button>
+									))}
 									<button
-										key={label}
 										type="button"
-										onClick={() => stepBpm(delta)}
+										onClick={handleTapTempo}
 										className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
 									>
-										{label}
+										TAP
 									</button>
-								))}
-								<button
-									type="button"
-									onClick={handleTapTempo}
-									className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-								>
-									TAP
-								</button>
-								{(
-									[
-										{ label: "+1", delta: 1 },
-										{ label: "+10", delta: 10 },
-									] as const
-								).map(({ label, delta }) => (
-									<button
-										key={label}
-										type="button"
-										onClick={() => stepBpm(delta)}
-										className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-									>
-										{label}
-									</button>
-								))}
+									{(
+										[
+											{ label: "+1", delta: 1 },
+											{ label: "+10", delta: 10 },
+										] as const
+									).map(({ label, delta }) => (
+										<button
+											key={label}
+											type="button"
+											onClick={() => stepBpm(delta)}
+											className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										>
+											{label}
+										</button>
+									))}
+								</div>
+								{/* Fixed-height row reserves space for the TAP→Space hint */}
+								<div className="flex gap-2 h-4">
+									<div className="flex-1" />
+									<div className="flex-1" />
+									<div className="flex-1 flex items-center justify-center">
+										<span
+											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
+											aria-hidden="true"
+										>
+											space
+										</span>
+									</div>
+									<div className="flex-1" />
+									<div className="flex-1" />
+								</div>
 							</div>
-							<BpmSlider
-								bpm={bpm}
+							<Fader
 								min={MIN_BPM}
 								max={MAX_BPM}
-								isPlaying={isPlaying}
-								setBpm={setBpm}
-								start={start}
-								stop={stop}
+								step={1}
+								value={bpm}
+								onValue={setBpm}
+								onDragStart={handleSliderPointerDown}
+								onDragEnd={handleSliderPointerUp}
+								ticks={BPM_TICK_PERCENTS}
+								tickValues={BPM_TICK_VALUES}
+								tickLabels={BPM_TICK_LABELS}
+								scale={["40", "130", "220"]}
+								ariaLabel="Tempo in BPM"
 							/>
 						</div>
 
@@ -1209,16 +1039,8 @@ export default function StrumPage() {
 						/>
 					</button>
 
-					{/* Stop + Play/Pause — flush right */}
-					<div className="ml-auto flex items-center gap-0.5 shrink-0">
-						<button
-							onClick={stop}
-							className={`p-1 text-ink-dim transition-colors duration-150 ${
-								isPlaying ? "visible" : "invisible"
-							}`}
-						>
-							<CircleStop size={28} strokeWidth={1.5} />
-						</button>
+					{/* Play/Stop — flush right */}
+					<div className="ml-auto flex items-center shrink-0">
 						<div
 							onClick={handleHitPlayAndPause}
 							className={`flex h-11 w-11 items-center justify-center bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
@@ -1226,7 +1048,7 @@ export default function StrumPage() {
 							}`}
 						>
 							{isPlaying ? (
-								<CirclePause size={22} strokeWidth={1.5} />
+								<CircleStop size={22} strokeWidth={1.5} />
 							) : (
 								<CirclePlay size={22} strokeWidth={1.5} />
 							)}

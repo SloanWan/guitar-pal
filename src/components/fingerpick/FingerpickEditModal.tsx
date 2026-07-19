@@ -144,9 +144,12 @@ const MAX_BPM = 220;
 // Two-layer hover highlight tints (denim #4A6FA5). Applied via inline
 // backgroundColor rather than Tailwind classes so they never collide with the
 // selected-cell denim ring/tint classes. L1 is a subtle wash over the whole beat
-// group; L2 is a stronger per-axis tint on the hovered slot column and string row
-// (they sum on the hovered cell itself, giving a brighter cross centre).
-const HOVER_L1_BG = "rgba(74, 111, 165, 0.06)";
+// group — it reuses the shared --sidebar-hover-bg token (the same denim wash the
+// pattern library uses for row hover). L2 is a stronger per-axis tint on the
+// hovered slot column and string row (they sum on the hovered cell itself, giving
+// a brighter cross centre); its 0.14 alpha has no token equivalent, so it stays a
+// raw rgba.
+const HOVER_L1_BG = "var(--sidebar-hover-bg)";
 const HOVER_L2_ALPHA = 0.14;
 const hoverAxisBg = (alpha: number): string => `rgba(74, 111, 165, ${alpha})`;
 

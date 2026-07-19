@@ -112,8 +112,8 @@ const CURSOR_LAMBDA = 20;
 
 // ── v3 control primitives ────────────────────────────────────────────────
 // Presentational hardware-panel controls scoped to the fingerpick controls
-// rack / mobile drawer. Colors are fixed (slate/denim) rather than theme
-// tokens because this workspace renders on a fixed light panel surface.
+// rack / mobile drawer. Colors are driven by the v3 design tokens
+// (bg-panel, bg-ink, bg-denim, …) so they track the active theme.
 
 interface FaderProps {
 	min: number;
@@ -363,7 +363,7 @@ function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps) {
 			<span
 				aria-hidden="true"
 				className={`absolute top-0.5 h-3.5 w-3.5 transition-all duration-100 ${
-					checked ? "left-5 bg-denim" : "left-0.5 bg-ink-dim"
+					checked ? "left-5 bg-denim-accent" : "left-0.5 bg-ink-faint"
 				}`}
 			/>
 		</button>
@@ -1995,16 +1995,14 @@ export default function FingerpickPage() {
 						</button>
 						<div
 							onClick={isLoaded ? handlePlayPause : undefined}
-							className={`transition-all duration-150 active:scale-95 ${
-								isLoaded
-									? "cursor-pointer text-denim"
-									: "opacity-30 pointer-events-none text-denim"
+							className={`flex h-11 w-11 items-center justify-center rounded-none bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
+								isLoaded ? "cursor-pointer" : "opacity-30 pointer-events-none"
 							}`}
 						>
 							{isPlaying ? (
-								<CirclePause size={40} strokeWidth={1.5} />
+								<CirclePause size={22} strokeWidth={1.5} />
 							) : (
-								<CirclePlay size={40} strokeWidth={1.5} />
+								<CirclePlay size={22} strokeWidth={1.5} />
 							)}
 						</div>
 					</div>

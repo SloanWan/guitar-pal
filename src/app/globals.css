@@ -38,7 +38,6 @@
 	--sidebar-bg: var(--bg-panel); /* fingerpick pattern library sidebar — decoupled from --bg-panel; dark keeps parity (#141414) */
 	--sidebar-header-1-bg: var(--bg-panel); /* "My Patterns" section header row — near-invisible against sidebar-bg */
 	--sidebar-header-2-bg: #1a1a1a; /* "Presets" section header row — subtly offset from header-1 so the two remain distinguishable */
-	--tab-viewer-bg: var(--bg-panel); /* fret-number occlusion patch fill in TabStaveRow — masks stave lines behind numbers; dark keeps parity (#141414) */
 	--workspace-bg: var(--bg); /* fingerpick outer workspace wrapper (behind all panels) — decoupled from --bg; dark keeps parity (#0f0f0f) */
 
 	/* Ink */
@@ -92,7 +91,6 @@
 	--sidebar-bg: #ffffff; /* fingerpick pattern library sidebar — extracted from its current bg-white; visually unchanged */
 	--sidebar-header-1-bg: #f8fafc; /* "My Patterns" header — original near-invisible off-white tint */
 	--sidebar-header-2-bg: #f1f5f9; /* "Presets" header — original near-invisible off-white tint, one step down from header-1 */
-	--tab-viewer-bg: #ffffff; /* fret-number occlusion patch fill in TabStaveRow — masks stave lines behind numbers; visually unchanged */
 	--workspace-bg: #f8fafc; /* fingerpick outer workspace wrapper — extracted from its current bg-slate-50; visually unchanged */
 
 	--ink: #141414;

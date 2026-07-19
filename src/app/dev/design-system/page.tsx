@@ -21,12 +21,7 @@
  *    in the codebase, so minimal standalone versions are built here from spec.
  */
 
-import {
-	useEffect,
-	useRef,
-	useState,
-	useSyncExternalStore,
-} from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 // ════════════════════════════════════════════════════════════════════════════
 // THEME — reuses the app's mechanism (localStorage "gp-theme" + dataset.theme)
@@ -378,8 +373,7 @@ function Segmented({ options, value, onChange, disabled }: SegmentedProps): Reac
 type LedState = "dormant" | "on" | "pulse" | "breathe";
 function Led({ state }: { state: LedState }): React.JSX.Element {
 	const lit = state !== "dormant";
-	const anim =
-		state === "pulse" ? "gp-led-pulse" : state === "breathe" ? "gp-led-breathe" : "";
+	const anim = state === "pulse" ? "gp-led-pulse" : state === "breathe" ? "gp-led-breathe" : "";
 	return (
 		<span
 			aria-hidden="true"
@@ -402,9 +396,7 @@ function BpmReadout({ bpm }: { bpm: number }): React.JSX.Element {
 				</span>
 				<span className="relative">{String(bpm).padStart(3, "0")}</span>
 			</span>
-			<div className="mt-1.5 font-mono text-[9px] tracking-[0.28em] text-ink-faint">
-				BPM
-			</div>
+			<div className="mt-1.5 font-mono text-[9px] tracking-[0.28em] text-ink-faint">BPM</div>
 		</div>
 	);
 }
@@ -487,7 +479,7 @@ function useIsClient(): boolean {
 	return useSyncExternalStore(
 		emptySubscribe,
 		() => true,
-		() => false
+		() => false,
 	);
 }
 
@@ -667,8 +659,7 @@ const TYPE_ROLES: readonly TypeRole[] = [
 	},
 	{
 		role: "Body (landing) — sans 400, 16px, lh 1.55",
-		sample:
-			"A web practice studio for self-taught guitarists — strumming machine, fingerpicking TAB player, chord library.",
+		sample: "A web practice studio for self-taught guitarists — strumming machine, fingerpicking TAB player, chord library.",
 		className: "font-sans text-ink-dim max-w-[52ch]",
 		style: { fontSize: "16px", lineHeight: 1.55 },
 	},
@@ -778,8 +769,8 @@ export default function DesignSystemPage(): React.JSX.Element {
 					</h1>
 					<p className="mt-3 max-w-[60ch] font-sans text-[14px] text-ink-dim">
 						Every documented component and state, built from the spec docs, for
-						side-by-side visual audit. Toggle the theme (top-right) to check both
-						modes. Section labels cite the spec § for report-by-reference.
+						side-by-side visual audit. Toggle the theme (top-right) to check both modes.
+						Section labels cite the spec § for report-by-reference.
 					</p>
 				</header>
 
@@ -950,7 +941,11 @@ export default function DesignSystemPage(): React.JSX.Element {
 				<Section spec="§5.5" title="Toggle switches (hardware rocker)">
 					<div className="flex flex-wrap gap-10">
 						<StateCell label="Off">
-							<Rocker checked={rockerOff} onChange={setRockerOff} ariaLabel="Demo off" />
+							<Rocker
+								checked={rockerOff}
+								onChange={setRockerOff}
+								ariaLabel="Demo off"
+							/>
 						</StateCell>
 						<StateCell label="On">
 							<Rocker checked={rockerOn} onChange={setRockerOn} ariaLabel="Demo on" />
@@ -1065,9 +1060,24 @@ export default function DesignSystemPage(): React.JSX.Element {
 				<Section spec="§5.3" title="List items (pattern library)">
 					<div className="max-w-[280px] border border-line bg-panel">
 						{[
-							{ id: 0, title: "Travis picking", meta: "12 BARS · 4/4 · 96 BPM", fav: true },
-							{ id: 1, title: "Waltz arpeggio", meta: "8 BARS · 3/4 · 120 BPM", fav: false },
-							{ id: 2, title: "Clawhammer roll", meta: "16 BARS · 4/4 · 84 BPM", fav: false },
+							{
+								id: 0,
+								title: "Travis picking",
+								meta: "12 BARS · 4/4 · 96 BPM",
+								fav: true,
+							},
+							{
+								id: 1,
+								title: "Waltz arpeggio",
+								meta: "8 BARS · 3/4 · 120 BPM",
+								fav: false,
+							},
+							{
+								id: 2,
+								title: "Clawhammer roll",
+								meta: "16 BARS · 4/4 · 84 BPM",
+								fav: false,
+							},
 						].map((item) => {
 							const selected = item.id === selectedItem;
 							return (
@@ -1113,9 +1123,21 @@ export default function DesignSystemPage(): React.JSX.Element {
 				<Section spec="§5.2" title="Cards / hairline grid">
 					<div className="grid grid-cols-1 border border-line sm:grid-cols-3">
 						{[
-							{ tag: "TOOL_01", h: "Strumming", body: "Programmable rhythm machine with real guitar samples." },
-							{ tag: "TOOL_02", h: "Fingerpicking", body: "TAB player with a live playback cursor." },
-							{ tag: "TOOL_03", h: "Chords", body: "2,000+ chord voicings, browsable by root." },
+							{
+								tag: "TOOL_01",
+								h: "Strumming",
+								body: "Programmable rhythm machine with real guitar samples.",
+							},
+							{
+								tag: "TOOL_02",
+								h: "Fingerpicking",
+								body: "TAB player with a live playback cursor.",
+							},
+							{
+								tag: "TOOL_03",
+								h: "Chords",
+								body: "2,000+ chord voicings, browsable by root.",
+							},
 						].map((c, i) => (
 							<div
 								key={c.tag}

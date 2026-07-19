@@ -1731,21 +1731,6 @@ export default function FingerpickPage() {
 								disabled={playOnce}
 							/>
 						</div>
-
-						{/* Spacebar mode */}
-						<div>
-							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-								Spacebar
-							</div>
-							<Segmented
-								options={[
-									{ value: "playPause", label: "Play/Pause" },
-									{ value: "tapTempo", label: "Tap" },
-								]}
-								value={spaceMode}
-								onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
-							/>
-						</div>
 					</div>
 				</div>
 

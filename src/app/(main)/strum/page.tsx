@@ -8,14 +8,7 @@ import { useState, useEffect, useRef } from "react";
 
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
-import {
-	CirclePlay,
-	CircleStop,
-	ChevronUp,
-	SquareMenu,
-	Metronome,
-	X,
-} from "lucide-react";
+import { CirclePlay, CircleStop, ChevronUp, SquareMenu, Metronome, X } from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
 import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import { useUser } from "@/hooks/useUser";
@@ -376,7 +369,10 @@ export default function StrumPage() {
 					{/* Library toggle — scoped to centre column, 768–1024 px only */}
 					{!showLibrary && (
 						<button
-							onClick={(e) => { e.stopPropagation(); setShowLibrary(true); }}
+							onClick={(e) => {
+								e.stopPropagation();
+								setShowLibrary(true);
+							}}
 							className={`absolute top-3 right-3 z-10 lg:hidden flex items-center bg-denim text-on-denim px-2 py-2 transition-all duration-300 active:scale-95 ${
 								controlsVisible
 									? "opacity-100 pointer-events-auto"
@@ -459,7 +455,10 @@ export default function StrumPage() {
 							{/* BPM readout with LCD segment-ghost */}
 							<div className="border border-line-strong px-0 pt-3 pb-2 text-center">
 								<span className="relative inline-block font-mono text-[44px] font-bold leading-none tracking-[-0.02em] text-denim text-shadow-(--glow-readout)">
-									<span aria-hidden="true" className="absolute inset-0 opacity-[0.09]">
+									<span
+										aria-hidden="true"
+										className="absolute inset-0 opacity-[0.09]"
+									>
 										888
 									</span>
 									<span className="relative">{String(bpm).padStart(3, "0")}</span>
@@ -550,7 +549,11 @@ export default function StrumPage() {
 								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
 									Play once
 								</span>
-								<Rocker checked={playOnce} onChange={setPlayOnce} ariaLabel="Play once" />
+								<Rocker
+									checked={playOnce}
+									onChange={setPlayOnce}
+									ariaLabel="Play once"
+								/>
 							</div>
 							<div className={playOnce ? "opacity-40" : ""}>
 								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
@@ -607,7 +610,9 @@ export default function StrumPage() {
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
 								<span>Metronome</span>
-								<span className="tabular-nums">{Math.round(metronomeGain * 100)}%</span>
+								<span className="tabular-nums">
+									{Math.round(metronomeGain * 100)}%
+								</span>
 							</div>
 							<div className="flex items-center justify-between">
 								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
@@ -890,7 +895,9 @@ export default function StrumPage() {
 						<div className={!metronomeEnabled ? "opacity-40" : ""}>
 							<div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 								<span>Metronome vol.</span>
-								<span className="tabular-nums">{Math.round(metronomeGain * 100)}%</span>
+								<span className="tabular-nums">
+									{Math.round(metronomeGain * 100)}%
+								</span>
 							</div>
 							<Fader
 								min={0}
@@ -924,21 +931,6 @@ export default function StrumPage() {
 								value={String(loopGap)}
 								onChange={(v) => setLoopGap(Number(v) as LoopGapSeconds)}
 								disabled={playOnce}
-							/>
-						</div>
-
-						{/* Spacebar mode */}
-						<div>
-							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-								Spacebar
-							</div>
-							<Segmented
-								options={[
-									{ value: "playPause", label: "Play/Pause" },
-									{ value: "tapTempo", label: "Tap" },
-								]}
-								value={spaceMode}
-								onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
 							/>
 						</div>
 					</div>
@@ -1044,7 +1036,9 @@ export default function StrumPage() {
 						<div
 							onClick={handleHitPlayAndPause}
 							className={`flex h-11 w-11 items-center justify-center bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
-								selectedPattern ? "cursor-pointer" : "opacity-30 pointer-events-none"
+								selectedPattern
+									? "cursor-pointer"
+									: "opacity-30 pointer-events-none"
 							}`}
 						>
 							{isPlaying ? (

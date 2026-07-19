@@ -335,7 +335,9 @@ StepValue semantics:
 
 **Files:** `src/app/(main)/fingerpick/page.tsx`, `src/components/fingerpick/TabStaveRow.tsx`, `src/components/fingerpick/useFingerpickAudioEngine.ts`, `src/lib/fingerpickScheduler.ts`, `src/lib/fingerpickToVexFlow.ts`, `src/lib/fingerpickTypes.ts`
 
-**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible on `lg`+), TAB viewer (centre), controls panel (right). The library sidebar shows a "coming soon" placeholder. The controls panel is fully implemented on desktop. On mobile/tablet (below md breakpoint), controls move to a unified fixed-bottom drawer. On mobile/tablet (below `md`), a hide-on-scroll behaviour is active: scrolling down hides the NavBar (`translateY(-100%)`), the fixed bottom drawer (`translateY(100%)`), and the pattern library floating button (`opacity-0`). Scrolling up ≥ 40px restores all three. Tapping anywhere on the TAB viewer also restores all three — implemented via a `CustomEvent ('fingerpick-controls-restore')` dispatched from `handleTabClick` and listened to in `NavBar.tsx`. The scroll listener targets `tabViewerRef` on desktop and `window` on mobile, selected by `window.innerWidth >= 768` at listener-attach time.
+**Layout:** Three-panel layout mirroring the strumming machine — pattern library sidebar (left, slide-in overlay on mobile/tablet, always-visible above the sidebar breakpoint), TAB viewer (centre), controls panel (right). The controls panel is fully implemented on desktop. On mobile/tablet (below md breakpoint), controls move to a unified fixed-bottom drawer. On mobile/tablet (below `md`), a hide-on-scroll behaviour is active: scrolling down hides the NavBar (`translateY(-100%)`), the fixed bottom drawer (`translateY(100%)`), and the pattern library floating button (`opacity-0`). Scrolling up ≥ 40px restores all three. Tapping anywhere on the TAB viewer also restores all three — implemented via a `CustomEvent ('fingerpick-controls-restore')` dispatched from `handleTabClick` and listened to in `NavBar.tsx`. The scroll listener targets `tabViewerRef` on desktop and `window` on mobile, selected by `window.innerWidth >= 768` at listener-attach time. The pattern-library sidebar's hide breakpoint and its drawer-toggle button's visibility breakpoint are kept aligned (a prior mismatch left a dead zone where the sidebar was hidden but unreachable); the toggle button sits at the TAB viewer section's top-right, adjacent to the controls panel.
+
+**Visual design (v3):** Sidebar, controls panel (desktop rack + mobile drawer), and TAB viewer all render through the shared v3 token system (`globals.css`, see Design Tokens under Key Conventions) with full dark/light mode support — radius 0, hairline borders instead of shadows, denim accent, and dedicated per-surface tokens (`--sidebar-bg`/`--sidebar-header-1-bg`/`--sidebar-header-2-bg`/`--sidebar-hover-bg` for the sidebar; `--popover`/`--modal-bg` for the controls panel; `--tab-viewer-bg`/`--tab-viewer-border` for the TAB viewer container) so each surface family themes independently rather than sharing one background token. Readable text (empty states, descriptions, default icon states) uses `--ink-dim`, not `--ink-faint` — the latter is reserved for genuinely dormant/label-scale elements (module labels, ticks, dormant LEDs) and fails WCAG AA contrast on real content.
 
 **Data model** (`src/lib/fingerpickTypes.ts`):
 
@@ -439,6 +441,7 @@ Props: `measures`, `measureWidths: number[]` (one entry per measure — the pre-
 - Beams: `Beam.applyAndGetBeams(voice, -1)` is applied after notes are added to the voice (stem direction `−1` = down). Tuplets, connectors, and beams are all drawn after `voice.draw()`.
 - After drawing notes, when `startMeasureIndex` is set: writes `data-measure-index` (global) and `data-slot-index` onto each note's SVG element. The cursor RAF loop queries these attributes to locate the note element for the current playback position.
 - Font: `"Geist Mono", ui-monospace, monospace` at `10pt`.
+- **Dark/light theming:** VexFlow's SVG output is re-themed at the render layer, not by forking VexFlow's internal rendering. After `draw()` completes, CSS classes (`.sline`, `.fnum`, `.fnum-dim`, `.fnum-hot`, `.clef`, `.tech`, `.tech-arc`) are applied to the relevant SVG elements so stave lines, fret numbers, clef, and technique markup pick up token colors per `[data-theme]`; the cursor/measure-highlight overlays use token colors directly rather than inline rgba. This preserves the `data-stave-*`/`data-measure-index`/`data-slot-index` attributes the playback RAF loop depends on — patching classes post-draw avoids touching VexFlow's rendering internals.
 
 `FingerpickPage` derives row layout from a content-driven greedy-wrap algorithm. A `ResizeObserver` on `tabViewerRef` provides `containerWidth` (via `entry.contentRect.width`). For each measure, `fingerpickToVexFlow` is called once to produce `VexFlowRenderData`; the notes array is passed to `computeMeasureMinWidth` (in `TabStaveRow.tsx`) along with a hammer-on/pull-off count derived from `measure.slots` to get the minimum required width. Rows are composed greedily: measures are packed left-to-right until the next measure would overflow `containerWidth`, then a new row starts. After greedy grouping, each row's measure widths are scaled proportionally so the row's total equals exactly `containerWidth` (stretch-to-fill). The resulting `number[]` per row is passed as `measureWidths` to each `TabStaveRow`. No breakpoint-based `measuresPerRow` cap exists — however many measures fit at their content-driven widths, fit. The page renders a single hardcoded `PRESET_FINGERPICK_PATTERN` ("Technique Showcase") — 14 measures covering all six duration values (whole, half, quarter, eighth, sixteenth, eighth-triplet), all four technique types, muted notes, and multi-string chordal slots.
 
@@ -521,6 +524,10 @@ used by the pattern library (edit existing) and [+ New Pattern] entry point. Out
 is a standard FingerpickPattern — feeds directly into fingerpickToVexFlow → TabStaveRow
 with no conversion layer.
 
+**Visual design (v3):** Full v3 pass — radius 0, hairline borders (`--line`/`--line-strong`)
+in place of shadows, token colors throughout, §5.6 segmented-pill duration picker, §5.1
+button recipes for Save/Cancel/Delete.
+
 Props: `open`, `pattern: FingerpickPattern | null` (null = new), `onClose`, `onSave(pattern)`.
 
 Grid layout: one block per measure; responsive (lg: 3/row, md: 2/row, sm: 1/row);
@@ -555,6 +562,27 @@ arrow buttons, drag-and-drop deferred), delete (disabled if only 1 measure).
 Undo/Redo: Cmd+Z / Cmd+Shift+Z, history stack capped at 50 entries, scoped to modal
 container. Unsaved changes guard: isDirty flag, inline confirmation on Cancel/close.
 Save pinned to bottom-right footer, always visible without scrolling.
+
+**Mobile-specific behavior:**
+
+- **Fret entry:** a hidden `inputMode="numeric"` input opens the native numeric keyboard
+  on tap (touch devices have no physical keyboard); digit input maps onto the same
+  two-digit entry logic used by desktop keydown handling.
+- **Touch mute button:** rendered only while the numeric keyboard is actually focused
+  (not merely on cell selection), anchored directly below the selected cell, and hidden
+  once the cell is already muted.
+- **Long-press technique menu touch fix:** `user-select: none`, `touch-action: manipulation`,
+  and `preventDefault()` on touch `pointerdown` suppress the native long-press-to-select-text
+  gesture that would otherwise fire during the 500ms long-press that opens the technique menu.
+- **Touch row/column highlight:** the two-layer hover highlight (L1 beat group, L2 slot
+  column + string row) is driven by selection state instead of `:hover` on touch devices,
+  since touch has no hover state.
+- **Sticky header:** mirrors the pre-existing sticky footer pattern — uses `-mx-4 -mt-4`
+  to consume the dialog's own padding, rather than `sticky top-0` alone (which left a
+  scrollable gap above it for content to leak through).
+- **Capability-aware hint text:** keyboard vs. touch instructions, surfaced via a footer
+  "?" icon popover with an iMessage-style spring-pop entrance animation and icon-only
+  (no background box) hover/press/open feedback, rather than inline in the modal body.
 
 **Pattern sync (`src/lib/fingerpickPatternSync.ts`):**
 
@@ -798,19 +826,23 @@ All lib functions in `src/lib/`:
 Display labels: `CATEGORY_LABELS` in `src/lib/constants.ts`.
 Colour classes: `CATEGORY_COLORS` in `src/lib/constants.ts` (Tailwind inline bg + text classes).
 
-### Denim colour palette
+### Design tokens (v3)
 
-The brand colour is "denim blue". Use Tailwind classes, not raw hex:
+All v3 surface/ink/accent colors live in `src/app/globals.css` as CSS custom properties, consumed through Tailwind v4 `@theme inline` semantic utilities (`bg-panel`, `text-ink-dim`, `border-line`, `bg-denim`, etc.) — components reference tokens, never raw hex. Dark is the default theme, declared on `:root` (aliased onto `[data-theme="dark"]`); light applies via `[data-theme="light"]` on `<html>`. Theme switching is attribute-driven — there is no `.dark` class.
 
-| Class                     | CSS var          | Use                                |
-| ------------------------- | ---------------- | ---------------------------------- |
-| `text-denim` / `bg-denim` | `--denim`        | Active state, primary interactive  |
-| `bg-denim-tint`           | `--denim-tint`   | Light background tint              |
-| `border-denim-border`     | `--denim-border` | Borders on denim-tinted containers |
-| `text-denim-dark`         | `--denim-dark`   | Deeper hover state                 |
-| `text-denim-light`        | `--denim-light`  | Muted / ring                       |
+Brand accent (identical in both themes): `--denim: #4a6fa5`. The current accent token set is `--denim`, `--denim-accent`, `--denim-tint`, `--denim-glow`, `--readout-glow` — use Tailwind class names (`text-denim`, `bg-denim-tint`, `text-denim-accent`), not raw hex.
 
-Dark mode variants of these vars are defined in `globals.css` under `.dark`.
+Per-surface tokens introduced or decoupled during the #107 fingerpick v3 refactor:
+
+| Token | Dark (default) | Light | Notes |
+| ----- | --------------- | ----- | ----- |
+| `--modal-bg` | `#141414` (= `--bg-panel`) | `#ffffff` | Dialog/popover surface. `--popover` (shadcn bridge) now resolves via `--modal-bg`, not `--bg-panel` — dialogs/popovers can diverge visually from sidebars, topbars, and control racks. |
+| `--topbar-bg` | `#141414` (= `--bg-panel`) | `#ebeff5` (= `--bg-panel`) | App topbar surface, decoupled from `--bg-panel` so it can diverge independently later. |
+| `--sidebar-header-1-bg` | `#141414` (= `--bg-panel`) | `#f8fafc` | "My Patterns" section header row in the fingerpick pattern library sidebar. |
+| `--sidebar-header-2-bg` | `#1a1a1a` | `#f1f5f9` | "Presets" section header row — one step darker/offset from header-1 so the two stay visually distinguishable. |
+| `--sidebar-hover-bg` | `rgba(74, 111, 165, 0.06)` | `rgba(74, 111, 165, 0.05)` | Pattern-card hover fill, lighter than `--denim-tint` so hover reads weaker than selected. |
+
+Light-mode `--bg`/`--bg-panel` intentionally deviate from the original design mockups: they are `#f5f7fa`/`#ebeff5` (denim-tinted cool white — a #106 landing-page decision), not the originally-mocked `#f4f4f1`/`#edede9` warm paper. `FINAL_DESIGN_DIRECTION.md` and `fable/design-tokens.css` were updated during #107 to match this repo value, so there is no drift between spec and implementation.
 
 ### Path alias
 

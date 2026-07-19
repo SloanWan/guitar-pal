@@ -1108,7 +1108,7 @@ export default function FingerpickEditModal({
 							value={working.name}
 							onChange={(e) => commit((p) => ({ ...p, name: e.target.value }))}
 							placeholder="Pattern name"
-							className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-denim/40 ${
+							className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
 								nameValid ? "border-line-strong" : "border-destructive"
 							}`}
 						/>
@@ -1125,7 +1125,7 @@ export default function FingerpickEditModal({
 							onChange={(e) =>
 								commit((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))
 							}
-							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						/>
 					</div>
 					<div className="flex flex-col gap-1 w-24">
@@ -1138,7 +1138,7 @@ export default function FingerpickEditModal({
 								const ts = TIME_SIGNATURES.find((t) => t.label === e.target.value);
 								if (ts) commit((p) => ({ ...p, timeSignature: ts.value }));
 							}}
-							className="w-full border border-line-strong bg-surface px-2 py-2 font-mono text-sm text-ink focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-2 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						>
 							{TIME_SIGNATURES.map((t) => (
 								<option key={t.label} value={t.label}>
@@ -1156,7 +1156,7 @@ export default function FingerpickEditModal({
 							value={working.description ?? ""}
 							onChange={(e) => commit((p) => ({ ...p, description: e.target.value }))}
 							placeholder="Optional"
-							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-denim/40"
+							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						/>
 					</div>
 				</div>
@@ -1424,7 +1424,7 @@ export default function FingerpickEditModal({
 																		{tiedDisplay && (
 																			<span
 																				aria-hidden
-																				className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 rounded-t-full border-t-2"
+																				className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 border-t-2"
 																				style={{
 																					borderColor:
 																						"rgba(74, 111, 165, 0.5)",

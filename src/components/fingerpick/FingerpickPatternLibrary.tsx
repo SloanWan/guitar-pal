@@ -74,7 +74,7 @@ function PatternCard({
 								e.stopPropagation();
 								onDelete();
 							}}
-							className="p-0.5 rounded transition-colors text-ink-dim hover:text-red-500"
+							className="p-0.5 rounded transition-colors text-ink-dim hover:text-destructive"
 							aria-label="Delete pattern"
 						>
 							<Trash2 size={14} />
@@ -85,10 +85,13 @@ function PatternCard({
 							e.stopPropagation();
 							onToggleFav();
 						}}
-						className="p-0.5 rounded transition-colors text-ink-dim hover:text-amber-400"
+						className="p-0.5 rounded transition-colors text-ink-dim hover:text-favorite-active"
 						aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
 					>
-						<Star size={12} className={isFav ? "fill-amber-400 text-amber-400" : ""} />
+						<Star
+							size={12}
+							className={isFav ? "fill-favorite-active text-favorite-active" : ""}
+						/>
 					</button>
 				</div>
 			</div>
@@ -116,16 +119,23 @@ export default function FingerpickPatternLibrary({
 	const [presetsOpen, setPresetsOpen] = useState(true);
 	const [editModalOpen, setEditModalOpen] = useState(false);
 	const [editingPattern, setEditingPattern] = useState<FingerpickPattern | null>(null);
+	const [filter, setFilter] = useState("");
 
 	const customIds = new Set(customPatterns.map((p) => p.id));
 	const presets = patterns.filter((p) => !customIds.has(p.id));
 
-	const visiblePresets =
+	const query = filter.trim().toLowerCase();
+	const matchesFilter = (p: FingerpickPattern) => p.name.toLowerCase().includes(query);
+
+	const tabPresets =
 		activeTab === "favourites" ? presets.filter((p) => favouriteIds.includes(p.id)) : presets;
-	const visibleCustom =
+	const tabCustom =
 		activeTab === "favourites"
 			? customPatterns.filter((p) => favouriteIds.includes(p.id))
 			: customPatterns;
+
+	const visiblePresets = query ? tabPresets.filter(matchesFilter) : tabPresets;
+	const visibleCustom = query ? tabCustom.filter(matchesFilter) : tabCustom;
 
 	function openNewPattern() {
 		setEditingPattern(null);
@@ -184,6 +194,29 @@ export default function FingerpickPatternLibrary({
 				</button>
 			</div>
 
+			{/* Filter */}
+			<div className="shrink-0 border-b border-line px-3 py-2.5">
+				<div className="relative">
+					<input
+						type="text"
+						value={filter}
+						onChange={(e) => setFilter(e.target.value)}
+						placeholder="> filter patterns…"
+						aria-label="Filter patterns"
+						className="w-full border border-line-strong bg-surface pl-3 pr-8 py-1.5 font-mono text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+					/>
+					{filter && (
+						<button
+							onClick={() => setFilter("")}
+							className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-ink-faint hover:text-ink transition-colors"
+							aria-label="Clear filter"
+						>
+							<X size={14} />
+						</button>
+					)}
+				</div>
+			</div>
+
 			{/* Scrollable content */}
 			<div className="w-full flex-1 overflow-y-auto flex flex-col">
 				{/* My Patterns section */}
@@ -206,9 +239,11 @@ export default function FingerpickPatternLibrary({
 						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
 							{visibleCustom.length === 0 ? (
 								<p className="text-[11px] text-ink-dim px-1">
-									{activeTab === "all"
-										? "No custom patterns yet"
-										: "No custom favourites yet"}
+									{query
+										? "No matches"
+										: activeTab === "all"
+											? "No custom patterns yet"
+											: "No custom favourites yet"}
 								</p>
 							) : (
 								visibleCustom.map((pattern) => (
@@ -247,7 +282,9 @@ export default function FingerpickPatternLibrary({
 					{presetsOpen && (
 						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
 							{visiblePresets.length === 0 ? (
-								<p className="text-[11px] text-ink-dim px-1">No preset favourites yet</p>
+								<p className="text-[11px] text-ink-dim px-1">
+									{query ? "No matches" : "No preset favourites yet"}
+								</p>
 							) : (
 								visiblePresets.map((pattern) => (
 									<PatternCard

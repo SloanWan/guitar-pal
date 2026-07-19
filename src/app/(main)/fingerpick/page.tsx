@@ -281,7 +281,7 @@ function Fader({
 					{/* Genre tooltip — shown while hovering a tick's segment */}
 					{hoveredTick !== null && tickLabels && (
 						<div
-							className="pointer-events-none absolute z-20 -translate-x-1/2 whitespace-nowrap rounded bg-ink px-1.5 py-0.5 text-[10px] text-surface"
+							className="pointer-events-none absolute z-20 -translate-x-1/2 whitespace-nowrap bg-ink px-1.5 py-0.5 text-[10px] text-surface"
 							style={{
 								left: `${ticks[hoveredTick]}%`,
 								bottom: "calc(100% + 10px)",
@@ -1305,7 +1305,7 @@ export default function FingerpickPage() {
 				{/* Backdrop — tap outside to close library on mobile/tablet */}
 				{showLibrary && (
 					<div
-						className="fixed inset-0 z-30 bg-black/20 lg:hidden"
+						className="fixed inset-0 z-30 bg-(--backdrop) lg:hidden"
 						onClick={() => setShowLibrary(false)}
 					/>
 				)}
@@ -1333,7 +1333,7 @@ export default function FingerpickPage() {
 						<div
 							ref={tabViewerRef}
 							data-tab-viewer
-							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto bg-tab-viewer rounded-xl border border-tab-viewer-border cursor-pointer"
+							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto cursor-pointer"
 							onClick={handleTabClick}
 						>
 							{/* Measure background highlight — updated only on measure transitions. */}
@@ -1344,7 +1344,6 @@ export default function FingerpickPage() {
 								style={{
 									display: "none",
 									backgroundColor: "var(--measure-hl)",
-									borderRadius: 3,
 								}}
 							/>
 							{/* Playhead line — sits BEFORE the SVG rows in DOM order so it renders
@@ -1355,13 +1354,31 @@ export default function FingerpickPage() {
 								className="absolute pointer-events-none"
 								style={{
 									display: "none",
-									width: 6,
+									width: 2,
 									left: 0,
-									backgroundColor: "rgba(74, 111, 165, 0.5)",
-									borderRadius: 5,
+									backgroundColor: "var(--denim-accent)",
+									boxShadow: "var(--glow-playhead)",
 								}}
-							/>
-							<div className="flex flex-col pb-20 md:pb-0">
+							>
+								{/* Downward-pointing triangle cap centred on the 2px line. */}
+								<span
+									aria-hidden="true"
+									style={{
+										position: "absolute",
+										top: -6,
+										left: -4,
+										width: 0,
+										height: 0,
+										borderLeft: "5px solid transparent",
+										borderRight: "5px solid transparent",
+										borderTop: "6px solid var(--denim-accent)",
+									}}
+								/>
+							</div>
+							{/* pt-2 leaves headroom so the playhead's triangle cap (top: -6px
+						    relative to the cursor line, which is positioned at the row's stave
+						    top) isn't clipped by the scroll container's overflow at row 0. */}
+							<div className="flex flex-col pt-2 pb-20 md:pb-0">
 								{rows.map((row, rowIdx) => (
 									<div
 										key={row.measures[0].id}
@@ -1384,7 +1401,7 @@ export default function FingerpickPage() {
 						{!showLibrary && (
 							<button
 								onClick={() => setShowLibrary(true)}
-								className={`absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-300 active:scale-95 ${
+								className={`absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
 									controlsVisible
 										? "opacity-100 pointer-events-auto"
 										: "opacity-0 pointer-events-none"
@@ -1653,7 +1670,7 @@ export default function FingerpickPage() {
 			{/* BPM vertical slider popover — fixed so it escapes the drawer's overflow context */}
 			{showBpmPopover && (
 				<div
-					className="md:hidden fixed z-60 bg-popover rounded-xl border border-line shadow-lg px-4 py-4 flex items-center justify-center -translate-x-1/2"
+					className="md:hidden fixed z-60 bg-popover border border-line px-4 py-4 flex items-center justify-center -translate-x-1/2"
 					style={{ bottom: bpmPopoverPos.bottom, left: bpmPopoverPos.left }}
 				>
 					<input
@@ -1683,7 +1700,7 @@ export default function FingerpickPage() {
 
 			{/* ── Unified mobile drawer ────────────────────────────────────────── */}
 			<div
-				className="md:hidden fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl bg-popover border-t border-line-strong shadow-[0_-4px_24px_rgba(0,0,0,0.12)] overflow-hidden transition-transform duration-300 ease-out"
+				className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden transition-transform duration-300 ease-out"
 				style={{ transform: controlsVisible ? "translateY(0)" : "translateY(100%)" }}
 				onPointerDown={(e) => {
 					if (!bpmButtonRef.current?.contains(e.target as Node)) {
@@ -1716,7 +1733,7 @@ export default function FingerpickPage() {
 							handleIsDraggingRef.current = false;
 						}}
 					>
-						<div className="w-9 h-1 rounded-full bg-line-strong" />
+						<div className="w-9 h-1 bg-line-strong" />
 					</div>
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
 						{/* Tempo — steppers + fader */}
@@ -1891,7 +1908,7 @@ export default function FingerpickPage() {
 
 				{/* Always-visible bottom bar */}
 				<div
-					className="bg-popover/95 backdrop-blur-sm flex items-center gap-1.5 px-3 py-2"
+					className="bg-popover flex items-center gap-1.5 px-3 py-2"
 					onPointerDown={handleBottomBarPointerDown}
 					onPointerMove={handleBottomBarPointerMove}
 					onPointerUp={handleBottomBarPointerUp}
@@ -1958,7 +1975,7 @@ export default function FingerpickPage() {
 					{/* Chevron — toggles the controls panel open/closed */}
 					<button
 						onClick={() => setShowSheet((v) => !v)}
-						className="p-1.5 rounded-full text-ink-faint hover:text-ink transition-colors duration-150 shrink-0"
+						className="p-1.5 text-ink-faint hover:text-ink transition-colors duration-150 shrink-0"
 					>
 						<ChevronUp
 							size={20}
@@ -1980,7 +1997,7 @@ export default function FingerpickPage() {
 							onClick={isLoaded ? handlePlayPause : undefined}
 							className={`transition-all duration-150 active:scale-95 ${
 								isLoaded
-									? "cursor-pointer text-denim hover:text-denim-dark"
+									? "cursor-pointer text-denim"
 									: "opacity-30 pointer-events-none text-denim"
 							}`}
 						>

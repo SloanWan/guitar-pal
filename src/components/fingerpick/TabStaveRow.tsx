@@ -51,10 +51,12 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 		noteGroup.querySelectorAll("text").forEach((el) => el.setAttribute("fill", "var(--ink)"));
 		// Occlusion patch behind each fret number (masks the stave line
 		// passing through it) — hardcoded white by VexFlow; must track the
-		// viewer's own surface so it doesn't show as a light square on dark.
+		// actual surface behind the viewer so it doesn't show as a faint
+		// square. The card wrapper was removed, so that surface is now the
+		// workspace background, not the (former card) tab-viewer background.
 		noteGroup
 			.querySelectorAll("rect")
-			.forEach((el) => el.setAttribute("fill", "var(--tab-viewer-bg)"));
+			.forEach((el) => el.setAttribute("fill", "var(--workspace-bg)"));
 	});
 	svgEl.querySelectorAll<SVGPathElement>("g.vf-stem path").forEach((el) => {
 		el.setAttribute("stroke", "var(--ink)");
@@ -129,7 +131,7 @@ export default function TabStaveRow({
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
 			renderer.resize(svgWidth, SVG_HEIGHT);
 			const ctx = renderer.getContext();
-			ctx.setFont({ family: "'Geist Mono', ui-monospace, monospace", size: "10pt" });
+			ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
 
 			// Draw staves, accumulating x from per-measure widths.
 			let staveX = CLEF_WIDTH;

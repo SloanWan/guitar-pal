@@ -166,13 +166,13 @@ export default function BpmSlider({
 			{/* Track */}
 			<div
 				ref={trackRef}
-				className="relative h-1.5 rounded-full bg-slate-100 mx-2"
+				className="relative h-0.75 bg-line-strong mx-2"
 				onMouseMove={handleTrackMouseMove}
 				onMouseLeave={handleTrackMouseLeave}
 			>
 				{/* Fill */}
 				<div
-					className="absolute inset-y-0 left-0 rounded-full pointer-events-none bg-denim"
+					className="absolute inset-y-0 left-0 pointer-events-none bg-denim"
 					style={{ width: `${percent}%` }}
 				/>
 
@@ -180,7 +180,7 @@ export default function BpmSlider({
 				{hoveredSegment !== null && (
 					<div
 						className="absolute -translate-x-1/2 pointer-events-none whitespace-nowrap
-						           rounded px-1.5 py-0.5 z-20 text-[10px] text-white bg-slate-700"
+						           border border-line px-1.5 py-0.5 z-20 text-[10px] text-ink bg-(--modal-bg)"
 						style={{
 							left: `${segments[hoveredSegment].tickPercent}%`,
 							bottom: "calc(100% + 8px)",
@@ -209,7 +209,9 @@ export default function BpmSlider({
 									className="block w-2 h-2 rounded-full"
 									style={{
 										backgroundColor:
-											tick.bpm <= bpm ? "var(--denim)" : "#9ca3af",
+											tick.bpm <= bpm
+												? "var(--denim)"
+												: "var(--ink-faint)",
 									}}
 								/>
 							</button>
@@ -217,9 +219,9 @@ export default function BpmSlider({
 					);
 				})}
 
-				{/* Thumb */}
+				{/* Thumb — knurled hardware fader thumb (ported from fingerpick) */}
 				<div
-					className="absolute top-1/2 z-10 w-4 h-4 rounded-full border-2 border-white shadow-sm cursor-grab active:cursor-grabbing bg-denim"
+					className="absolute top-1/2 z-10 h-4.5 w-2.5 border border-panel bg-ink cursor-grab active:cursor-grabbing"
 					style={{
 						left: `${percent}%`,
 						transform: "translate(-50%, -50%)",
@@ -228,7 +230,16 @@ export default function BpmSlider({
 					onPointerMove={handlePointerMove}
 					onPointerUp={handlePointerUp}
 					onPointerCancel={handlePointerCancel}
-				/>
+				>
+					<span
+						aria-hidden="true"
+						className="absolute inset-x-0.5 inset-y-1"
+						style={{
+							background:
+								"repeating-linear-gradient(90deg, var(--bg-panel) 0 1px, transparent 1px 3px)",
+						}}
+					/>
+				</div>
 			</div>
 		</div>
 	);

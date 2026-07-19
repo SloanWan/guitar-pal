@@ -255,28 +255,28 @@ export default function StrumPage() {
 
 	return (
 		<>
-			<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-slate-50">
+			<div className="md:h-[calc(100vh-3.5rem)] flex flex-col md:flex-row md:overflow-hidden bg-workspace">
 				{/* Left sidebar — lg: static; below lg: slide-in overlay */}
 				<div
-					className={`fixed inset-y-0 left-0 z-40 w-72 h-full border-r border-slate-200 bg-white flex flex-col shrink-0 transition-transform duration-200 ease-in-out lg:relative lg:inset-auto lg:z-auto lg:translate-x-0 ${
+					className={`fixed inset-y-0 left-0 z-40 w-72 h-full border-r border-line bg-sidebar flex flex-col shrink-0 transition-transform duration-200 ease-in-out lg:relative lg:inset-auto lg:z-auto lg:translate-x-0 ${
 						showLibrary ? "translate-x-0" : "-translate-x-full"
 					}`}
 				>
 					{/* Header */}
-					<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-slate-200">
-						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+					<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-line">
+						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-ink-dim">
 							Strumming Library
 						</h2>
 						<div className="flex items-center gap-1">
 							<button
 								onClick={() => setCreateModalOpen(true)}
-								className="text-xs font-semibold text-denim px-2 py-1 rounded hover:bg-denim-tint transition-colors"
+								className="text-xs font-semibold text-denim px-2 py-1 hover:bg-denim-tint transition-colors"
 							>
 								+ Create
 							</button>
 							<button
 								onClick={() => setShowLibrary(false)}
-								className="lg:hidden h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+								className="lg:hidden h-8 w-8 flex items-center justify-center text-ink-dim hover:bg-raise hover:text-ink transition-colors"
 							>
 								<X size={18} />
 							</button>
@@ -284,13 +284,13 @@ export default function StrumPage() {
 					</div>
 
 					{/* Tab bar */}
-					<div className="flex shrink-0 border-b border-slate-200">
+					<div className="flex shrink-0 border-b border-line">
 						<button
 							onClick={() => setActiveTab("all")}
 							className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
 								activeTab === "all"
 									? "text-denim border-denim"
-									: "text-slate-400 border-transparent hover:text-slate-600"
+									: "text-ink-dim border-transparent hover:text-ink"
 							}`}
 						>
 							All
@@ -300,7 +300,7 @@ export default function StrumPage() {
 							className={`flex-1 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 ${
 								activeTab === "favourites"
 									? "text-denim border-denim"
-									: "text-slate-400 border-transparent hover:text-slate-600"
+									: "text-ink-dim border-transparent hover:text-ink"
 							}`}
 						>
 							Favourites
@@ -320,14 +320,14 @@ export default function StrumPage() {
 								<div>
 									<button
 										onClick={() => setMyPatternsOpen((v) => !v)}
-										className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-50"
+										className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-1"
 									>
-										<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+										<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 											My Patterns
 										</span>
 										<ChevronDown
 											size={13}
-											className={`text-slate-400 transition-transform duration-200 ${
+											className={`text-ink-dim transition-transform duration-200 ${
 												myPatternsOpen ? "" : "-rotate-90"
 											}`}
 										/>
@@ -338,11 +338,11 @@ export default function StrumPage() {
 												<div className="flex justify-center py-4">
 													<Loader2
 														size={16}
-														className="animate-spin text-slate-300"
+														className="animate-spin text-ink-faint"
 													/>
 												</div>
 											) : visibleCustom.length === 0 ? (
-												<p className="text-[11px] text-slate-400 px-1">
+												<p className="text-[11px] text-ink-dim px-1">
 													No custom patterns yet
 												</p>
 											) : (
@@ -354,10 +354,10 @@ export default function StrumPage() {
 														<div
 															key={idx}
 															onClick={() => handleSelectPattern(pattern)}
-															className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
+															className={`cursor-pointer px-3 py-2.5 border-l-2 transition-all duration-200 ${
 																isSelected
 																	? "bg-denim-tint border-l-denim"
-																	: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
+																	: "border-l-transparent hover:bg-sidebar-hover hover:border-l-line-strong"
 															}`}
 														>
 															<div className="flex items-center justify-between mb-2">
@@ -365,7 +365,7 @@ export default function StrumPage() {
 																	className={`text-[11px] font-semibold transition-colors duration-200 ${
 																		isSelected
 																			? "text-denim"
-																			: "text-slate-500"
+																			: "text-ink"
 																	}`}
 																>
 																	{pattern.name.replace(
@@ -381,13 +381,13 @@ export default function StrumPage() {
 																				pattern.id,
 																			);
 																		}}
-																		className="p-0.5 rounded transition-colors text-slate-300 hover:text-amber-400"
+																		className="p-0.5 transition-colors text-ink-faint hover:text-favorite-active"
 																	>
 																		<Star
 																			size={12}
 																			className={
 																				isFav
-																					? "fill-amber-400 text-amber-400"
+																					? "fill-favorite-active text-favorite-active"
 																					: ""
 																			}
 																		/>
@@ -398,7 +398,7 @@ export default function StrumPage() {
 																			setEditingPattern(pattern);
 																			setCreateModalOpen(true);
 																		}}
-																		className="p-0.5 rounded transition-colors text-slate-300 hover:text-denim"
+																		className="p-0.5 transition-colors text-ink-faint hover:text-denim"
 																	>
 																		<Pencil size={12} />
 																	</button>
@@ -409,7 +409,7 @@ export default function StrumPage() {
 																				pattern.id,
 																			);
 																		}}
-																		className="p-0.5 rounded transition-colors text-slate-300 hover:text-red-500"
+																		className="p-0.5 transition-colors text-ink-faint hover:text-destructive"
 																	>
 																		<Trash2 size={12} />
 																	</button>
@@ -433,7 +433,7 @@ export default function StrumPage() {
 
 						{/* Favourites sign-in nudge */}
 						{activeTab === "favourites" && !user && (
-							<p className="text-xs text-slate-400 text-center px-4 py-3">
+							<p className="text-xs text-ink-dim text-center px-4 py-3">
 								Sign in to sync your favourites across devices.
 							</p>
 						)}
@@ -449,14 +449,14 @@ export default function StrumPage() {
 								<div className="">
 									<button
 										onClick={() => setPresetsOpen((v) => !v)}
-										className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-100"
+										className="flex items-center justify-between w-full px-4 py-2.5 bg-sidebar-header-2"
 									>
-										<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+										<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 											Presets
 										</span>
 										<ChevronDown
 											size={13}
-											className={`text-slate-400 transition-transform duration-200 ${
+											className={`text-ink-dim transition-transform duration-200 ${
 												presetsOpen ? "" : "-rotate-90"
 											}`}
 										/>
@@ -470,10 +470,10 @@ export default function StrumPage() {
 													<div
 														key={idx}
 														onClick={() => handleSelectPattern(pattern)}
-														className={`cursor-pointer rounded-lg px-3 py-2.5 border-l-[3px] transition-all duration-200 ${
+														className={`cursor-pointer px-3 py-2.5 border-l-2 transition-all duration-200 ${
 															isSelected
 																? "bg-denim-tint border-l-denim"
-																: "border-l-transparent hover:bg-slate-50 hover:border-l-slate-300"
+																: "border-l-transparent hover:bg-sidebar-hover hover:border-l-line-strong"
 														}`}
 													>
 														<div className="flex items-center justify-between mb-2">
@@ -481,7 +481,7 @@ export default function StrumPage() {
 																className={`capitalize text-[11px] font-semibold transition-colors duration-200 ${
 																	isSelected
 																		? "text-denim"
-																		: "text-slate-500"
+																		: "text-ink"
 																}`}
 															>
 																{pattern.name}
@@ -491,13 +491,13 @@ export default function StrumPage() {
 																	e.stopPropagation();
 																	handleToggleFavourite(pattern.id);
 																}}
-																className="p-0.5 rounded transition-colors text-slate-300 hover:text-amber-400"
+																className="p-0.5 transition-colors text-ink-faint hover:text-favorite-active"
 															>
 																<Star
 																	size={12}
 																	className={
 																		isFav
-																			? "fill-amber-400 text-amber-400"
+																			? "fill-favorite-active text-favorite-active"
 																			: ""
 																	}
 																/>
@@ -523,7 +523,7 @@ export default function StrumPage() {
 				{/* Backdrop — tap outside to close library on mobile/tablet */}
 				{showLibrary && (
 					<div
-						className="fixed inset-0 z-30 bg-black/20 lg:hidden"
+						className="fixed inset-0 z-30 bg-(--backdrop) lg:hidden"
 						onClick={() => setShowLibrary(false)}
 					/>
 				)}
@@ -542,7 +542,7 @@ export default function StrumPage() {
 								onChordChange={setSelectedChord}
 							/>
 						) : (
-							<p className="text-slate-400 text-sm text-center">
+							<p className="text-ink-dim text-sm text-center">
 								Choose a pattern from the library
 							</p>
 						)}
@@ -550,15 +550,15 @@ export default function StrumPage() {
 				</div>
 
 				{/* Right panel — desktop controls only */}
-				<div className="hidden md:flex w-full border-t border-slate-200 bg-white md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
-					<h2 className="w-full px-5 py-4 shrink-0 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+				<div className="hidden md:flex w-full border-t border-line bg-popover md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
+					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line text-[11px] font-semibold uppercase tracking-widest text-ink-dim">
 						Controls
 					</h2>
 					<div className="flex flex-col gap-5 px-5 py-5 flex-1 overflow-y-auto">
 						{/* Play / Pause */}
 						<div
 							onClick={handleHitPlayAndPause}
-							className={`flex justify-center transition-all duration-150 active:scale-95 ${selectedPattern ? "cursor-pointer text-denim hover:text-denim-dark" : "opacity-30 pointer-events-none text-denim"}`}
+							className={`flex justify-center transition-all duration-150 active:scale-95 ${selectedPattern ? "cursor-pointer text-denim hover:text-denim-accent" : "opacity-30 pointer-events-none text-denim"}`}
 						>
 							{isPlaying ? (
 								<CirclePause size={60} strokeWidth={1.5} />
@@ -582,7 +582,7 @@ export default function StrumPage() {
 						<div className="flex justify-between items-center">
 							<Button
 								variant="outline"
-								className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
+								className="h-10 w-10 p-0 border-line-strong hover:border-denim hover:text-denim transition-colors duration-150"
 								onClick={() => setBpm(Math.max(MIN_BPM, bpm - 10))}
 							>
 								<Minus size={16} />
@@ -591,13 +591,13 @@ export default function StrumPage() {
 								<span className="text-5xl font-bold tracking-tight text-denim">
 									{bpm}
 								</span>
-								<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+								<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 									BPM
 								</span>
 							</span>
 							<Button
 								variant="outline"
-								className="h-10 w-10 p-0 rounded-full border-slate-200 hover:border-denim hover:text-denim transition-colors duration-150"
+								className="h-10 w-10 p-0 border-line-strong hover:border-denim hover:text-denim transition-colors duration-150"
 								onClick={() => setBpm(Math.min(MAX_BPM, bpm + 10))}
 							>
 								<Plus size={16} />
@@ -609,7 +609,6 @@ export default function StrumPage() {
 							<Button
 								onClick={handleTapTempo}
 								className="h-9 px-8 text-sm font-semibold cursor-pointer transition-all duration-150"
-								style={{ backgroundColor: "var(--denim)", color: "white" }}
 							>
 								Tap Tempo
 							</Button>
@@ -618,7 +617,7 @@ export default function StrumPage() {
 									className={`text-xs font-medium transition-colors duration-200 ${
 										spaceMode === "playPause"
 											? "text-denim font-semibold"
-											: "text-slate-400"
+											: "text-ink-dim"
 									}`}
 								>
 									Play/Pause
@@ -636,7 +635,7 @@ export default function StrumPage() {
 									className={`text-xs font-medium transition-colors duration-200 ${
 										spaceMode === "tapTempo"
 											? "text-denim font-semibold"
-											: "text-slate-400"
+											: "text-ink-dim"
 									}`}
 								>
 									Tap Tempo
@@ -646,28 +645,28 @@ export default function StrumPage() {
 
 						{/* Play once */}
 						<div className="flex items-center justify-between">
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 								Play once
 							</span>
 							<Switch
 								checked={playOnce}
 								onCheckedChange={setPlayOnce}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
 							/>
 						</div>
 
 						{/* Divider */}
-						<div className="border-t border-slate-100" />
+						<div className="border-t border-line" />
 
 						{/* Metronome toggle */}
 						<div className="flex items-center justify-between">
-							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+							<span className="text-[11px] font-bold uppercase tracking-widest text-ink-dim">
 								Metronome
 							</span>
 							<Switch
 								checked={metronomeEnabled}
 								onCheckedChange={setMetronomeEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
 							/>
 						</div>
 
@@ -680,11 +679,6 @@ export default function StrumPage() {
 								variant={tickMode === "quarter" ? "default" : "secondary"}
 								disabled={!metronomeEnabled}
 								className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-								style={
-									tickMode === "quarter"
-										? { backgroundColor: "var(--denim)", color: "white" }
-										: {}
-								}
 							>
 								1/4
 							</Button>
@@ -693,11 +687,6 @@ export default function StrumPage() {
 								variant={tickMode === "eighth" ? "default" : "secondary"}
 								disabled={!metronomeEnabled}
 								className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-								style={
-									tickMode === "eighth"
-										? { backgroundColor: "var(--denim)", color: "white" }
-										: {}
-								}
 							>
 								1/8
 							</Button>
@@ -706,11 +695,6 @@ export default function StrumPage() {
 								variant={tickMode === "sixteenth" ? "default" : "secondary"}
 								disabled={!metronomeEnabled}
 								className="cursor-pointer h-8 px-4 text-xs font-semibold transition-all duration-150"
-								style={
-									tickMode === "sixteenth"
-										? { backgroundColor: "var(--denim)", color: "white" }
-										: {}
-								}
 							>
 								1/16
 							</Button>
@@ -720,14 +704,14 @@ export default function StrumPage() {
 						<div
 							className={`flex items-center justify-between ${!metronomeEnabled ? "opacity-40" : ""}`}
 						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 								Accent beat 1
 							</span>
 							<Switch
 								checked={accentEnabled}
 								disabled={!metronomeEnabled}
 								onCheckedChange={setAccentEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
 							/>
 						</div>
 
@@ -738,8 +722,8 @@ export default function StrumPage() {
 									!metronomeEnabled ? "opacity-40" : ""
 								}`}
 							>
-								<span className="text-xs text-slate-400">Volume</span>
-								<span className="text-xs tabular-nums text-slate-400">
+								<span className="text-xs text-ink-dim">Volume</span>
+								<span className="text-xs tabular-nums text-ink-dim">
 									{Math.round(metronomeGain * 100)}%
 								</span>
 							</div>
@@ -755,17 +739,17 @@ export default function StrumPage() {
 							/>
 						</div>
 
-						<div className="border-t border-slate-100" />
+						<div className="border-t border-line" />
 
 						{/* Strum sound toggle */}
 						<div className="flex items-center justify-between">
-							<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+							<span className="text-[11px] font-bold uppercase tracking-widest text-ink-dim">
 								Strum Sound
 							</span>
 							<Switch
 								checked={strumEnabled}
 								onCheckedChange={setStrumEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
 							/>
 						</div>
 
@@ -776,8 +760,8 @@ export default function StrumPage() {
 							}`}
 						>
 							<div className="flex justify-between items-center">
-								<span className="text-xs text-slate-400">Volume</span>
-								<span className="text-xs tabular-nums text-slate-400">
+								<span className="text-xs text-ink-dim">Volume</span>
+								<span className="text-xs tabular-nums text-ink-dim">
 									{Math.round(strumGain * 100)}%
 								</span>
 							</div>
@@ -800,12 +784,11 @@ export default function StrumPage() {
 			{!showLibrary && (
 				<button
 					onClick={() => setShowLibrary(true)}
-					className={`fixed top-17 right-4 z-30 md:hidden flex items-center gap-2 text-white text-sm font-semibold rounded-md px-2 py-2 shadow-lg transition-all duration-300 active:scale-95 ${
+					className={`fixed top-17 right-4 z-30 md:hidden flex items-center gap-2 bg-denim text-on-denim text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
 						controlsVisible
 							? "opacity-100 pointer-events-auto"
 							: "opacity-0 pointer-events-none"
 					}`}
-					style={{ backgroundColor: "var(--denim)" }}
 				>
 					<SquareMenu />
 				</button>
@@ -814,7 +797,7 @@ export default function StrumPage() {
 			{/* BPM vertical slider popover — fixed so it escapes the drawer's overflow context */}
 			{showBpmPopover && (
 				<div
-					className="md:hidden fixed z-60 bg-white rounded-xl border border-slate-200 shadow-lg px-4 py-4 flex items-center justify-center -translate-x-1/2"
+					className="md:hidden fixed z-60 bg-popover border border-line px-4 py-4 flex items-center justify-center -translate-x-1/2"
 					style={{ bottom: bpmPopoverPos.bottom, left: bpmPopoverPos.left }}
 				>
 					<input
@@ -848,7 +831,7 @@ export default function StrumPage() {
 
 			{/* ── Mobile fixed bottom drawer ───────────────────────────────────── */}
 			<div
-				className="md:hidden fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl bg-white border-t border-slate-300 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] overflow-hidden transition-transform duration-300 ease-out"
+				className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden transition-transform duration-300 ease-out"
 				style={{ transform: controlsVisible ? "translateY(0)" : "translateY(100%)" }}
 				onPointerDown={(e) => {
 					if (!bpmButtonRef.current?.contains(e.target as Node)) {
@@ -858,7 +841,7 @@ export default function StrumPage() {
 			>
 				{/* Collapsible panel — max-height transition */}
 				<div
-					className={`bg-white overflow-hidden transition-[max-height] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+					className={`bg-popover overflow-hidden transition-[max-height] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
 						showSheet ? "max-h-[calc(33.333vh-56px)] overflow-y-auto" : "max-h-0"
 					}`}
 				>
@@ -882,7 +865,7 @@ export default function StrumPage() {
 							handleIsDraggingRef.current = false;
 						}}
 					>
-						<div className="w-9 h-1 rounded-full bg-slate-300" />
+						<div className="w-9 h-1 bg-line-strong" />
 					</div>
 
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
@@ -890,7 +873,6 @@ export default function StrumPage() {
 						<Button
 							onClick={handleTapTempo}
 							className="h-9 w-full text-sm font-semibold cursor-pointer transition-all duration-150"
-							style={{ backgroundColor: "var(--denim)", color: "white" }}
 						>
 							Tap Tempo
 						</Button>
@@ -898,7 +880,7 @@ export default function StrumPage() {
 						{/* BPM slider */}
 						<div className="flex flex-col gap-1.5">
 							<div className="flex justify-between items-center">
-								<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+								<span className="text-[11px] font-bold uppercase tracking-widest text-ink-dim">
 									BPM
 								</span>
 								<span className="text-xs tabular-nums text-denim font-semibold">
@@ -921,10 +903,10 @@ export default function StrumPage() {
 							className={`flex flex-col gap-1.5 transition-opacity duration-200 ${!strumEnabled ? "opacity-40" : ""}`}
 						>
 							<div className="flex justify-between items-center">
-								<span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+								<span className="text-[11px] font-bold uppercase tracking-widest text-ink-dim">
 									Strum Sound
 								</span>
-								<span className="text-xs tabular-nums text-slate-400">
+								<span className="text-xs tabular-nums text-ink-dim">
 									{Math.round(strumGain * 100)}%
 								</span>
 							</div>
@@ -940,20 +922,20 @@ export default function StrumPage() {
 							/>
 						</div>
 
-						<div className="border-t border-slate-100" />
+						<div className="border-t border-line" />
 
 						{/* Accent beat 1 */}
 						<div
 							className={`flex items-center justify-between transition-opacity duration-200 ${!metronomeEnabled ? "opacity-40 pointer-events-none" : ""}`}
 						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 								Accent beat 1
 							</span>
 							<Switch
 								checked={accentEnabled}
 								disabled={!metronomeEnabled}
 								onCheckedChange={setAccentEnabled}
-								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-slate-200"
+								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-line-strong"
 							/>
 						</div>
 
@@ -962,8 +944,8 @@ export default function StrumPage() {
 							className={`flex flex-col gap-1.5 transition-opacity duration-200 ${!metronomeEnabled ? "opacity-40 pointer-events-none" : ""}`}
 						>
 							<div className="flex justify-between items-center">
-								<span className="text-xs text-slate-400">Metronome vol.</span>
-								<span className="text-xs tabular-nums text-slate-400">
+								<span className="text-xs text-ink-dim">Metronome vol.</span>
+								<span className="text-xs tabular-nums text-ink-dim">
 									{Math.round(metronomeGain * 100)}%
 								</span>
 							</div>
@@ -979,13 +961,13 @@ export default function StrumPage() {
 							/>
 						</div>
 
-						<div className="border-t border-slate-100" />
+						<div className="border-t border-line" />
 
 						{/* Loop Gap — greyed when Play Once active */}
 						<div
 							className={`flex flex-col gap-2 transition-opacity duration-200 ${playOnce ? "opacity-40 pointer-events-none" : ""}`}
 						>
-							<span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+							<span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">
 								Loop Gap
 							</span>
 							<div className="flex gap-1">
@@ -996,11 +978,6 @@ export default function StrumPage() {
 										disabled={playOnce}
 										onClick={() => setLoopGap(gap)}
 										className="flex-1 h-9 text-xs font-semibold transition-colors duration-150"
-										style={
-											loopGap === gap && !playOnce
-												? { backgroundColor: "var(--denim)", color: "white" }
-												: undefined
-										}
 									>
 										{gap}s
 									</Button>
@@ -1011,7 +988,7 @@ export default function StrumPage() {
 						{/* Space bar mode */}
 						<div className="flex items-center gap-2">
 							<span
-								className={`text-xs font-medium transition-colors duration-200 ${spaceMode === "playPause" ? "text-denim font-semibold" : "text-slate-400"}`}
+								className={`text-xs font-medium transition-colors duration-200 ${spaceMode === "playPause" ? "text-denim font-semibold" : "text-ink-dim"}`}
 							>
 								Play/Pause
 							</span>
@@ -1025,7 +1002,7 @@ export default function StrumPage() {
 								className="data-[state=checked]:bg-denim data-[state=unchecked]:bg-denim"
 							/>
 							<span
-								className={`text-xs font-medium transition-colors duration-200 ${spaceMode === "tapTempo" ? "text-denim font-semibold" : "text-slate-400"}`}
+								className={`text-xs font-medium transition-colors duration-200 ${spaceMode === "tapTempo" ? "text-denim font-semibold" : "text-ink-dim"}`}
 							>
 								Tap
 							</span>
@@ -1035,13 +1012,13 @@ export default function StrumPage() {
 
 				{/* Mute hint — above the bottom bar, covered when the panel expands */}
 				{!mutHintDismissed && (
-					<div className="flex items-center justify-center gap-2 px-4 py-1.5 border-t border-slate-100">
-						<p className="text-xs text-slate-400">
+					<div className="flex items-center justify-center gap-2 px-4 py-1.5 border-t border-line">
+						<p className="text-xs text-ink-dim">
 							No sound? Check your phone&apos;s mute switch.
 						</p>
 						<button
 							onClick={() => setMutHintDismissed(true)}
-							className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
+							className="shrink-0 text-ink-faint hover:text-ink-dim transition-colors"
 							aria-label="Dismiss hint"
 						>
 							<X size={14} />
@@ -1049,11 +1026,11 @@ export default function StrumPage() {
 					</div>
 				)}
 
-				<div className="border-t border-slate-200" />
+				<div className="border-t border-line" />
 
 				{/* Always-visible bottom bar */}
 				<div
-					className="bg-white/95 backdrop-blur-sm flex items-center gap-1.5 px-3 py-2"
+					className="bg-popover flex items-center gap-1.5 px-3 py-2"
 					onPointerDown={handleBottomBarPointerDown}
 					onPointerMove={handleBottomBarPointerMove}
 					onPointerUp={handleBottomBarPointerUp}
@@ -1075,31 +1052,26 @@ export default function StrumPage() {
 							className="w-14 flex flex-col items-center leading-none text-center"
 						>
 							<span className="text-xl font-bold text-denim">{bpm}</span>
-							<span className="text-[8px] font-semibold uppercase tracking-widest text-slate-400">
+							<span className="text-[8px] font-semibold uppercase tracking-widest text-ink-faint">
 								BPM
 							</span>
 						</button>
 					</div>
 
 					{/* Loop / Once segmented pill */}
-					<div className="relative flex h-8 items-center rounded-full bg-slate-200 p-0.5 overflow-hidden shrink-0">
-						<div
-							className={`absolute inset-y-0.5 left-0 w-1/2 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
-								playOnce ? "translate-x-full" : "translate-x-0"
-							}`}
-						/>
+					<div className="flex shrink-0 border border-line-strong">
 						<button
 							onClick={() => setPlayOnce(false)}
-							className={`relative z-10 px-3 h-full rounded-full text-xs font-semibold transition-colors duration-150 ${
-								!playOnce ? "text-slate-700" : "text-slate-400"
+							className={`px-3 h-8 text-xs font-semibold transition-colors duration-150 ${
+								!playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
 							}`}
 						>
 							Loop
 						</button>
 						<button
 							onClick={() => setPlayOnce(true)}
-							className={`relative z-10 px-3 h-full rounded-full text-xs font-semibold transition-colors duration-150 ${
-								playOnce ? "text-slate-700" : "text-slate-400"
+							className={`border-l border-line-strong px-3 h-8 text-xs font-semibold transition-colors duration-150 ${
+								playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
 							}`}
 						>
 							Once
@@ -1109,8 +1081,10 @@ export default function StrumPage() {
 					{/* Metronome icon toggle */}
 					<button
 						onClick={() => setMetronomeEnabled(!metronomeEnabled)}
-						className={`p-1.5 rounded-full transition-colors duration-150 shrink-0 ${
-							metronomeEnabled ? "text-denim" : "text-slate-400"
+						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors duration-150 ${
+							metronomeEnabled
+								? "border-denim text-denim"
+								: "border-line-strong text-ink-faint"
 						}`}
 					>
 						<Metronome size={20} />
@@ -1119,7 +1093,7 @@ export default function StrumPage() {
 					{/* Chevron — toggles the controls panel */}
 					<button
 						onClick={() => setShowSheet((v) => !v)}
-						className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 transition-colors duration-150 shrink-0"
+						className="p-1.5 text-ink-faint hover:text-ink transition-colors duration-150 shrink-0"
 					>
 						<ChevronUp
 							size={20}
@@ -1131,7 +1105,7 @@ export default function StrumPage() {
 					<div className="ml-auto flex items-center gap-0.5 shrink-0">
 						<button
 							onClick={stop}
-							className={`p-1 text-slate-500 transition-colors duration-150 ${
+							className={`p-1 text-ink-dim transition-colors duration-150 ${
 								isPlaying ? "visible" : "invisible"
 							}`}
 						>
@@ -1141,7 +1115,7 @@ export default function StrumPage() {
 							onClick={handleHitPlayAndPause}
 							className={`transition-all duration-150 active:scale-95 ${
 								selectedPattern
-									? "cursor-pointer text-denim hover:text-denim-dark"
+									? "cursor-pointer text-denim hover:text-denim-accent"
 									: "opacity-30 pointer-events-none text-denim"
 							}`}
 						>

@@ -43,7 +43,7 @@ export default function BrowseGrid({ sections, onSelectChord }: Props) {
 			{sections.map(({ label, cards, subsections }) => (
 				<section key={label}>
 					{/* Category / root top-level heading */}
-					<h3 id={tocSectionId(label)} className="mb-3 text-s font-semibold uppercase tracking-widest text-muted-foreground">
+					<h3 id={tocSectionId(label)} className="mb-3 text-s font-semibold uppercase tracking-widest text-denim">
 						<MusicalText
 							text={label}
 							className="space-x-[0.01em]"
@@ -56,7 +56,7 @@ export default function BrowseGrid({ sections, onSelectChord }: Props) {
 						<div className="flex flex-col gap-5">
 							{subsections.map(({ label: rootLabel, cards: subCards }) => (
 								<div key={rootLabel}>
-									<h4 id={tocSubsectionId(label, rootLabel)} className="mb-2 text-xs font-medium text-muted-foreground/60">
+									<h4 id={tocSubsectionId(label, rootLabel)} className="mb-2 text-xs font-medium text-denim">
 										<MusicalText
 											text={rootLabel}
 											className="space-x-[0.01em]"

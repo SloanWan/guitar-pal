@@ -50,7 +50,7 @@ export default function LazyChordDiagram({ def, label, size = "compact", href, o
 			<div
 				ref={rootRef}
 				style={{ width: PLACEHOLDER[size].w, height: PLACEHOLDER[size].h }}
-				className="shrink-0 rounded-lg border border-denim-border bg-denim-tint"
+				className="shrink-0 rounded-none border border-line-strong bg-denim-tint"
 			/>
 		);
 	}

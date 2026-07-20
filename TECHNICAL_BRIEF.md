@@ -58,7 +58,7 @@ src/
 │   │   │       └── [suffixSlug]/page.tsx  # Chord detail: voicing grid, fret/note-name label toggle
 │   │   ├── strum/page.tsx       # Client component: full strumming machine page
 │   │   └── fingerpick/
-│   │       └── page.tsx         # Client component: TAB viewer with pattern library and controls scaffold
+│   │       └── page.tsx         # Client component: TAB viewer with pattern library, fully-implemented controls, and create/edit modal
 │   ├── dev/
 │   │   ├── audio-diagnostic/page.tsx      # Throwaway: multi-preset pitch audition tool
 │   │   ├── muted-preset-audition/page.tsx # Throwaway: compares muted guitar presets
@@ -127,6 +127,7 @@ src/
 │   ├── fingerpickToVexFlow.ts   # Pure adapter: Measure → VexFlowRenderData (TabNote / GhostNote / TabTie / TabSlide arrays)
 │   ├── constants.ts             # CATEGORY_LABELS and CATEGORY_COLORS records
 │   ├── utils.ts                 # shadcn cn() utility
+│   ├── tabImport/              # Tab-import MVP core: validate/normalize + repeat-expand + technique registry (pure, DOM-free, network-free)
 │   └── __tests__/               # chordSlug, chordSuffixes, chordVoicingToMidi, chordVoicingToVexChords, fingerpickScheduler, musicalNotation
 │
 ├── types/
@@ -400,7 +401,7 @@ type FingerpickPattern = {
 };
 ```
 
-String index `0` = high e; index `5` = low E. All four `Technique` values (`hammer-on`, `pull-off`, `slide-up`, `slide-down`) are implemented. Techniques such as bend, vibrato, and harmonics are not in the type — they are backlogged.
+String index `0` = high e; index `5` = low E. The `Technique` union already includes bend (`bend-full/half/quarter`, `bend-release`, `pre-bend`, `pre-bend-release`), vibrato (`vibrato`, `vibrato-wide`, `vibrato-bar`), harmonic (`harmonic-natural`, `harmonic-artificial`), tapping, trill, whammy, pick-scrape, and grace-note as data-model members. Render/audio support is partial: hammer-on, pull-off, slide-up, slide-down (connectors) plus vibrato, tapping, trill, and the StringFret modifier set (staccato, accent, pickStroke, tremolo) are rendered; the rest exist in the type but are not yet rendered or sounded — treated as detected-but-unsupported.
 
 **Adapter** (`src/lib/fingerpickToVexFlow.ts`):
 
@@ -649,6 +650,31 @@ Known bug (open issue): on mobile, natural playback end causes the page to scrol
 **Testing:**
 
 `fingerpickToVexFlow.ts` has 23 unit tests in `src/components/fingerpick/__tests__/fingerpickToVexFlow.test.ts`, covering: `VEX_DURATION` key mapping (6 cases), silent and rest slots producing `GhostNote` (3 cases), single-note `TabNote` construction and VexFlow string-index mapping (5 cases), all four technique connectors and tied notes plus the no-connector baseline (6 cases), and beam grouping via `Beam.applyAndGetBeams` (3 cases). Tests assert against output object types and graph structure — not rendered pixel positions — because jsdom lacks a real Canvas/text-measurement implementation (see Known Issue #8).
+
+---
+
+### Tab Import Core (`src/lib/tabImport/`)
+
+Pure, DOM-free, network-free foundation for the tab-import MVP (Track 1, Issue #114). No React, no Audio Core, no LLM/network calls — it consumes an already-parsed object (what the vision LLM emits) and produces a renderable pattern. The vision route handler (Issue 2) and import UI (Issue 3) are not yet built.
+
+**Entry point:** `normalizeImportedPattern(raw, repeats?): NormalizeResult` — orchestrates validate → expandRepeats → capMeasures. Skips expand/cap if validation returned a null pattern.
+
+**Contract (cross-issue seam):**
+```ts
+type ValidationIssue = { code: string; path: string; message: string; original?: unknown; repairedTo?: unknown };
+type NormalizeResult = { pattern: FingerpickPattern | null; errors: ValidationIssue[]; warnings: ValidationIssue[]; truncated: boolean };
+```
+
+**Core invariant:** `pattern === null ⟺ errors.length > 0`. A null pattern occurs ONLY on gross structural failure (input not an object / `measures` not an array / zero measures). In every other case the pattern is repaired to a guaranteed-renderable `FingerpickPattern` and each mutation is disclosed as a warning — never a silent change. Downstream may treat a non-null pattern as directly renderable by `fingerpickToVexFlow` without re-validation. The layer makes NO transcription-accuracy claim (accuracy is Issue 2's concern).
+
+**Modules:**
+- `validateFingerpickPattern.ts` — arbitrary JSON → renderable pattern + issues. Clamps fret to [0,24]; normalizes every slot's strings to an exact length-6 tuple (pad/truncate with silent StringFret); defaults invalid/missing Duration. Missing-duration handling: whole-measure-missing → uniform duration from time-signature capacity (falls back to `eighth` if no clean division); partial-missing → per-slot `eighth`. Invalid measure → single full-measure rest slot. bpm defaults 80, timeSignature [4,4], ids generated where absent. Preserves measure count/order (so repeat indices stay valid). Does NOT enforce that slot durations sum to measure capacity — renderability is the bar, not musical completeness.
+- `techniqueSupport.ts` — `Record<NonNullable<Technique>, { renderSupported; audioSupported }>` (compile-time exhaustive; new union members fail to compile until classified). `renderSupported` mirrors `fingerpickToVexFlow`'s actual output. Exports `isRenderSupported`. Non-render-supported techniques on a note are dropped to `null` (note kept) + warned.
+- `expandRepeats.ts` — `expandRepeats(measures, directives)`. `times` = total occurrences of a range (times=1 is identity). Fresh UUIDs on every cloned measure AND its slots. `MAX_REPEAT_TIMES = 128`; out-of-bounds / overlapping / over-`times` directives are skipped + warned (`INVALID_REPEAT_DIRECTIVE` / `OVERLAPPING_REPEAT_DIRECTIVE`), never thrown.
+- `capMeasures.ts` — `MAX_MEASURES = 128` (pathological ceiling — real single-image imports never reach it; guards against runaway expansion / hallucination). Returns `{ measures, truncated }`; applied AFTER expansion.
+- `normalizeImportedPattern.ts` — orchestrator; also pushes the `MEASURES_TRUNCATED` warning (with pre-cap count) when truncation occurs, alongside the `truncated` boolean.
+
+**Testing:** Vitest suite in `src/lib/tabImport/__tests__/` covers boundary clamps, duration defaulting (uniform + per-slot), strings-tuple normalization, technique classification + unsupported-downgrade, registry exhaustiveness, repeat expansion (single & ×N + id uniqueness), out-of-bounds / over-`times` repeat skip, and 128-measure truncation.
 
 ---
 

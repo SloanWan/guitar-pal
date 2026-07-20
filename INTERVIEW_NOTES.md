@@ -466,3 +466,35 @@ A full-featured create/edit modal for fingerpick patterns, grid-based UI with tw
 **Breakpoint bug caught during final walkthrough:** the pattern-library sidebar's hide breakpoint and its drawer-toggle button's visibility breakpoint didn't match, leaving a ~751px-997px dead zone where the sidebar was hidden but unreachable. Fixed by aligning both to the same breakpoint, and repositioning the toggle button from the page's outer top-right to the TAB viewer section's top-right (adjacent to the controls panel) for better visual grouping.
 
 **Interview angle:** Good example of scope discipline under real iteration — the issue's stated scope (page.tsx + TabStaveRow.tsx) expanded organically as gaps surfaced (FingerpickEditModal, page-level background, the breakpoint dead zone), and each expansion was made a deliberate, stated decision rather than silent scope creep. Also a clean example of catching a documentation-drift failure mode before it compounded: an audit before writing code found the design spec had gone stale relative to two intentional prior decisions, and the spec was corrected rather than the implementation being reverted to match outdated docs.
+
+---
+
+## Issue #114 — Tab Import 校验 / 归一 / 反复展开核心 lib（识谱 MVP, Track 1）
+
+### 一句话闪光点
+我给一个消费视觉 LLM 不确定输出的校验层立了一条硬不变式——要么交出保证可渲染、且逐处披露修改的结果，要么明确失败，绝不产出"看着对其实错"的东西；并刻意不在这层承诺识别准确率，把"可渲染"的地板和"读得准"的天花板拆给不同组件。
+
+### 技术要点
+- **核心不变式**：`pattern === null ⟺ errors 非空`。null 只在三种结构崩塌（非对象 / measures 非数组 / 零小节）发生；其余一律 clamp/修复 + warn。下游（Issue 2）拿到非 null 即可直接塞进编辑器、无需二次校验——这条负向保证就是契约本身。
+- **诚实频道**：所有对原始 LLM 输出的改动（clamp 品位 / 填默认时值 / drop 不支持技巧 / 截断）一律记入 warnings。截断是全 lib 唯一"销毁数据"的操作，其余都"改+保留+标记"。
+- **技巧注册表用类型系统当护栏**：`Record<NonNullable<Technique>, TechniqueSupport>` 穷举，将来新增 Technique 未分类则编译不过。render 标志逐条对齐 `fingerpickToVexFlow` 实际渲染行为，非 brief 旧描述。
+- **时值推断分流**：整小节全缺 → 按拍号容量均匀推（4/4 4 slot → quarter）；部分缺 → 只对缺的逐个退 `eighth`，不重建节奏（那属于转录，超出 DoD）。
+- **反复展开**：`times` = 总出现次数（times=1 恒等）；克隆 measure 与其每个 slot 双层换新 id（防 React key 撞 + cursor data-index 定位）；越界/重叠 directive → skip+warn，绝不 throw。
+- **orchestrator 顺序**：validate → expand → cap，cap 必须在 expand 之后。
+
+### 产品视角
+- 北极星是"一键准确转录"，编辑器兜底是**最后手段**不是主力；但"编辑器兜底"被重新界定为——它只兜那一类**结构上无法自动验证**的 valid-but-wrong，不是低准确率的挡箭牌。
+- 截断销毁数据、编辑器够不着，所以硬截断与"编辑器兜底"自相矛盾——这驱动了 cap 从 16 硬限改为 128 病态天花板。
+
+### 被推翻的方案 / 决策路径
+1. **DoD 修正**：原 DoD"不追求完美转录、编辑器是纠错层" → 发现该框架会纵容低准确率 → 拆两层：准确率归 Issue 2 的验收（可配样本图 eval），可渲染 + 诚实标注归 #114。
+2. **errors/warnings 分界标准**：从"问题严不严重"（模糊）→ 改成"#114 检测得出它错吗？告诉 LLM 会不会改变答案？"。检测得出（不可能的 fret、对不上拍号的小节数）→ error → 值得 re-parse；检测不出（合法但可能读错的时值/技巧）→ warning → 只有人+原图能验。
+3. **validity ≠ correctness**：#114 只判"合法/可渲染"（有标准答案），从不判"读得对不对"（pipeline 里无 ground truth）。这直接解释了为什么 re-parse 对时值/技巧无效——同图同模型、无新信号，第二次只是另一个独立猜测。
+4. **硬截断 16 → 128**：16 是过紧的 MVP 护栏，且加错了地方——真正的炸口是 `expandRepeats` 的 `times` 无上限（可 `times: 9999`）。改法：用户真实内容不截（128 病态天花板真实导入摸不到），把上限加在 directive 层的 `times`（MAX_REPEAT_TIMES）堵住展开炸口。
+5. **AI agent 产出的 QA 方法**：审计时把标准拆成"客观项（交证据 file:line/grep）"与"判断项（禁止自评，只交字面输出，判决权在人手里）"——因为判断项是同一模型检查自己的理解、误读对它自己隐形。这次正是靠这套逼出了唯一一个静默 mutation bug。
+
+### 可深挖的追问方向
+- 为什么 re-parse 不是通用准确率旋钮？（只对可检测的不可能有效）
+- times 炸口为什么在 directive 层堵而非输出层截？（区分"用户给了长歌"vs"放大失控"两个不同来源）
+- 如何对 AI coding agent 的自查做防伪？（交证据 vs 交结论）
+- 分层 DoD 如何落到组件边界：#114 刻意不含任何准确率断言意味着什么？

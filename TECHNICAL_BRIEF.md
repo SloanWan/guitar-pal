@@ -261,6 +261,14 @@ fingers     jsonb  (array of finger numbers per string)
 
 **Layout:** Three-column on desktop (library sidebar left | StepGridCard centre | controls right). On mobile: hidden library (slide-in overlay), StepGridCard vertically centered in remaining viewport space, controls moved to a unified fixed-bottom drawer matching the fingerpick page pattern.
 
+**Pattern library:** `StrumPatternLibrary.tsx` — mirrors `FingerpickPatternLibrary.tsx`'s two-section collapsible structure ("My Patterns" / "Presets"). Visible on desktop; slide-in overlay on mobile.
+
+**StepGridCard container** uses a dedicated `--step-grid-bg` token (dark: `#141414`, light: `#ffffff`), independent from `--tab-viewer-bg`, so the strum pattern display surface can be themed separately.
+
+**Transport:** Single Play/Stop toggle — strum always resets to the start on stop (no separate reset-to-start Stop button, unlike the fingerpick page's dedicated Stop + Play/Pause pair).
+
+**Spacebar mode selector:** Spacebar can be bound to either play/pause or tap-tempo, selectable in the controls rack. When in tap-tempo mode, the transport header's "space" hint is hidden and a "space" hint appears under the Tap button instead (fixed-height reserved area to avoid layout shift).
+
 **Pattern data model** (`src/lib/strumPatterns.ts`):
 
 ```ts
@@ -302,11 +310,10 @@ StepValue semantics:
 - Metronome: `OscillatorNode`, 1200 Hz accented / 800 Hz normal, 50 ms duration.
 - `setStrumEnabled` and `setMetronomeEnabled` stop and restart playback so the ref update propagates immediately.
 - `sixteenth` tick mode with a 2-cell beat interleaves real cells with empty subdivisions (alternating via `nextPlatEmptyCellRef`).
-- BPM range: 40–220. Tap tempo uses up to 8 recent taps, resets after 2 seconds of inactivity. The BPM input is a fully custom `div`-based slider (`src/components/strum/BpmSlider.tsx`) — the native `<input type="range">` was replaced to support genre tick marks. 9 ticks at fixed BPM values (60 / 75 / 90 / 100 / 110 / 120 / 130 / 140 / 160) are rendered as dot markers on the track; hovering a segment between ticks shows a genre label tooltip (Slow Practice / Folk / Ballad / Pop Blues / Funk / Pop Rock / Rock / Jazz Hard Rock / Fast Rock). Tick dots change colour depending on whether they fall inside or outside the filled portion. Clicking a tick jumps BPM directly. Drag-pause-then-resume and onPointerUp blur behaviours are preserved.
-- **BPM slider snap:** during pointer drag, raw BPM value snaps to the nearest tick (`SNAP_THRESHOLD = 4 BPM`) with a `snapLocked` ref preventing jitter at the boundary. Keyboard arrow keys bypass snap. Tick dot color: denim blue for ticks ≤ current BPM, gray for ticks > current BPM.
-- **Mobile fixed-bottom drawer (below `md` breakpoint):** two-layer structure mirroring fingerpick page. Main bar (always visible): BPM tap popover, Loop/Once segmented pill, Metronome toggle, Stop + Play/Pause. Collapsible panel: Tap Tempo, BPM horizontal slider, Strum volume, Accent Beat 1, Metronome volume, Loop Gap pills. Hide-on-scroll behaviour with `controlsVisibleRef` pattern. `touch-action: none` + `setPointerCapture` on drag handle suppresses pull-to-refresh.
+- BPM range: 40–220. Tap tempo uses up to 8 recent taps, resets after 2 seconds of inactivity. BPM and volume controls use the shared `<Fader>` component (`src/components/ui/Fader.tsx`); strum passes its genre-tick data via `ticks`/`tickValues`/`tickLabels` props — 9 ticks at fixed BPM values (60 / 75 / 90 / 100 / 110 / 120 / 130 / 140 / 160) with genre labels (Slow Practice / Folk / Ballad / Pop Blues / Funk / Pop Rock / Rock / Jazz Hard Rock / Fast Rock). Tick snap (`SNAP_THRESHOLD = 4 BPM`), denim tick-dot coloring (blue ≤ current BPM, gray > current BPM), and keyboard arrow-key snap bypass are all handled within `Fader`.
+- **Mobile fixed-bottom drawer (below `md` breakpoint):** two-layer structure mirroring fingerpick page. Main bar (always visible): BPM tap popover, Loop/Once segmented pill, Metronome toggle, Play/Stop toggle. Collapsible panel: Tap Tempo, BPM horizontal slider (Fader), Strum volume, Accent Beat 1, Metronome volume, Loop Gap pills. Hide-on-scroll behaviour with `controlsVisibleRef` pattern. `touch-action: none` + `setPointerCapture` on drag handle suppresses pull-to-refresh.
 
-**Chord picker (`ChordPickerModal`):** Two-phase modal. Phase 1: piano keyboard root selector (12 keys) + category grid (`CHORD_SUFFIX_CATEGORIES`, 7 categories with example suffix helper text). Phase 2 triggers when both selections are made — desktop expands horizontally (voicing panel to the right, width transition); mobile expands vertically (voicing panel below, `max-h-[80dvh]` + `overflow-y-auto` + `overscroll-contain` + `touch-pan-y` for scroll isolation). Voicing panel: horizontal scrollable `ChordDiagramSVG` compact cards, ~1.5 cards visible. Confirmed chord voicing → `chordVoicingToMidi` → dynamic MIDI pitches passed to `useAudioEngine` replacing hardcoded `STRUM_PITCHES`. Falls back to C major when no chord selected. Voicings fetched client-side via browser Supabase client.
+**Chord picker (`ChordPickerModal`):** Two-phase modal using v3 tokens (`--modal-bg`, hairline borders, radius 0). Phase 1: piano keyboard root selector (12 keys, opaque selected state, seamless white-key layout with no gaps between keys) + category grid (`CHORD_SUFFIX_CATEGORIES`, 7 categories with example suffix helper text). Phase 2 triggers when both selections are made — desktop expands horizontally (voicing panel to the right, width transition); mobile expands vertically (voicing panel below, `max-h-[80dvh]` + `overflow-y-auto` + `overscroll-contain` + `touch-pan-y` for scroll isolation). Voicing panel: fetch-key-tracked loading state (spinner + "Checking…" while fetching, "No voicings found" only after a completed fetch for the current selection returns empty); horizontal scrollable `ChordDiagramSVG` compact cards (~1.5 cards visible) with hover bounce animation on voicing preview play buttons. Confirmed chord voicing → `chordVoicingToMidi` → dynamic MIDI pitches passed to `useAudioEngine` replacing hardcoded `STRUM_PITCHES`. Falls back to C major when no chord selected. Voicings fetched client-side via browser Supabase client.
 
 **Custom pattern sync** (`src/components/strum/useStrumPatterns.ts`):
 
@@ -318,6 +325,7 @@ StepValue semantics:
 
 **Pattern creator** (`src/components/strum/CreatePatternModal.tsx`):
 
+- Uses v3 modal tokens (`--modal-bg`, hairline `--line`/`--line-strong` borders, radius 0). Save and Sign-in buttons use className-based token overrides (`bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40 rounded-none`), not inline styles.
 - Editing cycles cells through `["", "D", "U", "X"]` only. Ghost (`DG`/`UG`) and triplet (`D3`/`U3`) values can exist in preset/saved data and display correctly in StepGrid, but cannot be set via the creator UI — clicking a ghost or triplet cell resets it to `""`.
 - Each beat can have 2–4 cells. Beats always have exactly 4 columns displayed (2-cell beats are padded to 4 display slots with ghost cells in StepGrid).
 - Unauthenticated users who try to save are shown a choice: save locally or go sign in.
@@ -508,14 +516,14 @@ implemented, pending dedicated research issue.
 Fully implemented; no longer a placeholder. Controls (right panel, `md:w-55 lg:w-70`):
 
 - **Play/Pause** toggle (CirclePlay / CirclePause, 56 px icons); becomes a Stop button (`CircleStop`) while playing or paused.
-- **BPM slider** (40–220). Drag gesture: `onPointerDown` pauses playback and records `wasPlayingRef`; `onChange` updates display and `dragBpmRef` only; `onPointerUp` calls `applyBpmChange(dragBpmRef.current)` then resumes if `wasPlayingRef`. Keyboard arrow keys on the focused slider reschedule immediately (no pointer-down guard active).
+- **BPM slider** (40–220, `<Fader>` from `src/components/ui/Fader.tsx`). Drag gesture: `onPointerDown` pauses playback and records `wasPlayingRef`; `onChange` updates display and `dragBpmRef` only; `onPointerUp` calls `applyBpmChange(dragBpmRef.current)` then resumes if `wasPlayingRef`. Keyboard arrow keys on the focused slider reschedule immediately (no pointer-down guard active).
 - **±10 BPM buttons** and large BPM display.
 - **Tap Tempo** — up to 8 taps, resets after 2 s idle; computes average interval and calls `applyBpmChange`.
 - **Play Once** toggle (Switch) — if on, loop machinery schedules only one pass then stops.
 - **Loop Gap** selector (0 s / 5 s / 10 s pill buttons) — greyed/disabled while Play Once is active; calls `applyLoopGapChange` immediately on change.
 - **Note Sound** volume slider (0–200%).
 - **Metronome** toggle, **Accent Beat 1** toggle, **Subdivision** (1/4 / 1/8 / 1/16 pill buttons), **Metronome volume** slider — all greyed when metronome is off.
-- **Spacebar** keybinding toggles Play/Pause; skipped when focus is inside a text input, select, or textarea.
+- **Spacebar mode selector:** spacebar can be bound to either play/pause or tap-tempo, selectable in the controls rack. When in tap-tempo mode, the transport header's "space" hint is hidden and a "space" hint appears under the Tap button instead (fixed-height reserved area to avoid layout shift). The text-input focus guard (skipped when focus is inside a text input, select, or textarea) applies in both modes.
 
 **Pattern create/edit modal (`src/components/fingerpick/FingerpickEditModal.tsx`):**
 
@@ -841,6 +849,9 @@ Per-surface tokens introduced or decoupled during the #107 fingerpick v3 refacto
 | `--sidebar-header-1-bg` | `#141414` (= `--bg-panel`) | `#f8fafc` | "My Patterns" section header row in the fingerpick pattern library sidebar. |
 | `--sidebar-header-2-bg` | `#1a1a1a` | `#f1f5f9` | "Presets" section header row — one step darker/offset from header-1 so the two stay visually distinguishable. |
 | `--sidebar-hover-bg` | `rgba(74, 111, 165, 0.06)` | `rgba(74, 111, 165, 0.05)` | Pattern-card hover fill, lighter than `--denim-tint` so hover reads weaker than selected. |
+| `--step-grid-bg` | `#141414` (= `--bg-panel`) | `#ffffff` | Strum machine's `StepGridCard` surface — dedicated token, independently themeable; does not reuse `--tab-viewer-bg` so the two can diverge. |
+
+**Section header colors:** Control-rack and pattern-library section headers (e.g. "Tempo", "Metronome", pattern-library "My Patterns" / "Presets" titles) use `--denim`, not `--ink-faint`/`--ink-dim` — this applies to both `/strum` and `/fingerpick` shell elements. Modal field labels (e.g. `CreatePatternModal`'s "Pattern name") remain `--ink-faint` — this convention is shell-specific and does not apply to modals.
 
 Light-mode `--bg`/`--bg-panel` intentionally deviate from the original design mockups: they are `#f5f7fa`/`#ebeff5` (denim-tinted cool white — a #106 landing-page decision), not the originally-mocked `#f4f4f1`/`#edede9` warm paper. `FINAL_DESIGN_DIRECTION.md` and `fable/design-tokens.css` were updated during #107 to match this repo value, so there is no drift between spec and implementation.
 
@@ -879,6 +890,8 @@ Light-mode `--bg`/`--bg-panel` intentionally deviate from the original design mo
 7. **`7sg` suffix data is mislabelled.** Three rows in the `chords` table under root `C` with suffix `7sg` are actually mislabelled C7 voicings. They are silently excluded at the UI layer via `EXCLUDED_SUFFIXES` in `chordSuffixes.ts` but remain in the database. A one-off delete or correction is the clean fix.
 
 8. **jsdom has no real Canvas / text-measurement implementation.** VexFlow internally calls `Canvas.measureText()` to compute notation layout. Under jsdom, `measureText()` returns zero widths for all strings, so `fingerpickToVexFlow` tests cannot meaningfully assert pixel-level layout (note x-positions, stave widths). Tests are therefore written against the output object graph (note types, beam groups, connectors) rather than rendered geometry. Tracked as a separate GitHub issue.
+
+9. **shadcn `Button`'s default/lg size variants have a hardcoded `rounded-lg` class that is not bridged to this project's `--radius: 0px` token.** Only the `xs`/`sm`/`icon-xs`/`icon-sm` size variants reference `var(--radius-md)`. Any `Button` using the default or `lg` size must add `rounded-none` explicitly, or it will render with visible rounded corners despite the v3 zero-radius rule. This shipped unnoticed in `FingerpickEditModal`'s Save button during #107 before being caught and fixed during #108 — audit any other default/lg-size `Button` usages for the same issue.
 
 ---
 

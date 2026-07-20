@@ -204,8 +204,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 			if (cancelled) return;
 
-			const vs =
-				(chord as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? [];
+			const vs = (chord as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? [];
 			setVoicings(vs);
 			const standard = vs.find((v) => v.label === "Standard") ?? vs[0] ?? null;
 			setSelectedVoicingId(standard?.id ?? null);
@@ -254,10 +253,13 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			ctxRef.current.destination,
 			ctxRef.current.currentTime,
 		);
-		playTimerRef.current = setTimeout(() => {
-			setPlayingVoicingId(null);
-			playTimerRef.current = null;
-		}, (CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000);
+		playTimerRef.current = setTimeout(
+			() => {
+				setPlayingVoicingId(null);
+				playTimerRef.current = null;
+			},
+			(CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000,
+		);
 	}
 
 	function handleConfirm() {
@@ -307,9 +309,9 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 								<button
 									key={k.root}
 									onClick={() => setSelectedRoot(k.root)}
-									className={`flex-1 flex items-end justify-center pb-1 text-[7px] font-bold transition-colors border [&:not(:first-child)]:-ml-px ${
+									className={`flex-1 flex items-end justify-center pb-1 text-[7px] font-bold transition-colors border not-first:-ml-px ${
 										selectedRoot === k.root
-											? "relative z-10 bg-denim/70 text-white border-denim"
+											? "relative z-10 bg-denim text-white border-denim"
 											: "bg-background text-ink-faint border-line-strong hover:bg-denim-tint hover:text-denim"
 									}`}
 								>
@@ -324,7 +326,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 								onClick={() => setSelectedRoot(k.root)}
 								className={`absolute top-0 z-10 h-[62%] flex items-end justify-center pb-0.5 text-[6px] font-bold transition-colors ${
 									selectedRoot === k.root
-										? "bg-denim/70 text-white"
+										? "bg-denim text-white"
 										: "bg-zinc-600 text-zinc-100 hover:bg-denim hover:text-on-denim"
 								}`}
 								style={{
@@ -384,7 +386,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				{/* Voicing panel — expands downward on mobile, rightward on desktop */}
 				<div
 					ref={voicingPanelRef}
-					className={`overflow-hidden shrink-0 ${phase2 ? "max-md:max-h-[500px] md:max-w-[320px]" : "max-md:max-h-0 md:max-w-0"}`}
+					className={`overflow-hidden shrink-0 ${phase2 ? "max-md:max-h-125 md:max-w-[320px]" : "max-md:max-h-0 md:max-w-0"}`}
 					style={{
 						transition:
 							"max-height 350ms cubic-bezier(0.32, 0.72, 0, 1), max-width 350ms cubic-bezier(0.32, 0.72, 0, 1)",
@@ -446,7 +448,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 											>
 												<ChordDiagramSVG {...svgProps} size="compact" />
 												<div className="flex items-center gap-1">
-													<span className="text-[9px] text-ink-faint max-w-[60px] truncate">
+													<span className="text-[9px] text-ink-faint max-w-15 truncate">
 														{v.label ?? "—"}
 													</span>
 													<button
@@ -455,7 +457,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 															void handlePlay(v);
 														}}
 														disabled={isPreloading}
-														className={`transition-colors motion-safe:enabled:hover:[animation:play-bounce-hop_0.35s_ease-out] ${
+														className={`transition-colors motion-safe:enabled:hover:animate-[play-bounce-hop_0.35s_ease-out] ${
 															isPlaying
 																? "text-denim-accent"
 																: "text-denim hover:text-denim-accent"
@@ -463,7 +465,10 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 														aria-label="Preview chord"
 													>
 														{isPreloading && isPlaying ? (
-															<Loader2 size={11} className="animate-spin" />
+															<Loader2
+																size={11}
+																className="animate-spin"
+															/>
 														) : (
 															<CirclePlay size={11} />
 														)}

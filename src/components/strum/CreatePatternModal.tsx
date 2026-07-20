@@ -8,7 +8,6 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-	DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { MoveDown, MoveUp, X, Dot, Plus, Minus } from "lucide-react";
@@ -63,6 +62,7 @@ export default function CreatePatternModal({
 			setNameError(false);
 			setShowSignInPrompt(false);
 		});
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
 	function handleCellClick(beatIdx: number, cellIdx: number) {
@@ -128,7 +128,7 @@ export default function CreatePatternModal({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="max-w-120 w-full flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0">
+			<DialogContent className="max-w-120 w-full flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none">
 				<DialogHeader className="shrink-0 p-4 pb-0">
 					<DialogTitle>{editPattern ? "Edit pattern" : "Create pattern"}</DialogTitle>
 				</DialogHeader>
@@ -136,7 +136,7 @@ export default function CreatePatternModal({
 				<div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4 min-h-0">
 					{/* Name input */}
 					<div className="flex flex-col gap-1.5">
-						<label className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Pattern name
 						</label>
 						<input
@@ -147,30 +147,30 @@ export default function CreatePatternModal({
 								if (nameError) setNameError(false);
 							}}
 							placeholder="e.g. My strum pattern"
-							className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-denim/40 ${
-								nameError ? "border-red-400" : "border-slate-200"
+							className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
+								nameError ? "border-destructive" : "border-line-strong"
 							}`}
 						/>
 						{nameError && (
-							<p className="text-xs text-red-500">Pattern name is required</p>
+							<p className="text-xs text-destructive">Pattern name is required</p>
 						)}
 					</div>
 
 					{/* Beat grid */}
 					<div className="flex flex-col gap-2">
-						<span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+						<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Pattern
 						</span>
 						<div className="flex gap-2">
 							{beats.map((beat, beatIdx) => (
 								<div key={beatIdx} className="flex-1 flex flex-col gap-1.5">
 									{/* Cells */}
-									<div className="flex border border-slate-200 rounded-sm py-2">
+									<div className="flex border border-line-strong py-2">
 										{beat.map((cell, cellIdx) => (
 											<button
 												key={cellIdx}
 												onClick={() => handleCellClick(beatIdx, cellIdx)}
-												className="flex-1 flex justify-center items-center text-slate-500 hover:text-denim hover:bg-denim-tint/60 rounded-sm transition-colors"
+												className="flex-1 flex justify-center items-center text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
 											>
 												<StepIcon step={cell} />
 											</button>
@@ -181,14 +181,14 @@ export default function CreatePatternModal({
 										<button
 											onClick={() => removeCell(beatIdx)}
 											disabled={beat.length <= 2}
-											className="flex-1 flex justify-center items-center h-6 rounded border border-slate-200 text-slate-400 hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+											className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 										>
 											<Minus size={10} />
 										</button>
 										<button
 											onClick={() => addCell(beatIdx)}
 											disabled={beat.length >= 4}
-											className="flex-1 flex justify-center items-center h-6 rounded border border-slate-200 text-slate-400 hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+											className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 										>
 											<Plus size={10} />
 										</button>
@@ -200,44 +200,50 @@ export default function CreatePatternModal({
 
 					{/* Sign-in prompt — shown when user is not logged in and tries to save */}
 					{showSignInPrompt && (
-						<div className="rounded-lg border border-denim/20 bg-denim-tint/50 px-4 py-3">
-							<p className="text-sm text-slate-700">
+						<div className="border border-denim/20 bg-denim-tint px-4 py-3">
+							<p className="text-sm text-ink">
 								Sign in to keep your patterns safe across devices.
 							</p>
 						</div>
 					)}
 				</div>
 
-				<DialogFooter className="mx-0 mb-0 shrink-0">
+				<div className="flex items-center justify-end gap-2 shrink-0 border-t border-line bg-popover px-4 py-3">
 					{showSignInPrompt ? (
 						<>
-							<Button variant="outline" onClick={handleSaveLocally}>
+							<button
+								onClick={handleSaveLocally}
+								className="px-4 py-2 border border-line-strong text-ink-dim text-sm hover:border-denim hover:text-denim-accent active:bg-denim-tint transition-colors"
+							>
 								Save locally anyway
-							</Button>
+							</button>
 							<Button
 								onClick={() => {
 									onSave(buildPattern());
 									router.push("/auth?redirect=/strum");
 								}}
-								style={{ backgroundColor: "var(--denim)", color: "white" }}
+								className="h-9 px-4 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
 							>
 								Sign in
 							</Button>
 						</>
 					) : (
 						<>
-							<Button variant="outline" onClick={handleClose}>
+							<button
+								onClick={handleClose}
+								className="px-4 py-2 border border-line-strong text-ink-dim text-sm hover:border-denim hover:text-denim-accent active:bg-denim-tint transition-colors"
+							>
 								Cancel
-							</Button>
+							</button>
 							<Button
 								onClick={handleSave}
-								style={{ backgroundColor: "var(--denim)", color: "white" }}
+								className="h-9 px-4 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
 							>
 								{editPattern ? "Save changes" : "Save pattern"}
 							</Button>
 						</>
 					)}
-				</DialogFooter>
+				</div>
 			</DialogContent>
 		</Dialog>
 	);

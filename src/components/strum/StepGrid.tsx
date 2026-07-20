@@ -41,8 +41,8 @@ export default function StepGrid({
 		U: () => <MoveUp className={iconCls} />,
 		X: () => <X className={iconCls} />,
 		G: () => <></>,
-		DG: () => <MoveDown className={iconCls} color="#cfcfcf" />,
-		UG: () => <MoveUp className={iconCls} color="#cfcfcf" />,
+		DG: () => <MoveDown className={iconCls} color="var(--ink-faint)" />,
+		UG: () => <MoveUp className={iconCls} color="var(--ink-faint)" />,
 		D3: () => <MoveDown className={iconCls} />,
 		U3: () => <MoveUp className={iconCls} />,
 		"": () => <Dot className={iconCls} />,
@@ -62,8 +62,8 @@ export default function StepGrid({
 				return (
 					<div className="flex flex-col gap-2 flex-1" key={beatIdx}>
 						<div
-							className={`flex border rounded-sm ${beatPy} transition-colors duration-100 ${
-								isActiveBeat ? "border-denim/50 bg-denim-tint" : "border-slate-200"
+							className={`flex border ${beatPy} transition-colors duration-100 ${
+								isActiveBeat ? "border-denim/50 bg-denim-tint" : "border-line"
 							}`}
 						>
 							{paddedCells.map((cell, cellIdx) => {
@@ -74,7 +74,7 @@ export default function StepGrid({
 								return (
 									<div
 										key={cellIdx}
-										className={`flex-1 flex justify-center items-center rounded-sm transition-colors duration-100 ${
+										className={`flex-1 flex justify-center items-center transition-colors duration-100 ${
 											isActiveCell ? "text-denim" : ""
 										}`}
 									>
@@ -92,7 +92,7 @@ export default function StepGrid({
 										)[cellIdx];
 									return (
 										<div
-											className={`flex-1 flex justify-center ${labelFontSize} text-slate-400`}
+											className={`flex-1 flex justify-center ${labelFontSize} text-ink-dim`}
 											key={cellIdx}
 										>
 											{label}

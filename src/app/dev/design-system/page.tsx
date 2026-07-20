@@ -60,7 +60,7 @@ function ThemeSegmented(): React.JSX.Element {
 		<div
 			role="group"
 			aria-label="Switch color theme"
-			className="flex border border-line-strong font-mono text-[10px] tracking-[0.1em]"
+			className="flex border border-line-strong font-mono text-[10px] tracking-widest"
 		>
 			{(["dark", "light"] as const).map((t, i) => {
 				const on = theme === t;
@@ -531,7 +531,7 @@ const BTN_BASE =
 
 function PlayheadStrip(): React.JSX.Element {
 	return (
-		<div className="max-w-[520px]">
+		<div className="max-w-130">
 			{/* DAW ruler (§5.10): 20px, one cell per measure, zero-padded numbers */}
 			<div className="flex h-5 border-b border-line-strong">
 				{["01", "02", "03", "04"].map((n, i) => (
@@ -539,7 +539,7 @@ function PlayheadStrip(): React.JSX.Element {
 						key={n}
 						className={`flex-1 font-mono text-[9px] tracking-[0.08em] text-ink-faint ${
 							i > 0 ? "border-l border-line-strong pl-1.5" : ""
-						} pt-[3px]`}
+						} pt-0.75`}
 					>
 						{n}
 					</span>
@@ -755,7 +755,7 @@ export default function DesignSystemPage(): React.JSX.Element {
 				<ThemeSegmented />
 			</div>
 
-			<div className="mx-auto max-w-[1000px] px-8 pt-8 pb-24">
+			<div className="mx-auto max-w-250 px-8 pt-8 pb-24">
 				{/* Page header */}
 				<header className="pb-6">
 					<div className="font-mono text-[11px] tracking-[0.18em] text-denim-accent uppercase">
@@ -870,21 +870,21 @@ export default function DesignSystemPage(): React.JSX.Element {
 							<StateCell label="Outlined accent · default">
 								<button
 									type="button"
-									className={`${BTN_BASE} border border-denim bg-transparent px-[18px] py-2 text-[12px] text-denim-accent hover:bg-denim hover:text-on-denim active:bg-denim-tint`}
+									className={`${BTN_BASE} border border-denim bg-transparent px-4.5 py-2 text-[12px] text-denim-accent hover:bg-denim hover:text-on-denim active:bg-denim-tint`}
 								>
 									Sign in
 								</button>
 							</StateCell>
 							<StateCell label="Outlined accent · hover">
 								<span
-									className={`${BTN_BASE} border border-denim bg-denim px-[18px] py-2 text-[12px] text-on-denim`}
+									className={`${BTN_BASE} border border-denim bg-denim px-4.5 py-2 text-[12px] text-on-denim`}
 								>
 									Sign in
 								</span>
 							</StateCell>
 							<StateCell label="Outlined accent · active">
 								<span
-									className={`${BTN_BASE} border border-denim bg-denim-tint px-[18px] py-2 text-[12px] text-denim-accent`}
+									className={`${BTN_BASE} border border-denim bg-denim-tint px-4.5 py-2 text-[12px] text-denim-accent`}
 								>
 									Sign in
 								</span>
@@ -1019,7 +1019,7 @@ export default function DesignSystemPage(): React.JSX.Element {
 					<div className="mt-6 font-mono text-[9px] tracking-[0.06em] text-ink-faint uppercase">
 						Placement example (§5.9 module label with LED):
 					</div>
-					<div className="mt-2 flex max-w-[260px] items-center justify-between border border-line bg-panel px-4 py-3 font-mono text-[9px] tracking-[0.2em] text-ink-faint uppercase">
+					<div className="mt-2 flex max-w-65 items-center justify-between border border-line bg-panel px-4 py-3 font-mono text-[9px] tracking-[0.2em] text-ink-faint uppercase">
 						<span className="inline-flex items-center gap-1.5">
 							<Led state="pulse" />
 							Metronome
@@ -1058,7 +1058,7 @@ export default function DesignSystemPage(): React.JSX.Element {
 
 				{/* §5.3 LIST ITEMS */}
 				<Section spec="§5.3" title="List items (pattern library)">
-					<div className="max-w-[280px] border border-line bg-panel">
+					<div className="max-w-70 border border-line bg-panel">
 						{[
 							{
 								id: 0,
@@ -1176,14 +1176,14 @@ export default function DesignSystemPage(): React.JSX.Element {
 							<input
 								type="text"
 								defaultValue="Travis picking"
-								className="w-[280px] border border-line-strong bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+								className="w-70 border border-line-strong bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 							/>
 						</StateCell>
 						<StateCell label="Placeholder (terminal '>' affordance)">
 							<input
 								type="text"
 								placeholder="> filter patterns…"
-								className="w-[280px] border border-line-strong bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink placeholder:text-ink-faint focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+								className="w-70 border border-line-strong bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink placeholder:text-ink-faint focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 							/>
 						</StateCell>
 					</div>

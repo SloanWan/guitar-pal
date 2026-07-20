@@ -1,26 +1,27 @@
 "use client";
 
-import { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { PRESET_STRUM_PATTERNS, StrumPattern } from "@/lib/strumPatterns";
 import { User } from "@supabase/supabase-js";
-import { ChevronDown, Pencil, Plus, Star, Trash2, X } from "lucide-react";
+import { ChevronDown, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
-import FingerpickEditModal from "./FingerpickEditModal";
+import StepGrid from "./StepGrid";
 
-interface FingerpickPatternLibraryProps {
-	patterns: FingerpickPattern[];
-	customPatterns: FingerpickPattern[];
-	selectedPattern: FingerpickPattern;
-	setSelectedPattern: (pattern: FingerpickPattern) => void;
+interface StrumPatternLibraryProps {
+	customPatterns: StrumPattern[];
+	patternsLoading: boolean;
+	selectedPattern: StrumPattern | null;
+	onSelectPattern: (pattern: StrumPattern) => void;
 	favouriteIds: string[];
-	toggleFavourite: (patternId: string) => void;
-	onSaveCustom: (pattern: FingerpickPattern) => void;
-	onDeleteCustom: (patternId: string) => void;
+	onToggleFavourite: (patternId: string) => void;
+	onCreate: () => void;
+	onEditPattern: (pattern: StrumPattern) => void;
+	onDeletePattern: (patternId: string) => void;
 	onClose: () => void;
 	user: User | null;
 }
 
 interface PatternCardProps {
-	pattern: FingerpickPattern;
+	pattern: StrumPattern;
 	isSelected: boolean;
 	isFav: boolean;
 	onSelect: () => void;
@@ -38,7 +39,6 @@ function PatternCard({
 	onEdit,
 	onDelete,
 }: PatternCardProps) {
-	const meta = `${pattern.measures.length} BARS · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${pattern.bpm} BPM`;
 	return (
 		<button
 			type="button"
@@ -49,9 +49,9 @@ function PatternCard({
 					: "border-l-transparent hover:bg-sidebar-hover hover:border-l-line-strong"
 			}`}
 		>
-			<div className="flex items-center justify-between mb-1">
+			<div className="flex items-center justify-between mb-2">
 				<span
-					className={`text-[13px] font-medium transition-colors duration-200 ${
+					className={`capitalize text-[13px] font-medium transition-colors duration-200 ${
 						isSelected ? "text-denim-accent" : "text-ink"
 					}`}
 				>
@@ -124,43 +124,39 @@ function PatternCard({
 					</span>
 				</div>
 			</div>
-			<p className="font-mono text-[10px] tracking-[0.06em] uppercase text-ink-faint">
-				{meta}
-			</p>
 			{pattern.description && (
-				<p className="mt-1 text-[10px] text-ink-dim leading-snug">{pattern.description}</p>
+				<p className="mb-2 text-[10px] text-ink-dim leading-snug">{pattern.description}</p>
 			)}
+			<StepGrid beats={pattern.beats} activeCell={null} size="sm" showLabels={false} />
 		</button>
 	);
 }
 
-export default function FingerpickPatternLibrary({
-	patterns,
+export default function StrumPatternLibrary({
 	customPatterns,
+	patternsLoading,
 	selectedPattern,
-	setSelectedPattern,
+	onSelectPattern,
 	favouriteIds,
-	toggleFavourite,
-	onSaveCustom,
-	onDeleteCustom,
+	onToggleFavourite,
+	onCreate,
+	onEditPattern,
+	onDeletePattern,
 	onClose,
 	user,
-}: FingerpickPatternLibraryProps) {
+}: StrumPatternLibraryProps) {
 	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
 	const [myPatternsOpen, setMyPatternsOpen] = useState(true);
 	const [presetsOpen, setPresetsOpen] = useState(true);
-	const [editModalOpen, setEditModalOpen] = useState(false);
-	const [editingPattern, setEditingPattern] = useState<FingerpickPattern | null>(null);
 	const [filter, setFilter] = useState("");
 
-	const customIds = new Set(customPatterns.map((p) => p.id));
-	const presets = patterns.filter((p) => !customIds.has(p.id));
-
 	const query = filter.trim().toLowerCase();
-	const matchesFilter = (p: FingerpickPattern) => p.name.toLowerCase().includes(query);
+	const matchesFilter = (p: StrumPattern) => p.name.toLowerCase().includes(query);
 
 	const tabPresets =
-		activeTab === "favourites" ? presets.filter((p) => favouriteIds.includes(p.id)) : presets;
+		activeTab === "favourites"
+			? PRESET_STRUM_PATTERNS.filter((p) => favouriteIds.includes(p.id))
+			: PRESET_STRUM_PATTERNS;
 	const tabCustom =
 		activeTab === "favourites"
 			? customPatterns.filter((p) => favouriteIds.includes(p.id))
@@ -169,26 +165,16 @@ export default function FingerpickPatternLibrary({
 	const visiblePresets = query ? tabPresets.filter(matchesFilter) : tabPresets;
 	const visibleCustom = query ? tabCustom.filter(matchesFilter) : tabCustom;
 
-	function openNewPattern() {
-		setEditingPattern(null);
-		setEditModalOpen(true);
-	}
-
-	function openEditPattern(pattern: FingerpickPattern) {
-		setEditingPattern(pattern);
-		setEditModalOpen(true);
-	}
-
 	return (
 		<>
 			{/* Header strip */}
 			<div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-line">
 				<h2 className="text-[10px] font-normal uppercase tracking-[0.18em] text-ink">
-					Pattern Library
+					Strumming Library
 				</h2>
 				<div className="flex items-center gap-1">
 					<button
-						onClick={openNewPattern}
+						onClick={onCreate}
 						className="flex items-center gap-1 h-8 px-2 text-[11px] font-semibold text-denim hover:bg-denim-tint transition-colors"
 					>
 						<Plus size={14} /> New Pattern
@@ -268,8 +254,12 @@ export default function FingerpickPatternLibrary({
 						/>
 					</button>
 					{myPatternsOpen && (
-						<div className="px-3 pb-3 pt-3 flex flex-col">
-							{visibleCustom.length === 0 ? (
+						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
+							{patternsLoading ? (
+								<div className="flex justify-center py-4">
+									<Loader2 size={16} className="animate-spin text-ink-faint" />
+								</div>
+							) : visibleCustom.length === 0 ? (
 								<p className="text-[11px] text-ink-dim px-1">
 									{query
 										? "No matches"
@@ -282,12 +272,12 @@ export default function FingerpickPatternLibrary({
 									<PatternCard
 										key={pattern.id}
 										pattern={pattern}
-										isSelected={selectedPattern.id === pattern.id}
+										isSelected={selectedPattern?.id === pattern.id}
 										isFav={favouriteIds.includes(pattern.id)}
-										onSelect={() => setSelectedPattern(pattern)}
-										onToggleFav={() => toggleFavourite(pattern.id)}
-										onEdit={() => openEditPattern(pattern)}
-										onDelete={() => onDeleteCustom(pattern.id)}
+										onSelect={() => onSelectPattern(pattern)}
+										onToggleFav={() => onToggleFavourite(pattern.id)}
+										onEdit={() => onEditPattern(pattern)}
+										onDelete={() => onDeletePattern(pattern.id)}
 									/>
 								))
 							)}
@@ -312,7 +302,7 @@ export default function FingerpickPatternLibrary({
 						/>
 					</button>
 					{presetsOpen && (
-						<div className="px-3 pb-3 pt-3 flex flex-col">
+						<div className="px-3 pb-3 pt-3 flex flex-col gap-1.5">
 							{visiblePresets.length === 0 ? (
 								<p className="text-[11px] text-ink-dim px-1">
 									{query ? "No matches" : "No preset favourites yet"}
@@ -322,10 +312,10 @@ export default function FingerpickPatternLibrary({
 									<PatternCard
 										key={pattern.id}
 										pattern={pattern}
-										isSelected={selectedPattern.id === pattern.id}
+										isSelected={selectedPattern?.id === pattern.id}
 										isFav={favouriteIds.includes(pattern.id)}
-										onSelect={() => setSelectedPattern(pattern)}
-										onToggleFav={() => toggleFavourite(pattern.id)}
+										onSelect={() => onSelectPattern(pattern)}
+										onToggleFav={() => onToggleFavourite(pattern.id)}
 									/>
 								))
 							)}
@@ -340,13 +330,6 @@ export default function FingerpickPatternLibrary({
 					</p>
 				)}
 			</div>
-
-			<FingerpickEditModal
-				open={editModalOpen}
-				pattern={editingPattern}
-				onClose={() => setEditModalOpen(false)}
-				onSave={onSaveCustom}
-			/>
 		</>
 	);
 }

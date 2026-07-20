@@ -39,6 +39,7 @@
 	--sidebar-header-1-bg: var(--bg-panel); /* "My Patterns" section header row — near-invisible against sidebar-bg */
 	--sidebar-header-2-bg: #1a1a1a; /* "Presets" section header row — subtly offset from header-1 so the two remain distinguishable */
 	--workspace-bg: var(--bg); /* fingerpick outer workspace wrapper (behind all panels) — decoupled from --bg; dark keeps parity (#0f0f0f) */
+	--step-grid-bg: #141414; /* strum StepGridCard container surface — dedicated token, independently themeable (do not reuse a tab-viewer bg); dark = panel-level card surface */
 
 	/* Ink */
 	--ink: #f0f0f0; /* primary text, active fret numbers, slider thumbs  */
@@ -92,6 +93,7 @@
 	--sidebar-header-1-bg: #f8fafc; /* "My Patterns" header — original near-invisible off-white tint */
 	--sidebar-header-2-bg: #f1f5f9; /* "Presets" header — original near-invisible off-white tint, one step down from header-1 */
 	--workspace-bg: #f8fafc; /* fingerpick outer workspace wrapper — extracted from its current bg-slate-50; visually unchanged */
+	--step-grid-bg: #ffffff; /* strum StepGridCard container surface — dedicated token; light = clean white card */
 
 	--ink: #141414;
 	--ink-dim: #63635e;
@@ -411,6 +413,7 @@
 	--color-sidebar-header-2: var(--sidebar-header-2-bg); /* bg-sidebar-header-2 — "Presets" row */
 	--color-sidebar-hover: var(--sidebar-hover-bg); /* bg-sidebar-hover — pattern-card hover fill */
 	--color-workspace: var(--workspace-bg); /* bg-workspace — fingerpick outer workspace wrapper */
+	--color-step-grid: var(--step-grid-bg); /* bg-step-grid — strum StepGridCard container surface */
 	--color-tab-title: var(--tab-title-ink); /* text-tab-title — pattern-name heading */
 	--color-tab-meta: var(--tab-meta-ink); /* text-tab-meta — BPM/time-signature meta row */
 	--color-raise: var(--bg-raise);
@@ -497,5 +500,19 @@
 	50% {
 		opacity: 0.45;
 		box-shadow: var(--glow-led-dim);
+	}
+}
+@keyframes play-bounce-hop {
+	0% {
+		transform: translateY(0);
+	}
+	35% {
+		transform: translateY(-3px);
+	}
+	65% {
+		transform: translateY(-1.5px);
+	}
+	100% {
+		transform: translateY(0);
 	}
 }

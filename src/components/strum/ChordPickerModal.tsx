@@ -90,6 +90,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	const [selectedVoicingId, setSelectedVoicingId] = useState<string | null>(null);
 	const [loadingVoicings, setLoadingVoicings] = useState(false);
 	const [availableSuffixes, setAvailableSuffixes] = useState<string[]>([]);
+	const [voicingsFor, setVoicingsFor] = useState<string | null>(null);
 
 	const ctxRef = useRef<AudioContext | null>(null);
 	const preloadRef = useRef<Promise<void> | null>(null);
@@ -99,6 +100,10 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	const [playingVoicingId, setPlayingVoicingId] = useState<string | null>(null);
 
 	const phase2 = selectedRoot !== null && selectedCategory !== null;
+
+	const voicingsKey = selectedRoot && selectedSuffix ? `${selectedRoot}|${selectedSuffix}` : null;
+	const voicingsFetched = voicingsKey !== null && voicingsFor === voicingsKey;
+	const showVoicingSpinner = voicingsKey !== null && !voicingsFetched;
 
 	// Restore or reset when modal opens
 	useEffect(() => {
@@ -112,6 +117,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				);
 				setSelectedCategory(cat?.category ?? null);
 				setSelectedSuffix(ic.suffix);
+				setVoicingsFor(null);
 			});
 		} else {
 			queueMicrotask(() => {
@@ -121,6 +127,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				setVoicings([]);
 				setSelectedVoicingId(null);
 				setAvailableSuffixes([]);
+				setVoicingsFor(null);
 			});
 		}
 	}, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -197,15 +204,16 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 			if (cancelled) return;
 
-			const vs =
-				(chord as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? [];
+			const vs = (chord as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? [];
 			setVoicings(vs);
 			const standard = vs.find((v) => v.label === "Standard") ?? vs[0] ?? null;
 			setSelectedVoicingId(standard?.id ?? null);
+			setVoicingsFor(`${selectedRoot}|${selectedSuffix}`);
 			setLoadingVoicings(false);
 		})().catch((err) => {
 			if (!cancelled) {
 				console.error("[ChordPickerModal]", err);
+				setVoicingsFor(`${selectedRoot}|${selectedSuffix}`);
 				setLoadingVoicings(false);
 			}
 		});
@@ -245,10 +253,13 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			ctxRef.current.destination,
 			ctxRef.current.currentTime,
 		);
-		playTimerRef.current = setTimeout(() => {
-			setPlayingVoicingId(null);
-			playTimerRef.current = null;
-		}, (CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000);
+		playTimerRef.current = setTimeout(
+			() => {
+				setPlayingVoicingId(null);
+				playTimerRef.current = null;
+			},
+			(CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000,
+		);
 	}
 
 	function handleConfirm() {
@@ -267,7 +278,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			onClick={onClose}
 		>
 			<div
-				className={`relative bg-white rounded-2xl shadow-xl flex flex-col md:flex-row max-md:overflow-x-hidden max-md:overflow-y-auto max-md:overscroll-contain max-md:touch-pan-y max-md:max-h-[80dvh] md:overflow-hidden mx-4 max-md:w-72 transition-all duration-200 ${
+				className={`relative bg-popover border border-line-strong flex flex-col md:flex-row max-md:overflow-x-hidden max-md:overflow-y-auto max-md:overscroll-contain max-md:touch-pan-y max-md:max-h-[80dvh] md:overflow-hidden mx-4 max-md:w-72 transition-all duration-200 ${
 					open ? "opacity-100 scale-100" : "opacity-0 scale-95"
 				}`}
 				style={{ maxWidth: "calc(100vw - 2rem)" }}
@@ -278,30 +289,30 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				{/* Piano + category panel */}
 				<div className="flex flex-col gap-4 p-6 shrink-0 md:w-72">
 					<div className="flex items-center justify-between">
-						<h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+						<h2 className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Pick a chord
 						</h2>
 						<button
 							onClick={onClose}
-							className="text-slate-400 hover:text-slate-600 transition-colors"
+							className="text-ink-faint hover:text-ink hover:bg-raise transition-colors p-1"
 							aria-label="Close"
 						>
 							<X size={16} />
 						</button>
 					</div>
 
-					{/* Piano keyboard */}
+					{/* Piano keyboard — visual treatment from ChordToc root-first sidebar */}
 					<div className="relative h-16 w-full select-none">
 						{/* White keys */}
-						<div className="absolute inset-0 flex gap-px">
+						<div className="absolute inset-0 flex">
 							{WHITE_KEYS.map((k) => (
 								<button
 									key={k.root}
 									onClick={() => setSelectedRoot(k.root)}
-									className={`flex-1 rounded-b flex items-end justify-center pb-1 text-[7px] font-bold transition-colors border border-slate-200 ${
+									className={`flex-1 flex items-end justify-center pb-1 text-[7px] font-bold transition-colors border not-first:-ml-px ${
 										selectedRoot === k.root
-											? "bg-denim text-white border-denim"
-											: "bg-white text-slate-400 hover:bg-denim-tint"
+											? "relative z-10 bg-denim text-white border-denim"
+											: "bg-background text-ink-faint border-line-strong hover:bg-denim-tint hover:text-denim"
 									}`}
 								>
 									{k.root}
@@ -313,10 +324,10 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 							<button
 								key={k.root}
 								onClick={() => setSelectedRoot(k.root)}
-								className={`absolute top-0 z-10 h-[62%] rounded-b flex items-end justify-center pb-0.5 text-[6px] font-bold transition-colors ${
+								className={`absolute top-0 z-10 h-[62%] flex items-end justify-center pb-0.5 text-[6px] font-bold transition-colors ${
 									selectedRoot === k.root
 										? "bg-denim text-white"
-										: "bg-slate-800 text-slate-400 hover:bg-slate-700"
+										: "bg-zinc-600 text-zinc-100 hover:bg-denim hover:text-on-denim"
 								}`}
 								style={{
 									left: `${((k.afterWhite + 0.71) / 7) * 100}%`,
@@ -340,23 +351,24 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 									setVoicings([]);
 									setSelectedVoicingId(null);
 									setAvailableSuffixes([]);
+									setVoicingsFor(null);
 								}}
-								className={`text-left rounded-lg border px-3 py-2.5 transition-all ${
+								className={`text-left border px-3 py-2.5 transition-all ${
 									selectedCategory === cat.category
 										? "border-denim bg-denim-tint"
-										: "border-slate-200 hover:border-denim hover:bg-slate-50"
+										: "border-line-strong hover:border-denim hover:bg-denim-tint/50"
 								}`}
 							>
 								<div
 									className={`text-xs font-semibold ${
 										selectedCategory === cat.category
 											? "text-denim"
-											: "text-slate-700"
+											: "text-ink"
 									}`}
 								>
 									{cat.category}
 								</div>
-								<div className="text-[10px] text-slate-400 mt-0.5">
+								<div className="text-[10px] text-ink-faint mt-0.5">
 									{CATEGORY_HINTS[cat.category] ??
 										(cat.suffixes as readonly string[]).slice(0, 3).join(", ")}
 								</div>
@@ -365,7 +377,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 					</div>
 
 					{!phase2 && (
-						<p className="text-[10px] text-slate-400 text-center">
+						<p className="text-[10px] text-ink-faint text-center">
 							Select a root and category
 						</p>
 					)}
@@ -374,13 +386,13 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				{/* Voicing panel — expands downward on mobile, rightward on desktop */}
 				<div
 					ref={voicingPanelRef}
-					className={`overflow-hidden shrink-0 ${phase2 ? "max-md:max-h-[500px] md:max-w-[320px]" : "max-md:max-h-0 md:max-w-0"}`}
+					className={`overflow-hidden shrink-0 ${phase2 ? "max-md:max-h-125 md:max-w-[320px]" : "max-md:max-h-0 md:max-w-0"}`}
 					style={{
 						transition:
 							"max-height 350ms cubic-bezier(0.32, 0.72, 0, 1), max-width 350ms cubic-bezier(0.32, 0.72, 0, 1)",
 					}}
 				>
-					<div className="flex flex-col gap-4 px-6 pb-6 pt-4 border-t border-slate-100 md:border-t-0 md:border-l md:w-80 md:h-full md:justify-center">
+					<div className="flex flex-col gap-4 px-6 pb-6 pt-4 border-t border-line md:border-t-0 md:border-l md:w-80 md:h-full md:justify-center">
 						{/* Suffix tabs */}
 						{availableSuffixes.length > 1 && (
 							<div className="flex flex-wrap gap-1">
@@ -388,10 +400,10 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 									<button
 										key={s}
 										onClick={() => void handleSelectSuffix(s)}
-										className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+										className={`px-2.5 py-1 text-xs font-semibold transition-colors ${
 											selectedSuffix === s
-												? "bg-denim text-white"
-												: "bg-slate-100 text-slate-600 hover:bg-denim-tint hover:text-denim"
+												? "bg-denim text-on-denim"
+												: "bg-raise text-ink-dim hover:bg-denim-tint hover:text-denim"
 										}`}
 									>
 										{s}
@@ -402,22 +414,23 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 						{/* Chord name */}
 						{selectedRoot && selectedSuffix && (
-							<p className="text-sm font-semibold text-slate-700">
+							<p className="text-sm font-semibold text-ink">
 								{selectedRoot} {selectedSuffix}
 							</p>
 						)}
 
 						{/* Voicing cards — horizontal scroll, ~1.5 cards visible */}
 						<div>
-							{loadingVoicings ? (
-								<div className="flex justify-center py-6">
-									<Loader2 size={18} className="animate-spin text-slate-300" />
+							{showVoicingSpinner ? (
+								<div className="flex items-center gap-2 justify-center py-6">
+									<Loader2 size={18} className="animate-spin text-ink-faint" />
+									<span className="text-xs text-ink-faint">Checking…</span>
 								</div>
-							) : voicings.length === 0 ? (
-								<p className="text-xs text-slate-400 text-center py-6">
+							) : !showVoicingSpinner && voicings.length === 0 ? (
+								<p className="text-xs text-ink-faint text-center py-6">
 									No voicings found
 								</p>
-							) : (
+							) : voicings.length > 0 ? (
 								<div className="flex gap-3 overflow-x-auto pb-2">
 									{voicings.map((v) => {
 										const svgProps = voicingToSVGProps(v);
@@ -427,15 +440,15 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 											<div
 												key={v.id}
 												onClick={() => setSelectedVoicingId(v.id)}
-												className={`w-36 shrink-0 flex flex-col items-center gap-1.5 cursor-pointer rounded-lg p-2 border-2 transition-all ${
+												className={`w-36 shrink-0 flex flex-col items-center gap-1.5 cursor-pointer p-2 border-2 transition-all ${
 													isSelected
-														? "border-denim shadow-md"
-														: "border-transparent hover:border-slate-200"
+														? "border-denim"
+														: "border-transparent hover:border-line-strong"
 												}`}
 											>
 												<ChordDiagramSVG {...svgProps} size="compact" />
 												<div className="flex items-center gap-1">
-													<span className="text-[9px] text-slate-400 max-w-[60px] truncate">
+													<span className="text-[9px] text-ink-faint max-w-15 truncate">
 														{v.label ?? "—"}
 													</span>
 													<button
@@ -444,15 +457,18 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 															void handlePlay(v);
 														}}
 														disabled={isPreloading}
-														className={`transition-all duration-150 hover:-translate-y-0.5 ${
+														className={`transition-colors motion-safe:enabled:hover:animate-[play-bounce-hop_0.35s_ease-out] ${
 															isPlaying
-																? "text-denim-dark"
-																: "text-denim hover:text-denim-dark"
+																? "text-denim-accent"
+																: "text-denim hover:text-denim-accent"
 														}`}
 														aria-label="Preview chord"
 													>
 														{isPreloading && isPlaying ? (
-															<Loader2 size={11} className="animate-spin" />
+															<Loader2
+																size={11}
+																className="animate-spin"
+															/>
 														) : (
 															<CirclePlay size={11} />
 														)}
@@ -462,7 +478,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 										);
 									})}
 								</div>
-							)}
+							) : null}
 						</div>
 
 						{/* Confirm / Clear buttons */}
@@ -470,7 +486,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 							{initialChord && (
 								<button
 									onClick={() => onConfirm(null)}
-									className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-500 text-sm font-semibold hover:bg-slate-50 transition-colors"
+									className="flex-1 py-2 border border-line-strong text-ink-dim text-sm font-semibold hover:border-denim hover:text-denim-accent active:bg-denim-tint transition-colors"
 								>
 									Clear
 								</button>
@@ -478,7 +494,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 							<button
 								onClick={handleConfirm}
 								disabled={voicings.length === 0}
-								className="flex-1 py-2 rounded-lg bg-denim text-white text-sm font-semibold hover:bg-denim-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+								className="flex-1 py-2 bg-denim text-on-denim text-sm font-semibold hover:bg-denim-accent active:bg-denim-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 							>
 								Confirm
 							</button>

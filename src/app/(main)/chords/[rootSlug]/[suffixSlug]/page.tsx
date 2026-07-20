@@ -40,22 +40,22 @@ export default async function ChordDetailPage({ params }: Props) {
 	}));
 
 	return (
-		<div className="flex-1 bg-background flex flex-col">
+		<div className="flex-1 bg-surface flex flex-col">
 			<div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col flex-1">
 				<div className="flex flex-col items-center gap-6 flex-1">
 					<div className="flex w-full items-center justify-between">
 						<Link
 							href={`/chords/${rootSlug}`}
-							className="text-sm text-muted-foreground hover:text-foreground"
+							className="text-sm text-ink-dim hover:text-ink"
 						>
 							← <MusicalText text={root} /> Chords
 						</Link>
-						<h1 className="text-2xl font-semibold">
+						<h1 className="text-2xl font-semibold text-ink">
 							<MusicalText text={root} /> <MusicalText text={suffix} />
 						</h1>
 						<Link
 							href="/chords/all"
-							className="text-sm text-muted-foreground hover:text-foreground"
+							className="text-sm text-ink-dim hover:text-ink"
 						>
 							All Chords →
 						</Link>

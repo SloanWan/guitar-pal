@@ -60,7 +60,7 @@ export default function ChordDiagram({
 
 	return (
 		<div
-			className={`relative overflow-hidden flex flex-col items-center gap-1 rounded-lg border border-denim-border p-3 transition-colors duration-300 ${isHovered ? "bg-denim-light/10" : "bg-denim-tint"}`}
+			className={`relative overflow-hidden flex flex-col items-center gap-1 rounded-none border p-3 transition-colors duration-300 ${isHovered ? "border-denim bg-surface" : "border-transparent bg-denim-tint"}`}
 			onMouseEnter={onMouseEnter}
 			onMouseLeave={onMouseLeave}
 		>

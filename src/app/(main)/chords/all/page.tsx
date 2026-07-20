@@ -37,17 +37,17 @@ export default async function AllChordsPage({ searchParams }: Props) {
 		<>
 			<ChordToc sections={sections} />
 			<ChordTocIndicator sections={sections} />
-			<div className="flex-1 bg-background">
+			<div className="flex-1 bg-surface">
 				<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 					<div className="flex flex-col items-center gap-6">
 						<div className="flex w-full items-center gap-2">
 							<Link
 								href="/chords"
-								className="flex-1 text-sm text-muted-foreground hover:text-foreground"
+								className="flex-1 text-sm text-ink-dim hover:text-ink"
 							>
 								← Chord Library
 							</Link>
-							<h1 className="text-2xl font-semibold">All Chords</h1>
+							<h1 className="text-2xl font-semibold text-ink">All Chords</h1>
 							<div className="flex-1" aria-hidden />
 						</div>
 

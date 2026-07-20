@@ -1598,7 +1598,7 @@ export default function FingerpickEditModal({
 						ref={saveButtonRef}
 						onClick={handleSave}
 						disabled={!nameValid}
-						className="h-9 bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
+						className="h-9 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
 					>
 						Save
 					</Button>

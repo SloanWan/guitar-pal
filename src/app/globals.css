@@ -502,3 +502,17 @@
 		box-shadow: var(--glow-led-dim);
 	}
 }
+@keyframes play-bounce-hop {
+	0% {
+		transform: translateY(0);
+	}
+	35% {
+		transform: translateY(-3px);
+	}
+	65% {
+		transform: translateY(-1.5px);
+	}
+	100% {
+		transform: translateY(0);
+	}
+}

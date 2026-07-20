@@ -16,7 +16,7 @@ export default function NavLinks() {
 	return (
 		<nav className="flex divide-x divide-line-strong border border-line-strong">
 			{links.map(({ href, label, Icon }) => {
-				const isActive = pathname === href;
+				const isActive = pathname === href || pathname.startsWith(`${href}/`);
 				/* Latched = pressed-in: recessed via bg color difference only
 				   (no inset shadow), content statically sunk 1px. */
 				const sink = isActive ? "translate-y-px" : "";

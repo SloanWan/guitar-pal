@@ -171,7 +171,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 			width: "0px",
 			height: "0px",
 			borderRadius: "50%",
-			backgroundColor: "var(--denim-light)",
+			backgroundColor: "var(--denim)",
 			transform: "translate(-50%, -50%)",
 			pointerEvents: "none",
 		});
@@ -187,15 +187,15 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 	}, []);
 
 	if (voicings.length === 0) {
-		return <p className="text-sm text-muted-foreground">No voicings found.</p>;
+		return <p className="text-sm text-ink-dim">No voicings found.</p>;
 	}
 
 	return (
 		<>
 			<div className="flex flex-col items-center gap-6">
-				<div className="relative inline-flex overflow-hidden rounded-full border border-denim-border bg-denim-tint">
+				<div className="relative inline-flex overflow-hidden rounded-none border border-line-strong bg-surface">
 					<div
-						className="absolute top-0 h-full rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out"
+						className="absolute top-0 h-full bg-denim transition-transform duration-200 ease-in-out"
 						style={{
 							width: "33.333%",
 							transform: `translateX(${MODES.indexOf(mode) * 100}%)`,
@@ -206,7 +206,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 							key={m}
 							onClick={() => setMode(m)}
 							className={`relative z-10 px-5 py-2 text-sm font-medium text-center transition-colors duration-200 ${
-								mode === m ? "text-denim" : "text-denim-light"
+								mode === m ? "text-on-denim" : "text-ink-dim"
 							}`}
 						>
 							{MODE_LABELS[m]}
@@ -236,7 +236,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 								<Button
 									size="sm"
 									variant="outline"
-									className="gap-1 border-denim-border text-denim hover:bg-denim-tint"
+									className="gap-1 rounded-none border-line-strong text-denim hover:bg-denim-tint"
 									disabled={isPreloading}
 									onClick={(e) => {
 										e.stopPropagation();
@@ -264,7 +264,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 				onClick={closeModal}
 			>
 				<div
-					className={`relative bg-white rounded-2xl shadow-xl p-6 flex flex-col items-center gap-4 max-w-xl w-full mx-4 transition-all duration-200 ${
+					className={`relative bg-popover border border-line-strong p-6 flex flex-col items-center gap-4 max-w-xl w-full mx-4 transition-all duration-200 ${
 						modalOpen ? "opacity-100 scale-100" : "opacity-0 scale-95"
 					}`}
 					onClick={(e) => e.stopPropagation()}
@@ -273,7 +273,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 				>
 					<button
 						onClick={closeModal}
-						className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+						className="absolute top-4 right-4 text-ink-faint hover:text-ink transition-colors"
 						aria-label="Close"
 					>
 						<X className="h-5 w-5" />
@@ -289,14 +289,14 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 								</>
 							)}
 						</h2>
-						<p className="text-sm text-muted-foreground">{activeVoicing.label}</p>
+						<p className="text-sm text-ink-dim">{activeVoicing.label}</p>
 					</div>
 
 					<div className="relative flex items-center justify-center w-full px-10 sm:px-14">
 						<button
 							onClick={goPrev}
 							disabled={activeIndex === 0}
-							className="absolute left-0 top-1/2 -translate-y-1/2 p-1 sm:p-2 rounded-full border border-denim-border text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+							className="absolute left-0 top-1/2 -translate-y-1/2 p-1 sm:p-2 rounded-none border border-line-strong text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 							aria-label="Previous voicing"
 						>
 							<ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -311,20 +311,20 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 						<button
 							onClick={goNext}
 							disabled={activeIndex === voicings.length - 1}
-							className="absolute right-0 top-1/2 -translate-y-1/2 p-1 sm:p-2 rounded-full border border-denim-border text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+							className="absolute right-0 top-1/2 -translate-y-1/2 p-1 sm:p-2 rounded-none border border-line-strong text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 							aria-label="Next voicing"
 						>
 							<ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
 						</button>
 					</div>
 
-					<span className="text-sm text-muted-foreground">
+					<span className="text-sm text-ink-dim">
 						{activeIndex + 1} / {voicings.length}
 					</span>
 
-					<div className="relative inline-flex overflow-hidden rounded-full border border-denim-border bg-denim-tint">
+					<div className="relative inline-flex overflow-hidden rounded-none border border-line-strong bg-surface">
 						<div
-							className="absolute top-0 h-full rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out"
+							className="absolute top-0 h-full bg-denim transition-transform duration-200 ease-in-out"
 							style={{
 								width: "33.333%",
 								transform: `translateX(${MODES.indexOf(modalMode) * 100}%)`,
@@ -335,7 +335,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 								key={m}
 								onClick={() => setModalMode(m)}
 								className={`relative z-10 px-5 py-2 text-sm font-medium text-center transition-colors duration-200 ${
-									modalMode === m ? "text-denim" : "text-denim-light"
+									modalMode === m ? "text-on-denim" : "text-ink-dim"
 								}`}
 							>
 								{MODE_LABELS[m]}
@@ -346,7 +346,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 					<Button
 						size="sm"
 						variant="outline"
-						className="gap-1 border-denim-border text-denim hover:bg-denim-tint"
+						className="gap-1 rounded-none border-line-strong text-denim hover:bg-denim-tint"
 						disabled={isPreloading}
 						onClick={() => void handlePlay(activeVoicing.pitches)}
 					>

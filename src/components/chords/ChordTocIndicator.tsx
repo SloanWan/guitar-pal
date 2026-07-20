@@ -64,7 +64,7 @@ export default function ChordTocIndicator({ sections }: Props) {
 								"truncate text-right transition-all duration-200 ease-in-out",
 								isActive
 									? "text-[10px] sm:text-[11px] font-semibold text-denim"
-									: "text-[8px] sm:text-[9px] font-normal text-muted-foreground/35",
+									: "text-[8px] sm:text-[9px] font-normal text-ink-faint",
 							)}
 						>
 							{label}

@@ -76,18 +76,20 @@ export default function ChordToc({ sections }: Props) {
 							onClick={() => scrollTo(id)}
 							aria-label={`Jump to ${root} chords`}
 							className={cn(
-								"flex items-center justify-end overflow-hidden rounded-sm border",
+								"flex items-center justify-end overflow-hidden rounded-none border",
 								"transition-all duration-200 ease-in-out cursor-pointer",
 								isNatural
 									? cn(
 											"h-7 w-9 group-hover:w-28",
 											isActive
-												? "bg-denim/70"
-												: "bg-background hover:bg-denim/10",
+												? "bg-denim border-denim"
+												: "bg-surface border-line-strong hover:bg-denim-tint",
 										)
 									: cn(
 											"h-5 w-5 group-hover:w-18",
-											isActive ? "bg-denim/70" : "bg-zinc-600 hover:bg-denim",
+											isActive
+												? "bg-denim border-denim"
+												: "bg-zinc-600 border-zinc-600 hover:bg-denim",
 										),
 							)}
 						>
@@ -99,7 +101,7 @@ export default function ChordToc({ sections }: Props) {
 									isActive
 										? "text-white"
 										: isNatural
-											? "text-foreground"
+											? "text-ink"
 											: "text-zinc-100",
 								)}
 							>
@@ -119,7 +121,7 @@ export default function ChordToc({ sections }: Props) {
 	// ── Category-first: existing thin-line Notion-style outline ──────────────
 	return (
 		<nav
-			className="group fixed right-2 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-1 rounded-lg p-2 transition-all duration-200 ease-in-out hover:bg-background/95 hover:shadow-sm lg:flex"
+			className="group fixed right-2 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-1 rounded-none p-2 transition-all duration-200 ease-in-out hover:bg-panel/95 lg:flex"
 			aria-label="Chord sections"
 		>
 			{entries.map((entry) => (
@@ -128,19 +130,19 @@ export default function ChordToc({ sections }: Props) {
 					type="button"
 					onClick={() => scrollTo(entry.id)}
 					aria-label={`Jump to ${entry.label}`}
-					className={cn("flex items-center rounded py-0.5", entry.level === 2 && "ml-3")}
+					className={cn("flex items-center rounded-none py-0.5", entry.level === 2 && "ml-3")}
 				>
 					{/* Line — shrinks away as sidebar expands */}
 					<span
 						className={cn(
-							"block shrink-0 rounded-full transition-all duration-200 ease-in-out",
+							"block shrink-0 rounded-none transition-all duration-200 ease-in-out",
 							"group-hover:w-0 group-hover:opacity-0",
 							entry.level === 1 ? "h-0.5 w-5" : "h-[1.5px] w-3",
 							displayActiveId === entry.id
 								? "bg-denim"
 								: entry.level === 1
-									? "bg-muted-foreground/50"
-									: "bg-muted-foreground/25",
+									? "bg-ink-faint"
+									: "bg-ink-faint/50",
 						)}
 					/>
 					{/* Label — fades and slides in as line retreats */}
@@ -150,8 +152,8 @@ export default function ChordToc({ sections }: Props) {
 							"transition-all duration-400 ease-in-out",
 							"max-w-0 opacity-0 group-hover:max-w-50 group-hover:opacity-100 group-hover:mr-5",
 							entry.level === 1
-								? "font-medium text-muted-foreground hover:text-foreground"
-								: "text-muted-foreground/60 hover:text-muted-foreground",
+								? "font-medium text-ink-dim hover:text-ink"
+								: "text-ink-faint hover:text-ink-dim",
 							displayActiveId === entry.id && "text-denim!",
 						)}
 					>

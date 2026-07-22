@@ -150,4 +150,33 @@ describe("expandRepeats", () => {
 		expect(measures[7].id).not.toBe("E");
 		expect(warnings).toHaveLength(0);
 	});
+
+	// ─── Provenance (sourceIndices) ──────────────────────────────────────────────
+
+	it("returns identity provenance when there are no directives", () => {
+		const { sourceIndices } = expandRepeats([A, B, C], []);
+		expect(sourceIndices).toEqual([0, 1, 2]);
+	});
+
+	it("maps each expanded position back to its pre-expansion measure", () => {
+		// [A,B,C,D] with [1,2]×3 → A B C B' C' B'' C'' D
+		const { measures, sourceIndices } = expandRepeats(
+			[A, B, C, D],
+			[{ range: [1, 2], times: 3 }],
+		);
+		expect(sourceIndices).toHaveLength(measures.length);
+		expect(sourceIndices).toEqual([0, 1, 2, 1, 2, 1, 2, 3]);
+	});
+
+	it("tracks provenance across multiple non-overlapping directives", () => {
+		// [A,B,C,D,E]: [0,0]×2 and [3,4]×2 → A A' B C D E D' E'
+		const { sourceIndices } = expandRepeats(
+			[A, B, C, D, E],
+			[
+				{ range: [0, 0], times: 2 },
+				{ range: [3, 4], times: 2 },
+			],
+		);
+		expect(sourceIndices).toEqual([0, 0, 1, 2, 3, 4, 3, 4]);
+	});
 });

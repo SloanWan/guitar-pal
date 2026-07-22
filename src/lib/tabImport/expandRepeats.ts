@@ -17,7 +17,7 @@ function cloneMeasureWithFreshIds(measure: Measure): Measure {
 export function expandRepeats(
 	measures: Measure[],
 	directives: RepeatDirective[],
-): { measures: Measure[]; warnings: ValidationIssue[] } {
+): { measures: Measure[]; warnings: ValidationIssue[]; sourceIndices: number[] } {
 	const warnings: ValidationIssue[] = [];
 	const n = measures.length;
 
@@ -61,24 +61,35 @@ export function expandRepeats(
 		accepted.push(d);
 	}
 
+	// Provenance: sourceIndices[expandedPos] = index of the pre-expansion measure
+	// that expandedPos came from. This is the single source of truth for remapping
+	// pre-expansion warning paths onto post-expansion positions.
+	const identity = measures.map((_, i) => i);
+
 	if (accepted.length === 0) {
-		return { measures: [...measures], warnings };
+		return { measures: [...measures], warnings, sourceIndices: identity };
 	}
 
 	// Process from the back so earlier insertions don't shift later indices.
 	const result: Measure[] = [...measures];
+	// Kept in lockstep with `result` under every splice.
+	const sourceIndices: number[] = [...identity];
 	const byDesc = [...accepted].sort((a, b) => b.range[0] - a.range[0]);
 
 	for (const d of byDesc) {
 		const [start, end] = d.range;
 		const segment = result.slice(start, end + 1);
+		const segmentSources = sourceIndices.slice(start, end + 1);
 		const copies: Measure[] = [];
+		const copySources: number[] = [];
 		for (let i = 1; i < d.times; i++) {
 			copies.push(...segment.map(cloneMeasureWithFreshIds));
+			copySources.push(...segmentSources);
 		}
 		// Insert copies immediately after the range end.
 		result.splice(end + 1, 0, ...copies);
+		sourceIndices.splice(end + 1, 0, ...copySources);
 	}
 
-	return { measures: result, warnings };
+	return { measures: result, warnings, sourceIndices };
 }

@@ -44,6 +44,69 @@ function computeUniformDuration(slotCount: number, ts: [number, number]): Durati
 	return match ? match[0] : "eighth";
 }
 
+// ─── Measure-capacity check ─────────────────────────────────────────────────────
+
+// Tick values scaled ×3 so triplet durations (8/3 and 4/3 ticks in raw 32nd-note
+// units) sum as exact integers, sidestepping floating-point drift. Reuses
+// DURATION_TICKS for the eight integer-clean durations — the same single tick
+// scale — and only supplies the three durations DURATION_TICKS structurally
+// omits (the two triplets, which are non-integer, and "rest").
+const TICKS_SCALE = 3;
+
+function durationTicksX3(d: Duration): number {
+	switch (d) {
+		case "eighth-triplet":    return 8;  // 1/3 beat = 8/3 ticks → 8 at ×3
+		case "sixteenth-triplet": return 4;  // 1/6 beat = 4/3 ticks → 4 at ×3
+		case "rest":              return 24; // 1 beat = 8 ticks → 24 at ×3
+		default: {
+			const clean = DURATION_TICKS.find(([dur]) => dur === d);
+			return clean ? clean[1] * TICKS_SCALE : 0;
+		}
+	}
+}
+
+const fmtTicks = (n: number): number => Number(n.toFixed(3));
+
+/**
+ * Emit a WARNING (never an error) when a measure's slot durations do not sum to
+ * the bar capacity implied by the time signature — both under- and over-full.
+ * Purely advisory: it never nulls the pattern. Run AFTER uniform-duration
+ * assignment so it sees final durations. Grace-note slots are excluded because
+ * they carry a nominal duration but do not consume bar time (see
+ * fingerpickScheduler: grace notes do not advance currentTime).
+ */
+function checkMeasureCapacity(
+	slots: BeatSlot[],
+	measureIdx: number,
+	timeSignature: [number, number],
+	warnings: ValidationIssue[],
+): void {
+	const filledX3 = slots.reduce(
+		(sum, slot) => (slot.isGraceNote ? sum : sum + durationTicksX3(slot.duration)),
+		0,
+	);
+	const capacityX3 = measureCapacityTicks(timeSignature) * TICKS_SCALE;
+	if (filledX3 === capacityX3) return;
+
+	const observed = fmtTicks(filledX3 / TICKS_SCALE);
+	const expected = fmtTicks(capacityX3 / TICKS_SCALE);
+	const short = filledX3 < capacityX3;
+	const delta = fmtTicks(Math.abs(capacityX3 - filledX3) / TICKS_SCALE);
+
+	let message =
+		`Measure durations sum to ${observed} of ${expected} 32nd-note units ` +
+		`(${short ? "short" : "long"} by ${delta}) for ${timeSignature[0]}/${timeSignature[1]}`;
+	if (measureIdx === 0 && short) {
+		message += "; a short first measure may be an intentional pickup (anacrusis)";
+	}
+
+	warnings.push({
+		code: "MEASURE_CAPACITY_MISMATCH",
+		path: `measures[${measureIdx}]`,
+		message,
+	});
+}
+
 // ─── Technique helper ─────────────────────────────────────────────────────────
 
 const ALL_TECHNIQUES = new Set<NonNullable<Technique>>([
@@ -267,6 +330,10 @@ function validateMeasure(
 	const slots = obj.slots.map((rawSlot, slotIdx) =>
 		validateSlot(rawSlot, `${path}.slots[${slotIdx}]`, warnings, uniformDur),
 	);
+
+	// Advisory only — runs after uniform-duration assignment so it sees final
+	// durations. Never nulls the pattern.
+	checkMeasureCapacity(slots, measureIdx, timeSignature, warnings);
 
 	return { id, slots };
 }

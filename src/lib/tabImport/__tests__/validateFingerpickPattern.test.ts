@@ -285,3 +285,115 @@ describe("validateFingerpickPattern — measure/slot repair", () => {
 		expect(pattern?.measures).toHaveLength(3);
 	});
 });
+
+// ─── Measure capacity ──────────────────────────────────────────────────────────
+
+describe("validateFingerpickPattern — measure capacity", () => {
+	const CODE = "MEASURE_CAPACITY_MISMATCH";
+
+	// Build a measure of N slots each with the given duration; put it at a chosen
+	// index by prefixing full 4/4 bars (four quarters) so the tested measure is
+	// never index 0 unless we want the pickup note.
+	function fullBar() {
+		return makeMeasure(Array.from({ length: 4 }, () => makeSlot({ duration: "quarter" })));
+	}
+	function measureOf(duration: string, count: number) {
+		return makeMeasure(Array.from({ length: count }, () => makeSlot({ duration })));
+	}
+
+	it("warns UNDER-full: a half-full 4/4 bar (two quarters)", () => {
+		// index 1 so the pickup note does not attach.
+		const raw = makePattern({ measures: [fullBar(), measureOf("quarter", 2)] });
+		const { warnings } = validateFingerpickPattern(raw);
+		const w = warnings.find((x) => x.code === CODE && x.path === "measures[1]");
+		expect(w).toBeDefined();
+		expect(w?.message).toContain("short");
+		expect(w?.message).toContain("16 of 32");
+	});
+
+	it("warns OVER-full: five quarters in 4/4", () => {
+		const raw = makePattern({ measures: [fullBar(), measureOf("quarter", 5)] });
+		const { warnings } = validateFingerpickPattern(raw);
+		const w = warnings.find((x) => x.code === CODE && x.path === "measures[1]");
+		expect(w).toBeDefined();
+		expect(w?.message).toContain("long");
+		expect(w?.message).toContain("40 of 32");
+	});
+
+	it("does NOT warn on an exactly-full 4/4 bar (four quarters)", () => {
+		const raw = makePattern({ measures: [fullBar()] });
+		const { warnings } = validateFingerpickPattern(raw);
+		expect(warnings.some((x) => x.code === CODE)).toBe(false);
+	});
+
+	it("does NOT warn on twelve eighth-triplets in 4/4 (exactly full, no float drift)", () => {
+		const raw = makePattern({ measures: [measureOf("eighth-triplet", 12)] });
+		const { warnings } = validateFingerpickPattern(raw);
+		expect(warnings.some((x) => x.code === CODE)).toBe(false);
+	});
+
+	it("does NOT penalise a grace-note slot for its nominal duration", () => {
+		// A full bar (four quarters) plus one grace-note slot. Counting the grace
+		// slot would push the measure over; excluding it keeps the bar exactly full.
+		const graceSlot = makeSlot({ duration: "eighth", isGraceNote: true });
+		const raw = makePattern({
+			measures: [
+				makeMeasure([
+					makeSlot({ duration: "quarter" }),
+					makeSlot({ duration: "quarter" }),
+					makeSlot({ duration: "quarter" }),
+					makeSlot({ duration: "quarter" }),
+					graceSlot,
+				]),
+			],
+		});
+		const { warnings } = validateFingerpickPattern(raw);
+		expect(warnings.some((x) => x.code === CODE)).toBe(false);
+	});
+
+	it("computes the right capacity for 3/4 (three quarters is full, two is short)", () => {
+		const full = validateFingerpickPattern(
+			makePattern({ timeSignature: [3, 4], measures: [measureOf("quarter", 3)] }),
+		);
+		expect(full.warnings.some((x) => x.code === CODE)).toBe(false);
+
+		const short = validateFingerpickPattern(
+			makePattern({ timeSignature: [3, 4], measures: [fullBar(), measureOf("quarter", 2)] }),
+		);
+		const w = short.warnings.find((x) => x.code === CODE && x.path === "measures[1]");
+		expect(w).toBeDefined();
+		expect(w?.message).toContain("3/4");
+		expect(w?.message).toContain("16 of 24");
+	});
+
+	it("computes the right capacity for 6/8 (six eighths is full)", () => {
+		const raw = makePattern({ timeSignature: [6, 8], measures: [measureOf("eighth", 6)] });
+		const { warnings } = validateFingerpickPattern(raw);
+		expect(warnings.some((x) => x.code === CODE)).toBe(false);
+	});
+
+	it("notes the pickup (anacrusis) possibility only for a short measure 0", () => {
+		const raw = makePattern({ measures: [measureOf("quarter", 2)] });
+		const { warnings } = validateFingerpickPattern(raw);
+		const w = warnings.find((x) => x.code === CODE && x.path === "measures[0]");
+		expect(w).toBeDefined();
+		expect(w?.message.toLowerCase()).toContain("pickup");
+		expect(w?.message.toLowerCase()).toContain("anacrusis");
+	});
+
+	it("does NOT add the pickup note to a short measure that is not index 0", () => {
+		const raw = makePattern({ measures: [fullBar(), measureOf("quarter", 2)] });
+		const { warnings } = validateFingerpickPattern(raw);
+		const w = warnings.find((x) => x.code === CODE && x.path === "measures[1]");
+		expect(w?.message.toLowerCase()).not.toContain("pickup");
+	});
+
+	it("a capacity mismatch alone still yields a NON-NULL pattern with EMPTY errors", () => {
+		const raw = makePattern({ measures: [measureOf("quarter", 2)] });
+		const { pattern, errors, warnings } = validateFingerpickPattern(raw);
+		expect(pattern).not.toBeNull();
+		expect(errors).toEqual([]);
+		// The frozen invariant: errors non-empty <=> pattern === null.
+		expect(warnings.some((x) => x.code === CODE)).toBe(true);
+	});
+});

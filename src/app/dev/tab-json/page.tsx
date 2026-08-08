@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
+import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import TabStaveRow, {
   computeMeasureMinWidth,
   CLEF_WIDTH,
@@ -444,6 +445,12 @@ export default function TabJsonDevPage() {
     error: null,
   });
 
+  // Section 2's last successful normalized pattern, retained so section 3 can
+  // seed the editor with the post-pipeline result (not the raw textarea text).
+  // null whenever section 2 has never converted, errored, or produced no pattern.
+  const [lastNormalizedPattern, setLastNormalizedPattern] =
+    useState<FingerpickPattern | null>(null);
+
   // ── Section 3: author via the real editor modal ────────────────────────────
   // The saved pattern lives only in local state — this page persists nothing.
   const [savedPattern, setSavedPattern] = useState<FingerpickPattern | null>(
@@ -456,12 +463,37 @@ export default function TabJsonDevPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
 
+  // Static playback of section 3's held pattern via the real fingerpick engine.
+  // Pause/resume, tempo, metronome, loop, and the cursor overlay are all out of
+  // scope here — just Play (from the top, at the pattern's own bpm) / Stop.
+  const {
+    isLoaded: audioLoaded,
+    isPlaying,
+    load: loadAudio,
+    play: playAudio,
+    stop: stopAudio,
+  } = useFingerpickAudioEngine();
+
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current !== null)
         window.clearTimeout(copyTimeoutRef.current);
     };
   }, []);
+
+  // Preload presets on mount so the first Play is instant. The hook's own
+  // useEffect cleanup stops playback and closes the AudioContext on unmount.
+  useEffect(() => {
+    void loadAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Stop any in-flight playback whenever the held pattern is replaced by a new
+  // save/load, so an old pattern can't keep sounding over the new one.
+  useEffect(() => {
+    stopAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedPattern]);
 
   function openNewPattern() {
     setLoadError(null);
@@ -501,8 +533,35 @@ export default function TabJsonDevPage() {
     setModalOpen(true);
   }
 
+  // Seed the modal with section 2's last NORMALIZED result — the actual
+  // post-pipeline pattern (draftFromToolOutput → normalizeImportedPattern in
+  // vision mode, or the parsed pattern in FingerpickPattern mode), not the raw
+  // textarea text loadFromSection2 reads.
+  function loadNormalizedFromSection2() {
+    if (!lastNormalizedPattern) {
+      setLoadError(
+        "Section 2 has no normalized pattern to load — run Convert first, and make sure it didn't error or return null.",
+      );
+      return;
+    }
+    setLoadError(null);
+    setModalSeed(lastNormalizedPattern);
+    setModalOpen(true);
+  }
+
   function handlePatternSave(pattern: FingerpickPattern) {
     setSavedPattern(pattern);
+  }
+
+  // Single Play/Stop toggle: play the held pattern once from the start (at its
+  // own bpm), or stop if already playing.
+  function handlePlayStop() {
+    if (isPlaying) {
+      stopAudio();
+      return;
+    }
+    if (!savedPattern) return;
+    playAudio(savedPattern);
   }
 
   function handleCopyPattern() {
@@ -548,6 +607,9 @@ export default function TabJsonDevPage() {
         return;
       }
       setState({ measures: candidate, vision: null, error: null });
+      // Only a full FingerpickPattern (not a bare measures array) can seed the
+      // editor; a bare array leaves nothing for section 3 to load.
+      setLastNormalizedPattern(isFingerpickPattern(parsed) ? parsed : null);
       return;
     }
 
@@ -572,6 +634,13 @@ export default function TabJsonDevPage() {
         },
         error: null,
       });
+      // Retain the full normalized pattern for section 3; null when the bridge
+      // short-circuited (unsupported notation) or normalization produced nothing.
+      setLastNormalizedPattern(
+        result.pattern && isFingerpickPattern(result.pattern)
+          ? result.pattern
+          : null,
+      );
     } catch (err) {
       // Parsed but not a valid VisionToolOutput shape — don't crash.
       setState((prev) => ({
@@ -770,10 +839,26 @@ export default function TabJsonDevPage() {
             </button>
             <button
               type="button"
+              onClick={handlePlayStop}
+              disabled={!savedPattern || (!audioLoaded && !isPlaying)}
+              className="border border-denim bg-denim px-4 py-1.5 text-[11px] tracking-[0.06em] text-on-denim uppercase transition-colors hover:bg-denim-accent disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-denim"
+            >
+              {isPlaying ? "Stop" : "Play"}
+            </button>
+            <button
+              type="button"
               onClick={loadFromSection2}
               className="border border-line-strong px-4 py-1.5 text-[11px] tracking-[0.06em] text-ink-dim uppercase transition-colors hover:text-denim"
             >
               Load from section 2 input
+            </button>
+            <button
+              type="button"
+              onClick={loadNormalizedFromSection2}
+              disabled={!lastNormalizedPattern}
+              className="border border-line-strong px-4 py-1.5 text-[11px] tracking-[0.06em] text-ink-dim uppercase transition-colors hover:text-denim disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-ink-dim"
+            >
+              Load normalized pattern from section 2
             </button>
           </div>
 

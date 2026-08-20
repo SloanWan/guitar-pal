@@ -2,8 +2,9 @@
 
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { User } from "@supabase/supabase-js";
-import { ChevronDown, Pencil, Plus, Star, Trash2, X } from "lucide-react";
+import { ChevronDown, Copy, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import FingerpickEditModal from "./FingerpickEditModal";
 
 interface FingerpickPatternLibraryProps {
@@ -39,6 +40,16 @@ function PatternCard({
 	onDelete,
 }: PatternCardProps) {
 	const meta = `${pattern.measures.length} BARS · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${pattern.bpm} BPM`;
+
+	async function copyPatternJson() {
+		try {
+			await navigator.clipboard.writeText(JSON.stringify(pattern, null, 2));
+			toast.success("Pattern JSON copied to clipboard");
+		} catch {
+			toast.error("Failed to copy pattern JSON");
+		}
+	}
+
 	return (
 		<button
 			type="button"
@@ -58,6 +69,25 @@ function PatternCard({
 					{pattern.name}
 				</span>
 				<div className="flex items-center gap-0.5">
+					<span
+						role="button"
+						tabIndex={0}
+						onClick={(e) => {
+							e.stopPropagation();
+							void copyPatternJson();
+						}}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								e.stopPropagation();
+								void copyPatternJson();
+							}
+						}}
+						className="p-0.5 transition-colors text-ink-dim hover:text-denim cursor-pointer"
+						aria-label="Copy pattern JSON"
+					>
+						<Copy size={14} />
+					</span>
 					{onEdit && (
 						<span
 							role="button"

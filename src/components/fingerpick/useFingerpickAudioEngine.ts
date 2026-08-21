@@ -11,6 +11,7 @@ import {
 	findSlotStartTime,
 	stealVoice,
 	_shutdownEngine,
+	VOICE_STEAL_FADE_TAU,
 	type ScheduleEvent,
 	type VoiceHandle,
 } from "@/lib/fingerpickScheduler";
@@ -46,6 +47,48 @@ const MIN_DECAY_TC_S = 0.03;
 /** Source stop margin past note end — lets the envelope tail off cleanly. */
 const SOURCE_STOP_BUFFER_S = 0.05;
 
+/**
+ * Default gain-decay time constant (s) for a letRing note. Unlike a normal note
+ * (whose τ is derived from the slot duration), a letRing note rings at a fixed,
+ * long τ and is terminated only by voice stealing on its string.
+ */
+const LET_RING_DECAY_TC_S = 1.5;
+
+/**
+ * How many decay time-constants a letRing source is kept alive before its hard
+ * source.stop(). After 4τ the exponential envelope is at ~1.8% of the attack
+ * gain — inaudible — so this bounds dangling sources without an audible cut.
+ * A letRing note that is voice-stolen earlier is stopped by stealVoice instead.
+ */
+const LET_RING_LIFETIME_TAUS = 4;
+
+// ─── Envelope parameters ────────────────────────────────────────────────────
+// Tunable per-note envelope constants. Defaults equal the hardcoded production
+// values above, so an engine consumer that never calls setEnvelopeParams() gets
+// byte-for-byte the prior behaviour. Read via envelopeRef inside scheduleNote
+// (never during React render), matching the ref-only scheduler-state convention.
+
+export interface EnvelopeParams {
+	/** Fraction of slot duration used as a normal note's decay time constant. */
+	decayTcRatio: number;
+	/** Floor for a normal note's decay time constant (s). */
+	minDecayTc: number;
+	/** Exponential fade τ (s) applied to the outgoing voice when a string is re-struck. */
+	voiceStealFadeTau: number;
+	/** Fixed decay time constant (s) used instead of the duration-derived τ when letRing is set. */
+	letRingDecayTc: number;
+	/** Margin (s) added past a normal note's end before its hard source.stop(). */
+	sourceStopBuffer: number;
+}
+
+export const DEFAULT_ENVELOPE: EnvelopeParams = {
+	decayTcRatio: DECAY_TC_RATIO,
+	minDecayTc: MIN_DECAY_TC_S,
+	voiceStealFadeTau: VOICE_STEAL_FADE_TAU,
+	letRingDecayTc: LET_RING_DECAY_TC_S,
+	sourceStopBuffer: SOURCE_STOP_BUFFER_S,
+};
+
 
 const METRONOME_TICK_DURATION_S = 0.05;
 const METRONOME_ACCENT_FREQ = 1200;
@@ -76,6 +119,29 @@ export interface FingerpickPlaybackProgress {
 interface ActiveVoice extends VoiceHandle {
 	gainNode: GainNode;
 	source: AudioBufferSourceNode;
+	/** Schedule event that created this voice — read-only; consumed only by the optional voice-steal observer. */
+	event: ScheduleEvent;
+	/** Absolute AudioContext time of this voice's hard source.stop() — read-only; used to test "still ringing" at steal time. */
+	stopTime: number;
+}
+
+/**
+ * Read-only notification emitted when a still-ringing voice is terminated by a
+ * new note on the same string (voice stealing). Purely observational — surfaced
+ * for dev instrumentation (the decay lab) to visualise the decay-τ ↔ voice-steal
+ * interaction. Registering an observer never influences scheduling or audio.
+ */
+export interface VoiceStealEvent {
+	/** Measure index of the note that was cut short. */
+	stolenMeasureIndex: number;
+	/** Slot index of the note that was cut short. */
+	stolenSlotIndex: number;
+	/** String (0-5) on which the steal occurred. */
+	stringIndex: number;
+	/** Measure index of the incoming note that caused the steal. */
+	byMeasureIndex: number;
+	/** Slot index of the incoming note that caused the steal. */
+	bySlotIndex: number;
 }
 
 // ─── Beat onset helper ────────────────────────────────────────────────────────
@@ -137,6 +203,8 @@ export function useFingerpickAudioEngine() {
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
 	const [accentEnabled, setAccentEnabled] = useState(true);
 	const [noteGain, setNoteGain] = useState(1.0);
+	const [envelope, setEnvelope] = useState<EnvelopeParams>(DEFAULT_ENVELOPE);
+	const envelopeRef = useRef<EnvelopeParams>(DEFAULT_ENVELOPE);
 
 	// AudioContext and routing
 	const ctxRef = useRef<AudioContext | null>(null);
@@ -146,6 +214,10 @@ export function useFingerpickAudioEngine() {
 
 	// Per-string voice map — keyed by string index 0-5
 	const perStringVoicesRef = useRef<Map<number, ActiveVoice>>(new Map());
+
+	// Optional read-only observer, notified synchronously (at schedule time) each
+	// time a still-ringing voice is stolen. Null unless a dev consumer registers one.
+	const voiceStealObserverRef = useRef<((steal: VoiceStealEvent) => void) | null>(null);
 
 	// Every AudioBufferSourceNode created in the current playback pass.
 	// Superset of perStringVoicesRef's sources; contains intermediate (voice-stolen)
@@ -201,6 +273,9 @@ export function useFingerpickAudioEngine() {
 	useEffect(() => {
 		noteGainRef.current = noteGain;
 	}, [noteGain]);
+	useEffect(() => {
+		envelopeRef.current = envelope;
+	}, [envelope]);
 
 	// ─── AudioContext lifecycle ──────────────────────────────────────────────
 
@@ -247,8 +322,26 @@ export function useFingerpickAudioEngine() {
 			return;
 		}
 
+		const env = envelopeRef.current;
+
+		// Read-only voice-steal instrumentation: if a voice on this string is still
+		// ringing (its source has not yet hard-stopped) when the new note begins,
+		// report the outgoing note's identity before it is faded/stopped. This reads
+		// only already-computed values and never alters scheduling — it is a no-op
+		// unless a dev consumer has registered an observer.
+		const outgoing = perStringVoicesRef.current.get(event.stringIndex);
+		if (outgoing && voiceStealObserverRef.current && when < outgoing.stopTime) {
+			voiceStealObserverRef.current({
+				stolenMeasureIndex: outgoing.event.measureIndex,
+				stolenSlotIndex: outgoing.event.slotIndex,
+				stringIndex: event.stringIndex,
+				byMeasureIndex: event.measureIndex,
+				bySlotIndex: event.slotIndex,
+			});
+		}
+
 		// Steal (fade + stop) any ringing voice on this string.
-		stealVoice(perStringVoicesRef.current, event.stringIndex, when);
+		stealVoice(perStringVoicesRef.current, event.stringIndex, when, env.voiceStealFadeTau);
 
 		// Gain: ghost overrides everything; otherwise technique sets base, accent boosts on top.
 		let volume: number;
@@ -276,9 +369,19 @@ export function useFingerpickAudioEngine() {
 		const effectiveDuration = noteDuration;
 		source.playbackRate.value = noteData.playbackRate;
 
+		// letRing precedence: a letRing note rings at a fixed long τ and is terminated
+		// only by voice stealing, so the duration-derived τ (and any staccato ×0.2
+		// shortening of it) is ignored. letRing therefore overrides staccato for the
+		// envelope — the two express opposite intents (ring past duration vs. cut
+		// short) and letRing is the more specific "sustain" instruction. Gain is
+		// untouched either way (letRing changes τ, not the gain ladder).
+		const letRing = event.letRing === true;
+
 		const gainNode = ctx.createGain();
 		gainNode.gain.setValueAtTime(volume, when);
-		const decayTc = Math.max(effectiveDuration * DECAY_TC_RATIO, MIN_DECAY_TC_S);
+		const decayTc = letRing
+			? env.letRingDecayTc
+			: Math.max(effectiveDuration * env.decayTcRatio, env.minDecayTc);
 		gainNode.gain.setTargetAtTime(0, when, decayTc);
 
 		const isLegato =
@@ -296,13 +399,21 @@ export function useFingerpickAudioEngine() {
 			source.connect(gainNode).connect(target);
 		}
 		source.start(when);
-		source.stop(when + effectiveDuration + SOURCE_STOP_BUFFER_S);
+		// Normal note: hard-stop just past its notated end. letRing note: keep the
+		// source alive for several decay τ so the long ring is audible; voice stealing
+		// stops it sooner when the same string is re-struck.
+		const stopTime = letRing
+			? when + env.letRingDecayTc * LET_RING_LIFETIME_TAUS + env.sourceStopBuffer
+			: when + effectiveDuration + env.sourceStopBuffer;
+		source.stop(stopTime);
 
 		allSourcesRef.current.add(source);
 		// Grace notes (very short duration) are not registered in perStringVoicesRef so the
 		// following note on the same string does not steal and immediately silence them.
-		if (event.duration >= 0.1) {
-			const voice: ActiveVoice = { gainNode, source };
+		// letRing notes are always registered regardless of duration — voice stealing is
+		// their only terminator, so they must be reachable by a later same-string note.
+		if (event.duration >= 0.1 || letRing) {
+			const voice: ActiveVoice = { gainNode, source, event, stopTime };
 			perStringVoicesRef.current.set(event.stringIndex, voice);
 			source.onended = () => {
 				allSourcesRef.current.delete(source);
@@ -849,6 +960,30 @@ export function useFingerpickAudioEngine() {
 		}
 	}
 
+	/**
+	 * Merge tunable envelope parameters. Read via envelopeRef inside scheduleNote,
+	 * so a change takes effect on every note scheduled AFTER it — i.e. the next loop
+	 * pass (looping) or the next play() call (play-once). Sources already handed to
+	 * the Web Audio scheduler for the current pass keep their baked-in envelopes;
+	 * Web Audio has no way to retroactively reshape a scheduled gain ramp.
+	 */
+	function setEnvelopeParams(partial: Partial<EnvelopeParams>): void {
+		setEnvelope((prev) => ({ ...prev, ...partial }));
+	}
+
+	/** Restore all envelope parameters to their production defaults. */
+	function resetEnvelopeParams(): void {
+		setEnvelope(DEFAULT_ENVELOPE);
+	}
+
+	/**
+	 * Register (or clear, with null) a read-only observer notified on each voice
+	 * steal. Dev-only instrumentation — the observer never influences scheduling.
+	 */
+	function setVoiceStealObserver(observer: ((steal: VoiceStealEvent) => void) | null): void {
+		voiceStealObserverRef.current = observer;
+	}
+
 	/** Update note volume — takes effect immediately via the master gain node. */
 	function handleSetNoteGain(value: number): void {
 		noteGainRef.current = value;
@@ -904,5 +1039,9 @@ export function useFingerpickAudioEngine() {
 		setAccentEnabled,
 		noteGain,
 		setNoteGain: handleSetNoteGain,
+		envelope,
+		setEnvelopeParams,
+		resetEnvelopeParams,
+		setVoiceStealObserver,
 	};
 }

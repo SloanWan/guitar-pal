@@ -25,6 +25,8 @@ export interface ScheduleEvent {
 	ghostNote?: boolean;
 	accent?: boolean;
 	staccato?: boolean;
+	/** Let the note ring past its notated duration; termination comes from voice stealing only. */
+	letRing?: boolean;
 }
 
 /**
@@ -124,6 +126,7 @@ export function fingerpickPatternToScheduleEvents(
 						...(sf.ghostNote && { ghostNote: true }),
 						...(sf.accent && { accent: true }),
 						...(sf.staccato && { staccato: true }),
+						...(sf.letRing && { letRing: true }),
 					});
 				});
 			}
@@ -253,11 +256,12 @@ export function stealVoice(
 	voices: Map<number, VoiceHandle>,
 	stringIndex: number,
 	when: number,
+	fadeTau: number = VOICE_STEAL_FADE_TAU,
 ): void {
 	const prev = voices.get(stringIndex);
 	if (!prev) return;
 	prev.gainNode.gain.cancelScheduledValues(when);
-	prev.gainNode.gain.setTargetAtTime(0, when, VOICE_STEAL_FADE_TAU);
+	prev.gainNode.gain.setTargetAtTime(0, when, fadeTau);
 	prev.source.stop(when + VOICE_STEAL_STOP_BUFFER);
 	// Remove immediately so a second steal for the same string within the same
 	// scheduling pass doesn't attempt to stop the already-scheduled fade.

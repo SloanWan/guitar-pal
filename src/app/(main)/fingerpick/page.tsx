@@ -18,7 +18,6 @@ import TabStaveRow, {
 	CLEF_WIDTH,
 } from "@/components/fingerpick/TabStaveRow";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
-import { withLetRingAll } from "@/lib/fingerpickLetRing";
 import {
 	useFingerpickAudioEngine,
 	type MetronomeSubdivision,
@@ -366,11 +365,15 @@ export default function FingerpickPage() {
 		const startOffset = pending
 			? findSlotStartTime(scheduleEventsRef.current, pending.measureIndex, pending.slotIndex)
 			: 0;
-		// Force letRing on every note so the whole pattern rings at the long
-		// letRingDecayTc τ (terminated only by voice stealing) — a fuller, more
-		// natural fingerstyle sustain. letRing changes only the audio envelope, not
-		// timing/positions, so the cursor's untransformed scheduleEventsRef stays valid.
-		play(withLetRingAll({ ...selectedPattern, bpm }), { loop: true, loopGapSeconds: loopGap }, startOffset);
+		// forceLetRing: every note rings at the long letRingDecayTc τ (terminated only
+		// by voice stealing) — a fuller, more natural fingerstyle sustain. This is a
+		// playback mode, so the pattern data is left untouched; letRing changes only
+		// the audio envelope, not timing/positions, so scheduleEventsRef stays valid.
+		play(
+			{ ...selectedPattern, bpm },
+			{ loop: true, loopGapSeconds: loopGap, forceLetRing: true },
+			startOffset,
+		);
 	}
 
 	function handleStop() {

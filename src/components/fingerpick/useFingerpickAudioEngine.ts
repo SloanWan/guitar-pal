@@ -103,6 +103,12 @@ export interface PlayOptions {
 	loop?: boolean;
 	/** Gap between loop passes, in seconds (0 = seamless). */
 	loopGapSeconds?: number;
+	/**
+	 * Playback mode: when true, every played note rings at the long letRing τ
+	 * regardless of its authored `letRing` flag (terminated only by voice
+	 * stealing). Lets a consumer force full sustain without mutating pattern data.
+	 */
+	forceLetRing?: boolean;
 }
 
 export interface FingerpickPlaybackProgress {
@@ -237,6 +243,8 @@ export function useFingerpickAudioEngine() {
 	const patternDurationRef = useRef(0);
 	const loopRef = useRef(false);
 	const loopGapRef = useRef(0);
+	/** Playback mode: force every note to ring at the long letRing τ (read in scheduleNote). */
+	const forceLetRingRef = useRef(false);
 	const scheduleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -375,7 +383,9 @@ export function useFingerpickAudioEngine() {
 		// envelope — the two express opposite intents (ring past duration vs. cut
 		// short) and letRing is the more specific "sustain" instruction. Gain is
 		// untouched either way (letRing changes τ, not the gain ladder).
-		const letRing = event.letRing === true;
+		// forceLetRing (a playback mode set via PlayOptions) makes every note ring,
+		// independent of its authored flag — the pattern data is never mutated.
+		const letRing = event.letRing === true || forceLetRingRef.current;
 
 		const gainNode = ctx.createGain();
 		gainNode.gain.setValueAtTime(volume, when);
@@ -608,6 +618,7 @@ export function useFingerpickAudioEngine() {
 		patternDurationRef.current = getTotalPatternDuration(pattern, bpm);
 		loopRef.current = options.loop ?? false;
 		loopGapRef.current = options.loopGapSeconds ?? 0;
+		forceLetRingRef.current = options.forceLetRing ?? false;
 		timeSignatureRef.current = pattern.timeSignature;
 		beatOnsetsRef.current = computeBeatOnsets(pattern, bpm);
 		secondsPerBeatRef.current = 60 / bpm;

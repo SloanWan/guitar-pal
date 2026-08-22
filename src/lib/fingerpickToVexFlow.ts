@@ -13,9 +13,27 @@ import {
 	AnnotationVerticalJustify,
 	Tremolo,
 	Vibrato,
+	// NAMING COLLISION: our domain type is also called `Stroke` (see fingerpickTypes).
+	// VexFlow's modifier class is aliased to VexStroke so the two never resolve
+	// ambiguously in this file.
+	Stroke as VexStroke,
 } from "vexflow";
 
-import { Measure, Duration } from "@/lib/fingerpickTypes";
+import { Measure, Duration, Stroke } from "@/lib/fingerpickTypes";
+
+// Map our slot-level roll direction to a VexFlow Stroke.Type.
+//
+// VISUALLY CONFIRMED CORRECT — do not flip. The constant names are counterintuitive
+// (OSMD is on record hitting this exact mismatch), so this was verified against the
+// rendered output, not inferred from the names. Notation convention: an arrow
+// pointing UP means low→high pitch, which on a guitar is a DOWN-stroke. In VexFlow 5,
+// Stroke.Type.ROLL_DOWN renders an up-pointing arrowhead at the top (high-pitch) end
+// of a TAB stave — i.e. it reads as low→high — matching our "roll-down" (low pitch →
+// high pitch). Confirmed on /dev/tab-notation.
+const STROKE_TO_VEX: Record<Stroke, number> = {
+	"roll-down": VexStroke.Type.ROLL_DOWN,
+	"roll-up": VexStroke.Type.ROLL_UP,
+};
 
 export const VEX_DURATION: Record<Duration, string> = {
 	whole: "w",
@@ -181,6 +199,14 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 					.setVerticalJustification(AnnotationVerticalJustify.TOP)
 					.setFont("Geist Mono, monospace", 10),
 			);
+		}
+
+		// Slot-level roll (arpeggiated chord): one right-hand action spanning the
+		// slot's strings. Attached at position index 0; the modifier draws across
+		// all of the note's positions (allVoices defaults true), so it spans from
+		// the top active string to the bottom active string, gaps included.
+		if (slot.stroke) {
+			tabNote.addStroke(0, new VexStroke(STROKE_TO_VEX[slot.stroke]));
 		}
 
 		const noteIdx = notes.length;

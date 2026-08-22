@@ -24,7 +24,7 @@ import {
 	CircleHelp,
 	X as XIcon,
 } from "lucide-react";
-import type { Duration, FingerpickPattern, Measure, StringFret } from "@/lib/fingerpickTypes";
+import type { Duration, FingerpickPattern, Measure, StringFret, Stroke } from "@/lib/fingerpickTypes";
 import {
 	makeDefaultPattern,
 	clonePatternForEdit,
@@ -33,6 +33,7 @@ import {
 	toggleMuted,
 	setTechnique,
 	setTied,
+	setStroke,
 	moveCell,
 	hasPreviousNoteOnString,
 	setSlotsDuration,
@@ -116,6 +117,15 @@ const NEXT_LARGER_DURATION: Partial<Record<Duration, Duration>> = {
 	quarter: "half",
 	half: "whole",
 };
+
+// Slot-level roll (arpeggiated chord) options for the column popup. "none" clears
+// the field; "roll-down"/"roll-up" are the domain Stroke values. Roll ↓ = hand moves
+// down = low→high pitch; Roll ↑ = hand moves up = high→low pitch (see fingerpickTypes).
+const STROKE_PICKER: { label: string; value: "none" | Stroke }[] = [
+	{ label: "None", value: "none" },
+	{ label: "Roll ↓", value: "roll-down" },
+	{ label: "Roll ↑", value: "roll-up" },
+];
 
 const TECHNIQUE_OPTIONS: { label: string; value: NonNullable<StringFret["technique"]> }[] = [
 	{ label: "Hammer-on (H)", value: "hammer-on" },
@@ -647,6 +657,15 @@ export default function FingerpickEditModal({
 		commit((prev) => setSlotsDuration(prev, columnTargets(), duration));
 	}
 
+	// Apply (or clear) a roll stroke on every selected column in one commit, so
+	// undo/redo treat a multi-column stroke change as a single step. `undefined`
+	// clears. Routed through commit, so it participates in undo/redo and the dirty
+	// guard just like every other edit.
+	function applyStroke(stroke: Stroke | undefined) {
+		const targets = columnTargets();
+		commit((prev) => targets.reduce((p, t) => setStroke(p, t, stroke), prev));
+	}
+
 	function applyStructural(op: "before" | "after" | "duplicate" | "delete") {
 		const targets = columnTargets();
 		commit((prev) => {
@@ -769,6 +788,18 @@ export default function FingerpickEditModal({
 		return durations.every((d) => d === first) ? (first ?? null) : null;
 	})();
 
+	// Stroke highlighted in the roll picker = the shared stroke of all selected slots
+	// ("none" when they all lack one). "mixed" when they disagree, so nothing lights up.
+	const selectedStroke: "none" | Stroke | "mixed" = (() => {
+		const targets = columnTargets();
+		if (targets.length === 0) return "none";
+		const strokes = targets.map(
+			(t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.stroke,
+		);
+		const first = strokes[0];
+		return strokes.every((s) => s === first) ? (first ?? "none") : "mixed";
+	})();
+
 	// The column popup is anchored below the first selected column's selector.
 	const firstSelectedColumn: SlotTarget | null =
 		selectedColumns.size > 0
@@ -871,6 +902,32 @@ export default function FingerpickEditModal({
 						</button>
 					);
 				})}
+			</div>
+
+			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
+			    selected column. Same segmented-pill pattern as the duration picker. */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2">
+				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+					Roll
+				</span>
+				<div className="flex border border-line-strong">
+					{STROKE_PICKER.map((s, i) => (
+						<button
+							key={s.value}
+							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
+							title={s.value === "none" ? "No roll" : s.value}
+							className={`h-7 flex-1 px-2 font-mono text-xs font-semibold transition-colors ${
+								i > 0 ? "border-l border-line-strong" : ""
+							} ${
+								selectedStroke === s.value
+									? "bg-denim text-on-denim"
+									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+							}`}
+						>
+							{s.label}
+						</button>
+					))}
+				</div>
 			</div>
 
 			{/* Split / merge (single column only) */}

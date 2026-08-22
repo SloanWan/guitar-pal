@@ -8,11 +8,16 @@ import {
 	findSlotStartTime,
 	stealVoice,
 	_shutdownEngine,
+	computeRollOffsets,
+	computeMeasureBoundaries,
 	OPEN_STRING_MIDI,
 	VOICE_STEAL_FADE_TAU,
 	VOICE_STEAL_STOP_BUFFER,
+	DEFAULT_ROLL_PARAMS,
+	ROLL_HARD_SPAN_CEILING,
+	type RollParams,
 } from "@/lib/fingerpickScheduler";
-import type { FingerpickPattern, BeatSlot, StringFret, Duration } from "@/lib/fingerpickTypes";
+import type { FingerpickPattern, BeatSlot, StringFret, Duration, Stroke } from "@/lib/fingerpickTypes";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -1162,5 +1167,245 @@ describe("metronome enable mid-pass — beat onset filtering", () => {
 			if (t8 >= elapsed && t8 < totalDuration - 0.001) subBeats.push(t8);
 		}
 		expect(subBeats).toEqual([0.75, 1.25, 1.75]);
+	});
+});
+
+// ─── Roll (arpeggiated chord) stroke scheduling ──────────────────────────────
+//
+// Every assertion in this block would FAIL before the roll feature: the pre-roll
+// fingerpickPatternToScheduleEvents ignored `stroke` entirely, so all events in a
+// slot shared its start time and none carried `rollGain`. The one exception is the
+// "no-stroke byte-identical" test, which is the guard that the roll path never
+// touches stroke-free slots.
+
+// Build a slot that carries a stroke (the base `slot()` helper cannot set one).
+function rolledSlot(
+	id: string,
+	duration: Duration,
+	stroke: Stroke,
+	strOverrides: Record<number, Partial<StringFret>> = {},
+): BeatSlot {
+	return { ...slot(id, duration, strOverrides), stroke };
+}
+
+// Full six-string chord overrides (every string fretted).
+const FULL_CHORD: Record<number, Partial<StringFret>> = {
+	0: { fret: 0 },
+	1: { fret: 1 },
+	2: { fret: 0 },
+	3: { fret: 2 },
+	4: { fret: 3 },
+	5: { fret: 0 },
+};
+
+// time of the event on a given string index.
+function timeOfString(events: { stringIndex: number; time: number }[], stringIndex: number): number {
+	const ev = events.find((e) => e.stringIndex === stringIndex);
+	if (!ev) throw new Error(`no event for string ${stringIndex}`);
+	return ev.time;
+}
+
+describe("computeRollOffsets — sweep order and gain taper", () => {
+	const params: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.02 };
+
+	it("roll-down orders strings low→high (5 first, 0 last) with increasing offsets", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "roll-down", 1.0, params);
+		const t = (s: number) => m.get(s)!.timeOffset;
+		expect(t(5)).toBeCloseTo(0);
+		expect(t(5)).toBeLessThan(t(4));
+		expect(t(4)).toBeLessThan(t(3));
+		expect(t(3)).toBeLessThan(t(2));
+		expect(t(2)).toBeLessThan(t(1));
+		expect(t(1)).toBeLessThan(t(0));
+	});
+
+	it("roll-up orders strings high→low (0 first, 5 last)", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "roll-up", 1.0, params);
+		const t = (s: number) => m.get(s)!.timeOffset;
+		expect(t(0)).toBeCloseTo(0);
+		expect(t(0)).toBeLessThan(t(1));
+		expect(t(4)).toBeLessThan(t(5));
+	});
+
+	it("gain taper is gainTaper^rank in sweep order", () => {
+		const p: RollParams = { ...params, gainTaper: 0.9 };
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "roll-down", 1.0, p);
+		// roll-down rank order: 5,4,3,2,1,0 → ranks 0..5
+		expect(m.get(5)!.gain).toBeCloseTo(1);
+		expect(m.get(4)!.gain).toBeCloseTo(0.9);
+		expect(m.get(3)!.gain).toBeCloseTo(0.81);
+		expect(m.get(0)!.gain).toBeCloseTo(Math.pow(0.9, 5));
+	});
+
+	it("empty / single-string input produces no roll spread", () => {
+		expect(computeRollOffsets([], "roll-down", 1.0, params).size).toBe(0);
+		const one = computeRollOffsets([2], "roll-down", 1.0, params);
+		expect(one.get(2)!.timeOffset).toBeCloseTo(0);
+	});
+
+	it("roll-up multiplier widens up-strokes relative to down-strokes", () => {
+		const p: RollParams = { ...params, rollUpMultiplier: 1.5 };
+		const down = computeRollOffsets([0, 5], "roll-down", 1.0, p);
+		const up = computeRollOffsets([0, 5], "roll-up", 1.0, p);
+		// Total span of the up-stroke is 1.5× the down-stroke span.
+		const downSpan = Math.abs(down.get(0)!.timeOffset - down.get(5)!.timeOffset);
+		const upSpan = Math.abs(up.get(0)!.timeOffset - up.get(5)!.timeOffset);
+		expect(upSpan).toBeCloseTo(downSpan * 1.5);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — stroke applies stagger", () => {
+	it("a rolled slot no longer shares one start time (stagger IS applied — not silently dropped)", () => {
+		const rolled = pattern(120, [rolledSlot("s1", "quarter", "roll-down", FULL_CHORD)]);
+		const plain = pattern(120, [slot("s1", "quarter", FULL_CHORD)]);
+		const rolledEvents = fingerpickPatternToScheduleEvents(rolled, 120);
+		const plainEvents = fingerpickPatternToScheduleEvents(plain, 120);
+
+		const rolledTimes = new Set(rolledEvents.map((e) => e.time));
+		const plainTimes = new Set(plainEvents.map((e) => e.time));
+		// Plain chord: all six events share t=0. Rolled: six distinct onset times.
+		expect(plainTimes.size).toBe(1);
+		expect(rolledTimes.size).toBe(6);
+	});
+
+	it("roll-down first-on-beat: string 5 lands on the beat, string 0 last", () => {
+		const p = pattern(120, [rolledSlot("s1", "quarter", "roll-down", FULL_CHORD)]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(timeOfString(events, 5)).toBeCloseTo(0);
+		expect(timeOfString(events, 5)).toBeLessThan(timeOfString(events, 0));
+		// The whole roll stays within the slot (quarter at 120 BPM = 0.5 s).
+		expect(Math.max(...events.map((e) => e.time))).toBeLessThan(0.5);
+	});
+
+	it("roll-up first-on-beat: string 0 lands on the beat, string 5 last", () => {
+		const p = pattern(120, [rolledSlot("s1", "quarter", "roll-up", FULL_CHORD)]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(timeOfString(events, 0)).toBeCloseTo(0);
+		expect(timeOfString(events, 0)).toBeLessThan(timeOfString(events, 5));
+	});
+
+	it("last-on-beat anchor: the final struck string lands exactly on the slot start", () => {
+		// Rolled chord as the SECOND slot so the beat is at t=0.5 (quarter @120).
+		const p = pattern(120, [
+			slot("s0", "quarter", { 0: { fret: 0 } }),
+			rolledSlot("s1", "quarter", "roll-down", FULL_CHORD),
+		]);
+		const params: RollParams = { ...DEFAULT_ROLL_PARAMS, anchor: "last-on-beat" };
+		const events = fingerpickPatternToScheduleEvents(p, 120, params);
+		const rolled = events.filter((e) => e.slotIndex === 1);
+		// roll-down last string is 0 → lands on the beat (0.5); earlier strings before it.
+		expect(timeOfString(rolled, 0)).toBeCloseTo(0.5);
+		expect(timeOfString(rolled, 5)).toBeLessThan(0.5);
+	});
+
+	it("rollGain is stamped on rolled events and absent on plain events", () => {
+		const rolled = fingerpickPatternToScheduleEvents(
+			pattern(120, [rolledSlot("s1", "quarter", "roll-down", FULL_CHORD)]),
+			120,
+		);
+		expect(rolled.every((e) => typeof e.rollGain === "number")).toBe(true);
+		const plain = fingerpickPatternToScheduleEvents(
+			pattern(120, [slot("s1", "quarter", FULL_CHORD)]),
+			120,
+		);
+		expect(plain.every((e) => !("rollGain" in e))).toBe(true);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — no-stroke byte-identical", () => {
+	it("a stroke-free pattern is identical regardless of rollParams", () => {
+		const p = multiMeasurePattern(120, [
+			[slot("s1", "quarter", { 0: { fret: 0 }, 2: { fret: 2 } }), slot("s2", "eighth", { 5: { fret: 3 } })],
+			[slot("s3", "rest"), slot("s4", "quarter", { 1: { fret: 1, muted: true } })],
+		]);
+		const wild: RollParams = {
+			baseStagger: 0.09,
+			staggerMode: "proportional",
+			proportionalFraction: 0.25,
+			spanCapFraction: 0.9,
+			rollUpMultiplier: 2,
+			gainTaper: 0.5,
+			gapMode: "consume",
+			anchor: "last-on-beat",
+		};
+		const withDefault = fingerpickPatternToScheduleEvents(p, 120);
+		const withWild = fingerpickPatternToScheduleEvents(p, 120, wild);
+		// Byte-identical: same order, same field set, same values.
+		expect(withWild).toEqual(withDefault);
+		expect(withDefault.some((e) => "rollGain" in e)).toBe(false);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — span cap holds at short durations", () => {
+	it("fixed-with-cap: total roll span never exceeds spanCapFraction × slot duration", () => {
+		// Sixteenth at 240 BPM = 0.0625 s. Default fixed-with-cap, spanCap 0.5.
+		const p = pattern(240, [rolledSlot("s1", "sixteenth", "roll-down", FULL_CHORD)]);
+		const events = fingerpickPatternToScheduleEvents(p, 240);
+		const slotDur = events[0].duration; // 0.0625
+		const span = Math.max(...events.map((e) => e.time)) - Math.min(...events.map((e) => e.time));
+		expect(span).toBeLessThanOrEqual(DEFAULT_ROLL_PARAMS.spanCapFraction * slotDur + 1e-9);
+		// And it genuinely clamped (base 0.03 × 5 = 0.15 ≫ the 0.03125 cap).
+		expect(span).toBeGreaterThan(0);
+	});
+
+	it("fixed mode: the hard safety ceiling still prevents bleed into the next slot", () => {
+		const params: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.03 };
+		const p = pattern(240, [rolledSlot("s1", "sixteenth", "roll-down", FULL_CHORD)]);
+		const events = fingerpickPatternToScheduleEvents(p, 240, params);
+		const slotDur = events[0].duration;
+		const span = Math.max(...events.map((e) => e.time)) - Math.min(...events.map((e) => e.time));
+		expect(span).toBeLessThanOrEqual(ROLL_HARD_SPAN_CEILING * slotDur + 1e-9);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — gap handling modes", () => {
+	// Sparse voicing: strings 0, 1, 4, 5 active; holes at 2, 3. Long slot so no clamp.
+	const sparse: Record<number, Partial<StringFret>> = {
+		0: { fret: 0 },
+		1: { fret: 1 },
+		4: { fret: 3 },
+		5: { fret: 0 },
+	};
+	const base: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.03 };
+
+	function spanFor(gapMode: RollParams["gapMode"]): number {
+		const p = pattern(60, [rolledSlot("s1", "whole", "roll-down", sparse)]); // whole @60 = 4 s
+		const events = fingerpickPatternToScheduleEvents(p, 60, { ...base, gapMode });
+		return Math.max(...events.map((e) => e.time)) - Math.min(...events.map((e) => e.time));
+	}
+
+	it("consume spans wider than collapse on a gapped voicing (skipped strings cost a step)", () => {
+		// collapse: 4 active → 3 steps × 0.03 = 0.09. consume: sweep 0..5 → 5 steps × 0.03 = 0.15.
+		expect(spanFor("collapse")).toBeCloseTo(0.09);
+		expect(spanFor("consume")).toBeCloseTo(0.15);
+		expect(spanFor("consume")).toBeGreaterThan(spanFor("collapse"));
+	});
+
+	it("both modes keep the same sweep order (string 5 first, string 0 last)", () => {
+		const p = pattern(60, [rolledSlot("s1", "whole", "roll-down", sparse)]);
+		for (const gapMode of ["collapse", "consume"] as const) {
+			const events = fingerpickPatternToScheduleEvents(p, 60, { ...base, gapMode });
+			expect(timeOfString(events, 5)).toBeCloseTo(0);
+			expect(timeOfString(events, 5)).toBeLessThan(timeOfString(events, 0));
+		}
+	});
+});
+
+describe("stroke does not affect slot durations or measure boundaries (Objective 5)", () => {
+	it("getTotalPatternDuration and computeMeasureBoundaries are identical with/without a stroke", () => {
+		const withStroke = multiMeasurePattern(120, [
+			[rolledSlot("s1", "quarter", "roll-down", FULL_CHORD), slot("s2", "quarter", { 0: { fret: 0 } })],
+			[rolledSlot("s3", "half", "roll-up", FULL_CHORD)],
+		]);
+		const withoutStroke = multiMeasurePattern(120, [
+			[slot("s1", "quarter", FULL_CHORD), slot("s2", "quarter", { 0: { fret: 0 } })],
+			[slot("s3", "half", FULL_CHORD)],
+		]);
+		expect(getTotalPatternDuration(withStroke, 120)).toBeCloseTo(
+			getTotalPatternDuration(withoutStroke, 120),
+		);
+		expect(computeMeasureBoundaries(withStroke, 120)).toEqual(
+			computeMeasureBoundaries(withoutStroke, 120),
+		);
 	});
 });

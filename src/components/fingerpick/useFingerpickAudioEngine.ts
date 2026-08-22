@@ -12,8 +12,10 @@ import {
 	stealVoice,
 	_shutdownEngine,
 	VOICE_STEAL_FADE_TAU,
+	DEFAULT_ROLL_PARAMS,
 	type ScheduleEvent,
 	type VoiceHandle,
+	type RollParams,
 } from "@/lib/fingerpickScheduler";
 import {
 	preloadFingerpickPresets,
@@ -211,6 +213,10 @@ export function useFingerpickAudioEngine() {
 	const [noteGain, setNoteGain] = useState(1.0);
 	const [envelope, setEnvelope] = useState<EnvelopeParams>(DEFAULT_ENVELOPE);
 	const envelopeRef = useRef<EnvelopeParams>(DEFAULT_ENVELOPE);
+	// Roll (arpeggiated chord) parameters. Read via rollParamsRef when (re)computing the
+	// event stream (play / applyBpmChange); never read during React render.
+	const [rollParams, setRollParams] = useState<RollParams>(DEFAULT_ROLL_PARAMS);
+	const rollParamsRef = useRef<RollParams>(DEFAULT_ROLL_PARAMS);
 
 	// AudioContext and routing
 	const ctxRef = useRef<AudioContext | null>(null);
@@ -284,6 +290,9 @@ export function useFingerpickAudioEngine() {
 	useEffect(() => {
 		envelopeRef.current = envelope;
 	}, [envelope]);
+	useEffect(() => {
+		rollParamsRef.current = rollParams;
+	}, [rollParams]);
 
 	// ─── AudioContext lifecycle ──────────────────────────────────────────────
 
@@ -367,6 +376,9 @@ export function useFingerpickAudioEngine() {
 			volume = NORMAL_GAIN;
 		}
 		if (event.accent) volume *= ACCENT_MULTIPLIER;
+		// Roll taper: per-successive-string gain from an arpeggiated slot, on top of the
+		// technique/accent ladder. Undefined on non-rolled slots → volume unchanged.
+		if (event.rollGain !== undefined) volume *= event.rollGain;
 
 		// Staccato shortens the sounding duration to 20% of the slot duration.
 		const noteDuration = event.staccato ? event.duration * 0.2 : event.duration;
@@ -614,7 +626,7 @@ export function useFingerpickAudioEngine() {
 
 		const bpm = pattern.bpm;
 		patternRef.current = pattern;
-		eventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm);
+		eventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm, rollParamsRef.current);
 		patternDurationRef.current = getTotalPatternDuration(pattern, bpm);
 		loopRef.current = options.loop ?? false;
 		loopGapRef.current = options.loopGapSeconds ?? 0;
@@ -832,7 +844,7 @@ export function useFingerpickAudioEngine() {
 		const pattern = patternRef.current;
 		if (!pattern) return;
 
-		const newEvents = fingerpickPatternToScheduleEvents(pattern, newBpm);
+		const newEvents = fingerpickPatternToScheduleEvents(pattern, newBpm, rollParamsRef.current);
 		const newPatternDuration = getTotalPatternDuration(pattern, newBpm);
 		const newBeatOnsets = computeBeatOnsets(pattern, newBpm);
 		secondsPerBeatRef.current = 60 / newBpm;
@@ -988,6 +1000,20 @@ export function useFingerpickAudioEngine() {
 	}
 
 	/**
+	 * Merge tunable roll parameters. Read via rollParamsRef when the event stream is
+	 * (re)built, so a change takes effect on the next play() / applyBpmChange() call —
+	 * a consumer that wants an immediate change while playing should restart playback.
+	 */
+	function setRollParamsPartial(partial: Partial<RollParams>): void {
+		setRollParams((prev) => ({ ...prev, ...partial }));
+	}
+
+	/** Restore all roll parameters to their production defaults. */
+	function resetRollParams(): void {
+		setRollParams(DEFAULT_ROLL_PARAMS);
+	}
+
+	/**
 	 * Register (or clear, with null) a read-only observer notified on each voice
 	 * steal. Dev-only instrumentation — the observer never influences scheduling.
 	 */
@@ -1053,6 +1079,9 @@ export function useFingerpickAudioEngine() {
 		envelope,
 		setEnvelopeParams,
 		resetEnvelopeParams,
+		rollParams,
+		setRollParams: setRollParamsPartial,
+		resetRollParams,
 		setVoiceStealObserver,
 	};
 }

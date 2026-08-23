@@ -624,19 +624,37 @@ export default function FingerpickPage() {
 				rafId = requestAnimationFrame(tryInitialPosition);
 				return;
 			}
-			const noteEl = container.querySelector<SVGElement>(
+			// The pattern may open with leading silence: empty slots render as
+			// zero-width GhostNotes that emit NO SVG element, so slot 0 can be absent.
+			// Fall back to the first note element that actually exists for vertical
+			// positioning, and park the cursor at the measure's left edge (pattern
+			// start) so playback drifts rightward from there instead of snapping.
+			const slot0El = container.querySelector<SVGElement>(
 				'[data-measure-index="0"][data-slot-index="0"]',
 			);
-			const svgEl = noteEl?.closest("svg");
-			if (!noteEl || !svgEl) {
+			const anchorEl =
+				slot0El ??
+				container.querySelector<SVGElement>('[data-measure-index="0"][data-slot-index]');
+			const svgEl = anchorEl?.closest("svg");
+			const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
+			if (!anchorEl || !svgEl || !stavesvg) {
 				rafId = requestAnimationFrame(tryInitialPosition);
 				return;
 			}
 			const containerRect = container.getBoundingClientRect();
-			const noteRect = noteEl.getBoundingClientRect();
 			const svgRect = svgEl.getBoundingClientRect();
-			const x0 =
-				noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
+			const staveSvgRect = stavesvg.getBoundingClientRect();
+			const sx = parseFloat(stavesvg.getAttribute("data-stave-0-x") ?? "0");
+			const sw = parseFloat(stavesvg.getAttribute("data-stave-0-w") ?? "0");
+			// x0 = slot 0's note center when it exists; otherwise the measure's left
+			// edge (matches the rest-path's snapX so the drift begins seamlessly).
+			let x0: number;
+			if (slot0El) {
+				const noteRect = slot0El.getBoundingClientRect();
+				x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
+			} else {
+				x0 = staveSvgRect.left - containerRect.left + sx + container.scrollLeft;
+			}
 			const top = svgRect.top - containerRect.top + container.scrollTop;
 
 			playhead.style.top = `${top}px`;
@@ -645,17 +663,11 @@ export default function FingerpickPage() {
 			playhead.style.display = "block";
 
 			if (measureHL) {
-				const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
-				if (stavesvg) {
-					const staveSvgRect = stavesvg.getBoundingClientRect();
-					const sx = parseFloat(stavesvg.getAttribute("data-stave-0-x") ?? "0");
-					const sw = parseFloat(stavesvg.getAttribute("data-stave-0-w") ?? "0");
-					measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
-					measureHL.style.width = `${sw}px`;
-					measureHL.style.top = `${top}px`;
-					measureHL.style.height = `${svgRect.height}px`;
-					measureHL.style.display = "block";
-				}
+				measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
+				measureHL.style.width = `${sw}px`;
+				measureHL.style.top = `${top}px`;
+				measureHL.style.height = `${svgRect.height}px`;
+				measureHL.style.display = "block";
 			}
 		}
 		rafId = requestAnimationFrame(tryInitialPosition);
@@ -678,19 +690,33 @@ export default function FingerpickPage() {
 				rafId = requestAnimationFrame(resetToInitial);
 				return;
 			}
-			const noteEl = container.querySelector<SVGElement>(
+			// Leading silence: slot 0 may be an element-less GhostNote — fall back to
+			// the first existing note element for vertical positioning and park at the
+			// measure's left edge (see the mount effect above for the full rationale).
+			const slot0El = container.querySelector<SVGElement>(
 				'[data-measure-index="0"][data-slot-index="0"]',
 			);
-			const svgEl = noteEl?.closest("svg");
-			if (!noteEl || !svgEl) {
+			const anchorEl =
+				slot0El ??
+				container.querySelector<SVGElement>('[data-measure-index="0"][data-slot-index]');
+			const svgEl = anchorEl?.closest("svg");
+			const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
+			if (!anchorEl || !svgEl || !stavesvg) {
 				rafId = requestAnimationFrame(resetToInitial);
 				return;
 			}
 			const containerRect = container.getBoundingClientRect();
-			const noteRect = noteEl.getBoundingClientRect();
 			const svgRect = svgEl.getBoundingClientRect();
-			const x0 =
-				noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
+			const staveSvgRect = stavesvg.getBoundingClientRect();
+			const sx = parseFloat(stavesvg.getAttribute("data-stave-0-x") ?? "0");
+			const sw = parseFloat(stavesvg.getAttribute("data-stave-0-w") ?? "0");
+			let x0: number;
+			if (slot0El) {
+				const noteRect = slot0El.getBoundingClientRect();
+				x0 = noteRect.left - containerRect.left + noteRect.width / 2 + container.scrollLeft;
+			} else {
+				x0 = staveSvgRect.left - containerRect.left + sx + container.scrollLeft;
+			}
 			const top = svgRect.top - containerRect.top + container.scrollTop;
 			playhead.style.top = `${top}px`;
 			playhead.style.height = `${svgRect.height}px`;
@@ -698,16 +724,10 @@ export default function FingerpickPage() {
 			renderedXRef.current = x0;
 			prevTimestampRef.current = 0;
 			if (measureHL) {
-				const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
-				if (stavesvg) {
-					const staveSvgRect = stavesvg.getBoundingClientRect();
-					const sx = parseFloat(stavesvg.getAttribute("data-stave-0-x") ?? "0");
-					const sw = parseFloat(stavesvg.getAttribute("data-stave-0-w") ?? "0");
-					measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
-					measureHL.style.width = `${sw}px`;
-					measureHL.style.top = `${top}px`;
-					measureHL.style.height = `${svgRect.height}px`;
-				}
+				measureHL.style.left = `${staveSvgRect.left - containerRect.left + sx}px`;
+				measureHL.style.width = `${sw}px`;
+				measureHL.style.top = `${top}px`;
+				measureHL.style.height = `${svgRect.height}px`;
 			}
 		}
 		rafId = requestAnimationFrame(resetToInitial);
@@ -876,22 +896,48 @@ export default function FingerpickPage() {
 			const noteRect = noteEl.getBoundingClientRect();
 			const x0 = noteRect.left - containerRect.left + noteRect.width / 2;
 
-			// Find the schedule event for the current note and the next event after it.
-			const t0Event = events.find(
-				(e) => e.measureIndex === measureIndex && e.slotIndex === slotIndex,
-			);
-			const t0 = t0Event?.time ?? elapsed;
-			const nextEvent = events.find((e) => e.time > t0);
+			// A rolled slot emits one event PER STRING — all sharing this (measureIndex,
+			// slotIndex) but staggered in time. Interpolate between SLOTS, not events:
+			// t0 is the slot's earliest event time; the "next" note is the next DISTINCT
+			// slot, whose start is its own earliest event time. Using the minimum (not the
+			// first array match) is required because the last-on-beat anchor produces
+			// negative offsets, so same-slot events aren't guaranteed to be in time order.
+			let t0 = Infinity;
+			let slotDuration = 0;
+			for (const e of events) {
+				if (e.measureIndex === measureIndex && e.slotIndex === slotIndex) {
+					if (e.time < t0) t0 = e.time;
+					slotDuration = e.duration;
+				}
+			}
+			if (t0 === Infinity) t0 = elapsed;
 
-			// True when this is the last note in its measure or the last note overall —
+			// First event, in time order, that belongs to a DIFFERENT slot (skips the
+			// current rolled slot's siblings) — identifies the next distinct slot.
+			const nextSlotEvent = events.find(
+				(e) => e.time > t0 && (e.measureIndex !== measureIndex || e.slotIndex !== slotIndex),
+			);
+			// t1 = the earliest event time of that next distinct slot.
+			let t1 = Infinity;
+			if (nextSlotEvent) {
+				for (const e of events) {
+					if (
+						e.measureIndex === nextSlotEvent.measureIndex &&
+						e.slotIndex === nextSlotEvent.slotIndex &&
+						e.time < t1
+					) {
+						t1 = e.time;
+					}
+				}
+			}
+
+			// True when the next distinct slot is in a later measure (or there is none) —
 			// drift to the measure's right edge rather than interpolating toward the next note.
-			const isLastNoteInMeasure = !nextEvent || nextEvent.measureIndex !== measureIndex;
+			const isLastNoteInMeasure = !nextSlotEvent || nextSlotEvent.measureIndex !== measureIndex;
 
 			let targetX = x0;
 			if (isLastNoteInMeasure) {
-				const lastEvent = events[events.length - 1];
-				const noteDuration =
-					t0Event?.duration ?? (lastEvent ? Math.max(0.1, lastEvent.time - t0 + 0.5) : 1);
+				const noteDuration = slotDuration > 0 ? slotDuration : 1;
 				const frac = Math.max(0, Math.min(1, (elapsed - t0) / noteDuration));
 				const stavesvg = container.querySelector<SVGElement>(
 					`svg[data-stave-${measureIndex}-x]`,
@@ -907,17 +953,18 @@ export default function FingerpickPage() {
 					const measureRight = staveSvgRect.left - containerRect.left + sx + sw;
 					targetX = x0 + (measureRight - x0) * frac;
 				}
-			} else if (nextEvent) {
-				// Interpolate between consecutive notes in the same measure.
+			} else if (nextSlotEvent) {
+				// Interpolate between consecutive slots in the same measure.
 				// When x1 < x0 the next note is on a different row; substitute the current
 				// measure's right edge as x1 so the cursor keeps drifting rightward.
 				const nextEl = container.querySelector<SVGElement>(
-					`[data-measure-index="${nextEvent.measureIndex}"][data-slot-index="${nextEvent.slotIndex}"]`,
+					`[data-measure-index="${nextSlotEvent.measureIndex}"][data-slot-index="${nextSlotEvent.slotIndex}"]`,
 				);
 				if (nextEl) {
 					const nRect = nextEl.getBoundingClientRect();
 					const x1 = nRect.left - containerRect.left + nRect.width / 2;
-					const frac = Math.max(0, Math.min(1, (elapsed - t0) / (nextEvent.time - t0)));
+					const denom = t1 - t0;
+					const frac = denom > 0 ? Math.max(0, Math.min(1, (elapsed - t0) / denom)) : 0;
 					if (x1 >= x0) {
 						targetX = x0 + (x1 - x0) * frac;
 					} else {

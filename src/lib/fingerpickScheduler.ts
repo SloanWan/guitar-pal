@@ -460,6 +460,484 @@ export function stealVoice(
 	voices.delete(stringIndex);
 }
 
+// ─── Slide (real pitch motion) ──────────────────────────────────────────────
+//
+// Every other technique modifies a NEW note. A slide does not: on a real guitar the
+// string is never re-plucked — one sounding note changes pitch. So a slide event does
+// NOT emit a new AudioBufferSourceNode; instead it ramps playbackRate on the voice that
+// is ALREADY sounding on that string (the origin note), and extends that voice's life to
+// cover the slid-into note. This is only feasible because letRing keeps notes ringing
+// long enough to still be alive when the slide arrives. When no live origin voice exists
+// (first note on the string, origin already voice-stolen/decayed, or interval too wide),
+// the slide falls back to an ordinary retriggered pluck.
+
+/** How the ramp duration is derived. */
+export type SlideDurationScaling = "fixed" | "interval-scaled";
+
+/**
+ * Where the ramp sits relative to the target note's beat.
+ *  - "finish-on-target" — the ramp ENDS on the beat: the note arrives on time and the
+ *    slide happens just before it, consuming the tail of the origin note (real playing).
+ *  - "start-on-target"  — the ramp STARTS on the beat and travels after it.
+ */
+export type SlideAnchor = "finish-on-target" | "start-on-target";
+
+export interface SlideParams {
+	/** Ramp duration (s) for "fixed" scaling. */
+	rampDurationS: number;
+	/** How the ramp duration scales. */
+	durationScaling: SlideDurationScaling;
+	/** For "interval-scaled": ramp duration = interval(semitones) × this. */
+	intervalScaleSecPerSemitone: number;
+	/** Where the ramp sits relative to the target beat. */
+	anchor: SlideAnchor;
+	/**
+	 * Interval (semitones) beyond which the slide falls back to a normal retriggered
+	 * note. Large intervals resample the buffer far from its recorded pitch (12 frets =
+	 * 2× rate) and sound artificial.
+	 */
+	maxIntervalSemitones: number;
+	/** Optional mid-ramp gain dip (0 = off, 0.3 = dip to 70% at the ramp midpoint). */
+	gainDip: number;
+}
+
+/**
+ * Production defaults, each with reasoning:
+ *  - rampDurationS 0.08 — fast enough to read as a connecting slide between two beats,
+ *    slow enough that the pitch motion is audible rather than a click.
+ *  - durationScaling "fixed" — predictable; a wide and a narrow slide take the same time.
+ *  - intervalScaleSecPerSemitone 0.02 — for "interval-scaled": a 2-fret slide = 0.04 s,
+ *    a 7-fret slide = 0.14 s, matching a real hand travelling further in more time.
+ *  - anchor "finish-on-target" — real playing: the target lands on the beat, the slide
+ *    leads into it. This consumes the tail of the origin note (audible in the lab).
+ *  - maxIntervalSemitones 12 — permissive by default so wide slides still bend and their
+ *    resampling artefact is audible for the listening decision; a tighter ceiling (≈5–7)
+ *    is the suggested production value once the artefact is judged unacceptable.
+ *  - gainDip 0 — off by default so production/most auditions are clean; the lab raises it.
+ */
+export const DEFAULT_SLIDE_PARAMS: SlideParams = {
+	rampDurationS: 0.08,
+	durationScaling: "fixed",
+	intervalScaleSecPerSemitone: 0.02,
+	anchor: "finish-on-target",
+	maxIntervalSemitones: 12,
+	gainDip: 0,
+};
+
+/** Floor for a computed ramp duration so a zero-interval slide still ramps briefly. */
+const MIN_SLIDE_RAMP_S = 0.005;
+
+export type SlideFallbackReason =
+	| "not-a-slide"
+	| "no-origin-voice"
+	| "origin-not-ringing"
+	| "interval-too-wide";
+
+/** Everything the engine needs to bend an already-sounding voice into the target note. */
+export interface SlidePlan {
+	/** Rate the ramp starts from — the origin voice's CURRENT logical rate (tracks chains). */
+	fromRate: number;
+	/** Rate the ramp reaches — the target pitch's playbackRate. */
+	targetRate: number;
+	/** Absolute time the ramp (and its rate anchor) begins. */
+	rampStartTime: number;
+	/** Absolute time of the ramp midpoint — used only for the optional gain dip. */
+	rampMidTime: number;
+	/** Absolute time the ramp reaches targetRate. */
+	rampEndTime: number;
+	/** New hard-stop for the origin source, extended to cover the slid-into note. */
+	newStopTime: number;
+	/** Time from which the re-armed gain decay runs (the target note's beat). */
+	decayFromTime: number;
+	/** Mid-ramp gain dip fraction (0 = none), copied from params for the engine. */
+	gainDip: number;
+}
+
+export type SlideResolution =
+	| { action: "handoff"; plan: SlidePlan }
+	| { action: "fallback"; reason: SlideFallbackReason };
+
+/** Minimal live-voice state a slide needs from the origin note. */
+export interface SlideOriginVoice {
+	/** Current logical playbackRate (NOT AudioParam.value, which is unreliable at schedule time). */
+	currentRate: number;
+	/** Current logical MIDI pitch of the origin (updated across chained slides). */
+	currentMidi: number;
+	/** Absolute time the origin source is scheduled to hard-stop. */
+	stopTime: number;
+}
+
+/**
+ * Decide whether a slide event can hand off to a live origin voice, and if so compute
+ * the full ramp/envelope geometry. Pure — no Web Audio side effects. `now` is the
+ * AudioContext time at schedule time; it clamps a "finish-on-target" ramp so it never
+ * starts in the past (which would make the exponential ramp behave oddly).
+ */
+export function resolveSlide(args: {
+	technique: Technique;
+	origin: SlideOriginVoice | undefined;
+	targetMidi: number;
+	targetRate: number;
+	targetDuration: number;
+	when: number;
+	now: number;
+	params: SlideParams;
+	sourceStopBuffer: number;
+}): SlideResolution {
+	const { technique, origin, targetMidi, targetRate, targetDuration, when, now, params, sourceStopBuffer } =
+		args;
+
+	if (technique !== "slide-up" && technique !== "slide-down") {
+		return { action: "fallback", reason: "not-a-slide" };
+	}
+	if (!origin) return { action: "fallback", reason: "no-origin-voice" };
+	// Origin source already hard-stopped (voice-stolen or decayed past its lifetime) by
+	// the time the slide arrives — nothing left to bend.
+	if (when >= origin.stopTime) return { action: "fallback", reason: "origin-not-ringing" };
+
+	const interval = Math.abs(targetMidi - origin.currentMidi);
+	if (interval > params.maxIntervalSemitones) {
+		return { action: "fallback", reason: "interval-too-wide" };
+	}
+
+	const rampDuration =
+		params.durationScaling === "interval-scaled"
+			? Math.max(interval * params.intervalScaleSecPerSemitone, MIN_SLIDE_RAMP_S)
+			: params.rampDurationS;
+
+	let rampStartTime: number;
+	let rampEndTime: number;
+	if (params.anchor === "finish-on-target") {
+		rampEndTime = when;
+		rampStartTime = Math.max(when - rampDuration, now);
+	} else {
+		rampStartTime = Math.max(when, now);
+		rampEndTime = rampStartTime + rampDuration;
+	}
+	// Guarantee a strictly positive ramp window for exponentialRampToValueAtTime.
+	if (rampEndTime <= rampStartTime) rampEndTime = rampStartTime + MIN_SLIDE_RAMP_S;
+	const rampMidTime = (rampStartTime + rampEndTime) / 2;
+
+	const newStopTime = Math.max(origin.stopTime, when + targetDuration + sourceStopBuffer);
+
+	return {
+		action: "handoff",
+		plan: {
+			fromRate: origin.currentRate,
+			targetRate,
+			rampStartTime,
+			rampMidTime,
+			rampEndTime,
+			newStopTime,
+			decayFromTime: when,
+			gainDip: params.gainDip,
+		},
+	};
+}
+
+/**
+ * Minimal Web Audio surface a slide handoff manipulates — the ALREADY-PLAYING origin
+ * voice. Both real nodes and test mocks satisfy this.
+ */
+export interface SlideVoiceHandle {
+	source: {
+		stop: (when?: number) => void;
+		playbackRate: {
+			cancelScheduledValues: (startTime: number) => void;
+			setValueAtTime: (value: number, startTime: number) => void;
+			exponentialRampToValueAtTime: (value: number, endTime: number) => void;
+		};
+	};
+	gainNode: {
+		gain: {
+			cancelScheduledValues: (startTime: number) => void;
+			setValueAtTime: (value: number, startTime: number) => void;
+			setTargetAtTime: (value: number, startTime: number, timeConstant: number) => void;
+			exponentialRampToValueAtTime: (value: number, endTime: number) => void;
+		};
+	};
+}
+
+/** Smallest positive gain used to anchor exponential ramps (which cannot reach zero). */
+const MIN_RAMP_GAIN = 1e-4;
+
+/**
+ * Bend an already-sounding voice into the slide's target: ramp its playbackRate and
+ * extend its gain envelope + hard-stop to cover the slid-into note. Creates NO new source.
+ *
+ * Uses exponentialRampToValueAtTime for the pitch ramp — pitch is logarithmic in
+ * playbackRate, so a LINEAR ramp would sound fast-then-slow and not read as a slide.
+ * Exponential ramps can neither cross nor reach zero; both playbackRate and gain values
+ * here are strictly positive, and the dipped/anchor gains are floored at MIN_RAMP_GAIN.
+ */
+export function applySlideToVoice(
+	voice: SlideVoiceHandle,
+	plan: SlidePlan,
+	opts: { gainAtRampStart: number; decayTc: number },
+): void {
+	const pr = voice.source.playbackRate;
+	pr.cancelScheduledValues(plan.rampStartTime);
+	pr.setValueAtTime(plan.fromRate, plan.rampStartTime);
+	pr.exponentialRampToValueAtTime(plan.targetRate, plan.rampEndTime);
+
+	const g = voice.gainNode.gain;
+	const start = Math.max(opts.gainAtRampStart, MIN_RAMP_GAIN);
+	g.cancelScheduledValues(plan.rampStartTime);
+	if (plan.gainDip > 0) {
+		// Dip mid-travel (a real slide loses energy) then recover to the sustain level.
+		g.setValueAtTime(start, plan.rampStartTime);
+		g.exponentialRampToValueAtTime(Math.max(start * (1 - plan.gainDip), MIN_RAMP_GAIN), plan.rampMidTime);
+		g.exponentialRampToValueAtTime(start, plan.rampEndTime);
+	} else {
+		// Hold the current level across the ramp so the note does not die on the origin's
+		// decay timetable before the target beat.
+		g.setValueAtTime(start, plan.rampStartTime);
+	}
+	// Re-arm the decay from the target beat so the slid-into note rings for its own duration.
+	g.setTargetAtTime(0, plan.decayFromTime, opts.decayTc);
+
+	voice.source.stop(plan.newStopTime);
+}
+
+// ─── Dependency-injected note scheduler ──────────────────────────────────────
+//
+// Extracted from useFingerpickAudioEngine.scheduleNote so the create-or-handoff decision
+// is unit-testable with a mock AudioContext (a slide that silently created no ramp — or
+// dropped the note entirely — must be caught by a test, not shipped). The engine wires
+// its refs/constants into `deps` and this function performs identical work for every
+// non-slide event; a pattern with no slides never enters the handoff branch.
+
+export type LegatoTreatment = "current" | "gain-only" | "dry";
+
+/** Gain ladder + letRing lifetime, injected so tests control every value. */
+export interface NoteGains {
+	normal: number;
+	technique: number;
+	tapping: number;
+	ghost: number;
+	accentMultiplier: number;
+	letRingLifetimeTaus: number;
+}
+
+/** Envelope shape scheduleFingerpickNote reads (structurally EnvelopeParams). */
+export interface NoteEnvelope {
+	decayTcRatio: number;
+	minDecayTc: number;
+	voiceStealFadeTau: number;
+	letRingDecayTc: number;
+	sourceStopBuffer: number;
+}
+
+/** Resolves the decoded buffer + playbackRate for a note; returns null if unavailable. */
+export type NoteDataResolver = (
+	muted: boolean,
+	midi: number,
+) => { buffer: AudioBuffer; playbackRate: number } | null;
+
+/** A live per-string voice, with the extra logical state a slide handoff needs. */
+export interface SlideActiveVoice extends VoiceHandle {
+	gainNode: GainNode;
+	source: AudioBufferSourceNode;
+	/** The event that created this voice — identity for the steal observer + cleanup. */
+	event: ScheduleEvent;
+	/** Absolute time of this voice's hard source.stop(). */
+	stopTime: number;
+	/** Current logical playbackRate (tracks slide ramps across a chain). */
+	currentRate: number;
+	/** Current logical MIDI pitch (updated on each handoff for chained-slide intervals). */
+	currentMidi: number;
+	/** Attack gain, onset time and decay τ — used to reconstruct the mid-ramp gain for a dip. */
+	attackVolume: number;
+	attackTime: number;
+	decayTc: number;
+}
+
+export interface FingerpickNoteSchedulerDeps {
+	ctx: AudioContext;
+	target: AudioNode;
+	voices: Map<number, SlideActiveVoice>;
+	allSources: Set<AudioBufferSourceNode>;
+	resolveNoteData: NoteDataResolver;
+	gains: NoteGains;
+	envelope: NoteEnvelope;
+	forceLetRing: boolean;
+	legatoTreatment: LegatoTreatment;
+	slideParams: SlideParams;
+	/** Read-only voice-steal observer; invoked only when a still-ringing voice is stolen. */
+	onVoiceSteal?: (outgoing: SlideActiveVoice, incoming: ScheduleEvent) => void;
+}
+
+/**
+ * Schedule one note. A slide with a live origin voice bends that voice in place (no new
+ * source); every other event — including a slide that falls back — creates a source
+ * exactly as the pre-slide engine did.
+ */
+export function scheduleFingerpickNote(
+	deps: FingerpickNoteSchedulerDeps,
+	event: ScheduleEvent,
+	when: number,
+): void {
+	const {
+		ctx,
+		target,
+		voices,
+		allSources,
+		resolveNoteData,
+		gains,
+		envelope: env,
+		forceLetRing,
+		legatoTreatment,
+		slideParams,
+	} = deps;
+
+	const noteData = resolveNoteData(event.muted, event.midi);
+	if (!noteData) return;
+
+	const existing = voices.get(event.stringIndex);
+
+	// ── Slide voice handoff ──────────────────────────────────────────────────
+	// A handoff keeps playing the ORIGIN's buffer and only ramps its playbackRate, so the
+	// ramp target must be the origin buffer's rate transposed by the pitch interval — NOT
+	// the target note's own resolved playbackRate. With a multi-sampled instrument the
+	// target note maps to a DIFFERENT zone played near rate 1.0, so `noteData.playbackRate`
+	// would be ≈ the origin's rate and the ramp would move no pitch at all (silent slide).
+	// Deriving it from origin.currentRate × 2^(Δsemitones/12) bends the sounding buffer by
+	// the correct interval regardless of which zone the target would have used.
+	const rampTargetRate = existing
+		? existing.currentRate * Math.pow(2, (event.midi - existing.currentMidi) / 12)
+		: noteData.playbackRate;
+	const slide = resolveSlide({
+		technique: event.technique,
+		origin: existing
+			? { currentRate: existing.currentRate, currentMidi: existing.currentMidi, stopTime: existing.stopTime }
+			: undefined,
+		targetMidi: event.midi,
+		targetRate: rampTargetRate,
+		targetDuration: event.duration,
+		when,
+		now: ctx.currentTime,
+		params: slideParams,
+		sourceStopBuffer: env.sourceStopBuffer,
+	});
+
+	if (slide.action === "handoff" && existing) {
+		const letRing = event.letRing === true || forceLetRing;
+		const noteDuration = event.staccato ? event.duration * 0.2 : event.duration;
+		const decayTc = letRing
+			? env.letRingDecayTc
+			: Math.max(noteDuration * env.decayTcRatio, env.minDecayTc);
+		// Reconstruct the origin's gain at the ramp start from its decay envelope so a dip
+		// (and the sustain hold) start from the true current level.
+		const gainAtRampStart =
+			existing.attackVolume *
+			Math.exp(-Math.max(slide.plan.rampStartTime - existing.attackTime, 0) / existing.decayTc);
+
+		applySlideToVoice(existing, slide.plan, { gainAtRampStart, decayTc });
+
+		// Keep the voice registered under the same string so a later note steals it
+		// normally; update its logical state so a chained slide anchors from the new pitch.
+		existing.currentRate = slide.plan.targetRate;
+		existing.currentMidi = event.midi;
+		existing.stopTime = slide.plan.newStopTime;
+		existing.attackVolume = gainAtRampStart;
+		existing.attackTime = slide.plan.decayFromTime;
+		existing.decayTc = decayTc;
+		return;
+	}
+
+	// ── Voice-steal instrumentation (read-only; no-op without an observer) ─────
+	if (existing && deps.onVoiceSteal && when < existing.stopTime) {
+		deps.onVoiceSteal(existing, event);
+	}
+
+	// Steal (fade + stop) any ringing voice on this string.
+	stealVoice(voices, event.stringIndex, when, env.voiceStealFadeTau);
+
+	// ── Gain ladder (+ legato A/B for hammer-on / pull-off) ───────────────────
+	const isHammerOrPull = event.technique === "hammer-on" || event.technique === "pull-off";
+	let volume: number;
+	if (event.ghostNote) {
+		volume = gains.ghost;
+	} else if (isHammerOrPull) {
+		// "dry" plays a hammer/pull identically to a plucked note; "current" and
+		// "gain-only" keep the reduced technique gain (they differ only in the filter).
+		volume = legatoTreatment === "dry" ? gains.normal : gains.technique;
+	} else if (event.technique === "trill") {
+		volume = gains.technique;
+	} else if (event.technique === "tapping") {
+		volume = gains.tapping;
+	} else {
+		volume = gains.normal;
+	}
+	if (event.accent) volume *= gains.accentMultiplier;
+	if (event.rollGain !== undefined) volume *= event.rollGain;
+
+	// Staccato shortens the sounding duration to 20% of the slot duration.
+	const noteDuration = event.staccato ? event.duration * 0.2 : event.duration;
+
+	const source = ctx.createBufferSource();
+	source.buffer = noteData.buffer;
+
+	const effectiveDuration = noteDuration;
+	source.playbackRate.value = noteData.playbackRate;
+
+	const letRing = event.letRing === true || forceLetRing;
+
+	const gainNode = ctx.createGain();
+	gainNode.gain.setValueAtTime(volume, when);
+	const decayTc = letRing
+		? env.letRingDecayTc
+		: Math.max(effectiveDuration * env.decayTcRatio, env.minDecayTc);
+	gainNode.gain.setTargetAtTime(0, when, decayTc);
+
+	// Legato lowpass masks the sample's pick transient. Trill keeps it always; hammer/pull
+	// get it only in "current" treatment (the A/B: "gain-only"/"dry" drop the filter).
+	const applyFilter = event.technique === "trill" || (isHammerOrPull && legatoTreatment === "current");
+	if (applyFilter) {
+		const filter = ctx.createBiquadFilter();
+		filter.type = "lowpass";
+		filter.frequency.value = 2000;
+		filter.Q.value = 0.7;
+		source.connect(filter).connect(gainNode).connect(target);
+	} else {
+		source.connect(gainNode).connect(target);
+	}
+	source.start(when);
+	const stopTime = letRing
+		? when + env.letRingDecayTc * gains.letRingLifetimeTaus + env.sourceStopBuffer
+		: when + effectiveDuration + env.sourceStopBuffer;
+	source.stop(stopTime);
+
+	allSources.add(source);
+	// Grace notes (very short duration) are not registered so the next same-string note
+	// does not steal and immediately silence them. letRing notes are always registered —
+	// voice stealing is their only terminator (and a slide's only origin).
+	if (event.duration >= 0.1 || letRing) {
+		const voice: SlideActiveVoice = {
+			gainNode,
+			source,
+			event,
+			stopTime,
+			currentRate: noteData.playbackRate,
+			currentMidi: event.midi,
+			attackVolume: volume,
+			attackTime: when,
+			decayTc,
+		};
+		voices.set(event.stringIndex, voice);
+		source.onended = () => {
+			allSources.delete(source);
+			if (voices.get(event.stringIndex) === voice) {
+				voices.delete(event.stringIndex);
+			}
+		};
+	} else {
+		source.onended = () => {
+			allSources.delete(source);
+		};
+	}
+}
+
 // ─── Engine shutdown ──────────────────────────────────────────────────────────
 
 /**

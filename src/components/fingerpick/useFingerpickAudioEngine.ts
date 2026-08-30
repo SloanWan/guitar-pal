@@ -9,10 +9,16 @@ import {
 	computeLoopOffset,
 	getProgressAtTime,
 	findSlotStartTime,
-	stealVoice,
+	scheduleFingerpickNote,
 	_shutdownEngine,
+	VOICE_STEAL_FADE_TAU,
+	DEFAULT_ROLL_PARAMS,
+	DEFAULT_SLIDE_PARAMS,
 	type ScheduleEvent,
-	type VoiceHandle,
+	type RollParams,
+	type SlideParams,
+	type SlideActiveVoice,
+	type LegatoTreatment,
 } from "@/lib/fingerpickScheduler";
 import {
 	preloadFingerpickPresets,
@@ -46,6 +52,48 @@ const MIN_DECAY_TC_S = 0.03;
 /** Source stop margin past note end — lets the envelope tail off cleanly. */
 const SOURCE_STOP_BUFFER_S = 0.05;
 
+/**
+ * Default gain-decay time constant (s) for a letRing note. Unlike a normal note
+ * (whose τ is derived from the slot duration), a letRing note rings at a fixed,
+ * long τ and is terminated only by voice stealing on its string.
+ */
+const LET_RING_DECAY_TC_S = 1.5;
+
+/**
+ * How many decay time-constants a letRing source is kept alive before its hard
+ * source.stop(). After 4τ the exponential envelope is at ~1.8% of the attack
+ * gain — inaudible — so this bounds dangling sources without an audible cut.
+ * A letRing note that is voice-stolen earlier is stopped by stealVoice instead.
+ */
+const LET_RING_LIFETIME_TAUS = 4;
+
+// ─── Envelope parameters ────────────────────────────────────────────────────
+// Tunable per-note envelope constants. Defaults equal the hardcoded production
+// values above, so an engine consumer that never calls setEnvelopeParams() gets
+// byte-for-byte the prior behaviour. Read via envelopeRef inside scheduleNote
+// (never during React render), matching the ref-only scheduler-state convention.
+
+export interface EnvelopeParams {
+	/** Fraction of slot duration used as a normal note's decay time constant. */
+	decayTcRatio: number;
+	/** Floor for a normal note's decay time constant (s). */
+	minDecayTc: number;
+	/** Exponential fade τ (s) applied to the outgoing voice when a string is re-struck. */
+	voiceStealFadeTau: number;
+	/** Fixed decay time constant (s) used instead of the duration-derived τ when letRing is set. */
+	letRingDecayTc: number;
+	/** Margin (s) added past a normal note's end before its hard source.stop(). */
+	sourceStopBuffer: number;
+}
+
+export const DEFAULT_ENVELOPE: EnvelopeParams = {
+	decayTcRatio: DECAY_TC_RATIO,
+	minDecayTc: MIN_DECAY_TC_S,
+	voiceStealFadeTau: VOICE_STEAL_FADE_TAU,
+	letRingDecayTc: LET_RING_DECAY_TC_S,
+	sourceStopBuffer: SOURCE_STOP_BUFFER_S,
+};
+
 
 const METRONOME_TICK_DURATION_S = 0.05;
 const METRONOME_ACCENT_FREQ = 1200;
@@ -60,6 +108,12 @@ export interface PlayOptions {
 	loop?: boolean;
 	/** Gap between loop passes, in seconds (0 = seamless). */
 	loopGapSeconds?: number;
+	/**
+	 * Playback mode: when true, every played note rings at the long letRing τ
+	 * regardless of its authored `letRing` flag (terminated only by voice
+	 * stealing). Lets a consumer force full sustain without mutating pattern data.
+	 */
+	forceLetRing?: boolean;
 }
 
 export interface FingerpickPlaybackProgress {
@@ -73,9 +127,29 @@ export interface FingerpickPlaybackProgress {
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
-interface ActiveVoice extends VoiceHandle {
-	gainNode: GainNode;
-	source: AudioBufferSourceNode;
+/**
+ * A live per-string voice. Defined canonically in the scheduler (SlideActiveVoice) so the
+ * extracted note scheduler and the hook share one shape; aliased here for local readability.
+ */
+type ActiveVoice = SlideActiveVoice;
+
+/**
+ * Read-only notification emitted when a still-ringing voice is terminated by a
+ * new note on the same string (voice stealing). Purely observational — surfaced
+ * for dev instrumentation (the decay lab) to visualise the decay-τ ↔ voice-steal
+ * interaction. Registering an observer never influences scheduling or audio.
+ */
+export interface VoiceStealEvent {
+	/** Measure index of the note that was cut short. */
+	stolenMeasureIndex: number;
+	/** Slot index of the note that was cut short. */
+	stolenSlotIndex: number;
+	/** String (0-5) on which the steal occurred. */
+	stringIndex: number;
+	/** Measure index of the incoming note that caused the steal. */
+	byMeasureIndex: number;
+	/** Slot index of the incoming note that caused the steal. */
+	bySlotIndex: number;
 }
 
 // ─── Beat onset helper ────────────────────────────────────────────────────────
@@ -137,6 +211,20 @@ export function useFingerpickAudioEngine() {
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
 	const [accentEnabled, setAccentEnabled] = useState(true);
 	const [noteGain, setNoteGain] = useState(1.0);
+	const [envelope, setEnvelope] = useState<EnvelopeParams>(DEFAULT_ENVELOPE);
+	const envelopeRef = useRef<EnvelopeParams>(DEFAULT_ENVELOPE);
+	// Roll (arpeggiated chord) parameters. Read via rollParamsRef when (re)computing the
+	// event stream (play / applyBpmChange); never read during React render.
+	const [rollParams, setRollParams] = useState<RollParams>(DEFAULT_ROLL_PARAMS);
+	const rollParamsRef = useRef<RollParams>(DEFAULT_ROLL_PARAMS);
+	// Slide (real pitch-motion) parameters. Read via slideParamsRef inside scheduleNote —
+	// a change takes effect on the next scheduled note (next loop pass / next play).
+	const [slideParams, setSlideParams] = useState<SlideParams>(DEFAULT_SLIDE_PARAMS);
+	const slideParamsRef = useRef<SlideParams>(DEFAULT_SLIDE_PARAMS);
+	// Hammer-on / pull-off gain+filter treatment (A/B). "current" = production behaviour.
+	// Read via legatoTreatmentRef inside scheduleNote; takes effect on the next note.
+	const [legatoTreatment, setLegatoTreatment] = useState<LegatoTreatment>("current");
+	const legatoTreatmentRef = useRef<LegatoTreatment>("current");
 
 	// AudioContext and routing
 	const ctxRef = useRef<AudioContext | null>(null);
@@ -146,6 +234,10 @@ export function useFingerpickAudioEngine() {
 
 	// Per-string voice map — keyed by string index 0-5
 	const perStringVoicesRef = useRef<Map<number, ActiveVoice>>(new Map());
+
+	// Optional read-only observer, notified synchronously (at schedule time) each
+	// time a still-ringing voice is stolen. Null unless a dev consumer registers one.
+	const voiceStealObserverRef = useRef<((steal: VoiceStealEvent) => void) | null>(null);
 
 	// Every AudioBufferSourceNode created in the current playback pass.
 	// Superset of perStringVoicesRef's sources; contains intermediate (voice-stolen)
@@ -165,6 +257,8 @@ export function useFingerpickAudioEngine() {
 	const patternDurationRef = useRef(0);
 	const loopRef = useRef(false);
 	const loopGapRef = useRef(0);
+	/** Playback mode: force every note to ring at the long letRing τ (read in scheduleNote). */
+	const forceLetRingRef = useRef(false);
 	const scheduleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -201,6 +295,18 @@ export function useFingerpickAudioEngine() {
 	useEffect(() => {
 		noteGainRef.current = noteGain;
 	}, [noteGain]);
+	useEffect(() => {
+		envelopeRef.current = envelope;
+	}, [envelope]);
+	useEffect(() => {
+		rollParamsRef.current = rollParams;
+	}, [rollParams]);
+	useEffect(() => {
+		slideParamsRef.current = slideParams;
+	}, [slideParams]);
+	useEffect(() => {
+		legatoTreatmentRef.current = legatoTreatment;
+	}, [legatoTreatment]);
 
 	// ─── AudioContext lifecycle ──────────────────────────────────────────────
 
@@ -233,88 +339,60 @@ export function useFingerpickAudioEngine() {
 
 	// ─── Note scheduling ─────────────────────────────────────────────────────
 
+	// Thin adapter over the extracted, dependency-injected scheduleFingerpickNote. All
+	// scheduling/slide/gain logic lives in the scheduler (unit-testable with a mock
+	// AudioContext); the hook only supplies its refs and constants. A slide with a live
+	// origin voice bends that voice in place (no new source); every other event behaves
+	// exactly as before.
 	function scheduleNote(
 		ctx: AudioContext,
 		target: AudioNode,
 		event: ScheduleEvent,
 		when: number,
 	): void {
-		const soundType: FingerpickSoundType = event.muted ? "muted" : "pluck";
-		let noteData: { buffer: AudioBuffer; playbackRate: number };
-		try {
-			noteData = getFingerpickNoteData(soundType, event.midi);
-		} catch {
-			return;
-		}
-
-		// Steal (fade + stop) any ringing voice on this string.
-		stealVoice(perStringVoicesRef.current, event.stringIndex, when);
-
-		// Gain: ghost overrides everything; otherwise technique sets base, accent boosts on top.
-		let volume: number;
-		if (event.ghostNote) {
-			volume = GHOST_GAIN;
-		} else if (
-			event.technique === "hammer-on" ||
-			event.technique === "pull-off" ||
-			event.technique === "trill"
-		) {
-			volume = TECHNIQUE_GAIN;
-		} else if (event.technique === "tapping") {
-			volume = TAPPING_GAIN;
-		} else {
-			volume = NORMAL_GAIN;
-		}
-		if (event.accent) volume *= ACCENT_MULTIPLIER;
-
-		// Staccato shortens the sounding duration to 20% of the slot duration.
-		const noteDuration = event.staccato ? event.duration * 0.2 : event.duration;
-
-		const source = ctx.createBufferSource();
-		source.buffer = noteData.buffer;
-
-		const effectiveDuration = noteDuration;
-		source.playbackRate.value = noteData.playbackRate;
-
-		const gainNode = ctx.createGain();
-		gainNode.gain.setValueAtTime(volume, when);
-		const decayTc = Math.max(effectiveDuration * DECAY_TC_RATIO, MIN_DECAY_TC_S);
-		gainNode.gain.setTargetAtTime(0, when, decayTc);
-
-		const isLegato =
-			event.technique === "hammer-on" ||
-			event.technique === "pull-off" ||
-			event.technique === "trill";
-
-		if (isLegato) {
-			const filter = ctx.createBiquadFilter();
-			filter.type = "lowpass";
-			filter.frequency.value = 2000;
-			filter.Q.value = 0.7;
-			source.connect(filter).connect(gainNode).connect(target);
-		} else {
-			source.connect(gainNode).connect(target);
-		}
-		source.start(when);
-		source.stop(when + effectiveDuration + SOURCE_STOP_BUFFER_S);
-
-		allSourcesRef.current.add(source);
-		// Grace notes (very short duration) are not registered in perStringVoicesRef so the
-		// following note on the same string does not steal and immediately silence them.
-		if (event.duration >= 0.1) {
-			const voice: ActiveVoice = { gainNode, source };
-			perStringVoicesRef.current.set(event.stringIndex, voice);
-			source.onended = () => {
-				allSourcesRef.current.delete(source);
-				if (perStringVoicesRef.current.get(event.stringIndex) === voice) {
-					perStringVoicesRef.current.delete(event.stringIndex);
-				}
-			};
-		} else {
-			source.onended = () => {
-				allSourcesRef.current.delete(source);
-			};
-		}
+		scheduleFingerpickNote(
+			{
+				ctx,
+				target,
+				voices: perStringVoicesRef.current,
+				allSources: allSourcesRef.current,
+				resolveNoteData: (muted, midi) => {
+					const soundType: FingerpickSoundType = muted ? "muted" : "pluck";
+					try {
+						return getFingerpickNoteData(soundType, midi);
+					} catch {
+						return null;
+					}
+				},
+				gains: {
+					normal: NORMAL_GAIN,
+					technique: TECHNIQUE_GAIN,
+					tapping: TAPPING_GAIN,
+					ghost: GHOST_GAIN,
+					accentMultiplier: ACCENT_MULTIPLIER,
+					letRingLifetimeTaus: LET_RING_LIFETIME_TAUS,
+				},
+				envelope: envelopeRef.current,
+				forceLetRing: forceLetRingRef.current,
+				legatoTreatment: legatoTreatmentRef.current,
+				slideParams: slideParamsRef.current,
+				// Read-only voice-steal instrumentation — no-op unless a dev consumer has
+				// registered an observer. Never fired on a slide handoff (no steal occurs).
+				onVoiceSteal: (outgoing, incoming) => {
+					const observer = voiceStealObserverRef.current;
+					if (!observer) return;
+					observer({
+						stolenMeasureIndex: outgoing.event.measureIndex,
+						stolenSlotIndex: outgoing.event.slotIndex,
+						stringIndex: incoming.stringIndex,
+						byMeasureIndex: incoming.measureIndex,
+						bySlotIndex: incoming.slotIndex,
+					});
+				},
+			},
+			event,
+			when,
+		);
 	}
 
 	// ─── Metronome scheduling ────────────────────────────────────────────────
@@ -493,10 +571,11 @@ export function useFingerpickAudioEngine() {
 
 		const bpm = pattern.bpm;
 		patternRef.current = pattern;
-		eventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm);
+		eventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm, rollParamsRef.current);
 		patternDurationRef.current = getTotalPatternDuration(pattern, bpm);
 		loopRef.current = options.loop ?? false;
 		loopGapRef.current = options.loopGapSeconds ?? 0;
+		forceLetRingRef.current = options.forceLetRing ?? false;
 		timeSignatureRef.current = pattern.timeSignature;
 		beatOnsetsRef.current = computeBeatOnsets(pattern, bpm);
 		secondsPerBeatRef.current = 60 / bpm;
@@ -710,7 +789,7 @@ export function useFingerpickAudioEngine() {
 		const pattern = patternRef.current;
 		if (!pattern) return;
 
-		const newEvents = fingerpickPatternToScheduleEvents(pattern, newBpm);
+		const newEvents = fingerpickPatternToScheduleEvents(pattern, newBpm, rollParamsRef.current);
 		const newPatternDuration = getTotalPatternDuration(pattern, newBpm);
 		const newBeatOnsets = computeBeatOnsets(pattern, newBpm);
 		secondsPerBeatRef.current = 60 / newBpm;
@@ -849,6 +928,69 @@ export function useFingerpickAudioEngine() {
 		}
 	}
 
+	/**
+	 * Merge tunable envelope parameters. Read via envelopeRef inside scheduleNote,
+	 * so a change takes effect on every note scheduled AFTER it — i.e. the next loop
+	 * pass (looping) or the next play() call (play-once). Sources already handed to
+	 * the Web Audio scheduler for the current pass keep their baked-in envelopes;
+	 * Web Audio has no way to retroactively reshape a scheduled gain ramp.
+	 */
+	function setEnvelopeParams(partial: Partial<EnvelopeParams>): void {
+		setEnvelope((prev) => ({ ...prev, ...partial }));
+	}
+
+	/** Restore all envelope parameters to their production defaults. */
+	function resetEnvelopeParams(): void {
+		setEnvelope(DEFAULT_ENVELOPE);
+	}
+
+	/**
+	 * Merge tunable roll parameters. Read via rollParamsRef when the event stream is
+	 * (re)built, so a change takes effect on the next play() / applyBpmChange() call —
+	 * a consumer that wants an immediate change while playing should restart playback.
+	 */
+	function setRollParamsPartial(partial: Partial<RollParams>): void {
+		setRollParams((prev) => ({ ...prev, ...partial }));
+	}
+
+	/** Restore all roll parameters to their production defaults. */
+	function resetRollParams(): void {
+		setRollParams(DEFAULT_ROLL_PARAMS);
+	}
+
+	/**
+	 * Merge tunable slide parameters. Read via slideParamsRef inside scheduleNote, so a
+	 * change takes effect on the next scheduled note — the next loop pass (looping) or the
+	 * next play() call (play-once). A consumer wanting an immediate change while looping can
+	 * call applyBpmChange(currentBpm) to rebuild the running loop seamlessly.
+	 */
+	function setSlideParamsPartial(partial: Partial<SlideParams>): void {
+		setSlideParams((prev) => ({ ...prev, ...partial }));
+	}
+
+	/** Restore all slide parameters to their production defaults. */
+	function resetSlideParams(): void {
+		setSlideParams(DEFAULT_SLIDE_PARAMS);
+	}
+
+	/**
+	 * Set the hammer-on / pull-off treatment (A/B). Read via legatoTreatmentRef inside
+	 * scheduleNote; takes effect on the next scheduled note. Default "current" leaves
+	 * production behaviour unchanged. Does not affect trill or tapping.
+	 */
+	function handleSetLegatoTreatment(treatment: LegatoTreatment): void {
+		legatoTreatmentRef.current = treatment;
+		setLegatoTreatment(treatment);
+	}
+
+	/**
+	 * Register (or clear, with null) a read-only observer notified on each voice
+	 * steal. Dev-only instrumentation — the observer never influences scheduling.
+	 */
+	function setVoiceStealObserver(observer: ((steal: VoiceStealEvent) => void) | null): void {
+		voiceStealObserverRef.current = observer;
+	}
+
 	/** Update note volume — takes effect immediately via the master gain node. */
 	function handleSetNoteGain(value: number): void {
 		noteGainRef.current = value;
@@ -904,5 +1046,17 @@ export function useFingerpickAudioEngine() {
 		setAccentEnabled,
 		noteGain,
 		setNoteGain: handleSetNoteGain,
+		envelope,
+		setEnvelopeParams,
+		resetEnvelopeParams,
+		rollParams,
+		setRollParams: setRollParamsPartial,
+		resetRollParams,
+		slideParams,
+		setSlideParams: setSlideParamsPartial,
+		resetSlideParams,
+		legatoTreatment,
+		setLegatoTreatment: handleSetLegatoTreatment,
+		setVoiceStealObserver,
 	};
 }

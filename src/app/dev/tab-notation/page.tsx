@@ -1,6 +1,16 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
+import {
+	Renderer,
+	TabStave,
+	TabNote,
+	Voice,
+	Formatter,
+	Stroke,
+	Barline,
+	type TabNotePosition,
+} from "vexflow";
 
 import TabStaveRow, {
 	computeMeasureMinWidth,
@@ -679,6 +689,210 @@ function computeGroupWidths(measures: Measure[], containerWidth: number): number
 	return minWidths.map((w) => w * scale);
 }
 
+// ── Stroke (strum/arpeggiate arrow) verification ───────────────────────────────
+// VERIFICATION ONLY. Strokes cannot route through fingerpickToVexFlow.ts (read-only
+// this round), so this demo renders VexFlow TabNotes with Stroke modifiers directly,
+// isolated to this dev page. It exists to reveal what VexFlow 5's Stroke class draws
+// on a TabNote — NOT to map Stroke.Type to guitar strum direction (that decision is
+// made from the rendered output, not inferred from the constant names).
+
+const STROKE_TYPES: { name: string; value: number }[] = [
+	{ name: "BRUSH_DOWN", value: Stroke.Type.BRUSH_DOWN },
+	{ name: "BRUSH_UP", value: Stroke.Type.BRUSH_UP },
+	{ name: "ROLL_DOWN", value: Stroke.Type.ROLL_DOWN },
+	{ name: "ROLL_UP", value: Stroke.Type.ROLL_UP },
+	{ name: "RASGUEADO_DOWN", value: Stroke.Type.RASGUEADO_DOWN },
+	{ name: "RASGUEADO_UP", value: Stroke.Type.RASGUEADO_UP },
+	{ name: "ARPEGGIO_DIRECTIONLESS", value: Stroke.Type.ARPEGGIO_DIRECTIONLESS },
+];
+
+// Three note shapes so the stroke span behaviour is visible. `str` is 1-indexed
+// (1 = high e). The gapped chord (strings 1, 2, 5 active; 3 and 4 empty) is the
+// key case: does the stroke span only its own positions, or the full range
+// including the gap?
+const STROKE_SHAPES: { label: string; positions: TabNotePosition[] }[] = [
+	{ label: "single", positions: [{ str: 1, fret: 5 }] },
+	{
+		label: "gapped (1,2,5)",
+		positions: [
+			{ str: 1, fret: 5 },
+			{ str: 2, fret: 7 },
+			{ str: 5, fret: 3 },
+		],
+	},
+	{
+		label: "six-string",
+		positions: [
+			{ str: 1, fret: 3 },
+			{ str: 2, fret: 5 },
+			{ str: 3, fret: 5 },
+			{ str: 4, fret: 5 },
+			{ str: 5, fret: 3 },
+			{ str: 6, fret: 3 },
+		],
+	},
+];
+
+const STROKE_STAVE_HEIGHT = 140;
+const STROKE_STAVE_WIDTH = 360;
+
+/**
+ * Renders one TabStave containing the three STROKE_SHAPES, each carrying the given
+ * Stroke.Type. Each row isolates a single stroke type in its own Renderer so that a
+ * throw or empty render in one type does not tear down the others; failures are
+ * caught and surfaced as text.
+ */
+function StrokeDemoRow({ typeValue }: { typeValue: number }) {
+	const containerRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		const div = containerRef.current;
+		if (!div) return;
+		div.innerHTML = "";
+
+		try {
+			const renderer = new Renderer(div, Renderer.Backends.SVG);
+			renderer.resize(STROKE_STAVE_WIDTH, STROKE_STAVE_HEIGHT);
+			const ctx = renderer.getContext();
+			ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
+
+			const stave = new TabStave(10, 10, STROKE_STAVE_WIDTH - 20);
+			stave.addTabGlyph();
+			stave.setBegBarType(Barline.type.NONE);
+			stave.setContext(ctx).draw();
+
+			const notes = STROKE_SHAPES.map((shape) => {
+				const tn = new TabNote({ positions: shape.positions, duration: "q" }, true);
+				tn.addStroke(0, new Stroke(typeValue));
+				return tn;
+			});
+
+			const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
+			voice.addTickables(notes);
+			const noteWidth = stave.getNoteEndX() - stave.getNoteStartX() - 10;
+			new Formatter().joinVoices([voice]).format([voice], noteWidth);
+			voice.draw(ctx, stave);
+
+			// Theme the emitted SVG for readability on the dev page.
+			const svgEl = div.querySelector("svg");
+			if (svgEl) {
+				svgEl.querySelectorAll<SVGPathElement>("g.vf-stave > path").forEach((el) =>
+					el.setAttribute("stroke", "var(--ink-dim, #64748b)"),
+				);
+				svgEl
+					.querySelectorAll<SVGTextElement>("g.vf-tabnote text")
+					.forEach((el) => el.setAttribute("fill", "var(--ink, #0f172a)"));
+			}
+		} catch (e) {
+			// Surface a throw as text without a setState-in-effect (which would
+			// trip the cascading-render lint) — write it straight into the container.
+			const msg = e instanceof Error ? e.message : String(e);
+			const p = document.createElement("p");
+			p.className = "text-xs text-red-600";
+			p.textContent = `⚠ threw: ${msg}`;
+			div.appendChild(p);
+		}
+	}, [typeValue]);
+
+	return <div ref={containerRef} className="font-mono" />;
+}
+
+// DIAGNOSTIC CONTROL — a quarter-note chord with NO stroke, built the same way as a
+// StrokeDemoRow but skipping addStroke. If its stem still renders ABOVE the tab row,
+// the "stems above" behaviour is VexFlow's default TabNote stem direction (Stem.UP)
+// on unbeamed notes — nothing to do with Stroke. Like StrokeDemoRow, it makes no
+// Beam.applyAndGetBeams call; a quarter is unbeamable, so a beam call would not touch
+// it either way.
+function StrokeControlRow() {
+	const containerRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		const div = containerRef.current;
+		if (!div) return;
+		div.innerHTML = "";
+
+		const renderer = new Renderer(div, Renderer.Backends.SVG);
+		renderer.resize(STROKE_STAVE_WIDTH, STROKE_STAVE_HEIGHT);
+		const ctx = renderer.getContext();
+		ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
+
+		const stave = new TabStave(10, 10, STROKE_STAVE_WIDTH - 20);
+		stave.addTabGlyph();
+		stave.setBegBarType(Barline.type.NONE);
+		stave.setContext(ctx).draw();
+
+		const note = new TabNote(
+			{
+				positions: [
+					{ str: 1, fret: 3 },
+					{ str: 2, fret: 5 },
+					{ str: 3, fret: 5 },
+				],
+				duration: "q",
+			},
+			true,
+		);
+		const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
+		voice.addTickables([note]);
+		const noteWidth = stave.getNoteEndX() - stave.getNoteStartX() - 10;
+		new Formatter().joinVoices([voice]).format([voice], noteWidth);
+		voice.draw(ctx, stave);
+
+		const svgEl = div.querySelector("svg");
+		if (svgEl) {
+			svgEl.querySelectorAll<SVGPathElement>("g.vf-stave > path").forEach((el) =>
+				el.setAttribute("stroke", "var(--ink-dim, #64748b)"),
+			);
+			svgEl
+				.querySelectorAll<SVGTextElement>("g.vf-tabnote text")
+				.forEach((el) => el.setAttribute("fill", "var(--ink, #0f172a)"));
+		}
+	}, []);
+
+	return <div ref={containerRef} className="font-mono" />;
+}
+
+function StrokeVerificationSection({ lang }: { lang: "en" | "zh" }) {
+	return (
+		<section className="mb-8">
+			<h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+				{lang === "en"
+					? "Stroke (strum / arpeggiate arrows) — VexFlow API verification"
+					: "Stroke（扫弦 / 琶音箭头）— VexFlow API 验证"}
+			</h3>
+			<p className="text-xs text-slate-500 mb-3" style={{ color: "var(--ink-dim, #64748b)" }}>
+				{lang === "en"
+					? "VexFlow 5.0.0 · import { Stroke } from \"vexflow\" · note.addStroke(index, stroke) · new Stroke(type). Each row is one Stroke.Type applied to three shapes: single note, gapped chord (strings 1,2,5 — strings 3,4 empty), and a full six-string chord. Verification only — no data model, editor, or audio changes."
+					: "VexFlow 5.0.0 · import { Stroke } from \"vexflow\" · note.addStroke(index, stroke) · new Stroke(type)。每行是一种 Stroke.Type，应用于三种形状：单音、带间隙和弦（1、2、5 弦，3、4 弦空）、完整六弦和弦。仅验证——不改数据模型、编辑器或音频。"}
+			</p>
+			<div className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 items-center">
+				<div className="text-[10px] uppercase tracking-wider text-slate-400">Stroke.Type</div>
+				<div className="text-[10px] text-slate-400">single · gapped (1,2,5) · six-string</div>
+				<div className="contents">
+					<div className="text-xs font-medium" style={{ color: "var(--ink, #0f172a)" }}>
+						(control) no stroke
+						<span className="text-slate-400"> — stem check</span>
+					</div>
+					<div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+						<StrokeControlRow />
+					</div>
+				</div>
+				{STROKE_TYPES.map((t) => (
+					<div key={t.name} className="contents">
+						<div className="text-xs font-medium" style={{ color: "var(--ink, #0f172a)" }}>
+							{t.name}
+							<span className="text-slate-400"> ({t.value})</span>
+						</div>
+						<div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+							<StrokeDemoRow typeValue={t.value} />
+						</div>
+					</div>
+				))}
+			</div>
+		</section>
+	);
+}
+
 // ── Page component ────────────────────────────────────────────────────────────
 
 export default function TabNotationDevPage() {
@@ -754,6 +968,8 @@ export default function TabNotationDevPage() {
 				tremolo, vibrato. Regression: hammer-on, pull-off, slide-up, tie, slide-down.
 				Duration rendering.
 			</p>
+
+			<StrokeVerificationSection lang={lang} />
 
 			{groups.map(({ label, measures, widths }) => {
 				const meta = GROUP_METAS[label];

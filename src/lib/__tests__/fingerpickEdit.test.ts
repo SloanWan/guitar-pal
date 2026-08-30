@@ -8,6 +8,7 @@ import {
 	toggleMuted,
 	setTechnique,
 	setTied,
+	setStroke,
 	moveCell,
 	previousSlotFret,
 	hasPreviousNoteOnString,
@@ -572,5 +573,125 @@ describe("remapMeasure", () => {
 		expect(out[0].slots).toHaveLength(4);
 		expect(firstFret(out, 0)).toBe(6); // first eighth's data kept
 		expect(firstFret(out, 1)).toBeNull(); // second eighth (9) discarded, not carried
+	});
+});
+
+// ── Slot-level roll stroke ──────────────────────────────────────────────────
+
+describe("setStroke", () => {
+	const target = { measureIndex: 0, slotIndex: 1 };
+
+	it("sets a roll stroke on the targeted slot only", () => {
+		const p = setStroke(twoMeasurePattern(), target, "roll-down");
+		expect(p.measures[0].slots[1].stroke).toBe("roll-down");
+		expect(p.measures[0].slots[0].stroke).toBeUndefined();
+	});
+
+	it("overwrites an existing stroke", () => {
+		let p = setStroke(twoMeasurePattern(), target, "roll-down");
+		p = setStroke(p, target, "roll-up");
+		expect(p.measures[0].slots[1].stroke).toBe("roll-up");
+	});
+
+	it("clearing with undefined removes the key entirely (not stored as undefined)", () => {
+		let p = setStroke(twoMeasurePattern(), target, "roll-up");
+		p = setStroke(p, target, undefined);
+		expect(p.measures[0].slots[1].stroke).toBeUndefined();
+		expect("stroke" in p.measures[0].slots[1]).toBe(false);
+	});
+
+	it("does not mutate the input pattern", () => {
+		const p = twoMeasurePattern();
+		const before = structuredClone(p);
+		setStroke(p, target, "roll-down");
+		expect(p).toEqual(before);
+	});
+});
+
+describe("stroke preservation across slot operations", () => {
+	// A slot of the given duration carrying both string data and a roll stroke.
+	function slotWithStroke(duration: Duration, fret: number, stroke: "roll-down" | "roll-up") {
+		return { ...slotWith(duration, fret), stroke };
+	}
+
+	it("splitSlot: only the first sub-slot inherits the stroke", () => {
+		const measures = measuresOf([
+			slotWithStroke("quarter", 5, "roll-down"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const out = splitSlot(measures, 0, 0, "eighth", [4, 4]);
+		expect(out[0].slots[0].stroke).toBe("roll-down");
+		expect(out[0].slots[1].stroke).toBeUndefined();
+	});
+
+	it("mergeSlots: the first slot's stroke wins when both carry one", () => {
+		const measures = measuresOf([
+			slotWithStroke("eighth", 2, "roll-down"),
+			slotWithStroke("eighth", 7, "roll-up"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const res = mergeSlots(measures, 0, 0, "quarter", [4, 4]);
+		// Discarding the second (data-bearing) slot asks for confirmation.
+		expect(res.type).toBe("confirm");
+		if (res.type === "confirm") {
+			expect(res.pendingMeasures[0].slots[0].stroke).toBe("roll-down");
+		}
+	});
+
+	it("mergeSlots: a stroke-free merge leaves the merged slot stroke-free", () => {
+		const measures = measuresOf([
+			slotWith("eighth", 2),
+			makeEmptySlot("eighth"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const res = mergeSlots(measures, 0, 0, "quarter", [4, 4]);
+		expect(res.type).toBe("ok");
+		if (res.type === "ok") {
+			expect(res.measures[0].slots[0].stroke).toBeUndefined();
+		}
+	});
+
+	it("cloneMeasure: preserves strokes on the clone", () => {
+		const measures = measuresOf([
+			slotWithStroke("quarter", 4, "roll-up"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const out = cloneMeasure(measures, 0);
+		expect(out[1].slots[0].stroke).toBe("roll-up");
+	});
+
+	it("swapMeasures: preserves strokes on the swapped measures", () => {
+		const measures = [
+			{ id: "a", slots: [slotWithStroke("quarter", 4, "roll-down")] },
+			{ id: "b", slots: [makeEmptySlot("whole")] },
+		];
+		const out = swapMeasures(measures, 0, 1);
+		expect(out[1].slots[0].stroke).toBe("roll-down");
+	});
+
+	it("remapMeasure: carries the stroke to the slot that keeps the data", () => {
+		const measures = measuresOf([
+			slotWithStroke("quarter", 6, "roll-down"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const out = remapMeasure(measures, 0, "eighth", [4, 4]);
+		expect(out[0].slots[0].stroke).toBe("roll-down");
+		expect(out[0].slots[1].stroke).toBeUndefined();
+	});
+
+	it("resetMeasure: clears strokes (fresh empty slots)", () => {
+		const measures = measuresOf([slotWithStroke("quarter", 4, "roll-up"), makeEmptySlot("quarter")]);
+		const res = resetMeasure(measures, 0, "quarter", [4, 4]);
+		expect(res.measures[0].slots.every((s) => s.stroke === undefined)).toBe(true);
 	});
 });

@@ -8,11 +8,29 @@ import {
 	findSlotStartTime,
 	stealVoice,
 	_shutdownEngine,
+	computeRollOffsets,
+	computeMeasureBoundaries,
+	resolveSlide,
+	applySlideToVoice,
+	scheduleFingerpickNote,
 	OPEN_STRING_MIDI,
 	VOICE_STEAL_FADE_TAU,
 	VOICE_STEAL_STOP_BUFFER,
+	DEFAULT_ROLL_PARAMS,
+	DEFAULT_SLIDE_PARAMS,
+	ROLL_HARD_SPAN_CEILING,
+	type RollParams,
+	type SlideParams,
+	type SlidePlan,
+	type SlideActiveVoice,
+	type NoteGains,
+	type NoteEnvelope,
+	type LegatoTreatment,
+	type NoteDataResolver,
+	type FingerpickNoteSchedulerDeps,
+	type ScheduleEvent,
 } from "@/lib/fingerpickScheduler";
-import type { FingerpickPattern, BeatSlot, StringFret, Duration } from "@/lib/fingerpickTypes";
+import type { FingerpickPattern, BeatSlot, StringFret, Duration, Stroke } from "@/lib/fingerpickTypes";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -1162,5 +1180,755 @@ describe("metronome enable mid-pass — beat onset filtering", () => {
 			if (t8 >= elapsed && t8 < totalDuration - 0.001) subBeats.push(t8);
 		}
 		expect(subBeats).toEqual([0.75, 1.25, 1.75]);
+	});
+});
+
+// ─── Roll (arpeggiated chord) stroke scheduling ──────────────────────────────
+//
+// Every assertion in this block would FAIL before the roll feature: the pre-roll
+// fingerpickPatternToScheduleEvents ignored `stroke` entirely, so all events in a
+// slot shared its start time and none carried `rollGain`. The one exception is the
+// "no-stroke byte-identical" test, which is the guard that the roll path never
+// touches stroke-free slots.
+
+// Build a slot that carries a stroke (the base `slot()` helper cannot set one).
+function rolledSlot(
+	id: string,
+	duration: Duration,
+	stroke: Stroke,
+	strOverrides: Record<number, Partial<StringFret>> = {},
+): BeatSlot {
+	return { ...slot(id, duration, strOverrides), stroke };
+}
+
+// Full six-string chord overrides (every string fretted).
+const FULL_CHORD: Record<number, Partial<StringFret>> = {
+	0: { fret: 0 },
+	1: { fret: 1 },
+	2: { fret: 0 },
+	3: { fret: 2 },
+	4: { fret: 3 },
+	5: { fret: 0 },
+};
+
+// time of the event on a given string index.
+function timeOfString(events: { stringIndex: number; time: number }[], stringIndex: number): number {
+	const ev = events.find((e) => e.stringIndex === stringIndex);
+	if (!ev) throw new Error(`no event for string ${stringIndex}`);
+	return ev.time;
+}
+
+describe("computeRollOffsets — sweep order and gain taper", () => {
+	const params: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.02 };
+
+	it("roll-down orders strings low→high (5 first, 0 last) with increasing offsets", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "roll-down", 1.0, params);
+		const t = (s: number) => m.get(s)!.timeOffset;
+		expect(t(5)).toBeCloseTo(0);
+		expect(t(5)).toBeLessThan(t(4));
+		expect(t(4)).toBeLessThan(t(3));
+		expect(t(3)).toBeLessThan(t(2));
+		expect(t(2)).toBeLessThan(t(1));
+		expect(t(1)).toBeLessThan(t(0));
+	});
+
+	it("roll-up orders strings high→low (0 first, 5 last)", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "roll-up", 1.0, params);
+		const t = (s: number) => m.get(s)!.timeOffset;
+		expect(t(0)).toBeCloseTo(0);
+		expect(t(0)).toBeLessThan(t(1));
+		expect(t(4)).toBeLessThan(t(5));
+	});
+
+	it("gain taper is gainTaper^rank in sweep order", () => {
+		const p: RollParams = { ...params, gainTaper: 0.9 };
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "roll-down", 1.0, p);
+		// roll-down rank order: 5,4,3,2,1,0 → ranks 0..5
+		expect(m.get(5)!.gain).toBeCloseTo(1);
+		expect(m.get(4)!.gain).toBeCloseTo(0.9);
+		expect(m.get(3)!.gain).toBeCloseTo(0.81);
+		expect(m.get(0)!.gain).toBeCloseTo(Math.pow(0.9, 5));
+	});
+
+	it("empty / single-string input produces no roll spread", () => {
+		expect(computeRollOffsets([], "roll-down", 1.0, params).size).toBe(0);
+		const one = computeRollOffsets([2], "roll-down", 1.0, params);
+		expect(one.get(2)!.timeOffset).toBeCloseTo(0);
+	});
+
+	it("roll-up multiplier widens up-strokes relative to down-strokes", () => {
+		const p: RollParams = { ...params, rollUpMultiplier: 1.5 };
+		const down = computeRollOffsets([0, 5], "roll-down", 1.0, p);
+		const up = computeRollOffsets([0, 5], "roll-up", 1.0, p);
+		// Total span of the up-stroke is 1.5× the down-stroke span.
+		const downSpan = Math.abs(down.get(0)!.timeOffset - down.get(5)!.timeOffset);
+		const upSpan = Math.abs(up.get(0)!.timeOffset - up.get(5)!.timeOffset);
+		expect(upSpan).toBeCloseTo(downSpan * 1.5);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — stroke applies stagger", () => {
+	it("a rolled slot no longer shares one start time (stagger IS applied — not silently dropped)", () => {
+		const rolled = pattern(120, [rolledSlot("s1", "quarter", "roll-down", FULL_CHORD)]);
+		const plain = pattern(120, [slot("s1", "quarter", FULL_CHORD)]);
+		const rolledEvents = fingerpickPatternToScheduleEvents(rolled, 120);
+		const plainEvents = fingerpickPatternToScheduleEvents(plain, 120);
+
+		const rolledTimes = new Set(rolledEvents.map((e) => e.time));
+		const plainTimes = new Set(plainEvents.map((e) => e.time));
+		// Plain chord: all six events share t=0. Rolled: six distinct onset times.
+		expect(plainTimes.size).toBe(1);
+		expect(rolledTimes.size).toBe(6);
+	});
+
+	it("roll-down first-on-beat: string 5 lands on the beat, string 0 last", () => {
+		const p = pattern(120, [rolledSlot("s1", "quarter", "roll-down", FULL_CHORD)]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(timeOfString(events, 5)).toBeCloseTo(0);
+		expect(timeOfString(events, 5)).toBeLessThan(timeOfString(events, 0));
+		// The whole roll stays within the slot (quarter at 120 BPM = 0.5 s).
+		expect(Math.max(...events.map((e) => e.time))).toBeLessThan(0.5);
+	});
+
+	it("roll-up first-on-beat: string 0 lands on the beat, string 5 last", () => {
+		const p = pattern(120, [rolledSlot("s1", "quarter", "roll-up", FULL_CHORD)]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(timeOfString(events, 0)).toBeCloseTo(0);
+		expect(timeOfString(events, 0)).toBeLessThan(timeOfString(events, 5));
+	});
+
+	it("last-on-beat anchor: the final struck string lands exactly on the slot start", () => {
+		// Rolled chord as the SECOND slot so the beat is at t=0.5 (quarter @120).
+		const p = pattern(120, [
+			slot("s0", "quarter", { 0: { fret: 0 } }),
+			rolledSlot("s1", "quarter", "roll-down", FULL_CHORD),
+		]);
+		const params: RollParams = { ...DEFAULT_ROLL_PARAMS, anchor: "last-on-beat" };
+		const events = fingerpickPatternToScheduleEvents(p, 120, params);
+		const rolled = events.filter((e) => e.slotIndex === 1);
+		// roll-down last string is 0 → lands on the beat (0.5); earlier strings before it.
+		expect(timeOfString(rolled, 0)).toBeCloseTo(0.5);
+		expect(timeOfString(rolled, 5)).toBeLessThan(0.5);
+	});
+
+	it("rollGain is stamped on rolled events and absent on plain events", () => {
+		const rolled = fingerpickPatternToScheduleEvents(
+			pattern(120, [rolledSlot("s1", "quarter", "roll-down", FULL_CHORD)]),
+			120,
+		);
+		expect(rolled.every((e) => typeof e.rollGain === "number")).toBe(true);
+		const plain = fingerpickPatternToScheduleEvents(
+			pattern(120, [slot("s1", "quarter", FULL_CHORD)]),
+			120,
+		);
+		expect(plain.every((e) => !("rollGain" in e))).toBe(true);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — no-stroke byte-identical", () => {
+	it("a stroke-free pattern is identical regardless of rollParams", () => {
+		const p = multiMeasurePattern(120, [
+			[slot("s1", "quarter", { 0: { fret: 0 }, 2: { fret: 2 } }), slot("s2", "eighth", { 5: { fret: 3 } })],
+			[slot("s3", "rest"), slot("s4", "quarter", { 1: { fret: 1, muted: true } })],
+		]);
+		const wild: RollParams = {
+			baseStagger: 0.09,
+			staggerMode: "proportional",
+			proportionalFraction: 0.25,
+			spanCapFraction: 0.9,
+			rollUpMultiplier: 2,
+			gainTaper: 0.5,
+			gapMode: "consume",
+			anchor: "last-on-beat",
+		};
+		const withDefault = fingerpickPatternToScheduleEvents(p, 120);
+		const withWild = fingerpickPatternToScheduleEvents(p, 120, wild);
+		// Byte-identical: same order, same field set, same values.
+		expect(withWild).toEqual(withDefault);
+		expect(withDefault.some((e) => "rollGain" in e)).toBe(false);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — span cap holds at short durations", () => {
+	it("fixed-with-cap: total roll span never exceeds spanCapFraction × slot duration", () => {
+		// Sixteenth at 240 BPM = 0.0625 s. Default fixed-with-cap, spanCap 0.5.
+		const p = pattern(240, [rolledSlot("s1", "sixteenth", "roll-down", FULL_CHORD)]);
+		const events = fingerpickPatternToScheduleEvents(p, 240);
+		const slotDur = events[0].duration; // 0.0625
+		const span = Math.max(...events.map((e) => e.time)) - Math.min(...events.map((e) => e.time));
+		expect(span).toBeLessThanOrEqual(DEFAULT_ROLL_PARAMS.spanCapFraction * slotDur + 1e-9);
+		// And it genuinely clamped (base 0.03 × 5 = 0.15 ≫ the 0.03125 cap).
+		expect(span).toBeGreaterThan(0);
+	});
+
+	it("fixed mode: the hard safety ceiling still prevents bleed into the next slot", () => {
+		const params: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.03 };
+		const p = pattern(240, [rolledSlot("s1", "sixteenth", "roll-down", FULL_CHORD)]);
+		const events = fingerpickPatternToScheduleEvents(p, 240, params);
+		const slotDur = events[0].duration;
+		const span = Math.max(...events.map((e) => e.time)) - Math.min(...events.map((e) => e.time));
+		expect(span).toBeLessThanOrEqual(ROLL_HARD_SPAN_CEILING * slotDur + 1e-9);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — gap handling modes", () => {
+	// Sparse voicing: strings 0, 1, 4, 5 active; holes at 2, 3. Long slot so no clamp.
+	const sparse: Record<number, Partial<StringFret>> = {
+		0: { fret: 0 },
+		1: { fret: 1 },
+		4: { fret: 3 },
+		5: { fret: 0 },
+	};
+	const base: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.03 };
+
+	function spanFor(gapMode: RollParams["gapMode"]): number {
+		const p = pattern(60, [rolledSlot("s1", "whole", "roll-down", sparse)]); // whole @60 = 4 s
+		const events = fingerpickPatternToScheduleEvents(p, 60, { ...base, gapMode });
+		return Math.max(...events.map((e) => e.time)) - Math.min(...events.map((e) => e.time));
+	}
+
+	it("consume spans wider than collapse on a gapped voicing (skipped strings cost a step)", () => {
+		// collapse: 4 active → 3 steps × 0.03 = 0.09. consume: sweep 0..5 → 5 steps × 0.03 = 0.15.
+		expect(spanFor("collapse")).toBeCloseTo(0.09);
+		expect(spanFor("consume")).toBeCloseTo(0.15);
+		expect(spanFor("consume")).toBeGreaterThan(spanFor("collapse"));
+	});
+
+	it("both modes keep the same sweep order (string 5 first, string 0 last)", () => {
+		const p = pattern(60, [rolledSlot("s1", "whole", "roll-down", sparse)]);
+		for (const gapMode of ["collapse", "consume"] as const) {
+			const events = fingerpickPatternToScheduleEvents(p, 60, { ...base, gapMode });
+			expect(timeOfString(events, 5)).toBeCloseTo(0);
+			expect(timeOfString(events, 5)).toBeLessThan(timeOfString(events, 0));
+		}
+	});
+});
+
+describe("stroke does not affect slot durations or measure boundaries (Objective 5)", () => {
+	it("getTotalPatternDuration and computeMeasureBoundaries are identical with/without a stroke", () => {
+		const withStroke = multiMeasurePattern(120, [
+			[rolledSlot("s1", "quarter", "roll-down", FULL_CHORD), slot("s2", "quarter", { 0: { fret: 0 } })],
+			[rolledSlot("s3", "half", "roll-up", FULL_CHORD)],
+		]);
+		const withoutStroke = multiMeasurePattern(120, [
+			[slot("s1", "quarter", FULL_CHORD), slot("s2", "quarter", { 0: { fret: 0 } })],
+			[slot("s3", "half", FULL_CHORD)],
+		]);
+		expect(getTotalPatternDuration(withStroke, 120)).toBeCloseTo(
+			getTotalPatternDuration(withoutStroke, 120),
+		);
+		expect(computeMeasureBoundaries(withStroke, 120)).toEqual(
+			computeMeasureBoundaries(withoutStroke, 120),
+		);
+	});
+});
+
+// ─── Slide: real pitch motion (voice handoff) ────────────────────────────────
+//
+// Every assertion here would FAIL before this change: resolveSlide / applySlideToVoice /
+// scheduleFingerpickNote did not exist, and the engine treated a slide event as an
+// ordinary pluck. The scheduleFingerpickNote block in particular exercises the ENGINE
+// path with a mock AudioContext, so a slide that silently created no ramp (or dropped the
+// note) is caught by a test rather than shipped.
+
+// Rate helper: an invertible, midi-dependent playbackRate so origin and target rates
+// differ (proves the ramp targets the TARGET pitch, not the origin's).
+const rateFor = (midi: number): number => Math.pow(2, (midi - 60) / 12);
+
+const TEST_GAINS: NoteGains = {
+	normal: 0.8,
+	technique: 0.5,
+	tapping: 0.8,
+	ghost: 0.3,
+	accentMultiplier: 1.3,
+	letRingLifetimeTaus: 4,
+};
+
+const TEST_ENV: NoteEnvelope = {
+	decayTcRatio: 0.8,
+	minDecayTc: 0.03,
+	voiceStealFadeTau: 0.005,
+	letRingDecayTc: 1.5,
+	sourceStopBuffer: 0.05,
+};
+
+function noteEvent(overrides: Partial<ScheduleEvent> = {}): ScheduleEvent {
+	return {
+		time: 0,
+		duration: 0.5,
+		stringIndex: 2,
+		midi: 62,
+		technique: null,
+		muted: false,
+		measureIndex: 0,
+		slotIndex: 0,
+		...overrides,
+	};
+}
+
+function mockParam(initial = 0) {
+	return {
+		value: initial,
+		setValueAtTime: vi.fn(),
+		setTargetAtTime: vi.fn(),
+		cancelScheduledValues: vi.fn(),
+		exponentialRampToValueAtTime: vi.fn(),
+		linearRampToValueAtTime: vi.fn(),
+	};
+}
+
+function mockSource() {
+	return {
+		buffer: null as unknown,
+		playbackRate: mockParam(1),
+		connect: vi.fn((node: unknown) => node),
+		start: vi.fn(),
+		stop: vi.fn(),
+		onended: null as (() => void) | null,
+	};
+}
+
+function mockGain() {
+	return {
+		gain: mockParam(0),
+		connect: vi.fn((node: unknown) => node),
+	};
+}
+
+function mockFilter() {
+	return {
+		type: "" as BiquadFilterType,
+		frequency: { value: 0 },
+		Q: { value: 0 },
+		connect: vi.fn((node: unknown) => node),
+	};
+}
+
+function mockCtx(currentTime = 0) {
+	const sources: ReturnType<typeof mockSource>[] = [];
+	const gains: ReturnType<typeof mockGain>[] = [];
+	const filters: ReturnType<typeof mockFilter>[] = [];
+	return {
+		currentTime,
+		createBufferSource: vi.fn(() => {
+			const s = mockSource();
+			sources.push(s);
+			return s;
+		}),
+		createGain: vi.fn(() => {
+			const g = mockGain();
+			gains.push(g);
+			return g;
+		}),
+		createBiquadFilter: vi.fn(() => {
+			const f = mockFilter();
+			filters.push(f);
+			return f;
+		}),
+		_sources: sources,
+		_gains: gains,
+		_filters: filters,
+	};
+}
+
+type MockCtx = ReturnType<typeof mockCtx>;
+
+// A live per-string voice as scheduleFingerpickNote expects to find in the map.
+function makeLiveVoice(overrides: {
+	currentMidi?: number;
+	currentRate?: number;
+	stopTime?: number;
+} = {}) {
+	const currentMidi = overrides.currentMidi ?? 60;
+	return {
+		gainNode: mockGain(),
+		source: mockSource(),
+		event: noteEvent({ midi: currentMidi }),
+		stopTime: overrides.stopTime ?? 100,
+		currentRate: overrides.currentRate ?? rateFor(currentMidi),
+		currentMidi,
+		attackVolume: 0.8,
+		attackTime: 0,
+		decayTc: 1.5,
+	};
+}
+
+function makeDeps(
+	ctx: MockCtx,
+	voices: Map<number, SlideActiveVoice>,
+	opts: {
+		legatoTreatment?: LegatoTreatment;
+		slideParams?: SlideParams;
+		resolveNoteData?: NoteDataResolver;
+		forceLetRing?: boolean;
+	} = {},
+): FingerpickNoteSchedulerDeps {
+	const target = {} as AudioNode;
+	return {
+		ctx: ctx as unknown as AudioContext,
+		target,
+		voices,
+		allSources: new Set<AudioBufferSourceNode>(),
+		resolveNoteData:
+			opts.resolveNoteData ??
+			((_muted, midi) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) })),
+		gains: TEST_GAINS,
+		envelope: TEST_ENV,
+		forceLetRing: opts.forceLetRing ?? false,
+		legatoTreatment: opts.legatoTreatment ?? "current",
+		slideParams: opts.slideParams ?? DEFAULT_SLIDE_PARAMS,
+	};
+}
+
+describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)", () => {
+	it("a slide with a live origin voice creates NO new source and ramps the origin in place", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+
+		expect(ctx.createBufferSource).not.toHaveBeenCalled();
+		expect(origin.source.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalledTimes(1);
+		// The stolen-voice path must NOT run: the origin source is bent, not stopped-and-faded.
+		expect(origin.source.stop).toHaveBeenCalledTimes(1); // the single re-scheduled hard-stop
+	});
+
+	it("the ramp target rate equals the TARGET pitch's rate, not the origin's", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+
+		const rampArg = origin.source.playbackRate.exponentialRampToValueAtTime.mock.calls[0][0];
+		expect(rampArg).toBeCloseTo(rateFor(62));
+		expect(rampArg).not.toBeCloseTo(rateFor(60));
+	});
+
+	it("bends the origin buffer by the pitch INTERVAL, not the target zone's own rate (multi-sample)", () => {
+		// Regression: the real guitar instrument is multi-sampled — every note maps to its
+		// OWN nearby zone played near rate 1.0. A handoff keeps playing the ORIGIN buffer, so
+		// ramping to the target note's independently-resolved rate (≈1.0) moved NO pitch and
+		// the slide was silent. The ramp target must be origin.currentRate × 2^(Δst/12).
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		// Origin plays its own zone at rate 1.0 (currentMidi 45 = open A).
+		const origin = makeLiveVoice({ currentMidi: 45, currentRate: 1.0, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		// Multi-sample resolver: EVERY midi resolves to its own zone at rate ~1.0.
+		const flatResolver: NoteDataResolver = () => ({ buffer: {} as AudioBuffer, playbackRate: 1.0 });
+
+		// Slide up 5 semitones (A5 → fret 5, midi 50).
+		scheduleFingerpickNote(
+			makeDeps(ctx, voices, { resolveNoteData: flatResolver }),
+			noteEvent({ midi: 50, technique: "slide-up" }),
+			1,
+		);
+
+		const rampArg = origin.source.playbackRate.exponentialRampToValueAtTime.mock.calls[0][0];
+		// Correct: bend the sounding buffer up 5 semitones. WRONG (pre-fix): 1.0 → no motion.
+		expect(rampArg).toBeCloseTo(Math.pow(2, 5 / 12));
+		expect(rampArg).not.toBeCloseTo(1.0);
+	});
+
+	it("a slide with NO origin voice falls back to a new source played as an ordinary note", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+
+		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
+		// Fallback = ordinary pluck: NORMAL gain, no lowpass filter.
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.normal, 1);
+		expect(ctx.createBiquadFilter).not.toHaveBeenCalled();
+	});
+
+	it("a slide whose origin already hard-stopped (not ringing) falls back to a new source", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		// stopTime 0.5 is before the slide's beat (when = 1) → origin is dead.
+		voices.set(2, makeLiveVoice({ currentMidi: 60, stopTime: 0.5 }) as unknown as SlideActiveVoice);
+
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+
+		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
+	});
+
+	it("a slide beyond maxIntervalSemitones falls back and retriggers (steals the origin)", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const origin = makeLiveVoice({ currentMidi: 40, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		// interval |60 - 40| = 20 > default max 12 → fallback.
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 60, technique: "slide-up" }), 1);
+
+		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
+		// A retrigger steals the ringing origin (fade + stop via stealVoice).
+		expect(origin.source.stop).toHaveBeenCalledWith(1 + VOICE_STEAL_STOP_BUFFER);
+	});
+
+	it("uses the EXPONENTIAL ramp form for pitch (never linear)", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+
+		expect(origin.source.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalled();
+		expect(origin.source.playbackRate.linearRampToValueAtTime).not.toHaveBeenCalled();
+	});
+
+	it("extends the origin voice's hard-stop to cover the slid-into note's duration", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		// Origin's own stop (1.2) is sooner than the target note needs (1 + 0.5 + 0.05 = 1.55).
+		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 1.2 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		scheduleFingerpickNote(
+			makeDeps(ctx, voices),
+			noteEvent({ midi: 62, technique: "slide-up", duration: 0.5 }),
+			1,
+		);
+
+		expect(origin.source.stop).toHaveBeenCalledWith(1 + 0.5 + TEST_ENV.sourceStopBuffer);
+		// And the voice stays registered under the same string for a later steal/chain.
+		expect(voices.get(2)).toBe(origin);
+	});
+
+	it("a chained slide anchors from the previous slide's target pitch, not the original pluck", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		// First slide 60 → 64.
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 64, technique: "slide-up" }), 1);
+		expect(origin.currentMidi).toBe(64);
+		expect(origin.currentRate).toBeCloseTo(rateFor(64));
+
+		// Second slide 64 → 60: interval must be measured from 64 (=4), and the ramp anchored
+		// at the current rate. A 24-semitone max still permits it; verify the from-rate anchor.
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 60, technique: "slide-down" }), 2);
+		const secondRamp = origin.source.playbackRate.exponentialRampToValueAtTime.mock.calls[1][0];
+		expect(secondRamp).toBeCloseTo(rateFor(60));
+		const secondFromAnchor = origin.source.playbackRate.setValueAtTime.mock.calls[1][0];
+		expect(secondFromAnchor).toBeCloseTo(rateFor(64)); // anchored at the intermediate pitch
+	});
+});
+
+describe("scheduleFingerpickNote — no-slide behaviour unchanged (regression guard)", () => {
+	it("an ordinary note creates one source + one gain, wires source→gain→target, registers a voice", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const deps = makeDeps(ctx, voices);
+
+		scheduleFingerpickNote(deps, noteEvent({ midi: 60, duration: 0.5 }), 2);
+
+		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
+		expect(ctx.createGain).toHaveBeenCalledTimes(1);
+		expect(ctx.createBiquadFilter).not.toHaveBeenCalled();
+
+		const source = ctx._sources[0];
+		const gain = ctx._gains[0];
+		expect(source.connect).toHaveBeenCalledWith(gain);
+		expect(gain.connect).toHaveBeenCalledWith(deps.target);
+		expect(gain.gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.normal, 2);
+		expect(source.start).toHaveBeenCalledWith(2);
+		expect(source.stop).toHaveBeenCalledWith(2 + 0.5 + TEST_ENV.sourceStopBuffer);
+		expect(voices.get(2)).toBeDefined();
+	});
+
+	it("hammer-on in 'current' treatment: technique gain + 2 kHz lowpass (production default)", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map(), { legatoTreatment: "current" });
+		scheduleFingerpickNote(deps, noteEvent({ midi: 62, technique: "hammer-on" }), 1);
+
+		expect(ctx.createBiquadFilter).toHaveBeenCalledTimes(1);
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.technique, 1);
+		expect(ctx._filters[0].frequency.value).toBe(2000);
+	});
+
+	it("hammer-on in 'gain-only': technique gain, NO filter", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map(), { legatoTreatment: "gain-only" });
+		scheduleFingerpickNote(deps, noteEvent({ midi: 62, technique: "hammer-on" }), 1);
+
+		expect(ctx.createBiquadFilter).not.toHaveBeenCalled();
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.technique, 1);
+	});
+
+	it("hammer-on in 'dry': NORMAL gain, NO filter (identical to a plucked note)", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map(), { legatoTreatment: "dry" });
+		scheduleFingerpickNote(deps, noteEvent({ midi: 62, technique: "hammer-on" }), 1);
+
+		expect(ctx.createBiquadFilter).not.toHaveBeenCalled();
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.normal, 1);
+	});
+
+	it("trill keeps technique gain + filter regardless of treatment (dry) — A/B is HO/PO only", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map(), { legatoTreatment: "dry" });
+		scheduleFingerpickNote(deps, noteEvent({ midi: 62, technique: "trill" }), 1);
+
+		expect(ctx.createBiquadFilter).toHaveBeenCalledTimes(1);
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.technique, 1);
+	});
+});
+
+describe("resolveSlide — decision + ramp geometry", () => {
+	const origin = { currentRate: rateFor(60), currentMidi: 60, stopTime: 100 };
+	const base = {
+		targetMidi: 62,
+		targetRate: rateFor(62),
+		targetDuration: 0.5,
+		when: 1,
+		now: 0,
+		params: DEFAULT_SLIDE_PARAMS,
+		sourceStopBuffer: 0.05,
+	};
+
+	it("hands off when a live origin voice exists, targeting the target pitch's rate", () => {
+		const r = resolveSlide({ technique: "slide-up", origin, ...base });
+		expect(r.action).toBe("handoff");
+		if (r.action !== "handoff") return;
+		expect(r.plan.targetRate).toBeCloseTo(rateFor(62));
+		expect(r.plan.fromRate).toBeCloseTo(rateFor(60));
+	});
+
+	it("finish-on-target: the ramp ENDS on the beat and starts one ramp-duration earlier", () => {
+		const r = resolveSlide({ technique: "slide-up", origin, ...base });
+		if (r.action !== "handoff") throw new Error("expected handoff");
+		expect(r.plan.rampEndTime).toBeCloseTo(1);
+		expect(r.plan.rampStartTime).toBeCloseTo(1 - DEFAULT_SLIDE_PARAMS.rampDurationS);
+	});
+
+	it("start-on-target: the ramp STARTS on the beat", () => {
+		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, anchor: "start-on-target" };
+		const r = resolveSlide({ technique: "slide-up", origin, ...base, params });
+		if (r.action !== "handoff") throw new Error("expected handoff");
+		expect(r.plan.rampStartTime).toBeCloseTo(1);
+		expect(r.plan.rampEndTime).toBeCloseTo(1 + params.rampDurationS);
+	});
+
+	it("interval-scaled: ramp duration scales with the interval size", () => {
+		const params: SlideParams = {
+			...DEFAULT_SLIDE_PARAMS,
+			durationScaling: "interval-scaled",
+			intervalScaleSecPerSemitone: 0.03,
+			anchor: "start-on-target",
+		};
+		// 5-fret slide: 60 → 65, interval 5 → ramp = 5 × 0.03 = 0.15 s.
+		const r = resolveSlide({
+			technique: "slide-up",
+			origin,
+			...base,
+			targetMidi: 65,
+			targetRate: rateFor(65),
+			params,
+		});
+		if (r.action !== "handoff") throw new Error("expected handoff");
+		expect(r.plan.rampEndTime - r.plan.rampStartTime).toBeCloseTo(0.15);
+	});
+
+	it("clamps a finish-on-target ramp so it never starts before `now`", () => {
+		// now = 0.98 leaves only 0.02 s before the beat at 1 — less than the 0.08 default ramp.
+		const r = resolveSlide({ technique: "slide-up", origin, ...base, now: 0.98 });
+		if (r.action !== "handoff") throw new Error("expected handoff");
+		expect(r.plan.rampStartTime).toBeCloseTo(0.98);
+		expect(r.plan.rampEndTime).toBeCloseTo(1);
+	});
+
+	it("extends the stop time to cover the target note", () => {
+		const shortOrigin = { ...origin, stopTime: 1.1 };
+		const r = resolveSlide({ technique: "slide-up", origin: shortOrigin, ...base });
+		if (r.action !== "handoff") throw new Error("expected handoff");
+		expect(r.plan.newStopTime).toBeCloseTo(1 + 0.5 + 0.05);
+	});
+
+	it("falls back (not-a-slide) for a non-slide technique", () => {
+		const r = resolveSlide({ technique: "hammer-on", origin, ...base });
+		expect(r).toEqual({ action: "fallback", reason: "not-a-slide" });
+	});
+
+	it("falls back (no-origin-voice) when there is no live voice", () => {
+		const r = resolveSlide({ technique: "slide-up", origin: undefined, ...base });
+		expect(r).toEqual({ action: "fallback", reason: "no-origin-voice" });
+	});
+
+	it("falls back (origin-not-ringing) when the origin has already stopped", () => {
+		const dead = { ...origin, stopTime: 0.5 }; // < when (1)
+		const r = resolveSlide({ technique: "slide-up", origin: dead, ...base });
+		expect(r).toEqual({ action: "fallback", reason: "origin-not-ringing" });
+	});
+
+	it("falls back (interval-too-wide) beyond maxIntervalSemitones", () => {
+		// 60 → 80 = 20 semitones > default 12.
+		const r = resolveSlide({
+			technique: "slide-up",
+			origin,
+			...base,
+			targetMidi: 80,
+			targetRate: rateFor(80),
+		});
+		expect(r).toEqual({ action: "fallback", reason: "interval-too-wide" });
+	});
+});
+
+describe("applySlideToVoice — ramp + envelope extension on a live voice", () => {
+	const plan: SlidePlan = {
+		fromRate: rateFor(60),
+		targetRate: rateFor(64),
+		rampStartTime: 0.92,
+		rampMidTime: 0.96,
+		rampEndTime: 1.0,
+		newStopTime: 1.55,
+		decayFromTime: 1.0,
+		gainDip: 0,
+	};
+
+	it("ramps playbackRate exponentially from fromRate to targetRate", () => {
+		const voice = { source: mockSource(), gainNode: mockGain() };
+		applySlideToVoice(voice, plan, { gainAtRampStart: 0.7, decayTc: 0.4 });
+
+		expect(voice.source.playbackRate.cancelScheduledValues).toHaveBeenCalledWith(0.92);
+		expect(voice.source.playbackRate.setValueAtTime).toHaveBeenCalledWith(rateFor(60), 0.92);
+		expect(voice.source.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalledWith(rateFor(64), 1.0);
+		expect(voice.source.playbackRate.linearRampToValueAtTime).not.toHaveBeenCalled();
+	});
+
+	it("re-arms the gain decay from the target beat and extends the hard-stop", () => {
+		const voice = { source: mockSource(), gainNode: mockGain() };
+		applySlideToVoice(voice, plan, { gainAtRampStart: 0.7, decayTc: 0.4 });
+
+		expect(voice.gainNode.gain.setTargetAtTime).toHaveBeenCalledWith(0, 1.0, 0.4);
+		expect(voice.source.stop).toHaveBeenCalledWith(1.55);
+	});
+
+	it("with no dip: holds the current gain level across the ramp (no gain ramps)", () => {
+		const voice = { source: mockSource(), gainNode: mockGain() };
+		applySlideToVoice(voice, plan, { gainAtRampStart: 0.7, decayTc: 0.4 });
+
+		expect(voice.gainNode.gain.setValueAtTime).toHaveBeenCalledWith(0.7, 0.92);
+		expect(voice.gainNode.gain.exponentialRampToValueAtTime).not.toHaveBeenCalled();
+	});
+
+	it("with a dip: dips mid-ramp and recovers (two gain ramps)", () => {
+		const voice = { source: mockSource(), gainNode: mockGain() };
+		applySlideToVoice(voice, { ...plan, gainDip: 0.5 }, { gainAtRampStart: 0.8, decayTc: 0.4 });
+
+		const calls = voice.gainNode.gain.exponentialRampToValueAtTime.mock.calls;
+		expect(calls).toHaveLength(2);
+		expect(calls[0][0]).toBeCloseTo(0.8 * 0.5); // dip to 50%
+		expect(calls[0][1]).toBeCloseTo(0.96); // at the ramp midpoint
+		expect(calls[1][0]).toBeCloseTo(0.8); // recover to the sustain level
+		expect(calls[1][1]).toBeCloseTo(1.0); // by the ramp end
 	});
 });

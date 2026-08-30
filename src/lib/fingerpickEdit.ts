@@ -4,6 +4,7 @@ import type {
 	FingerpickPattern,
 	Measure,
 	StringFret,
+	Stroke,
 	Technique,
 } from "./fingerpickTypes";
 
@@ -399,6 +400,38 @@ export function setSlotsDuration(
 	};
 }
 
+// Set (or clear) the slot-level roll stroke on a single slot. Passing `undefined`
+// removes the field entirely rather than storing `undefined`, so a slot returned to
+// "no roll" stays byte-identical to one that never carried a stroke — the scheduler
+// keys arpeggiation off `slot.stroke !== undefined`, and the modal's dirty check
+// compares serialized snapshots, so a lingering `stroke: undefined` key would falsely
+// read as an edit.
+export function setStroke(
+	pattern: FingerpickPattern,
+	target: SlotTarget,
+	stroke: Stroke | undefined,
+): FingerpickPattern {
+	return {
+		...pattern,
+		measures: pattern.measures.map((measure, mi) => {
+			if (mi !== target.measureIndex) return measure;
+			return {
+				...measure,
+				slots: measure.slots.map((slot, si) => {
+					if (si !== target.slotIndex) return slot;
+					if (stroke === undefined) {
+						// Omit the key so JSON output matches a stroke-free slot.
+						const { stroke: _dropped, ...rest } = slot;
+						void _dropped;
+						return rest;
+					}
+					return { ...slot, stroke };
+				}),
+			};
+		}),
+	};
+}
+
 // Insert a fresh quarter-note slot before/after each targeted slot.
 export function insertSlots(
 	pattern: FingerpickPattern,
@@ -603,10 +636,13 @@ export function splitSlot(
 	const subSlots: BeatSlot[] = [];
 	for (let i = 0; i < count; i++) {
 		if (i === 0) {
+			// First sub-slot inherits the original string data AND the roll stroke,
+			// consistent with the "first sub-slot inherits" rule; the rest are empty.
 			subSlots.push({
 				id: crypto.randomUUID(),
 				duration: targetDuration,
 				strings: cloneStrings(slot.strings),
+				...(slot.stroke !== undefined ? { stroke: slot.stroke } : {}),
 			});
 		} else {
 			subSlots.push(makeEmptySlot(targetDuration));
@@ -656,10 +692,14 @@ export function mergeSlots(
 	if (sum !== targetUnits || consumed < 2) return { type: "ok", measures };
 
 	const first = measure.slots[slotIndex];
+	// The first slot's string data is kept, so its roll stroke is kept too. When
+	// both the first and a later merged slot carry a stroke, the first wins (the
+	// later slots' data — stroke included — is discarded along with everything else).
 	const merged: BeatSlot = {
 		id: crypto.randomUUID(),
 		duration: targetDuration,
 		strings: cloneStrings(first.strings),
+		...(first.stroke !== undefined ? { stroke: first.stroke } : {}),
 	};
 	const newSlots = [
 		...measure.slots.slice(0, slotIndex),
@@ -732,7 +772,12 @@ export function remapMeasure(
 		const index = Math.floor(cursor / targetUnits);
 		if (index < count && !claimed.has(index)) {
 			if (slotHasStringData(old)) {
-				newSlots[index] = { ...newSlots[index], strings: cloneStrings(old.strings) };
+				newSlots[index] = {
+					...newSlots[index],
+					strings: cloneStrings(old.strings),
+					// Preserve the roll stroke on the slot that keeps this note's data.
+					...(old.stroke !== undefined ? { stroke: old.stroke } : {}),
+				};
 			}
 			claimed.add(index);
 		}

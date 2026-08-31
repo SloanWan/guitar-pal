@@ -214,6 +214,86 @@ const TECHNIQUE_SHOWCASE: FingerpickPattern = {
 				{ id: "s96", duration: "eighth-triplet", strings: [S(), S(), N(4), S(), S(), S()] },
 			],
 		},
+
+		// ── SLIDE SHOWCASE (m15–m19) — the same slide at every duration value ───────
+		// Origins are plain notes: promoteSlideOriginsToLetRing auto-promotes each one to
+		// letRing so the slide bends the ringing voice in place (a single attack + glide)
+		// rather than re-plucking. Each measure isolates one duration tier.
+
+		// ── m15: HALF-note slide — slow, wide 5-fret glide up on A ──────────────
+		{
+			id: "m15",
+			slots: [
+				{ id: "s97", duration: "half", strings: [S(), S(), S(), S(), N(3), S()] },
+				{ id: "s98", duration: "half", strings: [S(), S(), S(), S(), Su(8), S()] },
+			],
+		},
+
+		// ── m16: QUARTER-note slides — up then down (with a chained 7→5) on D ───
+		{
+			id: "m16",
+			slots: [
+				{ id: "s99",  duration: "quarter", strings: [S(), S(), S(), N(5), S(), S()] },
+				{ id: "s100", duration: "quarter", strings: [S(), S(), S(), Su(7), S(), S()] },
+				{ id: "s101", duration: "quarter", strings: [S(), S(), S(), Sd(5), S(), S()] },
+				{ id: "s102", duration: "quarter", strings: [S(), S(), S(), N(5), S(), S()] },
+			],
+		},
+
+		// ── m17: EIGHTH-note slides — four alternating up/down glides on D ──────
+		{
+			id: "m17",
+			slots: [
+				{ id: "s103", duration: "eighth", strings: [S(), S(), S(), N(5), S(), S()] },
+				{ id: "s104", duration: "eighth", strings: [S(), S(), S(), Su(7), S(), S()] },
+				{ id: "s105", duration: "eighth", strings: [S(), S(), S(), N(7), S(), S()] },
+				{ id: "s106", duration: "eighth", strings: [S(), S(), S(), Sd(5), S(), S()] },
+				{ id: "s107", duration: "eighth", strings: [S(), S(), S(), N(5), S(), S()] },
+				{ id: "s108", duration: "eighth", strings: [S(), S(), S(), Su(8), S(), S()] },
+				{ id: "s109", duration: "eighth", strings: [S(), S(), S(), N(8), S(), S()] },
+				{ id: "s110", duration: "eighth", strings: [S(), S(), S(), Sd(5), S(), S()] },
+			],
+		},
+
+		// ── m18: SIXTEENTH-note slides — rapid oscillating glide on B ───────────
+		{
+			id: "m18",
+			slots: [
+				{ id: "s111", duration: "sixteenth", strings: [S(), N(5), S(), S(), S(), S()] },
+				{ id: "s112", duration: "sixteenth", strings: [S(), Su(7), S(), S(), S(), S()] },
+				{ id: "s113", duration: "sixteenth", strings: [S(), N(7), S(), S(), S(), S()] },
+				{ id: "s114", duration: "sixteenth", strings: [S(), Sd(5), S(), S(), S(), S()] },
+				{ id: "s115", duration: "sixteenth", strings: [S(), N(5), S(), S(), S(), S()] },
+				{ id: "s116", duration: "sixteenth", strings: [S(), Su(7), S(), S(), S(), S()] },
+				{ id: "s117", duration: "sixteenth", strings: [S(), N(7), S(), S(), S(), S()] },
+				{ id: "s118", duration: "sixteenth", strings: [S(), Sd(5), S(), S(), S(), S()] },
+				{ id: "s119", duration: "sixteenth", strings: [S(), N(5), S(), S(), S(), S()] },
+				{ id: "s120", duration: "sixteenth", strings: [S(), Su(7), S(), S(), S(), S()] },
+				{ id: "s121", duration: "sixteenth", strings: [S(), N(7), S(), S(), S(), S()] },
+				{ id: "s122", duration: "sixteenth", strings: [S(), Sd(5), S(), S(), S(), S()] },
+				{ id: "s123", duration: "sixteenth", strings: [S(), N(5), S(), S(), S(), S()] },
+				{ id: "s124", duration: "sixteenth", strings: [S(), Su(7), S(), S(), S(), S()] },
+				{ id: "s125", duration: "sixteenth", strings: [S(), N(7), S(), S(), S(), S()] },
+				{ id: "s126", duration: "sixteenth", strings: [S(), Sd(5), S(), S(), S(), S()] },
+			],
+		},
+
+		// ── m19: SUBDIVISION slides — dotted-eighth+16th, triplets, 32nds, dotted-quarter on G ──
+		{
+			id: "m19",
+			slots: [
+				{ id: "s127", duration: "dotted-eighth",  strings: [S(), S(), N(5), S(), S(), S()] },
+				{ id: "s128", duration: "sixteenth",      strings: [S(), S(), Su(8), S(), S(), S()] },
+				{ id: "s129", duration: "eighth-triplet", strings: [S(), S(), N(8), S(), S(), S()] },
+				{ id: "s130", duration: "eighth-triplet", strings: [S(), S(), Sd(6), S(), S(), S()] },
+				{ id: "s131", duration: "eighth-triplet", strings: [S(), S(), N(6), S(), S(), S()] },
+				{ id: "s132", duration: "32nd",           strings: [S(), S(), Su(7), S(), S(), S()] },
+				{ id: "s133", duration: "32nd",           strings: [S(), S(), N(7), S(), S(), S()] },
+				{ id: "s134", duration: "32nd",           strings: [S(), S(), Sd(6), S(), S(), S()] },
+				{ id: "s135", duration: "32nd",           strings: [S(), S(), N(6), S(), S(), S()] },
+				{ id: "s136", duration: "dotted-quarter", strings: [S(), S(), Su(9), S(), S(), S()] },
+			],
+		},
 	],
 };
 

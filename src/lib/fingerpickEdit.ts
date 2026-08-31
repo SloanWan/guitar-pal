@@ -29,13 +29,18 @@ export const STRING_LABELS = ["e", "B", "G", "D", "A", "E"] as const;
 export const MIN_FRET = 0;
 export const MAX_FRET = 24;
 
-// Duration picker options exposed in the column popup, in display order.
+// Duration picker options exposed in the column popup, ordered longest → shortest
+// by unit weight (rest last). Triplets stay out — their unit weights are fractional
+// (8/3, 4/3) and require a separate capacity-model change.
 export const DURATION_PICKER: { label: string; value: Duration }[] = [
 	{ label: "W", value: "whole" },
 	{ label: "H", value: "half" },
+	{ label: "Q.", value: "dotted-quarter" },
 	{ label: "Q", value: "quarter" },
+	{ label: "E.", value: "dotted-eighth" },
 	{ label: "E", value: "eighth" },
 	{ label: "S", value: "sixteenth" },
+	{ label: "T", value: "32nd" },
 	{ label: "R", value: "rest" },
 ];
 
@@ -392,9 +397,18 @@ export function setSlotsDuration(
 			if (!selected) return measure;
 			return {
 				...measure,
-				slots: measure.slots.map((slot, si) =>
-					selected.has(si) ? { ...slot, duration } : slot,
-				),
+				slots: measure.slots.map((slot, si) => {
+					if (!selected.has(si)) return slot;
+					// A rest is silence: clear the slot's note data (and any roll stroke) so a
+					// slot converted to a rest is a true rest, not a note that renders/schedules
+					// as silence downstream while its fret data lingers, orphaned, in the editor.
+					if (duration === "rest") {
+						const { stroke: _stroke, ...rest } = slot;
+						void _stroke;
+						return { ...rest, duration, strings: makeStrings() };
+					}
+					return { ...slot, duration };
+				}),
 			};
 		}),
 	};
@@ -588,6 +602,14 @@ export function slotDurationUnits(duration: Duration): number {
 	return DURATION_UNITS[duration];
 }
 
+// True when a duration's unit weight is a whole number of thirty-second-note units.
+// The triplet durations (8/3, 4/3) are fractional; split/merge produce exact-fit,
+// integer-count subdivisions and cannot honour a fractional target, so they guard
+// against one rather than relying on callers to never pass a triplet.
+export function hasIntegerUnitWeight(duration: Duration): boolean {
+	return Number.isInteger(DURATION_UNITS[duration]);
+}
+
 export function usedUnits(slots: BeatSlot[]): number {
 	return slots.reduce((sum, slot) => sum + slotDurationUnits(slot.duration), 0);
 }
@@ -624,6 +646,9 @@ export function splitSlot(
 	if (!measure) return measures;
 	const slot = measure.slots[slotIndex];
 	if (!slot) return measures;
+	// Reject fractional-weight targets (triplets): they can't tile a slot into an
+	// integer number of exact sub-slots.
+	if (!hasIntegerUnitWeight(targetDuration)) return measures;
 
 	const currentUnits = slotDurationUnits(slot.duration);
 	const targetUnits = slotDurationUnits(targetDuration);
@@ -679,6 +704,9 @@ export function mergeSlots(
 ): MergeResult {
 	const measure = measures[measureIndex];
 	if (!measure) return { type: "ok", measures };
+	// Reject fractional-weight targets (triplets): a merge must sum to the target
+	// exactly, which a fractional unit weight can never do against integer sources.
+	if (!hasIntegerUnitWeight(targetDuration)) return { type: "ok", measures };
 
 	const targetUnits = slotDurationUnits(targetDuration);
 	let sum = 0;

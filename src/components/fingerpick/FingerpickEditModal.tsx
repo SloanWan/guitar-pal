@@ -107,15 +107,31 @@ function DurationIcon({ duration }: { duration: Duration }) {
 	);
 }
 
-// Plain note durations, largest → smallest, used by the split/merge controls.
-const NOTE_LADDER: Duration[] = ["whole", "half", "quarter", "eighth", "sixteenth"];
+// Integer-weight note durations, largest → smallest by unit weight, used by the
+// split/merge controls. Triplets are excluded (fractional weight — see the
+// hasIntegerUnitWeight guard in splitSlot/mergeSlots).
+const NOTE_LADDER: Duration[] = [
+	"whole", // 32
+	"half", // 16
+	"dotted-quarter", // 12
+	"quarter", // 8
+	"dotted-eighth", // 6
+	"eighth", // 4
+	"sixteenth", // 2
+	"32nd", // 1
+];
 
-// The next larger plain note value (used as the merge target for a slot).
+// The next larger note value (used as the merge target for a slot). Existing plain
+// keys keep their plain targets so e.g. two eighths still merge to a quarter (not a
+// dotted-eighth); the added dotted/32nd keys point at the next larger value by weight.
 const NEXT_LARGER_DURATION: Partial<Record<Duration, Duration>> = {
-	sixteenth: "eighth",
-	eighth: "quarter",
-	quarter: "half",
-	half: "whole",
+	"32nd": "sixteenth", // 1 → 2
+	sixteenth: "eighth", // 2 → 4
+	eighth: "quarter", // 4 → 8
+	"dotted-eighth": "quarter", // 6 → 8
+	quarter: "half", // 8 → 16
+	"dotted-quarter": "half", // 12 → 16
+	half: "whole", // 16 → 32
 };
 
 // Slot-level roll (arpeggiated chord) options for the column popup. "none" clears
@@ -1349,10 +1365,17 @@ export default function FingerpickEditModal({
 														slotIndex,
 													});
 													const columnSelected = selectedColumns.has(key);
+													// A rest slot gets a faint gray wash across its whole
+													// column so it reads as silence at a glance. bg-raise is
+													// theme-aware (subtle light gray on light, subtle dark
+													// gray on dark), so no per-mode color handling is needed.
+													const isRest = slot.duration === "rest";
 													return (
 														<div
 															key={slot.id}
-															className="flex min-w-0 flex-1 flex-col gap-0.5"
+															className={`flex min-w-0 flex-1 flex-col gap-0.5 rounded-sm ${
+																isRest ? "bg-raise/70" : ""
+															}`}
 														>
 															{STRING_LABELS.map((_, stringIndex) => {
 																const cell: Cell = {

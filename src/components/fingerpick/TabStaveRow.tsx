@@ -61,6 +61,12 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 	svgEl.querySelectorAll<SVGPathElement>("g.vf-stem path").forEach((el) => {
 		el.setAttribute("stroke", "var(--ink)");
 	});
+	// Rest glyphs are StaveNotes (g.vf-stavenote), not tabnotes; VexFlow draws the rest
+	// as a path with hardcoded black fill. Track theme ink so rests stay visible in dark
+	// mode (and match fret-number ink in light mode).
+	svgEl
+		.querySelectorAll<SVGElement>("g.vf-stavenote path, g.vf-stavenote text")
+		.forEach((el) => el.setAttribute("fill", "var(--ink)"));
 	svgEl.querySelectorAll<SVGPathElement>("g.vf-beam path").forEach((el) => {
 		el.setAttribute("fill", "var(--ink)");
 	});

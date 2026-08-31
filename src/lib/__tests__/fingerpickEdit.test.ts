@@ -32,8 +32,14 @@ import {
 	mergeSlots,
 	resetMeasure,
 	remapMeasure,
+	hasIntegerUnitWeight,
 	type Cell,
 } from "@/lib/fingerpickEdit";
+import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import {
+	fingerpickPatternToScheduleEvents,
+	getTotalPatternDuration,
+} from "@/lib/fingerpickScheduler";
 import type { Duration, Measure, StringFret } from "@/lib/fingerpickTypes";
 
 // A 2-measure pattern with distinct slot counts for boundary-wrap tests.
@@ -694,4 +700,191 @@ describe("stroke preservation across slot operations", () => {
 		const res = resetMeasure(measures, 0, "quarter", [4, 4]);
 		expect(res.measures[0].slots.every((s) => s.stroke === undefined)).toBe(true);
 	});
+});
+
+describe("setSlotsDuration rest semantics", () => {
+	function measurePattern(slots: ReturnType<typeof makeEmptySlot>[]): FingerpickPattern {
+		return {
+			id: "p",
+			name: "t",
+			description: "",
+			bpm: 100,
+			timeSignature: [4, 4],
+			measures: measuresOf(slots),
+		};
+	}
+
+	it("converting a slot to rest clears its note data and any roll stroke", () => {
+		let p = measurePattern([
+			slotWith("quarter", 5),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		p = setStroke(p, { measureIndex: 0, slotIndex: 0 }, "roll-down");
+		p = setSlotsDuration(p, [{ measureIndex: 0, slotIndex: 0 }], "rest");
+
+		const slot = p.measures[0].slots[0];
+		expect(slot.duration).toBe("rest");
+		expect(slot.strings.every((sf) => sf.fret === null && !sf.muted)).toBe(true);
+		expect(slot.stroke).toBeUndefined();
+	});
+
+	it("converting to a non-rest duration preserves note data", () => {
+		let p = measurePattern([
+			slotWith("quarter", 5),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		p = setSlotsDuration(p, [{ measureIndex: 0, slotIndex: 0 }], "eighth");
+		expect(p.measures[0].slots[0].duration).toBe("eighth");
+		expect(p.measures[0].slots[0].strings[0].fret).toBe(5);
+	});
+});
+
+describe("split/merge round-trips for newly exposed integer-weight durations", () => {
+	it("sixteenth ⇄ two 32nds, keeping the 4/4 measure at 32 units", () => {
+		const measures = measuresOf([
+			slotWith("sixteenth", 5), // 2
+			makeEmptySlot("sixteenth"), // 2
+			makeEmptySlot("quarter"), // 8
+			makeEmptySlot("quarter"), // 8
+			makeEmptySlot("quarter"), // 8
+			makeEmptySlot("eighth"), // 4
+		]); // = 32
+		expect(usedUnits(measures[0].slots)).toBe(measureCapacity([4, 4]));
+
+		const split = splitSlot(measures, 0, 0, "32nd", [4, 4]);
+		expect(split[0].slots[0].duration).toBe("32nd");
+		expect(split[0].slots[1].duration).toBe("32nd");
+		expect(firstFret(split, 0)).toBe(5); // first sub-slot inherits the note
+		expect(firstFret(split, 1)).toBeNull();
+		expect(usedUnits(split[0].slots)).toBe(32);
+
+		const merged = mergeSlots(split, 0, 0, "sixteenth", [4, 4]);
+		expect(merged.type).toBe("ok");
+		if (merged.type === "ok") {
+			expect(merged.measures[0].slots[0].duration).toBe("sixteenth");
+			expect(merged.measures[0].slots[0].strings[0].fret).toBe(5);
+			expect(usedUnits(merged.measures[0].slots)).toBe(32);
+		}
+	});
+
+	it("dotted-quarter ⇄ two dotted-eighths, keeping the 4/4 measure at 32 units", () => {
+		const measures = measuresOf([
+			slotWith("dotted-quarter", 7), // 12
+			makeEmptySlot("quarter"), // 8
+			makeEmptySlot("quarter"), // 8
+			makeEmptySlot("eighth"), // 4
+		]); // = 32
+		expect(usedUnits(measures[0].slots)).toBe(32);
+
+		const split = splitSlot(measures, 0, 0, "dotted-eighth", [4, 4]);
+		expect(split[0].slots[0].duration).toBe("dotted-eighth");
+		expect(split[0].slots[1].duration).toBe("dotted-eighth");
+		expect(firstFret(split, 0)).toBe(7);
+		expect(usedUnits(split[0].slots)).toBe(32);
+
+		const merged = mergeSlots(split, 0, 0, "dotted-quarter", [4, 4]);
+		expect(merged.type).toBe("ok");
+		if (merged.type === "ok") {
+			expect(merged.measures[0].slots[0].duration).toBe("dotted-quarter");
+			expect(merged.measures[0].slots[0].strings[0].fret).toBe(7);
+			expect(usedUnits(merged.measures[0].slots)).toBe(32);
+		}
+	});
+
+	it("splits a quarter into eight 32nds without breaking capacity", () => {
+		const measures = measuresOf([
+			slotWith("quarter", 3),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const split = splitSlot(measures, 0, 0, "32nd", [4, 4]);
+		expect(split[0].slots.filter((s) => s.duration === "32nd")).toHaveLength(8);
+		expect(usedUnits(split[0].slots)).toBe(32);
+	});
+});
+
+describe("integer-weight guard on split/merge", () => {
+	it("hasIntegerUnitWeight: true for plain/dotted/32nd, false for triplets", () => {
+		expect(hasIntegerUnitWeight("dotted-quarter")).toBe(true);
+		expect(hasIntegerUnitWeight("dotted-eighth")).toBe(true);
+		expect(hasIntegerUnitWeight("32nd")).toBe(true);
+		expect(hasIntegerUnitWeight("quarter")).toBe(true);
+		expect(hasIntegerUnitWeight("rest")).toBe(true);
+		expect(hasIntegerUnitWeight("eighth-triplet")).toBe(false);
+		expect(hasIntegerUnitWeight("sixteenth-triplet")).toBe(false);
+	});
+
+	it("splitSlot rejects both triplet targets, returning the measures unchanged", () => {
+		const measures = measuresOf([
+			slotWith("quarter", 3),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		expect(splitSlot(measures, 0, 0, "eighth-triplet", [4, 4])).toEqual(measures);
+		expect(splitSlot(measures, 0, 0, "sixteenth-triplet", [4, 4])).toEqual(measures);
+	});
+
+	it("mergeSlots rejects both triplet targets, returning an ok/unchanged result", () => {
+		const measures = measuresOf([
+			slotWith("eighth", 2),
+			makeEmptySlot("eighth"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		expect(mergeSlots(measures, 0, 0, "eighth-triplet", [4, 4])).toEqual({ type: "ok", measures });
+		expect(mergeSlots(measures, 0, 0, "sixteenth-triplet", [4, 4])).toEqual({
+			type: "ok",
+			measures,
+		});
+	});
+});
+
+describe("newly exposed durations survive editor → render → audio with consistent length", () => {
+	function singleSlotPattern(duration: Duration, bpm: number): FingerpickPattern {
+		return {
+			id: "p",
+			name: "t",
+			description: "",
+			bpm,
+			timeSignature: [4, 4],
+			measures: measuresOf([slotWith(duration, 3)]),
+		};
+	}
+
+	// Each layer measures the duration's length relative to a quarter note, independently:
+	// the editor via unit weight, the VexFlow render via note ticks, the scheduler via
+	// total pattern duration. All three ratios must agree.
+	function layerRatios(duration: Duration): { editor: number; render: number; audio: number } {
+		const bpm = 120;
+		const q = singleSlotPattern("quarter", bpm);
+		const d = singleSlotPattern(duration, bpm);
+		const qNote = fingerpickToVexFlow(q.measures[0]).notes[0];
+		const dNote = fingerpickToVexFlow(d.measures[0]).notes[0];
+		return {
+			editor: slotDurationUnits(duration) / slotDurationUnits("quarter"),
+			render: dNote.getTicks().value() / qNote.getTicks().value(),
+			audio: getTotalPatternDuration(d, bpm) / getTotalPatternDuration(q, bpm),
+		};
+	}
+
+	for (const duration of ["dotted-quarter", "dotted-eighth", "32nd"] as Duration[]) {
+		it(`${duration}: editor, VexFlow render, and scheduler agree on relative length`, () => {
+			const r = layerRatios(duration);
+			expect(r.render).toBeCloseTo(r.editor, 6);
+			expect(r.audio).toBeCloseTo(r.editor, 6);
+
+			// The scheduler emits an actual note event whose length is the slot duration.
+			const pattern = singleSlotPattern(duration, 120);
+			const events = fingerpickPatternToScheduleEvents(pattern, 120);
+			expect(events.length).toBeGreaterThanOrEqual(1);
+			expect(events[0].duration).toBeCloseTo(getTotalPatternDuration(pattern, 120), 6);
+		});
+	}
 });

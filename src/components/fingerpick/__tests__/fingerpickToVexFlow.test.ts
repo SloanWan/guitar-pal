@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
 	TabNote,
 	GhostNote,
+	StaveNote,
 	TabTie,
 	TabSlide,
 	Voice,
@@ -83,12 +84,15 @@ describe("fingerpickToVexFlow — empty / silent", () => {
 		expect(connectors).toHaveLength(0);
 	});
 
-	it("rest slot becomes a GhostNote regardless of string data", () => {
+	it("rest slot becomes a visible rest StaveNote regardless of string data", () => {
 		const { notes } = fingerpickToVexFlow(
 			measure([beatSlot("s1", "rest", { 0: { fret: 5 } })])
 		);
 		expect(notes).toHaveLength(1);
-		expect(notes[0]).toBeInstanceOf(GhostNote);
+		// A rest renders a visible glyph (StaveNote rest), not an invisible GhostNote spacer.
+		expect(notes[0]).toBeInstanceOf(StaveNote);
+		expect(notes[0]).not.toBeInstanceOf(GhostNote);
+		expect(notes[0].getDuration()).toBe("q");
 	});
 });
 

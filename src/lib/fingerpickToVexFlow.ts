@@ -5,6 +5,7 @@ import {
 	TabSlide,
 	Tuplet,
 	GhostNote,
+	StaveNote,
 	StemmableNote,
 	GraceTabNote,
 	GraceNoteGroup,
@@ -101,7 +102,10 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		if (slot.duration === "rest") {
 			pendingGraceNotes = [];
 			const noteIdx = notes.length;
-			notes.push(new GhostNote({ duration }));
+			// A rest renders a VISIBLE glyph, not an invisible GhostNote spacer. On a tab
+			// stave a StaveNote rest draws the standard rest symbol; the "b/4" key parks it
+			// mid-stave. Duration is the fixed quarter rest (VEX_DURATION.rest = "q" → "qr").
+			notes.push(new StaveNote({ keys: ["b/4"], duration: `${duration}r` }));
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
 			continue;

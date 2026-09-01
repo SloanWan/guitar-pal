@@ -411,6 +411,7 @@ export default function FingerpickEditModal({
 			setPopupConfirm(null);
 			setPresetConfirm(null);
 			setDiscardConfirm(false);
+			setRepeatError(null);
 			setHintOpen(false);
 			setHighlightedMeasureId(null);
 			pendingDigitRef.current = null;
@@ -746,6 +747,8 @@ export default function FingerpickEditModal({
 		measureIndex: number,
 		patch: Partial<Pick<Measure, "repeatStart" | "repeatEnd" | "repeatTimes">>,
 	) {
+		// Any repeat edit is the user acting on the markup — drop a stale save-blocked error.
+		setRepeatError(null);
 		commit((prev) => ({
 			...prev,
 			measures: prev.measures.map((m, i) => {
@@ -1897,7 +1900,10 @@ export default function FingerpickEditModal({
 										</div>
 									</div>
 
-									{/* Quick preset row: fill the whole measure with one note value. */}
+									{/* Quick preset row: fill the whole measure with one note value.
+									    The repeat-barline toggles (|: start, :| end) sit at the row's
+									    bottom-right; the play-count stepper drops to its own line below
+									    when a repeat end is set. */}
 									<div className="flex items-center gap-1 border-t border-line pt-2">
 										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
 											All
@@ -1914,83 +1920,80 @@ export default function FingerpickEditModal({
 												</button>
 											),
 										)}
+										<div className="flex items-center gap-1 ml-auto">
+											<button
+												onClick={() =>
+													setMeasureRepeat(measureIndex, {
+														repeatStart: !measure.repeatStart,
+													})
+												}
+												title="Repeat start (|:) — the section repeats from here"
+												aria-pressed={!!measure.repeatStart}
+												className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
+													measure.repeatStart
+														? "border-denim bg-denim-tint text-denim"
+														: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+												}`}
+											>
+												|:
+											</button>
+											<button
+												onClick={() =>
+													setMeasureRepeat(measureIndex, {
+														repeatEnd: !measure.repeatEnd,
+													})
+												}
+												title="Repeat end (:|) — loop back to the repeat start"
+												aria-pressed={!!measure.repeatEnd}
+												className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
+													measure.repeatEnd
+														? "border-denim bg-denim-tint text-denim"
+														: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+												}`}
+											>
+												:|
+											</button>
+										</div>
 									</div>
 
-									{/* Repeat barlines: |: (start) and :| (end) with an editable play-count. */}
-									<div className="flex items-center gap-1 border-t border-line pt-2">
-										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
-											Repeat
-										</span>
-										<button
-											onClick={() =>
-												setMeasureRepeat(measureIndex, {
-													repeatStart: !measure.repeatStart,
-												})
-											}
-											title="Repeat start (|:)"
-											aria-pressed={!!measure.repeatStart}
-											className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
-												measure.repeatStart
-													? "border-denim bg-denim-tint text-denim"
-													: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
-											}`}
-										>
-											|:
-										</button>
-										<button
-											onClick={() =>
-												setMeasureRepeat(measureIndex, {
-													repeatEnd: !measure.repeatEnd,
-												})
-											}
-											title="Repeat end (:|)"
-											aria-pressed={!!measure.repeatEnd}
-											className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
-												measure.repeatEnd
-													? "border-denim bg-denim-tint text-denim"
-													: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
-											}`}
-										>
-											:|
-										</button>
-										{measure.repeatEnd && (
-											<div className="flex items-center gap-0.5 ml-auto">
-												<button
-													onClick={() =>
-														setMeasureRepeat(measureIndex, {
-															repeatTimes: Math.max(
-																DEFAULT_REPEAT_TIMES,
-																(measure.repeatTimes ??
-																	DEFAULT_REPEAT_TIMES) - 1,
-															),
-														})
-													}
-													title="Play fewer times"
-													className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
-												>
-													−
-												</button>
-												<span className="font-mono text-xs w-7 text-center text-ink">
-													×{measure.repeatTimes ?? DEFAULT_REPEAT_TIMES}
-												</span>
-												<button
-													onClick={() =>
-														setMeasureRepeat(measureIndex, {
-															repeatTimes: Math.min(
-																REPEAT_TIMES_MAX,
-																(measure.repeatTimes ??
-																	DEFAULT_REPEAT_TIMES) + 1,
-															),
-														})
-													}
-													title="Play more times"
-													className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
-												>
-													+
-												</button>
-											</div>
-										)}
-									</div>
+									{/* Play-count stepper — only when this measure ends a repeat. */}
+									{measure.repeatEnd && (
+										<div className="flex items-center gap-0.5 justify-end">
+											<button
+												onClick={() =>
+													setMeasureRepeat(measureIndex, {
+														repeatTimes: Math.max(
+															DEFAULT_REPEAT_TIMES,
+															(measure.repeatTimes ??
+																DEFAULT_REPEAT_TIMES) - 1,
+														),
+													})
+												}
+												title="Play fewer times"
+												className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
+											>
+												−
+											</button>
+											<span className="font-mono text-xs w-7 text-center text-ink">
+												×{measure.repeatTimes ?? DEFAULT_REPEAT_TIMES}
+											</span>
+											<button
+												onClick={() =>
+													setMeasureRepeat(measureIndex, {
+														repeatTimes: Math.min(
+															REPEAT_TIMES_MAX,
+															(measure.repeatTimes ??
+																DEFAULT_REPEAT_TIMES) + 1,
+														),
+													})
+												}
+												title="Play more times"
+												className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
+											>
+												+
+											</button>
+										</div>
+									)}
 
 									{presetConfirm &&
 										presetConfirm.measureIndex === measureIndex && (

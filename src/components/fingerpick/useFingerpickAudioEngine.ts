@@ -841,78 +841,6 @@ export function useFingerpickAudioEngine() {
 	}
 
 	/**
-	 * Apply a live pattern edit and reschedule audio seamlessly from the current
-	 * musical position — the audio analogue of the TAB re-rendering on edit. The
-	 * pattern is captured into patternRef only at play() time, so without this a
-	 * mid-playback edit would keep looping the pre-edit notes until the next play().
-	 *
-	 * The pattern's *structure* can change (measures/slots added, removed, split,
-	 * merged), so unlike applyBpmChange this reschedules from the current elapsed
-	 * TIME within the pass rather than from a measure/slot index that may no longer
-	 * exist. Already-played notes of this pass are skipped (schedulePass drops events
-	 * with time < startOffset); notes still ahead are scheduled from the new pattern.
-	 *
-	 * - Playing: cancels pre-scheduled note sources, rebuilds the event stream, and
-	 *   reschedules from the clamped elapsed position — no audible restart.
-	 * - Paused: updates the refs so resume() plays the new pattern.
-	 * - Stopped: updates patternRef only (the next play() rebuilds from it anyway).
-	 *
-	 * `pattern.bpm` must carry the current *playback* BPM — the caller merges the
-	 * live BPM the same way handlePlay()/play() do.
-	 */
-	function applyPatternChange(pattern: FingerpickPattern): void {
-		patternRef.current = pattern;
-		const bpm = pattern.bpm;
-		const newEvents = fingerpickPatternToScheduleEvents(pattern, bpm, rollParamsRef.current);
-		const newPatternDuration = getTotalPatternDuration(pattern, bpm);
-		const newBeatOnsets = computeBeatOnsets(pattern, bpm);
-		timeSignatureRef.current = pattern.timeSignature;
-		secondsPerBeatRef.current = 60 / bpm;
-
-		if (isPlayingRef.current) {
-			const progress = getPlaybackProgress();
-			const passIndex = progress?.passIndex ?? 0;
-			// Clamp the current position into the (possibly shorter) new pattern; if the
-			// edit trimmed it below the current position, restart the pass from t=0.
-			let elapsed = progress?.elapsed ?? 0;
-			if (newPatternDuration <= 0 || elapsed >= newPatternDuration) elapsed = 0;
-
-			clearTimers();
-			cancelAllSources();
-
-			eventsRef.current = newEvents;
-			patternDurationRef.current = newPatternDuration;
-			beatOnsetsRef.current = newBeatOnsets;
-
-			const ctx = ctxRef.current;
-			if (!ctx) return;
-
-			const totalElapsed =
-				computeLoopOffset(passIndex, newPatternDuration, loopGapRef.current) + elapsed;
-			startTimeRef.current = ctx.currentTime - totalElapsed;
-
-			schedulePassAndQueue(passIndex, elapsed);
-
-			if (!loopRef.current) {
-				const remainingMs = (newPatternDuration - elapsed + SOURCE_STOP_BUFFER_S) * 1000;
-				endTimerRef.current = setTimeout(() => {
-					isPlayingRef.current = false;
-					setIsPlaying(false);
-				}, remainingMs);
-			}
-		} else if (pausedAtRef.current !== null) {
-			// Paused: keep resume() consistent; clamp into the new duration.
-			let pausedAt = pausedAtRef.current;
-			if (newPatternDuration <= 0 || pausedAt >= newPatternDuration) pausedAt = 0;
-			pausedAtRef.current = pausedAt;
-			eventsRef.current = newEvents;
-			patternDurationRef.current = newPatternDuration;
-			beatOnsetsRef.current = newBeatOnsets;
-		}
-		// Stopped: patternRef updated; the next play() rebuilds from selectedPattern.
-	}
-
-	/**
 	 * Change the loop gap mid-playback.
 	 *
 	 * - Playing + looping: recalibrates startTimeRef so computeLoopOffset() still
@@ -1106,7 +1034,6 @@ export function useFingerpickAudioEngine() {
 		stop,
 		getPlaybackProgress,
 		applyBpmChange,
-		applyPatternChange,
 		applyLoopGapChange,
 		seekToNote,
 		metronomeEnabled,

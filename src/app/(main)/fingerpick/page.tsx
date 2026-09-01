@@ -250,7 +250,6 @@ export default function FingerpickPage() {
 		noteGain,
 		setNoteGain,
 		applyBpmChange,
-		applyPatternChange,
 		applyLoopGapChange,
 		seekToNote,
 	} = useFingerpickAudioEngine();
@@ -371,6 +370,26 @@ export default function FingerpickPage() {
 		setSelectedPattern(p);
 		setBpm(p.bpm);
 		dragBpmRef.current = p.bpm;
+		setCursorResetTick((t) => t + 1);
+	}
+
+	// Saving an edit to the currently-selected pattern: the audio engine snapshots
+	// the pattern into a ref at play() time, so a running loop would keep playing the
+	// pre-edit notes. Reset the engine here so the change is heard without a manual
+	// page refresh — restart from the top if it was playing, otherwise just clear any
+	// stale scheduled/paused audio so the next play() rebuilds from the saved edit.
+	function handleSaveCustom(pattern: FingerpickPattern) {
+		const isCurrent = pattern.id === selectedPattern.id;
+		const wasPlaying = isCurrent && isPlaying;
+		saveCustomPattern(pattern);
+		if (!isCurrent) return;
+		stop();
+		if (wasPlaying) {
+			play(
+				{ ...pattern, bpm },
+				{ loop: true, loopGapSeconds: loopGap, forceLetRing: true },
+			);
+		}
 		setCursorResetTick((t) => t + 1);
 	}
 
@@ -625,17 +644,6 @@ export default function FingerpickPage() {
 		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(selectedPattern, bpm);
 		measureBoundariesRef.current = computeMeasureBoundaries(selectedPattern, bpm);
 	}, [selectedPattern, bpm]);
-
-	// Push live pattern edits into the running audio engine. The TAB re-renders from
-	// selectedPattern via React state, but the engine captures the pattern into a ref
-	// only at play() time — so a save made while playing/paused would keep looping the
-	// pre-edit notes until the next play(). Fire only on pattern-identity change (BPM
-	// edits are handled by applyBpmChange); bpm is merged the same way handlePlay does.
-	// When idle, the next handlePlay() already rebuilds from selectedPattern, so skip.
-	useEffect(() => {
-		if (isPlaying || isPaused) applyPatternChange({ ...selectedPattern, bpm });
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedPattern]);
 
 	// Restore the last-viewed pattern once patterns finish loading (custom patterns
 	// arrive async, so wait for isLoading to clear before resolving the saved id).
@@ -1189,7 +1197,7 @@ export default function FingerpickPage() {
 						setSelectedPattern={handleSelectPattern}
 						favouriteIds={favouriteIds}
 						toggleFavourite={toggleFavourite}
-						onSaveCustom={saveCustomPattern}
+						onSaveCustom={handleSaveCustom}
 						onDeleteCustom={deleteCustomPattern}
 						onClose={() => setShowLibrary(false)}
 						user={user}

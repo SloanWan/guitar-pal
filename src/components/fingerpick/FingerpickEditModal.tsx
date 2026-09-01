@@ -18,13 +18,21 @@ import {
 	ArrowRight,
 	ArrowLeftToLine,
 	ArrowRightToLine,
+	ArrowDown,
+	ArrowUp,
 	Merge,
 	Undo2,
 	Redo2,
 	CircleHelp,
 	X as XIcon,
 } from "lucide-react";
-import type { Duration, FingerpickPattern, Measure, StringFret, Stroke } from "@/lib/fingerpickTypes";
+import type {
+	Duration,
+	FingerpickPattern,
+	Measure,
+	StringFret,
+	Stroke,
+} from "@/lib/fingerpickTypes";
 import {
 	makeDefaultPattern,
 	clonePatternForEdit,
@@ -105,9 +113,9 @@ function DurationIcon({ duration }: { duration: Duration }) {
 // the field; "roll-down"/"roll-up" are the domain Stroke values. Roll ↓ = hand moves
 // down = low→high pitch; Roll ↑ = hand moves up = high→low pitch (see fingerpickTypes).
 const STROKE_PICKER: { label: string; value: "none" | Stroke }[] = [
-	{ label: "None", value: "none" },
-	{ label: "Roll ↓", value: "roll-down" },
-	{ label: "Roll ↑", value: "roll-up" },
+	{ label: "Off", value: "none" },
+	{ label: "Down", value: "roll-down" },
+	{ label: "Up", value: "roll-up" },
 ];
 
 const TECHNIQUE_OPTIONS: { label: string; value: NonNullable<StringFret["technique"]> }[] = [
@@ -901,11 +909,9 @@ export default function FingerpickEditModal({
 		const viewRect = scroller.getBoundingClientRect();
 		let dx = 0;
 		let dy = 0;
-		if (menuRect.right > viewRect.right - PAD)
-			dx = menuRect.right - (viewRect.right - PAD);
+		if (menuRect.right > viewRect.right - PAD) dx = menuRect.right - (viewRect.right - PAD);
 		else if (menuRect.left < viewRect.left + PAD) dx = menuRect.left - (viewRect.left + PAD);
-		if (menuRect.bottom > viewRect.bottom - PAD)
-			dy = menuRect.bottom - (viewRect.bottom - PAD);
+		if (menuRect.bottom > viewRect.bottom - PAD) dy = menuRect.bottom - (viewRect.bottom - PAD);
 		else if (menuRect.top < viewRect.top + PAD) dy = menuRect.top - (viewRect.top + PAD);
 		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
 	}, [techMenu]);
@@ -950,105 +956,60 @@ export default function FingerpickEditModal({
 			}}
 			className="z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg"
 		>
-			{/* Rest toggle — silences the selected column(s) while keeping their
-			    rhythmic duration, so the measure total never changes. Durations
-			    themselves are only ever changed via Split / Merge below. */}
-			<div className="flex flex-col gap-1">
-				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-					Silence
-				</span>
-				<button
-					onClick={() => applyRest(!allSelectedRest)}
-					title={
-						allSelectedRest
-							? "Turn the rest back into a note"
-							: "Silence this slot (keeps its duration as a rest)"
-					}
-					className={`h-7 px-2 font-mono text-xs font-semibold border border-line-strong transition-colors ${
-						allSelectedRest
-							? "bg-denim text-on-denim"
-							: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-					}`}
-				>
-					Rest
-				</button>
-			</div>
-
-			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
-			    selected column. Same segmented-pill pattern as the Roll picker. */}
-			<div className="flex flex-col gap-1 border-t border-line pt-2">
-				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-					Roll
-				</span>
-				<div className="flex border border-line-strong">
-					{STROKE_PICKER.map((s, i) => (
-						<button
-							key={s.value}
-							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
-							title={s.value === "none" ? "No roll" : s.value}
-							className={`h-7 flex-1 px-2 font-mono text-xs font-semibold transition-colors ${
-								i > 0 ? "border-l border-line-strong" : ""
-							} ${
-								selectedStroke === s.value
-									? "bg-denim text-on-denim"
-									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-							}`}
-						>
-							{s.label}
-						</button>
-					))}
-				</div>
-			</div>
-
 			{/* Split / merge (single column only). Split subdivides the slot into equal
 			    smaller notes; merge folds this slot plus the following run into any larger
 			    note value they sum to. Both preserve the measure total. */}
-			{singleTarget && !popupConfirm && (splitOptions.length > 0 || mergeOptions.length > 0) && (
-				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
-					{splitOptions.length > 0 && (
-						<div className="flex flex-wrap items-center gap-1">
-							<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-								Split
-							</span>
-							{splitOptions.map(({ duration, count }) => (
-								<button
-									key={duration}
-									onClick={() => applySplit(singleTarget, duration)}
-									title={`Split into ${count} × ${duration}`}
-									className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-								>
-									{count}×<DurationIcon duration={duration} />
-								</button>
-							))}
-						</div>
-					)}
-					{mergeOptions.length > 0 && (
-						<div className="flex flex-wrap items-center gap-1">
-							<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-								Merge
-							</span>
-							{mergeOptions.map(({ duration, count }) => (
-								<button
-									key={duration}
-									onClick={() => requestMerge(singleTarget, duration)}
-									title={`Merge ${count} slots into a ${duration}`}
-									className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-								>
-									<Merge size={13} />
-									<DurationIcon duration={duration} />
-								</button>
-							))}
-						</div>
-					)}
-				</div>
-			)}
+			{singleTarget &&
+				!popupConfirm &&
+				(splitOptions.length > 0 || mergeOptions.length > 0) && (
+					<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
+						{splitOptions.length > 0 && (
+							<div className="flex flex-wrap items-center gap-1">
+								<PopupSectionLabel
+									label="Split"
+									hint="Break this note into smaller, even notes."
+								/>
+								{splitOptions.map(({ duration, count }) => (
+									<button
+										key={duration}
+										onClick={() => applySplit(singleTarget, duration)}
+										title={`Split into ${count} × ${duration}`}
+										className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+									>
+										{count}×<DurationIcon duration={duration} />
+									</button>
+								))}
+							</div>
+						)}
+						{mergeOptions.length > 0 && (
+							<div className="flex flex-wrap items-center gap-1">
+								<PopupSectionLabel
+									label="Merge"
+									hint="Join this note with the ones after it into one longer note."
+								/>
+								{mergeOptions.map(({ duration, count }) => (
+									<button
+										key={duration}
+										onClick={() => requestMerge(singleTarget, duration)}
+										title={`Merge ${count} slots into a ${duration}`}
+										className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+									>
+										<Merge size={13} />
+										<DurationIcon duration={duration} />
+									</button>
+								))}
+							</div>
+						)}
+					</div>
+				)}
 
 			{/* Replace whole measure with a single whole note (single column only) */}
 			{singleTarget && measureHasContent && !popupConfirm && (
-				<div className="border-t border-line pt-2">
+				<div className="border-t border-line pt-2 first:border-t-0 first:pt-0">
 					<button
 						onClick={() => requestReplaceWithWhole(singleTarget)}
-						className="flex items-center gap-1 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+						title="Clear the whole measure back to one empty note."
+						className="flex items-center gap-1 h-7 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 					>
 						Replace with <DurationIcon duration="whole" />
 					</button>
@@ -1057,7 +1018,7 @@ export default function FingerpickEditModal({
 
 			{/* Inline confirmation for a destructive merge / whole-replace */}
 			{popupConfirm && (
-				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
+				<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
 					<span className="text-[11px] text-ink-dim">
 						{popupConfirm.kind === "merge"
 							? `This will discard data from ${popupConfirm.affectedSlotCount} slot(s). Continue?`
@@ -1080,19 +1041,89 @@ export default function FingerpickEditModal({
 				</div>
 			)}
 
-			<div className="flex gap-1 border-t border-line pt-2">
-				<PopupIconButton title="Insert before" onClick={() => applyStructural("before")}>
-					<ArrowLeftToLine size={14} />
-				</PopupIconButton>
-				<PopupIconButton title="Insert after" onClick={() => applyStructural("after")}>
-					<ArrowRightToLine size={14} />
-				</PopupIconButton>
-				<PopupIconButton title="Duplicate" onClick={() => applyStructural("duplicate")}>
-					<Copy size={14} />
-				</PopupIconButton>
-				<PopupIconButton title="Delete" onClick={() => applyStructural("delete")} danger>
-					<Trash2 size={14} />
-				</PopupIconButton>
+			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
+			    selected column. Rings the strings out one at a time instead of together. */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Roll"
+					hint="Ring the strings out one at a time instead of all together."
+				/>
+				<div className="flex border border-line-strong">
+					{STROKE_PICKER.map((s, i) => (
+						<button
+							key={s.value}
+							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
+							title={
+								s.value === "none"
+									? "No roll — sound the strings together"
+									: s.value === "roll-down"
+										? "Roll down — low to high strings"
+										: "Roll up — high to low strings"
+							}
+							className={`h-7 flex-1 px-2 flex items-center justify-center gap-1 font-mono text-xs font-semibold transition-colors ${
+								i > 0 ? "border-l border-line-strong" : ""
+							} ${
+								selectedStroke === s.value
+									? "bg-denim text-on-denim"
+									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+							}`}
+						>
+							{s.value === "roll-down" && <ArrowDown size={12} aria-hidden />}
+							{s.value === "roll-up" && <ArrowUp size={12} aria-hidden />}
+							{s.label}
+						</button>
+					))}
+				</div>
+			</div>
+
+			{/* Rest — silences the selected column(s) while keeping their rhythmic
+			    duration, so the measure total never changes. */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Rest"
+					hint="Silence this slot but keep its timing in the measure."
+				/>
+				<button
+					onClick={() => applyRest(!allSelectedRest)}
+					title={
+						allSelectedRest
+							? "Turn the rest back into a note"
+							: "Silence this slot (keeps its duration as a rest)"
+					}
+					className={`h-7 px-2 font-mono text-xs font-semibold border border-line-strong transition-colors self-start ${
+						allSelectedRest
+							? "bg-denim text-on-denim"
+							: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+					}`}
+				>
+					Rest
+				</button>
+			</div>
+
+			{/* Move — structural edits on the selected slot(s). */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel label="Move" hint="Insert, duplicate, or delete this slot." />
+				<div className="flex gap-1">
+					<PopupIconButton
+						title="Insert before"
+						onClick={() => applyStructural("before")}
+					>
+						<ArrowLeftToLine size={14} />
+					</PopupIconButton>
+					<PopupIconButton title="Insert after" onClick={() => applyStructural("after")}>
+						<ArrowRightToLine size={14} />
+					</PopupIconButton>
+					<PopupIconButton title="Duplicate" onClick={() => applyStructural("duplicate")}>
+						<Copy size={14} />
+					</PopupIconButton>
+					<PopupIconButton
+						title="Delete"
+						onClick={() => applyStructural("delete")}
+						danger
+					>
+						<Trash2 size={14} />
+					</PopupIconButton>
+				</div>
 			</div>
 		</div>
 	);
@@ -1317,121 +1348,131 @@ export default function FingerpickEditModal({
 					ref={scrollRef}
 					className="fp-thin-scroll relative min-h-0 flex-1 overflow-auto"
 				>
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4 select-none">
-					{working.measures.map((measure, measureIndex) => {
-						const beatLabels = computeBeatLabels(measure.slots, working.timeSignature);
-						const beatGroups = computeBeatGroups(measure.slots, working.timeSignature);
-						const hoverInMeasure =
-							hoveredCell?.measureIndex === measureIndex ? hoveredCell : null;
-						// Slot indices sharing the hovered slot's binary-parent window (two
-						// sixteenths under a split eighth, two 32nds under a sixteenth, …), for
-						// the mid-level wash. Only kept when that window actually holds more
-						// than one slot, so notes at the beat's own subdivision don't get a
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4 select-none">
+						{working.measures.map((measure, measureIndex) => {
+							const beatLabels = computeBeatLabels(
+								measure.slots,
+								working.timeSignature,
+							);
+							const beatGroups = computeBeatGroups(
+								measure.slots,
+								working.timeSignature,
+							);
+							const hoverInMeasure =
+								hoveredCell?.measureIndex === measureIndex ? hoveredCell : null;
+							// Slot indices sharing the hovered slot's binary-parent window (two
+							// sixteenths under a split eighth, two 32nds under a sixteenth, …), for
+							// the mid-level wash. Only kept when that window actually holds more
+							// than one slot, so notes at the beat's own subdivision don't get a
 							// redundant single-column wash on top of the L1/L2 layers.
-						const subBeatSlots: Set<number> =
-							hoverInMeasure != null
-								? (() => {
-										const group = computeSubBeatGroups(
-											measure.slots,
-											working.timeSignature,
-										).find((g) => g.includes(hoverInMeasure.slotIndex));
-										return group && group.length > 1 ? new Set(group) : new Set();
-									})()
-								: new Set();
-						return (
-							<div
-								key={measure.id}
-								onMouseLeave={() => setHoveredCell(null)}
-								className="border border-line p-3 flex flex-col gap-2"
-							>
-								<div className="flex items-center justify-between">
-									<div className="flex items-center gap-2">
-										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-											Measure {measureIndex + 1}
-										</span>
+							const subBeatSlots: Set<number> =
+								hoverInMeasure != null
+									? (() => {
+											const group = computeSubBeatGroups(
+												measure.slots,
+												working.timeSignature,
+											).find((g) => g.includes(hoverInMeasure.slotIndex));
+											return group && group.length > 1
+												? new Set(group)
+												: new Set();
+										})()
+									: new Set();
+							return (
+								<div
+									key={measure.id}
+									onMouseLeave={() => setHoveredCell(null)}
+									className="border border-line p-3 flex flex-col gap-2"
+								>
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-2">
+											<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+												Measure {measureIndex + 1}
+											</span>
+											<button
+												onClick={() =>
+													commit((p) => ({
+														...p,
+														measures: cloneMeasure(
+															p.measures,
+															measureIndex,
+														),
+													}))
+												}
+												aria-label="Copy measure"
+												title="Copy measure"
+												className="flex items-center justify-center text-ink-dim hover:text-denim transition-colors"
+											>
+												<Copy size={14} />
+											</button>
+											<button
+												onClick={() =>
+													commit((p) => ({
+														...p,
+														measures: swapMeasures(
+															p.measures,
+															measureIndex,
+															measureIndex - 1,
+														),
+													}))
+												}
+												disabled={measureIndex === 0}
+												aria-label="Move measure left"
+												title="Move measure left"
+												className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
+											>
+												<ArrowLeft size={14} />
+											</button>
+											<button
+												onClick={() =>
+													commit((p) => ({
+														...p,
+														measures: swapMeasures(
+															p.measures,
+															measureIndex,
+															measureIndex + 1,
+														),
+													}))
+												}
+												disabled={
+													measureIndex === working.measures.length - 1
+												}
+												aria-label="Move measure right"
+												title="Move measure right"
+												className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
+											>
+												<ArrowRight size={14} />
+											</button>
+										</div>
 										<button
 											onClick={() =>
-												commit((p) => ({
-													...p,
-													measures: cloneMeasure(
-														p.measures,
-														measureIndex,
-													),
-												}))
+												commit((p) => deleteMeasure(p, measureIndex))
 											}
-											aria-label="Copy measure"
-											title="Copy measure"
-											className="flex items-center justify-center text-ink-dim hover:text-denim transition-colors"
+											disabled={working.measures.length <= 1}
+											aria-label="Delete measure"
+											title="Delete measure"
+											className="flex items-center gap-1 text-[10px] text-ink-dim hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 										>
-											<Copy size={14} />
-										</button>
-										<button
-											onClick={() =>
-												commit((p) => ({
-													...p,
-													measures: swapMeasures(
-														p.measures,
-														measureIndex,
-														measureIndex - 1,
-													),
-												}))
-											}
-											disabled={measureIndex === 0}
-											aria-label="Move measure left"
-											title="Move measure left"
-											className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
-										>
-											<ArrowLeft size={14} />
-										</button>
-										<button
-											onClick={() =>
-												commit((p) => ({
-													...p,
-													measures: swapMeasures(
-														p.measures,
-														measureIndex,
-														measureIndex + 1,
-													),
-												}))
-											}
-											disabled={measureIndex === working.measures.length - 1}
-											aria-label="Move measure right"
-											title="Move measure right"
-											className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
-										>
-											<ArrowRight size={14} />
+											<XIcon size={12} /> Delete
 										</button>
 									</div>
-									<button
-										onClick={() =>
-											commit((p) => deleteMeasure(p, measureIndex))
-										}
-										disabled={working.measures.length <= 1}
-										aria-label="Delete measure"
-										title="Delete measure"
-										className="flex items-center gap-1 text-[10px] text-ink-dim hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-									>
-										<XIcon size={12} /> Delete
-									</button>
-								</div>
 
-								{/* Column-major layout: a fixed label column, then one wrapper per
+									{/* Column-major layout: a fixed label column, then one wrapper per
 								    beat group. The L1 hover wash is applied to the group wrapper so
 								    it spans every string cell plus the duration label, column
 								    selector and beat label beneath. */}
-								<div className="flex gap-0.5 items-start">
-									<div className="flex w-5 shrink-0 flex-col gap-0.5">
-										{STRING_LABELS.map((label, stringIndex) => (
-											<div
-												key={stringIndex}
-												className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
-											>
-												{label}
-											</div>
-										))}
-									</div>
+									<div className="flex gap-0.5 items-start">
+										<div className="flex w-5 shrink-0 flex-col gap-0.5">
+											{STRING_LABELS.map((label, stringIndex) => (
+												<div
+													key={stringIndex}
+													className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
+												>
+													{label}
+												</div>
+											))}
+										</div>
 
-									{/* Horizontally scrollable slot area. Each slot column has a
+										{/* Horizontally scrollable slot area. Each slot column has a
 									    legible min-width, so when a measure is subdivided into
 									    many small notes (e.g. 32nds) the columns overflow and this
 									    wrapper scrolls sideways — while the string-label column
@@ -1441,426 +1482,497 @@ export default function FingerpickEditModal({
 									    the CSS spec would otherwise force on: with overflow-x set to
 									    auto, a still-visible overflow-y is promoted to auto too, so
 									    any sub-pixel height rounding would summon a stray v-scrollbar. */}
-									<div className="fp-thin-scroll min-w-0 flex-1 overflow-x-auto overflow-y-hidden pb-2">
-										<div className="flex items-start gap-0.5">
-											{beatGroups.map((group, groupIndex) => {
-										const l1Active =
-											hoverInMeasure != null &&
-											group.includes(hoverInMeasure.slotIndex);
-										return (
-											<div
-												key={groupIndex}
-												className="flex flex-1 gap-0.5"
-												style={{
-													// Grow proportionally to slot count so every slot column
-													// stays equal width across the whole measure.
-													flexGrow: group.length,
-													flexBasis: 0,
-													backgroundColor: l1Active
-														? HOVER_L1_BG
-														: undefined,
-												}}
-											>
-												{group.map((slotIndex) => {
-													const slot = measure.slots[slotIndex];
-													const key = columnKey({
-														measureIndex,
-														slotIndex,
-													});
-													const columnSelected = selectedColumns.has(key);
-													// A rest slot gets a faint gray wash across its whole
-													// column so it reads as silence at a glance. bg-raise is
-													// theme-aware (subtle light gray on light, subtle dark
-													// gray on dark), so no per-mode color handling is needed.
-													const isRest = !!slot.isRest;
+										<div className="fp-thin-scroll min-w-0 flex-1 overflow-x-auto overflow-y-hidden pb-2">
+											<div className="flex items-start gap-0.5">
+												{beatGroups.map((group, groupIndex) => {
+													const l1Active =
+														hoverInMeasure != null &&
+														group.includes(hoverInMeasure.slotIndex);
 													return (
 														<div
-															key={slot.id}
-															ref={
-																key === firstSelectedColumnKey
-																	? popupAnchorRef
-																	: undefined
-															}
-															// Mid-level sixteenth-window wash (denim) spans this
-															// whole column — cells plus labels — like the L1 beat
-															// wash but one subdivision finer. Inline so it layers
-															// above the rest className bg during hover; it clears
-															// back to the rest wash when the hover moves away.
-															style={
-																subBeatSlots.has(slotIndex)
-																	? { backgroundColor: HOVER_SUBBEAT_BG }
-																	: undefined
-															}
-															// min-w-5 floors each slot column at a legible width; once the
-															// columns can no longer fit, the parent scroll wrapper overflows
-															// horizontally rather than shrinking them into an unreadable smear.
-															className={`flex min-w-5 flex-1 flex-col gap-0.5 rounded-sm ${
-																isRest ? "bg-raise/70" : ""
-															}`}
+															key={groupIndex}
+															className="flex flex-1 gap-0.5"
+															style={{
+																// Grow proportionally to slot count so every slot column
+																// stays equal width across the whole measure.
+																flexGrow: group.length,
+																flexBasis: 0,
+																backgroundColor: l1Active
+																	? HOVER_L1_BG
+																	: undefined,
+															}}
 														>
-															{STRING_LABELS.map((_, stringIndex) => {
-																const cell: Cell = {
+															{group.map((slotIndex) => {
+																const slot =
+																	measure.slots[slotIndex];
+																const key = columnKey({
 																	measureIndex,
 																	slotIndex,
-																	stringIndex,
-																};
-																const ck = cellKey(cell);
-																const sf =
-																	slot.strings[stringIndex];
-																const isSelected =
-																	selectedCell != null &&
-																	selectedCell.measureIndex ===
-																		measureIndex &&
-																	selectedCell.slotIndex ===
-																		slotIndex &&
-																	selectedCell.stringIndex ===
-																		stringIndex;
-																const glyph = sf.technique
-																	? TECHNIQUE_GLYPH[sf.technique]
-																	: undefined;
-																// Muted cells can't be tied — treat
-																// a tied+muted cell as untied here.
-																const tiedDisplay =
-																	sf.tied && !sf.muted;
-																const l2Alpha =
-																	hoverInMeasure != null
-																		? (hoverInMeasure.slotIndex ===
-																			slotIndex
-																				? HOVER_L2_ALPHA
-																				: 0) +
-																			(hoverInMeasure.stringIndex ===
-																			stringIndex
-																				? HOVER_L2_ALPHA
-																				: 0)
-																		: 0;
+																});
+																const columnSelected =
+																	selectedColumns.has(key);
+																// A rest slot gets a faint gray wash across its whole
+																// column so it reads as silence at a glance. bg-raise is
+																// theme-aware (subtle light gray on light, subtle dark
+																// gray on dark), so no per-mode color handling is needed.
+																const isRest = !!slot.isRest;
 																return (
-																	<button
-																		key={ck}
-																		ref={(el) => {
-																			if (el)
-																				cellRefs.current.set(
-																					ck,
-																					el,
-																				);
-																			else
-																				cellRefs.current.delete(
-																					ck,
-																				);
-																		}}
-																		onClick={() => {
-																			// Touch selection +
-																			// keyboard focus is
-																			// handled in
-																			// handleCellPointerUp so
-																			// focus() lands inside
-																			// the tap gesture (iOS
-																			// requirement); the
-																			// trailing click is a
-																			// no-op here.
-																			if (
-																				lastPointerTypeRef.current ===
-																				"touch"
-																			)
-																				return;
-																			setTouchMute(null);
-																			setSelectedCell(cell);
-																		}}
-																		onKeyDown={(e) =>
-																			handleCellKeyDown(
-																				e,
-																				cell,
-																			)
+																	<div
+																		key={slot.id}
+																		ref={
+																			key ===
+																			firstSelectedColumnKey
+																				? popupAnchorRef
+																				: undefined
 																		}
-																		onMouseEnter={() =>
-																			setHoveredCell({
-																				measureIndex,
-																				slotIndex,
-																				stringIndex,
-																			})
-																		}
-																		onPointerDown={(e) =>
-																			handleCellPointerDown(
-																				cell,
-																				e,
-																			)
-																		}
-																		onPointerUp={(e) =>
-																			handleCellPointerUp(
-																				cell,
-																				e,
-																			)
-																		}
-																		onPointerLeave={
-																			cancelLongPress
-																		}
-																		onContextMenu={(e) => {
-																			e.preventDefault();
-																			setSelectedCell(cell);
-																			openTechMenu(
-																				cell,
-																				e.clientX,
-																				e.clientY,
-																				e.currentTarget,
-																			);
-																		}}
+																		// Mid-level sixteenth-window wash (denim) spans this
+																		// whole column — cells plus labels — like the L1 beat
+																		// wash but one subdivision finer. Inline so it layers
+																		// above the rest className bg during hover; it clears
+																		// back to the rest wash when the hover moves away.
 																		style={
-																			l2Alpha > 0
+																			subBeatSlots.has(
+																				slotIndex,
+																			)
 																				? {
 																						backgroundColor:
-																							hoverAxisBg(
-																								l2Alpha,
-																							),
+																							HOVER_SUBBEAT_BG,
 																					}
 																				: undefined
 																		}
-																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center font-mono text-xs transition-colors select-none touch-manipulation ${
-																			isSelected
-																				? "bg-denim-tint ring-1 ring-denim text-denim"
-																				: "hover:bg-raise text-ink-dim"
-																		} ${sf.fret === null && !sf.muted ? "text-ink-faint" : ""}`}
+																		// min-w-5 floors each slot column at a legible width; once the
+																		// columns can no longer fit, the parent scroll wrapper overflows
+																		// horizontally rather than shrinking them into an unreadable smear.
+																		className={`flex min-w-5 flex-1 flex-col gap-0.5 rounded-sm ${
+																			isRest
+																				? "bg-raise/70"
+																				: ""
+																		}`}
 																	>
-																		{cellDisplay(sf)}
-																		{glyph && (
-																			<span className="absolute top-0 right-0.5 text-[8px] leading-none text-denim">
-																				{glyph}
-																			</span>
+																		{STRING_LABELS.map(
+																			(_, stringIndex) => {
+																				const cell: Cell = {
+																					measureIndex,
+																					slotIndex,
+																					stringIndex,
+																				};
+																				const ck =
+																					cellKey(cell);
+																				const sf =
+																					slot.strings[
+																						stringIndex
+																					];
+																				const isSelected =
+																					selectedCell !=
+																						null &&
+																					selectedCell.measureIndex ===
+																						measureIndex &&
+																					selectedCell.slotIndex ===
+																						slotIndex &&
+																					selectedCell.stringIndex ===
+																						stringIndex;
+																				const glyph =
+																					sf.technique
+																						? TECHNIQUE_GLYPH[
+																								sf
+																									.technique
+																							]
+																						: undefined;
+																				// Muted cells can't be tied — treat
+																				// a tied+muted cell as untied here.
+																				const tiedDisplay =
+																					sf.tied &&
+																					!sf.muted;
+																				const l2Alpha =
+																					hoverInMeasure !=
+																					null
+																						? (hoverInMeasure.slotIndex ===
+																							slotIndex
+																								? HOVER_L2_ALPHA
+																								: 0) +
+																							(hoverInMeasure.stringIndex ===
+																							stringIndex
+																								? HOVER_L2_ALPHA
+																								: 0)
+																						: 0;
+																				return (
+																					<button
+																						key={ck}
+																						ref={(
+																							el,
+																						) => {
+																							if (el)
+																								cellRefs.current.set(
+																									ck,
+																									el,
+																								);
+																							else
+																								cellRefs.current.delete(
+																									ck,
+																								);
+																						}}
+																						onClick={() => {
+																							// Touch selection +
+																							// keyboard focus is
+																							// handled in
+																							// handleCellPointerUp so
+																							// focus() lands inside
+																							// the tap gesture (iOS
+																							// requirement); the
+																							// trailing click is a
+																							// no-op here.
+																							if (
+																								lastPointerTypeRef.current ===
+																								"touch"
+																							)
+																								return;
+																							setTouchMute(
+																								null,
+																							);
+																							setSelectedCell(
+																								cell,
+																							);
+																						}}
+																						onKeyDown={(
+																							e,
+																						) =>
+																							handleCellKeyDown(
+																								e,
+																								cell,
+																							)
+																						}
+																						onMouseEnter={() =>
+																							setHoveredCell(
+																								{
+																									measureIndex,
+																									slotIndex,
+																									stringIndex,
+																								},
+																							)
+																						}
+																						onPointerDown={(
+																							e,
+																						) =>
+																							handleCellPointerDown(
+																								cell,
+																								e,
+																							)
+																						}
+																						onPointerUp={(
+																							e,
+																						) =>
+																							handleCellPointerUp(
+																								cell,
+																								e,
+																							)
+																						}
+																						onPointerLeave={
+																							cancelLongPress
+																						}
+																						onContextMenu={(
+																							e,
+																						) => {
+																							e.preventDefault();
+																							setSelectedCell(
+																								cell,
+																							);
+																							openTechMenu(
+																								cell,
+																								e.clientX,
+																								e.clientY,
+																								e.currentTarget,
+																							);
+																						}}
+																						style={
+																							l2Alpha >
+																							0
+																								? {
+																										backgroundColor:
+																											hoverAxisBg(
+																												l2Alpha,
+																											),
+																									}
+																								: undefined
+																						}
+																						className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center font-mono text-xs transition-colors select-none touch-manipulation ${
+																							isSelected
+																								? "bg-denim-tint ring-1 ring-denim text-denim"
+																								: "hover:bg-raise text-ink-dim"
+																						} ${sf.fret === null && !sf.muted ? "text-ink-faint" : ""}`}
+																					>
+																						{cellDisplay(
+																							sf,
+																						)}
+																						{glyph && (
+																							<span className="absolute top-0 right-0.5 text-[8px] leading-none text-denim">
+																								{
+																									glyph
+																								}
+																							</span>
+																						)}
+																						{tiedDisplay && (
+																							<span
+																								aria-hidden
+																								className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 border-t-2"
+																								style={{
+																									borderColor:
+																										"rgba(74, 111, 165, 0.5)",
+																								}}
+																							/>
+																						)}
+																					</button>
+																				);
+																			},
 																		)}
-																		{tiedDisplay && (
-																			<span
-																				aria-hidden
-																				className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 border-t-2"
-																				style={{
-																					borderColor:
-																						"rgba(74, 111, 165, 0.5)",
-																				}}
-																			/>
-																		)}
-																	</button>
-																);
-															})}
 
-															{/* Duration label */}
-															<div
-																	onMouseEnter={() => hoverColumn(measureIndex, slotIndex)}
-																	className="text-center text-[9px] font-mono text-ink-faint leading-none"
-																>
-																{DURATION_ABBREV[slot.duration]}
-															</div>
+																		{/* Duration label */}
+																		<div
+																			onMouseEnter={() =>
+																				hoverColumn(
+																					measureIndex,
+																					slotIndex,
+																				)
+																			}
+																			className="text-center text-[9px] font-mono text-ink-faint leading-none"
+																		>
+																			{
+																				DURATION_ABBREV[
+																					slot.duration
+																				]
+																			}
+																		</div>
 
-															{/* Column selector. The popup itself is rendered once, absolutely
+																		{/* Column selector. The popup itself is rendered once, absolutely
 															    positioned inside the scroll region and anchored below the
 															    first selected column (see columnPopup above). */}
-															<div
-																	onMouseEnter={() => hoverColumn(measureIndex, slotIndex)}
-																	className="flex justify-center pt-1"
-																>
-																<button
-																	data-column-selector
-																	onClick={() =>
-																		toggleColumn({
-																			measureIndex,
-																			slotIndex,
-																		})
-																	}
-																	aria-label={`Select column ${slotIndex + 1}`}
-																	className={`h-3.5 w-3.5 border transition-colors ${
-																		columnSelected
-																			? "bg-denim border-denim"
-																			: "border-line-strong hover:border-denim"
-																	}`}
-																/>
-															</div>
+																		<div
+																			onMouseEnter={() =>
+																				hoverColumn(
+																					measureIndex,
+																					slotIndex,
+																				)
+																			}
+																			className="flex justify-center pt-1"
+																		>
+																			<button
+																				data-column-selector
+																				onClick={() =>
+																					toggleColumn({
+																						measureIndex,
+																						slotIndex,
+																					})
+																				}
+																				aria-label={`Select column ${slotIndex + 1}`}
+																				className={`h-3.5 w-3.5 border transition-colors ${
+																					columnSelected
+																						? "bg-denim border-denim"
+																						: "border-line-strong hover:border-denim"
+																				}`}
+																			/>
+																		</div>
 
-															{/* Beat position label */}
-															<span
-																	onMouseEnter={() => hoverColumn(measureIndex, slotIndex)}
-																	className="pt-1 text-center font-mono text-[10px] leading-none text-muted-foreground"
-																>
-																{beatLabels[slotIndex]}
-															</span>
+																		{/* Beat position label */}
+																		<span
+																			onMouseEnter={() =>
+																				hoverColumn(
+																					measureIndex,
+																					slotIndex,
+																				)
+																			}
+																			className="pt-1 text-center font-mono text-[10px] leading-none text-muted-foreground"
+																		>
+																			{beatLabels[slotIndex]}
+																		</span>
+																	</div>
+																);
+															})}
 														</div>
 													);
 												})}
 											</div>
-										);
-									})}
 										</div>
 									</div>
-								</div>
 
-								{/* Quick preset row: fill the whole measure with one note value. */}
-								<div className="flex items-center gap-1 border-t border-line pt-2">
-									<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
-										All
-									</span>
-									{(["quarter", "eighth", "sixteenth", "32nd"] as const).map((d) => (
-										<button
-											key={d}
-											onClick={() => requestPreset(measureIndex, d)}
-											title={`Fill measure with ${d} notes`}
-											className="flex items-center justify-center h-7 w-8 border border-line-strong text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
-										>
-											<DurationIcon duration={d} />
-										</button>
-									))}
-								</div>
-
-								{presetConfirm && presetConfirm.measureIndex === measureIndex && (
-									<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
-										<span className="text-[11px] text-ink-dim">
-											Keep existing data (remap) or clear?
+									{/* Quick preset row: fill the whole measure with one note value. */}
+									<div className="flex items-center gap-1 border-t border-line pt-2">
+										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
+											All
 										</span>
-										<div className="flex gap-1">
-											<button
-												onClick={applyPresetRemap}
-												className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
-											>
-												Remap
-											</button>
-											<button
-												onClick={applyPresetClear}
-												className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
-											>
-												Clear
-											</button>
-											<button
-												onClick={() => setPresetConfirm(null)}
-												className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
-											>
-												Cancel
-											</button>
-										</div>
+										{(["quarter", "eighth", "sixteenth", "32nd"] as const).map(
+											(d) => (
+												<button
+													key={d}
+													onClick={() => requestPreset(measureIndex, d)}
+													title={`Fill measure with ${d} notes`}
+													className="flex items-center justify-center h-7 w-8 border border-line-strong text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
+												>
+													<DurationIcon duration={d} />
+												</button>
+											),
+										)}
 									</div>
-								)}
-							</div>
-						);
-					})}
 
-					{/* Add measure block */}
-					<button
-						onClick={() => commit((p) => addMeasure(p))}
-						className="border border-dashed border-line-strong min-h-32 flex items-center justify-center gap-1.5 text-sm text-ink-dim hover:border-denim hover:text-denim transition-colors"
-					>
-						<Plus size={16} /> Add measure
-					</button>
-				</div>
+									{presetConfirm &&
+										presetConfirm.measureIndex === measureIndex && (
+											<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
+												<span className="text-[11px] text-ink-dim">
+													Keep existing data (remap) or clear?
+												</span>
+												<div className="flex gap-1">
+													<button
+														onClick={applyPresetRemap}
+														className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
+													>
+														Remap
+													</button>
+													<button
+														onClick={applyPresetClear}
+														className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+													>
+														Clear
+													</button>
+													<button
+														onClick={() => setPresetConfirm(null)}
+														className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+													>
+														Cancel
+													</button>
+												</div>
+											</div>
+										)}
+								</div>
+							);
+						})}
 
-				{/* Off-screen numeric input: focused on a touch tap to summon the
+						{/* Add measure block */}
+						<button
+							onClick={() => commit((p) => addMeasure(p))}
+							className="border border-dashed border-line-strong min-h-32 flex items-center justify-center gap-1.5 text-sm text-ink-dim hover:border-denim hover:text-denim transition-colors"
+						>
+							<Plus size={16} /> Add measure
+						</button>
+					</div>
+
+					{/* Off-screen numeric input: focused on a touch tap to summon the
 				    native numeric keyboard for fret entry. Invisible and
 				    non-interactive; the keyboard writes through
 				    handleHiddenNumericInput. Positioned over the tapped cell at
 				    focus time to avoid a jump-scroll. */}
-				<input
-					ref={hiddenInputRef}
-					type="number"
-					inputMode="numeric"
-					pattern="[0-9]*"
-					aria-hidden
-					tabIndex={-1}
-					onChange={handleHiddenNumericInput}
-					onFocus={() => setIsFretInputFocused(true)}
-					onBlur={() => {
-						setIsFretInputFocused(false);
-						resetHiddenNumericInput();
-					}}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") {
-							e.currentTarget.blur();
-							return;
-						}
-						// The native numeric keyboard has no "x"; its Backspace clears
-						// the selected cell (mirrors the physical-keyboard path).
-						if (e.key === "Backspace" || e.key === "Delete") {
-							if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
-							pendingDigitRef.current = null;
-						}
-					}}
-					className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
-					style={{ top: 0, left: 0 }}
-				/>
+					<input
+						ref={hiddenInputRef}
+						type="number"
+						inputMode="numeric"
+						pattern="[0-9]*"
+						aria-hidden
+						tabIndex={-1}
+						onChange={handleHiddenNumericInput}
+						onFocus={() => setIsFretInputFocused(true)}
+						onBlur={() => {
+							setIsFretInputFocused(false);
+							resetHiddenNumericInput();
+						}}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.currentTarget.blur();
+								return;
+							}
+							// The native numeric keyboard has no "x"; its Backspace clears
+							// the selected cell (mirrors the physical-keyboard path).
+							if (e.key === "Backspace" || e.key === "Delete") {
+								if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
+								pendingDigitRef.current = null;
+							}
+						}}
+						className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
+						style={{ top: 0, left: 0 }}
+					/>
 
-				{/* Touch mute button: the native numeric keyboard can't type "x", so
+					{/* Touch mute button: the native numeric keyboard can't type "x", so
 				    give touch users a tappable way to mute the selected string. Uses
 				    the same toggleMuted commit as the desktop "x" key. Centred just
 				    below the selected cell (the "x" glyph is the tab mute notation).
 				    Hidden while the selected cell is already muted — it reappears once
 				    the cell is un-muted or a different, non-muted cell is selected. */}
-				{touchMute && selectedCell && isFretInputFocused && !selectedStringFret?.muted && (
-					<button
-						// Keep the hidden input focused when pressing this button: without
-						// it, the button steals focus, blurs the input, and the resulting
-						// isFretInputFocused=false would unmount the button before its
-						// onClick fires. Preserving focus also keeps the keyboard up.
-						onMouseDown={(e) => e.preventDefault()}
-						onClick={() => {
-							if (selectedCell) commit((prev) => toggleMuted(prev, selectedCell));
-						}}
-						aria-label="Mute string"
-						title="Mute string"
-						className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink hover:bg-denim-tint hover:text-denim active:bg-denim-tint transition-colors"
-						style={{
-							top: touchMute.top,
-							left: touchMute.left,
-							transform: "translate(-50%, 6px)",
-						}}
-					>
-						<XIcon size={14} />
-					</button>
-				)}
+					{touchMute &&
+						selectedCell &&
+						isFretInputFocused &&
+						!selectedStringFret?.muted && (
+							<button
+								// Keep the hidden input focused when pressing this button: without
+								// it, the button steals focus, blurs the input, and the resulting
+								// isFretInputFocused=false would unmount the button before its
+								// onClick fires. Preserving focus also keeps the keyboard up.
+								onMouseDown={(e) => e.preventDefault()}
+								onClick={() => {
+									if (selectedCell)
+										commit((prev) => toggleMuted(prev, selectedCell));
+								}}
+								aria-label="Mute string"
+								title="Mute string"
+								className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink hover:bg-denim-tint hover:text-denim active:bg-denim-tint transition-colors"
+								style={{
+									top: touchMute.top,
+									left: touchMute.left,
+									transform: "translate(-50%, 6px)",
+								}}
+							>
+								<XIcon size={14} />
+							</button>
+						)}
 
-				{/* ── Technique context menu (absolute within the content box) ───── */}
-				{techMenu && (
-					<div
-						ref={techMenuRef}
-						className="absolute z-60 border border-line-strong bg-popover py-1 min-w-40 text-sm"
-						style={{ top: techMenu.y, left: techMenu.x }}
-					>
-						{(() => {
-							const enabled = hasPreviousNoteOnString(working, techMenu.cell);
-							return (
-								<>
-									{TECHNIQUE_OPTIONS.map((opt) => (
+					{/* ── Technique context menu (absolute within the content box) ───── */}
+					{techMenu && (
+						<div
+							ref={techMenuRef}
+							className="absolute z-60 border border-line-strong bg-popover py-1 min-w-40 text-sm"
+							style={{ top: techMenu.y, left: techMenu.x }}
+						>
+							{(() => {
+								const enabled = hasPreviousNoteOnString(working, techMenu.cell);
+								return (
+									<>
+										{TECHNIQUE_OPTIONS.map((opt) => (
+											<button
+												key={opt.value}
+												disabled={!enabled}
+												onClick={() => applyTechnique(opt.value)}
+												title={
+													enabled
+														? undefined
+														: "No previous note on this string"
+												}
+												className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
+											>
+												{opt.label}
+											</button>
+										))}
 										<button
-											key={opt.value}
 											disabled={!enabled}
-											onClick={() => applyTechnique(opt.value)}
+											onClick={applyTied}
 											title={
 												enabled
 													? undefined
-													: "No previous note on this string"
+													: "No previous note on this string to tie from"
 											}
 											className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
 										>
-											{opt.label}
+											Tied (⌒)
 										</button>
-									))}
-									<button
-										disabled={!enabled}
-										onClick={applyTied}
-										title={
-											enabled
-												? undefined
-												: "No previous note on this string to tie from"
-										}
-										className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-									>
-										Tied (⌒)
-									</button>
-								</>
-							);
-						})()}
-						<div className="border-t border-line my-1" />
-						<button
-							onClick={applyClearTechnique}
-							className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-						>
-							Clear technique
-						</button>
-					</div>
-				)}
+									</>
+								);
+							})()}
+							<div className="border-t border-line my-1" />
+							<button
+								onClick={applyClearTechnique}
+								className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+							>
+								Clear technique
+							</button>
+						</div>
+					)}
 
-				{/* ── Column popup (absolute within the scroll region) ───────────── */}
-				{firstSelectedColumnKey && columnPopup}
+					{/* ── Column popup (absolute within the scroll region) ───────────── */}
+					{firstSelectedColumnKey && columnPopup}
 				</div>
 				{/* ── Footer (fixed; sibling of the scroll region, never scrolls) ── */}
 				<div className="shrink-0 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
@@ -1938,6 +2050,26 @@ export default function FingerpickEditModal({
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
+
+// Column-popup section label. The plain-English explanation lives in a hover
+// tooltip rather than inline text, keeping the popup compact; the help-cursor +
+// faint question mark signal that hovering reveals more. Uses a CSS group-hover
+// bubble instead of the native `title` attribute so it appears instantly — the
+// browser's built-in title delay (~0.5–1s) is not configurable.
+function PopupSectionLabel({ label, hint }: { label: string; hint: string }) {
+	return (
+		<span className="group/hint relative inline-flex w-max items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint cursor-help">
+			{label}
+			<CircleHelp size={10} className="text-ink-faint/70" aria-hidden />
+			<span
+				role="tooltip"
+				className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/hint:opacity-100"
+			>
+				{hint}
+			</span>
+		</span>
+	);
+}
 
 function PopupIconButton({
 	title,

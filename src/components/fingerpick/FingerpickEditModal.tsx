@@ -46,7 +46,7 @@ import {
 	swapMeasures,
 	computeBeatLabels,
 	computeBeatGroups,
-	computeSixteenthGroups,
+	computeSubBeatGroups,
 	splitSlot,
 	mergeSlots,
 	splitTargetsForSlot,
@@ -1323,16 +1323,18 @@ export default function FingerpickEditModal({
 						const beatGroups = computeBeatGroups(measure.slots, working.timeSignature);
 						const hoverInMeasure =
 							hoveredCell?.measureIndex === measureIndex ? hoveredCell : null;
-						// Slot indices sharing the hovered slot's sixteenth-note window, for
-						// the mid-level wash. Only kept when the window subdivides (>1 slot,
-						// i.e. finer than a sixteenth) so plain sixteenths/larger don't get a
-						// redundant single-column wash on top of the L1/L2 layers.
+						// Slot indices sharing the hovered slot's binary-parent window (two
+						// sixteenths under a split eighth, two 32nds under a sixteenth, …), for
+						// the mid-level wash. Only kept when that window actually holds more
+						// than one slot, so notes at the beat's own subdivision don't get a
+							// redundant single-column wash on top of the L1/L2 layers.
 						const subBeatSlots: Set<number> =
 							hoverInMeasure != null
 								? (() => {
-										const group = computeSixteenthGroups(measure.slots).find((g) =>
-											g.includes(hoverInMeasure.slotIndex),
-										);
+										const group = computeSubBeatGroups(
+											measure.slots,
+											working.timeSignature,
+										).find((g) => g.includes(hoverInMeasure.slotIndex));
 										return group && group.length > 1 ? new Set(group) : new Set();
 									})()
 								: new Set();

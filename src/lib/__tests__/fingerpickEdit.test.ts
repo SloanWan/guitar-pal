@@ -26,7 +26,7 @@ import {
 	swapMeasures,
 	computeBeatLabels,
 	computeBeatGroups,
-	computeSixteenthGroups,
+	computeSubBeatGroups,
 	clampFret,
 	measureCapacity,
 	slotDurationUnits,
@@ -434,22 +434,94 @@ describe("computeBeatGroups", () => {
 	});
 });
 
-describe("computeSixteenthGroups", () => {
+describe("computeSubBeatGroups", () => {
 	const slotsOf = (durations: Duration[]) => durations.map((d) => makeEmptySlot(d));
+	const FOUR_FOUR: [number, number] = [4, 4];
 
-	it("pairs each two 32nd notes into one sixteenth window", () => {
+	it("pairs each two 32nd notes into one sixteenth window (evenly filled beat)", () => {
+		// Both eighth-halves are subdivided the same way, so it descends to readable
+		// pairs rather than collapsing wholesale.
 		const slots = slotsOf(Array<Duration>(8).fill("32nd"));
-		expect(computeSixteenthGroups(slots)).toEqual([[0, 1], [2, 3], [4, 5], [6, 7]]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0, 1], [2, 3], [4, 5], [6, 7]]);
 	});
 
-	it("leaves sixteenth notes and larger as singleton windows", () => {
-		const slots = slotsOf(["sixteenth", "sixteenth", "eighth", "quarter"]);
-		expect(computeSixteenthGroups(slots)).toEqual([[0], [1], [2], [3]]);
+	it("groups all four 32nds that fill an eighth beside a plain eighth", () => {
+		// The requested case: quarter → eighth + four 32nds. The four 32nds are one
+		// eighth's worth, so they collapse into a single group.
+		const slots = slotsOf(["eighth", "32nd", "32nd", "32nd", "32nd"]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0], [1, 2, 3, 4]]);
 	});
 
-	it("mixes a sixteenth with a pair of 32nds", () => {
-		const slots = slotsOf(["sixteenth", "32nd", "32nd"]);
-		expect(computeSixteenthGroups(slots)).toEqual([[0], [1, 2]]);
+	it("groups two sixteenths that fill a split eighth (eighth + 2 sixteenths)", () => {
+		const slots = slotsOf(["eighth", "sixteenth", "sixteenth"]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0], [1, 2]]);
+	});
+
+	it("keeps a mixed eighth split: sixteenth alone, only the 32nds pair (2 e ta / +)", () => {
+		// Beat 2 = [sixteenth "2", 32nd "e", 32nd "ta", eighth "+"]. The half is mixed
+		// (not uniform), so "2" stays on its own and only [e, ta] group.
+		const slots = slotsOf(["sixteenth", "32nd", "32nd", "eighth"]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0], [1, 2], [3]]);
+	});
+
+	it("descends when both eighths are subdivided (sixteenth alone, 32nds paired)", () => {
+		const slots = slotsOf(["sixteenth", "32nd", "32nd", "sixteenth", "32nd", "32nd"]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0], [1, 2], [3], [4, 5]]);
+	});
+
+	it("groups each split eighth's sixteenth pair independently", () => {
+		const slots = slotsOf(["sixteenth", "sixteenth", "sixteenth", "sixteenth"]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0, 1], [2, 3]]);
+	});
+
+	it("resolves the requested case inside a full 4/4 measure", () => {
+		// Beat 1: eighth + four 32nds; beats 2–4: plain quarters.
+		const slots = slotsOf([
+			"eighth",
+			"32nd",
+			"32nd",
+			"32nd",
+			"32nd",
+			"quarter",
+			"quarter",
+			"quarter",
+		]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([
+			[0],
+			[1, 2, 3, 4],
+			[5],
+			[6],
+			[7],
+		]);
+	});
+
+	it("leaves the beat's own subdivision ungrouped (two eighths in 4/4)", () => {
+		const slots = slotsOf(["eighth", "eighth"]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0], [1]]);
+	});
+
+	it("does not group notes straddling a binary boundary (syncopation)", () => {
+		// An eighth starting on the off-sixteenth can't be halved cleanly: all singletons.
+		const slots = slotsOf(["sixteenth", "eighth", "sixteenth"]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0], [1], [2]]);
+	});
+
+	it("keeps eighth-note triplets ungrouped", () => {
+		const slots = slotsOf(["eighth-triplet", "eighth-triplet", "eighth-triplet"]);
+		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0], [1], [2]]);
+	});
+
+	it("keeps a beat-level sixteenth pair ungrouped in 6/8 but pairs its 32nds", () => {
+		// In 6/8 the beat is an eighth, so two sixteenths fill the whole beat (L1
+		// covers them); four 32nds still pair under their sixteenth windows.
+		expect(computeSubBeatGroups(slotsOf(["sixteenth", "sixteenth"]), [6, 8])).toEqual([
+			[0],
+			[1],
+		]);
+		expect(computeSubBeatGroups(slotsOf(["32nd", "32nd", "32nd", "32nd"]), [6, 8])).toEqual([
+			[0, 1],
+			[2, 3],
+		]);
 	});
 });
 

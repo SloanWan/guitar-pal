@@ -370,32 +370,109 @@ export function computeBeatGroups(
 	return groups;
 }
 
-// Group slot indices by the sixteenth-note (6-tick) window their onset falls in.
-// This is one subdivision finer than computeBeatGroups and independent of the time
-// signature (a sixteenth is a fixed tick value). It drives the editor's mid-level
-// hover wash: when a beat is subdivided finer than a sixteenth — e.g. a quarter
-// beat split into eight 32nd notes — the two 32nds that make up each sixteenth are
-// highlighted together, sitting between the whole-beat wash and the per-cell tint.
-// A note at least a sixteenth long occupies its window alone (the windows it spans
-// have no onset and are skipped), so those groups are singletons and the caller can
-// leave them un-washed. Every slot appears in exactly one group.
-export function computeSixteenthGroups(slots: BeatSlot[]): number[][] {
-	const windowTicks = DURATION_TICKS.sixteenth; // 6
+// One node of a beat's binary subdivision tree (see computeSubBeatGroups). A `leaf`
+// is a single note filling its window; a `split` is a window cleanly bisected at its
+// midpoint into two halves; a `flat` window can't be bisected on a binary boundary
+// (syncopation / triplets), so its notes never group; `empty` covers a window with no
+// onset (e.g. under a note tied over from an earlier beat).
+type SubBeatNode =
+	| { kind: "leaf"; index: number }
+	| { kind: "flat"; indices: number[] }
+	| { kind: "split"; left: SubBeatNode; right: SubBeatNode }
+	| { kind: "empty" };
 
-	const groups: number[][] = [];
-	let current: number[] | null = null;
-	let currentWindow = -1;
+// Group slot indices for the editor's mid-level hover wash by reconstructing, per
+// beat, the binary tree the split/merge edits imply — then collapsing each subtree to
+// the level that reads as one rhythmic unit. This sits between the whole-beat wash
+// (L1) and the per-cell tint (L2), and is strictly finer than a beat: the beat itself
+// is the top window and its two halves are never merged into one group (L1 covers
+// that), so a note at the beat's own subdivision (an eighth in 4/4, a sixteenth in
+// 6/8) stays a singleton.
+//
+// A subdivided half collapses into a single group only when it is *uniform* (all its
+// leaves the same note value) AND either its sibling is a single plain note — then the
+// half is "that note's worth, subdivided" (e.g. an eighth beside four 32nds groups all
+// four; beside two sixteenths groups both) — OR the half is the finest binary pair
+// (both its halves are leaves, e.g. two 32nds filling a sixteenth). A mixed half
+// descends instead: a sixteenth followed by two 32nds ("2 e ta") keeps the sixteenth
+// "2" on its own and pairs only the equal-value 32nds "[e, ta]". Likewise a beat
+// evenly filled with 32nds descends to its readable pairs rather than collapsing
+// wholesale. Non-binary rhythms never bisect on a midpoint onset, so triplets and
+// syncopations fall out as singletons. Every slot appears in exactly one group; the
+// flattened result is [0, 1, …, slots.length - 1].
+export function computeSubBeatGroups(
+	slots: BeatSlot[],
+	timeSignature: [number, number],
+): number[][] {
+	const beatTicks = TICKS_PER_WHOLE / timeSignature[1]; // quarter = 24, eighth = 12
+
+	// Onset (cumulative start tick) of every slot.
+	const onsets: { index: number; onset: number }[] = [];
 	let cursor = 0;
 	slots.forEach((slot, i) => {
-		const windowIndex = Math.floor(cursor / windowTicks);
-		if (!current || windowIndex !== currentWindow) {
-			current = [];
-			groups.push(current);
-			currentWindow = windowIndex;
-		}
-		current.push(i);
+		onsets.push({ index: i, onset: cursor });
 		cursor += DURATION_TICKS[slot.duration];
 	});
+	const totalTicks = cursor;
+
+	const groups: number[][] = [];
+
+	// Build the subdivision tree for a tick window, following the actual note onsets.
+	function build(start: number, end: number): SubBeatNode {
+		const inRange = onsets.filter((o) => o.onset >= start && o.onset < end);
+		if (inRange.length === 0) return { kind: "empty" };
+		if (inRange.length === 1) return { kind: "leaf", index: inRange[0].index };
+		const mid = (start + end) / 2;
+		// No onset exactly at the midpoint ⇒ the window can't be cleanly halved on a
+		// binary boundary (a note straddles it, or it's a triplet): keep its notes flat.
+		if (!inRange.some((o) => o.onset === mid))
+			return { kind: "flat", indices: inRange.map((o) => o.index) };
+		return { kind: "split", left: build(start, mid), right: build(mid, end) };
+	}
+
+	function leavesOf(node: SubBeatNode): number[] {
+		if (node.kind === "leaf") return [node.index];
+		if (node.kind === "flat") return node.indices;
+		if (node.kind === "split") return [...leavesOf(node.left), ...leavesOf(node.right)];
+		return [];
+	}
+
+	// Emit groups for one child of a split, given its sibling.
+	function handleChild(child: SubBeatNode, sibling: SubBeatNode): void {
+		if (child.kind === "leaf") {
+			groups.push([child.index]);
+		} else if (child.kind === "flat") {
+			child.indices.forEach((i) => groups.push([i]));
+		} else if (child.kind === "split") {
+			const childLeaves = leavesOf(child);
+			// Only a *uniform* subtree (all leaves the same note value) collapses into a
+			// single group. A mixed half — e.g. a sixteenth followed by two 32nds ("2 e
+			// ta") — descends instead, so the sixteenth "2" stays on its own and only the
+			// equal-value 32nds "[e, ta]" pair up, rather than the whole half fusing.
+			const uniform = childLeaves.every((i) => slots[i].duration === slots[childLeaves[0]].duration);
+			const siblingIsLeaf = sibling.kind === "leaf";
+			const bothHalvesLeaves = child.left.kind === "leaf" && child.right.kind === "leaf";
+			if (uniform && (siblingIsLeaf || bothHalvesLeaves)) groups.push(childLeaves);
+			else walk(child);
+		}
+	}
+
+	// Emit the groups under a window node, halves in playing order.
+	function walk(node: SubBeatNode): void {
+		if (node.kind === "split") {
+			handleChild(node.left, node.right);
+			handleChild(node.right, node.left);
+		} else if (node.kind === "leaf") {
+			groups.push([node.index]);
+		} else if (node.kind === "flat") {
+			node.indices.forEach((i) => groups.push([i]));
+		}
+	}
+
+	// One beat window at a time, so nothing groups across a beat boundary.
+	for (let beatStart = 0; beatStart < totalTicks; beatStart += beatTicks) {
+		walk(build(beatStart, beatStart + beatTicks));
+	}
 
 	return groups;
 }

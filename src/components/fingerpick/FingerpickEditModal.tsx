@@ -8,7 +8,6 @@ import {
 	useCallback,
 	useSyncExternalStore,
 } from "react";
-import { createPortal } from "react-dom";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -273,15 +272,11 @@ export default function FingerpickEditModal({
 	// Focusable cell buttons, keyed by cellKey.
 	const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 	const popupRef = useRef<HTMLDivElement>(null);
-	// The selected column's DOM box, used to anchor the (body-portaled) column popup
-	// below it so the popup escapes the dialog's overflow clip.
+	// The selected column's DOM box, used to anchor the column popup below it inside
+	// the scroll region's coordinate space.
 	const popupAnchorRef = useRef<HTMLDivElement | null>(null);
-	// Fixed-position coordinates for the portaled column popup (null when closed).
-	const [popupPos, setPopupPos] = useState<{
-		top: number;
-		left?: number;
-		right?: number;
-	} | null>(null);
+	// Scroll-region-relative coordinates for the column popup (null until measured).
+	const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null);
 	const techMenuRef = useRef<HTMLDivElement>(null);
 	// The middle (measure-grid) scroll area. Only this region scrolls — the
 	// header/metadata/footer stay pinned — and it's the coordinate space the
@@ -826,11 +821,12 @@ export default function FingerpickEditModal({
 		return firstSelectedColumn.slotIndex >= totalSlots / 2;
 	})();
 
-	// Position the column popup as a fixed, body-portaled box anchored just below the
-	// whole selected column — so it escapes the dialog's overflow clip (which would
-	// otherwise truncate it at the modal edge) and leaves the column's duration/beat
-	// labels visible above it. Recomputed on scroll (capture, to catch the dialog's own
-	// inner scroll) and resize while a column is selected.
+	// Position the column popup just below the selected column, in the scroll region's
+	// own coordinate space, so it lives inside the dialog (never spilling outside it)
+	// and scrolls with the grid — the same anchoring model as the technique menu.
+	// Recomputed on scroll (capture, to catch the measure's inner horizontal scroll)
+	// and resize; setPopupPos bails when the numbers are unchanged so a stable scroll
+	// doesn't churn the auto-scroll effect below.
 	useIsomorphicLayoutEffect(() => {
 		if (!firstSelectedColumnKey) {
 			setPopupPos(null);
@@ -839,12 +835,23 @@ export default function FingerpickEditModal({
 		const GAP = 6;
 		const compute = () => {
 			const el = popupAnchorRef.current;
-			if (!el) return;
+			const scroller = scrollRef.current;
+			if (!el || !scroller) return;
+			const scRect = scroller.getBoundingClientRect();
 			const r = el.getBoundingClientRect();
-			setPopupPos(
-				popupOpensLeft
-					? { top: r.bottom + GAP, right: window.innerWidth - r.right }
-					: { top: r.bottom + GAP, left: r.left },
+			const top = r.bottom - scRect.top + scroller.scrollTop + GAP;
+			// Columns in the right half of their measure open the popup leftwards (its
+			// right edge aligned to the column) so it doesn't shoot off the right; the
+			// rest open rightwards from the column's left edge. Clamp to 0 so it never
+			// starts off the left edge. offsetWidth is read from the already-rendered
+			// (visibility-hidden until positioned) popup.
+			const popupW = popupRef.current?.offsetWidth ?? 0;
+			const rawLeft = popupOpensLeft
+				? r.right - scRect.left + scroller.scrollLeft - popupW
+				: r.left - scRect.left + scroller.scrollLeft;
+			const left = Math.max(0, rawLeft);
+			setPopupPos((prev) =>
+				prev && prev.top === top && prev.left === left ? prev : { top, left },
 			);
 		};
 		compute();
@@ -855,6 +862,29 @@ export default function FingerpickEditModal({
 			window.removeEventListener("scroll", compute, true);
 		};
 	}, [firstSelectedColumnKey, popupOpensLeft]);
+
+	// Nudge the scroll region just enough to bring the whole column popup into view
+	// when it overflows the viewport (e.g. selecting a column in the bottom measure).
+	// Mirrors the technique-menu auto-scroll: runs after layout so the popup has its
+	// real size, and re-runs when its position or content height changes (selection,
+	// single↔multi controls, or an inline confirmation appearing).
+	useIsomorphicLayoutEffect(() => {
+		if (!firstSelectedColumnKey || !popupPos) return;
+		const popup = popupRef.current;
+		const scroller = scrollRef.current;
+		if (!popup || !scroller) return;
+		const PAD = 8;
+		const popupRect = popup.getBoundingClientRect();
+		const viewRect = scroller.getBoundingClientRect();
+		let dx = 0;
+		let dy = 0;
+		if (popupRect.right > viewRect.right - PAD) dx = popupRect.right - (viewRect.right - PAD);
+		else if (popupRect.left < viewRect.left + PAD) dx = popupRect.left - (viewRect.left + PAD);
+		if (popupRect.bottom > viewRect.bottom - PAD)
+			dy = popupRect.bottom - (viewRect.bottom - PAD);
+		else if (popupRect.top < viewRect.top + PAD) dy = popupRect.top - (viewRect.top + PAD);
+		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
+	}, [firstSelectedColumnKey, popupPos, popupConfirm, selectedColumns]);
 
 	// When the technique menu opens near the grid's edge (e.g. right-clicking the
 	// last cell in a row), it's clipped by the scroll area. Nudge the scroll area
@@ -908,15 +938,17 @@ export default function FingerpickEditModal({
 	const columnPopup = (
 		<div
 			ref={popupRef}
-			style={
-				popupPos
-					? { position: "fixed", top: popupPos.top, left: popupPos.left, right: popupPos.right }
-					: undefined
-			}
-			// pointer-events-auto is required: the modal Dialog sets pointer-events:none on
-			// document.body, which this body-portaled popup would otherwise inherit — making
-			// clicks fall through it to the overlay (closing it) instead of hitting its buttons.
-			className="pointer-events-auto z-[100] w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg"
+			// Absolutely positioned inside the scroll region (like the technique menu), so
+			// it stays clipped to the dialog and scrolls with the grid. Rendered as soon
+			// as a column is selected but kept hidden (yet measurable, for its width) until
+			// the layout effect has computed its content-relative position.
+			style={{
+				position: "absolute",
+				top: popupPos?.top ?? 0,
+				left: popupPos?.left ?? 0,
+				visibility: popupPos ? "visible" : "hidden",
+			}}
+			className="z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg"
 		>
 			{/* Rest toggle — silences the selected column(s) while keeping their
 			    rhythmic duration, so the measure total never changes. Durations
@@ -1152,15 +1184,6 @@ export default function FingerpickEditModal({
 						setTechMenu(null);
 						setSelectedColumns(new Set());
 					}
-				}}
-				onInteractOutside={(e) => {
-					// The column popup is portaled to document.body, so interacting with it
-					// registers as "outside" the dialog. Keep the dialog open in that case;
-					// the popup's own outside-pointer handler manages closing it. Radix puts
-					// the real DOM target on detail.originalEvent, NOT on e.target (which is
-					// the synthetic layer node) — read it from there or the dismiss fires.
-					const target = e.detail.originalEvent.target as Node | null;
-					if (target && popupRef.current?.contains(target)) e.preventDefault();
 				}}
 			>
 				{/* ── Header (fixed; only the grid between it and the footer scrolls) ── */}
@@ -1622,8 +1645,9 @@ export default function FingerpickEditModal({
 																{DURATION_ABBREV[slot.duration]}
 															</div>
 
-															{/* Column selector. The popup itself is rendered once, portaled to
-															    the document body (see below), so it isn't clipped by the dialog. */}
+															{/* Column selector. The popup itself is rendered once, absolutely
+															    positioned inside the scroll region and anchored below the
+															    first selected column (see columnPopup above). */}
 															<div
 																	onMouseEnter={() => hoverColumn(measureIndex, slotIndex)}
 																	className="flex justify-center pt-1"
@@ -1667,7 +1691,7 @@ export default function FingerpickEditModal({
 									<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
 										All
 									</span>
-									{(["quarter", "eighth", "sixteenth"] as const).map((d) => (
+									{(["quarter", "eighth", "sixteenth", "32nd"] as const).map((d) => (
 										<button
 											key={d}
 											onClick={() => requestPreset(measureIndex, d)}
@@ -1832,6 +1856,9 @@ export default function FingerpickEditModal({
 						</button>
 					</div>
 				)}
+
+				{/* ── Column popup (absolute within the scroll region) ───────────── */}
+				{firstSelectedColumnKey && columnPopup}
 				</div>
 				{/* ── Footer (fixed; sibling of the scroll region, never scrolls) ── */}
 				<div className="shrink-0 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
@@ -1904,12 +1931,6 @@ export default function FingerpickEditModal({
 					</Button>
 				</div>
 			</DialogContent>
-			{/* Column popup, portaled to the body so it renders above and outside the
-			    dialog's overflow-clipped content, anchored below the selected column. */}
-			{firstSelectedColumnKey &&
-				popupPos &&
-				typeof document !== "undefined" &&
-				createPortal(columnPopup, document.body)}
 		</Dialog>
 	);
 }

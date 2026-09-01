@@ -1,5 +1,6 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { FingerpickPattern, Measure } from "./fingerpickTypes";
+import { normalizeLoadedPattern } from "./fingerpickEdit";
 
 // localStorage key for guest (logged-out) custom fingerpick patterns.
 export const LOCAL_FINGERPICK_PATTERNS_KEY = "customFingerpickPatterns";
@@ -17,14 +18,15 @@ type FingerpickPatternRow = {
 };
 
 function rowToPattern(row: FingerpickPatternRow): FingerpickPattern {
-	return {
+	// Migrate any legacy `duration: "rest"` slots to the isRest-flag model on load.
+	return normalizeLoadedPattern({
 		id: row.pattern_id,
 		name: row.name,
 		description: row.description ?? "",
 		bpm: row.bpm,
 		timeSignature: row.time_signature,
 		measures: row.measures,
-	};
+	});
 }
 
 function patternToRow(user: User, pattern: FingerpickPattern) {
@@ -44,7 +46,7 @@ function patternToRow(user: User, pattern: FingerpickPattern) {
 export function readLocalFingerpickPatterns(): FingerpickPattern[] {
 	try {
 		const saved = localStorage.getItem(LOCAL_FINGERPICK_PATTERNS_KEY);
-		if (saved) return JSON.parse(saved) as FingerpickPattern[];
+		if (saved) return (JSON.parse(saved) as FingerpickPattern[]).map(normalizeLoadedPattern);
 	} catch {
 		// ignore malformed data
 	}

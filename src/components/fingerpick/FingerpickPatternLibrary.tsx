@@ -2,7 +2,7 @@
 
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { User } from "@supabase/supabase-js";
-import { ChevronDown, Copy, Pencil, Plus, Star, Trash2, X } from "lucide-react";
+import { ChevronDown, Copy, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import FingerpickEditModal from "./FingerpickEditModal";
@@ -18,6 +18,8 @@ interface FingerpickPatternLibraryProps {
 	onDeleteCustom: (patternId: string) => void;
 	onClose: () => void;
 	user: User | null;
+	/** True while user (custom) patterns are still being fetched. */
+	isLoading: boolean;
 }
 
 interface PatternCardProps {
@@ -69,25 +71,28 @@ function PatternCard({
 					{pattern.name}
 				</span>
 				<div className="flex items-center gap-0.5">
-					<span
-						role="button"
-						tabIndex={0}
-						onClick={(e) => {
-							e.stopPropagation();
-							void copyPatternJson();
-						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
+					{/* Dev-only: quick pattern JSON export. Stripped from production builds. */}
+					{process.env.NODE_ENV !== "production" && (
+						<span
+							role="button"
+							tabIndex={0}
+							onClick={(e) => {
 								e.stopPropagation();
 								void copyPatternJson();
-							}
-						}}
-						className="p-0.5 transition-colors text-ink-dim hover:text-denim cursor-pointer"
-						aria-label="Copy pattern JSON"
-					>
-						<Copy size={14} />
-					</span>
+							}}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									e.stopPropagation();
+									void copyPatternJson();
+								}
+							}}
+							className="p-0.5 transition-colors text-ink-dim hover:text-denim cursor-pointer"
+							aria-label="Copy pattern JSON"
+						>
+							<Copy size={14} />
+						</span>
+					)}
 					{onEdit && (
 						<span
 							role="button"
@@ -175,6 +180,7 @@ export default function FingerpickPatternLibrary({
 	onDeleteCustom,
 	onClose,
 	user,
+	isLoading,
 }: FingerpickPatternLibraryProps) {
 	const [activeTab, setActiveTab] = useState<"all" | "favourites">("all");
 	const [myPatternsOpen, setMyPatternsOpen] = useState(true);
@@ -299,7 +305,12 @@ export default function FingerpickPatternLibrary({
 					</button>
 					{myPatternsOpen && (
 						<div className="px-3 pb-3 pt-3 flex flex-col">
-							{visibleCustom.length === 0 ? (
+							{isLoading ? (
+								<div className="flex items-center gap-2 px-1 py-1 text-[11px] text-ink-dim">
+									<Loader2 size={13} className="animate-spin" />
+									Loading your patterns…
+								</div>
+							) : visibleCustom.length === 0 ? (
 								<p className="text-[11px] text-ink-dim px-1">
 									{query
 										? "No matches"

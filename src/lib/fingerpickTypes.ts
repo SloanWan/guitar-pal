@@ -8,8 +8,7 @@ export type Duration =
 	| "eighth-triplet"
 	| "sixteenth"
 	| "sixteenth-triplet"
-	| "32nd"
-	| "rest";
+	| "32nd";
 
 export type Technique =
 	| "hammer-on"
@@ -64,12 +63,22 @@ export type BeatSlot = {
 	duration: Duration;
 	strings: [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret];
 	isGraceNote?: boolean;  // no rhythmic duration; scheduling uses fixed 1/32 beat
+	isRest?: boolean;       // silent slot — keeps its rhythmic `duration` but produces no sound (rest glyph)
 	stroke?: Stroke;        // roll (arpeggiated chord) across this slot's strings — slot-level, not per-string
 };
 
 export type Measure = {
 	id: string;
 	slots: BeatSlot[];
+	/** Render a repeat-start barline (|:) on this measure's LEFT edge. */
+	repeatStart?: boolean;
+	/** Render a repeat-end barline (:|) on this measure's RIGHT edge. */
+	repeatEnd?: boolean;
+	/**
+	 * Total times the repeated section ENDING at this measure is played (default 2 =
+	 * one loop-back). Only meaningful together with `repeatEnd`.
+	 */
+	repeatTimes?: number;
 };
 
 export type FingerpickPattern = {

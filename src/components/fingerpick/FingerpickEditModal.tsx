@@ -18,13 +18,21 @@ import {
 	ArrowRight,
 	ArrowLeftToLine,
 	ArrowRightToLine,
+	ArrowDown,
+	ArrowUp,
 	Merge,
 	Undo2,
 	Redo2,
 	CircleHelp,
 	X as XIcon,
 } from "lucide-react";
-import type { Duration, FingerpickPattern, Measure, StringFret, Stroke } from "@/lib/fingerpickTypes";
+import type {
+	Duration,
+	FingerpickPattern,
+	Measure,
+	StringFret,
+	Stroke,
+} from "@/lib/fingerpickTypes";
 import {
 	makeDefaultPattern,
 	clonePatternForEdit,
@@ -36,7 +44,9 @@ import {
 	setStroke,
 	moveCell,
 	hasPreviousNoteOnString,
-	setSlotsDuration,
+	availableTechniques,
+	type TechniqueAvailability,
+	setSlotsRest,
 	insertSlots,
 	duplicateSlots,
 	deleteSlots,
@@ -46,19 +56,20 @@ import {
 	swapMeasures,
 	computeBeatLabels,
 	computeBeatGroups,
-	slotDurationUnits,
-	remainingUnits,
+	computeSubBeatGroups,
 	splitSlot,
 	mergeSlots,
+	splitTargetsForSlot,
+	mergeTargetsForSlot,
 	resetMeasure,
 	remapMeasure,
 	STRING_LABELS,
-	DURATION_PICKER,
 	MAX_FRET,
 	type Cell,
 	type Direction,
 	type SlotTarget,
 } from "@/lib/fingerpickEdit";
+import { deriveRepeatDirectives, DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
 
 export interface FingerpickEditModalProps {
 	open: boolean;
@@ -67,14 +78,9 @@ export interface FingerpickEditModalProps {
 	onSave: (pattern: FingerpickPattern) => void;
 }
 
-const TIME_SIGNATURES: { label: string; value: [number, number] }[] = [
-	{ label: "4/4", value: [4, 4] },
-	{ label: "3/4", value: [3, 4] },
-	{ label: "6/8", value: [6, 8] },
-];
-
 // Short glyphs shown under each slot column so the current rhythmic value is
-// visible in the grid (durations beyond the picker set still get a marker).
+// visible in the grid. A rest keeps its real duration, so it shows the same glyph
+// as the note value it replaces (plus a gray wash on the column, applied below).
 const DURATION_ABBREV: Record<Duration, string> = {
 	whole: "W",
 	half: "H",
@@ -86,48 +92,35 @@ const DURATION_ABBREV: Record<Duration, string> = {
 	sixteenth: "S",
 	"sixteenth-triplet": "S³",
 	"32nd": "T",
-	rest: "R",
 };
 
-// Note-value glyphs for the split/merge/quick-preset controls. These are the
-// standard Unicode musical symbols; DurationIcon renders one per duration.
-const DURATION_NOTE_GLYPH: Partial<Record<Duration, string>> = {
-	whole: "𝅝",
-	half: "𝅗𝅥",
-	quarter: "♩",
-	eighth: "♪",
-	sixteenth: "♬",
-};
-
+// Duration label for the split/merge/replace controls. Uses the same short text
+// abbreviations as the grid (W/H/Q/E/S/T, dotted with a trailing dot) rather than
+// Unicode note glyphs — the whole/half/rest musical symbols live in the astral plane
+// (U+1D1xx) and render as tofu boxes in almost every UI font, so text is used instead.
 function DurationIcon({ duration }: { duration: Duration }) {
 	return (
-		<span aria-hidden className="font-serif leading-none">
-			{DURATION_NOTE_GLYPH[duration] ?? DURATION_ABBREV[duration]}
+		<span aria-hidden className="font-mono text-xs font-semibold leading-none">
+			{DURATION_ABBREV[duration]}
 		</span>
 	);
 }
-
-// Plain note durations, largest → smallest, used by the split/merge controls.
-const NOTE_LADDER: Duration[] = ["whole", "half", "quarter", "eighth", "sixteenth"];
-
-// The next larger plain note value (used as the merge target for a slot).
-const NEXT_LARGER_DURATION: Partial<Record<Duration, Duration>> = {
-	sixteenth: "eighth",
-	eighth: "quarter",
-	quarter: "half",
-	half: "whole",
-};
 
 // Slot-level roll (arpeggiated chord) options for the column popup. "none" clears
 // the field; "roll-down"/"roll-up" are the domain Stroke values. Roll ↓ = hand moves
 // down = low→high pitch; Roll ↑ = hand moves up = high→low pitch (see fingerpickTypes).
 const STROKE_PICKER: { label: string; value: "none" | Stroke }[] = [
-	{ label: "None", value: "none" },
-	{ label: "Roll ↓", value: "roll-down" },
-	{ label: "Roll ↑", value: "roll-up" },
+	{ label: "Off", value: "none" },
+	{ label: "Down", value: "roll-down" },
+	{ label: "Up", value: "roll-up" },
 ];
 
-const TECHNIQUE_OPTIONS: { label: string; value: NonNullable<StringFret["technique"]> }[] = [
+// Only the direction-bearing techniques are offered in the context menu; each
+// value must be a key of TechniqueAvailability so per-option enablement type-checks.
+const TECHNIQUE_OPTIONS: {
+	label: string;
+	value: Exclude<keyof TechniqueAvailability, "tied">;
+}[] = [
 	{ label: "Hammer-on (H)", value: "hammer-on" },
 	{ label: "Pull-off (P)", value: "pull-off" },
 	{ label: "Slide up (↑)", value: "slide-up" },
@@ -162,6 +155,20 @@ const MAX_BPM = 220;
 const HOVER_L1_BG = "var(--sidebar-hover-bg)";
 const HOVER_L2_ALPHA = 0.14;
 const hoverAxisBg = (alpha: number): string => `rgba(74, 111, 165, ${alpha})`;
+// Mid-level ("L1.5") wash for the sixteenth-note window containing the hovered
+// slot — only meaningful when a beat is subdivided finer than a sixteenth (e.g.
+// eight 32nd notes), where each sixteenth spans two slot columns. Sits between the
+// whole-beat L1 wash and the per-cell L2 axis tint, so its 0.08 denim alpha is
+// weaker than L2's 0.14 but stronger than L1's neutral wash.
+const HOVER_SUBBEAT_BG = hoverAxisBg(0.08);
+// Steady denim wash on any slot carrying a roll (arpeggiated) stroke, so rolled
+// columns read as such at a glance without a per-cell marker. Reuses the same
+// denim base as the hover washes (staying on-theme) at a 0.10 alpha — heavier
+// than the transient L1.5 sub-beat wash (0.08) yet lighter than the per-cell L2
+// hover tint (0.14), so a hovered rolled column still visibly brightens. Applied
+// only when the slot isn't a rest (the gray rest wash wins) and no hover wash is
+// active.
+const ROLL_TINT_BG = hoverAxisBg(0.1);
 
 type HoveredCell = { measureIndex: number; slotIndex: number; stringIndex: number };
 
@@ -174,6 +181,8 @@ const LONG_PRESS_MS = 500;
 // Maximum number of pattern snapshots retained for undo/redo. Older snapshots
 // are dropped from the front once this is exceeded.
 const HISTORY_LIMIT = 50;
+// Upper bound for the repeat play-count stepper (kept well under the lib's hard cap).
+const REPEAT_TIMES_MAX = 16;
 
 const cellKey = (c: Cell) => `${c.measureIndex}:${c.slotIndex}:${c.stringIndex}`;
 const columnKey = (t: SlotTarget) => `${t.measureIndex}:${t.slotIndex}`;
@@ -243,6 +252,9 @@ export default function FingerpickEditModal({
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
 	const [discardConfirm, setDiscardConfirm] = useState(false);
+	// Repeat-markup validation message; set when Save is blocked by unclosed/dangling
+	// repeat barlines, cleared on the next successful save attempt.
+	const [repeatError, setRepeatError] = useState<string | null>(null);
 	// True when the device has a fine pointer (mouse/trackpad → physical keyboard
 	// likely). Drives which editing hint to show.
 	const hasFinePointer = useSyncExternalStore(
@@ -260,6 +272,18 @@ export default function FingerpickEditModal({
 	const [isFretInputFocused, setIsFretInputFocused] = useState(false);
 	// Whether the editing-help popover (anchored to the footer "?" button) is open.
 	const [hintOpen, setHintOpen] = useState(false);
+	// Id of the measure most recently copied or moved. That box gets a denim glow
+	// so the user can see which one just changed; it clears on the next outside
+	// pointer press (clicking the grid background or anywhere else).
+	const [highlightedMeasureId, setHighlightedMeasureId] = useState<string | null>(null);
+	// The measure that just moved and the direction it travelled, so its landed
+	// cell can play a short directional slide-in. Cleared on the next outside
+	// pointer press (same lifecycle as the highlight) — the clear-then-reset on a
+	// repeated move toggles the class off/on, which re-fires the CSS animation.
+	const [moveNudge, setMoveNudge] = useState<{
+		id: string;
+		dir: "left" | "right";
+	} | null>(null);
 
 	// Undo/redo history. `history` holds every committed pattern snapshot (the
 	// initial state plus one entry per edit); `historyIndex` points at the entry
@@ -283,7 +307,16 @@ export default function FingerpickEditModal({
 	// Focusable cell buttons, keyed by cellKey.
 	const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 	const popupRef = useRef<HTMLDivElement>(null);
+	// The selected column's DOM box, used to anchor the column popup below it inside
+	// the scroll region's coordinate space.
+	const popupAnchorRef = useRef<HTMLDivElement | null>(null);
+	// Scroll-region-relative coordinates for the column popup (null until measured).
+	const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null);
 	const techMenuRef = useRef<HTMLDivElement>(null);
+	// The middle (measure-grid) scroll area. Only this region scrolls — the
+	// header/metadata/footer stay pinned — and it's the coordinate space the
+	// absolute popups (technique menu, touch-mute, hidden input) are anchored in.
+	const scrollRef = useRef<HTMLDivElement>(null);
 	const hintRef = useRef<HTMLDivElement>(null);
 	// Save button node, for the spring-pop press feedback.
 	const saveButtonRef = useRef<HTMLButtonElement>(null);
@@ -378,7 +411,9 @@ export default function FingerpickEditModal({
 			setPopupConfirm(null);
 			setPresetConfirm(null);
 			setDiscardConfirm(false);
+			setRepeatError(null);
 			setHintOpen(false);
+			setHighlightedMeasureId(null);
 			pendingDigitRef.current = null;
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -426,6 +461,20 @@ export default function FingerpickEditModal({
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
 	}, [selectedColumns, techMenu, hintOpen]);
 
+	// Clear the copy/move highlight on the next pointer press anywhere. A press on
+	// a copy/move control clears here first, then that control's click re-sets the
+	// highlight to its own measure — so re-copying or re-moving still lands the glow
+	// on the freshly changed box.
+	useEffect(() => {
+		if (!highlightedMeasureId) return;
+		function handlePointerDown() {
+			setHighlightedMeasureId(null);
+			setMoveNudge(null);
+		}
+		document.addEventListener("pointerdown", handlePointerDown);
+		return () => document.removeEventListener("pointerdown", handlePointerDown);
+	}, [highlightedMeasureId]);
+
 	// Hint popover entrance: spring-pop (scale in from 0.85 with overshoot past 1.0,
 	// plus the opacity fade) only on the false→true transition. Closing keeps the
 	// plain CSS fade/shrink from the element's transition classes. Skipped entirely
@@ -470,6 +519,15 @@ export default function FingerpickEditModal({
 		[commit],
 	);
 
+	// Hover the whole slot column without a specific string row — used by the
+	// duration label, column selector and beat label beneath each column so the
+	// L1 beat-group wash and L2 column tint activate there too, not only inside
+	// the string cells. stringIndex -1 is a sentinel that never matches a real
+	// row (0–5), so the per-axis row tint stays off while the column lights up.
+	const hoverColumn = useCallback((measureIndex: number, slotIndex: number) => {
+		setHoveredCell({ measureIndex, slotIndex, stringIndex: -1 });
+	}, []);
+
 	const handleCellKeyDown = useCallback(
 		(e: React.KeyboardEvent, cell: Cell) => {
 			const key = e.key;
@@ -505,7 +563,7 @@ export default function FingerpickEditModal({
 	// Position the menu relative to the (scrollable, transformed) dialog content
 	// box so it stays correctly anchored regardless of viewport scroll/transform.
 	function openTechMenu(cell: Cell, clientX: number, clientY: number, anchorEl: HTMLElement) {
-		const content = anchorEl.closest<HTMLElement>('[data-slot="dialog-content"]');
+		const content = anchorEl.closest<HTMLElement>("[data-fp-scroll]");
 		if (!content) return;
 		const rect = content.getBoundingClientRect();
 		setTechMenu({
@@ -574,9 +632,7 @@ export default function FingerpickEditModal({
 		if (!input) return;
 		// Park the invisible input over the tapped cell (same content-relative maths
 		// as openTechMenu) so focusing it doesn't jump-scroll the dialog.
-		const content = (e.currentTarget as HTMLElement).closest<HTMLElement>(
-			'[data-slot="dialog-content"]',
-		);
+		const content = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-fp-scroll]");
 		if (content) {
 			const rect = content.getBoundingClientRect();
 			const top = e.clientY - rect.top + content.scrollTop;
@@ -653,8 +709,10 @@ export default function FingerpickEditModal({
 		});
 	}
 
-	function applyDuration(duration: Duration) {
-		commit((prev) => setSlotsDuration(prev, columnTargets(), duration));
+	// Toggle the silent (rest) state on every selected column in one commit. A rest
+	// keeps its rhythmic duration, so the measure total is unchanged.
+	function applyRest(isRest: boolean) {
+		commit((prev) => setSlotsRest(prev, columnTargets(), isRest));
 	}
 
 	// Apply (or clear) a roll stroke on every selected column in one commit, so
@@ -681,6 +739,29 @@ export default function FingerpickEditModal({
 	// all operate on the measure array, not the whole pattern).
 	function applyMeasures(measures: Measure[]) {
 		commit((prev) => ({ ...prev, measures }));
+	}
+
+	// Patch a single measure's repeat flags (start / end barline, play-count). Undefined
+	// values are stripped so a cleared flag doesn't linger in the serialized measure.
+	function setMeasureRepeat(
+		measureIndex: number,
+		patch: Partial<Pick<Measure, "repeatStart" | "repeatEnd" | "repeatTimes">>,
+	) {
+		// Any repeat edit is the user acting on the markup — drop a stale save-blocked error.
+		setRepeatError(null);
+		commit((prev) => ({
+			...prev,
+			measures: prev.measures.map((m, i) => {
+				if (i !== measureIndex) return m;
+				const next: Measure = { ...m, ...patch };
+				if (!next.repeatStart) delete next.repeatStart;
+				if (!next.repeatEnd) {
+					delete next.repeatEnd;
+					delete next.repeatTimes;
+				}
+				return next;
+			}),
+		}));
 	}
 
 	// ── Split / merge / replace-with-whole (single selected column) ──────────
@@ -777,15 +858,11 @@ export default function FingerpickEditModal({
 		setPresetConfirm(null);
 	}
 
-	// Duration highlighted in the picker = the shared value of all selected slots.
-	const selectedDuration: Duration | null = (() => {
+	// Rest toggle is active only when every selected column is already a rest.
+	const allSelectedRest: boolean = (() => {
 		const targets = columnTargets();
-		if (targets.length === 0) return null;
-		const durations = targets.map(
-			(t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.duration,
-		);
-		const first = durations[0];
-		return durations.every((d) => d === first) ? (first ?? null) : null;
+		if (targets.length === 0) return false;
+		return targets.every((t) => !!working.measures[t.measureIndex]?.slots[t.slotIndex]?.isRest);
 	})();
 
 	// Stroke highlighted in the roll picker = the shared stroke of all selected slots
@@ -818,52 +895,110 @@ export default function FingerpickEditModal({
 		return firstSelectedColumn.slotIndex >= totalSlots / 2;
 	})();
 
+	// Position the column popup just below the selected column, in the scroll region's
+	// own coordinate space, so it lives inside the dialog (never spilling outside it)
+	// and scrolls with the grid — the same anchoring model as the technique menu.
+	// Recomputed on scroll (capture, to catch the measure's inner horizontal scroll)
+	// and resize; setPopupPos bails when the numbers are unchanged so a stable scroll
+	// doesn't churn the auto-scroll effect below.
+	useIsomorphicLayoutEffect(() => {
+		if (!firstSelectedColumnKey) {
+			setPopupPos(null);
+			return;
+		}
+		const GAP = 6;
+		const compute = () => {
+			const el = popupAnchorRef.current;
+			const scroller = scrollRef.current;
+			if (!el || !scroller) return;
+			const scRect = scroller.getBoundingClientRect();
+			const r = el.getBoundingClientRect();
+			const top = r.bottom - scRect.top + scroller.scrollTop + GAP;
+			// Columns in the right half of their measure open the popup leftwards (its
+			// right edge aligned to the column) so it doesn't shoot off the right; the
+			// rest open rightwards from the column's left edge. Clamp to 0 so it never
+			// starts off the left edge. offsetWidth is read from the already-rendered
+			// (visibility-hidden until positioned) popup.
+			const popupW = popupRef.current?.offsetWidth ?? 0;
+			const rawLeft = popupOpensLeft
+				? r.right - scRect.left + scroller.scrollLeft - popupW
+				: r.left - scRect.left + scroller.scrollLeft;
+			const left = Math.max(0, rawLeft);
+			setPopupPos((prev) =>
+				prev && prev.top === top && prev.left === left ? prev : { top, left },
+			);
+		};
+		compute();
+		window.addEventListener("resize", compute);
+		window.addEventListener("scroll", compute, true);
+		return () => {
+			window.removeEventListener("resize", compute);
+			window.removeEventListener("scroll", compute, true);
+		};
+	}, [firstSelectedColumnKey, popupOpensLeft]);
+
+	// Nudge the scroll region just enough to bring the whole column popup into view
+	// when it overflows the viewport (e.g. selecting a column in the bottom measure).
+	// Mirrors the technique-menu auto-scroll: runs after layout so the popup has its
+	// real size, and re-runs when its position or content height changes (selection,
+	// single↔multi controls, or an inline confirmation appearing).
+	useIsomorphicLayoutEffect(() => {
+		if (!firstSelectedColumnKey || !popupPos) return;
+		const popup = popupRef.current;
+		const scroller = scrollRef.current;
+		if (!popup || !scroller) return;
+		const PAD = 8;
+		const popupRect = popup.getBoundingClientRect();
+		const viewRect = scroller.getBoundingClientRect();
+		let dx = 0;
+		let dy = 0;
+		if (popupRect.right > viewRect.right - PAD) dx = popupRect.right - (viewRect.right - PAD);
+		else if (popupRect.left < viewRect.left + PAD) dx = popupRect.left - (viewRect.left + PAD);
+		if (popupRect.bottom > viewRect.bottom - PAD)
+			dy = popupRect.bottom - (viewRect.bottom - PAD);
+		else if (popupRect.top < viewRect.top + PAD) dy = popupRect.top - (viewRect.top + PAD);
+		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
+	}, [firstSelectedColumnKey, popupPos, popupConfirm, selectedColumns]);
+
+	// When the technique menu opens near the grid's edge (e.g. right-clicking the
+	// last cell in a row), it's clipped by the scroll area. Nudge the scroll area
+	// just enough to bring the whole menu into view — so the user never has to
+	// scroll manually to reach its options. Runs after layout so the menu has its
+	// real size. techMenu.x/y are the deps: a fresh open re-measures.
+	useIsomorphicLayoutEffect(() => {
+		if (!techMenu) return;
+		const menu = techMenuRef.current;
+		const scroller = scrollRef.current;
+		if (!menu || !scroller) return;
+		const PAD = 8;
+		const menuRect = menu.getBoundingClientRect();
+		const viewRect = scroller.getBoundingClientRect();
+		let dx = 0;
+		let dy = 0;
+		if (menuRect.right > viewRect.right - PAD) dx = menuRect.right - (viewRect.right - PAD);
+		else if (menuRect.left < viewRect.left + PAD) dx = menuRect.left - (viewRect.left + PAD);
+		if (menuRect.bottom > viewRect.bottom - PAD) dy = menuRect.bottom - (viewRect.bottom - PAD);
+		else if (menuRect.top < viewRect.top + PAD) dy = menuRect.top - (viewRect.top + PAD);
+		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
+	}, [techMenu]);
+
 	// Split/merge/whole controls act on a single slot. When exactly one column is
-	// selected, derive that slot's split targets and merge target from live state.
+	// selected, enumerate that slot's split and merge targets from live state.
 	const singleTarget: SlotTarget | null = selectedColumns.size === 1 ? columnTargets()[0] : null;
-
 	const singleMeasure = singleTarget ? working.measures[singleTarget.measureIndex] : null;
-	const singleSlot =
-		singleTarget && singleMeasure ? singleMeasure.slots[singleTarget.slotIndex] : null;
 
-	// Smaller note values this slot can be split into: they must subdivide the
-	// slot evenly and the sub-slots must fit the measure's remaining capacity.
-	const splitOptions: { duration: Duration; count: number }[] =
-		singleSlot && singleMeasure
-			? NOTE_LADDER.flatMap((d) => {
-					const currentUnits = slotDurationUnits(singleSlot.duration);
-					const targetUnits = slotDurationUnits(d);
-					if (targetUnits >= currentUnits || currentUnits % targetUnits !== 0) return [];
-					const count = currentUnits / targetUnits;
-					const extra = count * targetUnits - currentUnits; // 0 for even splits
-					if (extra > remainingUnits(singleMeasure.slots, working.timeSignature))
-						return [];
-					return [{ duration: d, count }];
-				})
+	// Smaller note values this slot can be split into (even subdivisions that fit the
+	// measure's remaining capacity), and larger values the following slots can merge
+	// up to — both enumerated by the shared lib helpers.
+	const splitOptions =
+		singleTarget && singleMeasure
+			? splitTargetsForSlot(singleMeasure, singleTarget.slotIndex, working.timeSignature)
+			: [];
+	const mergeOptions =
+		singleTarget && singleMeasure
+			? mergeTargetsForSlot(singleMeasure, singleTarget.slotIndex)
 			: [];
 
-	// Merge target: the next larger note value, valid only when the following
-	// slots line up to exactly fill it.
-	const mergeTarget: Duration | null = singleSlot
-		? (NEXT_LARGER_DURATION[singleSlot.duration] ?? null)
-		: null;
-	const canMerge = (() => {
-		if (!singleTarget || !singleMeasure || !mergeTarget) return false;
-		const targetUnits = slotDurationUnits(mergeTarget);
-		let sum = 0;
-		let end = singleTarget.slotIndex;
-		while (end < singleMeasure.slots.length && sum < targetUnits) {
-			sum += slotDurationUnits(singleMeasure.slots[end].duration);
-			end++;
-		}
-		return sum === targetUnits && end - singleTarget.slotIndex >= 2;
-	})();
-
-	// A whole note may only be the sole slot in its measure. Disable it in the
-	// picker whenever the targeted measure(s) already hold other slots.
-	const wholeDisabled = columnTargets().some(
-		(t) => (working.measures[t.measureIndex]?.slots.length ?? 0) > 1,
-	);
 	// Show "Replace with whole note" only when the measure has content to replace:
 	// more than one slot, or a lone slot that isn't already an empty whole note.
 	const measureHasContent =
@@ -875,99 +1010,72 @@ export default function FingerpickEditModal({
 	const columnPopup = (
 		<div
 			ref={popupRef}
-			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2`}
+			// Absolutely positioned inside the scroll region (like the technique menu), so
+			// it stays clipped to the dialog and scrolls with the grid. Rendered as soon
+			// as a column is selected but kept hidden (yet measurable, for its width) until
+			// the layout effect has computed its content-relative position.
+			style={{
+				position: "absolute",
+				top: popupPos?.top ?? 0,
+				left: popupPos?.left ?? 0,
+				visibility: popupPos ? "visible" : "hidden",
+			}}
+			className="z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg"
 		>
-			<div className="flex border border-line-strong">
-				{DURATION_PICKER.map((d, i) => {
-					const disabled = d.value === "whole" && wholeDisabled;
-					return (
-						<button
-							key={d.value}
-							onClick={() => applyDuration(d.value)}
-							disabled={disabled}
-							title={
-								disabled
-									? "Whole note must be the only slot in the measure"
-									: d.value
-							}
-							className={`h-7 flex-1 px-2 font-mono text-xs font-semibold transition-colors ${
-								i > 0 ? "border-l border-line-strong" : ""
-							} ${
-								selectedDuration === d.value
-									? "bg-denim text-on-denim"
-									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-							} disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-dim`}
-						>
-							{d.label}
-						</button>
-					);
-				})}
-			</div>
-
-			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
-			    selected column. Same segmented-pill pattern as the duration picker. */}
-			<div className="flex flex-col gap-1 border-t border-line pt-2">
-				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-					Roll
-				</span>
-				<div className="flex border border-line-strong">
-					{STROKE_PICKER.map((s, i) => (
-						<button
-							key={s.value}
-							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
-							title={s.value === "none" ? "No roll" : s.value}
-							className={`h-7 flex-1 px-2 font-mono text-xs font-semibold transition-colors ${
-								i > 0 ? "border-l border-line-strong" : ""
-							} ${
-								selectedStroke === s.value
-									? "bg-denim text-on-denim"
-									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-							}`}
-						>
-							{s.label}
-						</button>
-					))}
-				</div>
-			</div>
-
-			{/* Split / merge (single column only) */}
-			{singleTarget && !popupConfirm && (splitOptions.length > 0 || canMerge) && (
-				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
-					{splitOptions.length > 0 && (
-						<div className="flex flex-wrap items-center gap-1">
-							<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-								Split
-							</span>
-							{splitOptions.map(({ duration, count }) => (
-								<button
-									key={duration}
-									onClick={() => applySplit(singleTarget, duration)}
-									title={`Split into ${count} × ${duration}`}
-									className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-								>
-									{count}×<DurationIcon duration={duration} />
-								</button>
-							))}
-						</div>
-					)}
-					{canMerge && mergeTarget && (
-						<button
-							onClick={() => requestMerge(singleTarget, mergeTarget)}
-							title={`Merge into ${mergeTarget}`}
-							className="flex items-center gap-1 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-						>
-							<Merge size={13} /> Merge → <DurationIcon duration={mergeTarget} />
-						</button>
-					)}
-				</div>
-			)}
+			{/* Split / merge (single column only). Split subdivides the slot into equal
+			    smaller notes; merge folds this slot plus the following run into any larger
+			    note value they sum to. Both preserve the measure total. */}
+			{singleTarget &&
+				!popupConfirm &&
+				(splitOptions.length > 0 || mergeOptions.length > 0) && (
+					<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
+						{splitOptions.length > 0 && (
+							<div className="flex flex-wrap items-center gap-1">
+								<PopupSectionLabel
+									label="Split"
+									hint="Break this note into smaller, even notes."
+								/>
+								{splitOptions.map(({ duration, count }) => (
+									<button
+										key={duration}
+										onClick={() => applySplit(singleTarget, duration)}
+										title={`Split into ${count} × ${duration}`}
+										className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+									>
+										{count}×<DurationIcon duration={duration} />
+									</button>
+								))}
+							</div>
+						)}
+						{mergeOptions.length > 0 && (
+							<div className="flex flex-wrap items-center gap-1">
+								<PopupSectionLabel
+									label="Merge"
+									hint="Join this note with the ones after it into one longer note."
+								/>
+								{mergeOptions.map(({ duration, count }) => (
+									<button
+										key={duration}
+										onClick={() => requestMerge(singleTarget, duration)}
+										title={`Merge ${count} slots into a ${duration}`}
+										className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+									>
+										<Merge size={13} />
+										<DurationIcon duration={duration} />
+									</button>
+								))}
+							</div>
+						)}
+					</div>
+				)}
 
 			{/* Replace whole measure with a single whole note (single column only) */}
 			{singleTarget && measureHasContent && !popupConfirm && (
-				<div className="border-t border-line pt-2">
+				<div className="border-t border-line pt-2 first:border-t-0 first:pt-0">
 					<button
 						onClick={() => requestReplaceWithWhole(singleTarget)}
-						className="flex items-center gap-1 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+						title="Clear the whole measure back to one empty note."
+						className="flex items-center gap-1 h-7 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 					>
 						Replace with <DurationIcon duration="whole" />
 					</button>
@@ -976,7 +1084,7 @@ export default function FingerpickEditModal({
 
 			{/* Inline confirmation for a destructive merge / whole-replace */}
 			{popupConfirm && (
-				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
+				<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
 					<span className="text-[11px] text-ink-dim">
 						{popupConfirm.kind === "merge"
 							? `This will discard data from ${popupConfirm.affectedSlotCount} slot(s). Continue?`
@@ -999,19 +1107,92 @@ export default function FingerpickEditModal({
 				</div>
 			)}
 
-			<div className="flex gap-1 border-t border-line pt-2">
-				<PopupIconButton title="Insert before" onClick={() => applyStructural("before")}>
-					<ArrowLeftToLine size={14} />
-				</PopupIconButton>
-				<PopupIconButton title="Insert after" onClick={() => applyStructural("after")}>
-					<ArrowRightToLine size={14} />
-				</PopupIconButton>
-				<PopupIconButton title="Duplicate" onClick={() => applyStructural("duplicate")}>
-					<Copy size={14} />
-				</PopupIconButton>
-				<PopupIconButton title="Delete" onClick={() => applyStructural("delete")} danger>
-					<Trash2 size={14} />
-				</PopupIconButton>
+			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
+			    selected column. Rings the strings out one at a time instead of together. */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Roll"
+					hint="Ring the strings out one at a time instead of all together."
+				/>
+				<div className="flex border border-line-strong">
+					{STROKE_PICKER.map((s, i) => (
+						<button
+							key={s.value}
+							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
+							title={
+								s.value === "none"
+									? "No roll — sound the strings together"
+									: s.value === "roll-down"
+										? "Roll down — low to high strings"
+										: "Roll up — high to low strings"
+							}
+							className={`h-7 flex-1 px-2 flex items-center justify-center gap-1 font-mono text-xs font-semibold transition-colors ${
+								i > 0 ? "border-l border-line-strong" : ""
+							} ${
+								selectedStroke === s.value
+									? "bg-denim text-on-denim"
+									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+							}`}
+						>
+							{s.value === "roll-down" && <ArrowDown size={12} aria-hidden />}
+							{s.value === "roll-up" && <ArrowUp size={12} aria-hidden />}
+							{s.label}
+						</button>
+					))}
+				</div>
+			</div>
+
+			{/* Rest — silences the selected column(s) while keeping their rhythmic
+			    duration, so the measure total never changes. */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Rest"
+					hint="Silence this slot but keep its timing in the measure."
+				/>
+				<button
+					onClick={() => applyRest(!allSelectedRest)}
+					title={
+						allSelectedRest
+							? "Turn the rest back into a note"
+							: "Silence this slot (keeps its duration as a rest)"
+					}
+					className={`h-7 px-2 font-mono text-xs font-semibold border border-line-strong transition-colors self-start ${
+						allSelectedRest
+							? "bg-denim text-on-denim"
+							: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+					}`}
+				>
+					Rest
+				</button>
+			</div>
+
+			{/* Move — structural edits on the selected slot(s). */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Move Slot"
+					hint="Insert, duplicate, or delete this slot."
+				/>
+				<div className="flex gap-1">
+					<PopupIconButton
+						title="Insert before"
+						onClick={() => applyStructural("before")}
+					>
+						<ArrowLeftToLine size={14} />
+					</PopupIconButton>
+					<PopupIconButton title="Insert after" onClick={() => applyStructural("after")}>
+						<ArrowRightToLine size={14} />
+					</PopupIconButton>
+					<PopupIconButton title="Duplicate" onClick={() => applyStructural("duplicate")}>
+						<Copy size={14} />
+					</PopupIconButton>
+					<PopupIconButton
+						title="Delete"
+						onClick={() => applyStructural("delete")}
+						danger
+					>
+						<Trash2 size={14} />
+					</PopupIconButton>
+				</div>
 			</div>
 		</div>
 	);
@@ -1039,6 +1220,14 @@ export default function FingerpickEditModal({
 
 	function handleSave() {
 		if (!working.name.trim()) return;
+		// Block save on unclosed / dangling / nested repeat barlines so playback and
+		// rendering never see malformed repeat markup.
+		const { error: repeatValidationError } = deriveRepeatDirectives(working.measures);
+		if (repeatValidationError) {
+			setRepeatError(repeatValidationError);
+			return;
+		}
+		setRepeatError(null);
 		// Spring-pop the button as the save fires (skip for reduced-motion). Pure
 		// transform, so no reflow; the save/close flow below is unchanged.
 		if (!prefersReducedMotion()) {
@@ -1086,7 +1275,7 @@ export default function FingerpickEditModal({
 			<DialogContent
 				showCloseButton={false}
 				style={dynamicStyle}
-				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] lg:max-h-[90vh] overflow-y-auto p-0"
+				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] lg:max-h-[90vh] overflow-hidden flex flex-col p-0"
 				onKeyDown={(e) => {
 					// Undo/redo scoped to the modal (not window) to avoid clashing with
 					// the page. Skip text fields so their native undo keeps working.
@@ -1105,8 +1294,8 @@ export default function FingerpickEditModal({
 					}
 				}}
 			>
-				{/* ── Header ─────────────────────────────────────────────────────── */}
-				<div className="sticky top-0 z-55 flex items-center justify-between border-b border-line bg-popover px-4 py-3">
+				{/* ── Header (fixed; only the grid between it and the footer scrolls) ── */}
+				<div className="shrink-0 z-55 flex items-center justify-between border-b border-line bg-popover px-4 py-3">
 					<h2 className="font-heading text-base font-medium text-ink">
 						{initialPattern ? "Edit pattern" : "New pattern"}
 					</h2>
@@ -1157,9 +1346,9 @@ export default function FingerpickEditModal({
 					</div>
 				</div>
 
-				{/* ── Metadata bar ──────────────────────────────────────────────── */}
-				<div className="flex flex-wrap items-end gap-3 px-4">
-					<div className="flex flex-col gap-1 min-w-40 flex-1">
+				{/* ── Metadata bar (fixed, above the scroll region) ─────────────── */}
+				<div className="shrink-0 flex items-end gap-3 px-4">
+					<div className="flex flex-col gap-1 min-w-0 flex-[2]">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Name
 						</label>
@@ -1173,7 +1362,7 @@ export default function FingerpickEditModal({
 							}`}
 						/>
 					</div>
-					<div className="flex flex-col gap-1 w-24">
+					<div className="flex flex-col gap-1 w-20 shrink-0">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							BPM
 						</label>
@@ -1188,26 +1377,28 @@ export default function FingerpickEditModal({
 							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						/>
 					</div>
-					<div className="flex flex-col gap-1 w-24">
-						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+					<div className="flex flex-col gap-1 w-20 shrink-0">
+						<label className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Time Sig.
+							{/* Time signature is fixed at 4/4 until other meters ship. CSS
+							    group-hover tooltip (75ms fade) instead of the native `title`,
+							    which has a slow browser-controlled delay. */}
+							<span className="group/ts relative inline-flex cursor-help text-ink-faint/70">
+								<CircleHelp size={11} aria-label="More time signatures coming soon" />
+								<span
+									role="tooltip"
+									className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/ts:opacity-100"
+								>
+									Only 4/4 is supported right now — more time signatures coming
+									soon.
+								</span>
+							</span>
 						</label>
-						<select
-							value={`${working.timeSignature[0]}/${working.timeSignature[1]}`}
-							onChange={(e) => {
-								const ts = TIME_SIGNATURES.find((t) => t.label === e.target.value);
-								if (ts) commit((p) => ({ ...p, timeSignature: ts.value }));
-							}}
-							className="w-full border border-line-strong bg-surface px-2 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
-						>
-							{TIME_SIGNATURES.map((t) => (
-								<option key={t.label} value={t.label}>
-									{t.label}
-								</option>
-							))}
-						</select>
+						<div className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink">
+							4/4
+						</div>
 					</div>
-					<div className="flex flex-col gap-1 min-w-40 flex-1">
+					<div className="flex flex-col gap-1 min-w-0 flex-[2]">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Description
 						</label>
@@ -1225,373 +1416,764 @@ export default function FingerpickEditModal({
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
 				    count (2→4, --fp-cols) in step with the dynamic modal width, so
 				    measures fill each row and the extra (add) tile wraps below. */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4 select-none">
-					{working.measures.map((measure, measureIndex) => {
-						const beatLabels = computeBeatLabels(measure.slots, working.timeSignature);
-						const beatGroups = computeBeatGroups(measure.slots, working.timeSignature);
-						const hoverInMeasure =
-							hoveredCell?.measureIndex === measureIndex ? hoveredCell : null;
-						return (
-							<div
-								key={measure.id}
-								onMouseLeave={() => setHoveredCell(null)}
-								className="border border-line p-3 flex flex-col gap-2"
-							>
-								<div className="flex items-center justify-between">
-									<div className="flex items-center gap-2">
-										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-											Measure {measureIndex + 1}
-										</span>
+				{/* ── Scroll region — the ONLY part that scrolls ─────────────────── */}
+				{/* Header, metadata, and footer stay pinned; this middle box scrolls
+				    both axes. It's also the coordinate space the absolute popups
+				    (technique menu, touch-mute, hidden input) are anchored in, so they
+				    live inside it and scroll with the grid. fp-thin-scroll keeps the
+				    bar a slim denim line. */}
+				<div
+					data-fp-scroll
+					ref={scrollRef}
+					className="fp-thin-scroll relative min-h-0 flex-1 overflow-auto"
+				>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4 select-none">
+						{working.measures.map((measure, measureIndex) => {
+							const beatLabels = computeBeatLabels(
+								measure.slots,
+								working.timeSignature,
+							);
+							const beatGroups = computeBeatGroups(
+								measure.slots,
+								working.timeSignature,
+							);
+							const hoverInMeasure =
+								hoveredCell?.measureIndex === measureIndex ? hoveredCell : null;
+							// Slot indices sharing the hovered slot's binary-parent window (two
+							// sixteenths under a split eighth, two 32nds under a sixteenth, …), for
+							// the mid-level wash. Only kept when that window actually holds more
+							// than one slot, so notes at the beat's own subdivision don't get a
+							// redundant single-column wash on top of the L1/L2 layers.
+							const subBeatSlots: Set<number> =
+								hoverInMeasure != null
+									? (() => {
+											const group = computeSubBeatGroups(
+												measure.slots,
+												working.timeSignature,
+											).find((g) => g.includes(hoverInMeasure.slotIndex));
+											return group && group.length > 1
+												? new Set(group)
+												: new Set();
+										})()
+									: new Set();
+							return (
+								<div
+									key={measure.id}
+									onMouseLeave={() => setHoveredCell(null)}
+									className={`p-3 flex flex-col gap-2 border transition-shadow duration-200 ${
+										highlightedMeasureId === measure.id
+											? "border-denim shadow-[0_0_0_1px_var(--color-denim),0_0_12px_var(--denim-glow)]"
+											: "border-line"
+									} ${
+										moveNudge?.id === measure.id
+											? moveNudge.dir === "left"
+												? "fp-nudge-left"
+												: "fp-nudge-right"
+											: ""
+									}`}
+								>
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-2">
+											<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+												Measure {measureIndex + 1}
+											</span>
+											<button
+												onClick={() => {
+													// Pre-generate the clone's id so the newly
+													// appended box can be highlighted (the copy
+													// lands at the last position).
+													const cloneId = crypto.randomUUID();
+													commit((p) => ({
+														...p,
+														measures: cloneMeasure(
+															p.measures,
+															measureIndex,
+															cloneId,
+														),
+													}));
+													setHighlightedMeasureId(cloneId);
+												}}
+												aria-label="Copy measure"
+												title="Copy measure"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
+											>
+												<Copy size={14} />
+											</button>
+											<button
+												onClick={() => {
+													commit((p) => ({
+														...p,
+														measures: swapMeasures(
+															p.measures,
+															measureIndex,
+															measureIndex - 1,
+														),
+													}));
+													setHighlightedMeasureId(measure.id);
+													setMoveNudge({ id: measure.id, dir: "left" });
+												}}
+												disabled={measureIndex === 0}
+												aria-label="Move measure left"
+												title="Move measure left"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
+											>
+												<ArrowLeft size={14} />
+											</button>
+											<button
+												onClick={() => {
+													commit((p) => ({
+														...p,
+														measures: swapMeasures(
+															p.measures,
+															measureIndex,
+															measureIndex + 1,
+														),
+													}));
+													setHighlightedMeasureId(measure.id);
+													setMoveNudge({ id: measure.id, dir: "right" });
+												}}
+												disabled={
+													measureIndex === working.measures.length - 1
+												}
+												aria-label="Move measure right"
+												title="Move measure right"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
+											>
+												<ArrowRight size={14} />
+											</button>
+										</div>
 										<button
 											onClick={() =>
-												commit((p) => ({
-													...p,
-													measures: cloneMeasure(
-														p.measures,
-														measureIndex,
-													),
-												}))
+												commit((p) => deleteMeasure(p, measureIndex))
 											}
-											aria-label="Copy measure"
-											title="Copy measure"
-											className="flex items-center justify-center text-ink-dim hover:text-denim transition-colors"
+											disabled={working.measures.length <= 1}
+											aria-label="Delete measure"
+											title="Delete measure"
+											className="flex items-center gap-1 text-[10px] text-ink-dim hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 										>
-											<Copy size={14} />
-										</button>
-										<button
-											onClick={() =>
-												commit((p) => ({
-													...p,
-													measures: swapMeasures(
-														p.measures,
-														measureIndex,
-														measureIndex - 1,
-													),
-												}))
-											}
-											disabled={measureIndex === 0}
-											aria-label="Move measure left"
-											title="Move measure left"
-											className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
-										>
-											<ArrowLeft size={14} />
-										</button>
-										<button
-											onClick={() =>
-												commit((p) => ({
-													...p,
-													measures: swapMeasures(
-														p.measures,
-														measureIndex,
-														measureIndex + 1,
-													),
-												}))
-											}
-											disabled={measureIndex === working.measures.length - 1}
-											aria-label="Move measure right"
-											title="Move measure right"
-											className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
-										>
-											<ArrowRight size={14} />
+											<XIcon size={12} /> Delete
 										</button>
 									</div>
-									<button
-										onClick={() =>
-											commit((p) => deleteMeasure(p, measureIndex))
-										}
-										disabled={working.measures.length <= 1}
-										aria-label="Delete measure"
-										title="Delete measure"
-										className="flex items-center gap-1 text-[10px] text-ink-dim hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-									>
-										<XIcon size={12} /> Delete
-									</button>
-								</div>
 
-								{/* Column-major layout: a fixed label column, then one wrapper per
+									{/* Column-major layout: a fixed label column, then one wrapper per
 								    beat group. The L1 hover wash is applied to the group wrapper so
 								    it spans every string cell plus the duration label, column
 								    selector and beat label beneath. */}
-								<div className="flex gap-0.5 items-start">
-									<div className="flex w-5 shrink-0 flex-col gap-0.5">
-										{STRING_LABELS.map((label, stringIndex) => (
-											<div
-												key={stringIndex}
-												className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
-											>
-												{label}
-											</div>
-										))}
-									</div>
+									<div className="flex gap-0.5 items-start">
+										<div className="flex w-5 shrink-0 flex-col gap-0.5">
+											{STRING_LABELS.map((label, stringIndex) => (
+												<div
+													key={stringIndex}
+													className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
+												>
+													{label}
+												</div>
+											))}
+										</div>
 
-									{beatGroups.map((group, groupIndex) => {
-										const l1Active =
-											hoverInMeasure != null &&
-											group.includes(hoverInMeasure.slotIndex);
-										return (
-											<div
-												key={groupIndex}
-												className="flex flex-1 gap-0.5"
-												style={{
-													// Grow proportionally to slot count so every slot column
-													// stays equal width across the whole measure.
-													flexGrow: group.length,
-													flexBasis: 0,
-													backgroundColor: l1Active
-														? HOVER_L1_BG
-														: undefined,
-												}}
-											>
-												{group.map((slotIndex) => {
-													const slot = measure.slots[slotIndex];
-													const key = columnKey({
-														measureIndex,
-														slotIndex,
-													});
-													const columnSelected = selectedColumns.has(key);
+										{/* Horizontally scrollable slot area. Each slot column has a
+									    legible min-width, so when a measure is subdivided into
+									    many small notes (e.g. 32nds) the columns overflow and this
+									    wrapper scrolls sideways — while the string-label column
+									    above stays fixed. min-w-0 lets the flex item shrink below
+									    its content so the overflow scrolls instead of widening the
+									    measure block. overflow-y-hidden stops the vertical scrollbar
+									    the CSS spec would otherwise force on: with overflow-x set to
+									    auto, a still-visible overflow-y is promoted to auto too, so
+									    any sub-pixel height rounding would summon a stray v-scrollbar. */}
+										<div className="fp-thin-scroll min-w-0 flex-1 overflow-x-auto overflow-y-hidden pb-2">
+											<div className="flex items-start gap-0.5">
+												{beatGroups.map((group, groupIndex) => {
+													const l1Active =
+														hoverInMeasure != null &&
+														group.includes(hoverInMeasure.slotIndex);
 													return (
 														<div
-															key={slot.id}
-															className="flex min-w-0 flex-1 flex-col gap-0.5"
+															key={groupIndex}
+															className="flex flex-1 gap-0.5"
+															style={{
+																// Grow proportionally to slot count so every slot column
+																// stays equal width across the whole measure.
+																flexGrow: group.length,
+																flexBasis: 0,
+																backgroundColor: l1Active
+																	? HOVER_L1_BG
+																	: undefined,
+															}}
 														>
-															{STRING_LABELS.map((_, stringIndex) => {
-																const cell: Cell = {
+															{group.map((slotIndex) => {
+																const slot =
+																	measure.slots[slotIndex];
+																const key = columnKey({
 																	measureIndex,
 																	slotIndex,
-																	stringIndex,
-																};
-																const ck = cellKey(cell);
-																const sf =
-																	slot.strings[stringIndex];
-																const isSelected =
-																	selectedCell != null &&
-																	selectedCell.measureIndex ===
-																		measureIndex &&
-																	selectedCell.slotIndex ===
-																		slotIndex &&
-																	selectedCell.stringIndex ===
-																		stringIndex;
-																const glyph = sf.technique
-																	? TECHNIQUE_GLYPH[sf.technique]
-																	: undefined;
-																// Muted cells can't be tied — treat
-																// a tied+muted cell as untied here.
-																const tiedDisplay =
-																	sf.tied && !sf.muted;
-																const l2Alpha =
-																	hoverInMeasure != null
-																		? (hoverInMeasure.slotIndex ===
-																			slotIndex
-																				? HOVER_L2_ALPHA
-																				: 0) +
-																			(hoverInMeasure.stringIndex ===
-																			stringIndex
-																				? HOVER_L2_ALPHA
-																				: 0)
-																		: 0;
+																});
+																const columnSelected =
+																	selectedColumns.has(key);
+																// A rest slot gets a faint gray wash across its whole
+																// column so it reads as silence at a glance. bg-raise is
+																// theme-aware (subtle light gray on light, subtle dark
+																// gray on dark), so no per-mode color handling is needed.
+																const isRest = !!slot.isRest;
+																// Rolled (arpeggiated) slot — gets the amber wash below.
+																const hasRoll = !!slot.stroke;
 																return (
-																	<button
-																		key={ck}
-																		ref={(el) => {
-																			if (el)
-																				cellRefs.current.set(
-																					ck,
-																					el,
-																				);
-																			else
-																				cellRefs.current.delete(
-																					ck,
-																				);
-																		}}
-																		onClick={() => {
-																			// Touch selection +
-																			// keyboard focus is
-																			// handled in
-																			// handleCellPointerUp so
-																			// focus() lands inside
-																			// the tap gesture (iOS
-																			// requirement); the
-																			// trailing click is a
-																			// no-op here.
-																			if (
-																				lastPointerTypeRef.current ===
-																				"touch"
-																			)
-																				return;
-																			setTouchMute(null);
-																			setSelectedCell(cell);
-																		}}
-																		onKeyDown={(e) =>
-																			handleCellKeyDown(
-																				e,
-																				cell,
-																			)
-																		}
-																		onMouseEnter={() =>
-																			setHoveredCell({
-																				measureIndex,
-																				slotIndex,
-																				stringIndex,
-																			})
-																		}
-																		onPointerDown={(e) =>
-																			handleCellPointerDown(
-																				cell,
-																				e,
-																			)
-																		}
-																		onPointerUp={(e) =>
-																			handleCellPointerUp(
-																				cell,
-																				e,
-																			)
-																		}
-																		onPointerLeave={
-																			cancelLongPress
-																		}
-																		onContextMenu={(e) => {
-																			e.preventDefault();
-																			setSelectedCell(cell);
-																			openTechMenu(
-																				cell,
-																				e.clientX,
-																				e.clientY,
-																				e.currentTarget,
-																			);
-																		}}
-																		style={
-																			l2Alpha > 0
-																				? {
-																						backgroundColor:
-																							hoverAxisBg(
-																								l2Alpha,
-																							),
-																					}
+																	<div
+																		key={slot.id}
+																		ref={
+																			key ===
+																			firstSelectedColumnKey
+																				? popupAnchorRef
 																				: undefined
 																		}
-																		className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center font-mono text-xs transition-colors select-none touch-manipulation ${
-																			isSelected
-																				? "bg-denim-tint ring-1 ring-denim text-denim"
-																				: "hover:bg-raise text-ink-dim"
-																		} ${sf.fret === null && !sf.muted ? "text-ink-faint" : ""}`}
+																		// Column background, in priority order: the mid-level
+																		// sixteenth-window hover wash (denim, one subdivision finer
+																		// than the L1 beat wash) wins while hovered; otherwise a
+																		// rolled slot shows its steady denim tint. Both are inline so
+																		// they layer above the rest className bg; when neither applies
+																		// the column falls back to the className (rest wash or bare).
+																		style={
+																			subBeatSlots.has(
+																				slotIndex,
+																			)
+																				? {
+																						backgroundColor:
+																							HOVER_SUBBEAT_BG,
+																					}
+																				: hasRoll && !isRest
+																					? {
+																							backgroundColor:
+																								ROLL_TINT_BG,
+																						}
+																					: undefined
+																		}
+																		// min-w-5 floors each slot column at a legible width; once the
+																		// columns can no longer fit, the parent scroll wrapper overflows
+																		// horizontally rather than shrinking them into an unreadable smear.
+																		className={`flex min-w-5 flex-1 flex-col gap-0.5 rounded-sm ${
+																			isRest
+																				? "bg-raise/70"
+																				: ""
+																		}`}
 																	>
-																		{cellDisplay(sf)}
-																		{glyph && (
-																			<span className="absolute top-0 right-0.5 text-[8px] leading-none text-denim">
-																				{glyph}
-																			</span>
+																		{STRING_LABELS.map(
+																			(_, stringIndex) => {
+																				const cell: Cell = {
+																					measureIndex,
+																					slotIndex,
+																					stringIndex,
+																				};
+																				const ck =
+																					cellKey(cell);
+																				const sf =
+																					slot.strings[
+																						stringIndex
+																					];
+																				const isSelected =
+																					selectedCell !=
+																						null &&
+																					selectedCell.measureIndex ===
+																						measureIndex &&
+																					selectedCell.slotIndex ===
+																						slotIndex &&
+																					selectedCell.stringIndex ===
+																						stringIndex;
+																				const glyph =
+																					sf.technique
+																						? TECHNIQUE_GLYPH[
+																								sf
+																									.technique
+																							]
+																						: undefined;
+																				// Muted cells can't be tied — treat
+																				// a tied+muted cell as untied here.
+																				const tiedDisplay =
+																					sf.tied &&
+																					!sf.muted;
+																				const l2Alpha =
+																					hoverInMeasure !=
+																					null
+																						? (hoverInMeasure.slotIndex ===
+																							slotIndex
+																								? HOVER_L2_ALPHA
+																								: 0) +
+																							(hoverInMeasure.stringIndex ===
+																							stringIndex
+																								? HOVER_L2_ALPHA
+																								: 0)
+																						: 0;
+																				return (
+																					<button
+																						key={ck}
+																						ref={(
+																							el,
+																						) => {
+																							if (el)
+																								cellRefs.current.set(
+																									ck,
+																									el,
+																								);
+																							else
+																								cellRefs.current.delete(
+																									ck,
+																								);
+																						}}
+																						onClick={() => {
+																							// Touch selection +
+																							// keyboard focus is
+																							// handled in
+																							// handleCellPointerUp so
+																							// focus() lands inside
+																							// the tap gesture (iOS
+																							// requirement); the
+																							// trailing click is a
+																							// no-op here.
+																							if (
+																								lastPointerTypeRef.current ===
+																								"touch"
+																							)
+																								return;
+																							setTouchMute(
+																								null,
+																							);
+																							setSelectedCell(
+																								cell,
+																							);
+																						}}
+																						onKeyDown={(
+																							e,
+																						) =>
+																							handleCellKeyDown(
+																								e,
+																								cell,
+																							)
+																						}
+																						onMouseEnter={() =>
+																							setHoveredCell(
+																								{
+																									measureIndex,
+																									slotIndex,
+																									stringIndex,
+																								},
+																							)
+																						}
+																						onPointerDown={(
+																							e,
+																						) =>
+																							handleCellPointerDown(
+																								cell,
+																								e,
+																							)
+																						}
+																						onPointerUp={(
+																							e,
+																						) =>
+																							handleCellPointerUp(
+																								cell,
+																								e,
+																							)
+																						}
+																						onPointerLeave={
+																							cancelLongPress
+																						}
+																						onContextMenu={(
+																							e,
+																						) => {
+																							e.preventDefault();
+																							setSelectedCell(
+																								cell,
+																							);
+																							openTechMenu(
+																								cell,
+																								e.clientX,
+																								e.clientY,
+																								e.currentTarget,
+																							);
+																						}}
+																						style={
+																							l2Alpha >
+																							0
+																								? {
+																										backgroundColor:
+																											hoverAxisBg(
+																												l2Alpha,
+																											),
+																									}
+																								: undefined
+																						}
+																						className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center font-mono text-xs transition-colors select-none touch-manipulation ${
+																							isSelected
+																								? "bg-denim-tint ring-1 ring-denim text-denim"
+																								: "hover:bg-raise text-ink-dim"
+																						} ${sf.fret === null && !sf.muted ? "text-ink-faint" : ""}`}
+																					>
+																						{cellDisplay(
+																							sf,
+																						)}
+																						{glyph && (
+																							<span className="absolute top-0 right-0.5 text-[8px] leading-none text-denim">
+																								{
+																									glyph
+																								}
+																							</span>
+																						)}
+																						{tiedDisplay && (
+																							<span
+																								aria-hidden
+																								className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 border-t-2"
+																								style={{
+																									borderColor:
+																										"rgba(74, 111, 165, 0.5)",
+																								}}
+																							/>
+																						)}
+																					</button>
+																				);
+																			},
 																		)}
-																		{tiedDisplay && (
-																			<span
-																				aria-hidden
-																				className="pointer-events-none absolute top-0 left-1/2 h-1.5 w-3 -translate-x-1/2 border-t-2"
-																				style={{
-																					borderColor:
-																						"rgba(74, 111, 165, 0.5)",
-																				}}
+
+																		{/* Duration label */}
+																		<div
+																			onMouseEnter={() =>
+																				hoverColumn(
+																					measureIndex,
+																					slotIndex,
+																				)
+																			}
+																			className="text-center text-[9px] font-mono text-ink-faint leading-none"
+																		>
+																			{
+																				DURATION_ABBREV[
+																					slot.duration
+																				]
+																			}
+																		</div>
+
+																		{/* Column selector. The popup itself is rendered once, absolutely
+															    positioned inside the scroll region and anchored below the
+															    first selected column (see columnPopup above). */}
+																		<div
+																			onMouseEnter={() =>
+																				hoverColumn(
+																					measureIndex,
+																					slotIndex,
+																				)
+																			}
+																			className="flex justify-center pt-1"
+																		>
+																			<button
+																				data-column-selector
+																				onClick={() =>
+																					toggleColumn({
+																						measureIndex,
+																						slotIndex,
+																					})
+																				}
+																				aria-label={`Select column ${slotIndex + 1}`}
+																				className={`h-3.5 w-3.5 border transition-colors ${
+																					columnSelected
+																						? "bg-denim border-denim"
+																						: "border-line-strong hover:border-denim"
+																				}`}
 																			/>
-																		)}
-																	</button>
+																		</div>
+
+																		{/* Beat position label */}
+																		<span
+																			onMouseEnter={() =>
+																				hoverColumn(
+																					measureIndex,
+																					slotIndex,
+																				)
+																			}
+																			className="pt-1 text-center font-mono text-[10px] leading-none text-muted-foreground"
+																		>
+																			{beatLabels[slotIndex]}
+																		</span>
+																	</div>
 																);
 															})}
-
-															{/* Duration label */}
-															<div className="text-center text-[9px] font-mono text-ink-faint leading-none">
-																{DURATION_ABBREV[slot.duration]}
-															</div>
-
-															{/* Column selector */}
-															<div className="relative flex justify-center pt-1">
-																<button
-																	data-column-selector
-																	onClick={() =>
-																		toggleColumn({
-																			measureIndex,
-																			slotIndex,
-																		})
-																	}
-																	aria-label={`Select column ${slotIndex + 1}`}
-																	className={`h-3.5 w-3.5 border transition-colors ${
-																		columnSelected
-																			? "bg-denim border-denim"
-																			: "border-line-strong hover:border-denim"
-																	}`}
-																/>
-																{key === firstSelectedColumnKey &&
-																	columnPopup}
-															</div>
-
-															{/* Beat position label */}
-															<span className="pt-1 text-center font-mono text-[10px] leading-none text-muted-foreground">
-																{beatLabels[slotIndex]}
-															</span>
 														</div>
 													);
 												})}
 											</div>
-										);
-									})}
-								</div>
+										</div>
+									</div>
 
-								{/* Quick preset row: fill the whole measure with one note value. */}
-								<div className="flex items-center gap-1 border-t border-line pt-2">
-									<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
-										All
-									</span>
-									{(["quarter", "eighth", "sixteenth"] as const).map((d) => (
-										<button
-											key={d}
-											onClick={() => requestPreset(measureIndex, d)}
-											title={`Fill measure with ${d} notes`}
-											className="flex items-center justify-center h-7 w-8 border border-line-strong text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
-										>
-											<DurationIcon duration={d} />
-										</button>
-									))}
-								</div>
-
-								{presetConfirm && presetConfirm.measureIndex === measureIndex && (
-									<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
-										<span className="text-[11px] text-ink-dim">
-											Keep existing data (remap) or clear?
+									{/* Quick preset row: fill the whole measure with one note value.
+									    The repeat-barline toggles (|: start, :| end) sit at the row's
+									    bottom-right; the play-count stepper drops to its own line below
+									    when a repeat end is set. */}
+									<div className="flex items-center gap-1 border-t border-line pt-2">
+										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
+											All
 										</span>
-										<div className="flex gap-1">
+										{(["quarter", "eighth", "sixteenth", "32nd"] as const).map(
+											(d) => (
+												<button
+													key={d}
+													onClick={() => requestPreset(measureIndex, d)}
+													title={`Fill measure with ${d} notes`}
+													className="flex items-center justify-center h-7 w-8 border border-line-strong text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
+												>
+													<DurationIcon duration={d} />
+												</button>
+											),
+										)}
+										<div className="flex items-center gap-1 ml-auto">
 											<button
-												onClick={applyPresetRemap}
-												className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
+												onClick={() =>
+													setMeasureRepeat(measureIndex, {
+														repeatStart: !measure.repeatStart,
+													})
+												}
+												title="Repeat start (|:) — the section repeats from here"
+												aria-pressed={!!measure.repeatStart}
+												className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
+													measure.repeatStart
+														? "border-denim bg-denim-tint text-denim"
+														: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+												}`}
 											>
-												Remap
+												|:
 											</button>
 											<button
-												onClick={applyPresetClear}
-												className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+												onClick={() =>
+													setMeasureRepeat(measureIndex, {
+														repeatEnd: !measure.repeatEnd,
+													})
+												}
+												title="Repeat end (:|) — loop back to the repeat start"
+												aria-pressed={!!measure.repeatEnd}
+												className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
+													measure.repeatEnd
+														? "border-denim bg-denim-tint text-denim"
+														: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+												}`}
 											>
-												Clear
-											</button>
-											<button
-												onClick={() => setPresetConfirm(null)}
-												className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
-											>
-												Cancel
+												:|
 											</button>
 										</div>
 									</div>
-								)}
-							</div>
-						);
-					})}
 
-					{/* Add measure block */}
-					<button
-						onClick={() => commit((p) => addMeasure(p))}
-						className="border border-dashed border-line-strong min-h-32 flex items-center justify-center gap-1.5 text-sm text-ink-dim hover:border-denim hover:text-denim transition-colors"
-					>
-						<Plus size={16} /> Add measure
-					</button>
+									{/* Play-count stepper — only when this measure ends a repeat. */}
+									{measure.repeatEnd && (
+										<div className="flex items-center gap-0.5 justify-end">
+											<button
+												onClick={() =>
+													setMeasureRepeat(measureIndex, {
+														repeatTimes: Math.max(
+															DEFAULT_REPEAT_TIMES,
+															(measure.repeatTimes ??
+																DEFAULT_REPEAT_TIMES) - 1,
+														),
+													})
+												}
+												title="Play fewer times"
+												className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
+											>
+												−
+											</button>
+											<span className="font-mono text-xs w-7 text-center text-ink">
+												×{measure.repeatTimes ?? DEFAULT_REPEAT_TIMES}
+											</span>
+											<button
+												onClick={() =>
+													setMeasureRepeat(measureIndex, {
+														repeatTimes: Math.min(
+															REPEAT_TIMES_MAX,
+															(measure.repeatTimes ??
+																DEFAULT_REPEAT_TIMES) + 1,
+														),
+													})
+												}
+												title="Play more times"
+												className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
+											>
+												+
+											</button>
+										</div>
+									)}
+
+									{presetConfirm &&
+										presetConfirm.measureIndex === measureIndex && (
+											<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
+												<span className="text-[11px] text-ink-dim">
+													Keep existing data (remap) or clear?
+												</span>
+												<div className="flex gap-1">
+													<button
+														onClick={applyPresetRemap}
+														className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
+													>
+														Remap
+													</button>
+													<button
+														onClick={applyPresetClear}
+														className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+													>
+														Clear
+													</button>
+													<button
+														onClick={() => setPresetConfirm(null)}
+														className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+													>
+														Cancel
+													</button>
+												</div>
+											</div>
+										)}
+								</div>
+							);
+						})}
+
+						{/* Add measure block */}
+						<button
+							onClick={() => commit((p) => addMeasure(p))}
+							className="border border-dashed border-line-strong min-h-32 flex items-center justify-center gap-1.5 text-sm text-ink-dim hover:border-denim hover:text-denim transition-colors"
+						>
+							<Plus size={16} /> Add measure
+						</button>
+					</div>
+
+					{/* Off-screen numeric input: focused on a touch tap to summon the
+				    native numeric keyboard for fret entry. Invisible and
+				    non-interactive; the keyboard writes through
+				    handleHiddenNumericInput. Positioned over the tapped cell at
+				    focus time to avoid a jump-scroll. */}
+					<input
+						ref={hiddenInputRef}
+						type="number"
+						inputMode="numeric"
+						pattern="[0-9]*"
+						aria-hidden
+						tabIndex={-1}
+						onChange={handleHiddenNumericInput}
+						onFocus={() => setIsFretInputFocused(true)}
+						onBlur={() => {
+							setIsFretInputFocused(false);
+							resetHiddenNumericInput();
+						}}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.currentTarget.blur();
+								return;
+							}
+							// The native numeric keyboard has no "x"; its Backspace clears
+							// the selected cell (mirrors the physical-keyboard path).
+							if (e.key === "Backspace" || e.key === "Delete") {
+								if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
+								pendingDigitRef.current = null;
+							}
+						}}
+						className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
+						style={{ top: 0, left: 0 }}
+					/>
+
+					{/* Touch mute button: the native numeric keyboard can't type "x", so
+				    give touch users a tappable way to mute the selected string. Uses
+				    the same toggleMuted commit as the desktop "x" key. Centred just
+				    below the selected cell (the "x" glyph is the tab mute notation).
+				    Hidden while the selected cell is already muted — it reappears once
+				    the cell is un-muted or a different, non-muted cell is selected. */}
+					{touchMute &&
+						selectedCell &&
+						isFretInputFocused &&
+						!selectedStringFret?.muted && (
+							<button
+								// Keep the hidden input focused when pressing this button: without
+								// it, the button steals focus, blurs the input, and the resulting
+								// isFretInputFocused=false would unmount the button before its
+								// onClick fires. Preserving focus also keeps the keyboard up.
+								onMouseDown={(e) => e.preventDefault()}
+								onClick={() => {
+									if (selectedCell)
+										commit((prev) => toggleMuted(prev, selectedCell));
+								}}
+								aria-label="Mute string"
+								title="Mute string"
+								className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink hover:bg-denim-tint hover:text-denim active:bg-denim-tint transition-colors"
+								style={{
+									top: touchMute.top,
+									left: touchMute.left,
+									transform: "translate(-50%, 6px)",
+								}}
+							>
+								<XIcon size={14} />
+							</button>
+						)}
+
+					{/* ── Technique context menu (absolute within the content box) ───── */}
+					{techMenu && (
+						<div
+							ref={techMenuRef}
+							className="absolute z-60 w-44 border border-line-strong bg-popover py-1 text-sm"
+							style={{ top: techMenu.y, left: techMenu.x }}
+						>
+							{(() => {
+								const hasPrev = hasPreviousNoteOnString(working, techMenu.cell);
+								const avail = availableTechniques(working, techMenu.cell);
+								// When a previous note exists but a marker is still off, it's
+								// the fret movement that rules it out (not a missing note).
+								const disabledTitle = (ok: boolean) =>
+									ok
+										? undefined
+										: hasPrev
+											? "Not valid for this fret movement"
+											: "No previous note on this string";
+								return (
+									<>
+										{TECHNIQUE_OPTIONS.map((opt) => (
+											<button
+												key={opt.value}
+												disabled={!avail[opt.value]}
+												onClick={() => applyTechnique(opt.value)}
+												title={disabledTitle(avail[opt.value])}
+												className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
+											>
+												{opt.label}
+											</button>
+										))}
+										<button
+											disabled={!avail.tied}
+											onClick={applyTied}
+											title={disabledTitle(avail.tied)}
+											className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
+										>
+											Tied (⌒)
+										</button>
+									</>
+								);
+							})()}
+							<div className="border-t border-line my-1" />
+							{(() => {
+								// Clear only makes sense when the target note actually carries
+								// a marker (technique or tie) to remove.
+								const sf =
+									working.measures[techMenu.cell.measureIndex]?.slots[
+										techMenu.cell.slotIndex
+									]?.strings[techMenu.cell.stringIndex];
+								const hasMarker = !!sf && (sf.technique !== null || sf.tied);
+								return (
+									<button
+										disabled={!hasMarker}
+										onClick={applyClearTechnique}
+										title={hasMarker ? undefined : "No technique to clear"}
+										className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-ink-dim hover:bg-destructive/10 hover:text-destructive disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
+									>
+										Clear technique
+										<Trash2 size={13} className="shrink-0" />
+									</button>
+								);
+							})()}
+						</div>
+					)}
+
+					{/* ── Column popup (absolute within the scroll region) ───────────── */}
+					{firstSelectedColumnKey && columnPopup}
 				</div>
-
-				{/* ── Footer (pinned to the bottom of the scroll area) ───────────── */}
-				<div className="sticky bottom-0 z-55 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
+				{/* ── Footer (fixed; sibling of the scroll region, never scrolls) ── */}
+				<div className="shrink-0 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
 					{/* Editing help: "?" toggles a popover with the input-appropriate hint.
 					    Anchored above the icon (footer sits at the bottom) and left-aligned
 					    from the leftmost button so it never spills past the modal edges. */}
@@ -1651,6 +2233,14 @@ export default function FingerpickEditModal({
 							)}
 						</div>
 					</div>
+					{repeatError && (
+						<span
+							role="alert"
+							className="ml-auto mr-2 text-[11px] leading-tight text-red-500 max-w-xs text-right"
+						>
+							{repeatError}
+						</span>
+					)}
 					<Button
 						ref={saveButtonRef}
 						onClick={handleSave}
@@ -1660,126 +2250,32 @@ export default function FingerpickEditModal({
 						Save
 					</Button>
 				</div>
-
-				{/* Off-screen numeric input: focused on a touch tap to summon the
-				    native numeric keyboard for fret entry. Invisible and
-				    non-interactive; the keyboard writes through
-				    handleHiddenNumericInput. Positioned over the tapped cell at
-				    focus time to avoid a jump-scroll. */}
-				<input
-					ref={hiddenInputRef}
-					type="number"
-					inputMode="numeric"
-					pattern="[0-9]*"
-					aria-hidden
-					tabIndex={-1}
-					onChange={handleHiddenNumericInput}
-					onFocus={() => setIsFretInputFocused(true)}
-					onBlur={() => {
-						setIsFretInputFocused(false);
-						resetHiddenNumericInput();
-					}}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") {
-							e.currentTarget.blur();
-							return;
-						}
-						// The native numeric keyboard has no "x"; its Backspace clears
-						// the selected cell (mirrors the physical-keyboard path).
-						if (e.key === "Backspace" || e.key === "Delete") {
-							if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
-							pendingDigitRef.current = null;
-						}
-					}}
-					className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
-					style={{ top: 0, left: 0 }}
-				/>
-
-				{/* Touch mute button: the native numeric keyboard can't type "x", so
-				    give touch users a tappable way to mute the selected string. Uses
-				    the same toggleMuted commit as the desktop "x" key. Centred just
-				    below the selected cell (the "x" glyph is the tab mute notation).
-				    Hidden while the selected cell is already muted — it reappears once
-				    the cell is un-muted or a different, non-muted cell is selected. */}
-				{touchMute && selectedCell && isFretInputFocused && !selectedStringFret?.muted && (
-					<button
-						// Keep the hidden input focused when pressing this button: without
-						// it, the button steals focus, blurs the input, and the resulting
-						// isFretInputFocused=false would unmount the button before its
-						// onClick fires. Preserving focus also keeps the keyboard up.
-						onMouseDown={(e) => e.preventDefault()}
-						onClick={() => {
-							if (selectedCell) commit((prev) => toggleMuted(prev, selectedCell));
-						}}
-						aria-label="Mute string"
-						title="Mute string"
-						className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink hover:bg-denim-tint hover:text-denim active:bg-denim-tint transition-colors"
-						style={{
-							top: touchMute.top,
-							left: touchMute.left,
-							transform: "translate(-50%, 6px)",
-						}}
-					>
-						<XIcon size={14} />
-					</button>
-				)}
-
-				{/* ── Technique context menu (absolute within the content box) ───── */}
-				{techMenu && (
-					<div
-						ref={techMenuRef}
-						className="absolute z-60 border border-line-strong bg-popover py-1 min-w-40 text-sm"
-						style={{ top: techMenu.y, left: techMenu.x }}
-					>
-						{(() => {
-							const enabled = hasPreviousNoteOnString(working, techMenu.cell);
-							return (
-								<>
-									{TECHNIQUE_OPTIONS.map((opt) => (
-										<button
-											key={opt.value}
-											disabled={!enabled}
-											onClick={() => applyTechnique(opt.value)}
-											title={
-												enabled
-													? undefined
-													: "No previous note on this string"
-											}
-											className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-										>
-											{opt.label}
-										</button>
-									))}
-									<button
-										disabled={!enabled}
-										onClick={applyTied}
-										title={
-											enabled
-												? undefined
-												: "No previous note on this string to tie from"
-										}
-										className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-									>
-										Tied (⌒)
-									</button>
-								</>
-							);
-						})()}
-						<div className="border-t border-line my-1" />
-						<button
-							onClick={applyClearTechnique}
-							className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-						>
-							Clear technique
-						</button>
-					</div>
-				)}
 			</DialogContent>
 		</Dialog>
 	);
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
+
+// Column-popup section label. The plain-English explanation lives in a hover
+// tooltip rather than inline text, keeping the popup compact; the help-cursor +
+// faint question mark signal that hovering reveals more. Uses a CSS group-hover
+// bubble instead of the native `title` attribute so it appears instantly — the
+// browser's built-in title delay (~0.5–1s) is not configurable.
+function PopupSectionLabel({ label, hint }: { label: string; hint: string }) {
+	return (
+		<span className="group/hint relative inline-flex w-max items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint cursor-help">
+			{label}
+			<CircleHelp size={10} className="text-ink-faint/70" aria-hidden />
+			<span
+				role="tooltip"
+				className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/hint:opacity-100"
+			>
+				{hint}
+			</span>
+		</span>
+	);
+}
 
 function PopupIconButton({
 	title,

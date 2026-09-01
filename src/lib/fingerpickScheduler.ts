@@ -76,7 +76,6 @@ const DURATION_BEATS: Record<Duration, number> = {
 	sixteenth: 0.25,
 	"sixteenth-triplet": 1 / 6,
 	"32nd": 0.125,
-	rest: 1,
 };
 
 // ─── Roll (arpeggiated chord) parameters ──────────────────────────────────────
@@ -274,7 +273,7 @@ export function fingerpickPatternToScheduleEvents(
 				? DURATION_BEATS["32nd"] * secondsPerBeat
 				: DURATION_BEATS[slot.duration] * secondsPerBeat;
 
-			if (slot.duration !== "rest") {
+			if (!slot.isRest) {
 				// A rolled slot staggers its attacks; gather the strings that will fire
 				// (same predicate as the push below) and resolve per-string offsets.
 				let rollOffsets: Map<number, RollOffset> | null = null;
@@ -329,7 +328,37 @@ export function fingerpickPatternToScheduleEvents(
 		events.sort((a, b) => a.time - b.time);
 	}
 
+	promoteSlideOriginsToLetRing(events);
+
 	return events;
+}
+
+/**
+ * A slide bends the note already sounding on its string — it never re-plucks. For that the
+ * origin (the immediately preceding same-string note) must still be a live, registered
+ * voice when the slide lands. A short, non-letRing origin falls below the voice-map
+ * registration threshold, so the slide finds no voice and falls back to a fresh pluck — an
+ * audible SECOND attack instead of a glide. This promotes every slide origin to letRing so
+ * the slide always has a voice to bend.
+ *
+ * Mutates events in place. Touches only the origins of slides, so a slide-free pattern is
+ * left byte-identical (early-out below). A slide that is the FIRST note on its string has no
+ * origin and is left to fall back — correctly, since there is nothing to slide from.
+ */
+export function promoteSlideOriginsToLetRing(events: ScheduleEvent[]): void {
+	const hasSlide = events.some((e) => e.technique === "slide-up" || e.technique === "slide-down");
+	if (!hasSlide) return;
+
+	// Per-string predecessor lookup needs time order; `events` may still be in insertion order.
+	const ordered = [...events].sort((a, b) => a.time - b.time);
+	const lastByString = new Map<number, ScheduleEvent>();
+	for (const ev of ordered) {
+		if (ev.technique === "slide-up" || ev.technique === "slide-down") {
+			const origin = lastByString.get(ev.stringIndex);
+			if (origin) origin.letRing = true;
+		}
+		lastByString.set(ev.stringIndex, ev);
+	}
 }
 
 /** Sum of all slot durations across all measures, in seconds. */
@@ -499,6 +528,14 @@ export interface SlideParams {
 	maxIntervalSemitones: number;
 	/** Optional mid-ramp gain dip (0 = off, 0.3 = dip to 70% at the ramp midpoint). */
 	gainDip: number;
+	/**
+	 * Floor for the slid-into note's gain, as a fraction of the ORIGIN voice's attack
+	 * volume (0 = no floor). A slide re-plucks nothing: the target inherits whatever the
+	 * origin's decay has left, which — for a slow origin or a late slide — can be nearly
+	 * inaudible. This clamps the hand-off gain to at least `minGainRatio × attackVolume`
+	 * so the target still speaks. 0.5 ≈ "never quieter than half the origin's attack".
+	 */
+	minGainRatio: number;
 }
 
 /**
@@ -508,20 +545,27 @@ export interface SlideParams {
  *  - durationScaling "fixed" — predictable; a wide and a narrow slide take the same time.
  *  - intervalScaleSecPerSemitone 0.02 — for "interval-scaled": a 2-fret slide = 0.04 s,
  *    a 7-fret slide = 0.14 s, matching a real hand travelling further in more time.
- *  - anchor "finish-on-target" — real playing: the target lands on the beat, the slide
- *    leads into it. This consumes the tail of the origin note (audible in the lab).
+ *  - anchor "start-on-target" — the slide begins on the beat and travels after it, so the
+ *    hand-off starts from the origin's gain at the beat rather than one ramp-duration
+ *    earlier into its decay. Keeps the slid-into note more audible than "finish-on-target"
+ *    (which consumes the origin's tail before the beat even arrives).
  *  - maxIntervalSemitones 12 — permissive by default so wide slides still bend and their
  *    resampling artefact is audible for the listening decision; a tighter ceiling (≈5–7)
  *    is the suggested production value once the artefact is judged unacceptable.
- *  - gainDip 0 — off by default so production/most auditions are clean; the lab raises it.
+ *  - gainDip 0.4 — dip to 60% mid-travel then recover, so the slide has an audible
+ *    "finger sliding across frets loses energy" swell rather than a flat glide.
+ *  - minGainRatio 0.75 — floor the hand-off gain at 75% of the origin's attack so a
+ *    slid-into note is never swallowed by the origin's decay. Set 0 in the lab to hear
+ *    the raw decay.
  */
 export const DEFAULT_SLIDE_PARAMS: SlideParams = {
 	rampDurationS: 0.08,
 	durationScaling: "fixed",
 	intervalScaleSecPerSemitone: 0.02,
-	anchor: "finish-on-target",
+	anchor: "start-on-target",
 	maxIntervalSemitones: 12,
-	gainDip: 0,
+	gainDip: 0.4,
+	minGainRatio: 0.75,
 };
 
 /** Floor for a computed ramp duration so a zero-interval slide still ramps briefly. */
@@ -827,10 +871,12 @@ export function scheduleFingerpickNote(
 			? env.letRingDecayTc
 			: Math.max(noteDuration * env.decayTcRatio, env.minDecayTc);
 		// Reconstruct the origin's gain at the ramp start from its decay envelope so a dip
-		// (and the sustain hold) start from the true current level.
-		const gainAtRampStart =
+		// (and the sustain hold) start from the true current level, then floor it so a
+		// slid-into note is never swallowed by a far-decayed origin (see minGainRatio).
+		const decayedGain =
 			existing.attackVolume *
 			Math.exp(-Math.max(slide.plan.rampStartTime - existing.attackTime, 0) / existing.decayTc);
+		const gainAtRampStart = Math.max(decayedGain, existing.attackVolume * slideParams.minGainRatio);
 
 		applySlideToVoice(existing, slide.plan, { gainAtRampStart, decayTc });
 

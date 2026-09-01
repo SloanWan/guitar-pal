@@ -71,8 +71,10 @@ export const SLIDE_LAB_FIXTURE: FingerpickPattern = {
 		},
 
 		// m3 — SHORT origin note (a "32nd" = 0.083 s at 90 BPM, below the 0.1 s registration
-		// threshold and NOT letRing) → excluded from the voice map, so the following slide
-		// finds no origin voice and falls back to a normal pluck (voice-map exclusion path).
+		// threshold and authored WITHOUT letRing). promoteSlideOriginsToLetRing auto-promotes
+		// it to letRing because a same-string slide follows, so it registers and the slide
+		// bends it in place (single attack) instead of falling back to a re-pluck. Exercises
+		// the short-origin auto-promotion path.
 		{
 			id: "m3",
 			slots: [

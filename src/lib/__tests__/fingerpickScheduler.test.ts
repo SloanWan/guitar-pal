@@ -12,6 +12,7 @@ import {
 	computeMeasureBoundaries,
 	resolveSlide,
 	applySlideToVoice,
+	promoteSlideOriginsToLetRing,
 	scheduleFingerpickNote,
 	OPEN_STRING_MIDI,
 	VOICE_STEAL_FADE_TAU,
@@ -53,6 +54,12 @@ function slot(
 	strOverrides: Record<number, Partial<StringFret>> = {},
 ): BeatSlot {
 	return { id, duration, strings: strings6(strOverrides) };
+}
+
+// A silent slot: keeps a real rhythmic duration (quarter by default) but produces
+// no sound. Mirrors the isRest-flag model.
+function restSlot(id: string, duration: Duration = "quarter"): BeatSlot {
+	return { ...slot(id, duration), isRest: true };
 }
 
 function pattern(bpm: number, slots: BeatSlot[]): FingerpickPattern {
@@ -152,7 +159,7 @@ describe("fingerpickPatternToScheduleEvents — BPM / timing math", () => {
 		// quarter(0) → rest → quarter (appears at 0.5 + rest duration)
 		const p = pattern(120, [
 			slot("s1", "quarter", { 5: { fret: 0 } }),
-			slot("s2", "rest"), // no strings active, duration = quarter = 0.5 s
+			restSlot("s2"), // silent, keeps quarter duration = 0.5 s
 			slot("s3", "quarter", { 5: { fret: 2 } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
@@ -370,6 +377,80 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 		expect(events[1].duration).toBeCloseTo(0.5);  // quarter at 120 BPM
 		expect(events[2].duration).toBeCloseTo(1.0);  // half at 120 BPM
 	});
+
+	it("auto-promotes a short slide origin to letRing so it registers and the slide glides", () => {
+		// A "32nd" origin (below the 0.1 s registration threshold) followed by a same-string
+		// slide would otherwise fall back to a re-pluck (two attacks). See promoteSlideOrigins.
+		const p = pattern(120, [
+			slot("s1", "32nd",    { 2: { fret: 5 } }),
+			slot("s2", "quarter", { 2: { fret: 8, technique: "slide-up" } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events[0].letRing).toBe(true); // origin promoted
+		expect(events[1].letRing).toBeUndefined(); // the slide itself is untouched
+	});
+});
+
+describe("promoteSlideOriginsToLetRing", () => {
+	function ev(overrides: Partial<ScheduleEvent>): ScheduleEvent {
+		return {
+			time: 0,
+			duration: 0.5,
+			stringIndex: 0,
+			midi: 60,
+			technique: null,
+			muted: false,
+			measureIndex: 0,
+			slotIndex: 0,
+			...overrides,
+		};
+	}
+
+	it("marks the immediate same-string predecessor of a slide as letRing", () => {
+		const origin = ev({ time: 0, technique: null });
+		const slide = ev({ time: 0.5, technique: "slide-up" });
+		promoteSlideOriginsToLetRing([origin, slide]);
+		expect(origin.letRing).toBe(true);
+		expect(slide.letRing).toBeUndefined();
+	});
+
+	it("promotes across intervening time order even if the array is not pre-sorted", () => {
+		const slide = ev({ time: 0.5, technique: "slide-down" });
+		const origin = ev({ time: 0, technique: null });
+		promoteSlideOriginsToLetRing([slide, origin]); // slide listed first
+		expect(origin.letRing).toBe(true);
+	});
+
+	it("only promotes the SAME string's predecessor, not another string's", () => {
+		const otherString = ev({ time: 0, stringIndex: 3, technique: null });
+		const origin = ev({ time: 0.1, stringIndex: 2, technique: null });
+		const slide = ev({ time: 0.5, stringIndex: 2, technique: "slide-up" });
+		promoteSlideOriginsToLetRing([otherString, origin, slide]);
+		expect(origin.letRing).toBe(true);
+		expect(otherString.letRing).toBeUndefined();
+	});
+
+	it("leaves a first-note slide (no predecessor on its string) to fall back", () => {
+		const slide = ev({ time: 0, stringIndex: 4, technique: "slide-up" });
+		promoteSlideOriginsToLetRing([slide]);
+		expect(slide.letRing).toBeUndefined();
+	});
+
+	it("chained slides promote each hop's origin (the intermediate slide too)", () => {
+		const a = ev({ time: 0, technique: null });
+		const b = ev({ time: 0.25, technique: "slide-up" });
+		const c = ev({ time: 0.5, technique: "slide-down" });
+		promoteSlideOriginsToLetRing([a, b, c]);
+		expect(a.letRing).toBe(true); // origin of the first slide
+		expect(b.letRing).toBe(true); // b is the origin of the second slide
+		expect(c.letRing).toBeUndefined();
+	});
+
+	it("leaves a slide-free array untouched (no letRing added anywhere)", () => {
+		const events = [ev({ time: 0 }), ev({ time: 0.5 }), ev({ time: 1 })];
+		promoteSlideOriginsToLetRing(events);
+		expect(events.every((e) => e.letRing === undefined)).toBe(true);
+	});
 });
 
 // ─── getTotalPatternDuration ─────────────────────────────────────────────────
@@ -402,7 +483,7 @@ describe("getTotalPatternDuration", () => {
 
 	it("rest slots contribute to total duration", () => {
 		// quarter(0.5) + rest(0.5) at 120 BPM = 1.0 s
-		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 0 } }), slot("s2", "rest")]);
+		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 0 } }), restSlot("s2")]);
 		expect(getTotalPatternDuration(p, 120)).toBeCloseTo(1.0);
 	});
 });
@@ -1329,7 +1410,7 @@ describe("fingerpickPatternToScheduleEvents — no-stroke byte-identical", () =>
 	it("a stroke-free pattern is identical regardless of rollParams", () => {
 		const p = multiMeasurePattern(120, [
 			[slot("s1", "quarter", { 0: { fret: 0 }, 2: { fret: 2 } }), slot("s2", "eighth", { 5: { fret: 3 } })],
-			[slot("s3", "rest"), slot("s4", "quarter", { 1: { fret: 1, muted: true } })],
+			[restSlot("s3"), slot("s4", "quarter", { 1: { fret: 1, muted: true } })],
 		]);
 		const wild: RollParams = {
 			baseStagger: 0.09,
@@ -1721,6 +1802,42 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		const secondFromAnchor = origin.source.playbackRate.setValueAtTime.mock.calls[1][0];
 		expect(secondFromAnchor).toBeCloseTo(rateFor(64)); // anchored at the intermediate pitch
 	});
+
+	it("floors the hand-off gain at minGainRatio × the origin's attack (slid-into note stays audible)", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		// attackVolume 0.8, decayTc 1.5, attackTime 0 → natural decay at the beat (t=1) is
+		// 0.8·e^(−1/1.5) ≈ 0.41, well below the 0.72 floor a 0.9 ratio imposes.
+		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, minGainRatio: 0.9 };
+		scheduleFingerpickNote(
+			makeDeps(ctx, voices, { slideParams: params }),
+			noteEvent({ midi: 62, technique: "slide-up" }),
+			1,
+		);
+
+		const handoffGain = origin.gainNode.gain.setValueAtTime.mock.calls.at(-1);
+		expect(handoffGain?.[0]).toBeCloseTo(0.8 * 0.9); // floored, not the ~0.41 raw decay
+	});
+
+	it("minGainRatio 0 leaves the hand-off gain at the origin's raw decayed level", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+
+		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, minGainRatio: 0 };
+		scheduleFingerpickNote(
+			makeDeps(ctx, voices, { slideParams: params }),
+			noteEvent({ midi: 62, technique: "slide-up" }),
+			1,
+		);
+
+		const handoffGain = origin.gainNode.gain.setValueAtTime.mock.calls.at(-1);
+		expect(handoffGain?.[0]).toBeCloseTo(0.8 * Math.exp(-1 / 1.5)); // raw decay, no floor
+	});
 });
 
 describe("scheduleFingerpickNote — no-slide behaviour unchanged (regression guard)", () => {
@@ -1804,18 +1921,19 @@ describe("resolveSlide — decision + ramp geometry", () => {
 	});
 
 	it("finish-on-target: the ramp ENDS on the beat and starts one ramp-duration earlier", () => {
-		const r = resolveSlide({ technique: "slide-up", origin, ...base });
-		if (r.action !== "handoff") throw new Error("expected handoff");
-		expect(r.plan.rampEndTime).toBeCloseTo(1);
-		expect(r.plan.rampStartTime).toBeCloseTo(1 - DEFAULT_SLIDE_PARAMS.rampDurationS);
-	});
-
-	it("start-on-target: the ramp STARTS on the beat", () => {
-		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, anchor: "start-on-target" };
+		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, anchor: "finish-on-target" };
 		const r = resolveSlide({ technique: "slide-up", origin, ...base, params });
 		if (r.action !== "handoff") throw new Error("expected handoff");
+		expect(r.plan.rampEndTime).toBeCloseTo(1);
+		expect(r.plan.rampStartTime).toBeCloseTo(1 - params.rampDurationS);
+	});
+
+	it("start-on-target (the default): the ramp STARTS on the beat", () => {
+		const r = resolveSlide({ technique: "slide-up", origin, ...base });
+		if (r.action !== "handoff") throw new Error("expected handoff");
+		expect(DEFAULT_SLIDE_PARAMS.anchor).toBe("start-on-target");
 		expect(r.plan.rampStartTime).toBeCloseTo(1);
-		expect(r.plan.rampEndTime).toBeCloseTo(1 + params.rampDurationS);
+		expect(r.plan.rampEndTime).toBeCloseTo(1 + DEFAULT_SLIDE_PARAMS.rampDurationS);
 	});
 
 	it("interval-scaled: ramp duration scales with the interval size", () => {
@@ -1840,7 +1958,8 @@ describe("resolveSlide — decision + ramp geometry", () => {
 
 	it("clamps a finish-on-target ramp so it never starts before `now`", () => {
 		// now = 0.98 leaves only 0.02 s before the beat at 1 — less than the 0.08 default ramp.
-		const r = resolveSlide({ technique: "slide-up", origin, ...base, now: 0.98 });
+		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, anchor: "finish-on-target" };
+		const r = resolveSlide({ technique: "slide-up", origin, ...base, now: 0.98, params });
 		if (r.action !== "handoff") throw new Error("expected handoff");
 		expect(r.plan.rampStartTime).toBeCloseTo(0.98);
 		expect(r.plan.rampEndTime).toBeCloseTo(1);

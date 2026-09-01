@@ -65,7 +65,8 @@ type NumericSlideKey =
 	| "rampDurationS"
 	| "intervalScaleSecPerSemitone"
 	| "maxIntervalSemitones"
-	| "gainDip";
+	| "gainDip"
+	| "minGainRatio";
 
 interface SliderSpec {
 	key: NumericSlideKey;
@@ -118,6 +119,16 @@ const SLIDERS: SliderSpec[] = [
 		unit: "×",
 		decimals: 2,
 		note: "0 = off; energy loss mid-travel",
+	},
+	{
+		key: "minGainRatio",
+		label: "Min gain floor",
+		min: 0,
+		max: 1,
+		step: 0.05,
+		unit: "×",
+		decimals: 2,
+		note: "0 = raw decay; floor as a fraction of the origin's attack",
 	},
 ];
 

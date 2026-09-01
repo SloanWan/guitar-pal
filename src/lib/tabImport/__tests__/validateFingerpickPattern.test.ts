@@ -262,8 +262,22 @@ describe("validateFingerpickPattern — measure/slot repair", () => {
 		const raw = makePattern({ measures: [{ id: "m1", slots: [] }] });
 		const { pattern, warnings } = validateFingerpickPattern(raw);
 		expect(pattern?.measures[0].slots).toHaveLength(1);
-		expect(pattern?.measures[0].slots[0].duration).toBe("rest");
+		// A rest is now a quarter-duration slot flagged isRest (not a "rest" duration).
+		expect(pattern?.measures[0].slots[0].duration).toBe("quarter");
+		expect(pattern?.measures[0].slots[0].isRest).toBe(true);
 		expect(warnings.some((w) => w.code === "EMPTY_SLOTS")).toBe(true);
+	});
+
+	it("migrates a legacy duration:'rest' slot to a quarter isRest slot without erroring", () => {
+		const raw = makePattern({
+			measures: [{ id: "m1", slots: [{ id: "s1", duration: "rest", strings: [] }] }],
+		});
+		const { pattern, warnings } = validateFingerpickPattern(raw);
+		const slot = pattern?.measures[0].slots[0];
+		expect(slot?.duration).toBe("quarter");
+		expect(slot?.isRest).toBe(true);
+		// The legacy rest is accepted, not flagged as an invalid duration.
+		expect(warnings.some((w) => w.code === "INVALID_DURATION")).toBe(false);
 	});
 
 	it("replaces a null slot entry with a default slot and emits INVALID_SLOT", () => {

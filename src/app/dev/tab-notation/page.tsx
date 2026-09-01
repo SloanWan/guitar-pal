@@ -408,10 +408,10 @@ const THIRTY_SECOND_DUR_MEASURE: Measure = {
 const REST_DUR_MEASURE: Measure = {
 	id: "dur-rest",
 	slots: [
-		{ id: "dr1", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
-		{ id: "dr2", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
-		{ id: "dr3", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
-		{ id: "dr4", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
+		{ id: "dr1", duration: "quarter", isRest: true, strings: [S(), S(), S(), S(), S(), S()] },
+		{ id: "dr2", duration: "quarter", isRest: true, strings: [S(), S(), S(), S(), S(), S()] },
+		{ id: "dr3", duration: "quarter", isRest: true, strings: [S(), S(), S(), S(), S(), S()] },
+		{ id: "dr4", duration: "quarter", isRest: true, strings: [S(), S(), S(), S(), S(), S()] },
 	],
 };
 

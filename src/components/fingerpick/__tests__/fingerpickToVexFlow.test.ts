@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
 	TabNote,
 	GhostNote,
+	StaveNote,
 	TabTie,
 	TabSlide,
 	Voice,
@@ -59,7 +60,6 @@ describe("VEX_DURATION", () => {
 		["quarter", "q"],
 		["eighth", "8"],
 		["sixteenth", "16"],
-		["rest", "q"],
 	] as const)('maps "%s" → "%s"', (dur, expected) => {
 		expect(VEX_DURATION[dur]).toBe(expected);
 	});
@@ -83,12 +83,28 @@ describe("fingerpickToVexFlow — empty / silent", () => {
 		expect(connectors).toHaveLength(0);
 	});
 
-	it("rest slot becomes a GhostNote regardless of string data", () => {
+	it("rest slot becomes a visible rest StaveNote keeping its own duration", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "rest", { 0: { fret: 5 } })])
+			measure([{ ...beatSlot("s1", "eighth", { 0: { fret: 5 } }), isRest: true }])
 		);
 		expect(notes).toHaveLength(1);
-		expect(notes[0]).toBeInstanceOf(GhostNote);
+		// A rest renders a visible glyph (StaveNote rest), not an invisible GhostNote spacer,
+		// and it keeps the slot's own rhythmic value (an eighth rest → duration "8").
+		expect(notes[0]).toBeInstanceOf(StaveNote);
+		expect(notes[0]).not.toBeInstanceOf(GhostNote);
+		expect(notes[0].getDuration()).toBe("8");
+	});
+
+	it("a dotted-quarter rest constructs without throwing (VexFlow accepts the 'qdr' string)", () => {
+		// The dotted-note duration string ("qd") plus the rest suffix → "qdr". VexFlow
+		// parses it to a quarter rest; the dot glyph itself isn't rendered here (this
+		// codebase never attaches Dot modifiers — dotted NOTES behave the same way).
+		const { notes } = fingerpickToVexFlow(
+			measure([{ ...beatSlot("s1", "dotted-quarter"), isRest: true }])
+		);
+		expect(notes).toHaveLength(1);
+		expect(notes[0]).toBeInstanceOf(StaveNote);
+		expect(notes[0].getDuration()).toBe("q");
 	});
 });
 

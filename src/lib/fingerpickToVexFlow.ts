@@ -5,6 +5,7 @@ import {
 	TabSlide,
 	Tuplet,
 	GhostNote,
+	StaveNote,
 	StemmableNote,
 	GraceTabNote,
 	GraceNoteGroup,
@@ -48,7 +49,6 @@ export const VEX_DURATION: Record<Duration, string> = {
 	sixteenth: "16",
 	"sixteenth-triplet": "16",
 	"32nd": "32",
-	rest: "q",
 };
 
 export interface VexFlowRenderData {
@@ -98,10 +98,15 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			continue;
 		}
 
-		if (slot.duration === "rest") {
+		if (slot.isRest) {
 			pendingGraceNotes = [];
 			const noteIdx = notes.length;
-			notes.push(new GhostNote({ duration }));
+			// A rest renders a VISIBLE glyph, not an invisible GhostNote spacer. On a tab
+			// stave a StaveNote rest draws the standard rest symbol; the "b/4" key parks it
+			// mid-stave. The rest keeps the slot's real duration, so the symbol matches the
+			// note value it replaces (VexFlow appends "r" to the duration/dots string, e.g.
+			// "8r" for an eighth rest, "qdr" for a dotted-quarter rest).
+			notes.push(new StaveNote({ keys: ["b/4"], duration: `${duration}r` }));
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
 			continue;
@@ -219,7 +224,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 
 	for (let i = 1; i < measure.slots.length; i++) {
 		const slot = measure.slots[i];
-		if (slot.duration === "rest" || slot.isGraceNote) continue;
+		if (slot.isRest || slot.isGraceNote) continue;
 
 		const currNoteIdx = slotNoteIndex[i];
 		if (currNoteIdx === null || currNoteIdx === undefined) continue;

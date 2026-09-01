@@ -452,6 +452,31 @@
 	--color-ring: var(--ring);
 }
 
+/* ----------------------------------------------------------------------------
+   THIN SCROLLBAR — for the fingerpick measure-cell horizontal scroll area.
+   The native (fat) scrollbar overlapped the slot labels; this slims it to a
+   short denim line. Radius 0 to match the system (LEDs are the only exception).
+   Track is transparent so the bar reads as a single accent hairline.
+   ------------------------------------------------------------------------- */
+.fp-thin-scroll {
+	scrollbar-width: thin; /* Firefox */
+	scrollbar-color: var(--denim) transparent;
+}
+.fp-thin-scroll::-webkit-scrollbar {
+	height: 4px;
+	width: 4px;
+}
+.fp-thin-scroll::-webkit-scrollbar-track {
+	background: transparent;
+}
+.fp-thin-scroll::-webkit-scrollbar-thumb {
+	background: var(--denim);
+	border-radius: 0;
+}
+.fp-thin-scroll::-webkit-scrollbar-thumb:hover {
+	background: var(--denim-accent);
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;

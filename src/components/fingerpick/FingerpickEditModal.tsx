@@ -1379,7 +1379,7 @@ export default function FingerpickEditModal({
 									    the CSS spec would otherwise force on: with overflow-x set to
 									    auto, a still-visible overflow-y is promoted to auto too, so
 									    any sub-pixel height rounding would summon a stray v-scrollbar. */}
-									<div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+									<div className="fp-thin-scroll min-w-0 flex-1 overflow-x-auto overflow-y-hidden pb-2">
 										<div className="flex items-start gap-0.5">
 											{beatGroups.map((group, groupIndex) => {
 										const l1Active =

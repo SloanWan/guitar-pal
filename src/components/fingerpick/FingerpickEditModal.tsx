@@ -44,6 +44,8 @@ import {
 	setStroke,
 	moveCell,
 	hasPreviousNoteOnString,
+	availableTechniques,
+	type TechniqueAvailability,
 	setSlotsRest,
 	insertSlots,
 	duplicateSlots,
@@ -118,7 +120,12 @@ const STROKE_PICKER: { label: string; value: "none" | Stroke }[] = [
 	{ label: "Up", value: "roll-up" },
 ];
 
-const TECHNIQUE_OPTIONS: { label: string; value: NonNullable<StringFret["technique"]> }[] = [
+// Only the direction-bearing techniques are offered in the context menu; each
+// value must be a key of TechniqueAvailability so per-option enablement type-checks.
+const TECHNIQUE_OPTIONS: {
+	label: string;
+	value: Exclude<keyof TechniqueAvailability, "tied">;
+}[] = [
 	{ label: "Hammer-on (H)", value: "hammer-on" },
 	{ label: "Pull-off (P)", value: "pull-off" },
 	{ label: "Slide up (↑)", value: "slide-up" },
@@ -1974,36 +1981,37 @@ export default function FingerpickEditModal({
 					{techMenu && (
 						<div
 							ref={techMenuRef}
-							className="absolute z-60 border border-line-strong bg-popover py-1 min-w-40 text-sm"
+							className="absolute z-60 w-44 border border-line-strong bg-popover py-1 text-sm"
 							style={{ top: techMenu.y, left: techMenu.x }}
 						>
 							{(() => {
-								const enabled = hasPreviousNoteOnString(working, techMenu.cell);
+								const hasPrev = hasPreviousNoteOnString(working, techMenu.cell);
+								const avail = availableTechniques(working, techMenu.cell);
+								// When a previous note exists but a marker is still off, it's
+								// the fret movement that rules it out (not a missing note).
+								const disabledTitle = (ok: boolean) =>
+									ok
+										? undefined
+										: hasPrev
+											? "Not valid for this fret movement"
+											: "No previous note on this string";
 								return (
 									<>
 										{TECHNIQUE_OPTIONS.map((opt) => (
 											<button
 												key={opt.value}
-												disabled={!enabled}
+												disabled={!avail[opt.value]}
 												onClick={() => applyTechnique(opt.value)}
-												title={
-													enabled
-														? undefined
-														: "No previous note on this string"
-												}
+												title={disabledTitle(avail[opt.value])}
 												className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
 											>
 												{opt.label}
 											</button>
 										))}
 										<button
-											disabled={!enabled}
+											disabled={!avail.tied}
 											onClick={applyTied}
-											title={
-												enabled
-													? undefined
-													: "No previous note on this string to tie from"
-											}
+											title={disabledTitle(avail.tied)}
 											className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
 										>
 											Tied (⌒)
@@ -2012,12 +2020,26 @@ export default function FingerpickEditModal({
 								);
 							})()}
 							<div className="border-t border-line my-1" />
-							<button
-								onClick={applyClearTechnique}
-								className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								Clear technique
-							</button>
+							{(() => {
+								// Clear only makes sense when the target note actually carries
+								// a marker (technique or tie) to remove.
+								const sf =
+									working.measures[techMenu.cell.measureIndex]?.slots[
+										techMenu.cell.slotIndex
+									]?.strings[techMenu.cell.stringIndex];
+								const hasMarker = !!sf && (sf.technique !== null || sf.tied);
+								return (
+									<button
+										disabled={!hasMarker}
+										onClick={applyClearTechnique}
+										title={hasMarker ? undefined : "No technique to clear"}
+										className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-ink-dim hover:bg-destructive/10 hover:text-destructive disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
+									>
+										Clear technique
+										<Trash2 size={13} className="shrink-0" />
+									</button>
+								);
+							})()}
 						</div>
 					)}
 

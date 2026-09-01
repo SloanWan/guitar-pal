@@ -213,6 +213,51 @@ export function hasPreviousNoteOnString(pattern: FingerpickPattern, cell: Cell):
 	return !!sf && sf.fret !== null && !sf.muted;
 }
 
+// Which connecting markers are musically valid for the note in `cell`, given the
+// note it connects from (same string, previous slot). A technique/tie needs a
+// sounding note on both ends; the fret relationship then dictates the direction:
+// ascending (hammer-on / slide-up), descending (pull-off / slide-down), or same
+// pitch (tie). Anything else is disabled so the UI can only offer what makes
+// sense — e.g. prev fret 1 → current fret 5 allows only hammer-on and slide-up.
+export interface TechniqueAvailability {
+	"hammer-on": boolean;
+	"pull-off": boolean;
+	"slide-up": boolean;
+	"slide-down": boolean;
+	tied: boolean;
+}
+
+export function availableTechniques(
+	pattern: FingerpickPattern,
+	cell: Cell,
+): TechniqueAvailability {
+	const none: TechniqueAvailability = {
+		"hammer-on": false,
+		"pull-off": false,
+		"slide-up": false,
+		"slide-down": false,
+		tied: false,
+	};
+	const prev = previousSlotFret(pattern, cell);
+	const curr =
+		pattern.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[
+			cell.stringIndex
+		] ?? null;
+	if (!prev || !curr) return none;
+	if (prev.fret === null || curr.fret === null || prev.muted || curr.muted) {
+		return none;
+	}
+	const ascending = curr.fret > prev.fret;
+	const descending = curr.fret < prev.fret;
+	return {
+		"hammer-on": ascending,
+		"pull-off": descending,
+		"slide-up": ascending,
+		"slide-down": descending,
+		tied: curr.fret === prev.fret,
+	};
+}
+
 // ── Keyboard navigation ──────────────────────────────────────────────────────
 
 // Move the focused cell one step. up/down clamp within the 6 strings; left/right

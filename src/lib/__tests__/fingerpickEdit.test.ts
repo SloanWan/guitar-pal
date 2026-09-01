@@ -12,6 +12,7 @@ import {
 	moveCell,
 	previousSlotFret,
 	hasPreviousNoteOnString,
+	availableTechniques,
 	setSlotsRest,
 	splitTargetsForSlot,
 	mergeTargetsForSlot,
@@ -257,6 +258,83 @@ describe("previous-note lookup", () => {
 		expect(hasPreviousNoteOnString(p, { measureIndex: 0, slotIndex: 1, stringIndex: 5 })).toBe(
 			false,
 		);
+	});
+});
+
+describe("availableTechniques", () => {
+	const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 5 };
+	// Set prev-slot fret then current-slot fret on the same string.
+	const withFrets = (prevFret: number, currFret: number): FingerpickPattern => {
+		let p = twoMeasurePattern();
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, prevFret);
+		p = setFret(p, cell, currFret);
+		return p;
+	};
+
+	it("allows only hammer-on and slide-up when ascending (1 → 5)", () => {
+		expect(availableTechniques(withFrets(1, 5), cell)).toEqual({
+			"hammer-on": true,
+			"pull-off": false,
+			"slide-up": true,
+			"slide-down": false,
+			tied: false,
+		});
+	});
+
+	it("allows only pull-off and slide-down when descending (5 → 1)", () => {
+		expect(availableTechniques(withFrets(5, 1), cell)).toEqual({
+			"hammer-on": false,
+			"pull-off": true,
+			"slide-up": false,
+			"slide-down": true,
+			tied: false,
+		});
+	});
+
+	it("allows only a tie when both notes share the same fret", () => {
+		expect(availableTechniques(withFrets(3, 3), cell)).toEqual({
+			"hammer-on": false,
+			"pull-off": false,
+			"slide-up": false,
+			"slide-down": false,
+			tied: true,
+		});
+	});
+
+	it("disables everything with no previous sounding note", () => {
+		let p = twoMeasurePattern();
+		p = setFret(p, cell, 4);
+		expect(availableTechniques(p, cell)).toEqual({
+			"hammer-on": false,
+			"pull-off": false,
+			"slide-up": false,
+			"slide-down": false,
+			tied: false,
+		});
+	});
+
+	it("disables everything when the current cell has no fret", () => {
+		let p = twoMeasurePattern();
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 2);
+		expect(availableTechniques(p, cell)).toEqual({
+			"hammer-on": false,
+			"pull-off": false,
+			"slide-up": false,
+			"slide-down": false,
+			tied: false,
+		});
+	});
+
+	it("disables everything when the previous note is muted", () => {
+		let p = withFrets(1, 5);
+		p = toggleMuted(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 });
+		expect(availableTechniques(p, cell)).toEqual({
+			"hammer-on": false,
+			"pull-off": false,
+			"slide-up": false,
+			"slide-down": false,
+			tied: false,
+		});
 	});
 });
 

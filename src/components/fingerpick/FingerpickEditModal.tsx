@@ -166,6 +166,14 @@ const hoverAxisBg = (alpha: number): string => `rgba(74, 111, 165, ${alpha})`;
 // whole-beat L1 wash and the per-cell L2 axis tint, so its 0.08 denim alpha is
 // weaker than L2's 0.14 but stronger than L1's neutral wash.
 const HOVER_SUBBEAT_BG = hoverAxisBg(0.08);
+// Steady denim wash on any slot carrying a roll (arpeggiated) stroke, so rolled
+// columns read as such at a glance without a per-cell marker. Reuses the same
+// denim base as the hover washes (staying on-theme) at a 0.10 alpha — heavier
+// than the transient L1.5 sub-beat wash (0.08) yet lighter than the per-cell L2
+// hover tint (0.14), so a hovered rolled column still visibly brightens. Applied
+// only when the slot isn't a rest (the gray rest wash wins) and no hover wash is
+// active.
+const ROLL_TINT_BG = hoverAxisBg(0.1);
 
 type HoveredCell = { measureIndex: number; slotIndex: number; stringIndex: number };
 
@@ -1573,6 +1581,8 @@ export default function FingerpickEditModal({
 																// theme-aware (subtle light gray on light, subtle dark
 																// gray on dark), so no per-mode color handling is needed.
 																const isRest = !!slot.isRest;
+																// Rolled (arpeggiated) slot — gets the amber wash below.
+																const hasRoll = !!slot.stroke;
 																return (
 																	<div
 																		key={slot.id}
@@ -1582,11 +1592,12 @@ export default function FingerpickEditModal({
 																				? popupAnchorRef
 																				: undefined
 																		}
-																		// Mid-level sixteenth-window wash (denim) spans this
-																		// whole column — cells plus labels — like the L1 beat
-																		// wash but one subdivision finer. Inline so it layers
-																		// above the rest className bg during hover; it clears
-																		// back to the rest wash when the hover moves away.
+																		// Column background, in priority order: the mid-level
+																		// sixteenth-window hover wash (denim, one subdivision finer
+																		// than the L1 beat wash) wins while hovered; otherwise a
+																		// rolled slot shows its steady denim tint. Both are inline so
+																		// they layer above the rest className bg; when neither applies
+																		// the column falls back to the className (rest wash or bare).
 																		style={
 																			subBeatSlots.has(
 																				slotIndex,
@@ -1595,7 +1606,12 @@ export default function FingerpickEditModal({
 																						backgroundColor:
 																							HOVER_SUBBEAT_BG,
 																					}
-																				: undefined
+																				: hasRoll && !isRest
+																					? {
+																							backgroundColor:
+																								ROLL_TINT_BG,
+																						}
+																					: undefined
 																		}
 																		// min-w-5 floors each slot column at a legible width; once the
 																		// columns can no longer fit, the parent scroll wrapper overflows

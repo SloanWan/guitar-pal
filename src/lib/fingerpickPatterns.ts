@@ -65,7 +65,7 @@ const TECHNIQUE_SHOWCASE: FingerpickPattern = {
 			id: "m4",
 			slots: [
 				{ id: "s17", duration: "half", strings: [N(5), S(), S(), S(), S(), S()] },
-				{ id: "s18", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "s18", duration: "quarter", isRest: true, strings: [S(), S(), S(), S(), S(), S()] },
 				{ id: "s19", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
 				{ id: "s20", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
 				{ id: "s21", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },
@@ -83,7 +83,7 @@ const TECHNIQUE_SHOWCASE: FingerpickPattern = {
 		{
 			id: "m6",
 			slots: [
-				{ id: "s24", duration: "rest", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "s24", duration: "quarter", isRest: true, strings: [S(), S(), S(), S(), S(), S()] },
 				{ id: "s25", duration: "sixteenth", strings: [N(5), S(), S(), S(), S(), S()] },
 				{ id: "s26", duration: "sixteenth", strings: [N(7), S(), S(), S(), S(), S()] },
 				{ id: "s27", duration: "sixteenth", strings: [N(8), S(), S(), S(), S(), S()] },

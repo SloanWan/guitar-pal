@@ -76,7 +76,6 @@ const DURATION_BEATS: Record<Duration, number> = {
 	sixteenth: 0.25,
 	"sixteenth-triplet": 1 / 6,
 	"32nd": 0.125,
-	rest: 1,
 };
 
 // ─── Roll (arpeggiated chord) parameters ──────────────────────────────────────
@@ -274,7 +273,7 @@ export function fingerpickPatternToScheduleEvents(
 				? DURATION_BEATS["32nd"] * secondsPerBeat
 				: DURATION_BEATS[slot.duration] * secondsPerBeat;
 
-			if (slot.duration !== "rest") {
+			if (!slot.isRest) {
 				// A rolled slot staggers its attacks; gather the strings that will fire
 				// (same predicate as the push below) and resolve per-string offsets.
 				let rollOffsets: Map<number, RollOffset> | null = null;

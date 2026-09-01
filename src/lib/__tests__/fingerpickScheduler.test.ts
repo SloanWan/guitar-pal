@@ -56,6 +56,12 @@ function slot(
 	return { id, duration, strings: strings6(strOverrides) };
 }
 
+// A silent slot: keeps a real rhythmic duration (quarter by default) but produces
+// no sound. Mirrors the isRest-flag model.
+function restSlot(id: string, duration: Duration = "quarter"): BeatSlot {
+	return { ...slot(id, duration), isRest: true };
+}
+
 function pattern(bpm: number, slots: BeatSlot[]): FingerpickPattern {
 	return {
 		id: "p",
@@ -153,7 +159,7 @@ describe("fingerpickPatternToScheduleEvents — BPM / timing math", () => {
 		// quarter(0) → rest → quarter (appears at 0.5 + rest duration)
 		const p = pattern(120, [
 			slot("s1", "quarter", { 5: { fret: 0 } }),
-			slot("s2", "rest"), // no strings active, duration = quarter = 0.5 s
+			restSlot("s2"), // silent, keeps quarter duration = 0.5 s
 			slot("s3", "quarter", { 5: { fret: 2 } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
@@ -477,7 +483,7 @@ describe("getTotalPatternDuration", () => {
 
 	it("rest slots contribute to total duration", () => {
 		// quarter(0.5) + rest(0.5) at 120 BPM = 1.0 s
-		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 0 } }), slot("s2", "rest")]);
+		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 0 } }), restSlot("s2")]);
 		expect(getTotalPatternDuration(p, 120)).toBeCloseTo(1.0);
 	});
 });
@@ -1404,7 +1410,7 @@ describe("fingerpickPatternToScheduleEvents — no-stroke byte-identical", () =>
 	it("a stroke-free pattern is identical regardless of rollParams", () => {
 		const p = multiMeasurePattern(120, [
 			[slot("s1", "quarter", { 0: { fret: 0 }, 2: { fret: 2 } }), slot("s2", "eighth", { 5: { fret: 3 } })],
-			[slot("s3", "rest"), slot("s4", "quarter", { 1: { fret: 1, muted: true } })],
+			[restSlot("s3"), slot("s4", "quarter", { 1: { fret: 1, muted: true } })],
 		]);
 		const wild: RollParams = {
 			baseStagger: 0.09,

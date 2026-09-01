@@ -8,6 +8,7 @@ import {
 	useCallback,
 	useSyncExternalStore,
 } from "react";
+import { createPortal } from "react-dom";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +37,7 @@ import {
 	setStroke,
 	moveCell,
 	hasPreviousNoteOnString,
-	setSlotsDuration,
+	setSlotsRest,
 	insertSlots,
 	duplicateSlots,
 	deleteSlots,
@@ -46,14 +47,14 @@ import {
 	swapMeasures,
 	computeBeatLabels,
 	computeBeatGroups,
-	slotDurationUnits,
-	remainingUnits,
+	computeSixteenthGroups,
 	splitSlot,
 	mergeSlots,
+	splitTargetsForSlot,
+	mergeTargetsForSlot,
 	resetMeasure,
 	remapMeasure,
 	STRING_LABELS,
-	DURATION_PICKER,
 	MAX_FRET,
 	type Cell,
 	type Direction,
@@ -74,7 +75,8 @@ const TIME_SIGNATURES: { label: string; value: [number, number] }[] = [
 ];
 
 // Short glyphs shown under each slot column so the current rhythmic value is
-// visible in the grid (durations beyond the picker set still get a marker).
+// visible in the grid. A rest keeps its real duration, so it shows the same glyph
+// as the note value it replaces (plus a gray wash on the column, applied below).
 const DURATION_ABBREV: Record<Duration, string> = {
 	whole: "W",
 	half: "H",
@@ -86,53 +88,19 @@ const DURATION_ABBREV: Record<Duration, string> = {
 	sixteenth: "S",
 	"sixteenth-triplet": "S³",
 	"32nd": "T",
-	rest: "R",
 };
 
-// Note-value glyphs for the split/merge/quick-preset controls. These are the
-// standard Unicode musical symbols; DurationIcon renders one per duration.
-const DURATION_NOTE_GLYPH: Partial<Record<Duration, string>> = {
-	whole: "𝅝",
-	half: "𝅗𝅥",
-	quarter: "♩",
-	eighth: "♪",
-	sixteenth: "♬",
-};
-
+// Duration label for the split/merge/replace controls. Uses the same short text
+// abbreviations as the grid (W/H/Q/E/S/T, dotted with a trailing dot) rather than
+// Unicode note glyphs — the whole/half/rest musical symbols live in the astral plane
+// (U+1D1xx) and render as tofu boxes in almost every UI font, so text is used instead.
 function DurationIcon({ duration }: { duration: Duration }) {
 	return (
-		<span aria-hidden className="font-serif leading-none">
-			{DURATION_NOTE_GLYPH[duration] ?? DURATION_ABBREV[duration]}
+		<span aria-hidden className="font-mono text-xs font-semibold leading-none">
+			{DURATION_ABBREV[duration]}
 		</span>
 	);
 }
-
-// Integer-weight note durations, largest → smallest by unit weight, used by the
-// split/merge controls. Triplets are excluded (fractional weight — see the
-// hasIntegerUnitWeight guard in splitSlot/mergeSlots).
-const NOTE_LADDER: Duration[] = [
-	"whole", // 32
-	"half", // 16
-	"dotted-quarter", // 12
-	"quarter", // 8
-	"dotted-eighth", // 6
-	"eighth", // 4
-	"sixteenth", // 2
-	"32nd", // 1
-];
-
-// The next larger note value (used as the merge target for a slot). Existing plain
-// keys keep their plain targets so e.g. two eighths still merge to a quarter (not a
-// dotted-eighth); the added dotted/32nd keys point at the next larger value by weight.
-const NEXT_LARGER_DURATION: Partial<Record<Duration, Duration>> = {
-	"32nd": "sixteenth", // 1 → 2
-	sixteenth: "eighth", // 2 → 4
-	eighth: "quarter", // 4 → 8
-	"dotted-eighth": "quarter", // 6 → 8
-	quarter: "half", // 8 → 16
-	"dotted-quarter": "half", // 12 → 16
-	half: "whole", // 16 → 32
-};
 
 // Slot-level roll (arpeggiated chord) options for the column popup. "none" clears
 // the field; "roll-down"/"roll-up" are the domain Stroke values. Roll ↓ = hand moves
@@ -178,6 +146,12 @@ const MAX_BPM = 220;
 const HOVER_L1_BG = "var(--sidebar-hover-bg)";
 const HOVER_L2_ALPHA = 0.14;
 const hoverAxisBg = (alpha: number): string => `rgba(74, 111, 165, ${alpha})`;
+// Mid-level ("L1.5") wash for the sixteenth-note window containing the hovered
+// slot — only meaningful when a beat is subdivided finer than a sixteenth (e.g.
+// eight 32nd notes), where each sixteenth spans two slot columns. Sits between the
+// whole-beat L1 wash and the per-cell L2 axis tint, so its 0.08 denim alpha is
+// weaker than L2's 0.14 but stronger than L1's neutral wash.
+const HOVER_SUBBEAT_BG = hoverAxisBg(0.08);
 
 type HoveredCell = { measureIndex: number; slotIndex: number; stringIndex: number };
 
@@ -299,6 +273,15 @@ export default function FingerpickEditModal({
 	// Focusable cell buttons, keyed by cellKey.
 	const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 	const popupRef = useRef<HTMLDivElement>(null);
+	// The selected column's DOM box, used to anchor the (body-portaled) column popup
+	// below it so the popup escapes the dialog's overflow clip.
+	const popupAnchorRef = useRef<HTMLDivElement | null>(null);
+	// Fixed-position coordinates for the portaled column popup (null when closed).
+	const [popupPos, setPopupPos] = useState<{
+		top: number;
+		left?: number;
+		right?: number;
+	} | null>(null);
 	const techMenuRef = useRef<HTMLDivElement>(null);
 	const hintRef = useRef<HTMLDivElement>(null);
 	// Save button node, for the spring-pop press feedback.
@@ -486,6 +469,15 @@ export default function FingerpickEditModal({
 		[commit],
 	);
 
+	// Hover the whole slot column without a specific string row — used by the
+	// duration label, column selector and beat label beneath each column so the
+	// L1 beat-group wash and L2 column tint activate there too, not only inside
+	// the string cells. stringIndex -1 is a sentinel that never matches a real
+	// row (0–5), so the per-axis row tint stays off while the column lights up.
+	const hoverColumn = useCallback((measureIndex: number, slotIndex: number) => {
+		setHoveredCell({ measureIndex, slotIndex, stringIndex: -1 });
+	}, []);
+
 	const handleCellKeyDown = useCallback(
 		(e: React.KeyboardEvent, cell: Cell) => {
 			const key = e.key;
@@ -669,8 +661,10 @@ export default function FingerpickEditModal({
 		});
 	}
 
-	function applyDuration(duration: Duration) {
-		commit((prev) => setSlotsDuration(prev, columnTargets(), duration));
+	// Toggle the silent (rest) state on every selected column in one commit. A rest
+	// keeps its rhythmic duration, so the measure total is unchanged.
+	function applyRest(isRest: boolean) {
+		commit((prev) => setSlotsRest(prev, columnTargets(), isRest));
 	}
 
 	// Apply (or clear) a roll stroke on every selected column in one commit, so
@@ -793,15 +787,11 @@ export default function FingerpickEditModal({
 		setPresetConfirm(null);
 	}
 
-	// Duration highlighted in the picker = the shared value of all selected slots.
-	const selectedDuration: Duration | null = (() => {
+	// Rest toggle is active only when every selected column is already a rest.
+	const allSelectedRest: boolean = (() => {
 		const targets = columnTargets();
-		if (targets.length === 0) return null;
-		const durations = targets.map(
-			(t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.duration,
-		);
-		const first = durations[0];
-		return durations.every((d) => d === first) ? (first ?? null) : null;
+		if (targets.length === 0) return false;
+		return targets.every((t) => !!working.measures[t.measureIndex]?.slots[t.slotIndex]?.isRest);
 	})();
 
 	// Stroke highlighted in the roll picker = the shared stroke of all selected slots
@@ -834,52 +824,53 @@ export default function FingerpickEditModal({
 		return firstSelectedColumn.slotIndex >= totalSlots / 2;
 	})();
 
+	// Position the column popup as a fixed, body-portaled box anchored just below the
+	// whole selected column — so it escapes the dialog's overflow clip (which would
+	// otherwise truncate it at the modal edge) and leaves the column's duration/beat
+	// labels visible above it. Recomputed on scroll (capture, to catch the dialog's own
+	// inner scroll) and resize while a column is selected.
+	useIsomorphicLayoutEffect(() => {
+		if (!firstSelectedColumnKey) {
+			setPopupPos(null);
+			return;
+		}
+		const GAP = 6;
+		const compute = () => {
+			const el = popupAnchorRef.current;
+			if (!el) return;
+			const r = el.getBoundingClientRect();
+			setPopupPos(
+				popupOpensLeft
+					? { top: r.bottom + GAP, right: window.innerWidth - r.right }
+					: { top: r.bottom + GAP, left: r.left },
+			);
+		};
+		compute();
+		window.addEventListener("resize", compute);
+		window.addEventListener("scroll", compute, true);
+		return () => {
+			window.removeEventListener("resize", compute);
+			window.removeEventListener("scroll", compute, true);
+		};
+	}, [firstSelectedColumnKey, popupOpensLeft]);
+
 	// Split/merge/whole controls act on a single slot. When exactly one column is
-	// selected, derive that slot's split targets and merge target from live state.
+	// selected, enumerate that slot's split and merge targets from live state.
 	const singleTarget: SlotTarget | null = selectedColumns.size === 1 ? columnTargets()[0] : null;
-
 	const singleMeasure = singleTarget ? working.measures[singleTarget.measureIndex] : null;
-	const singleSlot =
-		singleTarget && singleMeasure ? singleMeasure.slots[singleTarget.slotIndex] : null;
 
-	// Smaller note values this slot can be split into: they must subdivide the
-	// slot evenly and the sub-slots must fit the measure's remaining capacity.
-	const splitOptions: { duration: Duration; count: number }[] =
-		singleSlot && singleMeasure
-			? NOTE_LADDER.flatMap((d) => {
-					const currentUnits = slotDurationUnits(singleSlot.duration);
-					const targetUnits = slotDurationUnits(d);
-					if (targetUnits >= currentUnits || currentUnits % targetUnits !== 0) return [];
-					const count = currentUnits / targetUnits;
-					const extra = count * targetUnits - currentUnits; // 0 for even splits
-					if (extra > remainingUnits(singleMeasure.slots, working.timeSignature))
-						return [];
-					return [{ duration: d, count }];
-				})
+	// Smaller note values this slot can be split into (even subdivisions that fit the
+	// measure's remaining capacity), and larger values the following slots can merge
+	// up to — both enumerated by the shared lib helpers.
+	const splitOptions =
+		singleTarget && singleMeasure
+			? splitTargetsForSlot(singleMeasure, singleTarget.slotIndex, working.timeSignature)
+			: [];
+	const mergeOptions =
+		singleTarget && singleMeasure
+			? mergeTargetsForSlot(singleMeasure, singleTarget.slotIndex)
 			: [];
 
-	// Merge target: the next larger note value, valid only when the following
-	// slots line up to exactly fill it.
-	const mergeTarget: Duration | null = singleSlot
-		? (NEXT_LARGER_DURATION[singleSlot.duration] ?? null)
-		: null;
-	const canMerge = (() => {
-		if (!singleTarget || !singleMeasure || !mergeTarget) return false;
-		const targetUnits = slotDurationUnits(mergeTarget);
-		let sum = 0;
-		let end = singleTarget.slotIndex;
-		while (end < singleMeasure.slots.length && sum < targetUnits) {
-			sum += slotDurationUnits(singleMeasure.slots[end].duration);
-			end++;
-		}
-		return sum === targetUnits && end - singleTarget.slotIndex >= 2;
-	})();
-
-	// A whole note may only be the sole slot in its measure. Disable it in the
-	// picker whenever the targeted measure(s) already hold other slots.
-	const wholeDisabled = columnTargets().some(
-		(t) => (working.measures[t.measureIndex]?.slots.length ?? 0) > 1,
-	);
 	// Show "Replace with whole note" only when the measure has content to replace:
 	// more than one slot, or a lone slot that isn't already an empty whole note.
 	const measureHasContent =
@@ -891,37 +882,42 @@ export default function FingerpickEditModal({
 	const columnPopup = (
 		<div
 			ref={popupRef}
-			className={`absolute top-full ${popupOpensLeft ? "right-0" : "left-0"} mt-1.5 z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2`}
+			style={
+				popupPos
+					? { position: "fixed", top: popupPos.top, left: popupPos.left, right: popupPos.right }
+					: undefined
+			}
+			// pointer-events-auto is required: the modal Dialog sets pointer-events:none on
+			// document.body, which this body-portaled popup would otherwise inherit — making
+			// clicks fall through it to the overlay (closing it) instead of hitting its buttons.
+			className="pointer-events-auto z-[100] w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg"
 		>
-			<div className="flex border border-line-strong">
-				{DURATION_PICKER.map((d, i) => {
-					const disabled = d.value === "whole" && wholeDisabled;
-					return (
-						<button
-							key={d.value}
-							onClick={() => applyDuration(d.value)}
-							disabled={disabled}
-							title={
-								disabled
-									? "Whole note must be the only slot in the measure"
-									: d.value
-							}
-							className={`h-7 flex-1 px-2 font-mono text-xs font-semibold transition-colors ${
-								i > 0 ? "border-l border-line-strong" : ""
-							} ${
-								selectedDuration === d.value
-									? "bg-denim text-on-denim"
-									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-							} disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-dim`}
-						>
-							{d.label}
-						</button>
-					);
-				})}
+			{/* Rest toggle — silences the selected column(s) while keeping their
+			    rhythmic duration, so the measure total never changes. Durations
+			    themselves are only ever changed via Split / Merge below. */}
+			<div className="flex flex-col gap-1">
+				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+					Silence
+				</span>
+				<button
+					onClick={() => applyRest(!allSelectedRest)}
+					title={
+						allSelectedRest
+							? "Turn the rest back into a note"
+							: "Silence this slot (keeps its duration as a rest)"
+					}
+					className={`h-7 px-2 font-mono text-xs font-semibold border border-line-strong transition-colors ${
+						allSelectedRest
+							? "bg-denim text-on-denim"
+							: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+					}`}
+				>
+					Rest
+				</button>
 			</div>
 
 			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
-			    selected column. Same segmented-pill pattern as the duration picker. */}
+			    selected column. Same segmented-pill pattern as the Roll picker. */}
 			<div className="flex flex-col gap-1 border-t border-line pt-2">
 				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 					Roll
@@ -946,8 +942,10 @@ export default function FingerpickEditModal({
 				</div>
 			</div>
 
-			{/* Split / merge (single column only) */}
-			{singleTarget && !popupConfirm && (splitOptions.length > 0 || canMerge) && (
+			{/* Split / merge (single column only). Split subdivides the slot into equal
+			    smaller notes; merge folds this slot plus the following run into any larger
+			    note value they sum to. Both preserve the measure total. */}
+			{singleTarget && !popupConfirm && (splitOptions.length > 0 || mergeOptions.length > 0) && (
 				<div className="flex flex-col gap-1.5 border-t border-line pt-2">
 					{splitOptions.length > 0 && (
 						<div className="flex flex-wrap items-center gap-1">
@@ -966,14 +964,23 @@ export default function FingerpickEditModal({
 							))}
 						</div>
 					)}
-					{canMerge && mergeTarget && (
-						<button
-							onClick={() => requestMerge(singleTarget, mergeTarget)}
-							title={`Merge into ${mergeTarget}`}
-							className="flex items-center gap-1 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-						>
-							<Merge size={13} /> Merge → <DurationIcon duration={mergeTarget} />
-						</button>
+					{mergeOptions.length > 0 && (
+						<div className="flex flex-wrap items-center gap-1">
+							<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								Merge
+							</span>
+							{mergeOptions.map(({ duration, count }) => (
+								<button
+									key={duration}
+									onClick={() => requestMerge(singleTarget, duration)}
+									title={`Merge ${count} slots into a ${duration}`}
+									className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+								>
+									<Merge size={13} />
+									<DurationIcon duration={duration} />
+								</button>
+							))}
+						</div>
 					)}
 				</div>
 			)}
@@ -1120,6 +1127,15 @@ export default function FingerpickEditModal({
 						setSelectedColumns(new Set());
 					}
 				}}
+				onInteractOutside={(e) => {
+					// The column popup is portaled to document.body, so interacting with it
+					// registers as "outside" the dialog. Keep the dialog open in that case;
+					// the popup's own outside-pointer handler manages closing it. Radix puts
+					// the real DOM target on detail.originalEvent, NOT on e.target (which is
+					// the synthetic layer node) — read it from there or the dismiss fires.
+					const target = e.detail.originalEvent.target as Node | null;
+					if (target && popupRef.current?.contains(target)) e.preventDefault();
+				}}
 			>
 				{/* ── Header ─────────────────────────────────────────────────────── */}
 				<div className="sticky top-0 z-55 flex items-center justify-between border-b border-line bg-popover px-4 py-3">
@@ -1247,6 +1263,19 @@ export default function FingerpickEditModal({
 						const beatGroups = computeBeatGroups(measure.slots, working.timeSignature);
 						const hoverInMeasure =
 							hoveredCell?.measureIndex === measureIndex ? hoveredCell : null;
+						// Slot indices sharing the hovered slot's sixteenth-note window, for
+						// the mid-level wash. Only kept when the window subdivides (>1 slot,
+						// i.e. finer than a sixteenth) so plain sixteenths/larger don't get a
+						// redundant single-column wash on top of the L1/L2 layers.
+						const subBeatSlots: Set<number> =
+							hoverInMeasure != null
+								? (() => {
+										const group = computeSixteenthGroups(measure.slots).find((g) =>
+											g.includes(hoverInMeasure.slotIndex),
+										);
+										return group && group.length > 1 ? new Set(group) : new Set();
+									})()
+								: new Set();
 						return (
 							<div
 								key={measure.id}
@@ -1340,7 +1369,19 @@ export default function FingerpickEditModal({
 										))}
 									</div>
 
-									{beatGroups.map((group, groupIndex) => {
+									{/* Horizontally scrollable slot area. Each slot column has a
+									    legible min-width, so when a measure is subdivided into
+									    many small notes (e.g. 32nds) the columns overflow and this
+									    wrapper scrolls sideways — while the string-label column
+									    above stays fixed. min-w-0 lets the flex item shrink below
+									    its content so the overflow scrolls instead of widening the
+									    measure block. overflow-y-hidden stops the vertical scrollbar
+									    the CSS spec would otherwise force on: with overflow-x set to
+									    auto, a still-visible overflow-y is promoted to auto too, so
+									    any sub-pixel height rounding would summon a stray v-scrollbar. */}
+									<div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+										<div className="flex items-start gap-0.5">
+											{beatGroups.map((group, groupIndex) => {
 										const l1Active =
 											hoverInMeasure != null &&
 											group.includes(hoverInMeasure.slotIndex);
@@ -1369,11 +1410,29 @@ export default function FingerpickEditModal({
 													// column so it reads as silence at a glance. bg-raise is
 													// theme-aware (subtle light gray on light, subtle dark
 													// gray on dark), so no per-mode color handling is needed.
-													const isRest = slot.duration === "rest";
+													const isRest = !!slot.isRest;
 													return (
 														<div
 															key={slot.id}
-															className={`flex min-w-0 flex-1 flex-col gap-0.5 rounded-sm ${
+															ref={
+																key === firstSelectedColumnKey
+																	? popupAnchorRef
+																	: undefined
+															}
+															// Mid-level sixteenth-window wash (denim) spans this
+															// whole column — cells plus labels — like the L1 beat
+															// wash but one subdivision finer. Inline so it layers
+															// above the rest className bg during hover; it clears
+															// back to the rest wash when the hover moves away.
+															style={
+																subBeatSlots.has(slotIndex)
+																	? { backgroundColor: HOVER_SUBBEAT_BG }
+																	: undefined
+															}
+															// min-w-5 floors each slot column at a legible width; once the
+															// columns can no longer fit, the parent scroll wrapper overflows
+															// horizontally rather than shrinking them into an unreadable smear.
+															className={`flex min-w-5 flex-1 flex-col gap-0.5 rounded-sm ${
 																isRest ? "bg-raise/70" : ""
 															}`}
 														>
@@ -1519,12 +1578,19 @@ export default function FingerpickEditModal({
 															})}
 
 															{/* Duration label */}
-															<div className="text-center text-[9px] font-mono text-ink-faint leading-none">
+															<div
+																	onMouseEnter={() => hoverColumn(measureIndex, slotIndex)}
+																	className="text-center text-[9px] font-mono text-ink-faint leading-none"
+																>
 																{DURATION_ABBREV[slot.duration]}
 															</div>
 
-															{/* Column selector */}
-															<div className="relative flex justify-center pt-1">
+															{/* Column selector. The popup itself is rendered once, portaled to
+															    the document body (see below), so it isn't clipped by the dialog. */}
+															<div
+																	onMouseEnter={() => hoverColumn(measureIndex, slotIndex)}
+																	className="flex justify-center pt-1"
+																>
 																<button
 																	data-column-selector
 																	onClick={() =>
@@ -1540,12 +1606,13 @@ export default function FingerpickEditModal({
 																			: "border-line-strong hover:border-denim"
 																	}`}
 																/>
-																{key === firstSelectedColumnKey &&
-																	columnPopup}
 															</div>
 
 															{/* Beat position label */}
-															<span className="pt-1 text-center font-mono text-[10px] leading-none text-muted-foreground">
+															<span
+																	onMouseEnter={() => hoverColumn(measureIndex, slotIndex)}
+																	className="pt-1 text-center font-mono text-[10px] leading-none text-muted-foreground"
+																>
 																{beatLabels[slotIndex]}
 															</span>
 														</div>
@@ -1554,6 +1621,8 @@ export default function FingerpickEditModal({
 											</div>
 										);
 									})}
+										</div>
+									</div>
 								</div>
 
 								{/* Quick preset row: fill the whole measure with one note value. */}
@@ -1798,6 +1867,12 @@ export default function FingerpickEditModal({
 					</div>
 				)}
 			</DialogContent>
+			{/* Column popup, portaled to the body so it renders above and outside the
+			    dialog's overflow-clipped content, anchored below the selected column. */}
+			{firstSelectedColumnKey &&
+				popupPos &&
+				typeof document !== "undefined" &&
+				createPortal(columnPopup, document.body)}
 		</Dialog>
 	);
 }

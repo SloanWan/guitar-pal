@@ -29,19 +29,18 @@ export const STRING_LABELS = ["e", "B", "G", "D", "A", "E"] as const;
 export const MIN_FRET = 0;
 export const MAX_FRET = 24;
 
-// Duration picker options exposed in the column popup, ordered longest → shortest
-// by unit weight (rest last). Triplets stay out — their unit weights are fractional
-// (8/3, 4/3) and require a separate capacity-model change.
-export const DURATION_PICKER: { label: string; value: Duration }[] = [
-	{ label: "W", value: "whole" },
-	{ label: "H", value: "half" },
-	{ label: "Q.", value: "dotted-quarter" },
-	{ label: "Q", value: "quarter" },
-	{ label: "E.", value: "dotted-eighth" },
-	{ label: "E", value: "eighth" },
-	{ label: "S", value: "sixteenth" },
-	{ label: "T", value: "32nd" },
-	{ label: "R", value: "rest" },
+// Integer-weight note durations, largest → smallest by unit weight, used by the
+// split/merge controls. Triplets are excluded (fractional weight — see the
+// hasIntegerUnitWeight guard in splitSlot/mergeSlots).
+export const NOTE_LADDER: Duration[] = [
+	"whole", // 32
+	"half", // 16
+	"dotted-quarter", // 12
+	"quarter", // 8
+	"dotted-eighth", // 6
+	"eighth", // 4
+	"sixteenth", // 2
+	"32nd", // 1
 ];
 
 // ── Factories ────────────────────────────────────────────────────────────────
@@ -246,8 +245,8 @@ export function moveCell(pattern: FingerpickPattern, cell: Cell, direction: Dire
 // ── Beat position labels ─────────────────────────────────────────────────────
 
 // Rhythmic value of each Duration in ticks, where one whole note = 96 ticks. 96
-// is divisible by 3, so triplet values stay integral. A rest carries no inherent
-// length in the data model, so it is treated as a quarter-beat's worth of time.
+// is divisible by 3, so triplet values stay integral. A rest is not a distinct
+// duration — a silent slot keeps its real `duration`, so it needs no entry here.
 const TICKS_PER_WHOLE = 96;
 
 const DURATION_TICKS: Record<Duration, number> = {
@@ -261,7 +260,6 @@ const DURATION_TICKS: Record<Duration, number> = {
 	sixteenth: 6,
 	"sixteenth-triplet": 4,
 	"32nd": 3,
-	rest: 24,
 };
 
 // Standard counting syllables for a single beat subdivided into `subdivisions`
@@ -372,6 +370,36 @@ export function computeBeatGroups(
 	return groups;
 }
 
+// Group slot indices by the sixteenth-note (6-tick) window their onset falls in.
+// This is one subdivision finer than computeBeatGroups and independent of the time
+// signature (a sixteenth is a fixed tick value). It drives the editor's mid-level
+// hover wash: when a beat is subdivided finer than a sixteenth — e.g. a quarter
+// beat split into eight 32nd notes — the two 32nds that make up each sixteenth are
+// highlighted together, sitting between the whole-beat wash and the per-cell tint.
+// A note at least a sixteenth long occupies its window alone (the windows it spans
+// have no onset and are skipped), so those groups are singletons and the caller can
+// leave them un-washed. Every slot appears in exactly one group.
+export function computeSixteenthGroups(slots: BeatSlot[]): number[][] {
+	const windowTicks = DURATION_TICKS.sixteenth; // 6
+
+	const groups: number[][] = [];
+	let current: number[] | null = null;
+	let currentWindow = -1;
+	let cursor = 0;
+	slots.forEach((slot, i) => {
+		const windowIndex = Math.floor(cursor / windowTicks);
+		if (!current || windowIndex !== currentWindow) {
+			current = [];
+			groups.push(current);
+			currentWindow = windowIndex;
+		}
+		current.push(i);
+		cursor += DURATION_TICKS[slot.duration];
+	});
+
+	return groups;
+}
+
 // ── Slot / measure structural edits ─────────────────────────────────────────
 
 function groupTargetsByMeasure(targets: SlotTarget[]): Map<number, Set<number>> {
@@ -383,11 +411,19 @@ function groupTargetsByMeasure(targets: SlotTarget[]): Map<number, Set<number>> 
 	return map;
 }
 
-// Apply a duration to every targeted slot (across any number of measures).
-export function setSlotsDuration(
+// Toggle the silent (rest) state on every targeted slot (across any number of
+// measures). A rest keeps its rhythmic `duration` — so the measure total never
+// changes — but produces no sound and renders as a rest glyph.
+//
+// Setting a rest is silence: clear the slot's note data (and any roll stroke) so a
+// rest is a true rest, not a note that renders/schedules as silence downstream while
+// its fret data lingers, orphaned, in the editor. Clearing it *omits* the isRest key
+// (rather than storing `false`) so a slot returned to "note" stays byte-identical to
+// one that was never a rest — the modal's dirty check compares serialized snapshots.
+export function setSlotsRest(
 	pattern: FingerpickPattern,
 	targets: SlotTarget[],
-	duration: Duration,
+	isRest: boolean,
 ): FingerpickPattern {
 	const grouped = groupTargetsByMeasure(targets);
 	return {
@@ -399,15 +435,14 @@ export function setSlotsDuration(
 				...measure,
 				slots: measure.slots.map((slot, si) => {
 					if (!selected.has(si)) return slot;
-					// A rest is silence: clear the slot's note data (and any roll stroke) so a
-					// slot converted to a rest is a true rest, not a note that renders/schedules
-					// as silence downstream while its fret data lingers, orphaned, in the editor.
-					if (duration === "rest") {
+					if (isRest) {
 						const { stroke: _stroke, ...rest } = slot;
 						void _stroke;
-						return { ...rest, duration, strings: makeStrings() };
+						return { ...rest, isRest: true, strings: makeStrings() };
 					}
-					return { ...slot, duration };
+					const { isRest: _wasRest, ...note } = slot;
+					void _wasRest;
+					return note;
 				}),
 			};
 		}),
@@ -573,10 +608,10 @@ export function swapMeasures(measures: Measure[], indexA: number, indexB: number
 // ── Duration arithmetic (capacity model) ─────────────────────────────────────
 //
 // Rhythmic value of each Duration measured in thirty-second notes (the common
-// unit). A rest carries no inherent length in the data model, so — like the beat
-// label logic — it is treated as a quarter's worth of time for capacity purposes.
-// Triplet values are not integral in this unit; they are not offered by the
-// split/merge UI but are given their exact fractional weight so sums stay honest.
+// unit). A rest is not a distinct duration — a silent slot keeps its real
+// `duration` and thus its real weight — so it needs no entry here. Triplet values
+// are not integral in this unit; they are not offered by the split/merge UI but
+// are given their exact fractional weight so sums stay honest.
 export const DURATION_UNITS: Record<Duration, number> = {
 	whole: 32,
 	half: 16,
@@ -588,7 +623,6 @@ export const DURATION_UNITS: Record<Duration, number> = {
 	sixteenth: 2,
 	"sixteenth-triplet": 4 / 3,
 	"32nd": 1,
-	rest: 8,
 };
 
 // Total capacity of a measure in thirty-second-note units. 4/4 → 32, 3/4 → 24,
@@ -661,13 +695,15 @@ export function splitSlot(
 	const subSlots: BeatSlot[] = [];
 	for (let i = 0; i < count; i++) {
 		if (i === 0) {
-			// First sub-slot inherits the original string data AND the roll stroke,
-			// consistent with the "first sub-slot inherits" rule; the rest are empty.
+			// First sub-slot inherits the original string data, the roll stroke AND the
+			// rest flag (splitting a rest keeps the head silent), consistent with the
+			// "first sub-slot inherits" rule; the rest are empty notes.
 			subSlots.push({
 				id: crypto.randomUUID(),
 				duration: targetDuration,
 				strings: cloneStrings(slot.strings),
 				...(slot.stroke !== undefined ? { stroke: slot.stroke } : {}),
+				...(slot.isRest ? { isRest: true } : {}),
 			});
 		} else {
 			subSlots.push(makeEmptySlot(targetDuration));
@@ -720,14 +756,15 @@ export function mergeSlots(
 	if (sum !== targetUnits || consumed < 2) return { type: "ok", measures };
 
 	const first = measure.slots[slotIndex];
-	// The first slot's string data is kept, so its roll stroke is kept too. When
-	// both the first and a later merged slot carry a stroke, the first wins (the
-	// later slots' data — stroke included — is discarded along with everything else).
+	// The first slot's string data is kept, so its roll stroke and rest flag are kept
+	// too. When both the first and a later merged slot carry a stroke, the first wins
+	// (the later slots' data — stroke included — is discarded along with everything else).
 	const merged: BeatSlot = {
 		id: crypto.randomUUID(),
 		duration: targetDuration,
 		strings: cloneStrings(first.strings),
 		...(first.stroke !== undefined ? { stroke: first.stroke } : {}),
+		...(first.isRest ? { isRest: true } : {}),
 	};
 	const newSlots = [
 		...measure.slots.slice(0, slotIndex),
@@ -744,6 +781,85 @@ export function mergeSlots(
 		return { type: "confirm", affectedSlotCount, pendingMeasures };
 	}
 	return { type: "ok", measures: pendingMeasures };
+}
+
+// ── Split / merge option enumeration (drives the column popup buttons) ────────
+
+// A split/merge target: the resulting note value and how many slots it spans (for a
+// split, the number of sub-slots produced; for a merge, the number of slots consumed).
+export type DurationTarget = { duration: Duration; count: number };
+
+// Integer-weight note value keyed by its thirty-second-note unit weight, used to
+// resolve a prefix-sum back to a duration when enumerating merge targets.
+const DURATION_BY_UNITS: Map<number, Duration> = new Map(
+	NOTE_LADDER.map((d) => [slotDurationUnits(d), d] as const),
+);
+
+// Smaller note values the slot at `slotIndex` can be split into: each must divide
+// the slot evenly (integer sub-slot count) and the sub-slots must fit the measure's
+// remaining capacity. Ordered largest → smallest by NOTE_LADDER.
+export function splitTargetsForSlot(
+	measure: Measure,
+	slotIndex: number,
+	timeSignature: [number, number],
+): DurationTarget[] {
+	const slot = measure.slots[slotIndex];
+	if (!slot) return [];
+	const currentUnits = slotDurationUnits(slot.duration);
+	const remaining = remainingUnits(measure.slots, timeSignature);
+	return NOTE_LADDER.flatMap((d) => {
+		const targetUnits = slotDurationUnits(d);
+		if (targetUnits >= currentUnits || currentUnits % targetUnits !== 0) return [];
+		const count = currentUnits / targetUnits;
+		const extra = count * targetUnits - currentUnits; // 0 for even splits
+		if (extra > remaining) return [];
+		return [{ duration: d, count }];
+	});
+}
+
+// Larger note values the slot at `slotIndex` can be merged up to: walk the prefix
+// sums of [current, ...following] and, for every run of ≥ 2 slots whose durations
+// sum exactly to a supported integer-weight value, offer that value. A merge keeps
+// the measure total (the sum equals the target), so capacity is never at issue.
+// Ordered smallest → largest target by the run length that produces it.
+export function mergeTargetsForSlot(measure: Measure, slotIndex: number): DurationTarget[] {
+	const slots = measure.slots;
+	const results: DurationTarget[] = [];
+	let sum = 0;
+	for (let end = slotIndex; end < slots.length; end++) {
+		sum += slotDurationUnits(slots[end].duration);
+		const count = end - slotIndex + 1;
+		if (count < 2) continue;
+		if (sum > 32) break; // past a whole note — no larger target exists
+		const duration = DURATION_BY_UNITS.get(sum);
+		if (duration) results.push({ duration, count });
+	}
+	return results;
+}
+
+// ── Legacy-pattern normalization ──────────────────────────────────────────────
+
+// Older saved patterns encoded a rest as `duration: "rest"` (a fixed quarter-weight
+// member of the Duration union). The model now represents a rest as a per-slot
+// `isRest` flag that keeps the slot's real duration. Convert any legacy rest slot on
+// load — quarter duration + isRest, string data cleared — matching the old fixed
+// quarter weight so the measure total is unchanged. Runs on every load path
+// (Supabase rows, localStorage, tab import); a no-op for already-migrated patterns.
+export function normalizeLoadedPattern(pattern: FingerpickPattern): FingerpickPattern {
+	let touched = false;
+	const measures = pattern.measures.map((measure) => {
+		let measureTouched = false;
+		const slots = measure.slots.map((slot) => {
+			if ((slot.duration as string) !== "rest") return slot;
+			measureTouched = true;
+			touched = true;
+			const { stroke: _stroke, ...rest } = slot;
+			void _stroke;
+			return { ...rest, duration: "quarter" as Duration, isRest: true, strings: makeStrings() };
+		});
+		return measureTouched ? { ...measure, slots } : measure;
+	});
+	return touched ? { ...pattern, measures } : pattern;
 }
 
 export type ResetResult =

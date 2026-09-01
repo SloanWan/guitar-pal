@@ -13,8 +13,13 @@ import { isRenderSupported } from "./techniqueSupport";
 
 const ALL_DURATIONS = new Set<Duration>([
 	"whole", "half", "quarter", "dotted-quarter", "eighth", "dotted-eighth",
-	"eighth-triplet", "sixteenth", "sixteenth-triplet", "32nd", "rest",
+	"eighth-triplet", "sixteenth", "sixteenth-triplet", "32nd",
 ]);
+
+// Legacy patterns encoded a rest as `duration: "rest"` (a fixed quarter-weight value).
+// A rest is now a per-slot `isRest` flag over a real duration; the validator converts
+// a legacy rest to a quarter-duration slot flagged isRest (matching the old weight).
+const LEGACY_REST = "rest";
 
 function isValidDuration(v: unknown): v is Duration {
 	return typeof v === "string" && ALL_DURATIONS.has(v as Duration);
@@ -71,7 +76,12 @@ function makeDefaultStrings(): BeatSlot["strings"] {
 }
 
 function makeRestSlot(): BeatSlot {
-	return { id: crypto.randomUUID(), duration: "rest", strings: makeDefaultStrings() };
+	return {
+		id: crypto.randomUUID(),
+		duration: "quarter",
+		isRest: true,
+		strings: makeDefaultStrings(),
+	};
 }
 
 // ─── Per-field validators ─────────────────────────────────────────────────────
@@ -196,9 +206,13 @@ function validateSlot(
 	const obj = raw as Record<string, unknown>;
 	const id = typeof obj.id === "string" && obj.id ? obj.id : crypto.randomUUID();
 
+	// A legacy `duration: "rest"` slot becomes a quarter-duration rest (isRest flag).
+	const legacyRest = obj.duration === LEGACY_REST;
 	let duration: Duration;
 	if (uniformDuration !== null) {
 		duration = uniformDuration;
+	} else if (legacyRest) {
+		duration = "quarter";
 	} else if (isValidDuration(obj.duration)) {
 		duration = obj.duration;
 	} else {
@@ -215,6 +229,7 @@ function validateSlot(
 	const strings = validateStrings(obj.strings, path, warnings);
 	const slot: BeatSlot = { id, duration, strings };
 	if (obj.isGraceNote === true) slot.isGraceNote = true;
+	if (legacyRest || obj.isRest === true) slot.isRest = true;
 	return slot;
 }
 
@@ -248,10 +263,13 @@ function validateMeasure(
 		return { id, slots: [makeRestSlot()] };
 	}
 
-	// Determine if ALL slots lack a valid duration (type-a image case).
-	const allLackDuration = obj.slots.every(
-		(s) => !isValidDuration((s as Record<string, unknown>)?.duration),
-	);
+	// Determine if ALL slots lack a valid duration (type-a image case). A legacy
+	// "rest" counts as carrying a duration so an all-rest measure is not treated as
+	// the no-durations image case.
+	const allLackDuration = obj.slots.every((s) => {
+		const d = (s as Record<string, unknown>)?.duration;
+		return !isValidDuration(d) && d !== LEGACY_REST;
+	});
 
 	let uniformDur: Duration | null = null;
 	if (allLackDuration) {

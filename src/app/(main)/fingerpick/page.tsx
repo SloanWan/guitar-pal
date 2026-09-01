@@ -30,6 +30,11 @@ import {
 	ChevronUp,
 	Metronome,
 	Loader2,
+	Play,
+	Gauge,
+	Repeat,
+	Volume2,
+	RotateCcw,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
 
@@ -87,8 +92,6 @@ function computeAllMeasureWidths(measures: Measure[], containerWidth: number): n
 	return rows;
 }
 
-const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
-type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
 
 const MIN_BPM = 40;
 const MAX_BPM = 220;
@@ -199,13 +202,15 @@ export default function FingerpickPage() {
 	} = useFingerpickPatterns(user, loading);
 
 	const [showLibrary, setShowLibrary] = useState(false);
-	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 	const [bpm, setBpm] = useState<number>(selectedPattern.bpm);
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
-	const [showSheet, setShowSheet] = useState(false);
+	// Bottom-sheet detent (Google-Maps style): "closed" shows only the bottom bar,
+	// "half" is the default open height, "full" is the tall/expanded height. The
+	// drawer handle steps between detents; dragging up expands, dragging down closes.
+	const [sheetDetent, setSheetDetent] = useState<"closed" | "half" | "full">("closed");
+	const showSheet = sheetDetent !== "closed";
 	const [showBpmPopover, setShowBpmPopover] = useState(false);
-	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
 	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
 	const [containerWidth, setContainerWidth] = useState(0);
 	const [bpmPopoverPos, setBpmPopoverPos] = useState<{ bottom: number; left: number }>({
@@ -245,12 +250,9 @@ export default function FingerpickPage() {
 		setMetronomeSubdivision,
 		metronomeGain,
 		setMetronomeGain,
-		accentEnabled,
-		setAccentEnabled,
 		noteGain,
 		setNoteGain,
 		applyBpmChange,
-		applyLoopGapChange,
 		seekToNote,
 	} = useFingerpickAudioEngine();
 
@@ -385,10 +387,7 @@ export default function FingerpickPage() {
 		if (!isCurrent) return;
 		stop();
 		if (wasPlaying) {
-			play(
-				{ ...pattern, bpm },
-				{ loop: true, loopGapSeconds: loopGap, forceLetRing: true },
-			);
+			play({ ...pattern, bpm }, { loop: true, loopGapSeconds: 0, forceLetRing: true });
 		}
 		setCursorResetTick((t) => t + 1);
 	}
@@ -405,7 +404,7 @@ export default function FingerpickPage() {
 		// the audio envelope, not timing/positions, so scheduleEventsRef stays valid.
 		play(
 			{ ...selectedPattern, bpm },
-			{ loop: true, loopGapSeconds: loopGap, forceLetRing: true },
+			{ loop: true, loopGapSeconds: 0, forceLetRing: true },
 			startOffset,
 		);
 	}
@@ -490,6 +489,16 @@ export default function FingerpickPage() {
 
 	// ── Bottom bar / sheet gesture handlers ─────────────────────────────────────
 
+	// Step one detent up (closed → half → full) on drag-up / expand gestures.
+	function expandSheet() {
+		setSheetDetent((d) => (d === "closed" ? "half" : "full"));
+	}
+
+	// Step one detent down (full → half → closed) on drag-down / collapse gestures.
+	function collapseSheet() {
+		setSheetDetent((d) => (d === "full" ? "half" : "closed"));
+	}
+
 	function handleBottomBarPointerDown(e: React.PointerEvent) {
 		if ((e.target as HTMLElement).closest("button, input")) return;
 		bottomBarDragStartYRef.current = e.clientY;
@@ -501,7 +510,7 @@ export default function FingerpickPage() {
 		if (!bottomBarIsDraggingRef.current) return;
 		if (e.clientY - bottomBarDragStartYRef.current < -40) {
 			bottomBarIsDraggingRef.current = false;
-			setShowSheet(true);
+			expandSheet();
 		}
 	}
 
@@ -984,7 +993,8 @@ export default function FingerpickPage() {
 			// First event, in time order, that belongs to a DIFFERENT slot (skips the
 			// current rolled slot's siblings) — identifies the next distinct slot.
 			const nextSlotEvent = events.find(
-				(e) => e.time > t0 && (e.measureIndex !== measureIndex || e.slotIndex !== slotIndex),
+				(e) =>
+					e.time > t0 && (e.measureIndex !== measureIndex || e.slotIndex !== slotIndex),
 			);
 			// t1 = the earliest event time of that next distinct slot.
 			let t1 = Infinity;
@@ -1002,7 +1012,8 @@ export default function FingerpickPage() {
 
 			// True when the next distinct slot is in a later measure (or there is none) —
 			// drift to the measure's right edge rather than interpolating toward the next note.
-			const isLastNoteInMeasure = !nextSlotEvent || nextSlotEvent.measureIndex !== measureIndex;
+			const isLastNoteInMeasure =
+				!nextSlotEvent || nextSlotEvent.measureIndex !== measureIndex;
 
 			let targetX = x0;
 			if (isLastNoteInMeasure) {
@@ -1133,7 +1144,7 @@ export default function FingerpickPage() {
 		};
 	}, [isPlaying]);
 
-	// Spacebar routes to play/pause or tap-tempo depending on spaceMode.
+	// Spacebar toggles play/pause.
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (
@@ -1144,17 +1155,13 @@ export default function FingerpickPage() {
 				return;
 			if (e.code === "Space") {
 				e.preventDefault();
-				if (spaceMode === "playPause") {
-					handlePlayPause();
-				} else {
-					handleTapTempo();
-				}
+				handlePlayPause();
 			}
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isPlaying, isPaused, isLoaded, bpm, loopGap, spaceMode]);
+	}, [isPlaying, isPaused, isLoaded, bpm]);
 
 	// Greedy row layout driven by content width; guard: render nothing until the
 	// ResizeObserver fires with the real container width on mount.
@@ -1338,12 +1345,18 @@ export default function FingerpickPage() {
 						{/* TRANSPORT */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Transport</span>
-								<span
-									className={`transition-opacity duration-150 ${spaceMode === "playPause" ? "opacity-100" : "opacity-0"}`}
-									aria-hidden={spaceMode !== "playPause"}
-								>
-									Space
+								<span className="flex items-center gap-1.5">
+									<Play size={12} strokeWidth={2} className="shrink-0" />
+									Transport
+								</span>
+								{/* Loop toggle: on = loop the tab, off = play once */}
+								<span className="flex items-center gap-1.5">
+									<Repeat size={12} strokeWidth={2} className="shrink-0" />
+									<Rocker
+										checked={!playOnce}
+										onChange={(v) => setPlayOnce(!v)}
+										ariaLabel="Loop"
+									/>
 								</span>
 							</div>
 							<div className="flex gap-2">
@@ -1375,17 +1388,28 @@ export default function FingerpickPage() {
 									Loading samples…
 								</p>
 							)}
-							<div>
-								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Spacebar
+							{/* NOTE SOUND — sits directly under the play controls */}
+							<div className="flex flex-col gap-3">
+								<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
+									<span className="flex items-center gap-1.5">
+										<Volume2 size={12} strokeWidth={2} className="shrink-0" />
+										Note Sound
+									</span>
+									<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
 								</div>
-								<Segmented
-									options={[
-										{ value: "playPause", label: "Play/Pause" },
-										{ value: "tapTempo", label: "Tap" },
-									]}
-									value={spaceMode}
-									onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
+								<Fader
+									min={0}
+									max={2}
+									step={0.01}
+									value={noteGain}
+									onValue={(v) => {
+										setNoteGain(v);
+										navigator.vibrate?.(10);
+									}}
+									ticks={[0, 25, 50, 75, 100]}
+									tickValues={[0, 0.5, 1, 1.5, 2]}
+									scale={["0", "100", "200"]}
+									ariaLabel="Note volume"
 								/>
 							</div>
 						</div>
@@ -1393,8 +1417,22 @@ export default function FingerpickPage() {
 						{/* TEMPO */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Tempo</span>
-								<span>40–220</span>
+								<span className="flex items-center gap-1.5">
+									<Gauge size={12} strokeWidth={2} className="shrink-0" />
+									Tempo
+								</span>
+								<div className="flex items-center gap-2">
+									<button
+										type="button"
+										onClick={() => handleBpmChange(selectedPattern.bpm)}
+										disabled={bpm === selectedPattern.bpm}
+										aria-label="Reset tempo to default"
+										title={`Reset to ${selectedPattern.bpm} BPM`}
+										className="flex items-center justify-center text-ink-faint transition-colors hover:text-denim disabled:pointer-events-none disabled:opacity-30"
+									>
+										<RotateCcw size={12} strokeWidth={2} />
+									</button>
+								</div>
 							</div>
 							{/* BPM readout with LCD segment-ghost */}
 							<div className="border border-line-strong px-0 pt-3 pb-2 text-center">
@@ -1446,7 +1484,7 @@ export default function FingerpickPage() {
 									<button
 										type="button"
 										onClick={handleTapTempo}
-										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint border-b-denim"
 									>
 										TAP
 									</button>
@@ -1466,92 +1504,16 @@ export default function FingerpickPage() {
 										</button>
 									))}
 								</div>
-								{/* Fixed-height row reserves space for the TAP→Space hint so switching modes causes no layout shift */}
-								<div className="flex gap-2 h-4">
-									<div className="flex-1" />
-									<div className="flex-1" />
-									<div className="flex-1 flex items-center justify-center">
-										<span
-											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
-											aria-hidden="true"
-										>
-											space
-										</span>
-									</div>
-									<div className="flex-1" />
-									<div className="flex-1" />
-								</div>
 							</div>
 						</div>
 
-						{/* LOOP */}
+						{/* METRONOME — sits directly under Tempo. Header toggle enables the
+						    metronome (with accent on beat 1, always on when enabled). */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Loop</span>
-							</div>
-							<div className="flex items-center justify-between">
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Play once
-								</span>
-								<Rocker
-									checked={playOnce}
-									onChange={setPlayOnce}
-									ariaLabel="Play once"
-								/>
-							</div>
-							<div className={playOnce ? "opacity-40" : ""}>
-								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Loop gap
-								</div>
-								<Segmented
-									options={LOOP_GAP_OPTIONS.map((gap) => ({
-										value: String(gap),
-										label: `${gap}S`,
-									}))}
-									value={String(loopGap)}
-									onChange={(v) => {
-										const gap = Number(v) as LoopGapSeconds;
-										setLoopGap(gap);
-										applyLoopGapChange(gap);
-									}}
-									disabled={playOnce}
-								/>
-							</div>
-						</div>
-
-						{/* NOTE SOUND */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Note Sound</span>
-								<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
-							</div>
-							<Fader
-								min={0}
-								max={2}
-								step={0.01}
-								value={noteGain}
-								onValue={(v) => {
-									setNoteGain(v);
-									navigator.vibrate?.(10);
-								}}
-								ticks={[0, 25, 50, 75, 100]}
-								tickValues={[0, 0.5, 1, 1.5, 2]}
-								scale={["0", "100", "200"]}
-								ariaLabel="Note volume"
-							/>
-						</div>
-
-						{/* METRONOME */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Metronome</span>
-								<span className="tabular-nums">
-									{Math.round(metronomeGain * 100)}%
-								</span>
-							</div>
-							<div className="flex items-center justify-between">
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Enabled
+								<span className="flex items-center gap-1.5">
+									<Metronome size={12} strokeWidth={2} className="shrink-0" />
+									Metronome
 								</span>
 								<Rocker
 									checked={metronomeEnabled}
@@ -1559,19 +1521,27 @@ export default function FingerpickPage() {
 									ariaLabel="Metronome"
 								/>
 							</div>
-							<div
-								className={`flex items-center justify-between ${
-									!metronomeEnabled ? "opacity-40" : ""
-								}`}
-							>
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Accent beat 1
-								</span>
-								<Rocker
-									checked={accentEnabled}
-									onChange={setAccentEnabled}
+							<div className={!metronomeEnabled ? "opacity-40" : ""}>
+								<div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									<span>Metronome vol.</span>
+									<span className="tabular-nums">
+										{Math.round(metronomeGain * 100)}%
+									</span>
+								</div>
+								<Fader
+									min={0}
+									max={1}
+									step={0.01}
+									value={metronomeGain}
+									onValue={(v) => {
+										setMetronomeGain(v);
+										navigator.vibrate?.(10);
+									}}
+									ticks={[0, 25, 50, 75, 100]}
+									tickValues={[0, 0.25, 0.5, 0.75, 1]}
+									scale={["0", "50", "100"]}
 									disabled={!metronomeEnabled}
-									ariaLabel="Accent beat 1"
+									ariaLabel="Metronome volume"
 								/>
 							</div>
 							<div className={!metronomeEnabled ? "opacity-40" : ""}>
@@ -1591,27 +1561,8 @@ export default function FingerpickPage() {
 									disabled={!metronomeEnabled}
 								/>
 							</div>
-							<div className={!metronomeEnabled ? "opacity-40" : ""}>
-								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Metronome vol.
-								</div>
-								<Fader
-									min={0}
-									max={1}
-									step={0.01}
-									value={metronomeGain}
-									onValue={(v) => {
-										setMetronomeGain(v);
-										navigator.vibrate?.(10);
-									}}
-									ticks={[0, 25, 50, 75, 100]}
-									tickValues={[0, 0.25, 0.5, 0.75, 1]}
-									scale={["0", "50", "100"]}
-									disabled={!metronomeEnabled}
-									ariaLabel="Metronome volume"
-								/>
-							</div>
 						</div>
+
 					</div>
 				</div>
 			</div>
@@ -1644,7 +1595,7 @@ export default function FingerpickPage() {
 
 			{/* Backdrop — intercepts taps outside the drawer to close it without triggering tab seek */}
 			{showSheet && (
-				<div className="md:hidden fixed inset-0 z-20" onClick={() => setShowSheet(false)} />
+				<div className="md:hidden fixed inset-0 z-20" onClick={() => setSheetDetent("closed")} />
 			)}
 
 			{/* ── Unified mobile drawer ────────────────────────────────────────── */}
@@ -1660,7 +1611,11 @@ export default function FingerpickPage() {
 				{/* Expandable controls panel — max-height transition reveals/hides content */}
 				<div
 					className={`bg-popover overflow-hidden transition-[max-height] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-						showSheet ? "max-h-[calc(33.333vh-56px)] overflow-y-auto" : "max-h-0"
+						sheetDetent === "full"
+							? "max-h-[calc(85vh-56px)] overflow-y-auto"
+							: sheetDetent === "half"
+								? "max-h-[calc(33.333vh-56px)] overflow-y-auto"
+								: "max-h-0"
 					}`}
 				>
 					<div
@@ -1673,9 +1628,15 @@ export default function FingerpickPage() {
 						}}
 						onPointerMove={(e) => {
 							if (!handleIsDraggingRef.current) return;
-							if (e.clientY - handleDragStartYRef.current > 40) {
+							const dy = e.clientY - handleDragStartYRef.current;
+							if (dy < -40) {
+								// Drag up → expand a detent.
 								handleIsDraggingRef.current = false;
-								setShowSheet(false);
+								expandSheet();
+							} else if (dy > 40) {
+								// Drag down → collapse a detent (full → half → closed).
+								handleIsDraggingRef.current = false;
+								collapseSheet();
 							}
 						}}
 						onPointerUp={() => {
@@ -1688,8 +1649,23 @@ export default function FingerpickPage() {
 						{/* Tempo — steppers + fader */}
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Tempo</span>
-								<span className="tabular-nums text-denim">{bpm}</span>
+								<span className="flex items-center gap-1.5">
+									<Gauge size={12} strokeWidth={2} className="shrink-0" />
+									Tempo
+								</span>
+								<div className="flex items-center gap-2">
+									<span className="tabular-nums text-denim">{bpm}</span>
+									<button
+										type="button"
+										onClick={() => handleBpmChange(selectedPattern.bpm)}
+										disabled={bpm === selectedPattern.bpm}
+										aria-label="Reset tempo to default"
+										title={`Reset to ${selectedPattern.bpm} BPM`}
+										className="flex items-center justify-center text-ink-faint transition-colors hover:text-denim disabled:pointer-events-none disabled:opacity-30"
+									>
+										<RotateCcw size={12} strokeWidth={2} />
+									</button>
+								</div>
 							</div>
 							<div className="flex flex-col">
 								<div className="flex gap-2">
@@ -1731,21 +1707,6 @@ export default function FingerpickPage() {
 										</button>
 									))}
 								</div>
-								{/* Fixed-height row reserves space for the TAP→Space hint */}
-								<div className="flex gap-2 h-4">
-									<div className="flex-1" />
-									<div className="flex-1" />
-									<div className="flex-1 flex items-center justify-center">
-										<span
-											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
-											aria-hidden="true"
-										>
-											space
-										</span>
-									</div>
-									<div className="flex-1" />
-									<div className="flex-1" />
-								</div>
 							</div>
 							<Fader
 								min={MIN_BPM}
@@ -1766,7 +1727,10 @@ export default function FingerpickPage() {
 						{/* Note Sound volume */}
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Note Sound</span>
+								<span className="flex items-center gap-1.5">
+									<Volume2 size={12} strokeWidth={2} className="shrink-0" />
+									Note Sound
+								</span>
 								<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
 							</div>
 							<Fader
@@ -1786,23 +1750,6 @@ export default function FingerpickPage() {
 						</div>
 
 						<div className="border-t border-line" />
-
-						{/* Accent beat 1 */}
-						<div
-							className={`flex items-center justify-between ${
-								!metronomeEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-								Accent beat 1
-							</span>
-							<Rocker
-								checked={accentEnabled}
-								onChange={setAccentEnabled}
-								disabled={!metronomeEnabled}
-								ariaLabel="Accent beat 1"
-							/>
-						</div>
 
 						{/* Subdivision */}
 						<div className={!metronomeEnabled ? "opacity-40" : ""}>
@@ -1846,27 +1793,6 @@ export default function FingerpickPage() {
 							/>
 						</div>
 
-						<div className="border-t border-line" />
-
-						{/* Loop Gap */}
-						<div className={playOnce ? "opacity-40" : ""}>
-							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-								Loop gap
-							</div>
-							<Segmented
-								options={LOOP_GAP_OPTIONS.map((gap) => ({
-									value: String(gap),
-									label: `${gap}S`,
-								}))}
-								value={String(loopGap)}
-								onChange={(v) => {
-									const gap = Number(v) as LoopGapSeconds;
-									setLoopGap(gap);
-									applyLoopGapChange(gap);
-								}}
-								disabled={playOnce}
-							/>
-						</div>
 					</div>
 				</div>
 
@@ -1874,7 +1800,7 @@ export default function FingerpickPage() {
 
 				{/* Always-visible bottom bar */}
 				<div
-					className="bg-popover flex items-center gap-1.5 px-3 py-2"
+					className="relative bg-popover flex items-center gap-1.5 px-3 py-2"
 					onPointerDown={handleBottomBarPointerDown}
 					onPointerMove={handleBottomBarPointerMove}
 					onPointerUp={handleBottomBarPointerUp}
@@ -1904,25 +1830,19 @@ export default function FingerpickPage() {
 						</button>
 					</div>
 
-					{/* Loop / Once segmented pill */}
-					<div className="flex shrink-0 border border-line-strong">
-						<button
-							onClick={() => setPlayOnce(false)}
-							className={`px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
-								!playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
-							}`}
-						>
-							Loop
-						</button>
-						<button
-							onClick={() => setPlayOnce(true)}
-							className={`border-l border-line-strong px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
-								playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
-							}`}
-						>
-							Once
-						</button>
-					</div>
+					{/* Loop icon toggle: on = loop the tab, off = play once */}
+					<button
+						onClick={() => setPlayOnce(!playOnce)}
+						aria-label="Loop"
+						aria-pressed={!playOnce}
+						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors ${
+							!playOnce
+								? "border-denim text-denim"
+								: "border-line-strong text-ink-faint"
+						}`}
+					>
+						<Repeat size={18} />
+					</button>
 
 					{/* Metronome icon toggle */}
 					<button
@@ -1938,10 +1858,11 @@ export default function FingerpickPage() {
 						<Metronome size={18} />
 					</button>
 
-					{/* Chevron — toggles the controls panel open/closed */}
+					{/* Chevron — centered in the bar; toggles the controls panel open/closed */}
 					<button
-						onClick={() => setShowSheet((v) => !v)}
-						className="p-1.5 text-ink-faint hover:text-ink transition-colors duration-150 shrink-0"
+						onClick={() => setSheetDetent((d) => (d === "closed" ? "half" : "closed"))}
+						aria-label={showSheet ? "Close controls" : "Open controls"}
+						className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-1.5 text-ink-faint hover:text-ink transition-colors duration-150"
 					>
 						<ChevronUp
 							size={20}

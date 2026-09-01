@@ -283,6 +283,10 @@ export default function FingerpickEditModal({
 		right?: number;
 	} | null>(null);
 	const techMenuRef = useRef<HTMLDivElement>(null);
+	// The middle (measure-grid) scroll area. Only this region scrolls — the
+	// header/metadata/footer stay pinned — and it's the coordinate space the
+	// absolute popups (technique menu, touch-mute, hidden input) are anchored in.
+	const scrollRef = useRef<HTMLDivElement>(null);
 	const hintRef = useRef<HTMLDivElement>(null);
 	// Save button node, for the spring-pop press feedback.
 	const saveButtonRef = useRef<HTMLButtonElement>(null);
@@ -513,7 +517,7 @@ export default function FingerpickEditModal({
 	// Position the menu relative to the (scrollable, transformed) dialog content
 	// box so it stays correctly anchored regardless of viewport scroll/transform.
 	function openTechMenu(cell: Cell, clientX: number, clientY: number, anchorEl: HTMLElement) {
-		const content = anchorEl.closest<HTMLElement>('[data-slot="dialog-content"]');
+		const content = anchorEl.closest<HTMLElement>("[data-fp-scroll]");
 		if (!content) return;
 		const rect = content.getBoundingClientRect();
 		setTechMenu({
@@ -582,9 +586,7 @@ export default function FingerpickEditModal({
 		if (!input) return;
 		// Park the invisible input over the tapped cell (same content-relative maths
 		// as openTechMenu) so focusing it doesn't jump-scroll the dialog.
-		const content = (e.currentTarget as HTMLElement).closest<HTMLElement>(
-			'[data-slot="dialog-content"]',
-		);
+		const content = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-fp-scroll]");
 		if (content) {
 			const rect = content.getBoundingClientRect();
 			const top = e.clientY - rect.top + content.scrollTop;
@@ -854,6 +856,30 @@ export default function FingerpickEditModal({
 		};
 	}, [firstSelectedColumnKey, popupOpensLeft]);
 
+	// When the technique menu opens near the grid's edge (e.g. right-clicking the
+	// last cell in a row), it's clipped by the scroll area. Nudge the scroll area
+	// just enough to bring the whole menu into view — so the user never has to
+	// scroll manually to reach its options. Runs after layout so the menu has its
+	// real size. techMenu.x/y are the deps: a fresh open re-measures.
+	useIsomorphicLayoutEffect(() => {
+		if (!techMenu) return;
+		const menu = techMenuRef.current;
+		const scroller = scrollRef.current;
+		if (!menu || !scroller) return;
+		const PAD = 8;
+		const menuRect = menu.getBoundingClientRect();
+		const viewRect = scroller.getBoundingClientRect();
+		let dx = 0;
+		let dy = 0;
+		if (menuRect.right > viewRect.right - PAD)
+			dx = menuRect.right - (viewRect.right - PAD);
+		else if (menuRect.left < viewRect.left + PAD) dx = menuRect.left - (viewRect.left + PAD);
+		if (menuRect.bottom > viewRect.bottom - PAD)
+			dy = menuRect.bottom - (viewRect.bottom - PAD);
+		else if (menuRect.top < viewRect.top + PAD) dy = menuRect.top - (viewRect.top + PAD);
+		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
+	}, [techMenu]);
+
 	// Split/merge/whole controls act on a single slot. When exactly one column is
 	// selected, enumerate that slot's split and merge targets from live state.
 	const singleTarget: SlotTarget | null = selectedColumns.size === 1 ? columnTargets()[0] : null;
@@ -1109,7 +1135,7 @@ export default function FingerpickEditModal({
 			<DialogContent
 				showCloseButton={false}
 				style={dynamicStyle}
-				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] lg:max-h-[90vh] overflow-y-auto p-0"
+				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] lg:max-h-[90vh] overflow-hidden flex flex-col p-0"
 				onKeyDown={(e) => {
 					// Undo/redo scoped to the modal (not window) to avoid clashing with
 					// the page. Skip text fields so their native undo keeps working.
@@ -1137,8 +1163,8 @@ export default function FingerpickEditModal({
 					if (target && popupRef.current?.contains(target)) e.preventDefault();
 				}}
 			>
-				{/* ── Header ─────────────────────────────────────────────────────── */}
-				<div className="sticky top-0 z-55 flex items-center justify-between border-b border-line bg-popover px-4 py-3">
+				{/* ── Header (fixed; only the grid between it and the footer scrolls) ── */}
+				<div className="shrink-0 z-55 flex items-center justify-between border-b border-line bg-popover px-4 py-3">
 					<h2 className="font-heading text-base font-medium text-ink">
 						{initialPattern ? "Edit pattern" : "New pattern"}
 					</h2>
@@ -1189,8 +1215,8 @@ export default function FingerpickEditModal({
 					</div>
 				</div>
 
-				{/* ── Metadata bar ──────────────────────────────────────────────── */}
-				<div className="flex flex-wrap items-end gap-3 px-4">
+				{/* ── Metadata bar (fixed, above the scroll region) ─────────────── */}
+				<div className="shrink-0 flex flex-wrap items-end gap-3 px-4">
 					<div className="flex flex-col gap-1 min-w-40 flex-1">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Name
@@ -1257,6 +1283,17 @@ export default function FingerpickEditModal({
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
 				    count (2→4, --fp-cols) in step with the dynamic modal width, so
 				    measures fill each row and the extra (add) tile wraps below. */}
+				{/* ── Scroll region — the ONLY part that scrolls ─────────────────── */}
+				{/* Header, metadata, and footer stay pinned; this middle box scrolls
+				    both axes. It's also the coordinate space the absolute popups
+				    (technique menu, touch-mute, hidden input) are anchored in, so they
+				    live inside it and scroll with the grid. fp-thin-scroll keeps the
+				    bar a slim denim line. */}
+				<div
+					data-fp-scroll
+					ref={scrollRef}
+					className="fp-thin-scroll relative min-h-0 flex-1 overflow-auto"
+				>
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4 select-none">
 					{working.measures.map((measure, measureIndex) => {
 						const beatLabels = computeBeatLabels(measure.slots, working.timeSignature);
@@ -1682,77 +1719,6 @@ export default function FingerpickEditModal({
 					</button>
 				</div>
 
-				{/* ── Footer (pinned to the bottom of the scroll area) ───────────── */}
-				<div className="sticky bottom-0 z-55 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
-					{/* Editing help: "?" toggles a popover with the input-appropriate hint.
-					    Anchored above the icon (footer sits at the bottom) and left-aligned
-					    from the leftmost button so it never spills past the modal edges. */}
-					<div className="relative">
-						{/* LED-style feedback (§1.2 / §5.11): the glyph itself carries all
-						    state — no background box, border, or shadow on the button.
-						    Dormant (ink-faint) when closed; lit (denim-accent + soft glow)
-						    on hover and while the popover is open; a quick scale-down on
-						    press stands in for §5.1's momentary-flash on bare chrome. */}
-						<button
-							data-hint-trigger
-							onClick={() => setHintOpen((v) => !v)}
-							aria-label="Editing help"
-							aria-expanded={hintOpen}
-							title="Editing help"
-							className={`h-8 w-8 flex items-center justify-center transition duration-150 ease-out motion-reduce:transition-none active:scale-[0.92] ${
-								hintOpen
-									? "text-denim-accent filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
-									: "text-ink-faint hover:text-denim-accent hover:filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
-							}`}
-						>
-							<CircleHelp size={18} />
-						</button>
-						{/* Kept mounted (not conditionally rendered) so the exit transition
-						    plays on close. Entrance is a spring-pop run via the Web Animations
-						    API (see the layout effect above); close is the plain CSS fade/shrink
-						    from the classes below. Visibility/interaction is gated by the
-						    opacity/pointer-events classes; reduced-motion users skip both and
-						    get an instant toggle (§6.7). Show/hide state and outside-click
-						    dismissal are unchanged — driven by hintOpen. */}
-						<div
-							ref={hintRef}
-							aria-hidden={!hintOpen}
-							className={`absolute bottom-full left-0 mb-2 z-60 w-max max-w-xs origin-bottom-left border border-line-strong bg-surface p-3 flex flex-col gap-1 text-[11px] leading-relaxed text-ink-dim transition duration-150 ease-out motion-reduce:transition-none ${
-								hintOpen
-									? "opacity-100 scale-100"
-									: "pointer-events-none opacity-0 scale-[0.96]"
-							}`}
-						>
-							{hasFinePointer ? (
-								<>
-									<p>
-										Click a cell, then use arrow keys to move, number keys to
-										set a fret, <span className="font-mono">X</span> to mute, or
-										Backspace to clear.
-									</p>
-									<p>Right-click a cell for techniques.</p>
-								</>
-							) : (
-								<>
-									<p>
-										Tap a cell to select it, then use the number pad to set a
-										fret, the mute button to mute, or Backspace to clear.
-									</p>
-									<p>Long-press a cell for techniques.</p>
-								</>
-							)}
-						</div>
-					</div>
-					<Button
-						ref={saveButtonRef}
-						onClick={handleSave}
-						disabled={!nameValid}
-						className="h-9 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
-					>
-						Save
-					</Button>
-				</div>
-
 				{/* Off-screen numeric input: focused on a touch tap to summon the
 				    native numeric keyboard for fret entry. Invisible and
 				    non-interactive; the keyboard writes through
@@ -1866,6 +1832,77 @@ export default function FingerpickEditModal({
 						</button>
 					</div>
 				)}
+				</div>
+				{/* ── Footer (fixed; sibling of the scroll region, never scrolls) ── */}
+				<div className="shrink-0 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
+					{/* Editing help: "?" toggles a popover with the input-appropriate hint.
+					    Anchored above the icon (footer sits at the bottom) and left-aligned
+					    from the leftmost button so it never spills past the modal edges. */}
+					<div className="relative">
+						{/* LED-style feedback (§1.2 / §5.11): the glyph itself carries all
+						    state — no background box, border, or shadow on the button.
+						    Dormant (ink-faint) when closed; lit (denim-accent + soft glow)
+						    on hover and while the popover is open; a quick scale-down on
+						    press stands in for §5.1's momentary-flash on bare chrome. */}
+						<button
+							data-hint-trigger
+							onClick={() => setHintOpen((v) => !v)}
+							aria-label="Editing help"
+							aria-expanded={hintOpen}
+							title="Editing help"
+							className={`h-8 w-8 flex items-center justify-center transition duration-150 ease-out motion-reduce:transition-none active:scale-[0.92] ${
+								hintOpen
+									? "text-denim-accent filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
+									: "text-ink-faint hover:text-denim-accent hover:filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
+							}`}
+						>
+							<CircleHelp size={18} />
+						</button>
+						{/* Kept mounted (not conditionally rendered) so the exit transition
+						    plays on close. Entrance is a spring-pop run via the Web Animations
+						    API (see the layout effect above); close is the plain CSS fade/shrink
+						    from the classes below. Visibility/interaction is gated by the
+						    opacity/pointer-events classes; reduced-motion users skip both and
+						    get an instant toggle (§6.7). Show/hide state and outside-click
+						    dismissal are unchanged — driven by hintOpen. */}
+						<div
+							ref={hintRef}
+							aria-hidden={!hintOpen}
+							className={`absolute bottom-full left-0 mb-2 z-60 w-max max-w-xs origin-bottom-left border border-line-strong bg-surface p-3 flex flex-col gap-1 text-[11px] leading-relaxed text-ink-dim transition duration-150 ease-out motion-reduce:transition-none ${
+								hintOpen
+									? "opacity-100 scale-100"
+									: "pointer-events-none opacity-0 scale-[0.96]"
+							}`}
+						>
+							{hasFinePointer ? (
+								<>
+									<p>
+										Click a cell, then use arrow keys to move, number keys to
+										set a fret, <span className="font-mono">X</span> to mute, or
+										Backspace to clear.
+									</p>
+									<p>Right-click a cell for techniques.</p>
+								</>
+							) : (
+								<>
+									<p>
+										Tap a cell to select it, then use the number pad to set a
+										fret, the mute button to mute, or Backspace to clear.
+									</p>
+									<p>Long-press a cell for techniques.</p>
+								</>
+							)}
+						</div>
+					</div>
+					<Button
+						ref={saveButtonRef}
+						onClick={handleSave}
+						disabled={!nameValid}
+						className="h-9 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
+					>
+						Save
+					</Button>
+				</div>
 			</DialogContent>
 			{/* Column popup, portaled to the body so it renders above and outside the
 			    dialog's overflow-clipped content, anchored below the selected column. */}

@@ -541,3 +541,35 @@
 		transform: translateY(0);
 	}
 }
+/* Directional entrance for a measure that just moved. The cell slides in from
+   the side it came from, so a left-move reads as "arrived from the right" and
+   vice-versa. Local micro-motion — looks the same whether or not the swap
+   wrapped a grid row. */
+@keyframes fp-nudge-from-right {
+	from {
+		transform: translateX(10px);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
+@keyframes fp-nudge-from-left {
+	from {
+		transform: translateX(-10px);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
+.fp-nudge-left {
+	animation: fp-nudge-from-right 0.22s ease-out;
+}
+.fp-nudge-right {
+	animation: fp-nudge-from-left 0.22s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.fp-nudge-left,
+	.fp-nudge-right {
+		animation: none;
+	}
+}

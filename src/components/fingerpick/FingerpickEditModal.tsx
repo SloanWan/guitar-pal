@@ -257,6 +257,18 @@ export default function FingerpickEditModal({
 	const [isFretInputFocused, setIsFretInputFocused] = useState(false);
 	// Whether the editing-help popover (anchored to the footer "?" button) is open.
 	const [hintOpen, setHintOpen] = useState(false);
+	// Id of the measure most recently copied or moved. That box gets a denim glow
+	// so the user can see which one just changed; it clears on the next outside
+	// pointer press (clicking the grid background or anywhere else).
+	const [highlightedMeasureId, setHighlightedMeasureId] = useState<string | null>(null);
+	// The measure that just moved and the direction it travelled, so its landed
+	// cell can play a short directional slide-in. Cleared on the next outside
+	// pointer press (same lifecycle as the highlight) — the clear-then-reset on a
+	// repeated move toggles the class off/on, which re-fires the CSS animation.
+	const [moveNudge, setMoveNudge] = useState<{
+		id: string;
+		dir: "left" | "right";
+	} | null>(null);
 
 	// Undo/redo history. `history` holds every committed pattern snapshot (the
 	// initial state plus one entry per edit); `historyIndex` points at the entry
@@ -385,6 +397,7 @@ export default function FingerpickEditModal({
 			setPresetConfirm(null);
 			setDiscardConfirm(false);
 			setHintOpen(false);
+			setHighlightedMeasureId(null);
 			pendingDigitRef.current = null;
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -431,6 +444,20 @@ export default function FingerpickEditModal({
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
 	}, [selectedColumns, techMenu, hintOpen]);
+
+	// Clear the copy/move highlight on the next pointer press anywhere. A press on
+	// a copy/move control clears here first, then that control's click re-sets the
+	// highlight to its own measure — so re-copying or re-moving still lands the glow
+	// on the freshly changed box.
+	useEffect(() => {
+		if (!highlightedMeasureId) return;
+		function handlePointerDown() {
+			setHighlightedMeasureId(null);
+			setMoveNudge(null);
+		}
+		document.addEventListener("pointerdown", handlePointerDown);
+		return () => document.removeEventListener("pointerdown", handlePointerDown);
+	}, [highlightedMeasureId]);
 
 	// Hint popover entrance: spring-pop (scale in from 0.85 with overshoot past 1.0,
 	// plus the opacity fade) only on the false→true transition. Closing keeps the
@@ -1102,7 +1129,10 @@ export default function FingerpickEditModal({
 
 			{/* Move — structural edits on the selected slot(s). */}
 			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
-				<PopupSectionLabel label="Move" hint="Insert, duplicate, or delete this slot." />
+				<PopupSectionLabel
+					label="Move Slot"
+					hint="Insert, duplicate, or delete this slot."
+				/>
 				<div className="flex gap-1">
 					<PopupIconButton
 						title="Insert before"
@@ -1381,7 +1411,17 @@ export default function FingerpickEditModal({
 								<div
 									key={measure.id}
 									onMouseLeave={() => setHoveredCell(null)}
-									className="border border-line p-3 flex flex-col gap-2"
+									className={`p-3 flex flex-col gap-2 border transition-shadow duration-200 ${
+										highlightedMeasureId === measure.id
+											? "border-denim shadow-[0_0_0_1px_var(--color-denim),0_0_12px_var(--denim-glow)]"
+											: "border-line"
+									} ${
+										moveNudge?.id === measure.id
+											? moveNudge.dir === "left"
+												? "fp-nudge-left"
+												: "fp-nudge-right"
+											: ""
+									}`}
 								>
 									<div className="flex items-center justify-between">
 										<div className="flex items-center gap-2">
@@ -1389,23 +1429,29 @@ export default function FingerpickEditModal({
 												Measure {measureIndex + 1}
 											</span>
 											<button
-												onClick={() =>
+												onClick={() => {
+													// Pre-generate the clone's id so the newly
+													// appended box can be highlighted (the copy
+													// lands at the last position).
+													const cloneId = crypto.randomUUID();
 													commit((p) => ({
 														...p,
 														measures: cloneMeasure(
 															p.measures,
 															measureIndex,
+															cloneId,
 														),
-													}))
-												}
+													}));
+													setHighlightedMeasureId(cloneId);
+												}}
 												aria-label="Copy measure"
 												title="Copy measure"
-												className="flex items-center justify-center text-ink-dim hover:text-denim transition-colors"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
 											>
 												<Copy size={14} />
 											</button>
 											<button
-												onClick={() =>
+												onClick={() => {
 													commit((p) => ({
 														...p,
 														measures: swapMeasures(
@@ -1413,17 +1459,19 @@ export default function FingerpickEditModal({
 															measureIndex,
 															measureIndex - 1,
 														),
-													}))
-												}
+													}));
+													setHighlightedMeasureId(measure.id);
+													setMoveNudge({ id: measure.id, dir: "left" });
+												}}
 												disabled={measureIndex === 0}
 												aria-label="Move measure left"
 												title="Move measure left"
-												className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
 											>
 												<ArrowLeft size={14} />
 											</button>
 											<button
-												onClick={() =>
+												onClick={() => {
 													commit((p) => ({
 														...p,
 														measures: swapMeasures(
@@ -1431,14 +1479,16 @@ export default function FingerpickEditModal({
 															measureIndex,
 															measureIndex + 1,
 														),
-													}))
-												}
+													}));
+													setHighlightedMeasureId(measure.id);
+													setMoveNudge({ id: measure.id, dir: "right" });
+												}}
 												disabled={
 													measureIndex === working.measures.length - 1
 												}
 												aria-label="Move measure right"
 												title="Move measure right"
-												className="flex items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim transition-colors"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
 											>
 												<ArrowRight size={14} />
 											</button>

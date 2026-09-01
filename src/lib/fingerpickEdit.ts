@@ -651,18 +651,22 @@ export function deleteMeasure(
 // it. The clone gets a fresh measure id and fresh ids for every slot so it never
 // aliases the original. No-op when the index is out of range. Measure numbers are
 // derived from position, so they update automatically for the caller.
-export function cloneMeasure(measures: Measure[], measureIndex: number): Measure[] {
+// Deep-clone the measure at `measureIndex` and append the copy at the end of the
+// array (the last position), with fresh measure and slot ids. `newId` lets the
+// caller pre-generate the clone's id so it can highlight the newly added box;
+// omitting it falls back to a generated id.
+export function cloneMeasure(
+	measures: Measure[],
+	measureIndex: number,
+	newId?: string,
+): Measure[] {
 	const measure = measures[measureIndex];
 	if (!measure) return measures;
 	const cloned: Measure = {
-		id: crypto.randomUUID(),
+		id: newId ?? crypto.randomUUID(),
 		slots: measure.slots.map(cloneSlotWithNewId),
 	};
-	return [
-		...measures.slice(0, measureIndex + 1),
-		cloned,
-		...measures.slice(measureIndex + 1),
-	];
+	return [...measures, cloned];
 }
 
 // Swap the measures at `indexA` and `indexB`. No-op when the indices are equal or

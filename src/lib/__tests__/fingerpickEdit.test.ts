@@ -333,21 +333,28 @@ describe("measure structural edits", () => {
 });
 
 describe("cloneMeasure", () => {
-	it("inserts a deep clone after the source with fresh measure and slot ids", () => {
+	it("appends a deep clone at the end with fresh measure and slot ids", () => {
 		let p = twoMeasurePattern();
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 4);
 		const out = cloneMeasure(p.measures, 0);
 		expect(out).toHaveLength(3);
-		// Clone sits immediately after the source.
+		// Original measures keep their order; the clone lands at the last position.
+		expect(out[0].id).toBe("m0");
+		expect(out[1].id).toBe("m1");
 		const source = out[0];
-		const clone = out[1];
-		expect(out[2].id).toBe("m1");
+		const clone = out[2];
 		// Same shape and data...
 		expect(clone.slots).toHaveLength(source.slots.length);
 		expect(clone.slots[0].strings[5].fret).toBe(4);
 		// ...but brand-new ids at every level.
 		expect(clone.id).not.toBe(source.id);
 		expect(clone.slots.every((s, i) => s.id !== source.slots[i].id)).toBe(true);
+	});
+
+	it("uses the supplied newId for the appended clone", () => {
+		const p = twoMeasurePattern();
+		const out = cloneMeasure(p.measures, 0, "clone-id");
+		expect(out[2].id).toBe("clone-id");
 	});
 
 	it("returns the input unchanged for an out-of-range index", () => {

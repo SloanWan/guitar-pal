@@ -29,8 +29,13 @@ import {
 	SquareMenu,
 	ChevronUp,
 	Metronome,
+	Loader2,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
+
+// Remembers the last-viewed pattern id so a page refresh reopens it instead of
+// defaulting back to the first preset. Device-local UI state — not synced.
+const LAST_PATTERN_KEY = "lastFingerpickPatternId";
 
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
 function hoPoConnectorCount(measure: Measure): number {
@@ -190,6 +195,7 @@ export default function FingerpickPage() {
 		toggleFavourite,
 		saveCustomPattern,
 		deleteCustomPattern,
+		isLoading,
 	} = useFingerpickPatterns(user, loading);
 
 	const [showLibrary, setShowLibrary] = useState(false);
@@ -208,6 +214,11 @@ export default function FingerpickPage() {
 	});
 	const bpmButtonRef = useRef<HTMLButtonElement>(null);
 	const tapTimesRef = useRef<number[]>([]);
+	// One-shot guard for restoring the last-viewed pattern from localStorage. Set
+	// true once restore runs or the user picks a pattern, whichever comes first.
+	// State (not a ref) so the tab viewer can show a loading placeholder until the
+	// saved pattern is resolved, instead of flashing the default preset.
+	const [patternRestored, setPatternRestored] = useState(false);
 	// Tracks the latest BPM value during slider drag so onPointerUp reads the
 	// correct final value regardless of React batching.
 	const dragBpmRef = useRef(selectedPattern.bpm);
@@ -239,6 +250,7 @@ export default function FingerpickPage() {
 		noteGain,
 		setNoteGain,
 		applyBpmChange,
+		applyPatternChange,
 		applyLoopGapChange,
 		seekToNote,
 	} = useFingerpickAudioEngine();
@@ -352,6 +364,9 @@ export default function FingerpickPage() {
 	}, []);
 
 	function handleSelectPattern(p: FingerpickPattern) {
+		// An explicit choice also ends the one-shot restore window: it must not be
+		// overridden by the saved id once async pattern loading finishes.
+		setPatternRestored(true);
 		stop();
 		setSelectedPattern(p);
 		setBpm(p.bpm);
@@ -610,6 +625,52 @@ export default function FingerpickPage() {
 		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(selectedPattern, bpm);
 		measureBoundariesRef.current = computeMeasureBoundaries(selectedPattern, bpm);
 	}, [selectedPattern, bpm]);
+
+	// Push live pattern edits into the running audio engine. The TAB re-renders from
+	// selectedPattern via React state, but the engine captures the pattern into a ref
+	// only at play() time — so a save made while playing/paused would keep looping the
+	// pre-edit notes until the next play(). Fire only on pattern-identity change (BPM
+	// edits are handled by applyBpmChange); bpm is merged the same way handlePlay does.
+	// When idle, the next handlePlay() already rebuilds from selectedPattern, so skip.
+	useEffect(() => {
+		if (isPlaying || isPaused) applyPatternChange({ ...selectedPattern, bpm });
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedPattern]);
+
+	// Restore the last-viewed pattern once patterns finish loading (custom patterns
+	// arrive async, so wait for isLoading to clear before resolving the saved id).
+	// Routed through handleSelectPattern so BPM/cursor state sync like a normal pick.
+	// Marking patternRestored true here also hides the loading placeholder.
+	useEffect(() => {
+		if (patternRestored || isLoading) return;
+		let savedId: string | null = null;
+		try {
+			savedId = localStorage.getItem(LAST_PATTERN_KEY);
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+		const match =
+			savedId && savedId !== selectedPattern.id
+				? patterns.find((p) => p.id === savedId)
+				: undefined;
+		// One-shot sync from persisted (external) storage after async load — the
+		// extra render is intentional and bounded to a single restore.
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		if (match) handleSelectPattern(match); // also flips patternRestored true
+		else setPatternRestored(true);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isLoading, patternRestored]);
+
+	// Persist the current pattern so a refresh reopens it. Gated on the restore
+	// flag so the initial default doesn't clobber the saved id before restore runs.
+	useEffect(() => {
+		if (!patternRestored) return;
+		try {
+			localStorage.setItem(LAST_PATTERN_KEY, selectedPattern.id);
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}, [selectedPattern.id, patternRestored]);
 
 	// Position cursor and measure highlight at the very first note as soon as the
 	// SVG data attributes are available (TabStaveRow renders asynchronously via
@@ -1132,6 +1193,7 @@ export default function FingerpickPage() {
 						onDeleteCustom={deleteCustomPattern}
 						onClose={() => setShowLibrary(false)}
 						user={user}
+						isLoading={isLoading}
 					/>
 				</div>
 
@@ -1149,6 +1211,17 @@ export default function FingerpickPage() {
 			    Mobile: no height constraint, page scroll handles overflow naturally. */}
 				<div className="md:flex-1 flex flex-col px-4 md:px-8 py-6 md:py-8 md:overflow-hidden">
 					<div className="relative w-full max-w-4xl mx-auto flex flex-col min-h-0 md:flex-1">
+						{/* Loading overlay while patterns are fetched and the last-viewed one is
+						    restored — kept as an overlay (not a conditional) so the tab viewer
+						    stays mounted and its ResizeObserver can measure width underneath. */}
+						{!patternRestored && (
+							<div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-workspace">
+								<Loader2 className="h-6 w-6 animate-spin text-denim" />
+								<span className="text-xs text-tab-meta uppercase tracking-wider">
+									Loading pattern…
+								</span>
+							</div>
+						)}
 						<div className="mb-4 shrink-0">
 							<h1 className="text-lg font-semibold text-tab-title">
 								{selectedPattern.name}

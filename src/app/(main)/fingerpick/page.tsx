@@ -19,6 +19,10 @@ import TabStaveRow, {
 } from "@/components/fingerpick/TabStaveRow";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 import {
+	expandFingerpickPattern,
+	mapOriginToExpandedIndex,
+} from "@/lib/fingerpickRepeats";
+import {
 	useFingerpickAudioEngine,
 	type MetronomeSubdivision,
 } from "@/components/fingerpick/useFingerpickAudioEngine";
@@ -63,11 +67,12 @@ function computeAllMeasureWidths(measures: Measure[], containerWidth: number): n
 	// Precompute render data once per measure to avoid double adapter calls.
 	const renderData = measures.map((m) => fingerpickToVexFlow(m));
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
+	const repeatBarlines = (m: Measure): number => (m.repeatStart ? 1 : 0) + (m.repeatEnd ? 1 : 0);
 	const widthsFirst = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, true, hoPoConnectorCount(measures[i])),
+		computeMeasureMinWidth(rd.notes, true, hoPoConnectorCount(measures[i]), repeatBarlines(measures[i])),
 	);
 	const widthsNonFirst = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, false, hoPoConnectorCount(measures[i])),
+		computeMeasureMinWidth(rd.notes, false, hoPoConnectorCount(measures[i]), repeatBarlines(measures[i])),
 	);
 
 	const rows: number[][] = [];
@@ -203,6 +208,12 @@ export default function FingerpickPage() {
 
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [bpm, setBpm] = useState<number>(selectedPattern.bpm);
+	// Repeats flattened into a linear playback timeline (the rendered staves stay compact).
+	// Memoized on selectedPattern ONLY — expansion is bpm-independent (bpm is applied when
+	// events are built from expanded.pattern), and a single memoized object keeps the audio
+	// engine, the cursor event mirror, and the origin-index map all on one consistent
+	// expansion. See src/lib/fingerpickRepeats.ts.
+	const expanded = useMemo(() => expandFingerpickPattern(selectedPattern), [selectedPattern]);
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
 	// Bottom-sheet detent (Google-Maps style): "closed" shows only the bottom bar,
@@ -280,6 +291,9 @@ export default function FingerpickPage() {
 	const scheduleEventsRef = useRef<ScheduleEvent[]>([]);
 	// Measure start times for boundary-aware progress tracking (rest-at-start fix).
 	const measureBoundariesRef = useRef<MeasureBoundary[]>([]);
+	// expanded-measure-index -> original rendered-measure-index, kept in sync with
+	// scheduleEventsRef so the RAF cursor and click-to-seek can bridge the two index spaces.
+	const originMeasureIndicesRef = useRef<number[]>([]);
 	// Exponential-smoothed cursor x — chases targetX every frame so velocity changes
 	// at note boundaries don't cause visible stutter.
 	const renderedXRef = useRef(0);
@@ -387,7 +401,13 @@ export default function FingerpickPage() {
 		if (!isCurrent) return;
 		stop();
 		if (wasPlaying) {
-			play({ ...pattern, bpm }, { loop: true, loopGapSeconds: 0, forceLetRing: true });
+			// Expand the just-saved pattern so playback picks up any repeat edits immediately
+			// (the memoized `expanded` recomputes only after selectedPattern re-renders).
+			const savedExpanded = expandFingerpickPattern(pattern);
+			play(
+				{ ...savedExpanded.pattern, bpm },
+				{ loop: true, loopGapSeconds: 0, forceLetRing: true },
+			);
 		}
 		setCursorResetTick((t) => t + 1);
 	}
@@ -395,15 +415,21 @@ export default function FingerpickPage() {
 	function handlePlay() {
 		const pending = pendingSeekRef.current;
 		pendingSeekRef.current = null;
+		// `pending` holds an ORIGINAL measure index (from a click); map it to its first
+		// occurrence in the expanded timeline before locating the slot's start time.
 		const startOffset = pending
-			? findSlotStartTime(scheduleEventsRef.current, pending.measureIndex, pending.slotIndex)
+			? findSlotStartTime(
+					scheduleEventsRef.current,
+					mapOriginToExpandedIndex(originMeasureIndicesRef.current, pending.measureIndex),
+					pending.slotIndex,
+				)
 			: 0;
 		// forceLetRing: every note rings at the long letRingDecayTc τ (terminated only
 		// by voice stealing) — a fuller, more natural fingerstyle sustain. This is a
 		// playback mode, so the pattern data is left untouched; letRing changes only
 		// the audio envelope, not timing/positions, so scheduleEventsRef stays valid.
 		play(
-			{ ...selectedPattern, bpm },
+			{ ...expanded.pattern, bpm },
 			{ loop: true, loopGapSeconds: 0, forceLetRing: true },
 			startOffset,
 		);
@@ -639,7 +665,12 @@ export default function FingerpickPage() {
 
 		if (isPlaying || isPaused) {
 			// Audio engine handles the reschedule (playing) or saved-position update (paused).
-			seekToNote(measureIndex, slotIndex);
+			// The engine runs on the expanded timeline, so map the clicked original measure
+			// to its first expanded occurrence.
+			seekToNote(
+				mapOriginToExpandedIndex(originMeasureIndicesRef.current, measureIndex),
+				slotIndex,
+			);
 		} else {
 			// Stopped: record the target so handlePlay() starts from here.
 			pendingSeekRef.current = { measureIndex, slotIndex };
@@ -650,9 +681,10 @@ export default function FingerpickPage() {
 	// Mirror the audio engine's event list so the RAF loop has per-note timestamps
 	// for interpolation. Recomputed whenever BPM or pattern changes.
 	useEffect(() => {
-		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(selectedPattern, bpm);
-		measureBoundariesRef.current = computeMeasureBoundaries(selectedPattern, bpm);
-	}, [selectedPattern, bpm]);
+		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(expanded.pattern, bpm);
+		measureBoundariesRef.current = computeMeasureBoundaries(expanded.pattern, bpm);
+		originMeasureIndicesRef.current = expanded.originMeasureIndices;
+	}, [expanded, bpm]);
 
 	// Restore the last-viewed pattern once patterns finish loading (custom patterns
 	// arrive async, so wait for isLoading to clear before resolving the saved id).
@@ -857,7 +889,14 @@ export default function FingerpickPage() {
 				rafRef.current = requestAnimationFrame(tick);
 				return;
 			}
-			const { measureIndex, slotIndex } = position;
+			// `position` is on the EXPANDED playback timeline (repeats flattened). DOM staves,
+			// rows and the highlight are rendered from the COMPACT pattern, so `measureIndex`
+			// maps back to the original rendered measure and drives every DOM/row lookup. The
+			// few event/boundary comparisons below stay on `expandedMeasureIndex`, since
+			// scheduleEventsRef / measureBoundariesRef are built from the expanded pattern.
+			const { measureIndex: expandedMeasureIndex, slotIndex } = position;
+			const measureIndex =
+				originMeasureIndicesRef.current[expandedMeasureIndex] ?? expandedMeasureIndex;
 			const events = scheduleEventsRef.current;
 			const currentRows = rowsRef.current;
 
@@ -888,9 +927,11 @@ export default function FingerpickPage() {
 					const snapX =
 						staveSvgRect.left - containerRect.left + sx + container.scrollLeft;
 
-					const firstNonRestEvent = events.find((e) => e.measureIndex === measureIndex);
+					const firstNonRestEvent = events.find(
+						(e) => e.measureIndex === expandedMeasureIndex,
+					);
 					const measureBoundary = measureBoundariesRef.current.find(
-						(b) => b.measureIndex === measureIndex,
+						(b) => b.measureIndex === expandedMeasureIndex,
 					);
 
 					let driftX = snapX;
@@ -983,7 +1024,7 @@ export default function FingerpickPage() {
 			let t0 = Infinity;
 			let slotDuration = 0;
 			for (const e of events) {
-				if (e.measureIndex === measureIndex && e.slotIndex === slotIndex) {
+				if (e.measureIndex === expandedMeasureIndex && e.slotIndex === slotIndex) {
 					if (e.time < t0) t0 = e.time;
 					slotDuration = e.duration;
 				}
@@ -994,7 +1035,8 @@ export default function FingerpickPage() {
 			// current rolled slot's siblings) — identifies the next distinct slot.
 			const nextSlotEvent = events.find(
 				(e) =>
-					e.time > t0 && (e.measureIndex !== measureIndex || e.slotIndex !== slotIndex),
+					e.time > t0 &&
+					(e.measureIndex !== expandedMeasureIndex || e.slotIndex !== slotIndex),
 			);
 			// t1 = the earliest event time of that next distinct slot.
 			let t1 = Infinity;
@@ -1013,7 +1055,7 @@ export default function FingerpickPage() {
 			// True when the next distinct slot is in a later measure (or there is none) —
 			// drift to the measure's right edge rather than interpolating toward the next note.
 			const isLastNoteInMeasure =
-				!nextSlotEvent || nextSlotEvent.measureIndex !== measureIndex;
+				!nextSlotEvent || nextSlotEvent.measureIndex !== expandedMeasureIndex;
 
 			let targetX = x0;
 			if (isLastNoteInMeasure) {
@@ -1037,8 +1079,11 @@ export default function FingerpickPage() {
 				// Interpolate between consecutive slots in the same measure.
 				// When x1 < x0 the next note is on a different row; substitute the current
 				// measure's right edge as x1 so the cursor keeps drifting rightward.
+				const nextDomMeasureIndex =
+					originMeasureIndicesRef.current[nextSlotEvent.measureIndex] ??
+					nextSlotEvent.measureIndex;
 				const nextEl = container.querySelector<SVGElement>(
-					`[data-measure-index="${nextSlotEvent.measureIndex}"][data-slot-index="${nextSlotEvent.slotIndex}"]`,
+					`[data-measure-index="${nextDomMeasureIndex}"][data-slot-index="${nextSlotEvent.slotIndex}"]`,
 				);
 				if (nextEl) {
 					const nRect = nextEl.getBoundingClientRect();

@@ -18,6 +18,8 @@ const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
 const MIN_MEASURE_WIDTH = 120;
 const HO_PO_EXTRA_WIDTH = 25;
+// Extra room for a repeat-begin (|:) / repeat-end (:|) barline's thick line + dots.
+const REPEAT_BARLINE_EXTRA_WIDTH = 14;
 
 interface TabStaveRowProps {
 	/** One "row" worth of measures rendered into a single VexFlow context. */
@@ -44,6 +46,11 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 	svgEl.querySelectorAll<SVGRectElement>("g.vf-stavebarline > rect").forEach((el) => {
 		el.setAttribute("fill", "var(--line-strong)");
 	});
+	// Repeat barlines (|: / :|) draw their dots as filled <path>/<circle> elements inside
+	// the barline group — hardcoded black by VexFlow. Track theme so they show in dark mode.
+	svgEl.querySelectorAll<SVGElement>("g.vf-stavebarline path, g.vf-stavebarline circle").forEach(
+		(el) => el.setAttribute("fill", "var(--line-strong)"),
+	);
 	svgEl.querySelectorAll<SVGTextElement>("g.vf-clef text").forEach((el) => {
 		el.setAttribute("fill", "var(--ink-faint)");
 	});
@@ -98,6 +105,7 @@ export function computeMeasureMinWidth(
 	notes: StemmableNote[],
 	isFirstInRow: boolean,
 	techniqueCount: number,
+	repeatBarlineCount: number = 0,
 ): number {
 	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 	voice.addTickables(notes);
@@ -107,6 +115,7 @@ export function computeMeasureMinWidth(
 		notesWidth +
 		TECHNIQUE_CONNECTOR_PAD +
 		techniqueCount * HO_PO_EXTRA_WIDTH +
+		repeatBarlineCount * REPEAT_BARLINE_EXTRA_WIDTH +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);
 }
@@ -141,20 +150,30 @@ export default function TabStaveRow({
 
 			// Draw staves, accumulating x from per-measure widths.
 			let staveX = CLEF_WIDTH;
-			const staves = measures.map((_, i) => {
+			const staves = measures.map((measure, i) => {
 				const w = measureWidths[i];
 				const stave = new TabStave(staveX, STAVE_Y, w);
 				staveX += w;
 				if (i === 0) {
 					stave.addTabGlyph();
-				} else {
+				} else if (!measure.repeatStart) {
 					stave.setBegBarType(Barline.type.NONE);
 				}
+				// Repeat barlines: |: on the left, :| on the right (coexist with the
+				// first measure's TAB clef glyph).
+				if (measure.repeatStart) stave.setBegBarType(Barline.type.REPEAT_BEGIN);
+				if (measure.repeatEnd) stave.setEndBarType(Barline.type.REPEAT_END);
 				const measNum =
 					startMeasureNumber !== undefined ? startMeasureNumber + i : undefined;
 				if (measNum !== undefined) stave.setMeasure(measNum);
 				stave.setContext(ctx);
 				stave.draw();
+				// Play-count label above the end-repeat barline. Per notation convention only
+				// shown when it plays more than the implicit twice (×2 is the default :| meaning).
+				const times = measure.repeatTimes ?? 2;
+				if (measure.repeatEnd && times > 2) {
+					ctx.fillText(`×${times}`, stave.getX() + w - 22, STAVE_Y + 6);
+				}
 				return stave;
 			});
 

@@ -70,6 +70,15 @@ export type BeatSlot = {
 export type Measure = {
 	id: string;
 	slots: BeatSlot[];
+	/** Render a repeat-start barline (|:) on this measure's LEFT edge. */
+	repeatStart?: boolean;
+	/** Render a repeat-end barline (:|) on this measure's RIGHT edge. */
+	repeatEnd?: boolean;
+	/**
+	 * Total times the repeated section ENDING at this measure is played (default 2 =
+	 * one loop-back). Only meaningful together with `repeatEnd`.
+	 */
+	repeatTimes?: number;
 };
 
 export type FingerpickPattern = {

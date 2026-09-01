@@ -69,6 +69,7 @@ import {
 	type Direction,
 	type SlotTarget,
 } from "@/lib/fingerpickEdit";
+import { deriveRepeatDirectives, DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
 
 export interface FingerpickEditModalProps {
 	open: boolean;
@@ -76,12 +77,6 @@ export interface FingerpickEditModalProps {
 	onClose: () => void;
 	onSave: (pattern: FingerpickPattern) => void;
 }
-
-const TIME_SIGNATURES: { label: string; value: [number, number] }[] = [
-	{ label: "4/4", value: [4, 4] },
-	{ label: "3/4", value: [3, 4] },
-	{ label: "6/8", value: [6, 8] },
-];
 
 // Short glyphs shown under each slot column so the current rhythmic value is
 // visible in the grid. A rest keeps its real duration, so it shows the same glyph
@@ -186,6 +181,8 @@ const LONG_PRESS_MS = 500;
 // Maximum number of pattern snapshots retained for undo/redo. Older snapshots
 // are dropped from the front once this is exceeded.
 const HISTORY_LIMIT = 50;
+// Upper bound for the repeat play-count stepper (kept well under the lib's hard cap).
+const REPEAT_TIMES_MAX = 16;
 
 const cellKey = (c: Cell) => `${c.measureIndex}:${c.slotIndex}:${c.stringIndex}`;
 const columnKey = (t: SlotTarget) => `${t.measureIndex}:${t.slotIndex}`;
@@ -255,6 +252,9 @@ export default function FingerpickEditModal({
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
 	const [discardConfirm, setDiscardConfirm] = useState(false);
+	// Repeat-markup validation message; set when Save is blocked by unclosed/dangling
+	// repeat barlines, cleared on the next successful save attempt.
+	const [repeatError, setRepeatError] = useState<string | null>(null);
 	// True when the device has a fine pointer (mouse/trackpad → physical keyboard
 	// likely). Drives which editing hint to show.
 	const hasFinePointer = useSyncExternalStore(
@@ -740,6 +740,27 @@ export default function FingerpickEditModal({
 		commit((prev) => ({ ...prev, measures }));
 	}
 
+	// Patch a single measure's repeat flags (start / end barline, play-count). Undefined
+	// values are stripped so a cleared flag doesn't linger in the serialized measure.
+	function setMeasureRepeat(
+		measureIndex: number,
+		patch: Partial<Pick<Measure, "repeatStart" | "repeatEnd" | "repeatTimes">>,
+	) {
+		commit((prev) => ({
+			...prev,
+			measures: prev.measures.map((m, i) => {
+				if (i !== measureIndex) return m;
+				const next: Measure = { ...m, ...patch };
+				if (!next.repeatStart) delete next.repeatStart;
+				if (!next.repeatEnd) {
+					delete next.repeatEnd;
+					delete next.repeatTimes;
+				}
+				return next;
+			}),
+		}));
+	}
+
 	// ── Split / merge / replace-with-whole (single selected column) ──────────
 
 	function applySplit(target: SlotTarget, duration: Duration) {
@@ -1196,6 +1217,14 @@ export default function FingerpickEditModal({
 
 	function handleSave() {
 		if (!working.name.trim()) return;
+		// Block save on unclosed / dangling / nested repeat barlines so playback and
+		// rendering never see malformed repeat markup.
+		const { error: repeatValidationError } = deriveRepeatDirectives(working.measures);
+		if (repeatValidationError) {
+			setRepeatError(repeatValidationError);
+			return;
+		}
+		setRepeatError(null);
 		// Spring-pop the button as the save fires (skip for reduced-motion). Pure
 		// transform, so no reflow; the save/close flow below is unchanged.
 		if (!prefersReducedMotion()) {
@@ -1315,8 +1344,8 @@ export default function FingerpickEditModal({
 				</div>
 
 				{/* ── Metadata bar (fixed, above the scroll region) ─────────────── */}
-				<div className="shrink-0 flex flex-wrap items-end gap-3 px-4">
-					<div className="flex flex-col gap-1 min-w-40 flex-1">
+				<div className="shrink-0 flex items-end gap-3 px-4">
+					<div className="flex flex-col gap-1 min-w-0 flex-[2]">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Name
 						</label>
@@ -1330,7 +1359,7 @@ export default function FingerpickEditModal({
 							}`}
 						/>
 					</div>
-					<div className="flex flex-col gap-1 w-24">
+					<div className="flex flex-col gap-1 w-20 shrink-0">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							BPM
 						</label>
@@ -1345,26 +1374,28 @@ export default function FingerpickEditModal({
 							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						/>
 					</div>
-					<div className="flex flex-col gap-1 w-24">
-						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+					<div className="flex flex-col gap-1 w-20 shrink-0">
+						<label className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Time Sig.
+							{/* Time signature is fixed at 4/4 until other meters ship. CSS
+							    group-hover tooltip (75ms fade) instead of the native `title`,
+							    which has a slow browser-controlled delay. */}
+							<span className="group/ts relative inline-flex cursor-help text-ink-faint/70">
+								<CircleHelp size={11} aria-label="More time signatures coming soon" />
+								<span
+									role="tooltip"
+									className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/ts:opacity-100"
+								>
+									Only 4/4 is supported right now — more time signatures coming
+									soon.
+								</span>
+							</span>
 						</label>
-						<select
-							value={`${working.timeSignature[0]}/${working.timeSignature[1]}`}
-							onChange={(e) => {
-								const ts = TIME_SIGNATURES.find((t) => t.label === e.target.value);
-								if (ts) commit((p) => ({ ...p, timeSignature: ts.value }));
-							}}
-							className="w-full border border-line-strong bg-surface px-2 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
-						>
-							{TIME_SIGNATURES.map((t) => (
-								<option key={t.label} value={t.label}>
-									{t.label}
-								</option>
-							))}
-						</select>
+						<div className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink">
+							4/4
+						</div>
 					</div>
-					<div className="flex flex-col gap-1 min-w-40 flex-1">
+					<div className="flex flex-col gap-1 min-w-0 flex-[2]">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Description
 						</label>
@@ -1885,6 +1916,82 @@ export default function FingerpickEditModal({
 										)}
 									</div>
 
+									{/* Repeat barlines: |: (start) and :| (end) with an editable play-count. */}
+									<div className="flex items-center gap-1 border-t border-line pt-2">
+										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
+											Repeat
+										</span>
+										<button
+											onClick={() =>
+												setMeasureRepeat(measureIndex, {
+													repeatStart: !measure.repeatStart,
+												})
+											}
+											title="Repeat start (|:)"
+											aria-pressed={!!measure.repeatStart}
+											className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
+												measure.repeatStart
+													? "border-denim bg-denim-tint text-denim"
+													: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+											}`}
+										>
+											|:
+										</button>
+										<button
+											onClick={() =>
+												setMeasureRepeat(measureIndex, {
+													repeatEnd: !measure.repeatEnd,
+												})
+											}
+											title="Repeat end (:|)"
+											aria-pressed={!!measure.repeatEnd}
+											className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
+												measure.repeatEnd
+													? "border-denim bg-denim-tint text-denim"
+													: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+											}`}
+										>
+											:|
+										</button>
+										{measure.repeatEnd && (
+											<div className="flex items-center gap-0.5 ml-auto">
+												<button
+													onClick={() =>
+														setMeasureRepeat(measureIndex, {
+															repeatTimes: Math.max(
+																DEFAULT_REPEAT_TIMES,
+																(measure.repeatTimes ??
+																	DEFAULT_REPEAT_TIMES) - 1,
+															),
+														})
+													}
+													title="Play fewer times"
+													className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
+												>
+													−
+												</button>
+												<span className="font-mono text-xs w-7 text-center text-ink">
+													×{measure.repeatTimes ?? DEFAULT_REPEAT_TIMES}
+												</span>
+												<button
+													onClick={() =>
+														setMeasureRepeat(measureIndex, {
+															repeatTimes: Math.min(
+																REPEAT_TIMES_MAX,
+																(measure.repeatTimes ??
+																	DEFAULT_REPEAT_TIMES) + 1,
+															),
+														})
+													}
+													title="Play more times"
+													className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
+												>
+													+
+												</button>
+											</div>
+										)}
+									</div>
+
 									{presetConfirm &&
 										presetConfirm.measureIndex === measureIndex && (
 											<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
@@ -2123,6 +2230,14 @@ export default function FingerpickEditModal({
 							)}
 						</div>
 					</div>
+					{repeatError && (
+						<span
+							role="alert"
+							className="ml-auto mr-2 text-[11px] leading-tight text-red-500 max-w-xs text-right"
+						>
+							{repeatError}
+						</span>
+					)}
 					<Button
 						ref={saveButtonRef}
 						onClick={handleSave}

@@ -71,25 +71,28 @@ function PatternCard({
 					{pattern.name}
 				</span>
 				<div className="flex items-center gap-0.5">
-					<span
-						role="button"
-						tabIndex={0}
-						onClick={(e) => {
-							e.stopPropagation();
-							void copyPatternJson();
-						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
+					{/* Dev-only: quick pattern JSON export. Stripped from production builds. */}
+					{process.env.NODE_ENV !== "production" && (
+						<span
+							role="button"
+							tabIndex={0}
+							onClick={(e) => {
 								e.stopPropagation();
 								void copyPatternJson();
-							}
-						}}
-						className="p-0.5 transition-colors text-ink-dim hover:text-denim cursor-pointer"
-						aria-label="Copy pattern JSON"
-					>
-						<Copy size={14} />
-					</span>
+							}}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									e.stopPropagation();
+									void copyPatternJson();
+								}
+							}}
+							className="p-0.5 transition-colors text-ink-dim hover:text-denim cursor-pointer"
+							aria-label="Copy pattern JSON"
+						>
+							<Copy size={14} />
+						</span>
+					)}
 					{onEdit && (
 						<span
 							role="button"

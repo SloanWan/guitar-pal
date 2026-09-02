@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getAllChordsWithVoicings } from "@/lib/chords";
+import { getAllChordsWithVoicings } from "@/lib/chordsData";
 import { rootToSlug, suffixToSlug } from "@/lib/chordSlug";
 import { buildAllChordsRootFirst, buildAllChordsCategories } from "@/lib/chordBrowseSections";
 import BrowseGrid from "@/components/chords/BrowseGrid";

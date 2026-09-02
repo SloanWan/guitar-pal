@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FlaskConical } from "lucide-react";
-import { createSupabaseServer } from "@/lib/supabase-server";
 
 /* v3 landing — spec: guitar-pal-design-decisions/fable (layout-specs §6,
    component-patterns §2/§3/§8, additional-components §1/§7/§8/§10/§11);
@@ -204,14 +203,10 @@ const HERO_META: readonly { value: string; label: string }[] = [
 	{ value: "FREE", label: "IN THE BROWSER" },
 ];
 
-export default async function Home() {
-	// Logged-in visitors have already been sold on the app — skip the marketing
-	// hero and drop them straight onto the toolkit so `/` acts as a launcher.
-	// Anonymous visitors still get the full hero + toolkit.
-	const supabase = await createSupabaseServer();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
+export default function Home() {
+	// `/` is a fully public, statically-rendered tool hub — no auth read here, so
+	// there is no per-request Supabase round-trip blocking navigation to it.
+	// Identity (sign-in state) is surfaced by the NavBar, not this page.
 
 	// shrink-0 on the root div: it's a flex item of the h-full flex-col <body>. Without
 	// it, flex-shrink collapses the div to one viewport (its min-h-full minimum) while
@@ -223,9 +218,8 @@ export default async function Home() {
 			{/* NavBar is provided by (main)/layout.tsx; the semantic <main> lives
 			    there too, so the hero uses a plain <div> to avoid a nested landmark. */}
 			<div>
-				{/* Hero — anonymous visitors only. */}
-				{!user && (
-					<section className="relative flex min-h-[92vh] items-center overflow-hidden border-b border-line">
+				{/* Hero */}
+				<section className="relative flex min-h-[92vh] items-center overflow-hidden border-b border-line">
 						{/* Animated TAB notation background — confirmed keeper, do not shrink */}
 						<div
 							aria-hidden="true"
@@ -285,13 +279,11 @@ export default async function Home() {
 							</div>
 						</div>
 					</section>
-				)}
 
-				{/* Features / toolkit — the launcher; the whole page for logged-in users. */}
+				{/* Features / toolkit — the launcher. */}
 				<section className="relative border-b border-line py-27.5 max-sm:py-10">
 					{/* Dev tool-hub entry — top-right corner, only when the flag is set
-					    (NEXT_PUBLIC_ vars inline at build time). Lives here rather than in
-					    the hero so it survives when the hero is hidden for logged-in users. */}
+					    (NEXT_PUBLIC_ vars inline at build time). */}
 					{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && (
 						<Link
 							href="/dev"

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getChordsByRoot } from "@/lib/chords";
+import { getChordsByRoot } from "@/lib/chordsData";
 import { slugToRoot, suffixToSlug } from "@/lib/chordSlug";
 import { buildRootSections } from "@/lib/chordBrowseSections";
 import MusicalText from "@/components/MusicalText";

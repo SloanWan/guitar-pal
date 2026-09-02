@@ -1,18 +1,11 @@
-import { createSupabaseServer } from "@/lib/supabase-server";
-import { isBrowsableSuffix } from "@/lib/chordSuffixes";
-import type { ChordIndexEntry } from "@/lib/chordSearch";
+import { getChordIndex } from "@/lib/chordsData";
 import ChordSearch from "@/components/chords/ChordSearch";
 
-// This layout is preserved across /chords/* navigations by the App Router, so the
-// index query runs once per visit — not on every sub-page. Filtering through
-// isBrowsableSuffix guarantees search offers exactly what browse links to.
+// The search index comes from a cookie-free cached read (getChordIndex), so this
+// layout carries no per-request/dynamic dependency and no longer forces the
+// /chords/* subtree to render dynamically or hit Supabase on every visit.
 export default async function ChordsLayout({ children }: { children: React.ReactNode }) {
-	const supabase = await createSupabaseServer();
-	const { data } = await supabase.from("chords").select("root, suffix");
-	const rows = (data ?? []) as { root: string; suffix: string }[];
-	const index: ChordIndexEntry[] = rows
-		.filter((c) => isBrowsableSuffix(c.suffix))
-		.map((c) => ({ root: c.root, suffix: c.suffix }));
+	const index = await getChordIndex();
 
 	return (
 		<div className="flex flex-col min-h-[calc(100vh-3.5rem)]">

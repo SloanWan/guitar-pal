@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { getChordRoots } from "@/lib/chordsData";
 import { rootToSlug } from "@/lib/chordSlug";
-import { sortRoots } from "@/lib/chordSuffixes";
 import MusicalText from "@/components/MusicalText";
 
 export const metadata: Metadata = {
@@ -11,9 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ChordsPage() {
-	const supabase = await createSupabaseServer();
-	const { data } = await supabase.from("chords").select("root");
-	const roots = sortRoots([...new Set(data?.map((c) => c.root) ?? [])]);
+	const roots = await getChordRoots();
 
 	return (
 		<div className="flex-1 bg-surface">

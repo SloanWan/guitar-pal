@@ -1,49 +1,33 @@
 "use server";
 
-import { createSupabaseServer } from "@/lib/supabase-server";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+// Server Action wrappers around the cached chord reads in `chordsData.ts`.
+// Client components ("use client") import these and invoke them over the wire,
+// which requires the "use server" boundary. Server Components should import from
+// `chordsData.ts` directly to skip the action round-trip. Both paths share one
+// cache entry, since these delegate straight to the cached functions.
 
-export interface ChordWithVoicings {
-  id: string;
-  root: string;
-  suffix: string;
-  chord_voicings: ChordVoicing[];
-}
+import {
+	getChord as getChordCached,
+	getChordsByRoot as getChordsByRootCached,
+	getAllChordsWithVoicings as getAllChordsWithVoicingsCached,
+	type ChordWithVoicings,
+} from "@/lib/chordsData";
 
-const VOICING_FIELDS = `
-  id, root, suffix,
-  chord_voicings ( id, label, start_fret, barre_fret, capo, frets, fingers )
-` as const;
+export type { ChordWithVoicings };
 
 export async function getChord(
-  root: string,
-  suffix: string
+	root: string,
+	suffix: string,
 ): Promise<ChordWithVoicings | null> {
-  const supabase = await createSupabaseServer();
-  const { data: chord } = await supabase
-    .from("chords")
-    .select(VOICING_FIELDS)
-    .eq("root", root)
-    .eq("suffix", suffix)
-    .single();
-  return chord as ChordWithVoicings | null;
+	return getChordCached(root, suffix);
 }
 
-export async function getChordsByRoot(root: string): Promise<ChordWithVoicings[]> {
-  const supabase = await createSupabaseServer();
-  const { data } = await supabase
-    .from("chords")
-    .select(VOICING_FIELDS)
-    .eq("root", root);
-  return (data as ChordWithVoicings[] | null) ?? [];
+export async function getChordsByRoot(
+	root: string,
+): Promise<ChordWithVoicings[]> {
+	return getChordsByRootCached(root);
 }
 
 export async function getAllChordsWithVoicings(): Promise<ChordWithVoicings[]> {
-  const supabase = await createSupabaseServer();
-  const { data } = await supabase
-    .from("chords")
-    .select(VOICING_FIELDS)
-    .order("root")
-    .order("suffix");
-  return (data as ChordWithVoicings[] | null) ?? [];
+	return getAllChordsWithVoicingsCached();
 }

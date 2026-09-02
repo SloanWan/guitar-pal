@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import NavBar from "@/components/NavBar";
+import { FlaskConical } from "lucide-react";
 
 /* v3 landing — spec: guitar-pal-design-decisions/fable (layout-specs §6,
    component-patterns §2/§3/§8, additional-components §1/§7/§8/§10/§11);
@@ -211,11 +211,22 @@ export default function Home() {
 	// div grow to full content height, restoring sticky.
 	return (
 		<div className="flex min-h-full shrink-0 flex-col">
-			<NavBar />
-
-			<main>
+			{/* NavBar is provided by (main)/layout.tsx; the semantic <main> lives
+			    there too, so the hero uses a plain <div> to avoid a nested landmark. */}
+			<div>
 				{/* Hero */}
 				<section className="relative flex min-h-[92vh] items-center overflow-hidden border-b border-line">
+					{/* Dev tool-hub entry — landing-only, top-right corner, and only
+					    when the flag is set (NEXT_PUBLIC_ vars inline at build time). */}
+					{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && (
+						<Link
+							href="/dev"
+							className="absolute right-(--gutter) top-4 z-10 inline-flex items-center gap-1.5 border border-denim bg-surface px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors duration-(--dur-hover) hover:bg-denim hover:text-on-denim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-denim-accent"
+						>
+							<FlaskConical className="size-3.5" strokeWidth={1.5} />
+							Dev
+						</Link>
+					)}
 					{/* Animated TAB notation background — confirmed keeper, do not shrink */}
 					<div
 						aria-hidden="true"
@@ -336,7 +347,7 @@ export default function Home() {
 						</Link>
 					</div>
 				</section>
-			</main>
+			</div>
 
 			{/* Footer — no LEDs by design */}
 			<footer className="border-t border-line font-mono text-[11.5px] tracking-[0.06em] text-ink-faint">
@@ -390,7 +401,7 @@ export default function Home() {
 								</Link>
 							</li>
 							<li>
-								<Link href="/dashboard" className={FOOTER_LINK}>
+								<Link href="/dev/dashboard" className={FOOTER_LINK}>
 									Dashboard
 								</Link>
 							</li>

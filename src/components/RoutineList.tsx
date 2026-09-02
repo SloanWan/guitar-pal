@@ -319,7 +319,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 												variant="secondary"
 												onClick={(e) => {
 													e.stopPropagation();
-													router.push(`/session/${routine.id}`);
+													router.push(`/dev/session/${routine.id}`);
 												}}
 											>
 												<Play className="size-3.5" />

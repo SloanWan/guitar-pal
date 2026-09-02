@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 
 // Plain index of every route under /dev. Kept as a hand-maintained list rather
 // than filesystem introspection — it's a dev-only convenience, not a feature.

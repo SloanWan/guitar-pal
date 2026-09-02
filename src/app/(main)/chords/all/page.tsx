@@ -2,7 +2,7 @@
 // No real root slug collides with "all" — root slugs are chromatic note names
 // (a, ab, b, bb, c, c-sharp, d, db, e, eb, f, f-sharp, g, gb).
 
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import type { Metadata } from "next";
 import { getAllChordsWithVoicings } from "@/lib/chordsData";
 import { rootToSlug, suffixToSlug } from "@/lib/chordSlug";

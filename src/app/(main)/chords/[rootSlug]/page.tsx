@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import type { Metadata } from "next";
 import { getChordsByRoot } from "@/lib/chordsData";
 import { slugToRoot, suffixToSlug } from "@/lib/chordSlug";

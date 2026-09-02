@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { Music, Rows4, Hand } from "lucide-react";
 
 const links = [

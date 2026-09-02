@@ -573,3 +573,39 @@
 		animation: none;
 	}
 }
+
+/* Global navigation progress bar — fixed at the very top, above the nav ladder.
+   Runs while a route transition is in flight (see components/nav-progress.tsx).
+   The previous page stays visible beneath it; this is the only nav-pending signal
+   available, since App Router client navigation never triggers browser chrome. */
+.nav-progress {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 3px;
+	z-index: 100; /* above --z-nav (50) */
+	overflow: hidden;
+	pointer-events: none;
+	background: var(--denim-tint);
+	opacity: 1;
+	transition: opacity 0.2s ease-out;
+}
+.nav-progress.is-exiting {
+	opacity: 0;
+}
+/* Single fill; width is driven by JS (simulated decelerating progress). The width
+   transition smooths the ~200ms trickle steps and the final snap to 100%. */
+.nav-progress-fill {
+	height: 100%;
+	background: var(--denim);
+	box-shadow: 0 0 8px 1px var(--denim-glow);
+	transition: width 0.2s ease-out;
+	will-change: width;
+}
+@media (prefers-reduced-motion: reduce) {
+	.nav-progress,
+	.nav-progress-fill {
+		transition: none;
+	}
+}

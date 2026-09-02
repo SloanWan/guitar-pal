@@ -2,7 +2,7 @@ import LogoutButton from "./LogoutButton";
 import NavLinks from "./NavLinks";
 import NavBarMenu from "./NavBarMenu";
 import ThemeToggle from "./ThemeToggle";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import NavBarScrollWrapper from "./NavBarScrollWrapper";
 

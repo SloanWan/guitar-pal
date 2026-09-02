@@ -12,6 +12,7 @@ import {
 	CommandItem,
 } from "@/components/ui/command";
 import MusicalText from "@/components/MusicalText";
+import { useNavTransition } from "@/components/nav-progress";
 import { rootToSlug, suffixToSlug } from "@/lib/chordSlug";
 import { isSlashChord } from "@/lib/chordSuffixes";
 import { tocSectionId, tocSubsectionId } from "@/lib/chordToc";
@@ -63,6 +64,7 @@ type ReportState = "idle" | "sending" | { done: SubmissionVerdict } | { error: t
 
 export default function ChordSearch({ index }: { index: readonly ChordIndexEntry[] }) {
 	const router = useRouter();
+	const startNav = useNavTransition();
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [report, setReport] = useState<ReportState>("idle");
@@ -115,20 +117,25 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 		}
 	}, []);
 
+	// Close the palette immediately on select so it never sits open and inert, then
+	// run the navigation inside a transition so the global progress bar takes over
+	// while the destination route is in flight (the palette is already gone).
 	const goToChord = useCallback(
 		(r: ChordSearchResult) => {
 			handleOpenChange(false);
-			router.push(`/chords/${rootToSlug(r.root)}/${suffixToSlug(r.suffix)}`);
+			startNav(() =>
+				router.push(`/chords/${rootToSlug(r.root)}/${suffixToSlug(r.suffix)}`),
+			);
 		},
-		[router, handleOpenChange],
+		[router, handleOpenChange, startNav],
 	);
 
 	const goToBrowse = useCallback(
 		(s: NavShortcut) => {
 			handleOpenChange(false);
-			router.push(shortcutHref(s));
+			startNav(() => router.push(shortcutHref(s)));
 		},
-		[router, handleOpenChange],
+		[router, handleOpenChange, startNav],
 	);
 
 	const submitReport = useCallback(async () => {

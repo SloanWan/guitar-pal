@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 
 // Single source of truth for whether the /dev tool area exists. When the flag
 // is unset (production), the whole subtree 404s here — proxy.ts deliberately

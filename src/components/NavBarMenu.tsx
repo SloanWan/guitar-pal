@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { EllipsisVertical } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import LogoutButton from "./LogoutButton";

@@ -60,3 +60,12 @@ export type ExerciseLog = {
 	notes: string | null;
 	logged_at: string;
 };
+
+// Write-only feedback: a chord name a user searched for but couldn't find.
+// Anon-insertable (see scripts/create-chord-requests-table.sql); no select policy.
+export type ChordRequest = {
+	id: string;
+	query: string;
+	user_id: string | null;
+	created_at: string;
+};

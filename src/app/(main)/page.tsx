@@ -303,7 +303,7 @@ export default function Home() {
 								<Link
 									key={tag}
 									href={href}
-									className="group relative block border-r border-line px-8 pt-10 pb-12 transition-colors duration-200 last:border-r-0 hover:bg-raise focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-denim-accent max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:last:border-b-0"
+									className="group relative block border-r border-line px-8 pt-10 pb-12 transition-colors duration-200 last:border-r-0 hover:bg-denim-tint focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-denim-accent max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:last:border-b-0"
 								>
 									<span className="absolute top-4 right-4 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-ink-faint">
 										{/* Dormant LED powers on with the card — teaches LED = active */}

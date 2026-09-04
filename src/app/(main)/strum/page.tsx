@@ -11,7 +11,18 @@ import { useState, useEffect, useRef } from "react";
 
 import { useAudioEngine, type BarPitches } from "@/components/strum/useAudioEngine";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
-import { CirclePlay, CircleStop, ChevronUp, SquareMenu, Metronome, X } from "lucide-react";
+import {
+	CirclePlay,
+	CircleStop,
+	ChevronUp,
+	SquareMenu,
+	Metronome,
+	X,
+	Play,
+	Repeat,
+	Volume2,
+	Gauge,
+} from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
 import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import { useUser } from "@/hooks/useUser";
@@ -206,12 +217,12 @@ export default function StrumPage() {
 	const [createModalOpen, setCreateModalOpen] = useState(false);
 	const [editingPattern, setEditingPattern] = useState<StrumPattern | null>(null);
 	const [showLibrary, setShowLibrary] = useState(false);
-	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
 	const [mutHintDismissed, setMutHintDismissed] = useState(false);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 
-	// Mobile drawer state
-	const [showSheet, setShowSheet] = useState(false);
+	// Mobile drawer state — three detents, same as the fingerpick drawer
+	const [sheetDetent, setSheetDetent] = useState<"closed" | "half" | "full">("closed");
+	const showSheet = sheetDetent !== "closed";
 	const [showBpmPopover, setShowBpmPopover] = useState(false);
 	const [bpmPopoverPos, setBpmPopoverPos] = useState<{ bottom: number; left: number }>({
 		bottom: 0,
@@ -277,16 +288,12 @@ export default function StrumPage() {
 				return;
 			if (e.code === "Space") {
 				e.preventDefault();
-				if (spaceMode === "playPause") {
-					handleHitPlayAndPause();
-				} else {
-					handleTapTempo();
-				}
+				handleHitPlayAndPause();
 			}
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isPlaying, spaceMode]);
+	}, [isPlaying]);
 
 	// Restore the initial pattern once, after custom patterns finish loading (they
 	// arrive async). A `?pattern=<id>` deep link (e.g. from /home) takes priority
@@ -369,6 +376,16 @@ export default function StrumPage() {
 		wasPlayingRef.current = false;
 	}
 
+	// Step one detent up (closed → half → full) on drag-up / expand gestures.
+	function expandSheet() {
+		setSheetDetent((d) => (d === "closed" ? "half" : "full"));
+	}
+
+	// Step one detent down (full → half → closed) on drag-down / collapse gestures.
+	function collapseSheet() {
+		setSheetDetent((d) => (d === "full" ? "half" : "closed"));
+	}
+
 	function handleBottomBarPointerDown(e: React.PointerEvent) {
 		if ((e.target as HTMLElement).closest("button, input")) return;
 		bottomBarDragStartYRef.current = e.clientY;
@@ -380,7 +397,7 @@ export default function StrumPage() {
 		if (!bottomBarIsDraggingRef.current) return;
 		if (e.clientY - bottomBarDragStartYRef.current < -40) {
 			bottomBarIsDraggingRef.current = false;
-			setShowSheet(true);
+			expandSheet();
 		}
 	}
 
@@ -483,12 +500,18 @@ export default function StrumPage() {
 						{/* TRANSPORT */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Transport</span>
-								<span
-									className={`transition-opacity duration-150 ${spaceMode === "playPause" ? "opacity-100" : "opacity-0"}`}
-									aria-hidden={spaceMode !== "playPause"}
-								>
-									Space
+								<span className="flex items-center gap-1.5">
+									<Play size={12} strokeWidth={2} className="shrink-0" />
+									Transport
+								</span>
+								{/* Loop toggle: on = loop the pattern, off = play once */}
+								<span className="flex items-center gap-1.5">
+									<Repeat size={12} strokeWidth={2} className="shrink-0" />
+									<Rocker
+										checked={!playOnce}
+										onChange={(v) => setPlayOnce(!v)}
+										ariaLabel="Loop"
+									/>
 								</span>
 							</div>
 							<div className="flex gap-2">
@@ -497,7 +520,7 @@ export default function StrumPage() {
 									onClick={handleHitPlayAndPause}
 									disabled={!selectedPattern}
 									aria-label={isPlaying ? "Stop" : "Play"}
-									className="flex h-13 w-full items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
+									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
 								>
 									{isPlaying ? (
 										<CircleStop size={20} strokeWidth={1.5} />
@@ -505,26 +528,75 @@ export default function StrumPage() {
 										<CirclePlay size={20} strokeWidth={1.5} />
 									)}
 								</button>
+								<button
+									type="button"
+									onClick={stop}
+									disabled={!isPlaying}
+									aria-label="Stop and return to start"
+									className="flex h-13 flex-1 items-center justify-center border border-line-strong text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint disabled:pointer-events-none disabled:opacity-30"
+								>
+									<CircleStop size={20} strokeWidth={1.5} />
+								</button>
 							</div>
-							<div>
+							<div className={playOnce ? "opacity-40" : ""}>
 								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Spacebar
+									Loop gap
 								</div>
 								<Segmented
-									options={[
-										{ value: "playPause", label: "Play/Pause" },
-										{ value: "tapTempo", label: "Tap" },
-									]}
-									value={spaceMode}
-									onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
+									options={LOOP_GAP_OPTIONS.map((gap) => ({
+										value: String(gap),
+										label: `${gap}S`,
+									}))}
+									value={String(loopGap)}
+									onChange={(v) => setLoopGap(Number(v) as LoopGapSeconds)}
+									disabled={playOnce}
 								/>
+							</div>
+							{/* STRUM SOUND — sits directly under the play controls */}
+							<div className="flex flex-col gap-3">
+								<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
+									<span className="flex items-center gap-1.5">
+										<Volume2 size={12} strokeWidth={2} className="shrink-0" />
+										Strum Sound
+									</span>
+									<span className="flex items-center gap-2">
+										<span className="tabular-nums">
+											{Math.round(strumGain * 100)}%
+										</span>
+										<Rocker
+											checked={strumEnabled}
+											onChange={setStrumEnabled}
+											ariaLabel="Strum sound"
+										/>
+									</span>
+								</div>
+								<div className={!strumEnabled ? "opacity-40" : ""}>
+									<Fader
+										min={0}
+										max={2}
+										step={0.01}
+										value={strumGain}
+										onValue={(v) => {
+											setStrumGain(v);
+											navigator.vibrate?.(10);
+										}}
+										ticks={[0, 25, 50, 75, 100]}
+										tickValues={[0, 0.5, 1, 1.5, 2]}
+										scale={["0", "100", "200"]}
+										disabled={!strumEnabled}
+										ariaLabel="Strum volume"
+									/>
+								</div>
 							</div>
 						</div>
 
 						{/* TEMPO */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Tempo</span>
+								<span className="flex items-center gap-1.5">
+									<Gauge size={12} strokeWidth={2} className="shrink-0" />
+									Tempo
+								</span>
 								<span>40–220</span>
 							</div>
 							{/* BPM readout with LCD segment-ghost */}
@@ -577,7 +649,7 @@ export default function StrumPage() {
 									<button
 										type="button"
 										onClick={handleTapTempo}
-										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint border-b-denim"
 									>
 										TAP
 									</button>
@@ -597,101 +669,16 @@ export default function StrumPage() {
 										</button>
 									))}
 								</div>
-								{/* Fixed-height row reserves space for the TAP→Space hint so switching modes causes no layout shift */}
-								<div className="flex gap-2 h-4">
-									<div className="flex-1" />
-									<div className="flex-1" />
-									<div className="flex-1 flex items-center justify-center">
-										<span
-											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
-											aria-hidden="true"
-										>
-											space
-										</span>
-									</div>
-									<div className="flex-1" />
-									<div className="flex-1" />
-								</div>
 							</div>
 						</div>
 
-						{/* LOOP */}
+						{/* METRONOME — sits directly under Tempo. Header toggle enables the
+					    metronome; accent on beat 1 is a strum-only extra below it. */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Loop</span>
-							</div>
-							<div className="flex items-center justify-between">
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Play once
-								</span>
-								<Rocker
-									checked={playOnce}
-									onChange={setPlayOnce}
-									ariaLabel="Play once"
-								/>
-							</div>
-							<div className={playOnce ? "opacity-40" : ""}>
-								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Loop gap
-								</div>
-								<Segmented
-									options={LOOP_GAP_OPTIONS.map((gap) => ({
-										value: String(gap),
-										label: `${gap}S`,
-									}))}
-									value={String(loopGap)}
-									onChange={(v) => setLoopGap(Number(v) as LoopGapSeconds)}
-									disabled={playOnce}
-								/>
-							</div>
-						</div>
-
-						{/* STRUM SOUND */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Strum Sound</span>
-								<span className="tabular-nums">{Math.round(strumGain * 100)}%</span>
-							</div>
-							<div className="flex items-center justify-between">
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Enabled
-								</span>
-								<Rocker
-									checked={strumEnabled}
-									onChange={setStrumEnabled}
-									ariaLabel="Strum sound"
-								/>
-							</div>
-							<div className={!strumEnabled ? "opacity-40" : ""}>
-								<Fader
-									min={0}
-									max={2}
-									step={0.01}
-									value={strumGain}
-									onValue={(v) => {
-										setStrumGain(v);
-										navigator.vibrate?.(10);
-									}}
-									ticks={[0, 25, 50, 75, 100]}
-									tickValues={[0, 0.5, 1, 1.5, 2]}
-									scale={["0", "100", "200"]}
-									disabled={!strumEnabled}
-									ariaLabel="Strum volume"
-								/>
-							</div>
-						</div>
-
-						{/* METRONOME */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Metronome</span>
-								<span className="tabular-nums">
-									{Math.round(metronomeGain * 100)}%
-								</span>
-							</div>
-							<div className="flex items-center justify-between">
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Enabled
+								<span className="flex items-center gap-1.5">
+									<Metronome size={12} strokeWidth={2} className="shrink-0" />
+									Metronome
 								</span>
 								<Rocker
 									checked={metronomeEnabled}
@@ -699,19 +686,27 @@ export default function StrumPage() {
 									ariaLabel="Metronome"
 								/>
 							</div>
-							<div
-								className={`flex items-center justify-between ${
-									!metronomeEnabled ? "opacity-40" : ""
-								}`}
-							>
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Accent beat 1
-								</span>
-								<Rocker
-									checked={accentEnabled}
-									onChange={setAccentEnabled}
+							<div className={!metronomeEnabled ? "opacity-40" : ""}>
+								<div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									<span>Metronome vol.</span>
+									<span className="tabular-nums">
+										{Math.round(metronomeGain * 100)}%
+									</span>
+								</div>
+								<Fader
+									min={0}
+									max={1}
+									step={0.01}
+									value={metronomeGain}
+									onValue={(v) => {
+										setMetronomeGain(v);
+										navigator.vibrate?.(10);
+									}}
+									ticks={[0, 25, 50, 75, 100]}
+									tickValues={[0, 0.25, 0.5, 0.75, 1]}
+									scale={["0", "50", "100"]}
 									disabled={!metronomeEnabled}
-									ariaLabel="Accent beat 1"
+									ariaLabel="Metronome volume"
 								/>
 							</div>
 							<div className={!metronomeEnabled ? "opacity-40" : ""}>
@@ -729,24 +724,19 @@ export default function StrumPage() {
 									disabled={!metronomeEnabled}
 								/>
 							</div>
-							<div className={!metronomeEnabled ? "opacity-40" : ""}>
-								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Metronome vol.
-								</div>
-								<Fader
-									min={0}
-									max={1}
-									step={0.01}
-									value={metronomeGain}
-									onValue={(v) => {
-										setMetronomeGain(v);
-										navigator.vibrate?.(10);
-									}}
-									ticks={[0, 25, 50, 75, 100]}
-									tickValues={[0, 0.25, 0.5, 0.75, 1]}
-									scale={["0", "50", "100"]}
+							<div
+								className={`flex items-center justify-between ${
+									!metronomeEnabled ? "opacity-40" : ""
+								}`}
+							>
+								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
+									Accent beat 1
+								</span>
+								<Rocker
+									checked={accentEnabled}
+									onChange={setAccentEnabled}
 									disabled={!metronomeEnabled}
-									ariaLabel="Metronome volume"
+									ariaLabel="Accent beat 1"
 								/>
 							</div>
 						</div>
@@ -786,7 +776,7 @@ export default function StrumPage() {
 
 			{/* Backdrop — closes sheet without bubbling to the card */}
 			{showSheet && (
-				<div className="md:hidden fixed inset-0 z-20" onClick={() => setShowSheet(false)} />
+				<div className="md:hidden fixed inset-0 z-20" onClick={() => setSheetDetent("closed")} />
 			)}
 
 			{/* ── Mobile fixed bottom drawer ───────────────────────────────────── */}
@@ -802,7 +792,11 @@ export default function StrumPage() {
 				{/* Collapsible panel — max-height transition */}
 				<div
 					className={`bg-popover overflow-hidden transition-[max-height] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-						showSheet ? "max-h-[calc(33.333vh-56px)] overflow-y-auto" : "max-h-0"
+						sheetDetent === "full"
+							? "max-h-[calc(85vh-56px)] overflow-y-auto"
+							: sheetDetent === "half"
+								? "max-h-[calc(33.333vh-56px)] overflow-y-auto"
+								: "max-h-0"
 					}`}
 				>
 					{/* Drag handle — swipe down to collapse */}
@@ -816,9 +810,15 @@ export default function StrumPage() {
 						}}
 						onPointerMove={(e) => {
 							if (!handleIsDraggingRef.current) return;
-							if (e.clientY - handleDragStartYRef.current > 40) {
+							const dy = e.clientY - handleDragStartYRef.current;
+							if (dy < -40) {
+								// Drag up → expand a detent.
 								handleIsDraggingRef.current = false;
-								setShowSheet(false);
+								expandSheet();
+							} else if (dy > 40) {
+								// Drag down → collapse a detent (full → half → closed).
+								handleIsDraggingRef.current = false;
+								collapseSheet();
 							}
 						}}
 						onPointerUp={() => {
@@ -832,7 +832,10 @@ export default function StrumPage() {
 						{/* Tempo — steppers + fader */}
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Tempo</span>
+								<span className="flex items-center gap-1.5">
+									<Gauge size={12} strokeWidth={2} className="shrink-0" />
+									Tempo
+								</span>
 								<span className="tabular-nums text-denim">{bpm}</span>
 							</div>
 							<div className="flex flex-col">
@@ -875,21 +878,6 @@ export default function StrumPage() {
 										</button>
 									))}
 								</div>
-								{/* Fixed-height row reserves space for the TAP→Space hint */}
-								<div className="flex gap-2 h-4">
-									<div className="flex-1" />
-									<div className="flex-1" />
-									<div className="flex-1 flex items-center justify-center">
-										<span
-											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
-											aria-hidden="true"
-										>
-											space
-										</span>
-									</div>
-									<div className="flex-1" />
-									<div className="flex-1" />
-								</div>
 							</div>
 							<Fader
 								min={MIN_BPM}
@@ -910,7 +898,10 @@ export default function StrumPage() {
 						{/* Strum Sound volume */}
 						<div className={`flex flex-col gap-3 ${!strumEnabled ? "opacity-40" : ""}`}>
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Strum Sound</span>
+								<span className="flex items-center gap-1.5">
+									<Volume2 size={12} strokeWidth={2} className="shrink-0" />
+									Strum Sound
+								</span>
 								<span className="tabular-nums">{Math.round(strumGain * 100)}%</span>
 							</div>
 							<Fader
@@ -931,23 +922,6 @@ export default function StrumPage() {
 						</div>
 
 						<div className="border-t border-line" />
-
-						{/* Accent beat 1 */}
-						<div
-							className={`flex items-center justify-between ${
-								!metronomeEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-								Accent beat 1
-							</span>
-							<Rocker
-								checked={accentEnabled}
-								onChange={setAccentEnabled}
-								disabled={!metronomeEnabled}
-								ariaLabel="Accent beat 1"
-							/>
-						</div>
 
 						{/* Subdivision */}
 						<div className={!metronomeEnabled ? "opacity-40" : ""}>
@@ -991,6 +965,23 @@ export default function StrumPage() {
 							/>
 						</div>
 
+						{/* Accent beat 1 */}
+						<div
+							className={`flex items-center justify-between ${
+								!metronomeEnabled ? "opacity-40" : ""
+							}`}
+						>
+							<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
+								Accent beat 1
+							</span>
+							<Rocker
+								checked={accentEnabled}
+								onChange={setAccentEnabled}
+								disabled={!metronomeEnabled}
+								ariaLabel="Accent beat 1"
+							/>
+						</div>
+
 						<div className="border-t border-line" />
 
 						{/* Loop Gap — greyed when Play Once active */}
@@ -1031,7 +1022,7 @@ export default function StrumPage() {
 
 				{/* Always-visible bottom bar */}
 				<div
-					className="bg-popover flex items-center gap-1.5 px-3 py-2"
+					className="relative bg-popover flex items-center gap-1.5 px-3 py-2"
 					onPointerDown={handleBottomBarPointerDown}
 					onPointerMove={handleBottomBarPointerMove}
 					onPointerUp={handleBottomBarPointerUp}
@@ -1061,25 +1052,19 @@ export default function StrumPage() {
 						</button>
 					</div>
 
-					{/* Loop / Once segmented pill */}
-					<div className="flex shrink-0 border border-line-strong">
-						<button
-							onClick={() => setPlayOnce(false)}
-							className={`px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
-								!playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
-							}`}
-						>
-							Loop
-						</button>
-						<button
-							onClick={() => setPlayOnce(true)}
-							className={`border-l border-line-strong px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
-								playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
-							}`}
-						>
-							Once
-						</button>
-					</div>
+					{/* Loop icon toggle: on = loop the pattern, off = play once */}
+					<button
+						onClick={() => setPlayOnce(!playOnce)}
+						aria-label="Loop"
+						aria-pressed={!playOnce}
+						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors ${
+							!playOnce
+								? "border-denim text-denim"
+								: "border-line-strong text-ink-faint"
+						}`}
+					>
+						<Repeat size={18} />
+					</button>
 
 					{/* Metronome icon toggle */}
 					<button
@@ -1095,10 +1080,11 @@ export default function StrumPage() {
 						<Metronome size={18} />
 					</button>
 
-					{/* Chevron — toggles the controls panel */}
+					{/* Chevron — centered in the bar; toggles the controls panel open/closed */}
 					<button
-						onClick={() => setShowSheet((v) => !v)}
-						className="p-1.5 text-ink-faint hover:text-ink transition-colors duration-150 shrink-0"
+						onClick={() => setSheetDetent((d) => (d === "closed" ? "half" : "closed"))}
+						aria-label={showSheet ? "Close controls" : "Open controls"}
+						className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-1.5 text-ink-faint hover:text-ink transition-colors duration-150"
 					>
 						<ChevronUp
 							size={20}
@@ -1106,11 +1092,20 @@ export default function StrumPage() {
 						/>
 					</button>
 
-					{/* Play/Stop — flush right */}
-					<div className="ml-auto flex items-center shrink-0">
+					{/* Stop + Play — flush right */}
+					<div className="ml-auto flex items-center gap-0.5 shrink-0">
+						<button
+							onClick={stop}
+							aria-label="Stop and return to start"
+							className={`p-1 text-ink-dim transition-colors duration-150 ${
+								isPlaying ? "visible" : "invisible"
+							}`}
+						>
+							<CircleStop size={28} strokeWidth={1.5} />
+						</button>
 						<div
 							onClick={handleHitPlayAndPause}
-							className={`flex h-11 w-11 items-center justify-center bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
+							className={`flex h-11 w-11 items-center justify-center rounded-none bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
 								selectedPattern
 									? "cursor-pointer"
 									: "opacity-30 pointer-events-none"

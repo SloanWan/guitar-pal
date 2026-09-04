@@ -25,6 +25,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useNavTransition } from "@/components/nav-progress";
 import {
 	createRoutine,
 	getRoutines,
@@ -65,6 +66,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 	const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
 
 	const router = useRouter();
+	const startNav = useNavTransition();
 	const filteredExercises = exercises.filter((ex) => ex.category === selectedCategory);
 
 	const editingRoutine = routines.find((r) => r.id === editingRoutineId) ?? null;
@@ -319,7 +321,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 												variant="secondary"
 												onClick={(e) => {
 													e.stopPropagation();
-													router.push(`/session/${routine.id}`);
+													startNav(() => router.push(`/dev/session/${routine.id}`));
 												}}
 											>
 												<Play className="size-3.5" />

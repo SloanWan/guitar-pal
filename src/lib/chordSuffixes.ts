@@ -23,7 +23,7 @@ export const CHORD_SUFFIX_CATEGORIES: readonly SuffixCategoryDef[] = [
   { category: "Minor",        suffixes: ["minor","m6","m69","madd9","m7","m9","m11","mmaj7","mmaj9","mmaj11","mmaj7b5"] },
   { category: "Dominant 7th", suffixes: ["7","9","11","13","7#9","7b5","7b9","9#11","9b5","alt"] },
   { category: "Suspended",    suffixes: ["sus","sus2","sus4","sus2sus4","7sus4"] },
-  { category: "Diminished",   suffixes: ["dim","dim7"] },
+  { category: "Diminished",   suffixes: ["dim","dim7","m7b5"] },
   { category: "Augmented",    suffixes: ["aug","aug7","aug9"] },
   { category: "Power Chord",  suffixes: ["5"] },
 ];
@@ -31,8 +31,8 @@ export const CHORD_SUFFIX_CATEGORIES: readonly SuffixCategoryDef[] = [
 // Slash chords / inversions detected by pattern — separate axis from chord quality,
 // so they are not part of CHORD_SUFFIX_CATEGORIES.
 
-// 3 rows under root="C" with suffix="7sg" are mislabeled C7 voicings — excluded at UI
-// layer only; data cleanup is a separate chore.
+// suffix="7sg" rows are mislabeled dominant-7 voicings — excluded at the UI layer
+// only; data cleanup is a separate chore.
 export const EXCLUDED_SUFFIXES: readonly string[] = ["7sg"];
 
 export function isSlashChord(suffix: string): boolean {
@@ -47,11 +47,22 @@ export function getSuffixCategory(suffix: string): string | null {
   return null;
 }
 
+// Single source of truth for "should this suffix be reachable in the product":
+// a suffix is browsable iff it is not excluded AND it either belongs to a quality
+// category or is a slash chord. Both the browse builders and the search index derive
+// visibility from this predicate so the two can never drift apart. Any suffix that
+// fails this (an "orphan") is enforced against by the invariant test in
+// chordSuffixes.test.ts — it must be categorised or excluded, never silently hidden.
+export function isBrowsableSuffix(suffix: string): boolean {
+  if (EXCLUDED_SUFFIXES.includes(suffix)) return false;
+  return getSuffixCategory(suffix) !== null || isSlashChord(suffix);
+}
+
 // Intersects `available` with the taxonomy, in taxonomy order.
 // Excluded and slash-chord suffixes are stripped.
 export function groupSuffixes(available: readonly string[]): SuffixCategoryDef[] {
   const valid = new Set(
-    available.filter(s => !EXCLUDED_SUFFIXES.includes(s) && !isSlashChord(s))
+    available.filter(s => isBrowsableSuffix(s) && !isSlashChord(s))
   );
   return CHORD_SUFFIX_CATEGORIES.flatMap(({ category, suffixes }) => {
     const present = suffixes.filter(s => valid.has(s));
@@ -62,6 +73,6 @@ export function groupSuffixes(available: readonly string[]): SuffixCategoryDef[]
 // Returns slash chords present in `available`, excluding EXCLUDED_SUFFIXES.
 export function getSlashSuffixes(available: readonly string[]): string[] {
   return Array.from(available).filter(
-    s => !EXCLUDED_SUFFIXES.includes(s) && isSlashChord(s)
+    s => isBrowsableSuffix(s) && isSlashChord(s)
   );
 }

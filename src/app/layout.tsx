@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { NavProgressProvider, NavProgressBar } from "@/components/nav-progress";
 
 const mono = JetBrains_Mono({
   subsets: ["latin"],
@@ -41,7 +42,10 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="h-full flex flex-col">
-        {children}
+        <NavProgressProvider>
+          <NavProgressBar />
+          {children}
+        </NavProgressProvider>
         <Toaster />
       </body>
     </html>

@@ -2,7 +2,7 @@ import LogoutButton from "./LogoutButton";
 import NavLinks from "./NavLinks";
 import NavBarMenu from "./NavBarMenu";
 import ThemeToggle from "./ThemeToggle";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import NavBarScrollWrapper from "./NavBarScrollWrapper";
 
@@ -46,7 +46,10 @@ export default async function NavBar() {
 					<div className="flex min-w-0 items-center justify-self-end">
 						{/* ≥ nav: controls sit inline in the topbar. */}
 						<div className="hidden min-w-0 items-center gap-3 nav:flex">
-							<ThemeToggle />
+							{/* Theme toggle is a dev-only affordance; production ships a
+							    single theme, so it renders only when dev routes are on
+							    (NEXT_PUBLIC_ vars inline at build time). */}
+							{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeToggle />}
 							{user ? (
 								<>
 									<span className="min-w-0 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">

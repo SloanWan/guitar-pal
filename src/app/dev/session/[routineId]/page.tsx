@@ -140,7 +140,7 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 				rating,
 				notes: notes.trim() || null,
 			});
-			router.push("/dashboard");
+			router.push("/dev/dashboard");
 		} catch (e) {
 			console.error(e);
 		} finally {
@@ -162,7 +162,7 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 				<p className="text-sm text-muted-foreground">
 					Routine not found or has no exercises.
 				</p>
-				<Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
+				<Button variant="outline" size="sm" onClick={() => router.push("/dev/dashboard")}>
 					<ArrowLeft className="size-4" />
 					Back to dashboard
 				</Button>
@@ -251,7 +251,7 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 						<Button
 							variant="outline"
 							className="flex-1"
-							onClick={() => router.push("/dashboard")}
+							onClick={() => router.push("/dev/dashboard")}
 						>
 							Skip &amp; Exit
 						</Button>
@@ -299,7 +299,7 @@ export default function SessionPage({ params }: { params: Promise<{ routineId: s
 
 			{/* Header */}
 			<header className="relative flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border">
-				<Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}>
+				<Button variant="ghost" size="sm" onClick={() => router.push("/dev/dashboard")}>
 					<ArrowLeft className="size-4" />
 					<span className="hidden sm:inline">Dashboard</span>
 				</Button>

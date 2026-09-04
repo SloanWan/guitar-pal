@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { EllipsisVertical } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import LogoutButton from "./LogoutButton";
@@ -35,15 +35,22 @@ export default function NavBarMenu({ userEmail }: { userEmail: string | null }) 
 
 			<DropdownMenuContent align="end" sideOffset={8} className="w-56 p-2">
 				{/* Theme: an inline control row (not a menu item — it wraps its own
-				    interactive button, which toggles without dismissing the menu). */}
-				<div className="flex items-center justify-between gap-4 pb-2">
-					<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-						Theme
-					</span>
-					<ThemeToggle />
-				</div>
+				    interactive button, which toggles without dismissing the menu).
+				    Dev-only affordance; production ships a single theme, so both the
+				    row and its separator render only when dev routes are on
+				    (NEXT_PUBLIC_ vars inline at build time). */}
+				{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && (
+					<>
+						<div className="flex items-center justify-between gap-4 pb-2">
+							<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
+								Theme
+							</span>
+							<ThemeToggle />
+						</div>
 
-				<DropdownMenuSeparator className="mx-0" />
+						<DropdownMenuSeparator className="mx-0" />
+					</>
+				)}
 
 				{userEmail ? (
 					<div className="flex flex-col gap-2 pt-2">

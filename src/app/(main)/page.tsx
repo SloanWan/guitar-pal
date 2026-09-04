@@ -1,6 +1,6 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import type { ReactNode } from "react";
-import NavBar from "@/components/NavBar";
+import { FlaskConical } from "lucide-react";
 
 /* v3 landing — spec: guitar-pal-design-decisions/fable (layout-specs §6,
    component-patterns §2/§3/§8, additional-components §1/§7/§8/§10/§11);
@@ -204,6 +204,10 @@ const HERO_META: readonly { value: string; label: string }[] = [
 ];
 
 export default function Home() {
+	// `/` is a fully public, statically-rendered tool hub — no auth read here, so
+	// there is no per-request Supabase round-trip blocking navigation to it.
+	// Identity (sign-in state) is surfaced by the NavBar, not this page.
+
 	// shrink-0 on the root div: it's a flex item of the h-full flex-col <body>. Without
 	// it, flex-shrink collapses the div to one viewport (its min-h-full minimum) while
 	// the taller content overflows and the window scrolls — which caps the sticky NavBar's
@@ -211,73 +215,84 @@ export default function Home() {
 	// div grow to full content height, restoring sticky.
 	return (
 		<div className="flex min-h-full shrink-0 flex-col">
-			<NavBar />
-
-			<main>
+			{/* NavBar is provided by (main)/layout.tsx; the semantic <main> lives
+			    there too, so the hero uses a plain <div> to avoid a nested landmark. */}
+			<div>
 				{/* Hero */}
 				<section className="relative flex min-h-[92vh] items-center overflow-hidden border-b border-line">
-					{/* Animated TAB notation background — confirmed keeper, do not shrink */}
-					<div
-						aria-hidden="true"
-						className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-16 opacity-50 [-webkit-mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)] mask-[linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)]"
-					>
-						<div className="flex w-max animate-[tabscroll_60s_linear_infinite] motion-reduce:animate-none">
-							<TabStripSvg spec={STRIP_FRONT} />
-							<TabStripSvg spec={STRIP_FRONT} />
-						</div>
-						<div className="flex w-max animate-[tabscroll-rev_80s_linear_infinite] motion-reduce:animate-none">
-							<TabStripSvg spec={STRIP_BACK} />
-							<TabStripSvg spec={STRIP_BACK} />
-						</div>
-					</div>
-
-					<div className="relative z-2 mx-auto w-full max-w-300 px-(--gutter) pt-5 pb-8 max-sm:pt-10 max-sm:pb-20">
-						{/* Hero badge — the landing page's one LED (system online) */}
-						<span
-							className={`${EYEBROW} inline-flex items-center gap-2.5 border border-[rgba(74,111,165,0.45)] px-3.5 py-2`}
+						{/* Animated TAB notation background — confirmed keeper, do not shrink */}
+						<div
+							aria-hidden="true"
+							className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-16 opacity-50 [-webkit-mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)] mask-[linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)]"
 						>
-							<span
-								aria-hidden="true"
-								className="size-1.5 flex-none animate-[ledbreathe_2.4s_ease-in-out_infinite] rounded-full bg-denim-accent shadow-(--glow-led) motion-reduce:animate-none"
-							/>
-							Practice studio for self-taught guitarists
-						</span>
-
-						<h1 className="mt-5 max-w-[14ch] font-mono text-(length:--text-hero-size) leading-(--text-hero-lh) font-bold tracking-(--text-hero-ls)">
-							Guitar practice, <span className="text-denim-accent">engineered.</span>
-							<span
-								aria-hidden="true"
-								className="inline-block h-[0.9em] w-[0.55ch] animate-[blink_1.1s_steps(1)_infinite] bg-denim align-text-bottom motion-reduce:animate-none"
-							/>
-						</h1>
-
-						<p className="mt-7 max-w-[52ch] text-(length:--text-body-lede) text-ink-dim">
-							Strumming machine, fingerpicking TAB player, and a full chord library —
-							one precise, no-nonsense workspace for building real technique. No
-							streaks. No gamification. Just the tools.
-						</p>
-
-						<div className="mt-11 flex flex-wrap gap-4">
-							<Link href="/strum" className={BTN_PRIMARY}>
-								Start practicing →
-							</Link>
-							<Link href="/chords" className={BTN_GHOST}>
-								Browse chords
-							</Link>
+							<div className="flex w-max animate-[tabscroll_60s_linear_infinite] motion-reduce:animate-none">
+								<TabStripSvg spec={STRIP_FRONT} />
+								<TabStripSvg spec={STRIP_FRONT} />
+							</div>
+							<div className="flex w-max animate-[tabscroll-rev_80s_linear_infinite] motion-reduce:animate-none">
+								<TabStripSvg spec={STRIP_BACK} />
+								<TabStripSvg spec={STRIP_BACK} />
+							</div>
 						</div>
 
-						<div className="mt-18 flex gap-12 font-mono text-xs tracking-[0.06em] text-ink-faint max-sm:mt-14 max-sm:flex-col max-sm:gap-3">
-							{HERO_META.map(({ value, label }) => (
-								<span key={label}>
-									<b className="font-medium text-ink-dim">{value}</b> {label}
-								</span>
-							))}
-						</div>
-					</div>
-				</section>
+						<div className="relative z-2 mx-auto w-full max-w-300 px-(--gutter) pt-5 pb-8 max-sm:pt-10 max-sm:pb-20">
+							{/* Hero badge — the landing page's one LED (system online) */}
+							<span
+								className={`${EYEBROW} inline-flex items-center gap-2.5 border border-[rgba(74,111,165,0.45)] px-3.5 py-2`}
+							>
+								<span
+									aria-hidden="true"
+									className="size-1.5 flex-none animate-[ledbreathe_2.4s_ease-in-out_infinite] rounded-full bg-denim-accent shadow-(--glow-led) motion-reduce:animate-none"
+								/>
+								Practice studio for self-taught guitarists
+							</span>
 
-				{/* Features */}
-				<section className="border-b border-line py-27.5 max-sm:py-10">
+							<h1 className="mt-5 max-w-[14ch] font-mono text-(length:--text-hero-size) leading-(--text-hero-lh) font-bold tracking-(--text-hero-ls)">
+								Guitar practice, <span className="text-denim-accent">engineered.</span>
+								<span
+									aria-hidden="true"
+									className="inline-block h-[0.9em] w-[0.55ch] animate-[blink_1.1s_steps(1)_infinite] bg-denim align-text-bottom motion-reduce:animate-none"
+								/>
+							</h1>
+
+							<p className="mt-7 max-w-[52ch] text-(length:--text-body-lede) text-ink-dim">
+								Strumming machine, fingerpicking TAB player, and a full chord library —
+								one precise, no-nonsense workspace for building real technique. No
+								streaks. No gamification. Just the tools.
+							</p>
+
+							<div className="mt-11 flex flex-wrap gap-4">
+								<Link href="/strum" className={BTN_PRIMARY}>
+									Start practicing →
+								</Link>
+								<Link href="/chords" className={BTN_GHOST}>
+									Browse chords
+								</Link>
+							</div>
+
+							<div className="mt-18 flex gap-12 font-mono text-xs tracking-[0.06em] text-ink-faint max-sm:mt-14 max-sm:flex-col max-sm:gap-3">
+								{HERO_META.map(({ value, label }) => (
+									<span key={label}>
+										<b className="font-medium text-ink-dim">{value}</b> {label}
+									</span>
+								))}
+							</div>
+						</div>
+					</section>
+
+				{/* Features / toolkit — the launcher. */}
+				<section className="relative border-b border-line py-27.5 max-sm:py-10">
+					{/* Dev tool-hub entry — top-right corner, only when the flag is set
+					    (NEXT_PUBLIC_ vars inline at build time). */}
+					{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && (
+						<Link
+							href="/dev"
+							className="absolute right-(--gutter) top-4 z-10 inline-flex items-center gap-1.5 border border-denim bg-surface px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors duration-(--dur-hover) hover:bg-denim hover:text-on-denim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-denim-accent"
+						>
+							<FlaskConical className="size-3.5" strokeWidth={1.5} />
+							Dev
+						</Link>
+					)}
 					<div className="mx-auto max-w-300 px-(--gutter)">
 						<div className="mb-16">
 							<span className={EYEBROW}>{"// Toolkit"}</span>
@@ -292,7 +307,7 @@ export default function Home() {
 								<Link
 									key={tag}
 									href={href}
-									className="group relative block border-r border-line px-8 pt-10 pb-12 transition-colors duration-200 last:border-r-0 hover:bg-raise focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-denim-accent max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:last:border-b-0"
+									className="group relative block border-r border-line px-8 pt-10 pb-12 transition-colors duration-200 last:border-r-0 hover:bg-denim-tint focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-denim-accent max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:last:border-b-0"
 								>
 									<span className="absolute top-4 right-4 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-ink-faint">
 										{/* Dormant LED powers on with the card — teaches LED = active */}
@@ -316,27 +331,7 @@ export default function Home() {
 						</div>
 					</div>
 				</section>
-
-				{/* CTA band — no bottom border by design */}
-				<section className="py-25 max-sm:py-10">
-					<div className="mx-auto max-w-300 px-(--gutter)">
-						<span className={EYEBROW}>{"// Free account, no install"}</span>
-						<h2 className="mt-4 max-w-[22ch] font-mono text-[clamp(26px,3.6vw,44px)] font-bold tracking-(--text-h2-ls)">
-							Save your patterns.
-							<br />
-							Practice from any browser.
-						</h2>
-						<p className="mt-6 max-w-[56ch] text-(length:--text-body-lede) text-ink-dim">
-							Guitar Pal runs entirely in the browser — no downloads, no plugins.
-							Create a free account to save custom strum and fingerpick patterns, mark
-							favourites, and pick up practice from any device.
-						</p>
-						<Link href="/auth" className={`${BTN_PRIMARY} mt-9`}>
-							Create Free Account →
-						</Link>
-					</div>
-				</section>
-			</main>
+			</div>
 
 			{/* Footer — no LEDs by design */}
 			<footer className="border-t border-line font-mono text-[11.5px] tracking-[0.06em] text-ink-faint">
@@ -387,11 +382,6 @@ export default function Home() {
 							<li>
 								<Link href="/fingerpick" className={FOOTER_LINK}>
 									Fingerpick
-								</Link>
-							</li>
-							<li>
-								<Link href="/dashboard" className={FOOTER_LINK}>
-									Dashboard
 								</Link>
 							</li>
 						</ul>

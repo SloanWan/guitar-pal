@@ -802,15 +802,20 @@ Low-time indicator: timer text turns `text-amber-500` when `secondsLeft <= 10` a
 
 **`src/proxy.ts` is the Next.js 16 middleware file.** In Next.js 16, the middleware entry point is named `proxy.ts` rather than `middleware.ts`. It runs at the edge on every matched request.
 
-Matcher: `["/dashboard/:path*", "/session/:path*", "/", "/auth/:path*"]`
+Matcher: all paths except `_next/static`, `_next/image`, `favicon.ico`, `icon.svg`, and static image extensions. Every matched request refreshes the Supabase session cookie first (`getUser()`), and any redirect must carry the refreshed cookies across (`redirectWithCookies`).
 
-Routing rules:
+Routing rules (order is load-bearing):
 
-- Unauthenticated + not `/auth` + not `/` → redirect to `/`.
-- Authenticated + `/auth` → redirect to `/dashboard`.
-- Authenticated + `/` → redirect to `/dashboard`. This means logged-in users never see the marketing home page — they are immediately sent to the dashboard.
+- `/dev/**` with the dev flag off → returned unchanged; the dev layout produces the 404 (no redirect, so production never leaks that the route exists).
+- `/dev/dashboard` or `/dev/session` with the flag on but no user → redirect to `/auth?redirect=<pathname>`.
+- Authenticated + `/auth` → redirect to the `?redirect` param if present, else `/home`.
+- `/home` + no user → redirect to `/auth?redirect=/home`. `/home` is the signed-in personal surface (favourites + last-practiced patterns).
+- Authenticated + `/` → redirect to `/home`. Signed-out visitors are **not** redirected — they keep seeing the public tool hub at `/` (per issue #127). The signed-in redirect to `/home` is an intentional adjustment on top of #127, adding a personal landing surface.
+- Everything else → public, unchanged.
 
-Auth redirect on `/auth` page: after sign-in/sign-up, redirects to `?redirect` param or defaults to `/dashboard`.
+Auth redirect on `/auth` page: after sign-in/sign-up, redirects to `?redirect` param or defaults to `/home`.
+
+`/home` is a client component in the `(main)` group. It reads entirely from the account (Supabase), not device localStorage: favourites from `user_favourite_patterns` / `user_favourite_fingerpick_patterns`, and last-practiced ids from `user_last_pattern` (keyed `(user_id, tool)`). Cards deep-link into `/strum?pattern=<id>` / `/fingerpick?pattern=<id>`; both pages resolve the `pattern` query param on mount (ahead of the device-local last-viewed id) and write back to `user_last_pattern` on selection via `saveLastPattern`.
 
 ---
 

@@ -18,7 +18,7 @@ function AuthPageInner() {
 	const [loading, setLoading] = useState(false);
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const redirect = searchParams.get("redirect") ?? "/dashboard";
+	const redirect = searchParams.get("redirect") ?? "/";
 
 	async function handleSignIn() {
 		setLoading(true);

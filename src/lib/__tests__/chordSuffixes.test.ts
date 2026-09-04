@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { ROOT_CHROMATIC_ORDER, sortRoots, isSlashChord } from "@/lib/chordSuffixes";
+import {
+  ROOT_CHROMATIC_ORDER,
+  sortRoots,
+  isSlashChord,
+  isBrowsableSuffix,
+  getSuffixCategory,
+  EXCLUDED_SUFFIXES,
+} from "@/lib/chordSuffixes";
+import { DISTINCT_SUFFIXES } from "@/lib/__fixtures__/chordData.fixture";
 
 // All 12 roots present in the chords table (no Db/Gb — sourced spelling is C#/F#).
 const ALL_12_ROOTS = [
@@ -57,4 +65,43 @@ describe("isSlashChord", () => {
   it("returns false for plain suffix m7", () => expect(isSlashChord("m7")).toBe(false));
   it("returns false for plain suffix major", () => expect(isSlashChord("major")).toBe(false));
   it("returns false for plain suffix mmaj7", () => expect(isSlashChord("mmaj7")).toBe(false));
+});
+
+describe("suffix taxonomy invariant (no orphans)", () => {
+  // The whole point of the exercise: a suffix present in the chords table that is
+  // neither categorised, nor a slash chord, nor explicitly excluded is invisible in
+  // both browse and search. That must fail CI here, not sit unnoticed in production.
+  // NOTE: DISTINCT_SUFFIXES is a snapshot fixture — regenerate it (see
+  // scripts/gen-chord-fixture.mjs) whenever chord data is imported.
+  it("every suffix in the table is categorised, slash, or explicitly excluded", () => {
+    const orphans = DISTINCT_SUFFIXES.filter(
+      (s) =>
+        getSuffixCategory(s) === null &&
+        !isSlashChord(s) &&
+        !EXCLUDED_SUFFIXES.includes(s),
+    );
+    expect(orphans).toEqual([]);
+  });
+
+  it("classifies m7b5 (half-diminished) under Diminished", () => {
+    expect(getSuffixCategory("m7b5")).toBe("Diminished");
+  });
+});
+
+describe("isBrowsableSuffix", () => {
+  it("accepts categorised quality suffixes", () => {
+    expect(isBrowsableSuffix("major")).toBe(true);
+    expect(isBrowsableSuffix("m7")).toBe(true);
+    expect(isBrowsableSuffix("m7b5")).toBe(true);
+  });
+  it("accepts slash chords", () => {
+    expect(isBrowsableSuffix("/G")).toBe(true);
+    expect(isBrowsableSuffix("m/C#")).toBe(true);
+  });
+  it("rejects excluded suffixes", () => {
+    expect(isBrowsableSuffix("7sg")).toBe(false);
+  });
+  it("rejects unknown/uncategorised suffixes", () => {
+    expect(isBrowsableSuffix("bogus")).toBe(false);
+  });
 });

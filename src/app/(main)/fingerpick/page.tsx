@@ -5,6 +5,8 @@ import { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
 import { useUser } from "@/hooks/useUser";
+import { createClient } from "@/lib/supabase";
+import { saveLastPattern } from "@/lib/lastPattern";
 import {
 	fingerpickPatternToScheduleEvents,
 	findSlotStartTime,
@@ -387,6 +389,8 @@ export default function FingerpickPage() {
 		setBpm(p.bpm);
 		dragBpmRef.current = p.bpm;
 		setCursorResetTick((t) => t + 1);
+		// Mirror the choice to the account so /home can surface it cross-device.
+		saveLastPattern(createClient(), user, "fingerpick", p.id).catch(console.error);
 	}
 
 	// Saving an edit to the currently-selected pattern: the audio engine snapshots
@@ -694,7 +698,13 @@ export default function FingerpickPage() {
 		if (patternRestored || isLoading) return;
 		let savedId: string | null = null;
 		try {
-			savedId = localStorage.getItem(LAST_PATTERN_KEY);
+			// A `?pattern=<id>` deep link (e.g. from /home) takes priority over the
+			// device-local last-viewed id.
+			const queryId =
+				typeof window !== "undefined"
+					? new URLSearchParams(window.location.search).get("pattern")
+					: null;
+			savedId = queryId ?? localStorage.getItem(LAST_PATTERN_KEY);
 		} catch {
 			// ignore unavailable/blocked storage
 		}

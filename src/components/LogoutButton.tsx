@@ -14,6 +14,9 @@ export default function LogoutButton({ className }: { className?: string }) {
 		setLoading(true);
 		try {
 			await signOut();
+			// Nothing bounces logged-out users off protected pages anymore, so
+			// navigate home explicitly, then refresh server components.
+			router.push("/");
 			router.refresh();
 		} catch (error) {
 			console.error("Error signing out:", error);

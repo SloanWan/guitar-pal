@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import LazyChordDiagram from "@/components/chords/LazyChordDiagram";
 import ChordVoicingModal from "@/components/chords/ChordVoicingModal";
@@ -27,6 +27,9 @@ export default function ChordBatchGrid({ cards, truncated }: Props) {
 	// Kept separate from selectedKey so the card stays rendered through the close
 	// transition instead of vanishing the instant the modal is dismissed.
 	const [modalOpen, setModalOpen] = useState(false);
+	// Voicing the user last paged to in the modal, per card. Absent means "the Standard
+	// shape the card was built with".
+	const [chosenIndex, setChosenIndex] = useState<Record<string, number>>({});
 
 	const selected = useMemo(
 		() => cards.find((c): c is BatchGridHit => c.key === selectedKey && c.status === "resolved"),
@@ -36,6 +39,14 @@ export default function ChordBatchGrid({ cards, truncated }: Props) {
 	// Keeps the modal's voicing list referentially stable across re-renders so its
 	// open-time reset doesn't re-fire while the user is paging.
 	const modalVoicings = useMemo(() => selected?.voicings ?? [], [selected]);
+
+	const rememberVoicing = useCallback(
+		(index: number) => {
+			if (!selectedKey) return;
+			setChosenIndex((prev) => ({ ...prev, [selectedKey]: index }));
+		},
+		[selectedKey],
+	);
 
 	return (
 		<div className="flex w-full flex-col items-center gap-6">
@@ -56,34 +67,47 @@ export default function ChordBatchGrid({ cards, truncated }: Props) {
 				</div>
 			) : (
 				<div className="flex flex-wrap justify-center gap-4">
-					{cards.map((card) =>
-						card.status === "resolved" ? (
+					{cards.map((card) => {
+						if (card.status !== "resolved") {
+							return (
+								<div
+									key={card.key}
+									style={MISS_CARD}
+									className="flex shrink-0 flex-col items-center justify-center gap-3 rounded-none border border-dashed border-line-strong bg-surface px-4 text-center"
+								>
+									<span className="text-sm font-medium text-ink">{card.token}</span>
+									<span className="text-xs text-ink-dim">No chord found</span>
+									<ChordRequestButton
+										query={card.token}
+										label="Report as missing"
+										className="rounded-md border border-line-strong px-2.5 py-1 text-xs font-medium text-denim transition-colors hover:bg-denim-tint"
+									/>
+								</div>
+							);
+						}
+
+						// Whatever the user last paged to in the modal, else the Standard shape
+						// the card was built with. The voicing name is appended only once it
+						// diverges, so an untouched grid stays labelled with plain chord names.
+						const index = chosenIndex[card.key] ?? card.standardIndex;
+						const voicing = card.voicings[index];
+						return (
 							<LazyChordDiagram
 								key={card.key}
-								def={card.voicings[card.standardIndex].def}
-								label={card.label}
+								def={voicing.def}
+								label={
+									index === card.standardIndex
+										? card.label
+										: `${card.label} · ${voicing.label}`
+								}
 								size="regular"
 								onClick={() => {
 									setSelectedKey(card.key);
 									setModalOpen(true);
 								}}
 							/>
-						) : (
-							<div
-								key={card.key}
-								style={MISS_CARD}
-								className="flex shrink-0 flex-col items-center justify-center gap-3 rounded-none border border-dashed border-line-strong bg-surface px-4 text-center"
-							>
-								<span className="text-sm font-medium text-ink">{card.token}</span>
-								<span className="text-xs text-ink-dim">No chord found</span>
-								<ChordRequestButton
-									query={card.token}
-									label="Report as missing"
-									className="rounded-md border border-line-strong px-2.5 py-1 text-xs font-medium text-denim transition-colors hover:bg-denim-tint"
-								/>
-							</div>
-						),
-					)}
+						);
+					})}
 				</div>
 			)}
 
@@ -98,8 +122,9 @@ export default function ChordBatchGrid({ cards, truncated }: Props) {
 				root={selected?.root}
 				suffix={selected?.suffix}
 				open={modalOpen && selected !== undefined}
-				initialIndex={selected?.standardIndex ?? 0}
+				initialIndex={selected ? (chosenIndex[selected.key] ?? selected.standardIndex) : 0}
 				onClose={() => setModalOpen(false)}
+				onActiveIndexChange={rememberVoicing}
 				preview={preview}
 			/>
 		</div>

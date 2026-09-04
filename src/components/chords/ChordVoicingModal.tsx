@@ -22,6 +22,8 @@ interface Props {
 	/** Voicing to show when the modal opens; paging from there is internal. */
 	initialIndex?: number;
 	onClose: () => void;
+	/** Fires as the user pages, so a caller can remember which voicing they landed on. */
+	onActiveIndexChange?: (index: number) => void;
 	/** Shared audio context — see useChordPreview. */
 	preview: ChordPreview;
 }
@@ -40,6 +42,7 @@ export default function ChordVoicingModal({
 	open,
 	initialIndex = 0,
 	onClose,
+	onActiveIndexChange,
 	preview,
 }: Props) {
 	const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -62,10 +65,21 @@ export default function ChordVoicingModal({
 	const safeIndex = Math.min(activeIndex, Math.max(voicings.length - 1, 0));
 	const activeVoicing = voicings[safeIndex];
 
-	const goPrev = useCallback(() => setActiveIndex((i) => Math.max(i - 1, 0)), []);
+	// Paging goes through one setter so every move is reported outward. Written against
+	// the rendered index rather than a functional update, since the callback needs the
+	// resulting value and these only ever run from event handlers.
+	const goTo = useCallback(
+		(next: number) => {
+			setActiveIndex(next);
+			onActiveIndexChange?.(next);
+		},
+		[onActiveIndexChange],
+	);
+
+	const goPrev = useCallback(() => goTo(Math.max(safeIndex - 1, 0)), [goTo, safeIndex]);
 	const goNext = useCallback(
-		() => setActiveIndex((i) => Math.min(i + 1, voicings.length - 1)),
-		[voicings.length],
+		() => goTo(Math.min(safeIndex + 1, voicings.length - 1)),
+		[goTo, safeIndex, voicings.length],
 	);
 
 	const handleTouchStart = useCallback((e: React.TouchEvent) => {

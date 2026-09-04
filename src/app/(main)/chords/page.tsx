@@ -35,12 +35,14 @@ export default async function ChordsPage() {
 						))}
 					</div>
 
-					<Link
-						href="/chords/all"
-						className="text-sm text-ink-dim underline hover:text-ink"
-					>
-						Browse All Chords →
-					</Link>
+					<div className="flex flex-col items-center gap-2">
+						<Link
+							href="/chords/all"
+							className="text-sm text-ink-dim underline hover:text-ink"
+						>
+							Browse All Chords →
+						</Link>
+					</div>
 				</div>
 			</div>
 		</div>

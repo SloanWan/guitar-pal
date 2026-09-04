@@ -2,12 +2,14 @@
 
 import StepGridCard from "@/components/strum/StepGridCard";
 import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
-import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
-import { toBars } from "@/lib/strumBars";
+import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern, type Bar } from "@/lib/strumPatterns";
+import { toBars, resolveBarChords } from "@/lib/strumBars";
+import { setBarChord, barLocalBeatIndex } from "@/lib/strumBarEdit";
+import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 
-import { useAudioEngine } from "@/components/strum/useAudioEngine";
+import { useAudioEngine, type BarPitches } from "@/components/strum/useAudioEngine";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import { CirclePlay, CircleStop, ChevronUp, SquareMenu, Metronome, X } from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
@@ -108,24 +110,67 @@ function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
 	);
 }
 
+/** Fetches the voicings a bar's ChordRef points at, for the audio engine. */
+async function lookupVoicings(ref: {
+	root: string;
+	suffix: string;
+}): Promise<ChordVoicing[] | null> {
+	const { data } = await createClient()
+		.from("chords")
+		.select("chord_voicings(id, label, start_fret, barre_fret, capo, frets, fingers)")
+		.eq("root", ref.root)
+		.eq("suffix", ref.suffix)
+		.single();
+	return (data as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? null;
+}
+
 export default function StrumPage() {
 	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(
 		PRESET_STRUM_PATTERNS[0],
 	);
 	const [bpm, setBpm] = useState(80);
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
-	const [selectedChord, setSelectedChord] = useState<ConfirmedChord | null>(null);
+	// Live bars for the selected pattern. Chords picked here are session-only —
+	// persistence goes through the create/edit modal, as it did before bars.
+	const [bars, setBars] = useState<Bar[]>(() => toBars(PRESET_STRUM_PATTERNS[0]));
+	const [barPitches, setBarPitches] = useState<BarPitches>([]);
 
-	const bars = useMemo(
-		() => toBars(selectedPattern ?? PRESET_STRUM_PATTERNS[0]),
-		[selectedPattern],
-	);
-	// One chord still applies to the whole pattern here — per-bar assignment is
-	// issue #135. Repeating it across bars keeps today's behaviour exact.
-	const barPitches = useMemo(
-		() => bars.map(() => selectedChord?.pitches ?? null),
-		[bars, selectedChord],
-	);
+	useEffect(() => {
+		const next = toBars(selectedPattern ?? PRESET_STRUM_PATTERNS[0]);
+		// queueMicrotask: the codebase's idiom for deferring state writes out of
+		// the effect body so they do not cascade renders.
+		queueMicrotask(() => {
+			setBars(next);
+			setBarPitches(next.map(() => null));
+		});
+
+		let cancelled = false;
+		resolveBarChords(next, lookupVoicings)
+			.then((pitches) => {
+				if (!cancelled) setBarPitches(pitches);
+			})
+			.catch((err: unknown) => {
+				console.error("[StrumPage] chord resolution failed:", err);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [selectedPattern]);
+
+	function handleBarChordChange(barIdx: number, chord: ConfirmedChord | null) {
+		setBars((prev) =>
+			setBarChord(
+				prev,
+				barIdx,
+				chord
+					? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
+					: null,
+			),
+		);
+		setBarPitches((prev) =>
+			prev.map((pitches, i) => (i === barIdx ? (chord?.pitches ?? null) : pitches)),
+		);
+	}
 
 	const {
 		isPlaying,
@@ -133,6 +178,7 @@ export default function StrumPage() {
 		stop,
 		currBeat,
 		currCell,
+		currBar,
 		strumEnabled,
 		setStrumEnabled,
 		strumGain,
@@ -407,13 +453,17 @@ export default function StrumPage() {
 							<SquareMenu />
 						</button>
 					)}
-					<div className="w-full max-w-160">
+					<div className="flex max-h-full w-full max-w-160 flex-col">
 						{selectedPattern ? (
 							<StepGridCard
 								pattern={selectedPattern}
-								activeCell={{ beatIdx: currBeat, cellIdx: currCell }}
-								selectedChord={selectedChord}
-								onChordChange={setSelectedChord}
+								bars={bars}
+								activeCell={{
+									barIdx: currBar,
+									beatIdx: barLocalBeatIndex(bars, currBeat),
+									cellIdx: currCell,
+								}}
+								onBarChordChange={handleBarChordChange}
 							/>
 						) : (
 							<p className="text-ink-dim text-sm text-center">

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { X, CirclePlay, Loader2 } from "lucide-react";
 import { CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
+import type { ChordRef } from "@/lib/strumPatterns";
 import { createClient } from "@/lib/supabase";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
@@ -53,13 +54,16 @@ export interface ConfirmedChord {
 	root: string;
 	suffix: string;
 	pitches: number[];
+	/** The voicing the user actually picked, so a stored ChordRef can pin it. */
+	voicingId?: string | null;
 }
 
 interface Props {
 	open: boolean;
 	onClose: () => void;
 	onConfirm: (chord: ConfirmedChord | null) => void;
-	initialChord?: ConfirmedChord | null;
+	/** Only root/suffix are read, so a stored ChordRef works as-is. */
+	initialChord?: ChordRef | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,6 +104,9 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	const [playingVoicingId, setPlayingVoicingId] = useState<string | null>(null);
 
 	const phase2 = selectedRoot !== null && selectedCategory !== null;
+	// Primitive, so it can sit in the voicing-fetch deps without re-running on
+	// every render of the parent.
+	const initialVoicingId = initialChord?.voicingId ?? null;
 
 	const voicingsKey = selectedRoot && selectedSuffix ? `${selectedRoot}|${selectedSuffix}` : null;
 	const voicingsFetched = voicingsKey !== null && voicingsFor === voicingsKey;
@@ -206,8 +213,13 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 			const vs = (chord as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? [];
 			setVoicings(vs);
-			const standard = vs.find((v) => v.label === "Standard") ?? vs[0] ?? null;
-			setSelectedVoicingId(standard?.id ?? null);
+			// Reopen on the voicing the bar was saved with; falls through to
+			// Standard when the pinned id belongs to a different chord.
+			const pinned = initialVoicingId
+				? vs.find((v) => v.id === initialVoicingId)
+				: undefined;
+			const preselected = pinned ?? vs.find((v) => v.label === "Standard") ?? vs[0] ?? null;
+			setSelectedVoicingId(preselected?.id ?? null);
 			setVoicingsFor(`${selectedRoot}|${selectedSuffix}`);
 			setLoadingVoicings(false);
 		})().catch((err) => {
@@ -221,7 +233,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedRoot, selectedSuffix]);
+	}, [selectedRoot, selectedSuffix, initialVoicingId]);
 
 	const handleSelectSuffix = useCallback(
 		async (suffix: string) => {
@@ -267,7 +279,12 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 		const voicing = voicings.find((v) => v.id === selectedVoicingId) ?? voicings[0];
 		if (!voicing) return;
 		const pitches = chordVoicingToMidi(voicing).map((n) => n.midi);
-		onConfirm({ root: selectedRoot, suffix: selectedSuffix, pitches });
+		onConfirm({
+			root: selectedRoot,
+			suffix: selectedSuffix,
+			pitches,
+			voicingId: voicing.id,
+		});
 	}
 
 	return (

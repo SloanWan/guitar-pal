@@ -9,7 +9,10 @@ import { createClient } from "@/lib/supabase";
 import type { Bar, ChordRef, TickMode } from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { resolveBarChords } from "@/lib/strumBars";
+import { barLocalBeatIndex, setBarChord } from "@/lib/strumBarEdit";
 import { useAudioEngine, type BarPitches } from "@/components/strum/useAudioEngine";
+import StepGridCard from "@/components/strum/StepGridCard";
+import type { ConfirmedChord } from "@/components/strum/ChordPickerModal";
 
 const OLD_FAITHFUL: Bar["beats"] = [
 	["D", "UG"],
@@ -51,9 +54,14 @@ export default function StrumMultibarDevPage() {
 	);
 	const [bpm, setBpm] = useState(60);
 	const [tickMode] = useState<TickMode>("quarter");
-	const [barPitches, setBarPitches] = useState<BarPitches | undefined>(undefined);
+	const [barPitches, setBarPitches] = useState<BarPitches>([]);
 
-	const bars = useMemo(() => PROGRESSIONS[progression], [progression]);
+	const initialBars = useMemo(() => PROGRESSIONS[progression], [progression]);
+	const [bars, setBars] = useState<Bar[]>(initialBars);
+
+	useEffect(() => {
+		queueMicrotask(() => setBars(initialBars));
+	}, [initialBars]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -71,6 +79,21 @@ export default function StrumMultibarDevPage() {
 
 	const { isPlaying, start, stop, currBar, currBeat, currCell, accentEnabled, setAccentEnabled } =
 		useAudioEngine(bars, bpm, tickMode, barPitches);
+
+	function handleBarChordChange(barIdx: number, chord: ConfirmedChord | null) {
+		setBars((prev) =>
+			setBarChord(
+				prev,
+				barIdx,
+				chord
+					? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
+					: null,
+			),
+		);
+		setBarPitches((prev) =>
+			prev.map((pitches, i) => (i === barIdx ? (chord?.pitches ?? null) : pitches)),
+		);
+	}
 
 	return (
 		<main className="mx-auto flex max-w-2xl flex-col gap-6 p-8 font-mono text-sm">
@@ -120,6 +143,17 @@ export default function StrumMultibarDevPage() {
 			>
 				{isPlaying ? "stop" : "play"}
 			</button>
+
+			<StepGridCard
+				pattern={{ id: "dev", name: progression, description: "dev harness", beats: [] }}
+				bars={bars}
+				activeCell={{
+					barIdx: currBar,
+					beatIdx: barLocalBeatIndex(bars, currBeat),
+					cellIdx: currCell,
+				}}
+				onBarChordChange={handleBarChordChange}
+			/>
 
 			<pre className="border border-denim-border p-3 text-xs">
 				{JSON.stringify(

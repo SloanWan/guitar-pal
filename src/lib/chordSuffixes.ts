@@ -76,3 +76,9 @@ export function getSlashSuffixes(available: readonly string[]): string[] {
     s => isBrowsableSuffix(s) && isSlashChord(s)
   );
 }
+
+// Display name for a chord. Chord names read best compact (Cm7, Cmaj7), but slash
+// chords already carry their own separator, so no extra space there.
+export function chordDisplayName(root: string, suffix: string): string {
+  return isSlashChord(suffix) ? `${root}${suffix}` : `${root} ${suffix}`;
+}

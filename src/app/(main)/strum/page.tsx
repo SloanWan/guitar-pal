@@ -3,8 +3,9 @@
 import StepGridCard from "@/components/strum/StepGridCard";
 import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
 import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
+import { toBars } from "@/lib/strumBars";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 import { useAudioEngine } from "@/components/strum/useAudioEngine";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
@@ -115,6 +116,17 @@ export default function StrumPage() {
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
 	const [selectedChord, setSelectedChord] = useState<ConfirmedChord | null>(null);
 
+	const bars = useMemo(
+		() => toBars(selectedPattern ?? PRESET_STRUM_PATTERNS[0]),
+		[selectedPattern],
+	);
+	// One chord still applies to the whole pattern here — per-bar assignment is
+	// issue #135. Repeating it across bars keeps today's behaviour exact.
+	const barPitches = useMemo(
+		() => bars.map(() => selectedChord?.pitches ?? null),
+		[bars, selectedChord],
+	);
+
 	const {
 		isPlaying,
 		start,
@@ -133,12 +145,7 @@ export default function StrumPage() {
 		setAccentEnabled,
 		playOnce,
 		setPlayOnce,
-	} = useAudioEngine(
-		selectedPattern?.beats ?? PRESET_STRUM_PATTERNS[0].beats,
-		bpm,
-		tickMode,
-		selectedChord?.pitches,
-	);
+	} = useAudioEngine(bars, bpm, tickMode, barPitches);
 
 	const { user, loading } = useUser();
 	const {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Beat, StepValue, TickMode } from "@/lib/strumPatterns";
+import { Bar, Beat, StepValue, TickMode } from "@/lib/strumPatterns";
 
 import { useRef, useEffect, useState } from "react";
 import {
@@ -35,17 +35,59 @@ export function _resolveStrumBuffer(
 	return buffers[soundType] ?? null;
 }
 
+/** Per-bar MIDI pitches, indexed by bar. A one-element array is a single-bar pattern. */
+export type BarPitches = readonly (readonly number[] | null)[];
+
+export interface FlatBars {
+	/** Every bar's beats concatenated — what the scheduler steps through. */
+	beats: Beat[];
+	/** barIndexOfBeat[i] = the bar flat beat i belongs to. */
+	barIndexOfBeat: number[];
+	/** barHeadFlags[i] = true when flat beat i is the first beat of its bar. */
+	barHeadFlags: boolean[];
+}
+
+/**
+ * Flatten Bar[] into the scheduler's beat sequence plus the bar lookup tables
+ * it needs. Bar boundaries come from the bars themselves — never a hardcoded
+ * beats-per-bar. Empty bars contribute nothing. Exported for unit testing only.
+ */
+export function _flattenBars(bars: Bar[]): FlatBars {
+	const flat: FlatBars = { beats: [], barIndexOfBeat: [], barHeadFlags: [] };
+	bars.forEach((bar, barIndex) => {
+		bar.beats.forEach((beat, beatIndex) => {
+			flat.beats.push(beat);
+			flat.barIndexOfBeat.push(barIndex);
+			flat.barHeadFlags.push(beatIndex === 0);
+		});
+	});
+	return flat;
+}
+
+/**
+ * Pitches for the bar currently sounding. Undefined (not null) is the "use the
+ * sample loader's default voicing" signal triggerStrum expects.
+ * Exported for unit testing only.
+ */
+export function _pitchesForBar(
+	barPitches: BarPitches | undefined,
+	barIndex: number,
+): readonly number[] | undefined {
+	return barPitches?.[barIndex] ?? undefined;
+}
+
 export function useAudioEngine(
-	beats: Beat[],
+	bars: Bar[],
 	bpm: number,
 	tickMode: TickMode,
-	chordMidiPitches?: readonly number[] | null,
+	barPitches?: BarPitches,
 ) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
 	const schedulerRef = useRef<number | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [currBeat, setCurrBeat] = useState(0);
 	const [currCell, setCurrCell] = useState(0);
+	const [currBar, setCurrBar] = useState(0);
 
 	const [strumEnabled, setStrumEnabled] = useState(true);
 	const [strumGain, setStrumGain] = useState(1.0);
@@ -55,7 +97,7 @@ export function useAudioEngine(
 	const [playOnce, setPlayOnce] = useState(false);
 
 	const isPlayingRef = useRef(false);
-	const beatsRef = useRef(beats);
+	const flatBarsRef = useRef(_flattenBars(bars));
 
 	const currBeatIdxref = useRef(0);
 	const currCellIdxRef = useRef(0);
@@ -69,7 +111,7 @@ export function useAudioEngine(
 	const metronomeGainRef = useRef(metronomeGain);
 	const accentEnabledRef = useRef(accentEnabled);
 	const playOnceRef = useRef(playOnce);
-	const chordMidiPitchesRef = useRef(chordMidiPitches);
+	const barPitchesRef = useRef(barPitches);
 
 	// Active source nodes tracked for cleanup on stop() and unmount.
 	const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
@@ -78,8 +120,8 @@ export function useAudioEngine(
 		isPlayingRef.current = isPlaying;
 	}, [isPlaying]);
 	useEffect(() => {
-		beatsRef.current = beats;
-	}, [beats]);
+		flatBarsRef.current = _flattenBars(bars);
+	}, [bars]);
 	useEffect(() => {
 		bpmRef.current = bpm;
 	}, [bpm]);
@@ -105,8 +147,8 @@ export function useAudioEngine(
 		playOnceRef.current = playOnce;
 	}, [playOnce]);
 	useEffect(() => {
-		chordMidiPitchesRef.current = chordMidiPitches;
-	}, [chordMidiPitches]);
+		barPitchesRef.current = barPitches;
+	}, [barPitches]);
 
 	// Cancel in-flight audio on unmount to prevent dangling source nodes.
 	useEffect(() => {
@@ -174,7 +216,12 @@ export function useAudioEngine(
 		osc.stop(time + 0.05);
 	}
 
-	function playStrum(time: number, type: StepValue, secondsPerCell: number): void {
+	function playStrum(
+		time: number,
+		type: StepValue,
+		secondsPerCell: number,
+		barIndex: number,
+	): void {
 		if (!strumEnabledRef.current) return;
 
 		const soundType = STEP_TO_SOUND[type];
@@ -190,16 +237,25 @@ export function useAudioEngine(
 			gainNode,
 			time,
 			secondsPerCell,
-			chordMidiPitchesRef.current ?? undefined,
+			_pitchesForBar(barPitchesRef.current, barIndex),
 		);
 	}
 
 	function scheduler() {
 		const ctx = audioCtxRef.current!;
 		const secondsPerBeat = 60 / bpmRef.current;
+		const flat = flatBarsRef.current;
+
+		// A pattern with no beats at all has nothing to schedule; bail out rather
+		// than spinning the reschedule timer forever.
+		if (flat.beats.length === 0) {
+			setIsPlaying(false);
+			return;
+		}
 
 		while (nextCellTimeRef.current < ctx.currentTime + 0.1) {
-			const beat = beatsRef.current[currBeatIdxref.current];
+			const beat = flat.beats[currBeatIdxref.current];
+			const barIndex = flat.barIndexOfBeat[currBeatIdxref.current];
 			const secondsPerCell =
 				beat.length === 2 && tickModeRef.current === "sixteenth"
 					? secondsPerBeat / 4
@@ -212,9 +268,11 @@ export function useAudioEngine(
 					(currCellIdxRef.current === 1 || currCellIdxRef.current === 3));
 
 			if (!shouldNotTick) {
+				// Accent lands on the first beat of every bar. For a single-bar
+				// pattern that is beat 0, exactly as before.
 				const isAccent =
 					accentEnabledRef.current &&
-					currBeatIdxref.current === 0 &&
+					flat.barHeadFlags[currBeatIdxref.current] &&
 					currCellIdxRef.current === 0;
 				playTick(nextCellTimeRef.current, isAccent);
 			}
@@ -226,10 +284,11 @@ export function useAudioEngine(
 				beat.length === 2 &&
 				nextPlatEmptyCellRef.current;
 			const beatType: StepValue = isEmptySubdivision ? "" : beat[currCellIdxRef.current];
-			playStrum(nextCellTimeRef.current, beatType, secondsPerCell);
+			playStrum(nextCellTimeRef.current, beatType, secondsPerCell, barIndex);
 
 			setCurrBeat(currBeatIdxref.current);
 			setCurrCell(currCellIdxRef.current);
+			setCurrBar(barIndex);
 
 			if (tickModeRef.current === "sixteenth" && beat.length === 2) {
 				if (!nextPlatEmptyCellRef.current) {
@@ -244,7 +303,7 @@ export function useAudioEngine(
 
 			if (currCellIdxRef.current >= beat.length) {
 				currCellIdxRef.current = 0;
-				currBeatIdxref.current = (currBeatIdxref.current + 1) % beatsRef.current.length;
+				currBeatIdxref.current = (currBeatIdxref.current + 1) % flat.beats.length;
 				if (playOnceRef.current && currBeatIdxref.current === 0) {
 					// Do not call stop() here: it would invoke cancelStrums() synchronously,
 					// killing the just-scheduled last-note sources before they play.
@@ -264,6 +323,7 @@ export function useAudioEngine(
 					nextPlatEmptyCellRef.current = false;
 					setCurrBeat(0);
 					setCurrCell(0);
+					setCurrBar(0);
 					setIsPlaying(false);
 					return;
 				}
@@ -293,6 +353,7 @@ export function useAudioEngine(
 		nextPlatEmptyCellRef.current = false;
 		setCurrBeat(0);
 		setCurrCell(0);
+		setCurrBar(0);
 		setIsPlaying(false);
 	}
 
@@ -318,6 +379,7 @@ export function useAudioEngine(
 		isPlaying,
 		currBeat,
 		currCell,
+		currBar,
 		start,
 		stop,
 		strumEnabled,

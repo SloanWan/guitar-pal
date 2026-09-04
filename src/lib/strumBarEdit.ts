@@ -37,6 +37,33 @@ export function removeBar(bars: Bar[], barIdx: number): Bar[] {
 	return bars.filter((_, i) => i !== barIdx);
 }
 
+/**
+ * Copy a bar, chord and all. The clone lands at the end of the pattern rather
+ * than beside its source, so the bar numbering the user is reading never
+ * shifts under them. Refuses at the bar cap.
+ */
+export function duplicateBar(bars: Bar[], barIdx: number): Bar[] {
+	const bar = bars[barIdx];
+	if (!bar || bars.length >= MAX_BARS) return bars;
+	return [...bars, { beats: bar.beats.map((beat) => [...beat]), chord: bar.chord }];
+}
+
+/** Swap two bars. Out-of-range or identical indices leave the input untouched. */
+export function swapBars(bars: Bar[], indexA: number, indexB: number): Bar[] {
+	if (
+		indexA === indexB ||
+		indexA < 0 ||
+		indexB < 0 ||
+		indexA >= bars.length ||
+		indexB >= bars.length
+	) {
+		return bars;
+	}
+	const next = [...bars];
+	[next[indexA], next[indexB]] = [next[indexB], next[indexA]];
+	return next;
+}
+
 export function setBarChord(bars: Bar[], barIdx: number, chord: ChordRef | null): Bar[] {
 	return bars.map((bar, i) => (i === barIdx ? { ...bar, chord } : bar));
 }

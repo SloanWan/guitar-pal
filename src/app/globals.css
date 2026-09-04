@@ -574,6 +574,37 @@
 	}
 }
 
+/* Same landing nudge for the strum editor, where bars stack vertically instead
+   of flowing left-to-right, so the motion runs on the Y axis. */
+@keyframes sb-nudge-from-below {
+	from {
+		transform: translateY(10px);
+	}
+	to {
+		transform: translateY(0);
+	}
+}
+@keyframes sb-nudge-from-above {
+	from {
+		transform: translateY(-10px);
+	}
+	to {
+		transform: translateY(0);
+	}
+}
+.sb-nudge-up {
+	animation: sb-nudge-from-below 0.22s ease-out;
+}
+.sb-nudge-down {
+	animation: sb-nudge-from-above 0.22s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sb-nudge-up,
+	.sb-nudge-down {
+		animation: none;
+	}
+}
+
 /* Global navigation progress bar — fixed at the very top, above the nav ladder.
    Runs while a route transition is in flight (see components/nav-progress.tsx).
    The previous page stays visible beneath it; this is the only nav-pending signal

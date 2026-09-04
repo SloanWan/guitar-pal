@@ -10,13 +10,26 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MoveDown, MoveUp, X, Dot, Plus, Minus, Music, Trash2 } from "lucide-react";
+import {
+	MoveDown,
+	MoveUp,
+	X,
+	Dot,
+	Plus,
+	Minus,
+	Trash2,
+	Copy,
+	ArrowUp,
+	ArrowDown,
+} from "lucide-react";
 import { Bar, StrumPattern, StepValue } from "@/lib/strumPatterns";
 import { toBars, barsToLegacyBeats, validateBars } from "@/lib/strumBars";
 import {
 	emptyBar,
 	addBar,
 	removeBar,
+	duplicateBar,
+	swapBars,
 	setBarChord,
 	cycleCell,
 	addCell,
@@ -25,7 +38,9 @@ import {
 	MIN_CELLS_PER_BEAT,
 } from "@/lib/strumBarEdit";
 import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
-import ChordPickerModal, { type ConfirmedChord } from "./ChordPickerModal";
+import ChordSearchSelect from "./ChordSearchSelect";
+import { getChordIndex } from "@/lib/chords";
+import type { ChordIndexEntry } from "@/lib/chordSearch";
 
 function StepIcon({ step }: { step: StepValue }) {
 	if (step === "D" || step === "D3" || step === "DG") return <MoveDown className="size-4" />;
@@ -52,7 +67,18 @@ export default function CreatePatternModal({
 	const [bars, setBars] = useState<Bar[]>([emptyBar()]);
 	const [nameError, setNameError] = useState(false);
 	const [showSignInPrompt, setShowSignInPrompt] = useState(false);
-	const [pickerBarIdx, setPickerBarIdx] = useState<number | null>(null);
+	// Browsable (root, suffix) pairs, fetched once per modal open and shared by
+	// every bar's selector rather than refetched per bar.
+	const [chordIndex, setChordIndex] = useState<readonly ChordIndexEntry[]>([]);
+	// Index of the bar most recently copied or moved. That block gets a denim
+	// glow so the user can find where the edit landed.
+	const [highlightedBarIdx, setHighlightedBarIdx] = useState<number | null>(null);
+	// The bar that just moved and which way it travelled, so its landing nudge
+	// can play. Cleared before re-setting, otherwise a repeated move would not
+	// re-fire the CSS animation.
+	const [moveNudge, setMoveNudge] = useState<{ idx: number; dir: "up" | "down" } | null>(
+		null,
+	);
 
 	useEffect(() => {
 		if (!open) return;
@@ -61,24 +87,57 @@ export default function CreatePatternModal({
 			setBars(editPattern ? toBars(editPattern) : [emptyBar()]);
 			setNameError(false);
 			setShowSignInPrompt(false);
-			setPickerBarIdx(null);
+			setHighlightedBarIdx(null);
+			setMoveNudge(null);
 		});
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
-	function handleChordConfirm(chord: ConfirmedChord | null) {
-		if (pickerBarIdx !== null) {
-			setBars((prev) =>
-				setBarChord(
-					prev,
-					pickerBarIdx,
-					chord
-						? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
-						: null,
-				),
-			);
+	useEffect(() => {
+		if (!open || chordIndex.length > 0) return;
+		let cancelled = false;
+		getChordIndex()
+			.then((index) => {
+				if (!cancelled) setChordIndex(index);
+			})
+			.catch((e: unknown) => console.error("[CreatePatternModal] chord index:", e));
+		return () => {
+			cancelled = true;
+		};
+	}, [open, chordIndex.length]);
+
+	// Clear the copy/move highlight on the next pointer press anywhere. A press on
+	// a copy/move control clears here first (pointerdown precedes click), then that
+	// control's click re-sets the highlight to its own bar.
+	useEffect(() => {
+		if (!open) return;
+		function handlePointerDown() {
+			setHighlightedBarIdx(null);
+			setMoveNudge(null);
 		}
-		setPickerBarIdx(null);
+		document.addEventListener("pointerdown", handlePointerDown);
+		return () => document.removeEventListener("pointerdown", handlePointerDown);
+	}, [open]);
+
+	function handleCopyBar(barIdx: number) {
+		setBars((prev) => {
+			const next = duplicateBar(prev, barIdx);
+			// The copy lands last; highlight it only if one was actually made.
+			setHighlightedBarIdx(next === prev ? null : next.length - 1);
+			return next;
+		});
+	}
+
+	function handleMoveBar(barIdx: number, dir: "up" | "down") {
+		const target = dir === "up" ? barIdx - 1 : barIdx + 1;
+		setBars((prev) => {
+			const next = swapBars(prev, barIdx, target);
+			if (next !== prev) {
+				setHighlightedBarIdx(target);
+				setMoveNudge({ idx: target, dir });
+			}
+			return next;
+		});
 	}
 
 	function buildPattern(): StrumPattern {
@@ -120,7 +179,6 @@ export default function CreatePatternModal({
 		setBars([emptyBar()]);
 		setNameError(false);
 		setShowSignInPrompt(false);
-		setPickerBarIdx(null);
 		onClose();
 	}
 
@@ -169,36 +227,69 @@ export default function CreatePatternModal({
 							{bars.map((bar, barIdx) => (
 								<div
 									key={barIdx}
-									className="flex flex-col gap-1.5 border-l border-line-strong pl-2"
+									className={`flex flex-col gap-1.5 border-l pl-2 transition-shadow duration-200 ${
+										highlightedBarIdx === barIdx
+											? "border-denim shadow-[0_0_0_1px_var(--color-denim),0_0_12px_var(--denim-glow)]"
+											: "border-line-strong"
+									} ${
+										moveNudge?.idx === barIdx
+											? moveNudge.dir === "up"
+												? "sb-nudge-up"
+												: "sb-nudge-down"
+											: ""
+									}`}
 								>
 									{/* Bar header — number, chord, remove */}
 									<div className="flex items-center gap-2">
 										<span className="font-mono text-[9px] tracking-[0.2em] text-ink-faint">
 											{barIdx + 1}
 										</span>
-										<button
-											onClick={() => setPickerBarIdx(barIdx)}
-											className={`flex items-center gap-1.5 border px-2 py-1 text-[11px] font-semibold transition-colors ${
-												bar.chord
-													? "border-denim bg-denim-tint text-denim hover:bg-denim hover:text-on-denim"
-													: "border-line-strong text-ink-dim hover:border-denim hover:bg-denim-tint hover:text-denim"
-											}`}
-										>
-											<Music size={10} />
-											<span>
-												{bar.chord
-													? `${bar.chord.root} ${bar.chord.suffix}`
-													: "No chord"}
-											</span>
-										</button>
-										<button
-											onClick={() => setBars((prev) => removeBar(prev, barIdx))}
-											disabled={bars.length <= 1}
-											aria-label={`Remove bar ${barIdx + 1}`}
-											className="ml-auto flex size-6 items-center justify-center border border-line-strong text-ink-faint transition-colors hover:border-destructive hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
-										>
-											<Trash2 size={10} />
-										</button>
+										<ChordSearchSelect
+											chord={bar.chord}
+											onChange={(chord) =>
+												setBars((prev) => setBarChord(prev, barIdx, chord))
+											}
+											index={chordIndex}
+											ariaLabel={`Chord for bar ${barIdx + 1}`}
+										/>
+										<div className="ml-auto flex items-center">
+											<button
+												onClick={() => handleCopyBar(barIdx)}
+												disabled={bars.length >= MAX_BARS}
+												aria-label={`Copy bar ${barIdx + 1}`}
+												title="Copy bar — the copy is added at the end"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim transition-colors hover:bg-denim-tint hover:text-denim disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-dim"
+											>
+												<Copy size={14} />
+											</button>
+											<button
+												onClick={() => handleMoveBar(barIdx, "up")}
+												disabled={barIdx === 0}
+												aria-label={`Move bar ${barIdx + 1} up`}
+												title="Move bar up"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim transition-colors hover:bg-denim-tint hover:text-denim disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-dim"
+											>
+												<ArrowUp size={14} />
+											</button>
+											<button
+												onClick={() => handleMoveBar(barIdx, "down")}
+												disabled={barIdx === bars.length - 1}
+												aria-label={`Move bar ${barIdx + 1} down`}
+												title="Move bar down"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim transition-colors hover:bg-denim-tint hover:text-denim disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-dim"
+											>
+												<ArrowDown size={14} />
+											</button>
+											<button
+												onClick={() => setBars((prev) => removeBar(prev, barIdx))}
+												disabled={bars.length <= 1}
+												aria-label={`Remove bar ${barIdx + 1}`}
+												title="Delete bar"
+												className="flex items-center justify-center p-1.5 rounded text-ink-dim transition-colors hover:bg-denim-tint hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-dim"
+											>
+												<Trash2 size={14} />
+											</button>
+										</div>
 									</div>
 
 									{/* Beats */}
@@ -306,13 +397,6 @@ export default function CreatePatternModal({
 					</div>
 				</DialogContent>
 			</Dialog>
-
-			<ChordPickerModal
-				open={pickerBarIdx !== null}
-				onClose={() => setPickerBarIdx(null)}
-				onConfirm={handleChordConfirm}
-				initialChord={pickerBarIdx !== null ? bars[pickerBarIdx]?.chord : null}
-			/>
 		</>
 	);
 }

@@ -10,10 +10,15 @@ import {
 	getChord as getChordCached,
 	getChordsByRoot as getChordsByRootCached,
 	getAllChordsWithVoicings as getAllChordsWithVoicingsCached,
+	getChordIndex as getChordIndexCached,
 	type ChordWithVoicings,
 } from "@/lib/chordsData";
+import type { ChordIndexEntry } from "@/lib/chordSearch";
 
-export type { ChordWithVoicings };
+// NOTE: a "use server" module may only export async functions. A re-exported
+// type here is compiled as a value export and blows up at module evaluation
+// ("ChordWithVoicings is not defined"), so consumers import the type straight
+// from chordsData — a type-only import, erased before it reaches the client.
 
 export async function getChord(
 	root: string,
@@ -30,4 +35,8 @@ export async function getChordsByRoot(
 
 export async function getAllChordsWithVoicings(): Promise<ChordWithVoicings[]> {
 	return getAllChordsWithVoicingsCached();
+}
+
+export async function getChordIndex(): Promise<ChordIndexEntry[]> {
+	return getChordIndexCached();
 }

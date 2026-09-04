@@ -5,6 +5,8 @@ import {
 	addBar,
 	removeBar,
 	setBarChord,
+	duplicateBar,
+	swapBars,
 	cycleCell,
 	addCell,
 	removeCell,
@@ -90,6 +92,67 @@ describe("addBar / removeBar", () => {
 		const two = bars(2);
 		expect(removeBar(two, 5)).toBe(two);
 		expect(removeBar(two, -1)).toBe(two);
+	});
+});
+
+describe("duplicateBar", () => {
+	it("appends the copy at the end, not beside its source", () => {
+		const three = [
+			setBarChord(bars(1), 0, C_REF)[0],
+			emptyBar(),
+			emptyBar(),
+		];
+		const next = duplicateBar(three, 0);
+		expect(next).toHaveLength(4);
+		expect(next[3].chord).toEqual(C_REF);
+		// the bars the user is reading keep their numbers
+		expect(next.slice(0, 3)).toEqual(three);
+	});
+
+	it("copies the chord along with the beats", () => {
+		const withChord = setBarChord(bars(1), 0, { root: "G", suffix: "minor" });
+		expect(duplicateBar(withChord, 0)[1].chord).toEqual({ root: "G", suffix: "minor" });
+	});
+
+	it("deep-copies the beats so editing the clone leaves the source alone", () => {
+		const source = cycleCell(bars(1), 0, 0, 0);
+		const copied = duplicateBar(source, 0);
+		const edited = cycleCell(copied, 1, 0, 0);
+		expect(edited[0].beats[0]).toEqual(["D", ""]);
+		expect(edited[1].beats[0]).toEqual(["U", ""]);
+		expect(copied[1].beats[0]).not.toBe(copied[0].beats[0]);
+	});
+
+	it("refuses at the bar cap", () => {
+		const full = bars(MAX_BARS);
+		expect(duplicateBar(full, 0)).toBe(full);
+	});
+
+	it("ignores an out-of-range index", () => {
+		const two = bars(2);
+		expect(duplicateBar(two, 9)).toBe(two);
+	});
+});
+
+describe("swapBars", () => {
+	it("swaps two bars", () => {
+		const three = setBarChord(bars(3), 0, C_REF);
+		const next = swapBars(three, 0, 1);
+		expect(next[0].chord).toBeNull();
+		expect(next[1].chord).toEqual(C_REF);
+	});
+
+	it("does not mutate the input", () => {
+		const before = setBarChord(bars(2), 0, C_REF);
+		swapBars(before, 0, 1);
+		expect(before[0].chord).toEqual(C_REF);
+	});
+
+	it("is a no-op for identical or out-of-range indices", () => {
+		const two = bars(2);
+		expect(swapBars(two, 1, 1)).toBe(two);
+		expect(swapBars(two, 0, -1)).toBe(two);
+		expect(swapBars(two, 0, 5)).toBe(two);
 	});
 });
 

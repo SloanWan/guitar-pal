@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAllChordsWithVoicings, type ChordWithVoicings } from "@/lib/chords";
+import { getAllChordsWithVoicings } from "@/lib/chords";
+import type { ChordWithVoicings } from "@/lib/chordsData";
 import {
 	buildAllChordsRootFirst,
 	buildAllChordsCategories,

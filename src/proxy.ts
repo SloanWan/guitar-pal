@@ -56,13 +56,28 @@ export async function proxy(request: NextRequest) {
 		);
 	}
 
-	// c. A logged-in user hitting /auth → the redirect param if present, else /.
+	// c. A logged-in user hitting /auth → the redirect param if present, else the
+	//    personal home.
 	if (pathname === "/auth" && user) {
-		const target = request.nextUrl.searchParams.get("redirect") ?? "/";
+		const target = request.nextUrl.searchParams.get("redirect") ?? "/home";
 		return redirectWithCookies(new URL(target, request.url));
 	}
 
-	// d. Everything else is public.
+	// d. /home is the signed-in personal surface — a signed-out visitor is sent to
+	//    auth with a return path so they land back on /home after signing in.
+	if (pathname === "/home" && !user) {
+		return redirectWithCookies(
+			new URL(`/auth?redirect=${encodeURIComponent("/home")}`, request.url),
+		);
+	}
+
+	// e. A signed-in user hitting the public hub → their personal home. Signed-out
+	//    visitors keep seeing the public hub at / (no redirect, per issue #127).
+	if (pathname === "/" && user) {
+		return redirectWithCookies(new URL("/home", request.url));
+	}
+
+	// f. Everything else is public.
 	return response;
 }
 

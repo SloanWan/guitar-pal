@@ -12,6 +12,8 @@ import { CirclePlay, CircleStop, ChevronUp, SquareMenu, Metronome, X } from "luc
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
 import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import { useUser } from "@/hooks/useUser";
+import { createClient } from "@/lib/supabase";
+import { saveLastPattern } from "@/lib/lastPattern";
 import Fader from "@/components/ui/Fader";
 
 const MIN_BPM = 40;
@@ -233,11 +235,25 @@ export default function StrumPage() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [isPlaying, spaceMode]);
 
+	// Restore the initial pattern once, after custom patterns finish loading (they
+	// arrive async). A `?pattern=<id>` deep link (e.g. from /home) takes priority
+	// over the device-local last-viewed id, and both resolve against presets AND
+	// custom patterns so a favourited custom pattern opens correctly.
+	const patternRestoredRef = useRef(false);
 	useEffect(() => {
-		const saved = localStorage.getItem("lastStrumPattern");
-		const found = PRESET_STRUM_PATTERNS.find((p) => p.id === saved);
+		if (patternRestoredRef.current || patternsLoading) return;
+		patternRestoredRef.current = true;
+		const queryId =
+			typeof window !== "undefined"
+				? new URLSearchParams(window.location.search).get("pattern")
+				: null;
+		const savedId = queryId ?? localStorage.getItem("lastStrumPattern");
+		if (!savedId) return;
+		const found = [...PRESET_STRUM_PATTERNS, ...customPatterns].find(
+			(p) => p.id === savedId,
+		);
 		if (found) queueMicrotask(() => setSelectedPattern(found));
-	}, []);
+	}, [patternsLoading, customPatterns]);
 
 	useEffect(() => {
 		if (patternsLoading || !selectedPattern) return;
@@ -261,6 +277,8 @@ export default function StrumPage() {
 		stop();
 		setSelectedPattern(pattern);
 		localStorage.setItem("lastStrumPattern", pattern.id);
+		// Mirror the choice to the account so /home can surface it cross-device.
+		saveLastPattern(createClient(), user, "strum", pattern.id).catch(console.error);
 	}
 
 	function stepBpm(delta: number) {

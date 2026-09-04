@@ -4,11 +4,32 @@ export type Beat = StepValue[]; // length = 1|2|3|4
 
 export type TickMode = "quarter" | "eighth" | "sixteenth";
 
+/**
+ * Chord identity as stored on a pattern. Frets and pitches are never stored
+ * inline — they are always looked up from the `chords` / `chord_voicings`
+ * tables via `resolveBarChords` in `strumBars.ts`.
+ */
+export interface ChordRef {
+	root: string;
+	suffix: string;
+	/** Pin a specific voicing; when absent the standard voicing is used. */
+	voicingId?: string | null;
+}
+
+/** One bar of a pattern: its beats plus the chord played over them. */
+export interface Bar {
+	beats: Beat[];
+	chord: ChordRef | null;
+}
+
 export interface StrumPattern {
 	id: string;
 	name: string;
+	/** Legacy / single-bar path. Mirrors `bars[0].beats` when `bars` is set. */
 	beats: Beat[];
 	description: string;
+	/** Multi-bar patterns with a per-bar chord. Read it through `toBars`. */
+	bars?: Bar[];
 }
 
 export const PRESET_STRUM_PATTERNS: StrumPattern[] = [

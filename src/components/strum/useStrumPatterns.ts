@@ -1,8 +1,61 @@
 import { useState, useEffect } from "react";
-import { StrumPattern, Beat } from "@/lib/strumPatterns";
+import { StrumPattern, Beat, Bar } from "@/lib/strumPatterns";
+import { toBars, barsToLegacyBeats, validateBars } from "@/lib/strumBars";
 import { createClient } from "@/lib/supabase";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
+
+/** A Supabase row from `user_strum_patterns`; the table is not code-generated. */
+interface StrumPatternRow {
+	pattern_id: string;
+	name: string;
+	beats: Beat[];
+	description: string | null;
+	bars?: unknown;
+}
+
+/**
+ * Accept `bars` only when it round-trips the validator — a legacy row, a null
+ * column, or anything malformed falls back to the single-bar `beats` path.
+ */
+function readBars(raw: unknown): Bar[] | undefined {
+	if (raw == null) return undefined;
+	return validateBars(raw).ok ? (raw as Bar[]) : undefined;
+}
+
+function rowToPattern(row: StrumPatternRow): StrumPattern {
+	return {
+		id: row.pattern_id,
+		name: row.name,
+		beats: row.beats,
+		description: row.description ?? "",
+		bars: readBars(row.bars),
+	};
+}
+
+/**
+ * Columns written for a pattern. `beats` is double-written from `bars[0]` so a
+ * rollback to pre-multi-bar code still finds a playable first bar.
+ */
+function patternColumns(pattern: StrumPattern): {
+	name: string;
+	beats: Beat[];
+	bars: Bar[];
+	description: string;
+} {
+	const bars = toBars(pattern);
+	return {
+		name: pattern.name,
+		beats: barsToLegacyBeats(bars),
+		bars,
+		description: pattern.description,
+	};
+}
+
+/** Drop `bars` that no longer validate after a round trip through localStorage. */
+function sanitizeStoredPatterns(patterns: StrumPattern[]): StrumPattern[] {
+	return patterns.map((p) => ({ ...p, bars: readBars(p.bars) }));
+}
 
 export function useStrumPatterns(user: User | null, loading: boolean) {
 	const [customPatterns, setCustomPatterns] = useState<StrumPattern[]>([]);
@@ -14,7 +67,8 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		let localPatterns: StrumPattern[] = [];
 		try {
 			const saved = localStorage.getItem("customStrumPatterns");
-			if (saved) localPatterns = JSON.parse(saved) as StrumPattern[];
+			if (saved)
+				localPatterns = sanitizeStoredPatterns(JSON.parse(saved) as StrumPattern[]);
 		} catch {
 			// ignore malformed data
 		}
@@ -43,7 +97,9 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 			const savedPatterns = localStorage.getItem("customStrumPatterns");
 			if (savedPatterns) {
 				try {
-					const localPatterns = JSON.parse(savedPatterns) as StrumPattern[];
+					const localPatterns = sanitizeStoredPatterns(
+						JSON.parse(savedPatterns) as StrumPattern[],
+					);
 					const { data: existing } = await supabase
 						.from("user_strum_patterns")
 						.select("pattern_id")
@@ -57,9 +113,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 							toInsert.map((p) => ({
 								user_id: currentUser.id,
 								pattern_id: p.id,
-								name: p.name,
-								beats: p.beats,
-								description: p.description,
+								...patternColumns(p),
 							})),
 						);
 						merged = true;
@@ -99,12 +153,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 				.select("*")
 				.eq("user_id", currentUser.id);
 			setCustomPatterns(
-				(patterns ?? []).map((row) => ({
-					id: row.pattern_id as string,
-					name: row.name as string,
-					beats: row.beats as Beat[],
-					description: (row.description ?? "") as string,
-				})),
+				(patterns ?? []).map((row) => rowToPattern(row as StrumPatternRow)),
 			);
 			setPatternsLoading(false);
 
@@ -131,9 +180,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 					const { error } = await supabase.from("user_strum_patterns").insert({
 						user_id: user.id,
 						pattern_id: pattern.id,
-						name: pattern.name,
-						beats: pattern.beats,
-						description: pattern.description,
+						...patternColumns(pattern),
 					});
 					if (error) throw new Error(error.message);
 					const { data: patterns } = await supabase
@@ -141,12 +188,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 						.select("*")
 						.eq("user_id", user.id);
 					setCustomPatterns(
-						(patterns ?? []).map((row) => ({
-							id: row.pattern_id as string,
-							name: row.name as string,
-							beats: row.beats as Beat[],
-							description: (row.description ?? "") as string,
-						})),
+						(patterns ?? []).map((row) => rowToPattern(row as StrumPatternRow)),
 					);
 					setPatternsLoading(false);
 				} catch (e) {
@@ -170,7 +212,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 					const supabase = createClient();
 					const { error } = await supabase
 						.from("user_strum_patterns")
-						.update({ name: updated.name, beats: updated.beats, description: updated.description })
+						.update(patternColumns(updated))
 						.eq("pattern_id", updated.id)
 						.eq("user_id", user.id);
 					if (error) throw new Error(error.message);

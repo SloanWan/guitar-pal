@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Bar, ChordProgression } from "@/lib/strumPatterns";
 import { validateBars, normalizeBpm } from "@/lib/strumBars";
+import { normalizeCapo } from "@/lib/strumProgressions";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
@@ -14,6 +15,7 @@ interface ProgressionRow {
 	order_index: number | null;
 	name: string | null;
 	bpm: number | null;
+	capo: number | null;
 }
 
 /** Drop rows whose bars no longer validate — a bad row must not break the list. */
@@ -27,6 +29,7 @@ function rowToProgression(row: ProgressionRow): ChordProgression | null {
 		name: row.name ?? "",
 		// Null means "no tempo of its own" — the pattern's tempo is used instead.
 		bpm: row.bpm === null ? undefined : normalizeBpm(row.bpm),
+		capo: normalizeCapo(row.capo),
 	};
 }
 
@@ -39,6 +42,7 @@ function progressionColumns(progression: ChordProgression, userId: string) {
 		order_index: progression.orderIndex,
 		name: progression.name?.trim() || null,
 		bpm: progression.bpm === undefined ? null : normalizeBpm(progression.bpm),
+		capo: normalizeCapo(progression.capo),
 	};
 }
 
@@ -98,7 +102,7 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 
 			const { data, error } = await supabase
 				.from("user_pattern_progressions")
-				.select("id, pattern_id, bars, order_index, name, bpm")
+				.select("id, pattern_id, bars, order_index, name, bpm, capo")
 				.eq("user_id", currentUser.id);
 			if (error) console.error("[useChordProgressions] load failed:", error.message);
 			setProgressions(

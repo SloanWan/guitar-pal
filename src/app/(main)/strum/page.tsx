@@ -13,12 +13,21 @@ import {
 	type ChordProgression,
 	type ChordRef,
 } from "@/lib/strumPatterns";
-import { toBars, resolveBarChords, patternBpm, normalizeBpm } from "@/lib/strumBars";
+import {
+	toBars,
+	resolveBarChords,
+	transposeBarPitches,
+	patternBpm,
+	normalizeBpm,
+} from "@/lib/strumBars";
+import { STRUM_PITCHES } from "@/components/strum/useGuitarSampleLoader";
 import { setBarChord, barLocalBeatIndex } from "@/lib/strumBarEdit";
 import {
 	progressionsForPattern,
 	nextOrderIndex,
 	progressionBarsFromChords,
+	progressionCapo,
+	syncBarsToPattern,
 } from "@/lib/strumProgressions";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 
@@ -257,6 +266,10 @@ export default function StrumPage() {
 			: toBars(selectedPattern ?? PRESET_STRUM_PATTERNS[0]),
 	);
 
+	// The capo only applies to the sequence that declares it; the pattern tab's
+	// session chords always sound at concert pitch.
+	const activeCapo = tab === "progressions" ? progressionCapo(openProgression) : 0;
+
 	useEffect(() => {
 		const next = JSON.parse(sourceBarsKey) as Bar[];
 		// queueMicrotask: the codebase's idiom for deferring state writes out of
@@ -269,7 +282,9 @@ export default function StrumPage() {
 		let cancelled = false;
 		resolveBarChords(next, lookupVoicings)
 			.then((pitches) => {
-				if (!cancelled) setBarPitches(pitches);
+				if (!cancelled) {
+					setBarPitches(transposeBarPitches(pitches, activeCapo, STRUM_PITCHES));
+				}
 			})
 			.catch((err: unknown) => {
 				console.error("[StrumPage] chord resolution failed:", err);
@@ -277,7 +292,7 @@ export default function StrumPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [sourceBarsKey]);
+	}, [sourceBarsKey, activeCapo]);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
 	// The progression the editor is open on; null when the editor is closed.
 	// New progressions are typed inline instead, never through the editor.
@@ -486,12 +501,31 @@ export default function StrumPage() {
 		setEditingProgression(progression);
 	}
 
-	function handleProgressionSave(update: { bars: Bar[]; name: string; bpm?: number }) {
+	function handleProgressionSave(update: {
+		bars: Bar[];
+		name: string;
+		bpm?: number;
+		capo: number;
+	}) {
 		if (!editingProgression) return;
 		const next: ChordProgression = { ...editingProgression, ...update };
 		handleSaveProgression(next);
 		stop();
 		if (openProgressionId === next.id) setBpm(bpmFor(next));
+	}
+
+	/**
+	 * Carry a rhythm edit into the progressions written over the pattern. Bars the
+	 * user re-wrote inside a progression keep their own rhythm; see
+	 * `syncBarsToPattern`.
+	 */
+	function syncProgressionsToPattern(previous: StrumPattern, next: StrumPattern) {
+		for (const progression of progressionsForPattern(progressions, next.id)) {
+			const nextBars = syncBarsToPattern(progression.bars, previous.beats, next.beats);
+			if (nextBars !== progression.bars) {
+				handleSaveProgression({ ...progression, bars: nextBars });
+			}
+		}
 	}
 
 	/** Deleting a pattern takes the progressions written over it with it. */
@@ -675,6 +709,14 @@ export default function StrumPage() {
 								onAddProgression={handleAddProgression}
 								onEditProgression={handleEditProgression}
 								onDeleteProgression={handleRemoveProgression}
+								onEditPattern={
+									customPatterns.some((p) => p.id === selectedPattern.id)
+										? () => {
+												setEditingPattern(selectedPattern);
+												setCreateModalOpen(true);
+											}
+										: undefined
+								}
 							/>
 						) : (
 							<p className="text-ink-dim text-sm text-center">
@@ -1348,6 +1390,7 @@ export default function StrumPage() {
 				onSave={(pattern) => {
 					if (editingPattern) {
 						handleEditCustomPattern(pattern);
+						syncProgressionsToPattern(editingPattern, pattern);
 						if (selectedPattern?.id === pattern.id) {
 							setSelectedPattern(pattern);
 							// The edit may have moved the pattern's default tempo — adopt it.

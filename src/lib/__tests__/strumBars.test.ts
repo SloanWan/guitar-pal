@@ -6,6 +6,7 @@ import {
 	selectRefVoicing,
 	chordRefToMidi,
 	resolveBarChords,
+	transposeBarPitches,
 	normalizeBpm,
 	patternBpm,
 	MAX_CELLS_PER_BEAT,
@@ -254,5 +255,38 @@ describe("patternBpm", () => {
 
 	it("defaults a pattern that carries no tempo", () => {
 		expect(patternBpm(PRESET_STRUM_PATTERNS[0])).toBe(DEFAULT_STRUM_BPM);
+	});
+});
+
+describe("transposeBarPitches — the capo", () => {
+	// The default voicing the engine falls back to for a bar with no chord.
+	const FALLBACK = [48, 52, 55, 60, 64];
+
+	it("returns the table untouched at capo 0, nulls included", () => {
+		const pitches = [[48, 52, 55], null];
+		expect(transposeBarPitches(pitches, 0, FALLBACK)).toEqual([[48, 52, 55], null]);
+	});
+
+	it("raises every resolved pitch by the capo fret", () => {
+		expect(transposeBarPitches([[48, 52, 55]], 2, FALLBACK)).toEqual([[50, 54, 57]]);
+	});
+
+	it("sounds the transposed default voicing for a bar with no chord", () => {
+		expect(transposeBarPitches([null], 3, FALLBACK)).toEqual([[51, 55, 58, 63, 67]]);
+	});
+
+	it("handles a mixed table in one pass", () => {
+		expect(transposeBarPitches([[40], null, [64]], 1, FALLBACK)).toEqual([
+			[41],
+			[49, 53, 56, 61, 65],
+			[65],
+		]);
+	});
+
+	it("copies rather than mutating the input", () => {
+		const bar = [48, 52];
+		const out = transposeBarPitches([bar], 0, FALLBACK);
+		out[0]![0] = 99;
+		expect(bar[0]).toBe(48);
 	});
 });

@@ -173,3 +173,21 @@ export async function resolveBarChords(
 		}),
 	);
 }
+
+/**
+ * Raise a resolved pitch table by a capo. The chords name the shapes the player
+ * fingers, so a capo at fret N sounds every string N semitones higher.
+ *
+ * A bar with no chord of its own sounds the engine's default voicing, which the
+ * capo raises too — `fallback` is that voicing, transposed in its place. At capo
+ * 0 the table is returned untouched, nulls included, so the engine keeps using
+ * its own default.
+ */
+export function transposeBarPitches(
+	pitches: readonly (readonly number[] | null)[],
+	capo: number,
+	fallback: readonly number[],
+): (number[] | null)[] {
+	if (capo === 0) return pitches.map((bar) => (bar ? [...bar] : null));
+	return pitches.map((bar) => (bar ?? fallback).map((midi) => midi + capo));
+}

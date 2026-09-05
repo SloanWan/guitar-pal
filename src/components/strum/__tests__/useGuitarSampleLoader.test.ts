@@ -11,6 +11,8 @@ import {
 	DECAY_TIME_CONSTANT_RATIO,
 	MUTED_MAX_DURATION_S,
 	MIN_DECAY_TC_S,
+	STRUM_RING_SECONDS,
+	RING_DECAY_TC_DIVISOR,
 	SOURCE_STOP_BUFFER_S,
 	_resetCachesForTesting,
 	_setReadyPresetForTesting,
@@ -488,42 +490,53 @@ describe("triggerStrum — duration and decay time constant scaling", () => {
 		return makeMockStrumCtx();
 	}
 
-	it("scales decay τ proportionally at slow tempo (60 BPM, 1-cell beat → 1.0 s/cell)", () => {
-		const { ctx, mockGain } = setupSingleZonePreset();
-		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
-		// String 0: adjustedDuration = 1.0, τ = max(1.0 × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)
-		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
-		expect(tau).toBeCloseTo(Math.max(1.0 * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S), 5);
+	it("lets a struck string ring for STRUM_RING_SECONDS whatever the cell length", () => {
+		// τ = ring / 3 regardless of tempo: the cell no longer cuts the note.
+		const expectedTau = STRUM_RING_SECONDS / RING_DECAY_TC_DIVISOR;
+		for (const cellDuration of [1.0, 0.125, 60 / 180 / 4]) {
+			const { ctx, mockGain } = setupSingleZonePreset();
+			triggerStrum("down", ctx, {} as AudioNode, 0, cellDuration);
+			const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock
+				.calls[0][2] as number;
+			expect(tau).toBeCloseTo(expectedTau, 5);
+		}
 	});
 
-	it("scales decay τ proportionally at normal tempo (120 BPM, 4-cell beat → 0.125 s/cell)", () => {
-		const { ctx, mockGain } = setupSingleZonePreset();
-		triggerStrum("down", ctx, {} as AudioNode, 0, 0.125);
-		// String 0: adjustedDuration = 0.125, τ = max(0.125 × DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S)
-		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
-		expect(tau).toBeCloseTo(Math.max(0.125 * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S), 5);
-	});
-
-	it("scales decay τ proportionally at fast tempo (180 BPM, 4-cell beat → ~0.0833 s/cell)", () => {
-		const { ctx, mockGain } = setupSingleZonePreset();
-		const fastCellDur = 60 / 180 / 4; // ~0.0833 s
-		triggerStrum("down", ctx, {} as AudioNode, 0, fastCellDur);
-		// With DECAY_TIME_CONSTANT_RATIO = 0.8: τ = max(0.0833 × 0.8, 0.03) = 0.0667 (ratio-scaled,
-		// not floor-clamped — the floor only kicks in below ~0.0375 s/cell, i.e. ≈400+ BPM).
-		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock.calls[0][2] as number;
-		expect(tau).toBeCloseTo(Math.max(fastCellDur * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S), 5);
-	});
-
-	it("schedules every string to stop at when + noteDuration + SOURCE_STOP_BUFFER_S (stagger cancels out)", () => {
+	it("stops each struck string a ring after its own onset, so the sweep is preserved", () => {
 		const { ctx, sources } = setupSingleZonePreset();
 		const WHEN = 2.0;
-		const NOTE_DUR = 0.5;
-		triggerStrum("down", ctx, {} as AudioNode, WHEN, NOTE_DUR);
+		triggerStrum("down", ctx, {} as AudioNode, WHEN, 0.5);
 		expect(sources).toHaveLength(STRUM_PITCHES.length);
-		for (const source of sources) {
+		sources.forEach((source, i) => {
+			const startTime = (source.start as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
 			const stopTime = (source.stop as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
-			expect(stopTime).toBeCloseTo(WHEN + NOTE_DUR + SOURCE_STOP_BUFFER_S, 5);
-		}
+			expect(stopTime).toBeCloseTo(startTime + STRUM_RING_SECONDS + SOURCE_STOP_BUFFER_S, 5);
+			// Later strings start later; nothing is cut short to catch up.
+			if (i > 0) {
+				const prevStop = (sources[i - 1].stop as ReturnType<typeof vi.fn>).mock
+					.calls[0][0] as number;
+				expect(stopTime).toBeGreaterThan(prevStop);
+			}
+		});
+	});
+
+	it("rings past the cell it was struck in, so consecutive strums overlap", () => {
+		const { ctx, sources } = setupSingleZonePreset();
+		const CELL = 0.25;
+		triggerStrum("down", ctx, {} as AudioNode, 0, CELL);
+		const stopTime = (sources[0].stop as ReturnType<typeof vi.fn>).mock.calls[0][0] as number;
+		expect(stopTime).toBeGreaterThan(CELL);
+	});
+
+	it("muted keeps the cell-scaled decay so the chuck stays percussive", () => {
+		const { ctx, mockGain } = setupSingleZonePreset("mutedGuitar");
+		triggerStrum("muted", ctx, {} as AudioNode, 0, 1.0);
+		const tau = (mockGain.gain.setTargetAtTime as ReturnType<typeof vi.fn>).mock
+			.calls[0][2] as number;
+		expect(tau).toBeCloseTo(
+			Math.max(MUTED_MAX_DURATION_S * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S),
+			5,
+		);
 	});
 
 	it("decay starts immediately at the note onset (setTargetAtTime startTime === source.start time)", () => {

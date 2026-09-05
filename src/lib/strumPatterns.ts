@@ -54,6 +54,11 @@ export interface ChordProgression {
 	name?: string;
 	/** Tempo this sequence plays at; falls back to the pattern's own. */
 	bpm?: number;
+	/**
+	 * Capo fret the chords are fingered behind. The chords name the shapes the
+	 * player holds, so playback sounds this many semitones higher. 0 = no capo.
+	 */
+	capo?: number;
 }
 
 /** Tempo bounds shared by the transport fader and the pattern editor. */
@@ -61,6 +66,9 @@ export const STRUM_BPM_MIN = 40;
 export const STRUM_BPM_MAX = 220;
 /** Tempo a pattern loads at when it carries no BPM of its own. */
 export const DEFAULT_STRUM_BPM = 80;
+
+/** Highest capo fret offered; past this the samples stop sounding like a guitar. */
+export const STRUM_CAPO_MAX = 12;
 
 export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 	{

@@ -26,6 +26,7 @@ import {
 	StepValue,
 	STRUM_BPM_MIN,
 	STRUM_BPM_MAX,
+	STRUM_CAPO_MAX,
 } from "@/lib/strumPatterns";
 import { validateBars, MAX_CELLS_PER_BEAT, normalizeBpm } from "@/lib/strumBars";
 import {
@@ -40,7 +41,7 @@ import {
 	MAX_BARS,
 	MIN_CELLS_PER_BEAT,
 } from "@/lib/strumBarEdit";
-import { defaultProgressionName } from "@/lib/strumProgressions";
+import { defaultProgressionName, normalizeCapo, progressionCapo } from "@/lib/strumProgressions";
 import ChordSearchSelect from "./ChordSearchSelect";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
@@ -54,10 +55,9 @@ function StepIcon({ step }: { step: StepValue }) {
 
 /**
  * The chord progression editor: several bars, each with its own rhythm and
- * chord. A progression carries no name — its chords are its name — and no
- * tempo, which belongs to the pattern it extends. Progressions are created by
- * typing a chord sequence in the workspace; this editor only changes one that
- * already exists.
+ * chord, plus the sequence's own name, tempo and capo. Progressions are created
+ * by typing a chord sequence in the workspace; this editor only changes one
+ * that already exists.
  */
 export default function ProgressionEditModal({
 	open,
@@ -68,7 +68,7 @@ export default function ProgressionEditModal({
 }: {
 	open: boolean;
 	onClose: () => void;
-	onSave: (update: { bars: Bar[]; name: string; bpm?: number }) => void;
+	onSave: (update: { bars: Bar[]; name: string; bpm?: number; capo: number }) => void;
 	/** The progression being edited. */
 	progression: ChordProgression;
 	/** Tempo the progression falls back to when it carries none of its own. */
@@ -79,6 +79,10 @@ export default function ProgressionEditModal({
 	// Free text so the field can be emptied — empty means "follow the pattern".
 	const [bpmInput, setBpmInput] = useState(
 		progression.bpm === undefined ? "" : String(progression.bpm),
+	);
+	// Free text too — empty reads as "no capo".
+	const [capoInput, setCapoInput] = useState(
+		progressionCapo(progression) === 0 ? "" : String(progressionCapo(progression)),
 	);
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
@@ -104,10 +108,18 @@ export default function ProgressionEditModal({
 		queueMicrotask(() => {
 			const initialName = progression.name ?? "";
 			const initialBpm = progression.bpm === undefined ? "" : String(progression.bpm);
-			pristineRef.current = draftSnapshot(progression.bars, initialName, initialBpm);
+			const initialCapo =
+				progressionCapo(progression) === 0 ? "" : String(progressionCapo(progression));
+			pristineRef.current = draftSnapshot(
+				progression.bars,
+				initialName,
+				initialBpm,
+				initialCapo,
+			);
 			setBars(progression.bars);
 			setName(initialName);
 			setBpmInput(initialBpm);
+			setCapoInput(initialCapo);
 			setDiscardConfirm(false);
 			setHighlightedBarIdx(null);
 			setMoveNudge(null);
@@ -162,13 +174,28 @@ export default function ProgressionEditModal({
 		});
 	}
 
-	function draftSnapshot(barsValue: Bar[], nameValue: string, bpmValue: string): string {
-		return JSON.stringify({ bars: barsValue, name: nameValue.trim(), bpm: bpmValue.trim() });
+	function draftSnapshot(
+		barsValue: Bar[],
+		nameValue: string,
+		bpmValue: string,
+		capoValue: string,
+	): string {
+		return JSON.stringify({
+			bars: barsValue,
+			name: nameValue.trim(),
+			bpm: bpmValue.trim(),
+			capo: capoValue.trim(),
+		});
 	}
 
 	/** An emptied tempo field means "play at the pattern's tempo". */
 	function parsedBpm(): number | undefined {
 		return bpmInput.trim() === "" ? undefined : normalizeBpm(Number(bpmInput));
+	}
+
+	/** An emptied capo field means "no capo". */
+	function parsedCapo(): number {
+		return capoInput.trim() === "" ? 0 : normalizeCapo(Number(capoInput));
 	}
 
 	function handleSave() {
@@ -180,12 +207,13 @@ export default function ProgressionEditModal({
 			);
 			return;
 		}
-		onSave({ bars, name: name.trim(), bpm: parsedBpm() });
+		onSave({ bars, name: name.trim(), bpm: parsedBpm(), capo: parsedCapo() });
 		onClose();
 	}
 
 	function requestClose() {
-		if (draftSnapshot(bars, name, bpmInput) !== pristineRef.current) setDiscardConfirm(true);
+		if (draftSnapshot(bars, name, bpmInput, capoInput) !== pristineRef.current)
+			setDiscardConfirm(true);
 		else onClose();
 	}
 
@@ -230,8 +258,8 @@ export default function ProgressionEditModal({
 				</DialogHeader>
 
 				<div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4 min-h-0">
-					{/* Name + tempo */}
-					<div className="flex items-end gap-3">
+					{/* Name + tempo + capo */}
+					<div className="flex flex-wrap items-end gap-3">
 						<div className="flex min-w-0 flex-1 flex-col gap-1.5">
 							<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 								Progression name
@@ -263,6 +291,27 @@ export default function ProgressionEditModal({
 								}}
 								placeholder={String(patternBpm)}
 								aria-label="Tempo in BPM — empty follows the pattern"
+								className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+							/>
+						</div>
+						<div className="flex w-24 shrink-0 flex-col gap-1.5">
+							<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+								Capo
+							</label>
+							{/* The chords name the shapes fingered behind the capo, so playback
+							    sounds this many semitones higher. Empty = no capo. */}
+							<input
+								type="number"
+								min={0}
+								max={STRUM_CAPO_MAX}
+								value={capoInput}
+								onChange={(e) => setCapoInput(e.target.value)}
+								onBlur={() => {
+									const parsed = parsedCapo();
+									setCapoInput(parsed === 0 ? "" : String(parsed));
+								}}
+								placeholder="0"
+								aria-label="Capo fret — empty means no capo"
 								className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 							/>
 						</div>

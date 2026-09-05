@@ -1,9 +1,29 @@
-import type { Bar, Beat, ChordProgression, ChordRef } from "@/lib/strumPatterns";
+import {
+	STRUM_CAPO_MAX,
+	type Bar,
+	type Beat,
+	type ChordProgression,
+	type ChordRef,
+} from "@/lib/strumPatterns";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 
 /** Written in place of a bar nobody assigned a chord to. */
 export const NO_CHORD_LABEL = "—";
+
+/**
+ * Coerce anything claiming to be a capo fret into a usable one: rounded and
+ * clamped to 0…`STRUM_CAPO_MAX`. A missing or unusable value means no capo.
+ */
+export function normalizeCapo(raw: unknown): number {
+	if (typeof raw !== "number" || !Number.isFinite(raw)) return 0;
+	return Math.min(STRUM_CAPO_MAX, Math.max(0, Math.round(raw)));
+}
+
+/** The capo a progression is played behind — 0 when it carries none. */
+export function progressionCapo(progression: ChordProgression | null): number {
+	return normalizeCapo(progression?.capo);
+}
 
 /** Separates chords in a progression's default name. */
 const NAME_SEPARATOR = "|";
@@ -101,4 +121,29 @@ export function parseChordSequence(
 /** One bar per chord, every bar playing the pattern's own rhythm. */
 export function progressionBarsFromChords(beats: Beat[], chords: ChordRef[]): Bar[] {
 	return chords.map((chord) => ({ beats: beats.map((beat) => [...beat]), chord }));
+}
+
+/**
+ * Carry an edit of the pattern's rhythm into a progression written over it.
+ *
+ * Only bars still playing the pattern's previous rhythm follow the edit; a bar
+ * the user re-wrote in the progression editor has diverged on purpose and is
+ * left as it is. Chords are never touched. Returns the input array unchanged
+ * when nothing followed, so callers can skip the write.
+ */
+export function syncBarsToPattern(
+	bars: Bar[],
+	previousBeats: Beat[],
+	nextBeats: Beat[],
+): Bar[] {
+	const previous = JSON.stringify(previousBeats);
+	if (previous === JSON.stringify(nextBeats)) return bars;
+
+	let changed = false;
+	const next = bars.map((bar) => {
+		if (JSON.stringify(bar.beats) !== previous) return bar;
+		changed = true;
+		return { ...bar, beats: nextBeats.map((beat) => [...beat]) };
+	});
+	return changed ? next : bars;
 }

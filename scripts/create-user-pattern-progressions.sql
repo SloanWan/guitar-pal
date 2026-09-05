@@ -13,6 +13,9 @@
 --   * `name` is optional: null means the UI writes the chord abbreviations
 --     ("C|G|Am|F") instead. `bpm` is optional too — null means the progression
 --     plays at the tempo of the pattern it extends.
+--   * `capo` is the fret the shapes are fingered behind: the chords name the
+--     shapes the player holds, so playback sounds `capo` semitones higher.
+--     0 / null = no capo.
 --
 -- Security shape (reviewed against CLAUDE.md constraints — violates none of the four):
 --   * RLS on, every policy row-scoped by user_id, so a user only ever sees and
@@ -26,6 +29,7 @@ create table if not exists public.user_pattern_progressions (
   order_index smallint not null default 0,
   name        text,
   bpm         smallint,
+  capo        smallint,
   created_at  timestamptz not null default now()
 );
 
@@ -35,6 +39,8 @@ alter table public.user_pattern_progressions
   add column if not exists name text;
 alter table public.user_pattern_progressions
   add column if not exists bpm smallint;
+alter table public.user_pattern_progressions
+  add column if not exists capo smallint;
 
 do $$
 begin
@@ -48,6 +54,14 @@ do $$
 begin
   alter table public.user_pattern_progressions
     add constraint user_pattern_progressions_bpm_range check (bpm is null or (bpm between 40 and 220));
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter table public.user_pattern_progressions
+    add constraint user_pattern_progressions_capo_range check (capo is null or (capo between 0 and 12));
 exception
   when duplicate_object then null;
 end $$;

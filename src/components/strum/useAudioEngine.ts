@@ -8,6 +8,7 @@ import {
 	triggerStrum,
 	cancelStrums,
 	SOURCE_STOP_BUFFER_S,
+	STRUM_RING_SECONDS,
 	type StrumSoundType,
 } from "./useGuitarSampleLoader";
 
@@ -310,9 +311,12 @@ export function useAudioEngine(
 					// Instead, defer cancelStrums() until the last note has finished decaying.
 					// Re-using schedulerRef means a manual stop() click still cancels this via
 					// its existing window.clearTimeout(schedulerRef.current) call.
+					// The last strum lets ring past the final cell, so the wait is the
+					// ring length, not one cell — otherwise play-once clips its own
+					// closing chord.
 					const delaySec =
 						Math.max(0, nextCellTimeRef.current - ctx.currentTime) +
-						secondsPerCell +
+						STRUM_RING_SECONDS +
 						SOURCE_STOP_BUFFER_S;
 					schedulerRef.current = window.setTimeout(() => {
 						cancelStrums();

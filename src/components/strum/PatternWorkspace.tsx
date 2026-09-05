@@ -5,6 +5,7 @@ import { List, Music, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Bar, ChordProgression, ChordRef, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,
+	progressionCapo,
 	chordAbbreviation,
 	parseChordSequence,
 } from "@/lib/strumProgressions";
@@ -37,6 +38,8 @@ interface Props {
 	onAddProgression: (chords: ChordRef[]) => void;
 	onEditProgression: (progression: ChordProgression) => void;
 	onDeleteProgression: (progression: ChordProgression) => void;
+	/** Given only for a pattern the user owns; presets cannot be edited. */
+	onEditPattern?: () => void;
 }
 
 function TabButton({
@@ -77,6 +80,7 @@ export default function PatternWorkspace({
 	onAddProgression,
 	onEditProgression,
 	onDeleteProgression,
+	onEditPattern,
 }: Props) {
 	const selected = progressions.find((p) => p.id === selectedProgressionId) ?? null;
 
@@ -268,7 +272,7 @@ export default function PatternWorkspace({
 
 			{/* The card header — pattern name and written rhythm — belongs to both
 			    tabs; only the body below it switches. */}
-			<StepGridCard pattern={pattern}>
+			<StepGridCard pattern={pattern} onEditPattern={onEditPattern}>
 				{tab === "pattern" ? (
 					<PatternBarBody
 						bars={bars}
@@ -372,6 +376,13 @@ export default function PatternWorkspace({
 									<span className="shrink-0 font-mono text-[10px] text-ink-faint">
 										{selected.bars.length} bars
 									</span>
+									{/* The chords name the shapes; the capo says how much higher
+									    they sound. Hidden at capo 0, where there is nothing to say. */}
+									{progressionCapo(selected) > 0 && (
+										<span className="shrink-0 border border-denim-border bg-denim-tint px-1.5 py-0.5 font-mono text-[10px] text-denim">
+											Capo {progressionCapo(selected)}
+										</span>
+									)}
 								</div>
 								{deleteConfirmId === selected.id ? (
 									<div className="flex shrink-0 items-center gap-2">

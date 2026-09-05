@@ -1,35 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRightIcon, SearchIcon } from "lucide-react";
+import { Command as CommandPrimitive } from "cmdk";
+import { SearchIcon } from "lucide-react";
 
-import {
-	CommandDialog,
-	CommandInput,
-	CommandList,
-	CommandGroup,
-	CommandItem,
-} from "@/components/ui/command";
-import MusicalText from "@/components/MusicalText";
+import { Command, CommandDialog, CommandInput, CommandList } from "@/components/ui/command";
+import ChordSearchResults, { useChordPaletteRows } from "@/components/chords/ChordSearchResults";
 import { useNavTransition } from "@/components/nav-progress";
 import { rootToSlug, suffixToSlug } from "@/lib/chordSlug";
-import { isSlashChord } from "@/lib/chordSuffixes";
 import { tocSectionId, tocSubsectionId } from "@/lib/chordToc";
-import {
-	searchChords,
-	getNavShortcut,
-	type ChordIndexEntry,
-	type ChordSearchResult,
-	type NavShortcut,
-} from "@/lib/chordSearch";
-import { reportChordRequest, type SubmissionVerdict } from "@/lib/chordRequests";
-
-// Chord names read best compact (Cm7, Cmaj7) but slash chords already carry their
-// own separator, so no extra space there. Matches how the browse UI labels chords.
-function displayName(root: string, suffix: string): string {
-	return isSlashChord(suffix) ? `${root}${suffix}` : `${root} ${suffix}`;
-}
+import { batchGridHref } from "@/lib/chordBatchResolve";
+import type { ChordIndexEntry, ChordSearchResult, NavShortcut } from "@/lib/chordSearch";
 
 // Deep-links a browse shortcut into /chords/all via the shared tocSectionId anchors.
 // Root (and root+category) shortcuts land on the default root-first grouping — where
@@ -46,28 +28,16 @@ function shortcutHref(s: NavShortcut): string {
 	}
 }
 
-// Trailing phrase for a category in a shortcut label: "minor" → "minor chords",
-// "power chord" → "power chords" (avoids the doubled "power chord chords").
-function categoryPhrase(category: string): string {
-	const lower = category.toLowerCase();
-	return /chord$/.test(lower) ? `${lower}s` : `${lower} chords`;
-}
-
-const REPORT_MESSAGES: Record<SubmissionVerdict, string> = {
-	ok: "Thanks — we'll look into adding it.",
-	duplicate: "You've already reported that.",
-	throttled: "Please wait a moment before reporting again.",
-	empty: "",
-};
-
-type ReportState = "idle" | "sending" | { done: SubmissionVerdict } | { error: true };
-
 export default function ChordSearch({ index }: { index: readonly ChordIndexEntry[] }) {
 	const router = useRouter();
 	const startNav = useNavTransition();
-	const [open, setOpen] = useState(false);
+	// Two surfaces over one query: the inline dropdown that grows out of the pill, and
+	// the ⌘K dialog. The dialog is keyboard-only — clicking the pill types in place.
+	const [inlineOpen, setInlineOpen] = useState(false);
+	const [dialogOpen, setDialogOpen] = useState(false);
 	const [query, setQuery] = useState("");
-	const [report, setReport] = useState<ReportState>("idle");
+	const inlineRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
 
 	// Browser-only platform hint. Lazily read on first render; on the server it
 	// resolves to false, so the <kbd> is marked suppressHydrationWarning to absorb
@@ -78,8 +48,14 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 			/mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent),
 	);
 
-	// Cmd+K / Ctrl+K toggles the palette. Skipped while focus is in a form field —
+	const closeInline = useCallback(() => {
+		setInlineOpen(false);
+		setQuery("");
+	}, []);
+
+	// Cmd+K / Ctrl+K toggles the dialog. Skipped while focus is in a form field —
 	// same guard the strum/fingerpick spacebar handlers use, extended to <select>.
+	// That guard also covers the inline input: typing there never raises the dialog.
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
 			const t = e.target;
@@ -92,180 +68,197 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 			}
 			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
 				e.preventDefault();
-				setOpen((o) => !o);
+				setQuery("");
+				setDialogOpen((o) => !o);
 			}
 		}
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
-	const results = useMemo(() => searchChords(index, query), [index, query]);
-	const shortcut = useMemo(() => getNavShortcut(query), [query]);
-	const trimmed = query.trim();
+	// Dismiss the inline dropdown on an outside press. Only listens while it is open,
+	// so there is no idle document-level handler.
+	useEffect(() => {
+		if (!inlineOpen) return;
+		function onPointerDown(e: MouseEvent | TouchEvent) {
+			const el = inlineRef.current;
+			if (el && e.target instanceof Node && !el.contains(e.target)) closeInline();
+		}
+		document.addEventListener("mousedown", onPointerDown);
+		document.addEventListener("touchstart", onPointerDown);
+		return () => {
+			document.removeEventListener("mousedown", onPointerDown);
+			document.removeEventListener("touchstart", onPointerDown);
+		};
+	}, [inlineOpen, closeInline]);
 
-	// Report state is per-query, so clear it whenever the query changes.
-	const handleQueryChange = useCallback((next: string) => {
-		setQuery(next);
-		setReport("idle");
+	const handleDialogOpenChange = useCallback((next: boolean) => {
+		setDialogOpen(next);
+		if (!next) setQuery("");
 	}, []);
 
-	const handleOpenChange = useCallback((next: boolean) => {
-		setOpen(next);
-		if (!next) {
+	// Close the surface immediately on select so it never sits open and inert, then run
+	// the navigation inside a transition so the global progress bar takes over while the
+	// destination route is in flight.
+	const navigate = useCallback(
+		(href: string) => {
+			setInlineOpen(false);
+			setDialogOpen(false);
 			setQuery("");
-			setReport("idle");
-		}
-	}, []);
+			startNav(() => router.push(href));
+		},
+		[router, startNav],
+	);
 
-	// Close the palette immediately on select so it never sits open and inert, then
-	// run the navigation inside a transition so the global progress bar takes over
-	// while the destination route is in flight (the palette is already gone).
 	const goToChord = useCallback(
-		(r: ChordSearchResult) => {
-			handleOpenChange(false);
-			startNav(() =>
-				router.push(`/chords/${rootToSlug(r.root)}/${suffixToSlug(r.suffix)}`),
-			);
-		},
-		[router, handleOpenChange, startNav],
+		(r: ChordSearchResult) =>
+			navigate(`/chords/${rootToSlug(r.root)}/${suffixToSlug(r.suffix)}`),
+		[navigate],
+	);
+	const goToBrowse = useCallback((s: NavShortcut) => navigate(shortcutHref(s)), [navigate]);
+	// Multi-chord queries leave the palette entirely — a grid of diagrams doesn't belong
+	// inside a command list (and its voicing modal would nest inside the dialog), so the
+	// palette's job here is the same one it already does for browse shortcuts: route.
+	const goToGrid = useCallback(
+		() => navigate(batchGridHref(query.trim())),
+		[navigate, query],
 	);
 
-	const goToBrowse = useCallback(
-		(s: NavShortcut) => {
-			handleOpenChange(false);
-			startNav(() => router.push(shortcutHref(s)));
-		},
-		[router, handleOpenChange, startNav],
-	);
+	// Collapsed the pill is a plain circle; expanded (hovered, or opened for typing) it
+	// widens and washes in a low-alpha denim gradient — the brand hue at tint strength,
+	// not a solid fill, so the pill stays light and its text stays ink-dark. No border in
+	// either state: a 1px ring sits outside the gradient's box and reads as a seam.
+	// Computed once here and handed to whichever surface is rendering, so the index
+	// lookup map is built once rather than per surface.
+	const rows = useChordPaletteRows(index, query);
 
-	const submitReport = useCallback(async () => {
-		setReport("sending");
-		try {
-			const verdict = await reportChordRequest(trimmed);
-			setReport({ done: verdict });
-		} catch {
-			setReport({ error: true });
-		}
-	}, [trimmed]);
+	// The dropdown is mounted as soon as the pill opens but only revealed once there is
+	// something to list, so its entrance can transition instead of popping in.
+	const inlineListOpen = inlineOpen && query.trim() !== "";
+
+	const pillState = inlineOpen
+		? "cursor-text w-[21.5rem] shadow-none before:opacity-100 after:opacity-30"
+		: "w-14 shadow-[0_10px_25px_rgba(0,0,0,0.10)] before:opacity-0 after:opacity-0 hover:w-[21.5rem] hover:shadow-none hover:before:opacity-100 hover:after:opacity-30";
 
 	return (
 		<>
-			{/* Compact affordance — it only opens the modal, so an icon + shortcut hint
-          is enough. Discoverable and touch-friendly (hint hidden on small screens). */}
-			<button
-				type="button"
-				onClick={() => setOpen(true)}
-				aria-label="Search chords"
-				title="Search chords"
-				className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-ink-dim shadow-sm transition-all duration-200 hover:scale-110 hover:border-denim-light hover:text-ink hover:shadow-lg"
+			<div
+				ref={inlineRef}
+				className="relative"
+				onKeyDown={(e) => {
+					if (e.key === "Escape" && inlineOpen) closeInline();
+				}}
 			>
-				<SearchIcon className="size-4 shrink-0" />
-				<kbd
-					suppressHydrationWarning
-					className="pointer-events-none hidden rounded border border-line bg-denim-tint px-1.5 font-sans text-[10px] text-ink-dim sm:inline-block"
+				<Command
+					shouldFilter={false}
+					label="Chord search"
+					className="h-auto w-auto overflow-visible rounded-none bg-transparent"
 				>
-					{isMac ? "⌘K" : "Ctrl K"}
-				</kbd>
-			</button>
+					{/* Drops upward: the pill is anchored to the bottom of the viewport, so the
+					    list scales up out of its own bottom edge and settles the last few
+					    pixels into place. Held back until something has been typed — an empty
+					    dropdown carrying only a "type a chord name" hint is a card that says
+					    nothing the placeholder hasn't already said. The ⌘K dialog keeps that
+					    hint: it opens onto an otherwise blank surface. Width tracks the
+					    expanded pill (w-[21.5rem]) so the two line up. */}
+					{inlineOpen && (
+						<CommandList
+							aria-hidden={!inlineListOpen}
+							className={`absolute bottom-full left-1/2 mb-3 max-h-[60vh] w-[21.5rem] origin-bottom rounded-2xl bg-popover py-1 shadow-[0_12px_36px_rgba(0,0,0,0.20)] transition-[opacity,transform] duration-300 ease-out ${
+								inlineListOpen
+									? "-translate-x-1/2 translate-y-0 scale-100 opacity-100"
+									: "pointer-events-none -translate-x-1/2 translate-y-2 scale-95 opacity-0"
+							}`}
+						>
+							<ChordSearchResults
+								rows={rows}
+								onSelectChord={goToChord}
+								onSelectShortcut={goToBrowse}
+								onSelectBatch={goToGrid}
+							/>
+						</CommandList>
+					)}
 
+					{/* Expanding affordance: a round icon button that widens on hover to reveal
+					    its label, and turns into a text field when clicked. The gradient fill
+					    and glow are the pill's OWN pseudo-elements, so they use hover: rather
+					    than group-hover: (group-hover targets descendants of .group, which a
+					    pseudo-element of .group itself is not). Touch devices never hover: a
+					    tap expands the pill and focuses the field in one step. */}
+					<div
+						className={`group relative flex h-14 items-center rounded-full bg-surface pl-4 transition-[width,box-shadow] duration-500 ease-out
+							before:absolute before:inset-0 before:rounded-full before:bg-gradient-to-br before:from-denim/12 before:to-denim-accent/25 before:transition-opacity before:duration-500
+							after:absolute after:inset-x-0 after:top-2.5 after:-z-10 after:h-full after:rounded-full after:bg-gradient-to-br after:from-denim after:to-denim-accent after:blur-[15px] after:transition-opacity after:duration-500
+							${pillState}`}
+						onClick={inlineOpen ? () => inputRef.current?.focus() : undefined}
+					>
+						<SearchIcon
+							className={`relative size-6 shrink-0 transition-colors duration-500 ${
+								inlineOpen
+									? "text-denim-accent"
+									: "text-ink-dim group-hover:text-denim-accent"
+							}`}
+						/>
+
+						{inlineOpen ? (
+							// cmdk's own input, not the ui/command wrapper — that one ships a
+							// bordered row with a second search icon, which this pill supplies.
+							<CommandPrimitive.Input
+								ref={inputRef}
+								autoFocus
+								value={query}
+								onValueChange={setQuery}
+								placeholder="Cmaj7, or C Am F G"
+								aria-label="Search chords"
+								className="relative ml-3 w-full bg-transparent pr-6 text-sm font-medium text-ink caret-denim outline-none placeholder:text-ink-faint"
+							/>
+						) : (
+							<>
+								{/* Scaled from the left rather than faded in place, so the label
+								    unfurls out of the icon as the pill grows. Transform carries no
+								    layout width, so the collapsed circle stays a circle. */}
+								<span className="pointer-events-none relative ml-3 inline-flex origin-left scale-x-0 items-center gap-2 whitespace-nowrap text-sm font-medium text-denim-accent opacity-0 transition-[transform,opacity] duration-500 group-hover:scale-x-100 group-hover:opacity-100 group-hover:delay-[150ms]">
+									Search Chord or Chords in a batch
+									<kbd
+										suppressHydrationWarning
+										className="rounded border border-denim/30 bg-denim/10 px-1.5 py-0.5 font-sans text-[10px]"
+									>
+										{isMac ? "⌘K" : "Ctrl K"}
+									</kbd>
+								</span>
+								<button
+									type="button"
+									onClick={() => setInlineOpen(true)}
+									aria-label="Search chords"
+									title="Search a chord, or several chords at once"
+									className="absolute inset-0 cursor-text rounded-full"
+								/>
+							</>
+						)}
+					</div>
+				</Command>
+			</div>
+
+			{/* Keyboard-only surface: ⌘K raises the full dialog, clicking the pill does not. */}
 			<CommandDialog
-				open={open}
-				onOpenChange={handleOpenChange}
+				open={dialogOpen}
+				onOpenChange={handleDialogOpenChange}
 				shouldFilter={false}
 				title="Chord search"
-				description="Search the chord library by name — try Cmaj7, F#m7b5, or C/G."
+				description="Search the chord library by name — try Cmaj7, F#m7b5, or C/G. Type several chords to compare them side by side."
 			>
 				<CommandInput
 					value={query}
-					onValueChange={handleQueryChange}
-					placeholder="Search chords — e.g. Cmaj7, F#m7b5, C/G"
+					onValueChange={setQuery}
+					placeholder="Search chords — e.g. Cmaj7, or C Am F G"
 				/>
 				<CommandList>
-					{shortcut && (
-						<CommandGroup heading="Jump to">
-							<CommandItem
-								value={`jump-${shortcut.kind}`}
-								onSelect={() => goToBrowse(shortcut)}
-							>
-								<span className="font-medium text-ink">
-									{shortcut.kind === "root" ? (
-										<>
-											Show all <MusicalText text={shortcut.root} /> chords
-										</>
-									) : shortcut.kind === "root-category" ? (
-										<>
-											Show all <MusicalText text={shortcut.root} />{" "}
-											{categoryPhrase(shortcut.category)}
-										</>
-									) : (
-										// "Power Chord" already ends in "Chord", so pluralise it
-										// rather than tack on a second "chords".
-										`Show all ${shortcut.category}${/chord/i.test(shortcut.category) ? "s" : " chords"}`
-									)}
-								</span>
-								<ArrowRightIcon className="ml-auto size-4 text-ink-dim" />
-							</CommandItem>
-						</CommandGroup>
-					)}
-
-					{results.length > 0 && (
-						<CommandGroup heading="Chords">
-							{results.map((r) => {
-								const key = `${r.root} ${r.suffix}`;
-								return (
-									<CommandItem
-										key={key}
-										value={key}
-										onSelect={() => goToChord(r)}
-									>
-										<span className="font-medium text-ink">
-											<MusicalText text={displayName(r.root, r.suffix)} />
-										</span>
-										<span className="ml-auto text-xs text-ink-dim">
-											{r.category}
-										</span>
-									</CommandItem>
-								);
-							})}
-						</CommandGroup>
-					)}
-
-					{trimmed === "" && (
-						<p className="px-4 py-6 text-center text-sm text-ink-dim">
-							Type a chord name to search.
-						</p>
-					)}
-
-					{trimmed !== "" && results.length === 0 && (
-						<div className="flex flex-col items-center gap-3 px-4 py-6 text-center text-sm">
-							<p className="text-ink-dim">
-								No chord found for “<span className="text-ink">{trimmed}</span>”.
-							</p>
-
-							{report === "idle" && (
-								<button
-									type="button"
-									onClick={submitReport}
-									className="rounded-md bg-denim px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-denim-dark"
-								>
-									Report this chord as missing
-								</button>
-							)}
-							{report === "sending" && <p className="text-ink-dim">Sending…</p>}
-							{typeof report === "object" && "done" in report && (
-								<p className="text-denim">{REPORT_MESSAGES[report.done]}</p>
-							)}
-							{typeof report === "object" && "error" in report && (
-								<button
-									type="button"
-									onClick={submitReport}
-									className="text-denim underline hover:text-denim-dark"
-								>
-									Couldn&apos;t send — tap to retry
-								</button>
-							)}
-						</div>
-					)}
+					<ChordSearchResults
+						rows={rows}
+						onSelectChord={goToChord}
+						onSelectShortcut={goToBrowse}
+						onSelectBatch={goToGrid}
+					/>
 				</CommandList>
 			</CommandDialog>
 		</>

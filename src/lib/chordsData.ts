@@ -104,3 +104,14 @@ export const getChordIndex = unstable_cache(
 	["chords:getChordIndex"],
 	CACHE_OPTS,
 );
+
+// Resolves many (root, suffix) pairs in one server round-trip. Deliberately NOT wrapped
+// in unstable_cache itself: it composes the already-cached getChord above, so each chord
+// reuses its existing cache entry and an arbitrary pair list never mints a new key.
+// Misses are dropped — the caller renders a "not found" card from its own token list.
+export async function getChordsBatch(
+	pairs: readonly { root: string; suffix: string }[],
+): Promise<ChordWithVoicings[]> {
+	const chords = await Promise.all(pairs.map(({ root, suffix }) => getChord(root, suffix)));
+	return chords.filter((c): c is ChordWithVoicings => c !== null);
+}

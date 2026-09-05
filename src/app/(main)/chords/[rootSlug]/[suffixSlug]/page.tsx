@@ -3,9 +3,8 @@ import Link from "@/components/AppLink";
 import type { Metadata } from "next";
 import { getChord } from "@/lib/chordsData";
 import { slugToRoot, slugToSuffix } from "@/lib/chordSlug";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
-import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
-import ChordDetailView, { type VoicingCard } from "@/components/chords/ChordDetailView";
+import { toVoicingCards } from "@/lib/chordCards";
+import ChordDetailView from "@/components/chords/ChordDetailView";
 import MusicalText from "@/components/MusicalText";
 
 type Props = { params: Promise<{ rootSlug: string; suffixSlug: string }> };
@@ -32,12 +31,7 @@ export default async function ChordDetailPage({ params }: Props) {
 
 	if (!chord) notFound();
 
-	const voicings: VoicingCard[] = chord.chord_voicings.map((v) => ({
-		id: v.id,
-		label: v.label ?? `Pos. ${v.start_fret}`,
-		def: chordVoicingToVexChords(v),
-		pitches: chordVoicingToMidi(v).map(({ midi }) => midi),
-	}));
+	const voicings = toVoicingCards(chord.chord_voicings);
 
 	return (
 		<div className="flex-1 bg-surface flex flex-col">

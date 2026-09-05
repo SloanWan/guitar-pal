@@ -1,8 +1,6 @@
 import type { Bar, Beat, ChordRef, StepValue } from "@/lib/strumPatterns";
 import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
 
-/** Upper bound on bars in one pattern — keeps the grid readable and the AI output bounded. */
-export const MAX_BARS = 8;
 /** A beat never drops below two cells; one-cell beats exist only in presets. */
 export const MIN_CELLS_PER_BEAT = 2;
 /** Beats in a bar added from the editor. */
@@ -25,9 +23,8 @@ export function emptyBar(): Bar {
 	};
 }
 
-/** Append a bar, up to MAX_BARS. Returns the input untouched when already at the cap. */
+/** Append a bar. A progression runs as long as the player writes it. */
 export function addBar(bars: Bar[]): Bar[] {
-	if (bars.length >= MAX_BARS) return bars;
 	return [...bars, emptyBar()];
 }
 
@@ -40,11 +37,11 @@ export function removeBar(bars: Bar[], barIdx: number): Bar[] {
 /**
  * Copy a bar, chord and all. The clone lands at the end of the pattern rather
  * than beside its source, so the bar numbering the user is reading never
- * shifts under them. Refuses at the bar cap.
+ * shifts under them.
  */
 export function duplicateBar(bars: Bar[], barIdx: number): Bar[] {
 	const bar = bars[barIdx];
-	if (!bar || bars.length >= MAX_BARS) return bars;
+	if (!bar) return bars;
 	return [...bars, { beats: bar.beats.map((beat) => [...beat]), chord: bar.chord }];
 }
 

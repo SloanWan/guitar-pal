@@ -38,7 +38,6 @@ import {
 	cycleCell,
 	addCell,
 	removeCell,
-	MAX_BARS,
 	MIN_CELLS_PER_BEAT,
 } from "@/lib/strumBarEdit";
 import { defaultProgressionName, normalizeCapo, progressionCapo } from "@/lib/strumProgressions";
@@ -323,7 +322,7 @@ export default function ProgressionEditModal({
 								{defaultProgressionName(bars)}
 							</span>
 							<span className="shrink-0 font-mono text-[9px] text-ink-faint">
-								{bars.length}/{MAX_BARS} bars
+								{bars.length} bars
 							</span>
 						</div>
 
@@ -365,7 +364,6 @@ export default function ProgressionEditModal({
 										<div className="ml-auto flex items-center">
 											<button
 												onClick={() => handleCopyBar(barIdx)}
-												disabled={bars.length >= MAX_BARS}
 												aria-label={`Copy bar ${barIdx + 1}`}
 												title="Copy bar — the copy is added at the end"
 												className="flex items-center justify-center p-1.5 rounded text-ink-dim transition-colors hover:bg-denim-tint hover:text-denim disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-dim"
@@ -452,7 +450,6 @@ export default function ProgressionEditModal({
 
 						<button
 							onClick={() => setBars((prev) => addBar(prev))}
-							disabled={bars.length >= MAX_BARS}
 							className="flex items-center justify-center gap-1.5 border border-dashed border-line-strong py-2 text-xs text-ink-dim transition-colors hover:border-denim hover:text-denim disabled:cursor-not-allowed disabled:opacity-30"
 						>
 							<Plus size={12} />

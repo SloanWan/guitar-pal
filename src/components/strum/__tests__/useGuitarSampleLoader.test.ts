@@ -12,6 +12,7 @@ import {
 	MUTED_MAX_DURATION_S,
 	MIN_DECAY_TC_S,
 	STRUM_RING_SECONDS,
+	STRUM_STRING_VOLUME,
 	RING_DECAY_TC_DIVISOR,
 	SOURCE_STOP_BUFFER_S,
 	_resetCachesForTesting,
@@ -357,6 +358,24 @@ describe("triggerStrum — multi-string strum scheduling", () => {
 		const { ctx, sources } = makeMockStrumCtx();
 		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
 		expect(sources).toHaveLength(0);
+	});
+
+	it("keeps a whole strum under unity, so overlapping rings have headroom", () => {
+		const preset = makePreset([makeZone({ buffer: makeFakeBuffer() })]);
+		_setReadyPresetForTesting("steelGuitar", preset);
+
+		const { ctx, mockGain } = makeMockStrumCtx();
+		triggerStrum("down", ctx, {} as AudioNode, 0, 1.0);
+
+		const volumes = mockGain.gain.setValueAtTime.mock.calls.map(
+			(call) => call[0] as number,
+		);
+		expect(volumes).toHaveLength(STRUM_PITCHES.length);
+		// The loudest string sits at the headroom ceiling, the rest taper under it.
+		expect(volumes[0]).toBeCloseTo(STRUM_STRING_VOLUME, 5);
+		expect(volumes.every((v, i) => i === 0 || v < volumes[i - 1])).toBe(true);
+		// Five strings at once still leave room for the strums ringing under them.
+		expect(volumes.reduce((sum, v) => sum + v, 0)).toBeLessThan(1.5);
 	});
 
 	it("creates one AudioBufferSourceNode per chord pitch (5 total for a full voicing)", () => {

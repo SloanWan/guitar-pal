@@ -11,7 +11,6 @@ import {
 	addCell,
 	removeCell,
 	barLocalBeatIndex,
-	MAX_BARS,
 	MIN_CELLS_PER_BEAT,
 } from "@/lib/strumBarEdit";
 import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
@@ -67,9 +66,9 @@ describe("addBar / removeBar", () => {
 		expect(before).toHaveLength(1);
 	});
 
-	it("refuses to exceed the bar cap", () => {
-		const full = bars(MAX_BARS);
-		expect(addBar(full)).toBe(full);
+	it("keeps appending past what used to be the bar cap", () => {
+		const long = bars(8);
+		expect(addBar(long)).toHaveLength(9);
 	});
 
 	it("removes the addressed bar", () => {
@@ -123,9 +122,9 @@ describe("duplicateBar", () => {
 		expect(copied[1].beats[0]).not.toBe(copied[0].beats[0]);
 	});
 
-	it("refuses at the bar cap", () => {
-		const full = bars(MAX_BARS);
-		expect(duplicateBar(full, 0)).toBe(full);
+	it("duplicates past what used to be the bar cap", () => {
+		const long = bars(8);
+		expect(duplicateBar(long, 0)).toHaveLength(9);
 	});
 
 	it("ignores an out-of-range index", () => {

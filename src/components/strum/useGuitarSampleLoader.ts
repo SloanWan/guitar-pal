@@ -114,6 +114,21 @@ export const STRUM_PITCHES: readonly number[] = [48, 52, 55, 60, 64];
 const STRUM_STAGGER_S = 0.01;
 
 /**
+ * Level of the loudest string in a strum, before the sweep taper below.
+ *
+ * A strum is five sample voices stacked, and since struck strings let ring for
+ * STRUM_RING_SECONDS they pile onto the strums that follow — at eighth notes,
+ * a dozen voices can sound at once. At full scale that sums well past 1.0 and
+ * clips at the destination, which is heard as "too loud" long before the fader
+ * is touched. Headroom is taken here, at the source, so the strum fader keeps
+ * its whole 0–200% range for anyone who wants it hotter.
+ */
+export const STRUM_STRING_VOLUME = 0.35;
+
+/** Per-string falloff across the sweep, applied on top of STRUM_STRING_VOLUME. */
+const STRUM_SWEEP_TAPER = 0.9;
+
+/**
  * Maximum effective duration (s) for muted strums regardless of the cell duration
  * passed by the caller. Preserves the percussive "chuck" character at all tempos.
  */
@@ -512,7 +527,8 @@ export function triggerStrum(
 			ringSeconds = STRUM_RING_SECONDS;
 		}
 
-		const volume = Math.pow(0.9, i); // slight taper toward the sweep end
+		// Slight taper toward the sweep end, under the shared headroom ceiling.
+		const volume = STRUM_STRING_VOLUME * Math.pow(STRUM_SWEEP_TAPER, i);
 		_scheduleNote(
 			ctx,
 			target,

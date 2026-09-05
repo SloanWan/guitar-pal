@@ -9,7 +9,12 @@ import {
 	chordAbbreviation,
 	parseChordSequence,
 } from "@/lib/strumProgressions";
-import { MAX_BARS } from "@/lib/strumBarEdit";
+import {
+	PROGRESSION_PRESETS,
+	filterPresets,
+	groupPresets,
+	type ProgressionPreset,
+} from "@/lib/strumProgressionPresets";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import StepGrid, { type ActiveCell, type ChordView } from "./StepGrid";
@@ -124,12 +129,22 @@ export default function PatternWorkspace({
 
 	// What the typed line resolves to right now — the preview under the input.
 	const parsed = parseChordSequence(chordInput, chordIndex);
+	// Presets still worth offering for what has been typed so far.
+	const matchingPresets = filterPresets(PROGRESSION_PRESETS, chordInput);
 
 	function openComposer() {
 		setChordInput("");
 		setComposerError(null);
 		setSkipConfirm(false);
 		setComposerOpen(true);
+	}
+
+	/** Drops a preset into the input rather than creating it outright, so it can
+	 *  be transposed or trimmed first — and unknown chords are still confirmed. */
+	function applyPreset(preset: ProgressionPreset) {
+		setChordInput(preset.chords);
+		setComposerError(null);
+		setSkipConfirm(false);
 	}
 
 	function closeComposer() {
@@ -157,10 +172,6 @@ export default function PatternWorkspace({
 		// Unknown chords are not silently dropped: the user is asked first.
 		if (unmatched.length > 0 && !skipUnknown) {
 			setSkipConfirm(true);
-			return;
-		}
-		if (chords.length > MAX_BARS) {
-			setComposerError(`At most ${MAX_BARS} chords — one bar each.`);
 			return;
 		}
 		onAddProgression(chords);
@@ -259,6 +270,45 @@ export default function PatternWorkspace({
 					<p className="text-[10px] text-ink-faint">
 						One chord per bar. Enter to add, Esc to cancel.
 					</p>
+				)}
+
+				{/* Known progressions to start from, narrowing as the line is typed.
+				    Kept below the read-out, so what the user wrote always reads first. */}
+				{matchingPresets.length > 0 && (
+					<div className="flex max-h-56 flex-col overflow-y-auto border border-line bg-surface">
+						{groupPresets(matchingPresets).map(({ group, presets }) => (
+							<div key={group}>
+								<p className="sticky top-0 bg-surface px-2 py-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									{group}
+								</p>
+								{presets.map((preset) => (
+									<button
+										key={preset.id}
+										type="button"
+										// Keeps focus in the input, so the line can be edited
+										// straight after picking one.
+										onMouseDown={(e) => e.preventDefault()}
+										onClick={() => applyPreset(preset)}
+										className="flex w-full flex-col items-start gap-0.5 px-2 py-1.5 text-left transition-colors hover:bg-denim-tint"
+									>
+										<span className="flex w-full items-baseline justify-between gap-2">
+											<span className="truncate text-[11px] font-semibold text-ink">
+												{preset.name}
+											</span>
+											{!rail && (
+												<span className="shrink-0 font-mono text-[9px] text-ink-faint">
+													{preset.degrees}
+												</span>
+											)}
+										</span>
+										<span className="truncate font-mono text-[11px] text-denim">
+											{preset.chords}
+										</span>
+									</button>
+								))}
+							</div>
+						))}
+					</div>
 				)}
 			</div>
 		);

@@ -1,52 +1,34 @@
-import { useState } from "react";
-import { Bar, StrumPattern } from "@/lib/strumPatterns";
-import StepGrid, { type ActiveCell } from "./StepGrid";
-import ChordPickerModal, { type ConfirmedChord } from "./ChordPickerModal";
+import { StrumPattern } from "@/lib/strumPatterns";
+import { patternNotation } from "@/lib/strumNotation";
 
 interface Props {
 	pattern: StrumPattern;
-	/** The bars actually playing — carries any chord the user picked this session. */
-	bars: Bar[];
-	activeCell: ActiveCell | null;
-	onBarChordChange?: (barIdx: number, chord: ConfirmedChord | null) => void;
+	/** What fills the card below the header — the bar, or a progression view. */
+	children: React.ReactNode;
 }
 
-export default function StepGridCard({ pattern, bars, activeCell, onBarChordChange }: Props) {
-	const [pickerBarIdx, setPickerBarIdx] = useState<number | null>(null);
-
-	function handleConfirm(chord: ConfirmedChord | null) {
-		if (pickerBarIdx !== null) onBarChordChange?.(pickerBarIdx, chord);
-		setPickerBarIdx(null);
-	}
-
+/**
+ * The card the selected pattern lives in. Its header — the pattern's name and
+ * written rhythm — stays put whichever tab is open; only the body below it
+ * changes.
+ */
+export default function StepGridCard({ pattern, children }: Props) {
 	return (
-		<>
-			{/* v3 card: hairline border, no shadow, radius 0, dedicated --step-grid-bg surface */}
-			<div className="flex max-h-full flex-col overflow-hidden border border-line bg-step-grid">
-				<div className="flex shrink-0 items-start justify-between gap-2 border-b border-line px-5 py-4">
-					<div className="flex flex-col gap-0.5">
-						<h3 className="font-heading capitalize text-base font-semibold text-ink">
-							{pattern.name}
-						</h3>
-						<p className="text-xs text-ink-dim">{pattern.description}</p>
-					</div>
-				</div>
-				{/* Scrolls internally: a capped-height column cannot grow with the bar count. */}
-				<div className="flex min-h-0 flex-col items-center overflow-y-auto px-5 py-5">
-					<StepGrid
-						bars={bars}
-						activeCell={activeCell}
-						onChordClick={onBarChordChange ? setPickerBarIdx : undefined}
-					/>
+		// v3 card: hairline border, no shadow, radius 0, dedicated --step-grid-bg surface
+		<div className="flex min-h-0 flex-col overflow-hidden border border-line bg-step-grid">
+			<div className="flex shrink-0 items-start justify-between gap-2 border-b border-line px-5 py-4">
+				<div className="flex flex-col gap-0.5">
+					<h3 className="font-heading capitalize text-base font-semibold text-ink">
+						{pattern.name}
+					</h3>
+					{/* whitespace-pre + mono: blank cells are part of the notation — a two-cell
+					    silent beat must read as two columns, not collapse to one space. */}
+					<p className="whitespace-pre font-mono text-xs text-ink-dim">
+						{patternNotation(pattern.beats)}
+					</p>
 				</div>
 			</div>
-
-			<ChordPickerModal
-				open={pickerBarIdx !== null}
-				onClose={() => setPickerBarIdx(null)}
-				onConfirm={handleConfirm}
-				initialChord={pickerBarIdx !== null ? bars[pickerBarIdx]?.chord : null}
-			/>
-		</>
+			{children}
+		</div>
 	);
 }

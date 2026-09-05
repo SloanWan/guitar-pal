@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { StrumPattern, Beat, Bar } from "@/lib/strumPatterns";
-import { toBars, barsToLegacyBeats, validateBars } from "@/lib/strumBars";
+import { normalizeBpm, patternBpm } from "@/lib/strumBars";
 import { createClient } from "@/lib/supabase";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
@@ -10,17 +10,7 @@ interface StrumPatternRow {
 	pattern_id: string;
 	name: string;
 	beats: Beat[];
-	description: string | null;
-	bars?: unknown;
-}
-
-/**
- * Accept `bars` only when it round-trips the validator — a legacy row, a null
- * column, or anything malformed falls back to the single-bar `beats` path.
- */
-function readBars(raw: unknown): Bar[] | undefined {
-	if (raw == null) return undefined;
-	return validateBars(raw).ok ? (raw as Bar[]) : undefined;
+	bpm?: unknown;
 }
 
 function rowToPattern(row: StrumPatternRow): StrumPattern {
@@ -28,33 +18,37 @@ function rowToPattern(row: StrumPatternRow): StrumPattern {
 		id: row.pattern_id,
 		name: row.name,
 		beats: row.beats,
-		description: row.description ?? "",
-		bars: readBars(row.bars),
+		bpm: normalizeBpm(row.bpm),
 	};
 }
 
 /**
- * Columns written for a pattern. `beats` is double-written from `bars[0]` so a
- * rollback to pre-multi-bar code still finds a playable first bar.
+ * Columns written for a pattern. `bars` mirrors the single bar so the column
+ * stays consistent with `beats` for any reader still looking at it; chord
+ * sequences live in their own table, never here.
  */
 function patternColumns(pattern: StrumPattern): {
 	name: string;
 	beats: Beat[];
 	bars: Bar[];
-	description: string;
+	bpm: number;
 } {
-	const bars = toBars(pattern);
 	return {
 		name: pattern.name,
-		beats: barsToLegacyBeats(bars),
-		bars,
-		description: pattern.description,
+		beats: pattern.beats,
+		bars: [{ beats: pattern.beats, chord: null }],
+		bpm: patternBpm(pattern),
 	};
 }
 
-/** Drop `bars` that no longer validate after a round trip through localStorage. */
+/** Normalize patterns read back from localStorage into the current shape. */
 function sanitizeStoredPatterns(patterns: StrumPattern[]): StrumPattern[] {
-	return patterns.map((p) => ({ ...p, bars: readBars(p.bars) }));
+	return patterns.map((p) => ({
+		id: p.id,
+		name: p.name,
+		beats: p.beats,
+		bpm: patternBpm(p),
+	}));
 }
 
 export function useStrumPatterns(user: User | null, loading: boolean) {

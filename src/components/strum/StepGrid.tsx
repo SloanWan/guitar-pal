@@ -1,4 +1,10 @@
+import { useEffect, useRef } from "react";
 import { Bar } from "@/lib/strumPatterns";
+import {
+	paddedBeatCells,
+	paddedCellIndex,
+	barsFitTwoColumns,
+} from "@/lib/strumGridLayout";
 
 import { MoveDown, MoveUp, X, Dot, Music } from "lucide-react";
 
@@ -8,12 +14,6 @@ const BEAT_LABELS = {
 	3: (_beatIdx: number) => ["tri", "p", "let"],
 	4: (beatIdx: number) => [`${beatIdx + 1}`, "e", "+", "a"],
 };
-
-// Maps audio engine cellIdx to padded display index (2-cell beats are padded to 4 slots)
-function getPaddedCellIdx(beatLength: number, cellIdx: number) {
-	if (beatLength === 2) return cellIdx * 2;
-	return cellIdx;
-}
 
 export interface ActiveCell {
 	barIdx: number;
@@ -38,8 +38,24 @@ export default function StepGrid({
 }) {
 	const isSm = size === "sm";
 	const isMultiBar = bars.length > 1;
+	// Two bars share a row only while both stay narrow enough; a fine-grained bar
+	// takes the whole row rather than squeezing its cells under the arrow size.
+	const twoColumns = !isSm && barsFitTwoColumns(bars);
 
-	const iconCls = isSm ? "size-3" : "size-4 md:size-5";
+	// The bar currently playing, scrolled into view so a tall stack follows the
+	// cursor instead of leaving the player looking at bar 1.
+	const barRefs = useRef<(HTMLDivElement | null)[]>([]);
+	const activeBarIdx = activeCell?.barIdx ?? null;
+	useEffect(() => {
+		if (activeBarIdx === null) return;
+		barRefs.current[activeBarIdx]?.scrollIntoView({ block: "nearest" });
+	}, [activeBarIdx]);
+
+	// The arrow shrinks with the cell so a sixteenth-note bar still fits a phone
+	// screen whole, rather than overflowing or overlapping.
+	const iconCls = isSm ? "size-3" : "size-3.5 sm:size-4 md:size-5";
+	// Mirrors CELL_MIN_WIDTHS_PX in strumGridLayout — change both together.
+	const cellMinWidth = isSm ? "" : "min-w-3.5 sm:min-w-5 md:min-w-6";
 	const beatPy = isSm ? "py-1" : "py-2";
 	const beatGap = isSm ? "gap-1" : "gap-2";
 	const labelFontSize = isSm ? "text-[8px]" : "text-[12px]";
@@ -60,11 +76,11 @@ export default function StepGrid({
 	};
 
 	return (
-		// One bar per row, two per row from md upwards. A single-bar pattern fills
-		// the row and lays out exactly as it did before bars existed.
+		// One bar per row; two per row from md upwards only while the bars are
+		// narrow enough for both to keep full-size cells (see barsFitTwoColumns).
 		<div
 			className={`grid w-full grid-cols-1 ${isSm ? "gap-2" : "gap-x-6 gap-y-4"} ${
-				isMultiBar && !isSm ? "md:grid-cols-2" : ""
+				twoColumns ? "md:grid-cols-2" : ""
 			}`}
 		>
 			{bars.map((bar, barIdx) => {
@@ -73,6 +89,9 @@ export default function StepGrid({
 				return (
 					<div
 						key={barIdx}
+						ref={(el) => {
+							barRefs.current[barIdx] = el;
+						}}
 						// The bar line: a hairline down the left edge of every bar.
 						className={`flex flex-col gap-1.5 ${
 							isMultiBar ? "border-l border-line-strong pl-2" : ""
@@ -109,12 +128,7 @@ export default function StepGrid({
 
 						<div className={`flex w-full ${beatGap}`}>
 							{bar.beats.map((beat, beatIdx) => {
-								const paddedCells =
-									beat.length === 1
-										? [beat[0], "G", "UG", "G"]
-										: beat.length === 2
-											? [beat[0], "G", beat[1], "G"]
-											: beat;
+								const paddedCells = paddedBeatCells(beat);
 								const isActiveBeat = isActiveBar && activeCell?.beatIdx === beatIdx;
 								return (
 									<div className="flex flex-col gap-2 flex-1" key={beatIdx}>
@@ -131,13 +145,13 @@ export default function StepGrid({
 												const isActiveCell =
 													isActiveBeat &&
 													cellIdx ===
-														getPaddedCellIdx(beat.length, activeCell!.cellIdx);
+														paddedCellIndex(beat.length, activeCell!.cellIdx);
 												return (
 													<div
 														key={cellIdx}
-														className={`flex-1 flex justify-center items-center transition-colors duration-100 ${
-															isActiveCell ? "text-denim" : ""
-														}`}
+														className={`flex flex-1 items-center justify-center transition-colors duration-100 ${
+															cellMinWidth
+														} ${isActiveCell ? "text-denim" : ""}`}
 													>
 														<Icon />
 													</div>
@@ -153,7 +167,9 @@ export default function StepGrid({
 														](beatIdx)[cellIdx];
 													return (
 														<div
-															className={`flex-1 flex justify-center ${labelFontSize} text-ink-dim`}
+															className={`flex flex-1 justify-center ${
+																cellMinWidth
+															} ${labelFontSize} text-ink-dim`}
 															key={cellIdx}
 														>
 															{label}

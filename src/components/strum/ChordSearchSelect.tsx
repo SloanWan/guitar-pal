@@ -3,15 +3,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Music, X } from "lucide-react";
 import MusicalText from "@/components/MusicalText";
-import { isSlashChord } from "@/lib/chordSuffixes";
+import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry, type ChordSearchResult } from "@/lib/chordSearch";
 import type { ChordRef } from "@/lib/strumPatterns";
-
-// Same compact spelling the browse UI and the chord palette use: slash chords
-// already carry their own separator, everything else gets a space.
-export function chordDisplayName(root: string, suffix: string): string {
-	return isSlashChord(suffix) ? `${root}${suffix}` : `${root} ${suffix}`;
-}
 
 interface Props {
 	chord: ChordRef | null;

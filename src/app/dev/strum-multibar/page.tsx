@@ -12,6 +12,7 @@ import { resolveBarChords } from "@/lib/strumBars";
 import { barLocalBeatIndex, setBarChord } from "@/lib/strumBarEdit";
 import { useAudioEngine, type BarPitches } from "@/components/strum/useAudioEngine";
 import StepGridCard from "@/components/strum/StepGridCard";
+import PatternBarBody from "@/components/strum/PatternBarBody";
 import type { ConfirmedChord } from "@/components/strum/ChordPickerModal";
 
 const OLD_FAITHFUL: Bar["beats"] = [
@@ -144,16 +145,17 @@ export default function StrumMultibarDevPage() {
 				{isPlaying ? "stop" : "play"}
 			</button>
 
-			<StepGridCard
-				pattern={{ id: "dev", name: progression, description: "dev harness", beats: [] }}
-				bars={bars}
-				activeCell={{
-					barIdx: currBar,
-					beatIdx: barLocalBeatIndex(bars, currBeat),
-					cellIdx: currCell,
-				}}
-				onBarChordChange={handleBarChordChange}
-			/>
+			<StepGridCard pattern={{ id: "dev", name: progression, beats: bars[0]?.beats ?? [] }}>
+				<PatternBarBody
+					bars={bars}
+					activeCell={{
+						barIdx: currBar,
+						beatIdx: barLocalBeatIndex(bars, currBeat),
+						cellIdx: currCell,
+					}}
+					onBarChordChange={handleBarChordChange}
+				/>
+			</StepGridCard>
 
 			<pre className="border border-denim-border p-3 text-xs">
 				{JSON.stringify(

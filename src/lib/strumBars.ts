@@ -1,4 +1,12 @@
-import type { Bar, Beat, ChordRef, StrumPattern } from "@/lib/strumPatterns";
+import {
+	DEFAULT_STRUM_BPM,
+	STRUM_BPM_MAX,
+	STRUM_BPM_MIN,
+	type Bar,
+	type Beat,
+	type ChordRef,
+	type StrumPattern,
+} from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
@@ -7,17 +15,32 @@ import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 export const MAX_CELLS_PER_BEAT = 4;
 
 /**
- * The single read path for every pattern consumer. Legacy single-bar patterns
- * (no `bars`) are lifted into a one-bar, chordless shape so callers never have
- * to branch on which storage shape a pattern happens to use.
+ * The single read path for every pattern consumer: a pattern is one chordless
+ * bar. Multi-bar, chord-carrying sequences are `ChordProgression`s, which are
+ * already stored as `Bar[]` and need no lifting.
  */
 export function toBars(pattern: StrumPattern): Bar[] {
-	return pattern.bars ?? [{ beats: pattern.beats, chord: null }];
+	return [{ beats: pattern.beats, chord: null }];
 }
 
 /**
- * Flatten bars back into the legacy `beats` field. Only the first bar survives,
- * which is what keeps a rollback to pre-multi-bar code playable.
+ * Coerce anything that claims to be a tempo into a playable one: rounded and
+ * clamped to the fader bounds, falling back to the default for a missing or
+ * non-finite value (a legacy row, a null column, a blank editor field).
+ */
+export function normalizeBpm(raw: unknown): number {
+	if (typeof raw !== "number" || !Number.isFinite(raw)) return DEFAULT_STRUM_BPM;
+	return Math.min(STRUM_BPM_MAX, Math.max(STRUM_BPM_MIN, Math.round(raw)));
+}
+
+/** The tempo a pattern loads at — its own BPM, or the default when it has none. */
+export function patternBpm(pattern: StrumPattern): number {
+	return normalizeBpm(pattern.bpm);
+}
+
+/**
+ * Flatten bars back into a pattern's `beats`. Only the first bar survives —
+ * a progression edited down to its rhythm is the pattern it extends.
  */
 export function barsToLegacyBeats(bars: Bar[]): Beat[] {
 	return bars[0]?.beats ?? [];

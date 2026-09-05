@@ -1,13 +1,28 @@
 "use client";
 
-import StepGridCard from "@/components/strum/StepGridCard";
+import PatternWorkspace, { type WorkspaceTab } from "@/components/strum/PatternWorkspace";
 import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
-import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern, type Bar } from "@/lib/strumPatterns";
-import { toBars, resolveBarChords } from "@/lib/strumBars";
+import {
+	PRESET_STRUM_PATTERNS,
+	TickMode,
+	StrumPattern,
+	STRUM_BPM_MIN,
+	STRUM_BPM_MAX,
+	DEFAULT_STRUM_BPM,
+	type Bar,
+	type ChordProgression,
+	type ChordRef,
+} from "@/lib/strumPatterns";
+import { toBars, resolveBarChords, patternBpm, normalizeBpm } from "@/lib/strumBars";
 import { setBarChord, barLocalBeatIndex } from "@/lib/strumBarEdit";
+import {
+	progressionsForPattern,
+	nextOrderIndex,
+	progressionBarsFromChords,
+} from "@/lib/strumProgressions";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 import { useAudioEngine, type BarPitches } from "@/components/strum/useAudioEngine";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
@@ -22,16 +37,24 @@ import {
 	Repeat,
 	Volume2,
 	Gauge,
+	RotateCcw,
 } from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
+import ProgressionEditModal from "@/components/strum/ProgressionEditModal";
+import { useChordProgressions } from "@/components/strum/useChordProgressions";
 import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
 import Fader from "@/components/ui/Fader";
 
-const MIN_BPM = 40;
-const MAX_BPM = 220;
+const MIN_BPM = STRUM_BPM_MIN;
+const MAX_BPM = STRUM_BPM_MAX;
+
+// Device-local memory of where the user was in the workspace, so a refresh
+// lands back on the same tab and the same progression.
+const TAB_STORAGE_KEY = "strumTab";
+const OPEN_PROGRESSION_STORAGE_KEY = "strumOpenProgression";
 
 const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
 type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
@@ -136,37 +159,32 @@ async function lookupVoicings(ref: {
 }
 
 export default function StrumPage() {
-	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(
-		PRESET_STRUM_PATTERNS[0],
-	);
-	const [bpm, setBpm] = useState(80);
+	// Null until the device-local choice has been read: showing a preset first and
+	// swapping it out a tick later reads as a glitch, so the card waits instead.
+	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(null);
+	const [patternRestored, setPatternRestored] = useState(false);
+	const [bpm, setBpm] = useState(() => patternBpm(PRESET_STRUM_PATTERNS[0]));
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
-	// Live bars for the selected pattern. Chords picked here are session-only —
-	// persistence goes through the create/edit modal, as it did before bars.
+	// Which view of the pattern is on screen: its own bar, or one of the chord
+	// progressions written over it.
+	const [tab, setTab] = useState<WorkspaceTab>("pattern");
+	const [openProgressionId, setOpenProgressionId] = useState<string | null>(null);
+	// Live bars being played. On the pattern tab any chord picked is session-only;
+	// on the progressions tab the bars come from the open progression.
 	const [bars, setBars] = useState<Bar[]>(() => toBars(PRESET_STRUM_PATTERNS[0]));
 	const [barPitches, setBarPitches] = useState<BarPitches>([]);
 
+	// Restore the tab first: it needs no data, so it can be applied on mount.
+	const workspaceRestoredRef = useRef(false);
 	useEffect(() => {
-		const next = toBars(selectedPattern ?? PRESET_STRUM_PATTERNS[0]);
-		// queueMicrotask: the codebase's idiom for deferring state writes out of
-		// the effect body so they do not cascade renders.
+		const savedTab = localStorage.getItem(TAB_STORAGE_KEY);
 		queueMicrotask(() => {
-			setBars(next);
-			setBarPitches(next.map(() => null));
+			if (savedTab === "pattern" || savedTab === "progressions") setTab(savedTab);
+			// Only now may the workspace be written back, or the default would
+			// overwrite what was just restored.
+			workspaceRestoredRef.current = true;
 		});
-
-		let cancelled = false;
-		resolveBarChords(next, lookupVoicings)
-			.then((pitches) => {
-				if (!cancelled) setBarPitches(pitches);
-			})
-			.catch((err: unknown) => {
-				console.error("[StrumPage] chord resolution failed:", err);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [selectedPattern]);
+	}, []);
 
 	function handleBarChordChange(barIdx: number, chord: ConfirmedChord | null) {
 		setBars((prev) =>
@@ -214,7 +232,55 @@ export default function StrumPage() {
 		handleDeleteCustomPattern,
 		handleToggleFavourite,
 	} = useStrumPatterns(user, loading);
+	const {
+		progressions,
+		progressionsLoading,
+		handleSaveProgression,
+		handleDeleteProgression,
+	} = useChordProgressions(user, loading);
+
+	// The selected pattern's own progressions, in playing order.
+	const patternProgressions = useMemo(
+		() => (selectedPattern ? progressionsForPattern(progressions, selectedPattern.id) : []),
+		[progressions, selectedPattern],
+	);
+	const openProgression = patternProgressions.find((p) => p.id === openProgressionId) ?? null;
+
+	// What the engine plays: the pattern's own bar, or the open progression's
+	// bars. Serialized so the effect below keys on content rather than identity —
+	// a progressions reload with unchanged content must not wipe the chords the
+	// user picked on the pattern tab this session.
+	const sourceBarsKey = JSON.stringify(
+		tab === "progressions" && openProgression
+			? openProgression.bars
+			: toBars(selectedPattern ?? PRESET_STRUM_PATTERNS[0]),
+	);
+
+	useEffect(() => {
+		const next = JSON.parse(sourceBarsKey) as Bar[];
+		// queueMicrotask: the codebase's idiom for deferring state writes out of
+		// the effect body so they do not cascade renders.
+		queueMicrotask(() => {
+			setBars(next);
+			setBarPitches(next.map(() => null));
+		});
+
+		let cancelled = false;
+		resolveBarChords(next, lookupVoicings)
+			.then((pitches) => {
+				if (!cancelled) setBarPitches(pitches);
+			})
+			.catch((err: unknown) => {
+				console.error("[StrumPage] chord resolution failed:", err);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [sourceBarsKey]);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
+	// The progression the editor is open on; null when the editor is closed.
+	// New progressions are typed inline instead, never through the editor.
+	const [editingProgression, setEditingProgression] = useState<ChordProgression | null>(null);
 	const [editingPattern, setEditingPattern] = useState<StrumPattern | null>(null);
 	const [showLibrary, setShowLibrary] = useState(false);
 	const [mutHintDismissed, setMutHintDismissed] = useState(false);
@@ -308,11 +374,15 @@ export default function StrumPage() {
 				? new URLSearchParams(window.location.search).get("pattern")
 				: null;
 		const savedId = queryId ?? localStorage.getItem("lastStrumPattern");
-		if (!savedId) return;
-		const found = [...PRESET_STRUM_PATTERNS, ...customPatterns].find(
-			(p) => p.id === savedId,
-		);
-		if (found) queueMicrotask(() => setSelectedPattern(found));
+		const found = savedId
+			? [...PRESET_STRUM_PATTERNS, ...customPatterns].find((p) => p.id === savedId)
+			: undefined;
+		const next = found ?? PRESET_STRUM_PATTERNS[0];
+		queueMicrotask(() => {
+			setSelectedPattern(next);
+			setBpm(patternBpm(next));
+			setPatternRestored(true);
+		});
 	}, [patternsLoading, customPatterns]);
 
 	useEffect(() => {
@@ -333,12 +403,102 @@ export default function StrumPage() {
 		}
 	}
 
+	// The progression can only be restored once the list — and the pattern it
+	// belongs to — have loaded, so this runs again until the saved one shows up.
+	const [progressionRestored, setProgressionRestored] = useState(false);
+	useEffect(() => {
+		if (progressionRestored || progressionsLoading || !patternRestored) return;
+		const savedId = localStorage.getItem(OPEN_PROGRESSION_STORAGE_KEY);
+		const found = savedId
+			? patternProgressions.find((p) => p.id === savedId)
+			: undefined;
+		queueMicrotask(() => {
+			if (found) {
+				setOpenProgressionId(found.id);
+				setBpm(bpmFor(found));
+			}
+			// Restored either way — a saved id the list no longer holds is gone.
+			setProgressionRestored(true);
+		});
+	}, [progressionRestored, progressionsLoading, patternRestored, patternProgressions]);
+
+	useEffect(() => {
+		if (!workspaceRestoredRef.current) return;
+		localStorage.setItem(TAB_STORAGE_KEY, tab);
+		if (openProgressionId) {
+			localStorage.setItem(OPEN_PROGRESSION_STORAGE_KEY, openProgressionId);
+		} else {
+			localStorage.removeItem(OPEN_PROGRESSION_STORAGE_KEY);
+		}
+	}, [tab, openProgressionId]);
+
 	function handleSelectPattern(pattern: StrumPattern) {
 		stop();
 		setSelectedPattern(pattern);
+		setBpm(patternBpm(pattern));
+		setTab("pattern");
+		setOpenProgressionId(null);
 		localStorage.setItem("lastStrumPattern", pattern.id);
 		// Mirror the choice to the account so /home can surface it cross-device.
 		saveLastPattern(createClient(), user, "strum", pattern.id).catch(console.error);
+	}
+
+	/** The tempo something plays at: the progression's own, else the pattern's. */
+	function bpmFor(progression: ChordProgression | null): number {
+		if (progression?.bpm !== undefined) return normalizeBpm(progression.bpm);
+		return selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM;
+	}
+
+	// The tempo the reset control returns to: whatever is on screen owns it.
+	const defaultBpm = bpmFor(tab === "progressions" ? openProgression : null);
+
+	function handleTabChange(next: WorkspaceTab) {
+		if (next === tab) return;
+		stop();
+		setTab(next);
+		setBpm(bpmFor(next === "progressions" ? openProgression : null));
+	}
+
+	function handleOpenProgression(id: string | null) {
+		stop();
+		setOpenProgressionId(id);
+		setBpm(bpmFor(patternProgressions.find((p) => p.id === id) ?? null));
+	}
+
+	/** A typed chord sequence becomes a progression: one bar per chord. */
+	function handleAddProgression(chords: ChordRef[]) {
+		if (!selectedPattern) return;
+		const progression: ChordProgression = {
+			id: crypto.randomUUID(),
+			patternId: selectedPattern.id,
+			bars: progressionBarsFromChords(selectedPattern.beats, chords),
+			orderIndex: nextOrderIndex(patternProgressions),
+		};
+		handleSaveProgression(progression);
+		stop();
+		setTab("progressions");
+		setOpenProgressionId(progression.id);
+		setBpm(bpmFor(progression));
+	}
+
+	function handleEditProgression(progression: ChordProgression) {
+		setEditingProgression(progression);
+	}
+
+	function handleProgressionSave(update: { bars: Bar[]; name: string; bpm?: number }) {
+		if (!editingProgression) return;
+		const next: ChordProgression = { ...editingProgression, ...update };
+		handleSaveProgression(next);
+		stop();
+		if (openProgressionId === next.id) setBpm(bpmFor(next));
+	}
+
+	function handleRemoveProgression(progression: ChordProgression) {
+		handleDeleteProgression(progression.id);
+		if (openProgressionId === progression.id) {
+			stop();
+			setOpenProgressionId(null);
+		}
 	}
 
 	function stepBpm(delta: number) {
@@ -451,7 +611,9 @@ export default function StrumPage() {
 
 				{/* Center — StepGrid; on mobile occupies exactly the space between navbar and drawer */}
 				<div
-					className="relative h-[calc(100dvh-3.5rem-3.5rem)] md:h-auto md:flex-1 flex items-center justify-center px-4 md:px-8 md:py-0 md:overflow-hidden"
+					// items-start, not centred: the card grows downwards with its tab's
+					// content while the tab strip keeps a constant place on screen.
+					className="relative h-[calc(100dvh-3.5rem-3.5rem)] md:h-auto md:flex-1 flex items-start justify-center overflow-hidden px-4 py-4 md:px-8 md:py-6"
 					onClick={restoreControls}
 				>
 					{/* Library toggle — scoped to centre column, 768–1024 px only */}
@@ -471,8 +633,20 @@ export default function StrumPage() {
 						</button>
 					)}
 					<div className="flex max-h-full w-full max-w-160 flex-col">
-						{selectedPattern ? (
-							<StepGridCard
+						{!patternRestored ? (
+							// Skeleton in the card's shape: tab strip, header, one bar row.
+							<div className="flex w-full flex-col gap-2" aria-busy="true">
+								<div className="flex gap-3 px-3 py-2">
+									<div className="h-2 w-16 animate-pulse bg-denim-tint" />
+									<div className="h-2 w-20 animate-pulse bg-denim-tint" />
+								</div>
+								<div className="flex flex-col gap-4 border border-line bg-step-grid p-5">
+									<div className="h-4 w-40 animate-pulse bg-denim-tint" />
+									<div className="h-16 w-full animate-pulse bg-denim-tint" />
+								</div>
+							</div>
+						) : selectedPattern ? (
+							<PatternWorkspace
 								pattern={selectedPattern}
 								bars={bars}
 								activeCell={{
@@ -480,7 +654,16 @@ export default function StrumPage() {
 									beatIdx: barLocalBeatIndex(bars, currBeat),
 									cellIdx: currCell,
 								}}
+								tab={tab}
+								onTabChange={handleTabChange}
 								onBarChordChange={handleBarChordChange}
+								progressions={patternProgressions}
+								progressionsLoading={progressionsLoading || !progressionRestored}
+								selectedProgressionId={openProgressionId}
+								onSelectProgression={handleOpenProgression}
+								onAddProgression={handleAddProgression}
+								onEditProgression={handleEditProgression}
+								onDeleteProgression={handleRemoveProgression}
 							/>
 						) : (
 							<p className="text-ink-dim text-sm text-center">
@@ -597,7 +780,19 @@ export default function StrumPage() {
 									<Gauge size={12} strokeWidth={2} className="shrink-0" />
 									Tempo
 								</span>
-								<span>40–220</span>
+								<div className="flex items-center gap-2">
+									<span>40–220</span>
+									<button
+										type="button"
+										onClick={() => setBpm(defaultBpm)}
+										disabled={bpm === defaultBpm}
+										aria-label="Reset tempo to the pattern default"
+										title={`Reset to ${defaultBpm} BPM`}
+										className="flex items-center justify-center text-ink-faint transition-colors hover:text-denim disabled:pointer-events-none disabled:opacity-30"
+									>
+										<RotateCcw size={12} strokeWidth={2} />
+									</button>
+								</div>
 							</div>
 							{/* BPM readout with LCD segment-ghost */}
 							<div className="border border-line-strong px-0 pt-3 pb-2 text-center">
@@ -1130,7 +1325,11 @@ export default function StrumPage() {
 				onSave={(pattern) => {
 					if (editingPattern) {
 						handleEditCustomPattern(pattern);
-						if (selectedPattern?.id === pattern.id) setSelectedPattern(pattern);
+						if (selectedPattern?.id === pattern.id) {
+							setSelectedPattern(pattern);
+							// The edit may have moved the pattern's default tempo — adopt it.
+							setBpm(patternBpm(pattern));
+						}
 					} else {
 						handleSaveCustomPattern(pattern);
 					}
@@ -1138,6 +1337,16 @@ export default function StrumPage() {
 				editPattern={editingPattern ?? undefined}
 				user={user}
 			/>
+
+			{editingProgression && (
+				<ProgressionEditModal
+					open
+					onClose={() => setEditingProgression(null)}
+					onSave={handleProgressionSave}
+					progression={editingProgression}
+					patternBpm={selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM}
+				/>
+			)}
 		</>
 	);
 }

@@ -6,10 +6,17 @@ import {
 	selectRefVoicing,
 	chordRefToMidi,
 	resolveBarChords,
+	normalizeBpm,
+	patternBpm,
 	MAX_CELLS_PER_BEAT,
 } from "@/lib/strumBars";
 import type { Bar, ChordRef, StrumPattern } from "@/lib/strumPatterns";
-import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
+import {
+	PRESET_STRUM_PATTERNS,
+	DEFAULT_STRUM_BPM,
+	STRUM_BPM_MAX,
+	STRUM_BPM_MIN,
+} from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 
 function voicing(overrides: Partial<ChordVoicing>): ChordVoicing {
@@ -29,7 +36,6 @@ function pattern(overrides: Partial<StrumPattern>): StrumPattern {
 	return {
 		id: "p1",
 		name: "test",
-		description: "",
 		beats: [["D", "UG"]],
 		...overrides,
 	};
@@ -45,23 +51,9 @@ const C_REF: ChordRef = { root: "C", suffix: "major" };
 const G_REF: ChordRef = { root: "G", suffix: "major" };
 
 describe("toBars — the single read path", () => {
-	it("lifts a legacy pattern into one chordless bar", () => {
+	it("reads a pattern as one chordless bar", () => {
 		const p = pattern({ beats: [["D", "UG"], ["DG", "U"]] });
 		expect(toBars(p)).toEqual([{ beats: p.beats, chord: null }]);
-	});
-
-	it("returns the stored bars when the pattern has them", () => {
-		const bars: Bar[] = [
-			{ beats: [["D", "UG"]], chord: C_REF },
-			{ beats: [["DG", "U"]], chord: G_REF },
-		];
-		expect(toBars(pattern({ bars }))).toBe(bars);
-	});
-
-	it("prefers bars over the legacy beats field when both are present", () => {
-		const bars: Bar[] = [{ beats: [["X", "X"]], chord: null }];
-		const p = pattern({ beats: [["D", "UG"]], bars });
-		expect(toBars(p)[0].beats).toEqual([["X", "X"]]);
 	});
 
 	it("every preset normalizes to a single valid bar", () => {
@@ -230,5 +222,37 @@ describe("resolveBarChords", () => {
 	it("yields null for a chord the lookup cannot find", async () => {
 		const bars: Bar[] = [{ beats: [["D"]], chord: C_REF }];
 		expect(await resolveBarChords(bars, async () => null)).toEqual([null]);
+	});
+});
+
+describe("normalizeBpm", () => {
+	it("keeps an in-range tempo", () => {
+		expect(normalizeBpm(120)).toBe(120);
+	});
+
+	it("clamps to the fader bounds", () => {
+		expect(normalizeBpm(10)).toBe(STRUM_BPM_MIN);
+		expect(normalizeBpm(900)).toBe(STRUM_BPM_MAX);
+	});
+
+	it("rounds fractional tempos", () => {
+		expect(normalizeBpm(99.6)).toBe(100);
+	});
+
+	it("falls back to the default for a missing or unusable value", () => {
+		expect(normalizeBpm(undefined)).toBe(DEFAULT_STRUM_BPM);
+		expect(normalizeBpm(null)).toBe(DEFAULT_STRUM_BPM);
+		expect(normalizeBpm(NaN)).toBe(DEFAULT_STRUM_BPM);
+		expect(normalizeBpm("120")).toBe(DEFAULT_STRUM_BPM);
+	});
+});
+
+describe("patternBpm", () => {
+	it("reads the pattern's own tempo", () => {
+		expect(patternBpm({ ...PRESET_STRUM_PATTERNS[0], bpm: 132 })).toBe(132);
+	});
+
+	it("defaults a pattern that carries no tempo", () => {
+		expect(patternBpm(PRESET_STRUM_PATTERNS[0])).toBe(DEFAULT_STRUM_BPM);
 	});
 });

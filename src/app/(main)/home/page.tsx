@@ -149,7 +149,6 @@ export default function HomePage() {
 						id: row.pattern_id as string,
 						name: row.name as string,
 						beats: [],
-						description: "",
 					}),
 				);
 				const fpCustoms: FingerpickPattern[] = fingerpickCustoms;

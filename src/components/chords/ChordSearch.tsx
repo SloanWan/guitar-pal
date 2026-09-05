@@ -1,40 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Command as CommandPrimitive } from "cmdk";
 import { SearchIcon } from "lucide-react";
 
-import { Command, CommandDialog, CommandInput, CommandList } from "@/components/ui/command";
+import { Command, CommandList } from "@/components/ui/command";
 import ChordSearchResults, { useChordPaletteRows } from "@/components/chords/ChordSearchResults";
-import { useNavTransition } from "@/components/nav-progress";
-import { rootToSlug, suffixToSlug } from "@/lib/chordSlug";
-import { tocSectionId, tocSubsectionId } from "@/lib/chordToc";
-import { batchGridHref } from "@/lib/chordBatchResolve";
-import type { ChordIndexEntry, ChordSearchResult, NavShortcut } from "@/lib/chordSearch";
-
-// Deep-links a browse shortcut into /chords/all via the shared tocSectionId anchors.
-// Root (and root+category) shortcuts land on the default root-first grouping — where
-// each root section carries per-category subsections (id "b-minor"); a bare category
-// flips to the category-first grouping (?group=category) where its heading lives.
-function shortcutHref(s: NavShortcut): string {
-	switch (s.kind) {
-		case "root":
-			return `/chords/all#${tocSectionId(s.root)}`;
-		case "root-category":
-			return `/chords/all#${tocSubsectionId(s.root, s.category)}`;
-		case "category":
-			return `/chords/all?group=category#${tocSectionId(s.category)}`;
-	}
-}
+import { useChordSearchNavigation } from "@/components/chords/useChordSearchNavigation";
+import type { ChordIndexEntry } from "@/lib/chordSearch";
 
 export default function ChordSearch({ index }: { index: readonly ChordIndexEntry[] }) {
-	const router = useRouter();
-	const startNav = useNavTransition();
-	// Two surfaces over one query: the inline dropdown that grows out of the pill, and
-	// the ⌘K dialog. The dialog is keyboard-only — clicking the pill types in place.
+	// The pill: the inline dropdown that grows out of it, over the same index the
+	// app-wide ⌘K dialog searches (ChordSearchDialog, mounted in the main layout).
 	const [inlineOpen, setInlineOpen] = useState(false);
-	const [dialogOpen, setDialogOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const inlineRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -53,29 +31,6 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 		setQuery("");
 	}, []);
 
-	// Cmd+K / Ctrl+K toggles the dialog. Skipped while focus is in a form field —
-	// same guard the strum/fingerpick spacebar handlers use, extended to <select>.
-	// That guard also covers the inline input: typing there never raises the dialog.
-	useEffect(() => {
-		function onKeyDown(e: KeyboardEvent) {
-			const t = e.target;
-			if (
-				t instanceof HTMLInputElement ||
-				t instanceof HTMLTextAreaElement ||
-				t instanceof HTMLSelectElement
-			) {
-				return;
-			}
-			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-				e.preventDefault();
-				setQuery("");
-				setDialogOpen((o) => !o);
-			}
-		}
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, []);
-
 	// Dismiss the inline dropdown on an outside press. Only listens while it is open,
 	// so there is no idle document-level handler.
 	useEffect(() => {
@@ -92,37 +47,9 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 		};
 	}, [inlineOpen, closeInline]);
 
-	const handleDialogOpenChange = useCallback((next: boolean) => {
-		setDialogOpen(next);
-		if (!next) setQuery("");
-	}, []);
-
-	// Close the surface immediately on select so it never sits open and inert, then run
-	// the navigation inside a transition so the global progress bar takes over while the
+	// Closed immediately on select, so it never sits open and inert while the
 	// destination route is in flight.
-	const navigate = useCallback(
-		(href: string) => {
-			setInlineOpen(false);
-			setDialogOpen(false);
-			setQuery("");
-			startNav(() => router.push(href));
-		},
-		[router, startNav],
-	);
-
-	const goToChord = useCallback(
-		(r: ChordSearchResult) =>
-			navigate(`/chords/${rootToSlug(r.root)}/${suffixToSlug(r.suffix)}`),
-		[navigate],
-	);
-	const goToBrowse = useCallback((s: NavShortcut) => navigate(shortcutHref(s)), [navigate]);
-	// Multi-chord queries leave the palette entirely — a grid of diagrams doesn't belong
-	// inside a command list (and its voicing modal would nest inside the dialog), so the
-	// palette's job here is the same one it already does for browse shortcuts: route.
-	const goToGrid = useCallback(
-		() => navigate(batchGridHref(query.trim())),
-		[navigate, query],
-	);
+	const { goToChord, goToBrowse, goToGrid } = useChordSearchNavigation(closeInline);
 
 	// Collapsed the pill is a plain circle; expanded (hovered, or opened for typing) it
 	// widens and washes in a low-alpha denim gradient — the brand hue at tint strength,
@@ -174,7 +101,7 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 								rows={rows}
 								onSelectChord={goToChord}
 								onSelectShortcut={goToBrowse}
-								onSelectBatch={goToGrid}
+								onSelectBatch={() => goToGrid(query)}
 							/>
 						</CommandList>
 					)}
@@ -238,29 +165,6 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 					</div>
 				</Command>
 			</div>
-
-			{/* Keyboard-only surface: ⌘K raises the full dialog, clicking the pill does not. */}
-			<CommandDialog
-				open={dialogOpen}
-				onOpenChange={handleDialogOpenChange}
-				shouldFilter={false}
-				title="Chord search"
-				description="Search the chord library by name — try Cmaj7, F#m7b5, or C/G. Type several chords to compare them side by side."
-			>
-				<CommandInput
-					value={query}
-					onValueChange={setQuery}
-					placeholder="Search chords — e.g. Cmaj7, or C Am F G"
-				/>
-				<CommandList>
-					<ChordSearchResults
-						rows={rows}
-						onSelectChord={goToChord}
-						onSelectShortcut={goToBrowse}
-						onSelectBatch={goToGrid}
-					/>
-				</CommandList>
-			</CommandDialog>
 		</>
 	);
 }

@@ -4,12 +4,71 @@ export type Beat = StepValue[]; // length = 1|2|3|4
 
 export type TickMode = "quarter" | "eighth" | "sixteenth";
 
+/**
+ * Chord identity as stored on a pattern. Frets and pitches are never stored
+ * inline — they are always looked up from the `chords` / `chord_voicings`
+ * tables via `resolveBarChords` in `strumBars.ts`.
+ */
+export interface ChordRef {
+	root: string;
+	suffix: string;
+	/** Pin a specific voicing; when absent the standard voicing is used. */
+	voicingId?: string | null;
+}
+
+/** One bar of a pattern: its beats plus the chord played over them. */
+export interface Bar {
+	beats: Beat[];
+	chord: ChordRef | null;
+}
+
+/**
+ * A strum pattern is one bar of rhythm. Chords never live here — the pattern
+ * tab's chord picker is session-only, and saved chord sequences are
+ * `ChordProgression`s hanging off the pattern.
+ *
+ * There is no stored description: it is written from `beats` on read by
+ * `patternNotation` in strumNotation.ts.
+ */
 export interface StrumPattern {
 	id: string;
 	name: string;
 	beats: Beat[];
-	description: string;
+	/** Tempo the pattern loads at. Read it through `patternBpm`. */
+	bpm?: number;
 }
+
+/**
+ * A chord sequence played over a pattern: one or more bars, each carrying its
+ * own rhythm and chord. Stored per user, and attachable to preset patterns as
+ * well as the user's own.
+ */
+export interface ChordProgression {
+	id: string;
+	/** The `StrumPattern` this sequence extends — a preset id or a custom one. */
+	patternId: string;
+	bars: Bar[];
+	/** Ordering within the pattern's progression list. */
+	orderIndex: number;
+	/** User-given name. Empty or absent falls back to the chord abbreviations. */
+	name?: string;
+	/** Tempo this sequence plays at; falls back to the pattern's own. */
+	bpm?: number;
+	/**
+	 * Capo fret the chords are fingered behind. The chords name the shapes the
+	 * player holds, so playback sounds this many semitones higher. 0 = no capo.
+	 */
+	capo?: number;
+}
+
+/** Tempo bounds shared by the transport fader and the pattern editor. */
+export const STRUM_BPM_MIN = 40;
+export const STRUM_BPM_MAX = 220;
+/** Tempo a pattern loads at when it carries no BPM of its own. */
+export const DEFAULT_STRUM_BPM = 80;
+
+/** Highest capo fret offered; past this the samples stop sounding like a guitar. */
+export const STRUM_CAPO_MAX = 12;
 
 export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 	{
@@ -21,7 +80,6 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 			["", ""],
 			["", ""],
 		],
-		description: "D . . .",
 	},
 	{
 		id: "4-4 on the beats",
@@ -32,7 +90,6 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 			["D", "UG"],
 			["D", "UG"],
 		],
-		description: "D D D D",
 	},
 	{
 		id: "4-4 old faithful",
@@ -43,7 +100,6 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 			["DG", "U"],
 			["D", "UG"],
 		],
-		description: "D DU UD",
 	},
 	{
 		id: "4-4 triplet on one",
@@ -54,7 +110,6 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 			["D", "UG"],
 			["D", "UG"],
 		],
-		description: "DUD D D D",
 	},
 	{
 		id: "4-4 boaf",
@@ -65,7 +120,6 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 			["DG", "U", "D", "U"],
 			["D", "UG", "D", "U"],
 		],
-		description: "Billie Ilish",
 	},
 	{
 		id: "3-4 test",
@@ -76,7 +130,6 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 			["D", "UG", "DG"],
 			["D", "U", "D"],
 		],
-		description: "Billie Ilish",
 	},
 	{
 		id: "4-4 triplet on 1 and 3",
@@ -87,7 +140,6 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 			["D3", "U3", "D3"],
 			["D", "UG"],
 		],
-		description: "DUD D D D",
 	},
 	{
 		id: "muted",
@@ -98,6 +150,5 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 			["U", "X"],
 			["D", "X"],
 		],
-		description: "D DU UD",
 	},
 ];

@@ -61,6 +61,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "A/B audition of strum presets across pitch ranges.",
 	},
 	{
+		href: "/dev/strum-sound-lab",
+		label: "strum-sound-lab",
+		description: "Strum sample × decay-envelope lab — presets, let ring, hard cut, AHDSR.",
+	},
+	{
 		href: "/dev/tab-notation",
 		label: "tab-notation",
 		description: "VexFlow TAB rendering audit using real fingerpick patterns.",

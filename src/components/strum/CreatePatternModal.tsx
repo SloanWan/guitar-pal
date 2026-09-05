@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -11,15 +11,18 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { MoveDown, MoveUp, X, Dot, Plus, Minus } from "lucide-react";
-import { Beat, StrumPattern, StepValue } from "@/lib/strumPatterns";
-
-const STEP_CYCLE: StepValue[] = ["", "D", "U", "X"];
-
-function cycleStep(current: StepValue): StepValue {
-	const idx = STEP_CYCLE.indexOf(current);
-	// idx === -1 for D3/U3/DG/UG: (−1+1)%4 = 0 → "" which resets gracefully
-	return STEP_CYCLE[(idx + 1) % STEP_CYCLE.length];
-}
+import {
+	Bar,
+	StrumPattern,
+	StepValue,
+	STRUM_BPM_MIN,
+	STRUM_BPM_MAX,
+	DEFAULT_STRUM_BPM,
+} from "@/lib/strumPatterns";
+import { toBars, validateBars, normalizeBpm, patternBpm } from "@/lib/strumBars";
+import { emptyBar, cycleCell, addCell, removeCell, MIN_CELLS_PER_BEAT } from "@/lib/strumBarEdit";
+import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
+import { patternNotation } from "@/lib/strumNotation";
 
 function StepIcon({ step }: { step: StepValue }) {
 	if (step === "D" || step === "D3" || step === "DG") return <MoveDown className="size-4" />;
@@ -28,13 +31,11 @@ function StepIcon({ step }: { step: StepValue }) {
 	return <Dot className="size-4" />;
 }
 
-const EMPTY_BEATS: Beat[] = [
-	["", ""],
-	["", ""],
-	["", ""],
-	["", ""],
-];
-
+/**
+ * The pattern editor: name, default tempo and the pattern's single bar of
+ * rhythm. Chords are not part of a pattern — a chord sequence is a
+ * `ChordProgression`, edited in its own modal.
+ */
 export default function CreatePatternModal({
 	open,
 	onClose,
@@ -50,45 +51,46 @@ export default function CreatePatternModal({
 }) {
 	const router = useRouter();
 	const [name, setName] = useState("");
-	const [beats, setBeats] = useState<Beat[]>(EMPTY_BEATS);
+	// Free text while typing so the field can be cleared; normalized on save.
+	const [bpmInput, setBpmInput] = useState(String(DEFAULT_STRUM_BPM));
+	// Held as a one-element Bar[] so the shared cell editors in strumBarEdit
+	// apply unchanged; the bar's chord stays null throughout.
+	const [bars, setBars] = useState<Bar[]>([emptyBar()]);
 	const [nameError, setNameError] = useState(false);
+	// Inline "Discard changes?" confirmation shown when the user tries to close
+	// with unsaved edits. Rendered in the header in place of the close button.
+	const [discardConfirm, setDiscardConfirm] = useState(false);
+	// Serialized draft taken when the modal opened. Comparing the live draft
+	// against it detects unsaved edits without flagging every mutation site.
+	const pristineRef = useRef("");
 	const [showSignInPrompt, setShowSignInPrompt] = useState(false);
+
+	const beats = bars[0].beats;
 
 	useEffect(() => {
 		if (!open) return;
 		queueMicrotask(() => {
-			setName(editPattern?.name ?? "");
-			setBeats(editPattern?.beats ?? EMPTY_BEATS);
+			const initialName = editPattern?.name ?? "";
+			const initialBpm = editPattern ? patternBpm(editPattern) : DEFAULT_STRUM_BPM;
+			const initialBars = editPattern ? toBars(editPattern) : [emptyBar()];
+			pristineRef.current = draftSnapshot(initialName, initialBpm, initialBars);
+			setName(initialName);
+			setBpmInput(String(initialBpm));
+			setBars(initialBars);
 			setNameError(false);
 			setShowSignInPrompt(false);
+			setDiscardConfirm(false);
 		});
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
-	function handleCellClick(beatIdx: number, cellIdx: number) {
-		setBeats((prev) =>
-			prev.map((beat, bi) =>
-				bi !== beatIdx
-					? beat
-					: (beat.map((cell, ci) => (ci === cellIdx ? cycleStep(cell) : cell)) as Beat),
-			),
-		);
+	function draftSnapshot(nameValue: string, bpmValue: number, barsValue: Bar[]): string {
+		return JSON.stringify({ name: nameValue.trim(), bpm: bpmValue, bars: barsValue });
 	}
 
-	function addCell(beatIdx: number) {
-		setBeats((prev) =>
-			prev.map((beat, bi) =>
-				bi === beatIdx && beat.length < 4 ? ([...beat, ""] as Beat) : beat,
-			),
-		);
-	}
-
-	function removeCell(beatIdx: number) {
-		setBeats((prev) =>
-			prev.map((beat, bi) =>
-				bi === beatIdx && beat.length > 2 ? (beat.slice(0, -1) as Beat) : beat,
-			),
-		);
+	/** An emptied field means "no opinion" — the default tempo, not a clamped 0. */
+	function parsedBpm(): number {
+		return bpmInput.trim() === "" ? DEFAULT_STRUM_BPM : normalizeBpm(Number(bpmInput));
 	}
 
 	function buildPattern(): StrumPattern {
@@ -96,13 +98,18 @@ export default function CreatePatternModal({
 			id: editPattern?.id ?? crypto.randomUUID(),
 			name: name.trim(),
 			beats,
-			description: editPattern?.description ?? "",
+			bpm: parsedBpm(),
 		};
 	}
 
 	function handleSave() {
 		if (!name.trim()) {
 			setNameError(true);
+			return;
+		}
+		const validation = validateBars(bars);
+		if (!validation.ok) {
+			console.error("[CreatePatternModal] refusing to save malformed bars:", validation.errors);
 			return;
 		}
 		if (!user && !editPattern) {
@@ -120,131 +127,227 @@ export default function CreatePatternModal({
 
 	function handleClose() {
 		setName("");
-		setBeats(EMPTY_BEATS);
+		setBpmInput(String(DEFAULT_STRUM_BPM));
+		setBars([emptyBar()]);
 		setNameError(false);
 		setShowSignInPrompt(false);
+		setDiscardConfirm(false);
 		onClose();
 	}
 
-	return (
-		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="max-w-120 w-full flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none">
-				<DialogHeader className="shrink-0 p-4 pb-0">
-					<DialogTitle>{editPattern ? "Edit pattern" : "Create pattern"}</DialogTitle>
-				</DialogHeader>
+	// True when the live draft differs from the snapshot taken on open.
+	function isDirty(): boolean {
+		return draftSnapshot(name, parsedBpm(), bars) !== pristineRef.current;
+	}
 
-				<div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4 min-h-0">
-					{/* Name input */}
-					<div className="flex flex-col gap-1.5">
-						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-							Pattern name
-						</label>
-						<input
-							type="text"
-							value={name}
-							onChange={(e) => {
-								setName(e.target.value);
-								if (nameError) setNameError(false);
-							}}
-							placeholder="e.g. My strum pattern"
-							className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
-								nameError ? "border-destructive" : "border-line-strong"
-							}`}
-						/>
-						{nameError && (
-							<p className="text-xs text-destructive">Pattern name is required</p>
+	/**
+	 * Enter saves, from anywhere in the dialog. It stands down on a focused
+	 * button (Enter presses that button), inside a textarea, and while either the
+	 * discard question or the sign-in prompt is waiting on an answer of its own.
+	 */
+	function handleDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+		if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+		if (discardConfirm || showSignInPrompt) return;
+		if (
+			e.target instanceof HTMLTextAreaElement ||
+			e.target instanceof HTMLButtonElement ||
+			e.target instanceof HTMLAnchorElement
+		) {
+			return;
+		}
+		e.preventDefault();
+		handleSave();
+	}
+
+	// Entry point for every close affordance (header button, Cancel, outside
+	// click, Escape). Guards against discarding unsaved edits.
+	function requestClose() {
+		if (isDirty()) setDiscardConfirm(true);
+		else handleClose();
+	}
+
+	return (
+		<>
+			<Dialog open={open} onOpenChange={(isOpen) => !isOpen && requestClose()}>
+				<DialogContent
+					showCloseButton={false}
+					onKeyDown={handleDialogKeyDown}
+					className="w-full max-w-120 flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
+				>
+					<DialogHeader className="shrink-0 flex-row items-center justify-between gap-2 p-4 pb-0">
+						<DialogTitle>{editPattern ? "Edit pattern" : "Create pattern"}</DialogTitle>
+						{discardConfirm ? (
+							<div className="flex items-center gap-2">
+								<span className="text-xs text-ink-dim">Discard changes?</span>
+								<button
+									onClick={() => setDiscardConfirm(false)}
+									className="h-8 px-3 text-xs font-medium text-ink-dim transition-colors hover:bg-raise active:bg-denim-tint"
+								>
+									Keep editing
+								</button>
+								<button
+									onClick={handleClose}
+									className="h-8 px-3 text-xs font-semibold text-white bg-destructive transition-colors hover:bg-destructive/90"
+								>
+									Discard
+								</button>
+							</div>
+						) : (
+							<button
+								onClick={requestClose}
+								aria-label="Close"
+								className="flex h-8 w-8 items-center justify-center text-ink-dim transition-colors hover:bg-raise hover:text-ink active:bg-denim-tint"
+							>
+								<X size={18} />
+							</button>
+						)}
+					</DialogHeader>
+
+					<div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4 min-h-0">
+						{/* Name + default tempo */}
+						<div className="flex flex-col gap-1.5">
+							<div className="flex items-end gap-3">
+								<div className="flex min-w-0 flex-1 flex-col gap-1.5">
+									<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+										Pattern name
+									</label>
+									<input
+										type="text"
+										value={name}
+										onChange={(e) => {
+											setName(e.target.value);
+											if (nameError) setNameError(false);
+										}}
+										placeholder="e.g. My strum pattern"
+										className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
+											nameError ? "border-destructive" : "border-line-strong"
+										}`}
+									/>
+								</div>
+								<div className="flex w-20 shrink-0 flex-col gap-1.5">
+									<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+										BPM
+									</label>
+									{/* Kept as text state so the field can be emptied mid-edit; the
+									    value is clamped to 40–220 on save and on blur. */}
+									<input
+										type="number"
+										min={STRUM_BPM_MIN}
+										max={STRUM_BPM_MAX}
+										value={bpmInput}
+										onChange={(e) => setBpmInput(e.target.value)}
+										onBlur={() => setBpmInput(String(parsedBpm()))}
+										aria-label="Default tempo in BPM"
+										className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+									/>
+								</div>
+							</div>
+							{nameError && (
+								<p className="text-xs text-destructive">Pattern name is required</p>
+							)}
+						</div>
+
+						{/* The pattern's single bar */}
+						<div className="flex flex-col gap-3">
+							<div className="flex items-center justify-between">
+								<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									Pattern
+								</span>
+								{/* The written form doubles as the pattern's description. */}
+								<span className="whitespace-pre font-mono text-[9px] text-ink-faint">
+									{patternNotation(beats)}
+								</span>
+							</div>
+
+							<div className="flex flex-col gap-1.5 border-l border-line-strong pl-2">
+								<div className="flex gap-2">
+									{beats.map((beat, beatIdx) => (
+										<div key={beatIdx} className="flex-1 flex flex-col gap-1.5">
+											{/* Cells */}
+											<div className="flex border border-line-strong py-2">
+												{beat.map((cell, cellIdx) => (
+													<button
+														key={cellIdx}
+														onClick={() =>
+															setBars((prev) => cycleCell(prev, 0, beatIdx, cellIdx))
+														}
+														className="flex-1 flex justify-center items-center text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
+													>
+														<StepIcon step={cell} />
+													</button>
+												))}
+											</div>
+											{/* Cell count controls */}
+											<div className="flex gap-1">
+												<button
+													onClick={() => setBars((prev) => removeCell(prev, 0, beatIdx))}
+													disabled={beat.length <= MIN_CELLS_PER_BEAT}
+													className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+												>
+													<Minus size={10} />
+												</button>
+												<button
+													onClick={() => setBars((prev) => addCell(prev, 0, beatIdx))}
+													disabled={beat.length >= MAX_CELLS_PER_BEAT}
+													className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+												>
+													<Plus size={10} />
+												</button>
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+						</div>
+
+						{/* Sign-in prompt — shown when user is not logged in and tries to save */}
+						{showSignInPrompt && (
+							<div className="border border-denim/20 bg-denim-tint px-4 py-3">
+								<p className="text-sm text-ink">
+									Sign in to keep your patterns safe across devices.
+								</p>
+							</div>
 						)}
 					</div>
 
-					{/* Beat grid */}
-					<div className="flex flex-col gap-2">
-						<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-							Pattern
-						</span>
-						<div className="flex gap-2">
-							{beats.map((beat, beatIdx) => (
-								<div key={beatIdx} className="flex-1 flex flex-col gap-1.5">
-									{/* Cells */}
-									<div className="flex border border-line-strong py-2">
-										{beat.map((cell, cellIdx) => (
-											<button
-												key={cellIdx}
-												onClick={() => handleCellClick(beatIdx, cellIdx)}
-												className="flex-1 flex justify-center items-center text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
-											>
-												<StepIcon step={cell} />
-											</button>
-										))}
-									</div>
-									{/* Cell count controls */}
-									<div className="flex gap-1">
-										<button
-											onClick={() => removeCell(beatIdx)}
-											disabled={beat.length <= 2}
-											className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-										>
-											<Minus size={10} />
-										</button>
-										<button
-											onClick={() => addCell(beatIdx)}
-											disabled={beat.length >= 4}
-											className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-										>
-											<Plus size={10} />
-										</button>
-									</div>
-								</div>
-							))}
-						</div>
+					<div className="flex items-center justify-end gap-2 shrink-0 border-t border-line bg-popover px-4 py-3">
+						{showSignInPrompt ? (
+							<>
+								<button
+									onClick={handleSaveLocally}
+									className="px-4 py-2 border border-line-strong text-ink-dim text-sm hover:border-denim hover:text-denim-accent active:bg-denim-tint transition-colors"
+								>
+									Save locally anyway
+								</button>
+								<Button
+									onClick={() => {
+										onSave(buildPattern());
+										router.push("/auth?redirect=/strum");
+									}}
+									className="h-9 px-4 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
+								>
+									Sign in
+								</Button>
+							</>
+						) : (
+							<>
+								<button
+									onClick={requestClose}
+									className="px-4 py-2 border border-line-strong text-ink-dim text-sm hover:border-denim hover:text-denim-accent active:bg-denim-tint transition-colors"
+								>
+									Cancel
+								</button>
+								<Button
+									onClick={handleSave}
+									className="h-9 px-4 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
+								>
+									{editPattern ? "Save changes" : "Save pattern"}
+								</Button>
+							</>
+						)}
 					</div>
-
-					{/* Sign-in prompt — shown when user is not logged in and tries to save */}
-					{showSignInPrompt && (
-						<div className="border border-denim/20 bg-denim-tint px-4 py-3">
-							<p className="text-sm text-ink">
-								Sign in to keep your patterns safe across devices.
-							</p>
-						</div>
-					)}
-				</div>
-
-				<div className="flex items-center justify-end gap-2 shrink-0 border-t border-line bg-popover px-4 py-3">
-					{showSignInPrompt ? (
-						<>
-							<button
-								onClick={handleSaveLocally}
-								className="px-4 py-2 border border-line-strong text-ink-dim text-sm hover:border-denim hover:text-denim-accent active:bg-denim-tint transition-colors"
-							>
-								Save locally anyway
-							</button>
-							<Button
-								onClick={() => {
-									onSave(buildPattern());
-									router.push("/auth?redirect=/strum");
-								}}
-								className="h-9 px-4 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
-							>
-								Sign in
-							</Button>
-						</>
-					) : (
-						<>
-							<button
-								onClick={handleClose}
-								className="px-4 py-2 border border-line-strong text-ink-dim text-sm hover:border-denim hover:text-denim-accent active:bg-denim-tint transition-colors"
-							>
-								Cancel
-							</button>
-							<Button
-								onClick={handleSave}
-								className="h-9 px-4 rounded-none bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40"
-							>
-								{editPattern ? "Save changes" : "Save pattern"}
-							</Button>
-						</>
-					)}
-				</div>
-			</DialogContent>
-		</Dialog>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }

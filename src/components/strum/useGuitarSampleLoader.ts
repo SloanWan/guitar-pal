@@ -114,6 +114,21 @@ export const STRUM_PITCHES: readonly number[] = [48, 52, 55, 60, 64];
 const STRUM_STAGGER_S = 0.01;
 
 /**
+ * Level of the loudest string in a strum, before the sweep taper below.
+ *
+ * A strum is five sample voices stacked, and since struck strings let ring for
+ * STRUM_RING_SECONDS they pile onto the strums that follow — at eighth notes,
+ * a dozen voices can sound at once. At full scale that sums well past 1.0 and
+ * clips at the destination, which is heard as "too loud" long before the fader
+ * is touched. Headroom is taken here, at the source, so the strum fader keeps
+ * its whole 0–200% range for anyone who wants it hotter.
+ */
+export const STRUM_STRING_VOLUME = 0.35;
+
+/** Per-string falloff across the sweep, applied on top of STRUM_STRING_VOLUME. */
+const STRUM_SWEEP_TAPER = 0.9;
+
+/**
  * Maximum effective duration (s) for muted strums regardless of the cell duration
  * passed by the caller. Preserves the percussive "chuck" character at all tempos.
  */
@@ -121,9 +136,26 @@ export const MUTED_MAX_DURATION_S = 0.08;
 
 /**
  * Fraction of the cell duration used as the gain-decay time constant.
+ * Applies to muted strums only — struck strings let ring (see STRUM_RING_SECONDS).
  * Exported so tests can reference it without duplicating the literal.
  */
 export const DECAY_TIME_CONSTANT_RATIO = 1;
+
+/**
+ * How long a struck string rings, in seconds — chosen in /dev/strum-sound-lab.
+ * Down and up strums let ring: the note decays over this window regardless of the
+ * cell length, so consecutive strums overlap the way a real guitar does instead
+ * of each cell being silenced before the next. Muted strums are unaffected; they
+ * stay percussive under MUTED_MAX_DURATION_S.
+ */
+export const STRUM_RING_SECONDS = 1.5;
+
+/**
+ * Divisor turning the ring length into a decay time constant. setTargetAtTime
+ * leaves e^-3 ≈ 5% of the peak after three time constants, so τ = ring / 3 puts
+ * the note at the edge of audibility exactly when the ring is over.
+ */
+export const RING_DECAY_TC_DIVISOR = 3;
 
 /**
  * Minimum gain-decay time constant (s).
@@ -271,7 +303,10 @@ export function _pcmSampleToBuffer(
 	return buffer;
 }
 
-async function _decodeZone(zone: WafZone, ctx: AudioContext): Promise<AudioBuffer> {
+/** Decode one zone's sample data. Exported so the dev sound lab can decode
+ *  presets outside the two this module ships with, rather than duplicating the
+ *  base64 / PCM handling. */
+export async function _decodeZone(zone: WafZone, ctx: AudioContext): Promise<AudioBuffer> {
 	if (zone.sample) {
 		return _pcmSampleToBuffer(zone.sample, zone.sampleRate ?? 44100, ctx);
 	}
@@ -313,6 +348,13 @@ export function findZoneForMidi(preset: WafPreset, midiNote: number): WafZone {
 
 // ─── Strum scheduling ─────────────────────────────────────────────────────────
 
+/**
+ * Schedule one string of a strum.
+ *
+ * @param decayTimeConstant - τ for the gain's exponential decay from `when`.
+ * @param ringSeconds       - how long the note is allowed to sound; the source is
+ *                            stopped SOURCE_STOP_BUFFER_S past it.
+ */
 function _scheduleNote(
 	ctx: AudioContext,
 	target: AudioNode,
@@ -320,7 +362,8 @@ function _scheduleNote(
 	buffer: AudioBuffer,
 	when: number,
 	midiPitch: number,
-	noteDuration: number,
+	decayTimeConstant: number,
+	ringSeconds: number,
 	volume: number,
 ): void {
 	// Playback rate so this zone sounds at midiPitch.
@@ -342,17 +385,14 @@ function _scheduleNote(
 	}
 
 	// Decay starts immediately at `when` (guitar-pluck model: no hold phase).
-	// Floor of MIN_DECAY_TC_S prevents click-like transitions at very fast tempos.
-	const decayTimeConstant = Math.max(noteDuration * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S);
-
 	const gainNode = ctx.createGain();
 	gainNode.gain.setValueAtTime(volume, when);
 	gainNode.gain.setTargetAtTime(0, when, decayTimeConstant);
 
 	source.connect(gainNode).connect(target);
 	source.start(when);
-	// Stop is set past the cell end so the gain envelope has time to tail off cleanly.
-	source.stop(when + noteDuration + SOURCE_STOP_BUFFER_S);
+	// Stop is set past the ring so the gain envelope has time to tail off cleanly.
+	source.stop(when + ringSeconds + SOURCE_STOP_BUFFER_S);
 
 	_activeSources.add(source);
 	source.onended = () => {
@@ -435,9 +475,10 @@ export async function preloadStrumPresets(ctx: AudioContext): Promise<void> {
  * @param target       - Destination AudioNode (e.g. a master gain node).
  * @param when         - Absolute AudioContext time in seconds.
  * @param noteDuration - Time in seconds until the next scheduled event (e.g.
- *                       secondsPerCell from the scheduler). Notes are enveloped
- *                       to decay within this window, preventing beat-to-beat overlap.
- *                       Muted strums are additionally capped at MUTED_MAX_DURATION_S.
+ *                       secondsPerCell from the scheduler). **Muted strums only**:
+ *                       it caps their percussive chuck at MUTED_MAX_DURATION_S.
+ *                       Struck strings ignore it and let ring for
+ *                       STRUM_RING_SECONDS, so consecutive strums overlap.
  */
 export function triggerStrum(
 	type: StrumSoundType,
@@ -457,21 +498,37 @@ export function triggerStrum(
 			? [...basePitches].sort((a, b) => b - a)
 			: [...basePitches].sort((a, b) => a - b);
 
+	const isMuted = type === "muted";
 	// Muted strums cap at MUTED_MAX_DURATION_S regardless of tempo.
-	const effectiveDuration =
-		type === "muted" ? Math.min(noteDuration, MUTED_MAX_DURATION_S) : noteDuration;
+	const mutedDuration = Math.min(noteDuration, MUTED_MAX_DURATION_S);
 
 	for (let i = 0; i < pitches.length; i++) {
 		const zone = findZoneForMidi(preset, pitches[i]);
 		if (!zone.buffer) continue;
 
 		const noteOffset = i * STRUM_STAGGER_S;
-		// Compensate for the stagger so all sources stop at when + effectiveDuration + buffer,
-		// ensuring no note bleeds past the cell boundary regardless of string index.
-		const adjustedDuration = effectiveDuration - noteOffset;
-		if (adjustedDuration <= 0) continue;
 
-		const volume = Math.pow(0.9, i); // slight taper toward the sweep end
+		let decayTimeConstant: number;
+		let ringSeconds: number;
+		if (isMuted) {
+			// Compensate for the stagger so every chuck stops on the same boundary,
+			// keeping the mute percussive rather than smeared across the cell.
+			const adjustedDuration = mutedDuration - noteOffset;
+			if (adjustedDuration <= 0) continue;
+			decayTimeConstant = Math.max(
+				adjustedDuration * DECAY_TIME_CONSTANT_RATIO,
+				MIN_DECAY_TC_S,
+			);
+			ringSeconds = adjustedDuration;
+		} else {
+			// Struck strings let ring: the cell length no longer cuts them, so a
+			// strum still sounds while the next one lands on top of it.
+			decayTimeConstant = STRUM_RING_SECONDS / RING_DECAY_TC_DIVISOR;
+			ringSeconds = STRUM_RING_SECONDS;
+		}
+
+		// Slight taper toward the sweep end, under the shared headroom ceiling.
+		const volume = STRUM_STRING_VOLUME * Math.pow(STRUM_SWEEP_TAPER, i);
 		_scheduleNote(
 			ctx,
 			target,
@@ -479,7 +536,8 @@ export function triggerStrum(
 			zone.buffer,
 			when + noteOffset,
 			pitches[i],
-			adjustedDuration,
+			decayTimeConstant,
+			ringSeconds,
 			volume,
 		);
 	}
@@ -534,6 +592,8 @@ export function triggerChordPreview(
 		const adjustedDuration = CHORD_PREVIEW_DURATION_S - noteOffset;
 		if (adjustedDuration <= 0) continue;
 
+		// The preview keeps its own decay: it is a chord audition, not a strum in
+		// a pattern, so nothing else is about to land on top of it.
 		_scheduleNote(
 			ctx,
 			target,
@@ -541,6 +601,7 @@ export function triggerChordPreview(
 			zone.buffer,
 			when + noteOffset,
 			sorted[i],
+			Math.max(adjustedDuration * DECAY_TIME_CONSTANT_RATIO, MIN_DECAY_TC_S),
 			adjustedDuration,
 			0.7,
 		);

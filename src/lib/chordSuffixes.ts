@@ -39,6 +39,12 @@ export function isSlashChord(suffix: string): boolean {
   return suffix.includes("/");
 }
 
+// Same compact spelling the browse UI and the chord palette use: slash chords
+// already carry their own separator, everything else gets a space.
+export function chordDisplayName(root: string, suffix: string): string {
+  return isSlashChord(suffix) ? `${root}${suffix}` : `${root} ${suffix}`;
+}
+
 // Returns the category name for a suffix, or null if it belongs to none.
 export function getSuffixCategory(suffix: string): string | null {
   for (const { category, suffixes } of CHORD_SUFFIX_CATEGORIES) {
@@ -75,10 +81,4 @@ export function getSlashSuffixes(available: readonly string[]): string[] {
   return Array.from(available).filter(
     s => isBrowsableSuffix(s) && isSlashChord(s)
   );
-}
-
-// Display name for a chord. Chord names read best compact (Cm7, Cmaj7), but slash
-// chords already carry their own separator, so no extra space there.
-export function chordDisplayName(root: string, suffix: string): string {
-  return isSlashChord(suffix) ? `${root}${suffix}` : `${root} ${suffix}`;
 }

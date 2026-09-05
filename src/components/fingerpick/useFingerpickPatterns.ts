@@ -165,10 +165,28 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 	function deleteCustomPattern(patternId: string) {
 		setCustomPatterns((prev) => prev.filter((p) => p.id !== patternId));
 		if (selectedPattern.id === patternId) setSelectedPattern(PRESET_FINGERPICK_PATTERNS[0]);
+
+		// The favourite record goes with the pattern, or the favourites tab keeps
+		// listing one that can no longer be opened.
+		const wasFavourite = favouriteIds.includes(patternId);
+		if (wasFavourite) {
+			const remainingFavs = favouriteIds.filter((id) => id !== patternId);
+			setFavouriteIds(remainingFavs);
+			if (!user) localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remainingFavs));
+		}
+
 		(async () => {
 			try {
 				const supabase = createClient();
 				await deleteUserFingerpickPattern(supabase, user, patternId);
+				if (user && wasFavourite) {
+					const { error } = await supabase
+						.from("user_favourite_fingerpick_patterns")
+						.delete()
+						.eq("pattern_id", patternId)
+						.eq("user_id", user.id);
+					if (error) throw new Error(error.message);
+				}
 			} catch (e) {
 				console.error(e);
 			}

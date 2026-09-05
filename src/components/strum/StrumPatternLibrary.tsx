@@ -5,6 +5,8 @@ import { User } from "@supabase/supabase-js";
 import { ChevronDown, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import StepGrid from "./StepGrid";
+import { toBars } from "@/lib/strumBars";
+import { patternNotation } from "@/lib/strumNotation";
 
 interface StrumPatternLibraryProps {
 	customPatterns: StrumPattern[];
@@ -39,6 +41,10 @@ function PatternCard({
 	onEdit,
 	onDelete,
 }: PatternCardProps) {
+	// Deleting a pattern cannot be undone, so the trash icon asks first — inline,
+	// in the row's own controls, the way the editors confirm a discard.
+	const [confirmDelete, setConfirmDelete] = useState(false);
+
 	return (
 		<button
 			type="button"
@@ -79,27 +85,72 @@ function PatternCard({
 							<Pencil size={14} />
 						</span>
 					)}
-					{onDelete && (
-						<span
-							role="button"
-							tabIndex={0}
-							onClick={(e) => {
-								e.stopPropagation();
-								onDelete();
-							}}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
+					{onDelete &&
+						(confirmDelete ? (
+							<span className="flex items-center gap-1">
+								<span className="text-[10px] text-ink-dim">Delete?</span>
+								<span
+									role="button"
+									tabIndex={0}
+									onClick={(e) => {
+										e.stopPropagation();
+										setConfirmDelete(false);
+										onDelete();
+									}}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											e.stopPropagation();
+											setConfirmDelete(false);
+											onDelete();
+										}
+									}}
+									className="cursor-pointer px-1 text-[10px] font-semibold text-destructive transition-colors hover:underline"
+									aria-label="Confirm delete pattern"
+								>
+									Yes
+								</span>
+								<span
+									role="button"
+									tabIndex={0}
+									onClick={(e) => {
+										e.stopPropagation();
+										setConfirmDelete(false);
+									}}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											e.stopPropagation();
+											setConfirmDelete(false);
+										}
+									}}
+									className="cursor-pointer px-1 text-[10px] text-ink-dim transition-colors hover:text-ink"
+									aria-label="Keep pattern"
+								>
+									No
+								</span>
+							</span>
+						) : (
+							<span
+								role="button"
+								tabIndex={0}
+								onClick={(e) => {
 									e.stopPropagation();
-									onDelete();
-								}
-							}}
-							className="p-0.5 transition-colors text-ink-dim hover:text-destructive cursor-pointer"
-							aria-label="Delete pattern"
-						>
-							<Trash2 size={14} />
-						</span>
-					)}
+									setConfirmDelete(true);
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										e.stopPropagation();
+										setConfirmDelete(true);
+									}
+								}}
+								className="p-0.5 transition-colors text-ink-dim hover:text-destructive cursor-pointer"
+								aria-label="Delete pattern"
+							>
+								<Trash2 size={14} />
+							</span>
+						))}
 					<span
 						role="button"
 						tabIndex={0}
@@ -124,10 +175,10 @@ function PatternCard({
 					</span>
 				</div>
 			</div>
-			{pattern.description && (
-				<p className="mb-2 text-[10px] text-ink-dim leading-snug">{pattern.description}</p>
-			)}
-			<StepGrid beats={pattern.beats} activeCell={null} size="sm" showLabels={false} />
+			<p className="mb-2 whitespace-pre font-mono text-[10px] leading-snug text-ink-dim">
+				{patternNotation(pattern.beats)}
+			</p>
+			<StepGrid bars={toBars(pattern)} activeCell={null} size="sm" showLabels={false} />
 		</button>
 	);
 }

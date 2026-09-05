@@ -1,23 +1,71 @@
 "use client";
 
-import StepGridCard from "@/components/strum/StepGridCard";
+import PatternWorkspace, { type WorkspaceTab } from "@/components/strum/PatternWorkspace";
 import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
-import { PRESET_STRUM_PATTERNS, TickMode, StrumPattern } from "@/lib/strumPatterns";
+import {
+	PRESET_STRUM_PATTERNS,
+	TickMode,
+	StrumPattern,
+	STRUM_BPM_MIN,
+	STRUM_BPM_MAX,
+	DEFAULT_STRUM_BPM,
+	type Bar,
+	type ChordProgression,
+	type ChordRef,
+} from "@/lib/strumPatterns";
+import {
+	toBars,
+	resolveBarChords,
+	transposeBarPitches,
+	patternBpm,
+	normalizeBpm,
+} from "@/lib/strumBars";
+import { STRUM_PITCHES } from "@/components/strum/useGuitarSampleLoader";
+import { setBarChord, barLocalBeatIndex } from "@/lib/strumBarEdit";
+import {
+	progressionsForPattern,
+	nextOrderIndex,
+	progressionBarsFromChords,
+	progressionCapo,
+	syncBarsToPattern,
+} from "@/lib/strumProgressions";
+import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import { loadVoicings } from "@/lib/chordVoicingCache";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
-import { useAudioEngine } from "@/components/strum/useAudioEngine";
+import { useAudioEngine, type BarPitches } from "@/components/strum/useAudioEngine";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
-import { CirclePlay, CircleStop, ChevronUp, SquareMenu, Metronome, X } from "lucide-react";
+import {
+	CirclePlay,
+	CircleStop,
+	ChevronUp,
+	SquareMenu,
+	Metronome,
+	X,
+	Play,
+	Repeat,
+	Volume2,
+	Gauge,
+	RotateCcw,
+} from "lucide-react";
 import CreatePatternModal from "@/components/strum/CreatePatternModal";
+import ProgressionEditModal from "@/components/strum/ProgressionEditModal";
+import { useChordProgressions } from "@/components/strum/useChordProgressions";
 import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
+import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import Fader from "@/components/ui/Fader";
 
-const MIN_BPM = 40;
-const MAX_BPM = 220;
+const MIN_BPM = STRUM_BPM_MIN;
+const MAX_BPM = STRUM_BPM_MAX;
+
+// Device-local memory of where the user was in the workspace, so a refresh
+// lands back on the same tab and the same progression.
+const TAB_STORAGE_KEY = "strumTab";
+const OPEN_PROGRESSION_STORAGE_KEY = "strumOpenProgression";
 
 const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
 type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
@@ -107,13 +155,60 @@ function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
 	);
 }
 
+/**
+ * Fetches the voicings a bar's ChordRef points at, for the audio engine.
+ * Shares `voicingCache` with the chord-diagram view, so resolving a
+ * progression's pitches also warms the shapes it can be asked to draw.
+ */
+async function lookupVoicings(ref: {
+	root: string;
+	suffix: string;
+}): Promise<ChordVoicing[] | null> {
+	return loadVoicings(ref.root, ref.suffix);
+}
+
 export default function StrumPage() {
-	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(
-		PRESET_STRUM_PATTERNS[0],
-	);
-	const [bpm, setBpm] = useState(80);
+	// Null until the device-local choice has been read: showing a preset first and
+	// swapping it out a tick later reads as a glitch, so the card waits instead.
+	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(null);
+	const [patternRestored, setPatternRestored] = useState(false);
+	const [bpm, setBpm] = useState(() => patternBpm(PRESET_STRUM_PATTERNS[0]));
 	const [tickMode, setTickMode] = useState<TickMode>("quarter");
-	const [selectedChord, setSelectedChord] = useState<ConfirmedChord | null>(null);
+	// Which view of the pattern is on screen: its own bar, or one of the chord
+	// progressions written over it.
+	const [tab, setTab] = useState<WorkspaceTab>("pattern");
+	const [openProgressionId, setOpenProgressionId] = useState<string | null>(null);
+	// Live bars being played. On the pattern tab any chord picked is session-only;
+	// on the progressions tab the bars come from the open progression.
+	const [bars, setBars] = useState<Bar[]>(() => toBars(PRESET_STRUM_PATTERNS[0]));
+	const [barPitches, setBarPitches] = useState<BarPitches>([]);
+
+	// Restore the tab first: it needs no data, so it can be applied on mount.
+	const workspaceRestoredRef = useRef(false);
+	useEffect(() => {
+		const savedTab = localStorage.getItem(TAB_STORAGE_KEY);
+		queueMicrotask(() => {
+			if (savedTab === "pattern" || savedTab === "progressions") setTab(savedTab);
+			// Only now may the workspace be written back, or the default would
+			// overwrite what was just restored.
+			workspaceRestoredRef.current = true;
+		});
+	}, []);
+
+	function handleBarChordChange(barIdx: number, chord: ConfirmedChord | null) {
+		setBars((prev) =>
+			setBarChord(
+				prev,
+				barIdx,
+				chord
+					? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
+					: null,
+			),
+		);
+		setBarPitches((prev) =>
+			prev.map((pitches, i) => (i === barIdx ? (chord?.pitches ?? null) : pitches)),
+		);
+	}
 
 	const {
 		isPlaying,
@@ -121,6 +216,7 @@ export default function StrumPage() {
 		stop,
 		currBeat,
 		currCell,
+		currBar,
 		strumEnabled,
 		setStrumEnabled,
 		strumGain,
@@ -133,12 +229,7 @@ export default function StrumPage() {
 		setAccentEnabled,
 		playOnce,
 		setPlayOnce,
-	} = useAudioEngine(
-		selectedPattern?.beats ?? PRESET_STRUM_PATTERNS[0].beats,
-		bpm,
-		tickMode,
-		selectedChord?.pitches,
-	);
+	} = useAudioEngine(bars, bpm, tickMode, barPitches);
 
 	const { user, loading } = useUser();
 	const {
@@ -150,15 +241,70 @@ export default function StrumPage() {
 		handleDeleteCustomPattern,
 		handleToggleFavourite,
 	} = useStrumPatterns(user, loading);
+	const {
+		progressions,
+		progressionsLoading,
+		handleSaveProgression,
+		handleDeleteProgression,
+		handleDeletePatternProgressions,
+	} = useChordProgressions(user, loading);
+
+	// The selected pattern's own progressions, in playing order.
+	const patternProgressions = useMemo(
+		() => (selectedPattern ? progressionsForPattern(progressions, selectedPattern.id) : []),
+		[progressions, selectedPattern],
+	);
+	const openProgression = patternProgressions.find((p) => p.id === openProgressionId) ?? null;
+
+	// What the engine plays: the pattern's own bar, or the open progression's
+	// bars. Serialized so the effect below keys on content rather than identity —
+	// a progressions reload with unchanged content must not wipe the chords the
+	// user picked on the pattern tab this session.
+	const sourceBarsKey = JSON.stringify(
+		tab === "progressions" && openProgression
+			? openProgression.bars
+			: toBars(selectedPattern ?? PRESET_STRUM_PATTERNS[0]),
+	);
+
+	// The capo only applies to the sequence that declares it; the pattern tab's
+	// session chords always sound at concert pitch.
+	const activeCapo = tab === "progressions" ? progressionCapo(openProgression) : 0;
+
+	useEffect(() => {
+		const next = JSON.parse(sourceBarsKey) as Bar[];
+		// queueMicrotask: the codebase's idiom for deferring state writes out of
+		// the effect body so they do not cascade renders.
+		queueMicrotask(() => {
+			setBars(next);
+			setBarPitches(next.map(() => null));
+		});
+
+		let cancelled = false;
+		resolveBarChords(next, lookupVoicings)
+			.then((pitches) => {
+				if (!cancelled) {
+					setBarPitches(transposeBarPitches(pitches, activeCapo, STRUM_PITCHES));
+				}
+			})
+			.catch((err: unknown) => {
+				console.error("[StrumPage] chord resolution failed:", err);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [sourceBarsKey, activeCapo]);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
+	// The progression the editor is open on; null when the editor is closed.
+	// New progressions are typed inline instead, never through the editor.
+	const [editingProgression, setEditingProgression] = useState<ChordProgression | null>(null);
 	const [editingPattern, setEditingPattern] = useState<StrumPattern | null>(null);
 	const [showLibrary, setShowLibrary] = useState(false);
-	const [spaceMode, setSpaceMode] = useState<"playPause" | "tapTempo">("playPause");
 	const [mutHintDismissed, setMutHintDismissed] = useState(false);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 
-	// Mobile drawer state
-	const [showSheet, setShowSheet] = useState(false);
+	// Mobile drawer state — three detents, same as the fingerpick drawer
+	const [sheetDetent, setSheetDetent] = useState<"closed" | "half" | "full">("closed");
+	const showSheet = sheetDetent !== "closed";
 	const [showBpmPopover, setShowBpmPopover] = useState(false);
 	const [bpmPopoverPos, setBpmPopoverPos] = useState<{ bottom: number; left: number }>({
 		bottom: 0,
@@ -218,22 +364,19 @@ export default function StrumPage() {
 		return () => target.removeEventListener("scroll", handleScroll);
 	}, []);
 
+	// Space is the transport, anywhere on the page — including with a button
+	// focused, where the browser would otherwise re-fire that button. It stands
+	// down inside a form field and behind an open dialog, where the keystroke
+	// belongs to what is on top (see shouldRunPageShortcut).
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
-			if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
-				return;
-			if (e.code === "Space") {
-				e.preventDefault();
-				if (spaceMode === "playPause") {
-					handleHitPlayAndPause();
-				} else {
-					handleTapTempo();
-				}
-			}
+			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
+			e.preventDefault();
+			handleHitPlayAndPause();
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isPlaying, spaceMode]);
+	}, [isPlaying]);
 
 	// Restore the initial pattern once, after custom patterns finish loading (they
 	// arrive async). A `?pattern=<id>` deep link (e.g. from /home) takes priority
@@ -248,11 +391,15 @@ export default function StrumPage() {
 				? new URLSearchParams(window.location.search).get("pattern")
 				: null;
 		const savedId = queryId ?? localStorage.getItem("lastStrumPattern");
-		if (!savedId) return;
-		const found = [...PRESET_STRUM_PATTERNS, ...customPatterns].find(
-			(p) => p.id === savedId,
-		);
-		if (found) queueMicrotask(() => setSelectedPattern(found));
+		const found = savedId
+			? [...PRESET_STRUM_PATTERNS, ...customPatterns].find((p) => p.id === savedId)
+			: undefined;
+		const next = found ?? PRESET_STRUM_PATTERNS[0];
+		queueMicrotask(() => {
+			setSelectedPattern(next);
+			setBpm(patternBpm(next));
+			setPatternRestored(true);
+		});
 	}, [patternsLoading, customPatterns]);
 
 	useEffect(() => {
@@ -273,12 +420,131 @@ export default function StrumPage() {
 		}
 	}
 
+	// The progression can only be restored once the list — and the pattern it
+	// belongs to — have loaded, so this runs again until the saved one shows up.
+	const [progressionRestored, setProgressionRestored] = useState(false);
+	useEffect(() => {
+		if (progressionRestored || progressionsLoading || !patternRestored) return;
+		const savedId = localStorage.getItem(OPEN_PROGRESSION_STORAGE_KEY);
+		const found = savedId
+			? patternProgressions.find((p) => p.id === savedId)
+			: undefined;
+		queueMicrotask(() => {
+			if (found) {
+				setOpenProgressionId(found.id);
+				setBpm(bpmFor(found));
+			}
+			// Restored either way — a saved id the list no longer holds is gone.
+			setProgressionRestored(true);
+		});
+	}, [progressionRestored, progressionsLoading, patternRestored, patternProgressions]);
+
+	useEffect(() => {
+		if (!workspaceRestoredRef.current) return;
+		localStorage.setItem(TAB_STORAGE_KEY, tab);
+		if (openProgressionId) {
+			localStorage.setItem(OPEN_PROGRESSION_STORAGE_KEY, openProgressionId);
+		} else {
+			localStorage.removeItem(OPEN_PROGRESSION_STORAGE_KEY);
+		}
+	}, [tab, openProgressionId]);
+
 	function handleSelectPattern(pattern: StrumPattern) {
 		stop();
 		setSelectedPattern(pattern);
+		setBpm(patternBpm(pattern));
+		setTab("pattern");
+		setOpenProgressionId(null);
 		localStorage.setItem("lastStrumPattern", pattern.id);
 		// Mirror the choice to the account so /home can surface it cross-device.
 		saveLastPattern(createClient(), user, "strum", pattern.id).catch(console.error);
+	}
+
+	/** The tempo something plays at: the progression's own, else the pattern's. */
+	function bpmFor(progression: ChordProgression | null): number {
+		if (progression?.bpm !== undefined) return normalizeBpm(progression.bpm);
+		return selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM;
+	}
+
+	// The tempo the reset control returns to: whatever is on screen owns it.
+	const defaultBpm = bpmFor(tab === "progressions" ? openProgression : null);
+
+	function handleTabChange(next: WorkspaceTab) {
+		if (next === tab) return;
+		stop();
+		setTab(next);
+		setBpm(bpmFor(next === "progressions" ? openProgression : null));
+	}
+
+	function handleOpenProgression(id: string | null) {
+		stop();
+		setOpenProgressionId(id);
+		setBpm(bpmFor(patternProgressions.find((p) => p.id === id) ?? null));
+	}
+
+	/** A typed chord sequence becomes a progression: one bar per chord. */
+	function handleAddProgression(chords: ChordRef[]) {
+		if (!selectedPattern) return;
+		const progression: ChordProgression = {
+			id: crypto.randomUUID(),
+			patternId: selectedPattern.id,
+			bars: progressionBarsFromChords(selectedPattern.beats, chords),
+			orderIndex: nextOrderIndex(patternProgressions),
+		};
+		handleSaveProgression(progression);
+		stop();
+		setTab("progressions");
+		setOpenProgressionId(progression.id);
+		setBpm(bpmFor(progression));
+	}
+
+	function handleEditProgression(progression: ChordProgression) {
+		setEditingProgression(progression);
+	}
+
+	function handleProgressionSave(update: {
+		bars: Bar[];
+		name: string;
+		bpm?: number;
+		capo: number;
+	}) {
+		if (!editingProgression) return;
+		const next: ChordProgression = { ...editingProgression, ...update };
+		handleSaveProgression(next);
+		stop();
+		if (openProgressionId === next.id) setBpm(bpmFor(next));
+	}
+
+	/**
+	 * Carry a rhythm edit into the progressions written over the pattern. Bars the
+	 * user re-wrote inside a progression keep their own rhythm; see
+	 * `syncBarsToPattern`.
+	 */
+	function syncProgressionsToPattern(previous: StrumPattern, next: StrumPattern) {
+		for (const progression of progressionsForPattern(progressions, next.id)) {
+			const nextBars = syncBarsToPattern(progression.bars, previous.beats, next.beats);
+			if (nextBars !== progression.bars) {
+				handleSaveProgression({ ...progression, bars: nextBars });
+			}
+		}
+	}
+
+	/** Deleting a pattern takes the progressions written over it with it. */
+	function handleRemovePattern(patternId: string) {
+		handleDeleteCustomPattern(patternId);
+		handleDeletePatternProgressions(patternId);
+		if (openProgression?.patternId === patternId) {
+			stop();
+			setOpenProgressionId(null);
+		}
+	}
+
+	function handleRemoveProgression(progression: ChordProgression) {
+		handleDeleteProgression(progression.id);
+		if (openProgressionId === progression.id) {
+			stop();
+			setOpenProgressionId(null);
+		}
 	}
 
 	function stepBpm(delta: number) {
@@ -316,6 +582,16 @@ export default function StrumPage() {
 		wasPlayingRef.current = false;
 	}
 
+	// Step one detent up (closed → half → full) on drag-up / expand gestures.
+	function expandSheet() {
+		setSheetDetent((d) => (d === "closed" ? "half" : "full"));
+	}
+
+	// Step one detent down (full → half → closed) on drag-down / collapse gestures.
+	function collapseSheet() {
+		setSheetDetent((d) => (d === "full" ? "half" : "closed"));
+	}
+
 	function handleBottomBarPointerDown(e: React.PointerEvent) {
 		if ((e.target as HTMLElement).closest("button, input")) return;
 		bottomBarDragStartYRef.current = e.clientY;
@@ -327,7 +603,7 @@ export default function StrumPage() {
 		if (!bottomBarIsDraggingRef.current) return;
 		if (e.clientY - bottomBarDragStartYRef.current < -40) {
 			bottomBarIsDraggingRef.current = false;
-			setShowSheet(true);
+			expandSheet();
 		}
 	}
 
@@ -365,7 +641,7 @@ export default function StrumPage() {
 							setEditingPattern(pattern);
 							setCreateModalOpen(true);
 						}}
-						onDeletePattern={handleDeleteCustomPattern}
+						onDeletePattern={handleRemovePattern}
 						onClose={() => setShowLibrary(false)}
 						user={user}
 					/>
@@ -381,7 +657,9 @@ export default function StrumPage() {
 
 				{/* Center — StepGrid; on mobile occupies exactly the space between navbar and drawer */}
 				<div
-					className="relative h-[calc(100dvh-3.5rem-3.5rem)] md:h-auto md:flex-1 flex items-center justify-center px-4 md:px-8 md:py-0 md:overflow-hidden"
+					// items-start, not centred: the card grows downwards with its tab's
+					// content while the tab strip keeps a constant place on screen.
+					className="relative h-[calc(100dvh-3.5rem-3.5rem)] md:h-auto md:flex-1 flex items-start justify-center overflow-hidden px-4 py-4 md:px-8 md:py-6"
 					onClick={restoreControls}
 				>
 					{/* Library toggle — scoped to centre column, 768–1024 px only */}
@@ -400,13 +678,46 @@ export default function StrumPage() {
 							<SquareMenu />
 						</button>
 					)}
-					<div className="w-full max-w-160">
-						{selectedPattern ? (
-							<StepGridCard
+					<div className="flex max-h-full w-full max-w-160 flex-col">
+						{!patternRestored ? (
+							// Skeleton in the card's shape: tab strip, header, one bar row.
+							<div className="flex w-full flex-col gap-2" aria-busy="true">
+								<div className="flex gap-3 px-3 py-2">
+									<div className="h-2 w-16 animate-pulse bg-denim-tint" />
+									<div className="h-2 w-20 animate-pulse bg-denim-tint" />
+								</div>
+								<div className="flex flex-col gap-4 border border-line bg-step-grid p-5">
+									<div className="h-4 w-40 animate-pulse bg-denim-tint" />
+									<div className="h-16 w-full animate-pulse bg-denim-tint" />
+								</div>
+							</div>
+						) : selectedPattern ? (
+							<PatternWorkspace
 								pattern={selectedPattern}
-								activeCell={{ beatIdx: currBeat, cellIdx: currCell }}
-								selectedChord={selectedChord}
-								onChordChange={setSelectedChord}
+								bars={bars}
+								activeCell={{
+									barIdx: currBar,
+									beatIdx: barLocalBeatIndex(bars, currBeat),
+									cellIdx: currCell,
+								}}
+								tab={tab}
+								onTabChange={handleTabChange}
+								onBarChordChange={handleBarChordChange}
+								progressions={patternProgressions}
+								progressionsLoading={progressionsLoading || !progressionRestored}
+								selectedProgressionId={openProgressionId}
+								onSelectProgression={handleOpenProgression}
+								onAddProgression={handleAddProgression}
+								onEditProgression={handleEditProgression}
+								onDeleteProgression={handleRemoveProgression}
+								onEditPattern={
+									customPatterns.some((p) => p.id === selectedPattern.id)
+										? () => {
+												setEditingPattern(selectedPattern);
+												setCreateModalOpen(true);
+											}
+										: undefined
+								}
 							/>
 						) : (
 							<p className="text-ink-dim text-sm text-center">
@@ -426,12 +737,18 @@ export default function StrumPage() {
 						{/* TRANSPORT */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Transport</span>
-								<span
-									className={`transition-opacity duration-150 ${spaceMode === "playPause" ? "opacity-100" : "opacity-0"}`}
-									aria-hidden={spaceMode !== "playPause"}
-								>
-									Space
+								<span className="flex items-center gap-1.5">
+									<Play size={12} strokeWidth={2} className="shrink-0" />
+									Transport
+								</span>
+								{/* Loop toggle: on = loop the pattern, off = play once */}
+								<span className="flex items-center gap-1.5">
+									<Repeat size={12} strokeWidth={2} className="shrink-0" />
+									<Rocker
+										checked={!playOnce}
+										onChange={(v) => setPlayOnce(!v)}
+										ariaLabel="Loop"
+									/>
 								</span>
 							</div>
 							<div className="flex gap-2">
@@ -440,7 +757,7 @@ export default function StrumPage() {
 									onClick={handleHitPlayAndPause}
 									disabled={!selectedPattern}
 									aria-label={isPlaying ? "Stop" : "Play"}
-									className="flex h-13 w-full items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
+									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
 								>
 									{isPlaying ? (
 										<CircleStop size={20} strokeWidth={1.5} />
@@ -448,27 +765,88 @@ export default function StrumPage() {
 										<CirclePlay size={20} strokeWidth={1.5} />
 									)}
 								</button>
+								<button
+									type="button"
+									onClick={stop}
+									disabled={!isPlaying}
+									aria-label="Stop and return to start"
+									className="flex h-13 flex-1 items-center justify-center border border-line-strong text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint disabled:pointer-events-none disabled:opacity-30"
+								>
+									<CircleStop size={20} strokeWidth={1.5} />
+								</button>
 							</div>
-							<div>
+							<div className={playOnce ? "opacity-40" : ""}>
 								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Spacebar
+									Loop gap
 								</div>
 								<Segmented
-									options={[
-										{ value: "playPause", label: "Play/Pause" },
-										{ value: "tapTempo", label: "Tap" },
-									]}
-									value={spaceMode}
-									onChange={(v) => setSpaceMode(v as "playPause" | "tapTempo")}
+									options={LOOP_GAP_OPTIONS.map((gap) => ({
+										value: String(gap),
+										label: `${gap}S`,
+									}))}
+									value={String(loopGap)}
+									onChange={(v) => setLoopGap(Number(v) as LoopGapSeconds)}
+									disabled={playOnce}
 								/>
+							</div>
+							{/* STRUM SOUND — sits directly under the play controls */}
+							<div className="flex flex-col gap-3">
+								<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
+									<span className="flex items-center gap-1.5">
+										<Volume2 size={12} strokeWidth={2} className="shrink-0" />
+										Strum Sound
+									</span>
+									<span className="flex items-center gap-2">
+										<span className="tabular-nums">
+											{Math.round(strumGain * 100)}%
+										</span>
+										<Rocker
+											checked={strumEnabled}
+											onChange={setStrumEnabled}
+											ariaLabel="Strum sound"
+										/>
+									</span>
+								</div>
+								<div className={!strumEnabled ? "opacity-40" : ""}>
+									<Fader
+										min={0}
+										max={2}
+										step={0.01}
+										value={strumGain}
+										onValue={(v) => {
+											setStrumGain(v);
+											navigator.vibrate?.(10);
+										}}
+										ticks={[0, 25, 50, 75, 100]}
+										tickValues={[0, 0.5, 1, 1.5, 2]}
+										scale={["0", "100", "200"]}
+										disabled={!strumEnabled}
+										ariaLabel="Strum volume"
+									/>
+								</div>
 							</div>
 						</div>
 
 						{/* TEMPO */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Tempo</span>
-								<span>40–220</span>
+								<span className="flex items-center gap-1.5">
+									<Gauge size={12} strokeWidth={2} className="shrink-0" />
+									Tempo
+								</span>
+								<div className="flex items-center gap-2">
+									<span>40–220</span>
+									<button
+										type="button"
+										onClick={() => setBpm(defaultBpm)}
+										disabled={bpm === defaultBpm}
+										aria-label="Reset tempo to the pattern default"
+										title={`Reset to ${defaultBpm} BPM`}
+										className="flex items-center justify-center text-ink-faint transition-colors hover:text-denim disabled:pointer-events-none disabled:opacity-30"
+									>
+										<RotateCcw size={12} strokeWidth={2} />
+									</button>
+								</div>
 							</div>
 							{/* BPM readout with LCD segment-ghost */}
 							<div className="border border-line-strong px-0 pt-3 pb-2 text-center">
@@ -520,7 +898,7 @@ export default function StrumPage() {
 									<button
 										type="button"
 										onClick={handleTapTempo}
-										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
+										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint border-b-denim"
 									>
 										TAP
 									</button>
@@ -540,101 +918,16 @@ export default function StrumPage() {
 										</button>
 									))}
 								</div>
-								{/* Fixed-height row reserves space for the TAP→Space hint so switching modes causes no layout shift */}
-								<div className="flex gap-2 h-4">
-									<div className="flex-1" />
-									<div className="flex-1" />
-									<div className="flex-1 flex items-center justify-center">
-										<span
-											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
-											aria-hidden="true"
-										>
-											space
-										</span>
-									</div>
-									<div className="flex-1" />
-									<div className="flex-1" />
-								</div>
 							</div>
 						</div>
 
-						{/* LOOP */}
+						{/* METRONOME — sits directly under Tempo. Header toggle enables the
+					    metronome; accent on beat 1 is a strum-only extra below it. */}
 						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Loop</span>
-							</div>
-							<div className="flex items-center justify-between">
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Play once
-								</span>
-								<Rocker
-									checked={playOnce}
-									onChange={setPlayOnce}
-									ariaLabel="Play once"
-								/>
-							</div>
-							<div className={playOnce ? "opacity-40" : ""}>
-								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Loop gap
-								</div>
-								<Segmented
-									options={LOOP_GAP_OPTIONS.map((gap) => ({
-										value: String(gap),
-										label: `${gap}S`,
-									}))}
-									value={String(loopGap)}
-									onChange={(v) => setLoopGap(Number(v) as LoopGapSeconds)}
-									disabled={playOnce}
-								/>
-							</div>
-						</div>
-
-						{/* STRUM SOUND */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Strum Sound</span>
-								<span className="tabular-nums">{Math.round(strumGain * 100)}%</span>
-							</div>
-							<div className="flex items-center justify-between">
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Enabled
-								</span>
-								<Rocker
-									checked={strumEnabled}
-									onChange={setStrumEnabled}
-									ariaLabel="Strum sound"
-								/>
-							</div>
-							<div className={!strumEnabled ? "opacity-40" : ""}>
-								<Fader
-									min={0}
-									max={2}
-									step={0.01}
-									value={strumGain}
-									onValue={(v) => {
-										setStrumGain(v);
-										navigator.vibrate?.(10);
-									}}
-									ticks={[0, 25, 50, 75, 100]}
-									tickValues={[0, 0.5, 1, 1.5, 2]}
-									scale={["0", "100", "200"]}
-									disabled={!strumEnabled}
-									ariaLabel="Strum volume"
-								/>
-							</div>
-						</div>
-
-						{/* METRONOME */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Metronome</span>
-								<span className="tabular-nums">
-									{Math.round(metronomeGain * 100)}%
-								</span>
-							</div>
-							<div className="flex items-center justify-between">
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Enabled
+								<span className="flex items-center gap-1.5">
+									<Metronome size={12} strokeWidth={2} className="shrink-0" />
+									Metronome
 								</span>
 								<Rocker
 									checked={metronomeEnabled}
@@ -642,19 +935,27 @@ export default function StrumPage() {
 									ariaLabel="Metronome"
 								/>
 							</div>
-							<div
-								className={`flex items-center justify-between ${
-									!metronomeEnabled ? "opacity-40" : ""
-								}`}
-							>
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Accent beat 1
-								</span>
-								<Rocker
-									checked={accentEnabled}
-									onChange={setAccentEnabled}
+							<div className={!metronomeEnabled ? "opacity-40" : ""}>
+								<div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									<span>Metronome vol.</span>
+									<span className="tabular-nums">
+										{Math.round(metronomeGain * 100)}%
+									</span>
+								</div>
+								<Fader
+									min={0}
+									max={1}
+									step={0.01}
+									value={metronomeGain}
+									onValue={(v) => {
+										setMetronomeGain(v);
+										navigator.vibrate?.(10);
+									}}
+									ticks={[0, 25, 50, 75, 100]}
+									tickValues={[0, 0.25, 0.5, 0.75, 1]}
+									scale={["0", "50", "100"]}
 									disabled={!metronomeEnabled}
-									ariaLabel="Accent beat 1"
+									ariaLabel="Metronome volume"
 								/>
 							</div>
 							<div className={!metronomeEnabled ? "opacity-40" : ""}>
@@ -672,24 +973,19 @@ export default function StrumPage() {
 									disabled={!metronomeEnabled}
 								/>
 							</div>
-							<div className={!metronomeEnabled ? "opacity-40" : ""}>
-								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Metronome vol.
-								</div>
-								<Fader
-									min={0}
-									max={1}
-									step={0.01}
-									value={metronomeGain}
-									onValue={(v) => {
-										setMetronomeGain(v);
-										navigator.vibrate?.(10);
-									}}
-									ticks={[0, 25, 50, 75, 100]}
-									tickValues={[0, 0.25, 0.5, 0.75, 1]}
-									scale={["0", "50", "100"]}
+							<div
+								className={`flex items-center justify-between ${
+									!metronomeEnabled ? "opacity-40" : ""
+								}`}
+							>
+								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
+									Accent beat 1
+								</span>
+								<Rocker
+									checked={accentEnabled}
+									onChange={setAccentEnabled}
 									disabled={!metronomeEnabled}
-									ariaLabel="Metronome volume"
+									ariaLabel="Accent beat 1"
 								/>
 							</div>
 						</div>
@@ -729,7 +1025,7 @@ export default function StrumPage() {
 
 			{/* Backdrop — closes sheet without bubbling to the card */}
 			{showSheet && (
-				<div className="md:hidden fixed inset-0 z-20" onClick={() => setShowSheet(false)} />
+				<div className="md:hidden fixed inset-0 z-20" onClick={() => setSheetDetent("closed")} />
 			)}
 
 			{/* ── Mobile fixed bottom drawer ───────────────────────────────────── */}
@@ -745,7 +1041,11 @@ export default function StrumPage() {
 				{/* Collapsible panel — max-height transition */}
 				<div
 					className={`bg-popover overflow-hidden transition-[max-height] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-						showSheet ? "max-h-[calc(33.333vh-56px)] overflow-y-auto" : "max-h-0"
+						sheetDetent === "full"
+							? "max-h-[calc(85vh-56px)] overflow-y-auto"
+							: sheetDetent === "half"
+								? "max-h-[calc(33.333vh-56px)] overflow-y-auto"
+								: "max-h-0"
 					}`}
 				>
 					{/* Drag handle — swipe down to collapse */}
@@ -759,9 +1059,15 @@ export default function StrumPage() {
 						}}
 						onPointerMove={(e) => {
 							if (!handleIsDraggingRef.current) return;
-							if (e.clientY - handleDragStartYRef.current > 40) {
+							const dy = e.clientY - handleDragStartYRef.current;
+							if (dy < -40) {
+								// Drag up → expand a detent.
 								handleIsDraggingRef.current = false;
-								setShowSheet(false);
+								expandSheet();
+							} else if (dy > 40) {
+								// Drag down → collapse a detent (full → half → closed).
+								handleIsDraggingRef.current = false;
+								collapseSheet();
 							}
 						}}
 						onPointerUp={() => {
@@ -775,8 +1081,23 @@ export default function StrumPage() {
 						{/* Tempo — steppers + fader */}
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Tempo</span>
-								<span className="tabular-nums text-denim">{bpm}</span>
+								<span className="flex items-center gap-1.5">
+									<Gauge size={12} strokeWidth={2} className="shrink-0" />
+									Tempo
+								</span>
+								<div className="flex items-center gap-2">
+									<span className="tabular-nums text-denim">{bpm}</span>
+									<button
+										type="button"
+										onClick={() => setBpm(defaultBpm)}
+										disabled={bpm === defaultBpm}
+										aria-label="Reset tempo to the pattern default"
+										title={`Reset to ${defaultBpm} BPM`}
+										className="flex items-center justify-center text-ink-faint transition-colors hover:text-denim disabled:pointer-events-none disabled:opacity-30"
+									>
+										<RotateCcw size={12} strokeWidth={2} />
+									</button>
+								</div>
 							</div>
 							<div className="flex flex-col">
 								<div className="flex gap-2">
@@ -818,21 +1139,6 @@ export default function StrumPage() {
 										</button>
 									))}
 								</div>
-								{/* Fixed-height row reserves space for the TAP→Space hint */}
-								<div className="flex gap-2 h-4">
-									<div className="flex-1" />
-									<div className="flex-1" />
-									<div className="flex-1 flex items-center justify-center">
-										<span
-											className={`font-mono text-[8px] uppercase tracking-[0.08em] text-ink-faint transition-opacity duration-150 ${spaceMode === "tapTempo" ? "opacity-100" : "opacity-0"}`}
-											aria-hidden="true"
-										>
-											space
-										</span>
-									</div>
-									<div className="flex-1" />
-									<div className="flex-1" />
-								</div>
 							</div>
 							<Fader
 								min={MIN_BPM}
@@ -853,7 +1159,10 @@ export default function StrumPage() {
 						{/* Strum Sound volume */}
 						<div className={`flex flex-col gap-3 ${!strumEnabled ? "opacity-40" : ""}`}>
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span>Strum Sound</span>
+								<span className="flex items-center gap-1.5">
+									<Volume2 size={12} strokeWidth={2} className="shrink-0" />
+									Strum Sound
+								</span>
 								<span className="tabular-nums">{Math.round(strumGain * 100)}%</span>
 							</div>
 							<Fader
@@ -874,23 +1183,6 @@ export default function StrumPage() {
 						</div>
 
 						<div className="border-t border-line" />
-
-						{/* Accent beat 1 */}
-						<div
-							className={`flex items-center justify-between ${
-								!metronomeEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-								Accent beat 1
-							</span>
-							<Rocker
-								checked={accentEnabled}
-								onChange={setAccentEnabled}
-								disabled={!metronomeEnabled}
-								ariaLabel="Accent beat 1"
-							/>
-						</div>
 
 						{/* Subdivision */}
 						<div className={!metronomeEnabled ? "opacity-40" : ""}>
@@ -934,6 +1226,23 @@ export default function StrumPage() {
 							/>
 						</div>
 
+						{/* Accent beat 1 */}
+						<div
+							className={`flex items-center justify-between ${
+								!metronomeEnabled ? "opacity-40" : ""
+							}`}
+						>
+							<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
+								Accent beat 1
+							</span>
+							<Rocker
+								checked={accentEnabled}
+								onChange={setAccentEnabled}
+								disabled={!metronomeEnabled}
+								ariaLabel="Accent beat 1"
+							/>
+						</div>
+
 						<div className="border-t border-line" />
 
 						{/* Loop Gap — greyed when Play Once active */}
@@ -974,7 +1283,7 @@ export default function StrumPage() {
 
 				{/* Always-visible bottom bar */}
 				<div
-					className="bg-popover flex items-center gap-1.5 px-3 py-2"
+					className="relative bg-popover flex items-center gap-1.5 px-3 py-2"
 					onPointerDown={handleBottomBarPointerDown}
 					onPointerMove={handleBottomBarPointerMove}
 					onPointerUp={handleBottomBarPointerUp}
@@ -1004,25 +1313,19 @@ export default function StrumPage() {
 						</button>
 					</div>
 
-					{/* Loop / Once segmented pill */}
-					<div className="flex shrink-0 border border-line-strong">
-						<button
-							onClick={() => setPlayOnce(false)}
-							className={`px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
-								!playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
-							}`}
-						>
-							Loop
-						</button>
-						<button
-							onClick={() => setPlayOnce(true)}
-							className={`border-l border-line-strong px-3 py-1.75 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
-								playOnce ? "bg-denim text-on-denim" : "text-ink-dim"
-							}`}
-						>
-							Once
-						</button>
-					</div>
+					{/* Loop icon toggle: on = loop the pattern, off = play once */}
+					<button
+						onClick={() => setPlayOnce(!playOnce)}
+						aria-label="Loop"
+						aria-pressed={!playOnce}
+						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors ${
+							!playOnce
+								? "border-denim text-denim"
+								: "border-line-strong text-ink-faint"
+						}`}
+					>
+						<Repeat size={18} />
+					</button>
 
 					{/* Metronome icon toggle */}
 					<button
@@ -1038,10 +1341,11 @@ export default function StrumPage() {
 						<Metronome size={18} />
 					</button>
 
-					{/* Chevron — toggles the controls panel */}
+					{/* Chevron — centered in the bar; toggles the controls panel open/closed */}
 					<button
-						onClick={() => setShowSheet((v) => !v)}
-						className="p-1.5 text-ink-faint hover:text-ink transition-colors duration-150 shrink-0"
+						onClick={() => setSheetDetent((d) => (d === "closed" ? "half" : "closed"))}
+						aria-label={showSheet ? "Close controls" : "Open controls"}
+						className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-1.5 text-ink-faint hover:text-ink transition-colors duration-150"
 					>
 						<ChevronUp
 							size={20}
@@ -1049,11 +1353,20 @@ export default function StrumPage() {
 						/>
 					</button>
 
-					{/* Play/Stop — flush right */}
-					<div className="ml-auto flex items-center shrink-0">
+					{/* Stop + Play — flush right */}
+					<div className="ml-auto flex items-center gap-0.5 shrink-0">
+						<button
+							onClick={stop}
+							aria-label="Stop and return to start"
+							className={`p-1 text-ink-dim transition-colors duration-150 ${
+								isPlaying ? "visible" : "invisible"
+							}`}
+						>
+							<CircleStop size={28} strokeWidth={1.5} />
+						</button>
 						<div
 							onClick={handleHitPlayAndPause}
-							className={`flex h-11 w-11 items-center justify-center bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
+							className={`flex h-11 w-11 items-center justify-center rounded-none bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
 								selectedPattern
 									? "cursor-pointer"
 									: "opacity-30 pointer-events-none"
@@ -1078,7 +1391,12 @@ export default function StrumPage() {
 				onSave={(pattern) => {
 					if (editingPattern) {
 						handleEditCustomPattern(pattern);
-						if (selectedPattern?.id === pattern.id) setSelectedPattern(pattern);
+						syncProgressionsToPattern(editingPattern, pattern);
+						if (selectedPattern?.id === pattern.id) {
+							setSelectedPattern(pattern);
+							// The edit may have moved the pattern's default tempo — adopt it.
+							setBpm(patternBpm(pattern));
+						}
 					} else {
 						handleSaveCustomPattern(pattern);
 					}
@@ -1086,6 +1404,16 @@ export default function StrumPage() {
 				editPattern={editingPattern ?? undefined}
 				user={user}
 			/>
+
+			{editingProgression && (
+				<ProgressionEditModal
+					open
+					onClose={() => setEditingProgression(null)}
+					onSave={handleProgressionSave}
+					progression={editingProgression}
+					patternBpm={selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM}
+				/>
+			)}
 		</>
 	);
 }

@@ -210,6 +210,26 @@ export default function ProgressionEditModal({
 		onClose();
 	}
 
+	/**
+	 * Enter saves, from anywhere in the dialog — the same key that commits a
+	 * one-line form everywhere else. It stands down on a focused button (Enter
+	 * presses that button), inside a textarea, and while the discard question is
+	 * up; the chord fields stop the key before it ever reaches here.
+	 */
+	function handleDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+		if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+		if (discardConfirm) return;
+		if (
+			e.target instanceof HTMLTextAreaElement ||
+			e.target instanceof HTMLButtonElement ||
+			e.target instanceof HTMLAnchorElement
+		) {
+			return;
+		}
+		e.preventDefault();
+		handleSave();
+	}
+
 	function requestClose() {
 		if (draftSnapshot(bars, name, bpmInput, capoInput) !== pristineRef.current)
 			setDiscardConfirm(true);
@@ -225,6 +245,7 @@ export default function ProgressionEditModal({
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && requestClose()}>
 			<DialogContent
 				showCloseButton={false}
+				onKeyDown={handleDialogKeyDown}
 				className="w-full max-w-120 md:max-w-[58rem] flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
 			>
 				<DialogHeader className="shrink-0 flex-row items-center justify-between gap-2 p-4 pb-0">

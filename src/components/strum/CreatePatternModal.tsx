@@ -140,6 +140,25 @@ export default function CreatePatternModal({
 		return draftSnapshot(name, parsedBpm(), bars) !== pristineRef.current;
 	}
 
+	/**
+	 * Enter saves, from anywhere in the dialog. It stands down on a focused
+	 * button (Enter presses that button), inside a textarea, and while either the
+	 * discard question or the sign-in prompt is waiting on an answer of its own.
+	 */
+	function handleDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+		if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+		if (discardConfirm || showSignInPrompt) return;
+		if (
+			e.target instanceof HTMLTextAreaElement ||
+			e.target instanceof HTMLButtonElement ||
+			e.target instanceof HTMLAnchorElement
+		) {
+			return;
+		}
+		e.preventDefault();
+		handleSave();
+	}
+
 	// Entry point for every close affordance (header button, Cancel, outside
 	// click, Escape). Guards against discarding unsaved edits.
 	function requestClose() {
@@ -152,6 +171,7 @@ export default function CreatePatternModal({
 			<Dialog open={open} onOpenChange={(isOpen) => !isOpen && requestClose()}>
 				<DialogContent
 					showCloseButton={false}
+					onKeyDown={handleDialogKeyDown}
 					className="w-full max-w-120 flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
 				>
 					<DialogHeader className="shrink-0 flex-row items-center justify-between gap-2 p-4 pb-0">

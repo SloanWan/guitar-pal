@@ -43,6 +43,7 @@ import {
 	RotateCcw,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
+import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 
 // Remembers the last-viewed pattern id so a page refresh reopens it instead of
 // defaulting back to the first preset. Device-local UI state — not synced.
@@ -1199,19 +1200,13 @@ export default function FingerpickPage() {
 		};
 	}, [isPlaying]);
 
-	// Spacebar toggles play/pause.
+	// Spacebar toggles play/pause, anywhere on the page — but not in a form field
+	// and not behind an open dialog (see shouldRunPageShortcut).
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
-			if (
-				(e.target instanceof HTMLInputElement && e.target.type !== "range") ||
-				e.target instanceof HTMLSelectElement ||
-				e.target instanceof HTMLTextAreaElement
-			)
-				return;
-			if (e.code === "Space") {
-				e.preventDefault();
-				handlePlayPause();
-			}
+			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
+			e.preventDefault();
+			handlePlayPause();
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);

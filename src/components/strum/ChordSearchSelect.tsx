@@ -58,9 +58,13 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 		inputRef.current?.blur();
 	}
 
+	// Every key this widget acts on is also stopped: the enclosing dialog saves on
+	// Enter and closes on Escape, and picking a chord out of the dropdown must do
+	// neither of those on the way through.
 	function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
 		if (e.key === "Escape") {
 			e.preventDefault();
+			e.stopPropagation();
 			stopEditing();
 			inputRef.current?.blur();
 			return;
@@ -68,12 +72,15 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 		if (results.length === 0) return;
 		if (e.key === "ArrowDown") {
 			e.preventDefault();
+			e.stopPropagation();
 			setHighlighted((i) => (i + 1) % results.length);
 		} else if (e.key === "ArrowUp") {
 			e.preventDefault();
+			e.stopPropagation();
 			setHighlighted((i) => (i - 1 + results.length) % results.length);
 		} else if (e.key === "Enter") {
 			e.preventDefault();
+			e.stopPropagation();
 			const pick = results[highlighted];
 			if (pick) commit(pick);
 		}

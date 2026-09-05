@@ -56,6 +56,7 @@ import { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
+import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import Fader from "@/components/ui/Fader";
 
 const MIN_BPM = STRUM_BPM_MIN;
@@ -363,14 +364,15 @@ export default function StrumPage() {
 		return () => target.removeEventListener("scroll", handleScroll);
 	}, []);
 
+	// Space is the transport, anywhere on the page — including with a button
+	// focused, where the browser would otherwise re-fire that button. It stands
+	// down inside a form field and behind an open dialog, where the keystroke
+	// belongs to what is on top (see shouldRunPageShortcut).
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
-			if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
-				return;
-			if (e.code === "Space") {
-				e.preventDefault();
-				handleHitPlayAndPause();
-			}
+			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
+			e.preventDefault();
+			handleHitPlayAndPause();
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);

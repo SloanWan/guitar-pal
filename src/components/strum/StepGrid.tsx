@@ -4,7 +4,10 @@ import {
 	paddedBeatCells,
 	paddedCellIndex,
 	barsFitTwoColumns,
+	followScrollTop,
 } from "@/lib/strumGridLayout";
+import ChordDiagram from "@/components/chords/ChordDiagram";
+import type { BarChordDiagram } from "./useBarChordDiagrams";
 
 import { MoveDown, MoveUp, X, Dot, Music } from "lucide-react";
 
@@ -15,11 +18,45 @@ const BEAT_LABELS = {
 	4: (beatIdx: number) => [`${beatIdx + 1}`, "e", "+", "a"],
 };
 
+/** Nearest ancestor that actually scrolls vertically, if any. */
+function scrollableAncestor(el: HTMLElement): HTMLElement | null {
+	for (let node = el.parentElement; node; node = node.parentElement) {
+		const overflowY = getComputedStyle(node).overflowY;
+		if (
+			(overflowY === "auto" || overflowY === "scroll") &&
+			node.scrollHeight > node.clientHeight
+		)
+			return node;
+	}
+	return null;
+}
+
 export interface ActiveCell {
 	barIdx: number;
 	/** Beat index within its bar, not into the flattened sequence. */
 	beatIdx: number;
 	cellIdx: number;
+}
+
+/** How a bar announces its chord: written out, or drawn on a fretboard. */
+export type ChordView = "name" | "diagram";
+
+/**
+ * Stands in while a bar's shape is being fetched. Same box as the compact
+ * `ChordDiagram` — 100 x 86 grid plus its label — so the real diagram drops
+ * into place without moving the bar underneath it.
+ */
+function ChordDiagramSkeleton({ label }: { label: string }) {
+	return (
+		<div
+			className="flex animate-pulse flex-col items-center gap-1 border border-transparent bg-denim-tint p-3"
+			aria-label={`Loading the ${label} diagram`}
+			role="status"
+		>
+			<div className="h-[86px] w-[100px] bg-line" />
+			<span className="text-xs font-medium text-denim">{label}</span>
+		</div>
+	);
 }
 
 export default function StepGrid({
@@ -28,6 +65,8 @@ export default function StepGrid({
 	size = "md",
 	showLabels = true,
 	onChordClick,
+	chordView = "name",
+	barDiagrams,
 }: {
 	bars: Bar[];
 	activeCell: ActiveCell | null;
@@ -35,6 +74,10 @@ export default function StepGrid({
 	showLabels?: boolean; // default true
 	/** When given, each bar's chord label becomes a button scoped to that bar. */
 	onChordClick?: (barIdx: number) => void;
+	/** Chord name (default) or fretboard shape above each bar. */
+	chordView?: ChordView;
+	/** Shapes for the "diagram" view, index-aligned with `bars`. */
+	barDiagrams?: (BarChordDiagram | null)[];
 }) {
 	const isSm = size === "sm";
 	const isMultiBar = bars.length > 1;
@@ -43,13 +86,47 @@ export default function StepGrid({
 	const twoColumns = !isSm && barsFitTwoColumns(bars);
 
 	// The bar currently playing, scrolled into view so a tall stack follows the
-	// cursor instead of leaving the player looking at bar 1.
+	// cursor instead of leaving the player looking at bar 1. A multi-bar
+	// progression glides: the playing bar holds the middle of its scroller and
+	// the row after it stays on screen, so the next chord is readable ahead of
+	// time. A lone bar keeps the cheap "only scroll if it is off screen" nudge.
 	const barRefs = useRef<(HTMLDivElement | null)[]>([]);
 	const activeBarIdx = activeCell?.barIdx ?? null;
 	useEffect(() => {
 		if (activeBarIdx === null) return;
-		barRefs.current[activeBarIdx]?.scrollIntoView({ block: "nearest" });
-	}, [activeBarIdx]);
+		const active = barRefs.current[activeBarIdx];
+		if (!active) return;
+
+		const scroller = isMultiBar ? scrollableAncestor(active) : null;
+		if (!scroller) {
+			active.scrollIntoView({ block: "nearest" });
+			return;
+		}
+
+		const scrollerTop = scroller.getBoundingClientRect().top - scroller.scrollTop;
+		const activeRect = active.getBoundingClientRect();
+		// The row below, not merely the next bar: under the two-per-row layout the
+		// following bar can sit beside this one, and that row is already in view.
+		let nextRowBottom: number | null = null;
+		for (let i = activeBarIdx + 1; i < barRefs.current.length; i++) {
+			const rect = barRefs.current[i]?.getBoundingClientRect();
+			if (rect && rect.top > activeRect.top + 1) {
+				nextRowBottom = rect.bottom - scrollerTop;
+				break;
+			}
+		}
+		const target = followScrollTop({
+			activeTop: activeRect.top - scrollerTop,
+			activeHeight: activeRect.height,
+			nextBottom: nextRowBottom,
+			viewportHeight: scroller.clientHeight,
+			contentHeight: scroller.scrollHeight,
+		});
+		if (Math.abs(target - scroller.scrollTop) < 1) return;
+
+		const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+		scroller.scrollTo({ top: target, behavior: reduceMotion ? "auto" : "smooth" });
+	}, [activeBarIdx, isMultiBar]);
 
 	// The arrow shrinks with the cell so a sixteenth-note bar still fits a phone
 	// screen whole, rather than overflowing or overlapping.
@@ -86,6 +163,9 @@ export default function StepGrid({
 			{bars.map((bar, barIdx) => {
 				const isActiveBar = activeCell?.barIdx === barIdx;
 				const chordLabel = bar.chord ? `${bar.chord.root} ${bar.chord.suffix}` : null;
+				// The shape only replaces the name once it has actually arrived; until
+				// then — and for a bar with no chord — the name stands in.
+				const diagram = chordView === "diagram" ? (barDiagrams?.[barIdx] ?? null) : null;
 				return (
 					<div
 						key={barIdx}
@@ -104,7 +184,29 @@ export default function StepGrid({
 										{barIdx + 1}
 									</span>
 								)}
-								{onChordClick ? (
+								{diagram && chordLabel ? (
+									onChordClick ? (
+										<button
+											onClick={() => onChordClick(barIdx)}
+											title={`${chordLabel} — change this bar's chord`}
+											className="border border-transparent transition-colors hover:border-denim"
+										>
+											{diagram.status === "ready" ? (
+												<ChordDiagram
+													def={diagram.def}
+													label={chordLabel}
+													size="compact"
+												/>
+											) : (
+												<ChordDiagramSkeleton label={chordLabel} />
+											)}
+										</button>
+									) : diagram.status === "ready" ? (
+										<ChordDiagram def={diagram.def} label={chordLabel} size="compact" />
+									) : (
+										<ChordDiagramSkeleton label={chordLabel} />
+									)
+								) : onChordClick ? (
 									<button
 										onClick={() => onChordClick(barIdx)}
 										className={`flex items-center gap-1.5 border px-2 py-1 text-[11px] font-semibold transition-colors ${

@@ -7,7 +7,11 @@ import {
 	type ChordRef,
 	type StrumPattern,
 } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import {
+	chordVoicingToVexChords,
+	type ChordVoicing,
+	type VexChordDef,
+} from "@/lib/chordVoicingToVexChords";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 
@@ -140,6 +144,21 @@ export function chordRefToMidi(
 	if (!voicing) return null;
 	const pitches = chordVoicingToMidi(voicing).map((n) => n.midi);
 	return pitches.length > 0 ? pitches : null;
+}
+
+/**
+ * The other half of the same boundary, for the eye rather than the ear: the
+ * fretboard shape a bar's chord draws. Picks the same voicing the engine
+ * sounds — the pinned one if it still resolves, the standard shape otherwise —
+ * so the diagram never contradicts what is playing.
+ */
+export function chordRefToDiagram(
+	ref: ChordRef | null,
+	voicings: ChordVoicing[],
+): VexChordDef | null {
+	if (!ref) return null;
+	const voicing = selectRefVoicing(ref, voicings);
+	return voicing ? chordVoicingToVexChords(voicing) : null;
 }
 
 /**

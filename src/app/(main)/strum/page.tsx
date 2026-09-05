@@ -30,6 +30,7 @@ import {
 	syncBarsToPattern,
 } from "@/lib/strumProgressions";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import { loadVoicings } from "@/lib/chordVoicingCache";
 
 import { useState, useEffect, useRef, useMemo } from "react";
 
@@ -153,18 +154,16 @@ function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
 	);
 }
 
-/** Fetches the voicings a bar's ChordRef points at, for the audio engine. */
+/**
+ * Fetches the voicings a bar's ChordRef points at, for the audio engine.
+ * Shares `voicingCache` with the chord-diagram view, so resolving a
+ * progression's pitches also warms the shapes it can be asked to draw.
+ */
 async function lookupVoicings(ref: {
 	root: string;
 	suffix: string;
 }): Promise<ChordVoicing[] | null> {
-	const { data } = await createClient()
-		.from("chords")
-		.select("chord_voicings(id, label, start_fret, barre_fret, capo, frets, fingers)")
-		.eq("root", ref.root)
-		.eq("suffix", ref.suffix)
-		.single();
-	return (data as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? null;
+	return loadVoicings(ref.root, ref.suffix);
 }
 
 export default function StrumPage() {

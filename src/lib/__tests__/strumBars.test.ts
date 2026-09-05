@@ -5,6 +5,7 @@ import {
 	validateBars,
 	selectRefVoicing,
 	chordRefToMidi,
+	chordRefToDiagram,
 	resolveBarChords,
 	transposeBarPitches,
 	normalizeBpm,
@@ -184,6 +185,33 @@ describe("chordRefToMidi — the ChordRef → pitch boundary", () => {
 	it("returns null when every string of the voicing is muted", () => {
 		const silent = voicing({ label: "Standard", frets: "xxxxxx", fingers: "000000" });
 		expect(chordRefToMidi(C_REF, [silent])).toBeNull();
+	});
+});
+
+describe("chordRefToDiagram — the ChordRef → fretboard shape boundary", () => {
+	it("draws the standard voicing when nothing is pinned", () => {
+		const def = chordRefToDiagram(C_REF, [C_BARRE, C_MAJOR]);
+		// x32010 at the nut: muted low E, then frets 3-2-0-1-0.
+		expect(def).not.toBeNull();
+		expect(def!.position).toBe(1);
+		expect(def!.chord).toEqual([
+			[6, "x"],
+			[5, 3, "3"],
+			[4, 2, "2"],
+			[3, 0],
+			[2, 1, "1"],
+			[1, 0],
+		]);
+	});
+
+	it("draws the pinned voicing, so the shape matches what sounds", () => {
+		const def = chordRefToDiagram({ ...C_REF, voicingId: "c-barre" }, [C_MAJOR, C_BARRE]);
+		expect(def!.position).toBe(3);
+	});
+
+	it("returns null for a bar with no chord, and for a chord with no voicings", () => {
+		expect(chordRefToDiagram(null, [C_MAJOR])).toBeNull();
+		expect(chordRefToDiagram(C_REF, [])).toBeNull();
 	});
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { List, Music, Pencil, Plus, Trash2 } from "lucide-react";
+import { Guitar, List, Music, Pencil, Plus, Trash2, Type } from "lucide-react";
 import type { Bar, ChordProgression, ChordRef, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,
@@ -12,7 +12,8 @@ import {
 import { MAX_BARS } from "@/lib/strumBarEdit";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import StepGrid, { type ActiveCell } from "./StepGrid";
+import StepGrid, { type ActiveCell, type ChordView } from "./StepGrid";
+import { useBarChordDiagrams } from "./useBarChordDiagrams";
 import StepGridCard from "./StepGridCard";
 import PatternBarBody from "./PatternBarBody";
 import { type ConfirmedChord } from "./ChordPickerModal";
@@ -100,6 +101,13 @@ export default function PatternWorkspace({
 	const [railOpen, setRailOpen] = useState(false);
 	// Fetched the first time the composer opens, then shared by every parse.
 	const [chordIndex, setChordIndex] = useState<readonly ChordIndexEntry[]>([]);
+	// How the open progression announces its chords: by name, or as the shape to
+	// hold. The shapes are fetched only while the diagrams are on screen.
+	const [chordView, setChordView] = useState<ChordView>("name");
+	const barDiagrams = useBarChordDiagrams(
+		bars,
+		chordView === "diagram" && tab === "progressions",
+	);
 
 	useEffect(() => {
 		if (!composerOpen || chordIndex.length > 0) return;
@@ -411,6 +419,28 @@ export default function PatternWorkspace({
 									<div className="flex shrink-0 items-center">
 										<button
 											type="button"
+											onClick={() =>
+												setChordView((view) => (view === "name" ? "diagram" : "name"))
+											}
+											aria-label={
+												chordView === "name"
+													? "Show chord diagrams"
+													: "Show chord names"
+											}
+											aria-pressed={chordView === "diagram"}
+											title={
+												chordView === "name"
+													? "Show chord diagrams"
+													: "Show chord names"
+											}
+											className={`flex items-center justify-center p-1.5 transition-colors hover:bg-denim-tint hover:text-denim ${
+												chordView === "diagram" ? "text-denim" : "text-ink-dim"
+											}`}
+										>
+											{chordView === "name" ? <Guitar size={14} /> : <Type size={14} />}
+										</button>
+										<button
+											type="button"
 											onClick={() => onEditProgression(selected)}
 											aria-label="Edit progression"
 											title="Edit progression"
@@ -433,7 +463,12 @@ export default function PatternWorkspace({
 							{/* Scrolls internally; playback keeps the current bar in view. */}
 							<div className="flex min-h-0 flex-col items-center overflow-y-auto px-3 py-5 sm:px-5">
 								<div className="my-auto w-full">
-									<StepGrid bars={bars} activeCell={activeCell} />
+									<StepGrid
+										bars={bars}
+										activeCell={activeCell}
+										chordView={chordView}
+										barDiagrams={barDiagrams}
+									/>
 								</div>
 							</div>
 						</div>

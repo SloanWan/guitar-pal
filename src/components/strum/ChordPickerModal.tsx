@@ -5,6 +5,7 @@ import { X, CirclePlay, Loader2 } from "lucide-react";
 import { CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { createClient } from "@/lib/supabase";
+import { loadVoicings } from "@/lib/chordVoicingCache";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
@@ -201,17 +202,12 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			setLoadingVoicings(true);
 			setVoicings([]);
 			setSelectedVoicingId(null);
-			const supabase = createClient();
-			const { data: chord } = await supabase
-				.from("chords")
-				.select("chord_voicings(id, label, start_fret, barre_fret, capo, frets, fingers)")
-				.eq("root", selectedRoot)
-				.eq("suffix", selectedSuffix)
-				.single();
+			// Through the shared cache: a chord already resolved for playback or
+			// for a diagram opens the picker with no round trip at all.
+			const vs = await loadVoicings(selectedRoot, selectedSuffix);
 
 			if (cancelled) return;
 
-			const vs = (chord as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? [];
 			setVoicings(vs);
 			// Reopen on the voicing the bar was saved with; falls through to
 			// Standard when the pinned id belongs to a different chord.

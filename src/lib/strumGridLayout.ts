@@ -69,3 +69,45 @@ export const TWO_COLUMN_MAX_CELLS = 8;
 export function barsFitTwoColumns(bars: Bar[]): boolean {
 	return bars.length > 1 && maxBarDisplayCells(bars) <= TWO_COLUMN_MAX_CELLS;
 }
+
+/**
+ * Breathing room kept between the row after the playing one and the bottom of
+ * the viewport, so the upcoming chord never sits flush against the edge.
+ */
+export const FOLLOW_SCROLL_PADDING_PX = 8;
+
+export interface FollowScrollInput {
+	/** Top of the playing bar, in the scroll container's content coordinates. */
+	activeTop: number;
+	activeHeight: number;
+	/** Bottom of the bar after it, or null when the playing bar is the last. */
+	nextBottom: number | null;
+	/** Visible height of the scroll container. */
+	viewportHeight: number;
+	/** Full scrollable height of its content. */
+	contentHeight: number;
+}
+
+/**
+ * Where the bar list should sit while a bar plays: the playing row centred,
+ * then scrolled down just far enough to keep the row after it on screen — the
+ * player has to read the next chord before reaching it. The correction never
+ * pushes the playing row past the top edge, and the result stays inside the
+ * container's scroll range.
+ */
+export function followScrollTop({
+	activeTop,
+	activeHeight,
+	nextBottom,
+	viewportHeight,
+	contentHeight,
+}: FollowScrollInput): number {
+	let target = activeTop + activeHeight / 2 - viewportHeight / 2;
+	if (nextBottom !== null) {
+		const revealNext = nextBottom + FOLLOW_SCROLL_PADDING_PX - viewportHeight;
+		target = Math.max(target, revealNext);
+		target = Math.min(target, activeTop - FOLLOW_SCROLL_PADDING_PX);
+	}
+	const maxScroll = Math.max(contentHeight - viewportHeight, 0);
+	return Math.min(Math.max(target, 0), maxScroll);
+}

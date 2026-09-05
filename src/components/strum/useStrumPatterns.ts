@@ -223,6 +223,16 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		const updated = customPatterns.filter((p) => p.id !== id);
 		setCustomPatterns(updated);
 		localStorage.setItem("customStrumPatterns", JSON.stringify(updated));
+
+		// A favourite record for a pattern that no longer exists would keep the
+		// favourites tab listing a ghost, so it goes with the pattern.
+		const wasFavourite = favouriteIds.includes(id);
+		if (wasFavourite) {
+			const remainingFavs = favouriteIds.filter((favId) => favId !== id);
+			setFavouriteIds(remainingFavs);
+			localStorage.setItem("favouritePatternIds", JSON.stringify(remainingFavs));
+		}
+
 		if (user) {
 			(async () => {
 				try {
@@ -233,6 +243,14 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 						.eq("pattern_id", id)
 						.eq("user_id", user.id);
 					if (error) throw new Error(error.message);
+					if (wasFavourite) {
+						const { error: favError } = await supabase
+							.from("user_favourite_patterns")
+							.delete()
+							.eq("pattern_id", id)
+							.eq("user_id", user.id);
+						if (favError) throw new Error(favError.message);
+					}
 				} catch (e) {
 					console.error(e);
 				}

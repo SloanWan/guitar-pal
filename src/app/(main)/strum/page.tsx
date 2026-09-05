@@ -237,6 +237,7 @@ export default function StrumPage() {
 		progressionsLoading,
 		handleSaveProgression,
 		handleDeleteProgression,
+		handleDeletePatternProgressions,
 	} = useChordProgressions(user, loading);
 
 	// The selected pattern's own progressions, in playing order.
@@ -493,6 +494,16 @@ export default function StrumPage() {
 		if (openProgressionId === next.id) setBpm(bpmFor(next));
 	}
 
+	/** Deleting a pattern takes the progressions written over it with it. */
+	function handleRemovePattern(patternId: string) {
+		handleDeleteCustomPattern(patternId);
+		handleDeletePatternProgressions(patternId);
+		if (openProgression?.patternId === patternId) {
+			stop();
+			setOpenProgressionId(null);
+		}
+	}
+
 	function handleRemoveProgression(progression: ChordProgression) {
 		handleDeleteProgression(progression.id);
 		if (openProgressionId === progression.id) {
@@ -595,7 +606,7 @@ export default function StrumPage() {
 							setEditingPattern(pattern);
 							setCreateModalOpen(true);
 						}}
-						onDeletePattern={handleDeleteCustomPattern}
+						onDeletePattern={handleRemovePattern}
 						onClose={() => setShowLibrary(false)}
 						user={user}
 					/>
@@ -1031,7 +1042,19 @@ export default function StrumPage() {
 									<Gauge size={12} strokeWidth={2} className="shrink-0" />
 									Tempo
 								</span>
-								<span className="tabular-nums text-denim">{bpm}</span>
+								<div className="flex items-center gap-2">
+									<span className="tabular-nums text-denim">{bpm}</span>
+									<button
+										type="button"
+										onClick={() => setBpm(defaultBpm)}
+										disabled={bpm === defaultBpm}
+										aria-label="Reset tempo to the pattern default"
+										title={`Reset to ${defaultBpm} BPM`}
+										className="flex items-center justify-center text-ink-faint transition-colors hover:text-denim disabled:pointer-events-none disabled:opacity-30"
+									>
+										<RotateCcw size={12} strokeWidth={2} />
+									</button>
+								</div>
 							</div>
 							<div className="flex flex-col">
 								<div className="flex gap-2">

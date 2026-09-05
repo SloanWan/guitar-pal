@@ -45,6 +45,7 @@ Env vars required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 - `practice_logs` — immutable records written at end of a session
 - `exercise_logs` — per-exercise records (currently unused by any UI)
 - `user_strum_patterns`, `user_favourite_patterns` — custom strum pattern storage
+- `user_pattern_progressions` — chord sequences a user attached to a strum pattern (`pattern_id` is a plain text id, not a foreign key: a progression can hang off a preset pattern as well as a custom one)
 - `chords`, `chord_voicings` — shared/read-only reference data
 
 Types defined in `src/types/database.ts`.
@@ -52,8 +53,16 @@ Types defined in `src/types/database.ts`.
 **Strumming machine audio engine** (`src/components/strum/`):
 
 - `useAudioEngine.ts` — setTimeout-based lookahead scheduler (100 ms window, 25 ms reschedule). All scheduler-read state lives in `useRef`, never `useState`, to avoid stale closures and re-render-triggered timing drift. Do not read `ref.current` values inside React render logic.
-- `useGuitarSampleLoader.ts` — fetches and parses WebAudioFont preset data from the pinned CDN (`surikov.github.io/webaudiofontdata`). Presets are JS object literals, not strict JSON — parsed via sandboxed `new Function()` evaluation, not `JSON.parse` or a hand-rolled tokenizer (this was tried and repeatedly broke on real CDN content — do not reintroduce a custom parser). Exposes `triggerStrum(type, ctx, target, when, noteDuration)`, which directly schedules one `AudioBufferSourceNode` per string (5 strings, 10 ms stagger, 0.9× volume taper) using the Web Audio API with a fixed C-major voicing (MIDI [48, 52, 55, 60, 64]). The `WebAudioFontPlayer` class is not used. Down strum: low→high pitch order; up strum: high→low. Exposes `preloadStrumPresets(ctx)` (call once on playback start) and `cancelStrums()` (call on stop and unmount).
+- `useGuitarSampleLoader.ts` — fetches and parses WebAudioFont preset data from the pinned CDN (`surikov.github.io/webaudiofontdata`). Presets are JS object literals, not strict JSON — parsed via sandboxed `new Function()` evaluation, not `JSON.parse` or a hand-rolled tokenizer (this was tried and repeatedly broke on real CDN content — do not reintroduce a custom parser). Exposes `triggerStrum(type, ctx, target, when, noteDuration, customPitches?)`, which directly schedules one `AudioBufferSourceNode` per string (5 strings, 10 ms stagger, 0.9× volume taper) using the Web Audio API. `customPitches` carries the sounding bar's chord (resolved by `resolveBarChords`); without it the default C-major voicing (MIDI [48, 52, 55, 60, 64]) plays. The `WebAudioFontPlayer` class is not used. Down strum: low→high pitch order; up strum: high→low. Exposes `preloadStrumPresets(ctx)` (call once on playback start) and `cancelStrums()` (call on stop and unmount).
 - Note duration/decay must scale with the current BPM/beat interval (`noteDuration = secondsPerCell`) — a fixed duration causes audible overlap between consecutive strums at any tempo.
+
+**Strum pattern model** (`src/lib/strumPatterns.ts`, `strumBars.ts`, `strumNotation.ts`, `strumProgressions.ts`, `strumGridLayout.ts`):
+
+- A `StrumPattern` is **one bar of rhythm** — `{ id, name, beats, bpm? }`. It carries no chord and no stored description: the pattern tab's chord picker is session-only, and the description is written from `beats` by `patternNotation` (one character per cell, blanks where nothing is struck, so `whitespace-pre` + a mono font are required wherever it is rendered).
+- A `ChordProgression` is a chord sequence written over a pattern: `Bar[]` (each bar its own rhythm + `ChordRef`), plus an optional name and tempo, stored per user in `user_pattern_progressions`. Unnamed progressions are listed by their chord abbreviations (`"C|G|Am|F"`). New ones are typed as a chord line in the workspace (`parseChordSequence` resolves each word through the same ranked search the chord picker uses); the multi-bar editor only edits existing ones.
+- `toBars(pattern)` is still the single read path (a pattern is one chordless bar); `resolveBarChords` is the `ChordRef` → MIDI boundary.
+- Grid width is computed, not guessed: beats pad out to four columns (`strumGridLayout.ts`), so bars run 12–16 columns and only short bars pair up two per row. The per-cell minimum widths there mirror Tailwind classes in `StepGrid` — change both together.
+- Deleting a pattern must cascade: its progressions and its favourite record go with it.
 
 **Fingerpicking feature** (`src/lib/fingerpickTypes.ts`, `src/lib/fingerpickToVexFlow.ts`, `src/components/fingerpick/`):
 

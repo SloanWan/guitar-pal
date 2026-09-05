@@ -156,10 +156,34 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 		})();
 	}
 
+	/**
+	 * Drop every progression written over a pattern — called when that pattern is
+	 * deleted, so no row is left pointing at something that no longer exists.
+	 */
+	function handleDeletePatternProgressions(patternId: string) {
+		if (!progressions.some((p) => p.patternId === patternId)) return;
+		persist(progressions.filter((p) => p.patternId !== patternId));
+		if (!user) return;
+		(async () => {
+			try {
+				const supabase = createClient();
+				const { error } = await supabase
+					.from("user_pattern_progressions")
+					.delete()
+					.eq("pattern_id", patternId)
+					.eq("user_id", user.id);
+				if (error) throw new Error(error.message);
+			} catch (e) {
+				console.error("[useChordProgressions] cascade delete failed:", e);
+			}
+		})();
+	}
+
 	return {
 		progressions,
 		progressionsLoading,
 		handleSaveProgression,
 		handleDeleteProgression,
+		handleDeletePatternProgressions,
 	};
 }

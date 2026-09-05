@@ -420,7 +420,7 @@ export default function PatternWorkspace({
 								)}
 							</div>
 							{/* Scrolls internally; playback keeps the current bar in view. */}
-							<div className="flex min-h-0 flex-col items-center overflow-y-auto px-5 py-5">
+							<div className="flex min-h-0 flex-col items-center overflow-y-auto px-3 py-5 sm:px-5">
 								<div className="my-auto w-full">
 									<StepGrid bars={bars} activeCell={activeCell} />
 								</div>

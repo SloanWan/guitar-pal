@@ -36,8 +36,10 @@ import {
 	dismissPatternNotice,
 	markPatternSynced,
 } from "@/lib/strumProgressions";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { loadVoicings } from "@/lib/chordVoicingCache";
+import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
+import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
+import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 
 import { useState, useEffect, useRef, useMemo } from "react";
 
@@ -65,6 +67,7 @@ import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import Fader from "@/components/ui/Fader";
+import Rocker from "@/components/ui/Rocker";
 
 
 // Device-local memory of where the user was in the workspace, so a refresh
@@ -91,38 +94,6 @@ const BPM_TICK_LABELS = [
 	"Jazz / Hard Rock",
 	"Fast Rock",
 ];
-
-interface RockerProps {
-	checked: boolean;
-	onChange: (checked: boolean) => void;
-	disabled?: boolean;
-	ariaLabel: string;
-}
-
-// Hardware rocker switch: 40×20 bordered outer, 15×14 sliding block. A sliding
-// rectangle — never a pill with a circle.
-function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps) {
-	return (
-		<button
-			type="button"
-			role="switch"
-			aria-checked={checked}
-			aria-label={ariaLabel}
-			disabled={disabled}
-			onClick={() => onChange(!checked)}
-			className={`relative h-5 w-10 shrink-0 border transition-colors duration-100 disabled:cursor-not-allowed ${
-				checked ? "border-denim" : "border-line-strong"
-			}`}
-		>
-			<span
-				aria-hidden="true"
-				className={`absolute top-0.5 h-3.5 w-3.5 transition-all duration-100 ${
-					checked ? "left-5 bg-denim-accent" : "left-0.5 bg-ink-faint"
-				}`}
-			/>
-		</button>
-	);
-}
 
 interface SegmentedOption {
 	value: string;
@@ -165,12 +136,7 @@ function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
  * Shares `voicingCache` with the chord-diagram view, so resolving a
  * progression's pitches also warms the shapes it can be asked to draw.
  */
-async function lookupVoicings(ref: {
-	root: string;
-	suffix: string;
-}): Promise<ChordVoicing[] | null> {
-	return loadVoicings(ref.root, ref.suffix);
-}
+
 
 export default function StrumPage() {
 	// Null until the device-local choice has been read: showing a preset first and
@@ -208,14 +174,14 @@ export default function StrumPage() {
 	}, []);
 
 	function handleBarChordChange(barIdx: number, chord: ConfirmedChord | null) {
+		const ref = chord
+			? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
+			: null;
+		const remembered = [...sessionChordsRef.current];
+		remembered[barIdx] = ref;
+		sessionChordsRef.current = remembered;
 		setBars((prev) =>
-			setBarChord(
-				prev,
-				barIdx,
-				chord
-					? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
-					: null,
-			),
+			setBarChord(prev, barIdx, ref),
 		);
 		setBarPitches((prev) =>
 			prev.map((pitches, i) => (i === barIdx ? (chord?.pitches ?? null) : pitches)),
@@ -242,6 +208,26 @@ export default function StrumPage() {
 	} = useAudioEngine(bars, bpm, tickLevel, barPitches, meter);
 
 	const { user, loading } = useUser();
+	// Held here rather than deeper down because three things need the same list:
+	// the pitches the engine plays, the shapes the grid draws, and the editor.
+	// A shape the bar points at but the resolver has never seen simply falls back
+	// to the library's standard voicing — silently, in both sound and picture.
+	const { voicings: userVoicings, saveVoicing: saveUserVoicing } = useUserChordVoicings(
+		user,
+		loading,
+	);
+
+	const lookupVoicings = useMemo(
+		() => withUserVoicings(loadVoicings, userVoicings),
+		[userVoicings],
+	);
+
+	// Serialised so the resolve effect below re-runs when a shape is written or
+	// edited — editing one changes no bar, so nothing else would wake it.
+	const userVoicingsKey = useMemo(
+		() => userVoicings.map((v) => `${v.id}:${v.start_fret}:${v.frets}`).join("|"),
+		[userVoicings],
+	);
 	const {
 		customPatterns,
 		patternsLoading,
@@ -279,9 +265,37 @@ export default function StrumPage() {
 	// The capo only applies to the sequence that declares it; the pattern tab's
 	// session chords always sound at concert pitch.
 	const activeCapo = tab === "progressions" ? progressionCapo(openProgression) : 0;
+	const playingProgression = tab === "progressions" && openProgression !== null;
+
+	/**
+	 * Chords picked on the pattern tab this session, and the pattern they belong
+	 * to.
+	 *
+	 * Held apart from `bars`, which is rebuilt from the pattern whenever the
+	 * source changes — switching tabs included. Without this a pick vanished on
+	 * the way to the progressions tab and back, which reads as a bug rather than
+	 * as a session-scoped choice. A ref rather than state: the effect below
+	 * restores them when it rebuilds, and having them wake it would make picking
+	 * a chord re-resolve the pitches it had just set.
+	 */
+	const sessionChordsRef = useRef<(ChordRef | null)[]>([]);
+	const sessionPatternIdRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		const next = JSON.parse(sourceBarsKey) as Bar[];
+
+		if (!playingProgression) {
+			// A different pattern's picks are not ours to restore.
+			const patternId = selectedPattern?.id ?? null;
+			if (sessionPatternIdRef.current !== patternId) {
+				sessionChordsRef.current = [];
+				sessionPatternIdRef.current = patternId;
+			}
+			sessionChordsRef.current.forEach((chord, i) => {
+				if (chord && next[i]) next[i] = { ...next[i], chord };
+			});
+		}
+
 		// queueMicrotask: the codebase's idiom for deferring state writes out of
 		// the effect body so they do not cascade renders.
 		queueMicrotask(() => {
@@ -302,7 +316,7 @@ export default function StrumPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [sourceBarsKey, activeCapo]);
+	}, [sourceBarsKey, activeCapo, userVoicingsKey, lookupVoicings, playingProgression, selectedPattern?.id]);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
 	// The progression the editor is open on; null when the editor is closed.
 	// New progressions are typed inline instead, never through the editor.
@@ -575,6 +589,52 @@ export default function StrumPage() {
 		handleSaveProgression(resumePatternSync(openProgression));
 	}
 
+	/**
+	 * Pin a shape onto the open sequence.
+	 *
+	 * Only the sequence's own bars: the pattern tab's chord picks are session-only
+	 * and have nowhere to be saved, so the control is not offered there.
+	 */
+	function handleApplyChordShape(
+		barIdx: number,
+		voicing: UserChordVoicing,
+		scope: "bar" | "chord",
+	) {
+		const onProgression = tab === "progressions" && openProgression !== null;
+		const source = onProgression ? openProgression!.bars : bars;
+		const target = source[barIdx]?.chord;
+		if (!target) return;
+
+		const matches = (bar: Bar, i: number) =>
+			scope === "bar"
+				? i === barIdx
+				: bar.chord?.root === target.root && bar.chord?.suffix === target.suffix;
+		const pin = (bar: Bar, i: number) =>
+			matches(bar, i) && bar.chord
+				? { ...bar, chord: { ...bar.chord, voicingId: voicing.id } }
+				: bar;
+
+		if (onProgression) {
+			handleSaveProgression({
+				...openProgression!,
+				bars: openProgression!.bars.map(pin),
+			});
+			return;
+		}
+
+		// The pattern tab. Its chords are session-only, so the pin is too — but the
+		// shape itself is on record either way and will be there next time. Pitches
+		// are set here because a session pick never reaches the resolve effect.
+		const pitches = chordVoicingToMidi(voicing).map((n) => n.midi);
+		// Remembered like any other pattern-tab pick, or the pin would be lost on
+		// the way to the progressions tab and back.
+		sessionChordsRef.current = source.map((bar, i) =>
+			matches(bar, i) && bar.chord ? { ...bar.chord, voicingId: voicing.id } : (sessionChordsRef.current[i] ?? bar.chord ?? null),
+		);
+		setBars((prev) => prev.map(pin));
+		setBarPitches((prev) => prev.map((p, i) => (matches(source[i], i) ? pitches : p)));
+	}
+
 	function handleDismissPatternNotice() {
 		if (!openProgression) return;
 		handleSaveProgression(dismissPatternNotice(openProgression));
@@ -768,6 +828,9 @@ export default function StrumPage() {
 								onDeclinePatternSync={handleDeclinePatternSync}
 								onResumePatternSync={handleResumePatternSync}
 								onDismissPatternNotice={handleDismissPatternNotice}
+								onApplyChordShape={handleApplyChordShape}
+								userVoicings={userVoicings}
+								onSaveVoicing={saveUserVoicing}
 								onAddProgression={handleAddProgression}
 								onEditProgression={handleEditProgression}
 								onDeleteProgression={handleRemoveProgression}

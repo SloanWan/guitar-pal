@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Rocker from "@/components/ui/Rocker";
 
 // ════════════════════════════════════════════════════════════════════════════
 // THEME — reuses the app's mechanism (localStorage "gp-theme" + dataset.theme)
@@ -294,38 +295,6 @@ function Fader({
 				))}
 			</div>
 		</div>
-	);
-}
-
-interface RockerProps {
-	checked: boolean;
-	onChange: (checked: boolean) => void;
-	disabled?: boolean;
-	ariaLabel: string;
-}
-
-// Hardware rocker switch: 40×20 bordered outer, 15×14 sliding block. A sliding
-// rectangle — never a pill with a circle.
-function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps): React.JSX.Element {
-	return (
-		<button
-			type="button"
-			role="switch"
-			aria-checked={checked}
-			aria-label={ariaLabel}
-			disabled={disabled}
-			onClick={() => onChange(!checked)}
-			className={`relative h-5 w-10 shrink-0 border transition-colors duration-100 disabled:cursor-not-allowed ${
-				checked ? "border-denim" : "border-line-strong"
-			}`}
-		>
-			<span
-				aria-hidden="true"
-				className={`absolute top-0.5 h-3.5 w-3.5 transition-all duration-100 ${
-					checked ? "left-5 bg-denim" : "left-0.5 bg-ink-dim"
-				}`}
-			/>
-		</button>
 	);
 }
 

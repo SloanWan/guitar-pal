@@ -17,10 +17,15 @@ import {
 } from "@/lib/strumProgressionPresets";
 import { patternMeter } from "@/lib/strumBars";
 import { getChordIndex } from "@/lib/chords";
+import { peekVoicings } from "@/lib/chordVoicingCache";
+import { selectRefVoicing } from "@/lib/strumBars";
+import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
+import ChordShapeModal, { type ApplyScope } from "@/components/chords/ChordShapeModal";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import StepGrid, { type ActiveCell, type ChordView } from "./StepGrid";
 import { useBarChordDiagrams } from "./useBarChordDiagrams";
 import StepGridCard from "./StepGridCard";
+import ChordViewToggle from "./ChordViewToggle";
 import PatternBarBody from "./PatternBarBody";
 import { type ConfirmedChord } from "./ChordPickerModal";
 
@@ -57,6 +62,15 @@ interface Props {
 	onDeclinePatternSync?: () => void;
 	onResumePatternSync?: () => void;
 	onDismissPatternNotice?: () => void;
+	/**
+	 * Pin a shape the player wrote onto this bar, or onto every bar playing the
+	 * same chord. Given only where the bars can actually be saved.
+	 */
+	onApplyChordShape?: (barIdx: number, voicing: UserChordVoicing, scope: ApplyScope) => void;
+	/** The player's own shapes, held by the page so sound and picture agree. */
+	userVoicings?: readonly UserChordVoicing[];
+	/** Returns the row the shape actually lives in — its id may not be the one just minted. */
+	onSaveVoicing?: (voicing: UserChordVoicing) => UserChordVoicing;
 }
 
 function TabButton({
@@ -103,6 +117,9 @@ export default function PatternWorkspace({
 	onDeclinePatternSync,
 	onResumePatternSync,
 	onDismissPatternNotice,
+	onApplyChordShape,
+	userVoicings = [],
+	onSaveVoicing,
 }: Props) {
 	const selected = progressions.find((p) => p.id === selectedProgressionId) ?? null;
 
@@ -128,10 +145,44 @@ export default function PatternWorkspace({
 	// A progression inherits its pattern's meter — the chords change, the way the
 	// bar is counted does not.
 	const meter = patternMeter(pattern);
-	const barDiagrams = useBarChordDiagrams(
-		bars,
-		chordView === "diagram" && tab === "progressions",
-	);
+
+	// Writing a shape from the diagram view: the one place the player is looking
+	// at the shape rather than at the chord's name.
+	const [shapeEditBar, setShapeEditBar] = useState<number | null>(null);
+	const editingChord = shapeEditBar !== null ? (bars[shapeEditBar]?.chord ?? null) : null;
+	// What that bar is drawing right now, recovered the same way the diagram was:
+	// from the shared cache, through the same selector.
+	const editingVoicing = editingChord
+		? selectRefVoicing(
+				editingChord,
+				mergeVoicings(
+					peekVoicings(editingChord.root, editingChord.suffix) ?? [],
+					userVoicings,
+					editingChord.root,
+					editingChord.suffix,
+				),
+			)
+		: null;
+
+	/** Bars on screen playing the chord being edited — how far a change can reach. */
+	const matchingBarCount = editingChord
+		? bars.filter(
+				(bar) =>
+					bar.chord?.root === editingChord.root && bar.chord?.suffix === editingChord.suffix,
+			).length
+		: 0;
+
+	function handleApplyShape(voicing: UserChordVoicing, scope: ApplyScope) {
+		if (shapeEditBar === null) return;
+		// Pin what was stored, not what was minted: an identical shape already on
+		// record keeps its own id, and pinning the fresh one would point the bar
+		// at a row that was never written.
+		const stored = onSaveVoicing?.(voicing) ?? voicing;
+		onApplyChordShape?.(shapeEditBar, stored, scope);
+	}
+	// Both tabs: the pattern tab's chords are session-only, but looking at the
+	// shape you are playing is as useful there as anywhere.
+	const barDiagrams = useBarChordDiagrams(bars, chordView === "diagram", userVoicings);
 
 	useEffect(() => {
 		if (!composerOpen || chordIndex.length > 0) return;
@@ -356,6 +407,10 @@ export default function PatternWorkspace({
 						bars={bars}
 						activeCell={activeCell}
 						onBarChordChange={onBarChordChange}
+						chordView={chordView}
+						onChordViewChange={setChordView}
+						barDiagrams={barDiagrams}
+						onEditChordShape={onApplyChordShape ? setShapeEditBar : undefined}
 					/>
 				) : progressionsLoading ? (
 					<p className="px-5 py-6 text-xs text-ink-dim">Loading progressions…</p>
@@ -487,28 +542,7 @@ export default function PatternWorkspace({
 									</div>
 								) : (
 									<div className="flex shrink-0 items-center">
-										<button
-											type="button"
-											onClick={() =>
-												setChordView((view) => (view === "name" ? "diagram" : "name"))
-											}
-											aria-label={
-												chordView === "name"
-													? "Show chord diagrams"
-													: "Show chord names"
-											}
-											aria-pressed={chordView === "diagram"}
-											title={
-												chordView === "name"
-													? "Show chord diagrams"
-													: "Show chord names"
-											}
-											className={`flex items-center justify-center p-1.5 transition-colors hover:bg-denim-tint hover:text-denim ${
-												chordView === "diagram" ? "text-denim" : "text-ink-dim"
-											}`}
-										>
-											{chordView === "name" ? <Guitar size={14} /> : <Type size={14} />}
-										</button>
+										<ChordViewToggle value={chordView} onChange={setChordView} />
 										<button
 											type="button"
 											onClick={() => onEditProgression(selected)}
@@ -595,6 +629,9 @@ export default function PatternWorkspace({
 										meter={meter}
 										chordView={chordView}
 										barDiagrams={barDiagrams}
+										onEditChordShape={
+											onApplyChordShape ? setShapeEditBar : undefined
+										}
 									/>
 								</div>
 							</div>
@@ -602,6 +639,17 @@ export default function PatternWorkspace({
 					</div>
 				)}
 			</StepGridCard>
+
+			{editingChord && (
+				<ChordShapeModal
+					open={shapeEditBar !== null}
+					chord={editingChord}
+					initialVoicing={editingVoicing}
+					onClose={() => setShapeEditBar(null)}
+					onApply={handleApplyShape}
+					matchingBarCount={matchingBarCount}
+				/>
+			)}
 		</div>
 	);
 }

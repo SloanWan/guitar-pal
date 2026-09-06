@@ -117,7 +117,11 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 
 			const { data, error } = await supabase
 				.from("user_pattern_progressions")
-				.select("id, pattern_id, bars, order_index, name, bpm, capo")
+				// select("*"), as useStrumPatterns does: an explicit column list is a
+				// second place to remember a new column, and forgetting it is silent —
+				// the field writes fine and simply never comes back, which is how the
+				// reconcile fields were dead on arrival until this was noticed.
+				.select("*")
 				.eq("user_id", currentUser.id);
 			if (error) console.error("[useChordProgressions] load failed:", error.message);
 			setProgressions(

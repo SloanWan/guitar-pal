@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { X, CirclePlay, Loader2 } from "lucide-react";
 import { CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { createClient } from "@/lib/supabase";
 import { loadVoicings } from "@/lib/chordVoicingCache";
+import { useUser } from "@/hooks/useUser";
+import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
+import { isUserVoicingId, mergeVoicings } from "@/lib/userChordVoicings";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
@@ -91,7 +94,21 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	const [selectedRoot, setSelectedRoot] = useState<string | null>(null);
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 	const [selectedSuffix, setSelectedSuffix] = useState<string | null>(null);
-	const [voicings, setVoicings] = useState<ChordVoicing[]>([]);
+	const [libraryVoicings, setLibraryVoicings] = useState<ChordVoicing[]>([]);
+	const { user, loading: userLoading } = useUser();
+	const { voicings: userVoicings, deleteVoicing } = useUserChordVoicings(user, userLoading);
+	/**
+	 * What the player may choose from: the library's shapes, then their own.
+	 * Merged here rather than in the fetch so a shape saved a moment ago appears
+	 * without another round trip, and so saving one cannot reset the selection.
+	 */
+	const voicings: ChordVoicing[] = useMemo(
+		() =>
+			selectedRoot && selectedSuffix
+				? mergeVoicings(libraryVoicings, userVoicings, selectedRoot, selectedSuffix)
+				: libraryVoicings,
+		[libraryVoicings, userVoicings, selectedRoot, selectedSuffix],
+	);
 	const [selectedVoicingId, setSelectedVoicingId] = useState<string | null>(null);
 	const [loadingVoicings, setLoadingVoicings] = useState(false);
 	const [availableSuffixes, setAvailableSuffixes] = useState<string[]>([]);
@@ -132,7 +149,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				setSelectedRoot(null);
 				setSelectedCategory(null);
 				setSelectedSuffix(null);
-				setVoicings([]);
+				setLibraryVoicings([]);
 				setSelectedVoicingId(null);
 				setAvailableSuffixes([]);
 				setVoicingsFor(null);
@@ -200,7 +217,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 		(async () => {
 			setLoadingVoicings(true);
-			setVoicings([]);
+			setLibraryVoicings([]);
 			setSelectedVoicingId(null);
 			// Through the shared cache: a chord already resolved for playback or
 			// for a diagram opens the picker with no round trip at all.
@@ -208,7 +225,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 			if (cancelled) return;
 
-			setVoicings(vs);
+			setLibraryVoicings(vs);
 			// Reopen on the voicing the bar was saved with; falls through to
 			// Standard when the pinned id belongs to a different chord.
 			const pinned = initialVoicingId
@@ -230,6 +247,28 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			cancelled = true;
 		};
 	}, [selectedRoot, selectedSuffix, initialVoicingId]);
+
+	/**
+	 * A pinned shape of the player's own is not in the library fetch, so it is
+	 * selected once their shapes have loaded rather than in the fetch effect.
+	 */
+	useEffect(() => {
+		if (!initialVoicingId || !isUserVoicingId(initialVoicingId)) return;
+		if (selectedVoicingId === initialVoicingId) return;
+		if (!voicings.some((v) => v.id === initialVoicingId)) return;
+		// Deferred rather than set in the effect body: the shapes arrive after the
+		// library fetch has already chosen a selection, and setting state straight
+		// back inside an effect is the cascading-render pattern the repo defers
+		// elsewhere for the same reason.
+		queueMicrotask(() => setSelectedVoicingId(initialVoicingId));
+	}, [voicings, initialVoicingId, selectedVoicingId]);
+
+
+	function handleDeleteShape(id: string) {
+		deleteVoicing(id);
+		// Fall back rather than leaving a selection pointing at nothing.
+		if (selectedVoicingId === id) setSelectedVoicingId(null);
+	}
 
 	const handleSelectSuffix = useCallback(
 		async (suffix: string) => {
@@ -361,7 +400,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 									if (cat.category === selectedCategory) return;
 									setSelectedCategory(cat.category);
 									setSelectedSuffix(null);
-									setVoicings([]);
+									setLibraryVoicings([]);
 									setSelectedVoicingId(null);
 									setAvailableSuffixes([]);
 									setVoicingsFor(null);
@@ -462,8 +501,21 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 												<ChordDiagramSVG {...svgProps} size="compact" />
 												<div className="flex items-center gap-1">
 													<span className="text-[9px] text-ink-faint max-w-15 truncate">
-														{v.label ?? "—"}
+														{v.label ?? (isUserVoicingId(v.id) ? "Mine" : "—")}
 													</span>
+													{isUserVoicingId(v.id) && (
+														<button
+															onClick={(e) => {
+																e.stopPropagation();
+																handleDeleteShape(v.id);
+															}}
+															aria-label="Delete this shape"
+															title="Delete this shape"
+															className="text-ink-faint transition-colors hover:text-destructive"
+														>
+															<X size={10} />
+														</button>
+													)}
 													<button
 														onClick={(e) => {
 															e.stopPropagation();
@@ -493,6 +545,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 								</div>
 							) : null}
 						</div>
+
 
 						{/* Confirm / Clear buttons */}
 						<div className="flex gap-2">

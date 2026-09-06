@@ -10,7 +10,7 @@ import { DEFAULT_METER, beatLabels, type Meter } from "@/lib/strumMeter";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import type { BarChordDiagram } from "./useBarChordDiagrams";
 
-import { MoveDown, MoveUp, X, Dot, Music } from "lucide-react";
+import { MoveDown, MoveUp, X, Dot, Music, Pencil } from "lucide-react";
 
 /** Nearest ancestor that actually scrolls vertically, if any. */
 function scrollableAncestor(el: HTMLElement): HTMLElement | null {
@@ -61,6 +61,7 @@ export default function StepGrid({
 	onChordClick,
 	chordView = "name",
 	barDiagrams,
+	onEditChordShape,
 	meter = DEFAULT_METER,
 }: {
 	bars: Bar[];
@@ -73,6 +74,12 @@ export default function StepGrid({
 	chordView?: ChordView;
 	/** Shapes for the "diagram" view, index-aligned with `bars`. */
 	barDiagrams?: (BarChordDiagram | null)[];
+	/**
+	 * Given, each drawn shape gains an edit control. Offered only in the diagram
+	 * view: it is the one place the player is already looking at the shape rather
+	 * than at the chord's name.
+	 */
+	onEditChordShape?: (barIdx: number) => void;
 	/**
 	 * The pattern's time signature. Decides whether a three-cell beat is counted
 	 * as a compound beat's own division or called a triplet — the cells look
@@ -226,6 +233,17 @@ export default function StepGrid({
 											{chordLabel}
 										</span>
 									)
+								)}
+								{onEditChordShape && diagram && chordLabel && (
+									<button
+										type="button"
+										onClick={() => onEditChordShape(barIdx)}
+										aria-label={`Edit the shape for ${chordLabel}`}
+										title="Edit this chord's shape"
+										className="flex items-center justify-center p-1 text-ink-faint transition-colors hover:text-denim-accent"
+									>
+										<Pencil size={11} />
+									</button>
 								)}
 							</div>
 						)}

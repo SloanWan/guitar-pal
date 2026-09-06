@@ -14,13 +14,23 @@ import {
  */
 export const MIN_CELLS_PER_BEAT = 2;
 
-const STEP_CYCLE: StepValue[] = ["", "D", "U", "X"];
-
-/** Advance a cell through the editable step values. */
-export function cycleStep(current: StepValue): StepValue {
-	const idx = STEP_CYCLE.indexOf(current);
+/**
+ * Advance a cell through the editable step values, starting from the stroke
+ * that belongs at this position.
+ *
+ * `prefer` is the direction the hand is already travelling in that slot — down
+ * on an even cell, up on an odd one. Leading with it makes the common case one
+ * click instead of two on every off-beat, and costs nothing on the on-beats,
+ * which already led with a downstroke. Nothing becomes unreachable: the
+ * against-the-motion stroke is simply second in the cycle, and the shipped
+ * "muted" preset shows those do occur.
+ */
+export function cycleStep(current: StepValue, prefer: "D" | "U" = "D"): StepValue {
+	const opposite: StepValue = prefer === "D" ? "U" : "D";
+	const cycle: StepValue[] = ["", prefer, opposite, "X"];
+	const idx = cycle.indexOf(current);
 	// idx === -1 for D3/U3/DG/UG: (-1+1)%4 = 0 → "" which resets gracefully
-	return STEP_CYCLE[(idx + 1) % STEP_CYCLE.length];
+	return cycle[(idx + 1) % cycle.length];
 }
 
 /**
@@ -100,8 +110,141 @@ export function cycleCell(
 	cellIdx: number,
 ): Bar[] {
 	return mapBeat(bars, barIdx, beatIdx, (beat) =>
-		beat.map((cell, ci) => (ci === cellIdx ? cycleStep(cell) : cell)),
+		beat.map((cell, ci) =>
+			// Even cells sit under a downstroke, odd cells under the upstroke that
+			// returns from it — the same alternation the ghost cells encode.
+			ci === cellIdx ? cycleStep(cell, ci % 2 === 0 ? "D" : "U") : cell,
+		),
 	);
+}
+
+/**
+ * Write one cell outright, rather than cycling to it. What typing a stroke does,
+ * where clicking cycles.
+ */
+export function setCell(
+	bars: Bar[],
+	barIdx: number,
+	beatIdx: number,
+	cellIdx: number,
+	value: StepValue,
+): Bar[] {
+	return mapBeat(bars, barIdx, beatIdx, (beat) =>
+		beat.map((cell, ci) => (ci === cellIdx ? value : cell)),
+	);
+}
+
+/**
+ * Re-divide every beat in a bar at once.
+ *
+ * Setting a bar to sixteenths took one press per beat before this, so four
+ * presses stood between the player and an empty grid they could actually draw
+ * on. Each beat resamples, so strokes already written keep their place in time.
+ */
+export function setBarCells(bars: Bar[], barIdx: number, cells: number): Bar[] {
+	if (barIdx < 0 || barIdx >= bars.length) return bars;
+	return bars.map((bar, i) =>
+		i === barIdx ? { ...bar, beats: bar.beats.map((beat) => resizeBeat(beat, cells)) } : bar,
+	);
+}
+
+/**
+ * Copy one beat over another, inside the same bar.
+ *
+ * Copying, not inserting: a bar's beat count is fixed by its meter, so adding a
+ * beat would put a 4/4 bar in five. The source's subdivision travels with it —
+ * duplicating a beat of sixteenths onto a beat of eighths gives sixteenths,
+ * which is what "duplicate" reads as and is still a legal width in either meter
+ * family.
+ *
+ * Returns the input unchanged when either index is out of range or the two are
+ * the same, so callers can wire it to a button without guarding first.
+ */
+export function copyBeat(
+	bars: Bar[],
+	barIdx: number,
+	fromBeatIdx: number,
+	toBeatIdx: number,
+): Bar[] {
+	if (barIdx < 0 || barIdx >= bars.length) return bars;
+	const beats = bars[barIdx].beats;
+	if (fromBeatIdx === toBeatIdx) return bars;
+	if (fromBeatIdx < 0 || fromBeatIdx >= beats.length) return bars;
+	if (toBeatIdx < 0 || toBeatIdx >= beats.length) return bars;
+
+	return bars.map((bar, i) =>
+		i === barIdx
+			? {
+					...bar,
+					// A fresh array: the two beats must not share cells, or editing
+					// one would silently rewrite the other.
+					beats: bar.beats.map((beat, bi) =>
+						bi === toBeatIdx ? [...beats[fromBeatIdx]] : beat,
+					),
+				}
+			: bar,
+	);
+}
+
+/**
+ * Exchange two beats inside a bar.
+ *
+ * Reordering, like copying, cannot change how many beats a bar has — that
+ * belongs to the meter — so moving a beat is a swap with its neighbour rather
+ * than a lift and reinsert. Widths travel with their beats.
+ */
+export function swapBeats(bars: Bar[], barIdx: number, a: number, b: number): Bar[] {
+	if (barIdx < 0 || barIdx >= bars.length) return bars;
+	const beats = bars[barIdx].beats;
+	if (a === b) return bars;
+	if (a < 0 || a >= beats.length || b < 0 || b >= beats.length) return bars;
+
+	return bars.map((bar, i) =>
+		i === barIdx
+			? {
+					...bar,
+					beats: bar.beats.map((beat, bi) =>
+						bi === a ? beats[b] : bi === b ? beats[a] : beat,
+					),
+				}
+			: bar,
+	);
+}
+
+/** A cell's address inside a `Bar[]`. */
+export interface CellPosition {
+	barIdx: number;
+	beatIdx: number;
+	cellIdx: number;
+}
+
+/**
+ * The cell one step along from this one, walking beats and bars as it goes, or
+ * null at either end of the pattern. Keyboard navigation reads a grid as one
+ * line of cells; beat and bar boundaries are a drawing convention, not a wall.
+ *
+ * Deliberately does not wrap: arrowing off the end should stop, so holding the
+ * key cannot silently carry the cursor back to the start.
+ */
+export function stepCellPosition(
+	bars: Bar[],
+	position: CellPosition,
+	direction: 1 | -1,
+): CellPosition | null {
+	const flat: CellPosition[] = [];
+	bars.forEach((bar, barIdx) =>
+		bar.beats.forEach((beat, beatIdx) =>
+			beat.forEach((_, cellIdx) => flat.push({ barIdx, beatIdx, cellIdx })),
+		),
+	);
+	const i = flat.findIndex(
+		(c) =>
+			c.barIdx === position.barIdx &&
+			c.beatIdx === position.beatIdx &&
+			c.cellIdx === position.cellIdx,
+	);
+	if (i === -1) return null;
+	return flat[i + direction] ?? null;
 }
 
 /**

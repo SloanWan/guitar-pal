@@ -107,6 +107,25 @@ export function allowedCellsPerBeat(meter: Meter): number[] {
 }
 
 /**
+ * How a beat's division reads as a note value: what the player is choosing when
+ * they set a whole bar's subdivision. A triplet is the one division that needs
+ * naming rather than counting, because three in the space of two is not a
+ * fraction of the beat the way the others are.
+ */
+export function cellCountLabel(meter: Meter, cells: number): string {
+	const bottom = meter[1];
+	if (isCompound(meter)) {
+		if (cells === 3) return `1/${bottom}`;
+		if (cells === 6) return `1/${bottom * 2}`;
+		return String(cells);
+	}
+	if (cells === 2) return `1/${bottom * 2}`;
+	if (cells === 3) return `1/${bottom * 2}T`;
+	if (cells === 4) return `1/${bottom * 4}`;
+	return String(cells);
+}
+
+/**
  * The next legal cell count in a direction, or null at either end. Stepping
  * through the list rather than adding one is what keeps a compound beat from
  * landing on 4 or 5, which name no note value.

@@ -5,7 +5,19 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MoveDown, MoveUp, X, Dot, Plus, Minus } from "lucide-react";
+import {
+	MoveDown,
+	MoveUp,
+	X,
+	Dot,
+	Plus,
+	Minus,
+	Copy,
+	ChevronLeft,
+	ChevronRight,
+	Undo2,
+	Redo2,
+} from "lucide-react";
 import {
 	Bar,
 	StrumPattern,
@@ -21,17 +33,31 @@ import {
 	clampBpmToMeter,
 	rescaleBpmForMeter,
 } from "@/lib/strumBars";
-import { emptyBar, cycleCell, addCell, removeCell } from "@/lib/strumBarEdit";
+import {
+	emptyBar,
+	cycleCell,
+	addCell,
+	removeCell,
+	copyBeat,
+	swapBeats,
+	setBarCells,
+	setCell,
+	stepCellPosition,
+} from "@/lib/strumBarEdit";
 import {
 	DEFAULT_METER,
 	SUPPORTED_METERS,
 	beatUnitLabel,
 	meterLabel,
+	allowedCellsPerBeat,
+	cellCountLabel,
 	metersEqual,
 	stepCellsPerBeat,
 	type Meter,
 } from "@/lib/strumMeter";
 import { patternNotation } from "@/lib/strumNotation";
+import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
+import { useBarHistory } from "./useBarHistory";
 
 function StepIcon({ step }: { step: StepValue }) {
 	if (step === "D" || step === "D3" || step === "DG") return <MoveDown className="size-4" />;
@@ -64,7 +90,15 @@ export default function CreatePatternModal({
 	const [bpmInput, setBpmInput] = useState(String(DEFAULT_STRUM_BPM));
 	// Held as a one-element Bar[] so the shared cell editors in strumBarEdit
 	// apply unchanged; the bar's chord stays null throughout.
-	const [bars, setBars] = useState<Bar[]>([emptyBar()]);
+	const {
+		bars,
+		setBars,
+		reset: resetBars,
+		undo,
+		redo,
+		canUndo,
+		canRedo,
+	} = useBarHistory([emptyBar()]);
 	// The bar's shape follows the meter: four two-cell beats in 4/4, two
 	// three-cell beats in 6/8. Stored on the pattern because nothing else can
 	// tell a compound beat's three cells from a triplet's.
@@ -76,6 +110,12 @@ export default function CreatePatternModal({
 	// Serialized draft taken when the modal opened. Comparing the live draft
 	// against it detects unsaved edits without flagging every mutation site.
 	const pristineRef = useRef("");
+	// Cell buttons by "beat:cell", so arrow keys can move focus without the grid
+	// having to own a selection model of its own.
+	const cellRefs = useRef(new Map<string, HTMLButtonElement>());
+	// Beat columns, so a beat that was just copied or moved can announce itself.
+	const beatRefs = useRef(new Map<number, HTMLDivElement>());
+
 	const [showSignInPrompt, setShowSignInPrompt] = useState(false);
 
 	const beats = bars[0].beats;
@@ -90,7 +130,7 @@ export default function CreatePatternModal({
 			pristineRef.current = draftSnapshot(initialName, initialBpm, initialBars, initialMeter);
 			setName(initialName);
 			setBpmInput(String(initialBpm));
-			setBars(initialBars);
+			resetBars(initialBars);
 			setMeter(initialMeter);
 			setNameError(false);
 			setShowSignInPrompt(false);
@@ -129,6 +169,93 @@ export default function CreatePatternModal({
 		};
 	}
 
+	/**
+	 * Point the eye at a beat that just changed under it.
+	 *
+	 * No state and no effect: the column's DOM node survives the re-render, so
+	 * one frame's wait is enough for it to be showing the new content before it
+	 * pops. Driving this from state would mean setting state inside an effect to
+	 * clear it again, which is a cascading render for a 220 ms flourish.
+	 */
+	function flashBeat(beatIdx: number) {
+		if (prefersReducedMotion()) return;
+		requestAnimationFrame(() => {
+			beatRefs.current.get(beatIdx)?.animate(
+				[
+					{ transform: "scale(0.94)", opacity: 0.55 },
+					{ transform: "scale(1)", opacity: 1 },
+				],
+				{ duration: 220, easing: SPRING_POP_EASING },
+			);
+		});
+	}
+
+	/** Copy this beat onto another, and point the eye at where it landed. */
+	function copyBeatTo(from: number, to: number) {
+		if (to < 0 || to >= bars[0].beats.length) return;
+		setBars((prev) => copyBeat(prev, 0, from, to));
+		flashBeat(to);
+	}
+
+	/** Swap this beat with a neighbour; the beat follows the eye to its new seat. */
+	function moveBeat(from: number, to: number) {
+		if (to < 0 || to >= bars[0].beats.length) return;
+		setBars((prev) => swapBeats(prev, 0, from, to));
+		flashBeat(to);
+	}
+
+	/**
+	 * Typing beats clicking on a dense grid: a stroke is one key rather than one
+	 * to three presses, and the arrows walk beat and bar boundaries as if the
+	 * grid were the single line of cells it actually is.
+	 */
+	function handleCellKeyDown(
+		e: React.KeyboardEvent<HTMLButtonElement>,
+		beatIdx: number,
+		cellIdx: number,
+	) {
+		const move = (direction: 1 | -1) => {
+			const next = stepCellPosition(bars, { barIdx: 0, beatIdx, cellIdx }, direction);
+			if (!next) return;
+			e.preventDefault();
+			cellRefs.current.get(`${next.beatIdx}:${next.cellIdx}`)?.focus();
+		};
+		const write = (value: StepValue) => {
+			e.preventDefault();
+			setBars((prev) => setCell(prev, 0, beatIdx, cellIdx, value));
+		};
+
+		// Duplicate-rightwards, on the shortcut editors use for duplicate-line.
+		// preventDefault because the browser reads it as "bookmark this page".
+		if ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "D")) {
+			e.preventDefault();
+			copyBeatTo(beatIdx, beatIdx + 1);
+			return;
+		}
+		if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+		switch (e.key) {
+			case "ArrowRight":
+				return move(1);
+			case "ArrowLeft":
+				return move(-1);
+			case "d":
+			case "D":
+				return write("D");
+			case "u":
+			case "U":
+				return write("U");
+			case "x":
+			case "X":
+				return write("X");
+			case "Backspace":
+			case "Delete":
+				return write("");
+			default:
+				return;
+		}
+	}
+
 	function handleSave() {
 		if (!name.trim()) {
 			setNameError(true);
@@ -158,7 +285,7 @@ export default function CreatePatternModal({
 	function handleClose() {
 		setName("");
 		setBpmInput(String(DEFAULT_STRUM_BPM));
-		setBars([emptyBar()]);
+		resetBars([emptyBar()]);
 		setMeter(DEFAULT_METER);
 		setNameError(false);
 		setShowSignInPrompt(false);
@@ -177,6 +304,23 @@ export default function CreatePatternModal({
 	 * discard question or the sign-in prompt is waiting on an answer of its own.
 	 */
 	function handleDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+		// Undo/redo, before the Enter-to-save check. Skipped inside a text field,
+		// where the browser's own undo is the one the player means.
+		const mod = e.metaKey || e.ctrlKey;
+		const inTextField =
+			e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+		if (mod && !inTextField && (e.key === "z" || e.key === "Z")) {
+			e.preventDefault();
+			if (e.shiftKey) redo();
+			else undo();
+			return;
+		}
+		if (mod && !inTextField && (e.key === "y" || e.key === "Y")) {
+			e.preventDefault();
+			redo();
+			return;
+		}
+
 		if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
 		if (discardConfirm || showSignInPrompt) return;
 		if (
@@ -334,15 +478,77 @@ export default function CreatePatternModal({
 								</span>
 							</div>
 
+							{/* Divide the whole bar at once. Setting sixteenths beat by beat
+							    took four presses before a single stroke could be drawn. */}
+							<div className="flex items-center gap-1">
+								<span className="mr-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+									Divide
+								</span>
+								{allowedCellsPerBeat(meter).map((cells) => {
+									const active = beats.every((b) => b.length === cells);
+									return (
+										<button
+											key={cells}
+											type="button"
+											onClick={() => setBars((prev) => setBarCells(prev, 0, cells))}
+											aria-pressed={active}
+											className={`border px-2 py-1 font-mono text-[11px] tracking-[0.04em] transition-[color,border-color] duration-(--dur-hover) ease-out focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${
+												active
+													? "border-denim text-denim-accent"
+													: "border-line-strong text-ink-dim hover:border-denim hover:text-denim-accent"
+											}`}
+										>
+											{cellCountLabel(meter, cells)}
+										</button>
+									);
+								})}
+
+								<div className="ml-auto flex gap-1">
+									<button
+										type="button"
+										onClick={undo}
+										disabled={!canUndo}
+										aria-label="Undo"
+										title="Undo (Cmd/Ctrl+Z)"
+										className="flex h-6 w-7 items-center justify-center border border-line-strong text-ink-faint transition-colors hover:border-denim hover:text-denim disabled:cursor-not-allowed disabled:opacity-30"
+									>
+										<Undo2 size={11} />
+									</button>
+									<button
+										type="button"
+										onClick={redo}
+										disabled={!canRedo}
+										aria-label="Redo"
+										title="Redo (Cmd/Ctrl+Shift+Z)"
+										className="flex h-6 w-7 items-center justify-center border border-line-strong text-ink-faint transition-colors hover:border-denim hover:text-denim disabled:cursor-not-allowed disabled:opacity-30"
+									>
+										<Redo2 size={11} />
+									</button>
+								</div>
+							</div>
+
 							<div className="flex flex-col gap-1.5 border-l border-line-strong pl-2">
 								<div className="flex gap-2">
 									{beats.map((beat, beatIdx) => (
-										<div key={beatIdx} className="flex-1 flex flex-col gap-1.5">
-											{/* Cells */}
-											<div className="flex border border-line-strong py-2">
+										<div
+											key={beatIdx}
+											ref={(el) => {
+												if (el) beatRefs.current.set(beatIdx, el);
+												else beatRefs.current.delete(beatIdx);
+											}}
+											className="group flex-1 flex flex-col gap-1.5"
+										>
+											{/* Cells. Plain CSS hover — the highlight is presentation,
+											    not state, so it never touches React. */}
+											<div className="flex border border-line-strong py-2 transition-colors group-hover:border-denim">
 												{beat.map((cell, cellIdx) => (
 													<button
 														key={cellIdx}
+														ref={(el) => {
+															const key = `${beatIdx}:${cellIdx}`;
+															if (el) cellRefs.current.set(key, el);
+															else cellRefs.current.delete(key);
+														}}
 														onClick={() =>
 															setBars((prev) =>
 																cycleCell(
@@ -353,7 +559,11 @@ export default function CreatePatternModal({
 																),
 															)
 														}
-														className="flex-1 flex justify-center items-center text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
+														onKeyDown={(e) =>
+															handleCellKeyDown(e, beatIdx, cellIdx)
+														}
+														aria-label={`Beat ${beatIdx + 1} cell ${cellIdx + 1}`}
+														className="flex-1 flex justify-center items-center text-ink-dim hover:text-denim hover:bg-denim-tint focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-[-2px] transition-colors"
 													>
 														<StepIcon step={cell} />
 													</button>
@@ -382,6 +592,44 @@ export default function CreatePatternModal({
 													className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 												>
 													<Plus size={10} />
+												</button>
+											</div>
+
+											{/* Beat operations, kept off the cell-count row: three more
+											    controls squeezed beside +/- would each be a sliver. */}
+											<div className="flex gap-1">
+												<button
+													type="button"
+													onClick={() => moveBeat(beatIdx, beatIdx - 1)}
+													disabled={beatIdx === 0}
+													aria-label={`Move beat ${beatIdx + 1} left`}
+													title="Move this beat left"
+													className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+												>
+													<ChevronLeft size={10} />
+												</button>
+												{/* Copy this beat onto the next. Copying, not inserting:
+												    the bar's beat count belongs to the meter. Clicking
+												    along fills the bar with one figure. */}
+												<button
+													type="button"
+													onClick={() => copyBeatTo(beatIdx, beatIdx + 1)}
+													disabled={beatIdx >= beats.length - 1}
+													aria-label={`Copy beat ${beatIdx + 1} onto beat ${beatIdx + 2}`}
+													title="Copy this beat to the next"
+													className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+												>
+													<Copy size={10} />
+												</button>
+												<button
+													type="button"
+													onClick={() => moveBeat(beatIdx, beatIdx + 1)}
+													disabled={beatIdx >= beats.length - 1}
+													aria-label={`Move beat ${beatIdx + 1} right`}
+													title="Move this beat right"
+													className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+												>
+													<ChevronRight size={10} />
 												</button>
 											</div>
 										</div>

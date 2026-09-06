@@ -5,6 +5,7 @@ import {
 	beatLabels,
 	allowedCellsPerBeat,
 	beatUnitLabel,
+	cellCountLabel,
 	beatsPerBar,
 	isCompound,
 	isSupportedMeter,
@@ -230,5 +231,31 @@ describe("strumMeter", () => {
 		expect(meterLabel(SIX_EIGHT)).toBe("6/8");
 		expect(metersEqual([4, 4], DEFAULT_METER)).toBe(true);
 		expect(metersEqual([6, 8], [12, 8])).toBe(false);
+	});
+});
+
+describe("cellCountLabel", () => {
+	it("names the divisions of a simple beat", () => {
+		expect(cellCountLabel(FOUR_FOUR, 2)).toBe("1/8");
+		expect(cellCountLabel(FOUR_FOUR, 4)).toBe("1/16");
+	});
+
+	it("marks the triplet, the one division that is not a fraction of the beat", () => {
+		expect(cellCountLabel(FOUR_FOUR, 3)).toBe("1/8T");
+	});
+
+	it("names a compound beat's own divisions without calling them triplets", () => {
+		// Three eighths under a dotted beat are the beat's division, not three in
+		// the space of two — so no T.
+		expect(cellCountLabel(SIX_EIGHT, 3)).toBe("1/8");
+		expect(cellCountLabel(SIX_EIGHT, 6)).toBe("1/16");
+	});
+
+	it("labels every count the editor can offer", () => {
+		for (const meter of SUPPORTED_METERS) {
+			for (const cells of allowedCellsPerBeat(meter)) {
+				expect(cellCountLabel(meter, cells)).not.toBe("");
+			}
+		}
 	});
 });

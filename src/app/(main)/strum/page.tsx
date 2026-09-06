@@ -31,6 +31,7 @@ import {
 } from "@/lib/strumProgressions";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { loadVoicings } from "@/lib/chordVoicingCache";
+import { takeHandoff } from "@/lib/strumAssistant/handoff";
 
 import { useState, useEffect, useRef, useMemo } from "react";
 
@@ -386,6 +387,44 @@ export default function StrumPage() {
 	useEffect(() => {
 		if (patternRestoredRef.current || patternsLoading) return;
 		patternRestoredRef.current = true;
+
+		// A proposal confirmed in the assistant wins over any deep link or
+		// last-viewed id — the person asked for it a navigation ago. Handled here
+		// rather than in an effect of its own so exactly one place decides which
+		// pattern opens, and the two cannot race.
+		const handoff = takeHandoff();
+		if (handoff) {
+			const pattern: StrumPattern = {
+				id: crypto.randomUUID(),
+				name: handoff.name,
+				beats: handoff.bars[0].beats,
+				...(handoff.bpm === null ? {} : { bpm: handoff.bpm }),
+			};
+			handleSaveCustomPattern(pattern);
+			// Chords live in the progression table, never on the pattern row, so a
+			// proposal carrying chords becomes a pattern plus one progression over it.
+			const progression =
+				handoff.chords.length > 0
+					? {
+							id: crypto.randomUUID(),
+							patternId: pattern.id,
+							bars: handoff.bars,
+							orderIndex: nextOrderIndex([]),
+						}
+					: null;
+			if (progression) handleSaveProgression(progression);
+			queueMicrotask(() => {
+				setSelectedPattern(pattern);
+				setBpm(patternBpm(pattern));
+				setPatternRestored(true);
+				if (progression) {
+					setTab("progressions");
+					setOpenProgressionId(progression.id);
+				}
+			});
+			return;
+		}
+
 		const queryId =
 			typeof window !== "undefined"
 				? new URLSearchParams(window.location.search).get("pattern")

@@ -5,6 +5,7 @@ import ThemeToggle from "./ThemeToggle";
 import Link from "@/components/AppLink";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import NavBarScrollWrapper from "./NavBarScrollWrapper";
+import AssistantLauncher from "./assistant/AssistantLauncher";
 
 export default async function NavBar() {
 	const supabase = await createSupabaseServer();
@@ -43,7 +44,7 @@ export default async function NavBar() {
 						</span>
 					</Link>
 					<NavLinks />
-					<div className="flex min-w-0 items-center justify-self-end">
+					<div className="flex min-w-0 items-center gap-3 justify-self-end">
 						{/* ≥ nav: controls sit inline in the topbar. */}
 						<div className="hidden min-w-0 items-center gap-3 nav:flex">
 							{/* Theme toggle is a dev-only affordance; production ships a
@@ -73,6 +74,9 @@ export default async function NavBar() {
 						<div className="nav:hidden">
 							<NavBarMenu userEmail={user?.email ?? null} />
 						</div>
+						{/* Rightmost at every width: the assistant is a primary entry
+						    point, not something that collapses into the overflow menu. */}
+						<AssistantLauncher />
 					</div>
 				</div>
 			</header>

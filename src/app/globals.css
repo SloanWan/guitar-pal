@@ -17,9 +17,10 @@
      aliased onto :root for explicit-attribute setups.)
    - Border radius is 0 everywhere. The ONLY exception is the LED (50%).
      There are deliberately no radius scale tokens beyond these two.
-   - There are NO offset/elevation shadows in this system. The only shadow
-     tokens are the three GLOWS below, and all of them signal "live/active",
-     never elevation.
+   - There are NO offset/elevation shadows in this system, with ONE exception:
+     --elev-panel, for a panel that floats over arbitrary page content and
+     needs an edge a border alone does not give it. Every other shadow token
+     is a GLOW signalling "live/active", never elevation.
    - Components must reference tokens, never raw hex. The single permitted
      hardcoded value is denim #4A6FA5 inside the logo playhead rect.
    ========================================================================= */
@@ -271,6 +272,13 @@
 	--glow-led: 0 0 6px 1px var(--denim-glow); /* box-shadow on .led.on        */
 	--glow-led-dim: 0 0 2px 0 var(--denim-glow); /* pulse/breathe trough frame   */
 	--glow-readout: 0 0 14px var(--readout-glow); /* TEXT-shadow on .bpm-value    */
+
+	/* The system's only elevation shadow. A panel opened from the topbar sits
+	   over content it does not own, where a 1px border can vanish against a
+	   busy background. Kept deliberately soft and near-neutral so it reads as
+	   separation, not as material. Delete this token and its one consumer
+	   (AssistantPanel) to restore the no-elevation rule. */
+	--elev-panel: 0 12px 32px -8px rgb(0 0 0 / 0.28), 0 2px 8px -2px rgb(0 0 0 / 0.16);
 }
 
 /* ----------------------------------------------------------------------------

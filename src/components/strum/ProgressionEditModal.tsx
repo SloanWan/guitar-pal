@@ -16,6 +16,7 @@ import {
 	Plus,
 	Minus,
 	Copy,
+	Eraser,
 	ChevronLeft,
 	ChevronRight,
 	Undo2,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/strumMeter";
 import {
 	addBar,
+	clearBeat,
 	copyBeat,
 	swapBeats,
 	setBarCells,
@@ -267,6 +269,11 @@ export default function ProgressionEditModal({
 		if ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "D")) {
 			e.preventDefault();
 			copyBeatTo(barIdx, beatIdx, beatIdx + 1);
+			return;
+		}
+		if ((e.metaKey || e.ctrlKey) && (e.key === "Backspace" || e.key === "Delete")) {
+			e.preventDefault();
+			setBars((prev) => clearBeat(prev, barIdx, beatIdx));
 			return;
 		}
 		if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -648,6 +655,23 @@ export default function ProgressionEditModal({
 														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 													>
 														<Minus size={10} />
+													</button>
+													{/* Clearing sits between the steppers: all three act on
+													    this beat's own contents, where the row below moves
+													    it around the bar. */}
+													<button
+														type="button"
+														onClick={() =>
+															setBars((prev) => clearBeat(prev, barIdx, beatIdx))
+														}
+														disabled={beat.every((cell) => cell === "")}
+														aria-label={`Clear bar ${barIdx + 1} beat ${beatIdx + 1}`}
+														title="Clear this beat (Cmd/Ctrl+Backspace)"
+														// The one beat control that throws work away, so it warns in the
+														// destructive colour rather than the denim the others share.
+														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-destructive hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+													>
+														<Eraser size={10} />
 													</button>
 													<button
 														onClick={() =>

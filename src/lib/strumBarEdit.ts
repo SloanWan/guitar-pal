@@ -90,16 +90,31 @@ export function setBarChord(bars: Bar[], barIdx: number, chord: ChordRef | null)
 	return bars.map((bar, i) => (i === barIdx ? { ...bar, chord } : bar));
 }
 
+/**
+ * Apply `fn` to one beat, returning the input untouched when nothing changed.
+ *
+ * The identity guarantee is load-bearing, not a micro-optimisation: the undo
+ * history commits on reference change, so rebuilding the array regardless would
+ * push an entry for every press of `+` at the maximum division, and undo would
+ * then appear to do nothing several times in a row.
+ */
 function mapBeat(
 	bars: Bar[],
 	barIdx: number,
 	beatIdx: number,
 	fn: (beat: Beat) => Beat,
 ): Bar[] {
+	if (barIdx < 0 || barIdx >= bars.length) return bars;
+	const beats = bars[barIdx].beats;
+	if (beatIdx < 0 || beatIdx >= beats.length) return bars;
+
+	const next = fn(beats[beatIdx]);
+	if (next === beats[beatIdx]) return bars;
+
 	return bars.map((bar, bi) =>
 		bi !== barIdx
 			? bar
-			: { ...bar, beats: bar.beats.map((beat, i) => (i === beatIdx ? fn(beat) : beat)) },
+			: { ...bar, beats: bar.beats.map((beat, i) => (i === beatIdx ? next : beat)) },
 	);
 }
 
@@ -183,6 +198,20 @@ export function copyBeat(
 					),
 				}
 			: bar,
+	);
+}
+
+/**
+ * Empty a beat, keeping its width.
+ *
+ * Clearing, not removing: the beat stays and keeps its division, so the bar's
+ * shape is untouched and only what was struck goes. Cycling each cell back to
+ * empty costs two or three clicks per cell, which is the one place a batch
+ * operation still earns its keep now that writing a stroke is a single click.
+ */
+export function clearBeat(bars: Bar[], barIdx: number, beatIdx: number): Bar[] {
+	return mapBeat(bars, barIdx, beatIdx, (beat) =>
+		beat.every((cell) => cell === "") ? beat : beat.map(() => ""),
 	);
 }
 

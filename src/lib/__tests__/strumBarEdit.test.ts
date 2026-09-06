@@ -12,6 +12,7 @@ import {
 	removeCell,
 	barLocalBeatIndex,
 	MIN_CELLS_PER_BEAT,
+	clearBeat,
 	copyBeat,
 	resizeBeat,
 	setBarCells,
@@ -650,5 +651,78 @@ describe("swapBeats", () => {
 	it("touches only the addressed bar", () => {
 		const bars = swapBeats([bar4()[0], emptyBar()], 1, 0, 1);
 		expect(bars[0].beats[0]).toEqual(["D", ""]);
+	});
+});
+
+describe("clearBeat", () => {
+	function written(): Bar[] {
+		let bars = [emptyBar()];
+		bars = cycleCell(bars, 0, 0, 0); // D
+		bars = cycleCell(bars, 0, 0, 1); // U
+		bars = cycleCell(bars, 0, 1, 0); // D on the next beat
+		return bars;
+	}
+
+	it("empties the beat it is given", () => {
+		const bars = clearBeat(written(), 0, 0);
+		expect(bars[0].beats[0]).toEqual(["", ""]);
+	});
+
+	it("keeps the beat's width, so the bar's shape is untouched", () => {
+		let bars = addCell(addCell(written(), 0, 0), 0, 0);
+		expect(bars[0].beats[0]).toHaveLength(4);
+		bars = clearBeat(bars, 0, 0);
+		expect(bars[0].beats[0]).toEqual(["", "", "", ""]);
+		expect(bars[0].beats).toHaveLength(4);
+	});
+
+	it("leaves the other beats alone", () => {
+		const bars = clearBeat(written(), 0, 0);
+		expect(bars[0].beats[1]).toEqual(["D", ""]);
+	});
+
+	it("clears a preset's ghost and triplet cells too", () => {
+		const preset: Bar[] = [{ beats: [["D", "UG"], ["D3", "U3", "D3"]], chord: null }];
+		const bars = clearBeat(preset, 0, 1);
+		expect(bars[0].beats[1]).toEqual(["", "", ""]);
+	});
+
+	it("is a no-op on an already empty beat, so it cannot fill the undo history", () => {
+		const bars = [emptyBar()];
+		expect(clearBeat(bars, 0, 0)).toBe(bars);
+	});
+
+	it("is a no-op for an out-of-range address", () => {
+		const bars = written();
+		expect(clearBeat(bars, 0, 9)).toBe(bars);
+		expect(clearBeat(bars, 5, 0)).toBe(bars);
+	});
+
+	it("touches only the addressed bar", () => {
+		const bars = clearBeat([written()[0], emptyBar()], 1, 0);
+		expect(bars[0].beats[0]).toEqual(["D", "U"]);
+	});
+});
+
+describe("edits that change nothing return the same array", () => {
+	// The undo history commits on reference change, so a no-op that allocates
+	// would push an entry and make undo appear to do nothing.
+	it("holds for a stepper already at its limit", () => {
+		const atMax = addCell(addCell([emptyBar()], 0, 0), 0, 0);
+		expect(addCell(atMax, 0, 0)).toBe(atMax);
+		const atMin = [emptyBar()];
+		expect(removeCell(atMin, 0, 0)).toBe(atMin);
+	});
+
+	it("holds for an out-of-range address", () => {
+		const bars = [emptyBar()];
+		expect(cycleCell(bars, 0, 9, 0)).toBe(bars);
+		expect(cycleCell(bars, 3, 0, 0)).toBe(bars);
+		expect(setCell(bars, 0, 0, 9, "D")).not.toBe(bars); // in-range beat, out-of-range cell
+	});
+
+	it("still allocates for an edit that does change something", () => {
+		const bars = [emptyBar()];
+		expect(cycleCell(bars, 0, 0, 0)).not.toBe(bars);
 	});
 });

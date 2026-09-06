@@ -6,17 +6,11 @@ import {
 	barsFitTwoColumns,
 	followScrollTop,
 } from "@/lib/strumGridLayout";
+import { DEFAULT_METER, beatLabels, type Meter } from "@/lib/strumMeter";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import type { BarChordDiagram } from "./useBarChordDiagrams";
 
 import { MoveDown, MoveUp, X, Dot, Music } from "lucide-react";
-
-const BEAT_LABELS = {
-	1: (beatIdx: number) => [`${beatIdx + 1}`, "", "+", ""],
-	2: (beatIdx: number) => [`${beatIdx + 1}`, "", "+", ""],
-	3: (_beatIdx: number) => ["tri", "p", "let"],
-	4: (beatIdx: number) => [`${beatIdx + 1}`, "e", "+", "a"],
-};
 
 /** Nearest ancestor that actually scrolls vertically, if any. */
 function scrollableAncestor(el: HTMLElement): HTMLElement | null {
@@ -67,6 +61,7 @@ export default function StepGrid({
 	onChordClick,
 	chordView = "name",
 	barDiagrams,
+	meter = DEFAULT_METER,
 }: {
 	bars: Bar[];
 	activeCell: ActiveCell | null;
@@ -78,6 +73,13 @@ export default function StepGrid({
 	chordView?: ChordView;
 	/** Shapes for the "diagram" view, index-aligned with `bars`. */
 	barDiagrams?: (BarChordDiagram | null)[];
+	/**
+	 * The pattern's time signature. Decides whether a three-cell beat is counted
+	 * as a compound beat's own division or called a triplet — the cells look
+	 * identical, so nothing else can tell. Defaults to 4/4, which is how every
+	 * pattern read before meters existed.
+	 */
+	meter?: Meter;
 }) {
 	const isSm = size === "sm";
 	const isMultiBar = bars.length > 1;
@@ -263,10 +265,11 @@ export default function StepGrid({
 										{showLabels && (
 											<div className="flex">
 												{paddedCells.map((_, cellIdx) => {
+													// Labels are indexed by display column; a beat
+													// labelled shorter than its padded width leaves
+													// the remaining columns blank.
 													const label =
-														BEAT_LABELS[
-															beat.length as keyof typeof BEAT_LABELS
-														](beatIdx)[cellIdx];
+														beatLabels(meter, beatIdx, beat.length)[cellIdx] ?? "";
 													return (
 														<div
 															className={`flex flex-1 justify-center ${

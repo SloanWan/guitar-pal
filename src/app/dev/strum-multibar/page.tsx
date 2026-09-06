@@ -6,7 +6,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase";
-import type { Bar, ChordRef, TickMode } from "@/lib/strumPatterns";
+import type { Bar, ChordRef } from "@/lib/strumPatterns";
+import type { TickLevel } from "@/lib/strumMetronome";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { resolveBarChords } from "@/lib/strumBars";
 import { barLocalBeatIndex, setBarChord } from "@/lib/strumBarEdit";
@@ -54,7 +55,7 @@ export default function StrumMultibarDevPage() {
 		"C–G–Am–F (4 bars)",
 	);
 	const [bpm, setBpm] = useState(60);
-	const [tickMode] = useState<TickMode>("quarter");
+	const [tickLevel] = useState<TickLevel>("beat");
 	const [barPitches, setBarPitches] = useState<BarPitches>([]);
 
 	const initialBars = useMemo(() => PROGRESSIONS[progression], [progression]);
@@ -78,8 +79,8 @@ export default function StrumMultibarDevPage() {
 		};
 	}, [bars]);
 
-	const { isPlaying, start, stop, currBar, currBeat, currCell, accentEnabled, setAccentEnabled } =
-		useAudioEngine(bars, bpm, tickMode, barPitches);
+	const { isPlaying, start, stop, currBar, currBeat, currCell } =
+		useAudioEngine(bars, bpm, tickLevel, barPitches);
 
 	function handleBarChordChange(barIdx: number, chord: ConfirmedChord | null) {
 		setBars((prev) =>
@@ -127,15 +128,6 @@ export default function StrumMultibarDevPage() {
 					value={bpm}
 					onChange={(e) => setBpm(Number(e.target.value))}
 				/>
-			</label>
-
-			<label className="flex items-center gap-2">
-				<input
-					type="checkbox"
-					checked={accentEnabled}
-					onChange={(e) => setAccentEnabled(e.target.checked)}
-				/>
-				<span>accent (should fire on every bar head)</span>
 			</label>
 
 			<button

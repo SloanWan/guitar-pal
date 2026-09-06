@@ -1,8 +1,8 @@
+import type { Meter } from "@/lib/strumMeter";
+
 export type StepValue = "D" | "U" | "X" | "" | "DG" | "UG" | "D3" | "U3";
 
-export type Beat = StepValue[]; // length = 1|2|3|4
-
-export type TickMode = "quarter" | "eighth" | "sixteenth";
+export type Beat = StepValue[]; // length = 1|2|3|4|6 — see allowedCellsPerBeat
 
 /**
  * Chord identity as stored on a pattern. Frets and pitches are never stored
@@ -36,6 +36,15 @@ export interface StrumPattern {
 	beats: Beat[];
 	/** Tempo the pattern loads at. Read it through `patternBpm`. */
 	bpm?: number;
+	/**
+	 * Time signature. Absent means 4/4, which is what every pattern stored
+	 * before meters existed is. Read it through `patternMeter`, never directly,
+	 * so the fallback lives in one place.
+	 *
+	 * This is the only thing that tells a three-cell beat of 6/8 apart from a
+	 * triplet in 4/4 — the cells are identical.
+	 */
+	meter?: Meter;
 }
 
 /**

@@ -8,6 +8,12 @@ import {
 	type StrumPattern,
 } from "@/lib/strumPatterns";
 import {
+	VALID_CELL_COUNTS,
+	isCompound,
+	normalizeMeter,
+	type Meter,
+} from "@/lib/strumMeter";
+import {
 	chordVoicingToVexChords,
 	type ChordVoicing,
 	type VexChordDef,
@@ -16,7 +22,13 @@ import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 
 /** Max cells a single beat may hold (quarter / eighth / triplet / sixteenth). */
-export const MAX_CELLS_PER_BEAT = 4;
+/**
+ * Cells one beat can hold. Six, not four, because a compound beat divides into
+ * three eighths and each of those halves again — the finest division 6/8 asks
+ * for. Which counts are actually offered is a question of meter, not of this
+ * cap: see `allowedCellsPerBeat` in strumMeter.ts.
+ */
+export const MAX_CELLS_PER_BEAT = 6;
 
 /**
  * The single read path for every pattern consumer: a pattern is one chordless
@@ -40,6 +52,52 @@ export function normalizeBpm(raw: unknown): number {
 /** The tempo a pattern loads at — its own BPM, or the default when it has none. */
 export function patternBpm(pattern: StrumPattern): number {
 	return normalizeBpm(pattern.bpm);
+}
+
+/**
+ * The pattern's time signature, defaulted for every row written before meters
+ * existed. The one reader of `pattern.meter`, so the fallback cannot drift.
+ */
+export function patternMeter(pattern: StrumPattern): Meter {
+	return normalizeMeter(pattern.meter);
+}
+
+/**
+ * The tempo range worth offering in a meter.
+ *
+ * BPM counts the beat, and a compound beat is a dotted quarter — so the same
+ * number is a much faster pulse in 6/8 than in 4/4. The simple-meter ceiling of
+ * 220 would be 22 eighth notes a second in 6/8, which is not a tempo anyone
+ * strums at; a compound meter tops out far lower.
+ */
+export function bpmRangeForMeter(meter: Meter): { min: number; max: number } {
+	return isCompound(meter)
+		? { min: STRUM_BPM_MIN, max: COMPOUND_BPM_MAX }
+		: { min: STRUM_BPM_MIN, max: STRUM_BPM_MAX };
+}
+
+/** Fast jig territory; well past any strummed 6/8. */
+const COMPOUND_BPM_MAX = 140;
+
+export function clampBpmToMeter(bpm: number, meter: Meter): number {
+	const { min, max } = bpmRangeForMeter(meter);
+	return Math.min(max, Math.max(min, normalizeBpm(bpm)));
+}
+
+/**
+ * Carry a tempo across a meter change so the music does not appear to leap.
+ *
+ * Read literally, 80 in 4/4 and 80 in 6/8 are different speeds: the beat is a
+ * quarter in one and a dotted quarter in the other, so the eighth notes run 1.5x
+ * quicker and the bar goes by twice as fast. Rescaling by 2/3 (or 3/2 coming
+ * back) holds the *eighth note* still, which is what "the same speed" means to
+ * the player. 80 in 4/4 becomes about 53 in 6/8.
+ *
+ * Returns an unrounded tempo; callers round and clamp.
+ */
+export function rescaleBpmForMeter(bpm: number, from: Meter, to: Meter): number {
+	if (isCompound(from) === isCompound(to)) return bpm;
+	return isCompound(to) ? (bpm * 2) / 3 : (bpm * 3) / 2;
 }
 
 /**
@@ -90,9 +148,11 @@ export function validateBars(bars: unknown): BarsValidationResult {
 				if (beat.length === 0) {
 					errors.push(`bar ${barIndex} beat ${beatIndex}: must contain at least one cell`);
 				}
-				if (beat.length > MAX_CELLS_PER_BEAT) {
+				// A count, not a cap: no meter divides a beat five ways, so five
+				// cells is corruption rather than an unusually fine subdivision.
+				if (beat.length > 0 && !VALID_CELL_COUNTS.includes(beat.length)) {
 					errors.push(
-						`bar ${barIndex} beat ${beatIndex}: has ${beat.length} cells, max is ${MAX_CELLS_PER_BEAT}`,
+						`bar ${barIndex} beat ${beatIndex}: has ${beat.length} cells, allowed are ${VALID_CELL_COUNTS.join(", ")}`,
 					);
 				}
 			});

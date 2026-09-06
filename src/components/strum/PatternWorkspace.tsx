@@ -15,6 +15,7 @@ import {
 	groupPresets,
 	type ProgressionPreset,
 } from "@/lib/strumProgressionPresets";
+import { patternMeter } from "@/lib/strumBars";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import StepGrid, { type ActiveCell, type ChordView } from "./StepGrid";
@@ -109,6 +110,9 @@ export default function PatternWorkspace({
 	// How the open progression announces its chords: by name, or as the shape to
 	// hold. The shapes are fetched only while the diagrams are on screen.
 	const [chordView, setChordView] = useState<ChordView>("name");
+	// A progression inherits its pattern's meter — the chords change, the way the
+	// bar is counted does not.
+	const meter = patternMeter(pattern);
 	const barDiagrams = useBarChordDiagrams(
 		bars,
 		chordView === "diagram" && tab === "progressions",
@@ -333,6 +337,7 @@ export default function PatternWorkspace({
 			<StepGridCard pattern={pattern} onEditPattern={onEditPattern}>
 				{tab === "pattern" ? (
 					<PatternBarBody
+						meter={meter}
 						bars={bars}
 						activeCell={activeCell}
 						onBarChordChange={onBarChordChange}
@@ -516,6 +521,7 @@ export default function PatternWorkspace({
 									<StepGrid
 										bars={bars}
 										activeCell={activeCell}
+										meter={meter}
 										chordView={chordView}
 										barDiagrams={barDiagrams}
 									/>

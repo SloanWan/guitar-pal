@@ -3,25 +3,34 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { MoveDown, MoveUp, X, Dot, Plus, Minus } from "lucide-react";
 import {
 	Bar,
 	StrumPattern,
 	StepValue,
-	STRUM_BPM_MIN,
-	STRUM_BPM_MAX,
 	DEFAULT_STRUM_BPM,
 } from "@/lib/strumPatterns";
-import { toBars, validateBars, normalizeBpm, patternBpm } from "@/lib/strumBars";
-import { emptyBar, cycleCell, addCell, removeCell, MIN_CELLS_PER_BEAT } from "@/lib/strumBarEdit";
-import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
+import {
+	toBars,
+	validateBars,
+	patternBpm,
+	patternMeter,
+	bpmRangeForMeter,
+	clampBpmToMeter,
+	rescaleBpmForMeter,
+} from "@/lib/strumBars";
+import { emptyBar, cycleCell, addCell, removeCell } from "@/lib/strumBarEdit";
+import {
+	DEFAULT_METER,
+	SUPPORTED_METERS,
+	beatUnitLabel,
+	meterLabel,
+	metersEqual,
+	stepCellsPerBeat,
+	type Meter,
+} from "@/lib/strumMeter";
 import { patternNotation } from "@/lib/strumNotation";
 
 function StepIcon({ step }: { step: StepValue }) {
@@ -56,6 +65,10 @@ export default function CreatePatternModal({
 	// Held as a one-element Bar[] so the shared cell editors in strumBarEdit
 	// apply unchanged; the bar's chord stays null throughout.
 	const [bars, setBars] = useState<Bar[]>([emptyBar()]);
+	// The bar's shape follows the meter: four two-cell beats in 4/4, two
+	// three-cell beats in 6/8. Stored on the pattern because nothing else can
+	// tell a compound beat's three cells from a triplet's.
+	const [meter, setMeter] = useState<Meter>(DEFAULT_METER);
 	const [nameError, setNameError] = useState(false);
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
@@ -72,25 +85,38 @@ export default function CreatePatternModal({
 		queueMicrotask(() => {
 			const initialName = editPattern?.name ?? "";
 			const initialBpm = editPattern ? patternBpm(editPattern) : DEFAULT_STRUM_BPM;
-			const initialBars = editPattern ? toBars(editPattern) : [emptyBar()];
-			pristineRef.current = draftSnapshot(initialName, initialBpm, initialBars);
+			const initialMeter = editPattern ? patternMeter(editPattern) : DEFAULT_METER;
+			const initialBars = editPattern ? toBars(editPattern) : [emptyBar(initialMeter)];
+			pristineRef.current = draftSnapshot(initialName, initialBpm, initialBars, initialMeter);
 			setName(initialName);
 			setBpmInput(String(initialBpm));
 			setBars(initialBars);
+			setMeter(initialMeter);
 			setNameError(false);
 			setShowSignInPrompt(false);
 			setDiscardConfirm(false);
 		});
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
-	function draftSnapshot(nameValue: string, bpmValue: number, barsValue: Bar[]): string {
-		return JSON.stringify({ name: nameValue.trim(), bpm: bpmValue, bars: barsValue });
+	function draftSnapshot(
+		nameValue: string,
+		bpmValue: number,
+		barsValue: Bar[],
+		meterValue: Meter,
+	): string {
+		return JSON.stringify({
+			name: nameValue.trim(),
+			bpm: bpmValue,
+			bars: barsValue,
+			meter: meterValue,
+		});
 	}
 
 	/** An emptied field means "no opinion" — the default tempo, not a clamped 0. */
 	function parsedBpm(): number {
-		return bpmInput.trim() === "" ? DEFAULT_STRUM_BPM : normalizeBpm(Number(bpmInput));
+		const raw = bpmInput.trim() === "" ? DEFAULT_STRUM_BPM : Number(bpmInput);
+		return clampBpmToMeter(raw, meter);
 	}
 
 	function buildPattern(): StrumPattern {
@@ -99,6 +125,7 @@ export default function CreatePatternModal({
 			name: name.trim(),
 			beats,
 			bpm: parsedBpm(),
+			meter,
 		};
 	}
 
@@ -109,7 +136,10 @@ export default function CreatePatternModal({
 		}
 		const validation = validateBars(bars);
 		if (!validation.ok) {
-			console.error("[CreatePatternModal] refusing to save malformed bars:", validation.errors);
+			console.error(
+				"[CreatePatternModal] refusing to save malformed bars:",
+				validation.errors,
+			);
 			return;
 		}
 		if (!user && !editPattern) {
@@ -129,6 +159,7 @@ export default function CreatePatternModal({
 		setName("");
 		setBpmInput(String(DEFAULT_STRUM_BPM));
 		setBars([emptyBar()]);
+		setMeter(DEFAULT_METER);
 		setNameError(false);
 		setShowSignInPrompt(false);
 		setDiscardConfirm(false);
@@ -137,7 +168,7 @@ export default function CreatePatternModal({
 
 	// True when the live draft differs from the snapshot taken on open.
 	function isDirty(): boolean {
-		return draftSnapshot(name, parsedBpm(), bars) !== pristineRef.current;
+		return draftSnapshot(name, parsedBpm(), bars, meter) !== pristineRef.current;
 	}
 
 	/**
@@ -226,20 +257,64 @@ export default function CreatePatternModal({
 								</div>
 								<div className="flex w-20 shrink-0 flex-col gap-1.5">
 									<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+										Meter
+									</label>
+									{/* Changing the meter rebuilds the bar: 4/4 and 6/8 do not
+									    share a grid, so there is nothing meaningful to carry
+									    across. A native select rather than the Radix one — the
+									    surrounding fields are plain inputs, and a portalled
+									    listbox inside a Dialog buys nothing here. */}
+									<select
+										value={meterLabel(meter)}
+										onChange={(e) => {
+											const next = SUPPORTED_METERS.find(
+												(m) => meterLabel(m) === e.target.value,
+											);
+											if (!next || metersEqual(next, meter)) return;
+											// Carry the tempo across so the pattern does not appear
+											// to leap: the beat changes note value, so the number
+											// has to move for the speed to stay put.
+											setBpmInput(
+												String(
+													clampBpmToMeter(
+														Math.round(rescaleBpmForMeter(parsedBpm(), meter, next)),
+														next,
+													),
+												),
+											);
+											setMeter(next);
+											setBars([emptyBar(next)]);
+										}}
+										aria-label="Time signature"
+										className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+									>
+										{SUPPORTED_METERS.map((m) => (
+											<option key={meterLabel(m)} value={meterLabel(m)}>
+												{meterLabel(m)}
+											</option>
+										))}
+									</select>
+								</div>
+								<div className="flex w-20 shrink-0 flex-col gap-1.5">
+									<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 										BPM
 									</label>
 									{/* Kept as text state so the field can be emptied mid-edit; the
 									    value is clamped to 40–220 on save and on blur. */}
 									<input
 										type="number"
-										min={STRUM_BPM_MIN}
-										max={STRUM_BPM_MAX}
+										min={bpmRangeForMeter(meter).min}
+										max={bpmRangeForMeter(meter).max}
 										value={bpmInput}
 										onChange={(e) => setBpmInput(e.target.value)}
 										onBlur={() => setBpmInput(String(parsedBpm()))}
-										aria-label="Default tempo in BPM"
+										aria-label={`Default tempo in ${beatUnitLabel(meter)}s per minute`}
 										className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 									/>
+									{/* 90 in 6/8 and 90 in 4/4 are not the same pulse. */}
+									{/* <span className="font-mono text-[9px] leading-tight text-ink-faint">
+										per {beatUnitLabel(meter)}
+									</span> */}
 								</div>
 							</div>
 							{nameError && (
@@ -269,7 +344,14 @@ export default function CreatePatternModal({
 													<button
 														key={cellIdx}
 														onClick={() =>
-															setBars((prev) => cycleCell(prev, 0, beatIdx, cellIdx))
+															setBars((prev) =>
+																cycleCell(
+																	prev,
+																	0,
+																	beatIdx,
+																	cellIdx,
+																),
+															)
 														}
 														className="flex-1 flex justify-center items-center text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
 													>
@@ -280,15 +362,23 @@ export default function CreatePatternModal({
 											{/* Cell count controls */}
 											<div className="flex gap-1">
 												<button
-													onClick={() => setBars((prev) => removeCell(prev, 0, beatIdx))}
-													disabled={beat.length <= MIN_CELLS_PER_BEAT}
+													onClick={() =>
+														setBars((prev) =>
+															removeCell(prev, 0, beatIdx, meter),
+														)
+													}
+													// The legal divisions are a set, not a range: a
+													// quarter beat steps 2-3-4, a dotted beat 3-6.
+													disabled={stepCellsPerBeat(meter, beat.length, -1) === null}
 													className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 												>
 													<Minus size={10} />
 												</button>
 												<button
-													onClick={() => setBars((prev) => addCell(prev, 0, beatIdx))}
-													disabled={beat.length >= MAX_CELLS_PER_BEAT}
+													onClick={() =>
+														setBars((prev) => addCell(prev, 0, beatIdx, meter))
+													}
+													disabled={stepCellsPerBeat(meter, beat.length, 1) === null}
 													className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 												>
 													<Plus size={10} />

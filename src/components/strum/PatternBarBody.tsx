@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Bar } from "@/lib/strumPatterns";
 import StepGrid, { type ActiveCell } from "./StepGrid";
+import { DEFAULT_METER, type Meter } from "@/lib/strumMeter";
 import ChordPickerModal, { type ConfirmedChord } from "./ChordPickerModal";
 
 interface Props {
@@ -11,10 +12,17 @@ interface Props {
 	activeCell: ActiveCell | null;
 	/** Given, each bar's chord label becomes a picker. Session-only on a pattern. */
 	onBarChordChange?: (barIdx: number, chord: ConfirmedChord | null) => void;
+	/** The pattern's time signature; decides how the beats are counted. */
+	meter?: Meter;
 }
 
 /** The grid itself, filling a `StepGridCard` below its header. */
-export default function PatternBarBody({ bars, activeCell, onBarChordChange }: Props) {
+export default function PatternBarBody({
+	bars,
+	activeCell,
+	onBarChordChange,
+	meter = DEFAULT_METER,
+}: Props) {
 	const [pickerBarIdx, setPickerBarIdx] = useState<number | null>(null);
 
 	function handleConfirm(chord: ConfirmedChord | null) {
@@ -33,6 +41,7 @@ export default function PatternBarBody({ bars, activeCell, onBarChordChange }: P
 					<StepGrid
 						bars={bars}
 						activeCell={activeCell}
+						meter={meter}
 						onChordClick={onBarChordChange ? setPickerBarIdx : undefined}
 					/>
 				</div>

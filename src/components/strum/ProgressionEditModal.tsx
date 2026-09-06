@@ -28,7 +28,8 @@ import {
 	STRUM_BPM_MAX,
 	STRUM_CAPO_MAX,
 } from "@/lib/strumPatterns";
-import { validateBars, MAX_CELLS_PER_BEAT, normalizeBpm } from "@/lib/strumBars";
+import { validateBars, normalizeBpm } from "@/lib/strumBars";
+import { stepCellsPerBeat, type Meter } from "@/lib/strumMeter";
 import {
 	addBar,
 	removeBar,
@@ -38,7 +39,6 @@ import {
 	cycleCell,
 	addCell,
 	removeCell,
-	MIN_CELLS_PER_BEAT,
 } from "@/lib/strumBarEdit";
 import { defaultProgressionName, normalizeCapo, progressionCapo } from "@/lib/strumProgressions";
 import ChordSearchSelect from "./ChordSearchSelect";
@@ -64,6 +64,7 @@ export default function ProgressionEditModal({
 	onSave,
 	progression,
 	patternBpm,
+	meter,
 }: {
 	open: boolean;
 	onClose: () => void;
@@ -72,6 +73,8 @@ export default function ProgressionEditModal({
 	progression: ChordProgression;
 	/** Tempo the progression falls back to when it carries none of its own. */
 	patternBpm: number;
+	/** The pattern's time signature. A progression never has one of its own. */
+	meter: Meter;
 }) {
 	const [bars, setBars] = useState<Bar[]>(progression.bars);
 	const [name, setName] = useState(progression.name ?? "");
@@ -445,18 +448,24 @@ export default function ProgressionEditModal({
 												<div className="flex gap-1">
 													<button
 														onClick={() =>
-															setBars((prev) => removeCell(prev, barIdx, beatIdx))
+															setBars((prev) => removeCell(prev, barIdx, beatIdx, meter))
 														}
-														disabled={beat.length <= MIN_CELLS_PER_BEAT}
+														// The legal divisions are a set, not a range: a
+														// quarter beat steps 2-3-4, a dotted beat 3-6.
+														disabled={
+															stepCellsPerBeat(meter, beat.length, -1) === null
+														}
 														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 													>
 														<Minus size={10} />
 													</button>
 													<button
 														onClick={() =>
-															setBars((prev) => addCell(prev, barIdx, beatIdx))
+															setBars((prev) => addCell(prev, barIdx, beatIdx, meter))
 														}
-														disabled={beat.length >= MAX_CELLS_PER_BEAT}
+														disabled={
+															stepCellsPerBeat(meter, beat.length, 1) === null
+														}
 														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 													>
 														<Plus size={10} />
@@ -470,7 +479,7 @@ export default function ProgressionEditModal({
 						</div>
 
 						<button
-							onClick={() => setBars((prev) => addBar(prev))}
+							onClick={() => setBars((prev) => addBar(prev, meter))}
 							className="flex items-center justify-center gap-1.5 border border-dashed border-line-strong py-2 text-xs text-ink-dim transition-colors hover:border-denim hover:text-denim disabled:cursor-not-allowed disabled:opacity-30"
 						>
 							<Plus size={12} />

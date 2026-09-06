@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { StrumPattern, Beat, Bar } from "@/lib/strumPatterns";
-import { normalizeBpm, patternBpm } from "@/lib/strumBars";
+import { normalizeBpm, patternBpm, patternMeter } from "@/lib/strumBars";
+import { normalizeMeter, type Meter } from "@/lib/strumMeter";
 import { createClient } from "@/lib/supabase";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
@@ -11,6 +12,8 @@ interface StrumPatternRow {
 	name: string;
 	beats: Beat[];
 	bpm?: unknown;
+	/** Absent on every row written before meters existed; reads back as 4/4. */
+	meter?: unknown;
 }
 
 function rowToPattern(row: StrumPatternRow): StrumPattern {
@@ -19,6 +22,7 @@ function rowToPattern(row: StrumPatternRow): StrumPattern {
 		name: row.name,
 		beats: row.beats,
 		bpm: normalizeBpm(row.bpm),
+		meter: normalizeMeter(row.meter),
 	};
 }
 
@@ -32,12 +36,14 @@ function patternColumns(pattern: StrumPattern): {
 	beats: Beat[];
 	bars: Bar[];
 	bpm: number;
+	meter: Meter;
 } {
 	return {
 		name: pattern.name,
 		beats: pattern.beats,
 		bars: [{ beats: pattern.beats, chord: null }],
 		bpm: patternBpm(pattern),
+		meter: patternMeter(pattern),
 	};
 }
 
@@ -48,6 +54,7 @@ function sanitizeStoredPatterns(patterns: StrumPattern[]): StrumPattern[] {
 		name: p.name,
 		beats: p.beats,
 		bpm: patternBpm(p),
+		meter: patternMeter(p),
 	}));
 }
 

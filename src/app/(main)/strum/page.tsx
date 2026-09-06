@@ -4,10 +4,7 @@ import PatternWorkspace, { type WorkspaceTab } from "@/components/strum/PatternW
 import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
 import {
 	PRESET_STRUM_PATTERNS,
-	TickMode,
 	StrumPattern,
-	STRUM_BPM_MIN,
-	STRUM_BPM_MAX,
 	DEFAULT_STRUM_BPM,
 	type Bar,
 	type ChordProgression,
@@ -18,8 +15,13 @@ import {
 	resolveBarChords,
 	transposeBarPitches,
 	patternBpm,
+	patternMeter,
+	bpmRangeForMeter,
+	clampBpmToMeter,
 	normalizeBpm,
 } from "@/lib/strumBars";
+import { DEFAULT_METER, isCompound } from "@/lib/strumMeter";
+import { TICK_LEVELS, tickLevelLabel, type TickLevel } from "@/lib/strumMetronome";
 import { STRUM_PITCHES } from "@/components/strum/useGuitarSampleLoader";
 import { setBarChord, barLocalBeatIndex } from "@/lib/strumBarEdit";
 import {
@@ -59,8 +61,6 @@ import { saveLastPattern } from "@/lib/lastPattern";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import Fader from "@/components/ui/Fader";
 
-const MIN_BPM = STRUM_BPM_MIN;
-const MAX_BPM = STRUM_BPM_MAX;
 
 // Device-local memory of where the user was in the workspace, so a refresh
 // lands back on the same tab and the same progression.
@@ -171,9 +171,16 @@ export default function StrumPage() {
 	// Null until the device-local choice has been read: showing a preset first and
 	// swapping it out a tick later reads as a glitch, so the card waits instead.
 	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(null);
+
+	// How the bar is counted. A progression inherits it from its pattern, so this
+	// holds on both tabs.
+	const meter = selectedPattern ? patternMeter(selectedPattern) : DEFAULT_METER;
+	// The tempo range follows the meter: a dotted-quarter 220 is not a tempo.
+	const { min: MIN_BPM, max: MAX_BPM } = bpmRangeForMeter(meter);
+
 	const [patternRestored, setPatternRestored] = useState(false);
 	const [bpm, setBpm] = useState(() => patternBpm(PRESET_STRUM_PATTERNS[0]));
-	const [tickMode, setTickMode] = useState<TickMode>("quarter");
+	const [tickLevel, setTickLevel] = useState<TickLevel>("beat");
 	// Which view of the pattern is on screen: its own bar, or one of the chord
 	// progressions written over it.
 	const [tab, setTab] = useState<WorkspaceTab>("pattern");
@@ -225,11 +232,9 @@ export default function StrumPage() {
 		setMetronomeEnabled,
 		metronomeGain,
 		setMetronomeGain,
-		accentEnabled,
-		setAccentEnabled,
 		playOnce,
 		setPlayOnce,
-	} = useAudioEngine(bars, bpm, tickMode, barPitches);
+	} = useAudioEngine(bars, bpm, tickLevel, barPitches, meter);
 
 	const { user, loading } = useUser();
 	const {
@@ -397,7 +402,7 @@ export default function StrumPage() {
 		const next = found ?? PRESET_STRUM_PATTERNS[0];
 		queueMicrotask(() => {
 			setSelectedPattern(next);
-			setBpm(patternBpm(next));
+			setBpm(clampBpmToMeter(patternBpm(next), patternMeter(next)));
 			setPatternRestored(true);
 		});
 	}, [patternsLoading, customPatterns]);
@@ -462,8 +467,15 @@ export default function StrumPage() {
 
 	/** The tempo something plays at: the progression's own, else the pattern's. */
 	function bpmFor(progression: ChordProgression | null): number {
-		if (progression?.bpm !== undefined) return normalizeBpm(progression.bpm);
-		return selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM;
+		// Clamped to the meter: a tempo stored before the meter changed, or edited
+		// by hand, must still land somewhere the fader can show.
+		const raw =
+			progression?.bpm !== undefined
+				? normalizeBpm(progression.bpm)
+				: selectedPattern
+					? patternBpm(selectedPattern)
+					: DEFAULT_STRUM_BPM;
+		return clampBpmToMeter(raw, meter);
 	}
 
 	// The tempo the reset control returns to: whatever is on screen owns it.
@@ -859,8 +871,11 @@ export default function StrumPage() {
 									</span>
 									<span className="relative">{String(bpm).padStart(3, "0")}</span>
 								</span>
+								{/* A compound meter counts dotted beats, so 90 here is not the
+								    90 of a 4/4 pattern. Named only where the ambiguity exists —
+								    every simple meter counts quarters. */}
 								<div className="mt-1.5 font-mono text-[9px] tracking-[0.28em] text-ink-faint">
-									BPM
+									{isCompound(meter) ? "BPM ♩." : "BPM"}
 								</div>
 							</div>
 							<Fader
@@ -963,29 +978,13 @@ export default function StrumPage() {
 									Subdivision
 								</div>
 								<Segmented
-									options={[
-										{ value: "quarter", label: "1/4" },
-										{ value: "eighth", label: "1/8" },
-										{ value: "sixteenth", label: "1/16" },
-									]}
-									value={tickMode}
-									onChange={(v) => setTickMode(v as TickMode)}
+									options={TICK_LEVELS.map((level) => ({
+										value: level,
+										label: tickLevelLabel(meter, level),
+									}))}
+									value={tickLevel}
+									onChange={(v) => setTickLevel(v as TickLevel)}
 									disabled={!metronomeEnabled}
-								/>
-							</div>
-							<div
-								className={`flex items-center justify-between ${
-									!metronomeEnabled ? "opacity-40" : ""
-								}`}
-							>
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Accent beat 1
-								</span>
-								<Rocker
-									checked={accentEnabled}
-									onChange={setAccentEnabled}
-									disabled={!metronomeEnabled}
-									ariaLabel="Accent beat 1"
 								/>
 							</div>
 						</div>
@@ -1190,13 +1189,12 @@ export default function StrumPage() {
 								Subdivision
 							</div>
 							<Segmented
-								options={[
-									{ value: "quarter", label: "1/4" },
-									{ value: "eighth", label: "1/8" },
-									{ value: "sixteenth", label: "1/16" },
-								]}
-								value={tickMode}
-								onChange={(v) => setTickMode(v as TickMode)}
+								options={TICK_LEVELS.map((level) => ({
+									value: level,
+									label: tickLevelLabel(meter, level),
+								}))}
+								value={tickLevel}
+								onChange={(v) => setTickLevel(v as TickLevel)}
 								disabled={!metronomeEnabled}
 							/>
 						</div>
@@ -1223,23 +1221,6 @@ export default function StrumPage() {
 								scale={["0", "50", "100"]}
 								disabled={!metronomeEnabled}
 								ariaLabel="Metronome volume"
-							/>
-						</div>
-
-						{/* Accent beat 1 */}
-						<div
-							className={`flex items-center justify-between ${
-								!metronomeEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-								Accent beat 1
-							</span>
-							<Rocker
-								checked={accentEnabled}
-								onChange={setAccentEnabled}
-								disabled={!metronomeEnabled}
-								ariaLabel="Accent beat 1"
 							/>
 						</div>
 
@@ -1395,7 +1376,7 @@ export default function StrumPage() {
 						if (selectedPattern?.id === pattern.id) {
 							setSelectedPattern(pattern);
 							// The edit may have moved the pattern's default tempo — adopt it.
-							setBpm(patternBpm(pattern));
+							setBpm(clampBpmToMeter(patternBpm(pattern), patternMeter(pattern)));
 						}
 					} else {
 						handleSaveCustomPattern(pattern);
@@ -1412,6 +1393,7 @@ export default function StrumPage() {
 					onSave={handleProgressionSave}
 					progression={editingProgression}
 					patternBpm={selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM}
+					meter={meter}
 				/>
 			)}
 		</>

@@ -68,6 +68,23 @@ export interface ChordProgression {
 	 * player holds, so playback sounds this many semitones higher. 0 = no capo.
 	 */
 	capo?: number;
+	/**
+	 * The pattern rhythm this sequence was last reconciled with.
+	 *
+	 * Also the "before" argument `syncBarsToPattern` needs, which is why this is
+	 * a snapshot and not a dirty flag. Absent means the sequence predates the
+	 * reconcile prompt: there is no baseline to diff or to sync from, so it is
+	 * backfilled silently rather than being asked about.
+	 */
+	syncedBeats?: Beat[];
+	/** False once the player has declined to follow the pattern. */
+	followsPattern?: boolean;
+	/**
+	 * True once the player has dismissed the "not following" notice. A third
+	 * piece of information, not derivable from the other two: a sequence can have
+	 * stopped following and still want to be reminded that it has.
+	 */
+	syncNoticeDismissed?: boolean;
 }
 
 /** Tempo bounds shared by the transport fader and the pattern editor. */

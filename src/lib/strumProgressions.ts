@@ -5,6 +5,7 @@ import {
 	type ChordProgression,
 	type ChordRef,
 } from "@/lib/strumPatterns";
+import { validateBars } from "@/lib/strumBars";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 
@@ -146,4 +147,139 @@ export function syncBarsToPattern(
 		return { ...bar, beats: nextBeats.map((beat) => [...beat]) };
 	});
 	return changed ? next : bars;
+}
+
+/**
+ * Whether a sequence has a pattern edit waiting for an answer.
+ *
+ * Kept apart from the components so the decision — which is the whole feature —
+ * can be read and tested in one place, rather than inferred from a condition
+ * spread across a modal.
+ */
+export type PatternSyncState =
+	/** The sequence already plays the pattern's current rhythm. */
+	| { kind: "in-sync" }
+	/**
+	 * Written before the prompt existed. Nothing to diff against, so record the
+	 * pattern's rhythm quietly and never mention it.
+	 */
+	| { kind: "backfill" }
+	/**
+	 * The pattern moved, but syncing would change nothing here — every bar has
+	 * been re-written in the progression editor, or already reads the way the
+	 * pattern does now. Record and say nothing: a question whose only answer
+	 * changes nothing is worse than no question.
+	 */
+	| { kind: "no-change" }
+	/** The pattern moved. `previousBeats` is what to sync from if the answer is yes. */
+	| { kind: "ask"; previousBeats: Beat[] }
+	/** The player has said no; this sequence has a rhythm of its own now. */
+	| { kind: "detached" }
+	/** Detached, and the player has dismissed the notice saying so. */
+	| { kind: "detached-dismissed" };
+
+export function patternSyncState(
+	progression: ChordProgression,
+	patternBeats: Beat[],
+): PatternSyncState {
+	if (progression.followsPattern === false) {
+		return progression.syncNoticeDismissed === true
+			? { kind: "detached-dismissed" }
+			: { kind: "detached" };
+	}
+	if (!Array.isArray(progression.syncedBeats)) return { kind: "backfill" };
+	if (JSON.stringify(progression.syncedBeats) === JSON.stringify(patternBeats)) {
+		return { kind: "in-sync" };
+	}
+
+	// The pattern having moved is not on its own a reason to ask. What matters is
+	// whether this sequence would change — a progression whose bars the player
+	// re-wrote follows nothing, and asking it about every pattern edit is noise.
+	// syncBarsToPattern returns its input by reference when no bar followed, so
+	// the question is answered by the same code that would carry out the answer.
+	const synced = syncBarsToPattern(progression.bars, progression.syncedBeats, patternBeats);
+	if (synced === progression.bars) return { kind: "no-change" };
+
+	return { kind: "ask", previousBeats: progression.syncedBeats };
+}
+
+/** Record the pattern's rhythm without touching the bars. Backfill, and "no". */
+export function markPatternSynced(
+	progression: ChordProgression,
+	patternBeats: Beat[],
+): ChordProgression {
+	return { ...progression, syncedBeats: patternBeats.map((beat) => [...beat]) };
+}
+
+/**
+ * Answer yes: carry the pattern edit in, then record that it has been carried.
+ * Bars the player re-wrote inside the progression editor still keep their own
+ * rhythm — that judgement lives in `syncBarsToPattern` and is unchanged.
+ */
+export function applyPatternSync(
+	progression: ChordProgression,
+	patternBeats: Beat[],
+): ChordProgression {
+	const state = patternSyncState(progression, patternBeats);
+	const previous = state.kind === "ask" ? state.previousBeats : progression.bars[0]?.beats ?? [];
+	return {
+		...markPatternSynced(progression, patternBeats),
+		bars: syncBarsToPattern(progression.bars, previous, patternBeats),
+		followsPattern: true,
+	};
+}
+
+/**
+ * Answer no.
+ *
+ * The snapshot is deliberately left where it was. Moving it to the pattern's
+ * current rhythm would strand the sequence: its bars would then match no
+ * snapshot the pattern will ever have, every later edit would compute as
+ * "nothing would change", and "follow again" would be a button that does
+ * nothing. Reconsidering has to start from where the sequence actually stands.
+ */
+export function declinePatternSync(progression: ChordProgression): ChordProgression {
+	return { ...progression, followsPattern: false };
+}
+
+/**
+ * Follow the pattern again. Only lifts the refusal — whether anything is then
+ * out of step is `patternSyncState`'s to say, so re-following a pattern that has
+ * since moved asks the question again rather than applying it unseen.
+ */
+export function resumePatternSync(progression: ChordProgression): ChordProgression {
+	// The dismissal goes with the refusal it was hiding. Following again is
+	// re-engaging, so a later refusal deserves to be visible again rather than
+	// inheriting a silence agreed to about a different decision.
+	const { syncNoticeDismissed: _dismissed, ...rest } = progression;
+	return { ...rest, followsPattern: true };
+}
+
+/**
+ * Hide the "not following" notice for good.
+ *
+ * Separate from declining: saying no is about the rhythm, dismissing is about
+ * being told. A player who has settled on their own rhythm does not need a
+ * standing reminder, but one who has just decided might.
+ */
+export function dismissPatternNotice(progression: ChordProgression): ChordProgression {
+	return { ...progression, syncNoticeDismissed: true };
+}
+
+/** Reading the two fields back from storage, where anything could be in them. */
+export function normalizeProgressionSync(
+	raw: { syncedBeats?: unknown; followsPattern?: unknown; syncNoticeDismissed?: unknown },
+): { syncedBeats?: Beat[]; followsPattern?: boolean; syncNoticeDismissed?: boolean } {
+	const out: {
+		syncedBeats?: Beat[];
+		followsPattern?: boolean;
+		syncNoticeDismissed?: boolean;
+	} = {};
+	// A snapshot is one bar's worth of beats; validateBars is the existing guard.
+	if (Array.isArray(raw.syncedBeats) && validateBars([{ beats: raw.syncedBeats, chord: null }]).ok) {
+		out.syncedBeats = raw.syncedBeats as Beat[];
+	}
+	if (raw.followsPattern === false) out.followsPattern = false;
+	if (raw.syncNoticeDismissed === true) out.syncNoticeDismissed = true;
+	return out;
 }

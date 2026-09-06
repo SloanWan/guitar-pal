@@ -29,7 +29,12 @@ import {
 	nextOrderIndex,
 	progressionBarsFromChords,
 	progressionCapo,
-	syncBarsToPattern,
+	patternSyncState,
+	applyPatternSync,
+	declinePatternSync,
+	resumePatternSync,
+	dismissPatternNotice,
+	markPatternSynced,
 } from "@/lib/strumProgressions";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { loadVoicings } from "@/lib/chordVoicingCache";
@@ -502,6 +507,8 @@ export default function StrumPage() {
 			patternId: selectedPattern.id,
 			bars: progressionBarsFromChords(selectedPattern.beats, chords),
 			orderIndex: nextOrderIndex(patternProgressions),
+			// Written from the pattern as it stands, so it starts reconciled.
+			syncedBeats: selectedPattern.beats.map((beat) => [...beat]),
 		};
 		handleSaveProgression(progression);
 		stop();
@@ -528,17 +535,49 @@ export default function StrumPage() {
 	}
 
 	/**
-	 * Carry a rhythm edit into the progressions written over the pattern. Bars the
-	 * user re-wrote inside a progression keep their own rhythm; see
-	 * `syncBarsToPattern`.
+	 * Reconcile the open sequence with its pattern, or ask to.
+	 *
+	 * A pattern edit used to rewrite every sequence over it on save, silently and
+	 * while the player was looking at the pattern editor. The decision now happens
+	 * here, where the sequence is on screen and the answer can be judged.
+	 *
+	 * A sequence written before the prompt existed has no baseline to diff, so it
+	 * is backfilled without a word rather than asked about a change nobody could
+	 * describe.
 	 */
-	function syncProgressionsToPattern(previous: StrumPattern, next: StrumPattern) {
-		for (const progression of progressionsForPattern(progressions, next.id)) {
-			const nextBars = syncBarsToPattern(progression.bars, previous.beats, next.beats);
-			if (nextBars !== progression.bars) {
-				handleSaveProgression({ ...progression, bars: nextBars });
-			}
-		}
+	const openSyncState =
+		openProgression && selectedPattern
+			? patternSyncState(openProgression, selectedPattern.beats)
+			: null;
+
+	useEffect(() => {
+		// Both quiet outcomes settle the same way: record the pattern's rhythm and
+		// say nothing. One has no baseline to diff, the other has one but nothing
+		// that would change.
+		const quiet = openSyncState?.kind === "backfill" || openSyncState?.kind === "no-change";
+		if (!quiet || !openProgression || !selectedPattern) return;
+		handleSaveProgression(markPatternSynced(openProgression, selectedPattern.beats));
+	}, [openSyncState?.kind, openProgression?.id]);
+
+	function handleApplyPatternSync() {
+		if (!openProgression || !selectedPattern) return;
+		stop();
+		handleSaveProgression(applyPatternSync(openProgression, selectedPattern.beats));
+	}
+
+	function handleDeclinePatternSync() {
+		if (!openProgression) return;
+		handleSaveProgression(declinePatternSync(openProgression));
+	}
+
+	function handleResumePatternSync() {
+		if (!openProgression) return;
+		handleSaveProgression(resumePatternSync(openProgression));
+	}
+
+	function handleDismissPatternNotice() {
+		if (!openProgression) return;
+		handleSaveProgression(dismissPatternNotice(openProgression));
 	}
 
 	/** Deleting a pattern takes the progressions written over it with it. */
@@ -719,6 +758,16 @@ export default function StrumPage() {
 								progressionsLoading={progressionsLoading || !progressionRestored}
 								selectedProgressionId={openProgressionId}
 								onSelectProgression={handleOpenProgression}
+								// "detached-dismissed" and the quiet outcomes render nothing.
+								patternSync={
+									openSyncState?.kind === "ask" || openSyncState?.kind === "detached"
+										? openSyncState.kind
+										: null
+								}
+								onApplyPatternSync={handleApplyPatternSync}
+								onDeclinePatternSync={handleDeclinePatternSync}
+								onResumePatternSync={handleResumePatternSync}
+								onDismissPatternNotice={handleDismissPatternNotice}
 								onAddProgression={handleAddProgression}
 								onEditProgression={handleEditProgression}
 								onDeleteProgression={handleRemoveProgression}
@@ -1372,7 +1421,6 @@ export default function StrumPage() {
 				onSave={(pattern) => {
 					if (editingPattern) {
 						handleEditCustomPattern(pattern);
-						syncProgressionsToPattern(editingPattern, pattern);
 						if (selectedPattern?.id === pattern.id) {
 							setSelectedPattern(pattern);
 							// The edit may have moved the pattern's default tempo — adopt it.

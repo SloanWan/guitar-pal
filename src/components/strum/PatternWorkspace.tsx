@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Guitar, List, Music, Pencil, Plus, Trash2, Type } from "lucide-react";
+import { Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
 import type { Bar, ChordProgression, ChordRef, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,
@@ -47,6 +47,16 @@ interface Props {
 	onDeleteProgression: (progression: ChordProgression) => void;
 	/** Given only for a pattern the user owns; presets cannot be edited. */
 	onEditPattern?: () => void;
+	/**
+	 * Whether the open sequence is still in step with the pattern it was written
+	 * over. "ask" means the pattern's rhythm has moved and the player has not
+	 * answered; "detached" means they said no and it no longer follows.
+	 */
+	patternSync?: "ask" | "detached" | null;
+	onApplyPatternSync?: () => void;
+	onDeclinePatternSync?: () => void;
+	onResumePatternSync?: () => void;
+	onDismissPatternNotice?: () => void;
 }
 
 function TabButton({
@@ -88,6 +98,11 @@ export default function PatternWorkspace({
 	onEditProgression,
 	onDeleteProgression,
 	onEditPattern,
+	patternSync = null,
+	onApplyPatternSync,
+	onDeclinePatternSync,
+	onResumePatternSync,
+	onDismissPatternNotice,
 }: Props) {
 	const selected = progressions.find((p) => p.id === selectedProgressionId) ?? null;
 
@@ -515,6 +530,62 @@ export default function PatternWorkspace({
 									</div>
 								)}
 							</div>
+							{/* The pattern moved under this sequence. Asked here, where the
+							    sequence is on screen and the answer can be judged, rather than
+							    applied on the pattern's save where it could not be. Inline
+							    rather than a dialog: it is a question about what is behind it,
+							    and blocking the view of the thing in question helps nobody. */}
+							{patternSync === "ask" && (
+								<div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-destructive bg-destructive-tint px-3 py-2 sm:px-5">
+									<span className="min-w-0 flex-1 font-mono text-[11px] leading-snug tracking-[0.04em] text-ink-dim">
+										The pattern&rsquo;s rhythm has changed since this sequence was
+										written. Apply it here?
+									</span>
+									<button
+										type="button"
+										onClick={onApplyPatternSync}
+										className="flex h-(--h-control) items-center border border-denim px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors hover:bg-denim hover:text-on-denim"
+									>
+										Apply
+									</button>
+									<button
+										type="button"
+										onClick={onDeclinePatternSync}
+										className="flex h-(--h-control) items-center border border-line-strong px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors hover:border-denim hover:text-denim-accent"
+									>
+										Keep mine
+									</button>
+								</div>
+							)}
+							{/* Declining is a state, not a silence: a one-way door the player
+							    cannot see they walked through is the failure mode here. */}
+							{patternSync === "detached" && (
+								<div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-1.5 sm:px-5">
+									<span className="min-w-0 flex-1 font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+										Not following the pattern&rsquo;s rhythm.
+									</span>
+									<button
+										type="button"
+										onClick={onResumePatternSync}
+										className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim underline-offset-2 transition-colors hover:text-denim-accent hover:underline"
+									>
+										Follow again
+									</button>
+									{/* Saying no is about the rhythm; this is about being told. A
+									    player who has settled on their own rhythm does not need a
+									    standing reminder, but one who has just decided might. */}
+									<button
+										type="button"
+										onClick={onDismissPatternNotice}
+										aria-label="Dismiss this notice for good"
+										title="Dismiss for good"
+										className="flex items-center justify-center p-1 text-ink-faint transition-colors hover:text-ink-dim"
+									>
+										<X size={12} />
+									</button>
+								</div>
+							)}
+
 							{/* Scrolls internally; playback keeps the current bar in view. */}
 							<div className="flex min-h-0 flex-col items-center overflow-y-auto px-3 py-5 sm:px-5">
 								<div className="my-auto w-full">

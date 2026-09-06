@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Bar, ChordProgression } from "@/lib/strumPatterns";
 import { validateBars, normalizeBpm } from "@/lib/strumBars";
-import { normalizeCapo } from "@/lib/strumProgressions";
+import { normalizeCapo, normalizeProgressionSync } from "@/lib/strumProgressions";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
@@ -16,6 +16,10 @@ interface ProgressionRow {
 	name: string | null;
 	bpm: number | null;
 	capo: number | null;
+	/** All absent on rows written before the reconcile prompt existed. */
+	synced_beats?: unknown;
+	follows_pattern?: unknown;
+	sync_notice_dismissed?: unknown;
 }
 
 /** Drop rows whose bars no longer validate — a bad row must not break the list. */
@@ -30,6 +34,11 @@ function rowToProgression(row: ProgressionRow): ChordProgression | null {
 		// Null means "no tempo of its own" — the pattern's tempo is used instead.
 		bpm: row.bpm === null ? undefined : normalizeBpm(row.bpm),
 		capo: normalizeCapo(row.capo),
+		...normalizeProgressionSync({
+			syncedBeats: row.synced_beats,
+			followsPattern: row.follows_pattern,
+			syncNoticeDismissed: row.sync_notice_dismissed,
+		}),
 	};
 }
 
@@ -43,6 +52,9 @@ function progressionColumns(progression: ChordProgression, userId: string) {
 		name: progression.name?.trim() || null,
 		bpm: progression.bpm === undefined ? null : normalizeBpm(progression.bpm),
 		capo: normalizeCapo(progression.capo),
+		synced_beats: progression.syncedBeats ?? null,
+		follows_pattern: progression.followsPattern ?? null,
+		sync_notice_dismissed: progression.syncNoticeDismissed ?? null,
 	};
 }
 
@@ -50,7 +62,10 @@ function readStored(): ChordProgression[] {
 	try {
 		const saved = localStorage.getItem(STORAGE_KEY);
 		if (!saved) return [];
-		return (JSON.parse(saved) as ChordProgression[]).filter((p) => validateBars(p.bars).ok);
+		return (JSON.parse(saved) as ChordProgression[])
+			.filter((p) => validateBars(p.bars).ok)
+			// Local storage is as untrusted as the database; the same guard applies.
+			.map((p) => ({ ...p, ...normalizeProgressionSync(p) }));
 	} catch {
 		return [];
 	}

@@ -236,6 +236,18 @@ describe("normalizeChordName — a typed name as a stored identity", () => {
     expect(normalizeChordName("zzz")).toBeNull();
     expect(normalizeChordName("   ")).toBeNull();
   });
+
+  it("takes 'unknown' as a name in its own right", () => {
+    // The one name that needs no root: a chord the player cannot identify. It is
+    // filed under a root that is deliberately not a note, so browsing A never
+    // turns up a chord that only might have been an A.
+    expect(normalizeChordName("unknown")).toEqual({ root: "?", suffix: "unknown" });
+    expect(normalizeChordName("  UNKNOWN ")).toEqual({ root: "?", suffix: "unknown" });
+  });
+
+  it("does not read a named chord as unknown", () => {
+    expect(normalizeChordName("A unknown")).toEqual({ root: "A", suffix: "unknown" });
+  });
 });
 
 describe("slug round-trip — every row decodes back to itself", () => {

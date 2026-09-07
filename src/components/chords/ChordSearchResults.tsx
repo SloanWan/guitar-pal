@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, PencilIcon } from "lucide-react";
 
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import MusicalText from "@/components/MusicalText";
@@ -34,6 +34,7 @@ const BATCH_VALUE = "batch-grid";
 const shortcutValue = (s: NavShortcut) => `jump-${s.kind}`;
 const chordValue = (r: ChordSearchResult) => `${r.root} ${r.suffix}`.toLowerCase();
 const shapeValue = (m: ShapeMatch) => `shape-${m.root} ${m.suffix}`.toLowerCase();
+const CREATE_VALUE = "create-chord";
 
 /**
  * What the palette can be asked, one row each: what to type, and what typing it
@@ -126,9 +127,12 @@ export function useChordPaletteRows(
 
 interface Props {
 	rows: ChordPaletteRows;
-	onSelectChord: (result: ChordSearchResult) => void;
+	/** `shape` says which chord is meant when the name cannot — see goToChord. */
+	onSelectChord: (result: ChordSearchResult, shape?: string) => void;
 	onSelectShortcut: (shortcut: NavShortcut) => void;
 	onSelectBatch: () => void;
+	/** Take the typed shape somewhere it can be written down. */
+	onCreateChord: (frets: string) => void;
 }
 
 // The rows of the chord palette, shared by the ⌘K dialog and the inline dropdown that
@@ -148,9 +152,14 @@ export default function ChordSearchResults({
 	onSelectChord,
 	onSelectShortcut,
 	onSelectBatch,
+	onCreateChord,
 }: Props) {
 	const { results, shortcut, batch, trimmed, showChords, shape } = rows;
 	const isShape = shape.target !== null;
+	// Near misses and transposed grips are worth listing, but none of them is the
+	// chord in the player's hands — so the offer to write it down stands until
+	// something answers on the same frets.
+	const held = shape.matches.some((m) => m.match.kind === "exact");
 
 	return (
 		<>
@@ -163,13 +172,25 @@ export default function ChordSearchResults({
 						<CommandItem
 							key={shapeValue(m)}
 							value={shapeValue(m)}
+							// The shape addresses it: every unnamed chord is called the same
+							// thing, so only the frets say which one this row is.
 							onSelect={() =>
-								onSelectChord({ root: m.root, suffix: m.suffix, category: m.category })
+								onSelectChord(
+									{ root: m.root, suffix: m.suffix, category: m.category },
+									formatTabSequence(m.frets),
+								)
 							}
 						>
 							<span className="flex min-w-0 flex-col gap-0.5">
-								<span className="font-medium text-ink">
-									<MusicalText text={chordDisplayName(m.root, m.suffix)} />
+								<span className="flex items-baseline gap-1.5">
+									<span className="font-medium text-ink">
+										<MusicalText text={chordDisplayName(m.root, m.suffix)} />
+									</span>
+									{m.mine && (
+										<span className="shrink-0 border border-denim-border bg-denim-tint px-1 font-mono text-[9px] uppercase tracking-[0.08em] text-denim">
+											yours
+										</span>
+									)}
 								</span>
 								<span className="font-mono text-xs tracking-[0.12em] text-ink-dim">
 									{formatTabSequence(m.frets)}
@@ -178,6 +199,22 @@ export default function ChordSearchResults({
 							<span className="ml-auto shrink-0 text-xs text-ink-dim">
 								{shapeMatchNote(m.match)}
 							</span>
+							{/* The row opens the chord; this opens the page it was written on,
+							    where its name and its filing can be changed. */}
+							{m.mine && (
+								<button
+									type="button"
+									aria-label={`Edit ${chordDisplayName(m.root, m.suffix)}`}
+									title="Rename, refile or redraw"
+									onClick={(e) => {
+										e.stopPropagation();
+										onCreateChord(formatTabSequence(m.frets));
+									}}
+									className="-my-1 shrink-0 p-1 text-ink-faint transition-colors hover:text-denim-accent"
+								>
+									<PencilIcon className="size-3.5" />
+								</button>
+							)}
 						</CommandItem>
 					))}
 				</CommandGroup>
@@ -197,6 +234,22 @@ export default function ChordSearchResults({
 					</NoteLead>
 					<NoteRow ask="Frets are read first string first" example={SHAPE_EXAMPLE} />
 				</PaletteNote>
+			)}
+
+			{/* Last, so a real match keeps cmdk's default highlight; on its own when
+			    nothing answered, which is when it is the only thing to do. */}
+			{isShape && !shape.loading && !held && (
+				<CommandGroup heading="Not in the library">
+					<CommandItem value={CREATE_VALUE} onSelect={() => onCreateChord(trimmed)}>
+						<span className="flex min-w-0 flex-col gap-0.5">
+							<span className="font-medium text-ink">Create this chord?</span>
+							<span className="font-mono text-xs tracking-[0.12em] text-ink-dim">
+								{trimmed}
+							</span>
+						</span>
+						<ArrowRightIcon className="ml-auto size-4 text-ink-dim" />
+					</CommandItem>
+				</CommandGroup>
 			)}
 
 			{showChords && (

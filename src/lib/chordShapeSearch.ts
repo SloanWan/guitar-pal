@@ -2,6 +2,7 @@ import { MUTED, voicingToChordShape, type ShapeFret } from "@/lib/chordShape";
 import { getSuffixCategory, isSlashChord } from "@/lib/chordSuffixes";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { TAB_STRING_COUNT } from "@/lib/chordTabSequence";
+import type { UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**
  * Finding a chord by the shape of the hand rather than by its name.
@@ -15,11 +16,58 @@ import { TAB_STRING_COUNT } from "@/lib/chordTabSequence";
  * windows would compare as two different shapes.
  */
 
-/** A chord and one of the shapes it is played with. */
+/** A chord and the shapes it is played with. */
 export interface ShapeSearchChord {
 	root: string;
 	suffix: string;
 	chord_voicings: ChordVoicing[];
+	/**
+	 * True for a chord only the player has. The library has no page for one of
+	 * those, so a row that answers with it leads somewhere else entirely.
+	 */
+	mine?: boolean;
+}
+
+/**
+ * The library, plus the chords only the player has.
+ *
+ * Searching a grip has to find a chord they wrote themselves — otherwise the
+ * shape they invented last week comes back as "not in the library", inviting
+ * them to invent it a second time. A shape written for a chord the library
+ * already carries joins that chord's own list rather than starting a rival
+ * entry: it is another way to play a C, not another C.
+ */
+export function withUserChords(
+	library: readonly ShapeSearchChord[],
+	user: readonly UserChordVoicing[],
+): ShapeSearchChord[] {
+	if (user.length === 0) return [...library];
+
+	const merged = new Map<string, ShapeSearchChord>();
+	for (const chord of library) {
+		merged.set(`${chord.root} ${chord.suffix}`, chord);
+	}
+
+	for (const voicing of user) {
+		const key = `${voicing.root} ${voicing.suffix}`;
+		const existing = merged.get(key);
+		if (existing) {
+			// Copied, never appended in place: the library list is shared and cached.
+			merged.set(key, {
+				...existing,
+				chord_voicings: [...existing.chord_voicings, voicing],
+			});
+			continue;
+		}
+		merged.set(key, {
+			root: voicing.root,
+			suffix: voicing.suffix,
+			chord_voicings: [voicing],
+			mine: true,
+		});
+	}
+
+	return [...merged.values()];
 }
 
 /** How a stored shape answers the one that was typed. */
@@ -40,6 +88,8 @@ export interface ShapeMatch {
 	/** The voicing's frets on the neck, low E first. */
 	frets: ShapeFret[];
 	match: ShapeMatchKind;
+	/** A chord only the player has, which is opened rather than browsed. */
+	mine: boolean;
 }
 
 /** How far from exact a match may be and still be worth showing. */
@@ -144,11 +194,18 @@ export function searchChordsByShape(
 				voicing,
 				frets,
 				match,
+				mine: chord.mine === true,
 			});
 		}
 	}
 
 	return [...best.values()]
-		.sort((a, b) => matchRank(a.match) - matchRank(b.match))
+		.sort(
+			(a, b) =>
+				matchRank(a.match) - matchRank(b.match) ||
+				// Between two equally good answers, the player's own comes first: a
+				// grip they wrote down themselves is the one they are looking for.
+				Number(b.mine) - Number(a.mine),
+		)
 		.slice(0, limit);
 }

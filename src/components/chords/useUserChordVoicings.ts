@@ -6,11 +6,16 @@ import { createClient } from "@/lib/supabase";
 import {
 	dedupeUserVoicing,
 	rawUserVoicingId,
-	rowToUserVoicing,
 	userVoicingColumns,
 	type UserChordVoicing,
-	type UserVoicingRow,
 } from "@/lib/userChordVoicings";
+import {
+	clearLocalVoicings,
+	fetchAccountVoicings,
+	invalidateUserVoicings,
+	readLocalVoicings,
+	writeLocalVoicings,
+} from "@/lib/userVoicingStore";
 
 /**
  * The chord shapes the player has written, across every chord.
@@ -21,36 +26,13 @@ import {
  * is small enough to hold whole and filter per chord where it is used.
  */
 
-const STORAGE_KEY = "userChordVoicings";
-
-function readStored(): UserChordVoicing[] {
-	try {
-		const saved = localStorage.getItem(STORAGE_KEY);
-		if (!saved) return [];
-		// Local storage is as untrusted as the database: the same guard, and the
-		// same silent drop for a shape that could not be drawn.
-		return (JSON.parse(saved) as UserVoicingRow[])
-			.map((row) => rowToUserVoicing({ ...row, id: rawUserVoicingId(row.id) }))
-			.filter((v): v is UserChordVoicing => v !== null);
-	} catch {
-		return [];
-	}
-}
-
-function writeStored(voicings: UserChordVoicing[]) {
-	localStorage.setItem(
-		STORAGE_KEY,
-		JSON.stringify(voicings.map((v) => userVoicingColumns(v, "local"))),
-	);
-}
-
 export function useUserChordVoicings(user: User | null, loading: boolean) {
 	const [voicings, setVoicings] = useState<UserChordVoicing[]>([]);
 	const [voicingsLoading, setVoicingsLoading] = useState(true);
 
 	useEffect(() => {
 		if (loading || user) return;
-		const local = readStored();
+		const local = readLocalVoicings();
 		queueMicrotask(() => {
 			setVoicings(local);
 			setVoicingsLoading(false);
@@ -63,31 +45,24 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 
 		async function mergeAndReload() {
 			const supabase = createClient();
-			const local = readStored();
+			const local = readLocalVoicings();
 			if (local.length > 0) {
 				try {
 					const { error } = await supabase
 						.from("user_chord_voicings")
 						.upsert(local.map((v) => userVoicingColumns(v, currentUser.id)));
 					if (error) throw new Error(error.message);
-					localStorage.removeItem(STORAGE_KEY);
+					clearLocalVoicings();
 				} catch (e) {
 					console.error("[useUserChordVoicings] merge failed:", e);
 				}
 			}
 
-			// select("*") on purpose: an explicit column list is a second place to
-			// remember a new column, and forgetting it fails silently.
-			const { data, error } = await supabase
-				.from("user_chord_voicings")
-				.select("*")
-				.eq("user_id", currentUser.id);
-			if (error) console.error("[useUserChordVoicings] load failed:", error.message);
-			setVoicings(
-				(data ?? [])
-					.map((row) => rowToUserVoicing(row as UserVoicingRow))
-					.filter((v): v is UserChordVoicing => v !== null),
-			);
+			try {
+				setVoicings(await fetchAccountVoicings(currentUser.id));
+			} catch (e) {
+				console.error("[useUserChordVoicings] load failed:", e);
+			}
 			setVoicingsLoading(false);
 		}
 
@@ -112,7 +87,13 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 				const next = prev.some((v) => v.id === stored.id)
 					? prev.map((v) => (v.id === stored.id ? stored : v))
 					: [...prev, stored];
-				if (!user) writeStored(next);
+				if (!user) {
+					writeLocalVoicings(next);
+					// After the write, never before it: anything holding a fetched copy
+					// has to fetch it again, and invalidating a cache while the old
+					// value is still the stored one simply refills it with the old one.
+					invalidateUserVoicings();
+				}
 				return next;
 			});
 			if (!user) return stored;
@@ -123,6 +104,7 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 						.from("user_chord_voicings")
 						.upsert(userVoicingColumns(stored, user.id));
 					if (error) throw new Error(error.message);
+					invalidateUserVoicings();
 				} catch (e) {
 					console.error("[useUserChordVoicings] save failed:", e);
 				}
@@ -136,7 +118,10 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 		(id: string) => {
 			setVoicings((prev) => {
 				const next = prev.filter((v) => v.id !== id);
-				if (!user) writeStored(next);
+				if (!user) {
+					writeLocalVoicings(next);
+					invalidateUserVoicings();
+				}
 				return next;
 			});
 			if (!user) return;
@@ -149,6 +134,7 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 						.eq("id", rawUserVoicingId(id))
 						.eq("user_id", user.id);
 					if (error) throw new Error(error.message);
+					invalidateUserVoicings();
 				} catch (e) {
 					console.error("[useUserChordVoicings] delete failed:", e);
 				}

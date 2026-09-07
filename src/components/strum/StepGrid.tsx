@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Bar } from "@/lib/strumPatterns";
 import { barPlaceholder } from "@/lib/strumBars";
+import { chordDisplayName } from "@/lib/chordSuffixes";
 import {
 	paddedBeatCells,
 	paddedCellIndex,
@@ -179,7 +180,12 @@ export default function StepGrid({
 		>
 			{bars.map((bar, barIdx) => {
 				const isActiveBar = activeCell?.barIdx === barIdx;
-				const chordLabel = bar.chord ? `${bar.chord.root} ${bar.chord.suffix}` : null;
+				// Written, not concatenated: a chord nobody has named is stored under a
+				// placeholder root, and "? unknown" is not something to make a player
+				// read off their own chart.
+				const chordLabel = bar.chord
+					? chordDisplayName(bar.chord.root, bar.chord.suffix)
+					: null;
 				// A chord the library has nothing for, kept as the player typed it.
 				// It reads red and draws no shape — there is no shape to draw — and
 				// the bar it names sounds nothing until a chord is picked for it.

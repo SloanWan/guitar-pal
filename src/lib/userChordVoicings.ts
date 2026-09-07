@@ -1,6 +1,11 @@
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { CHORD_SHAPE_WINDOW, MAX_SHAPE_START_FRET } from "@/lib/chordShape";
+import {
+	CHORD_SUFFIX_CATEGORIES,
+	UNKNOWN_SUFFIX,
+	getSuffixCategory,
+} from "@/lib/chordSuffixes";
 
 /**
  * Chord shapes the player wrote themselves.
@@ -21,6 +26,62 @@ export interface UserChordVoicing extends ChordVoicing {
 	/** The chord this shape is functioning as. */
 	root: string;
 	suffix: string;
+	/**
+	 * The browse category the player filed this chord under, when they chose one.
+	 *
+	 * Only asked for where a chord is being invented rather than shaped: a chord
+	 * the library carries already has a category, and a chord it does not carry
+	 * usually has a suffix the taxonomy has never heard of — leaving it to be
+	 * derived would put it somewhere nobody would look for it. Absent means
+	 * "wherever its suffix says", which for an invented chord is nowhere in
+	 * particular. Read it through `userVoicingCategory`.
+	 */
+	category?: string;
+}
+
+/** The section unnamed chords are browsed in — a list of things still to name. */
+export const UNKNOWN_CATEGORY = "Unknown";
+
+/** Whether the player has any chord they have not named. */
+export function hasUnknownChords(voicings: readonly UserChordVoicing[]): boolean {
+	return voicings.some((v) => v.suffix === UNKNOWN_SUFFIX);
+}
+
+/**
+ * Where a shape is browsed: the category chosen for it, else the one its suffix
+ * implies, else — for a chord nobody has named — the section for those.
+ */
+export function userVoicingCategory(voicing: UserChordVoicing): string | null {
+	if (voicing.category) return voicing.category;
+	if (voicing.suffix === UNKNOWN_SUFFIX) return UNKNOWN_CATEGORY;
+	return getSuffixCategory(voicing.suffix);
+}
+
+/** Category names a shape may be filed under — the ones the picker browses by. */
+const BROWSE_CATEGORIES = CHORD_SUFFIX_CATEGORIES.map((c) => c.category);
+const BROWSE_CATEGORY_SET = new Set(BROWSE_CATEGORIES);
+
+export function browseCategories(): readonly string[] {
+	return BROWSE_CATEGORIES;
+}
+
+/**
+ * Distinct suffixes of the player's shapes for one root, filed under a given
+ * category — null for the ones filed nowhere, which is what the picker's own
+ * section is for. Sorted, so a list built from it does not reorder between opens.
+ */
+export function userSuffixesFiledUnder(
+	voicings: readonly UserChordVoicing[],
+	root: string,
+	category: string | null,
+): string[] {
+	return [
+		...new Set(
+			voicings
+				.filter((v) => v.root === root && userVoicingCategory(v) === category)
+				.map((v) => v.suffix),
+		),
+	].sort();
 }
 
 /**
@@ -156,6 +217,8 @@ export interface UserVoicingRow {
 	root: string;
 	suffix: string;
 	label: string | null;
+	/** Nullable and added later; rows written before it read as unfiled. */
+	category?: string | null;
 	start_fret: number | null;
 	barre_fret: number | null;
 	capo: boolean | null;
@@ -191,11 +254,19 @@ export function rowToUserVoicing(row: UserVoicingRow): UserChordVoicing | null {
 			? (barre as number)
 			: null;
 
+	// A category nothing browses by would file the chord out of sight, so only a
+	// name the taxonomy actually carries is kept.
+	const category =
+		typeof row.category === "string" && BROWSE_CATEGORY_SET.has(row.category)
+			? row.category
+			: undefined;
+
 	return {
 		id: userVoicingId(row.id),
 		root: row.root,
 		suffix: row.suffix,
 		label: typeof row.label === "string" && row.label.trim() !== "" ? row.label.trim() : null,
+		...(category ? { category } : {}),
 		start_fret: startFret,
 		barre_fret: barreFret,
 		capo: row.capo === true,
@@ -215,6 +286,7 @@ export function userVoicingColumns(
 		root: voicing.root,
 		suffix: voicing.suffix,
 		label: voicing.label,
+		category: voicing.category ?? null,
 		start_fret: voicing.start_fret,
 		barre_fret: voicing.barre_fret,
 		capo: voicing.capo,

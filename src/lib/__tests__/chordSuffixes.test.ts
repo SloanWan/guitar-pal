@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   ROOT_CHROMATIC_ORDER,
+  UNKNOWN_ROOT,
+  UNKNOWN_SUFFIX,
+  chordDisplayName,
+  isUnknownChord,
   sortRoots,
   isSlashChord,
   isBrowsableSuffix,
@@ -103,5 +107,26 @@ describe("isBrowsableSuffix", () => {
   });
   it("rejects unknown/uncategorised suffixes", () => {
     expect(isBrowsableSuffix("bogus")).toBe(false);
+  });
+});
+
+describe("a chord nobody has named", () => {
+  it("is filed under a root that is deliberately not a note", () => {
+    expect(ROOT_CHROMATIC_ORDER).not.toContain(UNKNOWN_ROOT);
+  });
+
+  it("is written as the one word, never as its storage form", () => {
+    expect(chordDisplayName(UNKNOWN_ROOT, UNKNOWN_SUFFIX)).toBe("unknown");
+  });
+
+  it("leaves every named chord written the way it always was", () => {
+    expect(chordDisplayName("C", "major")).toBe("C major");
+    expect(chordDisplayName("C", "/G")).toBe("C/G");
+    expect(chordDisplayName("A", "m7")).toBe("A m7");
+  });
+
+  it("recognises the unnamed either by its root or by its quality", () => {
+    expect(isUnknownChord(UNKNOWN_ROOT, UNKNOWN_SUFFIX)).toBe(true);
+    expect(isUnknownChord("C", "major")).toBe(false);
   });
 });

@@ -8,6 +8,8 @@
 import {
   ROOT_CHROMATIC_ORDER,
   CHORD_SUFFIX_CATEGORIES,
+  UNKNOWN_ROOT,
+  UNKNOWN_SUFFIX,
   getSuffixCategory,
   isSlashChord,
 } from "@/lib/chordSuffixes";
@@ -140,10 +142,17 @@ function normalizeSlashBass(suffix: string): string {
  * nothing to match it against, and the player's own shape still has to be filed
  * somewhere findable.
  *
- * Null when nothing in the input reads as a root note, which is the one thing
- * a chord identity cannot be invented without.
+ * Null when nothing in the input reads as a root note — the one thing a chord
+ * identity cannot be invented without, and the reason `unknown` is a name in its
+ * own right rather than a missing one.
  */
 export function normalizeChordName(raw: string): ChordIndexEntry | null {
+  // The one name that needs no root: a chord the player cannot identify. Filing
+  // it under the note in its bass would be a guess, and would bury it among the
+  // chords of a key it may well not belong to.
+  if (normalizeInput(raw) === UNKNOWN_SUFFIX) {
+    return { root: UNKNOWN_ROOT, suffix: UNKNOWN_SUFFIX };
+  }
   const { root, normalizedSuffix } = parseQuery(raw);
   if (root === null) return null;
   return { root, suffix: normalizeSlashBass(normalizedSuffix) };

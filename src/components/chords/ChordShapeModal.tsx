@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import ChordShapeEditor from "@/components/chords/ChordShapeEditor";
+import ChordShapeFields from "@/components/chords/ChordShapeFields";
 import {
 	chordShapeToVoicing,
 	emptyChordShape,
@@ -179,44 +179,17 @@ export default function ChordShapeModal({
 					)}
 				</DialogHeader>
 
-				{/* Only for a chord that has none yet. A named chord's identity is not
-				    editable here: renaming it would move every bar pinned to it. */}
-				{naming && (
-					<div className="flex flex-col gap-1">
-						<input
-							type="text"
-							value={chordName}
-							onChange={(e) => setChordName(e.target.value)}
-							placeholder="What is this chord called? e.g. Cadd9#11"
-							aria-label="Chord name"
-							className={`h-(--h-control) w-full border bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:outline-none ${
-								identity
-									? "border-line-strong focus-visible:border-denim"
-									: "border-destructive"
-							}`}
-						/>
-						<p
-							className={`font-mono text-[10px] ${
-								identity ? "text-ink-faint" : "text-destructive"
-							}`}
-						>
-							{identity
-								? `Saved as ${label} — you can write this chord again next time.`
-								: "Start with a root note (A–G) so the chord can be filed."}
-						</p>
-					</div>
-				)}
-
-				<input
-					type="text"
-					value={name}
-					onChange={(e) => setName(e.target.value)}
-					placeholder="Name it (optional)"
-					aria-label="Name for this shape"
-					className="h-(--h-control) w-full border border-line-strong bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
+				{/* The chord-name field appears only for a chord that has none yet: a
+				    named chord's identity is not editable here, since renaming it would
+				    move every bar pinned to it. */}
+				<ChordShapeFields
+					shape={shape}
+					onShapeChange={setShape}
+					name={name}
+					onNameChange={setName}
+					chordName={naming ? chordName : undefined}
+					onChordNameChange={naming ? setChordName : undefined}
 				/>
-
-				<ChordShapeEditor shape={shape} onChange={setShape} />
 
 				{/* The two scopes only. Leaving is the close control and Escape, both
 				    of which go through the same discard guard — a third button

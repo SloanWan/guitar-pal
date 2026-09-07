@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { searchChordsByShape, shapeMatch, voicingFrets } from "@/lib/chordShapeSearch";
+import {
+	searchChordsByShape,
+	shapeMatch,
+	voicingFrets,
+	withUserChords,
+} from "@/lib/chordShapeSearch";
+import type { UserChordVoicing } from "@/lib/userChordVoicings";
 import { parseTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
 import { chordShapeToVoicing } from "@/lib/chordShape";
 import type { ShapeSearchChord } from "@/lib/chordShapeSearch";
@@ -102,5 +108,52 @@ describe("searchChordsByShape", () => {
 
 	it("honours the limit", () => {
 		expect(searchChordsByShape(LIBRARY, frets("01023x"), 1)).toHaveLength(1);
+	});
+});
+
+describe("withUserChords — a shape you wrote is a shape you can find", () => {
+	const own = (root: string, suffix: string, tab: string): UserChordVoicing => ({
+		...chordShapeToVoicing(tabSequenceToShape(frets(tab)), "u:1"),
+		root,
+		suffix,
+	});
+	const LIBRARY: ShapeSearchChord[] = [chord("C", "major", "01023x")];
+
+	it("adds a chord only the player has, marked as theirs", () => {
+		const corpus = withUserChords(LIBRARY, [own("?", "unknown", "007707")]);
+		const mine = corpus.find((c) => c.root === "?");
+		expect(mine).toMatchObject({ suffix: "unknown", mine: true });
+		expect(mine!.chord_voicings).toHaveLength(1);
+	});
+
+	it("finds a shape the player wrote, which the library alone never could", () => {
+		const written = "007707";
+		const corpus = withUserChords(LIBRARY, [own("?", "unknown", written)]);
+		const [best] = searchChordsByShape(corpus, frets(written));
+		expect(best).toMatchObject({ root: "?", mine: true, match: { kind: "exact" } });
+	});
+
+	it("hangs a shape written for a library chord off that chord, not beside it", () => {
+		// Another way to play a C, not another C.
+		const corpus = withUserChords(LIBRARY, [own("C", "major", "35553x")]);
+		expect(corpus).toHaveLength(1);
+		expect(corpus[0].mine).toBeUndefined();
+		expect(corpus[0].chord_voicings).toHaveLength(2);
+		expect(searchChordsByShape(corpus, frets("35553x"))[0]).toMatchObject({
+			root: "C",
+			mine: false,
+			match: { kind: "exact" },
+		});
+	});
+
+	it("leaves the library list it was given alone", () => {
+		const before = LIBRARY[0].chord_voicings.length;
+		withUserChords(LIBRARY, [own("C", "major", "35553x")]);
+		expect(LIBRARY[0].chord_voicings).toHaveLength(before);
+	});
+
+	it("puts the player's own answer first among equally good ones", () => {
+		const corpus = withUserChords(LIBRARY, [own("?", "unknown", "01023x")]);
+		expect(searchChordsByShape(corpus, frets("01023x"))[0].mine).toBe(true);
 	});
 });

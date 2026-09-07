@@ -1,13 +1,17 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { CirclePlay, Loader2, Plus, X } from "lucide-react";
+import { CirclePlay, Loader2, Pencil, Plus, X } from "lucide-react";
+import Link from "@/components/AppLink";
+import { voicingFrets } from "@/lib/chordShapeSearch";
+import { formatTabSequence } from "@/lib/chordTabSequence";
+import type { ShapeFret } from "@/lib/chordShape";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import ChordModeToggle from "@/components/chords/ChordModeToggle";
 import ChordVoicingModal, { type VoicingCard } from "@/components/chords/ChordVoicingModal";
 import { useChordPreview } from "@/components/chords/useChordPreview";
 import { Button } from "@/components/ui/button";
-import { rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { chordVoicingToMidi, rootPitchClass } from "@/lib/chordVoicingToMidi";
 import type { DiagramMode } from "@/components/chords/ChordDiagramSVG";
 import ChordShapeEditor from "@/components/chords/ChordShapeEditor";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
@@ -29,9 +33,17 @@ interface Props {
 	voicings: VoicingCard[];
 	root?: string;
 	suffix?: string;
+	/**
+	 * One shape out of the player's, when the page is about that one alone.
+	 *
+	 * Chords nobody has named all share an identity, so a page for "unknown"
+	 * would otherwise be a page for every unnamed chord at once. The frets pick
+	 * out the one that was asked for.
+	 */
+	shape?: ShapeFret[];
 }
 
-export default function ChordDetailView({ voicings, root, suffix }: Props) {
+export default function ChordDetailView({ voicings, root, suffix, shape }: Props) {
 	const [mode, setMode] = useState<DiagramMode>("fingers");
 
 	// The player's own shapes for this chord, written here because this is the
@@ -44,7 +56,10 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 	const [shapeDraft, setShapeDraft] = useState<ChordShape | null>(null);
 	const [shapeName, setShapeName] = useState("");
 
-	const myShapes = userVoicings.filter((v) => v.root === root && v.suffix === suffix);
+	const written = shape ? formatTabSequence(shape) : null;
+	const myShapes = userVoicings
+		.filter((v) => v.root === root && v.suffix === suffix)
+		.filter((v) => written === null || formatTabSequence(voicingFrets(v)) === written);
 
 	function openShapeEditor() {
 		// From nothing here, since this page has no "currently selected" shape to
@@ -113,8 +128,13 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 			<div className="flex flex-col items-center gap-6">
 				{voicings.length === 0 ? (
 					// Not an early return any more: a chord the library has no shape for
-					// is exactly when a player wants to write their own.
-					<p className="text-sm text-ink-dim">No voicings found.</p>
+					// is exactly when a player wants to write their own — and once they
+					// have, the section below is the page and this line is noise.
+					myShapes.length === 0 && (
+						<p className="text-sm text-ink-dim">
+							The library has no shape for this chord. Write your own below.
+						</p>
+					)
 				) : (
 					<ChordModeToggle mode={mode} onChange={setMode} />
 				)}
@@ -166,7 +186,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 							<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 								My shapes
 							</span>
-							{shapeDraft === null && (
+							{shapeDraft === null && written === null && (
 								<button
 									type="button"
 									onClick={openShapeEditor}
@@ -181,22 +201,55 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 						{myShapes.length > 0 && (
 							<div className="flex flex-wrap justify-center gap-4">
 								{myShapes.map((v) => (
-									<div key={v.id} className="flex flex-col items-center gap-1">
+									<div key={v.id} className="flex flex-col items-center gap-2">
 										<ChordDiagram
 											def={chordVoicingToVexChords(v)}
 											label={v.label ?? "Mine"}
 											mode={mode}
 											rootMidi={rootPitchClass(root)}
 										/>
-										<button
-											type="button"
-											onClick={() => deleteVoicing(v.id)}
-											aria-label={`Delete ${v.label ?? "this shape"}`}
-											className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-faint transition-colors hover:text-destructive"
+										{/* A shape you wrote is a chord you want to hear, and it
+										    sounds through the same preview the library's do —
+										    pitch comes from the frets, so nothing about it being
+										    yours changes how it is played. */}
+										<Button
+											size="sm"
+											variant="outline"
+											className="gap-1 rounded-none border-line-strong text-denim hover:bg-denim-tint"
+											disabled={preview.isPreloading}
+											onClick={() =>
+												void preview.play(chordVoicingToMidi(v).map((n) => n.midi))
+											}
 										>
-											<X size={10} />
-											Delete
-										</button>
+											{preview.isPreloading ? (
+												<Loader2 className="h-3 w-3 animate-spin" />
+											) : (
+												<CirclePlay className="h-3 w-3" />
+											)}
+											{preview.isPreloading ? "Loading…" : "Play"}
+										</Button>
+										<div className="flex items-center gap-3">
+											{/* Renaming and refiling happen where the chord was
+											    written; the shape itself is what this page edits. */}
+											<Link
+												href={`/chords/create?frets=${encodeURIComponent(formatTabSequence(voicingFrets(v)))}`}
+												aria-label={`Edit ${v.label ?? "this shape"}`}
+												title="Rename, refile or redraw this chord"
+												className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-faint transition-colors hover:text-denim-accent"
+											>
+												<Pencil size={10} />
+												Edit
+											</Link>
+											<button
+												type="button"
+												onClick={() => deleteVoicing(v.id)}
+												aria-label={`Delete ${v.label ?? "this shape"}`}
+												className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-faint transition-colors hover:text-destructive"
+											>
+												<X size={10} />
+												Delete
+											</button>
+										</div>
 									</div>
 								))}
 							</div>

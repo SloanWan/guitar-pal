@@ -39,9 +39,26 @@ export function isSlashChord(suffix: string): boolean {
   return suffix.includes("/");
 }
 
+// A chord nobody has named yet.
+//
+// A grip read off a tab often arrives with no name — frequently that is why the
+// tab gave the grip. Rather than make the player invent one, or file it under a
+// root that is only a guess, such a chord is stored under a root that is
+// deliberately not a note: it belongs to no key, and browsing A must not turn it
+// up. What tells the shapes apart is their own names and the id a bar pins.
+export const UNKNOWN_ROOT = "?";
+export const UNKNOWN_SUFFIX = "unknown";
+
+export function isUnknownChord(root: string, suffix: string): boolean {
+  return root === UNKNOWN_ROOT || suffix === UNKNOWN_SUFFIX;
+}
+
 // Same compact spelling the browse UI and the chord palette use: slash chords
-// already carry their own separator, everything else gets a space.
+// already carry their own separator, everything else gets a space. A chord with
+// no name is written as the one word, never as "? unknown" — the placeholder
+// root is a storage detail and nothing the player should have to read.
 export function chordDisplayName(root: string, suffix: string): string {
+  if (isUnknownChord(root, suffix)) return UNKNOWN_SUFFIX;
   return isSlashChord(suffix) ? `${root}${suffix}` : `${root} ${suffix}`;
 }
 

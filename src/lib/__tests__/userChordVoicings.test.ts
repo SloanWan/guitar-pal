@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
 	USER_VOICING_ID_PREFIX,
+	UNKNOWN_CATEGORY,
+	browseCategories,
+	hasUnknownChords,
 	chordIndexWithUser,
+	userSuffixesFiledUnder,
+	userVoicingCategory,
 	dedupeUserVoicing,
 	isUserVoicingId,
 	sameShape,
@@ -166,6 +171,24 @@ describe("reading a stored row", () => {
 		expect(rowToUserVoicing(row({ start_fret: null }))!.start_fret).toBe(1);
 		expect(rowToUserVoicing(row({ barre_fret: 99 }))!.barre_fret).toBeNull();
 		expect(rowToUserVoicing(row({ capo: null }))!.capo).toBe(false);
+	});
+
+	it("reads the category the chord was filed under", () => {
+		expect(rowToUserVoicing(row({ category: "Minor" }))!.category).toBe("Minor");
+	});
+
+	it("ignores a category nothing browses by, rather than filing it out of sight", () => {
+		// Storage is untrusted, and a chord under a heading the picker never shows
+		// is a chord the player cannot find again.
+		expect(rowToUserVoicing(row({ category: "Nonsense" }))!.category).toBeUndefined();
+		expect(rowToUserVoicing(row({ category: null }))!.category).toBeUndefined();
+		expect(rowToUserVoicing(row())!.category).toBeUndefined();
+	});
+
+	it("writes the category back, and null for one filed nowhere", () => {
+		const voicing = rowToUserVoicing(row({ category: "Minor" }))!;
+		expect(userVoicingColumns(voicing, "u1").category).toBe("Minor");
+		expect(userVoicingColumns(rowToUserVoicing(row())!, "u1").category).toBeNull();
 	});
 
 	it("treats a blank name as no name", () => {
@@ -357,5 +380,88 @@ describe("chordIndexWithUser — the player's own chords are searchable too", ()
 	it("leaves the index it was given alone", () => {
 		chordIndexWithUser(INDEX, [shape("C", "add9#11")]).push({ root: "X", suffix: "y" });
 		expect(INDEX).toHaveLength(2);
+	});
+});
+
+describe("userVoicingCategory — where a shape is browsed", () => {
+	const shape = (
+		suffix: string,
+		category?: string,
+	): UserChordVoicing => ({
+		id: "u:1",
+		label: null,
+		start_fret: 1,
+		barre_fret: null,
+		capo: false,
+		frets: "x32010",
+		fingers: "032010",
+		root: "C",
+		suffix,
+		...(category ? { category } : {}),
+	});
+
+	it("derives the category from the suffix when none was chosen", () => {
+		expect(userVoicingCategory(shape("m7"))).toBe("Minor");
+	});
+
+	it("is nowhere in particular for a suffix the taxonomy has never heard of", () => {
+		expect(userVoicingCategory(shape("add9#11"))).toBeNull();
+	});
+
+	it("puts a chord nobody has named in the section for those", () => {
+		expect(userVoicingCategory(shape("unknown"))).toBe(UNKNOWN_CATEGORY);
+	});
+
+	it("lets the player file an unnamed chord anyway, once they have a view", () => {
+		expect(userVoicingCategory(shape("unknown", "Minor"))).toBe("Minor");
+	});
+
+	it("knows whether there is anything still to name", () => {
+		expect(hasUnknownChords([shape("m7")])).toBe(false);
+		expect(hasUnknownChords([shape("m7"), shape("unknown")])).toBe(true);
+	});
+
+	it("does not offer Unknown as somewhere to file a chord", () => {
+		// It is what a chord is called before it is filed, not a place to put one.
+		expect(browseCategories()).not.toContain(UNKNOWN_CATEGORY);
+	});
+
+	it("prefers the category the player filed it under", () => {
+		expect(userVoicingCategory(shape("add9#11", "Major"))).toBe("Major");
+		// Filing overrides the derivation, which is the whole point of asking.
+		expect(userVoicingCategory(shape("m7", "Dominant 7th"))).toBe("Dominant 7th");
+	});
+
+	it("offers only categories the browse UI actually has", () => {
+		expect(browseCategories()).toContain("Minor");
+		expect(browseCategories()).not.toContain("Slash Chords");
+	});
+
+	describe("userSuffixesFiledUnder", () => {
+		const mine: UserChordVoicing[] = [
+			shape("add9#11"),
+			{ ...shape("sus17"), id: "u:2" },
+			{ ...shape("m7"), id: "u:3" },
+			{ ...shape("x13", "Major"), id: "u:4" },
+			{ ...shape("add9#11"), id: "u:5", root: "G" },
+		];
+
+		it("collects the unfiled shapes for one root, sorted", () => {
+			expect(userSuffixesFiledUnder(mine, "C", null)).toEqual(["add9#11", "sus17"]);
+		});
+
+		it("collects the ones filed under a category, derived or chosen", () => {
+			expect(userSuffixesFiledUnder(mine, "C", "Minor")).toEqual(["m7"]);
+			expect(userSuffixesFiledUnder(mine, "C", "Major")).toEqual(["x13"]);
+		});
+
+		it("keeps the roots apart", () => {
+			expect(userSuffixesFiledUnder(mine, "G", null)).toEqual(["add9#11"]);
+		});
+
+		it("lists a suffix once however many shapes were written for it", () => {
+			const two = [...mine, { ...shape("add9#11"), id: "u:6" }];
+			expect(userSuffixesFiledUnder(two, "C", null)).toEqual(["add9#11", "sus17"]);
+		});
 	});
 });

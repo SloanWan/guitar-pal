@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { loadUserVoicings } from "@/lib/userVoicingStore";
 import { parseTabSequence } from "@/lib/chordTabSequence";
 import {
 	searchChordsByShape,
+	withUserChords,
 	type ShapeMatch,
 	type ShapeSearchChord,
 } from "@/lib/chordShapeSearch";
 import type { ShapeFret } from "@/lib/chordShape";
+import type { UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**
  * The chords played with the shape someone typed into the search.
@@ -51,27 +54,52 @@ export function useChordShapeMatches(query: string): ChordShapeMatches {
 	// the effect below would refire on every keystroke's worth of re-rendering.
 	const target = useMemo(() => parseTabSequence(query).frets, [query]);
 	const [library, setLibrary] = useState<ShapeSearchChord[] | null>(null);
+	/**
+	 * The player's own chords, searched alongside the library. Without them a
+	 * shape they wrote themselves comes back as "not in the library", inviting
+	 * them to write it a second time.
+	 *
+	 * Read through the store rather than the hook: this palette is mounted on
+	 * every page in the app, and holding a live subscription to the player's
+	 * shapes would mean an auth round trip on every page load for a search almost
+	 * nobody runs. Re-read whenever a new shape is typed, so a chord written a
+	 * moment ago on another page is already there.
+	 */
+	const [mine, setMine] = useState<readonly UserChordVoicing[]>([]);
 
 	useEffect(() => {
-		if (target === null || library !== null) return;
+		if (target === null) return;
 		let cancelled = false;
-		loadLibrary()
-			.then((chords) => {
-				if (!cancelled) setLibrary(chords);
+
+		if (library === null) {
+			loadLibrary()
+				.then((chords) => {
+					if (!cancelled) setLibrary(chords);
+				})
+				.catch((err: unknown) => {
+					// The name search still works; a shape search that cannot reach the
+					// library simply finds nothing.
+					console.error("[useChordShapeMatches] library load failed:", err);
+				});
+		}
+
+		loadUserVoicings()
+			.then((voicings) => {
+				if (!cancelled) setMine(voicings);
 			})
 			.catch((err: unknown) => {
-				// The name search still works; a shape search that cannot reach the
-				// library simply finds nothing.
-				console.error("[useChordShapeMatches] library load failed:", err);
+				console.error("[useChordShapeMatches] own shapes load failed:", err);
 			});
+
 		return () => {
 			cancelled = true;
 		};
 	}, [target, library]);
 
 	const matches = useMemo(
-		() => (target && library ? searchChordsByShape(library, target) : []),
-		[target, library],
+		() =>
+			target && library ? searchChordsByShape(withUserChords(library, mine), target) : [],
+		[target, library, mine],
 	);
 
 	return { target, matches, loading: target !== null && library === null };

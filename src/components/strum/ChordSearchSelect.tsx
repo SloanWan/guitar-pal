@@ -5,6 +5,8 @@ import { Music, X } from "lucide-react";
 import MusicalText from "@/components/MusicalText";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry, type ChordSearchResult } from "@/lib/chordSearch";
+import { parseTabSequence } from "@/lib/chordTabSequence";
+import { resolveShapeToChord, type ShapeSearchChord } from "@/lib/chordShapeSearch";
 import type { ChordRef } from "@/lib/strumPatterns";
 
 interface Props {
@@ -12,7 +14,19 @@ interface Props {
 	onChange: (chord: ChordRef | null) => void;
 	/** Browsable (root, suffix) pairs. Empty while the index is still loading. */
 	index: readonly ChordIndexEntry[];
+	/**
+	 * Chords to match a written shape against — the library plus the player's
+	 * own. Null while they are still on their way, or when nothing has been typed
+	 * that needs them.
+	 */
+	shapeCorpus?: readonly ShapeSearchChord[] | null;
 	ariaLabel: string;
+	/**
+	 * A name the bar is holding that the library has no chord for. Shown in red
+	 * in place of "No chord", so the bar reads as unfinished rather than blank,
+	 * and typing over it is how the player finishes it.
+	 */
+	unknownLabel?: string | null;
 }
 
 /**
@@ -21,7 +35,14 @@ interface Props {
  * (searchChords), but stays in the flow instead of opening a dialog, so a bar
  * can be assigned without leaving the pattern editor.
  */
-export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }: Props) {
+export default function ChordSearchSelect({
+	chord,
+	onChange,
+	index,
+	shapeCorpus = null,
+	ariaLabel,
+	unknownLabel = null,
+}: Props) {
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(false);
 	const [highlighted, setHighlighted] = useState(0);
@@ -29,11 +50,21 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listboxId = useId();
 
-	const results = useMemo(
-		() => (editing ? searchChords(index, query) : []),
-		[index, query, editing],
+	/**
+	 * A written shape resolves to the chord held that way rather than being
+	 * searched for by name: `x32010` is a grip, not a word, and a player copying
+	 * a chart has the grip in front of them and not its name.
+	 */
+	const shape = useMemo(() => (editing ? parseTabSequence(query).frets : null), [editing, query]);
+	const shapeChord = useMemo(
+		() => (shape && shapeCorpus ? resolveShapeToChord(shapeCorpus, shape) : null),
+		[shape, shapeCorpus],
 	);
-	const open = editing && (results.length > 0 || query.trim() !== "");
+	const results = useMemo(
+		() => (editing && !shape ? searchChords(index, query) : []),
+		[index, query, editing, shape],
+	);
+	const open = editing && (results.length > 0 || shape !== null || query.trim() !== "");
 
 	// Close on a press anywhere outside, the way the other in-modal popovers do.
 	useEffect(() => {
@@ -58,6 +89,13 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 		inputRef.current?.blur();
 	}
 
+	/** A grip is committed to the shape that was written, not to a default one. */
+	function commitShape(ref: ChordRef) {
+		onChange(ref);
+		stopEditing();
+		inputRef.current?.blur();
+	}
+
 	// Every key this widget acts on is also stopped: the enclosing dialog saves on
 	// Enter and closes on Escape, and picking a chord out of the dropdown must do
 	// neither of those on the way through.
@@ -67,6 +105,15 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 			e.stopPropagation();
 			stopEditing();
 			inputRef.current?.blur();
+			return;
+		}
+		if (shape) {
+			// The one row a shape offers, taken the same way a name's would be.
+			if (e.key === "Enter" && shapeChord) {
+				e.preventDefault();
+				e.stopPropagation();
+				commitShape(shapeChord);
+			}
 			return;
 		}
 		if (results.length === 0) return;
@@ -86,19 +133,28 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 		}
 	}
 
+	// Only meaningful while nothing is picked; a named chord retires it.
+	const unknown = chord ? null : unknownLabel;
 	const displayValue = editing
 		? query
 		: chord
 			? chordDisplayName(chord.root, chord.suffix)
-			: "";
+			: (unknown ?? "");
 
 	return (
 		<div ref={containerRef} className="relative">
 			<div
+				title={
+					unknown && !editing
+						? `${unknown} — not in the chord library, so this bar sounds nothing`
+						: undefined
+				}
 				className={`flex items-center gap-1.5 border px-2 py-1 transition-colors ${
 					chord && !editing
 						? "border-denim bg-denim-tint text-denim"
-						: "border-line-strong text-ink-dim focus-within:border-denim"
+						: unknown && !editing
+							? "border-destructive bg-destructive-tint text-destructive"
+							: "border-line-strong text-ink-dim focus-within:border-denim"
 				}`}
 			>
 				<Music size={10} className="shrink-0" />
@@ -111,7 +167,7 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 					aria-label={ariaLabel}
 					autoComplete="off"
 					value={displayValue}
-					placeholder="No chord"
+					placeholder="Name or frets"
 					onFocus={() => setEditing(true)}
 					onChange={(e) => {
 						setEditing(true);
@@ -123,13 +179,17 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 					onKeyDown={handleKeyDown}
 					className="w-24 bg-transparent font-mono text-[11px] font-semibold placeholder:font-normal placeholder:text-ink-dim focus:outline-none"
 				/>
-				{chord && !editing && (
+				{/* Clearing a kept name goes through the same path a chord does:
+				    `setBarChord` retires the placeholder either way. */}
+				{(chord || unknown) && !editing && (
 					<button
 						type="button"
 						onClick={() => onChange(null)}
 						aria-label={`Clear ${ariaLabel}`}
 						title="Clear chord"
-						className="shrink-0 text-denim transition-colors hover:text-destructive"
+						className={`shrink-0 transition-colors ${
+							chord ? "text-denim hover:text-destructive" : "text-destructive hover:text-ink"
+						}`}
 					>
 						<X size={10} />
 					</button>
@@ -171,7 +231,37 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 							</li>
 						);
 					})}
-					{results.length === 0 && (
+					{/* A written shape offers exactly one answer: the chord held that
+					    way, pinned to the very voicing that was written. */}
+					{shape && shapeChord && (
+						<li>
+							<button
+								type="button"
+								role="option"
+								aria-selected
+								onPointerDown={(e) => {
+									e.preventDefault();
+									commitShape(shapeChord);
+								}}
+								className="flex w-full items-center gap-2 bg-denim-tint px-2 py-1.5 text-left"
+							>
+								<span className="font-mono text-[11px] font-semibold text-ink">
+									<MusicalText text={chordDisplayName(shapeChord.root, shapeChord.suffix)} />
+								</span>
+								<span className="ml-auto font-mono text-[9px] text-ink-faint">
+									held this way
+								</span>
+							</button>
+						</li>
+					)}
+
+					{shape && !shapeChord && (
+						<li className="px-2 py-2 text-center font-mono text-[10px] text-ink-faint">
+							{shapeCorpus === null ? "Looking for that shape…" : "Nothing is held that way"}
+						</li>
+					)}
+
+					{!shape && results.length === 0 && (
 						<li className="px-2 py-2 text-center font-mono text-[10px] text-ink-faint">
 							{index.length === 0 ? "Loading chords…" : "No match"}
 						</li>

@@ -163,6 +163,13 @@ describe("_pitchesForBar — bar index to chord pitches", () => {
 		expect(_pitchesForBar(table, 1)).toBeUndefined();
 	});
 
+	it("keeps a silent bar's empty table distinct from undefined", () => {
+		// The distinction playStrum acts on: undefined means "no chord picked, play
+		// the default voicing", an empty array means "sound nothing at all".
+		expect(_pitchesForBar([C, [], null], 1)).toEqual([]);
+		expect(_pitchesForBar([C, [], null], 2)).toBeUndefined();
+	});
+
 	it("returns undefined when no chord table was supplied at all", () => {
 		expect(_pitchesForBar(undefined, 0)).toBeUndefined();
 	});

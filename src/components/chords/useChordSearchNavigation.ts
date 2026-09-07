@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import { useNavTransition } from "@/components/nav-progress";
-import { rootToSlug, suffixToSlug } from "@/lib/chordSlug";
+import { chordHref } from "@/lib/chordSlug";
 import { tocSectionId, tocSubsectionId } from "@/lib/chordToc";
 import { batchGridHref } from "@/lib/chordBatchResolve";
 import type { ChordSearchResult, NavShortcut } from "@/lib/chordSearch";
@@ -29,6 +29,8 @@ export interface ChordSearchNavigation {
 	goToBrowse: (shortcut: NavShortcut) => void;
 	/** Multi-chord queries leave the palette for the batch grid. */
 	goToGrid: (query: string) => void;
+	/** A shape nothing in the library is held with can be written down instead. */
+	goToCreateChord: (frets: string) => void;
 }
 
 /**
@@ -53,8 +55,7 @@ export function useChordSearchNavigation(onNavigate: () => void): ChordSearchNav
 	);
 
 	const goToChord = useCallback(
-		(r: ChordSearchResult) =>
-			navigate(`/chords/${rootToSlug(r.root)}/${suffixToSlug(r.suffix)}`),
+		(r: ChordSearchResult) => navigate(chordHref(r.root, r.suffix)),
 		[navigate],
 	);
 	const goToBrowse = useCallback((s: NavShortcut) => navigate(shortcutHref(s)), [navigate]);
@@ -64,5 +65,12 @@ export function useChordSearchNavigation(onNavigate: () => void): ChordSearchNav
 		navigate,
 	]);
 
-	return { goToChord, goToBrowse, goToGrid };
+	// The only way in: /chords/create is linked from nowhere else, and without a
+	// shape in the URL it has nothing to write down.
+	const goToCreateChord = useCallback(
+		(frets: string) => navigate(`/chords/create?frets=${encodeURIComponent(frets.trim())}`),
+		[navigate],
+	);
+
+	return { goToChord, goToBrowse, goToGrid, goToCreateChord };
 }

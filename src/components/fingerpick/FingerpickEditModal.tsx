@@ -70,6 +70,7 @@ import {
 	type SlotTarget,
 } from "@/lib/fingerpickEdit";
 import { deriveRepeatDirectives, DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
+import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 
 export interface FingerpickEditModalProps {
 	open: boolean;
@@ -210,11 +211,7 @@ const getFinePointerServerSnapshot = (): boolean => true;
 // target before settling. Driven via the Web Animations API for the Save press and
 // the hint-popover entrance. Read prefers-reduced-motion at call time so both
 // effects can fall back to an instant, animation-free state change (§6.7).
-const SPRING_POP_EASING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
-const prefersReducedMotion = (): boolean =>
-	typeof window !== "undefined" &&
-	!!window.matchMedia &&
-	window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Both now live in src/lib/motion.ts — the strum editors want the same spring.
 
 // useLayoutEffect on the client so the popover spring's first frame is the one that
 // paints (no flash of the settled state); useEffect on the server to avoid the

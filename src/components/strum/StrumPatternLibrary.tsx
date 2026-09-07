@@ -5,7 +5,7 @@ import { User } from "@supabase/supabase-js";
 import { ChevronDown, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import StepGrid from "./StepGrid";
-import { toBars } from "@/lib/strumBars";
+import { toBars, patternMeter } from "@/lib/strumBars";
 import { patternNotation } from "@/lib/strumNotation";
 
 interface StrumPatternLibraryProps {
@@ -178,7 +178,13 @@ function PatternCard({
 			<p className="mb-2 whitespace-pre font-mono text-[10px] leading-snug text-ink-dim">
 				{patternNotation(pattern.beats)}
 			</p>
-			<StepGrid bars={toBars(pattern)} activeCell={null} size="sm" showLabels={false} />
+			<StepGrid
+				bars={toBars(pattern)}
+				activeCell={null}
+				meter={patternMeter(pattern)}
+				size="sm"
+				showLabels={false}
+			/>
 		</button>
 	);
 }

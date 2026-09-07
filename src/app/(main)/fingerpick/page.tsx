@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
+import Rocker from "@/components/ui/Rocker";
 
 // Remembers the last-viewed pattern id so a page refresh reopens it instead of
 // defaulting back to the first preset. Device-local UI state — not synced.
@@ -126,38 +127,6 @@ const BPM_TICK_LABELS = [
 // At 20, steady-state lag behind a constant-velocity target is ~v/20 px/s — barely
 // perceptible on dense sixteenth-note runs (~8 px) and invisible on slower material.
 const CURSOR_LAMBDA = 20;
-
-interface RockerProps {
-	checked: boolean;
-	onChange: (checked: boolean) => void;
-	disabled?: boolean;
-	ariaLabel: string;
-}
-
-// Hardware rocker switch: 40×20 bordered outer, 15×14 sliding block. A sliding
-// rectangle — never a pill with a circle.
-function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps) {
-	return (
-		<button
-			type="button"
-			role="switch"
-			aria-checked={checked}
-			aria-label={ariaLabel}
-			disabled={disabled}
-			onClick={() => onChange(!checked)}
-			className={`relative h-5 w-10 shrink-0 border transition-colors duration-100 disabled:cursor-not-allowed ${
-				checked ? "border-denim" : "border-line-strong"
-			}`}
-		>
-			<span
-				aria-hidden="true"
-				className={`absolute top-0.5 h-3.5 w-3.5 transition-all duration-100 ${
-					checked ? "left-5 bg-denim-accent" : "left-0.5 bg-ink-faint"
-				}`}
-			/>
-		</button>
-	);
-}
 
 interface SegmentedOption {
 	value: string;

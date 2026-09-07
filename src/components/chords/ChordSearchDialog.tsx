@@ -58,7 +58,8 @@ export default function ChordSearchDialog() {
 		setQuery("");
 	}, []);
 
-	const { goToChord, goToBrowse, goToGrid } = useChordSearchNavigation(close);
+	const { goToChord, goToBrowse, goToGrid, goToCreateChord } =
+		useChordSearchNavigation(close);
 	const rows = useChordPaletteRows(index, query);
 
 	const handleOpenChange = useCallback((next: boolean) => {
@@ -89,6 +90,7 @@ export default function ChordSearchDialog() {
 					onSelectChord={goToChord}
 					onSelectShortcut={goToBrowse}
 					onSelectBatch={() => goToGrid(query)}
+					onCreateChord={goToCreateChord}
 				/>
 			</CommandList>
 		</CommandDialog>

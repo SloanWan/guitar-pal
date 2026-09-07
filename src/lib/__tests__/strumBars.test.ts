@@ -8,9 +8,13 @@ import {
 	chordRefToDiagram,
 	resolveBarChords,
 	transposeBarPitches,
+	barPlaceholder,
 	normalizeBpm,
 	patternBpm,
-	MAX_CELLS_PER_BEAT,
+	patternMeter,
+	bpmRangeForMeter,
+	clampBpmToMeter,
+	rescaleBpmForMeter,
 } from "@/lib/strumBars";
 import type { Bar, ChordRef, StrumPattern } from "@/lib/strumPatterns";
 import {
@@ -88,6 +92,27 @@ describe("barsToLegacyBeats — the double-write source", () => {
 	});
 });
 
+describe("barPlaceholder — a bar holding a chord we do not have", () => {
+	it("reads the name a chordless bar was left with", () => {
+		expect(barPlaceholder({ beats: [["D"]], chord: null, unknownChord: "Cadd9#11" })).toBe(
+			"Cadd9#11",
+		);
+	});
+
+	it("is null for an ordinary bar, chorded or not", () => {
+		expect(barPlaceholder({ beats: [["D"]], chord: null })).toBeNull();
+		expect(barPlaceholder({ beats: [["D"]], chord: C_REF })).toBeNull();
+	});
+
+	it("ignores a name left behind on a bar that has since been given a chord", () => {
+		expect(barPlaceholder({ beats: [["D"]], chord: C_REF, unknownChord: "zzz" })).toBeNull();
+	});
+
+	it("reads a blank name as no placeholder", () => {
+		expect(barPlaceholder({ beats: [["D"]], chord: null, unknownChord: "   " })).toBeNull();
+	});
+});
+
 describe("validateBars", () => {
 	it("accepts a multi-bar pattern with per-bar chords", () => {
 		const bars: Bar[] = [
@@ -110,20 +135,44 @@ describe("validateBars", () => {
 		expect(result.errors[0]).toMatch(/at least one bar/);
 	});
 
+	it("accepts a bar holding a name the chord library has nothing for", () => {
+		const bars: Bar[] = [{ beats: [["D", "U"]], chord: null, unknownChord: "Cadd9#11" }];
+		expect(validateBars(bars)).toEqual({ ok: true, errors: [] });
+	});
+
+	it("rejects an unknownChord that came back from storage as something else", () => {
+		const result = validateBars([{ beats: [["D"]], chord: null, unknownChord: 7 }]);
+		expect(result.ok).toBe(false);
+		expect(result.errors[0]).toMatch(/unknownChord must be a non-empty string/);
+	});
+
+	it("rejects a blank unknownChord, which would draw a nameless red bar", () => {
+		const result = validateBars([{ beats: [["D"]], chord: null, unknownChord: "  " }]);
+		expect(result.ok).toBe(false);
+		expect(result.errors[0]).toMatch(/unknownChord must be a non-empty string/);
+	});
+
 	it("rejects a bar with zero beats", () => {
 		const result = validateBars([{ beats: [], chord: null }]);
 		expect(result.ok).toBe(false);
 		expect(result.errors[0]).toMatch(/bar 0: must contain at least one beat/);
 	});
 
-	it("rejects a beat with more than 4 cells", () => {
+	it("rejects a cell count no meter divides a beat into", () => {
+		// Five is not an unusually fine subdivision, it is corruption: no
+		// supported meter produces it. Six is legal — a dotted beat in sixteenths.
 		const result = validateBars([
 			{ beats: [["D", "U", "D", "U", "D"]], chord: null },
 		]);
 		expect(result.ok).toBe(false);
-		expect(result.errors[0]).toMatch(
-			new RegExp(`bar 0 beat 0: has 5 cells, max is ${MAX_CELLS_PER_BEAT}`),
-		);
+		expect(result.errors[0]).toMatch(/bar 0 beat 0: has 5 cells, allowed are/);
+	});
+
+	it("accepts a dotted beat divided into sixteenths", () => {
+		const result = validateBars([
+			{ beats: [["D", "", "U", "", "D", ""]], chord: null },
+		]);
+		expect(result.ok).toBe(true);
 	});
 
 	it("rejects a beat with zero cells", () => {
@@ -252,6 +301,19 @@ describe("resolveBarChords", () => {
 		const bars: Bar[] = [{ beats: [["D"]], chord: C_REF }];
 		expect(await resolveBarChords(bars, async () => null)).toEqual([null]);
 	});
+
+	it("yields an empty table for a bar kept as a name — silence, not the default", async () => {
+		const bars: Bar[] = [
+			{ beats: [["D"]], chord: C_REF },
+			{ beats: [["D"]], chord: null, unknownChord: "Cadd9#11" },
+			{ beats: [["D"]], chord: null },
+		];
+		const lookup = vi.fn(async () => [C_MAJOR]);
+
+		expect(await resolveBarChords(bars, lookup)).toEqual([C_MAJOR_PITCHES, [], null]);
+		// The placeholder is not a chord identity: nothing is looked up for it.
+		expect(lookup).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe("normalizeBpm", () => {
@@ -311,10 +373,83 @@ describe("transposeBarPitches — the capo", () => {
 		]);
 	});
 
+	it("keeps a silent bar silent — a capo on silence is silence", () => {
+		expect(transposeBarPitches([[48], [], null], 2, FALLBACK)).toEqual([
+			[50],
+			[],
+			[50, 54, 57, 62, 66],
+		]);
+	});
+
 	it("copies rather than mutating the input", () => {
 		const bar = [48, 52];
 		const out = transposeBarPitches([bar], 0, FALLBACK);
 		out[0]![0] = 99;
 		expect(bar[0]).toBe(48);
+	});
+});
+
+describe("patternMeter", () => {
+	const base = { id: "p", name: "n", beats: [] };
+
+	it("reads 4/4 for a pattern stored before meters existed", () => {
+		expect(patternMeter(base)).toEqual([4, 4]);
+	});
+
+	it("reads the stored meter", () => {
+		expect(patternMeter({ ...base, meter: [6, 8] })).toEqual([6, 8]);
+		expect(patternMeter({ ...base, meter: [3, 4] })).toEqual([3, 4]);
+	});
+
+	it("falls back rather than trusting an unsupported stored value", () => {
+		// The column is jsonb; anything could be in it.
+		expect(patternMeter({ ...base, meter: [7, 8] as unknown as [number, number] })).toEqual([
+			4, 4,
+		]);
+		expect(patternMeter({ ...base, meter: "6/8" as unknown as [number, number] })).toEqual([
+			4, 4,
+		]);
+	});
+});
+
+describe("tempo across meters", () => {
+	it("offers a lower ceiling in a compound meter", () => {
+		// 220 dotted quarters is 22 eighths a second — not a tempo anyone strums.
+		expect(bpmRangeForMeter([4, 4]).max).toBeGreaterThan(bpmRangeForMeter([6, 8]).max);
+		expect(bpmRangeForMeter([4, 4])).toEqual(bpmRangeForMeter([3, 4]));
+		expect(bpmRangeForMeter([6, 8])).toEqual(bpmRangeForMeter([12, 8]));
+	});
+
+	it("clamps a stored tempo into the meter's range", () => {
+		expect(clampBpmToMeter(200, [4, 4])).toBe(200);
+		expect(clampBpmToMeter(200, [6, 8])).toBe(bpmRangeForMeter([6, 8]).max);
+		expect(clampBpmToMeter(10, [6, 8])).toBe(bpmRangeForMeter([6, 8]).min);
+	});
+
+	describe("rescaleBpmForMeter", () => {
+		it("leaves the number alone within a meter family", () => {
+			expect(rescaleBpmForMeter(80, [4, 4], [3, 4])).toBe(80);
+			expect(rescaleBpmForMeter(80, [6, 8], [12, 8])).toBe(80);
+		});
+
+		it("holds the eighth note still when crossing families", () => {
+			// This is the point: 80 in 4/4 puts an eighth every 0.375 s. The same
+			// eighth in 6/8 needs a dotted quarter of 1.125 s, which is 53.3 BPM.
+			const bpm44 = 80;
+			const eighthIn44 = 60 / bpm44 / 2;
+			const bpm68 = rescaleBpmForMeter(bpm44, [4, 4], [6, 8]);
+			const eighthIn68 = 60 / bpm68 / 3;
+			expect(eighthIn68).toBeCloseTo(eighthIn44, 10);
+			expect(bpm68).toBeCloseTo(53.33, 2);
+		});
+
+		it("round-trips", () => {
+			expect(rescaleBpmForMeter(rescaleBpmForMeter(90, [4, 4], [6, 8]), [6, 8], [4, 4])).toBe(90);
+		});
+
+		it("scales down going compound and up coming back", () => {
+			expect(rescaleBpmForMeter(120, [4, 4], [6, 8])).toBe(80);
+			expect(rescaleBpmForMeter(80, [6, 8], [4, 4])).toBe(120);
+		});
 	});
 });

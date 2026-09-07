@@ -79,6 +79,15 @@
 	   the near-black panel; still clearly red for delete/discard affordances.
 	   Theme-aware (deeper on light) like every other color token. */
 	--destructive: oklch(0.585 0.13 25);
+	/* Tint of --destructive, the way --denim-tint is of --denim. Written in the
+	   same colour space as its base rather than converted to rgba, so the two
+	   cannot drift.
+	   Deliberately far heavier than --denim-tint (0.12): that one washes a
+	   selected row and must not shout, this one has to read as a red field at a
+	   glance. At the denim tint's alpha it was invisible against the panel and
+	   only the border showed. Light gets less, since a tint over paper white
+	   reads stronger than the same alpha over a dark panel. */
+	--destructive-tint: oklch(0.585 0.13 25 / 0.34);
 }
 
 /* ----------------------------------------------------------------------------
@@ -122,6 +131,7 @@
 	--favorite-active: oklch(82.8% 0.189 84.429); /* Tailwind amber-400 — same as dark; star stays amber */
 
 	--destructive: oklch(0.53 0.17 27); /* deeper on light for contrast on paper white */
+	--destructive-tint: oklch(0.53 0.17 27 / 0.2);
 }
 
 /* Text selection is fixed across BOTH themes */
@@ -455,6 +465,7 @@
 	--color-accent: var(--accent);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-destructive: var(--destructive);
+	--color-destructive-tint: var(--destructive-tint);
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);

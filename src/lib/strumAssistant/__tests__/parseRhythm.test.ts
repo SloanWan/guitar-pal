@@ -187,13 +187,16 @@ describe("parseRhythm", () => {
 		});
 
 		it("rejects a stream that overflows the bar", () => {
-			const result = parseRhythm("D".repeat(20));
+			// A bar holds four beats of at most six cells since compound meters
+			// landed; 25 is the first count that fits into none of them.
+			const result = parseRhythm("D".repeat(25));
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.errors[0].code).toBe("too-many-cells");
 		});
 
 		it("rejects out-of-range options", () => {
+			// Not a range any more: no meter divides a beat five ways.
 			expect(parseRhythm("DUDU", { cellsPerBeat: 5 }).ok).toBe(false);
 			expect(parseRhythm("DUDU", { beatsPerBar: 0 }).ok).toBe(false);
 		});

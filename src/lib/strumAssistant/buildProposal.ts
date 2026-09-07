@@ -4,9 +4,10 @@ import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
 import { normalizeBpm } from "@/lib/strumBars";
 import { patternNotation } from "@/lib/strumNotation";
 import {
+	chordAbbreviation,
 	defaultProgressionName,
 	parseChordSequence,
-	progressionBarsFromChords,
+	progressionBarsFromTokens,
 } from "@/lib/strumProgressions";
 import { parseRhythm, type RhythmParseError } from "@/lib/strumAssistant/parseRhythm";
 import type { AssistantProposal } from "@/lib/strumAssistant/types";
@@ -51,9 +52,13 @@ function barsFor(rhythmBars: Beat[][], chords: Bar["chord"][]): Bar[] {
 	// One rhythm, many chords: every chord gets a bar of that rhythm. This is the
 	// same assembly the progression editor uses when a sequence is typed.
 	if (rhythmBars.length === 1) {
-		return progressionBarsFromChords(
+		return progressionBarsFromTokens(
 			rhythmBars[0],
-			chords.filter((c): c is NonNullable<Bar["chord"]> => c !== null),
+			// Every chord here has resolved, so `input` is never read back — it is
+			// what a token that did *not* resolve would be kept under.
+			chords
+				.filter((c): c is NonNullable<Bar["chord"]> => c !== null)
+				.map((chord) => ({ input: chordAbbreviation(chord), chord })),
 		);
 	}
 	// Written bar by bar: chords line up in order, and a bar past the last chord

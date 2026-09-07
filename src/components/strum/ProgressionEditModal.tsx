@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
 	Dialog,
 	DialogContent,
@@ -15,8 +15,13 @@ import {
 	Dot,
 	Plus,
 	Minus,
-	Trash2,
 	Copy,
+	Eraser,
+	ChevronLeft,
+	ChevronRight,
+	Undo2,
+	Redo2,
+	Trash2,
 	ArrowUp,
 	ArrowDown,
 } from "lucide-react";
@@ -28,9 +33,21 @@ import {
 	STRUM_BPM_MAX,
 	STRUM_CAPO_MAX,
 } from "@/lib/strumPatterns";
-import { validateBars, MAX_CELLS_PER_BEAT, normalizeBpm } from "@/lib/strumBars";
+import { barPlaceholder, validateBars, normalizeBpm } from "@/lib/strumBars";
+import {
+	allowedCellsPerBeat,
+	cellCountLabel,
+	stepCellsPerBeat,
+	type Meter,
+} from "@/lib/strumMeter";
 import {
 	addBar,
+	clearBeat,
+	copyBeat,
+	swapBeats,
+	setBarCells,
+	setCell,
+	stepCellPosition,
 	removeBar,
 	duplicateBar,
 	swapBars,
@@ -38,12 +55,15 @@ import {
 	cycleCell,
 	addCell,
 	removeCell,
-	MIN_CELLS_PER_BEAT,
 } from "@/lib/strumBarEdit";
 import { defaultProgressionName, normalizeCapo, progressionCapo } from "@/lib/strumProgressions";
+import { chordIndexWithUser, type UserChordVoicing } from "@/lib/userChordVoicings";
+import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
 import ChordSearchSelect from "./ChordSearchSelect";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
+import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
+import { useBarHistory } from "./useBarHistory";
 
 function StepIcon({ step }: { step: StepValue }) {
 	if (step === "D" || step === "D3" || step === "DG") return <MoveDown className="size-4" />;
@@ -64,6 +84,8 @@ export default function ProgressionEditModal({
 	onSave,
 	progression,
 	patternBpm,
+	meter,
+	userVoicings = [],
 }: {
 	open: boolean;
 	onClose: () => void;
@@ -72,8 +94,28 @@ export default function ProgressionEditModal({
 	progression: ChordProgression;
 	/** Tempo the progression falls back to when it carries none of its own. */
 	patternBpm: number;
+	/** The pattern's time signature. A progression never has one of its own. */
+	meter: Meter;
+	/**
+	 * The player's own shapes. Their chords join the library's in the bar chord
+	 * fields, so a chord written once can be typed again here.
+	 */
+	userVoicings?: readonly UserChordVoicing[];
 }) {
-	const [bars, setBars] = useState<Bar[]>(progression.bars);
+	const {
+		bars,
+		setBars,
+		reset: resetBars,
+		undo,
+		redo,
+		canUndo,
+		canRedo,
+	} = useBarHistory(progression.bars);
+	// Cell buttons by "bar:beat:cell", so arrow keys can walk the whole
+	// progression as the one line of cells it is.
+	const cellRefs = useRef(new Map<string, HTMLButtonElement>());
+	// Beat columns, keyed "bar:beat", so one that was just copied or moved pops.
+	const beatRefs = useRef(new Map<string, HTMLDivElement>());
 	const [name, setName] = useState(progression.name ?? "");
 	// Free text so the field can be emptied — empty means "follow the pattern".
 	const [bpmInput, setBpmInput] = useState(
@@ -92,6 +134,14 @@ export default function ProgressionEditModal({
 	// Browsable (root, suffix) pairs, fetched once per modal open and shared by
 	// every bar's selector rather than refetched per bar.
 	const [chordIndex, setChordIndex] = useState<readonly ChordIndexEntry[]>([]);
+	// The library's chords plus the ones the player's own shapes are filed under.
+	const searchIndex = useMemo(
+		() => chordIndexWithUser(chordIndex, userVoicings),
+		[chordIndex, userVoicings],
+	);
+	// Frets typed into a bar's chord field are matched against every voicing
+	// there is, fetched only once the editor is actually open.
+	const shapeCorpus = useChordShapeCorpus(open);
 	// Index of the bar most recently copied or moved. That block gets a denim
 	// glow so the user can find where the edit landed.
 	const [highlightedBarIdx, setHighlightedBarIdx] = useState<number | null>(null);
@@ -115,7 +165,7 @@ export default function ProgressionEditModal({
 				initialBpm,
 				initialCapo,
 			);
-			setBars(progression.bars);
+			resetBars(progression.bars);
 			setName(initialName);
 			setBpmInput(initialBpm);
 			setCapoInput(initialCapo);
@@ -187,6 +237,85 @@ export default function ProgressionEditModal({
 		});
 	}
 
+	/** Point the eye at a beat that just changed under it. See CreatePatternModal. */
+	function flashBeat(barIdx: number, beatIdx: number) {
+		if (prefersReducedMotion()) return;
+		requestAnimationFrame(() => {
+			beatRefs.current.get(`${barIdx}:${beatIdx}`)?.animate(
+				[
+					{ transform: "scale(0.94)", opacity: 0.55 },
+					{ transform: "scale(1)", opacity: 1 },
+				],
+				{ duration: 220, easing: SPRING_POP_EASING },
+			);
+		});
+	}
+
+	function copyBeatTo(barIdx: number, from: number, to: number) {
+		if (to < 0 || to >= bars[barIdx].beats.length) return;
+		setBars((prev) => copyBeat(prev, barIdx, from, to));
+		flashBeat(barIdx, to);
+	}
+
+	function moveBeat(barIdx: number, from: number, to: number) {
+		if (to < 0 || to >= bars[barIdx].beats.length) return;
+		setBars((prev) => swapBeats(prev, barIdx, from, to));
+		flashBeat(barIdx, to);
+	}
+
+	/** Typing a stroke, and arrowing across beat and bar boundaries. */
+	function handleCellKeyDown(
+		e: React.KeyboardEvent<HTMLButtonElement>,
+		barIdx: number,
+		beatIdx: number,
+		cellIdx: number,
+	) {
+		const move = (direction: 1 | -1) => {
+			const next = stepCellPosition(bars, { barIdx, beatIdx, cellIdx }, direction);
+			if (!next) return;
+			e.preventDefault();
+			cellRefs.current.get(`${next.barIdx}:${next.beatIdx}:${next.cellIdx}`)?.focus();
+		};
+		const write = (value: StepValue) => {
+			e.preventDefault();
+			setBars((prev) => setCell(prev, barIdx, beatIdx, cellIdx, value));
+		};
+
+		// Duplicate-rightwards, on the shortcut editors use for duplicate-line.
+		if ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "D")) {
+			e.preventDefault();
+			copyBeatTo(barIdx, beatIdx, beatIdx + 1);
+			return;
+		}
+		if ((e.metaKey || e.ctrlKey) && (e.key === "Backspace" || e.key === "Delete")) {
+			e.preventDefault();
+			setBars((prev) => clearBeat(prev, barIdx, beatIdx));
+			return;
+		}
+		if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+		switch (e.key) {
+			case "ArrowRight":
+				return move(1);
+			case "ArrowLeft":
+				return move(-1);
+			case "d":
+			case "D":
+				return write("D");
+			case "u":
+			case "U":
+				return write("U");
+			case "x":
+			case "X":
+				return write("X");
+			case "Backspace":
+			case "Delete":
+				return write("");
+			default:
+				return;
+		}
+	}
+
 	/** An emptied tempo field means "play at the pattern's tempo". */
 	function parsedBpm(): number | undefined {
 		return bpmInput.trim() === "" ? undefined : normalizeBpm(Number(bpmInput));
@@ -217,6 +346,23 @@ export default function ProgressionEditModal({
 	 * up; the chord fields stop the key before it ever reaches here.
 	 */
 	function handleDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+		// Undo/redo first; skipped inside a text field, where the browser's own
+		// undo is the one the player means.
+		const mod = e.metaKey || e.ctrlKey;
+		const inTextField =
+			e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+		if (mod && !inTextField && (e.key === "z" || e.key === "Z")) {
+			e.preventDefault();
+			if (e.shiftKey) redo();
+			else undo();
+			return;
+		}
+		if (mod && !inTextField && (e.key === "y" || e.key === "Y")) {
+			e.preventDefault();
+			redo();
+			return;
+		}
+
 		if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
 		if (discardConfirm) return;
 		if (
@@ -246,7 +392,7 @@ export default function ProgressionEditModal({
 			<DialogContent
 				showCloseButton={false}
 				onKeyDown={handleDialogKeyDown}
-				className="w-full max-w-120 md:max-w-[58rem] flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
+				className="w-[calc(100%-2rem)] max-w-100 md:max-w-[58rem] flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
 			>
 				<DialogHeader className="shrink-0 flex-row items-center justify-between gap-2 p-4 pb-0">
 					<DialogTitle>Edit progression</DialogTitle>
@@ -347,6 +493,31 @@ export default function ProgressionEditModal({
 							</span>
 						</div>
 
+						{/* Undo/redo for the whole grid, not for one bar — the history is
+						    of the progression, so the controls sit above all of it. */}
+						<div className="mb-2 flex justify-end gap-1">
+							<button
+								type="button"
+								onClick={undo}
+								disabled={!canUndo}
+								aria-label="Undo"
+								title="Undo (Cmd/Ctrl+Z)"
+								className="flex h-6 w-7 items-center justify-center border border-line-strong text-ink-faint transition-colors hover:border-denim hover:text-denim disabled:cursor-not-allowed disabled:opacity-30"
+							>
+								<Undo2 size={11} />
+							</button>
+							<button
+								type="button"
+								onClick={redo}
+								disabled={!canRedo}
+								aria-label="Redo"
+								title="Redo (Cmd/Ctrl+Shift+Z)"
+								className="flex h-6 w-7 items-center justify-center border border-line-strong text-ink-faint transition-colors hover:border-denim hover:text-denim disabled:cursor-not-allowed disabled:opacity-30"
+							>
+								<Redo2 size={11} />
+							</button>
+						</div>
+
 						{/* One bar per row, two per row from md upwards — the desktop dialog
 						    is wide enough for two, and a lone bar keeps the full width. */}
 						<div
@@ -376,10 +547,12 @@ export default function ProgressionEditModal({
 										</span>
 										<ChordSearchSelect
 											chord={bar.chord}
+											unknownLabel={barPlaceholder(bar)}
 											onChange={(chord) =>
 												setBars((prev) => setBarChord(prev, barIdx, chord))
 											}
-											index={chordIndex}
+											index={searchIndex}
+											shapeCorpus={shapeCorpus}
 											ariaLabel={`Chord for bar ${barIdx + 1}`}
 										/>
 										<div className="ml-auto flex items-center">
@@ -421,21 +594,66 @@ export default function ProgressionEditModal({
 										</div>
 									</div>
 
+									{/* Divide this bar at once, rather than beat by beat. */}
+									<div className="mb-1.5 flex items-center gap-1">
+										<span className="mr-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+											Divide
+										</span>
+										{allowedCellsPerBeat(meter).map((cells) => {
+											const active = bar.beats.every((b) => b.length === cells);
+											return (
+												<button
+													key={cells}
+													type="button"
+													onClick={() =>
+														setBars((prev) => setBarCells(prev, barIdx, cells))
+													}
+													aria-pressed={active}
+													aria-label={`Bar ${barIdx + 1} in ${cellCountLabel(meter, cells)}`}
+													className={`border px-2 py-0.5 font-mono text-[11px] tracking-[0.04em] transition-[color,border-color] duration-(--dur-hover) ease-out focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${
+														active
+															? "border-denim text-denim-accent"
+															: "border-line-strong text-ink-dim hover:border-denim hover:text-denim-accent"
+													}`}
+												>
+													{cellCountLabel(meter, cells)}
+												</button>
+											);
+										})}
+									</div>
+
 									{/* Beats */}
 									<div className="flex gap-2">
 										{bar.beats.map((beat, beatIdx) => (
-											<div key={beatIdx} className="flex-1 flex flex-col gap-1.5">
-												{/* Cells */}
-												<div className="flex border border-line-strong py-2">
+											<div
+												key={beatIdx}
+												ref={(el) => {
+													const key = `${barIdx}:${beatIdx}`;
+													if (el) beatRefs.current.set(key, el);
+													else beatRefs.current.delete(key);
+												}}
+												className="group flex-1 flex flex-col gap-1.5"
+											>
+												{/* Cells, with a plain-CSS hover highlight. */}
+												<div className="flex border border-line-strong py-2 transition-colors group-hover:border-denim">
 													{beat.map((cell, cellIdx) => (
 														<button
 															key={cellIdx}
+															ref={(el) => {
+																const key = `${barIdx}:${beatIdx}:${cellIdx}`;
+																if (el) cellRefs.current.set(key, el);
+																else cellRefs.current.delete(key);
+															}}
 															onClick={() =>
 																setBars((prev) =>
 																	cycleCell(prev, barIdx, beatIdx, cellIdx),
 																)
 															}
-															className="flex-1 flex justify-center items-center text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
+															onKeyDown={(e) =>
+																handleCellKeyDown(e, barIdx, beatIdx, cellIdx)
+															}
+															aria-label={`Bar ${barIdx + 1} beat ${beatIdx + 1} cell ${cellIdx + 1}`}
+															className="flex-1 flex justify-center items-center text-ink-dim hover:text-denim hover:bg-denim-tint focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-[-2px] transition-colors"
 														>
 															<StepIcon step={cell} />
 														</button>
@@ -445,21 +663,81 @@ export default function ProgressionEditModal({
 												<div className="flex gap-1">
 													<button
 														onClick={() =>
-															setBars((prev) => removeCell(prev, barIdx, beatIdx))
+															setBars((prev) => removeCell(prev, barIdx, beatIdx, meter))
 														}
-														disabled={beat.length <= MIN_CELLS_PER_BEAT}
+														// The legal divisions are a set, not a range: a
+														// quarter beat steps 2-3-4, a dotted beat 3-6.
+														disabled={
+															stepCellsPerBeat(meter, beat.length, -1) === null
+														}
 														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 													>
 														<Minus size={10} />
 													</button>
+													{/* Clearing sits between the steppers: all three act on
+													    this beat's own contents, where the row below moves
+													    it around the bar. */}
+													<button
+														type="button"
+														onClick={() =>
+															setBars((prev) => clearBeat(prev, barIdx, beatIdx))
+														}
+														disabled={beat.every((cell) => cell === "")}
+														aria-label={`Clear bar ${barIdx + 1} beat ${beatIdx + 1}`}
+														title="Clear this beat (Cmd/Ctrl+Backspace)"
+														// The one beat control that throws work away, so it warns in the
+														// destructive colour rather than the denim the others share.
+														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-destructive hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+													>
+														<Eraser size={10} />
+													</button>
 													<button
 														onClick={() =>
-															setBars((prev) => addCell(prev, barIdx, beatIdx))
+															setBars((prev) => addCell(prev, barIdx, beatIdx, meter))
 														}
-														disabled={beat.length >= MAX_CELLS_PER_BEAT}
+														disabled={
+															stepCellsPerBeat(meter, beat.length, 1) === null
+														}
 														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 													>
 														<Plus size={10} />
+													</button>
+												</div>
+
+												{/* Beat operations on their own row: three more controls
+												    beside +/- would each be a sliver. */}
+												<div className="flex gap-1">
+													<button
+														type="button"
+														onClick={() => moveBeat(barIdx, beatIdx, beatIdx - 1)}
+														disabled={beatIdx === 0}
+														aria-label={`Move bar ${barIdx + 1} beat ${beatIdx + 1} left`}
+														title="Move this beat left"
+														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+													>
+														<ChevronLeft size={10} />
+													</button>
+													{/* Copy this beat onto the next. Copying, not inserting:
+													    the bar's beat count belongs to the meter. */}
+													<button
+														type="button"
+														onClick={() => copyBeatTo(barIdx, beatIdx, beatIdx + 1)}
+														disabled={beatIdx >= bar.beats.length - 1}
+														aria-label={`Copy bar ${barIdx + 1} beat ${beatIdx + 1} onto beat ${beatIdx + 2}`}
+														title="Copy this beat to the next"
+														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+													>
+														<Copy size={10} />
+													</button>
+													<button
+														type="button"
+														onClick={() => moveBeat(barIdx, beatIdx, beatIdx + 1)}
+														disabled={beatIdx >= bar.beats.length - 1}
+														aria-label={`Move bar ${barIdx + 1} beat ${beatIdx + 1} right`}
+														title="Move this beat right"
+														className="flex-1 flex justify-center items-center h-6 border border-line-strong text-ink-faint hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+													>
+														<ChevronRight size={10} />
 													</button>
 												</div>
 											</div>
@@ -470,7 +748,7 @@ export default function ProgressionEditModal({
 						</div>
 
 						<button
-							onClick={() => setBars((prev) => addBar(prev))}
+							onClick={() => setBars((prev) => addBar(prev, meter))}
 							className="flex items-center justify-center gap-1.5 border border-dashed border-line-strong py-2 text-xs text-ink-dim transition-colors hover:border-denim hover:text-denim disabled:cursor-not-allowed disabled:opacity-30"
 						>
 							<Plus size={12} />

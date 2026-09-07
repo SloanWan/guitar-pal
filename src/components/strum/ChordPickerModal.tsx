@@ -1,11 +1,26 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { X, CirclePlay, Loader2 } from "lucide-react";
-import { CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
+import {
+	CHORD_SUFFIX_CATEGORIES,
+	UNKNOWN_ROOT,
+	chordDisplayName,
+	isUnknownSuffix,
+} from "@/lib/chordSuffixes";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { createClient } from "@/lib/supabase";
 import { loadVoicings } from "@/lib/chordVoicingCache";
+import { useUser } from "@/hooks/useUser";
+import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
+import {
+	UNKNOWN_CATEGORY,
+	unknownChordSuffixes,
+	isUserVoicingId,
+	mergeVoicings,
+	userSuffixesFiledUnder,
+	userVoicingCategory,
+} from "@/lib/userChordVoicings";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
@@ -38,6 +53,18 @@ const BLACK_KEYS = [
 ] as const;
 
 // ─── Category helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Where the player's own chords live in the browse list.
+ *
+ * A chord written for a shape the library never had belongs to no quality
+ * category — that is usually why it was written — so browsing by category alone
+ * would hide it for good. Its own section is the only honest home for it.
+ */
+const MINE_CATEGORY = "Mine";
+
+/** Where the piano opens for a chord that belongs to no key. */
+const BROWSE_START_ROOT = "C";
 
 const CATEGORY_HINTS: Record<string, string> = {
 	Major: "major, maj7, add9",
@@ -91,7 +118,52 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	const [selectedRoot, setSelectedRoot] = useState<string | null>(null);
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 	const [selectedSuffix, setSelectedSuffix] = useState<string | null>(null);
-	const [voicings, setVoicings] = useState<ChordVoicing[]>([]);
+	const [libraryVoicings, setLibraryVoicings] = useState<ChordVoicing[]>([]);
+	const { user, loading: userLoading } = useUser();
+	const { voicings: userVoicings, deleteVoicing } = useUserChordVoicings(user, userLoading);
+	/**
+	 * What the player may choose from: the library's shapes, then their own.
+	 * Merged here rather than in the fetch so a shape saved a moment ago appears
+	 * without another round trip, and so saving one cannot reset the selection.
+	 */
+	/**
+	 * The root the chord is stored under, which is the placeholder for one nobody
+	 * has named — the piano key is how the player got here, not what they picked.
+	 */
+	const chordRoot =
+		selectedSuffix && isUnknownSuffix(selectedSuffix) ? UNKNOWN_ROOT : selectedRoot;
+	const voicings: ChordVoicing[] = useMemo(
+		() =>
+			chordRoot && selectedSuffix
+				? mergeVoicings(libraryVoicings, userVoicings, chordRoot, selectedSuffix)
+				: libraryVoicings,
+		[libraryVoicings, userVoicings, chordRoot, selectedSuffix],
+	);
+	/**
+	 * Sections of the player's own, offered beside the taxonomy: the chords they
+	 * filed nowhere in particular, and the ones nobody has named yet. Both are
+	 * held apart from the categories because neither is a quality.
+	 */
+	const ownSections = selectedRoot
+		? [
+				{ category: MINE_CATEGORY, suffixes: userSuffixesFiledUnder(userVoicings, selectedRoot, null) },
+				// Unnamed chords belong to no root, so the section is the same one
+				// under every key rather than being hidden behind guessing which root
+				// a chord nobody has identified might turn out to have.
+				{ category: UNKNOWN_CATEGORY, suffixes: unknownChordSuffixes(userVoicings) },
+			].filter((section) => section.suffixes.length > 0)
+		: [];
+	/** Their own chords filed under the category being browsed, if any. */
+	const filedHereSuffixes =
+		selectedRoot && selectedCategory && !ownSections.some((s) => s.category === selectedCategory)
+			? userSuffixesFiledUnder(userVoicings, selectedRoot, selectedCategory)
+			: [];
+	// Serialized, so the suffix effect keys on the chords themselves rather than
+	// on arrays rebuilt by every render.
+	const ownSectionsKey = JSON.stringify(ownSections);
+	const filedHereKey = filedHereSuffixes.join("|");
+	const categories = [...CHORD_SUFFIX_CATEGORIES, ...ownSections];
+
 	const [selectedVoicingId, setSelectedVoicingId] = useState<string | null>(null);
 	const [loadingVoicings, setLoadingVoicings] = useState(false);
 	const [availableSuffixes, setAvailableSuffixes] = useState<string[]>([]);
@@ -119,20 +191,37 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 		if (initialChord) {
 			const ic = initialChord;
 			queueMicrotask(() => {
+				setVoicingsFor(null);
+				setSelectedSuffix(ic.suffix);
+
+				// An unnamed chord is filed under no root, so the piano opens on a key
+				// only because the browse has to start somewhere — the section it
+				// leads to is the same under every one of them.
+				if (ic.root === UNKNOWN_ROOT) {
+					setSelectedRoot(BROWSE_START_ROOT);
+					setSelectedCategory(UNKNOWN_CATEGORY);
+					return;
+				}
+
 				setSelectedRoot(ic.root);
 				const cat = CHORD_SUFFIX_CATEGORIES.find((c) =>
 					(c.suffixes as readonly string[]).includes(ic.suffix),
 				);
-				setSelectedCategory(cat?.category ?? null);
-				setSelectedSuffix(ic.suffix);
-				setVoicingsFor(null);
+				// A chord of the player's own opens wherever they filed it.
+				const mine = userVoicings.find(
+					(v) => v.root === ic.root && v.suffix === ic.suffix,
+				);
+				setSelectedCategory(
+					cat?.category ??
+						(mine ? (userVoicingCategory(mine) ?? MINE_CATEGORY) : null),
+				);
 			});
 		} else {
 			queueMicrotask(() => {
 				setSelectedRoot(null);
 				setSelectedCategory(null);
 				setSelectedSuffix(null);
-				setVoicings([]);
+				setLibraryVoicings([]);
 				setSelectedVoicingId(null);
 				setAvailableSuffixes([]);
 				setVoicingsFor(null);
@@ -160,6 +249,23 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	// When root or category changes: find available suffixes, update selectedSuffix
 	useEffect(() => {
 		if (!selectedRoot || !selectedCategory) return;
+
+		// The player's own chords are already in hand — there is nothing in the
+		// library to ask for, and a query for suffixes it does not carry would
+		// come back empty and clear the section.
+		const own = (
+			JSON.parse(ownSectionsKey) as { category: string; suffixes: string[] }[]
+		).find((section) => section.category === selectedCategory);
+		if (own) {
+			queueMicrotask(() => {
+				setAvailableSuffixes(own.suffixes);
+				setSelectedSuffix((prev) =>
+					prev && own.suffixes.includes(prev) ? prev : (own.suffixes[0] ?? null),
+				);
+			});
+			return;
+		}
+
 		const catDef = CHORD_SUFFIX_CATEGORIES.find((c) => c.category === selectedCategory);
 		if (!catDef) return;
 		const categorySuffixes = catDef.suffixes as readonly string[];
@@ -175,9 +281,13 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 			if (cancelled) return;
 
-			const available = (rows ?? [])
+			const library = (rows ?? [])
 				.map((r) => r.suffix as string)
 				.sort((a, b) => categorySuffixes.indexOf(a) - categorySuffixes.indexOf(b));
+			// A chord the player filed here is offered here, whether or not the
+			// library carries anything by that name — filing it is what filing means.
+			const filed = filedHereKey === "" ? [] : filedHereKey.split("|");
+			const available = [...library, ...filed.filter((s) => !library.includes(s))];
 
 			setAvailableSuffixes(available);
 
@@ -191,7 +301,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedRoot, selectedCategory]);
+	}, [selectedRoot, selectedCategory, ownSectionsKey, filedHereKey]);
 
 	// When root + suffix are both set: fetch voicings
 	useEffect(() => {
@@ -200,15 +310,18 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 		(async () => {
 			setLoadingVoicings(true);
-			setVoicings([]);
+			setLibraryVoicings([]);
 			setSelectedVoicingId(null);
 			// Through the shared cache: a chord already resolved for playback or
-			// for a diagram opens the picker with no round trip at all.
-			const vs = await loadVoicings(selectedRoot, selectedSuffix);
+			// for a diagram opens the picker with no round trip at all. An unnamed
+			// chord is nobody's but the player's, so the library is not asked.
+			const vs = isUnknownSuffix(selectedSuffix)
+				? []
+				: await loadVoicings(selectedRoot, selectedSuffix);
 
 			if (cancelled) return;
 
-			setVoicings(vs);
+			setLibraryVoicings(vs);
 			// Reopen on the voicing the bar was saved with; falls through to
 			// Standard when the pinned id belongs to a different chord.
 			const pinned = initialVoicingId
@@ -230,6 +343,28 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			cancelled = true;
 		};
 	}, [selectedRoot, selectedSuffix, initialVoicingId]);
+
+	/**
+	 * A pinned shape of the player's own is not in the library fetch, so it is
+	 * selected once their shapes have loaded rather than in the fetch effect.
+	 */
+	useEffect(() => {
+		if (!initialVoicingId || !isUserVoicingId(initialVoicingId)) return;
+		if (selectedVoicingId === initialVoicingId) return;
+		if (!voicings.some((v) => v.id === initialVoicingId)) return;
+		// Deferred rather than set in the effect body: the shapes arrive after the
+		// library fetch has already chosen a selection, and setting state straight
+		// back inside an effect is the cascading-render pattern the repo defers
+		// elsewhere for the same reason.
+		queueMicrotask(() => setSelectedVoicingId(initialVoicingId));
+	}, [voicings, initialVoicingId, selectedVoicingId]);
+
+
+	function handleDeleteShape(id: string) {
+		deleteVoicing(id);
+		// Fall back rather than leaving a selection pointing at nothing.
+		if (selectedVoicingId === id) setSelectedVoicingId(null);
+	}
 
 	const handleSelectSuffix = useCallback(
 		async (suffix: string) => {
@@ -271,12 +406,12 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	}
 
 	function handleConfirm() {
-		if (!selectedRoot || !selectedSuffix) return;
+		if (!chordRoot || !selectedSuffix) return;
 		const voicing = voicings.find((v) => v.id === selectedVoicingId) ?? voicings[0];
 		if (!voicing) return;
 		const pitches = chordVoicingToMidi(voicing).map((n) => n.midi);
 		onConfirm({
-			root: selectedRoot,
+			root: chordRoot,
 			suffix: selectedSuffix,
 			pitches,
 			voicingId: voicing.id,
@@ -354,14 +489,14 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 					{/* Category grid */}
 					<div className="grid grid-cols-2 gap-2">
-						{CHORD_SUFFIX_CATEGORIES.map((cat) => (
+						{categories.map((cat) => (
 							<button
 								key={cat.category}
 								onClick={() => {
 									if (cat.category === selectedCategory) return;
 									setSelectedCategory(cat.category);
 									setSelectedSuffix(null);
-									setVoicings([]);
+									setLibraryVoicings([]);
 									setSelectedVoicingId(null);
 									setAvailableSuffixes([]);
 									setVoicingsFor(null);
@@ -426,9 +561,9 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 						)}
 
 						{/* Chord name */}
-						{selectedRoot && selectedSuffix && (
+						{chordRoot && selectedSuffix && (
 							<p className="text-sm font-semibold text-ink">
-								{selectedRoot} {selectedSuffix}
+								{chordDisplayName(chordRoot, selectedSuffix)}
 							</p>
 						)}
 
@@ -462,8 +597,21 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 												<ChordDiagramSVG {...svgProps} size="compact" />
 												<div className="flex items-center gap-1">
 													<span className="text-[9px] text-ink-faint max-w-15 truncate">
-														{v.label ?? "—"}
+														{v.label ?? (isUserVoicingId(v.id) ? "Mine" : "—")}
 													</span>
+													{isUserVoicingId(v.id) && (
+														<button
+															onClick={(e) => {
+																e.stopPropagation();
+																handleDeleteShape(v.id);
+															}}
+															aria-label="Delete this shape"
+															title="Delete this shape"
+															className="text-ink-faint transition-colors hover:text-destructive"
+														>
+															<X size={10} />
+														</button>
+													)}
 													<button
 														onClick={(e) => {
 															e.stopPropagation();
@@ -493,6 +641,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 								</div>
 							) : null}
 						</div>
+
 
 						{/* Confirm / Clear buttons */}
 						<div className="flex gap-2">

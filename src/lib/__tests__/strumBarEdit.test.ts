@@ -7,14 +7,23 @@ import {
 	setBarChord,
 	duplicateBar,
 	swapBars,
+	applyVoicingToBars,
+	voicingReach,
 	cycleCell,
 	addCell,
 	removeCell,
 	barLocalBeatIndex,
 	MIN_CELLS_PER_BEAT,
+	clearBeat,
+	copyBeat,
+	resizeBeat,
+	setBarCells,
+	swapBeats,
+	setCell,
+	stepCellPosition,
 } from "@/lib/strumBarEdit";
 import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
-import type { Bar, ChordRef } from "@/lib/strumPatterns";
+import type { Bar, ChordRef , Beat } from "@/lib/strumPatterns";
 
 const C_REF: ChordRef = { root: "C", suffix: "major" };
 
@@ -113,6 +122,11 @@ describe("duplicateBar", () => {
 		expect(duplicateBar(withChord, 0)[1].chord).toEqual({ root: "G", suffix: "minor" });
 	});
 
+	it("carries a kept name across, so the copy is unfinished too", () => {
+		const kept: Bar[] = [{ beats: [["D", ""]], chord: null, unknownChord: "Cadd9#11" }];
+		expect(duplicateBar(kept, 0)[1].unknownChord).toBe("Cadd9#11");
+	});
+
 	it("deep-copies the beats so editing the clone leaves the source alone", () => {
 		const source = cycleCell(bars(1), 0, 0, 0);
 		const copied = duplicateBar(source, 0);
@@ -130,6 +144,34 @@ describe("duplicateBar", () => {
 	it("ignores an out-of-range index", () => {
 		const two = bars(2);
 		expect(duplicateBar(two, 9)).toBe(two);
+	});
+});
+
+describe("setBarChord", () => {
+	it("names a bar's chord", () => {
+		expect(setBarChord(bars(1), 0, C_REF)[0].chord).toEqual(C_REF);
+	});
+
+	it("retires the name a placeholder bar was standing in with", () => {
+		const kept: Bar[] = [{ beats: [["D", ""]], chord: null, unknownChord: "Cadd9#11" }];
+		const named = setBarChord(kept, 0, C_REF)[0];
+		expect(named.chord).toEqual(C_REF);
+		expect(named.unknownChord).toBeUndefined();
+	});
+
+	it("retires it on a clear too — an emptied bar is not still unfinished", () => {
+		const kept: Bar[] = [{ beats: [["D", ""]], chord: null, unknownChord: "Cadd9#11" }];
+		const cleared = setBarChord(kept, 0, null)[0];
+		expect(cleared.chord).toBeNull();
+		expect(cleared.unknownChord).toBeUndefined();
+	});
+
+	it("leaves every other bar alone", () => {
+		const kept: Bar[] = [
+			emptyBar(),
+			{ beats: [["D", ""]], chord: null, unknownChord: "zzz" },
+		];
+		expect(setBarChord(kept, 0, C_REF)[1]).toBe(kept[1]);
 	});
 });
 
@@ -191,13 +233,18 @@ describe("cycleCell", () => {
 });
 
 describe("addCell / removeCell", () => {
-	it("grows a beat up to the cell cap", () => {
+	it("grows a beat up to the cap its meter allows", () => {
+		// MAX_CELLS_PER_BEAT is the storage capacity (six, for a dotted beat in
+		// sixteenths), not the editor's ceiling. In 4/4 the ceiling is four —
+		// a quarter beat has no five- or six-way division worth offering.
+		const SIMPLE_MAX = 4;
 		let next = addCell(bars(1), 0, 0);
 		expect(next[0].beats[0]).toHaveLength(3);
 		next = addCell(next, 0, 0);
-		expect(next[0].beats[0]).toHaveLength(MAX_CELLS_PER_BEAT);
+		expect(next[0].beats[0]).toHaveLength(SIMPLE_MAX);
 		next = addCell(next, 0, 0);
-		expect(next[0].beats[0]).toHaveLength(MAX_CELLS_PER_BEAT);
+		expect(next[0].beats[0]).toHaveLength(SIMPLE_MAX);
+		expect(SIMPLE_MAX).toBeLessThan(MAX_CELLS_PER_BEAT);
 	});
 
 	it("shrinks a beat down to the cell floor", () => {
@@ -247,5 +294,529 @@ describe("barLocalBeatIndex — flat scheduler cursor to grid position", () => {
 	it("clamps a stale cursor past the end rather than pointing at nothing", () => {
 		expect(barLocalBeatIndex(twoBars, 99)).toBe(0);
 		expect(barLocalBeatIndex(twoBars, -1)).toBe(0);
+	});
+});
+
+describe("emptyBar with a meter", () => {
+	it("still builds a 4/4 bar when no meter is given", () => {
+		const bar = emptyBar();
+		expect(bar.beats).toHaveLength(4);
+		expect(bar.beats.every((b) => b.length === 2)).toBe(true);
+	});
+
+	it("builds 6/8 as two dotted beats of three cells, not six beats of one", () => {
+		const bar = emptyBar([6, 8]);
+		expect(bar.beats).toHaveLength(2);
+		expect(bar.beats.every((b) => b.length === 3)).toBe(true);
+	});
+
+	it("builds 12/8 as four dotted beats", () => {
+		const bar = emptyBar([12, 8]);
+		expect(bar.beats).toHaveLength(4);
+		expect(bar.beats.every((b) => b.length === 3)).toBe(true);
+	});
+
+	it("builds 3/4 as three simple beats", () => {
+		const bar = emptyBar([3, 4]);
+		expect(bar.beats).toHaveLength(3);
+		expect(bar.beats.every((b) => b.length === 2)).toBe(true);
+	});
+
+	it("never shares cell arrays between beats", () => {
+		const bar = emptyBar([6, 8]);
+		expect(bar.beats[0]).not.toBe(bar.beats[1]);
+	});
+
+	it("gives an added bar the same meter as the rest", () => {
+		const bars = addBar([emptyBar([6, 8])], [6, 8]);
+		expect(bars).toHaveLength(2);
+		expect(bars[1].beats).toHaveLength(2);
+		expect(bars[1].beats[0]).toHaveLength(3);
+	});
+});
+
+describe("resizeBeat", () => {
+	it("spreads strokes across their own positions when doubling", () => {
+		// The whole point: three eighths becoming six sixteenths must leave each
+		// eighth where it was in time. Appending blanks would shove all three into
+		// the first half of the beat and silently rewrite the rhythm.
+		expect(resizeBeat(["D", "U", "D"], 6)).toEqual(["D", "", "U", "", "D", ""]);
+	});
+
+	it("keeps the on-beat cells when halving", () => {
+		expect(resizeBeat(["D", "U", "D", "U", "X", "U"], 3)).toEqual(["D", "D", "X"]);
+	});
+
+	it("round-trips a rhythm that has nothing on the off-beats", () => {
+		const eighths: Beat = ["D", "U", "D"];
+		expect(resizeBeat(resizeBeat(eighths, 6), 3)).toEqual(eighths);
+	});
+
+	it("drops what sat between the kept cells, and says so by losing it", () => {
+		// Halving cannot preserve an off-beat stroke; the alternative would be
+		// refusing the edit, which is worse.
+		expect(resizeBeat(["D", "U", "", "", "", ""], 3)).toEqual(["D", "", ""]);
+	});
+
+	it("pads or trims from the end when neither count divides the other", () => {
+		expect(resizeBeat(["D", "U"], 3)).toEqual(["D", "U", ""]);
+		expect(resizeBeat(["D", "U", "D"], 4)).toEqual(["D", "U", "D", ""]);
+		expect(resizeBeat(["D", "U", "D", "U"], 3)).toEqual(["D", "U", "D"]);
+	});
+
+	it("leaves a beat alone when nothing changes", () => {
+		const beat: Beat = ["D", "U"];
+		expect(resizeBeat(beat, 2)).toBe(beat);
+		expect(resizeBeat(beat, 0)).toBe(beat);
+	});
+});
+
+describe("cell stepping follows the meter", () => {
+	function beatOf(bars: Bar[]): Beat {
+		return bars[0].beats[0];
+	}
+
+	it("steps a compound beat straight from three to six and back", () => {
+		let bars = [emptyBar([6, 8])];
+		bars = cycleCell(bars, 0, 0, 0);
+		expect(beatOf(bars)).toHaveLength(3);
+
+		bars = addCell(bars, 0, 0, [6, 8]);
+		expect(beatOf(bars)).toHaveLength(6);
+		expect(beatOf(bars)[0]).toBe("D");
+
+		bars = removeCell(bars, 0, 0, [6, 8]);
+		expect(beatOf(bars)).toEqual(["D", "", ""]);
+	});
+
+	it("refuses to leave a dotted beat on a count that names no note value", () => {
+		let bars = [emptyBar([6, 8])];
+		// Six is the finest; another press must not produce seven.
+		bars = addCell(bars, 0, 0, [6, 8]);
+		bars = addCell(bars, 0, 0, [6, 8]);
+		expect(beatOf(bars)).toHaveLength(6);
+		// Three is the coarsest; another press must not produce two.
+		bars = removeCell(bars, 0, 0, [6, 8]);
+		bars = removeCell(bars, 0, 0, [6, 8]);
+		expect(beatOf(bars)).toHaveLength(3);
+	});
+
+	it("leaves simple-meter stepping exactly as it was", () => {
+		// 4/4 walks 2-3-4 one at a time, and each step keeps the leading cells —
+		// the behaviour before meters existed. Guarded so the compound rules
+		// cannot quietly change how every existing pattern is edited.
+		let bars = [emptyBar()];
+		bars = cycleCell(bars, 0, 0, 0);
+		expect(beatOf(bars)).toEqual(["D", ""]);
+
+		bars = addCell(bars, 0, 0);
+		expect(beatOf(bars)).toEqual(["D", "", ""]);
+		bars = addCell(bars, 0, 0);
+		expect(beatOf(bars)).toEqual(["D", "", "", ""]);
+		bars = addCell(bars, 0, 0);
+		expect(beatOf(bars)).toHaveLength(4);
+
+		bars = removeCell(bars, 0, 0);
+		expect(beatOf(bars)).toEqual(["D", "", ""]);
+		bars = removeCell(bars, 0, 0);
+		expect(beatOf(bars)).toEqual(["D", ""]);
+		bars = removeCell(bars, 0, 0);
+		expect(beatOf(bars)).toHaveLength(2);
+	});
+});
+
+describe("cycleStep leads with the stroke that belongs at the position", () => {
+	it("still leads with a downstroke by default", () => {
+		expect(cycleStep("")).toBe("D");
+	});
+
+	it("leads with an upstroke where the hand is travelling up", () => {
+		expect(cycleStep("", "U")).toBe("U");
+		expect(cycleStep("U", "U")).toBe("D");
+		expect(cycleStep("D", "U")).toBe("X");
+		expect(cycleStep("X", "U")).toBe("");
+	});
+
+	it("keeps the against-the-motion stroke reachable, just second", () => {
+		// The shipped "muted" preset opens a beat with an upstroke, so writing a
+		// stroke against the alternation has to stay possible.
+		expect(cycleStep(cycleStep("", "U"), "U")).toBe("D");
+		expect(cycleStep(cycleStep("", "D"), "D")).toBe("U");
+	});
+
+	it("still resets a preset-only value to a rest whichever way it leads", () => {
+		for (const preset of ["DG", "UG", "D3", "U3"] as const) {
+			expect(cycleStep(preset, "D")).toBe("");
+			expect(cycleStep(preset, "U")).toBe("");
+		}
+	});
+});
+
+describe("cycleCell reads the position from the cell index", () => {
+	it("writes a downstroke on an even cell and an upstroke on an odd one", () => {
+		const start = [emptyBar()];
+		expect(cycleCell(start, 0, 0, 0)[0].beats[0][0]).toBe("D");
+		expect(cycleCell(start, 0, 0, 1)[0].beats[0][1]).toBe("U");
+	});
+
+	it("halves the clicks for a plain alternating bar", () => {
+		// Every stroke of DUDU is now one press; the odd cells used to take two.
+		let bars = [emptyBar()];
+		for (let beatIdx = 0; beatIdx < 4; beatIdx++) {
+			bars = cycleCell(bars, 0, beatIdx, 0);
+			bars = cycleCell(bars, 0, beatIdx, 1);
+		}
+		expect(bars[0].beats).toEqual([
+			["D", "U"],
+			["D", "U"],
+			["D", "U"],
+			["D", "U"],
+		]);
+	});
+
+	it("alternates across a four-cell beat", () => {
+		let bars = [emptyBar()];
+		bars = addCell(bars, 0, 0);
+		bars = addCell(bars, 0, 0);
+		for (let cellIdx = 0; cellIdx < 4; cellIdx++) bars = cycleCell(bars, 0, 0, cellIdx);
+		expect(bars[0].beats[0]).toEqual(["D", "U", "D", "U"]);
+	});
+});
+
+describe("setBarCells", () => {
+	it("re-divides every beat in one action", () => {
+		const bars = setBarCells([emptyBar()], 0, 4);
+		expect(bars[0].beats).toHaveLength(4);
+		expect(bars[0].beats.every((b) => b.length === 4)).toBe(true);
+	});
+
+	it("keeps written strokes at the point in time they were written", () => {
+		let bars = [emptyBar()];
+		bars = cycleCell(bars, 0, 0, 0);
+		bars = cycleCell(bars, 0, 1, 0);
+		bars = setBarCells(bars, 0, 4);
+		// Each beat's downbeat stroke stays on its own downbeat.
+		expect(bars[0].beats[0]).toEqual(["D", "", "", ""]);
+		expect(bars[0].beats[1]).toEqual(["D", "", "", ""]);
+	});
+
+	it("leaves other bars alone", () => {
+		const bars = setBarCells([emptyBar(), emptyBar()], 1, 4);
+		expect(bars[0].beats[0]).toHaveLength(2);
+		expect(bars[1].beats[0]).toHaveLength(4);
+	});
+
+	it("ignores an out-of-range bar rather than throwing", () => {
+		const bars = [emptyBar()];
+		expect(setBarCells(bars, 5, 4)).toBe(bars);
+		expect(setBarCells(bars, -1, 4)).toBe(bars);
+	});
+});
+
+describe("stepCellPosition", () => {
+	const twoBars = [emptyBar(), emptyBar()];
+
+	it("moves along a beat", () => {
+		expect(stepCellPosition(twoBars, { barIdx: 0, beatIdx: 0, cellIdx: 0 }, 1)).toEqual({
+			barIdx: 0,
+			beatIdx: 0,
+			cellIdx: 1,
+		});
+	});
+
+	it("crosses a beat boundary, which is a drawing convention and not a wall", () => {
+		expect(stepCellPosition(twoBars, { barIdx: 0, beatIdx: 0, cellIdx: 1 }, 1)).toEqual({
+			barIdx: 0,
+			beatIdx: 1,
+			cellIdx: 0,
+		});
+	});
+
+	it("crosses a bar boundary too", () => {
+		expect(stepCellPosition(twoBars, { barIdx: 0, beatIdx: 3, cellIdx: 1 }, 1)).toEqual({
+			barIdx: 1,
+			beatIdx: 0,
+			cellIdx: 0,
+		});
+	});
+
+	it("walks backwards the same way", () => {
+		expect(stepCellPosition(twoBars, { barIdx: 1, beatIdx: 0, cellIdx: 0 }, -1)).toEqual({
+			barIdx: 0,
+			beatIdx: 3,
+			cellIdx: 1,
+		});
+	});
+
+	it("stops at either end instead of wrapping", () => {
+		expect(stepCellPosition(twoBars, { barIdx: 0, beatIdx: 0, cellIdx: 0 }, -1)).toBeNull();
+		expect(stepCellPosition(twoBars, { barIdx: 1, beatIdx: 3, cellIdx: 1 }, 1)).toBeNull();
+	});
+
+	it("returns null for a position that is not in the grid", () => {
+		expect(stepCellPosition(twoBars, { barIdx: 9, beatIdx: 0, cellIdx: 0 }, 1)).toBeNull();
+		expect(stepCellPosition(twoBars, { barIdx: 0, beatIdx: 0, cellIdx: 7 }, 1)).toBeNull();
+	});
+
+	it("handles beats of differing widths", () => {
+		const mixed = setBarCells([emptyBar()], 0, 2);
+		const wide = addCell(addCell(mixed, 0, 1), 0, 1);
+		expect(wide[0].beats[1]).toHaveLength(4);
+		expect(stepCellPosition(wide, { barIdx: 0, beatIdx: 1, cellIdx: 3 }, 1)).toEqual({
+			barIdx: 0,
+			beatIdx: 2,
+			cellIdx: 0,
+		});
+	});
+});
+
+describe("copyBeat", () => {
+	function written(): Bar[] {
+		// Beat 0 becomes "D U", the rest stay empty.
+		let bars = [emptyBar()];
+		bars = cycleCell(bars, 0, 0, 0);
+		bars = cycleCell(bars, 0, 0, 1);
+		return bars;
+	}
+
+	it("copies a beat onto the next one", () => {
+		const bars = copyBeat(written(), 0, 0, 1);
+		expect(bars[0].beats[1]).toEqual(["D", "U"]);
+		expect(bars[0].beats[0]).toEqual(["D", "U"]);
+	});
+
+	it("leaves the beats it was not asked about alone", () => {
+		const bars = copyBeat(written(), 0, 0, 1);
+		expect(bars[0].beats[2]).toEqual(["", ""]);
+		expect(bars[0].beats[3]).toEqual(["", ""]);
+	});
+
+	it("does not let the two beats share cells", () => {
+		let bars = copyBeat(written(), 0, 0, 1);
+		expect(bars[0].beats[0]).not.toBe(bars[0].beats[1]);
+		// Editing the copy must not reach back into the original.
+		bars = setCell(bars, 0, 1, 0, "X");
+		expect(bars[0].beats[0][0]).toBe("D");
+	});
+
+	it("carries the source's subdivision with it", () => {
+		let bars = [emptyBar()];
+		bars = addCell(bars, 0, 0);
+		bars = addCell(bars, 0, 0);
+		expect(bars[0].beats[0]).toHaveLength(4);
+		bars = copyBeat(bars, 0, 0, 1);
+		expect(bars[0].beats[1]).toHaveLength(4);
+		// The bar is not otherwise re-divided.
+		expect(bars[0].beats[2]).toHaveLength(2);
+	});
+
+	it("stays legal in a compound meter, where widths are a set", () => {
+		let bars = [emptyBar([6, 8])];
+		bars = addCell(bars, 0, 0, [6, 8]);
+		expect(bars[0].beats[0]).toHaveLength(6);
+		bars = copyBeat(bars, 0, 0, 1);
+		expect(bars[0].beats.map((b) => b.length)).toEqual([6, 6]);
+	});
+
+	it("fills a bar when walked rightwards", () => {
+		let bars = written();
+		for (let i = 0; i < 3; i++) bars = copyBeat(bars, 0, i, i + 1);
+		expect(bars[0].beats).toEqual([
+			["D", "U"],
+			["D", "U"],
+			["D", "U"],
+			["D", "U"],
+		]);
+	});
+
+	it("copies within the addressed bar only", () => {
+		const two = [written()[0], emptyBar()];
+		const bars = copyBeat(two, 1, 0, 1);
+		expect(bars[1].beats[1]).toEqual(["", ""]);
+		expect(bars[0].beats[0]).toEqual(["D", "U"]);
+	});
+
+	it("is a no-op for a source and target that are the same, or out of range", () => {
+		const bars = written();
+		expect(copyBeat(bars, 0, 1, 1)).toBe(bars);
+		expect(copyBeat(bars, 0, 0, 9)).toBe(bars);
+		expect(copyBeat(bars, 0, -1, 1)).toBe(bars);
+		expect(copyBeat(bars, 5, 0, 1)).toBe(bars);
+	});
+});
+
+describe("swapBeats", () => {
+	function bar4(): Bar[] {
+		let bars = [emptyBar()];
+		bars = cycleCell(bars, 0, 0, 0); // beat 0 gets a D
+		bars = cycleCell(bars, 0, 3, 1); // beat 3 gets a U on its off-beat
+		return bars;
+	}
+
+	it("exchanges two beats", () => {
+		const bars = swapBeats(bar4(), 0, 0, 3);
+		expect(bars[0].beats[0]).toEqual(["", "U"]);
+		expect(bars[0].beats[3]).toEqual(["D", ""]);
+	});
+
+	it("keeps the bar's beat count, since that belongs to the meter", () => {
+		expect(swapBeats(bar4(), 0, 0, 1)[0].beats).toHaveLength(4);
+	});
+
+	it("carries differing widths with their beats", () => {
+		let bars = addCell(addCell([emptyBar()], 0, 0), 0, 0);
+		expect(bars[0].beats.map((b) => b.length)).toEqual([4, 2, 2, 2]);
+		bars = swapBeats(bars, 0, 0, 2);
+		expect(bars[0].beats.map((b) => b.length)).toEqual([2, 2, 4, 2]);
+	});
+
+	it("is its own inverse", () => {
+		const bars = bar4();
+		expect(swapBeats(swapBeats(bars, 0, 1, 2), 0, 1, 2)).toEqual(bars);
+	});
+
+	it("is a no-op for equal or out-of-range indices", () => {
+		const bars = bar4();
+		expect(swapBeats(bars, 0, 1, 1)).toBe(bars);
+		expect(swapBeats(bars, 0, 0, 9)).toBe(bars);
+		expect(swapBeats(bars, 0, -1, 1)).toBe(bars);
+		expect(swapBeats(bars, 4, 0, 1)).toBe(bars);
+	});
+
+	it("touches only the addressed bar", () => {
+		const bars = swapBeats([bar4()[0], emptyBar()], 1, 0, 1);
+		expect(bars[0].beats[0]).toEqual(["D", ""]);
+	});
+});
+
+describe("clearBeat", () => {
+	function written(): Bar[] {
+		let bars = [emptyBar()];
+		bars = cycleCell(bars, 0, 0, 0); // D
+		bars = cycleCell(bars, 0, 0, 1); // U
+		bars = cycleCell(bars, 0, 1, 0); // D on the next beat
+		return bars;
+	}
+
+	it("empties the beat it is given", () => {
+		const bars = clearBeat(written(), 0, 0);
+		expect(bars[0].beats[0]).toEqual(["", ""]);
+	});
+
+	it("keeps the beat's width, so the bar's shape is untouched", () => {
+		let bars = addCell(addCell(written(), 0, 0), 0, 0);
+		expect(bars[0].beats[0]).toHaveLength(4);
+		bars = clearBeat(bars, 0, 0);
+		expect(bars[0].beats[0]).toEqual(["", "", "", ""]);
+		expect(bars[0].beats).toHaveLength(4);
+	});
+
+	it("leaves the other beats alone", () => {
+		const bars = clearBeat(written(), 0, 0);
+		expect(bars[0].beats[1]).toEqual(["D", ""]);
+	});
+
+	it("clears a preset's ghost and triplet cells too", () => {
+		const preset: Bar[] = [{ beats: [["D", "UG"], ["D3", "U3", "D3"]], chord: null }];
+		const bars = clearBeat(preset, 0, 1);
+		expect(bars[0].beats[1]).toEqual(["", "", ""]);
+	});
+
+	it("is a no-op on an already empty beat, so it cannot fill the undo history", () => {
+		const bars = [emptyBar()];
+		expect(clearBeat(bars, 0, 0)).toBe(bars);
+	});
+
+	it("is a no-op for an out-of-range address", () => {
+		const bars = written();
+		expect(clearBeat(bars, 0, 9)).toBe(bars);
+		expect(clearBeat(bars, 5, 0)).toBe(bars);
+	});
+
+	it("touches only the addressed bar", () => {
+		const bars = clearBeat([written()[0], emptyBar()], 1, 0);
+		expect(bars[0].beats[0]).toEqual(["D", "U"]);
+	});
+});
+
+describe("edits that change nothing return the same array", () => {
+	// The undo history commits on reference change, so a no-op that allocates
+	// would push an entry and make undo appear to do nothing.
+	it("holds for a stepper already at its limit", () => {
+		const atMax = addCell(addCell([emptyBar()], 0, 0), 0, 0);
+		expect(addCell(atMax, 0, 0)).toBe(atMax);
+		const atMin = [emptyBar()];
+		expect(removeCell(atMin, 0, 0)).toBe(atMin);
+	});
+
+	it("holds for an out-of-range address", () => {
+		const bars = [emptyBar()];
+		expect(cycleCell(bars, 0, 9, 0)).toBe(bars);
+		expect(cycleCell(bars, 3, 0, 0)).toBe(bars);
+		expect(setCell(bars, 0, 0, 9, "D")).not.toBe(bars); // in-range beat, out-of-range cell
+	});
+
+	it("still allocates for an edit that does change something", () => {
+		const bars = [emptyBar()];
+		expect(cycleCell(bars, 0, 0, 0)).not.toBe(bars);
+	});
+});
+
+describe("voicingReach / applyVoicingToBars — writing a shape", () => {
+	const SHAPE = { id: "u:1", root: "C", suffix: "add9#11" };
+	const beats: Beat[] = [["D", "U"]];
+	const chorded = (root: string, suffix: string, voicingId?: string): Bar => ({
+		beats: beats.map((b) => [...b]),
+		chord: { root, suffix, voicingId: voicingId ?? null },
+	});
+	const kept = (name: string): Bar => ({
+		beats: beats.map((b) => [...b]),
+		chord: null,
+		unknownChord: name,
+	});
+
+	it("reaches only its own bar under the bar scope", () => {
+		const bars = [chorded("C", "major"), chorded("C", "major")];
+		expect(voicingReach(bars, 1, "bar")).toEqual([false, true]);
+	});
+
+	it("reaches every bar playing the same chord under the chord scope", () => {
+		const bars = [chorded("C", "major"), chorded("G", "major"), chorded("C", "major")];
+		expect(voicingReach(bars, 0, "chord")).toEqual([true, false, true]);
+	});
+
+	it("reaches every bar kept under the same name, and no other", () => {
+		const bars = [kept("Cadd9#11"), kept("Gsus17"), kept("Cadd9#11"), chorded("C", "major")];
+		expect(voicingReach(bars, 0, "chord")).toEqual([true, false, true, false]);
+	});
+
+	it("pins the shape onto a bar that already has a chord", () => {
+		const next = applyVoicingToBars([chorded("C", "major")], 0, SHAPE, "bar");
+		// The chord is the bar's, not the shape's: pinning is not renaming.
+		expect(next[0].chord).toEqual({ root: "C", suffix: "major", voicingId: "u:1" });
+	});
+
+	it("turns a bar kept as a name into the chord the shape was filed under", () => {
+		const next = applyVoicingToBars([kept("Cadd9#11")], 0, SHAPE, "bar");
+		expect(next[0].chord).toEqual({ root: "C", suffix: "add9#11", voicingId: "u:1" });
+		expect(next[0].unknownChord).toBeUndefined();
+	});
+
+	it("finishes every bar kept under that name at once under the chord scope", () => {
+		const bars = [kept("Cadd9#11"), chorded("G", "major"), kept("Cadd9#11")];
+		const next = applyVoicingToBars(bars, 0, SHAPE, "chord");
+		expect(next.map((b) => b.chord?.suffix ?? null)).toEqual(["add9#11", "major", "add9#11"]);
+		expect(next[1]).toBe(bars[1]);
+	});
+
+	it("leaves a plainly chordless bar alone — there is nothing to file", () => {
+		const bars = [{ beats: [["D"]] as Beat[], chord: null }];
+		expect(applyVoicingToBars(bars, 0, SHAPE, "bar")[0]).toBe(bars[0]);
+	});
+
+	it("ignores an out-of-range index", () => {
+		const bars = [chorded("C", "major")];
+		expect(voicingReach(bars, 4, "chord")).toEqual([false]);
+		expect(applyVoicingToBars(bars, 4, SHAPE, "chord")[0]).toBe(bars[0]);
 	});
 });

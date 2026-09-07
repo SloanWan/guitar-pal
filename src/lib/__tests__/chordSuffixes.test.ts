@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   ROOT_CHROMATIC_ORDER,
+  UNKNOWN_ROOT,
+  UNKNOWN_SUFFIX,
+  chordDisplayName,
+  isUnknownChord,
+  isUnknownSuffix,
+  unknownSuffixFor,
   sortRoots,
   isSlashChord,
   isBrowsableSuffix,
@@ -103,5 +109,35 @@ describe("isBrowsableSuffix", () => {
   });
   it("rejects unknown/uncategorised suffixes", () => {
     expect(isBrowsableSuffix("bogus")).toBe(false);
+  });
+});
+
+describe("a chord nobody has named", () => {
+  it("is filed under a root that is deliberately not a note", () => {
+    expect(ROOT_CHROMATIC_ORDER).not.toContain(UNKNOWN_ROOT);
+  });
+
+  it("is written as the grip it is named after, never as its storage form", () => {
+    expect(chordDisplayName(UNKNOWN_ROOT, "uk-007707")).toBe("uk-007707");
+    expect(chordDisplayName(UNKNOWN_ROOT, UNKNOWN_SUFFIX)).toBe("unknown");
+  });
+
+  it("names a chord after the grip, spaces and case folded away", () => {
+    expect(unknownSuffixFor("007707")).toBe("uk-007707");
+    expect(unknownSuffixFor("X 12 12 12 10 X")).toBe("uk-x-12-12-12-10-x");
+  });
+
+  it("leaves every named chord written the way it always was", () => {
+    expect(chordDisplayName("C", "major")).toBe("C major");
+    expect(chordDisplayName("C", "/G")).toBe("C/G");
+    expect(chordDisplayName("A", "m7")).toBe("A m7");
+  });
+
+  it("recognises the unnamed either by its root or by its quality", () => {
+    expect(isUnknownChord(UNKNOWN_ROOT, "uk-007707")).toBe(true);
+    expect(isUnknownSuffix("uk-007707")).toBe(true);
+    expect(isUnknownSuffix(UNKNOWN_SUFFIX)).toBe(true);
+    expect(isUnknownChord("C", "major")).toBe(false);
+    expect(isUnknownSuffix("major")).toBe(false);
   });
 });

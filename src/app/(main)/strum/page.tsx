@@ -4,10 +4,7 @@ import PatternWorkspace, { type WorkspaceTab } from "@/components/strum/PatternW
 import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
 import {
 	PRESET_STRUM_PATTERNS,
-	TickMode,
 	StrumPattern,
-	STRUM_BPM_MIN,
-	STRUM_BPM_MAX,
 	DEFAULT_STRUM_BPM,
 	type Bar,
 	type ChordProgression,
@@ -15,23 +12,42 @@ import {
 } from "@/lib/strumPatterns";
 import {
 	toBars,
+	barPlaceholder,
 	resolveBarChords,
 	transposeBarPitches,
 	patternBpm,
+	patternMeter,
+	bpmRangeForMeter,
+	clampBpmToMeter,
 	normalizeBpm,
 } from "@/lib/strumBars";
+import { DEFAULT_METER, isCompound } from "@/lib/strumMeter";
+import { TICK_LEVELS, tickLevelLabel, type TickLevel } from "@/lib/strumMetronome";
 import { STRUM_PITCHES } from "@/components/strum/useGuitarSampleLoader";
-import { setBarChord, barLocalBeatIndex } from "@/lib/strumBarEdit";
+import {
+	setBarChord,
+	barLocalBeatIndex,
+	applyVoicingToBars,
+	voicingReach,
+} from "@/lib/strumBarEdit";
 import {
 	progressionsForPattern,
 	nextOrderIndex,
-	progressionBarsFromChords,
+	progressionBarsFromTokens,
 	progressionCapo,
-	syncBarsToPattern,
+	patternSyncState,
+	applyPatternSync,
+	declinePatternSync,
+	resumePatternSync,
+	dismissPatternNotice,
+	markPatternSynced,
+	type ChordToken,
 } from "@/lib/strumProgressions";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { loadVoicings } from "@/lib/chordVoicingCache";
 import { takeHandoff } from "@/lib/strumAssistant/handoff";
+import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
+import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
+import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 
 import { useState, useEffect, useRef, useMemo } from "react";
 
@@ -59,9 +75,8 @@ import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import Fader from "@/components/ui/Fader";
+import Rocker from "@/components/ui/Rocker";
 
-const MIN_BPM = STRUM_BPM_MIN;
-const MAX_BPM = STRUM_BPM_MAX;
 
 // Device-local memory of where the user was in the workspace, so a refresh
 // lands back on the same tab and the same progression.
@@ -87,38 +102,6 @@ const BPM_TICK_LABELS = [
 	"Jazz / Hard Rock",
 	"Fast Rock",
 ];
-
-interface RockerProps {
-	checked: boolean;
-	onChange: (checked: boolean) => void;
-	disabled?: boolean;
-	ariaLabel: string;
-}
-
-// Hardware rocker switch: 40×20 bordered outer, 15×14 sliding block. A sliding
-// rectangle — never a pill with a circle.
-function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps) {
-	return (
-		<button
-			type="button"
-			role="switch"
-			aria-checked={checked}
-			aria-label={ariaLabel}
-			disabled={disabled}
-			onClick={() => onChange(!checked)}
-			className={`relative h-5 w-10 shrink-0 border transition-colors duration-100 disabled:cursor-not-allowed ${
-				checked ? "border-denim" : "border-line-strong"
-			}`}
-		>
-			<span
-				aria-hidden="true"
-				className={`absolute top-0.5 h-3.5 w-3.5 transition-all duration-100 ${
-					checked ? "left-5 bg-denim-accent" : "left-0.5 bg-ink-faint"
-				}`}
-			/>
-		</button>
-	);
-}
 
 interface SegmentedOption {
 	value: string;
@@ -161,20 +144,22 @@ function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
  * Shares `voicingCache` with the chord-diagram view, so resolving a
  * progression's pitches also warms the shapes it can be asked to draw.
  */
-async function lookupVoicings(ref: {
-	root: string;
-	suffix: string;
-}): Promise<ChordVoicing[] | null> {
-	return loadVoicings(ref.root, ref.suffix);
-}
+
 
 export default function StrumPage() {
 	// Null until the device-local choice has been read: showing a preset first and
 	// swapping it out a tick later reads as a glitch, so the card waits instead.
 	const [selectedPattern, setSelectedPattern] = useState<StrumPattern | null>(null);
+
+	// How the bar is counted. A progression inherits it from its pattern, so this
+	// holds on both tabs.
+	const meter = selectedPattern ? patternMeter(selectedPattern) : DEFAULT_METER;
+	// The tempo range follows the meter: a dotted-quarter 220 is not a tempo.
+	const { min: MIN_BPM, max: MAX_BPM } = bpmRangeForMeter(meter);
+
 	const [patternRestored, setPatternRestored] = useState(false);
 	const [bpm, setBpm] = useState(() => patternBpm(PRESET_STRUM_PATTERNS[0]));
-	const [tickMode, setTickMode] = useState<TickMode>("quarter");
+	const [tickLevel, setTickLevel] = useState<TickLevel>("beat");
 	// Which view of the pattern is on screen: its own bar, or one of the chord
 	// progressions written over it.
 	const [tab, setTab] = useState<WorkspaceTab>("pattern");
@@ -197,14 +182,14 @@ export default function StrumPage() {
 	}, []);
 
 	function handleBarChordChange(barIdx: number, chord: ConfirmedChord | null) {
+		const ref = chord
+			? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
+			: null;
+		const remembered = [...sessionChordsRef.current];
+		remembered[barIdx] = ref;
+		sessionChordsRef.current = remembered;
 		setBars((prev) =>
-			setBarChord(
-				prev,
-				barIdx,
-				chord
-					? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
-					: null,
-			),
+			setBarChord(prev, barIdx, ref),
 		);
 		setBarPitches((prev) =>
 			prev.map((pitches, i) => (i === barIdx ? (chord?.pitches ?? null) : pitches)),
@@ -226,13 +211,31 @@ export default function StrumPage() {
 		setMetronomeEnabled,
 		metronomeGain,
 		setMetronomeGain,
-		accentEnabled,
-		setAccentEnabled,
 		playOnce,
 		setPlayOnce,
-	} = useAudioEngine(bars, bpm, tickMode, barPitches);
+	} = useAudioEngine(bars, bpm, tickLevel, barPitches, meter);
 
 	const { user, loading } = useUser();
+	// Held here rather than deeper down because three things need the same list:
+	// the pitches the engine plays, the shapes the grid draws, and the editor.
+	// A shape the bar points at but the resolver has never seen simply falls back
+	// to the library's standard voicing — silently, in both sound and picture.
+	const { voicings: userVoicings, saveVoicing: saveUserVoicing } = useUserChordVoicings(
+		user,
+		loading,
+	);
+
+	const lookupVoicings = useMemo(
+		() => withUserVoicings(loadVoicings, userVoicings),
+		[userVoicings],
+	);
+
+	// Serialised so the resolve effect below re-runs when a shape is written or
+	// edited — editing one changes no bar, so nothing else would wake it.
+	const userVoicingsKey = useMemo(
+		() => userVoicings.map((v) => `${v.id}:${v.start_fret}:${v.frets}`).join("|"),
+		[userVoicings],
+	);
 	const {
 		customPatterns,
 		patternsLoading,
@@ -270,14 +273,44 @@ export default function StrumPage() {
 	// The capo only applies to the sequence that declares it; the pattern tab's
 	// session chords always sound at concert pitch.
 	const activeCapo = tab === "progressions" ? progressionCapo(openProgression) : 0;
+	const playingProgression = tab === "progressions" && openProgression !== null;
+
+	/**
+	 * Chords picked on the pattern tab this session, and the pattern they belong
+	 * to.
+	 *
+	 * Held apart from `bars`, which is rebuilt from the pattern whenever the
+	 * source changes — switching tabs included. Without this a pick vanished on
+	 * the way to the progressions tab and back, which reads as a bug rather than
+	 * as a session-scoped choice. A ref rather than state: the effect below
+	 * restores them when it rebuilds, and having them wake it would make picking
+	 * a chord re-resolve the pitches it had just set.
+	 */
+	const sessionChordsRef = useRef<(ChordRef | null)[]>([]);
+	const sessionPatternIdRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		const next = JSON.parse(sourceBarsKey) as Bar[];
+
+		if (!playingProgression) {
+			// A different pattern's picks are not ours to restore.
+			const patternId = selectedPattern?.id ?? null;
+			if (sessionPatternIdRef.current !== patternId) {
+				sessionChordsRef.current = [];
+				sessionPatternIdRef.current = patternId;
+			}
+			sessionChordsRef.current.forEach((chord, i) => {
+				if (chord && next[i]) next[i] = { ...next[i], chord };
+			});
+		}
+
 		// queueMicrotask: the codebase's idiom for deferring state writes out of
 		// the effect body so they do not cascade renders.
 		queueMicrotask(() => {
 			setBars(next);
-			setBarPitches(next.map(() => null));
+			// Silent bars are silent before the lookups settle too, or a placeholder
+			// would sound the default voicing for the first loop after loading.
+			setBarPitches(next.map((bar) => (barPlaceholder(bar) ? [] : null)));
 		});
 
 		let cancelled = false;
@@ -293,7 +326,7 @@ export default function StrumPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [sourceBarsKey, activeCapo]);
+	}, [sourceBarsKey, activeCapo, userVoicingsKey, lookupVoicings, playingProgression, selectedPattern?.id]);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
 	// The progression the editor is open on; null when the editor is closed.
 	// New progressions are typed inline instead, never through the editor.
@@ -436,7 +469,7 @@ export default function StrumPage() {
 		const next = found ?? PRESET_STRUM_PATTERNS[0];
 		queueMicrotask(() => {
 			setSelectedPattern(next);
-			setBpm(patternBpm(next));
+			setBpm(clampBpmToMeter(patternBpm(next), patternMeter(next)));
 			setPatternRestored(true);
 		});
 	}, [patternsLoading, customPatterns]);
@@ -501,8 +534,15 @@ export default function StrumPage() {
 
 	/** The tempo something plays at: the progression's own, else the pattern's. */
 	function bpmFor(progression: ChordProgression | null): number {
-		if (progression?.bpm !== undefined) return normalizeBpm(progression.bpm);
-		return selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM;
+		// Clamped to the meter: a tempo stored before the meter changed, or edited
+		// by hand, must still land somewhere the fader can show.
+		const raw =
+			progression?.bpm !== undefined
+				? normalizeBpm(progression.bpm)
+				: selectedPattern
+					? patternBpm(selectedPattern)
+					: DEFAULT_STRUM_BPM;
+		return clampBpmToMeter(raw, meter);
 	}
 
 	// The tempo the reset control returns to: whatever is on screen owns it.
@@ -521,20 +561,41 @@ export default function StrumPage() {
 		setBpm(bpmFor(patternProgressions.find((p) => p.id === id) ?? null));
 	}
 
-	/** A typed chord sequence becomes a progression: one bar per chord. */
-	function handleAddProgression(chords: ChordRef[]) {
+	/** A typed chord sequence becomes a progression: one bar per typed word. */
+	function handleAddProgression(tokens: ChordToken[]) {
 		if (!selectedPattern) return;
 		const progression: ChordProgression = {
 			id: crypto.randomUUID(),
 			patternId: selectedPattern.id,
-			bars: progressionBarsFromChords(selectedPattern.beats, chords),
+			bars: progressionBarsFromTokens(selectedPattern.beats, tokens),
 			orderIndex: nextOrderIndex(patternProgressions),
+			// Written from the pattern as it stands, so it starts reconciled.
+			syncedBeats: selectedPattern.beats.map((beat) => [...beat]),
 		};
 		handleSaveProgression(progression);
 		stop();
 		setTab("progressions");
 		setOpenProgressionId(progression.id);
 		setBpm(bpmFor(progression));
+	}
+
+	/**
+	 * Give a bar of the open sequence the chord it was only ever named with.
+	 *
+	 * Saved into the progression rather than held for the session: the bar was
+	 * written down unfinished on purpose, and finishing it is the point. The
+	 * write re-runs the resolve effect, so the bar stops being silent by the same
+	 * path every other chord change takes.
+	 */
+	function handleProgressionBarChord(barIdx: number, chord: ConfirmedChord | null) {
+		if (!openProgression) return;
+		const ref = chord
+			? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
+			: null;
+		handleSaveProgression({
+			...openProgression,
+			bars: setBarChord(openProgression.bars, barIdx, ref),
+		});
 	}
 
 	function handleEditProgression(progression: ChordProgression) {
@@ -555,17 +616,95 @@ export default function StrumPage() {
 	}
 
 	/**
-	 * Carry a rhythm edit into the progressions written over the pattern. Bars the
-	 * user re-wrote inside a progression keep their own rhythm; see
-	 * `syncBarsToPattern`.
+	 * Reconcile the open sequence with its pattern, or ask to.
+	 *
+	 * A pattern edit used to rewrite every sequence over it on save, silently and
+	 * while the player was looking at the pattern editor. The decision now happens
+	 * here, where the sequence is on screen and the answer can be judged.
+	 *
+	 * A sequence written before the prompt existed has no baseline to diff, so it
+	 * is backfilled without a word rather than asked about a change nobody could
+	 * describe.
 	 */
-	function syncProgressionsToPattern(previous: StrumPattern, next: StrumPattern) {
-		for (const progression of progressionsForPattern(progressions, next.id)) {
-			const nextBars = syncBarsToPattern(progression.bars, previous.beats, next.beats);
-			if (nextBars !== progression.bars) {
-				handleSaveProgression({ ...progression, bars: nextBars });
-			}
+	const openSyncState =
+		openProgression && selectedPattern
+			? patternSyncState(openProgression, selectedPattern.beats)
+			: null;
+
+	useEffect(() => {
+		// Both quiet outcomes settle the same way: record the pattern's rhythm and
+		// say nothing. One has no baseline to diff, the other has one but nothing
+		// that would change.
+		const quiet = openSyncState?.kind === "backfill" || openSyncState?.kind === "no-change";
+		if (!quiet || !openProgression || !selectedPattern) return;
+		handleSaveProgression(markPatternSynced(openProgression, selectedPattern.beats));
+	}, [openSyncState?.kind, openProgression?.id]);
+
+	function handleApplyPatternSync() {
+		if (!openProgression || !selectedPattern) return;
+		stop();
+		handleSaveProgression(applyPatternSync(openProgression, selectedPattern.beats));
+	}
+
+	function handleDeclinePatternSync() {
+		if (!openProgression) return;
+		handleSaveProgression(declinePatternSync(openProgression));
+	}
+
+	function handleResumePatternSync() {
+		if (!openProgression) return;
+		handleSaveProgression(resumePatternSync(openProgression));
+	}
+
+	/**
+	 * Pin a shape onto the open sequence.
+	 *
+	 * Only the sequence's own bars: the pattern tab's chord picks are session-only
+	 * and have nowhere to be saved, so the control is not offered there.
+	 *
+	 * A bar kept under a name the library had no chord for is finished here
+	 * rather than pinned: the shape the player just drew is the first record that
+	 * chord exists, so the bar takes the identity the shape was filed under and
+	 * its placeholder retires. Bars sharing the name travel with it under the
+	 * "whole pattern" scope — they were written as the same chord.
+	 */
+	function handleApplyChordShape(
+		barIdx: number,
+		voicing: UserChordVoicing,
+		scope: "bar" | "chord",
+	) {
+		const onProgression = tab === "progressions" && openProgression !== null;
+		const source = onProgression ? openProgression!.bars : bars;
+		const bar = source[barIdx];
+		if (!bar || (!bar.chord && !barPlaceholder(bar))) return;
+		const reach = voicingReach(source, barIdx, scope);
+
+		if (onProgression) {
+			handleSaveProgression({
+				...openProgression!,
+				bars: applyVoicingToBars(openProgression!.bars, barIdx, voicing, scope),
+			});
+			return;
 		}
+
+		// The pattern tab. Its chords are session-only, so the pin is too — but the
+		// shape itself is on record either way and will be there next time. Pitches
+		// are set here because a session pick never reaches the resolve effect.
+		const pitches = chordVoicingToMidi(voicing).map((n) => n.midi);
+		// Remembered like any other pattern-tab pick, or the pin would be lost on
+		// the way to the progressions tab and back.
+		sessionChordsRef.current = source.map((candidate, i) =>
+			reach[i] && candidate.chord
+				? { ...candidate.chord, voicingId: voicing.id }
+				: (sessionChordsRef.current[i] ?? candidate.chord ?? null),
+		);
+		setBars((prev) => applyVoicingToBars(prev, barIdx, voicing, scope));
+		setBarPitches((prev) => prev.map((p, i) => (reach[i] ? pitches : p)));
+	}
+
+	function handleDismissPatternNotice() {
+		if (!openProgression) return;
+		handleSaveProgression(dismissPatternNotice(openProgression));
 	}
 
 	/** Deleting a pattern takes the progressions written over it with it. */
@@ -717,7 +856,9 @@ export default function StrumPage() {
 							<SquareMenu />
 						</button>
 					)}
-					<div className="flex max-h-full w-full max-w-160 flex-col">
+					{/* pt below lg: the library toggle floats over this column's top-right
+					    corner, and without the gap it sits on the card's own top edge. */}
+					<div className="flex max-h-full w-full max-w-160 flex-col pt-10 lg:pt-0">
 						{!patternRestored ? (
 							// Skeleton in the card's shape: tab strip, header, one bar row.
 							<div className="flex w-full flex-col gap-2" aria-busy="true">
@@ -746,9 +887,25 @@ export default function StrumPage() {
 								progressionsLoading={progressionsLoading || !progressionRestored}
 								selectedProgressionId={openProgressionId}
 								onSelectProgression={handleOpenProgression}
+								// "detached-dismissed" and the quiet outcomes render nothing.
+								patternSync={
+									openSyncState?.kind === "ask" || openSyncState?.kind === "detached"
+										? openSyncState.kind
+										: null
+								}
+								onApplyPatternSync={handleApplyPatternSync}
+								onDeclinePatternSync={handleDeclinePatternSync}
+								onResumePatternSync={handleResumePatternSync}
+								onDismissPatternNotice={handleDismissPatternNotice}
+								onApplyChordShape={handleApplyChordShape}
+								userVoicings={userVoicings}
+								onSaveVoicing={saveUserVoicing}
 								onAddProgression={handleAddProgression}
 								onEditProgression={handleEditProgression}
 								onDeleteProgression={handleRemoveProgression}
+								onProgressionBarChord={
+									openProgression ? handleProgressionBarChord : undefined
+								}
 								onEditPattern={
 									customPatterns.some((p) => p.id === selectedPattern.id)
 										? () => {
@@ -898,8 +1055,11 @@ export default function StrumPage() {
 									</span>
 									<span className="relative">{String(bpm).padStart(3, "0")}</span>
 								</span>
+								{/* A compound meter counts dotted beats, so 90 here is not the
+								    90 of a 4/4 pattern. Named only where the ambiguity exists —
+								    every simple meter counts quarters. */}
 								<div className="mt-1.5 font-mono text-[9px] tracking-[0.28em] text-ink-faint">
-									BPM
+									{isCompound(meter) ? "BPM ♩." : "BPM"}
 								</div>
 							</div>
 							<Fader
@@ -1002,29 +1162,13 @@ export default function StrumPage() {
 									Subdivision
 								</div>
 								<Segmented
-									options={[
-										{ value: "quarter", label: "1/4" },
-										{ value: "eighth", label: "1/8" },
-										{ value: "sixteenth", label: "1/16" },
-									]}
-									value={tickMode}
-									onChange={(v) => setTickMode(v as TickMode)}
+									options={TICK_LEVELS.map((level) => ({
+										value: level,
+										label: tickLevelLabel(meter, level),
+									}))}
+									value={tickLevel}
+									onChange={(v) => setTickLevel(v as TickLevel)}
 									disabled={!metronomeEnabled}
-								/>
-							</div>
-							<div
-								className={`flex items-center justify-between ${
-									!metronomeEnabled ? "opacity-40" : ""
-								}`}
-							>
-								<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-									Accent beat 1
-								</span>
-								<Rocker
-									checked={accentEnabled}
-									onChange={setAccentEnabled}
-									disabled={!metronomeEnabled}
-									ariaLabel="Accent beat 1"
 								/>
 							</div>
 						</div>
@@ -1229,13 +1373,12 @@ export default function StrumPage() {
 								Subdivision
 							</div>
 							<Segmented
-								options={[
-									{ value: "quarter", label: "1/4" },
-									{ value: "eighth", label: "1/8" },
-									{ value: "sixteenth", label: "1/16" },
-								]}
-								value={tickMode}
-								onChange={(v) => setTickMode(v as TickMode)}
+								options={TICK_LEVELS.map((level) => ({
+									value: level,
+									label: tickLevelLabel(meter, level),
+								}))}
+								value={tickLevel}
+								onChange={(v) => setTickLevel(v as TickLevel)}
 								disabled={!metronomeEnabled}
 							/>
 						</div>
@@ -1262,23 +1405,6 @@ export default function StrumPage() {
 								scale={["0", "50", "100"]}
 								disabled={!metronomeEnabled}
 								ariaLabel="Metronome volume"
-							/>
-						</div>
-
-						{/* Accent beat 1 */}
-						<div
-							className={`flex items-center justify-between ${
-								!metronomeEnabled ? "opacity-40" : ""
-							}`}
-						>
-							<span className="font-mono text-[11px] tracking-[0.06em] text-ink-dim">
-								Accent beat 1
-							</span>
-							<Rocker
-								checked={accentEnabled}
-								onChange={setAccentEnabled}
-								disabled={!metronomeEnabled}
-								ariaLabel="Accent beat 1"
 							/>
 						</div>
 
@@ -1430,11 +1556,10 @@ export default function StrumPage() {
 				onSave={(pattern) => {
 					if (editingPattern) {
 						handleEditCustomPattern(pattern);
-						syncProgressionsToPattern(editingPattern, pattern);
 						if (selectedPattern?.id === pattern.id) {
 							setSelectedPattern(pattern);
 							// The edit may have moved the pattern's default tempo — adopt it.
-							setBpm(patternBpm(pattern));
+							setBpm(clampBpmToMeter(patternBpm(pattern), patternMeter(pattern)));
 						}
 					} else {
 						handleSaveCustomPattern(pattern);
@@ -1451,6 +1576,8 @@ export default function StrumPage() {
 					onSave={handleProgressionSave}
 					progression={editingProgression}
 					patternBpm={selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM}
+					meter={meter}
+					userVoicings={userVoicings}
 				/>
 			)}
 		</>

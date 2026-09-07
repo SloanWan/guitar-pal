@@ -1,5 +1,6 @@
 import type { Beat, StepValue } from "@/lib/strumPatterns";
 import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
+import { VALID_CELL_COUNTS } from "@/lib/strumMeter";
 
 /**
  * Rhythm notation → `Beat[]`, the inverse of `patternNotation` in
@@ -83,7 +84,10 @@ export function acceptedRhythmCharacters(): string[] {
 function inferCellsPerBeat(cellCount: number, beatsPerBar: number): number {
 	const raw = Math.ceil(cellCount / beatsPerBar);
 	if (raw <= 1) return 1;
-	return Math.min(raw, MAX_CELLS_PER_BEAT);
+	// A count, not a cap: no meter divides a beat five ways, so a width that is
+	// not one a beat actually has rounds up to the next one that is, and stops at
+	// the finest division any meter asks for.
+	return VALID_CELL_COUNTS.find((count) => count >= raw) ?? MAX_CELLS_PER_BEAT;
 }
 
 /**
@@ -177,13 +181,10 @@ export function parseRhythm(input: string, options: ParseRhythmOptions = {}): Rh
 		});
 	}
 	const requested = options.cellsPerBeat;
-	if (
-		requested !== undefined &&
-		(!Number.isInteger(requested) || requested < 1 || requested > MAX_CELLS_PER_BEAT)
-	) {
+	if (requested !== undefined && !VALID_CELL_COUNTS.includes(requested)) {
 		errors.push({
 			code: "invalid-options",
-			message: `cellsPerBeat must be an integer in 1..${MAX_CELLS_PER_BEAT}.`,
+			message: `cellsPerBeat must be one of ${VALID_CELL_COUNTS.join(", ")}.`,
 		});
 	}
 	if (errors.length > 0) return { ok: false, errors };

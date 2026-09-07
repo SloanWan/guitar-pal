@@ -237,12 +237,17 @@ describe("normalizeChordName — a typed name as a stored identity", () => {
     expect(normalizeChordName("   ")).toBeNull();
   });
 
-  it("takes 'unknown' as a name in its own right", () => {
-    // The one name that needs no root: a chord the player cannot identify. It is
-    // filed under a root that is deliberately not a note, so browsing A never
-    // turns up a chord that only might have been an A.
+  it("takes a chord named after its grip as a name in its own right", () => {
+    // The names that need no root: a chord the player cannot identify. Filed
+    // under a root that is deliberately not a note, so browsing A never turns up
+    // a chord that only might have been an A.
+    expect(normalizeChordName("uk-007707")).toEqual({ root: "?", suffix: "uk-007707" });
+    expect(normalizeChordName("  UK-X32010 ")).toEqual({ root: "?", suffix: "uk-x32010" });
     expect(normalizeChordName("unknown")).toEqual({ root: "?", suffix: "unknown" });
-    expect(normalizeChordName("  UNKNOWN ")).toEqual({ root: "?", suffix: "unknown" });
+  });
+
+  it("does not take any old uk- word as one", () => {
+    expect(normalizeChordName("uk-lele")).toBeNull();
   });
 
   it("does not read a named chord as unknown", () => {

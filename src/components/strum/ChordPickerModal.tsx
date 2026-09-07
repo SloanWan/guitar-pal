@@ -5,8 +5,8 @@ import { X, CirclePlay, Loader2 } from "lucide-react";
 import {
 	CHORD_SUFFIX_CATEGORIES,
 	UNKNOWN_ROOT,
-	UNKNOWN_SUFFIX,
 	chordDisplayName,
+	isUnknownSuffix,
 } from "@/lib/chordSuffixes";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { createClient } from "@/lib/supabase";
@@ -15,7 +15,7 @@ import { useUser } from "@/hooks/useUser";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import {
 	UNKNOWN_CATEGORY,
-	hasUnknownChords,
+	unknownChordSuffixes,
 	isUserVoicingId,
 	mergeVoicings,
 	userSuffixesFiledUnder,
@@ -130,7 +130,8 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	 * The root the chord is stored under, which is the placeholder for one nobody
 	 * has named — the piano key is how the player got here, not what they picked.
 	 */
-	const chordRoot = selectedSuffix === UNKNOWN_SUFFIX ? UNKNOWN_ROOT : selectedRoot;
+	const chordRoot =
+		selectedSuffix && isUnknownSuffix(selectedSuffix) ? UNKNOWN_ROOT : selectedRoot;
 	const voicings: ChordVoicing[] = useMemo(
 		() =>
 			chordRoot && selectedSuffix
@@ -149,10 +150,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				// Unnamed chords belong to no root, so the section is the same one
 				// under every key rather than being hidden behind guessing which root
 				// a chord nobody has identified might turn out to have.
-				{
-					category: UNKNOWN_CATEGORY,
-					suffixes: hasUnknownChords(userVoicings) ? [UNKNOWN_SUFFIX] : [],
-				},
+				{ category: UNKNOWN_CATEGORY, suffixes: unknownChordSuffixes(userVoicings) },
 			].filter((section) => section.suffixes.length > 0)
 		: [];
 	/** Their own chords filed under the category being browsed, if any. */
@@ -317,8 +315,9 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			// Through the shared cache: a chord already resolved for playback or
 			// for a diagram opens the picker with no round trip at all. An unnamed
 			// chord is nobody's but the player's, so the library is not asked.
-			const vs =
-				selectedSuffix === UNKNOWN_SUFFIX ? [] : await loadVoicings(selectedRoot, selectedSuffix);
+			const vs = isUnknownSuffix(selectedSuffix)
+				? []
+				: await loadVoicings(selectedRoot, selectedSuffix);
 
 			if (cancelled) return;
 

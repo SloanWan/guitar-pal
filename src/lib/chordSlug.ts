@@ -48,18 +48,7 @@ export function slugToSuffix(slug: string): string {
   return slug.replace(/-sharp-/g, "#").replace(/-sharp$/, "#");
 }
 
-/**
- * The page a chord is read on.
- *
- * A chord nobody has named is addressed by its shape rather than by its name:
- * every one of them is called the same thing, so the name says nothing about
- * which one is meant, while the six frets say exactly. Written with dashes so
- * the two-digit frets stay legible in a path.
- */
-export function chordHref(root: string, suffix: string, shape?: string): string {
-  const rootSlug = rootToSlug(root);
-  if (root === UNKNOWN_ROOT && shape) {
-    return `/chords/${rootSlug}/${encodeURIComponent(shape.trim().replace(/\s+/g, "-"))}`;
-  }
-  return `/chords/${rootSlug}/${suffixToSlug(suffix)}`;
+/** The page a chord is read on. */
+export function chordHref(root: string, suffix: string): string {
+  return `/chords/${rootToSlug(root)}/${suffixToSlug(suffix)}`;
 }

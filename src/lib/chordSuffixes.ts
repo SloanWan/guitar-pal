@@ -47,10 +47,27 @@ export function isSlashChord(suffix: string): boolean {
 // deliberately not a note: it belongs to no key, and browsing A must not turn it
 // up. What tells the shapes apart is their own names and the id a bar pins.
 export const UNKNOWN_ROOT = "?";
+
+// An unnamed chord is named after the grip it is: `uk-007707`. Not a pretty
+// name, but a distinct one — every unnamed chord used to be called the same
+// thing, so a player with three of them could tell neither which was which in a
+// search nor which one a bar was playing. The frets are the only thing that
+// distinguishes them, so the frets are the name.
+export const UNKNOWN_PREFIX = "uk-";
+// What the first of them were called, before that. Still read, never written.
 export const UNKNOWN_SUFFIX = "unknown";
 
+export function unknownSuffixFor(shape: string): string {
+  return `${UNKNOWN_PREFIX}${shape.trim().toLowerCase().replace(/\s+/g, "-")}`;
+}
+
+/** Whether a quality is one of the unnamed. Asked where no root is in hand. */
+export function isUnknownSuffix(suffix: string): boolean {
+  return suffix === UNKNOWN_SUFFIX || suffix.startsWith(UNKNOWN_PREFIX);
+}
+
 export function isUnknownChord(root: string, suffix: string): boolean {
-  return root === UNKNOWN_ROOT || suffix === UNKNOWN_SUFFIX;
+  return root === UNKNOWN_ROOT || isUnknownSuffix(suffix);
 }
 
 // Same compact spelling the browse UI and the chord palette use: slash chords
@@ -58,7 +75,9 @@ export function isUnknownChord(root: string, suffix: string): boolean {
 // no name is written as the one word, never as "? unknown" — the placeholder
 // root is a storage detail and nothing the player should have to read.
 export function chordDisplayName(root: string, suffix: string): string {
-  if (isUnknownChord(root, suffix)) return UNKNOWN_SUFFIX;
+  // The suffix is the whole name: "uk-007707" says which chord, "? uk-007707"
+  // would only add a storage detail nobody should have to read.
+  if (isUnknownChord(root, suffix)) return suffix;
   return isSlashChord(suffix) ? `${root}${suffix}` : `${root} ${suffix}`;
 }
 

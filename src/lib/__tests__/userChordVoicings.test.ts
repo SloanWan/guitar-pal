@@ -3,7 +3,7 @@ import {
 	USER_VOICING_ID_PREFIX,
 	UNKNOWN_CATEGORY,
 	browseCategories,
-	hasUnknownChords,
+	unknownChordSuffixes,
 	chordIndexWithUser,
 	userSuffixesFiledUnder,
 	userVoicingCategory,
@@ -409,16 +409,26 @@ describe("userVoicingCategory — where a shape is browsed", () => {
 	});
 
 	it("puts a chord nobody has named in the section for those", () => {
+		expect(userVoicingCategory(shape("uk-007707"))).toBe(UNKNOWN_CATEGORY);
+		// What the first of them were called, before each was named after its grip.
 		expect(userVoicingCategory(shape("unknown"))).toBe(UNKNOWN_CATEGORY);
 	});
 
 	it("lets the player file an unnamed chord anyway, once they have a view", () => {
-		expect(userVoicingCategory(shape("unknown", "Minor"))).toBe("Minor");
+		expect(userVoicingCategory(shape("uk-007707", "Minor"))).toBe("Minor");
 	});
 
-	it("knows whether there is anything still to name", () => {
-		expect(hasUnknownChords([shape("m7")])).toBe(false);
-		expect(hasUnknownChords([shape("m7"), shape("unknown")])).toBe(true);
+	it("lists what is still to name, each under the grip it is named after", () => {
+		expect(unknownChordSuffixes([shape("m7")])).toEqual([]);
+		expect(
+			unknownChordSuffixes([shape("m7"), shape("uk-x32010"), shape("uk-007707")]),
+		).toEqual(["uk-007707", "uk-x32010"]);
+	});
+
+	it("lists a grip once however many shapes were written under it", () => {
+		expect(
+			unknownChordSuffixes([shape("uk-007707"), { ...shape("uk-007707"), id: "u:9" }]),
+		).toEqual(["uk-007707"]);
 	});
 
 	it("does not offer Unknown as somewhere to file a chord", () => {

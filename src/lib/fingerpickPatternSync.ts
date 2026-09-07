@@ -4,6 +4,8 @@ import { normalizeLoadedPattern } from "./fingerpickEdit";
 
 // localStorage key for guest (logged-out) custom fingerpick patterns.
 export const LOCAL_FINGERPICK_PATTERNS_KEY = "customFingerpickPatterns";
+/** Where a signed-out player's favourites live; the hook reads the same key. */
+export const LOCAL_FINGERPICK_FAVOURITES_KEY = "favouriteFingerpickPatternIds";
 
 // Row shape for the `user_fingerpick_patterns` table. Mirrors the discrete-column
 // convention used by `user_strum_patterns`: identity + name/description plus the
@@ -99,6 +101,15 @@ export async function saveUserFingerpickPattern(
 
 // ── Delete ─────────────────────────────────────────────────────────────────
 
+/**
+ * Delete a pattern, and the favourite record that pointed at it.
+ *
+ * The cascade lives here rather than at the call site because forgetting it
+ * fails silently and late: the row survives the deletion, and the pattern comes
+ * back as a ghost favourite on the next sign-in — a list entry for something
+ * that can no longer be opened. There is one place a pattern is deleted, so
+ * there is one place this can be forgotten.
+ */
 export async function deleteUserFingerpickPattern(
 	supabase: SupabaseClient,
 	user: User | null,
@@ -108,6 +119,7 @@ export async function deleteUserFingerpickPattern(
 		writeLocalFingerpickPatterns(
 			readLocalFingerpickPatterns().filter((p) => p.id !== patternId),
 		);
+		removeLocalFingerpickFavourite(patternId);
 		return;
 	}
 
@@ -117,6 +129,29 @@ export async function deleteUserFingerpickPattern(
 		.eq("pattern_id", patternId)
 		.eq("user_id", user.id);
 	if (error) throw new Error(error.message);
+
+	const { error: favouriteError } = await supabase
+		.from("user_favourite_fingerpick_patterns")
+		.delete()
+		.eq("pattern_id", patternId)
+		.eq("user_id", user.id);
+	if (favouriteError) throw new Error(favouriteError.message);
+}
+
+/** Drop one id from the signed-out favourites list. Best-effort, like the rest. */
+function removeLocalFingerpickFavourite(patternId: string): void {
+	try {
+		const saved = localStorage.getItem(LOCAL_FINGERPICK_FAVOURITES_KEY);
+		if (!saved) return;
+		const ids = JSON.parse(saved) as unknown;
+		if (!Array.isArray(ids)) return;
+		localStorage.setItem(
+			LOCAL_FINGERPICK_FAVOURITES_KEY,
+			JSON.stringify(ids.filter((id) => id !== patternId)),
+		);
+	} catch {
+		// A corrupt or unavailable store is not a reason to fail the delete.
+	}
 }
 
 // ── Merge local → Supabase (called on login) ─────────────────────────────────

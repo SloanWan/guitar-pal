@@ -42,6 +42,15 @@ export default async function ChordsPage() {
 						>
 							Browse All Chords →
 						</Link>
+						{/* The shapes the player has written. Empty for most people, and
+						    the page says what to do about that, so it is a quiet link
+						    rather than a section of its own. */}
+						<Link
+							href="/chords/my"
+							className="text-sm text-ink-dim underline hover:text-ink"
+						>
+							My Chords →
+						</Link>
 					</div>
 				</div>
 			</div>

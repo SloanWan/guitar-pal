@@ -121,15 +121,15 @@ describe("withUserChords — a shape you wrote is a shape you can find", () => {
 	const LIBRARY: ShapeSearchChord[] = [chord("C", "major", "01023x")];
 
 	it("adds a chord only the player has, marked as theirs", () => {
-		const corpus = withUserChords(LIBRARY, [own("?", "unknown", "007707")]);
+		const corpus = withUserChords(LIBRARY, [own("?", "uk-007707", "007707")]);
 		const mine = corpus.find((c) => c.root === "?");
-		expect(mine).toMatchObject({ suffix: "unknown", mine: true });
+		expect(mine).toMatchObject({ suffix: "uk-007707", mine: true });
 		expect(mine!.chord_voicings).toHaveLength(1);
 	});
 
 	it("finds a shape the player wrote, which the library alone never could", () => {
 		const written = "007707";
-		const corpus = withUserChords(LIBRARY, [own("?", "unknown", written)]);
+		const corpus = withUserChords(LIBRARY, [own("?", `uk-${written}`, written)]);
 		const [best] = searchChordsByShape(corpus, frets(written));
 		expect(best).toMatchObject({ root: "?", mine: true, match: { kind: "exact" } });
 	});
@@ -154,7 +154,7 @@ describe("withUserChords — a shape you wrote is a shape you can find", () => {
 	});
 
 	it("puts the player's own answer first among equally good ones", () => {
-		const corpus = withUserChords(LIBRARY, [own("?", "unknown", "01023x")]);
+		const corpus = withUserChords(LIBRARY, [own("?", "uk-01023x", "01023x")]);
 		expect(searchChordsByShape(corpus, frets("01023x"))[0].mine).toBe(true);
 	});
 });

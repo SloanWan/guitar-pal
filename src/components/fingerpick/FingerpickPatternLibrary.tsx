@@ -41,6 +41,10 @@ function PatternCard({
 	onEdit,
 	onDelete,
 }: PatternCardProps) {
+	// Deleting a pattern cannot be undone, so the trash icon asks first — inline,
+	// in the row's own controls, the way the strum library and the editors do.
+	const [confirmDelete, setConfirmDelete] = useState(false);
+
 	const meta = `${pattern.measures.length} BARS · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${pattern.bpm} BPM`;
 
 	async function copyPatternJson() {
@@ -114,27 +118,72 @@ function PatternCard({
 							<Pencil size={14} />
 						</span>
 					)}
-					{onDelete && (
-						<span
-							role="button"
-							tabIndex={0}
-							onClick={(e) => {
-								e.stopPropagation();
-								onDelete();
-							}}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
+					{onDelete &&
+						(confirmDelete ? (
+							<span className="flex items-center gap-1">
+								<span className="text-[10px] text-ink-dim">Delete?</span>
+								<span
+									role="button"
+									tabIndex={0}
+									onClick={(e) => {
+										e.stopPropagation();
+										setConfirmDelete(false);
+										onDelete();
+									}}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											e.stopPropagation();
+											setConfirmDelete(false);
+											onDelete();
+										}
+									}}
+									className="cursor-pointer px-1 text-[10px] font-semibold text-destructive transition-colors hover:underline"
+									aria-label="Confirm delete pattern"
+								>
+									Yes
+								</span>
+								<span
+									role="button"
+									tabIndex={0}
+									onClick={(e) => {
+										e.stopPropagation();
+										setConfirmDelete(false);
+									}}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											e.stopPropagation();
+											setConfirmDelete(false);
+										}
+									}}
+									className="cursor-pointer px-1 text-[10px] text-ink-dim transition-colors hover:text-ink"
+									aria-label="Keep pattern"
+								>
+									No
+								</span>
+							</span>
+						) : (
+							<span
+								role="button"
+								tabIndex={0}
+								onClick={(e) => {
 									e.stopPropagation();
-									onDelete();
-								}
-							}}
-							className="p-0.5 transition-colors text-ink-dim hover:text-destructive cursor-pointer"
-							aria-label="Delete pattern"
-						>
-							<Trash2 size={14} />
-						</span>
-					)}
+									setConfirmDelete(true);
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										e.stopPropagation();
+										setConfirmDelete(true);
+									}
+								}}
+								className="p-0.5 transition-colors text-ink-dim hover:text-destructive cursor-pointer"
+								aria-label="Delete pattern"
+							>
+								<Trash2 size={14} />
+							</span>
+						))}
 					<span
 						role="button"
 						tabIndex={0}

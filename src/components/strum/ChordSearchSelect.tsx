@@ -5,6 +5,8 @@ import { Music, X } from "lucide-react";
 import MusicalText from "@/components/MusicalText";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry, type ChordSearchResult } from "@/lib/chordSearch";
+import { parseTabSequence } from "@/lib/chordTabSequence";
+import { resolveShapeToChord, type ShapeSearchChord } from "@/lib/chordShapeSearch";
 import type { ChordRef } from "@/lib/strumPatterns";
 
 interface Props {
@@ -12,6 +14,12 @@ interface Props {
 	onChange: (chord: ChordRef | null) => void;
 	/** Browsable (root, suffix) pairs. Empty while the index is still loading. */
 	index: readonly ChordIndexEntry[];
+	/**
+	 * Chords to match a written shape against — the library plus the player's
+	 * own. Null while they are still on their way, or when nothing has been typed
+	 * that needs them.
+	 */
+	shapeCorpus?: readonly ShapeSearchChord[] | null;
 	ariaLabel: string;
 	/**
 	 * A name the bar is holding that the library has no chord for. Shown in red
@@ -31,6 +39,7 @@ export default function ChordSearchSelect({
 	chord,
 	onChange,
 	index,
+	shapeCorpus = null,
 	ariaLabel,
 	unknownLabel = null,
 }: Props) {
@@ -41,11 +50,21 @@ export default function ChordSearchSelect({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listboxId = useId();
 
-	const results = useMemo(
-		() => (editing ? searchChords(index, query) : []),
-		[index, query, editing],
+	/**
+	 * A written shape resolves to the chord held that way rather than being
+	 * searched for by name: `x32010` is a grip, not a word, and a player copying
+	 * a chart has the grip in front of them and not its name.
+	 */
+	const shape = useMemo(() => (editing ? parseTabSequence(query).frets : null), [editing, query]);
+	const shapeChord = useMemo(
+		() => (shape && shapeCorpus ? resolveShapeToChord(shapeCorpus, shape) : null),
+		[shape, shapeCorpus],
 	);
-	const open = editing && (results.length > 0 || query.trim() !== "");
+	const results = useMemo(
+		() => (editing && !shape ? searchChords(index, query) : []),
+		[index, query, editing, shape],
+	);
+	const open = editing && (results.length > 0 || shape !== null || query.trim() !== "");
 
 	// Close on a press anywhere outside, the way the other in-modal popovers do.
 	useEffect(() => {
@@ -70,6 +89,13 @@ export default function ChordSearchSelect({
 		inputRef.current?.blur();
 	}
 
+	/** A grip is committed to the shape that was written, not to a default one. */
+	function commitShape(ref: ChordRef) {
+		onChange(ref);
+		stopEditing();
+		inputRef.current?.blur();
+	}
+
 	// Every key this widget acts on is also stopped: the enclosing dialog saves on
 	// Enter and closes on Escape, and picking a chord out of the dropdown must do
 	// neither of those on the way through.
@@ -79,6 +105,15 @@ export default function ChordSearchSelect({
 			e.stopPropagation();
 			stopEditing();
 			inputRef.current?.blur();
+			return;
+		}
+		if (shape) {
+			// The one row a shape offers, taken the same way a name's would be.
+			if (e.key === "Enter" && shapeChord) {
+				e.preventDefault();
+				e.stopPropagation();
+				commitShape(shapeChord);
+			}
 			return;
 		}
 		if (results.length === 0) return;
@@ -132,7 +167,7 @@ export default function ChordSearchSelect({
 					aria-label={ariaLabel}
 					autoComplete="off"
 					value={displayValue}
-					placeholder="No chord"
+					placeholder="Name or frets"
 					onFocus={() => setEditing(true)}
 					onChange={(e) => {
 						setEditing(true);
@@ -196,7 +231,37 @@ export default function ChordSearchSelect({
 							</li>
 						);
 					})}
-					{results.length === 0 && (
+					{/* A written shape offers exactly one answer: the chord held that
+					    way, pinned to the very voicing that was written. */}
+					{shape && shapeChord && (
+						<li>
+							<button
+								type="button"
+								role="option"
+								aria-selected
+								onPointerDown={(e) => {
+									e.preventDefault();
+									commitShape(shapeChord);
+								}}
+								className="flex w-full items-center gap-2 bg-denim-tint px-2 py-1.5 text-left"
+							>
+								<span className="font-mono text-[11px] font-semibold text-ink">
+									<MusicalText text={chordDisplayName(shapeChord.root, shapeChord.suffix)} />
+								</span>
+								<span className="ml-auto font-mono text-[9px] text-ink-faint">
+									held this way
+								</span>
+							</button>
+						</li>
+					)}
+
+					{shape && !shapeChord && (
+						<li className="px-2 py-2 text-center font-mono text-[10px] text-ink-faint">
+							{shapeCorpus === null ? "Looking for that shape…" : "Nothing is held that way"}
+						</li>
+					)}
+
+					{!shape && results.length === 0 && (
 						<li className="px-2 py-2 text-center font-mono text-[10px] text-ink-faint">
 							{index.length === 0 ? "Loading chords…" : "No match"}
 						</li>

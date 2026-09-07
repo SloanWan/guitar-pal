@@ -127,8 +127,7 @@ export function useChordPaletteRows(
 
 interface Props {
 	rows: ChordPaletteRows;
-	/** `shape` says which chord is meant when the name cannot — see goToChord. */
-	onSelectChord: (result: ChordSearchResult, shape?: string) => void;
+	onSelectChord: (result: ChordSearchResult) => void;
 	onSelectShortcut: (shortcut: NavShortcut) => void;
 	onSelectBatch: () => void;
 	/** Take the typed shape somewhere it can be written down. */
@@ -172,13 +171,8 @@ export default function ChordSearchResults({
 						<CommandItem
 							key={shapeValue(m)}
 							value={shapeValue(m)}
-							// The shape addresses it: every unnamed chord is called the same
-							// thing, so only the frets say which one this row is.
 							onSelect={() =>
-								onSelectChord(
-									{ root: m.root, suffix: m.suffix, category: m.category },
-									formatTabSequence(m.frets),
-								)
+								onSelectChord({ root: m.root, suffix: m.suffix, category: m.category })
 							}
 						>
 							<span className="flex min-w-0 flex-col gap-0.5">

@@ -70,11 +70,13 @@ export default function ChordShapeFields({
 				</div>
 			)}
 
+			{/* The shape's name, not the chord's: one chord is played several ways,
+			    and this is what tells them apart in the list. */}
 			<input
 				type="text"
 				value={name}
 				onChange={(e) => onNameChange(e.target.value)}
-				placeholder="Name it (optional)"
+				placeholder="Name this shape (optional) — e.g. up at the 7th"
 				aria-label="Name for this shape"
 				className="h-(--h-control) w-full border border-line-strong bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 			/>

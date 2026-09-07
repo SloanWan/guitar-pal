@@ -817,7 +817,9 @@ export default function StrumPage() {
 							<SquareMenu />
 						</button>
 					)}
-					<div className="flex max-h-full w-full max-w-160 flex-col">
+					{/* pt below lg: the library toggle floats over this column's top-right
+					    corner, and without the gap it sits on the card's own top edge. */}
+					<div className="flex max-h-full w-full max-w-160 flex-col pt-10 lg:pt-0">
 						{!patternRestored ? (
 							// Skeleton in the card's shape: tab strip, header, one bar row.
 							<div className="flex w-full flex-col gap-2" aria-busy="true">

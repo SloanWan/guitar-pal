@@ -8,11 +8,15 @@
 import {
   ROOT_CHROMATIC_ORDER,
   CHORD_SUFFIX_CATEGORIES,
+  UNKNOWN_PREFIX,
   UNKNOWN_ROOT,
   UNKNOWN_SUFFIX,
   getSuffixCategory,
   isSlashChord,
 } from "@/lib/chordSuffixes";
+
+/** `uk-` followed by a shape: frets, mutes and the dashes between them. */
+const UNKNOWN_NAME = new RegExp(`^${UNKNOWN_PREFIX}[0-9x-]+$`);
 
 export interface ChordIndexEntry {
   readonly root: string; // stored spelling: C C# D Eb E F F# G Ab A Bb B
@@ -147,11 +151,13 @@ function normalizeSlashBass(suffix: string): string {
  * own right rather than a missing one.
  */
 export function normalizeChordName(raw: string): ChordIndexEntry | null {
-  // The one name that needs no root: a chord the player cannot identify. Filing
-  // it under the note in its bass would be a guess, and would bury it among the
-  // chords of a key it may well not belong to.
-  if (normalizeInput(raw) === UNKNOWN_SUFFIX) {
-    return { root: UNKNOWN_ROOT, suffix: UNKNOWN_SUFFIX };
+  // The names that need no root: a chord the player cannot identify. Filing it
+  // under the note in its bass would be a guess, and would bury it among the
+  // chords of a key it may well not belong to. `uk-007707` names it after the
+  // grip instead, which is the one thing that tells two of them apart.
+  const normalized = normalizeInput(raw);
+  if (normalized === UNKNOWN_SUFFIX || UNKNOWN_NAME.test(normalized)) {
+    return { root: UNKNOWN_ROOT, suffix: normalized };
   }
   const { root, normalizedSuffix } = parseQuery(raw);
   if (root === null) return null;

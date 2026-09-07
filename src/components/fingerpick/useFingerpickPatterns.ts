@@ -7,11 +7,10 @@ import {
 	saveUserFingerpickPattern,
 	deleteUserFingerpickPattern,
 	mergeLocalFingerpickPatternsToSupabase,
+	LOCAL_FINGERPICK_FAVOURITES_KEY as LOCAL_STORAGE_KEY,
 } from "@/lib/fingerpickPatternSync";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
-
-const LOCAL_STORAGE_KEY = "favouriteFingerpickPatternIds";
 
 export function useFingerpickPatterns(user: User | null, loading: boolean) {
 	const [selectedPattern, setSelectedPattern] = useState<FingerpickPattern>(
@@ -177,16 +176,9 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 
 		(async () => {
 			try {
-				const supabase = createClient();
-				await deleteUserFingerpickPattern(supabase, user, patternId);
-				if (user && wasFavourite) {
-					const { error } = await supabase
-						.from("user_favourite_fingerpick_patterns")
-						.delete()
-						.eq("pattern_id", patternId)
-						.eq("user_id", user.id);
-					if (error) throw new Error(error.message);
-				}
+				// The favourite record goes with it, inside the delete itself — see
+				// deleteUserFingerpickPattern.
+				await deleteUserFingerpickPattern(createClient(), user, patternId);
 			} catch (e) {
 				console.error(e);
 			}

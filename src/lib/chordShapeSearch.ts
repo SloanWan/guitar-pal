@@ -3,6 +3,7 @@ import { getSuffixCategory, isSlashChord } from "@/lib/chordSuffixes";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { TAB_STRING_COUNT } from "@/lib/chordTabSequence";
 import type { UserChordVoicing } from "@/lib/userChordVoicings";
+import type { ChordRef } from "@/lib/strumPatterns";
 
 /**
  * Finding a chord by the shape of the hand rather than by its name.
@@ -208,4 +209,22 @@ export function searchChordsByShape(
 				Number(b.mine) - Number(a.mine),
 		)
 		.slice(0, limit);
+}
+
+/**
+ * The chord a written shape *is*, when something is held exactly that way.
+ *
+ * Exact only, and it hands back the voicing that answered: a player who wrote
+ * the frets meant those frets, so the bar is pinned to that shape rather than to
+ * whichever one the chord happens to load with. A near miss is not an answer
+ * here — it would quietly put a different grip in a chart the player copied
+ * note for note.
+ */
+export function resolveShapeToChord(
+	chords: readonly ShapeSearchChord[],
+	frets: readonly ShapeFret[],
+): ChordRef | null {
+	const [best] = searchChordsByShape(chords, frets, 1);
+	if (!best || best.match.kind !== "exact") return null;
+	return { root: best.root, suffix: best.suffix, voicingId: best.voicing.id };
 }

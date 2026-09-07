@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	parseChordSequence,
+	hasShapeToken,
 	progressionBarsFromTokens,
 	keptTokens,
 	syncBarsToPattern,
@@ -24,6 +25,7 @@ import {
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import type { Bar, Beat, ChordProgression } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
+import { parseTabSequence } from "@/lib/chordTabSequence";
 
 function progression(overrides: Partial<ChordProgression>): ChordProgression {
 	return {
@@ -196,6 +198,55 @@ describe("parseChordSequence", () => {
 		const { tokens } = parseChordSequence("C zzz Am", INDEX);
 		expect(tokens.map((t) => t.input)).toEqual(["C", "zzz", "Am"]);
 		expect(tokens.map((t) => t.chord?.root ?? null)).toEqual(["C", null, "A"]);
+	});
+});
+
+describe("a shape written into a chord sequence", () => {
+	// Stands in for the voicing lookup: only this one grip is held by anything.
+	const HELD = "01023x";
+	const resolve = (frets: (number | "x")[]) =>
+		frets.join(",") === parseTabSequence(HELD).frets!.join(",")
+			? { root: "C", suffix: "major", voicingId: "lib-1" }
+			: null;
+
+	it("resolves a written shape to the chord held that way, pinned to it", () => {
+		const { tokens } = parseChordSequence(`G ${HELD}`, INDEX, resolve);
+		expect(tokens[0].shape).toBeUndefined();
+		expect(tokens[1]).toMatchObject({
+			input: HELD,
+			shape: true,
+			chord: { root: "C", suffix: "major", voicingId: "lib-1" },
+		});
+	});
+
+	it("leaves a shape nothing is held with unresolved, and says it was a shape", () => {
+		const { tokens, unmatched } = parseChordSequence("007707", INDEX, resolve);
+		expect(tokens[0]).toMatchObject({ input: "007707", shape: true, chord: null });
+		expect(unmatched).toEqual(["007707"]);
+	});
+
+	it("reads a dashed shape, which is how one survives a URL", () => {
+		expect(parseChordSequence("x-3-2-0-1-0", INDEX, resolve).tokens[0].shape).toBe(true);
+	});
+
+	it("resolves nothing without a lookup, rather than guessing", () => {
+		expect(parseChordSequence(HELD, INDEX).tokens[0]).toMatchObject({
+			shape: true,
+			chord: null,
+		});
+	});
+
+	it("never reads a chord name as a shape", () => {
+		const { tokens } = parseChordSequence("C G Am F", INDEX, resolve);
+		expect(tokens.every((t) => t.shape === undefined)).toBe(true);
+	});
+
+	describe("hasShapeToken — asked before the voicings are fetched", () => {
+		it("is true only when a shape is actually written", () => {
+			expect(hasShapeToken("C G Am F")).toBe(false);
+			expect(hasShapeToken("C 007707 G")).toBe(true);
+			expect(hasShapeToken("")).toBe(false);
+		});
 	});
 });
 

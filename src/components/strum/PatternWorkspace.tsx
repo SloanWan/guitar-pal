@@ -9,9 +9,13 @@ import {
 	chordAbbreviation,
 	parseChordSequence,
 	keptTokens,
+	hasShapeToken,
 	type ChordToken,
 	type UnknownChordChoice,
 } from "@/lib/strumProgressions";
+import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
+import { useChordSearchNavigation } from "@/components/chords/useChordSearchNavigation";
+import { resolveShapeToChord } from "@/lib/chordShapeSearch";
 import {
 	PROGRESSION_PRESETS,
 	filterPresets,
@@ -105,7 +109,16 @@ const UNKNOWN_ANSWERS = [
 	{ key: "edit", label: "Keep editing", hint: "Go back to the line and change it" },
 ] as const;
 
-type UnknownAnswer = (typeof UNKNOWN_ANSWERS)[number]["key"];
+type UnknownAnswer = (typeof UNKNOWN_ANSWERS)[number]["key"] | "create";
+
+/** Written both ways: the same chord chart is copied on both kinds of keyboard. */
+const WRITE_SHORTCUT = "Ctrl/⌘ + Enter";
+
+interface UnknownOption {
+	key: UnknownAnswer;
+	label: string;
+	hint: string;
+}
 
 function TabButton({
 	active,
@@ -255,8 +268,16 @@ export default function PatternWorkspace({
 	// A chord the player wrote a shape for is a chord they can write again, so
 	// their own chords are searchable beside the library's.
 	const searchIndex = chordIndexWithUser(chordIndex, userVoicings);
+	// Voicings are only needed once a shape is actually written into the line —
+	// a sequence of names never pays for them.
+	const shapeCorpus = useChordShapeCorpus(composerOpen && hasShapeToken(chordInput));
 	// What the typed line resolves to right now — the preview under the input.
-	const parsed = parseChordSequence(chordInput, searchIndex);
+	const parsed = parseChordSequence(chordInput, searchIndex, (frets) =>
+		shapeCorpus ? resolveShapeToChord(shapeCorpus, frets) : null,
+	);
+	/** Shapes in the line that nothing is held with — chords waiting to be written. */
+	const unwritten = parsed.tokens.filter((t) => t.shape && t.chord === null);
+	const { goToCreateChord } = useChordSearchNavigation(closeComposer);
 	// Presets still worth offering for what has been typed so far.
 	const matchingPresets = filterPresets(PROGRESSION_PRESETS, chordInput);
 
@@ -313,13 +334,43 @@ export default function PatternWorkspace({
 		closeComposer();
 	}
 
-	/** Act on one of the three answers; "edit" is simply returning to the line. */
+	/**
+	 * The answers on offer. A shape nothing is held with adds a fourth and puts
+	 * it first: the others all decide what to do *without* the chord, and this
+	 * one is the chord.
+	 */
+	const unknownAnswers: UnknownOption[] = unwritten[0]
+		? [
+				{
+					key: "create",
+					label: `Write ${unwritten[0].input} down`,
+					hint: "Nothing is held that way — draw it, name it, and it is yours",
+				},
+				...UNKNOWN_ANSWERS,
+			]
+		: [...UNKNOWN_ANSWERS];
+
+	/** Act on one of the answers; "edit" is simply returning to the line. */
 	function answerUnknown(answer: UnknownAnswer) {
 		if (answer === "edit") {
 			setUnknownPrompt(false);
 			return;
 		}
+		if (answer === "create") {
+			writeUnwritten();
+			return;
+		}
 		submitComposer(answer);
+	}
+
+	/**
+	 * Leave for the page where a shape becomes a chord. The composer closes on the
+	 * way out — the line cannot survive the navigation, and a half-open composer
+	 * behind a page change is worse than a clean one on return.
+	 */
+	function writeUnwritten() {
+		const first = unwritten[0];
+		if (first) goToCreateChord(first.input);
 	}
 
 	/** `rail` is the compact form used beside an open progression. */
@@ -373,18 +424,26 @@ export default function PatternWorkspace({
 							e.preventDefault();
 							const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
 							setUnknownChoice(
-								(i) => (i + step + UNKNOWN_ANSWERS.length) % UNKNOWN_ANSWERS.length,
+								(i) => (i + step + unknownAnswers.length) % unknownAnswers.length,
 							);
 						} else if (e.key === "Enter") {
 							e.preventDefault();
-							if (unknownPrompt) answerUnknown(UNKNOWN_ANSWERS[unknownChoice].key);
-							else submitComposer(null);
+							// Straight to writing the shape down, without answering a
+							// question whose answer is already known: the line has frets in
+							// it that nothing is held with, and that is what to do about it.
+							if ((e.metaKey || e.ctrlKey) && unwritten.length > 0) {
+								writeUnwritten();
+							} else if (unknownPrompt) {
+								answerUnknown(unknownAnswers[unknownChoice]?.key ?? "edit");
+							} else {
+								submitComposer(null);
+							}
 						} else if (e.key === "Escape") {
 							e.preventDefault();
 							closeComposer();
 						}
 					}}
-					placeholder="C G Am F"
+					placeholder="C G Am F, or 007707"
 					aria-label="Chord sequence"
 					className={`w-full border bg-surface font-mono text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
 						composerError ? "border-destructive" : "border-line-strong"
@@ -405,7 +464,9 @@ export default function PatternWorkspace({
 								title={
 									token.chord
 										? undefined
-										: `${token.input} is not in the library — keep it as a silent bar, or skip it`
+										: token.shape
+											? `Nothing is held like ${token.input} — ${WRITE_SHORTCUT} writes it down`
+											: `${token.input} is not in the library — keep it as a silent bar, or skip it`
 								}
 							>
 								{token.chord ? chordAbbreviation(token.chord) : token.input}
@@ -419,7 +480,9 @@ export default function PatternWorkspace({
 				) : unknownPrompt ? (
 					<div className="flex flex-col gap-1">
 						<span className="text-[10px] text-destructive">
-							{parsed.unmatched.join(", ")} not in the chord library.
+							{unwritten.length === parsed.unmatched.length
+								? `Nothing is held like ${parsed.unmatched.join(", ")}.`
+								: `${parsed.unmatched.join(", ")} not in the chord library.`}
 						</span>
 						<div
 							id={unknownAnswersId}
@@ -427,7 +490,7 @@ export default function PatternWorkspace({
 							aria-label="What to do with the chords that were not found"
 							className="flex flex-wrap items-center gap-2"
 						>
-							{UNKNOWN_ANSWERS.map((answer, i) => {
+							{unknownAnswers.map((answer, i) => {
 								const active = i === unknownChoice;
 								return (
 									<button
@@ -459,7 +522,9 @@ export default function PatternWorkspace({
 					</div>
 				) : (
 					<p className="text-[10px] text-ink-faint">
-						One chord per bar. Enter to add, Esc to cancel.
+						{unwritten.length > 0
+							? `Nothing is held like ${unwritten[0].input} — ${WRITE_SHORTCUT} to write it down.`
+							: "One chord per bar, by name or by shape. Enter to add, Esc to cancel."}
 					</p>
 				)}
 

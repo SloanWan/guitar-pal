@@ -8,6 +8,8 @@ import {
 import { barPlaceholder, validateBars } from "@/lib/strumBars";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
+import { parseTabSequence } from "@/lib/chordTabSequence";
+import type { ShapeFret } from "@/lib/chordShape";
 
 /** Written in place of a bar nobody assigned a chord to. */
 export const NO_CHORD_LABEL = "—";
@@ -91,6 +93,37 @@ const DASH_ONLY = /^[-–—]+$/;
 export interface ChordToken {
 	input: string;
 	chord: ChordRef | null;
+	/**
+	 * The word was six frets rather than a name. It changes what to offer when
+	 * nothing matched: a name nobody knows can be kept as written, but a shape
+	 * nobody is holding is a chord waiting to be written down.
+	 */
+	shape?: boolean;
+}
+
+/**
+ * Resolves a written shape to the chord held that way, if any.
+ *
+ * Injected rather than done here: matching frets needs every voicing in the
+ * library, which is far more than the name index this module is handed and is
+ * not worth fetching for the many sequences that are only names.
+ */
+export type ShapeResolver = (frets: ShapeFret[]) => ChordRef | null;
+
+/** The words of a typed sequence, separators dropped. */
+function sequenceTokens(input: string): string[] {
+	return input
+		.trim()
+		.split(TOKEN_SEPARATOR)
+		.filter((token) => token !== "" && !DASH_ONLY.test(token));
+}
+
+/**
+ * Whether a sequence has a written shape in it — asked before parsing, so the
+ * voicings needed to resolve one are fetched only when there is one.
+ */
+export function hasShapeToken(input: string): boolean {
+	return sequenceTokens(input).some((token) => parseTabSequence(token).frets !== null);
 }
 
 export interface ChordSequenceParse {
@@ -106,15 +139,25 @@ export interface ChordSequenceParse {
  * Read a typed chord sequence — `"C G Am F"`, `"C - G - Am"`, `"C,G,Am"` — into
  * chord identities, resolving each token through the same ranked search the
  * chord picker uses, so anything the picker can find can also be typed.
+ *
+ * A word that reads as six frets is a shape rather than a name: charts are
+ * frequently written that way, and a player copying one should not have to look
+ * up what each grip is called first. It resolves to the chord held exactly that
+ * way, pinned to that voicing.
  */
 export function parseChordSequence(
 	input: string,
 	index: readonly ChordIndexEntry[],
+	resolveShape?: ShapeResolver,
 ): ChordSequenceParse {
 	const tokens: ChordToken[] = [];
 
-	for (const token of input.trim().split(TOKEN_SEPARATOR)) {
-		if (token === "" || DASH_ONLY.test(token)) continue;
+	for (const token of sequenceTokens(input)) {
+		const frets = parseTabSequence(token).frets;
+		if (frets) {
+			tokens.push({ input: token, chord: resolveShape?.(frets) ?? null, shape: true });
+			continue;
+		}
 		const match = searchChords(index, token, 1)[0];
 		tokens.push({
 			input: token,

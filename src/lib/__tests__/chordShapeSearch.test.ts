@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+	resolveShapeToChord,
 	searchChordsByShape,
 	shapeMatch,
 	voicingFrets,
@@ -155,5 +156,25 @@ describe("withUserChords — a shape you wrote is a shape you can find", () => {
 	it("puts the player's own answer first among equally good ones", () => {
 		const corpus = withUserChords(LIBRARY, [own("?", "unknown", "01023x")]);
 		expect(searchChordsByShape(corpus, frets("01023x"))[0].mine).toBe(true);
+	});
+});
+
+describe("resolveShapeToChord — a shape written into a chord line", () => {
+	const LIBRARY: ShapeSearchChord[] = [chord("C", "major", "01023x"), chord("A", "minor", "01220x")];
+
+	it("names the chord held exactly that way, pinned to the shape that was written", () => {
+		expect(resolveShapeToChord(LIBRARY, frets("01023x"))).toEqual({
+			root: "C",
+			suffix: "major",
+			voicingId: "C-0",
+		});
+	});
+
+	it("refuses a near miss — a chart copied note for note means those notes", () => {
+		expect(resolveShapeToChord(LIBRARY, frets("01033x"))).toBeNull();
+	});
+
+	it("is null when nothing is held that way", () => {
+		expect(resolveShapeToChord(LIBRARY, frets("007707"))).toBeNull();
 	});
 });

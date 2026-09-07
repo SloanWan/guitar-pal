@@ -14,7 +14,11 @@ import {
 } from "@/lib/chordShape";
 import { formatTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
 import { normalizeChordName } from "@/lib/chordSearch";
-import { UNKNOWN_SUFFIX, chordDisplayName } from "@/lib/chordSuffixes";
+import {
+	chordDisplayName,
+	isUnknownSuffix,
+	unknownSuffixFor,
+} from "@/lib/chordSuffixes";
 import { shapeNoteNames, type ChordGuess } from "@/lib/chordIdentify";
 import {
 	UNKNOWN_CATEGORY,
@@ -106,15 +110,16 @@ export default function CreateChordView({ frets, written, guesses }: Props) {
 	}
 
 	/**
-	 * Leave it unnamed, honestly.
+	 * Leave it unnamed, honestly — and named after its grip, `uk-007707`.
 	 *
 	 * Not filed under the note in its bass: that root would be a guess, and it
-	 * would bury the chord among the chords of a key it may not belong to. An
-	 * unnamed chord belongs to no root at all — it is written down, playable and
-	 * findable under Unknown, and can be named the day the player works it out.
+	 * would bury the chord among the chords of a key it may not belong to. It
+	 * belongs to no root at all. But it does need a name of its own: calling
+	 * every unnamed chord "unknown" makes three of them indistinguishable in a
+	 * search and in a bar, and the frets are the one thing that tells them apart.
 	 */
 	function nameItUnknown() {
-		setChordName(UNKNOWN_SUFFIX);
+		setChordName(unknownSuffixFor(formatTabSequence(frets)));
 		setCategory(null);
 	}
 
@@ -138,7 +143,7 @@ export default function CreateChordView({ frets, written, guesses }: Props) {
 				<p className="text-sm leading-snug text-ink-dim">
 					Write it into a progression by name, or find it under{" "}
 					<span className="text-ink">
-						{created.suffix === UNKNOWN_SUFFIX && !created.category
+						{isUnknownSuffix(created.suffix) && !created.category
 							? UNKNOWN_CATEGORY
 							: (created.category ?? UNFILED)}
 					</span>{" "}
@@ -166,10 +171,10 @@ export default function CreateChordView({ frets, written, guesses }: Props) {
 						Keep editing
 					</button>
 					<Link
-						href="/chords"
+						href="/chords/my"
 						className="flex h-(--h-control) items-center border border-line-strong px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors hover:border-denim hover:text-denim-accent"
 					>
-						Back to chords
+						My chords
 					</Link>
 				</div>
 			</div>
@@ -236,7 +241,8 @@ export default function CreateChordView({ frets, written, guesses }: Props) {
 						onClick={nameItUnknown}
 						className="self-start font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim underline-offset-2 transition-colors hover:text-denim-accent hover:underline"
 					>
-						I don&rsquo;t know what it is — leave it {UNKNOWN_SUFFIX}
+						I don&rsquo;t know what it is — call it{" "}
+						{unknownSuffixFor(formatTabSequence(frets))}
 					</button>
 				</div>
 			)}

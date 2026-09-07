@@ -58,6 +58,7 @@ import {
 } from "@/lib/strumBarEdit";
 import { defaultProgressionName, normalizeCapo, progressionCapo } from "@/lib/strumProgressions";
 import { chordIndexWithUser, type UserChordVoicing } from "@/lib/userChordVoicings";
+import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
 import ChordSearchSelect from "./ChordSearchSelect";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
@@ -138,6 +139,9 @@ export default function ProgressionEditModal({
 		() => chordIndexWithUser(chordIndex, userVoicings),
 		[chordIndex, userVoicings],
 	);
+	// Frets typed into a bar's chord field are matched against every voicing
+	// there is, fetched only once the editor is actually open.
+	const shapeCorpus = useChordShapeCorpus(open);
 	// Index of the bar most recently copied or moved. That block gets a denim
 	// glow so the user can find where the edit landed.
 	const [highlightedBarIdx, setHighlightedBarIdx] = useState<number | null>(null);
@@ -548,6 +552,7 @@ export default function ProgressionEditModal({
 												setBars((prev) => setBarChord(prev, barIdx, chord))
 											}
 											index={searchIndex}
+											shapeCorpus={shapeCorpus}
 											ariaLabel={`Chord for bar ${barIdx + 1}`}
 										/>
 										<div className="ml-auto flex items-center">

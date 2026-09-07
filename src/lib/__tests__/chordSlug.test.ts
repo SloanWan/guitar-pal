@@ -159,28 +159,12 @@ describe("a chord nobody has named still needs a URL", () => {
 });
 
 describe("chordHref — where a chord is read", () => {
-  it("addresses a named chord by its name", () => {
+  it("addresses a chord by its name", () => {
     expect(chordHref("C", "major")).toBe("/chords/c/major");
     expect(chordHref("C", "/G")).toBe("/chords/c/over-g");
   });
 
-  it("addresses an unnamed chord by its shape, since its name says nothing", () => {
-    expect(chordHref(UNKNOWN_ROOT, UNKNOWN_SUFFIX, "007707")).toBe(
-      "/chords/unknown/007707",
-    );
-  });
-
-  it("writes a spaced shape with dashes, which the parser reads back", () => {
-    expect(chordHref(UNKNOWN_ROOT, UNKNOWN_SUFFIX, "x 12 12 12 10 x")).toBe(
-      "/chords/unknown/x-12-12-12-10-x",
-    );
-  });
-
-  it("falls back to the name when no shape is given", () => {
-    expect(chordHref(UNKNOWN_ROOT, UNKNOWN_SUFFIX)).toBe("/chords/unknown/unknown");
-  });
-
-  it("ignores a shape for a chord that has a name of its own", () => {
-    expect(chordHref("C", "major", "01023x")).toBe("/chords/c/major");
+  it("addresses an unnamed chord by the grip it is named after", () => {
+    expect(chordHref(UNKNOWN_ROOT, "uk-007707")).toBe("/chords/unknown/uk-007707");
   });
 });

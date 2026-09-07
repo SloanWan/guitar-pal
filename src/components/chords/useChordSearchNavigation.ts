@@ -25,11 +25,7 @@ export function shortcutHref(s: NavShortcut): string {
 }
 
 export interface ChordSearchNavigation {
-	/**
-	 * `shape` addresses one chord among the unnamed, which all share a name. It
-	 * is ignored for a chord that has one.
-	 */
-	goToChord: (result: ChordSearchResult, shape?: string) => void;
+	goToChord: (result: ChordSearchResult) => void;
 	goToBrowse: (shortcut: NavShortcut) => void;
 	/** Multi-chord queries leave the palette for the batch grid. */
 	goToGrid: (query: string) => void;
@@ -59,7 +55,7 @@ export function useChordSearchNavigation(onNavigate: () => void): ChordSearchNav
 	);
 
 	const goToChord = useCallback(
-		(r: ChordSearchResult, shape?: string) => navigate(chordHref(r.root, r.suffix, shape)),
+		(r: ChordSearchResult) => navigate(chordHref(r.root, r.suffix)),
 		[navigate],
 	);
 	const goToBrowse = useCallback((s: NavShortcut) => navigate(shortcutHref(s)), [navigate]);

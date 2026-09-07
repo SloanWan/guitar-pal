@@ -5,7 +5,6 @@ import { CirclePlay, Loader2, Pencil, Plus, X } from "lucide-react";
 import Link from "@/components/AppLink";
 import { voicingFrets } from "@/lib/chordShapeSearch";
 import { formatTabSequence } from "@/lib/chordTabSequence";
-import type { ShapeFret } from "@/lib/chordShape";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import ChordModeToggle from "@/components/chords/ChordModeToggle";
 import ChordVoicingModal, { type VoicingCard } from "@/components/chords/ChordVoicingModal";
@@ -33,17 +32,9 @@ interface Props {
 	voicings: VoicingCard[];
 	root?: string;
 	suffix?: string;
-	/**
-	 * One shape out of the player's, when the page is about that one alone.
-	 *
-	 * Chords nobody has named all share an identity, so a page for "unknown"
-	 * would otherwise be a page for every unnamed chord at once. The frets pick
-	 * out the one that was asked for.
-	 */
-	shape?: ShapeFret[];
 }
 
-export default function ChordDetailView({ voicings, root, suffix, shape }: Props) {
+export default function ChordDetailView({ voicings, root, suffix }: Props) {
 	const [mode, setMode] = useState<DiagramMode>("fingers");
 
 	// The player's own shapes for this chord, written here because this is the
@@ -56,10 +47,7 @@ export default function ChordDetailView({ voicings, root, suffix, shape }: Props
 	const [shapeDraft, setShapeDraft] = useState<ChordShape | null>(null);
 	const [shapeName, setShapeName] = useState("");
 
-	const written = shape ? formatTabSequence(shape) : null;
-	const myShapes = userVoicings
-		.filter((v) => v.root === root && v.suffix === suffix)
-		.filter((v) => written === null || formatTabSequence(voicingFrets(v)) === written);
+	const myShapes = userVoicings.filter((v) => v.root === root && v.suffix === suffix);
 
 	function openShapeEditor() {
 		// From nothing here, since this page has no "currently selected" shape to
@@ -186,7 +174,7 @@ export default function ChordDetailView({ voicings, root, suffix, shape }: Props
 							<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 								My shapes
 							</span>
-							{shapeDraft === null && written === null && (
+							{shapeDraft === null && (
 								<button
 									type="button"
 									onClick={openShapeEditor}

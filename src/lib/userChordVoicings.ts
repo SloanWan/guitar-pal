@@ -3,8 +3,8 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { CHORD_SHAPE_WINDOW, MAX_SHAPE_START_FRET } from "@/lib/chordShape";
 import {
 	CHORD_SUFFIX_CATEGORIES,
-	UNKNOWN_SUFFIX,
 	getSuffixCategory,
+	isUnknownChord,
 } from "@/lib/chordSuffixes";
 
 /**
@@ -42,9 +42,13 @@ export interface UserChordVoicing extends ChordVoicing {
 /** The section unnamed chords are browsed in — a list of things still to name. */
 export const UNKNOWN_CATEGORY = "Unknown";
 
-/** Whether the player has any chord they have not named. */
-export function hasUnknownChords(voicings: readonly UserChordVoicing[]): boolean {
-	return voicings.some((v) => v.suffix === UNKNOWN_SUFFIX);
+/** The chords the player has not named, by the shape each is named after. */
+export function unknownChordSuffixes(voicings: readonly UserChordVoicing[]): string[] {
+	return [
+		...new Set(
+			voicings.filter((v) => isUnknownChord(v.root, v.suffix)).map((v) => v.suffix),
+		),
+	].sort();
 }
 
 /**
@@ -53,7 +57,7 @@ export function hasUnknownChords(voicings: readonly UserChordVoicing[]): boolean
  */
 export function userVoicingCategory(voicing: UserChordVoicing): string | null {
 	if (voicing.category) return voicing.category;
-	if (voicing.suffix === UNKNOWN_SUFFIX) return UNKNOWN_CATEGORY;
+	if (isUnknownChord(voicing.root, voicing.suffix)) return UNKNOWN_CATEGORY;
 	return getSuffixCategory(voicing.suffix);
 }
 

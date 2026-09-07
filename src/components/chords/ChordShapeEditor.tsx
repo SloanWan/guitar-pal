@@ -1,7 +1,7 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
 	CHORD_SHAPE_WINDOW,
 	MAX_FINGER,
@@ -12,6 +12,11 @@ import {
 	validateChordShape,
 	type ChordShape,
 } from "@/lib/chordShape";
+import {
+	TAB_STRING_COUNT,
+	parseTabSequence,
+	tabSequenceToShape,
+} from "@/lib/chordTabSequence";
 
 /**
  * A chord shape, edited as the grid it is drawn as.
@@ -43,6 +48,22 @@ export default function ChordShapeEditor({ shape, onChange }: Props) {
 	 * them would be arguing with an instruction.
 	 */
 	const [fingersTouched, setFingersTouched] = useState(false);
+	/**
+	 * The shortcut field: a shape written the way a tab writes it.
+	 *
+	 * Starts empty and is never written back to from the grid. It is a way in,
+	 * not a second view of the shape — a field that re-wrote itself under the
+	 * player's cursor every time they clicked a fret would be worse than one that
+	 * simply holds what they typed.
+	 */
+	const [tabInput, setTabInput] = useState("");
+	const tabParse = parseTabSequence(tabInput);
+	// A sequence too short to be one yet is unfinished, not wrong: telling a
+	// player their three characters are not six strings while they are still
+	// typing the fourth is an error message about nothing.
+	const tabError =
+		tabInput.trim().length < TAB_STRING_COUNT ? null : tabParse.error;
+	const tabFieldId = useId();
 	const windowFrets = Array.from(
 		{ length: CHORD_SHAPE_WINDOW },
 		(_, i) => shape.startFret + i,
@@ -104,6 +125,17 @@ export default function ChordShapeEditor({ shape, onChange }: Props) {
 		const next: ChordShape = { ...shape, barreFret: shape.barreFret === fret ? null : fret };
 		// A barre changes which finger holds what, so the suggestion follows it.
 		onChange(fingersTouched ? next : { ...next, fingers: suggestFingers(next) });
+	}
+
+	/** Draw what has been typed, once it reads as a whole shape. */
+	function applyTabSequence(value: string) {
+		setTabInput(value);
+		const { frets } = parseTabSequence(value);
+		if (!frets) return;
+		// The fingering follows the written shape, the same way it follows a shape
+		// clicked out on the grid — a sequence is a way of drawing, not a paste.
+		setFingersTouched(false);
+		onChange(tabSequenceToShape(frets));
 	}
 
 	const cell =
@@ -250,6 +282,53 @@ export default function ChordShapeEditor({ shape, onChange }: Props) {
 					))}
 				</ul>
 			)}
+
+			<div className="border-t border-line" />
+
+			{/* The written way in, under the drawn one. Reading a shape off a tab is
+			    six keystrokes here and a dozen clicks on the grid, and a player
+			    copying a chart already has the tab in front of them — but the grid is
+			    what this control is, so it stays the thing you meet first. */}
+			<div className="flex flex-col gap-1">
+				<label
+					htmlFor={tabFieldId}
+					className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
+				>
+					Or, type in the tab sequence..
+				</label>
+				<input
+					id={tabFieldId}
+					type="text"
+					inputMode="text"
+					autoComplete="off"
+					spellCheck={false}
+					value={tabInput}
+					onChange={(e) => applyTabSequence(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key !== "Enter") return;
+						// The field sits inside dialogs that save on Enter; drawing a shape
+						// must not also close the thing being drawn in.
+						e.preventDefault();
+						e.stopPropagation();
+						applyTabSequence(tabInput);
+					}}
+					placeholder="00750x"
+					aria-label="Tab sequence, first string first"
+					aria-describedby={`${tabFieldId}-hint`}
+					className={`h-(--h-control) w-full border bg-surface px-2 font-mono text-xs tracking-[0.12em] text-ink placeholder:tracking-normal placeholder:text-ink-faint focus-visible:outline-none ${
+						tabError ? "border-destructive" : "border-line-strong focus-visible:border-denim"
+					}`}
+				/>
+				<p
+					id={`${tabFieldId}-hint`}
+					className={`font-mono text-[10px] leading-snug ${
+						tabError ? "text-destructive" : "text-ink-faint"
+					}`}
+				>
+					{tabError ??
+						"First string first, x for a muted string — 00750x is Em7/A. Space the frets out above the ninth."}
+				</p>
+			</div>
 		</div>
 	);
 }

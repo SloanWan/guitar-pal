@@ -6,6 +6,9 @@ import { ArrowRightIcon } from "lucide-react";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import MusicalText from "@/components/MusicalText";
 import ChordRequestButton from "@/components/chords/ChordRequestButton";
+import { useChordShapeMatches, type ChordShapeMatches } from "@/components/chords/useChordShapeMatches";
+import { formatTabSequence } from "@/lib/chordTabSequence";
+import type { ShapeMatch } from "@/lib/chordShapeSearch";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { buildChordLookup, classifyBatchQuery } from "@/lib/chordBatchResolve";
 import {
@@ -30,6 +33,59 @@ function categoryPhrase(category: string): string {
 const BATCH_VALUE = "batch-grid";
 const shortcutValue = (s: NavShortcut) => `jump-${s.kind}`;
 const chordValue = (r: ChordSearchResult) => `${r.root} ${r.suffix}`.toLowerCase();
+const shapeValue = (m: ShapeMatch) => `shape-${m.root} ${m.suffix}`.toLowerCase();
+
+/**
+ * What the palette can be asked, one row each: what to type, and what typing it
+ * looks like. Written as data rather than three differently-shaped paragraphs so
+ * every way in reads the same way down the card.
+ */
+/** The shape of C major, and the one example a shape hint is written with. */
+const SHAPE_EXAMPLE = "01023x";
+
+const SEARCH_HINTS: readonly { readonly ask: string; readonly example: string }[] = [
+	{ ask: "Search by name", example: "Am7" },
+	{ ask: "Several at once, side by side — a comma forces it", example: "C Am F G" },
+	// A tab that names no chord is still searchable: paste the grip.
+	{ ask: "Or by shape, frets first string first", example: SHAPE_EXAMPLE },
+];
+
+/**
+ * A note the palette shows in place of rows: nothing typed yet, nothing found,
+ * still looking. One container for all of them, so the four things this card can
+ * say are laid out and spaced the same way rather than each in its own style.
+ */
+function PaletteNote({ children }: { children: React.ReactNode }) {
+	return <div className="flex flex-col px-4 py-2">{children}</div>;
+}
+
+/** The lead sentence of a note. */
+function NoteLead({ children }: { children: React.ReactNode }) {
+	return <p className="py-2.5 text-sm leading-snug text-ink-dim">{children}</p>;
+}
+
+/**
+ * One line of the note: what can be asked on the left, what it looks like typed
+ * on the right, hairline-divided from whatever came before it.
+ */
+function NoteRow({ ask, example }: { ask: string; example: string }) {
+	return (
+		<div className="flex items-baseline justify-between gap-4 border-t border-line py-2.5 first:border-t-0">
+			<span className="min-w-0 text-xs leading-snug text-ink-dim">{ask}</span>
+			<span className="shrink-0 font-mono text-xs tracking-[0.08em] text-ink">{example}</span>
+		</div>
+	);
+}
+
+/** How a shape answered, in the words a player would use. */
+function shapeMatchNote(match: ShapeMatch["match"]): string {
+	if (match.kind === "exact") return "same shape";
+	if (match.kind === "near") {
+		return match.differences === 1 ? "one string differs" : `${match.differences} strings differ`;
+	}
+	const frets = Math.abs(match.semitones);
+	return `same grip, ${frets} fret${frets === 1 ? "" : "s"} ${match.semitones > 0 ? "up" : "down"}`;
+}
 
 export interface ChordPaletteRows {
 	readonly results: ChordSearchResult[];
@@ -37,6 +93,8 @@ export interface ChordPaletteRows {
 	readonly batch: ReturnType<typeof classifyBatchQuery>;
 	readonly trimmed: string;
 	readonly showChords: boolean;
+	/** Chords played with the shape typed, when the query is a shape at all. */
+	readonly shape: ChordShapeMatches;
 }
 
 // Computed once by the palette and handed to whichever surface is rendering, so the
@@ -47,6 +105,9 @@ export function useChordPaletteRows(
 ): ChordPaletteRows {
 	const results = useMemo(() => searchChords(index, query), [index, query]);
 	const shortcut = useMemo(() => getNavShortcut(query), [query]);
+	// Six frets are a query of their own: a tab that names no chord can be pasted
+	// straight in. Nothing is fetched unless one actually is.
+	const shape = useChordShapeMatches(query);
 
 	// Exact-lookup map for batch classification, so the per-keystroke check costs one
 	// hash probe per token instead of a scan of the whole index.
@@ -56,9 +117,11 @@ export function useChordPaletteRows(
 	return useMemo(() => {
 		// Single-chord results are meaningless once the query has been read as a chord
 		// list — "C Am F G" collapses to "camfg" in the single-chord parser.
-		const showChords = !batch.shouldOffer && results.length > 0;
-		return { results, shortcut, batch, trimmed: query.trim(), showChords };
-	}, [results, shortcut, batch, query]);
+		// A shape is read the same way: "0-1-0-2-2-0" is six frets, not six chords.
+		const isShape = shape.target !== null;
+		const showChords = !batch.shouldOffer && !isShape && results.length > 0;
+		return { results, shortcut, batch, trimmed: query.trim(), showChords, shape };
+	}, [results, shortcut, batch, query, shape]);
 }
 
 interface Props {
@@ -86,10 +149,56 @@ export default function ChordSearchResults({
 	onSelectShortcut,
 	onSelectBatch,
 }: Props) {
-	const { results, shortcut, batch, trimmed, showChords } = rows;
+	const { results, shortcut, batch, trimmed, showChords, shape } = rows;
+	const isShape = shape.target !== null;
 
 	return (
 		<>
+			{/* First in DOM order, because cmdk highlights the first row: a player who
+			    pasted a grip and pressed Enter means the chord it is, not a browse
+			    shortcut the six characters happened to look like. */}
+			{isShape && shape.matches.length > 0 && (
+				<CommandGroup heading="Chords with this shape">
+					{shape.matches.map((m) => (
+						<CommandItem
+							key={shapeValue(m)}
+							value={shapeValue(m)}
+							onSelect={() =>
+								onSelectChord({ root: m.root, suffix: m.suffix, category: m.category })
+							}
+						>
+							<span className="flex min-w-0 flex-col gap-0.5">
+								<span className="font-medium text-ink">
+									<MusicalText text={chordDisplayName(m.root, m.suffix)} />
+								</span>
+								<span className="font-mono text-xs tracking-[0.12em] text-ink-dim">
+									{formatTabSequence(m.frets)}
+								</span>
+							</span>
+							<span className="ml-auto shrink-0 text-xs text-ink-dim">
+								{shapeMatchNote(m.match)}
+							</span>
+						</CommandItem>
+					))}
+				</CommandGroup>
+			)}
+
+			{isShape && shape.loading && (
+				<PaletteNote>
+					<NoteLead>Looking for that shape…</NoteLead>
+				</PaletteNote>
+			)}
+
+			{isShape && !shape.loading && shape.matches.length === 0 && (
+				<PaletteNote>
+					<NoteLead>
+						No chord in the library is held like{" "}
+						<span className="font-mono text-ink">{trimmed}</span>.
+					</NoteLead>
+					<NoteRow ask="Frets are read first string first" example={SHAPE_EXAMPLE} />
+				</PaletteNote>
+			)}
+
 			{showChords && (
 				<CommandGroup heading="Chords">
 					{results.map((r) => {
@@ -106,7 +215,7 @@ export default function ChordSearchResults({
 				</CommandGroup>
 			)}
 
-			{batch.shouldOffer && (
+			{batch.shouldOffer && !isShape && (
 				<CommandGroup heading="Chords Result">
 					<CommandItem value={BATCH_VALUE} onSelect={onSelectBatch}>
 						<span className="flex flex-col gap-0.5">
@@ -139,7 +248,7 @@ export default function ChordSearchResults({
 				</CommandGroup>
 			)}
 
-			{shortcut && (
+			{shortcut && !isShape && (
 				<CommandGroup heading="Jump to">
 					<CommandItem
 						value={shortcutValue(shortcut)}
@@ -166,24 +275,24 @@ export default function ChordSearchResults({
 				</CommandGroup>
 			)}
 
-			{trimmed === "" && (
-				<div className="flex flex-col items-center gap-1 px-4 py-6 text-center text-sm text-ink-dim">
-					<p>Type a chord name to search.</p>
-					<p className="text-xs">
-						Several at once — <span className="text-ink">C Am F G</span> — opens them
-						side by side; commas force it: <span className="text-ink">C, Am</span>
-					</p>
-				</div>
+			{trimmed === "" && !isShape && (
+				<PaletteNote>
+					{SEARCH_HINTS.map((hint) => (
+						<NoteRow key={hint.example} ask={hint.ask} example={hint.example} />
+					))}
+				</PaletteNote>
 			)}
 
-			{!batch.shouldOffer && trimmed !== "" && results.length === 0 && (
-				<div className="flex flex-col items-center gap-3 px-4 py-6 text-center text-sm">
-					<p className="text-ink-dim">
+			{!batch.shouldOffer && !isShape && trimmed !== "" && results.length === 0 && (
+				<PaletteNote>
+					<NoteLead>
 						No chord found for “<span className="text-ink">{trimmed}</span>”.
-					</p>
+					</NoteLead>
 					{/* Keyed on the query so a new search always gets a fresh button. */}
-					<ChordRequestButton key={trimmed} query={trimmed} />
-				</div>
+					<div className="border-t border-line py-2.5">
+						<ChordRequestButton key={trimmed} query={trimmed} />
+					</div>
+				</PaletteNote>
 			)}
 		</>
 	);

@@ -39,6 +39,7 @@ function Palette({ query }: { query: string }) {
 					onSelectChord={() => {}}
 					onSelectShortcut={() => {}}
 					onSelectBatch={() => {}}
+					onCreateChord={() => {}}
 				/>
 			</CommandList>
 		</Command>

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import { chordRefToDiagram } from "@/lib/strumBars";
 import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
-import type { VexChordDef } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing, VexChordDef } from "@/lib/chordVoicingToVexChords";
+import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**
  * A bar's fretboard shape, or the fact that it is still on its way. Null — no
@@ -25,7 +26,16 @@ function keyOf(ref: ChordRef): string {
  * diagrams are switched on, their chords are usually in memory and the shapes
  * render on the first paint, with no loading state at all.
  */
-export function useBarChordDiagrams(bars: Bar[], enabled: boolean): (BarChordDiagram | null)[] {
+export function useBarChordDiagrams(
+	bars: Bar[],
+	enabled: boolean,
+	/**
+	 * The player's own shapes. Without them a bar pinned to one draws the
+	 * library's standard voicing instead — `selectRefVoicing` cannot find an id
+	 * that is not in the list it was handed.
+	 */
+	userVoicings: readonly UserChordVoicing[] = [],
+): (BarChordDiagram | null)[] {
 	// Which lookups have settled. The voicings themselves live in the shared
 	// cache; this only records the outcome, so a resolved fetch re-renders and a
 	// failed one stops the bar waiting forever.
@@ -75,12 +85,23 @@ export function useBarChordDiagrams(bars: Bar[], enabled: boolean): (BarChordDia
 			bars.map((bar) => {
 				if (!enabled || !bar.chord) return null;
 				const cached = peekVoicings(bar.chord.root, bar.chord.suffix);
-				if (cached === null) {
+				const mine = userVoicings.filter(
+					(v) => v.root === bar.chord!.root && v.suffix === bar.chord!.suffix,
+				);
+				if (cached === null && mine.length === 0) {
 					return outcomes[keyOf(bar.chord)] === "failed" ? null : { status: "loading" };
 				}
-				const def = chordRefToDiagram(bar.chord, cached);
+				// A chord the library has nothing for still draws, if the player has
+				// written a shape for it.
+				const available: ChordVoicing[] = mergeVoicings(
+					cached ?? [],
+					userVoicings,
+					bar.chord.root,
+					bar.chord.suffix,
+				);
+				const def = chordRefToDiagram(bar.chord, available);
 				return def ? { status: "ready", def } : null;
 			}),
-		[bars, enabled, outcomes],
+		[bars, enabled, outcomes, userVoicings],
 	);
 }

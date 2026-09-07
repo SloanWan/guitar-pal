@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { rootToSlug, slugToRoot, suffixToSlug, slugToSuffix } from "@/lib/chordSlug";
+import {
+  chordHref,
+  rootToSlug,
+  slugToRoot,
+  suffixToSlug,
+  slugToSuffix,
+} from "@/lib/chordSlug";
+import { UNKNOWN_ROOT, UNKNOWN_SUFFIX } from "@/lib/chordSuffixes";
 
 // All 14 root values present in the chords table (12 chromatic + enharmonics)
 const ALL_ROOTS = [
@@ -133,4 +140,47 @@ describe("slugToSuffix known values", () => {
   it("m9-over-e → m9/E", () => expect(slugToSuffix("m9-over-e")).toBe("m9/E"));
   it("m7 → m7 (not decoded as slash chord)", () => expect(slugToSuffix("m7")).toBe("m7"));
   it("mmaj7 → mmaj7 (not decoded as slash chord)", () => expect(slugToSuffix("mmaj7")).toBe("mmaj7"));
+});
+
+describe("a chord nobody has named still needs a URL", () => {
+  it("writes the placeholder root out, since '?' would start the query string", () => {
+    expect(rootToSlug(UNKNOWN_ROOT)).toBe(UNKNOWN_SUFFIX);
+    expect(rootToSlug(UNKNOWN_ROOT)).not.toContain("?");
+  });
+
+  it("round-trips back to the root it is stored under", () => {
+    expect(slugToRoot(rootToSlug(UNKNOWN_ROOT))).toBe(UNKNOWN_ROOT);
+    expect(slugToSuffix(suffixToSlug(UNKNOWN_SUFFIX))).toBe(UNKNOWN_SUFFIX);
+  });
+
+  it("collides with no real root, which is why the word is safe to use", () => {
+    for (const root of ALL_ROOTS) expect(rootToSlug(root)).not.toBe(UNKNOWN_SUFFIX);
+  });
+});
+
+describe("chordHref — where a chord is read", () => {
+  it("addresses a named chord by its name", () => {
+    expect(chordHref("C", "major")).toBe("/chords/c/major");
+    expect(chordHref("C", "/G")).toBe("/chords/c/over-g");
+  });
+
+  it("addresses an unnamed chord by its shape, since its name says nothing", () => {
+    expect(chordHref(UNKNOWN_ROOT, UNKNOWN_SUFFIX, "007707")).toBe(
+      "/chords/unknown/007707",
+    );
+  });
+
+  it("writes a spaced shape with dashes, which the parser reads back", () => {
+    expect(chordHref(UNKNOWN_ROOT, UNKNOWN_SUFFIX, "x 12 12 12 10 x")).toBe(
+      "/chords/unknown/x-12-12-12-10-x",
+    );
+  });
+
+  it("falls back to the name when no shape is given", () => {
+    expect(chordHref(UNKNOWN_ROOT, UNKNOWN_SUFFIX)).toBe("/chords/unknown/unknown");
+  });
+
+  it("ignores a shape for a chord that has a name of its own", () => {
+    expect(chordHref("C", "major", "01023x")).toBe("/chords/c/major");
+  });
 });

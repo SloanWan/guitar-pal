@@ -1,27 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Guitar, List, Music, Pencil, Plus, Trash2, Type } from "lucide-react";
-import type { Bar, ChordProgression, ChordRef, StrumPattern } from "@/lib/strumPatterns";
+import { useEffect, useId, useState } from "react";
+import { Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
+import type { Bar, ChordProgression, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,
 	progressionCapo,
 	chordAbbreviation,
 	parseChordSequence,
+	keptTokens,
+	hasShapeToken,
+	type ChordToken,
+	type UnknownChordChoice,
 } from "@/lib/strumProgressions";
+import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
+import { useChordSearchNavigation } from "@/components/chords/useChordSearchNavigation";
+import { resolveShapeToChord } from "@/lib/chordShapeSearch";
 import {
 	PROGRESSION_PRESETS,
 	filterPresets,
 	groupPresets,
 	type ProgressionPreset,
 } from "@/lib/strumProgressionPresets";
+import { barPlaceholder, patternMeter } from "@/lib/strumBars";
 import { getChordIndex } from "@/lib/chords";
+import { peekVoicings } from "@/lib/chordVoicingCache";
+import { selectRefVoicing } from "@/lib/strumBars";
+import {
+	chordIndexWithUser,
+	mergeVoicings,
+	type UserChordVoicing,
+} from "@/lib/userChordVoicings";
+import ChordShapeModal, { type ApplyScope } from "@/components/chords/ChordShapeModal";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import StepGrid, { type ActiveCell, type ChordView } from "./StepGrid";
 import { useBarChordDiagrams } from "./useBarChordDiagrams";
 import StepGridCard from "./StepGridCard";
+import ChordViewToggle from "./ChordViewToggle";
 import PatternBarBody from "./PatternBarBody";
-import { type ConfirmedChord } from "./ChordPickerModal";
+import ChordPickerModal, { type ConfirmedChord } from "./ChordPickerModal";
 
 /** Which view of the selected pattern is on screen. */
 export type WorkspaceTab = "pattern" | "progressions";
@@ -40,12 +57,67 @@ interface Props {
 	progressionsLoading: boolean;
 	selectedProgressionId: string | null;
 	onSelectProgression: (id: string | null) => void;
-	/** Create a progression from a typed chord sequence, one bar per chord. */
-	onAddProgression: (chords: ChordRef[]) => void;
+	/**
+	 * Create a progression from a typed chord sequence, one bar per word. Words
+	 * the library could not match arrive only when the player chose to keep them;
+	 * those bars carry the name and no chord.
+	 */
+	onAddProgression: (tokens: ChordToken[]) => void;
 	onEditProgression: (progression: ChordProgression) => void;
 	onDeleteProgression: (progression: ChordProgression) => void;
+	/**
+	 * Name the chord of a bar in the open sequence, saved with it. Given only
+	 * where there is a sequence to save into; used to finish a bar kept as a name
+	 * the chord library has nothing for, from where the sequence is read.
+	 */
+	onProgressionBarChord?: (barIdx: number, chord: ConfirmedChord | null) => void;
 	/** Given only for a pattern the user owns; presets cannot be edited. */
 	onEditPattern?: () => void;
+	/**
+	 * Whether the open sequence is still in step with the pattern it was written
+	 * over. "ask" means the pattern's rhythm has moved and the player has not
+	 * answered; "detached" means they said no and it no longer follows.
+	 */
+	patternSync?: "ask" | "detached" | null;
+	onApplyPatternSync?: () => void;
+	onDeclinePatternSync?: () => void;
+	onResumePatternSync?: () => void;
+	onDismissPatternNotice?: () => void;
+	/**
+	 * Pin a shape the player wrote onto this bar, or onto every bar playing the
+	 * same chord. Given only where the bars can actually be saved.
+	 */
+	onApplyChordShape?: (barIdx: number, voicing: UserChordVoicing, scope: ApplyScope) => void;
+	/** The player's own shapes, held by the page so sound and picture agree. */
+	userVoicings?: readonly UserChordVoicing[];
+	/** Returns the row the shape actually lives in — its id may not be the one just minted. */
+	onSaveVoicing?: (voicing: UserChordVoicing) => UserChordVoicing;
+}
+
+/**
+ * The three answers to "this word is not a chord we have". Ordered as the
+ * keyboard walks them, and keeping is first because it is the one that throws
+ * nothing the player typed away.
+ */
+const UNKNOWN_ANSWERS = [
+	{
+		key: "keep",
+		label: "Keep as written",
+		hint: "Write them down as typed — those bars sound nothing until you give them a shape",
+	},
+	{ key: "skip", label: "Skip them", hint: "Leave them out of the progression" },
+	{ key: "edit", label: "Keep editing", hint: "Go back to the line and change it" },
+] as const;
+
+type UnknownAnswer = (typeof UNKNOWN_ANSWERS)[number]["key"] | "create";
+
+/** Written both ways: the same chord chart is copied on both kinds of keyboard. */
+const WRITE_SHORTCUT = "Ctrl/⌘ + Enter";
+
+interface UnknownOption {
+	key: UnknownAnswer;
+	label: string;
+	hint: string;
 }
 
 function TabButton({
@@ -86,7 +158,16 @@ export default function PatternWorkspace({
 	onAddProgression,
 	onEditProgression,
 	onDeleteProgression,
+	onProgressionBarChord,
 	onEditPattern,
+	patternSync = null,
+	onApplyPatternSync,
+	onDeclinePatternSync,
+	onResumePatternSync,
+	onDismissPatternNotice,
+	onApplyChordShape,
+	userVoicings = [],
+	onSaveVoicing,
 }: Props) {
 	const selected = progressions.find((p) => p.id === selectedProgressionId) ?? null;
 
@@ -96,9 +177,15 @@ export default function PatternWorkspace({
 	const [composerOpen, setComposerOpen] = useState(false);
 	const [chordInput, setChordInput] = useState("");
 	const [composerError, setComposerError] = useState<string | null>(null);
-	// Raised when the typed line holds chords the library does not have: creating
-	// anyway drops them, so the user confirms first.
-	const [skipConfirm, setSkipConfirm] = useState(false);
+	// Raised when the typed line holds chords the library does not have. There is
+	// no safe default — dropping them loses bars, keeping them writes bars that do
+	// not sound — so the player answers rather than the composer guessing.
+	const [unknownPrompt, setUnknownPrompt] = useState(false);
+	// Which answer the arrow keys are resting on. The prompt appears under a
+	// focused text input, so it is walked from there rather than tabbed into —
+	// taking focus away would put the caret somewhere the player did not ask for.
+	const [unknownChoice, setUnknownChoice] = useState(0);
+	const unknownAnswersId = useId();
 	// Deleting a progression cannot be undone, so the trash icon asks first.
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	// Phone only: the list slides out from the left and pushes the open
@@ -109,10 +196,61 @@ export default function PatternWorkspace({
 	// How the open progression announces its chords: by name, or as the shape to
 	// hold. The shapes are fetched only while the diagrams are on screen.
 	const [chordView, setChordView] = useState<ChordView>("name");
-	const barDiagrams = useBarChordDiagrams(
-		bars,
-		chordView === "diagram" && tab === "progressions",
-	);
+	// A progression inherits its pattern's meter — the chords change, the way the
+	// bar is counted does not.
+	const meter = patternMeter(pattern);
+
+	// A bar of the open sequence whose chord is being swapped for another out of
+	// the library. Null while the picker is closed.
+	const [chordPickerBar, setChordPickerBar] = useState<number | null>(null);
+
+	// The bar whose shape is being written. One state for both kinds: a chord the
+	// library has is being re-shaped, a bar kept as a name is being turned into a
+	// chord, and both end in exactly one stored shape.
+	const [shapeEditBar, setShapeEditBar] = useState<number | null>(null);
+	const editingBar = shapeEditBar !== null ? (bars[shapeEditBar] ?? null) : null;
+	const editingChord = editingBar?.chord ?? null;
+	// The name a bar was kept under, which the dialog turns into a chord identity.
+	const editingKeptName = editingBar ? barPlaceholder(editingBar) : null;
+	// What that bar is drawing right now, recovered the same way the diagram was:
+	// from the shared cache, through the same selector.
+	const editingVoicing = editingChord
+		? selectRefVoicing(
+				editingChord,
+				mergeVoicings(
+					peekVoicings(editingChord.root, editingChord.suffix) ?? [],
+					userVoicings,
+					editingChord.root,
+					editingChord.suffix,
+				),
+			)
+		: null;
+
+	/**
+	 * Bars on screen the shape being written could reach — the ones playing the
+	 * same chord, or, for a chord being named, the ones kept under the same name.
+	 */
+	const matchingBarCount = editingKeptName
+		? bars.filter((bar) => barPlaceholder(bar) === editingKeptName).length
+		: editingChord
+			? bars.filter(
+					(bar) =>
+						bar.chord?.root === editingChord.root &&
+						bar.chord?.suffix === editingChord.suffix,
+				).length
+			: 0;
+
+	function handleApplyShape(voicing: UserChordVoicing, scope: ApplyScope) {
+		if (shapeEditBar === null) return;
+		// Pin what was stored, not what was minted: an identical shape already on
+		// record keeps its own id, and pinning the fresh one would point the bar
+		// at a row that was never written.
+		const stored = onSaveVoicing?.(voicing) ?? voicing;
+		onApplyChordShape?.(shapeEditBar, stored, scope);
+	}
+	// Both tabs: the pattern tab's chords are session-only, but looking at the
+	// shape you are playing is as useful there as anywhere.
+	const barDiagrams = useBarChordDiagrams(bars, chordView === "diagram", userVoicings);
 
 	useEffect(() => {
 		if (!composerOpen || chordIndex.length > 0) return;
@@ -127,15 +265,26 @@ export default function PatternWorkspace({
 		};
 	}, [composerOpen, chordIndex.length]);
 
+	// A chord the player wrote a shape for is a chord they can write again, so
+	// their own chords are searchable beside the library's.
+	const searchIndex = chordIndexWithUser(chordIndex, userVoicings);
+	// Voicings are only needed once a shape is actually written into the line —
+	// a sequence of names never pays for them.
+	const shapeCorpus = useChordShapeCorpus(composerOpen && hasShapeToken(chordInput));
 	// What the typed line resolves to right now — the preview under the input.
-	const parsed = parseChordSequence(chordInput, chordIndex);
+	const parsed = parseChordSequence(chordInput, searchIndex, (frets) =>
+		shapeCorpus ? resolveShapeToChord(shapeCorpus, frets) : null,
+	);
+	/** Shapes in the line that nothing is held with — chords waiting to be written. */
+	const unwritten = parsed.tokens.filter((t) => t.shape && t.chord === null);
+	const { goToCreateChord } = useChordSearchNavigation(closeComposer);
 	// Presets still worth offering for what has been typed so far.
 	const matchingPresets = filterPresets(PROGRESSION_PRESETS, chordInput);
 
 	function openComposer() {
 		setChordInput("");
 		setComposerError(null);
-		setSkipConfirm(false);
+		setUnknownPrompt(false);
 		setComposerOpen(true);
 	}
 
@@ -144,38 +293,84 @@ export default function PatternWorkspace({
 	function applyPreset(preset: ProgressionPreset) {
 		setChordInput(preset.chords);
 		setComposerError(null);
-		setSkipConfirm(false);
+		setUnknownPrompt(false);
 	}
 
 	function closeComposer() {
 		setComposerOpen(false);
 		setChordInput("");
 		setComposerError(null);
-		setSkipConfirm(false);
+		setUnknownPrompt(false);
 	}
 
-	/** `skipUnknown` is the answer to the "skip it and carry on?" prompt. */
-	function submitComposer(skipUnknown = false) {
+	/**
+	 * `answer` is the reply to the unknown-chord prompt; null means it has not
+	 * been asked yet, which is what pressing Enter on a fresh line does.
+	 */
+	function submitComposer(answer: UnknownChordChoice | null = null) {
 		if (chordIndex.length === 0) {
 			setComposerError("Still loading chords — try again in a moment.");
 			return;
 		}
-		const { chords, unmatched } = parsed;
-		if (chords.length === 0) {
-			setComposerError(
-				unmatched.length > 0
-					? `No chord found for ${unmatched.join(", ")}`
-					: "Type a chord sequence, e.g. C G Am F",
-			);
+		const { tokens, unmatched } = parsed;
+		if (tokens.length === 0) {
+			setComposerError("Type a chord sequence, e.g. C G Am F");
 			return;
 		}
-		// Unknown chords are not silently dropped: the user is asked first.
-		if (unmatched.length > 0 && !skipUnknown) {
-			setSkipConfirm(true);
+		// Unknown chords are neither dropped nor kept behind the player's back.
+		if (unmatched.length > 0 && answer === null) {
+			setUnknownPrompt(true);
+			setUnknownChoice(0);
 			return;
 		}
-		onAddProgression(chords);
+		const kept = keptTokens(tokens, answer ?? "skip");
+		// Skipping every word there was leaves nothing to write down.
+		if (kept.length === 0) {
+			setUnknownPrompt(false);
+			setComposerError(`No chord found for ${unmatched.join(", ")}`);
+			return;
+		}
+		onAddProgression(kept);
 		closeComposer();
+	}
+
+	/**
+	 * The answers on offer. A shape nothing is held with adds a fourth and puts
+	 * it first: the others all decide what to do *without* the chord, and this
+	 * one is the chord.
+	 */
+	const unknownAnswers: UnknownOption[] = unwritten[0]
+		? [
+				{
+					key: "create",
+					label: `Write ${unwritten[0].input} down`,
+					hint: "Nothing is held that way — draw it, name it, and it is yours",
+				},
+				...UNKNOWN_ANSWERS,
+			]
+		: [...UNKNOWN_ANSWERS];
+
+	/** Act on one of the answers; "edit" is simply returning to the line. */
+	function answerUnknown(answer: UnknownAnswer) {
+		if (answer === "edit") {
+			setUnknownPrompt(false);
+			return;
+		}
+		if (answer === "create") {
+			writeUnwritten();
+			return;
+		}
+		submitComposer(answer);
+	}
+
+	/**
+	 * Leave for the page where a shape becomes a chord. The composer closes on the
+	 * way out — the line cannot survive the navigation, and a half-open composer
+	 * behind a page change is worse than a clean one on return.
+	 */
+	function writeUnwritten() {
+		const first = unwritten[0];
+		if (first) goToCreateChord(first.input);
 	}
 
 	/** `rail` is the compact form used beside an open progression. */
@@ -204,19 +399,51 @@ export default function PatternWorkspace({
 					onChange={(e) => {
 						setChordInput(e.target.value);
 						if (composerError) setComposerError(null);
-						// A new keystroke re-opens the question the confirmation answered.
-						if (skipConfirm) setSkipConfirm(false);
+						// A new keystroke re-opens the question the answer settled.
+						if (unknownPrompt) setUnknownPrompt(false);
 					}}
+					// Claimed only while the answers are actually on screen; the rest of
+					// the time this is a plain text field.
+					role={unknownPrompt ? "combobox" : undefined}
+					aria-expanded={unknownPrompt ? true : undefined}
+					aria-controls={unknownPrompt ? unknownAnswersId : undefined}
+					aria-activedescendant={
+						unknownPrompt ? `${unknownAnswersId}-${unknownChoice}` : undefined
+					}
 					onKeyDown={(e) => {
-						if (e.key === "Enter") {
+						// While the prompt is up the arrows walk the answers rather than
+						// the caret: there is a question on screen waiting to be answered,
+						// and the line behind it cannot be edited until it is.
+						if (
+							unknownPrompt &&
+							(e.key === "ArrowRight" ||
+								e.key === "ArrowDown" ||
+								e.key === "ArrowLeft" ||
+								e.key === "ArrowUp")
+						) {
 							e.preventDefault();
-							submitComposer(skipConfirm);
+							const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+							setUnknownChoice(
+								(i) => (i + step + unknownAnswers.length) % unknownAnswers.length,
+							);
+						} else if (e.key === "Enter") {
+							e.preventDefault();
+							// Straight to writing the shape down, without answering a
+							// question whose answer is already known: the line has frets in
+							// it that nothing is held with, and that is what to do about it.
+							if ((e.metaKey || e.ctrlKey) && unwritten.length > 0) {
+								writeUnwritten();
+							} else if (unknownPrompt) {
+								answerUnknown(unknownAnswers[unknownChoice]?.key ?? "edit");
+							} else {
+								submitComposer(null);
+							}
 						} else if (e.key === "Escape") {
 							e.preventDefault();
 							closeComposer();
 						}
 					}}
-					placeholder="C G Am F"
+					placeholder="C G Am F, or 007707"
 					aria-label="Chord sequence"
 					className={`w-full border bg-surface font-mono text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
 						composerError ? "border-destructive" : "border-line-strong"
@@ -232,9 +459,15 @@ export default function PatternWorkspace({
 								className={`border px-1.5 py-0.5 font-mono text-[11px] ${
 									token.chord
 										? "border-denim-border bg-denim-tint text-denim"
-										: "border-destructive/40 text-destructive line-through"
+										: "border-destructive/40 text-destructive"
 								}`}
-								title={token.chord ? undefined : `${token.input} is not in the library`}
+								title={
+									token.chord
+										? undefined
+										: token.shape
+											? `Nothing is held like ${token.input} — ${WRITE_SHORTCUT} writes it down`
+											: `${token.input} is not in the library — keep it as a silent bar, or skip it`
+								}
 							>
 								{token.chord ? chordAbbreviation(token.chord) : token.input}
 							</span>
@@ -244,31 +477,54 @@ export default function PatternWorkspace({
 
 				{composerError ? (
 					<p className="text-[10px] text-destructive">{composerError}</p>
-				) : skipConfirm ? (
-					<div className="flex flex-wrap items-center gap-2">
+				) : unknownPrompt ? (
+					<div className="flex flex-col gap-1">
 						<span className="text-[10px] text-destructive">
-							{parsed.unmatched.join(", ")} not found — skip and create?
+							{unwritten.length === parsed.unmatched.length
+								? `Nothing is held like ${parsed.unmatched.join(", ")}.`
+								: `${parsed.unmatched.join(", ")} not in the chord library.`}
 						</span>
-						<button
-							type="button"
-							onMouseDown={(e) => e.preventDefault()}
-							onClick={() => submitComposer(true)}
-							className="border border-denim px-2 py-0.5 text-[10px] font-semibold text-denim transition-colors hover:bg-denim-tint"
+						<div
+							id={unknownAnswersId}
+							role="listbox"
+							aria-label="What to do with the chords that were not found"
+							className="flex flex-wrap items-center gap-2"
 						>
-							Skip &amp; create
-						</button>
-						<button
-							type="button"
-							onMouseDown={(e) => e.preventDefault()}
-							onClick={() => setSkipConfirm(false)}
-							className="px-1 text-[10px] text-ink-dim transition-colors hover:text-ink"
-						>
-							Keep editing
-						</button>
+							{unknownAnswers.map((answer, i) => {
+								const active = i === unknownChoice;
+								return (
+									<button
+										key={answer.key}
+										id={`${unknownAnswersId}-${i}`}
+										type="button"
+										role="option"
+										aria-selected={active}
+										title={answer.hint}
+										// Keeps focus in the input, so the arrows keep working
+										// after a click and the line stays editable.
+										onMouseDown={(e) => e.preventDefault()}
+										onMouseEnter={() => setUnknownChoice(i)}
+										onClick={() => answerUnknown(answer.key)}
+										className={`border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+											active
+												? "border-denim bg-denim text-on-denim"
+												: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+										}`}
+									>
+										{answer.label}
+									</button>
+								);
+							})}
+						</div>
+						<p className="text-[10px] text-ink-faint">
+							&larr; &rarr; to choose, Enter to confirm.
+						</p>
 					</div>
 				) : (
 					<p className="text-[10px] text-ink-faint">
-						One chord per bar. Enter to add, Esc to cancel.
+						{unwritten.length > 0
+							? `Nothing is held like ${unwritten[0].input} — ${WRITE_SHORTCUT} to write it down.`
+							: "One chord per bar, by name or by shape. Enter to add, Esc to cancel."}
 					</p>
 				)}
 
@@ -333,9 +589,14 @@ export default function PatternWorkspace({
 			<StepGridCard pattern={pattern} onEditPattern={onEditPattern}>
 				{tab === "pattern" ? (
 					<PatternBarBody
+						meter={meter}
 						bars={bars}
 						activeCell={activeCell}
 						onBarChordChange={onBarChordChange}
+						chordView={chordView}
+						onChordViewChange={setChordView}
+						barDiagrams={barDiagrams}
+						onEditChordShape={onApplyChordShape ? setShapeEditBar : undefined}
 					/>
 				) : progressionsLoading ? (
 					<p className="px-5 py-6 text-xs text-ink-dim">Loading progressions…</p>
@@ -467,28 +728,7 @@ export default function PatternWorkspace({
 									</div>
 								) : (
 									<div className="flex shrink-0 items-center">
-										<button
-											type="button"
-											onClick={() =>
-												setChordView((view) => (view === "name" ? "diagram" : "name"))
-											}
-											aria-label={
-												chordView === "name"
-													? "Show chord diagrams"
-													: "Show chord names"
-											}
-											aria-pressed={chordView === "diagram"}
-											title={
-												chordView === "name"
-													? "Show chord diagrams"
-													: "Show chord names"
-											}
-											className={`flex items-center justify-center p-1.5 transition-colors hover:bg-denim-tint hover:text-denim ${
-												chordView === "diagram" ? "text-denim" : "text-ink-dim"
-											}`}
-										>
-											{chordView === "name" ? <Guitar size={14} /> : <Type size={14} />}
-										</button>
+										<ChordViewToggle value={chordView} onChange={setChordView} />
 										<button
 											type="button"
 											onClick={() => onEditProgression(selected)}
@@ -510,14 +750,85 @@ export default function PatternWorkspace({
 									</div>
 								)}
 							</div>
+							{/* The pattern moved under this sequence. Asked here, where the
+							    sequence is on screen and the answer can be judged, rather than
+							    applied on the pattern's save where it could not be. Inline
+							    rather than a dialog: it is a question about what is behind it,
+							    and blocking the view of the thing in question helps nobody. */}
+							{patternSync === "ask" && (
+								<div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-destructive bg-destructive-tint px-3 py-2 sm:px-5">
+									<span className="min-w-0 flex-1 font-mono text-[11px] leading-snug tracking-[0.04em] text-ink-dim">
+										The pattern&rsquo;s rhythm has changed since this sequence was
+										written. Apply it here?
+									</span>
+									<button
+										type="button"
+										onClick={onApplyPatternSync}
+										className="flex h-(--h-control) items-center border border-denim px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors hover:bg-denim hover:text-on-denim"
+									>
+										Apply
+									</button>
+									<button
+										type="button"
+										onClick={onDeclinePatternSync}
+										className="flex h-(--h-control) items-center border border-line-strong px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors hover:border-denim hover:text-denim-accent"
+									>
+										Keep mine
+									</button>
+								</div>
+							)}
+							{/* Declining is a state, not a silence: a one-way door the player
+							    cannot see they walked through is the failure mode here. */}
+							{patternSync === "detached" && (
+								<div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-1.5 sm:px-5">
+									<span className="min-w-0 flex-1 font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+										Not following the pattern&rsquo;s rhythm.
+									</span>
+									<button
+										type="button"
+										onClick={onResumePatternSync}
+										className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim underline-offset-2 transition-colors hover:text-denim-accent hover:underline"
+									>
+										Follow again
+									</button>
+									{/* Saying no is about the rhythm; this is about being told. A
+									    player who has settled on their own rhythm does not need a
+									    standing reminder, but one who has just decided might. */}
+									<button
+										type="button"
+										onClick={onDismissPatternNotice}
+										aria-label="Dismiss this notice for good"
+										title="Dismiss for good"
+										className="flex items-center justify-center p-1 text-ink-faint transition-colors hover:text-ink-dim"
+									>
+										<X size={12} />
+									</button>
+								</div>
+							)}
+
 							{/* Scrolls internally; playback keeps the current bar in view. */}
 							<div className="flex min-h-0 flex-col items-center overflow-y-auto px-3 py-5 sm:px-5">
 								<div className="my-auto w-full">
 									<StepGrid
 										bars={bars}
 										activeCell={activeCell}
+										meter={meter}
 										chordView={chordView}
 										barDiagrams={barDiagrams}
+										onEditChordShape={
+											onApplyChordShape ? setShapeEditBar : undefined
+										}
+										// Changing a chord where it is read, rather than only
+										// inside the editor — the editor is for rewriting the
+										// sequence, not for swapping one chord in it.
+										onChordClick={
+											onProgressionBarChord ? setChordPickerBar : undefined
+										}
+										// A kept name has no chord to swap and no shape on
+										// record, so it goes to the shape editor instead.
+										onPlaceholderClick={
+											onApplyChordShape ? setShapeEditBar : undefined
+										}
 									/>
 								</div>
 							</div>
@@ -525,6 +836,28 @@ export default function PatternWorkspace({
 					</div>
 				)}
 			</StepGridCard>
+
+			<ChordPickerModal
+				open={chordPickerBar !== null}
+				onClose={() => setChordPickerBar(null)}
+				onConfirm={(chord) => {
+					if (chordPickerBar !== null) onProgressionBarChord?.(chordPickerBar, chord);
+					setChordPickerBar(null);
+				}}
+				initialChord={chordPickerBar !== null ? bars[chordPickerBar]?.chord : null}
+			/>
+
+			{(editingChord || editingKeptName) && (
+				<ChordShapeModal
+					open={shapeEditBar !== null}
+					chord={editingChord}
+					namingFrom={editingKeptName ?? undefined}
+					initialVoicing={editingVoicing}
+					onClose={() => setShapeEditBar(null)}
+					onApply={handleApplyShape}
+					matchingBarCount={matchingBarCount}
+				/>
+			)}
 		</div>
 	);
 }

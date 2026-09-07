@@ -13,6 +13,12 @@ interface Props {
 	/** Browsable (root, suffix) pairs. Empty while the index is still loading. */
 	index: readonly ChordIndexEntry[];
 	ariaLabel: string;
+	/**
+	 * A name the bar is holding that the library has no chord for. Shown in red
+	 * in place of "No chord", so the bar reads as unfinished rather than blank,
+	 * and typing over it is how the player finishes it.
+	 */
+	unknownLabel?: string | null;
 }
 
 /**
@@ -21,7 +27,13 @@ interface Props {
  * (searchChords), but stays in the flow instead of opening a dialog, so a bar
  * can be assigned without leaving the pattern editor.
  */
-export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }: Props) {
+export default function ChordSearchSelect({
+	chord,
+	onChange,
+	index,
+	ariaLabel,
+	unknownLabel = null,
+}: Props) {
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(false);
 	const [highlighted, setHighlighted] = useState(0);
@@ -86,19 +98,28 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 		}
 	}
 
+	// Only meaningful while nothing is picked; a named chord retires it.
+	const unknown = chord ? null : unknownLabel;
 	const displayValue = editing
 		? query
 		: chord
 			? chordDisplayName(chord.root, chord.suffix)
-			: "";
+			: (unknown ?? "");
 
 	return (
 		<div ref={containerRef} className="relative">
 			<div
+				title={
+					unknown && !editing
+						? `${unknown} — not in the chord library, so this bar sounds nothing`
+						: undefined
+				}
 				className={`flex items-center gap-1.5 border px-2 py-1 transition-colors ${
 					chord && !editing
 						? "border-denim bg-denim-tint text-denim"
-						: "border-line-strong text-ink-dim focus-within:border-denim"
+						: unknown && !editing
+							? "border-destructive bg-destructive-tint text-destructive"
+							: "border-line-strong text-ink-dim focus-within:border-denim"
 				}`}
 			>
 				<Music size={10} className="shrink-0" />
@@ -123,13 +144,17 @@ export default function ChordSearchSelect({ chord, onChange, index, ariaLabel }:
 					onKeyDown={handleKeyDown}
 					className="w-24 bg-transparent font-mono text-[11px] font-semibold placeholder:font-normal placeholder:text-ink-dim focus:outline-none"
 				/>
-				{chord && !editing && (
+				{/* Clearing a kept name goes through the same path a chord does:
+				    `setBarChord` retires the placeholder either way. */}
+				{(chord || unknown) && !editing && (
 					<button
 						type="button"
 						onClick={() => onChange(null)}
 						aria-label={`Clear ${ariaLabel}`}
 						title="Clear chord"
-						className="shrink-0 text-denim transition-colors hover:text-destructive"
+						className={`shrink-0 transition-colors ${
+							chord ? "text-denim hover:text-destructive" : "text-destructive hover:text-ink"
+						}`}
 					>
 						<X size={10} />
 					</button>

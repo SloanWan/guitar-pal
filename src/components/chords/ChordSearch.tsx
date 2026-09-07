@@ -49,7 +49,8 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 
 	// Closed immediately on select, so it never sits open and inert while the
 	// destination route is in flight.
-	const { goToChord, goToBrowse, goToGrid } = useChordSearchNavigation(closeInline);
+	const { goToChord, goToBrowse, goToGrid, goToCreateChord } =
+		useChordSearchNavigation(closeInline);
 
 	// Collapsed the pill is a plain circle; expanded (hovered, or opened for typing) it
 	// widens and washes in a low-alpha denim gradient — the brand hue at tint strength,
@@ -102,6 +103,7 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 								onSelectChord={goToChord}
 								onSelectShortcut={goToBrowse}
 								onSelectBatch={() => goToGrid(query)}
+								onCreateChord={goToCreateChord}
 							/>
 						</CommandList>
 					)}

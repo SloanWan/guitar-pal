@@ -8,6 +8,8 @@
 import {
   ROOT_CHROMATIC_ORDER,
   CHORD_SUFFIX_CATEGORIES,
+  UNKNOWN_ROOT,
+  UNKNOWN_SUFFIX,
   getSuffixCategory,
   isSlashChord,
 } from "@/lib/chordSuffixes";
@@ -116,6 +118,44 @@ function normalizeSuffix(rest: string): string {
     default:
       return s;
   }
+}
+
+// A slash chord's bass note is a root like any other, and is stored spelled the
+// way roots are stored ("/G", "m/C#"). Typed input arrives lowercased by
+// normalizeInput, so "c/d#" would otherwise be filed as "/d#" — a suffix nothing
+// else in the product would ever produce.
+function normalizeSlashBass(suffix: string): string {
+  const at = suffix.indexOf("/");
+  if (at < 0) return suffix;
+  const { root, rest } = parseRoot(suffix.slice(at + 1));
+  if (root === null || rest !== "") return suffix;
+  return `${suffix.slice(0, at)}/${root}`;
+}
+
+/**
+ * A typed chord name as the identity it would be stored under: "cadd9#11" →
+ * `{ root: "C", suffix: "add9#11" }`, "c/d#" → `{ root: "C", suffix: "/Eb" }`.
+ *
+ * The same reading `searchChords` does, stopped one step earlier: search asks
+ * which stored chord a query is looking for, this asks what the query itself
+ * says. That is what a chord the library does not carry needs — there is
+ * nothing to match it against, and the player's own shape still has to be filed
+ * somewhere findable.
+ *
+ * Null when nothing in the input reads as a root note — the one thing a chord
+ * identity cannot be invented without, and the reason `unknown` is a name in its
+ * own right rather than a missing one.
+ */
+export function normalizeChordName(raw: string): ChordIndexEntry | null {
+  // The one name that needs no root: a chord the player cannot identify. Filing
+  // it under the note in its bass would be a guess, and would bury it among the
+  // chords of a key it may well not belong to.
+  if (normalizeInput(raw) === UNKNOWN_SUFFIX) {
+    return { root: UNKNOWN_ROOT, suffix: UNKNOWN_SUFFIX };
+  }
+  const { root, normalizedSuffix } = parseQuery(raw);
+  if (root === null) return null;
+  return { root, suffix: normalizeSlashBass(normalizedSuffix) };
 }
 
 export function parseQuery(raw: string): ParsedQuery {

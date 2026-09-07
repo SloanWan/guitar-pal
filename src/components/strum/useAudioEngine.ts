@@ -1,6 +1,8 @@
 "use client";
 
-import { Bar, Beat, StepValue, TickMode } from "@/lib/strumPatterns";
+import { Bar, Beat, StepValue } from "@/lib/strumPatterns";
+import { DEFAULT_METER, type Meter } from "@/lib/strumMeter";
+import { beatSteps, ticksPerBeat, type TickLevel } from "@/lib/strumMetronome";
 
 import { useRef, useEffect, useState } from "react";
 import {
@@ -36,7 +38,13 @@ export function _resolveStrumBuffer(
 	return buffers[soundType] ?? null;
 }
 
-/** Per-bar MIDI pitches, indexed by bar. A one-element array is a single-bar pattern. */
+/**
+ * Per-bar MIDI pitches, indexed by bar. A one-element array is a single-bar
+ * pattern. Three cases per bar, produced by `resolveBarChords`: the chord's
+ * pitches, `null` for a chordless bar (the sample loader's default voicing), and
+ * an empty array for a bar that sounds nothing — a chord the library does not
+ * have, kept as a name. A silent bar still keeps its metronome ticks.
+ */
 export type BarPitches = readonly (readonly number[] | null)[];
 
 export interface FlatBars {
@@ -80,8 +88,9 @@ export function _pitchesForBar(
 export function useAudioEngine(
 	bars: Bar[],
 	bpm: number,
-	tickMode: TickMode,
+	tickLevel: TickLevel,
 	barPitches?: BarPitches,
+	meter: Meter = DEFAULT_METER,
 ) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
 	const schedulerRef = useRef<number | null>(null);
@@ -94,7 +103,6 @@ export function useAudioEngine(
 	const [strumGain, setStrumGain] = useState(1.0);
 	const [metronomeEnabled, setMetronomeEnabled] = useState(true);
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
-	const [accentEnabled, setAccentEnabled] = useState(true);
 	const [playOnce, setPlayOnce] = useState(false);
 
 	const isPlayingRef = useRef(false);
@@ -102,20 +110,26 @@ export function useAudioEngine(
 
 	const currBeatIdxref = useRef(0);
 	const currCellIdxRef = useRef(0);
-	const nextCellTimeRef = useRef(0);
+	// Position inside the beat's merged strum/metronome grid — not a cell index.
+	// A step may strike a cell, sound the metronome, or both.
+	const currStepIdxRef = useRef(0);
+	const nextStepTimeRef = useRef(0);
 	const bpmRef = useRef(bpm);
-	const tickModeRef = useRef(tickMode);
-	const nextPlatEmptyCellRef = useRef(false);
+	const tickLevelRef = useRef(tickLevel);
+	const meterRef = useRef(meter);
 	const strumEnabledRef = useRef(strumEnabled);
 	const strumGainRef = useRef(strumGain);
 	const metronomeEnabledRef = useRef(metronomeEnabled);
 	const metronomeGainRef = useRef(metronomeGain);
-	const accentEnabledRef = useRef(accentEnabled);
 	const playOnceRef = useRef(playOnce);
 	const barPitchesRef = useRef(barPitches);
 
 	// Active source nodes tracked for cleanup on stop() and unmount.
-	const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+	// Metronome oscillators that have been scheduled but may not have sounded yet.
+	// Strum voices are cancelled by cancelStrums(); ticks had no cancellation path
+	// at all until this list, so stopping mid-beat left the already-scheduled
+	// clicks to fire into the silence.
+	const activeTicksRef = useRef<OscillatorNode[]>([]);
 
 	useEffect(() => {
 		isPlayingRef.current = isPlaying;
@@ -127,8 +141,11 @@ export function useAudioEngine(
 		bpmRef.current = bpm;
 	}, [bpm]);
 	useEffect(() => {
-		tickModeRef.current = tickMode;
-	}, [tickMode]);
+		tickLevelRef.current = tickLevel;
+	}, [tickLevel]);
+	useEffect(() => {
+		meterRef.current = meter;
+	}, [meter]);
 	useEffect(() => {
 		strumEnabledRef.current = strumEnabled;
 	}, [strumEnabled]);
@@ -142,9 +159,6 @@ export function useAudioEngine(
 		metronomeGainRef.current = metronomeGain;
 	}, [metronomeGain]);
 	useEffect(() => {
-		accentEnabledRef.current = accentEnabled;
-	}, [accentEnabled]);
-	useEffect(() => {
 		playOnceRef.current = playOnce;
 	}, [playOnce]);
 	useEffect(() => {
@@ -157,14 +171,14 @@ export function useAudioEngine(
 			if (schedulerRef.current !== null) {
 				window.clearTimeout(schedulerRef.current);
 			}
-			for (const source of activeSourcesRef.current) {
+			for (const osc of activeTicksRef.current) {
 				try {
-					source.stop();
+					osc.stop();
 				} catch {
 					// node may have already ended naturally
 				}
 			}
-			activeSourcesRef.current = [];
+			activeTicksRef.current = [];
 			cancelStrums();
 			if (audioCtxRef.current) {
 				try {
@@ -197,7 +211,7 @@ export function useAudioEngine(
 			console.error("[useAudioEngine] Failed to preload strum presets:", err);
 		});
 
-		nextCellTimeRef.current = ctx.currentTime;
+		nextStepTimeRef.current = ctx.currentTime;
 		setIsPlaying(true);
 		scheduler();
 	}
@@ -215,6 +229,17 @@ export function useAudioEngine(
 
 		osc.start(time);
 		osc.stop(time + 0.05);
+
+		// Tracked so stop() can silence a click that is scheduled but has not
+		// sounded; dropped again on ended so a long session cannot accumulate
+		// thousands of finished nodes.
+		activeTicksRef.current.push(osc);
+		osc.onended = () => {
+			osc.disconnect();
+			gain.disconnect();
+			const i = activeTicksRef.current.indexOf(osc);
+			if (i !== -1) activeTicksRef.current.splice(i, 1);
+		};
 	}
 
 	function playStrum(
@@ -228,18 +253,17 @@ export function useAudioEngine(
 		const soundType = STEP_TO_SOUND[type];
 		if (!soundType) return;
 
+		const pitches = _pitchesForBar(barPitchesRef.current, barIndex);
+		// An empty pitch table is a bar holding a chord we have nothing for: it
+		// keeps its place in the loop and sounds nothing. Undefined is the other
+		// thing entirely — no chord picked, play the default voicing.
+		if (pitches?.length === 0) return;
+
 		const ctx = audioCtxRef.current!;
 		const gainNode = ctx.createGain();
 		gainNode.gain.value = strumGainRef.current;
 		gainNode.connect(ctx.destination);
-		triggerStrum(
-			soundType,
-			ctx,
-			gainNode,
-			time,
-			secondsPerCell,
-			_pitchesForBar(barPitchesRef.current, barIndex),
-		);
+		triggerStrum(soundType, ctx, gainNode, time, secondsPerCell, pitches);
 	}
 
 	function scheduler() {
@@ -254,56 +278,45 @@ export function useAudioEngine(
 			return;
 		}
 
-		while (nextCellTimeRef.current < ctx.currentTime + 0.1) {
+		while (nextStepTimeRef.current < ctx.currentTime + 0.1) {
 			const beat = flat.beats[currBeatIdxref.current];
 			const barIndex = flat.barIndexOfBeat[currBeatIdxref.current];
-			const secondsPerCell =
-				beat.length === 2 && tickModeRef.current === "sixteenth"
-					? secondsPerBeat / 4
-					: secondsPerBeat / beat.length;
 
-			const shouldNotTick =
-				(tickModeRef.current === "quarter" && currCellIdxRef.current != 0) ||
-				(tickModeRef.current === "eighth" &&
-					beat.length === 4 &&
-					(currCellIdxRef.current === 1 || currCellIdxRef.current === 3));
+			// The strum grid and the metronome are independent: how finely the
+			// player drew this beat says nothing about how often they want to hear
+			// a click. `beatSteps` merges the two onto their least common multiple,
+			// which is what the old `beat.length === 2 && sixteenth` phantom-cell
+			// branch was doing by hand for one case out of many.
+			const steps = beatSteps(beat.length, ticksPerBeat(meterRef.current, tickLevelRef.current));
+			const step = steps[currStepIdxRef.current] ?? steps[0];
+			const secondsPerStep = secondsPerBeat / steps.length;
+			// A struck cell rings until the next cell, never until the next step —
+			// the metronome setting must not change how long a strum sounds.
+			const secondsPerCell = secondsPerBeat / beat.length;
 
-			if (!shouldNotTick) {
-				// Accent lands on the first beat of every bar. For a single-bar
-				// pattern that is beat 0, exactly as before.
+			if (step.tick) {
+				// Every bar's first click is accented — a bar line the player can
+				// hear. Not optional: a metronome that does not mark the downbeat
+				// is only half a metronome.
 				const isAccent =
-					accentEnabledRef.current &&
-					flat.barHeadFlags[currBeatIdxref.current] &&
-					currCellIdxRef.current === 0;
-				playTick(nextCellTimeRef.current, isAccent);
+					flat.barHeadFlags[currBeatIdxref.current] && currStepIdxRef.current === 0;
+				playTick(nextStepTimeRef.current, isAccent);
 			}
 
-			// For 2-cell beats in sixteenth mode, alternate between real cells and
-			// empty subdivisions — skip strumming on the empty subdivisions.
-			const isEmptySubdivision =
-				tickModeRef.current === "sixteenth" &&
-				beat.length === 2 &&
-				nextPlatEmptyCellRef.current;
-			const beatType: StepValue = isEmptySubdivision ? "" : beat[currCellIdxRef.current];
-			playStrum(nextCellTimeRef.current, beatType, secondsPerCell, barIndex);
+			if (step.cellIndex !== null) {
+				playStrum(nextStepTimeRef.current, beat[step.cellIndex], secondsPerCell, barIndex);
+				// The cursor follows struck cells only, so it holds its place
+				// through the clicks that fall between them.
+				currCellIdxRef.current = step.cellIndex;
+				setCurrCell(step.cellIndex);
+			}
 
 			setCurrBeat(currBeatIdxref.current);
-			setCurrCell(currCellIdxRef.current);
 			setCurrBar(barIndex);
 
-			if (tickModeRef.current === "sixteenth" && beat.length === 2) {
-				if (!nextPlatEmptyCellRef.current) {
-					nextPlatEmptyCellRef.current = true;
-				} else {
-					nextPlatEmptyCellRef.current = false;
-					currCellIdxRef.current += 1;
-				}
-			} else {
-				currCellIdxRef.current += 1;
-			}
-
-			if (currCellIdxRef.current >= beat.length) {
-				currCellIdxRef.current = 0;
+			currStepIdxRef.current += 1;
+			if (currStepIdxRef.current >= steps.length) {
+				currStepIdxRef.current = 0;
 				currBeatIdxref.current = (currBeatIdxref.current + 1) % flat.beats.length;
 				if (playOnceRef.current && currBeatIdxref.current === 0) {
 					// Do not call stop() here: it would invoke cancelStrums() synchronously,
@@ -315,7 +328,7 @@ export function useAudioEngine(
 					// ring length, not one cell — otherwise play-once clips its own
 					// closing chord.
 					const delaySec =
-						Math.max(0, nextCellTimeRef.current - ctx.currentTime) +
+						Math.max(0, nextStepTimeRef.current - ctx.currentTime) +
 						STRUM_RING_SECONDS +
 						SOURCE_STOP_BUFFER_S;
 					schedulerRef.current = window.setTimeout(() => {
@@ -324,7 +337,6 @@ export function useAudioEngine(
 					}, delaySec * 1000);
 					currBeatIdxref.current = 0;
 					currCellIdxRef.current = 0;
-					nextPlatEmptyCellRef.current = false;
 					setCurrBeat(0);
 					setCurrCell(0);
 					setCurrBar(0);
@@ -333,7 +345,7 @@ export function useAudioEngine(
 				}
 			}
 
-			nextCellTimeRef.current += secondsPerCell;
+			nextStepTimeRef.current += secondsPerStep;
 		}
 
 		schedulerRef.current = window.setTimeout(scheduler, 25);
@@ -343,18 +355,18 @@ export function useAudioEngine(
 		if (schedulerRef.current) {
 			window.clearTimeout(schedulerRef.current as number);
 		}
-		for (const source of activeSourcesRef.current) {
+		for (const osc of activeTicksRef.current) {
 			try {
-				source.stop();
+				osc.stop();
 			} catch {
 				// node may have already ended naturally
 			}
 		}
-		activeSourcesRef.current = [];
+		activeTicksRef.current = [];
 		cancelStrums();
 		currBeatIdxref.current = 0;
 		currCellIdxRef.current = 0;
-		nextPlatEmptyCellRef.current = false;
+		currStepIdxRef.current = 0;
 		setCurrBeat(0);
 		setCurrCell(0);
 		setCurrBar(0);
@@ -394,8 +406,6 @@ export function useAudioEngine(
 		setMetronomeEnabled: handleSetMetronomeEnabled,
 		metronomeGain,
 		setMetronomeGain,
-		accentEnabled,
-		setAccentEnabled,
 		playOnce,
 		setPlayOnce,
 	};

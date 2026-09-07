@@ -40,6 +40,20 @@ export function toBars(pattern: StrumPattern): Bar[] {
 }
 
 /**
+ * The name a bar carries with no chord behind it: a word the player typed that
+ * the library has nothing for, kept as written.
+ *
+ * The one reader of `Bar.unknownChord`, so "a chord was picked, the placeholder
+ * is gone" is decided in a single place rather than re-derived at every call
+ * site. Null means an ordinary bar — chorded, or plainly chordless.
+ */
+export function barPlaceholder(bar: Bar): string | null {
+	if (bar.chord) return null;
+	const label = bar.unknownChord?.trim();
+	return label ? label : null;
+}
+
+/**
  * Coerce anything that claims to be a tempo into a playable one: rounded and
  * clamped to the fader bounds, falling back to the default for a missing or
  * non-finite value (a legacy row, a null column, a blank editor field).
@@ -133,7 +147,7 @@ export function validateBars(bars: unknown): BarsValidationResult {
 			errors.push(`bar ${barIndex}: must be an object`);
 			return;
 		}
-		const { beats, chord } = bar as Partial<Bar>;
+		const { beats, chord, unknownChord } = bar as Partial<Bar>;
 
 		if (!Array.isArray(beats)) {
 			errors.push(`bar ${barIndex}: beats must be an array`);
@@ -156,6 +170,12 @@ export function validateBars(bars: unknown): BarsValidationResult {
 					);
 				}
 			});
+		}
+
+		// Read back from storage, where anything could be in it. A blank one is
+		// not a placeholder either: it would render as a nameless red bar.
+		if (unknownChord !== undefined && (typeof unknownChord !== "string" || unknownChord.trim() === "")) {
+			errors.push(`bar ${barIndex}: unknownChord must be a non-empty string when present`);
 		}
 
 		if (chord !== null && chord !== undefined) {
@@ -231,6 +251,11 @@ export type VoicingLookup = (ref: ChordRef) => Promise<ChordVoicing[] | null>;
  * Resolve every bar's chord to MIDI pitches, index-aligned with `bars`.
  * Each distinct chord identity is fetched once, so a `C–G–C–G` progression
  * costs two lookups, not four.
+ *
+ * Three outcomes per bar, and this is the one place that tells them apart:
+ * pitches for a chord, `null` for a chordless bar (the engine sounds its own
+ * default voicing), and `[]` for a bar holding a chord the library does not
+ * have — that one sounds nothing at all.
  */
 export async function resolveBarChords(
 	bars: Bar[],
@@ -241,7 +266,8 @@ export async function resolveBarChords(
 	return Promise.all(
 		bars.map(async (bar) => {
 			const ref = bar.chord;
-			if (!ref) return null;
+			// A name with no chord behind it is silence, not the default voicing.
+			if (!ref) return barPlaceholder(bar) ? [] : null;
 			const key = `${ref.root} ${ref.suffix}`;
 			let voicings = cache.get(key);
 			if (!voicings) {
@@ -261,6 +287,9 @@ export async function resolveBarChords(
  * capo raises too — `fallback` is that voicing, transposed in its place. At capo
  * 0 the table is returned untouched, nulls included, so the engine keeps using
  * its own default.
+ *
+ * A silent bar's empty table is carried through as it is: a capo on silence is
+ * silence, and `??` leaves an empty array alone where it would replace a null.
  */
 export function transposeBarPitches(
 	pitches: readonly (readonly number[] | null)[],

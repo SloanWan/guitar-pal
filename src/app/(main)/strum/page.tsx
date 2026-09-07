@@ -12,6 +12,7 @@ import {
 } from "@/lib/strumPatterns";
 import {
 	toBars,
+	barPlaceholder,
 	resolveBarChords,
 	transposeBarPitches,
 	patternBpm,
@@ -23,11 +24,16 @@ import {
 import { DEFAULT_METER, isCompound } from "@/lib/strumMeter";
 import { TICK_LEVELS, tickLevelLabel, type TickLevel } from "@/lib/strumMetronome";
 import { STRUM_PITCHES } from "@/components/strum/useGuitarSampleLoader";
-import { setBarChord, barLocalBeatIndex } from "@/lib/strumBarEdit";
+import {
+	setBarChord,
+	barLocalBeatIndex,
+	applyVoicingToBars,
+	voicingReach,
+} from "@/lib/strumBarEdit";
 import {
 	progressionsForPattern,
 	nextOrderIndex,
-	progressionBarsFromChords,
+	progressionBarsFromTokens,
 	progressionCapo,
 	patternSyncState,
 	applyPatternSync,
@@ -35,6 +41,7 @@ import {
 	resumePatternSync,
 	dismissPatternNotice,
 	markPatternSynced,
+	type ChordToken,
 } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
 import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
@@ -300,7 +307,9 @@ export default function StrumPage() {
 		// the effect body so they do not cascade renders.
 		queueMicrotask(() => {
 			setBars(next);
-			setBarPitches(next.map(() => null));
+			// Silent bars are silent before the lookups settle too, or a placeholder
+			// would sound the default voicing for the first loop after loading.
+			setBarPitches(next.map((bar) => (barPlaceholder(bar) ? [] : null)));
 		});
 
 		let cancelled = false;
@@ -513,13 +522,13 @@ export default function StrumPage() {
 		setBpm(bpmFor(patternProgressions.find((p) => p.id === id) ?? null));
 	}
 
-	/** A typed chord sequence becomes a progression: one bar per chord. */
-	function handleAddProgression(chords: ChordRef[]) {
+	/** A typed chord sequence becomes a progression: one bar per typed word. */
+	function handleAddProgression(tokens: ChordToken[]) {
 		if (!selectedPattern) return;
 		const progression: ChordProgression = {
 			id: crypto.randomUUID(),
 			patternId: selectedPattern.id,
-			bars: progressionBarsFromChords(selectedPattern.beats, chords),
+			bars: progressionBarsFromTokens(selectedPattern.beats, tokens),
 			orderIndex: nextOrderIndex(patternProgressions),
 			// Written from the pattern as it stands, so it starts reconciled.
 			syncedBeats: selectedPattern.beats.map((beat) => [...beat]),
@@ -529,6 +538,25 @@ export default function StrumPage() {
 		setTab("progressions");
 		setOpenProgressionId(progression.id);
 		setBpm(bpmFor(progression));
+	}
+
+	/**
+	 * Give a bar of the open sequence the chord it was only ever named with.
+	 *
+	 * Saved into the progression rather than held for the session: the bar was
+	 * written down unfinished on purpose, and finishing it is the point. The
+	 * write re-runs the resolve effect, so the bar stops being silent by the same
+	 * path every other chord change takes.
+	 */
+	function handleProgressionBarChord(barIdx: number, chord: ConfirmedChord | null) {
+		if (!openProgression) return;
+		const ref = chord
+			? { root: chord.root, suffix: chord.suffix, voicingId: chord.voicingId ?? null }
+			: null;
+		handleSaveProgression({
+			...openProgression,
+			bars: setBarChord(openProgression.bars, barIdx, ref),
+		});
 	}
 
 	function handleEditProgression(progression: ChordProgression) {
@@ -594,6 +622,12 @@ export default function StrumPage() {
 	 *
 	 * Only the sequence's own bars: the pattern tab's chord picks are session-only
 	 * and have nowhere to be saved, so the control is not offered there.
+	 *
+	 * A bar kept under a name the library had no chord for is finished here
+	 * rather than pinned: the shape the player just drew is the first record that
+	 * chord exists, so the bar takes the identity the shape was filed under and
+	 * its placeholder retires. Bars sharing the name travel with it under the
+	 * "whole pattern" scope — they were written as the same chord.
 	 */
 	function handleApplyChordShape(
 		barIdx: number,
@@ -602,22 +636,14 @@ export default function StrumPage() {
 	) {
 		const onProgression = tab === "progressions" && openProgression !== null;
 		const source = onProgression ? openProgression!.bars : bars;
-		const target = source[barIdx]?.chord;
-		if (!target) return;
-
-		const matches = (bar: Bar, i: number) =>
-			scope === "bar"
-				? i === barIdx
-				: bar.chord?.root === target.root && bar.chord?.suffix === target.suffix;
-		const pin = (bar: Bar, i: number) =>
-			matches(bar, i) && bar.chord
-				? { ...bar, chord: { ...bar.chord, voicingId: voicing.id } }
-				: bar;
+		const bar = source[barIdx];
+		if (!bar || (!bar.chord && !barPlaceholder(bar))) return;
+		const reach = voicingReach(source, barIdx, scope);
 
 		if (onProgression) {
 			handleSaveProgression({
 				...openProgression!,
-				bars: openProgression!.bars.map(pin),
+				bars: applyVoicingToBars(openProgression!.bars, barIdx, voicing, scope),
 			});
 			return;
 		}
@@ -628,11 +654,13 @@ export default function StrumPage() {
 		const pitches = chordVoicingToMidi(voicing).map((n) => n.midi);
 		// Remembered like any other pattern-tab pick, or the pin would be lost on
 		// the way to the progressions tab and back.
-		sessionChordsRef.current = source.map((bar, i) =>
-			matches(bar, i) && bar.chord ? { ...bar.chord, voicingId: voicing.id } : (sessionChordsRef.current[i] ?? bar.chord ?? null),
+		sessionChordsRef.current = source.map((candidate, i) =>
+			reach[i] && candidate.chord
+				? { ...candidate.chord, voicingId: voicing.id }
+				: (sessionChordsRef.current[i] ?? candidate.chord ?? null),
 		);
-		setBars((prev) => prev.map(pin));
-		setBarPitches((prev) => prev.map((p, i) => (matches(source[i], i) ? pitches : p)));
+		setBars((prev) => applyVoicingToBars(prev, barIdx, voicing, scope));
+		setBarPitches((prev) => prev.map((p, i) => (reach[i] ? pitches : p)));
 	}
 
 	function handleDismissPatternNotice() {
@@ -834,6 +862,9 @@ export default function StrumPage() {
 								onAddProgression={handleAddProgression}
 								onEditProgression={handleEditProgression}
 								onDeleteProgression={handleRemoveProgression}
+								onProgressionBarChord={
+									openProgression ? handleProgressionBarChord : undefined
+								}
 								onEditPattern={
 									customPatterns.some((p) => p.id === selectedPattern.id)
 										? () => {
@@ -1505,6 +1536,7 @@ export default function StrumPage() {
 					progression={editingProgression}
 					patternBpm={selectedPattern ? patternBpm(selectedPattern) : DEFAULT_STRUM_BPM}
 					meter={meter}
+					userVoicings={userVoicings}
 				/>
 			)}
 		</>

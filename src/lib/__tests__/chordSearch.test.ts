@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { parseQuery, searchChords, getNavShortcut, type ChordIndexEntry } from "@/lib/chordSearch";
+import {
+  parseQuery,
+  searchChords,
+  getNavShortcut,
+  normalizeChordName,
+  type ChordIndexEntry,
+} from "@/lib/chordSearch";
 import { isBrowsableSuffix, CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
 import { rootToSlug, suffixToSlug, slugToRoot, slugToSuffix } from "@/lib/chordSlug";
 import { CHORD_ROWS } from "@/lib/__fixtures__/chordData.fixture";
@@ -198,6 +204,38 @@ describe("getNavShortcut — browse jump shortcuts", () => {
 			if (s?.kind === "category") expect(valid.has(s.category)).toBe(true);
 		}
 	});
+});
+
+describe("normalizeChordName — a typed name as a stored identity", () => {
+  it("reads a chord the library does not carry", () => {
+    expect(normalizeChordName("Cadd9#11")).toEqual({ root: "C", suffix: "add9#11" });
+  });
+
+  it("files the same chord under one identity however it was typed", () => {
+    expect(normalizeChordName("  cADD9#11 ")).toEqual(normalizeChordName("Cadd9#11"));
+  });
+
+  it("applies the same root spelling search does", () => {
+    expect(normalizeChordName("D#sus17")).toEqual({ root: "Eb", suffix: "sus17" });
+  });
+
+  it("reads a bare root as its major chord", () => {
+    expect(normalizeChordName("F")).toEqual({ root: "F", suffix: "major" });
+  });
+
+  it("spells a slash chord's bass the way roots are stored", () => {
+    expect(normalizeChordName("C/g")).toEqual({ root: "C", suffix: "/G" });
+    expect(normalizeChordName("Am/d#")).toEqual({ root: "A", suffix: "m/Eb" });
+  });
+
+  it("leaves a bass note it cannot read alone rather than inventing one", () => {
+    expect(normalizeChordName("C/xyz")).toEqual({ root: "C", suffix: "/xyz" });
+  });
+
+  it("is null for a name with no root note in it — nothing to file it under", () => {
+    expect(normalizeChordName("zzz")).toBeNull();
+    expect(normalizeChordName("   ")).toBeNull();
+  });
 });
 
 describe("slug round-trip — every row decodes back to itself", () => {

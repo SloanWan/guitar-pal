@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
 	Dialog,
 	DialogContent,
@@ -33,7 +33,7 @@ import {
 	STRUM_BPM_MAX,
 	STRUM_CAPO_MAX,
 } from "@/lib/strumPatterns";
-import { validateBars, normalizeBpm } from "@/lib/strumBars";
+import { barPlaceholder, validateBars, normalizeBpm } from "@/lib/strumBars";
 import {
 	allowedCellsPerBeat,
 	cellCountLabel,
@@ -57,6 +57,7 @@ import {
 	removeCell,
 } from "@/lib/strumBarEdit";
 import { defaultProgressionName, normalizeCapo, progressionCapo } from "@/lib/strumProgressions";
+import { chordIndexWithUser, type UserChordVoicing } from "@/lib/userChordVoicings";
 import ChordSearchSelect from "./ChordSearchSelect";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
@@ -83,6 +84,7 @@ export default function ProgressionEditModal({
 	progression,
 	patternBpm,
 	meter,
+	userVoicings = [],
 }: {
 	open: boolean;
 	onClose: () => void;
@@ -93,6 +95,11 @@ export default function ProgressionEditModal({
 	patternBpm: number;
 	/** The pattern's time signature. A progression never has one of its own. */
 	meter: Meter;
+	/**
+	 * The player's own shapes. Their chords join the library's in the bar chord
+	 * fields, so a chord written once can be typed again here.
+	 */
+	userVoicings?: readonly UserChordVoicing[];
 }) {
 	const {
 		bars,
@@ -126,6 +133,11 @@ export default function ProgressionEditModal({
 	// Browsable (root, suffix) pairs, fetched once per modal open and shared by
 	// every bar's selector rather than refetched per bar.
 	const [chordIndex, setChordIndex] = useState<readonly ChordIndexEntry[]>([]);
+	// The library's chords plus the ones the player's own shapes are filed under.
+	const searchIndex = useMemo(
+		() => chordIndexWithUser(chordIndex, userVoicings),
+		[chordIndex, userVoicings],
+	);
 	// Index of the bar most recently copied or moved. That block gets a denim
 	// glow so the user can find where the edit landed.
 	const [highlightedBarIdx, setHighlightedBarIdx] = useState<number | null>(null);
@@ -531,10 +543,11 @@ export default function ProgressionEditModal({
 										</span>
 										<ChordSearchSelect
 											chord={bar.chord}
+											unknownLabel={barPlaceholder(bar)}
 											onChange={(chord) =>
 												setBars((prev) => setBarChord(prev, barIdx, chord))
 											}
-											index={chordIndex}
+											index={searchIndex}
 											ariaLabel={`Chord for bar ${barIdx + 1}`}
 										/>
 										<div className="ml-auto flex items-center">

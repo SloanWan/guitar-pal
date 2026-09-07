@@ -1,4 +1,5 @@
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { CHORD_SHAPE_WINDOW, MAX_SHAPE_START_FRET } from "@/lib/chordShape";
 
 /**
@@ -121,6 +122,32 @@ export function withUserVoicings(
 	user: readonly UserChordVoicing[],
 ): (ref: { root: string; suffix: string }) => Promise<ChordVoicing[]> {
 	return async (ref) => mergeVoicings(await base(ref.root, ref.suffix), user, ref.root, ref.suffix);
+}
+
+/**
+ * The searchable chord index, plus the chords the player's own shapes are filed
+ * under.
+ *
+ * A shape written for a chord the library does not carry is the only record
+ * that chord exists. Without this it stays unfindable: the player types the
+ * name again next week, nothing matches, and they are asked to keep or skip a
+ * chord they have already drawn. Identities the library already has are not
+ * repeated — the library's spelling wins, since that is what everything else
+ * indexes by.
+ */
+export function chordIndexWithUser(
+	index: readonly ChordIndexEntry[],
+	user: readonly UserChordVoicing[],
+): ChordIndexEntry[] {
+	const seen = new Set(index.map((entry) => `${entry.root} ${entry.suffix}`));
+	const extra: ChordIndexEntry[] = [];
+	for (const { root, suffix } of user) {
+		const key = `${root} ${suffix}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		extra.push({ root, suffix });
+	}
+	return extra.length === 0 ? [...index] : [...index, ...extra];
 }
 
 /** The row shape of `user_chord_voicings`, as it comes back from the database. */

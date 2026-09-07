@@ -15,6 +15,7 @@ import { userVoicingId, type UserChordVoicing } from "@/lib/userChordVoicings";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { chordDisplayName } from "@/lib/chordSuffixes";
+import { normalizeChordName } from "@/lib/chordSearch";
 
 /**
  * Write a shape for the chord a bar is playing.
@@ -30,7 +31,20 @@ export type ApplyScope = "bar" | "chord";
 
 interface Props {
 	open: boolean;
-	chord: ChordRef;
+	/**
+	 * The chord this shape belongs to. Null while it is still to be named, which
+	 * is the case for a bar kept under a name the library has no chord for —
+	 * `namingFrom` then carries that name.
+	 */
+	chord: ChordRef | null;
+	/**
+	 * The name the bar was kept under. Given, the dialog asks what the chord is
+	 * called as well as what it looks like: a shape is filed under a chord
+	 * identity, and for a chord the library never had, this is the moment that
+	 * identity gets settled. The name is normalized the way search reads one, so
+	 * "cadd9#11" and "Cadd9#11" file under the same chord.
+	 */
+	namingFrom?: string;
 	/** The shape currently drawn for this bar, to start from. */
 	initialVoicing: ChordVoicing | null;
 	onClose: () => void;
@@ -46,6 +60,7 @@ interface Props {
 export default function ChordShapeModal({
 	open,
 	chord,
+	namingFrom,
 	initialVoicing,
 	onClose,
 	onApply,
@@ -53,6 +68,8 @@ export default function ChordShapeModal({
 }: Props) {
 	const [shape, setShape] = useState<ChordShape>(() => emptyChordShape());
 	const [name, setName] = useState("");
+	// What the chord is called. Only asked while it has no identity yet.
+	const [chordName, setChordName] = useState("");
 	// Shown in place of the close control once there is work to lose.
 	const [discardConfirm, setDiscardConfirm] = useState(false);
 	const [pristine, setPristine] = useState("");
@@ -72,22 +89,33 @@ export default function ChordShapeModal({
 		queueMicrotask(() => {
 			setShape(start);
 			setName("");
+			setChordName(namingFrom ?? "");
 			setDiscardConfirm(false);
 			setPristine(JSON.stringify(start));
 		});
-	}, [open, initialVoicing]);
+	}, [open, initialVoicing, namingFrom]);
 
-	const label = chordDisplayName(chord.root, chord.suffix);
-	const valid = validateChordShape(shape).ok;
-	const dirty = JSON.stringify(shape) !== pristine || name.trim() !== "";
+	// A chord being named resolves from the field; one that already has an
+	// identity keeps it. Null is a name nothing in it reads as a root note, which
+	// is the one thing a chord identity cannot be invented without.
+	const naming = chord === null;
+	const identity = naming ? normalizeChordName(chordName) : chord;
+	const label = identity
+		? chordDisplayName(identity.root, identity.suffix)
+		: chordName.trim() || "New chord";
+	const valid = validateChordShape(shape).ok && identity !== null;
+	const dirty =
+		JSON.stringify(shape) !== pristine ||
+		name.trim() !== "" ||
+		chordName.trim() !== (namingFrom ?? "").trim();
 
 	function apply(scope: ApplyScope) {
-		if (!valid) return;
+		if (!valid || !identity) return;
 		onApply(
 			{
 				...chordShapeToVoicing(shape, userVoicingId(crypto.randomUUID()), name.trim() || null),
-				root: chord.root,
-				suffix: chord.suffix,
+				root: identity.root,
+				suffix: identity.suffix,
 			},
 			scope,
 		);
@@ -150,6 +178,34 @@ export default function ChordShapeModal({
 						</button>
 					)}
 				</DialogHeader>
+
+				{/* Only for a chord that has none yet. A named chord's identity is not
+				    editable here: renaming it would move every bar pinned to it. */}
+				{naming && (
+					<div className="flex flex-col gap-1">
+						<input
+							type="text"
+							value={chordName}
+							onChange={(e) => setChordName(e.target.value)}
+							placeholder="What is this chord called? e.g. Cadd9#11"
+							aria-label="Chord name"
+							className={`h-(--h-control) w-full border bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:outline-none ${
+								identity
+									? "border-line-strong focus-visible:border-denim"
+									: "border-destructive"
+							}`}
+						/>
+						<p
+							className={`font-mono text-[10px] ${
+								identity ? "text-ink-faint" : "text-destructive"
+							}`}
+						>
+							{identity
+								? `Saved as ${label} — you can write this chord again next time.`
+								: "Start with a root note (A–G) so the chord can be filed."}
+						</p>
+					</div>
+				)}
 
 				<input
 					type="text"

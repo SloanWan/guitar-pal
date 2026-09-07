@@ -20,6 +20,16 @@ export interface ChordRef {
 export interface Bar {
 	beats: Beat[];
 	chord: ChordRef | null;
+	/**
+	 * A chord the player typed that the library has nothing for, kept exactly as
+	 * written rather than dropped.
+	 *
+	 * Only meaningful while `chord` is null — naming the bar's chord retires it.
+	 * Such a bar holds its place in time and sounds nothing: it must not fall
+	 * through to the engine's default voicing the way a plain chordless bar does.
+	 * Read it through `barPlaceholder` in strumBars.ts.
+	 */
+	unknownChord?: string;
 }
 
 /**

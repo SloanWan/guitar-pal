@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
 	parseChordSequence,
-	progressionBarsFromChords,
+	progressionBarsFromTokens,
+	keptTokens,
 	syncBarsToPattern,
 	chordAbbreviation,
 	defaultProgressionName,
@@ -87,6 +88,14 @@ describe("progression naming", () => {
 		];
 		expect(defaultProgressionName(bars)).toBe(`G|${NO_CHORD_LABEL}`);
 		expect(defaultProgressionName([])).toBe(NO_CHORD_LABEL);
+	});
+
+	it("lists a bar kept as a name under that name, not as a blank", () => {
+		const bars: Bar[] = [
+			{ beats: [["D"]], chord: { root: "C", suffix: "major" } },
+			{ beats: [["D"]], chord: null, unknownChord: "Cadd9#11" },
+		];
+		expect(defaultProgressionName(bars)).toBe("C|Cadd9#11");
 	});
 
 	it("prefers a user-given name, ignoring a blank one", () => {
@@ -190,18 +199,45 @@ describe("parseChordSequence", () => {
 	});
 });
 
-describe("progressionBarsFromChords", () => {
+describe("keptTokens — the answer to the unknown-chord prompt", () => {
+	const TOKENS = parseChordSequence("C zzz G", INDEX).tokens;
+
+	it("drops the words no chord matched when the answer is skip", () => {
+		expect(keptTokens(TOKENS, "skip").map((t) => t.input)).toEqual(["C", "G"]);
+	});
+
+	it("writes every word down when the answer is keep", () => {
+		expect(keptTokens(TOKENS, "keep").map((t) => t.input)).toEqual(["C", "zzz", "G"]);
+	});
+
+	it("leaves the parsed tokens alone", () => {
+		keptTokens(TOKENS, "keep").pop();
+		expect(TOKENS).toHaveLength(3);
+	});
+});
+
+describe("progressionBarsFromTokens", () => {
 	it("gives every chord a bar of the pattern's rhythm", () => {
 		const beats = [["D", "UG"], ["DG", "U"]];
-		const bars = progressionBarsFromChords(beats, [
-			{ root: "C", suffix: "major", voicingId: null },
-			{ root: "G", suffix: "major", voicingId: null },
-		]);
+		const bars = progressionBarsFromTokens(beats, parseChordSequence("C G", INDEX).tokens);
 		expect(bars).toHaveLength(2);
 		expect(bars[0].beats).toEqual(beats);
 		expect(bars[1].chord).toMatchObject({ root: "G" });
 		bars[0].beats[0][0] = "X";
 		expect(beats[0][0]).toBe("D");
+	});
+
+	it("keeps a word the library could not match as the bar's name", () => {
+		const beats: Beat[] = [["D", "UG"]];
+		const bars = progressionBarsFromTokens(beats, parseChordSequence("C zzz", INDEX).tokens);
+		expect(bars).toHaveLength(2);
+		expect(bars[1].chord).toBeNull();
+		expect(bars[1].unknownChord).toBe("zzz");
+	});
+
+	it("leaves a resolved bar with no name to carry", () => {
+		const bars = progressionBarsFromTokens([["D"]], parseChordSequence("C", INDEX).tokens);
+		expect(bars[0].unknownChord).toBeUndefined();
 	});
 });
 

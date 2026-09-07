@@ -7,6 +7,8 @@ import {
 	setBarChord,
 	duplicateBar,
 	swapBars,
+	applyVoicingToBars,
+	voicingReach,
 	cycleCell,
 	addCell,
 	removeCell,
@@ -120,6 +122,11 @@ describe("duplicateBar", () => {
 		expect(duplicateBar(withChord, 0)[1].chord).toEqual({ root: "G", suffix: "minor" });
 	});
 
+	it("carries a kept name across, so the copy is unfinished too", () => {
+		const kept: Bar[] = [{ beats: [["D", ""]], chord: null, unknownChord: "Cadd9#11" }];
+		expect(duplicateBar(kept, 0)[1].unknownChord).toBe("Cadd9#11");
+	});
+
 	it("deep-copies the beats so editing the clone leaves the source alone", () => {
 		const source = cycleCell(bars(1), 0, 0, 0);
 		const copied = duplicateBar(source, 0);
@@ -137,6 +144,34 @@ describe("duplicateBar", () => {
 	it("ignores an out-of-range index", () => {
 		const two = bars(2);
 		expect(duplicateBar(two, 9)).toBe(two);
+	});
+});
+
+describe("setBarChord", () => {
+	it("names a bar's chord", () => {
+		expect(setBarChord(bars(1), 0, C_REF)[0].chord).toEqual(C_REF);
+	});
+
+	it("retires the name a placeholder bar was standing in with", () => {
+		const kept: Bar[] = [{ beats: [["D", ""]], chord: null, unknownChord: "Cadd9#11" }];
+		const named = setBarChord(kept, 0, C_REF)[0];
+		expect(named.chord).toEqual(C_REF);
+		expect(named.unknownChord).toBeUndefined();
+	});
+
+	it("retires it on a clear too — an emptied bar is not still unfinished", () => {
+		const kept: Bar[] = [{ beats: [["D", ""]], chord: null, unknownChord: "Cadd9#11" }];
+		const cleared = setBarChord(kept, 0, null)[0];
+		expect(cleared.chord).toBeNull();
+		expect(cleared.unknownChord).toBeUndefined();
+	});
+
+	it("leaves every other bar alone", () => {
+		const kept: Bar[] = [
+			emptyBar(),
+			{ beats: [["D", ""]], chord: null, unknownChord: "zzz" },
+		];
+		expect(setBarChord(kept, 0, C_REF)[1]).toBe(kept[1]);
 	});
 });
 
@@ -724,5 +759,64 @@ describe("edits that change nothing return the same array", () => {
 	it("still allocates for an edit that does change something", () => {
 		const bars = [emptyBar()];
 		expect(cycleCell(bars, 0, 0, 0)).not.toBe(bars);
+	});
+});
+
+describe("voicingReach / applyVoicingToBars — writing a shape", () => {
+	const SHAPE = { id: "u:1", root: "C", suffix: "add9#11" };
+	const beats: Beat[] = [["D", "U"]];
+	const chorded = (root: string, suffix: string, voicingId?: string): Bar => ({
+		beats: beats.map((b) => [...b]),
+		chord: { root, suffix, voicingId: voicingId ?? null },
+	});
+	const kept = (name: string): Bar => ({
+		beats: beats.map((b) => [...b]),
+		chord: null,
+		unknownChord: name,
+	});
+
+	it("reaches only its own bar under the bar scope", () => {
+		const bars = [chorded("C", "major"), chorded("C", "major")];
+		expect(voicingReach(bars, 1, "bar")).toEqual([false, true]);
+	});
+
+	it("reaches every bar playing the same chord under the chord scope", () => {
+		const bars = [chorded("C", "major"), chorded("G", "major"), chorded("C", "major")];
+		expect(voicingReach(bars, 0, "chord")).toEqual([true, false, true]);
+	});
+
+	it("reaches every bar kept under the same name, and no other", () => {
+		const bars = [kept("Cadd9#11"), kept("Gsus17"), kept("Cadd9#11"), chorded("C", "major")];
+		expect(voicingReach(bars, 0, "chord")).toEqual([true, false, true, false]);
+	});
+
+	it("pins the shape onto a bar that already has a chord", () => {
+		const next = applyVoicingToBars([chorded("C", "major")], 0, SHAPE, "bar");
+		// The chord is the bar's, not the shape's: pinning is not renaming.
+		expect(next[0].chord).toEqual({ root: "C", suffix: "major", voicingId: "u:1" });
+	});
+
+	it("turns a bar kept as a name into the chord the shape was filed under", () => {
+		const next = applyVoicingToBars([kept("Cadd9#11")], 0, SHAPE, "bar");
+		expect(next[0].chord).toEqual({ root: "C", suffix: "add9#11", voicingId: "u:1" });
+		expect(next[0].unknownChord).toBeUndefined();
+	});
+
+	it("finishes every bar kept under that name at once under the chord scope", () => {
+		const bars = [kept("Cadd9#11"), chorded("G", "major"), kept("Cadd9#11")];
+		const next = applyVoicingToBars(bars, 0, SHAPE, "chord");
+		expect(next.map((b) => b.chord?.suffix ?? null)).toEqual(["add9#11", "major", "add9#11"]);
+		expect(next[1]).toBe(bars[1]);
+	});
+
+	it("leaves a plainly chordless bar alone — there is nothing to file", () => {
+		const bars = [{ beats: [["D"]] as Beat[], chord: null }];
+		expect(applyVoicingToBars(bars, 0, SHAPE, "bar")[0]).toBe(bars[0]);
+	});
+
+	it("ignores an out-of-range index", () => {
+		const bars = [chorded("C", "major")];
+		expect(voicingReach(bars, 4, "chord")).toEqual([false]);
+		expect(applyVoicingToBars(bars, 4, SHAPE, "chord")[0]).toBe(bars[0]);
 	});
 });

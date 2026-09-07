@@ -5,7 +5,7 @@ import {
 	type ChordProgression,
 	type ChordRef,
 } from "@/lib/strumPatterns";
-import { validateBars } from "@/lib/strumBars";
+import { barPlaceholder, validateBars } from "@/lib/strumBars";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 
@@ -40,11 +40,21 @@ export function chordAbbreviation(chord: ChordRef): string {
 	return chordDisplayName(chord.root, chord.suffix).replace(" ", "");
 }
 
-/** The name a progression takes when the user gives it none: `"C|G|Am|F"`. */
+/**
+ * The name a progression takes when the user gives it none: `"C|G|Am|F"`.
+ *
+ * A bar kept as a name the library has no chord for is listed under that name,
+ * not as `—`: the sequence is called what the player wrote, whether or not we
+ * can play all of it yet.
+ */
 export function defaultProgressionName(bars: Bar[]): string {
 	if (bars.length === 0) return NO_CHORD_LABEL;
 	return bars
-		.map((bar) => (bar.chord ? chordAbbreviation(bar.chord) : NO_CHORD_LABEL))
+		.map((bar) =>
+			bar.chord
+				? chordAbbreviation(bar.chord)
+				: (barPlaceholder(bar) ?? NO_CHORD_LABEL),
+		)
 		.join(NAME_SEPARATOR);
 }
 
@@ -119,9 +129,36 @@ export function parseChordSequence(
 	};
 }
 
-/** One bar per chord, every bar playing the pattern's own rhythm. */
-export function progressionBarsFromChords(beats: Beat[], chords: ChordRef[]): Bar[] {
-	return chords.map((chord) => ({ beats: beats.map((beat) => [...beat]), chord }));
+/** How a typed word the chord library cannot match is dealt with. */
+export type UnknownChordChoice = "skip" | "keep";
+
+/**
+ * The words that become bars, once the unknown-chord question has an answer.
+ * "skip" drops them; "keep" writes them down as they were typed.
+ */
+export function keptTokens(
+	tokens: readonly ChordToken[],
+	choice: UnknownChordChoice,
+): ChordToken[] {
+	return choice === "keep" ? [...tokens] : tokens.filter((t) => t.chord !== null);
+}
+
+/**
+ * One bar per typed word, every bar playing the pattern's own rhythm.
+ *
+ * A word that resolved becomes an ordinary chorded bar. One that did not is
+ * kept verbatim as a placeholder: the bar holds its place and its name, and
+ * sounds nothing until a chord is picked for it.
+ */
+export function progressionBarsFromTokens(
+	beats: Beat[],
+	tokens: readonly ChordToken[],
+): Bar[] {
+	return tokens.map((token) => ({
+		beats: beats.map((beat) => [...beat]),
+		chord: token.chord,
+		...(token.chord ? {} : { unknownChord: token.input }),
+	}));
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Bar } from "@/lib/strumPatterns";
+import { barPlaceholder } from "@/lib/strumBars";
 import {
 	paddedBeatCells,
 	paddedCellIndex,
@@ -59,6 +60,7 @@ export default function StepGrid({
 	size = "md",
 	showLabels = true,
 	onChordClick,
+	onPlaceholderClick,
 	chordView = "name",
 	barDiagrams,
 	onEditChordShape,
@@ -70,6 +72,12 @@ export default function StepGrid({
 	showLabels?: boolean; // default true
 	/** When given, each bar's chord label becomes a button scoped to that bar. */
 	onChordClick?: (barIdx: number) => void;
+	/**
+	 * When given, only the bars kept as a name the library has nothing for become
+	 * buttons. Lets a sequence be finished where it is read, without making every
+	 * settled chord in it clickable as well.
+	 */
+	onPlaceholderClick?: (barIdx: number) => void;
 	/** Chord name (default) or fretboard shape above each bar. */
 	chordView?: ChordView;
 	/** Shapes for the "diagram" view, index-aligned with `bars`. */
@@ -172,6 +180,19 @@ export default function StepGrid({
 			{bars.map((bar, barIdx) => {
 				const isActiveBar = activeCell?.barIdx === barIdx;
 				const chordLabel = bar.chord ? `${bar.chord.root} ${bar.chord.suffix}` : null;
+				// A chord the library has nothing for, kept as the player typed it.
+				// It reads red and draws no shape — there is no shape to draw — and
+				// the bar it names sounds nothing until a chord is picked for it.
+				const placeholder = barPlaceholder(bar);
+				const placeholderTitle = !placeholder
+					? undefined
+					: onPlaceholderClick
+						? `${placeholder} — not in the chord library, so this bar sounds nothing. Write its shape to file it as a chord.`
+						: `${placeholder} — not in the chord library, so this bar sounds nothing`;
+				// The two are different questions and go to different places: a chord
+				// the library has is changed by picking another one, while a bar kept
+				// as a name has no shape on record and is finished by drawing one.
+				const chordClick = placeholder ? onPlaceholderClick : onChordClick;
 				// The shape only replaces the name once it has actually arrived; until
 				// then — and for a bar with no chord — the name stands in.
 				const diagram = chordView === "diagram" ? (barDiagrams?.[barIdx] ?? null) : null;
@@ -194,9 +215,9 @@ export default function StepGrid({
 									</span>
 								)}
 								{diagram && chordLabel ? (
-									onChordClick ? (
+									chordClick ? (
 										<button
-											onClick={() => onChordClick(barIdx)}
+											onClick={() => chordClick(barIdx)}
 											title={`${chordLabel} — change this bar's chord`}
 											className="border border-transparent transition-colors hover:border-denim"
 										>
@@ -215,24 +236,46 @@ export default function StepGrid({
 									) : (
 										<ChordDiagramSkeleton label={chordLabel} />
 									)
-								) : onChordClick ? (
+								) : chordClick ? (
 									<button
-										onClick={() => onChordClick(barIdx)}
+										onClick={() => chordClick(barIdx)}
+										title={placeholderTitle ?? (chordLabel ? undefined : "Pick this bar's chord")}
 										className={`flex items-center gap-1.5 border px-2 py-1 text-[11px] font-semibold transition-colors ${
 											chordLabel
 												? "border-denim bg-denim-tint text-denim hover:bg-denim hover:text-on-denim"
-												: "border-line-strong text-ink-dim hover:border-denim hover:bg-denim-tint hover:text-denim"
+												: placeholder
+													? "border-destructive bg-destructive-tint text-destructive hover:bg-destructive hover:text-white"
+													: "border-line-strong text-ink-dim hover:border-denim hover:bg-denim-tint hover:text-denim"
 										}`}
 									>
 										<Music size={10} />
-										<span>{chordLabel ?? "No chord"}</span>
+										<span>{chordLabel ?? placeholder ?? "No chord"}</span>
 									</button>
 								) : (
-									chordLabel && (
-										<span className="text-[11px] font-semibold text-denim">
-											{chordLabel}
+									(chordLabel || placeholder) && (
+										<span
+											title={placeholderTitle}
+											className={`text-[11px] font-semibold ${
+												chordLabel ? "text-denim" : "text-destructive"
+											}`}
+										>
+											{chordLabel ?? placeholder}
 										</span>
 									)
+								)}
+								{/* The diagram view's way into the shape editor. A bar kept as
+								    a name has no diagram to hang a pencil off, but it is the one
+								    that most needs a shape written for it. */}
+								{onPlaceholderClick && placeholder && chordView === "diagram" && (
+									<button
+										type="button"
+										onClick={() => onPlaceholderClick(barIdx)}
+										aria-label={`Write the shape for ${placeholder}`}
+										title="Write this chord's shape"
+										className="flex items-center justify-center p-1 text-destructive transition-colors hover:text-denim-accent"
+									>
+										<Pencil size={11} />
+									</button>
 								)}
 								{onEditChordShape && diagram && chordLabel && (
 									<button

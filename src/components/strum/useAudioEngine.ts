@@ -38,7 +38,13 @@ export function _resolveStrumBuffer(
 	return buffers[soundType] ?? null;
 }
 
-/** Per-bar MIDI pitches, indexed by bar. A one-element array is a single-bar pattern. */
+/**
+ * Per-bar MIDI pitches, indexed by bar. A one-element array is a single-bar
+ * pattern. Three cases per bar, produced by `resolveBarChords`: the chord's
+ * pitches, `null` for a chordless bar (the sample loader's default voicing), and
+ * an empty array for a bar that sounds nothing — a chord the library does not
+ * have, kept as a name. A silent bar still keeps its metronome ticks.
+ */
 export type BarPitches = readonly (readonly number[] | null)[];
 
 export interface FlatBars {
@@ -247,18 +253,17 @@ export function useAudioEngine(
 		const soundType = STEP_TO_SOUND[type];
 		if (!soundType) return;
 
+		const pitches = _pitchesForBar(barPitchesRef.current, barIndex);
+		// An empty pitch table is a bar holding a chord we have nothing for: it
+		// keeps its place in the loop and sounds nothing. Undefined is the other
+		// thing entirely — no chord picked, play the default voicing.
+		if (pitches?.length === 0) return;
+
 		const ctx = audioCtxRef.current!;
 		const gainNode = ctx.createGain();
 		gainNode.gain.value = strumGainRef.current;
 		gainNode.connect(ctx.destination);
-		triggerStrum(
-			soundType,
-			ctx,
-			gainNode,
-			time,
-			secondsPerCell,
-			_pitchesForBar(barPitchesRef.current, barIndex),
-		);
+		triggerStrum(soundType, ctx, gainNode, time, secondsPerCell, pitches);
 	}
 
 	function scheduler() {

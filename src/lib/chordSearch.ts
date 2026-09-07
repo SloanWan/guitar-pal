@@ -118,6 +118,37 @@ function normalizeSuffix(rest: string): string {
   }
 }
 
+// A slash chord's bass note is a root like any other, and is stored spelled the
+// way roots are stored ("/G", "m/C#"). Typed input arrives lowercased by
+// normalizeInput, so "c/d#" would otherwise be filed as "/d#" — a suffix nothing
+// else in the product would ever produce.
+function normalizeSlashBass(suffix: string): string {
+  const at = suffix.indexOf("/");
+  if (at < 0) return suffix;
+  const { root, rest } = parseRoot(suffix.slice(at + 1));
+  if (root === null || rest !== "") return suffix;
+  return `${suffix.slice(0, at)}/${root}`;
+}
+
+/**
+ * A typed chord name as the identity it would be stored under: "cadd9#11" →
+ * `{ root: "C", suffix: "add9#11" }`, "c/d#" → `{ root: "C", suffix: "/Eb" }`.
+ *
+ * The same reading `searchChords` does, stopped one step earlier: search asks
+ * which stored chord a query is looking for, this asks what the query itself
+ * says. That is what a chord the library does not carry needs — there is
+ * nothing to match it against, and the player's own shape still has to be filed
+ * somewhere findable.
+ *
+ * Null when nothing in the input reads as a root note, which is the one thing
+ * a chord identity cannot be invented without.
+ */
+export function normalizeChordName(raw: string): ChordIndexEntry | null {
+  const { root, normalizedSuffix } = parseQuery(raw);
+  if (root === null) return null;
+  return { root, suffix: normalizeSlashBass(normalizedSuffix) };
+}
+
 export function parseQuery(raw: string): ParsedQuery {
   const normalized = normalizeInput(raw);
   const { root, rest } = parseRoot(normalized);

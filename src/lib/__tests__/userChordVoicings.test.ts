@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	USER_VOICING_ID_PREFIX,
+	chordIndexWithUser,
 	dedupeUserVoicing,
 	isUserVoicingId,
 	sameShape,
@@ -317,5 +318,44 @@ describe("sameShape", () => {
 		expect(sameShape(base, { ...base, start_fret: base.start_fret + 1 })).toBe(false);
 		expect(sameShape(base, { ...base, barre_fret: 1 })).toBe(false);
 		expect(sameShape(base, { ...base, capo: true })).toBe(false);
+	});
+});
+
+describe("chordIndexWithUser — the player's own chords are searchable too", () => {
+	const shape = (root: string, suffix: string): UserChordVoicing => ({
+		id: "u:1",
+		label: null,
+		start_fret: 1,
+		barre_fret: null,
+		capo: false,
+		frets: "x32010",
+		fingers: "032010",
+		root,
+		suffix,
+	});
+	const INDEX = [
+		{ root: "C", suffix: "major" },
+		{ root: "G", suffix: "major" },
+	];
+
+	it("adds a chord the library does not carry, so it can be typed again", () => {
+		expect(chordIndexWithUser(INDEX, [shape("C", "add9#11")])).toEqual([
+			...INDEX,
+			{ root: "C", suffix: "add9#11" },
+		]);
+	});
+
+	it("does not repeat a chord the library already has", () => {
+		expect(chordIndexWithUser(INDEX, [shape("C", "major")])).toEqual(INDEX);
+	});
+
+	it("lists a chord once however many shapes were written for it", () => {
+		const two = [shape("C", "add9#11"), { ...shape("C", "add9#11"), id: "u:2" }];
+		expect(chordIndexWithUser(INDEX, two)).toHaveLength(INDEX.length + 1);
+	});
+
+	it("leaves the index it was given alone", () => {
+		chordIndexWithUser(INDEX, [shape("C", "add9#11")]).push({ root: "X", suffix: "y" });
+		expect(INDEX).toHaveLength(2);
 	});
 });

@@ -42,6 +42,15 @@ const BLACK_KEYS = [
 
 // ─── Category helpers ─────────────────────────────────────────────────────────
 
+/**
+ * Where the player's own chords live in the browse list.
+ *
+ * A chord written for a shape the library never had belongs to no quality
+ * category — that is usually why it was written — so browsing by category alone
+ * would hide it for good. Its own section is the only honest home for it.
+ */
+const MINE_CATEGORY = "Mine";
+
 const CATEGORY_HINTS: Record<string, string> = {
 	Major: "major, maj7, add9",
 	Minor: "minor, m7, m9",
@@ -109,6 +118,33 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				: libraryVoicings,
 		[libraryVoicings, userVoicings, selectedRoot, selectedSuffix],
 	);
+	/**
+	 * The player's own chords for this root that the categories do not already
+	 * offer. Sorted so the list is stable between opens.
+	 */
+	const mySuffixes = selectedRoot
+		? [
+				...new Set(
+					userVoicings
+						.filter((v) => v.root === selectedRoot)
+						.map((v) => v.suffix)
+						.filter(
+							(suffix) =>
+								!CHORD_SUFFIX_CATEGORIES.some((c) =>
+									(c.suffixes as readonly string[]).includes(suffix),
+								),
+						),
+				),
+			].sort()
+		: [];
+	// Serialized, so the suffix effect keys on the chords themselves rather than
+	// on an array rebuilt by every render.
+	const mySuffixesKey = mySuffixes.join("|");
+	const categories =
+		mySuffixes.length > 0
+			? [...CHORD_SUFFIX_CATEGORIES, { category: MINE_CATEGORY, suffixes: mySuffixes }]
+			: CHORD_SUFFIX_CATEGORIES;
+
 	const [selectedVoicingId, setSelectedVoicingId] = useState<string | null>(null);
 	const [loadingVoicings, setLoadingVoicings] = useState(false);
 	const [availableSuffixes, setAvailableSuffixes] = useState<string[]>([]);
@@ -140,7 +176,11 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 				const cat = CHORD_SUFFIX_CATEGORIES.find((c) =>
 					(c.suffixes as readonly string[]).includes(ic.suffix),
 				);
-				setSelectedCategory(cat?.category ?? null);
+				// A chord of the player's own belongs to no category but their own.
+				const mine = userVoicings.some(
+					(v) => v.root === ic.root && v.suffix === ic.suffix,
+				);
+				setSelectedCategory(cat?.category ?? (mine ? MINE_CATEGORY : null));
 				setSelectedSuffix(ic.suffix);
 				setVoicingsFor(null);
 			});
@@ -177,6 +217,19 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	// When root or category changes: find available suffixes, update selectedSuffix
 	useEffect(() => {
 		if (!selectedRoot || !selectedCategory) return;
+
+		// The player's own chords are already in hand — there is nothing in the
+		// library to ask for, and a query for suffixes it does not carry would
+		// come back empty and clear the section.
+		if (selectedCategory === MINE_CATEGORY) {
+			const mine = mySuffixesKey === "" ? [] : mySuffixesKey.split("|");
+			queueMicrotask(() => {
+				setAvailableSuffixes(mine);
+				setSelectedSuffix((prev) => (prev && mine.includes(prev) ? prev : (mine[0] ?? null)));
+			});
+			return;
+		}
+
 		const catDef = CHORD_SUFFIX_CATEGORIES.find((c) => c.category === selectedCategory);
 		if (!catDef) return;
 		const categorySuffixes = catDef.suffixes as readonly string[];
@@ -208,7 +261,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedRoot, selectedCategory]);
+	}, [selectedRoot, selectedCategory, mySuffixesKey]);
 
 	// When root + suffix are both set: fetch voicings
 	useEffect(() => {
@@ -393,7 +446,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 
 					{/* Category grid */}
 					<div className="grid grid-cols-2 gap-2">
-						{CHORD_SUFFIX_CATEGORIES.map((cat) => (
+						{categories.map((cat) => (
 							<button
 								key={cat.category}
 								onClick={() => {

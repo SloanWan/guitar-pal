@@ -8,6 +8,7 @@ import {
 	chordRefToDiagram,
 	resolveBarChords,
 	transposeBarPitches,
+	barPlaceholder,
 	normalizeBpm,
 	patternBpm,
 	patternMeter,
@@ -91,6 +92,27 @@ describe("barsToLegacyBeats — the double-write source", () => {
 	});
 });
 
+describe("barPlaceholder — a bar holding a chord we do not have", () => {
+	it("reads the name a chordless bar was left with", () => {
+		expect(barPlaceholder({ beats: [["D"]], chord: null, unknownChord: "Cadd9#11" })).toBe(
+			"Cadd9#11",
+		);
+	});
+
+	it("is null for an ordinary bar, chorded or not", () => {
+		expect(barPlaceholder({ beats: [["D"]], chord: null })).toBeNull();
+		expect(barPlaceholder({ beats: [["D"]], chord: C_REF })).toBeNull();
+	});
+
+	it("ignores a name left behind on a bar that has since been given a chord", () => {
+		expect(barPlaceholder({ beats: [["D"]], chord: C_REF, unknownChord: "zzz" })).toBeNull();
+	});
+
+	it("reads a blank name as no placeholder", () => {
+		expect(barPlaceholder({ beats: [["D"]], chord: null, unknownChord: "   " })).toBeNull();
+	});
+});
+
 describe("validateBars", () => {
 	it("accepts a multi-bar pattern with per-bar chords", () => {
 		const bars: Bar[] = [
@@ -111,6 +133,23 @@ describe("validateBars", () => {
 		const result = validateBars([]);
 		expect(result.ok).toBe(false);
 		expect(result.errors[0]).toMatch(/at least one bar/);
+	});
+
+	it("accepts a bar holding a name the chord library has nothing for", () => {
+		const bars: Bar[] = [{ beats: [["D", "U"]], chord: null, unknownChord: "Cadd9#11" }];
+		expect(validateBars(bars)).toEqual({ ok: true, errors: [] });
+	});
+
+	it("rejects an unknownChord that came back from storage as something else", () => {
+		const result = validateBars([{ beats: [["D"]], chord: null, unknownChord: 7 }]);
+		expect(result.ok).toBe(false);
+		expect(result.errors[0]).toMatch(/unknownChord must be a non-empty string/);
+	});
+
+	it("rejects a blank unknownChord, which would draw a nameless red bar", () => {
+		const result = validateBars([{ beats: [["D"]], chord: null, unknownChord: "  " }]);
+		expect(result.ok).toBe(false);
+		expect(result.errors[0]).toMatch(/unknownChord must be a non-empty string/);
 	});
 
 	it("rejects a bar with zero beats", () => {
@@ -262,6 +301,19 @@ describe("resolveBarChords", () => {
 		const bars: Bar[] = [{ beats: [["D"]], chord: C_REF }];
 		expect(await resolveBarChords(bars, async () => null)).toEqual([null]);
 	});
+
+	it("yields an empty table for a bar kept as a name — silence, not the default", async () => {
+		const bars: Bar[] = [
+			{ beats: [["D"]], chord: C_REF },
+			{ beats: [["D"]], chord: null, unknownChord: "Cadd9#11" },
+			{ beats: [["D"]], chord: null },
+		];
+		const lookup = vi.fn(async () => [C_MAJOR]);
+
+		expect(await resolveBarChords(bars, lookup)).toEqual([C_MAJOR_PITCHES, [], null]);
+		// The placeholder is not a chord identity: nothing is looked up for it.
+		expect(lookup).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe("normalizeBpm", () => {
@@ -318,6 +370,14 @@ describe("transposeBarPitches — the capo", () => {
 			[41],
 			[49, 53, 56, 61, 65],
 			[65],
+		]);
+	});
+
+	it("keeps a silent bar silent — a capo on silence is silence", () => {
+		expect(transposeBarPitches([[48], [], null], 2, FALLBACK)).toEqual([
+			[50],
+			[],
+			[50, 54, 57, 62, 66],
 		]);
 	});
 

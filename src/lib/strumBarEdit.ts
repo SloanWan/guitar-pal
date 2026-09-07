@@ -1,4 +1,5 @@
 import type { Bar, Beat, ChordRef, StepValue } from "@/lib/strumPatterns";
+import { barPlaceholder } from "@/lib/strumBars";
 import {
 	DEFAULT_METER,
 	beatsPerBar,
@@ -67,7 +68,16 @@ export function removeBar(bars: Bar[], barIdx: number): Bar[] {
 export function duplicateBar(bars: Bar[], barIdx: number): Bar[] {
 	const bar = bars[barIdx];
 	if (!bar) return bars;
-	return [...bars, { beats: bar.beats.map((beat) => [...beat]), chord: bar.chord }];
+	return [
+		...bars,
+		{
+			beats: bar.beats.map((beat) => [...beat]),
+			chord: bar.chord,
+			// A copy of an unfinished bar is still unfinished; dropping the name
+			// would silently turn it into an ordinary chordless bar.
+			...(bar.unknownChord ? { unknownChord: bar.unknownChord } : {}),
+		},
+	];
 }
 
 /** Swap two bars. Out-of-range or identical indices leave the input untouched. */
@@ -86,8 +96,83 @@ export function swapBars(bars: Bar[], indexA: number, indexB: number): Bar[] {
 	return next;
 }
 
+/**
+ * Name a bar's chord, or take it away.
+ *
+ * Either answer retires a placeholder the bar was standing in for: the name the
+ * player typed was a note-to-self about a chord they had not settled yet, and
+ * once they have — or have deliberately cleared the bar — keeping it would put a
+ * red word back on a bar they just finished.
+ */
 export function setBarChord(bars: Bar[], barIdx: number, chord: ChordRef | null): Bar[] {
-	return bars.map((bar, i) => (i === barIdx ? { ...bar, chord } : bar));
+	return bars.map((bar, i) => {
+		if (i !== barIdx) return bar;
+		const { unknownChord: _retired, ...rest } = bar;
+		return { ...rest, chord };
+	});
+}
+
+/** What pinning a shape needs to know about it: its id and the chord it is filed under. */
+export interface VoicingPin {
+	id: string;
+	root: string;
+	suffix: string;
+}
+
+/** How far writing a shape reaches: the one bar, or every bar of that chord. */
+export type VoicingScope = "bar" | "chord";
+
+/**
+ * Which bars a shape written at `barIdx` reaches, index-aligned with `bars`.
+ *
+ * "Every bar of that chord" means two different things depending on the bar it
+ * started from, and both are answered here so nothing has to ask twice: a
+ * chorded bar reaches the bars playing the same chord, and a bar kept under a
+ * name the library had no chord for reaches the bars kept under that same name.
+ * They were written as one chord and are about to become one.
+ */
+export function voicingReach(
+	bars: Bar[],
+	barIdx: number,
+	scope: VoicingScope,
+): boolean[] {
+	const source = bars[barIdx];
+	if (!source) return bars.map(() => false);
+	if (scope === "bar") return bars.map((_, i) => i === barIdx);
+
+	const kept = barPlaceholder(source);
+	if (kept) return bars.map((bar) => barPlaceholder(bar) === kept);
+
+	const chord = source.chord;
+	if (!chord) return bars.map((_, i) => i === barIdx);
+	return bars.map((bar) => bar.chord?.root === chord.root && bar.chord?.suffix === chord.suffix);
+}
+
+/**
+ * Pin a shape the player wrote onto the bars it reaches.
+ *
+ * A chorded bar keeps its chord and points at the new shape. A bar that was
+ * only ever a name becomes the chord the shape was filed under — that shape is
+ * the first record the chord exists at all — and its placeholder retires with
+ * it. Bars outside the reach are returned by reference.
+ */
+export function applyVoicingToBars(
+	bars: Bar[],
+	barIdx: number,
+	voicing: VoicingPin,
+	scope: VoicingScope,
+): Bar[] {
+	const reach = voicingReach(bars, barIdx, scope);
+	return bars.map((bar, i) => {
+		if (!reach[i]) return bar;
+		if (bar.chord) return { ...bar, chord: { ...bar.chord, voicingId: voicing.id } };
+		if (!barPlaceholder(bar)) return bar;
+		const { unknownChord: _named, ...rest } = bar;
+		return {
+			...rest,
+			chord: { root: voicing.root, suffix: voicing.suffix, voicingId: voicing.id },
+		};
+	});
 }
 
 /**

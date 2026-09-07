@@ -74,6 +74,16 @@
 	   alike. Inactive state reuses --ink-dim (no separate token). */
 	--favorite-active: oklch(82.8% 0.189 84.429);
 
+	/* Fretboard chord-tone roles — the one place several hues sit side by side.
+	   The root stays denim; thirds, fifths, sevenths and extensions each get a
+	   fill so a player can tell them apart at a glance. Kept low-chroma so the
+	   board still reads as one instrument, not a colour chart. Labels on every
+	   one of these fills use --btn-on-denim. */
+	--tone-third: oklch(0.68 0.12 165); /* teal */
+	--tone-fifth: oklch(0.66 0.13 300); /* violet */
+	--tone-seventh: oklch(0.72 0.14 60); /* amber-brown */
+	--tone-extension: oklch(0.66 0.13 350); /* rose */
+
 	/* Destructive — muted brick red, NOT neon. Low chroma so it reads calm on
 	   the near-black panel; still clearly red for delete/discard affordances.
 	   Theme-aware (deeper on light) like every other color token. */
@@ -128,6 +138,10 @@
 	--tab-line-2: #e6e6e1;
 	--tab-num-2: #a9bad3;
 	--favorite-active: oklch(82.8% 0.189 84.429); /* Tailwind amber-400 — same as dark; star stays amber */
+	--tone-third: oklch(0.55 0.11 165); /* deeper on light so the label stays readable */
+	--tone-fifth: oklch(0.52 0.13 300);
+	--tone-seventh: oklch(0.58 0.13 60);
+	--tone-extension: oklch(0.55 0.13 350);
 
 	--destructive: oklch(0.53 0.17 27); /* deeper on light for contrast on paper white */
 	--destructive-tint: oklch(0.53 0.17 27 / 0.2);
@@ -468,11 +482,8 @@
    matrix laid over the neck: every slot is always present, a FretMark lights
    one up. Round like the LED and for the same reason (a signal, not a surface).
    Denim marks the root only; the other levels are told apart by fill and
-   outline, not colour. Position slides ride the drawer curve.
+   outline, not colour.
    ------------------------------------------------------------------------- */
-.fb-neck {
-	transition: transform var(--dur-drawer) var(--ease-drawer);
-}
 .fb-mark {
 	transform-box: fill-box;
 	transform-origin: center;
@@ -530,6 +541,28 @@
 .fb-mark[data-emphasis="chordTone"] .fb-label {
 	fill: var(--bg);
 }
+/* Chord-tone roles: each member of the chord in its own fill. A chord tone
+   without a role (root unknown) keeps the plain ink fill above. */
+.fb-mark[data-tone="third"] .fb-dot {
+	fill: var(--tone-third);
+	stroke: var(--tone-third);
+}
+.fb-mark[data-tone="fifth"] .fb-dot {
+	fill: var(--tone-fifth);
+	stroke: var(--tone-fifth);
+}
+.fb-mark[data-tone="seventh"] .fb-dot {
+	fill: var(--tone-seventh);
+	stroke: var(--tone-seventh);
+}
+.fb-mark[data-tone="extension"] .fb-dot {
+	fill: var(--tone-extension);
+	stroke: var(--tone-extension);
+}
+.fb-mark[data-tone] .fb-label {
+	fill: var(--btn-on-denim);
+	font-weight: 700;
+}
 .fb-mark[data-emphasis="muted"] {
 	transform: scale(0.45);
 }
@@ -541,7 +574,6 @@
 	opacity: 0;
 }
 @media (prefers-reduced-motion: reduce) {
-	.fb-neck,
 	.fb-mark,
 	.fb-dot,
 	.fb-ring,

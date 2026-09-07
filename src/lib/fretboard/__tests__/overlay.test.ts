@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
+import { chordToneRole, chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
 import { pitchClassAt, scaleMarks } from "@/lib/fretboard/scales";
 import { slotKey, type FretMark } from "@/lib/fretboard/types";
 
@@ -22,8 +22,42 @@ describe("chordTonesFromMidi", () => {
 	});
 });
 
+describe("chordToneRole", () => {
+	it("groups intervals into third, fifth, seventh and extension", () => {
+		expect(chordToneRole(3)).toBe("third");
+		expect(chordToneRole(4)).toBe("third");
+		expect(chordToneRole(6)).toBe("fifth");
+		expect(chordToneRole(7)).toBe("fifth");
+		expect(chordToneRole(8)).toBe("fifth");
+		expect(chordToneRole(10)).toBe("seventh");
+		expect(chordToneRole(11)).toBe("seventh");
+		expect(chordToneRole(2)).toBe("extension"); // 9th / sus2
+		expect(chordToneRole(5)).toBe("extension"); // 11th / sus4
+		expect(chordToneRole(9)).toBe("extension"); // 13th / 6th
+		expect(chordToneRole(-1)).toBe("seventh");
+	});
+});
+
 describe("overlayChordTones", () => {
 	const cMajor = { root: "C", scale: "major" } as const;
+
+	it("tags each chord tone with its role relative to the chord root", () => {
+		const aMinorPent = { root: "A", scale: "minorPentatonic" } as const;
+		const scale = scaleMarks(aMinorPent, NECK, "note");
+		const overlay = overlayChordTones(scale, chordTonesFromMidi(E7, 4), aMinorPent, NECK, "note");
+		const roleOf = (pc: number) => overlay.find((m) => pitchClassAt(m.string, m.fret) === pc)?.tone;
+		expect(roleOf(4)).toBeUndefined(); // E is the root, no role
+		expect(roleOf(8)).toBe("third"); // G#
+		expect(roleOf(11)).toBe("fifth"); // B
+		expect(roleOf(2)).toBe("seventh"); // D
+		expect(overlay.filter((m) => m.emphasis === "scaleTone").every((m) => m.tone === undefined)).toBe(true);
+	});
+
+	it("leaves roles off when the chord root is unknown", () => {
+		const scale = scaleMarks(cMajor, NECK, "note");
+		const overlay = overlayChordTones(scale, chordTonesFromMidi(C_MAJOR), cMajor, NECK, "note");
+		expect(overlay.filter((m) => m.emphasis === "chordTone").every((m) => m.tone === undefined)).toBe(true);
+	});
 
 	it("a diatonic chord's marks are exactly the scale's slots, re-emphasised", () => {
 		const scale = scaleMarks(cMajor, NECK, "note");

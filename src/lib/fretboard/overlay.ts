@@ -9,7 +9,13 @@
  * leaves that tone out of the overlay.
  */
 import { createLabeler, pitchClassAt, type LabelMode, type ScaleSpec } from "./scales";
-import { STRING_COUNT, slotKey, type FretMark, type FretWindow } from "./types";
+import {
+	STRING_COUNT,
+	slotKey,
+	type ChordToneRole,
+	type FretMark,
+	type FretWindow,
+} from "./types";
 
 export interface ChordTones {
 	/** Distinct pitch classes, 0..11. */
@@ -22,6 +28,29 @@ export interface ChordTones {
 export function chordTonesFromMidi(midi: readonly number[], rootPitchClass?: number): ChordTones {
 	const pitchClasses = [...new Set(midi.map((m) => ((m % 12) + 12) % 12))].sort((a, b) => a - b);
 	return rootPitchClass === undefined ? { pitchClasses } : { pitchClasses, rootPitchClass };
+}
+
+/**
+ * Which member of the chord a pitch class is, by its interval above the chord
+ * root: minor and major thirds are both the third, diminished, perfect and
+ * augmented fifths all the fifth, minor and major sevenths the seventh, and the
+ * rest (2nds, 4ths, 6ths as they appear in 9/11/13 and sus voicings) extensions.
+ */
+export function chordToneRole(semitonesAboveRoot: number): ChordToneRole {
+	switch (((semitonesAboveRoot % 12) + 12) % 12) {
+		case 3:
+		case 4:
+			return "third";
+		case 6:
+		case 7:
+		case 8:
+			return "fifth";
+		case 10:
+		case 11:
+			return "seventh";
+		default:
+			return "extension";
+	}
 }
 
 /**
@@ -52,12 +81,14 @@ export function overlayChordTones(
 			const pc = pitchClassAt(string, fret);
 			const scaleMark = scaleByKey.get(slotKey(string, fret));
 			if (chordSet.has(pc)) {
-				marks.push({
-					string,
-					fret,
-					label: scaleMark?.label ?? label(pc),
-					emphasis: pc === chord.rootPitchClass ? "root" : "chordTone",
-				});
+				const base = { string, fret, label: scaleMark?.label ?? label(pc) };
+				if (chord.rootPitchClass === undefined) {
+					marks.push({ ...base, emphasis: "chordTone" });
+				} else if (pc === chord.rootPitchClass) {
+					marks.push({ ...base, emphasis: "root" });
+				} else {
+					marks.push({ ...base, emphasis: "chordTone", tone: chordToneRole(pc - chord.rootPitchClass) });
+				}
 			} else if (scaleMark) {
 				marks.push({
 					...scaleMark,

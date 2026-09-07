@@ -7,6 +7,13 @@
 
 export type MarkEmphasis = "root" | "chordTone" | "scaleTone" | "muted";
 
+/**
+ * Which member of the chord a chord tone is, so the board can colour thirds,
+ * fifths and sevenths apart. "extension" covers everything else a voicing may
+ * carry: 9ths, 11ths, 13ths, suspended 2nds and 4ths.
+ */
+export type ChordToneRole = "third" | "fifth" | "seventh" | "extension";
+
 export interface FretMark {
 	/** 0..5, low E to high e — the same convention as `GUITAR_OPEN_MIDI`. */
 	string: number;
@@ -15,6 +22,8 @@ export interface FretMark {
 	/** What the dot says: "A", "b3", or "" — the caller decides. */
 	label: string;
 	emphasis: MarkEmphasis;
+	/** Only meaningful with `emphasis: "chordTone"`; absent when the chord root is unknown. */
+	tone?: ChordToneRole;
 }
 
 /** The frets a caller wants marks for, or the frets a board shows. Inclusive. */

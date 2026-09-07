@@ -273,7 +273,7 @@ fingers     jsonb  (array of finger numbers per string)
 **Pattern data model** (`src/lib/strumPatterns.ts`):
 
 ```ts
-type StepValue = "D" | "U" | "X" | "" | "DG" | "UG" | "D3" | "U3";
+type StepValue = "D" | "U" | "X" | "";
 type Beat = StepValue[]; // length 1–4
 interface StrumPattern {
 	id;
@@ -288,9 +288,14 @@ StepValue semantics:
 - `D` — down strum (audible)
 - `U` — up strum (audible)
 - `X` — muted strum (audible, distinct noise)
-- `DG` / `UG` — ghost (metronome ticks, strum engine silent)
-- `D3` / `U3` — triplet (same sound as D/U, used when beat.length === 3)
-- `""` — rest (metronome ticks only)
+- `""` — not struck (metronome ticks only)
+
+Ghost strokes (`DG` / `UG`) are a *drawing*, not a stored value: `ghostedBeats`
+(`src/lib/strumGridLayout.ts`) derives them from the struck cells at render time,
+and StepGrid draws them faint. Triplets are read from the beat's cell count plus
+the pattern's `meter`, not from a marker on the cell. Both `DG`/`UG` and the
+retired `D3`/`U3` still occur in rows written by earlier versions; `normalizeBeats`
+(`src/lib/strumBars.ts`) folds them away as the rhythm is read.
 
 **Audio engine** (`src/components/strum/useAudioEngine.ts`, `src/components/strum/useGuitarSampleLoader.ts`):
 
@@ -299,7 +304,7 @@ StepValue semantics:
 - All mutable state that the scheduler reads lives in `useRef` (not `useState`) to avoid stale closures. The matching `useState` values are kept for React renders only. Refs: `bpmRef`, `beatsRef`, `tickModeRef`, `strumEnabledRef`, `strumGainRef`, `metronomeEnabledRef`, `metronomeGainRef`, `accentEnabledRef`, `playOnceRef`.
 - **Do not read ref.current values inside React render logic.** Only refs are safe to read inside the scheduler closure.
 - **Strum sounds use real guitar samples** fetched at runtime from the webaudiofontdata CDN (`https://surikov.github.io/webaudiofontdata/sound/`). All sample logic lives in `useGuitarSampleLoader.ts`:
-  - Two GM presets: `0250_LK_AcousticSteel_SF2_file` (LK Acoustic Steel — used for `D`/`D3` down-strum and `U`/`U3` up-strum) and `0280_Chaos_sf2_file` (Chaos muted guitar — used for `X`). Both presets match the sample library source used by the fingerpick engine for cross-page audio consistency.
+  - Two GM presets: `0250_LK_AcousticSteel_SF2_file` (LK Acoustic Steel — used for the `D` down-strum and the `U` up-strum) and `0280_Chaos_sf2_file` (Chaos muted guitar — used for `X`). Both presets match the sample library source used by the fingerpick engine for cross-page audio consistency.
   - Fixed C major open chord voicing: MIDI pitches [48 C3, 52 E3, 55 G3, 60 C4, 64 E4] (exported as `STRUM_PITCHES`). Low E string is not played.
   - `preloadStrumPresets(ctx)` — async, called once on playback start. Fetches and parses both preset JS files (unquoted-key JS object format, evaluated via `new Function()`), then decodes all zones used by `STRUM_PITCHES` into `AudioBuffer`s. Results are cached in module-level `Map`s for synchronous scheduler access.
   - `triggerStrum(type, ctx, target, when, noteDuration)` — synchronous. Schedules one `AudioBufferSourceNode` per string (5 total) with 10 ms per-string stagger and 0.9× volume taper per string. Down strum: low→high pitch order; up strum: high→low. Playback rate per note: `2^((100×midiPitch − baseDetune) / 1200)` where `baseDetune = originalPitch − 100×coarseTune − fineTune`.
@@ -307,7 +312,7 @@ StepValue semantics:
   - `cancelStrums()` — stops all tracked `AudioBufferSourceNode`s immediately. Called on manual stop and component unmount.
   - `triggerChordPreview(pitches, ctx, target, when)` — synchronous. Plays MIDI pitches ascending (low→high), 10 ms stagger per note, fixed `CHORD_PREVIEW_DURATION_S = 2.0 s` duration. Uses the fingerpick `pluck` preset (`0250_LK_AcousticSteel_SF2_file`); no-ops silently if the preset has not yet been loaded. Called by `ChordDetailView` to play voicing previews.
 - Each scheduler tick creates a per-strum `GainNode` (gain = `strumGainRef.current`) that connects `triggerStrum`'s output to `ctx.destination`.
-- `DG`, `UG`, and `""` step values produce no strum sound (scheduler calls are gated by `STEP_TO_SOUND` mapping in `useAudioEngine.ts`).
+- The `""` step value produces no strum sound (scheduler calls are gated by the `STEP_TO_SOUND` mapping in `useAudioEngine.ts`). Ghosts never reach the engine — they exist only in the rendered grid.
 - Metronome: `OscillatorNode`, 1200 Hz accented / 800 Hz normal, 50 ms duration.
 - `setStrumEnabled` and `setMetronomeEnabled` stop and restart playback so the ref update propagates immediately.
 - `sixteenth` tick mode with a 2-cell beat interleaves real cells with empty subdivisions (alternating via `nextPlatEmptyCellRef`).
@@ -327,14 +332,15 @@ StepValue semantics:
 **Pattern creator** (`src/components/strum/CreatePatternModal.tsx`):
 
 - Uses v3 modal tokens (`--modal-bg`, hairline `--line`/`--line-strong` borders, radius 0). Save and Sign-in buttons use className-based token overrides (`bg-denim text-on-denim hover:bg-denim-accent active:bg-denim-accent disabled:opacity-40 rounded-none`), not inline styles.
-- Editing cycles cells through `["", "D", "U", "X"]` only. Ghost (`DG`/`UG`) and triplet (`D3`/`U3`) values can exist in preset/saved data and display correctly in StepGrid, but cannot be set via the creator UI — clicking a ghost or triplet cell resets it to `""`.
-- Each beat can have 2–4 cells. Beats always have exactly 4 columns displayed (2-cell beats are padded to 4 display slots with ghost cells in StepGrid).
+- Editing cycles cells through `["", "D", "U", "X"]` — the whole stored alphabet, since ghosts and triplet markers are no longer values. A retired value arriving from an un-normalized row resets to `""` on click.
+- The rhythm can also be typed: a "type in the strumming sequence" field parses one character per cell (`parseRhythmInMeter`, `src/lib/strumAssistant/parseRhythm.ts`) against the selected meter and writes the result into the grid above it.
+- Each beat can have 2–4 cells in a simple meter, 3 or 6 in a compound one. Beats of one or two cells are padded to 4 display columns in StepGrid.
 - Unauthenticated users who try to save are shown a choice: save locally or go sign in.
 
 **StepGrid display** (`src/components/strum/StepGrid.tsx`):
 
 - Receives `beats: Beat[]` and `activeCell: { beatIdx, cellIdx } | null`.
-- 2-cell beats are padded to 4 display columns using ghost values; the `getPaddedCellIdx` function maps the audio engine's `cellIdx` to the padded display index.
+- Ghost strokes are derived per bar by `ghostedBeats` and drawn faint; 2-cell beats are then padded to 4 display columns, and `paddedCellIndex` maps the audio engine's `cellIdx` to the padded display index.
 - Beat labels: 1-cell → `["1", "", "+", ""]`; 2-cell → `["1", "", "+", ""]`; 3-cell → `["tri", "p", "let"]`; 4-cell → `["1", "e", "+", "a"]`.
 - `size="sm"` variant used in library sidebar previews (smaller icons, no labels).
 

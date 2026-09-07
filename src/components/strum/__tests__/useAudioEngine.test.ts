@@ -21,28 +21,12 @@ describe("_resolveStrumBuffer — step-to-buffer resolution and pending-sample f
 		expect(_resolveStrumBuffer("D", fullBuffers)).toBe(downBuf);
 	});
 
-	it("D3 maps to the down AudioBuffer", () => {
-		expect(_resolveStrumBuffer("D3", fullBuffers)).toBe(downBuf);
-	});
-
 	it("U maps to the up AudioBuffer", () => {
 		expect(_resolveStrumBuffer("U", fullBuffers)).toBe(upBuf);
 	});
 
-	it("U3 maps to the up AudioBuffer", () => {
-		expect(_resolveStrumBuffer("U3", fullBuffers)).toBe(upBuf);
-	});
-
 	it("X maps to the muted AudioBuffer", () => {
 		expect(_resolveStrumBuffer("X", fullBuffers)).toBe(mutedBuf);
-	});
-
-	it("DG returns null (ghost strum — silent)", () => {
-		expect(_resolveStrumBuffer("DG", fullBuffers)).toBeNull();
-	});
-
-	it("UG returns null (ghost strum — silent)", () => {
-		expect(_resolveStrumBuffer("UG", fullBuffers)).toBeNull();
 	});
 
 	it('empty string returns null (rest — silent)', () => {
@@ -64,10 +48,10 @@ describe("_resolveStrumBuffer — step-to-buffer resolution and pending-sample f
 // ─── Multi-bar scheduling (#134) ─────────────────────────────────────────────
 
 const FOUR_BEATS: Bar["beats"] = [
-	["D", "UG"],
+	["D", ""],
 	["D", "U"],
-	["DG", "U"],
-	["D", "UG"],
+	["", "U"],
+	["D", ""],
 ];
 
 function bar(beats: Bar["beats"], root?: string): Bar {

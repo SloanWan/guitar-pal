@@ -1,6 +1,11 @@
 import type { Beat, StepValue } from "@/lib/strumPatterns";
 import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
-import { VALID_CELL_COUNTS } from "@/lib/strumMeter";
+import {
+	VALID_CELL_COUNTS,
+	allowedCellsPerBeat,
+	beatsPerBar,
+	type Meter,
+} from "@/lib/strumMeter";
 
 /**
  * Rhythm notation → `Beat[]`, the inverse of `patternNotation` in
@@ -90,32 +95,6 @@ function inferCellsPerBeat(cellCount: number, beatsPerBar: number): number {
 	return VALID_CELL_COUNTS.find((count) => count >= raw) ?? MAX_CELLS_PER_BEAT;
 }
 
-/**
- * Ghost cells mark the hand still travelling between strikes, and rests mark it
- * stopped. Derived from the shipped presets rather than invented: every unstruck
- * cell between the first and last strike is a ghost, plus the single cell after
- * the last strike (the return stroke), and everything else is a rest. The
- * direction follows the cell's position in its beat — even down, odd up.
- */
-function fillUnstruckCells(cells: (StepValue | null)[], cellsPerBeat: number): StepValue[] {
-	let first = -1;
-	let last = -1;
-	for (let i = 0; i < cells.length; i++) {
-		if (cells[i] !== null) {
-			if (first === -1) first = i;
-			last = i;
-		}
-	}
-	if (first === -1) return cells.map(() => "" as StepValue);
-
-	return cells.map((cell, i) => {
-		if (cell !== null) return cell;
-		const ghosted = i > first && (i < last || i === last + 1);
-		if (!ghosted) return "" as StepValue;
-		return i % cellsPerBeat % 2 === 0 ? "DG" : "UG";
-	});
-}
-
 function parseBar(
 	raw: string,
 	offset: number,
@@ -158,7 +137,12 @@ function parseBar(
 	const padded = cells.length < total;
 	while (cells.length < total) cells.push(null);
 
-	const filled = fillUnstruckCells(cells, perBeat);
+	// Literal: one character, one cell, and nothing nobody wrote. The travelling
+	// hand is drawn from these cells where the grid is rendered
+	// (`ghostedBeats`), so writing it in here would put strokes into the data
+	// that the player never typed — and, in the pattern editor, into the grid
+	// they are typing at.
+	const filled: StepValue[] = cells.map((cell) => cell ?? "");
 	const beats: Beat[] = [];
 	for (let b = 0; b < beatsPerBar; b++) {
 		beats.push(filled.slice(b * perBeat, (b + 1) * perBeat));
@@ -215,4 +199,31 @@ export function parseRhythm(input: string, options: ParseRhythmOptions = {}): Rh
 	}
 
 	return { ok: true, value: { bars, beatsPerBar, cellsPerBeat, padded } };
+}
+
+/**
+ * The same parse, told what bar it has to fit.
+ *
+ * `parseRhythm` infers a subdivision from the cell count alone, which is right
+ * for free text but blind to the meter: 4 cells to a beat is a legal division of
+ * a quarter and names nothing at all under a dotted one. Here the meter decides
+ * the beat count and picks the subdivision from the counts that meter actually
+ * has, rounding up to the next one that holds everything written.
+ *
+ * Two passes rather than one so the tokenizing stays in a single place: the
+ * first pass is only consulted for the width it inferred.
+ */
+export function parseRhythmInMeter(input: string, meter: Meter): RhythmParseResult {
+	const beats = beatsPerBar(meter);
+	const first = parseRhythm(input, { beatsPerBar: beats });
+	if (!first.ok) return first;
+
+	const allowed = allowedCellsPerBeat(meter);
+	if (allowed.includes(first.value.cellsPerBeat)) return first;
+
+	// Nothing wider left: re-parse at the widest the meter has so the overflow is
+	// reported against a real division rather than an invented one.
+	const target =
+		allowed.find((count) => count >= first.value.cellsPerBeat) ?? allowed[allowed.length - 1];
+	return parseRhythm(input, { beatsPerBar: beats, cellsPerBeat: target });
 }

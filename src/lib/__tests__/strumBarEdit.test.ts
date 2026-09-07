@@ -17,15 +17,22 @@ import {
 	clearBeat,
 	copyBeat,
 	resizeBeat,
+	setBarBeats,
 	setBarCells,
 	swapBeats,
 	setCell,
 	stepCellPosition,
 } from "@/lib/strumBarEdit";
 import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
-import type { Bar, ChordRef , Beat } from "@/lib/strumPatterns";
+import type { Bar, ChordRef, Beat, StepValue } from "@/lib/strumPatterns";
 
 const C_REF: ChordRef = { root: "C", suffix: "major" };
+
+/**
+ * Step values earlier versions stored, cast in deliberately: the editors have to
+ * survive one arriving from a row that has not been through `normalizeBeats`.
+ */
+const RETIRED = ["DG", "UG", "D3", "U3"] as unknown as StepValue[];
 
 function bars(count: number): Bar[] {
 	return Array.from({ length: count }, () => emptyBar());
@@ -39,11 +46,11 @@ describe("cycleStep", () => {
 		expect(cycleStep("X")).toBe("");
 	});
 
-	it("resets non-editable preset values (ghosts, triplets) to a rest", () => {
-		expect(cycleStep("DG")).toBe("");
-		expect(cycleStep("UG")).toBe("");
-		expect(cycleStep("D3")).toBe("");
-		expect(cycleStep("U3")).toBe("");
+	it("resets a value from before normalization to a rest", () => {
+		// `normalizeBeats` folds the retired ghosts and triplet markers away as the
+		// rhythm is read, so none of these should reach the editor. If one does, it
+		// starts the cycle over rather than sticking.
+		for (const retired of RETIRED) expect(cycleStep(retired)).toBe("");
 	});
 });
 
@@ -444,10 +451,10 @@ describe("cycleStep leads with the stroke that belongs at the position", () => {
 		expect(cycleStep(cycleStep("", "D"), "D")).toBe("U");
 	});
 
-	it("still resets a preset-only value to a rest whichever way it leads", () => {
-		for (const preset of ["DG", "UG", "D3", "U3"] as const) {
-			expect(cycleStep(preset, "D")).toBe("");
-			expect(cycleStep(preset, "U")).toBe("");
+	it("still resets a retired value to a rest whichever way it leads", () => {
+		for (const retired of RETIRED) {
+			expect(cycleStep(retired, "D")).toBe("");
+			expect(cycleStep(retired, "U")).toBe("");
 		}
 	});
 });
@@ -716,8 +723,8 @@ describe("clearBeat", () => {
 		expect(bars[0].beats[1]).toEqual(["D", ""]);
 	});
 
-	it("clears a preset's ghost and triplet cells too", () => {
-		const preset: Bar[] = [{ beats: [["D", "UG"], ["D3", "U3", "D3"]], chord: null }];
+	it("clears a beat of any width", () => {
+		const preset: Bar[] = [{ beats: [["D", ""], ["D", "U", "D"]], chord: null }];
 		const bars = clearBeat(preset, 0, 1);
 		expect(bars[0].beats[1]).toEqual(["", "", ""]);
 	});
@@ -818,5 +825,42 @@ describe("voicingReach / applyVoicingToBars — writing a shape", () => {
 		const bars = [chorded("C", "major")];
 		expect(voicingReach(bars, 4, "chord")).toEqual([false]);
 		expect(applyVoicingToBars(bars, 4, SHAPE, "chord")[0]).toBe(bars[0]);
+	});
+});
+
+describe("setBarBeats", () => {
+	const written: Beat[] = [
+		["D", ""],
+		["D", "U"],
+		["", "U"],
+		["D", ""],
+	];
+
+	it("replaces a bar's rhythm and leaves its chord alone", () => {
+		const before: Bar[] = [{ beats: [["", ""]], chord: C_REF }, ...bars(1)];
+		const after = setBarBeats(before, 0, written);
+		expect(after[0].beats).toEqual(written);
+		expect(after[0].chord).toEqual(C_REF);
+		expect(after[1]).toBe(before[1]);
+	});
+
+	it("returns the input untouched when the rhythm already reads the same", () => {
+		const before: Bar[] = [{ beats: written.map((b) => [...b]), chord: null }];
+		// Identity is what keeps a keystroke that changes no cell off the undo
+		// history, the same guarantee the cell editors give.
+		expect(setBarBeats(before, 0, written)).toBe(before);
+	});
+
+	it("copies the beats it is handed", () => {
+		const source: Beat[] = [["D", "U"]];
+		const after = setBarBeats([{ beats: [["", ""]], chord: null }], 0, source);
+		source[0][0] = "X";
+		expect(after[0].beats[0][0]).toBe("D");
+	});
+
+	it("ignores an out-of-range bar", () => {
+		const before = bars(1);
+		expect(setBarBeats(before, 3, written)).toBe(before);
+		expect(setBarBeats(before, -1, written)).toBe(before);
 	});
 });

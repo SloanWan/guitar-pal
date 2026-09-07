@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import {
 	toBars,
+	sortPatternsByNewest,
+	normalizeStep,
+	normalizeBeats,
+	normalizeBars,
 	barsToLegacyBeats,
 	validateBars,
 	selectRefVoicing,
@@ -42,7 +46,7 @@ function pattern(overrides: Partial<StrumPattern>): StrumPattern {
 	return {
 		id: "p1",
 		name: "test",
-		beats: [["D", "UG"]],
+		beats: [["D", ""]],
 		...overrides,
 	};
 }
@@ -56,9 +60,38 @@ const C_MAJOR_PITCHES = [48, 52, 55, 60, 64];
 const C_REF: ChordRef = { root: "C", suffix: "major" };
 const G_REF: ChordRef = { root: "G", suffix: "major" };
 
+describe("normalizing what storage gives back", () => {
+	it("folds the retired step values away", () => {
+		// Ghosts became a drawing rather than a value, and D3/U3 said what `meter`
+		// now says. Rows written before either still read back as playable bars.
+		expect(normalizeBeats([["D", "UG"], ["DG", "U"], ["D3", "U3", "D3"]])).toEqual([
+			["D", ""],
+			["", "U"],
+			["D", "U", "D"],
+		]);
+	});
+
+	it("reads anything else as an unstruck cell", () => {
+		expect(normalizeStep("Q")).toBe("");
+		expect(normalizeStep(null)).toBe("");
+		expect(normalizeStep(7)).toBe("");
+		expect(normalizeStep("D")).toBe("D");
+	});
+
+	it("normalizes a stored bar's beats and leaves its chord alone", () => {
+		const bars = normalizeBars([{ beats: [["D", "UG"]], chord: C_REF }]);
+		expect(bars[0].beats).toEqual([["D", ""]]);
+		expect(bars[0].chord).toEqual(C_REF);
+	});
+
+	it("folds them on the pattern read path too", () => {
+		expect(toBars(pattern({ beats: [["D", "UG"]] }))[0].beats).toEqual([["D", ""]]);
+	});
+});
+
 describe("toBars — the single read path", () => {
 	it("reads a pattern as one chordless bar", () => {
-		const p = pattern({ beats: [["D", "UG"], ["DG", "U"]] });
+		const p = pattern({ beats: [["D", ""], ["", "U"]] });
 		expect(toBars(p)).toEqual([{ beats: p.beats, chord: null }]);
 	});
 
@@ -67,7 +100,9 @@ describe("toBars — the single read path", () => {
 			const bars = toBars(preset);
 			expect(bars).toHaveLength(1);
 			expect(bars[0].chord).toBeNull();
-			expect(bars[0].beats).toBe(preset.beats);
+			// Equal, not identical: the read normalizes, which also means a bar can
+			// no longer reach back into the preset constant it came from.
+			expect(bars[0].beats).toEqual(preset.beats);
 			expect(validateBars(bars).ok).toBe(true);
 		}
 	});
@@ -76,14 +111,14 @@ describe("toBars — the single read path", () => {
 describe("barsToLegacyBeats — the double-write source", () => {
 	it("keeps only the first bar's beats", () => {
 		const bars: Bar[] = [
-			{ beats: [["D", "UG"]], chord: C_REF },
+			{ beats: [["D", ""]], chord: C_REF },
 			{ beats: [["X", "X"]], chord: G_REF },
 		];
-		expect(barsToLegacyBeats(bars)).toEqual([["D", "UG"]]);
+		expect(barsToLegacyBeats(bars)).toEqual([["D", ""]]);
 	});
 
 	it("round-trips a legacy pattern unchanged", () => {
-		const p = pattern({ beats: [["D", "UG"], ["DG", "U"]] });
+		const p = pattern({ beats: [["D", ""], ["", "U"]] });
 		expect(barsToLegacyBeats(toBars(p))).toEqual(p.beats);
 	});
 
@@ -116,8 +151,8 @@ describe("barPlaceholder — a bar holding a chord we do not have", () => {
 describe("validateBars", () => {
 	it("accepts a multi-bar pattern with per-bar chords", () => {
 		const bars: Bar[] = [
-			{ beats: [["D", "UG"], ["D", "U"]], chord: C_REF },
-			{ beats: [["D3", "U3", "D3"]], chord: { ...G_REF, voicingId: "g-std" } },
+			{ beats: [["D", ""], ["D", "U"]], chord: C_REF },
+			{ beats: [["D", "U", "D"]], chord: { ...G_REF, voicingId: "g-std" } },
 			{ beats: [["D", "U", "D", "U"]], chord: null },
 		];
 		expect(validateBars(bars)).toEqual({ ok: true, errors: [] });
@@ -451,5 +486,48 @@ describe("tempo across meters", () => {
 			expect(rescaleBpmForMeter(120, [4, 4], [6, 8])).toBe(80);
 			expect(rescaleBpmForMeter(80, [6, 8], [4, 4])).toBe(120);
 		});
+	});
+});
+
+describe("sortPatternsByNewest", () => {
+	const made = (id: string, createdAt?: string): StrumPattern =>
+		pattern({ id, name: id, ...(createdAt ? { createdAt } : {}) });
+
+	it("lists the most recently created first", () => {
+		const sorted = sortPatternsByNewest([
+			made("old", "2026-01-01T00:00:00Z"),
+			made("newest", "2026-09-07T10:00:00Z"),
+			made("middle", "2026-05-05T00:00:00Z"),
+		]);
+		expect(sorted.map((p) => p.id)).toEqual(["newest", "middle", "old"]);
+	});
+
+	it("sinks a pattern with no creation time below every stamped one", () => {
+		// No stamp means it was stored before the app kept one, which makes it
+		// older than anything that has one.
+		const sorted = sortPatternsByNewest([
+			made("stamped", "2026-01-01T00:00:00Z"),
+			made("legacy"),
+		]);
+		expect(sorted.map((p) => p.id)).toEqual(["stamped", "legacy"]);
+	});
+
+	it("leaves unstamped patterns in the order they were stored", () => {
+		const sorted = sortPatternsByNewest([made("a"), made("b"), made("c")]);
+		expect(sorted.map((p) => p.id)).toEqual(["a", "b", "c"]);
+	});
+
+	it("treats an unreadable timestamp as no timestamp at all", () => {
+		const sorted = sortPatternsByNewest([
+			made("junk", "not a date"),
+			made("stamped", "2026-01-01T00:00:00Z"),
+		]);
+		expect(sorted.map((p) => p.id)).toEqual(["stamped", "junk"]);
+	});
+
+	it("does not touch the array it was given", () => {
+		const input = [made("old", "2026-01-01T00:00:00Z"), made("new", "2026-09-01T00:00:00Z")];
+		sortPatternsByNewest(input);
+		expect(input.map((p) => p.id)).toEqual(["old", "new"]);
 	});
 });

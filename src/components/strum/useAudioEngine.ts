@@ -15,19 +15,17 @@ import {
 } from "./useGuitarSampleLoader";
 
 // Maps strum step values to the corresponding sample type.
-// DG, UG, and "" are intentionally absent — they produce no strum sound.
+// "" is intentionally absent — an unstruck cell produces no strum sound.
 const STEP_TO_SOUND: Partial<Record<StepValue, StrumSoundType>> = {
 	D: "down",
-	D3: "down",
 	U: "up",
-	U3: "up",
 	X: "muted",
 };
 
 /**
  * Resolves a StepValue and a buffer map to a concrete AudioBuffer (or null).
- * Returns null if the step is silent (DG, UG, ""), or if the sample has not
- * yet finished loading. Exported for unit testing only.
+ * Returns null if the step is silent (""), or if the sample has not yet
+ * finished loading. Exported for unit testing only.
  */
 export function _resolveStrumBuffer(
 	step: StepValue,

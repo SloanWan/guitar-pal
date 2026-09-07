@@ -66,8 +66,8 @@ import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 import { useBarHistory } from "./useBarHistory";
 
 function StepIcon({ step }: { step: StepValue }) {
-	if (step === "D" || step === "D3" || step === "DG") return <MoveDown className="size-4" />;
-	if (step === "U" || step === "U3" || step === "UG") return <MoveUp className="size-4" />;
+	if (step === "D") return <MoveDown className="size-4" />;
+	if (step === "U") return <MoveUp className="size-4" />;
 	if (step === "X") return <X className="size-4" />;
 	return <Dot className="size-4" />;
 }

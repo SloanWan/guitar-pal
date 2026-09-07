@@ -23,10 +23,10 @@ describe("buildProposal", () => {
 		expect(p.bars).toHaveLength(1);
 		expect(p.bars[0].chord).toBeNull();
 		expect(p.bars[0].beats).toEqual([
-			["D", "UG"],
+			["D", ""],
 			["D", "U"],
-			["DG", "U"],
-			["D", "UG"],
+			["", "U"],
+			["D", ""],
 		]);
 	});
 

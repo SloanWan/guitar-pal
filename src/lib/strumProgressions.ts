@@ -5,7 +5,7 @@ import {
 	type ChordProgression,
 	type ChordRef,
 } from "@/lib/strumPatterns";
-import { barPlaceholder, validateBars } from "@/lib/strumBars";
+import { barPlaceholder, normalizeBeats, validateBars } from "@/lib/strumBars";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 import { parseTabSequence } from "@/lib/chordTabSequence";
@@ -357,7 +357,7 @@ export function normalizeProgressionSync(
 	} = {};
 	// A snapshot is one bar's worth of beats; validateBars is the existing guard.
 	if (Array.isArray(raw.syncedBeats) && validateBars([{ beats: raw.syncedBeats, chord: null }]).ok) {
-		out.syncedBeats = raw.syncedBeats as Beat[];
+		out.syncedBeats = normalizeBeats(raw.syncedBeats as Beat[]);
 	}
 	if (raw.followsPattern === false) out.followsPattern = false;
 	if (raw.syncNoticeDismissed === true) out.syncNoticeDismissed = true;

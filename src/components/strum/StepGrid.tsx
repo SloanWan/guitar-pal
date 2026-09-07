@@ -3,6 +3,7 @@ import { Bar } from "@/lib/strumPatterns";
 import { barPlaceholder } from "@/lib/strumBars";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import {
+	ghostedBeats,
 	paddedBeatCells,
 	paddedCellIndex,
 	barsFitTwoColumns,
@@ -165,8 +166,6 @@ export default function StepGrid({
 		G: () => <></>,
 		DG: () => <MoveDown className={iconCls} color="var(--ink-faint)" />,
 		UG: () => <MoveUp className={iconCls} color="var(--ink-faint)" />,
-		D3: () => <MoveDown className={iconCls} />,
-		U3: () => <MoveUp className={iconCls} />,
 		"": () => <Dot className={iconCls} />,
 	};
 
@@ -180,6 +179,10 @@ export default function StepGrid({
 		>
 			{bars.map((bar, barIdx) => {
 				const isActiveBar = activeCell?.barIdx === barIdx;
+				// The travelling hand, drawn from the struck cells rather than stored
+				// beside them. Cell for cell with `bar.beats`, so the active-cell
+				// index and the padding below still line up.
+				const displayBeats = ghostedBeats(bar.beats);
 				// Written, not concatenated: a chord nobody has named is stored under a
 				// placeholder root, and "? unknown" is not something to make a player
 				// read off their own chart.
@@ -299,7 +302,7 @@ export default function StepGrid({
 
 						<div className={`flex w-full ${beatGap}`}>
 							{bar.beats.map((beat, beatIdx) => {
-								const paddedCells = paddedBeatCells(beat);
+								const paddedCells = paddedBeatCells(displayBeats[beatIdx]);
 								const isActiveBeat = isActiveBar && activeCell?.beatIdx === beatIdx;
 								return (
 									<div className="flex flex-col gap-2 flex-1" key={beatIdx}>

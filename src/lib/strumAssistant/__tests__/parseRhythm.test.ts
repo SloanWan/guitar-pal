@@ -1,8 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { parseRhythm, acceptedRhythmCharacters } from "@/lib/strumAssistant/parseRhythm";
+import {
+	parseRhythm,
+	parseRhythmInMeter,
+	acceptedRhythmCharacters,
+} from "@/lib/strumAssistant/parseRhythm";
 import { patternNotation } from "@/lib/strumNotation";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
 import type { Beat } from "@/lib/strumPatterns";
+import { SUPPORTED_METERS, type Meter } from "@/lib/strumMeter";
 
 function beatsOf(input: string, options?: Parameters<typeof parseRhythm>[1]): Beat[] {
 	const result = parseRhythm(input, options);
@@ -41,10 +46,10 @@ describe("parseRhythm", () => {
 		it("reads a space as a blank cell, not a separator", () => {
 			// "D DU UD" is 7 cells, matching patternNotation's output for old faithful.
 			expect(beatsOf("D DU UD")).toEqual([
-				["D", "UG"],
+				["D", ""],
 				["D", "U"],
-				["DG", "U"],
-				["D", "UG"],
+				["", "U"],
+				["D", ""],
 			]);
 		});
 
@@ -69,10 +74,10 @@ describe("parseRhythm", () => {
 
 		it("accepts . - _ as blank cells", () => {
 			expect(beatsOf("D.D-D_D.")).toEqual([
-				["D", "UG"],
-				["D", "UG"],
-				["D", "UG"],
-				["D", "UG"],
+				["D", ""],
+				["D", ""],
+				["D", ""],
+				["D", ""],
 			]);
 		});
 
@@ -97,36 +102,34 @@ describe("parseRhythm", () => {
 		});
 	});
 
-	describe("ghost cells and rests", () => {
-		it("ghosts the return stroke after the last strike", () => {
-			// One cell infers a quarter grid, where the return lands on beat 2.
-			expect(beatsOf("D")).toEqual([["D"], ["DG"], [""], [""]]);
-		});
-
-		it("reproduces the 'on the one' preset on an eighth grid", () => {
+	describe("what is not struck", () => {
+		// Nothing is invented here. The travelling hand is drawn from these cells
+		// where the grid is rendered (`ghostedBeats` in strumGridLayout.ts), so a
+		// cell the writer left blank comes back blank — which is what makes the
+		// notation and the grid two views of one rhythm rather than two rhythms.
+		it("leaves every unstruck cell a rest", () => {
+			expect(beatsOf("D")).toEqual([["D"], [""], [""], [""]]);
 			expect(beatsOf("D", { cellsPerBeat: 2 })).toEqual([
-				["D", "UG"],
+				["D", ""],
 				["", ""],
 				["", ""],
 				["", ""],
 			]);
 		});
 
-		it("ghosts gaps between strikes but rests before the first", () => {
-			// _ _ D _ _ D (_ _ trimmed then re-padded): the hand is still before
-			// the first strike, travelling between the two, and stops after.
+		it("keeps a leading rest where it was written", () => {
 			expect(beatsOf("  D  D  ")).toEqual([
 				["", ""],
-				["D", "UG"],
-				["DG", "D"],
-				["DG", ""],
+				["D", ""],
+				["", "D"],
+				["", ""],
 			]);
 		});
 
-		it("gives a ghost the direction of its slot in the beat", () => {
-			const beats = beatsOf("D  UD  U", { cellsPerBeat: 4, beatsPerBar: 2 });
-			expect(beats[0]).toEqual(["D", "UG", "DG", "U"]);
-			expect(beats[1]).toEqual(["D", "UG", "DG", "U"]);
+		it("writes back exactly what was read", () => {
+			for (const input of ["D DU UD", "DUDUDUDU", "DXUX", "D U DU", "  D  D"]) {
+				expect(patternNotation(beatsOf(input))).toBe(input.trimEnd());
+			}
 		});
 
 		it("returns an all-rest bar when nothing is struck", () => {
@@ -141,7 +144,7 @@ describe("parseRhythm", () => {
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value.bars).toHaveLength(2);
-			expect(result.value.bars[0].beats[2]).toEqual(["DG", "U"]);
+			expect(result.value.bars[0].beats[2]).toEqual(["", "U"]);
 			expect(result.value.bars[1].beats[0]).toEqual(["D", "U"]);
 		});
 
@@ -153,7 +156,7 @@ describe("parseRhythm", () => {
 			if (!result.ok) return;
 			expect(result.value.cellsPerBeat).toBe(4);
 			expect(result.value.bars[1].beats[0]).toEqual(["D", "D", "D", "D"]);
-			expect(result.value.bars[1].beats[1]).toEqual(["DG", "", "", ""]);
+			expect(result.value.bars[1].beats[1]).toEqual(["", "", "", ""]);
 		});
 
 		it("reports padding when the input does not fill the grid", () => {
@@ -213,5 +216,84 @@ describe("parseRhythm", () => {
 		expect(chars).toContain("D");
 		expect(chars).toContain("上");
 		expect(chars).toContain(" ");
+	});
+});
+
+describe("parseRhythmInMeter", () => {
+	function barOf(input: string, meter: Meter): Beat[] {
+		const result = parseRhythmInMeter(input, meter);
+		if (!result.ok) throw new Error(result.errors.map((e) => e.message).join("; "));
+		expect(result.value.bars).toHaveLength(1);
+		return result.value.bars[0].beats;
+	}
+
+	it("reads eight cells as the eighths of a 4/4 bar", () => {
+		expect(barOf("D DU UD", [4, 4])).toEqual([
+			["D", ""],
+			["D", "U"],
+			["", "U"],
+			["D", ""],
+		]);
+	});
+
+	it("reads sixteen cells as sixteenths", () => {
+		const beats = barOf("D".repeat(16), [4, 4]);
+		expect(beats).toHaveLength(4);
+		expect(beats.every((beat) => beat.length === 4)).toBe(true);
+	});
+
+	it("counts a compound bar in dotted beats", () => {
+		// 6/8 is two beats of three, never six beats of one.
+		const beats = barOf("DUDUDU", [6, 8]);
+		expect(beats).toEqual([
+			["D", "U", "D"],
+			["U", "D", "U"],
+		]);
+	});
+
+	it("never divides a dotted beat four ways", () => {
+		// Eight cells over two beats infers four, which names no note value under
+		// a dotted beat; it rounds up to the six the meter does have.
+		const beats = barOf("D".repeat(8), [6, 8]);
+		expect(beats).toHaveLength(2);
+		expect(beats.every((beat) => beat.length === 6)).toBe(true);
+	});
+
+	it("fills a 3/4 bar in three", () => {
+		const beats = barOf("DUDUDU", [3, 4]);
+		expect(beats).toEqual([
+			["D", "U"],
+			["D", "U"],
+			["D", "U"],
+		]);
+	});
+
+	it("pads a short bar with rests", () => {
+		const result = parseRhythmInMeter("DU", [4, 4]);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.padded).toBe(true);
+		expect(result.value.bars[0].beats).toHaveLength(4);
+	});
+
+	it("rejects more cells than the meter's finest division holds", () => {
+		// 4/4 tops out at four cells a beat: 17 fits into no division of it.
+		const result = parseRhythmInMeter("D".repeat(17), [4, 4]);
+		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(result.errors[0].code).toBe("too-many-cells");
+	});
+
+	it("round-trips through the written notation", () => {
+		const beats = barOf("D DU UD", [4, 4]);
+		expect(patternNotation(beats)).toBe("D DU UD");
+	});
+
+	it("never throws on arbitrary input", () => {
+		for (const junk of ["", "🎸", "|||", "0123"]) {
+			for (const meter of SUPPORTED_METERS) {
+				expect(() => parseRhythmInMeter(junk, meter)).not.toThrow();
+			}
+		}
 	});
 });

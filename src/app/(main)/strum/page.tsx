@@ -1573,6 +1573,10 @@ export default function StrumPage() {
 						}
 					} else {
 						handleSaveCustomPattern(pattern);
+						// Open what was just made, exactly as picking it from the
+						// library would: saving a pattern and then having to go and find
+						// it is a step nobody wants.
+						handleSelectPattern(pattern);
 					}
 				}}
 				editPattern={editingPattern ?? undefined}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -42,6 +42,7 @@ import {
 	clearBeat,
 	copyBeat,
 	swapBeats,
+	setBarBeats,
 	setBarCells,
 	setCell,
 	stepCellPosition,
@@ -52,18 +53,21 @@ import {
 	beatUnitLabel,
 	meterLabel,
 	allowedCellsPerBeat,
+	beatsPerBar,
 	cellCountLabel,
+	naturalCellsPerBeat,
 	metersEqual,
 	stepCellsPerBeat,
 	type Meter,
 } from "@/lib/strumMeter";
 import { patternNotation } from "@/lib/strumNotation";
+import { parseRhythmInMeter } from "@/lib/strumAssistant/parseRhythm";
 import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 import { useBarHistory } from "./useBarHistory";
 
 function StepIcon({ step }: { step: StepValue }) {
-	if (step === "D" || step === "D3" || step === "DG") return <MoveDown className="size-4" />;
-	if (step === "U" || step === "U3" || step === "UG") return <MoveUp className="size-4" />;
+	if (step === "D") return <MoveDown className="size-4" />;
+	if (step === "U") return <MoveUp className="size-4" />;
 	if (step === "X") return <X className="size-4" />;
 	return <Dot className="size-4" />;
 }
@@ -120,7 +124,57 @@ export default function CreatePatternModal({
 
 	const [showSignInPrompt, setShowSignInPrompt] = useState(false);
 
+	/**
+	 * The shortcut field: the bar written out as notation.
+	 *
+	 * A way in, not a second view of the grid — it holds what the player typed
+	 * and is never written back to from the cells, the same bargain the chord
+	 * shape editor's tab field strikes. Clicking a cell after typing leaves the
+	 * text stale on purpose, rather than rewriting itself under the cursor.
+	 */
+	// The name field, so a save blocked on it can put the cursor where the answer
+	// goes — a red border on a field the player cannot see is not an answer.
+	const nameRef = useRef<HTMLInputElement>(null);
+	const nameErrorId = useId();
+	const [sequenceInput, setSequenceInput] = useState("");
+	const [sequenceError, setSequenceError] = useState<string | null>(null);
+	const sequenceFieldId = useId();
+
 	const beats = bars[0].beats;
+	// What the field's count is read against: 8 in 4/4, 6 in 6/8. Twice this many
+	// characters halves every cell, which is the whole of the rule.
+	const naturalBarCells = beatsPerBar(meter) * naturalCellsPerBeat(meter);
+
+	/** Draw what has been typed, once it reads as a whole bar. */
+	function applySequence(value: string) {
+		// D, U and X are the alphabet; uppercasing as it is typed says so without
+		// rejecting the keystroke. Same length in, same length out, so the caret
+		// stays where the player left it.
+		const written = value.toUpperCase();
+		setSequenceInput(written);
+
+		if (written.trim() === "") {
+			setSequenceError(null);
+			return;
+		}
+		if (written.includes("|")) {
+			setSequenceError('A pattern is one bar — a chord sequence is where "|" belongs.');
+			return;
+		}
+		const parsed = parseRhythmInMeter(written, meter);
+		if (!parsed.ok) {
+			setSequenceError(parsed.errors[0].message);
+			return;
+		}
+		setSequenceError(null);
+		setBars((prev) => setBarBeats(prev, 0, parsed.value.bars[0].beats));
+	}
+
+	/** The written bar no longer describes the grid — drop it rather than lie. */
+	function clearSequence() {
+		setSequenceInput("");
+		setSequenceError(null);
+	}
 
 	useEffect(() => {
 		if (!open) return;
@@ -137,6 +191,7 @@ export default function CreatePatternModal({
 			setNameError(false);
 			setShowSignInPrompt(false);
 			setDiscardConfirm(false);
+			clearSequence();
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
@@ -266,6 +321,7 @@ export default function CreatePatternModal({
 	function handleSave() {
 		if (!name.trim()) {
 			setNameError(true);
+			nameRef.current?.focus();
 			return;
 		}
 		const validation = validateBars(bars);
@@ -297,6 +353,7 @@ export default function CreatePatternModal({
 		setNameError(false);
 		setShowSignInPrompt(false);
 		setDiscardConfirm(false);
+		clearSequence();
 		onClose();
 	}
 
@@ -394,7 +451,11 @@ export default function CreatePatternModal({
 										Pattern name
 									</label>
 									<input
+										ref={nameRef}
 										type="text"
+										required
+										aria-invalid={nameError}
+										aria-describedby={nameError ? nameErrorId : undefined}
 										value={name}
 										onChange={(e) => {
 											setName(e.target.value);
@@ -435,6 +496,9 @@ export default function CreatePatternModal({
 											);
 											setMeter(next);
 											setBars([emptyBar(next)]);
+											// The bar is rebuilt from scratch, so whatever was
+											// written for the old meter describes nothing now.
+											clearSequence();
 										}}
 										aria-label="Time signature"
 										className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
@@ -469,7 +533,9 @@ export default function CreatePatternModal({
 								</div>
 							</div>
 							{nameError && (
-								<p className="text-xs text-destructive">Pattern name is required</p>
+								<p id={nameErrorId} className="text-xs text-destructive">
+									Pattern name is required
+								</p>
 							)}
 						</div>
 
@@ -658,6 +724,52 @@ export default function CreatePatternModal({
 									))}
 								</div>
 							</div>
+						</div>
+
+						{/* The written way in. The grid is what this editor is, so the field
+						    sits under it: a player who already knows the pattern as letters
+						    types it once instead of clicking sixteen cells. */}
+						<div className="flex flex-col gap-1">
+							<label
+								htmlFor={sequenceFieldId}
+								className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
+							>
+								Or, type in the strumming sequence..
+							</label>
+							<input
+								id={sequenceFieldId}
+								type="text"
+								inputMode="text"
+								autoComplete="off"
+								spellCheck={false}
+								value={sequenceInput}
+								onChange={(e) => applySequence(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key !== "Enter") return;
+									// The dialog saves on Enter; writing a bar must not also close
+									// the editor it is being written in.
+									e.preventDefault();
+									e.stopPropagation();
+									applySequence(sequenceInput);
+								}}
+								placeholder="D DU UD"
+								aria-label="Strumming sequence"
+								aria-describedby={`${sequenceFieldId}-hint`}
+								className={`h-(--h-control) w-full border bg-surface px-2 font-mono text-xs tracking-[0.12em] text-ink placeholder:tracking-normal placeholder:text-ink-faint focus-visible:outline-none ${
+									sequenceError
+										? "border-destructive"
+										: "border-line-strong focus-visible:border-denim"
+								}`}
+							/>
+							<p
+								id={`${sequenceFieldId}-hint`}
+								className={`font-mono text-[10px] leading-snug ${
+									sequenceError ? "text-destructive" : "text-ink-faint"
+								}`}
+							>
+								{sequenceError ??
+									`D down, U up, X muted, a space for a cell nobody strikes. The subdivision follows the count — ${naturalBarCells} cells fill a bar of ${meterLabel(meter)}.`}
+							</p>
 						</div>
 
 						{/* Sign-in prompt — shown when user is not logged in and tries to save */}

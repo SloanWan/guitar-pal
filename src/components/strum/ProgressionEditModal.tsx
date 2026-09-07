@@ -392,7 +392,7 @@ export default function ProgressionEditModal({
 			<DialogContent
 				showCloseButton={false}
 				onKeyDown={handleDialogKeyDown}
-				className="w-full max-w-120 md:max-w-[58rem] flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
+				className="w-[calc(100%-2rem)] max-w-100 md:max-w-[58rem] flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
 			>
 				<DialogHeader className="shrink-0 flex-row items-center justify-between gap-2 p-4 pb-0">
 					<DialogTitle>Edit progression</DialogTitle>

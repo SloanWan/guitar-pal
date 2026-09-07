@@ -134,7 +134,7 @@ export default function ChordShapeModal({
 		<Dialog open={open} onOpenChange={(next) => (next ? undefined : requestClose())}>
 			<DialogContent
 				showCloseButton={false}
-				className="max-w-lg gap-4 border-line-strong p-4"
+				className="w-[calc(100%-2rem)] max-w-lg gap-4 border-line-strong p-4"
 				onEscapeKeyDown={(e) => {
 					e.preventDefault();
 					requestClose();

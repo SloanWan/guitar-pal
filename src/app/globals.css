@@ -464,6 +464,93 @@
 }
 
 /* ----------------------------------------------------------------------------
+   FRETBOARD — src/components/fretboard/Fretboard.tsx. The marks are an LED
+   matrix laid over the neck: every slot is always present, a FretMark lights
+   one up. Round like the LED and for the same reason (a signal, not a surface).
+   Denim marks the root only; the other levels are told apart by fill and
+   outline, not colour. Position slides ride the drawer curve.
+   ------------------------------------------------------------------------- */
+.fb-neck {
+	transition: transform var(--dur-drawer) var(--ease-drawer);
+}
+.fb-mark {
+	transform-box: fill-box;
+	transform-origin: center;
+	transition:
+		opacity var(--dur-theme) ease-out,
+		transform var(--dur-theme) ease-out,
+		filter var(--dur-theme) ease-out;
+}
+.fb-dot,
+.fb-ring,
+.fb-label {
+	transition:
+		fill var(--dur-theme),
+		stroke var(--dur-theme),
+		opacity var(--dur-theme);
+}
+/* Dormant: invisible, shrunk, and styled like a scale tone so lighting up is a
+   fade rather than a colour jump. */
+.fb-mark[data-emphasis="none"] {
+	opacity: 0;
+	transform: scale(0.4);
+	pointer-events: none;
+}
+.fb-dot {
+	fill: var(--bg);
+	stroke: var(--ink-dim);
+}
+.fb-ring {
+	fill: none;
+	stroke: var(--denim);
+	opacity: 0;
+}
+.fb-label {
+	fill: var(--ink-dim);
+	font-weight: 500;
+}
+.fb-mark[data-emphasis="root"] {
+	filter: drop-shadow(0 0 4px var(--denim-glow));
+}
+.fb-mark[data-emphasis="root"] .fb-ring {
+	opacity: 1;
+}
+.fb-mark[data-emphasis="root"] .fb-dot {
+	fill: var(--denim);
+	stroke: var(--denim);
+}
+.fb-mark[data-emphasis="root"] .fb-label {
+	fill: var(--btn-on-denim);
+	font-weight: 700;
+}
+.fb-mark[data-emphasis="chordTone"] .fb-dot {
+	fill: var(--ink);
+	stroke: var(--ink);
+}
+.fb-mark[data-emphasis="chordTone"] .fb-label {
+	fill: var(--bg);
+}
+.fb-mark[data-emphasis="muted"] {
+	transform: scale(0.45);
+}
+.fb-mark[data-emphasis="muted"] .fb-dot {
+	fill: var(--ink-faint);
+	stroke: var(--ink-faint);
+}
+.fb-mark[data-emphasis="muted"] .fb-label {
+	opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+	.fb-neck,
+	.fb-mark,
+	.fb-dot,
+	.fb-ring,
+	.fb-label {
+		transition: none;
+	}
+}
+
+/* ----------------------------------------------------------------------------
    THIN SCROLLBAR — for the fingerpick measure-cell horizontal scroll area.
    The native (fat) scrollbar overlapped the slot labels; this slims it to a
    short denim line. Radius 0 to match the system (LEDs are the only exception).

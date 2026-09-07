@@ -402,15 +402,25 @@ export default function StrumPage() {
 	// focused, where the browser would otherwise re-fire that button. It stands
 	// down inside a form field and behind an open dialog, where the keystroke
 	// belongs to what is on top (see shouldRunPageShortcut).
+	//
+	// Held through a ref, and subscribed exactly once. A dependency list would
+	// have to name every value the toggle reads — the pattern arrives from the
+	// database a render after the listener goes up, and a listener still holding
+	// the null it was mounted with is a space bar that does nothing until
+	// something else happens to re-subscribe it.
+	const playPauseRef = useRef(handleHitPlayAndPause);
+	useEffect(() => {
+		playPauseRef.current = handleHitPlayAndPause;
+	});
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
 			e.preventDefault();
-			handleHitPlayAndPause();
+			playPauseRef.current();
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isPlaying]);
+	}, []);
 
 	// Restore the initial pattern once, after custom patterns finish loading (they
 	// arrive async). A `?pattern=<id>` deep link (e.g. from /home) takes priority

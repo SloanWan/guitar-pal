@@ -1171,16 +1171,24 @@ export default function FingerpickPage() {
 
 	// Spacebar toggles play/pause, anywhere on the page — but not in a form field
 	// and not behind an open dialog (see shouldRunPageShortcut).
+	//
+	// Held through a ref, and subscribed exactly once: the toggle reads the
+	// pattern, the samples' load state and the tempo, and a dependency list that
+	// misses one of them leaves the key acting on a state the page has already
+	// left behind.
+	const playPauseRef = useRef(handlePlayPause);
+	useEffect(() => {
+		playPauseRef.current = handlePlayPause;
+	});
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
 			e.preventDefault();
-			handlePlayPause();
+			playPauseRef.current();
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isPlaying, isPaused, isLoaded, bpm]);
+	}, []);
 
 	// Greedy row layout driven by content width; guard: render nothing until the
 	// ResizeObserver fires with the real container width on mount.

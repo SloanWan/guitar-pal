@@ -3,21 +3,16 @@
 import { useCallback, useRef, useState } from "react";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import { routeAssistantInput } from "@/lib/strumAssistant/router";
-import { buildProposal } from "@/lib/strumAssistant/buildProposal";
-import type {
-	AssistantProposal,
-	AssistantReply,
-	AssistantTurn,
-} from "@/lib/strumAssistant/types";
+import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
+import type { AssistantProposal, AssistantTurn } from "@/lib/strumAssistant/types";
 
 /**
  * Drives one assistant conversation.
  *
- * The deterministic router runs here rather than on the server, so a typed
- * rhythm or a plain chord line is answered from memory with no network call at
- * all — which is what makes "the model is only reached when determinism runs
- * out" a structural property rather than a promise.
+ * The conversation's state lives here; deciding a turn lives in
+ * `resolveAssistantTurn`, which runs the deterministic router before it reaches
+ * for the network — so a typed rhythm or a plain chord line is answered from
+ * memory, and that can be asserted rather than promised.
  */
 
 export interface AssistantMessage {
@@ -69,81 +64,19 @@ export function useAssistant() {
 
 			try {
 				const index = await chordIndex();
-				const route = routeAssistantInput(text, index);
-
-				if (route.path !== "llm") {
-					const built = buildProposal({
-						rhythm: route.path === "rhythm" ? route.rhythm : null,
-						chordWords: route.chordWords,
-						index,
-					});
-					if (built.ok) {
-						setMessages((prev) => [
-							...prev,
-							{
-								id: newId(),
-								role: "assistant",
-								text: "Read straight from what you typed — no model needed.",
-								proposal: built.proposal,
-							},
-						]);
-						return;
-					}
-					// Notation that parses in the router but not here would be a bug,
-					// not a user error; fall through to the model rather than dead-end.
-				}
-
 				const history: AssistantTurn[] = [...messages, userMessage]
 					.slice(-MAX_HISTORY_TURNS)
 					.map((m) => ({ role: m.role, content: m.text }));
 
-				const response = await fetch("/api/strum-assistant", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ messages: history }),
-				});
-
-				if (!response.ok) {
-					const body = (await response.json().catch(() => null)) as { error?: string } | null;
-					setMessages((prev) => [
-						...prev,
-						{
-							id: newId(),
-							role: "assistant",
-							text: body?.error ?? "The assistant is unavailable right now.",
-							failed: true,
-						},
-					]);
-					return;
-				}
-
-				const reply = (await response.json()) as AssistantReply;
-				let proposal: AssistantProposal | undefined;
-				if (reply.draft) {
-					const built = buildProposal({
-						rhythm: reply.draft.rhythm,
-						chordWords: reply.draft.chords,
-						name: reply.draft.name,
-						bpm: reply.draft.bpm,
-						rhythmGuessed: reply.draft.rhythmGuessed,
-						index,
-					});
-					if (built.ok) proposal = built.proposal;
-				}
-
-				setMessages((prev) => [
-					...prev,
-					{ id: newId(), role: "assistant", text: reply.message, proposal },
-				]);
-			} catch (e) {
-				console.error("[assistant] send:", e);
+				const outcome = await resolveAssistantTurn({ text, history, index });
 				setMessages((prev) => [
 					...prev,
 					{
 						id: newId(),
 						role: "assistant",
-						text: "Something went wrong reaching the assistant.",
-						failed: true,
+						text: outcome.text,
+						proposal: outcome.proposal,
+						...(outcome.failed ? { failed: true } : {}),
 					},
 				]);
 			} finally {

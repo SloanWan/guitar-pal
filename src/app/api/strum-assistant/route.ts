@@ -1,9 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { parseRhythm } from "@/lib/strumAssistant/parseRhythm";
+import { askModel } from "@/lib/strumAssistant/askModel";
 import { SlidingWindowLimiter } from "@/lib/strumAssistant/rateLimit";
-import { ASSISTANT_OUTPUT_SCHEMA, ASSISTANT_SYSTEM_PROMPT } from "@/lib/strumAssistant/prompt";
-import type { AssistantDraft, AssistantReply, AssistantTurn } from "@/lib/strumAssistant/types";
+import type { AssistantTurn } from "@/lib/strumAssistant/types";
 
 /**
  * The assistant's model path. Reached only when the client's deterministic
@@ -17,12 +16,8 @@ import type { AssistantDraft, AssistantReply, AssistantTurn } from "@/lib/strumA
  *  3. Hard caps on turns, input length and output tokens.
  */
 
-const MODEL = "claude-opus-5";
-/** The output is a short JSON object; a large cap would only widen the blast radius. */
-const MAX_OUTPUT_TOKENS = 1024;
 const MAX_TURNS = 12;
 const MAX_CHARS_PER_TURN = 600;
-const MAX_REPAIR_ATTEMPTS = 1;
 
 const limiter = new SlidingWindowLimiter({ limit: 20, windowMs: 60 * 60 * 1000 });
 
@@ -52,59 +47,6 @@ function readTurns(body: unknown): AssistantTurn[] | string {
 		return `Keep each message under ${MAX_CHARS_PER_TURN} characters.`;
 	}
 	return turns;
-}
-
-interface ModelOutput {
-	action: "propose" | "ask" | "decline";
-	message: string;
-	draft: AssistantDraft & { bpm: number };
-}
-
-/** Shape check only — the semantic checks that drive the repair loop follow. */
-function isModelOutput(value: unknown): value is ModelOutput {
-	if (typeof value !== "object" || value === null) return false;
-	const v = value as Record<string, unknown>;
-	if (v.action !== "propose" && v.action !== "ask" && v.action !== "decline") return false;
-	if (typeof v.message !== "string") return false;
-	if (typeof v.draft !== "object" || v.draft === null) return false;
-	const d = v.draft as Record<string, unknown>;
-	return (
-		(d.kind === "pattern" || d.kind === "progression") &&
-		typeof d.name === "string" &&
-		typeof d.rhythm === "string" &&
-		Array.isArray(d.chords) &&
-		d.chords.every((c) => typeof c === "string") &&
-		typeof d.bpm === "number" &&
-		typeof d.rhythmGuessed === "boolean"
-	);
-}
-
-/**
- * What the schema cannot express. A structured output is already guaranteed to
- * fit the shape, so this only checks meaning: that a proposed rhythm is really
- * playable notation, and that a proposal offers something at all.
- */
-function semanticErrors(output: ModelOutput): string[] {
-	const errors: string[] = [];
-	if (output.message.trim() === "") errors.push("message was empty.");
-	if (output.action !== "propose") return errors;
-
-	const hasChords = output.draft.chords.length > 0;
-	const rhythm = output.draft.rhythm.trim();
-	if (rhythm === "" && !hasChords) {
-		errors.push("action was propose but the draft has neither a rhythm nor chords.");
-	}
-	if (rhythm !== "") {
-		const parsed = parseRhythm(output.draft.rhythm);
-		if (!parsed.ok) {
-			errors.push(
-				`rhythm "${output.draft.rhythm}" is not valid notation: ${parsed.errors
-					.map((e) => e.message)
-					.join(" ")}`,
-			);
-		}
-	}
-	return errors;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -143,104 +85,34 @@ export async function POST(request: Request): Promise<Response> {
 	}
 
 	const client = new Anthropic();
-	const messages: Anthropic.MessageParam[] = turns.map((t) => ({
-		role: t.role,
-		content: t.content,
-	}));
-
-	let attempt = 0;
-	let lastErrors: string[] = [];
-
-	while (attempt <= MAX_REPAIR_ATTEMPTS) {
-		let response: Anthropic.Message;
-		try {
-			response = await client.messages.create({
-				model: MODEL,
-				max_tokens: MAX_OUTPUT_TOKENS,
-				system: [
-					{
-						type: "text",
-						text: ASSISTANT_SYSTEM_PROMPT,
-						cache_control: { type: "ephemeral" },
-					},
-				],
-				// Short extraction-and-classification work: low effort is the right
-				// setting and keeps the per-request cost down.
-				output_config: {
-					effort: "low",
-					format: { type: "json_schema", schema: ASSISTANT_OUTPUT_SCHEMA },
-				},
-				messages,
-			});
-		} catch (error) {
-			if (error instanceof Anthropic.RateLimitError) {
-				return json({ error: "The assistant is busy. Try again in a moment." }, 429);
-			}
-			if (error instanceof Anthropic.AuthenticationError) {
-				return json({ error: "The assistant is misconfigured on this deployment." }, 503);
-			}
-			console.error("[strum-assistant] model call failed:", error);
-			return json({ error: "The assistant could not be reached." }, 502);
-		}
-
+	try {
+		const result = await askModel(client, turns);
+		// One line per request, with everything a cost-per-request figure needs.
+		// The deterministic paths never reach here, so path is always the model's.
+		const totals = result.attempts.reduce(
+			(sum, a) => ({
+				in: sum.in + a.inputTokens,
+				out: sum.out + a.outputTokens,
+				cacheRead: sum.cacheRead + a.cacheReadTokens,
+				cacheWrite: sum.cacheWrite + a.cacheWriteTokens,
+			}),
+			{ in: 0, out: 0, cacheRead: 0, cacheWrite: 0 },
+		);
 		console.info(
-			`[strum-assistant] user=${user.id} attempt=${attempt} in=${response.usage.input_tokens} out=${response.usage.output_tokens} cache_read=${response.usage.cache_read_input_tokens ?? 0} stop=${response.stop_reason}`,
+			`[strum-assistant] user=${user.id} path=llm outcome=${result.outcome} attempts=${result.attempts.length} in=${totals.in} out=${totals.out} cache_read=${totals.cacheRead} cache_write=${totals.cacheWrite} latency_ms=${result.latencyMs}`,
 		);
-
-		if (response.stop_reason === "refusal") {
-			return json({ message: "I can't help with that one. Ask me about strumming patterns or chord progressions." } satisfies AssistantReply, 200);
+		if (result.outcome === "gave-up") {
+			console.warn(`[strum-assistant] gave up after repair: ${result.repairErrors.join(" ")}`);
 		}
-
-		const text = response.content.find((b) => b.type === "text");
-		let parsed: unknown = null;
-		if (text) {
-			try {
-				parsed = JSON.parse(text.text);
-			} catch {
-				parsed = null;
-			}
+		return json(result.reply, 200);
+	} catch (error) {
+		if (error instanceof Anthropic.RateLimitError) {
+			return json({ error: "The assistant is busy. Try again in a moment." }, 429);
 		}
-
-		if (isModelOutput(parsed)) {
-			const errors = semanticErrors(parsed);
-			if (errors.length === 0) {
-				const reply: AssistantReply = { message: parsed.message };
-				if (parsed.action === "propose") {
-					reply.draft = {
-						kind: parsed.draft.kind,
-						name: parsed.draft.name,
-						rhythm: parsed.draft.rhythm,
-						chords: parsed.draft.chords,
-						bpm: parsed.draft.bpm > 0 ? parsed.draft.bpm : null,
-						rhythmGuessed: parsed.draft.rhythmGuessed,
-					};
-				}
-				return json(reply, 200);
-			}
-			lastErrors = errors;
-		} else {
-			lastErrors = ["the reply did not match the required shape."];
+		if (error instanceof Anthropic.AuthenticationError) {
+			return json({ error: "The assistant is misconfigured on this deployment." }, 503);
 		}
-
-		// Bounded repair: quote the concrete failures back once, then give up
-		// rather than looping on the user's money.
-		attempt += 1;
-		if (attempt > MAX_REPAIR_ATTEMPTS) break;
-		messages.push(
-			{ role: "assistant", content: text?.text ?? "" },
-			{
-				role: "user",
-				content: `That reply could not be used: ${lastErrors.join(" ")} Answer again, correcting only those points.`,
-			},
-		);
+		console.error("[strum-assistant] model call failed:", error);
+		return json({ error: "The assistant could not be reached." }, 502);
 	}
-
-	console.warn(`[strum-assistant] gave up after repair: ${lastErrors.join(" ")}`);
-	return json(
-		{
-			message:
-				"I couldn't put that into a pattern I trust. Try naming the chords, or type a rhythm like \"D DU UD\".",
-		} satisfies AssistantReply,
-		200,
-	);
 }

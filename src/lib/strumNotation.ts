@@ -2,21 +2,19 @@ import type { Beat, StepValue } from "@/lib/strumPatterns";
 
 /**
  * The character a cell contributes to the written pattern. Every cell takes
- * exactly one column, so the writing keeps the grid's rhythm: cells nobody
- * strikes — ghosts (`DG`, `UG`, `G`) and rests — are written as a blank.
- * Triplet cells read as ordinary strokes; their grouping is the triplet.
+ * exactly one column, so the writing keeps the grid's rhythm: a cell nobody
+ * strikes is written as a blank. Ghost strokes never appear here — they are
+ * drawn from these cells, not written alongside them.
  */
 const CELL_LETTERS: Partial<Record<StepValue, string>> = {
 	D: "D",
 	U: "U",
 	X: "X",
-	D3: "D",
-	U3: "U",
 };
 
 const BLANK = " ";
 
-/** One beat's cells, one character each, e.g. `["D", "UG"]` → `"D "`. */
+/** One beat's cells, one character each, e.g. `["D", ""]` → `"D "`. */
 export function beatNotation(beat: Beat): string {
 	return beat.map((cell) => CELL_LETTERS[cell] ?? BLANK).join("");
 }

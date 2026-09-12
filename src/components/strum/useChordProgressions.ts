@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Bar, ChordProgression } from "@/lib/strumPatterns";
-import { validateBars, normalizeBpm } from "@/lib/strumBars";
+import { validateBars, normalizeBars, normalizeBpm } from "@/lib/strumBars";
 import { normalizeCapo, normalizeProgressionSync } from "@/lib/strumProgressions";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
@@ -28,7 +28,7 @@ function rowToProgression(row: ProgressionRow): ChordProgression | null {
 	return {
 		id: row.id,
 		patternId: row.pattern_id,
-		bars: row.bars as Bar[],
+		bars: normalizeBars(row.bars as Bar[]),
 		orderIndex: row.order_index ?? 0,
 		name: row.name ?? "",
 		// Null means "no tempo of its own" — the pattern's tempo is used instead.
@@ -65,7 +65,7 @@ function readStored(): ChordProgression[] {
 		return (JSON.parse(saved) as ChordProgression[])
 			.filter((p) => validateBars(p.bars).ok)
 			// Local storage is as untrusted as the database; the same guard applies.
-			.map((p) => ({ ...p, ...normalizeProgressionSync(p) }));
+			.map((p) => ({ ...p, bars: normalizeBars(p.bars), ...normalizeProgressionSync(p) }));
 	} catch {
 		return [];
 	}

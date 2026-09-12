@@ -173,6 +173,53 @@ In the **My Patterns** section of the library, each custom pattern has three ico
 
 ---
 
+## Strum Assistant
+
+The chat control at the right of the top bar. Type what you want and it answers
+with a pattern you can preview and open in the strumming machine.
+
+Three kinds of request, and only the last one reaches a model:
+
+- **Chords** — `C Am F G`, `C-G-Am-F`, `Am | F | C | G`. Read instantly; the
+  rhythm is a suggestion and says so.
+- **A rhythm** — `DUDUDUDU`, `D DU UD`, `下上下上`, with or without chords in
+  front of it (`C Am F G, DUDUDU`). Read instantly.
+- **A sentence** — `给我一个 C-G-Am-F 的民谣扫弦，慢一点`, `a slow folk strum in
+  C G Am F`. A small lexicon reads chords, a style (folk, pop, rock, ballad) and
+  a tempo (slower, faster, or a written BPM) out of it, and answers instantly
+  **only when it read the whole sentence**. One word it does not know — a song
+  title, a mood — and the request goes to the model instead.
+
+Everything the model returns is notation and chord words; the app itself turns
+them into a pattern, so a chord it names always comes from the chord library.
+The model path needs a signed-in account.
+
+### Quality baseline
+
+The assistant has an eval set of 30 requests (`src/lib/strumAssistant/__evals__/cases.ts`),
+graded programmatically: which path a request takes, which chords come back, how
+many bars, the tempo, and whether the model invented a rhythm or reported a word
+it could not resolve.
+
+| Path | Cases | Pass | Cost per request | Latency |
+| --- | --- | --- | --- | --- |
+| chords | 6 | 6/6 | $0 | instant |
+| rhythm | 5 | 5/5 | $0 | instant |
+| sentence (lexicon) | 7 | 7/7 | $0 | instant |
+| model (`claude-opus-5`) | 11 | 9/11 | $0.0068 | 4.8 s mean |
+
+**18 of 30 requests (60%) are answered without a model call.** The offline half
+runs in `npm test` and makes no API calls. The model half runs with
+`npm run evals` — it costs money (about $0.08 for the set), needs
+`ANTHROPIC_API_KEY`, and writes `src/lib/strumAssistant/__evals__/baseline.json`
+with the pass rate, the measured cost per request, latency, and how often the
+repair loop fired. Compare a prompt edit against that file, not against a
+feeling. (The twelfth model-path case is empty input, which the app never sends.)
+
+Baseline recorded 2026-09-11: 9/11, no repairs needed. The two misses are
+recorded in `baseline.json` — a chord word no chord matches was dropped instead
+of being reported, and a bare "慢一点" got a pattern instead of a question.
+
 ## Chord Library
 
 Found at **Chords** in the navigation. The Chord Library gives you fingering diagrams for a large collection of guitar chords.

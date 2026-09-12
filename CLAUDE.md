@@ -78,7 +78,7 @@ Types defined in `src/types/database.ts`.
 
 ## Conventions
 
-- Ghost cells (`"DG"`/`"UG"`) belong exclusively to the UI presentation layer — never let them leak into audio engine data structures.
+- Ghost strokes (`"DG"`/`"UG"`) are **drawn, not stored**: `ghostedBeats` in `strumGridLayout.ts` derives them from the struck cells where the grid is rendered. A stored `StepValue` is only `"D" | "U" | "X" | ""`; the retired `DG`/`UG`/`D3`/`U3` values are folded away by `normalizeBeats` (`strumBars.ts`) as rows are read. Never write a ghost into stored beats, a parser result, or an audio engine structure.
 - `CATEGORY_COLORS` is centrally managed in `src/lib/constants.ts`; styling uses Tailwind v4 arbitrary value syntax `bg-[#hex]`.
 - Brand color (denim): `#4A6FA5` (denim — active/main), `#6B8CAE` (denim-light — muted/rings), `#EEF2F7` (denim-tint — bg), `#3A5A8A` (denim-dark — deep hover). Use Tailwind class names (`text-denim`, `bg-denim-tint`, `border-denim-border`, etc.), not raw hex.
 - **All code, comments, and commit messages must be in English** — no Chinese identifiers, comments, or commit messages, regardless of what language the requirement was discussed in.

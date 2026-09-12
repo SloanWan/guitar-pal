@@ -1,6 +1,19 @@
 import type { Meter } from "@/lib/strumMeter";
 
-export type StepValue = "D" | "U" | "X" | "" | "DG" | "UG" | "D3" | "U3";
+/**
+ * A cell of a bar, as authored and as stored: struck down, struck up, struck
+ * muted, or not struck at all.
+ *
+ * Ghost strokes — the hand travelling between strikes — are not in here. They
+ * are a reading of the rhythm rather than part of it, derived where the grid is
+ * drawn (`ghostedBeats` in strumGridLayout.ts) and never stored. Neither is a
+ * triplet marker: three cells in a simple meter *are* the triplet, and `meter`
+ * is what tells them from a compound beat's own division.
+ *
+ * Beats read back from storage may still carry the retired `DG`/`UG`/`D3`/`U3`
+ * values; `normalizeBeats` in strumBars.ts is the boundary that folds them away.
+ */
+export type StepValue = "D" | "U" | "X" | "";
 
 export type Beat = StepValue[]; // length = 1|2|3|4|6 — see allowedCellsPerBeat
 
@@ -46,6 +59,15 @@ export interface StrumPattern {
 	beats: Beat[];
 	/** Tempo the pattern loads at. Read it through `patternBpm`. */
 	bpm?: number;
+	/**
+	 * When the player created it, as an ISO 8601 timestamp — the library lists
+	 * their patterns newest first (`sortPatternsByNewest`).
+	 *
+	 * Written by the database for a signed-in player and stamped locally for a
+	 * guest. Absent on anything stored before the column was read back, which is
+	 * a pattern older than every stamped one.
+	 */
+	createdAt?: string;
 	/**
 	 * Time signature. Absent means 4/4, which is what every pattern stored
 	 * before meters existed is. Read it through `patternMeter`, never directly,
@@ -111,7 +133,7 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 		id: "4-4 on the one",
 		name: "on the one",
 		beats: [
-			["D", "UG"],
+			["D", ""],
 			["", ""],
 			["", ""],
 			["", ""],
@@ -121,49 +143,49 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 		id: "4-4 on the beats",
 		name: "on the beat",
 		beats: [
-			["D", "UG"],
-			["D", "UG"],
-			["D", "UG"],
-			["D", "UG"],
+			["D", ""],
+			["D", ""],
+			["D", ""],
+			["D", ""],
 		],
 	},
 	{
 		id: "4-4 old faithful",
 		name: "old faithful",
 		beats: [
-			["D", "UG"],
+			["D", ""],
 			["D", "U"],
-			["DG", "U"],
-			["D", "UG"],
+			["", "U"],
+			["D", ""],
 		],
 	},
 	{
 		id: "4-4 triplet on one",
 		name: "triplet on one",
 		beats: [
-			["D3", "U3", "D3"],
-			["D", "UG"],
-			["D", "UG"],
-			["D", "UG"],
+			["D", "U", "D"],
+			["D", ""],
+			["D", ""],
+			["D", ""],
 		],
 	},
 	{
 		id: "4-4 boaf",
 		name: "birds of a feather",
 		beats: [
-			["D", "UG", "DG", "U"],
-			["D", "U", "D", "UG"],
-			["DG", "U", "D", "U"],
-			["D", "UG", "D", "U"],
+			["D", "", "", "U"],
+			["D", "U", "D", ""],
+			["", "U", "D", "U"],
+			["D", "", "D", "U"],
 		],
 	},
 	{
 		id: "3-4 test",
 		name: "hualala",
 		beats: [
-			["D", "UG", "DG"],
+			["D", "", ""],
 			["D", "U", "D"],
-			["D", "UG", "DG"],
+			["D", "", ""],
 			["D", "U", "D"],
 		],
 	},
@@ -171,10 +193,10 @@ export const PRESET_STRUM_PATTERNS: StrumPattern[] = [
 		id: "4-4 triplet on 1 and 3",
 		name: "triplet on 1+3",
 		beats: [
-			["D3", "U3", "D3"],
-			["D", "UG"],
-			["D3", "U3", "D3"],
-			["D", "UG"],
+			["D", "U", "D"],
+			["D", ""],
+			["D", "U", "D"],
+			["D", ""],
 		],
 	},
 	{

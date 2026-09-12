@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
 import { StrumPattern, Beat, Bar } from "@/lib/strumPatterns";
-import { normalizeBpm, patternBpm, patternMeter } from "@/lib/strumBars";
+import {
+	normalizeBeats,
+	normalizeBpm,
+	patternBpm,
+	patternMeter,
+	sortPatternsByNewest,
+} from "@/lib/strumBars";
 import { normalizeMeter, type Meter } from "@/lib/strumMeter";
 import { createClient } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -14,15 +20,18 @@ interface StrumPatternRow {
 	bpm?: unknown;
 	/** Absent on every row written before meters existed; reads back as 4/4. */
 	meter?: unknown;
+	/** Written by the database on insert; what the library orders on. */
+	created_at?: string;
 }
 
 function rowToPattern(row: StrumPatternRow): StrumPattern {
 	return {
 		id: row.pattern_id,
 		name: row.name,
-		beats: row.beats,
+		beats: normalizeBeats(row.beats),
 		bpm: normalizeBpm(row.bpm),
 		meter: normalizeMeter(row.meter),
+		createdAt: row.created_at,
 	};
 }
 
@@ -49,12 +58,13 @@ function patternColumns(pattern: StrumPattern): {
 
 /** Normalize patterns read back from localStorage into the current shape. */
 function sanitizeStoredPatterns(patterns: StrumPattern[]): StrumPattern[] {
-	return patterns.map((p) => ({
+	return sortPatternsByNewest(patterns).map((p) => ({
 		id: p.id,
 		name: p.name,
-		beats: p.beats,
+		beats: normalizeBeats(p.beats),
 		bpm: patternBpm(p),
 		meter: patternMeter(p),
+		createdAt: p.createdAt,
 	}));
 }
 
@@ -115,6 +125,10 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 								user_id: currentUser.id,
 								pattern_id: p.id,
 								...patternColumns(p),
+								// Signing in is not creating: carry the times the guest's
+								// patterns were actually made, or a whole library would
+								// arrive stamped with one moment and lose its order.
+								...(p.createdAt ? { created_at: p.createdAt } : {}),
 							})),
 						);
 						merged = true;
@@ -152,7 +166,11 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 			const { data: patterns } = await supabase
 				.from("user_strum_patterns")
 				.select("*")
-				.eq("user_id", currentUser.id);
+				.eq("user_id", currentUser.id)
+				// Newest first: the pattern someone just made is the one they are
+				// working on, and the database is the only place the creation time
+				// is recorded.
+				.order("created_at", { ascending: false });
 			setCustomPatterns(
 				(patterns ?? []).map((row) => rowToPattern(row as StrumPatternRow)),
 			);
@@ -187,7 +205,8 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 					const { data: patterns } = await supabase
 						.from("user_strum_patterns")
 						.select("*")
-						.eq("user_id", user.id);
+						.eq("user_id", user.id)
+						.order("created_at", { ascending: false });
 					setCustomPatterns(
 						(patterns ?? []).map((row) => rowToPattern(row as StrumPatternRow)),
 					);
@@ -198,14 +217,24 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 				}
 			})();
 		} else {
-			const updated = [...customPatterns, pattern];
+			// No database to stamp it, so the save does: without a creation time a
+			// guest's patterns have no order to be listed in.
+			const stamped: StrumPattern = {
+				...pattern,
+				createdAt: pattern.createdAt ?? new Date().toISOString(),
+			};
+			const updated = sortPatternsByNewest([...customPatterns, stamped]);
 			setCustomPatterns(updated);
 			localStorage.setItem("customStrumPatterns", JSON.stringify(updated));
 		}
 	}
 
 	function handleEditCustomPattern(updated: StrumPattern) {
-		const next = customPatterns.map((p) => (p.id === updated.id ? updated : p));
+		// Editing is not creating: the pattern keeps the time it was made, and
+		// therefore its place in the list.
+		const next = customPatterns.map((p) =>
+			p.id === updated.id ? { ...updated, createdAt: p.createdAt } : p,
+		);
 		setCustomPatterns(next);
 		if (user) {
 			(async () => {

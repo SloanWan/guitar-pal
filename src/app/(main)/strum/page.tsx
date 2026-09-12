@@ -44,6 +44,11 @@ import {
 	type ChordToken,
 } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
+import {
+	HANDOFF_EVENT,
+	takeHandoff,
+	type AssistantHandoff,
+} from "@/lib/strumAssistant/handoff";
 import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
@@ -401,15 +406,80 @@ export default function StrumPage() {
 	// focused, where the browser would otherwise re-fire that button. It stands
 	// down inside a form field and behind an open dialog, where the keystroke
 	// belongs to what is on top (see shouldRunPageShortcut).
+	//
+	// Held through a ref, and subscribed exactly once. A dependency list would
+	// have to name every value the toggle reads — the pattern arrives from the
+	// database a render after the listener goes up, and a listener still holding
+	// the null it was mounted with is a space bar that does nothing until
+	// something else happens to re-subscribe it.
+	const playPauseRef = useRef(handleHitPlayAndPause);
+	useEffect(() => {
+		playPauseRef.current = handleHitPlayAndPause;
+	});
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
 			e.preventDefault();
-			handleHitPlayAndPause();
+			playPauseRef.current();
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isPlaying]);
+	}, []);
+
+	/**
+	 * Save a proposal the assistant handed over, and open it.
+	 *
+	 * The assistant owns no write path of its own: a pattern and a progression go
+	 * to two different tables through the hooks this page already uses, so it
+	 * hands the words over and this saves them exactly as the editor does.
+	 */
+	function applyHandoff(handoff: AssistantHandoff) {
+		const pattern: StrumPattern = {
+			id: crypto.randomUUID(),
+			name: handoff.name,
+			beats: handoff.bars[0].beats,
+			...(handoff.bpm === null ? {} : { bpm: handoff.bpm }),
+		};
+		handleSaveCustomPattern(pattern);
+		// Chords live in the progression table, never on the pattern row, so a
+		// proposal carrying chords becomes a pattern plus one progression over it.
+		const progression =
+			handoff.chords.length > 0
+				? {
+						id: crypto.randomUUID(),
+						patternId: pattern.id,
+						bars: handoff.bars,
+						orderIndex: nextOrderIndex([]),
+					}
+				: null;
+		if (progression) handleSaveProgression(progression);
+		queueMicrotask(() => {
+			setSelectedPattern(pattern);
+			setBpm(patternBpm(pattern));
+			setPatternRestored(true);
+			if (progression) {
+				setTab("progressions");
+				setOpenProgressionId(progression.id);
+			}
+		});
+	}
+
+	// The assistant lives in the topbar, so a proposal is usually confirmed with
+	// this page already on screen — where the mount-time read above has long
+	// since run and navigating to /strum again does nothing. Same ref idiom as
+	// the transport key: subscribe once, always call the current closure.
+	const applyHandoffRef = useRef(applyHandoff);
+	useEffect(() => {
+		applyHandoffRef.current = applyHandoff;
+	});
+	useEffect(() => {
+		function handleHandoff() {
+			const handoff = takeHandoff();
+			if (handoff) applyHandoffRef.current(handoff);
+		}
+		window.addEventListener(HANDOFF_EVENT, handleHandoff);
+		return () => window.removeEventListener(HANDOFF_EVENT, handleHandoff);
+	}, []);
 
 	// Restore the initial pattern once, after custom patterns finish loading (they
 	// arrive async). A `?pattern=<id>` deep link (e.g. from /home) takes priority
@@ -419,6 +489,17 @@ export default function StrumPage() {
 	useEffect(() => {
 		if (patternRestoredRef.current || patternsLoading) return;
 		patternRestoredRef.current = true;
+
+		// A proposal confirmed in the assistant wins over any deep link or
+		// last-viewed id — the person asked for it a navigation ago. Handled here
+		// rather than in an effect of its own so exactly one place decides which
+		// pattern opens, and the two cannot race.
+		const handoff = takeHandoff();
+		if (handoff) {
+			applyHandoff(handoff);
+			return;
+		}
+
 		const queryId =
 			typeof window !== "undefined"
 				? new URLSearchParams(window.location.search).get("pattern")
@@ -1524,6 +1605,10 @@ export default function StrumPage() {
 						}
 					} else {
 						handleSaveCustomPattern(pattern);
+						// Open what was just made, exactly as picking it from the
+						// library would: saving a pattern and then having to go and find
+						// it is a step nobody wants.
+						handleSelectPattern(pattern);
 					}
 				}}
 				editPattern={editingPattern ?? undefined}

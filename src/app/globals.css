@@ -17,9 +17,10 @@
      aliased onto :root for explicit-attribute setups.)
    - Border radius is 0 everywhere. The ONLY exception is the LED (50%).
      There are deliberately no radius scale tokens beyond these two.
-   - There are NO offset/elevation shadows in this system. The only shadow
-     tokens are the three GLOWS below, and all of them signal "live/active",
-     never elevation.
+   - There are NO offset/elevation shadows in this system, with ONE exception:
+     --elev-panel, for a panel that floats over arbitrary page content and
+     needs an edge a border alone does not give it. Every other shadow token
+     is a GLOW signalling "live/active", never elevation.
    - Components must reference tokens, never raw hex. The single permitted
      hardcoded value is denim #4A6FA5 inside the logo playhead rect.
    ========================================================================= */
@@ -281,6 +282,13 @@
 	--glow-led: 0 0 6px 1px var(--denim-glow); /* box-shadow on .led.on        */
 	--glow-led-dim: 0 0 2px 0 var(--denim-glow); /* pulse/breathe trough frame   */
 	--glow-readout: 0 0 14px var(--readout-glow); /* TEXT-shadow on .bpm-value    */
+
+	/* The system's only elevation shadow. A panel opened from the topbar sits
+	   over content it does not own, where a 1px border can vanish against a
+	   busy background. Kept deliberately soft and near-neutral so it reads as
+	   separation, not as material. Delete this token and its one consumer
+	   (AssistantPanel) to restore the no-elevation rule. */
+	--elev-panel: 0 12px 32px -8px rgb(0 0 0 / 0.28), 0 2px 8px -2px rgb(0 0 0 / 0.16);
 }
 
 /* ----------------------------------------------------------------------------
@@ -304,7 +312,10 @@
 	   LED breathe:      2.4s ease-in-out infinite (standby — slower than any BPM)
 	   LED pulse:        var(--beat-dur) ease-in-out infinite
 	   rack boot:        modboot 0.35s ease-out backwards, delays .05/.15/.25/.35/.45s
-	   odometer:         JS rAF, min(240, 60 + |Δ|×14) ms */
+	   odometer:         JS rAF, min(240, 60 + |Δ|×14) ms
+	   assistant typing: typing-tick 1.05s ease-in-out infinite, delays 0/.15/.3s
+	   proposal pop:     proposal-pop 0.18s ease-out
+	   assistant stream: JS interval, whole message revealed over ~0.9s */
 }
 
 /* ----------------------------------------------------------------------------
@@ -522,6 +533,36 @@
 		transform: translateX(0);
 	}
 }
+/* Assistant "typing" dots: three squares lifting in turn while the model
+   writes. The lift has to be legible at 5px — a 2px hop on a faint square read
+   as three static dots — so it travels half its own height and swings the full
+   opacity range. */
+@keyframes typing-tick {
+	0%,
+	65%,
+	100% {
+		opacity: 0.25;
+		transform: translateY(0);
+	}
+	30% {
+		opacity: 1;
+		transform: translateY(-3px);
+	}
+}
+
+/* A proposal cannot stream in the way its message does — a grid is a shape,
+   not a sequence — so it arrives at once and says so by popping. */
+@keyframes proposal-pop {
+	from {
+		opacity: 0;
+		transform: translateY(4px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
 @keyframes blink {
 	50% {
 		opacity: 0;

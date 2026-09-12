@@ -5,6 +5,7 @@ import {
 	type Bar,
 	type Beat,
 	type ChordRef,
+	type StepValue,
 	type StrumPattern,
 } from "@/lib/strumPatterns";
 import {
@@ -36,7 +37,45 @@ export const MAX_CELLS_PER_BEAT = 6;
  * already stored as `Bar[]` and need no lifting.
  */
 export function toBars(pattern: StrumPattern): Bar[] {
-	return [{ beats: pattern.beats, chord: null }];
+	return [{ beats: normalizeBeats(pattern.beats), chord: null }];
+}
+
+/**
+ * Step values written by earlier versions of the app, and what they mean now.
+ *
+ * `DG`/`UG` were ghost strokes stored beside the struck cells; they are drawn
+ * from the struck cells instead (`ghostedBeats` in strumGridLayout.ts), so a
+ * stored one is simply a cell nobody struck. `D3`/`U3` marked a triplet before
+ * `meter` existed to say so, and are ordinary strokes.
+ */
+const RETIRED_STEPS: Record<string, StepValue> = {
+	DG: "",
+	UG: "",
+	// The grid's pure padding column, which had no business being stored either.
+	G: "",
+	D3: "D",
+	U3: "U",
+};
+
+/** One cell, read from storage where anything could be in it. */
+export function normalizeStep(raw: unknown): StepValue {
+	if (raw === "D" || raw === "U" || raw === "X" || raw === "") return raw;
+	if (typeof raw === "string" && raw in RETIRED_STEPS) return RETIRED_STEPS[raw];
+	return "";
+}
+
+/**
+ * The boundary every stored rhythm crosses on its way in: rows written before
+ * ghosts became a drawing rather than a value keep working, and nothing
+ * downstream has to know the retired states ever existed.
+ */
+export function normalizeBeats(beats: readonly (readonly unknown[])[]): Beat[] {
+	return beats.map((beat) => beat.map(normalizeStep));
+}
+
+/** The same, for the `Bar[]` a chord sequence is stored as. Chords pass through. */
+export function normalizeBars(bars: readonly Bar[]): Bar[] {
+	return bars.map((bar) => ({ ...bar, beats: normalizeBeats(bar.beats) }));
 }
 
 /**
@@ -74,6 +113,24 @@ export function patternBpm(pattern: StrumPattern): number {
  */
 export function patternMeter(pattern: StrumPattern): Meter {
 	return normalizeMeter(pattern.meter);
+}
+
+/**
+ * A player's own patterns, newest first — the order the library lists them in.
+ *
+ * Newest first because the pattern someone is working on is the one they just
+ * made: a list that grows downwards buries it deeper with every save.
+ *
+ * A pattern with no creation time predates the stamp itself, so it sinks below
+ * everything stamped and keeps the order it was stored in against its equally
+ * unstamped neighbours — `sort` is stable, which is what makes that work.
+ */
+export function sortPatternsByNewest(patterns: readonly StrumPattern[]): StrumPattern[] {
+	const at = (pattern: StrumPattern): number => {
+		const parsed = pattern.createdAt ? Date.parse(pattern.createdAt) : NaN;
+		return Number.isNaN(parsed) ? -Infinity : parsed;
+	};
+	return [...patterns].sort((a, b) => at(b) - at(a));
 }
 
 /**

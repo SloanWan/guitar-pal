@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, MessageCircle, Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AssistantPanel from "./AssistantPanel";
 import { useAssistant } from "./useAssistant";
@@ -94,7 +94,9 @@ export default function AssistantLauncher() {
 				// The system's one elevation shadow: this panel floats over content it
 				// does not own, where a 1px border alone can disappear into a busy
 				// background. See --elev-panel in globals.css.
-				className="w-[min(24rem,calc(100vw-1.5rem))] bg-panel p-0 [box-shadow:var(--elev-panel)]"
+				// The page's own background, not the panel surface: a conversation
+				// reads as a place of its own, and the bubbles carry the contrast.
+				className="w-[min(24rem,calc(100vw-1.5rem))] bg-surface p-0 [box-shadow:var(--elev-panel)]"
 			>
 				<div className="flex items-center justify-between border-b border-line px-3 py-2">
 					<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
@@ -105,8 +107,9 @@ export default function AssistantLauncher() {
 							type="button"
 							onClick={assistant.reset}
 							disabled={assistant.pending}
-							className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+							className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 						>
+							<Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />
 							New chat
 						</button>
 					)}

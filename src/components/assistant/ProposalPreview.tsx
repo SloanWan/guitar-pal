@@ -42,7 +42,7 @@ export default function ProposalPreview({ proposal }: { proposal: AssistantPropo
 	}
 
 	return (
-		<div className="mt-2 border border-line-strong bg-surface">
+		<div className="mt-2 border border-denim bg-surface animate-[proposal-pop_0.18s_ease-out] motion-reduce:animate-none">
 			<div className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2">
 				<span className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
 					{proposal.name}

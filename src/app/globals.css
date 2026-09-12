@@ -312,7 +312,10 @@
 	   LED breathe:      2.4s ease-in-out infinite (standby — slower than any BPM)
 	   LED pulse:        var(--beat-dur) ease-in-out infinite
 	   rack boot:        modboot 0.35s ease-out backwards, delays .05/.15/.25/.35/.45s
-	   odometer:         JS rAF, min(240, 60 + |Δ|×14) ms */
+	   odometer:         JS rAF, min(240, 60 + |Δ|×14) ms
+	   assistant typing: typing-tick 1.05s ease-in-out infinite, delays 0/.15/.3s
+	   proposal pop:     proposal-pop 0.18s ease-out
+	   assistant stream: JS interval, whole message revealed over ~0.9s */
 }
 
 /* ----------------------------------------------------------------------------
@@ -530,6 +533,36 @@
 		transform: translateX(0);
 	}
 }
+/* Assistant "typing" dots: three squares lifting in turn while the model
+   writes. The lift has to be legible at 5px — a 2px hop on a faint square read
+   as three static dots — so it travels half its own height and swings the full
+   opacity range. */
+@keyframes typing-tick {
+	0%,
+	65%,
+	100% {
+		opacity: 0.25;
+		transform: translateY(0);
+	}
+	30% {
+		opacity: 1;
+		transform: translateY(-3px);
+	}
+}
+
+/* A proposal cannot stream in the way its message does — a grid is a shape,
+   not a sequence — so it arrives at once and says so by popping. */
+@keyframes proposal-pop {
+	from {
+		opacity: 0;
+		transform: translateY(4px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
 @keyframes blink {
 	50% {
 		opacity: 0;

@@ -22,6 +22,12 @@ export interface AssistantMessage {
 	proposal?: AssistantProposal;
 	/** Set when the turn failed; rendered as an error rather than as speech. */
 	failed?: boolean;
+	/**
+	 * True once the panel has typed this message out. Kept on the message, and
+	 * therefore in storage, so reopening the panel or refreshing shows the
+	 * transcript as it stands rather than replaying it.
+	 */
+	streamed?: boolean;
 }
 
 /** Kept short: every turn is re-sent, and a long tail costs tokens per request. */
@@ -105,6 +111,13 @@ export function useAssistant() {
 
 	const reset = useCallback(() => setMessages([]), []);
 
+	/** The panel has finished typing this message out. */
+	const markStreamed = useCallback((id: string) => {
+		setMessages((prev) =>
+			prev.map((m) => (m.id === id && !m.streamed ? { ...m, streamed: true } : m)),
+		);
+	}, []);
+
 	const send = useCallback(
 		async (input: string) => {
 			const text = input.trim();
@@ -138,5 +151,5 @@ export function useAssistant() {
 		[chordIndex, messages, pending],
 	);
 
-	return { messages, pending, send, reset };
+	return { messages, pending, send, reset, markStreamed };
 }

@@ -9,6 +9,7 @@
 		"lint": "eslint",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
+		"evals": "vitest run --config vitest.evals.config.ts",
 		"prepare": "husky"
 	},
 	"dependencies": {

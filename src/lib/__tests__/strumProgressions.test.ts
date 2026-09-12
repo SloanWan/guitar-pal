@@ -171,6 +171,21 @@ describe("parseChordSequence", () => {
 		expect(parseChordSequence("C | G", INDEX).chords).toHaveLength(2);
 	});
 
+	it("splits a dashed chord line with no spaces", () => {
+		// The way a chord line is most often written, and the one case the
+		// separator list could not take on its own without breaking dashed shapes.
+		const { chords, unmatched } = parseChordSequence("C-G-Am-F", INDEX);
+		expect(unmatched).toEqual([]);
+		expect(chords.map((c) => c.root)).toEqual(["C", "G", "A", "F"]);
+		expect(parseChordSequence("C–G—Am", INDEX).chords).toHaveLength(3);
+	});
+
+	it("keeps a dashed shape as one token", () => {
+		const { tokens } = parseChordSequence("0-1-0-2-2-0", INDEX);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].shape).toBe(true);
+	});
+
 	it("resolves the same spellings the chord picker accepts", () => {
 		expect(parseChordSequence("g7", INDEX).chords[0]).toMatchObject({
 			root: "G",

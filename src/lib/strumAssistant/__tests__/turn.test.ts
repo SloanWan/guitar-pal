@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
 	resolveAssistantTurn,
 	DETERMINISTIC_REPLY,
+	PHRASE_REPLY,
 	ASSISTANT_ENDPOINT,
 } from "@/lib/strumAssistant/turn";
 import type { AssistantReply, AssistantTurn } from "@/lib/strumAssistant/types";
@@ -69,6 +70,21 @@ describe("resolveAssistantTurn", () => {
 			expect(outcome.usedModel).toBe(false);
 			expect(outcome.proposal?.rhythm).toBe("D DU UD");
 			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(false);
+		});
+
+		it("answers a sentence the lexicon can read from memory", async () => {
+			const fetchImpl = forbiddenFetch();
+			const text = "给我一个 C-G-Am-F 的民谣扫弦，慢一点";
+			const outcome = await resolveAssistantTurn({ text, history: turns(text), index: INDEX, fetchImpl });
+
+			expect(fetchImpl).not.toHaveBeenCalled();
+			expect(outcome.usedModel).toBe(false);
+			expect(outcome.text).toBe(PHRASE_REPLY);
+			expect(outcome.proposal?.chords).toHaveLength(4);
+			expect(outcome.proposal?.rhythm).toBe("D DU UD");
+			expect(outcome.proposal?.bpm).toBe(70);
+			// The strokes came from the style word, not from the player.
+			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(true);
 		});
 
 		it("answers chords and a rhythm together from memory", async () => {

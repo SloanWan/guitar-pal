@@ -88,6 +88,12 @@ export function progressionsForPattern(
 const TOKEN_SEPARATOR = /[\s,|]+/;
 /** A lone dash is a written separator ("C - G - Am"), not a chord. */
 const DASH_ONLY = /^[-–—]+$/;
+/**
+ * A dash between chords with no space around it ("C-G-Am-F") — the way a chord
+ * line is most often written. Not a top-level separator, because a shape may be
+ * written dashed too ("0-1-0-2-2-0"), and that has to stay one token.
+ */
+const DASH = /[-–—]+/;
 
 /** One word of a typed sequence and what it resolved to, if anything. */
 export interface ChordToken {
@@ -115,7 +121,15 @@ function sequenceTokens(input: string): string[] {
 	return input
 		.trim()
 		.split(TOKEN_SEPARATOR)
-		.filter((token) => token !== "" && !DASH_ONLY.test(token));
+		.filter((token) => token !== "" && !DASH_ONLY.test(token))
+		// Only a token that does not read as a shape splits on its dashes: no
+		// chord suffix in the library contains one, so a dash inside a word that
+		// is not six frets can only be joining chords.
+		.flatMap((token) =>
+			DASH.test(token) && parseTabSequence(token).frets === null
+				? token.split(DASH).filter((part) => part !== "")
+				: [token],
+		);
 }
 
 /**

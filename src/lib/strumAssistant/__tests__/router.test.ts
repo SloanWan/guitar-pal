@@ -77,6 +77,34 @@ describe("routeAssistantInput", () => {
 		});
 	});
 
+	describe("reads a sentence by the lexicon", () => {
+		it("takes the Chinese request the model used to get", () => {
+			const result = route("给我一个 C-G-Am-F 的民谣扫弦，慢一点");
+			expect(result.path).toBe("phrase");
+			if (result.path !== "phrase") return;
+			expect(result.chordWords).toEqual(["C", "G", "Am", "F"]);
+			expect(result.style).toBe("folk");
+			expect(result.rhythm).toBe("D DU UD");
+			expect(result.bpm).toBe(70);
+		});
+
+		it("takes an English one", () => {
+			expect(route("a slow folk strum in C G Am F").path).toBe("phrase");
+		});
+
+		it("leaves the strict paths as they were", () => {
+			// A line the strict reading accepts never reaches the lexicon.
+			expect(route("C Am F G").path).toBe("chords");
+			expect(route("C-G-Am-F").path).toBe("chords");
+			expect(route("C Am F G, DUDUDU").path).toBe("rhythm");
+		});
+
+		it("still hands a sentence with an unread word to the model", () => {
+			expect(route("像 Wonderwall 那样的 C G Am F").path).toBe("llm");
+			expect(route("C G Am F but dreamy").path).toBe("llm");
+		});
+	});
+
 	describe("hands over to the model", () => {
 		it("on free-form prose", () => {
 			const result = route("give me something folky and slow in C");

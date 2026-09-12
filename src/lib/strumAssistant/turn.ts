@@ -18,6 +18,7 @@ import type {
  */
 
 export const DETERMINISTIC_REPLY = "Read straight from what you typed — no model needed.";
+export const PHRASE_REPLY = "Read from your words — no model needed. The rhythm is a suggestion.";
 const UNAVAILABLE = "The assistant is unavailable right now.";
 const UNREACHABLE = "Something went wrong reaching the assistant.";
 
@@ -53,12 +54,16 @@ export async function resolveAssistantTurn({
 
 	if (route.path !== "llm") {
 		const built = buildProposal({
-			rhythm: route.path === "rhythm" ? route.rhythm : null,
+			rhythm: route.path === "chords" ? null : route.rhythm,
 			chordWords: route.chordWords,
+			bpm: route.path === "phrase" ? route.bpm : null,
+			// A style word names a feel, not the strokes; the rhythm is chosen for it.
+			rhythmGuessed: route.path === "phrase",
 			index,
 		});
 		if (built.ok) {
-			return { text: DETERMINISTIC_REPLY, proposal: built.proposal, usedModel: false };
+			const text = route.path === "phrase" ? PHRASE_REPLY : DETERMINISTIC_REPLY;
+			return { text, proposal: built.proposal, usedModel: false };
 		}
 		// Notation that parses in the router but not here would be a bug, not a
 		// user error; fall through to the model rather than dead-end.

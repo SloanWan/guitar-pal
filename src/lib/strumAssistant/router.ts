@@ -1,6 +1,7 @@
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { parseChordSequence } from "@/lib/strumProgressions";
 import { parseRhythm } from "@/lib/strumAssistant/parseRhythm";
+import { phraseIsEnough, readPhrase } from "@/lib/strumAssistant/readPhrase";
 
 /**
  * Decides, without any model call, whether the user's words already say enough.
@@ -20,6 +21,12 @@ const SEGMENT_SEPARATOR = /[,，、;；\n]+/;
 export type AssistantRoute =
 	| { path: "chords"; chordWords: string[] }
 	| { path: "rhythm"; rhythm: string; chordWords: string[] }
+	/**
+	 * A sentence read by the lexicon: chords and/or a named style, with a tempo.
+	 * The rhythm here is always a guess — it came from the style word, not from
+	 * the player's strokes.
+	 */
+	| { path: "phrase"; chordWords: string[]; rhythm: string | null; bpm: number | null; style: string | null }
 	| { path: "llm"; reason: LlmReason };
 
 export type LlmReason = "empty" | "unrecognised-segment" | "multiple-rhythms";
@@ -45,6 +52,25 @@ export function routeAssistantInput(
 	input: string,
 	index: readonly ChordIndexEntry[],
 ): AssistantRoute {
+	const strict = routeStrict(input, index);
+	if (strict.path !== "llm" || strict.reason !== "unrecognised-segment") return strict;
+
+	// The strict reading refused a segment. Before that costs a model call, see
+	// whether the sentence is one the lexicon can read whole — and only whole:
+	// a leftover word is a meaning that would otherwise be silently dropped.
+	const reading = readPhrase(input, index);
+	if (!phraseIsEnough(reading)) return strict;
+	return {
+		path: "phrase",
+		chordWords: reading.chordWords,
+		rhythm: reading.rhythm,
+		bpm: reading.bpm,
+		style: reading.style,
+	};
+}
+
+/** Every segment must read as chords or as a rhythm, or the whole line fails. */
+function routeStrict(input: string, index: readonly ChordIndexEntry[]): AssistantRoute {
 	const segments = input
 		.split(SEGMENT_SEPARATOR)
 		.map((s) => s.trim())

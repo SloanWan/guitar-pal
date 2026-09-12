@@ -14,6 +14,16 @@ import type { AssistantProposal } from "@/lib/strumAssistant/types";
 
 const KEY = "guitarpal:strumAssistantHandoff";
 
+/**
+ * Announces a stashed proposal to a strum page that is already on screen.
+ *
+ * The assistant lives in the topbar, so "open in strum" is often pressed from
+ * the strum page itself — where navigating to the route it is already on does
+ * nothing, and the page's mount-time read has long since run. The stash says so
+ * out loud instead, and the page takes it where it stands.
+ */
+export const HANDOFF_EVENT = "guitarpal:strum-handoff";
+
 export interface AssistantHandoff {
 	name: string;
 	bars: Bar[];
@@ -33,7 +43,9 @@ export function stashHandoff(proposal: AssistantProposal): void {
 	} catch {
 		// Private mode or a full quota: the navigation still happens, the page
 		// just opens without a pattern waiting.
+		return;
 	}
+	window.dispatchEvent(new CustomEvent(HANDOFF_EVENT));
 }
 
 /**

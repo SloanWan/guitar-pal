@@ -44,7 +44,11 @@ import {
 	type ChordToken,
 } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
-import { takeHandoff } from "@/lib/strumAssistant/handoff";
+import {
+	HANDOFF_EVENT,
+	takeHandoff,
+	type AssistantHandoff,
+} from "@/lib/strumAssistant/handoff";
 import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
@@ -422,6 +426,61 @@ export default function StrumPage() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, []);
 
+	/**
+	 * Save a proposal the assistant handed over, and open it.
+	 *
+	 * The assistant owns no write path of its own: a pattern and a progression go
+	 * to two different tables through the hooks this page already uses, so it
+	 * hands the words over and this saves them exactly as the editor does.
+	 */
+	function applyHandoff(handoff: AssistantHandoff) {
+		const pattern: StrumPattern = {
+			id: crypto.randomUUID(),
+			name: handoff.name,
+			beats: handoff.bars[0].beats,
+			...(handoff.bpm === null ? {} : { bpm: handoff.bpm }),
+		};
+		handleSaveCustomPattern(pattern);
+		// Chords live in the progression table, never on the pattern row, so a
+		// proposal carrying chords becomes a pattern plus one progression over it.
+		const progression =
+			handoff.chords.length > 0
+				? {
+						id: crypto.randomUUID(),
+						patternId: pattern.id,
+						bars: handoff.bars,
+						orderIndex: nextOrderIndex([]),
+					}
+				: null;
+		if (progression) handleSaveProgression(progression);
+		queueMicrotask(() => {
+			setSelectedPattern(pattern);
+			setBpm(patternBpm(pattern));
+			setPatternRestored(true);
+			if (progression) {
+				setTab("progressions");
+				setOpenProgressionId(progression.id);
+			}
+		});
+	}
+
+	// The assistant lives in the topbar, so a proposal is usually confirmed with
+	// this page already on screen — where the mount-time read above has long
+	// since run and navigating to /strum again does nothing. Same ref idiom as
+	// the transport key: subscribe once, always call the current closure.
+	const applyHandoffRef = useRef(applyHandoff);
+	useEffect(() => {
+		applyHandoffRef.current = applyHandoff;
+	});
+	useEffect(() => {
+		function handleHandoff() {
+			const handoff = takeHandoff();
+			if (handoff) applyHandoffRef.current(handoff);
+		}
+		window.addEventListener(HANDOFF_EVENT, handleHandoff);
+		return () => window.removeEventListener(HANDOFF_EVENT, handleHandoff);
+	}, []);
+
 	// Restore the initial pattern once, after custom patterns finish loading (they
 	// arrive async). A `?pattern=<id>` deep link (e.g. from /home) takes priority
 	// over the device-local last-viewed id, and both resolve against presets AND
@@ -437,34 +496,7 @@ export default function StrumPage() {
 		// pattern opens, and the two cannot race.
 		const handoff = takeHandoff();
 		if (handoff) {
-			const pattern: StrumPattern = {
-				id: crypto.randomUUID(),
-				name: handoff.name,
-				beats: handoff.bars[0].beats,
-				...(handoff.bpm === null ? {} : { bpm: handoff.bpm }),
-			};
-			handleSaveCustomPattern(pattern);
-			// Chords live in the progression table, never on the pattern row, so a
-			// proposal carrying chords becomes a pattern plus one progression over it.
-			const progression =
-				handoff.chords.length > 0
-					? {
-							id: crypto.randomUUID(),
-							patternId: pattern.id,
-							bars: handoff.bars,
-							orderIndex: nextOrderIndex([]),
-						}
-					: null;
-			if (progression) handleSaveProgression(progression);
-			queueMicrotask(() => {
-				setSelectedPattern(pattern);
-				setBpm(patternBpm(pattern));
-				setPatternRestored(true);
-				if (progression) {
-					setTab("progressions");
-					setOpenProgressionId(progression.id);
-				}
-			});
+			applyHandoff(handoff);
 			return;
 		}
 

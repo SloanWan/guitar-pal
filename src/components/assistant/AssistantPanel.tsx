@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { CornerDownLeft, Loader2 } from "lucide-react";
 import ProposalPreview from "./ProposalPreview";
-import { useAssistant } from "./useAssistant";
+import type { useAssistant } from "./useAssistant";
 
 /**
- * The conversation itself. Kept separate from the launcher so the panel can be
- * opened from somewhere else later without dragging the popover along.
+ * The conversation, rendered. The state is the launcher's — this only mounts
+ * while the popover is open, and a conversation that ended every time the
+ * popover closed would be no conversation at all.
  */
 
 /** Shown on an empty panel: the two deterministic shapes, then a model one. */
@@ -15,8 +16,8 @@ const EXAMPLES = ["C Am F G", "D DU UD", "a slow folk strum in C"];
 
 const MAX_INPUT_CHARS = 600;
 
-export default function AssistantPanel() {
-	const { messages, pending, send } = useAssistant();
+export default function AssistantPanel({ assistant }: { assistant: ReturnType<typeof useAssistant> }) {
+	const { messages, pending, send } = assistant;
 	const [draft, setDraft] = useState("");
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);

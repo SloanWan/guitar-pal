@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
@@ -27,6 +27,49 @@ export interface AssistantMessage {
 /** Kept short: every turn is re-sent, and a long tail costs tokens per request. */
 const MAX_HISTORY_TURNS = 10;
 
+/**
+ * Where the conversation waits between openings of the panel.
+ *
+ * sessionStorage rather than memory alone: the hook already lives in the
+ * topbar, which outlives the panel and every route change, so memory covers
+ * closing and reopening. What memory does not cover is a refresh — and a
+ * conversation that vanishes on F5 reads as lost work. The tab is the natural
+ * end of it: nothing here is worth keeping across days.
+ */
+const STORAGE_KEY = "guitarpal:strumAssistantConversation";
+/** Bound the stored transcript so a long session does not grow without limit. */
+const MAX_STORED_MESSAGES = 40;
+
+function readStored(): AssistantMessage[] {
+	try {
+		const raw = sessionStorage.getItem(STORAGE_KEY);
+		if (!raw) return [];
+		const parsed: unknown = JSON.parse(raw);
+		if (!Array.isArray(parsed)) return [];
+		// Untrusted like any storage: keep only what reads as a message.
+		return parsed.filter(
+			(m): m is AssistantMessage =>
+				typeof m === "object" &&
+				m !== null &&
+				typeof (m as AssistantMessage).id === "string" &&
+				((m as AssistantMessage).role === "user" || (m as AssistantMessage).role === "assistant") &&
+				typeof (m as AssistantMessage).text === "string",
+		);
+	} catch {
+		return [];
+	}
+}
+
+function writeStored(messages: AssistantMessage[]): void {
+	try {
+		if (messages.length === 0) sessionStorage.removeItem(STORAGE_KEY);
+		else sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_STORED_MESSAGES)));
+	} catch {
+		// Private mode or a full quota: the conversation still works, it just
+		// does not survive a refresh.
+	}
+}
+
 function newId(): string {
 	return typeof crypto !== "undefined" && "randomUUID" in crypto
 		? crypto.randomUUID()
@@ -34,8 +77,17 @@ function newId(): string {
 }
 
 export function useAssistant() {
-	const [messages, setMessages] = useState<AssistantMessage[]>([]);
+	// Read once, lazily. Safe to differ between server and client: nothing that
+	// renders the transcript is mounted until the popover opens, so the markup
+	// React hydrates against does not depend on this.
+	const [messages, setMessages] = useState<AssistantMessage[]>(() =>
+		typeof window === "undefined" ? [] : readStored(),
+	);
 	const [pending, setPending] = useState(false);
+
+	useEffect(() => {
+		writeStored(messages);
+	}, [messages]);
 	const indexRef = useRef<Promise<readonly ChordIndexEntry[]> | null>(null);
 
 	/** Fetched once per session, shared by every parse in this panel. */

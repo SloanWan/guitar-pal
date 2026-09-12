@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ArrowUpRight, TriangleAlert } from "lucide-react";
 import StepGrid from "@/components/strum/StepGrid";
 import { chordAbbreviation } from "@/lib/strumProgressions";
@@ -27,13 +27,18 @@ function warningLines(proposal: AssistantProposal): string[] {
 	return lines;
 }
 
+const STRUM_PATH = "/strum";
+
 export default function ProposalPreview({ proposal }: { proposal: AssistantProposal }) {
 	const router = useRouter();
+	const pathname = usePathname();
 	const warnings = warningLines(proposal);
 
 	function openInStrum() {
+		// The stash announces itself, so a strum page already on screen picks it
+		// up; the navigation is only for the times this was asked from elsewhere.
 		stashHandoff(proposal);
-		router.push("/strum");
+		if (pathname !== STRUM_PATH) router.push(STRUM_PATH);
 	}
 
 	return (

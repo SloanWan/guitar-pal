@@ -21,7 +21,8 @@ export default function FretboardLabPage() {
 					One board, one <code className="font-mono">FretMark[]</code>. Scale tones light up
 					hollow, the chord sounding now lights up solid, its root in denim. Pick a chord to
 					see which scale notes are safe over it; switch labels to degrees to make the shape
-					transferable to another key.
+					transferable to another key. Hover a slot to ring its unisons and octaves; tap any
+					slot, lit or dormant, to hear it (SOUND rocker to mute).
 				</p>
 			</header>
 

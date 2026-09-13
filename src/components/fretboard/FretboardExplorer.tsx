@@ -5,14 +5,18 @@
  *
  * The whole 22-fret neck is always rendered; where it does not fit it scrolls
  * sideways under the fixed string-name column, and "Root" scrolls to the
- * lowest root on the low E.
+ * lowest root on the low E. Any slot sounds its note when tapped, lit or not;
+ * the SOUND rocker turns that off (and with it the press affordance) and is
+ * remembered per device.
  */
-import { useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Volume2, X } from "lucide-react";
 
 import Fretboard from "@/components/fretboard/Fretboard";
+import { useNoteSound } from "@/components/fretboard/useNoteSound";
 import ChordPickerModal, { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import MusicalText from "@/components/MusicalText";
+import Rocker from "@/components/ui/Rocker";
 import { GUITAR_OPEN_MIDI, rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
 import {
@@ -24,11 +28,15 @@ import {
 	type LabelMode,
 	type ScaleType,
 } from "@/lib/fretboard/scales";
+import type { SlotNote } from "@/lib/fretboard/positions";
 import type { FretMark, FretWindow } from "@/lib/fretboard/types";
 import { parseMusicalText } from "@/lib/musicalNotation";
 
 /** A 22-fret neck, the common electric; acoustics simply never use the top frets. */
 export const NECK: FretWindow = { fromFret: 0, toFret: 22 };
+
+/** Device-local memory of the SOUND rocker; absent means on. */
+export const SOUND_STORAGE_KEY = "fretboardSound";
 
 export interface FretboardExplorerProps {
 	initialRoot?: string;
@@ -102,6 +110,30 @@ export default function FretboardExplorer({
 	const [chord, setChord] = useState<ConfirmedChord | null>(null);
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [scrollTo, setScrollTo] = useState<{ fret: number } | null>(null);
+	// Default on; the stored choice is applied after mount so the server and
+	// the first client render agree, then every change is written back.
+	const [soundOn, setSoundOn] = useState(true);
+	const [soundRestored, setSoundRestored] = useState(false);
+	const { play } = useNoteSound();
+
+	useEffect(() => {
+		const stored = localStorage.getItem(SOUND_STORAGE_KEY);
+		queueMicrotask(() => {
+			if (stored === "off") setSoundOn(false);
+			setSoundRestored(true);
+		});
+	}, []);
+
+	useEffect(() => {
+		if (!soundRestored) return;
+		localStorage.setItem(SOUND_STORAGE_KEY, soundOn ? "on" : "off");
+	}, [soundOn, soundRestored]);
+
+	// A press that cannot sound (samples still failing to load) is just silent.
+	const handleSlotPress = useCallback(
+		(slot: SlotNote) => void play(slot.midi).catch(() => undefined),
+		[play],
+	);
 
 	const spec = useMemo(() => ({ root, scale }), [root, scale]);
 
@@ -198,6 +230,14 @@ export default function FretboardExplorer({
 							Root
 						</button>
 					</div>
+
+					<div className="flex flex-col gap-1.5">
+						<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Sound</span>
+						<span className="flex h-[30px] items-center gap-2">
+							<Volume2 className="size-3.5 shrink-0 text-ink-dim" strokeWidth={1.5} />
+							<Rocker checked={soundOn} onChange={setSoundOn} ariaLabel="Sound" />
+						</span>
+					</div>
 				</div>
 			</div>
 
@@ -209,6 +249,8 @@ export default function FretboardExplorer({
 					toFret={NECK.toFret}
 					scrollTo={scrollTo}
 					label={`${root} ${SCALE_LABELS[scale]} on the fretboard`}
+					onSlotPress={handleSlotPress}
+					pressable={soundOn}
 				/>
 				<ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1" aria-hidden="true">
 					{LEGEND.map(({ emphasis, tone, label }) => (

@@ -573,11 +573,50 @@
 .fb-mark[data-emphasis="muted"] .fb-label {
 	opacity: 0;
 }
+/* The touch layer over the marks: an invisible hit area per slot, a hover ring
+   that lights the hovered slot, its unisons and, fainter, its octaves, and the
+   ring a pluck sends out. Marks stay pointer-inert; this layer takes the hits.
+   The rings are toggled by `data-hover` straight on the DOM, no re-render. */
+.fb-hit {
+	fill: transparent;
+	pointer-events: all;
+}
+[data-pressable] .fb-hit {
+	cursor: pointer;
+}
+.fb-hover,
+.fb-pop {
+	fill: none;
+	stroke: var(--denim);
+	opacity: 0;
+	pointer-events: none;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+.fb-hover {
+	transition: opacity var(--dur-hover) ease-out;
+}
+.fb-slot[data-hover="self"] .fb-hover {
+	opacity: 1;
+	stroke-width: 2;
+}
+.fb-slot[data-hover="unison"] .fb-hover {
+	opacity: 0.8;
+	stroke-width: 1.5;
+}
+.fb-slot[data-hover="octave"] .fb-hover {
+	opacity: 0.35;
+	stroke-width: 1.25;
+}
+.fb-pop {
+	stroke-width: 1.25;
+}
 @media (prefers-reduced-motion: reduce) {
 	.fb-mark,
 	.fb-dot,
 	.fb-ring,
-	.fb-label {
+	.fb-label,
+	.fb-hover {
 		transition: none;
 	}
 }

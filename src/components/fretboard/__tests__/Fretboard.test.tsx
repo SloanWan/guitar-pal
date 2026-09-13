@@ -1,10 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import Fretboard, { FRET_W } from "@/components/fretboard/Fretboard";
+import Fretboard, { FRET_W, type FretboardComponentProps } from "@/components/fretboard/Fretboard";
 import type { FretMark } from "@/lib/fretboard/types";
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 function render(marks: readonly FretMark[], fromFret: number, toFret: number): HTMLElement {
 	const host = document.createElement("div");
@@ -80,10 +84,153 @@ describe("Fretboard", () => {
 		for (let fret = 0; fret <= 22; fret++) expect(text).toContain(String(fret));
 	});
 
-	it("knows nothing about scales or chords: only the mark model and the string names", () => {
+	it("knows nothing about scales or chords: only the mark model, position facts, motion and the string names", () => {
 		const source = readFileSync(path.resolve(__dirname, "../Fretboard.tsx"), "utf8");
 		const modules = [...source.matchAll(/^import[^;]*from "([^"]+)";/gm)].map((m) => m[1]);
-		expect(new Set(modules)).toEqual(new Set(["react", "@/lib/chordVoicingToMidi", "@/lib/fretboard/types"]));
+		expect(new Set(modules)).toEqual(
+			new Set([
+				"react",
+				"@/lib/chordVoicingToMidi",
+				"@/lib/fretboard/positions",
+				"@/lib/fretboard/types",
+				"@/lib/motion",
+			]),
+		);
 		expect(source).toMatch(/import \{ STRING_LABELS \} from "@\/lib\/chordVoicingToMidi"/);
+	});
+});
+
+// ── Interaction: hover rings and presses land on the DOM, not on React ──────
+
+function mount(props: Partial<FretboardComponentProps> = {}) {
+	const host = document.createElement("div");
+	document.body.appendChild(host);
+	const root = createRoot(host);
+	act(() => {
+		root.render(<Fretboard marks={A_ROOTS} fromFret={0} toFret={22} {...props} />);
+	});
+	return {
+		host,
+		hit: (string: number, fret: number) =>
+			host.querySelector(`[data-slot="${string}:${fret}"] .fb-hit`) as SVGRectElement,
+		hoverOf: (string: number, fret: number) =>
+			host.querySelector(`[data-slot="${string}:${fret}"]`)?.getAttribute("data-hover") ?? null,
+		unmount: () => {
+			act(() => root.unmount());
+			host.remove();
+		},
+	};
+}
+
+function pointer(
+	el: Element,
+	type: string,
+	init: PointerEventInit & { relatedTarget?: Element | null } = {},
+): void {
+	act(() => {
+		el.dispatchEvent(
+			new PointerEvent(type, { bubbles: true, pointerId: 1, pointerType: "mouse", ...init }),
+		);
+	});
+}
+
+describe("Fretboard — hover", () => {
+	it("rings the hovered slot, its unisons and, fainter, its octaves; leaving clears them", () => {
+		const board = mount();
+		pointer(board.hit(5, 0), "pointerover"); // E4 on the open high e
+		expect(board.hoverOf(5, 0)).toBe("self");
+		for (const [s, f] of [
+			[4, 5],
+			[3, 9],
+			[2, 14],
+			[1, 19],
+		]) {
+			expect(board.hoverOf(s, f)).toBe("unison");
+		}
+		expect(board.hoverOf(0, 0)).toBe("octave"); // E2
+		expect(board.hoverOf(5, 12)).toBe("octave"); // E5
+		expect(board.hoverOf(5, 1)).toBeNull(); // F: unrelated
+		expect(board.host.querySelectorAll("[data-hover]")).toHaveLength(1 + 4 + 7);
+
+		pointer(board.hit(5, 0), "pointerout", { relatedTarget: null });
+		expect(board.host.querySelectorAll("[data-hover]")).toHaveLength(0);
+		board.unmount();
+	});
+
+	it("moves the rings with the pointer and ignores touch", () => {
+		const board = mount({ pressable: false });
+		pointer(board.hit(5, 0), "pointerover");
+		pointer(board.hit(0, 5), "pointerover"); // A2
+		expect(board.hoverOf(5, 0)).toBeNull();
+		expect(board.hoverOf(0, 5)).toBe("self");
+		expect(board.hoverOf(1, 0)).toBe("unison"); // open A
+
+		pointer(board.hit(0, 5), "pointerout", { relatedTarget: null });
+		pointer(board.hit(2, 2), "pointerover", { pointerType: "touch" });
+		expect(board.host.querySelectorAll("[data-hover]")).toHaveLength(0);
+		board.unmount();
+	});
+});
+
+describe("Fretboard — press", () => {
+	it("reports the slot with its MIDI pitch when a pointer lifts where it landed", () => {
+		const onSlotPress = vi.fn();
+		const board = mount({ onSlotPress });
+		pointer(board.hit(0, 5), "pointerdown", { clientX: 10, clientY: 10 });
+		pointer(board.hit(0, 5), "pointerup", { clientX: 12, clientY: 11 });
+		expect(onSlotPress).toHaveBeenCalledTimes(1);
+		expect(onSlotPress).toHaveBeenCalledWith({ string: 0, fret: 5, midi: 45 });
+
+		// Dormant slots sound too: the board is a full chromatic instrument.
+		pointer(board.hit(3, 4), "pointerdown", { clientX: 0, clientY: 0 });
+		pointer(board.hit(3, 4), "pointerup", { clientX: 0, clientY: 0 });
+		expect(onSlotPress).toHaveBeenLastCalledWith({ string: 3, fret: 4, midi: 59 });
+		expect(board.host.querySelector("svg[data-from-fret]")?.hasAttribute("data-pressable")).toBe(true);
+		board.unmount();
+	});
+
+	it("treats a drag as a scroll, not a tap", () => {
+		const onSlotPress = vi.fn();
+		const board = mount({ onSlotPress });
+		pointer(board.hit(0, 5), "pointerdown", { clientX: 0, clientY: 0, pointerType: "touch" });
+		pointer(board.hit(0, 5), "pointerup", { clientX: 40, clientY: 0, pointerType: "touch" });
+		// Lifting on another slot is not a press either, however short the move.
+		pointer(board.hit(0, 5), "pointerdown", { clientX: 0, clientY: 0 });
+		pointer(board.hit(0, 6), "pointerup", { clientX: 2, clientY: 0 });
+		// A cancelled pointer (the browser took the gesture for scrolling) drops the press.
+		pointer(board.hit(0, 5), "pointerdown", { clientX: 0, clientY: 0, pointerType: "touch" });
+		pointer(board.hit(0, 5), "pointercancel", { pointerType: "touch" });
+		pointer(board.hit(0, 5), "pointerup", { clientX: 0, clientY: 0, pointerType: "touch" });
+		expect(onSlotPress).not.toHaveBeenCalled();
+		board.unmount();
+	});
+
+	it("is inert when not pressable, but hover still works", () => {
+		const onSlotPress = vi.fn();
+		const board = mount({ onSlotPress, pressable: false });
+		pointer(board.hit(0, 5), "pointerdown", { clientX: 0, clientY: 0 });
+		pointer(board.hit(0, 5), "pointerup", { clientX: 0, clientY: 0 });
+		expect(onSlotPress).not.toHaveBeenCalled();
+		const neck = board.host.querySelector("svg[data-from-fret]") as SVGElement;
+		expect(neck.hasAttribute("data-pressable")).toBe(false);
+		expect(neck.getAttribute("aria-disabled")).toBe("true");
+
+		pointer(board.hit(0, 5), "pointerover");
+		expect(board.hoverOf(0, 5)).toBe("self");
+		board.unmount();
+	});
+
+	it("plucks the string under a dormant slot and lets it settle straight", async () => {
+		const board = mount({ onSlotPress: () => {} });
+		const string = board.host.querySelector('.fb-string[data-string="3"]') as SVGPathElement;
+		const straight = string.getAttribute("d");
+		expect(straight).toMatch(/^M0 \d+L\d+ \d+$/);
+		pointer(board.hit(3, 4), "pointerdown", { clientX: 0, clientY: 0 });
+		pointer(board.hit(3, 4), "pointerup", { clientX: 0, clientY: 0 });
+		await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+		expect(string.getAttribute("d")).toContain("Q");
+		await new Promise((r) => setTimeout(r, 400));
+		expect(string.getAttribute("d")).toBe(straight);
+		board.unmount();
 	});
 });

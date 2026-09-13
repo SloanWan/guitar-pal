@@ -20,7 +20,8 @@ export default function FretboardPage() {
 					<p className="max-w-[60ch] text-sm text-ink-dim">
 						Pick a root and a scale to see it across the neck. Add a chord to light up its tones
 						over the scale: solid dots are safe over that chord, hollow ones are the rest of the
-						scale. Switch to degrees to carry the shape into any key.
+						scale. Switch to degrees to carry the shape into any key. Hover a note to find every
+						place it lives on the neck, and tap any position to hear it.
 					</p>
 				</div>
 				<FretboardExplorer />

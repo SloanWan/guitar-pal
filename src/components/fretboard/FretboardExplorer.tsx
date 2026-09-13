@@ -4,27 +4,27 @@
  * The scale + chord-tone view: controls above, one `<Fretboard/>` below.
  *
  * The whole 22-fret neck is always rendered; where it does not fit it scrolls
- * sideways under the fixed string-name column, and "Root" scrolls to the
- * lowest root on the low E. Any slot sounds its note when tapped, lit or not;
- * the SOUND rocker turns that off (and with it the press affordance) and is
+ * sideways under the fixed string-name column. Any slot sounds its note when
+ * tapped, lit or not; the first press downloads the samples, and the SOUND
+ * control shows that wait;
+ * the rocker turns sound off (and with it the press affordance) and is
  * remembered per device.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Volume2, X } from "lucide-react";
+import { LoaderCircle, Volume2, X } from "lucide-react";
 
 import Fretboard from "@/components/fretboard/Fretboard";
 import { useNoteSound } from "@/components/fretboard/useNoteSound";
 import ChordPickerModal, { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import MusicalText from "@/components/MusicalText";
 import Rocker from "@/components/ui/Rocker";
-import { GUITAR_OPEN_MIDI, rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
 import {
 	SCALE_LABELS,
 	SCALE_ROOTS,
 	SCALE_TYPES,
 	scaleMarks,
-	scaleRootPitchClass,
 	type LabelMode,
 	type ScaleType,
 } from "@/lib/fretboard/scales";
@@ -81,11 +81,6 @@ function withGlyphs(label: string): string {
 		.join("");
 }
 
-/** Lowest fret on the low E that sounds the root, where a player starts the scale. */
-function rootFretOnLowE(root: string): number {
-	return (scaleRootPitchClass(root) - GUITAR_OPEN_MIDI[0] + 120) % 12;
-}
-
 const LABEL_MODES: readonly { value: LabelMode; label: string }[] = [
 	{ value: "note", label: "Notes" },
 	{ value: "degree", label: "Degrees" },
@@ -109,12 +104,11 @@ export default function FretboardExplorer({
 	const [labelMode, setLabelMode] = useState<LabelMode>("note");
 	const [chord, setChord] = useState<ConfirmedChord | null>(null);
 	const [pickerOpen, setPickerOpen] = useState(false);
-	const [scrollTo, setScrollTo] = useState<{ fret: number } | null>(null);
 	// Default on; the stored choice is applied after mount so the server and
 	// the first client render agree, then every change is written back.
 	const [soundOn, setSoundOn] = useState(true);
 	const [soundRestored, setSoundRestored] = useState(false);
-	const { play } = useNoteSound();
+	const { play, isLoading: soundLoading } = useNoteSound();
 
 	useEffect(() => {
 		const stored = localStorage.getItem(SOUND_STORAGE_KEY);
@@ -144,8 +138,6 @@ export default function FretboardExplorer({
 			: base;
 		return layered.map((m) => ({ ...m, label: withGlyphs(m.label) }));
 	}, [spec, labelMode, chord]);
-
-	const jumpToRoot = () => setScrollTo({ fret: rootFretOnLowE(root) });
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -221,21 +213,16 @@ export default function FretboardExplorer({
 					</div>
 
 					<div className="flex flex-col gap-1.5">
-						<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Go to</span>
-						<button
-							type="button"
-							onClick={jumpToRoot}
-							className="border border-line-strong px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent"
-						>
-							Root
-						</button>
-					</div>
-
-					<div className="flex flex-col gap-1.5">
-						<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Sound</span>
+						<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+							{soundLoading ? "Loading sound…" : "Sound"}
+						</span>
 						<span className="flex h-[30px] items-center gap-2">
-							<Volume2 className="size-3.5 shrink-0 text-ink-dim" strokeWidth={1.5} />
-							<Rocker checked={soundOn} onChange={setSoundOn} ariaLabel="Sound" />
+							{soundLoading ? (
+								<LoaderCircle className="size-3.5 shrink-0 animate-spin text-denim-accent" strokeWidth={1.5} />
+							) : (
+								<Volume2 className="size-3.5 shrink-0 text-ink-dim" strokeWidth={1.5} />
+							)}
+							<Rocker checked={soundOn} onChange={setSoundOn} loading={soundLoading} ariaLabel="Sound" />
 						</span>
 					</div>
 				</div>
@@ -247,7 +234,6 @@ export default function FretboardExplorer({
 					marks={marks}
 					fromFret={NECK.fromFret}
 					toFret={NECK.toFret}
-					scrollTo={scrollTo}
 					label={`${root} ${SCALE_LABELS[scale]} on the fretboard`}
 					onSlotPress={handleSlotPress}
 					pressable={soundOn}

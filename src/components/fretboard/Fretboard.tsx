@@ -137,12 +137,6 @@ export interface FretboardComponentProps extends FretboardProps {
 	/** Accessible name for the board; defaults to a plain description. */
 	label?: string;
 	/**
-	 * A fret to bring into view, scrolled smoothly (instantly under reduced
-	 * motion). Re-applied whenever the value changes, so pass a fresh object
-	 * to re-scroll to the same fret.
-	 */
-	scrollTo?: { fret: number } | null;
-	/**
 	 * Called when a slot is tapped or clicked, lit or not, with what it sounds.
 	 * A drag (native scroll on touch) never counts as a press.
 	 */
@@ -169,11 +163,9 @@ export default function Fretboard({
 	toFret,
 	className,
 	label = "Guitar fretboard",
-	scrollTo = null,
 	onSlotPress,
 	pressable = true,
 }: FretboardComponentProps) {
-	const scroller = useRef<HTMLDivElement>(null);
 	const neck = useRef<SVGSVGElement>(null);
 	/** Nodes currently carrying a `data-hover`, so leaving clears exactly those. */
 	const hovered = useRef<SVGGElement[]>([]);
@@ -181,22 +173,6 @@ export default function Fretboard({
 	/** One running pluck per string, so a re-pluck restarts rather than stacks. */
 	const plucks = useRef(new Map<number, number>());
 	const canPress = pressable && !!onSlotPress;
-
-	useEffect(() => {
-		const el = scroller.current;
-		if (!el || !scrollTo) return;
-		const reduce = window.matchMedia?.(
-			"(prefers-reduced-motion: reduce)",
-		).matches;
-		// The neck is scaled by CSS, so measure the rendered width for the ratio.
-		const svg = el.firstElementChild as SVGSVGElement | null;
-		const scale = svg
-			? svg.getBoundingClientRect().width / Number(svg.getAttribute("width"))
-			: 1;
-		// Leave one cell of context to the left of the target fret.
-		const left = Math.max(0, (scrollTo.fret - fromFret - 1) * FRET_W * scale);
-		el.scrollTo({ left, behavior: reduce ? "auto" : "smooth" });
-	}, [scrollTo, fromFret]);
 
 	// Constraint 4: a pluck still in flight on unmount must not touch a dead node.
 	useEffect(() => {
@@ -382,7 +358,6 @@ export default function Fretboard({
 				</svg>
 
 				<div
-					ref={scroller}
 					className="fp-thin-scroll min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
 				>
 					<svg

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Pencil, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
@@ -44,14 +44,29 @@ export default function EditIntentCard({
 	edit,
 	patterns,
 	index,
+	ensureIndex,
+	done,
+	onDone,
 }: {
 	edit: EditIntentReading;
 	/** Everything a name could refer to, for the picker in edit mode. */
 	patterns: readonly StrumPattern[];
 	index: readonly ChordIndexEntry[];
+	/** Asks for the index when this card finds itself rendering without one. */
+	ensureIndex: () => void;
+	/** Confirmed already — kept on the message, so it survives the panel closing. */
+	done: boolean;
+	onDone: () => void;
 }) {
 	const router = useRouter();
 	const pathname = usePathname();
+
+	// Nothing can be judged against an index that has not arrived. A restored
+	// card asks for it rather than calling every chord unplaceable meanwhile.
+	const indexReady = index.length > 0;
+	useEffect(() => {
+		if (!indexReady) ensureIndex();
+	}, [indexReady, ensureIndex]);
 
 	// Which pattern this will be written to, and the chord line to write. Both
 	// start as they were read and are what the fields edit.
@@ -59,11 +74,11 @@ export default function EditIntentCard({
 		edit.kind === "attach" ? edit.pattern : null,
 	);
 	const [chordLine, setChordLine] = useState(() =>
-		edit.kind === "ambiguous" ? "" : canonicalLine(edit.chordWords.join(" "), index),
+		edit.kind === "ambiguous" ? "" : edit.chordWords.join(" "),
 	);
 	const [editing, setEditing] = useState(false);
-	const [done, setDone] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
 
 	/**
 	 * Whether every part of the request came through. A half-read one is not put
@@ -104,7 +119,7 @@ export default function EditIntentCard({
 			return;
 		}
 		setError(null);
-		setDone(true);
+		onDone();
 		stashHandoff({
 			kind: "attach",
 			patternId: pattern.id,
@@ -135,6 +150,7 @@ export default function EditIntentCard({
 						type="button"
 						onClick={() => {
 							setOffered(false);
+							setChordLine((line) => canonicalLine(line, index));
 							setEditing(true);
 						}}
 						className="flex items-center gap-1 border border-denim px-2 py-1 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors duration-(--dur-hover) hover:bg-denim hover:text-on-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
@@ -236,8 +252,10 @@ export default function EditIntentCard({
 								// the library cannot place keeps the player's own spelling and
 								// is shown, not dropped — it would be saved as a bar that holds
 								// its time and sounds nothing until a shape is drawn for it.
-								className={token.chord ? "text-ink" : "text-destructive"}
-								title={token.chord ? undefined : `${token.input} — not in the chord library`}
+								className={token.chord || !indexReady ? "text-ink" : "text-destructive"}
+								title={
+									token.chord || !indexReady ? undefined : `${token.input} — not in the chord library`
+								}
 							>
 								{token.chord ? chordAbbreviation(token.chord) : token.input}
 							</span>
@@ -246,7 +264,7 @@ export default function EditIntentCard({
 				)}
 			</Row>
 
-			{parsed.unmatched.length > 0 && !editing && (
+			{indexReady && parsed.unmatched.length > 0 && !editing && (
 				<p className="px-3 pb-2 text-[11px] leading-snug text-destructive">
 					{parsed.unmatched.join(", ")} {parsed.unmatched.length === 1 ? "is" : "are"} not in
 					the chord library — those bars will keep their place and sound nothing.
@@ -279,7 +297,12 @@ export default function EditIntentCard({
 					<>
 						<button
 							type="button"
-							onClick={() => setEditing(true)}
+							onClick={() => {
+								// The field opens spelled the library's way; the view above
+								// already was, being drawn from the resolved chords.
+								setChordLine((line) => canonicalLine(line, index));
+								setEditing(true);
+							}}
 							className="flex items-center gap-1 px-2 py-1 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 						>
 							<Pencil className="size-3" strokeWidth={1.5} aria-hidden="true" />

@@ -133,8 +133,129 @@ function Bubble({
 	);
 }
 
-export default function AssistantPanel({ assistant }: { assistant: ReturnType<typeof useAssistant> }) {
-	const { messages, pending, send, markStreamed, patterns, index, sessionId } = assistant;
+/** The assistant, mid-sentence. */
+function TypingBubble() {
+	return (
+		<Bubble side="assistant">
+			<span className="flex items-center gap-1 py-0.5" aria-label="Writing a reply">
+				{[0, 0.15, 0.3].map((delay) => (
+					<span
+						key={delay}
+						aria-hidden="true"
+						className="size-[5px] bg-ink-dim animate-[typing-tick_1.05s_ease-in-out_infinite] motion-reduce:animate-none"
+						style={{ animationDelay: `${delay}s` }}
+					/>
+				))}
+			</span>
+		</Bubble>
+	);
+}
+
+/** How long the assistant appears to think before it says hello. */
+const INTRO_TYPING_MS = 1400;
+const HINT =
+	"Type chords or a rhythm and it is read instantly, offline. Describe what you want in words and it asks the model.";
+
+/**
+ * An empty conversation, arriving the way a reply does.
+ *
+ * The greeting is not a heading: it is the assistant's first turn, and it
+ * comes the way every turn after it will — a pause, then typed out, then the
+ * next line. The examples follow once it has finished speaking, one after
+ * another, as things offered rather than as a menu that was always there.
+ *
+ * Four phases: thinking, greeting, hint, offered. Something that has already
+ * been greeted starts at the last one; so does anyone who asked for less motion.
+ */
+function Intro({
+	hello,
+	greeted,
+	onGreeted,
+	onExample,
+	onTick,
+}: {
+	hello: string;
+	greeted: boolean;
+	onGreeted: () => void;
+	onExample: (text: string) => void;
+	onTick: () => void;
+}) {
+	const [phase, setPhase] = useState<0 | 1 | 2 | 3>(() =>
+		greeted || prefersReducedMotion() ? 3 : 0,
+	);
+
+	useEffect(() => {
+		if (phase !== 0) return;
+		const timer = setTimeout(() => setPhase(1), INTRO_TYPING_MS);
+		return () => clearTimeout(timer);
+	}, [phase]);
+
+	return (
+		<div className="flex flex-col items-start gap-2.5">
+			{phase === 0 && <TypingBubble />}
+
+			{phase >= 1 && (
+				<Bubble side="assistant">
+					<StreamedText text={hello} animate={phase === 1} onTick={onTick} onDone={() => setPhase(2)} />
+				</Bubble>
+			)}
+
+			{phase >= 2 && (
+				<Bubble side="assistant">
+					<StreamedText
+						text={HINT}
+						animate={phase === 2}
+						onTick={onTick}
+						onDone={() => {
+							setPhase(3);
+							onGreeted();
+						}}
+					/>
+				</Bubble>
+			)}
+
+			{phase === 3 && (
+				<div className="flex flex-wrap gap-1.5 pl-2">
+					{EXAMPLES.map((example, i) => (
+						<button
+							key={example}
+							type="button"
+							onClick={() => onExample(example)}
+							// Each one lands a beat after the last. backwards fill keeps
+							// it invisible until its own animation starts.
+							className="border border-line-strong px-2 py-1 font-mono text-[11px] tracking-[0.04em] text-ink-dim transition-[color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 animate-[proposal-pop_0.35s_ease-out_backwards] motion-reduce:animate-none"
+							style={{ animationDelay: `${i * 0.14}s` }}
+						>
+							{example}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
+export default function AssistantPanel({
+	assistant,
+	height,
+}: {
+	assistant: ReturnType<typeof useAssistant>;
+	/** Set by the launcher's grip; the panel only wears it. */
+	height: number;
+}) {
+	const {
+		messages,
+		pending,
+		send,
+		markStreamed,
+		markEditDone,
+		patterns,
+		index,
+		ensureIndex,
+		sessionId,
+		greeted,
+		markGreeted,
+	} = assistant;
 	const [draft, setDraft] = useState("");
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -185,7 +306,7 @@ export default function AssistantPanel({ assistant }: { assistant: ReturnType<ty
 	}
 
 	return (
-		<div className="flex h-[min(30rem,70vh)] flex-col">
+		<div className="flex flex-col" style={{ height }}>
 			<div
 				ref={scrollRef}
 				className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
@@ -194,25 +315,16 @@ export default function AssistantPanel({ assistant }: { assistant: ReturnType<ty
 				aria-label="Assistant conversation"
 			>
 				{messages.length === 0 ? (
-					<div className="space-y-3">
-						<p className="text-sm leading-snug text-ink">{hello}</p>
-						<p className="text-xs leading-relaxed text-ink-dim">
-							Type chords or a rhythm and it is read instantly, offline. Describe what you
-							want in words and it asks the model.
-						</p>
-						<div className="flex flex-wrap gap-1.5">
-							{EXAMPLES.map((example) => (
-								<button
-									key={example}
-									type="button"
-									onClick={() => submit(example)}
-									className="border border-line-strong px-2 py-1 font-mono text-[11px] tracking-[0.04em] text-ink-dim transition-[color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-								>
-									{example}
-								</button>
-							))}
-						</div>
-					</div>
+					// Keyed on the conversation: a new chat remounts the intro and plays
+					// it again from the top, and reopening the panel does not.
+					<Intro
+						key={sessionId}
+						hello={hello}
+						greeted={greeted}
+						onGreeted={markGreeted}
+						onExample={submit}
+						onTick={followTail}
+					/>
 				) : (
 					<ul className="space-y-2.5">
 						{messages.map((message) =>
@@ -244,6 +356,9 @@ export default function AssistantPanel({ assistant }: { assistant: ReturnType<ty
 												edit={message.edit}
 												patterns={patterns}
 												index={index}
+												ensureIndex={ensureIndex}
+												done={message.editDone === true}
+												onDone={() => markEditDone(message.id)}
 											/>
 										</div>
 									)}
@@ -255,18 +370,7 @@ export default function AssistantPanel({ assistant }: { assistant: ReturnType<ty
 
 				{pending && (
 					<div className="mt-2.5 flex justify-start">
-						<Bubble side="assistant">
-							<span className="flex items-center gap-1 py-0.5" aria-label="Writing a reply">
-								{[0, 0.15, 0.3].map((delay) => (
-									<span
-										key={delay}
-										aria-hidden="true"
-										className="size-[5px] bg-ink-dim animate-[typing-tick_1.05s_ease-in-out_infinite] motion-reduce:animate-none"
-										style={{ animationDelay: `${delay}s` }}
-									/>
-								))}
-							</span>
-						</Bubble>
+						<TypingBubble />
 					</div>
 				)}
 			</div>

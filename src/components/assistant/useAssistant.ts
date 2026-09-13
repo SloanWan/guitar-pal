@@ -27,6 +27,8 @@ export interface AssistantMessage {
 	edit?: EditIntentReading;
 	/** Set when the turn failed; rendered as an error rather than as speech. */
 	failed?: boolean;
+	/** True once the edit this message carried was confirmed and handed over. */
+	editDone?: boolean;
 	/**
 	 * True once the panel has typed this message out. Kept on the message, and
 	 * therefore in storage, so reopening the panel or refreshing shows the
@@ -125,6 +127,15 @@ export function useAssistant() {
 		return indexRef.current;
 	}, []);
 
+	/**
+	 * A restored transcript can hold a card that needs the chord index the moment
+	 * it renders — and it rendered, once, against an empty one, calling every
+	 * chord unplaceable. So the index is fetched as soon as anything needs it.
+	 */
+	const ensureIndex = useCallback(() => {
+		void chordIndex().then(setIndex);
+	}, [chordIndex]);
+
 	/** Read on the first turn, not on mount: a panel nobody types in costs nothing. */
 	const loadPatterns = useCallback(async (): Promise<readonly StrumPattern[]> => {
 		if (patternsRef.current === null) {
@@ -139,10 +150,23 @@ export function useAssistant() {
 
 	/** Changes when the conversation is cleared — what a fresh greeting keys on. */
 	const [sessionId, setSessionId] = useState(newId);
+	/**
+	 * Whether the greeting has played out for this conversation. Kept here, where
+	 * the panel's closing does not reach: a greeting that typed itself out again
+	 * every time the popover reopened would stop being one.
+	 */
+	const [greeted, setGreeted] = useState(false);
+	const markGreeted = useCallback(() => setGreeted(true), []);
 
 	const reset = useCallback(() => {
 		setMessages([]);
 		setSessionId(newId());
+		setGreeted(false);
+	}, []);
+
+	/** The edit this message carried has been confirmed — the card stays settled. */
+	const markEditDone = useCallback((id: string) => {
+		setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, editDone: true } : m)));
 	}, []);
 
 	/** The panel has finished typing this message out. */
@@ -192,5 +216,18 @@ export function useAssistant() {
 		[chordIndex, loadPatterns, messages, pending],
 	);
 
-	return { messages, pending, send, reset, markStreamed, patterns, index, sessionId };
+	return {
+		messages,
+		pending,
+		send,
+		reset,
+		markStreamed,
+		markEditDone,
+		patterns,
+		index,
+		ensureIndex,
+		sessionId,
+		greeted,
+		markGreeted,
+	};
 }

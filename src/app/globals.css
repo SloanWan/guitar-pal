@@ -139,6 +139,19 @@
 	background: var(--denim);
 	color: #f0f0f0;
 }
+/* …except on a denim surface, where denim-on-denim selects nothing you can
+   see. There the selection inverts to the fill's own text colour — the light
+   that already sits on denim — with denim text on it. Not the page background:
+   on dark that is near-black, and browsers blend a selection highlight, so a
+   black block on denim reads as slightly darker denim, which is to say as
+   nothing. Denim is the same in both themes, so this is too. Scoped by the
+   fill class rather than a token so every denim-filled control picks it up
+   without opting in. */
+.bg-denim ::selection,
+.bg-denim::selection {
+	background: var(--btn-on-denim);
+	color: var(--denim);
+}
 
 /* ----------------------------------------------------------------------------
    3. TYPOGRAPHY

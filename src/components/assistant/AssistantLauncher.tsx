@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, MessageCircle, Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AssistantPanel from "./AssistantPanel";
@@ -20,8 +20,60 @@ import { HANDOFF_EVENT } from "@/lib/strumAssistant/handoff";
  * panel: closing the popover is putting the assistant away, not ending the
  * talk, and a reply that was in flight when it closed still lands.
  */
+/** How tall the conversation may be, in px. The panel floats over content it does not own. */
+const MIN_PANEL_HEIGHT = 240;
+const MAX_PANEL_HEIGHT = 720;
+const DEFAULT_PANEL_HEIGHT = 480;
+const HEIGHT_KEY = "guitarpal:strumAssistantHeight";
+
+function clampHeight(px: number): number {
+	// Never taller than the viewport leaves room for, whatever was remembered.
+	const viewportMax = typeof window === "undefined" ? MAX_PANEL_HEIGHT : window.innerHeight * 0.8;
+	return Math.round(Math.min(MAX_PANEL_HEIGHT, viewportMax, Math.max(MIN_PANEL_HEIGHT, px)));
+}
+
+function readHeight(): number {
+	try {
+		const raw = localStorage.getItem(HEIGHT_KEY);
+		const px = raw === null ? Number.NaN : Number(raw);
+		return Number.isFinite(px) ? clampHeight(px) : DEFAULT_PANEL_HEIGHT;
+	} catch {
+		return DEFAULT_PANEL_HEIGHT;
+	}
+}
+
 export default function AssistantLauncher() {
 	const [open, setOpen] = useState(false);
+
+	// The conversation's height, dragged from the bottom edge and kept on this
+	// device: a size someone settled on is a preference, not a session.
+	// Read lazily and only on the client. Nothing that wears the height is in
+	// the server's markup — the panel mounts on click — so the first render's
+	// value cannot disagree with anything React hydrates against.
+	const [height, setHeight] = useState(() =>
+		typeof window === "undefined" ? DEFAULT_PANEL_HEIGHT : readHeight(),
+	);
+	const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
+	function onGripPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+		dragRef.current = { startY: e.clientY, startHeight: height };
+		e.currentTarget.setPointerCapture(e.pointerId);
+	}
+	function onGripPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+		const drag = dragRef.current;
+		if (!drag) return;
+		setHeight(clampHeight(drag.startHeight + (e.clientY - drag.startY)));
+	}
+	function onGripPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+		if (!dragRef.current) return;
+		dragRef.current = null;
+		e.currentTarget.releasePointerCapture(e.pointerId);
+		try {
+			localStorage.setItem(HEIGHT_KEY, String(height));
+		} catch {
+			// Private mode: the size holds for this session and no longer.
+		}
+	}
 	const assistant = useAssistant();
 	const { messages, pending } = assistant;
 
@@ -114,7 +166,34 @@ export default function AssistantLauncher() {
 						</button>
 					)}
 				</div>
-				{open && <AssistantPanel assistant={assistant} />}
+				{open && <AssistantPanel assistant={assistant} height={height} />}
+				{/* The grip: the panel's bottom edge, draggable. touch-action none so a
+				    finger dragging it resizes the panel rather than scrolling the page. */}
+				<div
+					role="separator"
+					aria-orientation="horizontal"
+					aria-label="Resize the assistant panel"
+					aria-valuemin={MIN_PANEL_HEIGHT}
+					aria-valuemax={MAX_PANEL_HEIGHT}
+					aria-valuenow={height}
+					tabIndex={0}
+					onPointerDown={onGripPointerDown}
+					onPointerMove={onGripPointerMove}
+					onPointerUp={onGripPointerUp}
+					onPointerCancel={onGripPointerUp}
+					onKeyDown={(e) => {
+						// The keyboard gets the same control, a step at a time.
+						if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+						e.preventDefault();
+						setHeight((h) => clampHeight(h + (e.key === "ArrowDown" ? 24 : -24)));
+					}}
+					className="group flex h-2.5 cursor-ns-resize touch-none items-center justify-center border-t border-line focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+				>
+					<span
+						aria-hidden="true"
+						className="h-0.5 w-8 bg-line-strong transition-colors duration-(--dur-hover) group-hover:bg-denim"
+					/>
+				</div>
 			</PopoverContent>
 		</Popover>
 	);

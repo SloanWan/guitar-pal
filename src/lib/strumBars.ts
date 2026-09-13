@@ -115,6 +115,30 @@ export function patternMeter(pattern: StrumPattern): Meter {
 	return normalizeMeter(pattern.meter);
 }
 
+/** Two names are the same name if they differ only in case or surrounding space. */
+export function samePatternName(a: string, b: string): boolean {
+	return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * The pattern already answering to a name, if one does.
+ *
+ * Names have to be unique because the assistant resolves "add C G to belief"
+ * by name, and a name that means two things means nothing. Presets count: a
+ * player's "old faithful" would shadow the shipped one in every sentence.
+ * `exceptId` is the pattern being edited, whose own name is not a clash.
+ */
+export function patternNameTakenBy(
+	name: string,
+	patterns: readonly StrumPattern[],
+	exceptId?: string,
+): StrumPattern | null {
+	if (name.trim() === "") return null;
+	return (
+		patterns.find((p) => p.id !== exceptId && samePatternName(p.name, name)) ?? null
+	);
+}
+
 /**
  * A player's own patterns, newest first — the order the library lists them in.
  *

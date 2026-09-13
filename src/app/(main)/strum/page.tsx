@@ -1659,6 +1659,7 @@ export default function StrumPage() {
 					}
 				}}
 				editPattern={editingPattern ?? undefined}
+				existingPatterns={[...PRESET_STRUM_PATTERNS, ...customPatterns]}
 				user={user}
 			/>
 

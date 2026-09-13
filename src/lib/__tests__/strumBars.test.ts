@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import {
 	toBars,
 	sortPatternsByNewest,
+	patternNameTakenBy,
+	samePatternName,
 	normalizeStep,
 	normalizeBeats,
 	normalizeBars,
@@ -529,5 +531,33 @@ describe("sortPatternsByNewest", () => {
 		const input = [made("old", "2026-01-01T00:00:00Z"), made("new", "2026-09-01T00:00:00Z")];
 		sortPatternsByNewest(input);
 		expect(input.map((p) => p.id)).toEqual(["old", "new"]);
+	});
+});
+
+describe("patternNameTakenBy", () => {
+	const library = [
+		pattern({ id: "preset-old", name: "old faithful" }),
+		pattern({ id: "p1", name: "Belief" }),
+	];
+
+	it("finds a name however it is cased or spaced", () => {
+		expect(patternNameTakenBy("belief", library)?.id).toBe("p1");
+		expect(patternNameTakenBy("  BELIEF ", library)?.id).toBe("p1");
+		expect(samePatternName("Old Faithful", " old faithful")).toBe(true);
+	});
+
+	it("counts a preset as taken", () => {
+		// A player's "old faithful" would shadow the shipped one by name.
+		expect(patternNameTakenBy("Old Faithful", library)?.id).toBe("preset-old");
+	});
+
+	it("lets a pattern keep its own name while being edited", () => {
+		expect(patternNameTakenBy("belief", library, "p1")).toBeNull();
+		// Renaming onto another pattern's name is still a clash.
+		expect(patternNameTakenBy("old faithful", library, "p1")?.id).toBe("preset-old");
+	});
+
+	it("does not treat an empty name as anything", () => {
+		expect(patternNameTakenBy("   ", library)).toBeNull();
 	});
 });

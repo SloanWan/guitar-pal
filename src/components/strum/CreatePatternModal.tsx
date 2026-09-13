@@ -30,6 +30,7 @@ import {
 	validateBars,
 	patternBpm,
 	patternMeter,
+	patternNameTakenBy,
 	bpmRangeForMeter,
 	clampBpmToMeter,
 	rescaleBpmForMeter,
@@ -83,12 +84,15 @@ export default function CreatePatternModal({
 	onSave,
 	user,
 	editPattern,
+	existingPatterns = [],
 }: {
 	open: boolean;
 	onClose: () => void;
 	onSave: (pattern: StrumPattern) => void;
 	user: User | null;
 	editPattern?: StrumPattern;
+	/** Every pattern a name could clash with — presets and the player's own. */
+	existingPatterns?: readonly StrumPattern[];
 }) {
 	const router = useRouter();
 	const [name, setName] = useState("");
@@ -109,7 +113,8 @@ export default function CreatePatternModal({
 	// three-cell beats in 6/8. Stored on the pattern because nothing else can
 	// tell a compound beat's three cells from a triplet's.
 	const [meter, setMeter] = useState<Meter>(DEFAULT_METER);
-	const [nameError, setNameError] = useState(false);
+	/** Why the name was refused, or null while it is fine. */
+	const [nameError, setNameError] = useState<string | null>(null);
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
 	const [discardConfirm, setDiscardConfirm] = useState(false);
@@ -188,7 +193,7 @@ export default function CreatePatternModal({
 			setBpmInput(String(initialBpm));
 			resetBars(initialBars);
 			setMeter(initialMeter);
-			setNameError(false);
+			setNameError(null);
 			setShowSignInPrompt(false);
 			setDiscardConfirm(false);
 			clearSequence();
@@ -320,7 +325,15 @@ export default function CreatePatternModal({
 
 	function handleSave() {
 		if (!name.trim()) {
-			setNameError(true);
+			setNameError("Pattern name is required");
+			nameRef.current?.focus();
+			return;
+		}
+		// Unique, presets included: the assistant finds a pattern by its name, and
+		// a name two patterns share is one neither can be found by.
+		const taken = patternNameTakenBy(name, existingPatterns, editPattern?.id);
+		if (taken) {
+			setNameError(`"${taken.name}" is already a pattern — pick another name`);
 			nameRef.current?.focus();
 			return;
 		}
@@ -350,7 +363,7 @@ export default function CreatePatternModal({
 		setBpmInput(String(DEFAULT_STRUM_BPM));
 		resetBars([emptyBar()]);
 		setMeter(DEFAULT_METER);
-		setNameError(false);
+		setNameError(null);
 		setShowSignInPrompt(false);
 		setDiscardConfirm(false);
 		clearSequence();
@@ -454,12 +467,12 @@ export default function CreatePatternModal({
 										ref={nameRef}
 										type="text"
 										required
-										aria-invalid={nameError}
+										aria-invalid={nameError !== null}
 										aria-describedby={nameError ? nameErrorId : undefined}
 										value={name}
 										onChange={(e) => {
 											setName(e.target.value);
-											if (nameError) setNameError(false);
+											if (nameError) setNameError(null);
 										}}
 										placeholder="e.g. My strum pattern"
 										className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
@@ -534,7 +547,7 @@ export default function CreatePatternModal({
 							</div>
 							{nameError && (
 								<p id={nameErrorId} className="text-xs text-destructive">
-									Pattern name is required
+									{nameError}
 								</p>
 							)}
 						</div>

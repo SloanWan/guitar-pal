@@ -184,6 +184,13 @@ export const EVAL_CASES: readonly EvalCase[] = [
 		why: "A rhythm written out with a tempo: the strokes are the player's, only the tempo was read.",
 	},
 	{
+		id: "phrase-named",
+		input: "D DU UD in 140 bpm, name it test",
+		path: "phrase",
+		expect: { rhythm: "D DU UD", bpm: [140, 140], rhythmGuessed: false },
+		why: "A name for what is made, read as a clause and kept out of the chords.",
+	},
+	{
 		id: "phrase-ballad",
 		input: "抒情一点的 Am F C G",
 		path: "phrase",

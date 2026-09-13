@@ -122,6 +122,7 @@ export function resolveAssistantTurn({
 			rhythm: route.path === "chords" ? null : route.rhythm,
 			chordWords: route.chordWords,
 			bpm: route.path === "phrase" ? route.bpm : null,
+			name: route.path === "phrase" ? route.name : null,
 			// A style word names a feel, not the strokes; a rhythm written out is the strokes.
 			rhythmGuessed: route.path === "phrase" && route.rhythmGuessed,
 			index,

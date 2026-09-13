@@ -74,6 +74,12 @@ const PROGRESSION_WORDS = /进行|和弦|progression|chords?/i;
 
 /** Verbs that give a pattern a new name. */
 const RENAME_VERBS = ["改名", "重命名", "改叫", "命名", "rename", "call"];
+/**
+ * The rename verbs that also name a *new* thing: "call it test", "命名为 test".
+ * They read as a rename only when a pattern the player has is in the sentence;
+ * otherwise the sentence is not an edit, and the naming is the phrase reader's.
+ */
+const NAMING_VERBS = new Set(["命名", "call"]);
 
 /** Where the new name sits after a rename verb, in either language. */
 const NEW_NAME =
@@ -361,6 +367,11 @@ export function explainEditIntent(
 	// run, and the run would gain a chord the player never wrote.
 	const named = findName(input, patterns);
 	const rest = named ? blank(input, named) : input;
+
+	// "call it test" with no pattern of the player's in it is naming something
+	// new, not renaming — leave the whole sentence to the readers that follow,
+	// with nothing seen, so the guidance does not call it a rename either.
+	if (op === "rename" && named === null && NAMING_VERBS.has(verb)) return base;
 
 	// A rename's new name would be read as chord words, so only an attach — and
 	// a delete, where chords mean the player wants one progression gone, which

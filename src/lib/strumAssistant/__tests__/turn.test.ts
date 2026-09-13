@@ -57,6 +57,20 @@ describe("resolveAssistantTurn", () => {
 			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(true);
 		});
 
+		it("names what it makes when told to", () => {
+			const outcome = resolve("D DU UD in 140 bpm, name it test");
+			expect(outcome.proposal?.name).toBe("test");
+			expect(outcome.proposal?.rhythm).toBe("D DU UD");
+			expect(outcome.proposal?.bpm).toBe(140);
+			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(false);
+		});
+
+		it("does not read 'call it' as renaming something", () => {
+			expect(resolve("C G Am F, call it sunday").proposal?.name).toBe("sunday");
+			// With a pattern of the player's named, it is a rename after all.
+			expect(resolve("call belief faith").edit?.kind).toBe("rename");
+		});
+
 		it("answers chords and a rhythm together", () => {
 			const outcome = resolve("C Am F G, DUDUDUDU");
 			expect(outcome.proposal?.bars).toHaveLength(4);

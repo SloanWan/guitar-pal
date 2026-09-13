@@ -34,6 +34,7 @@ export type AssistantRoute =
 			rhythmGuessed: boolean;
 			bpm: number | null;
 			style: string | null;
+			name: string | null;
 	  }
 	| { path: "llm"; reason: LlmReason };
 
@@ -75,6 +76,7 @@ export function routeAssistantInput(
 		rhythmGuessed: reading.notation === null,
 		bpm: reading.bpm,
 		style: reading.style,
+		name: reading.name,
 	};
 }
 

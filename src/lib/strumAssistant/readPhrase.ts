@@ -74,6 +74,8 @@ export interface PhraseReading {
 	tempo: "slower" | "faster" | null;
 	/** Written tempo, else the style's adjusted by the adjective; null with neither. */
 	bpm: number | null;
+	/** "name it test", "叫 test": what the player wants it called. */
+	name: string | null;
 	/**
 	 * What was not read, with nothing else in it. Empty means the whole sentence
 	 * was understood — the only state in which this reading may be acted on.
@@ -87,6 +89,15 @@ export const CHORD_TOKEN = /[A-G][A-Za-z0-9#♯♭+°ø/]*/g;
 export const CHORD_TOKEN_ANY_CASE = /[A-Ga-g][A-Za-z0-9#♯♭+°ø/]*/g;
 /** What may sit between two chords of one run. */
 const RUN_GAP = /^[\s,，、\-–—→>|]*$/;
+
+/**
+ * "name it test", "call it test", "取名为 test", "叫 test" — the name a new
+ * pattern should carry, read before anything else so a name that happens to
+ * contain a chord ("call it C jam") is not read as one. Ends at punctuation.
+ */
+const NAME_CLAUSE =
+	/(?:name it|call it|call this|named|name:|叫它|叫做|命名为|名字叫|取名为|取名|名为|叫)\s*[「『《"'`]?([^」』》"'`，。,.!?！？]{1,40})/i;
+const NAME_TAIL = /(?:\s*(?:pattern|模式|节奏型|的))+$/i;
 
 /** A word made only of the characters notation is written in. */
 const RHYTHM_WORD = /^[DUXdux上下〇\-._|·]+$/;
@@ -102,7 +113,8 @@ function findNotation(
 	input: string,
 	index: readonly ChordIndexEntry[],
 ): { text: string; start: number; end: number } | null {
-	const words = [...input.matchAll(/\S+/g)].map((m) => ({
+	// Words without the punctuation a sentence hangs on them: "UD," is UD.
+	const words = [...input.matchAll(/[^\s,，。;；!?！？]+/g)].map((m) => ({
 		text: m[0],
 		start: m.index,
 		end: m.index + m[0].length,
@@ -224,8 +236,16 @@ function roundToFive(bpm: number): number {
 	return Math.round(bpm / 5) * 5;
 }
 
-export function readPhrase(input: string, index: readonly ChordIndexEntry[]): PhraseReading {
-	// Notation first, and blanked before the chords are read: "D DU UD" holds a
+export function readPhrase(rawInput: string, index: readonly ChordIndexEntry[]): PhraseReading {
+	// The name first: it is free text, and blanking it keeps a chord-shaped word
+	// inside it ("C jam") from being read as a chord.
+	const naming = NAME_CLAUSE.exec(rawInput);
+	const name = naming ? (naming[1].trim().replace(NAME_TAIL, "").trim() || null) : null;
+	const input = naming
+		? rawInput.slice(0, naming.index) + " ".repeat(naming[0].length) + rawInput.slice(naming.index + naming[0].length)
+		: rawInput;
+
+	// Notation next, and blanked before the chords are read: "D DU UD" holds a
 	// D that is not the chord.
 	const notation = findNotation(input, index);
 	const afterNotation = notation
@@ -291,6 +311,7 @@ export function readPhrase(input: string, index: readonly ChordIndexEntry[]): Ph
 		style: style?.key ?? null,
 		rhythm: style?.rhythm ?? null,
 		notation: notation?.text ?? null,
+		name,
 		tempo,
 		bpm,
 		leftover,

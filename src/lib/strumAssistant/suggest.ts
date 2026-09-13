@@ -112,6 +112,14 @@ export function suggestFrom(seen: EditIntentExplanation, phrase: PhraseReading):
 		};
 	}
 
+	// Only a name. Offer the sentences it could be the name of.
+	if (phrase.name !== null) {
+		return {
+			text: `Read the name as "${phrase.name}", and nothing to give it to yet. Chords, or a rhythm?`,
+			templates: [`${BLANK} ${BLANK} ${BLANK} ${BLANK}, name it ${phrase.name}`, `${BLANK}, name it ${phrase.name}`],
+		};
+	}
+
 	// Nothing at all. Ask what was meant, as sentences.
 	return {
 		text: "I didn't get that. Pick what you meant and fill in the blanks — chords, a rhythm, or a change to a pattern you have.",

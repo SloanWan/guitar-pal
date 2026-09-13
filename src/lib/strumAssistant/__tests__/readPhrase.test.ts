@@ -111,6 +111,33 @@ describe("readPhrase", () => {
 		});
 	});
 
+	describe("reads a name for what it makes", () => {
+		it("takes the name after 'name it', 'call it', or 叫", () => {
+			for (const [line, name] of [
+				["D DU UD in 140 bpm, name it test", "test"],
+				["C G Am F, call it sunday", "sunday"],
+				["给我一个 C-G-Am-F 的民谣扫弦，叫 周日", "周日"],
+				["C G Am F 取名为「夏天」", "夏天"],
+			] as const) {
+				const reading = read(line);
+				expect(reading.name, line).toBe(name);
+				expect(reading.leftover, line).toBe("");
+				expect(phraseIsEnough(reading), line).toBe(true);
+			}
+		});
+
+		it("keeps a chord-shaped word inside the name out of the chords", () => {
+			const reading = read("D DU UD, call it C jam");
+			expect(reading.name).toBe("C jam");
+			expect(reading.chordWords).toEqual([]);
+			expect(phraseIsEnough(reading)).toBe(true);
+		});
+
+		it("is not enough on its own", () => {
+			expect(phraseIsEnough(read("name it test"))).toBe(false);
+		});
+	});
+
 	describe("refuses what it cannot read whole", () => {
 		it("leaves a reference to a song unread", () => {
 			const reading = read("像 Wonderwall 那样的 C G Am F");

@@ -6,16 +6,17 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
 import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
 import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
-import type { AssistantProposal, AssistantTurn } from "@/lib/strumAssistant/types";
+import { recordMiss } from "@/lib/strumAssistant/missLog";
+import type { AssistantProposal } from "@/lib/strumAssistant/types";
 import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
 
 /**
  * Drives one assistant conversation.
  *
  * The conversation's state lives here; deciding a turn lives in
- * `resolveAssistantTurn`, which runs the deterministic router before it reaches
- * for the network — so a typed rhythm or a plain chord line is answered from
- * memory, and that can be asserted rather than promised.
+ * `resolveAssistantTurn`, which reads the message by rules and never reaches
+ * for the network — so every answer is one the app can stand behind, and that
+ * can be asserted rather than promised.
  */
 
 export interface AssistantMessage {
@@ -25,6 +26,8 @@ export interface AssistantMessage {
 	proposal?: AssistantProposal;
 	/** An edit to an existing pattern, waiting on the player to confirm it. */
 	edit?: EditIntentReading;
+	/** Sentences offered when nothing read the message, with blanks to fill. */
+	templates?: string[];
 	/** Set when the turn failed; rendered as an error rather than as speech. */
 	failed?: boolean;
 	/** True once the edit this message carried was confirmed and handed over. */
@@ -36,9 +39,6 @@ export interface AssistantMessage {
 	 */
 	streamed?: boolean;
 }
-
-/** Kept short: every turn is re-sent, and a long tail costs tokens per request. */
-const MAX_HISTORY_TURNS = 10;
 
 /**
  * Where the conversation waits between openings of the panel.
@@ -188,16 +188,10 @@ export function useAssistant() {
 			try {
 				const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
 				setIndex(index);
-				const history: AssistantTurn[] = [...messages, userMessage]
-					.slice(-MAX_HISTORY_TURNS)
-					.map((m) => ({ role: m.role, content: m.text }));
-
-				const outcome = await resolveAssistantTurn({
-					text,
-					history,
-					index,
-					patterns: patternList,
-				});
+				const outcome = resolveAssistantTurn({ text, index, patterns: patternList });
+				// A sentence nothing read is worth keeping: it is the next eval case,
+				// and the sentence picked after it is what the rules should have read.
+				if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
 				setMessages((prev) => [
 					...prev,
 					{
@@ -206,6 +200,7 @@ export function useAssistant() {
 						text: outcome.text,
 						proposal: outcome.proposal,
 						edit: outcome.edit,
+						templates: outcome.templates,
 						...(outcome.failed ? { failed: true } : {}),
 					},
 				]);
@@ -213,7 +208,7 @@ export function useAssistant() {
 				setPending(false);
 			}
 		},
-		[chordIndex, loadPatterns, messages, pending],
+		[chordIndex, loadPatterns, pending],
 	);
 
 	return {

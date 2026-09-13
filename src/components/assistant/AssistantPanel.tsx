@@ -4,6 +4,9 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { CornerDownLeft } from "lucide-react";
 import ProposalPreview from "./ProposalPreview";
 import EditIntentCard from "./EditIntentCard";
+import { Option, Options } from "./Options";
+import { BLANK } from "@/lib/strumAssistant/suggest";
+import { recordPick } from "@/lib/strumAssistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
 import { greeting, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
 import { useUser } from "@/hooks/useUser";
@@ -154,7 +157,7 @@ function TypingBubble() {
 /** How long the assistant appears to think before it says hello. */
 const INTRO_TYPING_MS = 1400;
 const HINT =
-	"Type chords or a rhythm and it is read instantly, offline. Describe what you want in words and it asks the model.";
+	"Chords, a rhythm, or a change to one of your patterns — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.";
 
 /**
  * An empty conversation, arriving the way a reply does.
@@ -341,6 +344,32 @@ export default function AssistantPanel({
 		void send(text);
 	}
 
+	/** The player's message this reply answered — what a picked sentence is a pick for. */
+	function askedBefore(replyId: string): string | null {
+		const at = messages.findIndex((m) => m.id === replyId);
+		for (let i = at - 1; i >= 0; i--) if (messages[i].role === "user") return messages[i].text;
+		return null;
+	}
+
+	/**
+	 * A suggested sentence goes into the composer, not out as a message: the
+	 * blanks are the player's to fill. The first blank is selected, so typing
+	 * replaces it; a sentence with none is ready to send.
+	 */
+	function take(template: string, asked: string | null) {
+		if (asked !== null) recordPick(asked, template);
+		recallRef.current = null;
+		setDraft(template);
+		requestAnimationFrame(() => {
+			const field = inputRef.current;
+			if (!field) return;
+			field.focus();
+			const at = template.indexOf(BLANK);
+			if (at === -1) field.setSelectionRange(template.length, template.length);
+			else field.setSelectionRange(at, at + BLANK.length);
+		});
+	}
+
 	return (
 		<div className="flex flex-col" style={{ height }}>
 			<div
@@ -385,6 +414,20 @@ export default function AssistantPanel({
 										<div className="w-full">
 											<ProposalPreview proposal={message.proposal} />
 										</div>
+									)}
+									{message.templates && message.streamed === true && (
+										<Options>
+											{message.templates.map((template, i) => (
+												<Option
+													key={template}
+													order={i}
+													tone="template"
+													onClick={() => take(template, askedBefore(message.id))}
+												>
+													{template}
+												</Option>
+											))}
+										</Options>
 									)}
 									{message.edit && message.streamed === true && (
 										<div className="w-full">

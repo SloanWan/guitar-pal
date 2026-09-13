@@ -1,28 +1,60 @@
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { routeAssistantInput } from "@/lib/strumAssistant/router";
-import {
-	explainEditIntent,
-	type EditIntentExplanation,
-	type EditIntentReading,
-} from "@/lib/strumAssistant/editIntent";
+import { explainEditIntent, type EditIntentReading } from "@/lib/strumAssistant/editIntent";
+import { readPhrase } from "@/lib/strumAssistant/readPhrase";
 import { buildProposal } from "@/lib/strumAssistant/buildProposal";
-import type {
-	AssistantProposal,
-	AssistantReply,
-	AssistantTurn,
-} from "@/lib/strumAssistant/types";
+import { suggestFrom } from "@/lib/strumAssistant/suggest";
+import { smallTalk } from "@/lib/strumAssistant/smallTalk";
+import type { EditIntentExplanation } from "@/lib/strumAssistant/editIntent";
+import type { AssistantProposal } from "@/lib/strumAssistant/types";
 import type { NamedPattern } from "@/lib/lastPattern";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
 
 /**
- * One turn of the conversation, decided.
+ * One turn of the conversation, decided — by the app, never by a model.
  *
- * Lifted out of the panel's hook so the thing #136 actually promises — that a
- * plain chord line or a typed rhythm never reaches the model — is a property
- * something can assert, rather than a claim about code buried in a component.
- * `fetchImpl` is injected for the same reason: a test can watch it and see that
- * it was never called.
+ * A sentence with a clear intent is a shortcut past the page's own controls,
+ * and a shortcut has to be exact: it is read by rules, and when the rules fall
+ * short the reply says what was read and offers sentences that would have
+ * worked. A vague request is a different thing — a question, not an
+ * instruction — and belongs to a model with the app's own material behind it,
+ * which is a later piece of work. Until then nothing here reaches the network.
  */
+
+export const DETERMINISTIC_REPLY = "Read straight from what you typed — no model needed.";
+export const PHRASE_REPLY = "Read from your words — no model needed. The rhythm is a suggestion.";
+
+export interface AssistantTurnOutcome {
+	/** What the assistant says back. */
+	text: string;
+	/** Present when there is something concrete to preview. */
+	proposal?: AssistantProposal;
+	/**
+	 * Present when the sentence asked for a change to a pattern that already
+	 * exists. Nothing has been written: the player confirms or corrects it first.
+	 */
+	edit?: EditIntentReading;
+	/**
+	 * Present when nothing read the sentence: sentences that would have, with
+	 * blanks for what was missing, for the player to take into the composer.
+	 */
+	templates?: string[];
+	/** Set when the turn failed; the panel renders it as an error, not as speech. */
+	failed?: boolean;
+	/**
+	 * Present with `templates` when nothing read the sentence: what the readers
+	 * saw in it, for the record that turns misses into eval cases.
+	 */
+	seen?: EditIntentExplanation;
+}
+
+export interface ResolveTurnInput {
+	/** What the user just typed. */
+	text: string;
+	index: readonly ChordIndexEntry[];
+	/** The player's own patterns, for a sentence that names one. */
+	patterns?: readonly NamedPattern[];
+}
 
 /**
  * What the assistant says about an edit it has read.
@@ -69,96 +101,22 @@ export function isPreset(patternId: string): boolean {
 	return PRESET_STRUM_PATTERNS.some((p) => p.id === patternId);
 }
 
-export const DETERMINISTIC_REPLY = "Read straight from what you typed — no model needed.";
-export const PHRASE_REPLY = "Read from your words — no model needed. The rhythm is a suggestion.";
-const UNAVAILABLE = "The assistant is unavailable right now.";
-const UNREACHABLE = "Something went wrong reaching the assistant.";
-
-export const ASSISTANT_ENDPOINT = "/api/strum-assistant";
-
-function modelIsOff(): boolean {
-	return (
-		process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_ASSISTANT_MODEL !== "1"
-	);
-}
-
-/**
- * Why the rules did not read this sentence, in the order they gave up.
- *
- * Written for whoever is extending them, which in development is the only
- * reader there is.
- */
-export function explainMiss(text: string, seen: EditIntentExplanation): string {
-	const lines = [`No rule read "${text}". The model is off in development.`];
-
-	if (seen.patternCount === 0) {
-		lines.push("· patterns: none were loaded — nothing could have matched a name.");
-	} else if (seen.verb === null) {
-		lines.push(`· verb: none found, so this is not an edit (${seen.patternCount} patterns known).`);
-	} else {
-		lines.push(`· verb: "${seen.verb}"`);
-		lines.push(
-			seen.matchedName !== null
-				? `· pattern: "${seen.matchedName}"`
-				: seen.guessedName !== null
-					? `· pattern: "${seen.guessedName}" — no pattern of yours answers to it`
-					: `· pattern: no name matched. Yours: ${seen.patternNames.slice(0, 10).join(", ")}${
-						seen.patternNames.length > 10 ? ", …" : ""
-					}`,
-		);
-		lines.push(
-			seen.chordWords.length > 0
-				? `· chords: ${seen.chordWords.join(" ")}`
-				: "· chords: none — nothing in the sentence reads as one",
-		);
-	}
-
-	return lines.join("\n");
-}
-
-export interface AssistantTurnOutcome {
-	/** What the assistant says back. */
-	text: string;
-	/** Present when there is something concrete to preview. */
-	proposal?: AssistantProposal;
-	/**
-	 * Present when the sentence asked for a change to a pattern that already
-	 * exists. Nothing has been written: the player confirms or corrects it first.
-	 */
-	edit?: EditIntentReading;
-	/** Set when the turn failed; the panel renders it as an error, not as speech. */
-	failed?: boolean;
-	/** Whether the model was reached at all — the router's decision, observable. */
-	usedModel: boolean;
-}
-
-export interface ResolveTurnInput {
-	/** What the user just typed. */
-	text: string;
-	/** The conversation to send, including this turn, already trimmed. */
-	history: AssistantTurn[];
-	index: readonly ChordIndexEntry[];
-	/** The player's own patterns, for a sentence that names one. */
-	patterns?: readonly NamedPattern[];
-	fetchImpl?: typeof fetch;
-}
-
-export async function resolveAssistantTurn({
+export function resolveAssistantTurn({
 	text,
-	history,
 	index,
 	patterns = [],
-	fetchImpl = fetch,
-}: ResolveTurnInput): Promise<AssistantTurnOutcome> {
+}: ResolveTurnInput): AssistantTurnOutcome {
+	// "hi" and "thanks" are not requests, and are answered before anything tries
+	// to read them as one. Whole-message matches only.
+	const talk = smallTalk(text);
+	if (talk) return { text: talk.text, templates: talk.templates.length ? talk.templates : undefined };
+
 	// An edit names its target, so it is read before anything else: "add C G to
 	// belief" is a chord line to every reader that comes after this one.
 	const seen = explainEditIntent(text, patterns);
-	if (seen.reading) {
-		return { text: editMessage(seen.reading), edit: seen.reading, usedModel: false };
-	}
+	if (seen.reading) return { text: editMessage(seen.reading), edit: seen.reading };
 
 	const route = routeAssistantInput(text, index);
-
 	if (route.path !== "llm") {
 		const built = buildProposal({
 			rhythm: route.path === "chords" ? null : route.rhythm,
@@ -169,49 +127,17 @@ export async function resolveAssistantTurn({
 			index,
 		});
 		if (built.ok) {
-			const text = route.path === "phrase" ? PHRASE_REPLY : DETERMINISTIC_REPLY;
-			return { text, proposal: built.proposal, usedModel: false };
+			return {
+				text: route.path === "phrase" ? PHRASE_REPLY : DETERMINISTIC_REPLY,
+				proposal: built.proposal,
+			};
 		}
 		// Notation that parses in the router but not here would be a bug, not a
-		// user error; fall through to the model rather than dead-end.
+		// user error; the guidance below at least hands back what was read.
 	}
 
-	// In development the model is not reached at all: a rule that missed is
-	// worth reading, and paying to have the sentence answered anyway hides the
-	// miss behind a good-looking reply. Set NEXT_PUBLIC_ASSISTANT_MODEL=1 to
-	// exercise the model path locally.
-	if (modelIsOff()) {
-		return { text: explainMiss(text, seen), failed: true, usedModel: false };
-	}
-
-	try {
-		const response = await fetchImpl(ASSISTANT_ENDPOINT, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ messages: history }),
-		});
-
-		if (!response.ok) {
-			const body = (await response.json().catch(() => null)) as { error?: string } | null;
-			return { text: body?.error ?? UNAVAILABLE, failed: true, usedModel: true };
-		}
-
-		const reply = (await response.json()) as AssistantReply;
-		let proposal: AssistantProposal | undefined;
-		if (reply.draft) {
-			const built = buildProposal({
-				rhythm: reply.draft.rhythm,
-				chordWords: reply.draft.chords,
-				name: reply.draft.name,
-				bpm: reply.draft.bpm,
-				rhythmGuessed: reply.draft.rhythmGuessed,
-				index,
-			});
-			if (built.ok) proposal = built.proposal;
-		}
-		return { text: reply.message, proposal, usedModel: true };
-	} catch (e) {
-		console.error("[assistant] send:", e);
-		return { text: UNREACHABLE, failed: true, usedModel: true };
-	}
+	// Nothing read it whole. Say what was read, and offer the sentences that
+	// would have worked — never a model's guess at what was meant.
+	const guidance = suggestFrom(seen, readPhrase(text, index));
+	return { text: guidance.text, templates: guidance.templates, seen };
 }

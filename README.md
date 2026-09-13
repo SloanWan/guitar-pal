@@ -178,21 +178,25 @@ In the **My Patterns** section of the library, each custom pattern has three ico
 The chat control at the right of the top bar. Type what you want and it answers
 with a pattern you can preview and open in the strumming machine.
 
-Three kinds of request, and only the last one reaches a model:
+Every request is read by the app itself — nothing you type is sent to a
+model. Four kinds of sentence:
 
-- **Chords** — `C Am F G`, `C-G-Am-F`, `Am | F | C | G`. Read instantly; the
-  rhythm is a suggestion and says so.
+- **Chords** — `C Am F G`, `C-G-Am-F`, `Am | F | C | G`. The rhythm is a
+  suggestion and says so.
 - **A rhythm** — `DUDUDUDU`, `D DU UD`, `下上下上`, with or without chords in
-  front of it (`C Am F G, DUDUDU`). Read instantly.
+  front of it (`C Am F G, DUDUDU`).
 - **A sentence** — `给我一个 C-G-Am-F 的民谣扫弦，慢一点`, `a slow folk strum in
   C G Am F`. A small lexicon reads chords, a style (folk, pop, rock, ballad) and
-  a tempo (slower, faster, or a written BPM) out of it, and answers instantly
-  **only when it read the whole sentence**. One word it does not know — a song
-  title, a mood — and the request goes to the model instead.
+  a tempo (slower, faster, or a written BPM), and answers only when it read the
+  whole sentence.
+- **A change to a pattern you have** — `add C G Am F to belief`, `把 belief 改名为
+  faith`, `删掉 belief`. Read, shown back to you, and written only when you
+  confirm. Shipped patterns take chords and refuse the rest.
 
-Everything the model returns is notation and chord words; the app itself turns
-them into a pattern, so a chord it names always comes from the chord library.
-The model path needs a signed-in account.
+A sentence none of that reads is answered with what *was* read and a few
+sentences that would have worked, blanks and all — pick one and fill it in.
+The model endpoint (`/api/strum-assistant`) is kept for a later, separate job:
+answering a vague question with the app's own material behind it.
 
 ### Quality baseline
 
@@ -208,14 +212,16 @@ it could not resolve.
 | sentence (lexicon) | 7 | 7/7 | $0 | instant |
 | model (`claude-opus-5`) | 12 | 12/12 | $0.0065 | 4.4 s mean |
 
-**18 of 31 requests (58%) are answered without a model call.** The offline half
-runs in `npm test` and makes no API calls. The model half runs with
-`npm run evals` — it costs money (about $0.08 for the set), needs
-`ANTHROPIC_API_KEY`, and writes `src/lib/strumAssistant/__evals__/baseline.json`
-with the pass rate, the measured cost per request, latency, and how often the
-repair loop fired. Compare a prompt edit against that file, not against a
-feeling. (A thirteenth model-path case is empty input, which the app never
-sends, so the runner skips it.)
+**In the app, every request is answered without a model call**; the offline
+half of the set — everything but the `llm` cases — runs in `npm test` and makes
+no API calls. The `llm` rows measure the endpoint on its own, for the day it is
+wired to a question-answering job: `npm run evals` costs money (about $0.08 for
+the set), needs `ANTHROPIC_API_KEY`, and writes
+`src/lib/strumAssistant/__evals__/baseline.json` with the pass rate, the
+measured cost per request, latency, and how often the repair loop fired.
+Compare a prompt edit against that file, not against a feeling. (A thirteenth
+model-path case is empty input, which the app never sends, so the runner skips
+it.)
 
 Baseline recorded 2026-09-13: 12/12, no repairs. It took two prompt rules to
 get there, both found by the set rather than by hand — the model was "fixing" a

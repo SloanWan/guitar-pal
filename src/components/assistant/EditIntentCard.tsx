@@ -16,6 +16,7 @@ import { isPreset } from "@/lib/strumAssistant/turn";
 import { patternNameTakenBy, toBars } from "@/lib/strumBars";
 import type { NamedPattern } from "@/lib/lastPattern";
 import type { StrumPattern } from "@/lib/strumPatterns";
+import { Option, Options } from "./Options";
 
 /**
  * What the assistant understood, before anything is written.
@@ -431,45 +432,3 @@ function FillButton({ onClick, icon, children }: ButtonProps) {
 	);
 }
 
-/** Answers to a question, under the message that asked it. */
-function Options({ children }: { children: React.ReactNode }) {
-	return <div className="flex flex-wrap items-center gap-1.5 pl-2">{children}</div>;
-}
-
-const TONES = {
-	ghost: "text-ink-dim hover:text-ink",
-	outline: "border border-denim text-denim-accent hover:bg-denim hover:text-on-denim",
-	fill: "border border-denim bg-denim text-on-denim hover:bg-denim-accent",
-	// The one tone that throws work away.
-	danger: "border border-destructive bg-destructive text-white hover:bg-destructive/90",
-} as const;
-
-/**
- * One answer. Each lands a beat after the one before it — the same arrival the
- * examples make — with backwards fill so it is not there until its turn.
- */
-function Option({
-	order,
-	tone,
-	onClick,
-	icon,
-	children,
-}: {
-	order: number;
-	tone: keyof typeof TONES;
-	onClick: () => void;
-	icon?: React.ReactNode;
-	children: React.ReactNode;
-}) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={`${BUTTON} ${TONES[tone]} animate-[proposal-pop_0.35s_ease-out_backwards] motion-reduce:animate-none`}
-			style={{ animationDelay: `${order * 0.14}s` }}
-		>
-			{icon}
-			{children}
-		</button>
-	);
-}

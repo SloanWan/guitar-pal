@@ -1,21 +1,20 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
 	resolveAssistantTurn,
 	editMessage,
 	DETERMINISTIC_REPLY,
 	PHRASE_REPLY,
-	ASSISTANT_ENDPOINT,
 } from "@/lib/strumAssistant/turn";
-import type { AssistantReply, AssistantTurn } from "@/lib/strumAssistant/types";
+import { BLANK } from "@/lib/strumAssistant/suggest";
 import { isBrowsableSuffix } from "@/lib/chordSuffixes";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { CHORD_ROWS } from "@/lib/__fixtures__/chordData.fixture";
 
 /**
- * The promise #136 is built on: the model is reached only where determinism
- * runs out. Every case here watches the injected fetch — a deterministic answer
- * that quietly called the endpoint would still look right on screen, and only
- * this assertion would notice.
+ * Every turn is decided by the app. A sentence is read by rules, and one the
+ * rules cannot read is answered with what was read and sentences that would
+ * have worked — never sent anywhere to be guessed at. The function is
+ * synchronous, which is the strongest form of that assertion.
  */
 
 // The same chord corpus the proposal builder's tests use, so a word that
@@ -24,62 +23,32 @@ const INDEX: readonly ChordIndexEntry[] = CHORD_ROWS.filter((r) =>
 	isBrowsableSuffix(r.suffix),
 ).map((r) => ({ root: r.root, suffix: r.suffix }));
 
-function turns(text: string): AssistantTurn[] {
-	return [{ role: "user", content: text }];
-}
+const PATTERNS = [
+	{ id: "p-belief", name: "belief" },
+	{ id: "preset-old", name: "old faithful" },
+];
 
-/** A fetch that fails the test if it is called at all. */
-function forbiddenFetch() {
-	return vi.fn(async () => {
-		throw new Error("the model was reached for input the app can read itself");
-	}) as unknown as typeof fetch;
-}
-
-function replyingFetch(reply: AssistantReply, status = 200) {
-	return vi.fn(async () => new Response(JSON.stringify(reply), { status })) as unknown as typeof fetch;
-}
+const resolve = (text: string) => resolveAssistantTurn({ text, index: INDEX, patterns: PATTERNS });
 
 describe("resolveAssistantTurn", () => {
-	describe("paths the app reads itself — no API call", () => {
-		it("answers a plain chord line from memory", async () => {
-			const fetchImpl = forbiddenFetch();
-			const outcome = await resolveAssistantTurn({
-				text: "C Am F G",
-				history: turns("C Am F G"),
-				index: INDEX,
-				fetchImpl,
-			});
-
-			expect(fetchImpl).not.toHaveBeenCalled();
-			expect(outcome.usedModel).toBe(false);
+	describe("reads what it can", () => {
+		it("answers a plain chord line", () => {
+			const outcome = resolve("C Am F G");
 			expect(outcome.text).toBe(DETERMINISTIC_REPLY);
 			expect(outcome.proposal?.chords).toHaveLength(4);
 			// No rhythm was asked for, so one was chosen — and said so.
 			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(true);
+			expect(outcome.templates).toBeUndefined();
 		});
 
-		it("answers a typed rhythm from memory", async () => {
-			const fetchImpl = forbiddenFetch();
-			const outcome = await resolveAssistantTurn({
-				text: "D DU UD",
-				history: turns("D DU UD"),
-				index: INDEX,
-				fetchImpl,
-			});
-
-			expect(fetchImpl).not.toHaveBeenCalled();
-			expect(outcome.usedModel).toBe(false);
+		it("answers a typed rhythm", () => {
+			const outcome = resolve("D DU UD");
 			expect(outcome.proposal?.rhythm).toBe("D DU UD");
 			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(false);
 		});
 
-		it("answers a sentence the lexicon can read from memory", async () => {
-			const fetchImpl = forbiddenFetch();
-			const text = "给我一个 C-G-Am-F 的民谣扫弦，慢一点";
-			const outcome = await resolveAssistantTurn({ text, history: turns(text), index: INDEX, fetchImpl });
-
-			expect(fetchImpl).not.toHaveBeenCalled();
-			expect(outcome.usedModel).toBe(false);
+		it("answers a sentence the lexicon can read", () => {
+			const outcome = resolve("给我一个 C-G-Am-F 的民谣扫弦，慢一点");
 			expect(outcome.text).toBe(PHRASE_REPLY);
 			expect(outcome.proposal?.chords).toHaveLength(4);
 			expect(outcome.proposal?.rhythm).toBe("D DU UD");
@@ -88,174 +57,64 @@ describe("resolveAssistantTurn", () => {
 			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(true);
 		});
 
-		it("answers chords and a rhythm together from memory", async () => {
-			const fetchImpl = forbiddenFetch();
-			const outcome = await resolveAssistantTurn({
-				text: "C Am F G, DUDUDUDU",
-				history: turns("C Am F G, DUDUDUDU"),
-				index: INDEX,
-				fetchImpl,
-			});
-
-			expect(fetchImpl).not.toHaveBeenCalled();
+		it("answers chords and a rhythm together", () => {
+			const outcome = resolve("C Am F G, DUDUDUDU");
 			expect(outcome.proposal?.bars).toHaveLength(4);
 			expect(outcome.proposal?.chords).toHaveLength(4);
 		});
 	});
 
-	describe("the path that needs the model", () => {
-		it("asks the endpoint when the words are not chords or a rhythm", async () => {
-			const fetchImpl = replyingFetch({
-				message: "Here is a slow folk strum.",
-				draft: {
-					kind: "progression",
-					name: "slow folk",
-					rhythm: "D DU UD",
-					chords: ["C", "G"],
-					bpm: 72,
-					rhythmGuessed: true,
-				},
+	describe("an edit to a pattern that already exists", () => {
+		it("reads it, and writes nothing", () => {
+			const outcome = resolve("添加一个 Em9-D-C#-F#m7 和弦进行去 belief 里");
+			expect(outcome.proposal).toBeUndefined();
+			expect(outcome.edit).toMatchObject({
+				kind: "attach",
+				pattern: { id: "p-belief" },
+				chordWords: ["Em9", "D", "C#", "F#m7"],
 			});
-			const text = "something dreamy in C";
-			const outcome = await resolveAssistantTurn({
-				text,
-				history: turns(text),
-				index: INDEX,
-				fetchImpl,
-			});
-
-			expect(fetchImpl).toHaveBeenCalledTimes(1);
-			const [url, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-			expect(url).toBe(ASSISTANT_ENDPOINT);
-			expect(JSON.parse((init as RequestInit).body as string)).toEqual({ messages: turns(text) });
-
-			expect(outcome.usedModel).toBe(true);
-			expect(outcome.text).toBe("Here is a slow folk strum.");
-			// The bars are expanded here from the model's notation, never sent by it.
-			expect(outcome.proposal?.bars).toHaveLength(2);
-			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(true);
+			// The message is the app's own words.
+			expect(outcome.text).toContain("belief");
 		});
 
-		it("shows a reply that carries no draft as speech", async () => {
-			const fetchImpl = replyingFetch({ message: "Which key are you in?" });
-			const outcome = await resolveAssistantTurn({
-				text: "something folky",
-				history: turns("something folky"),
-				index: INDEX,
-				fetchImpl,
-			});
+		it("is read before the chord line the same words would otherwise be", () => {
+			expect(resolve("add C G Am F to belief").edit?.kind).toBe("attach");
+		});
 
-			expect(outcome.text).toBe("Which key are you in?");
+		it("says so when the pattern is not one the player has", () => {
+			const outcome = resolve("add C G Am F to wonderwall");
+			expect(outcome.edit).toMatchObject({ kind: "unknown-pattern", name: "wonderwall" });
+			expect(outcome.text).toContain("wonderwall");
+		});
+
+		it("leaves every other sentence to the readers after it", () => {
+			for (const text of ["C Am F G", "D DU UD", "给我一个 C-G-Am-F 的民谣扫弦，慢一点"]) {
+				const outcome = resolve(text);
+				expect(outcome.edit, text).toBeUndefined();
+				expect(outcome.proposal, text).toBeDefined();
+			}
+		});
+	});
+
+	describe("a sentence nothing read", () => {
+		it("offers sentences with blanks instead of a guess", () => {
+			const outcome = resolve("something dreamy for a rainy day");
 			expect(outcome.proposal).toBeUndefined();
+			expect(outcome.edit).toBeUndefined();
 			expect(outcome.failed).toBeUndefined();
+			expect(outcome.templates?.length).toBeGreaterThan(0);
+			expect(outcome.templates?.some((t) => t.includes(BLANK))).toBe(true);
 		});
 
-		it("passes the endpoint's own refusal through as the failure", async () => {
-			const fetchImpl = vi.fn(
-				async () =>
-					new Response(JSON.stringify({ error: "Sign in to use the assistant." }), {
-						status: 401,
-					}),
-			) as unknown as typeof fetch;
-			const outcome = await resolveAssistantTurn({
-				text: "something dreamy",
-				history: turns("something dreamy"),
-				index: INDEX,
-				fetchImpl,
-			});
-
-			expect(outcome.failed).toBe(true);
-			expect(outcome.text).toBe("Sign in to use the assistant.");
+		it("keeps the chords it did read in what it offers", () => {
+			const outcome = resolve("C G Am F but dreamy");
+			expect(outcome.templates).toContain("C G Am F");
+			expect(outcome.templates).toContain(`add C G Am F to ${BLANK}`);
 		});
 
-		it("survives a network that is simply not there", async () => {
-			const fetchImpl = vi.fn(async () => {
-				throw new Error("offline");
-			}) as unknown as typeof fetch;
-			const outcome = await resolveAssistantTurn({
-				text: "something dreamy",
-				history: turns("something dreamy"),
-				index: INDEX,
-				fetchImpl,
-			});
-
-			expect(outcome.failed).toBe(true);
-			expect(outcome.proposal).toBeUndefined();
+		it("asks rather than guesses when a rename names no new name", () => {
+			expect(resolve("rename belief").edit).toMatchObject({ kind: "rename", newName: "" });
 		});
-	});
-});
-
-describe("an edit to a pattern that already exists", () => {
-	const PATTERNS = [
-		{ id: "p-belief", name: "belief" },
-		{ id: "preset-old", name: "old faithful" },
-	];
-
-	it("reads it without the model, and writes nothing", async () => {
-		const fetchImpl = forbiddenFetch();
-		const text = "添加一个 Em9-D-C#-F#m7 和弦进行去 belief 里";
-		const outcome = await resolveAssistantTurn({
-			text,
-			history: turns(text),
-			index: INDEX,
-			patterns: PATTERNS,
-			fetchImpl,
-		});
-
-		expect(fetchImpl).not.toHaveBeenCalled();
-		expect(outcome.usedModel).toBe(false);
-		expect(outcome.proposal).toBeUndefined();
-		expect(outcome.edit).toMatchObject({
-			kind: "attach",
-			pattern: { id: "p-belief" },
-			chordWords: ["Em9", "D", "C#", "F#m7"],
-		});
-		// The message is the app's own words, not the model's.
-		expect(outcome.text).toContain("belief");
-	});
-
-	it("is read before the chord line the same words would otherwise be", async () => {
-		const fetchImpl = forbiddenFetch();
-		const text = "add C G Am F to belief";
-		const outcome = await resolveAssistantTurn({
-			text,
-			history: turns(text),
-			index: INDEX,
-			patterns: PATTERNS,
-			fetchImpl,
-		});
-		expect(outcome.edit?.kind).toBe("attach");
-	});
-
-	it("says so when the pattern is not one the player has", async () => {
-		const fetchImpl = forbiddenFetch();
-		const text = "add C G Am F to wonderwall";
-		const outcome = await resolveAssistantTurn({
-			text,
-			history: turns(text),
-			index: INDEX,
-			patterns: PATTERNS,
-			fetchImpl,
-		});
-
-		expect(fetchImpl).not.toHaveBeenCalled();
-		expect(outcome.edit).toMatchObject({ kind: "unknown-pattern", name: "wonderwall" });
-		expect(outcome.text).toContain("wonderwall");
-	});
-
-	it("leaves every other sentence to the readers after it", async () => {
-		const fetchImpl = forbiddenFetch();
-		for (const text of ["C Am F G", "D DU UD", "给我一个 C-G-Am-F 的民谣扫弦，慢一点"]) {
-			const outcome = await resolveAssistantTurn({
-				text,
-				history: turns(text),
-				index: INDEX,
-				patterns: PATTERNS,
-				fetchImpl,
-			});
-			expect(outcome.edit, text).toBeUndefined();
-			expect(outcome.proposal, text).toBeDefined();
-		}
 	});
 
 	it("says what it understood in one language, whatever was typed", () => {

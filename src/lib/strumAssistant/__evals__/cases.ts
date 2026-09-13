@@ -177,6 +177,13 @@ export const EVAL_CASES: readonly EvalCase[] = [
 		why: "Style and tempo adjective combine.",
 	},
 	{
+		id: "phrase-rhythm-bpm",
+		input: "D DU UD in 140 bpm",
+		path: "phrase",
+		expect: { rhythm: "D DU UD", bpm: [140, 140], bars: 1, rhythmGuessed: false },
+		why: "A rhythm written out with a tempo: the strokes are the player's, only the tempo was read.",
+	},
+	{
 		id: "phrase-ballad",
 		input: "抒情一点的 Am F C G",
 		path: "phrase",

@@ -200,7 +200,7 @@ answering a vague question with the app's own material behind it.
 
 ### Quality baseline
 
-The assistant has an eval set of 30 requests (`src/lib/strumAssistant/__evals__/cases.ts`),
+The assistant has an eval set of 32 requests (`src/lib/strumAssistant/__evals__/cases.ts`),
 graded programmatically: which path a request takes, which chords come back, how
 many bars, the tempo, and whether the model invented a rhythm or reported a word
 it could not resolve.
@@ -209,7 +209,7 @@ it could not resolve.
 | --- | --- | --- | --- | --- |
 | chords | 6 | 6/6 | $0 | instant |
 | rhythm | 5 | 5/5 | $0 | instant |
-| sentence (lexicon) | 7 | 7/7 | $0 | instant |
+| sentence (lexicon) | 8 | 8/8 | $0 | instant |
 | model (`claude-opus-5`) | 12 | 12/12 | $0.0065 | 4.4 s mean |
 
 **In the app, every request is answered without a model call**; the offline

@@ -92,6 +92,15 @@ describe("routeAssistantInput", () => {
 			expect(route("a slow folk strum in C G Am F").path).toBe("phrase");
 		});
 
+		it("takes a rhythm written out with a tempo, and says the strokes are the player's", () => {
+			const result = route("D DU UD in 140 bpm");
+			expect(result.path).toBe("phrase");
+			if (result.path !== "phrase") return;
+			expect(result.rhythm).toBe("D DU UD");
+			expect(result.bpm).toBe(140);
+			expect(result.rhythmGuessed).toBe(false);
+		});
+
 		it("leaves the strict paths as they were", () => {
 			// A line the strict reading accepts never reaches the lexicon.
 			expect(route("C Am F G").path).toBe("chords");

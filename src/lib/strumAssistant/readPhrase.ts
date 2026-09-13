@@ -1,5 +1,6 @@
 import { normalizeChordName, searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 import { DEFAULT_STRUM_BPM } from "@/lib/strumPatterns";
+import { parseRhythm } from "@/lib/strumAssistant/parseRhythm";
 
 /**
  * Reads a request written as a sentence, without a model.
@@ -65,6 +66,11 @@ export interface PhraseReading {
 	style: string | null;
 	/** From the style; null when no style was named. Always a guess. */
 	rhythm: string | null;
+	/**
+	 * Rhythm the player wrote out — "D DU UD in 140 bpm" — as written. Not a
+	 * guess, and it outranks the style's when both are present.
+	 */
+	notation: string | null;
 	tempo: "slower" | "faster" | null;
 	/** Written tempo, else the style's adjusted by the adjective; null with neither. */
 	bpm: number | null;
@@ -81,6 +87,49 @@ export const CHORD_TOKEN = /[A-G][A-Za-z0-9#♯♭+°ø/]*/g;
 export const CHORD_TOKEN_ANY_CASE = /[A-Ga-g][A-Za-z0-9#♯♭+°ø/]*/g;
 /** What may sit between two chords of one run. */
 const RUN_GAP = /^[\s,，、\-–—→>|]*$/;
+
+/** A word made only of the characters notation is written in. */
+const RHYTHM_WORD = /^[DUXdux上下〇\-._|·]+$/;
+
+/**
+ * Rhythm written into a sentence: the longest run of notation-only words that
+ * parses as a bar. "D" on its own does not count — it is the chord far more
+ * often — and neither does a run every word of which is a chord ("D D D"),
+ * since chords win that tie everywhere else in the app. Two struck cells is
+ * the floor.
+ */
+function findNotation(
+	input: string,
+	index: readonly ChordIndexEntry[],
+): { text: string; start: number; end: number } | null {
+	const words = [...input.matchAll(/\S+/g)].map((m) => ({
+		text: m[0],
+		start: m.index,
+		end: m.index + m[0].length,
+	}));
+
+	let best: { text: string; start: number; end: number } | null = null;
+	let i = 0;
+	while (i < words.length) {
+		if (!RHYTHM_WORD.test(words[i].text)) {
+			i += 1;
+			continue;
+		}
+		let j = i;
+		while (j + 1 < words.length && RHYTHM_WORD.test(words[j + 1].text)) j += 1;
+		const run = words.slice(i, j + 1);
+		const text = input.slice(run[0].start, run[run.length - 1].end);
+		const allChords = run.every((w) => isExactChord(w.text, index));
+		const struck = (text.match(/[DUXdux上下〇]/g) ?? []).length;
+		if (!allChords && struck >= 2 && parseRhythm(text).ok) {
+			if (best === null || text.length > best.text.length) {
+				best = { text, start: run[0].start, end: run[run.length - 1].end };
+			}
+		}
+		i = j + 1;
+	}
+	return best;
+}
 
 /** A word that reads as a chord, and where it sat in the input. */
 export interface ChordSpan {
@@ -176,13 +225,19 @@ function roundToFive(bpm: number): number {
 }
 
 export function readPhrase(input: string, index: readonly ChordIndexEntry[]): PhraseReading {
-	const { run, strays } = findChordRun(input, (token) => isExactChord(token, index));
+	// Notation first, and blanked before the chords are read: "D DU UD" holds a
+	// D that is not the chord.
+	const notation = findNotation(input, index);
+	const afterNotation = notation
+		? input.slice(0, notation.start) + " ".repeat(notation.end - notation.start) + input.slice(notation.end)
+		: input;
+	const { run, strays } = findChordRun(afterNotation, (token) => isExactChord(token, index));
 
 	// Blank every chord out by position rather than by text, so a "c" inside
 	// "chords" is not mistaken for the chord that was read. Strays are blanked
 	// too — and put back into the leftover below, so a noise word that happens
 	// to spell a chord ("a") cannot make them disappear.
-	let masked = input;
+	let masked = afterNotation;
 	for (const token of [...run, ...strays]) {
 		masked = masked.slice(0, token.start) + " ".repeat(token.end - token.start) + masked.slice(token.end);
 	}
@@ -219,6 +274,8 @@ export function readPhrase(input: string, index: readonly ChordIndexEntry[]): Ph
 		text.replace(/[\s\p{P}\p{S}\d]/gu, "") + strays.map((t) => t.text.toLowerCase()).join("");
 
 	let bpm: number | null = writtenBpm;
+	// A rhythm written out with a tempo word and no style still gets a tempo:
+	// there is something to be slow, so the default is what is slowed.
 	if (bpm === null && (style !== null || tempo !== null)) {
 		const base = style?.bpm ?? DEFAULT_STRUM_BPM;
 		bpm =
@@ -233,6 +290,7 @@ export function readPhrase(input: string, index: readonly ChordIndexEntry[]): Ph
 		chordWords: run.map((t) => t.text),
 		style: style?.key ?? null,
 		rhythm: style?.rhythm ?? null,
+		notation: notation?.text ?? null,
 		tempo,
 		bpm,
 		leftover,
@@ -245,5 +303,8 @@ export function readPhrase(input: string, index: readonly ChordIndexEntry[]): Ph
  * then the default, and flagged as a guess — and so is a style alone.
  */
 export function phraseIsEnough(reading: PhraseReading): boolean {
-	return reading.leftover === "" && (reading.chordWords.length >= 2 || reading.style !== null);
+	return (
+		reading.leftover === "" &&
+		(reading.chordWords.length >= 2 || reading.style !== null || reading.notation !== null)
+	);
 }

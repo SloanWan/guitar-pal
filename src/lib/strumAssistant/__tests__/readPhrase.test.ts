@@ -74,6 +74,43 @@ describe("readPhrase", () => {
 		});
 	});
 
+	describe("reads rhythm written into a sentence", () => {
+		it("takes notation with a tempo", () => {
+			const reading = read("D DU UD in 140 bpm");
+			expect(reading.notation).toBe("D DU UD");
+			expect(reading.bpm).toBe(140);
+			expect(reading.leftover).toBe("");
+			expect(phraseIsEnough(reading)).toBe(true);
+		});
+
+		it("takes notation with a tempo word, and no style", () => {
+			const reading = read("DUDUDUDU 慢一点");
+			expect(reading.notation).toBe("DUDUDUDU");
+			// Nothing named a base tempo, so the default is what is slowed.
+			expect(reading.bpm).toBe(70);
+			expect(phraseIsEnough(reading)).toBe(true);
+		});
+
+		it("takes notation and chords together", () => {
+			const reading = read("D DU UD with C G Am F, slow");
+			expect(reading.notation).toBe("D DU UD");
+			expect(reading.chordWords).toEqual(["C", "G", "Am", "F"]);
+			expect(reading.tempo).toBe("slower");
+			expect(phraseIsEnough(reading)).toBe(true);
+		});
+
+		it("lets written strokes outrank a style's", () => {
+			const reading = read("folk D DU UDU");
+			expect(reading.style).toBe("folk");
+			expect(reading.notation).toBe("D DU UDU");
+		});
+
+		it("does not read a lone D, or a chord list, as notation", () => {
+			expect(read("D folk").notation).toBeNull();
+			expect(read("D D D D folk").notation).toBeNull();
+		});
+	});
+
 	describe("refuses what it cannot read whole", () => {
 		it("leaves a reference to a song unread", () => {
 			const reading = read("像 Wonderwall 那样的 C G Am F");

@@ -80,6 +80,17 @@ export function suggestFrom(seen: EditIntentExplanation, phrase: PhraseReading):
 	}
 
 	// Not an instruction, but something musical was in it.
+	if (phrase.notation !== null) {
+		const strokes = phrase.notation;
+		return {
+			text: `Read the rhythm as ${strokes}. The rest I could not place — one of these?`,
+			templates: unique([
+				strokes,
+				chords.length > 0 ? `${chordLine}, ${strokes}` : `${BLANK} ${BLANK} ${BLANK} ${BLANK}, ${strokes}`,
+				`${strokes} in ${BLANK} bpm`,
+			]),
+		};
+	}
 	if (chords.length >= 2) {
 		return {
 			text: `Read the chords as ${chordLine}. The rest I could not place — one of these?`,

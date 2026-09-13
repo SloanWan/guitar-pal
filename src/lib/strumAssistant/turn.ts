@@ -122,13 +122,13 @@ export function resolveAssistantTurn({
 			rhythm: route.path === "chords" ? null : route.rhythm,
 			chordWords: route.chordWords,
 			bpm: route.path === "phrase" ? route.bpm : null,
-			// A style word names a feel, not the strokes; the rhythm is chosen for it.
-			rhythmGuessed: route.path === "phrase",
+			// A style word names a feel, not the strokes; a rhythm written out is the strokes.
+			rhythmGuessed: route.path === "phrase" && route.rhythmGuessed,
 			index,
 		});
 		if (built.ok) {
 			return {
-				text: route.path === "phrase" ? PHRASE_REPLY : DETERMINISTIC_REPLY,
+				text: route.path === "phrase" && route.rhythmGuessed ? PHRASE_REPLY : DETERMINISTIC_REPLY,
 				proposal: built.proposal,
 			};
 		}

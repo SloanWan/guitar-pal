@@ -26,7 +26,15 @@ export type AssistantRoute =
 	 * The rhythm here is always a guess — it came from the style word, not from
 	 * the player's strokes.
 	 */
-	| { path: "phrase"; chordWords: string[]; rhythm: string | null; bpm: number | null; style: string | null }
+	| {
+			path: "phrase";
+			chordWords: string[];
+			rhythm: string | null;
+			/** False when the rhythm was written out in the sentence; true when a style word chose it. */
+			rhythmGuessed: boolean;
+			bpm: number | null;
+			style: string | null;
+	  }
 	| { path: "llm"; reason: LlmReason };
 
 export type LlmReason = "empty" | "unrecognised-segment" | "multiple-rhythms";
@@ -63,7 +71,8 @@ export function routeAssistantInput(
 	return {
 		path: "phrase",
 		chordWords: reading.chordWords,
-		rhythm: reading.rhythm,
+		rhythm: reading.notation ?? reading.rhythm,
+		rhythmGuessed: reading.notation === null,
 		bpm: reading.bpm,
 		style: reading.style,
 	};

@@ -49,6 +49,13 @@ describe("suggestFrom", () => {
 		expect(g.templates).toContain(`add C G Am F to ${BLANK}`);
 	});
 
+	it("keeps a rhythm it read", () => {
+		const g = suggest("D DU UD but groovier somehow");
+		expect(g.text).toContain("D DU UD");
+		expect(g.templates).toContain("D DU UD");
+		expect(g.templates).toContain(`D DU UD in ${BLANK} bpm`);
+	});
+
 	it("keeps a style word it read and asks for the rest", () => {
 		const g = suggest("something folk and slow like that song");
 		expect(g.text).toContain("folk slow");

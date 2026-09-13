@@ -18,8 +18,12 @@ import type { useAssistant } from "./useAssistant";
  * popover closed would be no conversation at all.
  */
 
-/** Shown on an empty panel: the two deterministic shapes, then a model one. */
-const EXAMPLES = ["C Am F G", "D DU UD", "a slow folk strum in C"];
+/**
+ * Shown on an empty panel: chords, a rhythm, and a sentence — each one read by
+ * the app, so every click lands. A lone "C" would not: one chord is a key, not
+ * a progression, and the sentence reader steps aside for it.
+ */
+const EXAMPLES = ["C Am F G", "D DU UD", "a slow folk strum in C G Am F"];
 
 const MAX_INPUT_CHARS = 600;
 /** Five lines of the field's own text, after which it scrolls instead of growing. */

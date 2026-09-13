@@ -81,7 +81,10 @@ describe("strum assistant eval set — model path", () => {
 
 	for (const c of cases) {
 		it(`"${c.input}"  (${c.id})`, async () => {
-			const result = await askModel(client, [{ role: "user", content: c.input }]);
+			const result = await askModel(client, [
+				...(c.context ?? []),
+				{ role: "user", content: c.input },
+			]);
 
 			// The reply is notation and chord words; frets and pitches cannot be in it.
 			expect(JSON.stringify(result.reply)).not.toMatch(/frets|midi|voicing/i);

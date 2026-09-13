@@ -206,19 +206,22 @@ it could not resolve.
 | chords | 6 | 6/6 | $0 | instant |
 | rhythm | 5 | 5/5 | $0 | instant |
 | sentence (lexicon) | 7 | 7/7 | $0 | instant |
-| model (`claude-opus-5`) | 11 | 9/11 | $0.0068 | 4.8 s mean |
+| model (`claude-opus-5`) | 12 | 12/12 | $0.0065 | 4.4 s mean |
 
-**18 of 30 requests (60%) are answered without a model call.** The offline half
+**18 of 31 requests (58%) are answered without a model call.** The offline half
 runs in `npm test` and makes no API calls. The model half runs with
 `npm run evals` — it costs money (about $0.08 for the set), needs
 `ANTHROPIC_API_KEY`, and writes `src/lib/strumAssistant/__evals__/baseline.json`
 with the pass rate, the measured cost per request, latency, and how often the
 repair loop fired. Compare a prompt edit against that file, not against a
-feeling. (The twelfth model-path case is empty input, which the app never sends.)
+feeling. (A thirteenth model-path case is empty input, which the app never
+sends, so the runner skips it.)
 
-Baseline recorded 2026-09-11: 9/11, no repairs needed. The two misses are
-recorded in `baseline.json` — a chord word no chord matches was dropped instead
-of being reported, and a bare "慢一点" got a pattern instead of a question.
+Baseline recorded 2026-09-13: 12/12, no repairs. It took two prompt rules to
+get there, both found by the set rather than by hand — the model was "fixing" a
+chord word it did not recognise into one it did, and its choice between
+proposing and asking flipped run to run on a request to change something with
+nothing to change.
 
 ## Chord Library
 

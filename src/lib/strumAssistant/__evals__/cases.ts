@@ -1,4 +1,5 @@
 import type { AssistantRoute } from "@/lib/strumAssistant/router";
+import type { AssistantTurn } from "@/lib/strumAssistant/types";
 
 /**
  * The strum assistant's eval set (#137): what a request is, and what a right
@@ -36,6 +37,12 @@ export interface EvalExpectation {
 export interface EvalCase {
 	id: string;
 	input: string;
+	/**
+	 * The conversation this request arrives in, as the panel would send it —
+	 * an assistant turn carries its prose, never its draft. Routing always reads
+	 * `input` alone; only the model is given the history.
+	 */
+	context?: readonly AssistantTurn[];
 	/** Which path the router must take. */
 	path: EvalPath;
 	/** What the answer must contain. For the model, the bar is set low and firm. */
@@ -253,7 +260,27 @@ export const EVAL_CASES: readonly EvalCase[] = [
 		input: "慢一点",
 		path: "llm",
 		expect: { noDraft: true },
-		why: "A tempo with nothing to apply it to.",
+		why:
+			"A tempo with nothing to apply it to. Observed on both sides of the line " +
+			"run to run — proposing a guessed pattern one day, asking the next — so " +
+			"the prompt now decides it: a change with nothing to change is the one " +
+			"case a guess cannot cover.",
+	},
+	{
+		id: "llm-tempo-followup",
+		input: "慢一点",
+		context: [
+			{ role: "user", content: "给我一个 C G Am F 的民谣扫弦" },
+			{
+				role: "assistant",
+				content: "给你一个民谣扫弦：D DU UD，速度 80 BPM，配 C–G–Am–F 的进行。",
+			},
+		],
+		path: "llm",
+		expect: { chordRoots: ["C", "G", "A", "F"], bpm: [40, 75] },
+		why:
+			"Where a bare tempo actually appears: after something to slow down. The " +
+			"chords must survive the edit and the tempo must come down.",
 	},
 	{
 		id: "llm-empty",

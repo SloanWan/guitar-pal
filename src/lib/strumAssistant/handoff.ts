@@ -42,7 +42,22 @@ export interface AttachHandoff {
 	bars: Bar[];
 }
 
-export type AssistantHandoff = PatternHandoff | AttachHandoff;
+/** A pattern of the player's own, given a new name. */
+export interface RenameHandoff {
+	kind: "rename";
+	patternId: string;
+	patternName: string;
+	newName: string;
+}
+
+/** A pattern of the player's own, removed — with every progression over it. */
+export interface DeleteHandoff {
+	kind: "delete";
+	patternId: string;
+	patternName: string;
+}
+
+export type AssistantHandoff = PatternHandoff | AttachHandoff | RenameHandoff | DeleteHandoff;
 
 export function patternHandoff(proposal: AssistantProposal): PatternHandoff {
 	return {
@@ -89,6 +104,22 @@ export function takeHandoff(): AssistantHandoff | null {
 	if (typeof parsed !== "object" || parsed === null) return null;
 
 	const value = parsed as Record<string, unknown>;
+
+	if (value.kind === "rename" || value.kind === "delete") {
+		if (typeof value.patternId !== "string" || value.patternId === "") return null;
+		if (typeof value.patternName !== "string") return null;
+		if (value.kind === "delete") {
+			return { kind: "delete", patternId: value.patternId, patternName: value.patternName };
+		}
+		if (typeof value.newName !== "string" || value.newName.trim() === "") return null;
+		return {
+			kind: "rename",
+			patternId: value.patternId,
+			patternName: value.patternName,
+			newName: value.newName.trim(),
+		};
+	}
+
 	// validateBars was written for exactly this: checking bars that came from
 	// outside the app before anything downstream trusts their shape.
 	if (!validateBars(value.bars).ok) return null;

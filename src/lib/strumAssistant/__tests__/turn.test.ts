@@ -266,12 +266,13 @@ describe("an edit to a pattern that already exists", () => {
 			chordWords: ["C"],
 		});
 		expect(zh).toContain("belief");
-		expect(editMessage({ kind: "unknown-pattern", name: "summer", chordWords: [] })).toContain(
-			"summer",
-		);
+		expect(
+			editMessage({ kind: "unknown-pattern", op: "attach", name: "summer", chordWords: [] }),
+		).toContain("summer");
 		expect(
 			editMessage({
 				kind: "ambiguous",
+				op: "attach",
 				name: "belief",
 				matches: [
 					{ id: "a", name: "belief" },

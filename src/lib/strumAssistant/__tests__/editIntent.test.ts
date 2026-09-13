@@ -94,6 +94,26 @@ describe("parseEditIntent", () => {
 			});
 		});
 
+		it("carries a word it cannot place along with the chords around it", () => {
+			// "RM" is not a chord, but it is where a chord goes. Ending the run at it
+			// would have read only "F C F G"; dropping it would lose a bar.
+			expect(read("添加C G AM RM F C F G到belief")).toMatchObject({
+				kind: "attach",
+				chordWords: ["C", "G", "AM", "RM", "F", "C", "F", "G"],
+			});
+		});
+
+		it("does not carry a trailing word, which is more likely prose", () => {
+			expect(read("add C G RM to belief")).toMatchObject({ chordWords: ["C", "G"] });
+		});
+
+		it("reads a Chinese and between chords as a gap", () => {
+			expect(read("给 belief 加上 C 和 G 与 Am")).toMatchObject({
+				chordWords: ["C", "G", "Am"],
+			});
+			expect(read("add C and G to belief")).toMatchObject({ chordWords: ["C", "G"] });
+		});
+
 		it("takes a single chord as a one-bar progression", () => {
 			expect(read("add C to belief")).toMatchObject({ chordWords: ["C"] });
 		});
@@ -106,11 +126,60 @@ describe("parseEditIntent", () => {
 		});
 	});
 
+	describe("renames and deletes", () => {
+		it("reads a rename with its new name, in either language", () => {
+			for (const line of ["把 belief 改名为 faith", "rename belief to faith", "belief 改叫 faith"]) {
+				expect(read(line), line).toEqual({
+					kind: "rename",
+					op: "rename",
+					pattern: { id: "p-belief", name: "belief" },
+					newName: "faith",
+				});
+			}
+		});
+
+		it("reads a rename that names no new name", () => {
+			expect(read("rename belief")).toMatchObject({ kind: "rename", newName: "" });
+		});
+
+		it("does not read a new name as chords", () => {
+			// "to C" would be one chord to the attach reader; here it is a name.
+			expect(read("rename belief to C")).toMatchObject({ kind: "rename", newName: "C" });
+		});
+
+		it("reads a delete, in either language", () => {
+			for (const line of ["删掉 belief", "delete belief", "remove the belief pattern"]) {
+				expect(read(line), line).toEqual({
+					kind: "delete",
+					op: "delete",
+					pattern: { id: "p-belief", name: "belief" },
+				});
+			}
+		});
+
+		it("still names a preset, so the card can say no", () => {
+			expect(read("delete old faithful")).toMatchObject({ kind: "delete", pattern: { id: "preset-old" } });
+		});
+
+		it("carries the operation into a name it could not resolve", () => {
+			expect(read("delete wonderwall")).toEqual({
+				kind: "unknown-pattern",
+				op: "delete",
+				name: "wonderwall",
+				chordWords: [],
+			});
+			expect(read("remove the wonderwall pattern")).toMatchObject({ name: "wonderwall" });
+			expect(read("rename wonderwall to faith")).toMatchObject({ op: "rename", name: "wonderwall" });
+			expect(read("删掉「夏天」")).toMatchObject({ op: "delete", name: "夏天" });
+		});
+	});
+
 	describe("says what it cannot resolve", () => {
 		it("reports a pattern the player does not have, keeping the chords", () => {
 			// The chords were read fine; only the target has to be picked.
 			expect(read("add C G Am F to wonderwall")).toEqual({
 				kind: "unknown-pattern",
+				op: "attach",
 				name: "wonderwall",
 				chordWords: ["C", "G", "Am", "F"],
 			});
@@ -148,6 +217,7 @@ describe("parseEditIntent", () => {
 		it("keeps a name aimed at when neither half resolves", () => {
 			expect(read("add a progression to wonderwall")).toEqual({
 				kind: "unknown-pattern",
+				op: "attach",
 				name: "wonderwall",
 				chordWords: [],
 			});

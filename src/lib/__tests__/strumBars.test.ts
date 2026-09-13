@@ -4,6 +4,7 @@ import {
 	sortPatternsByNewest,
 	patternNameTakenBy,
 	samePatternName,
+	uniquePatternName,
 	normalizeStep,
 	normalizeBeats,
 	normalizeBars,
@@ -559,5 +560,22 @@ describe("patternNameTakenBy", () => {
 
 	it("does not treat an empty name as anything", () => {
 		expect(patternNameTakenBy("   ", library)).toBeNull();
+	});
+});
+
+describe("uniquePatternName", () => {
+	const library = [
+		pattern({ id: "a", name: "folk strum" }),
+		pattern({ id: "b", name: "Folk Strum 2" }),
+	];
+
+	it("keeps a free name as it is", () => {
+		expect(uniquePatternName("ballad", library)).toBe("ballad");
+		expect(uniquePatternName("  ballad ", library)).toBe("ballad");
+	});
+
+	it("numbers a taken one past every number already used", () => {
+		expect(uniquePatternName("folk strum", library)).toBe("folk strum 3");
+		expect(uniquePatternName("FOLK STRUM", library)).toBe("FOLK STRUM 3");
 	});
 });

@@ -140,6 +140,22 @@ export function patternNameTakenBy(
 }
 
 /**
+ * The name, or the first numbered form of it nobody has: "folk strum",
+ * "folk strum 2", "folk strum 3". For a pattern the player has already agreed
+ * to save — an assistant's proposal, confirmed — where refusing it over the
+ * name would send them back a step for nothing.
+ */
+export function uniquePatternName(name: string, patterns: readonly StrumPattern[]): string {
+	const base = name.trim();
+	if (!patternNameTakenBy(base, patterns)) return base;
+	for (let n = 2; n < 1000; n++) {
+		const candidate = `${base} ${n}`;
+		if (!patternNameTakenBy(candidate, patterns)) return candidate;
+	}
+	return `${base} ${Date.now()}`;
+}
+
+/**
  * A player's own patterns, newest first — the order the library lists them in.
  *
  * Newest first because the pattern someone is working on is the one they just

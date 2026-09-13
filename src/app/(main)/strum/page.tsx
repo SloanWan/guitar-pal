@@ -20,6 +20,7 @@ import {
 	bpmRangeForMeter,
 	clampBpmToMeter,
 	normalizeBpm,
+	uniquePatternName,
 } from "@/lib/strumBars";
 import { DEFAULT_METER, isCompound } from "@/lib/strumMeter";
 import { TICK_LEVELS, tickLevelLabel, type TickLevel } from "@/lib/strumMetronome";
@@ -49,6 +50,8 @@ import {
 	takeHandoff,
 	type AssistantHandoff,
 	type AttachHandoff,
+	type DeleteHandoff,
+	type RenameHandoff,
 } from "@/lib/strumAssistant/handoff";
 import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
@@ -439,10 +442,14 @@ export default function StrumPage() {
 	 */
 	function applyHandoff(handoff: AssistantHandoff) {
 		if (handoff.kind === "attach") return applyAttachHandoff(handoff);
+		if (handoff.kind === "rename") return applyRenameHandoff(handoff);
+		if (handoff.kind === "delete") return applyDeleteHandoff(handoff);
 
 		const pattern: StrumPattern = {
 			id: crypto.randomUUID(),
-			name: handoff.name,
+			// The player confirmed this already; a name clash is not a reason to
+			// send them back, so it takes a number instead.
+			name: uniquePatternName(handoff.name, [...PRESET_STRUM_PATTERNS, ...customPatterns]),
 			beats: handoff.bars[0].beats,
 			...(handoff.bpm === null ? {} : { bpm: handoff.bpm }),
 		};
@@ -504,6 +511,34 @@ export default function StrumPage() {
 			setOpenProgressionId(progression.id);
 			localStorage.setItem("lastStrumPattern", pattern.id);
 		});
+	}
+
+	/** Rename one of the player's own patterns; a preset never reaches here. */
+	function applyRenameHandoff(handoff: RenameHandoff) {
+		const pattern = customPatterns.find((p) => p.id === handoff.patternId);
+		if (!pattern) {
+			toast(`"${handoff.patternName}" is no longer in your patterns — nothing was changed.`);
+			return;
+		}
+		const name = uniquePatternName(
+			handoff.newName,
+			[...PRESET_STRUM_PATTERNS, ...customPatterns].filter((p) => p.id !== pattern.id),
+		);
+		const renamed = { ...pattern, name };
+		handleEditCustomPattern(renamed);
+		if (selectedPattern?.id === pattern.id) setSelectedPattern(renamed);
+		toast(`Renamed to "${name}".`);
+	}
+
+	/** Delete one of the player's own patterns, progressions and all. */
+	function applyDeleteHandoff(handoff: DeleteHandoff) {
+		const pattern = customPatterns.find((p) => p.id === handoff.patternId);
+		if (!pattern) {
+			toast(`"${handoff.patternName}" is no longer in your patterns — nothing was deleted.`);
+			return;
+		}
+		handleRemovePattern(pattern.id);
+		toast(`Deleted "${pattern.name}".`);
 	}
 
 	// The assistant lives in the topbar, so a proposal is usually confirmed with

@@ -278,6 +278,41 @@ export default function AssistantPanel({
 		return () => clearInterval(timer);
 	}, [draft]);
 
+	// Up and Down walk back through what the player has sent, the way a shell
+	// does: a request worth repeating is usually one worth editing first. Only
+	// from an empty field — anything typed is a draft, and arrows in a draft are
+	// arrows. No wrapping: Down from empty goes nowhere, Up from the oldest stays.
+	const sent = messages.filter((m) => m.role === "user").map((m) => m.text);
+	const recallRef = useRef<number | null>(null);
+
+	function recall(direction: -1 | 1): boolean {
+		const browsing = recallRef.current;
+		if (browsing === null) {
+			if (draft !== "" || direction === 1 || sent.length === 0) return false;
+			return show(sent.length - 1);
+		}
+		const index = browsing + direction;
+		if (index < 0) return true;
+		if (index >= sent.length) {
+			// Walked past the newest: back to the empty field this started from.
+			recallRef.current = null;
+			setDraft("");
+			return true;
+		}
+		return show(index);
+	}
+
+	function show(index: number): boolean {
+		recallRef.current = index;
+		setDraft(sent[index]);
+		// The caret lands at the end, as it would after typing it.
+		requestAnimationFrame(() => {
+			const field = inputRef.current;
+			if (field) field.setSelectionRange(field.value.length, field.value.length);
+		});
+		return true;
+	}
+
 	// The field grows with what is in it and then stops, because a panel that is
 	// mostly composer is no longer a conversation.
 	useEffect(() => {
@@ -301,6 +336,7 @@ export default function AssistantPanel({
 
 	function submit(text: string) {
 		if (pending) return;
+		recallRef.current = null;
 		setDraft("");
 		void send(text);
 	}
@@ -386,8 +422,16 @@ export default function AssistantPanel({
 					ref={inputRef}
 					rows={1}
 					value={draft}
-					onChange={(e) => setDraft(e.target.value)}
+					onChange={(e) => {
+						// Typing turns a recalled message into a draft of its own.
+						recallRef.current = null;
+						setDraft(e.target.value);
+					}}
 					onKeyDown={(e) => {
+						if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.altKey && !e.metaKey) {
+							if (recall(e.key === "ArrowUp" ? -1 : 1)) e.preventDefault();
+							return;
+						}
 						if (e.key === "Tab" && !e.shiftKey && hint !== "") {
 							e.preventDefault();
 							// And kept from the popover: with the send button disabled on an
@@ -412,7 +456,8 @@ export default function AssistantPanel({
 					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 				/>
 				<span id={promptHintId} className="sr-only">
-					Press Tab to use the example shown, Shift and Enter for a new line.
+					Press Tab to use the example shown, Shift and Enter for a new line, Up and Down
+					for messages you have sent.
 				</span>
 				<button
 					type="submit"

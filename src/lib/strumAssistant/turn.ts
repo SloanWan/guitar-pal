@@ -12,6 +12,7 @@ import type {
 	AssistantTurn,
 } from "@/lib/strumAssistant/types";
 import type { NamedPattern } from "@/lib/lastPattern";
+import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
 
 /**
  * One turn of the conversation, decided.
@@ -36,13 +37,33 @@ export function editMessage(edit: EditIntentReading): string {
 			return edit.chordWords.length > 0
 				? `Add these chords to "${edit.pattern.name}"? Nothing is saved until you say so.`
 				: `Read that as an edit to "${edit.pattern.name}", but no chords came through — nothing in it reads as one. Want to write them yourself?`;
+		case "rename":
+			if (isPreset(edit.pattern.id)) {
+				return `"${edit.pattern.name}" is one of the shipped patterns, and those keep their names. Your own patterns can be renamed.`;
+			}
+			return edit.newName === ""
+				? `Rename "${edit.pattern.name}" — to what?`
+				: `Rename "${edit.pattern.name}" to "${edit.newName}"?`;
+		case "delete":
+			if (isPreset(edit.pattern.id)) {
+				return `"${edit.pattern.name}" is one of the shipped patterns and cannot be deleted. Its progressions can be.`;
+			}
+			return `Delete "${edit.pattern.name}"? Every progression written over it goes with it. This cannot be undone.`;
 		case "ambiguous":
 			return `${edit.matches.length} of your patterns are called "${edit.name}". Which one did you mean?`;
 		case "unknown-pattern":
+			if (edit.op !== "attach") {
+				return `You have no pattern called "${edit.name}". Check the name in the library.`;
+			}
 			return edit.chordWords.length > 0
-				? `Read the chords as ${edit.chordWords.join(" ")}, but you have no pattern called "${edit.name}". Want to pick the one you meant?`
+				? `Read the chords as ${edit.chordWords.join(" ")}, but you have no pattern called "${edit.name}". Make it, or pick the one you meant?`
 				: `Read that as an edit, and got neither half: "${edit.name}" is not one of your patterns, and no chords came through. Want to fill it in yourself?`;
 	}
+}
+
+/** The shipped patterns are base patterns: a progression can hang off one, nothing else changes. */
+export function isPreset(patternId: string): boolean {
+	return PRESET_STRUM_PATTERNS.some((p) => p.id === patternId);
 }
 
 export const DETERMINISTIC_REPLY = "Read straight from what you typed — no model needed.";

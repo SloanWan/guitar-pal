@@ -45,10 +45,13 @@ export function editMessage(edit: EditIntentReading): string {
 				? `Rename "${edit.pattern.name}" — to what?`
 				: `Rename "${edit.pattern.name}" to "${edit.newName}"?`;
 		case "delete":
-			if (isPreset(edit.pattern.id)) {
-				return `"${edit.pattern.name}" is one of the shipped patterns and cannot be deleted. Its progressions can be.`;
+			if (edit.aboutProgression) {
+				return `I can delete a pattern of yours whole, not one progression on it. To remove a single progression from "${edit.pattern.name}", use its progressions tab. Nothing was changed.`;
 			}
-			return `Delete "${edit.pattern.name}"? Every progression written over it goes with it. This cannot be undone.`;
+			if (isPreset(edit.pattern.id)) {
+				return `"${edit.pattern.name}" is one of the shipped patterns and cannot be deleted. Its progressions can be, from the progressions tab.`;
+			}
+			return `Delete "${edit.pattern.name}"? This deletes the pattern itself — every progression written over it goes with it, and it cannot be undone. To remove only a progression, use the progressions tab instead.`;
 		case "ambiguous":
 			return `${edit.matches.length} of your patterns are called "${edit.name}". Which one did you mean?`;
 		case "unknown-pattern":

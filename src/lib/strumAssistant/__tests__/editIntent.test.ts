@@ -153,7 +153,19 @@ describe("parseEditIntent", () => {
 					kind: "delete",
 					op: "delete",
 					pattern: { id: "p-belief", name: "belief" },
+					aboutProgression: false,
 				});
+			}
+		});
+
+		it("knows when the player means a progression, which it must not delete for", () => {
+			// Reading these as "delete belief" would take the whole pattern.
+			for (const line of [
+				"删掉 belief 里的 C G Am F",
+				"delete the C G Am F progression from belief",
+				"把 belief 的那个和弦进行删了",
+			]) {
+				expect(read(line), line).toMatchObject({ kind: "delete", aboutProgression: true });
 			}
 		});
 

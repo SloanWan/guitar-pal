@@ -189,8 +189,10 @@ export default function EditIntentCard({
 		);
 	}
 
-	// A preset can take chords and nothing else; the message has said so.
+	// A preset can take chords and nothing else; the message has said so. So has
+	// it for a progression the player wanted gone — that is not a delete here.
 	if (preset && op !== "attach") return null;
+	if (edit.kind === "delete" && edit.aboutProgression) return null;
 
 	if (edit.kind === "ambiguous" && target === null) {
 		return (

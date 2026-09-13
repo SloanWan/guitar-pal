@@ -48,6 +48,13 @@ export interface DeleteIntent {
 	kind: "delete";
 	op: "delete";
 	pattern: NamedPattern;
+	/**
+	 * The sentence named chords, or said "progression": the player wants one
+	 * progression gone, not the pattern. That is not something this does — a
+	 * delete here takes the whole pattern and everything on it — so it must be
+	 * refused rather than read as the bigger thing.
+	 */
+	aboutProgression: boolean;
 }
 
 export type EditIntentReading =
@@ -61,6 +68,9 @@ export type EditIntentReading =
 
 /** Verbs that take a pattern away. */
 const DELETE_VERBS = ["删除", "删掉", "删了", "去掉", "移除", "delete", "remove"];
+
+/** Words that say the player means a progression, not the pattern it is on. */
+const PROGRESSION_WORDS = /进行|和弦|progression|chords?/i;
 
 /** Verbs that give a pattern a new name. */
 const RENAME_VERBS = ["改名", "重命名", "改叫", "命名", "rename", "call"];
@@ -352,10 +362,12 @@ export function explainEditIntent(
 	const named = findName(input, patterns);
 	const rest = named ? blank(input, named) : input;
 
-	// Only an attach has chords in it: a rename's new name and a delete's
-	// nothing would otherwise be read as chord words. One chord is enough — the
-	// target is named, so this is not the guess the other reader has to avoid.
-	const found = op === "attach" ? chordRun(rest) : [];
+	// A rename's new name would be read as chord words, so only an attach — and
+	// a delete, where chords mean the player wants one progression gone, which
+	// is exactly what a delete must not be mistaken for — looks for them. One
+	// chord is enough: the target is named, so this is not the guess the other
+	// reader has to avoid.
+	const found = op === "rename" ? [] : chordRun(rest);
 	const run = tooWeakToAct(found) ? [] : found;
 	const chordWords = run.map((c) => c.text);
 	const guessed =
@@ -392,7 +404,15 @@ export function explainEditIntent(
 					reading: { kind: "rename", op, pattern, newName: newNameIn(rest) ?? "" },
 				};
 			case "delete":
-				return { ...seen, reading: { kind: "delete", op, pattern } };
+				return {
+					...seen,
+					reading: {
+						kind: "delete",
+						op,
+						pattern,
+						aboutProgression: chordWords.length > 0 || PROGRESSION_WORDS.test(rest),
+					},
+				};
 		}
 	}
 

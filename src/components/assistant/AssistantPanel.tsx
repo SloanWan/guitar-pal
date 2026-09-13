@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CornerDownLeft } from "lucide-react";
 import ProposalPreview from "./ProposalPreview";
+import EditIntentCard from "./EditIntentCard";
 import { prefersReducedMotion } from "@/lib/motion";
+import { greeting, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
+import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
 
 /**
@@ -16,6 +19,10 @@ import type { useAssistant } from "./useAssistant";
 const EXAMPLES = ["C Am F G", "D DU UD", "a slow folk strum in C"];
 
 const MAX_INPUT_CHARS = 600;
+/** Five lines of the field's own text, after which it scrolls instead of growing. */
+const MAX_INPUT_HEIGHT_PX = 104;
+/** Long enough to read one, short enough to see there are others. */
+const PROMPT_ROTATION_MS = 4500;
 
 /** How long a whole message takes to type itself out, and how often it ticks. */
 const REVEAL_MS = 900;
@@ -114,7 +121,7 @@ function Bubble({
 	const isUser = side === "user";
 	return (
 		<div
-			className={`relative max-w-[85%] px-2.5 py-1.5 text-sm leading-snug ${
+			className={`relative max-w-[85%] whitespace-pre-line px-2.5 py-1.5 text-sm leading-snug ${
 				isUser
 					? "bg-denim text-on-denim"
 					: `bg-denim-tint ${muted ? "text-ink-dim italic" : "text-ink"}`
@@ -127,10 +134,37 @@ function Bubble({
 }
 
 export default function AssistantPanel({ assistant }: { assistant: ReturnType<typeof useAssistant> }) {
-	const { messages, pending, send, markStreamed } = assistant;
+	const { messages, pending, send, markStreamed, patterns, index, sessionId } = assistant;
 	const [draft, setDraft] = useState("");
 	const scrollRef = useRef<HTMLDivElement | null>(null);
-	const inputRef = useRef<HTMLInputElement | null>(null);
+	const inputRef = useRef<HTMLTextAreaElement | null>(null);
+	const promptHintId = useId();
+	const { user } = useUser();
+
+	// Picked once per conversation rather than per render: a line that changed
+	// while being read would be a tic, not a greeting.
+	const name = user ? playerName(user.user_metadata, user.email) : null;
+	const hello = useMemo(() => greeting(name, sessionId), [name, sessionId]);
+
+	// The examples take turns while there is nothing typed. Tab takes the one on
+	// screen — only while the field is empty, so Tab still leaves a field with
+	// something in it, and Shift+Tab always walks back the way it should.
+	const [promptSlot, setPromptSlot] = useState(0);
+	const hint = draft === "" ? INPUT_PROMPTS[promptSlot % INPUT_PROMPTS.length] : "";
+	useEffect(() => {
+		if (draft !== "") return;
+		const timer = setInterval(() => setPromptSlot((slot) => slot + 1), PROMPT_ROTATION_MS);
+		return () => clearInterval(timer);
+	}, [draft]);
+
+	// The field grows with what is in it and then stops, because a panel that is
+	// mostly composer is no longer a conversation.
+	useEffect(() => {
+		const el = inputRef.current;
+		if (!el) return;
+		el.style.height = "auto";
+		el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_HEIGHT_PX)}px`;
+	}, [draft]);
 
 	/** Keep the newest turn on screen — called per message and per typed tick. */
 	const followTail = useCallback(() => {
@@ -161,6 +195,7 @@ export default function AssistantPanel({ assistant }: { assistant: ReturnType<ty
 			>
 				{messages.length === 0 ? (
 					<div className="space-y-3">
+						<p className="text-sm leading-snug text-ink">{hello}</p>
 						<p className="text-xs leading-relaxed text-ink-dim">
 							Type chords or a rhythm and it is read instantly, offline. Describe what you
 							want in words and it asks the model.
@@ -203,6 +238,15 @@ export default function AssistantPanel({ assistant }: { assistant: ReturnType<ty
 											<ProposalPreview proposal={message.proposal} />
 										</div>
 									)}
+									{message.edit && message.streamed === true && (
+										<div className="w-full">
+											<EditIntentCard
+												edit={message.edit}
+												patterns={patterns}
+												index={index}
+											/>
+										</div>
+									)}
 								</li>
 							),
 						)}
@@ -228,21 +272,44 @@ export default function AssistantPanel({ assistant }: { assistant: ReturnType<ty
 			</div>
 
 			<form
-				className="flex flex-none items-center gap-2 border-t border-line p-2"
+				className="flex flex-none items-end gap-2 border-t border-line p-2"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit(draft);
 				}}
 			>
-				<input
+				<textarea
 					ref={inputRef}
+					rows={1}
 					value={draft}
 					onChange={(e) => setDraft(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === "Tab" && !e.shiftKey && hint !== "") {
+							e.preventDefault();
+							// And kept from the popover: with the send button disabled on an
+							// empty field, this textarea is the last thing a focus trap can
+							// tab to, so the trap loops focus back to the top itself — a move
+							// preventDefault cannot undo, because it is not the browser's.
+							e.stopPropagation();
+							setDraft(hint);
+							return;
+						}
+						// Enter sends, as everywhere else a message is typed; the line
+						// break is the shifted one.
+						if (e.key === "Enter" && !e.shiftKey) {
+							e.preventDefault();
+							submit(draft);
+						}
+					}}
 					maxLength={MAX_INPUT_CHARS}
-					placeholder="Chords, a rhythm, or what you want"
+					placeholder={hint || "Chords, a rhythm, or what you want"}
 					aria-label="Ask the strum assistant"
-					className="h-(--h-control) min-w-0 flex-1 border border-line-strong bg-panel px-2 text-sm text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
+					aria-describedby={hint ? `${promptHintId}` : undefined}
+					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 				/>
+				<span id={promptHintId} className="sr-only">
+					Press Tab to use the example shown, Shift and Enter for a new line.
+				</span>
 				<button
 					type="submit"
 					disabled={pending || draft.trim() === ""}

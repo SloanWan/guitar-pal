@@ -9,6 +9,7 @@ import {
 } from "@/lib/strumBars";
 import { normalizeMeter, type Meter } from "@/lib/strumMeter";
 import { createClient } from "@/lib/supabase";
+import { getUser } from "@/lib/auth";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 
@@ -66,6 +67,40 @@ function sanitizeStoredPatterns(patterns: StrumPattern[]): StrumPattern[] {
 		meter: patternMeter(p),
 		createdAt: p.createdAt,
 	}));
+}
+
+/**
+ * The player's patterns, read once and owned by nobody.
+ *
+ * The assistant needs to know what "belief" refers to, and it lives in the
+ * topbar where this hook does not run. A read is all it needs: the merge, the
+ * writes and the invalidation stay here, with the page that owns them.
+ */
+export async function fetchCustomPatterns(user?: User | null): Promise<StrumPattern[]> {
+	// Resolved here when the caller has no user of its own. The panel opens from
+	// the topbar, often before any auth state has settled, and a list fetched as
+	// a guest and then cached is a library that stays empty for the session.
+	const account = user === undefined ? await getUser() : user;
+	if (!account) {
+		try {
+			const saved = localStorage.getItem("customStrumPatterns");
+			return saved ? sanitizeStoredPatterns(JSON.parse(saved) as StrumPattern[]) : [];
+		} catch {
+			return [];
+		}
+	}
+	try {
+		const supabase = createClient();
+		const { data } = await supabase
+			.from("user_strum_patterns")
+			.select("*")
+			.eq("user_id", account.id)
+			.order("created_at", { ascending: false });
+		return (data ?? []).map((row) => rowToPattern(row as StrumPatternRow));
+	} catch (e) {
+		console.error("[assistant] reading patterns:", e);
+		return [];
+	}
 }
 
 export function useStrumPatterns(user: User | null, loading: boolean) {

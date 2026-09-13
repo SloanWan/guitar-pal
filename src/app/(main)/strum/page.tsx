@@ -48,6 +48,7 @@ import {
 	HANDOFF_EVENT,
 	takeHandoff,
 	type AssistantHandoff,
+	type AttachHandoff,
 } from "@/lib/strumAssistant/handoff";
 import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
@@ -78,6 +79,7 @@ import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
+import { toast } from "sonner";
 import Fader from "@/components/ui/Fader";
 import Rocker from "@/components/ui/Rocker";
 
@@ -434,6 +436,8 @@ export default function StrumPage() {
 	 * hands the words over and this saves them exactly as the editor does.
 	 */
 	function applyHandoff(handoff: AssistantHandoff) {
+		if (handoff.kind === "attach") return applyAttachHandoff(handoff);
+
 		const pattern: StrumPattern = {
 			id: crypto.randomUUID(),
 			name: handoff.name,
@@ -461,6 +465,42 @@ export default function StrumPage() {
 				setTab("progressions");
 				setOpenProgressionId(progression.id);
 			}
+		});
+	}
+
+	/**
+	 * Put a progression the assistant assembled onto a pattern that already
+	 * exists, and open it.
+	 *
+	 * The bars arrive built — the panel laid the chords over this pattern's own
+	 * rhythm — so there is nothing to decide here beyond where the progression
+	 * sits in the list. A pattern deleted between the asking and the answering
+	 * is the one thing that can still go wrong, and it is said out loud rather
+	 * than dropped.
+	 */
+	function applyAttachHandoff(handoff: AttachHandoff) {
+		const pattern = [...PRESET_STRUM_PATTERNS, ...customPatterns].find(
+			(p) => p.id === handoff.patternId,
+		);
+		if (!pattern) {
+			toast(`"${handoff.patternName}" is no longer in your patterns — nothing was saved.`);
+			return;
+		}
+		const progression: ChordProgression = {
+			id: crypto.randomUUID(),
+			patternId: pattern.id,
+			bars: handoff.bars,
+			orderIndex: nextOrderIndex(progressionsForPattern(progressions, pattern.id)),
+		};
+		handleSaveProgression(progression);
+		queueMicrotask(() => {
+			stop();
+			setSelectedPattern(pattern);
+			setBpm(patternBpm(pattern));
+			setPatternRestored(true);
+			setTab("progressions");
+			setOpenProgressionId(progression.id);
+			localStorage.setItem("lastStrumPattern", pattern.id);
 		});
 	}
 

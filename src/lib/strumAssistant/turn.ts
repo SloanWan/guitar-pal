@@ -1,11 +1,17 @@
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { routeAssistantInput } from "@/lib/strumAssistant/router";
+import {
+	explainEditIntent,
+	type EditIntentExplanation,
+	type EditIntentReading,
+} from "@/lib/strumAssistant/editIntent";
 import { buildProposal } from "@/lib/strumAssistant/buildProposal";
 import type {
 	AssistantProposal,
 	AssistantReply,
 	AssistantTurn,
 } from "@/lib/strumAssistant/types";
+import type { NamedPattern } from "@/lib/lastPattern";
 
 /**
  * One turn of the conversation, decided.
@@ -17,6 +23,28 @@ import type {
  * it was never called.
  */
 
+/**
+ * What the assistant says about an edit it has read.
+ *
+ * Written here rather than asked for: the app knows exactly what it understood,
+ * so a sentence about it costs nothing, cannot drift from what will be saved,
+ * and comes out in one language every time.
+ */
+export function editMessage(edit: EditIntentReading): string {
+	switch (edit.kind) {
+		case "attach":
+			return edit.chordWords.length > 0
+				? `Add these chords to "${edit.pattern.name}"? Nothing is saved until you say so.`
+				: `Read that as an edit to "${edit.pattern.name}", but no chords came through — nothing in it reads as one. Want to write them yourself?`;
+		case "ambiguous":
+			return `${edit.matches.length} of your patterns are called "${edit.name}". Which one did you mean?`;
+		case "unknown-pattern":
+			return edit.chordWords.length > 0
+				? `Read the chords as ${edit.chordWords.join(" ")}, but you have no pattern called "${edit.name}". Want to pick the one you meant?`
+				: `Read that as an edit, and got neither half: "${edit.name}" is not one of your patterns, and no chords came through. Want to fill it in yourself?`;
+	}
+}
+
 export const DETERMINISTIC_REPLY = "Read straight from what you typed — no model needed.";
 export const PHRASE_REPLY = "Read from your words — no model needed. The rhythm is a suggestion.";
 const UNAVAILABLE = "The assistant is unavailable right now.";
@@ -24,11 +52,56 @@ const UNREACHABLE = "Something went wrong reaching the assistant.";
 
 export const ASSISTANT_ENDPOINT = "/api/strum-assistant";
 
+function modelIsOff(): boolean {
+	return (
+		process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_ASSISTANT_MODEL !== "1"
+	);
+}
+
+/**
+ * Why the rules did not read this sentence, in the order they gave up.
+ *
+ * Written for whoever is extending them, which in development is the only
+ * reader there is.
+ */
+export function explainMiss(text: string, seen: EditIntentExplanation): string {
+	const lines = [`No rule read "${text}". The model is off in development.`];
+
+	if (seen.patternCount === 0) {
+		lines.push("· patterns: none were loaded — nothing could have matched a name.");
+	} else if (seen.verb === null) {
+		lines.push(`· verb: none found, so this is not an edit (${seen.patternCount} patterns known).`);
+	} else {
+		lines.push(`· verb: "${seen.verb}"`);
+		lines.push(
+			seen.matchedName !== null
+				? `· pattern: "${seen.matchedName}"`
+				: seen.guessedName !== null
+					? `· pattern: "${seen.guessedName}" — no pattern of yours answers to it`
+					: `· pattern: no name matched. Yours: ${seen.patternNames.slice(0, 10).join(", ")}${
+						seen.patternNames.length > 10 ? ", …" : ""
+					}`,
+		);
+		lines.push(
+			seen.chordWords.length > 0
+				? `· chords: ${seen.chordWords.join(" ")}`
+				: "· chords: none — nothing in the sentence reads as one",
+		);
+	}
+
+	return lines.join("\n");
+}
+
 export interface AssistantTurnOutcome {
 	/** What the assistant says back. */
 	text: string;
 	/** Present when there is something concrete to preview. */
 	proposal?: AssistantProposal;
+	/**
+	 * Present when the sentence asked for a change to a pattern that already
+	 * exists. Nothing has been written: the player confirms or corrects it first.
+	 */
+	edit?: EditIntentReading;
 	/** Set when the turn failed; the panel renders it as an error, not as speech. */
 	failed?: boolean;
 	/** Whether the model was reached at all — the router's decision, observable. */
@@ -41,6 +114,8 @@ export interface ResolveTurnInput {
 	/** The conversation to send, including this turn, already trimmed. */
 	history: AssistantTurn[];
 	index: readonly ChordIndexEntry[];
+	/** The player's own patterns, for a sentence that names one. */
+	patterns?: readonly NamedPattern[];
 	fetchImpl?: typeof fetch;
 }
 
@@ -48,8 +123,16 @@ export async function resolveAssistantTurn({
 	text,
 	history,
 	index,
+	patterns = [],
 	fetchImpl = fetch,
 }: ResolveTurnInput): Promise<AssistantTurnOutcome> {
+	// An edit names its target, so it is read before anything else: "add C G to
+	// belief" is a chord line to every reader that comes after this one.
+	const seen = explainEditIntent(text, patterns);
+	if (seen.reading) {
+		return { text: editMessage(seen.reading), edit: seen.reading, usedModel: false };
+	}
+
 	const route = routeAssistantInput(text, index);
 
 	if (route.path !== "llm") {
@@ -67,6 +150,14 @@ export async function resolveAssistantTurn({
 		}
 		// Notation that parses in the router but not here would be a bug, not a
 		// user error; fall through to the model rather than dead-end.
+	}
+
+	// In development the model is not reached at all: a rule that missed is
+	// worth reading, and paying to have the sentence answered anyway hides the
+	// miss behind a good-looking reply. Set NEXT_PUBLIC_ASSISTANT_MODEL=1 to
+	// exercise the model path locally.
+	if (modelIsOff()) {
+		return { text: explainMiss(text, seen), failed: true, usedModel: false };
 	}
 
 	try {

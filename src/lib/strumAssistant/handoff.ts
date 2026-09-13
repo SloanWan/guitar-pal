@@ -24,20 +24,37 @@ const KEY = "guitarpal:strumAssistantHandoff";
  */
 export const HANDOFF_EVENT = "guitarpal:strum-handoff";
 
-export interface AssistantHandoff {
+/** A pattern the assistant made: saved as a pattern, plus a progression if it carries chords. */
+export interface PatternHandoff {
+	kind: "pattern";
 	name: string;
 	bars: Bar[];
 	bpm: number | null;
 	chords: ChordRef[];
 }
 
-export function stashHandoff(proposal: AssistantProposal): void {
-	const handoff: AssistantHandoff = {
+/** Chords for a pattern that already exists: one new progression on it. */
+export interface AttachHandoff {
+	kind: "attach";
+	patternId: string;
+	/** For the message shown if the pattern has since been deleted. */
+	patternName: string;
+	bars: Bar[];
+}
+
+export type AssistantHandoff = PatternHandoff | AttachHandoff;
+
+export function patternHandoff(proposal: AssistantProposal): PatternHandoff {
+	return {
+		kind: "pattern",
 		name: proposal.name,
 		bars: proposal.bars,
 		bpm: proposal.bpm,
 		chords: proposal.chords,
 	};
+}
+
+export function stashHandoff(handoff: AssistantHandoff): void {
 	try {
 		sessionStorage.setItem(KEY, JSON.stringify(handoff));
 	} catch {
@@ -75,11 +92,25 @@ export function takeHandoff(): AssistantHandoff | null {
 	// validateBars was written for exactly this: checking bars that came from
 	// outside the app before anything downstream trusts their shape.
 	if (!validateBars(value.bars).ok) return null;
+
+	if (value.kind === "attach") {
+		if (typeof value.patternId !== "string" || value.patternId === "") return null;
+		if (typeof value.patternName !== "string") return null;
+		return {
+			kind: "attach",
+			patternId: value.patternId,
+			patternName: value.patternName,
+			bars: value.bars as Bar[],
+		};
+	}
+
 	if (typeof value.name !== "string" || value.name.trim() === "") return null;
 	if (value.bpm !== null && typeof value.bpm !== "number") return null;
 	if (!Array.isArray(value.chords)) return null;
 
 	return {
+		// Anything stashed before the shape grew a kind is a pattern.
+		kind: "pattern",
 		name: value.name,
 		bars: value.bars as Bar[],
 		bpm: value.bpm as number | null,

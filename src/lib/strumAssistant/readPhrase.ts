@@ -76,11 +76,14 @@ export interface PhraseReading {
 }
 
 /** A latin word that could begin with a note name. Case matters: `a` is an article. */
-const CHORD_TOKEN = /[A-G][A-Za-z0-9#♯♭+°ø/]*/g;
+export const CHORD_TOKEN = /[A-G][A-Za-z0-9#♯♭+°ø/]*/g;
+/** The same, for a reader that can afford lowercase — see `ChordRunOptions.tokens`. */
+export const CHORD_TOKEN_ANY_CASE = /[A-Ga-g][A-Za-z0-9#♯♭+°ø/]*/g;
 /** What may sit between two chords of one run. */
 const RUN_GAP = /^[\s,，、\-–—→>|]*$/;
 
-interface Token {
+/** A word that reads as a chord, and where it sat in the input. */
+export interface ChordSpan {
 	text: string;
 	start: number;
 	end: number;
@@ -102,27 +105,49 @@ function isExactChord(token: string, index: readonly ChordIndexEntry[]): boolean
  * A stray chord is kept as unread rather than dropped: "folk in A" names a key
  * the lexicon cannot write a progression for, and a lone capital "A" may just
  * as well be the article. Either way the sentence is not understood whole.
+ *
+ * `accept` decides what counts as a chord, because the two readers want
+ * different answers: reading a request from scratch demands a word the library
+ * actually carries, while reading an edit to an existing pattern takes anything
+ * chord-shaped — an unmatched word there is shown to the player in red, not
+ * silently ignored.
  */
-function chordRun(
+export interface ChordRunOptions {
+	/**
+	 * How many chords make a run. Two, reading a sentence from scratch — a lone
+	 * capital letter is as likely to be a word. One, reading an edit, where the
+	 * player has already said which pattern they mean.
+	 */
+	minimum?: number;
+	/**
+	 * Which words are even looked at. Case is a filter in its own right: reading
+	 * a request from scratch, `a` is an article and `A` is a chord, and only an
+	 * instruction that already names its target can afford to read both.
+	 */
+	tokens?: RegExp;
+}
+
+export function findChordRun(
 	input: string,
-	index: readonly ChordIndexEntry[],
-): { run: Token[]; strays: Token[] } {
-	const chords: Token[] = [];
-	for (const match of input.matchAll(CHORD_TOKEN)) {
-		if (isExactChord(match[0], index)) {
+	accept: (token: string) => boolean,
+	{ minimum = 2, tokens = CHORD_TOKEN }: ChordRunOptions = {},
+): { run: ChordSpan[]; strays: ChordSpan[] } {
+	const chords: ChordSpan[] = [];
+	for (const match of input.matchAll(tokens)) {
+		if (accept(match[0])) {
 			chords.push({ text: match[0], start: match.index, end: match.index + match[0].length });
 		}
 	}
 
-	let best: Token[] = [];
-	let run: Token[] = [];
+	let best: ChordSpan[] = [];
+	let run: ChordSpan[] = [];
 	for (const token of chords) {
 		const previous = run[run.length - 1];
 		const joined = previous !== undefined && RUN_GAP.test(input.slice(previous.end, token.start));
 		run = joined ? [...run, token] : [token];
 		if (run.length > best.length) best = run;
 	}
-	if (best.length < 2) return { run: [], strays: chords };
+	if (best.length < minimum) return { run: [], strays: chords };
 	return { run: best, strays: chords.filter((c) => !best.includes(c)) };
 }
 
@@ -151,7 +176,7 @@ function roundToFive(bpm: number): number {
 }
 
 export function readPhrase(input: string, index: readonly ChordIndexEntry[]): PhraseReading {
-	const { run, strays } = chordRun(input, index);
+	const { run, strays } = findChordRun(input, (token) => isExactChord(token, index));
 
 	// Blank every chord out by position rather than by text, so a "c" inside
 	// "chords" is not mistaken for the chord that was read. Strays are blanked

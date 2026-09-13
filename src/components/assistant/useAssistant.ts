@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
+import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
+import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
 import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
 import type { AssistantProposal, AssistantTurn } from "@/lib/strumAssistant/types";
+import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
 
 /**
  * Drives one assistant conversation.
@@ -20,6 +23,8 @@ export interface AssistantMessage {
 	role: "user" | "assistant";
 	text: string;
 	proposal?: AssistantProposal;
+	/** An edit to an existing pattern, waiting on the player to confirm it. */
+	edit?: EditIntentReading;
 	/** Set when the turn failed; rendered as an error rather than as speech. */
 	failed?: boolean;
 	/**
@@ -94,7 +99,18 @@ export function useAssistant() {
 	useEffect(() => {
 		writeStored(messages);
 	}, [messages]);
+
 	const indexRef = useRef<Promise<readonly ChordIndexEntry[]> | null>(null);
+	const patternsRef = useRef<Promise<readonly StrumPattern[]> | null>(null);
+	/**
+	 * What "belief" can refer to: the shipped patterns plus the player's own.
+	 * Read, never written — the strum page owns every write to these. Presets are
+	 * in because a progression hangs off a pattern without changing it, and a
+	 * shipped rhythm is as good a thing to write chords over as any.
+	 */
+	const [patterns, setPatterns] = useState<readonly StrumPattern[]>(PRESET_STRUM_PATTERNS);
+	/** The chord index, once it has arrived, for the parts of the panel that cannot await. */
+	const [index, setIndex] = useState<readonly ChordIndexEntry[]>([]);
 
 	/** Fetched once per session, shared by every parse in this panel. */
 	const chordIndex = useCallback(async (): Promise<readonly ChordIndexEntry[]> => {
@@ -109,7 +125,25 @@ export function useAssistant() {
 		return indexRef.current;
 	}, []);
 
-	const reset = useCallback(() => setMessages([]), []);
+	/** Read on the first turn, not on mount: a panel nobody types in costs nothing. */
+	const loadPatterns = useCallback(async (): Promise<readonly StrumPattern[]> => {
+		if (patternsRef.current === null) {
+			patternsRef.current = fetchCustomPatterns().then((custom) => {
+				const all: readonly StrumPattern[] = [...PRESET_STRUM_PATTERNS, ...custom];
+				setPatterns(all);
+				return all;
+			});
+		}
+		return patternsRef.current;
+	}, []);
+
+	/** Changes when the conversation is cleared — what a fresh greeting keys on. */
+	const [sessionId, setSessionId] = useState(newId);
+
+	const reset = useCallback(() => {
+		setMessages([]);
+		setSessionId(newId());
+	}, []);
 
 	/** The panel has finished typing this message out. */
 	const markStreamed = useCallback((id: string) => {
@@ -128,12 +162,18 @@ export function useAssistant() {
 			setPending(true);
 
 			try {
-				const index = await chordIndex();
+				const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
+				setIndex(index);
 				const history: AssistantTurn[] = [...messages, userMessage]
 					.slice(-MAX_HISTORY_TURNS)
 					.map((m) => ({ role: m.role, content: m.text }));
 
-				const outcome = await resolveAssistantTurn({ text, history, index });
+				const outcome = await resolveAssistantTurn({
+					text,
+					history,
+					index,
+					patterns: patternList,
+				});
 				setMessages((prev) => [
 					...prev,
 					{
@@ -141,6 +181,7 @@ export function useAssistant() {
 						role: "assistant",
 						text: outcome.text,
 						proposal: outcome.proposal,
+						edit: outcome.edit,
 						...(outcome.failed ? { failed: true } : {}),
 					},
 				]);
@@ -148,8 +189,8 @@ export function useAssistant() {
 				setPending(false);
 			}
 		},
-		[chordIndex, messages, pending],
+		[chordIndex, loadPatterns, messages, pending],
 	);
 
-	return { messages, pending, send, reset, markStreamed };
+	return { messages, pending, send, reset, markStreamed, patterns, index, sessionId };
 }

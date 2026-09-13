@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
 	resolveAssistantTurn,
+	editMessage,
 	DETERMINISTIC_REPLY,
 	PHRASE_REPLY,
 	ASSISTANT_ENDPOINT,
@@ -181,5 +182,102 @@ describe("resolveAssistantTurn", () => {
 			expect(outcome.failed).toBe(true);
 			expect(outcome.proposal).toBeUndefined();
 		});
+	});
+});
+
+describe("an edit to a pattern that already exists", () => {
+	const PATTERNS = [
+		{ id: "p-belief", name: "belief" },
+		{ id: "preset-old", name: "old faithful" },
+	];
+
+	it("reads it without the model, and writes nothing", async () => {
+		const fetchImpl = forbiddenFetch();
+		const text = "添加一个 Em9-D-C#-F#m7 和弦进行去 belief 里";
+		const outcome = await resolveAssistantTurn({
+			text,
+			history: turns(text),
+			index: INDEX,
+			patterns: PATTERNS,
+			fetchImpl,
+		});
+
+		expect(fetchImpl).not.toHaveBeenCalled();
+		expect(outcome.usedModel).toBe(false);
+		expect(outcome.proposal).toBeUndefined();
+		expect(outcome.edit).toMatchObject({
+			kind: "attach",
+			pattern: { id: "p-belief" },
+			chordWords: ["Em9", "D", "C#", "F#m7"],
+		});
+		// The message is the app's own words, not the model's.
+		expect(outcome.text).toContain("belief");
+	});
+
+	it("is read before the chord line the same words would otherwise be", async () => {
+		const fetchImpl = forbiddenFetch();
+		const text = "add C G Am F to belief";
+		const outcome = await resolveAssistantTurn({
+			text,
+			history: turns(text),
+			index: INDEX,
+			patterns: PATTERNS,
+			fetchImpl,
+		});
+		expect(outcome.edit?.kind).toBe("attach");
+	});
+
+	it("says so when the pattern is not one the player has", async () => {
+		const fetchImpl = forbiddenFetch();
+		const text = "add C G Am F to wonderwall";
+		const outcome = await resolveAssistantTurn({
+			text,
+			history: turns(text),
+			index: INDEX,
+			patterns: PATTERNS,
+			fetchImpl,
+		});
+
+		expect(fetchImpl).not.toHaveBeenCalled();
+		expect(outcome.edit).toMatchObject({ kind: "unknown-pattern", name: "wonderwall" });
+		expect(outcome.text).toContain("wonderwall");
+	});
+
+	it("leaves every other sentence to the readers after it", async () => {
+		const fetchImpl = forbiddenFetch();
+		for (const text of ["C Am F G", "D DU UD", "给我一个 C-G-Am-F 的民谣扫弦，慢一点"]) {
+			const outcome = await resolveAssistantTurn({
+				text,
+				history: turns(text),
+				index: INDEX,
+				patterns: PATTERNS,
+				fetchImpl,
+			});
+			expect(outcome.edit, text).toBeUndefined();
+			expect(outcome.proposal, text).toBeDefined();
+		}
+	});
+
+	it("says what it understood in one language, whatever was typed", () => {
+		const zh = editMessage({
+			kind: "attach",
+			op: "attach",
+			pattern: { id: "p-belief", name: "belief" },
+			chordWords: ["C"],
+		});
+		expect(zh).toContain("belief");
+		expect(editMessage({ kind: "unknown-pattern", name: "summer", chordWords: [] })).toContain(
+			"summer",
+		);
+		expect(
+			editMessage({
+				kind: "ambiguous",
+				name: "belief",
+				matches: [
+					{ id: "a", name: "belief" },
+					{ id: "b", name: "Belief" },
+				],
+			}),
+		).toContain("2");
 	});
 });

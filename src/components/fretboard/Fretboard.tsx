@@ -142,6 +142,12 @@ export interface FretboardComponentProps extends FretboardProps {
 	 */
 	onSlotPress?: (slot: SlotNote) => void;
 	/**
+	 * Called with the slot under a mouse pointer as it moves, and with null
+	 * when it leaves the board — so another view (the piano) can follow the
+	 * hover. Fired from the same handlers as the rings: no re-render.
+	 */
+	onSlotHover?: (slot: SlotNote | null) => void;
+	/**
 	 * Whether slots may be pressed. Off: no pointer cursor, no pulse or pluck,
 	 * `onSlotPress` never fires. Hover rings are visual and stay on regardless.
 	 */
@@ -164,6 +170,7 @@ export default function Fretboard({
 	className,
 	label = "Guitar fretboard",
 	onSlotPress,
+	onSlotHover,
 	pressable = true,
 }: FretboardComponentProps) {
 	const neck = useRef<SVGSVGElement>(null);
@@ -184,10 +191,17 @@ export default function Fretboard({
 	}, []);
 
 	// ── Hover: ring the unisons and octaves, on the DOM, no re-render ──────────
-	const clearHover = useCallback(() => {
+	const clearRings = useCallback(() => {
 		for (const el of hovered.current) delete el.dataset.hover;
 		hovered.current = [];
 	}, []);
+
+	/** Leaving the board: rings off and the listener told, once. */
+	const clearHover = useCallback(() => {
+		if (hovered.current.length === 0) return;
+		clearRings();
+		onSlotHover?.(null);
+	}, [clearRings, onSlotHover]);
 
 	const handlePointerOver = useCallback(
 		(e: ReactPointerEvent<SVGSVGElement>) => {
@@ -196,7 +210,7 @@ export default function Fretboard({
 			if (!slot) return;
 			const board = neck.current;
 			if (!board) return;
-			clearHover();
+			clearRings(); // moving between slots: the listener gets the new slot, not a null first
 			const set = (el: SVGGElement | null, role: HoverRole) => {
 				if (!el) return;
 				el.dataset.hover = role;
@@ -206,8 +220,9 @@ export default function Fretboard({
 			const { unison, octave } = relatedSlots(slot.string, slot.fret, { fromFret, toFret });
 			for (const pos of unison) set(board.querySelector(`[data-slot="${slotKey(pos.string, pos.fret)}"]`), "unison");
 			for (const pos of octave) set(board.querySelector(`[data-slot="${slotKey(pos.string, pos.fret)}"]`), "octave");
+			onSlotHover?.({ string: slot.string, fret: slot.fret, midi: slotMidi(slot.string, slot.fret) });
 		},
-		[clearHover, fromFret, toFret],
+		[clearRings, onSlotHover, fromFret, toFret],
 	);
 
 	const handlePointerOut = useCallback(

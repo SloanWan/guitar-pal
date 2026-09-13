@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The scale + chord-tone view: controls above, one `<Fretboard/>` below.
+ * The scale + chord-tone view: controls above, one `<Fretboard/>` below. The
+ * root is picked on a 61-key piano (C2–C7) with the guitar's E2–D6 marked.
  *
  * The whole 22-fret neck is always rendered; where it does not fit it scrolls
  * sideways under the fixed string-name column. Any slot sounds its note when
@@ -10,30 +11,40 @@
  * the rocker turns sound off (and with it the press affordance) and is
  * remembered per device.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Volume2, X } from "lucide-react";
 
 import Fretboard from "@/components/fretboard/Fretboard";
+import PianoKeyboard, { type PianoKeyboardHandle } from "@/components/fretboard/PianoKeyboard";
 import { useNoteSound } from "@/components/fretboard/useNoteSound";
 import ChordPickerModal, { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import MusicalText from "@/components/MusicalText";
 import Rocker from "@/components/ui/Rocker";
-import { rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { FINGERPICK_MIDI_HIGH, FINGERPICK_MIDI_LOW } from "@/components/strum/useGuitarSampleLoader";
+import { GUITAR_OPEN_MIDI, rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
 import {
 	SCALE_LABELS,
 	SCALE_ROOTS,
 	SCALE_TYPES,
 	scaleMarks,
+	scaleRootPitchClass,
 	type LabelMode,
 	type ScaleType,
 } from "@/lib/fretboard/scales";
 import type { SlotNote } from "@/lib/fretboard/positions";
 import type { FretMark, FretWindow } from "@/lib/fretboard/types";
+import { PIANO_61, pitchClassOf, type PianoRange } from "@/lib/piano/keys";
 import { parseMusicalText } from "@/lib/musicalNotation";
 
 /** A 22-fret neck, the common electric; acoustics simply never use the top frets. */
 export const NECK: FretWindow = { fromFret: 0, toFret: 22 };
+
+/** What the neck can sound, E2 to D6: the band drawn under the piano keys. */
+export const GUITAR_RANGE: PianoRange = {
+	fromMidi: GUITAR_OPEN_MIDI[0],
+	toMidi: GUITAR_OPEN_MIDI[GUITAR_OPEN_MIDI.length - 1] + NECK.toFret,
+};
 
 /** Device-local memory of the SOUND rocker; absent means on. */
 export const SOUND_STORAGE_KEY = "fretboardSound";
@@ -123,10 +134,31 @@ export default function FretboardExplorer({
 		localStorage.setItem(SOUND_STORAGE_KEY, soundOn ? "on" : "off");
 	}, [soundOn, soundRestored]);
 
+	// The piano follows the neck: hover rings the key, a press strikes it.
+	// Both go through the keyboard's imperative handle, never through state.
+	const piano = useRef<PianoKeyboardHandle>(null);
+	const handleSlotHover = useCallback((slot: SlotNote | null) => piano.current?.highlight(slot?.midi ?? null), []);
+
 	// A press that cannot sound (samples still failing to load) is just silent.
 	const handleSlotPress = useCallback(
-		(slot: SlotNote) => void play(slot.midi).catch(() => undefined),
+		(slot: SlotNote) => {
+			piano.current?.strike(slot.midi);
+			void play(slot.midi).catch(() => undefined);
+		},
 		[play],
+	);
+
+	// A piano key picks the root by pitch class and, with sound on, plays the
+	// key itself. Keys above the pluck preset's range select silently.
+	const handleKeySelect = useCallback(
+		(midi: number) => {
+			setRoot(SCALE_ROOTS[pitchClassOf(midi)]);
+			if (soundOn && midi >= FINGERPICK_MIDI_LOW && midi <= FINGERPICK_MIDI_HIGH) {
+				piano.current?.strike(midi);
+				void play(midi).catch(() => undefined);
+			}
+		},
+		[soundOn, play],
 	);
 
 	const spec = useMemo(() => ({ root, scale }), [root, scale]);
@@ -145,25 +177,13 @@ export default function FretboardExplorer({
 			<div className="flex flex-col gap-3 border border-line bg-panel p-3">
 				<div className="flex flex-col gap-1.5">
 					<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Root</span>
-					<div role="radiogroup" aria-label="Scale root" className="grid grid-cols-6 gap-px border border-line-strong bg-line-strong sm:grid-cols-12">
-						{SCALE_ROOTS.map((r) => {
-							const on = r === root;
-							return (
-								<button
-									key={r}
-									type="button"
-									role="radio"
-									aria-checked={on}
-									onClick={() => setRoot(r)}
-									className={`py-2 font-mono text-[12px] transition-colors duration-(--dur-hover) ${
-										on ? "bg-denim text-on-denim" : "bg-surface text-ink hover:bg-denim-tint hover:text-denim-accent"
-									}`}
-								>
-									<MusicalText text={r} />
-								</button>
-							);
-						})}
-					</div>
+					<PianoKeyboard
+						ref={piano}
+						keys={PIANO_61}
+						selectedPitchClass={scaleRootPitchClass(root)}
+						range={GUITAR_RANGE}
+						onSelect={handleKeySelect}
+					/>
 				</div>
 
 				<div className="flex flex-wrap items-end gap-3">
@@ -236,6 +256,7 @@ export default function FretboardExplorer({
 					toFret={NECK.toFret}
 					label={`${root} ${SCALE_LABELS[scale]} on the fretboard`}
 					onSlotPress={handleSlotPress}
+					onSlotHover={handleSlotHover}
 					pressable={soundOn}
 				/>
 				<ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1" aria-hidden="true">

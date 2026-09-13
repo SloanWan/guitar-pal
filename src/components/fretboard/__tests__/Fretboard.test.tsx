@@ -157,6 +157,21 @@ describe("Fretboard — hover", () => {
 		board.unmount();
 	});
 
+	it("reports the hovered slot's pitch, and null once on leaving", () => {
+		const onSlotHover = vi.fn();
+		const board = mount({ onSlotHover });
+		pointer(board.hit(4, 5), "pointerover"); // E4 on the B string
+		expect(onSlotHover).toHaveBeenLastCalledWith({ string: 4, fret: 5, midi: 64 });
+		pointer(board.hit(4, 6), "pointerover");
+		expect(onSlotHover).toHaveBeenLastCalledWith({ string: 4, fret: 6, midi: 65 });
+		pointer(board.hit(4, 6), "pointerout", { relatedTarget: null });
+		expect(onSlotHover).toHaveBeenLastCalledWith(null);
+		expect(onSlotHover).toHaveBeenCalledTimes(3); // the move between slots did not clear first
+		pointer(board.hit(4, 6), "pointerout", { relatedTarget: null });
+		expect(onSlotHover).toHaveBeenCalledTimes(3); // nothing to clear, nothing reported
+		board.unmount();
+	});
+
 	it("moves the rings with the pointer and ignores touch", () => {
 		const board = mount({ pressable: false });
 		pointer(board.hit(5, 0), "pointerover");

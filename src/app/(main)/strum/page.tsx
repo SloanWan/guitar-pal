@@ -61,6 +61,7 @@ import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import {
 	CirclePlay,
 	CircleStop,
+	Loader2,
 	ChevronUp,
 	SquareMenu,
 	Metronome,
@@ -204,6 +205,7 @@ export default function StrumPage() {
 
 	const {
 		isPlaying,
+		isPreparing,
 		start,
 		stop,
 		currBeat,
@@ -1034,10 +1036,13 @@ export default function StrumPage() {
 									type="button"
 									onClick={handleHitPlayAndPause}
 									disabled={!selectedPattern}
-									aria-label={isPlaying ? "Stop" : "Play"}
+									aria-label={isPreparing ? "Loading samples" : isPlaying ? "Stop" : "Play"}
 									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
 								>
-									{isPlaying ? (
+									{/* The wait belongs on the key that was pressed. */}
+									{isPreparing ? (
+										<Loader2 size={20} strokeWidth={1.5} className="animate-spin" />
+									) : isPlaying ? (
 										<CircleStop size={20} strokeWidth={1.5} />
 									) : (
 										<CirclePlay size={20} strokeWidth={1.5} />
@@ -1619,7 +1624,9 @@ export default function StrumPage() {
 									: "opacity-30 pointer-events-none"
 							}`}
 						>
-							{isPlaying ? (
+							{isPreparing ? (
+								<Loader2 size={22} strokeWidth={1.5} className="animate-spin" />
+							) : isPlaying ? (
 								<CircleStop size={22} strokeWidth={1.5} />
 							) : (
 								<CirclePlay size={22} strokeWidth={1.5} />

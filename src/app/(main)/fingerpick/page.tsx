@@ -1391,10 +1391,13 @@ export default function FingerpickPage() {
 									type="button"
 									onClick={isLoaded ? handlePlayPause : undefined}
 									disabled={!isLoaded}
-									aria-label={isPlaying ? "Pause" : "Play"}
+									aria-label={!isLoaded ? "Loading samples" : isPlaying ? "Pause" : "Play"}
 									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
 								>
-									{isPlaying ? (
+									{/* Dimmed said "not yet" but not "nearly"; the spinner does. */}
+									{!isLoaded ? (
+										<Loader2 size={20} strokeWidth={1.5} className="animate-spin" />
+									) : isPlaying ? (
 										<CirclePause size={20} strokeWidth={1.5} />
 									) : (
 										<CirclePlay size={20} strokeWidth={1.5} />
@@ -1913,7 +1916,9 @@ export default function FingerpickPage() {
 								isLoaded ? "cursor-pointer" : "opacity-30 pointer-events-none"
 							}`}
 						>
-							{isPlaying ? (
+							{!isLoaded ? (
+								<Loader2 size={22} strokeWidth={1.5} className="animate-spin" />
+							) : isPlaying ? (
 								<CirclePause size={22} strokeWidth={1.5} />
 							) : (
 								<CirclePlay size={22} strokeWidth={1.5} />

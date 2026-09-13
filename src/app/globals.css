@@ -58,6 +58,12 @@
 	--denim-tint: rgba(74, 111, 165, 0.12); /* selected list-item bg; press-flash fill   */
 	--sidebar-hover-bg: rgba(74, 111, 165, 0.06); /* pattern-card hover fill — lighter than denim-tint so hover reads weaker than selected */
 	--denim-glow: rgba(110, 147, 201, 0.55); /* playhead + LED box-shadow color           */
+
+	/* Piano keyboard (fretboard root selector): the "white" keys are the raised
+	   surface, the black keys sink to the page bg. Both stay in the grey scale
+	   so denim is left for the selected root. */
+	--piano-white: #242424; /* a step above --bg-raise so the keys read against the panel */
+	--piano-black: #080808;
 	--readout-glow: rgba(110, 147, 201, 0.35); /* text-shadow color on large readouts       */
 	--measure-hl: rgba(74, 111, 165, 0.07); /* current-measure block in TAB viewer       */
 
@@ -128,6 +134,9 @@
 	--denim-tint: rgba(74, 111, 165, 0.1);
 	--sidebar-hover-bg: rgba(74, 111, 165, 0.05); /* pattern-card hover fill — lighter than denim-tint so hover reads weaker than selected */
 	--denim-glow: rgba(74, 111, 165, 0.45); /* glows read weaker on light — reduced */
+
+	--piano-white: #ffffff;
+	--piano-black: var(--ink);
 	--readout-glow: rgba(74, 111, 165, 0.25);
 	--measure-hl: rgba(74, 111, 165, 0.08);
 
@@ -450,6 +459,8 @@
 	--color-denim-accent: var(--denim-accent);
 	--color-denim-tint: var(--denim-tint);
 	--color-on-denim: var(--btn-on-denim);
+	--color-piano-white: var(--piano-white); /* bg-piano-white — keyboard white keys */
+	--color-piano-black: var(--piano-black); /* bg-piano-black — keyboard black keys */
 	--color-favorite-active: var(--favorite-active); /* text-favorite-active / fill-favorite-active — amber favourite star */
 
 	--radius-none: 0; /* and nothing else — do not define a radius scale */
@@ -618,6 +629,158 @@
 	.fb-label,
 	.fb-hover {
 		transition: none;
+	}
+}
+
+/* ----------------------------------------------------------------------------
+   PIANO KEYBOARD — src/components/fretboard/PianoKeyboard.tsx. The scale root
+   picked on a keyboard: white keys in a row, black keys over their gaps, the
+   selected pitch class in denim on every key that sounds it. Radius 0, like
+   everything else; a real key has square edges too.
+   ------------------------------------------------------------------------- */
+.pk-key {
+	position: absolute;
+	top: 0;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	padding-bottom: 4px;
+	border: 1px solid var(--line-strong);
+	cursor: pointer;
+	transition:
+		background-color var(--dur-hover),
+		color var(--dur-hover),
+		opacity var(--dur-hover);
+}
+.pk-white {
+	background: var(--piano-white);
+	color: var(--ink-faint);
+	z-index: 0;
+}
+.pk-black {
+	background: var(--piano-black);
+	border-color: var(--piano-black);
+	color: var(--btn-on-denim);
+	z-index: 1;
+}
+.pk-white:hover {
+	background: var(--denim-tint);
+	color: var(--denim-accent);
+}
+.pk-black:hover {
+	background: var(--ink-dim);
+}
+.pk-key:active {
+	transform: translateY(1px);
+}
+.pk-key[data-selected] {
+	background: var(--denim);
+	border-color: var(--denim);
+	color: var(--btn-on-denim);
+	font-weight: 700;
+}
+/* Outside the guitar's range: still a root, but faded, and selected only in outline. */
+.pk-key[data-outside] {
+	opacity: 0.45;
+}
+.pk-key[data-outside][data-selected] {
+	background: var(--piano-white);
+	color: var(--denim-accent);
+	box-shadow: inset 0 0 0 2px var(--denim);
+	opacity: 0.8;
+}
+.pk-black[data-outside][data-selected] {
+	background: var(--piano-black);
+}
+/* Following the fretboard: the key sounding the hovered slot, and its octaves. */
+.pk-key[data-hover="self"] {
+	box-shadow: inset 0 0 0 2px var(--denim-accent);
+	color: var(--denim-accent);
+}
+.pk-key[data-hover="octave"] {
+	box-shadow: inset 0 0 0 1px var(--denim-accent);
+}
+.pk-key[data-selected][data-hover] {
+	color: var(--btn-on-denim);
+}
+/* A key that just sounded dips and flashes, the way a played key does. */
+.pk-key[data-struck] {
+	animation: pk-strike 300ms ease-out;
+}
+@keyframes pk-strike {
+	0% {
+		transform: translateY(2px);
+		background-color: var(--denim-accent);
+		color: var(--btn-on-denim);
+	}
+	30% {
+		transform: translateY(2px);
+	}
+	100% {
+		transform: translateY(0);
+	}
+}
+.pk-key[data-selected][data-struck] {
+	animation-name: pk-strike-selected;
+}
+@keyframes pk-strike-selected {
+	0% {
+		transform: translateY(2px);
+		background-color: var(--btn-on-denim);
+		color: var(--denim);
+	}
+	30% {
+		transform: translateY(2px);
+	}
+	100% {
+		transform: translateY(0);
+	}
+}
+.pk-label {
+	font-size: 9px;
+	line-height: 1;
+	letter-spacing: 0.02em;
+	pointer-events: none;
+}
+.pk-band {
+	position: absolute;
+	height: 0;
+	border-top: 1px solid var(--denim);
+	margin-top: 7px;
+}
+.pk-band::before,
+.pk-band::after {
+	content: "";
+	position: absolute;
+	top: -4px;
+	width: 1px;
+	height: 7px;
+	background: var(--denim);
+}
+.pk-band::before {
+	left: 0;
+}
+.pk-band::after {
+	right: 0;
+}
+.pk-band-label {
+	position: absolute;
+	left: 50%;
+	top: 2px;
+	transform: translateX(-50%);
+	padding: 0 4px;
+	font-size: 8px;
+	line-height: 1;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	white-space: nowrap;
+	color: var(--denim-accent);
+	background: var(--bg-panel);
+}
+@media (prefers-reduced-motion: reduce) {
+	.pk-key {
+		transition: none;
+		animation: none;
 	}
 }
 

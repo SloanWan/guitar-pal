@@ -439,6 +439,9 @@ export default function FretboardExplorer({
 					ref={piano}
 					keys={PIANO_61}
 					selectedPitchClass={view ? view.sounding.rootPitchClass : rootPc}
+					// Dots for the scale, or for the chord: either way the keyboard
+					// uncovers one octave at a time under the pointer, so a hover
+					// answers "which notes here belong together".
 					tonePitchClasses={view ? view.sounding.pitchClasses : scalePcs}
 					range={GUITAR_RANGE}
 					onSelect={handleKeySelect}

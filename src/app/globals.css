@@ -64,9 +64,9 @@
 	   so denim is left for the selected root. */
 	--piano-white: #242424; /* a step above --bg-raise so the keys read against the panel */
 	--piano-black: #080808;
-	/* Keys in the current scale or chord. Heavier than --denim-tint: here a
-	   third of the keyboard carries it, and it has to read at a glance. */
-	--piano-tone: rgba(110, 147, 201, 0.3);
+	/* The dot on a key in the current scale or chord, where it sits on a black
+	   key and has to lift off it. */
+	--piano-tone: #8fb0e0;
 	--readout-glow: rgba(110, 147, 201, 0.35); /* text-shadow color on large readouts       */
 	--measure-hl: rgba(74, 111, 165, 0.07); /* current-measure block in TAB viewer       */
 
@@ -140,7 +140,7 @@
 
 	--piano-white: #ffffff;
 	--piano-black: var(--ink);
-	--piano-tone: rgba(74, 111, 165, 0.22);
+	--piano-tone: #a8c4ea;
 	--readout-glow: rgba(74, 111, 165, 0.25);
 	--measure-hl: rgba(74, 111, 165, 0.08);
 
@@ -465,7 +465,7 @@
 	--color-on-denim: var(--btn-on-denim);
 	--color-piano-white: var(--piano-white); /* bg-piano-white — keyboard white keys */
 	--color-piano-black: var(--piano-black); /* bg-piano-black — keyboard black keys */
-	--color-piano-tone: var(--piano-tone); /* bg-piano-tone — keys in the scale or chord */
+	--color-piano-tone: var(--piano-tone); /* bg-piano-tone — the scale/chord dot on a black key */
 	--color-favorite-active: var(--favorite-active); /* text-favorite-active / fill-favorite-active — amber favourite star */
 
 	--radius-none: 0; /* and nothing else — do not define a radius scale */
@@ -677,8 +677,10 @@
 	position: absolute;
 	top: 0;
 	display: flex;
-	align-items: flex-end;
-	justify-content: center;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 3px;
 	padding-bottom: 4px;
 	border: 1px solid var(--line-strong);
 	cursor: pointer;
@@ -731,13 +733,34 @@
 .pk-black[data-outside][data-selected] {
 	background: var(--piano-black);
 }
-/* The other members of the current chord: tinted, the root keeps the selected fill. */
-.pk-white[data-tone] {
-	background: var(--piano-tone);
-	color: var(--denim-accent);
+/* A key in the scale or chord: a dot on a key that stays a key. The root is
+   the only one filled, because it is the only one the player chose. The dots
+   wait until the pointer is over their octave, so a set is uncovered a
+   register at a time instead of covering the whole board. */
+.pk-dot {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%; /* round like the LED, and for the same reason */
+	background: var(--denim);
+	pointer-events: none;
+	transition: opacity var(--dur-hover) ease-out;
 }
-.pk-black[data-tone] {
-	box-shadow: inset 0 0 0 2.5px var(--denim-accent);
+.pk-dot {
+	opacity: 0;
+}
+.pk-key[data-scale] .pk-dot {
+	opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+	.pk-dot {
+		transition: none;
+	}
+}
+.pk-black .pk-dot {
+	background: var(--piano-tone);
+}
+.pk-white[data-tone] {
+	color: var(--denim-accent);
 }
 /* Following the fretboard: the key sounding the hovered slot, and its octaves. */
 .pk-key[data-hover="self"] {

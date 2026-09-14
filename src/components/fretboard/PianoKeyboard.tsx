@@ -15,6 +15,16 @@
  * outside it are dimmed but still select a root, since a root is a pitch
  * class and every octave of it is the same choice.
  *
+ * A key in the current scale or chord carries a dot, not a fill: filling them
+ * turns the keyboard into a blue block instead of a piano with marks on it.
+ * Only the root, the one key that is *chosen*, is filled.
+ *
+ * A scale or chord is a set of pitch classes, so its dots repeat in every
+ * octave — two dozen of them on a 61-key board, which reads as a rash rather
+ * than a scale. The dots are therefore held back until the pointer is over an
+ * octave, and only that octave's are shown: the keyboard stays a keyboard,
+ * and one hover answers "which notes here belong together".
+ *
  * The keyboard can also follow the fretboard: `highlight(midi)` rings the key
  * that sounds exactly that pitch (and, fainter, its other octaves) and
  * `strike(midi)` flashes a key that just sounded. Both are imperative, on the
@@ -26,6 +36,7 @@ import {
 	useImperativeHandle,
 	useRef,
 	type KeyboardEvent as ReactKeyboardEvent,
+	type PointerEvent as ReactPointerEvent,
 	type Ref,
 } from "react";
 
@@ -66,7 +77,10 @@ export interface PianoKeyboardProps {
 	labelFor?: (key: PianoKey, selected: boolean) => string;
 	/** Keys to grey out (still pressable), beyond those outside `range`. */
 	dimmed?: (key: PianoKey) => boolean;
-	/** Pitch classes to tint as members of the current chord (the root stays `selected`). */
+	/**
+	 * Pitch classes to dot as members of the current scale or chord (the root
+	 * stays `selected`). The dots appear one octave at a time, under the pointer.
+	 */
 	tonePitchClasses?: readonly number[];
 	ariaLabel?: string;
 	className?: string;
@@ -94,6 +108,8 @@ export default function PianoKeyboard({
 	const whites = keys.filter((k) => !k.isBlack).length;
 	const whiteW = `calc(100% / ${whites})`;
 	const inRange = (midi: number) => !range || (midi >= range.fromMidi && midi <= range.toMidi);
+	/** Keys whose dot is currently uncovered, so leaving clears exactly those. */
+	const revealed = useRef<HTMLElement[]>([]);
 	const isSelected = (key: PianoKey) => key.pitchClass === selectedPitchClass;
 	/** The one key tab lands on: the lowest selected key inside the range. */
 	const focusMidi =
@@ -108,6 +124,35 @@ export default function PianoKeyboard({
 		const left = key.offsetLeft + key.offsetWidth / 2 - el.clientWidth / 2;
 		el.scrollTo({ left: Math.max(0, left), behavior: prefersReducedMotion() ? "auto" : "smooth" });
 	}, [focusMidi]);
+
+	/** Uncover the scale dots of one octave, or of none. Straight on the DOM. */
+	const revealOctave = useCallback((octave: number | null) => {
+		for (const el of revealed.current) delete el.dataset.scale;
+		revealed.current = [];
+		if (octave === null || !board.current) return;
+		for (const el of board.current.querySelectorAll<HTMLElement>("[data-octave][data-tone]")) {
+			if (Number(el.dataset.octave) !== octave) continue;
+			el.dataset.scale = "";
+			revealed.current.push(el);
+		}
+	}, []);
+
+	const handleBoardOver = useCallback(
+		(e: ReactPointerEvent<HTMLDivElement>) => {
+			const key = (e.target as HTMLElement).closest<HTMLElement>("[data-octave]");
+			revealOctave(key ? Number(key.dataset.octave) : null);
+		},
+		[revealOctave],
+	);
+
+	/** Leaving the keys entirely covers the dots again; moving between them does not. */
+	const handleBoardOut = useCallback(
+		(e: ReactPointerEvent<HTMLDivElement>) => {
+			const next = e.relatedTarget instanceof Element ? e.relatedTarget.closest("[data-octave]") : null;
+			if (!next) revealOctave(null);
+		},
+		[revealOctave],
+	);
 
 	// Constraint 4: no timer may outlive the keyboard.
 	useEffect(() => {
@@ -194,6 +239,7 @@ export default function PianoKeyboard({
 				aria-label={keyLabel(key.midi)}
 				tabIndex={key.midi === focusMidi ? 0 : -1}
 				data-midi={key.midi}
+				data-octave={key.octave}
 				data-black={key.isBlack || undefined}
 				data-selected={selected || undefined}
 				data-outside={outside || undefined}
@@ -212,6 +258,9 @@ export default function PianoKeyboard({
 						: { left: `calc(${key.whiteIndex} * ${whiteW})`, width: whiteW, height: WHITE_H }
 				}
 			>
+				{!selected && tonePitchClasses?.includes(key.pitchClass) && (
+					<span className="pk-dot" aria-hidden="true" />
+				)}
 				{label && (
 					<span className="pk-label font-mono">
 						<MusicalText text={label} />
@@ -236,6 +285,8 @@ export default function PianoKeyboard({
 					role="radiogroup"
 					aria-label={ariaLabel}
 					className="pk-board relative"
+					onPointerOver={handleBoardOver}
+					onPointerOut={handleBoardOut}
 					style={{
 						width: `max(100cqw, ${whites * MIN_WHITE_W}px)`,
 						height: WHITE_H + (bandKeys ? BAND_H : 0),

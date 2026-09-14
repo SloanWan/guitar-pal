@@ -168,6 +168,51 @@ describe("PianoKeyboard", () => {
 		kb.unmount();
 	});
 
+	it("uncovers one octave of scale dots under the pointer, and clears on leaving", () => {
+		const kb = mount({ selectedPitchClass: 9, tonePitchClasses: [9, 0, 2, 4, 7] }); // A minor pentatonic
+		const dotted = () =>
+			[...kb.host.querySelectorAll("[data-scale]")].map((el) => Number((el as HTMLElement).dataset.midi));
+		// Every scale key carries a dot in the DOM; none is uncovered yet.
+		expect(kb.host.querySelectorAll(".pk-dot").length).toBe(21);
+		expect(dotted()).toEqual([]);
+
+		const over = (el: Element) =>
+			act(() => {
+				el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerId: 1 }));
+			});
+		over(kb.key(60)); // C4
+		expect(dotted()).toEqual([60, 62, 64, 67]); // C D E G of that octave, not the A
+		over(kb.key(48)); // C3: the previous octave goes dark
+		expect(dotted()).toEqual([48, 50, 52, 55]);
+
+		// Moving between keys of one octave keeps them uncovered.
+		over(kb.key(50));
+		expect(dotted()).toEqual([48, 50, 52, 55]);
+		// Leaving the keys entirely covers them again.
+		act(() => {
+			kb.key(50).dispatchEvent(
+				new PointerEvent("pointerout", { bubbles: true, pointerId: 1, relatedTarget: null }),
+			);
+		});
+		expect(dotted()).toEqual([]);
+		kb.unmount();
+	});
+
+	it("uncovers a chord's other notes in the hovered octave too", () => {
+		const kb = mount({ selectedPitchClass: 4, tonePitchClasses: [4, 7, 11] }); // Em
+		expect(kb.host.querySelectorAll(".pk-dot").length).toBe(10); // G and B in five octaves
+		expect(kb.host.querySelectorAll("[data-scale]").length).toBe(0);
+		act(() => {
+			kb.key(64).dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerId: 1 }));
+		});
+		// The root is filled, its third and fifth in that octave are dotted.
+		expect([...kb.host.querySelectorAll("[data-scale]")].map((e) => (e as HTMLElement).dataset.midi)).toEqual([
+			"67",
+			"71",
+		]);
+		kb.unmount();
+	});
+
 	it("tints the other members of a chord, leaving the root selected", () => {
 		const kb = mount({ selectedPitchClass: 0, tonePitchClasses: [0, 4, 7] });
 		expect(kb.key(60).hasAttribute("data-tone")).toBe(false); // the root: selected instead

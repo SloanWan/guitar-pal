@@ -1487,12 +1487,13 @@ export default function FingerpickPage() {
 									backgroundColor: "var(--measure-hl)",
 								}}
 							/>
-							{/* Playhead line — sits BEFORE the SVG rows in DOM order so it renders
-						    behind VexFlow note numbers; translateX updated every RAF frame. */}
+							{/* Playhead line — stacked above the rows (z-10, after the highlight
+						    in DOM order so it paints over it), so it crosses the fret numbers
+						    rather than being cut by them; translateX updated every RAF frame. */}
 							<div
 								ref={cursorRef}
 								aria-hidden="true"
-								className="absolute pointer-events-none"
+								className="absolute z-10 pointer-events-none"
 								style={{
 									display: "none",
 									width: 2,

@@ -17,10 +17,10 @@ import PatternBarBody from "@/components/strum/PatternBarBody";
 import type { ConfirmedChord } from "@/components/strum/ChordPickerModal";
 
 const OLD_FAITHFUL: Bar["beats"] = [
-	["D", "UG"],
+	["D", ""],
 	["D", "U"],
-	["DG", "U"],
-	["D", "UG"],
+	["", "U"],
+	["D", ""],
 ];
 
 const PROGRESSIONS: Record<string, Bar[]> = {

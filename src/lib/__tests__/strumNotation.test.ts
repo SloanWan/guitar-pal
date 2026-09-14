@@ -7,14 +7,10 @@ describe("beatNotation", () => {
 		expect(beatNotation(["D", "U"])).toBe("DU");
 	});
 
-	it("blanks ghost cells — they hold their column but are not struck", () => {
-		expect(beatNotation(["D", "UG"])).toBe("D ");
-		expect(beatNotation(["DG", "U"])).toBe(" U");
-		expect(beatNotation(["D", "G", "U", "G"])).toBe("D U ");
-	});
-
-	it("writes triplet cells as ordinary strokes", () => {
-		expect(beatNotation(["D3", "U3", "D3"])).toBe("DUD");
+	it("blanks an unstruck cell — it holds its column but sounds nothing", () => {
+		expect(beatNotation(["D", ""])).toBe("D ");
+		expect(beatNotation(["", "U"])).toBe(" U");
+		expect(beatNotation(["D", "", "U", ""])).toBe("D U ");
 	});
 
 	it("keeps muted strokes", () => {
@@ -23,7 +19,7 @@ describe("beatNotation", () => {
 
 	it("blanks a beat with nothing played", () => {
 		expect(beatNotation(["", ""])).toBe("  ");
-		expect(beatNotation(["DG", "UG"])).toBe("  ");
+		expect(beatNotation(["", "", "", ""])).toBe("    ");
 	});
 });
 
@@ -31,10 +27,10 @@ describe("patternNotation", () => {
 	it("writes the bar cell by cell, without beat separators", () => {
 		expect(
 			patternNotation([
-				["D", "UG"],
+				["D", ""],
 				["D", "U"],
-				["DG", "U"],
-				["D", "UG"],
+				["", "U"],
+				["D", ""],
 			]),
 		).toBe("D DU UD");
 	});
@@ -42,28 +38,28 @@ describe("patternNotation", () => {
 	it("drops trailing blanks but keeps a leading rest", () => {
 		expect(
 			patternNotation([
-				["D", "UG"],
+				["D", ""],
 				["", ""],
 				["", ""],
 				["", ""],
 			]),
 		).toBe("D");
-		expect(patternNotation([["DG", "U"], ["", ""]])).toBe(" U");
+		expect(patternNotation([["", "U"], ["", ""]])).toBe(" U");
 	});
 
 	it("keeps one column per cell, so a silent beat holds its width", () => {
 		expect(
 			patternNotation([
-				["D", "UG"],
+				["D", ""],
 				["", ""],
-				["D", "UG"],
+				["D", ""],
 			]),
 		).toBe("D   D");
 		expect(
 			patternNotation([
-				["D", "UG", "DG", "U"],
+				["D", "", "", "U"],
 				["", "", "", ""],
-				["D", "UG"],
+				["D", ""],
 			]),
 		).toBe("D  U    D");
 	});

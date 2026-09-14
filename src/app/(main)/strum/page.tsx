@@ -20,6 +20,7 @@ import {
 	bpmRangeForMeter,
 	clampBpmToMeter,
 	normalizeBpm,
+	uniquePatternName,
 } from "@/lib/strumBars";
 import { DEFAULT_METER, isCompound } from "@/lib/strumMeter";
 import { TICK_LEVELS, tickLevelLabel, type TickLevel } from "@/lib/strumMetronome";
@@ -42,8 +43,17 @@ import {
 	dismissPatternNotice,
 	markPatternSynced,
 	type ChordToken,
+	normalizeCapo,
 } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
+import {
+	HANDOFF_EVENT,
+	takeHandoff,
+	type AssistantHandoff,
+	type AttachHandoff,
+	type DeleteHandoff,
+	type RenameHandoff,
+} from "@/lib/strumAssistant/handoff";
 import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
@@ -55,6 +65,7 @@ import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import {
 	CirclePlay,
 	CircleStop,
+	Loader2,
 	ChevronUp,
 	SquareMenu,
 	Metronome,
@@ -73,6 +84,7 @@ import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
+import { toast } from "sonner";
 import Fader from "@/components/ui/Fader";
 import Rocker from "@/components/ui/Rocker";
 
@@ -197,6 +209,7 @@ export default function StrumPage() {
 
 	const {
 		isPlaying,
+		isPreparing,
 		start,
 		stop,
 		currBeat,
@@ -401,15 +414,152 @@ export default function StrumPage() {
 	// focused, where the browser would otherwise re-fire that button. It stands
 	// down inside a form field and behind an open dialog, where the keystroke
 	// belongs to what is on top (see shouldRunPageShortcut).
+	//
+	// Held through a ref, and subscribed exactly once. A dependency list would
+	// have to name every value the toggle reads — the pattern arrives from the
+	// database a render after the listener goes up, and a listener still holding
+	// the null it was mounted with is a space bar that does nothing until
+	// something else happens to re-subscribe it.
+	const playPauseRef = useRef(handleHitPlayAndPause);
+	useEffect(() => {
+		playPauseRef.current = handleHitPlayAndPause;
+	});
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
 			e.preventDefault();
-			handleHitPlayAndPause();
+			playPauseRef.current();
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isPlaying]);
+	}, []);
+
+	/**
+	 * Save a proposal the assistant handed over, and open it.
+	 *
+	 * The assistant owns no write path of its own: a pattern and a progression go
+	 * to two different tables through the hooks this page already uses, so it
+	 * hands the words over and this saves them exactly as the editor does.
+	 */
+	function applyHandoff(handoff: AssistantHandoff) {
+		if (handoff.kind === "attach") return applyAttachHandoff(handoff);
+		if (handoff.kind === "rename") return applyRenameHandoff(handoff);
+		if (handoff.kind === "delete") return applyDeleteHandoff(handoff);
+
+		const pattern: StrumPattern = {
+			id: crypto.randomUUID(),
+			// The player confirmed this already; a name clash is not a reason to
+			// send them back, so it takes a number instead.
+			name: uniquePatternName(handoff.name, [...PRESET_STRUM_PATTERNS, ...customPatterns]),
+			beats: handoff.bars[0].beats,
+			...(handoff.bpm === null ? {} : { bpm: handoff.bpm }),
+		};
+		handleSaveCustomPattern(pattern);
+		// Chords live in the progression table, never on the pattern row, so a
+		// proposal carrying chords becomes a pattern plus one progression over it.
+		const progression =
+			handoff.chords.length > 0
+				? {
+						id: crypto.randomUUID(),
+						patternId: pattern.id,
+						bars: handoff.bars,
+						orderIndex: nextOrderIndex([]),
+						...(handoff.capo === null ? {} : { capo: normalizeCapo(handoff.capo) }),
+					}
+				: null;
+		if (progression) handleSaveProgression(progression);
+		queueMicrotask(() => {
+			setSelectedPattern(pattern);
+			setBpm(patternBpm(pattern));
+			setPatternRestored(true);
+			if (progression) {
+				setTab("progressions");
+				setOpenProgressionId(progression.id);
+			}
+		});
+	}
+
+	/**
+	 * Put a progression the assistant assembled onto a pattern that already
+	 * exists, and open it.
+	 *
+	 * The bars arrive built — the panel laid the chords over this pattern's own
+	 * rhythm — so there is nothing to decide here beyond where the progression
+	 * sits in the list. A pattern deleted between the asking and the answering
+	 * is the one thing that can still go wrong, and it is said out loud rather
+	 * than dropped.
+	 */
+	function applyAttachHandoff(handoff: AttachHandoff) {
+		const pattern = [...PRESET_STRUM_PATTERNS, ...customPatterns].find(
+			(p) => p.id === handoff.patternId,
+		);
+		if (!pattern) {
+			toast(`"${handoff.patternName}" is no longer in your patterns — nothing was saved.`);
+			return;
+		}
+		const progression: ChordProgression = {
+			id: crypto.randomUUID(),
+			patternId: pattern.id,
+			bars: handoff.bars,
+			orderIndex: nextOrderIndex(progressionsForPattern(progressions, pattern.id)),
+			...(handoff.capo === null ? {} : { capo: normalizeCapo(handoff.capo) }),
+		};
+		handleSaveProgression(progression);
+		queueMicrotask(() => {
+			stop();
+			setSelectedPattern(pattern);
+			setBpm(patternBpm(pattern));
+			setPatternRestored(true);
+			setTab("progressions");
+			setOpenProgressionId(progression.id);
+			localStorage.setItem("lastStrumPattern", pattern.id);
+		});
+	}
+
+	/** Rename one of the player's own patterns; a preset never reaches here. */
+	function applyRenameHandoff(handoff: RenameHandoff) {
+		const pattern = customPatterns.find((p) => p.id === handoff.patternId);
+		if (!pattern) {
+			toast(`"${handoff.patternName}" is no longer in your patterns — nothing was changed.`);
+			return;
+		}
+		const name = uniquePatternName(
+			handoff.newName,
+			[...PRESET_STRUM_PATTERNS, ...customPatterns].filter((p) => p.id !== pattern.id),
+		);
+		const renamed = { ...pattern, name };
+		handleEditCustomPattern(renamed);
+		if (selectedPattern?.id === pattern.id) setSelectedPattern(renamed);
+		toast(`Renamed to "${name}".`);
+	}
+
+	/** Delete one of the player's own patterns, progressions and all. */
+	function applyDeleteHandoff(handoff: DeleteHandoff) {
+		const pattern = customPatterns.find((p) => p.id === handoff.patternId);
+		if (!pattern) {
+			toast(`"${handoff.patternName}" is no longer in your patterns — nothing was deleted.`);
+			return;
+		}
+		handleRemovePattern(pattern.id);
+		toast(`Deleted "${pattern.name}".`);
+	}
+
+	// The assistant lives in the topbar, so a proposal is usually confirmed with
+	// this page already on screen — where the mount-time read above has long
+	// since run and navigating to /strum again does nothing. Same ref idiom as
+	// the transport key: subscribe once, always call the current closure.
+	const applyHandoffRef = useRef(applyHandoff);
+	useEffect(() => {
+		applyHandoffRef.current = applyHandoff;
+	});
+	useEffect(() => {
+		function handleHandoff() {
+			const handoff = takeHandoff();
+			if (handoff) applyHandoffRef.current(handoff);
+		}
+		window.addEventListener(HANDOFF_EVENT, handleHandoff);
+		return () => window.removeEventListener(HANDOFF_EVENT, handleHandoff);
+	}, []);
 
 	// Restore the initial pattern once, after custom patterns finish loading (they
 	// arrive async). A `?pattern=<id>` deep link (e.g. from /home) takes priority
@@ -419,6 +569,17 @@ export default function StrumPage() {
 	useEffect(() => {
 		if (patternRestoredRef.current || patternsLoading) return;
 		patternRestoredRef.current = true;
+
+		// A proposal confirmed in the assistant wins over any deep link or
+		// last-viewed id — the person asked for it a navigation ago. Handled here
+		// rather than in an effect of its own so exactly one place decides which
+		// pattern opens, and the two cannot race.
+		const handoff = takeHandoff();
+		if (handoff) {
+			applyHandoff(handoff);
+			return;
+		}
+
 		const queryId =
 			typeof window !== "undefined"
 				? new URLSearchParams(window.location.search).get("pattern")
@@ -913,10 +1074,13 @@ export default function StrumPage() {
 									type="button"
 									onClick={handleHitPlayAndPause}
 									disabled={!selectedPattern}
-									aria-label={isPlaying ? "Stop" : "Play"}
+									aria-label={isPreparing ? "Loading samples" : isPlaying ? "Stop" : "Play"}
 									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
 								>
-									{isPlaying ? (
+									{/* The wait belongs on the key that was pressed. */}
+									{isPreparing ? (
+										<Loader2 size={20} strokeWidth={1.5} className="animate-spin" />
+									) : isPlaying ? (
 										<CircleStop size={20} strokeWidth={1.5} />
 									) : (
 										<CirclePlay size={20} strokeWidth={1.5} />
@@ -1498,7 +1662,9 @@ export default function StrumPage() {
 									: "opacity-30 pointer-events-none"
 							}`}
 						>
-							{isPlaying ? (
+							{isPreparing ? (
+								<Loader2 size={22} strokeWidth={1.5} className="animate-spin" />
+							) : isPlaying ? (
 								<CircleStop size={22} strokeWidth={1.5} />
 							) : (
 								<CirclePlay size={22} strokeWidth={1.5} />
@@ -1524,9 +1690,14 @@ export default function StrumPage() {
 						}
 					} else {
 						handleSaveCustomPattern(pattern);
+						// Open what was just made, exactly as picking it from the
+						// library would: saving a pattern and then having to go and find
+						// it is a step nobody wants.
+						handleSelectPattern(pattern);
 					}
 				}}
 				editPattern={editingPattern ?? undefined}
+				existingPatterns={[...PRESET_STRUM_PATTERNS, ...customPatterns]}
 				user={user}
 			/>
 

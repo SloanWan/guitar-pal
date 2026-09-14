@@ -9,23 +9,24 @@ import {
 	MAX_BAR_DISPLAY_CELLS,
 	TWO_COLUMN_MAX_CELLS,
 	followScrollTop,
+	ghostedBeats,
 	FOLLOW_SCROLL_PADDING_PX,
 } from "@/lib/strumGridLayout";
-import type { Bar, Beat } from "@/lib/strumPatterns";
+import { PRESET_STRUM_PATTERNS, type Bar, type Beat } from "@/lib/strumPatterns";
 
 function bar(beats: Beat[]): Bar {
 	return { beats, chord: null };
 }
 
 const QUARTERS: Beat[] = [
-	["D", "UG"],
-	["D", "UG"],
-	["D", "UG"],
-	["D", "UG"],
+	["D", ""],
+	["D", ""],
+	["D", ""],
+	["D", ""],
 ];
 /** A two-beat bar: half the columns of a four-beat one. */
 const SHORT: Beat[] = [
-	["D", "UG"],
+	["D", ""],
 	["D", "U"],
 ];
 const SIXTEENTHS: Beat[] = [
@@ -46,7 +47,7 @@ describe("beat padding", () => {
 	it("leaves triplets and sixteenths alone", () => {
 		expect(paddedBeatLength(3)).toBe(3);
 		expect(paddedBeatLength(4)).toBe(4);
-		expect(paddedBeatCells(["D3", "U3", "D3"])).toEqual(["D3", "U3", "D3"]);
+		expect(paddedBeatCells(["D", "U", "D"])).toEqual(["D", "U", "D"]);
 	});
 
 	it("maps an engine cell index onto its display column", () => {
@@ -66,7 +67,7 @@ describe("bar width", () => {
 	});
 
 	it("counts triplet beats as three columns", () => {
-		expect(barDisplayCells(bar([["D3", "U3", "D3"], ["D", "UG"]]))).toBe(7);
+		expect(barDisplayCells(bar([["D", "U", "D"], ["D", ""]]))).toBe(7);
 	});
 
 	it("reports the widest bar of a set", () => {
@@ -137,5 +138,74 @@ describe("followScrollTop", () => {
 		expect(
 			followScrollTop({ ...base, activeTop: 0, nextBottom: 200, contentHeight: 250 }),
 		).toBe(0);
+	});
+});
+
+/**
+ * The ghosts the shipped presets used to carry as stored values, keyed by name.
+ *
+ * This is the calibration set the ghost rule was reverse-engineered from before
+ * it moved into the render layer, kept here so a change to the rule has to
+ * account for every pattern a player has already looked at.
+ */
+const PRESET_GHOSTS: Record<string, string[][]> = {
+	"on the one": [["D", "UG"], ["", ""], ["", ""], ["", ""]],
+	"on the beat": [["D", "UG"], ["D", "UG"], ["D", "UG"], ["D", "UG"]],
+	"old faithful": [["D", "UG"], ["D", "U"], ["DG", "U"], ["D", "UG"]],
+	"triplet on one": [["D", "U", "D"], ["D", "UG"], ["D", "UG"], ["D", "UG"]],
+	"birds of a feather": [
+		["D", "UG", "DG", "U"],
+		["D", "U", "D", "UG"],
+		["DG", "U", "D", "U"],
+		["D", "UG", "D", "U"],
+	],
+	hualala: [["D", "UG", "DG"], ["D", "U", "D"], ["D", "UG", "DG"], ["D", "U", "D"]],
+	"triplet on 1+3": [["D", "U", "D"], ["D", "UG"], ["D", "U", "D"], ["D", "UG"]],
+	muted: [["D", "X", "U", "X"], ["D", "X", "U", "X"], ["U", "X"], ["D", "X"]],
+};
+
+describe("ghostedBeats", () => {
+	it("redraws every shipped preset exactly as it was stored", () => {
+		expect(PRESET_STRUM_PATTERNS).toHaveLength(Object.keys(PRESET_GHOSTS).length);
+		for (const preset of PRESET_STRUM_PATTERNS) {
+			expect(ghostedBeats(preset.beats), preset.name).toEqual(PRESET_GHOSTS[preset.name]);
+		}
+	});
+
+	it("ghosts the gaps between strikes, and the return from the last", () => {
+		expect(ghostedBeats([["D", ""], ["", "U"], ["", ""]])).toEqual([
+			["D", "UG"],
+			["DG", "U"],
+			["DG", ""],
+		]);
+	});
+
+	it("rests before the first strike", () => {
+		// Nothing has happened yet: the hand is not travelling, it is waiting.
+		expect(ghostedBeats([["", "U"], ["D", ""]])).toEqual([
+			["", "U"],
+			["D", "UG"],
+		]);
+	});
+
+	it("takes a ghost's direction from its place in the beat", () => {
+		expect(ghostedBeats([["D", "", "", ""], ["", "", "", "U"]])).toEqual([
+			["D", "UG", "DG", "UG"],
+			["DG", "UG", "DG", "U"],
+		]);
+	});
+
+	it("leaves an empty bar empty", () => {
+		expect(ghostedBeats([["", ""], ["", ""]])).toEqual([["", ""], ["", ""]]);
+	});
+
+	it("never moves a struck cell", () => {
+		const beats: Beat[] = [["D", "X"], ["U", ""], ["", "X"]];
+		const drawn = ghostedBeats(beats);
+		beats.forEach((beat, i) =>
+			beat.forEach((cell, j) => {
+				if (cell !== "") expect(drawn[i][j]).toBe(cell);
+			}),
+		);
 	});
 });

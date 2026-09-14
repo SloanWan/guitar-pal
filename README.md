@@ -173,6 +173,62 @@ In the **My Patterns** section of the library, each custom pattern has three ico
 
 ---
 
+## Strum Assistant
+
+The chat control at the right of the top bar. Type what you want and it answers
+with a pattern you can preview and open in the strumming machine.
+
+Every request is read by the app itself — nothing you type is sent to a
+model. Four kinds of sentence:
+
+- **Chords** — `C Am F G`, `C-G-Am-F`, `Am | F | C | G`. The rhythm is a
+  suggestion and says so.
+- **A rhythm** — `DUDUDUDU`, `D DU UD`, `下上下上`, with or without chords in
+  front of it (`C Am F G, DUDUDU`).
+- **A sentence** — `给我一个 C-G-Am-F 的民谣扫弦，慢一点`, `a slow folk strum in
+  C G Am F`. A small lexicon reads chords, a style (folk, pop, rock, ballad) and
+  a tempo (slower, faster, or a written BPM), and answers only when it read the
+  whole sentence.
+- **A change to a pattern you have** — `add C G Am F to belief`, `把 belief 改名为
+  faith`, `删掉 belief`. Read, shown back to you, and written only when you
+  confirm. Shipped patterns take chords and refuse the rest.
+
+A sentence none of that reads is answered with what *was* read and a few
+sentences that would have worked, blanks and all — pick one and fill it in.
+The model endpoint (`/api/strum-assistant`) is kept for a later, separate job:
+answering a vague question with the app's own material behind it.
+
+### Quality baseline
+
+The assistant has an eval set of 34 requests (`src/lib/strumAssistant/__evals__/cases.ts`),
+graded programmatically: which path a request takes, which chords come back, how
+many bars, the tempo, and whether the model invented a rhythm or reported a word
+it could not resolve.
+
+| Path | Cases | Pass | Cost per request | Latency |
+| --- | --- | --- | --- | --- |
+| chords | 6 | 6/6 | $0 | instant |
+| rhythm | 5 | 5/5 | $0 | instant |
+| sentence (lexicon) | 10 | 10/10 | $0 | instant |
+| model (`claude-opus-5`) | 12 | 12/12 | $0.0065 | 4.4 s mean |
+
+**In the app, every request is answered without a model call**; the offline
+half of the set — everything but the `llm` cases — runs in `npm test` and makes
+no API calls. The `llm` rows measure the endpoint on its own, for the day it is
+wired to a question-answering job: `npm run evals` costs money (about $0.08 for
+the set), needs `ANTHROPIC_API_KEY`, and writes
+`src/lib/strumAssistant/__evals__/baseline.json` with the pass rate, the
+measured cost per request, latency, and how often the repair loop fired.
+Compare a prompt edit against that file, not against a feeling. (A thirteenth
+model-path case is empty input, which the app never sends, so the runner skips
+it.)
+
+Baseline recorded 2026-09-13: 12/12, no repairs. It took two prompt rules to
+get there, both found by the set rather than by hand — the model was "fixing" a
+chord word it did not recognise into one it did, and its choice between
+proposing and asking flipped run to run on a request to change something with
+nothing to change.
+
 ## Chord Library
 
 Found at **Chords** in the navigation. The Chord Library gives you fingering diagrams for a large collection of guitar chords.

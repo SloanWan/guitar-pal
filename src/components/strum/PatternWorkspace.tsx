@@ -39,6 +39,8 @@ import StepGridCard from "./StepGridCard";
 import ChordViewToggle from "./ChordViewToggle";
 import PatternBarBody from "./PatternBarBody";
 import ChordPickerModal, { type ConfirmedChord } from "./ChordPickerModal";
+import ChordShapeChoice from "./ChordShapeChoice";
+import { chordDisplayName } from "@/lib/chordSuffixes";
 
 /** Which view of the selected pattern is on screen. */
 export type WorkspaceTab = "pattern" | "progressions";
@@ -209,6 +211,15 @@ export default function PatternWorkspace({
 	// chord, and both end in exactly one stored shape.
 	const [shapeEditBar, setShapeEditBar] = useState<number | null>(null);
 	const editingBar = shapeEditBar !== null ? (bars[shapeEditBar] ?? null) : null;
+	// The bar whose pencil was pressed and whose chord the library carries — so
+	// there is a choice to put: pick another voicing of it, or draw one. A bar
+	// kept under a name has nothing to pick from and goes straight to the editor.
+	const [shapeChoiceBar, setShapeChoiceBar] = useState<number | null>(null);
+	const choiceChord = shapeChoiceBar !== null ? (bars[shapeChoiceBar]?.chord ?? null) : null;
+	function handleEditShape(barIdx: number) {
+		if (bars[barIdx]?.chord) setShapeChoiceBar(barIdx);
+		else setShapeEditBar(barIdx);
+	}
 	const editingChord = editingBar?.chord ?? null;
 	// The name a bar was kept under, which the dialog turns into a chord identity.
 	const editingKeptName = editingBar ? barPlaceholder(editingBar) : null;
@@ -816,7 +827,7 @@ export default function PatternWorkspace({
 										chordView={chordView}
 										barDiagrams={barDiagrams}
 										onEditChordShape={
-											onApplyChordShape ? setShapeEditBar : undefined
+											onApplyChordShape ? handleEditShape : undefined
 										}
 										// Changing a chord where it is read, rather than only
 										// inside the editor — the editor is for rewriting the
@@ -845,6 +856,20 @@ export default function PatternWorkspace({
 					setChordPickerBar(null);
 				}}
 				initialChord={chordPickerBar !== null ? bars[chordPickerBar]?.chord : null}
+			/>
+
+			<ChordShapeChoice
+				open={shapeChoiceBar !== null}
+				chordLabel={choiceChord ? chordDisplayName(choiceChord.root, choiceChord.suffix) : ""}
+				onClose={() => setShapeChoiceBar(null)}
+				onPickFromLibrary={() => {
+					setChordPickerBar(shapeChoiceBar);
+					setShapeChoiceBar(null);
+				}}
+				onCreateOwn={() => {
+					setShapeEditBar(shapeChoiceBar);
+					setShapeChoiceBar(null);
+				}}
 			/>
 
 			{(editingChord || editingKeptName) && (

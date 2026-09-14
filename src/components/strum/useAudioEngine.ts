@@ -15,19 +15,17 @@ import {
 } from "./useGuitarSampleLoader";
 
 // Maps strum step values to the corresponding sample type.
-// DG, UG, and "" are intentionally absent — they produce no strum sound.
+// "" is intentionally absent — an unstruck cell produces no strum sound.
 const STEP_TO_SOUND: Partial<Record<StepValue, StrumSoundType>> = {
 	D: "down",
-	D3: "down",
 	U: "up",
-	U3: "up",
 	X: "muted",
 };
 
 /**
  * Resolves a StepValue and a buffer map to a concrete AudioBuffer (or null).
- * Returns null if the step is silent (DG, UG, ""), or if the sample has not
- * yet finished loading. Exported for unit testing only.
+ * Returns null if the step is silent (""), or if the sample has not yet
+ * finished loading. Exported for unit testing only.
  */
 export function _resolveStrumBuffer(
 	step: StepValue,
@@ -95,6 +93,10 @@ export function useAudioEngine(
 	const audioCtxRef = useRef<AudioContext | null>(null);
 	const schedulerRef = useRef<number | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
+	/** True between the press and the first sound: the samples are on their way. */
+	const [isPreparing, setIsPreparing] = useState(false);
+	/** Identifies the current start attempt; see `start`. */
+	const startTokenRef = useRef(0);
 	const [currBeat, setCurrBeat] = useState(0);
 	const [currCell, setCurrCell] = useState(0);
 	const [currBar, setCurrBar] = useState(0);
@@ -192,6 +194,11 @@ export function useAudioEngine(
 	}, []);
 
 	function start() {
+		// Every start gets a token. The samples are fetched before the first note
+		// sounds, and in that window the player may stop or start again — either
+		// retires this attempt, and the load that is still in flight must not come
+		// back and begin playing on top of what replaced it.
+		const token = ++startTokenRef.current;
 		// Cancel any deferred cancelStrums scheduled by a previous play-once pass.
 		if (schedulerRef.current !== null) {
 			window.clearTimeout(schedulerRef.current);
@@ -207,13 +214,21 @@ export function useAudioEngine(
 		audioCtxRef.current = new AudioContext();
 		const ctx = audioCtxRef.current;
 
-		preloadStrumPresets(ctx).catch((err: unknown) => {
-			console.error("[useAudioEngine] Failed to preload strum presets:", err);
-		});
-
-		nextStepTimeRef.current = ctx.currentTime;
-		setIsPlaying(true);
-		scheduler();
+		// Nothing sounds until the samples are here. The metronome used to start
+		// against silence while they downloaded, which reads as a broken pattern
+		// rather than as a wait.
+		setIsPreparing(true);
+		preloadStrumPresets(ctx)
+			.catch((err: unknown) => {
+				console.error("[useAudioEngine] Failed to preload strum presets:", err);
+			})
+			.finally(() => {
+				if (startTokenRef.current !== token) return;
+				setIsPreparing(false);
+				nextStepTimeRef.current = ctx.currentTime;
+				setIsPlaying(true);
+				scheduler();
+			});
 	}
 
 	function playTick(time: number, isAccent: boolean) {
@@ -352,6 +367,9 @@ export function useAudioEngine(
 	}
 
 	function stop() {
+		// Retires any load still in flight, so it cannot start playing after this.
+		startTokenRef.current += 1;
+		setIsPreparing(false);
 		if (schedulerRef.current) {
 			window.clearTimeout(schedulerRef.current as number);
 		}
@@ -393,6 +411,7 @@ export function useAudioEngine(
 
 	return {
 		isPlaying,
+		isPreparing,
 		currBeat,
 		currCell,
 		currBar,

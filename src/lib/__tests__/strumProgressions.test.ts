@@ -31,7 +31,7 @@ function progression(overrides: Partial<ChordProgression>): ChordProgression {
 	return {
 		id: "pr1",
 		patternId: "4-4 old faithful",
-		bars: [{ beats: [["D", "UG"]], chord: null }],
+		bars: [{ beats: [["D", ""]], chord: null }],
 		orderIndex: 0,
 		...overrides,
 	};
@@ -171,6 +171,21 @@ describe("parseChordSequence", () => {
 		expect(parseChordSequence("C | G", INDEX).chords).toHaveLength(2);
 	});
 
+	it("splits a dashed chord line with no spaces", () => {
+		// The way a chord line is most often written, and the one case the
+		// separator list could not take on its own without breaking dashed shapes.
+		const { chords, unmatched } = parseChordSequence("C-G-Am-F", INDEX);
+		expect(unmatched).toEqual([]);
+		expect(chords.map((c) => c.root)).toEqual(["C", "G", "A", "F"]);
+		expect(parseChordSequence("C–G—Am", INDEX).chords).toHaveLength(3);
+	});
+
+	it("keeps a dashed shape as one token", () => {
+		const { tokens } = parseChordSequence("0-1-0-2-2-0", INDEX);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].shape).toBe(true);
+	});
+
 	it("resolves the same spellings the chord picker accepts", () => {
 		expect(parseChordSequence("g7", INDEX).chords[0]).toMatchObject({
 			root: "G",
@@ -269,7 +284,7 @@ describe("keptTokens — the answer to the unknown-chord prompt", () => {
 
 describe("progressionBarsFromTokens", () => {
 	it("gives every chord a bar of the pattern's rhythm", () => {
-		const beats = [["D", "UG"], ["DG", "U"]];
+		const beats = [["D", ""], ["", "U"]];
 		const bars = progressionBarsFromTokens(beats, parseChordSequence("C G", INDEX).tokens);
 		expect(bars).toHaveLength(2);
 		expect(bars[0].beats).toEqual(beats);
@@ -279,7 +294,7 @@ describe("progressionBarsFromTokens", () => {
 	});
 
 	it("keeps a word the library could not match as the bar's name", () => {
-		const beats: Beat[] = [["D", "UG"]];
+		const beats: Beat[] = [["D", ""]];
 		const bars = progressionBarsFromTokens(beats, parseChordSequence("C zzz", INDEX).tokens);
 		expect(bars).toHaveLength(2);
 		expect(bars[1].chord).toBeNull();
@@ -294,12 +309,12 @@ describe("progressionBarsFromTokens", () => {
 
 describe("syncBarsToPattern", () => {
 	const OLD: Beat[] = [
-		["D", "UG"],
-		["D", "UG"],
+		["D", ""],
+		["D", ""],
 	];
 	const NEW: Beat[] = [
 		["D", "U"],
-		["DG", "U"],
+		["", "U"],
 	];
 	const HAND_EDITED: Beat[] = [["X", "X"], ["D", "U"]];
 
@@ -346,7 +361,7 @@ describe("syncBarsToPattern", () => {
 });
 
 describe("reconciling a progression with its pattern", () => {
-	const OLD: Beat[] = [["D", "UG"], ["D", "U"]];
+	const OLD: Beat[] = [["D", ""], ["D", "U"]];
 	const NEW: Beat[] = [["D", "U"], ["D", "U"]];
 	const OWN: Beat[] = [["X", "X"], ["X", "X"]];
 
@@ -470,11 +485,15 @@ describe("reconciling a progression with its pattern", () => {
 			}
 		});
 
-		it("checks the shape, not the cell values — as validateBars does everywhere", () => {
-			// An unknown step value survives, matching the app-wide guard rather than
-			// being stricter in this one place. It is also self-healing: a snapshot
-			// that matches nothing prompts once, syncs no bar, and is then replaced.
-			expect(normalizeProgressionSync({ syncedBeats: [["Q"]] }).syncedBeats).toEqual([["Q"]]);
+		it("checks the shape here and the cell values on the way in", () => {
+			// validateBars still only judges the shape, but a snapshot crosses the
+			// storage boundary like every other rhythm: a retired ghost reads back as
+			// the unstruck cell it always was, and a value from nowhere reads as one
+			// too rather than being carried around as a rhythm nothing can play.
+			expect(normalizeProgressionSync({ syncedBeats: [["D", "UG"]] }).syncedBeats).toEqual([
+				["D", ""],
+			]);
+			expect(normalizeProgressionSync({ syncedBeats: [["Q"]] }).syncedBeats).toEqual([[""]]);
 		});
 
 		it("treats anything but an explicit false as still following", () => {
@@ -490,7 +509,7 @@ describe("reconciling a progression with its pattern", () => {
 	});
 
 	it("copies the snapshot rather than aliasing the pattern's own beats", () => {
-		const patternBeats: Beat[] = [["D", "UG"]];
+		const patternBeats: Beat[] = [["D", ""]];
 		const next = markPatternSynced(progression(), patternBeats);
 		expect(next.syncedBeats).toEqual(patternBeats);
 		expect(next.syncedBeats?.[0]).not.toBe(patternBeats[0]);
@@ -498,7 +517,7 @@ describe("reconciling a progression with its pattern", () => {
 });
 
 describe("a pattern edit only asks when this sequence would actually change", () => {
-	const OLD: Beat[] = [["D", "UG"], ["D", "U"]];
+	const OLD: Beat[] = [["D", ""], ["D", "U"]];
 	const NEW: Beat[] = [["D", "U"], ["D", "U"]];
 	const OWN: Beat[] = [["X", "X"], ["X", "X"]];
 
@@ -545,7 +564,7 @@ describe("a pattern edit only asks when this sequence would actually change", ()
 });
 
 describe("dismissing the not-following notice", () => {
-	const OLD: Beat[] = [["D", "UG"], ["D", "U"]];
+	const OLD: Beat[] = [["D", ""], ["D", "U"]];
 	const NEW: Beat[] = [["D", "U"], ["D", "U"]];
 
 	function declined(): ChordProgression {

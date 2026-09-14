@@ -7,6 +7,7 @@ import type { EditIntentReading, EditOp } from "@/lib/strumAssistant/editIntent"
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import {
 	chordAbbreviation,
+	normalizeCapo,
 	parseChordSequence,
 	progressionBarsFromTokens,
 } from "@/lib/strumProgressions";
@@ -15,7 +16,7 @@ import { buildProposal } from "@/lib/strumAssistant/buildProposal";
 import { isPreset } from "@/lib/strumAssistant/turn";
 import { patternNameTakenBy, toBars } from "@/lib/strumBars";
 import type { NamedPattern } from "@/lib/lastPattern";
-import type { StrumPattern } from "@/lib/strumPatterns";
+import { STRUM_CAPO_MAX, type StrumPattern } from "@/lib/strumPatterns";
 import { Option, Options } from "./Options";
 
 /**
@@ -90,6 +91,11 @@ export default function EditIntentCard({
 		edit.kind === "attach" || edit.kind === "unknown-pattern" ? edit.chordWords.join(" ") : "",
 	);
 	const [newName, setNewName] = useState(edit.kind === "rename" ? edit.newName : "");
+	/** As typed in the field: empty means no capo. */
+	const [capoText, setCapoText] = useState(
+		edit.kind === "attach" && edit.capo !== null ? String(edit.capo) : "",
+	);
+	const capo = capoText.trim() === "" ? null : normalizeCapo(Number(capoText));
 	const [editing, setEditing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -137,8 +143,8 @@ export default function EditIntentCard({
 			if (parsed.chords.length === 0) return setError("None of those match a chord in the library.");
 			const bars = progressionBarsFromTokens(toBars(pattern)[0].beats, parsed.tokens);
 			if (bars.length === 0) return setError("That leaves nothing to save.");
-			stashHandoff({ kind: "attach", patternId: pattern.id, patternName: pattern.name, bars });
-			setOutcome(`Added to ${pattern.name}`);
+			stashHandoff({ kind: "attach", patternId: pattern.id, patternName: pattern.name, bars, capo });
+			setOutcome(`Added to ${pattern.name}${capo ? `, capo ${capo}` : ""}`);
 		} else if (op === "rename") {
 			if (preset) return setError("Shipped patterns keep their names.");
 			const name = newName.trim();
@@ -313,6 +319,26 @@ export default function EditIntentCard({
 								</span>
 							))}
 						</span>
+					)}
+				</Row>
+			)}
+
+			{op === "attach" && (editing || capo !== null) && (
+				<Row label="Capo">
+					{editing ? (
+						<input
+							type="number"
+							min={0}
+							max={STRUM_CAPO_MAX}
+							value={capoText}
+							onChange={(e) => setCapoText(e.target.value)}
+							onKeyDown={(e) => submitOnEnter(e, confirm)}
+							aria-label="Capo fret, empty for none"
+							placeholder="none"
+							className="w-20 border border-line-strong bg-panel px-2 py-1 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
+						/>
+					) : (
+						<span className="font-mono text-xs text-ink">fret {capo}</span>
 					)}
 				</Row>
 			)}

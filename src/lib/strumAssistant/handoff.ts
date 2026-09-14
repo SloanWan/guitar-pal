@@ -31,6 +31,8 @@ export interface PatternHandoff {
 	bars: Bar[];
 	bpm: number | null;
 	chords: ChordRef[];
+	/** For the progression the chords become; null when none was named. */
+	capo: number | null;
 }
 
 /** Chords for a pattern that already exists: one new progression on it. */
@@ -40,6 +42,7 @@ export interface AttachHandoff {
 	/** For the message shown if the pattern has since been deleted. */
 	patternName: string;
 	bars: Bar[];
+	capo: number | null;
 }
 
 /** A pattern of the player's own, given a new name. */
@@ -66,6 +69,7 @@ export function patternHandoff(proposal: AssistantProposal): PatternHandoff {
 		bars: proposal.bars,
 		bpm: proposal.bpm,
 		chords: proposal.chords,
+		capo: proposal.capo,
 	};
 }
 
@@ -124,6 +128,9 @@ export function takeHandoff(): AssistantHandoff | null {
 	// outside the app before anything downstream trusts their shape.
 	if (!validateBars(value.bars).ok) return null;
 
+	// A capo read back from storage: a fret, or nothing.
+	const capo = typeof value.capo === "number" && Number.isFinite(value.capo) ? value.capo : null;
+
 	if (value.kind === "attach") {
 		if (typeof value.patternId !== "string" || value.patternId === "") return null;
 		if (typeof value.patternName !== "string") return null;
@@ -132,6 +139,7 @@ export function takeHandoff(): AssistantHandoff | null {
 			patternId: value.patternId,
 			patternName: value.patternName,
 			bars: value.bars as Bar[],
+			capo,
 		};
 	}
 
@@ -146,5 +154,6 @@ export function takeHandoff(): AssistantHandoff | null {
 		bars: value.bars as Bar[],
 		bpm: value.bpm as number | null,
 		chords: value.chords as ChordRef[],
+		capo,
 	};
 }

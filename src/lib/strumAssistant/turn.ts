@@ -67,7 +67,7 @@ export function editMessage(edit: EditIntentReading): string {
 	switch (edit.kind) {
 		case "attach":
 			return edit.chordWords.length > 0
-				? `Add these chords to "${edit.pattern.name}"? Nothing is saved until you say so.`
+				? `Add these chords to "${edit.pattern.name}"${edit.capo ? `, capo on ${edit.capo}` : ""}? Nothing is saved until you say so.`
 				: `Read that as an edit to "${edit.pattern.name}", but no chords came through — nothing in it reads as one. Want to write them yourself?`;
 		case "rename":
 			if (isPreset(edit.pattern.id)) {
@@ -123,6 +123,7 @@ export function resolveAssistantTurn({
 			chordWords: route.chordWords,
 			bpm: route.path === "phrase" ? route.bpm : null,
 			name: route.path === "phrase" ? route.name : null,
+			capo: route.path === "phrase" ? route.capo : null,
 			// A style word names a feel, not the strokes; a rhythm written out is the strokes.
 			rhythmGuessed: route.path === "phrase" && route.rhythmGuessed,
 			index,

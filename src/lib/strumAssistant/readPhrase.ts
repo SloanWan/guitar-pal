@@ -1,6 +1,7 @@
 import { normalizeChordName, searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 import { DEFAULT_STRUM_BPM } from "@/lib/strumPatterns";
 import { parseRhythm } from "@/lib/strumAssistant/parseRhythm";
+import { withoutCapo } from "@/lib/strumAssistant/readCapo";
 
 /**
  * Reads a request written as a sentence, without a model.
@@ -76,6 +77,8 @@ export interface PhraseReading {
 	bpm: number | null;
 	/** "name it test", "叫 test": what the player wants it called. */
 	name: string | null;
+	/** "capo 2", "变调夹 2 品": the fret the progression is held behind. */
+	capo: number | null;
 	/**
 	 * What was not read, with nothing else in it. Empty means the whole sentence
 	 * was understood — the only state in which this reading may be acted on.
@@ -236,8 +239,12 @@ function roundToFive(bpm: number): number {
 	return Math.round(bpm / 5) * 5;
 }
 
-export function readPhrase(rawInput: string, index: readonly ChordIndexEntry[]): PhraseReading {
-	// The name first: it is free text, and blanking it keeps a chord-shaped word
+export function readPhrase(original: string, index: readonly ChordIndexEntry[]): PhraseReading {
+	// The capo first: a number that must not be left over, on a word that must
+	// not be read as a chord.
+	const { text: rawInput, capo } = withoutCapo(original);
+
+	// The name next: it is free text, and blanking it keeps a chord-shaped word
 	// inside it ("C jam") from being read as a chord.
 	const naming = NAME_CLAUSE.exec(rawInput);
 	const name = naming ? (naming[1].trim().replace(NAME_TAIL, "").trim() || null) : null;
@@ -312,6 +319,7 @@ export function readPhrase(rawInput: string, index: readonly ChordIndexEntry[]):
 		rhythm: style?.rhythm ?? null,
 		notation: notation?.text ?? null,
 		name,
+		capo,
 		tempo,
 		bpm,
 		leftover,

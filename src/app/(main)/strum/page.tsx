@@ -43,6 +43,7 @@ import {
 	dismissPatternNotice,
 	markPatternSynced,
 	type ChordToken,
+	normalizeCapo,
 } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
 import {
@@ -463,6 +464,7 @@ export default function StrumPage() {
 						patternId: pattern.id,
 						bars: handoff.bars,
 						orderIndex: nextOrderIndex([]),
+						...(handoff.capo === null ? {} : { capo: normalizeCapo(handoff.capo) }),
 					}
 				: null;
 		if (progression) handleSaveProgression(progression);
@@ -500,6 +502,7 @@ export default function StrumPage() {
 			patternId: pattern.id,
 			bars: handoff.bars,
 			orderIndex: nextOrderIndex(progressionsForPattern(progressions, pattern.id)),
+			...(handoff.capo === null ? {} : { capo: normalizeCapo(handoff.capo) }),
 		};
 		handleSaveProgression(progression);
 		queueMicrotask(() => {

@@ -71,6 +71,13 @@ describe("resolveAssistantTurn", () => {
 			expect(resolve("call belief faith").edit?.kind).toBe("rename");
 		});
 
+		it("puts a capo on the progression it makes, and only on a progression", () => {
+			expect(resolve("C G Am F, capo 2").proposal?.capo).toBe(2);
+			const bare = resolve("D DU UD capo 2").proposal;
+			expect(bare?.capo).toBeNull();
+			expect(bare?.warnings.capoIgnored).toBe(true);
+		});
+
 		it("answers chords and a rhythm together", () => {
 			const outcome = resolve("C Am F G, DUDUDUDU");
 			expect(outcome.proposal?.bars).toHaveLength(4);

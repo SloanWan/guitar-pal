@@ -138,6 +138,29 @@ describe("readPhrase", () => {
 		});
 	});
 
+	describe("reads a capo", () => {
+		it("takes the fret and leaves nothing over", () => {
+			for (const [line, fret] of [
+				["C G Am F capo 2", 2],
+				["C G Am F, capo at the 4th fret", 4],
+				["给我一个 C-G-Am-F 的民谣扫弦，变调夹夹在第二品", 2],
+				["C G Am F 二品变调夹", 2],
+				["C G Am F no capo", 0],
+			] as const) {
+				const reading = read(line);
+				expect(reading.capo, line).toBe(fret);
+				expect(reading.chordWords, line).toEqual(["C", "G", "Am", "F"]);
+				expect(reading.leftover, line).toBe("");
+			}
+		});
+
+		it("refuses a fret past the last one offered", () => {
+			const reading = read("C G Am F capo 15");
+			expect(reading.capo).toBeNull();
+			expect(reading.leftover).not.toBe("");
+		});
+	});
+
 	describe("refuses what it cannot read whole", () => {
 		it("leaves a reference to a song unread", () => {
 			const reading = read("像 Wonderwall 那样的 C G Am F");

@@ -17,13 +17,15 @@ import type { AssistantProposal } from "@/lib/strumAssistant/types";
 
 function warningLines(proposal: AssistantProposal): string[] {
 	const lines: string[] = [];
-	const { unresolvedChords, rhythmGuessed, padded, fellBackToDeterministic } = proposal.warnings;
+	const { unresolvedChords, rhythmGuessed, padded, fellBackToDeterministic, capoIgnored } =
+		proposal.warnings;
 	if (unresolvedChords.length > 0) {
 		lines.push(`No chord matched ${unresolvedChords.join(", ")} — those bars have no chord.`);
 	}
 	if (rhythmGuessed) lines.push("The rhythm is a suggestion, not something you asked for.");
 	if (padded) lines.push("The rhythm was shorter than the bar and was padded with rests.");
 	if (fellBackToDeterministic) lines.push("Built from the parts that could be read.");
+	if (capoIgnored) lines.push("A capo was named, but there are no chords for it to sit on — it was left off.");
 	return lines;
 }
 
@@ -47,11 +49,10 @@ export default function ProposalPreview({ proposal }: { proposal: AssistantPropo
 				<span className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
 					{proposal.name}
 				</span>
-				{proposal.bpm !== null && (
-					<span className="shrink-0 font-mono text-[11px] tracking-[0.04em] text-ink-faint">
-						{proposal.bpm} BPM
-					</span>
-				)}
+				<span className="flex shrink-0 gap-2 font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+					{proposal.capo !== null && <span>capo {proposal.capo}</span>}
+					{proposal.bpm !== null && <span>{proposal.bpm} BPM</span>}
+				</span>
 			</div>
 
 			<div className="overflow-x-auto px-3 py-3">

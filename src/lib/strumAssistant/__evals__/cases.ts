@@ -191,6 +191,13 @@ export const EVAL_CASES: readonly EvalCase[] = [
 		why: "A name for what is made, read as a clause and kept out of the chords.",
 	},
 	{
+		id: "phrase-capo",
+		input: "C G Am F, capo 2",
+		path: "phrase",
+		expect: { chordRoots: ["C", "G", "A", "F"], bars: 4, rhythmGuessed: true },
+		why: "A capo, read as a clause: its number is not a chord and its word is not a name.",
+	},
+	{
 		id: "phrase-ballad",
 		input: "抒情一点的 Am F C G",
 		path: "phrase",

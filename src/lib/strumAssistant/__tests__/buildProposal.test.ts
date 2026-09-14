@@ -116,3 +116,21 @@ describe("buildProposal", () => {
 		expect(pattern.beats).toEqual(p.bars[0].beats);
 	});
 });
+
+describe("a capo on the proposal", () => {
+	it("sits on a progression", () => {
+		const p = unwrap(build({ chordWords: ["C", "G"], capo: 3 }));
+		expect(p.capo).toBe(3);
+		expect(p.warnings.capoIgnored).toBeUndefined();
+	});
+
+	it("has nothing to sit on in a bare pattern, and says so", () => {
+		const p = unwrap(build({ rhythm: "D DU UD", capo: 3 }));
+		expect(p.capo).toBeNull();
+		expect(p.warnings.capoIgnored).toBe(true);
+	});
+
+	it("is clamped to a fret the app offers", () => {
+		expect(unwrap(build({ chordWords: ["C"], capo: 40 })).capo).toBe(12);
+	});
+});

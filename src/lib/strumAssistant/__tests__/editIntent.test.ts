@@ -29,6 +29,7 @@ describe("parseEditIntent", () => {
 				op: "attach",
 				pattern: { id: "p-belief", name: "belief" },
 				chordWords: ["Em9", "D", "C#", "F#m7"],
+				capo: null,
 			});
 		});
 
@@ -112,6 +113,26 @@ describe("parseEditIntent", () => {
 				chordWords: ["C", "G", "Am"],
 			});
 			expect(read("add C and G to belief")).toMatchObject({ chordWords: ["C", "G"] });
+		});
+
+		it("reads a capo for the progression, in either language", () => {
+			for (const [line, fret] of [
+				["add C G Am F to belief with capo 2", 2],
+				["add C G Am F to belief, capo on the 3rd fret", 3],
+				["把 C G Am F 加到 belief 里，变调夹 2 品", 2],
+				["给 belief 加上 C G Am F，夹三品", 3],
+				["add C G Am F to belief, no capo", 0],
+			] as const) {
+				expect(read(line), line).toMatchObject({
+					kind: "attach",
+					chordWords: ["C", "G", "Am", "F"],
+					capo: fret,
+				});
+			}
+		});
+
+		it("does not read the capo's number or word as a chord", () => {
+			expect(read("add C G to belief capo 7")).toMatchObject({ chordWords: ["C", "G"], capo: 7 });
 		});
 
 		it("takes a single chord as a one-bar progression", () => {
@@ -219,6 +240,7 @@ describe("parseEditIntent", () => {
 				op: "attach",
 				pattern: { id: "p-belief", name: "belief" },
 				chordWords: [],
+				capo: null,
 			});
 			expect(read("add a progression to belief")).toMatchObject({
 				kind: "attach",

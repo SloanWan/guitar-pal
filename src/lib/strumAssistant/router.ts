@@ -35,6 +35,7 @@ export type AssistantRoute =
 			bpm: number | null;
 			style: string | null;
 			name: string | null;
+			capo: number | null;
 	  }
 	| { path: "llm"; reason: LlmReason };
 
@@ -77,6 +78,7 @@ export function routeAssistantInput(
 		bpm: reading.bpm,
 		style: reading.style,
 		name: reading.name,
+		capo: reading.capo,
 	};
 }
 

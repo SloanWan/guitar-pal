@@ -6,6 +6,7 @@ import { patternNotation } from "@/lib/strumNotation";
 import {
 	chordAbbreviation,
 	defaultProgressionName,
+	normalizeCapo,
 	parseChordSequence,
 	progressionBarsFromTokens,
 } from "@/lib/strumProgressions";
@@ -37,6 +38,8 @@ export interface BuildProposalInput {
 	index: readonly ChordIndexEntry[];
 	name?: string | null;
 	bpm?: number | null;
+	/** A capo for the progression. Dropped, and said so, when there are no chords. */
+	capo?: number | null;
 	rhythmGuessed?: boolean;
 	fellBackToDeterministic?: boolean;
 }
@@ -92,12 +95,14 @@ export function buildProposal(input: BuildProposalInput): BuildProposalResult {
 			rhythm: notation,
 			bars,
 			bpm: input.bpm == null ? null : normalizeBpm(input.bpm),
+			capo: input.capo != null && kind === "progression" ? normalizeCapo(input.capo) : null,
 			chords: sequence.chords,
 			warnings: {
 				unresolvedChords: sequence.unmatched,
 				rhythmGuessed: guessedRhythm || input.rhythmGuessed === true,
 				padded: parsed.value.padded,
 				fellBackToDeterministic: input.fellBackToDeterministic === true,
+				...(input.capo != null && kind !== "progression" ? { capoIgnored: true } : {}),
 			},
 		},
 	};

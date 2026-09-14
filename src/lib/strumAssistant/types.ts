@@ -14,6 +14,8 @@ export interface AssistantProposal {
 	/** Expanded from `rhythm` on the client by parseRhythm — never by the model. */
 	bars: Bar[];
 	bpm: number | null;
+	/** Fret the progression's chords are held behind; null when none was named. */
+	capo: number | null;
 	chords: ChordRef[];
 	warnings: AssistantWarnings;
 }
@@ -27,6 +29,8 @@ export interface AssistantWarnings {
 	padded: boolean;
 	/** The model failed validation twice and a deterministic result was used. */
 	fellBackToDeterministic: boolean;
+	/** A capo was named for a rhythm with no chords — nothing for it to sit on. */
+	capoIgnored?: boolean;
 }
 
 /** One turn of the conversation, as sent to the route. */

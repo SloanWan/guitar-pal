@@ -1,5 +1,6 @@
 import type { ChordSpan } from "@/lib/strumAssistant/readPhrase";
 import type { NamedPattern } from "@/lib/lastPattern";
+import { withoutCapo } from "@/lib/strumAssistant/readCapo";
 
 /**
  * Reading a request to change a pattern the player already has.
@@ -34,6 +35,8 @@ export interface AttachIntent {
 	 * than being told the whole sentence failed.
 	 */
 	chordWords: string[];
+	/** The fret the new progression is held behind, when one was named. */
+	capo: number | null;
 }
 
 export interface RenameIntent {
@@ -344,9 +347,12 @@ export interface EditIntentExplanation {
 }
 
 export function explainEditIntent(
-	input: string,
+	original: string,
 	patterns: readonly NamedPattern[],
 ): EditIntentExplanation {
+	// A capo clause is blanked before anything else reads the sentence: its
+	// number is not a chord, and "capo" is not a name.
+	const { text: input, capo } = withoutCapo(original);
 	const base: EditIntentExplanation = {
 		verb: null,
 		op: null,
@@ -408,7 +414,7 @@ export function explainEditIntent(
 		const pattern = matches[0];
 		switch (op) {
 			case "attach":
-				return { ...seen, reading: { kind: "attach", op, pattern, chordWords } };
+				return { ...seen, reading: { kind: "attach", op, pattern, chordWords, capo } };
 			case "rename":
 				return {
 					...seen,

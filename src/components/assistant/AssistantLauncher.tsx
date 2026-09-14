@@ -101,6 +101,9 @@ export default function AssistantLauncher() {
 	const unread = !open && messages.length > seenCount;
 
 	function setPanelOpen(next: boolean) {
+		// A conversation that went quiet while the panel was shut is over before
+		// it is shown; the fresh greeting is what opens.
+		if (next) assistant.expireIfIdle();
 		// Both transitions mark everything so far as seen: opening shows it,
 		// closing means it was on screen until now.
 		setSeenCount(messages.length);

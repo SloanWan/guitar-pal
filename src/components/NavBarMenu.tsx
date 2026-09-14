@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "@/components/AppLink";
+import SignInLink from "./SignInLink";
 import { EllipsisVertical } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import {
@@ -55,12 +55,9 @@ export default function NavBarMenu() {
 					</>
 				)}
 
-				<Link
-					href="/auth"
+				<SignInLink
 					className="mt-2 flex h-(--h-control) w-full items-center justify-center border border-denim bg-transparent font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-				>
-					Sign In
-				</Link>
+				/>
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

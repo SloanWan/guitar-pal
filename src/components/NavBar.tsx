@@ -3,12 +3,18 @@ import NavBarMenu from "./NavBarMenu";
 import ThemeToggle from "./ThemeToggle";
 import UserMenu from "./UserMenu";
 import Link from "@/components/AppLink";
+import SignInLink from "./SignInLink";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { profileOf } from "@/lib/profile";
 import NavBarScrollWrapper from "./NavBarScrollWrapper";
 import AssistantLauncher from "./assistant/AssistantLauncher";
 
-export default async function NavBar() {
+/**
+ * `hideSignIn` is for the sign-in page itself, where a "Sign In" CTA in the
+ * topbar would point at the page the visitor is already on. The signed-out
+ * cluster then keeps only the dev theme toggle, at every width.
+ */
+export default async function NavBar({ hideSignIn = false }: { hideSignIn?: boolean } = {}) {
 	const supabase = await createSupabaseServer();
 	const {
 		data: { user },
@@ -56,6 +62,8 @@ export default async function NavBar() {
 							// Signed in: the avatar menu is the rightmost control at every
 							// width and carries theme + sign-out itself, so no collapse menu.
 							<UserMenu profile={profile} />
+						) : hideSignIn ? (
+							process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeToggle />
 						) : (
 							<>
 								{/* ≥ nav: signed-out controls sit inline in the topbar. */}
@@ -67,12 +75,9 @@ export default async function NavBar() {
 									{/* Single nav-CTA: transparent, denim border, denim-accent
 									    text; hover fills denim; :active press-flashes denim-tint.
 									    Sign-up stays reachable via the auth page tabs. */}
-									<Link
-										href="/auth"
+									<SignInLink
 										className="flex h-(--h-control) items-center border border-denim bg-transparent px-4.5 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-									>
-										Sign In
-									</Link>
+									/>
 								</div>
 								{/* < nav: the toggle + sign-in collapse into one menu trigger. */}
 								<div className="nav:hidden">

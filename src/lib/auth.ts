@@ -92,3 +92,35 @@ export async function refreshSession() {
 	const { error } = await supabase.auth.refreshSession();
 	return { error };
 }
+
+/** Re-sends the sign-up confirmation email; rate-limited server-side. */
+export async function resendSignUpConfirmation(email: string) {
+	const supabase = createClient();
+	const { error } = await supabase.auth.resend({ type: "signup", email });
+	return { error };
+}
+
+/**
+ * Emails a password-recovery link. It brings the user back to `/auth/reset`
+ * with a PKCE code; the browser client exchanges it on load and raises
+ * `PASSWORD_RECOVERY`, after which `setRecoveredPassword` can run. The
+ * return address must be in the dashboard's redirect allowlist, or Supabase
+ * silently falls back to the site URL.
+ */
+export async function requestPasswordReset(email: string) {
+	const supabase = createClient();
+	const { error } = await supabase.auth.resetPasswordForEmail(email, {
+		redirectTo: `${window.location.origin}/auth/reset`,
+	});
+	return { error };
+}
+
+/**
+ * The password change that follows a recovery link. No nonce: the recovery
+ * session is minutes old, which is what "secure password change" asks for.
+ */
+export async function setRecoveredPassword(password: string) {
+	const supabase = createClient();
+	const { data, error } = await supabase.auth.updateUser({ password });
+	return { data, error };
+}

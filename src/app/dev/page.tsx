@@ -51,6 +51,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "A/B audition of muted-note presets across guitar voicings.",
 	},
 	{
+		href: "/dev/piano-preset-audition",
+		label: "piano-preset-audition",
+		description: "A/B audition of GM piano presets as the root selector's voice, on a real keyboard.",
+	},
+	{
 		href: "/dev/roll-lab",
 		label: "roll-lab",
 		description: "Fingerpick roll technique lab — stagger, gap, and anchor modes.",

@@ -165,8 +165,10 @@ export function uniquePatternName(name: string, patterns: readonly StrumPattern[
  * everything stamped and keeps the order it was stored in against its equally
  * unstamped neighbours — `sort` is stable, which is what makes that work.
  */
-export function sortPatternsByNewest(patterns: readonly StrumPattern[]): StrumPattern[] {
-	const at = (pattern: StrumPattern): number => {
+export function sortPatternsByNewest<T extends { createdAt?: string }>(
+	patterns: readonly T[],
+): T[] {
+	const at = (pattern: T): number => {
 		const parsed = pattern.createdAt ? Date.parse(pattern.createdAt) : NaN;
 		return Number.isNaN(parsed) ? -Infinity : parsed;
 	};

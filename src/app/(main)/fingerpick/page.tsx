@@ -118,6 +118,10 @@ function computeAllMeasureWidths(measures: Measure[], containerWidth: number): n
 const MIN_BPM = 40;
 const MAX_BPM = 220;
 
+/** Silence between loop passes, offered when looping is on. */
+const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
+type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
+
 // BPM fader tick marks: genre reference tempos. `PERCENTS` are the fixed v3
 // visual positions on the 40–220 track; `VALUES` are the exact BPM each tick
 // snaps to when clicked; `LABELS` are the genre tooltip shown while hovering the
@@ -201,6 +205,7 @@ export default function FingerpickPage() {
 	const expanded = useMemo(() => expandFingerpickPattern(selectedPattern), [selectedPattern]);
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
+	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 	// Bottom-sheet detent (Google-Maps style): "closed" shows only the bottom bar,
 	// "half" is the default open height, "full" is the tall/expanded height. The
 	// drawer handle steps between detents; dragging up expands, dragging down closes.
@@ -249,6 +254,7 @@ export default function FingerpickPage() {
 		noteGain,
 		setNoteGain,
 		applyBpmChange,
+		applyLoopGapChange,
 		seekToNote,
 	} = useFingerpickAudioEngine();
 
@@ -393,7 +399,7 @@ export default function FingerpickPage() {
 			const savedExpanded = expandFingerpickPattern(pattern);
 			play(
 				{ ...savedExpanded.pattern, bpm },
-				{ loop: true, loopGapSeconds: 0, forceLetRing: true },
+				{ loop: true, loopGapSeconds: loopGap, forceLetRing: true },
 			);
 		}
 		setCursorResetTick((t) => t + 1);
@@ -417,7 +423,7 @@ export default function FingerpickPage() {
 		// the audio envelope, not timing/positions, so scheduleEventsRef stays valid.
 		play(
 			{ ...expanded.pattern, bpm },
-			{ loop: true, loopGapSeconds: 0, forceLetRing: true },
+			{ loop: true, loopGapSeconds: loopGap, forceLetRing: true },
 			startOffset,
 		);
 	}
@@ -1287,10 +1293,15 @@ export default function FingerpickPage() {
 									{selectedPattern.timeSignature[1]}
 								</span>
 								{/* The TAB is written behind the capo; this says how much higher
-								    it sounds. Hidden at capo 0, where there is nothing to say. */}
-								{patternCapo(selectedPattern) > 0 && (
+								    it sounds. "No capo" is said too, so a player about to play
+								    along never has to wonder whether the badge is just missing. */}
+								{patternCapo(selectedPattern) > 0 ? (
 									<span className="border border-denim-border bg-denim-tint px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal text-denim">
 										Capo {patternCapo(selectedPattern)}
+									</span>
+								) : (
+									<span className="border border-line px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal text-ink-faint">
+										No capo
 									</span>
 								)}
 							</p>
@@ -1408,6 +1419,28 @@ export default function FingerpickPage() {
 									/>
 								</span>
 							</div>
+							{/* Gap between loop passes — only a question while looping. */}
+							{!playOnce && (
+								<div className="flex items-center gap-3">
+									<span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+										Loop gap
+									</span>
+									<div className="flex-1">
+										<Segmented
+											options={LOOP_GAP_OPTIONS.map((gap) => ({
+												value: String(gap),
+												label: `${gap}S`,
+											}))}
+											value={String(loopGap)}
+											onChange={(v) => {
+												const gap = Number(v) as LoopGapSeconds;
+												setLoopGap(gap);
+												applyLoopGapChange(gap);
+											}}
+										/>
+									</div>
+								</div>
+							)}
 							<div className="flex gap-2">
 								<button
 									type="button"
@@ -1698,6 +1731,27 @@ export default function FingerpickPage() {
 						<div className="w-9 h-1 bg-line-strong" />
 					</div>
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
+						{/* Loop gap — only a question while looping (the bar's loop toggle). */}
+						{!playOnce && (
+							<div className="flex flex-col gap-3">
+								<div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
+									<Repeat size={12} strokeWidth={2} className="shrink-0" />
+									Loop gap
+								</div>
+								<Segmented
+									options={LOOP_GAP_OPTIONS.map((gap) => ({
+										value: String(gap),
+										label: `${gap}S`,
+									}))}
+									value={String(loopGap)}
+									onChange={(v) => {
+										const gap = Number(v) as LoopGapSeconds;
+										setLoopGap(gap);
+										applyLoopGapChange(gap);
+									}}
+								/>
+							</div>
+						)}
 						{/* Tempo — steppers + fader */}
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">

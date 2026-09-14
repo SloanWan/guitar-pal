@@ -418,14 +418,6 @@ export default function FingerpickEditModal({
 		[chordsInEffect, voicingsFor],
 	);
 	const techMenuRef = useRef<HTMLDivElement>(null);
-	// Right-click menu on a string label: empty that string in one measure or all.
-	const [stringMenu, setStringMenu] = useState<{
-		measureIndex: number;
-		stringIndex: number;
-		x: number;
-		y: number;
-	} | null>(null);
-	const stringMenuRef = useRef<HTMLDivElement>(null);
 	// The shape editor, opened from a chord search that found nothing. The slot
 	// is captured here because the column popup closes under the editor.
 	const [shapeCreate, setShapeCreate] = useState<{
@@ -527,7 +519,6 @@ export default function FingerpickEditModal({
 			setTouchMute(null);
 			setSelectedColumns(new Set());
 			setTechMenu(null);
-			setStringMenu(null);
 			setShapeCreate(null);
 			setPopupConfirm(null);
 			setPresetConfirm(null);
@@ -557,14 +548,11 @@ export default function FingerpickEditModal({
 
 	// Close popups on any outside pointer press.
 	useEffect(() => {
-		if (selectedColumns.size === 0 && !techMenu && !hintOpen && !stringMenu) return;
+		if (selectedColumns.size === 0 && !techMenu && !hintOpen) return;
 		function handlePointerDown(e: PointerEvent) {
 			const target = e.target as HTMLElement;
 			if (techMenu && !techMenuRef.current?.contains(target)) {
 				setTechMenu(null);
-			}
-			if (stringMenu && !stringMenuRef.current?.contains(target)) {
-				setStringMenu(null);
 			}
 			if (
 				selectedColumns.size > 0 &&
@@ -586,7 +574,7 @@ export default function FingerpickEditModal({
 		}
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
-	}, [selectedColumns, techMenu, hintOpen, stringMenu]);
+	}, [selectedColumns, techMenu, hintOpen]);
 
 	// Clear the copy/move highlight on the next pointer press anywhere. A press on
 	// a copy/move control clears here first, then that control's click re-sets the
@@ -1236,33 +1224,10 @@ export default function FingerpickEditModal({
 		return { namingFrom: shapeCreate.query, initialVoicing: null };
 	}, [shapeCreate]);
 
-	// Right-click menu on a string label, anchored in the scroll region like the
-	// technique menu so it scrolls with the grid.
-	function openStringMenu(
-		measureIndex: number,
-		stringIndex: number,
-		clientX: number,
-		clientY: number,
-		anchorEl: HTMLElement,
-	) {
-		const content = anchorEl.closest<HTMLElement>("[data-fp-scroll]");
-		if (!content) return;
-		const rect = content.getBoundingClientRect();
-		setStringMenu({
-			measureIndex,
-			stringIndex,
-			x: clientX - rect.left + content.scrollLeft,
-			y: clientY - rect.top + content.scrollTop,
-		});
-	}
-
-	function applyClearString(scope: "measure" | "all") {
-		if (!stringMenu) return;
-		const { measureIndex, stringIndex } = stringMenu;
-		commit((prev) =>
-			clearString(prev, stringIndex, scope === "measure" ? measureIndex : undefined),
-		);
-		setStringMenu(null);
+	// Empty one string of one measure — the × that appears beside the string
+	// label while its row is hovered.
+	function applyClearString(measureIndex: number, stringIndex: number) {
+		commit((prev) => clearString(prev, stringIndex, measureIndex));
 	}
 
 	// Step to another shape of the same chord. Pinning a shape on a slot that only
@@ -1296,6 +1261,34 @@ export default function FingerpickEditModal({
 			}}
 			className="z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg"
 		>
+			{/* Move — structural edits on the selected slot(s). */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Move Slot"
+					hint="Insert, duplicate, or delete this slot."
+				/>
+				<div className="flex gap-1">
+					<PopupIconButton
+						title="Insert before"
+						onClick={() => applyStructural("before")}
+					>
+						<ArrowLeftToLine size={14} />
+					</PopupIconButton>
+					<PopupIconButton title="Insert after" onClick={() => applyStructural("after")}>
+						<ArrowRightToLine size={14} />
+					</PopupIconButton>
+					<PopupIconButton title="Duplicate" onClick={() => applyStructural("duplicate")}>
+						<Copy size={14} />
+					</PopupIconButton>
+					<PopupIconButton
+						title="Delete"
+						onClick={() => applyStructural("delete")}
+						danger
+					>
+						<Trash2 size={14} />
+					</PopupIconButton>
+				</div>
+			</div>
 			{/* Split / merge (single column only). Split subdivides the slot into equal
 			    smaller notes; merge folds this slot plus the following run into any larger
 			    note value they sum to. Both preserve the measure total. */}
@@ -1380,6 +1373,65 @@ export default function FingerpickEditModal({
 					</div>
 				</div>
 			)}
+
+			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
+			    selected column. Rings the strings out one at a time instead of together. */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Roll"
+					hint="Ring the strings out one at a time instead of all together."
+				/>
+				<div className="flex border border-line-strong">
+					{STROKE_PICKER.map((s, i) => (
+						<button
+							key={s.value}
+							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
+							title={
+								s.value === "none"
+									? "No roll — sound the strings together"
+									: s.value === "roll-down"
+										? "Roll down — low to high strings"
+										: "Roll up — high to low strings"
+							}
+							className={`h-7 flex-1 px-2 flex items-center justify-center gap-1 font-mono text-xs font-semibold transition-colors ${
+								i > 0 ? "border-l border-line-strong" : ""
+							} ${
+								selectedStroke === s.value
+									? "bg-denim text-on-denim"
+									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+							}`}
+						>
+							{s.value === "roll-down" && <ArrowDown size={12} aria-hidden />}
+							{s.value === "roll-up" && <ArrowUp size={12} aria-hidden />}
+							{s.label}
+						</button>
+					))}
+				</div>
+			</div>
+
+			{/* Rest — silences the selected column(s) while keeping their rhythmic
+			    duration, so the measure total never changes. */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Rest"
+					hint="Silence this slot but keep its timing in the measure."
+				/>
+				<button
+					onClick={() => applyRest(!allSelectedRest)}
+					title={
+						allSelectedRest
+							? "Turn the rest back into a note"
+							: "Silence this slot (keeps its duration as a rest)"
+					}
+					className={`h-7 px-2 font-mono text-xs font-semibold border border-line-strong transition-colors self-start ${
+						allSelectedRest
+							? "bg-denim text-on-denim"
+							: "text-ink-dim hover:bg-denim-tint hover:text-denim"
+					}`}
+				>
+					Rest
+				</button>
+			</div>
 
 			{/* Chord — a change marked on this slot, running on until the next mark.
 			    Single column only: a chord starts at one point in time. */}
@@ -1473,93 +1525,6 @@ export default function FingerpickEditModal({
 				</div>
 			)}
 
-			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
-			    selected column. Rings the strings out one at a time instead of together. */}
-			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
-				<PopupSectionLabel
-					label="Roll"
-					hint="Ring the strings out one at a time instead of all together."
-				/>
-				<div className="flex border border-line-strong">
-					{STROKE_PICKER.map((s, i) => (
-						<button
-							key={s.value}
-							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
-							title={
-								s.value === "none"
-									? "No roll — sound the strings together"
-									: s.value === "roll-down"
-										? "Roll down — low to high strings"
-										: "Roll up — high to low strings"
-							}
-							className={`h-7 flex-1 px-2 flex items-center justify-center gap-1 font-mono text-xs font-semibold transition-colors ${
-								i > 0 ? "border-l border-line-strong" : ""
-							} ${
-								selectedStroke === s.value
-									? "bg-denim text-on-denim"
-									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-							}`}
-						>
-							{s.value === "roll-down" && <ArrowDown size={12} aria-hidden />}
-							{s.value === "roll-up" && <ArrowUp size={12} aria-hidden />}
-							{s.label}
-						</button>
-					))}
-				</div>
-			</div>
-
-			{/* Rest — silences the selected column(s) while keeping their rhythmic
-			    duration, so the measure total never changes. */}
-			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
-				<PopupSectionLabel
-					label="Rest"
-					hint="Silence this slot but keep its timing in the measure."
-				/>
-				<button
-					onClick={() => applyRest(!allSelectedRest)}
-					title={
-						allSelectedRest
-							? "Turn the rest back into a note"
-							: "Silence this slot (keeps its duration as a rest)"
-					}
-					className={`h-7 px-2 font-mono text-xs font-semibold border border-line-strong transition-colors self-start ${
-						allSelectedRest
-							? "bg-denim text-on-denim"
-							: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-					}`}
-				>
-					Rest
-				</button>
-			</div>
-
-			{/* Move — structural edits on the selected slot(s). */}
-			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
-				<PopupSectionLabel
-					label="Move Slot"
-					hint="Insert, duplicate, or delete this slot."
-				/>
-				<div className="flex gap-1">
-					<PopupIconButton
-						title="Insert before"
-						onClick={() => applyStructural("before")}
-					>
-						<ArrowLeftToLine size={14} />
-					</PopupIconButton>
-					<PopupIconButton title="Insert after" onClick={() => applyStructural("after")}>
-						<ArrowRightToLine size={14} />
-					</PopupIconButton>
-					<PopupIconButton title="Duplicate" onClick={() => applyStructural("duplicate")}>
-						<Copy size={14} />
-					</PopupIconButton>
-					<PopupIconButton
-						title="Delete"
-						onClick={() => applyStructural("delete")}
-						danger
-					>
-						<Trash2 size={14} />
-					</PopupIconButton>
-				</div>
-			</div>
 		</div>
 	);
 
@@ -1949,25 +1914,52 @@ export default function FingerpickEditModal({
 											{/* Keeps the string labels level with the cells when the
 											    chord row is shown above the columns. */}
 											{hasChords && <div className="h-4" />}
-											{STRING_LABELS.map((label, stringIndex) => (
-												<div
-													key={stringIndex}
-													onContextMenu={(e) => {
-														e.preventDefault();
-														openStringMenu(
-															measureIndex,
-															stringIndex,
-															e.clientX,
-															e.clientY,
-															e.currentTarget,
-														);
-													}}
-													title="Right-click to clear this string"
-													className="flex h-7 cursor-context-menu items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
-												>
-													{label}
-												</div>
-											))}
+											{STRING_LABELS.map((label, stringIndex) => {
+												// The row is "hovered" from any of its cells or from the
+												// label itself, so the × stays reachable on the way over.
+												const rowHovered =
+													hoverInMeasure?.stringIndex === stringIndex;
+												const rowHasNotes = measure.slots.some(
+													(slot) =>
+														slot.strings[stringIndex].fret !== null ||
+														slot.strings[stringIndex].muted,
+												);
+												return (
+													<div
+														key={stringIndex}
+														onMouseEnter={() =>
+															setHoveredCell({
+																measureIndex,
+																slotIndex: -1,
+																stringIndex,
+															})
+														}
+														className="relative flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
+													>
+														{/* Clear-the-row control: shown while the row is hovered,
+														    hidden (but still laid out) otherwise, so it never shifts
+														    the labels. Sits in the block's left padding. */}
+														{rowHasNotes && (
+															<button
+																type="button"
+																tabIndex={rowHovered ? 0 : -1}
+																aria-hidden={!rowHovered}
+																onClick={() =>
+																	applyClearString(measureIndex, stringIndex)
+																}
+																aria-label={`Clear the ${label} string in measure ${measureIndex + 1}`}
+																title={`Clear the ${label} string in this measure`}
+																className={`absolute -left-3.5 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center text-ink-faint transition-opacity hover:text-destructive ${
+																	rowHovered ? "opacity-100" : "opacity-0 pointer-events-none"
+																}`}
+															>
+																<XIcon size={11} />
+															</button>
+														)}
+														{label}
+													</div>
+												);
+											})}
 										</div>
 
 										{/* Horizontally scrollable slot area. Each slot column has a
@@ -2675,26 +2667,6 @@ export default function FingerpickEditModal({
 						)}
 
 					{/* ── Technique context menu (absolute within the content box) ───── */}
-					{stringMenu && (
-						<div
-							ref={stringMenuRef}
-							className="absolute z-60 w-56 border border-line-strong bg-popover py-1 text-sm"
-							style={{ top: stringMenu.y, left: stringMenu.x }}
-						>
-							<button
-								onClick={() => applyClearString("measure")}
-								className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								Clear {STRING_LABELS[stringMenu.stringIndex]} string in this measure
-							</button>
-							<button
-								onClick={() => applyClearString("all")}
-								className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								Clear {STRING_LABELS[stringMenu.stringIndex]} string in all measures
-							</button>
-						</div>
-					)}
 					{techMenu && (
 						<div
 							ref={techMenuRef}

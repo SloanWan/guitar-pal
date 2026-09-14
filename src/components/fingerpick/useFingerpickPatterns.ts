@@ -144,12 +144,18 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 	}
 
 	// Insert or update a custom pattern (create + edit both route here).
-	function saveCustomPattern(pattern: FingerpickPattern) {
-		setCustomPatterns((prev) => {
-			const idx = prev.findIndex((p) => p.id === pattern.id);
-			if (idx === -1) return [...prev, pattern];
-			return prev.map((p) => (p.id === pattern.id ? pattern : p));
-		});
+	function saveCustomPattern(saved: FingerpickPattern) {
+		// A new pattern is stamped now and goes to the top; an edit keeps its
+		// stamp and its place. The list is newest first, as the library shows it.
+		const existing = customPatterns.find((p) => p.id === saved.id);
+		const pattern: FingerpickPattern = existing
+			? { ...saved, createdAt: existing.createdAt ?? saved.createdAt }
+			: { ...saved, createdAt: saved.createdAt ?? new Date().toISOString() };
+		setCustomPatterns((prev) =>
+			existing
+				? prev.map((p) => (p.id === pattern.id ? pattern : p))
+				: [pattern, ...prev],
+		);
 		if (selectedPattern.id === pattern.id) setSelectedPattern(pattern);
 		(async () => {
 			try {

@@ -105,5 +105,10 @@ export type FingerpickPattern = {
 	 * `patternCapo` in fingerpickChords.ts.
 	 */
 	capo?: number;
+	/**
+	 * When the pattern was first saved (ISO 8601). Orders the library newest
+	 * first; presets and patterns stored before the stamp have none.
+	 */
+	createdAt?: string;
 };
 

@@ -83,6 +83,10 @@ function writeStored(messages: AssistantMessage[]): void {
 	}
 }
 
+/** How long the assistant appears to think before it answers. */
+const THINK_MIN_MS = 150;
+const THINK_MAX_MS = 2000;
+
 function newId(): string {
 	return typeof crypto !== "undefined" && "randomUUID" in crypto
 		? crypto.randomUUID()
@@ -189,6 +193,13 @@ export function useAssistant() {
 				const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
 				setIndex(index);
 				const outcome = resolveAssistantTurn({ text, index, patterns: patternList });
+				// The reading is instant; the reply is not. A pause of the kind a
+				// person takes before answering — random, so it never reads as a
+				// timer — with the typing dots showing for it. The floor keeps the
+				// dots from flashing for a frame and vanishing.
+				await new Promise((done) =>
+					setTimeout(done, THINK_MIN_MS + Math.random() * (THINK_MAX_MS - THINK_MIN_MS)),
+				);
 				// A sentence nothing read is worth keeping: it is the next eval case,
 				// and the sentence picked after it is what the rules should have read.
 				if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);

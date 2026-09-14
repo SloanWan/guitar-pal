@@ -10,8 +10,10 @@
  * workspace in both themes without a backing chip.
  */
 
-/** viewBox width; the height follows from the geometry below. */
-const VB_W = 100;
+/** viewBox width; the height follows from the geometry below. Fret cells are
+ * a little narrower than the string spacing, so the strip reads as a fretboard
+ * segment rather than a long ruler. */
+const VB_W = 78;
 /** Room left of the nut for the open (○) and muted (×) marks and the fret number. */
 const LEFT = 14;
 const FRET_CELLS = 5;

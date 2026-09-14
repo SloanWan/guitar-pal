@@ -74,10 +74,13 @@ import {
 } from "@/lib/fingerpickEdit";
 import { deriveRepeatDirectives, DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
 import {
+	chordFretHints,
 	chordSymbolLabel,
 	effectiveChords,
+	fillColumnFromChord,
 	patternHasChords,
 	setSlotChord,
+	type FretHint,
 } from "@/lib/fingerpickChords";
 import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 import type { ChordRef } from "@/lib/strumPatterns";
@@ -368,6 +371,22 @@ export default function FingerpickEditModal({
 		[working.measures],
 	);
 	const voicingsFor = useChordVoicings(chordRefs, userVoicings);
+	// What each string plays in the shape under every slot (null where no chord
+	// is in effect or its shapes are not here yet), for the hover hints and the
+	// column fill. One lookup per slot from the cache; nothing is fetched here.
+	const hintsBySlot = useMemo<(FretHint[] | null)[][]>(
+		() =>
+			chordsInEffect.map((row) =>
+				row.map((ref) => {
+					if (!ref) return null;
+					const state = voicingsFor(ref);
+					if (state.status !== "ready") return null;
+					const voicing = selectRefVoicing(ref, state.voicings);
+					return voicing ? chordFretHints(voicing) : null;
+				}),
+			),
+		[chordsInEffect, voicingsFor],
+	);
 	const techMenuRef = useRef<HTMLDivElement>(null);
 	// The middle (measure-grid) scroll area. Only this region scrolls — the
 	// header/metadata/footer stay pinned — and it's the coordinate space the
@@ -1074,6 +1093,12 @@ export default function FingerpickEditModal({
 	const voicingHere = chordHere && voicingList.length > 0 ? selectRefVoicing(chordHere, voicingList) : null;
 	const voicingIndex = voicingHere ? voicingList.findIndex((v) => v.id === voicingHere.id) : -1;
 
+	// Write the shape's frets into the slot's empty cells.
+	function applyFillFromChord() {
+		if (!singleTarget || !voicingHere) return;
+		commit((prev) => fillColumnFromChord(prev, singleTarget, voicingHere));
+	}
+
 	// Step to another shape of the same chord. Pinning a shape on a slot that only
 	// inherits its chord writes a mark there: a voicing change is a change.
 	function stepVoicing(delta: number) {
@@ -1255,6 +1280,16 @@ export default function FingerpickEditModal({
 								<ChevronRight size={14} />
 							</button>
 						</div>
+					)}
+					{chordHere && voicingHere && (
+						<button
+							type="button"
+							onClick={applyFillFromChord}
+							title="Write this shape's frets into the slot's empty cells. Cells already holding a fret or a dead note are left alone."
+							className="h-7 self-start border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+						>
+							Fill column from chord
+						</button>
 					)}
 				</div>
 			)}
@@ -1892,6 +1927,25 @@ export default function FingerpickEditModal({
 																				const tiedDisplay =
 																					sf.tied &&
 																					!sf.muted;
+																				// The shape's fret for this string, offered only
+																				// while the cell is hovered and empty: a chord is a
+																				// suggestion, and not every string gets played.
+																				const isEmpty =
+																					sf.fret === null &&
+																					!sf.muted;
+																				const hint: FretHint | null =
+																					hasFinePointer &&
+																					isEmpty &&
+																					hoverInMeasure?.slotIndex ===
+																						slotIndex &&
+																					hoverInMeasure.stringIndex ===
+																						stringIndex
+																						? (hintsBySlot[
+																								measureIndex
+																							]?.[slotIndex]?.[
+																								stringIndex
+																							] ?? null)
+																						: null;
 																				const l2Alpha =
 																					hoverInMeasure !=
 																					null
@@ -1941,6 +1995,25 @@ export default function FingerpickEditModal({
 																							setSelectedCell(
 																								cell,
 																							);
+																							// Taking the hint: the fret is
+																							// written, and stays editable.
+																							if (
+																								typeof hint ===
+																								"number"
+																							) {
+																								commit(
+																									(
+																										prev,
+																									) =>
+																										setFret(
+																											prev,
+																											cell,
+																											hint,
+																										),
+																								);
+																								pendingDigitRef.current =
+																									null;
+																							}
 																						}}
 																						onKeyDown={(
 																							e,
@@ -2009,8 +2082,22 @@ export default function FingerpickEditModal({
 																								: "hover:bg-raise text-ink-dim"
 																						} ${sf.fret === null && !sf.muted ? "text-ink-faint" : ""}`}
 																					>
-																						{cellDisplay(
-																							sf,
+																						{hint !==
+																						null ? (
+																							<span
+																								className={
+																									hint ===
+																									"/"
+																										? "text-ink-faint"
+																										: "text-denim-accent"
+																								}
+																							>
+																								{hint}
+																							</span>
+																						) : (
+																							cellDisplay(
+																								sf,
+																							)
 																						)}
 																						{glyph && (
 																							<span className="absolute top-0 right-0.5 text-[8px] leading-none text-denim">

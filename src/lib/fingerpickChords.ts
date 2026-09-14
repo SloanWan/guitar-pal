@@ -1,7 +1,8 @@
 import type { FingerpickPattern, Measure } from "./fingerpickTypes";
-import type { SlotTarget } from "./fingerpickEdit";
+import { setFret, type SlotTarget } from "./fingerpickEdit";
 import type { ChordRef } from "./strumPatterns";
 import { chordAbbreviation } from "./strumProgressions";
+import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicingToVexChords";
 
 /**
  * The chord in effect at every slot, index-aligned with `measures[i].slots[j]`.
@@ -60,4 +61,45 @@ export function setSlotChord(
  */
 export function chordSymbolLabel(chord: ChordRef): string {
 	return chordAbbreviation(chord);
+}
+
+/**
+ * What a string plays in a chord shape: its fret, or `"/"` for a string the
+ * shape leaves out. Not `"x"` — in the editor that is a struck dead note, a
+ * different thing from a string that simply is not part of the chord.
+ */
+export type FretHint = number | "/";
+
+/**
+ * The fret each string plays in `voicing`, in the fingerpick string order —
+ * index 0 = high e, as `BeatSlot.strings` and `STRING_LABELS` are laid out.
+ * That is the reverse of the voicing tables, where index 0 is the low E; the
+ * flip happens here and nowhere else. Absolute frets: `decodeVoicingStrings`
+ * already folds in `start_fret`, so a barre shape at the eighth fret hints 8,
+ * not 1. With a capo the TAB is written relative to it, so the shape's frets
+ * are written as they are — there is nothing to add.
+ */
+export function chordFretHints(voicing: ChordVoicing): FretHint[] {
+	return decodeVoicingStrings(voicing)
+		.map(({ absoluteFret }): FretHint => (absoluteFret === "x" ? "/" : absoluteFret))
+		.reverse();
+}
+
+/**
+ * Write the shape's frets into a slot's empty cells. Cells that already hold a
+ * fret or a dead note are left alone — the shape fills in around what the
+ * player wrote, never over it — and strings the shape leaves out stay empty.
+ */
+export function fillColumnFromChord(
+	pattern: FingerpickPattern,
+	target: SlotTarget,
+	voicing: ChordVoicing,
+): FingerpickPattern {
+	const slot = pattern.measures[target.measureIndex]?.slots[target.slotIndex];
+	if (!slot) return pattern;
+	return chordFretHints(voicing).reduce((p, hint, stringIndex) => {
+		const cell = slot.strings[stringIndex];
+		if (hint === "/" || cell.fret !== null || cell.muted) return p;
+		return setFret(p, { ...target, stringIndex }, hint);
+	}, pattern);
 }

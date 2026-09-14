@@ -4,10 +4,26 @@ import {
 	patternHasChords,
 	setSlotChord,
 	chordSymbolLabel,
+	chordFretHints,
+	fillColumnFromChord,
 } from "@/lib/fingerpickChords";
-import { makeEmptySlot } from "@/lib/fingerpickEdit";
+import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import type { ChordRef } from "@/lib/strumPatterns";
+import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+
+function voicing(overrides: Partial<ChordVoicing> = {}): ChordVoicing {
+	return {
+		id: "v",
+		label: null,
+		start_fret: 1,
+		barre_fret: null,
+		capo: false,
+		frets: "x32010",
+		fingers: "032010",
+		...overrides,
+	};
+}
 
 const C: ChordRef = { root: "C", suffix: "major" };
 const Am: ChordRef = { root: "A", suffix: "minor" };
@@ -97,5 +113,50 @@ describe("chordSymbolLabel", () => {
 		expect(chordSymbolLabel(Am)).toBe("Am");
 		expect(chordSymbolLabel(G7)).toBe("G7");
 		expect(chordSymbolLabel({ root: "F#", suffix: "m7b5" })).toBe("F#m7b5");
+	});
+});
+
+describe("chordFretHints", () => {
+	it("reads open-position frets off the shape in fingerpick order, high e first", () => {
+		// Voicing tables run low E → high e; slot strings run high e → low E.
+		expect(chordFretHints(voicing())).toEqual([0, 1, 0, 2, 3, "/"]);
+	});
+
+	it("gives absolute frets for a shape up the neck", () => {
+		// F-shape barre at the 8th fret = C major.
+		const v = voicing({ start_fret: 8, barre_fret: 1, capo: true, frets: "133211", fingers: "134211" });
+		expect(chordFretHints(v)).toEqual([8, 8, 9, 10, 10, 8]);
+	});
+
+	it("hints '/' rather than 'x' for a string the shape leaves out", () => {
+		expect(chordFretHints(voicing({ frets: "xx0232" }))).toEqual([2, 3, 2, 0, "/", "/"]);
+	});
+});
+
+describe("fillColumnFromChord", () => {
+	const target = { measureIndex: 0, slotIndex: 0 };
+
+	it("writes the shape's frets into the empty cells and skips left-out strings", () => {
+		const out = fillColumnFromChord(pattern([measure("a", [undefined])]), target, voicing());
+		expect(out.measures[0].slots[0].strings.map((sf) => sf.fret)).toEqual([
+			0, 1, 0, 2, 3, null,
+		]);
+	});
+
+	it("leaves cells that already hold a fret or a dead note alone", () => {
+		let p = pattern([measure("a", [undefined])]);
+		p = setFret(p, { ...target, stringIndex: 1 }, 5);
+		p = toggleMuted(p, { ...target, stringIndex: 2 });
+		const out = fillColumnFromChord(p, target, voicing());
+		const strings = out.measures[0].slots[0].strings;
+		expect(strings[1].fret).toBe(5);
+		expect(strings[2].muted).toBe(true);
+		expect(strings[2].fret).toBeNull();
+		expect(strings.map((sf) => sf.fret)).toEqual([0, 5, null, 2, 3, null]);
+	});
+
+	it("is a no-op on a slot that does not exist", () => {
+		const p = pattern([measure("a", [undefined])]);
+		expect(fillColumnFromChord(p, { measureIndex: 3, slotIndex: 0 }, voicing())).toBe(p);
 	});
 });

@@ -15,8 +15,10 @@
  *
  * Interaction is position-only and never re-renders the board: hovering a slot
  * rings its unisons and octaves by toggling `data-hover` on a handful of nodes;
- * pressing a slot reports `{ string, fret, midi }` and plays a transient pulse
- * (lit slot) or pluck (dormant slot) straight on the DOM.
+ * pressing a slot reports `{ string, fret, midi }` and plays a transient
+ * ripple straight on the DOM, plus a pulse (lit slot) or a string pluck
+ * (dormant slot). The same feedback is available through the `strike` handle
+ * for a note or chord that sounded elsewhere.
  *
  * Sizing: the board scales so that `VISIBLE_FRETS` cells fill the container,
  * the size a full-width 15-fret board had, and the rest of the 22-fret neck
@@ -25,10 +27,17 @@
  * from shrinking the cells, it scrolls further instead. Geometry is uniform
  * per fret rather than the real 2^(1/12) taper so every position reads the same.
  */
-import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import {
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useRef,
+	type PointerEvent as ReactPointerEvent,
+	type Ref,
+} from "react";
 
 import { STRING_LABELS } from "@/lib/chordVoicingToMidi";
-import { relatedSlots, slotMidi, type SlotNote } from "@/lib/fretboard/positions";
+import { relatedSlots, slotMidi, type SlotNote, type SlotPosition } from "@/lib/fretboard/positions";
 import {
 	STRING_COUNT,
 	slotKey,
@@ -67,7 +76,7 @@ const DESIGN_W = LABEL_W + VISIBLE_FRETS * FRET_W + EDGE * 2;
 /** A lit slot pulses: 1 → 1.35 → 1 on the shared spring. */
 const PULSE_MS = 350;
 const PULSE_SCALE = 1.35;
-/** A dormant slot plucks: the string rings for this long… */
+/** Every strike sends out a ripple, and a dormant slot plucks: the string rings for this long… */
 const PLUCK_MS = 300;
 /** …over this many cells either side of the tap… */
 const PLUCK_REACH = FRET_W * 1.5;
@@ -75,10 +84,14 @@ const PLUCK_REACH = FRET_W * 1.5;
 const PLUCK_AMP = 3.5;
 const PLUCK_HZ = 14;
 const PLUCK_TAU_S = 0.09;
-/** The pluck's ring expands from the dot to this many times `HOVER_R`. */
+/** The ripple expands from the dot to this many times `HOVER_R`. */
 const POP_SCALE = 1.7;
 /** A pointer that travels further than this before lifting is a scroll, not a tap. */
 const TAP_SLOP_PX = 8;
+/** The capo bar: a band just behind its fret wire, square-ended like everything here. */
+const CAPO_W = 7;
+/** Default stagger for `strike`, matching the strum engine's per-string offset. */
+const STRIKE_STAGGER_MS = 10;
 
 /**
  * A length in CSS: `units` design units at the container's scale, never below
@@ -132,8 +145,25 @@ function canAnimate(el: Element): el is Element & Animatable {
 
 export type HoverRole = "self" | "unison" | "octave";
 
+export interface FretboardHandle {
+	/**
+	 * Play the press feedback (pulse on a lit slot, pluck on a dormant one) on
+	 * each slot in order, `staggerMs` apart, the way a strum reaches the
+	 * strings. No-op under reduced motion.
+	 */
+	strike: (slots: readonly SlotPosition[], staggerMs?: number) => void;
+}
+
 export interface FretboardComponentProps extends FretboardProps {
+	ref?: Ref<FretboardHandle>;
 	className?: string;
+	/**
+	 * A capo at this fret: a bar is drawn across it and the frets behind it
+	 * are dimmed. Pressing a slot behind the capo reports the pitch the capo
+	 * makes the string sound, since nothing behind a capo can sound itself.
+	 * 0 or absent: no capo.
+	 */
+	capo?: number;
 	/** Accessible name for the board; defaults to a plain description. */
 	label?: string;
 	/**
@@ -164,10 +194,12 @@ interface PendingPress {
 }
 
 export default function Fretboard({
+	ref,
 	marks,
 	fromFret,
 	toFret,
 	className,
+	capo = 0,
 	label = "Guitar fretboard",
 	onSlotPress,
 	onSlotHover,
@@ -179,14 +211,19 @@ export default function Fretboard({
 	const pending = useRef<PendingPress | null>(null);
 	/** One running pluck per string, so a re-pluck restarts rather than stacks. */
 	const plucks = useRef(new Map<number, number>());
+	/** Pending staggered strikes, so unmount cancels them (Constraint 4). */
+	const strikes = useRef(new Set<ReturnType<typeof setTimeout>>());
 	const canPress = pressable && !!onSlotPress;
 
 	// Constraint 4: a pluck still in flight on unmount must not touch a dead node.
 	useEffect(() => {
 		const running = plucks.current;
+		const pendingStrikes = strikes.current;
 		return () => {
 			for (const id of running.values()) cancelAnimationFrame(id);
 			running.clear();
+			for (const t of pendingStrikes) clearTimeout(t);
+			pendingStrikes.clear();
 		};
 	}, []);
 
@@ -246,20 +283,24 @@ export default function Fretboard({
 		);
 	}, []);
 
+	/** The ripple: a ring that grows out of the slot and fades. */
+	const ripple = useCallback((string: number, fret: number) => {
+		const pop = neck.current?.querySelector(`[data-slot="${slotKey(string, fret)}"] .fb-pop`);
+		if (!pop || !canAnimate(pop)) return;
+		pop.animate(
+			[
+				{ transform: "scale(0.5)", opacity: 0.9 },
+				{ transform: `scale(${POP_SCALE})`, opacity: 0 },
+			],
+			{ duration: PLUCK_MS, easing: "ease-out" },
+		);
+	}, []);
+
+	/** The string vibrates around the slot for a moment. */
 	const pluck = useCallback(
-		(slotEl: SVGGElement, string: number, fret: number) => {
+		(string: number, fret: number) => {
 			const board = neck.current;
 			if (!board) return;
-			const pop = slotEl.querySelector(".fb-pop");
-			if (pop && canAnimate(pop)) {
-				pop.animate(
-					[
-						{ transform: "scale(0.5)", opacity: 0.9 },
-						{ transform: `scale(${POP_SCALE})`, opacity: 0 },
-					],
-					{ duration: PLUCK_MS, easing: "ease-out" },
-				);
-			}
 			const path = board.querySelector<SVGPathElement>(`.fb-string[data-string="${string}"]`);
 			if (!path) return;
 			const y = stringY(string);
@@ -291,6 +332,41 @@ export default function Fretboard({
 		[fromFret, toFret],
 	);
 
+	/** A ripple always; on top of it a lit slot pulses, a dormant one plucks its string. */
+	const feedback = useCallback(
+		(string: number, fret: number) => {
+			const board = neck.current;
+			if (!board) return;
+			ripple(string, fret);
+			const mark = board.querySelector<SVGGElement>(`.fb-mark[data-string="${string}"][data-fret="${fret}"]`);
+			const lit = !!mark && mark.dataset.emphasis !== "none";
+			if (lit) pulse(string, fret);
+			else pluck(string, fret);
+		},
+		[ripple, pulse, pluck],
+	);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			strike(slots, staggerMs = STRIKE_STAGGER_MS) {
+				if (prefersReducedMotion()) return;
+				slots.forEach((slot, i) => {
+					if (i === 0) {
+						feedback(slot.string, slot.fret);
+						return;
+					}
+					const timer = setTimeout(() => {
+						strikes.current.delete(timer);
+						feedback(slot.string, slot.fret);
+					}, i * staggerMs);
+					strikes.current.add(timer);
+				});
+			},
+		}),
+		[feedback],
+	);
+
 	const handlePointerDown = useCallback(
 		(e: ReactPointerEvent<SVGSVGElement>) => {
 			if (!canPress) return;
@@ -316,17 +392,14 @@ export default function Fretboard({
 			const slot = slotFromTarget(e.target);
 			if (!slot || slotKey(slot.string, slot.fret) !== press.key) return;
 
-			onSlotPress?.({ string: slot.string, fret: slot.fret, midi: slotMidi(slot.string, slot.fret) });
+			// Behind a capo the string cannot sound at this fret; it sounds at the capo.
+			const soundingFret = capo > 0 && slot.fret < capo ? capo : slot.fret;
+			onSlotPress?.({ string: slot.string, fret: slot.fret, midi: slotMidi(slot.string, soundingFret) });
 
 			if (prefersReducedMotion()) return;
-			const mark = neck.current?.querySelector<SVGGElement>(
-				`.fb-mark[data-string="${slot.string}"][data-fret="${slot.fret}"]`,
-			);
-			const lit = !!mark && mark.dataset.emphasis !== "none";
-			if (lit) pulse(slot.string, slot.fret);
-			else pluck(slot.el, slot.string, slot.fret);
+			feedback(slot.string, slot.fret);
 		},
-		[canPress, onSlotPress, pulse, pluck],
+		[canPress, capo, onSlotPress, feedback],
 	);
 
 	const cancelPress = useCallback(() => {
@@ -385,6 +458,7 @@ export default function Fretboard({
 						data-from-fret={fromFret}
 						data-to-fret={toFret}
 						data-pressable={canPress || undefined}
+						data-capo={capo > 0 ? capo : undefined}
 						aria-disabled={onSlotPress && !pressable ? true : undefined}
 						onPointerOver={handlePointerOver}
 						onPointerOut={handlePointerOut}
@@ -476,6 +550,26 @@ export default function Fretboard({
 									strokeWidth={STRING_STROKE[string]}
 								/>
 							))}
+
+							{/* Capo: the frets behind it fall into shade, the bar clamps the strings. */}
+							{capo > 0 && capo >= fromFret && capo <= toFret && (
+								<g className="fb-capo" data-fret={capo}>
+									<rect
+										className="fb-capo-shade"
+										x={fromFret * FRET_W}
+										y={stringY(STRING_COUNT - 1) - 8}
+										width={wireX(capo) - CAPO_W - 2 - fromFret * FRET_W}
+										height={stringY(0) - stringY(STRING_COUNT - 1) + 16}
+									/>
+									<rect
+										className="fb-capo-bar"
+										x={wireX(capo) - CAPO_W - 2}
+										y={stringY(STRING_COUNT - 1) - 8}
+										width={CAPO_W}
+										height={stringY(0) - stringY(STRING_COUNT - 1) + 16}
+									/>
+								</g>
+							)}
 
 							{/* Fret numbers under each cell. */}
 							{frets.map((fret) => (

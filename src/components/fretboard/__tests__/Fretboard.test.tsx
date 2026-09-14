@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import Fretboard, { FRET_W, type FretboardComponentProps } from "@/components/fretboard/Fretboard";
+import Fretboard, { FRET_W, type FretboardComponentProps, type FretboardHandle } from "@/components/fretboard/Fretboard";
 import type { FretMark } from "@/lib/fretboard/types";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -233,6 +233,44 @@ describe("Fretboard — press", () => {
 		pointer(board.hit(0, 5), "pointerover");
 		expect(board.hoverOf(0, 5)).toBe("self");
 		board.unmount();
+	});
+
+	it("strikes a list of slots in order with a stagger, through the ref handle", async () => {
+		vi.useFakeTimers();
+		try {
+			const handle = createRef<FretboardHandle>();
+			const board = mount({ ref: handle });
+			const d = (s: number) => board.host.querySelector(`.fb-string[data-string="${s}"]`)!.getAttribute("d");
+			// Two dormant slots on different strings: each pluck bends its own string.
+			act(() => handle.current!.strike([{ string: 2, fret: 4 }, { string: 3, fret: 4 }], 20));
+			act(() => vi.advanceTimersByTime(16));
+			expect(d(2)).toContain("Q");
+			expect(d(3)).not.toContain("Q"); // its turn comes 20 ms later
+			act(() => vi.advanceTimersByTime(20));
+			expect(d(3)).toContain("Q");
+			board.unmount();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("draws a capo, dims the frets behind it, and reports the capo's pitch for a press behind it", () => {
+		const onSlotPress = vi.fn();
+		const board = mount({ onSlotPress, capo: 2 });
+		const neck = board.host.querySelector("svg[data-from-fret]") as SVGElement;
+		expect(neck.getAttribute("data-capo")).toBe("2");
+		expect(board.host.querySelector(".fb-capo[data-fret='2'] .fb-capo-bar")).not.toBeNull();
+		const shade = board.host.querySelector(".fb-capo-shade") as SVGRectElement;
+		expect(Number(shade.getAttribute("width"))).toBeLessThan(3 * FRET_W); // covers cells 0–1 and part of 2
+		// Fret 1 on the low E cannot sound behind a capo at 2: it reports F#2 (42), the capo's pitch.
+		pointer(board.hit(0, 1), "pointerdown", { clientX: 0, clientY: 0 });
+		pointer(board.hit(0, 1), "pointerup", { clientX: 0, clientY: 0 });
+		expect(onSlotPress).toHaveBeenLastCalledWith({ string: 0, fret: 1, midi: 42 });
+		pointer(board.hit(0, 5), "pointerdown", { clientX: 0, clientY: 0 });
+		pointer(board.hit(0, 5), "pointerup", { clientX: 0, clientY: 0 });
+		expect(onSlotPress).toHaveBeenLastCalledWith({ string: 0, fret: 5, midi: 45 });
+		board.unmount();
+		expect(mount().host.querySelector(".fb-capo")).toBeNull();
 	});
 
 	it("plucks the string under a dormant slot and lets it settle straight", async () => {

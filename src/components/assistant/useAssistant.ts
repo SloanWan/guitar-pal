@@ -10,6 +10,8 @@ import { recordMiss } from "@/lib/strumAssistant/missLog";
 import { uiLang, type Lang } from "@/lib/strumAssistant/lang";
 import type { AssistantProposal } from "@/lib/strumAssistant/types";
 import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
+import { IDLE_MS, isIdle, readConversation, writeConversation } from "@/lib/strumAssistant/conversation";
+import { createClient } from "@/lib/supabase";
 
 /**
  * Drives one assistant conversation.
@@ -43,49 +45,6 @@ export interface AssistantMessage {
 	streamed?: boolean;
 }
 
-/**
- * Where the conversation waits between openings of the panel.
- *
- * sessionStorage rather than memory alone: the hook already lives in the
- * topbar, which outlives the panel and every route change, so memory covers
- * closing and reopening. What memory does not cover is a refresh — and a
- * conversation that vanishes on F5 reads as lost work. The tab is the natural
- * end of it: nothing here is worth keeping across days.
- */
-const STORAGE_KEY = "guitarpal:strumAssistantConversation";
-/** Bound the stored transcript so a long session does not grow without limit. */
-const MAX_STORED_MESSAGES = 40;
-
-function readStored(): AssistantMessage[] {
-	try {
-		const raw = sessionStorage.getItem(STORAGE_KEY);
-		if (!raw) return [];
-		const parsed: unknown = JSON.parse(raw);
-		if (!Array.isArray(parsed)) return [];
-		// Untrusted like any storage: keep only what reads as a message.
-		return parsed.filter(
-			(m): m is AssistantMessage =>
-				typeof m === "object" &&
-				m !== null &&
-				typeof (m as AssistantMessage).id === "string" &&
-				((m as AssistantMessage).role === "user" || (m as AssistantMessage).role === "assistant") &&
-				typeof (m as AssistantMessage).text === "string",
-		);
-	} catch {
-		return [];
-	}
-}
-
-function writeStored(messages: AssistantMessage[]): void {
-	try {
-		if (messages.length === 0) sessionStorage.removeItem(STORAGE_KEY);
-		else sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_STORED_MESSAGES)));
-	} catch {
-		// Private mode or a full quota: the conversation still works, it just
-		// does not survive a refresh.
-	}
-}
-
 /** How long the assistant appears to think before it answers. */
 const THINK_MIN_MS = 150;
 const THINK_MAX_MS = 2000;
@@ -101,13 +60,9 @@ export function useAssistant() {
 	// renders the transcript is mounted until the popover opens, so the markup
 	// React hydrates against does not depend on this.
 	const [messages, setMessages] = useState<AssistantMessage[]>(() =>
-		typeof window === "undefined" ? [] : readStored(),
+		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now()),
 	);
 	const [pending, setPending] = useState(false);
-
-	useEffect(() => {
-		writeStored(messages);
-	}, [messages]);
 
 	const indexRef = useRef<Promise<readonly ChordIndexEntry[]> | null>(null);
 	const patternsRef = useRef<Promise<readonly StrumPattern[]> | null>(null);
@@ -171,6 +126,61 @@ export function useAssistant() {
 		setGreeted(false);
 	}, []);
 
+	/**
+	 * When the transcript last changed. A ref, not state: it is read by the
+	 * idle check on opening and written by the persist effect, and nothing
+	 * renders from it. Starts at 0 — "never" — and is stamped by the persist
+	 * effect on mount, before anything can open the panel.
+	 */
+	const touchedAtRef = useRef(0);
+
+	// Persist on every change, and start the silence clock over. Ten minutes
+	// without a change ends the conversation — see `conversation.ts` for why.
+	// The timer is cleared on the next change and on unmount, so at most one is
+	// ever pending.
+	useEffect(() => {
+		const now = Date.now();
+		touchedAtRef.current = now;
+		writeConversation(messages, now);
+		if (messages.length === 0) return;
+		const timer = setTimeout(reset, IDLE_MS);
+		return () => clearTimeout(timer);
+	}, [messages, reset]);
+
+	/**
+	 * For the moment the panel opens: a timer that fired late (a laptop asleep,
+	 * a throttled background tab) is caught up here, so what opens after a long
+	 * silence is a fresh greeting, never a stale thread.
+	 */
+	const expireIfIdle = useCallback(() => {
+		if (messages.length > 0 && isIdle(touchedAtRef.current, Date.now())) reset();
+	}, [messages.length, reset]);
+
+	// A change of who is signed in ends the conversation: the transcript may
+	// name the previous person's patterns, and the greeting is by name. Keyed on
+	// the user id rather than the event: `SIGNED_IN` also fires when a tab
+	// regains focus, which is nobody new.
+	useEffect(() => {
+		const supabase = createClient();
+		// `undefined` until the first event: the initial session is the baseline,
+		// not a change.
+		let known: string | null | undefined;
+		const {
+			data: { subscription },
+		} = supabase.auth.onAuthStateChange((_event, session) => {
+			const id = session?.user.id ?? null;
+			if (known === undefined) {
+				known = id;
+				return;
+			}
+			if (id !== known) {
+				known = id;
+				reset();
+			}
+		});
+		return () => subscription.unsubscribe();
+	}, [reset]);
+
 	/** The edit this message carried has been confirmed — the card stays settled. */
 	const markEditDone = useCallback((id: string) => {
 		setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, editDone: true } : m)));
@@ -231,6 +241,7 @@ export function useAssistant() {
 		pending,
 		send,
 		reset,
+		expireIfIdle,
 		markStreamed,
 		markEditDone,
 		patterns,

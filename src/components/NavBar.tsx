@@ -9,7 +9,12 @@ import { profileOf } from "@/lib/profile";
 import NavBarScrollWrapper from "./NavBarScrollWrapper";
 import AssistantLauncher from "./assistant/AssistantLauncher";
 
-export default async function NavBar() {
+/**
+ * `hideSignIn` is for the sign-in page itself, where a "Sign In" CTA in the
+ * topbar would point at the page the visitor is already on. The signed-out
+ * cluster then keeps only the dev theme toggle, at every width.
+ */
+export default async function NavBar({ hideSignIn = false }: { hideSignIn?: boolean } = {}) {
 	const supabase = await createSupabaseServer();
 	const {
 		data: { user },
@@ -57,6 +62,8 @@ export default async function NavBar() {
 							// Signed in: the avatar menu is the rightmost control at every
 							// width and carries theme + sign-out itself, so no collapse menu.
 							<UserMenu profile={profile} />
+						) : hideSignIn ? (
+							process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeToggle />
 						) : (
 							<>
 								{/* ≥ nav: signed-out controls sit inline in the topbar. */}

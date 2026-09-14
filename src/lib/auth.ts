@@ -92,3 +92,10 @@ export async function refreshSession() {
 	const { error } = await supabase.auth.refreshSession();
 	return { error };
 }
+
+/** Re-sends the sign-up confirmation email; rate-limited server-side. */
+export async function resendSignUpConfirmation(email: string) {
+	const supabase = createClient();
+	const { error } = await supabase.auth.resend({ type: "signup", email });
+	return { error };
+}

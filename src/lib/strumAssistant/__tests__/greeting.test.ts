@@ -7,6 +7,10 @@ describe("playerName", () => {
 		expect(playerName({ name: "sloan" }, undefined)).toBe("Sloan");
 	});
 
+	it("prefers the nickname the player set over the provider's name", () => {
+		expect(playerName({ full_name: "Sloan Wan", nickname: "riff" }, undefined)).toBe("Riff");
+	});
+
 	it("falls back to the handle in an email", () => {
 		expect(playerName({}, "nysuswan@gmail.com")).toBe("Nysuswan");
 		expect(playerName(undefined, "first.last@example.com")).toBe("First");

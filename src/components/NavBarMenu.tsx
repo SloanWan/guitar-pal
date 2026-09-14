@@ -3,7 +3,6 @@
 import Link from "@/components/AppLink";
 import { EllipsisVertical } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
-import LogoutButton from "./LogoutButton";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -12,13 +11,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 /**
- * Below the `nav:` breakpoint the topbar can't fit the theme toggle and the
- * auth control side by side, so they collapse into this single icon trigger.
- * The panel reuses the exact same controls (ThemeToggle, LogoutButton, the
+ * Signed-out only. Below the `nav:` breakpoint the topbar can't fit the theme
+ * toggle and the sign-in CTA side by side, so they collapse into this single
+ * icon trigger. The panel reuses the exact same controls (ThemeToggle, the
  * nav-CTA link) rather than re-styling them, so mobile and desktop stay in
- * lockstep. Rendered only under `nav:` — the desktop cluster owns ≥ nav:.
+ * lockstep. Rendered only under `nav:` — the desktop cluster owns ≥ nav:. A
+ * signed-in user gets UserMenu at every width instead, which carries the
+ * theme control itself.
  */
-export default function NavBarMenu({ userEmail }: { userEmail: string | null }) {
+export default function NavBarMenu() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
@@ -52,21 +53,12 @@ export default function NavBarMenu({ userEmail }: { userEmail: string | null }) 
 					</>
 				)}
 
-				{userEmail ? (
-					<div className="flex flex-col gap-2 pt-2">
-						<span className="truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">
-							{userEmail}
-						</span>
-						<LogoutButton className="w-full justify-center" />
-					</div>
-				) : (
-					<Link
-						href="/auth"
-						className="mt-2 flex h-(--h-control) w-full items-center justify-center border border-denim bg-transparent font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-					>
-						Sign In
-					</Link>
-				)}
+				<Link
+					href="/auth"
+					className="mt-2 flex h-(--h-control) w-full items-center justify-center border border-denim bg-transparent font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+				>
+					Sign In
+				</Link>
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

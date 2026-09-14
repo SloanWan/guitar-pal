@@ -21,6 +21,8 @@ const MESSAGES: Record<string, string> = {
 	signup_disabled: "Sign-ups are closed right now.",
 	over_request_rate_limit: "Too many attempts. Wait a minute and try again.",
 	over_email_send_rate_limit: "We've sent as many emails as we can for now. Try again in a few minutes.",
+	same_password: "That's already your password. Pick a different one.",
+	otp_expired: "That link has expired. Request a new one.",
 	validation_failed: "Check the email and password and try again.",
 	request_timeout: "The server took too long to answer. Try again.",
 };

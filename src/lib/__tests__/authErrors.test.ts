@@ -12,6 +12,11 @@ describe("authErrorMessage", () => {
 		expect(authErrorMessage({ code: "over_request_rate_limit", message: "x" })).toMatch(/too many attempts/i);
 	});
 
+	it("maps the codes the password-reset flow can hit", () => {
+		expect(authErrorMessage({ code: "same_password", message: "x" })).toMatch(/already your password/i);
+		expect(authErrorMessage({ code: "otp_expired", message: "x" })).toMatch(/expired/i);
+	});
+
 	it("treats email_exists like user_already_exists", () => {
 		expect(authErrorMessage({ code: "email_exists", message: "x" })).toBe(
 			authErrorMessage({ code: "user_already_exists", message: "x" }),

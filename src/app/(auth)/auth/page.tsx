@@ -1,9 +1,9 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, KeyboardEvent } from "react";
+import type { FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, MailCheck } from "lucide-react";
+import { MailCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import Link from "@/components/AppLink";
@@ -21,6 +21,7 @@ import { passwordStrength } from "@/lib/passwordStrength";
 import { displayNameOf } from "@/lib/profile";
 import { safeRedirectPath } from "@/lib/safeRedirect";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
+import PasswordField from "@/components/auth/PasswordField";
 import TabStripBackdrop from "@/components/TabStripBackdrop";
 import { fingerpickToTabStrip } from "@/lib/fingerpickToTabStrip";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
@@ -49,8 +50,6 @@ function AuthPageInner() {
 	const [email, setEmail] = useState("");
 	const [emailTouched, setEmailTouched] = useState(false);
 	const [password, setPassword] = useState("");
-	const [showPassword, setShowPassword] = useState(false);
-	const [capsLock, setCapsLock] = useState(false);
 	const [busy, setBusy] = useState(false);
 	// Tagged with the tab it came from, so switching tabs drops the previous
 	// verdict without an effect: an error from sign-in is not shown on sign-up.
@@ -96,10 +95,6 @@ function AuthPageInner() {
 		if (raw) params.set("redirect", raw);
 		const query = params.toString();
 		return query ? `/auth?${query}` : "/auth";
-	}
-
-	function trackCapsLock(e: KeyboardEvent<HTMLInputElement>) {
-		setCapsLock(e.getModifierState("CapsLock"));
 	}
 
 	// On success `busy` deliberately stays true: `router.push` resolves before
@@ -218,44 +213,29 @@ function AuthPageInner() {
 									</div>
 
 									<div className="flex flex-col gap-1.5">
-										<label htmlFor="auth-password" className={LABEL}>
-											Password
-										</label>
-										<div className="relative">
-											<input
-												ref={passwordRef}
-												id="auth-password"
-												name="password"
-												type={showPassword ? "text" : "password"}
-												autoComplete={mode === "signin" ? "current-password" : "new-password"}
-												placeholder={mode === "signup" ? "8+ characters" : "••••••••"}
-												value={password}
-												onChange={(e) => setPassword(e.target.value)}
-												onKeyDown={trackCapsLock}
-												onKeyUp={trackCapsLock}
-												onBlur={() => setCapsLock(false)}
-												aria-describedby={errorId}
-												className={`${INPUT} pr-10`}
-											/>
-											<button
-												type="button"
-												onClick={() => setShowPassword((v) => !v)}
-												aria-label={showPassword ? "Hide password" : "Show password"}
-												aria-pressed={showPassword}
-												className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ink-faint transition-colors duration-(--dur-hover) hover:text-ink focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:-outline-offset-2"
-											>
-												{showPassword ? (
-													<EyeOff className="size-4" strokeWidth={1.5} aria-hidden="true" />
-												) : (
-													<Eye className="size-4" strokeWidth={1.5} aria-hidden="true" />
-												)}
-											</button>
+										<div className="flex items-baseline justify-between">
+											<label htmlFor="auth-password" className={LABEL}>
+												Password
+											</label>
+											{mode === "signin" && (
+												<Link
+													href={email ? `/auth/reset?email=${encodeURIComponent(email.trim())}` : "/auth/reset"}
+													className="font-mono text-[10px] tracking-[0.04em] text-ink-dim underline-offset-4 hover:text-denim-accent hover:underline"
+												>
+													Forgot password?
+												</Link>
+											)}
 										</div>
-										{capsLock && (
-											<span className={HELP} aria-live="polite">
-												Caps Lock is on
-											</span>
-										)}
+										<PasswordField
+											ref={passwordRef}
+											id="auth-password"
+											name="password"
+											autoComplete={mode === "signin" ? "current-password" : "new-password"}
+											placeholder={mode === "signup" ? "8+ characters" : "••••••••"}
+											value={password}
+											onChange={(e) => setPassword(e.target.value)}
+											aria-describedby={errorId}
+										/>
 										{strength && (
 											<PasswordStrengthMeter strength={strength} empty={password.length === 0} />
 										)}

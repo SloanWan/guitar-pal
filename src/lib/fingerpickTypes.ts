@@ -98,5 +98,12 @@ export type FingerpickPattern = {
 	measures: Measure[];
 	bpm: number;
 	timeSignature: [number, number];
+	/**
+	 * The fret the pattern is played behind. The TAB is written relative to the
+	 * capo (it is the nut), chord shapes are written as they are, and playback
+	 * sounds this many semitones higher. Absent or 0 = no capo. Read it through
+	 * `patternCapo` in fingerpickChords.ts.
+	 */
+	capo?: number;
 };
 

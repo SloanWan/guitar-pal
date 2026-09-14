@@ -1,6 +1,7 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { FingerpickPattern, Measure } from "./fingerpickTypes";
 import { normalizeLoadedPattern } from "./fingerpickEdit";
+import { patternCapo } from "./fingerpickChords";
 
 // localStorage key for guest (logged-out) custom fingerpick patterns.
 export const LOCAL_FINGERPICK_PATTERNS_KEY = "customFingerpickPatterns";
@@ -17,6 +18,8 @@ type FingerpickPatternRow = {
 	bpm: number;
 	time_signature: [number, number];
 	measures: Measure[];
+	/** Null for rows written before the column existed, and for no capo. */
+	capo: number | null;
 };
 
 function rowToPattern(row: FingerpickPatternRow): FingerpickPattern {
@@ -28,6 +31,7 @@ function rowToPattern(row: FingerpickPatternRow): FingerpickPattern {
 		bpm: row.bpm,
 		timeSignature: row.time_signature,
 		measures: row.measures,
+		...(row.capo ? { capo: row.capo } : {}),
 	});
 }
 
@@ -40,6 +44,7 @@ function patternToRow(user: User, pattern: FingerpickPattern) {
 		bpm: pattern.bpm,
 		time_signature: pattern.timeSignature,
 		measures: pattern.measures,
+		capo: patternCapo(pattern) || null,
 	};
 }
 

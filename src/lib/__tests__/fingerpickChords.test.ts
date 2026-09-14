@@ -6,6 +6,8 @@ import {
 	chordSymbolLabel,
 	chordFretHints,
 	fillColumnFromChord,
+	patternCapo,
+	setPatternCapo,
 } from "@/lib/fingerpickChords";
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
@@ -158,5 +160,26 @@ describe("fillColumnFromChord", () => {
 	it("is a no-op on a slot that does not exist", () => {
 		const p = pattern([measure("a", [undefined])]);
 		expect(fillColumnFromChord(p, { measureIndex: 3, slotIndex: 0 }, voicing())).toBe(p);
+	});
+});
+
+describe("pattern capo", () => {
+	it("reads 0 for a pattern without one, and the fret otherwise", () => {
+		const p = pattern([measure("a", [undefined])]);
+		expect(patternCapo(p)).toBe(0);
+		expect(patternCapo({ ...p, capo: 4 })).toBe(4);
+	});
+
+	it("setPatternCapo stores a fret and removes the key at 0", () => {
+		const p = pattern([measure("a", [undefined])]);
+		expect(setPatternCapo(p, 2).capo).toBe(2);
+		expect("capo" in setPatternCapo(setPatternCapo(p, 2), 0)).toBe(false);
+	});
+
+	it("clamps and rounds what it is handed", () => {
+		const p = pattern([measure("a", [undefined])]);
+		expect(setPatternCapo(p, 2.6).capo).toBe(3);
+		expect(setPatternCapo(p, 99).capo).toBe(12);
+		expect("capo" in setPatternCapo(p, -1)).toBe(false);
 	});
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { patternCapo } from "@/lib/fingerpickChords";
 import { User } from "@supabase/supabase-js";
 import { ChevronDown, Copy, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
@@ -50,7 +51,8 @@ function PatternCard({
 	// in the row's own controls, the way the strum library and the editors do.
 	const [confirmDelete, setConfirmDelete] = useState(false);
 
-	const meta = `${pattern.measures.length} BARS · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${pattern.bpm} BPM`;
+	const capo = patternCapo(pattern);
+	const meta = `${pattern.measures.length} BARS · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${pattern.bpm} BPM${capo > 0 ? ` · CAPO ${capo}` : ""}`;
 
 	async function copyPatternJson() {
 		try {

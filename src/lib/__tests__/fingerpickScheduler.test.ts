@@ -230,6 +230,36 @@ describe("fingerpickPatternToScheduleEvents — MIDI resolution", () => {
 	});
 });
 
+describe("fingerpickPatternToScheduleEvents — capo", () => {
+	const slots = [
+		slot("s1", "quarter", { 0: { fret: 3 }, 5: { fret: 0 } }),
+		slot("s2", "quarter", { 3: { muted: true }, 2: { fret: 5, technique: "slide-up" } }),
+	];
+
+	it("raises every event by the capo, written frets and open dead notes alike", () => {
+		const plain = fingerpickPatternToScheduleEvents(pattern(120, slots), 120);
+		const behind = fingerpickPatternToScheduleEvents({ ...pattern(120, slots), capo: 3 }, 120);
+		expect(behind).toHaveLength(plain.length);
+		behind.forEach((ev, i) => {
+			expect(ev.midi).toBe(plain[i].midi + 3);
+			expect({ ...ev, midi: 0 }).toEqual({ ...plain[i], midi: 0 });
+		});
+	});
+
+	it("capo 0 or absent leaves the events untouched", () => {
+		const plain = fingerpickPatternToScheduleEvents(pattern(120, slots), 120);
+		expect(fingerpickPatternToScheduleEvents({ ...pattern(120, slots), capo: 0 }, 120)).toEqual(
+			plain,
+		);
+	});
+
+	it("clamps a junk capo to the supported range", () => {
+		const [ev] = fingerpickPatternToScheduleEvents({ ...pattern(120, slots), capo: 40 }, 120);
+		const [plain] = fingerpickPatternToScheduleEvents(pattern(120, slots), 120);
+		expect(ev.midi).toBe(plain.midi + 12);
+	});
+});
+
 describe("fingerpickPatternToScheduleEvents — tied / silent strings", () => {
 	it("tied string produces no event (sustain — no re-attack)", () => {
 		const p = pattern(120, [

@@ -78,10 +78,13 @@ import {
 	chordSymbolLabel,
 	effectiveChords,
 	fillColumnFromChord,
+	patternCapo,
 	patternHasChords,
+	setPatternCapo,
 	setSlotChord,
 	type FretHint,
 } from "@/lib/fingerpickChords";
+import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
@@ -1562,6 +1565,25 @@ export default function FingerpickEditModal({
 								commit((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))
 							}
 							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+						/>
+					</div>
+					<div className="flex flex-col gap-1 w-20 shrink-0">
+						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+							Capo
+						</label>
+						{/* The TAB is written relative to the capo, so playback sounds this
+						    many semitones higher. Empty = no capo. */}
+						<input
+							type="number"
+							min={0}
+							max={STRUM_CAPO_MAX}
+							value={patternCapo(working) === 0 ? "" : patternCapo(working)}
+							onChange={(e) =>
+								commit((p) => setPatternCapo(p, Number(e.target.value) || 0))
+							}
+							placeholder="0"
+							aria-label="Capo fret — empty means no capo"
+							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 						/>
 					</div>
 					<div className="flex flex-col gap-1 w-20 shrink-0">

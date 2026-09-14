@@ -1,7 +1,7 @@
 import type { FingerpickPattern, Measure } from "./fingerpickTypes";
 import { setFret, type SlotTarget } from "./fingerpickEdit";
 import type { ChordRef } from "./strumPatterns";
-import { chordAbbreviation } from "./strumProgressions";
+import { chordAbbreviation, normalizeCapo } from "./strumProgressions";
 import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicingToVexChords";
 
 /**
@@ -61,6 +61,23 @@ export function setSlotChord(
  */
 export function chordSymbolLabel(chord: ChordRef): string {
 	return chordAbbreviation(chord);
+}
+
+/** The capo a pattern is played behind — 0 when it carries none. Same range as strum. */
+export function patternCapo(pattern: Pick<FingerpickPattern, "capo">): number {
+	return normalizeCapo(pattern.capo);
+}
+
+/**
+ * Put a capo on a pattern, or take it off (0). No capo leaves no key behind, so
+ * a pattern returned to "no capo" is byte-identical to one that never had it —
+ * the editor's dirty check compares serialized snapshots.
+ */
+export function setPatternCapo(pattern: FingerpickPattern, capo: number): FingerpickPattern {
+	const { capo: _capo, ...rest } = pattern;
+	void _capo;
+	const normalized = normalizeCapo(capo);
+	return normalized === 0 ? rest : { ...rest, capo: normalized };
 }
 
 /**

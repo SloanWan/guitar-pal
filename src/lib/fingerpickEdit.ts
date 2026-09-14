@@ -7,6 +7,7 @@ import type {
 	Stroke,
 	Technique,
 } from "./fingerpickTypes";
+import { normalizeCapo } from "./strumProgressions";
 
 // ── Cell / target identity ───────────────────────────────────────────────────
 
@@ -1009,6 +1010,14 @@ export function mergeTargetsForSlot(measure: Measure, slotIndex: number): Durati
 // quarter weight so the measure total is unchanged. Runs on every load path
 // (Supabase rows, localStorage, tab import); a no-op for already-migrated patterns.
 export function normalizeLoadedPattern(pattern: FingerpickPattern): FingerpickPattern {
+	// A capo is kept only when it is a real fret: out-of-range or junk values are
+	// folded to "no capo" so a stored pattern never carries a capo the UI can't show.
+	const capo = normalizeCapo(pattern.capo);
+	if (capo !== (pattern.capo ?? 0)) {
+		const { capo: _capo, ...rest } = pattern;
+		void _capo;
+		pattern = capo === 0 ? rest : { ...rest, capo };
+	}
 	let touched = false;
 	const measures = pattern.measures.map((measure) => {
 		let measureTouched = false;

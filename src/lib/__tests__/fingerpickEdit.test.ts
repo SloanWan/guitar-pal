@@ -1319,3 +1319,17 @@ describe("chord marks survive structural edits", () => {
 		expect(out[0].slots.filter((s) => s.chord)).toHaveLength(1);
 	});
 });
+
+describe("normalizeLoadedPattern (capo)", () => {
+	it("keeps a real capo and drops a junk one", () => {
+		const base = twoMeasurePattern();
+		expect(normalizeLoadedPattern({ ...base, capo: 5 }).capo).toBe(5);
+		expect("capo" in normalizeLoadedPattern({ ...base, capo: Number.NaN })).toBe(false);
+		expect(normalizeLoadedPattern({ ...base, capo: 30 }).capo).toBe(12);
+	});
+
+	it("returns the same object when there is nothing to fix", () => {
+		const base = twoMeasurePattern();
+		expect(normalizeLoadedPattern(base)).toBe(base);
+	});
+});

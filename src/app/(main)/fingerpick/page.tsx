@@ -20,6 +20,7 @@ import TabStaveRow, {
 	CLEF_WIDTH,
 } from "@/components/fingerpick/TabStaveRow";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import { patternCapo } from "@/lib/fingerpickChords";
 import {
 	expandFingerpickPattern,
 	mapOriginToExpandedIndex,
@@ -1280,9 +1281,18 @@ export default function FingerpickPage() {
 							<h1 className="text-lg font-semibold text-tab-title">
 								{selectedPattern.name}
 							</h1>
-							<p className="text-xs text-tab-meta uppercase tracking-wider mt-0.5">
-								{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
-								{selectedPattern.timeSignature[1]}
+							<p className="flex items-center gap-2 text-xs text-tab-meta uppercase tracking-wider mt-0.5">
+								<span>
+									{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
+									{selectedPattern.timeSignature[1]}
+								</span>
+								{/* The TAB is written behind the capo; this says how much higher
+								    it sounds. Hidden at capo 0, where there is nothing to say. */}
+								{patternCapo(selectedPattern) > 0 && (
+									<span className="border border-denim-border bg-denim-tint px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal text-denim">
+										Capo {patternCapo(selectedPattern)}
+									</span>
+								)}
 							</p>
 						</div>
 

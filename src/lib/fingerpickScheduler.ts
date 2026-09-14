@@ -1,4 +1,5 @@
 import type { FingerpickPattern, Duration, Technique, Stroke } from "@/lib/fingerpickTypes";
+import { patternCapo } from "@/lib/fingerpickChords";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -257,6 +258,9 @@ export function fingerpickPatternToScheduleEvents(
 	rollParams: RollParams = DEFAULT_ROLL_PARAMS,
 ): ScheduleEvent[] {
 	const secondsPerBeat = 60 / bpm;
+	// The TAB is written relative to the capo, so every string sounds this much
+	// higher than its written fret — folded in once here, at compile time.
+	const capo = patternCapo(pattern);
 	const events: ScheduleEvent[] = [];
 	let currentTime = 0;
 	// A roll can place attacks before their slot's nominal start (last-on-beat anchor),
@@ -292,7 +296,7 @@ export function fingerpickPatternToScheduleEvents(
 					const isPlayed = sf.fret !== null || sf.muted;
 					if (!isPlayed) return;
 
-					const openMidi = OPEN_STRING_MIDI[stringIndex];
+					const openMidi = OPEN_STRING_MIDI[stringIndex] + capo;
 					// fret takes priority over muted for pitch; muted only shapes the envelope.
 					const midi = sf.fret !== null ? openMidi + sf.fret : openMidi;
 

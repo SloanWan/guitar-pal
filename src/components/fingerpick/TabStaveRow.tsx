@@ -18,7 +18,11 @@ const STAVE_Y = 10;
 // number sits on, which the stave already leaves room for (the number is at the
 // barline, the symbol over a note, so the two never meet).
 const CHORD_BASELINE_OFFSET = 14;
-const CHORD_FONT = { family: '"JetBrains Mono", ui-monospace, monospace', size: "11pt", weight: "bold" };
+const CHORD_FONT = {
+	family: '"JetBrains Mono", ui-monospace, monospace',
+	size: "11pt",
+	weight: "bold",
+};
 // Room a chord symbol needs over its note so two changes in one measure don't collide.
 const CHORD_LABEL_EXTRA_WIDTH = 28;
 // The chord line's shape view: a shape strip sits over each symbol, placed from
@@ -26,7 +30,7 @@ const CHORD_LABEL_EXTRA_WIDTH = 28;
 // line (VexFlow's space-above-staff); headroom is added only for what a strip
 // needs beyond that.
 // Air between the strip's bottom edge and the symbol's cap height.
-const CHORD_DIAGRAM_GAP = 22;
+const CHORD_DIAGRAM_GAP = 15;
 // The symbol's own height above its baseline, cleared before the strip starts.
 const CHORD_SYMBOL_HEIGHT = 12;
 // Air kept above the strip so it never touches the row's top edge.
@@ -83,22 +87,27 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 	});
 	// Repeat barlines (|: / :|) draw their dots as filled <path>/<circle> elements inside
 	// the barline group — hardcoded black by VexFlow. Track theme so they show in dark mode.
-	svgEl.querySelectorAll<SVGElement>("g.vf-stavebarline path, g.vf-stavebarline circle").forEach(
-		(el) => el.setAttribute("fill", "var(--line-strong)"),
-	);
+	svgEl
+		.querySelectorAll<SVGElement>("g.vf-stavebarline path, g.vf-stavebarline circle")
+		.forEach((el) => el.setAttribute("fill", "var(--line-strong)"));
 	svgEl.querySelectorAll<SVGTextElement>("g.vf-clef text").forEach((el) => {
 		el.setAttribute("fill", "var(--ink-faint)");
 	});
 	svgEl.querySelectorAll<SVGGElement>("g.vf-tabnote").forEach((noteGroup) => {
-		noteGroup.querySelectorAll("text").forEach((el) => el.setAttribute("fill", "var(--ink)"));
-		// Occlusion patch behind each fret number (masks the stave line
-		// passing through it) — hardcoded white by VexFlow; must track the
-		// actual surface behind the viewer so it doesn't show as a faint
-		// square. The card wrapper was removed, so that surface is now the
-		// workspace background, not the (former card) tab-viewer background.
-		noteGroup
-			.querySelectorAll("rect")
-			.forEach((el) => el.setAttribute("fill", "var(--workspace-bg)"));
+		// A fret number masks the stave line through it with a halo hugging its
+		// own strokes, not with VexFlow's white box behind it: the box is a
+		// surface-coloured square, and anything drawn behind the stave — the
+		// playhead and its glow — shows it as a pale patch while passing under.
+		// The halo hides only the line where the glyph is, and stays invisible
+		// on its own because it is the surface's colour.
+		noteGroup.querySelectorAll("text").forEach((el) => {
+			el.setAttribute("fill", "var(--ink)");
+			el.setAttribute("stroke", "var(--workspace-bg)");
+			el.setAttribute("stroke-width", "3");
+			el.setAttribute("stroke-linejoin", "round");
+			el.setAttribute("paint-order", "stroke fill");
+		});
+		noteGroup.querySelectorAll("rect").forEach((el) => el.setAttribute("fill", "none"));
 	});
 	// Chord symbols on the chord line — written by this component, grouped so they
 	// can carry the brand colour rather than the plain-text ink.
@@ -194,8 +203,10 @@ export default function TabStaveRow({
 
 			// Room above the stave's top line that VexFlow gives for free, against
 			// what the strip, its gap and the symbol need; the shortfall is headroom.
-			const freeAbove = new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y - CHORD_BASELINE_OFFSET;
-			const wanted = diagramHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
+			const freeAbove =
+				new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y - CHORD_BASELINE_OFFSET;
+			const wanted =
+				diagramHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
 			const headroom = showDiagrams ? Math.max(0, wanted - freeAbove) : 0;
 			const staveY = STAVE_Y + headroom;
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
@@ -276,7 +287,13 @@ export default function TabStaveRow({
 							nextAnchors.push({
 								key: `${measureIndex}:${chordLabel.slotIndex}`,
 								x,
-								y: Math.max(0, baseline - CHORD_SYMBOL_HEIGHT - CHORD_DIAGRAM_GAP - diagramHeight),
+								y: Math.max(
+									0,
+									baseline -
+										CHORD_SYMBOL_HEIGHT -
+										CHORD_DIAGRAM_GAP -
+										diagramHeight,
+								),
 								label: { ...chordLabel, measureIndex },
 							});
 						}
@@ -327,7 +344,14 @@ export default function TabStaveRow({
 			if (rafId !== undefined) cancelAnimationFrame(rafId);
 			div.innerHTML = "";
 		};
-	}, [measures, startMeasureNumber, startMeasureIndex, measureWidths, showDiagrams, diagramHeight]);
+	}, [
+		measures,
+		startMeasureNumber,
+		startMeasureIndex,
+		measureWidths,
+		showDiagrams,
+		diagramHeight,
+	]);
 
 	return (
 		<div className="relative w-full">

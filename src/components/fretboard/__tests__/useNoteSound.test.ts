@@ -16,6 +16,12 @@ const loader = vi.hoisted(() => ({
 	cancelStrums: vi.fn(),
 }));
 vi.mock("@/components/strum/useGuitarSampleLoader", () => loader);
+const piano = vi.hoisted(() => ({
+	preloadPianoPreset: vi.fn<() => Promise<void>>(),
+	triggerPianoNote: vi.fn(),
+	cancelPianoNotes: vi.fn(),
+}));
+vi.mock("@/components/fretboard/pianoSampleLoader", () => piano);
 
 class FakeAudioContext {
 	state = "running";
@@ -55,6 +61,9 @@ beforeEach(() => {
 	loader.preloadFingerpickPresets.mockReset();
 	loader.triggerChordPreview.mockReset();
 	loader.cancelStrums.mockReset();
+	piano.preloadPianoPreset.mockReset().mockResolvedValue(undefined);
+	piano.triggerPianoNote.mockReset();
+	piano.cancelPianoNotes.mockReset();
 });
 
 describe("useNoteSound", () => {
@@ -108,6 +117,41 @@ describe("useNoteSound", () => {
 		expect(loader.preloadFingerpickPresets).toHaveBeenCalledTimes(2);
 		expect(loader.triggerChordPreview).toHaveBeenCalledTimes(1);
 		unmount();
+	});
+
+	it("keeps the piano voice apart: its own preload, its own trigger, loading while either downloads", async () => {
+		const guitarLoad = deferred();
+		loader.preloadFingerpickPresets.mockReturnValue(guitarLoad.promise);
+		const { hook, unmount } = mount();
+
+		await act(async () => {
+			await hook().play(60, "piano");
+		});
+		expect(piano.preloadPianoPreset).toHaveBeenCalledTimes(1);
+		expect(piano.triggerPianoNote).toHaveBeenCalledTimes(1);
+		expect(piano.triggerPianoNote.mock.calls[0][0]).toBe(60);
+		expect(loader.triggerChordPreview).not.toHaveBeenCalled();
+		expect(hook().isLoading).toBe(false);
+
+		let guitar!: Promise<void>;
+		await act(async () => {
+			guitar = hook().play(45); // guitar by default
+		});
+		expect(hook().isLoading).toBe(true);
+		await act(async () => {
+			await hook().play(64, "piano"); // the piano is ready: plays at once, even mid guitar download
+		});
+		expect(piano.triggerPianoNote).toHaveBeenCalledTimes(2);
+		expect(hook().isLoading).toBe(true);
+
+		await act(async () => {
+			guitarLoad.resolve();
+			await guitar;
+		});
+		expect(hook().isLoading).toBe(false);
+		expect(loader.triggerChordPreview).toHaveBeenCalledTimes(1);
+		unmount();
+		expect(piano.cancelPianoNotes).toHaveBeenCalledTimes(1);
 	});
 
 	it("stops ringing notes and closes the context on unmount, and never plays into a dead context", async () => {

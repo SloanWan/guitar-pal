@@ -20,7 +20,6 @@ import { useNoteSound } from "@/components/fretboard/useNoteSound";
 import ChordPickerModal, { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
 import MusicalText from "@/components/MusicalText";
 import Rocker from "@/components/ui/Rocker";
-import { FINGERPICK_MIDI_HIGH, FINGERPICK_MIDI_LOW } from "@/components/strum/useGuitarSampleLoader";
 import { GUITAR_OPEN_MIDI, rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
 import {
@@ -149,13 +148,13 @@ export default function FretboardExplorer({
 	);
 
 	// A piano key picks the root by pitch class and, with sound on, plays the
-	// key itself. Keys above the pluck preset's range select silently.
+	// key itself in the piano voice.
 	const handleKeySelect = useCallback(
 		(midi: number) => {
 			setRoot(SCALE_ROOTS[pitchClassOf(midi)]);
-			if (soundOn && midi >= FINGERPICK_MIDI_LOW && midi <= FINGERPICK_MIDI_HIGH) {
+			if (soundOn) {
 				piano.current?.strike(midi);
-				void play(midi).catch(() => undefined);
+				void play(midi, "piano").catch(() => undefined);
 			}
 		},
 		[soundOn, play],

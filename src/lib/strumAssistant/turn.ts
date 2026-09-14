@@ -21,8 +21,8 @@ import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
  * which is a later piece of work. Until then nothing here reaches the network.
  */
 
-export const DETERMINISTIC_REPLY = "Read straight from what you typed — no model needed.";
-export const PHRASE_REPLY = "Read from your words — no model needed. The rhythm is a suggestion.";
+export const DETERMINISTIC_REPLY = "Read straight from what you typed.";
+export const PHRASE_REPLY = "Read from your words. The rhythm is a suggestion — change it if it isn't yours.";
 
 export interface AssistantTurnOutcome {
 	/** What the assistant says back. */

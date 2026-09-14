@@ -23,7 +23,7 @@ function warningLines(proposal: AssistantProposal): string[] {
 	}
 	if (rhythmGuessed) lines.push("The rhythm is a suggestion, not something you asked for.");
 	if (padded) lines.push("The rhythm was shorter than the bar and was padded with rests.");
-	if (fellBackToDeterministic) lines.push("Built without the model after it failed to answer usably.");
+	if (fellBackToDeterministic) lines.push("Built from the parts that could be read.");
 	return lines;
 }
 

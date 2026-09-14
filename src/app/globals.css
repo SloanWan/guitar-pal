@@ -745,10 +745,13 @@
 	pointer-events: none;
 	transition: opacity var(--dur-hover) ease-out;
 }
+/* Pitch-class dots wait for their octave to be hovered; exact pitches, being
+   a handful of keys rather than a set repeating in every octave, do not. */
 .pk-dot {
 	opacity: 0;
 }
-.pk-key[data-scale] .pk-dot {
+.pk-key[data-scale] .pk-dot,
+.pk-key[data-exact] .pk-dot {
 	opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -852,6 +855,18 @@
 		transition: none;
 		animation: none;
 	}
+}
+
+/* The two voice faders on the fretboard page. The native control, tinted:
+   a bespoke slider here would be a third implementation of one. */
+.fb-volume {
+	accent-color: var(--denim);
+	height: 14px;
+	cursor: pointer;
+}
+.fb-volume:disabled {
+	accent-color: var(--ink-faint);
+	cursor: not-allowed;
 }
 
 /* ----------------------------------------------------------------------------

@@ -198,18 +198,20 @@ describe("PianoKeyboard", () => {
 		kb.unmount();
 	});
 
-	it("uncovers a chord's other notes in the hovered octave too", () => {
-		const kb = mount({ selectedPitchClass: 4, tonePitchClasses: [4, 7, 11] }); // Em
-		expect(kb.host.querySelectorAll(".pk-dot").length).toBe(10); // G and B in five octaves
+	it("marks exact pitches at once, and only those keys", () => {
+		// Open Em: E2 B2 E3 G3 B3 E4.
+		const kb = mount({ selectedPitchClass: 4, toneMidis: [40, 47, 52, 55, 59, 64] });
+		const marked = [...kb.host.querySelectorAll("[data-selected], [data-tone]")].map((e) =>
+			Number((e as HTMLElement).dataset.midi),
+		);
+		expect(marked.sort((a, b) => a - b)).toEqual([40, 47, 52, 55, 59, 64]);
+		// Roots in the shape are filled; the rest are dotted and need no hover.
+		expect(kb.key(40).hasAttribute("data-selected")).toBe(true);
+		expect(kb.key(55).hasAttribute("data-exact")).toBe(true);
 		expect(kb.host.querySelectorAll("[data-scale]").length).toBe(0);
-		act(() => {
-			kb.key(64).dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerId: 1 }));
-		});
-		// The root is filled, its third and fifth in that octave are dotted.
-		expect([...kb.host.querySelectorAll("[data-scale]")].map((e) => (e as HTMLElement).dataset.midi)).toEqual([
-			"67",
-			"71",
-		]);
+		// An E the shape does not play stays plain, though its pitch class is the root.
+		expect(kb.key(76).hasAttribute("data-selected")).toBe(false);
+		expect(kb.key(76).getAttribute("aria-checked")).toBe("false");
 		kb.unmount();
 	});
 

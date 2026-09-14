@@ -10,9 +10,19 @@ import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-const sound = vi.hoisted(() => ({ play: vi.fn(async () => {}), playChord: vi.fn(async () => {}) }));
+const sound = vi.hoisted(() => ({
+	play: vi.fn(async () => {}),
+	playChord: vi.fn(async () => {}),
+	setVolume: vi.fn(),
+}));
 vi.mock("@/components/fretboard/useNoteSound", () => ({
-	useNoteSound: () => ({ play: sound.play, playChord: sound.playChord, isLoading: false }),
+	useNoteSound: () => ({
+		play: sound.play,
+		playChord: sound.playChord,
+		isLoading: false,
+		volumes: { guitar: 0.8, piano: 0.5 },
+		setVolume: sound.setVolume,
+	}),
 }));
 vi.mock("@/components/strum/ChordPickerModal", () => ({ default: () => null }));
 
@@ -102,10 +112,17 @@ describe("FretboardExplorer — Chords mode", () => {
 		await ex.settle();
 		expect(ex.readout()).toBe("Em iii");
 		expect(ex.lit().sort()).toEqual(["0:0=root", "1:2=chordTone", "2:2=root", "3:0=chordTone", "4:0=chordTone", "5:0=root"].sort());
-		expect(ex.key(64).getAttribute("aria-checked")).toBe("true");
-		expect(ex.key(67).hasAttribute("data-tone")).toBe(true); // G, the third
-		expect(ex.key(71).hasAttribute("data-tone")).toBe(true); // B, the fifth
-		expect(ex.key(60).hasAttribute("data-tone")).toBe(false);
+		// The piano lights the six notes the shape sounds — E2 B2 E3 G3 B3 E4 —
+		// and nothing else, not even other octaves of the same names.
+		const marked = () =>
+			[...ex.host.querySelectorAll(".pk-board [data-selected], .pk-board [data-tone]")].map((el) =>
+				Number((el as HTMLElement).dataset.midi),
+			);
+		expect(marked().sort((a, b) => a - b)).toEqual([40, 47, 52, 55, 59, 64]);
+		expect(ex.key(64).getAttribute("aria-checked")).toBe("true"); // E4, a root in the shape
+		expect(ex.key(76).getAttribute("aria-checked")).toBe("false"); // E5, not in the shape
+		expect(ex.key(55).hasAttribute("data-exact")).toBe(true); // G3, the third
+		expect(ex.key(67).hasAttribute("data-tone")).toBe(false); // G4, a third the shape never plays
 		expect(sound.playChord).toHaveBeenCalledWith([40, 47, 52, 55, 59, 64], "piano");
 		ex.unmount();
 	});
@@ -133,9 +150,13 @@ describe("FretboardExplorer — Chords mode", () => {
 		// Dm shape xx0231 sits above the capo: open D string at fret 2 sounds E, the root.
 		expect(ex.lit()).toContain("2:2=root");
 		expect(ex.lit()).toContain("0:2=muted");
-		// Heard as Em: the piano still lights E, G, B.
+		// Heard as Em: the Dm shape two frets up sounds E3 B3 E4 G4.
+		expect(
+			[...ex.host.querySelectorAll(".pk-board [data-selected], .pk-board [data-tone]")]
+				.map((el) => Number((el as HTMLElement).dataset.midi))
+				.sort((a, b) => a - b),
+		).toEqual([52, 59, 64, 67]);
 		expect(ex.key(64).getAttribute("aria-checked")).toBe("true");
-		expect(ex.key(67).hasAttribute("data-tone")).toBe(true);
 		ex.unmount();
 	});
 
@@ -252,6 +273,27 @@ describe("FretboardExplorer — key, piano and labels", () => {
 		await ex.settle();
 		expect(ex.title()).toBe("C minor pentatonic");
 		expect(ex.key(60).getAttribute("aria-checked")).toBe("true");
+		ex.unmount();
+	});
+
+	it("shows a fader per voice, reporting the level it is set to", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major" });
+		await ex.settle();
+		const fader = (label: string) => ex.host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+		expect(fader("Piano volume").value).toBe("50");
+		expect(fader("Guitar volume").value).toBe("80");
+		act(() => {
+			const el = fader("Guitar volume");
+			// React tracks the value, so assigning it directly is invisible; go
+			// through the native setter the way a real edit does.
+			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, "30");
+			el.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		expect(sound.setVolume).toHaveBeenCalledWith("guitar", 0.3);
+		// With the sound off there is nothing to balance.
+		act(() => (ex.host.querySelector('[role="switch"][aria-label="Sound"]') as HTMLButtonElement).click());
+		await ex.settle();
+		expect(fader("Piano volume").disabled).toBe(true);
 		ex.unmount();
 	});
 

@@ -19,11 +19,12 @@
  * turns the keyboard into a blue block instead of a piano with marks on it.
  * Only the root, the one key that is *chosen*, is filled.
  *
- * A scale or chord is a set of pitch classes, so its dots repeat in every
- * octave — two dozen of them on a 61-key board, which reads as a rash rather
- * than a scale. The dots are therefore held back until the pointer is over an
- * octave, and only that octave's are shown: the keyboard stays a keyboard,
- * and one hover answers "which notes here belong together".
+ * Members can be named two ways, and the way decides how they are shown. A
+ * set of **pitch classes** (a scale) repeats in every octave — two dozen dots
+ * on a 61-key board, a rash rather than a scale — so those are held back
+ * until the pointer is over an octave and only that octave's are shown. A set
+ * of **pitches** (the notes a chord shape actually sounds) is a handful of
+ * keys that do not repeat, so those are simply always lit.
  *
  * The keyboard can also follow the fretboard: `highlight(midi)` rings the key
  * that sounds exactly that pitch (and, fainter, its other octaves) and
@@ -78,10 +79,17 @@ export interface PianoKeyboardProps {
 	/** Keys to grey out (still pressable), beyond those outside `range`. */
 	dimmed?: (key: PianoKey) => boolean;
 	/**
-	 * Pitch classes to dot as members of the current scale or chord (the root
-	 * stays `selected`). The dots appear one octave at a time, under the pointer.
+	 * Pitch classes to dot as members of the current scale (the root stays
+	 * `selected`). The dots appear one octave at a time, under the pointer.
 	 */
 	tonePitchClasses?: readonly number[];
+	/**
+	 * The exact pitches sounding — a chord shape's notes. When given it
+	 * replaces `tonePitchClasses`: only these keys are marked, always visibly,
+	 * and only the ones among them that are the root are filled. A chord is
+	 * six specific notes, not the same three names in every octave.
+	 */
+	toneMidis?: readonly number[];
 	ariaLabel?: string;
 	className?: string;
 }
@@ -95,6 +103,7 @@ export default function PianoKeyboard({
 	labelFor,
 	dimmed,
 	tonePitchClasses,
+	toneMidis,
 	ariaLabel = "Scale root",
 	className,
 }: PianoKeyboardProps) {
@@ -110,7 +119,13 @@ export default function PianoKeyboard({
 	const inRange = (midi: number) => !range || (midi >= range.fromMidi && midi <= range.toMidi);
 	/** Keys whose dot is currently uncovered, so leaving clears exactly those. */
 	const revealed = useRef<HTMLElement[]>([]);
-	const isSelected = (key: PianoKey) => key.pitchClass === selectedPitchClass;
+	/** With exact pitches, a key counts only if the sounding chord uses it. */
+	const sounded = (key: PianoKey) => !toneMidis || toneMidis.includes(key.midi);
+	const isSelected = (key: PianoKey) => key.pitchClass === selectedPitchClass && sounded(key);
+	/** A member that is not the root: dotted. Exact pitches show at once, pitch classes on hover. */
+	const isTone = (key: PianoKey) =>
+		!isSelected(key) &&
+		(toneMidis ? toneMidis.includes(key.midi) : !!tonePitchClasses?.includes(key.pitchClass));
 	/** The one key tab lands on: the lowest selected key inside the range. */
 	const focusMidi =
 		keys.find((k) => isSelected(k) && inRange(k.midi))?.midi ?? keys.find(isSelected)?.midi ?? keys[0].midi;
@@ -242,9 +257,10 @@ export default function PianoKeyboard({
 				data-octave={key.octave}
 				data-black={key.isBlack || undefined}
 				data-selected={selected || undefined}
+				data-exact={(toneMidis && isTone(key)) || undefined}
 				data-outside={outside || undefined}
 				data-dimmed={dimmed?.(key) || undefined}
-				data-tone={(!selected && tonePitchClasses?.includes(key.pitchClass)) || undefined}
+				data-tone={isTone(key) || undefined}
 				onClick={() => onSelect(key.midi)}
 				onKeyDown={(e) => handleKeyDown(e, index)}
 				className={key.isBlack ? "pk-key pk-black" : "pk-key pk-white"}
@@ -258,9 +274,7 @@ export default function PianoKeyboard({
 						: { left: `calc(${key.whiteIndex} * ${whiteW})`, width: whiteW, height: WHITE_H }
 				}
 			>
-				{!selected && tonePitchClasses?.includes(key.pitchClass) && (
-					<span className="pk-dot" aria-hidden="true" />
-				)}
+				{isTone(key) && <span className="pk-dot" aria-hidden="true" />}
 				{label && (
 					<span className="pk-label font-mono">
 						<MusicalText text={label} />

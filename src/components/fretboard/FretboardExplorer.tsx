@@ -28,7 +28,7 @@
  * Marks above it keep the pitch they had — a capo does not transpose them.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Volume2, X } from "lucide-react";
+import { LoaderCircle, Music4, Piano, Volume2, X } from "lucide-react";
 
 import Fretboard, { type FretboardHandle } from "@/components/fretboard/Fretboard";
 import PianoKeyboard, { type PianoKeyboardHandle } from "@/components/fretboard/PianoKeyboard";
@@ -125,6 +125,40 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const SELECT_CLASS = "h-[30px] border border-line-strong bg-surface px-2 font-mono text-[12px] text-ink";
 
+/** One voice's level. Disabled with the sound off, since nothing would sound. */
+function VolumeSlider({
+	icon,
+	label,
+	value,
+	onChange,
+	disabled,
+}: {
+	icon: React.ReactNode;
+	label: string;
+	value: number;
+	onChange: (level: number) => void;
+	disabled?: boolean;
+}) {
+	return (
+		<span className="flex items-center gap-1.5" title={label}>
+			<span className={disabled ? "text-ink-faint" : "text-ink-dim"} aria-hidden="true">
+				{icon}
+			</span>
+			<input
+				type="range"
+				min={0}
+				max={100}
+				step={1}
+				value={Math.round(value * 100)}
+				disabled={disabled}
+				aria-label={label}
+				onChange={(e) => onChange(Number(e.target.value) / 100)}
+				className="fb-volume w-16"
+			/>
+		</span>
+	);
+}
+
 /** "Bb" → "B♭", "b3" → "♭3": the board prints glyphs, the model keeps ASCII. */
 function withGlyphs(label: string): string {
 	return parseMusicalText(label)
@@ -187,7 +221,7 @@ export default function FretboardExplorer({
 	// the first client render agree, then every change is written back.
 	const [soundOn, setSoundOn] = useState(true);
 	const [soundRestored, setSoundRestored] = useState(false);
-	const { play, playChord, isLoading: soundLoading } = useNoteSound();
+	const { play, playChord, isLoading: soundLoading, volumes, setVolume } = useNoteSound();
 
 	useEffect(() => {
 		const stored = localStorage.getItem(SOUND_STORAGE_KEY);
@@ -343,7 +377,21 @@ export default function FretboardExplorer({
 						</span>
 					)}
 				</h2>
-				<span className="flex items-center gap-2">
+				<span className="flex items-center gap-3">
+					<VolumeSlider
+						icon={<Piano className="size-3.5 shrink-0" strokeWidth={1.5} />}
+						label="Piano volume"
+						value={volumes.piano}
+						onChange={(v) => setVolume("piano", v)}
+						disabled={!soundOn}
+					/>
+					<VolumeSlider
+						icon={<Music4 className="size-3.5 shrink-0" strokeWidth={1.5} />}
+						label="Guitar volume"
+						value={volumes.guitar}
+						onChange={(v) => setVolume("guitar", v)}
+						disabled={!soundOn}
+					/>
 					<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
 						{soundLoading ? "Loading sound…" : "Sound"}
 					</span>
@@ -439,10 +487,10 @@ export default function FretboardExplorer({
 					ref={piano}
 					keys={PIANO_61}
 					selectedPitchClass={view ? view.sounding.rootPitchClass : rootPc}
-					// Dots for the scale, or for the chord: either way the keyboard
-					// uncovers one octave at a time under the pointer, so a hover
-					// answers "which notes here belong together".
-					tonePitchClasses={view ? view.sounding.pitchClasses : scalePcs}
+					// A scale is a set of names, uncovered one octave at a time under
+					// the pointer; a chord is the six notes its shape actually sounds.
+					tonePitchClasses={view ? undefined : scalePcs}
+					toneMidis={view && shapeVoicing ? shapePitches(shapeVoicing, capo) : undefined}
 					range={GUITAR_RANGE}
 					onSelect={handleKeySelect}
 					labelFor={inChords ? keyLabel : undefined}

@@ -10,6 +10,12 @@
  * press of that voice. Unmount stops any note still ringing and closes the
  * context, so a board that goes away leaves no source node or scheduled
  * callback behind (Constraint 4).
+ *
+ * Each voice plays through its own gain node, so the two instruments can be
+ * balanced against each other: the preset levels are whatever the samples
+ * happen to be, and a player learning chords may want the neck loud and the
+ * keyboard quiet. Both triggers already take a destination, so the levels are
+ * a concern of this hook alone — neither sample loader changes.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -38,7 +44,17 @@ export interface NoteSound {
 	playChord: (midis: readonly number[], voice?: NoteVoice) => Promise<void>;
 	/** True while any voice's samples are downloading for a first press. */
 	isLoading: boolean;
+	/** Each voice's level, 0…1. */
+	volumes: Readonly<Record<NoteVoice, number>>;
+	/** Set one voice's level. Ramped, so a slider drag does not click. */
+	setVolume: (voice: NoteVoice, level: number) => void;
 }
+
+/** Device-local memory of the two levels. */
+export const VOLUME_STORAGE_KEY = "fretboardVolume";
+export const DEFAULT_VOLUME = 0.8;
+/** Long enough that a drag glides, short enough to feel immediate. */
+const VOLUME_RAMP_S = 0.02;
 
 /** Per-note offset inside a chord, the strum engine's own. */
 const CHORD_STAGGER_S = 0.01;
@@ -47,41 +63,105 @@ const VOICES: Record<
 	NoteVoice,
 	{
 		preload: (ctx: AudioContext) => Promise<void>;
-		trigger: (midis: readonly number[], ctx: AudioContext) => void;
+		trigger: (midis: readonly number[], ctx: AudioContext, target: AudioNode) => void;
 	}
 > = {
 	guitar: {
 		preload: preloadFingerpickPresets,
 		// The preview already sorts and staggers the strings.
-		trigger: (midis, ctx) => triggerChordPreview(midis, ctx, ctx.destination, ctx.currentTime),
+		trigger: (midis, ctx, target) => triggerChordPreview(midis, ctx, target, ctx.currentTime),
 	},
 	piano: {
 		preload: preloadPianoPreset,
-		trigger: (midis, ctx) => {
+		trigger: (midis, ctx, target) => {
 			[...midis]
 				.sort((a, b) => a - b)
-				.forEach((midi, i) => triggerPianoNote(midi, ctx, ctx.destination, ctx.currentTime + i * CHORD_STAGGER_S));
+				.forEach((midi, i) => triggerPianoNote(midi, ctx, target, ctx.currentTime + i * CHORD_STAGGER_S));
 		},
 	},
 };
+
+function readStoredVolumes(): Record<NoteVoice, number> | null {
+	try {
+		const raw = localStorage.getItem(VOLUME_STORAGE_KEY);
+		if (!raw) return null;
+		const parsed: unknown = JSON.parse(raw);
+		if (typeof parsed !== "object" || parsed === null) return null;
+		const level = (v: NoteVoice): number => {
+			const n = (parsed as Record<string, unknown>)[v];
+			return typeof n === "number" && n >= 0 && n <= 1 ? n : DEFAULT_VOLUME;
+		};
+		return { guitar: level("guitar"), piano: level("piano") };
+	} catch {
+		return null;
+	}
+}
 
 export function useNoteSound(): NoteSound {
 	const ctxRef = useRef<AudioContext | null>(null);
 	const preloads = useRef(new Map<NoteVoice, Promise<void>>());
 	const ready = useRef(new Set<NoteVoice>());
+	const gains = useRef(new Map<NoteVoice, GainNode>());
 	const [loadingCount, setLoadingCount] = useState(0);
+	// Default first so the server and the first client render agree; the
+	// stored levels are applied after mount, like the SOUND rocker's.
+	const [volumes, setVolumes] = useState<Record<NoteVoice, number>>({
+		guitar: DEFAULT_VOLUME,
+		piano: DEFAULT_VOLUME,
+	});
+	// Mirrored for the audio path, which runs outside render.
+	const volumesRef = useRef(volumes);
+	useEffect(() => {
+		volumesRef.current = volumes;
+	}, [volumes]);
+
+	useEffect(() => {
+		const stored = readStoredVolumes();
+		if (stored) queueMicrotask(() => setVolumes(stored));
+	}, []);
 
 	useEffect(() => {
 		const inFlight = preloads.current;
 		const done = ready.current;
+		const nodes = gains.current;
 		return () => {
 			cancelStrums();
 			cancelPianoNotes();
+			for (const node of nodes.values()) node.disconnect();
+			nodes.clear();
 			ctxRef.current?.close().catch(() => undefined);
 			ctxRef.current = null;
 			inFlight.clear();
 			done.clear();
 		};
+	}, []);
+
+	/** This voice's gain node, made on first use and held at the current level. */
+	const gainFor = useCallback((voice: NoteVoice, ctx: AudioContext): GainNode => {
+		const existing = gains.current.get(voice);
+		if (existing) return existing;
+		const node = ctx.createGain();
+		node.gain.value = volumesRef.current[voice];
+		node.connect(ctx.destination);
+		gains.current.set(voice, node);
+		return node;
+	}, []);
+
+	const setVolume = useCallback((voice: NoteVoice, level: number) => {
+		const clamped = Math.min(1, Math.max(0, level));
+		setVolumes((prev) => ({ ...prev, [voice]: clamped }));
+		const ctx = ctxRef.current;
+		const node = gains.current.get(voice);
+		// Ramp rather than assign, or a drag steps through audible clicks.
+		if (ctx && node) node.gain.setTargetAtTime(clamped, ctx.currentTime, VOLUME_RAMP_S);
+		try {
+			localStorage.setItem(
+				VOLUME_STORAGE_KEY,
+				JSON.stringify({ ...volumesRef.current, [voice]: clamped }),
+			);
+		} catch {
+			// A browser refusing storage is no reason to refuse the change.
+		}
 	}, []);
 
 	const playChord = useCallback(async (midis: readonly number[], voice: NoteVoice = "guitar") => {
@@ -108,10 +188,10 @@ export function useNoteSound(): NoteSound {
 		// The board may have unmounted while the samples were downloading.
 		if (ctxRef.current !== ctx) return;
 		if (ctx.state === "suspended") await ctx.resume();
-		VOICES[voice].trigger(midis, ctx);
-	}, []);
+		VOICES[voice].trigger(midis, ctx, gainFor(voice, ctx));
+	}, [gainFor]);
 
 	const play = useCallback((midi: number, voice: NoteVoice = "guitar") => playChord([midi], voice), [playChord]);
 
-	return { play, playChord, isLoading: loadingCount > 0 };
+	return { play, playChord, isLoading: loadingCount > 0, volumes, setVolume };
 }

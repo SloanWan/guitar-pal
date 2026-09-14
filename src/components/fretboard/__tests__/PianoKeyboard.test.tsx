@@ -150,6 +150,24 @@ describe("PianoKeyboard", () => {
 		}
 	});
 
+	it("prints custom labels and greys the keys the caller dims, which stay pressable", () => {
+		const onSelect = vi.fn();
+		const kb = mount({
+			onSelect,
+			selectedPitchClass: 0,
+			labelFor: (key, selected) => (key.pitchClass === 0 ? (selected ? "I" : "?") : key.pitchClass === 7 ? "V" : ""),
+			dimmed: (key) => key.pitchClass === 1,
+		});
+		expect(kb.key(60).textContent).toBe("I");
+		expect(kb.key(67).textContent).toBe("V");
+		expect(kb.key(62).textContent).toBe("");
+		expect(kb.key(61).hasAttribute("data-dimmed")).toBe(true);
+		expect(kb.key(62).hasAttribute("data-dimmed")).toBe(false);
+		act(() => kb.key(61).click());
+		expect(onSelect).toHaveBeenCalledWith(61);
+		kb.unmount();
+	});
+
 	it("draws the range as a band labelled with its ends", () => {
 		const kb = mount();
 		expect(kb.host.querySelector(".pk-band")?.textContent).toBe("Guitar E2 – D6");

@@ -59,6 +59,13 @@ export interface PianoKeyboardProps {
 	range?: PianoRange;
 	/** The key that was pressed or chosen with the keyboard. */
 	onSelect: (midi: number) => void;
+	/**
+	 * What a key prints. Default: its name when selected, "C<octave>" on each
+	 * C, nothing otherwise. Chords mode prints numerals instead.
+	 */
+	labelFor?: (key: PianoKey, selected: boolean) => string;
+	/** Keys to grey out (still pressable), beyond those outside `range`. */
+	dimmed?: (key: PianoKey) => boolean;
 	ariaLabel?: string;
 	className?: string;
 }
@@ -69,6 +76,8 @@ export default function PianoKeyboard({
 	selectedPitchClass,
 	range,
 	onSelect,
+	labelFor,
+	dimmed,
 	ariaLabel = "Scale root",
 	className,
 }: PianoKeyboardProps) {
@@ -166,7 +175,13 @@ export default function PianoKeyboard({
 	const keyButton = (key: PianoKey, index: number) => {
 		const selected = isSelected(key);
 		const outside = !inRange(key.midi);
-		const label = selected ? key.name : key.pitchClass === 0 ? `C${key.octave}` : "";
+		const label = labelFor
+			? labelFor(key, selected)
+			: selected
+				? key.name
+				: key.pitchClass === 0
+					? `C${key.octave}`
+					: "";
 		return (
 			<button
 				key={key.midi}
@@ -179,6 +194,7 @@ export default function PianoKeyboard({
 				data-black={key.isBlack || undefined}
 				data-selected={selected || undefined}
 				data-outside={outside || undefined}
+				data-dimmed={dimmed?.(key) || undefined}
 				onClick={() => onSelect(key.midi)}
 				onKeyDown={(e) => handleKeyDown(e, index)}
 				className={key.isBlack ? "pk-key pk-black" : "pk-key pk-white"}

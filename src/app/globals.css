@@ -584,6 +584,19 @@
 .fb-mark[data-emphasis="muted"] .fb-label {
 	opacity: 0;
 }
+/* A capo: the frets behind it sink into shade, the bar clamps the strings. */
+.fb-capo-shade {
+	fill: var(--bg);
+	opacity: 0.55;
+	pointer-events: none;
+}
+.fb-capo-bar {
+	fill: var(--ink-dim);
+	stroke: var(--ink);
+	stroke-width: 0.75;
+	pointer-events: none;
+}
+
 /* The touch layer over the marks: an invisible hit area per slot, a hover ring
    that lights the hovered slot, its unisons and, fainter, its octaves, and the
    ring a pluck sends out. Marks stay pointer-inert; this layer takes the hits.
@@ -679,16 +692,20 @@
 	color: var(--btn-on-denim);
 	font-weight: 700;
 }
-/* Outside the guitar's range: still a root, but faded, and selected only in outline. */
-.pk-key[data-outside] {
+/* Outside the guitar's range, or greyed by the caller (a chord outside the
+   key): still pressable, but faded, and selected only in outline. */
+.pk-key[data-outside],
+.pk-key[data-dimmed] {
 	opacity: 0.45;
 }
+.pk-key[data-dimmed][data-selected],
 .pk-key[data-outside][data-selected] {
 	background: var(--piano-white);
 	color: var(--denim-accent);
 	box-shadow: inset 0 0 0 2px var(--denim);
 	opacity: 0.8;
 }
+.pk-black[data-dimmed][data-selected],
 .pk-black[data-outside][data-selected] {
 	background: var(--piano-black);
 }

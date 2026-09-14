@@ -1678,8 +1678,8 @@ export default function FingerpickEditModal({
 				</div>
 
 				{/* ── Metadata bar (fixed, above the scroll region) ─────────────── */}
-				<div className="shrink-0 flex items-end gap-3 px-4">
-					<div className="flex flex-col gap-1 min-w-0 flex-[2]">
+				<div className="shrink-0 flex flex-wrap items-end gap-3 px-4">
+					<div className="flex flex-col gap-1 min-w-40 flex-[2]">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Name
 						</label>
@@ -1748,7 +1748,7 @@ export default function FingerpickEditModal({
 							4/4
 						</div>
 					</div>
-					<div className="flex flex-col gap-1 min-w-0 flex-[2]">
+					<div className="flex flex-col gap-1 min-w-40 flex-[2]">
 						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 							Description
 						</label>
@@ -1917,7 +1917,10 @@ export default function FingerpickEditModal({
 											{STRING_LABELS.map((label, stringIndex) => {
 												// The row is "hovered" from any of its cells or from the
 												// label itself, so the × stays reachable on the way over.
+												// No hover on a touch screen, so there the control is simply
+												// always there for a row that has something to clear.
 												const rowHovered =
+													!hasFinePointer ||
 													hoverInMeasure?.stringIndex === stringIndex;
 												const rowHasNotes = measure.slots.some(
 													(slot) =>

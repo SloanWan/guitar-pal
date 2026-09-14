@@ -547,6 +547,10 @@ export default function FingerpickPage() {
 		setBpm(p.bpm);
 		dragBpmRef.current = p.bpm;
 		setCursorResetTick((t) => t + 1);
+		// Below lg the library is a slide-in over the tab: picking a pattern is
+		// what it was opened for, so it goes away and shows the pick. At lg it is
+		// static and this is a no-op.
+		setShowLibrary(false);
 		// Mirror the choice to the account so /home can surface it cross-device.
 		saveLastPattern(createClient(), user, "fingerpick", p.id).catch(console.error);
 	}
@@ -1460,7 +1464,9 @@ export default function FingerpickPage() {
 							<h1 className="text-lg font-semibold text-tab-title">
 								{selectedPattern.name}
 							</h1>
-							<div className="mt-0.5 flex items-center justify-between gap-3">
+							{/* Meta line, with the chord-line controls beside it — or under it
+							    on a phone, where the row has no room for both. */}
+							<div className="mt-0.5 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
 							<div className="flex items-center gap-2 text-xs text-tab-meta uppercase tracking-wider">
 								<span>
 									{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/

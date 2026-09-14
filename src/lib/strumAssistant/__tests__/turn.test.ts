@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
 	resolveAssistantTurn,
 	editMessage,
-	DETERMINISTIC_REPLY,
-	PHRASE_REPLY,
+	deterministicReply,
+	phraseReply,
 } from "@/lib/strumAssistant/turn";
 import { BLANK } from "@/lib/strumAssistant/suggest";
 import { isBrowsableSuffix } from "@/lib/chordSuffixes";
@@ -34,7 +34,7 @@ describe("resolveAssistantTurn", () => {
 	describe("reads what it can", () => {
 		it("answers a plain chord line", () => {
 			const outcome = resolve("C Am F G");
-			expect(outcome.text).toBe(DETERMINISTIC_REPLY);
+			expect(outcome.text).toBe(deterministicReply("en"));
 			expect(outcome.proposal?.chords).toHaveLength(4);
 			// No rhythm was asked for, so one was chosen — and said so.
 			expect(outcome.proposal?.warnings.rhythmGuessed).toBe(true);
@@ -49,7 +49,9 @@ describe("resolveAssistantTurn", () => {
 
 		it("answers a sentence the lexicon can read", () => {
 			const outcome = resolve("给我一个 C-G-Am-F 的民谣扫弦，慢一点");
-			expect(outcome.text).toBe(PHRASE_REPLY);
+			// Chinese in, Chinese out.
+			expect(outcome.text).toBe(phraseReply("zh"));
+			expect(outcome.lang).toBe("zh");
 			expect(outcome.proposal?.chords).toHaveLength(4);
 			expect(outcome.proposal?.rhythm).toBe("D DU UD");
 			expect(outcome.proposal?.bpm).toBe(70);
@@ -138,14 +140,46 @@ describe("resolveAssistantTurn", () => {
 		});
 	});
 
+	describe("answers in the player's language", () => {
+		it("follows the message", () => {
+			expect(resolve("给 belief 加上 C G Am F").text).toMatch(/[\u4e00-\u9fff]/);
+			expect(resolve("add C G Am F to belief").text).not.toMatch(/[\u4e00-\u9fff]/);
+		});
+
+		it("falls to the interface's when the message has none", () => {
+			const en = resolveAssistantTurn({ text: "C Am F G", index: INDEX, uiLang: "en" });
+			const zh = resolveAssistantTurn({ text: "C Am F G", index: INDEX, uiLang: "zh" });
+			expect(en.text).toBe(deterministicReply("en"));
+			expect(zh.text).toBe(deterministicReply("zh"));
+		});
+
+		it("offers sentences in that language, each one the rules read", () => {
+			const zh = resolve("给我来点什么");
+			expect(zh.lang).toBe("zh");
+			expect(zh.templates).toContain("把 ___ 加到 ___ 里");
+			expect(zh.templates).toContain("删掉 ___");
+		});
+
+		it("greets in it too", () => {
+			expect(resolve("你好").text).toMatch(/[\u4e00-\u9fff]/);
+			expect(resolve("hello").text).not.toMatch(/[\u4e00-\u9fff]/);
+		});
+	});
+
 	it("says what it understood in one language, whatever was typed", () => {
-		const zh = editMessage({
+		const en = editMessage({
 			kind: "attach",
 			op: "attach",
 			pattern: { id: "p-belief", name: "belief" },
 			chordWords: ["C"],
+			capo: null,
 		});
-		expect(zh).toContain("belief");
+		expect(en).toContain("belief");
+		const zh = editMessage(
+			{ kind: "attach", op: "attach", pattern: { id: "p-belief", name: "belief" }, chordWords: ["C"], capo: null },
+			"zh",
+		);
+		expect(zh).toContain("「belief」");
 		expect(
 			editMessage({ kind: "unknown-pattern", op: "attach", name: "summer", chordWords: [] }),
 		).toContain("summer");

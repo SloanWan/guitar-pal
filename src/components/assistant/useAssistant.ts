@@ -7,6 +7,7 @@ import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
 import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
 import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
 import { recordMiss } from "@/lib/strumAssistant/missLog";
+import { uiLang, type Lang } from "@/lib/strumAssistant/lang";
 import type { AssistantProposal } from "@/lib/strumAssistant/types";
 import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
 
@@ -28,6 +29,8 @@ export interface AssistantMessage {
 	edit?: EditIntentReading;
 	/** Sentences offered when nothing read the message, with blanks to fill. */
 	templates?: string[];
+	/** The language this reply was written in; the answers under it follow. */
+	lang?: Lang;
 	/** Set when the turn failed; rendered as an error rather than as speech. */
 	failed?: boolean;
 	/** True once the edit this message carried was confirmed and handed over. */
@@ -192,7 +195,7 @@ export function useAssistant() {
 			try {
 				const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
 				setIndex(index);
-				const outcome = resolveAssistantTurn({ text, index, patterns: patternList });
+				const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
 				// The reading is instant; the reply is not. A pause of the kind a
 				// person takes before answering — random, so it never reads as a
 				// timer — with the typing dots showing for it. The floor keeps the
@@ -212,6 +215,7 @@ export function useAssistant() {
 						proposal: outcome.proposal,
 						edit: outcome.edit,
 						templates: outcome.templates,
+						lang: outcome.lang,
 						...(outcome.failed ? { failed: true } : {}),
 					},
 				]);

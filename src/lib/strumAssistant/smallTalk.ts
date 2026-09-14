@@ -1,4 +1,5 @@
 import { BLANK } from "@/lib/strumAssistant/suggest";
+import type { Lang } from "@/lib/strumAssistant/lang";
 
 /**
  * The words people say to a chat box before they say anything to it.
@@ -17,12 +18,15 @@ export interface SmallTalk {
 }
 
 /** What the assistant does, as sentences that do it. */
-const STARTERS = [`C G Am F`, `D DU UD`, `add ${BLANK} to ${BLANK}`];
+const STARTERS: Record<Lang, readonly string[]> = {
+	en: [`C G Am F`, `D DU UD`, `add ${BLANK} to ${BLANK}`],
+	zh: [`C G Am F`, `D DU UD`, `把 ${BLANK} 加到 ${BLANK} 里`],
+};
 
 interface Topic {
 	/** Whole-message matches, after lowercasing and stripping punctuation. */
 	match: RegExp;
-	replies: readonly string[];
+	replies: Record<Lang, readonly string[]>;
 	/** Whether to lay the starter sentences under the reply. */
 	nudge: boolean;
 }
@@ -30,54 +34,86 @@ interface Topic {
 const TOPICS: readonly Topic[] = [
 	{
 		match: /^(hi+|hey+|hello+|hiya|yo|sup|howdy|good (morning|afternoon|evening)|你好|您好|嗨|哈喽|哈罗|早|早上好|晚上好)( there| assistant| bot)?$/,
-		replies: [
-			"Hey. Pick's in hand — chords, a rhythm, or a change to a pattern you have?",
-			"Hello! Strings are on. What are we playing?",
-			"Hi there. Tuned up and counted in — say the word.",
-		],
+		replies: {
+			en: [
+				"Hey. Pick's in hand — chords, a rhythm, or a change to a pattern you have?",
+				"Hello! Strings are on. What are we playing?",
+				"Hi there. Tuned up and counted in — say the word.",
+			],
+			zh: [
+				"嘿。拨片在手——和弦、节奏，还是改一个你已有的 pattern？",
+				"你好！弦上好了。今天弹什么？",
+				"嗨，音调好、拍数好——说吧。",
+			],
+		},
 		nudge: true,
 	},
 	{
 		match: /^(how are you|how are u|how r u|hru|hows it going|how is it going|whats up|wassup|how do you do|你好吗|最近怎么样|怎么样|在吗|在不在)( today)?$/,
-		replies: [
-			"In tune and in time — that's as good as it gets for me. You? Give me chords and let's find out.",
-			"All six strings accounted for. Yours?",
-			"Can't complain: nobody's played me out of tune yet. What are we working on?",
-		],
+		replies: {
+			en: [
+				"In tune and in time — that's as good as it gets for me. You? Give me chords and let's find out.",
+				"All six strings accounted for. Yours?",
+				"Can't complain: nobody's played me out of tune yet. What are we working on?",
+			],
+			zh: [
+				"音准拍稳，对我来说就是最好的状态。你呢？报几个和弦试试。",
+				"六根弦一根不少。你那边呢？",
+				"没什么好抱怨的：还没人把我弹跑调。今天练什么？",
+			],
+		},
 		nudge: true,
 	},
 	{
 		match: /^(thanks|thank you|thank u|thx|ty|cheers|nice|great|cool|perfect|awesome|谢谢|谢了|多谢|感谢|好的|不错|棒|赞)( a lot| so much| very much)?$/,
-		replies: [
-			"Anytime. Keep strumming.",
-			"That's what I'm here for. Say the word when you want another.",
-			"Good — now go play it a hundred times.",
-		],
+		replies: {
+			en: [
+				"Anytime. Keep strumming.",
+				"That's what I'm here for. Say the word when you want another.",
+				"Good — now go play it a hundred times.",
+			],
+			zh: ["随时。继续扫。", "分内事。想要下一个就说一声。", "好——现在去弹一百遍。"],
+		},
 		nudge: false,
 	},
 	{
 		match: /^(bye+|goodbye|see you|see ya|cya|later|good night|night|拜拜|再见|回见|晚安|走了)( now| then)?$/,
-		replies: [
-			"Later. Don't let the strings go dull.",
-			"See you. Practice slow, play fast.",
-			"Bye — the patterns will be here when you are.",
-		],
+		replies: {
+			en: [
+				"Later. Don't let the strings go dull.",
+				"See you. Practice slow, play fast.",
+				"Bye — the patterns will be here when you are.",
+			],
+			zh: ["回见。别让弦生锈。", "再见。慢练快弹。", "拜拜——pattern 都在这儿等你。"],
+		},
 		nudge: false,
 	},
 	{
 		match: /^(help|\?+|what|what now|so|hm+|um+|huh|ok|okay|test|testing|你是谁|谁|帮助|帮帮我|怎么用|怎么玩|干嘛的|能干嘛|你能做什么|什么)$/,
-		replies: [
-			"I read three things: chords, a rhythm, or a change to one of your patterns — no guessing. One of these to start:",
-			"Here's the whole trick: give me chords, or strokes, or tell me what to do with a pattern you've got. Like so:",
-		],
+		replies: {
+			en: [
+				"I read three things: chords, a rhythm, or a change to one of your patterns — no guessing. One of these to start:",
+				"Here's the whole trick: give me chords, or strokes, or tell me what to do with a pattern you've got. Like so:",
+			],
+			zh: [
+				"我只读三样：和弦、节奏、或者对你已有 pattern 的修改——不猜。从这些开始：",
+				"全部诀窍就是：给我和弦，或者扫弦记谱，或者告诉我拿你的某个 pattern 做什么。像这样：",
+			],
+		},
 		nudge: true,
 	},
 	{
 		match: /^(who are you|what are you|what is this|what are u|what can you do|what do you do|what can u do|what should i (say|type|write)|how does this work|what do i do)\??$/,
-		replies: [
-			"A strumming assistant — I turn chords and strokes into patterns you can play, and edit the ones you have. Nothing gets saved without a yes from you. Try:",
-			"The one who counts you in. Name some chords, write a rhythm, or tell me what to add to a pattern:",
-		],
+		replies: {
+			en: [
+				"A strumming assistant — I turn chords and strokes into patterns you can play, and edit the ones you have. Nothing gets saved without a yes from you. Try:",
+				"The one who counts you in. Name some chords, write a rhythm, or tell me what to add to a pattern:",
+			],
+			zh: [
+				"扫弦助手——把和弦和扫法变成能弹的 pattern，也能改你已有的。你不点头什么都不会保存。试试：",
+				"给你数拍的那位。报几个和弦、写一段节奏，或者说要往哪个 pattern 里加什么：",
+			],
+		},
 		nudge: true,
 	},
 ];
@@ -103,13 +139,13 @@ function pick<T>(items: readonly T[], key: string): T {
 	return items[hash % items.length];
 }
 
-export function smallTalk(input: string, seed = input): SmallTalk | null {
+export function smallTalk(input: string, lang: Lang = "en", seed = input): SmallTalk | null {
 	const said = normalize(input);
 	if (said === "") return null;
 	const topic = TOPICS.find((t) => t.match.test(said));
 	if (!topic) return null;
 	return {
-		text: pick(topic.replies, seed),
-		templates: topic.nudge ? [...STARTERS] : [],
+		text: pick(topic.replies[lang], seed),
+		templates: topic.nudge ? [...STARTERS[lang]] : [],
 	};
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { greeting, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
+import { greeting, hint, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
 
 describe("playerName", () => {
 	it("prefers a name the account carries", () => {
@@ -56,5 +56,23 @@ describe("INPUT_PROMPTS", () => {
 			expect(prompt.trim()).toBe(prompt);
 			expect(prompt).not.toMatch(/^(e\.g\.|like|try)/i);
 		}
+	});
+});
+
+describe("the greeting in Chinese, and the aside for a guest", () => {
+	it("greets in Chinese without a gap where a name would be", () => {
+		for (let i = 0; i < 12; i++) {
+			const line = greeting(null, `s${i}`, "zh");
+			expect(line).toMatch(/[\u4e00-\u9fff]/);
+			expect(line).not.toMatch(/，\s*[。？]|null/);
+		}
+		expect(greeting("Sloan", "abc", "zh")).toBe(greeting("Sloan", "abc", "zh"));
+	});
+
+	it("tells a guest where their work lives, and a member nothing of the sort", () => {
+		expect(hint("en", false)).toMatch(/sign in/i);
+		expect(hint("en", true)).not.toMatch(/sign in/i);
+		expect(hint("zh", false)).toMatch(/登录/);
+		expect(hint("zh", true)).not.toMatch(/登录/);
 	});
 });

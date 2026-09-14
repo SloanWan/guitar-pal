@@ -1,3 +1,5 @@
+import { pick, type Lang } from "@/lib/strumAssistant/lang";
+
 /**
  * What the panel says before anyone has said anything.
  *
@@ -9,14 +11,43 @@
  */
 
 /** Written as functions of the name so the same line works with and without one. */
-const GREETINGS: readonly ((name: string | null) => string)[] = [
-	(name) => (name ? `Tuned up, ${name}. What are we playing?` : "Tuned up. What are we playing?"),
-	(name) => (name ? `${name} — what are we working on?` : "What are we working on?"),
-	() => "Strings on. What do you need?",
-	(name) => (name ? `Hi ${name}. What's the idea?` : "What's the idea?"),
-	() => "Ready when you are.",
-	(name) => (name ? `Back at it, ${name}?` : "Back at it?"),
-];
+const GREETINGS: Record<Lang, readonly ((name: string | null) => string)[]> = {
+	en: [
+		(name) => (name ? `Tuned up, ${name}. What are we playing?` : "Tuned up. What are we playing?"),
+		(name) => (name ? `${name} — what are we working on?` : "What are we working on?"),
+		() => "Strings on. What do you need?",
+		(name) => (name ? `Hi ${name}. What's the idea?` : "What's the idea?"),
+		() => "Ready when you are.",
+		(name) => (name ? `Back at it, ${name}?` : "Back at it?"),
+	],
+	zh: [
+		(name) => (name ? `调好音了，${name}。弹什么？` : "调好音了。弹什么？"),
+		(name) => (name ? `${name}——今天练什么？` : "今天练什么？"),
+		() => "弦上好了。要什么？",
+		(name) => (name ? `嗨，${name}。有什么想法？` : "有什么想法？"),
+		() => "准备好了，你说开始。",
+		(name) => (name ? `又来了，${name}？` : "又来了？"),
+	],
+};
+
+/**
+ * The line under the greeting: what this thing does. A guest also hears that
+ * their patterns stay on this device until they sign in — said once, here,
+ * rather than at the moment they try to save.
+ */
+export function hint(lang: Lang, signedIn: boolean): string {
+	const what = pick(
+		lang,
+		"Chords, a rhythm, or a change to one of your patterns — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.",
+		"和弦、节奏，或者改一个你已有的 pattern——都能直接读，不联网。哪句没读懂，我会给你能读懂的写法。",
+	);
+	if (signedIn) return what;
+	return `${what} ${pick(
+		lang,
+		"You're not signed in, so anything you make stays on this device — sign in to keep it across devices.",
+		"你还没登录，做出来的东西只留在这台设备上——登录后才能跨设备保存。",
+	)}`;
+}
 
 /**
  * A name to use, from whatever the account carries. Falls back to the part of
@@ -44,10 +75,10 @@ function seedOf(key: string): number {
 	return (hash % 1000) / 1000;
 }
 
-export function greeting(name: string | null, key?: string): string {
+export function greeting(name: string | null, key?: string, lang: Lang = "en"): string {
 	const seed = key === undefined ? Math.random() : seedOf(key);
-	const pick = GREETINGS[Math.floor(seed * GREETINGS.length) % GREETINGS.length];
-	return pick(name);
+	const lines = GREETINGS[lang];
+	return lines[Math.floor(seed * lines.length) % lines.length](name);
 }
 
 /**

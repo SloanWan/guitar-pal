@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MessageCircle, Plus } from "lucide-react";
+import { ClipboardList, Loader2, MessageCircle, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { exportMisses, readMisses } from "@/lib/strumAssistant/missLog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AssistantPanel from "./AssistantPanel";
 import { useAssistant } from "./useAssistant";
@@ -76,6 +78,18 @@ export default function AssistantLauncher() {
 	}
 	const assistant = useAssistant();
 	const { messages, pending } = assistant;
+
+	// Development only: the sentences nothing read, one click from the eval set.
+	// Counted when the panel is open, which is when anyone is looking.
+	const devMisses = process.env.NODE_ENV === "development" && open ? readMisses().length : 0;
+	async function copyMisses() {
+		try {
+			await navigator.clipboard.writeText(exportMisses());
+			toast(`${devMisses} misses copied as JSON — paste into cases.ts.`);
+		} catch {
+			toast("Could not reach the clipboard. Run exportMisses() in the console instead.");
+		}
+	}
 
 	/**
 	 * How many messages the player had in front of them the last time the panel
@@ -154,6 +168,17 @@ export default function AssistantLauncher() {
 					<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
 						Strum assistant
 					</span>
+					{devMisses > 0 && (
+						<button
+							type="button"
+							onClick={copyMisses}
+							title="Development only: copy every sentence nothing read, as eval-set JSON"
+							className="mr-auto ml-3 flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-faint transition-colors duration-(--dur-hover) hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+						>
+							<ClipboardList className="size-3" strokeWidth={1.5} aria-hidden="true" />
+							misses · {devMisses}
+						</button>
+					)}
 					{assistant.messages.length > 0 && (
 						<button
 							type="button"

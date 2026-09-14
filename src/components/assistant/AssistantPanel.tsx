@@ -8,7 +8,8 @@ import { Option, Options } from "./Options";
 import { BLANK } from "@/lib/strumAssistant/suggest";
 import { recordPick } from "@/lib/strumAssistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
-import { greeting, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
+import { greeting, hint as introHint, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
+import { uiLang } from "@/lib/strumAssistant/lang";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
 
@@ -160,8 +161,6 @@ function TypingBubble() {
 
 /** How long the assistant appears to think before it says hello. */
 const INTRO_TYPING_MS = 1400;
-const HINT =
-	"Chords, a rhythm, or a change to one of your patterns — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.";
 
 /**
  * An empty conversation, arriving the way a reply does.
@@ -176,12 +175,15 @@ const HINT =
  */
 function Intro({
 	hello,
+	aside,
 	greeted,
 	onGreeted,
 	onExample,
 	onTick,
 }: {
 	hello: string;
+	/** The line after the greeting: what this does, and for a guest, where their work lives. */
+	aside: string;
 	greeted: boolean;
 	onGreeted: () => void;
 	onExample: (text: string) => void;
@@ -210,7 +212,7 @@ function Intro({
 			{phase >= 2 && (
 				<Bubble side="assistant">
 					<StreamedText
-						text={HINT}
+						text={aside}
 						animate={phase === 2}
 						onTick={onTick}
 						onDone={() => {
@@ -271,8 +273,12 @@ export default function AssistantPanel({
 
 	// Picked once per conversation rather than per render: a line that changed
 	// while being read would be a tic, not a greeting.
+	// The greeting speaks the interface's language — nothing has been said yet
+	// to follow — and to a guest it never uses a name, having none to use.
+	const lang = uiLang();
 	const name = user ? playerName(user.user_metadata, user.email) : null;
-	const hello = useMemo(() => greeting(name, sessionId), [name, sessionId]);
+	const hello = useMemo(() => greeting(name, sessionId, lang), [name, sessionId, lang]);
+	const aside = introHint(lang, user !== null);
 
 	// The examples take turns while there is nothing typed. Tab takes the one on
 	// screen — only while the field is empty, so Tab still leaves a field with
@@ -389,6 +395,7 @@ export default function AssistantPanel({
 					<Intro
 						key={sessionId}
 						hello={hello}
+						aside={aside}
 						greeted={greeted}
 						onGreeted={markGreeted}
 						onExample={submit}
@@ -442,6 +449,7 @@ export default function AssistantPanel({
 												ensureIndex={ensureIndex}
 												done={message.editDone === true}
 												onDone={() => markEditDone(message.id)}
+												lang={message.lang ?? "en"}
 											/>
 										</div>
 									)}

@@ -17,6 +17,7 @@ import { isPreset } from "@/lib/strumAssistant/turn";
 import { patternNameTakenBy, toBars } from "@/lib/strumBars";
 import type { NamedPattern } from "@/lib/lastPattern";
 import { STRUM_CAPO_MAX, type StrumPattern } from "@/lib/strumPatterns";
+import { pick, type Lang } from "@/lib/strumAssistant/lang";
 import { Option, Options } from "./Options";
 
 /**
@@ -59,6 +60,7 @@ export default function EditIntentCard({
 	ensureIndex,
 	done,
 	onDone,
+	lang = "en",
 }: {
 	edit: EditIntentReading;
 	/** Everything a name could refer to, for the picker in edit mode. */
@@ -69,9 +71,12 @@ export default function EditIntentCard({
 	/** Confirmed already — kept on the message, so it survives the panel closing. */
 	done: boolean;
 	onDone: () => void;
+	/** The reply's language; the answers under it follow, the card's chrome does not. */
+	lang?: Lang;
 }) {
 	const router = useRouter();
 	const pathname = usePathname();
+	const t = (en: string, zh: string) => pick(lang, en, zh);
 
 	// Nothing can be judged against an index that has not arrived. A restored
 	// card asks for it rather than calling every chord unplaceable meanwhile.
@@ -144,7 +149,9 @@ export default function EditIntentCard({
 			const bars = progressionBarsFromTokens(toBars(pattern)[0].beats, parsed.tokens);
 			if (bars.length === 0) return setError("That leaves nothing to save.");
 			stashHandoff({ kind: "attach", patternId: pattern.id, patternName: pattern.name, bars, capo });
-			setOutcome(`Added to ${pattern.name}${capo ? `, capo ${capo}` : ""}`);
+			setOutcome(
+				t(`Added to ${pattern.name}${capo ? `, capo ${capo}` : ""}`, `已加到 ${pattern.name}${capo ? `，变调夹 ${capo} 品` : ""}`),
+			);
 		} else if (op === "rename") {
 			if (preset) return setError("Shipped patterns keep their names.");
 			const name = newName.trim();
@@ -152,11 +159,11 @@ export default function EditIntentCard({
 			const taken = patternNameTakenBy(name, patterns, pattern.id);
 			if (taken) return setError(`"${taken.name}" is already a pattern.`);
 			stashHandoff({ kind: "rename", patternId: pattern.id, patternName: pattern.name, newName: name });
-			setOutcome(`Renamed to ${name}`);
+			setOutcome(t(`Renamed to ${name}`, `已改名为 ${name}`));
 		} else {
 			if (preset) return setError("Shipped patterns cannot be deleted.");
 			stashHandoff({ kind: "delete", patternId: pattern.id, patternName: pattern.name });
-			setOutcome(`Deleted ${pattern.name}`);
+			setOutcome(t(`Deleted ${pattern.name}`, `已删除 ${pattern.name}`));
 		}
 		setError(null);
 		onDone();
@@ -180,7 +187,7 @@ export default function EditIntentCard({
 			return;
 		}
 		stashHandoff(patternHandoff(built.proposal));
-		setOutcome(`Made "${edit.name}"`);
+		setOutcome(t(`Made "${edit.name}"`, `已新建「${edit.name}」`));
 		onDone();
 		leave();
 	}
@@ -224,14 +231,14 @@ export default function EditIntentCard({
 				<Options>
 					{canCreate && edit.kind === "unknown-pattern" && (
 						<Option order={0} tone="outline" onClick={createNamed} icon={<Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							Make “{edit.name}”
+							{t(`Make “${edit.name}”`, `新建「${edit.name}」`)}
 						</Option>
 					)}
 					<Option order={canCreate ? 1 : 0} tone="outline" onClick={openFields} icon={<Pencil className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-						{edit.kind === "unknown-pattern" ? "Pick one" : "Fill it in"}
+						{edit.kind === "unknown-pattern" ? t("Pick one", "选一个") : t("Fill it in", "填一下")}
 					</Option>
 					<Option order={canCreate ? 2 : 1} tone="ghost" onClick={() => setDismissed(true)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-						Not now
+						{t("Not now", "先不了")}
 					</Option>
 				</Options>
 				{error && <Problem>{error}</Problem>}
@@ -245,10 +252,10 @@ export default function EditIntentCard({
 			<>
 				<Options>
 					<Option order={0} tone="ghost" onClick={() => setDismissed(true)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-						Keep it
+						{t("Keep it", "留着")}
 					</Option>
 					<Option order={1} tone="danger" onClick={confirm} icon={<Trash2 className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-						Delete
+						{t("Delete", "删除")}
 					</Option>
 				</Options>
 				{error && <Problem>{error}</Problem>}
@@ -375,19 +382,19 @@ export default function EditIntentCard({
 				{editing ? (
 					<>
 						<GhostButton onClick={() => setEditing(false)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							Cancel
+							{t("Cancel", "取消")}
 						</GhostButton>
 						<FillButton onClick={confirm} icon={<Check className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							Submit
+							{t("Submit", "提交")}
 						</FillButton>
 					</>
 				) : (
 					<>
 						<GhostButton onClick={openFields} icon={<Pencil className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							Edit
+							{t("Edit", "修改")}
 						</GhostButton>
 						<FillButton onClick={confirm} icon={<Check className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							Confirm
+							{t("Confirm", "确认")}
 						</FillButton>
 					</>
 				)}

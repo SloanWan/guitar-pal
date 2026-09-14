@@ -521,11 +521,16 @@ function PasswordCard({ email }: { email: string | undefined }) {
 			setError(error.message);
 			return;
 		}
+		reset();
+		toast.success("Password updated");
+	}
+
+	function reset() {
 		setStep("idle");
 		setCode("");
 		setPassword("");
 		setConfirm("");
-		toast.success("Password updated");
+		setError(null);
 	}
 
 	return (
@@ -646,9 +651,21 @@ function PasswordCard({ email }: { email: string | undefined }) {
 					</div>
 
 					<ErrorLine message={error} />
-					<button type="submit" disabled={!canSubmit || busy} className={PRIMARY}>
-						{busy ? "Updating…" : "Change password"}
-					</button>
+					<div className="flex gap-2">
+						<button type="submit" disabled={!canSubmit || busy} className={PRIMARY}>
+							{busy ? "Updating…" : "Change password"}
+						</button>
+						{/* Backs out and clears the typed fields; the emailed code stays
+						    valid, so the resend cooldown is left running. */}
+						<button
+							type="button"
+							onClick={reset}
+							disabled={busy}
+							className={`${BUTTON} text-ink-faint hover:text-ink-dim`}
+						>
+							Cancel
+						</button>
+					</div>
 				</form>
 			)}
 		</Card>

@@ -66,6 +66,7 @@ import {
 	mergeTargetsForSlot,
 	resetMeasure,
 	remapMeasure,
+	slotHasStringData,
 	STRING_LABELS,
 	MAX_FRET,
 	type Cell,
@@ -85,6 +86,11 @@ import {
 	type FretHint,
 } from "@/lib/fingerpickChords";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
+import {
+	applyPickSequence,
+	parsePickSequence,
+	type PickSequenceParse,
+} from "@/lib/fingerpickPickSequence";
 import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
@@ -272,6 +278,21 @@ export default function FingerpickEditModal({
 	const [presetConfirm, setPresetConfirm] = useState<{
 		measureIndex: number;
 		targetDuration: Duration;
+	} | null>(null);
+	// The right-hand sequence typed into each measure's Pick field, by measure id
+	// (ids, not indices, so a moved measure keeps its draft).
+	const [pickInputs, setPickInputs] = useState<Record<string, string>>({});
+	// What the last Pick apply had to say for one measure: a parse error, or the
+	// notes it could not write as asked. Cleared by the next keystroke there.
+	const [pickNotice, setPickNotice] = useState<{
+		measureId: string;
+		kind: "error" | "warning";
+		lines: string[];
+	} | null>(null);
+	// A sequence waiting on "overwrite this measure?" — the measure already has notes.
+	const [pickConfirm, setPickConfirm] = useState<{
+		measureIndex: number;
+		parsed: Extract<PickSequenceParse, { ok: true }>;
 	} | null>(null);
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
@@ -488,6 +509,9 @@ export default function FingerpickEditModal({
 			setTechMenu(null);
 			setPopupConfirm(null);
 			setPresetConfirm(null);
+			setPickInputs({});
+			setPickNotice(null);
+			setPickConfirm(null);
 			setDiscardConfirm(false);
 			setRepeatError(null);
 			setHintOpen(false);
@@ -939,6 +963,56 @@ export default function FingerpickEditModal({
 		);
 		applyMeasures(res.measures);
 		setPresetConfirm(null);
+	}
+
+	// ── Pick sequence (per measure) ──────────────────────────────────────────
+
+	// Parse the measure's typed sequence and write it, asking first when the
+	// measure already holds notes. Shapes still on their way block the apply
+	// rather than silently writing open strings.
+	function requestPickSequence(measureIndex: number) {
+		const measure = working.measures[measureIndex];
+		if (!measure) return;
+		const parsed = parsePickSequence(pickInputs[measure.id] ?? "", working.timeSignature);
+		if (!parsed.ok) {
+			setPickNotice({ measureId: measure.id, kind: "error", lines: [parsed.error] });
+			return;
+		}
+		const pendingShapes = chordsInEffect[measureIndex].some(
+			(ref) => ref !== null && voicingsFor(ref).status === "loading",
+		);
+		if (pendingShapes) {
+			setPickNotice({
+				measureId: measure.id,
+				kind: "error",
+				lines: ["Chord shapes are still loading — try again in a moment."],
+			});
+			return;
+		}
+		if (measure.slots.some(slotHasStringData)) {
+			setPickConfirm({ measureIndex, parsed });
+			return;
+		}
+		applyPickSequenceNow(measureIndex, parsed);
+	}
+
+	function applyPickSequenceNow(
+		measureIndex: number,
+		parsed: Extract<PickSequenceParse, { ok: true }>,
+	) {
+		const measure = working.measures[measureIndex];
+		if (!measure) return;
+		const result = applyPickSequence(working, measureIndex, parsed, (ref) => {
+			const state = voicingsFor(ref);
+			return state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
+		});
+		commit(() => result.pattern);
+		setPickConfirm(null);
+		setPickNotice(
+			result.warnings.length > 0
+				? { measureId: measure.id, kind: "warning", lines: result.warnings }
+				: null,
+		);
 	}
 
 	// Rest toggle is active only when every selected column is already a rest.
@@ -2306,6 +2380,79 @@ export default function FingerpickEditModal({
 										</div>
 									)}
 
+									{/* Pick row: type a right-hand sequence (3212, 6(32)1(32), 0 or -
+									    for a rest) and Enter rewrites the measure, fretting each
+									    string from the chord in effect at that beat. */}
+									<div className="flex items-center gap-1.5">
+										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
+											Pick
+										</span>
+										<input
+											type="text"
+											value={pickInputs[measure.id] ?? ""}
+											onChange={(e) => {
+												const value = e.target.value;
+												setPickInputs((prev) => ({ ...prev, [measure.id]: value }));
+												setPickNotice((n) => (n?.measureId === measure.id ? null : n));
+												setPickConfirm((c) =>
+													c?.measureIndex === measureIndex ? null : c,
+												);
+											}}
+											onKeyDown={(e) => {
+												if (e.key !== "Enter") return;
+												e.preventDefault();
+												e.stopPropagation();
+												requestPickSequence(measureIndex);
+											}}
+											placeholder="e.g. 3212 or 6(32)1(32)"
+											aria-label={`Right-hand sequence for measure ${measureIndex + 1}`}
+											title="String numbers, 1 = high e … 6 = low E. Parentheses pluck strings together; 0 or - is a rest. Enter writes the measure, fretted from its chord."
+											className="h-7 min-w-0 flex-1 border border-line-strong bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:border-denim"
+										/>
+										<button
+											type="button"
+											onClick={() => requestPickSequence(measureIndex)}
+											disabled={!(pickInputs[measure.id] ?? "").trim()}
+											title="Write the sequence into this measure"
+											className="h-7 px-2 border border-line-strong font-mono text-xs font-semibold text-ink-dim hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+										>
+											Write
+										</button>
+									</div>
+									{pickNotice?.measureId === measure.id && (
+										<ul
+											className={`flex flex-col gap-0.5 text-[10px] leading-snug ${
+												pickNotice.kind === "error" ? "text-destructive" : "text-ink-dim"
+											}`}
+										>
+											{pickNotice.lines.map((line) => (
+												<li key={line}>{line}</li>
+											))}
+										</ul>
+									)}
+									{pickConfirm && pickConfirm.measureIndex === measureIndex && (
+										<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
+											<span className="text-[11px] text-ink-dim">
+												This will replace the measure&apos;s notes. Continue?
+											</span>
+											<div className="flex gap-1">
+												<button
+													onClick={() =>
+														applyPickSequenceNow(measureIndex, pickConfirm.parsed)
+													}
+													className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
+												>
+													Replace
+												</button>
+												<button
+													onClick={() => setPickConfirm(null)}
+													className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+												>
+													Cancel
+												</button>
+											</div>
+										</div>
+									)}
 									{presetConfirm &&
 										presetConfirm.measureIndex === measureIndex && (
 											<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">

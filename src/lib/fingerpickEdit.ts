@@ -1039,7 +1039,10 @@ export function normalizeLoadedPattern(pattern: FingerpickPattern): FingerpickPa
 // time it was written at. A mark is a point in the measure, not note data, so it
 // survives a rhythm change that clears every note; when two marks fall into the
 // same new slot the earlier one wins, as the later has no slot of its own left.
-function carryChordMarks(oldSlots: readonly BeatSlot[], newSlots: readonly BeatSlot[]): BeatSlot[] {
+export function carryChordMarks(
+	oldSlots: readonly BeatSlot[],
+	newSlots: readonly BeatSlot[],
+): BeatSlot[] {
 	const result = newSlots.map((slot) => ({ ...slot }));
 	if (result.length === 0) return result;
 	const onsets: number[] = [];

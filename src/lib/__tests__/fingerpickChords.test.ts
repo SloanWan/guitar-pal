@@ -12,6 +12,7 @@ import {
 	clearString,
 	heldButUnplucked,
 	chordRegionEnd,
+	offShapeStrings,
 } from "@/lib/fingerpickChords";
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
@@ -260,5 +261,26 @@ describe("chordRegionEnd", () => {
 		const m = measure("a", [C, undefined, Am, undefined]);
 		expect(chordRegionEnd(m, 0)).toBe(2);
 		expect(chordRegionEnd(m, 2)).toBe(4);
+	});
+});
+
+describe("offShapeStrings", () => {
+	// C = x32010 → hints e0 B1 G0 D2 A3 E/.
+	const hints = chordFretHints(voicing());
+
+	it("reports frets that differ from the shape and strings the shape leaves out", () => {
+		let p = pattern([measure("a", [C])]);
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 0 }, 0); // e0 — in shape
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 1 }, 3); // B3 — off (shape has 1)
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3); // low E — shape mutes it
+		expect(offShapeStrings(p.measures[0].slots[0], hints)).toEqual([1, 5]);
+	});
+
+	it("ignores dead notes and silent strings, and reports nothing without a shape", () => {
+		let p = pattern([measure("a", [C])]);
+		p = toggleMuted(p, { measureIndex: 0, slotIndex: 0, stringIndex: 1 });
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 2 }, 7);
+		expect(offShapeStrings(p.measures[0].slots[0], hints)).toEqual([2]);
+		expect(offShapeStrings(p.measures[0].slots[0], null)).toEqual([]);
 	});
 });

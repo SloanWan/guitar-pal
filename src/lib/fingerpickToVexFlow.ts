@@ -76,6 +76,15 @@ export interface VexFlowRenderData {
 	connectors: Array<TabTie | TabSlide>;
 	tuplets: Tuplet[];
 	chordLabels: ChordLabel[];
+	/**
+	 * Per note (index-aligned with `notes`), the string each of its positions
+	 * was written for, in the order the positions — and so VexFlow's fret-number
+	 * elements — are drawn. Empty for rests and silent slots. Lets a renderer
+	 * find "the number for string 3 of this note" after the fact.
+	 */
+	noteStrings: number[][];
+	/** Slot index of each note (index-aligned with `notes`); grace slots produce no note. */
+	noteSlots: number[];
 }
 
 // Pure, deterministic mapping from a Measure to VexFlow note objects.
@@ -335,5 +344,11 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		}
 	}
 
-	return { notes, connectors, tuplets, chordLabels };
+	const noteStrings = posIndexMaps.map((posMap) =>
+		[...posMap.entries()].sort((a, b) => a[1] - b[1]).map(([stringIdx]) => stringIdx),
+	);
+	const noteSlots = slotNoteIndex.flatMap((noteIdx, slotIdx) =>
+		noteIdx === null ? [] : [slotIdx],
+	);
+	return { notes, connectors, tuplets, chordLabels, noteStrings, noteSlots };
 }

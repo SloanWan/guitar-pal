@@ -60,6 +60,12 @@ interface TabStaveRowProps {
 	chordDiagram?: (label: ChordLabel & { measureIndex: number }) => ReactNode;
 	/** Rendered size of what `chordDiagram` draws, so the stave can reserve room for it. */
 	chordDiagramSize?: { width: number; height: number };
+	/**
+	 * Strings whose fret number at a slot should be coloured as "outside the
+	 * chord shape" (fingerpick order, 0 = high e). Called per note once drawn;
+	 * the numbers are recoloured in place after the theme pass.
+	 */
+	offShapeStrings?: (measureIndex: number, slotIndex: number) => readonly number[];
 }
 
 /** Where a chord mark landed after formatting, for the diagram overlay. */
@@ -180,6 +186,7 @@ export default function TabStaveRow({
 	measureWidths,
 	chordDiagram,
 	chordDiagramSize,
+	offShapeStrings,
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [anchors, setAnchors] = useState<ChordAnchor[]>([]);
@@ -260,8 +267,11 @@ export default function TabStaveRow({
 			}
 
 			// Format and draw notes for each measure against its own stave.
+			const drawn: { notes: StemmableNote[]; noteStrings: number[][]; noteSlots: number[] }[] = [];
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets, chordLabels } = fingerpickToVexFlow(measure);
+				const { notes, connectors, tuplets, chordLabels, noteStrings, noteSlots } =
+					fingerpickToVexFlow(measure);
+				drawn.push({ notes, noteStrings, noteSlots });
 				const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 				voice.addTickables(notes);
 				const noteWidth = staves[i].getNoteEndX() - staves[i].getNoteStartX() - 10;
@@ -316,6 +326,26 @@ export default function TabStaveRow({
 
 			const svgEl = div.querySelector("svg");
 			if (svgEl) applyStaveTheme(svgEl);
+
+			// Off-shape fret numbers, after the theme pass so the colour sticks. A
+			// TabNote draws one <text> per position, in position order, before any
+			// modifier text — so the number for a string is found by its position.
+			if (offShapeStrings && startMeasureIndex !== undefined) {
+				drawn.forEach(({ notes, noteStrings, noteSlots }, i) => {
+					const measureIndex = startMeasureIndex + i;
+					notes.forEach((note, j) => {
+						const off = offShapeStrings(measureIndex, noteSlots[j]);
+						if (off.length === 0) return;
+						const el = note.getSVGElement();
+						if (!el) return;
+						const texts = el.querySelectorAll("text");
+						off.forEach((stringIndex) => {
+							const pos = noteStrings[j].indexOf(stringIndex);
+							if (pos >= 0) texts[pos]?.setAttribute("fill", "var(--off-shape)");
+						});
+					});
+				});
+			}
 			// Same anchors → same state, so a resize that moved nothing re-renders nothing.
 			setAnchors((prev) =>
 				prev.length === nextAnchors.length &&
@@ -351,6 +381,7 @@ export default function TabStaveRow({
 		measureWidths,
 		showDiagrams,
 		diagramHeight,
+		offShapeStrings,
 	]);
 
 	return (

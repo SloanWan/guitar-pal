@@ -206,3 +206,19 @@ export function chordRegionEnd(measure: Measure, slotIndex: number): number {
 	}
 	return measure.slots.length;
 }
+
+/**
+ * Strings a slot plays outside the chord shape in effect — index list in
+ * fingerpick order (0 = high e). A note is off the shape when its fret is not
+ * the shape's fret for that string, or the shape does not sound that string at
+ * all. Dead notes are never reported: a percussive mute is rhythm, not a
+ * fingering. With no shape (`hints` null) nothing is reported either.
+ */
+export function offShapeStrings(slot: BeatSlot, hints: readonly FretHint[] | null): number[] {
+	if (!hints) return [];
+	return slot.strings.flatMap((sf, stringIndex) => {
+		if (sf.fret === null || sf.muted) return [];
+		const hint = hints[stringIndex];
+		return hint === "/" || hint !== sf.fret ? [stringIndex] : [];
+	});
+}

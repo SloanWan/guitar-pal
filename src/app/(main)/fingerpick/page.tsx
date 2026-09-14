@@ -21,10 +21,14 @@ import TabStaveRow, {
 } from "@/components/fingerpick/TabStaveRow";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 import {
+	chordFretHints,
 	chordRegionEnd,
+	effectiveChords,
 	heldButUnplucked,
+	offShapeStrings,
 	patternCapo,
 	patternHasChords,
+	type FretHint,
 } from "@/lib/fingerpickChords";
 import { selectRefVoicing } from "@/lib/strumBars";
 import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
@@ -68,6 +72,8 @@ const LAST_PATTERN_KEY = "lastFingerpickPatternId";
 // Device-local, like the pattern id.
 const CHORD_VIEW_KEY = "fingerpickChordView";
 const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
+// Whether fret numbers outside the chord shape are coloured, in the shape view.
+const OFF_SHAPE_KEY = "fingerpickOffShape";
 /** Width range of the shape strip over a chord symbol, in px. */
 const CHORD_SHAPE_WIDTH_MIN = 40;
 const CHORD_SHAPE_WIDTH_MAX = 100;
@@ -242,12 +248,15 @@ export default function FingerpickPage() {
 	// (not in the initializer — the server render has no storage to read).
 	const [chordView, setChordView] = useState<ChordView>("name");
 	const [chordShapeWidth, setChordShapeWidth] = useState(CHORD_SHAPE_WIDTH_DEFAULT);
+	const [offShapeOn, setOffShapeOn] = useState(true);
 	useEffect(() => {
 		let storedView: string | null = null;
 		let storedWidth: string | null = null;
+		let storedOffShape: string | null = null;
 		try {
 			storedView = localStorage.getItem(CHORD_VIEW_KEY);
 			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
+			storedOffShape = localStorage.getItem(OFF_SHAPE_KEY);
 		} catch {
 			// storage unavailable — the defaults it is
 		}
@@ -256,8 +265,17 @@ export default function FingerpickPage() {
 		queueMicrotask(() => {
 			if (storedView === "diagram") setChordView("diagram");
 			if (storedWidth !== null) setChordShapeWidth(clampShapeWidth(Number(storedWidth)));
+			if (storedOffShape === "off") setOffShapeOn(false);
 		});
 	}, []);
+	function handleOffShapeChange(on: boolean) {
+		setOffShapeOn(on);
+		try {
+			localStorage.setItem(OFF_SHAPE_KEY, on ? "on" : "off");
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}
 	function handleChordViewChange(view: ChordView) {
 		setChordView(view);
 		try {
@@ -300,6 +318,31 @@ export default function FingerpickPage() {
 		[selectedPattern.measures, showChordDiagrams],
 	);
 	const voicingsFor = useChordVoicings(chordRefs, userVoicings);
+	// What each string plays in the shape under every slot, for the off-shape
+	// colouring. Recomputed only when the pattern or a shape lookup changes —
+	// never per frame — and it is six comparisons per slot.
+	const showOffShape = showChordDiagrams && offShapeOn;
+	const offShapeBySlot = useMemo<readonly number[][][]>(() => {
+		if (!showOffShape) return [];
+		const chords = effectiveChords(selectedPattern.measures);
+		return selectedPattern.measures.map((measure, mi) =>
+			measure.slots.map((slot, si) => {
+				const ref = chords[mi][si];
+				let hints: FretHint[] | null = null;
+				if (ref) {
+					const state = voicingsFor(ref);
+					const voicing = state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
+					hints = voicing ? chordFretHints(voicing) : null;
+				}
+				return offShapeStrings(slot, hints);
+			}),
+		);
+	}, [selectedPattern.measures, showOffShape, voicingsFor]);
+	const offShapeAt = useCallback(
+		(measureIndex: number, slotIndex: number): readonly number[] =>
+			offShapeBySlot[measureIndex]?.[slotIndex] ?? [],
+		[offShapeBySlot],
+	);
 	// The shape over a chord symbol. Strings the shape holds but nothing in the
 	// chord's stretch of that measure plucks are drawn faintly, so the fingers
 	// that only complete the chord read differently from the ones that sound.
@@ -1442,6 +1485,21 @@ export default function FingerpickPage() {
 							{hasChords && (
 								<div className="flex shrink-0 items-center gap-3">
 									{chordView === "diagram" && (
+										<div className="flex items-center gap-2">
+											<Rocker
+												checked={offShapeOn}
+												onChange={handleOffShapeChange}
+												ariaLabel="Colour fret numbers outside the chord shape"
+											/>
+											<span
+												className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
+												title="Colour the fret numbers that are not part of the chord shape in effect"
+											>
+												Off-shape
+											</span>
+										</div>
+									)}
+									{chordView === "diagram" && (
 										<label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
 											Size
 											<input
@@ -1535,6 +1593,7 @@ export default function FingerpickPage() {
 											measureWidths={row.widths}
 											chordDiagram={showChordDiagrams ? chordDiagram : undefined}
 											chordDiagramSize={chordShapeSize}
+											offShapeStrings={showOffShape ? offShapeAt : undefined}
 										/>
 									</div>
 								))}

@@ -99,6 +99,11 @@
 	   alike. Inactive state reuses --ink-dim (no separate token). */
 	--favorite-active: oklch(82.8% 0.189 84.429);
 
+	/* Off-shape note — a fret number in the TAB that is not part of the chord
+	   shape in effect (passing note, hammer-on target, a string the shape mutes).
+	   Amber, off the denim system so it reads as "look here", not as selection. */
+	--off-shape: oklch(80% 0.17 78);
+
 	/* Destructive — muted brick red, NOT neon. Low chroma so it reads calm on
 	   the near-black panel; still clearly red for delete/discard affordances.
 	   Theme-aware (deeper on light) like every other color token. */
@@ -153,6 +158,7 @@
 	--tab-line-2: #e6e6e1;
 	--tab-num-2: #a9bad3;
 	--favorite-active: oklch(82.8% 0.189 84.429); /* Tailwind amber-400 — same as dark; star stays amber */
+	--off-shape: oklch(62% 0.16 62); /* darker amber on paper white so a digit still reads */
 
 	--destructive: oklch(0.53 0.17 27); /* deeper on light for contrast on paper white */
 	--destructive-tint: oklch(0.53 0.17 27 / 0.2);
@@ -501,6 +507,7 @@
 	--color-avatar-mauve-ink: var(--avatar-mauve-ink);
 	--color-avatar-stone: var(--avatar-stone);
 	--color-avatar-stone-ink: var(--avatar-stone-ink);
+	--color-off-shape: var(--off-shape); /* text-off-shape — fret numbers outside the chord shape */
 	--color-favorite-active: var(--favorite-active); /* text-favorite-active / fill-favorite-active — amber favourite star */
 
 	--radius-none: 0; /* and nothing else — do not define a radius scale */

@@ -565,3 +565,21 @@ describe("chord labels", () => {
 		expect(chordLabels).toEqual([{ noteIndex: 1, slotIndex: 1, chord: Am, label: "Am" }]);
 	});
 });
+
+// ─── Note → string / slot maps ───────────────────────────────────────────────
+
+describe("noteStrings / noteSlots", () => {
+	it("lists each note's strings in position order, and maps notes back to slots", () => {
+		const { notes, noteStrings, noteSlots } = fingerpickToVexFlow(
+			measure([
+				beatSlot("a", "quarter", { 4: { fret: 3 }, 1: { fret: 1 } }),
+				{ ...beatSlot("g", "eighth", { 2: { fret: 2 } }), isGraceNote: true },
+				beatSlot("b", "quarter"),
+				{ ...beatSlot("r", "quarter"), isRest: true },
+			]),
+		);
+		expect(notes).toHaveLength(3);
+		expect(noteStrings).toEqual([[1, 4], [], []]);
+		expect(noteSlots).toEqual([0, 2, 3]);
+	});
+});

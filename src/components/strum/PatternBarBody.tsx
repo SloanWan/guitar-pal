@@ -7,6 +7,8 @@ import type { BarChordDiagram } from "./useBarChordDiagrams";
 import ChordViewToggle from "./ChordViewToggle";
 import { DEFAULT_METER, type Meter } from "@/lib/strumMeter";
 import ChordPickerModal, { type ConfirmedChord } from "./ChordPickerModal";
+import ChordShapeChoice from "./ChordShapeChoice";
+import { chordDisplayName } from "@/lib/chordSuffixes";
 
 interface Props {
 	/** The bars actually playing — carries any chord the user picked this session. */
@@ -35,6 +37,17 @@ export default function PatternBarBody({
 	onEditChordShape,
 }: Props) {
 	const [pickerBarIdx, setPickerBarIdx] = useState<number | null>(null);
+	// The bar whose pencil was pressed and whose chord the library carries — so
+	// there is a choice to put: pick another voicing, or draw one.
+	const [choiceBarIdx, setChoiceBarIdx] = useState<number | null>(null);
+	const choiceChord = choiceBarIdx !== null ? (bars[choiceBarIdx]?.chord ?? null) : null;
+
+	// A bar kept under a name the library has nothing for has nothing to pick
+	// from: it goes straight to the editor.
+	function handleEditShape(barIdx: number) {
+		if (bars[barIdx]?.chord) setChoiceBarIdx(barIdx);
+		else onEditChordShape?.(barIdx);
+	}
 
 	function handleConfirm(chord: ConfirmedChord | null) {
 		if (pickerBarIdx !== null) onBarChordChange?.(pickerBarIdx, chord);
@@ -62,7 +75,7 @@ export default function PatternBarBody({
 						meter={meter}
 						chordView={chordView}
 						barDiagrams={barDiagrams}
-						onEditChordShape={onEditChordShape}
+						onEditChordShape={onEditChordShape ? handleEditShape : undefined}
 						onChordClick={onBarChordChange ? setPickerBarIdx : undefined}
 					/>
 				</div>
@@ -73,6 +86,20 @@ export default function PatternBarBody({
 				onClose={() => setPickerBarIdx(null)}
 				onConfirm={handleConfirm}
 				initialChord={pickerBarIdx !== null ? bars[pickerBarIdx]?.chord : null}
+			/>
+
+			<ChordShapeChoice
+				open={choiceBarIdx !== null}
+				chordLabel={choiceChord ? chordDisplayName(choiceChord.root, choiceChord.suffix) : ""}
+				onClose={() => setChoiceBarIdx(null)}
+				onPickFromLibrary={() => {
+					setPickerBarIdx(choiceBarIdx);
+					setChoiceBarIdx(null);
+				}}
+				onCreateOwn={() => {
+					if (choiceBarIdx !== null) onEditChordShape?.(choiceBarIdx);
+					setChoiceBarIdx(null);
+				}}
 			/>
 		</>
 	);

@@ -1,5 +1,5 @@
 import type { FingerpickPattern, Measure } from "./fingerpickTypes";
-import { setFret, type SlotTarget } from "./fingerpickEdit";
+import { setFret, setInactive, type SlotTarget } from "./fingerpickEdit";
 import type { ChordRef } from "./strumPatterns";
 import { chordAbbreviation, normalizeCapo } from "./strumProgressions";
 import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicingToVexChords";
@@ -118,5 +118,56 @@ export function fillColumnFromChord(
 		const cell = slot.strings[stringIndex];
 		if (hint === "/" || cell.fret !== null || cell.muted) return p;
 		return setFret(p, { ...target, stringIndex }, hint);
+	}, pattern);
+}
+
+/**
+ * Clear every note in a measure that sits on a string `voicing` leaves out,
+ * across the slots where `chord` is in effect there. The complement of
+ * `fillColumnFromChord`: a shape written over an older one leaves notes on
+ * strings the new shape does not sound, and those are the ones to take away.
+ * Dead notes on those strings go too — they were put there by the old shape.
+ */
+export function clearLeftOutStrings(
+	pattern: FingerpickPattern,
+	measureIndex: number,
+	chord: ChordRef,
+	voicing: ChordVoicing,
+): FingerpickPattern {
+	const measure = pattern.measures[measureIndex];
+	if (!measure) return pattern;
+	const leftOut = chordFretHints(voicing)
+		.map((hint, stringIndex) => (hint === "/" ? stringIndex : -1))
+		.filter((i) => i >= 0);
+	if (leftOut.length === 0) return pattern;
+	const inEffect = effectiveChords(pattern.measures)[measureIndex];
+	return measure.slots.reduce((p, slot, slotIndex) => {
+		const ref = inEffect[slotIndex];
+		if (!ref || ref.root !== chord.root || ref.suffix !== chord.suffix) return p;
+		return leftOut.reduce((q, stringIndex) => {
+			const cell = slot.strings[stringIndex];
+			if (cell.fret === null && !cell.muted) return q;
+			return setInactive(q, { measureIndex, slotIndex, stringIndex });
+		}, p);
+	}, pattern);
+}
+
+/**
+ * Empty one string — every slot of one measure, or of the whole pattern when
+ * `measureIndex` is omitted. Frets, dead notes, ties and techniques all go:
+ * the string is returned to "not in play".
+ */
+export function clearString(
+	pattern: FingerpickPattern,
+	stringIndex: number,
+	measureIndex?: number,
+): FingerpickPattern {
+	return pattern.measures.reduce((p, measure, mi) => {
+		if (measureIndex !== undefined && mi !== measureIndex) return p;
+		return measure.slots.reduce((q, slot, slotIndex) => {
+			const cell = slot.strings[stringIndex];
+			if (!cell || (cell.fret === null && !cell.muted && !cell.tied)) return q;
+			return setInactive(q, { measureIndex: mi, slotIndex, stringIndex });
+		}, p);
 	}, pattern);
 }

@@ -8,6 +8,8 @@ import {
 	fillColumnFromChord,
 	patternCapo,
 	setPatternCapo,
+	clearLeftOutStrings,
+	clearString,
 } from "@/lib/fingerpickChords";
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
@@ -181,5 +183,53 @@ describe("pattern capo", () => {
 		expect(setPatternCapo(p, 2.6).capo).toBe(3);
 		expect(setPatternCapo(p, 99).capo).toBe(12);
 		expect("capo" in setPatternCapo(p, -1)).toBe(false);
+	});
+});
+
+describe("clearLeftOutStrings", () => {
+	// C (x32010) leaves out the low E: fingerpick index 5.
+	it("clears notes and dead notes on the shape's left-out strings, under that chord only", () => {
+		let p = pattern([measure("a", [C, undefined, Am, undefined])]);
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
+		p = toggleMuted(p, { measureIndex: 0, slotIndex: 1, stringIndex: 5 });
+		p = setFret(p, { measureIndex: 0, slotIndex: 1, stringIndex: 0 }, 0);
+		// Under Am from slot 2 on — not this chord's region, left alone.
+		p = setFret(p, { measureIndex: 0, slotIndex: 3, stringIndex: 5 }, 0);
+		const out = clearLeftOutStrings(p, 0, C, voicing());
+		const low = out.measures[0].slots.map((s) => s.strings[5]);
+		expect(low[0].fret).toBeNull();
+		expect(low[1].muted).toBe(false);
+		expect(low[3].fret).toBe(0);
+		expect(out.measures[0].slots[1].strings[0].fret).toBe(0);
+	});
+
+	it("leaves other measures alone and is a no-op for a shape that sounds every string", () => {
+		let p = pattern([measure("a", [C]), measure("b", [undefined])]);
+		p = setFret(p, { measureIndex: 1, slotIndex: 0, stringIndex: 5 }, 3);
+		const out = clearLeftOutStrings(p, 0, C, voicing());
+		expect(out.measures[1]).toBe(p.measures[1]);
+		expect(clearLeftOutStrings(p, 0, C, voicing({ frets: "320003" }))).toBe(p);
+	});
+});
+
+describe("clearString", () => {
+	it("empties one string in one measure, or in every measure", () => {
+		let p = pattern([measure("a", [undefined, undefined]), measure("b", [undefined])]);
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 2 }, 5);
+		p = toggleMuted(p, { measureIndex: 0, slotIndex: 1, stringIndex: 2 });
+		p = setFret(p, { measureIndex: 1, slotIndex: 0, stringIndex: 2 }, 7);
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 3 }, 1);
+		const one = clearString(p, 2, 0);
+		expect(one.measures[0].slots.map((s) => s.strings[2].fret)).toEqual([null, null]);
+		expect(one.measures[0].slots[1].strings[2].muted).toBe(false);
+		expect(one.measures[1].slots[0].strings[2].fret).toBe(7);
+		expect(one.measures[0].slots[0].strings[3].fret).toBe(1);
+		const all = clearString(p, 2);
+		expect(all.measures[1].slots[0].strings[2].fret).toBeNull();
+	});
+
+	it("returns the same pattern when the string is already empty", () => {
+		const p = pattern([measure("a", [undefined])]);
+		expect(clearString(p, 4)).toBe(p);
 	});
 });

@@ -77,6 +77,8 @@ import { deriveRepeatDirectives, DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRe
 import {
 	chordFretHints,
 	chordSymbolLabel,
+	clearLeftOutStrings,
+	clearString,
 	effectiveChords,
 	fillColumnFromChord,
 	patternCapo,
@@ -103,6 +105,10 @@ import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
+import ChordShapeModal from "@/components/chords/ChordShapeModal";
+import type { UserChordVoicing } from "@/lib/userChordVoicings";
+import { parseTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
+import { chordShapeToVoicing } from "@/lib/chordShape";
 import { useChordVoicings } from "./useChordVoicings";
 
 export interface FingerpickEditModalProps {
@@ -363,7 +369,7 @@ export default function FingerpickEditModal({
 	// The player's own shapes are only fetched while the editor is open: the modal
 	// stays mounted behind the library, and a closed editor has no use for them.
 	const { user, loading: userLoading } = useUser();
-	const { voicings: userVoicings } = useUserChordVoicings(
+	const { voicings: userVoicings, saveVoicing } = useUserChordVoicings(
 		open ? user : null,
 		userLoading || !open,
 	);
@@ -412,6 +418,20 @@ export default function FingerpickEditModal({
 		[chordsInEffect, voicingsFor],
 	);
 	const techMenuRef = useRef<HTMLDivElement>(null);
+	// Right-click menu on a string label: empty that string in one measure or all.
+	const [stringMenu, setStringMenu] = useState<{
+		measureIndex: number;
+		stringIndex: number;
+		x: number;
+		y: number;
+	} | null>(null);
+	const stringMenuRef = useRef<HTMLDivElement>(null);
+	// The shape editor, opened from a chord search that found nothing. The slot
+	// is captured here because the column popup closes under the editor.
+	const [shapeCreate, setShapeCreate] = useState<{
+		target: SlotTarget;
+		query: string;
+	} | null>(null);
 	// The middle (measure-grid) scroll area. Only this region scrolls — the
 	// header/metadata/footer stay pinned — and it's the coordinate space the
 	// absolute popups (technique menu, touch-mute, hidden input) are anchored in.
@@ -507,6 +527,8 @@ export default function FingerpickEditModal({
 			setTouchMute(null);
 			setSelectedColumns(new Set());
 			setTechMenu(null);
+			setStringMenu(null);
+			setShapeCreate(null);
 			setPopupConfirm(null);
 			setPresetConfirm(null);
 			setPickInputs({});
@@ -535,11 +557,14 @@ export default function FingerpickEditModal({
 
 	// Close popups on any outside pointer press.
 	useEffect(() => {
-		if (selectedColumns.size === 0 && !techMenu && !hintOpen) return;
+		if (selectedColumns.size === 0 && !techMenu && !hintOpen && !stringMenu) return;
 		function handlePointerDown(e: PointerEvent) {
 			const target = e.target as HTMLElement;
 			if (techMenu && !techMenuRef.current?.contains(target)) {
 				setTechMenu(null);
+			}
+			if (stringMenu && !stringMenuRef.current?.contains(target)) {
+				setStringMenu(null);
 			}
 			if (
 				selectedColumns.size > 0 &&
@@ -561,7 +586,7 @@ export default function FingerpickEditModal({
 		}
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
-	}, [selectedColumns, techMenu, hintOpen]);
+	}, [selectedColumns, techMenu, hintOpen, stringMenu]);
 
 	// Clear the copy/move highlight on the next pointer press anywhere. A press on
 	// a copy/move control clears here first, then that control's click re-sets the
@@ -1176,6 +1201,70 @@ export default function FingerpickEditModal({
 		commit((prev) => fillColumnFromChord(prev, singleTarget, voicingHere));
 	}
 
+	// Take away the notes this measure holds on strings the shape leaves out.
+	function applyClearLeftOut() {
+		if (!singleTarget || !chordHere || !voicingHere) return;
+		commit((prev) => clearLeftOutStrings(prev, singleTarget.measureIndex, chordHere, voicingHere));
+	}
+
+	// A chord the search knows nothing about is written down as a shape of the
+	// player's own, then set on the slot it was searched for.
+	function handleShapeCreated(voicing: UserChordVoicing) {
+		if (!shapeCreate) return;
+		// Pin what was stored: an identical shape already on record keeps its id.
+		const stored = saveVoicing(voicing);
+		applySlotChord(shapeCreate.target, {
+			root: stored.root,
+			suffix: stored.suffix,
+			voicingId: stored.id,
+		});
+		setShapeCreate(null);
+	}
+
+	// Frets typed into the search ("x32010") seed the editor; a name seeds the
+	// chord-name field instead. Memoized: the editor re-seeds whenever the seed's
+	// identity changes, so a fresh object per render would wipe its edits.
+	const shapeCreateSeed = useMemo(() => {
+		if (!shapeCreate) return { namingFrom: undefined, initialVoicing: null };
+		const { frets } = parseTabSequence(shapeCreate.query);
+		if (frets) {
+			return {
+				namingFrom: undefined,
+				initialVoicing: chordShapeToVoicing(tabSequenceToShape(frets), "draft"),
+			};
+		}
+		return { namingFrom: shapeCreate.query, initialVoicing: null };
+	}, [shapeCreate]);
+
+	// Right-click menu on a string label, anchored in the scroll region like the
+	// technique menu so it scrolls with the grid.
+	function openStringMenu(
+		measureIndex: number,
+		stringIndex: number,
+		clientX: number,
+		clientY: number,
+		anchorEl: HTMLElement,
+	) {
+		const content = anchorEl.closest<HTMLElement>("[data-fp-scroll]");
+		if (!content) return;
+		const rect = content.getBoundingClientRect();
+		setStringMenu({
+			measureIndex,
+			stringIndex,
+			x: clientX - rect.left + content.scrollLeft,
+			y: clientY - rect.top + content.scrollTop,
+		});
+	}
+
+	function applyClearString(scope: "measure" | "all") {
+		if (!stringMenu) return;
+		const { measureIndex, stringIndex } = stringMenu;
+		commit((prev) =>
+			clearString(prev, stringIndex, scope === "measure" ? measureIndex : undefined),
+		);
+		setStringMenu(null);
+	}
+
 	// Step to another shape of the same chord. Pinning a shape on a slot that only
 	// inherits its chord writes a mark there: a voicing change is a change.
 	function stepVoicing(delta: number) {
@@ -1304,6 +1393,7 @@ export default function FingerpickEditModal({
 						<ChordSearchSelect
 							chord={ownChord}
 							onChange={(chord) => applySlotChord(singleTarget, chord)}
+							onCreate={(query) => setShapeCreate({ target: singleTarget, query })}
 							index={searchIndex}
 							shapeCorpus={shapeCorpus}
 							ariaLabel={`Chord at measure ${singleTarget.measureIndex + 1}, slot ${singleTarget.slotIndex + 1}`}
@@ -1359,14 +1449,26 @@ export default function FingerpickEditModal({
 						</div>
 					)}
 					{chordHere && voicingHere && (
-						<button
-							type="button"
-							onClick={applyFillFromChord}
-							title="Write this shape's frets into the slot's empty cells. Cells already holding a fret or a dead note are left alone."
-							className="h-7 self-start border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-						>
-							Fill column from chord
-						</button>
+						<div className="flex flex-wrap gap-1">
+							<button
+								type="button"
+								onClick={applyFillFromChord}
+								title="Write this shape's frets into the slot's empty cells. Cells already holding a fret or a dead note are left alone."
+								className="h-7 border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+							>
+								Fill column
+							</button>
+							{chordFretHints(voicingHere).includes("/") && (
+								<button
+									type="button"
+									onClick={applyClearLeftOut}
+									title={`Remove this measure's notes on the strings the ${chordSymbolLabel(chordHere)} shape doesn't sound, wherever it is in effect.`}
+									className="h-7 border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+								>
+									Clear left-out strings
+								</button>
+							)}
+						</div>
 					)}
 				</div>
 			)}
@@ -1850,7 +1952,18 @@ export default function FingerpickEditModal({
 											{STRING_LABELS.map((label, stringIndex) => (
 												<div
 													key={stringIndex}
-													className="flex h-7 items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
+													onContextMenu={(e) => {
+														e.preventDefault();
+														openStringMenu(
+															measureIndex,
+															stringIndex,
+															e.clientX,
+															e.clientY,
+															e.currentTarget,
+														);
+													}}
+													title="Right-click to clear this string"
+													className="flex h-7 cursor-context-menu items-center justify-center text-[10px] font-mono font-semibold text-ink-faint"
 												>
 													{label}
 												</div>
@@ -2562,6 +2675,26 @@ export default function FingerpickEditModal({
 						)}
 
 					{/* ── Technique context menu (absolute within the content box) ───── */}
+					{stringMenu && (
+						<div
+							ref={stringMenuRef}
+							className="absolute z-60 w-56 border border-line-strong bg-popover py-1 text-sm"
+							style={{ top: stringMenu.y, left: stringMenu.x }}
+						>
+							<button
+								onClick={() => applyClearString("measure")}
+								className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+							>
+								Clear {STRING_LABELS[stringMenu.stringIndex]} string in this measure
+							</button>
+							<button
+								onClick={() => applyClearString("all")}
+								className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+							>
+								Clear {STRING_LABELS[stringMenu.stringIndex]} string in all measures
+							</button>
+						</div>
+					)}
 					{techMenu && (
 						<div
 							ref={techMenuRef}
@@ -2709,6 +2842,19 @@ export default function FingerpickEditModal({
 					</Button>
 				</div>
 			</DialogContent>
+			{/* Nested dialog: a shape for a chord the search had nothing for. Mounted
+			    only while open so its open-effect seeds from the current query. */}
+			{shapeCreate && (
+				<ChordShapeModal
+					open
+					chord={null}
+					namingFrom={shapeCreateSeed.namingFrom}
+					initialVoicing={shapeCreateSeed.initialVoicing}
+					onClose={() => setShapeCreate(null)}
+					onApply={handleShapeCreated}
+					matchingBarCount={1}
+				/>
+			)}
 		</Dialog>
 	);
 }

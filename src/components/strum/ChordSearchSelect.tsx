@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Music, X } from "lucide-react";
+import { Music, Plus, X } from "lucide-react";
 import MusicalText from "@/components/MusicalText";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry, type ChordSearchResult } from "@/lib/chordSearch";
@@ -27,6 +27,12 @@ interface Props {
 	 * and typing over it is how the player finishes it.
 	 */
 	unknownLabel?: string | null;
+	/**
+	 * Offered when the search comes up empty: write the chord down as a shape
+	 * of the player's own. Called with what was typed — a name to file the shape
+	 * under, or the frets that were being looked for.
+	 */
+	onCreate?: (query: string) => void;
 }
 
 /**
@@ -42,6 +48,7 @@ export default function ChordSearchSelect({
 	shapeCorpus = null,
 	ariaLabel,
 	unknownLabel = null,
+	onCreate,
 }: Props) {
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(false);
@@ -266,6 +273,28 @@ export default function ChordSearchSelect({
 							{index.length === 0 ? "Loading chords…" : "No match"}
 						</li>
 					)}
+
+					{/* Nothing found, by name or by shape: the chord can be written down. */}
+					{onCreate &&
+						((shape && !shapeChord && shapeCorpus !== null) ||
+							(!shape && results.length === 0 && index.length > 0)) && (
+							<li>
+								<button
+									type="button"
+									onPointerDown={(e) => {
+										e.preventDefault();
+										const typed = query.trim();
+										onCreate(typed);
+										stopEditing();
+										inputRef.current?.blur();
+									}}
+									className="flex w-full items-center gap-2 border-t border-line px-2 py-1.5 text-left font-mono text-[11px] font-semibold text-denim-accent transition-colors hover:bg-denim-tint"
+								>
+									<Plus size={11} className="shrink-0" />
+									Write it down as my own chord
+								</button>
+							</li>
+						)}
 				</ul>
 			)}
 		</div>

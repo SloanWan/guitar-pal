@@ -21,7 +21,9 @@ import {
  */
 export default function NavBarMenu() {
 	return (
-		<DropdownMenu>
+		// Non-modal for the same reason as UserMenu: the body pointer-events lock
+		// turns a double-click on the trigger into a page text selection.
+		<DropdownMenu modal={false}>
 			<DropdownMenuTrigger
 				aria-label="Open menu"
 				className="flex size-(--h-control) items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent active:border-denim active:bg-denim-tint active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 data-[state=open]:border-denim data-[state=open]:text-denim-accent"

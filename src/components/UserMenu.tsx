@@ -24,16 +24,14 @@ import {
  */
 export default function UserMenu({ profile }: { profile: Profile }) {
 	return (
-		<DropdownMenu>
+		// Non-modal on purpose. Modal mode sets `pointer-events: none` on <body>
+		// while open, so the closing click of a double-click never reaches the
+		// trigger — it lands on <html>, and a double-click on the document
+		// selects the nearest text on the page. Without the lock the second click
+		// hits the button, where text is not selectable to begin with.
+		<DropdownMenu modal={false}>
 			<DropdownMenuTrigger
 				aria-label={`Account: ${profile.displayName}`}
-				// Radix only preventDefaults the pointerdown that *opens* the menu, so
-				// the second click of a double-click reaches the browser and starts a
-				// text selection that runs from the chip into the page. Swallow any
-				// click past the first; single clicks keep their default handling.
-				onMouseDown={(e) => {
-					if (e.detail > 1) e.preventDefault();
-				}}
 				className="flex size-(--h-control) items-center justify-center border border-line-strong transition-[border-color,opacity] duration-(--dur-hover) ease-out hover:border-denim hover:opacity-90 active:border-denim active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 data-[state=open]:border-denim"
 			>
 				{/* Inset by the trigger's 1px border, so the fill sits inside the frame

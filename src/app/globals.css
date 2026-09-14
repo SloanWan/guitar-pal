@@ -709,6 +709,14 @@
 .pk-black[data-outside][data-selected] {
 	background: var(--piano-black);
 }
+/* The other members of the current chord: tinted, the root keeps the selected fill. */
+.pk-white[data-tone] {
+	background: var(--denim-tint);
+	color: var(--denim-accent);
+}
+.pk-black[data-tone] {
+	box-shadow: inset 0 0 0 2px var(--denim);
+}
 /* Following the fretboard: the key sounding the hovered slot, and its octaves. */
 .pk-key[data-hover="self"] {
 	box-shadow: inset 0 0 0 2px var(--denim-accent);

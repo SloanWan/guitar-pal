@@ -66,6 +66,8 @@ export interface PianoKeyboardProps {
 	labelFor?: (key: PianoKey, selected: boolean) => string;
 	/** Keys to grey out (still pressable), beyond those outside `range`. */
 	dimmed?: (key: PianoKey) => boolean;
+	/** Pitch classes to tint as members of the current chord (the root stays `selected`). */
+	tonePitchClasses?: readonly number[];
 	ariaLabel?: string;
 	className?: string;
 }
@@ -78,6 +80,7 @@ export default function PianoKeyboard({
 	onSelect,
 	labelFor,
 	dimmed,
+	tonePitchClasses,
 	ariaLabel = "Scale root",
 	className,
 }: PianoKeyboardProps) {
@@ -195,6 +198,7 @@ export default function PianoKeyboard({
 				data-selected={selected || undefined}
 				data-outside={outside || undefined}
 				data-dimmed={dimmed?.(key) || undefined}
+				data-tone={(!selected && tonePitchClasses?.includes(key.pitchClass)) || undefined}
 				onClick={() => onSelect(key.midi)}
 				onKeyDown={(e) => handleKeyDown(e, index)}
 				className={key.isBlack ? "pk-key pk-black" : "pk-key pk-white"}

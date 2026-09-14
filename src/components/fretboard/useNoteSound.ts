@@ -34,24 +34,34 @@ export interface NoteSound {
 	 * presses in between are dropped rather than fired as a burst.
 	 */
 	play: (midi: number, voice?: NoteVoice) => Promise<void>;
+	/** Sound several pitches at once, low to high with a strum's stagger. Same loading rules. */
+	playChord: (midis: readonly number[], voice?: NoteVoice) => Promise<void>;
 	/** True while any voice's samples are downloading for a first press. */
 	isLoading: boolean;
 }
+
+/** Per-note offset inside a chord, the strum engine's own. */
+const CHORD_STAGGER_S = 0.01;
 
 const VOICES: Record<
 	NoteVoice,
 	{
 		preload: (ctx: AudioContext) => Promise<void>;
-		trigger: (midi: number, ctx: AudioContext) => void;
+		trigger: (midis: readonly number[], ctx: AudioContext) => void;
 	}
 > = {
 	guitar: {
 		preload: preloadFingerpickPresets,
-		trigger: (midi, ctx) => triggerChordPreview([midi], ctx, ctx.destination, ctx.currentTime),
+		// The preview already sorts and staggers the strings.
+		trigger: (midis, ctx) => triggerChordPreview(midis, ctx, ctx.destination, ctx.currentTime),
 	},
 	piano: {
 		preload: preloadPianoPreset,
-		trigger: (midi, ctx) => triggerPianoNote(midi, ctx, ctx.destination, ctx.currentTime),
+		trigger: (midis, ctx) => {
+			[...midis]
+				.sort((a, b) => a - b)
+				.forEach((midi, i) => triggerPianoNote(midi, ctx, ctx.destination, ctx.currentTime + i * CHORD_STAGGER_S));
+		},
 	},
 };
 
@@ -74,7 +84,7 @@ export function useNoteSound(): NoteSound {
 		};
 	}, []);
 
-	const play = useCallback(async (midi: number, voice: NoteVoice = "guitar") => {
+	const playChord = useCallback(async (midis: readonly number[], voice: NoteVoice = "guitar") => {
 		if (!ctxRef.current) ctxRef.current = new AudioContext();
 		const ctx = ctxRef.current;
 		if (!ready.current.has(voice)) {
@@ -98,8 +108,10 @@ export function useNoteSound(): NoteSound {
 		// The board may have unmounted while the samples were downloading.
 		if (ctxRef.current !== ctx) return;
 		if (ctx.state === "suspended") await ctx.resume();
-		VOICES[voice].trigger(midi, ctx);
+		VOICES[voice].trigger(midis, ctx);
 	}, []);
 
-	return { play, isLoading: loadingCount > 0 };
+	const play = useCallback((midi: number, voice: NoteVoice = "guitar") => playChord([midi], voice), [playChord]);
+
+	return { play, playChord, isLoading: loadingCount > 0 };
 }

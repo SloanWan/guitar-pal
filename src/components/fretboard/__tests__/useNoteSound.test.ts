@@ -93,10 +93,16 @@ describe("useNoteSound", () => {
 		expect(loader.triggerChordPreview).toHaveBeenCalledTimes(1);
 		expect(loader.triggerChordPreview.mock.calls[0][0]).toEqual([45]);
 
+		// A chord goes to the guitar preview as one staggered list.
+		await act(async () => {
+			await hook().playChord([48, 52, 55]);
+		});
+		expect(loader.triggerChordPreview).toHaveBeenLastCalledWith([48, 52, 55], expect.anything(), expect.anything(), 1.5);
+
 		await act(async () => {
 			await hook().play(52);
 		});
-		expect(loader.triggerChordPreview).toHaveBeenCalledTimes(2);
+		expect(loader.triggerChordPreview).toHaveBeenCalledTimes(3);
 		expect(loader.preloadFingerpickPresets).toHaveBeenCalledTimes(1);
 		unmount();
 	});
@@ -143,6 +149,14 @@ describe("useNoteSound", () => {
 		});
 		expect(piano.triggerPianoNote).toHaveBeenCalledTimes(2);
 		expect(hook().isLoading).toBe(true);
+
+		// A piano chord is one note per pitch, low to high, 10 ms apart.
+		await act(async () => {
+			await hook().playChord([64, 60, 67], "piano");
+		});
+		const calls = piano.triggerPianoNote.mock.calls.slice(2);
+		expect(calls.map((c) => c[0])).toEqual([60, 64, 67]);
+		expect(calls.map((c) => c[3])).toEqual([1.5, 1.51, 1.52]);
 
 		await act(async () => {
 			guitarLoad.resolve();

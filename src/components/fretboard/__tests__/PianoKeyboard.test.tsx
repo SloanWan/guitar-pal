@@ -168,6 +168,15 @@ describe("PianoKeyboard", () => {
 		kb.unmount();
 	});
 
+	it("tints the other members of a chord, leaving the root selected", () => {
+		const kb = mount({ selectedPitchClass: 0, tonePitchClasses: [0, 4, 7] });
+		expect(kb.key(60).hasAttribute("data-tone")).toBe(false); // the root: selected instead
+		expect(kb.key(64).hasAttribute("data-tone")).toBe(true);
+		expect(kb.key(67).hasAttribute("data-tone")).toBe(true);
+		expect(kb.key(62).hasAttribute("data-tone")).toBe(false);
+		kb.unmount();
+	});
+
 	it("draws the range as a band labelled with its ends", () => {
 		const kb = mount();
 		expect(kb.host.querySelector(".pk-band")?.textContent).toBe("Guitar E2 – D6");

@@ -1489,7 +1489,7 @@ export default function FingerpickPage() {
 							    pattern that names chords. The size slider appears with the
 							    shapes it sizes. */}
 							{hasChords && (
-								<div className="flex shrink-0 items-center gap-3">
+								<div className="flex shrink-0 flex-row-reverse items-center gap-3 sm:flex-row">
 									{chordView === "diagram" && (
 										<div className="flex items-center gap-2">
 											<Rocker
@@ -1498,7 +1498,7 @@ export default function FingerpickPage() {
 												ariaLabel="Colour fret numbers outside the chord shape"
 											/>
 											<span
-												className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
+												className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
 												title="Colour the fret numbers that are not part of the chord shape in effect"
 											>
 												Off-shape
@@ -1506,21 +1506,37 @@ export default function FingerpickPage() {
 										</div>
 									)}
 									{chordView === "diagram" && (
-										<label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
-											Size
-											<input
-												type="range"
-												min={CHORD_SHAPE_WIDTH_MIN}
-												max={CHORD_SHAPE_WIDTH_MAX}
-												step={4}
-												value={chordShapeWidth}
-												onChange={(e) =>
-													handleChordShapeWidthChange(Number(e.target.value))
-												}
-												aria-label="Chord shape size"
-												className="h-1 w-24 cursor-pointer accent-denim"
-											/>
-										</label>
+										<div className="flex items-center gap-2">
+											<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
+												Size
+											</span>
+											{/* The same fader as the transport's, so the header reads as
+											    one set of controls. No scale row: the range is a feel, not
+											    a number anyone needs to read off. */}
+											<div className="w-20 sm:w-28">
+												<Fader
+													min={CHORD_SHAPE_WIDTH_MIN}
+													max={CHORD_SHAPE_WIDTH_MAX}
+													step={4}
+													value={chordShapeWidth}
+													onValue={handleChordShapeWidthChange}
+													ticks={[
+														0,
+														((CHORD_SHAPE_WIDTH_DEFAULT - CHORD_SHAPE_WIDTH_MIN) /
+															(CHORD_SHAPE_WIDTH_MAX - CHORD_SHAPE_WIDTH_MIN)) *
+															100,
+														100,
+													]}
+													tickValues={[
+														CHORD_SHAPE_WIDTH_MIN,
+														CHORD_SHAPE_WIDTH_DEFAULT,
+														CHORD_SHAPE_WIDTH_MAX,
+													]}
+													scale={[]}
+													ariaLabel="Chord shape size"
+												/>
+											</div>
+										</div>
 									)}
 									<ChordViewToggle value={chordView} onChange={handleChordViewChange} />
 								</div>

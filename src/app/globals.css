@@ -64,6 +64,9 @@
 	   so denim is left for the selected root. */
 	--piano-white: #242424; /* a step above --bg-raise so the keys read against the panel */
 	--piano-black: #080808;
+	/* Keys in the current scale or chord. Heavier than --denim-tint: here a
+	   third of the keyboard carries it, and it has to read at a glance. */
+	--piano-tone: rgba(110, 147, 201, 0.3);
 	--readout-glow: rgba(110, 147, 201, 0.35); /* text-shadow color on large readouts       */
 	--measure-hl: rgba(74, 111, 165, 0.07); /* current-measure block in TAB viewer       */
 
@@ -137,6 +140,7 @@
 
 	--piano-white: #ffffff;
 	--piano-black: var(--ink);
+	--piano-tone: rgba(74, 111, 165, 0.22);
 	--readout-glow: rgba(74, 111, 165, 0.25);
 	--measure-hl: rgba(74, 111, 165, 0.08);
 
@@ -461,6 +465,7 @@
 	--color-on-denim: var(--btn-on-denim);
 	--color-piano-white: var(--piano-white); /* bg-piano-white — keyboard white keys */
 	--color-piano-black: var(--piano-black); /* bg-piano-black — keyboard black keys */
+	--color-piano-tone: var(--piano-tone); /* bg-piano-tone — keys in the scale or chord */
 	--color-favorite-active: var(--favorite-active); /* text-favorite-active / fill-favorite-active — amber favourite star */
 
 	--radius-none: 0; /* and nothing else — do not define a radius scale */
@@ -711,11 +716,11 @@
 }
 /* The other members of the current chord: tinted, the root keeps the selected fill. */
 .pk-white[data-tone] {
-	background: var(--denim-tint);
+	background: var(--piano-tone);
 	color: var(--denim-accent);
 }
 .pk-black[data-tone] {
-	box-shadow: inset 0 0 0 2px var(--denim);
+	box-shadow: inset 0 0 0 2.5px var(--denim-accent);
 }
 /* Following the fretboard: the key sounding the hovered slot, and its octaves. */
 .pk-key[data-hover="self"] {

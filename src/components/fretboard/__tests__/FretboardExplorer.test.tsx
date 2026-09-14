@@ -24,6 +24,8 @@ const LIBRARY: Record<string, ChordVoicing[]> = {
 	"E minor": [voicing("022000")],
 	"D minor": [voicing("xx0231")],
 	"C# major": [voicing("x43121")],
+	"F# minor": [voicing("244222")],
+	"D major": [voicing("xx0232")],
 };
 vi.mock("@/lib/chordVoicingCache", () => ({
 	peekVoicings: (root: string, suffix: string) => LIBRARY[`${root} ${suffix}`] ?? [],
@@ -42,6 +44,19 @@ function mount(props: React.ComponentProps<typeof FretboardExplorer>) {
 	return {
 		host,
 		key: (midi: number) => q<HTMLButtonElement>(`[data-midi="${midi}"]`),
+		title: () => q("[data-testid='view-title']").textContent?.replace(/\s+/g, " ").trim() ?? "",
+		setSelect: (label: string, value: string) => {
+			const el = q<HTMLSelectElement>(`select[aria-label="${label}"]`);
+			el.value = value;
+			el.dispatchEvent(new Event("change", { bubbles: true }));
+		},
+		clickRadio: (group: string, label: string) => {
+			const btn = [...host.querySelectorAll<HTMLButtonElement>(`[aria-label="${group}"] [role="radio"]`)].find(
+				(b) => b.textContent?.trim() === label,
+			);
+			if (!btn) throw new Error(`no ${label} in ${group}`);
+			btn.click();
+		},
 		// The readout is a row of spans; join them the way a reader would.
 		readout: () => {
 			const el = host.querySelector("[data-testid='chord-readout']");
@@ -111,11 +126,7 @@ describe("FretboardExplorer — Chords mode", () => {
 		await ex.settle();
 		act(() => ex.key(64).click()); // Em heard
 		await ex.settle();
-		const capo = ex.host.querySelectorAll("select")[1] as HTMLSelectElement;
-		act(() => {
-			capo.value = "2";
-			capo.dispatchEvent(new Event("change", { bubbles: true }));
-		});
+		act(() => ex.setSelect("Capo", "2"));
 		await ex.settle();
 		expect(ex.readout()).toBe("Em iii · Dm shape");
 		expect(ex.host.querySelector("svg[data-from-fret]")?.getAttribute("data-capo")).toBe("2");
@@ -144,12 +155,81 @@ describe("FretboardExplorer — Chords mode", () => {
 		ex.unmount();
 	});
 
+	it("keeps the degree when the key changes, transposing the chord with it", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.key(64).click()); // iii in C
+		await ex.settle();
+		expect(ex.readout()).toBe("Em iii");
+		act(() => ex.clickRadio("Key", "D"));
+		await ex.settle();
+		// Still the third degree, now F#m; the piano's selected key moved with it.
+		expect(ex.readout()).toBe("F♯m iii");
+		expect(ex.key(66).getAttribute("aria-checked")).toBe("true");
+		expect(ex.key(64).getAttribute("aria-checked")).toBe("false");
+		// And the numerals on the keys are re-derived for the new key.
+		expect(ex.key(62).textContent).toBe("I");
+		expect(ex.key(60).textContent).toBe(""); // C is chromatic in D major
+		ex.unmount();
+	});
+
+	it("names the view in the title, with the capo and the chord", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		expect(ex.title()).toBe("C major · C (I)");
+		act(() => ex.setSelect("Capo", "3"));
+		await ex.settle();
+		expect(ex.title()).toBe("C major · capo 3 · C (I)");
+		ex.unmount();
+	});
+
 	it("leaves Scale mode as it was", async () => {
 		const ex = mount({ initialRoot: "C", initialScale: "major" });
 		await ex.settle();
 		expect(ex.readout()).toBeNull();
 		expect(ex.key(64).textContent).toBe(""); // no numerals
 		expect(ex.lit().length).toBeGreaterThan(20); // the whole scale
+		ex.unmount();
+	});
+});
+
+describe("FretboardExplorer — key, piano and labels", () => {
+	it("tints the scale's pitch classes on the piano, tonic selected", async () => {
+		const ex = mount({ initialRoot: "A", initialScale: "minorPentatonic" });
+		await ex.settle();
+		// A minor pentatonic: A C D E G.
+		expect(ex.key(57).getAttribute("aria-checked")).toBe("true"); // A4, the tonic
+		for (const midi of [60, 62, 64, 67]) expect(ex.key(midi).hasAttribute("data-tone")).toBe(true);
+		expect(ex.key(61).hasAttribute("data-tone")).toBe(false); // Db, outside
+		ex.unmount();
+	});
+
+	it("does not change the key when a piano key is pressed; the key bar does", async () => {
+		const ex = mount({ initialRoot: "A", initialScale: "minorPentatonic" });
+		await ex.settle();
+		act(() => ex.key(60).click()); // C
+		await ex.settle();
+		expect(ex.title()).toBe("A minor pentatonic");
+		expect(sound.play).toHaveBeenCalledWith(60, "piano");
+
+		act(() => ex.clickRadio("Key", "C"));
+		await ex.settle();
+		expect(ex.title()).toBe("C minor pentatonic");
+		expect(ex.key(60).getAttribute("aria-checked")).toBe("true");
+		ex.unmount();
+	});
+
+	it("blanks every label when labels are switched off", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major" });
+		await ex.settle();
+		const labels = () =>
+			[...ex.host.querySelectorAll("svg[data-from-fret] .fb-mark:not([data-emphasis='none']) .fb-label")]
+				.map((t) => t.textContent)
+				.filter(Boolean);
+		expect(labels().length).toBeGreaterThan(20);
+		act(() => (ex.host.querySelector('[role="switch"][aria-label="Show labels"]') as HTMLButtonElement).click());
+		await ex.settle();
+		expect(labels()).toEqual([]);
 		ex.unmount();
 	});
 });

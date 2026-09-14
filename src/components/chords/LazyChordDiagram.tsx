@@ -19,7 +19,6 @@ interface Props {
 // Outer card = border(1) + p-3(12) + SVG + p-3(12) + border(1) wide;
 //              border(1) + p-3(12) + SVG + gap-1(4) + text-xs(18) + p-3(12) + border(1) tall.
 const PLACEHOLDER: Record<DiagramSize, { w: number; h: number }> = {
-	mini: { w: 82, h: 130 }, // SVG: 56 × 51
 	compact: { w: 126, h: 168 }, // SVG: 100 × 86
 	regular: { w: 210, h: 240 }, // SVG: 184 × 158
 	large: { w: 282, h: 302 }, // SVG: 256 × 220

@@ -21,16 +21,16 @@ const CHORD_BASELINE_OFFSET = 14;
 const CHORD_FONT = { family: '"JetBrains Mono", ui-monospace, monospace', size: "11pt", weight: "bold" };
 // Room a chord symbol needs over its note so two changes in one measure don't collide.
 const CHORD_LABEL_EXTRA_WIDTH = 28;
-// The chord line's diagram view: a mini diagram (56 × 51, plus its chip's
-// padding) sits over each symbol. The stave already leaves ~75 px above its top
-// line, so only a little headroom is added; the diagram is placed from the
-// symbol's baseline upwards.
-const CHORD_DIAGRAM_HEADROOM = 16;
-const CHORD_DIAGRAM_HEIGHT = 55;
-// Air between the diagram's chip and the symbol's cap height.
-const CHORD_DIAGRAM_GAP = 14;
-// A mini diagram is wider than its symbol, so two changes need more room apart.
-const CHORD_DIAGRAM_EXTRA_WIDTH = 60;
+// The chord line's shape view: a shape strip sits over each symbol, placed from
+// the symbol's baseline upwards. The stave already leaves room above its top
+// line (VexFlow's space-above-staff); headroom is added only for what a strip
+// needs beyond that.
+// Air between the strip's bottom edge and the symbol's cap height.
+const CHORD_DIAGRAM_GAP = 22;
+// The symbol's own height above its baseline, cleared before the strip starts.
+const CHORD_SYMBOL_HEIGHT = 12;
+// Air kept above the strip so it never touches the row's top edge.
+const CHORD_DIAGRAM_TOP_PAD = 4;
 const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
 const MIN_MEASURE_WIDTH = 120;
@@ -54,6 +54,8 @@ interface TabStaveRowProps {
 	 * stave at the symbol's x. Given, the stave leaves headroom for it.
 	 */
 	chordDiagram?: (label: ChordLabel & { measureIndex: number }) => ReactNode;
+	/** Rendered size of what `chordDiagram` draws, so the stave can reserve room for it. */
+	chordDiagramSize?: { width: number; height: number };
 }
 
 /** Where a chord mark landed after formatting, for the diagram overlay. */
@@ -145,8 +147,8 @@ export function computeMeasureMinWidth(
 	techniqueCount: number,
 	repeatBarlineCount: number = 0,
 	chordLabelCount: number = 0,
-	/** True when the chord line shows shapes, which need more room than names. */
-	chordDiagrams: boolean = false,
+	/** Width of the shape drawn over each symbol in the shape view; 0 = names only. */
+	chordDiagramWidth: number = 0,
 ): number {
 	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 	voice.addTickables(notes);
@@ -157,7 +159,7 @@ export function computeMeasureMinWidth(
 		TECHNIQUE_CONNECTOR_PAD +
 		techniqueCount * HO_PO_EXTRA_WIDTH +
 		repeatBarlineCount * REPEAT_BARLINE_EXTRA_WIDTH +
-		chordLabelCount * (chordDiagrams ? CHORD_DIAGRAM_EXTRA_WIDTH : CHORD_LABEL_EXTRA_WIDTH) +
+		chordLabelCount * Math.max(CHORD_LABEL_EXTRA_WIDTH, chordDiagramWidth + 8) +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);
 }
@@ -168,10 +170,12 @@ export default function TabStaveRow({
 	startMeasureIndex,
 	measureWidths,
 	chordDiagram,
+	chordDiagramSize,
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [anchors, setAnchors] = useState<ChordAnchor[]>([]);
 	const showDiagrams = chordDiagram !== undefined;
+	const diagramHeight = showDiagrams ? (chordDiagramSize?.height ?? 0) : 0;
 
 	useEffect(() => {
 		const div = containerRef.current;
@@ -188,7 +192,11 @@ export default function TabStaveRow({
 			const svgWidth =
 				CLEF_WIDTH + measureWidths.reduce((a, b) => a + b, 0) + BARLINE_CLIP_MARGIN;
 
-			const headroom = showDiagrams ? CHORD_DIAGRAM_HEADROOM : 0;
+			// Room above the stave's top line that VexFlow gives for free, against
+			// what the strip, its gap and the symbol need; the shortfall is headroom.
+			const freeAbove = new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y - CHORD_BASELINE_OFFSET;
+			const wanted = diagramHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
+			const headroom = showDiagrams ? Math.max(0, wanted - freeAbove) : 0;
 			const staveY = STAVE_Y + headroom;
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
 			renderer.resize(svgWidth, SVG_HEIGHT + headroom);
@@ -268,7 +276,7 @@ export default function TabStaveRow({
 							nextAnchors.push({
 								key: `${measureIndex}:${chordLabel.slotIndex}`,
 								x,
-								y: Math.max(0, baseline - CHORD_DIAGRAM_GAP - CHORD_DIAGRAM_HEIGHT),
+								y: Math.max(0, baseline - CHORD_SYMBOL_HEIGHT - CHORD_DIAGRAM_GAP - diagramHeight),
 								label: { ...chordLabel, measureIndex },
 							});
 						}
@@ -319,7 +327,7 @@ export default function TabStaveRow({
 			if (rafId !== undefined) cancelAnimationFrame(rafId);
 			div.innerHTML = "";
 		};
-	}, [measures, startMeasureNumber, startMeasureIndex, measureWidths, showDiagrams]);
+	}, [measures, startMeasureNumber, startMeasureIndex, measureWidths, showDiagrams, diagramHeight]);
 
 	return (
 		<div className="relative w-full">
@@ -331,10 +339,8 @@ export default function TabStaveRow({
 				anchors.map((anchor) => (
 					<div
 						key={anchor.key}
-						// A light chip under the diagram: its palette is drawn for a light
-						// surface, and the workspace behind it is dark in dark mode.
-						className="pointer-events-none absolute rounded-sm bg-white p-0.5 shadow-sm"
-						style={{ left: anchor.x - 4, top: anchor.y }}
+						className="pointer-events-none absolute"
+						style={{ left: anchor.x - 2, top: anchor.y }}
 					>
 						{chordDiagram(anchor.label)}
 					</div>

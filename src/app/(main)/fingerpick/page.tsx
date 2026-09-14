@@ -30,8 +30,8 @@ import { selectRefVoicing } from "@/lib/strumBars";
 import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
-import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";
+import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/ChordShapeStrip";
 import ChordViewToggle from "@/components/strum/ChordViewToggle";
 import type { ChordView } from "@/components/strum/StepGrid";
 import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
@@ -64,8 +64,18 @@ import Rocker from "@/components/ui/Rocker";
 // Remembers the last-viewed pattern id so a page refresh reopens it instead of
 // defaulting back to the first preset. Device-local UI state — not synced.
 const LAST_PATTERN_KEY = "lastFingerpickPatternId";
-// Whether the chord line shows names or shapes. Device-local, like the pattern id.
+// Whether the chord line shows names or shapes, and how wide a shape is drawn.
+// Device-local, like the pattern id.
 const CHORD_VIEW_KEY = "fingerpickChordView";
+const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
+/** Width range of the shape strip over a chord symbol, in px. */
+const CHORD_SHAPE_WIDTH_MIN = 40;
+const CHORD_SHAPE_WIDTH_MAX = 100;
+const CHORD_SHAPE_WIDTH_DEFAULT = 64;
+function clampShapeWidth(raw: number): number {
+	if (!Number.isFinite(raw)) return CHORD_SHAPE_WIDTH_DEFAULT;
+	return Math.min(CHORD_SHAPE_WIDTH_MAX, Math.max(CHORD_SHAPE_WIDTH_MIN, Math.round(raw)));
+}
 
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
 function hoPoConnectorCount(measure: Measure): number {
@@ -87,7 +97,7 @@ const ROW_TRAILING_PAD = 15;
 function computeAllMeasureWidths(
 	measures: Measure[],
 	containerWidth: number,
-	chordDiagrams: boolean,
+	chordDiagramWidth: number,
 ): number[][] {
 	// Precompute render data once per measure to avoid double adapter calls.
 	const renderData = measures.map((m) => fingerpickToVexFlow(m));
@@ -100,7 +110,7 @@ function computeAllMeasureWidths(
 			hoPoConnectorCount(measures[i]),
 			repeatBarlines(measures[i]),
 			rd.chordLabels.length,
-			chordDiagrams,
+			chordDiagramWidth,
 		),
 	);
 	const widthsNonFirst = renderData.map((rd, i) =>
@@ -110,7 +120,7 @@ function computeAllMeasureWidths(
 			hoPoConnectorCount(measures[i]),
 			repeatBarlines(measures[i]),
 			rd.chordLabels.length,
-			chordDiagrams,
+			chordDiagramWidth,
 		),
 	);
 
@@ -231,16 +241,22 @@ export default function FingerpickPage() {
 	// Chord line: names, or the shapes to hold. Read back from storage on mount
 	// (not in the initializer — the server render has no storage to read).
 	const [chordView, setChordView] = useState<ChordView>("name");
+	const [chordShapeWidth, setChordShapeWidth] = useState(CHORD_SHAPE_WIDTH_DEFAULT);
 	useEffect(() => {
-		let stored: string | null = null;
+		let storedView: string | null = null;
+		let storedWidth: string | null = null;
 		try {
-			stored = localStorage.getItem(CHORD_VIEW_KEY);
+			storedView = localStorage.getItem(CHORD_VIEW_KEY);
+			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
 		} catch {
-			// storage unavailable — names it is
+			// storage unavailable — the defaults it is
 		}
 		// Deferred, as the other storage restores here are: a one-shot sync after
 		// mount, not a state change inside the render that scheduled it.
-		if (stored === "diagram") queueMicrotask(() => setChordView("diagram"));
+		queueMicrotask(() => {
+			if (storedView === "diagram") setChordView("diagram");
+			if (storedWidth !== null) setChordShapeWidth(clampShapeWidth(Number(storedWidth)));
+		});
 	}, []);
 	function handleChordViewChange(view: ChordView) {
 		setChordView(view);
@@ -250,8 +266,24 @@ export default function FingerpickPage() {
 			// ignore unavailable/blocked storage
 		}
 	}
+	function handleChordShapeWidthChange(raw: number) {
+		const width = clampShapeWidth(raw);
+		setChordShapeWidth(width);
+		try {
+			localStorage.setItem(CHORD_SHAPE_WIDTH_KEY, String(width));
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}
 	const hasChords = patternHasChords(selectedPattern.measures);
 	const showChordDiagrams = hasChords && chordView === "diagram";
+	const chordShapeSize = useMemo(
+		() => ({
+			width: chordShapeWidth,
+			height: Math.round(chordShapeWidth * CHORD_STRIP_ASPECT),
+		}),
+		[chordShapeWidth],
+	);
 	// Shapes for the chord line's diagram view: the player's own voicings, and
 	// the library's for every chord the pattern names, through the shared cache.
 	const { voicings: userVoicings } = useUserChordVoicings(
@@ -284,16 +316,21 @@ export default function FingerpickPage() {
 				chordRegionEnd(measure, label.slotIndex),
 				voicing,
 			);
+			const { frets, startFret, barreFret } = vexChordDefToSVGProps(
+				chordVoicingToVexChords(voicing),
+			);
 			return (
-				<ChordDiagramSVG
-					{...vexChordDefToSVGProps(chordVoicingToVexChords(voicing))}
-					size="mini"
-					// The diagram's strings run low E → high e; the pattern's the other way.
+				<ChordShapeStrip
+					frets={frets}
+					startFret={startFret}
+					barreFret={barreFret}
+					// The strip's strings are indexed low E first; the pattern's the other way.
 					dimmedStrings={[...unplucked].reverse()}
+					width={chordShapeWidth}
 				/>
 			);
 		},
-		[voicingsFor, selectedPattern.measures],
+		[voicingsFor, selectedPattern.measures, chordShapeWidth],
 	);
 	// Bottom-sheet detent (Google-Maps style): "closed" shows only the bottom bar,
 	// "half" is the default open height, "full" is the tall/expanded height. The
@@ -1305,7 +1342,7 @@ export default function FingerpickPage() {
 		const widthRows = computeAllMeasureWidths(
 			selectedPattern.measures,
 			containerWidth,
-			showChordDiagrams,
+			showChordDiagrams ? chordShapeSize.width : 0,
 		);
 		let offset = 0;
 		return widthRows.map((rowWidths) => {
@@ -1314,7 +1351,7 @@ export default function FingerpickPage() {
 			offset += rowWidths.length;
 			return { measures: rowMeasures, startMeasureNumber: start + 1, widths: rowWidths };
 		});
-	}, [selectedPattern.measures, containerWidth, showChordDiagrams]);
+	}, [selectedPattern.measures, containerWidth, showChordDiagrams, chordShapeSize.width]);
 
 	// Keep refs in sync with the latest render values so the RAF closure never goes stale.
 	// useEffect (not inline assignment) satisfies react-hooks/refs; the one-frame lag
@@ -1380,7 +1417,8 @@ export default function FingerpickPage() {
 							<h1 className="text-lg font-semibold text-tab-title">
 								{selectedPattern.name}
 							</h1>
-							<div className="flex items-center gap-2 text-xs text-tab-meta uppercase tracking-wider mt-0.5">
+							<div className="mt-0.5 flex items-center justify-between gap-3">
+							<div className="flex items-center gap-2 text-xs text-tab-meta uppercase tracking-wider">
 								<span>
 									{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
 									{selectedPattern.timeSignature[1]}
@@ -1388,10 +1426,6 @@ export default function FingerpickPage() {
 								{/* The TAB is written behind the capo; this says how much higher
 								    it sounds. "No capo" is said too, so a player about to play
 								    along never has to wonder whether the badge is just missing. */}
-								{/* Chord line view — only a question for a pattern that names chords. */}
-								{hasChords && (
-									<ChordViewToggle value={chordView} onChange={handleChordViewChange} />
-								)}
 								{patternCapo(selectedPattern) > 0 ? (
 									<span className="border border-denim-border bg-denim-tint px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal text-denim">
 										Capo {patternCapo(selectedPattern)}
@@ -1401,6 +1435,32 @@ export default function FingerpickPage() {
 										No capo
 									</span>
 								)}
+							</div>
+							{/* Chord line view, at the row's other end — only a question for a
+							    pattern that names chords. The size slider appears with the
+							    shapes it sizes. */}
+							{hasChords && (
+								<div className="flex shrink-0 items-center gap-3">
+									{chordView === "diagram" && (
+										<label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
+											Size
+											<input
+												type="range"
+												min={CHORD_SHAPE_WIDTH_MIN}
+												max={CHORD_SHAPE_WIDTH_MAX}
+												step={4}
+												value={chordShapeWidth}
+												onChange={(e) =>
+													handleChordShapeWidthChange(Number(e.target.value))
+												}
+												aria-label="Chord shape size"
+												className="h-1 w-24 cursor-pointer accent-denim"
+											/>
+										</label>
+									)}
+									<ChordViewToggle value={chordView} onChange={handleChordViewChange} />
+								</div>
+							)}
 							</div>
 						</div>
 
@@ -1414,11 +1474,14 @@ export default function FingerpickPage() {
 							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto cursor-pointer"
 							onClick={handleTabClick}
 						>
-							{/* Measure background highlight — updated only on measure transitions. */}
+							{/* Measure highlight — updated only on measure transitions. Stacked
+							    ABOVE the rows (z-10): it is translucent, so the look is the same,
+							    but the opaque patches VexFlow paints behind fret numbers no
+							    longer show through it as pale squares. */}
 							<div
 								ref={measureHighlightRef}
 								aria-hidden="true"
-								className="absolute pointer-events-none"
+								className="absolute z-10 pointer-events-none"
 								style={{
 									display: "none",
 									backgroundColor: "var(--measure-hl)",
@@ -1470,6 +1533,7 @@ export default function FingerpickPage() {
 											startMeasureIndex={row.startMeasureNumber - 1}
 											measureWidths={row.widths}
 											chordDiagram={showChordDiagrams ? chordDiagram : undefined}
+											chordDiagramSize={chordShapeSize}
 										/>
 									</div>
 								))}

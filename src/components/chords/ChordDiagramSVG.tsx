@@ -45,13 +45,9 @@ function noteCenterY(visualFret: number): number {
 }
 
 export type DiagramMode = "fingers" | "noteNames" | "fretboard";
-export type DiagramSize = "mini" | "compact" | "regular" | "large";
+export type DiagramSize = "compact" | "regular" | "large";
 
 const LARGE_W = 256;
-// "mini": a glance-sized shape for a chord line above a stave, not for reading fingers.
-const MINI_W = 56;
-// How faint a string the player is holding but not plucking is drawn.
-const DIMMED_OPACITY = 0.28;
 
 export interface ChordDiagramSVGProps {
   frets: number[];
@@ -61,12 +57,6 @@ export interface ChordDiagramSVGProps {
   mode?: DiagramMode;
   size?: DiagramSize;
   rootMidi?: number;
-  /**
-   * Strings to draw faintly, index 0 = low E: held in the shape but never
-   * plucked where the diagram sits, so the player sees which fingers are only
-   * there for the chord's sake.
-   */
-  dimmedStrings?: readonly boolean[];
 }
 
 interface GhostDot {
@@ -83,9 +73,7 @@ export default function ChordDiagramSVG({
   mode = "fingers",
   size = "regular",
   rootMidi,
-  dimmedStrings,
 }: ChordDiagramSVGProps) {
-  const dimmed = (s: number): number | undefined => (dimmedStrings?.[s] ? DIMMED_OPACITY : undefined);
   const rootPitchClass = rootMidi !== undefined ? rootMidi % 12 : -1;
 
   function pitchClass(s: number, fret: number): number {
@@ -164,8 +152,8 @@ export default function ChordDiagramSVG({
   const nutY = fretLineY(0);
   const noteFontSize = mode === "fingers" ? 9 : 7;
 
-  const svgW = size === "mini" ? MINI_W : size === "compact" ? 100 : size === "large" ? LARGE_W : W;
-  const svgH = Math.round(H * svgW / W);
+  const svgW = size === "compact" ? 100 : size === "large" ? LARGE_W : W;
+  const svgH = size === "compact" ? Math.round(H * 100 / W) : size === "large" ? Math.round(H * LARGE_W / W) : H;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg">
@@ -188,7 +176,7 @@ export default function ChordDiagramSVG({
 
       {/* String lines */}
       {Array.from({ length: 6 }, (_, s) => (
-        <line key={s} x1={strX(s)} y1={nutY} x2={strX(s)} y2={fretLineY(NUM_FRETS)} stroke="#333" strokeWidth={1.5} opacity={dimmed(s)} />
+        <line key={s} x1={strX(s)} y1={nutY} x2={strX(s)} y2={fretLineY(NUM_FRETS)} stroke="#333" strokeWidth={1.5} />
       ))}
 
       {/* Ghost dots (fretboard mode) — rendered before barre and main dots */}
@@ -244,14 +232,14 @@ export default function ChordDiagramSVG({
         if (fret === 0) {
           if (mode === "fingers") {
             return (
-              <text key={s} x={x} y={nutY - 9} textAnchor="middle" fontSize={12} fill="#555" opacity={dimmed(s)}>○</text>
+              <text key={s} x={x} y={nutY - 9} textAnchor="middle" fontSize={12} fill="#555">○</text>
             );
           }
           // noteNames / fretboard: dark filled circle above nut row with open-string note name
           const root = isRoot(s, 0);
           const name = NOTE_NAMES[pitchClass(s, 0)];
           return (
-            <g key={s} opacity={dimmed(s)}>
+            <g key={s}>
               <circle cx={x} cy={OPEN_DOT_Y} r={DOT_R} fill={root ? "#4A6FA5" : "#1a1a1a"} stroke="white" strokeWidth={1.5} />
               <text x={x} y={OPEN_DOT_Y + noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} fill="#fff" fontWeight="bold">
                 {name}
@@ -267,7 +255,7 @@ export default function ChordDiagramSVG({
         const label = getDotLabel(s, fret, fingers[s]);
 
         return (
-          <g key={s} opacity={dimmed(s)}>
+          <g key={s}>
             <circle cx={x} cy={cy} r={DOT_R} fill={root ? "#4A6FA5" : "#1a1a1a"} stroke="white" strokeWidth={1.5} />
             {label && (
               <text x={x} y={cy + noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} fill="#fff" fontWeight="bold">

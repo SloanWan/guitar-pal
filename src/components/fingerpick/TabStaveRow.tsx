@@ -14,6 +14,13 @@ const BARLINE_CLIP_MARGIN = 3;
 const RIGHT_PAD = 15;
 const SVG_HEIGHT = 200;
 const STAVE_Y = 10;
+// Baseline of a chord symbol above the stave's top line — the line the measure
+// number sits on, which the stave already leaves room for (the number is at the
+// barline, the symbol over a note, so the two never meet).
+const CHORD_BASELINE_OFFSET = 14;
+const CHORD_FONT = { family: '"JetBrains Mono", ui-monospace, monospace', size: "11pt", weight: "bold" };
+// Room a chord symbol needs over its note so two changes in one measure don't collide.
+const CHORD_LABEL_EXTRA_WIDTH = 28;
 const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
 const MIN_MEASURE_WIDTH = 120;
@@ -65,6 +72,11 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 			.querySelectorAll("rect")
 			.forEach((el) => el.setAttribute("fill", "var(--workspace-bg)"));
 	});
+	// Chord symbols on the chord line — written by this component, grouped so they
+	// can carry the brand colour rather than the plain-text ink.
+	svgEl.querySelectorAll<SVGTextElement>("g.vf-chord-label text").forEach((el) => {
+		el.setAttribute("fill", "var(--denim-accent)");
+	});
 	svgEl.querySelectorAll<SVGPathElement>("g.vf-stem path").forEach((el) => {
 		el.setAttribute("stroke", "var(--ink)");
 	});
@@ -106,6 +118,7 @@ export function computeMeasureMinWidth(
 	isFirstInRow: boolean,
 	techniqueCount: number,
 	repeatBarlineCount: number = 0,
+	chordLabelCount: number = 0,
 ): number {
 	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 	voice.addTickables(notes);
@@ -116,6 +129,7 @@ export function computeMeasureMinWidth(
 		TECHNIQUE_CONNECTOR_PAD +
 		techniqueCount * HO_PO_EXTRA_WIDTH +
 		repeatBarlineCount * REPEAT_BARLINE_EXTRA_WIDTH +
+		chordLabelCount * CHORD_LABEL_EXTRA_WIDTH +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);
 }
@@ -194,7 +208,7 @@ export default function TabStaveRow({
 
 			// Format and draw notes for each measure against its own stave.
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets } = fingerpickToVexFlow(measure);
+				const { notes, connectors, tuplets, chordLabels } = fingerpickToVexFlow(measure);
 				const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 				voice.addTickables(notes);
 				const noteWidth = staves[i].getNoteEndX() - staves[i].getNoteStartX() - 10;
@@ -204,6 +218,20 @@ export default function TabStaveRow({
 				connectors.forEach((c) => c.setContext(ctx).draw());
 				beams.forEach((b) => b.setContext(ctx).draw());
 				tuplets.forEach((t) => t.setContext(ctx).draw());
+
+				// Chord symbols sit on one fixed line above the stave, at the x of the
+				// note where the chord changes (known only now, after formatting).
+				if (chordLabels.length > 0) {
+					const baseline = staves[i].getYForLine(0) - CHORD_BASELINE_OFFSET;
+					ctx.save();
+					ctx.setFont(CHORD_FONT);
+					ctx.openGroup("chord-label");
+					chordLabels.forEach(({ noteIndex, label }) => {
+						ctx.fillText(label, notes[noteIndex].getAbsoluteX(), baseline);
+					});
+					ctx.closeGroup();
+					ctx.restore();
+				}
 
 				if (startMeasureIndex !== undefined) {
 					const globalMeasureIdx = startMeasureIndex + i;

@@ -73,10 +73,22 @@ function computeAllMeasureWidths(measures: Measure[], containerWidth: number): n
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
 	const repeatBarlines = (m: Measure): number => (m.repeatStart ? 1 : 0) + (m.repeatEnd ? 1 : 0);
 	const widthsFirst = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, true, hoPoConnectorCount(measures[i]), repeatBarlines(measures[i])),
+		computeMeasureMinWidth(
+			rd.notes,
+			true,
+			hoPoConnectorCount(measures[i]),
+			repeatBarlines(measures[i]),
+			rd.chordLabels.length,
+		),
 	);
 	const widthsNonFirst = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, false, hoPoConnectorCount(measures[i]), repeatBarlines(measures[i])),
+		computeMeasureMinWidth(
+			rd.notes,
+			false,
+			hoPoConnectorCount(measures[i]),
+			repeatBarlines(measures[i]),
+			rd.chordLabels.length,
+		),
 	);
 
 	const rows: number[][] = [];

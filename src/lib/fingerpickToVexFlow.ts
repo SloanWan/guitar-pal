@@ -21,6 +21,7 @@ import {
 } from "vexflow";
 
 import { Measure, Duration, Stroke } from "@/lib/fingerpickTypes";
+import { chordSymbolLabel } from "@/lib/fingerpickChords";
 
 // Map our slot-level roll direction to a VexFlow Stroke.Type.
 //
@@ -51,10 +52,26 @@ export const VEX_DURATION: Record<Duration, string> = {
 	"32nd": "32",
 };
 
+/**
+ * A chord symbol to write above the stave, at the note where the chord changes.
+ *
+ * Not a VexFlow modifier on purpose: `ChordSymbol` is skipped by `GhostNote.draw`
+ * (an empty slot can start a chord too) and `Annotation` hangs its height off
+ * the note's own y, so symbols would ride up and down with the strings played.
+ * The renderer writes these itself at a fixed line above the stave, using the
+ * formatted note's x.
+ */
+export interface ChordLabel {
+	/** Index into `notes` of the note the symbol sits over. */
+	noteIndex: number;
+	label: string;
+}
+
 export interface VexFlowRenderData {
 	notes: StemmableNote[];
 	connectors: Array<TabTie | TabSlide>;
 	tuplets: Tuplet[];
+	chordLabels: ChordLabel[];
 }
 
 // Pure, deterministic mapping from a Measure to VexFlow note objects.
@@ -67,10 +84,20 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	// Maps slot index → notes[] index (null for grace-note slots).
 	const slotNoteIndex: (number | null)[] = [];
 	let pendingGraceNotes: GraceTabNote[] = [];
+	const chordLabels: ChordLabel[] = [];
+	// A chord marked on a grace-note slot has no note of its own to sit over; it
+	// is written at the note the grace resolves into.
+	let pendingChord: string | null = null;
+	const writeChordOver = (noteIdx: number) => {
+		if (pendingChord === null) return;
+		chordLabels.push({ noteIndex: noteIdx, label: pendingChord });
+		pendingChord = null;
+	};
 
 	for (let slotIdx = 0; slotIdx < measure.slots.length; slotIdx++) {
 		const slot = measure.slots[slotIdx];
 		const duration = VEX_DURATION[slot.duration];
+		if (slot.chord) pendingChord = chordSymbolLabel(slot.chord);
 
 		if (slot.isGraceNote) {
 			// Collect as a pending modifier; does not produce a standalone Voice tickable.
@@ -109,6 +136,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			notes.push(new StaveNote({ keys: ["b/4"], duration: `${duration}r` }));
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
+			writeChordOver(noteIdx);
 			continue;
 		}
 
@@ -129,6 +157,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			notes.push(new GhostNote({ duration }));
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
+			writeChordOver(noteIdx);
 			continue;
 		}
 
@@ -218,6 +247,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		notes.push(tabNote);
 		posIndexMaps.push(posMap);
 		slotNoteIndex.push(noteIdx);
+		writeChordOver(noteIdx);
 	}
 
 	const connectors: Array<TabTie | TabSlide> = [];
@@ -296,5 +326,5 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		}
 	}
 
-	return { notes, connectors, tuplets };
+	return { notes, connectors, tuplets, chordLabels };
 }

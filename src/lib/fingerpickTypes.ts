@@ -1,3 +1,5 @@
+import type { ChordRef } from "@/lib/strumPatterns";
+
 export type Duration =
 	| "whole"
 	| "half"
@@ -65,6 +67,14 @@ export type BeatSlot = {
 	isGraceNote?: boolean;  // no rhythmic duration; scheduling uses fixed 1/32 beat
 	isRest?: boolean;       // silent slot — keeps its rhythmic `duration` but produces no sound (rest glyph)
 	stroke?: Stroke;        // roll (arpeggiated chord) across this slot's strings — slot-level, not per-string
+	/**
+	 * A chord change at this slot. The chord stays in effect until the next slot
+	 * that carries one, across measure boundaries, like a lead sheet — so a
+	 * one-chord pattern marks only its first slot. It names what the player is
+	 * holding; the frets are what sound, so playback never reads it. Resolved
+	 * per slot by `effectiveChords` in fingerpickChords.ts.
+	 */
+	chord?: ChordRef;
 };
 
 export type Measure = {

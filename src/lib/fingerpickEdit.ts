@@ -99,6 +99,14 @@ function cloneSlotWithNewId(slot: BeatSlot): BeatSlot {
 	return { ...structuredClone(slot), id: crypto.randomUUID() };
 }
 
+// A duplicate placed right after its original is still under the same chord, so
+// carrying the mark across would only write the same symbol twice.
+function cloneSlotWithoutChord(slot: BeatSlot): BeatSlot {
+	const { chord: _chord, ...rest } = cloneSlotWithNewId(slot);
+	void _chord;
+	return rest;
+}
+
 // ── StringFret-level edits ───────────────────────────────────────────────────
 
 function updateStringFret(
@@ -640,7 +648,7 @@ export function duplicateSlots(
 			const newSlots: BeatSlot[] = [];
 			measure.slots.forEach((slot, si) => {
 				newSlots.push(slot);
-				if (selected.has(si)) newSlots.push(cloneSlotWithNewId(slot));
+				if (selected.has(si)) newSlots.push(cloneSlotWithoutChord(slot));
 			});
 			return { ...measure, slots: newSlots };
 		}),
@@ -659,8 +667,29 @@ export function deleteSlots(
 		measures: pattern.measures.map((measure, mi) => {
 			const selected = grouped.get(mi);
 			if (!selected) return measure;
-			const remaining = measure.slots.filter((_, si) => !selected.has(si));
-			return { ...measure, slots: remaining.length > 0 ? remaining : [makeEmptySlot()] };
+			// A deleted slot's chord mark moves to the next slot that survives, so the
+			// region it opened is not lost with the note. Of several deleted in a row,
+			// the last mark is the one in effect where the survivor begins, so it is
+			// the one carried. A surviving slot with a mark of its own keeps it — that
+			// mark was about to take over anyway. With nothing left after it, the mark
+			// is dropped: the previous chord runs on, and later measures are untouched.
+			const remaining: BeatSlot[] = [];
+			let carried: BeatSlot["chord"] | undefined;
+			measure.slots.forEach((slot, si) => {
+				if (selected.has(si)) {
+					carried = slot.chord ?? carried;
+					return;
+				}
+				if (carried !== undefined && slot.chord === undefined) {
+					remaining.push({ ...slot, chord: carried });
+				} else {
+					remaining.push(slot);
+				}
+				carried = undefined;
+			});
+			if (remaining.length > 0) return { ...measure, slots: remaining };
+			const fresh = makeEmptySlot();
+			return { ...measure, slots: [carried !== undefined ? { ...fresh, chord: carried } : fresh] };
 		}),
 	};
 }
@@ -830,6 +859,8 @@ export function splitSlot(
 				strings: cloneStrings(slot.strings),
 				...(slot.stroke !== undefined ? { stroke: slot.stroke } : {}),
 				...(slot.isRest ? { isRest: true } : {}),
+				// The chord changes where the note began, so the head keeps the mark.
+				...(slot.chord !== undefined ? { chord: slot.chord } : {}),
 			});
 		} else {
 			subSlots.push(makeEmptySlot(targetDuration));
@@ -885,12 +916,18 @@ export function mergeSlots(
 	// The first slot's string data is kept, so its roll stroke and rest flag are kept
 	// too. When both the first and a later merged slot carry a stroke, the first wins
 	// (the later slots' data — stroke included — is discarded along with everything else).
+	// A chord mark is a point in time rather than note data, so it is not
+	// discarded with the later slots: the earliest mark in the run starts the
+	// merged note. Later marks in the run have nowhere to go — the next mark
+	// after the merge takes over from there anyway.
+	const mergedChord = measure.slots.slice(slotIndex, end).find((s) => s.chord)?.chord;
 	const merged: BeatSlot = {
 		id: crypto.randomUUID(),
 		duration: targetDuration,
 		strings: cloneStrings(first.strings),
 		...(first.stroke !== undefined ? { stroke: first.stroke } : {}),
 		...(first.isRest ? { isRest: true } : {}),
+		...(mergedChord !== undefined ? { chord: mergedChord } : {}),
 	};
 	const newSlots = [
 		...measure.slots.slice(0, slotIndex),
@@ -988,6 +1025,32 @@ export function normalizeLoadedPattern(pattern: FingerpickPattern): FingerpickPa
 	return touched ? { ...pattern, measures } : pattern;
 }
 
+// Re-home the chord marks of `oldSlots` onto `newSlots` (a uniform rebuild of the
+// same measure) by onset: each mark lands on the new slot whose span contains the
+// time it was written at. A mark is a point in the measure, not note data, so it
+// survives a rhythm change that clears every note; when two marks fall into the
+// same new slot the earlier one wins, as the later has no slot of its own left.
+function carryChordMarks(oldSlots: readonly BeatSlot[], newSlots: readonly BeatSlot[]): BeatSlot[] {
+	const result = newSlots.map((slot) => ({ ...slot }));
+	if (result.length === 0) return result;
+	const onsets: number[] = [];
+	let cursor = 0;
+	for (const slot of result) {
+		onsets.push(cursor);
+		cursor += slotDurationUnits(slot.duration);
+	}
+	let oldCursor = 0;
+	for (const old of oldSlots) {
+		if (old.chord !== undefined) {
+			let index = 0;
+			while (index + 1 < onsets.length && onsets[index + 1] <= oldCursor) index++;
+			if (result[index].chord === undefined) result[index] = { ...result[index], chord: old.chord };
+		}
+		oldCursor += slotDurationUnits(old.duration);
+	}
+	return result;
+}
+
 export type ResetResult =
 	| { type: "ok"; measures: Measure[] }
 	| { type: "confirm"; measures: Measure[] };
@@ -1009,7 +1072,10 @@ export function resetMeasure(
 		1,
 		Math.round(measureCapacity(timeSignature) / slotDurationUnits(targetDuration)),
 	);
-	const newSlots = Array.from({ length: count }, () => makeEmptySlot(targetDuration));
+	const newSlots = carryChordMarks(
+		measure.slots,
+		Array.from({ length: count }, () => makeEmptySlot(targetDuration)),
+	);
 	const newMeasures = measures.map((m, mi) =>
 		mi === measureIndex ? { ...m, slots: newSlots } : m,
 	);
@@ -1054,5 +1120,7 @@ export function remapMeasure(
 		cursor += slotDurationUnits(old.duration);
 	}
 
-	return measures.map((m, mi) => (mi === measureIndex ? { ...m, slots: newSlots } : m));
+	return measures.map((m, mi) =>
+		mi === measureIndex ? { ...m, slots: carryChordMarks(measure.slots, newSlots) } : m,
+	);
 }

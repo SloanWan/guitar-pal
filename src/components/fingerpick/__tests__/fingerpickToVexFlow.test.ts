@@ -508,3 +508,60 @@ describe("fingerpickToVexFlow — slot stroke (roll)", () => {
 		expect(notes[0].getModifiers().filter((m) => m instanceof Stroke)).toHaveLength(1);
 	});
 });
+
+// ─── Chord labels ─────────────────────────────────────────────────────────────
+
+describe("chord labels", () => {
+	const C = { root: "C", suffix: "major" };
+	const Am = { root: "A", suffix: "minor" };
+
+	it("emits nothing for a measure without marks", () => {
+		const { chordLabels } = fingerpickToVexFlow(
+			measure([beatSlot("a", "quarter", { 0: { fret: 3 } })]),
+		);
+		expect(chordLabels).toEqual([]);
+	});
+
+	it("writes the symbol over the note where the chord changes", () => {
+		const { chordLabels } = fingerpickToVexFlow(
+			measure([
+				{ ...beatSlot("a", "quarter", { 0: { fret: 3 } }), chord: C },
+				beatSlot("b", "quarter", { 1: { fret: 2 } }),
+				{ ...beatSlot("c", "quarter", { 2: { fret: 0 } }), chord: Am },
+				beatSlot("d", "quarter"),
+			]),
+		);
+		expect(chordLabels).toEqual([
+			{ noteIndex: 0, label: "C" },
+			{ noteIndex: 2, label: "Am" },
+		]);
+	});
+
+	it("an empty slot and a rest can each start a chord", () => {
+		const { notes, chordLabels } = fingerpickToVexFlow(
+			measure([
+				{ ...beatSlot("a", "quarter"), chord: C },
+				{ ...beatSlot("b", "quarter"), isRest: true, chord: Am },
+			]),
+		);
+		expect(notes[0]).toBeInstanceOf(GhostNote);
+		expect(notes[1]).toBeInstanceOf(StaveNote);
+		expect(chordLabels).toEqual([
+			{ noteIndex: 0, label: "C" },
+			{ noteIndex: 1, label: "Am" },
+		]);
+	});
+
+	it("a mark on a grace-note slot is written at the note it resolves into", () => {
+		const { notes, chordLabels } = fingerpickToVexFlow(
+			measure([
+				beatSlot("a", "quarter", { 0: { fret: 3 } }),
+				{ ...beatSlot("g", "eighth", { 1: { fret: 2 } }), isGraceNote: true, chord: Am },
+				beatSlot("b", "quarter", { 1: { fret: 3 } }),
+			]),
+		);
+		// The grace slot produced no tickable, so the label indexes the main note.
+		expect(notes).toHaveLength(2);
+		expect(chordLabels).toEqual([{ noteIndex: 1, label: "Am" }]);
+	});
+});

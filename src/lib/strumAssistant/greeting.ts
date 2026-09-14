@@ -1,4 +1,5 @@
 import { pick, type Lang } from "@/lib/strumAssistant/lang";
+import { NICKNAME_KEY } from "@/lib/profile";
 
 /**
  * What the panel says before anyone has said anything.
@@ -55,7 +56,10 @@ export function hint(lang: Lang, signedIn: boolean): string {
  * and to nothing at all, which every greeting here survives.
  */
 export function playerName(metadata: Record<string, unknown> | undefined, email: string | undefined): string | null {
-	const named = metadata?.full_name ?? metadata?.name ?? metadata?.user_name;
+	// A nickname the player set themselves outranks whatever the provider wrote
+	// — the same order the topbar avatar uses (profile.ts).
+	const named =
+		metadata?.[NICKNAME_KEY] ?? metadata?.full_name ?? metadata?.name ?? metadata?.user_name;
 	const raw = typeof named === "string" && named.trim() !== "" ? named : (email?.split("@")[0] ?? "");
 	const first = raw.trim().split(/[\s._-]+/)[0];
 	if (first === "" || first.length > 24) return null;

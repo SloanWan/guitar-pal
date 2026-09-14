@@ -62,6 +62,30 @@
 	--readout-glow: rgba(110, 147, 201, 0.35); /* text-shadow color on large readouts       */
 	--measure-hl: rgba(74, 111, 165, 0.07); /* current-measure block in TAB viewer       */
 
+	/* Avatar chip: a Morandi palette — low-chroma, greyed pastels — each slot
+	   paired with its own ink, a deep shade of the same hue, so the initial or
+	   icon on it is always "the same colour, darker" and never a foreign black
+	   or white. Every pair clears 4.8:1. Fixed in both themes like --denim (the
+	   chip is the one personal colour in the system and should not shift
+	   under the user), so only this block defines them. Order here is
+	   cosmetic; the hash → slot mapping lives in AVATAR_COLORS (profile.ts). */
+	--avatar-rose: #d9b8b4; /* dusty pink */
+	--avatar-rose-ink: #5e3a36;
+	--avatar-clay: #d3ad9a; /* terracotta, greyed */
+	--avatar-clay-ink: #5c3a28;
+	--avatar-sand: #d6c7b0; /* warm beige */
+	--avatar-sand-ink: #5a4a2e;
+	--avatar-olive: #c3c2a3; /* grey-green, yellow side */
+	--avatar-olive-ink: #4a4a2a;
+	--avatar-sage: #b8c4b1; /* grey-green, cool side */
+	--avatar-sage-ink: #3f4d39;
+	--avatar-mist: #b4c3cf; /* grey-blue */
+	--avatar-mist-ink: #34485a;
+	--avatar-mauve: #c6b6c8; /* grey-violet */
+	--avatar-mauve-ink: #4e3d52;
+	--avatar-stone: #c4c0bb; /* warm grey */
+	--avatar-stone-ink: #45413c;
+
 	/* Utility */
 	--btn-on-denim: #f0f0f0; /* text/icons on denim fills (NEVER --ink)   */
 	--thumb: #f0f0f0; /* slider thumb fill                         */
@@ -460,6 +484,23 @@
 	--color-denim-accent: var(--denim-accent);
 	--color-denim-tint: var(--denim-tint);
 	--color-on-denim: var(--btn-on-denim);
+	/* bg-avatar-<slot> + text-avatar-<slot>-ink — one pair per AVATAR_COLORS slot (profile.ts) */
+	--color-avatar-rose: var(--avatar-rose);
+	--color-avatar-rose-ink: var(--avatar-rose-ink);
+	--color-avatar-clay: var(--avatar-clay);
+	--color-avatar-clay-ink: var(--avatar-clay-ink);
+	--color-avatar-sand: var(--avatar-sand);
+	--color-avatar-sand-ink: var(--avatar-sand-ink);
+	--color-avatar-olive: var(--avatar-olive);
+	--color-avatar-olive-ink: var(--avatar-olive-ink);
+	--color-avatar-sage: var(--avatar-sage);
+	--color-avatar-sage-ink: var(--avatar-sage-ink);
+	--color-avatar-mist: var(--avatar-mist);
+	--color-avatar-mist-ink: var(--avatar-mist-ink);
+	--color-avatar-mauve: var(--avatar-mauve);
+	--color-avatar-mauve-ink: var(--avatar-mauve-ink);
+	--color-avatar-stone: var(--avatar-stone);
+	--color-avatar-stone-ink: var(--avatar-stone-ink);
 	--color-favorite-active: var(--favorite-active); /* text-favorite-active / fill-favorite-active — amber favourite star */
 
 	--radius-none: 0; /* and nothing else — do not define a radius scale */

@@ -23,6 +23,9 @@
  *
  * A capo follows the strum page's rule: a chord names the shape the player
  * holds, so the neck shows the fingered chord and the piano the heard one.
+ * It also shortens the neck: nothing behind the capo can be played, so the
+ * scale's marks start at the capo fret, which becomes the new open string.
+ * Marks above it keep the pitch they had — a capo does not transpose them.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Volume2, X } from "lucide-react";
@@ -145,6 +148,8 @@ const LABEL_MODES: readonly { value: LabelMode; label: string }[] = [
 ];
 
 const CAPO_OPTIONS = Array.from({ length: STRUM_CAPO_MAX + 1 }, (_, i) => i);
+/** The frets a capo actually lands on, for one-press access. */
+const CAPO_QUICK: readonly number[] = [0, 2, 3, 5, 7];
 
 const LEGEND: readonly { emphasis: FretMark["emphasis"]; tone?: FretMark["tone"]; label: string }[] = [
 	{ emphasis: "root", label: "Root" },
@@ -227,19 +232,29 @@ export default function FretboardExplorer({
 			? voicing.voicing
 			: null;
 
+	// Behind a capo there is no neck left to play, so the scale starts at the
+	// capo fret; the pitches above it are what they always were.
+	const playable = useMemo<FretWindow>(() => ({ fromFret: capo, toFret: NECK.toFret }), [capo]);
+
 	const marks = useMemo<FretMark[]>(() => {
 		const label = createLabeler(spec, labelMode);
 		let raw: FretMark[];
 		if (view) {
 			raw = shapeVoicing ? shapeMarks(shapeVoicing, capo, view.shape.rootPitchClass, label) : [];
 		} else {
-			const base = scaleMarks(spec, NECK, labelMode);
+			const base = scaleMarks(spec, playable, labelMode);
 			raw = chord
-				? overlayChordTones(base, chordTonesFromMidi(chord.pitches, rootPitchClass(chord.root)), spec, NECK, labelMode)
+				? overlayChordTones(
+						base,
+						chordTonesFromMidi(chord.pitches, rootPitchClass(chord.root)),
+						spec,
+						playable,
+						labelMode,
+					)
 				: base;
 		}
 		return raw.map((m) => ({ ...m, label: showLabels ? withGlyphs(m.label) : "" }));
-	}, [spec, labelMode, showLabels, chord, view, shapeVoicing, capo]);
+	}, [spec, labelMode, showLabels, chord, view, shapeVoicing, capo, playable]);
 
 	// The piano follows the neck: hover rings the key, a press strikes it.
 	// Both go through the keyboard's imperative handle, never through state.
@@ -381,18 +396,40 @@ export default function FretboardExplorer({
 				</Field>
 
 				<Field label="Capo">
-					<select
-						aria-label="Capo"
-						value={capo}
-						onChange={(e) => setCapo(Number(e.target.value))}
-						className={SELECT_CLASS}
-					>
-						{CAPO_OPTIONS.map((fret) => (
-							<option key={fret} value={fret}>
-								{fret === 0 ? "None" : `Fret ${fret}`}
-							</option>
-						))}
-					</select>
+					<div className="flex items-stretch gap-2">
+						<select
+							aria-label="Capo"
+							value={capo}
+							onChange={(e) => setCapo(Number(e.target.value))}
+							className={SELECT_CLASS}
+						>
+							{CAPO_OPTIONS.map((fret) => (
+								<option key={fret} value={fret}>
+									{fret === 0 ? "None" : `Fret ${fret}`}
+								</option>
+							))}
+						</select>
+						<div role="radiogroup" aria-label="Capo shortcuts" className="flex border border-line-strong">
+							{CAPO_QUICK.map((fret, i) => {
+								const on = fret === capo;
+								return (
+									<button
+										key={fret}
+										type="button"
+										role="radio"
+										aria-checked={on}
+										aria-label={fret === 0 ? "No capo" : `Capo fret ${fret}`}
+										onClick={() => setCapo(fret)}
+										className={`min-w-8 font-mono text-[11px] transition-colors duration-(--dur-hover) ${
+											i > 0 ? "border-l border-line-strong" : ""
+										} ${on ? "bg-denim text-on-denim" : "text-ink-dim hover:text-denim-accent"}`}
+									>
+										{fret === 0 ? "—" : fret}
+									</button>
+								);
+							})}
+						</div>
+					</div>
 				</Field>
 			</div>
 
@@ -417,6 +454,8 @@ export default function FretboardExplorer({
 						fromFret={NECK.fromFret}
 						toFret={NECK.toFret}
 						capo={capo}
+						onCapoChange={setCapo}
+						maxCapo={STRUM_CAPO_MAX}
 						label={boardLabel}
 						onSlotPress={handleSlotPress}
 						onSlotHover={handleSlotHover}

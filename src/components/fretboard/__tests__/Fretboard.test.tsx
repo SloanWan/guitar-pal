@@ -260,8 +260,10 @@ describe("Fretboard — press", () => {
 		const neck = board.host.querySelector("svg[data-from-fret]") as SVGElement;
 		expect(neck.getAttribute("data-capo")).toBe("2");
 		expect(board.host.querySelector(".fb-capo[data-fret='2'] .fb-capo-bar")).not.toBeNull();
+		// The capo's own fret space still plays — it is the new open string —
+		// so only the two cells behind it are shaded out.
 		const shade = board.host.querySelector(".fb-capo-shade") as SVGRectElement;
-		expect(Number(shade.getAttribute("width"))).toBeLessThan(3 * FRET_W); // covers cells 0–1 and part of 2
+		expect(Number(shade.getAttribute("width"))).toBe(2 * FRET_W);
 		// Fret 1 on the low E cannot sound behind a capo at 2: it reports F#2 (42), the capo's pitch.
 		pointer(board.hit(0, 1), "pointerdown", { clientX: 0, clientY: 0 });
 		pointer(board.hit(0, 1), "pointerup", { clientX: 0, clientY: 0 });
@@ -271,6 +273,59 @@ describe("Fretboard — press", () => {
 		expect(onSlotPress).toHaveBeenLastCalledWith({ string: 0, fret: 5, midi: 45 });
 		board.unmount();
 		expect(mount().host.querySelector(".fb-capo")).toBeNull();
+	});
+
+	it("drags the capo to the fret under the pointer and keys it a fret at a time", () => {
+		const onCapoChange = vi.fn();
+		const board = mount({ capo: 2, onCapoChange, maxCapo: 12 });
+		const svg = board.host.querySelector("svg[data-from-fret]") as SVGSVGElement;
+		// jsdom measures nothing; give the neck its design size so the scale is 1.
+		svg.getBoundingClientRect = () =>
+			({ left: 0, top: 0, width: 23 * FRET_W + 2, height: 120 }) as DOMRect;
+		const grip = board.host.querySelector(".fb-capo-grip") as SVGRectElement;
+		// The capo lands on whichever cell the pointer is over; EDGE offsets by 1.
+		const midOf = (fret: number) => fret * FRET_W + FRET_W / 2 + 1;
+
+		pointer(grip, "pointerdown", { clientX: midOf(2) });
+		pointer(grip, "pointermove", { clientX: midOf(5) });
+		expect(onCapoChange).toHaveBeenLastCalledWith(5);
+		pointer(grip, "pointermove", { clientX: midOf(20) }); // past maxCapo
+		expect(onCapoChange).toHaveBeenLastCalledWith(12);
+		pointer(grip, "pointermove", { clientX: midOf(0) }); // off the low end: no capo
+		expect(onCapoChange).toHaveBeenLastCalledWith(0);
+		pointer(grip, "pointerup", { clientX: midOf(0) });
+		const afterDrag = onCapoChange.mock.calls.length;
+		pointer(grip, "pointermove", { clientX: midOf(7) }); // released: no longer dragging
+		expect(onCapoChange).toHaveBeenCalledTimes(afterDrag);
+
+		const slider = board.host.querySelector(".fb-capo") as SVGGElement;
+		expect(slider.getAttribute("role")).toBe("slider");
+		expect(slider.getAttribute("aria-valuenow")).toBe("2");
+		expect(slider.getAttribute("aria-valuemax")).toBe("12");
+		const key = (k: string) =>
+			act(() => {
+				slider.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+			});
+		key("ArrowRight");
+		expect(onCapoChange).toHaveBeenLastCalledWith(3);
+		key("ArrowLeft");
+		expect(onCapoChange).toHaveBeenLastCalledWith(1);
+		key("End");
+		expect(onCapoChange).toHaveBeenLastCalledWith(12);
+		key("Home");
+		expect(onCapoChange).toHaveBeenLastCalledWith(0);
+		board.unmount();
+	});
+
+	it("draws the capo over the slots, and leaves it inert without a change handler", () => {
+		const board = mount({ capo: 3 });
+		const nodes = [...board.host.querySelectorAll(".fb-slot, .fb-capo")];
+		// The capo is last, so its shade dims the marks and its grip would take
+		// pointer events before the slots underneath.
+		expect(nodes[nodes.length - 1].classList.contains("fb-capo")).toBe(true);
+		expect(board.host.querySelector(".fb-capo-grip")).toBeNull();
+		expect(board.host.querySelector(".fb-capo")?.getAttribute("role")).toBeNull();
+		board.unmount();
 	});
 
 	it("plucks the string under a dormant slot and lets it settle straight", async () => {

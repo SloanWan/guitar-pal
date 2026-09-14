@@ -193,6 +193,42 @@ describe("FretboardExplorer — Chords mode", () => {
 	});
 });
 
+describe("FretboardExplorer — capo", () => {
+	const fretsOf = (ex: ReturnType<typeof mount>) =>
+		ex.lit().map((m) => Number(m.split(":")[1].split("=")[0]));
+
+	it("stops the scale at the capo, and leaves the pitches above it alone", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major" });
+		await ex.settle();
+		expect(Math.min(...fretsOf(ex))).toBe(0);
+		expect(ex.lit()).toContain("0:5=scaleTone"); // A on the low E
+
+		act(() => ex.setSelect("Capo", "2"));
+		await ex.settle();
+		// Nothing behind the capo, and the capo fret is the new open string:
+		// the A string at fret 2 sounds B, which is in C major.
+		expect(Math.min(...fretsOf(ex))).toBe(2);
+		expect(ex.lit()).toContain("1:2=scaleTone");
+		// A fretted note above the capo is untouched — a capo does not transpose it.
+		expect(ex.lit()).toContain("0:5=scaleTone");
+		ex.unmount();
+	});
+
+	it("sets the capo from the shortcut buttons", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major" });
+		await ex.settle();
+		act(() => ex.clickRadio("Capo shortcuts", "5"));
+		await ex.settle();
+		expect(ex.title()).toBe("C major · capo 5");
+		expect(Math.min(...fretsOf(ex))).toBe(5);
+		act(() => ex.clickRadio("Capo shortcuts", "—"));
+		await ex.settle();
+		expect(ex.title()).toBe("C major");
+		expect(Math.min(...fretsOf(ex))).toBe(0);
+		ex.unmount();
+	});
+});
+
 describe("FretboardExplorer — key, piano and labels", () => {
 	it("tints the scale's pitch classes on the piano, tonic selected", async () => {
 		const ex = mount({ initialRoot: "A", initialScale: "minorPentatonic" });

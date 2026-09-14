@@ -20,6 +20,12 @@
  * (dormant slot). The same feedback is available through the `strike` handle
  * for a note or chord that sounded elsewhere.
  *
+ * A capo clamps the strings at its fret: everything behind it is out of play
+ * (the caller stops sending marks there), the capo fret becomes the new open
+ * string, and notes fretted above it keep the pitch they always had — a capo
+ * does not transpose them. The bar can be dragged along the neck and snaps to
+ * the fret the pointer is over.
+ *
  * Sizing: the board scales so that `VISIBLE_FRETS` cells fill the container,
  * the size a full-width 15-fret board had, and the rest of the 22-fret neck
  * scrolls sideways under the fixed string-name column. The scale comes from
@@ -32,6 +38,7 @@ import {
 	useEffect,
 	useImperativeHandle,
 	useRef,
+	type KeyboardEvent as ReactKeyboardEvent,
 	type PointerEvent as ReactPointerEvent,
 	type Ref,
 } from "react";
@@ -90,6 +97,8 @@ const POP_SCALE = 1.7;
 const TAP_SLOP_PX = 8;
 /** The capo bar: a band just behind its fret wire, square-ended like everything here. */
 const CAPO_W = 7;
+/** Invisible margin each side of the bar, so a finger can catch it. */
+const CAPO_GRIP_PAD = 7;
 /** Default stagger for `strike`, matching the strum engine's per-string offset. */
 const STRIKE_STAGGER_MS = 10;
 
@@ -164,6 +173,13 @@ export interface FretboardComponentProps extends FretboardProps {
 	 * 0 or absent: no capo.
 	 */
 	capo?: number;
+	/**
+	 * Called as the capo bar is dragged or keyed to another fret. Without it
+	 * the bar is drawn but inert.
+	 */
+	onCapoChange?: (fret: number) => void;
+	/** Highest fret the capo may be dragged to; the neck's last fret by default. */
+	maxCapo?: number;
 	/** Accessible name for the board; defaults to a plain description. */
 	label?: string;
 	/**
@@ -200,6 +216,8 @@ export default function Fretboard({
 	toFret,
 	className,
 	capo = 0,
+	onCapoChange,
+	maxCapo,
 	label = "Guitar fretboard",
 	onSlotPress,
 	onSlotHover,
@@ -406,6 +424,64 @@ export default function Fretboard({
 		pending.current = null;
 	}, []);
 
+	// ── Capo: drag the bar along the neck, snapping to the fret under the pointer ──
+	const capoMax = maxCapo ?? toFret;
+	const draggingCapo = useRef(false);
+
+	/** The fret whose cell the pointer is over, clamped to what a capo may reach. */
+	const capoFretAt = useCallback(
+		(clientX: number): number => {
+			const svg = neck.current;
+			if (!svg) return capo;
+			const rect = svg.getBoundingClientRect();
+			const width = (toFret - fromFret + 1) * FRET_W + EDGE * 2;
+			const scale = rect.width / width;
+			// Undo the neck group's translation to land in cell coordinates.
+			const cellX = (clientX - rect.left) / scale - EDGE + fromFret * FRET_W;
+			return Math.max(0, Math.min(capoMax, Math.floor(cellX / FRET_W)));
+		},
+		[capo, capoMax, fromFret, toFret],
+	);
+
+	const handleCapoDown = useCallback((e: ReactPointerEvent<SVGRectElement>) => {
+		// The neck must not treat this as a slot press, nor scroll under it.
+		e.stopPropagation();
+		e.preventDefault();
+		e.currentTarget.setPointerCapture?.(e.pointerId);
+		draggingCapo.current = true;
+	}, []);
+
+	const handleCapoMove = useCallback(
+		(e: ReactPointerEvent<SVGRectElement>) => {
+			if (!draggingCapo.current) return;
+			e.stopPropagation();
+			const next = capoFretAt(e.clientX);
+			if (next !== capo) onCapoChange?.(next);
+		},
+		[capo, capoFretAt, onCapoChange],
+	);
+
+	const handleCapoUp = useCallback((e: ReactPointerEvent<SVGRectElement>) => {
+		if (!draggingCapo.current) return;
+		draggingCapo.current = false;
+		e.currentTarget.releasePointerCapture?.(e.pointerId);
+		e.stopPropagation();
+	}, []);
+
+	const handleCapoKey = useCallback(
+		(e: ReactKeyboardEvent<SVGGElement>) => {
+			let next: number | null = null;
+			if (e.key === "ArrowRight" || e.key === "ArrowUp") next = Math.min(capoMax, capo + 1);
+			else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = Math.max(0, capo - 1);
+			else if (e.key === "Home") next = 0;
+			else if (e.key === "End") next = capoMax;
+			if (next === null || next === capo) return;
+			e.preventDefault();
+			onCapoChange?.(next);
+		},
+		[capo, capoMax, onCapoChange],
+	);
+
 	const byKey = new Map<string, FretMark>();
 	for (const mark of marks) byKey.set(slotKey(mark.string, mark.fret), mark);
 
@@ -551,26 +627,6 @@ export default function Fretboard({
 								/>
 							))}
 
-							{/* Capo: the frets behind it fall into shade, the bar clamps the strings. */}
-							{capo > 0 && capo >= fromFret && capo <= toFret && (
-								<g className="fb-capo" data-fret={capo}>
-									<rect
-										className="fb-capo-shade"
-										x={fromFret * FRET_W}
-										y={stringY(STRING_COUNT - 1) - 8}
-										width={wireX(capo) - CAPO_W - 2 - fromFret * FRET_W}
-										height={stringY(0) - stringY(STRING_COUNT - 1) + 16}
-									/>
-									<rect
-										className="fb-capo-bar"
-										x={wireX(capo) - CAPO_W - 2}
-										y={stringY(STRING_COUNT - 1) - 8}
-										width={CAPO_W}
-										height={stringY(0) - stringY(STRING_COUNT - 1) + 16}
-									/>
-								</g>
-							)}
-
 							{/* Fret numbers under each cell. */}
 							{frets.map((fret) => (
 								<text
@@ -644,6 +700,54 @@ export default function Fretboard({
 										</g>
 									);
 								}),
+							)}
+
+							{/* The capo, last so its shade dims everything behind it and its
+							    grip takes pointer events before the slots underneath do. */}
+							{capo > 0 && capo >= fromFret && capo <= toFret && (
+								<g
+									className="fb-capo"
+									data-fret={capo}
+									role={onCapoChange ? "slider" : undefined}
+									tabIndex={onCapoChange ? 0 : undefined}
+									aria-label={onCapoChange ? "Capo fret" : undefined}
+									aria-valuenow={onCapoChange ? capo : undefined}
+									aria-valuemin={onCapoChange ? 0 : undefined}
+									aria-valuemax={onCapoChange ? capoMax : undefined}
+									aria-valuetext={onCapoChange ? `Fret ${capo}` : undefined}
+									onKeyDown={onCapoChange ? handleCapoKey : undefined}
+								>
+									{/* The capo sits in its own fret space, so that space still
+									    plays — it is the new open string. Only the cells behind
+									    it are out of play. */}
+									<rect
+										className="fb-capo-shade"
+										x={fromFret * FRET_W}
+										y={stringY(STRING_COUNT - 1) - 8}
+										width={(capo - fromFret) * FRET_W}
+										height={stringY(0) - stringY(STRING_COUNT - 1) + 16}
+									/>
+									<rect
+										className="fb-capo-bar"
+										x={wireX(capo) - CAPO_W - 2}
+										y={stringY(STRING_COUNT - 1) - 8}
+										width={CAPO_W}
+										height={stringY(0) - stringY(STRING_COUNT - 1) + 16}
+									/>
+									{onCapoChange && (
+										<rect
+											className="fb-capo-grip"
+											x={wireX(capo) - CAPO_W - 2 - CAPO_GRIP_PAD}
+											y={stringY(STRING_COUNT - 1) - 8}
+											width={CAPO_W + CAPO_GRIP_PAD * 2}
+											height={stringY(0) - stringY(STRING_COUNT - 1) + 16}
+											onPointerDown={handleCapoDown}
+											onPointerMove={handleCapoMove}
+											onPointerUp={handleCapoUp}
+											onPointerCancel={handleCapoUp}
+										/>
+									)}
+								</g>
 							)}
 						</g>
 					</svg>

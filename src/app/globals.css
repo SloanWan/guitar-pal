@@ -601,6 +601,23 @@
 	stroke-width: 0.75;
 	pointer-events: none;
 }
+/* A wider invisible handle, so the bar can be caught by a finger. */
+.fb-capo-grip {
+	fill: transparent;
+	cursor: grab;
+	touch-action: none;
+}
+.fb-capo-grip:active {
+	cursor: grabbing;
+}
+.fb-capo:focus-visible {
+	outline: none;
+}
+.fb-capo:focus-visible .fb-capo-bar {
+	fill: var(--denim);
+	stroke: var(--denim-accent);
+	stroke-width: 1.5;
+}
 
 /* The touch layer over the marks: an invisible hit area per slot, a hover ring
    that lights the hovered slot, its unisons and, fainter, its octaves, and the

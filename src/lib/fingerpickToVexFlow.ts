@@ -22,6 +22,7 @@ import {
 
 import { Measure, Duration, Stroke } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
+import type { ChordRef } from "@/lib/strumPatterns";
 
 // Map our slot-level roll direction to a VexFlow Stroke.Type.
 //
@@ -64,6 +65,9 @@ export const VEX_DURATION: Record<Duration, string> = {
 export interface ChordLabel {
 	/** Index into `notes` of the note the symbol sits over. */
 	noteIndex: number;
+	/** The slot carrying the mark (a grace slot's mark reports the grace slot). */
+	slotIndex: number;
+	chord: ChordRef;
 	label: string;
 }
 
@@ -87,17 +91,22 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	const chordLabels: ChordLabel[] = [];
 	// A chord marked on a grace-note slot has no note of its own to sit over; it
 	// is written at the note the grace resolves into.
-	let pendingChord: string | null = null;
+	let pendingChord: { slotIndex: number; chord: ChordRef } | null = null;
 	const writeChordOver = (noteIdx: number) => {
 		if (pendingChord === null) return;
-		chordLabels.push({ noteIndex: noteIdx, label: pendingChord });
+		chordLabels.push({
+			noteIndex: noteIdx,
+			slotIndex: pendingChord.slotIndex,
+			chord: pendingChord.chord,
+			label: chordSymbolLabel(pendingChord.chord),
+		});
 		pendingChord = null;
 	};
 
 	for (let slotIdx = 0; slotIdx < measure.slots.length; slotIdx++) {
 		const slot = measure.slots[slotIdx];
 		const duration = VEX_DURATION[slot.duration];
-		if (slot.chord) pendingChord = chordSymbolLabel(slot.chord);
+		if (slot.chord) pendingChord = { slotIndex: slotIdx, chord: slot.chord };
 
 		if (slot.isGraceNote) {
 			// Collect as a pending modifier; does not produce a standalone Voice tickable.

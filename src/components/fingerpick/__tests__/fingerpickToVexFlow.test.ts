@@ -532,8 +532,8 @@ describe("chord labels", () => {
 			]),
 		);
 		expect(chordLabels).toEqual([
-			{ noteIndex: 0, label: "C" },
-			{ noteIndex: 2, label: "Am" },
+			{ noteIndex: 0, slotIndex: 0, chord: C, label: "C" },
+			{ noteIndex: 2, slotIndex: 2, chord: Am, label: "Am" },
 		]);
 	});
 
@@ -547,8 +547,8 @@ describe("chord labels", () => {
 		expect(notes[0]).toBeInstanceOf(GhostNote);
 		expect(notes[1]).toBeInstanceOf(StaveNote);
 		expect(chordLabels).toEqual([
-			{ noteIndex: 0, label: "C" },
-			{ noteIndex: 1, label: "Am" },
+			{ noteIndex: 0, slotIndex: 0, chord: C, label: "C" },
+			{ noteIndex: 1, slotIndex: 1, chord: Am, label: "Am" },
 		]);
 	});
 
@@ -562,6 +562,6 @@ describe("chord labels", () => {
 		);
 		// The grace slot produced no tickable, so the label indexes the main note.
 		expect(notes).toHaveLength(2);
-		expect(chordLabels).toEqual([{ noteIndex: 1, label: "Am" }]);
+		expect(chordLabels).toEqual([{ noteIndex: 1, slotIndex: 1, chord: Am, label: "Am" }]);
 	});
 });

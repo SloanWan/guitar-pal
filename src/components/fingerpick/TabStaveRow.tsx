@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Renderer, TabStave, Voice, Formatter, Beam, Barline, StemmableNote } from "vexflow";
 
 import { Measure } from "@/lib/fingerpickTypes";
-import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import { fingerpickToVexFlow, type ChordLabel } from "@/lib/fingerpickToVexFlow";
 
 // Layout constants — not props because they are fixed design decisions, not data.
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
@@ -21,6 +21,16 @@ const CHORD_BASELINE_OFFSET = 14;
 const CHORD_FONT = { family: '"JetBrains Mono", ui-monospace, monospace', size: "11pt", weight: "bold" };
 // Room a chord symbol needs over its note so two changes in one measure don't collide.
 const CHORD_LABEL_EXTRA_WIDTH = 28;
+// The chord line's diagram view: a mini diagram (56 × 51, plus its chip's
+// padding) sits over each symbol. The stave already leaves ~75 px above its top
+// line, so only a little headroom is added; the diagram is placed from the
+// symbol's baseline upwards.
+const CHORD_DIAGRAM_HEADROOM = 16;
+const CHORD_DIAGRAM_HEIGHT = 55;
+// Air between the diagram's chip and the symbol's cap height.
+const CHORD_DIAGRAM_GAP = 14;
+// A mini diagram is wider than its symbol, so two changes need more room apart.
+const CHORD_DIAGRAM_EXTRA_WIDTH = 60;
 const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
 const MIN_MEASURE_WIDTH = 120;
@@ -37,6 +47,22 @@ interface TabStaveRowProps {
 	startMeasureIndex?: number;
 	/** Per-measure stave widths in the same order as `measures`, computed by the greedy layout pass. */
 	measureWidths: number[];
+	/**
+	 * Draw a shape over each chord symbol. Called for every chord mark in the
+	 * row once the notes are placed, with the mark's measure (row-local index
+	 * plus `startMeasureIndex`) and slot; whatever it returns is laid over the
+	 * stave at the symbol's x. Given, the stave leaves headroom for it.
+	 */
+	chordDiagram?: (label: ChordLabel & { measureIndex: number }) => ReactNode;
+}
+
+/** Where a chord mark landed after formatting, for the diagram overlay. */
+interface ChordAnchor {
+	key: string;
+	x: number;
+	/** Top edge of the diagram, in the SVG's (= the wrapper's) pixel space. */
+	y: number;
+	label: ChordLabel & { measureIndex: number };
 }
 
 // VexFlow's SVG backend emits colors as literal presentation attributes
@@ -119,6 +145,8 @@ export function computeMeasureMinWidth(
 	techniqueCount: number,
 	repeatBarlineCount: number = 0,
 	chordLabelCount: number = 0,
+	/** True when the chord line shows shapes, which need more room than names. */
+	chordDiagrams: boolean = false,
 ): number {
 	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 	voice.addTickables(notes);
@@ -129,7 +157,7 @@ export function computeMeasureMinWidth(
 		TECHNIQUE_CONNECTOR_PAD +
 		techniqueCount * HO_PO_EXTRA_WIDTH +
 		repeatBarlineCount * REPEAT_BARLINE_EXTRA_WIDTH +
-		chordLabelCount * CHORD_LABEL_EXTRA_WIDTH +
+		chordLabelCount * (chordDiagrams ? CHORD_DIAGRAM_EXTRA_WIDTH : CHORD_LABEL_EXTRA_WIDTH) +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);
 }
@@ -139,8 +167,11 @@ export default function TabStaveRow({
 	startMeasureNumber,
 	startMeasureIndex,
 	measureWidths,
+	chordDiagram,
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
+	const [anchors, setAnchors] = useState<ChordAnchor[]>([]);
+	const showDiagrams = chordDiagram !== undefined;
 
 	useEffect(() => {
 		const div = containerRef.current;
@@ -157,16 +188,19 @@ export default function TabStaveRow({
 			const svgWidth =
 				CLEF_WIDTH + measureWidths.reduce((a, b) => a + b, 0) + BARLINE_CLIP_MARGIN;
 
+			const headroom = showDiagrams ? CHORD_DIAGRAM_HEADROOM : 0;
+			const staveY = STAVE_Y + headroom;
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
-			renderer.resize(svgWidth, SVG_HEIGHT);
+			renderer.resize(svgWidth, SVG_HEIGHT + headroom);
 			const ctx = renderer.getContext();
+			const nextAnchors: ChordAnchor[] = [];
 			ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
 
 			// Draw staves, accumulating x from per-measure widths.
 			let staveX = CLEF_WIDTH;
 			const staves = measures.map((measure, i) => {
 				const w = measureWidths[i];
-				const stave = new TabStave(staveX, STAVE_Y, w);
+				const stave = new TabStave(staveX, staveY, w);
 				staveX += w;
 				if (i === 0) {
 					stave.addTabGlyph();
@@ -186,7 +220,7 @@ export default function TabStaveRow({
 				// shown when it plays more than the implicit twice (×2 is the default :| meaning).
 				const times = measure.repeatTimes ?? 2;
 				if (measure.repeatEnd && times > 2) {
-					ctx.fillText(`×${times}`, stave.getX() + w - 22, STAVE_Y + 6);
+					ctx.fillText(`×${times}`, stave.getX() + w - 22, staveY + 6);
 				}
 				return stave;
 			});
@@ -226,8 +260,18 @@ export default function TabStaveRow({
 					ctx.save();
 					ctx.setFont(CHORD_FONT);
 					ctx.openGroup("chord-label");
-					chordLabels.forEach(({ noteIndex, label }) => {
-						ctx.fillText(label, notes[noteIndex].getAbsoluteX(), baseline);
+					chordLabels.forEach((chordLabel) => {
+						const x = notes[chordLabel.noteIndex].getAbsoluteX();
+						ctx.fillText(chordLabel.label, x, baseline);
+						if (showDiagrams && startMeasureIndex !== undefined) {
+							const measureIndex = startMeasureIndex + i;
+							nextAnchors.push({
+								key: `${measureIndex}:${chordLabel.slotIndex}`,
+								x,
+								y: Math.max(0, baseline - CHORD_DIAGRAM_GAP - CHORD_DIAGRAM_HEIGHT),
+								label: { ...chordLabel, measureIndex },
+							});
+						}
 					});
 					ctx.closeGroup();
 					ctx.restore();
@@ -247,6 +291,18 @@ export default function TabStaveRow({
 
 			const svgEl = div.querySelector("svg");
 			if (svgEl) applyStaveTheme(svgEl);
+			// Same anchors → same state, so a resize that moved nothing re-renders nothing.
+			setAnchors((prev) =>
+				prev.length === nextAnchors.length &&
+				prev.every(
+					(a, k) =>
+						a.key === nextAnchors[k].key &&
+						a.x === nextAnchors[k].x &&
+						a.y === nextAnchors[k].y,
+				)
+					? prev
+					: nextAnchors,
+			);
 		};
 
 		// Initial render; ResizeObserver re-renders on container size changes.
@@ -263,7 +319,26 @@ export default function TabStaveRow({
 			if (rafId !== undefined) cancelAnimationFrame(rafId);
 			div.innerHTML = "";
 		};
-	}, [measures, startMeasureNumber, startMeasureIndex, measureWidths]);
+	}, [measures, startMeasureNumber, startMeasureIndex, measureWidths, showDiagrams]);
 
-	return <div ref={containerRef} className="font-mono w-full" />;
+	return (
+		<div className="relative w-full">
+			<div ref={containerRef} className="font-mono w-full" />
+			{/* Shapes over the chord symbols. Laid over the SVG rather than drawn
+			    into it: the diagram is a React component with its own markup and
+			    theme, and the anchors only exist once VexFlow has placed the notes. */}
+			{chordDiagram &&
+				anchors.map((anchor) => (
+					<div
+						key={anchor.key}
+						// A light chip under the diagram: its palette is drawn for a light
+						// surface, and the workspace behind it is dark in dark mode.
+						className="pointer-events-none absolute rounded-sm bg-white p-0.5 shadow-sm"
+						style={{ left: anchor.x - 4, top: anchor.y }}
+					>
+						{chordDiagram(anchor.label)}
+					</div>
+				))}
+		</div>
+	);
 }

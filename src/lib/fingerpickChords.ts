@@ -1,4 +1,4 @@
-import type { FingerpickPattern, Measure } from "./fingerpickTypes";
+import type { BeatSlot, FingerpickPattern, Measure } from "./fingerpickTypes";
 import { setFret, setInactive, type SlotTarget } from "./fingerpickEdit";
 import type { ChordRef } from "./strumPatterns";
 import { chordAbbreviation, normalizeCapo } from "./strumProgressions";
@@ -170,4 +170,39 @@ export function clearString(
 			return setInactive(q, { measureIndex: mi, slotIndex, stringIndex });
 		}, p);
 	}, pattern);
+}
+
+/**
+ * Strings the shape holds that nothing in `slots[from, to)` plucks — index 0 =
+ * high e, the fingerpick order. Drawn faintly on a chord diagram, so the player
+ * can tell the fingers the pattern actually sounds from the ones held only to
+ * complete the chord. A dead note counts as plucked: the string is struck.
+ * A string the shape leaves out is never reported — there is nothing to hold.
+ */
+export function heldButUnplucked(
+	slots: readonly BeatSlot[],
+	from: number,
+	to: number,
+	voicing: ChordVoicing,
+): boolean[] {
+	return chordFretHints(voicing).map((hint, stringIndex) => {
+		if (hint === "/") return false;
+		for (let i = Math.max(0, from); i < Math.min(to, slots.length); i++) {
+			const cell = slots[i].strings[stringIndex];
+			if (cell.fret !== null || cell.muted) return false;
+		}
+		return true;
+	});
+}
+
+/**
+ * Where a chord mark's region ends inside its measure: the next mark's slot,
+ * or the measure's end. Pairs with `heldButUnplucked` for a diagram drawn at
+ * the mark.
+ */
+export function chordRegionEnd(measure: Measure, slotIndex: number): number {
+	for (let i = slotIndex + 1; i < measure.slots.length; i++) {
+		if (measure.slots[i].chord) return i;
+	}
+	return measure.slots.length;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
@@ -20,7 +20,21 @@ import TabStaveRow, {
 	CLEF_WIDTH,
 } from "@/components/fingerpick/TabStaveRow";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
-import { patternCapo } from "@/lib/fingerpickChords";
+import {
+	chordRegionEnd,
+	heldButUnplucked,
+	patternCapo,
+	patternHasChords,
+} from "@/lib/fingerpickChords";
+import { selectRefVoicing } from "@/lib/strumBars";
+import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
+import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
+import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
+import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";
+import ChordViewToggle from "@/components/strum/ChordViewToggle";
+import type { ChordView } from "@/components/strum/StepGrid";
+import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
 import {
 	expandFingerpickPattern,
 	mapOriginToExpandedIndex,
@@ -50,6 +64,8 @@ import Rocker from "@/components/ui/Rocker";
 // Remembers the last-viewed pattern id so a page refresh reopens it instead of
 // defaulting back to the first preset. Device-local UI state — not synced.
 const LAST_PATTERN_KEY = "lastFingerpickPatternId";
+// Whether the chord line shows names or shapes. Device-local, like the pattern id.
+const CHORD_VIEW_KEY = "fingerpickChordView";
 
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
 function hoPoConnectorCount(measure: Measure): number {
@@ -68,7 +84,11 @@ const ROW_TRAILING_PAD = 15;
 // Greedy row packer: each measure's minimum width drives wrapping.
 // Returns one inner array per row; each entry is the stretched stave width for that measure.
 // Rows are scaled to fill exactly (containerWidth − CLEF_WIDTH − ROW_TRAILING_PAD).
-function computeAllMeasureWidths(measures: Measure[], containerWidth: number): number[][] {
+function computeAllMeasureWidths(
+	measures: Measure[],
+	containerWidth: number,
+	chordDiagrams: boolean,
+): number[][] {
 	// Precompute render data once per measure to avoid double adapter calls.
 	const renderData = measures.map((m) => fingerpickToVexFlow(m));
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
@@ -80,6 +100,7 @@ function computeAllMeasureWidths(measures: Measure[], containerWidth: number): n
 			hoPoConnectorCount(measures[i]),
 			repeatBarlines(measures[i]),
 			rd.chordLabels.length,
+			chordDiagrams,
 		),
 	);
 	const widthsNonFirst = renderData.map((rd, i) =>
@@ -89,6 +110,7 @@ function computeAllMeasureWidths(measures: Measure[], containerWidth: number): n
 			hoPoConnectorCount(measures[i]),
 			repeatBarlines(measures[i]),
 			rd.chordLabels.length,
+			chordDiagrams,
 		),
 	);
 
@@ -206,6 +228,73 @@ export default function FingerpickPage() {
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
+	// Chord line: names, or the shapes to hold. Read back from storage on mount
+	// (not in the initializer — the server render has no storage to read).
+	const [chordView, setChordView] = useState<ChordView>("name");
+	useEffect(() => {
+		let stored: string | null = null;
+		try {
+			stored = localStorage.getItem(CHORD_VIEW_KEY);
+		} catch {
+			// storage unavailable — names it is
+		}
+		// Deferred, as the other storage restores here are: a one-shot sync after
+		// mount, not a state change inside the render that scheduled it.
+		if (stored === "diagram") queueMicrotask(() => setChordView("diagram"));
+	}, []);
+	function handleChordViewChange(view: ChordView) {
+		setChordView(view);
+		try {
+			localStorage.setItem(CHORD_VIEW_KEY, view);
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}
+	const hasChords = patternHasChords(selectedPattern.measures);
+	const showChordDiagrams = hasChords && chordView === "diagram";
+	// Shapes for the chord line's diagram view: the player's own voicings, and
+	// the library's for every chord the pattern names, through the shared cache.
+	const { voicings: userVoicings } = useUserChordVoicings(
+		showChordDiagrams ? user : null,
+		loading || !showChordDiagrams,
+	);
+	const chordRefs = useMemo(
+		() =>
+			showChordDiagrams
+				? selectedPattern.measures.flatMap((m) =>
+						m.slots.flatMap((slot) => (slot.chord ? [slot.chord] : [])),
+					)
+				: [],
+		[selectedPattern.measures, showChordDiagrams],
+	);
+	const voicingsFor = useChordVoicings(chordRefs, userVoicings);
+	// The shape over a chord symbol. Strings the shape holds but nothing in the
+	// chord's stretch of that measure plucks are drawn faintly, so the fingers
+	// that only complete the chord read differently from the ones that sound.
+	const chordDiagram = useCallback(
+		(label: ChordLabel & { measureIndex: number }) => {
+			const state = voicingsFor(label.chord);
+			if (state.status !== "ready") return null;
+			const voicing = selectRefVoicing(label.chord, state.voicings);
+			const measure = selectedPattern.measures[label.measureIndex];
+			if (!voicing || !measure) return null;
+			const unplucked = heldButUnplucked(
+				measure.slots,
+				label.slotIndex,
+				chordRegionEnd(measure, label.slotIndex),
+				voicing,
+			);
+			return (
+				<ChordDiagramSVG
+					{...vexChordDefToSVGProps(chordVoicingToVexChords(voicing))}
+					size="mini"
+					// The diagram's strings run low E → high e; the pattern's the other way.
+					dimmedStrings={[...unplucked].reverse()}
+				/>
+			);
+		},
+		[voicingsFor, selectedPattern.measures],
+	);
 	// Bottom-sheet detent (Google-Maps style): "closed" shows only the bottom bar,
 	// "half" is the default open height, "full" is the tall/expanded height. The
 	// drawer handle steps between detents; dragging up expands, dragging down closes.
@@ -1213,7 +1302,11 @@ export default function FingerpickPage() {
 	// ResizeObserver fires with the real container width on mount.
 	const rows = useMemo(() => {
 		if (containerWidth === 0) return [];
-		const widthRows = computeAllMeasureWidths(selectedPattern.measures, containerWidth);
+		const widthRows = computeAllMeasureWidths(
+			selectedPattern.measures,
+			containerWidth,
+			showChordDiagrams,
+		);
 		let offset = 0;
 		return widthRows.map((rowWidths) => {
 			const start = offset;
@@ -1221,7 +1314,7 @@ export default function FingerpickPage() {
 			offset += rowWidths.length;
 			return { measures: rowMeasures, startMeasureNumber: start + 1, widths: rowWidths };
 		});
-	}, [selectedPattern.measures, containerWidth]);
+	}, [selectedPattern.measures, containerWidth, showChordDiagrams]);
 
 	// Keep refs in sync with the latest render values so the RAF closure never goes stale.
 	// useEffect (not inline assignment) satisfies react-hooks/refs; the one-frame lag
@@ -1287,7 +1380,7 @@ export default function FingerpickPage() {
 							<h1 className="text-lg font-semibold text-tab-title">
 								{selectedPattern.name}
 							</h1>
-							<p className="flex items-center gap-2 text-xs text-tab-meta uppercase tracking-wider mt-0.5">
+							<div className="flex items-center gap-2 text-xs text-tab-meta uppercase tracking-wider mt-0.5">
 								<span>
 									{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
 									{selectedPattern.timeSignature[1]}
@@ -1295,6 +1388,10 @@ export default function FingerpickPage() {
 								{/* The TAB is written behind the capo; this says how much higher
 								    it sounds. "No capo" is said too, so a player about to play
 								    along never has to wonder whether the badge is just missing. */}
+								{/* Chord line view — only a question for a pattern that names chords. */}
+								{hasChords && (
+									<ChordViewToggle value={chordView} onChange={handleChordViewChange} />
+								)}
 								{patternCapo(selectedPattern) > 0 ? (
 									<span className="border border-denim-border bg-denim-tint px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal text-denim">
 										Capo {patternCapo(selectedPattern)}
@@ -1304,7 +1401,7 @@ export default function FingerpickPage() {
 										No capo
 									</span>
 								)}
-							</p>
+							</div>
 						</div>
 
 						{/* min-h-0 lets Flexbox shrink this child so overflow-y-auto scrolls.
@@ -1372,6 +1469,7 @@ export default function FingerpickPage() {
 											startMeasureNumber={row.startMeasureNumber}
 											startMeasureIndex={row.startMeasureNumber - 1}
 											measureWidths={row.widths}
+											chordDiagram={showChordDiagrams ? chordDiagram : undefined}
 										/>
 									</div>
 								))}

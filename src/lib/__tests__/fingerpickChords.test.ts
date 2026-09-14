@@ -10,6 +10,8 @@ import {
 	setPatternCapo,
 	clearLeftOutStrings,
 	clearString,
+	heldButUnplucked,
+	chordRegionEnd,
 } from "@/lib/fingerpickChords";
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
@@ -231,5 +233,32 @@ describe("clearString", () => {
 	it("returns the same pattern when the string is already empty", () => {
 		const p = pattern([measure("a", [undefined])]);
 		expect(clearString(p, 4)).toBe(p);
+	});
+});
+
+describe("heldButUnplucked", () => {
+	// C = x32010 → fingerpick order e0 B1 G0 D2 A3 E/.
+	it("reports held strings nothing in the range plucks, never left-out ones", () => {
+		let p = pattern([measure("a", [C, undefined, undefined, undefined])]);
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 4 }, 3); // A plucked
+		p = setFret(p, { measureIndex: 0, slotIndex: 2, stringIndex: 1 }, 1); // B plucked
+		p = toggleMuted(p, { measureIndex: 0, slotIndex: 3, stringIndex: 2 }); // G struck dead
+		const out = heldButUnplucked(p.measures[0].slots, 0, 4, voicing());
+		expect(out).toEqual([true, false, false, true, false, false]);
+	});
+
+	it("only looks inside the given slot range", () => {
+		let p = pattern([measure("a", [C, undefined, Am, undefined])]);
+		p = setFret(p, { measureIndex: 0, slotIndex: 3, stringIndex: 0 }, 0); // e, but after the region
+		const out = heldButUnplucked(p.measures[0].slots, 0, 2, voicing());
+		expect(out[0]).toBe(true);
+	});
+});
+
+describe("chordRegionEnd", () => {
+	it("stops at the next mark, else at the measure end", () => {
+		const m = measure("a", [C, undefined, Am, undefined]);
+		expect(chordRegionEnd(m, 0)).toBe(2);
+		expect(chordRegionEnd(m, 2)).toBe(4);
 	});
 });

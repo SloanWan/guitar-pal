@@ -33,6 +33,19 @@ export interface RelatedSlots {
 }
 
 /**
+ * Every slot on the board that sounds exactly `midi`, low string to high:
+ * the positions to strike when that pitch is played elsewhere (the piano).
+ */
+export function slotsSounding(midi: number, window: FretWindow): SlotPosition[] {
+	const slots: SlotPosition[] = [];
+	for (let string = 0; string < STRING_COUNT; string++) {
+		const fret = midi - GUITAR_OPEN_MIDI[string];
+		if (fret >= window.fromFret && fret <= window.toFret) slots.push({ string, fret });
+	}
+	return slots;
+}
+
+/**
  * The slots a hover should ring: unisons (same pitch, another position) and
  * octaves (same pitch class, another octave), within the frets the board shows.
  * The slot itself is in neither list. Ordered low string to high, low fret to

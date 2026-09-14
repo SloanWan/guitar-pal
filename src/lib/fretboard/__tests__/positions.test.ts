@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
-import { relatedSlots, slotMidi } from "@/lib/fretboard/positions";
+import { relatedSlots, slotMidi, slotsSounding } from "@/lib/fretboard/positions";
 
 const NECK = { fromFret: 0, toFret: 22 };
 
@@ -12,6 +12,28 @@ describe("slotMidi", () => {
 		expect(slotMidi(0, 5)).toBe(45); // A2 = open A
 		expect(slotMidi(0, 5)).toBe(GUITAR_OPEN_MIDI[1]);
 		expect(slotMidi(4, 12)).toBe(71); // B4
+	});
+});
+
+describe("slotsSounding", () => {
+	it("lists every position of a pitch, low string first", () => {
+		expect(slotsSounding(64, NECK)).toEqual([
+			{ string: 1, fret: 19 },
+			{ string: 2, fret: 14 },
+			{ string: 3, fret: 9 },
+			{ string: 4, fret: 5 },
+			{ string: 5, fret: 0 },
+		]);
+		expect(slotsSounding(40, NECK)).toEqual([{ string: 0, fret: 0 }]);
+	});
+
+	it("returns nothing for a pitch the board cannot sound, and respects the window", () => {
+		expect(slotsSounding(39, NECK)).toEqual([]); // below the low E
+		expect(slotsSounding(87, NECK)).toEqual([]); // above the 22nd fret
+		expect(slotsSounding(64, { fromFret: 0, toFret: 5 })).toEqual([
+			{ string: 4, fret: 5 },
+			{ string: 5, fret: 0 },
+		]);
 	});
 });
 

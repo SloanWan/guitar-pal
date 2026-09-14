@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Volume2, X } from "lucide-react";
 
-import Fretboard from "@/components/fretboard/Fretboard";
+import Fretboard, { type FretboardHandle } from "@/components/fretboard/Fretboard";
 import PianoKeyboard, { type PianoKeyboardHandle } from "@/components/fretboard/PianoKeyboard";
 import { useNoteSound } from "@/components/fretboard/useNoteSound";
 import ChordPickerModal, { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
@@ -31,7 +31,7 @@ import {
 	type LabelMode,
 	type ScaleType,
 } from "@/lib/fretboard/scales";
-import type { SlotNote } from "@/lib/fretboard/positions";
+import { slotsSounding, type SlotNote } from "@/lib/fretboard/positions";
 import type { FretMark, FretWindow } from "@/lib/fretboard/types";
 import { PIANO_61, pitchClassOf, type PianoRange } from "@/lib/piano/keys";
 import { parseMusicalText } from "@/lib/musicalNotation";
@@ -136,6 +136,7 @@ export default function FretboardExplorer({
 	// The piano follows the neck: hover rings the key, a press strikes it.
 	// Both go through the keyboard's imperative handle, never through state.
 	const piano = useRef<PianoKeyboardHandle>(null);
+	const fretboard = useRef<FretboardHandle>(null);
 	const handleSlotHover = useCallback((slot: SlotNote | null) => piano.current?.highlight(slot?.midi ?? null), []);
 
 	// A press that cannot sound (samples still failing to load) is just silent.
@@ -148,12 +149,14 @@ export default function FretboardExplorer({
 	);
 
 	// A piano key picks the root by pitch class and, with sound on, plays the
-	// key itself in the piano voice.
+	// key itself in the piano voice; every position of that pitch on the neck
+	// ripples, so the key maps onto the board the way a slot maps onto a key.
 	const handleKeySelect = useCallback(
 		(midi: number) => {
 			setRoot(SCALE_ROOTS[pitchClassOf(midi)]);
 			if (soundOn) {
 				piano.current?.strike(midi);
+				fretboard.current?.strike(slotsSounding(midi, NECK));
 				void play(midi, "piano").catch(() => undefined);
 			}
 		},
@@ -250,6 +253,7 @@ export default function FretboardExplorer({
 			{/* The board */}
 			<div className="select-none border border-line bg-surface p-3 sm:p-4">
 				<Fretboard
+					ref={fretboard}
 					marks={marks}
 					fromFret={NECK.fromFret}
 					toFret={NECK.toFret}

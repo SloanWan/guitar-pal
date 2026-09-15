@@ -222,3 +222,104 @@ export function offShapeStrings(slot: BeatSlot, hints: readonly FretHint[] | nul
 		return hint === "/" || hint !== sf.fret ? [stringIndex] : [];
 	});
 }
+
+/** Whether two references name the same chord held the same way. */
+export function sameChordRef(a: ChordRef | null, b: ChordRef | null): boolean {
+	if (a === null || b === null) return a === b;
+	return a.root === b.root && a.suffix === b.suffix && (a.voicingId ?? null) === (b.voicingId ?? null);
+}
+
+/**
+ * Put one chord over a selection of slots.
+ *
+ * Selected slots are grouped into runs of consecutive slots (a run may cross a
+ * measure boundary). Each run gets a single mark on its first slot and none on
+ * the rest, so the symbol is written once and carries. Where a run cut into a
+ * region of some other chord, the slot after the run gets that chord back —
+ * otherwise the new chord would run on past what was selected.
+ */
+export function setChordOnSlots(
+	pattern: FingerpickPattern,
+	targets: readonly SlotTarget[],
+	chord: ChordRef,
+): FingerpickPattern {
+	if (targets.length === 0) return pattern;
+	const before = effectiveChords(pattern.measures);
+	// Time order, then runs of adjacent slots.
+	const ordered = [...targets].sort(
+		(a, b) => a.measureIndex - b.measureIndex || a.slotIndex - b.slotIndex,
+	);
+	const nextOf = (t: SlotTarget): SlotTarget | null => {
+		const measure = pattern.measures[t.measureIndex];
+		if (!measure) return null;
+		if (t.slotIndex + 1 < measure.slots.length) {
+			return { measureIndex: t.measureIndex, slotIndex: t.slotIndex + 1 };
+		}
+		return t.measureIndex + 1 < pattern.measures.length
+			? { measureIndex: t.measureIndex + 1, slotIndex: 0 }
+			: null;
+	};
+	const sameSlot = (a: SlotTarget | null, b: SlotTarget) =>
+		a !== null && a.measureIndex === b.measureIndex && a.slotIndex === b.slotIndex;
+	const runs: SlotTarget[][] = [];
+	for (const t of ordered) {
+		const last = runs[runs.length - 1];
+		if (last && sameSlot(nextOf(last[last.length - 1]), t)) last.push(t);
+		else runs.push([t]);
+	}
+	let next = pattern;
+	for (const run of runs) {
+		const after = nextOf(run[run.length - 1]);
+		const afterSlot = after ? pattern.measures[after.measureIndex].slots[after.slotIndex] : null;
+		const restore =
+			after && afterSlot && !afterSlot.chord ? before[after.measureIndex][after.slotIndex] : null;
+		run.forEach((t, i) => {
+			next = setSlotChord(next, t, i === 0 ? chord : null);
+		});
+		if (after && restore && !sameChordRef(restore, chord)) {
+			next = setSlotChord(next, after, restore);
+		}
+	}
+	return next;
+}
+
+/**
+ * Whether a string in one measure holds any fret that is not the chord shape's
+ * fret there — what makes "replace this row with the shape" worth offering.
+ * Only cells with a fret count; a cell the shape has no fret for (`"/"`, or no
+ * chord in effect) can't be replaced and so is not a difference.
+ */
+export function rowDiffersFromHints(
+	measure: Measure,
+	stringIndex: number,
+	hintsForSlot: (slotIndex: number) => readonly FretHint[] | null,
+): boolean {
+	return measure.slots.some((slot, slotIndex) => {
+		const cell = slot.strings[stringIndex];
+		if (cell.fret === null) return false;
+		const hint = hintsForSlot(slotIndex)?.[stringIndex];
+		return typeof hint === "number" && hint !== cell.fret;
+	});
+}
+
+/**
+ * Rewrite every fretted cell on one string of one measure to the chord shape's
+ * fret for that slot. Cells without a fret, and cells whose slot has no shape
+ * fret for the string, are left as they are.
+ */
+export function replaceRowWithHints(
+	pattern: FingerpickPattern,
+	measureIndex: number,
+	stringIndex: number,
+	hintsForSlot: (slotIndex: number) => readonly FretHint[] | null,
+): FingerpickPattern {
+	const measure = pattern.measures[measureIndex];
+	if (!measure) return pattern;
+	return measure.slots.reduce((p, slot, slotIndex) => {
+		const cell = slot.strings[stringIndex];
+		if (cell.fret === null) return p;
+		const hint = hintsForSlot(slotIndex)?.[stringIndex];
+		if (typeof hint !== "number" || hint === cell.fret) return p;
+		return setFret(p, { measureIndex, slotIndex, stringIndex }, hint);
+	}, pattern);
+}

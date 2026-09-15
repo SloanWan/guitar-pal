@@ -13,6 +13,10 @@ import {
 	heldButUnplucked,
 	chordRegionEnd,
 	offShapeStrings,
+	setChordOnSlots,
+	sameChordRef,
+	rowDiffersFromHints,
+	replaceRowWithHints,
 } from "@/lib/fingerpickChords";
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
@@ -282,5 +286,81 @@ describe("offShapeStrings", () => {
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 2 }, 7);
 		expect(offShapeStrings(p.measures[0].slots[0], hints)).toEqual([2]);
 		expect(offShapeStrings(p.measures[0].slots[0], null)).toEqual([]);
+	});
+});
+
+describe("setChordOnSlots", () => {
+	const marks = (p: FingerpickPattern) => p.measures.map((m) => m.slots.map((s) => s.chord ?? null));
+
+	it("marks the first slot of a run and clears the rest", () => {
+		const p = pattern([measure("a", [C, undefined, Am, undefined])]);
+		const out = setChordOnSlots(p, [
+			{ measureIndex: 0, slotIndex: 1 },
+			{ measureIndex: 0, slotIndex: 2 },
+		], G7);
+		// C | G7 (run) | — | back to Am: the region the run cut into resumes after it.
+		expect(marks(out)).toEqual([[C, G7, null, Am]]);
+	});
+
+	it("does not restore anything when the chord after the run is the same", () => {
+		const p = pattern([measure("a", [C, undefined, undefined, undefined])]);
+		const out = setChordOnSlots(p, [{ measureIndex: 0, slotIndex: 1 }], C);
+		expect(marks(out)).toEqual([[C, C, null, null]]);
+	});
+
+	it("treats the last slot of one measure and the first of the next as one run", () => {
+		const p = pattern([measure("a", [C, undefined]), measure("b", [undefined, undefined])]);
+		const out = setChordOnSlots(p, [
+			{ measureIndex: 0, slotIndex: 1 },
+			{ measureIndex: 1, slotIndex: 0 },
+		], Am);
+		expect(marks(out)).toEqual([[C, Am], [null, C]]);
+	});
+
+	it("handles separate runs independently and leaves an existing mark after a run alone", () => {
+		const p = pattern([measure("a", [C, undefined, Am, undefined, undefined])]);
+		const out = setChordOnSlots(p, [
+			{ measureIndex: 0, slotIndex: 0 },
+			{ measureIndex: 0, slotIndex: 3 },
+		], G7);
+		// Slot 1 inherits C, so C is written back after the first run; slot 2's own
+		// Am mark stays; slot 4 gets Am back after the second run.
+		expect(marks(out)).toEqual([[G7, C, Am, G7, Am]]);
+	});
+
+	it("sameChordRef compares root, suffix and pinned voicing", () => {
+		expect(sameChordRef(C, { root: "C", suffix: "major" })).toBe(true);
+		expect(sameChordRef(C, { root: "C", suffix: "major", voicingId: "v1" })).toBe(false);
+		expect(sameChordRef(null, null)).toBe(true);
+		expect(sameChordRef(C, null)).toBe(false);
+	});
+});
+
+describe("row replace with hints", () => {
+	// C = x32010 → hints e0 B1 G0 D2 A3 E/ ; string 1 = B, shape says 1.
+	const hints = chordFretHints(voicing());
+	const forSlot = () => hints;
+
+	it("reports a difference only where a fretted cell disagrees with a shape fret", () => {
+		let p = pattern([measure("a", [C, undefined, undefined, undefined])]);
+		expect(rowDiffersFromHints(p.measures[0], 1, forSlot)).toBe(false); // nothing fretted
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 1 }, 1);
+		expect(rowDiffersFromHints(p.measures[0], 1, forSlot)).toBe(false); // agrees
+		p = setFret(p, { measureIndex: 0, slotIndex: 2, stringIndex: 1 }, 3);
+		expect(rowDiffersFromHints(p.measures[0], 1, forSlot)).toBe(true);
+		// Low E: the shape has no fret there, so a note on it is not a difference.
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
+		expect(rowDiffersFromHints(p.measures[0], 5, forSlot)).toBe(false);
+		expect(rowDiffersFromHints(p.measures[0], 1, () => null)).toBe(false);
+	});
+
+	it("rewrites the fretted cells of the row and nothing else", () => {
+		let p = pattern([measure("a", [C, undefined, undefined, undefined])]);
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 1 }, 3);
+		p = setFret(p, { measureIndex: 0, slotIndex: 2, stringIndex: 1 }, 5);
+		p = setFret(p, { measureIndex: 0, slotIndex: 2, stringIndex: 0 }, 7); // other string
+		const out = replaceRowWithHints(p, 0, 1, forSlot);
+		expect(out.measures[0].slots.map((s) => s.strings[1].fret)).toEqual([1, null, 1, null]);
+		expect(out.measures[0].slots[2].strings[0].fret).toBe(7);
 	});
 });

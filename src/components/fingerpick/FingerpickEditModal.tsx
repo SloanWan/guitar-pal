@@ -23,6 +23,7 @@ import {
 	ArrowUp,
 	ChevronLeft,
 	ChevronRight,
+	CornerDownLeft,
 	Merge,
 	Undo2,
 	Redo2,
@@ -83,6 +84,9 @@ import {
 	fillColumnFromChord,
 	patternCapo,
 	patternHasChords,
+	replaceRowWithHints,
+	rowDiffersFromHints,
+	setChordOnSlots,
 	setPatternCapo,
 	setSlotChord,
 	type FretHint,
@@ -363,6 +367,8 @@ export default function FingerpickEditModal({
 	const popupAnchorRef = useRef<HTMLDivElement | null>(null);
 	// Scroll-region-relative coordinates for the column popup (null until measured).
 	const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null);
+	// Height the popup may take before scrolling inside itself; set by the nudge.
+	const [popupMaxHeight, setPopupMaxHeight] = useState<number | null>(null);
 
 	// ── Chords ───────────────────────────────────────────────────────────────
 
@@ -585,7 +591,11 @@ export default function FingerpickEditModal({
 	// on the freshly changed box.
 	useEffect(() => {
 		if (!highlightedMeasureId) return;
-		function handlePointerDown() {
+		function handlePointerDown(e: PointerEvent) {
+			// A press inside the focused block keeps its focus — clearing and
+			// re-setting it on the click would blink the glow.
+			const block = (e.target as HTMLElement).closest<HTMLElement>("[data-measure-id]");
+			if (block?.dataset.measureId === highlightedMeasureId) return;
 			setHighlightedMeasureId(null);
 			setMoveNudge(null);
 		}
@@ -845,6 +855,19 @@ export default function FingerpickEditModal({
 	// Mark a chord change on a single slot (null takes the mark away).
 	function applySlotChord(target: SlotTarget, chord: ChordRef | null) {
 		commit((prev) => setSlotChord(prev, target, chord));
+	}
+
+	// One chord over every selected slot: marked once per run, the chord that
+	// was there resuming after it.
+	function applyChordToSelection(chord: ChordRef) {
+		commit((prev) => setChordOnSlots(prev, columnTargets(), chord));
+	}
+
+	// Rewrite a string's fretted cells in one measure to the shape's frets.
+	function applyReplaceRow(measureIndex: number, stringIndex: number) {
+		commit((prev) =>
+			replaceRowWithHints(prev, measureIndex, stringIndex, (si) => hintsBySlot[measureIndex]?.[si] ?? null),
+		);
 	}
 
 	function applyStructural(op: "before" | "after" | "duplicate" | "delete") {
@@ -1115,6 +1138,11 @@ export default function FingerpickEditModal({
 	// Mirrors the technique-menu auto-scroll: runs after layout so the popup has its
 	// real size, and re-runs when its position or content height changes (selection,
 	// single↔multi controls, or an inline confirmation appearing).
+	//
+	// The nudge never scrolls the selected column's measure out of view: the popup
+	// is about that column, and the player needs to see it. Where the popup would
+	// still not fit below the anchor, it is capped to the room left and scrolls
+	// inside itself instead.
 	useIsomorphicLayoutEffect(() => {
 		if (!firstSelectedColumnKey || !popupPos) return;
 		const popup = popupRef.current;
@@ -1123,13 +1151,26 @@ export default function FingerpickEditModal({
 		const PAD = 8;
 		const popupRect = popup.getBoundingClientRect();
 		const viewRect = scroller.getBoundingClientRect();
+		const block = popupAnchorRef.current?.closest<HTMLElement>("[data-measure-id]");
+		const blockTop = block?.getBoundingClientRect().top ?? popupRect.top;
 		let dx = 0;
 		let dy = 0;
 		if (popupRect.right > viewRect.right - PAD) dx = popupRect.right - (viewRect.right - PAD);
 		else if (popupRect.left < viewRect.left + PAD) dx = popupRect.left - (viewRect.left + PAD);
-		if (popupRect.bottom > viewRect.bottom - PAD)
-			dy = popupRect.bottom - (viewRect.bottom - PAD);
-		else if (popupRect.top < viewRect.top + PAD) dy = popupRect.top - (viewRect.top + PAD);
+		if (popupRect.bottom > viewRect.bottom - PAD) {
+			// Scroll down only as far as keeps the measure's top edge in view.
+			dy = Math.min(
+				popupRect.bottom - (viewRect.bottom - PAD),
+				Math.max(0, blockTop - (viewRect.top + PAD)),
+			);
+		} else if (popupRect.top < viewRect.top + PAD) {
+			dy = popupRect.top - (viewRect.top + PAD);
+		}
+		// Whatever still hangs below the view after the nudge is the popup's own
+		// scroll. Stored in scroll-region coordinates, so it holds while scrolling.
+		const room = viewRect.bottom - PAD - (popupRect.top - dy);
+		const maxHeight = Math.max(160, Math.floor(room));
+		setPopupMaxHeight((prev) => (prev === maxHeight ? prev : maxHeight));
 		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
 	}, [firstSelectedColumnKey, popupPos, popupConfirm, selectedColumns]);
 
@@ -1180,6 +1221,10 @@ export default function FingerpickEditModal({
 		: null;
 	const chordHere: ChordRef | null = singleTarget
 		? (chordsInEffect[singleTarget.measureIndex]?.[singleTarget.slotIndex] ?? null)
+		: null;
+	// For a multi-slot selection: the chord in effect at its first slot.
+	const chordAtSelectionStart: ChordRef | null = firstSelectedColumn
+		? (chordsInEffect[firstSelectedColumn.measureIndex]?.[firstSelectedColumn.slotIndex] ?? null)
 		: null;
 	const voicingsHere = chordHere ? voicingsFor(chordHere) : null;
 	const voicingList = voicingsHere?.status === "ready" ? voicingsHere.voicings : [];
@@ -1265,10 +1310,13 @@ export default function FingerpickEditModal({
 				top: popupPos?.top ?? 0,
 				left: popupPos?.left ?? 0,
 				visibility: popupPos ? "visible" : "hidden",
+				maxHeight: popupMaxHeight ?? undefined,
 			}}
-			className="z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg"
+			className="z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg overflow-y-auto fp-thin-scroll"
 		>
-			{/* Move — structural edits on the selected slot(s). */}
+			{/* Move — structural edits on the selected slot. Single selection only:
+			    with several slots picked, the popup is about what they share. */}
+			{singleTarget && (
 			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
 				<PopupSectionLabel
 					label="Move Slot"
@@ -1296,6 +1344,7 @@ export default function FingerpickEditModal({
 					</PopupIconButton>
 				</div>
 			</div>
+			)}
 			{/* Split / merge (single column only). Split subdivides the slot into equal
 			    smaller notes; merge folds this slot plus the following run into any larger
 			    note value they sum to. Both preserve the measure total. */}
@@ -1455,15 +1504,19 @@ export default function FingerpickEditModal({
 							onCreate={(query) => setShapeCreate({ target: singleTarget, query })}
 							index={searchIndex}
 							shapeCorpus={shapeCorpus}
+							inlineList
 							ariaLabel={`Chord at measure ${singleTarget.measureIndex + 1}, slot ${singleTarget.slotIndex + 1}`}
 						/>
 						{!ownChord && chordHere && (
-							<span
-								className="font-mono text-[10px] text-ink-faint"
-								title="Running on from an earlier slot"
+							<button
+								type="button"
+								onClick={() => applySlotChord(singleTarget, chordHere)}
+								title={`${chordSymbolLabel(chordHere)} is running on from an earlier slot — press to write it here, with the shape chosen there`}
+								className="flex h-7 items-center gap-1 px-1.5 font-mono text-[10px] text-ink-faint hover:bg-denim-tint hover:text-denim transition-colors"
 							>
-								← {chordSymbolLabel(chordHere)}
-							</span>
+								<CornerDownLeft size={11} />
+								{chordSymbolLabel(chordHere)}
+							</button>
 						)}
 					</div>
 					{chordHere && voicingsHere?.status === "loading" && (
@@ -1551,6 +1604,38 @@ export default function FingerpickEditModal({
 				</div>
 			)}
 
+			{/* Chord over a multi-slot selection: one chord written across every
+			    selected slot. The first selected slot's chord is offered as the
+			    quick pick, since that is usually the one being extended. */}
+			{selectedColumns.size > 1 && !popupConfirm && (
+				<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
+					<PopupSectionLabel
+						label="Chord"
+						hint={`Put one chord over the ${selectedColumns.size} selected slots.`}
+					/>
+					<div className="flex items-center gap-1.5">
+						<ChordSearchSelect
+							chord={null}
+							onChange={(chord) => chord && applyChordToSelection(chord)}
+							index={searchIndex}
+							shapeCorpus={shapeCorpus}
+							inlineList
+							ariaLabel={`Chord for the ${selectedColumns.size} selected slots`}
+						/>
+						{chordAtSelectionStart && (
+							<button
+								type="button"
+								onClick={() => applyChordToSelection(chordAtSelectionStart)}
+								title={`Write ${chordSymbolLabel(chordAtSelectionStart)} — the chord at the first selected slot — over all ${selectedColumns.size}`}
+								className="flex h-7 items-center gap-1 px-1.5 font-mono text-[10px] text-ink-faint hover:bg-denim-tint hover:text-denim transition-colors"
+							>
+								<CornerDownLeft size={11} />
+								{chordSymbolLabel(chordAtSelectionStart)}
+							</button>
+						)}
+					</div>
+				</div>
+			)}
 		</div>
 	);
 
@@ -1835,7 +1920,12 @@ export default function FingerpickEditModal({
 							return (
 								<div
 									key={measure.id}
+									data-measure-id={measure.id}
 									onMouseLeave={() => setHoveredCell(null)}
+									// A press anywhere in the block focuses it (the same glow a copy or
+									// move lands on). Capture phase, so a copy/move button's own click
+									// runs after this and its target measure wins.
+									onClickCapture={() => setHighlightedMeasureId(measure.id)}
 									className={`p-3 flex flex-col gap-2 border transition-shadow duration-200 ${
 										highlightedMeasureId === measure.id
 											? "border-denim shadow-[0_0_0_1px_var(--color-denim),0_0_12px_var(--denim-glow)]"
@@ -2417,6 +2507,57 @@ export default function FingerpickEditModal({
 												})}
 											</div>
 										</div>
+
+										{/* Right column: per row, "replace this row with the shape" —
+										    rewrites the row's frets to the chord's frets for each slot.
+										    Shown with the row, live only while some fret differs. */}
+										{hasChords && (
+											<div className="flex w-5 shrink-0 flex-col gap-0.5">
+												<div className="h-4" />
+												{STRING_LABELS.map((label, stringIndex) => {
+													const rowHovered =
+														!hasFinePointer ||
+														hoverInMeasure?.stringIndex === stringIndex;
+													const differs = rowDiffersFromHints(
+														measure,
+														stringIndex,
+														(si) => hintsBySlot[measureIndex]?.[si] ?? null,
+													);
+													return (
+														<div
+															key={stringIndex}
+															onMouseEnter={() =>
+																setHoveredCell({
+																	measureIndex,
+																	slotIndex: -1,
+																	stringIndex,
+																})
+															}
+															className="flex h-7 items-center justify-center"
+														>
+															<button
+																type="button"
+																disabled={!differs}
+																tabIndex={rowHovered ? 0 : -1}
+																aria-hidden={!rowHovered}
+																onClick={() => applyReplaceRow(measureIndex, stringIndex)}
+																aria-label={`Replace the ${label} string's frets in measure ${measureIndex + 1} with the chord shape's`}
+																title={
+																	differs
+																		? "Replace this row's frets with the chord shape's"
+																		: "This row already matches the chord shape"
+																}
+																className={`flex h-4 w-4 items-center justify-center text-ink-dim transition-opacity hover:text-denim disabled:cursor-not-allowed disabled:text-ink-faint/50 ${
+																	rowHovered ? "opacity-100" : "opacity-0 pointer-events-none"
+																}`}
+															>
+																<CornerDownLeft size={11} />
+															</button>
+														</div>
+													);
+												})}
+											</div>
+										)}
 									</div>
 
 									{/* Quick preset row: fill the whole measure with one note value.

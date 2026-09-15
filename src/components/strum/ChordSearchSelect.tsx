@@ -38,6 +38,12 @@ interface Props {
 	 * under, or the frets that were being looked for.
 	 */
 	onCreate?: (query: string) => void;
+	/**
+	 * Lay the result list out in flow, under the field, instead of floating it.
+	 * For a host that scrolls (the fingerpick column popup): a floating list is
+	 * clipped by the host's overflow, an in-flow one just makes it scroll.
+	 */
+	inlineList?: boolean;
 }
 
 /**
@@ -54,6 +60,7 @@ export default function ChordSearchSelect({
 	ariaLabel,
 	unknownLabel = null,
 	onCreate,
+	inlineList = false,
 }: Props) {
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(false);
@@ -224,7 +231,9 @@ export default function ChordSearchSelect({
 				<ul
 					id={listboxId}
 					role="listbox"
-					className="absolute left-0 top-full z-50 mt-1 max-h-44 w-52 overflow-y-auto border border-line-strong bg-popover"
+					className={`z-50 mt-1 max-h-44 w-52 overflow-y-auto border border-line-strong bg-popover ${
+						inlineList ? "" : "absolute left-0 top-full"
+					}`}
 				>
 					{results.map((r, i) => {
 						const key = `${r.root} ${r.suffix}`;

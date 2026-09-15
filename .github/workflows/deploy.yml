@@ -38,7 +38,7 @@ jobs:
               run: |
                   ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" bash -s <<'REMOTE'
                     set -euo pipefail
-                    cd ~/guitar-pal
+                    cd ~/dev/guitar-pal
                     git fetch --prune origin main
                     git reset --hard origin/main
                     docker compose up --build -d --remove-orphans

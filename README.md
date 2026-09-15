@@ -431,7 +431,7 @@ Production runs on a single Tencent Cloud HK VPS (Ubuntu, 2 GB) at `https://guit
 
 ### Environment variables
 
-`NEXT_PUBLIC_*` values are inlined into the client bundle at `next build`, so they are Docker **build args**; `ANTHROPIC_API_KEY` is server-only and injected at **runtime**. Both come from one file on the server, `~/guitar-pal/.env`, which is never committed:
+`NEXT_PUBLIC_*` values are inlined into the client bundle at `next build`, so they are Docker **build args**; `ANTHROPIC_API_KEY` is server-only and injected at **runtime**. Both come from one file on the server, `~/dev/guitar-pal/.env`, which is never committed:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
@@ -448,12 +448,12 @@ Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` 
 3. **Bootstrap** (as the `ubuntu` user):
 
     ```bash
-    git clone https://github.com/SloanWan/guitar-pal.git ~/guitar-pal
-    cd ~/guitar-pal
+    git clone https://github.com/SloanWan/guitar-pal.git ~/dev/guitar-pal
+    cd ~/dev/guitar-pal
     nano .env                      # the three variables above
     bash scripts/server-setup.sh   # idempotent; re-run if it stops midway
     exit                           # re-login so the docker group applies
-    cd ~/guitar-pal && docker compose up --build -d
+    cd ~/dev/guitar-pal && docker compose up --build -d
     ```
 
     The first build takes a few minutes on 2 GB — the script adds a swapfile for exactly that reason.

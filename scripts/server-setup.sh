@@ -3,13 +3,13 @@
 # One-time bootstrap for the Tencent Cloud HK VPS (Ubuntu 22.04/24.04).
 #
 # Run as the non-root `ubuntu` user (it uses sudo where needed):
-#   git clone https://github.com/SloanWan/guitar-pal.git ~/guitar-pal
-#   cd ~/guitar-pal && bash scripts/server-setup.sh
+#   git clone https://github.com/SloanWan/guitar-pal.git ~/dev/guitar-pal
+#   cd ~/dev/guitar-pal && bash scripts/server-setup.sh
 #
 # Prerequisites, before running:
 #   - DNS A record for $DOMAIN pointing at this server (certbot validates it)
 #   - Tencent Cloud security group allows inbound 22, 80, 443
-#   - ~/guitar-pal/.env written (see README → Deployment)
+#   - ~/dev/guitar-pal/.env written (see README → Deployment)
 #
 # Safe to re-run: every step checks whether it has already been applied.
 
@@ -17,7 +17,7 @@ set -euo pipefail
 
 DOMAIN="${DOMAIN:-guitarpal.sloanwan.com}"
 EMAIL="${EMAIL:-nysuswan@gmail.com}"   # Let's Encrypt expiry notices
-APP_DIR="${APP_DIR:-$HOME/guitar-pal}"
+APP_DIR="${APP_DIR:-$HOME/dev/guitar-pal}"
 SWAP_SIZE="${SWAP_SIZE:-2G}"           # next build OOMs on a 2 GB box without it
 
 log() { printf '\n==> %s\n' "$*"; }

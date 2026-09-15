@@ -1486,15 +1486,19 @@ export default function FingerpickEditModal({
 							>
 								<ChevronLeft size={14} />
 							</button>
-							<ChordDiagram
-								def={chordVoicingToVexChords(voicingHere)}
-								label={
-									voicingList.length > 1
-										? `${chordSymbolLabel(chordHere)} · ${voicingIndex + 1}/${voicingList.length}`
-										: chordSymbolLabel(chordHere)
-								}
-								size="compact"
-							/>
+							{/* Fixed footprint whatever the label says, so the ‹ › buttons and
+							    the shape stay put while the player steps through voicings. */}
+							<div className="w-36 shrink-0 [&>div]:h-[9.5rem] [&>div]:justify-center">
+								<ChordDiagram
+									def={chordVoicingToVexChords(voicingHere)}
+									label={
+										voicingList.length > 1
+											? `${chordSymbolLabel(chordHere)} · ${voicingIndex + 1}/${voicingList.length}`
+											: chordSymbolLabel(chordHere)
+									}
+									size="compact"
+								/>
+							</div>
 							<button
 								type="button"
 								onClick={() => stepVoicing(1)}

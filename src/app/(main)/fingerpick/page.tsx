@@ -60,6 +60,7 @@ import {
 	Repeat,
 	Volume2,
 	RotateCcw,
+	ChevronsDown,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
@@ -74,6 +75,15 @@ const CHORD_VIEW_KEY = "fingerpickChordView";
 const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
 // Whether fret numbers outside the chord shape are coloured, in the shape view.
 const OFF_SHAPE_KEY = "fingerpickOffShape";
+// Auto-scroll: how fast the tab creeps upward while reading along, in px/s.
+const SCROLL_SPEED_KEY = "fingerpickScrollSpeed";
+const SCROLL_SPEED_MIN = 10;
+const SCROLL_SPEED_MAX = 120;
+const SCROLL_SPEED_DEFAULT = 30;
+function clampScrollSpeed(raw: number): number {
+	if (!Number.isFinite(raw)) return SCROLL_SPEED_DEFAULT;
+	return Math.min(SCROLL_SPEED_MAX, Math.max(SCROLL_SPEED_MIN, Math.round(raw)));
+}
 /** Width range of the shape strip over a chord symbol, in px. */
 const CHORD_SHAPE_WIDTH_MIN = 40;
 const CHORD_SHAPE_WIDTH_MAX = 140;
@@ -251,14 +261,24 @@ export default function FingerpickPage() {
 	const [chordView, setChordView] = useState<ChordView>("name");
 	const [chordShapeWidth, setChordShapeWidth] = useState(CHORD_SHAPE_WIDTH_DEFAULT);
 	const [offShapeOn, setOffShapeOn] = useState(true);
+	// Auto-scroll: the tab creeps upward at a set speed for reading along without
+	// a hand free. Off by default; the speed is remembered.
+	const [autoScroll, setAutoScroll] = useState(false);
+	const [scrollSpeed, setScrollSpeed] = useState(SCROLL_SPEED_DEFAULT);
+	const scrollSpeedRef = useRef(SCROLL_SPEED_DEFAULT);
+	useEffect(() => {
+		scrollSpeedRef.current = scrollSpeed;
+	}, [scrollSpeed]);
 	useEffect(() => {
 		let storedView: string | null = null;
 		let storedWidth: string | null = null;
 		let storedOffShape: string | null = null;
+		let storedSpeed: string | null = null;
 		try {
 			storedView = localStorage.getItem(CHORD_VIEW_KEY);
 			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
 			storedOffShape = localStorage.getItem(OFF_SHAPE_KEY);
+			storedSpeed = localStorage.getItem(SCROLL_SPEED_KEY);
 		} catch {
 			// storage unavailable — the defaults it is
 		}
@@ -268,8 +288,45 @@ export default function FingerpickPage() {
 			if (storedView === "diagram") setChordView("diagram");
 			if (storedWidth !== null) setChordShapeWidth(clampShapeWidth(Number(storedWidth)));
 			if (storedOffShape === "off") setOffShapeOn(false);
+			if (storedSpeed !== null) setScrollSpeed(clampScrollSpeed(Number(storedSpeed)));
 		});
 	}, []);
+	function handleScrollSpeedChange(raw: number) {
+		const speed = clampScrollSpeed(raw);
+		setScrollSpeed(speed);
+		try {
+			localStorage.setItem(SCROLL_SPEED_KEY, String(speed));
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}
+	// The creep itself: a RAF loop moving the tab viewer by speed × elapsed,
+	// carrying sub-pixel remainders so slow speeds still move. Stops itself at
+	// the bottom, and whenever it is switched off or the pattern changes.
+	useEffect(() => {
+		if (!autoScroll) return;
+		const viewer = tabViewerRef.current;
+		if (!viewer) return;
+		let raf = 0;
+		let last = performance.now();
+		let carry = 0;
+		const step = (now: number) => {
+			carry += (scrollSpeedRef.current * (now - last)) / 1000;
+			last = now;
+			const px = Math.floor(carry);
+			if (px >= 1) {
+				viewer.scrollTop += px;
+				carry -= px;
+			}
+			if (viewer.scrollTop + viewer.clientHeight >= viewer.scrollHeight - 1) {
+				setAutoScroll(false);
+				return;
+			}
+			raf = requestAnimationFrame(step);
+		};
+		raf = requestAnimationFrame(step);
+		return () => cancelAnimationFrame(raf);
+	}, [autoScroll, selectedPattern.id]);
 	function handleOffShapeChange(on: boolean) {
 		setOffShapeOn(on);
 		try {
@@ -1463,9 +1520,53 @@ export default function FingerpickPage() {
 							</div>
 						)}
 						<div className="mb-4 shrink-0">
-							<h1 className="text-lg font-semibold text-tab-title">
-								{selectedPattern.name}
-							</h1>
+							<div className="flex flex-wrap items-center gap-3">
+								<h1 className="text-lg font-semibold text-tab-title">
+									{selectedPattern.name}
+								</h1>
+								{/* Auto-scroll: creep the tab upward at a set speed. The speed
+								    fader is only there while it is running. */}
+								<button
+									type="button"
+									onClick={() => setAutoScroll((on) => !on)}
+									aria-pressed={autoScroll}
+									aria-label={autoScroll ? "Stop auto-scroll" : "Start auto-scroll"}
+									title={autoScroll ? "Stop auto-scroll" : "Auto-scroll the tab"}
+									className={`flex h-7 w-7 items-center justify-center border transition-colors ${
+										autoScroll
+											? "border-denim bg-denim text-on-denim"
+											: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+									}`}
+								>
+									<ChevronsDown size={14} className={autoScroll ? "animate-bounce" : ""} />
+								</button>
+								{autoScroll && (
+									<div className="flex items-center gap-2">
+										<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
+											Speed
+										</span>
+										<div className="w-24 sm:w-28">
+											<Fader
+												min={SCROLL_SPEED_MIN}
+												max={SCROLL_SPEED_MAX}
+												step={5}
+												value={scrollSpeed}
+												onValue={handleScrollSpeedChange}
+												ticks={[
+													0,
+													((SCROLL_SPEED_DEFAULT - SCROLL_SPEED_MIN) /
+														(SCROLL_SPEED_MAX - SCROLL_SPEED_MIN)) *
+														100,
+													100,
+												]}
+												tickValues={[SCROLL_SPEED_MIN, SCROLL_SPEED_DEFAULT, SCROLL_SPEED_MAX]}
+												scale={[]}
+												ariaLabel="Auto-scroll speed"
+											/>
+										</div>
+									</div>
+								)}
+							</div>
 							{/* Meta line, with the chord-line controls beside it — or under it
 							    on a phone, where the row has no room for both. */}
 							<div className="mt-0.5 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">

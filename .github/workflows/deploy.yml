@@ -1,0 +1,56 @@
+name: Deploy
+
+# Runs after the CI workflow finishes on main, and only when it passed — a red
+# CI never reaches the server. Can also be triggered by hand for a re-deploy.
+on:
+    workflow_run:
+        workflows: [CI]
+        types: [completed]
+        branches: [main]
+    workflow_dispatch:
+
+# Never let two deploys overlap; a queued one waits for the running one.
+concurrency:
+    group: deploy-production
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        name: Push to Tencent HK
+        runs-on: ubuntu-latest
+        if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+
+        steps:
+            - name: Set up SSH
+              env:
+                  DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+              run: |
+                  mkdir -p ~/.ssh
+                  printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+                  chmod 600 ~/.ssh/deploy_key
+                  ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+            - name: Pull and rebuild on the server
+              env:
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+              run: |
+                  ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" bash -s <<'REMOTE'
+                    set -euo pipefail
+                    cd ~/dev/guitar-pal
+                    git fetch --prune origin main
+                    git reset --hard origin/main
+                    docker compose up --build -d --remove-orphans
+                    docker image prune -f
+                    docker compose ps
+                  REMOTE
+
+            - name: Smoke test
+              run: |
+                  for i in $(seq 1 12); do
+                    code=$(curl -s -o /dev/null -w '%{http_code}' https://guitarpal.sloanwan.com/)
+                    [ "$code" = "200" ] && { echo "OK ($code)"; exit 0; }
+                    echo "attempt $i: $code"; sleep 5
+                  done
+                  echo "site did not come back" >&2; exit 1

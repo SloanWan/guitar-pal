@@ -83,12 +83,6 @@ interface TabStaveRowProps {
 	 * the numbers are recoloured in place after the theme pass.
 	 */
 	offShapeStrings?: (measureIndex: number, slotIndex: number) => readonly number[];
-	/**
-	 * Write the pattern's first measure from its first note, pickup-style,
-	 * leaving out the empty slots before it. Applies to the row that holds
-	 * measure 0; other rows ignore it.
-	 */
-	skipLeadingEmpty?: boolean;
 }
 
 /** Where a chord mark landed after formatting, for the diagram overlay. */
@@ -312,7 +306,6 @@ export default function TabStaveRow({
 	chordDiagram,
 	chordDiagramSize,
 	offShapeStrings,
-	skipLeadingEmpty = false,
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [anchors, setAnchors] = useState<ChordAnchor[]>([]);
@@ -406,9 +399,7 @@ export default function TabStaveRow({
 			}[] = [];
 			measures.forEach((measure, i) => {
 				const { notes, connectors, tuplets, chordLabels, rolls, noteStrings, noteSlots } =
-					fingerpickToVexFlow(measure, {
-						skipLeadingEmpty: skipLeadingEmpty && startMeasureIndex === 0 && i === 0,
-					});
+					fingerpickToVexFlow(measure);
 				drawn.push({ notes, noteStrings, noteSlots, rolls, stave: staves[i] });
 				const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 				voice.addTickables(notes);
@@ -444,8 +435,7 @@ export default function TabStaveRow({
 				if (startMeasureIndex !== undefined) {
 					const globalMeasureIdx = startMeasureIndex + i;
 					// The cursor looks notes up by the SLOT they came from, which is not
-					// the note's index once grace slots, or the leading blanks of a pickup
-					// measure, produce no note of their own.
+					// the note's index once a grace slot produces no note of its own.
 					notes.forEach((note, j) => {
 						const el = note.getSVGElement();
 						if (el) {
@@ -570,7 +560,6 @@ export default function TabStaveRow({
 		diagramHeight,
 		chordDiagramSize?.width,
 		offShapeStrings,
-		skipLeadingEmpty,
 	]);
 
 	return (

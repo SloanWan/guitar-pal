@@ -88,8 +88,24 @@ export interface VexFlowRenderData {
 
 // Pure, deterministic mapping from a Measure to VexFlow note objects.
 // No DOM access — VexFlow note constructors are DOM-free.
-export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
+export interface RenderOptions {
+	/**
+	 * Leave out the empty slots before the measure's first note, rest or grace,
+	 * the way a pickup measure is written: only what sounds is on the stave. For
+	 * a pattern's first measure, where leading blanks are dead space the eye
+	 * has to skip and the cursor has to crawl through. Slot indices reported in
+	 * `noteSlots` stay the measure's own, so nothing indexed by slot shifts.
+	 */
+	skipLeadingEmpty?: boolean;
+}
+
+export function fingerpickToVexFlow(
+	measure: Measure,
+	options: RenderOptions = {},
+): VexFlowRenderData {
 	const notes: StemmableNote[] = [];
+	// True until the first slot that puts something on the stave.
+	let leading = options.skipLeadingEmpty === true;
 	// posIndexMaps[noteIdx].get(stringIdx) = index in that TabNote's positions array.
 	// Indexed parallel to notes[], not to measure.slots[].
 	const posIndexMaps: Map<number, number>[] = [];
@@ -118,6 +134,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		if (slot.chord) pendingChord = { slotIndex: slotIdx, chord: slot.chord };
 
 		if (slot.isGraceNote) {
+			leading = false;
 			// Collect as a pending modifier; does not produce a standalone Voice tickable.
 			const gracePositions: TabNotePosition[] = [];
 			slot.strings.forEach((sf, stringIdx) => {
@@ -144,6 +161,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		}
 
 		if (slot.isRest) {
+			leading = false;
 			pendingGraceNotes = [];
 			const noteIdx = notes.length;
 			// A rest renders a VISIBLE glyph, not an invisible GhostNote spacer. On a tab
@@ -171,6 +189,11 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 
 		if (positions.length === 0) {
 			pendingGraceNotes = [];
+			if (leading) {
+				// Not written: a chord marked here still carries to the first note.
+				slotNoteIndex.push(null);
+				continue;
+			}
 			const noteIdx = notes.length;
 			notes.push(new GhostNote({ duration }));
 			posIndexMaps.push(new Map());
@@ -178,6 +201,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			writeChordOver(noteIdx);
 			continue;
 		}
+		leading = false;
 
 		const tabNote = new TabNote({ positions, duration }, true);
 		if (pendingGraceNotes.length > 0) {

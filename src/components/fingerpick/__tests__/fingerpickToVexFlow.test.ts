@@ -568,3 +568,47 @@ describe("noteStrings / noteSlots", () => {
 		expect(noteSlots).toEqual([0, 2, 3]);
 	});
 });
+
+// ─── Leading empty slots (pickup-style first measure) ────────────────────────
+
+describe("skipLeadingEmpty", () => {
+	const C = { root: "C", suffix: "major" };
+
+	it("leaves out the empty slots before the first note, keeping the slots' own indices", () => {
+		const { notes, noteSlots, chordLabels } = fingerpickToVexFlow(
+			measure([
+				{ ...beatSlot("a", "quarter"), chord: C },
+				beatSlot("b", "quarter"),
+				beatSlot("c", "quarter", { 0: { fret: 3 } }),
+				beatSlot("d", "quarter"),
+			]),
+			{ skipLeadingEmpty: true },
+		);
+		expect(notes).toHaveLength(2);
+		expect(notes[0]).toBeInstanceOf(TabNote);
+		expect(notes[1]).toBeInstanceOf(GhostNote);
+		expect(noteSlots).toEqual([2, 3]);
+		// The chord marked on the dropped slot is written over the first note.
+		expect(chordLabels).toEqual([{ noteIndex: 0, slotIndex: 0, chord: C, label: "C" }]);
+	});
+
+	it("a rest or a grace note ends the leading run", () => {
+		const rest = fingerpickToVexFlow(
+			measure([
+				beatSlot("a", "quarter"),
+				{ ...beatSlot("r", "quarter"), isRest: true },
+				beatSlot("c", "quarter"),
+				beatSlot("d", "quarter", { 0: { fret: 3 } }),
+			]),
+			{ skipLeadingEmpty: true },
+		);
+		expect(rest.noteSlots).toEqual([1, 2, 3]);
+		expect(rest.notes[0]).toBeInstanceOf(StaveNote);
+	});
+
+	it("is off by default and a no-op for a measure that starts with a note", () => {
+		const m = measure([beatSlot("a", "quarter"), beatSlot("b", "quarter", { 0: { fret: 1 } })]);
+		expect(fingerpickToVexFlow(m).noteSlots).toEqual([0, 1]);
+		expect(fingerpickToVexFlow(m, { skipLeadingEmpty: false }).noteSlots).toEqual([0, 1]);
+	});
+});

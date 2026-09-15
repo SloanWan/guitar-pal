@@ -116,7 +116,9 @@ function computeAllMeasureWidths(
 	chordDiagramWidth: number,
 ): number[][] {
 	// Precompute render data once per measure to avoid double adapter calls.
-	const renderData = measures.map((m) => fingerpickToVexFlow(m));
+	// The first measure is written from its first note (see TabStaveRow's
+	// skipLeadingEmpty), so its width is measured the same way.
+	const renderData = measures.map((m, i) => fingerpickToVexFlow(m, { skipLeadingEmpty: i === 0 }));
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
 	const repeatBarlines = (m: Measure): number => (m.repeatStart ? 1 : 0) + (m.repeatEnd ? 1 : 0);
 	const widthsFirst = renderData.map((rd, i) =>
@@ -1719,6 +1721,7 @@ export default function FingerpickPage() {
 											chordDiagram={showChordDiagrams ? chordDiagram : undefined}
 											chordDiagramSize={chordShapeSize}
 											offShapeStrings={showOffShape ? offShapeAt : undefined}
+											skipLeadingEmpty
 										/>
 									</div>
 								))}

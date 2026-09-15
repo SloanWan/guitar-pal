@@ -19,7 +19,8 @@ const LEFT = 14;
 const FRET_CELLS = 5;
 const CELL_W = (VB_W - LEFT - 4) / FRET_CELLS;
 const STRING_GAP = 8.6;
-const TOP = 6;
+// Room above the top string for the window's fret number (shapes up the neck).
+const TOP = 9;
 const VB_H = TOP * 2 + STRING_GAP * 5;
 const DOT_R = 3.3;
 /** Height / width of the rendered strip, for callers that must reserve room. */
@@ -77,15 +78,16 @@ export default function ChordShapeStrip({
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden="true"
 		>
-			{/* Nut, or the window's first fret number for a shape up the neck. */}
+			{/* Nut, or — for a shape up the neck — the number of the window's first
+			    fret, written over that fret's cell so it labels the cell it means. */}
 			{startFret === 1 ? (
 				<rect x={nutX - 2} y={stringY(5) - 1} width={2.4} height={STRING_GAP * 5 + 2} fill="var(--ink)" />
 			) : (
 				<text
-					x={nutX - 3}
-					y={stringY(5) + STRING_GAP * 2.5 + 2.5}
-					textAnchor="end"
-					fontSize={7}
+					x={fretX(1)}
+					y={stringY(5) - 3}
+					textAnchor="middle"
+					fontSize={6.5}
 					fontFamily="ui-monospace, monospace"
 					fill="var(--ink-dim)"
 				>

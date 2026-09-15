@@ -33,6 +33,7 @@ import {
 	X as XIcon,
 } from "lucide-react";
 import {
+	isBrush,
 	strokeDirection,
 	type Duration,
 	type FingerpickPattern,
@@ -221,15 +222,16 @@ const HOVER_SUBBEAT_BG = hoverAxisBg(0.08);
 // hover tint (0.14), so a hovered rolled column still visibly brightens. Applied
 // only when the slot isn't a rest (the gray rest wash wins) and no hover wash is
 // active.
-// A rolled slot's wash runs from this alpha at the string the roll starts on to
-// the deeper one at the string it ends on, so the column shows the direction.
-const ROLL_WASH_MIN = 0.05;
-const ROLL_WASH_MAX = 0.24;
-function rollWashAlpha(stroke: Stroke | undefined, stringIndex: number): number {
-	// stringIndex 0 = high e. roll-down travels low → high, so the high e is deepest.
-	const progress =
-		stroke && strokeDirection(stroke) === "up" ? stringIndex / 5 : (5 - stringIndex) / 5;
-	return ROLL_WASH_MIN + (ROLL_WASH_MAX - ROLL_WASH_MIN) * progress;
+// A swept slot's wash runs from a faint alpha at the string the sweep starts on
+// to a deeper one at the string it ends on, so the column shows the direction.
+// Rolls wash amber and brushes green, so the two kinds read apart at a glance.
+const SWEEP_WASH_MIN = 0.08;
+const SWEEP_WASH_MAX = 0.34;
+function sweepWashBg(stroke: Stroke, stringIndex: number): string {
+	// stringIndex 0 = high e. A down sweep travels low → high, so the high e is deepest.
+	const progress = strokeDirection(stroke) === "up" ? stringIndex / 5 : (5 - stringIndex) / 5;
+	const alpha = SWEEP_WASH_MIN + (SWEEP_WASH_MAX - SWEEP_WASH_MIN) * progress;
+	return isBrush(stroke) ? `rgba(34, 197, 94, ${alpha})` : `rgba(245, 158, 11, ${alpha})`;
 }
 
 type HoveredCell = { measureIndex: number; slotIndex: number; stringIndex: number };
@@ -2307,8 +2309,6 @@ export default function FingerpickEditModal({
 																// theme-aware (subtle light gray on light, subtle dark
 																// gray on dark), so no per-mode color handling is needed.
 																const isRest = !!slot.isRest;
-																// Rolled (arpeggiated) slot — gets the amber wash below.
-																const hasRoll = !!slot.stroke;
 																return (
 																	<div
 																		key={slot.id}
@@ -2576,14 +2576,12 @@ export default function FingerpickEditModal({
 																												l2Alpha,
 																											),
 																									}
-																								: hasRoll && !isRest
+																								: slot.stroke && !isRest
 																									? {
 																											backgroundColor:
-																												hoverAxisBg(
-																													rollWashAlpha(
-																														slot.stroke,
-																														stringIndex,
-																													),
+																												sweepWashBg(
+																													slot.stroke,
+																													stringIndex,
 																												),
 																										}
 																									: undefined

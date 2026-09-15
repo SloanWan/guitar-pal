@@ -265,6 +265,28 @@ export default function FingerpickPage() {
 	// a hand free. Off by default; the speed is remembered.
 	const [autoScroll, setAutoScroll] = useState(false);
 	const [scrollSpeed, setScrollSpeed] = useState(SCROLL_SPEED_DEFAULT);
+	// Whether the tab is taller than its viewer at all — auto-scroll has nothing
+	// to do otherwise. Re-measured whenever the viewer or the rows change size
+	// (a window resize, a pattern switch, rows re-laid out), off the RAF-rendered
+	// stave heights rather than any guess from the viewport.
+	const [tabOverflows, setTabOverflows] = useState(false);
+	const rowsContainerRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const viewer = tabViewerRef.current;
+		const content = rowsContainerRef.current;
+		if (!viewer || !content) return;
+		const measure = () => {
+			const overflows = viewer.scrollHeight > viewer.clientHeight + 1;
+			setTabOverflows((prev) => (prev === overflows ? prev : overflows));
+		};
+		const observer = new ResizeObserver(measure);
+		observer.observe(viewer);
+		observer.observe(content);
+		return () => observer.disconnect();
+	}, []);
+	// A tab that stops overflowing (smaller pattern, taller window) has nothing
+	// left to scroll; the creep effect below reads this and stops.
+	const autoScrollActive = autoScroll && tabOverflows;
 	const scrollSpeedRef = useRef(SCROLL_SPEED_DEFAULT);
 	useEffect(() => {
 		scrollSpeedRef.current = scrollSpeed;
@@ -304,7 +326,7 @@ export default function FingerpickPage() {
 	// carrying sub-pixel remainders so slow speeds still move. Stops itself at
 	// the bottom, and whenever it is switched off or the pattern changes.
 	useEffect(() => {
-		if (!autoScroll) return;
+		if (!autoScrollActive) return;
 		const viewer = tabViewerRef.current;
 		if (!viewer) return;
 		let raf = 0;
@@ -326,7 +348,7 @@ export default function FingerpickPage() {
 		};
 		raf = requestAnimationFrame(step);
 		return () => cancelAnimationFrame(raf);
-	}, [autoScroll, selectedPattern.id]);
+	}, [autoScrollActive, selectedPattern.id]);
 	function handleOffShapeChange(on: boolean) {
 		setOffShapeOn(on);
 		try {
@@ -1529,18 +1551,25 @@ export default function FingerpickPage() {
 								<button
 									type="button"
 									onClick={() => setAutoScroll((on) => !on)}
-									aria-pressed={autoScroll}
-									aria-label={autoScroll ? "Stop auto-scroll" : "Start auto-scroll"}
-									title={autoScroll ? "Stop auto-scroll" : "Auto-scroll the tab"}
-									className={`flex h-7 w-7 items-center justify-center border transition-colors ${
-										autoScroll
+									disabled={!tabOverflows}
+									aria-pressed={autoScrollActive}
+									aria-label={autoScrollActive ? "Stop auto-scroll" : "Start auto-scroll"}
+									title={
+										!tabOverflows
+											? "The whole tab is in view — nothing to scroll"
+											: autoScrollActive
+												? "Stop auto-scroll"
+												: "Auto-scroll the tab"
+									}
+									className={`flex h-7 w-7 items-center justify-center border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+										autoScrollActive
 											? "border-denim bg-denim text-on-denim"
-											: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+											: "border-line-strong text-ink-dim hover:border-denim hover:text-denim disabled:hover:border-line-strong disabled:hover:text-ink-dim"
 									}`}
 								>
-									<ChevronsDown size={14} className={autoScroll ? "animate-bounce" : ""} />
+									<ChevronsDown size={14} className={autoScrollActive ? "animate-bounce" : ""} />
 								</button>
-								{autoScroll && (
+								{autoScrollActive && (
 									<div className="flex items-center gap-2">
 										<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
 											Speed
@@ -1703,7 +1732,7 @@ export default function FingerpickPage() {
 							{/* pt-2 leaves headroom so the playhead's triangle cap (top: -6px
 						    relative to the cursor line, which is positioned at the row's stave
 						    top) isn't clipped by the scroll container's overflow at row 0. */}
-							<div className="flex flex-col pt-2 pb-20 md:pb-0">
+							<div ref={rowsContainerRef} className="flex flex-col pt-2 pb-20 md:pb-0">
 								{rows.map((row, rowIdx) => (
 									<div
 										key={row.measures[0].id}

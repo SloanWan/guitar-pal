@@ -99,7 +99,7 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { getChordIndex } from "@/lib/chords";
 import { chordIndexWithUser } from "@/lib/userChordVoicings";
 import { selectRefVoicing } from "@/lib/strumBars";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { chordVoicingToVexChords, type ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { useUser } from "@/hooks/useUser";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
@@ -418,12 +418,15 @@ export default function FingerpickEditModal({
 		[chordsInEffect, voicingsFor],
 	);
 	const techMenuRef = useRef<HTMLDivElement>(null);
-	// The shape editor, opened from a chord search that found nothing. The slot
-	// is captured here because the column popup closes under the editor.
-	const [shapeCreate, setShapeCreate] = useState<{
-		target: SlotTarget;
-		query: string;
-	} | null>(null);
+	// The shape editor: opened from a chord search that found nothing (`query`
+	// seeds the name or the frets), or from the voicing stepper to write another
+	// shape for a chord the slot already has (`chord`, starting from `from`).
+	// The slot is captured here because the column popup closes under the editor.
+	const [shapeCreate, setShapeCreate] = useState<
+		| { target: SlotTarget; query: string }
+		| { target: SlotTarget; chord: ChordRef; from: ChordVoicing | null }
+		| null
+	>(null);
 	// The middle (measure-grid) scroll area. Only this region scrolls — the
 	// header/metadata/footer stay pinned — and it's the coordinate space the
 	// absolute popups (technique menu, touch-mute, hidden input) are anchored in.
@@ -1213,15 +1216,19 @@ export default function FingerpickEditModal({
 	// chord-name field instead. Memoized: the editor re-seeds whenever the seed's
 	// identity changes, so a fresh object per render would wipe its edits.
 	const shapeCreateSeed = useMemo(() => {
-		if (!shapeCreate) return { namingFrom: undefined, initialVoicing: null };
+		if (!shapeCreate) return { chord: null, namingFrom: undefined, initialVoicing: null };
+		if ("chord" in shapeCreate) {
+			return { chord: shapeCreate.chord, namingFrom: undefined, initialVoicing: shapeCreate.from };
+		}
 		const { frets } = parseTabSequence(shapeCreate.query);
 		if (frets) {
 			return {
+				chord: null,
 				namingFrom: undefined,
 				initialVoicing: chordShapeToVoicing(tabSequenceToShape(frets), "draft"),
 			};
 		}
-		return { namingFrom: shapeCreate.query, initialVoicing: null };
+		return { chord: null, namingFrom: shapeCreate.query, initialVoicing: null };
 	}, [shapeCreate]);
 
 	// Empty one string of one measure — the × that appears beside the string
@@ -1499,6 +1506,21 @@ export default function FingerpickEditModal({
 								<ChevronRight size={14} />
 							</button>
 						</div>
+					)}
+					{/* The shape the player needs may not be among the ones on offer: a
+					    new one starts from the shape on screen and is pinned to this slot. */}
+					{chordHere && voicingsHere?.status === "ready" && (
+						<button
+							type="button"
+							onClick={() =>
+								setShapeCreate({ target: singleTarget, chord: chordHere, from: voicingHere })
+							}
+							title={`Write a new shape for ${chordSymbolLabel(chordHere)} and use it here`}
+							className="flex h-7 items-center gap-1 self-start border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
+						>
+							<Plus size={12} />
+							New shape for {chordSymbolLabel(chordHere)}
+						</button>
 					)}
 					{chordHere && voicingHere && (
 						<div className="flex flex-wrap gap-1">
@@ -2822,7 +2844,7 @@ export default function FingerpickEditModal({
 			{shapeCreate && (
 				<ChordShapeModal
 					open
-					chord={null}
+					chord={shapeCreateSeed.chord}
 					namingFrom={shapeCreateSeed.namingFrom}
 					initialVoicing={shapeCreateSeed.initialVoicing}
 					onClose={() => setShapeCreate(null)}

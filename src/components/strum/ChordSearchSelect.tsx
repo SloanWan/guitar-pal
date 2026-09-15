@@ -4,7 +4,12 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Music, Plus, X } from "lucide-react";
 import MusicalText from "@/components/MusicalText";
 import { chordDisplayName } from "@/lib/chordSuffixes";
-import { searchChords, type ChordIndexEntry, type ChordSearchResult } from "@/lib/chordSearch";
+import {
+	normalizeChordName,
+	searchChords,
+	type ChordIndexEntry,
+	type ChordSearchResult,
+} from "@/lib/chordSearch";
 import { parseTabSequence } from "@/lib/chordTabSequence";
 import { resolveShapeToChord, type ShapeSearchChord } from "@/lib/chordShapeSearch";
 import type { ChordRef } from "@/lib/strumPatterns";
@@ -72,6 +77,18 @@ export default function ChordSearchSelect({
 		[index, query, editing, shape],
 	);
 	const open = editing && (results.length > 0 || shape !== null || query.trim() !== "");
+	/**
+	 * What the query names, when the library has no chord of that name: "c/d"
+	 * finds C/E and C/G, which is not the C/D the player asked for. Offered for
+	 * writing down alongside the near misses, not only when there are none.
+	 */
+	const exact = useMemo(() => (editing && !shape ? normalizeChordName(query) : null), [editing, shape, query]);
+	const exactMissing =
+		exact !== null && !results.some((r) => r.root === exact.root && r.suffix === exact.suffix);
+	const offerCreate =
+		onCreate !== undefined &&
+		((shape !== null && !shapeChord && shapeCorpus !== null) ||
+			(shape === null && index.length > 0 && (results.length === 0 || exactMissing)));
 
 	// Close on a press anywhere outside, the way the other in-modal popovers do.
 	useEffect(() => {
@@ -274,27 +291,33 @@ export default function ChordSearchSelect({
 						</li>
 					)}
 
-					{/* Nothing found, by name or by shape: the chord can be written down. */}
-					{onCreate &&
-						((shape && !shapeChord && shapeCorpus !== null) ||
-							(!shape && results.length === 0 && index.length > 0)) && (
-							<li>
-								<button
-									type="button"
-									onPointerDown={(e) => {
-										e.preventDefault();
-										const typed = query.trim();
-										onCreate(typed);
-										stopEditing();
-										inputRef.current?.blur();
-									}}
-									className="flex w-full items-center gap-2 border-t border-line px-2 py-1.5 text-left font-mono text-[11px] font-semibold text-denim-accent transition-colors hover:bg-denim-tint"
-								>
-									<Plus size={11} className="shrink-0" />
-									Write it down as my own chord
-								</button>
-							</li>
-						)}
+					{/* The chord asked for is not in the library — by name, by shape, or
+					    only its near misses are: it can be written down. */}
+					{offerCreate && onCreate && (
+						<li>
+							<button
+								type="button"
+								onPointerDown={(e) => {
+									e.preventDefault();
+									const typed = query.trim();
+									onCreate(typed);
+									stopEditing();
+									inputRef.current?.blur();
+								}}
+								className="flex w-full items-center gap-2 border-t border-line px-2 py-1.5 text-left font-mono text-[11px] font-semibold text-denim-accent transition-colors hover:bg-denim-tint"
+							>
+								<Plus size={11} className="shrink-0" />
+								{exact && exactMissing ? (
+									<span>
+										Write down <MusicalText text={chordDisplayName(exact.root, exact.suffix)} /> as
+										my own chord
+									</span>
+								) : (
+									"Write it down as my own chord"
+								)}
+							</button>
+						</li>
+					)}
 				</ul>
 			)}
 		</div>

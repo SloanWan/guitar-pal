@@ -323,3 +323,27 @@ export function replaceRowWithHints(
 		return setFret(p, { measureIndex, slotIndex, stringIndex }, hint);
 	}, pattern);
 }
+
+/** Whether any string in the measure holds a fret the chord shape would write differently. */
+export function measureDiffersFromHints(
+	measure: Measure,
+	hintsForSlot: (slotIndex: number) => readonly FretHint[] | null,
+): boolean {
+	return measure.slots.some((slot) =>
+		slot.strings.some((_, stringIndex) => rowDiffersFromHints(measure, stringIndex, hintsForSlot)),
+	);
+}
+
+/** `replaceRowWithHints` for every string of the measure at once. */
+export function replaceMeasureWithHints(
+	pattern: FingerpickPattern,
+	measureIndex: number,
+	hintsForSlot: (slotIndex: number) => readonly FretHint[] | null,
+): FingerpickPattern {
+	const measure = pattern.measures[measureIndex];
+	if (!measure) return pattern;
+	return measure.slots[0].strings.reduce(
+		(p, _, stringIndex) => replaceRowWithHints(p, measureIndex, stringIndex, hintsForSlot),
+		pattern,
+	);
+}

@@ -25,6 +25,7 @@ import {
 	ChevronRight,
 	CornerDownLeft,
 	Merge,
+	RotateCcw,
 	Undo2,
 	Redo2,
 	CircleHelp,
@@ -84,6 +85,8 @@ import {
 	fillColumnFromChord,
 	patternCapo,
 	patternHasChords,
+	measureDiffersFromHints,
+	replaceMeasureWithHints,
 	replaceRowWithHints,
 	rowDiffersFromHints,
 	setChordOnSlots,
@@ -362,6 +365,21 @@ export default function FingerpickEditModal({
 	// Focusable cell buttons, keyed by cellKey.
 	const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 	const popupRef = useRef<HTMLDivElement>(null);
+	// The popup's Chord section (single- or multi-slot — one renders at a time).
+	// Its height sets the least the popup may be capped to, and it is scrolled
+	// into view inside the popup whenever the chord is being worked on.
+	const chordSectionRef = useRef<HTMLDivElement>(null);
+	// Bumped by every chord edit made from the popup, so the section is revealed
+	// after the edit re-renders it (a new shape card, a longer result list …).
+	const [revealChordTick, setRevealChordTick] = useState(0);
+	// When the chord was last edited from the popup. Growth of the section soon
+	// after (the shape card arriving for the chord just picked) is revealed too,
+	// even though picking took the focus out of the section.
+	const lastChordEditRef = useRef(0);
+	const bumpRevealChord = useCallback(() => {
+		lastChordEditRef.current = Date.now();
+		setRevealChordTick((t) => t + 1);
+	}, []);
 	// The selected column's DOM box, used to anchor the column popup below it inside
 	// the scroll region's coordinate space.
 	const popupAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -855,12 +873,21 @@ export default function FingerpickEditModal({
 	// Mark a chord change on a single slot (null takes the mark away).
 	function applySlotChord(target: SlotTarget, chord: ChordRef | null) {
 		commit((prev) => setSlotChord(prev, target, chord));
+		bumpRevealChord();
 	}
 
 	// One chord over every selected slot: marked once per run, the chord that
 	// was there resuming after it.
 	function applyChordToSelection(chord: ChordRef) {
 		commit((prev) => setChordOnSlots(prev, columnTargets(), chord));
+		bumpRevealChord();
+	}
+
+	// Rewrite every fretted cell in a measure to the chord shape's frets.
+	function applyReplaceMeasure(measureIndex: number) {
+		commit((prev) =>
+			replaceMeasureWithHints(prev, measureIndex, (si) => hintsBySlot[measureIndex]?.[si] ?? null),
+		);
 	}
 
 	// Rewrite a string's fretted cells in one measure to the shape's frets.
@@ -1153,26 +1180,66 @@ export default function FingerpickEditModal({
 		const viewRect = scroller.getBoundingClientRect();
 		const block = popupAnchorRef.current?.closest<HTMLElement>("[data-measure-id]");
 		const blockTop = block?.getBoundingClientRect().top ?? popupRect.top;
+		// The popup's full content height, whatever cap it is under right now.
+		const naturalHeight = popup.scrollHeight + (popupRect.height - popup.clientHeight);
+		// The Chord section must always be showable whole: it is the part that
+		// grows (shape card, result list) and the part being worked on.
+		const chordHeight = chordSectionRef.current?.getBoundingClientRect().height ?? 0;
+		const leastHeight = Math.min(naturalHeight, Math.max(160, chordHeight + 24));
 		let dx = 0;
 		let dy = 0;
 		if (popupRect.right > viewRect.right - PAD) dx = popupRect.right - (viewRect.right - PAD);
 		else if (popupRect.left < viewRect.left + PAD) dx = popupRect.left - (viewRect.left + PAD);
-		if (popupRect.bottom > viewRect.bottom - PAD) {
-			// Scroll down only as far as keeps the measure's top edge in view.
-			dy = Math.min(
-				popupRect.bottom - (viewRect.bottom - PAD),
-				Math.max(0, blockTop - (viewRect.top + PAD)),
-			);
+		let maxHeight = naturalHeight;
+		if (popupRect.top + naturalHeight > viewRect.bottom - PAD) {
+			// Scroll down as far as keeps the measure's top edge in view; what still
+			// hangs below is the popup's own scroll — but never less than the Chord
+			// section needs, even if that costs a little of the measure's top.
+			const cap = Math.max(0, blockTop - (viewRect.top + PAD));
+			const roomAtCap = viewRect.bottom - PAD - (popupRect.top - cap);
+			maxHeight = Math.floor(Math.max(roomAtCap, leastHeight));
+			dy = popupRect.top + maxHeight - (viewRect.bottom - PAD);
 		} else if (popupRect.top < viewRect.top + PAD) {
 			dy = popupRect.top - (viewRect.top + PAD);
 		}
-		// Whatever still hangs below the view after the nudge is the popup's own
-		// scroll. Stored in scroll-region coordinates, so it holds while scrolling.
-		const room = viewRect.bottom - PAD - (popupRect.top - dy);
-		const maxHeight = Math.max(160, Math.floor(room));
 		setPopupMaxHeight((prev) => (prev === maxHeight ? prev : maxHeight));
 		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
-	}, [firstSelectedColumnKey, popupPos, popupConfirm, selectedColumns]);
+		// `popupMaxHeight` is a dep on purpose: the cap applied by this pass changes
+		// how far the scroll region can scroll, so the nudge is settled on the next.
+	}, [firstSelectedColumnKey, popupPos, popupConfirm, selectedColumns, revealChordTick, popupMaxHeight]);
+
+	// Bring the Chord section into view inside the popup whenever the chord is
+	// being worked on: on focus landing in it, and after every chord edit.
+	const revealChordSection = useCallback(() => {
+		const popup = popupRef.current;
+		const section = chordSectionRef.current;
+		if (!popup || !section) return;
+		const p = popup.getBoundingClientRect();
+		const c = section.getBoundingClientRect();
+		if (c.bottom > p.bottom) popup.scrollTop += c.bottom - p.bottom + 4;
+		else if (c.top < p.top) popup.scrollTop -= p.top - c.top + 4;
+	}, []);
+	useIsomorphicLayoutEffect(() => {
+		if (revealChordTick === 0) return;
+		revealChordSection();
+	}, [revealChordTick, revealChordSection]);
+	// The section also grows on its own — the result list opening under the
+	// search field, a shape card arriving — and while the player's focus is in
+	// it, that growth should stay in view too.
+	useEffect(() => {
+		const section = chordSectionRef.current;
+		if (!section || !firstSelectedColumnKey) return;
+		let lastHeight = section.getBoundingClientRect().height;
+		const observer = new ResizeObserver(() => {
+			const height = section.getBoundingClientRect().height;
+			if (height === lastHeight) return;
+			lastHeight = height;
+			const recentEdit = Date.now() - lastChordEditRef.current < 3000;
+			if (section.contains(document.activeElement) || recentEdit) setRevealChordTick((t) => t + 1);
+		});
+		observer.observe(section);
+		return () => observer.disconnect();
+	}, [firstSelectedColumnKey, selectedColumns]);
 
 	// When the technique menu opens near the grid's edge (e.g. right-clicking the
 	// last cell in a row), it's clipped by the scroll area. Nudge the scroll area
@@ -1492,7 +1559,11 @@ export default function FingerpickEditModal({
 			{/* Chord — a change marked on this slot, running on until the next mark.
 			    Single column only: a chord starts at one point in time. */}
 			{singleTarget && !popupConfirm && (
-				<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<div
+					ref={chordSectionRef}
+					onFocusCapture={revealChordSection}
+					className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0"
+				>
 					<PopupSectionLabel
 						label="Chord"
 						hint="Start a chord here. It runs until the next chord mark, across measures."
@@ -1608,7 +1679,11 @@ export default function FingerpickEditModal({
 			    selected slot. The first selected slot's chord is offered as the
 			    quick pick, since that is usually the one being extended. */}
 			{selectedColumns.size > 1 && !popupConfirm && (
-				<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<div
+					ref={chordSectionRef}
+					onFocusCapture={revealChordSection}
+					className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0"
+				>
 					<PopupSectionLabel
 						label="Chord"
 						hint={`Put one chord over the ${selectedColumns.size} selected slots.`}
@@ -2008,6 +2083,31 @@ export default function FingerpickEditModal({
 												<ArrowRight size={14} />
 											</button>
 										</div>
+										<div className="flex items-center gap-2">
+											{/* Snap the whole measure back to its chord shapes — live only
+											    while some fret differs from what the shape would write. */}
+											{hasChords &&
+												(() => {
+													const differs = measureDiffersFromHints(
+														measure,
+														(si) => hintsBySlot[measureIndex]?.[si] ?? null,
+													);
+													return (
+														<button
+															onClick={() => applyReplaceMeasure(measureIndex)}
+															disabled={!differs}
+															aria-label="Replace this measure's frets with the chord shapes'"
+															title={
+																differs
+																	? "Replace every fret in this measure with the chord shape's"
+																	: "Every fret in this measure already matches the chord shape"
+															}
+															className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
+														>
+															<RotateCcw size={14} />
+														</button>
+													);
+												})()}
 										<button
 											onClick={() =>
 												commit((p) => deleteMeasure(p, measureIndex))
@@ -2019,6 +2119,7 @@ export default function FingerpickEditModal({
 										>
 											<XIcon size={12} /> Delete
 										</button>
+										</div>
 									</div>
 
 									{/* Column-major layout: a fixed label column, then one wrapper per

@@ -17,6 +17,8 @@ import {
 	sameChordRef,
 	rowDiffersFromHints,
 	replaceRowWithHints,
+	measureDiffersFromHints,
+	replaceMeasureWithHints,
 } from "@/lib/fingerpickChords";
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
@@ -362,5 +364,24 @@ describe("row replace with hints", () => {
 		const out = replaceRowWithHints(p, 0, 1, forSlot);
 		expect(out.measures[0].slots.map((s) => s.strings[1].fret)).toEqual([1, null, 1, null]);
 		expect(out.measures[0].slots[2].strings[0].fret).toBe(7);
+	});
+});
+
+describe("measure replace with hints", () => {
+	const hints = chordFretHints(voicing()); // C: e0 B1 G0 D2 A3 E/
+	const forSlot = () => hints;
+
+	it("differs when any row differs, and rewrites every row at once", () => {
+		let p = pattern([measure("a", [C, undefined, undefined, undefined])]);
+		expect(measureDiffersFromHints(p.measures[0], forSlot)).toBe(false);
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 0 }, 3); // e: 0 expected
+		p = setFret(p, { measureIndex: 0, slotIndex: 1, stringIndex: 4 }, 3); // A: matches
+		p = setFret(p, { measureIndex: 0, slotIndex: 2, stringIndex: 3 }, 4); // D: 2 expected
+		expect(measureDiffersFromHints(p.measures[0], forSlot)).toBe(true);
+		const out = replaceMeasureWithHints(p, 0, forSlot);
+		expect(out.measures[0].slots[0].strings[0].fret).toBe(0);
+		expect(out.measures[0].slots[1].strings[4].fret).toBe(3);
+		expect(out.measures[0].slots[2].strings[3].fret).toBe(2);
+		expect(measureDiffersFromHints(out.measures[0], forSlot)).toBe(false);
 	});
 });

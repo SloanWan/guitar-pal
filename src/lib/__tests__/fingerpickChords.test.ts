@@ -350,10 +350,18 @@ describe("row replace with hints", () => {
 		expect(rowDiffersFromHints(p.measures[0], 1, forSlot)).toBe(false); // agrees
 		p = setFret(p, { measureIndex: 0, slotIndex: 2, stringIndex: 1 }, 3);
 		expect(rowDiffersFromHints(p.measures[0], 1, forSlot)).toBe(true);
-		// Low E: the shape has no fret there, so a note on it is not a difference.
+		// Low E: the shape leaves it out, so a note on it is one the shape would remove.
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
-		expect(rowDiffersFromHints(p.measures[0], 5, forSlot)).toBe(false);
+		expect(rowDiffersFromHints(p.measures[0], 5, forSlot)).toBe(true);
 		expect(rowDiffersFromHints(p.measures[0], 1, () => null)).toBe(false);
+	});
+
+	it("takes a fret off a string the shape leaves out", () => {
+		let p = pattern([measure("a", [C, undefined, undefined, undefined])]);
+		p = setFret(p, { measureIndex: 0, slotIndex: 1, stringIndex: 5 }, 3);
+		const out = replaceRowWithHints(p, 0, 5, forSlot);
+		expect(out.measures[0].slots[1].strings[5].fret).toBeNull();
+		expect(rowDiffersFromHints(out.measures[0], 5, forSlot)).toBe(false);
 	});
 
 	it("rewrites the fretted cells of the row and nothing else", () => {
@@ -377,11 +385,13 @@ describe("measure replace with hints", () => {
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 0 }, 3); // e: 0 expected
 		p = setFret(p, { measureIndex: 0, slotIndex: 1, stringIndex: 4 }, 3); // A: matches
 		p = setFret(p, { measureIndex: 0, slotIndex: 2, stringIndex: 3 }, 4); // D: 2 expected
+		p = setFret(p, { measureIndex: 0, slotIndex: 3, stringIndex: 5 }, 1); // low E: shape mutes it
 		expect(measureDiffersFromHints(p.measures[0], forSlot)).toBe(true);
 		const out = replaceMeasureWithHints(p, 0, forSlot);
 		expect(out.measures[0].slots[0].strings[0].fret).toBe(0);
 		expect(out.measures[0].slots[1].strings[4].fret).toBe(3);
 		expect(out.measures[0].slots[2].strings[3].fret).toBe(2);
+		expect(out.measures[0].slots[3].strings[5].fret).toBeNull();
 		expect(measureDiffersFromHints(out.measures[0], forSlot)).toBe(false);
 	});
 });

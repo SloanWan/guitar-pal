@@ -284,10 +284,11 @@ export function setChordOnSlots(
 }
 
 /**
- * Whether a string in one measure holds any fret that is not the chord shape's
- * fret there — what makes "replace this row with the shape" worth offering.
- * Only cells with a fret count; a cell the shape has no fret for (`"/"`, or no
- * chord in effect) can't be replaced and so is not a difference.
+ * Whether a string in one measure holds any fret the chord shape would write
+ * differently — what makes "replace this row with the shape" worth offering.
+ * Only cells with a fret count: a fret differing from the shape's, or a fret
+ * on a string the shape leaves out (`"/"`), which the shape would take away.
+ * A slot with no chord in effect has nothing to say and is never a difference.
  */
 export function rowDiffersFromHints(
 	measure: Measure,
@@ -298,14 +299,15 @@ export function rowDiffersFromHints(
 		const cell = slot.strings[stringIndex];
 		if (cell.fret === null) return false;
 		const hint = hintsForSlot(slotIndex)?.[stringIndex];
-		return typeof hint === "number" && hint !== cell.fret;
+		return hint !== undefined && hint !== null && hint !== cell.fret;
 	});
 }
 
 /**
- * Rewrite every fretted cell on one string of one measure to the chord shape's
- * fret for that slot. Cells without a fret, and cells whose slot has no shape
- * fret for the string, are left as they are.
+ * Rewrite every fretted cell on one string of one measure to what the chord
+ * shape has there: the shape's fret, or nothing at all on a string the shape
+ * leaves out. Cells without a fret (including dead notes), and slots with no
+ * chord in effect, are left as they are.
  */
 export function replaceRowWithHints(
 	pattern: FingerpickPattern,
@@ -319,8 +321,9 @@ export function replaceRowWithHints(
 		const cell = slot.strings[stringIndex];
 		if (cell.fret === null) return p;
 		const hint = hintsForSlot(slotIndex)?.[stringIndex];
-		if (typeof hint !== "number" || hint === cell.fret) return p;
-		return setFret(p, { measureIndex, slotIndex, stringIndex }, hint);
+		if (hint === undefined || hint === null || hint === cell.fret) return p;
+		const target = { measureIndex, slotIndex, stringIndex };
+		return hint === "/" ? setInactive(p, target) : setFret(p, target, hint);
 	}, pattern);
 }
 

@@ -1541,9 +1541,13 @@ export default function FingerpickPage() {
 								</span>
 							</div>
 						)}
+						{/* Fixed-height header: every row is as tall as its tallest possible
+						    occupant (the fader), so controls appearing and disappearing —
+						    the speed fader, the Size fader, the Off-shape switch — never move
+						    the tab beneath. */}
 						<div className="mb-4 shrink-0">
-							<div className="flex flex-wrap items-center gap-3">
-								<h1 className="text-lg font-semibold text-tab-title">
+							<div className="flex h-9 items-center gap-3">
+								<h1 className="truncate text-lg font-semibold text-tab-title">
 									{selectedPattern.name}
 								</h1>
 								{/* Auto-scroll: creep the tab upward at a set speed. The speed
@@ -1570,7 +1574,7 @@ export default function FingerpickPage() {
 									<ChevronsDown size={14} className={autoScrollActive ? "animate-bounce" : ""} />
 								</button>
 								{autoScrollActive && (
-									<div className="flex items-center gap-2">
+									<div className="fp-reveal flex items-center gap-2">
 										<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
 											Speed
 										</span>
@@ -1598,8 +1602,8 @@ export default function FingerpickPage() {
 							</div>
 							{/* Meta line, with the chord-line controls beside it — or under it
 							    on a phone, where the row has no room for both. */}
-							<div className="mt-0.5 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-							<div className="flex items-center gap-2 text-xs text-tab-meta uppercase tracking-wider">
+							<div className="flex flex-col sm:h-9 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+							<div className="flex h-6 items-center gap-2 text-xs text-tab-meta uppercase tracking-wider sm:h-9">
 								<span>
 									{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
 									{selectedPattern.timeSignature[1]}
@@ -1620,10 +1624,9 @@ export default function FingerpickPage() {
 							{/* Chord line view, at the row's other end — only a question for a
 							    pattern that names chords. The size slider appears with the
 							    shapes it sizes. */}
-							{hasChords && (
-								<div className="flex shrink-0 flex-row-reverse items-center gap-3 sm:flex-row">
-									{chordView === "diagram" && (
-										<div className="flex items-center gap-2">
+							<div className="flex h-9 shrink-0 flex-row-reverse items-center gap-3 sm:flex-row">
+								{hasChords && chordView === "diagram" && (
+										<div className="fp-reveal flex items-center gap-2">
 											<Rocker
 												checked={offShapeOn}
 												onChange={handleOffShapeChange}
@@ -1637,8 +1640,8 @@ export default function FingerpickPage() {
 											</span>
 										</div>
 									)}
-									{chordView === "diagram" && (
-										<div className="flex items-center gap-2">
+								{hasChords && chordView === "diagram" && (
+										<div className="fp-reveal flex items-center gap-2">
 											<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
 												Size
 											</span>
@@ -1670,9 +1673,10 @@ export default function FingerpickPage() {
 											</div>
 										</div>
 									)}
+								{hasChords && (
 									<ChordViewToggle value={chordView} onChange={handleChordViewChange} />
-								</div>
-							)}
+								)}
+							</div>
 							</div>
 						</div>
 

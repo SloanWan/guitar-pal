@@ -687,6 +687,28 @@
 	}
 }
 
+/* Entrance for a control that appears beside another one when a mode turns
+   on (the chord line's Size fader and Off-shape switch): a short fade and
+   slide in from the switch that revealed it. */
+@keyframes fp-reveal-from-right {
+	from {
+		opacity: 0;
+		transform: translateX(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+.fp-reveal {
+	animation: fp-reveal-from-right 0.18s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+	.fp-reveal {
+		animation: none;
+	}
+}
+
 /* Same landing nudge for the strum editor, where bars stack vertically instead
    of flowing left-to-right, so the motion runs on the Y axis. */
 @keyframes sb-nudge-from-below {

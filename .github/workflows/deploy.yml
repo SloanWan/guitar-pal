@@ -49,7 +49,7 @@ jobs:
             - name: Smoke test
               run: |
                   for i in $(seq 1 12); do
-                    code=$(curl -s -o /dev/null -w '%{http_code}' https://guitarpal.sloan.wan/)
+                    code=$(curl -s -o /dev/null -w '%{http_code}' https://guitarpal.sloanwan.com/)
                     [ "$code" = "200" ] && { echo "OK ($code)"; exit 0; }
                     echo "attempt $i: $code"; sleep 5
                   done

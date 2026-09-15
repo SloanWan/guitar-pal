@@ -418,7 +418,7 @@ Click **Log Out** in the top navigation bar. Your data remains safely stored in 
 
 ## Deployment (self-hosted)
 
-Production runs on a single Tencent Cloud HK VPS (Ubuntu, 2 GB) at `https://guitarpal.sloan.wan`: Nginx on the host terminates TLS and reverse-proxies to one Docker container running the Next.js standalone server. Database and auth stay on hosted Supabase — nothing stateful lives on the box, so it can be rebuilt from scratch with the steps below.
+Production runs on a single Tencent Cloud HK VPS (Ubuntu, 2 GB) at `https://guitarpal.sloanwan.com`: Nginx on the host terminates TLS and reverse-proxies to one Docker container running the Next.js standalone server. Database and auth stay on hosted Supabase — nothing stateful lives on the box, so it can be rebuilt from scratch with the steps below.
 
 ### Files
 
@@ -443,7 +443,7 @@ Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` 
 
 ### First-time setup
 
-1. **DNS** — A record `guitarpal.sloan.wan` → the server's public IP. Wait until it resolves; certbot validates the domain over HTTP.
+1. **DNS** — A record `guitarpal.sloanwan.com` → the server's public IP. Wait until it resolves; certbot validates the domain over HTTP.
 2. **Security group** — allow inbound TCP 22, 80, 443.
 3. **Bootstrap** (as the `ubuntu` user):
 
@@ -459,8 +459,8 @@ Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` 
     The first build takes a few minutes on 2 GB — the script adds a swapfile for exactly that reason.
 
 4. **Supabase Auth** — Dashboard → Authentication → URL Configuration:
-    - Site URL: `https://guitarpal.sloan.wan`
-    - Redirect URLs: add `https://guitarpal.sloan.wan/**` (covers the password-reset return to `/auth/reset`).
+    - Site URL: `https://guitarpal.sloanwan.com`
+    - Redirect URLs: add `https://guitarpal.sloanwan.com/**` (covers the password-reset return to `/auth/reset`).
 5. **Deploy key + GitHub secrets** — on the server:
 
     ```bash

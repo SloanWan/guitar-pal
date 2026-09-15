@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-DOMAIN="${DOMAIN:-guitarpal.sloan.wan}"
+DOMAIN="${DOMAIN:-guitarpal.sloanwan.com}"
 EMAIL="${EMAIL:-nysuswan@gmail.com}"   # Let's Encrypt expiry notices
 APP_DIR="${APP_DIR:-$HOME/guitar-pal}"
 SWAP_SIZE="${SWAP_SIZE:-2G}"           # next build OOMs on a 2 GB box without it

@@ -37,13 +37,25 @@ export type Technique =
 	| null;
 
 /**
- * A right-hand roll (arpeggiated chord) applied across a slot's strings. Slot-level,
- * never per-string — a roll is one physical right-hand action. Semantics are defined
- * by the PLAYING ACTION, not by notated appearance; the renderer maps these to arrows.
- *  - "roll-down" = hand moves down = low pitch → high pitch = stringIndex 5 → 0
- *  - "roll-up"   = hand moves up   = high pitch → low pitch = stringIndex 0 → 5
+ * A right-hand sweep across a slot's strings. Slot-level, never per-string — a
+ * sweep is one physical right-hand action. Semantics are defined by the PLAYING
+ * ACTION, not by notated appearance; the renderer maps these to arrows.
+ *  - "roll-*"  = a slow, deliberate arpeggio (strings clearly one after another)
+ *  - "brush-*" = a fast strum (strings near enough together to read as one chord)
+ *  - "*-down"  = hand moves down = low pitch → high pitch = stringIndex 5 → 0
+ *  - "*-up"    = hand moves up   = high pitch → low pitch = stringIndex 0 → 5
  */
-export type Stroke = "roll-down" | "roll-up";
+export type Stroke = "roll-down" | "roll-up" | "brush-down" | "brush-up";
+
+/** The hand's travel direction of a stroke, whatever its speed. */
+export function strokeDirection(stroke: Stroke): "down" | "up" {
+	return stroke === "roll-down" || stroke === "brush-down" ? "down" : "up";
+}
+
+/** Whether a stroke is the fast kind. */
+export function isBrush(stroke: Stroke): boolean {
+	return stroke === "brush-down" || stroke === "brush-up";
+}
 
 export type StringFret = {
 	fret: number | null;   // null = string not in play for this slot

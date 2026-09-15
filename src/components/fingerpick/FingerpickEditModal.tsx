@@ -32,12 +32,13 @@ import {
 	CircleHelp,
 	X as XIcon,
 } from "lucide-react";
-import type {
-	Duration,
-	FingerpickPattern,
-	Measure,
-	StringFret,
-	Stroke,
+import {
+	strokeDirection,
+	type Duration,
+	type FingerpickPattern,
+	type Measure,
+	type StringFret,
+	type Stroke,
 } from "@/lib/fingerpickTypes";
 import {
 	makeDefaultPattern,
@@ -158,10 +159,13 @@ function DurationIcon({ duration }: { duration: Duration }) {
 // Slot-level roll (arpeggiated chord) options for the column popup. "none" clears
 // the field; "roll-down"/"roll-up" are the domain Stroke values. Roll ↓ = hand moves
 // down = low→high pitch; Roll ↑ = hand moves up = high→low pitch (see fingerpickTypes).
-const STROKE_PICKER: { label: string; value: "none" | Stroke }[] = [
-	{ label: "Off", value: "none" },
-	{ label: "Down", value: "roll-down" },
-	{ label: "Up", value: "roll-up" },
+// Roll = slow arpeggio (wave), Brush = fast strum (straight arrow); ↓ = low → high pitch.
+const STROKE_PICKER: { label: string; value: "none" | Stroke; title: string }[] = [
+	{ label: "Off", value: "none", title: "No sweep — sound the strings together" },
+	{ label: "Roll", value: "roll-down", title: "Roll down — a slow arpeggio, low to high strings" },
+	{ label: "Roll", value: "roll-up", title: "Roll up — a slow arpeggio, high to low strings" },
+	{ label: "Brush", value: "brush-down", title: "Brush down — a fast strum, low to high strings" },
+	{ label: "Brush", value: "brush-up", title: "Brush up — a fast strum, high to low strings" },
 ];
 
 // Only the direction-bearing techniques are offered in the context menu; each
@@ -223,7 +227,8 @@ const ROLL_WASH_MIN = 0.05;
 const ROLL_WASH_MAX = 0.24;
 function rollWashAlpha(stroke: Stroke | undefined, stringIndex: number): number {
 	// stringIndex 0 = high e. roll-down travels low → high, so the high e is deepest.
-	const progress = stroke === "roll-up" ? stringIndex / 5 : (5 - stringIndex) / 5;
+	const progress =
+		stroke && strokeDirection(stroke) === "up" ? stringIndex / 5 : (5 - stringIndex) / 5;
 	return ROLL_WASH_MIN + (ROLL_WASH_MAX - ROLL_WASH_MIN) * progress;
 }
 
@@ -1577,31 +1582,31 @@ export default function FingerpickEditModal({
 			    selected column. Rings the strings out one at a time instead of together. */}
 			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
 				<PopupSectionLabel
-					label="Roll"
-					hint="Ring the strings out one at a time instead of all together."
+					label="Sweep"
+					hint="Roll: a slow arpeggio, one string after another. Brush: a fast strum. ↓ low to high strings, ↑ high to low."
 				/>
-				<div className="flex border border-line-strong">
+				{/* Off spans both rows; roll and brush each get a row of directions. */}
+				<div className="grid grid-cols-[auto_1fr_1fr] border border-line-strong">
 					{STROKE_PICKER.map((s, i) => (
 						<button
 							key={s.value}
 							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
-							title={
-								s.value === "none"
-									? "No roll — sound the strings together"
-									: s.value === "roll-down"
-										? "Roll down — low to high strings"
-										: "Roll up — high to low strings"
-							}
-							className={`h-7 flex-1 px-2 flex items-center justify-center gap-1 font-mono text-xs font-semibold transition-colors ${
-								i > 0 ? "border-l border-line-strong" : ""
-							} ${
+							title={s.title}
+							aria-label={s.title}
+							className={`h-7 px-2 flex items-center justify-center gap-0.5 font-mono text-[11px] font-semibold transition-colors ${
+								s.value === "none" ? "row-span-2 h-14" : "border-l border-line-strong"
+							} ${i >= 3 ? "border-t border-line-strong" : ""} ${
 								selectedStroke === s.value
 									? "bg-denim text-on-denim"
 									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
 							}`}
 						>
-							{s.value === "roll-down" && <ArrowDown size={12} aria-hidden />}
-							{s.value === "roll-up" && <ArrowUp size={12} aria-hidden />}
+							{s.value !== "none" && strokeDirection(s.value) === "down" && (
+								<ArrowDown size={11} aria-hidden />
+							)}
+							{s.value !== "none" && strokeDirection(s.value) === "up" && (
+								<ArrowUp size={11} aria-hidden />
+							)}
 							{s.label}
 						</button>
 					))}

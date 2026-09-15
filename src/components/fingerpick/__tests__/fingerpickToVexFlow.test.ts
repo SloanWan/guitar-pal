@@ -468,6 +468,13 @@ describe("fingerpickToVexFlow — slot stroke (roll)", () => {
 		expect(up.rolls).toEqual([{ noteIndex: 0, stroke: "roll-up" }]);
 	});
 
+	it("brush strokes are reported the same way", () => {
+		const { rolls } = fingerpickToVexFlow(
+			measure([{ ...beatSlot("s1", "quarter", { 0: { fret: 5 } }), stroke: "brush-up" }])
+		);
+		expect(rolls).toEqual([{ noteIndex: 0, stroke: "brush-up" }]);
+	});
+
 	it("a slot with no stroke produces no roll, and the note carries no VexFlow Stroke", () => {
 		const { notes, rolls } = fingerpickToVexFlow(
 			measure([beatSlot("s1", "quarter", { 0: { fret: 5 } })])

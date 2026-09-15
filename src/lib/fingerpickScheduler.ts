@@ -1,4 +1,11 @@
-import type { FingerpickPattern, Duration, Technique, Stroke } from "@/lib/fingerpickTypes";
+import {
+	isBrush,
+	strokeDirection,
+	type FingerpickPattern,
+	type Duration,
+	type Technique,
+	type Stroke,
+} from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -155,6 +162,13 @@ export const ROLL_HARD_SPAN_CEILING = 0.9;
  *  - anchor "first-on-beat" — standard notation: the arpeggio begins on the beat, and
  *    offsets stay ≥ 0 so a roll can never produce an unschedulable time < 0.
  */
+/**
+ * A brush is a strum: the strings land close enough together to read as one
+ * chord, so the stagger is a fixed few milliseconds with no direction asymmetry
+ * and no gain taper — every string sounds at full weight.
+ */
+export const BRUSH_STAGGER_SECONDS = 0.007;
+
 export const DEFAULT_ROLL_PARAMS: RollParams = {
 	baseStagger: 0.03,
 	staggerMode: "fixed-with-cap",
@@ -192,7 +206,7 @@ export function computeRollOffsets(
 	const result = new Map<number, RollOffset>();
 	if (struckStringIndices.length === 0) return result;
 
-	const sweepPos = (s: number): number => (stroke === "roll-down" ? 5 - s : s);
+	const sweepPos = (s: number): number => (strokeDirection(stroke) === "down" ? 5 - s : s);
 	// Hand-travel order (ascending sweep position).
 	const ordered = [...struckStringIndices].sort((a, b) => sweepPos(a) - sweepPos(b));
 	const minSweep = sweepPos(ordered[0]);
@@ -201,9 +215,12 @@ export function computeRollOffsets(
 	const stepOf = (s: number, rank: number): number =>
 		params.gapMode === "collapse" ? rank : sweepPos(s) - minSweep;
 
-	// Per-step stagger by mode.
-	let stepSize =
-		params.staggerMode === "proportional"
+	// Per-step stagger by mode. A brush ignores the roll's modes: it is fast by
+	// definition, the same in both directions.
+	const brush = isBrush(stroke);
+	let stepSize = brush
+		? BRUSH_STAGGER_SECONDS
+		: params.staggerMode === "proportional"
 			? slotDurationSeconds * params.proportionalFraction
 			: params.baseStagger;
 
@@ -214,7 +231,7 @@ export function computeRollOffsets(
 
 	if (maxStep > 0) {
 		// Mode "fixed-with-cap" actively clamps the total span to spanCapFraction.
-		if (params.staggerMode === "fixed-with-cap") {
+		if (!brush && params.staggerMode === "fixed-with-cap") {
 			const cap = params.spanCapFraction * slotDurationSeconds;
 			if (stepSize * maxStep > cap) stepSize = cap / maxStep;
 		}
@@ -229,7 +246,7 @@ export function computeRollOffsets(
 		// first-on-beat: attacks spread after the beat (base ≥ 0).
 		// last-on-beat: shift so the final attack lands on the beat (base - totalSpan ≤ 0).
 		const timeOffset = params.anchor === "last-on-beat" ? base - totalSpan : base;
-		result.set(s, { timeOffset, gain: Math.pow(params.gainTaper, rank) });
+		result.set(s, { timeOffset, gain: brush ? 1 : Math.pow(params.gainTaper, rank) });
 	});
 
 	return result;

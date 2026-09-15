@@ -9,6 +9,7 @@ import {
 	stealVoice,
 	_shutdownEngine,
 	computeRollOffsets,
+	BRUSH_STAGGER_SECONDS,
 	computeMeasureBoundaries,
 	resolveSlide,
 	applySlideToVoice,
@@ -1328,6 +1329,36 @@ function timeOfString(events: { stringIndex: number; time: number }[], stringInd
 	if (!ev) throw new Error(`no event for string ${stringIndex}`);
 	return ev.time;
 }
+
+describe("computeRollOffsets — brush (fast strum)", () => {
+	const params: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.05, gainTaper: 0.8 };
+
+	it("brush-down sweeps low→high at the fixed brush stagger, ignoring roll params", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "brush-down", 1.0, params);
+		const t = (s: number) => m.get(s)!.timeOffset;
+		expect(t(5)).toBeCloseTo(0);
+		expect(t(4)).toBeCloseTo(BRUSH_STAGGER_SECONDS);
+		expect(t(0)).toBeCloseTo(5 * BRUSH_STAGGER_SECONDS);
+	});
+
+	it("brush-up sweeps high→low, both directions at the same speed", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "brush-up", 1.0, params);
+		const t = (s: number) => m.get(s)!.timeOffset;
+		expect(t(0)).toBeCloseTo(0);
+		expect(t(5)).toBeCloseTo(5 * BRUSH_STAGGER_SECONDS);
+	});
+
+	it("a brush tapers no gain — every string at full weight", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "brush-down", 1.0, params);
+		expect([...m.values()].every((o) => o.gain === 1)).toBe(true);
+	});
+
+	it("a brush still keeps inside the slot when the slot is very short", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "brush-down", 0.02, params);
+		const span = Math.max(...[...m.values()].map((o) => o.timeOffset));
+		expect(span).toBeLessThanOrEqual(0.02);
+	});
+});
 
 describe("computeRollOffsets — sweep order and gain taper", () => {
 	const params: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.02 };

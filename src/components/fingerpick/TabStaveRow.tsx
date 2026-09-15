@@ -5,7 +5,7 @@ import { Renderer, TabStave, Voice, Formatter, Beam, Barline, StemmableNote } fr
 
 import { Measure } from "@/lib/fingerpickTypes";
 import { fingerpickToVexFlow, type ChordLabel, type RollMark } from "@/lib/fingerpickToVexFlow";
-import type { Stroke } from "@/lib/fingerpickTypes";
+import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 
 // Layout constants — not props because they are fixed design decisions, not data.
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
@@ -192,11 +192,12 @@ export function computeMeasureMinWidth(
 }
 
 /**
- * Draw a roll arrow beside a note: a vertical wave from the note's first played
- * string to its last, with the arrowhead at the end the hand travels towards.
- * An arrow pointing up reads low → high pitch, which is our "roll-down".
- * Exactly the played span — no half-line padding, no glyph rounding — so it
- * never reaches a string the slot does not play.
+ * Draw a stroke arrow beside a note, from the note's first played string to its
+ * last, with the arrowhead at the end the hand travels towards: a wave for a
+ * roll, a straight line for a brush (the notation's slow / fast pair). An arrow
+ * pointing up reads low → high pitch, which is our "*-down". Exactly the played
+ * span — no half-line padding, no glyph rounding — so it never reaches a string
+ * the slot does not play.
  */
 function drawRoll(
 	svgEl: SVGSVGElement,
@@ -208,25 +209,29 @@ function drawRoll(
 	const ns = "http://www.w3.org/2000/svg";
 	const g = document.createElementNS(ns, "g");
 	g.setAttribute("class", "vf-roll");
-	const headAtTop = stroke === "roll-down";
-	// Leave the arrowhead's own height out of the wave so the tip lands on the line.
-	const waveTop = headAtTop ? yTop + ROLL_HEAD : yTop;
-	const waveBottom = headAtTop ? yBottom : yBottom - ROLL_HEAD;
-	let d = `M ${x} ${waveTop}`;
-	let y = waveTop;
-	let side = 1;
-	while (y < waveBottom) {
-		const nextY = Math.min(waveBottom, y + ROLL_WAVELENGTH / 2);
-		d += ` Q ${x + side * ROLL_AMPLITUDE * 2} ${(y + nextY) / 2} ${x} ${nextY}`;
-		y = nextY;
-		side = -side;
+	const headAtTop = strokeDirection(stroke) === "down";
+	// Leave the arrowhead's own height out of the shaft so the tip lands on the line.
+	const shaftTop = headAtTop ? yTop + ROLL_HEAD : yTop;
+	const shaftBottom = headAtTop ? yBottom : yBottom - ROLL_HEAD;
+	let d = `M ${x} ${shaftTop}`;
+	if (isBrush(stroke)) {
+		d += ` L ${x} ${shaftBottom}`;
+	} else {
+		let y = shaftTop;
+		let side = 1;
+		while (y < shaftBottom) {
+			const nextY = Math.min(shaftBottom, y + ROLL_WAVELENGTH / 2);
+			d += ` Q ${x + side * ROLL_AMPLITUDE * 2} ${(y + nextY) / 2} ${x} ${nextY}`;
+			y = nextY;
+			side = -side;
+		}
 	}
-	const wave = document.createElementNS(ns, "path");
-	wave.setAttribute("d", d);
-	wave.setAttribute("fill", "none");
-	wave.setAttribute("stroke", "var(--ink)");
-	wave.setAttribute("stroke-width", "1");
-	g.appendChild(wave);
+	const shaft = document.createElementNS(ns, "path");
+	shaft.setAttribute("d", d);
+	shaft.setAttribute("fill", "none");
+	shaft.setAttribute("stroke", "var(--ink)");
+	shaft.setAttribute("stroke-width", isBrush(stroke) ? "1.4" : "1");
+	g.appendChild(shaft);
 	const head = document.createElementNS(ns, "path");
 	const tipY = headAtTop ? yTop : yBottom;
 	const baseY = headAtTop ? yTop + ROLL_HEAD : yBottom - ROLL_HEAD;
@@ -395,7 +400,8 @@ export default function TabStaveRow({
 				drawn.forEach(({ notes, noteStrings, rolls, stave }) => {
 					rolls.forEach(({ noteIndex, stroke }) => {
 						const strings = noteStrings[noteIndex];
-						if (strings.length === 0) return;
+						// One string is nothing to sweep across (the scheduler skips it too).
+						if (strings.length < 2) return;
 						const ys = strings.map((stringIndex) => stave.getYForLine(stringIndex));
 						drawRoll(
 							svgEl,

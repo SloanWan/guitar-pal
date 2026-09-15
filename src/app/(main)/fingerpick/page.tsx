@@ -117,6 +117,7 @@ function computeAllMeasureWidths(
 			repeatBarlines(measures[i]),
 			rd.chordLabels.length,
 			chordDiagramWidth,
+			rd.rolls.length,
 		),
 	);
 	const widthsNonFirst = renderData.map((rd, i) =>
@@ -127,6 +128,7 @@ function computeAllMeasureWidths(
 			repeatBarlines(measures[i]),
 			rd.chordLabels.length,
 			chordDiagramWidth,
+			rd.rolls.length,
 		),
 	);
 

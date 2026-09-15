@@ -21,6 +21,7 @@ import {
 	ArrowRightToLine,
 	ArrowDown,
 	ArrowUp,
+	Check,
 	ChevronLeft,
 	ChevronRight,
 	CornerDownLeft,
@@ -86,6 +87,7 @@ import {
 	patternCapo,
 	patternHasChords,
 	measureDiffersFromHints,
+	offShapeStrings,
 	replaceMeasureWithHints,
 	replaceRowWithHints,
 	rowDiffersFromHints,
@@ -215,7 +217,15 @@ const HOVER_SUBBEAT_BG = hoverAxisBg(0.08);
 // hover tint (0.14), so a hovered rolled column still visibly brightens. Applied
 // only when the slot isn't a rest (the gray rest wash wins) and no hover wash is
 // active.
-const ROLL_TINT_BG = hoverAxisBg(0.1);
+// A rolled slot's wash runs from this alpha at the string the roll starts on to
+// the deeper one at the string it ends on, so the column shows the direction.
+const ROLL_WASH_MIN = 0.05;
+const ROLL_WASH_MAX = 0.24;
+function rollWashAlpha(stroke: Stroke | undefined, stringIndex: number): number {
+	// stringIndex 0 = high e. roll-down travels low → high, so the high e is deepest.
+	const progress = stroke === "roll-up" ? stringIndex / 5 : (5 - stringIndex) / 5;
+	return ROLL_WASH_MIN + (ROLL_WASH_MAX - ROLL_WASH_MIN) * progress;
+}
 
 type HoveredCell = { measureIndex: number; slotIndex: number; stringIndex: number };
 
@@ -285,6 +295,8 @@ export default function FingerpickEditModal({
 	const [popupConfirm, setPopupConfirm] = useState<
 		| { kind: "merge"; affectedSlotCount: number; pendingMeasures: Measure[] }
 		| { kind: "whole"; pendingMeasures: Measure[] }
+		// Rolling slots that hold notes outside the chord shape: overwrite them?
+		| { kind: "roll"; targets: SlotTarget[] }
 		| null
 	>(null);
 	// Inline confirmation for a measure's quick-preset row.
@@ -865,9 +877,43 @@ export default function FingerpickEditModal({
 	// undo/redo treat a multi-column stroke change as a single step. `undefined`
 	// clears. Routed through commit, so it participates in undo/redo and the dirty
 	// guard just like every other edit.
+	// The shape in effect at a slot, when it is known.
+	function voicingAt(t: SlotTarget): ChordVoicing | null {
+		const ref = chordsInEffect[t.measureIndex]?.[t.slotIndex] ?? null;
+		if (!ref) return null;
+		const state = voicingsFor(ref);
+		return state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
+	}
+	function fillFromChordAt(p: FingerpickPattern, t: SlotTarget): FingerpickPattern {
+		const voicing = voicingAt(t);
+		return voicing ? fillColumnFromChord(p, t, voicing) : p;
+	}
+	function clearSlotStrings(p: FingerpickPattern, t: SlotTarget): FingerpickPattern {
+		return STRING_LABELS.reduce(
+			(q, _, stringIndex) => setInactive(q, { ...t, stringIndex }),
+			p,
+		);
+	}
+
+	// A roll is a chord being sounded, so an empty slot is filled from its chord
+	// shape as the roll goes on; a slot holding notes outside the shape is not
+	// touched without asking. Turning the roll off changes only the roll.
 	function applyStroke(stroke: Stroke | undefined) {
 		const targets = columnTargets();
-		commit((prev) => targets.reduce((p, t) => setStroke(p, t, stroke), prev));
+		const conflicting: SlotTarget[] = [];
+		commit((prev) =>
+			targets.reduce((p, t) => {
+				let next = setStroke(p, t, stroke);
+				if (!stroke) return next;
+				const slot = next.measures[t.measureIndex]?.slots[t.slotIndex];
+				const hints = hintsBySlot[t.measureIndex]?.[t.slotIndex] ?? null;
+				if (!slot || !hints) return next;
+				if (!slotHasStringData(slot)) next = fillFromChordAt(next, t);
+				else if (offShapeStrings(slot, hints).length > 0) conflicting.push(t);
+				return next;
+			}, prev),
+		);
+		setPopupConfirm(conflicting.length > 0 ? { kind: "roll", targets: conflicting } : null);
 	}
 
 	// Mark a chord change on a single slot (null takes the mark away).
@@ -990,6 +1036,14 @@ export default function FingerpickEditModal({
 
 	function confirmPopup() {
 		if (!popupConfirm) return;
+		if (popupConfirm.kind === "roll") {
+			// Overwrite: the slot's notes go, the shape's frets come in.
+			commit((prev) =>
+				popupConfirm.targets.reduce((p, t) => fillFromChordAt(clearSlotStrings(p, t), t), prev),
+			);
+			setPopupConfirm(null);
+			return;
+		}
 		applyMeasures(popupConfirm.pendingMeasures);
 		setSelectedColumns(new Set());
 		setPopupConfirm(null);
@@ -1219,10 +1273,13 @@ export default function FingerpickEditModal({
 		if (c.bottom > p.bottom) popup.scrollTop += c.bottom - p.bottom + 4;
 		else if (c.top < p.top) popup.scrollTop -= p.top - c.top + 4;
 	}, []);
+	// Re-run when the cap is applied too: the first reveal may have happened on
+	// an uncapped popup, where everything was in view anyway.
 	useIsomorphicLayoutEffect(() => {
 		if (revealChordTick === 0) return;
+		if (Date.now() - lastChordEditRef.current > 3000) return;
 		revealChordSection();
-	}, [revealChordTick, revealChordSection]);
+	}, [revealChordTick, popupMaxHeight, revealChordSection]);
 	// The section also grows on its own — the result list opening under the
 	// search field, a shape card arriving — and while the player's focus is in
 	// it, that growth should stay in view too.
@@ -1379,8 +1436,25 @@ export default function FingerpickEditModal({
 				visibility: popupPos ? "visible" : "hidden",
 				maxHeight: popupMaxHeight ?? undefined,
 			}}
-			className="z-60 w-max max-w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg overflow-y-auto fp-thin-scroll"
+			className="z-60 w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg overflow-y-auto fp-thin-scroll"
 		>
+			{/* Done — a way out of the selection that does not need a press
+			    somewhere else. Sticky so it stays in the corner while the popup
+			    scrolls; zero height so it takes no room from the sections. */}
+			<div className="sticky top-0 z-10 flex h-0 justify-end overflow-visible">
+				<button
+					type="button"
+					onClick={() => {
+						setSelectedColumns(new Set());
+						setPopupConfirm(null);
+					}}
+					aria-label="Done with this slot"
+					title="Done — close this popup"
+					className="-mt-1 -mr-1 flex h-6 w-6 items-center justify-center border border-line-strong bg-popover text-ink-dim hover:border-denim hover:text-denim transition-colors"
+				>
+					<Check size={13} />
+				</button>
+			</div>
 			{/* Move — structural edits on the selected slot. Single selection only:
 			    with several slots picked, the popup is about what they share. */}
 			{singleTarget && (
@@ -1478,7 +1552,9 @@ export default function FingerpickEditModal({
 					<span className="text-[11px] text-ink-dim">
 						{popupConfirm.kind === "merge"
 							? `This will discard data from ${popupConfirm.affectedSlotCount} slot(s). Continue?`
-							: "This will replace the measure's content. Continue?"}
+							: popupConfirm.kind === "roll"
+								? `${popupConfirm.targets.length === 1 ? "This slot holds" : `${popupConfirm.targets.length} slots hold`} notes outside the chord shape. Overwrite with the shape?`
+								: "This will replace the measure's content. Continue?"}
 					</span>
 					<div className="flex gap-1">
 						<button
@@ -1612,7 +1688,7 @@ export default function FingerpickEditModal({
 							</button>
 							{/* Fixed footprint whatever the label says, so the ‹ › buttons and
 							    the shape stay put while the player steps through voicings. */}
-							<div className="w-36 shrink-0 [&>div]:h-[9.5rem] [&>div]:justify-center">
+							<div className="mx-auto w-36 shrink-0 [&>div]:h-[9.5rem] [&>div]:justify-center">
 								<ChordDiagram
 									def={chordVoicingToVexChords(voicingHere)}
 									label={
@@ -2251,12 +2327,7 @@ export default function FingerpickEditModal({
 																						backgroundColor:
 																							HOVER_SUBBEAT_BG,
 																					}
-																				: hasRoll && !isRest
-																					? {
-																							backgroundColor:
-																								ROLL_TINT_BG,
-																						}
-																					: undefined
+																				: undefined
 																		}
 																		// min-w-5 floors each slot column at a legible width; once the
 																		// columns can no longer fit, the parent scroll wrapper overflows
@@ -2289,12 +2360,15 @@ export default function FingerpickEditModal({
 																						<button
 																							type="button"
 																							data-column-selector
-																							onClick={() =>
+																							onClick={() => {
 																								toggleColumn({
 																									measureIndex,
 																									slotIndex,
-																								})
-																							}
+																								});
+																								// The chip is about the chord, so the
+																								// popup opens on its Chord section.
+																								bumpRevealChord();
+																							}}
 																							title={
 																								own
 																									? "Chord changes here"
@@ -2486,16 +2560,28 @@ export default function FingerpickEditModal({
 																								e.currentTarget,
 																							);
 																						}}
+																						// Hover tint first; else a rolled slot's wash, deepening
+																						// string by string in the direction the hand travels —
+																						// roll-down (low → high pitch) deepens towards the high e.
 																						style={
-																							l2Alpha >
-																							0
+																							l2Alpha > 0
 																								? {
 																										backgroundColor:
 																											hoverAxisBg(
 																												l2Alpha,
 																											),
 																									}
-																								: undefined
+																								: hasRoll && !isRest
+																									? {
+																											backgroundColor:
+																												hoverAxisBg(
+																													rollWashAlpha(
+																														slot.stroke,
+																														stringIndex,
+																													),
+																												),
+																										}
+																									: undefined
 																						}
 																						className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center font-mono text-xs transition-colors select-none touch-manipulation ${
 																							isSelected

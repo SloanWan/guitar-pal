@@ -14,29 +14,11 @@ import {
 	AnnotationVerticalJustify,
 	Tremolo,
 	Vibrato,
-	// NAMING COLLISION: our domain type is also called `Stroke` (see fingerpickTypes).
-	// VexFlow's modifier class is aliased to VexStroke so the two never resolve
-	// ambiguously in this file.
-	Stroke as VexStroke,
 } from "vexflow";
 
 import { Measure, Duration, Stroke } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import type { ChordRef } from "@/lib/strumPatterns";
-
-// Map our slot-level roll direction to a VexFlow Stroke.Type.
-//
-// VISUALLY CONFIRMED CORRECT — do not flip. The constant names are counterintuitive
-// (OSMD is on record hitting this exact mismatch), so this was verified against the
-// rendered output, not inferred from the names. Notation convention: an arrow
-// pointing UP means low→high pitch, which on a guitar is a DOWN-stroke. In VexFlow 5,
-// Stroke.Type.ROLL_DOWN renders an up-pointing arrowhead at the top (high-pitch) end
-// of a TAB stave — i.e. it reads as low→high — matching our "roll-down" (low pitch →
-// high pitch). Confirmed on /dev/tab-notation.
-const STROKE_TO_VEX: Record<Stroke, number> = {
-	"roll-down": VexStroke.Type.ROLL_DOWN,
-	"roll-up": VexStroke.Type.ROLL_UP,
-};
 
 export const VEX_DURATION: Record<Duration, string> = {
 	whole: "w",
@@ -71,11 +53,28 @@ export interface ChordLabel {
 	label: string;
 }
 
+/**
+ * A roll (arpeggiated chord) to draw beside a note. Not a VexFlow `Stroke`
+ * modifier: that one pads the arrow half a line past the outermost played
+ * strings and rounds its wiggle up to a whole glyph, so it visibly spills onto
+ * strings the slot does not play. The renderer draws the arrow itself, exactly
+ * between the note's first and last played string.
+ *
+ * Notation convention, kept from the previous VexFlow rendering: an arrow
+ * pointing UP means low → high pitch, i.e. our "roll-down".
+ */
+export interface RollMark {
+	/** Index into `notes` of the note the roll belongs to. */
+	noteIndex: number;
+	stroke: Stroke;
+}
+
 export interface VexFlowRenderData {
 	notes: StemmableNote[];
 	connectors: Array<TabTie | TabSlide>;
 	tuplets: Tuplet[];
 	chordLabels: ChordLabel[];
+	rolls: RollMark[];
 	/**
 	 * Per note (index-aligned with `notes`), the string each of its positions
 	 * was written for, in the order the positions — and so VexFlow's fret-number
@@ -98,6 +97,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	const slotNoteIndex: (number | null)[] = [];
 	let pendingGraceNotes: GraceTabNote[] = [];
 	const chordLabels: ChordLabel[] = [];
+	const rolls: RollMark[] = [];
 	// A chord marked on a grace-note slot has no note of its own to sit over; it
 	// is written at the note the grace resolves into.
 	let pendingChord: { slotIndex: number; chord: ChordRef } | null = null;
@@ -253,15 +253,10 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			);
 		}
 
-		// Slot-level roll (arpeggiated chord): one right-hand action spanning the
-		// slot's strings. Attached at position index 0; the modifier draws across
-		// all of the note's positions (allVoices defaults true), so it spans from
-		// the top active string to the bottom active string, gaps included.
-		if (slot.stroke) {
-			tabNote.addStroke(0, new VexStroke(STROKE_TO_VEX[slot.stroke]));
-		}
-
 		const noteIdx = notes.length;
+		// Slot-level roll (arpeggiated chord): one right-hand action spanning the
+		// slot's played strings, gaps included. Drawn by the renderer (see RollMark).
+		if (slot.stroke) rolls.push({ noteIndex: noteIdx, stroke: slot.stroke });
 		notes.push(tabNote);
 		posIndexMaps.push(posMap);
 		slotNoteIndex.push(noteIdx);
@@ -350,5 +345,5 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	const noteSlots = slotNoteIndex.flatMap((noteIdx, slotIdx) =>
 		noteIdx === null ? [] : [slotIdx],
 	);
-	return { notes, connectors, tuplets, chordLabels, noteStrings, noteSlots };
+	return { notes, connectors, tuplets, chordLabels, rolls, noteStrings, noteSlots };
 }

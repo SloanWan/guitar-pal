@@ -450,62 +450,40 @@ describe("fingerpickToVexFlow — note modifiers", () => {
 	});
 });
 
-// ─── Slot-level roll stroke ─────────────────────────────────────────────────────
+// ─── Slot-level roll ────────────────────────────────────────────────────────────
 // The `letRing` field previously shipped passing 542 tests while being silently
-// dropped by the adapter. These assert the stroke is actually attached — a slot
-// with a stroke produces a Stroke modifier on its TabNote, one without produces none.
+// dropped by the adapter. These assert the roll is actually reported — a slot with
+// a stroke produces a RollMark for its note, one without produces none.
 
 describe("fingerpickToVexFlow — slot stroke (roll)", () => {
-	const strokeType = (note: ReturnType<typeof fingerpickToVexFlow>["notes"][number]): number => {
-		const mod = note.getModifiers().find((m) => m instanceof Stroke) as
-			| (Stroke & { type: number })
-			| undefined;
-		expect(mod).toBeDefined();
-		return mod!.type;
-	};
-
-	it("roll-down attaches a Stroke modifier to the TabNote", () => {
-		const { notes } = fingerpickToVexFlow(
-			measure([{ ...beatSlot("s1", "quarter", { 0: { fret: 5 } }), stroke: "roll-down" }])
-		);
-		expect(notes[0]).toBeInstanceOf(TabNote);
-		expect(notes[0].getModifiers().some((m) => m instanceof Stroke)).toBe(true);
-	});
-
-	it("roll-up attaches a Stroke modifier to the TabNote", () => {
-		const { notes } = fingerpickToVexFlow(
-			measure([{ ...beatSlot("s1", "quarter", { 0: { fret: 5 } }), stroke: "roll-up" }])
-		);
-		expect(notes[0].getModifiers().some((m) => m instanceof Stroke)).toBe(true);
-	});
-
-	it("roll-down and roll-up map to distinct Stroke.Type values", () => {
+	it("roll-down and roll-up are reported against the note, with their direction", () => {
 		const down = fingerpickToVexFlow(
 			measure([{ ...beatSlot("s1", "quarter", { 0: { fret: 5 } }), stroke: "roll-down" }])
-		).notes[0];
+		);
+		expect(down.notes[0]).toBeInstanceOf(TabNote);
+		expect(down.rolls).toEqual([{ noteIndex: 0, stroke: "roll-down" }]);
 		const up = fingerpickToVexFlow(
 			measure([{ ...beatSlot("s1", "quarter", { 0: { fret: 5 } }), stroke: "roll-up" }])
-		).notes[0];
-		expect(strokeType(down)).not.toBe(strokeType(up));
+		);
+		expect(up.rolls).toEqual([{ noteIndex: 0, stroke: "roll-up" }]);
 	});
 
-	it("a slot with no stroke produces no Stroke modifier", () => {
-		const { notes } = fingerpickToVexFlow(
+	it("a slot with no stroke produces no roll, and the note carries no VexFlow Stroke", () => {
+		const { notes, rolls } = fingerpickToVexFlow(
 			measure([beatSlot("s1", "quarter", { 0: { fret: 5 } })])
 		);
+		expect(rolls).toEqual([]);
 		expect(notes[0].getModifiers().some((m) => m instanceof Stroke)).toBe(false);
 	});
 
-	it("a roll spanning a gapped chord still attaches a single Stroke modifier", () => {
-		const { notes } = fingerpickToVexFlow(
+	it("a roll on a gapped chord is still one roll, indexed to the right note", () => {
+		const { rolls } = fingerpickToVexFlow(
 			measure([
-				{
-					...beatSlot("s1", "quarter", { 0: { fret: 5 }, 1: { fret: 7 }, 4: { fret: 3 } }),
-					stroke: "roll-down",
-				},
+				beatSlot("s0", "quarter", { 2: { fret: 1 } }),
+				{ ...beatSlot("s1", "quarter", { 0: { fret: 5 }, 4: { fret: 3 } }), stroke: "roll-up" },
 			])
 		);
-		expect(notes[0].getModifiers().filter((m) => m instanceof Stroke)).toHaveLength(1);
+		expect(rolls).toEqual([{ noteIndex: 1, stroke: "roll-up" }]);
 	});
 });
 

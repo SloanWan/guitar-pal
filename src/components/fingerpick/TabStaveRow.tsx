@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Renderer, TabStave, Voice, Formatter, Beam, Barline, StemmableNote } from "vexflow";
 
 import { Measure } from "@/lib/fingerpickTypes";
-import { fingerpickToVexFlow, type ChordLabel } from "@/lib/fingerpickToVexFlow";
+import { fingerpickToVexFlow, type ChordLabel, type RollMark } from "@/lib/fingerpickToVexFlow";
+import type { Stroke } from "@/lib/fingerpickTypes";
 
 // Layout constants — not props because they are fixed design decisions, not data.
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
@@ -41,6 +42,15 @@ const MIN_MEASURE_WIDTH = 120;
 const HO_PO_EXTRA_WIDTH = 25;
 // Extra room for a repeat-begin (|:) / repeat-end (:|) barline's thick line + dots.
 const REPEAT_BARLINE_EXTRA_WIDTH = 14;
+// A roll arrow sits left of its note; a slot needs this much more so it never
+// runs into the previous note's numbers.
+const ROLL_EXTRA_WIDTH = 10;
+// Roll arrow geometry: how far left of the fret numbers it sits, the wave's
+// half-width and wavelength, and the arrowhead's size.
+const ROLL_X_OFFSET = 8;
+const ROLL_AMPLITUDE = 1.6;
+const ROLL_WAVELENGTH = 6;
+const ROLL_HEAD = 4;
 
 interface TabStaveRowProps {
 	/** One "row" worth of measures rendered into a single VexFlow context. */
@@ -164,6 +174,7 @@ export function computeMeasureMinWidth(
 	chordLabelCount: number = 0,
 	/** Width of the shape drawn over each symbol in the shape view; 0 = names only. */
 	chordDiagramWidth: number = 0,
+	rollCount: number = 0,
 ): number {
 	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 	voice.addTickables(notes);
@@ -175,8 +186,54 @@ export function computeMeasureMinWidth(
 		techniqueCount * HO_PO_EXTRA_WIDTH +
 		repeatBarlineCount * REPEAT_BARLINE_EXTRA_WIDTH +
 		chordLabelCount * Math.max(CHORD_LABEL_EXTRA_WIDTH, chordDiagramWidth + 8) +
+		rollCount * ROLL_EXTRA_WIDTH +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);
+}
+
+/**
+ * Draw a roll arrow beside a note: a vertical wave from the note's first played
+ * string to its last, with the arrowhead at the end the hand travels towards.
+ * An arrow pointing up reads low → high pitch, which is our "roll-down".
+ * Exactly the played span — no half-line padding, no glyph rounding — so it
+ * never reaches a string the slot does not play.
+ */
+function drawRoll(
+	svgEl: SVGSVGElement,
+	x: number,
+	yTop: number,
+	yBottom: number,
+	stroke: Stroke,
+): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const g = document.createElementNS(ns, "g");
+	g.setAttribute("class", "vf-roll");
+	const headAtTop = stroke === "roll-down";
+	// Leave the arrowhead's own height out of the wave so the tip lands on the line.
+	const waveTop = headAtTop ? yTop + ROLL_HEAD : yTop;
+	const waveBottom = headAtTop ? yBottom : yBottom - ROLL_HEAD;
+	let d = `M ${x} ${waveTop}`;
+	let y = waveTop;
+	let side = 1;
+	while (y < waveBottom) {
+		const nextY = Math.min(waveBottom, y + ROLL_WAVELENGTH / 2);
+		d += ` Q ${x + side * ROLL_AMPLITUDE * 2} ${(y + nextY) / 2} ${x} ${nextY}`;
+		y = nextY;
+		side = -side;
+	}
+	const wave = document.createElementNS(ns, "path");
+	wave.setAttribute("d", d);
+	wave.setAttribute("fill", "none");
+	wave.setAttribute("stroke", "var(--ink)");
+	wave.setAttribute("stroke-width", "1");
+	g.appendChild(wave);
+	const head = document.createElementNS(ns, "path");
+	const tipY = headAtTop ? yTop : yBottom;
+	const baseY = headAtTop ? yTop + ROLL_HEAD : yBottom - ROLL_HEAD;
+	head.setAttribute("d", `M ${x} ${tipY} L ${x - ROLL_HEAD / 2 - 0.5} ${baseY} L ${x + ROLL_HEAD / 2 + 0.5} ${baseY} Z`);
+	head.setAttribute("fill", "var(--ink)");
+	g.appendChild(head);
+	svgEl.appendChild(g);
 }
 
 export default function TabStaveRow({
@@ -267,11 +324,17 @@ export default function TabStaveRow({
 			}
 
 			// Format and draw notes for each measure against its own stave.
-			const drawn: { notes: StemmableNote[]; noteStrings: number[][]; noteSlots: number[] }[] = [];
+			const drawn: {
+				notes: StemmableNote[];
+				noteStrings: number[][];
+				noteSlots: number[];
+				rolls: RollMark[];
+				stave: TabStave;
+			}[] = [];
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets, chordLabels, noteStrings, noteSlots } =
+				const { notes, connectors, tuplets, chordLabels, rolls, noteStrings, noteSlots } =
 					fingerpickToVexFlow(measure);
-				drawn.push({ notes, noteStrings, noteSlots });
+				drawn.push({ notes, noteStrings, noteSlots, rolls, stave: staves[i] });
 				const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 				voice.addTickables(notes);
 				const noteWidth = staves[i].getNoteEndX() - staves[i].getNoteStartX() - 10;
@@ -326,6 +389,24 @@ export default function TabStaveRow({
 
 			const svgEl = div.querySelector("svg");
 			if (svgEl) applyStaveTheme(svgEl);
+
+			// Roll arrows, from each rolled note's first played string to its last.
+			if (svgEl) {
+				drawn.forEach(({ notes, noteStrings, rolls, stave }) => {
+					rolls.forEach(({ noteIndex, stroke }) => {
+						const strings = noteStrings[noteIndex];
+						if (strings.length === 0) return;
+						const ys = strings.map((stringIndex) => stave.getYForLine(stringIndex));
+						drawRoll(
+							svgEl,
+							notes[noteIndex].getAbsoluteX() - ROLL_X_OFFSET,
+							Math.min(...ys),
+							Math.max(...ys),
+							stroke,
+						);
+					});
+				});
+			}
 
 			// Off-shape fret numbers, after the theme pass so the colour sticks. A
 			// TabNote draws one <text> per position, in position order, before any

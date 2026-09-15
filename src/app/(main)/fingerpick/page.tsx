@@ -76,7 +76,7 @@ const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
 const OFF_SHAPE_KEY = "fingerpickOffShape";
 /** Width range of the shape strip over a chord symbol, in px. */
 const CHORD_SHAPE_WIDTH_MIN = 40;
-const CHORD_SHAPE_WIDTH_MAX = 100;
+const CHORD_SHAPE_WIDTH_MAX = 140;
 const CHORD_SHAPE_WIDTH_DEFAULT = 64;
 function clampShapeWidth(raw: number): number {
 	if (!Number.isFinite(raw)) return CHORD_SHAPE_WIDTH_DEFAULT;

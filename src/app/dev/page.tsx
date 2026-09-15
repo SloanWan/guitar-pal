@@ -46,6 +46,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "A/B audition of muted-note presets across guitar voicings.",
 	},
 	{
+		href: "/dev/chord-line",
+		label: "chord-line",
+		description: "Chord-line stress lab — dense chord changes, long names, shape sizes up to the max.",
+	},
+	{
 		href: "/dev/roll-lab",
 		label: "roll-lab",
 		description: "Fingerpick roll technique lab — stagger, gap, and anchor modes.",

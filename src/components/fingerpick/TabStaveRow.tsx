@@ -36,6 +36,13 @@ const CHORD_DIAGRAM_GAP = 15;
 const CHORD_SYMBOL_HEIGHT = 12;
 // Air kept above the strip so it never touches the row's top edge.
 const CHORD_DIAGRAM_TOP_PAD = 4;
+// Least air between two chord symbols on the line; a later symbol is pushed
+// right of the one before it rather than drawn over it.
+const CHORD_LABEL_GAP = 6;
+// Shapes that would overlap stack into lanes above one another instead of
+// being pushed off their notes — a shape has to sit where its chord starts.
+const CHORD_DIAGRAM_LANE_GAP = 4;
+const CHORD_DIAGRAM_MAX_LANES = 3;
 const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
 const MIN_MEASURE_WIDTH = 120;
@@ -85,6 +92,54 @@ interface ChordAnchor {
 	/** Top edge of the diagram, in the SVG's (= the wrapper's) pixel space. */
 	y: number;
 	label: ChordLabel & { measureIndex: number };
+}
+
+/** A chord symbol placed on the line, before overlap is resolved. */
+interface PlacedLabel {
+	label: ChordLabel;
+	measureIndex: number | undefined;
+	/** The note's x — where the symbol wants to be. */
+	noteX: number;
+	/** Where it ends up after being pushed clear of the one before. */
+	x: number;
+	width: number;
+	/** The shape's left edge — the note's x, unless the row's edge is nearer. */
+	diagramX: number;
+	/** Which stacking lane the shape (if any) goes in; 0 is the lowest. */
+	lane: number;
+}
+
+/**
+ * Resolve overlaps on one row's chord line. Symbols are pushed right just far
+ * enough to clear the previous one; shapes, which must stay over their notes,
+ * are assigned lanes greedily — the lowest lane whose last shape they clear.
+ * Returns the number of lanes used, so the caller can make room for them.
+ */
+function layoutChordLine(labels: PlacedLabel[], diagramWidth: number, rightLimit: number): number {
+	labels.sort((a, b) => a.noteX - b.noteX);
+	let prevRight = -Infinity;
+	const laneRight: number[] = [];
+	for (const item of labels) {
+		item.x = Math.max(item.noteX, prevRight + CHORD_LABEL_GAP);
+		prevRight = item.x + item.width;
+		if (diagramWidth > 0) {
+			// Shapes stay over their notes, pulled in only at the row's right edge.
+			item.diagramX = Math.min(item.noteX, rightLimit - diagramWidth);
+			let lane = laneRight.findIndex((right) => right + CHORD_DIAGRAM_LANE_GAP <= item.diagramX);
+			if (lane === -1) lane = Math.min(laneRight.length, CHORD_DIAGRAM_MAX_LANES - 1);
+			item.lane = lane;
+			laneRight[lane] = item.diagramX + diagramWidth;
+		}
+	}
+	// Nothing may run off the row's right edge: pull the tail back in, each
+	// symbol keeping its gap from the one after it.
+	let nextLeft = rightLimit;
+	for (let i = labels.length - 1; i >= 0; i--) {
+		const item = labels[i];
+		item.x = Math.min(item.x, nextLeft - item.width);
+		nextLeft = item.x - CHORD_LABEL_GAP;
+	}
+	return diagramWidth > 0 ? Math.max(1, laneRight.length) : 0;
 }
 
 // VexFlow's SVG backend emits colors as literal presentation attributes
@@ -185,7 +240,9 @@ export function computeMeasureMinWidth(
 		TECHNIQUE_CONNECTOR_PAD +
 		techniqueCount * HO_PO_EXTRA_WIDTH +
 		repeatBarlineCount * REPEAT_BARLINE_EXTRA_WIDTH +
-		chordLabelCount * Math.max(CHORD_LABEL_EXTRA_WIDTH, chordDiagramWidth + 8) +
+		// Shapes stack into lanes rather than spreading out, so a shape needs only
+		// enough room for a third of its width per change (three lanes).
+		chordLabelCount * Math.max(CHORD_LABEL_EXTRA_WIDTH, Math.ceil(chordDiagramWidth / 3) + 4) +
 		rollCount * ROLL_EXTRA_WIDTH +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);
@@ -262,7 +319,9 @@ export default function TabStaveRow({
 		let rafId: number | undefined;
 		let cancelled = false;
 
-		const renderToWidth = () => {
+		// `lanes` is how many shape lanes to leave room for; the first pass
+		// assumes one and re-renders if the chord line turns out to need more.
+		const renderToWidth = (lanes = 1) => {
 			if (cancelled) return;
 			div.innerHTML = "";
 
@@ -271,17 +330,19 @@ export default function TabStaveRow({
 				CLEF_WIDTH + measureWidths.reduce((a, b) => a + b, 0) + BARLINE_CLIP_MARGIN;
 
 			// Room above the stave's top line that VexFlow gives for free, against
-			// what the strip, its gap and the symbol need; the shortfall is headroom.
+			// what the strips, their gap and the symbol need; the shortfall is headroom.
 			const freeAbove =
 				new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y - CHORD_BASELINE_OFFSET;
+			const stackHeight = diagramHeight * lanes + CHORD_DIAGRAM_LANE_GAP * (lanes - 1);
 			const wanted =
-				diagramHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
+				stackHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
 			const headroom = showDiagrams ? Math.max(0, wanted - freeAbove) : 0;
 			const staveY = STAVE_Y + headroom;
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
 			renderer.resize(svgWidth, SVG_HEIGHT + headroom);
 			const ctx = renderer.getContext();
 			const nextAnchors: ChordAnchor[] = [];
+			const placed: PlacedLabel[] = [];
 			ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
 
 			// Draw staves, accumulating x from per-measure widths.
@@ -350,33 +411,24 @@ export default function TabStaveRow({
 				beams.forEach((b) => b.setContext(ctx).draw());
 				tuplets.forEach((t) => t.setContext(ctx).draw());
 
-				// Chord symbols sit on one fixed line above the stave, at the x of the
-				// note where the chord changes (known only now, after formatting).
+				// Chord symbols want the x of the note where the chord changes (known
+				// only now, after formatting); they are drawn once the whole row is
+				// placed, so neighbours can be kept clear of each other.
 				if (chordLabels.length > 0) {
-					const baseline = staves[i].getYForLine(0) - CHORD_BASELINE_OFFSET;
 					ctx.save();
 					ctx.setFont(CHORD_FONT);
-					ctx.openGroup("chord-label");
 					chordLabels.forEach((chordLabel) => {
-						const x = notes[chordLabel.noteIndex].getAbsoluteX();
-						ctx.fillText(chordLabel.label, x, baseline);
-						if (showDiagrams && startMeasureIndex !== undefined) {
-							const measureIndex = startMeasureIndex + i;
-							nextAnchors.push({
-								key: `${measureIndex}:${chordLabel.slotIndex}`,
-								x,
-								y: Math.max(
-									0,
-									baseline -
-										CHORD_SYMBOL_HEIGHT -
-										CHORD_DIAGRAM_GAP -
-										diagramHeight,
-								),
-								label: { ...chordLabel, measureIndex },
-							});
-						}
+						const noteX = notes[chordLabel.noteIndex].getAbsoluteX();
+						placed.push({
+							label: chordLabel,
+							measureIndex: startMeasureIndex === undefined ? undefined : startMeasureIndex + i,
+							noteX,
+							x: noteX,
+							width: ctx.measureText(chordLabel.label).width,
+							diagramX: noteX,
+							lane: 0,
+						});
 					});
-					ctx.closeGroup();
 					ctx.restore();
 				}
 
@@ -391,6 +443,42 @@ export default function TabStaveRow({
 					});
 				}
 			});
+
+			// The chord line, laid out row-wide. More lanes than this pass left room
+			// for means one more pass with the right headroom; the staves all share
+			// a y, so the baseline is the first one's.
+			const lanesUsed = layoutChordLine(
+				placed,
+				showDiagrams ? (chordDiagramSize?.width ?? 0) : 0,
+				svgWidth - BARLINE_CLIP_MARGIN,
+			);
+			if (lanesUsed > lanes && lanes < CHORD_DIAGRAM_MAX_LANES) {
+				renderToWidth(Math.min(lanesUsed, CHORD_DIAGRAM_MAX_LANES));
+				return;
+			}
+			if (placed.length > 0) {
+				const baseline = staves[0].getYForLine(0) - CHORD_BASELINE_OFFSET;
+				ctx.save();
+				ctx.setFont(CHORD_FONT);
+				ctx.openGroup("chord-label");
+				placed.forEach((item) => {
+					ctx.fillText(item.label.label, item.x, baseline);
+					if (showDiagrams && item.measureIndex !== undefined) {
+						const lift = (diagramHeight + CHORD_DIAGRAM_LANE_GAP) * item.lane;
+						nextAnchors.push({
+							key: `${item.measureIndex}:${item.label.slotIndex}`,
+							x: item.diagramX,
+							y: Math.max(
+								0,
+								baseline - CHORD_SYMBOL_HEIGHT - CHORD_DIAGRAM_GAP - diagramHeight - lift,
+							),
+							label: { ...item.label, measureIndex: item.measureIndex },
+						});
+					}
+				});
+				ctx.closeGroup();
+				ctx.restore();
+			}
 
 			const svgEl = div.querySelector("svg");
 			if (svgEl) applyStaveTheme(svgEl);
@@ -448,10 +536,10 @@ export default function TabStaveRow({
 		};
 
 		// Initial render; ResizeObserver re-renders on container size changes.
-		rafId = requestAnimationFrame(renderToWidth);
+		rafId = requestAnimationFrame(() => renderToWidth());
 		const observer = new ResizeObserver(() => {
 			if (rafId !== undefined) cancelAnimationFrame(rafId);
-			rafId = requestAnimationFrame(renderToWidth);
+			rafId = requestAnimationFrame(() => renderToWidth());
 		});
 		observer.observe(div);
 
@@ -468,6 +556,7 @@ export default function TabStaveRow({
 		measureWidths,
 		showDiagrams,
 		diagramHeight,
+		chordDiagramSize?.width,
 		offShapeStrings,
 	]);
 

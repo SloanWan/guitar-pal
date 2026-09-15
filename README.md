@@ -413,3 +413,68 @@ Click **Log Out** in the top navigation bar. Your data remains safely stored in 
 - **Build your routines intentionally.** A good routine moves from technical warmups (scales, chord changes) to creative work (songs, full patterns). Keep sessions realistic — even 20 focused minutes beats an hour of unfocused noodling.
 - **Rate every session honestly.** The star rating helps you spot patterns over time — if you always rate chord changes at 2 stars, that tells you where to focus.
 - **Use the notes field.** A short note after each session ("G chord still buzzing on string 3, try thumb position") is worth far more six weeks later than you might expect.
+
+---
+
+## Deployment (self-hosted)
+
+Production runs on a single Tencent Cloud HK VPS (Ubuntu, 2 GB) at `https://guitarpal.sloan.wan`: Nginx on the host terminates TLS and reverse-proxies to one Docker container running the Next.js standalone server. Database and auth stay on hosted Supabase — nothing stateful lives on the box, so it can be rebuilt from scratch with the steps below.
+
+### Files
+
+| File | Role |
+|---|---|
+| `Dockerfile` | `node:22-alpine`, three stages: `npm ci` → `next build` → copy `.next/standalone` + `.next/static` + `public` |
+| `docker-compose.yml` | One `web` service bound to `127.0.0.1:3000`; fills the two `NEXT_PUBLIC_SUPABASE_*` build args and loads runtime secrets from `.env` |
+| `scripts/server-setup.sh` | One-time bootstrap: swap, Docker, Nginx (rate-limited reverse proxy), Let's Encrypt via the certbot nginx plugin |
+| `.github/workflows/deploy.yml` | Push-to-deploy: after CI passes on `main`, SSH in, `git reset --hard origin/main`, `docker compose up --build -d` |
+
+### Environment variables
+
+`NEXT_PUBLIC_*` values are inlined into the client bundle at `next build`, so they are Docker **build args**; `ANTHROPIC_API_KEY` is server-only and injected at **runtime**. Both come from one file on the server, `~/guitar-pal/.env`, which is never committed:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` and `src/app/dev/layout.tsx` hide `/dev` unless it is `"1"`. `SUPABASE_SERVICE_ROLE_KEY` is only needed by one-off scripts and stays off the server.
+
+### First-time setup
+
+1. **DNS** — A record `guitarpal.sloan.wan` → the server's public IP. Wait until it resolves; certbot validates the domain over HTTP.
+2. **Security group** — allow inbound TCP 22, 80, 443.
+3. **Bootstrap** (as the `ubuntu` user):
+
+    ```bash
+    git clone https://github.com/SloanWan/guitar-pal.git ~/guitar-pal
+    cd ~/guitar-pal
+    nano .env                      # the three variables above
+    bash scripts/server-setup.sh   # idempotent; re-run if it stops midway
+    exit                           # re-login so the docker group applies
+    cd ~/guitar-pal && docker compose up --build -d
+    ```
+
+    The first build takes a few minutes on 2 GB — the script adds a swapfile for exactly that reason.
+
+4. **Supabase Auth** — Dashboard → Authentication → URL Configuration:
+    - Site URL: `https://guitarpal.sloan.wan`
+    - Redirect URLs: add `https://guitarpal.sloan.wan/**` (covers the password-reset return to `/auth/reset`).
+5. **Deploy key + GitHub secrets** — on the server:
+
+    ```bash
+    ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/github-deploy
+    cat ~/.ssh/github-deploy.pub >> ~/.ssh/authorized_keys
+    cat ~/.ssh/github-deploy      # → repository secret DEPLOY_SSH_KEY
+    ```
+
+    Repository secrets (Settings → Secrets and variables → Actions): `DEPLOY_HOST` (IP or hostname), `DEPLOY_USER` (`ubuntu`), `DEPLOY_SSH_KEY` (the private key above).
+
+### Day-to-day
+
+- **Deploy** — merge to `main`. CI runs; if it is green, the Deploy workflow rebuilds the container and smoke-tests the site. It can also be re-run by hand from the Actions tab.
+- **Logs** — `docker compose logs -f web`
+- **Roll back** — `git checkout <sha> && docker compose up --build -d`; the next push to `main` moves it forward again.
+- **Certificate** — renews automatically through `certbot.timer`; `sudo certbot renew --dry-run` checks the setup.
+- **Change a `NEXT_PUBLIC_*` value** — edit `.env`, then `docker compose up --build -d` (the value is baked at build time, a restart is not enough).

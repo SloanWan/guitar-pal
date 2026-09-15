@@ -254,6 +254,61 @@ describe("Fretboard — press", () => {
 		}
 	});
 
+	it("tags each hand position, reporting hover and selection", () => {
+		const onPositionHover = vi.fn();
+		const onPositionSelect = vi.fn();
+		const board = mount({
+			positions: [
+				{ fromFret: 0, toFret: 4, label: "1" },
+				{ fromFret: 5, toFret: 9, label: "2" },
+			],
+			onPositionHover,
+			onPositionSelect,
+		});
+		const tags = [...board.host.querySelectorAll(".fb-tag")];
+		expect(tags).toHaveLength(2);
+		expect(tags.map((t) => t.textContent)).toEqual(["1", "2"]);
+		expect(tags[1].getAttribute("aria-label")).toBe("Play position 2");
+		// The tag sits over its box's left edge.
+		expect(Number(tags[1].querySelector("rect")!.getAttribute("x"))).toBe(5 * FRET_W + 1);
+
+		pointer(tags[1], "pointerover");
+		expect(onPositionHover).toHaveBeenLastCalledWith(1);
+		pointer(tags[1], "pointerout", { relatedTarget: null });
+		expect(onPositionHover).toHaveBeenLastCalledWith(null);
+		act(() => (tags[0] as SVGGElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onPositionSelect).toHaveBeenCalledWith(0);
+
+		// The neck keeps its own height when nothing is tagged.
+		expect(board.host.querySelector(".fb-tags")).not.toBeNull();
+		expect(mount().host.querySelector(".fb-tags")).toBeNull();
+		board.unmount();
+	});
+
+	it("offers a play glyph per string, and picks a position on a right press", () => {
+		const onStringPlay = vi.fn();
+		const onPositionPick = vi.fn();
+		const board = mount({ onStringPlay, onPositionPick });
+		const glyphs = [...board.host.querySelectorAll(".fb-string-play")];
+		expect(glyphs).toHaveLength(6);
+		expect(glyphs[0].getAttribute("aria-label")).toBe("Play the E string");
+		expect(glyphs[5].getAttribute("aria-label")).toBe("Play the e string");
+		act(() => glyphs[2].dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onStringPlay).toHaveBeenCalledWith(2);
+
+		pointer(board.hit(3, 7), "pointerdown", { button: 2, clientX: 0, clientY: 0 });
+		expect(onPositionPick).toHaveBeenCalledWith(7);
+		// A right press is not a note: lifting sounds nothing.
+		const onSlotPress = vi.fn();
+		const pressable = mount({ onSlotPress, onPositionPick });
+		pointer(pressable.hit(3, 7), "pointerdown", { button: 2, clientX: 0, clientY: 0 });
+		pointer(pressable.hit(3, 7), "pointerup", { button: 2, clientX: 0, clientY: 0 });
+		expect(onSlotPress).not.toHaveBeenCalled();
+		board.unmount();
+		pressable.unmount();
+		expect(mount().host.querySelector(".fb-string-play")).toBeNull();
+	});
+
 	it("draws a capo, dims the frets behind it, and reports the capo's pitch for a press behind it", () => {
 		const onSlotPress = vi.fn();
 		const board = mount({ onSlotPress, capo: 2 });

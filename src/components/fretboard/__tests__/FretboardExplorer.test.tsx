@@ -14,6 +14,8 @@ const sound = vi.hoisted(() => ({
 	play: vi.fn(async () => {}),
 	playChord: vi.fn(async () => {}),
 	setVolume: vi.fn(),
+	prepare: vi.fn(async () => ({ ctx: {}, target: () => ({}) })),
+	bus: vi.fn(() => ({ ctx: {}, target: () => ({}) })),
 }));
 vi.mock("@/components/fretboard/useNoteSound", () => ({
 	useNoteSound: () => ({
@@ -22,7 +24,14 @@ vi.mock("@/components/fretboard/useNoteSound", () => ({
 		isLoading: false,
 		volumes: { guitar: 0.8, piano: 0.5 },
 		setVolume: sound.setVolume,
+		prepare: sound.prepare,
+		bus: sound.bus,
 	}),
+}));
+const runner = vi.hoisted(() => ({ play: vi.fn(), stop: vi.fn() }));
+vi.mock("@/components/fretboard/useScalePlayer", async (original) => ({
+	...(await original<typeof import("@/components/fretboard/useScalePlayer")>()),
+	useScalePlayer: () => ({ isPlaying: false, currentIndex: -1, play: runner.play, stop: runner.stop }),
 }));
 vi.mock("@/components/strum/ChordPickerModal", () => ({ default: () => null }));
 
@@ -85,8 +94,14 @@ function mount(props: React.ComponentProps<typeof FretboardExplorer>) {
 }
 
 beforeEach(() => {
+	// The SOUND rocker and the faders persist; without this a test that turns
+	// sound off leaves the next one muted.
+	localStorage.clear();
 	sound.play.mockClear();
 	sound.playChord.mockClear();
+	sound.prepare.mockClear();
+	runner.play.mockClear();
+	runner.stop.mockClear();
 });
 
 describe("FretboardExplorer — Chords mode", () => {
@@ -210,6 +225,106 @@ describe("FretboardExplorer — Chords mode", () => {
 		expect(ex.readout()).toBeNull();
 		expect(ex.key(64).textContent).toBe(""); // no numerals
 		expect(ex.lit().length).toBeGreaterThan(20); // the whole scale
+		ex.unmount();
+	});
+});
+
+describe("FretboardExplorer — playing the scale", () => {
+	const press = (ex: ReturnType<typeof mount>, label: string) =>
+		act(() => (ex.host.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement).click());
+
+	it("offers the whole neck, every position and every string", async () => {
+		const ex = mount({ initialRoot: "A", initialScale: "minorPentatonic" });
+		await ex.settle();
+		const options = [...ex.host.querySelectorAll('select[aria-label="What to play"] option')].map(
+			(o) => o.getAttribute("value"),
+		);
+		expect(options[0]).toBe("neck");
+		// Five boxes for a pentatonic, then the six strings.
+		expect(options.filter((v) => v?.startsWith("box:"))).toHaveLength(5);
+		expect(options.filter((v) => v?.startsWith("string:"))).toHaveLength(6);
+		ex.unmount();
+	});
+
+	it("plays the chosen run at the chosen tempo, on the chosen instrument", async () => {
+		const ex = mount({ initialRoot: "A", initialScale: "minorPentatonic" });
+		await ex.settle();
+		act(() => ex.setSelect("What to play", "box:2")); // frets 5–9
+		await ex.settle();
+		// The box is outlined on the neck so the hand knows where to sit.
+		const frame = ex.host.querySelector(".fb-position") as SVGRectElement;
+		expect(frame).not.toBeNull();
+		expect(frame.getAttribute("x")).toBe(String(5 * 44));
+
+		act(() => ex.clickRadio("Note length", "1/4"));
+		act(() => ex.clickRadio("Heard on", "Both"));
+		press(ex, "Play the scale");
+		await ex.settle();
+		expect(sound.prepare.mock.calls.map((c) => c[0]).sort()).toEqual(["guitar", "piano"]);
+		const [notes, spacing, voice] = runner.play.mock.calls[0];
+		expect(voice).toBe("both");
+		expect(spacing).toBeCloseTo(60 / 90); // quarters at the default 90 BPM
+		expect(notes[0]).toEqual({ string: 0, fret: 5, midi: 45 }); // the box's lowest A
+		expect(notes.every((n: { fret: number }) => n.fret >= 5 && n.fret <= 9)).toBe(true);
+		ex.unmount();
+	});
+
+	it("plays a position from its tag, and previews the box on hover", async () => {
+		const ex = mount({ initialRoot: "A", initialScale: "minorPentatonic" });
+		await ex.settle();
+		const tags = [...ex.host.querySelectorAll<SVGGElement>(".fb-tag")];
+		expect(tags.map((t) => t.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+
+		// Hovering raises a box without committing to it.
+		act(() => tags[2].dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerId: 1 })));
+		await ex.settle();
+		expect(ex.host.querySelector(".fb-position")!.getAttribute("x")).toBe(String(5 * 44));
+		expect(ex.host.querySelector<HTMLSelectElement>('select[aria-label="What to play"]')!.value).toBe("neck");
+
+		act(() => tags[2].dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await ex.settle();
+		expect(ex.host.querySelector<HTMLSelectElement>('select[aria-label="What to play"]')!.value).toBe("box:2");
+		expect(runner.play.mock.calls[0][0][0]).toEqual({ string: 0, fret: 5, midi: 45 });
+		ex.unmount();
+	});
+
+	it("plays one string from its glyph, and a hand-picked box from a right press", async () => {
+		const ex = mount({ initialRoot: "A", initialScale: "minorPentatonic" });
+		await ex.settle();
+		act(() =>
+			ex.host
+				.querySelector('[aria-label="Play the D string"]')!
+				.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+		);
+		await ex.settle();
+		expect(runner.play.mock.calls[0][0].every((n: { string: number }) => n.string === 2)).toBe(true);
+
+		runner.play.mockClear();
+		const hit = ex.host.querySelector('[data-slot="0:9"] .fb-hit')!;
+		act(() =>
+			hit.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, button: 2, clientX: 0, clientY: 0 })),
+		);
+		await ex.settle();
+		// A box five frets wide starting where the press landed, listed as its own choice.
+		expect(ex.host.querySelector<HTMLSelectElement>('select[aria-label="What to play"]')!.value).toBe("pick:9");
+		expect(ex.host.querySelector(".fb-position")!.getAttribute("x")).toBe(String(9 * 44));
+		expect(runner.play.mock.calls[0][0].every((n: { fret: number }) => n.fret >= 9 && n.fret <= 13)).toBe(true);
+		ex.unmount();
+	});
+
+	it("cannot play with the sound off, and has no run controls in Chords mode", async () => {
+		const ex = mount({ initialRoot: "A", initialScale: "minorPentatonic" });
+		await ex.settle();
+		act(() => (ex.host.querySelector('[role="switch"][aria-label="Sound"]') as HTMLButtonElement).click());
+		await ex.settle();
+		expect((ex.host.querySelector('[aria-label="Play the scale"]') as HTMLButtonElement).disabled).toBe(true);
+
+		act(() => ex.clickRadio("Mode", "Chords"));
+		await ex.settle();
+		expect(ex.host.querySelector('[aria-label="Play the scale"]')).toBeNull();
+		expect(ex.host.querySelector(".fb-position")).toBeNull();
+		expect(ex.host.querySelector(".fb-tag")).toBeNull();
+		expect(ex.host.querySelector(".fb-string-play")).toBeNull();
 		ex.unmount();
 	});
 });

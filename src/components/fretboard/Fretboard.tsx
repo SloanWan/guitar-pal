@@ -76,8 +76,16 @@ const EDGE = 1;
 const VISIBLE_FRETS = 16;
 /** Smallest scale a narrow container may reach; below it the neck scrolls. */
 const MIN_SCALE = 1.25;
+/** Height of the position-tag strip above the neck, when there are tags. */
+const TAG_H = 14;
+const TAG_W = 15;
+/** Extra label-column width for the per-string play glyphs. */
+const PLAY_COL_W = 12;
+
 /** Design width that `VISIBLE_FRETS` occupies, labels included. */
-const DESIGN_W = LABEL_W + VISIBLE_FRETS * FRET_W + EDGE * 2;
+function designWidth(labelW: number): number {
+	return labelW + VISIBLE_FRETS * FRET_W + EDGE * 2;
+}
 
 // ── Press feedback ──────────────────────────────────────────────────────────
 /** A lit slot pulses: 1 → 1.35 → 1 on the shared spring. */
@@ -107,8 +115,8 @@ const STRIKE_STAGGER_MS = 10;
  * the floor. `100cqw` is the width of the nearest query container, the outer
  * wrapper, so `100cqw / DESIGN_W` is the scale factor.
  */
-function scaled(units: number): string {
-	return `max(calc(100cqw * ${(units / DESIGN_W).toFixed(5)}), ${(units * MIN_SCALE).toFixed(2)}px)`;
+function scaled(units: number, designW: number): string {
+	return `max(calc(100cqw * ${(units / designW).toFixed(5)}), ${(units * MIN_SCALE).toFixed(2)}px)`;
 }
 
 const SINGLE_INLAYS: readonly number[] = [3, 5, 7, 9, 15, 17, 19, 21];
@@ -180,6 +188,26 @@ export interface FretboardComponentProps extends FretboardProps {
 	onCapoChange?: (fret: number) => void;
 	/** Highest fret the capo may be dragged to; the neck's last fret by default. */
 	maxCapo?: number;
+	/**
+	 * A span of frets to outline — the hand position a run is being played in.
+	 * Drawn as a dashed frame over the neck, behind the marks.
+	 */
+	highlight?: { fromFret: number; toFret: number } | null;
+	/**
+	 * Hand positions to tag along the top of the neck. Hovering a tag reports
+	 * the index so the caller can raise that box; pressing one selects it.
+	 */
+	positions?: readonly { fromFret: number; toFret: number; label: string }[];
+	onPositionHover?: (index: number | null) => void;
+	onPositionSelect?: (index: number) => void;
+	/** Adds a play glyph beside each string name, for running the scale along it. */
+	onStringPlay?: (string: number) => void;
+	/**
+	 * Right-pressing a slot picks a hand position starting at that fret — the
+	 * width is fixed, so only the left edge is chosen and no drag is needed.
+	 * The context menu is suppressed on the neck while this is set.
+	 */
+	onPositionPick?: (fromFret: number) => void;
 	/** Accessible name for the board; defaults to a plain description. */
 	label?: string;
 	/**
@@ -218,6 +246,12 @@ export default function Fretboard({
 	capo = 0,
 	onCapoChange,
 	maxCapo,
+	highlight = null,
+	positions,
+	onPositionHover,
+	onPositionSelect,
+	onStringPlay,
+	onPositionPick,
 	label = "Guitar fretboard",
 	onSlotPress,
 	onSlotHover,
@@ -387,6 +421,15 @@ export default function Fretboard({
 
 	const handlePointerDown = useCallback(
 		(e: ReactPointerEvent<SVGSVGElement>) => {
+			// Right-press picks a hand position rather than sounding a note.
+			if (e.button === 2) {
+				const picked = slotFromTarget(e.target);
+				if (picked && onPositionPick) {
+					e.preventDefault();
+					onPositionPick(picked.fret);
+				}
+				return;
+			}
 			if (!canPress) return;
 			const slot = slotFromTarget(e.target);
 			if (!slot) return;
@@ -398,7 +441,7 @@ export default function Fretboard({
 				key: slotKey(slot.string, slot.fret),
 			};
 		},
-		[canPress],
+		[canPress, onPositionPick],
 	);
 
 	const handlePointerUp = useCallback(
@@ -490,6 +533,15 @@ export default function Fretboard({
 	const frets = Array.from({ length: cells }, (_, i) => fromFret + i);
 	const strings = Array.from({ length: STRING_COUNT }, (_, string) => string);
 
+	// The tag strip and the play glyphs each claim space; the board's scale
+	// follows, so a neck with neither is laid out exactly as it always was.
+	const tags = positions ?? [];
+	const tagsH = tags.length > 0 ? TAG_H : 0;
+	const labelW = onStringPlay ? LABEL_W + PLAY_COL_W : LABEL_W;
+	const designW = designWidth(labelW);
+	const boardH = H + tagsH;
+	const size = (units: number) => scaled(units, designW);
+
 	return (
 		<div
 			className={className}
@@ -500,25 +552,56 @@ export default function Fretboard({
 			<div className="flex">
 				{/* String names: a fixed column, outside the scroller. */}
 				<svg
-					viewBox={`0 0 ${LABEL_W} ${H}`}
-					width={LABEL_W}
-					height={H}
+					viewBox={`0 0 ${labelW} ${boardH}`}
+					width={labelW}
+					height={boardH}
 					className="shrink-0"
-					style={{ width: scaled(LABEL_W), height: scaled(H) }}
-					aria-hidden="true"
+					style={{ width: size(labelW), height: size(boardH) }}
+					aria-hidden={onStringPlay ? undefined : "true"}
 				>
-					{strings.map((string) => (
-						<text
-							key={string}
-							x={LABEL_W - 8}
-							y={stringY(string) + 3}
-							textAnchor="end"
-							fontSize={9}
-							className="fill-ink-faint font-mono"
-						>
-							{STRING_LABELS[string]}
-						</text>
-					))}
+					<g style={{ transform: `translateY(${tagsH}px)` }}>
+						{strings.map((string) => (
+							<text
+								key={string}
+								x={LABEL_W - 8}
+								y={stringY(string) + 3}
+								textAnchor="end"
+								fontSize={9}
+								className="fill-ink-faint font-mono"
+							>
+								{STRING_LABELS[string]}
+							</text>
+						))}
+						{/* A glyph per string: run the scale along this one. */}
+						{onStringPlay &&
+							strings.map((string) => (
+								<g
+									key={`play-${string}`}
+									className="fb-string-play"
+									role="button"
+									tabIndex={0}
+									aria-label={`Play the ${STRING_LABELS[string]} string`}
+									onClick={() => onStringPlay(string)}
+									onKeyDown={(e) => {
+										if (e.key !== "Enter" && e.key !== " ") return;
+										e.preventDefault();
+										onStringPlay(string);
+									}}
+								>
+									<rect
+										x={LABEL_W}
+										y={stringY(string) - STRING_GAP / 2}
+										width={PLAY_COL_W}
+										height={STRING_GAP}
+										fill="transparent"
+									/>
+									<path
+										fill="none"
+										d={`M${LABEL_W + 3} ${stringY(string) - 3.5}L${LABEL_W + 8} ${stringY(string)}L${LABEL_W + 3} ${stringY(string) + 3.5}Z`}
+									/>
+								</g>
+							))}
+					</g>
 				</svg>
 
 				<div
@@ -526,11 +609,12 @@ export default function Fretboard({
 				>
 					<svg
 						ref={neck}
-						viewBox={`0 0 ${neckW} ${H}`}
+						viewBox={`0 0 ${neckW} ${boardH}`}
 						width={neckW}
-						height={H}
+						height={boardH}
 						className="block max-w-none"
-						style={{ width: scaled(neckW), height: scaled(H) }}
+						style={{ width: size(neckW), height: size(boardH) }}
+						onContextMenu={onPositionPick ? (e) => e.preventDefault() : undefined}
 						data-from-fret={fromFret}
 						data-to-fret={toFret}
 						data-pressable={canPress || undefined}
@@ -544,7 +628,7 @@ export default function Fretboard({
 					>
 						<g
 							className="fb-neck"
-							style={{ transform: `translateX(${EDGE - fromFret * FRET_W}px)` }}
+							style={{ transform: `translate(${EDGE - fromFret * FRET_W}px, ${tagsH}px)` }}
 						>
 							{/* Inlays: squares, so they are not mistaken for marks. */}
 							{frets.map((fret) => {
@@ -626,6 +710,20 @@ export default function Fretboard({
 									strokeWidth={STRING_STROKE[string]}
 								/>
 							))}
+
+							{/* The hand position a run plays in. */}
+							{highlight && (
+								<rect
+									className="fb-position"
+									// An SVG rect fills black by default; say so here rather than
+									// trusting a stylesheet to arrive first.
+									fill="none"
+									x={highlight.fromFret * FRET_W}
+									y={stringY(STRING_COUNT - 1) - 9}
+									width={(highlight.toFret - highlight.fromFret + 1) * FRET_W}
+									height={stringY(0) - stringY(STRING_COUNT - 1) + 18}
+								/>
+							)}
 
 							{/* Fret numbers under each cell. */}
 							{frets.map((fret) => (
@@ -750,6 +848,57 @@ export default function Fretboard({
 								</g>
 							)}
 						</g>
+
+						{/* Hand positions, tagged along the top edge. */}
+						{tags.length > 0 && (
+							<g
+								className="fb-tags"
+								style={{ transform: `translateX(${EDGE - fromFret * FRET_W}px)` }}
+								onPointerOut={(e) => {
+									const next = e.relatedTarget instanceof Element ? e.relatedTarget.closest(".fb-tag") : null;
+									if (!next) onPositionHover?.(null);
+								}}
+							>
+								{tags.map((position, index) => (
+									<g
+										key={`${position.fromFret}-${position.label}`}
+										className="fb-tag"
+										data-position={index}
+										role={onPositionSelect ? "button" : undefined}
+										tabIndex={onPositionSelect ? 0 : undefined}
+										aria-label={onPositionSelect ? `Play position ${position.label}` : undefined}
+										onPointerOver={() => onPositionHover?.(index)}
+										onClick={() => onPositionSelect?.(index)}
+										onKeyDown={(e) => {
+											if (e.key !== "Enter" && e.key !== " ") return;
+											e.preventDefault();
+											onPositionSelect?.(index);
+										}}
+									>
+										{/* Presentation attributes as a floor: a bare rect fills black,
+										    and a stylesheet that has not arrived should leave a gap, not
+										    a blot. The class below overrides both once it loads. */}
+										<rect
+											x={position.fromFret * FRET_W + 1}
+											y={1}
+											width={TAG_W}
+											height={TAG_H - 3}
+											fill="none"
+										/>
+										<text
+											x={position.fromFret * FRET_W + 1 + TAG_W / 2}
+											y={TAG_H - 5}
+											textAnchor="middle"
+											fontSize={8}
+											fill="none"
+											className="font-mono"
+										>
+											{position.label}
+										</text>
+									</g>
+								))}
+							</g>
+						)}
 					</svg>
 				</div>
 			</div>

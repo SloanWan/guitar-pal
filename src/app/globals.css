@@ -589,6 +589,61 @@
 .fb-mark[data-emphasis="muted"] .fb-label {
 	opacity: 0;
 }
+/* Hand positions, tagged along the top edge of the neck. Small and quiet
+   until the pointer finds one, since there are five or seven of them. */
+.fb-tag rect {
+	fill: var(--bg-raise);
+	stroke: var(--line-strong);
+	stroke-width: 0.75;
+}
+.fb-tag text {
+	fill: var(--ink-dim);
+}
+.fb-tag[role="button"] {
+	cursor: pointer;
+}
+.fb-tag:hover rect,
+.fb-tag:focus-visible rect {
+	fill: var(--denim);
+	stroke: var(--denim);
+}
+.fb-tag:hover text,
+.fb-tag:focus-visible text {
+	fill: var(--btn-on-denim);
+}
+.fb-tag:focus-visible {
+	outline: none;
+}
+
+/* Run the scale along one string. */
+.fb-string-play {
+	cursor: pointer;
+}
+.fb-string-play path {
+	fill: var(--ink-faint);
+	transition: fill var(--dur-hover);
+}
+.fb-string-play:hover path,
+.fb-string-play:focus-visible path {
+	fill: var(--denim-accent);
+}
+.fb-string-play:focus-visible {
+	outline: none;
+}
+.fb-string-play:focus-visible rect {
+	fill: var(--denim-tint);
+}
+
+/* The hand position a run is played in: a frame, not a fill, so the marks
+   inside it keep their own colours. */
+.fb-position {
+	fill: none;
+	stroke: var(--denim-accent);
+	stroke-width: 1.25;
+	stroke-dasharray: 4 3;
+	pointer-events: none;
+}
+
 /* A capo: the frets behind it sink into shade, the bar clamps the strings. */
 .fb-capo-shade {
 	fill: var(--bg);

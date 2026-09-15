@@ -48,6 +48,22 @@ export interface NoteSound {
 	volumes: Readonly<Record<NoteVoice, number>>;
 	/** Set one voice's level. Ramped, so a slider drag does not click. */
 	setVolume: (voice: NoteVoice, level: number) => void;
+	/**
+	 * Make a voice ready and hand back what a scheduler needs: the context and
+	 * the node to play into. Unlike `play`, this waits for a download already
+	 * in flight rather than dropping the request, because a run is deliberate.
+	 * Null when the board went away mid-download.
+	 */
+	prepare: (voice: NoteVoice) => Promise<AudioBus | null>;
+	/** The bus as it stands, without preparing anything; null before the first press. */
+	bus: () => AudioBus | null;
+}
+
+/** What a scheduler needs to place notes itself. */
+export interface AudioBus {
+	ctx: AudioContext;
+	/** The gain node a voice plays into, so its fader applies. */
+	target: (voice: NoteVoice) => AudioNode;
 }
 
 /** Device-local memory of the two levels. */
@@ -164,34 +180,66 @@ export function useNoteSound(): NoteSound {
 		}
 	}, []);
 
-	const playChord = useCallback(async (midis: readonly number[], voice: NoteVoice = "guitar") => {
+	/**
+	 * The context, with this voice's samples ready. Null when the caller should
+	 * give up: the board unmounted, or (unless `wait`) a download is already
+	 * running and this press would only queue up behind it.
+	 */
+	const ensureVoice = useCallback(async (voice: NoteVoice, wait = false): Promise<AudioContext | null> => {
 		if (!ctxRef.current) ctxRef.current = new AudioContext();
 		const ctx = ctxRef.current;
 		if (!ready.current.has(voice)) {
-			if (preloads.current.has(voice)) return;
-			const preload = VOICES[voice].preload(ctx);
-			preloads.current.set(voice, preload);
-			setLoadingCount((n) => n + 1);
-			try {
-				await preload;
-				ready.current.add(voice);
-			} catch (err) {
-				// A failed download (offline, CDN down) is forgotten so the next
-				// press tries again instead of staying silent for the session.
-				preloads.current.delete(voice);
-				throw err;
-			} finally {
-				// Skip the state write if the board went away mid-download.
-				if (ctxRef.current === ctx) setLoadingCount((n) => n - 1);
+			const running = preloads.current.get(voice);
+			if (running) {
+				if (!wait) return null;
+				await running;
+			} else {
+				const preload = VOICES[voice].preload(ctx);
+				preloads.current.set(voice, preload);
+				setLoadingCount((n) => n + 1);
+				try {
+					await preload;
+					ready.current.add(voice);
+				} catch (err) {
+					// A failed download (offline, CDN down) is forgotten so the next
+					// press tries again instead of staying silent for the session.
+					preloads.current.delete(voice);
+					throw err;
+				} finally {
+					// Skip the state write if the board went away mid-download.
+					if (ctxRef.current === ctx) setLoadingCount((n) => n - 1);
+				}
 			}
 		}
 		// The board may have unmounted while the samples were downloading.
-		if (ctxRef.current !== ctx) return;
+		if (ctxRef.current !== ctx) return null;
 		if (ctx.state === "suspended") await ctx.resume();
-		VOICES[voice].trigger(midis, ctx, gainFor(voice, ctx));
+		return ctx;
+	}, []);
+
+	const bus = useCallback((): AudioBus | null => {
+		const ctx = ctxRef.current;
+		return ctx ? { ctx, target: (voice) => gainFor(voice, ctx) } : null;
 	}, [gainFor]);
+
+	const prepare = useCallback(
+		async (voice: NoteVoice): Promise<AudioBus | null> => {
+			const ctx = await ensureVoice(voice, true);
+			return ctx ? { ctx, target: (v) => gainFor(v, ctx) } : null;
+		},
+		[ensureVoice, gainFor],
+	);
+
+	const playChord = useCallback(
+		async (midis: readonly number[], voice: NoteVoice = "guitar") => {
+			const ctx = await ensureVoice(voice);
+			if (!ctx) return;
+			VOICES[voice].trigger(midis, ctx, gainFor(voice, ctx));
+		},
+		[ensureVoice, gainFor],
+	);
 
 	const play = useCallback((midi: number, voice: NoteVoice = "guitar") => playChord([midi], voice), [playChord]);
 
-	return { play, playChord, isLoading: loadingCount > 0, volumes, setVolume };
+	return { play, playChord, isLoading: loadingCount > 0, volumes, setVolume, prepare, bus };
 }

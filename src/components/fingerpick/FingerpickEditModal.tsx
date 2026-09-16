@@ -48,9 +48,6 @@ import {
 	setTied,
 	setStroke,
 	moveCell,
-	hasPreviousNoteOnString,
-	availableTechniques,
-	type TechniqueAvailability,
 	setSlotsRest,
 	insertSlots,
 	duplicateSlots,
@@ -119,6 +116,7 @@ import { useEditHistory } from "./useEditHistory";
 import FingerpickEditorMetaFields, { MAX_BPM, MIN_BPM } from "./FingerpickEditorMetaFields";
 import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
 import FingerpickEditorTouchInput from "./FingerpickEditorTouchInput";
+import FingerpickEditorTechniqueMenu from "./FingerpickEditorTechniqueMenu";
 import {
 	DURATION_ABBREV,
 	DurationIcon,
@@ -156,18 +154,6 @@ const STROKE_PICKER: { label: string; value: "none" | Stroke; title: string }[] 
 	{ label: "Roll", value: "roll-up", title: "Roll up — a slow arpeggio, high to low strings" },
 	{ label: "Brush", value: "brush-down", title: "Brush down — a fast strum, low to high strings" },
 	{ label: "Brush", value: "brush-up", title: "Brush up — a fast strum, high to low strings" },
-];
-
-// Only the direction-bearing techniques are offered in the context menu; each
-// value must be a key of TechniqueAvailability so per-option enablement type-checks.
-const TECHNIQUE_OPTIONS: {
-	label: string;
-	value: Exclude<keyof TechniqueAvailability, "tied">;
-}[] = [
-	{ label: "Hammer-on (H)", value: "hammer-on" },
-	{ label: "Pull-off (P)", value: "pull-off" },
-	{ label: "Slide up (↑)", value: "slide-up" },
-	{ label: "Slide down (↓)", value: "slide-down" },
 ];
 
 const TECHNIQUE_GLYPH: Partial<Record<NonNullable<StringFret["technique"]>, string>> = {
@@ -346,7 +332,6 @@ export default function FingerpickEditModal({
 			),
 		[chordsInEffect, voicingsFor],
 	);
-	const techMenuRef = useRef<HTMLDivElement>(null);
 	// The shape editor: opened from a chord search that found nothing (`query`
 	// seeds the name or the frets), or from the voicing stepper to write another
 	// shape for a chord the slot already has (`chord`, starting from `from`).
@@ -427,7 +412,7 @@ export default function FingerpickEditModal({
 		if (selectedColumns.size === 0 && !techMenu) return;
 		function handlePointerDown(e: PointerEvent) {
 			const target = e.target as HTMLElement;
-			if (techMenu && !techMenuRef.current?.contains(target)) {
+			if (techMenu && !target.closest("[data-technique-menu]")) {
 				setTechMenu(null);
 			}
 			if (
@@ -1088,28 +1073,6 @@ export default function FingerpickEditModal({
 		observer.observe(section);
 		return () => observer.disconnect();
 	}, [firstSelectedColumnKey, selectedColumns]);
-
-	// When the technique menu opens near the grid's edge (e.g. right-clicking the
-	// last cell in a row), it's clipped by the scroll area. Nudge the scroll area
-	// just enough to bring the whole menu into view — so the user never has to
-	// scroll manually to reach its options. Runs after layout so the menu has its
-	// real size. techMenu.x/y are the deps: a fresh open re-measures.
-	useIsomorphicLayoutEffect(() => {
-		if (!techMenu) return;
-		const menu = techMenuRef.current;
-		const scroller = scrollRef.current;
-		if (!menu || !scroller) return;
-		const PAD = 8;
-		const menuRect = menu.getBoundingClientRect();
-		const viewRect = scroller.getBoundingClientRect();
-		let dx = 0;
-		let dy = 0;
-		if (menuRect.right > viewRect.right - PAD) dx = menuRect.right - (viewRect.right - PAD);
-		else if (menuRect.left < viewRect.left + PAD) dx = menuRect.left - (viewRect.left + PAD);
-		if (menuRect.bottom > viewRect.bottom - PAD) dy = menuRect.bottom - (viewRect.bottom - PAD);
-		else if (menuRect.top < viewRect.top + PAD) dy = menuRect.top - (viewRect.top + PAD);
-		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
-	}, [techMenu]);
 
 	// Split/merge/whole controls act on a single slot. When exactly one column is
 	// selected, enumerate that slot's split and merge targets from live state.
@@ -2673,68 +2636,16 @@ export default function FingerpickEditModal({
 
 					{/* ── Technique context menu (absolute within the content box) ───── */}
 					{techMenu && (
-						<div
-							ref={techMenuRef}
-							className="absolute z-60 w-44 border border-line-strong bg-popover py-1 text-sm"
-							style={{ top: techMenu.y, left: techMenu.x }}
-						>
-							{(() => {
-								const hasPrev = hasPreviousNoteOnString(working, techMenu.cell);
-								const avail = availableTechniques(working, techMenu.cell);
-								// When a previous note exists but a marker is still off, it's
-								// the fret movement that rules it out (not a missing note).
-								const disabledTitle = (ok: boolean) =>
-									ok
-										? undefined
-										: hasPrev
-											? "Not valid for this fret movement"
-											: "No previous note on this string";
-								return (
-									<>
-										{TECHNIQUE_OPTIONS.map((opt) => (
-											<button
-												key={opt.value}
-												disabled={!avail[opt.value]}
-												onClick={() => applyTechnique(opt.value)}
-												title={disabledTitle(avail[opt.value])}
-												className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-											>
-												{opt.label}
-											</button>
-										))}
-										<button
-											disabled={!avail.tied}
-											onClick={applyTied}
-											title={disabledTitle(avail.tied)}
-											className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-										>
-											Tied (⌒)
-										</button>
-									</>
-								);
-							})()}
-							<div className="border-t border-line my-1" />
-							{(() => {
-								// Clear only makes sense when the target note actually carries
-								// a marker (technique or tie) to remove.
-								const sf =
-									working.measures[techMenu.cell.measureIndex]?.slots[
-										techMenu.cell.slotIndex
-									]?.strings[techMenu.cell.stringIndex];
-								const hasMarker = !!sf && (sf.technique !== null || sf.tied);
-								return (
-									<button
-										disabled={!hasMarker}
-										onClick={applyClearTechnique}
-										title={hasMarker ? undefined : "No technique to clear"}
-										className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-ink-dim hover:bg-destructive/10 hover:text-destructive disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-									>
-										Clear technique
-										<Trash2 size={13} className="shrink-0" />
-									</button>
-								);
-							})()}
-						</div>
+						<FingerpickEditorTechniqueMenu
+							working={working}
+							cell={techMenu.cell}
+							x={techMenu.x}
+							y={techMenu.y}
+							scrollRef={scrollRef}
+							onTechnique={applyTechnique}
+							onTied={applyTied}
+							onClear={applyClearTechnique}
+						/>
 					)}
 
 					{/* ── Column popup (absolute within the scroll region) ───────────── */}

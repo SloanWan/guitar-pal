@@ -118,6 +118,7 @@ import type { UserChordVoicing } from "@/lib/userChordVoicings";
 import { parseTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
 import { chordShapeToVoicing } from "@/lib/chordShape";
 import { useChordVoicings } from "./useChordVoicings";
+import { useEditHistory } from "./useEditHistory";
 import {
 	DURATION_ABBREV,
 	DurationIcon,
@@ -188,9 +189,6 @@ const MAX_BPM = 220;
 
 const TWO_DIGIT_WINDOW_MS = 800;
 const LONG_PRESS_MS = 500;
-// Maximum number of pattern snapshots retained for undo/redo. Older snapshots
-// are dropped from the front once this is exceeded.
-const HISTORY_LIMIT = 50;
 // Upper bound for the repeat play-count stepper (kept well under the lib's hard cap).
 const REPEAT_TIMES_MAX = 16;
 
@@ -206,7 +204,8 @@ export default function FingerpickEditModal({
 	onClose,
 	onSave,
 }: FingerpickEditModalProps) {
-	const [working, setWorking] = useState<FingerpickPattern>(makeDefaultPattern);
+	const { working, workingRef, commit, undo, redo, canUndo, canRedo, reset: resetHistory } =
+		useEditHistory(makeDefaultPattern);
 	const [selectedCell, setSelectedCell] = useState<Cell | null>(null);
 	const [hoveredCell, setHoveredCell] = useState<HoveredCell | null>(null);
 	const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
@@ -271,19 +270,6 @@ export default function FingerpickEditModal({
 		dir: "left" | "right";
 	} | null>(null);
 
-	// Undo/redo history. `history` holds every committed pattern snapshot (the
-	// initial state plus one entry per edit); `historyIndex` points at the entry
-	// currently shown in `working`. Undo/redo move the index and restore that
-	// snapshot; a fresh edit truncates any redo tail before appending.
-	const [history, setHistory] = useState<FingerpickPattern[]>([]);
-	const [historyIndex, setHistoryIndex] = useState(0);
-
-	// Latest working pattern for keyboard handlers (avoids stale-closure nav).
-	const workingRef = useRef(working);
-	// Ref mirrors of the history state so commit/undo/redo can read the latest
-	// values without stale closures (and without re-creating the callbacks).
-	const historyRef = useRef<FingerpickPattern[]>([]);
-	const historyIndexRef = useRef(0);
 	// Serialized snapshot of the pattern taken when the modal opened. Comparing
 	// the live pattern against this detects unsaved edits (see isDirty) without
 	// having to flag every individual mutation site.
@@ -401,56 +387,6 @@ export default function FingerpickEditModal({
 	// type a fret — there is no physical keyboard to drive handleCellKeyDown.
 	const hiddenInputRef = useRef<HTMLInputElement>(null);
 
-	// Keep the nav ref pointing at the latest working pattern.
-	useEffect(() => {
-		workingRef.current = working;
-	}, [working]);
-
-	// Keep the history refs in step with their state.
-	useEffect(() => {
-		historyRef.current = history;
-	}, [history]);
-	useEffect(() => {
-		historyIndexRef.current = historyIndex;
-	}, [historyIndex]);
-
-	// Apply a draft mutation and record it for undo/redo. Every draft-mutating
-	// operation goes through here: it derives the next pattern from the current
-	// one, drops any redo tail, appends the snapshot (capped at HISTORY_LIMIT),
-	// and advances the index.
-	const commit = useCallback((updater: (prev: FingerpickPattern) => FingerpickPattern) => {
-		const prev = workingRef.current;
-		const next = updater(prev);
-		if (next === prev) return;
-		setWorking(next);
-		const idx = historyIndexRef.current;
-		setHistory((h) => {
-			const base = h.slice(0, idx + 1);
-			base.push(next);
-			return base.length > HISTORY_LIMIT ? base.slice(base.length - HISTORY_LIMIT) : base;
-		});
-		setHistoryIndex((i) => Math.min(i + 1, HISTORY_LIMIT - 1));
-	}, []);
-
-	const undo = useCallback(() => {
-		const i = historyIndexRef.current;
-		if (i <= 0) return;
-		const ni = i - 1;
-		setHistoryIndex(ni);
-		setWorking(historyRef.current[ni]);
-	}, []);
-
-	const redo = useCallback(() => {
-		const i = historyIndexRef.current;
-		if (i >= historyRef.current.length - 1) return;
-		const ni = i + 1;
-		setHistoryIndex(ni);
-		setWorking(historyRef.current[ni]);
-	}, []);
-
-	const canUndo = historyIndex > 0;
-	const canRedo = historyIndex < history.length - 1;
-
 	// Clear any pending long-press timer on unmount.
 	useEffect(() => {
 		return () => {
@@ -465,9 +401,7 @@ export default function FingerpickEditModal({
 			const next = initialPattern
 				? clonePatternForEdit(initialPattern)
 				: makeDefaultPattern();
-			setWorking(next);
-			setHistory([next]);
-			setHistoryIndex(0);
+			resetHistory(next);
 			pristineRef.current = JSON.stringify(next);
 			setSelectedCell(null);
 			setHoveredCell(null);
@@ -629,7 +563,7 @@ export default function FingerpickEditModal({
 				applyFretDigit(cell, Number(key));
 			}
 		},
-		[commit, applyFretDigit],
+		[commit, applyFretDigit, workingRef],
 	);
 
 	// ── Technique context menu ───────────────────────────────────────────────

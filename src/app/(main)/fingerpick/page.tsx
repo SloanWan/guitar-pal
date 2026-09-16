@@ -67,6 +67,16 @@ import {
 import Fader from "@/components/ui/Fader";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import Rocker from "@/components/ui/Rocker";
+import Segmented from "@/components/fingerpick/Segmented";
+import {
+	BPM_TICK_LABELS,
+	BPM_TICK_PERCENTS,
+	BPM_TICK_VALUES,
+	LOOP_GAP_OPTIONS,
+	MAX_BPM,
+	MIN_BPM,
+	type LoopGapSeconds,
+} from "@/components/fingerpick/playbackConstants";
 
 // Remembers the last-viewed pattern id so a page refresh reopens it instead of
 // defaulting back to the first preset. Device-local UI state — not synced.
@@ -167,71 +177,10 @@ function computeAllMeasureWidths(
 }
 
 
-const MIN_BPM = 40;
-const MAX_BPM = 220;
-
-/** Silence between loop passes, offered when looping is on. */
-const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
-type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
-
-// BPM fader tick marks: genre reference tempos. `PERCENTS` are the fixed v3
-// visual positions on the 40–220 track; `VALUES` are the exact BPM each tick
-// snaps to when clicked; `LABELS` are the genre tooltip shown while hovering the
-// segment around each tick.
-const BPM_TICK_PERCENTS = [11, 19, 28, 33, 39, 44, 50, 56, 67];
-const BPM_TICK_VALUES = [60, 75, 90, 100, 110, 120, 130, 140, 160];
-const BPM_TICK_LABELS = [
-	"Slow Practice",
-	"Folk",
-	"Ballad",
-	"Pop / Blues",
-	"Funk",
-	"Pop / Rock",
-	"Rock",
-	"Jazz / Hard Rock",
-	"Fast Rock",
-];
-
 // Higher = tighter/snappier following, lower = smoother/more lag.
 // At 20, steady-state lag behind a constant-velocity target is ~v/20 px/s — barely
 // perceptible on dense sixteenth-note runs (~8 px) and invisible on slower material.
 const CURSOR_LAMBDA = 20;
-
-interface SegmentedOption {
-	value: string;
-	label: string;
-}
-interface SegmentedProps {
-	options: readonly SegmentedOption[];
-	value: string;
-	onChange: (value: string) => void;
-	disabled?: boolean;
-}
-
-// Segmented pills: hairline-bordered row, exactly one denim-filled active
-// segment. Used for loop gap, subdivision, and the mobile Loop/Once control.
-function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
-	return (
-		<div className={`flex border border-line-strong ${disabled ? "pointer-events-none" : ""}`}>
-			{options.map((opt, i) => {
-				const on = opt.value === value;
-				return (
-					<button
-						key={opt.value}
-						type="button"
-						disabled={disabled}
-						onClick={() => onChange(opt.value)}
-						className={`flex-1 py-1.5 font-mono text-[10px] tracking-[0.08em] uppercase transition-colors ${
-							i > 0 ? "border-l border-line-strong" : ""
-						} ${on ? "bg-denim text-on-denim" : "text-ink-dim hover:text-denim"}`}
-					>
-						{opt.label}
-					</button>
-				);
-			})}
-		</div>
-	);
-}
 
 export default function FingerpickPage() {
 	const { user, loading } = useUser();

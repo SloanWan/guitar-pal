@@ -10,6 +10,9 @@ import { saveLastPattern } from "@/lib/lastPattern";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
+import { useAutoScroll } from "@/components/fingerpick/useAutoScroll";
+import { useHideOnScroll } from "@/components/fingerpick/useHideOnScroll";
+import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
 import {
 	chordFretHints,
 	chordRegionEnd,
@@ -90,6 +93,8 @@ export default function FingerpickPage() {
 	} = useFingerpickPatterns(user, loading);
 
 	const [showLibrary, setShowLibrary] = useState(false);
+	// The scrolling tab viewer; the overlays, auto-scroll and click-to-seek all work inside it.
+	const tabViewerRef = useRef<HTMLDivElement>(null);
 	const [bpm, setBpm] = useState<number>(selectedPattern.bpm);
 	// Repeats flattened into a linear playback timeline (the rendered staves stay compact).
 	// Memoized on selectedPattern ONLY — expansion is bpm-independent (bpm is applied when
@@ -112,60 +117,12 @@ export default function FingerpickPage() {
 	} = useFingerpickPrefs();
 	// Auto-scroll: the tab creeps upward at a set speed for reading along without
 	// a hand free. Off by default; the speed is remembered.
-	const [autoScroll, setAutoScroll] = useState(false);
-	// Whether the tab is taller than its viewer at all — auto-scroll has nothing
-	// to do otherwise. Re-measured whenever the viewer or the rows change size
-	// (a window resize, a pattern switch, rows re-laid out), off the RAF-rendered
-	// stave heights rather than any guess from the viewport.
-	const [tabOverflows, setTabOverflows] = useState(false);
-	const rowsContainerRef = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		const viewer = tabViewerRef.current;
-		const content = rowsContainerRef.current;
-		if (!viewer || !content) return;
-		const measure = () => {
-			const overflows = viewer.scrollHeight > viewer.clientHeight + 1;
-			setTabOverflows((prev) => (prev === overflows ? prev : overflows));
-		};
-		const observer = new ResizeObserver(measure);
-		observer.observe(viewer);
-		observer.observe(content);
-		return () => observer.disconnect();
-	}, []);
-	// A tab that stops overflowing (smaller pattern, taller window) has nothing
-	// left to scroll; the creep effect below reads this and stops.
-	const autoScrollActive = autoScroll && tabOverflows;
-	const scrollSpeedRef = useRef(SCROLL_SPEED_DEFAULT);
-	useEffect(() => {
-		scrollSpeedRef.current = scrollSpeed;
-	}, [scrollSpeed]);
-	// The creep itself: a RAF loop moving the tab viewer by speed × elapsed,
-	// carrying sub-pixel remainders so slow speeds still move. Stops itself at
-	// the bottom, and whenever it is switched off or the pattern changes.
-	useEffect(() => {
-		if (!autoScrollActive) return;
-		const viewer = tabViewerRef.current;
-		if (!viewer) return;
-		let raf = 0;
-		let last = performance.now();
-		let carry = 0;
-		const step = (now: number) => {
-			carry += (scrollSpeedRef.current * (now - last)) / 1000;
-			last = now;
-			const px = Math.floor(carry);
-			if (px >= 1) {
-				viewer.scrollTop += px;
-				carry -= px;
-			}
-			if (viewer.scrollTop + viewer.clientHeight >= viewer.scrollHeight - 1) {
-				setAutoScroll(false);
-				return;
-			}
-			raf = requestAnimationFrame(step);
-		};
-		raf = requestAnimationFrame(step);
-		return () => cancelAnimationFrame(raf);
-	}, [autoScrollActive, selectedPattern.id]);
+	const {
+		contentRef: rowsContainerRef,
+		setAutoScroll,
+		tabOverflows,
+		autoScrollActive,
+	} = useAutoScroll({ viewerRef: tabViewerRef, scrollSpeed, patternId: selectedPattern.id });
 	const hasChords = patternHasChords(selectedPattern.measures);
 	const showChordDiagrams = hasChords && chordView === "diagram";
 	const chordShapeSize = useMemo(
@@ -301,7 +258,6 @@ export default function FingerpickPage() {
 	} = useFingerpickAudioEngine();
 
 	// ── Cursor / scroll ─────────────────────────────────────────────────────
-	const tabViewerRef = useRef<HTMLDivElement>(null);
 	// Greedy row layout driven by content width; guard: render nothing until the
 	// ResizeObserver fires with the real container width on mount.
 	const rows = useMemo(
@@ -324,20 +280,25 @@ export default function FingerpickPage() {
 		startOffsetFor,
 		toExpandedMeasureIndex,
 	} = usePlaybackCursor({ tabViewerRef, expanded, bpm, rows, isPlaying, getPlaybackProgress });
-	// Note to seek to on the next play() — set by click-to-seek while stopped,
-	// consumed by handlePlay() and cleared by handleStop().
-	const pendingSeekRef = useRef<{ measureIndex: number; slotIndex: number } | null>(null);
 	// Bottom bar drag-to-open-sheet gesture refs.
 	const bottomBarDragStartYRef = useRef<number>(0);
 	const bottomBarIsDraggingRef = useRef<boolean>(false);
 	// Drag handle drag-to-close gesture refs.
 	const handleDragStartYRef = useRef(0);
 	const handleIsDraggingRef = useRef(false);
-	// Hide-on-scroll state for mobile controls and NavBar.
-	const [controlsVisible, setControlsVisible] = useState(true);
-	const controlsVisibleRef = useRef(true);
-	const lastScrollYRef = useRef(0);
-	const scrollUpDistanceRef = useRef(0);
+	const { controlsVisible, restoreControls } = useHideOnScroll({
+		viewerRef: tabViewerRef,
+		isAutoScrollingRef,
+	});
+	const { handleTabClick, takePendingSeek, clearPendingSeek } = useClickToSeek({
+		viewerRef: tabViewerRef,
+		isPlaying,
+		isPaused,
+		seekToNote,
+		toExpandedMeasureIndex,
+		snapCursorToNote,
+		onInteract: restoreControls,
+	});
 
 	// Preload presets on mount so the first Play is instant.
 	// load() is stable in intent but re-created each render; the empty-dep array
@@ -361,41 +322,6 @@ export default function FingerpickPage() {
 		observer.observe(container);
 		return () => observer.disconnect();
 	}, []);
-
-	// Hide mobile controls bar (and NavBar via body class) when the user scrolls down;
-	// restore after 40 px of upward scroll.
-	useEffect(() => {
-		const isDesktop = window.innerWidth >= 768;
-		// Desktop: scroll source is the tab viewer; mobile: the main scroll container.
-		const target: Element | null = isDesktop
-			? tabViewerRef.current
-			: document.querySelector("main");
-		if (!target) return;
-
-		function handleScroll() {
-			if (isAutoScrollingRef.current) return;
-			const currentY = (target as HTMLElement).scrollTop;
-			const delta = currentY - lastScrollYRef.current;
-			lastScrollYRef.current = currentY;
-
-			if (delta > 0) {
-				scrollUpDistanceRef.current = 0;
-				if (controlsVisibleRef.current) {
-					controlsVisibleRef.current = false;
-					setControlsVisible(false);
-				}
-			} else {
-				scrollUpDistanceRef.current += Math.abs(delta);
-				if (scrollUpDistanceRef.current >= 40 && !controlsVisibleRef.current) {
-					controlsVisibleRef.current = true;
-					setControlsVisible(true);
-				}
-			}
-		}
-
-		target.addEventListener("scroll", handleScroll, { passive: true });
-		return () => target.removeEventListener("scroll", handleScroll);
-	}, [isAutoScrollingRef]);
 
 	function handleSelectPattern(p: FingerpickPattern) {
 		// An explicit choice also ends the one-shot restore window: it must not be
@@ -456,8 +382,7 @@ export default function FingerpickPage() {
 	}
 
 	function handlePlay() {
-		const pending = pendingSeekRef.current;
-		pendingSeekRef.current = null;
+		const pending = takePendingSeek();
 		const startOffset = pending ? startOffsetFor(pending) : 0;
 		// forceLetRing: every note rings at the long letRingDecayTc τ (terminated only
 		// by voice stealing) — a fuller, more natural fingerstyle sustain. This is a
@@ -472,7 +397,7 @@ export default function FingerpickPage() {
 
 	function handleStop() {
 		stop();
-		pendingSeekRef.current = null;
+		clearPendingSeek();
 		resetCursor();
 	}
 
@@ -577,83 +502,6 @@ export default function FingerpickPage() {
 
 	function handleBottomBarPointerUp() {
 		bottomBarIsDraggingRef.current = false;
-	}
-
-	// ── Click-to-seek ───────────────────────────────────────────────────────────
-
-	// Clicking anywhere in the tab viewer seeks to the nearest note in the clicked
-	// row (nearest by x-distance). Clicks outside all rows clamp to the nearest row.
-	function handleTabClick(e: React.MouseEvent<HTMLDivElement>): void {
-		// Restore controls visibility on any tab interaction.
-		setControlsVisible(true);
-		controlsVisibleRef.current = true;
-		scrollUpDistanceRef.current = 0;
-		window.dispatchEvent(new CustomEvent("fingerpick-controls-restore"));
-
-		const container = tabViewerRef.current;
-		if (!container) return;
-
-		const noteEls = Array.from(
-			container.querySelectorAll<SVGElement>("[data-measure-index][data-slot-index]"),
-		);
-		if (noteEls.length === 0) return;
-
-		const allSvgs = Array.from(container.querySelectorAll<SVGElement>("svg"));
-		if (allSvgs.length === 0) return;
-
-		const clickYVp = e.clientY;
-		const clickXVp = e.clientX;
-
-		// Find the row SVG the click landed in by viewport Y.
-		let targetSvg = allSvgs.find((svg) => {
-			const r = svg.getBoundingClientRect();
-			return clickYVp >= r.top && clickYVp <= r.bottom;
-		});
-
-		// Click was between or outside rows — clamp to nearest by Y distance.
-		if (!targetSvg) {
-			let minDist = Infinity;
-			for (const svg of allSvgs) {
-				const r = svg.getBoundingClientRect();
-				const dist = Math.min(Math.abs(clickYVp - r.top), Math.abs(clickYVp - r.bottom));
-				if (dist < minDist) {
-					minDist = dist;
-					targetSvg = svg;
-				}
-			}
-		}
-		if (!targetSvg) return;
-
-		// Notes in the target row only.
-		const rowNotes = noteEls.filter((el) => targetSvg!.contains(el));
-		if (rowNotes.length === 0) return;
-
-		// Nearest note by X distance.
-		let nearestEl: SVGElement | null = null;
-		let minXDist = Infinity;
-		for (const el of rowNotes) {
-			const r = el.getBoundingClientRect();
-			const dist = Math.abs(r.left + r.width / 2 - clickXVp);
-			if (dist < minXDist) {
-				minXDist = dist;
-				nearestEl = el;
-			}
-		}
-		if (!nearestEl) return;
-
-		const measureIndex = parseInt(nearestEl.getAttribute("data-measure-index") ?? "0", 10);
-		const slotIndex = parseInt(nearestEl.getAttribute("data-slot-index") ?? "0", 10);
-
-		if (isPlaying || isPaused) {
-			// Audio engine handles the reschedule (playing) or saved-position update (paused).
-			// The engine runs on the expanded timeline, so map the clicked original measure
-			// to its first expanded occurrence.
-			seekToNote(toExpandedMeasureIndex(measureIndex), slotIndex);
-		} else {
-			// Stopped: record the target so handlePlay() starts from here.
-			pendingSeekRef.current = { measureIndex, slotIndex };
-		}
-		snapCursorToNote(nearestEl, measureIndex);
 	}
 
 	// Restore the last-viewed pattern once patterns finish loading (custom patterns

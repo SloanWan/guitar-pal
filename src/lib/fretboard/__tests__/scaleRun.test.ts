@@ -66,13 +66,15 @@ describe("scalePositions", () => {
 describe("scaleRun", () => {
 	const AM_PENT: ScaleSpec = { root: "A", scale: "minorPentatonic" };
 
-	it("ascends by pitch, one slot per pitch, starting on the lowest root", () => {
+	it("ascends by pitch, one slot per pitch, tonic to tonic", () => {
 		const run = scaleRun(AM_PENT, NECK, { kind: "box", box: { fromFret: 5, toFret: 9 } });
 		const midis = run.map((s) => s.midi);
 		expect(midis).toEqual([...midis].sort((a, b) => a - b));
 		expect(new Set(midis).size).toBe(midis.length);
-		expect(mod12(midis[0])).toBe(scaleRootPitchClass("A"));
 		expect(run[0]).toEqual({ string: 0, fret: 5, midi: 45 }); // A2 on the low E
+		// It ends on a root too, so the run is whole octaves rather than a slice.
+		expect(mod12(midis[midis.length - 1])).toBe(scaleRootPitchClass("A"));
+		expect((midis[midis.length - 1] - midis[0]) % 12).toBe(0);
 		for (const slot of run) expect(new Set(scalePitchClasses(AM_PENT))).toContain(mod12(slot.midi));
 	});
 
@@ -84,20 +86,24 @@ describe("scaleRun", () => {
 		expect(run.filter((s) => s.midi === 64)).toHaveLength(1);
 	});
 
-	it("plays everything a string has, root or not", () => {
+	it("runs a string from root to root, not end to end", () => {
 		const run = scaleRun(AM_PENT, NECK, { kind: "string", string: 0 });
 		expect(run.every((s) => s.string === 0)).toBe(true);
-		// A minor pentatonic on the low E, open string included: E0 G3 A5 C8 …
-		expect(run.map((s) => s.fret)).toEqual([0, 3, 5, 8, 10, 12, 15, 17, 20, 22]);
+		// The low E has A at 5 and 17; the run is that octave, not frets 0–22.
+		expect(run.map((s) => s.fret)).toEqual([5, 8, 10, 12, 15, 17]);
 		expect(scaleRun(AM_PENT, NECK, { kind: "string", string: 9 })).toEqual([]);
 	});
 
-	it("runs the whole neck from its lowest root to its highest note", () => {
+	it("runs the whole neck from its lowest root to its highest", () => {
 		const run = scaleRun(AM_PENT, NECK, { kind: "neck" });
 		// A2, taken on the open A string rather than the low E's 5th fret —
 		// the lowest fret that sounds it, which is open position.
 		expect(run[0]).toEqual({ string: 1, fret: 0, midi: 45 });
-		expect(run[run.length - 1].midi).toBe(slotMidi(5, 22)); // D6, the neck's top
+		// A5, the highest A the neck reaches — not D6, which would end the run
+		// on a 4th. Four whole octaves.
+		expect(run[run.length - 1].midi).toBe(81);
+		expect((81 - 45) % 12).toBe(0);
+		expect(slotMidi(5, 22)).toBe(86); // the neck goes higher; the scale stops at its tonic
 		const midis = run.map((s) => s.midi);
 		expect(midis).toEqual([...midis].sort((a, b) => a - b));
 		expect(new Set(midis).size).toBe(midis.length);
@@ -111,13 +117,41 @@ describe("scaleRun", () => {
 	});
 
 	it("starts at the capo, not the nut", () => {
+		// Behind a capo at 7 the low E's only roots are 17; one root is no octave,
+		// so the run is what is left from it.
 		const run = scaleRun(AM_PENT, { fromFret: 7, toFret: 22 }, { kind: "string", string: 0 });
-		expect(run.map((s) => s.fret)).toEqual([8, 10, 12, 15, 17, 20, 22]);
+		expect(run.map((s) => s.fret)).toEqual([17, 20, 22]);
 		// The neck run's tonic moves up with the capo too: A2 is out of reach, A3 is not.
 		expect(scaleRun(AM_PENT, { fromFret: 7, toFret: 22 }, { kind: "neck" })[0].midi).toBe(57);
 	});
 
-	it("falls back to the lowest scale tone when a box holds no root", () => {
+	it("still has the whole scale to play in a three-fret box, the narrowest there is", () => {
+		// Three frets across six strings already hold every pitch class: the six
+		// strings start at only five distinct pitch classes, 0 3 5 7 10 apart, so
+		// three consecutive notes from each cover the twelve between them.
+		const wanted = new Set(scalePitchClasses(AM_PENT));
+		for (let from = 0; from <= 18; from++) {
+			const inWindow = new Set<number>();
+			for (let s = 0; s < 6; s++) {
+				for (let f = from; f <= from + 2; f++) {
+					const pc = mod12(slotMidi(s, f));
+					if (wanted.has(pc)) inWindow.add(pc);
+				}
+			}
+			expect(inWindow).toEqual(wanted);
+
+			// The run itself starts on a root, and runs root to root whenever the
+			// box holds two — a narrow one does not always, and then it plays out
+			// from the single root it has.
+			const run = scaleRun(AM_PENT, NECK, { kind: "box", box: { fromFret: from, toFret: from + 2 } });
+			expect(run.length).toBeGreaterThan(1);
+			expect(mod12(run[0].midi)).toBe(scaleRootPitchClass("A"));
+			const roots = run.filter((slot) => mod12(slot.midi) === scaleRootPitchClass("A"));
+			if (roots.length >= 2) expect(mod12(run[run.length - 1].midi)).toBe(scaleRootPitchClass("A"));
+		}
+	});
+
+	it("keeps whatever is there when a box holds no whole octave", () => {
 		// Two frets on the low E with no A anywhere: the C is still played.
 		const box = { fromFret: 8, toFret: 9 };
 		const run = scaleRun(AM_PENT, { fromFret: 8, toFret: 9 }, { kind: "box", box });

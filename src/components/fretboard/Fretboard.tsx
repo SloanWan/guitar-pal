@@ -37,14 +37,18 @@ import {
 	useCallback,
 	useEffect,
 	useImperativeHandle,
+	useMemo,
 	useRef,
 	type KeyboardEvent as ReactKeyboardEvent,
 	type PointerEvent as ReactPointerEvent,
 	type Ref,
 } from "react";
 
+import { ChevronLeft, ChevronRight, Play, Square, X } from "lucide-react";
+
 import { STRING_LABELS } from "@/lib/chordVoicingToMidi";
 import { relatedSlots, slotMidi, type SlotNote, type SlotPosition } from "@/lib/fretboard/positions";
+
 import {
 	STRING_COUNT,
 	slotKey,
@@ -76,11 +80,13 @@ const EDGE = 1;
 const VISIBLE_FRETS = 16;
 /** Smallest scale a narrow container may reach; below it the neck scrolls. */
 const MIN_SCALE = 1.25;
-/** Height of the position-tag strip above the neck, when there are tags. */
-const TAG_H = 14;
-const TAG_W = 15;
-/** Extra label-column width for the per-string play glyphs. */
-const PLAY_COL_W = 12;
+/** Extra label-column width for the per-string play buttons, which sit left of the names. */
+const PLAY_COL_W = 18;
+/** The play/clear controls, sitting above a highlighted position. */
+const BOX_BTN = 14;
+/** Headroom kept for them, so the board does not jump when a position appears. */
+const BOX_BTN_ROW = BOX_BTN + 4;
+
 
 /** Design width that `VISIBLE_FRETS` occupies, labels included. */
 function designWidth(labelW: number): number {
@@ -169,6 +175,12 @@ export interface FretboardHandle {
 	 * strings. No-op under reduced motion.
 	 */
 	strike: (slots: readonly SlotPosition[], staggerMs?: number) => void;
+	/**
+	 * Scroll a fret into view if it is not already, so a run that walks past
+	 * the right edge stays watchable. Does nothing while the fret is comfortably
+	 * inside the viewport, or the neck would twitch on every note.
+	 */
+	revealFret: (fret: number) => void;
 }
 
 export interface FretboardComponentProps extends FretboardProps {
@@ -193,15 +205,30 @@ export interface FretboardComponentProps extends FretboardProps {
 	 * Drawn as a dashed frame over the neck, behind the marks.
 	 */
 	highlight?: { fromFret: number; toFret: number } | null;
-	/**
-	 * Hand positions to tag along the top of the neck. Hovering a tag reports
-	 * the index so the caller can raise that box; pressing one selects it.
-	 */
-	positions?: readonly { fromFret: number; toFret: number; label: string }[];
-	onPositionHover?: (index: number | null) => void;
-	onPositionSelect?: (index: number) => void;
-	/** Adds a play glyph beside each string name, for running the scale along it. */
+	/** Adds a play button beside each string name, for running the scale along it. */
 	onStringPlay?: (string: number) => void;
+	/** The string whose run is sounding now: its button becomes a stop button. */
+	playingString?: number | null;
+	/**
+	 * Notes a run would play, tinted so the line through the position is
+	 * visible before it sounds, and shaded by octave so the register reads at
+	 * a glance. The first is left alone: it is the tonic, and says so already.
+	 */
+	runSlots?: readonly SlotNote[];
+	/**
+	 * Drag the highlighted position's right edge to this fret. Without it the
+	 * frame has no handle and cannot be resized.
+	 */
+	onHighlightResize?: (toFret: number) => void;
+	/** How few and how many frets a position may be dragged to. */
+	minHighlightFrets?: number;
+	maxHighlightFrets?: number;
+	/** Play or stop the highlighted position, from a button on its frame. */
+	onHighlightPlay?: () => void;
+	/** Dismiss the highlighted position, from an × on its frame. */
+	onHighlightClear?: () => void;
+	/** Whether the highlighted position is the run sounding now. */
+	highlightPlaying?: boolean;
 	/**
 	 * Right-pressing a slot picks a hand position starting at that fret — the
 	 * width is fixed, so only the left edge is chosen and no drag is needed.
@@ -247,10 +274,15 @@ export default function Fretboard({
 	onCapoChange,
 	maxCapo,
 	highlight = null,
-	positions,
-	onPositionHover,
-	onPositionSelect,
 	onStringPlay,
+	playingString = null,
+	runSlots,
+	onHighlightPlay,
+	onHighlightClear,
+	onHighlightResize,
+	minHighlightFrets = 3,
+	maxHighlightFrets = 7,
+	highlightPlaying = false,
 	onPositionPick,
 	label = "Guitar fretboard",
 	onSlotPress,
@@ -258,6 +290,7 @@ export default function Fretboard({
 	pressable = true,
 }: FretboardComponentProps) {
 	const neck = useRef<SVGSVGElement>(null);
+	const scroller = useRef<HTMLDivElement>(null);
 	/** Nodes currently carrying a `data-hover`, so leaving clears exactly those. */
 	const hovered = useRef<SVGGElement[]>([]);
 	const pending = useRef<PendingPress | null>(null);
@@ -401,6 +434,29 @@ export default function Fretboard({
 	useImperativeHandle(
 		ref,
 		() => ({
+			revealFret(fret) {
+				const el = scroller.current;
+				const svg = neck.current;
+				if (!el || !svg || typeof el.scrollTo !== "function") return;
+				const scale = svg.getBoundingClientRect().width / Number(svg.getAttribute("width"));
+				if (!Number.isFinite(scale) || scale <= 0) return;
+				const left = (fret - fromFret) * FRET_W * scale;
+				const width = FRET_W * scale;
+				// A cell of slack at each edge, so the neck moves before the
+				// playhead reaches the very edge rather than after.
+				const margin = width;
+				const min = el.scrollLeft + margin;
+				const max = el.scrollLeft + el.clientWidth - width - margin;
+				if (left >= min && left <= max) return;
+				// Nudge only as far as the fret needs plus a cell of lead, rather
+				// than centring it: a run steps a fret or two at a time, so the
+				// neck creeps along with it instead of jumping half a screen.
+				const overshoot = left < min ? left - min - width : left - max + width;
+				el.scrollTo({
+					left: Math.max(0, el.scrollLeft + overshoot),
+					behavior: prefersReducedMotion() ? "auto" : "smooth",
+				});
+			},
 			strike(slots, staggerMs = STRIKE_STAGGER_MS) {
 				if (prefersReducedMotion()) return;
 				slots.forEach((slot, i) => {
@@ -416,7 +472,7 @@ export default function Fretboard({
 				});
 			},
 		}),
-		[feedback],
+		[feedback, fromFret],
 	);
 
 	const handlePointerDown = useCallback(
@@ -471,45 +527,74 @@ export default function Fretboard({
 	const capoMax = maxCapo ?? toFret;
 	const draggingCapo = useRef(false);
 
-	/** The fret whose cell the pointer is over, clamped to what a capo may reach. */
-	const capoFretAt = useCallback(
-		(clientX: number): number => {
-			const svg = neck.current;
-			if (!svg) return capo;
-			const rect = svg.getBoundingClientRect();
-			const width = (toFret - fromFret + 1) * FRET_W + EDGE * 2;
-			const scale = rect.width / width;
-			// Undo the neck group's translation to land in cell coordinates.
-			const cellX = (clientX - rect.left) / scale - EDGE + fromFret * FRET_W;
-			return Math.max(0, Math.min(capoMax, Math.floor(cellX / FRET_W)));
-		},
-		[capo, capoMax, fromFret, toFret],
-	);
+	/** Where the drag began, so the capo moves *with* the pointer. */
+	const capoGrab = useRef<{ x: number; fret: number } | null>(null);
 
-	const handleCapoDown = useCallback((e: ReactPointerEvent<SVGRectElement>) => {
-		// The neck must not treat this as a slot press, nor scroll under it.
-		e.stopPropagation();
-		e.preventDefault();
-		e.currentTarget.setPointerCapture?.(e.pointerId);
-		draggingCapo.current = true;
-	}, []);
+
+	/** Rendered width of one fret, for turning a pointer distance into frets. */
+	const fretPixels = useCallback((): number => {
+		const svg = neck.current;
+		if (!svg) return 0;
+		const width = (toFret - fromFret + 1) * FRET_W + EDGE * 2;
+		const rendered = svg.getBoundingClientRect().width;
+		return rendered > 0 ? (rendered / width) * FRET_W : 0;
+	}, [fromFret, toFret]);
+
+	const handleCapoDown = useCallback(
+		(e: ReactPointerEvent<SVGRectElement>) => {
+			// The neck must not treat this as a slot press, nor scroll under it.
+			e.stopPropagation();
+			e.preventDefault();
+			e.currentTarget.setPointerCapture?.(e.pointerId);
+			draggingCapo.current = true;
+			capoGrab.current = { x: e.clientX, fret: capo };
+		},
+		[capo],
+	);
 
 	const handleCapoMove = useCallback(
 		(e: ReactPointerEvent<SVGRectElement>) => {
-			if (!draggingCapo.current) return;
+			const grab = capoGrab.current;
+			if (!draggingCapo.current || !grab) return;
 			e.stopPropagation();
-			const next = capoFretAt(e.clientX);
+			const perFret = fretPixels();
+			if (perFret <= 0) return;
+			// Relative to where it was grabbed, so merely touching the bar — whose
+			// grip is wider than the bar and straddles a fret wire — moves nothing.
+			const next = Math.max(0, Math.min(capoMax, grab.fret + Math.round((e.clientX - grab.x) / perFret)));
 			if (next !== capo) onCapoChange?.(next);
 		},
-		[capo, capoFretAt, onCapoChange],
+		[capo, capoMax, fretPixels, onCapoChange],
 	);
 
 	const handleCapoUp = useCallback((e: ReactPointerEvent<SVGRectElement>) => {
 		if (!draggingCapo.current) return;
 		draggingCapo.current = false;
+		capoGrab.current = null;
 		e.currentTarget.releasePointerCapture?.(e.pointerId);
 		e.stopPropagation();
 	}, []);
+
+	/** The narrowest and widest right edge a position may be given. */
+	const widthLimits = useMemo(
+		() =>
+			highlight
+				? {
+						low: highlight.fromFret + minHighlightFrets - 1,
+						high: Math.min(toFret, highlight.fromFret + maxHighlightFrets - 1),
+					}
+				: null,
+		[highlight, minHighlightFrets, maxHighlightFrets, toFret],
+	);
+
+	const resizeBy = useCallback(
+		(step: number) => {
+			if (!highlight || !onHighlightResize || !widthLimits) return;
+			const next = Math.max(widthLimits.low, Math.min(widthLimits.high, highlight.toFret + step));
+			if (next !== highlight.toFret) onHighlightResize(next);
+		},
+		[highlight, onHighlightResize, widthLimits],
+	);
 
 	const handleCapoKey = useCallback(
 		(e: ReactKeyboardEvent<SVGGElement>) => {
@@ -533,14 +618,23 @@ export default function Fretboard({
 	const frets = Array.from({ length: cells }, (_, i) => fromFret + i);
 	const strings = Array.from({ length: STRING_COUNT }, (_, string) => string);
 
-	// The tag strip and the play glyphs each claim space; the board's scale
-	// follows, so a neck with neither is laid out exactly as it always was.
-	const tags = positions ?? [];
-	const tagsH = tags.length > 0 ? TAG_H : 0;
+	// The play buttons claim their own column; the board's scale follows, so a
+	// neck without them is laid out exactly as it always was.
 	const labelW = onStringPlay ? LABEL_W + PLAY_COL_W : LABEL_W;
 	const designW = designWidth(labelW);
-	const boardH = H + tagsH;
+	// Kept whether or not a position is showing, so the board does not jump.
+	const headH = onHighlightPlay || onHighlightClear ? BOX_BTN_ROW : 0;
+	const boardH = H + headH;
 	const size = (units: number) => scaled(units, designW);
+	// Shade by octave above the run's own lowest note, so a line climbing the
+	// neck darkens and lightens with the register rather than reading flat.
+	const runShades = new Map<string, number>();
+	if (runSlots && runSlots.length > 0) {
+		const base = Math.floor(runSlots[0].midi / 12);
+		for (const slot of runSlots.slice(1)) {
+			runShades.set(slotKey(slot.string, slot.fret), Math.min(3, Math.max(0, Math.floor(slot.midi / 12) - base)));
+		}
+	}
 
 	return (
 		<div
@@ -559,11 +653,11 @@ export default function Fretboard({
 					style={{ width: size(labelW), height: size(boardH) }}
 					aria-hidden={onStringPlay ? undefined : "true"}
 				>
-					<g style={{ transform: `translateY(${tagsH}px)` }}>
+					<g style={{ transform: `translateY(${headH}px)` }}>
 						{strings.map((string) => (
 							<text
 								key={string}
-								x={LABEL_W - 8}
+								x={labelW - 8}
 								y={stringY(string) + 3}
 								textAnchor="end"
 								fontSize={9}
@@ -572,39 +666,43 @@ export default function Fretboard({
 								{STRING_LABELS[string]}
 							</text>
 						))}
-						{/* A glyph per string: run the scale along this one. */}
+						{/* One button per string, left of its name: run the scale along it. */}
 						{onStringPlay &&
-							strings.map((string) => (
-								<g
-									key={`play-${string}`}
-									className="fb-string-play"
-									role="button"
-									tabIndex={0}
-									aria-label={`Play the ${STRING_LABELS[string]} string`}
-									onClick={() => onStringPlay(string)}
-									onKeyDown={(e) => {
-										if (e.key !== "Enter" && e.key !== " ") return;
-										e.preventDefault();
-										onStringPlay(string);
-									}}
-								>
-									<rect
-										x={LABEL_W}
-										y={stringY(string) - STRING_GAP / 2}
-										width={PLAY_COL_W}
-										height={STRING_GAP}
-										fill="transparent"
-									/>
-									<path
-										fill="none"
-										d={`M${LABEL_W + 3} ${stringY(string) - 3.5}L${LABEL_W + 8} ${stringY(string)}L${LABEL_W + 3} ${stringY(string) + 3.5}Z`}
-									/>
-								</g>
-							))}
+							strings.map((string) => {
+								const playing = playingString === string;
+								const cx = PLAY_COL_W / 2 - 2;
+								const cy = stringY(string);
+								return (
+									<g
+										key={`play-${string}`}
+										className="fb-string-play"
+										data-playing={playing || undefined}
+										role="button"
+										tabIndex={0}
+										aria-label={
+											playing ? `Stop the ${STRING_LABELS[string]} string` : `Play the ${STRING_LABELS[string]} string`
+										}
+										onClick={() => onStringPlay(string)}
+										onKeyDown={(e) => {
+											if (e.key !== "Enter" && e.key !== " ") return;
+											e.preventDefault();
+											onStringPlay(string);
+										}}
+									>
+										<circle className="fb-string-play-bg" cx={cx} cy={cy} r={6.5} fill="none" />
+										{playing ? (
+											<rect x={cx - 2.5} y={cy - 2.5} width={5} height={5} fill="none" />
+										) : (
+											<path fill="none" d={`M${cx - 2} ${cy - 3.5}L${cx + 3.5} ${cy}L${cx - 2} ${cy + 3.5}Z`} />
+										)}
+									</g>
+								);
+							})}
 					</g>
 				</svg>
 
 				<div
+					ref={scroller}
 					className="fp-thin-scroll min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
 				>
 					<svg
@@ -628,7 +726,7 @@ export default function Fretboard({
 					>
 						<g
 							className="fb-neck"
-							style={{ transform: `translate(${EDGE - fromFret * FRET_W}px, ${tagsH}px)` }}
+							style={{ transform: `translate(${EDGE - fromFret * FRET_W}px, ${headH}px)` }}
 						>
 							{/* Inlays: squares, so they are not mistaken for marks. */}
 							{frets.map((fret) => {
@@ -713,16 +811,135 @@ export default function Fretboard({
 
 							{/* The hand position a run plays in. */}
 							{highlight && (
-								<rect
-									className="fb-position"
-									// An SVG rect fills black by default; say so here rather than
-									// trusting a stylesheet to arrive first.
-									fill="none"
-									x={highlight.fromFret * FRET_W}
-									y={stringY(STRING_COUNT - 1) - 9}
-									width={(highlight.toFret - highlight.fromFret + 1) * FRET_W}
-									height={stringY(0) - stringY(STRING_COUNT - 1) + 18}
-								/>
+								<g className="fb-position-group">
+									<rect
+										className="fb-position"
+										// An SVG rect fills black by default; say so here rather than
+										// trusting a stylesheet to arrive first.
+										fill="none"
+										x={highlight.fromFret * FRET_W}
+										y={stringY(STRING_COUNT - 1) - 9}
+										width={(highlight.toFret - highlight.fromFret + 1) * FRET_W}
+										height={stringY(0) - stringY(STRING_COUNT - 1) + 18}
+									/>
+									{/* The buttons sit in the row kept above the neck, clear of the
+									    frame rather than drawn on its line. */}
+									{onHighlightPlay && (
+										<g
+											className="fb-box-btn"
+											role="button"
+											tabIndex={0}
+											aria-label={highlightPlaying ? "Stop this position" : "Play this position"}
+											onClick={onHighlightPlay}
+											onKeyDown={(e) => {
+												if (e.key !== "Enter" && e.key !== " ") return;
+												e.preventDefault();
+												onHighlightPlay();
+											}}
+										>
+											<rect
+												x={highlight.fromFret * FRET_W}
+												y={-BOX_BTN_ROW}
+												width={BOX_BTN}
+												height={BOX_BTN}
+												fill="none"
+											/>
+											{highlightPlaying ? (
+												<Square
+													x={highlight.fromFret * FRET_W + 3}
+													y={-BOX_BTN_ROW + 3}
+													width={8}
+													height={8}
+													strokeWidth={2.5}
+												/>
+											) : (
+												<Play
+													x={highlight.fromFret * FRET_W + 3}
+													y={-BOX_BTN_ROW + 3}
+													width={8}
+													height={8}
+													strokeWidth={2.5}
+												/>
+											)}
+										</g>
+									)}
+									{/* Narrow and widen, next to the play button and styled with it:
+									    a position's width is a thing you step, not drag over the neck. */}
+									{onHighlightResize &&
+										(
+											[
+												{ step: -1, label: "Narrow this position", at: BOX_BTN, Icon: ChevronLeft },
+												{ step: 1, label: "Widen this position", at: BOX_BTN * 2, Icon: ChevronRight },
+											] as const
+										).map(({ step, label, at, Icon }) => {
+											const stuck =
+												!widthLimits ||
+												(step < 0 ? highlight.toFret <= widthLimits.low : highlight.toFret >= widthLimits.high);
+											return (
+												<g
+													key={label}
+													className="fb-box-btn"
+													role="button"
+													tabIndex={stuck ? -1 : 0}
+													aria-label={label}
+													aria-disabled={stuck || undefined}
+													data-stuck={stuck || undefined}
+													onClick={() => {
+														if (!stuck) resizeBy(step);
+													}}
+													onKeyDown={(e) => {
+														if (stuck || (e.key !== "Enter" && e.key !== " ")) return;
+														e.preventDefault();
+														resizeBy(step);
+													}}
+												>
+													<rect
+														x={highlight.fromFret * FRET_W + at}
+														y={-BOX_BTN_ROW}
+														width={BOX_BTN}
+														height={BOX_BTN}
+														fill="none"
+													/>
+													<Icon
+														x={highlight.fromFret * FRET_W + at + 3}
+														y={-BOX_BTN_ROW + 3}
+														width={8}
+														height={8}
+														strokeWidth={2.5}
+													/>
+												</g>
+											);
+										})}
+									{onHighlightClear && (
+										<g
+											className="fb-box-btn"
+											role="button"
+											tabIndex={0}
+											aria-label="Clear this position"
+											onClick={onHighlightClear}
+											onKeyDown={(e) => {
+												if (e.key !== "Enter" && e.key !== " ") return;
+												e.preventDefault();
+												onHighlightClear();
+											}}
+										>
+											<rect
+												x={(highlight.toFret + 1) * FRET_W - BOX_BTN}
+												y={-BOX_BTN_ROW}
+												width={BOX_BTN}
+												height={BOX_BTN}
+												fill="none"
+											/>
+											<X
+												x={(highlight.toFret + 1) * FRET_W - BOX_BTN + 3}
+												y={-BOX_BTN_ROW + 3}
+												width={8}
+												height={8}
+												strokeWidth={2.5}
+											/>
+										</g>
+									)}
+								</g>
 							)}
 
 							{/* Fret numbers under each cell. */}
@@ -754,6 +971,7 @@ export default function Fretboard({
 											data-fret={fret}
 											data-emphasis={emphasis}
 											data-tone={mark?.tone}
+											data-run={runShades.get(slotKey(string, fret))}
 										>
 											<circle className="fb-ring" cx={cx} cy={cy} r={RING_R} />
 											<circle
@@ -834,6 +1052,16 @@ export default function Fretboard({
 									/>
 									{onCapoChange && (
 										<rect
+											className="fb-capo-ripple"
+											x={wireX(capo) - CAPO_W - 2 - CAPO_GRIP_PAD}
+											y={stringY(STRING_COUNT - 1) - 8}
+											width={CAPO_W + CAPO_GRIP_PAD * 2}
+											height={stringY(0) - stringY(STRING_COUNT - 1) + 16}
+											fill="none"
+										/>
+									)}
+									{onCapoChange && (
+										<rect
 											className="fb-capo-grip"
 											x={wireX(capo) - CAPO_W - 2 - CAPO_GRIP_PAD}
 											y={stringY(STRING_COUNT - 1) - 8}
@@ -849,56 +1077,6 @@ export default function Fretboard({
 							)}
 						</g>
 
-						{/* Hand positions, tagged along the top edge. */}
-						{tags.length > 0 && (
-							<g
-								className="fb-tags"
-								style={{ transform: `translateX(${EDGE - fromFret * FRET_W}px)` }}
-								onPointerOut={(e) => {
-									const next = e.relatedTarget instanceof Element ? e.relatedTarget.closest(".fb-tag") : null;
-									if (!next) onPositionHover?.(null);
-								}}
-							>
-								{tags.map((position, index) => (
-									<g
-										key={`${position.fromFret}-${position.label}`}
-										className="fb-tag"
-										data-position={index}
-										role={onPositionSelect ? "button" : undefined}
-										tabIndex={onPositionSelect ? 0 : undefined}
-										aria-label={onPositionSelect ? `Play position ${position.label}` : undefined}
-										onPointerOver={() => onPositionHover?.(index)}
-										onClick={() => onPositionSelect?.(index)}
-										onKeyDown={(e) => {
-											if (e.key !== "Enter" && e.key !== " ") return;
-											e.preventDefault();
-											onPositionSelect?.(index);
-										}}
-									>
-										{/* Presentation attributes as a floor: a bare rect fills black,
-										    and a stylesheet that has not arrived should leave a gap, not
-										    a blot. The class below overrides both once it loads. */}
-										<rect
-											x={position.fromFret * FRET_W + 1}
-											y={1}
-											width={TAG_W}
-											height={TAG_H - 3}
-											fill="none"
-										/>
-										<text
-											x={position.fromFret * FRET_W + 1 + TAG_W / 2}
-											y={TAG_H - 5}
-											textAnchor="middle"
-											fontSize={8}
-											fill="none"
-											className="font-mono"
-										>
-											{position.label}
-										</text>
-									</g>
-								))}
-							</g>
-						)}
 					</svg>
 				</div>
 			</div>

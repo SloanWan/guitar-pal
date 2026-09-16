@@ -536,6 +536,28 @@
 	fill: var(--ink-dim);
 	font-weight: 500;
 }
+/* A slot the current run will play: tinted, so the line through a position
+   reads before a note sounds, and shaded by octave so the register reads too —
+   the lowest one solid, each one above it lighter. */
+.fb-mark[data-run] .fb-dot {
+	stroke: var(--denim);
+}
+.fb-mark[data-run="0"] .fb-dot {
+	fill: color-mix(in oklab, var(--denim) 45%, var(--bg));
+}
+.fb-mark[data-run="1"] .fb-dot {
+	fill: color-mix(in oklab, var(--denim) 30%, var(--bg));
+}
+.fb-mark[data-run="2"] .fb-dot {
+	fill: color-mix(in oklab, var(--denim) 18%, var(--bg));
+}
+.fb-mark[data-run="3"] .fb-dot {
+	fill: color-mix(in oklab, var(--denim) 10%, var(--bg));
+}
+.fb-mark[data-run] .fb-label {
+	fill: var(--denim-accent);
+	font-weight: 700;
+}
 .fb-mark[data-emphasis="root"] {
 	filter: drop-shadow(0 0 4px var(--denim-glow));
 }
@@ -589,49 +611,39 @@
 .fb-mark[data-emphasis="muted"] .fb-label {
 	opacity: 0;
 }
-/* Hand positions, tagged along the top edge of the neck. Small and quiet
-   until the pointer finds one, since there are five or seven of them. */
-.fb-tag rect {
-	fill: var(--bg-raise);
-	stroke: var(--line-strong);
-	stroke-width: 0.75;
-}
-.fb-tag text {
-	fill: var(--ink-dim);
-}
-.fb-tag[role="button"] {
-	cursor: pointer;
-}
-.fb-tag:hover rect,
-.fb-tag:focus-visible rect {
-	fill: var(--denim);
-	stroke: var(--denim);
-}
-.fb-tag:hover text,
-.fb-tag:focus-visible text {
-	fill: var(--btn-on-denim);
-}
-.fb-tag:focus-visible {
-	outline: none;
-}
-
-/* Run the scale along one string. */
+/* Run the scale along one string: a small disc left of the string's name. */
 .fb-string-play {
 	cursor: pointer;
 }
-.fb-string-play path {
-	fill: var(--ink-faint);
+.fb-string-play-bg {
+	fill: var(--denim-tint);
+	stroke: var(--denim);
+	stroke-width: 0.75;
+	transition:
+		fill var(--dur-hover),
+		stroke var(--dur-hover);
+}
+.fb-string-play path,
+.fb-string-play rect {
+	fill: var(--denim-accent);
 	transition: fill var(--dur-hover);
 }
+.fb-string-play:hover .fb-string-play-bg,
+.fb-string-play:focus-visible .fb-string-play-bg,
+.fb-string-play[data-playing] .fb-string-play-bg {
+	fill: var(--denim);
+	stroke: var(--denim);
+}
 .fb-string-play:hover path,
-.fb-string-play:focus-visible path {
-	fill: var(--denim-accent);
+.fb-string-play:hover rect,
+.fb-string-play:focus-visible path,
+.fb-string-play:focus-visible rect,
+.fb-string-play[data-playing] path,
+.fb-string-play[data-playing] rect {
+	fill: var(--btn-on-denim);
 }
 .fb-string-play:focus-visible {
 	outline: none;
-}
-.fb-string-play:focus-visible rect {
-	fill: var(--denim-tint);
 }
 
 /* The hand position a run is played in: a frame, not a fill, so the marks
@@ -641,6 +653,33 @@
 	stroke: var(--denim-accent);
 	stroke-width: 1.25;
 	stroke-dasharray: 4 3;
+	pointer-events: none;
+}
+
+/* The play and clear buttons above a highlighted position: bare icons, with a
+   ground only under the pointer. The browser draws its own focus ring around
+   an SVG element as a rounded halo, so that is turned off and the same hover
+   ground stands in for it. */
+.fb-box-btn {
+	cursor: pointer;
+	outline: none;
+}
+.fb-box-btn > rect:first-child {
+	fill: transparent;
+	transition: fill var(--dur-hover);
+}
+.fb-box-btn svg {
+	color: var(--denim-accent);
+	pointer-events: none;
+}
+.fb-box-btn:hover > rect:first-child,
+.fb-box-btn:focus-visible > rect:first-child {
+	fill: var(--denim-tint);
+}
+/* A width already at its narrowest or widest: still there, plainly spent, and
+   inert — no cursor, no hover ground, nothing to press. */
+.fb-box-btn[data-stuck] {
+	opacity: 0.3;
 	pointer-events: none;
 }
 
@@ -661,6 +700,24 @@
 	fill: transparent;
 	cursor: grab;
 	touch-action: none;
+}
+/* Hovering the capo draws a dashed outline around the span it can be dragged
+   through: still, quiet, and the usual sign that a thing is loose. */
+.fb-capo-ripple {
+	fill: none;
+	stroke: none;
+	stroke-width: 1;
+	stroke-dasharray: 3 3;
+	pointer-events: none;
+	transition: stroke var(--dur-hover);
+}
+.fb-capo:hover .fb-capo-ripple,
+.fb-capo:focus-visible .fb-capo-ripple {
+	stroke: var(--denim-accent);
+}
+.fb-capo:hover .fb-capo-bar,
+.fb-capo:focus-visible .fb-capo-bar {
+	fill: var(--ink);
 }
 .fb-capo-grip:active {
 	cursor: grabbing;
@@ -809,6 +866,16 @@
 .pk-key[data-exact] .pk-dot {
 	opacity: 1;
 }
+/* A scale key's degree waits for its octave the same way its dot does; the
+   tonic is filled and says "1" whatever the pointer is doing. */
+.pk-key[data-tone] .pk-label {
+	opacity: 0;
+	transition: opacity var(--dur-hover) ease-out;
+}
+.pk-key[data-scale] .pk-label,
+.pk-key[data-exact] .pk-label {
+	opacity: 1;
+}
 @media (prefers-reduced-motion: reduce) {
 	.pk-dot {
 		transition: none;
@@ -910,18 +977,6 @@
 		transition: none;
 		animation: none;
 	}
-}
-
-/* The two voice faders on the fretboard page. The native control, tinted:
-   a bespoke slider here would be a third implementation of one. */
-.fb-volume {
-	accent-color: var(--denim);
-	height: 14px;
-	cursor: pointer;
-}
-.fb-volume:disabled {
-	accent-color: var(--ink-faint);
-	cursor: not-allowed;
 }
 
 /* ----------------------------------------------------------------------------

@@ -84,12 +84,13 @@ describe("Fretboard", () => {
 		for (let fret = 0; fret <= 22; fret++) expect(text).toContain(String(fret));
 	});
 
-	it("knows nothing about scales or chords: only the mark model, position facts, motion and the string names", () => {
+	it("knows nothing about scales or chords: only the mark model, position facts, motion, icons and the string names", () => {
 		const source = readFileSync(path.resolve(__dirname, "../Fretboard.tsx"), "utf8");
 		const modules = [...source.matchAll(/^import[^;]*from "([^"]+)";/gm)].map((m) => m[1]);
 		expect(new Set(modules)).toEqual(
 			new Set([
 				"react",
+				"lucide-react",
 				"@/lib/chordVoicingToMidi",
 				"@/lib/fretboard/positions",
 				"@/lib/fretboard/types",
@@ -254,45 +255,18 @@ describe("Fretboard — press", () => {
 		}
 	});
 
-	it("tags each hand position, reporting hover and selection", () => {
-		const onPositionHover = vi.fn();
-		const onPositionSelect = vi.fn();
-		const board = mount({
-			positions: [
-				{ fromFret: 0, toFret: 4, label: "1" },
-				{ fromFret: 5, toFret: 9, label: "2" },
-			],
-			onPositionHover,
-			onPositionSelect,
-		});
-		const tags = [...board.host.querySelectorAll(".fb-tag")];
-		expect(tags).toHaveLength(2);
-		expect(tags.map((t) => t.textContent)).toEqual(["1", "2"]);
-		expect(tags[1].getAttribute("aria-label")).toBe("Play position 2");
-		// The tag sits over its box's left edge.
-		expect(Number(tags[1].querySelector("rect")!.getAttribute("x"))).toBe(5 * FRET_W + 1);
-
-		pointer(tags[1], "pointerover");
-		expect(onPositionHover).toHaveBeenLastCalledWith(1);
-		pointer(tags[1], "pointerout", { relatedTarget: null });
-		expect(onPositionHover).toHaveBeenLastCalledWith(null);
-		act(() => (tags[0] as SVGGElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		expect(onPositionSelect).toHaveBeenCalledWith(0);
-
-		// The neck keeps its own height when nothing is tagged.
-		expect(board.host.querySelector(".fb-tags")).not.toBeNull();
-		expect(mount().host.querySelector(".fb-tags")).toBeNull();
-		board.unmount();
-	});
-
-	it("offers a play glyph per string, and picks a position on a right press", () => {
+	it("offers a play button per string, and picks a position on a right press", () => {
 		const onStringPlay = vi.fn();
 		const onPositionPick = vi.fn();
-		const board = mount({ onStringPlay, onPositionPick });
+		const board = mount({ onStringPlay, onPositionPick, playingString: 4 });
 		const glyphs = [...board.host.querySelectorAll(".fb-string-play")];
 		expect(glyphs).toHaveLength(6);
 		expect(glyphs[0].getAttribute("aria-label")).toBe("Play the E string");
 		expect(glyphs[5].getAttribute("aria-label")).toBe("Play the e string");
+		// The string sounding now offers to stop instead.
+		expect(glyphs[4].getAttribute("aria-label")).toBe("Stop the B string");
+		expect(glyphs[4].hasAttribute("data-playing")).toBe(true);
+		expect(glyphs[0].hasAttribute("data-playing")).toBe(false);
 		act(() => glyphs[2].dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(onStringPlay).toHaveBeenCalledWith(2);
 
@@ -307,6 +281,62 @@ describe("Fretboard — press", () => {
 		board.unmount();
 		pressable.unmount();
 		expect(mount().host.querySelector(".fb-string-play")).toBeNull();
+	});
+
+	it("puts a play and a clear button on the highlighted position's frame", () => {
+		const onHighlightPlay = vi.fn();
+		const onHighlightClear = vi.fn();
+		const board = mount({
+			highlight: { fromFret: 5, toFret: 9 },
+			onHighlightPlay,
+			onHighlightClear,
+			highlightPlaying: true,
+		});
+		const buttons = [...board.host.querySelectorAll(".fb-box-btn")];
+		// Without a resize handler the frame carries only these two.
+		expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+			"Stop this position",
+			"Clear this position",
+		]);
+		// Play sits at the box's left edge, clear at its right, both in the row
+		// kept above the neck rather than drawn on the frame's line.
+		const hit = (b: Element) => b.querySelector("rect")!;
+		expect(Number(hit(buttons[0]).getAttribute("x"))).toBe(5 * FRET_W);
+		expect(Number(hit(buttons[1]).getAttribute("x"))).toBe(10 * FRET_W - 14);
+		for (const b of buttons) expect(Number(hit(b).getAttribute("y"))).toBeLessThan(0);
+		// The row is reserved whether or not a position is showing, so the
+		// board keeps its height.
+		const heightOf = (host: HTMLElement) =>
+			Number(host.querySelector("svg[data-from-fret]")!.getAttribute("height"));
+		expect(heightOf(board.host)).toBe(heightOf(mount({ onHighlightPlay: () => {} }).host));
+		act(() => buttons[0].dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onHighlightPlay).toHaveBeenCalled();
+		act(() => buttons[1].dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onHighlightClear).toHaveBeenCalled();
+		// A frame with no handlers carries no buttons.
+		expect(mount({ highlight: { fromFret: 0, toFret: 4 } }).host.querySelector(".fb-box-btn")).toBeNull();
+		board.unmount();
+	});
+
+	it("scrolls a fret into view only when it has left the viewport", () => {
+		const handle = createRef<FretboardHandle>();
+		const board = mount({ ref: handle });
+		const svg = board.host.querySelector("svg[data-from-fret]") as SVGSVGElement;
+		svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 23 * FRET_W + 2, height: 120 }) as DOMRect;
+		const scroller = svg.parentElement as HTMLDivElement;
+		Object.defineProperty(scroller, "clientWidth", { value: 10 * FRET_W, configurable: true });
+		scroller.scrollLeft = 0;
+		const scrollTo = vi.fn();
+		scroller.scrollTo = scrollTo;
+
+		act(() => handle.current!.revealFret(4)); // well inside
+		expect(scrollTo).not.toHaveBeenCalled();
+		act(() => handle.current!.revealFret(18)); // off to the right
+		expect(scrollTo).toHaveBeenCalledTimes(1);
+		// Nudged just past the edge with a cell of lead, not centred: a run
+		// stepping a fret at a time should creep, not jump half a screen.
+		expect(scrollTo.mock.calls[0][0].left).toBeCloseTo((18 - 10 + 3) * FRET_W);
+		board.unmount();
 	});
 
 	it("draws a capo, dims the frets behind it, and reports the capo's pitch for a press behind it", () => {
@@ -330,7 +360,24 @@ describe("Fretboard — press", () => {
 		expect(mount().host.querySelector(".fb-capo")).toBeNull();
 	});
 
-	it("drags the capo to the fret under the pointer and keys it a fret at a time", () => {
+	it("tints the slots a run will play, leaving its first note alone", () => {
+		const board = mount({
+			runSlots: [
+				{ string: 0, fret: 5 },
+				{ string: 0, fret: 8 },
+				{ string: 1, fret: 5 },
+			],
+		});
+		const run = (s: number, f: number) =>
+			board.host.querySelector(`.fb-mark[data-string="${s}"][data-fret="${f}"]`)!.hasAttribute("data-run");
+		expect(run(0, 5)).toBe(false); // the tonic the run starts on says enough already
+		expect(run(0, 8)).toBe(true);
+		expect(run(1, 5)).toBe(true);
+		expect(run(2, 5)).toBe(false);
+		board.unmount();
+	});
+
+	it("drags the capo by how far the pointer moved, not by where it landed", () => {
 		const onCapoChange = vi.fn();
 		const board = mount({ capo: 2, onCapoChange, maxCapo: 12 });
 		const svg = board.host.querySelector("svg[data-from-fret]") as SVGSVGElement;
@@ -341,10 +388,14 @@ describe("Fretboard — press", () => {
 		// The capo lands on whichever cell the pointer is over; EDGE offsets by 1.
 		const midOf = (fret: number) => fret * FRET_W + FRET_W / 2 + 1;
 
-		pointer(grip, "pointerdown", { clientX: midOf(2) });
-		pointer(grip, "pointermove", { clientX: midOf(5) });
+		// Merely touching the bar moves nothing, however the grip straddles a wire.
+		pointer(grip, "pointerdown", { clientX: midOf(3) });
+		pointer(grip, "pointermove", { clientX: midOf(3) });
+		expect(onCapoChange).not.toHaveBeenCalled();
+		// From there it follows the pointer: three cells right is three frets up.
+		pointer(grip, "pointermove", { clientX: midOf(6) });
 		expect(onCapoChange).toHaveBeenLastCalledWith(5);
-		pointer(grip, "pointermove", { clientX: midOf(20) }); // past maxCapo
+		pointer(grip, "pointermove", { clientX: midOf(30) }); // past maxCapo
 		expect(onCapoChange).toHaveBeenLastCalledWith(12);
 		pointer(grip, "pointermove", { clientX: midOf(0) }); // off the low end: no capo
 		expect(onCapoChange).toHaveBeenLastCalledWith(0);

@@ -28,26 +28,27 @@
  * Marks above it keep the pitch they had — a capo does not transpose them.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Music4, Piano, Play, Square, Volume2, X } from "lucide-react";
+import { Guitar, Piano, Volume2 } from "lucide-react";
+import { toast } from "sonner";
 
 import Fretboard, { type FretboardHandle } from "@/components/fretboard/Fretboard";
 import PianoKeyboard, { type PianoKeyboardHandle } from "@/components/fretboard/PianoKeyboard";
 import { useNoteSound, type NoteVoice } from "@/components/fretboard/useNoteSound";
-import { RUN_VOICES, useScalePlayer, type RunVoice } from "@/components/fretboard/useScalePlayer";
-import ChordPickerModal, { type ConfirmedChord } from "@/components/strum/ChordPickerModal";
+import { useScalePlayer } from "@/components/fretboard/useScalePlayer";
 import MusicalText from "@/components/MusicalText";
+import Fader from "@/components/ui/Fader";
 import Rocker from "@/components/ui/Rocker";
 import { loadVoicings, peekVoicings } from "@/lib/chordVoicingCache";
-import { GUITAR_OPEN_MIDI, STRING_LABELS, rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { chordModeView, inShape, shapeSlots, type ChordModeView } from "@/lib/fretboard/chordMode";
 import { keyChord, shapeMarks, shapePitches, type KeyChord } from "@/lib/fretboard/chords";
-import { chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
 import {
 	SCALE_LABELS,
 	SCALE_ROOTS,
 	SCALE_TYPES,
 	createLabeler,
+	degreeLabel,
 	scaleMarks,
 	scalePitchClasses,
 	scaleRootPitchClass,
@@ -127,37 +128,49 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const SELECT_CLASS = "h-[30px] border border-line-strong bg-surface px-2 font-mono text-[12px] text-ink";
 
-/** One voice's level. Disabled with the sound off, since nothing would sound. */
-function VolumeSlider({
+/**
+ * An instrument's heading: its name on the left, its own fader on the right.
+ * The fader belongs to the instrument it controls rather than to the page, so
+ * it sits in the corner of that instrument's block.
+ */
+function InstrumentHeader({
 	icon,
+	name,
 	label,
 	value,
 	onChange,
 	disabled,
+	children,
 }: {
 	icon: React.ReactNode;
+	name: string;
 	label: string;
 	value: number;
 	onChange: (level: number) => void;
 	disabled?: boolean;
+	children?: React.ReactNode;
 }) {
 	return (
-		<span className="flex items-center gap-1.5" title={label}>
-			<span className={disabled ? "text-ink-faint" : "text-ink-dim"} aria-hidden="true">
-				{icon}
+		<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+			<span className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+				<span className="flex items-center gap-1.5">
+					<span aria-hidden="true">{icon}</span>
+					{name}
+				</span>
+				{children}
 			</span>
-			<input
-				type="range"
-				min={0}
-				max={100}
-				step={1}
-				value={Math.round(value * 100)}
-				disabled={disabled}
-				aria-label={label}
-				onChange={(e) => onChange(Number(e.target.value) / 100)}
-				className="fb-volume w-16"
-			/>
-		</span>
+			<div className="w-28 shrink-0">
+				<Fader
+					min={0}
+					max={100}
+					step={1}
+					value={Math.round(value * 100)}
+					onValue={(v) => onChange(v / 100)}
+					disabled={disabled}
+					ariaLabel={label}
+				/>
+			</div>
+		</div>
 	);
 }
 
@@ -178,30 +191,24 @@ const MODES: readonly { value: ExplorerMode; label: string }[] = [
 	{ value: "chords", label: "Chords" },
 ];
 
-const LABEL_MODES: readonly { value: LabelMode; label: string }[] = [
+/** Off is a display choice like the other two, so it lives in the same control. */
+type LabelChoice = LabelMode | "none";
+
+const LABEL_MODES: readonly { value: LabelChoice; label: string }[] = [
+	{ value: "none", label: "None" },
 	{ value: "note", label: "Notes" },
 	{ value: "degree", label: "Degrees" },
 ];
 
-const CAPO_OPTIONS = Array.from({ length: STRUM_CAPO_MAX + 1 }, (_, i) => i);
 /** The frets a capo actually lands on, for one-press access. */
-const CAPO_QUICK: readonly number[] = [0, 2, 3, 5, 7];
+/** Where a capo lands when it is switched on: the first fret, then drag it. */
+const DEFAULT_CAPO = 1;
 
 /** Slow enough to learn a shape, fast enough to hear it as a line. */
-const BPM_MIN = 40;
-const BPM_MAX = 200;
 const DEFAULT_BPM = 90;
-
-const DIVISIONS: readonly { value: "quarter" | "eighth"; label: string }[] = [
-	{ value: "quarter", label: "1/4" },
-	{ value: "eighth", label: "1/8" },
-];
-
-const VOICE_LABELS: Readonly<Record<RunVoice, string>> = {
-	guitar: "Guitar",
-	piano: "Piano",
-	both: "Both",
-};
+/** A run's fixed tempo and voice, now that neither has a control. */
+const RUN_BPM = DEFAULT_BPM;
+const RUN_VOICE: NoteVoice = "guitar";
 
 const LEGEND: readonly { emphasis: FretMark["emphasis"]; tone?: FretMark["tone"]; label: string }[] = [
 	{ emphasis: "root", label: "Root" },
@@ -225,21 +232,11 @@ export default function FretboardExplorer({
 }: FretboardExplorerProps) {
 	const [root, setRoot] = useState(initialRoot);
 	const [scale, setScale] = useState<ScaleType>(initialScale);
-	const [labelMode, setLabelMode] = useState<LabelMode>("note");
-	const [showLabels, setShowLabels] = useState(true);
+	const [labelChoice, setLabelChoice] = useState<LabelChoice>("note");
 	const [mode, setMode] = useState<ExplorerMode>(initialMode);
 	const [capo, setCapo] = useState(0);
-	const [chord, setChord] = useState<ConfirmedChord | null>(null);
-	const [pickerOpen, setPickerOpen] = useState(false);
 	/** Scale mode: what a run plays — the whole neck, a hand position, or one string. */
 	const [runChoice, setRunChoice] = useState("neck");
-	const [bpm, setBpm] = useState(DEFAULT_BPM);
-	const [division, setDivision] = useState<"quarter" | "eighth">("eighth");
-	const [runVoice, setRunVoice] = useState<RunVoice>("guitar");
-	/** A tag under the pointer raises its box without selecting it. */
-	const [hoveredBox, setHoveredBox] = useState<number | null>(null);
-	/** A box picked by right-pressing the neck, outside the canonical five. */
-	const [pickedFret, setPickedFret] = useState<number | null>(null);
 	/** Chords mode: semitones above the key's root; 0 (the tonic) until a key is pressed. */
 	const [chordInterval, setChordInterval] = useState(0);
 	/** Chords mode: the fingered chord's voicing, or null while loading / when the library has none. */
@@ -262,6 +259,17 @@ export default function FretboardExplorer({
 		if (!soundRestored) return;
 		localStorage.setItem(SOUND_STORAGE_KEY, soundOn ? "on" : "off");
 	}, [soundOn, soundRestored]);
+
+	// The first press downloads a voice's samples, which takes seconds on a
+	// cold cache. Say so, and take it back when the wait is over, so a silent
+	// board is never a mystery.
+	useEffect(() => {
+		if (!soundLoading) return;
+		const id = toast.loading("Loading instrument sounds…");
+		return () => {
+			toast.dismiss(id);
+		};
+	}, [soundLoading]);
 
 	const spec = useMemo(() => ({ root, scale }), [root, scale]);
 	const inChords = mode === "chords";
@@ -297,25 +305,20 @@ export default function FretboardExplorer({
 	// capo fret; the pitches above it are what they always were.
 	const playable = useMemo<FretWindow>(() => ({ fromFret: capo, toFret: NECK.toFret }), [capo]);
 
+	const noteName = useMemo(() => createLabeler(spec, "note"), [spec]);
+	const labelMode: LabelMode = labelChoice === "degree" ? "degree" : "note";
+	const showLabels = labelChoice !== "none";
+
 	const marks = useMemo<FretMark[]>(() => {
 		const label = createLabeler(spec, labelMode);
 		let raw: FretMark[];
 		if (view) {
 			raw = shapeVoicing ? shapeMarks(shapeVoicing, capo, view.shape.rootPitchClass, label) : [];
 		} else {
-			const base = scaleMarks(spec, playable, labelMode);
-			raw = chord
-				? overlayChordTones(
-						base,
-						chordTonesFromMidi(chord.pitches, rootPitchClass(chord.root)),
-						spec,
-						playable,
-						labelMode,
-					)
-				: base;
+			raw = scaleMarks(spec, playable, labelMode);
 		}
 		return raw.map((m) => ({ ...m, label: showLabels ? withGlyphs(m.label) : "" }));
-	}, [spec, labelMode, showLabels, chord, view, shapeVoicing, capo, playable]);
+	}, [spec, labelMode, showLabels, view, shapeVoicing, capo, playable]);
 
 	// ── Playing the scale ─────────────────────────────────────────────────────
 	const boxes = useMemo(() => (inChords ? [] : scalePositions(spec, playable)), [inChords, spec, playable]);
@@ -324,8 +327,8 @@ export default function FretboardExplorer({
 			const [kind, index] = choice.split(":");
 			if (kind === "box") return { kind: "box", box: boxes[Number(index)] ?? playable };
 			if (kind === "pick") {
-				const fromFret = Number(index);
-				return { kind: "box", box: { fromFret, toFret: fromFret + BOX_FRETS - 1 } };
+				const [from, to] = index.split("-").map(Number);
+				return { kind: "box", box: { fromFret: from, toFret: to } };
 			}
 			if (kind === "string") return { kind: "string", string: Number(index) };
 			return { kind: "neck" };
@@ -341,12 +344,23 @@ export default function FretboardExplorer({
 	 * The box outlined on the neck: whichever tag the pointer is over, else the
 	 * one a run would play, so hovering previews without committing.
 	 */
-	const runBox =
-		hoveredBox !== null && boxes[hoveredBox]
-			? boxes[hoveredBox]
-			: runTarget.kind === "box"
-				? runTarget.box
-				: null;
+	const runBox = inChords ? null : runTarget.kind === "box" ? runTarget.box : null;
+
+	/**
+	 * The chord as it actually sounds: every note of the shape, low to high,
+	 * named with its octave and with which degree of the chord it is. Without a
+	 * voicing there is only the triad to show, so its three tones stand in.
+	 */
+	const chordTones = useMemo(() => {
+		if (!view) return [];
+		const root = view.sounding.rootPitchClass;
+		const describe = (midi: number, withOctave: boolean) => ({
+			name: `${noteName(((midi % 12) + 12) % 12)}${withOctave ? Math.floor(midi / 12) - 1 : ""}`,
+			degree: degreeLabel(midi - root),
+		});
+		if (shapeVoicing) return shapePitches(shapeVoicing, capo).map((midi) => describe(midi, true));
+		return view.sounding.pitchClasses.map((pc) => describe(pc, false));
+	}, [view, shapeVoicing, capo, noteName]);
 
 	// The piano follows the neck: hover rings the key, a press strikes it.
 	// Both go through the keyboard's imperative handle, never through state.
@@ -355,11 +369,14 @@ export default function FretboardExplorer({
 
 	// Each note of a run lights on both instruments as it sounds.
 	const handleRunNote = useCallback((note: SlotNote) => {
+		fretboard.current?.revealFret(note.fret);
 		fretboard.current?.strike([{ string: note.string, fret: note.fret }]);
 		piano.current?.strike(note.midi);
 	}, []);
 	const player = useScalePlayer({ audio: bus, onNote: handleRunNote });
 	const { stop: stopRun } = player;
+	/** The string whose run is sounding, so its button can offer to stop it. */
+	const playingString = player.isPlaying && runTarget.kind === "string" ? runTarget.string : null;
 
 	// A run describes the key it started in; changing any of that ends it.
 	useEffect(() => stopRun, [stopRun, root, scale, capo, mode, soundOn]);
@@ -368,26 +385,19 @@ export default function FretboardExplorer({
 	const startRun = useCallback(
 		(notes: readonly SlotNote[]) => {
 			if (!soundOn || notes.length === 0) return;
-			const voices: NoteVoice[] = runVoice === "both" ? ["guitar", "piano"] : [runVoice];
-			void Promise.all(voices.map((v) => prepare(v)))
-				.then((buses) => {
-					if (buses.every(Boolean)) player.play(notes, noteSpacingSeconds(bpm, division), runVoice);
+			void prepare(RUN_VOICE)
+				.then((ready) => {
+					if (ready) player.play(notes, noteSpacingSeconds(RUN_BPM, "eighth"), RUN_VOICE);
 				})
 				.catch(() => undefined);
 		},
-		[soundOn, runVoice, prepare, player, bpm, division],
+		[soundOn, prepare, player],
 	);
-
-	const toggleRun = useCallback(() => {
-		if (player.isPlaying) player.stop();
-		else startRun(runNotes);
-	}, [player, startRun, runNotes]);
 
 	/** Selecting a run from the board plays it straight away — that is the gesture. */
 	const runChoiceSelected = useCallback(
 		(choice: string) => {
 			setRunChoice(choice);
-			setPickedFret(choice.startsWith("pick:") ? Number(choice.split(":")[1]) : null);
 			startRun(scaleRun(spec, playable, targetFor(choice)));
 		},
 		[startRun, spec, playable, targetFor],
@@ -449,7 +459,7 @@ export default function FretboardExplorer({
 
 	/** The chord this key sounds, for the numerals and the dimming. */
 	const chordsByPc = useMemo(() => Array.from({ length: 12 }, (_, pc) => keyChord(spec, pc)), [spec]);
-	const keyLabel = useCallback(
+	const chordKeyLabel = useCallback(
 		(key: PianoKey, selected: boolean) => {
 			const c = chordsByPc[key.pitchClass];
 			return c.diatonic || selected ? c.numeral : "";
@@ -457,6 +467,22 @@ export default function FretboardExplorer({
 		[chordsByPc],
 	);
 	const keyDimmed = useCallback((key: PianoKey) => !chordsByPc[key.pitchClass].diatonic, [chordsByPc]);
+
+	/**
+	 * Scale mode: a key of the scale is named with its octave — A2, C3 — so the
+	 * keyboard says which note, in which register, rather than only "in the
+	 * scale". The tonic is named always; the rest appear with their octave's
+	 * dots. A C outside the scale keeps its marker, to count octaves by.
+	 */
+	const scaleKeyLabel = useCallback(
+		(key: PianoKey) =>
+			scalePcs.includes(key.pitchClass)
+				? withGlyphs(`${noteName(key.pitchClass)}${key.octave}`)
+				: key.pitchClass === 0
+					? `C${key.octave}`
+					: "",
+		[scalePcs, noteName],
+	);
 
 	const keyName = `${withGlyphs(root)} ${SCALE_LABELS[scale].toLowerCase()}`;
 	const boardLabel = view ? `${chordName(view.shape)} shape on the fretboard` : `${root} ${SCALE_LABELS[scale]} on the fretboard`;
@@ -475,31 +501,6 @@ export default function FretboardExplorer({
 						</span>
 					)}
 				</h2>
-				<span className="flex items-center gap-3">
-					<VolumeSlider
-						icon={<Piano className="size-3.5 shrink-0" strokeWidth={1.5} />}
-						label="Piano volume"
-						value={volumes.piano}
-						onChange={(v) => setVolume("piano", v)}
-						disabled={!soundOn}
-					/>
-					<VolumeSlider
-						icon={<Music4 className="size-3.5 shrink-0" strokeWidth={1.5} />}
-						label="Guitar volume"
-						value={volumes.guitar}
-						onChange={(v) => setVolume("guitar", v)}
-						disabled={!soundOn}
-					/>
-					<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-						{soundLoading ? "Loading sound…" : "Sound"}
-					</span>
-					{soundLoading ? (
-						<LoaderCircle className="size-3.5 shrink-0 animate-spin text-denim-accent" strokeWidth={1.5} />
-					) : (
-						<Volume2 className="size-3.5 shrink-0 text-ink-dim" strokeWidth={1.5} />
-					)}
-					<Rocker checked={soundOn} onChange={setSoundOn} loading={soundLoading} ariaLabel="Sound" />
-				</span>
 			</div>
 
 			{/* Key and capo: what both modes work on, always reachable. */}
@@ -541,46 +542,64 @@ export default function FretboardExplorer({
 					</select>
 				</Field>
 
-				<Field label="Capo">
-					<div className="flex items-stretch gap-2">
-						<select
-							aria-label="Capo"
-							value={capo}
-							onChange={(e) => setCapo(Number(e.target.value))}
-							className={SELECT_CLASS}
-						>
-							{CAPO_OPTIONS.map((fret) => (
-								<option key={fret} value={fret}>
-									{fret === 0 ? "None" : `Fret ${fret}`}
-								</option>
-							))}
-						</select>
-						<div role="radiogroup" aria-label="Capo shortcuts" className="flex border border-line-strong">
-							{CAPO_QUICK.map((fret, i) => {
-								const on = fret === capo;
-								return (
-									<button
-										key={fret}
-										type="button"
-										role="radio"
-										aria-checked={on}
-										aria-label={fret === 0 ? "No capo" : `Capo fret ${fret}`}
-										onClick={() => setCapo(fret)}
-										className={`min-w-8 font-mono text-[11px] transition-colors duration-(--dur-hover) ${
-											i > 0 ? "border-l border-line-strong" : ""
-										} ${on ? "bg-denim text-on-denim" : "text-ink-dim hover:text-denim-accent"}`}
-									>
-										{fret === 0 ? "—" : fret}
-									</button>
-								);
-							})}
-						</div>
-					</div>
+				<Field label="Mode">
+					<Segmented options={MODES} value={mode} onChange={setMode} ariaLabel="Mode" />
 				</Field>
 			</div>
 
 			{/* The two instruments, adjacent: the same key seen twice. */}
 			<div className="flex flex-col gap-3 border border-line bg-surface p-3 sm:p-4">
+				{/* The card's own switch: everything below it is what makes sound. */}
+				<div className="flex items-center justify-end gap-2">
+					<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Sound</span>
+					<Volume2 className="size-3.5 shrink-0 text-ink-dim" strokeWidth={1.5} />
+					{/* The wait is announced in a toast; the rocker only breathes. */}
+					<Rocker checked={soundOn} onChange={setSoundOn} loading={soundLoading} ariaLabel="Sound" />
+				</div>
+
+				{/* In Chords mode the keyboard is the chord picker, so the chord it
+				    is picking is named over it. */}
+				{view && (
+					<div className="text-center" data-testid="chord-readout">
+						<div className="font-mono text-[13px] text-ink">
+							<MusicalText text={chordName(view.sounding)} />
+							<span className="mx-1.5 text-ink-faint">·</span>
+							<span className="text-denim-accent">{view.sounding.numeral}</span>
+							{capo > 0 && (
+								<span className="ml-2 text-ink-dim">
+									· <MusicalText text={chordName(view.shape)} /> shape
+								</span>
+							)}
+							{shapeVoicing === null && voicing?.chord === view.shape && (
+								<span className="ml-2 text-ink-faint">· no voicing</span>
+							)}
+						</div>
+						{/* What the chord is made of: each note the shape sounds, in the
+						    key's spelling, with which degree of the chord it is. */}
+						<div className="mt-0.5 font-mono text-[10px] tracking-[0.08em] text-ink-faint">
+							{chordTones.map((tone, i) => (
+								<span key={`${tone.name}-${i}`}>
+									{i > 0 && <span className="mx-1">·</span>}
+									<MusicalText text={tone.name} />
+									<span className="text-denim-accent">
+										{" ("}
+										<MusicalText text={tone.degree} />
+										{")"}
+									</span>
+								</span>
+							))}
+						</div>
+					</div>
+				)}
+
+				<InstrumentHeader
+					icon={<Piano className="size-3.5" strokeWidth={1.5} />}
+					name="Piano"
+					label="Piano volume"
+					value={volumes.piano}
+					onChange={(v) => setVolume("piano", v)}
+					disabled={!soundOn}
+				/>
 				<PianoKeyboard
 					ref={piano}
 					keys={PIANO_61}
@@ -591,11 +610,27 @@ export default function FretboardExplorer({
 					toneMidis={view && shapeVoicing ? shapePitches(shapeVoicing, capo) : undefined}
 					range={GUITAR_RANGE}
 					onSelect={handleKeySelect}
-					labelFor={inChords ? keyLabel : undefined}
+					labelFor={inChords ? chordKeyLabel : scaleKeyLabel}
 					dimmed={inChords ? keyDimmed : undefined}
 					ariaLabel={inChords ? "Chord" : "Piano"}
 				/>
 
+				<InstrumentHeader
+					icon={<Guitar className="size-3.5" strokeWidth={1.5} />}
+					name="Guitar"
+					label="Guitar volume"
+					value={volumes.guitar}
+					onChange={(v) => setVolume("guitar", v)}
+					disabled={!soundOn}
+				>
+					{/* Both belong to the neck rather than to the key: where the capo
+					    is, and what the dots say. */}
+					<span className="flex items-center gap-1.5">
+						<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Capo</span>
+						<Rocker checked={capo > 0} onChange={(on) => setCapo(on ? DEFAULT_CAPO : 0)} ariaLabel="Capo" />
+					</span>
+					<Segmented options={LABEL_MODES} value={labelChoice} onChange={setLabelChoice} ariaLabel="Labels" />
+				</InstrumentHeader>
 				<div className="select-none">
 					<Fretboard
 						ref={fretboard}
@@ -603,14 +638,42 @@ export default function FretboardExplorer({
 						fromFret={NECK.fromFret}
 						toFret={NECK.toFret}
 						capo={capo}
-						onCapoChange={setCapo}
+						onCapoChange={(fret) => {
+							setCapo(fret);
+							// Dragged past the edge, the capo would vanish under the scroll.
+							fretboard.current?.revealFret(fret);
+						}}
 						maxCapo={STRUM_CAPO_MAX}
 						highlight={runBox}
-						positions={inChords ? undefined : boxes.map((box, i) => ({ ...box, label: String(i + 1) }))}
-						onPositionHover={setHoveredBox}
-						onPositionSelect={(i) => runChoiceSelected(`box:${i}`)}
-						onStringPlay={inChords ? undefined : (s) => runChoiceSelected(`string:${s}`)}
-						onPositionPick={inChords ? undefined : (fret) => runChoiceSelected(`pick:${fret}`)}
+						runSlots={runBox ? runNotes : undefined}
+						onStringPlay={
+							inChords
+								? undefined
+								: (s) => (playingString === s ? player.stop() : runChoiceSelected(`string:${s}`))
+						}
+						playingString={playingString}
+						onPositionPick={
+							inChords
+								? undefined
+								: (fret) => runChoiceSelected(`pick:${fret}-${Math.min(NECK.toFret, fret + BOX_FRETS - 1)}`)
+						}
+						onHighlightResize={
+							runBox && !inChords ? (to) => setRunChoice(`pick:${runBox.fromFret}-${to}`) : undefined
+						}
+						onHighlightPlay={
+							runBox && !inChords
+								? () => (player.isPlaying ? player.stop() : startRun(scaleRun(spec, playable, runTarget)))
+								: undefined
+						}
+						onHighlightClear={
+							runBox && !inChords
+								? () => {
+										setRunChoice("neck");
+										player.stop();
+									}
+								: undefined
+						}
+						highlightPlaying={player.isPlaying && runTarget.kind === "box"}
 						label={boardLabel}
 						onSlotPress={handleSlotPress}
 						onSlotHover={handleSlotHover}
@@ -635,157 +698,6 @@ export default function FretboardExplorer({
 				</div>
 			</div>
 
-			{/* Mode: what you are doing with the key, and that mode's own controls. */}
-			<div className="flex flex-wrap items-end gap-3 border border-line bg-panel p-3">
-				<Field label="Mode">
-					<Segmented options={MODES} value={mode} onChange={setMode} ariaLabel="Mode" />
-				</Field>
-
-				{!view && (
-					<>
-						<Field label="Play">
-							<div className="flex items-stretch gap-2">
-								<button
-									type="button"
-									onClick={toggleRun}
-									disabled={!soundOn || runNotes.length === 0}
-									aria-label={player.isPlaying ? "Stop" : "Play the scale"}
-									className="flex h-[30px] items-center gap-1.5 border border-line-strong px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent disabled:cursor-not-allowed disabled:opacity-40"
-								>
-									{player.isPlaying ? (
-										<Square className="size-3 shrink-0" strokeWidth={2} />
-									) : (
-										<Play className="size-3 shrink-0" strokeWidth={2} />
-									)}
-									{player.isPlaying ? "Stop" : "Play"}
-								</button>
-								<select
-									aria-label="What to play"
-									value={runChoice}
-									onChange={(e) => {
-										setRunChoice(e.target.value);
-										setPickedFret(null);
-									}}
-									className={SELECT_CLASS}
-								>
-									<option value="neck">Whole neck</option>
-									{pickedFret !== null && (
-										<option value={`pick:${pickedFret}`}>
-											Picked · frets {pickedFret}–{pickedFret + BOX_FRETS - 1}
-										</option>
-									)}
-									{boxes.map((box, i) => (
-										<option key={box.fromFret} value={`box:${i}`}>
-											Position {i + 1} · frets {box.fromFret}–{box.toFret}
-										</option>
-									))}
-									{STRING_LABELS.map((name, s) => (
-										<option key={name} value={`string:${s}`}>
-											String {name}
-										</option>
-									))}
-								</select>
-							</div>
-						</Field>
-
-						<Field label={`Tempo · ${bpm}`}>
-							<span className="flex h-[30px] items-center gap-2">
-								<input
-									type="range"
-									min={BPM_MIN}
-									max={BPM_MAX}
-									step={1}
-									value={bpm}
-									aria-label="Tempo"
-									onChange={(e) => setBpm(Number(e.target.value))}
-									className="fb-volume w-24"
-								/>
-								<Segmented
-									options={DIVISIONS}
-									value={division}
-									onChange={setDivision}
-									ariaLabel="Note length"
-								/>
-							</span>
-						</Field>
-
-						<Field label="Heard on">
-							<Segmented
-								options={RUN_VOICES.map((v) => ({ value: v, label: VOICE_LABELS[v] }))}
-								value={runVoice}
-								onChange={setRunVoice}
-								ariaLabel="Heard on"
-							/>
-						</Field>
-					</>
-				)}
-
-				{view ? (
-					<Field label="Chord">
-						<div
-							className="flex h-[30px] items-center gap-2 border border-line-strong px-3 font-mono text-[12px] text-ink"
-							data-testid="chord-readout"
-						>
-							<MusicalText text={chordName(view.sounding)} />
-							<span className="text-denim-accent">{view.sounding.numeral}</span>
-							{capo > 0 && (
-								<span className="text-ink-dim">
-									· <MusicalText text={chordName(view.shape)} /> shape
-								</span>
-							)}
-							{shapeVoicing === null && voicing?.chord === view.shape && (
-								<span className="text-ink-faint">· no voicing</span>
-							)}
-						</div>
-					</Field>
-				) : (
-					<Field label="Chord overlay">
-						<div className="flex border border-line-strong">
-							<button
-								type="button"
-								onClick={() => setPickerOpen(true)}
-								className={`px-3 py-1.5 font-mono text-[12px] transition-colors duration-(--dur-hover) hover:bg-denim-tint ${
-									chord ? "text-ink" : "text-ink-dim"
-								}`}
-							>
-								{chord ? <MusicalText text={`${chord.root}${chord.suffix}`} /> : "None"}
-							</button>
-							{chord && (
-								<button
-									type="button"
-									aria-label="Clear chord"
-									onClick={() => setChord(null)}
-									className="border-l border-line-strong px-2 text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent"
-								>
-									<X className="size-3.5" strokeWidth={1.5} strokeLinecap="square" />
-								</button>
-							)}
-						</div>
-					</Field>
-				)}
-			</div>
-
-			{/* Display: how the marks are drawn. */}
-			<div className="flex flex-wrap items-center gap-3 border border-line px-3 py-2">
-				<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Labels</span>
-				<Rocker checked={showLabels} onChange={setShowLabels} ariaLabel="Show labels" />
-				<Segmented
-					options={LABEL_MODES}
-					value={labelMode}
-					onChange={setLabelMode}
-					ariaLabel="Label mode"
-				/>
-			</div>
-
-			<ChordPickerModal
-				open={pickerOpen}
-				onClose={() => setPickerOpen(false)}
-				onConfirm={(picked) => {
-					setChord(picked);
-					setPickerOpen(false);
-				}}
-				initialChord={chord ? { root: chord.root, suffix: chord.suffix } : null}
-			/>
 		</div>
 	);
 }

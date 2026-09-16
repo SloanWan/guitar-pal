@@ -13,11 +13,11 @@
  * that is where a hand goes. (The issue first proposed preferring the lower
  * string outright; on the one place it matters, the G/B crossover inside a
  * box, that picks a note standard fingerings skip. Lowest fret picks the one
- * players actually use.) A box or neck run starts on its lowest root, so the
- * scale is heard from its tonic rather than from whatever note the box begins
- * on; a single string plays everything it has, because that run is a drill on
- * the string, and behind a capo trimming to the root would leave almost
- * nothing.
+ * players actually use.) A run is a **whole scale**: it starts on the lowest
+ * root in reach and ends on the highest, so it is heard tonic to tonic rather
+ * than stopping on whatever degree the box or string happens to end on. With
+ * fewer than two roots in reach there is no whole scale to trim to, and the
+ * run is whatever is there.
  *
  * Nothing here knows about audio or the DOM: the player schedules this list.
  */
@@ -100,10 +100,10 @@ export function scaleRun(spec: ScaleSpec, window: FretWindow, target: RunTarget)
 		if (oncePerPitch[oncePerPitch.length - 1]?.midi !== slot.midi) oncePerPitch.push(slot);
 	}
 
-	// A string drill plays all it has; a scale is heard from its tonic.
-	if (target.kind === "string") return oncePerPitch;
-	const firstRoot = oncePerPitch.findIndex((slot) => mod12(slot.midi) === rootPc);
-	return firstRoot === -1 ? oncePerPitch : oncePerPitch.slice(firstRoot);
+	// Tonic to tonic: a scale, not a slice of one.
+	const roots = oncePerPitch.map((slot, i) => (mod12(slot.midi) === rootPc ? i : -1)).filter((i) => i !== -1);
+	if (roots.length < 2) return roots.length === 1 ? oncePerPitch.slice(roots[0]) : oncePerPitch;
+	return oncePerPitch.slice(roots[0], roots[roots.length - 1] + 1);
 }
 
 /** Seconds between notes at this tempo. */

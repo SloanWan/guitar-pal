@@ -118,6 +118,7 @@ import { useChordVoicings } from "./useChordVoicings";
 import { useEditHistory } from "./useEditHistory";
 import FingerpickEditorMetaFields, { MAX_BPM, MIN_BPM } from "./FingerpickEditorMetaFields";
 import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
+import FingerpickEditorTouchInput from "./FingerpickEditorTouchInput";
 import {
 	DURATION_ABBREV,
 	DurationIcon,
@@ -247,10 +248,6 @@ export default function FingerpickEditModal({
 	// on a touch device. Rendered only while a cell is selected; gives touch users a
 	// way to mute a string (there is no "x" key on the native numeric keyboard).
 	const [touchMute, setTouchMute] = useState<{ top: number; left: number } | null>(null);
-	// True while the hidden numeric input holds focus (i.e. the native fret-entry
-	// keyboard is up). The touch mute button belongs to that same "keyboard active"
-	// interaction, so it is shown only while this is true and hidden on blur.
-	const [isFretInputFocused, setIsFretInputFocused] = useState(false);
 	// Id of the measure most recently copied or moved. That box gets a denim glow
 	// so the user can see which one just changed; it clears on the next outside
 	// pointer press (clicking the grid background or anywhere else).
@@ -615,25 +612,6 @@ export default function FingerpickEditModal({
 			positionTouchMute(cell, content);
 		}
 		input.focus();
-	}
-
-	// Native numeric keyboard input (touch). Each keystroke arrives as an onChange;
-	// take the last typed character, route it through the shared digit logic, and
-	// reset the field so the next keystroke starts fresh.
-	function handleHiddenNumericInput(e: React.ChangeEvent<HTMLInputElement>) {
-		const cell = selectedCell;
-		const raw = e.currentTarget.value;
-		e.currentTarget.value = "";
-		if (!cell) return;
-		const lastChar = raw.slice(-1);
-		if (!/^[0-9]$/.test(lastChar)) return;
-		applyFretDigit(cell, Number(lastChar));
-	}
-
-	// Reset the hidden input and pending two-digit buffer (on blur / Enter / Done).
-	function resetHiddenNumericInput() {
-		pendingDigitRef.current = null;
-		if (hiddenInputRef.current) hiddenInputRef.current.value = "";
 	}
 
 	function cancelLongPress() {
@@ -1656,15 +1634,6 @@ export default function FingerpickEditModal({
 
 	const nameValid = working.name.trim().length > 0;
 
-	// The selected cell's live string data, used to gate the touch mute button:
-	// an already-muted cell needs no mute affordance, so the button is hidden
-	// until the cell is un-muted (or a different, non-muted cell is selected).
-	const selectedStringFret: StringFret | null = selectedCell
-		? (working.measures[selectedCell.measureIndex]?.slots[selectedCell.slotIndex]?.strings[
-				selectedCell.stringIndex
-			] ?? null)
-		: null;
-
 	// Dynamic desktop (lg+) width: grow with measure count, 2 → 4 columns, then
 	// stop (extra measures wrap). Below lg the static md:2 / sm:1 layout applies.
 	// width = cols × (block + gap) + horizontal chrome (all rem).
@@ -2682,72 +2651,25 @@ export default function FingerpickEditModal({
 						</button>
 					</div>
 
-					{/* Off-screen numeric input: focused on a touch tap to summon the
-				    native numeric keyboard for fret entry. Invisible and
-				    non-interactive; the keyboard writes through
-				    handleHiddenNumericInput. Positioned over the tapped cell at
-				    focus time to avoid a jump-scroll. */}
-					<input
-						ref={hiddenInputRef}
-						type="number"
-						inputMode="numeric"
-						pattern="[0-9]*"
-						aria-hidden
-						tabIndex={-1}
-						onChange={handleHiddenNumericInput}
-						onFocus={() => setIsFretInputFocused(true)}
+					<FingerpickEditorTouchInput
+						inputRef={hiddenInputRef}
+						working={working}
+						selectedCell={selectedCell}
+						touchMute={touchMute}
+						onDigit={(digit) => {
+							if (selectedCell) applyFretDigit(selectedCell, digit);
+						}}
+						onBackspace={() => {
+							if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
+							pendingDigitRef.current = null;
+						}}
+						onToggleMute={() => {
+							if (selectedCell) commit((prev) => toggleMuted(prev, selectedCell));
+						}}
 						onBlur={() => {
-							setIsFretInputFocused(false);
-							resetHiddenNumericInput();
+							pendingDigitRef.current = null;
 						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter") {
-								e.currentTarget.blur();
-								return;
-							}
-							// The native numeric keyboard has no "x"; its Backspace clears
-							// the selected cell (mirrors the physical-keyboard path).
-							if (e.key === "Backspace" || e.key === "Delete") {
-								if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
-								pendingDigitRef.current = null;
-							}
-						}}
-						className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
-						style={{ top: 0, left: 0 }}
 					/>
-
-					{/* Touch mute button: the native numeric keyboard can't type "x", so
-				    give touch users a tappable way to mute the selected string. Uses
-				    the same toggleMuted commit as the desktop "x" key. Centred just
-				    below the selected cell (the "x" glyph is the tab mute notation).
-				    Hidden while the selected cell is already muted — it reappears once
-				    the cell is un-muted or a different, non-muted cell is selected. */}
-					{touchMute &&
-						selectedCell &&
-						isFretInputFocused &&
-						!selectedStringFret?.muted && (
-							<button
-								// Keep the hidden input focused when pressing this button: without
-								// it, the button steals focus, blurs the input, and the resulting
-								// isFretInputFocused=false would unmount the button before its
-								// onClick fires. Preserving focus also keeps the keyboard up.
-								onMouseDown={(e) => e.preventDefault()}
-								onClick={() => {
-									if (selectedCell)
-										commit((prev) => toggleMuted(prev, selectedCell));
-								}}
-								aria-label="Mute string"
-								title="Mute string"
-								className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink hover:bg-denim-tint hover:text-denim active:bg-denim-tint transition-colors"
-								style={{
-									top: touchMute.top,
-									left: touchMute.left,
-									transform: "translate(-50%, 6px)",
-								}}
-							>
-								<XIcon size={14} />
-							</button>
-						)}
 
 					{/* ── Technique context menu (absolute within the content box) ───── */}
 					{techMenu && (

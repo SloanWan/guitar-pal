@@ -14,10 +14,9 @@ import { useAutoScroll } from "@/components/fingerpick/useAutoScroll";
 import { useHideOnScroll } from "@/components/fingerpick/useHideOnScroll";
 import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
 import { useTempo } from "@/components/fingerpick/useTempo";
-import { LoopGapPicker } from "@/components/fingerpick/LoopControls";
-import { NoteSoundControl } from "@/components/fingerpick/NoteSoundControls";
-import { TempoFader, TempoResetButton, TempoSteppers } from "@/components/fingerpick/TempoControls";
-import { MetronomeVolumeControl, SubdivisionControl } from "@/components/fingerpick/MetronomeControls";
+import FingerpickDesktopPanel from "@/components/fingerpick/FingerpickDesktopPanel";
+import FingerpickMobileDrawer from "@/components/fingerpick/FingerpickMobileDrawer";
+import type { PlaybackControlProps } from "@/components/fingerpick/playbackControlProps";
 import {
 	chordFretHints,
 	chordRegionEnd,
@@ -41,16 +40,8 @@ import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
 import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import {
-	CirclePlay,
-	CirclePause,
-	CircleStop,
 	SquareMenu,
-	ChevronUp,
-	Metronome,
 	Loader2,
-	Play,
-	Gauge,
-	Repeat,
 	ChevronsDown,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
@@ -68,8 +59,6 @@ import {
 	writeLastPatternId,
 } from "@/components/fingerpick/useFingerpickPrefs";
 import {
-	MAX_BPM,
-	MIN_BPM,
 	type LoopGapSeconds,
 } from "@/components/fingerpick/playbackConstants";
 
@@ -203,19 +192,8 @@ export default function FingerpickPage() {
 		},
 		[voicingsFor, selectedPattern.measures, chordShapeWidth],
 	);
-	// Bottom-sheet detent (Google-Maps style): "closed" shows only the bottom bar,
-	// "half" is the default open height, "full" is the tall/expanded height. The
-	// drawer handle steps between detents; dragging up expands, dragging down closes.
-	const [sheetDetent, setSheetDetent] = useState<"closed" | "half" | "full">("closed");
-	const showSheet = sheetDetent !== "closed";
-	const [showBpmPopover, setShowBpmPopover] = useState(false);
 	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
 	const [containerWidth, setContainerWidth] = useState(0);
-	const [bpmPopoverPos, setBpmPopoverPos] = useState<{ bottom: number; left: number }>({
-		bottom: 0,
-		left: 0,
-	});
-	const bpmButtonRef = useRef<HTMLButtonElement>(null);
 	// One-shot guard for restoring the last-viewed pattern from localStorage. Set
 	// true once restore runs or the user picks a pattern, whichever comes first.
 	// State (not a ref) so the tab viewer can show a loading placeholder until the
@@ -279,12 +257,6 @@ export default function FingerpickPage() {
 		startOffsetFor,
 		toExpandedMeasureIndex,
 	} = usePlaybackCursor({ tabViewerRef, expanded, bpm, rows, isPlaying, getPlaybackProgress });
-	// Bottom bar drag-to-open-sheet gesture refs.
-	const bottomBarDragStartYRef = useRef<number>(0);
-	const bottomBarIsDraggingRef = useRef<boolean>(false);
-	// Drag handle drag-to-close gesture refs.
-	const handleDragStartYRef = useRef(0);
-	const handleIsDraggingRef = useRef(false);
 	const { controlsVisible, restoreControls } = useHideOnScroll({
 		viewerRef: tabViewerRef,
 		isAutoScrollingRef,
@@ -409,37 +381,6 @@ export default function FingerpickPage() {
 		}
 	}
 
-	// ── Bottom bar / sheet gesture handlers ─────────────────────────────────────
-
-	// Step one detent up (closed → half → full) on drag-up / expand gestures.
-	function expandSheet() {
-		setSheetDetent((d) => (d === "closed" ? "half" : "full"));
-	}
-
-	// Step one detent down (full → half → closed) on drag-down / collapse gestures.
-	function collapseSheet() {
-		setSheetDetent((d) => (d === "full" ? "half" : "closed"));
-	}
-
-	function handleBottomBarPointerDown(e: React.PointerEvent) {
-		if ((e.target as HTMLElement).closest("button, input")) return;
-		bottomBarDragStartYRef.current = e.clientY;
-		bottomBarIsDraggingRef.current = true;
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-	}
-
-	function handleBottomBarPointerMove(e: React.PointerEvent) {
-		if (!bottomBarIsDraggingRef.current) return;
-		if (e.clientY - bottomBarDragStartYRef.current < -40) {
-			bottomBarIsDraggingRef.current = false;
-			expandSheet();
-		}
-	}
-
-	function handleBottomBarPointerUp() {
-		bottomBarIsDraggingRef.current = false;
-	}
-
 	// Restore the last-viewed pattern once patterns finish loading (custom patterns
 	// arrive async, so wait for isLoading to clear before resolving the saved id).
 	// Routed through handleSelectPattern so BPM/cursor state sync like a normal pick.
@@ -486,6 +427,39 @@ export default function FingerpickPage() {
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, []);
+
+	// Everything the two control surfaces show, once.
+	const controls: PlaybackControlProps = {
+		transport: {
+			isLoaded,
+			isPlaying,
+			isPaused,
+			playOnce,
+			setPlayOnce,
+			loopGap,
+			onLoopGapChange: handleLoopGapChange,
+			onPlayPause: handlePlayPause,
+			onStop: handleStop,
+		},
+		tempo: {
+			bpm,
+			defaultBpm: selectedPattern.bpm,
+			onBpmChange: handleBpmChange,
+			onSliderChange: handleSliderChange,
+			onSliderPointerDown: handleSliderPointerDown,
+			onSliderPointerUp: handleSliderPointerUp,
+			onTapTempo: handleTapTempo,
+		},
+		metronome: {
+			enabled: metronomeEnabled,
+			setEnabled: setMetronomeEnabled,
+			gain: metronomeGain,
+			setGain: setMetronomeGain,
+			subdivision: metronomeSubdivision,
+			setSubdivision: setMetronomeSubdivision,
+		},
+		noteSound: { gain: noteGain, setGain: setNoteGain },
+	};
 
 	return (
 		<>
@@ -791,360 +765,10 @@ export default function FingerpickPage() {
 					</div>
 				</div>
 
-				{/* Right panel — controls */}
-				<div className="hidden md:flex w-full border-t border-line bg-popover md:w-55 md:border-t-0 md:border-l lg:w-70 md:h-full md:shrink-0 flex-col">
-					<h2 className="w-full px-5 py-4 shrink-0 border-b border-line font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-denim">
-						Controls
-					</h2>
-
-					<div className="flex flex-col overflow-y-auto">
-						{/* TRANSPORT */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span className="flex items-center gap-1.5">
-									<Play size={12} strokeWidth={2} className="shrink-0" />
-									Transport
-								</span>
-								{/* Loop toggle: on = loop the tab, off = play once */}
-								<span className="flex items-center gap-1.5">
-									<Repeat size={12} strokeWidth={2} className="shrink-0" />
-									<Rocker
-										checked={!playOnce}
-										onChange={(v) => setPlayOnce(!v)}
-										ariaLabel="Loop"
-									/>
-								</span>
-							</div>
-							{/* Gap between loop passes — only a question while looping. */}
-							{!playOnce && (
-								<div className="flex items-center gap-3">
-									<span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-										Loop gap
-									</span>
-									<div className="flex-1">
-										<LoopGapPicker value={loopGap} onChange={handleLoopGapChange} />
-									</div>
-								</div>
-							)}
-							<div className="flex gap-2">
-								<button
-									type="button"
-									onClick={isLoaded ? handlePlayPause : undefined}
-									disabled={!isLoaded}
-									aria-label={!isLoaded ? "Loading samples" : isPlaying ? "Pause" : "Play"}
-									className="flex h-13 flex-1 items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent active:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
-								>
-									{/* Dimmed said "not yet" but not "nearly"; the spinner does. */}
-									{!isLoaded ? (
-										<Loader2 size={20} strokeWidth={1.5} className="animate-spin" />
-									) : isPlaying ? (
-										<CirclePause size={20} strokeWidth={1.5} />
-									) : (
-										<CirclePlay size={20} strokeWidth={1.5} />
-									)}
-								</button>
-								<button
-									type="button"
-									onClick={handleStop}
-									disabled={!isPlaying && !isPaused}
-									aria-label="Stop and return to start"
-									className="flex h-13 flex-1 items-center justify-center border border-line-strong text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint disabled:pointer-events-none disabled:opacity-30"
-								>
-									<CircleStop size={20} strokeWidth={1.5} />
-								</button>
-							</div>
-							{!isLoaded && (
-								<p className="text-center font-mono text-[10px] tracking-wide text-ink-dim">
-									Loading samples…
-								</p>
-							)}
-							{/* NOTE SOUND — sits directly under the play controls */}
-							<NoteSoundControl gain={noteGain} onChange={setNoteGain} />
-						</div>
-
-						{/* TEMPO */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span className="flex items-center gap-1.5">
-									<Gauge size={12} strokeWidth={2} className="shrink-0" />
-									Tempo
-								</span>
-								<div className="flex items-center gap-2">
-									<TempoResetButton bpm={bpm} defaultBpm={selectedPattern.bpm} onReset={handleBpmChange} />
-								</div>
-							</div>
-							{/* BPM readout with LCD segment-ghost */}
-							<div className="border border-line-strong px-0 pt-3 pb-2 text-center">
-								<span className="relative inline-block font-mono text-[44px] font-bold leading-none tracking-[-0.02em] text-denim text-shadow-(--glow-readout)">
-									<span
-										aria-hidden="true"
-										className="absolute inset-0 opacity-[0.09]"
-									>
-										888
-									</span>
-									<span className="relative">{String(bpm).padStart(3, "0")}</span>
-								</span>
-								<div className="mt-1.5 font-mono text-[9px] tracking-[0.28em] text-ink-faint">
-									BPM
-								</div>
-							</div>
-							<TempoFader
-								bpm={bpm}
-								onSliderChange={handleSliderChange}
-								onDragStart={handleSliderPointerDown}
-								onDragEnd={handleSliderPointerUp}
-							/>
-							{/* Steppers: −10 / −1 / TAP / +1 / +10 */}
-							<TempoSteppers bpm={bpm} onChange={handleBpmChange} onTap={handleTapTempo} variant="desktop" />
-						</div>
-
-						{/* METRONOME — sits directly under Tempo. Header toggle enables the
-						    metronome (with accent on beat 1, always on when enabled). */}
-						<div className="flex flex-col gap-3 border-b border-line px-5 py-4">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span className="flex items-center gap-1.5">
-									<Metronome size={12} strokeWidth={2} className="shrink-0" />
-									Metronome
-								</span>
-								<Rocker
-									checked={metronomeEnabled}
-									onChange={setMetronomeEnabled}
-									ariaLabel="Metronome"
-								/>
-							</div>
-							<MetronomeVolumeControl enabled={metronomeEnabled} gain={metronomeGain} onChange={setMetronomeGain} />
-							<SubdivisionControl enabled={metronomeEnabled} value={metronomeSubdivision} onChange={setMetronomeSubdivision} />
-						</div>
-
-					</div>
-				</div>
+				<FingerpickDesktopPanel {...controls} />
 			</div>
 
-			{/* BPM vertical slider popover — fixed so it escapes the drawer's overflow context */}
-			{showBpmPopover && (
-				<div
-					className="md:hidden fixed z-60 bg-popover border border-line px-4 py-4 flex items-center justify-center -translate-x-1/2"
-					style={{ bottom: bpmPopoverPos.bottom, left: bpmPopoverPos.left }}
-				>
-					<input
-						type="range"
-						min={MIN_BPM}
-						max={MAX_BPM}
-						value={bpm}
-						onChange={(e) => handleSliderChange(Number(e.target.value))}
-						onPointerDown={handleSliderPointerDown}
-						onPointerUp={handleSliderPointerUp}
-						style={
-							{
-								writingMode: "vertical-lr",
-								direction: "rtl",
-								height: 120,
-							} as React.CSSProperties
-						}
-						className="accent-denim cursor-pointer"
-					/>
-				</div>
-			)}
-
-			{/* Backdrop — intercepts taps outside the drawer to close it without triggering tab seek */}
-			{showSheet && (
-				<div className="md:hidden fixed inset-0 z-20" onClick={() => setSheetDetent("closed")} />
-			)}
-
-			{/* ── Unified mobile drawer ────────────────────────────────────────── */}
-			<div
-				className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden transition-transform duration-300 ease-out"
-				style={{ transform: controlsVisible ? "translateY(0)" : "translateY(100%)" }}
-				onPointerDown={(e) => {
-					if (!bpmButtonRef.current?.contains(e.target as Node)) {
-						setShowBpmPopover(false);
-					}
-				}}
-			>
-				{/* Expandable controls panel — max-height transition reveals/hides content */}
-				<div
-					className={`bg-popover overflow-hidden transition-[max-height] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-						sheetDetent === "full"
-							? "max-h-[calc(85vh-56px)] overflow-y-auto"
-							: sheetDetent === "half"
-								? "max-h-[calc(33.333vh-56px)] overflow-y-auto"
-								: "max-h-0"
-					}`}
-				>
-					<div
-						className="flex justify-center pt-2.5 pb-1 shrink-0"
-						style={{ touchAction: "none" }}
-						onPointerDown={(e) => {
-							handleDragStartYRef.current = e.clientY;
-							handleIsDraggingRef.current = true;
-							e.currentTarget.setPointerCapture(e.pointerId);
-						}}
-						onPointerMove={(e) => {
-							if (!handleIsDraggingRef.current) return;
-							const dy = e.clientY - handleDragStartYRef.current;
-							if (dy < -40) {
-								// Drag up → expand a detent.
-								handleIsDraggingRef.current = false;
-								expandSheet();
-							} else if (dy > 40) {
-								// Drag down → collapse a detent (full → half → closed).
-								handleIsDraggingRef.current = false;
-								collapseSheet();
-							}
-						}}
-						onPointerUp={() => {
-							handleIsDraggingRef.current = false;
-						}}
-					>
-						<div className="w-9 h-1 bg-line-strong" />
-					</div>
-					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
-						{/* Loop gap — only a question while looping (the bar's loop toggle). */}
-						{!playOnce && (
-							<div className="flex flex-col gap-3">
-								<div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-									<Repeat size={12} strokeWidth={2} className="shrink-0" />
-									Loop gap
-								</div>
-								<LoopGapPicker value={loopGap} onChange={handleLoopGapChange} />
-							</div>
-						)}
-						{/* Tempo — steppers + fader */}
-						<div className="flex flex-col gap-3">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span className="flex items-center gap-1.5">
-									<Gauge size={12} strokeWidth={2} className="shrink-0" />
-									Tempo
-								</span>
-								<div className="flex items-center gap-2">
-									<span className="tabular-nums text-denim">{bpm}</span>
-									<TempoResetButton bpm={bpm} defaultBpm={selectedPattern.bpm} onReset={handleBpmChange} />
-								</div>
-							</div>
-							<TempoSteppers bpm={bpm} onChange={handleBpmChange} onTap={handleTapTempo} variant="mobile" />
-							<TempoFader
-								bpm={bpm}
-								onSliderChange={handleSliderChange}
-								onDragStart={handleSliderPointerDown}
-								onDragEnd={handleSliderPointerUp}
-							/>
-						</div>
-
-						{/* Note Sound volume */}
-						<NoteSoundControl gain={noteGain} onChange={setNoteGain} />
-
-						<div className="border-t border-line" />
-
-						{/* Subdivision */}
-						<SubdivisionControl enabled={metronomeEnabled} value={metronomeSubdivision} onChange={setMetronomeSubdivision} />
-
-						{/* Metronome volume */}
-						<MetronomeVolumeControl enabled={metronomeEnabled} gain={metronomeGain} onChange={setMetronomeGain} />
-
-					</div>
-				</div>
-
-				<div className="border-t border-line" />
-
-				{/* Always-visible bottom bar */}
-				<div
-					className="relative bg-popover flex items-center gap-1.5 px-3 py-2"
-					onPointerDown={handleBottomBarPointerDown}
-					onPointerMove={handleBottomBarPointerMove}
-					onPointerUp={handleBottomBarPointerUp}
-				>
-					{/* BPM display — tap to open vertical slider popover */}
-					<div className="relative shrink-0">
-						<button
-							ref={bpmButtonRef}
-							onClick={() => {
-								const rect = bpmButtonRef.current?.getBoundingClientRect();
-								if (rect) {
-									setBpmPopoverPos({
-										bottom: window.innerHeight - rect.top + 8,
-										left: rect.left + rect.width / 2,
-									});
-								}
-								setShowBpmPopover((v) => !v);
-							}}
-							className="flex w-14 flex-col items-center text-center leading-none"
-						>
-							<span className="font-mono text-[24px] font-bold leading-none text-denim">
-								{bpm}
-							</span>
-							<span className="mt-0.75 font-mono text-[8px] uppercase tracking-[0.24em] text-ink-faint">
-								BPM
-							</span>
-						</button>
-					</div>
-
-					{/* Loop icon toggle: on = loop the tab, off = play once */}
-					<button
-						onClick={() => setPlayOnce(!playOnce)}
-						aria-label="Loop"
-						aria-pressed={!playOnce}
-						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors ${
-							!playOnce
-								? "border-denim text-denim"
-								: "border-line-strong text-ink-faint"
-						}`}
-					>
-						<Repeat size={18} />
-					</button>
-
-					{/* Metronome icon toggle */}
-					<button
-						onClick={() => setMetronomeEnabled(!metronomeEnabled)}
-						aria-label="Metronome"
-						aria-pressed={metronomeEnabled}
-						className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors ${
-							metronomeEnabled
-								? "border-denim text-denim"
-								: "border-line-strong text-ink-faint"
-						}`}
-					>
-						<Metronome size={18} />
-					</button>
-
-					{/* Chevron — centered in the bar; toggles the controls panel open/closed */}
-					<button
-						onClick={() => setSheetDetent((d) => (d === "closed" ? "half" : "closed"))}
-						aria-label={showSheet ? "Close controls" : "Open controls"}
-						className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-1.5 text-ink-faint hover:text-ink transition-colors duration-150"
-					>
-						<ChevronUp
-							size={20}
-							className={`transition-transform duration-300 ${showSheet ? "rotate-180" : ""}`}
-						/>
-					</button>
-
-					{/* Stop + Play/Pause — flush right */}
-					<div className="ml-auto flex items-center gap-0.5 shrink-0">
-						<button
-							onClick={handleStop}
-							className={`p-1 text-ink-dim transition-colors duration-150 ${
-								isPlaying || isPaused ? "visible" : "invisible"
-							}`}
-						>
-							<CircleStop size={28} strokeWidth={1.5} />
-						</button>
-						<div
-							onClick={isLoaded ? handlePlayPause : undefined}
-							className={`flex h-11 w-11 items-center justify-center rounded-none bg-denim text-on-denim transition-all duration-150 active:scale-95 ${
-								isLoaded ? "cursor-pointer" : "opacity-30 pointer-events-none"
-							}`}
-						>
-							{!isLoaded ? (
-								<Loader2 size={22} strokeWidth={1.5} className="animate-spin" />
-							) : isPlaying ? (
-								<CirclePause size={22} strokeWidth={1.5} />
-							) : (
-								<CirclePlay size={22} strokeWidth={1.5} />
-							)}
-						</div>
-					</div>
-				</div>
-			</div>
+			<FingerpickMobileDrawer {...controls} controlsVisible={controlsVisible} />
 		</>
 	);
 }

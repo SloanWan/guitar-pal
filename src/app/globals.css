@@ -716,7 +716,7 @@
 /* The second of two revealed controls follows the first, so they arrive one
    after the other rather than as a block. */
 .fp-reveal-2 {
-	animation-delay: 0.18s;
+	animation-delay: 0.4s;
 }
 /* Below sm the switch that reveals them sits on the LEFT, so they come from there. */
 @media (max-width: 639px) {

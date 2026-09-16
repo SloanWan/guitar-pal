@@ -391,6 +391,7 @@ export default function TabStaveRow({
 
 			// Format and draw notes for each measure against its own stave.
 			const drawn: {
+				measure: Measure;
 				notes: StemmableNote[];
 				noteStrings: number[][];
 				noteSlots: number[];
@@ -400,7 +401,7 @@ export default function TabStaveRow({
 			measures.forEach((measure, i) => {
 				const { notes, connectors, tuplets, chordLabels, rolls, noteStrings, noteSlots } =
 					fingerpickToVexFlow(measure);
-				drawn.push({ notes, noteStrings, noteSlots, rolls, stave: staves[i] });
+				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, stave: staves[i] });
 				const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 				voice.addTickables(notes);
 				const noteWidth = staves[i].getNoteEndX() - staves[i].getNoteStartX() - 10;
@@ -504,9 +505,25 @@ export default function TabStaveRow({
 				});
 			}
 
-			// Off-shape fret numbers, after the theme pass so the colour sticks. A
+			// A tied note's second number is drawn lighter: the string is not struck
+			// again there, only held. After the theme pass so the colour sticks. A
 			// TabNote draws one <text> per position, in position order, before any
 			// modifier text — so the number for a string is found by its position.
+			drawn.forEach(({ measure, notes, noteStrings, noteSlots }) => {
+				notes.forEach((note, j) => {
+					const slot = measure.slots[noteSlots[j]];
+					if (!slot) return;
+					const el = note.getSVGElement();
+					if (!el) return;
+					const texts = el.querySelectorAll("text");
+					noteStrings[j].forEach((stringIndex, pos) => {
+						const sf = slot.strings[stringIndex];
+						if (sf.tied && !sf.muted) texts[pos]?.setAttribute("fill", "var(--ink-dim)");
+					});
+				});
+			});
+
+			// Off-shape fret numbers likewise, and they win over the tied tint.
 			if (offShapeStrings && startMeasureIndex !== undefined) {
 				drawn.forEach(({ notes, noteStrings, noteSlots }, i) => {
 					const measureIndex = startMeasureIndex + i;

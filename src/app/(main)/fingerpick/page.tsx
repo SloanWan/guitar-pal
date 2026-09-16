@@ -28,8 +28,10 @@ import {
 	offShapeStrings,
 	patternCapo,
 	patternHasChords,
+	setPatternCapo,
 	type FretHint,
 } from "@/lib/fingerpickChords";
+import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import { selectRefVoicing } from "@/lib/strumBars";
 import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
@@ -77,9 +79,9 @@ const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
 const OFF_SHAPE_KEY = "fingerpickOffShape";
 // Auto-scroll: how fast the tab creeps upward while reading along, in px/s.
 const SCROLL_SPEED_KEY = "fingerpickScrollSpeed";
-const SCROLL_SPEED_MIN = 10;
-const SCROLL_SPEED_MAX = 120;
-const SCROLL_SPEED_DEFAULT = 30;
+const SCROLL_SPEED_MIN = 4;
+const SCROLL_SPEED_MAX = 60;
+const SCROLL_SPEED_DEFAULT = 16;
 function clampScrollSpeed(raw: number): number {
 	if (!Number.isFinite(raw)) return SCROLL_SPEED_DEFAULT;
 	return Math.min(SCROLL_SPEED_MAX, Math.max(SCROLL_SPEED_MIN, Math.round(raw)));
@@ -657,6 +659,24 @@ export default function FingerpickPage() {
 			);
 		}
 		setCursorResetTick((t) => t + 1);
+	}
+
+	// Whether the pattern on screen is one of the player's own (and so saved on
+	// edit) rather than a preset.
+	const isCustomPattern = customPatterns.some((p) => p.id === selectedPattern.id);
+
+	// Capo from the header badge. A custom pattern is saved with it (through the
+	// same path the editor saves by, so playback and the library pick it up); a
+	// preset cannot be, so the change lives on the selected pattern for this
+	// session — the badge's tooltip says so.
+	function handleCapoChange(fret: number) {
+		const next = setPatternCapo(selectedPattern, fret);
+		if (isCustomPattern) handleSaveCustom(next);
+		else {
+			stop();
+			setSelectedPattern(next);
+			setCursorResetTick((t) => t + 1);
+		}
 	}
 
 	function handlePlay() {
@@ -1582,7 +1602,7 @@ export default function FingerpickPage() {
 											<Fader
 												min={SCROLL_SPEED_MIN}
 												max={SCROLL_SPEED_MAX}
-												step={5}
+												step={2}
 												value={scrollSpeed}
 												onValue={handleScrollSpeedChange}
 												ticks={[
@@ -1609,24 +1629,40 @@ export default function FingerpickPage() {
 									{selectedPattern.timeSignature[1]}
 								</span>
 								{/* The TAB is written behind the capo; this says how much higher
-								    it sounds. "No capo" is said too, so a player about to play
-								    along never has to wonder whether the badge is just missing. */}
-								{patternCapo(selectedPattern) > 0 ? (
-									<span className="border border-denim-border bg-denim-tint px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal text-denim">
-										Capo {patternCapo(selectedPattern)}
-									</span>
-								) : (
-									<span className="border border-line px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal text-ink-faint">
-										No capo
-									</span>
-								)}
+								    it sounds, and is where to change it — a select styled as the
+								    badge. "No capo" is said too, so a player about to play along
+								    never has to wonder whether the badge is just missing. A preset
+								    keeps the change for this session only; a custom pattern saves it. */}
+								<select
+									value={patternCapo(selectedPattern)}
+									onChange={(e) => handleCapoChange(Number(e.target.value))}
+									aria-label="Capo fret"
+									title={
+										isCustomPattern
+											? "Capo — the TAB is written behind it; playback sounds this much higher"
+											: "Capo — the TAB is written behind it; a preset keeps this for the session only"
+									}
+									className={`cursor-pointer appearance-none border px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal focus:outline-none focus-visible:border-denim ${
+										patternCapo(selectedPattern) > 0
+											? "border-denim-border bg-denim-tint text-denim"
+											: "border-line bg-transparent text-ink-faint hover:text-ink-dim"
+									}`}
+								>
+									<option value={0}>No capo</option>
+									{Array.from({ length: STRUM_CAPO_MAX }, (_, i) => i + 1).map((fret) => (
+										<option key={fret} value={fret}>
+											Capo {fret}
+										</option>
+									))}
+								</select>
 							</div>
 							{/* Chord line view, at the row's other end — only a question for a
 							    pattern that names chords. The size slider appears with the
 							    shapes it sizes. */}
-							<div className="flex h-9 shrink-0 flex-row-reverse items-center gap-3 sm:flex-row">
+							<div className="flex h-9 shrink-0 flex-row-reverse items-center gap-3 self-start sm:flex-row sm:self-auto">
 								{hasChords && chordView === "diagram" && (
-										<div className="fp-reveal fp-reveal-2 flex items-center gap-2">
+										<div className="fp-reveal fp-reveal-2 flex flex-row-reverse items-center gap-3 sm:flex-row">
+											<div className="flex items-center gap-2">
 											<Rocker
 												checked={offShapeOn}
 												onChange={handleOffShapeChange}
@@ -1638,10 +1674,13 @@ export default function FingerpickPage() {
 											>
 												Off-shape
 											</span>
+											</div>
+											<span aria-hidden className="h-4 w-px bg-line-strong" />
 										</div>
 									)}
 								{hasChords && chordView === "diagram" && (
-										<div className="fp-reveal flex items-center gap-2">
+										<div className="fp-reveal flex flex-row-reverse items-center gap-3 sm:flex-row">
+											<div className="flex items-center gap-2">
 											<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
 												Size
 											</span>
@@ -1671,6 +1710,8 @@ export default function FingerpickPage() {
 													ariaLabel="Chord shape size"
 												/>
 											</div>
+											</div>
+											<span aria-hidden className="h-4 w-px bg-line-strong" />
 										</div>
 									)}
 								{hasChords && (

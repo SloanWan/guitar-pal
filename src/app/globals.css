@@ -701,7 +701,7 @@
 	}
 }
 .fp-reveal {
-	animation: fp-reveal-from-right 0.18s ease-out both;
+	animation: fp-reveal-from-right 0.35s ease-out both;
 }
 @media (prefers-reduced-motion: reduce) {
 	.fp-reveal {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
+import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
 import { useUser } from "@/hooks/useUser";
@@ -15,11 +15,8 @@ import {
 	type ScheduleEvent,
 	type MeasureBoundary,
 } from "@/lib/fingerpickScheduler";
-import TabStaveRow, {
-	computeMeasureMinWidth,
-	CLEF_WIDTH,
-} from "@/components/fingerpick/TabStaveRow";
-import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import TabStaveRow from "@/components/fingerpick/TabStaveRow";
+import { layoutMeasureRows, type MeasureRow } from "@/components/fingerpick/fingerpickLayout";
 import {
 	chordFretHints,
 	chordRegionEnd,
@@ -104,78 +101,6 @@ function clampShapeWidth(raw: number): number {
 	if (!Number.isFinite(raw)) return CHORD_SHAPE_WIDTH_DEFAULT;
 	return Math.min(CHORD_SHAPE_WIDTH_MAX, Math.max(CHORD_SHAPE_WIDTH_MIN, Math.round(raw)));
 }
-
-// Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
-function hoPoConnectorCount(measure: Measure): number {
-	return measure.slots.reduce(
-		(count, slot) =>
-			count +
-			slot.strings.filter((sf) => sf.technique === "hammer-on" || sf.technique === "pull-off")
-				.length,
-		0,
-	);
-}
-
-// Gap between the last row's SVG right edge and the container edge — pure page-level visual choice.
-const ROW_TRAILING_PAD = 15;
-
-// Greedy row packer: each measure's minimum width drives wrapping.
-// Returns one inner array per row; each entry is the stretched stave width for that measure.
-// Rows are scaled to fill exactly (containerWidth − CLEF_WIDTH − ROW_TRAILING_PAD).
-function computeAllMeasureWidths(
-	measures: Measure[],
-	containerWidth: number,
-	chordDiagramWidth: number,
-): number[][] {
-	// Precompute render data once per measure to avoid double adapter calls.
-	const renderData = measures.map((m) => fingerpickToVexFlow(m));
-	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
-	const repeatBarlines = (m: Measure): number => (m.repeatStart ? 1 : 0) + (m.repeatEnd ? 1 : 0);
-	const widthsFirst = renderData.map((rd, i) =>
-		computeMeasureMinWidth(
-			rd.notes,
-			true,
-			hoPoConnectorCount(measures[i]),
-			repeatBarlines(measures[i]),
-			rd.chordLabels.length,
-			chordDiagramWidth,
-			rd.rolls.length,
-		),
-	);
-	const widthsNonFirst = renderData.map((rd, i) =>
-		computeMeasureMinWidth(
-			rd.notes,
-			false,
-			hoPoConnectorCount(measures[i]),
-			repeatBarlines(measures[i]),
-			rd.chordLabels.length,
-			chordDiagramWidth,
-			rd.rolls.length,
-		),
-	);
-
-	const rows: number[][] = [];
-	let i = 0;
-	while (i < measures.length) {
-		// Always include at least one measure per row.
-		const rowWidths: number[] = [widthsFirst[i]];
-		let rowWidth = widthsFirst[i];
-		i++;
-		// Pack subsequent measures until the next one would overflow the stave area.
-		while (i < measures.length) {
-			const w = widthsNonFirst[i];
-			if (rowWidth + w > staveSpace) break;
-			rowWidths.push(w);
-			rowWidth += w;
-			i++;
-		}
-		// Stretch widths proportionally so every row fills the container edge-to-edge.
-		const scale = staveSpace / rowWidth;
-		rows.push(rowWidths.map((w) => w * scale));
-	}
-	return rows;
-}
-
 
 // Higher = tighter/snappier following, lower = smoother/more lag.
 // At 20, steady-state lag behind a constant-velocity target is ~v/20 px/s — barely
@@ -466,9 +391,7 @@ export default function FingerpickPage() {
 	// Tracks the last row that was scrolled into view; -1 = none yet.
 	const lastScrolledRowRef = useRef(-1);
 	// Mirrors `rows` for the RAF closure without needing it as a dep (synced below).
-	const rowsRef = useRef<
-		Array<{ measures: Measure[]; startMeasureNumber: number; widths: number[] }>
-	>([]);
+	const rowsRef = useRef<MeasureRow[]>([]);
 	// One DOM ref per row wrapper div (indexed to match `rows`).
 	const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
 	// Always-current getter: `getPlaybackProgress` is recreated each render but all
@@ -1434,21 +1357,15 @@ export default function FingerpickPage() {
 
 	// Greedy row layout driven by content width; guard: render nothing until the
 	// ResizeObserver fires with the real container width on mount.
-	const rows = useMemo(() => {
-		if (containerWidth === 0) return [];
-		const widthRows = computeAllMeasureWidths(
-			selectedPattern.measures,
-			containerWidth,
-			showChordDiagrams ? chordShapeSize.width : 0,
-		);
-		let offset = 0;
-		return widthRows.map((rowWidths) => {
-			const start = offset;
-			const rowMeasures = selectedPattern.measures.slice(start, start + rowWidths.length);
-			offset += rowWidths.length;
-			return { measures: rowMeasures, startMeasureNumber: start + 1, widths: rowWidths };
-		});
-	}, [selectedPattern.measures, containerWidth, showChordDiagrams, chordShapeSize.width]);
+	const rows = useMemo(
+		() =>
+			layoutMeasureRows(
+				selectedPattern.measures,
+				containerWidth,
+				showChordDiagrams ? chordShapeSize.width : 0,
+			),
+		[selectedPattern.measures, containerWidth, showChordDiagrams, chordShapeSize.width],
+	);
 
 	// Keep refs in sync with the latest render values so the RAF closure never goes stale.
 	// useEffect (not inline assignment) satisfies react-hooks/refs; the one-frame lag

@@ -13,6 +13,11 @@ import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
 import { useAutoScroll } from "@/components/fingerpick/useAutoScroll";
 import { useHideOnScroll } from "@/components/fingerpick/useHideOnScroll";
 import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
+import { useTempo } from "@/components/fingerpick/useTempo";
+import { LoopGapPicker } from "@/components/fingerpick/LoopControls";
+import { NoteSoundControl } from "@/components/fingerpick/NoteSoundControls";
+import { TempoFader, TempoResetButton, TempoSteppers } from "@/components/fingerpick/TempoControls";
+import { MetronomeVolumeControl, SubdivisionControl } from "@/components/fingerpick/MetronomeControls";
 import {
 	chordFretHints,
 	chordRegionEnd,
@@ -34,10 +39,7 @@ import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/Cho
 import ChordViewToggle from "@/components/strum/ChordViewToggle";
 import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
 import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
-import {
-	useFingerpickAudioEngine,
-	type MetronomeSubdivision,
-} from "@/components/fingerpick/useFingerpickAudioEngine";
+import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import {
 	CirclePlay,
 	CirclePause,
@@ -49,14 +51,11 @@ import {
 	Play,
 	Gauge,
 	Repeat,
-	Volume2,
-	RotateCcw,
 	ChevronsDown,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import Rocker from "@/components/ui/Rocker";
-import Segmented from "@/components/fingerpick/Segmented";
 import {
 	CHORD_SHAPE_WIDTH_DEFAULT,
 	CHORD_SHAPE_WIDTH_MAX,
@@ -69,10 +68,6 @@ import {
 	writeLastPatternId,
 } from "@/components/fingerpick/useFingerpickPrefs";
 import {
-	BPM_TICK_LABELS,
-	BPM_TICK_PERCENTS,
-	BPM_TICK_VALUES,
-	LOOP_GAP_OPTIONS,
 	MAX_BPM,
 	MIN_BPM,
 	type LoopGapSeconds,
@@ -95,7 +90,6 @@ export default function FingerpickPage() {
 	const [showLibrary, setShowLibrary] = useState(false);
 	// The scrolling tab viewer; the overlays, auto-scroll and click-to-seek all work inside it.
 	const tabViewerRef = useRef<HTMLDivElement>(null);
-	const [bpm, setBpm] = useState<number>(selectedPattern.bpm);
 	// Repeats flattened into a linear playback timeline (the rendered staves stay compact).
 	// Memoized on selectedPattern ONLY — expansion is bpm-independent (bpm is applied when
 	// events are built from expanded.pattern), and a single memoized object keeps the audio
@@ -103,6 +97,10 @@ export default function FingerpickPage() {
 	// expansion. See src/lib/fingerpickRepeats.ts.
 	const expanded = useMemo(() => expandFingerpickPattern(selectedPattern), [selectedPattern]);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
+	function handleLoopGapChange(gap: LoopGapSeconds) {
+		setLoopGap(gap);
+		applyLoopGapChange(gap);
+	}
 	// Remembered view settings: chord line view and shape size, off-shape
 	// colouring, auto-scroll speed.
 	const {
@@ -218,19 +216,11 @@ export default function FingerpickPage() {
 		left: 0,
 	});
 	const bpmButtonRef = useRef<HTMLButtonElement>(null);
-	const tapTimesRef = useRef<number[]>([]);
 	// One-shot guard for restoring the last-viewed pattern from localStorage. Set
 	// true once restore runs or the user picks a pattern, whichever comes first.
 	// State (not a ref) so the tab viewer can show a loading placeholder until the
 	// saved pattern is resolved, instead of flashing the default preset.
 	const [patternRestored, setPatternRestored] = useState(false);
-	// Tracks the latest BPM value during slider drag so onPointerUp reads the
-	// correct final value regardless of React batching.
-	const dragBpmRef = useRef(selectedPattern.bpm);
-	// True while the user has the slider thumb pressed (drag gesture in progress).
-	const isDraggingSliderRef = useRef(false);
-	// True if playback was active when the drag started (so we resume on release).
-	const wasPlayingRef = useRef(false);
 
 	const {
 		isLoaded,
@@ -256,6 +246,15 @@ export default function FingerpickPage() {
 		applyLoopGapChange,
 		seekToNote,
 	} = useFingerpickAudioEngine();
+	const {
+		bpm,
+		resetBpm,
+		handleBpmChange,
+		handleSliderChange,
+		handleSliderPointerDown,
+		handleSliderPointerUp,
+		handleTapTempo,
+	} = useTempo({ initialBpm: selectedPattern.bpm, isPlaying, pause, resume, applyBpmChange });
 
 	// ── Cursor / scroll ─────────────────────────────────────────────────────
 	// Greedy row layout driven by content width; guard: render nothing until the
@@ -329,8 +328,7 @@ export default function FingerpickPage() {
 		setPatternRestored(true);
 		stop();
 		setSelectedPattern(p);
-		setBpm(p.bpm);
-		dragBpmRef.current = p.bpm;
+		resetBpm(p.bpm);
 		resetCursor();
 		// Below lg the library is a slide-in over the tab: picking a pattern is
 		// what it was opened for, so it goes away and shows the pick. At lg it is
@@ -409,68 +407,6 @@ export default function FingerpickPage() {
 		} else {
 			handlePlay();
 		}
-	}
-
-	// Used by ±10 buttons and tap tempo — always reschedules immediately.
-	function handleBpmChange(newBpm: number) {
-		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm));
-		setBpm(clamped);
-		applyBpmChange(clamped);
-	}
-
-	// Slider-specific handlers that decouple drag ticks from rescheduling.
-	function handleSliderChange(rawValue: number) {
-		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, rawValue));
-		setBpm(clamped);
-		dragBpmRef.current = clamped;
-		navigator.vibrate?.(10);
-		if (!isDraggingSliderRef.current) {
-			// Keyboard arrow key on a focused slider — reschedule immediately.
-			applyBpmChange(clamped);
-		}
-		// During pointer drag: display updates but rescheduling is deferred to pointer up.
-	}
-
-	function handleSliderPointerDown() {
-		isDraggingSliderRef.current = true;
-		wasPlayingRef.current = isPlaying;
-		if (isPlaying) {
-			// Silence audio immediately; saves elapsed position in pausedAtRef so
-			// handleSliderPointerUp can resume from the exact same musical position.
-			pause();
-		}
-	}
-
-	function handleSliderPointerUp() {
-		isDraggingSliderRef.current = false;
-		const finalBpm = dragBpmRef.current;
-		const shouldResume = wasPlayingRef.current;
-		wasPlayingRef.current = false;
-		// applyBpmChange converts pausedAtRef (old-BPM elapsed) to the new-BPM
-		// equivalent position; resume() then picks up that converted value.
-		applyBpmChange(finalBpm);
-		if (shouldResume) {
-			resume();
-		}
-	}
-
-	function handleTapTempo() {
-		const now = performance.now();
-		const taps = tapTimesRef.current;
-
-		if (taps.length > 0 && now - taps[taps.length - 1] > 2000) {
-			tapTimesRef.current = [];
-		}
-
-		tapTimesRef.current = [...tapTimesRef.current, now].slice(-8);
-
-		if (tapTimesRef.current.length < 2) return;
-
-		const intervals = tapTimesRef.current.slice(1).map((t, i) => t - tapTimesRef.current[i]);
-		const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-		const rawBpm = Math.round(60000 / avgInterval);
-		handleBpmChange(rawBpm);
-		navigator.vibrate?.(10);
 	}
 
 	// ── Bottom bar / sheet gesture handlers ─────────────────────────────────────
@@ -886,18 +822,7 @@ export default function FingerpickPage() {
 										Loop gap
 									</span>
 									<div className="flex-1">
-										<Segmented
-											options={LOOP_GAP_OPTIONS.map((gap) => ({
-												value: String(gap),
-												label: `${gap}S`,
-											}))}
-											value={String(loopGap)}
-											onChange={(v) => {
-												const gap = Number(v) as LoopGapSeconds;
-												setLoopGap(gap);
-												applyLoopGapChange(gap);
-											}}
-										/>
+										<LoopGapPicker value={loopGap} onChange={handleLoopGapChange} />
 									</div>
 								</div>
 							)}
@@ -934,29 +859,7 @@ export default function FingerpickPage() {
 								</p>
 							)}
 							{/* NOTE SOUND — sits directly under the play controls */}
-							<div className="flex flex-col gap-3">
-								<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-									<span className="flex items-center gap-1.5">
-										<Volume2 size={12} strokeWidth={2} className="shrink-0" />
-										Note Sound
-									</span>
-									<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
-								</div>
-								<Fader
-									min={0}
-									max={2}
-									step={0.01}
-									value={noteGain}
-									onValue={(v) => {
-										setNoteGain(v);
-										navigator.vibrate?.(10);
-									}}
-									ticks={[0, 25, 50, 75, 100]}
-									tickValues={[0, 0.5, 1, 1.5, 2]}
-									scale={["0", "100", "200"]}
-									ariaLabel="Note volume"
-								/>
-							</div>
+							<NoteSoundControl gain={noteGain} onChange={setNoteGain} />
 						</div>
 
 						{/* TEMPO */}
@@ -967,16 +870,7 @@ export default function FingerpickPage() {
 									Tempo
 								</span>
 								<div className="flex items-center gap-2">
-									<button
-										type="button"
-										onClick={() => handleBpmChange(selectedPattern.bpm)}
-										disabled={bpm === selectedPattern.bpm}
-										aria-label="Reset tempo to default"
-										title={`Reset to ${selectedPattern.bpm} BPM`}
-										className="flex items-center justify-center text-ink-faint transition-colors hover:text-denim disabled:pointer-events-none disabled:opacity-30"
-									>
-										<RotateCcw size={12} strokeWidth={2} />
-									</button>
+									<TempoResetButton bpm={bpm} defaultBpm={selectedPattern.bpm} onReset={handleBpmChange} />
 								</div>
 							</div>
 							{/* BPM readout with LCD segment-ghost */}
@@ -994,62 +888,14 @@ export default function FingerpickPage() {
 									BPM
 								</div>
 							</div>
-							<Fader
-								min={MIN_BPM}
-								max={MAX_BPM}
-								step={1}
-								value={bpm}
-								onValue={handleSliderChange}
+							<TempoFader
+								bpm={bpm}
+								onSliderChange={handleSliderChange}
 								onDragStart={handleSliderPointerDown}
 								onDragEnd={handleSliderPointerUp}
-								ticks={BPM_TICK_PERCENTS}
-								tickValues={BPM_TICK_VALUES}
-								tickLabels={BPM_TICK_LABELS}
-								scale={["40", "130", "220"]}
-								ariaLabel="Tempo in BPM"
 							/>
 							{/* Steppers: −10 / −1 / TAP / +1 / +10 */}
-							<div className="flex flex-col">
-								<div className="flex gap-2">
-									{(
-										[
-											{ label: "−10", delta: -10 },
-											{ label: "−1", delta: -1 },
-										] as const
-									).map(({ label, delta }) => (
-										<button
-											key={label}
-											type="button"
-											onClick={() => handleBpmChange(bpm + delta)}
-											className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-										>
-											{label}
-										</button>
-									))}
-									<button
-										type="button"
-										onClick={handleTapTempo}
-										className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint border-b-denim"
-									>
-										TAP
-									</button>
-									{(
-										[
-											{ label: "+1", delta: 1 },
-											{ label: "+10", delta: 10 },
-										] as const
-									).map(({ label, delta }) => (
-										<button
-											key={label}
-											type="button"
-											onClick={() => handleBpmChange(bpm + delta)}
-											className="flex-1 border border-line-strong py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-										>
-											{label}
-										</button>
-									))}
-								</div>
-							</div>
+							<TempoSteppers bpm={bpm} onChange={handleBpmChange} onTap={handleTapTempo} variant="desktop" />
 						</div>
 
 						{/* METRONOME — sits directly under Tempo. Header toggle enables the
@@ -1066,46 +912,8 @@ export default function FingerpickPage() {
 									ariaLabel="Metronome"
 								/>
 							</div>
-							<div className={!metronomeEnabled ? "opacity-40" : ""}>
-								<div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									<span>Metronome vol.</span>
-									<span className="tabular-nums">
-										{Math.round(metronomeGain * 100)}%
-									</span>
-								</div>
-								<Fader
-									min={0}
-									max={1}
-									step={0.01}
-									value={metronomeGain}
-									onValue={(v) => {
-										setMetronomeGain(v);
-										navigator.vibrate?.(10);
-									}}
-									ticks={[0, 25, 50, 75, 100]}
-									tickValues={[0, 0.25, 0.5, 0.75, 1]}
-									scale={["0", "50", "100"]}
-									disabled={!metronomeEnabled}
-									ariaLabel="Metronome volume"
-								/>
-							</div>
-							<div className={!metronomeEnabled ? "opacity-40" : ""}>
-								<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-									Subdivision
-								</div>
-								<Segmented
-									options={[
-										{ value: "quarter", label: "1/4" },
-										{ value: "eighth", label: "1/8" },
-										{ value: "sixteenth", label: "1/16" },
-									]}
-									value={metronomeSubdivision}
-									onChange={(v) =>
-										setMetronomeSubdivision(v as MetronomeSubdivision)
-									}
-									disabled={!metronomeEnabled}
-								/>
-							</div>
+							<MetronomeVolumeControl enabled={metronomeEnabled} gain={metronomeGain} onChange={setMetronomeGain} />
+							<SubdivisionControl enabled={metronomeEnabled} value={metronomeSubdivision} onChange={setMetronomeSubdivision} />
 						</div>
 
 					</div>
@@ -1198,18 +1006,7 @@ export default function FingerpickPage() {
 									<Repeat size={12} strokeWidth={2} className="shrink-0" />
 									Loop gap
 								</div>
-								<Segmented
-									options={LOOP_GAP_OPTIONS.map((gap) => ({
-										value: String(gap),
-										label: `${gap}S`,
-									}))}
-									value={String(loopGap)}
-									onChange={(v) => {
-										const gap = Number(v) as LoopGapSeconds;
-										setLoopGap(gap);
-										applyLoopGapChange(gap);
-									}}
-								/>
+								<LoopGapPicker value={loopGap} onChange={handleLoopGapChange} />
 							</div>
 						)}
 						{/* Tempo — steppers + fader */}
@@ -1221,143 +1018,28 @@ export default function FingerpickPage() {
 								</span>
 								<div className="flex items-center gap-2">
 									<span className="tabular-nums text-denim">{bpm}</span>
-									<button
-										type="button"
-										onClick={() => handleBpmChange(selectedPattern.bpm)}
-										disabled={bpm === selectedPattern.bpm}
-										aria-label="Reset tempo to default"
-										title={`Reset to ${selectedPattern.bpm} BPM`}
-										className="flex items-center justify-center text-ink-faint transition-colors hover:text-denim disabled:pointer-events-none disabled:opacity-30"
-									>
-										<RotateCcw size={12} strokeWidth={2} />
-									</button>
+									<TempoResetButton bpm={bpm} defaultBpm={selectedPattern.bpm} onReset={handleBpmChange} />
 								</div>
 							</div>
-							<div className="flex flex-col">
-								<div className="flex gap-2">
-									{(
-										[
-											{ label: "−10", delta: -10 },
-											{ label: "−1", delta: -1 },
-										] as const
-									).map(({ label, delta }) => (
-										<button
-											key={label}
-											type="button"
-											onClick={() => handleBpmChange(bpm + delta)}
-											className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-										>
-											{label}
-										</button>
-									))}
-									<button
-										type="button"
-										onClick={handleTapTempo}
-										className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-									>
-										TAP
-									</button>
-									{(
-										[
-											{ label: "+1", delta: 1 },
-											{ label: "+10", delta: 10 },
-										] as const
-									).map(({ label, delta }) => (
-										<button
-											key={label}
-											type="button"
-											onClick={() => handleBpmChange(bpm + delta)}
-											className="flex-1 border border-line-strong py-1.75 font-mono text-[11px] text-ink-dim transition-colors hover:border-denim hover:text-denim active:bg-denim-tint"
-										>
-											{label}
-										</button>
-									))}
-								</div>
-							</div>
-							<Fader
-								min={MIN_BPM}
-								max={MAX_BPM}
-								step={1}
-								value={bpm}
-								onValue={handleSliderChange}
+							<TempoSteppers bpm={bpm} onChange={handleBpmChange} onTap={handleTapTempo} variant="mobile" />
+							<TempoFader
+								bpm={bpm}
+								onSliderChange={handleSliderChange}
 								onDragStart={handleSliderPointerDown}
 								onDragEnd={handleSliderPointerUp}
-								ticks={BPM_TICK_PERCENTS}
-								tickValues={BPM_TICK_VALUES}
-								tickLabels={BPM_TICK_LABELS}
-								scale={["40", "130", "220"]}
-								ariaLabel="Tempo in BPM"
 							/>
 						</div>
 
 						{/* Note Sound volume */}
-						<div className="flex flex-col gap-3">
-							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
-								<span className="flex items-center gap-1.5">
-									<Volume2 size={12} strokeWidth={2} className="shrink-0" />
-									Note Sound
-								</span>
-								<span className="tabular-nums">{Math.round(noteGain * 100)}%</span>
-							</div>
-							<Fader
-								min={0}
-								max={2}
-								step={0.01}
-								value={noteGain}
-								onValue={(v) => {
-									setNoteGain(v);
-									navigator.vibrate?.(10);
-								}}
-								ticks={[0, 25, 50, 75, 100]}
-								tickValues={[0, 0.5, 1, 1.5, 2]}
-								scale={["0", "100", "200"]}
-								ariaLabel="Note volume"
-							/>
-						</div>
+						<NoteSoundControl gain={noteGain} onChange={setNoteGain} />
 
 						<div className="border-t border-line" />
 
 						{/* Subdivision */}
-						<div className={!metronomeEnabled ? "opacity-40" : ""}>
-							<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-								Subdivision
-							</div>
-							<Segmented
-								options={[
-									{ value: "quarter", label: "1/4" },
-									{ value: "eighth", label: "1/8" },
-									{ value: "sixteenth", label: "1/16" },
-								]}
-								value={metronomeSubdivision}
-								onChange={(v) => setMetronomeSubdivision(v as MetronomeSubdivision)}
-								disabled={!metronomeEnabled}
-							/>
-						</div>
+						<SubdivisionControl enabled={metronomeEnabled} value={metronomeSubdivision} onChange={setMetronomeSubdivision} />
 
 						{/* Metronome volume */}
-						<div className={!metronomeEnabled ? "opacity-40" : ""}>
-							<div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-								<span>Metronome vol.</span>
-								<span className="tabular-nums">
-									{Math.round(metronomeGain * 100)}%
-								</span>
-							</div>
-							<Fader
-								min={0}
-								max={1}
-								step={0.01}
-								value={metronomeGain}
-								onValue={(v) => {
-									setMetronomeGain(v);
-									navigator.vibrate?.(10);
-								}}
-								ticks={[0, 25, 50, 75, 100]}
-								tickValues={[0, 0.25, 0.5, 0.75, 1]}
-								scale={["0", "50", "100"]}
-								disabled={!metronomeEnabled}
-								ariaLabel="Metronome volume"
-							/>
-						</div>
+						<MetronomeVolumeControl enabled={metronomeEnabled} gain={metronomeGain} onChange={setMetronomeGain} />
 
 					</div>
 				</div>

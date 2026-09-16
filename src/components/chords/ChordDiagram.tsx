@@ -18,7 +18,8 @@ interface Props {
 	isHovered?: boolean;
 }
 
-function toSVGProps(def: VexChordDef): {
+/** A shape as the SVG draws it: absolute frets and fingers, index 0 = low E. */
+export function vexChordDefToSVGProps(def: VexChordDef): {
 	frets: number[];
 	fingers: number[];
 	startFret: number;
@@ -56,7 +57,7 @@ export default function ChordDiagram({
 	onMouseLeave,
 	isHovered = false,
 }: Props) {
-	const svgProps = toSVGProps(def);
+	const svgProps = vexChordDefToSVGProps(def);
 
 	return (
 		<div

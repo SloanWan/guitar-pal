@@ -1,3 +1,5 @@
+import type { ChordRef } from "@/lib/strumPatterns";
+
 export type Duration =
 	| "whole"
 	| "half"
@@ -35,13 +37,25 @@ export type Technique =
 	| null;
 
 /**
- * A right-hand roll (arpeggiated chord) applied across a slot's strings. Slot-level,
- * never per-string — a roll is one physical right-hand action. Semantics are defined
- * by the PLAYING ACTION, not by notated appearance; the renderer maps these to arrows.
- *  - "roll-down" = hand moves down = low pitch → high pitch = stringIndex 5 → 0
- *  - "roll-up"   = hand moves up   = high pitch → low pitch = stringIndex 0 → 5
+ * A right-hand sweep across a slot's strings. Slot-level, never per-string — a
+ * sweep is one physical right-hand action. Semantics are defined by the PLAYING
+ * ACTION, not by notated appearance; the renderer maps these to arrows.
+ *  - "roll-*"  = a slow, deliberate arpeggio (strings clearly one after another)
+ *  - "brush-*" = a fast strum (strings near enough together to read as one chord)
+ *  - "*-down"  = hand moves down = low pitch → high pitch = stringIndex 5 → 0
+ *  - "*-up"    = hand moves up   = high pitch → low pitch = stringIndex 0 → 5
  */
-export type Stroke = "roll-down" | "roll-up";
+export type Stroke = "roll-down" | "roll-up" | "brush-down" | "brush-up";
+
+/** The hand's travel direction of a stroke, whatever its speed. */
+export function strokeDirection(stroke: Stroke): "down" | "up" {
+	return stroke === "roll-down" || stroke === "brush-down" ? "down" : "up";
+}
+
+/** Whether a stroke is the fast kind. */
+export function isBrush(stroke: Stroke): boolean {
+	return stroke === "brush-down" || stroke === "brush-up";
+}
 
 export type StringFret = {
 	fret: number | null;   // null = string not in play for this slot
@@ -65,6 +79,14 @@ export type BeatSlot = {
 	isGraceNote?: boolean;  // no rhythmic duration; scheduling uses fixed 1/32 beat
 	isRest?: boolean;       // silent slot — keeps its rhythmic `duration` but produces no sound (rest glyph)
 	stroke?: Stroke;        // roll (arpeggiated chord) across this slot's strings — slot-level, not per-string
+	/**
+	 * A chord change at this slot. The chord stays in effect until the next slot
+	 * that carries one, across measure boundaries, like a lead sheet — so a
+	 * one-chord pattern marks only its first slot. It names what the player is
+	 * holding; the frets are what sound, so playback never reads it. Resolved
+	 * per slot by `effectiveChords` in fingerpickChords.ts.
+	 */
+	chord?: ChordRef;
 };
 
 export type Measure = {
@@ -88,5 +110,17 @@ export type FingerpickPattern = {
 	measures: Measure[];
 	bpm: number;
 	timeSignature: [number, number];
+	/**
+	 * The fret the pattern is played behind. The TAB is written relative to the
+	 * capo (it is the nut), chord shapes are written as they are, and playback
+	 * sounds this many semitones higher. Absent or 0 = no capo. Read it through
+	 * `patternCapo` in fingerpickChords.ts.
+	 */
+	capo?: number;
+	/**
+	 * When the pattern was first saved (ISO 8601). Orders the library newest
+	 * first; presets and patterns stored before the stamp have none.
+	 */
+	createdAt?: string;
 };
 

@@ -1163,3 +1163,173 @@ describe("normalizeLoadedPattern (legacy rest migration)", () => {
 		expect(normalizeLoadedPattern(clean)).toBe(clean);
 	});
 });
+
+describe("chord marks survive structural edits", () => {
+	const C = { root: "C", suffix: "major" };
+	const Am = { root: "A", suffix: "minor" };
+	const withChord = (slot: ReturnType<typeof makeEmptySlot>, chord: typeof C) => ({
+		...slot,
+		chord,
+	});
+
+	it("splitSlot: the head sub-slot keeps the mark", () => {
+		const measures = measuresOf([
+			withChord(makeEmptySlot("quarter"), C),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const out = splitSlot(measures, 0, 0, "eighth", [4, 4]);
+		expect(out[0].slots[0].chord).toEqual(C);
+		expect(out[0].slots[1].chord).toBeUndefined();
+	});
+
+	it("mergeSlots: the earliest mark in the merged run starts the merged note", () => {
+		const measures = measuresOf([
+			makeEmptySlot("eighth"),
+			withChord(makeEmptySlot("eighth"), Am),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const res = mergeSlots(measures, 0, 0, "quarter", [4, 4]);
+		expect(res.type).toBe("ok");
+		if (res.type === "ok") expect(res.measures[0].slots[0].chord).toEqual(Am);
+	});
+
+	it("mergeSlots: the first slot's own mark wins over a later one in the run", () => {
+		const measures = measuresOf([
+			withChord(makeEmptySlot("eighth"), C),
+			withChord(makeEmptySlot("eighth"), Am),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const res = mergeSlots(measures, 0, 0, "quarter", [4, 4]);
+		if (res.type === "ok") expect(res.measures[0].slots[0].chord).toEqual(C);
+	});
+
+	it("deleteSlots: a deleted slot's mark moves to the next surviving slot", () => {
+		const p: FingerpickPattern = {
+			...twoMeasurePattern(),
+			measures: measuresOf([
+				withChord(makeEmptySlot(), C),
+				makeEmptySlot(),
+				makeEmptySlot(),
+				makeEmptySlot(),
+			]),
+		};
+		const out = deleteSlots(p, [{ measureIndex: 0, slotIndex: 0 }]);
+		expect(out.measures[0].slots).toHaveLength(3);
+		expect(out.measures[0].slots[0].chord).toEqual(C);
+	});
+
+	it("deleteSlots: of several deleted in a row, the last mark is the one carried", () => {
+		const p: FingerpickPattern = {
+			...twoMeasurePattern(),
+			measures: measuresOf([
+				withChord(makeEmptySlot(), C),
+				withChord(makeEmptySlot(), Am),
+				makeEmptySlot(),
+				makeEmptySlot(),
+			]),
+		};
+		const out = deleteSlots(p, [
+			{ measureIndex: 0, slotIndex: 0 },
+			{ measureIndex: 0, slotIndex: 1 },
+		]);
+		expect(out.measures[0].slots.map((s) => s.chord)).toEqual([Am, undefined]);
+	});
+
+	it("deleteSlots: a surviving slot with its own mark keeps it", () => {
+		const p: FingerpickPattern = {
+			...twoMeasurePattern(),
+			measures: measuresOf([
+				withChord(makeEmptySlot(), C),
+				withChord(makeEmptySlot(), Am),
+				makeEmptySlot(),
+				makeEmptySlot(),
+			]),
+		};
+		const out = deleteSlots(p, [{ measureIndex: 0, slotIndex: 0 }]);
+		expect(out.measures[0].slots[0].chord).toEqual(Am);
+	});
+
+	it("deleteSlots: deleting the last slot drops its mark rather than moving it backwards", () => {
+		const p: FingerpickPattern = {
+			...twoMeasurePattern(),
+			measures: measuresOf([makeEmptySlot(), withChord(makeEmptySlot(), C)]),
+		};
+		const out = deleteSlots(p, [{ measureIndex: 0, slotIndex: 1 }]);
+		expect(out.measures[0].slots).toHaveLength(1);
+		expect(out.measures[0].slots[0].chord).toBeUndefined();
+	});
+
+	it("deleteSlots: emptying a measure leaves the mark on the fresh slot", () => {
+		const p: FingerpickPattern = {
+			...twoMeasurePattern(),
+			measures: measuresOf([withChord(makeEmptySlot(), C)]),
+		};
+		const out = deleteSlots(p, [{ measureIndex: 0, slotIndex: 0 }]);
+		expect(out.measures[0].slots).toHaveLength(1);
+		expect(out.measures[0].slots[0].chord).toEqual(C);
+	});
+
+	it("duplicateSlots: the copy does not repeat the mark", () => {
+		const p: FingerpickPattern = {
+			...twoMeasurePattern(),
+			measures: measuresOf([withChord(makeEmptySlot(), C), makeEmptySlot()]),
+		};
+		const out = duplicateSlots(p, [{ measureIndex: 0, slotIndex: 0 }]);
+		expect(out.measures[0].slots[0].chord).toEqual(C);
+		expect(out.measures[0].slots[1].chord).toBeUndefined();
+	});
+
+	it("resetMeasure: marks land on the new slot covering their onset", () => {
+		// C on beat 1, Am on beat 3 (eighths: slot index 4).
+		const measures = measuresOf([
+			withChord(makeEmptySlot("eighth"), C),
+			...Array.from({ length: 3 }, () => makeEmptySlot("eighth")),
+			withChord(makeEmptySlot("eighth"), Am),
+			...Array.from({ length: 3 }, () => makeEmptySlot("eighth")),
+		]);
+		const res = resetMeasure(measures, 0, "quarter", [4, 4]);
+		expect(res.measures[0].slots.map((s) => s.chord)).toEqual([C, undefined, Am, undefined]);
+	});
+
+	it("resetMeasure: two marks collapsing into one slot keep the earlier", () => {
+		const measures = measuresOf([
+			withChord(makeEmptySlot("eighth"), C),
+			withChord(makeEmptySlot("eighth"), Am),
+			...Array.from({ length: 6 }, () => makeEmptySlot("eighth")),
+		]);
+		const res = resetMeasure(measures, 0, "half", [4, 4]);
+		expect(res.measures[0].slots.map((s) => s.chord)).toEqual([C, undefined]);
+	});
+
+	it("remapMeasure: a mark on an empty slot is still carried", () => {
+		const measures = measuresOf([
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			withChord(makeEmptySlot("quarter"), Am),
+			makeEmptySlot("quarter"),
+		]);
+		const out = remapMeasure(measures, 0, "eighth", [4, 4]);
+		expect(out[0].slots[4].chord).toEqual(Am);
+		expect(out[0].slots.filter((s) => s.chord)).toHaveLength(1);
+	});
+});
+
+describe("normalizeLoadedPattern (capo)", () => {
+	it("keeps a real capo and drops a junk one", () => {
+		const base = twoMeasurePattern();
+		expect(normalizeLoadedPattern({ ...base, capo: 5 }).capo).toBe(5);
+		expect("capo" in normalizeLoadedPattern({ ...base, capo: Number.NaN })).toBe(false);
+		expect(normalizeLoadedPattern({ ...base, capo: 30 }).capo).toBe(12);
+	});
+
+	it("returns the same object when there is nothing to fix", () => {
+		const base = twoMeasurePattern();
+		expect(normalizeLoadedPattern(base)).toBe(base);
+	});
+});

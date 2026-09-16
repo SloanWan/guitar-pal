@@ -691,7 +691,13 @@ export function useFingerpickAudioEngine() {
 		const passIndex = passDuration > 0 ? Math.floor(totalElapsed / passDuration) : 0;
 		const elapsed = totalElapsed - passIndex * passDuration;
 
-		const position = getProgressAtTime(eventsRef.current, elapsed);
+		// Before the first note of a pass there is no event to stand on, but the
+		// pass has begun: report its opening slot so the cursor moves from the
+		// start rather than appearing at the first note. (The consumer re-derives
+		// the position with measure boundaries; this only has to be non-null.)
+		const position =
+			getProgressAtTime(eventsRef.current, elapsed) ??
+			(elapsed >= 0 && eventsRef.current.length > 0 ? { measureIndex: 0, slotIndex: 0 } : null);
 		if (!position) return null;
 
 		return { ...position, passIndex, elapsed };

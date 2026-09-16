@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
@@ -20,6 +20,27 @@ import TabStaveRow, {
 	CLEF_WIDTH,
 } from "@/components/fingerpick/TabStaveRow";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import {
+	chordFretHints,
+	chordRegionEnd,
+	effectiveChords,
+	heldButUnplucked,
+	offShapeStrings,
+	patternCapo,
+	patternHasChords,
+	setPatternCapo,
+	type FretHint,
+} from "@/lib/fingerpickChords";
+import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
+import { selectRefVoicing } from "@/lib/strumBars";
+import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
+import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
+import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";
+import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/ChordShapeStrip";
+import ChordViewToggle from "@/components/strum/ChordViewToggle";
+import type { ChordView } from "@/components/strum/StepGrid";
+import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
 import {
 	expandFingerpickPattern,
 	mapOriginToExpandedIndex,
@@ -41,6 +62,7 @@ import {
 	Repeat,
 	Volume2,
 	RotateCcw,
+	ChevronsDown,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
@@ -49,6 +71,29 @@ import Rocker from "@/components/ui/Rocker";
 // Remembers the last-viewed pattern id so a page refresh reopens it instead of
 // defaulting back to the first preset. Device-local UI state — not synced.
 const LAST_PATTERN_KEY = "lastFingerpickPatternId";
+// Whether the chord line shows names or shapes, and how wide a shape is drawn.
+// Device-local, like the pattern id.
+const CHORD_VIEW_KEY = "fingerpickChordView";
+const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
+// Whether fret numbers outside the chord shape are coloured, in the shape view.
+const OFF_SHAPE_KEY = "fingerpickOffShape";
+// Auto-scroll: how fast the tab creeps upward while reading along, in px/s.
+const SCROLL_SPEED_KEY = "fingerpickScrollSpeed";
+const SCROLL_SPEED_MIN = 4;
+const SCROLL_SPEED_MAX = 60;
+const SCROLL_SPEED_DEFAULT = 16;
+function clampScrollSpeed(raw: number): number {
+	if (!Number.isFinite(raw)) return SCROLL_SPEED_DEFAULT;
+	return Math.min(SCROLL_SPEED_MAX, Math.max(SCROLL_SPEED_MIN, Math.round(raw)));
+}
+/** Width range of the shape strip over a chord symbol, in px. */
+const CHORD_SHAPE_WIDTH_MIN = 40;
+const CHORD_SHAPE_WIDTH_MAX = 140;
+const CHORD_SHAPE_WIDTH_DEFAULT = 64;
+function clampShapeWidth(raw: number): number {
+	if (!Number.isFinite(raw)) return CHORD_SHAPE_WIDTH_DEFAULT;
+	return Math.min(CHORD_SHAPE_WIDTH_MAX, Math.max(CHORD_SHAPE_WIDTH_MIN, Math.round(raw)));
+}
 
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
 function hoPoConnectorCount(measure: Measure): number {
@@ -67,16 +112,36 @@ const ROW_TRAILING_PAD = 15;
 // Greedy row packer: each measure's minimum width drives wrapping.
 // Returns one inner array per row; each entry is the stretched stave width for that measure.
 // Rows are scaled to fill exactly (containerWidth − CLEF_WIDTH − ROW_TRAILING_PAD).
-function computeAllMeasureWidths(measures: Measure[], containerWidth: number): number[][] {
+function computeAllMeasureWidths(
+	measures: Measure[],
+	containerWidth: number,
+	chordDiagramWidth: number,
+): number[][] {
 	// Precompute render data once per measure to avoid double adapter calls.
 	const renderData = measures.map((m) => fingerpickToVexFlow(m));
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
 	const repeatBarlines = (m: Measure): number => (m.repeatStart ? 1 : 0) + (m.repeatEnd ? 1 : 0);
 	const widthsFirst = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, true, hoPoConnectorCount(measures[i]), repeatBarlines(measures[i])),
+		computeMeasureMinWidth(
+			rd.notes,
+			true,
+			hoPoConnectorCount(measures[i]),
+			repeatBarlines(measures[i]),
+			rd.chordLabels.length,
+			chordDiagramWidth,
+			rd.rolls.length,
+		),
 	);
 	const widthsNonFirst = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, false, hoPoConnectorCount(measures[i]), repeatBarlines(measures[i])),
+		computeMeasureMinWidth(
+			rd.notes,
+			false,
+			hoPoConnectorCount(measures[i]),
+			repeatBarlines(measures[i]),
+			rd.chordLabels.length,
+			chordDiagramWidth,
+			rd.rolls.length,
+		),
 	);
 
 	const rows: number[][] = [];
@@ -104,6 +169,10 @@ function computeAllMeasureWidths(measures: Measure[], containerWidth: number): n
 
 const MIN_BPM = 40;
 const MAX_BPM = 220;
+
+/** Silence between loop passes, offered when looping is on. */
+const LOOP_GAP_OPTIONS = [0, 5, 10] as const;
+type LoopGapSeconds = (typeof LOOP_GAP_OPTIONS)[number];
 
 // BPM fader tick marks: genre reference tempos. `PERCENTS` are the fixed v3
 // visual positions on the 40–220 track; `VALUES` are the exact BPM each tick
@@ -188,6 +257,207 @@ export default function FingerpickPage() {
 	const expanded = useMemo(() => expandFingerpickPattern(selectedPattern), [selectedPattern]);
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
+	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
+	// Chord line: names, or the shapes to hold. Read back from storage on mount
+	// (not in the initializer — the server render has no storage to read).
+	const [chordView, setChordView] = useState<ChordView>("name");
+	const [chordShapeWidth, setChordShapeWidth] = useState(CHORD_SHAPE_WIDTH_DEFAULT);
+	const [offShapeOn, setOffShapeOn] = useState(true);
+	// Auto-scroll: the tab creeps upward at a set speed for reading along without
+	// a hand free. Off by default; the speed is remembered.
+	const [autoScroll, setAutoScroll] = useState(false);
+	const [scrollSpeed, setScrollSpeed] = useState(SCROLL_SPEED_DEFAULT);
+	// Whether the tab is taller than its viewer at all — auto-scroll has nothing
+	// to do otherwise. Re-measured whenever the viewer or the rows change size
+	// (a window resize, a pattern switch, rows re-laid out), off the RAF-rendered
+	// stave heights rather than any guess from the viewport.
+	const [tabOverflows, setTabOverflows] = useState(false);
+	const rowsContainerRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const viewer = tabViewerRef.current;
+		const content = rowsContainerRef.current;
+		if (!viewer || !content) return;
+		const measure = () => {
+			const overflows = viewer.scrollHeight > viewer.clientHeight + 1;
+			setTabOverflows((prev) => (prev === overflows ? prev : overflows));
+		};
+		const observer = new ResizeObserver(measure);
+		observer.observe(viewer);
+		observer.observe(content);
+		return () => observer.disconnect();
+	}, []);
+	// A tab that stops overflowing (smaller pattern, taller window) has nothing
+	// left to scroll; the creep effect below reads this and stops.
+	const autoScrollActive = autoScroll && tabOverflows;
+	const scrollSpeedRef = useRef(SCROLL_SPEED_DEFAULT);
+	useEffect(() => {
+		scrollSpeedRef.current = scrollSpeed;
+	}, [scrollSpeed]);
+	useEffect(() => {
+		let storedView: string | null = null;
+		let storedWidth: string | null = null;
+		let storedOffShape: string | null = null;
+		let storedSpeed: string | null = null;
+		try {
+			storedView = localStorage.getItem(CHORD_VIEW_KEY);
+			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
+			storedOffShape = localStorage.getItem(OFF_SHAPE_KEY);
+			storedSpeed = localStorage.getItem(SCROLL_SPEED_KEY);
+		} catch {
+			// storage unavailable — the defaults it is
+		}
+		// Deferred, as the other storage restores here are: a one-shot sync after
+		// mount, not a state change inside the render that scheduled it.
+		queueMicrotask(() => {
+			if (storedView === "diagram") setChordView("diagram");
+			if (storedWidth !== null) setChordShapeWidth(clampShapeWidth(Number(storedWidth)));
+			if (storedOffShape === "off") setOffShapeOn(false);
+			if (storedSpeed !== null) setScrollSpeed(clampScrollSpeed(Number(storedSpeed)));
+		});
+	}, []);
+	function handleScrollSpeedChange(raw: number) {
+		const speed = clampScrollSpeed(raw);
+		setScrollSpeed(speed);
+		try {
+			localStorage.setItem(SCROLL_SPEED_KEY, String(speed));
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}
+	// The creep itself: a RAF loop moving the tab viewer by speed × elapsed,
+	// carrying sub-pixel remainders so slow speeds still move. Stops itself at
+	// the bottom, and whenever it is switched off or the pattern changes.
+	useEffect(() => {
+		if (!autoScrollActive) return;
+		const viewer = tabViewerRef.current;
+		if (!viewer) return;
+		let raf = 0;
+		let last = performance.now();
+		let carry = 0;
+		const step = (now: number) => {
+			carry += (scrollSpeedRef.current * (now - last)) / 1000;
+			last = now;
+			const px = Math.floor(carry);
+			if (px >= 1) {
+				viewer.scrollTop += px;
+				carry -= px;
+			}
+			if (viewer.scrollTop + viewer.clientHeight >= viewer.scrollHeight - 1) {
+				setAutoScroll(false);
+				return;
+			}
+			raf = requestAnimationFrame(step);
+		};
+		raf = requestAnimationFrame(step);
+		return () => cancelAnimationFrame(raf);
+	}, [autoScrollActive, selectedPattern.id]);
+	function handleOffShapeChange(on: boolean) {
+		setOffShapeOn(on);
+		try {
+			localStorage.setItem(OFF_SHAPE_KEY, on ? "on" : "off");
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}
+	function handleChordViewChange(view: ChordView) {
+		setChordView(view);
+		try {
+			localStorage.setItem(CHORD_VIEW_KEY, view);
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}
+	function handleChordShapeWidthChange(raw: number) {
+		const width = clampShapeWidth(raw);
+		setChordShapeWidth(width);
+		try {
+			localStorage.setItem(CHORD_SHAPE_WIDTH_KEY, String(width));
+		} catch {
+			// ignore unavailable/blocked storage
+		}
+	}
+	const hasChords = patternHasChords(selectedPattern.measures);
+	const showChordDiagrams = hasChords && chordView === "diagram";
+	const chordShapeSize = useMemo(
+		() => ({
+			width: chordShapeWidth,
+			height: Math.round(chordShapeWidth * CHORD_STRIP_ASPECT),
+		}),
+		[chordShapeWidth],
+	);
+	// Shapes for the chord line's diagram view: the player's own voicings, and
+	// the library's for every chord the pattern names, through the shared cache.
+	const { voicings: userVoicings } = useUserChordVoicings(
+		showChordDiagrams ? user : null,
+		loading || !showChordDiagrams,
+	);
+	const chordRefs = useMemo(
+		() =>
+			showChordDiagrams
+				? selectedPattern.measures.flatMap((m) =>
+						m.slots.flatMap((slot) => (slot.chord ? [slot.chord] : [])),
+					)
+				: [],
+		[selectedPattern.measures, showChordDiagrams],
+	);
+	const voicingsFor = useChordVoicings(chordRefs, userVoicings);
+	// What each string plays in the shape under every slot, for the off-shape
+	// colouring. Recomputed only when the pattern or a shape lookup changes —
+	// never per frame — and it is six comparisons per slot.
+	const showOffShape = showChordDiagrams && offShapeOn;
+	const offShapeBySlot = useMemo<readonly number[][][]>(() => {
+		if (!showOffShape) return [];
+		const chords = effectiveChords(selectedPattern.measures);
+		return selectedPattern.measures.map((measure, mi) =>
+			measure.slots.map((slot, si) => {
+				const ref = chords[mi][si];
+				let hints: FretHint[] | null = null;
+				if (ref) {
+					const state = voicingsFor(ref);
+					const voicing = state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
+					hints = voicing ? chordFretHints(voicing) : null;
+				}
+				return offShapeStrings(slot, hints);
+			}),
+		);
+	}, [selectedPattern.measures, showOffShape, voicingsFor]);
+	const offShapeAt = useCallback(
+		(measureIndex: number, slotIndex: number): readonly number[] =>
+			offShapeBySlot[measureIndex]?.[slotIndex] ?? [],
+		[offShapeBySlot],
+	);
+	// The shape over a chord symbol. Strings the shape holds but nothing in the
+	// chord's stretch of that measure plucks are drawn faintly, so the fingers
+	// that only complete the chord read differently from the ones that sound.
+	const chordDiagram = useCallback(
+		(label: ChordLabel & { measureIndex: number }) => {
+			const state = voicingsFor(label.chord);
+			if (state.status !== "ready") return null;
+			const voicing = selectRefVoicing(label.chord, state.voicings);
+			const measure = selectedPattern.measures[label.measureIndex];
+			if (!voicing || !measure) return null;
+			const unplucked = heldButUnplucked(
+				measure.slots,
+				label.slotIndex,
+				chordRegionEnd(measure, label.slotIndex),
+				voicing,
+			);
+			const { frets, startFret, barreFret } = vexChordDefToSVGProps(
+				chordVoicingToVexChords(voicing),
+			);
+			return (
+				<ChordShapeStrip
+					frets={frets}
+					startFret={startFret}
+					barreFret={barreFret}
+					// The strip's strings are indexed low E first; the pattern's the other way.
+					dimmedStrings={[...unplucked].reverse()}
+					width={chordShapeWidth}
+				/>
+			);
+		},
+		[voicingsFor, selectedPattern.measures, chordShapeWidth],
+	);
 	// Bottom-sheet detent (Google-Maps style): "closed" shows only the bottom bar,
 	// "half" is the default open height, "full" is the tall/expanded height. The
 	// drawer handle steps between detents; dragging up expands, dragging down closes.
@@ -236,6 +506,7 @@ export default function FingerpickPage() {
 		noteGain,
 		setNoteGain,
 		applyBpmChange,
+		applyLoopGapChange,
 		seekToNote,
 	} = useFingerpickAudioEngine();
 
@@ -359,6 +630,10 @@ export default function FingerpickPage() {
 		setBpm(p.bpm);
 		dragBpmRef.current = p.bpm;
 		setCursorResetTick((t) => t + 1);
+		// Below lg the library is a slide-in over the tab: picking a pattern is
+		// what it was opened for, so it goes away and shows the pick. At lg it is
+		// static and this is a no-op.
+		setShowLibrary(false);
 		// Mirror the choice to the account so /home can surface it cross-device.
 		saveLastPattern(createClient(), user, "fingerpick", p.id).catch(console.error);
 	}
@@ -380,10 +655,28 @@ export default function FingerpickPage() {
 			const savedExpanded = expandFingerpickPattern(pattern);
 			play(
 				{ ...savedExpanded.pattern, bpm },
-				{ loop: true, loopGapSeconds: 0, forceLetRing: true },
+				{ loop: true, loopGapSeconds: loopGap, forceLetRing: true },
 			);
 		}
 		setCursorResetTick((t) => t + 1);
+	}
+
+	// Whether the pattern on screen is one of the player's own (and so saved on
+	// edit) rather than a preset.
+	const isCustomPattern = customPatterns.some((p) => p.id === selectedPattern.id);
+
+	// Capo from the header badge. A custom pattern is saved with it (through the
+	// same path the editor saves by, so playback and the library pick it up); a
+	// preset cannot be, so the change lives on the selected pattern for this
+	// session — the badge's tooltip says so.
+	function handleCapoChange(fret: number) {
+		const next = setPatternCapo(selectedPattern, fret);
+		if (isCustomPattern) handleSaveCustom(next);
+		else {
+			stop();
+			setSelectedPattern(next);
+			setCursorResetTick((t) => t + 1);
+		}
 	}
 
 	function handlePlay() {
@@ -404,7 +697,7 @@ export default function FingerpickPage() {
 		// the audio envelope, not timing/positions, so scheduleEventsRef stays valid.
 		play(
 			{ ...expanded.pattern, bpm },
-			{ loop: true, loopGapSeconds: 0, forceLetRing: true },
+			{ loop: true, loopGapSeconds: loopGap, forceLetRing: true },
 			startOffset,
 		);
 	}
@@ -1194,7 +1487,11 @@ export default function FingerpickPage() {
 	// ResizeObserver fires with the real container width on mount.
 	const rows = useMemo(() => {
 		if (containerWidth === 0) return [];
-		const widthRows = computeAllMeasureWidths(selectedPattern.measures, containerWidth);
+		const widthRows = computeAllMeasureWidths(
+			selectedPattern.measures,
+			containerWidth,
+			showChordDiagrams ? chordShapeSize.width : 0,
+		);
 		let offset = 0;
 		return widthRows.map((rowWidths) => {
 			const start = offset;
@@ -1202,7 +1499,7 @@ export default function FingerpickPage() {
 			offset += rowWidths.length;
 			return { measures: rowMeasures, startMeasureNumber: start + 1, widths: rowWidths };
 		});
-	}, [selectedPattern.measures, containerWidth]);
+	}, [selectedPattern.measures, containerWidth, showChordDiagrams, chordShapeSize.width]);
 
 	// Keep refs in sync with the latest render values so the RAF closure never goes stale.
 	// useEffect (not inline assignment) satisfies react-hooks/refs; the one-frame lag
@@ -1264,14 +1561,164 @@ export default function FingerpickPage() {
 								</span>
 							</div>
 						)}
+						{/* Fixed-height header: every row is as tall as its tallest possible
+						    occupant (the fader), so controls appearing and disappearing —
+						    the speed fader, the Size fader, the Off-shape switch — never move
+						    the tab beneath. */}
 						<div className="mb-4 shrink-0">
-							<h1 className="text-lg font-semibold text-tab-title">
-								{selectedPattern.name}
-							</h1>
-							<p className="text-xs text-tab-meta uppercase tracking-wider mt-0.5">
-								{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
-								{selectedPattern.timeSignature[1]}
-							</p>
+							<div className="flex h-9 items-center gap-3">
+								<h1 className="truncate text-lg font-semibold text-tab-title">
+									{selectedPattern.name}
+								</h1>
+								{/* Auto-scroll: creep the tab upward at a set speed. The speed
+								    fader is only there while it is running. */}
+								<button
+									type="button"
+									onClick={() => setAutoScroll((on) => !on)}
+									disabled={!tabOverflows}
+									aria-pressed={autoScrollActive}
+									aria-label={autoScrollActive ? "Stop auto-scroll" : "Start auto-scroll"}
+									title={
+										!tabOverflows
+											? "The whole tab is in view — nothing to scroll"
+											: autoScrollActive
+												? "Stop auto-scroll"
+												: "Auto-scroll the tab"
+									}
+									className={`flex h-7 w-7 items-center justify-center border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+										autoScrollActive
+											? "border-denim bg-denim text-on-denim"
+											: "border-line-strong text-ink-dim hover:border-denim hover:text-denim disabled:hover:border-line-strong disabled:hover:text-ink-dim"
+									}`}
+								>
+									<ChevronsDown size={14} className={autoScrollActive ? "animate-bounce" : ""} />
+								</button>
+								{autoScrollActive && (
+									<div className="fp-reveal flex items-center gap-2">
+										<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
+											Speed
+										</span>
+										<div className="w-24 sm:w-28">
+											<Fader
+												min={SCROLL_SPEED_MIN}
+												max={SCROLL_SPEED_MAX}
+												step={2}
+												value={scrollSpeed}
+												onValue={handleScrollSpeedChange}
+												ticks={[
+													0,
+													((SCROLL_SPEED_DEFAULT - SCROLL_SPEED_MIN) /
+														(SCROLL_SPEED_MAX - SCROLL_SPEED_MIN)) *
+														100,
+													100,
+												]}
+												tickValues={[SCROLL_SPEED_MIN, SCROLL_SPEED_DEFAULT, SCROLL_SPEED_MAX]}
+												scale={[]}
+												ariaLabel="Auto-scroll speed"
+											/>
+										</div>
+									</div>
+								)}
+							</div>
+							{/* Meta line, with the chord-line controls beside it — or under it
+							    on a phone, where the row has no room for both. */}
+							<div className="flex flex-col sm:h-9 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+							<div className="flex h-6 items-center gap-2 text-xs text-tab-meta uppercase tracking-wider sm:h-9">
+								<span>
+									{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
+									{selectedPattern.timeSignature[1]}
+								</span>
+								{/* The TAB is written behind the capo; this says how much higher
+								    it sounds, and is where to change it — a select styled as the
+								    badge. "No capo" is said too, so a player about to play along
+								    never has to wonder whether the badge is just missing. A preset
+								    keeps the change for this session only; a custom pattern saves it. */}
+								<select
+									value={patternCapo(selectedPattern)}
+									onChange={(e) => handleCapoChange(Number(e.target.value))}
+									aria-label="Capo fret"
+									title={
+										isCustomPattern
+											? "Capo — the TAB is written behind it; playback sounds this much higher"
+											: "Capo — the TAB is written behind it; a preset keeps this for the session only"
+									}
+									className={`cursor-pointer appearance-none border px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal focus:outline-none focus-visible:border-denim ${
+										patternCapo(selectedPattern) > 0
+											? "border-denim-border bg-denim-tint text-denim"
+											: "border-line bg-transparent text-ink-faint hover:text-ink-dim"
+									}`}
+								>
+									<option value={0}>No capo</option>
+									{Array.from({ length: STRUM_CAPO_MAX }, (_, i) => i + 1).map((fret) => (
+										<option key={fret} value={fret}>
+											Capo {fret}
+										</option>
+									))}
+								</select>
+							</div>
+							{/* Chord line view, at the row's other end — only a question for a
+							    pattern that names chords. The size slider appears with the
+							    shapes it sizes. */}
+							<div className="flex h-9 shrink-0 flex-row-reverse items-center gap-3 self-start sm:flex-row sm:self-auto">
+								{hasChords && chordView === "diagram" && (
+										<div className="fp-reveal fp-reveal-2 flex flex-row-reverse items-center gap-3 sm:flex-row">
+											<div className="flex items-center gap-2">
+											<Rocker
+												checked={offShapeOn}
+												onChange={handleOffShapeChange}
+												ariaLabel="Colour fret numbers outside the chord shape"
+											/>
+											<span
+												className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
+												title="Colour the fret numbers that are not part of the chord shape in effect"
+											>
+												Off-shape
+											</span>
+											</div>
+											<span aria-hidden className="h-4 w-px bg-line-strong" />
+										</div>
+									)}
+								{hasChords && chordView === "diagram" && (
+										<div className="fp-reveal flex flex-row-reverse items-center gap-3 sm:flex-row">
+											<div className="flex items-center gap-2">
+											<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
+												Size
+											</span>
+											{/* The same fader as the transport's, so the header reads as
+											    one set of controls. No scale row: the range is a feel, not
+											    a number anyone needs to read off. */}
+											<div className="w-20 sm:w-28">
+												<Fader
+													min={CHORD_SHAPE_WIDTH_MIN}
+													max={CHORD_SHAPE_WIDTH_MAX}
+													step={4}
+													value={chordShapeWidth}
+													onValue={handleChordShapeWidthChange}
+													ticks={[
+														0,
+														((CHORD_SHAPE_WIDTH_DEFAULT - CHORD_SHAPE_WIDTH_MIN) /
+															(CHORD_SHAPE_WIDTH_MAX - CHORD_SHAPE_WIDTH_MIN)) *
+															100,
+														100,
+													]}
+													tickValues={[
+														CHORD_SHAPE_WIDTH_MIN,
+														CHORD_SHAPE_WIDTH_DEFAULT,
+														CHORD_SHAPE_WIDTH_MAX,
+													]}
+													scale={[]}
+													ariaLabel="Chord shape size"
+												/>
+											</div>
+											</div>
+											<span aria-hidden className="h-4 w-px bg-line-strong" />
+										</div>
+									)}
+								{hasChords && (
+									<ChordViewToggle value={chordView} onChange={handleChordViewChange} />
+								)}
+							</div>
+							</div>
 						</div>
 
 						{/* min-h-0 lets Flexbox shrink this child so overflow-y-auto scrolls.
@@ -1284,22 +1731,26 @@ export default function FingerpickPage() {
 							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto cursor-pointer"
 							onClick={handleTabClick}
 						>
-							{/* Measure background highlight — updated only on measure transitions. */}
+							{/* Measure highlight — updated only on measure transitions. Stacked
+							    ABOVE the rows (z-10): it is translucent, so the look is the same,
+							    but the opaque patches VexFlow paints behind fret numbers no
+							    longer show through it as pale squares. */}
 							<div
 								ref={measureHighlightRef}
 								aria-hidden="true"
-								className="absolute pointer-events-none"
+								className="absolute z-10 pointer-events-none"
 								style={{
 									display: "none",
 									backgroundColor: "var(--measure-hl)",
 								}}
 							/>
-							{/* Playhead line — sits BEFORE the SVG rows in DOM order so it renders
-						    behind VexFlow note numbers; translateX updated every RAF frame. */}
+							{/* Playhead line — stacked above the rows (z-10, after the highlight
+						    in DOM order so it paints over it), so it crosses the fret numbers
+						    rather than being cut by them; translateX updated every RAF frame. */}
 							<div
 								ref={cursorRef}
 								aria-hidden="true"
-								className="absolute pointer-events-none"
+								className="absolute z-10 pointer-events-none"
 								style={{
 									display: "none",
 									width: 2,
@@ -1326,7 +1777,7 @@ export default function FingerpickPage() {
 							{/* pt-2 leaves headroom so the playhead's triangle cap (top: -6px
 						    relative to the cursor line, which is positioned at the row's stave
 						    top) isn't clipped by the scroll container's overflow at row 0. */}
-							<div className="flex flex-col pt-2 pb-20 md:pb-0">
+							<div ref={rowsContainerRef} className="flex flex-col pt-2 pb-20 md:pb-0">
 								{rows.map((row, rowIdx) => (
 									<div
 										key={row.measures[0].id}
@@ -1339,6 +1790,9 @@ export default function FingerpickPage() {
 											startMeasureNumber={row.startMeasureNumber}
 											startMeasureIndex={row.startMeasureNumber - 1}
 											measureWidths={row.widths}
+											chordDiagram={showChordDiagrams ? chordDiagram : undefined}
+											chordDiagramSize={chordShapeSize}
+											offShapeStrings={showOffShape ? offShapeAt : undefined}
 										/>
 									</div>
 								))}
@@ -1386,6 +1840,28 @@ export default function FingerpickPage() {
 									/>
 								</span>
 							</div>
+							{/* Gap between loop passes — only a question while looping. */}
+							{!playOnce && (
+								<div className="flex items-center gap-3">
+									<span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+										Loop gap
+									</span>
+									<div className="flex-1">
+										<Segmented
+											options={LOOP_GAP_OPTIONS.map((gap) => ({
+												value: String(gap),
+												label: `${gap}S`,
+											}))}
+											value={String(loopGap)}
+											onChange={(v) => {
+												const gap = Number(v) as LoopGapSeconds;
+												setLoopGap(gap);
+												applyLoopGapChange(gap);
+											}}
+										/>
+									</div>
+								</div>
+							)}
 							<div className="flex gap-2">
 								<button
 									type="button"
@@ -1676,6 +2152,27 @@ export default function FingerpickPage() {
 						<div className="w-9 h-1 bg-line-strong" />
 					</div>
 					<div className="flex flex-col gap-5 px-5 py-4 pb-6">
+						{/* Loop gap — only a question while looping (the bar's loop toggle). */}
+						{!playOnce && (
+							<div className="flex flex-col gap-3">
+								<div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-denim">
+									<Repeat size={12} strokeWidth={2} className="shrink-0" />
+									Loop gap
+								</div>
+								<Segmented
+									options={LOOP_GAP_OPTIONS.map((gap) => ({
+										value: String(gap),
+										label: `${gap}S`,
+									}))}
+									value={String(loopGap)}
+									onChange={(v) => {
+										const gap = Number(v) as LoopGapSeconds;
+										setLoopGap(gap);
+										applyLoopGapChange(gap);
+									}}
+								/>
+							</div>
+						)}
 						{/* Tempo — steppers + fader */}
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] text-denim">

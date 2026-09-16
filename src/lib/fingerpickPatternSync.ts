@@ -1,6 +1,8 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { FingerpickPattern, Measure } from "./fingerpickTypes";
 import { normalizeLoadedPattern } from "./fingerpickEdit";
+import { patternCapo } from "./fingerpickChords";
+import { sortPatternsByNewest } from "./strumBars";
 
 // localStorage key for guest (logged-out) custom fingerpick patterns.
 export const LOCAL_FINGERPICK_PATTERNS_KEY = "customFingerpickPatterns";
@@ -17,6 +19,9 @@ type FingerpickPatternRow = {
 	bpm: number;
 	time_signature: [number, number];
 	measures: Measure[];
+	/** Null for rows written before the column existed, and for no capo. */
+	capo: number | null;
+	created_at: string;
 };
 
 function rowToPattern(row: FingerpickPatternRow): FingerpickPattern {
@@ -28,6 +33,8 @@ function rowToPattern(row: FingerpickPatternRow): FingerpickPattern {
 		bpm: row.bpm,
 		timeSignature: row.time_signature,
 		measures: row.measures,
+		...(row.capo ? { capo: row.capo } : {}),
+		createdAt: row.created_at,
 	});
 }
 
@@ -40,6 +47,7 @@ function patternToRow(user: User, pattern: FingerpickPattern) {
 		bpm: pattern.bpm,
 		time_signature: pattern.timeSignature,
 		measures: pattern.measures,
+		capo: patternCapo(pattern) || null,
 	};
 }
 
@@ -66,14 +74,16 @@ export async function loadUserFingerpickPatterns(
 	supabase: SupabaseClient,
 	user: User | null,
 ): Promise<FingerpickPattern[]> {
-	if (!user) return readLocalFingerpickPatterns();
+	if (!user) return sortPatternsByNewest(readLocalFingerpickPatterns());
 
 	const { data, error } = await supabase
 		.from("user_fingerpick_patterns")
-		.select("pattern_id, name, description, bpm, time_signature, measures")
+		.select("pattern_id, name, description, bpm, time_signature, measures, capo, created_at")
 		.eq("user_id", user.id);
 	if (error) throw new Error(error.message);
-	return (data ?? []).map((row) => rowToPattern(row as FingerpickPatternRow));
+	return sortPatternsByNewest(
+		(data ?? []).map((row) => rowToPattern(row as FingerpickPatternRow)),
+	);
 }
 
 // ── Save (insert or update) ──────────────────────────────────────────────────
@@ -88,7 +98,8 @@ export async function saveUserFingerpickPattern(
 		const existing = readLocalFingerpickPatterns();
 		const idx = existing.findIndex((p) => p.id === pattern.id);
 		if (idx === -1) existing.push(pattern);
-		else existing[idx] = pattern;
+		// An edit keeps the original stamp: the row is not new for being changed.
+		else existing[idx] = { ...pattern, createdAt: existing[idx].createdAt ?? pattern.createdAt };
 		writeLocalFingerpickPatterns(existing);
 		return;
 	}
@@ -175,7 +186,14 @@ export async function mergeLocalFingerpickPatternsToSupabase(
 	if (toInsert.length > 0) {
 		const { error } = await supabase
 			.from("user_fingerpick_patterns")
-			.insert(toInsert.map((p) => patternToRow(user, p)));
+			// The stamp travels with the pattern, so a guest's list keeps its order
+			// after signing in instead of every migrated pattern reading as "now".
+			.insert(
+				toInsert.map((p) => ({
+					...patternToRow(user, p),
+					...(p.createdAt ? { created_at: p.createdAt } : {}),
+				})),
+			);
 		if (error) throw new Error(error.message);
 	}
 

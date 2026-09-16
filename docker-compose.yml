@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      context: .
+      # Compose interpolates ${...} from the .env file next to this compose file,
+      # so one server-side .env feeds both the build args and the runtime env.
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    env_file: .env
+    # Loopback only: Nginx on the host is the public entry point.
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped

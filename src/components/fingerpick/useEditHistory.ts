@@ -5,6 +5,9 @@ import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 // are dropped from the front once this is exceeded.
 const HISTORY_LIMIT = 50;
 
+/** A draft mutation: derives the next pattern from the current one. */
+export type CommitPattern = (updater: (prev: FingerpickPattern) => FingerpickPattern) => void;
+
 export interface EditHistory {
 	/** The pattern currently shown in the editor. */
 	working: FingerpickPattern;
@@ -16,7 +19,7 @@ export interface EditHistory {
 	 * one, drops any redo tail, appends the snapshot (capped at HISTORY_LIMIT),
 	 * and advances the index. An updater that returns its input records nothing.
 	 */
-	commit: (updater: (prev: FingerpickPattern) => FingerpickPattern) => void;
+	commit: CommitPattern;
 	undo: () => void;
 	redo: () => void;
 	canUndo: boolean;

@@ -11,11 +11,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
 	Plus,
-	Copy,
-	ArrowLeft,
-	ArrowRight,
 	CornerDownLeft,
-	RotateCcw,
 	Undo2,
 	Redo2,
 	X as XIcon,
@@ -35,9 +31,6 @@ import {
 	setTied,
 	moveCell,
 	addMeasure,
-	deleteMeasure,
-	cloneMeasure,
-	swapMeasures,
 	computeBeatLabels,
 	computeBeatGroups,
 	computeSubBeatGroups,
@@ -54,8 +47,6 @@ import {
 	clearString,
 	effectiveChords,
 	patternHasChords,
-	measureDiffersFromHints,
-	replaceMeasureWithHints,
 	replaceRowWithHints,
 	rowDiffersFromHints,
 	setSlotChord,
@@ -80,6 +71,7 @@ import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
 import FingerpickEditorTouchInput from "./FingerpickEditorTouchInput";
 import FingerpickEditorTechniqueMenu from "./FingerpickEditorTechniqueMenu";
 import FingerpickEditorMeasureFooter from "./FingerpickEditorMeasureFooter";
+import FingerpickEditorMeasureHeader from "./FingerpickEditorMeasureHeader";
 import FingerpickEditorColumnPopup from "./FingerpickEditorColumnPopup";
 import {
 	DURATION_ABBREV,
@@ -537,13 +529,6 @@ export default function FingerpickEditModal({
 		});
 	}
 
-	// Rewrite every fretted cell in a measure to the chord shape's frets.
-	function applyReplaceMeasure(measureIndex: number) {
-		commit((prev) =>
-			replaceMeasureWithHints(prev, measureIndex, (si) => hintsBySlot[measureIndex]?.[si] ?? null),
-		);
-	}
-
 	// Rewrite a string's fretted cells in one measure to the shape's frets.
 	function applyReplaceRow(measureIndex: number, stringIndex: number) {
 		commit((prev) =>
@@ -829,114 +814,16 @@ export default function FingerpickEditModal({
 											: ""
 									}`}
 								>
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-2">
-											<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-												Measure {measureIndex + 1}
-											</span>
-											<button
-												onClick={() => {
-													// Pre-generate the clone's id so the newly
-													// appended box can be highlighted (the copy
-													// lands at the last position).
-													const cloneId = crypto.randomUUID();
-													commit((p) => ({
-														...p,
-														measures: cloneMeasure(
-															p.measures,
-															measureIndex,
-															cloneId,
-														),
-													}));
-													setHighlightedMeasureId(cloneId);
-												}}
-												aria-label="Copy measure"
-												title="Copy measure"
-												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
-											>
-												<Copy size={14} />
-											</button>
-											<button
-												onClick={() => {
-													commit((p) => ({
-														...p,
-														measures: swapMeasures(
-															p.measures,
-															measureIndex,
-															measureIndex - 1,
-														),
-													}));
-													setHighlightedMeasureId(measure.id);
-													setMoveNudge({ id: measure.id, dir: "left" });
-												}}
-												disabled={measureIndex === 0}
-												aria-label="Move measure left"
-												title="Move measure left"
-												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
-											>
-												<ArrowLeft size={14} />
-											</button>
-											<button
-												onClick={() => {
-													commit((p) => ({
-														...p,
-														measures: swapMeasures(
-															p.measures,
-															measureIndex,
-															measureIndex + 1,
-														),
-													}));
-													setHighlightedMeasureId(measure.id);
-													setMoveNudge({ id: measure.id, dir: "right" });
-												}}
-												disabled={
-													measureIndex === working.measures.length - 1
-												}
-												aria-label="Move measure right"
-												title="Move measure right"
-												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
-											>
-												<ArrowRight size={14} />
-											</button>
-										</div>
-										<div className="flex items-center gap-2">
-											{/* Snap the whole measure back to its chord shapes — live only
-											    while some fret differs from what the shape would write. */}
-											{hasChords &&
-												(() => {
-													const differs = measureDiffersFromHints(
-														measure,
-														(si) => hintsBySlot[measureIndex]?.[si] ?? null,
-													);
-													return (
-														<button
-															onClick={() => applyReplaceMeasure(measureIndex)}
-															disabled={!differs}
-															aria-label="Replace this measure's frets with the chord shapes'"
-															title={
-																differs
-																	? "Replace every fret in this measure with the chord shape's"
-																	: "Every fret in this measure already matches the chord shape"
-															}
-															className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
-														>
-															<RotateCcw size={14} />
-														</button>
-													);
-												})()}
-										<button
-											onClick={() =>
-												commit((p) => deleteMeasure(p, measureIndex))
-											}
-											disabled={working.measures.length <= 1}
-											aria-label="Delete measure"
-											title="Delete measure"
-											className="flex items-center gap-1 text-[10px] text-ink-dim hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-										>
-											<XIcon size={12} /> Delete
-										</button>
-										</div>
-									</div>
+									<FingerpickEditorMeasureHeader
+										measure={measure}
+										measureIndex={measureIndex}
+										measureCount={working.measures.length}
+										commit={commit}
+										hasChords={hasChords}
+										hints={hintsBySlot[measureIndex]}
+										onHighlight={setHighlightedMeasureId}
+										onNudge={(dir) => setMoveNudge({ id: measure.id, dir })}
+									/>
 
 									{/* Column-major layout: a fixed label column, then one wrapper per
 								    beat group. The L1 hover wash is applied to the group wrapper so

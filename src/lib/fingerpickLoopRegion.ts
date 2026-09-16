@@ -1,0 +1,105 @@
+import { computeLoopOffset, type MeasureBoundary } from "./fingerpickScheduler";
+
+/**
+ * Loop a stretch of the pattern instead of the whole of it.
+ *
+ * A "pass" is what the engine schedules and repeats. Without a region a pass
+ * is the whole pattern, and every formula here reduces to the plain
+ * whole-pattern arithmetic the engine has always used. With a region a pass is
+ * the measures `[startMeasure, endMeasure]`, but every time the engine hands
+ * out — progress, pause position, seek target — stays on the **pattern
+ * timeline** (seconds from the pattern's start), so the playhead and the
+ * event list never need to know a region exists. Only the conversion between
+ * pattern time and pass time happens here.
+ */
+
+/** The measures a loop covers, inclusive, on the expanded (playback) timeline. */
+export interface LoopRegion {
+	startMeasure: number;
+	endMeasure: number;
+}
+
+/** The stretch of pattern time one pass plays: `[start, end)` in seconds. */
+export interface PassBounds {
+	start: number;
+	end: number;
+}
+
+/** A pass over the whole pattern. */
+export function wholePattern(patternDuration: number): PassBounds {
+	return { start: 0, end: patternDuration };
+}
+
+/**
+ * The seconds a region covers: from its first measure's start to the start of
+ * the measure after its last (or the pattern's end). Measure indices outside
+ * the pattern are clamped; a reversed pair is swapped. No region, or no
+ * measures to bound, means the whole pattern.
+ */
+export function regionBounds(
+	boundaries: readonly MeasureBoundary[],
+	patternDuration: number,
+	region: LoopRegion | null,
+): PassBounds {
+	if (!region || boundaries.length === 0) return wholePattern(patternDuration);
+	const last = boundaries.length - 1;
+	const clamp = (i: number) => Math.min(last, Math.max(0, Math.floor(i)));
+	let a = clamp(region.startMeasure);
+	let b = clamp(region.endMeasure);
+	if (b < a) [a, b] = [b, a];
+	const start = boundaries[a].startTime;
+	const end = b + 1 <= last ? boundaries[b + 1].startTime : patternDuration;
+	return { start, end };
+}
+
+/** How long one pass plays, before any loop gap. */
+export function passLength(bounds: PassBounds): number {
+	return bounds.end - bounds.start;
+}
+
+/** Pass time (seconds into the pass) of a pattern time. */
+export function toPassTime(t: number, bounds: PassBounds): number {
+	return t - bounds.start;
+}
+
+/**
+ * Whether a pattern time is played by a pass that starts at `from` (pattern
+ * seconds): inside the bounds and not before `from`.
+ */
+export function inPass(t: number, bounds: PassBounds, from: number): boolean {
+	return t >= from && t >= bounds.start && t < bounds.end;
+}
+
+/** A pattern time inside the pass stays; anything outside starts the pass over. */
+export function clampToBounds(t: number, bounds: PassBounds): number {
+	return t >= bounds.start && t < bounds.end ? t : bounds.start;
+}
+
+/**
+ * Where playback stands `totalElapsed` seconds after pass 0 began: which pass,
+ * and the pattern time. During a loop gap `elapsed` runs past `bounds.end`,
+ * exactly as it used to run past the pattern's end.
+ */
+export function locateInPass(
+	totalElapsed: number,
+	bounds: PassBounds,
+	loopGapSeconds: number,
+): { passIndex: number; elapsed: number } {
+	const passDuration = passLength(bounds) + loopGapSeconds;
+	const passIndex = passDuration > 0 ? Math.floor(totalElapsed / passDuration) : 0;
+	const elapsed = bounds.start + (totalElapsed - passIndex * passDuration);
+	return { passIndex, elapsed };
+}
+
+/**
+ * Seconds after pass 0 began at which pattern time `t` of pass `passIndex`
+ * plays — the inverse of `locateInPass`.
+ */
+export function timelineOffset(
+	passIndex: number,
+	bounds: PassBounds,
+	loopGapSeconds: number,
+	t: number,
+): number {
+	return computeLoopOffset(passIndex, passLength(bounds), loopGapSeconds) + toPassTime(t, bounds);
+}

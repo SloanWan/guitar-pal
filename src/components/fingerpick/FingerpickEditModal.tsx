@@ -117,6 +117,7 @@ import { chordShapeToVoicing } from "@/lib/chordShape";
 import { useChordVoicings } from "./useChordVoicings";
 import { useEditHistory } from "./useEditHistory";
 import FingerpickEditorMetaFields, { MAX_BPM, MIN_BPM } from "./FingerpickEditorMetaFields";
+import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
 import {
 	DURATION_ABBREV,
 	DurationIcon,
@@ -250,8 +251,6 @@ export default function FingerpickEditModal({
 	// keyboard is up). The touch mute button belongs to that same "keyboard active"
 	// interaction, so it is shown only while this is true and hidden on blur.
 	const [isFretInputFocused, setIsFretInputFocused] = useState(false);
-	// Whether the editing-help popover (anchored to the footer "?" button) is open.
-	const [hintOpen, setHintOpen] = useState(false);
 	// Id of the measure most recently copied or moved. That box gets a denim glow
 	// so the user can see which one just changed; it clears on the next outside
 	// pointer press (clicking the grid background or anywhere else).
@@ -364,11 +363,8 @@ export default function FingerpickEditModal({
 	// header/metadata/footer stay pinned — and it's the coordinate space the
 	// absolute popups (technique menu, touch-mute, hidden input) are anchored in.
 	const scrollRef = useRef<HTMLDivElement>(null);
-	const hintRef = useRef<HTMLDivElement>(null);
 	// Save button node, for the spring-pop press feedback.
 	const saveButtonRef = useRef<HTMLButtonElement>(null);
-	// Previous hintOpen value, so the entrance spring fires only on false→true.
-	const prevHintOpenRef = useRef(false);
 	// Long-press timer for the mobile technique menu.
 	const longPressRef = useRef<number | null>(null);
 	// Set true when the long-press timer opens the technique menu, so the tap's
@@ -411,7 +407,6 @@ export default function FingerpickEditModal({
 			setPickConfirm(null);
 			setDiscardConfirm(false);
 			setRepeatError(null);
-			setHintOpen(false);
 			setHighlightedMeasureId(null);
 			pendingDigitRef.current = null;
 		});
@@ -432,7 +427,7 @@ export default function FingerpickEditModal({
 
 	// Close popups on any outside pointer press.
 	useEffect(() => {
-		if (selectedColumns.size === 0 && !techMenu && !hintOpen) return;
+		if (selectedColumns.size === 0 && !techMenu) return;
 		function handlePointerDown(e: PointerEvent) {
 			const target = e.target as HTMLElement;
 			if (techMenu && !techMenuRef.current?.contains(target)) {
@@ -446,19 +441,10 @@ export default function FingerpickEditModal({
 				setSelectedColumns(new Set());
 				setPopupConfirm(null);
 			}
-			// Dismiss the hint popover, except when the "?" trigger is pressed — its
-			// own click handler toggles it (so pressing it while open closes it).
-			if (
-				hintOpen &&
-				!hintRef.current?.contains(target) &&
-				!target.closest("[data-hint-trigger]")
-			) {
-				setHintOpen(false);
-			}
 		}
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
-	}, [selectedColumns, techMenu, hintOpen]);
+	}, [selectedColumns, techMenu]);
 
 	// Clear the copy/move highlight on the next pointer press anywhere. A press on
 	// a copy/move control clears here first, then that control's click re-sets the
@@ -477,24 +463,6 @@ export default function FingerpickEditModal({
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
 	}, [highlightedMeasureId]);
-
-	// Hint popover entrance: spring-pop (scale in from 0.85 with overshoot past 1.0,
-	// plus the opacity fade) only on the false→true transition. Closing keeps the
-	// plain CSS fade/shrink from the element's transition classes. Skipped entirely
-	// for prefers-reduced-motion, leaving the instant class-driven toggle.
-	useIsomorphicLayoutEffect(() => {
-		const wasOpen = prevHintOpenRef.current;
-		prevHintOpenRef.current = hintOpen;
-		if (!hintOpen || wasOpen) return;
-		if (prefersReducedMotion()) return;
-		hintRef.current?.animate(
-			[
-				{ opacity: 0, transform: "scale(0.85)" },
-				{ opacity: 1, transform: "scale(1)" },
-			],
-			{ duration: 250, easing: SPRING_POP_EASING },
-		);
-	}, [hintOpen]);
 
 	// ── Cell keyboard editing ──────────────────────────────────────────────────
 
@@ -2852,65 +2820,7 @@ export default function FingerpickEditModal({
 				</div>
 				{/* ── Footer (fixed; sibling of the scroll region, never scrolls) ── */}
 				<div className="shrink-0 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
-					{/* Editing help: "?" toggles a popover with the input-appropriate hint.
-					    Anchored above the icon (footer sits at the bottom) and left-aligned
-					    from the leftmost button so it never spills past the modal edges. */}
-					<div className="relative">
-						{/* LED-style feedback (§1.2 / §5.11): the glyph itself carries all
-						    state — no background box, border, or shadow on the button.
-						    Dormant (ink-faint) when closed; lit (denim-accent + soft glow)
-						    on hover and while the popover is open; a quick scale-down on
-						    press stands in for §5.1's momentary-flash on bare chrome. */}
-						<button
-							data-hint-trigger
-							onClick={() => setHintOpen((v) => !v)}
-							aria-label="Editing help"
-							aria-expanded={hintOpen}
-							title="Editing help"
-							className={`h-8 w-8 flex items-center justify-center transition duration-150 ease-out motion-reduce:transition-none active:scale-[0.92] ${
-								hintOpen
-									? "text-denim-accent filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
-									: "text-ink-faint hover:text-denim-accent hover:filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
-							}`}
-						>
-							<CircleHelp size={18} />
-						</button>
-						{/* Kept mounted (not conditionally rendered) so the exit transition
-						    plays on close. Entrance is a spring-pop run via the Web Animations
-						    API (see the layout effect above); close is the plain CSS fade/shrink
-						    from the classes below. Visibility/interaction is gated by the
-						    opacity/pointer-events classes; reduced-motion users skip both and
-						    get an instant toggle (§6.7). Show/hide state and outside-click
-						    dismissal are unchanged — driven by hintOpen. */}
-						<div
-							ref={hintRef}
-							aria-hidden={!hintOpen}
-							className={`absolute bottom-full left-0 mb-2 z-60 w-max max-w-xs origin-bottom-left border border-line-strong bg-surface p-3 flex flex-col gap-1 text-[11px] leading-relaxed text-ink-dim transition duration-150 ease-out motion-reduce:transition-none ${
-								hintOpen
-									? "opacity-100 scale-100"
-									: "pointer-events-none opacity-0 scale-[0.96]"
-							}`}
-						>
-							{hasFinePointer ? (
-								<>
-									<p>
-										Click a cell, then use arrow keys to move, number keys to
-										set a fret, <span className="font-mono">X</span> to mute, or
-										Backspace to clear.
-									</p>
-									<p>Right-click a cell for techniques.</p>
-								</>
-							) : (
-								<>
-									<p>
-										Tap a cell to select it, then use the number pad to set a
-										fret, the mute button to mute, or Backspace to clear.
-									</p>
-									<p>Long-press a cell for techniques.</p>
-								</>
-							)}
-						</div>
-					</div>
+					<FingerpickEditorHintPopover hasFinePointer={hasFinePointer} />
 					{repeatError && (
 						<span
 							role="alert"

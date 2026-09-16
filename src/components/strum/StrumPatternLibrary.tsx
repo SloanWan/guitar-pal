@@ -41,6 +41,11 @@ function PatternCard({
 	onEdit,
 	onDelete,
 }: PatternCardProps) {
+	// The row's icon controls activate on Enter alone. Space is the page
+	// transport wherever the player is not typing, and these controls stop
+	// propagation — handling it here would swallow the key and leave a focused
+	// star, pencil or trash icon as the one place on the page that space does
+	// not play from.
 	// Deleting a pattern cannot be undone, so the trash icon asks first — inline,
 	// in the row's own controls, the way the editors confirm a discard.
 	const [confirmDelete, setConfirmDelete] = useState(false);
@@ -73,7 +78,7 @@ function PatternCard({
 								onEdit();
 							}}
 							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
+								if (e.key === "Enter") {
 									e.preventDefault();
 									e.stopPropagation();
 									onEdit();
@@ -98,7 +103,7 @@ function PatternCard({
 										onDelete();
 									}}
 									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
+										if (e.key === "Enter") {
 											e.preventDefault();
 											e.stopPropagation();
 											setConfirmDelete(false);
@@ -118,7 +123,7 @@ function PatternCard({
 										setConfirmDelete(false);
 									}}
 									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
+										if (e.key === "Enter") {
 											e.preventDefault();
 											e.stopPropagation();
 											setConfirmDelete(false);
@@ -139,7 +144,7 @@ function PatternCard({
 									setConfirmDelete(true);
 								}}
 								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
+									if (e.key === "Enter") {
 										e.preventDefault();
 										e.stopPropagation();
 										setConfirmDelete(true);
@@ -159,7 +164,7 @@ function PatternCard({
 							onToggleFav();
 						}}
 						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
+							if (e.key === "Enter") {
 								e.preventDefault();
 								e.stopPropagation();
 								onToggleFav();

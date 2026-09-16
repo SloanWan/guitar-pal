@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+coverage
+.git
+.github
+.husky
+.tmp
+.claude
+.env*
+!.env.example
+*.md
+!README.md
+.DS_Store
+npm-debug.log*

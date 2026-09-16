@@ -14,27 +14,11 @@ import {
 	AnnotationVerticalJustify,
 	Tremolo,
 	Vibrato,
-	// NAMING COLLISION: our domain type is also called `Stroke` (see fingerpickTypes).
-	// VexFlow's modifier class is aliased to VexStroke so the two never resolve
-	// ambiguously in this file.
-	Stroke as VexStroke,
 } from "vexflow";
 
 import { Measure, Duration, Stroke } from "@/lib/fingerpickTypes";
-
-// Map our slot-level roll direction to a VexFlow Stroke.Type.
-//
-// VISUALLY CONFIRMED CORRECT — do not flip. The constant names are counterintuitive
-// (OSMD is on record hitting this exact mismatch), so this was verified against the
-// rendered output, not inferred from the names. Notation convention: an arrow
-// pointing UP means low→high pitch, which on a guitar is a DOWN-stroke. In VexFlow 5,
-// Stroke.Type.ROLL_DOWN renders an up-pointing arrowhead at the top (high-pitch) end
-// of a TAB stave — i.e. it reads as low→high — matching our "roll-down" (low pitch →
-// high pitch). Confirmed on /dev/tab-notation.
-const STROKE_TO_VEX: Record<Stroke, number> = {
-	"roll-down": VexStroke.Type.ROLL_DOWN,
-	"roll-up": VexStroke.Type.ROLL_UP,
-};
+import { chordSymbolLabel } from "@/lib/fingerpickChords";
+import type { ChordRef } from "@/lib/strumPatterns";
 
 export const VEX_DURATION: Record<Duration, string> = {
 	whole: "w",
@@ -51,10 +35,55 @@ export const VEX_DURATION: Record<Duration, string> = {
 	"32nd": "32",
 };
 
+/**
+ * A chord symbol to write above the stave, at the note where the chord changes.
+ *
+ * Not a VexFlow modifier on purpose: `ChordSymbol` is skipped by `GhostNote.draw`
+ * (an empty slot can start a chord too) and `Annotation` hangs its height off
+ * the note's own y, so symbols would ride up and down with the strings played.
+ * The renderer writes these itself at a fixed line above the stave, using the
+ * formatted note's x.
+ */
+export interface ChordLabel {
+	/** Index into `notes` of the note the symbol sits over. */
+	noteIndex: number;
+	/** The slot carrying the mark (a grace slot's mark reports the grace slot). */
+	slotIndex: number;
+	chord: ChordRef;
+	label: string;
+}
+
+/**
+ * A roll (arpeggiated chord) to draw beside a note. Not a VexFlow `Stroke`
+ * modifier: that one pads the arrow half a line past the outermost played
+ * strings and rounds its wiggle up to a whole glyph, so it visibly spills onto
+ * strings the slot does not play. The renderer draws the arrow itself, exactly
+ * between the note's first and last played string.
+ *
+ * Notation convention, kept from the previous VexFlow rendering: an arrow
+ * pointing UP means low → high pitch, i.e. our "roll-down".
+ */
+export interface RollMark {
+	/** Index into `notes` of the note the roll belongs to. */
+	noteIndex: number;
+	stroke: Stroke;
+}
+
 export interface VexFlowRenderData {
 	notes: StemmableNote[];
 	connectors: Array<TabTie | TabSlide>;
 	tuplets: Tuplet[];
+	chordLabels: ChordLabel[];
+	rolls: RollMark[];
+	/**
+	 * Per note (index-aligned with `notes`), the string each of its positions
+	 * was written for, in the order the positions — and so VexFlow's fret-number
+	 * elements — are drawn. Empty for rests and silent slots. Lets a renderer
+	 * find "the number for string 3 of this note" after the fact.
+	 */
+	noteStrings: number[][];
+	/** Slot index of each note (index-aligned with `notes`); grace slots produce no note. */
+	noteSlots: number[];
 }
 
 // Pure, deterministic mapping from a Measure to VexFlow note objects.
@@ -67,10 +96,26 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	// Maps slot index → notes[] index (null for grace-note slots).
 	const slotNoteIndex: (number | null)[] = [];
 	let pendingGraceNotes: GraceTabNote[] = [];
+	const chordLabels: ChordLabel[] = [];
+	const rolls: RollMark[] = [];
+	// A chord marked on a grace-note slot has no note of its own to sit over; it
+	// is written at the note the grace resolves into.
+	let pendingChord: { slotIndex: number; chord: ChordRef } | null = null;
+	const writeChordOver = (noteIdx: number) => {
+		if (pendingChord === null) return;
+		chordLabels.push({
+			noteIndex: noteIdx,
+			slotIndex: pendingChord.slotIndex,
+			chord: pendingChord.chord,
+			label: chordSymbolLabel(pendingChord.chord),
+		});
+		pendingChord = null;
+	};
 
 	for (let slotIdx = 0; slotIdx < measure.slots.length; slotIdx++) {
 		const slot = measure.slots[slotIdx];
 		const duration = VEX_DURATION[slot.duration];
+		if (slot.chord) pendingChord = { slotIndex: slotIdx, chord: slot.chord };
 
 		if (slot.isGraceNote) {
 			// Collect as a pending modifier; does not produce a standalone Voice tickable.
@@ -109,6 +154,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			notes.push(new StaveNote({ keys: ["b/4"], duration: `${duration}r` }));
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
+			writeChordOver(noteIdx);
 			continue;
 		}
 
@@ -129,6 +175,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			notes.push(new GhostNote({ duration }));
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
+			writeChordOver(noteIdx);
 			continue;
 		}
 
@@ -206,18 +253,14 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 			);
 		}
 
-		// Slot-level roll (arpeggiated chord): one right-hand action spanning the
-		// slot's strings. Attached at position index 0; the modifier draws across
-		// all of the note's positions (allVoices defaults true), so it spans from
-		// the top active string to the bottom active string, gaps included.
-		if (slot.stroke) {
-			tabNote.addStroke(0, new VexStroke(STROKE_TO_VEX[slot.stroke]));
-		}
-
 		const noteIdx = notes.length;
+		// Slot-level roll (arpeggiated chord): one right-hand action spanning the
+		// slot's played strings, gaps included. Drawn by the renderer (see RollMark).
+		if (slot.stroke) rolls.push({ noteIndex: noteIdx, stroke: slot.stroke });
 		notes.push(tabNote);
 		posIndexMaps.push(posMap);
 		slotNoteIndex.push(noteIdx);
+		writeChordOver(noteIdx);
 	}
 
 	const connectors: Array<TabTie | TabSlide> = [];
@@ -296,5 +339,11 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		}
 	}
 
-	return { notes, connectors, tuplets };
+	const noteStrings = posIndexMaps.map((posMap) =>
+		[...posMap.entries()].sort((a, b) => a[1] - b[1]).map(([stringIdx]) => stringIdx),
+	);
+	const noteSlots = slotNoteIndex.flatMap((noteIdx, slotIdx) =>
+		noteIdx === null ? [] : [slotIdx],
+	);
+	return { notes, connectors, tuplets, chordLabels, rolls, noteStrings, noteSlots };
 }

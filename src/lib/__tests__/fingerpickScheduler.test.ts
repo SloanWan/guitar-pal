@@ -9,6 +9,7 @@ import {
 	stealVoice,
 	_shutdownEngine,
 	computeRollOffsets,
+	BRUSH_STAGGER_SECONDS,
 	computeMeasureBoundaries,
 	resolveSlide,
 	applySlideToVoice,
@@ -227,6 +228,36 @@ describe("fingerpickPatternToScheduleEvents — MIDI resolution", () => {
 		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
 		expect(ev.midi).toBe(OPEN_STRING_MIDI[3] + 5); // 50 + 5 = 55
 		expect(ev.muted).toBe(true);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — capo", () => {
+	const slots = [
+		slot("s1", "quarter", { 0: { fret: 3 }, 5: { fret: 0 } }),
+		slot("s2", "quarter", { 3: { muted: true }, 2: { fret: 5, technique: "slide-up" } }),
+	];
+
+	it("raises every event by the capo, written frets and open dead notes alike", () => {
+		const plain = fingerpickPatternToScheduleEvents(pattern(120, slots), 120);
+		const behind = fingerpickPatternToScheduleEvents({ ...pattern(120, slots), capo: 3 }, 120);
+		expect(behind).toHaveLength(plain.length);
+		behind.forEach((ev, i) => {
+			expect(ev.midi).toBe(plain[i].midi + 3);
+			expect({ ...ev, midi: 0 }).toEqual({ ...plain[i], midi: 0 });
+		});
+	});
+
+	it("capo 0 or absent leaves the events untouched", () => {
+		const plain = fingerpickPatternToScheduleEvents(pattern(120, slots), 120);
+		expect(fingerpickPatternToScheduleEvents({ ...pattern(120, slots), capo: 0 }, 120)).toEqual(
+			plain,
+		);
+	});
+
+	it("clamps a junk capo to the supported range", () => {
+		const [ev] = fingerpickPatternToScheduleEvents({ ...pattern(120, slots), capo: 40 }, 120);
+		const [plain] = fingerpickPatternToScheduleEvents(pattern(120, slots), 120);
+		expect(ev.midi).toBe(plain.midi + 12);
 	});
 });
 
@@ -1298,6 +1329,36 @@ function timeOfString(events: { stringIndex: number; time: number }[], stringInd
 	if (!ev) throw new Error(`no event for string ${stringIndex}`);
 	return ev.time;
 }
+
+describe("computeRollOffsets — brush (fast strum)", () => {
+	const params: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.05, gainTaper: 0.8 };
+
+	it("brush-down sweeps low→high at the fixed brush stagger, ignoring roll params", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "brush-down", 1.0, params);
+		const t = (s: number) => m.get(s)!.timeOffset;
+		expect(t(5)).toBeCloseTo(0);
+		expect(t(4)).toBeCloseTo(BRUSH_STAGGER_SECONDS);
+		expect(t(0)).toBeCloseTo(5 * BRUSH_STAGGER_SECONDS);
+	});
+
+	it("brush-up sweeps high→low, both directions at the same speed", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "brush-up", 1.0, params);
+		const t = (s: number) => m.get(s)!.timeOffset;
+		expect(t(0)).toBeCloseTo(0);
+		expect(t(5)).toBeCloseTo(5 * BRUSH_STAGGER_SECONDS);
+	});
+
+	it("a brush tapers no gain — every string at full weight", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "brush-down", 1.0, params);
+		expect([...m.values()].every((o) => o.gain === 1)).toBe(true);
+	});
+
+	it("a brush still keeps inside the slot when the slot is very short", () => {
+		const m = computeRollOffsets([0, 1, 2, 3, 4, 5], "brush-down", 0.02, params);
+		const span = Math.max(...[...m.values()].map((o) => o.timeOffset));
+		expect(span).toBeLessThanOrEqual(0.02);
+	});
+});
 
 describe("computeRollOffsets — sweep order and gain taper", () => {
 	const params: RollParams = { ...DEFAULT_ROLL_PARAMS, staggerMode: "fixed", baseStagger: 0.02 };

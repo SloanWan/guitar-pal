@@ -1,16 +1,27 @@
-import LogoutButton from "./LogoutButton";
 import NavLinks from "./NavLinks";
 import NavBarMenu from "./NavBarMenu";
 import ThemeToggle from "./ThemeToggle";
+import UserMenu from "./UserMenu";
 import Link from "@/components/AppLink";
+import SignInLink from "./SignInLink";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { profileOf } from "@/lib/profile";
 import NavBarScrollWrapper from "./NavBarScrollWrapper";
+import AssistantLauncher from "./assistant/AssistantLauncher";
 
-export default async function NavBar() {
+/**
+ * `hideSignIn` is for the sign-in page itself, where a "Sign In" CTA in the
+ * topbar would point at the page the visitor is already on. The signed-out
+ * cluster then keeps only the dev theme toggle, at every width.
+ */
+export default async function NavBar({ hideSignIn = false }: { hideSignIn?: boolean } = {}) {
 	const supabase = await createSupabaseServer();
 	const {
 		data: { user },
 	} = await supabase.auth.getUser();
+	// Resolved here, on the server, so the client surfaces receive a small view
+	// model rather than the whole auth user.
+	const profile = user ? profileOf(user) : null;
 
 	return (
 		<NavBarScrollWrapper>
@@ -43,36 +54,37 @@ export default async function NavBar() {
 						</span>
 					</Link>
 					<NavLinks />
-					<div className="flex min-w-0 items-center justify-self-end">
-						{/* ≥ nav: controls sit inline in the topbar. */}
-						<div className="hidden min-w-0 items-center gap-3 nav:flex">
-							{/* Theme toggle is a dev-only affordance; production ships a
-							    single theme, so it renders only when dev routes are on
-							    (NEXT_PUBLIC_ vars inline at build time). */}
-							{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeToggle />}
-							{user ? (
-								<>
-									<span className="min-w-0 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">
-										{user?.email}
-									</span>
-									<LogoutButton />
-								</>
-							) : (
-								// Single nav-CTA: transparent, denim border, denim-accent
-								// text; hover fills denim; :active press-flashes denim-tint.
-								// Sign-up stays reachable via the auth page tabs.
-								<Link
-									href="/auth"
-									className="flex h-(--h-control) items-center border border-denim bg-transparent px-4.5 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-								>
-									Sign In
-								</Link>
-							)}
-						</div>
-						{/* < nav: the toggle + auth collapse into one menu trigger. */}
-						<div className="nav:hidden">
-							<NavBarMenu userEmail={user?.email ?? null} />
-						</div>
+					<div className="flex min-w-0 items-center gap-3 justify-self-end">
+						{/* The assistant sits just left of the account control at every
+						    width — a primary entry point, never collapsed into a menu. */}
+						<AssistantLauncher />
+						{profile ? (
+							// Signed in: the avatar menu is the rightmost control at every
+							// width and carries theme + sign-out itself, so no collapse menu.
+							<UserMenu profile={profile} />
+						) : hideSignIn ? (
+							process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeToggle />
+						) : (
+							<>
+								{/* ≥ nav: signed-out controls sit inline in the topbar. */}
+								<div className="hidden items-center gap-3 nav:flex">
+									{/* Theme toggle is a dev-only affordance; production ships a
+									    single theme, so it renders only when dev routes are on
+									    (NEXT_PUBLIC_ vars inline at build time). */}
+									{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeToggle />}
+									{/* Single nav-CTA: transparent, denim border, denim-accent
+									    text; hover fills denim; :active press-flashes denim-tint.
+									    Sign-up stays reachable via the auth page tabs. */}
+									<SignInLink
+										className="flex h-(--h-control) items-center border border-denim bg-transparent px-4.5 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+									/>
+								</div>
+								{/* < nav: the toggle + sign-in collapse into one menu trigger. */}
+								<div className="nav:hidden">
+									<NavBarMenu />
+								</div>
+							</>
+						)}
 					</div>
 				</div>
 			</header>

@@ -1,6 +1,8 @@
 import Link from "@/components/AppLink";
 import type { ReactNode } from "react";
 import { FlaskConical } from "lucide-react";
+import TabStripBackdrop from "@/components/TabStripBackdrop";
+import type { TabStripSpec } from "@/lib/fingerpickToTabStrip";
 
 /* v3 landing — spec: guitar-pal-design-decisions/fable (layout-specs §6,
    component-patterns §2/§3/§8, additional-components §1/§7/§8/§10/§11);
@@ -17,22 +19,10 @@ const BTN_GHOST = `${BTN_BASE} border-line-strong text-ink hover:border-denim ho
 const FOOTER_LINK =
 	"transition-colors duration-150 hover:text-ink-dim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-denim-accent";
 
-/* Hero background TAB strips (additional-components §8) */
-
-type TabNote = readonly [x: number, y: number, fret: string];
-
-interface TabStripSpec {
-	line: string;
-	num: string;
-	barlines: readonly number[];
-	notes: readonly TabNote[];
-}
-
-const TAB_LINES_Y = [10, 24, 38, 52, 66, 80] as const;
+/* Hero background TAB strips (additional-components §8): note positions taken
+   verbatim from the mockup; the drawing lives in TabStripBackdrop. */
 
 const STRIP_FRONT: TabStripSpec = {
-	line: "var(--line)",
-	num: "var(--denim)",
 	barlines: [200, 400, 600, 800, 1000, 1200, 1400, 1599],
 	notes: [
 		[30, 84, "3"],
@@ -71,8 +61,6 @@ const STRIP_FRONT: TabStripSpec = {
 };
 
 const STRIP_BACK: TabStripSpec = {
-	line: "var(--tab-line-2)",
-	num: "var(--tab-num-2)",
 	barlines: [266, 533, 800, 1066, 1333, 1599],
 	notes: [
 		[40, 56, "0"],
@@ -101,34 +89,6 @@ const STRIP_BACK: TabStripSpec = {
 		[1550, 28, "2"],
 	],
 };
-
-function TabStripSvg({ spec }: { spec: TabStripSpec }) {
-	return (
-		<svg
-			width="1600"
-			height="90"
-			viewBox="0 0 1600 90"
-			xmlns="http://www.w3.org/2000/svg"
-			className="flex-none"
-		>
-			<g stroke={spec.line} strokeWidth="1">
-				{TAB_LINES_Y.map((y) => (
-					<line key={`line-${y}`} x1="0" y1={y} x2="1600" y2={y} />
-				))}
-				{spec.barlines.map((x) => (
-					<line key={`bar-${x}`} x1={x} y1="10" x2={x} y2="80" />
-				))}
-			</g>
-			<g fontFamily="var(--mono)" fontSize="12" fill={spec.num}>
-				{spec.notes.map(([x, y, fret]) => (
-					<text key={`note-${x}`} x={x} y={y}>
-						{fret}
-					</text>
-				))}
-			</g>
-		</svg>
-	);
-}
 
 /* Feature cards (component-patterns §3, icon recipes additional-components §11) */
 
@@ -221,19 +181,7 @@ export default function Home() {
 				{/* Hero */}
 				<section className="relative flex min-h-[92vh] items-center overflow-hidden border-b border-line">
 						{/* Animated TAB notation background — confirmed keeper, do not shrink */}
-						<div
-							aria-hidden="true"
-							className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-16 opacity-50 [-webkit-mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)] mask-[linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)]"
-						>
-							<div className="flex w-max animate-[tabscroll_60s_linear_infinite] motion-reduce:animate-none">
-								<TabStripSvg spec={STRIP_FRONT} />
-								<TabStripSvg spec={STRIP_FRONT} />
-							</div>
-							<div className="flex w-max animate-[tabscroll-rev_80s_linear_infinite] motion-reduce:animate-none">
-								<TabStripSvg spec={STRIP_BACK} />
-								<TabStripSvg spec={STRIP_BACK} />
-							</div>
-						</div>
+						<TabStripBackdrop front={STRIP_FRONT} back={STRIP_BACK} />
 
 						<div className="relative z-2 mx-auto w-full max-w-300 px-(--gutter) pt-5 pb-8 max-sm:pt-10 max-sm:pb-20">
 							{/* Hero badge — the landing page's one LED (system online) */}

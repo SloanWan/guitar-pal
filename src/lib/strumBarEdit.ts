@@ -30,7 +30,8 @@ export function cycleStep(current: StepValue, prefer: "D" | "U" = "D"): StepValu
 	const opposite: StepValue = prefer === "D" ? "U" : "D";
 	const cycle: StepValue[] = ["", prefer, opposite, "X"];
 	const idx = cycle.indexOf(current);
-	// idx === -1 for D3/U3/DG/UG: (-1+1)%4 = 0 → "" which resets gracefully
+	// A cell read straight from storage could still hold a retired value, which
+	// indexOf misses: (-1+1)%4 = 0 → "", which resets it gracefully.
 	return cycle[(idx + 1) % cycle.length];
 }
 
@@ -246,6 +247,27 @@ export function setBarCells(bars: Bar[], barIdx: number, cells: number): Bar[] {
 	return bars.map((bar, i) =>
 		i === barIdx ? { ...bar, beats: bar.beats.map((beat) => resizeBeat(beat, cells)) } : bar,
 	);
+}
+
+/**
+ * Replace a bar's rhythm wholesale — what writing a pattern out as notation
+ * does, where the cell editors work a cell at a time.
+ *
+ * Returns the input untouched when the beats already read the same, so a
+ * keystroke that changes the text without changing the rhythm (a trailing
+ * space, a lowercase "d") pushes nothing onto the undo history.
+ */
+export function setBarBeats(bars: Bar[], barIdx: number, beats: Beat[]): Bar[] {
+	if (barIdx < 0 || barIdx >= bars.length) return bars;
+	const current = bars[barIdx].beats;
+	const same =
+		current.length === beats.length &&
+		current.every(
+			(beat, i) =>
+				beat.length === beats[i].length && beat.every((cell, ci) => cell === beats[i][ci]),
+		);
+	if (same) return bars;
+	return bars.map((bar, i) => (i === barIdx ? { ...bar, beats: beats.map((b) => [...b]) } : bar));
 }
 
 /**

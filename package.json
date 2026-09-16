@@ -9,9 +9,11 @@
 		"lint": "eslint",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
+		"evals": "vitest run --config vitest.evals.config.ts",
 		"prepare": "husky"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.124.0",
 		"@supabase/ssr": "^0.10.2",
 		"@supabase/supabase-js": "^2.103.3",
 		"@tombatossals/chords-db": "^0.5.1",

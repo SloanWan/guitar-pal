@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 
-type Theme = "dark" | "light";
+export type Theme = "dark" | "light";
 
 // Must match the key the FOUC boot script in src/app/layout.tsx reads.
 const THEME_STORAGE_KEY = "gp-theme";
@@ -30,18 +30,28 @@ function applyTheme(next: Theme): void {
 	localStorage.setItem(THEME_STORAGE_KEY, next);
 }
 
+/**
+ * The current theme and a setter, backed by `<html data-theme>` rather than
+ * React state so every consumer (this button, the rocker row in the account
+ * menu) agrees with the FOUC boot script and with each other.
+ */
+export function useTheme(): { theme: Theme; setTheme: (next: Theme) => void } {
+	const theme = useSyncExternalStore(subscribeToTheme, getTheme, getServerTheme);
+	return { theme, setTheme: applyTheme };
+}
+
 export default function ThemeToggle() {
 	// Icon visibility is pure CSS via the data-theme-bound `dark:` variant, so SSR
 	// markup matches the client (both icons render; CSS reveals exactly one). The
 	// store only drives the accessible pressed state and the click target.
-	const theme = useSyncExternalStore(subscribeToTheme, getTheme, getServerTheme);
+	const { theme, setTheme } = useTheme();
 
 	return (
 		<button
 			type="button"
 			aria-label="Toggle dark mode"
 			aria-pressed={theme === "dark"}
-			onClick={() => applyTheme(theme === "dark" ? "light" : "dark")}
+			onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
 			className="flex size-(--h-control) items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent motion-safe:active:translate-y-px active:border-denim active:bg-denim-tint active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 		>
 			{/* Mechanical two-sided flip driven purely by [data-theme] (SSR-safe,

@@ -294,7 +294,7 @@ export default function ChordShapeEditor({ shape, onChange }: Props) {
 					htmlFor={tabFieldId}
 					className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
 				>
-					Or, type in the tab sequence..
+					Or, type in the tab sequence — 1st string (high e) first
 				</label>
 				<input
 					id={tabFieldId}
@@ -326,7 +326,7 @@ export default function ChordShapeEditor({ shape, onChange }: Props) {
 					}`}
 				>
 					{tabError ??
-						"First string first, x for a muted string — 00750x is Em7/A. Space the frets out above the ninth."}
+						"Read from the 1st string (high e) down to the 6th (low E), not from the low E up: 00750x is Em7/A — e 0, B 0, G 7, D 5, A 0, low E muted. x = muted; space the frets out above the ninth."}
 				</p>
 			</div>
 		</div>

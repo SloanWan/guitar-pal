@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Music, X } from "lucide-react";
+import { Music, Plus, X } from "lucide-react";
 import MusicalText from "@/components/MusicalText";
 import { chordDisplayName } from "@/lib/chordSuffixes";
-import { searchChords, type ChordIndexEntry, type ChordSearchResult } from "@/lib/chordSearch";
+import {
+	normalizeChordName,
+	searchChords,
+	type ChordIndexEntry,
+	type ChordSearchResult,
+} from "@/lib/chordSearch";
 import { parseTabSequence } from "@/lib/chordTabSequence";
 import { resolveShapeToChord, type ShapeSearchChord } from "@/lib/chordShapeSearch";
 import type { ChordRef } from "@/lib/strumPatterns";
@@ -27,6 +32,18 @@ interface Props {
 	 * and typing over it is how the player finishes it.
 	 */
 	unknownLabel?: string | null;
+	/**
+	 * Offered when the search comes up empty: write the chord down as a shape
+	 * of the player's own. Called with what was typed — a name to file the shape
+	 * under, or the frets that were being looked for.
+	 */
+	onCreate?: (query: string) => void;
+	/**
+	 * Lay the result list out in flow, under the field, instead of floating it.
+	 * For a host that scrolls (the fingerpick column popup): a floating list is
+	 * clipped by the host's overflow, an in-flow one just makes it scroll.
+	 */
+	inlineList?: boolean;
 }
 
 /**
@@ -42,6 +59,8 @@ export default function ChordSearchSelect({
 	shapeCorpus = null,
 	ariaLabel,
 	unknownLabel = null,
+	onCreate,
+	inlineList = false,
 }: Props) {
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(false);
@@ -65,6 +84,18 @@ export default function ChordSearchSelect({
 		[index, query, editing, shape],
 	);
 	const open = editing && (results.length > 0 || shape !== null || query.trim() !== "");
+	/**
+	 * What the query names, when the library has no chord of that name: "c/d"
+	 * finds C/E and C/G, which is not the C/D the player asked for. Offered for
+	 * writing down alongside the near misses, not only when there are none.
+	 */
+	const exact = useMemo(() => (editing && !shape ? normalizeChordName(query) : null), [editing, shape, query]);
+	const exactMissing =
+		exact !== null && !results.some((r) => r.root === exact.root && r.suffix === exact.suffix);
+	const offerCreate =
+		onCreate !== undefined &&
+		((shape !== null && !shapeChord && shapeCorpus !== null) ||
+			(shape === null && index.length > 0 && (results.length === 0 || exactMissing)));
 
 	// Close on a press anywhere outside, the way the other in-modal popovers do.
 	useEffect(() => {
@@ -200,7 +231,9 @@ export default function ChordSearchSelect({
 				<ul
 					id={listboxId}
 					role="listbox"
-					className="absolute left-0 top-full z-50 mt-1 max-h-44 w-52 overflow-y-auto border border-line-strong bg-popover"
+					className={`z-50 mt-1 max-h-44 w-52 overflow-y-auto border border-line-strong bg-popover ${
+						inlineList ? "" : "absolute left-0 top-full"
+					}`}
 				>
 					{results.map((r, i) => {
 						const key = `${r.root} ${r.suffix}`;
@@ -264,6 +297,34 @@ export default function ChordSearchSelect({
 					{!shape && results.length === 0 && (
 						<li className="px-2 py-2 text-center font-mono text-[10px] text-ink-faint">
 							{index.length === 0 ? "Loading chords…" : "No match"}
+						</li>
+					)}
+
+					{/* The chord asked for is not in the library — by name, by shape, or
+					    only its near misses are: it can be written down. */}
+					{offerCreate && onCreate && (
+						<li>
+							<button
+								type="button"
+								onPointerDown={(e) => {
+									e.preventDefault();
+									const typed = query.trim();
+									onCreate(typed);
+									stopEditing();
+									inputRef.current?.blur();
+								}}
+								className="flex w-full items-center gap-2 border-t border-line px-2 py-1.5 text-left font-mono text-[11px] font-semibold text-denim-accent transition-colors hover:bg-denim-tint"
+							>
+								<Plus size={11} className="shrink-0" />
+								{exact && exactMissing ? (
+									<span>
+										Write down <MusicalText text={chordDisplayName(exact.root, exact.suffix)} /> as
+										my own chord
+									</span>
+								) : (
+									"Write it down as my own chord"
+								)}
+							</button>
 						</li>
 					)}
 				</ul>

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
+import { safeRedirectPath } from "@/lib/safeRedirect";
 
 export async function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;
@@ -56,18 +57,19 @@ export async function proxy(request: NextRequest) {
 		);
 	}
 
-	// c. A logged-in user hitting /auth → the redirect param if present, else the
-	//    personal home.
+	// c. A logged-in user hitting /auth → the redirect param if it is a local
+	//    path, else the personal home.
 	if (pathname === "/auth" && user) {
-		const target = request.nextUrl.searchParams.get("redirect") ?? "/home";
+		const target = safeRedirectPath(request.nextUrl.searchParams.get("redirect"));
 		return redirectWithCookies(new URL(target, request.url));
 	}
 
-	// d. /home is the signed-in personal surface — a signed-out visitor is sent to
-	//    auth with a return path so they land back on /home after signing in.
-	if (pathname === "/home" && !user) {
+	// d. /home and /settings are the signed-in personal surfaces — a signed-out
+	//    visitor is sent to auth with a return path so they land back after
+	//    signing in.
+	if ((pathname === "/home" || pathname === "/settings") && !user) {
 		return redirectWithCookies(
-			new URL(`/auth?redirect=${encodeURIComponent("/home")}`, request.url),
+			new URL(`/auth?redirect=${encodeURIComponent(pathname)}`, request.url),
 		);
 	}
 

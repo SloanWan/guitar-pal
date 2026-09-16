@@ -700,8 +700,29 @@
 		transform: translateX(0);
 	}
 }
+@keyframes fp-reveal-from-left {
+	from {
+		opacity: 0;
+		transform: translateX(-8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
 .fp-reveal {
 	animation: fp-reveal-from-right 0.35s ease-out both;
+}
+/* The second of two revealed controls follows the first, so they arrive one
+   after the other rather than as a block. */
+.fp-reveal-2 {
+	animation-delay: 0.18s;
+}
+/* Below sm the switch that reveals them sits on the LEFT, so they come from there. */
+@media (max-width: 639px) {
+	.fp-reveal {
+		animation-name: fp-reveal-from-left;
+	}
 }
 @media (prefers-reduced-motion: reduce) {
 	.fp-reveal {

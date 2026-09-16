@@ -1626,7 +1626,7 @@ export default function FingerpickPage() {
 							    shapes it sizes. */}
 							<div className="flex h-9 shrink-0 flex-row-reverse items-center gap-3 sm:flex-row">
 								{hasChords && chordView === "diagram" && (
-										<div className="fp-reveal flex items-center gap-2">
+										<div className="fp-reveal fp-reveal-2 flex items-center gap-2">
 											<Rocker
 												checked={offShapeOn}
 												onChange={handleOffShapeChange}

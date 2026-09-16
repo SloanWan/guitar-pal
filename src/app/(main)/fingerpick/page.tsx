@@ -36,7 +36,6 @@ import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
 import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";
 import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/ChordShapeStrip";
 import ChordViewToggle from "@/components/strum/ChordViewToggle";
-import type { ChordView } from "@/components/strum/StepGrid";
 import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
 import {
 	expandFingerpickPattern,
@@ -66,6 +65,17 @@ import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import Rocker from "@/components/ui/Rocker";
 import Segmented from "@/components/fingerpick/Segmented";
 import {
+	CHORD_SHAPE_WIDTH_DEFAULT,
+	CHORD_SHAPE_WIDTH_MAX,
+	CHORD_SHAPE_WIDTH_MIN,
+	SCROLL_SPEED_DEFAULT,
+	SCROLL_SPEED_MAX,
+	SCROLL_SPEED_MIN,
+	readLastPatternId,
+	useFingerpickPrefs,
+	writeLastPatternId,
+} from "@/components/fingerpick/useFingerpickPrefs";
+import {
 	BPM_TICK_LABELS,
 	BPM_TICK_PERCENTS,
 	BPM_TICK_VALUES,
@@ -74,33 +84,6 @@ import {
 	MIN_BPM,
 	type LoopGapSeconds,
 } from "@/components/fingerpick/playbackConstants";
-
-// Remembers the last-viewed pattern id so a page refresh reopens it instead of
-// defaulting back to the first preset. Device-local UI state — not synced.
-const LAST_PATTERN_KEY = "lastFingerpickPatternId";
-// Whether the chord line shows names or shapes, and how wide a shape is drawn.
-// Device-local, like the pattern id.
-const CHORD_VIEW_KEY = "fingerpickChordView";
-const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
-// Whether fret numbers outside the chord shape are coloured, in the shape view.
-const OFF_SHAPE_KEY = "fingerpickOffShape";
-// Auto-scroll: how fast the tab creeps upward while reading along, in px/s.
-const SCROLL_SPEED_KEY = "fingerpickScrollSpeed";
-const SCROLL_SPEED_MIN = 4;
-const SCROLL_SPEED_MAX = 60;
-const SCROLL_SPEED_DEFAULT = 16;
-function clampScrollSpeed(raw: number): number {
-	if (!Number.isFinite(raw)) return SCROLL_SPEED_DEFAULT;
-	return Math.min(SCROLL_SPEED_MAX, Math.max(SCROLL_SPEED_MIN, Math.round(raw)));
-}
-/** Width range of the shape strip over a chord symbol, in px. */
-const CHORD_SHAPE_WIDTH_MIN = 40;
-const CHORD_SHAPE_WIDTH_MAX = 140;
-const CHORD_SHAPE_WIDTH_DEFAULT = 64;
-function clampShapeWidth(raw: number): number {
-	if (!Number.isFinite(raw)) return CHORD_SHAPE_WIDTH_DEFAULT;
-	return Math.min(CHORD_SHAPE_WIDTH_MAX, Math.max(CHORD_SHAPE_WIDTH_MIN, Math.round(raw)));
-}
 
 // Higher = tighter/snappier following, lower = smoother/more lag.
 // At 20, steady-state lag behind a constant-velocity target is ~v/20 px/s — barely
@@ -132,15 +115,21 @@ export default function FingerpickPage() {
 	// Incremented each time Stop is pressed; triggers the cursor-reset effect below.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
-	// Chord line: names, or the shapes to hold. Read back from storage on mount
-	// (not in the initializer — the server render has no storage to read).
-	const [chordView, setChordView] = useState<ChordView>("name");
-	const [chordShapeWidth, setChordShapeWidth] = useState(CHORD_SHAPE_WIDTH_DEFAULT);
-	const [offShapeOn, setOffShapeOn] = useState(true);
+	// Remembered view settings: chord line view and shape size, off-shape
+	// colouring, auto-scroll speed.
+	const {
+		chordView,
+		setChordView,
+		chordShapeWidth,
+		setChordShapeWidth,
+		offShapeOn,
+		setOffShapeOn,
+		scrollSpeed,
+		setScrollSpeed,
+	} = useFingerpickPrefs();
 	// Auto-scroll: the tab creeps upward at a set speed for reading along without
 	// a hand free. Off by default; the speed is remembered.
 	const [autoScroll, setAutoScroll] = useState(false);
-	const [scrollSpeed, setScrollSpeed] = useState(SCROLL_SPEED_DEFAULT);
 	// Whether the tab is taller than its viewer at all — auto-scroll has nothing
 	// to do otherwise. Re-measured whenever the viewer or the rows change size
 	// (a window resize, a pattern switch, rows re-laid out), off the RAF-rendered
@@ -167,37 +156,6 @@ export default function FingerpickPage() {
 	useEffect(() => {
 		scrollSpeedRef.current = scrollSpeed;
 	}, [scrollSpeed]);
-	useEffect(() => {
-		let storedView: string | null = null;
-		let storedWidth: string | null = null;
-		let storedOffShape: string | null = null;
-		let storedSpeed: string | null = null;
-		try {
-			storedView = localStorage.getItem(CHORD_VIEW_KEY);
-			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
-			storedOffShape = localStorage.getItem(OFF_SHAPE_KEY);
-			storedSpeed = localStorage.getItem(SCROLL_SPEED_KEY);
-		} catch {
-			// storage unavailable — the defaults it is
-		}
-		// Deferred, as the other storage restores here are: a one-shot sync after
-		// mount, not a state change inside the render that scheduled it.
-		queueMicrotask(() => {
-			if (storedView === "diagram") setChordView("diagram");
-			if (storedWidth !== null) setChordShapeWidth(clampShapeWidth(Number(storedWidth)));
-			if (storedOffShape === "off") setOffShapeOn(false);
-			if (storedSpeed !== null) setScrollSpeed(clampScrollSpeed(Number(storedSpeed)));
-		});
-	}, []);
-	function handleScrollSpeedChange(raw: number) {
-		const speed = clampScrollSpeed(raw);
-		setScrollSpeed(speed);
-		try {
-			localStorage.setItem(SCROLL_SPEED_KEY, String(speed));
-		} catch {
-			// ignore unavailable/blocked storage
-		}
-	}
 	// The creep itself: a RAF loop moving the tab viewer by speed × elapsed,
 	// carrying sub-pixel remainders so slow speeds still move. Stops itself at
 	// the bottom, and whenever it is switched off or the pattern changes.
@@ -225,31 +183,6 @@ export default function FingerpickPage() {
 		raf = requestAnimationFrame(step);
 		return () => cancelAnimationFrame(raf);
 	}, [autoScrollActive, selectedPattern.id]);
-	function handleOffShapeChange(on: boolean) {
-		setOffShapeOn(on);
-		try {
-			localStorage.setItem(OFF_SHAPE_KEY, on ? "on" : "off");
-		} catch {
-			// ignore unavailable/blocked storage
-		}
-	}
-	function handleChordViewChange(view: ChordView) {
-		setChordView(view);
-		try {
-			localStorage.setItem(CHORD_VIEW_KEY, view);
-		} catch {
-			// ignore unavailable/blocked storage
-		}
-	}
-	function handleChordShapeWidthChange(raw: number) {
-		const width = clampShapeWidth(raw);
-		setChordShapeWidth(width);
-		try {
-			localStorage.setItem(CHORD_SHAPE_WIDTH_KEY, String(width));
-		} catch {
-			// ignore unavailable/blocked storage
-		}
-	}
 	const hasChords = patternHasChords(selectedPattern.measures);
 	const showChordDiagrams = hasChords && chordView === "diagram";
 	const chordShapeSize = useMemo(
@@ -831,18 +764,7 @@ export default function FingerpickPage() {
 	// Marking patternRestored true here also hides the loading placeholder.
 	useEffect(() => {
 		if (patternRestored || isLoading) return;
-		let savedId: string | null = null;
-		try {
-			// A `?pattern=<id>` deep link (e.g. from /home) takes priority over the
-			// device-local last-viewed id.
-			const queryId =
-				typeof window !== "undefined"
-					? new URLSearchParams(window.location.search).get("pattern")
-					: null;
-			savedId = queryId ?? localStorage.getItem(LAST_PATTERN_KEY);
-		} catch {
-			// ignore unavailable/blocked storage
-		}
+		const savedId = readLastPatternId();
 		const match =
 			savedId && savedId !== selectedPattern.id
 				? patterns.find((p) => p.id === savedId)
@@ -859,11 +781,7 @@ export default function FingerpickPage() {
 	// flag so the initial default doesn't clobber the saved id before restore runs.
 	useEffect(() => {
 		if (!patternRestored) return;
-		try {
-			localStorage.setItem(LAST_PATTERN_KEY, selectedPattern.id);
-		} catch {
-			// ignore unavailable/blocked storage
-		}
+		writeLastPatternId(selectedPattern.id);
 	}, [selectedPattern.id, patternRestored]);
 
 	// Position cursor and measure highlight at the very first note as soon as the
@@ -1470,7 +1388,7 @@ export default function FingerpickPage() {
 												max={SCROLL_SPEED_MAX}
 												step={2}
 												value={scrollSpeed}
-												onValue={handleScrollSpeedChange}
+												onValue={setScrollSpeed}
 												ticks={[
 													0,
 													((SCROLL_SPEED_DEFAULT - SCROLL_SPEED_MIN) /
@@ -1531,7 +1449,7 @@ export default function FingerpickPage() {
 											<div className="flex items-center gap-2">
 											<Rocker
 												checked={offShapeOn}
-												onChange={handleOffShapeChange}
+												onChange={setOffShapeOn}
 												ariaLabel="Colour fret numbers outside the chord shape"
 											/>
 											<span
@@ -1559,7 +1477,7 @@ export default function FingerpickPage() {
 													max={CHORD_SHAPE_WIDTH_MAX}
 													step={4}
 													value={chordShapeWidth}
-													onValue={handleChordShapeWidthChange}
+													onValue={setChordShapeWidth}
 													ticks={[
 														0,
 														((CHORD_SHAPE_WIDTH_DEFAULT - CHORD_SHAPE_WIDTH_MIN) /
@@ -1581,7 +1499,7 @@ export default function FingerpickPage() {
 										</div>
 									)}
 								{hasChords && (
-									<ChordViewToggle value={chordView} onChange={handleChordViewChange} />
+									<ChordViewToggle value={chordView} onChange={setChordView} />
 								)}
 							</div>
 							</div>

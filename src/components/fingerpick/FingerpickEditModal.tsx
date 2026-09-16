@@ -80,7 +80,7 @@ import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
 import FingerpickEditorTouchInput from "./FingerpickEditorTouchInput";
 import FingerpickEditorTechniqueMenu from "./FingerpickEditorTechniqueMenu";
 import FingerpickEditorMeasureFooter from "./FingerpickEditorMeasureFooter";
-import FingerpickEditorColumnPopup, { type ShapeCreateRequest } from "./FingerpickEditorColumnPopup";
+import FingerpickEditorColumnPopup from "./FingerpickEditorColumnPopup";
 import {
 	DURATION_ABBREV,
 	GRID_GAP_REM,
@@ -97,6 +97,7 @@ import {
 	sweepWashBg,
 	useHasFinePointer,
 	type HoveredCell,
+	type ShapeCreateRequest,
 } from "./fingerpickEditorShared";
 
 export interface FingerpickEditModalProps {

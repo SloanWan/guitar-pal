@@ -5,13 +5,8 @@ import {
 	ArrowRightToLine,
 	ArrowUp,
 	Check,
-	ChevronLeft,
-	ChevronRight,
-	CircleHelp,
 	Copy,
-	CornerDownLeft,
 	Merge,
-	Plus,
 	Trash2,
 } from "lucide-react";
 import {
@@ -37,25 +32,23 @@ import {
 	splitTargetsForSlot,
 	type SlotTarget,
 } from "@/lib/fingerpickEdit";
-import {
-	chordFretHints,
-	chordSymbolLabel,
-	clearLeftOutStrings,
-	fillColumnFromChord,
-	offShapeStrings,
-	setChordOnSlots,
-	setSlotChord,
-	type FretHint,
-} from "@/lib/fingerpickChords";
+import { fillColumnFromChord, offShapeStrings, type FretHint } from "@/lib/fingerpickChords";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { selectRefVoicing } from "@/lib/strumBars";
-import { chordVoicingToVexChords, type ChordVoicing } from "@/lib/chordVoicingToVexChords";
-import ChordDiagram from "@/components/chords/ChordDiagram";
+import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
 import type { ChordVoicingsState } from "./useChordVoicings";
 import type { CommitPattern } from "./useEditHistory";
-import { DurationIcon, columnKey, parseColumnKey, useIsomorphicLayoutEffect } from "./fingerpickEditorShared";
+import FingerpickEditorChordSection from "./FingerpickEditorChordSection";
+import {
+	DurationIcon,
+	PopupSectionLabel,
+	columnKey,
+	parseColumnKey,
+	useIsomorphicLayoutEffect,
+	type ShapeCreateRequest,
+} from "./fingerpickEditorShared";
 
 // Slot-level roll (arpeggiated chord) options for the column popup. "none" clears
 // the field; "roll-down"/"roll-up" are the domain Stroke values. Roll ↓ = hand moves
@@ -75,15 +68,6 @@ type PopupConfirm =
 	| { kind: "whole"; pendingMeasures: Measure[] }
 	// Rolling slots that hold notes outside the chord shape: overwrite them?
 	| { kind: "roll"; targets: SlotTarget[] };
-
-/**
- * A request to open the shape editor: from a chord search that found nothing
- * (`query` seeds the name or the frets), or from the voicing stepper to write
- * another shape for a chord the slot already has (`chord`, starting from `from`).
- */
-export type ShapeCreateRequest =
-	| { target: SlotTarget; query: string }
-	| { target: SlotTarget; chord: ChordRef; from: ChordVoicing | null };
 
 export interface FingerpickEditorColumnPopupProps {
 	working: FingerpickPattern;
@@ -212,19 +196,6 @@ export default function FingerpickEditorColumnPopup({
 			}, prev),
 		);
 		setPopupConfirm(conflicting.length > 0 ? { kind: "roll", targets: conflicting } : null);
-	}
-
-	// Mark a chord change on a single slot (null takes the mark away).
-	function applySlotChord(target: SlotTarget, chord: ChordRef | null) {
-		commit((prev) => setSlotChord(prev, target, chord));
-		bumpRevealChord();
-	}
-
-	// One chord over every selected slot: marked once per run, the chord that
-	// was there resuming after it.
-	function applyChordToSelection(chord: ChordRef) {
-		commit((prev) => setChordOnSlots(prev, columnTargets(), chord));
-		bumpRevealChord();
 	}
 
 	function applyStructural(op: "before" | "after" | "duplicate" | "delete") {
@@ -497,44 +468,10 @@ export default function FingerpickEditorColumnPopup({
 			? mergeTargetsForSlot(singleMeasure, singleTarget.slotIndex)
 			: [];
 
-	// The chord section of the popup: the slot's own mark, if any, and the chord
-	// in effect there (its own, or one running on from an earlier slot).
-	const ownChord: ChordRef | null = singleTarget
-		? (working.measures[singleTarget.measureIndex]?.slots[singleTarget.slotIndex]?.chord ??
-			null)
-		: null;
-	const chordHere: ChordRef | null = singleTarget
-		? (chordsInEffect[singleTarget.measureIndex]?.[singleTarget.slotIndex] ?? null)
-		: null;
 	// For a multi-slot selection: the chord in effect at its first slot.
 	const chordAtSelectionStart: ChordRef | null = firstSelectedColumn
 		? (chordsInEffect[firstSelectedColumn.measureIndex]?.[firstSelectedColumn.slotIndex] ?? null)
 		: null;
-	const voicingsHere = chordHere ? voicingsFor(chordHere) : null;
-	const voicingList = voicingsHere?.status === "ready" ? voicingsHere.voicings : [];
-	const voicingHere = chordHere && voicingList.length > 0 ? selectRefVoicing(chordHere, voicingList) : null;
-	const voicingIndex = voicingHere ? voicingList.findIndex((v) => v.id === voicingHere.id) : -1;
-
-	// Write the shape's frets into the slot's empty cells.
-	function applyFillFromChord() {
-		if (!singleTarget || !voicingHere) return;
-		commit((prev) => fillColumnFromChord(prev, singleTarget, voicingHere));
-	}
-
-	// Take away the notes this measure holds on strings the shape leaves out.
-	function applyClearLeftOut() {
-		if (!singleTarget || !chordHere || !voicingHere) return;
-		commit((prev) => clearLeftOutStrings(prev, singleTarget.measureIndex, chordHere, voicingHere));
-	}
-
-	// Step to another shape of the same chord. Pinning a shape on a slot that only
-	// inherits its chord writes a mark there: a voicing change is a change.
-	function stepVoicing(delta: number) {
-		if (!singleTarget || !chordHere || voicingList.length < 2 || voicingIndex < 0) return;
-		const next = voicingList[(voicingIndex + delta + voicingList.length) % voicingList.length];
-		applySlotChord(singleTarget, { root: chordHere.root, suffix: chordHere.suffix, voicingId: next.id });
-	}
-
 	// Show "Replace with whole note" only when the measure has content to replace:
 	// more than one slot, or a lone slot that isn't already an empty whole note.
 	const measureHasContent =
@@ -750,186 +687,28 @@ export default function FingerpickEditorColumnPopup({
 				</button>
 			</div>
 
-			{/* Chord — a change marked on this slot, running on until the next mark.
-			    Single column only: a chord starts at one point in time. */}
-			{singleTarget && !popupConfirm && (
-				<div
-					ref={chordSectionRef}
+			{!popupConfirm && (
+				<FingerpickEditorChordSection
+					working={working}
+					commit={commit}
+					singleTarget={singleTarget}
+					selectedTargets={columnTargets()}
+					chordAtSelectionStart={chordAtSelectionStart}
+					chordsInEffect={chordsInEffect}
+					voicingsFor={voicingsFor}
+					searchIndex={searchIndex}
+					shapeCorpus={shapeCorpus}
+					onCreateShape={onCreateShape}
+					sectionRef={chordSectionRef}
 					onFocusCapture={revealChordSection}
-					className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0"
-				>
-					<PopupSectionLabel
-						label="Chord"
-						hint="Start a chord here. It runs until the next chord mark, across measures."
-					/>
-					<div className="flex items-center gap-1.5">
-						<ChordSearchSelect
-							chord={ownChord}
-							onChange={(chord) => applySlotChord(singleTarget, chord)}
-							onCreate={(query) => onCreateShape({ target: singleTarget, query })}
-							index={searchIndex}
-							shapeCorpus={shapeCorpus}
-							inlineList
-							ariaLabel={`Chord at measure ${singleTarget.measureIndex + 1}, slot ${singleTarget.slotIndex + 1}`}
-						/>
-						{!ownChord && chordHere && (
-							<button
-								type="button"
-								onClick={() => applySlotChord(singleTarget, chordHere)}
-								title={`${chordSymbolLabel(chordHere)} is running on from an earlier slot — press to write it here, with the shape chosen there`}
-								className="flex h-7 items-center gap-1 px-1.5 font-mono text-[10px] text-ink-faint hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								<CornerDownLeft size={11} />
-								{chordSymbolLabel(chordHere)}
-							</button>
-						)}
-					</div>
-					{chordHere && voicingsHere?.status === "loading" && (
-						<span className="font-mono text-[10px] text-ink-faint">Loading shapes…</span>
-					)}
-					{chordHere && voicingsHere?.status === "ready" && !voicingHere && (
-						<span className="font-mono text-[10px] text-destructive">
-							No shape in the library for {chordSymbolLabel(chordHere)}.
-						</span>
-					)}
-					{chordHere && voicingHere && (
-						<div className="flex items-center gap-1">
-							<button
-								type="button"
-								onClick={() => stepVoicing(-1)}
-								disabled={voicingList.length < 2}
-								aria-label="Previous shape"
-								title="Previous shape"
-								className="flex h-7 w-6 items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-							>
-								<ChevronLeft size={14} />
-							</button>
-							{/* Fixed footprint whatever the label says, so the ‹ › buttons and
-							    the shape stay put while the player steps through voicings. */}
-							<div className="mx-auto w-36 shrink-0 [&>div]:h-[9.5rem] [&>div]:justify-center">
-								<ChordDiagram
-									def={chordVoicingToVexChords(voicingHere)}
-									label={
-										voicingList.length > 1
-											? `${chordSymbolLabel(chordHere)} · ${voicingIndex + 1}/${voicingList.length}`
-											: chordSymbolLabel(chordHere)
-									}
-									size="compact"
-								/>
-							</div>
-							<button
-								type="button"
-								onClick={() => stepVoicing(1)}
-								disabled={voicingList.length < 2}
-								aria-label="Next shape"
-								title="Next shape"
-								className="flex h-7 w-6 items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-							>
-								<ChevronRight size={14} />
-							</button>
-						</div>
-					)}
-					{/* The shape the player needs may not be among the ones on offer: a
-					    new one starts from the shape on screen and is pinned to this slot. */}
-					{chordHere && voicingsHere?.status === "ready" && (
-						<button
-							type="button"
-							onClick={() =>
-								onCreateShape({ target: singleTarget, chord: chordHere, from: voicingHere })
-							}
-							title={`Write a new shape for ${chordSymbolLabel(chordHere)} and use it here`}
-							className="flex h-7 items-center gap-1 self-start border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-						>
-							<Plus size={12} />
-							New shape for {chordSymbolLabel(chordHere)}
-						</button>
-					)}
-					{chordHere && voicingHere && (
-						<div className="flex flex-wrap gap-1">
-							<button
-								type="button"
-								onClick={applyFillFromChord}
-								title="Write this shape's frets into the slot's empty cells. Cells already holding a fret or a dead note are left alone."
-								className="h-7 border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								Fill column
-							</button>
-							{chordFretHints(voicingHere).includes("/") && (
-								<button
-									type="button"
-									onClick={applyClearLeftOut}
-									title={`Remove this measure's notes on the strings the ${chordSymbolLabel(chordHere)} shape doesn't sound, wherever it is in effect.`}
-									className="h-7 border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-								>
-									Clear left-out strings
-								</button>
-							)}
-						</div>
-					)}
-				</div>
-			)}
-
-			{/* Chord over a multi-slot selection: one chord written across every
-			    selected slot. The first selected slot's chord is offered as the
-			    quick pick, since that is usually the one being extended. */}
-			{selectedColumns.size > 1 && !popupConfirm && (
-				<div
-					ref={chordSectionRef}
-					onFocusCapture={revealChordSection}
-					className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0"
-				>
-					<PopupSectionLabel
-						label="Chord"
-						hint={`Put one chord over the ${selectedColumns.size} selected slots.`}
-					/>
-					<div className="flex items-center gap-1.5">
-						<ChordSearchSelect
-							chord={null}
-							onChange={(chord) => chord && applyChordToSelection(chord)}
-							index={searchIndex}
-							shapeCorpus={shapeCorpus}
-							inlineList
-							ariaLabel={`Chord for the ${selectedColumns.size} selected slots`}
-						/>
-						{chordAtSelectionStart && (
-							<button
-								type="button"
-								onClick={() => applyChordToSelection(chordAtSelectionStart)}
-								title={`Write ${chordSymbolLabel(chordAtSelectionStart)} — the chord at the first selected slot — over all ${selectedColumns.size}`}
-								className="flex h-7 items-center gap-1 px-1.5 font-mono text-[10px] text-ink-faint hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								<CornerDownLeft size={11} />
-								{chordSymbolLabel(chordAtSelectionStart)}
-							</button>
-						)}
-					</div>
-				</div>
+					onChordEdited={bumpRevealChord}
+				/>
 			)}
 		</div>
 	);
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
-
-// Column-popup section label. The plain-English explanation lives in a hover
-// tooltip rather than inline text, keeping the popup compact; the help-cursor +
-// faint question mark signal that hovering reveals more. Uses a CSS group-hover
-// bubble instead of the native `title` attribute so it appears instantly — the
-// browser's built-in title delay (~0.5–1s) is not configurable.
-function PopupSectionLabel({ label, hint }: { label: string; hint: string }) {
-	return (
-		<span className="group/hint relative inline-flex w-max items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint cursor-help">
-			{label}
-			<CircleHelp size={10} className="text-ink-faint/70" aria-hidden />
-			<span
-				role="tooltip"
-				className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/hint:opacity-100"
-			>
-				{hint}
-			</span>
-		</span>
-	);
-}
 
 function PopupIconButton({
 	title,

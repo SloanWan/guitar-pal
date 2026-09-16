@@ -2,6 +2,7 @@
 // the pieces split out of it. Nothing here holds state of its own.
 
 import { useEffect, useLayoutEffect, useSyncExternalStore } from "react";
+import { CircleHelp } from "lucide-react";
 import {
 	isBrush,
 	strokeDirection,
@@ -10,6 +11,8 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import type { Cell, SlotTarget } from "@/lib/fingerpickEdit";
+import type { ChordRef } from "@/lib/strumPatterns";
+import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 
 // Short glyphs shown under each slot column so the current rhythmic value is
 // visible in the grid. A rest keeps its real duration, so it shows the same glyph
@@ -124,4 +127,33 @@ export function cellDisplay(sf: StringFret): string {
 	if (sf.muted) return "x";
 	if (sf.fret !== null) return String(sf.fret);
 	return "–";
+}
+
+/**
+ * A request to open the shape editor: from a chord search that found nothing
+ * (`query` seeds the name or the frets), or from the voicing stepper to write
+ * another shape for a chord the slot already has (`chord`, starting from `from`).
+ */
+export type ShapeCreateRequest =
+	| { target: SlotTarget; query: string }
+	| { target: SlotTarget; chord: ChordRef; from: ChordVoicing | null };
+
+// Column-popup section label. The plain-English explanation lives in a hover
+// tooltip rather than inline text, keeping the popup compact; the help-cursor +
+// faint question mark signal that hovering reveals more. Uses a CSS group-hover
+// bubble instead of the native `title` attribute so it appears instantly — the
+// browser's built-in title delay (~0.5–1s) is not configurable.
+export function PopupSectionLabel({ label, hint }: { label: string; hint: string }) {
+	return (
+		<span className="group/hint relative inline-flex w-max items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint cursor-help">
+			{label}
+			<CircleHelp size={10} className="text-ink-faint/70" aria-hidden />
+			<span
+				role="tooltip"
+				className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/hint:opacity-100"
+			>
+				{hint}
+			</span>
+		</span>
+	);
 }

@@ -3,43 +3,23 @@
 import {
 	useState,
 	useEffect,
-	useLayoutEffect,
 	useMemo,
 	useRef,
 	useCallback,
-	useSyncExternalStore,
 } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
 	Plus,
-	Copy,
-	Trash2,
-	ArrowLeft,
-	ArrowRight,
-	ArrowLeftToLine,
-	ArrowRightToLine,
-	ArrowDown,
-	ArrowUp,
-	Check,
-	ChevronLeft,
-	ChevronRight,
 	CornerDownLeft,
-	Merge,
-	RotateCcw,
 	Undo2,
 	Redo2,
-	CircleHelp,
 	X as XIcon,
 } from "lucide-react";
 import {
-	isBrush,
-	strokeDirection,
-	type Duration,
 	type FingerpickPattern,
 	type Measure,
 	type StringFret,
-	type Stroke,
 } from "@/lib/fingerpickTypes";
 import {
 	makeDefaultPattern,
@@ -49,78 +29,68 @@ import {
 	toggleMuted,
 	setTechnique,
 	setTied,
-	setStroke,
 	moveCell,
-	hasPreviousNoteOnString,
-	availableTechniques,
-	type TechniqueAvailability,
-	setSlotsRest,
-	insertSlots,
-	duplicateSlots,
-	deleteSlots,
 	addMeasure,
-	deleteMeasure,
-	cloneMeasure,
-	swapMeasures,
 	computeBeatLabels,
 	computeBeatGroups,
 	computeSubBeatGroups,
-	splitSlot,
-	mergeSlots,
-	splitTargetsForSlot,
-	mergeTargetsForSlot,
-	resetMeasure,
-	remapMeasure,
-	slotHasStringData,
 	STRING_LABELS,
 	MAX_FRET,
 	type Cell,
 	type Direction,
 	type SlotTarget,
 } from "@/lib/fingerpickEdit";
-import { deriveRepeatDirectives, DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
+import { deriveRepeatDirectives } from "@/lib/fingerpickRepeats";
 import {
 	chordFretHints,
 	chordSymbolLabel,
-	clearLeftOutStrings,
 	clearString,
 	effectiveChords,
-	fillColumnFromChord,
-	patternCapo,
 	patternHasChords,
-	measureDiffersFromHints,
-	offShapeStrings,
-	replaceMeasureWithHints,
 	replaceRowWithHints,
 	rowDiffersFromHints,
-	setChordOnSlots,
-	setPatternCapo,
 	setSlotChord,
 	type FretHint,
 } from "@/lib/fingerpickChords";
-import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
-import {
-	applyPickSequence,
-	parsePickSequence,
-	type PickSequenceParse,
-} from "@/lib/fingerpickPickSequence";
 import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
-import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { getChordIndex } from "@/lib/chords";
 import { chordIndexWithUser } from "@/lib/userChordVoicings";
 import { selectRefVoicing } from "@/lib/strumBars";
-import { chordVoicingToVexChords, type ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { useUser } from "@/hooks/useUser";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
-import ChordDiagram from "@/components/chords/ChordDiagram";
-import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
 import ChordShapeModal from "@/components/chords/ChordShapeModal";
 import type { UserChordVoicing } from "@/lib/userChordVoicings";
 import { parseTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
 import { chordShapeToVoicing } from "@/lib/chordShape";
 import { useChordVoicings } from "./useChordVoicings";
+import { useEditHistory } from "./useEditHistory";
+import FingerpickEditorMetaFields, { MAX_BPM, MIN_BPM } from "./FingerpickEditorMetaFields";
+import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
+import FingerpickEditorTouchInput from "./FingerpickEditorTouchInput";
+import FingerpickEditorTechniqueMenu from "./FingerpickEditorTechniqueMenu";
+import FingerpickEditorMeasureFooter from "./FingerpickEditorMeasureFooter";
+import FingerpickEditorMeasureHeader from "./FingerpickEditorMeasureHeader";
+import FingerpickEditorColumnPopup from "./FingerpickEditorColumnPopup";
+import {
+	DURATION_ABBREV,
+	GRID_GAP_REM,
+	HOVER_L1_BG,
+	HOVER_L2_ALPHA,
+	HOVER_SUBBEAT_BG,
+	MEASURE_BLOCK_REM,
+	MODAL_CHROME_REM,
+	cellDisplay,
+	cellKey,
+	columnKey,
+	hoverAxisBg,
+	parseColumnKey,
+	sweepWashBg,
+	useHasFinePointer,
+	type HoveredCell,
+	type ShapeCreateRequest,
+} from "./fingerpickEditorShared";
 
 export interface FingerpickEditModalProps {
 	open: boolean;
@@ -129,57 +99,6 @@ export interface FingerpickEditModalProps {
 	onSave: (pattern: FingerpickPattern) => void;
 }
 
-// Short glyphs shown under each slot column so the current rhythmic value is
-// visible in the grid. A rest keeps its real duration, so it shows the same glyph
-// as the note value it replaces (plus a gray wash on the column, applied below).
-const DURATION_ABBREV: Record<Duration, string> = {
-	whole: "W",
-	half: "H",
-	quarter: "Q",
-	"dotted-quarter": "Q.",
-	eighth: "E",
-	"dotted-eighth": "E.",
-	"eighth-triplet": "E³",
-	sixteenth: "S",
-	"sixteenth-triplet": "S³",
-	"32nd": "T",
-};
-
-// Duration label for the split/merge/replace controls. Uses the same short text
-// abbreviations as the grid (W/H/Q/E/S/T, dotted with a trailing dot) rather than
-// Unicode note glyphs — the whole/half/rest musical symbols live in the astral plane
-// (U+1D1xx) and render as tofu boxes in almost every UI font, so text is used instead.
-function DurationIcon({ duration }: { duration: Duration }) {
-	return (
-		<span aria-hidden className="font-mono text-xs font-semibold leading-none">
-			{DURATION_ABBREV[duration]}
-		</span>
-	);
-}
-
-// Slot-level roll (arpeggiated chord) options for the column popup. "none" clears
-// the field; "roll-down"/"roll-up" are the domain Stroke values. Roll ↓ = hand moves
-// down = low→high pitch; Roll ↑ = hand moves up = high→low pitch (see fingerpickTypes).
-// Roll = slow arpeggio (wave), Brush = fast strum (straight arrow); ↓ = low → high pitch.
-const STROKE_PICKER: { label: string; value: "none" | Stroke; title: string }[] = [
-	{ label: "Off", value: "none", title: "No sweep — sound the strings together" },
-	{ label: "Roll", value: "roll-down", title: "Roll down — a slow arpeggio, low to high strings" },
-	{ label: "Roll", value: "roll-up", title: "Roll up — a slow arpeggio, high to low strings" },
-	{ label: "Brush", value: "brush-down", title: "Brush down — a fast strum, low to high strings" },
-	{ label: "Brush", value: "brush-up", title: "Brush up — a fast strum, high to low strings" },
-];
-
-// Only the direction-bearing techniques are offered in the context menu; each
-// value must be a key of TechniqueAvailability so per-option enablement type-checks.
-const TECHNIQUE_OPTIONS: {
-	label: string;
-	value: Exclude<keyof TechniqueAvailability, "tied">;
-}[] = [
-	{ label: "Hammer-on (H)", value: "hammer-on" },
-	{ label: "Pull-off (P)", value: "pull-off" },
-	{ label: "Slide up (↑)", value: "slide-up" },
-	{ label: "Slide down (↓)", value: "slide-down" },
-];
 
 const TECHNIQUE_GLYPH: Partial<Record<NonNullable<StringFret["technique"]>, string>> = {
 	"hammer-on": "h",
@@ -195,80 +114,8 @@ const ARROW_DIRECTIONS: Record<string, Direction> = {
 	ArrowRight: "right",
 };
 
-const MIN_BPM = 40;
-const MAX_BPM = 220;
-
-// Two-layer hover highlight tints (denim #4A6FA5). Applied via inline
-// backgroundColor rather than Tailwind classes so they never collide with the
-// selected-cell denim ring/tint classes. L1 is a subtle wash over the whole beat
-// group — it reuses the shared --sidebar-hover-bg token (the same denim wash the
-// pattern library uses for row hover). L2 is a stronger per-axis tint on the
-// hovered slot column and string row (they sum on the hovered cell itself, giving
-// a brighter cross centre); its 0.14 alpha has no token equivalent, so it stays a
-// raw rgba.
-const HOVER_L1_BG = "var(--sidebar-hover-bg)";
-const HOVER_L2_ALPHA = 0.14;
-const hoverAxisBg = (alpha: number): string => `rgba(74, 111, 165, ${alpha})`;
-// Mid-level ("L1.5") wash for the sixteenth-note window containing the hovered
-// slot — only meaningful when a beat is subdivided finer than a sixteenth (e.g.
-// eight 32nd notes), where each sixteenth spans two slot columns. Sits between the
-// whole-beat L1 wash and the per-cell L2 axis tint, so its 0.08 denim alpha is
-// weaker than L2's 0.14 but stronger than L1's neutral wash.
-const HOVER_SUBBEAT_BG = hoverAxisBg(0.08);
-// Steady denim wash on any slot carrying a roll (arpeggiated) stroke, so rolled
-// columns read as such at a glance without a per-cell marker. Reuses the same
-// denim base as the hover washes (staying on-theme) at a 0.10 alpha — heavier
-// than the transient L1.5 sub-beat wash (0.08) yet lighter than the per-cell L2
-// hover tint (0.14), so a hovered rolled column still visibly brightens. Applied
-// only when the slot isn't a rest (the gray rest wash wins) and no hover wash is
-// active.
-// A swept slot's wash runs from a faint alpha at the string the sweep starts on
-// to a deeper one at the string it ends on, so the column shows the direction.
-// Rolls wash amber and brushes green, so the two kinds read apart at a glance.
-const SWEEP_WASH_MIN = 0.08;
-const SWEEP_WASH_MAX = 0.34;
-function sweepWashBg(stroke: Stroke, stringIndex: number): string {
-	// stringIndex 0 = high e. A down sweep travels low → high, so the high e is deepest.
-	const progress = strokeDirection(stroke) === "up" ? stringIndex / 5 : (5 - stringIndex) / 5;
-	const alpha = SWEEP_WASH_MIN + (SWEEP_WASH_MAX - SWEEP_WASH_MIN) * progress;
-	return isBrush(stroke) ? `rgba(34, 197, 94, ${alpha})` : `rgba(245, 158, 11, ${alpha})`;
-}
-
-type HoveredCell = { measureIndex: number; slotIndex: number; stringIndex: number };
-
-// Desktop dynamic-width geometry (rem). Modal width = cols × (block + gap) + chrome.
-const MEASURE_BLOCK_REM = 19; // per-measure block target width
-const GRID_GAP_REM = 1; // gap-4 between measure blocks
-const MODAL_CHROME_REM = 2; // measure grid's own px-4 (left + right)
 const TWO_DIGIT_WINDOW_MS = 800;
 const LONG_PRESS_MS = 500;
-// Maximum number of pattern snapshots retained for undo/redo. Older snapshots
-// are dropped from the front once this is exceeded.
-const HISTORY_LIMIT = 50;
-// Upper bound for the repeat play-count stepper (kept well under the lib's hard cap).
-const REPEAT_TIMES_MAX = 16;
-
-const cellKey = (c: Cell) => `${c.measureIndex}:${c.slotIndex}:${c.stringIndex}`;
-const columnKey = (t: SlotTarget) => `${t.measureIndex}:${t.slotIndex}`;
-const parseColumnKey = (key: string): SlotTarget => {
-	const [m, s] = key.split(":").map(Number);
-	return { measureIndex: m, slotIndex: s };
-};
-
-// Fine-pointer (mouse/trackpad → physical keyboard) capability, read via
-// useSyncExternalStore so the editing hint tracks it without a setState-in-effect.
-function subscribeFinePointer(callback: () => void): () => void {
-	if (typeof window === "undefined" || !window.matchMedia) return () => {};
-	const mq = window.matchMedia("(pointer: fine)");
-	mq.addEventListener("change", callback);
-	return () => mq.removeEventListener("change", callback);
-}
-const getFinePointerSnapshot = (): boolean =>
-	typeof window !== "undefined" && !!window.matchMedia
-		? window.matchMedia("(pointer: fine)").matches
-		: true;
-// SSR/first paint assumes desktop; hydration corrects it from the real media query.
-const getFinePointerServerSnapshot = (): boolean => true;
 
 // iMessage-style spring "pop": an easeOutBack overshoot curve that scales past the
 // target before settling. Driven via the Web Animations API for the Save press and
@@ -276,56 +123,18 @@ const getFinePointerServerSnapshot = (): boolean => true;
 // effects can fall back to an instant, animation-free state change (§6.7).
 // Both now live in src/lib/motion.ts — the strum editors want the same spring.
 
-// useLayoutEffect on the client so the popover spring's first frame is the one that
-// paints (no flash of the settled state); useEffect on the server to avoid the
-// "useLayoutEffect does nothing on the server" warning.
-const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
-
-function cellDisplay(sf: StringFret): string {
-	if (sf.muted) return "x";
-	if (sf.fret !== null) return String(sf.fret);
-	return "–";
-}
-
 export default function FingerpickEditModal({
 	open,
 	pattern: initialPattern,
 	onClose,
 	onSave,
 }: FingerpickEditModalProps) {
-	const [working, setWorking] = useState<FingerpickPattern>(makeDefaultPattern);
+	const { working, workingRef, commit, undo, redo, canUndo, canRedo, reset: resetHistory } =
+		useEditHistory(makeDefaultPattern);
 	const [selectedCell, setSelectedCell] = useState<Cell | null>(null);
 	const [hoveredCell, setHoveredCell] = useState<HoveredCell | null>(null);
 	const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
 	const [techMenu, setTechMenu] = useState<{ cell: Cell; x: number; y: number } | null>(null);
-	// Inline confirmation inside the column popup (merge / replace-with-whole).
-	const [popupConfirm, setPopupConfirm] = useState<
-		| { kind: "merge"; affectedSlotCount: number; pendingMeasures: Measure[] }
-		| { kind: "whole"; pendingMeasures: Measure[] }
-		// Rolling slots that hold notes outside the chord shape: overwrite them?
-		| { kind: "roll"; targets: SlotTarget[] }
-		| null
-	>(null);
-	// Inline confirmation for a measure's quick-preset row.
-	const [presetConfirm, setPresetConfirm] = useState<{
-		measureIndex: number;
-		targetDuration: Duration;
-	} | null>(null);
-	// The right-hand sequence typed into each measure's Pick field, by measure id
-	// (ids, not indices, so a moved measure keeps its draft).
-	const [pickInputs, setPickInputs] = useState<Record<string, string>>({});
-	// What the last Pick apply had to say for one measure: a parse error, or the
-	// notes it could not write as asked. Cleared by the next keystroke there.
-	const [pickNotice, setPickNotice] = useState<{
-		measureId: string;
-		kind: "error" | "warning";
-		lines: string[];
-	} | null>(null);
-	// A sequence waiting on "overwrite this measure?" — the measure already has notes.
-	const [pickConfirm, setPickConfirm] = useState<{
-		measureIndex: number;
-		parsed: Extract<PickSequenceParse, { ok: true }>;
-	} | null>(null);
 	// Inline "Discard changes?" confirmation shown when the user tries to close
 	// with unsaved edits. Rendered in the header in place of the close button.
 	const [discardConfirm, setDiscardConfirm] = useState(false);
@@ -334,21 +143,11 @@ export default function FingerpickEditModal({
 	const [repeatError, setRepeatError] = useState<string | null>(null);
 	// True when the device has a fine pointer (mouse/trackpad → physical keyboard
 	// likely). Drives which editing hint to show.
-	const hasFinePointer = useSyncExternalStore(
-		subscribeFinePointer,
-		getFinePointerSnapshot,
-		getFinePointerServerSnapshot,
-	);
+	const hasFinePointer = useHasFinePointer();
 	// Content-relative position of the touch mute button, set when a cell is tapped
 	// on a touch device. Rendered only while a cell is selected; gives touch users a
 	// way to mute a string (there is no "x" key on the native numeric keyboard).
 	const [touchMute, setTouchMute] = useState<{ top: number; left: number } | null>(null);
-	// True while the hidden numeric input holds focus (i.e. the native fret-entry
-	// keyboard is up). The touch mute button belongs to that same "keyboard active"
-	// interaction, so it is shown only while this is true and hidden on blur.
-	const [isFretInputFocused, setIsFretInputFocused] = useState(false);
-	// Whether the editing-help popover (anchored to the footer "?" button) is open.
-	const [hintOpen, setHintOpen] = useState(false);
 	// Id of the measure most recently copied or moved. That box gets a denim glow
 	// so the user can see which one just changed; it clears on the next outside
 	// pointer press (clicking the grid background or anywhere else).
@@ -362,19 +161,6 @@ export default function FingerpickEditModal({
 		dir: "left" | "right";
 	} | null>(null);
 
-	// Undo/redo history. `history` holds every committed pattern snapshot (the
-	// initial state plus one entry per edit); `historyIndex` points at the entry
-	// currently shown in `working`. Undo/redo move the index and restore that
-	// snapshot; a fresh edit truncates any redo tail before appending.
-	const [history, setHistory] = useState<FingerpickPattern[]>([]);
-	const [historyIndex, setHistoryIndex] = useState(0);
-
-	// Latest working pattern for keyboard handlers (avoids stale-closure nav).
-	const workingRef = useRef(working);
-	// Ref mirrors of the history state so commit/undo/redo can read the latest
-	// values without stale closures (and without re-creating the callbacks).
-	const historyRef = useRef<FingerpickPattern[]>([]);
-	const historyIndexRef = useRef(0);
 	// Serialized snapshot of the pattern taken when the modal opened. Comparing
 	// the live pattern against this detects unsaved edits (see isDirty) without
 	// having to flag every individual mutation site.
@@ -383,29 +169,14 @@ export default function FingerpickEditModal({
 	const pendingDigitRef = useRef<{ key: string; digit: number; time: number } | null>(null);
 	// Focusable cell buttons, keyed by cellKey.
 	const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-	const popupRef = useRef<HTMLDivElement>(null);
-	// The popup's Chord section (single- or multi-slot — one renders at a time).
-	// Its height sets the least the popup may be capped to, and it is scrolled
-	// into view inside the popup whenever the chord is being worked on.
-	const chordSectionRef = useRef<HTMLDivElement>(null);
-	// Bumped by every chord edit made from the popup, so the section is revealed
-	// after the edit re-renders it (a new shape card, a longer result list …).
-	const [revealChordTick, setRevealChordTick] = useState(0);
-	// When the chord was last edited from the popup. Growth of the section soon
-	// after (the shape card arriving for the chord just picked) is revealed too,
-	// even though picking took the focus out of the section.
-	const lastChordEditRef = useRef(0);
-	const bumpRevealChord = useCallback(() => {
-		lastChordEditRef.current = Date.now();
-		setRevealChordTick((t) => t + 1);
-	}, []);
+	// When the chord was last worked on from outside the column popup (the
+	// chord chip in the grid, a shape created in the nested editor); the popup
+	// brings its Chord section into view for it.
+	const [revealChordAt, setRevealChordAt] = useState(0);
+	const bumpRevealChord = useCallback(() => setRevealChordAt(Date.now()), []);
 	// The selected column's DOM box, used to anchor the column popup below it inside
 	// the scroll region's coordinate space.
 	const popupAnchorRef = useRef<HTMLDivElement | null>(null);
-	// Scroll-region-relative coordinates for the column popup (null until measured).
-	const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null);
-	// Height the popup may take before scrolling inside itself; set by the nudge.
-	const [popupMaxHeight, setPopupMaxHeight] = useState<number | null>(null);
 
 	// ── Chords ───────────────────────────────────────────────────────────────
 
@@ -460,25 +231,17 @@ export default function FingerpickEditModal({
 			),
 		[chordsInEffect, voicingsFor],
 	);
-	const techMenuRef = useRef<HTMLDivElement>(null);
 	// The shape editor: opened from a chord search that found nothing (`query`
 	// seeds the name or the frets), or from the voicing stepper to write another
 	// shape for a chord the slot already has (`chord`, starting from `from`).
 	// The slot is captured here because the column popup closes under the editor.
-	const [shapeCreate, setShapeCreate] = useState<
-		| { target: SlotTarget; query: string }
-		| { target: SlotTarget; chord: ChordRef; from: ChordVoicing | null }
-		| null
-	>(null);
+	const [shapeCreate, setShapeCreate] = useState<ShapeCreateRequest | null>(null);
 	// The middle (measure-grid) scroll area. Only this region scrolls — the
 	// header/metadata/footer stay pinned — and it's the coordinate space the
 	// absolute popups (technique menu, touch-mute, hidden input) are anchored in.
 	const scrollRef = useRef<HTMLDivElement>(null);
-	const hintRef = useRef<HTMLDivElement>(null);
 	// Save button node, for the spring-pop press feedback.
 	const saveButtonRef = useRef<HTMLButtonElement>(null);
-	// Previous hintOpen value, so the entrance spring fires only on false→true.
-	const prevHintOpenRef = useRef(false);
 	// Long-press timer for the mobile technique menu.
 	const longPressRef = useRef<number | null>(null);
 	// Set true when the long-press timer opens the technique menu, so the tap's
@@ -491,56 +254,6 @@ export default function FingerpickEditModal({
 	// Shared off-screen numeric input, focused on a touch tap so mobile devices can
 	// type a fret — there is no physical keyboard to drive handleCellKeyDown.
 	const hiddenInputRef = useRef<HTMLInputElement>(null);
-
-	// Keep the nav ref pointing at the latest working pattern.
-	useEffect(() => {
-		workingRef.current = working;
-	}, [working]);
-
-	// Keep the history refs in step with their state.
-	useEffect(() => {
-		historyRef.current = history;
-	}, [history]);
-	useEffect(() => {
-		historyIndexRef.current = historyIndex;
-	}, [historyIndex]);
-
-	// Apply a draft mutation and record it for undo/redo. Every draft-mutating
-	// operation goes through here: it derives the next pattern from the current
-	// one, drops any redo tail, appends the snapshot (capped at HISTORY_LIMIT),
-	// and advances the index.
-	const commit = useCallback((updater: (prev: FingerpickPattern) => FingerpickPattern) => {
-		const prev = workingRef.current;
-		const next = updater(prev);
-		if (next === prev) return;
-		setWorking(next);
-		const idx = historyIndexRef.current;
-		setHistory((h) => {
-			const base = h.slice(0, idx + 1);
-			base.push(next);
-			return base.length > HISTORY_LIMIT ? base.slice(base.length - HISTORY_LIMIT) : base;
-		});
-		setHistoryIndex((i) => Math.min(i + 1, HISTORY_LIMIT - 1));
-	}, []);
-
-	const undo = useCallback(() => {
-		const i = historyIndexRef.current;
-		if (i <= 0) return;
-		const ni = i - 1;
-		setHistoryIndex(ni);
-		setWorking(historyRef.current[ni]);
-	}, []);
-
-	const redo = useCallback(() => {
-		const i = historyIndexRef.current;
-		if (i >= historyRef.current.length - 1) return;
-		const ni = i + 1;
-		setHistoryIndex(ni);
-		setWorking(historyRef.current[ni]);
-	}, []);
-
-	const canUndo = historyIndex > 0;
-	const canRedo = historyIndex < history.length - 1;
 
 	// Clear any pending long-press timer on unmount.
 	useEffect(() => {
@@ -556,9 +269,7 @@ export default function FingerpickEditModal({
 			const next = initialPattern
 				? clonePatternForEdit(initialPattern)
 				: makeDefaultPattern();
-			setWorking(next);
-			setHistory([next]);
-			setHistoryIndex(0);
+			resetHistory(next);
 			pristineRef.current = JSON.stringify(next);
 			setSelectedCell(null);
 			setHoveredCell(null);
@@ -566,14 +277,8 @@ export default function FingerpickEditModal({
 			setSelectedColumns(new Set());
 			setTechMenu(null);
 			setShapeCreate(null);
-			setPopupConfirm(null);
-			setPresetConfirm(null);
-			setPickInputs({});
-			setPickNotice(null);
-			setPickConfirm(null);
 			setDiscardConfirm(false);
 			setRepeatError(null);
-			setHintOpen(false);
 			setHighlightedMeasureId(null);
 			pendingDigitRef.current = null;
 		});
@@ -594,33 +299,23 @@ export default function FingerpickEditModal({
 
 	// Close popups on any outside pointer press.
 	useEffect(() => {
-		if (selectedColumns.size === 0 && !techMenu && !hintOpen) return;
+		if (selectedColumns.size === 0 && !techMenu) return;
 		function handlePointerDown(e: PointerEvent) {
 			const target = e.target as HTMLElement;
-			if (techMenu && !techMenuRef.current?.contains(target)) {
+			if (techMenu && !target.closest("[data-technique-menu]")) {
 				setTechMenu(null);
 			}
 			if (
 				selectedColumns.size > 0 &&
-				!popupRef.current?.contains(target) &&
+				!target.closest("[data-column-popup]") &&
 				!target.closest("[data-column-selector]")
 			) {
 				setSelectedColumns(new Set());
-				setPopupConfirm(null);
-			}
-			// Dismiss the hint popover, except when the "?" trigger is pressed — its
-			// own click handler toggles it (so pressing it while open closes it).
-			if (
-				hintOpen &&
-				!hintRef.current?.contains(target) &&
-				!target.closest("[data-hint-trigger]")
-			) {
-				setHintOpen(false);
 			}
 		}
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
-	}, [selectedColumns, techMenu, hintOpen]);
+	}, [selectedColumns, techMenu]);
 
 	// Clear the copy/move highlight on the next pointer press anywhere. A press on
 	// a copy/move control clears here first, then that control's click re-sets the
@@ -639,24 +334,6 @@ export default function FingerpickEditModal({
 		document.addEventListener("pointerdown", handlePointerDown);
 		return () => document.removeEventListener("pointerdown", handlePointerDown);
 	}, [highlightedMeasureId]);
-
-	// Hint popover entrance: spring-pop (scale in from 0.85 with overshoot past 1.0,
-	// plus the opacity fade) only on the false→true transition. Closing keeps the
-	// plain CSS fade/shrink from the element's transition classes. Skipped entirely
-	// for prefers-reduced-motion, leaving the instant class-driven toggle.
-	useIsomorphicLayoutEffect(() => {
-		const wasOpen = prevHintOpenRef.current;
-		prevHintOpenRef.current = hintOpen;
-		if (!hintOpen || wasOpen) return;
-		if (prefersReducedMotion()) return;
-		hintRef.current?.animate(
-			[
-				{ opacity: 0, transform: "scale(0.85)" },
-				{ opacity: 1, transform: "scale(1)" },
-			],
-			{ duration: 250, easing: SPRING_POP_EASING },
-		);
-	}, [hintOpen]);
 
 	// ── Cell keyboard editing ──────────────────────────────────────────────────
 
@@ -720,7 +397,7 @@ export default function FingerpickEditModal({
 				applyFretDigit(cell, Number(key));
 			}
 		},
-		[commit, applyFretDigit],
+		[commit, applyFretDigit, workingRef],
 	);
 
 	// ── Technique context menu ───────────────────────────────────────────────
@@ -811,25 +488,6 @@ export default function FingerpickEditModal({
 		input.focus();
 	}
 
-	// Native numeric keyboard input (touch). Each keystroke arrives as an onChange;
-	// take the last typed character, route it through the shared digit logic, and
-	// reset the field so the next keystroke starts fresh.
-	function handleHiddenNumericInput(e: React.ChangeEvent<HTMLInputElement>) {
-		const cell = selectedCell;
-		const raw = e.currentTarget.value;
-		e.currentTarget.value = "";
-		if (!cell) return;
-		const lastChar = raw.slice(-1);
-		if (!/^[0-9]$/.test(lastChar)) return;
-		applyFretDigit(cell, Number(lastChar));
-	}
-
-	// Reset the hidden input and pending two-digit buffer (on blur / Enter / Done).
-	function resetHiddenNumericInput() {
-		pendingDigitRef.current = null;
-		if (hiddenInputRef.current) hiddenInputRef.current.value = "";
-	}
-
 	function cancelLongPress() {
 		if (longPressRef.current !== null) {
 			clearTimeout(longPressRef.current);
@@ -861,10 +519,7 @@ export default function FingerpickEditModal({
 
 	// ── Column popup actions ─────────────────────────────────────────────────
 
-	const columnTargets = (): SlotTarget[] => [...selectedColumns].map(parseColumnKey);
-
 	function toggleColumn(target: SlotTarget) {
-		setPopupConfirm(null);
 		setSelectedColumns((prev) => {
 			const next = new Set(prev);
 			const key = columnKey(target);
@@ -874,97 +529,11 @@ export default function FingerpickEditModal({
 		});
 	}
 
-	// Toggle the silent (rest) state on every selected column in one commit. A rest
-	// keeps its rhythmic duration, so the measure total is unchanged.
-	function applyRest(isRest: boolean) {
-		commit((prev) => setSlotsRest(prev, columnTargets(), isRest));
-	}
-
-	// Apply (or clear) a roll stroke on every selected column in one commit, so
-	// undo/redo treat a multi-column stroke change as a single step. `undefined`
-	// clears. Routed through commit, so it participates in undo/redo and the dirty
-	// guard just like every other edit.
-	// The shape in effect at a slot, when it is known.
-	function voicingAt(t: SlotTarget): ChordVoicing | null {
-		const ref = chordsInEffect[t.measureIndex]?.[t.slotIndex] ?? null;
-		if (!ref) return null;
-		const state = voicingsFor(ref);
-		return state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
-	}
-	function fillFromChordAt(p: FingerpickPattern, t: SlotTarget): FingerpickPattern {
-		const voicing = voicingAt(t);
-		return voicing ? fillColumnFromChord(p, t, voicing) : p;
-	}
-	function clearSlotStrings(p: FingerpickPattern, t: SlotTarget): FingerpickPattern {
-		return STRING_LABELS.reduce(
-			(q, _, stringIndex) => setInactive(q, { ...t, stringIndex }),
-			p,
-		);
-	}
-
-	// A roll is a chord being sounded, so an empty slot is filled from its chord
-	// shape as the roll goes on; a slot holding notes outside the shape is not
-	// touched without asking. Turning the roll off changes only the roll.
-	function applyStroke(stroke: Stroke | undefined) {
-		const targets = columnTargets();
-		const conflicting: SlotTarget[] = [];
-		commit((prev) =>
-			targets.reduce((p, t) => {
-				let next = setStroke(p, t, stroke);
-				if (!stroke) return next;
-				const slot = next.measures[t.measureIndex]?.slots[t.slotIndex];
-				const hints = hintsBySlot[t.measureIndex]?.[t.slotIndex] ?? null;
-				if (!slot || !hints) return next;
-				if (!slotHasStringData(slot)) next = fillFromChordAt(next, t);
-				else if (offShapeStrings(slot, hints).length > 0) conflicting.push(t);
-				return next;
-			}, prev),
-		);
-		setPopupConfirm(conflicting.length > 0 ? { kind: "roll", targets: conflicting } : null);
-	}
-
-	// Mark a chord change on a single slot (null takes the mark away).
-	function applySlotChord(target: SlotTarget, chord: ChordRef | null) {
-		commit((prev) => setSlotChord(prev, target, chord));
-		bumpRevealChord();
-	}
-
-	// One chord over every selected slot: marked once per run, the chord that
-	// was there resuming after it.
-	function applyChordToSelection(chord: ChordRef) {
-		commit((prev) => setChordOnSlots(prev, columnTargets(), chord));
-		bumpRevealChord();
-	}
-
-	// Rewrite every fretted cell in a measure to the chord shape's frets.
-	function applyReplaceMeasure(measureIndex: number) {
-		commit((prev) =>
-			replaceMeasureWithHints(prev, measureIndex, (si) => hintsBySlot[measureIndex]?.[si] ?? null),
-		);
-	}
-
 	// Rewrite a string's fretted cells in one measure to the shape's frets.
 	function applyReplaceRow(measureIndex: number, stringIndex: number) {
 		commit((prev) =>
 			replaceRowWithHints(prev, measureIndex, stringIndex, (si) => hintsBySlot[measureIndex]?.[si] ?? null),
 		);
-	}
-
-	function applyStructural(op: "before" | "after" | "duplicate" | "delete") {
-		const targets = columnTargets();
-		commit((prev) => {
-			if (op === "duplicate") return duplicateSlots(prev, targets);
-			if (op === "delete") return deleteSlots(prev, targets);
-			return insertSlots(prev, targets, op);
-		});
-		setSelectedColumns(new Set());
-		setPopupConfirm(null);
-	}
-
-	// Replace a measure's slots via a Measure[] transform (split/merge/reset/remap
-	// all operate on the measure array, not the whole pattern).
-	function applyMeasures(measures: Measure[]) {
-		commit((prev) => ({ ...prev, measures }));
 	}
 
 	// Patch a single measure's repeat flags (start / end barline, play-count). Undefined
@@ -990,177 +559,6 @@ export default function FingerpickEditModal({
 		}));
 	}
 
-	// ── Split / merge / replace-with-whole (single selected column) ──────────
-
-	function applySplit(target: SlotTarget, duration: Duration) {
-		applyMeasures(
-			splitSlot(
-				working.measures,
-				target.measureIndex,
-				target.slotIndex,
-				duration,
-				working.timeSignature,
-			),
-		);
-		setSelectedColumns(new Set());
-		setPopupConfirm(null);
-	}
-
-	function requestMerge(target: SlotTarget, duration: Duration) {
-		const res = mergeSlots(
-			working.measures,
-			target.measureIndex,
-			target.slotIndex,
-			duration,
-			working.timeSignature,
-		);
-		if (res.type === "confirm") {
-			setPopupConfirm({
-				kind: "merge",
-				affectedSlotCount: res.affectedSlotCount,
-				pendingMeasures: res.pendingMeasures,
-			});
-		} else {
-			applyMeasures(res.measures);
-			setSelectedColumns(new Set());
-		}
-	}
-
-	function requestReplaceWithWhole(target: SlotTarget) {
-		const res = resetMeasure(
-			working.measures,
-			target.measureIndex,
-			"whole",
-			working.timeSignature,
-		);
-		if (res.type === "confirm") {
-			setPopupConfirm({ kind: "whole", pendingMeasures: res.measures });
-		} else {
-			applyMeasures(res.measures);
-			setSelectedColumns(new Set());
-		}
-	}
-
-	function confirmPopup() {
-		if (!popupConfirm) return;
-		if (popupConfirm.kind === "roll") {
-			// Overwrite: the slot's notes go, the shape's frets come in.
-			commit((prev) =>
-				popupConfirm.targets.reduce((p, t) => fillFromChordAt(clearSlotStrings(p, t), t), prev),
-			);
-			setPopupConfirm(null);
-			return;
-		}
-		applyMeasures(popupConfirm.pendingMeasures);
-		setSelectedColumns(new Set());
-		setPopupConfirm(null);
-	}
-
-	// ── Quick preset row (per measure) ───────────────────────────────────────
-
-	function requestPreset(measureIndex: number, duration: Duration) {
-		const res = resetMeasure(working.measures, measureIndex, duration, working.timeSignature);
-		if (res.type === "confirm") {
-			setPresetConfirm({ measureIndex, targetDuration: duration });
-		} else {
-			applyMeasures(res.measures);
-		}
-	}
-
-	function applyPresetRemap() {
-		if (!presetConfirm) return;
-		applyMeasures(
-			remapMeasure(
-				working.measures,
-				presetConfirm.measureIndex,
-				presetConfirm.targetDuration,
-				working.timeSignature,
-			),
-		);
-		setPresetConfirm(null);
-	}
-
-	function applyPresetClear() {
-		if (!presetConfirm) return;
-		const res = resetMeasure(
-			working.measures,
-			presetConfirm.measureIndex,
-			presetConfirm.targetDuration,
-			working.timeSignature,
-		);
-		applyMeasures(res.measures);
-		setPresetConfirm(null);
-	}
-
-	// ── Pick sequence (per measure) ──────────────────────────────────────────
-
-	// Parse the measure's typed sequence and write it, asking first when the
-	// measure already holds notes. Shapes still on their way block the apply
-	// rather than silently writing open strings.
-	function requestPickSequence(measureIndex: number) {
-		const measure = working.measures[measureIndex];
-		if (!measure) return;
-		const parsed = parsePickSequence(pickInputs[measure.id] ?? "", working.timeSignature);
-		if (!parsed.ok) {
-			setPickNotice({ measureId: measure.id, kind: "error", lines: [parsed.error] });
-			return;
-		}
-		const pendingShapes = chordsInEffect[measureIndex].some(
-			(ref) => ref !== null && voicingsFor(ref).status === "loading",
-		);
-		if (pendingShapes) {
-			setPickNotice({
-				measureId: measure.id,
-				kind: "error",
-				lines: ["Chord shapes are still loading — try again in a moment."],
-			});
-			return;
-		}
-		if (measure.slots.some(slotHasStringData)) {
-			setPickConfirm({ measureIndex, parsed });
-			return;
-		}
-		applyPickSequenceNow(measureIndex, parsed);
-	}
-
-	function applyPickSequenceNow(
-		measureIndex: number,
-		parsed: Extract<PickSequenceParse, { ok: true }>,
-	) {
-		const measure = working.measures[measureIndex];
-		if (!measure) return;
-		const result = applyPickSequence(working, measureIndex, parsed, (ref) => {
-			const state = voicingsFor(ref);
-			return state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
-		});
-		commit(() => result.pattern);
-		setPickConfirm(null);
-		setPickNotice(
-			result.warnings.length > 0
-				? { measureId: measure.id, kind: "warning", lines: result.warnings }
-				: null,
-		);
-	}
-
-	// Rest toggle is active only when every selected column is already a rest.
-	const allSelectedRest: boolean = (() => {
-		const targets = columnTargets();
-		if (targets.length === 0) return false;
-		return targets.every((t) => !!working.measures[t.measureIndex]?.slots[t.slotIndex]?.isRest);
-	})();
-
-	// Stroke highlighted in the roll picker = the shared stroke of all selected slots
-	// ("none" when they all lack one). "mixed" when they disagree, so nothing lights up.
-	const selectedStroke: "none" | Stroke | "mixed" = (() => {
-		const targets = columnTargets();
-		if (targets.length === 0) return "none";
-		const strokes = targets.map(
-			(t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.stroke,
-		);
-		const first = strokes[0];
-		return strokes.every((s) => s === first) ? (first ?? "none") : "mixed";
-	})();
-
 	// The column popup is anchored below the first selected column's selector.
 	const firstSelectedColumn: SlotTarget | null =
 		selectedColumns.size > 0
@@ -1170,221 +568,17 @@ export default function FingerpickEditModal({
 			: null;
 	const firstSelectedColumnKey = firstSelectedColumn ? columnKey(firstSelectedColumn) : null;
 
-	// Anchor direction: columns in the left half of their measure open the popup to
-	// the right (default); columns in the right half open it to the left so it never
-	// spills past the rightmost measure's edge.
-	const popupOpensLeft = (() => {
-		if (!firstSelectedColumn) return false;
-		const totalSlots = working.measures[firstSelectedColumn.measureIndex]?.slots.length ?? 0;
-		return firstSelectedColumn.slotIndex >= totalSlots / 2;
-	})();
-
-	// Position the column popup just below the selected column, in the scroll region's
-	// own coordinate space, so it lives inside the dialog (never spilling outside it)
-	// and scrolls with the grid — the same anchoring model as the technique menu.
-	// Recomputed on scroll (capture, to catch the measure's inner horizontal scroll)
-	// and resize; setPopupPos bails when the numbers are unchanged so a stable scroll
-	// doesn't churn the auto-scroll effect below.
-	useIsomorphicLayoutEffect(() => {
-		if (!firstSelectedColumnKey) {
-			setPopupPos(null);
-			return;
-		}
-		const GAP = 6;
-		const compute = () => {
-			const el = popupAnchorRef.current;
-			const scroller = scrollRef.current;
-			if (!el || !scroller) return;
-			const scRect = scroller.getBoundingClientRect();
-			const r = el.getBoundingClientRect();
-			const top = r.bottom - scRect.top + scroller.scrollTop + GAP;
-			// Columns in the right half of their measure open the popup leftwards (its
-			// right edge aligned to the column) so it doesn't shoot off the right; the
-			// rest open rightwards from the column's left edge. Clamp to 0 so it never
-			// starts off the left edge. offsetWidth is read from the already-rendered
-			// (visibility-hidden until positioned) popup.
-			const popupW = popupRef.current?.offsetWidth ?? 0;
-			const rawLeft = popupOpensLeft
-				? r.right - scRect.left + scroller.scrollLeft - popupW
-				: r.left - scRect.left + scroller.scrollLeft;
-			const left = Math.max(0, rawLeft);
-			setPopupPos((prev) =>
-				prev && prev.top === top && prev.left === left ? prev : { top, left },
-			);
-		};
-		compute();
-		window.addEventListener("resize", compute);
-		window.addEventListener("scroll", compute, true);
-		return () => {
-			window.removeEventListener("resize", compute);
-			window.removeEventListener("scroll", compute, true);
-		};
-	}, [firstSelectedColumnKey, popupOpensLeft]);
-
-	// Nudge the scroll region just enough to bring the whole column popup into view
-	// when it overflows the viewport (e.g. selecting a column in the bottom measure).
-	// Mirrors the technique-menu auto-scroll: runs after layout so the popup has its
-	// real size, and re-runs when its position or content height changes (selection,
-	// single↔multi controls, or an inline confirmation appearing).
-	//
-	// The nudge never scrolls the selected column's measure out of view: the popup
-	// is about that column, and the player needs to see it. Where the popup would
-	// still not fit below the anchor, it is capped to the room left and scrolls
-	// inside itself instead.
-	useIsomorphicLayoutEffect(() => {
-		if (!firstSelectedColumnKey || !popupPos) return;
-		const popup = popupRef.current;
-		const scroller = scrollRef.current;
-		if (!popup || !scroller) return;
-		const PAD = 8;
-		const popupRect = popup.getBoundingClientRect();
-		const viewRect = scroller.getBoundingClientRect();
-		const block = popupAnchorRef.current?.closest<HTMLElement>("[data-measure-id]");
-		const blockTop = block?.getBoundingClientRect().top ?? popupRect.top;
-		// The popup's full content height, whatever cap it is under right now.
-		const naturalHeight = popup.scrollHeight + (popupRect.height - popup.clientHeight);
-		// The Chord section must always be showable whole: it is the part that
-		// grows (shape card, result list) and the part being worked on.
-		const chordHeight = chordSectionRef.current?.getBoundingClientRect().height ?? 0;
-		const leastHeight = Math.min(naturalHeight, Math.max(160, chordHeight + 24));
-		let dx = 0;
-		let dy = 0;
-		if (popupRect.right > viewRect.right - PAD) dx = popupRect.right - (viewRect.right - PAD);
-		else if (popupRect.left < viewRect.left + PAD) dx = popupRect.left - (viewRect.left + PAD);
-		let maxHeight = naturalHeight;
-		if (popupRect.top + naturalHeight > viewRect.bottom - PAD) {
-			// Scroll down as far as keeps the measure's top edge in view; what still
-			// hangs below is the popup's own scroll — but never less than the Chord
-			// section needs, even if that costs a little of the measure's top.
-			const cap = Math.max(0, blockTop - (viewRect.top + PAD));
-			const roomAtCap = viewRect.bottom - PAD - (popupRect.top - cap);
-			maxHeight = Math.floor(Math.max(roomAtCap, leastHeight));
-			dy = popupRect.top + maxHeight - (viewRect.bottom - PAD);
-		} else if (popupRect.top < viewRect.top + PAD) {
-			dy = popupRect.top - (viewRect.top + PAD);
-		}
-		setPopupMaxHeight((prev) => (prev === maxHeight ? prev : maxHeight));
-		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
-		// `popupMaxHeight` is a dep on purpose: the cap applied by this pass changes
-		// how far the scroll region can scroll, so the nudge is settled on the next.
-	}, [firstSelectedColumnKey, popupPos, popupConfirm, selectedColumns, revealChordTick, popupMaxHeight]);
-
-	// Bring the Chord section into view inside the popup whenever the chord is
-	// being worked on: on focus landing in it, and after every chord edit.
-	const revealChordSection = useCallback(() => {
-		const popup = popupRef.current;
-		const section = chordSectionRef.current;
-		if (!popup || !section) return;
-		const p = popup.getBoundingClientRect();
-		const c = section.getBoundingClientRect();
-		if (c.bottom > p.bottom) popup.scrollTop += c.bottom - p.bottom + 4;
-		else if (c.top < p.top) popup.scrollTop -= p.top - c.top + 4;
-	}, []);
-	// Re-run when the cap is applied too: the first reveal may have happened on
-	// an uncapped popup, where everything was in view anyway.
-	useIsomorphicLayoutEffect(() => {
-		if (revealChordTick === 0) return;
-		if (Date.now() - lastChordEditRef.current > 3000) return;
-		revealChordSection();
-	}, [revealChordTick, popupMaxHeight, revealChordSection]);
-	// The section also grows on its own — the result list opening under the
-	// search field, a shape card arriving — and while the player's focus is in
-	// it, that growth should stay in view too.
-	useEffect(() => {
-		const section = chordSectionRef.current;
-		if (!section || !firstSelectedColumnKey) return;
-		let lastHeight = section.getBoundingClientRect().height;
-		const observer = new ResizeObserver(() => {
-			const height = section.getBoundingClientRect().height;
-			if (height === lastHeight) return;
-			lastHeight = height;
-			const recentEdit = Date.now() - lastChordEditRef.current < 3000;
-			if (section.contains(document.activeElement) || recentEdit) setRevealChordTick((t) => t + 1);
-		});
-		observer.observe(section);
-		return () => observer.disconnect();
-	}, [firstSelectedColumnKey, selectedColumns]);
-
-	// When the technique menu opens near the grid's edge (e.g. right-clicking the
-	// last cell in a row), it's clipped by the scroll area. Nudge the scroll area
-	// just enough to bring the whole menu into view — so the user never has to
-	// scroll manually to reach its options. Runs after layout so the menu has its
-	// real size. techMenu.x/y are the deps: a fresh open re-measures.
-	useIsomorphicLayoutEffect(() => {
-		if (!techMenu) return;
-		const menu = techMenuRef.current;
-		const scroller = scrollRef.current;
-		if (!menu || !scroller) return;
-		const PAD = 8;
-		const menuRect = menu.getBoundingClientRect();
-		const viewRect = scroller.getBoundingClientRect();
-		let dx = 0;
-		let dy = 0;
-		if (menuRect.right > viewRect.right - PAD) dx = menuRect.right - (viewRect.right - PAD);
-		else if (menuRect.left < viewRect.left + PAD) dx = menuRect.left - (viewRect.left + PAD);
-		if (menuRect.bottom > viewRect.bottom - PAD) dy = menuRect.bottom - (viewRect.bottom - PAD);
-		else if (menuRect.top < viewRect.top + PAD) dy = menuRect.top - (viewRect.top + PAD);
-		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
-	}, [techMenu]);
-
-	// Split/merge/whole controls act on a single slot. When exactly one column is
-	// selected, enumerate that slot's split and merge targets from live state.
-	const singleTarget: SlotTarget | null = selectedColumns.size === 1 ? columnTargets()[0] : null;
-	const singleMeasure = singleTarget ? working.measures[singleTarget.measureIndex] : null;
-
-	// Smaller note values this slot can be split into (even subdivisions that fit the
-	// measure's remaining capacity), and larger values the following slots can merge
-	// up to — both enumerated by the shared lib helpers.
-	const splitOptions =
-		singleTarget && singleMeasure
-			? splitTargetsForSlot(singleMeasure, singleTarget.slotIndex, working.timeSignature)
-			: [];
-	const mergeOptions =
-		singleTarget && singleMeasure
-			? mergeTargetsForSlot(singleMeasure, singleTarget.slotIndex)
-			: [];
-
-	// The chord section of the popup: the slot's own mark, if any, and the chord
-	// in effect there (its own, or one running on from an earlier slot).
-	const ownChord: ChordRef | null = singleTarget
-		? (working.measures[singleTarget.measureIndex]?.slots[singleTarget.slotIndex]?.chord ??
-			null)
-		: null;
-	const chordHere: ChordRef | null = singleTarget
-		? (chordsInEffect[singleTarget.measureIndex]?.[singleTarget.slotIndex] ?? null)
-		: null;
-	// For a multi-slot selection: the chord in effect at its first slot.
-	const chordAtSelectionStart: ChordRef | null = firstSelectedColumn
-		? (chordsInEffect[firstSelectedColumn.measureIndex]?.[firstSelectedColumn.slotIndex] ?? null)
-		: null;
-	const voicingsHere = chordHere ? voicingsFor(chordHere) : null;
-	const voicingList = voicingsHere?.status === "ready" ? voicingsHere.voicings : [];
-	const voicingHere = chordHere && voicingList.length > 0 ? selectRefVoicing(chordHere, voicingList) : null;
-	const voicingIndex = voicingHere ? voicingList.findIndex((v) => v.id === voicingHere.id) : -1;
-
-	// Write the shape's frets into the slot's empty cells.
-	function applyFillFromChord() {
-		if (!singleTarget || !voicingHere) return;
-		commit((prev) => fillColumnFromChord(prev, singleTarget, voicingHere));
-	}
-
-	// Take away the notes this measure holds on strings the shape leaves out.
-	function applyClearLeftOut() {
-		if (!singleTarget || !chordHere || !voicingHere) return;
-		commit((prev) => clearLeftOutStrings(prev, singleTarget.measureIndex, chordHere, voicingHere));
-	}
-
 	// A chord the search knows nothing about is written down as a shape of the
 	// player's own, then set on the slot it was searched for.
 	function handleShapeCreated(voicing: UserChordVoicing) {
 		if (!shapeCreate) return;
 		// Pin what was stored: an identical shape already on record keeps its id.
 		const stored = saveVoicing(voicing);
-		applySlotChord(shapeCreate.target, {
-			root: stored.root,
-			suffix: stored.suffix,
-			voicingId: stored.id,
-		});
+		const target = shapeCreate.target;
+		commit((prev) =>
+			setSlotChord(prev, target, { root: stored.root, suffix: stored.suffix, voicingId: stored.id }),
+		);
+		bumpRevealChord();
 		setShapeCreate(null);
 	}
 
@@ -1412,390 +606,6 @@ export default function FingerpickEditModal({
 	function applyClearString(measureIndex: number, stringIndex: number) {
 		commit((prev) => clearString(prev, stringIndex, measureIndex));
 	}
-
-	// Step to another shape of the same chord. Pinning a shape on a slot that only
-	// inherits its chord writes a mark there: a voicing change is a change.
-	function stepVoicing(delta: number) {
-		if (!singleTarget || !chordHere || voicingList.length < 2 || voicingIndex < 0) return;
-		const next = voicingList[(voicingIndex + delta + voicingList.length) % voicingList.length];
-		applySlotChord(singleTarget, { root: chordHere.root, suffix: chordHere.suffix, voicingId: next.id });
-	}
-
-	// Show "Replace with whole note" only when the measure has content to replace:
-	// more than one slot, or a lone slot that isn't already an empty whole note.
-	const measureHasContent =
-		!!singleMeasure &&
-		(singleMeasure.slots.length > 1 ||
-			singleMeasure.slots.some((s) => s.strings.some((sf) => sf.fret !== null || sf.muted)) ||
-			singleMeasure.slots[0]?.duration !== "whole");
-
-	const columnPopup = (
-		<div
-			ref={popupRef}
-			// Absolutely positioned inside the scroll region (like the technique menu), so
-			// it stays clipped to the dialog and scrolls with the grid. Rendered as soon
-			// as a column is selected but kept hidden (yet measurable, for its width) until
-			// the layout effect has computed its content-relative position.
-			style={{
-				position: "absolute",
-				top: popupPos?.top ?? 0,
-				left: popupPos?.left ?? 0,
-				visibility: popupPos ? "visible" : "hidden",
-				maxHeight: popupMaxHeight ?? undefined,
-			}}
-			className="z-60 w-60 border border-line-strong bg-popover p-2 flex flex-col gap-2 shadow-lg overflow-y-auto fp-thin-scroll"
-		>
-			{/* Done — a way out of the selection that does not need a press
-			    somewhere else. Sticky so it stays in the corner while the popup
-			    scrolls; zero height so it takes no room from the sections. */}
-			<div className="sticky top-0 z-10 flex h-0 justify-end overflow-visible">
-				<button
-					type="button"
-					onClick={() => {
-						setSelectedColumns(new Set());
-						setPopupConfirm(null);
-					}}
-					aria-label="Done with this slot"
-					title="Done — close this popup"
-					className="-mt-1 -mr-1 flex h-6 w-6 items-center justify-center border border-line-strong bg-popover text-ink-dim hover:border-denim hover:text-denim transition-colors"
-				>
-					<Check size={13} />
-				</button>
-			</div>
-			{/* Move — structural edits on the selected slot. Single selection only:
-			    with several slots picked, the popup is about what they share. */}
-			{singleTarget && (
-			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
-				<PopupSectionLabel
-					label="Move Slot"
-					hint="Insert, duplicate, or delete this slot."
-				/>
-				<div className="flex gap-1">
-					<PopupIconButton
-						title="Insert before"
-						onClick={() => applyStructural("before")}
-					>
-						<ArrowLeftToLine size={14} />
-					</PopupIconButton>
-					<PopupIconButton title="Insert after" onClick={() => applyStructural("after")}>
-						<ArrowRightToLine size={14} />
-					</PopupIconButton>
-					<PopupIconButton title="Duplicate" onClick={() => applyStructural("duplicate")}>
-						<Copy size={14} />
-					</PopupIconButton>
-					<PopupIconButton
-						title="Delete"
-						onClick={() => applyStructural("delete")}
-						danger
-					>
-						<Trash2 size={14} />
-					</PopupIconButton>
-				</div>
-			</div>
-			)}
-			{/* Split / merge (single column only). Split subdivides the slot into equal
-			    smaller notes; merge folds this slot plus the following run into any larger
-			    note value they sum to. Both preserve the measure total. */}
-			{singleTarget &&
-				!popupConfirm &&
-				(splitOptions.length > 0 || mergeOptions.length > 0) && (
-					<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
-						{splitOptions.length > 0 && (
-							<div className="flex flex-wrap items-center gap-1">
-								<PopupSectionLabel
-									label="Split"
-									hint="Break this note into smaller, even notes."
-								/>
-								{splitOptions.map(({ duration, count }) => (
-									<button
-										key={duration}
-										onClick={() => applySplit(singleTarget, duration)}
-										title={`Split into ${count} × ${duration}`}
-										className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-									>
-										{count}×<DurationIcon duration={duration} />
-									</button>
-								))}
-							</div>
-						)}
-						{mergeOptions.length > 0 && (
-							<div className="flex flex-wrap items-center gap-1">
-								<PopupSectionLabel
-									label="Merge"
-									hint="Join this note with the ones after it into one longer note."
-								/>
-								{mergeOptions.map(({ duration, count }) => (
-									<button
-										key={duration}
-										onClick={() => requestMerge(singleTarget, duration)}
-										title={`Merge ${count} slots into a ${duration}`}
-										className="flex items-center gap-0.5 h-7 px-1.5 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-									>
-										<Merge size={13} />
-										<DurationIcon duration={duration} />
-									</button>
-								))}
-							</div>
-						)}
-					</div>
-				)}
-
-			{/* Replace whole measure with a single whole note (single column only) */}
-			{singleTarget && measureHasContent && !popupConfirm && (
-				<div className="border-t border-line pt-2 first:border-t-0 first:pt-0">
-					<button
-						onClick={() => requestReplaceWithWhole(singleTarget)}
-						title="Clear the whole measure back to one empty note."
-						className="flex items-center gap-1 h-7 text-xs text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-					>
-						Replace with <DurationIcon duration="whole" />
-					</button>
-				</div>
-			)}
-
-			{/* Inline confirmation for a destructive merge / whole-replace */}
-			{popupConfirm && (
-				<div className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
-					<span className="text-[11px] text-ink-dim">
-						{popupConfirm.kind === "merge"
-							? `This will discard data from ${popupConfirm.affectedSlotCount} slot(s). Continue?`
-							: popupConfirm.kind === "roll"
-								? `${popupConfirm.targets.length === 1 ? "This slot holds" : `${popupConfirm.targets.length} slots hold`} notes outside the chord shape. Overwrite with the shape?`
-								: "This will replace the measure's content. Continue?"}
-					</span>
-					<div className="flex gap-1">
-						<button
-							onClick={() => setPopupConfirm(null)}
-							className="h-7 px-2 text-xs text-ink-dim hover:bg-raise active:bg-denim-tint transition-colors"
-						>
-							Cancel
-						</button>
-						<button
-							onClick={confirmPopup}
-							className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
-						>
-							Confirm
-						</button>
-					</div>
-				</div>
-			)}
-
-			{/* Roll (arpeggiated-chord) selector — slot-level, applies to every
-			    selected column. Rings the strings out one at a time instead of together. */}
-			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
-				<PopupSectionLabel
-					label="Sweep"
-					hint="Roll: a slow arpeggio, one string after another. Brush: a fast strum. ↓ low to high strings, ↑ high to low."
-				/>
-				{/* Off spans both rows; roll and brush each get a row of directions. */}
-				<div className="grid grid-cols-[auto_1fr_1fr] border border-line-strong">
-					{STROKE_PICKER.map((s, i) => (
-						<button
-							key={s.value}
-							onClick={() => applyStroke(s.value === "none" ? undefined : s.value)}
-							title={s.title}
-							aria-label={s.title}
-							className={`h-7 px-2 flex items-center justify-center gap-0.5 font-mono text-[11px] font-semibold transition-colors ${
-								s.value === "none" ? "row-span-2 h-14" : "border-l border-line-strong"
-							} ${i >= 3 ? "border-t border-line-strong" : ""} ${
-								selectedStroke === s.value
-									? "bg-denim text-on-denim"
-									: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-							}`}
-						>
-							{s.value !== "none" && strokeDirection(s.value) === "down" && (
-								<ArrowDown size={11} aria-hidden />
-							)}
-							{s.value !== "none" && strokeDirection(s.value) === "up" && (
-								<ArrowUp size={11} aria-hidden />
-							)}
-							{s.label}
-						</button>
-					))}
-				</div>
-			</div>
-
-			{/* Rest — silences the selected column(s) while keeping their rhythmic
-			    duration, so the measure total never changes. */}
-			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
-				<PopupSectionLabel
-					label="Rest"
-					hint="Silence this slot but keep its timing in the measure."
-				/>
-				<button
-					onClick={() => applyRest(!allSelectedRest)}
-					title={
-						allSelectedRest
-							? "Turn the rest back into a note"
-							: "Silence this slot (keeps its duration as a rest)"
-					}
-					className={`h-7 px-2 font-mono text-xs font-semibold border border-line-strong transition-colors self-start ${
-						allSelectedRest
-							? "bg-denim text-on-denim"
-							: "text-ink-dim hover:bg-denim-tint hover:text-denim"
-					}`}
-				>
-					Rest
-				</button>
-			</div>
-
-			{/* Chord — a change marked on this slot, running on until the next mark.
-			    Single column only: a chord starts at one point in time. */}
-			{singleTarget && !popupConfirm && (
-				<div
-					ref={chordSectionRef}
-					onFocusCapture={revealChordSection}
-					className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0"
-				>
-					<PopupSectionLabel
-						label="Chord"
-						hint="Start a chord here. It runs until the next chord mark, across measures."
-					/>
-					<div className="flex items-center gap-1.5">
-						<ChordSearchSelect
-							chord={ownChord}
-							onChange={(chord) => applySlotChord(singleTarget, chord)}
-							onCreate={(query) => setShapeCreate({ target: singleTarget, query })}
-							index={searchIndex}
-							shapeCorpus={shapeCorpus}
-							inlineList
-							ariaLabel={`Chord at measure ${singleTarget.measureIndex + 1}, slot ${singleTarget.slotIndex + 1}`}
-						/>
-						{!ownChord && chordHere && (
-							<button
-								type="button"
-								onClick={() => applySlotChord(singleTarget, chordHere)}
-								title={`${chordSymbolLabel(chordHere)} is running on from an earlier slot — press to write it here, with the shape chosen there`}
-								className="flex h-7 items-center gap-1 px-1.5 font-mono text-[10px] text-ink-faint hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								<CornerDownLeft size={11} />
-								{chordSymbolLabel(chordHere)}
-							</button>
-						)}
-					</div>
-					{chordHere && voicingsHere?.status === "loading" && (
-						<span className="font-mono text-[10px] text-ink-faint">Loading shapes…</span>
-					)}
-					{chordHere && voicingsHere?.status === "ready" && !voicingHere && (
-						<span className="font-mono text-[10px] text-destructive">
-							No shape in the library for {chordSymbolLabel(chordHere)}.
-						</span>
-					)}
-					{chordHere && voicingHere && (
-						<div className="flex items-center gap-1">
-							<button
-								type="button"
-								onClick={() => stepVoicing(-1)}
-								disabled={voicingList.length < 2}
-								aria-label="Previous shape"
-								title="Previous shape"
-								className="flex h-7 w-6 items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-							>
-								<ChevronLeft size={14} />
-							</button>
-							{/* Fixed footprint whatever the label says, so the ‹ › buttons and
-							    the shape stay put while the player steps through voicings. */}
-							<div className="mx-auto w-36 shrink-0 [&>div]:h-[9.5rem] [&>div]:justify-center">
-								<ChordDiagram
-									def={chordVoicingToVexChords(voicingHere)}
-									label={
-										voicingList.length > 1
-											? `${chordSymbolLabel(chordHere)} · ${voicingIndex + 1}/${voicingList.length}`
-											: chordSymbolLabel(chordHere)
-									}
-									size="compact"
-								/>
-							</div>
-							<button
-								type="button"
-								onClick={() => stepVoicing(1)}
-								disabled={voicingList.length < 2}
-								aria-label="Next shape"
-								title="Next shape"
-								className="flex h-7 w-6 items-center justify-center text-ink-dim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-							>
-								<ChevronRight size={14} />
-							</button>
-						</div>
-					)}
-					{/* The shape the player needs may not be among the ones on offer: a
-					    new one starts from the shape on screen and is pinned to this slot. */}
-					{chordHere && voicingsHere?.status === "ready" && (
-						<button
-							type="button"
-							onClick={() =>
-								setShapeCreate({ target: singleTarget, chord: chordHere, from: voicingHere })
-							}
-							title={`Write a new shape for ${chordSymbolLabel(chordHere)} and use it here`}
-							className="flex h-7 items-center gap-1 self-start border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-						>
-							<Plus size={12} />
-							New shape for {chordSymbolLabel(chordHere)}
-						</button>
-					)}
-					{chordHere && voicingHere && (
-						<div className="flex flex-wrap gap-1">
-							<button
-								type="button"
-								onClick={applyFillFromChord}
-								title="Write this shape's frets into the slot's empty cells. Cells already holding a fret or a dead note are left alone."
-								className="h-7 border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								Fill column
-							</button>
-							{chordFretHints(voicingHere).includes("/") && (
-								<button
-									type="button"
-									onClick={applyClearLeftOut}
-									title={`Remove this measure's notes on the strings the ${chordSymbolLabel(chordHere)} shape doesn't sound, wherever it is in effect.`}
-									className="h-7 border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
-								>
-									Clear left-out strings
-								</button>
-							)}
-						</div>
-					)}
-				</div>
-			)}
-
-			{/* Chord over a multi-slot selection: one chord written across every
-			    selected slot. The first selected slot's chord is offered as the
-			    quick pick, since that is usually the one being extended. */}
-			{selectedColumns.size > 1 && !popupConfirm && (
-				<div
-					ref={chordSectionRef}
-					onFocusCapture={revealChordSection}
-					className="flex flex-col gap-1.5 border-t border-line pt-2 first:border-t-0 first:pt-0"
-				>
-					<PopupSectionLabel
-						label="Chord"
-						hint={`Put one chord over the ${selectedColumns.size} selected slots.`}
-					/>
-					<div className="flex items-center gap-1.5">
-						<ChordSearchSelect
-							chord={null}
-							onChange={(chord) => chord && applyChordToSelection(chord)}
-							index={searchIndex}
-							shapeCorpus={shapeCorpus}
-							inlineList
-							ariaLabel={`Chord for the ${selectedColumns.size} selected slots`}
-						/>
-						{chordAtSelectionStart && (
-							<button
-								type="button"
-								onClick={() => applyChordToSelection(chordAtSelectionStart)}
-								title={`Write ${chordSymbolLabel(chordAtSelectionStart)} — the chord at the first selected slot — over all ${selectedColumns.size}`}
-								className="flex h-7 items-center gap-1 px-1.5 font-mono text-[10px] text-ink-faint hover:bg-denim-tint hover:text-denim transition-colors"
-							>
-								<CornerDownLeft size={11} />
-								{chordSymbolLabel(chordAtSelectionStart)}
-							</button>
-						)}
-					</div>
-				</div>
-			)}
-		</div>
-	);
 
 	// ── Close guard ───────────────────────────────────────────────────────────
 
@@ -1849,15 +659,6 @@ export default function FingerpickEditModal({
 	}
 
 	const nameValid = working.name.trim().length > 0;
-
-	// The selected cell's live string data, used to gate the touch mute button:
-	// an already-muted cell needs no mute affordance, so the button is hidden
-	// until the cell is un-muted (or a different, non-muted cell is selected).
-	const selectedStringFret: StringFret | null = selectedCell
-		? (working.measures[selectedCell.measureIndex]?.slots[selectedCell.slotIndex]?.strings[
-				selectedCell.stringIndex
-			] ?? null)
-		: null;
 
 	// Dynamic desktop (lg+) width: grow with measure count, 2 → 4 columns, then
 	// stop (extra measures wrap). Below lg the static md:2 / sm:1 layout applies.
@@ -1946,90 +747,7 @@ export default function FingerpickEditModal({
 					</div>
 				</div>
 
-				{/* ── Metadata bar (fixed, above the scroll region) ─────────────── */}
-				<div className="shrink-0 flex flex-wrap items-end gap-3 px-4">
-					<div className="flex flex-col gap-1 min-w-40 flex-[2]">
-						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-							Name
-						</label>
-						<input
-							type="text"
-							value={working.name}
-							onChange={(e) => commit((p) => ({ ...p, name: e.target.value }))}
-							placeholder="Pattern name"
-							className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
-								nameValid ? "border-line-strong" : "border-destructive"
-							}`}
-						/>
-					</div>
-					<div className="flex flex-col gap-1 w-20 shrink-0">
-						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-							BPM
-						</label>
-						<input
-							type="number"
-							min={MIN_BPM}
-							max={MAX_BPM}
-							value={working.bpm}
-							onChange={(e) =>
-								commit((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))
-							}
-							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
-						/>
-					</div>
-					<div className="flex flex-col gap-1 w-20 shrink-0">
-						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-							Capo
-						</label>
-						{/* The TAB is written relative to the capo, so playback sounds this
-						    many semitones higher. Empty = no capo. */}
-						<input
-							type="number"
-							min={0}
-							max={STRUM_CAPO_MAX}
-							value={patternCapo(working) === 0 ? "" : patternCapo(working)}
-							onChange={(e) =>
-								commit((p) => setPatternCapo(p, Number(e.target.value) || 0))
-							}
-							placeholder="0"
-							aria-label="Capo fret — empty means no capo"
-							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
-						/>
-					</div>
-					<div className="flex flex-col gap-1 w-20 shrink-0">
-						<label className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-							Time Sig.
-							{/* Time signature is fixed at 4/4 until other meters ship. CSS
-							    group-hover tooltip (75ms fade) instead of the native `title`,
-							    which has a slow browser-controlled delay. */}
-							<span className="group/ts relative inline-flex cursor-help text-ink-faint/70">
-								<CircleHelp size={11} aria-label="More time signatures coming soon" />
-								<span
-									role="tooltip"
-									className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/ts:opacity-100"
-								>
-									Only 4/4 is supported right now — more time signatures coming
-									soon.
-								</span>
-							</span>
-						</label>
-						<div className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink">
-							4/4
-						</div>
-					</div>
-					<div className="flex flex-col gap-1 min-w-40 flex-[2]">
-						<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-							Description
-						</label>
-						<input
-							type="text"
-							value={working.description ?? ""}
-							onChange={(e) => commit((p) => ({ ...p, description: e.target.value }))}
-							placeholder="Optional"
-							className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
-						/>
-					</div>
-				</div>
+				<FingerpickEditorMetaFields working={working} commit={commit} />
 
 				{/* ── Grid ──────────────────────────────────────────────────────── */}
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
@@ -2096,114 +814,16 @@ export default function FingerpickEditModal({
 											: ""
 									}`}
 								>
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-2">
-											<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
-												Measure {measureIndex + 1}
-											</span>
-											<button
-												onClick={() => {
-													// Pre-generate the clone's id so the newly
-													// appended box can be highlighted (the copy
-													// lands at the last position).
-													const cloneId = crypto.randomUUID();
-													commit((p) => ({
-														...p,
-														measures: cloneMeasure(
-															p.measures,
-															measureIndex,
-															cloneId,
-														),
-													}));
-													setHighlightedMeasureId(cloneId);
-												}}
-												aria-label="Copy measure"
-												title="Copy measure"
-												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint transition-colors"
-											>
-												<Copy size={14} />
-											</button>
-											<button
-												onClick={() => {
-													commit((p) => ({
-														...p,
-														measures: swapMeasures(
-															p.measures,
-															measureIndex,
-															measureIndex - 1,
-														),
-													}));
-													setHighlightedMeasureId(measure.id);
-													setMoveNudge({ id: measure.id, dir: "left" });
-												}}
-												disabled={measureIndex === 0}
-												aria-label="Move measure left"
-												title="Move measure left"
-												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
-											>
-												<ArrowLeft size={14} />
-											</button>
-											<button
-												onClick={() => {
-													commit((p) => ({
-														...p,
-														measures: swapMeasures(
-															p.measures,
-															measureIndex,
-															measureIndex + 1,
-														),
-													}));
-													setHighlightedMeasureId(measure.id);
-													setMoveNudge({ id: measure.id, dir: "right" });
-												}}
-												disabled={
-													measureIndex === working.measures.length - 1
-												}
-												aria-label="Move measure right"
-												title="Move measure right"
-												className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
-											>
-												<ArrowRight size={14} />
-											</button>
-										</div>
-										<div className="flex items-center gap-2">
-											{/* Snap the whole measure back to its chord shapes — live only
-											    while some fret differs from what the shape would write. */}
-											{hasChords &&
-												(() => {
-													const differs = measureDiffersFromHints(
-														measure,
-														(si) => hintsBySlot[measureIndex]?.[si] ?? null,
-													);
-													return (
-														<button
-															onClick={() => applyReplaceMeasure(measureIndex)}
-															disabled={!differs}
-															aria-label="Replace this measure's frets with the chord shapes'"
-															title={
-																differs
-																	? "Replace every fret in this measure with the chord shape's"
-																	: "Every fret in this measure already matches the chord shape"
-															}
-															className="flex items-center justify-center p-1.5 rounded text-ink-dim hover:text-denim hover:bg-denim-tint disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-ink-dim disabled:hover:bg-transparent transition-colors"
-														>
-															<RotateCcw size={14} />
-														</button>
-													);
-												})()}
-										<button
-											onClick={() =>
-												commit((p) => deleteMeasure(p, measureIndex))
-											}
-											disabled={working.measures.length <= 1}
-											aria-label="Delete measure"
-											title="Delete measure"
-											className="flex items-center gap-1 text-[10px] text-ink-dim hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-										>
-											<XIcon size={12} /> Delete
-										</button>
-										</div>
-									</div>
+									<FingerpickEditorMeasureHeader
+										measure={measure}
+										measureIndex={measureIndex}
+										measureCount={working.measures.length}
+										commit={commit}
+										hasChords={hasChords}
+										hints={hintsBySlot[measureIndex]}
+										onHighlight={setHighlightedMeasureId}
+										onNudge={(dir) => setMoveNudge({ id: measure.id, dir })}
+									/>
 
 									{/* Column-major layout: a fixed label column, then one wrapper per
 								    beat group. The L1 hover wash is applied to the group wrapper so
@@ -2650,7 +1270,7 @@ export default function FingerpickEditModal({
 
 																		{/* Column selector. The popup itself is rendered once, absolutely
 															    positioned inside the scroll region and anchored below the
-															    first selected column (see columnPopup above). */}
+															    first selected column (see FingerpickEditorColumnPopup). */}
 																		<div
 																			onMouseEnter={() =>
 																				hoverColumn(
@@ -2750,202 +1370,15 @@ export default function FingerpickEditModal({
 										)}
 									</div>
 
-									{/* Quick preset row: fill the whole measure with one note value.
-									    The repeat-barline toggles (|: start, :| end) sit at the row's
-									    bottom-right; the play-count stepper drops to its own line below
-									    when a repeat end is set. */}
-									<div className="flex items-center gap-1 border-t border-line pt-2">
-										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
-											All
-										</span>
-										{(["quarter", "eighth", "sixteenth", "32nd"] as const).map(
-											(d) => (
-												<button
-													key={d}
-													onClick={() => requestPreset(measureIndex, d)}
-													title={`Fill measure with ${d} notes`}
-													className="flex items-center justify-center h-7 w-8 border border-line-strong text-ink-dim hover:border-denim hover:text-denim active:bg-denim-tint transition-colors"
-												>
-													<DurationIcon duration={d} />
-												</button>
-											),
-										)}
-										<div className="flex items-center gap-1 ml-auto">
-											<button
-												onClick={() =>
-													setMeasureRepeat(measureIndex, {
-														repeatStart: !measure.repeatStart,
-													})
-												}
-												title="Repeat start (|:) — the section repeats from here"
-												aria-pressed={!!measure.repeatStart}
-												className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
-													measure.repeatStart
-														? "border-denim bg-denim-tint text-denim"
-														: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
-												}`}
-											>
-												|:
-											</button>
-											<button
-												onClick={() =>
-													setMeasureRepeat(measureIndex, {
-														repeatEnd: !measure.repeatEnd,
-													})
-												}
-												title="Repeat end (:|) — loop back to the repeat start"
-												aria-pressed={!!measure.repeatEnd}
-												className={`flex items-center justify-center h-7 w-8 border font-mono text-xs transition-colors ${
-													measure.repeatEnd
-														? "border-denim bg-denim-tint text-denim"
-														: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
-												}`}
-											>
-												:|
-											</button>
-										</div>
-									</div>
-
-									{/* Play-count stepper — only when this measure ends a repeat. */}
-									{measure.repeatEnd && (
-										<div className="flex items-center gap-0.5 justify-end">
-											<button
-												onClick={() =>
-													setMeasureRepeat(measureIndex, {
-														repeatTimes: Math.max(
-															DEFAULT_REPEAT_TIMES,
-															(measure.repeatTimes ??
-																DEFAULT_REPEAT_TIMES) - 1,
-														),
-													})
-												}
-												title="Play fewer times"
-												className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
-											>
-												−
-											</button>
-											<span className="font-mono text-xs w-7 text-center text-ink">
-												×{measure.repeatTimes ?? DEFAULT_REPEAT_TIMES}
-											</span>
-											<button
-												onClick={() =>
-													setMeasureRepeat(measureIndex, {
-														repeatTimes: Math.min(
-															REPEAT_TIMES_MAX,
-															(measure.repeatTimes ??
-																DEFAULT_REPEAT_TIMES) + 1,
-														),
-													})
-												}
-												title="Play more times"
-												className="flex items-center justify-center h-7 w-6 border border-line-strong text-ink-dim hover:border-denim hover:text-denim transition-colors"
-											>
-												+
-											</button>
-										</div>
-									)}
-
-									{/* Pick row: type a right-hand sequence (3212, 6(32)1(32), 0 or -
-									    for a rest) and Enter rewrites the measure, fretting each
-									    string from the chord in effect at that beat. */}
-									<div className="flex items-center gap-1.5">
-										<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
-											Pick
-										</span>
-										<input
-											type="text"
-											value={pickInputs[measure.id] ?? ""}
-											onChange={(e) => {
-												const value = e.target.value;
-												setPickInputs((prev) => ({ ...prev, [measure.id]: value }));
-												setPickNotice((n) => (n?.measureId === measure.id ? null : n));
-												setPickConfirm((c) =>
-													c?.measureIndex === measureIndex ? null : c,
-												);
-											}}
-											onKeyDown={(e) => {
-												if (e.key !== "Enter") return;
-												e.preventDefault();
-												e.stopPropagation();
-												requestPickSequence(measureIndex);
-											}}
-											placeholder="e.g. 3212 or 6(32)1(32)"
-											aria-label={`Right-hand sequence for measure ${measureIndex + 1}`}
-											title="String numbers, 1 = high e … 6 = low E. Parentheses pluck strings together; 0 or - is a rest. Enter writes the measure, fretted from its chord."
-											className="h-7 min-w-0 flex-1 border border-line-strong bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:border-denim"
-										/>
-										<button
-											type="button"
-											onClick={() => requestPickSequence(measureIndex)}
-											disabled={!(pickInputs[measure.id] ?? "").trim()}
-											title="Write the sequence into this measure"
-											className="h-7 px-2 border border-line-strong font-mono text-xs font-semibold text-ink-dim hover:border-denim hover:text-denim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-										>
-											Write
-										</button>
-									</div>
-									{pickNotice?.measureId === measure.id && (
-										<ul
-											className={`flex flex-col gap-0.5 text-[10px] leading-snug ${
-												pickNotice.kind === "error" ? "text-destructive" : "text-ink-dim"
-											}`}
-										>
-											{pickNotice.lines.map((line) => (
-												<li key={line}>{line}</li>
-											))}
-										</ul>
-									)}
-									{pickConfirm && pickConfirm.measureIndex === measureIndex && (
-										<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
-											<span className="text-[11px] text-ink-dim">
-												This will replace the measure&apos;s notes. Continue?
-											</span>
-											<div className="flex gap-1">
-												<button
-													onClick={() =>
-														applyPickSequenceNow(measureIndex, pickConfirm.parsed)
-													}
-													className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
-												>
-													Replace
-												</button>
-												<button
-													onClick={() => setPickConfirm(null)}
-													className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
-												>
-													Cancel
-												</button>
-											</div>
-										</div>
-									)}
-									{presetConfirm &&
-										presetConfirm.measureIndex === measureIndex && (
-											<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
-												<span className="text-[11px] text-ink-dim">
-													Keep existing data (remap) or clear?
-												</span>
-												<div className="flex gap-1">
-													<button
-														onClick={applyPresetRemap}
-														className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
-													>
-														Remap
-													</button>
-													<button
-														onClick={applyPresetClear}
-														className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
-													>
-														Clear
-													</button>
-													<button
-														onClick={() => setPresetConfirm(null)}
-														className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
-													>
-														Cancel
-													</button>
-												</div>
-											</div>
-										)}
+									<FingerpickEditorMeasureFooter
+										measure={measure}
+										measureIndex={measureIndex}
+										working={working}
+										commit={commit}
+										chordsInEffect={chordsInEffect[measureIndex]}
+										voicingsFor={voicingsFor}
+										onSetRepeat={(patch) => setMeasureRepeat(measureIndex, patch)}
+									/>
 								</div>
 							);
 						})}
@@ -2959,203 +1392,62 @@ export default function FingerpickEditModal({
 						</button>
 					</div>
 
-					{/* Off-screen numeric input: focused on a touch tap to summon the
-				    native numeric keyboard for fret entry. Invisible and
-				    non-interactive; the keyboard writes through
-				    handleHiddenNumericInput. Positioned over the tapped cell at
-				    focus time to avoid a jump-scroll. */}
-					<input
-						ref={hiddenInputRef}
-						type="number"
-						inputMode="numeric"
-						pattern="[0-9]*"
-						aria-hidden
-						tabIndex={-1}
-						onChange={handleHiddenNumericInput}
-						onFocus={() => setIsFretInputFocused(true)}
+					<FingerpickEditorTouchInput
+						inputRef={hiddenInputRef}
+						working={working}
+						selectedCell={selectedCell}
+						touchMute={touchMute}
+						onDigit={(digit) => {
+							if (selectedCell) applyFretDigit(selectedCell, digit);
+						}}
+						onBackspace={() => {
+							if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
+							pendingDigitRef.current = null;
+						}}
+						onToggleMute={() => {
+							if (selectedCell) commit((prev) => toggleMuted(prev, selectedCell));
+						}}
 						onBlur={() => {
-							setIsFretInputFocused(false);
-							resetHiddenNumericInput();
+							pendingDigitRef.current = null;
 						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter") {
-								e.currentTarget.blur();
-								return;
-							}
-							// The native numeric keyboard has no "x"; its Backspace clears
-							// the selected cell (mirrors the physical-keyboard path).
-							if (e.key === "Backspace" || e.key === "Delete") {
-								if (selectedCell) commit((prev) => setInactive(prev, selectedCell));
-								pendingDigitRef.current = null;
-							}
-						}}
-						className="absolute h-6 w-6 opacity-0 pointer-events-none -z-10"
-						style={{ top: 0, left: 0 }}
 					/>
-
-					{/* Touch mute button: the native numeric keyboard can't type "x", so
-				    give touch users a tappable way to mute the selected string. Uses
-				    the same toggleMuted commit as the desktop "x" key. Centred just
-				    below the selected cell (the "x" glyph is the tab mute notation).
-				    Hidden while the selected cell is already muted — it reappears once
-				    the cell is un-muted or a different, non-muted cell is selected. */}
-					{touchMute &&
-						selectedCell &&
-						isFretInputFocused &&
-						!selectedStringFret?.muted && (
-							<button
-								// Keep the hidden input focused when pressing this button: without
-								// it, the button steals focus, blurs the input, and the resulting
-								// isFretInputFocused=false would unmount the button before its
-								// onClick fires. Preserving focus also keeps the keyboard up.
-								onMouseDown={(e) => e.preventDefault()}
-								onClick={() => {
-									if (selectedCell)
-										commit((prev) => toggleMuted(prev, selectedCell));
-								}}
-								aria-label="Mute string"
-								title="Mute string"
-								className="absolute z-60 flex h-8 w-8 items-center justify-center border border-line-strong bg-popover text-ink hover:bg-denim-tint hover:text-denim active:bg-denim-tint transition-colors"
-								style={{
-									top: touchMute.top,
-									left: touchMute.left,
-									transform: "translate(-50%, 6px)",
-								}}
-							>
-								<XIcon size={14} />
-							</button>
-						)}
 
 					{/* ── Technique context menu (absolute within the content box) ───── */}
 					{techMenu && (
-						<div
-							ref={techMenuRef}
-							className="absolute z-60 w-44 border border-line-strong bg-popover py-1 text-sm"
-							style={{ top: techMenu.y, left: techMenu.x }}
-						>
-							{(() => {
-								const hasPrev = hasPreviousNoteOnString(working, techMenu.cell);
-								const avail = availableTechniques(working, techMenu.cell);
-								// When a previous note exists but a marker is still off, it's
-								// the fret movement that rules it out (not a missing note).
-								const disabledTitle = (ok: boolean) =>
-									ok
-										? undefined
-										: hasPrev
-											? "Not valid for this fret movement"
-											: "No previous note on this string";
-								return (
-									<>
-										{TECHNIQUE_OPTIONS.map((opt) => (
-											<button
-												key={opt.value}
-												disabled={!avail[opt.value]}
-												onClick={() => applyTechnique(opt.value)}
-												title={disabledTitle(avail[opt.value])}
-												className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-											>
-												{opt.label}
-											</button>
-										))}
-										<button
-											disabled={!avail.tied}
-											onClick={applyTied}
-											title={disabledTitle(avail.tied)}
-											className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-										>
-											Tied (⌒)
-										</button>
-									</>
-								);
-							})()}
-							<div className="border-t border-line my-1" />
-							{(() => {
-								// Clear only makes sense when the target note actually carries
-								// a marker (technique or tie) to remove.
-								const sf =
-									working.measures[techMenu.cell.measureIndex]?.slots[
-										techMenu.cell.slotIndex
-									]?.strings[techMenu.cell.stringIndex];
-								const hasMarker = !!sf && (sf.technique !== null || sf.tied);
-								return (
-									<button
-										disabled={!hasMarker}
-										onClick={applyClearTechnique}
-										title={hasMarker ? undefined : "No technique to clear"}
-										className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-ink-dim hover:bg-destructive/10 hover:text-destructive disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-									>
-										Clear technique
-										<Trash2 size={13} className="shrink-0" />
-									</button>
-								);
-							})()}
-						</div>
+						<FingerpickEditorTechniqueMenu
+							working={working}
+							cell={techMenu.cell}
+							x={techMenu.x}
+							y={techMenu.y}
+							scrollRef={scrollRef}
+							onTechnique={applyTechnique}
+							onTied={applyTied}
+							onClear={applyClearTechnique}
+						/>
 					)}
 
 					{/* ── Column popup (absolute within the scroll region) ───────────── */}
-					{firstSelectedColumnKey && columnPopup}
+					{firstSelectedColumnKey && (
+						<FingerpickEditorColumnPopup
+							working={working}
+							commit={commit}
+							selectedColumns={selectedColumns}
+							onClearSelection={() => setSelectedColumns(new Set())}
+							chordsInEffect={chordsInEffect}
+							hintsBySlot={hintsBySlot}
+							voicingsFor={voicingsFor}
+							searchIndex={searchIndex}
+							shapeCorpus={shapeCorpus}
+							scrollRef={scrollRef}
+							anchorRef={popupAnchorRef}
+							revealChordAt={revealChordAt}
+							onCreateShape={setShapeCreate}
+						/>
+					)}
 				</div>
 				{/* ── Footer (fixed; sibling of the scroll region, never scrolls) ── */}
 				<div className="shrink-0 flex items-center justify-between gap-2 border-t border-line bg-popover px-4 py-3">
-					{/* Editing help: "?" toggles a popover with the input-appropriate hint.
-					    Anchored above the icon (footer sits at the bottom) and left-aligned
-					    from the leftmost button so it never spills past the modal edges. */}
-					<div className="relative">
-						{/* LED-style feedback (§1.2 / §5.11): the glyph itself carries all
-						    state — no background box, border, or shadow on the button.
-						    Dormant (ink-faint) when closed; lit (denim-accent + soft glow)
-						    on hover and while the popover is open; a quick scale-down on
-						    press stands in for §5.1's momentary-flash on bare chrome. */}
-						<button
-							data-hint-trigger
-							onClick={() => setHintOpen((v) => !v)}
-							aria-label="Editing help"
-							aria-expanded={hintOpen}
-							title="Editing help"
-							className={`h-8 w-8 flex items-center justify-center transition duration-150 ease-out motion-reduce:transition-none active:scale-[0.92] ${
-								hintOpen
-									? "text-denim-accent filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
-									: "text-ink-faint hover:text-denim-accent hover:filter-[drop-shadow(0_0_4px_var(--denim-glow))]"
-							}`}
-						>
-							<CircleHelp size={18} />
-						</button>
-						{/* Kept mounted (not conditionally rendered) so the exit transition
-						    plays on close. Entrance is a spring-pop run via the Web Animations
-						    API (see the layout effect above); close is the plain CSS fade/shrink
-						    from the classes below. Visibility/interaction is gated by the
-						    opacity/pointer-events classes; reduced-motion users skip both and
-						    get an instant toggle (§6.7). Show/hide state and outside-click
-						    dismissal are unchanged — driven by hintOpen. */}
-						<div
-							ref={hintRef}
-							aria-hidden={!hintOpen}
-							className={`absolute bottom-full left-0 mb-2 z-60 w-max max-w-xs origin-bottom-left border border-line-strong bg-surface p-3 flex flex-col gap-1 text-[11px] leading-relaxed text-ink-dim transition duration-150 ease-out motion-reduce:transition-none ${
-								hintOpen
-									? "opacity-100 scale-100"
-									: "pointer-events-none opacity-0 scale-[0.96]"
-							}`}
-						>
-							{hasFinePointer ? (
-								<>
-									<p>
-										Click a cell, then use arrow keys to move, number keys to
-										set a fret, <span className="font-mono">X</span> to mute, or
-										Backspace to clear.
-									</p>
-									<p>Right-click a cell for techniques.</p>
-								</>
-							) : (
-								<>
-									<p>
-										Tap a cell to select it, then use the number pad to set a
-										fret, the mute button to mute, or Backspace to clear.
-									</p>
-									<p>Long-press a cell for techniques.</p>
-								</>
-							)}
-						</div>
-					</div>
+					<FingerpickEditorHintPopover hasFinePointer={hasFinePointer} />
 					{repeatError && (
 						<span
 							role="alert"
@@ -3188,54 +1480,5 @@ export default function FingerpickEditModal({
 				/>
 			)}
 		</Dialog>
-	);
-}
-
-// ── Sub-components ───────────────────────────────────────────────────────────
-
-// Column-popup section label. The plain-English explanation lives in a hover
-// tooltip rather than inline text, keeping the popup compact; the help-cursor +
-// faint question mark signal that hovering reveals more. Uses a CSS group-hover
-// bubble instead of the native `title` attribute so it appears instantly — the
-// browser's built-in title delay (~0.5–1s) is not configurable.
-function PopupSectionLabel({ label, hint }: { label: string; hint: string }) {
-	return (
-		<span className="group/hint relative inline-flex w-max items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint cursor-help">
-			{label}
-			<CircleHelp size={10} className="text-ink-faint/70" aria-hidden />
-			<span
-				role="tooltip"
-				className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/hint:opacity-100"
-			>
-				{hint}
-			</span>
-		</span>
-	);
-}
-
-function PopupIconButton({
-	title,
-	onClick,
-	children,
-	danger,
-}: {
-	title: string;
-	onClick: () => void;
-	children: React.ReactNode;
-	danger?: boolean;
-}) {
-	return (
-		<button
-			onClick={onClick}
-			title={title}
-			aria-label={title}
-			className={`h-7 w-7 flex items-center justify-center text-ink-dim transition-colors active:bg-denim-tint ${
-				danger
-					? "hover:bg-raise hover:text-destructive"
-					: "hover:bg-denim-tint hover:text-denim"
-			}`}
-		>
-			{children}
-		</button>
 	);
 }

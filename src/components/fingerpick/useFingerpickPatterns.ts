@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
+import { uniquePatternName } from "@/lib/uniquePatternName";
 import { createClient } from "@/lib/supabase";
 import {
 	loadUserFingerpickPatterns,
@@ -19,6 +20,9 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 	const [customPatterns, setCustomPatterns] = useState<FingerpickPattern[]>([]);
 	const [favouriteIds, setFavouriteIds] = useState<string[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
+
+	// Presets plus any user-created patterns; presets stay first.
+	const patterns = [...PRESET_FINGERPICK_PATTERNS, ...customPatterns];
 
 	// Logged-out path: read favourites and custom patterns from localStorage.
 	useEffect(() => {
@@ -143,14 +147,19 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 		}
 	}
 
-	// Insert or update a custom pattern (create + edit both route here).
-	function saveCustomPattern(saved: FingerpickPattern) {
+	// Insert or update a custom pattern (create + edit both route here). Returns
+	// what was stored (the name may have gained a counter) and whether it is new.
+	function saveCustomPattern(saved: FingerpickPattern): { pattern: FingerpickPattern; isNew: boolean } {
 		// A new pattern is stamped now and goes to the top; an edit keeps its
 		// stamp and its place. The list is newest first, as the library shows it.
+		// Names are unique across presets and customs ("Waltz" → "Waltz (1)"),
+		// so a card is always identifiable by name alone.
 		const existing = customPatterns.find((p) => p.id === saved.id);
+		const takenNames = patterns.filter((p) => p.id !== saved.id).map((p) => p.name);
+		const name = uniquePatternName(saved.name, takenNames);
 		const pattern: FingerpickPattern = existing
-			? { ...saved, createdAt: existing.createdAt ?? saved.createdAt }
-			: { ...saved, createdAt: saved.createdAt ?? new Date().toISOString() };
+			? { ...saved, name, createdAt: existing.createdAt ?? saved.createdAt }
+			: { ...saved, name, createdAt: saved.createdAt ?? new Date().toISOString() };
 		setCustomPatterns((prev) =>
 			existing
 				? prev.map((p) => (p.id === pattern.id ? pattern : p))
@@ -165,6 +174,7 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 				console.error(e);
 			}
 		})();
+		return { pattern, isNew: !existing };
 	}
 
 	function deleteCustomPattern(patternId: string) {
@@ -191,8 +201,6 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 		})();
 	}
 
-	// Presets plus any user-created patterns; presets stay first.
-	const patterns = [...PRESET_FINGERPICK_PATTERNS, ...customPatterns];
 
 	return {
 		patterns,

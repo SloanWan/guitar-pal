@@ -100,6 +100,8 @@ import {
 export interface FingerpickEditModalProps {
 	open: boolean;
 	pattern: FingerpickPattern | null; // null = new pattern from scratch
+	/** Names of every other pattern in the library; the save renames a clash to "Name (1)". */
+	takenNames?: readonly string[];
 	onClose: () => void;
 	onSave: (pattern: FingerpickPattern) => void;
 }
@@ -131,6 +133,7 @@ const LONG_PRESS_MS = 500;
 export default function FingerpickEditModal({
 	open,
 	pattern: initialPattern,
+	takenNames = [],
 	onClose,
 	onSave,
 }: FingerpickEditModalProps) {
@@ -758,6 +761,7 @@ export default function FingerpickEditModal({
 				<FingerpickEditorMetaFields
 					working={working}
 					commit={commit}
+					takenNames={takenNames}
 					countEighths={countEighths}
 					onCountEighthsChange={setCountEighths}
 				/>

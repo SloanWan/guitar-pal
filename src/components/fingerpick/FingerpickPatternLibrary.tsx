@@ -443,6 +443,7 @@ export default function FingerpickPatternLibrary({
 			<FingerpickEditModal
 				open={editModalOpen}
 				pattern={editingPattern}
+				takenNames={patterns.filter((p) => p.id !== editingPattern?.id).map((p) => p.name)}
 				onClose={() => setEditModalOpen(false)}
 				onSave={onSaveCustom}
 			/>

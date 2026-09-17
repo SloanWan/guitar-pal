@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Select as SelectPrimitive } from "radix-ui";
+import { Check, ChevronDown } from "lucide-react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { patternCapo, setPatternCapo } from "@/lib/fingerpickChords";
 import {
@@ -8,6 +10,7 @@ import {
 } from "@/lib/fingerpickEdit";
 import { isCompound, meterLabel, metersEqual } from "@/lib/strumMeter";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
+import { uniquePatternName } from "@/lib/uniquePatternName";
 import type { CommitPattern } from "./useEditHistory";
 
 export const MIN_BPM = 40;
@@ -16,6 +19,8 @@ export const MAX_BPM = 220;
 export interface FingerpickEditorMetaFieldsProps {
 	working: FingerpickPattern;
 	commit: CommitPattern;
+	/** Names of every other pattern in the library, to say what a clashing name will be saved as. */
+	takenNames?: readonly string[];
 	/** Compound meters only: count the eighths 1–6 under the grid instead of "1 + a 2 + a". */
 	countEighths: boolean;
 	onCountEighthsChange: (on: boolean) => void;
@@ -27,10 +32,15 @@ export interface FingerpickEditorMetaFieldsProps {
 export default function FingerpickEditorMetaFields({
 	working,
 	commit,
+	takenNames = [],
 	countEighths,
 	onCountEighthsChange,
 }: FingerpickEditorMetaFieldsProps) {
 	const nameValid = working.name.trim().length > 0;
+	// What the name will be saved as: the library keeps names unique, so a
+	// clash gets a counter ("Waltz (1)") — said here rather than sprung on save.
+	const savedAs = nameValid ? uniquePatternName(working.name, takenNames) : "";
+	const nameClashes = nameValid && savedAs !== working.name.trim();
 	// A meter change that would drop notes waits here for the player to choose
 	// how: keep what fits, cut the bars into equal shorter ones, or clear them.
 	const [meterConfirm, setMeterConfirm] = useState<TimeSignatureChange | null>(null);
@@ -62,6 +72,7 @@ export default function FingerpickEditorMetaFields({
 					value={working.name}
 					onChange={(e) => commit((p) => ({ ...p, name: e.target.value }))}
 					placeholder="Pattern name"
+					aria-describedby={nameClashes ? "fp-name-clash" : undefined}
 					className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
 						nameValid ? "border-line-strong" : "border-destructive"
 					}`}
@@ -102,19 +113,46 @@ export default function FingerpickEditorMetaFields({
 					Time Sig.
 				</label>
 				{/* A compound meter (6/8, 12/8) is counted in dotted-quarter beats;
-				    the grid, the stave and the metronome all follow the choice. */}
-				<select
+				    the grid, the stave and the metronome all follow the choice. A
+				    Radix select drawn like the fields beside it: hairline box, mono,
+				    denim highlight — the native menu would be the one rounded, sans
+				    control in the row. */}
+				<SelectPrimitive.Root
 					value={meterLabel(working.timeSignature)}
-					onChange={(e) => requestTimeSignature(e.target.value)}
-					aria-label="Time signature"
-					className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+					onValueChange={requestTimeSignature}
 				>
-					{FINGERPICK_TIME_SIGNATURES.map((ts) => (
-						<option key={meterLabel(ts)} value={meterLabel(ts)}>
-							{meterLabel(ts)}
-						</option>
-					))}
-				</select>
+					<SelectPrimitive.Trigger
+						aria-label="Time signature"
+						className="flex w-full items-center justify-between gap-1 border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink transition-colors hover:border-denim focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent data-[state=open]:border-denim"
+					>
+						<SelectPrimitive.Value />
+						<SelectPrimitive.Icon asChild>
+							<ChevronDown size={12} className="shrink-0 text-ink-faint" />
+						</SelectPrimitive.Icon>
+					</SelectPrimitive.Trigger>
+					<SelectPrimitive.Portal>
+						<SelectPrimitive.Content
+							position="popper"
+							sideOffset={2}
+							className="z-80 min-w-(--radix-select-trigger-width) border border-line-strong bg-popover shadow-lg"
+						>
+							<SelectPrimitive.Viewport>
+								{FINGERPICK_TIME_SIGNATURES.map((ts) => (
+									<SelectPrimitive.Item
+										key={meterLabel(ts)}
+										value={meterLabel(ts)}
+										className="flex cursor-default items-center justify-between gap-2 px-3 py-1.5 font-mono text-sm text-ink outline-none select-none data-highlighted:bg-denim-tint data-highlighted:text-denim data-[state=checked]:text-denim"
+									>
+										<SelectPrimitive.ItemText>{meterLabel(ts)}</SelectPrimitive.ItemText>
+										<SelectPrimitive.ItemIndicator>
+											<Check size={12} />
+										</SelectPrimitive.ItemIndicator>
+									</SelectPrimitive.Item>
+								))}
+							</SelectPrimitive.Viewport>
+						</SelectPrimitive.Content>
+					</SelectPrimitive.Portal>
+				</SelectPrimitive.Root>
 			</div>
 			{isCompound(working.timeSignature) && (
 				<div className="flex flex-col gap-1 shrink-0">
@@ -162,6 +200,11 @@ export default function FingerpickEditorMetaFields({
 				/>
 			</div>
 		</div>
+		{nameClashes && (
+			<span id="fp-name-clash" className="font-sans text-[11px] leading-snug text-ink-dim">
+				A pattern named “{working.name.trim()}” already exists — this one will be saved as “{savedAs}”.
+			</span>
+		)}
 		{meterConfirm && (
 			<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
 				<span className="text-[11px] text-ink-dim">

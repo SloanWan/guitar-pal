@@ -371,7 +371,13 @@ export default function FingerpickPage() {
 	function handleSaveCustom(pattern: FingerpickPattern) {
 		const isCurrent = pattern.id === selectedPattern.id;
 		const wasPlaying = isCurrent && isPlaying;
-		saveCustomPattern(pattern);
+		const saved = saveCustomPattern(pattern);
+		// A pattern just created is what the player wants to see: open it the way
+		// a pick from the library would (tempo, cursor and section reset with it).
+		if (saved.isNew) {
+			handleSelectPattern(saved.pattern);
+			return;
+		}
 		if (!isCurrent) return;
 		stop();
 		if (wasPlaying) {

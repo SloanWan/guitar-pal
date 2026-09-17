@@ -4,6 +4,7 @@ import {
 	TabTie,
 	TabSlide,
 	Tuplet,
+	Fraction,
 	GhostNote,
 	Stem,
 	StaveNote,
@@ -20,6 +21,7 @@ import {
 import { Measure, Duration, Stroke } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import { TRIPLET_GROUP_SIZE, tripletGroups } from "@/lib/fingerpickEdit";
+import { isCompound, type Meter } from "@/lib/strumMeter";
 import type { ChordRef } from "@/lib/strumPatterns";
 
 /**
@@ -87,6 +89,15 @@ export interface RollMark {
 	/** Index into `notes` of the note the roll belongs to. */
 	noteIndex: number;
 	stroke: Stroke;
+}
+
+/**
+ * How the stave beams a bar: by the meter's beat. A simple meter beams each
+ * quarter (3/4 is 2+2+2 eighths), a compound one each dotted quarter (6/8 is
+ * 3+3). Passed to `Beam.applyAndGetBeams`.
+ */
+export function beamGroupsFor(timeSignature: Meter): Fraction[] {
+	return isCompound(timeSignature) ? [new Fraction(3, 8)] : [new Fraction(1, 4)];
 }
 
 export interface VexFlowRenderData {

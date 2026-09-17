@@ -839,6 +839,7 @@ export default function FingerpickPage() {
 									>
 										<TabStaveRow
 											measures={row.measures}
+											timeSignature={selectedPattern.timeSignature}
 											startMeasureNumber={row.startMeasureNumber}
 											startMeasureIndex={row.startMeasureNumber - 1}
 											measureWidths={row.widths}

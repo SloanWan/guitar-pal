@@ -17,7 +17,7 @@ import {
 } from "vexflow";
 
 import { tripletGroups } from "@/lib/fingerpickEdit";
-import { fingerpickToVexFlow, VEX_DURATION } from "@/lib/fingerpickToVexFlow";
+import { beamGroupsFor, fingerpickToVexFlow, VEX_DURATION } from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, Measure, StringFret, Duration, Technique } from "@/lib/fingerpickTypes";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -323,6 +323,34 @@ describe("fingerpickToVexFlow — isGraceNote", () => {
 		const group = modifiers.find((m) => m instanceof GraceNoteGroup) as GraceNoteGroup | undefined;
 		expect(group).toBeDefined();
 		expect(group!.getGraceNotes()[0]).toBeInstanceOf(GraceTabNote);
+	});
+});
+
+// ─── Beam groups ──────────────────────────────────────────────────────────────
+
+describe("beamGroupsFor", () => {
+	it("beams simple meters by the quarter and compound meters by the dotted quarter", () => {
+		for (const ts of [[4, 4], [3, 4], [2, 4]] as const) {
+			const [g] = beamGroupsFor(ts);
+			expect(beamGroupsFor(ts)).toHaveLength(1);
+			expect(g.numerator / g.denominator).toBe(1 / 4);
+		}
+		for (const ts of [[6, 8], [12, 8]] as const) {
+			const [g] = beamGroupsFor(ts);
+			expect(g.numerator / g.denominator).toBe(3 / 8);
+		}
+	});
+
+	it("groups six eighths in 3/4 as 2+2+2 and in 6/8 as 3+3", () => {
+		const eighths = Array.from({ length: 6 }, (_, i) => beatSlot(`e${i}`, "eighth", { 0: { fret: 0 } }));
+		const beamsIn = (ts: [number, number]) => {
+			const { notes } = fingerpickToVexFlow(measure(eighths));
+			const voice = new Voice({ numBeats: ts[0], beatValue: ts[1] }).setMode(Voice.Mode.SOFT);
+			voice.addTickables(notes);
+			return Beam.applyAndGetBeams(voice, -1, beamGroupsFor(ts)).map((b) => b.getNotes().length);
+		};
+		expect(beamsIn([3, 4])).toEqual([2, 2, 2]);
+		expect(beamsIn([6, 8])).toEqual([3, 3]);
 	});
 });
 

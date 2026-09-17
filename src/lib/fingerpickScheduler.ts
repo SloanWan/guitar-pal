@@ -7,6 +7,8 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
+import { beatTicks } from "@/lib/fingerpickEdit";
+import type { Meter } from "@/lib/strumMeter";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -73,7 +75,8 @@ export const VOICE_STEAL_FADE_TAU = 0.005;
 /** Seconds added to stop() beyond fade onset to let the envelope tail off. */
 export const VOICE_STEAL_STOP_BUFFER = 0.05;
 
-const DURATION_BEATS: Record<Duration, number> = {
+/** Length of each Duration in quarter notes. */
+const DURATION_QUARTERS: Record<Duration, number> = {
 	whole: 4,
 	half: 2,
 	quarter: 1,
@@ -85,6 +88,18 @@ const DURATION_BEATS: Record<Duration, number> = {
 	"sixteenth-triplet": 1 / 6,
 	"32nd": 0.125,
 };
+
+/**
+ * Seconds per quarter note at `bpm` in a meter. BPM counts the meter's beat,
+ * as a score prints it — ♩ = 90 in 4/4, ♩. = 60 in 6/8 — so in a compound
+ * meter a quarter is two thirds of a beat. Every duration here is measured in
+ * quarters, so this is the one place the meter enters the timing.
+ */
+export function secondsPerQuarter(bpm: number, timeSignature: Meter): number {
+	return (60 / bpm) * (QUARTER_TICKS / beatTicks(timeSignature));
+}
+
+const QUARTER_TICKS = 24;
 
 // ─── Roll (arpeggiated chord) parameters ──────────────────────────────────────
 
@@ -274,7 +289,7 @@ export function fingerpickPatternToScheduleEvents(
 	bpm: number,
 	rollParams: RollParams = DEFAULT_ROLL_PARAMS,
 ): ScheduleEvent[] {
-	const secondsPerBeat = 60 / bpm;
+	const quarter = secondsPerQuarter(bpm, pattern.timeSignature);
 	// The TAB is written relative to the capo, so every string sounds this much
 	// higher than its written fret — folded in once here, at compile time.
 	const capo = patternCapo(pattern);
@@ -291,8 +306,8 @@ export function fingerpickPatternToScheduleEvents(
 			const slot = measure.slots[slotIndex];
 			// Grace notes use a fixed 1/32-beat duration and do not advance currentTime.
 			const slotDuration = slot.isGraceNote
-				? DURATION_BEATS["32nd"] * secondsPerBeat
-				: DURATION_BEATS[slot.duration] * secondsPerBeat;
+				? DURATION_QUARTERS["32nd"] * quarter
+				: DURATION_QUARTERS[slot.duration] * quarter;
 
 			if (!slot.isRest) {
 				// A rolled slot staggers its attacks; gather the strings that will fire
@@ -384,11 +399,11 @@ export function promoteSlideOriginsToLetRing(events: ScheduleEvent[]): void {
 
 /** Sum of all slot durations across all measures, in seconds. */
 export function getTotalPatternDuration(pattern: FingerpickPattern, bpm: number): number {
-	const secondsPerBeat = 60 / bpm;
+	const quarter = secondsPerQuarter(bpm, pattern.timeSignature);
 	let total = 0;
 	for (const measure of pattern.measures) {
 		for (const slot of measure.slots) {
-			total += DURATION_BEATS[slot.duration] * secondsPerBeat;
+			total += DURATION_QUARTERS[slot.duration] * quarter;
 		}
 	}
 	return total;
@@ -471,14 +486,14 @@ export function computeMeasureBoundaries(
 	pattern: FingerpickPattern,
 	bpm: number,
 ): MeasureBoundary[] {
-	const secondsPerBeat = 60 / bpm;
+	const quarter = secondsPerQuarter(bpm, pattern.timeSignature);
 	const boundaries: MeasureBoundary[] = [];
 	let currentTime = 0;
 	for (let measureIndex = 0; measureIndex < pattern.measures.length; measureIndex++) {
 		boundaries.push({ measureIndex, startTime: currentTime });
 		const measure = pattern.measures[measureIndex];
 		for (const slot of measure.slots) {
-			currentTime += DURATION_BEATS[slot.duration] * secondsPerBeat;
+			currentTime += DURATION_QUARTERS[slot.duration] * quarter;
 		}
 	}
 	return boundaries;

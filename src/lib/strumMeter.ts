@@ -69,6 +69,11 @@ export function naturalCellsPerBeat(meter: Meter): number {
 	return isCompound(meter) ? 3 : 2;
 }
 
+/** The note the BPM counts, as a glyph for a tempo mark: ♩ = 90, ♩. = 60. */
+export function beatUnitGlyph(meter: Meter): string {
+	return isCompound(meter) ? "♩." : "♩";
+}
+
 /** The note the BPM counts. 90 in 6/8 and 90 in 4/4 are not the same pulse. */
 export function beatUnitLabel(meter: Meter): string {
 	if (isCompound(meter)) return "dotted quarter";

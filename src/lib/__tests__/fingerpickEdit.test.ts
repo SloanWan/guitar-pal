@@ -1440,6 +1440,17 @@ describe("changeTimeSignature", () => {
 		expect(changeTimeSignature(p, [3, 4]).split).toBeNull();
 	});
 
+	it("rescales the tempo across simple ↔ compound so the eighth note keeps its speed", () => {
+		const p = patternOf([4, 4], makeEmptyMeasure());
+		expect(changeTimeSignature({ ...p, bpm: 90 }, [6, 8]).fitted.bpm).toBe(60);
+		expect(changeTimeSignature({ ...p, bpm: 90 }, [3, 4]).fitted.bpm).toBe(90);
+		const jig = patternOf([6, 8], makeEmptyMeasure([6, 8]));
+		expect(changeTimeSignature({ ...jig, bpm: 60 }, [4, 4]).fitted.bpm).toBe(90);
+		expect(changeTimeSignature({ ...jig, bpm: 60 }, [12, 8]).fitted.bpm).toBe(60);
+		const halved = changeTimeSignature({ ...patternOf([4, 4], makeEmptyMeasure()), bpm: 120 }, [2, 4]);
+		expect(halved.fitted.bpm).toBe(120);
+	});
+
 	it("does not offer a split when a note crosses the cut", () => {
 		const p = patternOf([4, 4], { id: "m", slots: [slotWith("quarter", 1), slotWith("half", 2), slotWith("quarter", 3)] });
 		expect(changeTimeSignature(p, [2, 4]).split).toBeNull();

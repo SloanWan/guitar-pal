@@ -39,6 +39,7 @@ import {
 } from "@/lib/fingerpickChords";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import { selectRefVoicing } from "@/lib/strumBars";
+import { beatUnitGlyph } from "@/lib/strumMeter";
 import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
@@ -514,6 +515,7 @@ export default function FingerpickPage() {
 			setGain: setMetronomeGain,
 			subdivision: metronomeSubdivision,
 			setSubdivision: setMetronomeSubdivision,
+			timeSignature: selectedPattern.timeSignature,
 		},
 		noteSound: { gain: noteGain, setGain: setNoteGain },
 	};
@@ -652,8 +654,8 @@ export default function FingerpickPage() {
 							<div className="flex flex-col sm:h-9 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
 							<div className="flex h-6 items-center gap-2 text-xs text-tab-meta uppercase tracking-wider sm:h-9">
 								<span>
-									{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
-									{selectedPattern.timeSignature[1]}
+									{beatUnitGlyph(selectedPattern.timeSignature)} = {bpm} &middot;{" "}
+									{selectedPattern.timeSignature[0]}/{selectedPattern.timeSignature[1]}
 								</span>
 								{/* The TAB is written behind the capo; this says how much higher
 								    it sounds, and is where to change it — a select styled as the

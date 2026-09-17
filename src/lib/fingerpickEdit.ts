@@ -7,6 +7,7 @@ import type {
 	Stroke,
 	Technique,
 } from "./fingerpickTypes";
+import { rescaleBpmForMeter } from "./strumBars";
 import { isCompound, type Meter } from "./strumMeter";
 import { normalizeCapo } from "./strumProgressions";
 
@@ -1289,8 +1290,9 @@ export interface TimeSignatureChange {
 // empty plain values; chord marks are carried by onset. Bars with room (2/4 →
 // 3/4) simply grow. 3/4 ↔ 6/8 share a capacity and keep their slots as they
 // are — a quarter then crosses the 3+3 grouping (a hemiola), which is left to
-// the player rather than re-notated with ties. The tempo is not touched here:
-// BPM counts the beat, and the editor rescales it with `rescaleBpmForMeter`.
+// the player rather than re-notated with ties. BPM counts the beat, so between
+// a simple and a compound meter the tempo is rescaled (`rescaleBpmForMeter`)
+// to hold the eighth note still; the caller clamps it to its range.
 export function changeTimeSignature(
 	pattern: FingerpickPattern,
 	timeSignature: [number, number],
@@ -1301,7 +1303,8 @@ export function changeTimeSignature(
 		if (losesData) affectedMeasures.push(i);
 		return fitted;
 	});
-	const fitted: FingerpickPattern = { ...pattern, timeSignature, measures: fittedMeasures };
+	const bpm = Math.round(rescaleBpmForMeter(pattern.bpm, pattern.timeSignature, timeSignature));
+	const fitted: FingerpickPattern = { ...pattern, timeSignature, bpm, measures: fittedMeasures };
 	const cleared: FingerpickPattern = {
 		...fitted,
 		measures: fittedMeasures.map((m, i) =>
@@ -1313,7 +1316,9 @@ export function changeTimeSignature(
 	const parts = oldCapacity / newCapacity;
 	const splitMeasuresOrNull =
 		Number.isInteger(parts) && parts >= 2 ? splitMeasures(pattern.measures, timeSignature, parts) : null;
-	const split = splitMeasuresOrNull ? { ...pattern, timeSignature, measures: splitMeasuresOrNull } : null;
+	const split = splitMeasuresOrNull
+		? { ...pattern, timeSignature, bpm, measures: splitMeasuresOrNull }
+		: null;
 	return { fitted, cleared, split, affectedMeasures };
 }
 

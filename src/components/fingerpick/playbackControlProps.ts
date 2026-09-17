@@ -1,3 +1,4 @@
+import type { Meter } from "@/lib/strumMeter";
 import type { MetronomeSubdivision } from "./useFingerpickAudioEngine";
 import type { LoopGapSeconds } from "./playbackConstants";
 
@@ -37,6 +38,8 @@ export interface MetronomeControlsProps {
 	setGain: (gain: number) => void;
 	subdivision: MetronomeSubdivision;
 	setSubdivision: (subdivision: MetronomeSubdivision) => void;
+	/** The pattern's meter, which names the subdivision levels. */
+	timeSignature: Meter;
 }
 
 export interface NoteSoundControlsProps {

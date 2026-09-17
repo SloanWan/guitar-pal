@@ -2,6 +2,7 @@
 
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
+import { beatUnitGlyph } from "@/lib/strumMeter";
 import { User } from "@supabase/supabase-js";
 import { ChevronDown, Copy, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
@@ -52,7 +53,8 @@ function PatternCard({
 	const [confirmDelete, setConfirmDelete] = useState(false);
 
 	const capo = patternCapo(pattern);
-	const meta = `${pattern.measures.length} BARS · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${pattern.bpm} BPM${capo > 0 ? ` · CAPO ${capo}` : ""}`;
+	// The tempo names its beat, as a score does: ♩ = 100 in 4/4, ♩. = 60 in 6/8.
+	const meta = `${pattern.measures.length} BARS · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${beatUnitGlyph(pattern.timeSignature)} = ${pattern.bpm}${capo > 0 ? ` · CAPO ${capo}` : ""}`;
 
 	async function copyPatternJson() {
 		try {

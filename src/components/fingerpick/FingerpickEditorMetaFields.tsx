@@ -34,12 +34,14 @@ export default function FingerpickEditorMetaFields({
 		const next = FINGERPICK_TIME_SIGNATURES.find((ts) => meterLabel(ts) === value);
 		if (!next || metersEqual(next, working.timeSignature)) return;
 		const change = changeTimeSignature(working, next);
-		if (change.affectedMeasures.length === 0) commit(() => change.fitted);
+		if (change.affectedMeasures.length === 0) applyMeter(change.fitted);
 		else setMeterConfirm(change);
 	}
 
+	// The lib rescales the tempo across a simple ↔ compound change (BPM counts
+	// the beat); the editor's own range is applied here.
 	function applyMeter(pattern: FingerpickPattern) {
-		commit(() => pattern);
+		commit(() => ({ ...pattern, bpm: Math.min(MAX_BPM, Math.max(MIN_BPM, pattern.bpm)) }));
 		setMeterConfirm(null);
 	}
 

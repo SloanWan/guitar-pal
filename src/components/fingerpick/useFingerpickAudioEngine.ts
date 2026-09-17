@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { beatDivision } from "@/lib/fingerpickEdit";
+import { beatsPerBar } from "@/lib/strumMeter";
 import {
 	fingerpickPatternToScheduleEvents,
 	getTotalPatternDuration,
@@ -115,7 +117,13 @@ const METRONOME_ACCENT_GAIN_MULT = 1.5;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
-export type MetronomeSubdivision = "quarter" | "eighth" | "sixteenth";
+/**
+ * How finely the metronome clicks: the beat alone, the beat's first division
+ * (two eighths in a simple meter, three in a compound one), or the next one
+ * down (sixteenths: four, or six). Named by level rather than by note value
+ * because the note value depends on the meter.
+ */
+export type MetronomeSubdivision = "beat" | "division" | "subdivision";
 
 export interface PlayOptions {
 	loop?: boolean;
@@ -167,7 +175,11 @@ export interface VoiceStealEvent {
 
 // ─── Beat onset helper ────────────────────────────────────────────────────────
 
-/** Quarter-note beat onset times (seconds from pass start) for the given pattern and BPM. */
+/**
+ * Beat onset times (seconds from pass start) for the given pattern and BPM. BPM
+ * counts the meter's beat — a quarter, or a dotted quarter in 6/8 — so a beat
+ * is always 60 / bpm long; the scheduler places the notes to match.
+ */
 function computeBeatOnsets(pattern: FingerpickPattern, bpm: number): number[] {
 	const secondsPerBeat = 60 / bpm;
 	const totalDuration = getTotalPatternDuration(pattern, bpm);
@@ -221,7 +233,7 @@ export function useFingerpickAudioEngine() {
 	const [loopRegion, setLoopRegionState] = useState<LoopRegion | null>(null);
 	const [metronomeEnabled, setMetronomeEnabled] = useState(false);
 	const [metronomeSubdivision, setMetronomeSubdivision] =
-		useState<MetronomeSubdivision>("quarter");
+		useState<MetronomeSubdivision>("beat");
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
 	const [accentEnabled, setAccentEnabled] = useState(true);
 	const [noteGain, setNoteGain] = useState(1.0);
@@ -288,7 +300,7 @@ export function useFingerpickAudioEngine() {
 
 	// Metronome / sound state refs (read in scheduler callbacks, never in React render)
 	const metronomeEnabledRef = useRef(false);
-	const metronomeSubdivisionRef = useRef<MetronomeSubdivision>("quarter");
+	const metronomeSubdivisionRef = useRef<MetronomeSubdivision>("beat");
 	const metronomeGainRef = useRef(0.15);
 	const accentEnabledRef = useRef(true);
 	const noteGainRef = useRef(1.0);
@@ -440,52 +452,44 @@ export function useFingerpickAudioEngine() {
 
 	/**
 	 * Schedule metronome ticks for one pass, skipping ticks before startOffset.
-	 * Beat accent follows time-signature grouping: beat index 0, N, 2N, … are accented.
+	 * The beat is the meter's (a quarter, or a dotted quarter in 6/8); beats
+	 * 0, N, 2N, … are accented, N being the beats in a bar (two in 6/8).
 	 * Subdivision density is controlled by metronomeSubdivisionRef:
-	 *   "quarter"   — one click per beat
-	 *   "eighth"    — beat + halfway point (2 clicks per beat, sub-beat non-accented)
-	 *   "sixteenth" — beat + ¼, ½, ¾ of beat (4 clicks per beat, only beat accented)
+	 *   "beat"        — one click per beat
+	 *   "division"    — the beat's first division: 2 clicks per beat in a simple
+	 *                   meter, 3 in a compound one (sub-beat clicks non-accented)
+	 *   "subdivision" — the next level down: 4 clicks per beat, or 6
 	 */
 	function scheduleMetronomePass(passOffset: number, startOffset: number = 0): void {
 		const ctx = ctxRef.current;
 		if (!ctx || !metronomeEnabledRef.current) return;
 
-		const beatsPerMeasure = timeSignatureRef.current[0];
+		const timeSignature = timeSignatureRef.current;
+		const beatsPerMeasure = beatsPerBar(timeSignature);
 		const onsets = beatOnsetsRef.current;
 		const subdivision = metronomeSubdivisionRef.current;
 		const spb = secondsPerBeatRef.current;
 		const bounds = boundsRef.current;
 		const tickEnd = bounds.end - 0.001;
+		const division = beatDivision(timeSignature);
+		const clicksPerBeat =
+			subdivision === "beat" ? 1 : subdivision === "division" ? division : division * 2;
 
 		for (let i = 0; i < onsets.length; i++) {
 			const beatTime = onsets[i];
 			const isAccentBeat = accentEnabledRef.current && i % beatsPerMeasure === 0;
 
-			// Beat (quarter-note) tick — always scheduled
+			// Beat tick — always scheduled
 			if (inPass(beatTime, bounds, startOffset)) {
 				const when = passOffset + toPassTime(beatTime, bounds);
 				if (when >= ctx.currentTime) scheduleTick(ctx, when, isAccentBeat);
 			}
 
-			// Eighth-note sub-beat (halfway between this beat and the next)
-			if (subdivision === "eighth" || subdivision === "sixteenth") {
-				const t8 = beatTime + spb / 2;
-				if (inPass(t8, bounds, startOffset) && t8 < tickEnd) {
-					const when = passOffset + toPassTime(t8, bounds);
-					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
-				}
-			}
-
-			// Sixteenth-note sub-beats (¼ and ¾ of the beat)
-			if (subdivision === "sixteenth") {
-				const t16a = beatTime + spb / 4;
-				const t16b = beatTime + (spb * 3) / 4;
-				if (inPass(t16a, bounds, startOffset) && t16a < tickEnd) {
-					const when = passOffset + toPassTime(t16a, bounds);
-					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
-				}
-				if (inPass(t16b, bounds, startOffset) && t16b < tickEnd) {
-					const when = passOffset + toPassTime(t16b, bounds);
+			// Sub-beat ticks, evenly through the beat, never accented
+			for (let k = 1; k < clicksPerBeat; k++) {
+				const t = beatTime + (spb * k) / clicksPerBeat;
+				if (inPass(t, bounds, startOffset) && t < tickEnd) {
+					const when = passOffset + toPassTime(t, bounds);
 					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
 				}
 			}

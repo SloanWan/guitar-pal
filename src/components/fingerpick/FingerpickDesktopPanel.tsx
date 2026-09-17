@@ -28,6 +28,7 @@ export default function FingerpickDesktopPanel({
 	} = transport;
 	const {
 		bpm,
+		timeSignature: tempoMeter,
 		defaultBpm,
 		onBpmChange: handleBpmChange,
 		onSliderChange: handleSliderChange,
@@ -145,6 +146,7 @@ export default function FingerpickDesktopPanel({
 					</div>
 					<TempoFader
 						bpm={bpm}
+						timeSignature={tempoMeter}
 						onSliderChange={handleSliderChange}
 						onDragStart={handleSliderPointerDown}
 						onDragEnd={handleSliderPointerUp}

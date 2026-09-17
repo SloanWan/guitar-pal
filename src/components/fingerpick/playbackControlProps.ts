@@ -20,6 +20,8 @@ export interface TransportControls {
 
 export interface TempoControlsProps {
 	bpm: number;
+	/** The pattern's meter: the fader's range and ticks follow it. */
+	timeSignature: Meter;
 	/** The pattern's own tempo, for the reset control. */
 	defaultBpm: number;
 	/** Steppers, tap tempo and reset — reschedules immediately. */

@@ -38,7 +38,7 @@ import {
 	type FretHint,
 } from "@/lib/fingerpickChords";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
-import { selectRefVoicing } from "@/lib/strumBars";
+import { clampBpmToMeter, selectRefVoicing } from "@/lib/strumBars";
 import { beatUnitGlyph } from "@/lib/strumMeter";
 import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
@@ -256,6 +256,9 @@ export default function FingerpickPage() {
 		seekToNote,
 		setLoopRegion,
 	} = useFingerpickAudioEngine();
+	// The pattern's own tempo, inside its meter's range (a stored or imported
+	// tempo may sit above a compound meter's ceiling).
+	const patternBpm = clampBpmToMeter(selectedPattern.bpm, selectedPattern.timeSignature);
 	const {
 		bpm,
 		resetBpm,
@@ -264,7 +267,14 @@ export default function FingerpickPage() {
 		handleSliderPointerDown,
 		handleSliderPointerUp,
 		handleTapTempo,
-	} = useTempo({ initialBpm: selectedPattern.bpm, isPlaying, pause, resume, applyBpmChange });
+	} = useTempo({
+		initialBpm: patternBpm,
+		timeSignature: selectedPattern.timeSignature,
+		isPlaying,
+		pause,
+		resume,
+		applyBpmChange,
+	});
 	// The chosen section loops in the engine: its rendered measures mapped onto
 	// the expanded timeline (a repeat inside the section plays). No section, or
 	// section mode off, and the whole pattern loops again. The engine's setter
@@ -352,7 +362,7 @@ export default function FingerpickPage() {
 		setPatternRestored(true);
 		stop();
 		setSelectedPattern(p);
-		resetBpm(p.bpm);
+		resetBpm(clampBpmToMeter(p.bpm, p.timeSignature));
 		resetCursor();
 		setSection(EMPTY_SELECTION);
 		// Below lg the library is a slide-in over the tab: picking a pattern is
@@ -507,7 +517,8 @@ export default function FingerpickPage() {
 		},
 		tempo: {
 			bpm,
-			defaultBpm: selectedPattern.bpm,
+			timeSignature: selectedPattern.timeSignature,
+			defaultBpm: patternBpm,
 			onBpmChange: handleBpmChange,
 			onSliderChange: handleSliderChange,
 			onSliderPointerDown: handleSliderPointerDown,

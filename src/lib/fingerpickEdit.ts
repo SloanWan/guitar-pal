@@ -7,7 +7,7 @@ import type {
 	Stroke,
 	Technique,
 } from "./fingerpickTypes";
-import { isCompound } from "./strumMeter";
+import { isCompound, type Meter } from "./strumMeter";
 import { normalizeCapo } from "./strumProgressions";
 
 // ── Cell / target identity ───────────────────────────────────────────────────
@@ -148,6 +148,40 @@ export const NOTE_LADDER: Duration[] = [
 	"32nd", // 3
 ];
 
+// ── Meter ────────────────────────────────────────────────────────────────────
+//
+// The meter model is strum's (`strumMeter.ts`): a compound meter (6/8, 12/8) is
+// counted in dotted-quarter beats of three eighths, not in eighths. Everything
+// here that needs "the beat" reads it from `beatTicks`; nothing reads the
+// denominator on its own.
+
+/** The time signatures the fingerpick editor offers, in menu order. */
+export const FINGERPICK_TIME_SIGNATURES: readonly [number, number][] = [
+	[4, 4],
+	[3, 4],
+	[2, 4],
+	[6, 8],
+	[12, 8],
+];
+
+/** Ticks in one beat: a quarter (24) in a simple meter, a dotted quarter (36) in a compound one. */
+export function beatTicks(timeSignature: Meter): number {
+	return isCompound(timeSignature) ? 36 : TICKS_PER_WHOLE / timeSignature[1];
+}
+
+/** How many notes a beat divides into at the first level: two in a simple meter, three in a compound one. */
+export function beatDivision(timeSignature: Meter): number {
+	return isCompound(timeSignature) ? 3 : 2;
+}
+
+/**
+ * The note value a fresh bar is filled with: quarters in a simple meter, eighths
+ * in a compound one (six in 6/8), which is also how the "All" row fills them.
+ */
+export function defaultFillDuration(timeSignature: Meter): Duration {
+	return isCompound(timeSignature) ? "eighth" : "quarter";
+}
+
 // ── Factories ────────────────────────────────────────────────────────────────
 
 export function makeEmptyStringFret(): StringFret {
@@ -169,15 +203,14 @@ export function makeEmptySlot(duration: Duration = "quarter"): BeatSlot {
 	return { id: crypto.randomUUID(), duration, strings: makeStrings() };
 }
 
-export function makeEmptyMeasure(): Measure {
+// A fresh bar of the meter's default fill: four quarters in 4/4, three in 3/4,
+// six eighths in 6/8.
+export function makeEmptyMeasure(timeSignature: Meter = [4, 4]): Measure {
+	const duration = defaultFillDuration(timeSignature);
+	const count = measureCapacity(timeSignature) / slotDurationUnits(duration);
 	return {
 		id: crypto.randomUUID(),
-		slots: [
-			makeEmptySlot("quarter"),
-			makeEmptySlot("quarter"),
-			makeEmptySlot("quarter"),
-			makeEmptySlot("quarter"),
-		],
+		slots: Array.from({ length: count }, () => makeEmptySlot(duration)),
 	};
 }
 
@@ -403,9 +436,25 @@ export function moveCell(pattern: FingerpickPattern, cell: Cell, direction: Dire
 // ── Beat position labels ─────────────────────────────────────────────────────
 
 // Standard counting syllables for a single beat subdivided into `subdivisions`
-// equal parts. Index 0 is always the beat number itself. Unknown subdivision
-// counts fall back to numbering only the downbeat.
-function subdivisionSequence(subdivisions: number, beatLabel: string): string[] {
+// equal parts, or null when there is no counting for that many. Index 0 is
+// always the beat number itself. A compound beat counts its three eighths
+// "1 + a" (so three parts are the beat's own division, not a triplet) and its
+// sixteenths with the same "ta" in-betweens the simple 32nds use.
+function subdivisionSequence(subdivisions: number, beatLabel: string, compound: boolean): string[] | null {
+	if (compound) {
+		switch (subdivisions) {
+			case 1:
+				return [beatLabel];
+			case 2:
+				return [beatLabel, "+"]; // a duplet: two dotted eighths
+			case 3:
+				return [beatLabel, "+", "a"];
+			case 6:
+				return [beatLabel, "ta", "+", "ta", "a", "ta"];
+			default:
+				return null;
+		}
+	}
 	switch (subdivisions) {
 		case 1:
 			return [beatLabel];
@@ -419,21 +468,20 @@ function subdivisionSequence(subdivisions: number, beatLabel: string): string[] 
 			return [beatLabel, "trip", "let", "+", "trip", "let"];
 		case 8:
 			return [beatLabel, "ta", "e", "ta", "+", "ta", "a", "ta"];
-		default: {
-			const seq = new Array<string>(subdivisions).fill("");
-			seq[0] = beatLabel;
-			return seq;
-		}
+		default:
+			return null;
 	}
 }
 
-// Compute the beat-position label for every slot in a measure. The beat unit is
-// derived from the time signature denominator (/4 → quarter, /8 → eighth). Slots
-// are grouped by the beat their onset falls in: a lone slot in a beat is labelled
-// with the beat number ("1", "2", …); a beat holding several onsets is subdivided
-// to the finest value present and labelled with counting syllables (e.g. quarter
-// → sixteenths gives "1 e + a"). A note spanning multiple beats is labelled with
-// its starting beat number and simply leaves the beats it covers unlabelled.
+// Compute the beat-position label for every slot in a measure. The beat is the
+// meter's (`beatTicks`: a quarter, or a dotted quarter in 6/8). Slots are grouped
+// by the beat their onset falls in: a slot on the beat is labelled with the
+// beat number ("1", "2", …); a beat holding several onsets is subdivided to the
+// finest value present and labelled with counting syllables (quarter →
+// sixteenths gives "1 e + a"; a 6/8 beat of eighths "1 + a 2 + a"), and a lone
+// off-beat onset gets its syllable the same way. A note spanning multiple beats
+// is labelled with its starting beat number and simply leaves the beats it
+// covers unlabelled.
 //
 // The returned array is always the same length as `slots` — exactly one label per
 // slot — so callers can render one label under each column.
@@ -441,8 +489,8 @@ export function computeBeatLabels(
 	slots: BeatSlot[],
 	timeSignature: [number, number],
 ): string[] {
-	const denominator = timeSignature[1];
-	const beatTicks = TICKS_PER_WHOLE / denominator; // quarter = 24, eighth = 12
+	const beat = beatTicks(timeSignature);
+	const compound = isCompound(timeSignature);
 
 	const labels = new Array<string>(slots.length).fill("");
 
@@ -450,7 +498,7 @@ export function computeBeatLabels(
 	const beats = new Map<number, { slotIndex: number; startTick: number }[]>();
 	let cursor = 0;
 	slots.forEach((slot, i) => {
-		const beatIndex = Math.floor(cursor / beatTicks);
+		const beatIndex = Math.floor(cursor / beat);
 		const group = beats.get(beatIndex);
 		if (group) group.push({ slotIndex: i, startTick: cursor });
 		else beats.set(beatIndex, [{ slotIndex: i, startTick: cursor }]);
@@ -459,19 +507,28 @@ export function computeBeatLabels(
 
 	for (const [beatIndex, group] of beats) {
 		const beatLabel = String(beatIndex + 1);
-		if (group.length === 1) {
+		const beatStart = beatIndex * beat;
+		if (group.length === 1 && group[0].startTick === beatStart) {
 			labels[group[0].slotIndex] = beatLabel;
 			continue;
 		}
-		// Several onsets share this beat: subdivide to the finest value present.
-		const beatStart = beatIndex * beatTicks;
+		// Several onsets share this beat (or its one onset is off the beat):
+		// subdivide to the finest value present. A mix with no counting of its
+		// own (a hemiola quarter in 6/8, a dotted eighth's sixteenth) falls back
+		// to the beat's plain grid — the sixteenths of a simple beat, the eighths
+		// of a compound one — and labels only the onsets that land on it.
 		const smallest = Math.min(
 			...group.map((g) => DURATION_TICKS[slots[g.slotIndex].duration]),
 		);
-		const subdivisions = Math.max(2, Math.round(beatTicks / smallest));
-		const seq = subdivisionSequence(subdivisions, beatLabel);
+		const exact =
+			beat % smallest === 0 ? subdivisionSequence(beat / smallest, beatLabel, compound) : null;
+		const fallbackCount = compound ? 3 : 4;
+		const seq = exact ?? subdivisionSequence(fallbackCount, beatLabel, compound)!;
+		const unit = exact ? smallest : beat / fallbackCount;
 		for (const g of group) {
-			const idx = Math.round((g.startTick - beatStart) / smallest);
+			const offset = g.startTick - beatStart;
+			if (offset % unit !== 0) continue;
+			const idx = offset / unit;
 			labels[g.slotIndex] = idx >= 0 && idx < seq.length ? seq[idx] : "";
 		}
 	}
@@ -479,25 +536,24 @@ export function computeBeatLabels(
 	return labels;
 }
 
-// Group slot indices by the beat their onset falls in, using the same beat unit
-// as computeBeatLabels (time signature denominator: /4 → quarter, /8 → eighth).
-// Each returned inner array lists the slot indices belonging to one beat, in
-// order. Beats are returned in playing order and every slot appears in exactly
-// one group, so the flattened result is [0, 1, …, slots.length - 1].
+// Group slot indices by the beat their onset falls in, using the same beat as
+// computeBeatLabels (`beatTicks`: a quarter, or a dotted quarter in 6/8). Each
+// returned inner array lists the slot indices belonging to one beat, in order.
+// Beats are returned in playing order and every slot appears in exactly one
+// group, so the flattened result is [0, 1, …, slots.length - 1].
 // Example: 4/4 [quarter, eighth, eighth, quarter, quarter] → [[0], [1, 2], [3], [4]].
 export function computeBeatGroups(
 	slots: BeatSlot[],
 	timeSignature: [number, number],
 ): number[][] {
-	const denominator = timeSignature[1];
-	const beatTicks = TICKS_PER_WHOLE / denominator; // quarter = 24, eighth = 12
+	const beat = beatTicks(timeSignature);
 
 	const groups: number[][] = [];
 	let current: number[] | null = null;
 	let currentBeat = -1;
 	let cursor = 0;
 	slots.forEach((slot, i) => {
-		const beatIndex = Math.floor(cursor / beatTicks);
+		const beatIndex = Math.floor(cursor / beat);
 		if (!current || beatIndex !== currentBeat) {
 			current = [];
 			groups.push(current);
@@ -538,13 +594,16 @@ type SubBeatNode =
 // "2" on its own and pairs only the equal-value 32nds "[e, ta]". Likewise a beat
 // evenly filled with 32nds descends to its readable pairs rather than collapsing
 // wholesale. Non-binary rhythms never bisect on a midpoint onset, so triplets and
-// syncopations fall out as singletons. Every slot appears in exactly one group; the
-// flattened result is [0, 1, …, slots.length - 1].
+// syncopations fall out as singletons. A compound beat is never bisected: its three
+// eighths are the windows, and the binary tree runs inside each of them. Every slot
+// appears in exactly one group; the flattened result is [0, 1, …, slots.length - 1].
 export function computeSubBeatGroups(
 	slots: BeatSlot[],
 	timeSignature: [number, number],
 ): number[][] {
-	const beatTicks = TICKS_PER_WHOLE / timeSignature[1]; // quarter = 24, eighth = 12
+	// The largest window that may still be bisected: the beat, or in a compound
+	// meter each of its three eighths.
+	const windowTicks = isCompound(timeSignature) ? beatTicks(timeSignature) / 3 : beatTicks(timeSignature);
 
 	// Onset (cumulative start tick) of every slot.
 	const onsets: { index: number; onset: number }[] = [];
@@ -609,9 +668,9 @@ export function computeSubBeatGroups(
 		}
 	}
 
-	// One beat window at a time, so nothing groups across a beat boundary.
-	for (let beatStart = 0; beatStart < totalTicks; beatStart += beatTicks) {
-		walk(build(beatStart, beatStart + beatTicks));
+	// One window at a time, so nothing groups across a beat (or compound-eighth) boundary.
+	for (let start = 0; start < totalTicks; start += windowTicks) {
+		walk(build(start, start + windowTicks));
 	}
 
 	return groups;
@@ -821,7 +880,7 @@ export function addSlotToMeasure(
 }
 
 export function addMeasure(pattern: FingerpickPattern): FingerpickPattern {
-	return { ...pattern, measures: [...pattern.measures, makeEmptyMeasure()] };
+	return { ...pattern, measures: [...pattern.measures, makeEmptyMeasure(pattern.timeSignature)] };
 }
 
 // Remove a measure. No-op when only one measure remains (the pattern must keep at
@@ -881,7 +940,7 @@ export function swapMeasures(measures: Measure[], indexA: number, indexB: number
 
 // Total capacity of a measure in ticks: numerator × (96 / denominator). 4/4 → 96,
 // 3/4 → 72, 6/8 → 72.
-export function measureCapacity(timeSignature: [number, number]): number {
+export function measureCapacity(timeSignature: Meter): number {
 	const [numerator, denominator] = timeSignature;
 	return numerator * (TICKS_PER_WHOLE / denominator);
 }
@@ -1128,6 +1187,134 @@ export function mergeTargetsForSlot(measure: Measure, slotIndex: number): Durati
 		if (duration) results.push({ duration, count });
 	}
 	return results;
+}
+
+// ── Time signature change ─────────────────────────────────────────────────────
+
+// Plain values a bar is padded out with, largest first, by meter — a compound
+// bar pads with its dotted beat and eighths, never a plain quarter.
+const SIMPLE_PAD_LADDER: readonly Duration[] = ["quarter", "eighth", "sixteenth", "32nd"];
+const COMPOUND_PAD_LADDER: readonly Duration[] = ["dotted-quarter", "eighth", "sixteenth", "32nd"];
+
+// Empty slots that exactly fill `ticks`, largest values first.
+function padSlots(ticks: number, timeSignature: Meter): BeatSlot[] {
+	const ladder = isCompound(timeSignature) ? COMPOUND_PAD_LADDER : SIMPLE_PAD_LADDER;
+	const out: BeatSlot[] = [];
+	let left = ticks;
+	for (const duration of ladder) {
+		const unit = slotDurationUnits(duration);
+		while (left >= unit) {
+			out.push(makeEmptySlot(duration));
+			left -= unit;
+		}
+	}
+	return out;
+}
+
+// Cut one measure to the new capacity: slots whose onset reaches or straddles
+// the bar's end are dropped, and the bar is padded out to full. A dropped slot
+// with string data is what the caller confirms. Chord marks travel by onset.
+function fitMeasure(
+	measure: Measure,
+	timeSignature: Meter,
+): { measure: Measure; losesData: boolean } {
+	const capacity = measureCapacity(timeSignature);
+	const kept: BeatSlot[] = [];
+	let losesData = false;
+	let cursor = 0;
+	for (const slot of measure.slots) {
+		const end = cursor + slotDurationUnits(slot.duration);
+		if (end <= capacity) kept.push(slot);
+		else if (slotHasStringData(slot)) losesData = true;
+		cursor = end;
+	}
+	const filled = usedUnits(kept);
+	const slots = filled < capacity ? [...kept, ...padSlots(capacity - filled, timeSignature)] : kept;
+	return {
+		measure: { ...measure, slots: carryChordMarks(measure.slots, slots) },
+		losesData,
+	};
+}
+
+// Cut every measure into `parts` equal bars of the new length. Only possible
+// when no slot straddles a cut; null otherwise. The first piece keeps the
+// repeat-start barline, the last the repeat-end and its play count; a chord in
+// effect carries into the later pieces by the lead-sheet rule on its own.
+function splitMeasures(measures: readonly Measure[], timeSignature: Meter, parts: number): Measure[] | null {
+	const capacity = measureCapacity(timeSignature);
+	const out: Measure[] = [];
+	for (const measure of measures) {
+		const pieces: BeatSlot[][] = Array.from({ length: parts }, () => []);
+		let cursor = 0;
+		for (const slot of measure.slots) {
+			const end = cursor + slotDurationUnits(slot.duration);
+			const piece = Math.floor(cursor / capacity);
+			if (piece >= parts || end > (piece + 1) * capacity) return null;
+			pieces[piece].push(slot);
+			cursor = end;
+		}
+		pieces.forEach((slots, i) => {
+			const filled = usedUnits(slots);
+			const full = filled < capacity ? [...slots, ...padSlots(capacity - filled, timeSignature)] : slots;
+			const { repeatStart, repeatEnd, repeatTimes, ...rest } = measure;
+			const piece: Measure = { ...rest, id: i === 0 ? measure.id : crypto.randomUUID(), slots: full };
+			if (i === 0 && repeatStart) piece.repeatStart = repeatStart;
+			if (i === parts - 1) {
+				if (repeatEnd) piece.repeatEnd = repeatEnd;
+				if (repeatTimes !== undefined) piece.repeatTimes = repeatTimes;
+			}
+			out.push(piece);
+		});
+	}
+	return out;
+}
+
+export interface TimeSignatureChange {
+	/** The pattern in the new meter: overlong bars cut and every bar padded to full. */
+	fitted: FingerpickPattern;
+	/** `fitted`, with every bar that lost string data reset to the meter's default fill instead. */
+	cleared: FingerpickPattern;
+	/**
+	 * Each bar cut into equal bars of the new length — what a player means by
+	 * "4/4 → 2/4" — when the old bar is a whole number of new ones and no note
+	 * crosses a cut; null otherwise.
+	 */
+	split: FingerpickPattern | null;
+	/** Indices of the bars that lose string data under `fitted`. Empty means `fitted` needs no confirmation. */
+	affectedMeasures: number[];
+}
+
+// Rewrite a pattern for a new time signature. Per bar, slots whose onset
+// reaches or straddles the new capacity are dropped and the bar is padded with
+// empty plain values; chord marks are carried by onset. Bars with room (2/4 →
+// 3/4) simply grow. 3/4 ↔ 6/8 share a capacity and keep their slots as they
+// are — a quarter then crosses the 3+3 grouping (a hemiola), which is left to
+// the player rather than re-notated with ties. The tempo is not touched here:
+// BPM counts the beat, and the editor rescales it with `rescaleBpmForMeter`.
+export function changeTimeSignature(
+	pattern: FingerpickPattern,
+	timeSignature: [number, number],
+): TimeSignatureChange {
+	const affectedMeasures: number[] = [];
+	const fittedMeasures = pattern.measures.map((measure, i) => {
+		const { measure: fitted, losesData } = fitMeasure(measure, timeSignature);
+		if (losesData) affectedMeasures.push(i);
+		return fitted;
+	});
+	const fitted: FingerpickPattern = { ...pattern, timeSignature, measures: fittedMeasures };
+	const cleared: FingerpickPattern = {
+		...fitted,
+		measures: fittedMeasures.map((m, i) =>
+			affectedMeasures.includes(i) ? { ...m, slots: makeEmptyMeasure(timeSignature).slots } : m,
+		),
+	};
+	const oldCapacity = measureCapacity(pattern.timeSignature);
+	const newCapacity = measureCapacity(timeSignature);
+	const parts = oldCapacity / newCapacity;
+	const splitMeasuresOrNull =
+		Number.isInteger(parts) && parts >= 2 ? splitMeasures(pattern.measures, timeSignature, parts) : null;
+	const split = splitMeasuresOrNull ? { ...pattern, timeSignature, measures: splitMeasuresOrNull } : null;
+	return { fitted, cleared, split, affectedMeasures };
 }
 
 // ── Legacy-pattern normalization ──────────────────────────────────────────────

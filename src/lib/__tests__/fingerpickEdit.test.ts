@@ -3,6 +3,10 @@ import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import {
 	makeDefaultPattern,
 	makeEmptySlot,
+	makeEmptyMeasure,
+	beatTicks,
+	beatDivision,
+	defaultFillDuration,
 	setFret,
 	setInactive,
 	toggleMuted,
@@ -38,6 +42,7 @@ import {
 	resetMeasure,
 	remapMeasure,
 	carryChordMarks,
+	changeTimeSignature,
 	isTripletDuration,
 	tripletGroups,
 	tripletGroupAt,
@@ -489,14 +494,40 @@ describe("computeBeatLabels", () => {
 		]);
 	});
 
-	it("uses eighth-note beats numbered 1-6 in 6/8", () => {
+	it("counts 6/8 in two dotted-quarter beats: 1 + a 2 + a", () => {
 		const slots = slotsOf(Array<Duration>(6).fill("eighth"));
-		expect(computeBeatLabels(slots, [6, 8])).toEqual(["1", "2", "3", "4", "5", "6"]);
+		expect(computeBeatLabels(slots, [6, 8])).toEqual(["1", "+", "a", "2", "+", "a"]);
+		expect(computeBeatLabels(slotsOf(["dotted-quarter", "dotted-quarter"]), [6, 8])).toEqual(["1", "2"]);
+		// ♩ ♪ | ♪ ♩ : the quarter sits on "1", the eighth on "a"; then "2" and "+".
+		expect(computeBeatLabels(slotsOf(["quarter", "eighth", "eighth", "quarter"]), [6, 8])).toEqual([
+			"1", "a", "2", "+",
+		]);
+		expect(computeBeatLabels(Array<Duration>(12).fill("eighth").map((d) => makeEmptySlot(d)), [12, 8])).toEqual([
+			"1", "+", "a", "2", "+", "a", "3", "+", "a", "4", "+", "a",
+		]);
 	});
 
-	it("subdivides an eighth beat into two sixteenths as 1 + in 6/8", () => {
-		const slots = slotsOf(["sixteenth", "sixteenth"]);
-		expect(computeBeatLabels(slots, [6, 8])).toEqual(["1", "+"]);
+	it("labels only the onsets on the beat's eighth grid when a compound beat has no counting of its own", () => {
+		// Three quarters carried into 6/8 (a hemiola): 1, a, +.
+		expect(computeBeatLabels(slotsOf(["quarter", "quarter", "quarter"]), [6, 8])).toEqual(["1", "a", "+"]);
+		// A triplet carried into 6/8 (a beat of 36 ticks holds 4½ of them): the
+		// members off the eighth grid go unlabelled rather than mislabelled.
+		const carried = slotsOf(["quarter", "eighth-triplet", "eighth-triplet", "eighth-triplet", "eighth", "eighth"]);
+		expect(computeBeatLabels(carried, [6, 8])).toEqual(["1", "a", "", "", "+", "a"]);
+		// A simple beat whose finest value does not divide it (dotted eighth +
+		// sixteenth) reads off the sixteenth grid: 1 . . a.
+		expect(computeBeatLabels(slotsOf(["dotted-eighth", "sixteenth"]), [4, 4])).toEqual(["1", "a"]);
+		// A lone off-beat onset is counted, not given the beat number it missed.
+		expect(computeBeatLabels(slotsOf(["dotted-quarter", "eighth", "half"]), [4, 4])).toEqual(["1", "+", "3"]);
+		expect(computeBeatLabels(slotsOf(["eighth", "sixteenth-triplet", "sixteenth-triplet", "sixteenth-triplet"]), [4, 4])).toEqual([
+			"1", "+", "trip", "let",
+		]);
+	});
+
+	it("subdivides a compound beat's sixteenths with ta, and a duplet as 1 +", () => {
+		const sixteenths = slotsOf(Array<Duration>(6).fill("sixteenth"));
+		expect(computeBeatLabels(sixteenths, [6, 8])).toEqual(["1", "ta", "+", "ta", "a", "ta"]);
+		expect(computeBeatLabels(slotsOf(["dotted-eighth", "dotted-eighth"]), [6, 8])).toEqual(["1", "+"]);
 	});
 
 	it("labels a whole note spanning the measure with its starting beat only", () => {
@@ -522,9 +553,33 @@ describe("computeBeatGroups", () => {
 		expect(computeBeatGroups(slots, [4, 4])).toEqual([[0], [1], [2]]);
 	});
 
-	it("uses eighth-note beats in 6/8", () => {
-		const slots = slotsOf(["eighth", "sixteenth", "sixteenth", "eighth"]);
-		expect(computeBeatGroups(slots, [6, 8])).toEqual([[0], [1, 2], [3]]);
+	it("groups 6/8 by dotted-quarter beat, never by eighth", () => {
+		const slots = slotsOf(["eighth", "sixteenth", "sixteenth", "eighth", "eighth", "eighth", "eighth"]);
+		expect(computeBeatGroups(slots, [6, 8])).toEqual([[0, 1, 2, 3], [4, 5, 6]]);
+		expect(computeBeatGroups(slotsOf(["dotted-quarter", "dotted-quarter"]), [6, 8])).toEqual([[0], [1]]);
+	});
+});
+
+describe("beatTicks / beatDivision / defaultFillDuration / makeEmptyMeasure", () => {
+	it("read the beat from the meter, not the denominator", () => {
+		expect(beatTicks([4, 4])).toBe(24);
+		expect(beatTicks([3, 4])).toBe(24);
+		expect(beatTicks([2, 4])).toBe(24);
+		expect(beatTicks([6, 8])).toBe(36);
+		expect(beatTicks([12, 8])).toBe(36);
+		expect(beatDivision([4, 4])).toBe(2);
+		expect(beatDivision([6, 8])).toBe(3);
+		expect(defaultFillDuration([4, 4])).toBe("quarter");
+		expect(defaultFillDuration([6, 8])).toBe("eighth");
+	});
+
+	it("makeEmptyMeasure fills the bar with the meter's default value", () => {
+		expect(makeEmptyMeasure().slots.map((s) => s.duration)).toEqual(Array(4).fill("quarter"));
+		expect(makeEmptyMeasure([3, 4]).slots).toHaveLength(3);
+		expect(makeEmptyMeasure([6, 8]).slots.map((s) => s.duration)).toEqual(Array(6).fill("eighth"));
+		expect(makeEmptyMeasure([12, 8]).slots).toHaveLength(12);
+		const jig: FingerpickPattern = { ...makeDefaultPattern(), timeSignature: [6, 8] };
+		expect(addMeasure(jig).measures[1].slots).toHaveLength(6);
 	});
 });
 
@@ -605,9 +660,15 @@ describe("computeSubBeatGroups", () => {
 		expect(computeSubBeatGroups(slots, FOUR_FOUR)).toEqual([[0], [1], [2]]);
 	});
 
-	it("keeps a beat-level sixteenth pair ungrouped in 6/8 but pairs its 32nds", () => {
-		// In 6/8 the beat is an eighth, so two sixteenths fill the whole beat (L1
-		// covers them); four 32nds still pair under their sixteenth windows.
+	it("never bisects a compound beat: its eighths are the windows, halved only inside", () => {
+		// Three eighths in 6/8 are the beat's own division — singletons, not a
+		// pair plus one; two sixteenths fill an eighth window (singletons, the
+		// window covers them); four 32nds still pair under their sixteenths.
+		expect(computeSubBeatGroups(slotsOf(["eighth", "eighth", "eighth"]), [6, 8])).toEqual([
+			[0],
+			[1],
+			[2],
+		]);
 		expect(computeSubBeatGroups(slotsOf(["sixteenth", "sixteenth"]), [6, 8])).toEqual([
 			[0],
 			[1],
@@ -615,6 +676,11 @@ describe("computeSubBeatGroups", () => {
 		expect(computeSubBeatGroups(slotsOf(["32nd", "32nd", "32nd", "32nd"]), [6, 8])).toEqual([
 			[0, 1],
 			[2, 3],
+		]);
+		// A duplet (two dotted eighths) straddles the eighth windows: singletons.
+		expect(computeSubBeatGroups(slotsOf(["dotted-eighth", "dotted-eighth"]), [6, 8])).toEqual([
+			[0],
+			[1],
 		]);
 	});
 });
@@ -1281,6 +1347,102 @@ describe("triplet groups", () => {
 			const strip = (m: Measure[]) => m[0].slots.map(({ id: _id, ...rest }) => { void _id; return rest; });
 			expect(strip(merged.measures)).toEqual(strip(measures));
 		}
+	});
+});
+
+describe("changeTimeSignature", () => {
+	const C = { root: "C", suffix: "major" };
+	const durations = (p: FingerpickPattern, m = 0) => p.measures[m].slots.map((s) => s.duration);
+	const top = (p: FingerpickPattern, m = 0) => p.measures[m].slots.map((s) => s.strings[0].fret);
+	function patternOf(ts: [number, number], ...measures: Measure[]): FingerpickPattern {
+		return { id: "p", name: "p", bpm: 100, timeSignature: ts, measures };
+	}
+
+	it("grows a bar with room by padding empty plain values, carrying chord marks", () => {
+		const p = patternOf([2, 4], { id: "m", slots: [{ ...slotWith("quarter", 1), chord: C }, slotWith("quarter", 2)] });
+		const res = changeTimeSignature(p, [3, 4]);
+		expect(res.affectedMeasures).toEqual([]);
+		expect(res.fitted.timeSignature).toEqual([3, 4]);
+		expect(durations(res.fitted)).toEqual(["quarter", "quarter", "quarter"]);
+		expect(top(res.fitted)).toEqual([1, 2, null]);
+		expect(res.fitted.measures[0].slots[0].chord).toEqual(C);
+		expect(usedUnits(res.fitted.measures[0].slots)).toBe(measureCapacity([3, 4]));
+		// 2/4 → 6/8 pads with eighths, not a hemiola quarter.
+		expect(durations(changeTimeSignature(p, [6, 8]).fitted)).toEqual(["quarter", "quarter", "eighth", "eighth"]);
+		// 6/8 → 12/8 pads with a dotted beat.
+		const jig = patternOf([6, 8], { id: "m", slots: Array.from({ length: 6 }, () => makeEmptySlot("eighth")) });
+		expect(durations(changeTimeSignature(jig, [12, 8]).fitted).slice(6)).toEqual(["dotted-quarter", "dotted-quarter"]);
+	});
+
+	it("cuts an overlong bar: a slot straddling the new end is dropped and the gap padded", () => {
+		// 4/4 [half(1), half(2)] → 3/4: the second half straddles tick 72.
+		const p = patternOf([4, 4], { id: "m", slots: [slotWith("half", 1), slotWith("half", 2)] });
+		const res = changeTimeSignature(p, [3, 4]);
+		expect(res.affectedMeasures).toEqual([0]);
+		expect(durations(res.fitted)).toEqual(["half", "quarter"]);
+		expect(top(res.fitted)).toEqual([1, null]);
+		expect(usedUnits(res.fitted.measures[0].slots)).toBe(72);
+		// Clear resets only the bar that lost something, to the meter's fill, keeping its id and flags.
+		const two = patternOf(
+			[4, 4],
+			{ id: "a", repeatStart: true, slots: [slotWith("half", 1), slotWith("half", 2)] },
+			{ id: "b", slots: [slotWith("quarter", 5), makeEmptySlot("quarter"), makeEmptySlot("quarter"), makeEmptySlot("quarter")] },
+		);
+		const res2 = changeTimeSignature(two, [3, 4]);
+		expect(res2.affectedMeasures).toEqual([0]);
+		expect(durations(res2.cleared, 0)).toEqual(["quarter", "quarter", "quarter"]);
+		expect(top(res2.cleared, 0)).toEqual([null, null, null]);
+		expect(res2.cleared.measures[0].id).toBe("a");
+		expect(res2.cleared.measures[0].repeatStart).toBe(true);
+		expect(top(res2.cleared, 1)).toEqual([5, null, null]);
+	});
+
+	it("dropping only empty slots needs no confirmation", () => {
+		const p = patternOf([4, 4], { id: "m", slots: [slotWith("quarter", 1), makeEmptySlot("quarter"), makeEmptySlot("quarter"), makeEmptySlot("quarter")] });
+		const res = changeTimeSignature(p, [2, 4]);
+		expect(res.affectedMeasures).toEqual([]);
+		expect(durations(res.fitted)).toEqual(["quarter", "quarter"]);
+	});
+
+	it("keeps 3/4 ↔ 6/8 slots as they are (same capacity)", () => {
+		const p = patternOf([3, 4], { id: "m", slots: [slotWith("quarter", 1), slotWith("quarter", 2), slotWith("quarter", 3)] });
+		const res = changeTimeSignature(p, [6, 8]);
+		expect(res.affectedMeasures).toEqual([]);
+		expect(res.fitted.measures[0].slots).toEqual(p.measures[0].slots);
+		expect(res.split).toBeNull();
+	});
+
+	it("offers a split into equal bars when the old bar is a whole number of new ones", () => {
+		const p = patternOf([4, 4], {
+			id: "m",
+			repeatStart: true,
+			repeatEnd: true,
+			repeatTimes: 3,
+			slots: [slotWith("quarter", 1), { ...slotWith("quarter", 2), chord: C }, slotWith("eighth", 3), slotWith("eighth", 4), slotWith("quarter", 5)],
+		});
+		const res = changeTimeSignature(p, [2, 4]);
+		expect(res.affectedMeasures).toEqual([0]);
+		expect(res.split).not.toBeNull();
+		const split = res.split!;
+		expect(split.measures).toHaveLength(2);
+		expect(durations(split, 0)).toEqual(["quarter", "quarter"]);
+		expect(durations(split, 1)).toEqual(["eighth", "eighth", "quarter"]);
+		expect(top(split, 1)).toEqual([3, 4, 5]);
+		expect(split.measures[0].id).toBe("m");
+		expect(split.measures[0].repeatStart).toBe(true);
+		expect(split.measures[0].repeatEnd).toBeUndefined();
+		expect(split.measures[1].repeatStart).toBeUndefined();
+		expect(split.measures[1].repeatEnd).toBe(true);
+		expect(split.measures[1].repeatTimes).toBe(3);
+		expect(split.measures[0].slots[1].chord).toEqual(C);
+		// 12/8 → 6/8 is a halving too; 4/4 → 3/4 is not.
+		expect(changeTimeSignature(patternOf([12, 8], makeEmptyMeasure([12, 8])), [6, 8]).split?.measures).toHaveLength(2);
+		expect(changeTimeSignature(p, [3, 4]).split).toBeNull();
+	});
+
+	it("does not offer a split when a note crosses the cut", () => {
+		const p = patternOf([4, 4], { id: "m", slots: [slotWith("quarter", 1), slotWith("half", 2), slotWith("quarter", 3)] });
+		expect(changeTimeSignature(p, [2, 4]).split).toBeNull();
 	});
 });
 

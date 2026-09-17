@@ -1,6 +1,12 @@
-import { CircleHelp } from "lucide-react";
+import { useState } from "react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { patternCapo, setPatternCapo } from "@/lib/fingerpickChords";
+import {
+	FINGERPICK_TIME_SIGNATURES,
+	changeTimeSignature,
+	type TimeSignatureChange,
+} from "@/lib/fingerpickEdit";
+import { meterLabel, metersEqual } from "@/lib/strumMeter";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import type { CommitPattern } from "./useEditHistory";
 
@@ -20,8 +26,26 @@ export default function FingerpickEditorMetaFields({
 	commit,
 }: FingerpickEditorMetaFieldsProps) {
 	const nameValid = working.name.trim().length > 0;
+	// A meter change that would drop notes waits here for the player to choose
+	// how: keep what fits, cut the bars into equal shorter ones, or clear them.
+	const [meterConfirm, setMeterConfirm] = useState<TimeSignatureChange | null>(null);
+
+	function requestTimeSignature(value: string) {
+		const next = FINGERPICK_TIME_SIGNATURES.find((ts) => meterLabel(ts) === value);
+		if (!next || metersEqual(next, working.timeSignature)) return;
+		const change = changeTimeSignature(working, next);
+		if (change.affectedMeasures.length === 0) commit(() => change.fitted);
+		else setMeterConfirm(change);
+	}
+
+	function applyMeter(pattern: FingerpickPattern) {
+		commit(() => pattern);
+		setMeterConfirm(null);
+	}
+
 	return (
-		<div className="shrink-0 flex flex-wrap items-end gap-3 px-4">
+		<div className="shrink-0 flex flex-col gap-2 px-4">
+		<div className="flex flex-wrap items-end gap-3">
 			<div className="flex flex-col gap-1 min-w-40 flex-[2]">
 				<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 					Name
@@ -67,24 +91,23 @@ export default function FingerpickEditorMetaFields({
 				/>
 			</div>
 			<div className="flex flex-col gap-1 w-20 shrink-0">
-				<label className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+				<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 					Time Sig.
-					{/* Time signature is fixed at 4/4 until other meters ship. CSS
-					    group-hover tooltip (75ms fade) instead of the native `title`,
-					    which has a slow browser-controlled delay. */}
-					<span className="group/ts relative inline-flex cursor-help text-ink-faint/70">
-						<CircleHelp size={11} aria-label="More time signatures coming soon" />
-						<span
-							role="tooltip"
-							className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/ts:opacity-100"
-						>
-							Only 4/4 is supported right now — more time signatures coming soon.
-						</span>
-					</span>
 				</label>
-				<div className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink">
-					4/4
-				</div>
+				{/* A compound meter (6/8, 12/8) is counted in dotted-quarter beats;
+				    the grid, the stave and the metronome all follow the choice. */}
+				<select
+					value={meterLabel(working.timeSignature)}
+					onChange={(e) => requestTimeSignature(e.target.value)}
+					aria-label="Time signature"
+					className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+				>
+					{FINGERPICK_TIME_SIGNATURES.map((ts) => (
+						<option key={meterLabel(ts)} value={meterLabel(ts)}>
+							{meterLabel(ts)}
+						</option>
+					))}
+				</select>
 			</div>
 			<div className="flex flex-col gap-1 min-w-40 flex-[2]">
 				<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
@@ -98,6 +121,48 @@ export default function FingerpickEditorMetaFields({
 					className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 				/>
 			</div>
+		</div>
+		{meterConfirm && (
+			<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
+				<span className="text-[11px] text-ink-dim">
+					{`Changing to ${meterLabel(meterConfirm.fitted.timeSignature)} drops notes in ${
+						meterConfirm.affectedMeasures.length === 1
+							? `bar ${meterConfirm.affectedMeasures[0] + 1}`
+							: `${meterConfirm.affectedMeasures.length} bars`
+					}. Keep what fits${meterConfirm.split ? ", cut each bar into shorter ones," : ""} or clear ${
+						meterConfirm.affectedMeasures.length === 1 ? "it" : "them"
+					}?`}
+				</span>
+				<div className="flex flex-wrap gap-1">
+					<button
+						onClick={() => applyMeter(meterConfirm.fitted)}
+						className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
+					>
+						Keep what fits
+					</button>
+					{meterConfirm.split && (
+						<button
+							onClick={() => applyMeter(meterConfirm.split!)}
+							className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+						>
+							{`Split into ${meterConfirm.split.measures.length} bars`}
+						</button>
+					)}
+					<button
+						onClick={() => applyMeter(meterConfirm.cleared)}
+						className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+					>
+						Clear
+					</button>
+					<button
+						onClick={() => setMeterConfirm(null)}
+						className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+					>
+						Cancel
+					</button>
+				</div>
+			</div>
+		)}
 		</div>
 	);
 }

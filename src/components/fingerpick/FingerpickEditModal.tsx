@@ -34,6 +34,10 @@ import {
 	computeBeatLabels,
 	computeBeatGroups,
 	computeSubBeatGroups,
+	tripletGroups,
+	tripletWrittenValue,
+	isTripletDuration,
+	TRIPLET_GROUP_SIZE,
 	STRING_LABELS,
 	MAX_FRET,
 	type Cell,
@@ -56,7 +60,7 @@ import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { getChordIndex } from "@/lib/chords";
 import { chordIndexWithUser } from "@/lib/userChordVoicings";
-import { selectRefVoicing } from "@/lib/strumBars";
+import { clampBpmToMeter, selectRefVoicing } from "@/lib/strumBars";
 import { useUser } from "@/hooks/useUser";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
@@ -65,8 +69,9 @@ import type { UserChordVoicing } from "@/lib/userChordVoicings";
 import { parseTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
 import { chordShapeToVoicing } from "@/lib/chordShape";
 import { useChordVoicings } from "./useChordVoicings";
+import { useFingerpickPrefs } from "./useFingerpickPrefs";
 import { useEditHistory } from "./useEditHistory";
-import FingerpickEditorMetaFields, { MAX_BPM, MIN_BPM } from "./FingerpickEditorMetaFields";
+import FingerpickEditorMetaFields from "./FingerpickEditorMetaFields";
 import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
 import FingerpickEditorTouchInput from "./FingerpickEditorTouchInput";
 import FingerpickEditorTechniqueMenu from "./FingerpickEditorTechniqueMenu";
@@ -95,6 +100,8 @@ import {
 export interface FingerpickEditModalProps {
 	open: boolean;
 	pattern: FingerpickPattern | null; // null = new pattern from scratch
+	/** Names of every other pattern in the library; the save renames a clash to "Name (1)". */
+	takenNames?: readonly string[];
 	onClose: () => void;
 	onSave: (pattern: FingerpickPattern) => void;
 }
@@ -126,6 +133,7 @@ const LONG_PRESS_MS = 500;
 export default function FingerpickEditModal({
 	open,
 	pattern: initialPattern,
+	takenNames = [],
 	onClose,
 	onSave,
 }: FingerpickEditModalProps) {
@@ -215,6 +223,9 @@ export default function FingerpickEditModal({
 		[working.measures],
 	);
 	const voicingsFor = useChordVoicings(chordRefs, userVoicings);
+	// How a compound meter's beats are labelled under the grid — a device
+	// preference, so it is not part of the pattern or its undo history.
+	const { countEighths, setCountEighths } = useFingerpickPrefs();
 	// What each string plays in the shape under every slot (null where no chord
 	// is in effect or its shapes are not here yet), for the hover hints and the
 	// column fill. One lookup per slot from the cache; nothing is fetched here.
@@ -653,7 +664,7 @@ export default function FingerpickEditModal({
 		onSave({
 			...working,
 			name: working.name.trim(),
-			bpm: Math.min(MAX_BPM, Math.max(MIN_BPM, working.bpm)),
+			bpm: clampBpmToMeter(working.bpm, working.timeSignature),
 		});
 		onClose();
 	}
@@ -747,7 +758,13 @@ export default function FingerpickEditModal({
 					</div>
 				</div>
 
-				<FingerpickEditorMetaFields working={working} commit={commit} />
+				<FingerpickEditorMetaFields
+					working={working}
+					commit={commit}
+					takenNames={takenNames}
+					countEighths={countEighths}
+					onCountEighthsChange={setCountEighths}
+				/>
 
 				{/* ── Grid ──────────────────────────────────────────────────────── */}
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
@@ -769,11 +786,22 @@ export default function FingerpickEditModal({
 							const beatLabels = computeBeatLabels(
 								measure.slots,
 								working.timeSignature,
+								countEighths ? "eighths" : "beats",
 							);
 							const beatGroups = computeBeatGroups(
 								measure.slots,
 								working.timeSignature,
 							);
+							// Where each slot sits under a `3` bracket: the bracket row is
+							// drawn column by column (left cap, the "3", right cap), and
+							// every column of a measure that has a bracket gets the row so
+							// the label rows beneath stay level.
+							const bracketRole = new Map<number, "start" | "mid" | "end">();
+							for (const g of tripletGroups(measure.slots)) {
+								bracketRole.set(g.start, "start");
+								bracketRole.set(g.start + 1, "mid");
+								bracketRole.set(g.start + TRIPLET_GROUP_SIZE - 1, "end");
+							}
 							const hoverInMeasure =
 								hoveredCell?.measureIndex === measureIndex ? hoveredCell : null;
 							// Slot indices sharing the hovered slot's binary-parent window (two
@@ -1251,6 +1279,31 @@ export default function FingerpickEditModal({
 																			},
 																		)}
 
+																		{/* Triplet bracket: a `3` over the group's three columns,
+																		    the way the stave draws it. A member's duration label then
+																		    shows the note it is drawn as (three E under a 3), not E³. */}
+																		{bracketRole.size > 0 &&
+																			(() => {
+																				const role = bracketRole.get(slotIndex);
+																				if (!role) return <div className="h-3" />;
+																				return (
+																					<div
+																						onMouseEnter={() =>
+																							hoverColumn(measureIndex, slotIndex)
+																						}
+																						className={`h-3 border-t border-ink-faint text-center font-mono text-[8px] leading-3 text-ink-faint ${
+																							role === "start"
+																								? "border-l"
+																								: role === "end"
+																									? "border-r"
+																									: ""
+																						}`}
+																					>
+																						{role === "mid" ? TRIPLET_GROUP_SIZE : ""}
+																					</div>
+																				);
+																			})()}
+
 																		{/* Duration label */}
 																		<div
 																			onMouseEnter={() =>
@@ -1261,11 +1314,10 @@ export default function FingerpickEditModal({
 																			}
 																			className="text-center text-[9px] font-mono text-ink-faint leading-none"
 																		>
-																			{
-																				DURATION_ABBREV[
-																					slot.duration
-																				]
-																			}
+																			{bracketRole.has(slotIndex) &&
+																			isTripletDuration(slot.duration)
+																				? DURATION_ABBREV[tripletWrittenValue(slot.duration)]
+																				: DURATION_ABBREV[slot.duration]}
 																		</div>
 
 																		{/* Column selector. The popup itself is rendered once, absolutely

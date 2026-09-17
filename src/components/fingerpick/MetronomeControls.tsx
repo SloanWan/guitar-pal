@@ -1,5 +1,6 @@
 import Fader from "@/components/ui/Fader";
 import Segmented from "./Segmented";
+import { isCompound, type Meter } from "@/lib/strumMeter";
 import type { MetronomeSubdivision } from "./useFingerpickAudioEngine";
 
 // The metronome controls shared by the desktop panel and the mobile drawer.
@@ -41,9 +42,12 @@ export interface SubdivisionControlProps {
 	enabled: boolean;
 	value: MetronomeSubdivision;
 	onChange: (value: MetronomeSubdivision) => void;
+	/** The pattern's meter: names each level by the note it clicks (the beat is 3/8 in 6/8). */
+	timeSignature: Meter;
 }
 
-export function SubdivisionControl({ enabled, value, onChange }: SubdivisionControlProps) {
+export function SubdivisionControl({ enabled, value, onChange, timeSignature }: SubdivisionControlProps) {
+	const compound = isCompound(timeSignature);
 	return (
 		<div className={!enabled ? "opacity-40" : ""}>
 			<div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
@@ -51,9 +55,9 @@ export function SubdivisionControl({ enabled, value, onChange }: SubdivisionCont
 			</div>
 			<Segmented
 				options={[
-					{ value: "quarter", label: "1/4" },
-					{ value: "eighth", label: "1/8" },
-					{ value: "sixteenth", label: "1/16" },
+					{ value: "beat", label: compound ? "3/8" : "1/4" },
+					{ value: "division", label: "1/8" },
+					{ value: "subdivision", label: "1/16" },
 				]}
 				value={value}
 				onChange={(v) => onChange(v as MetronomeSubdivision)}

@@ -3,8 +3,9 @@ import { ChevronUp, CirclePause, CirclePlay, CircleStop, Gauge, Loader2, Metrono
 import { LoopGapPicker } from "./LoopControls";
 import { NoteSoundControl } from "./NoteSoundControls";
 import { TempoFader, TempoResetButton, TempoSteppers } from "./TempoControls";
+import { beatUnitGlyph } from "@/lib/strumMeter";
 import { MetronomeVolumeControl, SubdivisionControl } from "./MetronomeControls";
-import { MAX_BPM, MIN_BPM } from "./playbackConstants";
+import { bpmFaderMarks } from "./playbackConstants";
 import type { PlaybackControlProps } from "./playbackControlProps";
 
 type SheetDetent = "closed" | "half" | "full";
@@ -92,6 +93,7 @@ export default function FingerpickMobileDrawer({
 	} = transport;
 	const {
 		bpm,
+		timeSignature: tempoMeter,
 		defaultBpm,
 		onBpmChange: handleBpmChange,
 		onSliderChange: handleSliderChange,
@@ -106,6 +108,7 @@ export default function FingerpickMobileDrawer({
 		setGain: setMetronomeGain,
 		subdivision: metronomeSubdivision,
 		setSubdivision: setMetronomeSubdivision,
+		timeSignature,
 	} = metronome;
 	const { gain: noteGain, setGain: setNoteGain } = noteSound;
 
@@ -138,8 +141,8 @@ export default function FingerpickMobileDrawer({
 			>
 				<input
 					type="range"
-					min={MIN_BPM}
-					max={MAX_BPM}
+					min={bpmFaderMarks(tempoMeter).min}
+					max={bpmFaderMarks(tempoMeter).max}
 					value={bpm}
 					onChange={(e) => handleSliderChange(Number(e.target.value))}
 					onPointerDown={handleSliderPointerDown}
@@ -234,6 +237,7 @@ export default function FingerpickMobileDrawer({
 						<TempoSteppers bpm={bpm} onChange={handleBpmChange} onTap={handleTapTempo} variant="mobile" />
 						<TempoFader
 							bpm={bpm}
+							timeSignature={tempoMeter}
 							onSliderChange={handleSliderChange}
 							onDragStart={handleSliderPointerDown}
 							onDragEnd={handleSliderPointerUp}
@@ -246,7 +250,12 @@ export default function FingerpickMobileDrawer({
 					<div className="border-t border-line" />
 
 					{/* Subdivision */}
-					<SubdivisionControl enabled={metronomeEnabled} value={metronomeSubdivision} onChange={setMetronomeSubdivision} />
+					<SubdivisionControl
+						enabled={metronomeEnabled}
+						value={metronomeSubdivision}
+						onChange={setMetronomeSubdivision}
+						timeSignature={timeSignature}
+					/>
 
 					{/* Metronome volume */}
 					<MetronomeVolumeControl enabled={metronomeEnabled} gain={metronomeGain} onChange={setMetronomeGain} />
@@ -283,7 +292,7 @@ export default function FingerpickMobileDrawer({
 							{bpm}
 						</span>
 						<span className="mt-0.75 font-mono text-[8px] uppercase tracking-[0.24em] text-ink-faint">
-							BPM
+							{beatUnitGlyph(timeSignature)} BPM
 						</span>
 					</button>
 				</div>

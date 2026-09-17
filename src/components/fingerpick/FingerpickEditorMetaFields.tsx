@@ -1,15 +1,27 @@
-import { CircleHelp } from "lucide-react";
+import { useState } from "react";
+import { Select as SelectPrimitive } from "radix-ui";
+import { Check, ChevronDown } from "lucide-react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { patternCapo, setPatternCapo } from "@/lib/fingerpickChords";
+import {
+	FINGERPICK_TIME_SIGNATURES,
+	changeTimeSignature,
+	type TimeSignatureChange,
+} from "@/lib/fingerpickEdit";
+import { bpmRangeForMeter, clampBpmToMeter } from "@/lib/strumBars";
+import { isCompound, meterLabel, metersEqual } from "@/lib/strumMeter";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
+import { uniquePatternName } from "@/lib/uniquePatternName";
 import type { CommitPattern } from "./useEditHistory";
-
-export const MIN_BPM = 40;
-export const MAX_BPM = 220;
 
 export interface FingerpickEditorMetaFieldsProps {
 	working: FingerpickPattern;
 	commit: CommitPattern;
+	/** Names of every other pattern in the library, to say what a clashing name will be saved as. */
+	takenNames?: readonly string[];
+	/** Compound meters only: count the eighths 1–6 under the grid instead of "1 + a 2 + a". */
+	countEighths: boolean;
+	onCountEighthsChange: (on: boolean) => void;
 }
 
 // The metadata bar pinned above the measure grid: name, BPM, capo, time
@@ -18,10 +30,39 @@ export interface FingerpickEditorMetaFieldsProps {
 export default function FingerpickEditorMetaFields({
 	working,
 	commit,
+	takenNames = [],
+	countEighths,
+	onCountEighthsChange,
 }: FingerpickEditorMetaFieldsProps) {
 	const nameValid = working.name.trim().length > 0;
+	// What the name will be saved as: the library keeps names unique, so a
+	// clash gets a counter ("Waltz (1)") — said here rather than sprung on save.
+	const savedAs = nameValid ? uniquePatternName(working.name, takenNames) : "";
+	const nameClashes = nameValid && savedAs !== working.name.trim();
+	// A meter change that would drop notes waits here for the player to choose
+	// how: keep what fits, cut the bars into equal shorter ones, or clear them.
+	const [meterConfirm, setMeterConfirm] = useState<TimeSignatureChange | null>(null);
+
+	function requestTimeSignature(value: string) {
+		const next = FINGERPICK_TIME_SIGNATURES.find((ts) => meterLabel(ts) === value);
+		if (!next || metersEqual(next, working.timeSignature)) return;
+		const change = changeTimeSignature(working, next);
+		if (change.affectedMeasures.length === 0) applyMeter(change.fitted);
+		else setMeterConfirm(change);
+	}
+
+	// The lib rescales the tempo across a simple ↔ compound change (BPM counts
+	// the beat); the meter's own range is applied here — a compound meter tops
+	// out lower, as it does for strum patterns.
+	function applyMeter(pattern: FingerpickPattern) {
+		commit(() => ({ ...pattern, bpm: clampBpmToMeter(pattern.bpm, pattern.timeSignature) }));
+		setMeterConfirm(null);
+	}
+	const bpmRange = bpmRangeForMeter(working.timeSignature);
+
 	return (
-		<div className="shrink-0 flex flex-wrap items-end gap-3 px-4">
+		<div className="shrink-0 flex flex-col gap-2 px-4">
+		<div className="flex flex-wrap items-end gap-3">
 			<div className="flex flex-col gap-1 min-w-40 flex-[2]">
 				<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 					Name
@@ -31,6 +72,7 @@ export default function FingerpickEditorMetaFields({
 					value={working.name}
 					onChange={(e) => commit((p) => ({ ...p, name: e.target.value }))}
 					placeholder="Pattern name"
+					aria-describedby={nameClashes ? "fp-name-clash" : undefined}
 					className={`w-full border bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent ${
 						nameValid ? "border-line-strong" : "border-destructive"
 					}`}
@@ -42,8 +84,8 @@ export default function FingerpickEditorMetaFields({
 				</label>
 				<input
 					type="number"
-					min={MIN_BPM}
-					max={MAX_BPM}
+					min={bpmRange.min}
+					max={bpmRange.max}
 					value={working.bpm}
 					onChange={(e) => commit((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))}
 					className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
@@ -67,25 +109,84 @@ export default function FingerpickEditorMetaFields({
 				/>
 			</div>
 			<div className="flex flex-col gap-1 w-20 shrink-0">
-				<label className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+				<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 					Time Sig.
-					{/* Time signature is fixed at 4/4 until other meters ship. CSS
-					    group-hover tooltip (75ms fade) instead of the native `title`,
-					    which has a slow browser-controlled delay. */}
-					<span className="group/ts relative inline-flex cursor-help text-ink-faint/70">
-						<CircleHelp size={11} aria-label="More time signatures coming soon" />
-						<span
-							role="tooltip"
-							className="pointer-events-none absolute left-0 top-full z-70 mt-1 w-max max-w-52 whitespace-normal border border-line-strong bg-popover px-2 py-1 font-sans text-[10px] normal-case leading-snug tracking-normal text-ink-dim opacity-0 shadow-md transition-opacity duration-75 group-hover/ts:opacity-100"
-						>
-							Only 4/4 is supported right now — more time signatures coming soon.
-						</span>
-					</span>
 				</label>
-				<div className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink">
-					4/4
-				</div>
+				{/* A compound meter (6/8, 12/8) is counted in dotted-quarter beats;
+				    the grid, the stave and the metronome all follow the choice. A
+				    Radix select drawn like the fields beside it: hairline box, mono,
+				    denim highlight — the native menu would be the one rounded, sans
+				    control in the row. */}
+				<SelectPrimitive.Root
+					value={meterLabel(working.timeSignature)}
+					onValueChange={requestTimeSignature}
+				>
+					<SelectPrimitive.Trigger
+						aria-label="Time signature"
+						className="flex w-full items-center justify-between gap-1 border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink transition-colors hover:border-denim focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent data-[state=open]:border-denim"
+					>
+						<SelectPrimitive.Value />
+						<SelectPrimitive.Icon asChild>
+							<ChevronDown size={12} className="shrink-0 text-ink-faint" />
+						</SelectPrimitive.Icon>
+					</SelectPrimitive.Trigger>
+					<SelectPrimitive.Portal>
+						<SelectPrimitive.Content
+							position="popper"
+							sideOffset={2}
+							className="z-80 min-w-(--radix-select-trigger-width) border border-line-strong bg-popover shadow-lg"
+						>
+							<SelectPrimitive.Viewport>
+								{FINGERPICK_TIME_SIGNATURES.map((ts) => (
+									<SelectPrimitive.Item
+										key={meterLabel(ts)}
+										value={meterLabel(ts)}
+										className="flex cursor-default items-center justify-between gap-2 px-3 py-1.5 font-mono text-sm text-ink outline-none select-none data-highlighted:bg-denim-tint data-highlighted:text-denim data-[state=checked]:text-denim"
+									>
+										<SelectPrimitive.ItemText>{meterLabel(ts)}</SelectPrimitive.ItemText>
+										<SelectPrimitive.ItemIndicator>
+											<Check size={12} />
+										</SelectPrimitive.ItemIndicator>
+									</SelectPrimitive.Item>
+								))}
+							</SelectPrimitive.Viewport>
+						</SelectPrimitive.Content>
+					</SelectPrimitive.Portal>
+				</SelectPrimitive.Root>
 			</div>
+			{isCompound(working.timeSignature) && (
+				<div className="flex flex-col gap-1 shrink-0">
+					<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+						Count
+					</label>
+					{/* A device-wide preference, not part of the pattern: the two real
+					    beats, or the six eighths a beginner is often taught to count. */}
+					<div role="radiogroup" aria-label="How to count the beats" className="flex">
+						{(
+							[
+								[false, "1 + a", "Count the two dotted-quarter beats"],
+								[true, "1–6", "Count the eighths"],
+							] as const
+						).map(([on, label, title]) => (
+							<button
+								key={label}
+								type="button"
+								role="radio"
+								aria-checked={countEighths === on}
+								title={title}
+								onClick={() => onCountEighthsChange(on)}
+								className={`h-9.5 px-2.5 border font-mono text-xs transition-colors first:border-r-0 ${
+									countEighths === on
+										? "border-denim bg-denim-tint text-denim"
+										: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+								}`}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				</div>
+			)}
 			<div className="flex flex-col gap-1 min-w-40 flex-[2]">
 				<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 					Description
@@ -98,6 +199,53 @@ export default function FingerpickEditorMetaFields({
 					className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
 				/>
 			</div>
+		</div>
+		{nameClashes && (
+			<span id="fp-name-clash" className="font-sans text-[11px] leading-snug text-ink-dim">
+				A pattern named “{working.name.trim()}” already exists — this one will be saved as “{savedAs}”.
+			</span>
+		)}
+		{meterConfirm && (
+			<div className="flex flex-col gap-1.5 border border-line bg-raise p-2">
+				<span className="text-[11px] text-ink-dim">
+					{`Changing to ${meterLabel(meterConfirm.fitted.timeSignature)} drops notes in ${
+						meterConfirm.affectedMeasures.length === 1
+							? `bar ${meterConfirm.affectedMeasures[0] + 1}`
+							: `${meterConfirm.affectedMeasures.length} bars`
+					}. Keep what fits${meterConfirm.split ? ", cut each bar into shorter ones," : ""} or clear ${
+						meterConfirm.affectedMeasures.length === 1 ? "it" : "them"
+					}?`}
+				</span>
+				<div className="flex flex-wrap gap-1">
+					<button
+						onClick={() => applyMeter(meterConfirm.fitted)}
+						className="h-7 px-2 text-xs font-semibold text-on-denim bg-denim hover:bg-denim-accent active:bg-denim-accent transition-colors"
+					>
+						Keep what fits
+					</button>
+					{meterConfirm.split && (
+						<button
+							onClick={() => applyMeter(meterConfirm.split!)}
+							className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+						>
+							{`Split into ${meterConfirm.split.measures.length} bars`}
+						</button>
+					)}
+					<button
+						onClick={() => applyMeter(meterConfirm.cleared)}
+						className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+					>
+						Clear
+					</button>
+					<button
+						onClick={() => setMeterConfirm(null)}
+						className="h-7 px-2 text-xs text-ink-dim hover:bg-denim-tint transition-colors"
+					>
+						Cancel
+					</button>
+				</div>
+			</div>
+		)}
 		</div>
 	);
 }

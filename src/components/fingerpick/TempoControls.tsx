@@ -1,12 +1,7 @@
 import { RotateCcw } from "lucide-react";
 import Fader from "@/components/ui/Fader";
-import {
-	BPM_TICK_LABELS,
-	BPM_TICK_PERCENTS,
-	BPM_TICK_VALUES,
-	MAX_BPM,
-	MIN_BPM,
-} from "./playbackConstants";
+import type { Meter } from "@/lib/strumMeter";
+import { bpmFaderMarks } from "./playbackConstants";
 
 // The tempo controls shared by the desktop panel and the mobile drawer. Each
 // renders one piece; the panels arrange them and add their own headers.
@@ -35,25 +30,28 @@ export function TempoResetButton({ bpm, defaultBpm, onReset }: TempoResetButtonP
 
 export interface TempoFaderProps {
 	bpm: number;
+	/** The pattern's meter: sets the range and the genre ticks (a 6/8 beat is a dotted quarter). */
+	timeSignature: Meter;
 	onSliderChange: (raw: number) => void;
 	onDragStart: () => void;
 	onDragEnd: () => void;
 }
 
-export function TempoFader({ bpm, onSliderChange, onDragStart, onDragEnd }: TempoFaderProps) {
+export function TempoFader({ bpm, timeSignature, onSliderChange, onDragStart, onDragEnd }: TempoFaderProps) {
+	const marks = bpmFaderMarks(timeSignature);
 	return (
 		<Fader
-			min={MIN_BPM}
-			max={MAX_BPM}
+			min={marks.min}
+			max={marks.max}
 			step={1}
 			value={bpm}
 			onValue={onSliderChange}
 			onDragStart={onDragStart}
 			onDragEnd={onDragEnd}
-			ticks={BPM_TICK_PERCENTS}
-			tickValues={BPM_TICK_VALUES}
-			tickLabels={BPM_TICK_LABELS}
-			scale={["40", "130", "220"]}
+			ticks={marks.percents}
+			tickValues={marks.values}
+			tickLabels={marks.labels}
+			scale={marks.scale}
 			ariaLabel="Tempo in BPM"
 		/>
 	);

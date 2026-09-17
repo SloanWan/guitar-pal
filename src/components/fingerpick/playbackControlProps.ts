@@ -1,3 +1,4 @@
+import type { Meter } from "@/lib/strumMeter";
 import type { MetronomeSubdivision } from "./useFingerpickAudioEngine";
 import type { LoopGapSeconds } from "./playbackConstants";
 
@@ -19,6 +20,8 @@ export interface TransportControls {
 
 export interface TempoControlsProps {
 	bpm: number;
+	/** The pattern's meter: the fader's range and ticks follow it. */
+	timeSignature: Meter;
 	/** The pattern's own tempo, for the reset control. */
 	defaultBpm: number;
 	/** Steppers, tap tempo and reset — reschedules immediately. */
@@ -37,6 +40,8 @@ export interface MetronomeControlsProps {
 	setGain: (gain: number) => void;
 	subdivision: MetronomeSubdivision;
 	setSubdivision: (subdivision: MetronomeSubdivision) => void;
+	/** The pattern's meter, which names the subdivision levels. */
+	timeSignature: Meter;
 }
 
 export interface NoteSoundControlsProps {

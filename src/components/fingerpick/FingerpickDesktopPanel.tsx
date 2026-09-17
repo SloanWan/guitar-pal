@@ -3,6 +3,7 @@ import Rocker from "@/components/ui/Rocker";
 import { LoopGapPicker } from "./LoopControls";
 import { NoteSoundControl } from "./NoteSoundControls";
 import { TempoFader, TempoResetButton, TempoSteppers } from "./TempoControls";
+import { beatUnitGlyph } from "@/lib/strumMeter";
 import { MetronomeVolumeControl, SubdivisionControl } from "./MetronomeControls";
 import type { PlaybackControlProps } from "./playbackControlProps";
 
@@ -27,6 +28,7 @@ export default function FingerpickDesktopPanel({
 	} = transport;
 	const {
 		bpm,
+		timeSignature: tempoMeter,
 		defaultBpm,
 		onBpmChange: handleBpmChange,
 		onSliderChange: handleSliderChange,
@@ -41,6 +43,7 @@ export default function FingerpickDesktopPanel({
 		setGain: setMetronomeGain,
 		subdivision: metronomeSubdivision,
 		setSubdivision: setMetronomeSubdivision,
+		timeSignature,
 	} = metronome;
 	const { gain: noteGain, setGain: setNoteGain } = noteSound;
 
@@ -138,11 +141,12 @@ export default function FingerpickDesktopPanel({
 							<span className="relative">{String(bpm).padStart(3, "0")}</span>
 						</span>
 						<div className="mt-1.5 font-mono text-[9px] tracking-[0.28em] text-ink-faint">
-							BPM
+							{beatUnitGlyph(timeSignature)} BPM
 						</div>
 					</div>
 					<TempoFader
 						bpm={bpm}
+						timeSignature={tempoMeter}
 						onSliderChange={handleSliderChange}
 						onDragStart={handleSliderPointerDown}
 						onDragEnd={handleSliderPointerUp}
@@ -166,7 +170,12 @@ export default function FingerpickDesktopPanel({
 						/>
 					</div>
 					<MetronomeVolumeControl enabled={metronomeEnabled} gain={metronomeGain} onChange={setMetronomeGain} />
-					<SubdivisionControl enabled={metronomeEnabled} value={metronomeSubdivision} onChange={setMetronomeSubdivision} />
+					<SubdivisionControl
+						enabled={metronomeEnabled}
+						value={metronomeSubdivision}
+						onChange={setMetronomeSubdivision}
+						timeSignature={timeSignature}
+					/>
 				</div>
 
 			</div>

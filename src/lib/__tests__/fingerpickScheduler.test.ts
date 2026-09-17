@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
 	fingerpickPatternToScheduleEvents,
 	getTotalPatternDuration,
+	secondsPerQuarter,
 	computeLoopOffset,
 	getProgressAtTime,
 	findSlotStartTime,
@@ -130,6 +131,35 @@ describe("fingerpickPatternToScheduleEvents — BPM / timing math", () => {
 		expect(events[1].time).toBeCloseTo(1 / 3);
 		expect(events[2].time).toBeCloseTo(2 / 3);
 		expect(getTotalPatternDuration(p, 60)).toBeCloseTo(1);
+	});
+
+	it("BPM counts the meter's beat: six eighths in 6/8 at ♩. = 60 take two seconds", () => {
+		const eighths = Array.from({ length: 6 }, (_, i) => slot(`e${i}`, "eighth", { 0: { fret: 0 } }));
+		const jig: FingerpickPattern = { ...pattern(60, eighths), timeSignature: [6, 8] };
+		expect(secondsPerQuarter(60, [6, 8])).toBeCloseTo(2 / 3, 9);
+		expect(getTotalPatternDuration(jig, 60)).toBeCloseTo(2, 9);
+		const events = fingerpickPatternToScheduleEvents(jig, 60);
+		events.forEach((ev, i) => expect(ev.time).toBeCloseTo(i / 3, 9));
+		expect(computeMeasureBoundaries({ ...jig, measures: [jig.measures[0], jig.measures[0]] }, 60)[1].startTime).toBeCloseTo(2, 9);
+		// The same six eighths read as 3/4 at ♩ = 60 take three seconds.
+		expect(getTotalPatternDuration({ ...jig, timeSignature: [3, 4] }, 60)).toBeCloseTo(3, 9);
+	});
+
+	it("simple meters are untouched: a quarter at 120 is still half a second", () => {
+		for (const ts of [[4, 4], [3, 4], [2, 4]] as [number, number][]) {
+			expect(secondsPerQuarter(120, ts)).toBe(0.5);
+		}
+	});
+
+	it("a 4/4 bar of twelve eighth-triplets schedules twelve evenly spaced events over four beats", () => {
+		const p = pattern(
+			60,
+			Array.from({ length: 12 }, (_, i) => slot(`t${i}`, "eighth-triplet", { 0: { fret: i } })),
+		);
+		const events = fingerpickPatternToScheduleEvents(p, 60);
+		expect(events).toHaveLength(12);
+		events.forEach((ev, i) => expect(ev.time).toBeCloseTo(i / 3, 9));
+		expect(getTotalPatternDuration(p, 60)).toBeCloseTo(4, 9);
 	});
 
 	it("second slot starts after first slot's duration elapses", () => {

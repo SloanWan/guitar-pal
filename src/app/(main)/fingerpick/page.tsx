@@ -38,7 +38,8 @@ import {
 	type FretHint,
 } from "@/lib/fingerpickChords";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
-import { selectRefVoicing } from "@/lib/strumBars";
+import { clampBpmToMeter, selectRefVoicing } from "@/lib/strumBars";
+import { beatUnitGlyph } from "@/lib/strumMeter";
 import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
@@ -255,6 +256,9 @@ export default function FingerpickPage() {
 		seekToNote,
 		setLoopRegion,
 	} = useFingerpickAudioEngine();
+	// The pattern's own tempo, inside its meter's range (a stored or imported
+	// tempo may sit above a compound meter's ceiling).
+	const patternBpm = clampBpmToMeter(selectedPattern.bpm, selectedPattern.timeSignature);
 	const {
 		bpm,
 		resetBpm,
@@ -263,7 +267,14 @@ export default function FingerpickPage() {
 		handleSliderPointerDown,
 		handleSliderPointerUp,
 		handleTapTempo,
-	} = useTempo({ initialBpm: selectedPattern.bpm, isPlaying, pause, resume, applyBpmChange });
+	} = useTempo({
+		initialBpm: patternBpm,
+		timeSignature: selectedPattern.timeSignature,
+		isPlaying,
+		pause,
+		resume,
+		applyBpmChange,
+	});
 	// The chosen section loops in the engine: its rendered measures mapped onto
 	// the expanded timeline (a repeat inside the section plays). No section, or
 	// section mode off, and the whole pattern loops again. The engine's setter
@@ -351,7 +362,7 @@ export default function FingerpickPage() {
 		setPatternRestored(true);
 		stop();
 		setSelectedPattern(p);
-		resetBpm(p.bpm);
+		resetBpm(clampBpmToMeter(p.bpm, p.timeSignature));
 		resetCursor();
 		setSection(EMPTY_SELECTION);
 		// Below lg the library is a slide-in over the tab: picking a pattern is
@@ -370,7 +381,13 @@ export default function FingerpickPage() {
 	function handleSaveCustom(pattern: FingerpickPattern) {
 		const isCurrent = pattern.id === selectedPattern.id;
 		const wasPlaying = isCurrent && isPlaying;
-		saveCustomPattern(pattern);
+		const saved = saveCustomPattern(pattern);
+		// A pattern just created is what the player wants to see: open it the way
+		// a pick from the library would (tempo, cursor and section reset with it).
+		if (saved.isNew) {
+			handleSelectPattern(saved.pattern);
+			return;
+		}
 		if (!isCurrent) return;
 		stop();
 		if (wasPlaying) {
@@ -500,7 +517,8 @@ export default function FingerpickPage() {
 		},
 		tempo: {
 			bpm,
-			defaultBpm: selectedPattern.bpm,
+			timeSignature: selectedPattern.timeSignature,
+			defaultBpm: patternBpm,
 			onBpmChange: handleBpmChange,
 			onSliderChange: handleSliderChange,
 			onSliderPointerDown: handleSliderPointerDown,
@@ -514,6 +532,7 @@ export default function FingerpickPage() {
 			setGain: setMetronomeGain,
 			subdivision: metronomeSubdivision,
 			setSubdivision: setMetronomeSubdivision,
+			timeSignature: selectedPattern.timeSignature,
 		},
 		noteSound: { gain: noteGain, setGain: setNoteGain },
 	};
@@ -652,8 +671,8 @@ export default function FingerpickPage() {
 							<div className="flex flex-col sm:h-9 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
 							<div className="flex h-6 items-center gap-2 text-xs text-tab-meta uppercase tracking-wider sm:h-9">
 								<span>
-									{bpm} BPM &middot; {selectedPattern.timeSignature[0]}/
-									{selectedPattern.timeSignature[1]}
+									{beatUnitGlyph(selectedPattern.timeSignature)} = {bpm} &middot;{" "}
+									{selectedPattern.timeSignature[0]}/{selectedPattern.timeSignature[1]}
 								</span>
 								{/* The TAB is written behind the capo; this says how much higher
 								    it sounds, and is where to change it — a select styled as the
@@ -839,6 +858,7 @@ export default function FingerpickPage() {
 									>
 										<TabStaveRow
 											measures={row.measures}
+											timeSignature={selectedPattern.timeSignature}
 											startMeasureNumber={row.startMeasureNumber}
 											startMeasureIndex={row.startMeasureNumber - 1}
 											measureWidths={row.widths}

@@ -8,6 +8,7 @@ import {
 	type PickSequenceParse,
 } from "@/lib/fingerpickPickSequence";
 import { selectRefVoicing } from "@/lib/strumBars";
+import { isCompound } from "@/lib/strumMeter";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordVoicingsState } from "./useChordVoicings";
 import type { CommitPattern } from "./useEditHistory";
@@ -15,6 +16,28 @@ import { DurationIcon } from "./fingerpickEditorShared";
 
 // Upper bound for the repeat play-count stepper (kept well under the lib's hard cap).
 const REPEAT_TIMES_MAX = 16;
+
+// The "All" row's fills, by meter. A compound bar's natural fills are its
+// dotted beats, eighths and sixteenths (2 / 6 / 12 in 6/8): a quarter is not a
+// beat there, and its beat already divides in three, so the eighth-triplet
+// fill (12 in 4/4, 9 in 3/4) is a simple-meter thing.
+const COMPOUND_METER_PRESET_DURATIONS: readonly Duration[] = ["dotted-quarter", "eighth", "sixteenth"];
+// An example the Pick field's own meter would accept: four or eight tokens in
+// 4/4, three in 3/4, six in 6/8 (see parsePickSequence).
+function pickPlaceholder(timeSignature: [number, number]): string {
+	if (isCompound(timeSignature)) return timeSignature[0] === 6 ? "e.g. 632123 or 6(32)" : "e.g. 632123632123";
+	if (timeSignature[0] === 3) return "e.g. 321 or 6(32)1";
+	if (timeSignature[0] === 2) return "e.g. 32 or 3212";
+	return "e.g. 3212 or 6(32)1(32)";
+}
+
+const SIMPLE_METER_PRESET_DURATIONS: readonly Duration[] = [
+	"quarter",
+	"eighth",
+	"eighth-triplet",
+	"sixteenth",
+	"32nd",
+];
 
 export interface FingerpickEditorMeasureFooterProps {
 	measure: Measure;
@@ -139,7 +162,10 @@ export default function FingerpickEditorMeasureFooter({
 				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
 					All
 				</span>
-				{(["quarter", "eighth", "sixteenth", "32nd"] as const).map((d) => (
+				{(isCompound(working.timeSignature)
+					? COMPOUND_METER_PRESET_DURATIONS
+					: SIMPLE_METER_PRESET_DURATIONS
+				).map((d) => (
 					<button
 						key={d}
 						onClick={() => requestPreset(d)}
@@ -235,7 +261,7 @@ export default function FingerpickEditorMeasureFooter({
 						e.stopPropagation();
 						requestPickSequence();
 					}}
-					placeholder="e.g. 3212 or 6(32)1(32)"
+					placeholder={pickPlaceholder(working.timeSignature)}
 					aria-label={`Right-hand sequence for measure ${measureIndex + 1}`}
 					title="String numbers, 1 = high e … 6 = low E. Parentheses pluck strings together; 0 or - is a rest. Enter writes the measure, fretted from its chord."
 					className="h-7 min-w-0 flex-1 border border-line-strong bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:border-denim"

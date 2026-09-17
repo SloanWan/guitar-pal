@@ -1,5 +1,5 @@
 import type { FingerpickPattern } from "./fingerpickTypes";
-import { DURATION_UNITS, measureCapacity } from "./fingerpickEdit";
+import { measureCapacity, slotDurationUnits } from "./fingerpickEdit";
 
 /**
  * A fingerpick pattern laid out on the landing page's background TAB strip —
@@ -55,7 +55,7 @@ export function fingerpickToTabStrip(
 				const y = TAB_STRIP_LINE_Y[stringIndex] + BASELINE_OFFSET;
 				notes.push([x, y, s.muted ? "x" : String(s.fret)]);
 			});
-			elapsed += DURATION_UNITS[slot.duration];
+			elapsed += slotDurationUnits(slot.duration);
 		}
 	});
 

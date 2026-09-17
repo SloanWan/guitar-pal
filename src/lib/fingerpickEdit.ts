@@ -7,6 +7,8 @@ import type {
 	Stroke,
 	Technique,
 } from "./fingerpickTypes";
+import { rescaleBpmForMeter } from "./strumBars";
+import { isCompound, SUPPORTED_METERS, type Meter } from "./strumMeter";
 import { normalizeCapo } from "./strumProgressions";
 
 // ── Cell / target identity ───────────────────────────────────────────────────
@@ -30,19 +32,152 @@ export const STRING_LABELS = ["e", "B", "G", "D", "A", "E"] as const;
 export const MIN_FRET = 0;
 export const MAX_FRET = 24;
 
-// Integer-weight note durations, largest → smallest by unit weight, used by the
-// split/merge controls. Triplets are excluded (fractional weight — see the
-// hasIntegerUnitWeight guard in splitSlot/mergeSlots).
+// ── Rhythmic scale ───────────────────────────────────────────────────────────
+
+// Rhythmic value of each Duration in ticks, where one whole note = 96 ticks. 96
+// is divisible by 3, so triplet values stay integral and measure totals compare
+// exactly. This is the one scale every piece of editor bookkeeping (capacity,
+// split/merge, remap, chord carry, beat labels, Pick) sums in. A rest is not a
+// distinct duration — a silent slot keeps its real `duration` — so it needs no
+// entry here.
+export const TICKS_PER_WHOLE = 96;
+
+export const DURATION_TICKS: Record<Duration, number> = {
+	whole: 96,
+	half: 48,
+	quarter: 24,
+	"dotted-quarter": 36,
+	eighth: 12,
+	"dotted-eighth": 18,
+	"eighth-triplet": 8,
+	sixteenth: 6,
+	"sixteenth-triplet": 4,
+	"32nd": 3,
+};
+
+export type TripletDuration = "eighth-triplet" | "sixteenth-triplet";
+
+export function isTripletDuration(duration: Duration): duration is TripletDuration {
+	return duration === "eighth-triplet" || duration === "sixteenth-triplet";
+}
+
+// The plain value three of a triplet add up to, and the triplet a plain value
+// splits into three of. Only the quarter and the eighth have a triplet.
+export function tripletPlainValue(duration: TripletDuration): Duration {
+	return duration === "eighth-triplet" ? "quarter" : "eighth";
+}
+
+// The note a triplet member is written as: three eighths under a `3` bracket.
+export function tripletWrittenValue(duration: TripletDuration): Duration {
+	return duration === "eighth-triplet" ? "eighth" : "sixteenth";
+}
+
+export function tripletForPlainValue(duration: Duration): TripletDuration | null {
+	if (duration === "quarter") return "eighth-triplet";
+	if (duration === "eighth") return "sixteenth-triplet";
+	return null;
+}
+
+// ── Triplet groups ───────────────────────────────────────────────────────────
+//
+// A triplet is three notes under one `3` bracket; a lone triplet slot is not a
+// note. Consecutive slots of the same triplet value are chunked in threes from
+// the start of the run — the same rule the stave uses to place its brackets —
+// and a leftover one or two at the end of a run belong to no group. The editor
+// never produces a leftover (structural edits act on the whole group, below);
+// imported data can, and simply renders unbracketed.
+
+export type TripletGroup = { start: number; duration: TripletDuration };
+
+export const TRIPLET_GROUP_SIZE = 3;
+
+export function tripletGroups(slots: readonly BeatSlot[]): TripletGroup[] {
+	const groups: TripletGroup[] = [];
+	let i = 0;
+	while (i < slots.length) {
+		const duration = slots[i].duration;
+		if (!isTripletDuration(duration)) {
+			i++;
+			continue;
+		}
+		let end = i;
+		while (end < slots.length && slots[end].duration === duration) end++;
+		for (let start = i; start + TRIPLET_GROUP_SIZE <= end; start += TRIPLET_GROUP_SIZE) {
+			groups.push({ start, duration });
+		}
+		i = end;
+	}
+	return groups;
+}
+
+// The group the slot at `slotIndex` belongs to, or null for a plain slot or a
+// leftover triplet.
+export function tripletGroupAt(slots: readonly BeatSlot[], slotIndex: number): TripletGroup | null {
+	return (
+		tripletGroups(slots).find(
+			(g) => slotIndex >= g.start && slotIndex < g.start + TRIPLET_GROUP_SIZE,
+		) ?? null
+	);
+}
+
+// Grow a set of slot indices so that selecting any member of a triplet group
+// selects the whole group.
+export function expandTripletGroups(
+	slots: readonly BeatSlot[],
+	selected: ReadonlySet<number>,
+): Set<number> {
+	const out = new Set(selected);
+	for (const g of tripletGroups(slots)) {
+		const members = [g.start, g.start + 1, g.start + 2];
+		if (members.some((m) => selected.has(m))) members.forEach((m) => out.add(m));
+	}
+	return out;
+}
+
+// Plain and dotted note values, largest → smallest, used by the split/merge
+// controls. Triplets are not on the ladder: they only exist as a group of three
+// under one bracket, so they are offered through their own targets rather than
+// as a rung a slot can be tiled with.
 export const NOTE_LADDER: Duration[] = [
-	"whole", // 32
-	"half", // 16
-	"dotted-quarter", // 12
-	"quarter", // 8
-	"dotted-eighth", // 6
-	"eighth", // 4
-	"sixteenth", // 2
-	"32nd", // 1
+	"whole", // 96
+	"half", // 48
+	"dotted-quarter", // 36
+	"quarter", // 24
+	"dotted-eighth", // 18
+	"eighth", // 12
+	"sixteenth", // 6
+	"32nd", // 3
 ];
+
+// ── Meter ────────────────────────────────────────────────────────────────────
+//
+// The meter model is strum's (`strumMeter.ts`): a compound meter (6/8, 12/8) is
+// counted in dotted-quarter beats of three eighths, not in eighths. Everything
+// here that needs "the beat" reads it from `beatTicks`; nothing reads the
+// denominator on its own.
+
+/** The time signatures the fingerpick editor offers, in menu order — strum's list, as mutable tuples. */
+export const FINGERPICK_TIME_SIGNATURES: readonly [number, number][] = SUPPORTED_METERS.map(
+	(m) => [m[0], m[1]] as [number, number],
+);
+
+/** Ticks in one beat: a quarter (24) in a simple meter, a dotted quarter (36) in a compound one. */
+export function beatTicks(timeSignature: Meter): number {
+	return isCompound(timeSignature) ? 36 : TICKS_PER_WHOLE / timeSignature[1];
+}
+
+/** How many notes a beat divides into at the first level: two in a simple meter, three in a compound one. */
+export function beatDivision(timeSignature: Meter): number {
+	return isCompound(timeSignature) ? 3 : 2;
+}
+
+/**
+ * The note value a fresh bar is filled with: quarters in a simple meter, eighths
+ * in a compound one (six in 6/8), which is also how the "All" row fills them.
+ */
+export function defaultFillDuration(timeSignature: Meter): Duration {
+	return isCompound(timeSignature) ? "eighth" : "quarter";
+}
 
 // ── Factories ────────────────────────────────────────────────────────────────
 
@@ -65,15 +200,14 @@ export function makeEmptySlot(duration: Duration = "quarter"): BeatSlot {
 	return { id: crypto.randomUUID(), duration, strings: makeStrings() };
 }
 
-export function makeEmptyMeasure(): Measure {
+// A fresh bar of the meter's default fill: four quarters in 4/4, three in 3/4,
+// six eighths in 6/8.
+export function makeEmptyMeasure(timeSignature: Meter = [4, 4]): Measure {
+	const duration = defaultFillDuration(timeSignature);
+	const count = measureCapacity(timeSignature) / slotDurationUnits(duration);
 	return {
 		id: crypto.randomUUID(),
-		slots: [
-			makeEmptySlot("quarter"),
-			makeEmptySlot("quarter"),
-			makeEmptySlot("quarter"),
-			makeEmptySlot("quarter"),
-		],
+		slots: Array.from({ length: count }, () => makeEmptySlot(duration)),
 	};
 }
 
@@ -298,28 +432,26 @@ export function moveCell(pattern: FingerpickPattern, cell: Cell, direction: Dire
 
 // ── Beat position labels ─────────────────────────────────────────────────────
 
-// Rhythmic value of each Duration in ticks, where one whole note = 96 ticks. 96
-// is divisible by 3, so triplet values stay integral. A rest is not a distinct
-// duration — a silent slot keeps its real `duration`, so it needs no entry here.
-const TICKS_PER_WHOLE = 96;
-
-const DURATION_TICKS: Record<Duration, number> = {
-	whole: 96,
-	half: 48,
-	quarter: 24,
-	"dotted-quarter": 36,
-	eighth: 12,
-	"dotted-eighth": 18,
-	"eighth-triplet": 8,
-	sixteenth: 6,
-	"sixteenth-triplet": 4,
-	"32nd": 3,
-};
-
 // Standard counting syllables for a single beat subdivided into `subdivisions`
-// equal parts. Index 0 is always the beat number itself. Unknown subdivision
-// counts fall back to numbering only the downbeat.
-function subdivisionSequence(subdivisions: number, beatLabel: string): string[] {
+// equal parts, or null when there is no counting for that many. Index 0 is
+// always the beat number itself. A compound beat counts its three eighths
+// "1 + a" (so three parts are the beat's own division, not a triplet) and its
+// sixteenths with the same "ta" in-betweens the simple 32nds use.
+function subdivisionSequence(subdivisions: number, beatLabel: string, compound: boolean): string[] | null {
+	if (compound) {
+		switch (subdivisions) {
+			case 1:
+				return [beatLabel];
+			case 2:
+				return [beatLabel, "+"]; // a duplet: two dotted eighths
+			case 3:
+				return [beatLabel, "+", "a"];
+			case 6:
+				return [beatLabel, "ta", "+", "ta", "a", "ta"];
+			default:
+				return null;
+		}
+	}
 	switch (subdivisions) {
 		case 1:
 			return [beatLabel];
@@ -333,30 +465,36 @@ function subdivisionSequence(subdivisions: number, beatLabel: string): string[] 
 			return [beatLabel, "trip", "let", "+", "trip", "let"];
 		case 8:
 			return [beatLabel, "ta", "e", "ta", "+", "ta", "a", "ta"];
-		default: {
-			const seq = new Array<string>(subdivisions).fill("");
-			seq[0] = beatLabel;
-			return seq;
-		}
+		default:
+			return null;
 	}
 }
 
-// Compute the beat-position label for every slot in a measure. The beat unit is
-// derived from the time signature denominator (/4 → quarter, /8 → eighth). Slots
-// are grouped by the beat their onset falls in: a lone slot in a beat is labelled
-// with the beat number ("1", "2", …); a beat holding several onsets is subdivided
-// to the finest value present and labelled with counting syllables (e.g. quarter
-// → sixteenths gives "1 e + a"). A note spanning multiple beats is labelled with
-// its starting beat number and simply leaves the beats it covers unlabelled.
+// Compute the beat-position label for every slot in a measure. The beat is the
+// meter's (`beatTicks`: a quarter, or a dotted quarter in 6/8). Slots are grouped
+// by the beat their onset falls in: a slot on the beat is labelled with the
+// beat number ("1", "2", …); a beat holding several onsets is subdivided to the
+// finest value present and labelled with counting syllables (quarter →
+// sixteenths gives "1 e + a"; a 6/8 beat of eighths "1 + a 2 + a"), and a lone
+// off-beat onset gets its syllable the same way. A note spanning multiple beats
+// is labelled with its starting beat number and simply leaves the beats it
+// covers unlabelled.
+//
+// In a compound meter the "eighths" style counts the eighths 1–6 instead, the
+// way a beginner is often taught 6/8; a simple meter has only the one style.
 //
 // The returned array is always the same length as `slots` — exactly one label per
 // slot — so callers can render one label under each column.
+export type BeatLabelStyle = "beats" | "eighths";
+
 export function computeBeatLabels(
 	slots: BeatSlot[],
 	timeSignature: [number, number],
+	style: BeatLabelStyle = "beats",
 ): string[] {
-	const denominator = timeSignature[1];
-	const beatTicks = TICKS_PER_WHOLE / denominator; // quarter = 24, eighth = 12
+	const countEighths = style === "eighths" && isCompound(timeSignature);
+	const beat = countEighths ? TICKS_PER_WHOLE / 8 : beatTicks(timeSignature);
+	const compound = countEighths ? false : isCompound(timeSignature);
 
 	const labels = new Array<string>(slots.length).fill("");
 
@@ -364,7 +502,7 @@ export function computeBeatLabels(
 	const beats = new Map<number, { slotIndex: number; startTick: number }[]>();
 	let cursor = 0;
 	slots.forEach((slot, i) => {
-		const beatIndex = Math.floor(cursor / beatTicks);
+		const beatIndex = Math.floor(cursor / beat);
 		const group = beats.get(beatIndex);
 		if (group) group.push({ slotIndex: i, startTick: cursor });
 		else beats.set(beatIndex, [{ slotIndex: i, startTick: cursor }]);
@@ -373,19 +511,28 @@ export function computeBeatLabels(
 
 	for (const [beatIndex, group] of beats) {
 		const beatLabel = String(beatIndex + 1);
-		if (group.length === 1) {
+		const beatStart = beatIndex * beat;
+		if (group.length === 1 && group[0].startTick === beatStart) {
 			labels[group[0].slotIndex] = beatLabel;
 			continue;
 		}
-		// Several onsets share this beat: subdivide to the finest value present.
-		const beatStart = beatIndex * beatTicks;
+		// Several onsets share this beat (or its one onset is off the beat):
+		// subdivide to the finest value present. A mix with no counting of its
+		// own (a hemiola quarter in 6/8, a dotted eighth's sixteenth) falls back
+		// to the beat's plain grid — the sixteenths of a simple beat, the eighths
+		// of a compound one — and labels only the onsets that land on it.
 		const smallest = Math.min(
 			...group.map((g) => DURATION_TICKS[slots[g.slotIndex].duration]),
 		);
-		const subdivisions = Math.max(2, Math.round(beatTicks / smallest));
-		const seq = subdivisionSequence(subdivisions, beatLabel);
+		const exact =
+			beat % smallest === 0 ? subdivisionSequence(beat / smallest, beatLabel, compound) : null;
+		const fallbackCount = compound ? 3 : 4;
+		const seq = exact ?? subdivisionSequence(fallbackCount, beatLabel, compound)!;
+		const unit = exact ? smallest : beat / fallbackCount;
 		for (const g of group) {
-			const idx = Math.round((g.startTick - beatStart) / smallest);
+			const offset = g.startTick - beatStart;
+			if (offset % unit !== 0) continue;
+			const idx = offset / unit;
 			labels[g.slotIndex] = idx >= 0 && idx < seq.length ? seq[idx] : "";
 		}
 	}
@@ -393,25 +540,24 @@ export function computeBeatLabels(
 	return labels;
 }
 
-// Group slot indices by the beat their onset falls in, using the same beat unit
-// as computeBeatLabels (time signature denominator: /4 → quarter, /8 → eighth).
-// Each returned inner array lists the slot indices belonging to one beat, in
-// order. Beats are returned in playing order and every slot appears in exactly
-// one group, so the flattened result is [0, 1, …, slots.length - 1].
+// Group slot indices by the beat their onset falls in, using the same beat as
+// computeBeatLabels (`beatTicks`: a quarter, or a dotted quarter in 6/8). Each
+// returned inner array lists the slot indices belonging to one beat, in order.
+// Beats are returned in playing order and every slot appears in exactly one
+// group, so the flattened result is [0, 1, …, slots.length - 1].
 // Example: 4/4 [quarter, eighth, eighth, quarter, quarter] → [[0], [1, 2], [3], [4]].
 export function computeBeatGroups(
 	slots: BeatSlot[],
 	timeSignature: [number, number],
 ): number[][] {
-	const denominator = timeSignature[1];
-	const beatTicks = TICKS_PER_WHOLE / denominator; // quarter = 24, eighth = 12
+	const beat = beatTicks(timeSignature);
 
 	const groups: number[][] = [];
 	let current: number[] | null = null;
 	let currentBeat = -1;
 	let cursor = 0;
 	slots.forEach((slot, i) => {
-		const beatIndex = Math.floor(cursor / beatTicks);
+		const beatIndex = Math.floor(cursor / beat);
 		if (!current || beatIndex !== currentBeat) {
 			current = [];
 			groups.push(current);
@@ -452,13 +598,16 @@ type SubBeatNode =
 // "2" on its own and pairs only the equal-value 32nds "[e, ta]". Likewise a beat
 // evenly filled with 32nds descends to its readable pairs rather than collapsing
 // wholesale. Non-binary rhythms never bisect on a midpoint onset, so triplets and
-// syncopations fall out as singletons. Every slot appears in exactly one group; the
-// flattened result is [0, 1, …, slots.length - 1].
+// syncopations fall out as singletons. A compound beat is never bisected: its three
+// eighths are the windows, and the binary tree runs inside each of them. Every slot
+// appears in exactly one group; the flattened result is [0, 1, …, slots.length - 1].
 export function computeSubBeatGroups(
 	slots: BeatSlot[],
 	timeSignature: [number, number],
 ): number[][] {
-	const beatTicks = TICKS_PER_WHOLE / timeSignature[1]; // quarter = 24, eighth = 12
+	// The largest window that may still be bisected: the beat, or in a compound
+	// meter each of its three eighths.
+	const windowTicks = isCompound(timeSignature) ? beatTicks(timeSignature) / 3 : beatTicks(timeSignature);
 
 	// Onset (cumulative start tick) of every slot.
 	const onsets: { index: number; onset: number }[] = [];
@@ -523,9 +672,9 @@ export function computeSubBeatGroups(
 		}
 	}
 
-	// One beat window at a time, so nothing groups across a beat boundary.
-	for (let beatStart = 0; beatStart < totalTicks; beatStart += beatTicks) {
-		walk(build(beatStart, beatStart + beatTicks));
+	// One window at a time, so nothing groups across a beat (or compound-eighth) boundary.
+	for (let start = 0; start < totalTicks; start += windowTicks) {
+		walk(build(start, start + windowTicks));
 	}
 
 	return groups;
@@ -612,23 +761,33 @@ export function setStroke(
 	};
 }
 
-// Insert a fresh quarter-note slot before/after each targeted slot.
+// Insert a fresh slot of the meter's default value (a quarter, an eighth in
+// 6/8) before/after each targeted slot. Nothing is inserted inside a triplet group: a target in one puts the new slot before the
+// group's first or after its last member, once per group however many of its
+// members were targeted.
 export function insertSlots(
 	pattern: FingerpickPattern,
 	targets: SlotTarget[],
 	position: "before" | "after",
 ): FingerpickPattern {
 	const grouped = groupTargetsByMeasure(targets);
+	const fill = defaultFillDuration(pattern.timeSignature);
 	return {
 		...pattern,
 		measures: pattern.measures.map((measure, mi) => {
 			const selected = grouped.get(mi);
 			if (!selected) return measure;
+			const anchors = new Set<number>();
+			for (const si of selected) {
+				const group = tripletGroupAt(measure.slots, si);
+				if (!group) anchors.add(si);
+				else anchors.add(position === "before" ? group.start : group.start + TRIPLET_GROUP_SIZE - 1);
+			}
 			const newSlots: BeatSlot[] = [];
 			measure.slots.forEach((slot, si) => {
-				if (selected.has(si) && position === "before") newSlots.push(makeEmptySlot());
+				if (anchors.has(si) && position === "before") newSlots.push(makeEmptySlot(fill));
 				newSlots.push(slot);
-				if (selected.has(si) && position === "after") newSlots.push(makeEmptySlot());
+				if (anchors.has(si) && position === "after") newSlots.push(makeEmptySlot(fill));
 			});
 			return { ...measure, slots: newSlots };
 		}),
@@ -636,6 +795,8 @@ export function insertSlots(
 }
 
 // Duplicate each targeted slot, placing the copy immediately after the original.
+// A triplet group duplicates as a unit — the copy of the group follows the
+// group, so the copies never interleave with the originals.
 export function duplicateSlots(
 	pattern: FingerpickPattern,
 	targets: SlotTarget[],
@@ -646,18 +807,32 @@ export function duplicateSlots(
 		measures: pattern.measures.map((measure, mi) => {
 			const selected = grouped.get(mi);
 			if (!selected) return measure;
+			const groups = tripletGroups(measure.slots);
 			const newSlots: BeatSlot[] = [];
-			measure.slots.forEach((slot, si) => {
-				newSlots.push(slot);
-				if (selected.has(si)) newSlots.push(cloneSlotWithoutChord(slot));
-			});
+			let si = 0;
+			while (si < measure.slots.length) {
+				const group = groups.find((g) => g.start === si);
+				if (group) {
+					const members = measure.slots.slice(si, si + TRIPLET_GROUP_SIZE);
+					newSlots.push(...members);
+					if (members.some((_, k) => selected.has(si + k))) {
+						newSlots.push(...members.map(cloneSlotWithoutChord));
+					}
+					si += TRIPLET_GROUP_SIZE;
+					continue;
+				}
+				newSlots.push(measure.slots[si]);
+				if (selected.has(si)) newSlots.push(cloneSlotWithoutChord(measure.slots[si]));
+				si++;
+			}
 			return { ...measure, slots: newSlots };
 		}),
 	};
 }
 
-// Delete every targeted slot. A measure never drops below one slot — if a delete
-// would empty it, a single fresh quarter slot is left behind.
+// Delete every targeted slot; a target in a triplet group deletes the whole
+// group. A measure never drops below one slot — if a delete would empty it, a
+// single fresh slot of the meter's default value is left behind.
 export function deleteSlots(
 	pattern: FingerpickPattern,
 	targets: SlotTarget[],
@@ -666,8 +841,9 @@ export function deleteSlots(
 	return {
 		...pattern,
 		measures: pattern.measures.map((measure, mi) => {
-			const selected = grouped.get(mi);
-			if (!selected) return measure;
+			const picked = grouped.get(mi);
+			if (!picked) return measure;
+			const selected = expandTripletGroups(measure.slots, picked);
 			// A deleted slot's chord mark moves to the next slot that survives, so the
 			// region it opened is not lost with the note. Of several deleted in a row,
 			// the last mark is the one in effect where the survivor begins, so it is
@@ -689,27 +865,28 @@ export function deleteSlots(
 				carried = undefined;
 			});
 			if (remaining.length > 0) return { ...measure, slots: remaining };
-			const fresh = makeEmptySlot();
+			const fresh = makeEmptySlot(defaultFillDuration(pattern.timeSignature));
 			return { ...measure, slots: [carried !== undefined ? { ...fresh, chord: carried } : fresh] };
 		}),
 	};
 }
 
-// Append a quarter-note slot (all strings inactive) to a measure.
+// Append a slot of the meter's default value (all strings inactive) to a measure.
 export function addSlotToMeasure(
 	pattern: FingerpickPattern,
 	measureIndex: number,
 ): FingerpickPattern {
+	const fresh = makeEmptySlot(defaultFillDuration(pattern.timeSignature));
 	return {
 		...pattern,
 		measures: pattern.measures.map((measure, mi) =>
-			mi !== measureIndex ? measure : { ...measure, slots: [...measure.slots, makeEmptySlot()] },
+			mi !== measureIndex ? measure : { ...measure, slots: [...measure.slots, fresh] },
 		),
 	};
 }
 
 export function addMeasure(pattern: FingerpickPattern): FingerpickPattern {
-	return { ...pattern, measures: [...pattern.measures, makeEmptyMeasure()] };
+	return { ...pattern, measures: [...pattern.measures, makeEmptyMeasure(pattern.timeSignature)] };
 }
 
 // Remove a measure. No-op when only one measure remains (the pattern must keep at
@@ -763,41 +940,19 @@ export function swapMeasures(measures: Measure[], indexA: number, indexB: number
 
 // ── Duration arithmetic (capacity model) ─────────────────────────────────────
 //
-// Rhythmic value of each Duration measured in thirty-second notes (the common
-// unit). A rest is not a distinct duration — a silent slot keeps its real
-// `duration` and thus its real weight — so it needs no entry here. Triplet values
-// are not integral in this unit; they are not offered by the split/merge UI but
-// are given their exact fractional weight so sums stay honest.
-export const DURATION_UNITS: Record<Duration, number> = {
-	whole: 32,
-	half: 16,
-	quarter: 8,
-	"dotted-quarter": 12,
-	eighth: 4,
-	"dotted-eighth": 6,
-	"eighth-triplet": 8 / 3,
-	sixteenth: 2,
-	"sixteenth-triplet": 4 / 3,
-	"32nd": 1,
-};
+// Every helper here measures rhythm in `DURATION_TICKS` (96 per whole note), so a
+// triplet weighs an exact 8 or 4 and a bar of twelve eighth-triplets is exactly
+// full. Nothing sums fractions.
 
-// Total capacity of a measure in thirty-second-note units. 4/4 → 32, 3/4 → 24,
-// 6/8 → 24 (numerator × 32/denominator).
-export function measureCapacity(timeSignature: [number, number]): number {
+// Total capacity of a measure in ticks: numerator × (96 / denominator). 4/4 → 96,
+// 3/4 → 72, 6/8 → 72.
+export function measureCapacity(timeSignature: Meter): number {
 	const [numerator, denominator] = timeSignature;
-	return numerator * (32 / denominator);
+	return numerator * (TICKS_PER_WHOLE / denominator);
 }
 
 export function slotDurationUnits(duration: Duration): number {
-	return DURATION_UNITS[duration];
-}
-
-// True when a duration's unit weight is a whole number of thirty-second-note units.
-// The triplet durations (8/3, 4/3) are fractional; split/merge produce exact-fit,
-// integer-count subdivisions and cannot honour a fractional target, so they guard
-// against one rather than relying on callers to never pass a triplet.
-export function hasIntegerUnitWeight(duration: Duration): boolean {
-	return Number.isInteger(DURATION_UNITS[duration]);
+	return DURATION_TICKS[duration];
 }
 
 export function usedUnits(slots: BeatSlot[]): number {
@@ -823,8 +978,10 @@ function cloneStrings(strings: BeatSlot["strings"]): BeatSlot["strings"] {
 // Split a slot into N sub-slots of `targetDuration`. The first sub-slot inherits
 // the original string data; the rest are empty. N is chosen to cover the original
 // slot's duration; any extra units the sub-slots add beyond the original must fit
-// in the measure's remaining capacity. Returns the measures unchanged when the
-// target is not smaller than the current slot or capacity would be exceeded.
+// in the measure's remaining capacity. A triplet target is a split into exactly
+// three — a quarter into eighth-triplets, an eighth into sixteenth-triplets — and
+// nothing else. Returns the measures unchanged when the target is not smaller
+// than the current slot or capacity would be exceeded.
 export function splitSlot(
 	measures: Measure[],
 	measureIndex: number,
@@ -836,9 +993,11 @@ export function splitSlot(
 	if (!measure) return measures;
 	const slot = measure.slots[slotIndex];
 	if (!slot) return measures;
-	// Reject fractional-weight targets (triplets): they can't tile a slot into an
-	// integer number of exact sub-slots.
-	if (!hasIntegerUnitWeight(targetDuration)) return measures;
+	if (isTripletDuration(targetDuration) && tripletForPlainValue(slot.duration) !== targetDuration) {
+		return measures;
+	}
+	// A triplet slot is not split further: its group is the unit.
+	if (isTripletDuration(slot.duration)) return measures;
 
 	const currentUnits = slotDurationUnits(slot.duration);
 	const targetUnits = slotDurationUnits(targetDuration);
@@ -884,8 +1043,10 @@ export type MergeResult =
 // exactly to `targetDuration`, into a single slot of that duration. The first
 // slot's string data is kept; the rest is discarded. When any of the discarded
 // slots carried data, the caller is asked to confirm (the merge is still computed
-// and returned as `pendingMeasures`). Returns an unchanged `ok` result when the
-// merge is not valid (not enough following slots, or durations don't line up).
+// and returned as `pendingMeasures`). A triplet group merges back to its plain
+// value from its first member and in no other way. Returns an unchanged `ok`
+// result when the merge is not valid (not enough following slots, or durations
+// don't line up).
 export function mergeSlots(
 	measures: Measure[],
 	measureIndex: number,
@@ -898,22 +1059,35 @@ export function mergeSlots(
 ): MergeResult {
 	const measure = measures[measureIndex];
 	if (!measure) return { type: "ok", measures };
-	// Reject fractional-weight targets (triplets): a merge must sum to the target
-	// exactly, which a fractional unit weight can never do against integer sources.
-	if (!hasIntegerUnitWeight(targetDuration)) return { type: "ok", measures };
-
-	const targetUnits = slotDurationUnits(targetDuration);
-	let sum = 0;
-	let end = slotIndex;
-	while (end < measure.slots.length && sum < targetUnits) {
-		sum += slotDurationUnits(measure.slots[end].duration);
-		end++;
-	}
-	const consumed = end - slotIndex;
-	// Need an exact fit spanning at least the current slot plus one following slot.
-	if (sum !== targetUnits || consumed < 2) return { type: "ok", measures };
+	// A triplet is never a merge target: 8 + 4 ticks is not an "eighth".
+	if (isTripletDuration(targetDuration)) return { type: "ok", measures };
 
 	const first = measure.slots[slotIndex];
+	if (!first) return { type: "ok", measures };
+	let end: number;
+	if (isTripletDuration(first.duration)) {
+		// Only a whole group, from its first member, back to its plain value.
+		const group = tripletGroupAt(measure.slots, slotIndex);
+		if (!group || group.start !== slotIndex || tripletPlainValue(first.duration) !== targetDuration) {
+			return { type: "ok", measures };
+		}
+		end = slotIndex + TRIPLET_GROUP_SIZE;
+	} else {
+		// Walk the following plain slots until they sum to the target. A run that
+		// reaches a triplet slot never merges.
+		const targetUnits = slotDurationUnits(targetDuration);
+		let sum = 0;
+		end = slotIndex;
+		while (end < measure.slots.length && sum < targetUnits) {
+			if (isTripletDuration(measure.slots[end].duration)) return { type: "ok", measures };
+			sum += slotDurationUnits(measure.slots[end].duration);
+			end++;
+		}
+		const consumed = end - slotIndex;
+		// Need an exact fit spanning at least the current slot plus one following slot.
+		if (sum !== targetUnits || consumed < 2) return { type: "ok", measures };
+	}
+
 	// The first slot's string data is kept, so its roll stroke and rest flag are kept
 	// too. When both the first and a later merged slot carry a stroke, the first wins
 	// (the later slots' data — stroke included — is discarded along with everything else).
@@ -953,25 +1127,28 @@ export function mergeSlots(
 // split, the number of sub-slots produced; for a merge, the number of slots consumed).
 export type DurationTarget = { duration: Duration; count: number };
 
-// Integer-weight note value keyed by its thirty-second-note unit weight, used to
-// resolve a prefix-sum back to a duration when enumerating merge targets.
+// Ladder note value keyed by its tick weight, used to resolve a prefix-sum back
+// to a duration when enumerating merge targets.
 const DURATION_BY_UNITS: Map<number, Duration> = new Map(
 	NOTE_LADDER.map((d) => [slotDurationUnits(d), d] as const),
 );
 
 // Smaller note values the slot at `slotIndex` can be split into: each must divide
 // the slot evenly (integer sub-slot count) and the sub-slots must fit the measure's
-// remaining capacity. Ordered largest → smallest by NOTE_LADDER.
+// remaining capacity, plus the slot's triplet (three of it) when it has one and
+// the meter is simple — a compound beat already divides in three, so a triplet
+// there names nothing. Ordered by sub-slot count, fewest first. A triplet slot
+// offers nothing: its group is the unit.
 export function splitTargetsForSlot(
 	measure: Measure,
 	slotIndex: number,
 	timeSignature: [number, number],
 ): DurationTarget[] {
 	const slot = measure.slots[slotIndex];
-	if (!slot) return [];
+	if (!slot || isTripletDuration(slot.duration)) return [];
 	const currentUnits = slotDurationUnits(slot.duration);
 	const remaining = remainingUnits(measure.slots, timeSignature);
-	return NOTE_LADDER.flatMap((d) => {
+	const targets = NOTE_LADDER.flatMap((d) => {
 		const targetUnits = slotDurationUnits(d);
 		if (targetUnits >= currentUnits || currentUnits % targetUnits !== 0) return [];
 		const count = currentUnits / targetUnits;
@@ -979,26 +1156,175 @@ export function splitTargetsForSlot(
 		if (extra > remaining) return [];
 		return [{ duration: d, count }];
 	});
+	const triplet = tripletForPlainValue(slot.duration);
+	if (triplet && !isCompound(timeSignature)) {
+		targets.push({ duration: triplet, count: TRIPLET_GROUP_SIZE });
+	}
+	return targets.sort((a, b) => a.count - b.count);
 }
 
 // Larger note values the slot at `slotIndex` can be merged up to: walk the prefix
 // sums of [current, ...following] and, for every run of ≥ 2 slots whose durations
-// sum exactly to a supported integer-weight value, offer that value. A merge keeps
-// the measure total (the sum equals the target), so capacity is never at issue.
-// Ordered smallest → largest target by the run length that produces it.
+// sum exactly to a ladder value, offer that value. The walk stops at a triplet
+// slot — a run mixing triplets and plain values is never a note. The first
+// member of a triplet group offers its plain value instead; the other members
+// offer nothing. A merge keeps the measure total (the sum equals the target), so
+// capacity is never at issue. Ordered smallest → largest target by the run
+// length that produces it.
 export function mergeTargetsForSlot(measure: Measure, slotIndex: number): DurationTarget[] {
 	const slots = measure.slots;
+	const slot = slots[slotIndex];
+	if (!slot) return [];
+	if (isTripletDuration(slot.duration)) {
+		const group = tripletGroupAt(slots, slotIndex);
+		return group && group.start === slotIndex
+			? [{ duration: tripletPlainValue(slot.duration), count: TRIPLET_GROUP_SIZE }]
+			: [];
+	}
 	const results: DurationTarget[] = [];
 	let sum = 0;
 	for (let end = slotIndex; end < slots.length; end++) {
+		if (isTripletDuration(slots[end].duration)) break;
 		sum += slotDurationUnits(slots[end].duration);
 		const count = end - slotIndex + 1;
 		if (count < 2) continue;
-		if (sum > 32) break; // past a whole note — no larger target exists
+		if (sum > TICKS_PER_WHOLE) break; // past a whole note — no larger target exists
 		const duration = DURATION_BY_UNITS.get(sum);
 		if (duration) results.push({ duration, count });
 	}
 	return results;
+}
+
+// ── Time signature change ─────────────────────────────────────────────────────
+
+// Plain values a bar is padded out with, largest first, by meter — a compound
+// bar pads with its dotted beat and eighths, never a plain quarter.
+const SIMPLE_PAD_LADDER: readonly Duration[] = ["quarter", "eighth", "sixteenth", "32nd"];
+const COMPOUND_PAD_LADDER: readonly Duration[] = ["dotted-quarter", "eighth", "sixteenth", "32nd"];
+
+// Empty slots that exactly fill `ticks`, largest values first.
+function padSlots(ticks: number, timeSignature: Meter): BeatSlot[] {
+	const ladder = isCompound(timeSignature) ? COMPOUND_PAD_LADDER : SIMPLE_PAD_LADDER;
+	const out: BeatSlot[] = [];
+	let left = ticks;
+	for (const duration of ladder) {
+		const unit = slotDurationUnits(duration);
+		while (left >= unit) {
+			out.push(makeEmptySlot(duration));
+			left -= unit;
+		}
+	}
+	return out;
+}
+
+// Cut one measure to the new capacity: slots whose onset reaches or straddles
+// the bar's end are dropped, and the bar is padded out to full. A dropped slot
+// with string data is what the caller confirms. Chord marks travel by onset.
+function fitMeasure(
+	measure: Measure,
+	timeSignature: Meter,
+): { measure: Measure; losesData: boolean } {
+	const capacity = measureCapacity(timeSignature);
+	const kept: BeatSlot[] = [];
+	let losesData = false;
+	let cursor = 0;
+	for (const slot of measure.slots) {
+		const end = cursor + slotDurationUnits(slot.duration);
+		if (end <= capacity) kept.push(slot);
+		else if (slotHasStringData(slot)) losesData = true;
+		cursor = end;
+	}
+	const filled = usedUnits(kept);
+	const slots = filled < capacity ? [...kept, ...padSlots(capacity - filled, timeSignature)] : kept;
+	return {
+		measure: { ...measure, slots: carryChordMarks(measure.slots, slots) },
+		losesData,
+	};
+}
+
+// Cut every measure into `parts` equal bars of the new length. Only possible
+// when no slot straddles a cut; null otherwise. The first piece keeps the
+// repeat-start barline, the last the repeat-end and its play count; a chord in
+// effect carries into the later pieces by the lead-sheet rule on its own.
+function splitMeasures(measures: readonly Measure[], timeSignature: Meter, parts: number): Measure[] | null {
+	const capacity = measureCapacity(timeSignature);
+	const out: Measure[] = [];
+	for (const measure of measures) {
+		const pieces: BeatSlot[][] = Array.from({ length: parts }, () => []);
+		let cursor = 0;
+		for (const slot of measure.slots) {
+			const end = cursor + slotDurationUnits(slot.duration);
+			const piece = Math.floor(cursor / capacity);
+			if (piece >= parts || end > (piece + 1) * capacity) return null;
+			pieces[piece].push(slot);
+			cursor = end;
+		}
+		pieces.forEach((slots, i) => {
+			const filled = usedUnits(slots);
+			const full = filled < capacity ? [...slots, ...padSlots(capacity - filled, timeSignature)] : slots;
+			const { repeatStart, repeatEnd, repeatTimes, ...rest } = measure;
+			const piece: Measure = { ...rest, id: i === 0 ? measure.id : crypto.randomUUID(), slots: full };
+			if (i === 0 && repeatStart) piece.repeatStart = repeatStart;
+			if (i === parts - 1) {
+				if (repeatEnd) piece.repeatEnd = repeatEnd;
+				if (repeatTimes !== undefined) piece.repeatTimes = repeatTimes;
+			}
+			out.push(piece);
+		});
+	}
+	return out;
+}
+
+export interface TimeSignatureChange {
+	/** The pattern in the new meter: overlong bars cut and every bar padded to full. */
+	fitted: FingerpickPattern;
+	/** `fitted`, with every bar that lost string data reset to the meter's default fill instead. */
+	cleared: FingerpickPattern;
+	/**
+	 * Each bar cut into equal bars of the new length — what a player means by
+	 * "4/4 → 2/4" — when the old bar is a whole number of new ones and no note
+	 * crosses a cut; null otherwise.
+	 */
+	split: FingerpickPattern | null;
+	/** Indices of the bars that lose string data under `fitted`. Empty means `fitted` needs no confirmation. */
+	affectedMeasures: number[];
+}
+
+// Rewrite a pattern for a new time signature. Per bar, slots whose onset
+// reaches or straddles the new capacity are dropped and the bar is padded with
+// empty plain values; chord marks are carried by onset. Bars with room (2/4 →
+// 3/4) simply grow. 3/4 ↔ 6/8 share a capacity and keep their slots as they
+// are — a quarter then crosses the 3+3 grouping (a hemiola), which is left to
+// the player rather than re-notated with ties. BPM counts the beat, so between
+// a simple and a compound meter the tempo is rescaled (`rescaleBpmForMeter`)
+// to hold the eighth note still; the caller clamps it to its range.
+export function changeTimeSignature(
+	pattern: FingerpickPattern,
+	timeSignature: [number, number],
+): TimeSignatureChange {
+	const affectedMeasures: number[] = [];
+	const fittedMeasures = pattern.measures.map((measure, i) => {
+		const { measure: fitted, losesData } = fitMeasure(measure, timeSignature);
+		if (losesData) affectedMeasures.push(i);
+		return fitted;
+	});
+	const bpm = Math.round(rescaleBpmForMeter(pattern.bpm, pattern.timeSignature, timeSignature));
+	const fitted: FingerpickPattern = { ...pattern, timeSignature, bpm, measures: fittedMeasures };
+	const cleared: FingerpickPattern = {
+		...fitted,
+		measures: fittedMeasures.map((m, i) =>
+			affectedMeasures.includes(i) ? { ...m, slots: makeEmptyMeasure(timeSignature).slots } : m,
+		),
+	};
+	const oldCapacity = measureCapacity(pattern.timeSignature);
+	const newCapacity = measureCapacity(timeSignature);
+	const parts = oldCapacity / newCapacity;
+	const splitMeasuresOrNull =
+		Number.isInteger(parts) && parts >= 2 ? splitMeasures(pattern.measures, timeSignature, parts) : null;
+	const split = splitMeasuresOrNull
+		? { ...pattern, timeSignature, bpm, measures: splitMeasuresOrNull }
+		: null;
+	return { fitted, cleared, split, affectedMeasures };
 }
 
 // ── Legacy-pattern normalization ──────────────────────────────────────────────
@@ -1063,12 +1389,19 @@ export function carryChordMarks(
 	return result;
 }
 
+// How many slots of `duration` fill a bar of `timeSignature` (see resetMeasure).
+function slotCountForFill(duration: Duration, timeSignature: [number, number]): number {
+	return Math.max(1, Math.floor(measureCapacity(timeSignature) / slotDurationUnits(duration)));
+}
+
 export type ResetResult =
 	| { type: "ok"; measures: Measure[] }
 	| { type: "confirm"; measures: Measure[] };
 
 // Replace every slot in a measure with (capacity / targetDuration) fresh empty
-// slots. When the measure already holds string data, the reset is returned as a
+// slots. Every offered target divides the bar exactly; one that does not fills
+// as many whole slots as fit (never more than one when even one is too long).
+// When the measure already holds string data, the reset is returned as a
 // `confirm` result so the caller can offer a keep-data (remap) alternative before
 // clearing.
 export function resetMeasure(
@@ -1080,10 +1413,7 @@ export function resetMeasure(
 	const measure = measures[measureIndex];
 	if (!measure) return { type: "ok", measures };
 
-	const count = Math.max(
-		1,
-		Math.round(measureCapacity(timeSignature) / slotDurationUnits(targetDuration)),
-	);
+	const count = slotCountForFill(targetDuration, timeSignature);
 	const newSlots = carryChordMarks(
 		measure.slots,
 		Array.from({ length: count }, () => makeEmptySlot(targetDuration)),
@@ -1111,7 +1441,7 @@ export function remapMeasure(
 	if (!measure) return measures;
 
 	const targetUnits = slotDurationUnits(targetDuration);
-	const count = Math.max(1, Math.round(measureCapacity(timeSignature) / targetUnits));
+	const count = slotCountForFill(targetDuration, timeSignature);
 	const newSlots = Array.from({ length: count }, () => makeEmptySlot(targetDuration));
 
 	const claimed = new Set<number>();

@@ -1,8 +1,11 @@
 import { useRef, useState } from "react";
-import { MAX_BPM, MIN_BPM } from "./playbackConstants";
+import { clampBpmToMeter } from "@/lib/strumBars";
+import type { Meter } from "@/lib/strumMeter";
 
 export interface TempoArgs {
 	initialBpm: number;
+	/** The pattern's meter: BPM counts its beat, and a compound meter has a lower ceiling. */
+	timeSignature: Meter;
 	isPlaying: boolean;
 	pause: () => void;
 	resume: () => void;
@@ -27,7 +30,14 @@ export interface Tempo {
  * The page's tempo: the number shown, and how the slider decouples its drag
  * ticks from rescheduling so a drag never restarts playback mid-gesture.
  */
-export function useTempo({ initialBpm, isPlaying, pause, resume, applyBpmChange }: TempoArgs): Tempo {
+export function useTempo({
+	initialBpm,
+	timeSignature,
+	isPlaying,
+	pause,
+	resume,
+	applyBpmChange,
+}: TempoArgs): Tempo {
 	const [bpm, setBpm] = useState<number>(initialBpm);
 	// Tracks the latest BPM value during slider drag so onPointerUp reads the
 	// correct final value regardless of React batching.
@@ -44,13 +54,13 @@ export function useTempo({ initialBpm, isPlaying, pause, resume, applyBpmChange 
 	}
 
 	function handleBpmChange(newBpm: number) {
-		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, newBpm));
+		const clamped = clampBpmToMeter(newBpm, timeSignature);
 		setBpm(clamped);
 		applyBpmChange(clamped);
 	}
 
 	function handleSliderChange(rawValue: number) {
-		const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, rawValue));
+		const clamped = clampBpmToMeter(rawValue, timeSignature);
 		setBpm(clamped);
 		dragBpmRef.current = clamped;
 		navigator.vibrate?.(10);

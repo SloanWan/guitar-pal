@@ -9,17 +9,30 @@ import {
 	computeLoopOffset,
 	getProgressAtTime,
 	findSlotStartTime,
+	computeMeasureBoundaries,
 	scheduleFingerpickNote,
 	_shutdownEngine,
 	VOICE_STEAL_FADE_TAU,
 	DEFAULT_ROLL_PARAMS,
 	DEFAULT_SLIDE_PARAMS,
 	type ScheduleEvent,
+	type MeasureBoundary,
 	type RollParams,
 	type SlideParams,
 	type SlideActiveVoice,
 	type LegatoTreatment,
 } from "@/lib/fingerpickScheduler";
+import {
+	clampToBounds,
+	inPass,
+	locateInPass,
+	passLength,
+	regionBounds,
+	timelineOffset,
+	toPassTime,
+	type LoopRegion,
+	type PassBounds,
+} from "@/lib/fingerpickLoopRegion";
 import {
 	preloadFingerpickPresets,
 	getFingerpickNoteData,
@@ -205,6 +218,7 @@ export function useFingerpickAudioEngine() {
 	const [isPaused, setIsPaused] = useState(false);
 	const [playOnce, setPlayOnce] = useState(true);
 	const playOnceRef = useRef(true);
+	const [loopRegion, setLoopRegionState] = useState<LoopRegion | null>(null);
 	const [metronomeEnabled, setMetronomeEnabled] = useState(false);
 	const [metronomeSubdivision, setMetronomeSubdivision] =
 		useState<MetronomeSubdivision>("quarter");
@@ -257,6 +271,12 @@ export function useFingerpickAudioEngine() {
 	const patternDurationRef = useRef(0);
 	const loopRef = useRef(false);
 	const loopGapRef = useRef(0);
+	/** Measure start times of the pattern at play() time, for the loop region's bounds. */
+	const measureBoundariesRef = useRef<MeasureBoundary[]>([]);
+	/** The measures to loop (expanded indices), or null for the whole pattern. */
+	const loopRegionRef = useRef<LoopRegion | null>(null);
+	/** The pattern seconds a pass plays: the region's, or [0, patternDuration). */
+	const boundsRef = useRef<PassBounds>({ start: 0, end: 0 });
 	/** Playback mode: force every note to ring at the long letRing τ (read in scheduleNote). */
 	const forceLetRingRef = useRef(false);
 	const scheduleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -434,23 +454,24 @@ export function useFingerpickAudioEngine() {
 		const onsets = beatOnsetsRef.current;
 		const subdivision = metronomeSubdivisionRef.current;
 		const spb = secondsPerBeatRef.current;
-		const totalDuration = patternDurationRef.current;
+		const bounds = boundsRef.current;
+		const tickEnd = bounds.end - 0.001;
 
 		for (let i = 0; i < onsets.length; i++) {
 			const beatTime = onsets[i];
 			const isAccentBeat = accentEnabledRef.current && i % beatsPerMeasure === 0;
 
 			// Beat (quarter-note) tick — always scheduled
-			if (beatTime >= startOffset) {
-				const when = passOffset + beatTime;
+			if (inPass(beatTime, bounds, startOffset)) {
+				const when = passOffset + toPassTime(beatTime, bounds);
 				if (when >= ctx.currentTime) scheduleTick(ctx, when, isAccentBeat);
 			}
 
 			// Eighth-note sub-beat (halfway between this beat and the next)
 			if (subdivision === "eighth" || subdivision === "sixteenth") {
 				const t8 = beatTime + spb / 2;
-				if (t8 >= startOffset && t8 < totalDuration - 0.001) {
-					const when = passOffset + t8;
+				if (inPass(t8, bounds, startOffset) && t8 < tickEnd) {
+					const when = passOffset + toPassTime(t8, bounds);
 					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
 				}
 			}
@@ -459,12 +480,12 @@ export function useFingerpickAudioEngine() {
 			if (subdivision === "sixteenth") {
 				const t16a = beatTime + spb / 4;
 				const t16b = beatTime + (spb * 3) / 4;
-				if (t16a >= startOffset && t16a < totalDuration - 0.001) {
-					const when = passOffset + t16a;
+				if (inPass(t16a, bounds, startOffset) && t16a < tickEnd) {
+					const when = passOffset + toPassTime(t16a, bounds);
 					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
 				}
-				if (t16b >= startOffset && t16b < totalDuration - 0.001) {
-					const when = passOffset + t16b;
+				if (inPass(t16b, bounds, startOffset) && t16b < tickEnd) {
+					const when = passOffset + toPassTime(t16b, bounds);
 					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
 				}
 			}
@@ -480,31 +501,37 @@ export function useFingerpickAudioEngine() {
 		const target = masterGainRef.current;
 		if (!ctx || !target) return;
 
+		const bounds = boundsRef.current;
 		for (const event of eventsRef.current) {
-			if (event.time < startOffset) continue;
-			const when = offset + event.time;
+			if (!inPass(event.time, bounds, startOffset)) continue;
+			const when = offset + toPassTime(event.time, bounds);
 			if (when < ctx.currentTime) continue;
 			scheduleNote(ctx, target, event, when);
 		}
 	}
 
 	/**
-	 * Schedule pass `passIndex` from `passStartOffset` seconds into the pass, then
-	 * queue subsequent passes if looping. Resume passes passStartOffset=0 (full pass).
+	 * Schedule pass `passIndex` from pattern time `passStartOffset` on, then queue
+	 * subsequent passes if looping. A pass is the loop region, or the whole
+	 * pattern without one; a full pass starts at the region's start.
 	 */
-	function schedulePassAndQueue(passIndex: number, passStartOffset: number = 0): void {
+	function schedulePassAndQueue(
+		passIndex: number,
+		passStartOffset: number = boundsRef.current.start,
+	): void {
 		const ctx = ctxRef.current;
 		if (!ctx || !isPlayingRef.current) return;
 
-		const patternDuration = patternDurationRef.current;
+		const bounds = boundsRef.current;
 		const loopGap = loopGapRef.current;
-		const offset = startTimeRef.current + computeLoopOffset(passIndex, patternDuration, loopGap);
+		const offset =
+			startTimeRef.current + computeLoopOffset(passIndex, passLength(bounds), loopGap);
 
 		schedulePass(offset, passStartOffset);
 		scheduleMetronomePass(offset, passStartOffset);
 
 		if (loopRef.current) {
-			const passEndAbsolute = offset + patternDuration;
+			const passEndAbsolute = offset + passLength(bounds);
 			const msUntilNext = Math.max(
 				0,
 				(passEndAbsolute - SCHEDULE_LOOKAHEAD_S - ctx.currentTime) * 1000,
@@ -523,6 +550,15 @@ export function useFingerpickAudioEngine() {
 				schedulePassAndQueue(passIndex + 1); // subsequent passes always full
 			}, msUntilNext);
 		}
+	}
+
+	// Recompute the pass bounds from the measure boundaries and the loop region.
+	function refreshBounds(): void {
+		boundsRef.current = regionBounds(
+			measureBoundariesRef.current,
+			patternDurationRef.current,
+			loopRegionRef.current,
+		);
 	}
 
 	// ─── Cancel helpers ──────────────────────────────────────────────────────
@@ -573,23 +609,27 @@ export function useFingerpickAudioEngine() {
 		patternRef.current = pattern;
 		eventsRef.current = fingerpickPatternToScheduleEvents(pattern, bpm, rollParamsRef.current);
 		patternDurationRef.current = getTotalPatternDuration(pattern, bpm);
+		measureBoundariesRef.current = computeMeasureBoundaries(pattern, bpm);
+		refreshBounds();
+		// A start outside the loop region (or past the end) starts the pass over.
+		const from = clampToBounds(startOffset, boundsRef.current);
 		loopRef.current = options.loop ?? false;
 		loopGapRef.current = options.loopGapSeconds ?? 0;
 		forceLetRingRef.current = options.forceLetRing ?? false;
 		timeSignatureRef.current = pattern.timeSignature;
 		beatOnsetsRef.current = computeBeatOnsets(pattern, bpm);
 		secondsPerBeatRef.current = 60 / bpm;
-		startTimeRef.current = ctx.currentTime - startOffset;
+		startTimeRef.current = ctx.currentTime - toPassTime(from, boundsRef.current);
 		pausedAtRef.current = null;
 		pausedPassIndexRef.current = 0;
 		isPlayingRef.current = true;
 		setIsPlaying(true);
 		setIsPaused(false);
 
-		schedulePassAndQueue(0, startOffset);
+		schedulePassAndQueue(0, from);
 
 		if (!loopRef.current) {
-			const doneAfterMs = (patternDurationRef.current - startOffset + SOURCE_STOP_BUFFER_S) * 1000;
+			const doneAfterMs = (boundsRef.current.end - from + SOURCE_STOP_BUFFER_S) * 1000;
 			endTimerRef.current = setTimeout(() => {
 				isPlayingRef.current = false;
 				setIsPlaying(false);
@@ -636,14 +676,13 @@ export function useFingerpickAudioEngine() {
 
 		const pausedAt = pausedAtRef.current;
 		const pausedPassIndex = pausedPassIndexRef.current;
-		const patternDuration = patternDurationRef.current;
+		const bounds = boundsRef.current;
 		const loopGap = loopGapRef.current;
 
 		// Align startTimeRef so computeLoopOffset(passIndex) produces the correct
 		// absolute AudioContext time for this pass's t=0.
 		// totalElapsedAtPause = passes_completed × (duration + gap) + position_in_pass
-		const totalElapsedAtPause =
-			computeLoopOffset(pausedPassIndex, patternDuration, loopGap) + pausedAt;
+		const totalElapsedAtPause = timelineOffset(pausedPassIndex, bounds, loopGap, pausedAt);
 		startTimeRef.current = ctx.currentTime - totalElapsedAtPause;
 
 		pausedAtRef.current = null;
@@ -657,7 +696,7 @@ export function useFingerpickAudioEngine() {
 		schedulePassAndQueue(pausedPassIndex, pausedAt);
 
 		if (!loopRef.current) {
-			const remainingMs = (patternDuration - pausedAt + SOURCE_STOP_BUFFER_S) * 1000;
+			const remainingMs = (bounds.end - pausedAt + SOURCE_STOP_BUFFER_S) * 1000;
 			endTimerRef.current = setTimeout(() => {
 				isPlayingRef.current = false;
 				setIsPlaying(false);
@@ -676,6 +715,13 @@ export function useFingerpickAudioEngine() {
 		setIsPaused(false);
 	}
 
+	/** The measure a pass opens on: the first whose start is not before the bounds. */
+	function openingMeasureIndex(bounds: PassBounds): number {
+		return (
+			measureBoundariesRef.current.find((b) => b.startTime >= bounds.start)?.measureIndex ?? 0
+		);
+	}
+
 	/**
 	 * Query current playback position without causing a re-render.
 	 * Call from requestAnimationFrame to drive cursor highlighting.
@@ -684,12 +730,14 @@ export function useFingerpickAudioEngine() {
 	function getPlaybackProgress(): FingerpickPlaybackProgress | null {
 		if (!isPlayingRef.current || !ctxRef.current) return null;
 
-		const patternDuration = patternDurationRef.current;
-		const loopGap = loopGapRef.current;
+		const bounds = boundsRef.current;
 		const totalElapsed = ctxRef.current.currentTime - startTimeRef.current;
-		const passDuration = patternDuration + loopGap;
-		const passIndex = passDuration > 0 ? Math.floor(totalElapsed / passDuration) : 0;
-		const elapsed = totalElapsed - passIndex * passDuration;
+		const located = locateInPass(totalElapsed, bounds, loopGapRef.current);
+		const passIndex = located.passIndex;
+		// During a loop gap the pass has run out: hold the position at the pass's
+		// last instant rather than letting it read on into the measures after a
+		// loop region. (For the whole pattern that instant is the pattern's end.)
+		const elapsed = Math.min(located.elapsed, Math.max(bounds.start, bounds.end - 1e-6));
 
 		// Before the first note of a pass there is no event to stand on, but the
 		// pass has begun: report its opening slot so the cursor moves from the
@@ -697,7 +745,9 @@ export function useFingerpickAudioEngine() {
 		// the position with measure boundaries; this only has to be non-null.)
 		const position =
 			getProgressAtTime(eventsRef.current, elapsed) ??
-			(elapsed >= 0 && eventsRef.current.length > 0 ? { measureIndex: 0, slotIndex: 0 } : null);
+			(elapsed >= 0 && eventsRef.current.length > 0
+				? { measureIndex: openingMeasureIndex(bounds), slotIndex: 0 }
+				: null);
 		if (!position) return null;
 
 		return { ...position, passIndex, elapsed };
@@ -731,7 +781,7 @@ export function useFingerpickAudioEngine() {
 			const elapsed = progress?.elapsed ?? 0;
 			const passOffset =
 				startTimeRef.current +
-				computeLoopOffset(passIndex, patternDurationRef.current, loopGapRef.current);
+				computeLoopOffset(passIndex, passLength(boundsRef.current), loopGapRef.current);
 			scheduleMetronomePass(passOffset, elapsed);
 		}
 	}
@@ -775,7 +825,7 @@ export function useFingerpickAudioEngine() {
 		const elapsed = progress?.elapsed ?? 0;
 		const passOffset =
 			startTimeRef.current +
-			computeLoopOffset(passIndex, patternDurationRef.current, loopGapRef.current);
+			computeLoopOffset(passIndex, passLength(boundsRef.current), loopGapRef.current);
 		scheduleMetronomePass(passOffset, elapsed);
 	}
 
@@ -814,18 +864,21 @@ export function useFingerpickAudioEngine() {
 			eventsRef.current = newEvents;
 			patternDurationRef.current = newPatternDuration;
 			beatOnsetsRef.current = newBeatOnsets;
+			measureBoundariesRef.current = computeMeasureBoundaries(pattern, newBpm);
+			refreshBounds();
+			const bounds = boundsRef.current;
+			const resumeAt = clampToBounds(newPausedAt, bounds);
 
 			const ctx = ctxRef.current;
 			if (!ctx) return;
 
-			const totalElapsedAtPosition =
-				computeLoopOffset(passIndex, newPatternDuration, loopGapRef.current) + newPausedAt;
+			const totalElapsedAtPosition = timelineOffset(passIndex, bounds, loopGapRef.current, resumeAt);
 			startTimeRef.current = ctx.currentTime - totalElapsedAtPosition;
 
-			schedulePassAndQueue(passIndex, newPausedAt);
+			schedulePassAndQueue(passIndex, resumeAt);
 
 			if (!loopRef.current) {
-				const remainingMs = (newPatternDuration - newPausedAt + SOURCE_STOP_BUFFER_S) * 1000;
+				const remainingMs = (bounds.end - resumeAt + SOURCE_STOP_BUFFER_S) * 1000;
 				endTimerRef.current = setTimeout(() => {
 					isPlayingRef.current = false;
 					setIsPlaying(false);
@@ -838,10 +891,12 @@ export function useFingerpickAudioEngine() {
 				? findSlotStartTime(newEvents, position.measureIndex, position.slotIndex)
 				: 0;
 
-			pausedAtRef.current = newPausedAt;
 			eventsRef.current = newEvents;
 			patternDurationRef.current = newPatternDuration;
 			beatOnsetsRef.current = newBeatOnsets;
+			measureBoundariesRef.current = computeMeasureBoundaries(pattern, newBpm);
+			refreshBounds();
+			pausedAtRef.current = clampToBounds(newPausedAt, boundsRef.current);
 		}
 		// Stopped: no-op — page's bpm state drives the next play() call.
 	}
@@ -874,18 +929,18 @@ export function useFingerpickAudioEngine() {
 		loopGapRef.current = newLoopGapSeconds;
 
 		// Recalibrate startTimeRef so the new loopGap maps passIndex/elapsed correctly.
-		const patternDuration = patternDurationRef.current;
+		const bounds = boundsRef.current;
 		startTimeRef.current =
 			ctx.currentTime -
-			computeLoopOffset(passIndex, patternDuration, newLoopGapSeconds) -
-			elapsed;
+			computeLoopOffset(passIndex, passLength(bounds), newLoopGapSeconds) -
+			toPassTime(elapsed, bounds);
 
 		// Cancel the old scheduling timer (computed with the old gap) and set a new
 		// one based on how much time remains in the current pass.
 		if (scheduleTimerRef.current !== null) {
 			clearTimeout(scheduleTimerRef.current);
 		}
-		const remainingInPass = patternDuration - elapsed;
+		const remainingInPass = bounds.end - elapsed;
 		const msUntilNext = Math.max(0, (remainingInPass - SCHEDULE_LOOKAHEAD_S) * 1000);
 		scheduleTimerRef.current = setTimeout(() => {
 			if (!isPlayingRef.current) return;
@@ -912,16 +967,19 @@ export function useFingerpickAudioEngine() {
 			const ctx = ctxRef.current;
 			if (!ctx) return;
 
-			const newTime = findSlotStartTime(eventsRef.current, measureIndex, slotIndex);
-			const totalElapsed =
-				computeLoopOffset(passIndex, patternDurationRef.current, loopGapRef.current) + newTime;
+			const bounds = boundsRef.current;
+			// A note outside the loop region starts the region over.
+			const newTime = clampToBounds(
+				findSlotStartTime(eventsRef.current, measureIndex, slotIndex),
+				bounds,
+			);
+			const totalElapsed = timelineOffset(passIndex, bounds, loopGapRef.current, newTime);
 			startTimeRef.current = ctx.currentTime - totalElapsed;
 
 			schedulePassAndQueue(passIndex, newTime);
 
 			if (!loopRef.current) {
-				const remainingMs =
-					(patternDurationRef.current - newTime + SOURCE_STOP_BUFFER_S) * 1000;
+				const remainingMs = (bounds.end - newTime + SOURCE_STOP_BUFFER_S) * 1000;
 				endTimerRef.current = setTimeout(() => {
 					isPlayingRef.current = false;
 					setIsPlaying(false);
@@ -929,7 +987,49 @@ export function useFingerpickAudioEngine() {
 			}
 		} else if (pausedAtRef.current !== null) {
 			// Paused: update saved position for resume(); reset to pass 0 for a clean seek.
-			pausedAtRef.current = findSlotStartTime(eventsRef.current, measureIndex, slotIndex);
+			pausedAtRef.current = clampToBounds(
+				findSlotStartTime(eventsRef.current, measureIndex, slotIndex),
+				boundsRef.current,
+			);
+			pausedPassIndexRef.current = 0;
+		}
+	}
+
+	/**
+	 * Loop a stretch of measures (expanded indices, inclusive) instead of the
+	 * whole pattern; null goes back to the whole pattern.
+	 *
+	 * - Playing: reschedules from the current position when it lies inside the
+	 *   new region, otherwise from the region's start, counting passes from 0.
+	 * - Paused: moves the saved position into the region the same way.
+	 * - Stopped: remembered for the next play().
+	 */
+	function setLoopRegion(region: LoopRegion | null): void {
+		// Read the position against the bounds it was played under.
+		const progress = isPlayingRef.current ? getPlaybackProgress() : null;
+		loopRegionRef.current = region;
+		setLoopRegionState(region);
+		if (!patternRef.current) return;
+		refreshBounds();
+		const bounds = boundsRef.current;
+
+		if (isPlayingRef.current) {
+			const ctx = ctxRef.current;
+			if (!ctx) return;
+			clearTimers();
+			cancelAllSources();
+			const from = clampToBounds(progress?.elapsed ?? bounds.start, bounds);
+			startTimeRef.current = ctx.currentTime - toPassTime(from, bounds);
+			schedulePassAndQueue(0, from);
+			if (!loopRef.current) {
+				const remainingMs = (bounds.end - from + SOURCE_STOP_BUFFER_S) * 1000;
+				endTimerRef.current = setTimeout(() => {
+					isPlayingRef.current = false;
+					setIsPlaying(false);
+				}, remainingMs);
+			}
+		} else if (pausedAtRef.current !== null) {
+			pausedAtRef.current = clampToBounds(pausedAtRef.current, bounds);
 			pausedPassIndexRef.current = 0;
 		}
 	}
@@ -1042,6 +1142,8 @@ export function useFingerpickAudioEngine() {
 		applyBpmChange,
 		applyLoopGapChange,
 		seekToNote,
+		loopRegion,
+		setLoopRegion,
 		metronomeEnabled,
 		setMetronomeEnabled: handleSetMetronomeEnabled,
 		metronomeSubdivision,

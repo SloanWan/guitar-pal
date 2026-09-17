@@ -3,6 +3,7 @@ import {
 	EMPTY_SELECTION,
 	highlightedRange,
 	pickMeasure,
+	sectionBands,
 	sectionHint,
 } from "../sectionSelection";
 
@@ -41,5 +42,34 @@ describe("highlightedRange / sectionHint", () => {
 		expect(highlightedRange(done)).toEqual({ startMeasure: 4, endMeasure: 6 });
 		expect(sectionHint(done)).toBe("Measures 5–7");
 		expect(sectionHint(pickMeasure(first, 4))).toBe("Measure 5");
+	});
+});
+
+describe("sectionBands", () => {
+	// Two rows of two measures, each note area 300 wide with a 20px barline gap.
+	const geometry = [
+		{ measureIndex: 0, left: 15, width: 300, top: 8, height: 200, rowIndex: 0 },
+		{ measureIndex: 1, left: 335, width: 300, top: 8, height: 200, rowIndex: 0 },
+		{ measureIndex: 2, left: 15, width: 300, top: 208, height: 200, rowIndex: 1 },
+		{ measureIndex: 3, left: 335, width: 300, top: 208, height: 200, rowIndex: 1 },
+	];
+	it("joins neighbouring measures on a row into one band with no gap", () => {
+		expect(sectionBands(geometry, { startMeasure: 0, endMeasure: 1 })).toEqual([
+			{ rowIndex: 0, left: 15, width: 620, top: 8, height: 200, startsSection: true, endsSection: true },
+		]);
+	});
+	it("spans rows, opening on the first row and closing on the last", () => {
+		expect(sectionBands(geometry, { startMeasure: 1, endMeasure: 2 })).toEqual([
+			{ rowIndex: 0, left: 335, width: 300, top: 8, height: 200, startsSection: true, endsSection: false },
+			{ rowIndex: 1, left: 15, width: 300, top: 208, height: 200, startsSection: false, endsSection: true },
+		]);
+	});
+	it("is a single measure's own box for a one-measure section", () => {
+		expect(sectionBands(geometry, { startMeasure: 3, endMeasure: 3 })).toEqual([
+			{ rowIndex: 1, left: 335, width: 300, top: 208, height: 200, startsSection: true, endsSection: true },
+		]);
+	});
+	it("is empty before the staves have drawn", () => {
+		expect(sectionBands([], { startMeasure: 0, endMeasure: 1 })).toEqual([]);
 	});
 });

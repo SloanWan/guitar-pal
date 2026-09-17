@@ -52,3 +52,51 @@ export function sectionHint(selection: SectionSelection): string {
 	if (selection.pending !== null) return "Click last measure";
 	return "Click first measure";
 }
+
+/** One continuous band of the selection on a stave row. */
+export interface SectionBand {
+	rowIndex: number;
+	left: number;
+	width: number;
+	top: number;
+	height: number;
+	/** The section's first measure is on this row: draw the opening edge. */
+	startsSection: boolean;
+	/** The section's last measure is on this row: draw the closing edge. */
+	endsSection: boolean;
+}
+
+/**
+ * The selection as one band per row, from the first selected measure's left
+ * to the last one's right. Drawing per measure would leave the barline
+ * padding between neighbours uncovered — the measure boxes are note areas.
+ */
+export function sectionBands(
+	geometry: readonly { measureIndex: number; left: number; width: number; top: number; height: number; rowIndex: number }[],
+	range: SectionRange,
+): SectionBand[] {
+	const rows = new Map<number, SectionBand>();
+	for (const r of geometry) {
+		if (r.measureIndex < range.startMeasure || r.measureIndex > range.endMeasure) continue;
+		const right = r.left + r.width;
+		const band = rows.get(r.rowIndex);
+		if (!band) {
+			rows.set(r.rowIndex, {
+				rowIndex: r.rowIndex,
+				left: r.left,
+				width: r.width,
+				top: r.top,
+				height: r.height,
+				startsSection: r.measureIndex === range.startMeasure,
+				endsSection: r.measureIndex === range.endMeasure,
+			});
+			continue;
+		}
+		const left = Math.min(band.left, r.left);
+		band.width = Math.max(band.left + band.width, right) - left;
+		band.left = left;
+		band.startsSection ||= r.measureIndex === range.startMeasure;
+		band.endsSection ||= r.measureIndex === range.endMeasure;
+	}
+	return [...rows.values()].sort((a, b) => a.rowIndex - b.rowIndex);
+}

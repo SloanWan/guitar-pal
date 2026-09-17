@@ -18,6 +18,7 @@ import {
 	EMPTY_SELECTION,
 	highlightedRange,
 	pickMeasure,
+	sectionBands,
 	sectionHint,
 	type SectionSelection,
 } from "@/components/fingerpick/sectionSelection";
@@ -757,41 +758,30 @@ export default function FingerpickPage() {
 							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto cursor-pointer"
 							onClick={handleTabClick}
 						>
-							{/* Section selection — the chosen measures, under the playing
-							    highlight and the playhead; the first and last carry a denim edge. */}
+							{/* Section selection — one band per row across the chosen measures,
+							    under the playing highlight and the playhead; the section's first
+							    and last measure carry a denim edge. */}
 							{sectionMode &&
 								(() => {
 									const range = highlightedRange(section);
 									if (!range) return null;
-									return geometry
-										.filter(
-											(r) =>
-												r.measureIndex >= range.startMeasure &&
-												r.measureIndex <= range.endMeasure,
-										)
-										.map((r) => (
-											<div
-												key={r.measureIndex}
-												aria-hidden="true"
-												data-section-measure={r.measureIndex}
-												className="absolute z-10 pointer-events-none"
-												style={{
-													left: r.left,
-													top: r.top,
-													width: r.width,
-													height: r.height,
-													backgroundColor: "var(--denim-tint)",
-													borderLeft:
-														r.measureIndex === range.startMeasure
-															? "1px solid var(--denim)"
-															: undefined,
-													borderRight:
-														r.measureIndex === range.endMeasure
-															? "1px solid var(--denim)"
-															: undefined,
-												}}
-											/>
-										));
+									return sectionBands(geometry, range).map((band) => (
+										<div
+											key={band.rowIndex}
+											aria-hidden="true"
+											data-section-row={band.rowIndex}
+											className="absolute z-10 pointer-events-none"
+											style={{
+												left: band.left,
+												top: band.top,
+												width: band.width,
+												height: band.height,
+												backgroundColor: "var(--denim-tint)",
+												borderLeft: band.startsSection ? "1px solid var(--denim)" : undefined,
+												borderRight: band.endsSection ? "1px solid var(--denim)" : undefined,
+											}}
+										/>
+									));
 								})()}
 							{/* Measure highlight — updated only on measure transitions. Stacked
 							    ABOVE the rows (z-10): it is translucent, so the look is the same,

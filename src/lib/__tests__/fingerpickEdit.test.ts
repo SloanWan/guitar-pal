@@ -37,7 +37,10 @@ import {
 	mergeSlots,
 	resetMeasure,
 	remapMeasure,
-	hasIntegerUnitWeight,
+	carryChordMarks,
+	isTripletDuration,
+	DURATION_TICKS,
+	TICKS_PER_WHOLE,
 	type Cell,
 } from "@/lib/fingerpickEdit";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
@@ -629,25 +632,46 @@ const firstFret = (measures: Measure[], slotIndex: number): number | null =>
 	measures[0].slots[slotIndex].strings[0].fret;
 
 describe("measureCapacity", () => {
-	it("returns 32/24/24 for 4/4, 3/4 and 6/8", () => {
-		expect(measureCapacity([4, 4])).toBe(32);
-		expect(measureCapacity([3, 4])).toBe(24);
-		expect(measureCapacity([6, 8])).toBe(24);
+	it("returns 96/72/72 ticks for 4/4, 3/4 and 6/8", () => {
+		expect(measureCapacity([4, 4])).toBe(96);
+		expect(measureCapacity([3, 4])).toBe(72);
+		expect(measureCapacity([6, 8])).toBe(72);
 	});
 });
 
 describe("duration unit helpers", () => {
-	it("slotDurationUnits maps the common durations", () => {
-		expect(slotDurationUnits("whole")).toBe(32);
-		expect(slotDurationUnits("quarter")).toBe(8);
-		expect(slotDurationUnits("eighth")).toBe(4);
-		expect(slotDurationUnits("sixteenth")).toBe(2);
+	it("slotDurationUnits maps the common durations to ticks", () => {
+		expect(slotDurationUnits("whole")).toBe(TICKS_PER_WHOLE);
+		expect(slotDurationUnits("quarter")).toBe(24);
+		expect(slotDurationUnits("eighth")).toBe(12);
+		expect(slotDurationUnits("sixteenth")).toBe(6);
+	});
+
+	it("every duration is an exact integer number of ticks, triplets included", () => {
+		for (const [duration, ticks] of Object.entries(DURATION_TICKS)) {
+			expect(Number.isInteger(ticks), duration).toBe(true);
+		}
+		expect(slotDurationUnits("eighth-triplet")).toBe(8);
+		expect(slotDurationUnits("sixteenth-triplet")).toBe(4);
+		expect(isTripletDuration("eighth-triplet")).toBe(true);
+		expect(isTripletDuration("sixteenth-triplet")).toBe(true);
+		expect(isTripletDuration("eighth")).toBe(false);
 	});
 
 	it("usedUnits and remainingUnits sum against capacity", () => {
 		const slots = [makeEmptySlot("quarter"), makeEmptySlot("eighth")];
-		expect(usedUnits(slots)).toBe(12);
-		expect(remainingUnits(slots, [4, 4])).toBe(20);
+		expect(usedUnits(slots)).toBe(36);
+		expect(remainingUnits(slots, [4, 4])).toBe(60);
+	});
+
+	it("a bar of triplets is exactly full: 12 eighth-triplets in 4/4, 9 in 3/4", () => {
+		const twelve = Array.from({ length: 12 }, () => makeEmptySlot("eighth-triplet"));
+		expect(usedUnits(twelve)).toBe(measureCapacity([4, 4]));
+		expect(remainingUnits(twelve, [4, 4])).toBe(0);
+		const nine = Array.from({ length: 9 }, () => makeEmptySlot("eighth-triplet"));
+		expect(remainingUnits(nine, [3, 4])).toBe(0);
+		const sixteenths = Array.from({ length: 24 }, () => makeEmptySlot("sixteenth-triplet"));
+		expect(remainingUnits(sixteenths, [4, 4])).toBe(0);
 	});
 });
 
@@ -924,15 +948,15 @@ describe("setSlotsRest semantics", () => {
 });
 
 describe("split/merge round-trips for newly exposed integer-weight durations", () => {
-	it("sixteenth ⇄ two 32nds, keeping the 4/4 measure at 32 units", () => {
+	it("sixteenth ⇄ two 32nds, keeping the 4/4 measure at 96 ticks", () => {
 		const measures = measuresOf([
-			slotWith("sixteenth", 5), // 2
-			makeEmptySlot("sixteenth"), // 2
-			makeEmptySlot("quarter"), // 8
-			makeEmptySlot("quarter"), // 8
-			makeEmptySlot("quarter"), // 8
-			makeEmptySlot("eighth"), // 4
-		]); // = 32
+			slotWith("sixteenth", 5), // 6
+			makeEmptySlot("sixteenth"), // 6
+			makeEmptySlot("quarter"), // 24
+			makeEmptySlot("quarter"), // 24
+			makeEmptySlot("quarter"), // 24
+			makeEmptySlot("eighth"), // 12
+		]); // = 96
 		expect(usedUnits(measures[0].slots)).toBe(measureCapacity([4, 4]));
 
 		const split = splitSlot(measures, 0, 0, "32nd", [4, 4]);
@@ -940,38 +964,38 @@ describe("split/merge round-trips for newly exposed integer-weight durations", (
 		expect(split[0].slots[1].duration).toBe("32nd");
 		expect(firstFret(split, 0)).toBe(5); // first sub-slot inherits the note
 		expect(firstFret(split, 1)).toBeNull();
-		expect(usedUnits(split[0].slots)).toBe(32);
+		expect(usedUnits(split[0].slots)).toBe(96);
 
 		const merged = mergeSlots(split, 0, 0, "sixteenth", [4, 4]);
 		expect(merged.type).toBe("ok");
 		if (merged.type === "ok") {
 			expect(merged.measures[0].slots[0].duration).toBe("sixteenth");
 			expect(merged.measures[0].slots[0].strings[0].fret).toBe(5);
-			expect(usedUnits(merged.measures[0].slots)).toBe(32);
+			expect(usedUnits(merged.measures[0].slots)).toBe(96);
 		}
 	});
 
-	it("dotted-quarter ⇄ two dotted-eighths, keeping the 4/4 measure at 32 units", () => {
+	it("dotted-quarter ⇄ two dotted-eighths, keeping the 4/4 measure at 96 ticks", () => {
 		const measures = measuresOf([
-			slotWith("dotted-quarter", 7), // 12
-			makeEmptySlot("quarter"), // 8
-			makeEmptySlot("quarter"), // 8
-			makeEmptySlot("eighth"), // 4
-		]); // = 32
-		expect(usedUnits(measures[0].slots)).toBe(32);
+			slotWith("dotted-quarter", 7), // 36
+			makeEmptySlot("quarter"), // 24
+			makeEmptySlot("quarter"), // 24
+			makeEmptySlot("eighth"), // 12
+		]); // = 96
+		expect(usedUnits(measures[0].slots)).toBe(96);
 
 		const split = splitSlot(measures, 0, 0, "dotted-eighth", [4, 4]);
 		expect(split[0].slots[0].duration).toBe("dotted-eighth");
 		expect(split[0].slots[1].duration).toBe("dotted-eighth");
 		expect(firstFret(split, 0)).toBe(7);
-		expect(usedUnits(split[0].slots)).toBe(32);
+		expect(usedUnits(split[0].slots)).toBe(96);
 
 		const merged = mergeSlots(split, 0, 0, "dotted-quarter", [4, 4]);
 		expect(merged.type).toBe("ok");
 		if (merged.type === "ok") {
 			expect(merged.measures[0].slots[0].duration).toBe("dotted-quarter");
 			expect(merged.measures[0].slots[0].strings[0].fret).toBe(7);
-			expect(usedUnits(merged.measures[0].slots)).toBe(32);
+			expect(usedUnits(merged.measures[0].slots)).toBe(96);
 		}
 	});
 
@@ -984,20 +1008,11 @@ describe("split/merge round-trips for newly exposed integer-weight durations", (
 		]);
 		const split = splitSlot(measures, 0, 0, "32nd", [4, 4]);
 		expect(split[0].slots.filter((s) => s.duration === "32nd")).toHaveLength(8);
-		expect(usedUnits(split[0].slots)).toBe(32);
+		expect(usedUnits(split[0].slots)).toBe(96);
 	});
 });
 
-describe("integer-weight guard on split/merge", () => {
-	it("hasIntegerUnitWeight: true for plain/dotted/32nd, false for triplets", () => {
-		expect(hasIntegerUnitWeight("dotted-quarter")).toBe(true);
-		expect(hasIntegerUnitWeight("dotted-eighth")).toBe(true);
-		expect(hasIntegerUnitWeight("32nd")).toBe(true);
-		expect(hasIntegerUnitWeight("quarter")).toBe(true);
-		expect(hasIntegerUnitWeight("eighth-triplet")).toBe(false);
-		expect(hasIntegerUnitWeight("sixteenth-triplet")).toBe(false);
-	});
-
+describe("triplet guard on split/merge", () => {
 	it("splitSlot rejects both triplet targets, returning the measures unchanged", () => {
 		const measures = measuresOf([
 			slotWith("quarter", 3),
@@ -1022,6 +1037,75 @@ describe("integer-weight guard on split/merge", () => {
 			type: "ok",
 			measures,
 		});
+	});
+
+	it("a run through a triplet slot never merges, even when its ticks sum to a plain value", () => {
+		// eighth-triplet (8) + sixteenth-triplet (4) = 12 = an eighth by tick count,
+		// but the run is not a note.
+		const measures = measuresOf([
+			slotWith("eighth-triplet", 2),
+			makeEmptySlot("sixteenth-triplet"),
+			makeEmptySlot("quarter"),
+		]);
+		expect(mergeSlots(measures, 0, 0, "eighth", [4, 4])).toEqual({ type: "ok", measures });
+		expect(mergeTargetsForSlot(measures[0], 0)).toEqual([]);
+		// Three eighth-triplets sum to a quarter, but merging a group back is a
+		// separate rule, not this prefix walk.
+		const group = measuresOf([
+			slotWith("eighth-triplet", 2),
+			makeEmptySlot("eighth-triplet"),
+			makeEmptySlot("eighth-triplet"),
+		]);
+		expect(mergeSlots(group, 0, 0, "quarter", [4, 4])).toEqual({ type: "ok", measures: group });
+		expect(mergeTargetsForSlot(group[0], 0)).toEqual([]);
+	});
+});
+
+describe("triplet slots under reset / remap / chord carry", () => {
+	const chord = { root: "C", suffix: "major" };
+
+	it("carryChordMarks keeps a mark on a triplet onset when the bar is re-tiled", () => {
+		// Marks on the 1st and 7th eighth-triplet (ticks 0 and 48) land on the first
+		// and third quarter of the new bar — exact, not a floating-point near miss.
+		const old = Array.from({ length: 12 }, (_, i) => ({
+			...makeEmptySlot("eighth-triplet"),
+			...(i === 0 || i === 6 ? { chord } : {}),
+		}));
+		const fresh = Array.from({ length: 4 }, () => makeEmptySlot("quarter"));
+		const out = carryChordMarks(old, fresh);
+		expect(out.map((s) => s.chord !== undefined)).toEqual([true, false, true, false]);
+	});
+
+	it("resetMeasure to eighth-triplets fills 4/4 with 12 and 3/4 with 9, carrying marks", () => {
+		const measures = measuresOf([
+			{ ...slotWith("quarter", 3), chord },
+			makeEmptySlot("quarter"),
+			{ ...makeEmptySlot("quarter"), chord },
+			makeEmptySlot("quarter"),
+		]);
+		const res = resetMeasure(measures, 0, "eighth-triplet", [4, 4]);
+		expect(res.type).toBe("confirm");
+		expect(res.measures[0].slots).toHaveLength(12);
+		expect(usedUnits(res.measures[0].slots)).toBe(96);
+		expect(res.measures[0].slots.map((s) => s.chord !== undefined).filter(Boolean)).toHaveLength(2);
+		expect(res.measures[0].slots[0].chord).toEqual(chord);
+		expect(res.measures[0].slots[6].chord).toEqual(chord);
+
+		const waltz = resetMeasure(measuresOf([makeEmptySlot("quarter")]), 0, "eighth-triplet", [3, 4]);
+		expect(waltz.measures[0].slots).toHaveLength(9);
+	});
+
+	it("remapMeasure keeps a note at a triplet onset that lands on a new slot", () => {
+		// 12 eighth-triplets with data on the 4th (tick 24 = beat 2) → quarters: the
+		// second quarter keeps it; data on the 2nd (tick 8, inside beat 1, whose slot
+		// the first triplet already claimed) is discarded.
+		const slots = Array.from({ length: 12 }, (_, i) =>
+			i === 3 ? slotWith("eighth-triplet", 7) : i === 1 ? slotWith("eighth-triplet", 9) : makeEmptySlot("eighth-triplet"),
+		);
+		const out = remapMeasure(measuresOf(slots), 0, "quarter", [4, 4]);
+		expect(out[0].slots).toHaveLength(4);
+		expect(firstFret(out, 0)).toBeNull();
+		expect(firstFret(out, 1)).toBe(7);
 	});
 });
 

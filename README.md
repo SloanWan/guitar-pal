@@ -418,28 +418,36 @@ Click **Log Out** in the top navigation bar. Your data remains safely stored in 
 
 ## Deployment (self-hosted)
 
-Production runs on a single Tencent Cloud HK VPS (Ubuntu, 2 GB) at `https://guitarpal.sloanwan.com`: Nginx on the host terminates TLS and reverse-proxies to one Docker container running the Next.js standalone server. Database and auth stay on hosted Supabase — nothing stateful lives on the box, so it can be rebuilt from scratch with the steps below.
+Production runs on a single Tencent Cloud HK VPS (Ubuntu, 2 GB) at `https://guitarpal.sloanwan.com`: Nginx on the host terminates TLS and reverse-proxies to one Docker container running the Next.js standalone server. A second container, `book-service` (Python, see [`book-service/README.md`](book-service/README.md)), sits behind it on the compose network for textbook import. Database, auth and file storage stay on hosted Supabase — nothing stateful lives on the box, so it can be rebuilt from scratch with the steps below.
 
 ### Files
 
 | File | Role |
 |---|---|
 | `Dockerfile` | `node:22-alpine`, three stages: `npm ci` → `next build` → copy `.next/standalone` + `.next/static` + `public` |
-| `docker-compose.yml` | One `web` service bound to `127.0.0.1:3000`; fills the two `NEXT_PUBLIC_SUPABASE_*` build args and loads runtime secrets from `.env` |
+| `docker-compose.yml` | `web` bound to `127.0.0.1:3000` (fills the two `NEXT_PUBLIC_SUPABASE_*` build args) and `book-service` with no host port; both load runtime secrets from `.env` |
+| `book-service/Dockerfile` | `python:3.12-slim`, dependencies from `pyproject.toml`, `uvicorn` on port 8000 |
 | `scripts/server-setup.sh` | One-time bootstrap: swap, Docker, Nginx (rate-limited reverse proxy), Let's Encrypt via the certbot nginx plugin |
 | `.github/workflows/deploy.yml` | Push-to-deploy: after CI passes on `main`, SSH in, `git reset --hard origin/main`, `docker compose up --build -d` |
 
 ### Environment variables
 
-`NEXT_PUBLIC_*` values are inlined into the client bundle at `next build`, so they are Docker **build args**; `ANTHROPIC_API_KEY` is server-only and injected at **runtime**. Both come from one file on the server, `~/dev/guitar-pal/.env`, which is never committed:
+`NEXT_PUBLIC_*` values are inlined into the client bundle at `next build`, so they are Docker **build args**; everything else is server-only and injected at **runtime**. All of it comes from one file on the server, `~/dev/guitar-pal/.env`, which is never committed and which both containers read:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ANTHROPIC_API_KEY=sk-ant-...
+
+# book-service
+BOOK_SERVICE_DATABASE_URL=postgresql://book_service:<password>@<pooler host>:6543/postgres
+# Only for a legacy project that still signs sessions with a shared secret
+# (Dashboard → Settings → API → JWT Secret). Projects on asymmetric signing
+# keys leave it unset; the service verifies against the project's JWKS.
+SUPABASE_JWT_SECRET=<jwt secret>
 ```
 
-Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` and `src/app/dev/layout.tsx` hide `/dev` unless it is `"1"`. `SUPABASE_SERVICE_ROLE_KEY` is only needed by one-off scripts and stays off the server.
+Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` and `src/app/dev/layout.tsx` hide `/dev` unless it is `"1"`. `SUPABASE_SERVICE_ROLE_KEY` is only needed by one-off scripts and stays off the server: the book-service reads Storage with the player's own session token, and its database role can reach nothing but its own tables. The migration URL (an admin role, direct connection on port 5432) is passed to `alembic` by hand and is not in `.env` — see the service README.
 
 ### First-time setup
 
@@ -461,7 +469,15 @@ Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` 
 4. **Supabase Auth** — Dashboard → Authentication → URL Configuration:
     - Site URL: `https://guitarpal.sloanwan.com`
     - Redirect URLs: add `https://guitarpal.sloanwan.com/**` (covers the password-reset return to `/auth/reset`).
-5. **Deploy key + GitHub secrets** — on the server:
+5. **Book service database** — in the Supabase SQL editor run `scripts/create-book-service-role.sql` (set a real password first) and `scripts/create-books-bucket.sql`, then apply the service's migrations from any machine that can reach the database:
+
+    ```bash
+    cd book-service && pip install -e .
+    BOOK_SERVICE_MIGRATION_DATABASE_URL='postgresql://postgres.<project-ref>:<db password>@aws-0-<region>.pooler.supabase.com:5432/postgres' alembic upgrade head
+    ```
+
+    That is the **session pooler** string from Dashboard → Settings → Database (port 5432, user `postgres.<ref>`). The direct `db.<project>.supabase.co` host is IPv6-only on the free tier and usually unreachable from a home network.
+6. **Deploy key + GitHub secrets** — on the server:
 
     ```bash
     ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/github-deploy
@@ -474,7 +490,7 @@ Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` 
 ### Day-to-day
 
 - **Deploy** — merge to `main`. CI runs; if it is green, the Deploy workflow rebuilds the container and smoke-tests the site. It can also be re-run by hand from the Actions tab.
-- **Logs** — `docker compose logs -f web`
+- **Logs** — `docker compose logs -f web` / `docker compose logs -f book-service`
 - **Roll back** — `git checkout <sha> && docker compose up --build -d`; the next push to `main` moves it forward again.
 - **Certificate** — renews automatically through `certbot.timer`; `sudo certbot renew --dry-run` checks the setup.
 - **Change a `NEXT_PUBLIC_*` value** — edit `.env`, then `docker compose up --build -d` (the value is baked at build time, a restart is not enough).

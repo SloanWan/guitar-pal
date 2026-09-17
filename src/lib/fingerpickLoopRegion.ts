@@ -103,3 +103,52 @@ export function timelineOffset(
 ): number {
 	return computeLoopOffset(passIndex, passLength(bounds), loopGapSeconds) + toPassTime(t, bounds);
 }
+
+/**
+ * The expanded measures a selection of rendered measures should loop.
+ *
+ * `originMeasureIndices[i]` is the rendered measure that expanded measure `i`
+ * plays. A repeat makes a rendered measure appear more than once, so the
+ * selection is mapped to the first contiguous run of expanded measures that
+ * lies entirely inside it and holds both its ends: a section that contains a
+ * whole repeat plays the repeat; one that cuts into a repeat plays its first
+ * occurrence only. With no such run (nothing rendered, or the indices are
+ * stale) the ends map to their first occurrences.
+ */
+export function regionForSelection(
+	originMeasureIndices: readonly number[],
+	selection: { startMeasure: number; endMeasure: number },
+): LoopRegion {
+	const s = Math.min(selection.startMeasure, selection.endMeasure);
+	const e = Math.max(selection.startMeasure, selection.endMeasure);
+	const inside = (i: number) => {
+		const origin = originMeasureIndices[i];
+		return origin >= s && origin <= e;
+	};
+	let i = 0;
+	while (i < originMeasureIndices.length) {
+		if (!inside(i)) {
+			i++;
+			continue;
+		}
+		const runStart = i;
+		while (i < originMeasureIndices.length && inside(i)) i++;
+		const runEnd = i - 1;
+		let first = -1;
+		let last = -1;
+		for (let j = runStart; j <= runEnd; j++) {
+			if (first === -1 && originMeasureIndices[j] === s) first = j;
+			if (originMeasureIndices[j] === e) last = j;
+		}
+		if (first !== -1 && last !== -1 && last >= first) {
+			return { startMeasure: first, endMeasure: last };
+		}
+	}
+	const firstOf = (m: number) => {
+		const idx = originMeasureIndices.indexOf(m);
+		return idx === -1 ? m : idx;
+	};
+	const a = firstOf(s);
+	const b = firstOf(e);
+	return { startMeasure: Math.min(a, b), endMeasure: Math.max(a, b) };
+}

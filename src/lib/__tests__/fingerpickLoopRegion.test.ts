@@ -6,6 +6,7 @@ import {
 	locateInPass,
 	passLength,
 	regionBounds,
+	regionForSelection,
 	timelineOffset,
 	toPassTime,
 	wholePattern,
@@ -145,5 +146,51 @@ describe("locateInPass / timelineOffset", () => {
 	});
 	it("copes with an empty pass instead of dividing by zero", () => {
 		expect(locateInPass(3, { start: 2, end: 2 }, 0)).toEqual({ passIndex: 0, elapsed: 5 });
+	});
+});
+
+describe("regionForSelection", () => {
+	// Rendered measures 0..3 with measures 1–2 repeated: 0 1 2 1 2 3.
+	const origins = [0, 1, 2, 1, 2, 3];
+	it("is the identity without repeats", () => {
+		expect(regionForSelection([0, 1, 2, 3], { startMeasure: 1, endMeasure: 2 })).toEqual({
+			startMeasure: 1,
+			endMeasure: 2,
+		});
+	});
+	it("plays the repeat when the section contains it", () => {
+		expect(regionForSelection(origins, { startMeasure: 1, endMeasure: 2 })).toEqual({
+			startMeasure: 1,
+			endMeasure: 4,
+		});
+	});
+	it("stops before the repeat when the section only reaches into it", () => {
+		expect(regionForSelection(origins, { startMeasure: 0, endMeasure: 1 })).toEqual({
+			startMeasure: 0,
+			endMeasure: 1,
+		});
+	});
+	it("uses the occurrence that reaches the section's end", () => {
+		// Measure 2 then 3 only run together after the repeat: expanded 4..5.
+		expect(regionForSelection(origins, { startMeasure: 2, endMeasure: 3 })).toEqual({
+			startMeasure: 4,
+			endMeasure: 5,
+		});
+	});
+	it("plays a single measure's first occurrence", () => {
+		expect(regionForSelection(origins, { startMeasure: 1, endMeasure: 1 })).toEqual({
+			startMeasure: 1,
+			endMeasure: 1,
+		});
+	});
+	it("accepts a reversed selection and falls back to first occurrences without a run", () => {
+		expect(regionForSelection(origins, { startMeasure: 2, endMeasure: 1 })).toEqual({
+			startMeasure: 1,
+			endMeasure: 4,
+		});
+		expect(regionForSelection([], { startMeasure: 2, endMeasure: 3 })).toEqual({
+			startMeasure: 2,
+			endMeasure: 3,
+		});
 	});
 });

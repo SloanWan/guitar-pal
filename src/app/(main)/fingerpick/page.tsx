@@ -46,6 +46,7 @@ import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/Cho
 import ChordViewToggle from "@/components/strum/ChordViewToggle";
 import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
 import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
+import { regionForSelection } from "@/lib/fingerpickLoopRegion";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import {
 	SquareMenu,
@@ -251,6 +252,7 @@ export default function FingerpickPage() {
 		applyBpmChange,
 		applyLoopGapChange,
 		seekToNote,
+		setLoopRegion,
 	} = useFingerpickAudioEngine();
 	const {
 		bpm,
@@ -261,6 +263,23 @@ export default function FingerpickPage() {
 		handleSliderPointerUp,
 		handleTapTempo,
 	} = useTempo({ initialBpm: selectedPattern.bpm, isPlaying, pause, resume, applyBpmChange });
+	// The chosen section loops in the engine: its rendered measures mapped onto
+	// the expanded timeline (a repeat inside the section plays). No section, or
+	// section mode off, and the whole pattern loops again. The engine's setter
+	// is held in a ref — it is recreated every render — so the effect follows
+	// only the selection.
+	const sectionRange = sectionMode ? section.range : null;
+	const setLoopRegionRef = useRef(setLoopRegion);
+	useEffect(() => {
+		setLoopRegionRef.current = setLoopRegion;
+	});
+	useEffect(() => {
+		setLoopRegionRef.current(
+			sectionRange ? regionForSelection(expanded.originMeasureIndices, sectionRange) : null,
+		);
+	}, [sectionRange, expanded]);
+	// Where Stop puts the playhead: the section's first measure while one is chosen.
+	const restartMeasure = sectionRange?.startMeasure ?? 0;
 
 	// ── Cursor / scroll ─────────────────────────────────────────────────────
 	// Greedy row layout driven by content width; guard: render nothing until the
@@ -400,7 +419,7 @@ export default function FingerpickPage() {
 	function handleStop() {
 		stop();
 		clearPendingSeek();
-		resetCursor();
+		resetCursor(restartMeasure);
 	}
 
 	function handlePlayPause() {

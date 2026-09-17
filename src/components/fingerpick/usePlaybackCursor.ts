@@ -46,8 +46,11 @@ export interface PlaybackCursor {
 	 * listener tell auto-scroll from the player scrolling.
 	 */
 	isAutoScrollingRef: React.RefObject<boolean>;
-	/** Scroll the viewer to the top and put the overlays back on the first note. */
-	resetCursor: () => void;
+	/**
+	 * Put the overlays back on a measure's first note (the pattern's first by
+	 * default; a loop region's first when one is playing).
+	 */
+	resetCursor: (measureIndex?: number) => void;
 	/**
 	 * Snap the overlays directly to a note element. Used on seek (a discrete
 	 * user-initiated jump) — bypasses the exponential smoothing.
@@ -59,31 +62,33 @@ export interface PlaybackCursor {
 	toExpandedMeasureIndex: (measureIndex: number) => number;
 }
 
-// Position both overlays at the pattern's start. The pattern may open with
-// leading silence: empty slots render as zero-width GhostNotes that emit NO SVG
-// element, so slot 0 can be absent. Fall back to the first note element that
-// actually exists for vertical positioning, and park the cursor at the
-// measure's left edge (pattern start) so playback drifts rightward from there
-// instead of snapping. Returns the cursor x, or null while the stave DOM is not
-// there yet (TabStaveRow renders asynchronously via ResizeObserver + rAF).
-function placeAtPatternStart(
+// Position both overlays at a measure's start (the pattern's start by default).
+// The measure may open with silence: empty slots render as zero-width
+// GhostNotes that emit NO SVG element, so slot 0 can be absent. Fall back to
+// the first note element that actually exists for vertical positioning, and
+// park the cursor at the measure's left edge so playback drifts rightward from
+// there instead of snapping. Returns the cursor x, or null while the stave DOM
+// is not there yet (TabStaveRow renders asynchronously via ResizeObserver + rAF).
+function placeAtMeasureStart(
 	container: HTMLDivElement,
 	playhead: HTMLDivElement,
 	measureHL: HTMLDivElement | null,
+	measureIndex: number,
 ): number | null {
 	const slot0El = container.querySelector<SVGElement>(
-		'[data-measure-index="0"][data-slot-index="0"]',
+		`[data-measure-index="${measureIndex}"][data-slot-index="0"]`,
 	);
 	const anchorEl =
-		slot0El ?? container.querySelector<SVGElement>('[data-measure-index="0"][data-slot-index]');
+		slot0El ??
+		container.querySelector<SVGElement>(`[data-measure-index="${measureIndex}"][data-slot-index]`);
 	const svgEl = anchorEl?.closest("svg");
-	const stavesvg = container.querySelector<SVGElement>("svg[data-stave-0-x]");
+	const stavesvg = container.querySelector<SVGElement>(`svg[data-stave-${measureIndex}-x]`);
 	if (!anchorEl || !svgEl || !stavesvg) return null;
 	const containerRect = container.getBoundingClientRect();
 	const svgRect = svgEl.getBoundingClientRect();
 	const staveSvgRect = stavesvg.getBoundingClientRect();
-	const sx = parseFloat(stavesvg.getAttribute("data-stave-0-x") ?? "0");
-	const sw = parseFloat(stavesvg.getAttribute("data-stave-0-w") ?? "0");
+	const sx = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-x`) ?? "0");
+	const sw = parseFloat(stavesvg.getAttribute(`data-stave-${measureIndex}-w`) ?? "0");
 	// x0 = slot 0's note center when it exists; otherwise the measure's left
 	// edge (matches the rest-path's snapX so the drift begins seamlessly).
 	let x0: number;
@@ -157,9 +162,14 @@ export function usePlaybackCursor({
 	// True while the RAF loop's scrollIntoView is in flight; suppresses the
 	// scroll listener so auto-scroll never triggers the hide behaviour.
 	const isAutoScrollingRef = useRef(false);
-	// Incremented by resetCursor; triggers the cursor-reset effect below.
+	// Incremented by resetCursor; triggers the cursor-reset effect below, which
+	// places the overlays on resetMeasureRef's first note.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
-	const resetCursor = useCallback(() => setCursorResetTick((t) => t + 1), []);
+	const resetMeasureRef = useRef(0);
+	const resetCursor = useCallback((measureIndex: number = 0) => {
+		resetMeasureRef.current = measureIndex;
+		setCursorResetTick((t) => t + 1);
+	}, []);
 
 	// Mirror the audio engine's event list so the RAF loop has per-note timestamps
 	// for interpolation. Recomputed whenever BPM or pattern changes.
@@ -193,7 +203,7 @@ export function usePlaybackCursor({
 				rafId = requestAnimationFrame(tryInitialPosition);
 				return;
 			}
-			if (placeAtPatternStart(container, playhead, measureHL) === null) {
+			if (placeAtMeasureStart(container, playhead, measureHL, 0) === null) {
 				rafId = requestAnimationFrame(tryInitialPosition);
 				return;
 			}
@@ -205,8 +215,8 @@ export function usePlaybackCursor({
 	}, [tabViewerRef]);
 
 	// When Stop is pressed, cursorResetTick increments and this effect re-runs the
-	// same rAF retry loop used on mount — scroll container to top first so the
-	// cursor lands in the visible area, then reposition to measure 0 / slot 0.
+	// same rAF retry loop used on mount, repositioning to the requested measure's
+	// slot 0 (the pattern's first measure, or a loop region's).
 	// cursorResetTick starts at 0 (mount); the guard skips the initial run so the
 	// mount effect handles first positioning without a double-trigger.
 	useEffect(() => {
@@ -220,7 +230,7 @@ export function usePlaybackCursor({
 				rafId = requestAnimationFrame(resetToInitial);
 				return;
 			}
-			const x0 = placeAtPatternStart(container, playhead, measureHL);
+			const x0 = placeAtMeasureStart(container, playhead, measureHL, resetMeasureRef.current);
 			if (x0 === null) {
 				rafId = requestAnimationFrame(resetToInitial);
 				return;

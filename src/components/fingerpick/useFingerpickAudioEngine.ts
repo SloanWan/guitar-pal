@@ -732,7 +732,12 @@ export function useFingerpickAudioEngine() {
 
 		const bounds = boundsRef.current;
 		const totalElapsed = ctxRef.current.currentTime - startTimeRef.current;
-		const { passIndex, elapsed } = locateInPass(totalElapsed, bounds, loopGapRef.current);
+		const located = locateInPass(totalElapsed, bounds, loopGapRef.current);
+		const passIndex = located.passIndex;
+		// During a loop gap the pass has run out: hold the position at the pass's
+		// last instant rather than letting it read on into the measures after a
+		// loop region. (For the whole pattern that instant is the pattern's end.)
+		const elapsed = Math.min(located.elapsed, Math.max(bounds.start, bounds.end - 1e-6));
 
 		// Before the first note of a pass there is no event to stand on, but the
 		// pass has begun: report its opening slot so the cursor moves from the

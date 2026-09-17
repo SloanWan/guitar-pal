@@ -3,6 +3,7 @@ import {
 	IDLE_MS,
 	MAX_STORED_MESSAGES,
 	STORAGE_KEY,
+	storageKeyFor,
 	isIdle,
 	readConversation,
 	writeConversation,
@@ -68,5 +69,16 @@ describe("conversation storage", () => {
 		expect(readConversation(T0)).toEqual([msg(0)]);
 		sessionStorage.setItem(STORAGE_KEY, "{not json");
 		expect(readConversation(T0)).toEqual([]);
+	});
+
+	it("keeps the strum and tab transcripts apart", () => {
+		writeConversation([msg(0)], T0, "strum");
+		writeConversation([msg(1), msg(2)], T0, "tab");
+		expect(readConversation(T0, "strum")).toEqual([msg(0)]);
+		expect(readConversation(T0, "tab")).toEqual([msg(1), msg(2)]);
+		expect(storageKeyFor("strum")).toBe(STORAGE_KEY);
+		expect(storageKeyFor("tab")).not.toBe(STORAGE_KEY);
+		writeConversation([], T0, "tab");
+		expect(readConversation(T0, "strum")).toEqual([msg(0)]);
 	});
 });

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
@@ -19,14 +18,16 @@ import { createClient } from "@/lib/supabase";
 /**
  * Drives one assistant conversation.
  *
- * The conversation's state lives here; deciding a turn lives in
- * `resolveAssistantTurn` and `resolveTabTurn`, which read the message by rules
- * and never reach for a model — so every answer is one the app can stand
- * behind, and that can be asserted rather than promised.
+ * One assistant at a time. The hook is given its domain and is that
+ * assistant for as long as it is mounted: the strum assistant reads with
+ * `resolveAssistantTurn`, the tab assistant with `resolveTabTurn`, each on
+ * its own transcript. Both read the message by rules and never reach for a
+ * model — so every answer is one the app can stand behind, and that can be
+ * asserted rather than promised.
  *
- * Which of the two answers is, for now, the page: on the fingerpick page the
- * turn is a tab turn, everywhere else a strum turn. One line, deliberately
- * crude, and the thing #191's triage replaces.
+ * Which one a page gets is, for now, the page itself: the fingerpick page has
+ * the tab assistant, every other page the strum one. That is the whole of the
+ * triage today, deliberately, and the thing #191 replaces with a real one.
  */
 
 const TAB_PATH = "/fingerpick";
@@ -72,14 +73,12 @@ function newId(): string {
 		: `m${Date.now()}${Math.random()}`;
 }
 
-export function useAssistant() {
-	const domain = domainForPath(usePathname());
-
+export function useAssistant(domain: AssistantDomain) {
 	// Read once, lazily. Safe to differ between server and client: nothing that
 	// renders the transcript is mounted until the popover opens, so the markup
 	// React hydrates against does not depend on this.
 	const [messages, setMessages] = useState<AssistantMessage[]>(() =>
-		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now()),
+		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now(), domain),
 	);
 	const [pending, setPending] = useState(false);
 
@@ -160,11 +159,11 @@ export function useAssistant() {
 	useEffect(() => {
 		const now = Date.now();
 		touchedAtRef.current = now;
-		writeConversation(messages, now);
+		writeConversation(messages, now, domain);
 		if (messages.length === 0) return;
 		const timer = setTimeout(reset, IDLE_MS);
 		return () => clearTimeout(timer);
-	}, [messages, reset]);
+	}, [messages, reset, domain]);
 
 	/**
 	 * For the moment the panel opens: a timer that fired late (a laptop asleep,

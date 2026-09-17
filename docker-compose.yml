@@ -8,7 +8,21 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     env_file: .env
+    environment:
+      # Reached over the compose network; never published on the host.
+      BOOK_SERVICE_URL: http://book-service:8000
     # Loopback only: Nginx on the host is the public entry point.
     ports:
       - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - book-service
+
+  book-service:
+    build:
+      context: ./book-service
+    # The same .env: it reads NEXT_PUBLIC_SUPABASE_URL for the JWT issuer and
+    # JWKS, plus SUPABASE_JWT_SECRET (legacy projects only) and
+    # BOOK_SERVICE_DATABASE_URL. No ports — only `web` talks to it.
+    env_file: .env
     restart: unless-stopped

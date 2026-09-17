@@ -1,0 +1,40 @@
+from functools import lru_cache
+
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """
+    Everything the service reads from the environment.
+
+    The Supabase URL is accepted under the Next.js name too, so the one server
+    `.env` that docker-compose loads feeds both containers without a duplicate
+    line that can drift.
+    """
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    supabase_url: str = Field(
+        validation_alias=AliasChoices("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
+    )
+    # Legacy projects sign session JWTs with a shared HS256 secret. Newer ones
+    # publish asymmetric keys at /auth/v1/.well-known/jwks.json, in which case
+    # this stays unset and JWKS is the only path.
+    supabase_jwt_secret: str | None = Field(default=None, validation_alias="SUPABASE_JWT_SECRET")
+    # Connection for the restricted `book_service` role. Optional so the process
+    # can boot (and answer /health) on a box that has not been wired to Postgres.
+    database_url: str | None = Field(default=None, validation_alias="BOOK_SERVICE_DATABASE_URL")
+
+    @property
+    def jwt_issuer(self) -> str:
+        return f"{self.supabase_url.rstrip('/')}/auth/v1"
+
+    @property
+    def jwks_url(self) -> str:
+        return f"{self.jwt_issuer}/.well-known/jwks.json"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()  # type: ignore[call-arg]  # pydantic-settings fills the fields from env

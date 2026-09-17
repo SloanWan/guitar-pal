@@ -17,10 +17,11 @@ import { DurationIcon } from "./fingerpickEditorShared";
 // Upper bound for the repeat play-count stepper (kept well under the lib's hard cap).
 const REPEAT_TIMES_MAX = 16;
 
-// The "All" row's fills. The eighth-triplet fill (12 in 4/4, 9 in 3/4) is a
-// simple-meter thing: a compound beat already divides in three, so it is not
-// offered there.
-const PRESET_DURATIONS: readonly Duration[] = ["quarter", "eighth", "sixteenth", "32nd"];
+// The "All" row's fills, by meter. A compound bar's natural fills are its
+// dotted beats, eighths and sixteenths (2 / 6 / 12 in 6/8): a quarter is not a
+// beat there, and its beat already divides in three, so the eighth-triplet
+// fill (12 in 4/4, 9 in 3/4) is a simple-meter thing.
+const COMPOUND_METER_PRESET_DURATIONS: readonly Duration[] = ["dotted-quarter", "eighth", "sixteenth"];
 const SIMPLE_METER_PRESET_DURATIONS: readonly Duration[] = [
 	"quarter",
 	"eighth",
@@ -153,7 +154,7 @@ export default function FingerpickEditorMeasureFooter({
 					All
 				</span>
 				{(isCompound(working.timeSignature)
-					? PRESET_DURATIONS
+					? COMPOUND_METER_PRESET_DURATIONS
 					: SIMPLE_METER_PRESET_DURATIONS
 				).map((d) => (
 					<button

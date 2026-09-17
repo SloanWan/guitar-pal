@@ -6,7 +6,7 @@ import {
 	changeTimeSignature,
 	type TimeSignatureChange,
 } from "@/lib/fingerpickEdit";
-import { meterLabel, metersEqual } from "@/lib/strumMeter";
+import { isCompound, meterLabel, metersEqual } from "@/lib/strumMeter";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import type { CommitPattern } from "./useEditHistory";
 
@@ -16,6 +16,9 @@ export const MAX_BPM = 220;
 export interface FingerpickEditorMetaFieldsProps {
 	working: FingerpickPattern;
 	commit: CommitPattern;
+	/** Compound meters only: count the eighths 1–6 under the grid instead of "1 + a 2 + a". */
+	countEighths: boolean;
+	onCountEighthsChange: (on: boolean) => void;
 }
 
 // The metadata bar pinned above the measure grid: name, BPM, capo, time
@@ -24,6 +27,8 @@ export interface FingerpickEditorMetaFieldsProps {
 export default function FingerpickEditorMetaFields({
 	working,
 	commit,
+	countEighths,
+	onCountEighthsChange,
 }: FingerpickEditorMetaFieldsProps) {
 	const nameValid = working.name.trim().length > 0;
 	// A meter change that would drop notes waits here for the player to choose
@@ -111,6 +116,39 @@ export default function FingerpickEditorMetaFields({
 					))}
 				</select>
 			</div>
+			{isCompound(working.timeSignature) && (
+				<div className="flex flex-col gap-1 shrink-0">
+					<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+						Count
+					</label>
+					{/* A device-wide preference, not part of the pattern: the two real
+					    beats, or the six eighths a beginner is often taught to count. */}
+					<div role="radiogroup" aria-label="How to count the beats" className="flex">
+						{(
+							[
+								[false, "1 + a", "Count the two dotted-quarter beats"],
+								[true, "1–6", "Count the eighths"],
+							] as const
+						).map(([on, label, title]) => (
+							<button
+								key={label}
+								type="button"
+								role="radio"
+								aria-checked={countEighths === on}
+								title={title}
+								onClick={() => onCountEighthsChange(on)}
+								className={`h-9.5 px-2.5 border font-mono text-xs transition-colors first:border-r-0 ${
+									countEighths === on
+										? "border-denim bg-denim-tint text-denim"
+										: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+								}`}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				</div>
+			)}
 			<div className="flex flex-col gap-1 min-w-40 flex-[2]">
 				<label className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
 					Description

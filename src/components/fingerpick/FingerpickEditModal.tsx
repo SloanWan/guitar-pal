@@ -69,6 +69,7 @@ import type { UserChordVoicing } from "@/lib/userChordVoicings";
 import { parseTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
 import { chordShapeToVoicing } from "@/lib/chordShape";
 import { useChordVoicings } from "./useChordVoicings";
+import { useFingerpickPrefs } from "./useFingerpickPrefs";
 import { useEditHistory } from "./useEditHistory";
 import FingerpickEditorMetaFields, { MAX_BPM, MIN_BPM } from "./FingerpickEditorMetaFields";
 import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
@@ -219,6 +220,9 @@ export default function FingerpickEditModal({
 		[working.measures],
 	);
 	const voicingsFor = useChordVoicings(chordRefs, userVoicings);
+	// How a compound meter's beats are labelled under the grid — a device
+	// preference, so it is not part of the pattern or its undo history.
+	const { countEighths, setCountEighths } = useFingerpickPrefs();
 	// What each string plays in the shape under every slot (null where no chord
 	// is in effect or its shapes are not here yet), for the hover hints and the
 	// column fill. One lookup per slot from the cache; nothing is fetched here.
@@ -751,7 +755,12 @@ export default function FingerpickEditModal({
 					</div>
 				</div>
 
-				<FingerpickEditorMetaFields working={working} commit={commit} />
+				<FingerpickEditorMetaFields
+					working={working}
+					commit={commit}
+					countEighths={countEighths}
+					onCountEighthsChange={setCountEighths}
+				/>
 
 				{/* ── Grid ──────────────────────────────────────────────────────── */}
 				{/* sm: 1/row, md: 2/row. At lg+ the column count tracks the measure
@@ -773,6 +782,7 @@ export default function FingerpickEditModal({
 							const beatLabels = computeBeatLabels(
 								measure.slots,
 								working.timeSignature,
+								countEighths ? "eighths" : "beats",
 							);
 							const beatGroups = computeBeatGroups(
 								measure.slots,

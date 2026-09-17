@@ -524,6 +524,15 @@ describe("computeBeatLabels", () => {
 		]);
 	});
 
+	it("counts a compound meter's eighths 1–6 in the eighths style, and ignores the style elsewhere", () => {
+		const eighths = slotsOf(Array<Duration>(6).fill("eighth"));
+		expect(computeBeatLabels(eighths, [6, 8], "eighths")).toEqual(["1", "2", "3", "4", "5", "6"]);
+		expect(computeBeatLabels(slotsOf(["eighth", "sixteenth", "sixteenth"]), [6, 8], "eighths")).toEqual(["1", "2", "+"]);
+		expect(computeBeatLabels(slotsOf(["dotted-quarter", "dotted-quarter"]), [6, 8], "eighths")).toEqual(["1", "4"]);
+		const quarters = slotsOf(["quarter", "quarter", "quarter", "quarter"]);
+		expect(computeBeatLabels(quarters, [4, 4], "eighths")).toEqual(["1", "2", "3", "4"]);
+	});
+
 	it("subdivides a compound beat's sixteenths with ta, and a duplet as 1 +", () => {
 		const sixteenths = slotsOf(Array<Duration>(6).fill("sixteenth"));
 		expect(computeBeatLabels(sixteenths, [6, 8])).toEqual(["1", "ta", "+", "ta", "a", "ta"]);

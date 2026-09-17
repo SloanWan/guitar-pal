@@ -13,6 +13,9 @@ const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
 const OFF_SHAPE_KEY = "fingerpickOffShape";
 // Auto-scroll: how fast the tab creeps upward while reading along, in px/s.
 const SCROLL_SPEED_KEY = "fingerpickScrollSpeed";
+// Editor beat labels in a compound meter: the two real beats ("1 + a 2 + a",
+// the default) or the six eighths ("1 2 3 4 5 6"), a teaching aid.
+const COUNT_EIGHTHS_KEY = "fingerpickCountEighths";
 
 export const SCROLL_SPEED_MIN = 4;
 export const SCROLL_SPEED_MAX = 60;
@@ -70,6 +73,9 @@ export interface FingerpickPrefs {
 	setOffShapeOn: (on: boolean) => void;
 	scrollSpeed: number;
 	setScrollSpeed: (raw: number) => void;
+	/** Editor beat labels in 6/8 and 12/8: count the eighths 1–6 instead of "1 + a 2 + a". */
+	countEighths: boolean;
+	setCountEighths: (on: boolean) => void;
 }
 
 /**
@@ -82,17 +88,20 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 	const [chordShapeWidth, setChordShapeWidthState] = useState(CHORD_SHAPE_WIDTH_DEFAULT);
 	const [offShapeOn, setOffShapeOnState] = useState(true);
 	const [scrollSpeed, setScrollSpeedState] = useState(SCROLL_SPEED_DEFAULT);
+	const [countEighths, setCountEighthsState] = useState(false);
 
 	useEffect(() => {
 		let storedView: string | null = null;
 		let storedWidth: string | null = null;
 		let storedOffShape: string | null = null;
 		let storedSpeed: string | null = null;
+		let storedCountEighths: string | null = null;
 		try {
 			storedView = localStorage.getItem(CHORD_VIEW_KEY);
 			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
 			storedOffShape = localStorage.getItem(OFF_SHAPE_KEY);
 			storedSpeed = localStorage.getItem(SCROLL_SPEED_KEY);
+			storedCountEighths = localStorage.getItem(COUNT_EIGHTHS_KEY);
 		} catch {
 			// storage unavailable — the defaults it is
 		}
@@ -103,6 +112,7 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 			if (storedWidth !== null) setChordShapeWidthState(clampShapeWidth(Number(storedWidth)));
 			if (storedOffShape === "off") setOffShapeOnState(false);
 			if (storedSpeed !== null) setScrollSpeedState(clampScrollSpeed(Number(storedSpeed)));
+			if (storedCountEighths === "on") setCountEighthsState(true);
 		});
 	}, []);
 
@@ -124,6 +134,10 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 		setScrollSpeedState(speed);
 		writeItem(SCROLL_SPEED_KEY, String(speed));
 	}
+	function setCountEighths(on: boolean) {
+		setCountEighthsState(on);
+		writeItem(COUNT_EIGHTHS_KEY, on ? "on" : "off");
+	}
 
 	return {
 		chordView,
@@ -134,5 +148,7 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 		setOffShapeOn,
 		scrollSpeed,
 		setScrollSpeed,
+		countEighths,
+		setCountEighths,
 	};
 }

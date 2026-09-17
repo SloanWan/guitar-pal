@@ -484,14 +484,21 @@ function subdivisionSequence(subdivisions: number, beatLabel: string, compound: 
 // is labelled with its starting beat number and simply leaves the beats it
 // covers unlabelled.
 //
+// In a compound meter the "eighths" style counts the eighths 1–6 instead, the
+// way a beginner is often taught 6/8; a simple meter has only the one style.
+//
 // The returned array is always the same length as `slots` — exactly one label per
 // slot — so callers can render one label under each column.
+export type BeatLabelStyle = "beats" | "eighths";
+
 export function computeBeatLabels(
 	slots: BeatSlot[],
 	timeSignature: [number, number],
+	style: BeatLabelStyle = "beats",
 ): string[] {
-	const beat = beatTicks(timeSignature);
-	const compound = isCompound(timeSignature);
+	const countEighths = style === "eighths" && isCompound(timeSignature);
+	const beat = countEighths ? TICKS_PER_WHOLE / 8 : beatTicks(timeSignature);
+	const compound = countEighths ? false : isCompound(timeSignature);
 
 	const labels = new Array<string>(slots.length).fill("");
 

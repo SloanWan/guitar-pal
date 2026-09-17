@@ -8,6 +8,7 @@ import {
 	toggleMuted,
 } from "./fingerpickEdit";
 import { chordFretHints, chordSymbolLabel, effectiveChords } from "./fingerpickChords";
+import { isCompound } from "./strumMeter";
 import type { ChordRef } from "./strumPatterns";
 import type { ChordVoicing } from "./chordVoicingToVexChords";
 
@@ -22,18 +23,34 @@ export type PickSequenceParse =
 	| { ok: false; error: string };
 
 /**
- * The note values a sequence can be written in — plain ones only. The token
- * count picks the value: it must divide the measure evenly, and a count that
- * only fits with dots or triplets is refused rather than guessed.
+ * The note values a sequence can be written in, by meter. The token count picks
+ * the value: it must divide the measure evenly into one of these. A simple
+ * meter takes the plain values and the two triplets (twelve in 4/4 are
+ * eighth-triplets, nine in 3/4 too); a compound meter takes what its dotted
+ * beat divides into — two dotted quarters, six eighths, twelve sixteenths in
+ * 6/8 — and never a plain quarter, which would be a hemiola, or a triplet,
+ * which its beat already is. Anything else is refused rather than guessed.
  */
-const PLAIN_DURATIONS: readonly Duration[] = [
+const SIMPLE_METER_DURATIONS: readonly Duration[] = [
 	"whole",
 	"half",
 	"quarter",
 	"eighth",
+	"eighth-triplet",
+	"sixteenth",
+	"sixteenth-triplet",
+	"32nd",
+];
+
+const COMPOUND_METER_DURATIONS: readonly Duration[] = [
+	"dotted-quarter",
+	"eighth",
 	"sixteenth",
 	"32nd",
 ];
+
+/** Ticks a quarter-note triplet would weigh (three in a half note) — not a Duration yet. */
+const QUARTER_TRIPLET_TICKS = 16;
 
 /** Highest string number a token may name (1 = high e … 6 = low E). */
 const STRING_COUNT = 6;
@@ -86,15 +103,18 @@ export function parsePickSequence(
 	if (tokens.length === 0) return { ok: false, error: "Type string numbers, e.g. 3212." };
 
 	const capacity = measureCapacity(timeSignature);
-	const duration = PLAIN_DURATIONS.find(
-		(d) => slotDurationUnits(d) * tokens.length === capacity,
-	);
+	const candidates = isCompound(timeSignature) ? COMPOUND_METER_DURATIONS : SIMPLE_METER_DURATIONS;
+	const duration = candidates.find((d) => slotDurationUnits(d) * tokens.length === capacity);
 	if (!duration) {
 		const meter = `${timeSignature[0]}/${timeSignature[1]}`;
-		return {
-			ok: false,
-			error: `${tokens.length} note${tokens.length === 1 ? "" : "s"} don't fit a ${meter} measure evenly.`,
-		};
+		const count = `${tokens.length} note${tokens.length === 1 ? "" : "s"}`;
+		if (!isCompound(timeSignature) && capacity === QUARTER_TRIPLET_TICKS * tokens.length) {
+			return {
+				ok: false,
+				error: `${count} in ${meter} would be quarter-note triplets, which the editor doesn't have yet.`,
+			};
+		}
+		return { ok: false, error: `${count} don't fit a ${meter} measure evenly.` };
 	}
 	return { ok: true, tokens, duration };
 }

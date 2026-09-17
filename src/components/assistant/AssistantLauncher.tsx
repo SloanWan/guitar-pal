@@ -10,7 +10,8 @@ import { useAssistant } from "./useAssistant";
 import { HANDOFF_EVENT } from "@/lib/strumAssistant/handoff";
 
 /**
- * The topbar's rightmost control: opens the strum assistant over the page.
+ * The topbar's rightmost control: opens the assistant over the page — the strum
+ * assistant everywhere but the fingerpick page, where it is the tab assistant.
  *
  * A popover anchored to the topbar rather than a draggable window — dragging
  * buys nothing here and costs mobile layout, focus management and a z-index to
@@ -122,11 +123,12 @@ export default function AssistantLauncher() {
 		return () => window.removeEventListener(HANDOFF_EVENT, close);
 	}, [messages.length]);
 
+	const title = assistant.domain === "tab" ? "Tab assistant" : "Strum assistant";
 	const label = pending
-		? "Strum assistant — still writing"
+		? `${title} — still writing`
 		: unread
-			? "Strum assistant — a reply is waiting"
-			: "Open the strum assistant";
+			? `${title} — a reply is waiting`
+			: `Open the ${title.toLowerCase()}`;
 
 	return (
 		<Popover open={open} onOpenChange={setPanelOpen}>
@@ -169,7 +171,7 @@ export default function AssistantLauncher() {
 			>
 				<div className="flex items-center justify-between border-b border-line px-3 py-2">
 					<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-						Strum assistant
+						{title}
 					</span>
 					{devMisses > 0 && (
 						<button

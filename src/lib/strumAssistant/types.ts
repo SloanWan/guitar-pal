@@ -1,6 +1,12 @@
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 
 /**
+ * Which instrument a turn is about. One launcher, one panel, one transcript;
+ * the domain says which reader answered and which card the reply carries.
+ */
+export type AssistantDomain = "strum" | "tab";
+
+/**
  * What the assistant offers the user, before anything is written. Nothing here
  * reaches the database until the user confirms the preview — the model proposes,
  * the person disposes.

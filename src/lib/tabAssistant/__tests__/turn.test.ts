@@ -1,0 +1,85 @@
+import { describe, it, expect } from "vitest";
+import { resolveTabTurn } from "@/lib/tabAssistant/turn";
+import { suggestTab } from "@/lib/tabAssistant/suggest";
+import { readTabSentence } from "@/lib/tabAssistant/readTabSentence";
+import { BLANK } from "@/lib/strumAssistant/suggest";
+import { INDEX, voicingFor } from "./fixtures";
+
+const resolve = (text: string, uiLang: "en" | "zh" = "en") =>
+	resolveTabTurn({ text, index: INDEX, uiLang, voicings: async () => voicingFor });
+
+const TAB = [
+	"e|------0-------0-|",
+	"B|----1-------1---|",
+	"G|--0-------0-----|",
+	"D|----------------|",
+	"A|3-------3-------|",
+	"E|----------------|",
+].join("\n");
+
+describe("resolveTabTurn", () => {
+	it("answers a chord and an order with a proposal, in the player's language", async () => {
+		const en = await resolve("Am: 5 3 2 1 3 2 1 3");
+		expect(en.proposal?.pattern.measures).toHaveLength(1);
+		expect(en.proposal?.chords).toEqual([{ root: "A", suffix: "minor", voicingId: null }]);
+		expect(en.lang).toBe("en");
+		expect(en.templates).toBeUndefined();
+		const zh = await resolve("Am 5 3 2 1 三拍子");
+		expect(zh.lang).toBe("zh");
+		expect(zh.proposal?.pattern.timeSignature).toEqual([3, 4]);
+		expect(zh.text).toMatch(/[一-鿿]/);
+	});
+
+	it("answers a style word with the preset's bar over the chord", async () => {
+		const out = await resolve("travis picking in C");
+		expect(out.proposal?.name).toBe("Travis in C");
+		expect(out.proposal?.pattern.bpm).toBe(100);
+		expect(out.text).toMatch(/shipped pattern/);
+	});
+
+	it("answers a bare chord line with a default order, and says it is a guess", async () => {
+		const out = await resolve("C G Am F");
+		expect(out.proposal?.pattern.measures).toHaveLength(4);
+		expect(out.proposal?.warnings.map((w) => w.code)).toContain("ORDER_GUESSED");
+		expect(out.text).toMatch(/suggestion/);
+	});
+
+	it("answers a pasted tab through the import validator", async () => {
+		const out = await resolve(`name it blackbird\n${TAB}`);
+		expect(out.proposal?.name).toBe("blackbird");
+		expect(out.proposal?.pattern.measures[0].slots).toHaveLength(8);
+		expect(out.proposal?.chords).toEqual([]);
+		expect(out.text).toMatch(/spacing/);
+		const unnamed = await resolve(TAB);
+		expect(unnamed.proposal?.name).toBe("Pasted tab");
+	});
+
+	it("answers small talk before reading anything as a request", async () => {
+		const out = await resolve("thanks");
+		expect(out.proposal).toBeUndefined();
+		expect(out.text).not.toBe("");
+	});
+
+	it("offers sentences that would have worked when nothing read the message", async () => {
+		const out = await resolve("something gentle in Am for a rainy day");
+		expect(out.proposal).toBeUndefined();
+		expect(out.templates).toContain("Am: 5 3 2 1 3 2 1 3");
+		expect(out.templates).toContain("travis picking in Am");
+		expect(out.text).toMatch(/Am/);
+		expect(out.seen).toBeDefined();
+	});
+});
+
+describe("suggestTab", () => {
+	it("leaves blanks where nothing was read", () => {
+		const g = suggestTab(readTabSentence("hello there", INDEX), "en");
+		expect(g.templates[0]).toBe(`${BLANK}: 5 3 2 1 3 2 1 3`);
+		expect(g.templates).toContain("C G Am F");
+	});
+
+	it("fills in what was read, in Chinese too", () => {
+		const g = suggestTab(readTabSentence("给我 Em 温柔一点的", INDEX), "zh");
+		expect(g.templates).toContain("Em 三指法");
+		expect(g.text).toMatch(/Em/);
+	});
+});

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
@@ -8,8 +9,10 @@ import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
 import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
 import { recordMiss } from "@/lib/strumAssistant/missLog";
 import { uiLang, type Lang } from "@/lib/strumAssistant/lang";
-import type { AssistantProposal } from "@/lib/strumAssistant/types";
+import type { AssistantDomain, AssistantProposal } from "@/lib/strumAssistant/types";
 import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
+import { resolveTabTurn } from "@/lib/tabAssistant/turn";
+import type { TabProposal } from "@/lib/tabAssistant/types";
 import { IDLE_MS, isIdle, readConversation, writeConversation } from "@/lib/strumAssistant/conversation";
 import { createClient } from "@/lib/supabase";
 
@@ -17,16 +20,30 @@ import { createClient } from "@/lib/supabase";
  * Drives one assistant conversation.
  *
  * The conversation's state lives here; deciding a turn lives in
- * `resolveAssistantTurn`, which reads the message by rules and never reaches
- * for the network — so every answer is one the app can stand behind, and that
- * can be asserted rather than promised.
+ * `resolveAssistantTurn` and `resolveTabTurn`, which read the message by rules
+ * and never reach for a model — so every answer is one the app can stand
+ * behind, and that can be asserted rather than promised.
+ *
+ * Which of the two answers is, for now, the page: on the fingerpick page the
+ * turn is a tab turn, everywhere else a strum turn. One line, deliberately
+ * crude, and the thing #191's triage replaces.
  */
+
+const TAB_PATH = "/fingerpick";
+
+export function domainForPath(pathname: string | null): AssistantDomain {
+	return pathname === TAB_PATH ? "tab" : "strum";
+}
 
 export interface AssistantMessage {
 	id: string;
 	role: "user" | "assistant";
 	text: string;
+	/** Which assistant answered; a restored transcript renders the right card by it. Absent on older turns, which were all strum. */
+	domain?: AssistantDomain;
 	proposal?: AssistantProposal;
+	/** The tab assistant's offer: a whole pattern, for the fingerpick editor. */
+	tabProposal?: TabProposal;
 	/** An edit to an existing pattern, waiting on the player to confirm it. */
 	edit?: EditIntentReading;
 	/** Sentences offered when nothing read the message, with blanks to fill. */
@@ -56,6 +73,8 @@ function newId(): string {
 }
 
 export function useAssistant() {
+	const domain = domainForPath(usePathname());
+
 	// Read once, lazily. Safe to differ between server and client: nothing that
 	// renders the transcript is mounted until the popover opens, so the markup
 	// React hydrates against does not depend on this.
@@ -205,38 +224,49 @@ export function useAssistant() {
 			try {
 				const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
 				setIndex(index);
-				const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
 				// The reading is instant; the reply is not. A pause of the kind a
 				// person takes before answering — random, so it never reads as a
 				// timer — with the typing dots showing for it. The floor keeps the
-				// dots from flashing for a frame and vanishing.
-				await new Promise((done) =>
+				// dots from flashing for a frame and vanishing. A tab turn may also
+				// wait on the chord library for its shapes; the pause runs alongside.
+				const thinking = new Promise((done) =>
 					setTimeout(done, THINK_MIN_MS + Math.random() * (THINK_MAX_MS - THINK_MIN_MS)),
 				);
-				// A sentence nothing read is worth keeping: it is the next eval case,
-				// and the sentence picked after it is what the rules should have read.
-				if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
-				setMessages((prev) => [
-					...prev,
-					{
-						id: newId(),
-						role: "assistant",
+				const reply: AssistantMessage = { id: newId(), role: "assistant", text: "", domain };
+				if (domain === "tab") {
+					const outcome = await resolveTabTurn({ text, index, uiLang: uiLang() });
+					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
+					Object.assign(reply, {
+						text: outcome.text,
+						tabProposal: outcome.proposal,
+						templates: outcome.templates,
+						lang: outcome.lang,
+					});
+				} else {
+					const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
+					// A sentence nothing read is worth keeping: it is the next eval case,
+					// and the sentence picked after it is what the rules should have read.
+					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
+					Object.assign(reply, {
 						text: outcome.text,
 						proposal: outcome.proposal,
 						edit: outcome.edit,
 						templates: outcome.templates,
 						lang: outcome.lang,
 						...(outcome.failed ? { failed: true } : {}),
-					},
-				]);
+					});
+				}
+				await thinking;
+				setMessages((prev) => [...prev, reply]);
 			} finally {
 				setPending(false);
 			}
 		},
-		[chordIndex, loadPatterns, pending],
+		[chordIndex, domain, loadPatterns, pending],
 	);
 
 	return {
+		domain,
 		messages,
 		pending,
 		send,

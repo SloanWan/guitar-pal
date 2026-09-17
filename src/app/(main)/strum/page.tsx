@@ -49,7 +49,7 @@ import { loadVoicings } from "@/lib/chordVoicingCache";
 import {
 	HANDOFF_EVENT,
 	takeHandoff,
-	type AssistantHandoff,
+	type StrumHandoff,
 	type AttachHandoff,
 	type DeleteHandoff,
 	type RenameHandoff,
@@ -441,7 +441,7 @@ export default function StrumPage() {
 	 * to two different tables through the hooks this page already uses, so it
 	 * hands the words over and this saves them exactly as the editor does.
 	 */
-	function applyHandoff(handoff: AssistantHandoff) {
+	function applyHandoff(handoff: StrumHandoff) {
 		if (handoff.kind === "attach") return applyAttachHandoff(handoff);
 		if (handoff.kind === "rename") return applyRenameHandoff(handoff);
 		if (handoff.kind === "delete") return applyDeleteHandoff(handoff);

@@ -4,6 +4,12 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
+import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
+import {
+	HANDOFF_EVENT,
+	takeHandoff,
+	type FingerpickHandoff,
+} from "@/lib/strumAssistant/handoff";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
@@ -341,6 +347,25 @@ export default function FingerpickPage() {
 		document.body.classList.add("fingerpick-page");
 		return () => document.body.classList.remove("fingerpick-page");
 		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	// A tab made elsewhere — by the assistant, or an import — and handed to this
+	// page to open in its editor. Nothing is saved on arrival: the player checks
+	// it in the editor and saves it the way a hand-drawn pattern is saved. The
+	// assistant lives in the topbar, so the handoff usually lands with this page
+	// already on screen; the announcement covers that, the mount read the rest.
+	const [handoff, setHandoff] = useState<FingerpickHandoff | null>(null);
+	useEffect(() => {
+		function handleHandoff() {
+			const next = takeHandoff("fingerpick");
+			if (!next) return;
+			// Whatever id the stash carried, this is a new pattern of the player's:
+			// a fresh id keeps it from overwriting one they already have.
+			setHandoff({ ...next, pattern: { ...next.pattern, id: crypto.randomUUID() } });
+		}
+		handleHandoff();
+		window.addEventListener(HANDOFF_EVENT, handleHandoff);
+		return () => window.removeEventListener(HANDOFF_EVENT, handleHandoff);
 	}, []);
 
 	// Track the tab viewer's pixel width so the greedy layout can pack measures.
@@ -892,6 +917,22 @@ export default function FingerpickPage() {
 			</div>
 
 			<FingerpickMobileDrawer {...controls} controlsVisible={controlsVisible} />
+
+			{/* The library owns the editor for its own patterns; a handed-over tab
+			    gets its own instance so it can open without the library on screen. */}
+			<FingerpickEditModal
+				key={handoff?.pattern.id ?? "none"}
+				open={handoff !== null}
+				pattern={handoff?.pattern ?? null}
+				takenNames={patterns.map((p) => p.name)}
+				notice={{
+					title: "Check this pattern",
+					text: "Made from what you asked for — check the frets and the rhythm, then save it as your own.",
+					warnings: handoff?.warnings.map((w) => w.message),
+				}}
+				onClose={() => setHandoff(null)}
+				onSave={handleSaveCustom}
+			/>
 		</>
 	);
 }

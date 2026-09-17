@@ -1,6 +1,8 @@
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import { validateBars } from "@/lib/strumBars";
 import type { AssistantProposal } from "@/lib/strumAssistant/types";
+import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { validateFingerpickPattern, type ValidationIssue } from "@/lib/tabImport";
 
 /**
  * How a confirmed proposal reaches the strum page.
@@ -60,7 +62,31 @@ export interface DeleteHandoff {
 	patternName: string;
 }
 
-export type AssistantHandoff = PatternHandoff | AttachHandoff | RenameHandoff | DeleteHandoff;
+/**
+ * A tab the assistant made, for the fingerpick page to open in its editor.
+ *
+ * Not saved on arrival: a tab is frets on six strings and a rhythm, which the
+ * player reads in the editor rather than at a glance, so the page opens it
+ * there as a new pattern and the player saves it the way a hand-drawn one is
+ * saved. `warnings` is what the reader could not carry over (an unsupported
+ * technique, a truncated measure) and is shown above the editor.
+ */
+export interface FingerpickHandoff {
+	kind: "fingerpick";
+	pattern: FingerpickPattern;
+	warnings: ValidationIssue[];
+}
+
+export type StrumHandoff = PatternHandoff | AttachHandoff | RenameHandoff | DeleteHandoff;
+
+export type AssistantHandoff = StrumHandoff | FingerpickHandoff;
+
+/** Which page a handoff is for. The stash holds one at a time, of either. */
+export type HandoffDomain = "strum" | "fingerpick";
+
+function domainOf(kind: unknown): HandoffDomain {
+	return kind === "fingerpick" ? "fingerpick" : "strum";
+}
 
 export function patternHandoff(proposal: AssistantProposal): PatternHandoff {
 	return {
@@ -85,15 +111,21 @@ export function stashHandoff(handoff: AssistantHandoff): void {
 }
 
 /**
- * Reads and clears the pending handoff. Validated rather than trusted:
- * sessionStorage is writable by anything running on the origin, so this is an
- * untrusted input like any other.
+ * Reads and clears the pending handoff for one page. Validated rather than
+ * trusted: sessionStorage is writable by anything running on the origin, so
+ * this is an untrusted input like any other.
+ *
+ * Both pages listen for the announcement, and a fingerpick tab confirmed with
+ * the strum page on screen would otherwise be taken — and cleared — by the
+ * wrong one before the fingerpick page has mounted. So a page names its
+ * domain, and a handoff for the other domain is left in the stash untouched.
  */
-export function takeHandoff(): AssistantHandoff | null {
+export function takeHandoff(domain: "fingerpick"): FingerpickHandoff | null;
+export function takeHandoff(domain?: "strum"): StrumHandoff | null;
+export function takeHandoff(domain: HandoffDomain = "strum"): AssistantHandoff | null {
 	let raw: string | null = null;
 	try {
 		raw = sessionStorage.getItem(KEY);
-		sessionStorage.removeItem(KEY);
 	} catch {
 		return null;
 	}
@@ -103,11 +135,22 @@ export function takeHandoff(): AssistantHandoff | null {
 	try {
 		parsed = JSON.parse(raw);
 	} catch {
+		parsed = null;
+	}
+	const value =
+		typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+
+	// Someone else's: leave it for them. Anything unreadable is cleared along
+	// with our own, so a broken stash cannot sit there forever.
+	if (value !== null && domainOf(value.kind) !== domain) return null;
+	try {
+		sessionStorage.removeItem(KEY);
+	} catch {
 		return null;
 	}
-	if (typeof parsed !== "object" || parsed === null) return null;
+	if (value === null) return null;
 
-	const value = parsed as Record<string, unknown>;
+	if (value.kind === "fingerpick") return takeFingerpickHandoff(value);
 
 	if (value.kind === "rename" || value.kind === "delete") {
 		if (typeof value.patternId !== "string" || value.patternId === "") return null;
@@ -156,4 +199,28 @@ export function takeHandoff(): AssistantHandoff | null {
 		chords: value.chords as ChordRef[],
 		capo,
 	};
+}
+
+/**
+ * The fingerpick branch of `takeHandoff`. The pattern is run through the same
+ * validator a pasted or scanned tab goes through, so a stash that was edited
+ * by hand, or written by an older build, comes back repaired or not at all.
+ * Warnings stashed alongside it are kept only when they still look like
+ * warnings; the validator's own are appended to them.
+ */
+function takeFingerpickHandoff(value: Record<string, unknown>): FingerpickHandoff | null {
+	const { pattern, warnings } = validateFingerpickPattern(value.pattern);
+	if (pattern === null) return null;
+	const stashed = Array.isArray(value.warnings) ? value.warnings.filter(isValidationIssue) : [];
+	return { kind: "fingerpick", pattern, warnings: [...stashed, ...warnings] };
+}
+
+function isValidationIssue(value: unknown): value is ValidationIssue {
+	if (typeof value !== "object" || value === null) return false;
+	const issue = value as Record<string, unknown>;
+	return (
+		typeof issue.code === "string" &&
+		typeof issue.path === "string" &&
+		typeof issue.message === "string"
+	);
 }

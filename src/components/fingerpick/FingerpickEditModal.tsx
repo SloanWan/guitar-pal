@@ -15,6 +15,7 @@ import {
 	Undo2,
 	Redo2,
 	X as XIcon,
+	TriangleAlert,
 } from "lucide-react";
 import {
 	type FingerpickPattern,
@@ -102,8 +103,21 @@ export interface FingerpickEditModalProps {
 	pattern: FingerpickPattern | null; // null = new pattern from scratch
 	/** Names of every other pattern in the library; the save renames a clash to "Name (1)". */
 	takenNames?: readonly string[];
+	/**
+	 * Where the pattern came from, when it was not drawn here — the assistant,
+	 * an import. Shown as one line under the header, with whatever the reader
+	 * could not carry over, so the player knows to check before saving.
+	 */
+	notice?: EditorNotice;
 	onClose: () => void;
 	onSave: (pattern: FingerpickPattern) => void;
+}
+
+export interface EditorNotice {
+	/** The heading, in place of "Edit pattern" / "New pattern". */
+	title: string;
+	text: string;
+	warnings?: readonly string[];
 }
 
 
@@ -134,6 +148,7 @@ export default function FingerpickEditModal({
 	open,
 	pattern: initialPattern,
 	takenNames = [],
+	notice,
 	onClose,
 	onSave,
 }: FingerpickEditModalProps) {
@@ -709,7 +724,7 @@ export default function FingerpickEditModal({
 				{/* ── Header (fixed; only the grid between it and the footer scrolls) ── */}
 				<div className="shrink-0 z-55 flex items-center justify-between border-b border-line bg-popover px-4 py-3">
 					<h2 className="font-heading text-base font-medium text-ink">
-						{initialPattern ? "Edit pattern" : "New pattern"}
+						{notice?.title ?? (initialPattern ? "Edit pattern" : "New pattern")}
 					</h2>
 					<div className="flex items-center gap-1">
 						<button
@@ -757,6 +772,26 @@ export default function FingerpickEditModal({
 						)}
 					</div>
 				</div>
+
+				{notice && (
+					<div className="shrink-0 border-b border-line bg-denim-tint px-4 py-2 text-xs leading-snug text-ink-dim">
+						<p>{notice.text}</p>
+						{notice.warnings && notice.warnings.length > 0 && (
+							<ul className="mt-1">
+								{notice.warnings.map((line) => (
+									<li key={line} className="flex gap-2 py-0.5">
+										<TriangleAlert
+											className="mt-px size-3.5 shrink-0"
+											strokeWidth={1.5}
+											aria-hidden="true"
+										/>
+										<span>{line}</span>
+									</li>
+								))}
+							</ul>
+						)}
+					</div>
+				)}
 
 				<FingerpickEditorMetaFields
 					working={working}

@@ -22,6 +22,15 @@ const REPEAT_TIMES_MAX = 16;
 // beat there, and its beat already divides in three, so the eighth-triplet
 // fill (12 in 4/4, 9 in 3/4) is a simple-meter thing.
 const COMPOUND_METER_PRESET_DURATIONS: readonly Duration[] = ["dotted-quarter", "eighth", "sixteenth"];
+// An example the Pick field's own meter would accept: four or eight tokens in
+// 4/4, three in 3/4, six in 6/8 (see parsePickSequence).
+function pickPlaceholder(timeSignature: [number, number]): string {
+	if (isCompound(timeSignature)) return timeSignature[0] === 6 ? "e.g. 632123 or 6(32)" : "e.g. 632123632123";
+	if (timeSignature[0] === 3) return "e.g. 321 or 6(32)1";
+	if (timeSignature[0] === 2) return "e.g. 32 or 3212";
+	return "e.g. 3212 or 6(32)1(32)";
+}
+
 const SIMPLE_METER_PRESET_DURATIONS: readonly Duration[] = [
 	"quarter",
 	"eighth",
@@ -252,7 +261,7 @@ export default function FingerpickEditorMeasureFooter({
 						e.stopPropagation();
 						requestPickSequence();
 					}}
-					placeholder="e.g. 3212 or 6(32)1(32)"
+					placeholder={pickPlaceholder(working.timeSignature)}
 					aria-label={`Right-hand sequence for measure ${measureIndex + 1}`}
 					title="String numbers, 1 = high e … 6 = low E. Parentheses pluck strings together; 0 or - is a rest. Enter writes the measure, fretted from its chord."
 					className="h-7 min-w-0 flex-1 border border-line-strong bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:border-denim"

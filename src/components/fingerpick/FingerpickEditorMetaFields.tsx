@@ -8,13 +8,11 @@ import {
 	changeTimeSignature,
 	type TimeSignatureChange,
 } from "@/lib/fingerpickEdit";
+import { bpmRangeForMeter, clampBpmToMeter } from "@/lib/strumBars";
 import { isCompound, meterLabel, metersEqual } from "@/lib/strumMeter";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import { uniquePatternName } from "@/lib/uniquePatternName";
 import type { CommitPattern } from "./useEditHistory";
-
-export const MIN_BPM = 40;
-export const MAX_BPM = 220;
 
 export interface FingerpickEditorMetaFieldsProps {
 	working: FingerpickPattern;
@@ -54,11 +52,13 @@ export default function FingerpickEditorMetaFields({
 	}
 
 	// The lib rescales the tempo across a simple ↔ compound change (BPM counts
-	// the beat); the editor's own range is applied here.
+	// the beat); the meter's own range is applied here — a compound meter tops
+	// out lower, as it does for strum patterns.
 	function applyMeter(pattern: FingerpickPattern) {
-		commit(() => ({ ...pattern, bpm: Math.min(MAX_BPM, Math.max(MIN_BPM, pattern.bpm)) }));
+		commit(() => ({ ...pattern, bpm: clampBpmToMeter(pattern.bpm, pattern.timeSignature) }));
 		setMeterConfirm(null);
 	}
+	const bpmRange = bpmRangeForMeter(working.timeSignature);
 
 	return (
 		<div className="shrink-0 flex flex-col gap-2 px-4">
@@ -84,8 +84,8 @@ export default function FingerpickEditorMetaFields({
 				</label>
 				<input
 					type="number"
-					min={MIN_BPM}
-					max={MAX_BPM}
+					min={bpmRange.min}
+					max={bpmRange.max}
 					value={working.bpm}
 					onChange={(e) => commit((p) => ({ ...p, bpm: Number(e.target.value) || 0 }))}
 					className="w-full border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"

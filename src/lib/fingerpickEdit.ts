@@ -8,7 +8,7 @@ import type {
 	Technique,
 } from "./fingerpickTypes";
 import { rescaleBpmForMeter } from "./strumBars";
-import { isCompound, type Meter } from "./strumMeter";
+import { isCompound, SUPPORTED_METERS, type Meter } from "./strumMeter";
 import { normalizeCapo } from "./strumProgressions";
 
 // ── Cell / target identity ───────────────────────────────────────────────────
@@ -156,14 +156,10 @@ export const NOTE_LADDER: Duration[] = [
 // here that needs "the beat" reads it from `beatTicks`; nothing reads the
 // denominator on its own.
 
-/** The time signatures the fingerpick editor offers, in menu order. */
-export const FINGERPICK_TIME_SIGNATURES: readonly [number, number][] = [
-	[4, 4],
-	[3, 4],
-	[2, 4],
-	[6, 8],
-	[12, 8],
-];
+/** The time signatures the fingerpick editor offers, in menu order — strum's list, as mutable tuples. */
+export const FINGERPICK_TIME_SIGNATURES: readonly [number, number][] = SUPPORTED_METERS.map(
+	(m) => [m[0], m[1]] as [number, number],
+);
 
 /** Ticks in one beat: a quarter (24) in a simple meter, a dotted quarter (36) in a compound one. */
 export function beatTicks(timeSignature: Meter): number {
@@ -765,8 +761,8 @@ export function setStroke(
 	};
 }
 
-// Insert a fresh quarter-note slot before/after each targeted slot. Nothing is
-// inserted inside a triplet group: a target in one puts the new slot before the
+// Insert a fresh slot of the meter's default value (a quarter, an eighth in
+// 6/8) before/after each targeted slot. Nothing is inserted inside a triplet group: a target in one puts the new slot before the
 // group's first or after its last member, once per group however many of its
 // members were targeted.
 export function insertSlots(
@@ -775,6 +771,7 @@ export function insertSlots(
 	position: "before" | "after",
 ): FingerpickPattern {
 	const grouped = groupTargetsByMeasure(targets);
+	const fill = defaultFillDuration(pattern.timeSignature);
 	return {
 		...pattern,
 		measures: pattern.measures.map((measure, mi) => {
@@ -788,9 +785,9 @@ export function insertSlots(
 			}
 			const newSlots: BeatSlot[] = [];
 			measure.slots.forEach((slot, si) => {
-				if (anchors.has(si) && position === "before") newSlots.push(makeEmptySlot());
+				if (anchors.has(si) && position === "before") newSlots.push(makeEmptySlot(fill));
 				newSlots.push(slot);
-				if (anchors.has(si) && position === "after") newSlots.push(makeEmptySlot());
+				if (anchors.has(si) && position === "after") newSlots.push(makeEmptySlot(fill));
 			});
 			return { ...measure, slots: newSlots };
 		}),
@@ -835,7 +832,7 @@ export function duplicateSlots(
 
 // Delete every targeted slot; a target in a triplet group deletes the whole
 // group. A measure never drops below one slot — if a delete would empty it, a
-// single fresh quarter slot is left behind.
+// single fresh slot of the meter's default value is left behind.
 export function deleteSlots(
 	pattern: FingerpickPattern,
 	targets: SlotTarget[],
@@ -868,21 +865,22 @@ export function deleteSlots(
 				carried = undefined;
 			});
 			if (remaining.length > 0) return { ...measure, slots: remaining };
-			const fresh = makeEmptySlot();
+			const fresh = makeEmptySlot(defaultFillDuration(pattern.timeSignature));
 			return { ...measure, slots: [carried !== undefined ? { ...fresh, chord: carried } : fresh] };
 		}),
 	};
 }
 
-// Append a quarter-note slot (all strings inactive) to a measure.
+// Append a slot of the meter's default value (all strings inactive) to a measure.
 export function addSlotToMeasure(
 	pattern: FingerpickPattern,
 	measureIndex: number,
 ): FingerpickPattern {
+	const fresh = makeEmptySlot(defaultFillDuration(pattern.timeSignature));
 	return {
 		...pattern,
 		measures: pattern.measures.map((measure, mi) =>
-			mi !== measureIndex ? measure : { ...measure, slots: [...measure.slots, makeEmptySlot()] },
+			mi !== measureIndex ? measure : { ...measure, slots: [...measure.slots, fresh] },
 		),
 	};
 }

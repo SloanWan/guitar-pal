@@ -60,7 +60,7 @@ import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { getChordIndex } from "@/lib/chords";
 import { chordIndexWithUser } from "@/lib/userChordVoicings";
-import { selectRefVoicing } from "@/lib/strumBars";
+import { clampBpmToMeter, selectRefVoicing } from "@/lib/strumBars";
 import { useUser } from "@/hooks/useUser";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
@@ -71,7 +71,7 @@ import { chordShapeToVoicing } from "@/lib/chordShape";
 import { useChordVoicings } from "./useChordVoicings";
 import { useFingerpickPrefs } from "./useFingerpickPrefs";
 import { useEditHistory } from "./useEditHistory";
-import FingerpickEditorMetaFields, { MAX_BPM, MIN_BPM } from "./FingerpickEditorMetaFields";
+import FingerpickEditorMetaFields from "./FingerpickEditorMetaFields";
 import FingerpickEditorHintPopover from "./FingerpickEditorHintPopover";
 import FingerpickEditorTouchInput from "./FingerpickEditorTouchInput";
 import FingerpickEditorTechniqueMenu from "./FingerpickEditorTechniqueMenu";
@@ -664,7 +664,7 @@ export default function FingerpickEditModal({
 		onSave({
 			...working,
 			name: working.name.trim(),
-			bpm: Math.min(MAX_BPM, Math.max(MIN_BPM, working.bpm)),
+			bpm: clampBpmToMeter(working.bpm, working.timeSignature),
 		});
 		onClose();
 	}

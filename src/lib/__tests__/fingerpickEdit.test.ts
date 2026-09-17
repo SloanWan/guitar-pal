@@ -582,6 +582,15 @@ describe("beatTicks / beatDivision / defaultFillDuration / makeEmptyMeasure", ()
 		expect(defaultFillDuration([6, 8])).toBe("eighth");
 	});
 
+	it("structural inserts use the meter's default value: an eighth in 6/8", () => {
+		const jig: FingerpickPattern = { ...makeDefaultPattern(), timeSignature: [6, 8], measures: [makeEmptyMeasure([6, 8])] };
+		expect(addSlotToMeasure(jig, 0).measures[0].slots.at(-1)?.duration).toBe("eighth");
+		expect(insertSlots(jig, [{ measureIndex: 0, slotIndex: 0 }], "before").measures[0].slots[0].duration).toBe("eighth");
+		const all = jig.measures[0].slots.map((_, slotIndex) => ({ measureIndex: 0, slotIndex }));
+		expect(deleteSlots(jig, all).measures[0].slots.map((s) => s.duration)).toEqual(["eighth"]);
+		expect(addSlotToMeasure(makeDefaultPattern(), 0).measures[0].slots.at(-1)?.duration).toBe("quarter");
+	});
+
 	it("makeEmptyMeasure fills the bar with the meter's default value", () => {
 		expect(makeEmptyMeasure().slots.map((s) => s.duration)).toEqual(Array(4).fill("quarter"));
 		expect(makeEmptyMeasure([3, 4]).slots).toHaveLength(3);

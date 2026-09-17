@@ -38,3 +38,30 @@ jobs:
               env:
                   NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
                   NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+    book-service:
+        name: Book service (ruff & pytest)
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: book-service
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+                  cache: pip
+                  cache-dependency-path: book-service/pyproject.toml
+
+            - name: Install
+              run: pip install -e ".[dev]"
+
+            - name: Lint
+              run: ruff check . && ruff format --check .
+
+            - name: Test
+              run: pytest -q

@@ -13,6 +13,14 @@ import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
 import { useAutoScroll } from "@/components/fingerpick/useAutoScroll";
 import { useHideOnScroll } from "@/components/fingerpick/useHideOnScroll";
 import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
+import { useMeasureGeometry } from "@/components/fingerpick/useMeasureGeometry";
+import {
+	EMPTY_SELECTION,
+	highlightedRange,
+	pickMeasure,
+	sectionHint,
+	type SectionSelection,
+} from "@/components/fingerpick/sectionSelection";
 import { useTempo } from "@/components/fingerpick/useTempo";
 import FingerpickDesktopPanel from "@/components/fingerpick/FingerpickDesktopPanel";
 import FingerpickMobileDrawer from "@/components/fingerpick/FingerpickMobileDrawer";
@@ -43,6 +51,7 @@ import {
 	SquareMenu,
 	Loader2,
 	ChevronsDown,
+	Brackets,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
@@ -110,6 +119,25 @@ export default function FingerpickPage() {
 		tabOverflows,
 		autoScrollActive,
 	} = useAutoScroll({ viewerRef: tabViewerRef, scrollSpeed, patternId: selectedPattern.id });
+	// Section mode: pick the first and last measure of the stretch to practise.
+	// The selection lives in rendered measure indices; leaving the mode drops it.
+	const [sectionMode, setSectionMode] = useState(false);
+	const [section, setSection] = useState<SectionSelection>(EMPTY_SELECTION);
+	const geometry = useMeasureGeometry({ viewerRef: tabViewerRef, contentRef: rowsContainerRef });
+	function toggleSectionMode() {
+		setSectionMode((on) => !on);
+		setSection(EMPTY_SELECTION);
+	}
+	// Escape leaves section mode; held in a ref so the key listener below is
+	// subscribed once, like the spacebar's.
+	const leaveSectionModeRef = useRef(() => {});
+	useEffect(() => {
+		leaveSectionModeRef.current = () => {
+			if (!sectionMode) return;
+			setSectionMode(false);
+			setSection(EMPTY_SELECTION);
+		};
+	});
 	const hasChords = patternHasChords(selectedPattern.measures);
 	const showChordDiagrams = hasChords && chordView === "diagram";
 	const chordShapeSize = useMemo(
@@ -269,6 +297,9 @@ export default function FingerpickPage() {
 		toExpandedMeasureIndex,
 		snapCursorToNote,
 		onInteract: restoreControls,
+		sectionMode,
+		geometry,
+		onPickMeasure: (measureIndex) => setSection((s) => pickMeasure(s, measureIndex)),
 	});
 
 	// Preload presets on mount so the first Play is instant.
@@ -302,6 +333,7 @@ export default function FingerpickPage() {
 		setSelectedPattern(p);
 		resetBpm(p.bpm);
 		resetCursor();
+		setSection(EMPTY_SELECTION);
 		// Below lg the library is a slide-in over the tab: picking a pattern is
 		// what it was opened for, so it goes away and shows the pick. At lg it is
 		// static and this is a no-op.
@@ -420,7 +452,12 @@ export default function FingerpickPage() {
 	});
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
-			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
+			if (!shouldRunPageShortcut(e)) return;
+			if (e.key === "Escape") {
+				leaveSectionModeRef.current();
+				return;
+			}
+			if (e.code !== "Space") return;
 			e.preventDefault();
 			playPauseRef.current();
 		}
@@ -542,6 +579,27 @@ export default function FingerpickPage() {
 								>
 									<ChevronsDown size={14} className={autoScrollActive ? "animate-bounce" : ""} />
 								</button>
+								{/* Section mode: pick the first and last measure to practise. The
+								    hint beside the button says which click comes next. */}
+								<button
+									type="button"
+									onClick={toggleSectionMode}
+									aria-pressed={sectionMode}
+									aria-label={sectionMode ? "Leave section mode" : "Select a section"}
+									title={sectionMode ? "Leave section mode (Esc)" : "Select a section to practise"}
+									className={`flex h-7 w-7 shrink-0 items-center justify-center border transition-colors ${
+										sectionMode
+											? "border-denim bg-denim text-on-denim"
+											: "border-line-strong text-ink-dim hover:border-denim hover:text-denim"
+									}`}
+								>
+									<Brackets size={14} />
+								</button>
+								{sectionMode && (
+									<span className="fp-reveal min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
+										{sectionHint(section)}
+									</span>
+								)}
 								{autoScrollActive && (
 									<div className="fp-reveal flex items-center gap-2">
 										<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
@@ -680,6 +738,42 @@ export default function FingerpickPage() {
 							className="relative min-h-0 min-w-0 overflow-hidden overflow-y-auto cursor-pointer"
 							onClick={handleTabClick}
 						>
+							{/* Section selection — the chosen measures, under the playing
+							    highlight and the playhead; the first and last carry a denim edge. */}
+							{sectionMode &&
+								(() => {
+									const range = highlightedRange(section);
+									if (!range) return null;
+									return geometry
+										.filter(
+											(r) =>
+												r.measureIndex >= range.startMeasure &&
+												r.measureIndex <= range.endMeasure,
+										)
+										.map((r) => (
+											<div
+												key={r.measureIndex}
+												aria-hidden="true"
+												data-section-measure={r.measureIndex}
+												className="absolute z-10 pointer-events-none"
+												style={{
+													left: r.left,
+													top: r.top,
+													width: r.width,
+													height: r.height,
+													backgroundColor: "var(--denim-tint)",
+													borderLeft:
+														r.measureIndex === range.startMeasure
+															? "1px solid var(--denim)"
+															: undefined,
+													borderRight:
+														r.measureIndex === range.endMeasure
+															? "1px solid var(--denim)"
+															: undefined,
+												}}
+											/>
+										));
+								})()}
 							{/* Measure highlight — updated only on measure transitions. Stacked
 							    ABOVE the rows (z-10): it is translucent, so the look is the same,
 							    but the opaque patches VexFlow paints behind fret numbers no

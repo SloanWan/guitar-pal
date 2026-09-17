@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { measureAtPoint, type MeasureRect } from "./useMeasureGeometry";
 
 export interface SeekTarget {
 	/** A rendered (compact) measure index. */
@@ -16,6 +17,10 @@ export interface ClickToSeekArgs {
 	snapCursorToNote: (noteEl: SVGElement, measureIndex: number) => void;
 	/** Any click on the tab counts as an interaction (the controls come back). */
 	onInteract: () => void;
+	/** Section mode: a click picks a measure instead of seeking. */
+	sectionMode: boolean;
+	geometry: readonly MeasureRect[];
+	onPickMeasure: (measureIndex: number) => void;
 }
 
 export interface ClickToSeek {
@@ -29,7 +34,8 @@ export interface ClickToSeek {
  * Clicking anywhere in the tab viewer seeks to the nearest note in the clicked
  * row (nearest by x-distance). Clicks outside all rows clamp to the nearest
  * row. While playing or paused the engine seeks at once; while stopped the
- * target is kept for the next play().
+ * target is kept for the next play(). In section mode a click picks the
+ * measure under it instead.
  */
 export function useClickToSeek({
 	viewerRef,
@@ -39,6 +45,9 @@ export function useClickToSeek({
 	toExpandedMeasureIndex,
 	snapCursorToNote,
 	onInteract,
+	sectionMode,
+	geometry,
+	onPickMeasure,
 }: ClickToSeekArgs): ClickToSeek {
 	// Note to seek to on the next play() — set by a click while stopped,
 	// consumed by takePendingSeek() and cleared by clearPendingSeek().
@@ -49,6 +58,17 @@ export function useClickToSeek({
 
 		const container = viewerRef.current;
 		if (!container) return;
+
+		if (sectionMode) {
+			const rect = container.getBoundingClientRect();
+			const measure = measureAtPoint(
+				geometry,
+				e.clientX - rect.left + container.scrollLeft,
+				e.clientY - rect.top + container.scrollTop,
+			);
+			if (measure !== null) onPickMeasure(measure);
+			return;
+		}
 
 		const noteEls = Array.from(
 			container.querySelectorAll<SVGElement>("[data-measure-index][data-slot-index]"),

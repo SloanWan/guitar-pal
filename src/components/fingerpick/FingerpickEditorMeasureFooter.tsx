@@ -8,6 +8,7 @@ import {
 	type PickSequenceParse,
 } from "@/lib/fingerpickPickSequence";
 import { selectRefVoicing } from "@/lib/strumBars";
+import { isCompound } from "@/lib/strumMeter";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordVoicingsState } from "./useChordVoicings";
 import type { CommitPattern } from "./useEditHistory";
@@ -15,6 +16,18 @@ import { DurationIcon } from "./fingerpickEditorShared";
 
 // Upper bound for the repeat play-count stepper (kept well under the lib's hard cap).
 const REPEAT_TIMES_MAX = 16;
+
+// The "All" row's fills. The eighth-triplet fill (12 in 4/4, 9 in 3/4) is a
+// simple-meter thing: a compound beat already divides in three, so it is not
+// offered there.
+const PRESET_DURATIONS: readonly Duration[] = ["quarter", "eighth", "sixteenth", "32nd"];
+const SIMPLE_METER_PRESET_DURATIONS: readonly Duration[] = [
+	"quarter",
+	"eighth",
+	"eighth-triplet",
+	"sixteenth",
+	"32nd",
+];
 
 export interface FingerpickEditorMeasureFooterProps {
 	measure: Measure;
@@ -139,7 +152,10 @@ export default function FingerpickEditorMeasureFooter({
 				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
 					All
 				</span>
-				{(["quarter", "eighth", "sixteenth", "32nd"] as const).map((d) => (
+				{(isCompound(working.timeSignature)
+					? PRESET_DURATIONS
+					: SIMPLE_METER_PRESET_DURATIONS
+				).map((d) => (
 					<button
 						key={d}
 						onClick={() => requestPreset(d)}

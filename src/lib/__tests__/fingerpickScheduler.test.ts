@@ -132,6 +132,17 @@ describe("fingerpickPatternToScheduleEvents — BPM / timing math", () => {
 		expect(getTotalPatternDuration(p, 60)).toBeCloseTo(1);
 	});
 
+	it("a 4/4 bar of twelve eighth-triplets schedules twelve evenly spaced events over four beats", () => {
+		const p = pattern(
+			60,
+			Array.from({ length: 12 }, (_, i) => slot(`t${i}`, "eighth-triplet", { 0: { fret: i } })),
+		);
+		const events = fingerpickPatternToScheduleEvents(p, 60);
+		expect(events).toHaveLength(12);
+		events.forEach((ev, i) => expect(ev.time).toBeCloseTo(i / 3, 9));
+		expect(getTotalPatternDuration(p, 60)).toBeCloseTo(4, 9);
+	});
+
 	it("second slot starts after first slot's duration elapses", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 5: { fret: 0 } }),

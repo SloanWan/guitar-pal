@@ -13,8 +13,10 @@ import {
 	Tremolo,
 	Vibrato,
 	Stroke,
+	TabStave,
 } from "vexflow";
 
+import { tripletGroups } from "@/lib/fingerpickEdit";
 import { fingerpickToVexFlow, VEX_DURATION } from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, Measure, StringFret, Duration, Technique } from "@/lib/fingerpickTypes";
 
@@ -350,6 +352,41 @@ describe("fingerpickToVexFlow — eighth-triplet tuplets", () => {
 			])
 		);
 		expect(tuplets).toHaveLength(2);
+	});
+
+	it("a 4/4 bar of twelve eighth-triplets renders four Tuplet brackets, one per group", () => {
+		const slots = Array.from({ length: 12 }, (_, i) =>
+			beatSlot(`t${i}`, "eighth-triplet", { 0: { fret: i % 3 } }),
+		);
+		const { tuplets } = fingerpickToVexFlow(measure(slots));
+		expect(tuplets).toHaveLength(4);
+		expect(tripletGroups(slots).map((g) => g.start)).toEqual([0, 3, 6, 9]);
+	});
+
+	it("a tuplet of empty slots can be positioned: ghost notes answer for a stem", () => {
+		// A bar just filled from the All row is three empty triplet slots; VexFlow
+		// positions the bracket from each rest's stem and a plain GhostNote has none.
+		const { notes, tuplets } = fingerpickToVexFlow(
+			measure([
+				beatSlot("t1", "eighth-triplet", {}),
+				beatSlot("t2", "eighth-triplet", { 0: { fret: 5 } }),
+				beatSlot("t3", "eighth-triplet", {}),
+			]),
+		);
+		expect(notes[0]).toBeInstanceOf(GhostNote);
+		const stave = new TabStave(0, 0, 300);
+		notes.forEach((n) => n.setStave(stave));
+		expect(tuplets).toHaveLength(1);
+		expect(() => tuplets[0].getYPosition()).not.toThrow();
+	});
+
+	it("a leftover triplet after a group gets no bracket, matching tripletGroups", () => {
+		const slots = Array.from({ length: 4 }, (_, i) =>
+			beatSlot(`t${i}`, "eighth-triplet", { 0: { fret: 5 } }),
+		);
+		const { tuplets } = fingerpickToVexFlow(measure(slots));
+		expect(tuplets).toHaveLength(tripletGroups(slots).length);
+		expect(tuplets).toHaveLength(1);
 	});
 
 	it("three consecutive sixteenth-triplet slots produce one Tuplet", () => {

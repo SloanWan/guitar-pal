@@ -39,6 +39,12 @@ import {
 	remapMeasure,
 	carryChordMarks,
 	isTripletDuration,
+	tripletGroups,
+	tripletGroupAt,
+	expandTripletGroups,
+	tripletPlainValue,
+	tripletForPlainValue,
+	tripletWrittenValue,
 	DURATION_TICKS,
 	TICKS_PER_WHOLE,
 	type Cell,
@@ -1013,15 +1019,16 @@ describe("split/merge round-trips for newly exposed integer-weight durations", (
 });
 
 describe("triplet guard on split/merge", () => {
-	it("splitSlot rejects both triplet targets, returning the measures unchanged", () => {
+	it("splitSlot rejects a triplet target that is not three of the source", () => {
 		const measures = measuresOf([
 			slotWith("quarter", 3),
 			makeEmptySlot("quarter"),
 			makeEmptySlot("quarter"),
 			makeEmptySlot("quarter"),
 		]);
-		expect(splitSlot(measures, 0, 0, "eighth-triplet", [4, 4])).toEqual(measures);
 		expect(splitSlot(measures, 0, 0, "sixteenth-triplet", [4, 4])).toEqual(measures);
+		const half = measuresOf([slotWith("half", 3), makeEmptySlot("half")]);
+		expect(splitSlot(half, 0, 0, "eighth-triplet", [4, 4])).toEqual(half);
 	});
 
 	it("mergeSlots rejects both triplet targets, returning an ok/unchanged result", () => {
@@ -1049,15 +1056,231 @@ describe("triplet guard on split/merge", () => {
 		]);
 		expect(mergeSlots(measures, 0, 0, "eighth", [4, 4])).toEqual({ type: "ok", measures });
 		expect(mergeTargetsForSlot(measures[0], 0)).toEqual([]);
-		// Three eighth-triplets sum to a quarter, but merging a group back is a
-		// separate rule, not this prefix walk.
-		const group = measuresOf([
-			slotWith("eighth-triplet", 2),
+		// A plain run stops at a triplet: quarter + eighth-triplet is not a note.
+		const mixed = measuresOf([
+			slotWith("eighth", 2),
+			makeEmptySlot("eighth-triplet"),
 			makeEmptySlot("eighth-triplet"),
 			makeEmptySlot("eighth-triplet"),
 		]);
-		expect(mergeSlots(group, 0, 0, "quarter", [4, 4])).toEqual({ type: "ok", measures: group });
-		expect(mergeTargetsForSlot(group[0], 0)).toEqual([]);
+		expect(mergeSlots(mixed, 0, 0, "dotted-quarter", [4, 4])).toEqual({ type: "ok", measures: mixed });
+		expect(mergeTargetsForSlot(mixed[0], 0)).toEqual([]);
+	});
+});
+
+describe("triplet groups", () => {
+	const t = (fret?: number) => (fret === undefined ? makeEmptySlot("eighth-triplet") : slotWith("eighth-triplet", fret));
+	const st = () => makeEmptySlot("sixteenth-triplet");
+
+	it("maps a triplet to the plain value it adds up to, and back", () => {
+		expect(tripletPlainValue("eighth-triplet")).toBe("quarter");
+		expect(tripletPlainValue("sixteenth-triplet")).toBe("eighth");
+		expect(tripletForPlainValue("quarter")).toBe("eighth-triplet");
+		expect(tripletForPlainValue("eighth")).toBe("sixteenth-triplet");
+		expect(tripletForPlainValue("half")).toBeNull();
+		expect(tripletForPlainValue("dotted-quarter")).toBeNull();
+		expect(tripletWrittenValue("eighth-triplet")).toBe("eighth");
+		expect(tripletWrittenValue("sixteenth-triplet")).toBe("sixteenth");
+	});
+
+	it("chunks a run of the same triplet value in threes from the run's start", () => {
+		expect(tripletGroups([t(), t(), t(), t(), t(), t()])).toEqual([
+			{ start: 0, duration: "eighth-triplet" },
+			{ start: 3, duration: "eighth-triplet" },
+		]);
+		// A run of a different triplet value is its own run.
+		expect(tripletGroups([makeEmptySlot("quarter"), t(), t(), t(), st(), st(), st()])).toEqual([
+			{ start: 1, duration: "eighth-triplet" },
+			{ start: 4, duration: "sixteenth-triplet" },
+		]);
+	});
+
+	it("leaves a leftover one or two at the end of a run in no group", () => {
+		expect(tripletGroups([t(), t(), t(), t()])).toEqual([{ start: 0, duration: "eighth-triplet" }]);
+		expect(tripletGroups([t(), t()])).toEqual([]);
+		expect(tripletGroupAt([t(), t(), t(), t()], 3)).toBeNull();
+		expect(tripletGroupAt([t(), t(), t(), t()], 1)).toEqual({ start: 0, duration: "eighth-triplet" });
+		expect(tripletGroupAt([makeEmptySlot("quarter")], 0)).toBeNull();
+	});
+
+	it("expandTripletGroups grows a selection to every member of a touched group", () => {
+		const slots = [makeEmptySlot("quarter"), t(), t(), t(), makeEmptySlot("quarter")];
+		expect([...expandTripletGroups(slots, new Set([2]))].sort()).toEqual([1, 2, 3]);
+		expect([...expandTripletGroups(slots, new Set([0, 4]))].sort()).toEqual([0, 4]);
+		expect([...expandTripletGroups(slots, new Set([0, 3]))].sort()).toEqual([0, 1, 2, 3]);
+	});
+
+	// A 4/4 bar: quarter, a triplet (1 2 3 on the top string), quarter, quarter.
+	function tripletPattern(): FingerpickPattern {
+		return {
+			id: "p",
+			name: "p",
+			bpm: 100,
+			timeSignature: [4, 4],
+			measures: measuresOf([slotWith("quarter", 9), t(1), t(2), t(3), makeEmptySlot("quarter"), makeEmptySlot("quarter")]),
+		};
+	}
+	const durationsOf = (p: FingerpickPattern) => p.measures[0].slots.map((s) => s.duration);
+	const topFrets = (p: FingerpickPattern) => p.measures[0].slots.map((s) => s.strings[0].fret);
+
+	it("deleteSlots on any member removes the whole group, carrying its chord mark on", () => {
+		const chord = { root: "C", suffix: "major" };
+		const p = tripletPattern();
+		p.measures[0].slots[1] = { ...p.measures[0].slots[1], chord };
+		const out = deleteSlots(p, [{ measureIndex: 0, slotIndex: 2 }]);
+		expect(durationsOf(out)).toEqual(["quarter", "quarter", "quarter"]);
+		expect(topFrets(out)).toEqual([9, null, null]);
+		expect(out.measures[0].slots[1].chord).toEqual(chord);
+	});
+
+	it("duplicateSlots on a member copies the group after the group, not after the member", () => {
+		const out = duplicateSlots(tripletPattern(), [{ measureIndex: 0, slotIndex: 2 }]);
+		expect(durationsOf(out)).toEqual([
+			"quarter",
+			"eighth-triplet", "eighth-triplet", "eighth-triplet",
+			"eighth-triplet", "eighth-triplet", "eighth-triplet",
+			"quarter", "quarter",
+		]);
+		expect(topFrets(out)).toEqual([9, 1, 2, 3, 1, 2, 3, null, null]);
+		// Selecting two members of one group still yields one copy.
+		const two = duplicateSlots(tripletPattern(), [
+			{ measureIndex: 0, slotIndex: 1 },
+			{ measureIndex: 0, slotIndex: 3 },
+		]);
+		expect(two.measures[0].slots).toHaveLength(9);
+		// The copy is its own group with fresh ids.
+		expect(tripletGroups(out.measures[0].slots)).toEqual([
+			{ start: 1, duration: "eighth-triplet" },
+			{ start: 4, duration: "eighth-triplet" },
+		]);
+		expect(new Set(out.measures[0].slots.map((s) => s.id)).size).toBe(9);
+	});
+
+	it("insertSlots never lands inside a group: before → before its first, after → after its last", () => {
+		const before = insertSlots(tripletPattern(), [{ measureIndex: 0, slotIndex: 2 }], "before");
+		expect(durationsOf(before)).toEqual([
+			"quarter", "quarter", "eighth-triplet", "eighth-triplet", "eighth-triplet", "quarter", "quarter",
+		]);
+		const after = insertSlots(tripletPattern(), [{ measureIndex: 0, slotIndex: 2 }], "after");
+		expect(durationsOf(after)).toEqual([
+			"quarter", "eighth-triplet", "eighth-triplet", "eighth-triplet", "quarter", "quarter", "quarter",
+		]);
+		expect(topFrets(after)).toEqual([9, 1, 2, 3, null, null, null]);
+		// Two members targeted → one insert.
+		const twice = insertSlots(
+			tripletPattern(),
+			[{ measureIndex: 0, slotIndex: 1 }, { measureIndex: 0, slotIndex: 3 }],
+			"after",
+		);
+		expect(twice.measures[0].slots).toHaveLength(7);
+	});
+
+	it("splitSlot 3×: a quarter into eighth-triplets, an eighth into sixteenth-triplets, head keeps data", () => {
+		const chord = { root: "A", suffix: "minor" };
+		const measures = measuresOf([
+			{ ...slotWith("quarter", 5), chord, stroke: "roll-down" as const },
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const out = splitSlot(measures, 0, 0, "eighth-triplet", [4, 4]);
+		expect(out[0].slots.slice(0, 3).map((s) => s.duration)).toEqual([
+			"eighth-triplet", "eighth-triplet", "eighth-triplet",
+		]);
+		expect(out[0].slots).toHaveLength(6);
+		expect(usedUnits(out[0].slots)).toBe(96);
+		expect(firstFret(out, 0)).toBe(5);
+		expect(firstFret(out, 1)).toBeNull();
+		expect(out[0].slots[0].chord).toEqual(chord);
+		expect(out[0].slots[0].stroke).toBe("roll-down");
+		expect(tripletGroups(out[0].slots)).toEqual([{ start: 0, duration: "eighth-triplet" }]);
+
+		const eighths = measuresOf([slotWith("eighth", 2), makeEmptySlot("eighth")]);
+		const s16 = splitSlot(eighths, 0, 0, "sixteenth-triplet", [4, 4]);
+		expect(s16[0].slots.map((s) => s.duration)).toEqual([
+			"sixteenth-triplet", "sixteenth-triplet", "sixteenth-triplet", "eighth",
+		]);
+	});
+
+	it("splitSlot refuses a triplet target that is not three of the source, and any split of a triplet slot", () => {
+		const half = measuresOf([slotWith("half", 5), makeEmptySlot("half")]);
+		expect(splitSlot(half, 0, 0, "eighth-triplet", [4, 4])).toEqual(half);
+		const quarter = measuresOf([slotWith("quarter", 5), makeEmptySlot("quarter")]);
+		expect(splitSlot(quarter, 0, 0, "sixteenth-triplet", [4, 4])).toEqual(quarter);
+		const p = tripletPattern().measures;
+		expect(splitSlot(p, 0, 1, "sixteenth", [4, 4])).toEqual(p);
+		expect(splitSlot(p, 0, 1, "32nd", [4, 4])).toEqual(p);
+	});
+
+	it("splitTargetsForSlot offers the triplet in a simple meter, ordered by count, never in 6/8", () => {
+		const [measure] = measuresOf([
+			slotWith("quarter", 5),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		expect(splitTargetsForSlot(measure, 0, [4, 4])).toEqual([
+			{ duration: "eighth", count: 2 },
+			{ duration: "eighth-triplet", count: 3 },
+			{ duration: "sixteenth", count: 4 },
+			{ duration: "32nd", count: 8 },
+		]);
+		const [waltz] = measuresOf([slotWith("quarter", 5), makeEmptySlot("half")]);
+		expect(splitTargetsForSlot(waltz, 0, [3, 4]).map((t) => t.duration)).toContain("eighth-triplet");
+		const [jig] = measuresOf([slotWith("quarter", 5), makeEmptySlot("quarter"), makeEmptySlot("quarter")]);
+		expect(splitTargetsForSlot(jig, 0, [6, 8]).map((t) => t.duration)).not.toContain("eighth-triplet");
+		const [eighth] = measuresOf([slotWith("eighth", 5)]);
+		expect(splitTargetsForSlot(eighth, 0, [4, 4])).toEqual([
+			{ duration: "sixteenth", count: 2 },
+			{ duration: "sixteenth-triplet", count: 3 },
+			{ duration: "32nd", count: 4 },
+		]);
+		// A triplet member offers nothing.
+		expect(splitTargetsForSlot(tripletPattern().measures[0], 2, [4, 4])).toEqual([]);
+	});
+
+	it("mergeSlots folds a group back to its plain value from its first member only", () => {
+		const p = tripletPattern().measures;
+		const fromMid = mergeSlots(p, 0, 2, "quarter", [4, 4]);
+		expect(fromMid).toEqual({ type: "ok", measures: p });
+		const wrongTarget = mergeSlots(p, 0, 1, "eighth", [4, 4]);
+		expect(wrongTarget).toEqual({ type: "ok", measures: p });
+
+		const res = mergeSlots(p, 0, 1, "quarter", [4, 4]);
+		// Members 2 and 3 carry data, so the merge asks first.
+		expect(res.type).toBe("confirm");
+		if (res.type === "confirm") {
+			expect(res.affectedSlotCount).toBe(2);
+			const slots = res.pendingMeasures[0].slots;
+			expect(slots.map((s) => s.duration)).toEqual(["quarter", "quarter", "quarter", "quarter"]);
+			expect(slots[1].strings[0].fret).toBe(1);
+			expect(usedUnits(slots)).toBe(96);
+		}
+	});
+
+	it("mergeTargetsForSlot: the plain value on a group's first member, nothing on the others", () => {
+		const [measure] = tripletPattern().measures;
+		expect(mergeTargetsForSlot(measure, 1)).toEqual([{ duration: "quarter", count: 3 }]);
+		expect(mergeTargetsForSlot(measure, 2)).toEqual([]);
+		expect(mergeTargetsForSlot(measure, 3)).toEqual([]);
+		// The plain quarter before the group cannot merge through it.
+		expect(mergeTargetsForSlot(measure, 0)).toEqual([]);
+	});
+
+	it("split → merge round-trips to the original measure", () => {
+		const measures = measuresOf([
+			slotWith("quarter", 5),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+			makeEmptySlot("quarter"),
+		]);
+		const split = splitSlot(measures, 0, 0, "eighth-triplet", [4, 4]);
+		const merged = mergeSlots(split, 0, 0, "quarter", [4, 4]);
+		expect(merged.type).toBe("ok");
+		if (merged.type === "ok") {
+			const strip = (m: Measure[]) => m[0].slots.map(({ id: _id, ...rest }) => { void _id; return rest; });
+			expect(strip(merged.measures)).toEqual(strip(measures));
+		}
 	});
 });
 
@@ -1153,7 +1376,7 @@ describe("newly exposed durations survive editor → render → audio with consi
 });
 
 describe("splitTargetsForSlot", () => {
-	it("offers every even subdivision of a quarter that fits the measure", () => {
+	it("offers every even subdivision of a quarter that fits the measure, and its triplet", () => {
 		const [measure] = measuresOf([
 			slotWith("quarter", 5),
 			makeEmptySlot("quarter"),
@@ -1163,6 +1386,7 @@ describe("splitTargetsForSlot", () => {
 		const targets = splitTargetsForSlot(measure, 0, [4, 4]);
 		expect(targets).toEqual([
 			{ duration: "eighth", count: 2 },
+			{ duration: "eighth-triplet", count: 3 },
 			{ duration: "sixteenth", count: 4 },
 			{ duration: "32nd", count: 8 },
 		]);

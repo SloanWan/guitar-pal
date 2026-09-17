@@ -23,6 +23,7 @@ import {
 	insertSlots,
 	mergeSlots,
 	mergeTargetsForSlot,
+	tripletGroupAt,
 	resetMeasure,
 	setInactive,
 	setSlotsRest,
@@ -455,6 +456,10 @@ export default function FingerpickEditorColumnPopup({
 	// selected, enumerate that slot's split and merge targets from live state.
 	const singleTarget: SlotTarget | null = selectedColumns.size === 1 ? columnTargets()[0] : null;
 	const singleMeasure = singleTarget ? working.measures[singleTarget.measureIndex] : null;
+	// A slot under a `3` bracket moves with its group: insert lands outside the
+	// bracket, duplicate and delete take all three.
+	const inTriplet =
+		!!singleTarget && !!singleMeasure && tripletGroupAt(singleMeasure.slots, singleTarget.slotIndex) !== null;
 
 	// Smaller note values this slot can be split into (even subdivisions that fit the
 	// measure's remaining capacity), and larger values the following slots can merge
@@ -515,24 +520,34 @@ export default function FingerpickEditorColumnPopup({
 			{singleTarget && (
 			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
 				<PopupSectionLabel
-					label="Move Slot"
-					hint="Insert, duplicate, or delete this slot."
+					label={inTriplet ? "Move Triplet" : "Move Slot"}
+					hint={
+						inTriplet
+							? "A triplet moves as one: insert outside it, duplicate or delete all three."
+							: "Insert, duplicate, or delete this slot."
+					}
 				/>
 				<div className="flex gap-1">
 					<PopupIconButton
-						title="Insert before"
+						title={inTriplet ? "Insert before the triplet" : "Insert before"}
 						onClick={() => applyStructural("before")}
 					>
 						<ArrowLeftToLine size={14} />
 					</PopupIconButton>
-					<PopupIconButton title="Insert after" onClick={() => applyStructural("after")}>
+					<PopupIconButton
+						title={inTriplet ? "Insert after the triplet" : "Insert after"}
+						onClick={() => applyStructural("after")}
+					>
 						<ArrowRightToLine size={14} />
 					</PopupIconButton>
-					<PopupIconButton title="Duplicate" onClick={() => applyStructural("duplicate")}>
+					<PopupIconButton
+						title={inTriplet ? "Duplicate the triplet" : "Duplicate"}
+						onClick={() => applyStructural("duplicate")}
+					>
 						<Copy size={14} />
 					</PopupIconButton>
 					<PopupIconButton
-						title="Delete"
+						title={inTriplet ? "Delete the triplet" : "Delete"}
 						onClick={() => applyStructural("delete")}
 						danger
 					>

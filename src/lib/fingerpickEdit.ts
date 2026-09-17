@@ -7,6 +7,7 @@ import type {
 	Stroke,
 	Technique,
 } from "./fingerpickTypes";
+import { isCompound } from "./strumMeter";
 import { normalizeCapo } from "./strumProgressions";
 
 // ── Cell / target identity ───────────────────────────────────────────────────
@@ -53,8 +54,83 @@ export const DURATION_TICKS: Record<Duration, number> = {
 	"32nd": 3,
 };
 
-export function isTripletDuration(duration: Duration): boolean {
+export type TripletDuration = "eighth-triplet" | "sixteenth-triplet";
+
+export function isTripletDuration(duration: Duration): duration is TripletDuration {
 	return duration === "eighth-triplet" || duration === "sixteenth-triplet";
+}
+
+// The plain value three of a triplet add up to, and the triplet a plain value
+// splits into three of. Only the quarter and the eighth have a triplet.
+export function tripletPlainValue(duration: TripletDuration): Duration {
+	return duration === "eighth-triplet" ? "quarter" : "eighth";
+}
+
+// The note a triplet member is written as: three eighths under a `3` bracket.
+export function tripletWrittenValue(duration: TripletDuration): Duration {
+	return duration === "eighth-triplet" ? "eighth" : "sixteenth";
+}
+
+export function tripletForPlainValue(duration: Duration): TripletDuration | null {
+	if (duration === "quarter") return "eighth-triplet";
+	if (duration === "eighth") return "sixteenth-triplet";
+	return null;
+}
+
+// ── Triplet groups ───────────────────────────────────────────────────────────
+//
+// A triplet is three notes under one `3` bracket; a lone triplet slot is not a
+// note. Consecutive slots of the same triplet value are chunked in threes from
+// the start of the run — the same rule the stave uses to place its brackets —
+// and a leftover one or two at the end of a run belong to no group. The editor
+// never produces a leftover (structural edits act on the whole group, below);
+// imported data can, and simply renders unbracketed.
+
+export type TripletGroup = { start: number; duration: TripletDuration };
+
+export const TRIPLET_GROUP_SIZE = 3;
+
+export function tripletGroups(slots: readonly BeatSlot[]): TripletGroup[] {
+	const groups: TripletGroup[] = [];
+	let i = 0;
+	while (i < slots.length) {
+		const duration = slots[i].duration;
+		if (!isTripletDuration(duration)) {
+			i++;
+			continue;
+		}
+		let end = i;
+		while (end < slots.length && slots[end].duration === duration) end++;
+		for (let start = i; start + TRIPLET_GROUP_SIZE <= end; start += TRIPLET_GROUP_SIZE) {
+			groups.push({ start, duration });
+		}
+		i = end;
+	}
+	return groups;
+}
+
+// The group the slot at `slotIndex` belongs to, or null for a plain slot or a
+// leftover triplet.
+export function tripletGroupAt(slots: readonly BeatSlot[], slotIndex: number): TripletGroup | null {
+	return (
+		tripletGroups(slots).find(
+			(g) => slotIndex >= g.start && slotIndex < g.start + TRIPLET_GROUP_SIZE,
+		) ?? null
+	);
+}
+
+// Grow a set of slot indices so that selecting any member of a triplet group
+// selects the whole group.
+export function expandTripletGroups(
+	slots: readonly BeatSlot[],
+	selected: ReadonlySet<number>,
+): Set<number> {
+	const out = new Set(selected);
+	for (const g of tripletGroups(slots)) {
+		const members = [g.start, g.start + 1, g.start + 2];
+		if (members.some((m) => selected.has(m))) members.forEach((m) => out.add(m));
+	}
+	return out;
 }
 
 // Plain and dotted note values, largest → smallest, used by the split/merge
@@ -622,7 +698,10 @@ export function setStroke(
 	};
 }
 
-// Insert a fresh quarter-note slot before/after each targeted slot.
+// Insert a fresh quarter-note slot before/after each targeted slot. Nothing is
+// inserted inside a triplet group: a target in one puts the new slot before the
+// group's first or after its last member, once per group however many of its
+// members were targeted.
 export function insertSlots(
 	pattern: FingerpickPattern,
 	targets: SlotTarget[],
@@ -634,11 +713,17 @@ export function insertSlots(
 		measures: pattern.measures.map((measure, mi) => {
 			const selected = grouped.get(mi);
 			if (!selected) return measure;
+			const anchors = new Set<number>();
+			for (const si of selected) {
+				const group = tripletGroupAt(measure.slots, si);
+				if (!group) anchors.add(si);
+				else anchors.add(position === "before" ? group.start : group.start + TRIPLET_GROUP_SIZE - 1);
+			}
 			const newSlots: BeatSlot[] = [];
 			measure.slots.forEach((slot, si) => {
-				if (selected.has(si) && position === "before") newSlots.push(makeEmptySlot());
+				if (anchors.has(si) && position === "before") newSlots.push(makeEmptySlot());
 				newSlots.push(slot);
-				if (selected.has(si) && position === "after") newSlots.push(makeEmptySlot());
+				if (anchors.has(si) && position === "after") newSlots.push(makeEmptySlot());
 			});
 			return { ...measure, slots: newSlots };
 		}),
@@ -646,6 +731,8 @@ export function insertSlots(
 }
 
 // Duplicate each targeted slot, placing the copy immediately after the original.
+// A triplet group duplicates as a unit — the copy of the group follows the
+// group, so the copies never interleave with the originals.
 export function duplicateSlots(
 	pattern: FingerpickPattern,
 	targets: SlotTarget[],
@@ -656,18 +743,32 @@ export function duplicateSlots(
 		measures: pattern.measures.map((measure, mi) => {
 			const selected = grouped.get(mi);
 			if (!selected) return measure;
+			const groups = tripletGroups(measure.slots);
 			const newSlots: BeatSlot[] = [];
-			measure.slots.forEach((slot, si) => {
-				newSlots.push(slot);
-				if (selected.has(si)) newSlots.push(cloneSlotWithoutChord(slot));
-			});
+			let si = 0;
+			while (si < measure.slots.length) {
+				const group = groups.find((g) => g.start === si);
+				if (group) {
+					const members = measure.slots.slice(si, si + TRIPLET_GROUP_SIZE);
+					newSlots.push(...members);
+					if (members.some((_, k) => selected.has(si + k))) {
+						newSlots.push(...members.map(cloneSlotWithoutChord));
+					}
+					si += TRIPLET_GROUP_SIZE;
+					continue;
+				}
+				newSlots.push(measure.slots[si]);
+				if (selected.has(si)) newSlots.push(cloneSlotWithoutChord(measure.slots[si]));
+				si++;
+			}
 			return { ...measure, slots: newSlots };
 		}),
 	};
 }
 
-// Delete every targeted slot. A measure never drops below one slot — if a delete
-// would empty it, a single fresh quarter slot is left behind.
+// Delete every targeted slot; a target in a triplet group deletes the whole
+// group. A measure never drops below one slot — if a delete would empty it, a
+// single fresh quarter slot is left behind.
 export function deleteSlots(
 	pattern: FingerpickPattern,
 	targets: SlotTarget[],
@@ -676,8 +777,9 @@ export function deleteSlots(
 	return {
 		...pattern,
 		measures: pattern.measures.map((measure, mi) => {
-			const selected = grouped.get(mi);
-			if (!selected) return measure;
+			const picked = grouped.get(mi);
+			if (!picked) return measure;
+			const selected = expandTripletGroups(measure.slots, picked);
 			// A deleted slot's chord mark moves to the next slot that survives, so the
 			// region it opened is not lost with the note. Of several deleted in a row,
 			// the last mark is the one in effect where the survivor begins, so it is
@@ -811,8 +913,10 @@ function cloneStrings(strings: BeatSlot["strings"]): BeatSlot["strings"] {
 // Split a slot into N sub-slots of `targetDuration`. The first sub-slot inherits
 // the original string data; the rest are empty. N is chosen to cover the original
 // slot's duration; any extra units the sub-slots add beyond the original must fit
-// in the measure's remaining capacity. Returns the measures unchanged when the
-// target is not smaller than the current slot or capacity would be exceeded.
+// in the measure's remaining capacity. A triplet target is a split into exactly
+// three — a quarter into eighth-triplets, an eighth into sixteenth-triplets — and
+// nothing else. Returns the measures unchanged when the target is not smaller
+// than the current slot or capacity would be exceeded.
 export function splitSlot(
 	measures: Measure[],
 	measureIndex: number,
@@ -824,9 +928,11 @@ export function splitSlot(
 	if (!measure) return measures;
 	const slot = measure.slots[slotIndex];
 	if (!slot) return measures;
-	// A triplet is a group of three under one bracket, not a rung a slot can be
-	// tiled with; triplet split targets are not offered yet.
-	if (isTripletDuration(targetDuration)) return measures;
+	if (isTripletDuration(targetDuration) && tripletForPlainValue(slot.duration) !== targetDuration) {
+		return measures;
+	}
+	// A triplet slot is not split further: its group is the unit.
+	if (isTripletDuration(slot.duration)) return measures;
 
 	const currentUnits = slotDurationUnits(slot.duration);
 	const targetUnits = slotDurationUnits(targetDuration);
@@ -872,8 +978,10 @@ export type MergeResult =
 // exactly to `targetDuration`, into a single slot of that duration. The first
 // slot's string data is kept; the rest is discarded. When any of the discarded
 // slots carried data, the caller is asked to confirm (the merge is still computed
-// and returned as `pendingMeasures`). Returns an unchanged `ok` result when the
-// merge is not valid (not enough following slots, or durations don't line up).
+// and returned as `pendingMeasures`). A triplet group merges back to its plain
+// value from its first member and in no other way. Returns an unchanged `ok`
+// result when the merge is not valid (not enough following slots, or durations
+// don't line up).
 export function mergeSlots(
 	measures: Measure[],
 	measureIndex: number,
@@ -886,24 +994,35 @@ export function mergeSlots(
 ): MergeResult {
 	const measure = measures[measureIndex];
 	if (!measure) return { type: "ok", measures };
-	// A triplet is never a merge target, and a run that includes a triplet slot
-	// never merges: 8 + 4 ticks would otherwise read as an "eighth". Triplet
-	// groups merge back through their own rule, not this prefix walk.
+	// A triplet is never a merge target: 8 + 4 ticks is not an "eighth".
 	if (isTripletDuration(targetDuration)) return { type: "ok", measures };
 
-	const targetUnits = slotDurationUnits(targetDuration);
-	let sum = 0;
-	let end = slotIndex;
-	while (end < measure.slots.length && sum < targetUnits) {
-		if (isTripletDuration(measure.slots[end].duration)) return { type: "ok", measures };
-		sum += slotDurationUnits(measure.slots[end].duration);
-		end++;
-	}
-	const consumed = end - slotIndex;
-	// Need an exact fit spanning at least the current slot plus one following slot.
-	if (sum !== targetUnits || consumed < 2) return { type: "ok", measures };
-
 	const first = measure.slots[slotIndex];
+	if (!first) return { type: "ok", measures };
+	let end: number;
+	if (isTripletDuration(first.duration)) {
+		// Only a whole group, from its first member, back to its plain value.
+		const group = tripletGroupAt(measure.slots, slotIndex);
+		if (!group || group.start !== slotIndex || tripletPlainValue(first.duration) !== targetDuration) {
+			return { type: "ok", measures };
+		}
+		end = slotIndex + TRIPLET_GROUP_SIZE;
+	} else {
+		// Walk the following plain slots until they sum to the target. A run that
+		// reaches a triplet slot never merges.
+		const targetUnits = slotDurationUnits(targetDuration);
+		let sum = 0;
+		end = slotIndex;
+		while (end < measure.slots.length && sum < targetUnits) {
+			if (isTripletDuration(measure.slots[end].duration)) return { type: "ok", measures };
+			sum += slotDurationUnits(measure.slots[end].duration);
+			end++;
+		}
+		const consumed = end - slotIndex;
+		// Need an exact fit spanning at least the current slot plus one following slot.
+		if (sum !== targetUnits || consumed < 2) return { type: "ok", measures };
+	}
+
 	// The first slot's string data is kept, so its roll stroke and rest flag are kept
 	// too. When both the first and a later merged slot carry a stroke, the first wins
 	// (the later slots' data — stroke included — is discarded along with everything else).
@@ -951,17 +1070,20 @@ const DURATION_BY_UNITS: Map<number, Duration> = new Map(
 
 // Smaller note values the slot at `slotIndex` can be split into: each must divide
 // the slot evenly (integer sub-slot count) and the sub-slots must fit the measure's
-// remaining capacity. Ordered largest → smallest by NOTE_LADDER.
+// remaining capacity, plus the slot's triplet (three of it) when it has one and
+// the meter is simple — a compound beat already divides in three, so a triplet
+// there names nothing. Ordered by sub-slot count, fewest first. A triplet slot
+// offers nothing: its group is the unit.
 export function splitTargetsForSlot(
 	measure: Measure,
 	slotIndex: number,
 	timeSignature: [number, number],
 ): DurationTarget[] {
 	const slot = measure.slots[slotIndex];
-	if (!slot) return [];
+	if (!slot || isTripletDuration(slot.duration)) return [];
 	const currentUnits = slotDurationUnits(slot.duration);
 	const remaining = remainingUnits(measure.slots, timeSignature);
-	return NOTE_LADDER.flatMap((d) => {
+	const targets = NOTE_LADDER.flatMap((d) => {
 		const targetUnits = slotDurationUnits(d);
 		if (targetUnits >= currentUnits || currentUnits % targetUnits !== 0) return [];
 		const count = currentUnits / targetUnits;
@@ -969,16 +1091,31 @@ export function splitTargetsForSlot(
 		if (extra > remaining) return [];
 		return [{ duration: d, count }];
 	});
+	const triplet = tripletForPlainValue(slot.duration);
+	if (triplet && !isCompound(timeSignature)) {
+		targets.push({ duration: triplet, count: TRIPLET_GROUP_SIZE });
+	}
+	return targets.sort((a, b) => a.count - b.count);
 }
 
 // Larger note values the slot at `slotIndex` can be merged up to: walk the prefix
 // sums of [current, ...following] and, for every run of ≥ 2 slots whose durations
 // sum exactly to a ladder value, offer that value. The walk stops at a triplet
-// slot — a run mixing triplets and plain values is never a note. A merge keeps
-// the measure total (the sum equals the target), so capacity is never at issue.
-// Ordered smallest → largest target by the run length that produces it.
+// slot — a run mixing triplets and plain values is never a note. The first
+// member of a triplet group offers its plain value instead; the other members
+// offer nothing. A merge keeps the measure total (the sum equals the target), so
+// capacity is never at issue. Ordered smallest → largest target by the run
+// length that produces it.
 export function mergeTargetsForSlot(measure: Measure, slotIndex: number): DurationTarget[] {
 	const slots = measure.slots;
+	const slot = slots[slotIndex];
+	if (!slot) return [];
+	if (isTripletDuration(slot.duration)) {
+		const group = tripletGroupAt(slots, slotIndex);
+		return group && group.start === slotIndex
+			? [{ duration: tripletPlainValue(slot.duration), count: TRIPLET_GROUP_SIZE }]
+			: [];
+	}
 	const results: DurationTarget[] = [];
 	let sum = 0;
 	for (let end = slotIndex; end < slots.length; end++) {

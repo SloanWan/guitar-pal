@@ -8,6 +8,7 @@ import type {
 } from "@/lib/fingerpickTypes";
 import type { ValidationIssue } from "./types";
 import { isRenderSupported } from "./techniqueSupport";
+import { normalizeCapo } from "@/lib/strumProgressions";
 
 // ─── Duration helpers ─────────────────────────────────────────────────────────
 
@@ -298,7 +299,19 @@ function validateMeasure(
 		validateSlot(rawSlot, `${path}.slots[${slotIdx}]`, warnings, uniformDur),
 	);
 
-	return { id, slots };
+	// Repeat barlines are kept as written — a stored pattern (a share, a
+	// handoff) carries them, and dropping them would silently shorten the
+	// piece. Anything but the well-typed flag is treated as absent.
+	const measure: Measure = { id, slots };
+	if (obj.repeatStart === true) measure.repeatStart = true;
+	if (obj.repeatEnd === true) {
+		measure.repeatEnd = true;
+		const times = obj.repeatTimes;
+		if (typeof times === "number" && Number.isInteger(times) && times >= 2) {
+			measure.repeatTimes = times;
+		}
+	}
+	return measure;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -387,5 +400,9 @@ export function validateFingerpickPattern(raw: unknown): {
 	);
 
 	const pattern: FingerpickPattern = { id, name, description, bpm, timeSignature, measures };
+	// Same fold as `normalizeLoadedPattern`: a capo is kept only when it is a
+	// real fret, so no pattern leaves here with one the UI cannot show.
+	const capo = normalizeCapo(obj.capo);
+	if (capo > 0) pattern.capo = capo;
 	return { pattern, errors, warnings };
 }

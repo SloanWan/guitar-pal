@@ -279,7 +279,9 @@ async function chordVoicing(
 	const cached = peekVoicings(chord.root, chord.suffix);
 	return pick(cached ?? (await loadVoicings(chord.root, chord.suffix)));
 }
-const standardVoicing = (chord: Named) => chordVoicing(chord, selectStandardVoicing);
+/** Every voicing the library has for a chord, from the cache when it has them. */
+const allVoicings = async (chord: Named): Promise<ChordVoicing[]> =>
+	peekVoicings(chord.root, chord.suffix) ?? (await loadVoicings(chord.root, chord.suffix));
 /** The voicing with this id, else the standard one: a grip that was written, if it was. */
 const byId =
 	(id: string | null) =>
@@ -525,9 +527,12 @@ export default function FretboardExplorer({
 	);
 
 	/**
-	 * Load every shape the strip needs, then loop it. A strip, key or capo that
-	 * changed while the shapes loaded has stopped this press already, so its
-	 * bars are dropped rather than played over the new state.
+	 * Load every shape the strip needs, then loop it. With a position raised,
+	 * each bar takes the shape inside it when the library has one there, and
+	 * the standard shape when it does not — the strip stays under the hand as
+	 * far as it can. A strip, key or capo that changed while the shapes loaded
+	 * has stopped this press already, so its bars are dropped rather than
+	 * played over the new state.
 	 */
 	const startProgression = useCallback(() => {
 		if (!soundOn || progression.length === 0) return;
@@ -537,7 +542,9 @@ export default function FretboardExplorer({
 		const table = new Map<string, ChordVoicing | null>();
 		void Promise.all(
 			[...shapes].map(async ([key, shape]) => {
-				table.set(key, await standardVoicing(shape).catch(() => null));
+				const list = await allVoicings(shape).catch(() => null);
+				const inBox = list && chordBox ? reachableChords([shape], () => list, chordBox, capo)[0]?.voicing : undefined;
+				table.set(key, inBox ?? (list ? selectStandardVoicing(list) : null));
 			}),
 		)
 			.then(() => prepare(RUN_VOICE))
@@ -548,7 +555,7 @@ export default function FretboardExplorer({
 				player.play(progressionSteps(bars), barSeconds(progressionBpm), RUN_VOICE, { loop: true });
 			})
 			.catch(() => undefined);
-	}, [soundOn, progression, spec, capo, prepare, player, progressionBpm]);
+	}, [soundOn, progression, spec, capo, prepare, player, progressionBpm, chordBox]);
 
 	/** A new tempo while the strip plays restarts it at that tempo; between runs it just waits. */
 	const tempoDragging = useRef(false);
@@ -730,6 +737,20 @@ export default function FretboardExplorer({
 		[chordBox, voicingsLoaded, keyVoicings, fingeredChords, capo],
 	);
 	const positionPlaying = playing?.source === "position" && player.isPlaying;
+
+	// Raising, moving or clearing the position while the strip loops restarts
+	// it with the shapes that position gives, so the sound follows the frame.
+	// Read through refs so that only the frame, not every re-render of the
+	// starter, triggers it.
+	const restartStrip = useRef<() => void>(() => {});
+	useEffect(() => {
+		restartStrip.current = () => {
+			if (playing?.source === "strip") startProgression();
+		};
+	}, [playing, startProgression]);
+	useEffect(() => {
+		restartStrip.current();
+	}, [chordBox]);
 
 	/** Moving or clearing the position ends a walk through it; the strip's loop is not its business. */
 	const stopWalk = useCallback(() => {

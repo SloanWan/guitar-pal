@@ -764,6 +764,33 @@ describe("FretboardExplorer — a hand position in Chords mode", () => {
 		ex.unmount();
 	});
 
+	it("plays the strip inside the position where a shape fits, and restarts it when the frame moves", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.button("Add I").click());
+		act(() => ex.button("Add ii").click());
+		act(() => ex.button("Play progression").click());
+		await ex.settle();
+		// No frame: the standard shapes.
+		expect(runner.play).toHaveBeenCalledTimes(1);
+		expect(runner.play.mock.calls[0][0].map((s: SequenceStep) => s.midis)).toEqual([
+			[48, 52, 55, 60, 64],
+			[50, 57, 62, 65],
+		]);
+		// A frame at 5–9 while it loops: the strip starts again with C held up
+		// there (xx1114 at the fifth fret); Dm has nothing there and keeps its shape.
+		act(() => ex.rightPress("0:5"));
+		await ex.settle();
+		expect(runner.play).toHaveBeenCalledTimes(2);
+		const [steps, , , options] = runner.play.mock.calls[1];
+		expect(steps.map((s: SequenceStep) => s.midis)).toEqual([
+			[55, 60, 64, 72],
+			[50, 57, 62, 65],
+		]);
+		expect(options).toEqual({ loop: true });
+		ex.unmount();
+	});
+
 	it("re-lists the frame for a new key, and clears it on a mode change", async () => {
 		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
 		await ex.settle();

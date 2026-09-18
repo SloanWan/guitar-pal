@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     supabase_url: str = Field(
         validation_alias=AliasChoices("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
     )
+    # Storage requests carry the player's session token for authorization and
+    # the project's anon key as the `apikey` header, like the browser's do.
+    supabase_anon_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    )
     # Legacy projects sign session JWTs with a shared HS256 secret. Newer ones
     # publish asymmetric keys at /auth/v1/.well-known/jwks.json, in which case
     # this stays unset and JWKS is the only path.
@@ -33,6 +39,10 @@ class Settings(BaseSettings):
     # from vision or the player's own ranges.
     tessdata_prefix: str | None = Field(default=None, validation_alias="TESSDATA_PREFIX")
     ocr_languages: str = Field(default="chi_sim+eng", validation_alias="BOOK_SERVICE_OCR_LANGUAGES")
+
+    @property
+    def storage_url(self) -> str:
+        return f"{self.supabase_url.rstrip('/')}/storage/v1"
 
     @property
     def jwt_issuer(self) -> str:

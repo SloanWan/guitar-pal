@@ -1,0 +1,218 @@
+"""
+`/books`: the routes the Next.js proxy forwards. Thin: validate, call the
+repo, hand the long job to the scanner. Every handler starts from the
+verified session, and every repo call takes its `user_id`.
+"""
+
+from datetime import datetime
+from typing import Annotated, Literal
+
+import asyncpg
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from app.auth import CurrentSession
+from app.db import get_pool
+from app.ingest.toc import MAX_TITLE_CHARS, Chapter
+from app.repo import BookRepo, BookRow, ChapterRow
+from app.scan import Scanner
+from app.storage import StorageClient, StorageError
+
+router = APIRouter(prefix="/books", tags=["books"])
+
+# --- request / response shapes ------------------------------------------------
+
+
+class CreateBook(BaseModel):
+    title: str = Field(min_length=1, max_length=MAX_TITLE_CHARS)
+
+
+class ChapterRange(BaseModel):
+    title: str = Field(min_length=1, max_length=MAX_TITLE_CHARS)
+    page_start: int = Field(ge=1)
+    page_end: int = Field(ge=1)
+
+
+class ReplaceChapters(BaseModel):
+    chapters: list[ChapterRange] = Field(min_length=1)
+
+
+class BookOut(BaseModel):
+    id: str
+    title: str
+    page_count: int | None
+    storage_path: str
+    status: Literal["uploaded", "scanning", "ready", "failed"]
+    toc_source: Literal["outline", "text", "vision", "manual"] | None
+    error: str | None
+    scanned_pages: int
+    created_at: datetime
+
+    @classmethod
+    def of(cls, row: BookRow) -> "BookOut":
+        return cls(
+            id=row.id,
+            title=row.title,
+            page_count=row.page_count,
+            storage_path=row.storage_path,
+            status=row.status,
+            toc_source=row.toc_source,
+            error=row.error,
+            scanned_pages=row.scanned_pages,
+            created_at=row.created_at,
+        )
+
+
+class ChapterOut(BaseModel):
+    id: str
+    index: int
+    title: str
+    page_start: int
+    page_end: int
+    exercise_hint_count: int
+    parsed_at: datetime | None
+
+    @classmethod
+    def of(cls, row: ChapterRow) -> "ChapterOut":
+        return cls(
+            id=row.id,
+            index=row.index,
+            title=row.title,
+            page_start=row.page_start,
+            page_end=row.page_end,
+            exercise_hint_count=row.exercise_hint_count,
+            parsed_at=row.parsed_at,
+        )
+
+
+class BookDetail(BookOut):
+    chapters: list[ChapterOut]
+
+
+# --- the manual ranges ----------------------------------------------------------
+
+
+def validate_ranges(ranges: list[ChapterRange], page_count: int) -> list[Chapter]:
+    """
+    The player's own chapters: in page order, inside the book, not
+    overlapping. Gaps are allowed — pages nobody wants parsed are fine —
+    and titles are the player's, kept as typed.
+    """
+    chapters: list[Chapter] = []
+    previous_end = 0
+    for r in sorted(ranges, key=lambda r: r.page_start):
+        if r.page_end < r.page_start:
+            raise HTTPException(422, f"'{r.title}' ends before it starts.")
+        if r.page_end > page_count:
+            raise HTTPException(422, f"'{r.title}' runs past page {page_count}.")
+        if r.page_start <= previous_end:
+            raise HTTPException(422, f"'{r.title}' overlaps the chapter before it.")
+        chapters.append(Chapter(" ".join(r.title.split()), r.page_start, r.page_end))
+        previous_end = r.page_end
+    return chapters
+
+
+# --- dependencies ------------------------------------------------------------------
+
+
+def get_repo(pool: Annotated[asyncpg.Pool, Depends(get_pool)]) -> BookRepo:
+    return BookRepo(pool)
+
+
+def get_storage(request: Request) -> StorageClient:
+    storage = getattr(request.app.state, "storage", None)
+    if storage is None:
+        raise HTTPException(503, "Book import is not configured on this deployment (no Storage).")
+    return storage
+
+
+def get_scanner(request: Request) -> Scanner:
+    scanner = getattr(request.app.state, "scanner", None)
+    if scanner is None:
+        raise HTTPException(503, "Book import is not configured on this deployment.")
+    return scanner
+
+
+Repo = Annotated[BookRepo, Depends(get_repo)]
+Storage = Annotated[StorageClient, Depends(get_storage)]
+
+
+async def owned_book(repo: BookRepo, user_id: str, book_id: str) -> BookRow:
+    book = await repo.get_book(user_id, book_id)
+    if book is None:
+        # Another user's book and a book that does not exist look the same.
+        raise HTTPException(404, "Book not found.")
+    return book
+
+
+# --- routes ------------------------------------------------------------------
+
+
+@router.post("", status_code=201, response_model=BookOut)
+async def create_book(body: CreateBook, session: CurrentSession, repo: Repo) -> BookOut:
+    """
+    The row first, so the browser knows the path to upload to. The upload
+    itself goes straight to Storage with the player's session, then
+    `POST /books/{id}/scan`.
+    """
+    return BookOut.of(await repo.create_book(session.user_id, body.title.strip()))
+
+
+@router.get("", response_model=list[BookOut])
+async def list_books(session: CurrentSession, repo: Repo) -> list[BookOut]:
+    return [BookOut.of(b) for b in await repo.list_books(session.user_id)]
+
+
+@router.get("/{book_id}", response_model=BookDetail)
+async def get_book(book_id: str, session: CurrentSession, repo: Repo) -> BookDetail:
+    book = await owned_book(repo, session.user_id, book_id)
+    chapters = await repo.list_chapters(book.id)
+    return BookDetail(
+        **BookOut.of(book).model_dump(), chapters=[ChapterOut.of(c) for c in chapters]
+    )
+
+
+@router.post("/{book_id}/scan", status_code=202, response_model=BookOut)
+async def scan_book(
+    book_id: str,
+    session: CurrentSession,
+    repo: Repo,
+    scanner: Annotated[Scanner, Depends(get_scanner)],
+    background: BackgroundTasks,
+) -> BookOut:
+    """
+    Schedules the whole-book pass; poll `GET /books/{id}` for progress. A
+    book already scanning answers 409 rather than starting a second job.
+    """
+    await owned_book(repo, session.user_id, book_id)
+    book = await repo.start_scan(session.user_id, book_id)
+    if book is None:
+        raise HTTPException(409, "This book is being scanned already.")
+    # The scan reads the PDF with this same session token; a token that
+    # expires mid-scan only matters for the download, which happens first.
+    background.add_task(scanner.run, book.id, book.storage_path, session.token)
+    return BookOut.of(book)
+
+
+@router.put("/{book_id}/chapters", response_model=BookDetail)
+async def replace_chapters(
+    book_id: str, body: ReplaceChapters, session: CurrentSession, repo: Repo
+) -> BookDetail:
+    book = await owned_book(repo, session.user_id, book_id)
+    if book.status == "scanning":
+        raise HTTPException(409, "Wait for the scan to finish before editing chapters.")
+    if book.page_count is None:
+        raise HTTPException(409, "Scan the book first, so its page count is known.")
+    await repo.replace_chapters(book.id, validate_ranges(body.chapters, book.page_count))
+    return await get_book(book_id, session, repo)
+
+
+@router.delete("/{book_id}", status_code=204)
+async def delete_book(book_id: str, session: CurrentSession, repo: Repo, storage: Storage) -> None:
+    """The PDF first, as the player; then the row, and every row under it."""
+    book = await owned_book(repo, session.user_id, book_id)
+    try:
+        await storage.delete(book.storage_path, session.token)
+    except StorageError as e:
+        raise HTTPException(502, f"Storage: {e.message}") from e
+    await repo.delete_book(session.user_id, book_id)

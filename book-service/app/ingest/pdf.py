@@ -81,13 +81,20 @@ class OcrConfig:
         ]
 
 
+class UnreadablePdf(ValueError):
+    """The bytes or file are not a PDF PyMuPDF can open."""
+
+
 @contextmanager
 def open_pdf(source: bytes | str | Path) -> Iterator[pymupdf.Document]:
-    doc = (
-        pymupdf.open(stream=source, filetype="pdf")
-        if isinstance(source, bytes)
-        else pymupdf.open(source)
-    )
+    try:
+        doc = (
+            pymupdf.open(stream=source, filetype="pdf")
+            if isinstance(source, bytes)
+            else pymupdf.open(source)
+        )
+    except Exception as e:
+        raise UnreadablePdf(str(e)) from e
     try:
         yield doc
     finally:

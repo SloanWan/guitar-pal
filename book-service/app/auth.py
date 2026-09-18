@@ -14,6 +14,7 @@ says which, and each is checked against the matching source only — an HS256
 token is never verified against a JWKS key, or the other way round.
 """
 
+from dataclasses import dataclass
 from typing import Annotated, Protocol
 
 import jwt
@@ -114,19 +115,32 @@ def get_verifier(request: Request) -> TokenVerifier:
     return verifier
 
 
-def require_user(
+@dataclass(frozen=True)
+class Session:
+    """A verified request: whose it is, and the token to act on Storage as them."""
+
+    user_id: str
+    token: str
+
+
+def require_session(
     request: Request,
     verifier: Annotated[TokenVerifier, Depends(get_verifier)],
-) -> str:
-    """FastAPI dependency: the verified user id, or a 401."""
+) -> Session:
+    """FastAPI dependency: the verified session, or a 401."""
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or token == "":
         raise HTTPException(status_code=401, detail="Sign in to use book import.")
     try:
-        return verifier.user_id(token)
+        return Session(user_id=verifier.user_id(token), token=token)
     except AuthError as e:
         raise HTTPException(status_code=401, detail=e.message) from e
 
 
+def require_user(session: Annotated[Session, Depends(require_session)]) -> str:
+    return session.user_id
+
+
+CurrentSession = Annotated[Session, Depends(require_session)]
 CurrentUser = Annotated[str, Depends(require_user)]

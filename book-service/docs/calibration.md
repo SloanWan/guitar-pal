@@ -31,7 +31,10 @@ pages (says chapter 1 inside chapters 2–4). The prompt tells the model the
 page body outranks the header; it did.
 
 EN-9 (no contents page, no chapter level in the excerpt): 1525 / 153 tokens,
-one chapter p1–9 titled from the opener. Correct.
+one chapter p1–9 titled from the opener. Correct. Three later runs of the
+same digest through the live A3 flow answered once with that and twice with
+"Introduction p1" + "Songwriting Cheat Sheets p2–9" — the model is not
+deterministic on where an opener page belongs; both readings are usable.
 
 The issue's original design read the first ~20 pages only. Dropped: with a
 contents page that has no page numbers, the starts of chapters 3 and 4 (p24,
@@ -127,3 +130,16 @@ the chapter boundary the vision-TOC step would have cost ~$0.06 to look for.
   and could use OCR garble rate (short fragment lines) as a diagram signal.
 - Sample size is one book per class. A second scanned book, a strum-notation
   page and a text-layer tab page are the next things to run.
+
+## 4. The live flow (A3)
+
+`tests/test_live_books.py` against the real project, typeset excerpt:
+create → upload as the player → scan (text layer, one model call) → chapters
+→ manual ranges → delete, 46 s end to end, of which the model call is a few
+seconds and the rest is Storage round-trips.
+
+One thing the flow taught: Storage sits behind a CDN that keeps serving an
+object after it was deleted (`cf-cache-status: HIT` seconds after a 200 on
+the delete, list already empty). The service's download therefore carries
+a unique query string, so a rescan after a re-upload to the same path reads
+the new file, and the test checks deletion through the list endpoint.

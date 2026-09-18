@@ -8,10 +8,14 @@ Thin on purpose: FastAPI, asyncpg with plain SQL, Alembic for its own tables, `B
 
 ```
 app/
-  main.py      app factory, lifespan, /health, /me
+  main.py      app factory, lifespan, /health, /me; wires Storage, OCR, the model reader
   config.py    Settings — everything read from the environment
-  auth.py      Supabase JWT verification (JWKS, HS256 fallback), the CurrentUser dependency
+  auth.py      Supabase JWT verification (JWKS, HS256 fallback), the CurrentSession dependency
   db.py        the asyncpg pool; stale-scan cleanup at startup
+  books.py     the /books routes and the manual-range validation
+  repo.py      the book tables as plain SQL, every query filtered by user_id
+  scan.py      the background whole-book scan (download → pages/OCR → tags → chapters)
+  storage.py   Supabase Storage as the player (download, delete)
   ingest/      the whole-book pass: pdf.py (PyMuPDF boundary, OCR), tag.py
                (may_have_exercise rules), toc.py (outline → text TOC → vision TOC →
                whole book), model.py (the one model call), __main__.py (calibration by hand)
@@ -99,6 +103,35 @@ What the text-TOC call costs: ~5 lines per page go to the model, so roughly
 
 CI runs both (`.github/workflows/ci.yml`, job `book-service`). The husky pre-commit hook is Node-only; run these by hand before pushing Python changes.
 
+## The API
+
+All routes take the player's Supabase session as `Authorization: Bearer`
+(the Next.js proxy forwards it) and answer only for that player's books —
+another user's book is a 404, the same as no book.
+
+| route | what |
+|---|---|
+| `POST /books` `{title}` | the row and its `storage_path` (`{user_id}/{book_id}.pdf`). The browser then uploads the PDF straight to the `books` bucket at that path with its own session. |
+| `POST /books/{id}/scan` | starts the whole-book pass in the background; 202 with the row, 409 if already scanning. Rescanning a `ready` or `failed` book is allowed and replaces its pages and chapters. |
+| `GET /books` | the player's books, newest first |
+| `GET /books/{id}` | the book with `status`, `scanned_pages` / `page_count` for progress, `error`, and its chapters with `exercise_hint_count` |
+| `PUT /books/{id}/chapters` `{chapters: [{title, page_start, page_end}]}` | the player's own ranges: sorted, inside the book, non-overlapping (gaps allowed). `toc_source` becomes `manual`; hint counts are recomputed from the tagged pages. |
+| `DELETE /books/{id}` | the PDF (as the player) and every row under the book |
+
+A scan reads the PDF with the session token from the request that started
+it, then never needs it again; the model call, if any, uses the server's
+`ANTHROPIC_API_KEY`. One scan runs at a time per process (OCR is a core's
+worth of work); others queue behind it while their status already says
+`scanning`.
+
+Without `NEXT_PUBLIC_SUPABASE_ANON_KEY` on the service there is no Storage
+client and the scan and delete routes answer 503, like the book routes do
+without a database.
+
+The whole flow against the real project is `tests/test_live_books.py`,
+opt-in with a session token (its docstring says how). It uploads the typeset
+excerpt, scans it, edits its chapters and deletes it again.
+
 ## Database
 
 Two roles, two URLs:
@@ -112,7 +145,8 @@ Setup, once per Supabase project:
 
 1. `scripts/create-book-service-role.sql` in the SQL editor — set a real password first.
 2. `scripts/create-books-bucket.sql` — the private `books` bucket and its Storage policies.
-3. `BOOK_SERVICE_MIGRATION_DATABASE_URL=... alembic upgrade head`
+3. `BOOK_SERVICE_MIGRATION_DATABASE_URL=... alembic upgrade head` — again after
+   every pull that adds a revision under `alembic/versions/`
 
 Migrations create their tables and grant on them to `book_service` in the same revision, so the role's reach is readable per table. The alembic version table is `book_service_alembic_version`, apart from anything else in the schema.
 

@@ -307,4 +307,32 @@ describe("validateFingerpickPattern — measure/slot repair", () => {
 		const bad = makePattern({ measures: [makeMeasure([makeSlot({ chord: { root: 3 } })])] });
 		expect(validateFingerpickPattern(bad).pattern?.measures[0].slots[0].chord).toBeUndefined();
 	});
+
+	it("keeps repeat barlines as written, and drops anything that is not the flag", () => {
+		const raw = makePattern({
+			measures: [
+				{ ...makeMeasure([makeSlot()], "m1"), repeatStart: true },
+				{ ...makeMeasure([makeSlot()], "m2"), repeatEnd: true, repeatTimes: 3 },
+				{ ...makeMeasure([makeSlot()], "m3"), repeatStart: "yes", repeatEnd: 1, repeatTimes: 3 },
+				{ ...makeMeasure([makeSlot()], "m4"), repeatEnd: true, repeatTimes: 1.5 },
+			],
+		});
+		const { pattern } = validateFingerpickPattern(raw);
+		expect(pattern?.measures[0]).toMatchObject({ repeatStart: true });
+		expect(pattern?.measures[0].repeatEnd).toBeUndefined();
+		expect(pattern?.measures[1]).toMatchObject({ repeatEnd: true, repeatTimes: 3 });
+		expect(pattern?.measures[2].repeatStart).toBeUndefined();
+		expect(pattern?.measures[2].repeatEnd).toBeUndefined();
+		expect(pattern?.measures[2].repeatTimes).toBeUndefined();
+		expect(pattern?.measures[3].repeatEnd).toBe(true);
+		expect(pattern?.measures[3].repeatTimes).toBeUndefined();
+	});
+
+	it("keeps a real capo and folds junk to no capo", () => {
+		expect(validateFingerpickPattern(makePattern({ capo: 3 })).pattern?.capo).toBe(3);
+		expect(validateFingerpickPattern(makePattern({ capo: 0 })).pattern?.capo).toBeUndefined();
+		expect(validateFingerpickPattern(makePattern({ capo: "3" })).pattern?.capo).toBeUndefined();
+		expect(validateFingerpickPattern(makePattern({ capo: -2 })).pattern?.capo).toBeUndefined();
+		expect(validateFingerpickPattern(makePattern({})).pattern?.capo).toBeUndefined();
+	});
 });

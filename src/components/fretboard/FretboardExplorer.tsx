@@ -14,8 +14,10 @@
  * Scale mode: the neck shows the scale across the neck, the piano tints its
  * pitch classes, a chord from the picker lays its tones over the scale, and
  * pressing anything sounds that note. Chords mode: the piano's keys become the
- * key's chords, pressing one lights that chord's standard voicing on the neck
- * and sounds it; pressing a note of the shape strums the shape.
+ * key's chords, pressing one lights that chord's shape on the neck and sounds
+ * it; pressing a note of the shape strums the shape. The octave of the key
+ * picks the shape: a guitar changes register by changing position, so a low
+ * key holds the open shape and a high one the barre up the neck.
  *
  * The chord is held as **semitones above the key's root**, not as a pitch
  * class, so changing key or scale keeps the degree and transposes the chord
@@ -100,6 +102,7 @@ import type { FretMark, FretWindow } from "@/lib/fretboard/types";
 import { PIANO_61, pitchClassOf, type PianoKey, type PianoRange } from "@/lib/piano/keys";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 import { parseMusicalText } from "@/lib/musicalNotation";
+import { voicingNearest } from "@/lib/fretboard/voicingRegister";
 import { STRUM_CAPO_MAX, type ChordRef } from "@/lib/strumPatterns";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 
@@ -268,12 +271,20 @@ const LEGEND: readonly { emphasis: FretMark["emphasis"]; tone?: FretMark["tone"]
 	{ emphasis: "scaleTone", label: "Scale tone" },
 ];
 
-/** A chord's voicing, from the cache when it has it: the one asked for by id, else the standard one. */
-async function standardVoicing(chord: Named, voicingId: string | null = null): Promise<ChordVoicing | null> {
+/** One of a chord's voicings, chosen by `pick` from the cache when it has them. */
+async function chordVoicing(
+	chord: Named,
+	pick: (list: ChordVoicing[]) => ChordVoicing | null,
+): Promise<ChordVoicing | null> {
 	const cached = peekVoicings(chord.root, chord.suffix);
-	const list = cached ?? (await loadVoicings(chord.root, chord.suffix));
-	return (voicingId ? list.find((v) => v.id === voicingId) : undefined) ?? selectStandardVoicing(list);
+	return pick(cached ?? (await loadVoicings(chord.root, chord.suffix)));
 }
+const standardVoicing = (chord: Named) => chordVoicing(chord, selectStandardVoicing);
+/** The voicing with this id, else the standard one: a grip that was written, if it was. */
+const byId =
+	(id: string | null) =>
+	(list: ChordVoicing[]): ChordVoicing | null =>
+		(id ? list.find((v) => v.id === id) : undefined) ?? selectStandardVoicing(list);
 
 export default function FretboardExplorer({
 	initialRoot = "A",
@@ -293,6 +304,8 @@ export default function FretboardExplorer({
 	const [voicing, setVoicing] = useState<{ chord: Named; voicing: ChordVoicing | null } | null>(null);
 	/** Chords mode: a shape named or written in the Shape field, shown in place of the degree. */
 	const [held, setHeld] = useState<HeldChord | null>(null);
+	/** Chords mode: the key that picked the degree, whose octave picks the shape; null takes the standard one. */
+	const [chordKeyMidi, setChordKeyMidi] = useState<number | null>(null);
 	/** The chord library's names, for the Shape field; loaded on entering Chords mode. */
 	const [chordIndex, setChordIndex] = useState<ChordIndexEntry[]>([]);
 	/** Chords mode: the strip, as intervals above the key's root. Session-only. */
@@ -384,7 +397,15 @@ export default function FretboardExplorer({
 		if (!named) return;
 		const target = named.shape;
 		let live = true;
-		void standardVoicing(target, held && sameChord(held, target) ? held.voicingId : null)
+		// The grip written for this chord; else the shape nearest the key that
+		// picked it; else the standard one.
+		const pick =
+			held && sameChord(held, target)
+				? byId(held.voicingId)
+				: !held && chordKeyMidi !== null
+					? (list: ChordVoicing[]) => voicingNearest(list, chordKeyMidi, capo)
+					: selectStandardVoicing;
+		void chordVoicing(target, pick)
 			.catch(() => null)
 			.then((v) => {
 				if (live) setVoicing({ chord: target, voicing: v });
@@ -392,7 +413,7 @@ export default function FretboardExplorer({
 		return () => {
 			live = false;
 		};
-	}, [named, held]);
+	}, [named, held, chordKeyMidi, capo]);
 	// A sounding bar brings its own voicing, resolved before play began; a
 	// shape picked from a position stands in while it is that chord's.
 	const shapeVoicing = playingBar
@@ -598,11 +619,12 @@ export default function FretboardExplorer({
 			}
 			const interval = mod12(pc - rootPc);
 			setChordInterval(interval);
+			setChordKeyMidi(midi);
 			setPinned(null);
 			setHeld(null);
 			if (!soundOn) return;
 			const next = chordModeView(spec, capo, rootPc + interval);
-			void standardVoicing(next.shape)
+			void chordVoicing(next.shape, (list) => voicingNearest(list, midi, capo))
 				.catch(() => null)
 				.then((v) => {
 					// The marks land on the next frame; strike after them so lit notes pulse.
@@ -642,7 +664,7 @@ export default function FretboardExplorer({
 			if (!soundOn) return;
 			// The shape to sound is the named chord itself, or the one the capo puts under it.
 			const shape = side === "shape" ? next : transposeChord(next.root, next.suffix, -capo);
-			void standardVoicing(shape, sameChord(shape, next) ? next.voicingId : null)
+			void chordVoicing(shape, byId(sameChord(shape, next) ? next.voicingId : null))
 				.catch(() => null)
 				.then((v) => {
 					// The marks land on the next frame; strike after them so lit notes pulse.

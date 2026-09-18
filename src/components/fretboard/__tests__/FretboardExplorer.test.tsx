@@ -50,11 +50,20 @@ vi.mock("@/components/fretboard/useSequencePlayer", async (original) => {
 });
 vi.mock("@/components/strum/ChordPickerModal", () => ({ default: () => null }));
 
-function voicing(frets: string, fingers = "000000"): ChordVoicing {
-	return { id: frets, label: "Standard", start_fret: 1, barre_fret: null, capo: false, frets, fingers };
+function voicing(frets: string, fingers = "000000", start_fret = 1): ChordVoicing {
+	return {
+		id: `${frets}@${start_fret}`,
+		label: start_fret === 1 ? "Standard" : null,
+		start_fret,
+		barre_fret: null,
+		capo: false,
+		frets,
+		fingers,
+	};
 }
 const LIBRARY: Record<string, ChordVoicing[]> = {
-	"C major": [voicing("x32010")],
+	// C has a second shape up the neck: a triad at the fifth fret topping out on C5.
+	"C major": [voicing("x32010"), voicing("xx1114", "000000", 5)],
 	"E minor": [voicing("022000")],
 	"D minor": [voicing("xx0231")],
 	"C# major": [voicing("x43121")],
@@ -211,6 +220,29 @@ describe("FretboardExplorer — Chords mode", () => {
 		expect(ex.key(55).hasAttribute("data-exact")).toBe(true); // G3, the third
 		expect(ex.key(67).hasAttribute("data-tone")).toBe(false); // G4, a third the shape never plays
 		expect(sound.playChord).toHaveBeenCalledWith([40, 47, 52, 55, 59, 64], "piano");
+		ex.unmount();
+	});
+
+	it("holds the shape nearest the octave of the key pressed", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.key(48).click()); // C3: the open C
+		await ex.settle();
+		expect(ex.lit().sort()).toEqual(["0:0=muted", "1:3=root", "2:2=chordTone", "3:0=chordTone", "4:1=root", "5:0=chordTone"].sort());
+		act(() => ex.key(72).click()); // C5: the triad at the fifth fret, topping out on that key
+		await ex.settle();
+		expect(ex.readout()).toBe("C · I");
+		expect(ex.lit().sort()).toEqual(["0:0=muted", "1:0=muted", "2:5=chordTone", "3:5=root", "4:5=chordTone", "5:8=root"].sort());
+		expect(
+			[...ex.host.querySelectorAll(".pk-board [data-selected], .pk-board [data-tone]")]
+				.map((el) => Number((el as HTMLElement).dataset.midi))
+				.sort((a, b) => a - b),
+		).toEqual([55, 60, 64, 72]);
+		expect(sound.playChord).toHaveBeenLastCalledWith([55, 60, 64, 72], "piano");
+		// The register outlives a key change: I in D has one shape, so it is that one.
+		act(() => ex.clickRadio("Key", "D"));
+		await ex.settle();
+		expect(ex.readout()).toBe("D · I");
 		ex.unmount();
 	});
 
@@ -693,8 +725,9 @@ describe("FretboardExplorer — a hand position in Chords mode", () => {
 		act(() => ex.rightPress("0:5"));
 		await ex.settle();
 		expect(ex.host.textContent).toContain("Position 5–9");
-		expect(chips(ex)).toEqual([]);
-		expect(note(ex)).toBe("Nothing fits here.");
+		// Only C has a shape up here, the triad at the fifth fret.
+		expect(chips(ex)).toEqual(["I C"]);
+		expect(note(ex)).toBe("Only I fits here.");
 		// Capo 1: the frame is on the fingered neck, where iii is an E♭m shape at
 		// frets 6–8 held above the capo — inside the frame, and heard as Em.
 		act(() => ex.toggle("Capo"));

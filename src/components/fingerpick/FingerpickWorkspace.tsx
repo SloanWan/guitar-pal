@@ -20,7 +20,7 @@ import { saveLastPattern } from "@/lib/lastPattern";
 import { saveUserFingerpickPattern } from "@/lib/fingerpickPatternSync";
 import { uniquePatternName } from "@/lib/uniquePatternName";
 import { createShare, newShareId, shareUrl, type SharedFingerpick } from "@/lib/sharedItems";
-import SharedPatternPanel from "@/components/fingerpick/SharedPatternPanel";
+import SharedPatternPanel from "@/components/SharedPatternPanel";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
@@ -623,6 +623,14 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		writeLastPatternId(selectedPattern.id);
 	}, [selectedPattern.id, patternRestored, shared]);
 
+	// What the shared panel says under the name: tempo, meter, length, capo.
+	const sharedMeta = [
+		`${beatUnitGlyph(selectedPattern.timeSignature)} = ${selectedPattern.bpm}`,
+		`${selectedPattern.timeSignature[0]}/${selectedPattern.timeSignature[1]}`,
+		`${selectedPattern.measures.length} bar${selectedPattern.measures.length === 1 ? "" : "s"}`,
+		...(patternCapo(selectedPattern) > 0 ? [`Capo ${patternCapo(selectedPattern)}`] : []),
+	].join(" · ");
+
 	// Share: the pattern as it is on screen (a session capo comes along) as a
 	// snapshot under a fresh id. The link goes on the clipboard first, inside
 	// the click — Safari refuses a clipboard write after an await — and the
@@ -769,7 +777,8 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 					<div className="hidden lg:flex w-72 h-full border-r border-line bg-sidebar flex-col shrink-0">
 						<SharedPatternPanel
 							variant="sidebar"
-							pattern={selectedPattern}
+							name={selectedPattern.name}
+							meta={sharedMeta}
 							user={user}
 							loading={loading}
 							importing={importing}
@@ -827,7 +836,8 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 							<div className="mb-4 shrink-0 lg:hidden">
 								<SharedPatternPanel
 									variant="strip"
-									pattern={selectedPattern}
+									name={selectedPattern.name}
+									meta={sharedMeta}
 									user={user}
 									loading={loading}
 									importing={importing}

@@ -4,14 +4,13 @@ import type { User } from "@supabase/supabase-js";
 import { Download, Loader2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "@/components/AppLink";
-import type { FingerpickPattern } from "@/lib/fingerpickTypes";
-import { patternCapo } from "@/lib/fingerpickChords";
-import { beatUnitGlyph } from "@/lib/strumMeter";
 
 interface SharedPatternPanelProps {
 	/** `sidebar` fills the library's column at lg; `strip` sits over the tab below it. */
 	variant: "sidebar" | "strip";
-	pattern: FingerpickPattern;
+	/** The shared pattern's name, and a one-line summary (tempo, meter, size, capo). */
+	name: string;
+	meta: string;
 	user: User | null;
 	/** The user is still being resolved: the import must not guess guest or account. */
 	loading: boolean;
@@ -20,13 +19,14 @@ interface SharedPatternPanelProps {
 }
 
 /**
- * What stands in for the library on a shared snapshot (/p/[id]): what this is,
- * and the one thing to do with it — import a copy into the viewer's own
- * library, which is also the only way to edit it.
+ * What stands in for the library on a shared snapshot (/p/[id]), fingerpick or
+ * strum: what this is, and the one thing to do with it — import a copy into
+ * the viewer's own library, which is also the only way to edit it.
  */
 export default function SharedPatternPanel({
 	variant,
-	pattern,
+	name,
+	meta,
 	user,
 	loading,
 	importing,
@@ -34,14 +34,6 @@ export default function SharedPatternPanel({
 }: SharedPatternPanelProps) {
 	const pathname = usePathname();
 	const signInHref = `/auth?redirect=${encodeURIComponent(pathname)}`;
-	const bars = pattern.measures.length;
-	const capo = patternCapo(pattern);
-	const meta = [
-		`${beatUnitGlyph(pattern.timeSignature)} = ${pattern.bpm}`,
-		`${pattern.timeSignature[0]}/${pattern.timeSignature[1]}`,
-		`${bars} bar${bars === 1 ? "" : "s"}`,
-		...(capo > 0 ? [`Capo ${capo}`] : []),
-	].join(" · ");
 	const hint = user ? (
 		<>Want to change it? Importing saves a copy to your patterns, ready to edit.</>
 	) : (
@@ -91,7 +83,7 @@ export default function SharedPatternPanel({
 			</div>
 			<div className="flex flex-col gap-4 px-5 py-5">
 				<div className="flex flex-col gap-1">
-					<span className="text-[13px] font-medium text-ink">{pattern.name}</span>
+					<span className="text-[13px] font-medium text-ink">{name}</span>
 					<span className="text-xs uppercase tracking-wider text-tab-meta">{meta}</span>
 				</div>
 				{button}

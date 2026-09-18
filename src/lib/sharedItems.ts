@@ -2,6 +2,10 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { FingerpickPattern } from "./fingerpickTypes";
 import { normalizeLoadedPattern } from "./fingerpickEdit";
 import { validateFingerpickPattern } from "./tabImport";
+import type { Bar, Beat, ChordProgression, StrumPattern } from "./strumPatterns";
+import { normalizeBars, normalizeBeats, normalizeBpm, patternBpm, patternMeter, validateBars } from "./strumBars";
+import { normalizeMeter } from "./strumMeter";
+import { normalizeCapo } from "./strumProgressions";
 
 /**
  * Public share links (issue #215).
@@ -11,8 +15,8 @@ import { validateFingerpickPattern } from "./tabImport";
  * link opens the copy in the full player; the sharer's own row is never read
  * by anyone else, and the link outlives edits and deletions of the original.
  *
- * The strum kind (pattern + optional progression) is in the schema already;
- * its read path arrives with the strum share page.
+ * Two kinds: a fingerpick pattern (a tab), and a strum pattern with, when one
+ * was open, the chord progression written over it.
  */
 
 export const SHARE_ID_LENGTH = 10;
@@ -23,7 +27,14 @@ export interface SharedFingerpick {
 	pattern: FingerpickPattern;
 }
 
-export type SharedItem = SharedFingerpick;
+export interface SharedStrum {
+	kind: "strum";
+	pattern: StrumPattern;
+	/** The progression that was open when the pattern was shared, if any. */
+	progression: ChordProgression | null;
+}
+
+export type SharedItem = SharedFingerpick | SharedStrum;
 
 export type SharedItemKind = SharedItem["kind"];
 
@@ -69,10 +80,81 @@ export function sharePath(id: string): string {
  * mislead a library sorted newest-first.
  */
 export function toSharePayload(item: SharedItem): Record<string, unknown> {
-	const { id: _id, createdAt: _createdAt, ...pattern } = item.pattern;
-	void _id;
-	void _createdAt;
-	return pattern;
+	if (item.kind === "fingerpick") {
+		const { id: _id, createdAt: _createdAt, ...pattern } = item.pattern;
+		void _id;
+		void _createdAt;
+		return pattern;
+	}
+	// A progression's identity, list position and reconcile bookkeeping are
+	// all about the sharer's library; the viewer's copy starts its own.
+	const { pattern, progression } = item;
+	return {
+		pattern: {
+			name: pattern.name,
+			beats: pattern.beats,
+			bpm: patternBpm(pattern),
+			meter: patternMeter(pattern),
+		},
+		...(progression
+			? {
+					progression: {
+						bars: progression.bars,
+						...(progression.name?.trim() ? { name: progression.name.trim() } : {}),
+						...(progression.bpm === undefined ? {} : { bpm: normalizeBpm(progression.bpm) }),
+						...(normalizeCapo(progression.capo) > 0 ? { capo: normalizeCapo(progression.capo) } : {}),
+					},
+				}
+			: {}),
+	};
+}
+
+const PROGRESSION_NAME_MAX = 60;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A strum payload back into a pattern and its progression. The row id becomes
+ * the pattern id, and the progression hangs off it under a derived id, so the
+ * two stay a pair on screen and neither can collide with the viewer's own.
+ */
+function readSharedStrum(rowId: string, payload: unknown): SharedStrum | null {
+	if (!isRecord(payload) || !isRecord(payload.pattern)) return null;
+	const raw = payload.pattern;
+	if (!validateBars([{ beats: raw.beats, chord: null }]).ok) return null;
+	const pattern: StrumPattern = {
+		id: rowId,
+		name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Shared pattern",
+		beats: normalizeBeats(raw.beats as Beat[]),
+		bpm: normalizeBpm(raw.bpm),
+		meter: normalizeMeter(raw.meter),
+	};
+
+	if (payload.progression === undefined || payload.progression === null) {
+		return { kind: "strum", pattern, progression: null };
+	}
+	// A progression that does not read is a share that does not read: the
+	// chords are what was being shared, and a bare rhythm would say nothing.
+	if (!isRecord(payload.progression)) return null;
+	const rawProgression = payload.progression;
+	if (!validateBars(rawProgression.bars).ok) return null;
+	const name =
+		typeof rawProgression.name === "string" ? rawProgression.name.trim().slice(0, PROGRESSION_NAME_MAX) : "";
+	const progression: ChordProgression = {
+		id: `${rowId}-progression`,
+		patternId: rowId,
+		bars: normalizeBars(rawProgression.bars as Bar[]),
+		orderIndex: 0,
+		...(name ? { name } : {}),
+		...(typeof rawProgression.bpm === "number" ? { bpm: normalizeBpm(rawProgression.bpm) } : {}),
+		...(normalizeCapo(rawProgression.capo) > 0 ? { capo: normalizeCapo(rawProgression.capo) } : {}),
+		// Written as reconciled with the pattern it arrived with, so nothing
+		// asks the viewer to sync a rhythm they have not touched.
+		syncedBeats: pattern.beats.map((beat) => [...beat]),
+	};
+	return { kind: "strum", pattern, progression };
 }
 
 /**
@@ -81,6 +163,7 @@ export function toSharePayload(item: SharedItem): Record<string, unknown> {
  * tab does, then the same load-time fold a library row gets.
  */
 export function readSharedItem(row: SharedItemRow): SharedItem | null {
+	if (row.kind === "strum") return readSharedStrum(row.id, row.payload);
 	if (row.kind !== "fingerpick") return null;
 	const { pattern } = validateFingerpickPattern(row.payload);
 	if (pattern === null) return null;

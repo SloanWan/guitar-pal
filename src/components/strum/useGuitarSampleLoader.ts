@@ -84,7 +84,8 @@ export class SampleLoadError extends Error {
 
 // ─── Preset configuration ──────────────────────────────────────────────────────
 
-const WAF_BASE_URL = "https://surikov.github.io/webaudiofontdata/sound/";
+/** The pinned sample CDN (GPL-3.0 data, fetched at runtime). Shared with the piano loader. */
+export const WAF_BASE_URL = "https://surikov.github.io/webaudiofontdata/sound/";
 
 const PRESET_DEFS = {
 	steelGuitar: {
@@ -658,9 +659,13 @@ export function _setReadyPresetForTesting(presetKey: PresetKey, preset: WafPrese
  */
 export type FingerpickSoundType = "pluck" | "muted";
 
-/** Full guitar range preloaded for the fingerpick engine (open E2 → 20th fret E5). */
+/**
+ * Full guitar range preloaded for the fingerpick engine and the fretboard:
+ * open low E (E2) to the 22nd fret of the high e (D6). Preload decodes every
+ * zone a pitch in this range falls into; a pitch outside it plays silently.
+ */
 export const FINGERPICK_MIDI_LOW = 40;
-export const FINGERPICK_MIDI_HIGH = 76;
+export const FINGERPICK_MIDI_HIGH = 86;
 
 const FINGERPICK_PRESET_DEFS: Record<FingerpickSoundType, { key: string; varName: string }> = {
 	pluck: {

@@ -41,9 +41,19 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "v3 DAW-aesthetic component audit — faders, rockers, LEDs, BPM readouts.",
 	},
 	{
+		href: "/dev/fretboard-lab",
+		label: "fretboard-lab",
+		description: "Scale + chord-tone fretboard — roots, scale types, degree labels, position window.",
+	},
+	{
 		href: "/dev/muted-preset-audition",
 		label: "muted-preset-audition",
 		description: "A/B audition of muted-note presets across guitar voicings.",
+	},
+	{
+		href: "/dev/piano-preset-audition",
+		label: "piano-preset-audition",
+		description: "A/B audition of GM piano presets as the root selector's voice, on a real keyboard.",
 	},
 	{
 		href: "/dev/chord-line",

@@ -28,23 +28,32 @@ tests/         pytest; nothing here needs a database, and the network only on op
 
 ## Run it locally
 
+Once:
+
 ```bash
 cd book-service
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-
-# The same names the Next.js .env uses; NEXT_PUBLIC_SUPABASE_URL is enough for
-# JWT verification on a project with asymmetric signing keys.
-export NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-export BOOK_SERVICE_DATABASE_URL=postgresql://book_service:<password>@<pooler host>:6543/postgres
-# export SUPABASE_JWT_SECRET=...      # legacy HS256 projects only
-export ANTHROPIC_API_KEY=...           # optional: chapter finding on unbookmarked books
-tools/fetch-tessdata.sh && export TESSDATA_PREFIX=$PWD/tessdata   # optional: OCR on scans
-
-uvicorn app.main:create_app --factory --reload
+python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 ```
 
-Then set `BOOK_SERVICE_URL=http://localhost:8000` in the Next.js `.env.local` and run `npm run dev` as usual.
+Then, from the repo root, beside `npm run dev`:
+
+```bash
+npm run dev:books
+```
+
+That is `tools/dev.sh`: it loads the repo's `.env.local` (the same
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`BOOK_SERVICE_DATABASE_URL` and `ANTHROPIC_API_KEY` the Next.js side uses),
+fetches the Tesseract data on first run, and starts `uvicorn` on port 8000
+with reload. `.env.local` also needs `BOOK_SERVICE_URL=http://localhost:8000`
+so the Next.js proxy finds it. `BOOK_SERVICE_PORT` overrides the port.
+
+By hand, the same thing is:
+
+```bash
+cd book-service && set -a && . ../.env.local && set +a
+TESSDATA_PREFIX=$PWD/tessdata .venv/bin/uvicorn app.main:create_app --factory --reload
+```
 
 Without `BOOK_SERVICE_DATABASE_URL` the process still boots and `/health` answers; the book routes return 503.
 
@@ -114,6 +123,7 @@ another user's book is a 404, the same as no book.
 | `POST /books` `{title}` | the row and its `storage_path` (`{user_id}/{book_id}.pdf`). The browser then uploads the PDF straight to the `books` bucket at that path with its own session. |
 | `POST /books/{id}/scan` | starts the whole-book pass in the background; 202 with the row, 409 if already scanning. Rescanning a `ready` or `failed` book is allowed and replaces its pages and chapters. |
 | `GET /books` | the player's books, newest first |
+| `PATCH /books/{id}` `{title}` | rename |
 | `GET /books/{id}` | the book with `status`, `scanned_pages` / `page_count` for progress, `error`, and its chapters with `exercise_hint_count` |
 | `PUT /books/{id}/chapters` `{chapters: [{title, page_start, page_end}]}` | the player's own ranges: sorted, inside the book, non-overlapping (gaps allowed). `toc_source` becomes `manual`; hint counts are recomputed from the tagged pages. |
 | `DELETE /books/{id}` | the PDF (as the player) and every row under the book |

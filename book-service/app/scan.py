@@ -159,6 +159,9 @@ def _read_book(
     try:
         with open_pdf(pdf) as doc:
             page_count = len(doc)
+            # The page count first, so the status shows `0 / N` before the
+            # first (slow, OCR'd) page rather than nothing for a while.
+            report(page_count, 0)
             outline = read_outline(doc)
             pages: list[PageText] = []
             for index, page in enumerate(doc, start=1):

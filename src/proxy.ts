@@ -64,10 +64,13 @@ export async function proxy(request: NextRequest) {
 		return redirectWithCookies(new URL(target, request.url));
 	}
 
-	// d. /home and /settings are the signed-in personal surfaces — a signed-out
-	//    visitor is sent to auth with a return path so they land back after
-	//    signing in.
-	if ((pathname === "/home" || pathname === "/settings") && !user) {
+	// d. /home, /settings and /books are the signed-in personal surfaces — a
+	//    signed-out visitor is sent to auth with a return path so they land back
+	//    after signing in.
+	if (
+		(pathname === "/home" || pathname === "/settings" || pathname.startsWith("/books")) &&
+		!user
+	) {
 		return redirectWithCookies(
 			new URL(`/auth?redirect=${encodeURIComponent(pathname)}`, request.url),
 		);

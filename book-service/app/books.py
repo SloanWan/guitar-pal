@@ -27,6 +27,10 @@ class CreateBook(BaseModel):
     title: str = Field(min_length=1, max_length=MAX_TITLE_CHARS)
 
 
+class RenameBook(BaseModel):
+    title: str = Field(min_length=1, max_length=MAX_TITLE_CHARS)
+
+
 class ChapterRange(BaseModel):
     title: str = Field(min_length=1, max_length=MAX_TITLE_CHARS)
     page_start: int = Field(ge=1)
@@ -170,6 +174,17 @@ async def get_book(book_id: str, session: CurrentSession, repo: Repo) -> BookDet
     return BookDetail(
         **BookOut.of(book).model_dump(), chapters=[ChapterOut.of(c) for c in chapters]
     )
+
+
+@router.patch("/{book_id}", response_model=BookOut)
+async def rename_book(
+    book_id: str, body: RenameBook, session: CurrentSession, repo: Repo
+) -> BookOut:
+    """The title starts as the upload's file name; this is the player fixing it."""
+    book = await repo.rename_book(session.user_id, book_id, body.title.strip())
+    if book is None:
+        raise HTTPException(404, "Book not found.")
+    return BookOut.of(book)
 
 
 @router.post("/{book_id}/scan", status_code=202, response_model=BookOut)

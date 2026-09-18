@@ -87,6 +87,9 @@ def test_upload_scan_edit_delete(client: TestClient, typeset_pdf: Path) -> None:
 
         assert any(b["id"] == book_id for b in client.get("/books", headers=auth).json())
 
+        renamed = client.patch(f"/books/{book_id}", json={"title": " Renamed "}, headers=auth)
+        assert renamed.status_code == 200 and renamed.json()["title"] == "Renamed"
+
         edited = client.put(
             f"/books/{book_id}/chapters",
             json={

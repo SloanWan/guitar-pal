@@ -133,6 +133,19 @@ class BookRepo:
         )
         return _book(record) if record else None
 
+    async def rename_book(self, user_id: str, book_id: str, title: str) -> BookRow | None:
+        record = await self._pool.fetchrow(
+            f"""
+            update user_books set title = $3
+             where user_id = $1 and id = $2
+            returning {BOOK_COLUMNS}
+            """,
+            user_id,
+            book_id,
+            title,
+        )
+        return _book(record) if record else None
+
     async def delete_book(self, user_id: str, book_id: str) -> BookRow | None:
         """Chapters and pages go with it (`on delete cascade`)."""
         record = await self._pool.fetchrow(

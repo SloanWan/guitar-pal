@@ -85,7 +85,7 @@ async def test_scan_writes_pages_tags_and_chapters(typeset_pdf: Path) -> None:
     await scanner.run("b", "u/b.pdf", "token")
 
     assert store.failed is None
-    assert store.progress == [(9, 5)]  # reported every five pages
+    assert store.progress == [(9, 0), (9, 5)]  # the count first, then every five pages
     assert store.finished is not None
     assert store.finished["page_count"] == 9
     assert store.finished["toc_source"] == "text"

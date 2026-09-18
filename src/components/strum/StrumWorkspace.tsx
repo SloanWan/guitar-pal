@@ -212,10 +212,17 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 
 	// Restore the tab first: it needs no data, so it can be applied on mount.
 	const workspaceRestoredRef = useRef(false);
+	// The progression to reopen, read here with the tab — before anything is
+	// written back. It is restored later, once the list has loaded, and by then
+	// the persist effect below has already run for the tab and cleared the key
+	// (the open id is still null at that point); reading it now is what lets
+	// the restore find it (#222).
+	const savedProgressionIdRef = useRef<string | null>(null);
 	useEffect(() => {
 		// A share page neither reads nor writes where the player was.
 		if (isShared) return;
 		const savedTab = localStorage.getItem(TAB_STORAGE_KEY);
+		savedProgressionIdRef.current = localStorage.getItem(OPEN_PROGRESSION_STORAGE_KEY);
 		queueMicrotask(() => {
 			if (savedTab === "pattern" || savedTab === "progressions") setTab(savedTab);
 			// Only now may the workspace be written back, or the default would
@@ -663,7 +670,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 	const [progressionRestored, setProgressionRestored] = useState(isShared);
 	useEffect(() => {
 		if (progressionRestored || progressionsLoading || !patternRestored) return;
-		const savedId = localStorage.getItem(OPEN_PROGRESSION_STORAGE_KEY);
+		const savedId = savedProgressionIdRef.current;
 		const found = savedId
 			? patternProgressions.find((p) => p.id === savedId)
 			: undefined;

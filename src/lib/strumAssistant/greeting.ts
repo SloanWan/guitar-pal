@@ -42,7 +42,7 @@ export function hint(lang: Lang, signedIn: boolean, domain: AssistantDomain = "s
 		domain === "tab"
 			? pick(
 					lang,
-					"A chord with the strings to pick, strings and frets written out, a style word over a chord, or six lines of tab pasted in — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.",
+					"Chords with the strings to pick, strings and frets written out, a style word over a chord, or six lines of tab pasted in — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.",
 					"和弦加要弹的弦号、直接写弦号和品格、风格词加和弦，或者直接贴六行 tab——都能直接读，不联网。哪句没读懂，我会给你能读懂的写法。",
 				)
 			: pick(
@@ -110,8 +110,10 @@ const INPUT_PROMPTS: Record<AssistantDomain, readonly string[]> = {
 		"给我一个 C-G-Am-F 的民谣扫弦，慢一点",
 	],
 	tab: [
+		"C G Am F: R3231323",
 		"Am: 5 3 2 1 3 2 1 3",
 		"travis picking in C",
+		"G D Em C: R3(12)3",
 		"string:66544322, fret:8(11)(10)8(10)88(11)",
 		"C G Am F: 5/4 2 1 3",
 		"Em 三指法",
@@ -130,7 +132,7 @@ export function inputPrompts(domain: AssistantDomain): readonly string[] {
  */
 const EXAMPLES: Record<AssistantDomain, readonly string[]> = {
 	strum: ["C Am F G", "D DU UD", "a slow folk strum in C G Am F"],
-	tab: ["Am: 5 3 2 1 3 2 1 3", "travis picking in C", "string:6654, fret:8-11-10-8"],
+	tab: ["C G Am F: R3231323", "Am: 53231323", "travis picking in C"],
 };
 
 export function examples(domain: AssistantDomain): readonly string[] {

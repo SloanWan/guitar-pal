@@ -1,0 +1,327 @@
+"use client";
+
+/**
+ * A piano keyboard as a radio group: one key per note, the selected pitch
+ * class lit on every key that sounds it. Built from HTML buttons rather than
+ * SVG so focus, keyboard operation and `role="radio"` come for free and match
+ * the button grid it replaces; the black keys are simply positioned over the
+ * white ones.
+ *
+ * Sizing follows `<Fretboard/>`: the white keys share the container's width
+ * down to a floor that keeps them tappable, and below that the keyboard
+ * scrolls, with the selected root scrolled into view.
+ *
+ * A `range` (the guitar's E2–D6) is drawn as a band under the keys; keys
+ * outside it are dimmed but still select a root, since a root is a pitch
+ * class and every octave of it is the same choice.
+ *
+ * A key in the current scale or chord carries a dot, not a fill: filling them
+ * turns the keyboard into a blue block instead of a piano with marks on it.
+ * Only the root, the one key that is *chosen*, is filled.
+ *
+ * Members can be named two ways, and the way decides how they are shown. A
+ * set of **pitch classes** (a scale) repeats in every octave — two dozen dots
+ * on a 61-key board, a rash rather than a scale — so those are held back
+ * until the pointer is over an octave and only that octave's are shown. A set
+ * of **pitches** (the notes a chord shape actually sounds) is a handful of
+ * keys that do not repeat, so those are simply always lit.
+ *
+ * The keyboard can also follow the fretboard: `highlight(midi)` rings the key
+ * that sounds exactly that pitch (and, fainter, its other octaves) and
+ * `strike(midi)` flashes a key that just sounded. Both are imperative, on the
+ * DOM, so a hover on the neck never re-renders anything.
+ */
+import {
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useRef,
+	type KeyboardEvent as ReactKeyboardEvent,
+	type PointerEvent as ReactPointerEvent,
+	type Ref,
+} from "react";
+
+import MusicalText from "@/components/MusicalText";
+import { prefersReducedMotion } from "@/lib/motion";
+import { keyLabel, pianoKeys, type PianoKey, type PianoRange } from "@/lib/piano/keys";
+
+/** Narrowest a white key gets before the keyboard scrolls instead. */
+const MIN_WHITE_W = 22;
+const WHITE_H = 76;
+const BLACK_H = 46;
+/** Black key width as a share of a white key. */
+const BLACK_W = 0.62;
+const BAND_H = 18;
+/** How long a struck key stays flashed; matches the CSS animation. */
+const STRIKE_MS = 300;
+
+export interface PianoKeyboardHandle {
+	/** Ring the key sounding `midi` (and its octaves, fainter); null clears. */
+	highlight: (midi: number | null) => void;
+	/** Flash the key sounding `midi` once, the way a played key dips. */
+	strike: (midi: number) => void;
+}
+
+export interface PianoKeyboardProps {
+	ref?: Ref<PianoKeyboardHandle>;
+	keys?: PianoRange;
+	/** 0..11; every key of this pitch class shows selected. */
+	selectedPitchClass: number;
+	/** Keys outside it are dimmed; drawn as a labelled band under the keyboard. */
+	range?: PianoRange;
+	/** The key that was pressed or chosen with the keyboard. */
+	onSelect: (midi: number) => void;
+	/**
+	 * What a key prints. Default: its name when selected, "C<octave>" on each
+	 * C, nothing otherwise. Chords mode prints numerals instead.
+	 */
+	labelFor?: (key: PianoKey, selected: boolean) => string;
+	/** Keys to grey out (still pressable), beyond those outside `range`. */
+	dimmed?: (key: PianoKey) => boolean;
+	/**
+	 * Pitch classes to dot as members of the current scale (the root stays
+	 * `selected`). The dots appear one octave at a time, under the pointer.
+	 */
+	tonePitchClasses?: readonly number[];
+	/**
+	 * The exact pitches sounding — a chord shape's notes. When given it
+	 * replaces `tonePitchClasses`: only these keys are marked, always visibly,
+	 * and only the ones among them that are the root are filled. A chord is
+	 * six specific notes, not the same three names in every octave.
+	 */
+	toneMidis?: readonly number[];
+	ariaLabel?: string;
+	className?: string;
+}
+
+export default function PianoKeyboard({
+	ref,
+	keys: keysRange,
+	selectedPitchClass,
+	range,
+	onSelect,
+	labelFor,
+	dimmed,
+	tonePitchClasses,
+	toneMidis,
+	ariaLabel = "Scale root",
+	className,
+}: PianoKeyboardProps) {
+	const scroller = useRef<HTMLDivElement>(null);
+	const board = useRef<HTMLDivElement>(null);
+	/** Keys carrying `data-hover`, so clearing touches exactly those. */
+	const highlighted = useRef<HTMLElement[]>([]);
+	/** Strike timers per key, so a re-strike restarts instead of stacking. */
+	const strikes = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+	const keys = pianoKeys(keysRange ?? { fromMidi: 36, toMidi: 96 });
+	const whites = keys.filter((k) => !k.isBlack).length;
+	const whiteW = `calc(100% / ${whites})`;
+	const inRange = (midi: number) => !range || (midi >= range.fromMidi && midi <= range.toMidi);
+	/** Keys whose dot is currently uncovered, so leaving clears exactly those. */
+	const revealed = useRef<HTMLElement[]>([]);
+	/** With exact pitches, a key counts only if the sounding chord uses it. */
+	const sounded = (key: PianoKey) => !toneMidis || toneMidis.includes(key.midi);
+	const isSelected = (key: PianoKey) => key.pitchClass === selectedPitchClass && sounded(key);
+	/** A member that is not the root: dotted. Exact pitches show at once, pitch classes on hover. */
+	const isTone = (key: PianoKey) =>
+		!isSelected(key) &&
+		(toneMidis ? toneMidis.includes(key.midi) : !!tonePitchClasses?.includes(key.pitchClass));
+	/** The one key tab lands on: the lowest selected key inside the range. */
+	const focusMidi =
+		keys.find((k) => isSelected(k) && inRange(k.midi))?.midi ?? keys.find(isSelected)?.midi ?? keys[0].midi;
+
+	// Bring the selected root into view, on mount and whenever it changes.
+	useEffect(() => {
+		const el = scroller.current;
+		const key = board.current?.querySelector<HTMLElement>(`[data-midi="${focusMidi}"]`);
+		// jsdom has no scrollTo on elements; the scroll is a convenience anyway.
+		if (!el || !key || typeof el.scrollTo !== "function") return;
+		const left = key.offsetLeft + key.offsetWidth / 2 - el.clientWidth / 2;
+		el.scrollTo({ left: Math.max(0, left), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+	}, [focusMidi]);
+
+	/** Uncover the scale dots of one octave, or of none. Straight on the DOM. */
+	const revealOctave = useCallback((octave: number | null) => {
+		for (const el of revealed.current) delete el.dataset.scale;
+		revealed.current = [];
+		if (octave === null || !board.current) return;
+		for (const el of board.current.querySelectorAll<HTMLElement>("[data-octave][data-tone]")) {
+			if (Number(el.dataset.octave) !== octave) continue;
+			el.dataset.scale = "";
+			revealed.current.push(el);
+		}
+	}, []);
+
+	const handleBoardOver = useCallback(
+		(e: ReactPointerEvent<HTMLDivElement>) => {
+			const key = (e.target as HTMLElement).closest<HTMLElement>("[data-octave]");
+			revealOctave(key ? Number(key.dataset.octave) : null);
+		},
+		[revealOctave],
+	);
+
+	/** Leaving the keys entirely covers the dots again; moving between them does not. */
+	const handleBoardOut = useCallback(
+		(e: ReactPointerEvent<HTMLDivElement>) => {
+			const next = e.relatedTarget instanceof Element ? e.relatedTarget.closest("[data-octave]") : null;
+			if (!next) revealOctave(null);
+		},
+		[revealOctave],
+	);
+
+	// Constraint 4: no timer may outlive the keyboard.
+	useEffect(() => {
+		const running = strikes.current;
+		return () => {
+			for (const t of running.values()) clearTimeout(t);
+			running.clear();
+		};
+	}, []);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			highlight(midi) {
+				for (const el of highlighted.current) delete el.dataset.hover;
+				highlighted.current = [];
+				if (midi === null || !board.current) return;
+				const pc = ((midi % 12) + 12) % 12;
+				for (const el of board.current.querySelectorAll<HTMLElement>("[data-midi]")) {
+					const keyMidi = Number(el.dataset.midi);
+					if (keyMidi === midi) el.dataset.hover = "self";
+					else if (((keyMidi % 12) + 12) % 12 === pc) el.dataset.hover = "octave";
+					else continue;
+					highlighted.current.push(el);
+				}
+			},
+			strike(midi) {
+				const el = board.current?.querySelector<HTMLElement>(`[data-midi="${midi}"]`);
+				if (!el || prefersReducedMotion()) return;
+				const prior = strikes.current.get(midi);
+				if (prior !== undefined) {
+					clearTimeout(prior);
+					delete el.dataset.struck;
+					// Restart the CSS animation: the attribute must leave and return
+					// across a style flush, or the browser sees no change.
+					void el.offsetWidth;
+				}
+				el.dataset.struck = "";
+				strikes.current.set(
+					midi,
+					setTimeout(() => {
+						delete el.dataset.struck;
+						strikes.current.delete(midi);
+					}, STRIKE_MS),
+				);
+			},
+		}),
+		[],
+	);
+
+	// Radio-group keyboard model: arrows move and select, Home/End jump.
+	const handleKeyDown = useCallback(
+		(e: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
+			let next: number | null = null;
+			if (e.key === "ArrowRight" || e.key === "ArrowUp") next = Math.min(keys.length - 1, index + 1);
+			else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = Math.max(0, index - 1);
+			else if (e.key === "Home") next = 0;
+			else if (e.key === "End") next = keys.length - 1;
+			if (next === null || next === index) return;
+			e.preventDefault();
+			const target = keys[next];
+			onSelect(target.midi);
+			board.current?.querySelector<HTMLElement>(`[data-midi="${target.midi}"]`)?.focus();
+		},
+		[keys, onSelect],
+	);
+
+	const keyButton = (key: PianoKey, index: number) => {
+		const selected = isSelected(key);
+		const outside = !inRange(key.midi);
+		const label = labelFor
+			? labelFor(key, selected)
+			: selected
+				? key.name
+				: key.pitchClass === 0
+					? `C${key.octave}`
+					: "";
+		return (
+			<button
+				key={key.midi}
+				type="button"
+				role="radio"
+				aria-checked={selected}
+				aria-label={keyLabel(key.midi)}
+				tabIndex={key.midi === focusMidi ? 0 : -1}
+				data-midi={key.midi}
+				data-octave={key.octave}
+				data-black={key.isBlack || undefined}
+				data-selected={selected || undefined}
+				data-exact={(toneMidis && isTone(key)) || undefined}
+				data-outside={outside || undefined}
+				data-dimmed={dimmed?.(key) || undefined}
+				data-tone={isTone(key) || undefined}
+				onClick={() => onSelect(key.midi)}
+				onKeyDown={(e) => handleKeyDown(e, index)}
+				className={key.isBlack ? "pk-key pk-black" : "pk-key pk-white"}
+				style={
+					key.isBlack
+						? {
+								left: `calc(${key.whiteIndex + 1} * ${whiteW} - ${BLACK_W / 2} * ${whiteW})`,
+								width: `calc(${BLACK_W} * ${whiteW})`,
+								height: BLACK_H,
+							}
+						: { left: `calc(${key.whiteIndex} * ${whiteW})`, width: whiteW, height: WHITE_H }
+				}
+			>
+				{isTone(key) && <span className="pk-dot" aria-hidden="true" />}
+				{label && (
+					<span className="pk-label font-mono">
+						<MusicalText text={label} />
+					</span>
+				)}
+			</button>
+		);
+	};
+
+	// The band's ends sit under the centre of their keys.
+	const bandKeys = range
+		? { from: keys.find((k) => k.midi === range.fromMidi), to: keys.find((k) => k.midi === range.toMidi) }
+		: null;
+	const centreOf = (key: PianoKey) =>
+		key.isBlack ? `calc(${key.whiteIndex + 1} * ${whiteW})` : `calc(${key.whiteIndex + 0.5} * ${whiteW})`;
+
+	return (
+		<div className={className} style={{ containerType: "inline-size" }}>
+			<div ref={scroller} className="fp-thin-scroll overflow-x-auto overflow-y-hidden">
+				<div
+					ref={board}
+					role="radiogroup"
+					aria-label={ariaLabel}
+					className="pk-board relative"
+					onPointerOver={handleBoardOver}
+					onPointerOut={handleBoardOut}
+					style={{
+						width: `max(100cqw, ${whites * MIN_WHITE_W}px)`,
+						height: WHITE_H + (bandKeys ? BAND_H : 0),
+					}}
+				>
+					{keys.map((key, i) => keyButton(key, i))}
+					{bandKeys?.from && bandKeys.to && (
+						<div
+							className="pk-band"
+							aria-hidden="true"
+							style={{ top: WHITE_H, left: centreOf(bandKeys.from), right: `calc(100% - ${centreOf(bandKeys.to)})` }}
+						>
+							<span className="pk-band-label font-mono">
+								Guitar <MusicalText text={keyLabel(bandKeys.from.midi)} />
+								{" – "}
+								<MusicalText text={keyLabel(bandKeys.to.midi)} />
+							</span>
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}

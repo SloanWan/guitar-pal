@@ -29,6 +29,33 @@ describe("readTabSentence", () => {
 			expect(r.order).toHaveLength(4);
 		});
 
+		it("reads a root order over several chords, in either language", () => {
+			const r = read("C G Am F: 根3231323");
+			expect(chordTexts(r)).toEqual(["C", "G", "Am", "F"]);
+			expect(r.orderText).toBe("根3231323");
+			expect(r.order).toHaveLength(8);
+			expect(r.order?.[0]).toEqual({ strings: [], root: true });
+			expect(r.leftover).toBe("");
+
+			const zh = read("给我一个 G D Em C 的分解，根3（12）3");
+			expect(chordTexts(zh)).toEqual(["G", "D", "Em", "C"]);
+			expect(zh.order).toHaveLength(4);
+			expect(zh.leftover).toBe("");
+
+			const latin = read("Am R 3 2 3 1 3 2 3");
+			expect(chordTexts(latin)).toEqual(["Am"]);
+			expect(latin.order).toHaveLength(8);
+			expect(latin.leftover).toBe("");
+		});
+
+		it("reads lone lowercase chord letters, and a lone 'a' only before a colon", () => {
+			expect(chordTexts(read("c g am f: R3231323"))).toEqual(["c", "g", "am", "f"]);
+			expect(read("c g am f: R3231323").leftover).toBe("");
+			expect(chordTexts(read("a: 5 3 2 1"))).toEqual(["a"]);
+			// An article stays one: nothing else in this sentence is a chord.
+			expect(chordTexts(read("give me a pattern"))).toEqual([]);
+		});
+
 		it("reads an alternating bass and a meter in one sentence", () => {
 			const r = read("C G Am F: 5/4 2 1 3 in 3/4");
 			expect(r.orderText).toBe("5/4 2 1 3");

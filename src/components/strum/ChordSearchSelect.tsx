@@ -44,6 +44,8 @@ interface Props {
 	 * clipped by the host's overflow, an in-flow one just makes it scroll.
 	 */
 	inlineList?: boolean;
+	/** How the picked chord is written in the field; the library's display name by default. */
+	format?: (root: string, suffix: string) => string;
 }
 
 /**
@@ -61,6 +63,7 @@ export default function ChordSearchSelect({
 	unknownLabel = null,
 	onCreate,
 	inlineList = false,
+	format = chordDisplayName,
 }: Props) {
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(false);
@@ -169,7 +172,7 @@ export default function ChordSearchSelect({
 	const displayValue = editing
 		? query
 		: chord
-			? chordDisplayName(chord.root, chord.suffix)
+			? format(chord.root, chord.suffix)
 			: (unknown ?? "");
 
 	return (

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import { Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronsDown, Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
 import type { Bar, ChordProgression, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,
@@ -41,6 +41,14 @@ import PatternBarBody from "./PatternBarBody";
 import ChordPickerModal, { type ConfirmedChord } from "./ChordPickerModal";
 import ChordShapeChoice from "./ChordShapeChoice";
 import { chordDisplayName } from "@/lib/chordSuffixes";
+import Fader from "@/components/ui/Fader";
+import {
+	SCROLL_SPEED_DEFAULT,
+	SCROLL_SPEED_MAX,
+	SCROLL_SPEED_MIN,
+	useAutoScroll,
+	useScrollSpeedPref,
+} from "@/components/useAutoScroll";
 
 /** Which view of the selected pattern is on screen. */
 export type WorkspaceTab = "pattern" | "progressions";
@@ -201,6 +209,24 @@ export default function PatternWorkspace({
 	// A progression inherits its pattern's meter — the chords change, the way the
 	// bar is counted does not.
 	const meter = patternMeter(pattern);
+
+	// Auto-scroll, as the fingerpick tab has it: the open sequence creeps upward
+	// at the remembered speed for reading along without a hand free. The
+	// scroller exists only while a progression is open, so the hook is told
+	// when it is there; a sequence that fits the card has nothing to creep.
+	const progressionViewerRef = useRef<HTMLDivElement>(null);
+	const [scrollSpeed, setScrollSpeed] = useScrollSpeedPref();
+	const {
+		contentRef: progressionContentRef,
+		setAutoScroll,
+		tabOverflows: progressionOverflows,
+		autoScrollActive,
+	} = useAutoScroll({
+		viewerRef: progressionViewerRef,
+		scrollSpeed,
+		patternId: selected?.id ?? "",
+		ready: tab === "progressions" && !progressionsLoading && selected !== null,
+	});
 
 	// A bar of the open sequence whose chord is being swapped for another out of
 	// the library. Null while the picker is closed.
@@ -739,6 +765,50 @@ export default function PatternWorkspace({
 									</div>
 								) : (
 									<div className="flex shrink-0 items-center">
+										{/* The speed fader is only there while the creep runs, and
+										    only where the strip has room for it. */}
+										{autoScrollActive && (
+											<div className="mr-2 hidden w-20 md:block">
+												<Fader
+													min={SCROLL_SPEED_MIN}
+													max={SCROLL_SPEED_MAX}
+													step={2}
+													value={scrollSpeed}
+													onValue={setScrollSpeed}
+													ticks={[
+														0,
+														((SCROLL_SPEED_DEFAULT - SCROLL_SPEED_MIN) /
+															(SCROLL_SPEED_MAX - SCROLL_SPEED_MIN)) *
+															100,
+														100,
+													]}
+													tickValues={[SCROLL_SPEED_MIN, SCROLL_SPEED_DEFAULT, SCROLL_SPEED_MAX]}
+													scale={[]}
+													ariaLabel="Auto-scroll speed"
+												/>
+											</div>
+										)}
+										<button
+											type="button"
+											onClick={() => setAutoScroll((on) => !on)}
+											disabled={!progressionOverflows}
+											aria-pressed={autoScrollActive}
+											aria-label={autoScrollActive ? "Stop auto-scroll" : "Start auto-scroll"}
+											title={
+												!progressionOverflows
+													? "The whole progression is in view — nothing to scroll"
+													: autoScrollActive
+														? "Stop auto-scroll"
+														: "Auto-scroll the progression"
+											}
+											className={`mr-2 flex h-7 w-7 items-center justify-center border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+												autoScrollActive
+													? "border-denim bg-denim text-on-denim"
+													: "border-line-strong text-ink-dim hover:border-denim hover:text-denim disabled:hover:border-line-strong disabled:hover:text-ink-dim"
+											}`}
+										>
+											<ChevronsDown size={14} className={autoScrollActive ? "animate-bounce" : ""} />
+										</button>
 										<ChordViewToggle value={chordView} onChange={setChordView} />
 										<button
 											type="button"
@@ -817,9 +887,13 @@ export default function PatternWorkspace({
 								</div>
 							)}
 
-							{/* Scrolls internally; playback keeps the current bar in view. */}
-							<div className="flex min-h-0 flex-col items-center overflow-y-auto px-3 py-5 sm:px-5">
-								<div className="my-auto w-full">
+							{/* Scrolls internally; playback keeps the current bar in view, and
+							    auto-scroll creeps it when asked. */}
+							<div
+								ref={progressionViewerRef}
+								className="flex min-h-0 flex-col items-center overflow-y-auto px-3 py-5 sm:px-5"
+							>
+								<div ref={progressionContentRef} className="my-auto w-full">
 									<StepGrid
 										bars={bars}
 										activeCell={activeCell}

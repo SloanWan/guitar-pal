@@ -21,6 +21,7 @@ import {
 	type WafPreset,
 	type WafZone,
 } from "@/components/strum/useGuitarSampleLoader";
+import { NOTE_NAMES } from "@/lib/chordVoicingToMidi";
 
 // ── Preset catalog ────────────────────────────────────────────────────────────
 
@@ -103,7 +104,6 @@ const WAF_BASE_URL = "https://surikov.github.io/webaudiofontdata/sound/";
 const MIDI_LOW = 40;
 const MIDI_HIGH = 76;
 const MIDI_RANGE = Array.from({ length: MIDI_HIGH - MIDI_LOW + 1 }, (_, i) => MIDI_LOW + i);
-const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 function midiToName(midi: number): string {
 	return `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;

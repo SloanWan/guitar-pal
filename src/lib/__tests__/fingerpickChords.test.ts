@@ -5,6 +5,7 @@ import {
 	setSlotChord,
 	chordSymbolLabel,
 	chordFretHints,
+	chordRootString,
 	fillColumnFromChord,
 	patternCapo,
 	setPatternCapo,
@@ -126,6 +127,39 @@ describe("chordSymbolLabel", () => {
 		expect(chordSymbolLabel(Am)).toBe("Am");
 		expect(chordSymbolLabel(G7)).toBe("G7");
 		expect(chordSymbolLabel({ root: "F#", suffix: "m7b5" })).toBe("F#m7b5");
+	});
+});
+
+describe("chordRootString", () => {
+	const ref = (root: string, suffix = "major"): ChordRef => ({ root, suffix, voicingId: null });
+	// Fingerpick order: 0 = high e, 5 = low E — so string 5 is index 4.
+	it("finds the lowest string of the shape that sounds the root", () => {
+		expect(chordRootString(ref("C"), voicing({ frets: "x32010" }))).toBe(4);
+		expect(chordRootString(ref("A", "minor"), voicing({ frets: "x02210" }))).toBe(4);
+		expect(chordRootString(ref("G"), voicing({ frets: "320003" }))).toBe(5);
+		expect(chordRootString(ref("E", "minor"), voicing({ frets: "022000" }))).toBe(5);
+		expect(chordRootString(ref("D"), voicing({ frets: "xx0232" }))).toBe(3);
+	});
+
+	it("reads a barre shape up the neck by its absolute frets", () => {
+		// F-shape barre at the 8th fret is C: the root is on low E at 8, not the open A.
+		const c8 = voicing({ start_fret: 8, barre_fret: 1, capo: true, frets: "133211", fingers: "134211" });
+		expect(chordRootString(ref("C"), c8)).toBe(5);
+	});
+
+	it("takes the bass of a slash chord, not its root", () => {
+		expect(chordRootString(ref("C", "/G"), voicing({ frets: "332010" }))).toBe(5);
+		expect(chordRootString(ref("D", "/F#"), voicing({ frets: "2x0232" }))).toBe(5);
+	});
+
+	it("falls back to the lowest sounding string when the shape never sounds the root", () => {
+		// A rootless C9 grip: x-3-2-3-3-x sounds E G Bb D, no C.
+		expect(chordRootString(ref("C", "9"), voicing({ frets: "x3233x" }))).toBe(4);
+	});
+
+	it("falls back to low E with no chord or no shape", () => {
+		expect(chordRootString(null, null)).toBe(5);
+		expect(chordRootString(ref("C"), null)).toBe(5);
 	});
 });
 

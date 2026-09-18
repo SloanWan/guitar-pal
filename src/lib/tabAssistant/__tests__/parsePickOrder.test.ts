@@ -19,6 +19,17 @@ describe("parsePickOrder", () => {
 		expect(numbers(ok("6(32)1(32)"))).toEqual(["6", "3+2", "1", "3+2"]);
 	});
 
+	it("reads the root token, spaced, glued or in a pinch", () => {
+		const root = (parsed: ReturnType<typeof ok>) => parsed.order.map((t) => "strings" in t && t.root === true);
+		expect(numbers(ok("根 3 2 3"))).toEqual(["", "3", "2", "3"]);
+		expect(root(ok("根 3 2 3"))).toEqual([true, false, false, false]);
+		expect(numbers(ok("R3（12）3"))).toEqual(["", "3", "1+2", "3"]);
+		expect(numbers(ok("(r1) 3"))).toEqual(["1", "3"]);
+		expect(root(ok("(r1) 3"))).toEqual([true, false]);
+		expect(isOrderWord("根3231323")).toBe(true);
+		expect(isOrderWord("root")).toBe(false);
+	});
+
 	it("reads rests as 0 or -", () => {
 		expect(numbers(ok("5 0 3 -"))).toEqual(["5", "-", "3", "-"]);
 	});

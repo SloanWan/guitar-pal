@@ -39,10 +39,10 @@ function makeBuf(id: string): AudioBuffer {
 }
 
 /**
- * Three-zone preset that exactly covers MIDI 40–76:
+ * Three-zone preset that exactly covers MIDI 40–86:
  *   low  zone: 40–55  → bufLow
  *   mid  zone: 56–68  → bufMid
- *   high zone: 69–76  → bufHigh
+ *   high zone: 69–86  → bufHigh
  */
 function makeFullRangePreset() {
 	const bufLow = makeBuf("low");
@@ -51,7 +51,7 @@ function makeFullRangePreset() {
 	const preset = makePreset([
 		makeZone({ keyRangeLow: 40, keyRangeHigh: 55, originalPitch: 4800, buffer: bufLow }),
 		makeZone({ keyRangeLow: 56, keyRangeHigh: 68, originalPitch: 6200, buffer: bufMid }),
-		makeZone({ keyRangeLow: 69, keyRangeHigh: 76, originalPitch: 7400, buffer: bufHigh }),
+		makeZone({ keyRangeLow: 69, keyRangeHigh: 86, originalPitch: 7400, buffer: bufHigh }),
 	]);
 	return { preset, bufLow, bufMid, bufHigh };
 }
@@ -74,20 +74,20 @@ describe("getBufferForMidi — error paths", () => {
 	});
 
 	it("throws SampleLoadError when the zone for the requested pitch has no decoded buffer", () => {
-		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 76 })]);
+		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86 })]);
 		_setReadyFingerpickPresetForTesting("pluck", preset);
 		expect(() => getBufferForMidi("pluck", 60)).toThrow(SampleLoadError);
 		expect(() => getBufferForMidi("pluck", 60)).toThrow("No decoded buffer");
 	});
 
 	it("throws independently for each type — loading pluck does not satisfy muted", () => {
-		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 76, buffer: makeBuf("x") })]);
+		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: makeBuf("x") })]);
 		_setReadyFingerpickPresetForTesting("pluck", preset);
 		expect(() => getBufferForMidi("muted", 60)).toThrow(SampleLoadError);
 	});
 });
 
-// ─── getBufferForMidi — zone resolution across MIDI 40–76 ────────────────────
+// ─── getBufferForMidi — zone resolution across MIDI 40–86 ────────────────────
 
 describe("getBufferForMidi — zone resolution across full guitar range", () => {
 	beforeEach(() => {
@@ -100,11 +100,11 @@ describe("getBufferForMidi — zone resolution across full guitar range", () => 
 		expect(() => getBufferForMidi("pluck", FINGERPICK_MIDI_LOW)).not.toThrow();
 	});
 
-	it("resolves edge pitch MIDI 76 (E5) without throwing", () => {
+	it("resolves edge pitch MIDI 86 (D6) without throwing", () => {
 		expect(() => getBufferForMidi("pluck", FINGERPICK_MIDI_HIGH)).not.toThrow();
 	});
 
-	it("returns a decoded buffer for every MIDI note in 40–76 without throwing", () => {
+	it("returns a decoded buffer for every MIDI note in 40–86 without throwing", () => {
 		for (let midi = FINGERPICK_MIDI_LOW; midi <= FINGERPICK_MIDI_HIGH; midi++) {
 			expect(() => getBufferForMidi("pluck", midi)).not.toThrow();
 			const buf = getBufferForMidi("pluck", midi);
@@ -116,22 +116,22 @@ describe("getBufferForMidi — zone resolution across full guitar range", () => 
 		const { bufLow } = makeFullRangePreset();
 		const freshPreset = makePreset([
 			makeZone({ keyRangeLow: 40, keyRangeHigh: 55, buffer: bufLow }),
-			makeZone({ keyRangeLow: 56, keyRangeHigh: 76, buffer: makeBuf("other") }),
+			makeZone({ keyRangeLow: 56, keyRangeHigh: 86, buffer: makeBuf("other") }),
 		]);
 		_setReadyFingerpickPresetForTesting("pluck", freshPreset);
 		expect(getBufferForMidi("pluck", 40)).toBe(bufLow);
 		expect(getBufferForMidi("pluck", 55)).toBe(bufLow);
 	});
 
-	it("returns the high-zone buffer for MIDI 69 and 76 (zone boundary)", () => {
+	it("returns the high-zone buffer for MIDI 69 and 86 (zone boundary)", () => {
 		const bufHigh = makeBuf("high");
 		const freshPreset = makePreset([
 			makeZone({ keyRangeLow: 40, keyRangeHigh: 68, buffer: makeBuf("other") }),
-			makeZone({ keyRangeLow: 69, keyRangeHigh: 76, buffer: bufHigh }),
+			makeZone({ keyRangeLow: 69, keyRangeHigh: 86, buffer: bufHigh }),
 		]);
 		_setReadyFingerpickPresetForTesting("pluck", freshPreset);
 		expect(getBufferForMidi("pluck", 69)).toBe(bufHigh);
-		expect(getBufferForMidi("pluck", 76)).toBe(bufHigh);
+		expect(getBufferForMidi("pluck", 86)).toBe(bufHigh);
 	});
 
 	it("returns the correct zone buffer for every range segment in the three-zone fixture", () => {
@@ -146,7 +146,7 @@ describe("getBufferForMidi — zone resolution across full guitar range", () => 
 		expect(getBufferForMidi("pluck", 60)).toBe(bufMid);
 		expect(getBufferForMidi("pluck", 68)).toBe(bufMid);
 		expect(getBufferForMidi("pluck", 69)).toBe(bufHigh);
-		expect(getBufferForMidi("pluck", 76)).toBe(bufHigh);
+		expect(getBufferForMidi("pluck", 86)).toBe(bufHigh);
 	});
 });
 
@@ -157,17 +157,17 @@ describe("getBufferForMidi — muted preset resolves independently", () => {
 		_resetFingerpickCachesForTesting();
 	});
 
-	it("returns the muted-preset buffer at edge pitches 40 and 76", () => {
+	it("returns the muted-preset buffer at edge pitches 40 and 86", () => {
 		const mutedBuf = makeBuf("muted");
-		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 76, buffer: mutedBuf })]);
+		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: mutedBuf })]);
 		_setReadyFingerpickPresetForTesting("muted", preset);
 		expect(getBufferForMidi("muted", FINGERPICK_MIDI_LOW)).toBe(mutedBuf);
 		expect(getBufferForMidi("muted", FINGERPICK_MIDI_HIGH)).toBe(mutedBuf);
 	});
 
-	it("returns a decoded buffer for every MIDI note in 40–76 from the muted preset", () => {
+	it("returns a decoded buffer for every MIDI note in 40–86 from the muted preset", () => {
 		const mutedBuf = makeBuf("muted");
-		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 76, buffer: mutedBuf })]);
+		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: mutedBuf })]);
 		_setReadyFingerpickPresetForTesting("muted", preset);
 		for (let midi = FINGERPICK_MIDI_LOW; midi <= FINGERPICK_MIDI_HIGH; midi++) {
 			expect(() => getBufferForMidi("muted", midi)).not.toThrow();
@@ -222,7 +222,7 @@ describe("cache separation — fingerpick and strum caches are independent", () 
 
 	it("_resetCachesForTesting does not clear fingerpick presets", () => {
 		const buf = makeBuf("fp");
-		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 76, buffer: buf })]);
+		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: buf })]);
 		_setReadyFingerpickPresetForTesting("pluck", preset);
 
 		_resetCachesForTesting();
@@ -232,7 +232,7 @@ describe("cache separation — fingerpick and strum caches are independent", () 
 
 	it("loading a fingerpick preset does not affect strum preset lookups", () => {
 		const fpBuf = makeBuf("fp");
-		const fpPreset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 76, buffer: fpBuf })]);
+		const fpPreset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: fpBuf })]);
 		_setReadyFingerpickPresetForTesting("pluck", fpPreset);
 
 		// Strum preset was reset — should still throw/noop, not accidentally use fingerpick preset
@@ -243,7 +243,7 @@ describe("cache separation — fingerpick and strum caches are independent", () 
 // ─── findZoneForMidi invariant — exercised with fingerpick-shaped preset ──────
 
 describe("findZoneForMidi — zone selection verified on fingerpick fixture", () => {
-	it("selects the correct zone for every pitch in MIDI 40–76 in the three-zone fixture", () => {
+	it("selects the correct zone for every pitch in MIDI 40–86 in the three-zone fixture", () => {
 		const { preset, bufLow, bufMid, bufHigh } = makeFullRangePreset();
 		for (let midi = 40; midi <= 55; midi++) {
 			expect(findZoneForMidi(preset, midi).buffer).toBe(bufLow);
@@ -251,7 +251,7 @@ describe("findZoneForMidi — zone selection verified on fingerpick fixture", ()
 		for (let midi = 56; midi <= 68; midi++) {
 			expect(findZoneForMidi(preset, midi).buffer).toBe(bufMid);
 		}
-		for (let midi = 69; midi <= 76; midi++) {
+		for (let midi = 69; midi <= 86; midi++) {
 			expect(findZoneForMidi(preset, midi).buffer).toBe(bufHigh);
 		}
 	});

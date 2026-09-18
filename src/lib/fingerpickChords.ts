@@ -3,6 +3,8 @@ import { setFret, setInactive, type SlotTarget } from "./fingerpickEdit";
 import type { ChordRef } from "./strumPatterns";
 import { chordAbbreviation, normalizeCapo } from "./strumProgressions";
 import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicingToVexChords";
+import { chordVoicingToMidi, rootPitchClass } from "./chordVoicingToMidi";
+import { isSlashChord } from "./chordSuffixes";
 
 /**
  * The chord in effect at every slot, index-aligned with `measures[i].slots[j]`.
@@ -100,6 +102,34 @@ export function chordFretHints(voicing: ChordVoicing): FretHint[] {
 	return decodeVoicingStrings(voicing)
 		.map(({ absoluteFret }): FretHint => (absoluteFret === "x" ? "/" : absoluteFret))
 		.reverse();
+}
+
+/** The string a root token falls on when there is no shape to read it from: low E, open. */
+const ROOT_STRING_WITHOUT_SHAPE = 5;
+
+/**
+ * The string the thumb takes for a chord's root — what `根` in a pick order
+ * means — in the fingerpick string order (0 = high e, 5 = low E).
+ *
+ * The lowest sounding string of the shape whose note is the chord's root:
+ * string 5 for C and Am, string 6 for G and F, string 4 for D. A slash chord
+ * puts the bass in its name, and that is the note the thumb wants — C/G is
+ * string 6. A shape that never sounds its root (some jazz grips leave it to
+ * the bass player) falls back to its lowest sounding string, which is what
+ * the thumb would find anyway; no chord, or no shape for it, falls back to
+ * low E, the string the rest of an unshaped chord is written open on.
+ */
+export function chordRootString(chord: ChordRef | null, voicing: ChordVoicing | null): number {
+	if (!chord || !voicing) return ROOT_STRING_WITHOUT_SHAPE;
+	const notes = chordVoicingToMidi(voicing);
+	if (notes.length === 0) return ROOT_STRING_WITHOUT_SHAPE;
+	const bassName = isSlashChord(chord.suffix) ? chord.suffix.slice(chord.suffix.indexOf("/") + 1) : chord.root;
+	const wanted = rootPitchClass(bassName);
+	const lowest = (list: typeof notes) => list.reduce((a, b) => (b.midi < a.midi ? b : a));
+	const roots = wanted === undefined ? [] : notes.filter((n) => n.midi % 12 === wanted);
+	const note = roots.length > 0 ? lowest(roots) : lowest(notes);
+	// The voicing tables count from the low E; the fingerpick grid from the high e.
+	return 5 - note.stringIndex;
 }
 
 /**

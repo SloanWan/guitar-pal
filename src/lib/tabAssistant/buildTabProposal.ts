@@ -8,7 +8,7 @@ import {
 } from "@/lib/fingerpickEdit";
 import { chordFretHints, chordSymbolLabel } from "@/lib/fingerpickChords";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
-import type { PickToken } from "@/lib/fingerpickPickSequence";
+import { tokenStrings, type PickToken } from "@/lib/fingerpickPickSequence";
 import type { NoteToken } from "@/lib/tabAssistant/parseStringFret";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { clampBpmToMeter } from "@/lib/strumBars";
@@ -116,7 +116,12 @@ function writeBar(
 		if (planSlot.strings === null || (word !== null && ref === null && !planSlot.frets)) {
 			return { ...slot, isRest: true };
 		}
-		planSlot.strings.forEach((stringIndex, i) => {
+		// A root token is the chord's root string in this bar: C sits on
+		// string 5 and G on 6, so one order follows the change.
+		const strings = planSlot.root
+			? tokenStrings({ strings: planSlot.strings, root: true }, ref, voicing)
+			: planSlot.strings;
+		strings.forEach((stringIndex, i) => {
 			// A fret written in the sentence is the fret; the chord only marks the bar.
 			const written = planSlot.frets?.[i];
 			if (written !== undefined) {
@@ -156,10 +161,11 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 		// below, never repeated to fill.
 	} else if (input.order && input.order.length > 0) {
 		const duration = input.duration ?? DEFAULT_ORDER_DURATION;
-		plan = input.order.map((token) => ({
-			strings: "rest" in token ? null : token.strings,
-			duration,
-		}));
+		plan = input.order.map((token) =>
+			"rest" in token
+				? { strings: null, duration }
+				: { strings: token.strings, ...(token.root ? { root: true as const } : {}), duration },
+		);
 		repeatToFill = true;
 	} else {
 		const style =

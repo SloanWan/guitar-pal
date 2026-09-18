@@ -23,6 +23,9 @@ import type { useAssistant } from "./useAssistant";
  */
 
 const MAX_INPUT_CHARS = 600;
+/** How far above the bottom still counts as reading the tail, so a stray pixel does not unpin. */
+const TAIL_SLACK_PX = 24;
+
 /** Five lines of the field's own text, after which it scrolls instead of growing. */
 const MAX_INPUT_HEIGHT_PX = 104;
 /** Long enough to read one, short enough to see there are others. */
@@ -266,6 +269,10 @@ export default function AssistantPanel({
 	} = assistant;
 	const [draft, setDraft] = useState("");
 	const scrollRef = useRef<HTMLDivElement | null>(null);
+	/** The conversation itself, inside the scrolling frame — what is watched for growth. */
+	const contentRef = useRef<HTMLDivElement | null>(null);
+	/** Whether the reader is at the tail, and so should be carried along as it grows. */
+	const pinnedRef = useRef(true);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
 	const promptHintId = useId();
 	const { user } = useUser();
@@ -339,9 +346,32 @@ export default function AssistantPanel({
 	const followTail = useCallback(() => {
 		const el = scrollRef.current;
 		if (el) el.scrollTop = el.scrollHeight;
+		pinnedRef.current = true;
 	}, []);
 
 	useEffect(followTail, [messages, pending, followTail]);
+
+	// The conversation grows after the turn that added to it has rendered — a
+	// preview drawing its stave, a template row popping in, the typing dots —
+	// and each growth would leave the tail below the fold. So the tail is
+	// followed whenever the content's height changes, as long as the reader
+	// was at the bottom: someone who scrolled up to re-read an earlier turn
+	// stays where they are until the next message pins them again.
+	useEffect(() => {
+		const el = scrollRef.current;
+		const content = contentRef.current;
+		if (!el || !content || typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(() => {
+			if (pinnedRef.current) el.scrollTop = el.scrollHeight;
+		});
+		observer.observe(content);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+	const onScroll = useCallback(() => {
+		const el = scrollRef.current;
+		if (el) pinnedRef.current = el.scrollHeight - el.clientHeight - el.scrollTop <= TAIL_SLACK_PX;
+	}, []);
 
 	useEffect(() => {
 		inputRef.current?.focus();
@@ -384,102 +414,105 @@ export default function AssistantPanel({
 		<div className="flex flex-col" style={{ height }}>
 			<div
 				ref={scrollRef}
+				onScroll={onScroll}
 				className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
 				role="log"
 				aria-live="polite"
 				aria-label="Assistant conversation"
 			>
-				{messages.length === 0 ? (
-					// Keyed on the conversation: a new chat remounts the intro and plays
-					// it again from the top, and reopening the panel does not.
-					<Intro
-						key={sessionId}
-						hello={hello}
-						aside={aside}
-						domain={domain}
-						greeted={greeted}
-						onGreeted={markGreeted}
-						onExample={submit}
-						onTick={followTail}
-					/>
-				) : (
-					<ul className="space-y-2.5">
-						{messages.map((message) =>
-							message.role === "user" ? (
-								<li key={message.id} className="flex justify-end">
-									<Bubble side="user">{message.text}</Bubble>
-								</li>
-							) : (
-								<li key={message.id} className="flex flex-col items-start gap-2">
-									<Bubble side="assistant" muted={message.failed}>
-										<StreamedText
-											text={message.text}
-											animate={message.streamed !== true}
-											onTick={followTail}
-											onDone={() => markStreamed(message.id)}
-										/>
-									</Bubble>
-									{/* The preview is an attachment, not speech: full width under
-									    the bubble, where a 16-cell grid actually fits — and held
-									    back until the message has finished saying what it is. */}
-									{message.proposal && message.streamed === true && (
-										<div className="w-full">
-											<ProposalPreview proposal={message.proposal} />
-										</div>
-									)}
-									{message.tabProposal && message.streamed === true && (
-										<div className="w-full">
-											<TabProposalPreview proposal={message.tabProposal} />
-										</div>
-									)}
-									{message.tabEdit && message.streamed === true && (
-										<div className="w-full">
-											<TabEditCard
-												edit={message.tabEdit}
-												done={message.editDone === true}
-												onDone={() => markEditDone(message.id)}
-												lang={message.lang ?? "en"}
+				<div ref={contentRef}>
+					{messages.length === 0 ? (
+						// Keyed on the conversation: a new chat remounts the intro and plays
+						// it again from the top, and reopening the panel does not.
+						<Intro
+							key={sessionId}
+							hello={hello}
+							aside={aside}
+							domain={domain}
+							greeted={greeted}
+							onGreeted={markGreeted}
+							onExample={submit}
+							onTick={followTail}
+						/>
+					) : (
+						<ul className="space-y-2.5">
+							{messages.map((message) =>
+								message.role === "user" ? (
+									<li key={message.id} className="flex justify-end">
+										<Bubble side="user">{message.text}</Bubble>
+									</li>
+								) : (
+									<li key={message.id} className="flex flex-col items-start gap-2">
+										<Bubble side="assistant" muted={message.failed}>
+											<StreamedText
+												text={message.text}
+												animate={message.streamed !== true}
+												onTick={followTail}
+												onDone={() => markStreamed(message.id)}
 											/>
-										</div>
-									)}
-									{message.templates && message.streamed === true && (
-										<Options>
-											{message.templates.map((template, i) => (
-												<Option
-													key={template}
-													order={i}
-													tone="template"
-													onClick={() => take(template, askedBefore(message.id))}
-												>
-													{template}
-												</Option>
-											))}
-										</Options>
-									)}
-									{message.edit && message.streamed === true && (
-										<div className="w-full">
-											<EditIntentCard
-												edit={message.edit}
-												patterns={patterns}
-												index={index}
-												ensureIndex={ensureIndex}
-												done={message.editDone === true}
-												onDone={() => markEditDone(message.id)}
-												lang={message.lang ?? "en"}
-											/>
-										</div>
-									)}
-								</li>
-							),
-						)}
-					</ul>
-				)}
+										</Bubble>
+										{/* The preview is an attachment, not speech: full width under
+										    the bubble, where a 16-cell grid actually fits — and held
+										    back until the message has finished saying what it is. */}
+										{message.proposal && message.streamed === true && (
+											<div className="w-full">
+												<ProposalPreview proposal={message.proposal} />
+											</div>
+										)}
+										{message.tabProposal && message.streamed === true && (
+											<div className="w-full">
+												<TabProposalPreview proposal={message.tabProposal} />
+											</div>
+										)}
+										{message.tabEdit && message.streamed === true && (
+											<div className="w-full">
+												<TabEditCard
+													edit={message.tabEdit}
+													done={message.editDone === true}
+													onDone={() => markEditDone(message.id)}
+													lang={message.lang ?? "en"}
+												/>
+											</div>
+										)}
+										{message.templates && message.streamed === true && (
+											<Options>
+												{message.templates.map((template, i) => (
+													<Option
+														key={template}
+														order={i}
+														tone="template"
+														onClick={() => take(template, askedBefore(message.id))}
+													>
+														{template}
+													</Option>
+												))}
+											</Options>
+										)}
+										{message.edit && message.streamed === true && (
+											<div className="w-full">
+												<EditIntentCard
+													edit={message.edit}
+													patterns={patterns}
+													index={index}
+													ensureIndex={ensureIndex}
+													done={message.editDone === true}
+													onDone={() => markEditDone(message.id)}
+													lang={message.lang ?? "en"}
+												/>
+											</div>
+										)}
+									</li>
+								),
+							)}
+						</ul>
+					)}
 
-				{pending && (
-					<div className="mt-2.5 flex justify-start">
-						<TypingBubble />
-					</div>
-				)}
+					{pending && (
+						<div className="mt-2.5 flex justify-start">
+							<TypingBubble />
+						</div>
+					)}
+				</div>
 			</div>
 
 			<form

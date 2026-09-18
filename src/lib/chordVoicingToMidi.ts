@@ -4,6 +4,15 @@ import type { ChordVoicing } from "./chordVoicingToVexChords";
 // MIDI pitch of each open string: index 0 = string 6 (low E = E2), index 5 = string 1 (high e = E4)
 export const GUITAR_OPEN_MIDI: readonly number[] = [40, 45, 50, 55, 59, 64];
 
+// Pitch-class names, sharps only, indexed by `midi % 12`. Diagrams and the
+// fretboard use it for note labels; key-aware spelling (flats) is the caller's job.
+export const NOTE_NAMES: readonly string[] = [
+  "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
+
+// Display name of each string in GUITAR_OPEN_MIDI order (low E first).
+export const STRING_LABELS: readonly string[] = ["E", "A", "D", "G", "B", "e"];
+
 export interface ChordMidiNote {
   /** 0 = string 6 (low E), 5 = string 1 (high e) */
   stringIndex: number;

@@ -24,7 +24,7 @@ import SharedPatternPanel from "@/components/fingerpick/SharedPatternPanel";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
-import { useAutoScroll } from "@/components/fingerpick/useAutoScroll";
+import { useAutoScroll } from "@/components/useAutoScroll";
 import { useHideOnScroll } from "@/components/fingerpick/useHideOnScroll";
 import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
 import { useMeasureGeometry } from "@/components/fingerpick/useMeasureGeometry";

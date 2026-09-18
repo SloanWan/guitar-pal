@@ -74,8 +74,8 @@ export function looksLikeChord(word: string): boolean {
 export interface TabSentenceReading {
 	/** Every chord word in typed order, resolved or not. */
 	chordWords: ChordWord[];
-	/** Notes written as string-and-fret pairs, when they were. */
-	notes: NoteToken[] | null;
+	/** Notes written as string-and-fret pairs, one group per pair — one bar each — when they were. */
+	notes: NoteToken[][] | null;
 	/** Why the string-and-fret lists could not be read, when they were there but did not pair up. */
 	notesError: string | null;
 	/** The right-hand order, when one was written. */
@@ -163,7 +163,7 @@ export function readTabSentence(
 	// Strings and frets first: their digits would read as a pick order to
 	// everything after this.
 	const pairs = readStringFret(afterBpm);
-	const notes = pairs.found && pairs.ok ? pairs.notes : null;
+	const notes = pairs.found && pairs.ok ? pairs.groups : null;
 	const notesError = pairs.found && !pairs.ok ? pairs.error : null;
 
 	// The meter and the note value before the order: `6/8` and `/16` are made

@@ -37,8 +37,8 @@ const DEFAULT_ORDER_DURATION: Duration = "eighth";
 
 export interface BuildTabProposalInput {
 	chordWords: readonly ChordWord[];
-	/** Notes written as string-and-fret pairs; the plan is these at `duration`, frets as written. */
-	notes?: readonly NoteToken[] | null;
+	/** Notes written as string-and-fret pairs, one group per bar; frets as written, at `duration`. */
+	notes?: readonly (readonly NoteToken[])[] | null;
 	/** A written order; the plan is these at `duration`. */
 	order?: readonly PickToken[] | null;
 	duration?: Duration | null;
@@ -145,14 +145,15 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 
 	// The plan: a written order, a style's bar, or the default when only
 	// chords were named — and, in that last case, said to be a guess.
-	let plan: PlanSlot[];
+	let plan: PlanSlot[] = [];
 	let repeatToFill = false;
 	let preset: FingerpickPattern | null = null;
 	let styleLabel: string | null = null;
-	const written = input.notes !== null && input.notes !== undefined && input.notes.length > 0;
+	const groups = (input.notes ?? []).filter((g) => g.length > 0);
+	const written = groups.length > 0;
 	if (written) {
-		const duration = input.duration ?? DEFAULT_ORDER_DURATION;
-		plan = input.notes!.map((note) => ({ strings: [note.stringIndex], frets: [note.fret], duration }));
+		// Each pair the player wrote is its own bar: laid out group by group
+		// below, never repeated to fill.
 	} else if (input.order && input.order.length > 0) {
 		const duration = input.duration ?? DEFAULT_ORDER_DURATION;
 		plan = input.order.map((token) => ({
@@ -180,12 +181,29 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 
 	const timeSignature: [number, number] = input.timeSignature ?? preset?.timeSignature ?? [4, 4];
 	const capacity = measureCapacity(timeSignature);
-	const { bars, padded } = barsFromPlan(plan, capacity, repeatToFill);
+	let bars: PlanSlot[][];
+	let padded: boolean;
+	if (written) {
+		const duration = input.duration ?? DEFAULT_ORDER_DURATION;
+		const laid = groups.map((group) =>
+			barsFromPlan(
+				group.map((note) => ({ strings: [note.stringIndex], frets: [note.fret], duration })),
+				capacity,
+				false,
+			),
+		);
+		bars = laid.flatMap((l) => l.bars);
+		padded = laid.some((l) => l.padded);
+	} else {
+		({ bars, padded } = barsFromPlan(plan, capacity, repeatToFill));
+	}
 	if (padded) {
 		warnings.push({
 			code: "PADDED",
 			path: "measures",
-			message: `The order did not fill a ${timeSignature[0]}/${timeSignature[1]} bar and was padded with rests.`,
+			message: written
+				? `A bar did not fill ${timeSignature[0]}/${timeSignature[1]} and was padded with rests.`
+				: `The order did not fill a ${timeSignature[0]}/${timeSignature[1]} bar and was padded with rests.`,
 		});
 	}
 

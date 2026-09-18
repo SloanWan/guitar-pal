@@ -136,7 +136,7 @@ export async function resolveTabTurn({
 	if (reading.notesError !== null) {
 		return {
 			text: pick(lang, `${reading.notesError}`, `${reading.notesError}`),
-			templates: ["string:66544322, fret:8-11-10-8-10-8-8-11"],
+			templates: ["string:66544322, fret:8-11-10-8-10-8-8-11", "string:6654, fret:8-11-10-8\nstring:3211, fret:8-8-11-8"],
 			lang,
 		};
 	}

@@ -6,11 +6,12 @@ import { buildTabProposal } from "@/lib/tabAssistant/buildTabProposal";
 import { resolveTabTurn } from "@/lib/tabAssistant/turn";
 import { INDEX, voicingFor } from "./fixtures";
 
-const notes = (text: string) => {
+const groups = (text: string) => {
 	const r = readStringFret(text);
 	if (!r.found || !r.ok) throw new Error(r.found ? r.error : "not found");
-	return r.notes.map((n) => `${n.stringIndex + 1}:${n.fret}`);
+	return r.groups.map((g) => g.map((n) => `${n.stringIndex + 1}:${n.fret}`));
 };
+const notes = (text: string) => groups(text).flat();
 
 describe("readStringFret", () => {
 	it("pairs string numbers with frets in order", () => {
@@ -34,11 +35,23 @@ describe("readStringFret", () => {
 		expect(r.found && r.ok && r.text.replace(/\s+/g, " ").trim()).toBe(", in 3/4");
 	});
 
-	it("says what is wrong when the lists do not pair up", () => {
+	it("reads several pairs as several bars, in the order written", () => {
+		expect(groups("string:6654, fret:8-11-10-8\nstring:3211, fret:8-8-11-8\nfret:3 string:6")).toEqual([
+			["6:8", "6:11", "5:10", "4:8"],
+			["3:8", "2:8", "1:11", "1:8"],
+			["6:3"],
+		]);
+	});
+
+	it("says what is wrong when the lists do not pair up, and in which bar", () => {
 		const short = readStringFret("string:665 fret:8-11");
-		expect(short.found && !short.ok && short.error).toMatch(/3 string numbers but 2 frets/);
+		expect(short.found && !short.ok && short.error).toMatch(/Bar 1 has 3 string numbers but 2 frets/);
 		const half = readStringFret("string:665");
 		expect(half.found && !half.ok && half.error).toMatch(/no frets/);
+		const second = readStringFret("string:66 fret:8-11, string:5 fret:1-2");
+		expect(second.found && !second.ok && second.error).toMatch(/^Bar 2/);
+		const odd = readStringFret("string:66 fret:8-11, string:5");
+		expect(odd.found && !odd.ok && odd.error).toMatch(/^Bar 2 has strings but no frets/);
 		const high = readStringFret("string:6 fret:30");
 		expect(high.found && !high.ok && high.error).toMatch(/past the neck/);
 	});
@@ -51,7 +64,8 @@ describe("readStringFret", () => {
 describe("notes written out, through the readers", () => {
 	it("is read whole, and not as a pick order", () => {
 		const r = readTabSentence("string:66544322, fret:8-11-10-8-10-8-8-11", INDEX);
-		expect(r.notes).toHaveLength(8);
+		expect(r.notes).toEqual([expect.any(Array)]);
+		expect(r.notes?.[0]).toHaveLength(8);
 		expect(r.order).toBeNull();
 		expect(r.leftover).toBe("");
 		expect(routeTabInput("string:66544322, fret:8-11-10-8-10-8-8-11", INDEX).path).toBe("notes");
@@ -59,7 +73,7 @@ describe("notes written out, through the readers", () => {
 
 	it("takes the note value, meter and a name alongside", () => {
 		const r = readTabSentence("string:6654 fret:8-11-10-8 /16 in 3/4, name it lick", INDEX);
-		expect(r.notes).toHaveLength(4);
+		expect(r.notes?.[0]).toHaveLength(4);
 		expect(r.duration).toBe("sixteenth");
 		expect(r.timeSignature).toEqual([3, 4]);
 		expect(r.name).toBe("lick");
@@ -82,6 +96,25 @@ describe("notes written out, through the readers", () => {
 		expect(built.proposal.name).toBe("Written tab");
 	});
 
+	it("writes one bar per pair, padding a short one and splitting a long one", () => {
+		const r = readTabSentence(
+			"string:6654, fret:8-11-10-8\nstring:66544322, fret:8-11-10-8-10-8-8-11\nstring:665443221, fret:8-11-10-8-10-8-8-11-8",
+			INDEX,
+		);
+		const built = buildTabProposal({ chordWords: [], notes: r.notes, voicingFor });
+		if (!built.ok) throw new Error(built.error);
+		const { measures } = built.proposal.pattern;
+		// A short pair is padded, not repeated; a long one spills into a bar of its own.
+		expect(measures).toHaveLength(4);
+		expect(measures[0].slots.filter((s) => !s.isRest)).toHaveLength(4);
+		expect(measures[0].slots.filter((s) => s.isRest).length).toBeGreaterThan(0);
+		expect(measures[1].slots.filter((s) => !s.isRest)).toHaveLength(8);
+		expect(measures[2].slots.filter((s) => !s.isRest)).toHaveLength(8);
+		expect(measures[3].slots.filter((s) => !s.isRest)).toHaveLength(1);
+		expect(measures[3].slots[0].strings[0].fret).toBe(8);
+		expect(built.proposal.warnings.map((w) => w.code)).toEqual(["PADDED"]);
+	});
+
 	it("marks a chord on the bar without changing the written frets", () => {
 		const r = readTabSentence("Am string:654 fret:x-0-2", INDEX);
 		const built = buildTabProposal({ chordWords: r.chordWords, notes: r.notes, voicingFor });
@@ -95,7 +128,7 @@ describe("notes written out, through the readers", () => {
 	it("answers a mismatch by saying what was wrong", async () => {
 		const out = await resolveTabTurn({ text: "string:665 fret:8-11", index: INDEX, voicings: async () => voicingFor });
 		expect(out.proposal).toBeUndefined();
-		expect(out.text).toMatch(/3 string numbers but 2 frets/);
+		expect(out.text).toMatch(/Bar 1 has 3 string numbers but 2 frets/);
 		expect(out.templates?.[0]).toMatch(/^string:/);
 	});
 

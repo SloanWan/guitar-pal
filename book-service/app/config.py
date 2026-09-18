@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     # Connection for the restricted `book_service` role. Optional so the process
     # can boot (and answer /health) on a box that has not been wired to Postgres.
     database_url: str | None = Field(default=None, validation_alias="BOOK_SERVICE_DATABASE_URL")
+    # The same key the Next.js strum assistant uses. Optional: without it the
+    # text-TOC step is skipped and an unbookmarked book lands on manual ranges.
+    anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    # Tesseract language data for scanned uploads (`tools/fetch-tessdata.sh`).
+    # Optional: without it a scan's pages stay textless and its chapters come
+    # from vision or the player's own ranges.
+    tessdata_prefix: str | None = Field(default=None, validation_alias="TESSDATA_PREFIX")
+    ocr_languages: str = Field(default="chi_sim+eng", validation_alias="BOOK_SERVICE_OCR_LANGUAGES")
 
     @property
     def jwt_issuer(self) -> str:

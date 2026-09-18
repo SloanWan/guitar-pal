@@ -3,10 +3,11 @@
  *
  * Two ways in. A **degree**: a piano key or a position's numeral picks one of
  * the key's chords, and the capo rule says which shape fingers it. A **held
- * chord**: the player names a shape — `Am7`, or the grip `x02010` — and asks
- * what it sounds like under this capo. The second is the first read backwards:
- * the shape is given, the sounding chord is the shape moved up by the capo,
- * and the numeral is whatever the key makes of that.
+ * chord**: the player names one side and asks for the other. Name the
+ * *shape* — `Am7`, or the grip `x02010` — and hear what it sounds under this
+ * capo; name the *sounding* chord — `D` — and see which shape holds it here.
+ * Either way the other side is the capo's distance away, and the numeral is
+ * whatever the key makes of what sounds.
  *
  * Both arrive here as a `ShownChord`, so the readout, the marks and the piano
  * never need to know which way the chord came in.
@@ -39,12 +40,14 @@ export interface ShownChord {
 	triad: readonly number[] | null;
 }
 
-/** A shape the player named or wrote: what the neck holds. */
+/** A chord the player named or wrote, and which side of the capo they named. */
 export interface HeldChord {
 	root: string;
 	suffix: string;
 	/** The grip that was written, when it was a grip; null takes the standard one. */
 	voicingId: string | null;
+	/** "shape": the neck holds this and the capo moves what sounds. "sounding": this is heard, and the shape sits below the capo. */
+	side: "shape" | "sounding";
 }
 
 const mod12 = (n: number): number => ((n % 12) + 12) % 12;
@@ -81,11 +84,12 @@ export function shownFromKeyChords(sounding: KeyChord, shape: KeyChord): ShownCh
 }
 
 /**
- * A held shape under the capo. `soundingPitchClasses` are the notes the shape
- * actually sounds, once its voicing is known: the chord is the key's, and gets
- * the key's numeral for its root, only when every one of them is a scale
- * tone. Before the voicing has loaded there is nothing to judge by, and the
- * numeral waits.
+ * A held chord under the capo: the named side stays, the other is the capo's
+ * distance from it. `soundingPitchClasses` are the notes the shape actually
+ * sounds, once its voicing is known: the chord is the key's, and gets the
+ * key's numeral for its root, only when every one of them is a scale tone.
+ * Before the voicing has loaded there is nothing to judge by, and the numeral
+ * waits.
  */
 export function heldChordView(
 	held: HeldChord,
@@ -93,19 +97,17 @@ export function heldChordView(
 	capo: number,
 	soundingPitchClasses: readonly number[] | null,
 ): ShownChord {
-	const shapePc = rootPitchClass(held.root);
-	const moved = transposeChord(held.root, held.suffix, capo);
-	const soundingPc = shapePc === -1 ? -1 : mod12(shapePc + capo);
+	const namedPc = rootPitchClass(held.root);
+	const named: ChordName = { root: held.root, suffix: held.suffix, rootPitchClass: namedPc };
+	const away = held.side === "shape" ? capo : -capo;
+	const moved = transposeChord(held.root, held.suffix, away);
+	const other: ChordName = { root: moved.root, suffix: moved.suffix, rootPitchClass: namedPc === -1 ? -1 : mod12(namedPc + away) };
+	const [sounding, shape] = held.side === "shape" ? [other, named] : [named, other];
 	let numeral: string | null = null;
-	if (soundingPc !== -1 && soundingPitchClasses) {
+	if (sounding.rootPitchClass !== -1 && soundingPitchClasses) {
 		const scale = new Set(scalePitchClasses(spec));
-		const degree = keyChord(spec, soundingPc);
+		const degree = keyChord(spec, sounding.rootPitchClass);
 		if (degree.diatonic && soundingPitchClasses.every((pc) => scale.has(mod12(pc)))) numeral = degree.numeral;
 	}
-	return {
-		sounding: { root: moved.root, suffix: moved.suffix, rootPitchClass: soundingPc },
-		shape: { root: held.root, suffix: held.suffix, rootPitchClass: shapePc },
-		numeral,
-		triad: null,
-	};
+	return { sounding, shape, numeral, triad: null };
 }

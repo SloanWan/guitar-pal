@@ -104,21 +104,35 @@ export function tabEditMessage(edit: TabEditReading, lang: Lang, presets: readon
 			const preset = presets.some((p) => p.id === edit.pattern.id);
 			const labels = edit.marks.map((m) => chordSymbolLabel(m.chord));
 			const first = edit.marks[0];
+			// One run on the first beat reads as a range; anything else is said
+			// mark by mark, beat included where it is not the first.
+			const oneRun =
+				edit.marks.every((m) => m.beat === first?.beat) &&
+				edit.marks.every((m, i) => i === 0 || m.bar === edit.marks[i - 1].bar + 1);
 			const where =
-				edit.marks.length === 0
-					? ""
-					: edit.marks.length === 1
-						? pick(lang, `bar ${first.bar}`, `第 ${first.bar} 小节`)
-						: pick(lang, `bars ${first.bar}–${edit.marks[edit.marks.length - 1].bar}`, `第 ${first.bar}–${edit.marks[edit.marks.length - 1].bar} 小节`);
+				edit.marks.length === 1
+					? pick(lang, `bar ${first.bar}`, `第 ${first.bar} 小节`)
+					: pick(lang, `bars ${first.bar}–${edit.marks[edit.marks.length - 1].bar}`, `第 ${first.bar}–${edit.marks[edit.marks.length - 1].bar} 小节`);
 			const beat = first && first.beat !== 1 ? pick(lang, `, beat ${first.beat}`, `第 ${first.beat} 拍`) : "";
+			const each = edit.marks
+				.map((m) =>
+					pick(
+						lang,
+						`${chordSymbolLabel(m.chord)} on bar ${m.bar}${m.beat !== 1 ? ` beat ${m.beat}` : ""}`,
+						`第 ${m.bar} 小节${m.beat !== 1 ? `第 ${m.beat} 拍` : ""} ${chordSymbolLabel(m.chord)}`,
+					),
+				)
+				.join(pick(lang, ", ", "、"));
 			const what =
 				edit.marks.length === 0
 					? pick(lang, `None of those chords matched — nothing to mark on ${q(edit.pattern.name)}.`, `这些和弦都没匹配上——${q(edit.pattern.name)}上没有可标的。`)
-					: pick(
-							lang,
-							`Mark ${labels.join(" ")} on ${where}${beat} of ${q(edit.pattern.name)}?`,
-							`在${q(edit.pattern.name)}的${where}${beat}标上 ${labels.join(" ")}？`,
-						);
+					: oneRun
+						? pick(
+								lang,
+								`Mark ${labels.join(" ")} on ${where}${beat} of ${q(edit.pattern.name)}?`,
+								`在${q(edit.pattern.name)}的${where}${beat}标上 ${labels.join(" ")}？`,
+							)
+						: pick(lang, `Mark ${each} of ${q(edit.pattern.name)}?`, `在${q(edit.pattern.name)}标上：${each}？`);
 			const note =
 				edit.marks.length === 0
 					? ""

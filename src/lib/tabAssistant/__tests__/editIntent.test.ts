@@ -124,6 +124,20 @@ describe("chord marks", () => {
 		expect(readFour("four bars 第 1-4 小节和弦：C G Am F")?.kind).toBe("chords");
 	});
 
+	it("reads a bar-by-bar list with the target named once, or on the first item", () => {
+		const r = readFour("in four bars, add Cm7 to bar 1, add F7 to bar 2, add Bbmaj7 to bar 3, add Ebmaj7 to bar 4");
+		expect(r?.kind).toBe("chords");
+		expect(r?.kind === "chords" && r.marks.map((m) => `${m.bar}:${m.chord.root}${m.chord.suffix}`)).toEqual(["1:Cm7", "2:F7", "3:Bbmaj7", "4:Ebmaj7"]);
+		expect(r?.kind === "chords" && r.measures).toHaveLength(4);
+		const onFirst = readFour("add Cm7 to bar 1 of four bars, F7 to bar 2 beat 3, mark Bbmaj7 on bar 4");
+		expect(onFirst?.kind === "chords" && onFirst.marks.map((m) => `${m.bar}.${m.beat}`)).toEqual(["1.1", "2.3", "4.1"]);
+		// Bars 1–4 are handed over as one run, bar 3 untouched.
+		expect(onFirst?.kind === "chords" && onFirst.measures).toHaveLength(4);
+		expect(chordOn(onFirst, 3, 0)).toBeUndefined();
+		const zh = readFour("给 four bars 第 1 小节加 Cm7，第 2 小节第 3 拍加 F7，第 4 小节 Bbmaj7");
+		expect(zh?.kind === "chords" && zh.marks.map((m) => `${m.bar}.${m.beat}:${m.chord.root}`)).toEqual(["1.1:C", "2.3:F", "4.1:Bb"]);
+	});
+
 	it("keeps a chord already on a beat that is not being marked", () => {
 		const marked = { ...four, measures: four.measures.map((m, i) => (i === 1 ? { ...m, slots: m.slots.map((s, j) => (j === 2 ? { ...s, chord: { root: "E", suffix: "major" } } : s)) } : m)) };
 		const r = readTabEdit({ text: "add chord Am to bar 2 of four bars", index: INDEX, patterns: [marked], voicingFor });
@@ -154,6 +168,8 @@ describe("chord marks", () => {
 		expect(out.text).toBe('Mark C G Am F on bars 1–4 of "four bars"? Nothing is saved until you say so.');
 		const beat = await resolveTabTurn({ text: "给 four bars 第 2 小节第 3 拍加和弦 Am", index: INDEX, patterns: [four], uiLang: "zh", voicings: async () => voicingFor });
 		expect(beat.text).toMatch(/在「four bars」的第 2 小节第 3 拍标上 Am？/);
+		const list = await resolveTabTurn({ text: "in four bars, add Cm7 to bar 1, add F7 to bar 2 beat 3", index: INDEX, patterns: [four], voicings: async () => voicingFor });
+		expect(list.text).toBe('Mark Cm7 on bar 1, F7 on bar 2 beat 3 of "four bars"? Nothing is saved until you say so.');
 		if (out.edit?.kind !== "chords") return;
 		const next = applyTabEdit(four, "replace", out.edit.barIndex, out.edit.measures, out.edit.measures.length);
 		expect(next.measures).toHaveLength(4);

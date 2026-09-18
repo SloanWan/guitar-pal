@@ -31,23 +31,45 @@ import type { VoicingLookup } from "@/lib/tabAssistant/voicings";
 
 export type TabEditOp = "append" | "replace" | "chords";
 
+/** One place chords go: a bar or a range, a beat, and the chord words. */
+interface ChordItem {
+	/** 1-based, as the player counts bars. */
+	bar: number;
+	/** The last bar of a range, 1-based, when one was named. */
+	barTo: number | null;
+	/** 1-based; null means the first beat. */
+	beat: number | null;
+	spec: string;
+}
+
 /** How the target was named, before the library is consulted. */
 interface EditClause {
 	op: TabEditOp;
 	name: string;
-	/** 1-based, as the player counts bars; only for a replace or a chord mark. */
+	/** 1-based, as the player counts bars; only for a replace. */
 	bar: number | null;
-	/** The last bar of a range, 1-based, when one was named. */
-	barTo: number | null;
-	/** 1-based; where in the bar a chord mark goes. Null means the first beat. */
-	beat: number | null;
-	/** Everything after the colon: the bars to write, or the chords to mark. */
+	/** Everything after the colon: the bars to write. */
 	spec: string;
+	/** For chord marks: every place named, in the order written. */
+	items: ChordItem[];
 }
+
+/**
+ * "in lick, add Cm7 to bar 1, add F7 to bar 2": the target once, then a list.
+ * The first item may also carry the target itself — "add Cm7 to bar 1 of
+ * lick, add F7 to bar 2" — and the rest follow without it.
+ */
+const CHORDS_LIST_EN = /^\s*(?:in|on|for)\s+(.+?)\s*[,，:：]\s*((?:add|mark|put|set|write)\s[\s\S]+)$/i;
+const CHORD_ITEM_EN =
+	/^\s*(?:(?:add|mark|put|set|write)\s+)?(?:(?:the\s+)?chords?\s+)?(.+?)\s+(?:to|on|at|in|over)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s*$/i;
+const CHORDS_LIST_ZH_LEAD = /^\s*(?:给|在|把|为)?\s*/;
+const CHORD_ITEM_ZH =
+	/^\s*第\s*(\d+)\s*(?:[-–到至]\s*(\d+))?\s*小节\s*(?:的?\s*第\s*(\d+)\s*拍)?\s*(?:上|里)?\s*(?:加上|添加|标上|标记|加|标|放|配|用|写)?\s*(?:和弦)?\s*[:：]?\s*(.+)$/;
+const LIST_SEPARATOR = /[,，;；\n]+/;
 
 /** "add chord Am to bar 2 beat 3 of lick", "mark C G Am F on bars 1-4 of lick". */
 const CHORDS_VERB_EN =
-	/^\s*(?:(?:add|set|put|write)\s+(?:the\s+)?chords?|mark(?:\s+(?:the\s+)?chords?)?)\s+(.+?)\s+(?:to|on|at|in|over)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s+(?:of|in|on)\s+(.+?)\s*$/i;
+	/^\s*(?:add|set|put|write|mark)(?:\s+(?:the\s+)?chords?)?\s+(.+?)\s+(?:to|on|at|in|over)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s+(?:of|in|on)\s+([^,，;；\n]+?)\s*$/i;
 /** "lick bar 2 beat 3: Am", "chords for lick bars 1-4: C G Am F". */
 const CHORDS_COLON_EN =
 	/^\s*(?:chords?\s+(?:for|on|in|over)\s+)?(.+?)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s*[:：]\s*(.+)$/i;
@@ -62,22 +84,74 @@ const REPLACE_ZH = /^\s*(?:把|将)?\s*(.+?)\s*的?\s*第\s*(\d+)\s*(?:小节|ba
 
 const num = (raw: string | undefined): number | null => (raw === undefined ? null : Number(raw));
 
+const chords = (name: string, items: ChordItem[]): EditClause => ({ op: "chords", name, bar: null, spec: "", items });
+const item = (bar: string, barTo: string | undefined, beat: string | undefined, spec: string): ChordItem => ({
+	bar: Number(bar),
+	barTo: num(barTo),
+	beat: num(beat),
+	spec,
+});
+
+/** Every item of a list, or null if any one of them is not an item. */
+function readItems(list: string, matcher: RegExp, order: "spec-first" | "bar-first"): ChordItem[] | null {
+	const items: ChordItem[] = [];
+	for (const part of list.split(LIST_SEPARATOR).map((p) => p.trim()).filter((p) => p !== "")) {
+		const m = matcher.exec(part);
+		if (!m) return null;
+		items.push(order === "spec-first" ? item(m[2], m[3], m[4], m[1]) : item(m[1], m[2], m[3], m[4]));
+	}
+	return items.length > 0 ? items : null;
+}
+
+/**
+ * "给 lick 第 1 小节加 Cm7，第 2 小节第 3 拍加 F7": the name is whatever stands
+ * before the first "第 N 小节" that begins a readable list — tried at each
+ * "第" in turn, since a name may hold one.
+ */
+function readListZh(text: string): EditClause | null {
+	const body = text.replace(CHORDS_LIST_ZH_LEAD, "");
+	for (const m of body.matchAll(/第\s*\d+/g)) {
+		const name = body.slice(0, m.index).replace(/[\s的,，:：]+$/, "").trim();
+		if (name === "") continue;
+		const items = readItems(body.slice(m.index), CHORD_ITEM_ZH, "bar-first");
+		if (items) return chords(name, items);
+	}
+	return null;
+}
+
 function readClause(text: string): EditClause | null {
-	// Chord marks first: they say "chord", "beat" or "和弦", which no bar spec does.
-	let m = CHORDS_VERB_EN.exec(text);
-	if (m) return { op: "chords", spec: m[1], bar: Number(m[2]), barTo: num(m[3]), beat: num(m[4]), name: m[5] };
-	m = CHORDS_ZH.exec(text);
-	if (m) return { op: "chords", name: m[1], bar: Number(m[2]), barTo: num(m[3]), beat: num(m[4]), spec: m[5] };
-	m = CHORDS_COLON_EN.exec(text);
-	if (m) return { op: "chords", name: m[1], bar: Number(m[2]), barTo: num(m[3]), beat: num(m[4]), spec: m[5] };
-	m = REPLACE_EN.exec(text);
-	if (m) return { op: "replace", bar: Number(m[1]), barTo: null, beat: null, name: m[2], spec: m[3] };
+	// Chord marks first: they say "chord", "beat", "和弦" or a bar-by-bar list,
+	// which no bar spec does.
+	let m = CHORDS_LIST_EN.exec(text);
+	if (m) {
+		const items = readItems(m[2], CHORD_ITEM_EN, "spec-first");
+		if (items) return chords(m[1], items);
+	}
+	m = CHORDS_VERB_EN.exec(text);
+	if (m) return chords(m[5], [item(m[2], m[3], m[4], m[1])]);
+	// "add Cm7 to bar 1 of lick, add F7 to bar 2": the target rides on the first item.
+	const [head, ...tail] = text.split(LIST_SEPARATOR);
+	m = tail.length > 0 ? CHORDS_VERB_EN.exec(head) : null;
+	if (m) {
+		const rest = readItems(tail.join(","), CHORD_ITEM_EN, "spec-first");
+		if (rest) return chords(m[5], [item(m[2], m[3], m[4], m[1]), ...rest]);
+	}
+	// "改成" is a rewrite of the bar, and is read before the chord list that
+	// would otherwise take it for a chord on the bar.
 	m = REPLACE_ZH.exec(text);
-	if (m) return { op: "replace", name: m[1], bar: Number(m[2]), barTo: null, beat: null, spec: m[3] };
+	if (m) return { op: "replace", name: m[1], bar: Number(m[2]), spec: m[3], items: [] };
+	m = CHORDS_ZH.exec(text);
+	if (m) return chords(m[1], [item(m[2], m[3], m[4], m[5])]);
+	const zhList = readListZh(text);
+	if (zhList) return zhList;
+	m = CHORDS_COLON_EN.exec(text);
+	if (m) return chords(m[1], [item(m[2], m[3], m[4], m[5])]);
+	m = REPLACE_EN.exec(text);
+	if (m) return { op: "replace", bar: Number(m[1]), name: m[2], spec: m[3], items: [] };
 	m = APPEND_EN.exec(text);
-	if (m) return { op: "append", name: m[1], bar: null, barTo: null, beat: null, spec: m[2] };
+	if (m) return { op: "append", name: m[1], bar: null, spec: m[2], items: [] };
 	m = APPEND_ZH.exec(text);
-	if (m) return { op: "append", name: m[1], bar: null, barTo: null, beat: null, spec: m[2] };
+	if (m) return { op: "append", name: m[1], bar: null, spec: m[2], items: [] };
 	return null;
 }
 
@@ -147,10 +221,10 @@ export function readTabEdit({ text, index, patterns, voicingFor }: ReadTabEditIn
 	const pattern = findTabPattern(clause.name, patterns);
 	if (!pattern) return { kind: "unknown-pattern", op: clause.op, name: clause.name.trim() };
 
-	if (clause.op !== "append" && (clause.bar === null || clause.bar < 1 || clause.bar > pattern.measures.length)) {
-		return { kind: "bar-out-of-range", op: clause.op, pattern, bar: clause.bar ?? 0 };
+	if (clause.op === "chords") return readChordMarks(clause.items, pattern, index);
+	if (clause.op === "replace" && (clause.bar === null || clause.bar < 1 || clause.bar > pattern.measures.length)) {
+		return { kind: "bar-out-of-range", op: "replace", pattern, bar: clause.bar ?? 0 };
 	}
-	if (clause.op === "chords") return readChordMarks(clause, pattern, index);
 
 	const measures: Measure[] = [];
 	const warnings: ValidationIssue[] = [];
@@ -197,62 +271,70 @@ export function slotAtBeat(measure: Measure, beat: number, timeSignature: [numbe
 }
 
 /**
- * Chord marks over a run of bars. One chord is written on every bar in the
- * range; several are written one per bar, and then the range has to be as
- * long as the list — or absent, in which case the list sets it. The beat is
- * where in each bar the mark goes, the first beat unless one was named.
+ * Chord marks over bars. Each item names a bar or a range: one chord is
+ * written on every bar in it; several are written one per bar, and then the
+ * range has to be as long as the list — or absent, in which case the list
+ * sets it. The beat is where in each bar the mark goes, the first beat
+ * unless one was named. Several items make one edit over the bars from the
+ * first touched to the last.
  */
 function readChordMarks(
-	clause: EditClause,
+	items: readonly ChordItem[],
 	pattern: FingerpickPattern,
 	index: readonly ChordIndexEntry[],
 ): TabEditReading {
-	const reading = readTabSentence(clause.spec, index);
-	const words = reading.chordWords;
-	if (words.length === 0 || reading.leftover !== "") {
-		return { kind: "segment-unread", op: "chords", pattern, segment: clause.spec.trim() };
-	}
-
-	const beat = clause.beat ?? 1;
 	const beats = beatsPerBar(pattern.timeSignature);
-	if (beat < 1 || beat > beats) return { kind: "beat-out-of-range", op: "chords", pattern, beat };
-
-	const from = clause.bar!;
-	const to = clause.barTo ?? (words.length > 1 ? from + words.length - 1 : from);
-	if (to < from || to > pattern.measures.length) {
-		return { kind: "bar-out-of-range", op: "chords", pattern, bar: to };
-	}
-	const count = to - from + 1;
-	if (words.length > 1 && words.length !== count) {
-		return { kind: "chords-mismatch", op: "chords", pattern, bars: count, chords: words.length };
-	}
-
 	const warnings: ValidationIssue[] = [];
 	const marks: { bar: number; beat: number; chord: ChordRef }[] = [];
 	let next = pattern;
-	for (let i = 0; i < count; i++) {
-		const word = words.length === 1 ? words[0] : words[i];
-		const bar = from + i;
-		if (!word.chord) {
-			warnings.push({
-				code: "UNRESOLVED_CHORD",
-				path: `measures[${bar - 1}]`,
-				message: `No chord matched "${word.text}" — bar ${bar} was left as it is.`,
-				original: word.text,
-			});
-			continue;
+	let low = Number.POSITIVE_INFINITY;
+	let high = 0;
+
+	for (const it of items) {
+		const reading = readTabSentence(it.spec, index);
+		const words = reading.chordWords;
+		if (words.length === 0 || reading.leftover !== "") {
+			return { kind: "segment-unread", op: "chords", pattern, segment: it.spec.trim() };
 		}
-		const measureIndex = bar - 1;
-		const slotIndex = slotAtBeat(pattern.measures[measureIndex], beat, pattern.timeSignature);
-		next = setSlotChord(next, { measureIndex, slotIndex }, word.chord);
-		marks.push({ bar, beat, chord: word.chord });
+		const beat = it.beat ?? 1;
+		if (beat < 1 || beat > beats) return { kind: "beat-out-of-range", op: "chords", pattern, beat };
+
+		const from = it.bar;
+		if (from < 1 || from > pattern.measures.length) return { kind: "bar-out-of-range", op: "chords", pattern, bar: from };
+		const to = it.barTo ?? (words.length > 1 ? from + words.length - 1 : from);
+		if (to < from || to > pattern.measures.length) return { kind: "bar-out-of-range", op: "chords", pattern, bar: to };
+		const count = to - from + 1;
+		if (words.length > 1 && words.length !== count) {
+			return { kind: "chords-mismatch", op: "chords", pattern, bars: count, chords: words.length };
+		}
+
+		for (let i = 0; i < count; i++) {
+			const word = words.length === 1 ? words[0] : words[i];
+			const bar = from + i;
+			if (!word.chord) {
+				warnings.push({
+					code: "UNRESOLVED_CHORD",
+					path: `measures[${bar - 1}]`,
+					message: `No chord matched "${word.text}" — bar ${bar} was left as it is.`,
+					original: word.text,
+				});
+				continue;
+			}
+			const measureIndex = bar - 1;
+			const slotIndex = slotAtBeat(pattern.measures[measureIndex], beat, pattern.timeSignature);
+			next = setSlotChord(next, { measureIndex, slotIndex }, word.chord);
+			marks.push({ bar, beat, chord: word.chord });
+			low = Math.min(low, bar);
+			high = Math.max(high, bar);
+		}
 	}
 
+	if (marks.length === 0) return { kind: "chords", pattern, barIndex: 0, measures: [], marks, warnings };
 	return {
 		kind: "chords",
 		pattern,
-		barIndex: from - 1,
-		measures: next.measures.slice(from - 1, to),
+		barIndex: low - 1,
+		measures: next.measures.slice(low - 1, high),
 		marks,
 		warnings,
 	};

@@ -55,6 +55,26 @@ describe("buildTabProposal", () => {
 			expect(sounded(p.pattern.measures[1])[0]).toBe("5:2");
 		});
 
+		it("puts a root token on each chord's own root string, bar by bar", () => {
+			const p = build({ chordWords: [C, G, Am, D], order: order("根3231323") });
+			expect(p.pattern.measures).toHaveLength(4);
+			// C and Am root on string 5, G on 6, D on 4 — one order, four basses.
+			expect(p.pattern.measures.map((m) => sounded(m)[0])).toEqual(["5:3", "6:3", "5:0", "4:0"]);
+			expect(sounded(p.pattern.measures[1]).slice(1, 4)).toEqual(["3:0", "2:0", "3:0"]);
+			expect(codes(p)).toEqual([]);
+		});
+
+		it("pinches the root with the strings written beside it", () => {
+			const p = build({ chordWords: [G], order: order("根3(12)3 (根1)3(12)3") });
+			expect(sounded(p.pattern.measures[0])).toEqual(["6:3", "3:0", "1:3 2:0", "3:0", "1:3 6:3", "3:0", "1:3 2:0", "3:0"]);
+		});
+
+		it("writes a root over a chord with no shape on the open low E, and says so", () => {
+			const p = build({ chordWords: [{ text: "F", chord: { root: "F", suffix: "major", voicingId: null } }], order: order("根323") });
+			expect(sounded(p.pattern.measures[0])[0]).toBe("6:0");
+			expect(codes(p)).toEqual(["NO_SHAPE"]);
+		});
+
 		it("repeats an order that divides the bar, so 5 3 2 1 is the arpeggio and not half of one", () => {
 			const p = build({ chordWords: [Am], order: order("5 3 2 1") });
 			expect(p.pattern.measures).toHaveLength(1);

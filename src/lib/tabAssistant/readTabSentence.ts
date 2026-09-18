@@ -222,9 +222,11 @@ export function readTabSentence(
 	});
 	for (const m of chordSpans) {
 		const word = m[0];
-		// A lone lowercase letter is an article, never a chord; "am" and "g7"
-		// are chords a phone keyboard writes.
-		const couldBeChord = /^[A-G]/.test(word) || word.length >= 2;
+		// "am" and "g7" are chords a phone keyboard writes, and so is a lone
+		// "c" — only a lone "a" is an article, and it is a chord only where a
+		// colon makes it one ("a: 5321").
+		const beforeColon = /^\s*[:：]/.test(text.slice(m.index + word.length));
+		const couldBeChord = /^[A-G]/.test(word) || word.length >= 2 || word !== "a" || beforeColon;
 		if (couldBeChord && isExactChord(word, index)) {
 			const parsed = parseChordSequence(word, index);
 			chordWords.push({ text: word, chord: parsed.chords[0] ?? null });

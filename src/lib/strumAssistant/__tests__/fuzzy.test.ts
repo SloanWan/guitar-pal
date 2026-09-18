@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { correctKeywords, editDistance } from "@/lib/tabAssistant/fuzzy";
+import { correctKeywords, editDistance } from "@/lib/strumAssistant/fuzzy";
 import { readTabSentence } from "@/lib/tabAssistant/readTabSentence";
 import { routeTabInput } from "@/lib/tabAssistant/router";
 import { resolveTabTurn } from "@/lib/tabAssistant/turn";
-import { INDEX, voicingFor } from "./fixtures";
+import { INDEX, voicingFor } from "@/lib/tabAssistant/__tests__/fixtures";
 
 const LEXICON = [
 	{ word: "string", beforeDigits: true },
@@ -34,8 +34,11 @@ describe("correctKeywords", () => {
 	it("allows two characters wrong in a long word, one in a short one", () => {
 		expect(correctKeywords("arpegio", LEXICON).text).toBe("arpeggio");
 		expect(correctKeywords("arpeggoi", LEXICON).text).toBe("arpeggio");
-		expect(correctKeywords("walz", LEXICON).text).toBe("waltz");
-		expect(correctKeywords("wlaz", LEXICON).text).toBe("wlaz");
+		expect(correctKeywords("waltx", LEXICON).text).toBe("waltz");
+		expect(correctKeywords("wlazt", LEXICON).text).toBe("wlazt");
+		// Four letters is too close to too many words to guess at.
+		expect(correctKeywords("walz", LEXICON).text).toBe("walz");
+		expect(correctKeywords("show me a slow one", [{ word: "slow" }, { word: "waltz" }]).text).toBe("show me a slow one");
 	});
 
 	it("corrects a clause keyword only when digits follow it", () => {
@@ -89,5 +92,27 @@ describe("typos through the readers", () => {
 		expect(out.text).toMatch(/Took “travs” as “travis”/);
 		const zh = await resolveTabTurn({ text: "Am三指发", index: INDEX, uiLang: "zh", voicings: async () => voicingFor });
 		expect(zh.text).toMatch(/把“三指发”当作“三指法”读了/);
+	});
+});
+
+describe("typos through the strum readers", () => {
+	it("reads a misspelt style word and tempo", async () => {
+		const { resolveAssistantTurn } = await import("@/lib/strumAssistant/turn");
+		const out = resolveAssistantTurn({ text: "a slwoer balad strum in C G Am F", index: INDEX });
+		expect(out.proposal?.bpm).toBeLessThan(65);
+		expect(out.text).toMatch(/Took “slwoer” as “slower”, “balad” as “ballad”/);
+	});
+
+	it("reads a misspelt edit verb, and leaves the pattern's own name alone", async () => {
+		const { resolveAssistantTurn } = await import("@/lib/strumAssistant/turn");
+		const patterns = [{ id: "p1", name: "belief" }, { id: "p2", name: "travs" }];
+		const out = resolveAssistantTurn({ text: "renmae belief to travs", index: INDEX, patterns });
+		expect(out.edit?.kind).toBe("rename");
+		expect(out.edit?.kind === "rename" && out.edit.newName).toBe("travs");
+		expect(out.text).toMatch(/Took “renmae” as “rename”/);
+		expect(out.text).not.toMatch(/“travs” as/);
+		const del = resolveAssistantTurn({ text: "delte travs", index: INDEX, patterns });
+		expect(del.edit?.kind).toBe("delete");
+		expect(del.edit?.kind === "delete" && del.edit.pattern.name).toBe("travs");
 	});
 });

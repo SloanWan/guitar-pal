@@ -13,8 +13,8 @@ import {
 } from "@/lib/strumAssistant/readPhrase";
 import { isOrderWord, parsePickOrder } from "@/lib/tabAssistant/parsePickOrder";
 import { readStringFret, type NoteToken } from "@/lib/tabAssistant/parseStringFret";
-import { looksLikeChord } from "@/lib/tabAssistant/chordSpelling";
-import { correctKeywords, type Correction, type LexiconEntry } from "@/lib/tabAssistant/fuzzy";
+import { looksLikeChord } from "@/lib/strumAssistant/chordSpelling";
+import { correctKeywords, type Correction, type LexiconEntry } from "@/lib/strumAssistant/fuzzy";
 import { TAB_STYLES, type TabStyleEntry } from "@/lib/tabAssistant/styles";
 import type { ChordWord } from "@/lib/tabAssistant/types";
 
@@ -71,6 +71,7 @@ const LEXICON: readonly LexiconEntry[] = [
 	{ word: "picking" },
 	{ word: "fingerpicking" },
 	{ word: "fingerstyle" },
+	{ word: "capo" },
 ];
 
 export { looksLikeChord };

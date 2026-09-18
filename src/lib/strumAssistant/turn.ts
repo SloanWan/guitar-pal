@@ -10,6 +10,8 @@ import type { AssistantProposal } from "@/lib/strumAssistant/types";
 import type { NamedPattern } from "@/lib/lastPattern";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
 import { detectLang, pick, type Lang } from "@/lib/strumAssistant/lang";
+import { correctionsNote } from "@/lib/strumAssistant/fuzzy";
+import { correctStrumTypos } from "@/lib/strumAssistant/typos";
 
 /**
  * One turn of the conversation, decided — by the app, never by a model.
@@ -163,22 +165,26 @@ export function isPreset(patternId: string): boolean {
 }
 
 export function resolveAssistantTurn({
-	text,
+	text: typed,
 	index,
 	patterns = [],
 	uiLang = "en",
 }: ResolveTurnInput): AssistantTurnOutcome {
-	const lang = detectLang(text, uiLang);
+	const lang = detectLang(typed, uiLang);
 
 	// "hi" and "thanks" are not requests, and are answered before anything tries
 	// to read them as one. Whole-message matches only.
-	const talk = smallTalk(text, lang);
+	const talk = smallTalk(typed, lang);
 	if (talk) return { text: talk.text, templates: talk.templates.length ? talk.templates : undefined, lang };
+
+	// Typos in the words the readers know are read past, and owned up to.
+	const { text, corrections } = correctStrumTypos(typed, patterns);
+	const note = correctionsNote(corrections, lang);
 
 	// An edit names its target, so it is read before anything else: "add C G to
 	// belief" is a chord line to every reader that comes after this one.
 	const seen = explainEditIntent(text, patterns);
-	if (seen.reading) return { text: editMessage(seen.reading, lang), edit: seen.reading, lang };
+	if (seen.reading) return { text: note + editMessage(seen.reading, lang), edit: seen.reading, lang };
 
 	const route = routeAssistantInput(text, index);
 	if (route.path !== "llm") {
@@ -195,7 +201,8 @@ export function resolveAssistantTurn({
 		if (built.ok) {
 			return {
 				text:
-					route.path === "phrase" && route.rhythmGuessed ? phraseReply(lang) : deterministicReply(lang),
+					note +
+					(route.path === "phrase" && route.rhythmGuessed ? phraseReply(lang) : deterministicReply(lang)),
 				proposal: built.proposal,
 				lang,
 			};
@@ -207,5 +214,5 @@ export function resolveAssistantTurn({
 	// Nothing read it whole. Say what was read, and offer the sentences that
 	// would have worked — never a model's guess at what was meant.
 	const guidance = suggestFrom(seen, readPhrase(text, index), lang);
-	return { text: guidance.text, templates: guidance.templates, seen, lang };
+	return { text: note + guidance.text, templates: guidance.templates, seen, lang };
 }

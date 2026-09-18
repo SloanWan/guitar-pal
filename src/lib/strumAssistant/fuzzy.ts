@@ -1,4 +1,5 @@
-import { looksLikeChord } from "@/lib/tabAssistant/chordSpelling";
+import { looksLikeChord } from "@/lib/strumAssistant/chordSpelling";
+import { pick, type Lang } from "@/lib/strumAssistant/lang";
 
 /**
  * Typos in the words the reader knows, corrected before it reads.
@@ -66,11 +67,21 @@ function nearest(word: string, candidates: readonly string[]): { word: string; d
 	return best;
 }
 
+export interface CorrectOptions {
+	/**
+	 * Words left exactly as typed, whatever they are near: the player's own
+	 * pattern names, and a name they are giving something. Case does not matter.
+	 */
+	keep?: readonly string[];
+}
+
 export function correctKeywords(
 	text: string,
 	lexicon: readonly LexiconEntry[],
+	options: CorrectOptions = {},
 ): { text: string; corrections: Correction[] } {
 	const corrections: Correction[] = [];
+	const keep = new Set((options.keep ?? []).map((w) => w.toLowerCase()));
 	const latin = lexicon.filter((e) => !CJK.test(e.word));
 	const cjk = lexicon.filter((e) => CJK.test(e.word));
 
@@ -80,10 +91,15 @@ export function correctKeywords(
 	out = out.replace(LATIN_WORD, (word, offset: number) => {
 		if (tolerance(word.length) === 0) return word;
 		const lower = word.toLowerCase();
-		if (latin.some((e) => e.word === lower)) return word;
+		if (keep.has(lower) || latin.some((e) => e.word === lower)) return word;
 		if (looksLikeChord(word)) return word;
 		const after = text.slice(offset + word.length);
-		const eligible = latin.filter((e) => !e.beforeDigits || DIGITS_AFTER.test(after));
+		// A four-letter word is one character from too many other words —
+		// "show" from "slow", "last" from "fast" — so at that length only the
+		// clause keywords are corrected, and only with their digits behind them.
+		const eligible = latin.filter((e) =>
+			e.beforeDigits ? DIGITS_AFTER.test(after) : word.length >= 5,
+		);
 		const hit = nearest(lower, eligible.map((e) => e.word));
 		if (!hit || hit.distance === 0 || hit.distance > tolerance(word.length)) return word;
 		// A word that is only a typo of the lexicon word when both are short
@@ -127,4 +143,16 @@ export function correctKeywords(
 	}
 
 	return { text: out, corrections };
+}
+
+/** "Took “strng” as “string”." — said before the reply when a typo was read past. */
+export function correctionsNote(corrections: readonly Correction[], lang: Lang): string {
+	if (corrections.length === 0) return "";
+	const pairs = corrections.map((c) => pick(lang, `“${c.from}” as “${c.to}”`, `“${c.from}”当作“${c.to}”`));
+	return pick(lang, `Took ${pairs.join(", ")}. `, `把${pairs.join("、")}读了。`);
+}
+
+/** The words of every name, for `keep`: a pattern called "travs" stays "travs". */
+export function wordsOf(names: readonly string[]): string[] {
+	return names.flatMap((name) => name.match(/[A-Za-z]+/g) ?? []);
 }

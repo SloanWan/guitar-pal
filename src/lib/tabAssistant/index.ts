@@ -3,8 +3,8 @@ export { parsePickOrder, isOrderWord, type PickOrderParse } from "./parsePickOrd
 export { readStringFret, type NoteToken, type StringFretReading } from "./parseStringFret";
 export { parseAsciiTab, looksLikeAsciiTab, asciiTabProse, type AsciiTabParse } from "./parseAsciiTab";
 export { readTabSentence, type TabSentenceReading } from "./readTabSentence";
-export { looksLikeChord } from "./chordSpelling";
-export { correctKeywords, editDistance, type Correction, type LexiconEntry } from "./fuzzy";
+export { looksLikeChord } from "@/lib/strumAssistant/chordSpelling";
+export { correctKeywords, editDistance, type Correction, type LexiconEntry } from "@/lib/strumAssistant/fuzzy";
 export { TAB_STYLES, stylePreset, planFromMeasure, type TabStyleEntry } from "./styles";
 export {
 	buildTabProposal,

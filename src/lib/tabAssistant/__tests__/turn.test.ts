@@ -42,6 +42,17 @@ describe("resolveTabTurn", () => {
 		expect(out.proposal?.pattern.measures).toHaveLength(4);
 		expect(out.proposal?.warnings.map((w) => w.code)).toContain("ORDER_GUESSED");
 		expect(out.text).toMatch(/suggestion/);
+		// The usual orders, over the same chords, to take instead of the guess.
+		expect(out.templates).toEqual(["C G Am F: 53231323", "C G Am F: 根3231323", "C G Am F: 根323", "C G Am F: 根3(12)3"]);
+		expect(out.seen).toBeUndefined();
+	});
+
+	it("reads a root order over chords and puts the thumb on each root", async () => {
+		const out = await resolve("C G Am: 根3231323");
+		expect(out.proposal?.warnings).toEqual([]);
+		expect(out.templates).toBeUndefined();
+		const bass = out.proposal?.pattern.measures.map((m) => m.slots[0].strings.findIndex((s) => s.fret !== null) + 1);
+		expect(bass).toEqual([5, 6, 5]);
 	});
 
 	it("answers a pasted tab through the import validator", async () => {
@@ -63,7 +74,8 @@ describe("resolveTabTurn", () => {
 	it("offers sentences that would have worked when nothing read the message", async () => {
 		const out = await resolve("something gentle in Am for a rainy day");
 		expect(out.proposal).toBeUndefined();
-		expect(out.templates).toContain("Am: 5 3 2 1 3 2 1 3");
+		expect(out.templates).toContain("Am: 53231323");
+		expect(out.templates).toContain("Am: 根3231323");
 		expect(out.templates).toContain("travis picking in Am");
 		expect(out.text).toMatch(/Am/);
 		expect(out.seen).toBeDefined();
@@ -73,7 +85,7 @@ describe("resolveTabTurn", () => {
 describe("suggestTab", () => {
 	it("leaves blanks where nothing was read", () => {
 		const g = suggestTab(readTabSentence("hello there", INDEX), "en");
-		expect(g.templates[0]).toBe(`${BLANK}: 5 3 2 1 3 2 1 3`);
+		expect(g.templates[0]).toBe(`${BLANK}: 53231323`);
 		expect(g.templates).toContain("C G Am F");
 	});
 

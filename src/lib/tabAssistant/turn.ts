@@ -11,7 +11,7 @@ import { buildTabProposal } from "@/lib/tabAssistant/buildTabProposal";
 import { readTabEdit, tabEditClause, type TabEditReading } from "@/lib/tabAssistant/editIntent";
 import { readTabSentence } from "@/lib/tabAssistant/readTabSentence";
 import { routeTabInput } from "@/lib/tabAssistant/router";
-import { suggestTab } from "@/lib/tabAssistant/suggest";
+import { commonPickOrderSentences, suggestTab } from "@/lib/tabAssistant/suggest";
 import type { TabProposal } from "@/lib/tabAssistant/types";
 import { correctionsNote } from "@/lib/strumAssistant/fuzzy";
 import { loadVoicingLookup, type VoicingLookup } from "@/lib/tabAssistant/voicings";
@@ -67,8 +67,8 @@ export function tabReply(kind: "notes" | "order" | "style" | "chords" | "ascii",
 		case "chords":
 			return pick(
 				lang,
-				"Read the chords. The picking order is a suggestion — change it if it isn't yours.",
-				"和弦读出来了。分解顺序是我建议的——不合适就改。",
+				"Read the chords. The picking order is a suggestion — change it if it isn't yours, or take one of the usual ones below: 根 puts the thumb on each chord's root, so the bass follows the change.",
+				"和弦读出来了。分解顺序是我建议的——不合适就改，或者点下面常用的几种：根 表示大拇指弹每个和弦的根音，低音跟着和弦走。",
 			);
 		case "ascii":
 			return pick(
@@ -346,7 +346,16 @@ export async function resolveTabTurn({
 						: route.path === "style"
 							? "style"
 							: "chords";
-			return { text: correctionsNote(reading.corrections, lang) + tabReply(kind, lang), proposal: built.proposal, lang };
+			// A bare chord line is answered with the default order and the
+			// everyday ones a chord sheet writes, over the same chords, to take.
+			const templates =
+				kind === "chords" ? commonPickOrderSentences(reading.chordWords.map((w) => w.text).join(" ")) : undefined;
+			return {
+				text: correctionsNote(reading.corrections, lang) + tabReply(kind, lang),
+				proposal: built.proposal,
+				...(templates ? { templates } : {}),
+				lang,
+			};
 		}
 	}
 

@@ -2,8 +2,9 @@ import { tokenizePickSequence, type PickToken } from "@/lib/fingerpickPickSequen
 
 /**
  * A right-hand order as typed into a sentence: `5 3 2 1 3 2 1 3`,
- * `6(32)1(32)`, `5/4 2 1 3`. The editor's Pick box grammar, plus one thing a
- * sentence needs that a box does not: an alternating bass.
+ * `6(32)1(32)`, `根3231323`, `5/4 2 1 3`. The editor's Pick box grammar —
+ * digits, rests, pinches and the root token — plus one thing a sentence
+ * needs that a box does not: an alternating bass.
  *
  * `5/4` says "the thumb takes string 5 this time and string 4 the next", which
  * is what Travis picking is. The order is written out twice — once with each
@@ -14,8 +15,8 @@ import { tokenizePickSequence, type PickToken } from "@/lib/fingerpickPickSequen
 /** Bass strings only, distinct: a `4/4` here is a meter, not a thumb going nowhere. */
 const ALTERNATION = /^([456])\/([456])$/;
 
-/** A word that could be part of an order: digits, rests, pinches, an alternation. */
-const ORDER_WORD = /^(?:[0-6\-()]+|[456]\/[456])$/;
+/** A word that could be part of an order: digits, rests, pinches (either width), a root, an alternation. */
+const ORDER_WORD = /^(?:[0-6\-()（）根Rr]+|[456]\/[456])$/;
 
 export type PickOrderParse =
 	| { ok: true; order: PickToken[]; alternated: boolean }

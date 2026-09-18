@@ -1,5 +1,4 @@
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import { normalizeChordName } from "@/lib/chordSearch";
 import type { Duration } from "@/lib/fingerpickTypes";
 import type { PickToken } from "@/lib/fingerpickPickSequence";
 import { parseChordSequence } from "@/lib/strumProgressions";
@@ -14,6 +13,8 @@ import {
 } from "@/lib/strumAssistant/readPhrase";
 import { isOrderWord, parsePickOrder } from "@/lib/tabAssistant/parsePickOrder";
 import { readStringFret, type NoteToken } from "@/lib/tabAssistant/parseStringFret";
+import { looksLikeChord } from "@/lib/tabAssistant/chordSpelling";
+import { correctKeywords, type Correction, type LexiconEntry } from "@/lib/tabAssistant/fuzzy";
 import { TAB_STYLES, type TabStyleEntry } from "@/lib/tabAssistant/styles";
 import type { ChordWord } from "@/lib/tabAssistant/types";
 
@@ -59,17 +60,20 @@ const NOISE = [
 ];
 
 /**
- * A word spelled the way a chord is — a root and a suffix made of the parts a
- * suffix can be made of — when the library has nothing for it. Cmaj13#11 is
- * a chord the player meant and it keeps its bar; "Give" is not, whatever its
- * first letter says.
+ * The words a typo is corrected towards: the clause keywords (only before
+ * digits), the style words, the meter and note-value words.
  */
-const CHORD_SPELLING =
-	/^[A-G][#b♯♭]?(?:maj|min|dim|aug|sus|add|m|M|\+|-|°|ø|Δ|#|b|♯|♭|\d+|\/[A-G][#b♯♭]?)*$/;
+const LEXICON: readonly LexiconEntry[] = [
+	...["string", "strings", "fret", "frets", "弦", "品"].map((word) => ({ word, beforeDigits: true })),
+	...TAB_STYLES.flatMap((s) => s.words.map((word) => ({ word }))),
+	...METER_WORDS.flatMap((m) => m.words.map((word) => ({ word }))),
+	...DURATION_WORDS.flatMap((d) => d.words.filter((w) => !w.startsWith("/")).map((word) => ({ word }))),
+	{ word: "picking" },
+	{ word: "fingerpicking" },
+	{ word: "fingerstyle" },
+];
 
-export function looksLikeChord(word: string): boolean {
-	return CHORD_SPELLING.test(word) && normalizeChordName(word) !== null;
-}
+export { looksLikeChord };
 
 export interface TabSentenceReading {
 	/** Every chord word in typed order, resolved or not. */
@@ -94,6 +98,8 @@ export interface TabSentenceReading {
 	 * sentence was understood — the only state in which it may be acted on.
 	 */
 	leftover: string;
+	/** Typos taken as the words they were nearest to, for the reply to own up to. */
+	corrections: Correction[];
 }
 
 function escapeRegExp(s: string): string {
@@ -158,7 +164,10 @@ export function readTabSentence(
 ): TabSentenceReading {
 	const { text: afterCapo, capo } = withoutCapo(original);
 	const { name, text: afterName } = readName(afterCapo);
-	const { bpm, text: afterBpm } = readWrittenBpm(afterName);
+	// Typos next, once the name is out of the way: a name is the player's
+	// spelling and is not corrected.
+	const { text: corrected, corrections } = correctKeywords(afterName, LEXICON);
+	const { bpm, text: afterBpm } = readWrittenBpm(corrected);
 
 	// Strings and frets first: their digits would read as a pick order to
 	// everything after this.
@@ -243,5 +252,6 @@ export function readTabSentence(
 		name,
 		capo,
 		leftover,
+		corrections,
 	};
 }

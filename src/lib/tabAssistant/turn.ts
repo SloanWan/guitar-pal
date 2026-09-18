@@ -9,6 +9,7 @@ import { readTabSentence } from "@/lib/tabAssistant/readTabSentence";
 import { routeTabInput } from "@/lib/tabAssistant/router";
 import { suggestTab } from "@/lib/tabAssistant/suggest";
 import type { TabProposal } from "@/lib/tabAssistant/types";
+import type { Correction } from "@/lib/tabAssistant/fuzzy";
 import { loadVoicingLookup, type VoicingLookup } from "@/lib/tabAssistant/voicings";
 
 /**
@@ -64,6 +65,13 @@ export function tabReply(kind: "notes" | "order" | "style" | "chords" | "ascii",
 				"tab 读出来了。节奏是按字距推的，保存前在编辑器里核对一下。",
 			);
 	}
+}
+
+/** "Took “strng” as “string”." — said before the reply when a typo was read past. */
+export function correctionsNote(corrections: readonly Correction[], lang: Lang): string {
+	if (corrections.length === 0) return "";
+	const pairs = corrections.map((c) => pick(lang, `“${c.from}” as “${c.to}”`, `“${c.from}”当作“${c.to}”`));
+	return pick(lang, `Took ${pairs.join(", ")}. `, `把${pairs.join("、")}读了。`);
 }
 
 export async function resolveTabTurn({
@@ -126,7 +134,7 @@ export async function resolveTabTurn({
 						: route.path === "style"
 							? "style"
 							: "chords";
-			return { text: tabReply(kind, lang), proposal: built.proposal, lang };
+			return { text: correctionsNote(reading.corrections, lang) + tabReply(kind, lang), proposal: built.proposal, lang };
 		}
 	}
 
@@ -135,7 +143,7 @@ export async function resolveTabTurn({
 	const reading = readTabSentence(text, index);
 	if (reading.notesError !== null) {
 		return {
-			text: pick(lang, `${reading.notesError}`, `${reading.notesError}`),
+			text: correctionsNote(reading.corrections, lang) + reading.notesError,
 			templates: ["string:66544322, fret:8-11-10-8-10-8-8-11", "string:6654, fret:8-11-10-8\nstring:3211, fret:8-8-11-8"],
 			lang,
 		};

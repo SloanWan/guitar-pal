@@ -2,7 +2,9 @@ export type { TabProposal, PlanSlot, ChordWord } from "./types";
 export { parsePickOrder, isOrderWord, type PickOrderParse } from "./parsePickOrder";
 export { readStringFret, type NoteToken, type StringFretReading } from "./parseStringFret";
 export { parseAsciiTab, looksLikeAsciiTab, asciiTabProse, type AsciiTabParse } from "./parseAsciiTab";
-export { readTabSentence, looksLikeChord, type TabSentenceReading } from "./readTabSentence";
+export { readTabSentence, type TabSentenceReading } from "./readTabSentence";
+export { looksLikeChord } from "./chordSpelling";
+export { correctKeywords, editDistance, type Correction, type LexiconEntry } from "./fuzzy";
 export { TAB_STYLES, stylePreset, planFromMeasure, type TabStyleEntry } from "./styles";
 export {
 	buildTabProposal,

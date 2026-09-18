@@ -27,7 +27,16 @@ export interface TabProposal {
  * 0 = high e), or a rest, and how long it lasts. Both sentence forms — a pick
  * order and a style word — reduce to a list of these before any fret is chosen.
  */
-export type PlanSlot = { strings: number[] | null; duration: Duration };
+export type PlanSlot = {
+	strings: number[] | null;
+	/**
+	 * Frets written in the sentence, one per entry of `strings`. Present only
+	 * for notes typed as string-and-fret pairs; every other plan takes its
+	 * frets from the chord.
+	 */
+	frets?: (number | "x")[];
+	duration: Duration;
+};
 
 /** A chord word as the player wrote it, and what the library made of it. */
 export interface ChordWord {

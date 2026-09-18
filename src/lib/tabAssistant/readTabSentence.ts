@@ -13,6 +13,7 @@ import {
 	readWrittenBpm,
 } from "@/lib/strumAssistant/readPhrase";
 import { isOrderWord, parsePickOrder } from "@/lib/tabAssistant/parsePickOrder";
+import { readStringFret, type NoteToken } from "@/lib/tabAssistant/parseStringFret";
 import { TAB_STYLES, type TabStyleEntry } from "@/lib/tabAssistant/styles";
 import type { ChordWord } from "@/lib/tabAssistant/types";
 
@@ -73,6 +74,10 @@ export function looksLikeChord(word: string): boolean {
 export interface TabSentenceReading {
 	/** Every chord word in typed order, resolved or not. */
 	chordWords: ChordWord[];
+	/** Notes written as string-and-fret pairs, when they were. */
+	notes: NoteToken[] | null;
+	/** Why the string-and-fret lists could not be read, when they were there but did not pair up. */
+	notesError: string | null;
 	/** The right-hand order, when one was written. */
 	order: PickToken[] | null;
 	/** The order as typed, for the reply. */
@@ -155,10 +160,16 @@ export function readTabSentence(
 	const { name, text: afterName } = readName(afterCapo);
 	const { bpm, text: afterBpm } = readWrittenBpm(afterName);
 
+	// Strings and frets first: their digits would read as a pick order to
+	// everything after this.
+	const pairs = readStringFret(afterBpm);
+	const notes = pairs.found && pairs.ok ? pairs.notes : null;
+	const notesError = pairs.found && !pairs.ok ? pairs.error : null;
+
 	// The meter and the note value before the order: `6/8` and `/16` are made
 	// of the same characters as a run, and a `5/4` inside a run is a thumb
 	// only because no supported meter is spelled that way.
-	let text = afterBpm;
+	let text = pairs.found ? pairs.text : afterBpm;
 	let timeSignature: [number, number] | null = null;
 	for (const m of text.matchAll(METER_WRITTEN)) {
 		const meter: [number, number] = [Number(m[1]), Number(m[2])];
@@ -221,6 +232,8 @@ export function readTabSentence(
 
 	return {
 		chordWords,
+		notes,
+		notesError,
 		order: order?.ok ? order.order : null,
 		orderText: run?.text ?? null,
 		duration,

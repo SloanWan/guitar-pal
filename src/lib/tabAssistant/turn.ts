@@ -39,8 +39,10 @@ export interface ResolveTabTurnInput {
 	voicings?: (refs: readonly ChordRef[]) => Promise<VoicingLookup>;
 }
 
-export function tabReply(kind: "order" | "style" | "chords" | "ascii", lang: Lang): string {
+export function tabReply(kind: "notes" | "order" | "style" | "chords" | "ascii", lang: Lang): string {
 	switch (kind) {
+		case "notes":
+			return pick(lang, "Read the strings and frets as you wrote them.", "按你写的弦号和品格读出来了。");
 		case "order":
 			return pick(lang, "Read straight from what you typed — the frets are the chord's.", "照你打的读出来了——品格取自和弦指法。");
 		case "style":
@@ -105,6 +107,7 @@ export async function resolveTabTurn({
 		const voicingFor = await voicings(refs);
 		const built = buildTabProposal({
 			chordWords: reading.chordWords,
+			notes: route.path === "notes" ? reading.notes : null,
 			order: route.path === "pick-order" ? reading.order : null,
 			duration: reading.duration,
 			style: route.path === "style" ? reading.style : null,
@@ -115,13 +118,31 @@ export async function resolveTabTurn({
 			voicingFor,
 		});
 		if (built.ok) {
-			const kind = route.path === "pick-order" ? "order" : route.path === "style" ? "style" : "chords";
+			const kind =
+				route.path === "notes"
+					? "notes"
+					: route.path === "pick-order"
+						? "order"
+						: route.path === "style"
+							? "style"
+							: "chords";
 			return { text: tabReply(kind, lang), proposal: built.proposal, lang };
 		}
 	}
 
+	// String and fret lists that were there but did not pair up: say exactly
+	// what was wrong with them, rather than what else could have been typed.
+	const reading = readTabSentence(text, index);
+	if (reading.notesError !== null) {
+		return {
+			text: pick(lang, `${reading.notesError}`, `${reading.notesError}`),
+			templates: ["string:66544322, fret:8-11-10-8-10-8-8-11"],
+			lang,
+		};
+	}
+
 	// Nothing read it whole. Say what was read, and offer the sentences that
 	// would have. The record of the miss is kept in the shape strum keeps it.
-	const guidance = suggestTab(readTabSentence(text, index), lang);
+	const guidance = suggestTab(reading, lang);
 	return { text: guidance.text, templates: guidance.templates, seen: explainEditIntent(text, []), lang };
 }

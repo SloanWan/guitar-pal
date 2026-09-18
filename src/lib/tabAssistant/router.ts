@@ -26,6 +26,8 @@ export type TabRoute =
 			name: string | null;
 			bpm: number | null;
 	  }
+	/** `string:66544322, fret:8-11-10-8-10-8-8-11` — notes written out, no chord needed. */
+	| { path: "notes"; reading: TabSentenceReading }
 	/** `Am: 5 3 2 1 3 2 1 3` — chords and the order to pick them in. */
 	| { path: "pick-order"; reading: TabSentenceReading }
 	/** `travis picking in Am` — chords and a shipped pattern's order. */
@@ -34,7 +36,14 @@ export type TabRoute =
 	| { path: "chords"; reading: TabSentenceReading }
 	| { path: "llm"; reason: TabLlmReason };
 
-export type TabLlmReason = "empty" | "unread" | "nothing-musical" | "style-unavailable" | "tab-unreadable";
+export type TabLlmReason =
+	| "empty"
+	| "unread"
+	| "nothing-musical"
+	| "style-unavailable"
+	| "tab-unreadable"
+	/** String and fret lists were there but did not pair up; the reading says why. */
+	| "notes-mismatch";
 
 export function routeTabInput(
 	input: string,
@@ -56,8 +65,10 @@ export function routeTabInput(
 	}
 
 	const reading = readTabSentence(input, index);
+	if (reading.notesError !== null) return { path: "llm", reason: "notes-mismatch" };
 	if (reading.leftover !== "") return { path: "llm", reason: "unread" };
 
+	if (reading.notes) return { path: "notes", reading };
 	if (reading.order) return { path: "pick-order", reading };
 	if (reading.style) {
 		const preset = stylePreset(reading.style, presets);

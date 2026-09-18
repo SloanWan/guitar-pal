@@ -13,6 +13,7 @@ export function suggestTab(reading: TabSentenceReading, lang: Lang = "en"): Guid
 	const templates = [
 		`${chordOr}: 5 3 2 1 3 2 1 3`,
 		pick(lang, `travis picking in ${chordOr}`, `${chordOr} 三指法`),
+		"string:66544322, fret:8-11-10-8-10-8-8-11",
 		chords ? chords : "C G Am F",
 	];
 
@@ -25,13 +26,13 @@ export function suggestTab(reading: TabSentenceReading, lang: Lang = "en"): Guid
 		read.length > 0
 			? pick(
 					lang,
-					`Read ${read.join(", ")}, but not the rest. A chord with the strings to pick, a style word over a chord, or six lines of tab — any of these I can read whole:`,
-					`读到了${read.join("、")}，其余没读懂。和弦加要弹的弦号、风格词加和弦、或者六行 tab——这些我都能整句读：`,
+					`Read ${read.join(", ")}, but not the rest. A chord with the strings to pick, strings and frets written out, a style word over a chord, or six lines of tab — any of these I can read whole:`,
+					`读到了${read.join("、")}，其余没读懂。和弦加要弹的弦号、直接写弦号和品格、风格词加和弦、或者六行 tab——这些我都能整句读：`,
 				)
 			: pick(
 					lang,
-					"I didn't read that. A chord with the strings to pick, a style word over a chord, or six lines of tab pasted in — any of these I can read whole:",
-					"这句没读懂。和弦加要弹的弦号、风格词加和弦、或者直接贴六行 tab——这些我都能整句读：",
+					"I didn't read that. A chord with the strings to pick, strings and frets written out, a style word over a chord, or six lines of tab pasted in — any of these I can read whole:",
+					"这句没读懂。和弦加要弹的弦号、直接写弦号和品格、风格词加和弦、或者直接贴六行 tab——这些我都能整句读：",
 				);
 	return { text, templates: [...new Set(templates)] };
 }

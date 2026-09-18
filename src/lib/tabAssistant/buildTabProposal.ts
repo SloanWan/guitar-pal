@@ -9,6 +9,7 @@ import {
 import { chordFretHints, chordSymbolLabel } from "@/lib/fingerpickChords";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import type { PickToken } from "@/lib/fingerpickPickSequence";
+import type { NoteToken } from "@/lib/tabAssistant/parseStringFret";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { clampBpmToMeter } from "@/lib/strumBars";
 import { normalizeCapo } from "@/lib/strumProgressions";
@@ -36,6 +37,8 @@ const DEFAULT_ORDER_DURATION: Duration = "eighth";
 
 export interface BuildTabProposalInput {
 	chordWords: readonly ChordWord[];
+	/** Notes written as string-and-fret pairs; the plan is these at `duration`, frets as written. */
+	notes?: readonly NoteToken[] | null;
 	/** A written order; the plan is these at `duration`. */
 	order?: readonly PickToken[] | null;
 	duration?: Duration | null;
@@ -110,10 +113,19 @@ function writeBar(
 		const slot = makeEmptySlot(planSlot.duration);
 		// A chord word the library has nothing for keeps its bar's place and
 		// sounds nothing, the way an unknown chord holds its bar in strum.
-		if (planSlot.strings === null || (word !== null && ref === null)) {
+		if (planSlot.strings === null || (word !== null && ref === null && !planSlot.frets)) {
 			return { ...slot, isRest: true };
 		}
-		for (const stringIndex of planSlot.strings) {
+		planSlot.strings.forEach((stringIndex, i) => {
+			// A fret written in the sentence is the fret; the chord only marks the bar.
+			const written = planSlot.frets?.[i];
+			if (written !== undefined) {
+				slot.strings[stringIndex] =
+					written === "x"
+						? { fret: null, technique: null, tied: false, muted: true }
+						: { fret: written, technique: null, tied: false, muted: false };
+				return;
+			}
 			const hint = hints ? hints[stringIndex] : 0;
 			if (hint === "/") {
 				slot.strings[stringIndex] = { fret: null, technique: null, tied: false, muted: true };
@@ -121,7 +133,7 @@ function writeBar(
 			} else {
 				slot.strings[stringIndex] = { fret: hint, technique: null, tied: false, muted: false };
 			}
-		}
+		});
 		return slot;
 	});
 	return { id: crypto.randomUUID(), slots };
@@ -137,7 +149,11 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 	let repeatToFill = false;
 	let preset: FingerpickPattern | null = null;
 	let styleLabel: string | null = null;
-	if (input.order && input.order.length > 0) {
+	const written = input.notes !== null && input.notes !== undefined && input.notes.length > 0;
+	if (written) {
+		const duration = input.duration ?? DEFAULT_ORDER_DURATION;
+		plan = input.notes!.map((note) => ({ strings: [note.stringIndex], frets: [note.fret], duration }));
+	} else if (input.order && input.order.length > 0) {
 		const duration = input.duration ?? DEFAULT_ORDER_DURATION;
 		plan = input.order.map((token) => ({
 			strings: "rest" in token ? null : token.strings,
@@ -185,11 +201,13 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 			warnings.push({
 				code: "UNRESOLVED_CHORD",
 				path: `measures[${measures.length}]`,
-				message: `No chord matched "${word.text}" — its bar is written as rests.`,
+				message: written
+					? `No chord matched "${word.text}" — the frets are as you wrote them, but the bar carries no chord mark.`
+					: `No chord matched "${word.text}" — its bar is written as rests.`,
 				original: word.text,
 			});
 		}
-		if (ref && input.voicingFor(ref) === null) noShape.add(chordSymbolLabel(ref));
+		if (ref && !written && input.voicingFor(ref) === null) noShape.add(chordSymbolLabel(ref));
 		bars.forEach((bar, i) => {
 			const measure = writeBar(bar, word, input.voicingFor, (label, stringNumber) => {
 				if (!leftOut.has(label)) leftOut.set(label, new Set());
@@ -217,7 +235,7 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 			message: `No shape for ${label} in the library — its beats are written open.`,
 		});
 	}
-	if (input.chordWords.length === 0) {
+	if (input.chordWords.length === 0 && !written) {
 		warnings.push({
 			code: "NO_CHORD",
 			path: "measures",
@@ -235,7 +253,9 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 				: styleLabel
 			: chordsText
 				? `${chordsText} picking`
-				: "Picked pattern");
+				: written
+					? "Written tab"
+					: "Picked pattern");
 
 	const bpm = input.bpm ?? preset?.bpm ?? makeDefaultPattern().bpm;
 	const capo = input.capo == null ? 0 : normalizeCapo(input.capo);

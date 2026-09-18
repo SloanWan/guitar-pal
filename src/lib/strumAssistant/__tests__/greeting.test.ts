@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { greeting, hint, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
+import { greeting, hint, playerName, inputPrompts, examples } from "@/lib/strumAssistant/greeting";
 
 describe("playerName", () => {
 	it("prefers a name the account carries", () => {
@@ -51,15 +51,23 @@ describe("greeting", () => {
 	});
 });
 
-describe("INPUT_PROMPTS", () => {
-	it("offers something for every path, including one the model answers", () => {
-		expect(INPUT_PROMPTS.length).toBeGreaterThanOrEqual(4);
-		// Tab types these verbatim, so none of them may be a description of a
-		// sentence rather than the sentence itself.
-		for (const prompt of INPUT_PROMPTS) {
-			expect(prompt.trim()).toBe(prompt);
-			expect(prompt).not.toMatch(/^(e\.g\.|like|try)/i);
+describe("the input prompts and examples", () => {
+	it("offer something for every path in each domain", () => {
+		for (const domain of ["strum", "tab"] as const) {
+			expect(inputPrompts(domain).length).toBeGreaterThanOrEqual(4);
+			expect(examples(domain).length).toBeGreaterThanOrEqual(3);
+			// Tab types these verbatim, so none of them may be a description of a
+			// sentence rather than the sentence itself.
+			for (const prompt of [...inputPrompts(domain), ...examples(domain)]) {
+				expect(prompt.trim()).toBe(prompt);
+				expect(prompt).not.toMatch(/^(e\.g\.|like|try)/i);
+			}
 		}
+	});
+
+	it("says what the tab assistant reads", () => {
+		expect(hint("en", true, "tab")).toMatch(/tab/i);
+		expect(hint("zh", true, "tab")).toMatch(/tab/);
 	});
 });
 

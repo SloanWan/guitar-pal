@@ -1,4 +1,5 @@
 import { pick, type Lang } from "@/lib/strumAssistant/lang";
+import type { AssistantDomain } from "@/lib/strumAssistant/types";
 import { NICKNAME_KEY } from "@/lib/profile";
 
 /**
@@ -36,12 +37,19 @@ const GREETINGS: Record<Lang, readonly ((name: string | null) => string)[]> = {
  * their patterns stay on this device until they sign in — said once, here,
  * rather than at the moment they try to save.
  */
-export function hint(lang: Lang, signedIn: boolean): string {
-	const what = pick(
-		lang,
-		"Chords, a rhythm, or a change to one of your patterns — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.",
-		"和弦、节奏，或者改一个你已有的 pattern——都能直接读，不联网。哪句没读懂，我会给你能读懂的写法。",
-	);
+export function hint(lang: Lang, signedIn: boolean, domain: AssistantDomain = "strum"): string {
+	const what =
+		domain === "tab"
+			? pick(
+					lang,
+					"A chord with the strings to pick, strings and frets written out, a style word over a chord, or six lines of tab pasted in — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.",
+					"和弦加要弹的弦号、直接写弦号和品格、风格词加和弦，或者直接贴六行 tab——都能直接读，不联网。哪句没读懂，我会给你能读懂的写法。",
+				)
+			: pick(
+					lang,
+					"Chords, a rhythm, or a change to one of your patterns — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.",
+					"和弦、节奏，或者改一个你已有的 pattern——都能直接读，不联网。哪句没读懂，我会给你能读懂的写法。",
+				);
 	if (signedIn) return what;
 	return `${what} ${pick(
 		lang,
@@ -92,11 +100,39 @@ export function greeting(name: string | null, key?: string, lang: Lang = "en"): 
  * and only then ask a model. Tab takes the one on screen, so each has to be a
  * sentence that works verbatim — nothing here is a description of a sentence.
  */
-export const INPUT_PROMPTS: readonly string[] = [
-	"C Am F G",
-	"D DU UD",
-	"C Am F G, DUDUDUDU",
-	"a slow folk strum in C G Am F",
-	"add C G Am F to old faithful",
-	"给我一个 C-G-Am-F 的民谣扫弦，慢一点",
-];
+const INPUT_PROMPTS: Record<AssistantDomain, readonly string[]> = {
+	strum: [
+		"C Am F G",
+		"D DU UD",
+		"C Am F G, DUDUDUDU",
+		"a slow folk strum in C G Am F",
+		"add C G Am F to old faithful",
+		"给我一个 C-G-Am-F 的民谣扫弦，慢一点",
+	],
+	tab: [
+		"Am: 5 3 2 1 3 2 1 3",
+		"travis picking in C",
+		"string:66544322, fret:8(11)(10)8(10)88(11)",
+		"C G Am F: 5/4 2 1 3",
+		"Em 三指法",
+		"waltz in G, 100 bpm",
+	],
+};
+
+export function inputPrompts(domain: AssistantDomain): readonly string[] {
+	return INPUT_PROMPTS[domain];
+}
+
+/**
+ * Shown on an empty panel: each one read by the app, so every click lands.
+ * On strum a lone "C" would not — one chord is a key, not a progression — so
+ * the strum examples start at two chords.
+ */
+const EXAMPLES: Record<AssistantDomain, readonly string[]> = {
+	strum: ["C Am F G", "D DU UD", "a slow folk strum in C G Am F"],
+	tab: ["Am: 5 3 2 1 3 2 1 3", "travis picking in C", "string:6654, fret:8-11-10-8"],
+};
+
+export function examples(domain: AssistantDomain): readonly string[] {
+	return EXAMPLES[domain];
+}

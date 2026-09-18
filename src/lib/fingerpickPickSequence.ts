@@ -55,21 +55,23 @@ const QUARTER_TRIPLET_TICKS = 16;
 /** Highest string number a token may name (1 = high e … 6 = low E). */
 const STRING_COUNT = 6;
 
+export type PickTokenize =
+	| { ok: true; tokens: PickToken[] }
+	| { ok: false; error: string };
+
 /**
- * Read a right-hand picking sequence such as `3212` or `6(32)1(32)`.
+ * The characters of a picking sequence, read into tokens — with no opinion
+ * yet about how long each one lasts.
  *
  *  - Digits `1`–`6` are string numbers, 1 = high e, 6 = low E, the way a
  *    guitarist counts them; `3212` is G B e B.
  *  - Parentheses group strings plucked together (a pinch): `6(32)1(32)`.
  *  - `0` or `-` is a rest. Whitespace is ignored.
  *
- * The number of tokens sets the note value: `n` tokens divide the measure
- * evenly, so four in 4/4 are quarters and eight are eighths.
+ * Shared by the editor's Pick box, which sizes the notes to the measure, and
+ * the tab assistant, which is told the note value and fills measures instead.
  */
-export function parsePickSequence(
-	input: string,
-	timeSignature: [number, number],
-): PickSequenceParse {
+export function tokenizePickSequence(input: string): PickTokenize {
 	const tokens: PickToken[] = [];
 	let pinch: number[] | null = null;
 	for (const ch of input.replace(/\s+/g, "")) {
@@ -101,6 +103,21 @@ export function parsePickSequence(
 	}
 	if (pinch) return { ok: false, error: "A pinch was opened with '(' but never closed." };
 	if (tokens.length === 0) return { ok: false, error: "Type string numbers, e.g. 3212." };
+	return { ok: true, tokens };
+}
+
+/**
+ * Read a right-hand picking sequence such as `3212` or `6(32)1(32)` for one
+ * measure. The number of tokens sets the note value: `n` tokens divide the
+ * measure evenly, so four in 4/4 are quarters and eight are eighths.
+ */
+export function parsePickSequence(
+	input: string,
+	timeSignature: [number, number],
+): PickSequenceParse {
+	const tokenized = tokenizePickSequence(input);
+	if (!tokenized.ok) return tokenized;
+	const { tokens } = tokenized;
 
 	const capacity = measureCapacity(timeSignature);
 	const candidates = isCompound(timeSignature) ? COMPOUND_METER_DURATIONS : SIMPLE_METER_DURATIONS;

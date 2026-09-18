@@ -4,6 +4,15 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
+import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
+import {
+	HANDOFF_EVENT,
+	takeHandoff,
+	type FingerpickAnyHandoff,
+	type FingerpickHandoff,
+} from "@/lib/strumAssistant/handoff";
+import { applySet, applyTabEdit } from "@/lib/tabAssistant/editIntent";
+import { toast } from "sonner";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
@@ -343,6 +352,116 @@ export default function FingerpickPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
+	// A tab made elsewhere — by the assistant, or an import — and handed to this
+	// page to open in its editor. Nothing is saved on arrival: the player checks
+	// it in the editor and saves it the way a hand-drawn pattern is saved. The
+	// assistant lives in the topbar, so the handoff usually lands with this page
+	// already on screen; the announcement covers that, the mount read the rest.
+	const [handoff, setHandoff] = useState<FingerpickHandoff | null>(null);
+
+	/**
+	 * What the assistant does to a pattern the player has — bars added or
+	 * rewritten, chords marked, a new name, a new tempo or meter, or deleted —
+	 * through the same saves the editor and the library use, so playback and
+	 * the list pick the change up. A preset is never changed: an edit to one
+	 * is saved as a new pattern of their own, and a rename or delete of one
+	 * never reaches here (the assistant refused it).
+	 */
+	function applyEdit(edit: Exclude<FingerpickAnyHandoff, FingerpickHandoff>) {
+		const target = patterns.find((p) => p.id === edit.patternId);
+		if (!target) {
+			toast(`"${edit.patternName}" is no longer in your patterns — nothing was changed.`);
+			return;
+		}
+		const isPreset = !customPatterns.some((p) => p.id === target.id);
+
+		if (edit.kind === "fingerpick-delete") {
+			if (isPreset) return;
+			deleteCustomPattern(target.id);
+			toast(`Deleted "${target.name}".`);
+			return;
+		}
+		if (edit.kind === "fingerpick-rename") {
+			if (isPreset) return;
+			// The save keeps names unique, so the name it settled on is the one said.
+			const renamed = handleSaveCustom({ ...target, name: edit.newName });
+			toast(`Renamed "${target.name}" to "${renamed.name}".`);
+			return;
+		}
+		if (edit.kind === "fingerpick-set") {
+			const { next: changed } = applySet(target, edit.bpm, edit.timeSignature);
+			const next = isPreset
+				? { ...changed, id: crypto.randomUUID(), name: `${target.name} (mine)`, createdAt: undefined }
+				: changed;
+			const saved = handleSaveCustom(next);
+			// Reopened even when it is the pattern on screen: the tempo fader and
+			// the meter badge read the selection, and both may have changed.
+			if (!isPreset) handleSelectPattern(saved);
+			const parts = [
+				...(edit.timeSignature ? [`${edit.timeSignature[0]}/${edit.timeSignature[1]}`] : []),
+				...(edit.bpm !== null ? [`${next.bpm} BPM`] : []),
+			].join(" at ");
+			toast(isPreset ? `Saved "${next.name}" at ${parts} — the shipped pattern stays as it was.` : `Set "${target.name}" to ${parts}.`);
+			return;
+		}
+
+		const edited = applyTabEdit(target, edit.op, edit.barIndex, edit.measures, edit.replaceCount);
+		const next = isPreset
+			? { ...edited, id: crypto.randomUUID(), name: `${target.name} (mine)`, createdAt: undefined }
+			: edited;
+		handleSaveCustom(next);
+		// A new pattern is opened by the save itself; an edited one is opened
+		// here, so the change is what is on screen.
+		if (!isPreset && next.id !== selectedPattern.id) handleSelectPattern(next);
+		const bars = `${edit.measures.length} bar${edit.measures.length === 1 ? "" : "s"}`;
+		const first = (edit.barIndex ?? 0) + 1;
+		const where = edit.replaceCount > 1 ? `bars ${first}–${first + edit.replaceCount - 1}` : `bar ${first}`;
+		toast(
+			edit.op === "append"
+				? isPreset
+					? `Saved "${next.name}" with ${bars} added — the shipped pattern stays as it was.`
+					: `Added ${bars} to "${target.name}".`
+				: isPreset
+					? `Saved "${next.name}" with ${where} rewritten — the shipped pattern stays as it was.`
+					: `Rewrote ${where} of "${target.name}".`,
+		);
+	}
+
+	// The handoff listener is subscribed once and always calls the current
+	// closure — the same ref idiom the strum page uses. An edit that lands
+	// before the library has loaded waits in the ref for it.
+	const applyEditRef = useRef(applyEdit);
+	const pendingEditRef = useRef<Exclude<FingerpickAnyHandoff, FingerpickHandoff> | null>(null);
+	const isLoadingRef = useRef(isLoading);
+	useEffect(() => {
+		applyEditRef.current = applyEdit;
+		isLoadingRef.current = isLoading;
+	});
+	useEffect(() => {
+		if (isLoading || !pendingEditRef.current) return;
+		const edit = pendingEditRef.current;
+		pendingEditRef.current = null;
+		applyEditRef.current(edit);
+	}, [isLoading]);
+
+	useEffect(() => {
+		function handleHandoff() {
+			const next = takeHandoff("fingerpick");
+			if (!next) return;
+			if (next.kind !== "fingerpick") {
+				if (isLoadingRef.current) pendingEditRef.current = next;
+				else applyEditRef.current(next);
+				return;
+			}
+			// Whatever id the stash carried, this is a new pattern of the player's:
+			// a fresh id keeps it from overwriting one they already have.
+			setHandoff({ ...next, pattern: { ...next.pattern, id: crypto.randomUUID() } });
+		}
+		handleHandoff();
+		window.addEventListener(HANDOFF_EVENT, handleHandoff);
+		return () => window.removeEventListener(HANDOFF_EVENT, handleHandoff);
+	}, []);
+
 	// Track the tab viewer's pixel width so the greedy layout can pack measures.
 	useEffect(() => {
 		const container = tabViewerRef.current;
@@ -378,7 +497,7 @@ export default function FingerpickPage() {
 	// pre-edit notes. Reset the engine here so the change is heard without a manual
 	// page refresh — restart from the top if it was playing, otherwise just clear any
 	// stale scheduled/paused audio so the next play() rebuilds from the saved edit.
-	function handleSaveCustom(pattern: FingerpickPattern) {
+	function handleSaveCustom(pattern: FingerpickPattern): FingerpickPattern {
 		const isCurrent = pattern.id === selectedPattern.id;
 		const wasPlaying = isCurrent && isPlaying;
 		const saved = saveCustomPattern(pattern);
@@ -386,9 +505,9 @@ export default function FingerpickPage() {
 		// a pick from the library would (tempo, cursor and section reset with it).
 		if (saved.isNew) {
 			handleSelectPattern(saved.pattern);
-			return;
+			return saved.pattern;
 		}
-		if (!isCurrent) return;
+		if (!isCurrent) return saved.pattern;
 		stop();
 		if (wasPlaying) {
 			// Expand the just-saved pattern so playback picks up any repeat edits immediately
@@ -400,6 +519,7 @@ export default function FingerpickPage() {
 			);
 		}
 		resetCursor();
+		return saved.pattern;
 	}
 
 	// Whether the pattern on screen is one of the player's own (and so saved on
@@ -463,9 +583,10 @@ export default function FingerpickPage() {
 				: undefined;
 		// One-shot sync from persisted (external) storage after async load — the
 		// extra render is intentional and bounded to a single restore.
-		// eslint-disable-next-line react-hooks/set-state-in-effect
+		/* eslint-disable react-hooks/set-state-in-effect */
 		if (match) handleSelectPattern(match); // also flips patternRestored true
 		else setPatternRestored(true);
+		/* eslint-enable react-hooks/set-state-in-effect */
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isLoading, patternRestored]);
 
@@ -892,6 +1013,22 @@ export default function FingerpickPage() {
 			</div>
 
 			<FingerpickMobileDrawer {...controls} controlsVisible={controlsVisible} />
+
+			{/* The library owns the editor for its own patterns; a handed-over tab
+			    gets its own instance so it can open without the library on screen. */}
+			<FingerpickEditModal
+				key={handoff?.pattern.id ?? "none"}
+				open={handoff !== null}
+				pattern={handoff?.pattern ?? null}
+				takenNames={patterns.map((p) => p.name)}
+				notice={{
+					title: "Check this pattern",
+					text: "Made from what you asked for — check the frets and the rhythm, then save it as your own.",
+					warnings: handoff?.warnings.map((w) => w.message),
+				}}
+				onClose={() => setHandoff(null)}
+				onSave={handleSaveCustom}
+			/>
 		</>
 	);
 }

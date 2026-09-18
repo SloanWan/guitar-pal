@@ -298,4 +298,13 @@ describe("validateFingerpickPattern — measure/slot repair", () => {
 		const { pattern } = validateFingerpickPattern(raw);
 		expect(pattern?.measures).toHaveLength(3);
 	});
+
+	it("keeps a chord mark that names a chord, and drops one that does not", () => {
+		const good = makePattern({ measures: [makeMeasure([makeSlot({ chord: { root: "A", suffix: "minor" } })])] });
+		expect(validateFingerpickPattern(good).pattern?.measures[0].slots[0].chord).toEqual({ root: "A", suffix: "minor", voicingId: null });
+		const pinned = makePattern({ measures: [makeMeasure([makeSlot({ chord: { root: "C", suffix: "major", voicingId: "v1" } })])] });
+		expect(validateFingerpickPattern(pinned).pattern?.measures[0].slots[0].chord?.voicingId).toBe("v1");
+		const bad = makePattern({ measures: [makeMeasure([makeSlot({ chord: { root: 3 } })])] });
+		expect(validateFingerpickPattern(bad).pattern?.measures[0].slots[0].chord).toBeUndefined();
+	});
 });

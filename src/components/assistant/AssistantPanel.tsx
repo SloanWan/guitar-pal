@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CornerDownLeft } from "lucide-react";
 import ProposalPreview from "./ProposalPreview";
+import TabProposalPreview from "./TabProposalPreview";
+import TabEditCard from "./TabEditCard";
 import EditIntentCard from "./EditIntentCard";
 import { Option, Options } from "./Options";
 import { BLANK } from "@/lib/strumAssistant/suggest";
 import { recordPick } from "@/lib/strumAssistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
-import { greeting, hint as introHint, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
+import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/strumAssistant/greeting";
 import { uiLang } from "@/lib/strumAssistant/lang";
+import type { AssistantDomain } from "@/lib/strumAssistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
 
@@ -18,13 +21,6 @@ import type { useAssistant } from "./useAssistant";
  * while the popover is open, and a conversation that ended every time the
  * popover closed would be no conversation at all.
  */
-
-/**
- * Shown on an empty panel: chords, a rhythm, and a sentence — each one read by
- * the app, so every click lands. A lone "C" would not: one chord is a key, not
- * a progression, and the sentence reader steps aside for it.
- */
-const EXAMPLES = ["C Am F G", "D DU UD", "a slow folk strum in C G Am F"];
 
 const MAX_INPUT_CHARS = 600;
 /** Five lines of the field's own text, after which it scrolls instead of growing. */
@@ -176,6 +172,7 @@ const INTRO_TYPING_MS = 1400;
 function Intro({
 	hello,
 	aside,
+	domain,
 	greeted,
 	onGreeted,
 	onExample,
@@ -184,6 +181,7 @@ function Intro({
 	hello: string;
 	/** The line after the greeting: what this does, and for a guest, where their work lives. */
 	aside: string;
+	domain: AssistantDomain;
 	greeted: boolean;
 	onGreeted: () => void;
 	onExample: (text: string) => void;
@@ -225,7 +223,7 @@ function Intro({
 
 			{phase === 3 && (
 				<div className="flex flex-wrap gap-1.5 pl-2">
-					{EXAMPLES.map((example, i) => (
+					{examples(domain).map((example, i) => (
 						<button
 							key={example}
 							type="button"
@@ -253,6 +251,7 @@ export default function AssistantPanel({
 	height: number;
 }) {
 	const {
+		domain,
 		messages,
 		pending,
 		send,
@@ -278,13 +277,14 @@ export default function AssistantPanel({
 	const lang = uiLang();
 	const name = user ? playerName(user.user_metadata, user.email) : null;
 	const hello = useMemo(() => greeting(name, sessionId, lang), [name, sessionId, lang]);
-	const aside = introHint(lang, user !== null);
+	const aside = introHint(lang, user !== null, domain);
 
 	// The examples take turns while there is nothing typed. Tab takes the one on
 	// screen — only while the field is empty, so Tab still leaves a field with
 	// something in it, and Shift+Tab always walks back the way it should.
 	const [promptSlot, setPromptSlot] = useState(0);
-	const hint = draft === "" ? INPUT_PROMPTS[promptSlot % INPUT_PROMPTS.length] : "";
+	const prompts = inputPrompts(domain);
+	const hint = draft === "" ? prompts[promptSlot % prompts.length] : "";
 	useEffect(() => {
 		if (draft !== "") return;
 		const timer = setInterval(() => setPromptSlot((slot) => slot + 1), PROMPT_ROTATION_MS);
@@ -396,6 +396,7 @@ export default function AssistantPanel({
 						key={sessionId}
 						hello={hello}
 						aside={aside}
+						domain={domain}
 						greeted={greeted}
 						onGreeted={markGreeted}
 						onExample={submit}
@@ -424,6 +425,21 @@ export default function AssistantPanel({
 									{message.proposal && message.streamed === true && (
 										<div className="w-full">
 											<ProposalPreview proposal={message.proposal} />
+										</div>
+									)}
+									{message.tabProposal && message.streamed === true && (
+										<div className="w-full">
+											<TabProposalPreview proposal={message.tabProposal} />
+										</div>
+									)}
+									{message.tabEdit && message.streamed === true && (
+										<div className="w-full">
+											<TabEditCard
+												edit={message.tabEdit}
+												done={message.editDone === true}
+												onDone={() => markEditDone(message.id)}
+												lang={message.lang ?? "en"}
+											/>
 										</div>
 									)}
 									{message.templates && message.streamed === true && (
@@ -505,8 +521,8 @@ export default function AssistantPanel({
 						}
 					}}
 					maxLength={MAX_INPUT_CHARS}
-					placeholder={hint || "Chords, a rhythm, or what you want"}
-					aria-label="Ask the strum assistant"
+					placeholder={hint || (domain === "tab" ? "A chord and the strings to pick, or a tab" : "Chords, a rhythm, or what you want")}
+					aria-label={domain === "tab" ? "Ask the tab assistant" : "Ask the strum assistant"}
 					aria-describedby={hint ? `${promptHintId}` : undefined}
 					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 				/>

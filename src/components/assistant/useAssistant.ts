@@ -8,25 +8,49 @@ import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
 import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
 import { recordMiss } from "@/lib/strumAssistant/missLog";
 import { uiLang, type Lang } from "@/lib/strumAssistant/lang";
-import type { AssistantProposal } from "@/lib/strumAssistant/types";
+import type { AssistantDomain, AssistantProposal } from "@/lib/strumAssistant/types";
 import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
+import { resolveTabTurn, type TabTurnOutcome } from "@/lib/tabAssistant/turn";
+import type { TabProposal } from "@/lib/tabAssistant/types";
+import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
+import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { loadUserFingerpickPatterns } from "@/lib/fingerpickPatternSync";
+import { getUser } from "@/lib/auth";
 import { IDLE_MS, isIdle, readConversation, writeConversation } from "@/lib/strumAssistant/conversation";
 import { createClient } from "@/lib/supabase";
 
 /**
  * Drives one assistant conversation.
  *
- * The conversation's state lives here; deciding a turn lives in
- * `resolveAssistantTurn`, which reads the message by rules and never reaches
- * for the network — so every answer is one the app can stand behind, and that
- * can be asserted rather than promised.
+ * One assistant at a time. The hook is given its domain and is that
+ * assistant for as long as it is mounted: the strum assistant reads with
+ * `resolveAssistantTurn`, the tab assistant with `resolveTabTurn`, each on
+ * its own transcript. Both read the message by rules and never reach for a
+ * model — so every answer is one the app can stand behind, and that can be
+ * asserted rather than promised.
+ *
+ * Which one a page gets is, for now, the page itself: the fingerpick page has
+ * the tab assistant, every other page the strum one. That is the whole of the
+ * triage today, deliberately, and the thing #191 replaces with a real one.
  */
+
+const TAB_PATH = "/fingerpick";
+
+export function domainForPath(pathname: string | null): AssistantDomain {
+	return pathname === TAB_PATH ? "tab" : "strum";
+}
 
 export interface AssistantMessage {
 	id: string;
 	role: "user" | "assistant";
 	text: string;
+	/** Which assistant answered; a restored transcript renders the right card by it. Absent on older turns, which were all strum. */
+	domain?: AssistantDomain;
 	proposal?: AssistantProposal;
+	/** The tab assistant's offer: a whole pattern, for the fingerpick editor. */
+	tabProposal?: TabProposal;
+	/** Bars for a fingerpick pattern the player has, waiting on the player to confirm. */
+	tabEdit?: TabTurnOutcome["edit"];
 	/** An edit to an existing pattern, waiting on the player to confirm it. */
 	edit?: EditIntentReading;
 	/** Sentences offered when nothing read the message, with blanks to fill. */
@@ -55,12 +79,12 @@ function newId(): string {
 		: `m${Date.now()}${Math.random()}`;
 }
 
-export function useAssistant() {
+export function useAssistant(domain: AssistantDomain) {
 	// Read once, lazily. Safe to differ between server and client: nothing that
 	// renders the transcript is mounted until the popover opens, so the markup
 	// React hydrates against does not depend on this.
 	const [messages, setMessages] = useState<AssistantMessage[]>(() =>
-		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now()),
+		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now(), domain),
 	);
 	const [pending, setPending] = useState(false);
 
@@ -97,6 +121,28 @@ export function useAssistant() {
 	const ensureIndex = useCallback(() => {
 		void chordIndex().then(setIndex);
 	}, [chordIndex]);
+
+	/**
+	 * What "travis" can refer to on the tab side: the shipped patterns plus the
+	 * player's own. Read, never written — the fingerpick page owns every write.
+	 */
+	const tabPatternsRef = useRef<Promise<readonly FingerpickPattern[]> | null>(null);
+	const loadTabPatterns = useCallback(async (): Promise<readonly FingerpickPattern[]> => {
+		if (tabPatternsRef.current === null) {
+			tabPatternsRef.current = (async () => {
+				try {
+					const user = await getUser();
+					const custom = await loadUserFingerpickPatterns(createClient(), user);
+					return [...PRESET_FINGERPICK_PATTERNS, ...custom];
+				} catch (e) {
+					console.error("[assistant] fingerpick patterns:", e);
+					tabPatternsRef.current = null;
+					return PRESET_FINGERPICK_PATTERNS;
+				}
+			})();
+		}
+		return tabPatternsRef.current;
+	}, []);
 
 	/** Read on the first turn, not on mount: a panel nobody types in costs nothing. */
 	const loadPatterns = useCallback(async (): Promise<readonly StrumPattern[]> => {
@@ -141,11 +187,11 @@ export function useAssistant() {
 	useEffect(() => {
 		const now = Date.now();
 		touchedAtRef.current = now;
-		writeConversation(messages, now);
+		writeConversation(messages, now, domain);
 		if (messages.length === 0) return;
 		const timer = setTimeout(reset, IDLE_MS);
 		return () => clearTimeout(timer);
-	}, [messages, reset]);
+	}, [messages, reset, domain]);
 
 	/**
 	 * For the moment the panel opens: a timer that fired late (a laptop asleep,
@@ -205,38 +251,54 @@ export function useAssistant() {
 			try {
 				const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
 				setIndex(index);
-				const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
 				// The reading is instant; the reply is not. A pause of the kind a
 				// person takes before answering — random, so it never reads as a
 				// timer — with the typing dots showing for it. The floor keeps the
-				// dots from flashing for a frame and vanishing.
-				await new Promise((done) =>
+				// dots from flashing for a frame and vanishing. A tab turn may also
+				// wait on the chord library for its shapes; the pause runs alongside.
+				const thinking = new Promise((done) =>
 					setTimeout(done, THINK_MIN_MS + Math.random() * (THINK_MAX_MS - THINK_MIN_MS)),
 				);
-				// A sentence nothing read is worth keeping: it is the next eval case,
-				// and the sentence picked after it is what the rules should have read.
-				if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
-				setMessages((prev) => [
-					...prev,
-					{
-						id: newId(),
-						role: "assistant",
+				const reply: AssistantMessage = { id: newId(), role: "assistant", text: "", domain };
+				if (domain === "tab") {
+					// Re-read per turn rather than cached for the session: a pattern
+					// saved on the page since the last turn has to be nameable now.
+					tabPatternsRef.current = null;
+					const tabPatterns = await loadTabPatterns();
+					const outcome = await resolveTabTurn({ text, index, patterns: tabPatterns, uiLang: uiLang() });
+					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
+					Object.assign(reply, {
+						text: outcome.text,
+						tabProposal: outcome.proposal,
+						tabEdit: outcome.edit,
+						templates: outcome.templates,
+						lang: outcome.lang,
+					});
+				} else {
+					const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
+					// A sentence nothing read is worth keeping: it is the next eval case,
+					// and the sentence picked after it is what the rules should have read.
+					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
+					Object.assign(reply, {
 						text: outcome.text,
 						proposal: outcome.proposal,
 						edit: outcome.edit,
 						templates: outcome.templates,
 						lang: outcome.lang,
 						...(outcome.failed ? { failed: true } : {}),
-					},
-				]);
+					});
+				}
+				await thinking;
+				setMessages((prev) => [...prev, reply]);
 			} finally {
 				setPending(false);
 			}
 		},
-		[chordIndex, loadPatterns, pending],
+		[chordIndex, domain, loadPatterns, loadTabPatterns, pending],
 	);
 
 	return {
+		domain,
 		messages,
 		pending,
 		send,

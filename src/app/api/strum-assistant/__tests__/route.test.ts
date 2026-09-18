@@ -36,7 +36,7 @@ vi.mock("@/lib/supabase-server", () => ({
 }));
 
 import { POST } from "@/app/api/strum-assistant/route";
-import type { AssistantReply } from "@/lib/strumAssistant/types";
+import type { AssistantReply } from "@/lib/assistant/types";
 
 /** A well-formed model reply, as the structured output would return it. */
 function modelMessage(output: unknown, stopReason = "end_turn") {

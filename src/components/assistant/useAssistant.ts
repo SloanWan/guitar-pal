@@ -5,18 +5,18 @@ import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
 import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
-import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
-import { recordMiss } from "@/lib/strumAssistant/missLog";
-import { uiLang, type Lang } from "@/lib/strumAssistant/lang";
-import type { AssistantDomain, AssistantProposal } from "@/lib/strumAssistant/types";
-import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
-import { resolveTabTurn, type TabTurnOutcome } from "@/lib/tabAssistant/turn";
-import type { TabProposal } from "@/lib/tabAssistant/types";
+import { resolveAssistantTurn } from "@/lib/assistant/strum/turn";
+import { recordMiss } from "@/lib/assistant/missLog";
+import { uiLang, type Lang } from "@/lib/assistant/lang";
+import type { AssistantDomain, AssistantProposal } from "@/lib/assistant/types";
+import type { EditIntentReading } from "@/lib/assistant/strum/editIntent";
+import { resolveTabTurn, type TabTurnOutcome } from "@/lib/assistant/tab/turn";
+import type { TabProposal } from "@/lib/assistant/tab/types";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { loadUserFingerpickPatterns } from "@/lib/fingerpickPatternSync";
 import { getUser } from "@/lib/auth";
-import { IDLE_MS, isIdle, readConversation, writeConversation } from "@/lib/strumAssistant/conversation";
+import { IDLE_MS, isIdle, readConversation, writeConversation } from "@/lib/assistant/conversation";
 import { createClient } from "@/lib/supabase";
 
 /**
@@ -24,8 +24,8 @@ import { createClient } from "@/lib/supabase";
  *
  * One assistant at a time. The hook is given its domain and is that
  * assistant for as long as it is mounted: the strum assistant reads with
- * `resolveAssistantTurn`, the tab assistant with `resolveTabTurn`, each on
- * its own transcript. Both read the message by rules and never reach for a
+ * `resolveAssistantTurn`, the tab assistant with `resolveTabTurn`, both on
+ * the one transcript. Both read the message by rules and never reach for a
  * model — so every answer is one the app can stand behind, and that can be
  * asserted rather than promised.
  *
@@ -84,7 +84,7 @@ export function useAssistant(domain: AssistantDomain) {
 	// renders the transcript is mounted until the popover opens, so the markup
 	// React hydrates against does not depend on this.
 	const [messages, setMessages] = useState<AssistantMessage[]>(() =>
-		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now(), domain),
+		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now()),
 	);
 	const [pending, setPending] = useState(false);
 
@@ -187,11 +187,11 @@ export function useAssistant(domain: AssistantDomain) {
 	useEffect(() => {
 		const now = Date.now();
 		touchedAtRef.current = now;
-		writeConversation(messages, now, domain);
+		writeConversation(messages, now);
 		if (messages.length === 0) return;
 		const timer = setTimeout(reset, IDLE_MS);
 		return () => clearTimeout(timer);
-	}, [messages, reset, domain]);
+	}, [messages, reset]);
 
 	/**
 	 * For the moment the panel opens: a timer that fired late (a laptop asleep,

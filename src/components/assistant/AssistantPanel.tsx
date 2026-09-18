@@ -2,17 +2,17 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CornerDownLeft } from "lucide-react";
-import ProposalPreview from "./ProposalPreview";
-import TabProposalPreview from "./TabProposalPreview";
-import TabEditCard from "./TabEditCard";
-import EditIntentCard from "./EditIntentCard";
+import ProposalPreview from "./strum/ProposalPreview";
+import TabProposalPreview from "./tab/TabProposalPreview";
+import TabEditCard from "./tab/TabEditCard";
+import EditIntentCard from "./strum/EditIntentCard";
 import { Option, Options } from "./Options";
-import { BLANK } from "@/lib/strumAssistant/suggest";
-import { recordPick } from "@/lib/strumAssistant/missLog";
+import { BLANK } from "@/lib/assistant/strum/suggest";
+import { recordPick } from "@/lib/assistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
-import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/strumAssistant/greeting";
-import { uiLang } from "@/lib/strumAssistant/lang";
-import type { AssistantDomain } from "@/lib/strumAssistant/types";
+import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/assistant/greeting";
+import { uiLang } from "@/lib/assistant/lang";
+import type { AssistantDomain } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
 

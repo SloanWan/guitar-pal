@@ -10,8 +10,8 @@ import {
 	takeHandoff,
 	type FingerpickAnyHandoff,
 	type FingerpickHandoff,
-} from "@/lib/strumAssistant/handoff";
-import { applySet, applyTabEdit } from "@/lib/tabAssistant/editIntent";
+} from "@/lib/assistant/handoff";
+import { applySet, applyTabEdit } from "@/lib/assistant/tab/editIntent";
 import { toast } from "sonner";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";

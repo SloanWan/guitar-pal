@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { askModel } from "@/lib/strumAssistant/askModel";
-import { SlidingWindowLimiter } from "@/lib/strumAssistant/rateLimit";
-import type { AssistantTurn } from "@/lib/strumAssistant/types";
+import { askModel } from "@/lib/assistant/strum/askModel";
+import { SlidingWindowLimiter } from "@/lib/assistant/rateLimit";
+import type { AssistantTurn } from "@/lib/assistant/types";
 
 /**
  * The assistant's model path. Reached only when the client's deterministic

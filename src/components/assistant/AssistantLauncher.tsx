@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ClipboardList, Loader2, MessageCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { exportMisses, readMisses } from "@/lib/strumAssistant/missLog";
+import { exportMisses, readMisses } from "@/lib/assistant/missLog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AssistantPanel from "./AssistantPanel";
 import { domainForPath, useAssistant } from "./useAssistant";
-import { HANDOFF_EVENT } from "@/lib/strumAssistant/handoff";
-import type { AssistantDomain } from "@/lib/strumAssistant/types";
+import { HANDOFF_EVENT } from "@/lib/assistant/handoff";
+import type { AssistantDomain } from "@/lib/assistant/types";
 
 /**
  * The topbar's rightmost control: opens the assistant over the page — the strum
@@ -29,7 +29,7 @@ import type { AssistantDomain } from "@/lib/strumAssistant/types";
 const MIN_PANEL_HEIGHT = 240;
 const MAX_PANEL_HEIGHT = 720;
 const DEFAULT_PANEL_HEIGHT = 480;
-const HEIGHT_KEY = "guitarpal:strumAssistantHeight";
+const HEIGHT_KEY = "guitarpal:assistantHeight";
 
 function clampHeight(px: number): number {
 	// Never taller than the viewport leaves room for, whatever was remembered.
@@ -50,8 +50,10 @@ function readHeight(): number {
 /**
  * The page decides which assistant this is. Keyed on the domain, so crossing
  * from the strum page to the fingerpick page unmounts one assistant and
- * mounts the other — its own transcript, its own greeting, its own readers —
- * rather than one assistant changing the subject mid-conversation.
+ * mounts the other — its own greeting, its own readers — rather than one
+ * assistant changing the subject mid-conversation. The transcript is the one
+ * thing they share: it is read back from storage on mount, so the thread
+ * carries across the two pages.
  */
 export default function AssistantLauncher() {
 	const domain = domainForPath(usePathname());

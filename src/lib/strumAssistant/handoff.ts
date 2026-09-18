@@ -90,6 +90,8 @@ export interface FingerpickEditHandoff {
 	patternName: string;
 	/** 0-based; null for an append. */
 	barIndex: number | null;
+	/** How many bars from `barIndex` the measures stand in for: one rewritten bar, or a run marked with chords. */
+	replaceCount: number;
 	measures: Measure[];
 }
 
@@ -255,6 +257,10 @@ function takeFingerpickEditHandoff(value: Record<string, unknown>): FingerpickEd
 			? value.barIndex
 			: null;
 	if (value.op === "replace" && barIndex === null) return null;
+	const replaceCount =
+		typeof value.replaceCount === "number" && Number.isInteger(value.replaceCount) && value.replaceCount >= 1
+			? value.replaceCount
+			: 1;
 	const { pattern } = validateFingerpickPattern({ measures: value.measures, timeSignature: [4, 4], bpm: 100 });
 	if (pattern === null) return null;
 	return {
@@ -263,6 +269,7 @@ function takeFingerpickEditHandoff(value: Record<string, unknown>): FingerpickEd
 		patternId: value.patternId,
 		patternName: value.patternName,
 		barIndex: value.op === "append" ? null : barIndex,
+		replaceCount: value.op === "append" ? 0 : replaceCount,
 		measures: pattern.measures,
 	};
 }

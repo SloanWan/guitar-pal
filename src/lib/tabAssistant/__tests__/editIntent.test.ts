@@ -79,6 +79,88 @@ describe("readTabEdit", () => {
 	});
 });
 
+describe("chord marks", () => {
+	const four: FingerpickPattern = {
+		...makeDefaultPattern(),
+		id: "four",
+		name: "four bars",
+		measures: Array.from({ length: 4 }, () => makeDefaultPattern().measures[0]),
+	};
+	const readFour = (text: string) => readTabEdit({ text, index: INDEX, patterns: [...PATTERNS, four], voicingFor });
+	const chordOn = (r: ReturnType<typeof readFour>, bar: number, slot: number) =>
+		r?.kind === "chords" ? r.measures[bar - r.barIndex - 1]?.slots[slot]?.chord?.root : undefined;
+
+	it("marks one chord on one bar, on the first beat unless told otherwise", () => {
+		const r = readFour("add chord Am to bar 2 of four bars");
+		expect(r?.kind).toBe("chords");
+		expect(r?.kind === "chords" && r.barIndex).toBe(1);
+		expect(r?.kind === "chords" && r.measures).toHaveLength(1);
+		expect(chordOn(r, 2, 0)).toBe("A");
+		expect(r?.kind === "chords" && r.marks).toEqual([{ bar: 2, beat: 1, chord: { root: "A", suffix: "minor", voicingId: null } }]);
+		// Four quarters in the bar: beat 3 is the third slot.
+		const onThree = readFour("add chord Am to bar 2 beat 3 of four bars");
+		expect(chordOn(onThree, 2, 2)).toBe("A");
+		expect(chordOn(onThree, 2, 0)).toBeUndefined();
+	});
+
+	it("reads the colon form and the Chinese form", () => {
+		expect(chordOn(readFour("four bars bar 3 beat 2: G"), 3, 1)).toBe("G");
+		expect(chordOn(readFour("chords for four bars bar 1: C"), 1, 0)).toBe("C");
+		expect(chordOn(readFour("给 four bars 第 2 小节第 3 拍加和弦 Am"), 2, 2)).toBe("A");
+		expect(chordOn(readFour("把 four bars 的第 1 小节配和弦 C"), 1, 0)).toBe("C");
+	});
+
+	it("writes one chord per bar across a range, or one chord on every bar", () => {
+		const r = readFour("mark C G Am F on bars 1-4 of four bars");
+		expect(r?.kind === "chords" && r.measures).toHaveLength(4);
+		expect([1, 2, 3, 4].map((b) => chordOn(r, b, 0))).toEqual(["C", "G", "A", "F"]);
+		const all = readFour("four bars bars 2-4: Am");
+		expect([2, 3, 4].map((b) => chordOn(all, b, 0))).toEqual(["A", "A", "A"]);
+		expect(all?.kind === "chords" && all.barIndex).toBe(1);
+		// No range: the list sets it, starting at the bar named.
+		const list = readFour("four bars bar 2: G Am F");
+		expect(list?.kind === "chords" && list.measures).toHaveLength(3);
+		expect(chordOn(list, 4, 0)).toBe("F");
+		expect(readFour("four bars 第 1-4 小节和弦：C G Am F")?.kind).toBe("chords");
+	});
+
+	it("keeps a chord already on a beat that is not being marked", () => {
+		const marked = { ...four, measures: four.measures.map((m, i) => (i === 1 ? { ...m, slots: m.slots.map((s, j) => (j === 2 ? { ...s, chord: { root: "E", suffix: "major" } } : s)) } : m)) };
+		const r = readTabEdit({ text: "add chord Am to bar 2 of four bars", index: INDEX, patterns: [marked], voicingFor });
+		expect(chordOn(r, 2, 0)).toBe("A");
+		expect(chordOn(r, 2, 2)).toBe("E");
+	});
+
+	it("says what is wrong: a bar, a beat, a count, a word that is no chord", () => {
+		expect(readFour("add chord Am to bar 9 of four bars")).toMatchObject({ kind: "bar-out-of-range", bar: 9 });
+		expect(readFour("four bars bar 3: G Am F")).toMatchObject({ kind: "bar-out-of-range", bar: 5 });
+		expect(readFour("add chord Am to bar 1 beat 5 of four bars")).toMatchObject({ kind: "beat-out-of-range", beat: 5 });
+		expect(readFour("mark C G on bars 1-4 of four bars")).toMatchObject({ kind: "chords-mismatch", bars: 4, chords: 2 });
+		expect(readFour("add chord gently to bar 1 of four bars")).toMatchObject({ kind: "segment-unread" });
+		expect(readFour("mark C Xmaj on bars 1-2 of four bars")).toMatchObject({ kind: "segment-unread" });
+		const partly = readFour("mark C Cmaj13#11 on bars 1-2 of four bars");
+		expect(partly?.kind === "chords" && partly.marks).toHaveLength(1);
+		expect(partly?.kind === "chords" && partly.warnings[0].message).toMatch(/Cmaj13#11/);
+	});
+
+	it("is not taken for a replace or an append", () => {
+		expect(readFour("replace bar 2 of four bars: Am: 5 3 2 1")?.kind).toBe("replace");
+		expect(readFour("add to four bars: Am: 5 3 2 1")?.kind).toBe("append");
+	});
+
+	it("goes through the turn as a card, and through the handoff as a range", async () => {
+		const out = await resolveTabTurn({ text: "mark C G Am F on bars 1-4 of four bars", index: INDEX, patterns: [four], voicings: async () => voicingFor });
+		expect(out.edit?.kind).toBe("chords");
+		expect(out.text).toBe('Mark C G Am F on bars 1–4 of "four bars"? Nothing is saved until you say so.');
+		const beat = await resolveTabTurn({ text: "给 four bars 第 2 小节第 3 拍加和弦 Am", index: INDEX, patterns: [four], uiLang: "zh", voicings: async () => voicingFor });
+		expect(beat.text).toMatch(/在「four bars」的第 2 小节第 3 拍标上 Am？/);
+		if (out.edit?.kind !== "chords") return;
+		const next = applyTabEdit(four, "replace", out.edit.barIndex, out.edit.measures, out.edit.measures.length);
+		expect(next.measures).toHaveLength(4);
+		expect(next.measures.map((m) => m.slots[0].chord?.root)).toEqual(["C", "G", "A", "F"]);
+	});
+});
+
 describe("an edit through the turn", () => {
 	const resolve = (text: string, uiLang: "en" | "zh" = "en") =>
 		resolveTabTurn({ text, index: INDEX, patterns: PATTERNS, uiLang, voicings: async () => voicingFor });
@@ -114,12 +196,12 @@ describe("the edit handoff", () => {
 	it("round-trips through the stash, validated", () => {
 		const r = read("add to my arp: Am: 5 3 2 1 3 2");
 		const measures = bars(r);
-		stashHandoff({ kind: "fingerpick-edit", op: "append", patternId: "mine", patternName: "my arp", barIndex: null, measures });
+		stashHandoff({ kind: "fingerpick-edit", op: "append", patternId: "mine", patternName: "my arp", barIndex: null, replaceCount: 0, measures });
 		const taken = takeHandoff("fingerpick");
 		expect(taken?.kind).toBe("fingerpick-edit");
 		if (taken?.kind !== "fingerpick-edit") return;
 		expect(taken.measures).toHaveLength(1);
-		expect(taken.measures[0].slots[0].chord).toBeUndefined();
+		expect(taken.measures[0].slots[0].chord).toEqual({ root: "A", suffix: "minor", voicingId: null });
 		expect(taken.op).toBe("append");
 	});
 

@@ -230,7 +230,19 @@ function validateSlot(
 	const slot: BeatSlot = { id, duration, strings };
 	if (obj.isGraceNote === true) slot.isGraceNote = true;
 	if (legacyRest || obj.isRest === true) slot.isRest = true;
+	// A chord change marked on the slot: kept when it names a chord, dropped
+	// silently otherwise — a mark is a label, and a malformed label is no label.
+	const chord = validateChord(obj.chord);
+	if (chord) slot.chord = chord;
 	return slot;
+}
+
+function validateChord(raw: unknown): BeatSlot["chord"] | null {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+	const obj = raw as Record<string, unknown>;
+	if (typeof obj.root !== "string" || obj.root === "" || typeof obj.suffix !== "string") return null;
+	const voicingId = typeof obj.voicingId === "string" ? obj.voicingId : null;
+	return { root: obj.root, suffix: obj.suffix, voicingId };
 }
 
 function validateMeasure(

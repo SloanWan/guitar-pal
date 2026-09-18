@@ -371,7 +371,7 @@ export default function FingerpickPage() {
 			return;
 		}
 		const isPreset = !customPatterns.some((p) => p.id === target.id);
-		const edited = applyTabEdit(target, edit.op, edit.barIndex, edit.measures);
+		const edited = applyTabEdit(target, edit.op, edit.barIndex, edit.measures, edit.replaceCount);
 		const next = isPreset
 			? { ...edited, id: crypto.randomUUID(), name: `${target.name} (mine)`, createdAt: undefined }
 			: edited;
@@ -380,14 +380,16 @@ export default function FingerpickPage() {
 		// here, so the change is what is on screen.
 		if (!isPreset && next.id !== selectedPattern.id) handleSelectPattern(next);
 		const bars = `${edit.measures.length} bar${edit.measures.length === 1 ? "" : "s"}`;
+		const first = (edit.barIndex ?? 0) + 1;
+		const where = edit.replaceCount > 1 ? `bars ${first}–${first + edit.replaceCount - 1}` : `bar ${first}`;
 		toast(
 			edit.op === "append"
 				? isPreset
 					? `Saved "${next.name}" with ${bars} added — the shipped pattern stays as it was.`
 					: `Added ${bars} to "${target.name}".`
 				: isPreset
-					? `Saved "${next.name}" with bar ${(edit.barIndex ?? 0) + 1} replaced — the shipped pattern stays as it was.`
-					: `Replaced bar ${(edit.barIndex ?? 0) + 1} of "${target.name}".`,
+					? `Saved "${next.name}" with ${where} rewritten — the shipped pattern stays as it was.`
+					: `Rewrote ${where} of "${target.name}".`,
 		);
 	}
 

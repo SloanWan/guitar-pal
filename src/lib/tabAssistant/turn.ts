@@ -1,6 +1,7 @@
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
+import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { normalizeImportedPattern } from "@/lib/tabImport";
 import { explainEditIntent, type EditIntentExplanation } from "@/lib/strumAssistant/editIntent";
@@ -34,7 +35,7 @@ export interface TabTurnOutcome {
 	 * written: the player confirms first. Only the readings with bars in them
 	 * reach the panel as a card; the rest are said in `text`.
 	 */
-	edit?: Extract<TabEditReading, { kind: "append" | "replace" }>;
+	edit?: Extract<TabEditReading, { kind: "append" | "replace" | "chords" }>;
 	templates?: string[];
 	lang: Lang;
 	/** With `templates`: what the readers saw, for the record that turns misses into eval cases. */
@@ -99,6 +100,45 @@ export function tabEditMessage(edit: TabEditReading, lang: Lang, presets: readon
 				: pick(lang, " Nothing is saved until you say so.", " 你确认之前什么都不会保存。");
 			return what + note;
 		}
+		case "chords": {
+			const preset = presets.some((p) => p.id === edit.pattern.id);
+			const labels = edit.marks.map((m) => chordSymbolLabel(m.chord));
+			const first = edit.marks[0];
+			const where =
+				edit.marks.length === 0
+					? ""
+					: edit.marks.length === 1
+						? pick(lang, `bar ${first.bar}`, `第 ${first.bar} 小节`)
+						: pick(lang, `bars ${first.bar}–${edit.marks[edit.marks.length - 1].bar}`, `第 ${first.bar}–${edit.marks[edit.marks.length - 1].bar} 小节`);
+			const beat = first && first.beat !== 1 ? pick(lang, `, beat ${first.beat}`, `第 ${first.beat} 拍`) : "";
+			const what =
+				edit.marks.length === 0
+					? pick(lang, `None of those chords matched — nothing to mark on ${q(edit.pattern.name)}.`, `这些和弦都没匹配上——${q(edit.pattern.name)}上没有可标的。`)
+					: pick(
+							lang,
+							`Mark ${labels.join(" ")} on ${where}${beat} of ${q(edit.pattern.name)}?`,
+							`在${q(edit.pattern.name)}的${where}${beat}标上 ${labels.join(" ")}？`,
+						);
+			const note =
+				edit.marks.length === 0
+					? ""
+					: preset
+						? pick(lang, " It is a shipped pattern, so this saves a copy of your own.", " 这是内置 pattern，所以会另存一份你自己的。")
+						: pick(lang, " Nothing is saved until you say so.", " 你确认之前什么都不会保存。");
+			return what + note;
+		}
+		case "beat-out-of-range":
+			return pick(
+				lang,
+				`${q(edit.pattern.name)} is in ${edit.pattern.timeSignature[0]}/${edit.pattern.timeSignature[1]} — there is no beat ${edit.beat}.`,
+				`${q(edit.pattern.name)}是 ${edit.pattern.timeSignature[0]}/${edit.pattern.timeSignature[1]} 拍，没有第 ${edit.beat} 拍。`,
+			);
+		case "chords-mismatch":
+			return pick(
+				lang,
+				`${edit.bars} bars but ${edit.chords} chords — write one chord per bar, or one chord for all of them.`,
+				`${edit.bars} 个小节但有 ${edit.chords} 个和弦——每小节一个，或者全部用同一个。`,
+			);
 		case "unknown-pattern":
 			return pick(
 				lang,
@@ -151,9 +191,18 @@ export async function resolveTabTurn({
 		const edit = readTabEdit({ text, index, patterns, voicingFor });
 		if (edit) {
 			const message = tabEditMessage(edit, lang, PRESET_FINGERPICK_PATTERNS);
-			return edit.kind === "append" || edit.kind === "replace"
-				? { text: message, edit, lang }
-				: { text: message, lang, templates: ["add to ___: string:6654, fret:8-11-10-8", "replace bar 1 of ___: Am: 5 3 2 1"] };
+			const card = edit.kind === "append" || edit.kind === "replace" || (edit.kind === "chords" && edit.marks.length > 0);
+			return card
+				? { text: message, edit: edit as NonNullable<TabTurnOutcome["edit"]>, lang }
+				: {
+						text: message,
+						lang,
+						templates: [
+							"add to ___: string:6654, fret:8-11-10-8",
+							"replace bar 1 of ___: Am: 5 3 2 1",
+							"add chord Am to bar 1 of ___",
+						],
+					};
 		}
 	}
 

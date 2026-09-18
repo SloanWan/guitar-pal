@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Plus, Replace, TriangleAlert, X } from "lucide-react";
+import { Check, Music, Plus, Replace, TriangleAlert, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import TabStavePreview from "./TabStavePreview";
 import { Option, Options } from "./Options";
@@ -39,12 +39,15 @@ export default function TabEditCard({
 	const more = edit.measures.length - shown;
 
 	function confirm() {
+		// Chord marks are a rewrite of the bars they sit on — the page swaps the
+		// run in, the way it swaps one bar for a replace.
 		stashHandoff({
 			kind: "fingerpick-edit",
-			op: edit.kind,
+			op: edit.kind === "append" ? "append" : "replace",
 			patternId: edit.pattern.id,
 			patternName: edit.pattern.name,
-			barIndex: edit.kind === "replace" ? edit.barIndex : null,
+			barIndex: edit.kind === "append" ? null : edit.barIndex,
+			replaceCount: edit.kind === "append" ? 0 : edit.measures.length,
 			measures: edit.measures,
 		});
 		onDone();
@@ -55,24 +58,32 @@ export default function TabEditCard({
 		return (
 			<p className="flex items-center gap-1.5 pl-2 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent">
 				<Check className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-				{edit.kind === "append" ? t("Bars added", "小节已加上") : t("Bar replaced", "小节已替换")}
+				{edit.kind === "append"
+					? t("Bars added", "小节已加上")
+					: edit.kind === "replace"
+						? t("Bar replaced", "小节已替换")
+						: t("Chords marked", "和弦已标上")}
 			</p>
 		);
 	}
 	if (dismissed) return null;
 
-	const firstBar = edit.kind === "replace" ? edit.barIndex + 1 : edit.pattern.measures.length + 1;
+	const firstBar = edit.kind === "append" ? edit.pattern.measures.length + 1 : edit.barIndex + 1;
+	const lastBar = firstBar + edit.measures.length - 1;
 
 	return (
 		<div className="mt-2 border border-denim bg-surface animate-[proposal-pop_0.18s_ease-out] motion-reduce:animate-none">
 			<div className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2">
 				<span className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-					{edit.kind === "append" ? t("Add to", "加到") : t("Replace in", "替换")} {edit.pattern.name}
+					{edit.kind === "append" ? t("Add to", "加到") : edit.kind === "replace" ? t("Replace in", "替换") : t("Chords on", "标和弦")}{" "}
+					{edit.pattern.name}
 				</span>
 				<span className="shrink-0 font-mono text-[11px] tracking-[0.04em] text-ink-faint">
 					{edit.kind === "append"
 						? t(`bar ${firstBar} on`, `第 ${firstBar} 小节起`)
-						: t(`bar ${firstBar}`, `第 ${firstBar} 小节`)}
+						: lastBar > firstBar
+							? t(`bars ${firstBar}–${lastBar}`, `第 ${firstBar}–${lastBar} 小节`)
+							: t(`bar ${firstBar}`, `第 ${firstBar} 小节`)}
 				</span>
 			</div>
 
@@ -112,12 +123,18 @@ export default function TabEditCard({
 						icon={
 							edit.kind === "append" ? (
 								<Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />
-							) : (
+							) : edit.kind === "replace" ? (
 								<Replace className="size-3" strokeWidth={1.5} aria-hidden="true" />
+							) : (
+								<Music className="size-3" strokeWidth={1.5} aria-hidden="true" />
 							)
 						}
 					>
-						{edit.kind === "append" ? t("Add the bars", "加上") : t("Replace the bar", "替换")}
+						{edit.kind === "append"
+							? t("Add the bars", "加上")
+							: edit.kind === "replace"
+								? t("Replace the bar", "替换")
+								: t("Mark the chords", "标上")}
 					</Option>
 				</Options>
 			</div>

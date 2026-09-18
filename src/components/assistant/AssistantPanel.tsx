@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { CornerDownLeft } from "lucide-react";
+import { ArrowRightLeft, CornerDownLeft } from "lucide-react";
 import ProposalPreview from "./strum/ProposalPreview";
 import TabProposalPreview from "./tab/TabProposalPreview";
 import TabEditCard from "./tab/TabEditCard";
 import EditIntentCard from "./strum/EditIntentCard";
 import { Option, Options } from "./Options";
-import { BLANK } from "@/lib/assistant/strum/suggest";
+import { BLANK } from "@/lib/assistant/blank";
 import { recordPick } from "@/lib/assistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
 import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/assistant/greeting";
-import { uiLang } from "@/lib/assistant/lang";
+import { pick, uiLang } from "@/lib/assistant/lang";
 import type { AssistantDomain } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
@@ -23,6 +23,10 @@ import type { useAssistant } from "./useAssistant";
  */
 
 const MAX_INPUT_CHARS = 600;
+/** The chip's segments, in the order they sit. */
+const MODES: readonly AssistantDomain[] = ["strum", "tab"];
+const MODE_LABEL: Record<AssistantDomain, string> = { strum: "Strum", tab: "Tab" };
+const MODE_LABEL_ZH: Record<AssistantDomain, string> = { strum: "扫弦", tab: "指弹" };
 /** How far above the bottom still counts as reading the tail, so a stray pixel does not unpin. */
 const TAIL_SLACK_PX = 24;
 
@@ -254,10 +258,15 @@ export default function AssistantPanel({
 	height: number;
 }) {
 	const {
-		domain,
+		mode,
+		setMode,
+		page,
+		nudge,
+		dismissNudge,
 		messages,
 		pending,
 		send,
+		readAs,
 		markStreamed,
 		markEditDone,
 		patterns,
@@ -284,13 +293,13 @@ export default function AssistantPanel({
 	const lang = uiLang();
 	const name = user ? playerName(user.user_metadata, user.email) : null;
 	const hello = useMemo(() => greeting(name, sessionId, lang), [name, sessionId, lang]);
-	const aside = introHint(lang, user !== null, domain);
+	const aside = introHint(lang, user !== null, mode);
 
 	// The examples take turns while there is nothing typed. Tab takes the one on
 	// screen — only while the field is empty, so Tab still leaves a field with
 	// something in it, and Shift+Tab always walks back the way it should.
 	const [promptSlot, setPromptSlot] = useState(0);
-	const prompts = inputPrompts(domain);
+	const prompts = inputPrompts(mode);
 	const hint = draft === "" ? prompts[promptSlot % prompts.length] : "";
 	useEffect(() => {
 		if (draft !== "") return;
@@ -428,7 +437,7 @@ export default function AssistantPanel({
 							key={sessionId}
 							hello={hello}
 							aside={aside}
-							domain={domain}
+							domain={mode}
 							greeted={greeted}
 							onGreeted={markGreeted}
 							onExample={submit}
@@ -488,6 +497,18 @@ export default function AssistantPanel({
 												))}
 											</Options>
 										)}
+										{message.readAs && message.streamed === true && (
+											<Options>
+												<Option
+													order={message.templates?.length ?? 0}
+													tone="outline"
+													onClick={() => void readAs(message.id, message.readAs!.domain, message.readAs!.text)}
+													icon={<ArrowRightLeft className="size-3" strokeWidth={1.5} aria-hidden="true" />}
+												>
+													{pick(message.lang ?? "en", `Read as ${MODE_LABEL[message.readAs.domain]} instead`, `按${MODE_LABEL_ZH[message.readAs.domain]}读`)}
+												</Option>
+											</Options>
+										)}
 										{message.edit && message.streamed === true && (
 											<div className="w-full">
 												<EditIntentCard
@@ -515,8 +536,39 @@ export default function AssistantPanel({
 				</div>
 			</div>
 
+			{/* Which assistant the thread talks to. The player's to set; the page
+			    only proposes, once per page, when the two disagree. */}
+			<div className="flex flex-none items-center gap-2 border-t border-line px-2 pt-2">
+				<div role="radiogroup" aria-label="Which assistant" className="flex border border-line-strong">
+					{MODES.map((m, i) => (
+						<button
+							key={m}
+							type="button"
+							role="radio"
+							aria-checked={mode === m}
+							disabled={pending}
+							onClick={() => setMode(m)}
+							className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${i > 0 ? "border-l border-line-strong" : ""} ${mode === m ? "bg-denim text-on-denim" : "text-ink-dim hover:text-denim"}`}
+						>
+							{MODE_LABEL[m]}
+						</button>
+					))}
+				</div>
+				{nudge && (
+					<button
+						type="button"
+						onClick={() => setMode(page)}
+						className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-denim-accent transition-colors duration-(--dur-hover) hover:text-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+					>
+						<ArrowRightLeft className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
+						<span className="truncate">
+							{`Switch to ${MODE_LABEL[page]} for this page?`}
+						</span>
+					</button>
+				)}
+			</div>
 			<form
-				className="flex flex-none items-end gap-2 border-t border-line p-2"
+				className="flex flex-none items-end gap-2 p-2"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit(draft);
@@ -527,8 +579,10 @@ export default function AssistantPanel({
 					rows={1}
 					value={draft}
 					onChange={(e) => {
-						// Typing turns a recalled message into a draft of its own.
+						// Typing turns a recalled message into a draft of its own — and
+						// answers the prompt to switch: the mode on the chip is the one meant.
 						recallRef.current = null;
+						if (nudge && e.target.value !== "") dismissNudge();
 						setDraft(e.target.value);
 					}}
 					onKeyDown={(e) => {
@@ -554,8 +608,8 @@ export default function AssistantPanel({
 						}
 					}}
 					maxLength={MAX_INPUT_CHARS}
-					placeholder={hint || (domain === "tab" ? "A chord and the strings to pick, or a tab" : "Chords, a rhythm, or what you want")}
-					aria-label={domain === "tab" ? "Ask the tab assistant" : "Ask the strum assistant"}
+					placeholder={hint || (mode === "tab" ? "A chord and the strings to pick, or a tab" : "Chords, a rhythm, or what you want")}
+					aria-label={mode === "tab" ? "Ask the tab assistant" : "Ask the strum assistant"}
 					aria-describedby={hint ? `${promptHintId}` : undefined}
 					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 				/>

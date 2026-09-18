@@ -1,3 +1,5 @@
+import type { AssistantDomain } from "@/lib/assistant/types";
+
 /**
  * Where the assistant's conversation waits between openings of the panel,
  * and when it is over.
@@ -34,6 +36,12 @@ export interface StoredConversation<M extends StoredMessage> {
  * for.
  */
 export const STORAGE_KEY = "guitarpal:assistantConversation";
+/**
+ * Which assistant the thread is talking to. Chosen on the chip above the
+ * input, kept with the transcript: a thread has one mode, whichever page it
+ * is read on, until the player changes it or the thread ends.
+ */
+export const MODE_KEY = "guitarpal:assistantMode";
 /** Bound the stored transcript so a long session does not grow without limit. */
 export const MAX_STORED_MESSAGES = 40;
 /** Silence after which the conversation is over. */
@@ -88,5 +96,24 @@ export function writeConversation<M extends StoredMessage>(messages: M[], now: n
 	} catch {
 		// Private mode or a full quota: the conversation still works, it just
 		// does not survive a refresh.
+	}
+}
+
+export function readMode(): AssistantDomain | null {
+	try {
+		const raw = sessionStorage.getItem(MODE_KEY);
+		return raw === "strum" || raw === "tab" ? raw : null;
+	} catch {
+		return null;
+	}
+}
+
+/** `null` ends the mode with the thread: the next one opens on the page's default. */
+export function writeMode(mode: AssistantDomain | null): void {
+	try {
+		if (mode === null) sessionStorage.removeItem(MODE_KEY);
+		else sessionStorage.setItem(MODE_KEY, mode);
+	} catch {
+		// As above: the choice holds for this mount and no longer.
 	}
 }

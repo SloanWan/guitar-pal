@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
@@ -9,35 +10,52 @@ import { resolveAssistantTurn } from "@/lib/assistant/strum/turn";
 import { recordMiss } from "@/lib/assistant/missLog";
 import { uiLang, type Lang } from "@/lib/assistant/lang";
 import type { AssistantDomain, AssistantProposal } from "@/lib/assistant/types";
-import type { EditIntentReading } from "@/lib/assistant/strum/editIntent";
+import type { EditIntentExplanation, EditIntentReading } from "@/lib/assistant/strum/editIntent";
 import { resolveTabTurn, type TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import type { TabProposal } from "@/lib/assistant/tab/types";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { loadUserFingerpickPatterns } from "@/lib/fingerpickPatternSync";
 import { getUser } from "@/lib/auth";
-import { IDLE_MS, isIdle, readConversation, writeConversation } from "@/lib/assistant/conversation";
+import {
+	IDLE_MS,
+	isIdle,
+	readConversation,
+	readMode,
+	writeConversation,
+	writeMode,
+} from "@/lib/assistant/conversation";
+import { otherDomainReads } from "@/lib/assistant/readAs";
 import { createClient } from "@/lib/supabase";
 
 /**
- * Drives one assistant conversation.
+ * Drives the assistant conversation.
  *
- * One assistant at a time. The hook is given its domain and is that
- * assistant for as long as it is mounted: the strum assistant reads with
- * `resolveAssistantTurn`, the tab assistant with `resolveTabTurn`, both on
- * the one transcript. Both read the message by rules and never reach for a
- * model — so every answer is one the app can stand behind, and that can be
- * asserted rather than promised.
+ * One thread, one mode. The chip above the input says which assistant the
+ * thread is talking to — the strum one reads with `resolveAssistantTurn`,
+ * the tab one with `resolveTabTurn` — and the choice is the player's, kept
+ * with the transcript until they change it or the thread ends. Both read the
+ * message by rules and never reach for a model, so every answer is one the
+ * app can stand behind, and that can be asserted rather than promised.
  *
- * Which one a page gets is, for now, the page itself: the fingerpick page has
- * the tab assistant, every other page the strum one. That is the whole of the
- * triage today, deliberately, and the thing #191 replaces with a real one.
+ * The page is a default, not a decision: a thread opens in the mode of the
+ * page it opens on, and crossing to the other page only prompts — once per
+ * page — to switch. The one time the mode is second-guessed is when it
+ * plainly failed: the chosen readers made nothing of the sentence and the
+ * other assistant's would have; then the reply offers to read it as that one.
  */
 
+const STRUM_PATH = "/strum";
 const TAB_PATH = "/fingerpick";
 
+/** The mode a thread opens in on this page. */
 export function domainForPath(pathname: string | null): AssistantDomain {
 	return pathname === TAB_PATH ? "tab" : "strum";
+}
+
+/** The pages that have an assistant of their own — the only ones worth a prompt to switch. */
+function hasOwnAssistant(pathname: string | null): boolean {
+	return pathname === STRUM_PATH || pathname === TAB_PATH;
 }
 
 export interface AssistantMessage {
@@ -57,6 +75,12 @@ export interface AssistantMessage {
 	templates?: string[];
 	/** The language this reply was written in; the answers under it follow. */
 	lang?: Lang;
+	/**
+	 * Present when the selected assistant read nothing and the other would
+	 * have: the domain to read the sentence as, and the sentence, so one click
+	 * switches the mode and answers again.
+	 */
+	readAs?: { domain: AssistantDomain; text: string };
 	/** Set when the turn failed; rendered as an error rather than as speech. */
 	failed?: boolean;
 	/** True once the edit this message carried was confirmed and handed over. */
@@ -79,7 +103,41 @@ function newId(): string {
 		: `m${Date.now()}${Math.random()}`;
 }
 
-export function useAssistant(domain: AssistantDomain) {
+export function useAssistant() {
+	const pathname = usePathname();
+	const page = domainForPath(pathname);
+	// A ref for the callbacks that must not change identity with the route:
+	// `reset` is a dependency of the idle timer, and navigating is not talking.
+	const pageRef = useRef(page);
+	useEffect(() => {
+		pageRef.current = page;
+	}, [page]);
+
+	// The mode the thread was left in, or the page's default for a new one.
+	// Read once, lazily, on the client — nothing that wears the mode is in the
+	// server's markup; the panel mounts on click.
+	const [mode, setModeState] = useState<AssistantDomain>(() =>
+		typeof window === "undefined" ? page : (readMode() ?? page),
+	);
+	/**
+	 * The page the player was last prompted to switch on. The prompt shows
+	 * when the mode and the page disagree, once per page: dismissed by typing
+	 * or by choosing a mode — either is an answer — and back again on the
+	 * next page that disagrees.
+	 */
+	const [nudgedPath, setNudgedPath] = useState<string | null>(null);
+	const dismissNudge = useCallback(() => setNudgedPath(pathname), [pathname]);
+
+	const setMode = useCallback(
+		(next: AssistantDomain) => {
+			setModeState(next);
+			writeMode(next);
+			dismissNudge();
+		},
+		[dismissNudge],
+	);
+	const nudge = hasOwnAssistant(pathname) && mode !== page && nudgedPath !== pathname;
+
 	// Read once, lazily. Safe to differ between server and client: nothing that
 	// renders the transcript is mounted until the popover opens, so the markup
 	// React hydrates against does not depend on this.
@@ -170,6 +228,9 @@ export function useAssistant(domain: AssistantDomain) {
 		setMessages([]);
 		setSessionId(newId());
 		setGreeted(false);
+		// A new thread opens in the page's mode, as the first one did.
+		setModeState(pageRef.current);
+		writeMode(null);
 	}, []);
 
 	/**
@@ -239,6 +300,72 @@ export function useAssistant(domain: AssistantDomain) {
 		);
 	}, []);
 
+	/**
+	 * One sentence, read by one assistant. The reading is instant; the reply
+	 * is not. A pause of the kind a person takes before answering — random,
+	 * so it never reads as a timer — with the typing dots showing for it. The
+	 * floor keeps the dots from flashing for a frame and vanishing. A tab turn
+	 * may also wait on the chord library for its shapes; the pause runs alongside.
+	 */
+	const resolveIn = useCallback(
+		async (as: AssistantDomain, text: string): Promise<AssistantMessage> => {
+			const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
+			setIndex(index);
+			const thinking = new Promise((done) =>
+				setTimeout(done, THINK_MIN_MS + Math.random() * (THINK_MAX_MS - THINK_MIN_MS)),
+			);
+			const reply: AssistantMessage = { id: newId(), role: "assistant", text: "", domain: as };
+			let missed: { seen: EditIntentExplanation; offered: string[] } | null = null;
+			let tabPatterns: readonly FingerpickPattern[];
+			if (as === "tab") {
+				// Re-read per turn rather than cached for the session: a pattern
+				// saved on the page since the last turn has to be nameable now.
+				tabPatternsRef.current = null;
+				tabPatterns = await loadTabPatterns();
+				const outcome = await resolveTabTurn({ text, index, patterns: tabPatterns, uiLang: uiLang() });
+				if (outcome.seen && outcome.templates) missed = { seen: outcome.seen, offered: outcome.templates };
+				Object.assign(reply, {
+					text: outcome.text,
+					tabProposal: outcome.proposal,
+					tabEdit: outcome.edit,
+					templates: outcome.templates,
+					lang: outcome.lang,
+				});
+			} else {
+				tabPatterns = await loadTabPatterns();
+				const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
+				if (outcome.seen && outcome.templates) missed = { seen: outcome.seen, offered: outcome.templates };
+				Object.assign(reply, {
+					text: outcome.text,
+					proposal: outcome.proposal,
+					edit: outcome.edit,
+					templates: outcome.templates,
+					lang: outcome.lang,
+					...(outcome.failed ? { failed: true } : {}),
+				});
+			}
+			// Nothing concrete came of it — no card, or a card that only says the
+			// name is unknown here. If the other assistant would have read the
+			// sentence whole, the reply says so, and offers to.
+			const hasCard =
+				reply.proposal !== undefined ||
+				reply.tabProposal !== undefined ||
+				reply.tabEdit !== undefined ||
+				(reply.edit !== undefined && reply.edit.kind !== "unknown-pattern");
+			const other =
+				hasCard || reply.failed
+					? null
+					: otherDomainReads(as, text, { index, strumPatterns: patternList, tabPatterns });
+			if (other) reply.readAs = { domain: other, text };
+			// A sentence nothing read is worth keeping: it is the next eval case,
+			// and the sentence picked after it is what the rules should have read.
+			if (missed) recordMiss(text, missed.seen, missed.offered, { mode: as, readAs: other });
+			await thinking;
+			return reply;
+		},
+		[chordIndex, loadPatterns, loadTabPatterns],
+	);
+
 	const send = useCallback(
 		async (input: string) => {
 			const text = input.trim();
@@ -247,61 +374,49 @@ export function useAssistant(domain: AssistantDomain) {
 			const userMessage: AssistantMessage = { id: newId(), role: "user", text };
 			setMessages((prev) => [...prev, userMessage]);
 			setPending(true);
-
+			// Talking settles the mode: a thread that has been spoken to keeps its
+			// assistant across pages, where an untouched one still follows the page.
+			writeMode(mode);
 			try {
-				const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
-				setIndex(index);
-				// The reading is instant; the reply is not. A pause of the kind a
-				// person takes before answering — random, so it never reads as a
-				// timer — with the typing dots showing for it. The floor keeps the
-				// dots from flashing for a frame and vanishing. A tab turn may also
-				// wait on the chord library for its shapes; the pause runs alongside.
-				const thinking = new Promise((done) =>
-					setTimeout(done, THINK_MIN_MS + Math.random() * (THINK_MAX_MS - THINK_MIN_MS)),
-				);
-				const reply: AssistantMessage = { id: newId(), role: "assistant", text: "", domain };
-				if (domain === "tab") {
-					// Re-read per turn rather than cached for the session: a pattern
-					// saved on the page since the last turn has to be nameable now.
-					tabPatternsRef.current = null;
-					const tabPatterns = await loadTabPatterns();
-					const outcome = await resolveTabTurn({ text, index, patterns: tabPatterns, uiLang: uiLang() });
-					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
-					Object.assign(reply, {
-						text: outcome.text,
-						tabProposal: outcome.proposal,
-						tabEdit: outcome.edit,
-						templates: outcome.templates,
-						lang: outcome.lang,
-					});
-				} else {
-					const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
-					// A sentence nothing read is worth keeping: it is the next eval case,
-					// and the sentence picked after it is what the rules should have read.
-					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
-					Object.assign(reply, {
-						text: outcome.text,
-						proposal: outcome.proposal,
-						edit: outcome.edit,
-						templates: outcome.templates,
-						lang: outcome.lang,
-						...(outcome.failed ? { failed: true } : {}),
-					});
-				}
-				await thinking;
+				const reply = await resolveIn(mode, text);
 				setMessages((prev) => [...prev, reply]);
 			} finally {
 				setPending(false);
 			}
 		},
-		[chordIndex, domain, loadPatterns, loadTabPatterns, pending],
+		[mode, pending, resolveIn],
+	);
+
+	/**
+	 * The offer taken: the thread switches to the other assistant and the
+	 * sentence is read again by it. The reply that made the offer is replaced,
+	 * not followed — the sentence was asked once.
+	 */
+	const readAs = useCallback(
+		async (messageId: string, as: AssistantDomain, text: string) => {
+			if (pending) return;
+			setMode(as);
+			setPending(true);
+			try {
+				const reply = await resolveIn(as, text);
+				setMessages((prev) => prev.map((m) => (m.id === messageId ? reply : m)));
+			} finally {
+				setPending(false);
+			}
+		},
+		[pending, resolveIn, setMode],
 	);
 
 	return {
-		domain,
+		mode,
+		setMode,
+		page,
+		nudge,
+		dismissNudge,
 		messages,
 		pending,
 		send,
+		readAs,
 		reset,
 		expireIfIdle,
 		markStreamed,

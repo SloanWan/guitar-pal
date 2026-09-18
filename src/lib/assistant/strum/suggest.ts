@@ -1,3 +1,4 @@
+import { BLANK } from "@/lib/assistant/blank";
 import type { EditIntentExplanation } from "@/lib/assistant/strum/editIntent";
 import type { PhraseReading } from "@/lib/assistant/strum/readPhrase";
 import { pick, type Lang } from "@/lib/assistant/lang";
@@ -17,7 +18,6 @@ import { pick, type Lang } from "@/lib/assistant/lang";
  * read — that is the whole point of offering it.
  */
 
-export const BLANK = "___";
 
 export interface Guidance {
 	/** What the assistant says. */

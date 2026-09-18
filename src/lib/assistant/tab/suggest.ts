@@ -1,5 +1,6 @@
 import { pick, type Lang } from "@/lib/assistant/lang";
-import { BLANK, type Guidance } from "@/lib/assistant/strum/suggest";
+import { BLANK } from "@/lib/assistant/blank";
+import type { Guidance } from "@/lib/assistant/strum/suggest";
 import type { TabSentenceReading } from "@/lib/assistant/tab/readTabSentence";
 
 /**

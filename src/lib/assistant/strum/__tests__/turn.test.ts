@@ -5,7 +5,7 @@ import {
 	deterministicReply,
 	phraseReply,
 } from "@/lib/assistant/strum/turn";
-import { BLANK } from "@/lib/assistant/strum/suggest";
+import { BLANK } from "@/lib/assistant/blank";
 import { isBrowsableSuffix } from "@/lib/chordSuffixes";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { CHORD_ROWS } from "@/lib/__fixtures__/chordData.fixture";

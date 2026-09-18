@@ -1,6 +1,7 @@
-// Shared module, strum type: what a miss "saw" is still the strum reader's
-// explanation. Untangled with #191, which records the domain triage chose.
+// Shared module, strum type: what a miss "saw" is the strum edit reader's
+// explanation, which the tab turn produces too for its own misses.
 import type { EditIntentExplanation } from "@/lib/assistant/strum/editIntent";
+import type { AssistantDomain } from "@/lib/assistant/types";
 
 /**
  * A record of the sentences nothing read, and what was picked afterwards.
@@ -23,6 +24,15 @@ export interface MissEntry {
 	offered: string[];
 	/** The sentence taken into the composer, once one is. */
 	picked?: string;
+	/** Which assistant the chip had selected when the sentence missed. */
+	mode?: AssistantDomain;
+	/** The other assistant, when its readers would have read the sentence and it was offered. */
+	readAs?: AssistantDomain;
+}
+
+export interface MissContext {
+	mode: AssistantDomain;
+	readAs: AssistantDomain | null;
 }
 
 export function readMisses(): MissEntry[] {
@@ -43,7 +53,12 @@ function write(entries: MissEntry[]): void {
 	}
 }
 
-export function recordMiss(input: string, seen: EditIntentExplanation, offered: string[]): void {
+export function recordMiss(
+	input: string,
+	seen: EditIntentExplanation,
+	offered: string[],
+	context?: MissContext,
+): void {
 	const entry: MissEntry = {
 		at: new Date().toISOString(),
 		input,
@@ -55,6 +70,7 @@ export function recordMiss(input: string, seen: EditIntentExplanation, offered: 
 			chordWords: seen.chordWords,
 		},
 		offered,
+		...(context ? { mode: context.mode, ...(context.readAs ? { readAs: context.readAs } : {}) } : {}),
 	};
 	write([...readMisses(), entry]);
 	if (process.env.NODE_ENV === "development") {

@@ -1,6 +1,4 @@
-// Shared module, strum import: the blank marker and the strumming-flavoured
-// replies both predate the tab assistant. Untangled with #191.
-import { BLANK } from "@/lib/assistant/strum/suggest";
+import { BLANK } from "@/lib/assistant/blank";
 import type { Lang } from "@/lib/assistant/lang";
 
 /**

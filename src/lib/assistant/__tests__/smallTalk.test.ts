@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { smallTalk } from "@/lib/assistant/smallTalk";
-import { BLANK } from "@/lib/assistant/strum/suggest";
+import { BLANK } from "@/lib/assistant/blank";
 
 describe("smallTalk", () => {
 	it("answers a greeting and points at the syntax", () => {

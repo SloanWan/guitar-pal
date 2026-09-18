@@ -16,6 +16,15 @@ describe("the record of misses", () => {
 		expect(entry.picked).toBeUndefined();
 	});
 
+	it("keeps which assistant was selected, and the one that would have read it", () => {
+		recordMiss("Am: 5 3 2 1", seen("Am: 5 3 2 1"), [], { mode: "strum", readAs: "tab" });
+		recordMiss("make it sadder", seen("make it sadder"), [], { mode: "strum", readAs: null });
+		const [first, second] = readMisses();
+		expect(first).toMatchObject({ mode: "strum", readAs: "tab" });
+		expect(second.mode).toBe("strum");
+		expect(second).not.toHaveProperty("readAs");
+	});
+
 	it("attaches a pick to the miss it answers", () => {
 		recordMiss("add C G somewhere", seen("add C G somewhere"), ["add C G to ___", "C G"]);
 		recordPick("add C G somewhere", "add C G to ___");

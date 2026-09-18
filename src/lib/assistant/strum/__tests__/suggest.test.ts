@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { suggestFrom, BLANK } from "@/lib/assistant/strum/suggest";
+import { suggestFrom } from "@/lib/assistant/strum/suggest";
+import { BLANK } from "@/lib/assistant/blank";
 import { explainEditIntent } from "@/lib/assistant/strum/editIntent";
 import { readPhrase } from "@/lib/assistant/strum/readPhrase";
 import { isBrowsableSuffix } from "@/lib/chordSuffixes";

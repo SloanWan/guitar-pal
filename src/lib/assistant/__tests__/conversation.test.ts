@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
 	IDLE_MS,
 	MAX_STORED_MESSAGES,
+	MODE_KEY,
+	readMode,
+	writeMode,
 	STORAGE_KEY,
 	isIdle,
 	readConversation,
@@ -77,5 +80,24 @@ describe("conversation storage", () => {
 		);
 		writeConversation([msg(1), msg(2)], T0);
 		expect(readConversation(T0)).toEqual([msg(1), msg(2)]);
+	});
+});
+
+describe("mode", () => {
+	beforeEach(() => sessionStorage.clear());
+
+	it("is nothing until chosen, then the choice, then nothing again", () => {
+		expect(readMode()).toBeNull();
+		writeMode("tab");
+		expect(readMode()).toBe("tab");
+		expect(sessionStorage.getItem(MODE_KEY)).toBe("tab");
+		writeMode(null);
+		expect(readMode()).toBeNull();
+		expect(sessionStorage.getItem(MODE_KEY)).toBeNull();
+	});
+
+	it("ignores a value that is not a mode", () => {
+		sessionStorage.setItem(MODE_KEY, "general");
+		expect(readMode()).toBeNull();
 	});
 });

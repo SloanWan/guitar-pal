@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { resolveTabTurn } from "@/lib/assistant/tab/turn";
 import { suggestTab } from "@/lib/assistant/tab/suggest";
 import { readTabSentence } from "@/lib/assistant/tab/readTabSentence";
-import { BLANK } from "@/lib/assistant/strum/suggest";
+import { BLANK } from "@/lib/assistant/blank";
 import { INDEX, voicingFor } from "./fixtures";
 
 const resolve = (text: string, uiLang: "en" | "zh" = "en") =>

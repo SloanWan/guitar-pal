@@ -26,6 +26,17 @@ describe("readStringFret", () => {
 		expect(notes("string 6-5-4 fret 3-2-0")).toEqual(["6:3", "5:2", "4:0"]);
 	});
 
+	it("reads single-digit frets run together, two-digit ones in parentheses", () => {
+		expect(notes("string:6654 fret:5768")).toEqual(["6:5", "6:7", "5:6", "4:8"]);
+		expect(notes("string:665432 fret:5768(11)(12)")).toEqual(["6:5", "6:7", "5:6", "4:8", "3:11", "2:12"]);
+		expect(notes("string:665432 fret:5768（11）（12）")).toEqual(["6:5", "6:7", "5:6", "4:8", "3:11", "2:12"]);
+		expect(notes("string:6654 fret:5x7(10)")).toEqual(["6:5", "6:x", "5:7", "4:10"]);
+		// A bare two-digit group is one fret when it can be, two when it cannot.
+		expect(notes("string:6 fret:11")).toEqual(["6:11"]);
+		expect(notes("string:66 fret:57")).toEqual(["6:5", "6:7"]);
+		expect(notes("string:6654 fret:8 11 10 8")).toEqual(["6:8", "6:11", "5:10", "4:8"]);
+	});
+
 	it("reads x as a dead note", () => {
 		expect(notes("string:654 fret:3-x-0")).toEqual(["6:3", "5:x", "4:0"]);
 	});
@@ -52,7 +63,7 @@ describe("readStringFret", () => {
 		expect(second.found && !second.ok && second.error).toMatch(/^Bar 2/);
 		const odd = readStringFret("string:66 fret:8-11, string:5");
 		expect(odd.found && !odd.ok && odd.error).toMatch(/^Bar 2 has strings but no frets/);
-		const high = readStringFret("string:6 fret:30");
+		const high = readStringFret("string:6 fret:(30)");
 		expect(high.found && !high.ok && high.error).toMatch(/past the neck/);
 	});
 

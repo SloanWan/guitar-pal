@@ -112,7 +112,7 @@ const INPUT_PROMPTS: Record<AssistantDomain, readonly string[]> = {
 	tab: [
 		"Am: 5 3 2 1 3 2 1 3",
 		"travis picking in C",
-		"string:66544322, fret:8-11-10-8-10-8-8-11",
+		"string:66544322, fret:8(11)(10)8(10)88(11)",
 		"C G Am F: 5/4 2 1 3",
 		"Em 三指法",
 		"waltz in G, 100 bpm",

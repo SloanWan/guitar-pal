@@ -8,8 +8,9 @@ import { blankSpan } from "@/lib/strumAssistant/readPhrase";
  * The fourth thing a player can type that needs no chord and no model — the
  * frets are in the sentence, so nothing is looked up. The two lists pair
  * up in order and must be the same length; `x` in the frets is a dead note.
- * Multi-digit frets need a separator (`-`, space or comma) between them;
- * string numbers are single digits and may run together.
+ * String numbers are single digits and may run together. Frets may too —
+ * `fret:5768` is four frets — with a two-digit fret in parentheses,
+ * `5768(11)(12)`, or the list written with separators, `8-11-10-8`.
  *
  * Several pairs in one message are several bars, in the order written:
  *
@@ -28,7 +29,8 @@ export interface NoteToken {
 }
 
 const STRINGS_CLAUSE = /(?:strings?|弦)\s*[:：]?\s*([1-6](?:[\s,，\-]*[1-6])*)(?![\d])/gi;
-const FRETS_CLAUSE = /(?:frets?|品)\s*[:：]?\s*((?:\d{1,2}|x)(?:[\s,，\-]*(?:\d{1,2}|x))*)/gi;
+const FRET_TOKEN = String.raw`(?:\(\d{1,2}\)|（\d{1,2}）|\d+|x)`;
+const FRETS_CLAUSE = new RegExp(String.raw`(?:frets?|品)\s*[:：]?\s*(${FRET_TOKEN}(?:[\s,，\-]*${FRET_TOKEN})*)`, "gi");
 
 const MAX_FRET = 24;
 
@@ -43,6 +45,28 @@ interface Clause {
 	index: number;
 	end: number;
 	value: string;
+}
+
+/**
+ * The frets of one list. Groups are split at separators; a group that is
+ * one number is that fret (`8-11-10-8`), and anything else is read a
+ * character at a time — a digit is a fret, `(11)` is a two-digit fret, `x`
+ * is a dead note — so `5768(11)x` is six notes. A bare two-digit group past
+ * the neck, `57`, can only have meant two frets.
+ */
+function readFretList(list: string): (number | "x")[] {
+	const out: (number | "x")[] = [];
+	for (const group of list.split(/[\s,，\-]+/).filter((g) => g !== "")) {
+		if (/^\d{1,2}$/.test(group) && Number(group) <= MAX_FRET) {
+			out.push(Number(group));
+			continue;
+		}
+		for (const token of group.matchAll(/\((\d{1,2})\)|（(\d{1,2})）|(\d)|(x)/gi)) {
+			if (token[4] !== undefined) out.push("x");
+			else out.push(Number(token[1] ?? token[2] ?? token[3]));
+		}
+	}
+	return out;
 }
 
 /**
@@ -80,9 +104,7 @@ export function readStringFret(input: string): StringFretReading {
 		const strings = a.kind === "strings" ? a : b;
 		const frets = a.kind === "frets" ? a : b;
 		const stringNumbers = [...strings.value.matchAll(/[1-6]/g)].map((m) => Number(m[0]));
-		const fretValues = [...frets.value.matchAll(/\d{1,2}|x/gi)].map((m) =>
-			m[0].toLowerCase() === "x" ? ("x" as const) : Number(m[0]),
-		);
+		const fretValues = readFretList(frets.value);
 		if (stringNumbers.length !== fretValues.length) {
 			return {
 				found: true,

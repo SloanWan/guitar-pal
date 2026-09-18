@@ -21,6 +21,12 @@
  * class, so changing key or scale keeps the degree and transposes the chord
  * with it — that is what makes numerals worth showing.
  *
+ * Chords mode also carries a **progression**: a strip of bars, each held as an
+ * interval like the picked chord, looped one strum per bar. And a **hand
+ * position**: a right-press raises a five-fret frame on the neck and the
+ * panel lists the key's chords with a shape inside it — pressing one lights
+ * that shape, and the frame's play button walks them once through.
+ *
  * A capo follows the strum page's rule: a chord names the shape the player
  * holds, so the neck shows the fingered chord and the piano the heard one.
  * It also shortens the neck: nothing behind the capo can be played, so the
@@ -28,13 +34,13 @@
  * Marks above it keep the pitch they had — a capo does not transpose them.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Guitar, Piano, Volume2 } from "lucide-react";
+import { Guitar, Piano, Play, Square, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import Fretboard, { type FretboardHandle } from "@/components/fretboard/Fretboard";
 import PianoKeyboard, { type PianoKeyboardHandle } from "@/components/fretboard/PianoKeyboard";
 import { useNoteSound, type NoteVoice } from "@/components/fretboard/useNoteSound";
-import { useScalePlayer } from "@/components/fretboard/useScalePlayer";
+import { useSequencePlayer } from "@/components/fretboard/useSequencePlayer";
 import MusicalText from "@/components/MusicalText";
 import Fader from "@/components/ui/Fader";
 import Rocker from "@/components/ui/Rocker";
@@ -42,7 +48,7 @@ import { loadVoicings, peekVoicings } from "@/lib/chordVoicingCache";
 import { GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
 import { chordModeView, inShape, shapeSlots, type ChordModeView } from "@/lib/fretboard/chordMode";
-import { keyChord, shapeMarks, shapePitches, type KeyChord } from "@/lib/fretboard/chords";
+import { keyChord, keyChords, shapeMarks, shapePitches, type KeyChord } from "@/lib/fretboard/chords";
 import {
 	SCALE_LABELS,
 	SCALE_ROOTS,
@@ -56,7 +62,22 @@ import {
 	type ScaleType,
 } from "@/lib/fretboard/scales";
 import { slotsSounding, type SlotNote } from "@/lib/fretboard/positions";
+import { MIN_REACHABLE, reachableChords, type ReachableChord } from "@/lib/fretboard/reachable";
+import {
+	MAX_BARS,
+	PROGRESSION_BPM,
+	PROGRESSION_PRESETS,
+	appendStep,
+	barSeconds,
+	presetSteps,
+	progressionSteps,
+	removeStep,
+	resolveProgression,
+	type ProgressionStep,
+	type ResolvedBar,
+} from "@/lib/fretboard/progression";
 import { BOX_FRETS, noteSpacingSeconds, scalePositions, scaleRun, type RunTarget } from "@/lib/fretboard/scaleRun";
+import { noteSteps, type SequenceStep } from "@/lib/fretboard/sequence";
 import type { FretMark, FretWindow } from "@/lib/fretboard/types";
 import { PIANO_61, pitchClassOf, type PianoKey, type PianoRange } from "@/lib/piano/keys";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
@@ -181,6 +202,9 @@ function withGlyphs(label: string): string {
 		.join("");
 }
 
+/** The voicing library's key for a chord. */
+const chordKey = (c: KeyChord): string => `${c.root} ${c.suffix}`;
+
 /** "Em", "C#dim": a key chord the way a chart writes it. */
 function chordName(chord: KeyChord): string {
 	return chordAbbreviation({ root: chord.root, suffix: chord.suffix });
@@ -241,6 +265,19 @@ export default function FretboardExplorer({
 	const [chordInterval, setChordInterval] = useState(0);
 	/** Chords mode: the fingered chord's voicing, or null while loading / when the library has none. */
 	const [voicing, setVoicing] = useState<{ chord: KeyChord; voicing: ChordVoicing | null } | null>(null);
+	/** Chords mode: the strip, as intervals above the key's root. Session-only. */
+	const [progression, setProgression] = useState<ProgressionStep[]>([]);
+	const [progressionBpm, setProgressionBpm] = useState<number>(PROGRESSION_BPM.default);
+	/** What is sounding, resolved when play began: the strip, or a position's chords. Null between runs. */
+	const [playing, setPlaying] = useState<{ bars: ResolvedBar[]; source: "strip" | "position" } | null>(null);
+	/** Chords mode: the hand position raised by a right-press, on the fingered neck. */
+	const [chordBox, setChordBox] = useState<FretWindow | null>(null);
+	/** Chords mode: a shape picked from the position's list; stands in for the standard one while the chord matches. */
+	const [pinned, setPinned] = useState<ReachableChord | null>(null);
+	/** Every shape of the fingered key's seven chords, loaded once a position is raised. */
+	const [keyVoicings, setKeyVoicings] = useState<{ key: string; table: Map<string, ChordVoicing[]> } | null>(null);
+	/** Identifies the latest press of play, so a strip that changed while its shapes loaded is not played. */
+	const playToken = useRef(0);
 	// Default on; the stored choice is applied after mount so the server and
 	// the first client render agree, then every change is written back.
 	const [soundOn, setSoundOn] = useState(true);
@@ -276,9 +313,33 @@ export default function FretboardExplorer({
 	const rootPc = scaleRootPitchClass(root);
 	const scalePcs = useMemo(() => scalePitchClasses(spec), [spec]);
 
+	// The piano follows the neck: hover rings the key, a press strikes it.
+	// Both go through the keyboard's imperative handle, never through state.
+	const piano = useRef<PianoKeyboardHandle>(null);
+	const fretboard = useRef<FretboardHandle>(null);
+
+	// Each step of a run lights on both instruments as it sounds. The strike
+	// waits a frame so that a chord's marks, which land with the same step,
+	// are lit before they pulse.
+	const handleRunStep = useCallback((step: SequenceStep) => {
+		const first = step.slots[0];
+		if (first) fretboard.current?.revealFret(first.fret);
+		requestAnimationFrame(() => {
+			fretboard.current?.strike(step.slots);
+			for (const midi of step.midis) piano.current?.strike(midi);
+		});
+	}, []);
+	const player = useSequencePlayer({ audio: bus, onStep: handleRunStep });
+	const { stop: stopRun } = player;
+
+	/** While the strip plays, the bar sounding now stands in for the chord picked on the piano. */
+	const playingBar =
+		playing && player.isPlaying && player.currentIndex >= 0 ? (playing.bars[player.currentIndex] ?? null) : null;
+	const activeInterval = playingBar ? mod12(playingBar.sounding.rootPitchClass - rootPc) : chordInterval;
+
 	const view = useMemo<ChordModeView | null>(
-		() => (inChords ? chordModeView(spec, capo, rootPc + chordInterval) : null),
-		[inChords, spec, capo, rootPc, chordInterval],
+		() => (inChords ? chordModeView(spec, capo, rootPc + activeInterval) : null),
+		[inChords, spec, capo, rootPc, activeInterval],
 	);
 
 	// The fingered chord's standard voicing, fetched when it changes. A stale
@@ -296,10 +357,16 @@ export default function FretboardExplorer({
 			live = false;
 		};
 	}, [view]);
-	const shapeVoicing =
-		view && voicing?.chord.root === view.shape.root && voicing.chord.suffix === view.shape.suffix
-			? voicing.voicing
-			: null;
+	// A sounding bar brings its own voicing, resolved before play began; a
+	// shape picked from a position stands in while it is that chord's.
+	const sameChord = (a: KeyChord, b: KeyChord) => a.root === b.root && a.suffix === b.suffix;
+	const shapeVoicing = playingBar
+		? playingBar.voicing
+		: view && pinned && sameChord(pinned.chord, view.shape)
+			? pinned.voicing
+			: view && voicing && sameChord(voicing.chord, view.shape)
+				? voicing.voicing
+				: null;
 
 	// Behind a capo there is no neck left to play, so the scale starts at the
 	// capo fret; the pitches above it are what they always were.
@@ -362,24 +429,18 @@ export default function FretboardExplorer({
 		return view.sounding.pitchClasses.map((pc) => describe(pc, false));
 	}, [view, shapeVoicing, capo, noteName]);
 
-	// The piano follows the neck: hover rings the key, a press strikes it.
-	// Both go through the keyboard's imperative handle, never through state.
-	const piano = useRef<PianoKeyboardHandle>(null);
-	const fretboard = useRef<FretboardHandle>(null);
-
-	// Each note of a run lights on both instruments as it sounds.
-	const handleRunNote = useCallback((note: SlotNote) => {
-		fretboard.current?.revealFret(note.fret);
-		fretboard.current?.strike([{ string: note.string, fret: note.fret }]);
-		piano.current?.strike(note.midi);
-	}, []);
-	const player = useScalePlayer({ audio: bus, onNote: handleRunNote });
-	const { stop: stopRun } = player;
 	/** The string whose run is sounding, so its button can offer to stop it. */
 	const playingString = player.isPlaying && runTarget.kind === "string" ? runTarget.string : null;
 
-	// A run describes the key it started in; changing any of that ends it.
-	useEffect(() => stopRun, [stopRun, root, scale, capo, mode, soundOn]);
+	/** End whatever is sounding, a run or the strip. */
+	const stopPlayback = useCallback(() => {
+		playToken.current++;
+		setPlaying(null);
+		stopRun();
+	}, [stopRun]);
+	// A run or a progression describes the key it started in; changing any of
+	// that ends it, as does editing the strip under it.
+	useEffect(() => stopPlayback, [stopPlayback, root, scale, capo, mode, soundOn, progression]);
 
 	/** Load whatever the run needs, then play it. */
 	const startRun = useCallback(
@@ -387,11 +448,63 @@ export default function FretboardExplorer({
 			if (!soundOn || notes.length === 0) return;
 			void prepare(RUN_VOICE)
 				.then((ready) => {
-					if (ready) player.play(notes, noteSpacingSeconds(RUN_BPM, "eighth"), RUN_VOICE);
+					if (ready) player.play(noteSteps(notes), noteSpacingSeconds(RUN_BPM, "eighth"), RUN_VOICE);
 				})
 				.catch(() => undefined);
 		},
 		[soundOn, prepare, player],
+	);
+
+	// ── Playing the strip ─────────────────────────────────────────────────────
+	const progressionPlaying = playing?.source === "strip" && player.isPlaying;
+	/** The strip's bars named through the key, for the chips; no voicing needed to name them. */
+	const stripBars = useMemo(
+		() => (inChords ? resolveProgression(progression, spec, capo, () => null) : []),
+		[inChords, progression, spec, capo],
+	);
+
+	/**
+	 * Load every shape the strip needs, then loop it. A strip, key or capo that
+	 * changed while the shapes loaded has stopped this press already, so its
+	 * bars are dropped rather than played over the new state.
+	 */
+	const startProgression = useCallback(() => {
+		if (!soundOn || progression.length === 0) return;
+		const token = ++playToken.current;
+		const shapes = new Map<string, KeyChord>();
+		for (const bar of resolveProgression(progression, spec, capo, () => null)) shapes.set(chordKey(bar.shape), bar.shape);
+		const table = new Map<string, ChordVoicing | null>();
+		void Promise.all(
+			[...shapes].map(async ([key, shape]) => {
+				table.set(key, await standardVoicing(shape).catch(() => null));
+			}),
+		)
+			.then(() => prepare(RUN_VOICE))
+			.then((ready) => {
+				if (!ready || token !== playToken.current) return;
+				const bars = resolveProgression(progression, spec, capo, (c) => table.get(chordKey(c)) ?? null);
+				setPlaying({ bars, source: "strip" });
+				player.play(progressionSteps(bars), barSeconds(progressionBpm), RUN_VOICE, { loop: true });
+			})
+			.catch(() => undefined);
+	}, [soundOn, progression, spec, capo, prepare, player, progressionBpm]);
+
+	/** A new tempo while the strip plays restarts it at that tempo; between runs it just waits. */
+	const tempoDragging = useRef(false);
+	const applyTempo = useCallback(
+		(bpm: number) => {
+			if (playing?.source !== "strip" || !player.isPlaying) return;
+			player.play(progressionSteps(playing.bars), barSeconds(bpm), RUN_VOICE, { loop: true });
+		},
+		[playing, player],
+	);
+	const handleTempo = useCallback(
+		(bpm: number) => {
+			setProgressionBpm(bpm);
+			// A drag restarts once, when it lets go, rather than on every step.
+			if (!tempoDragging.current) applyTempo(bpm);
+		},
+		[applyTempo],
 	);
 
 	/** Selecting a run from the board plays it straight away — that is the gesture. */
@@ -445,6 +558,7 @@ export default function FretboardExplorer({
 			}
 			const interval = mod12(pc - rootPc);
 			setChordInterval(interval);
+			setPinned(null);
 			if (!soundOn) return;
 			const next = chordModeView(spec, capo, rootPc + interval);
 			void standardVoicing(next.shape)
@@ -467,6 +581,96 @@ export default function FretboardExplorer({
 		[chordsByPc],
 	);
 	const keyDimmed = useCallback((key: PianoKey) => !chordsByPc[key.pitchClass].diatonic, [chordsByPc]);
+	/** The strip's buttons: the seven degrees, then the five chords outside the key, by interval. */
+	const degreeChords = useMemo(() => keyChords(spec), [spec]);
+	const chromaticChords = useMemo(
+		() =>
+			chordsByPc
+				.filter((c) => !c.diatonic)
+				.sort((a, b) => mod12(a.rootPitchClass - rootPc) - mod12(b.rootPitchClass - rootPc)),
+		[chordsByPc, rootPc],
+	);
+
+	// ── A hand position in Chords mode ────────────────────────────────────────
+	// The frame is on the fingered neck, so the chords searched for shapes are
+	// the fingered key's; their degrees are the heard key's degrees.
+	const shapeKeyRoot = view?.shapeKeyRoot ?? root;
+	const fingeredChords = useMemo(() => keyChords({ root: shapeKeyRoot, scale }), [shapeKeyRoot, scale]);
+	const voicingsKey = `${shapeKeyRoot}/${scale}`;
+	const voicingsLoaded = keyVoicings?.key === voicingsKey;
+	useEffect(() => {
+		if (!inChords || !chordBox || voicingsLoaded) return;
+		let live = true;
+		void Promise.all(
+			fingeredChords.map(async (c) => [chordKey(c), await loadVoicings(c.root, c.suffix).catch(() => [])] as const),
+		).then((entries) => {
+			if (live) setKeyVoicings({ key: voicingsKey, table: new Map(entries) });
+		});
+		return () => {
+			live = false;
+		};
+	}, [inChords, chordBox, voicingsLoaded, voicingsKey, fingeredChords]);
+	const reachable = useMemo<ReachableChord[]>(
+		() =>
+			chordBox && voicingsLoaded && keyVoicings
+				? reachableChords(fingeredChords, (c) => keyVoicings.table.get(chordKey(c)) ?? [], chordBox, capo)
+				: [],
+		[chordBox, voicingsLoaded, keyVoicings, fingeredChords, capo],
+	);
+	const positionPlaying = playing?.source === "position" && player.isPlaying;
+
+	/** Moving or clearing the position ends a walk through it; the strip's loop is not its business. */
+	const stopWalk = useCallback(() => {
+		if (playing?.source === "position") stopPlayback();
+	}, [playing, stopPlayback]);
+	/** A right-press raises a five-fret position from that fret; a picked shape does not survive the move. */
+	const pickChordBox = useCallback(
+		(fromFret: number) => {
+			setChordBox({ fromFret, toFret: Math.min(NECK.toFret, fromFret + BOX_FRETS - 1) });
+			setPinned(null);
+			stopWalk();
+		},
+		[stopWalk],
+	);
+	const resizeChordBox = useCallback(
+		(toFret: number) => {
+			setChordBox((box) => (box ? { fromFret: box.fromFret, toFret } : box));
+			setPinned(null);
+			stopWalk();
+		},
+		[stopWalk],
+	);
+	const clearChordBox = useCallback(() => {
+		setChordBox(null);
+		setPinned(null);
+		stopWalk();
+	}, [stopWalk]);
+	/** Pressing a numeral on the position: that chord, in that shape, strummed. */
+	const pickReachable = useCallback(
+		(r: ReachableChord) => {
+			setChordInterval(mod12(r.chord.rootPitchClass + capo - rootPc));
+			setPinned(r);
+			if (!soundOn) return;
+			// The marks land on the next frame; strike after them so lit notes pulse.
+			requestAnimationFrame(() => soundShape(r.voicing, "guitar"));
+		},
+		[capo, rootPc, soundOn, soundShape],
+	);
+	/** Walk the position's chords in degree order, one bar each, once through. */
+	const walkPosition = useCallback(() => {
+		if (!soundOn || reachable.length === 0) return;
+		const token = ++playToken.current;
+		const table = new Map(reachable.map((r) => [chordKey(r.chord), r.voicing]));
+		const steps = reachable.map((r) => ({ interval: mod12(r.chord.rootPitchClass + capo - rootPc) }));
+		void prepare(RUN_VOICE)
+			.then((ready) => {
+				if (!ready || token !== playToken.current) return;
+				const bars = resolveProgression(steps, spec, capo, (c) => table.get(chordKey(c)) ?? null);
+				setPlaying({ bars, source: "position" });
+				player.play(progressionSteps(bars), barSeconds(progressionBpm), RUN_VOICE);
+			})
+			.catch(() => undefined);
+	}, [soundOn, reachable, capo, rootPc, prepare, spec, player, progressionBpm]);
 
 	/**
 	 * Scale mode: a key of the scale is named with its octave — A2, C3 — so the
@@ -543,7 +747,15 @@ export default function FretboardExplorer({
 				</Field>
 
 				<Field label="Mode">
-					<Segmented options={MODES} value={mode} onChange={setMode} ariaLabel="Mode" />
+					<Segmented
+						options={MODES}
+						value={mode}
+						onChange={(m) => {
+							setMode(m);
+							clearChordBox();
+						}}
+						ariaLabel="Mode"
+					/>
 				</Field>
 			</div>
 
@@ -644,7 +856,7 @@ export default function FretboardExplorer({
 							fretboard.current?.revealFret(fret);
 						}}
 						maxCapo={STRUM_CAPO_MAX}
-						highlight={runBox}
+						highlight={inChords ? chordBox : runBox}
 						runSlots={runBox ? runNotes : undefined}
 						onStringPlay={
 							inChords
@@ -652,28 +864,44 @@ export default function FretboardExplorer({
 								: (s) => (playingString === s ? player.stop() : runChoiceSelected(`string:${s}`))
 						}
 						playingString={playingString}
+						// The same frame in both modes: a run's box in Scale mode, the
+						// hand position's in Chords mode.
 						onPositionPick={
 							inChords
-								? undefined
+								? pickChordBox
 								: (fret) => runChoiceSelected(`pick:${fret}-${Math.min(NECK.toFret, fret + BOX_FRETS - 1)}`)
 						}
 						onHighlightResize={
-							runBox && !inChords ? (to) => setRunChoice(`pick:${runBox.fromFret}-${to}`) : undefined
+							inChords
+								? chordBox
+									? resizeChordBox
+									: undefined
+								: runBox
+									? (to) => setRunChoice(`pick:${runBox.fromFret}-${to}`)
+									: undefined
 						}
 						onHighlightPlay={
-							runBox && !inChords
-								? () => (player.isPlaying ? player.stop() : startRun(scaleRun(spec, playable, runTarget)))
-								: undefined
+							inChords
+								? chordBox && reachable.length > 0
+									? () => (positionPlaying ? stopPlayback() : walkPosition())
+									: undefined
+								: runBox
+									? () => (player.isPlaying ? player.stop() : startRun(scaleRun(spec, playable, runTarget)))
+									: undefined
 						}
 						onHighlightClear={
-							runBox && !inChords
-								? () => {
-										setRunChoice("neck");
-										player.stop();
-									}
-								: undefined
+							inChords
+								? chordBox
+									? clearChordBox
+									: undefined
+								: runBox
+									? () => {
+											setRunChoice("neck");
+											player.stop();
+										}
+									: undefined
 						}
-						highlightPlaying={player.isPlaying && runTarget.kind === "box"}
+						highlightPlaying={inChords ? positionPlaying : player.isPlaying && runTarget.kind === "box"}
 						label={boardLabel}
 						onSlotPress={handleSlotPress}
 						onSlotHover={handleSlotHover}
@@ -698,6 +926,195 @@ export default function FretboardExplorer({
 				</div>
 			</div>
 
+			{/* Mode panel — Chords: a progression written in degrees over the key.
+			    The strip stores intervals, so a key change transposes every bar
+			    and leaves the numerals where they are. */}
+			{inChords && (
+				<div className="flex flex-col gap-3 border border-line bg-panel p-3" data-testid="progression-panel">
+					{/* The hand position: which of the key's chords have a shape inside
+					    the frame. Pressing one lights that shape and strums it. */}
+					{chordBox && (
+						<Field label={`Position ${chordBox.fromFret}–${chordBox.toFret}`}>
+							<div className="flex flex-wrap items-center gap-2" data-testid="position-chords">
+								{!voicingsLoaded ? (
+									<span className="font-mono text-[11px] text-ink-faint">Looking for shapes…</span>
+								) : (
+									<>
+										{reachable.length < MIN_REACHABLE && (
+											<span className="font-mono text-[11px] text-ink-faint" data-testid="position-note">
+												{reachable.length === 0
+													? "Nothing fits here."
+													: `Only ${reachable[0].chord.numeral} fits here.`}
+											</span>
+										)}
+										{reachable.map((r) => {
+											const on = !playingBar && pinned?.voicing.id === r.voicing.id;
+											const heard = chordsByPc[mod12(r.chord.rootPitchClass + capo)];
+											return (
+												<button
+													key={r.chord.numeral}
+													type="button"
+													aria-label={`Play ${r.chord.numeral} here`}
+													aria-pressed={on}
+													onClick={() => pickReachable(r)}
+													className={`flex flex-col items-center border px-2.5 py-1 font-mono transition-colors duration-(--dur-hover) ${
+														on
+															? "border-denim bg-denim-tint text-denim-accent"
+															: "border-line-strong text-ink hover:bg-denim-tint hover:text-denim-accent"
+													}`}
+												>
+													<span className="text-[12px]">{r.chord.numeral}</span>
+													<span className="text-[10px] text-ink-dim">
+														<MusicalText text={chordName(heard)} />
+													</span>
+												</button>
+											);
+										})}
+									</>
+								)}
+							</div>
+						</Field>
+					)}
+
+					<div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+						<Field label="Add a bar">
+							<div className="flex flex-wrap items-center gap-1" role="group" aria-label="Degrees">
+								{degreeChords.map((c) => (
+									<button
+										key={c.numeral}
+										type="button"
+										aria-label={`Add ${c.numeral}`}
+										disabled={progression.length >= MAX_BARS}
+										onClick={() => setProgression((p) => appendStep(p, c.rootPitchClass - rootPc))}
+										className="min-w-9 border border-line-strong px-2 py-1.5 font-mono text-[12px] text-ink transition-colors duration-(--dur-hover) hover:bg-denim-tint hover:text-denim-accent disabled:opacity-40"
+									>
+										{c.numeral}
+									</button>
+								))}
+								<span className="mx-1 text-ink-faint" aria-hidden="true">
+									·
+								</span>
+								{chromaticChords.map((c) => (
+									<button
+										key={c.numeral}
+										type="button"
+										aria-label={`Add ${c.numeral}`}
+										disabled={progression.length >= MAX_BARS}
+										onClick={() => setProgression((p) => appendStep(p, c.rootPitchClass - rootPc))}
+										className="min-w-8 border border-line px-1.5 py-1.5 font-mono text-[11px] text-ink-dim transition-colors duration-(--dur-hover) hover:bg-denim-tint hover:text-denim-accent disabled:opacity-40"
+									>
+										{c.numeral}
+									</button>
+								))}
+							</div>
+						</Field>
+						<Field label="Presets">
+							<div className="flex flex-wrap gap-1" role="group" aria-label="Presets">
+								{PROGRESSION_PRESETS.map((preset) => (
+									<button
+										key={preset.name}
+										type="button"
+										onClick={() => setProgression(presetSteps(preset, spec))}
+										// Not uppercased: the case of a numeral is its quality.
+										className="border border-line-strong px-2 py-1.5 font-mono text-[11px] tracking-[0.04em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent"
+									>
+										{preset.name}
+									</button>
+								))}
+							</div>
+						</Field>
+					</div>
+
+					{/* The strip: numerals over chord names, the sounding bar lit. */}
+					<div className="flex flex-wrap items-center gap-2" data-testid="progression-strip">
+						{stripBars.length === 0 ? (
+							<span className="font-mono text-[11px] text-ink-faint">Press a degree to add a bar.</span>
+						) : (
+							stripBars.map((bar, i) => {
+								const current = progressionPlaying && player.currentIndex === i;
+								return (
+									<div
+										key={i}
+										data-bar={i}
+										data-current={current || undefined}
+										className={`flex items-stretch border transition-colors duration-(--dur-hover) ${
+											current ? "border-denim bg-denim-tint" : "border-line-strong"
+										}`}
+									>
+										<div className="flex flex-col items-center px-2.5 py-1 font-mono">
+											<span className={`text-[12px] ${current ? "text-denim-accent" : "text-ink"}`}>
+												{bar.sounding.numeral}
+											</span>
+											<span className="text-[10px] text-ink-dim">
+												<MusicalText text={chordName(bar.sounding)} />
+											</span>
+										</div>
+										<button
+											type="button"
+											aria-label={`Remove bar ${i + 1}`}
+											onClick={() => setProgression((p) => removeStep(p, i))}
+											className="border-l border-line-strong px-1 text-ink-faint transition-colors duration-(--dur-hover) hover:text-denim-accent"
+										>
+											<X className="size-3" strokeWidth={1.5} />
+										</button>
+									</div>
+								);
+							})
+						)}
+					</div>
+
+					{/* Transport: play or stop the loop, and its tempo. */}
+					<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+						<button
+							type="button"
+							aria-label={progressionPlaying ? "Stop progression" : "Play progression"}
+							disabled={!soundOn || progression.length === 0}
+							onClick={() => (progressionPlaying ? stopPlayback() : startProgression())}
+							className="flex h-[30px] items-center gap-1.5 border border-denim bg-denim px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-on-denim transition-colors duration-(--dur-hover) hover:bg-denim-accent disabled:opacity-40"
+						>
+							{progressionPlaying ? (
+								<Square className="size-3" strokeWidth={2.5} />
+							) : (
+								<Play className="size-3" strokeWidth={2.5} />
+							)}
+							{progressionPlaying ? "Stop" : "Play"}
+						</button>
+						<div className="flex items-center gap-2">
+							<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Tempo</span>
+							<div className="w-36">
+								<Fader
+									min={PROGRESSION_BPM.min}
+									max={PROGRESSION_BPM.max}
+									step={1}
+									value={progressionBpm}
+									onValue={handleTempo}
+									onDragStart={() => {
+										tempoDragging.current = true;
+									}}
+									onDragEnd={() => {
+										tempoDragging.current = false;
+										applyTempo(progressionBpm);
+									}}
+									disabled={!soundOn}
+									ariaLabel="Tempo"
+								/>
+							</div>
+							<span className="font-mono text-[12px] tabular-nums text-ink" data-testid="tempo-readout">
+								{progressionBpm} BPM
+							</span>
+						</div>
+						{progression.length > 0 && (
+							<button
+								type="button"
+								onClick={() => setProgression([])}
+								className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent"
+							>
+								Clear
+							</button>
+						)}
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

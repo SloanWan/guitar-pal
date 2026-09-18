@@ -7,6 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 import FretboardExplorer from "@/components/fretboard/FretboardExplorer";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { SequenceStep } from "@/lib/fretboard/sequence";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -28,11 +29,25 @@ vi.mock("@/components/fretboard/useNoteSound", () => ({
 		bus: sound.bus,
 	}),
 }));
-const runner = vi.hoisted(() => ({ play: vi.fn(), stop: vi.fn() }));
-vi.mock("@/components/fretboard/useScalePlayer", async (original) => ({
-	...(await original<typeof import("@/components/fretboard/useScalePlayer")>()),
-	useScalePlayer: () => ({ isPlaying: false, currentIndex: -1, play: runner.play, stop: runner.stop }),
+// The player is a stub with a playhead the tests move by hand: `play` and
+// `stop` only record the call, and `advance` says which step is sounding.
+type PlayerState = { isPlaying: boolean; currentIndex: number };
+const runner = vi.hoisted(() => ({
+	play: vi.fn(),
+	stop: vi.fn(),
+	advance: (() => {}) as (state: PlayerState) => void,
 }));
+vi.mock("@/components/fretboard/useSequencePlayer", async (original) => {
+	const React = await import("react");
+	return {
+		...(await original<typeof import("@/components/fretboard/useSequencePlayer")>()),
+		useSequencePlayer: () => {
+			const [state, setState] = React.useState<PlayerState>({ isPlaying: false, currentIndex: -1 });
+			runner.advance = setState;
+			return { ...state, play: runner.play, stop: runner.stop };
+		},
+	};
+});
 vi.mock("@/components/strum/ChordPickerModal", () => ({ default: () => null }));
 
 function voicing(frets: string, fingers = "000000"): ChordVoicing {
@@ -92,6 +107,14 @@ function mount(props: React.ComponentProps<typeof FretboardExplorer>) {
 		},
 		chordNotes: () =>
 			host.querySelector("[data-testid='chord-readout'] > div:nth-child(2)")?.textContent?.trim() ?? null,
+		button: (label: string) => q<HTMLButtonElement>(`button[aria-label="${label}"]`),
+		/** The strip's chips as "numeral name", in order. */
+		strip: () =>
+			[...host.querySelectorAll<HTMLElement>("[data-testid='progression-strip'] [data-bar] > div")].map((el) =>
+				[...el.children].map((s) => s.textContent?.trim()).join(" "),
+			),
+		currentBar: () =>
+			host.querySelector<HTMLElement>("[data-testid='progression-strip'] [data-current]")?.dataset.bar ?? null,
 		lit: () =>
 			[...host.querySelectorAll<SVGGElement>("svg[data-from-fret] .fb-mark:not([data-emphasis='none'])")].map(
 				(m) => `${m.dataset.string}:${m.dataset.fret}=${m.dataset.emphasis}`,
@@ -257,9 +280,9 @@ describe("FretboardExplorer — playing the scale", () => {
 		expect(frame.getAttribute("x")).toBe(String(5 * 44));
 		expect(ex.host.querySelectorAll("svg[data-from-fret] .fb-mark[data-run]").length).toBeGreaterThan(3);
 
-		const [notes, spacing, voice] = runner.play.mock.calls[0];
-		expect(notes[0]).toEqual({ string: 0, fret: 5, midi: 45 });
-		expect(notes.every((n: { fret: number }) => n.fret >= 5 && n.fret <= 9)).toBe(true);
+		const [steps, spacing, voice] = runner.play.mock.calls[0];
+		expect(steps[0]).toEqual({ midis: [45], slots: [{ string: 0, fret: 5 }] });
+		expect(steps.every((s: SequenceStep) => s.slots[0].fret >= 5 && s.slots[0].fret <= 9)).toBe(true);
 		expect(spacing).toBeCloseTo(60 / 90 / 2); // eighths at 90 BPM
 		expect(voice).toBe("guitar");
 		ex.unmount();
@@ -307,14 +330,14 @@ describe("FretboardExplorer — playing the scale", () => {
 				.dispatchEvent(new MouseEvent("click", { bubbles: true })),
 		);
 		await ex.settle();
-		expect(runner.play.mock.calls[0][0].every((n: { string: number }) => n.string === 2)).toBe(true);
+		expect(runner.play.mock.calls[0][0].every((s: SequenceStep) => s.slots[0].string === 2)).toBe(true);
 
 		runner.play.mockClear();
 		act(() => ex.rightPress("0:9"));
 		await ex.settle();
 		// A box five frets wide starting where the press landed.
 		expect(ex.host.querySelector(".fb-position")!.getAttribute("x")).toBe(String(9 * 44));
-		expect(runner.play.mock.calls[0][0].every((n: { fret: number }) => n.fret >= 9 && n.fret <= 13)).toBe(true);
+		expect(runner.play.mock.calls[0][0].every((s: SequenceStep) => s.slots[0].fret >= 9 && s.slots[0].fret <= 13)).toBe(true);
 		ex.unmount();
 	});
 
@@ -450,6 +473,243 @@ describe("FretboardExplorer — key, piano and labels", () => {
 		act(() => ex.clickRadio("Labels", "None"));
 		await ex.settle();
 		expect(labels()).toEqual([]);
+		ex.unmount();
+	});
+});
+
+describe("FretboardExplorer — progression", () => {
+	it("builds a strip from the degree buttons and presets, names each bar from the key, removes and clears", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		expect(ex.host.querySelector("[data-testid='progression-panel']")).not.toBeNull();
+		expect(ex.strip()).toEqual([]);
+		for (const numeral of ["I", "V", "vi", "IV"]) act(() => ex.button(`Add ${numeral}`).click());
+		expect(ex.strip()).toEqual(["I C", "V G", "vi Am", "IV F"]);
+		act(() => ex.button("Remove bar 2").click());
+		expect(ex.strip()).toEqual(["I C", "vi Am", "IV F"]);
+		// A preset replaces the strip, its degrees read through the key.
+		act(() => [...ex.host.querySelectorAll("button")].find((b) => b.textContent === "ii–V–I")!.click());
+		expect(ex.strip()).toEqual(["ii Dm", "V G", "I C"]);
+		act(() => [...ex.host.querySelectorAll("button")].find((b) => b.textContent === "Clear")!.click());
+		expect(ex.strip()).toEqual([]);
+		ex.unmount();
+	});
+
+	it("loops the strip, one strum per bar at the tempo, sounding each bar's standard shape", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		for (const numeral of ["I", "ii", "iii"]) act(() => ex.button(`Add ${numeral}`).click());
+		act(() => ex.button("Play progression").click());
+		await ex.settle();
+		expect(runner.play).toHaveBeenCalledTimes(1);
+		const [steps, spacing, voice, options] = runner.play.mock.calls[0];
+		expect(steps.map((s: SequenceStep) => s.midis)).toEqual([
+			[48, 52, 55, 60, 64], // C x32010
+			[50, 57, 62, 65], // Dm xx0231
+			[40, 47, 52, 55, 59, 64], // Em 022000
+		]);
+		expect(steps[1].slots).toEqual([
+			{ string: 2, fret: 0 },
+			{ string: 3, fret: 2 },
+			{ string: 4, fret: 3 },
+			{ string: 5, fret: 1 },
+		]);
+		expect(spacing).toBeCloseTo((60 / 90) * 4); // four beats a bar at 90 BPM
+		expect(voice).toBe("guitar");
+		expect(options).toEqual({ loop: true });
+		expect(ex.host.querySelector("[data-testid='tempo-readout']")?.textContent).toBe("90 BPM");
+		ex.unmount();
+	});
+
+	it("transposes the strip when the key changes and keeps the numerals, a chromatic one included", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.button("Add I").click());
+		act(() => ex.button("Add ♭VII").click());
+		expect(ex.strip()).toEqual(["I C", "♭VII B♭"]);
+		act(() => ex.clickRadio("Key", "D"));
+		expect(ex.strip()).toEqual(["I D", "♭VII C"]);
+		// In a minor key the same degree buttons carry the key's qualities, and
+		// the interval that was ♭VII in major is the key's own VII now.
+		act(() => ex.setSelect("Scale", "naturalMinor"));
+		expect(ex.button("Add i")).not.toBeNull();
+		expect(ex.strip()).toEqual(["i Dm", "VII C"]);
+		ex.unmount();
+	});
+
+	it("with a capo, sounds the heard chord from the shape fingered below it", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.button("Add iii").click());
+		act(() => ex.toggle("Capo"));
+		await ex.settle();
+		expect(ex.strip()).toEqual(["iii Em"]); // the numeral and the heard chord do not move
+		act(() => ex.button("Play progression").click());
+		await ex.settle();
+		const [steps] = runner.play.mock.calls[0];
+		// The E♭m shape a fret up sounds E3 B3 E4 G4 B4.
+		expect(steps[0].midis).toEqual([52, 59, 64, 67, 71]);
+		expect(steps[0].slots.every((s: { fret: number }) => s.fret >= 1)).toBe(true);
+		ex.unmount();
+	});
+
+	it("keeps a bar the library has no shape for, silent", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.button("Add I").click());
+		act(() => ex.button("Add vi").click()); // no A minor in the fixture library
+		act(() => ex.button("Play progression").click());
+		await ex.settle();
+		const [steps] = runner.play.mock.calls[0];
+		expect(steps).toHaveLength(2);
+		expect(steps[1]).toEqual({ midis: [], slots: [] });
+		ex.unmount();
+	});
+
+	it("lights the sounding bar on the strip, the neck and the piano, and returns to the picked chord on stop", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.button("Add I").click());
+		act(() => ex.button("Add iii").click());
+		act(() => ex.button("Play progression").click());
+		await ex.settle();
+		act(() => runner.advance({ isPlaying: true, currentIndex: 1 }));
+		await ex.settle();
+		expect(ex.currentBar()).toBe("1");
+		expect(ex.readout()).toBe("Em · iii");
+		expect(ex.lit().sort()).toEqual(["0:0=root", "1:2=chordTone", "2:2=root", "3:0=chordTone", "4:0=chordTone", "5:0=root"].sort());
+		expect(ex.key(64).getAttribute("aria-checked")).toBe("true");
+		// Stop: the strip stays, the chord picked before play is back.
+		act(() => ex.button("Stop progression").click());
+		expect(runner.stop).toHaveBeenCalled();
+		act(() => runner.advance({ isPlaying: false, currentIndex: -1 }));
+		await ex.settle();
+		expect(ex.currentBar()).toBeNull();
+		expect(ex.readout()).toBe("C · I");
+		expect(ex.strip()).toEqual(["I C", "iii Em"]);
+		ex.unmount();
+	});
+
+	it("stops when the key, the capo, the mode or the strip changes, and cannot play with the sound off", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.button("Add I").click());
+		const stopsAfter = async (change: () => void) => {
+			runner.stop.mockClear();
+			act(change);
+			await ex.settle();
+			return runner.stop.mock.calls.length > 0;
+		};
+		expect(await stopsAfter(() => ex.clickRadio("Key", "G"))).toBe(true);
+		expect(await stopsAfter(() => ex.toggle("Capo"))).toBe(true);
+		expect(await stopsAfter(() => ex.button("Add V").click())).toBe(true);
+		expect(await stopsAfter(() => ex.clickRadio("Mode", "Scale"))).toBe(true);
+		expect(ex.host.querySelector("[data-testid='progression-panel']")).toBeNull();
+		act(() => ex.clickRadio("Mode", "Chords"));
+		await ex.settle();
+		expect(ex.strip()).toEqual(["I G", "V D"]); // the strip survives a trip through Scale mode
+		act(() => ex.toggle("Sound"));
+		expect(ex.button("Play progression").disabled).toBe(true);
+		ex.unmount();
+	});
+});
+
+describe("FretboardExplorer — a hand position in Chords mode", () => {
+	const chips = (ex: ReturnType<typeof mount>) =>
+		[...ex.host.querySelectorAll<HTMLButtonElement>("[data-testid='position-chords'] button")].map(
+			(b) => `${b.querySelector("span")?.textContent} ${b.querySelectorAll("span")[1]?.textContent}`,
+		);
+	const note = (ex: ReturnType<typeof mount>) =>
+		ex.host.querySelector("[data-testid='position-note']")?.textContent ?? null;
+
+	it("raises a frame on a right-press and lists the degrees with a shape inside it", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.rightPress("0:0"));
+		await ex.settle();
+		expect(ex.host.querySelector(".fb-position")?.getAttribute("x")).toBe("0");
+		expect(ex.host.textContent).toContain("Position 0–4");
+		// The fixture library holds C, Dm and Em at the nut; the rest of the key has no shape.
+		expect(chips(ex)).toEqual(["I C", "ii Dm", "iii Em"]);
+		expect(note(ex)).toBeNull();
+		// The picked chord is untouched until a numeral is pressed.
+		expect(ex.readout()).toBe("C · I");
+		ex.unmount();
+	});
+
+	it("lights and strums the listed shape when its numeral is pressed, and the piano shows what sounds", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.rightPress("0:0"));
+		await ex.settle();
+		act(() => ex.button("Play ii here").click());
+		await ex.settle();
+		expect(ex.readout()).toBe("Dm · ii");
+		expect(ex.lit().sort()).toEqual(["0:0=muted", "1:0=muted", "2:0=root", "3:2=chordTone", "4:3=root", "5:1=chordTone"].sort());
+		expect(sound.playChord).toHaveBeenCalledWith([50, 57, 62, 65], "guitar");
+		expect(ex.key(62).getAttribute("aria-checked")).toBe("true"); // D4, a root the shape sounds
+		expect(ex.button("Play ii here").getAttribute("aria-pressed")).toBe("true");
+		ex.unmount();
+	});
+
+	it("says so when fewer than two degrees fit, and re-derives the list for the capo", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.rightPress("0:5"));
+		await ex.settle();
+		expect(ex.host.textContent).toContain("Position 5–9");
+		expect(chips(ex)).toEqual([]);
+		expect(note(ex)).toBe("Nothing fits here.");
+		// Capo 1: the frame is on the fingered neck, where iii is an E♭m shape at
+		// frets 6–8 held above the capo — inside the frame, and heard as Em.
+		act(() => ex.toggle("Capo"));
+		await ex.settle();
+		expect(chips(ex)).toEqual(["iii Em"]);
+		expect(note(ex)).toBe("Only iii fits here.");
+		ex.unmount();
+	});
+
+	it("walks the position's chords once through from the frame's play button, lighting each in turn", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.rightPress("0:0"));
+		await ex.settle();
+		// The frame's button is an SVG group, so it is clicked by event rather than by method.
+		const frameButton = (label: string) => ex.host.querySelector(`[aria-label="${label}"]`);
+		act(() => frameButton("Play this position")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await ex.settle();
+		expect(runner.play).toHaveBeenCalledTimes(1);
+		const [steps, spacing, voice, options] = runner.play.mock.calls[0];
+		expect(steps.map((s: SequenceStep) => s.midis)).toEqual([
+			[48, 52, 55, 60, 64],
+			[50, 57, 62, 65],
+			[40, 47, 52, 55, 59, 64],
+		]);
+		expect(spacing).toBeCloseTo((60 / 90) * 4);
+		expect(voice).toBe("guitar");
+		expect(options).toBeUndefined(); // once through, not a loop
+		act(() => runner.advance({ isPlaying: true, currentIndex: 2 }));
+		await ex.settle();
+		expect(ex.readout()).toBe("Em · iii");
+		expect(frameButton("Stop this position")).not.toBeNull();
+		expect(ex.currentBar()).toBeNull(); // the strip is not what is playing
+		ex.unmount();
+	});
+
+	it("re-lists the frame for a new key, and clears it on a mode change", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.rightPress("0:0"));
+		await ex.settle();
+		act(() => ex.clickRadio("Key", "G"));
+		await ex.settle();
+		// G major at the nut: the fixture has C (IV), D (V) and Em (vi).
+		expect(chips(ex)).toEqual(["IV C", "V D", "vi Em"]);
+		act(() => ex.clickRadio("Mode", "Scale"));
+		act(() => ex.clickRadio("Mode", "Chords"));
+		await ex.settle();
+		expect(ex.host.querySelector(".fb-position")).toBeNull();
+		expect(ex.host.querySelector("[data-testid='position-chords']")).toBeNull();
 		ex.unmount();
 	});
 });

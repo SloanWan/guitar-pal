@@ -48,6 +48,14 @@ describe("readTabSentence", () => {
 			expect(latin.leftover).toBe("");
 		});
 
+		it("reads lone lowercase chord letters, and a lone 'a' only before a colon", () => {
+			expect(chordTexts(read("c g am f: R3231323"))).toEqual(["c", "g", "am", "f"]);
+			expect(read("c g am f: R3231323").leftover).toBe("");
+			expect(chordTexts(read("a: 5 3 2 1"))).toEqual(["a"]);
+			// An article stays one: nothing else in this sentence is a chord.
+			expect(chordTexts(read("give me a pattern"))).toEqual([]);
+		});
+
 		it("reads an alternating bass and a meter in one sentence", () => {
 			const r = read("C G Am F: 5/4 2 1 3 in 3/4");
 			expect(r.orderText).toBe("5/4 2 1 3");

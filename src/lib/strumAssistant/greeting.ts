@@ -110,10 +110,10 @@ const INPUT_PROMPTS: Record<AssistantDomain, readonly string[]> = {
 		"给我一个 C-G-Am-F 的民谣扫弦，慢一点",
 	],
 	tab: [
-		"C G Am F: 根3231323",
+		"C G Am F: R3231323",
 		"Am: 5 3 2 1 3 2 1 3",
 		"travis picking in C",
-		"G D Em C: 根3(12)3",
+		"G D Em C: R3(12)3",
 		"string:66544322, fret:8(11)(10)8(10)88(11)",
 		"C G Am F: 5/4 2 1 3",
 		"Em 三指法",

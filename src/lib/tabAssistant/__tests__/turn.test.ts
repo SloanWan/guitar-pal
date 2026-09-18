@@ -43,8 +43,19 @@ describe("resolveTabTurn", () => {
 		expect(out.proposal?.warnings.map((w) => w.code)).toContain("ORDER_GUESSED");
 		expect(out.text).toMatch(/suggestion/);
 		// The usual orders, over the same chords, to take instead of the guess.
-		expect(out.templates).toEqual(["C G Am F: 53231323", "C G Am F: 根3231323", "C G Am F: 根323", "C G Am F: 根3(12)3"]);
+		expect(out.templates).toEqual(["C G Am F: 53231323", "C G Am F: R3231323", "C G Am F: R323", "C G Am F: R3(12)3"]);
 		expect(out.seen).toBeUndefined();
+		expect(out.text).not.toMatch(/[\u4e00-\u9fff]/);
+		// The same offer in Chinese writes the root the Chinese way.
+		const zh = await resolve("C G Am F 的分解", "zh");
+		expect(zh.templates).toEqual(["C G Am F: 53231323", "C G Am F: 根3231323", "C G Am F: 根323", "C G Am F: 根3(12)3"]);
+	});
+
+	it("reads a lowercase chord and root, as a phone keyboard writes them", async () => {
+		const out = await resolve("c: r3231323");
+		expect(out.proposal?.chords).toEqual([{ root: "C", suffix: "major", voicingId: null }]);
+		expect(out.proposal?.warnings).toEqual([]);
+		expect(out.templates).toBeUndefined();
 	});
 
 	it("reads a root order over chords and puts the thumb on each root", async () => {
@@ -75,7 +86,8 @@ describe("resolveTabTurn", () => {
 		const out = await resolve("something gentle in Am for a rainy day");
 		expect(out.proposal).toBeUndefined();
 		expect(out.templates).toContain("Am: 53231323");
-		expect(out.templates).toContain("Am: 根3231323");
+		expect(out.templates).toContain("Am: R3231323");
+		expect(out.text).not.toMatch(/[\u4e00-\u9fff]/);
 		expect(out.templates).toContain("travis picking in Am");
 		expect(out.text).toMatch(/Am/);
 		expect(out.seen).toBeDefined();

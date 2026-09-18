@@ -19,7 +19,7 @@ import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
 import { saveUserFingerpickPattern } from "@/lib/fingerpickPatternSync";
 import { uniquePatternName } from "@/lib/uniquePatternName";
-import type { SharedFingerpick } from "@/lib/sharedItems";
+import { createShare, newShareId, shareUrl, type SharedFingerpick } from "@/lib/sharedItems";
 import SharedPatternPanel from "@/components/fingerpick/SharedPatternPanel";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
@@ -69,6 +69,7 @@ import {
 	Loader2,
 	ChevronsDown,
 	Brackets,
+	Share2,
 } from "lucide-react";
 import Fader from "@/components/ui/Fader";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
@@ -622,6 +623,43 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		writeLastPatternId(selectedPattern.id);
 	}, [selectedPattern.id, patternRestored, shared]);
 
+	// Share: the pattern as it is on screen (a session capo comes along) as a
+	// snapshot under a fresh id. The link goes on the clipboard first, inside
+	// the click — Safari refuses a clipboard write after an await — and the
+	// row is written after; if that fails the copied link is a dead one, and
+	// the toast says so. Where the clipboard is off limits (an in-app browser,
+	// http on a LAN) the link is shown to copy by hand.
+	const [sharing, setSharing] = useState(false);
+	async function handleShare() {
+		if (shared || sharing) return;
+		if (!user) {
+			toast("Sign in to share a pattern.", {
+				action: { label: "Sign in", onClick: () => router.push("/auth?redirect=/fingerpick") },
+			});
+			return;
+		}
+		const id = newShareId();
+		const url = shareUrl(window.location.origin, id);
+		let copied = false;
+		try {
+			await navigator.clipboard.writeText(url);
+			copied = true;
+		} catch {
+			copied = false;
+		}
+		setSharing(true);
+		try {
+			await createShare(createClient(), user, id, { kind: "fingerpick", pattern: selectedPattern });
+			if (copied) toast(`Link copied — anyone with it can open "${selectedPattern.name}".`, { description: url });
+			else window.prompt("Copy this link — anyone with it can open the pattern:", url);
+		} catch (e) {
+			console.error(e);
+			toast.error(copied ? "Couldn't create the share — the copied link won't work." : "Couldn't create the share.");
+		} finally {
+			setSharing(false);
+		}
+	}
+
 	// Import: the snapshot as it is on screen (a capo set here comes along)
 	// becomes a pattern of the viewer's own — through the same save a
 	// hand-drawn one gets, to the browser for a guest and the account for a
@@ -845,6 +883,20 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 								>
 									<Brackets size={14} />
 								</button>
+								{/* Share: a link to a snapshot of what is on screen. Not on a
+								    share page — the viewer already holds the link. */}
+								{!shared && (
+									<button
+										type="button"
+										onClick={handleShare}
+										disabled={sharing}
+										aria-label="Share pattern"
+										title="Copy a link to this pattern"
+										className="flex h-7 w-7 shrink-0 items-center justify-center border border-line-strong text-ink-dim transition-colors hover:border-denim hover:text-denim disabled:cursor-wait disabled:opacity-50"
+									>
+										{sharing ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
+									</button>
+								)}
 								{sectionMode && (
 									<span className="fp-reveal min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
 										{sectionHint(section)}

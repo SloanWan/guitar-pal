@@ -6,6 +6,7 @@ import {
 	newShareId,
 	readSharedItem,
 	sharePath,
+	shareUrl,
 	SHARE_ID_LENGTH,
 	toSharePayload,
 } from "@/lib/sharedItems";
@@ -37,9 +38,10 @@ describe("isShareId", () => {
 	});
 });
 
-describe("sharePath", () => {
-	it("is the public route", () => {
+describe("sharePath / shareUrl", () => {
+	it("is the public route, absolute when given an origin", () => {
 		expect(sharePath("abcDEF0123")).toBe("/p/abcDEF0123");
+		expect(shareUrl("https://guitar.example", "abcDEF0123")).toBe("https://guitar.example/p/abcDEF0123");
 	});
 });
 

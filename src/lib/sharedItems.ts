@@ -89,18 +89,28 @@ export function readSharedItem(row: SharedItemRow): SharedItem | null {
 	return { kind: "fingerpick", pattern: normalizeLoadedPattern({ ...pattern, id: row.id }) };
 }
 
-/** Write a share; resolves to its id. Guests cannot share — the row needs an owner. */
+/** The absolute link for a share, for the clipboard. */
+export function shareUrl(origin: string, id: string): string {
+	return `${origin}${sharePath(id)}`;
+}
+
+/**
+ * Write a share under an id the caller minted with `newShareId`. The id comes
+ * from outside so the link can be put on the clipboard inside the click that
+ * asked for it — Safari refuses a clipboard write once an await has passed —
+ * and the row written after. Guests cannot share: the row needs an owner.
+ */
 export async function createShare(
 	supabase: SupabaseClient,
 	user: User,
+	id: string,
 	item: SharedItem,
-): Promise<string> {
-	const id = newShareId();
+): Promise<void> {
+	if (!isShareId(id)) throw new Error(`Not a share id: ${id}`);
 	const { error } = await supabase
 		.from("shared_items")
 		.insert({ id, owner_id: user.id, kind: item.kind, payload: toSharePayload(item) });
 	if (error) throw new Error(error.message);
-	return id;
 }
 
 /** Read a share by id; null when there is no such row or its payload is unreadable. */

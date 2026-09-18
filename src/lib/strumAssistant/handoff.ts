@@ -3,6 +3,7 @@ import { validateBars } from "@/lib/strumBars";
 import type { AssistantProposal } from "@/lib/strumAssistant/types";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { validateFingerpickPattern, type ValidationIssue } from "@/lib/tabImport";
+import { isSupportedMeter } from "@/lib/strumMeter";
 
 /**
  * How a confirmed proposal reaches the strum page.
@@ -95,15 +96,46 @@ export interface FingerpickEditHandoff {
 	measures: Measure[];
 }
 
+/** A fingerpick pattern of the player's own, given a new name. */
+export interface FingerpickRenameHandoff {
+	kind: "fingerpick-rename";
+	patternId: string;
+	patternName: string;
+	newName: string;
+}
+
+/** A fingerpick pattern of the player's own, removed. */
+export interface FingerpickDeleteHandoff {
+	kind: "fingerpick-delete";
+	patternId: string;
+	patternName: string;
+}
+
+/** A fingerpick pattern's tempo and/or meter; a preset becomes a copy. */
+export interface FingerpickSetHandoff {
+	kind: "fingerpick-set";
+	patternId: string;
+	patternName: string;
+	bpm: number | null;
+	timeSignature: [number, number] | null;
+}
+
 export type StrumHandoff = PatternHandoff | AttachHandoff | RenameHandoff | DeleteHandoff;
 
-export type AssistantHandoff = StrumHandoff | FingerpickHandoff | FingerpickEditHandoff;
+export type FingerpickAnyHandoff =
+	| FingerpickHandoff
+	| FingerpickEditHandoff
+	| FingerpickRenameHandoff
+	| FingerpickDeleteHandoff
+	| FingerpickSetHandoff;
+
+export type AssistantHandoff = StrumHandoff | FingerpickAnyHandoff;
 
 /** Which page a handoff is for. The stash holds one at a time, of either. */
 export type HandoffDomain = "strum" | "fingerpick";
 
 function domainOf(kind: unknown): HandoffDomain {
-	return kind === "fingerpick" || kind === "fingerpick-edit" ? "fingerpick" : "strum";
+	return typeof kind === "string" && kind.startsWith("fingerpick") ? "fingerpick" : "strum";
 }
 
 export function patternHandoff(proposal: AssistantProposal): PatternHandoff {
@@ -138,7 +170,7 @@ export function stashHandoff(handoff: AssistantHandoff): void {
  * wrong one before the fingerpick page has mounted. So a page names its
  * domain, and a handoff for the other domain is left in the stash untouched.
  */
-export function takeHandoff(domain: "fingerpick"): FingerpickHandoff | FingerpickEditHandoff | null;
+export function takeHandoff(domain: "fingerpick"): FingerpickAnyHandoff | null;
 export function takeHandoff(domain?: "strum"): StrumHandoff | null;
 export function takeHandoff(domain: HandoffDomain = "strum"): AssistantHandoff | null {
 	let raw: string | null = null;
@@ -170,6 +202,9 @@ export function takeHandoff(domain: HandoffDomain = "strum"): AssistantHandoff |
 
 	if (value.kind === "fingerpick") return takeFingerpickHandoff(value);
 	if (value.kind === "fingerpick-edit") return takeFingerpickEditHandoff(value);
+	if (value.kind === "fingerpick-rename" || value.kind === "fingerpick-delete" || value.kind === "fingerpick-set") {
+		return takeFingerpickPatternHandoff(value);
+	}
 
 	if (value.kind === "rename" || value.kind === "delete") {
 		if (typeof value.patternId !== "string" || value.patternId === "") return null;
@@ -272,4 +307,22 @@ function takeFingerpickEditHandoff(value: Record<string, unknown>): FingerpickEd
 		replaceCount: value.op === "append" ? 0 : replaceCount,
 		measures: pattern.measures,
 	};
+}
+
+/** Rename, delete, set: a target and, for two of them, a value read back with care. */
+function takeFingerpickPatternHandoff(
+	value: Record<string, unknown>,
+): FingerpickRenameHandoff | FingerpickDeleteHandoff | FingerpickSetHandoff | null {
+	if (typeof value.patternId !== "string" || value.patternId === "") return null;
+	if (typeof value.patternName !== "string") return null;
+	const base = { patternId: value.patternId, patternName: value.patternName };
+	if (value.kind === "fingerpick-delete") return { kind: "fingerpick-delete", ...base };
+	if (value.kind === "fingerpick-rename") {
+		if (typeof value.newName !== "string" || value.newName.trim() === "") return null;
+		return { kind: "fingerpick-rename", ...base, newName: value.newName.trim() };
+	}
+	const bpm = typeof value.bpm === "number" && Number.isFinite(value.bpm) ? value.bpm : null;
+	const timeSignature = isSupportedMeter(value.timeSignature) ? ([...value.timeSignature] as [number, number]) : null;
+	if (bpm === null && timeSignature === null) return null;
+	return { kind: "fingerpick-set", ...base, bpm, timeSignature };
 }

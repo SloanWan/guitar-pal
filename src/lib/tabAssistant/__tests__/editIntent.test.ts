@@ -248,3 +248,86 @@ describe("the edit handoff", () => {
 		expect(takeHandoff("fingerpick")).toBeNull();
 	});
 });
+
+describe("the pattern itself: rename, delete, set", () => {
+	const resolve = (text: string, uiLang: "en" | "zh" = "en") =>
+		resolveTabTurn({ text, index: INDEX, patterns: PATTERNS, uiLang, voicings: async () => voicingFor });
+
+	it("reads a rename, in either language, and refuses one on a preset", async () => {
+		expect(read("rename my arp to slow arp")).toMatchObject({ kind: "rename", newName: "slow arp" });
+		expect(read("把 my arp 改名为 慢琶音")).toMatchObject({ kind: "rename", newName: "慢琶音" });
+		expect(read("重命名 my arp 为 x")).toMatchObject({ kind: "rename", newName: "x" });
+		expect(read("my arp 改名")).toMatchObject({ kind: "rename", newName: "" });
+		const out = await resolve("rename my arp to slow arp");
+		expect(out.edit?.kind).toBe("rename");
+		expect(out.text).toBe('Rename "my arp" to "slow arp"?');
+		const preset = await resolve("rename Travis Picking to mine");
+		expect(preset.edit).toBeUndefined();
+		expect(preset.text).toMatch(/shipped patterns, and those keep their names/);
+		const toWhat = await resolve("rename my arp");
+		expect(toWhat.edit).toBeUndefined();
+		expect(toWhat.text).toMatch(/to what\?/);
+	});
+
+	it("reads a delete, and refuses one on a preset", async () => {
+		expect(read("delete my arp")).toMatchObject({ kind: "delete" });
+		expect(read("删掉 my arp")).toMatchObject({ kind: "delete" });
+		expect(read("把 my arp 删了")).toMatchObject({ kind: "delete" });
+		const out = await resolve("delete my arp");
+		expect(out.edit?.kind).toBe("delete");
+		expect(out.text).toMatch(/cannot be undone/);
+		const preset = await resolve("delete waltz");
+		expect(preset.edit).toBeUndefined();
+		expect(preset.text).toMatch(/cannot be deleted/);
+	});
+
+	it("reads a tempo, a meter, or both", async () => {
+		const bpm = read("set my arp to 90 bpm");
+		expect(bpm).toMatchObject({ kind: "set", bpm: 90, timeSignature: null });
+		expect(bpm?.kind === "set" && bpm.next.bpm).toBe(90);
+		expect(read("my arp at 72 bpm")).toMatchObject({ kind: "set", bpm: 72 });
+		expect(read("把 my arp 设为 100")).toMatchObject({ kind: "set", bpm: 100 });
+		const meter = read("change my arp to 6/8");
+		expect(meter).toMatchObject({ kind: "set", timeSignature: [6, 8], bpm: null });
+		expect(meter?.kind === "set" && meter.next.timeSignature).toEqual([6, 8]);
+		expect(read("把 my arp 改成四拍子")).toMatchObject({ kind: "set", timeSignature: [4, 4] });
+		const both = read("set my arp to 3/4 at 80 bpm");
+		expect(both).toMatchObject({ kind: "set", timeSignature: [3, 4], bpm: 80 });
+		expect(read("set my arp to something")).toMatchObject({ kind: "value-unread", value: "something" });
+	});
+
+	it("says which bars a meter change would cut", async () => {
+		const out = await resolve("set Travis Picking to 2/4");
+		expect(out.edit?.kind).toBe("set");
+		expect(out.text).toMatch(/would lose the notes that no longer fit/);
+		expect(out.text).toMatch(/shipped pattern, so this saves a copy/);
+		const same = await resolve("set my arp to 3/4");
+		expect(same.text).toBe('Set "my arp" to 3/4? Nothing is saved until you say so.');
+	});
+
+	it("finds a pattern by part of its name, and asks when that is not enough", async () => {
+		expect(read("delete travis")).toMatchObject({ kind: "delete", pattern: { id: "travis-picking" } });
+		const arp = read("delete arp");
+		expect(arp?.kind).toBe("ambiguous");
+		expect(arp?.kind === "ambiguous" && arp.matches.map((m) => m.name).sort()).toEqual(["Arpeggio", "my arp"]);
+		const out = await resolve("delete arp");
+		expect(out.text).toMatch(/2 patterns match "arp"/);
+	});
+
+	it("does not take a bar rewrite or a chord mark for one of these", () => {
+		expect(read("set bar 1 in my arp to travis in C")?.kind).toBe("replace");
+		expect(read("把 my arp 的第 1 小节改成 Am: 5 3 2 1")?.kind).toBe("replace");
+		expect(read("set my arp bar 1: Am")?.kind).toBe("chords");
+	});
+
+	it("round-trips through the handoff", () => {
+		stashHandoff({ kind: "fingerpick-rename", patternId: "mine", patternName: "my arp", newName: " slow arp " });
+		expect(takeHandoff("fingerpick")).toEqual({ kind: "fingerpick-rename", patternId: "mine", patternName: "my arp", newName: "slow arp" });
+		stashHandoff({ kind: "fingerpick-delete", patternId: "mine", patternName: "my arp" });
+		expect(takeHandoff("fingerpick")?.kind).toBe("fingerpick-delete");
+		stashHandoff({ kind: "fingerpick-set", patternId: "mine", patternName: "my arp", bpm: 90, timeSignature: [6, 8] });
+		expect(takeHandoff("fingerpick")).toMatchObject({ kind: "fingerpick-set", bpm: 90, timeSignature: [6, 8] });
+		sessionStorage.setItem("guitarpal:strumAssistantHandoff", JSON.stringify({ kind: "fingerpick-set", patternId: "mine", patternName: "x", bpm: null, timeSignature: [5, 4] }));
+		expect(takeHandoff("fingerpick")).toBeNull();
+	});
+});

@@ -1,5 +1,6 @@
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import { beatTicks, slotDurationUnits } from "@/lib/fingerpickEdit";
+import { beatTicks, changeTimeSignature, slotDurationUnits } from "@/lib/fingerpickEdit";
+import { clampBpmToMeter } from "@/lib/strumBars";
 import { setSlotChord } from "@/lib/fingerpickChords";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { beatsPerBar } from "@/lib/strumMeter";
@@ -29,7 +30,7 @@ import type { VoicingLookup } from "@/lib/tabAssistant/voicings";
  * touched. Presets cannot be edited; a change to one becomes a copy.
  */
 
-export type TabEditOp = "append" | "replace" | "chords";
+export type TabEditOp = "append" | "replace" | "chords" | "rename" | "delete" | "set";
 
 /** One place chords go: a bar or a range, a beat, and the chord words. */
 interface ChordItem {
@@ -48,11 +49,26 @@ interface EditClause {
 	name: string;
 	/** 1-based, as the player counts bars; only for a replace. */
 	bar: number | null;
-	/** Everything after the colon: the bars to write. */
+	/** Everything after the colon: the bars to write; for a rename the new name; for a set the value. */
 	spec: string;
 	/** For chord marks: every place named, in the order written. */
 	items: ChordItem[];
 }
+
+/** "rename my arp to slow arp", "把 my arp 改名为 慢琶音", "重命名 my arp 为 x". */
+const RENAME_EN = /^\s*rename\s+(.+?)\s+(?:to|as)\s+(.+?)\s*$/i;
+/** "rename my arp" — the verb and the target, and nothing to call it yet. */
+const RENAME_EN_BARE = /^\s*rename\s+(.+?)\s*$/i;
+const RENAME_ZH = /^\s*(?:把|将)?\s*(.+?)\s*(?:改名为|改名成|改名叫|重命名为|改叫|改名)\s*(.*?)\s*$/;
+const RENAME_ZH_LEAD = /^\s*重命名\s*(.+?)\s*(?:为|成|叫)\s*(.+?)\s*$/;
+/** "delete my arp", "删掉 my arp", "把 my arp 删了". */
+const DELETE_EN = /^\s*(?:delete|remove)\s+(?:the\s+)?(?:pattern\s+)?(.+?)\s*$/i;
+const DELETE_ZH_LEAD = /^\s*(?:删除|删掉|删了|移除|去掉)\s*(.+?)\s*$/;
+const DELETE_ZH_TAIL = /^\s*(?:把|将)?\s*(.+?)\s*(?:删除|删掉|删了|移除|去掉)\s*$/;
+/** "set my arp to 90 bpm", "change my arp to 3/4", "my arp at 90 bpm", "把 my arp 改成 3/4". */
+const SET_EN = /^\s*(?:set|change|make|put)\s+(.+?)\s+(?:to|at|in)\s+(.+?)\s*$/i;
+const SET_EN_AT = /^\s*(.+?)\s+(?:at|to)\s+(\d{2,3}\s*bpm)\s*$/i;
+const SET_ZH = /^\s*(?:把|将)?\s*(.+?)\s*(?:设为|设成|设置为|改成|改为|调到|调成|调为)\s*(.+?)\s*$/;
 
 /**
  * "in lick, add Cm7 to bar 1, add F7 to bar 2": the target once, then a list.
@@ -72,7 +88,7 @@ const CHORDS_VERB_EN =
 	/^\s*(?:add|set|put|write|mark)(?:\s+(?:the\s+)?chords?)?\s+(.+?)\s+(?:to|on|at|in|over)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s+(?:of|in|on)\s+([^,，;；\n]+?)\s*$/i;
 /** "lick bar 2 beat 3: Am", "chords for lick bars 1-4: C G Am F". */
 const CHORDS_COLON_EN =
-	/^\s*(?:chords?\s+(?:for|on|in|over)\s+)?(.+?)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s*[:：]\s*(.+)$/i;
+	/^\s*(?:(?:set|mark|add|put|write)\s+)?(?:chords?\s+(?:for|on|in|over)\s+)?(.+?)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s*[:：]\s*(.+)$/i;
 /** "给 lick 第 2 小节第 3 拍加和弦 Am", "lick 第 1-4 小节和弦：C G Am F". */
 const CHORDS_ZH =
 	/^\s*(?:给|在|把|为)?\s*(.+?)\s*的?\s*第\s*(\d+)\s*(?:[-–到至]\s*(\d+))?\s*小节\s*(?:的?\s*第\s*(\d+)\s*拍)?\s*(?:上|里)?\s*(?:加上|添加|标上|标记|加|标|放|配|用|写)?\s*和弦\s*[:：]?\s*(.+)$/;
@@ -186,6 +202,15 @@ function readClause(text: string): EditClause | null {
 	if (m) return { op: "append", name: m[1], bar: null, spec: m[2], items: [] };
 	m = APPEND_ZH.exec(text);
 	if (m) return { op: "append", name: m[1], bar: null, spec: m[2], items: [] };
+	// The pattern itself: its name, its existence, its tempo or meter.
+	m = RENAME_EN.exec(text) ?? RENAME_ZH_LEAD.exec(text) ?? RENAME_ZH.exec(text);
+	if (m) return { op: "rename", name: m[1], bar: null, spec: m[2], items: [] };
+	m = RENAME_EN_BARE.exec(text);
+	if (m) return { op: "rename", name: m[1], bar: null, spec: "", items: [] };
+	m = DELETE_EN.exec(text) ?? DELETE_ZH_LEAD.exec(text) ?? DELETE_ZH_TAIL.exec(text);
+	if (m) return { op: "delete", name: m[1], bar: null, spec: "", items: [] };
+	m = SET_EN.exec(text) ?? SET_ZH.exec(text) ?? SET_EN_AT.exec(text);
+	if (m) return { op: "set", name: m[1], bar: null, spec: m[2], items: [] };
 	return null;
 }
 
@@ -218,7 +243,18 @@ export type TabEditReading =
 			marks: { bar: number; beat: number; chord: ChordRef }[];
 			warnings: ValidationIssue[];
 	  }
+	/** A new name for one of the player's own; empty when the sentence said to rename but not to what. */
+	| { kind: "rename"; pattern: FingerpickPattern; newName: string }
+	| { kind: "delete"; pattern: FingerpickPattern }
+	/**
+	 * A tempo, a meter, or both. `pattern` is the target as it is; `next` is
+	 * it as it would be — the meter change refitted by `changeTimeSignature`,
+	 * with the bars that lose notes listed so the player is told.
+	 */
+	| { kind: "set"; pattern: FingerpickPattern; next: FingerpickPattern; bpm: number | null; timeSignature: [number, number] | null; affectedBars: number[] }
+	| { kind: "value-unread"; op: "set"; pattern: FingerpickPattern; value: string }
 	| { kind: "unknown-pattern"; op: TabEditOp; name: string }
+	| { kind: "ambiguous"; op: TabEditOp; name: string; matches: FingerpickPattern[] }
 	| { kind: "bar-out-of-range"; op: "replace" | "chords"; pattern: FingerpickPattern; bar: number }
 	| { kind: "beat-out-of-range"; op: "chords"; pattern: FingerpickPattern; beat: number }
 	| { kind: "chords-mismatch"; op: "chords"; pattern: FingerpickPattern; bars: number; chords: number }
@@ -243,8 +279,48 @@ export function findTabPattern(
 	name: string,
 	patterns: readonly FingerpickPattern[],
 ): FingerpickPattern | null {
-	const wanted = name.trim().toLowerCase().replace(/^["'「『《]|["'」』》]$/g, "");
-	return patterns.find((p) => p.name.trim().toLowerCase() === wanted) ?? null;
+	for (const wanted of spellings(name)) {
+		const found = patterns.find((p) => p.name.trim().toLowerCase() === wanted);
+		if (found) return found;
+	}
+	return null;
+}
+
+/**
+ * Every pattern a name could mean when none matches it whole: the ones whose
+ * name contains it. "travis" finds "Travis Picking"; "arp" finds both "my arp"
+ * and "Arpeggio", which is a question for the player.
+ */
+export function findTabPatterns(name: string, patterns: readonly FingerpickPattern[]): FingerpickPattern[] {
+	const wanted = spellings(name).filter((w) => w.length >= 2);
+	return patterns.filter((p) => wanted.some((w) => p.name.trim().toLowerCase().includes(w)));
+}
+
+/**
+ * The name as written, and without the words around it — "the", "my",
+ * "pattern" — tried in that order, so a pattern actually called "my arp"
+ * is found before "arp" is looked for inside other names.
+ */
+function spellings(name: string): string[] {
+	const bare = name.trim().replace(/^["'「『《]|["'」』》]$/g, "").trim().toLowerCase();
+	const stripped = bare
+		.replace(/^(?:the\s+|my\s+)?(?:pattern\s+)?/, "")
+		.replace(/\s+pattern$/, "")
+		.trim();
+	return stripped === bare || stripped === "" ? [bare] : [bare, stripped];
+}
+
+/** A written tempo, a meter, or both: "90 bpm", "3/4", "3/4 at 90 bpm", "三拍子". */
+function readSetValue(
+	value: string,
+	index: readonly ChordIndexEntry[],
+): { bpm: number | null; timeSignature: [number, number] | null } | null {
+	const bare = /^\s*(\d{2,3})\s*$/.exec(value);
+	if (bare) return { bpm: Number(bare[1]), timeSignature: null };
+	const reading = readTabSentence(value, index);
+	if (reading.leftover !== "" || reading.chordWords.length > 0 || reading.order || reading.notes) return null;
+	if (reading.bpm === null && reading.timeSignature === null) return null;
+	return { bpm: reading.bpm, timeSignature: reading.timeSignature };
 }
 
 /** The bars a spec describes, built to the target's meter, one segment at a time. */
@@ -252,8 +328,21 @@ export function readTabEdit({ text, index, patterns, voicingFor }: ReadTabEditIn
 	const clause = readClause(text);
 	if (!clause) return null;
 
-	const pattern = findTabPattern(clause.name, patterns);
+	let pattern = findTabPattern(clause.name, patterns);
+	if (!pattern) {
+		const near = findTabPatterns(clause.name, patterns);
+		if (near.length > 1) return { kind: "ambiguous", op: clause.op, name: clause.name.trim(), matches: near };
+		pattern = near[0] ?? null;
+	}
 	if (!pattern) return { kind: "unknown-pattern", op: clause.op, name: clause.name.trim() };
+
+	if (clause.op === "rename") return { kind: "rename", pattern, newName: clause.spec.trim().replace(/^["'「『《]|["'」』》]$/g, "") };
+	if (clause.op === "delete") return { kind: "delete", pattern };
+	if (clause.op === "set") {
+		const value = readSetValue(clause.spec, index);
+		if (!value) return { kind: "value-unread", op: "set", pattern, value: clause.spec.trim() };
+		return applySet(pattern, value.bpm, value.timeSignature);
+	}
 
 	if (clause.op === "chords") return readChordMarks(clause.items, pattern, index);
 	if (clause.op === "replace" && (clause.bar === null || clause.bar < 1 || clause.bar > pattern.measures.length)) {
@@ -290,6 +379,27 @@ export function readTabEdit({ text, index, patterns, voicingFor }: ReadTabEditIn
 	return clause.op === "append"
 		? { kind: "append", pattern, measures, warnings }
 		: { kind: "replace", pattern, barIndex: clause.bar! - 1, measures, warnings };
+}
+
+/**
+ * The pattern with a new tempo, meter or both. A meter change goes through
+ * the editor's own refit, so what the assistant offers is exactly what the
+ * meter dropdown would do — including which bars lose notes.
+ */
+export function applySet(
+	pattern: FingerpickPattern,
+	bpm: number | null,
+	timeSignature: [number, number] | null,
+): Extract<TabEditReading, { kind: "set" }> {
+	let next = pattern;
+	let affectedBars: number[] = [];
+	if (timeSignature && (timeSignature[0] !== pattern.timeSignature[0] || timeSignature[1] !== pattern.timeSignature[1])) {
+		const change = changeTimeSignature(pattern, timeSignature);
+		next = change.fitted;
+		affectedBars = change.affectedMeasures.map((i) => i + 1);
+	}
+	if (bpm !== null) next = { ...next, bpm: clampBpmToMeter(bpm, next.timeSignature) };
+	return { kind: "set", pattern, next, bpm: bpm === null ? null : next.bpm, timeSignature, affectedBars };
 }
 
 /** The slot a beat falls in: the one whose span holds the beat's first tick. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Music, Plus, Replace, TriangleAlert, X } from "lucide-react";
+import { Check, Music, Pencil, Plus, Replace, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import TabStavePreview from "./TabStavePreview";
 import { Option, Options } from "./Options";
@@ -36,37 +36,75 @@ export default function TabEditCard({
 	const t = (en: string, zh: string) => pick(lang, en, zh);
 	const [dismissed, setDismissed] = useState(false);
 	const [shown, setShown] = useState(0);
-	const more = edit.measures.length - shown;
+	const bars = edit.kind === "append" || edit.kind === "replace" || edit.kind === "chords";
+	const more = bars ? edit.measures.length - shown : 0;
 
-	function confirm() {
-		// Chord marks are a rewrite of the bars they sit on — the page swaps the
-		// run in, the way it swaps one bar for a replace.
-		stashHandoff({
-			kind: "fingerpick-edit",
-			op: edit.kind === "append" ? "append" : "replace",
-			patternId: edit.pattern.id,
-			patternName: edit.pattern.name,
-			barIndex: edit.kind === "append" ? null : edit.barIndex,
-			replaceCount: edit.kind === "append" ? 0 : edit.measures.length,
-			measures: edit.measures,
-		});
+	function leave() {
 		onDone();
 		if (pathname !== FINGERPICK_PATH) router.push(FINGERPICK_PATH);
 	}
 
+	function confirm() {
+		const base = { patternId: edit.pattern.id, patternName: edit.pattern.name };
+		if (edit.kind === "rename") stashHandoff({ kind: "fingerpick-rename", ...base, newName: edit.newName });
+		else if (edit.kind === "delete") stashHandoff({ kind: "fingerpick-delete", ...base });
+		else if (edit.kind === "set") {
+			stashHandoff({ kind: "fingerpick-set", ...base, bpm: edit.bpm, timeSignature: edit.timeSignature });
+		} else {
+			// Chord marks are a rewrite of the bars they sit on — the page swaps
+			// the run in, the way it swaps one bar for a replace.
+			stashHandoff({
+				kind: "fingerpick-edit",
+				op: edit.kind === "append" ? "append" : "replace",
+				...base,
+				barIndex: edit.kind === "append" ? null : edit.barIndex,
+				replaceCount: edit.kind === "append" ? 0 : edit.measures.length,
+				measures: edit.measures,
+			});
+		}
+		leave();
+	}
+
 	if (done) {
+		const said: Record<typeof edit.kind, string> = {
+			append: t("Bars added", "小节已加上"),
+			replace: t("Bar replaced", "小节已替换"),
+			chords: t("Chords marked", "和弦已标上"),
+			rename: t("Renamed", "已改名"),
+			delete: t("Deleted", "已删除"),
+			set: t("Changed", "已修改"),
+		};
 		return (
 			<p className="flex items-center gap-1.5 pl-2 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent">
 				<Check className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-				{edit.kind === "append"
-					? t("Bars added", "小节已加上")
-					: edit.kind === "replace"
-						? t("Bar replaced", "小节已替换")
-						: t("Chords marked", "和弦已标上")}
+				{said[edit.kind]}
 			</p>
 		);
 	}
 	if (dismissed) return null;
+
+	// The pattern itself, not its bars: a yes or a no under the message that
+	// already said what will happen, the way a strum delete is confirmed.
+	if (!bars) {
+		const icon =
+			edit.kind === "rename" ? (
+				<Pencil className="size-3" strokeWidth={1.5} aria-hidden="true" />
+			) : edit.kind === "delete" ? (
+				<Trash2 className="size-3" strokeWidth={1.5} aria-hidden="true" />
+			) : (
+				<Settings2 className="size-3" strokeWidth={1.5} aria-hidden="true" />
+			);
+		return (
+			<Options>
+				<Option order={0} tone="ghost" onClick={() => setDismissed(true)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
+					{edit.kind === "delete" ? t("Keep it", "留着") : t("Leave it", "算了")}
+				</Option>
+				<Option order={1} tone={edit.kind === "delete" ? "danger" : "outline"} onClick={confirm} icon={icon}>
+					{edit.kind === "rename" ? t("Rename", "改名") : edit.kind === "delete" ? t("Delete", "删除") : t("Change it", "改")}
+				</Option>
+			</Options>
+		);
+	}
 
 	const firstBar = edit.kind === "append" ? edit.pattern.measures.length + 1 : edit.barIndex + 1;
 	const lastBar = firstBar + edit.measures.length - 1;

@@ -8,10 +8,10 @@ import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
 import {
 	HANDOFF_EVENT,
 	takeHandoff,
-	type FingerpickEditHandoff,
+	type FingerpickAnyHandoff,
 	type FingerpickHandoff,
 } from "@/lib/strumAssistant/handoff";
-import { applyTabEdit } from "@/lib/tabAssistant/editIntent";
+import { applySet, applyTabEdit } from "@/lib/tabAssistant/editIntent";
 import { toast } from "sonner";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
@@ -360,17 +360,51 @@ export default function FingerpickPage() {
 	const [handoff, setHandoff] = useState<FingerpickHandoff | null>(null);
 
 	/**
-	 * Bars added to, or put into, a pattern of the player's — through the same
-	 * save the editor uses, so playback and the library pick the change up. A
-	 * preset is not changed: the result is saved as a new pattern of their own.
+	 * What the assistant does to a pattern the player has — bars added or
+	 * rewritten, chords marked, a new name, a new tempo or meter, or deleted —
+	 * through the same saves the editor and the library use, so playback and
+	 * the list pick the change up. A preset is never changed: an edit to one
+	 * is saved as a new pattern of their own, and a rename or delete of one
+	 * never reaches here (the assistant refused it).
 	 */
-	function applyEdit(edit: FingerpickEditHandoff) {
+	function applyEdit(edit: Exclude<FingerpickAnyHandoff, FingerpickHandoff>) {
 		const target = patterns.find((p) => p.id === edit.patternId);
 		if (!target) {
 			toast(`"${edit.patternName}" is no longer in your patterns — nothing was changed.`);
 			return;
 		}
 		const isPreset = !customPatterns.some((p) => p.id === target.id);
+
+		if (edit.kind === "fingerpick-delete") {
+			if (isPreset) return;
+			deleteCustomPattern(target.id);
+			toast(`Deleted "${target.name}".`);
+			return;
+		}
+		if (edit.kind === "fingerpick-rename") {
+			if (isPreset) return;
+			// The save keeps names unique, so the name it settled on is the one said.
+			const renamed = handleSaveCustom({ ...target, name: edit.newName });
+			toast(`Renamed "${target.name}" to "${renamed.name}".`);
+			return;
+		}
+		if (edit.kind === "fingerpick-set") {
+			const { next: changed } = applySet(target, edit.bpm, edit.timeSignature);
+			const next = isPreset
+				? { ...changed, id: crypto.randomUUID(), name: `${target.name} (mine)`, createdAt: undefined }
+				: changed;
+			const saved = handleSaveCustom(next);
+			// Reopened even when it is the pattern on screen: the tempo fader and
+			// the meter badge read the selection, and both may have changed.
+			if (!isPreset) handleSelectPattern(saved);
+			const parts = [
+				...(edit.timeSignature ? [`${edit.timeSignature[0]}/${edit.timeSignature[1]}`] : []),
+				...(edit.bpm !== null ? [`${next.bpm} BPM`] : []),
+			].join(" at ");
+			toast(isPreset ? `Saved "${next.name}" at ${parts} — the shipped pattern stays as it was.` : `Set "${target.name}" to ${parts}.`);
+			return;
+		}
+
 		const edited = applyTabEdit(target, edit.op, edit.barIndex, edit.measures, edit.replaceCount);
 		const next = isPreset
 			? { ...edited, id: crypto.randomUUID(), name: `${target.name} (mine)`, createdAt: undefined }
@@ -397,7 +431,7 @@ export default function FingerpickPage() {
 	// closure — the same ref idiom the strum page uses. An edit that lands
 	// before the library has loaded waits in the ref for it.
 	const applyEditRef = useRef(applyEdit);
-	const pendingEditRef = useRef<FingerpickEditHandoff | null>(null);
+	const pendingEditRef = useRef<Exclude<FingerpickAnyHandoff, FingerpickHandoff> | null>(null);
 	const isLoadingRef = useRef(isLoading);
 	useEffect(() => {
 		applyEditRef.current = applyEdit;
@@ -414,7 +448,7 @@ export default function FingerpickPage() {
 		function handleHandoff() {
 			const next = takeHandoff("fingerpick");
 			if (!next) return;
-			if (next.kind === "fingerpick-edit") {
+			if (next.kind !== "fingerpick") {
 				if (isLoadingRef.current) pendingEditRef.current = next;
 				else applyEditRef.current(next);
 				return;
@@ -463,7 +497,7 @@ export default function FingerpickPage() {
 	// pre-edit notes. Reset the engine here so the change is heard without a manual
 	// page refresh — restart from the top if it was playing, otherwise just clear any
 	// stale scheduled/paused audio so the next play() rebuilds from the saved edit.
-	function handleSaveCustom(pattern: FingerpickPattern) {
+	function handleSaveCustom(pattern: FingerpickPattern): FingerpickPattern {
 		const isCurrent = pattern.id === selectedPattern.id;
 		const wasPlaying = isCurrent && isPlaying;
 		const saved = saveCustomPattern(pattern);
@@ -471,9 +505,9 @@ export default function FingerpickPage() {
 		// a pick from the library would (tempo, cursor and section reset with it).
 		if (saved.isNew) {
 			handleSelectPattern(saved.pattern);
-			return;
+			return saved.pattern;
 		}
-		if (!isCurrent) return;
+		if (!isCurrent) return saved.pattern;
 		stop();
 		if (wasPlaying) {
 			// Expand the just-saved pattern so playback picks up any repeat edits immediately
@@ -485,6 +519,7 @@ export default function FingerpickPage() {
 			);
 		}
 		resetCursor();
+		return saved.pattern;
 	}
 
 	// Whether the pattern on screen is one of the player's own (and so saved on

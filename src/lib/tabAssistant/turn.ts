@@ -35,7 +35,7 @@ export interface TabTurnOutcome {
 	 * written: the player confirms first. Only the readings with bars in them
 	 * reach the panel as a card; the rest are said in `text`.
 	 */
-	edit?: Extract<TabEditReading, { kind: "append" | "replace" | "chords" }>;
+	edit?: Extract<TabEditReading, { kind: "append" | "replace" | "chords" | "rename" | "delete" | "set" }>;
 	templates?: string[];
 	lang: Lang;
 	/** With `templates`: what the readers saw, for the record that turns misses into eval cases. */
@@ -160,6 +160,65 @@ export function tabEditMessage(edit: TabEditReading, lang: Lang, presets: readon
 				`${edit.chords} chords for ${edit.bars} bars — that is more chords than bars. Write one per bar, or fewer and the last will hold.`,
 				`${edit.bars} 个小节却有 ${edit.chords} 个和弦——和弦比小节多。每小节一个，或者少写几个，最后一个会延续。`,
 			);
+		case "rename":
+			if (presets.some((p) => p.id === edit.pattern.id)) {
+				return pick(
+					lang,
+					`${q(edit.pattern.name)} is one of the shipped patterns, and those keep their names. Your own patterns can be renamed.`,
+					`${q(edit.pattern.name)}是内置 pattern，名字改不了。你自己建的可以改名。`,
+				);
+			}
+			return edit.newName === ""
+				? pick(lang, `Rename ${q(edit.pattern.name)} — to what?`, `把${q(edit.pattern.name)}改名——改成什么？`)
+				: pick(lang, `Rename ${q(edit.pattern.name)} to ${q(edit.newName)}?`, `把${q(edit.pattern.name)}改名为${q(edit.newName)}？`);
+		case "delete":
+			if (presets.some((p) => p.id === edit.pattern.id)) {
+				return pick(
+					lang,
+					`${q(edit.pattern.name)} is one of the shipped patterns and cannot be deleted.`,
+					`${q(edit.pattern.name)}是内置 pattern，删不了。`,
+				);
+			}
+			return pick(
+				lang,
+				`Delete ${q(edit.pattern.name)}? It cannot be undone.`,
+				`删除${q(edit.pattern.name)}？删了就回不来了。`,
+			);
+		case "set": {
+			const preset = presets.some((p) => p.id === edit.pattern.id);
+			const parts: string[] = [];
+			if (edit.timeSignature) parts.push(`${edit.timeSignature[0]}/${edit.timeSignature[1]}`);
+			if (edit.bpm !== null) parts.push(`${edit.bpm} BPM`);
+			const what = pick(
+				lang,
+				`Set ${q(edit.pattern.name)} to ${parts.join(pick(lang, " at ", "，"))}?`,
+				`把${q(edit.pattern.name)}设为 ${parts.join("，")}？`,
+			);
+			const loss =
+				edit.affectedBars.length > 0
+					? pick(
+							lang,
+							` Bar${edit.affectedBars.length === 1 ? "" : "s"} ${edit.affectedBars.join(", ")} would lose the notes that no longer fit.`,
+							` 第 ${edit.affectedBars.join("、")} 小节里装不下的音会丢掉。`,
+						)
+					: "";
+			const note = preset
+				? pick(lang, " It is a shipped pattern, so this saves a copy of your own.", " 这是内置 pattern，所以会另存一份你自己的。")
+				: pick(lang, " Nothing is saved until you say so.", " 你确认之前什么都不会保存。");
+			return what + loss + note;
+		}
+		case "value-unread":
+			return pick(
+				lang,
+				`Read the change to ${q(edit.pattern.name)}, but not what to set: “${edit.value}”. A tempo (90 bpm) or a meter (3/4, 6/8) is what I can set.`,
+				`读到了要改${q(edit.pattern.name)}，但没读懂改成什么：“${edit.value}”。我能设的是速度（90 bpm）或拍号（3/4、6/8）。`,
+			);
+		case "ambiguous":
+			return pick(
+				lang,
+				`${edit.matches.length} patterns match ${q(edit.name)}: ${edit.matches.map((m) => q(m.name)).join(", ")}. Which one did you mean? Say its full name.`,
+				`有 ${edit.matches.length} 个 pattern 匹配${q(edit.name)}：${edit.matches.map((m) => q(m.name)).join("、")}。指的是哪个？说全名。`,
+			);
 		case "unknown-pattern":
 			return pick(
 				lang,
@@ -212,17 +271,28 @@ export async function resolveTabTurn({
 		const edit = readTabEdit({ text, index, patterns, voicingFor });
 		if (edit) {
 			const message = tabEditMessage(edit, lang, PRESET_FINGERPICK_PATTERNS);
-			const card = edit.kind === "append" || edit.kind === "replace" || (edit.kind === "chords" && edit.marks.length > 0);
+			const preset = PRESET_FINGERPICK_PATTERNS.some((p) => "pattern" in edit && p.id === edit.pattern.id);
+			const card =
+				edit.kind === "append" ||
+				edit.kind === "replace" ||
+				(edit.kind === "chords" && edit.marks.length > 0) ||
+				(edit.kind === "rename" && !preset && edit.newName !== "") ||
+				(edit.kind === "delete" && !preset) ||
+				edit.kind === "set";
 			return card
 				? { text: message, edit: edit as NonNullable<TabTurnOutcome["edit"]>, lang }
 				: {
 						text: message,
 						lang,
-						templates: [
-							"add to ___: string:6654, fret:8-11-10-8",
-							"replace bar 1 of ___: Am: 5 3 2 1",
-							"add chord Am to bar 1 of ___",
-						],
+						templates:
+							edit.kind === "rename" || edit.kind === "delete"
+								? undefined
+								: [
+										"add to ___: string:6654, fret:8-11-10-8",
+										"replace bar 1 of ___: Am: 5 3 2 1",
+										"add chord Am to bar 1 of ___",
+										"set ___ to 90 bpm",
+									],
 					};
 		}
 	}

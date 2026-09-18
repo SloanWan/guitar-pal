@@ -1,10 +1,13 @@
 import type { ChordIndexEntry } from "@/lib/chordSearch";
+import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { normalizeImportedPattern } from "@/lib/tabImport";
 import { explainEditIntent, type EditIntentExplanation } from "@/lib/strumAssistant/editIntent";
 import { detectLang, pick, type Lang } from "@/lib/strumAssistant/lang";
 import { smallTalk } from "@/lib/strumAssistant/smallTalk";
 import { buildTabProposal } from "@/lib/tabAssistant/buildTabProposal";
+import { readTabEdit, tabEditClause, type TabEditReading } from "@/lib/tabAssistant/editIntent";
 import { readTabSentence } from "@/lib/tabAssistant/readTabSentence";
 import { routeTabInput } from "@/lib/tabAssistant/router";
 import { suggestTab } from "@/lib/tabAssistant/suggest";
@@ -26,6 +29,12 @@ import { loadVoicingLookup, type VoicingLookup } from "@/lib/tabAssistant/voicin
 export interface TabTurnOutcome {
 	text: string;
 	proposal?: TabProposal;
+	/**
+	 * Bars for a pattern the player already has, read and built but not
+	 * written: the player confirms first. Only the readings with bars in them
+	 * reach the panel as a card; the rest are said in `text`.
+	 */
+	edit?: Extract<TabEditReading, { kind: "append" | "replace" }>;
 	templates?: string[];
 	lang: Lang;
 	/** With `templates`: what the readers saw, for the record that turns misses into eval cases. */
@@ -35,6 +44,8 @@ export interface TabTurnOutcome {
 export interface ResolveTabTurnInput {
 	text: string;
 	index: readonly ChordIndexEntry[];
+	/** Every pattern a name can refer to: the shipped ones and the player's own. */
+	patterns?: readonly FingerpickPattern[];
 	uiLang?: Lang;
 	/** How the shapes are fetched; the default reads the chord library. Injected so a turn can be tested without one. */
 	voicings?: (refs: readonly ChordRef[]) => Promise<VoicingLookup>;
@@ -67,9 +78,58 @@ export function tabReply(kind: "notes" | "order" | "style" | "chords" | "ascii",
 	}
 }
 
+/** What the assistant says about an edit it has read. Written here, never asked for. */
+export function tabEditMessage(edit: TabEditReading, lang: Lang, presets: readonly FingerpickPattern[]): string {
+	const q = (name: string) => (lang === "zh" ? `「${name}」` : `"${name}"`);
+	const bars = (n: number) => pick(lang, `${n} bar${n === 1 ? "" : "s"}`, `${n} 小节`);
+	switch (edit.kind) {
+		case "append":
+		case "replace": {
+			const preset = presets.some((p) => p.id === edit.pattern.id);
+			const what =
+				edit.kind === "append"
+					? pick(lang, `Add ${bars(edit.measures.length)} to the end of ${q(edit.pattern.name)}?`, `把 ${bars(edit.measures.length)}加到${q(edit.pattern.name)}的末尾？`)
+					: pick(
+							lang,
+							`Replace bar ${edit.barIndex + 1} of ${q(edit.pattern.name)} with ${edit.measures.length === 1 ? "this" : `these ${bars(edit.measures.length)}`}?`,
+							`把${q(edit.pattern.name)}的第 ${edit.barIndex + 1} 小节换成${edit.measures.length === 1 ? "这一小节" : `这 ${bars(edit.measures.length)}`}？`,
+						);
+			const note = preset
+				? pick(lang, " It is a shipped pattern, so this saves a copy of your own.", " 这是内置 pattern，所以会另存一份你自己的。")
+				: pick(lang, " Nothing is saved until you say so.", " 你确认之前什么都不会保存。");
+			return what + note;
+		}
+		case "unknown-pattern":
+			return pick(
+				lang,
+				`You have no pattern called ${q(edit.name)}. Check the name in the library.`,
+				`你没有叫${q(edit.name)}的 pattern，去库里核对一下名字。`,
+			);
+		case "bar-out-of-range":
+			return pick(
+				lang,
+				`${q(edit.pattern.name)} has ${bars(edit.pattern.measures.length)} — there is no bar ${edit.bar}.`,
+				`${q(edit.pattern.name)}只有 ${bars(edit.pattern.measures.length)}，没有第 ${edit.bar} 小节。`,
+			);
+		case "segment-unread":
+			return pick(
+				lang,
+				`Read the edit to ${q(edit.pattern.name)}, but not this bar: “${edit.segment}”. Write each bar as strings and frets, a chord with an order, or a style word over a chord.`,
+				`读到了要改${q(edit.pattern.name)}，但这一段没读懂：“${edit.segment}”。每小节写成弦号和品格、和弦加顺序，或风格词加和弦。`,
+			);
+		case "nothing-to-write":
+			return pick(
+				lang,
+				`Read the edit to ${q(edit.pattern.name)}, but no bars came after the colon.`,
+				`读到了要改${q(edit.pattern.name)}，但冒号后面没有小节。`,
+			);
+	}
+}
+
 export async function resolveTabTurn({
 	text,
 	index,
+	patterns = PRESET_FINGERPICK_PATTERNS,
 	uiLang = "en",
 	voicings = loadVoicingLookup,
 }: ResolveTabTurnInput): Promise<TabTurnOutcome> {
@@ -77,6 +137,25 @@ export async function resolveTabTurn({
 
 	const talk = smallTalk(text, lang);
 	if (talk) return { text: talk.text, templates: talk.templates.length ? talk.templates : undefined, lang };
+
+	// An edit names its target, so it is read before anything else: "add to
+	// travis: Am: 5 3 2 1" is a chord line to every reader after this one.
+	const clause = tabEditClause(text);
+	if (clause) {
+		const refs = clause.spec
+			.split(/[;；\n]+/)
+			.flatMap((segment) => readTabSentence(segment, index).chordWords)
+			.map((w) => w.chord)
+			.filter((c): c is ChordRef => c !== null);
+		const voicingFor = await voicings(refs);
+		const edit = readTabEdit({ text, index, patterns, voicingFor });
+		if (edit) {
+			const message = tabEditMessage(edit, lang, PRESET_FINGERPICK_PATTERNS);
+			return edit.kind === "append" || edit.kind === "replace"
+				? { text: message, edit, lang }
+				: { text: message, lang, templates: ["add to ___: string:6654, fret:8-11-10-8", "replace bar 1 of ___: Am: 5 3 2 1"] };
+		}
+	}
 
 	const route = routeTabInput(text, index);
 

@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowUpRight, TriangleAlert } from "lucide-react";
-import TabStaveRow from "@/components/fingerpick/TabStaveRow";
-import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
+import TabStavePreview from "./TabStavePreview";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import { beatUnitGlyph } from "@/lib/strumMeter";
 import { stashHandoff } from "@/lib/strumAssistant/handoff";
@@ -23,32 +22,12 @@ import type { TabProposal } from "@/lib/tabAssistant/types";
 
 const FINGERPICK_PATH = "/fingerpick";
 
-/** How many bars the one row shows before it says there are more. */
-const PREVIEW_MEASURES = 2;
-
 export default function TabProposalPreview({ proposal }: { proposal: TabProposal }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const { pattern } = proposal;
-	const staveRef = useRef<HTMLDivElement | null>(null);
-	const [width, setWidth] = useState(0);
-
-	// The stave is laid out to the card's real width, which is only known once
-	// the card is on screen — the same rule the page follows.
-	useEffect(() => {
-		const el = staveRef.current;
-		if (!el) return;
-		const observer = new ResizeObserver((entries) => {
-			const entry = entries[0];
-			if (entry) setWidth(Math.floor(entry.contentRect.width));
-		});
-		observer.observe(el);
-		return () => observer.disconnect();
-	}, []);
-
-	// At most two bars are offered to the row; the packer takes what fits.
-	const row = layoutMeasureRows(pattern.measures.slice(0, PREVIEW_MEASURES), width, 0)[0];
-	const more = pattern.measures.length - (row?.measures.length ?? 0);
+	const [shown, setShown] = useState(0);
+	const more = pattern.measures.length - shown;
 
 	function openInFingerpick() {
 		// The stash announces itself, so a fingerpick page already on screen
@@ -75,16 +54,7 @@ export default function TabProposalPreview({ proposal }: { proposal: TabProposal
 				</span>
 			</div>
 
-			<div ref={staveRef} className="overflow-x-auto px-2 py-2" data-testid="tab-proposal-stave">
-				{row && (
-					<TabStaveRow
-						measures={row.measures}
-						timeSignature={pattern.timeSignature}
-						startMeasureNumber={1}
-						measureWidths={row.widths}
-					/>
-				)}
-			</div>
+			<TabStavePreview measures={pattern.measures} timeSignature={pattern.timeSignature} onShown={setShown} />
 
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2">
 				<span className="font-mono text-xs tracking-[0.04em] text-ink-dim">

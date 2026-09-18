@@ -10,8 +10,12 @@ import { recordMiss } from "@/lib/strumAssistant/missLog";
 import { uiLang, type Lang } from "@/lib/strumAssistant/lang";
 import type { AssistantDomain, AssistantProposal } from "@/lib/strumAssistant/types";
 import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
-import { resolveTabTurn } from "@/lib/tabAssistant/turn";
+import { resolveTabTurn, type TabTurnOutcome } from "@/lib/tabAssistant/turn";
 import type { TabProposal } from "@/lib/tabAssistant/types";
+import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
+import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { loadUserFingerpickPatterns } from "@/lib/fingerpickPatternSync";
+import { getUser } from "@/lib/auth";
 import { IDLE_MS, isIdle, readConversation, writeConversation } from "@/lib/strumAssistant/conversation";
 import { createClient } from "@/lib/supabase";
 
@@ -45,6 +49,8 @@ export interface AssistantMessage {
 	proposal?: AssistantProposal;
 	/** The tab assistant's offer: a whole pattern, for the fingerpick editor. */
 	tabProposal?: TabProposal;
+	/** Bars for a fingerpick pattern the player has, waiting on the player to confirm. */
+	tabEdit?: TabTurnOutcome["edit"];
 	/** An edit to an existing pattern, waiting on the player to confirm it. */
 	edit?: EditIntentReading;
 	/** Sentences offered when nothing read the message, with blanks to fill. */
@@ -115,6 +121,28 @@ export function useAssistant(domain: AssistantDomain) {
 	const ensureIndex = useCallback(() => {
 		void chordIndex().then(setIndex);
 	}, [chordIndex]);
+
+	/**
+	 * What "travis" can refer to on the tab side: the shipped patterns plus the
+	 * player's own. Read, never written — the fingerpick page owns every write.
+	 */
+	const tabPatternsRef = useRef<Promise<readonly FingerpickPattern[]> | null>(null);
+	const loadTabPatterns = useCallback(async (): Promise<readonly FingerpickPattern[]> => {
+		if (tabPatternsRef.current === null) {
+			tabPatternsRef.current = (async () => {
+				try {
+					const user = await getUser();
+					const custom = await loadUserFingerpickPatterns(createClient(), user);
+					return [...PRESET_FINGERPICK_PATTERNS, ...custom];
+				} catch (e) {
+					console.error("[assistant] fingerpick patterns:", e);
+					tabPatternsRef.current = null;
+					return PRESET_FINGERPICK_PATTERNS;
+				}
+			})();
+		}
+		return tabPatternsRef.current;
+	}, []);
 
 	/** Read on the first turn, not on mount: a panel nobody types in costs nothing. */
 	const loadPatterns = useCallback(async (): Promise<readonly StrumPattern[]> => {
@@ -233,11 +261,16 @@ export function useAssistant(domain: AssistantDomain) {
 				);
 				const reply: AssistantMessage = { id: newId(), role: "assistant", text: "", domain };
 				if (domain === "tab") {
-					const outcome = await resolveTabTurn({ text, index, uiLang: uiLang() });
+					// Re-read per turn rather than cached for the session: a pattern
+					// saved on the page since the last turn has to be nameable now.
+					tabPatternsRef.current = null;
+					const tabPatterns = await loadTabPatterns();
+					const outcome = await resolveTabTurn({ text, index, patterns: tabPatterns, uiLang: uiLang() });
 					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
 					Object.assign(reply, {
 						text: outcome.text,
 						tabProposal: outcome.proposal,
+						tabEdit: outcome.edit,
 						templates: outcome.templates,
 						lang: outcome.lang,
 					});
@@ -261,7 +294,7 @@ export function useAssistant(domain: AssistantDomain) {
 				setPending(false);
 			}
 		},
-		[chordIndex, domain, loadPatterns, pending],
+		[chordIndex, domain, loadPatterns, loadTabPatterns, pending],
 	);
 
 	return {

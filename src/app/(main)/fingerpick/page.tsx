@@ -8,8 +8,11 @@ import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
 import {
 	HANDOFF_EVENT,
 	takeHandoff,
+	type FingerpickEditHandoff,
 	type FingerpickHandoff,
 } from "@/lib/strumAssistant/handoff";
+import { applyTabEdit } from "@/lib/tabAssistant/editIntent";
+import { toast } from "sonner";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
@@ -355,10 +358,65 @@ export default function FingerpickPage() {
 	// assistant lives in the topbar, so the handoff usually lands with this page
 	// already on screen; the announcement covers that, the mount read the rest.
 	const [handoff, setHandoff] = useState<FingerpickHandoff | null>(null);
+
+	/**
+	 * Bars added to, or put into, a pattern of the player's — through the same
+	 * save the editor uses, so playback and the library pick the change up. A
+	 * preset is not changed: the result is saved as a new pattern of their own.
+	 */
+	function applyEdit(edit: FingerpickEditHandoff) {
+		const target = patterns.find((p) => p.id === edit.patternId);
+		if (!target) {
+			toast(`"${edit.patternName}" is no longer in your patterns — nothing was changed.`);
+			return;
+		}
+		const isPreset = !customPatterns.some((p) => p.id === target.id);
+		const edited = applyTabEdit(target, edit.op, edit.barIndex, edit.measures);
+		const next = isPreset
+			? { ...edited, id: crypto.randomUUID(), name: `${target.name} (mine)`, createdAt: undefined }
+			: edited;
+		handleSaveCustom(next);
+		// A new pattern is opened by the save itself; an edited one is opened
+		// here, so the change is what is on screen.
+		if (!isPreset && next.id !== selectedPattern.id) handleSelectPattern(next);
+		const bars = `${edit.measures.length} bar${edit.measures.length === 1 ? "" : "s"}`;
+		toast(
+			edit.op === "append"
+				? isPreset
+					? `Saved "${next.name}" with ${bars} added — the shipped pattern stays as it was.`
+					: `Added ${bars} to "${target.name}".`
+				: isPreset
+					? `Saved "${next.name}" with bar ${(edit.barIndex ?? 0) + 1} replaced — the shipped pattern stays as it was.`
+					: `Replaced bar ${(edit.barIndex ?? 0) + 1} of "${target.name}".`,
+		);
+	}
+
+	// The handoff listener is subscribed once and always calls the current
+	// closure — the same ref idiom the strum page uses. An edit that lands
+	// before the library has loaded waits in the ref for it.
+	const applyEditRef = useRef(applyEdit);
+	const pendingEditRef = useRef<FingerpickEditHandoff | null>(null);
+	const isLoadingRef = useRef(isLoading);
+	useEffect(() => {
+		applyEditRef.current = applyEdit;
+		isLoadingRef.current = isLoading;
+	});
+	useEffect(() => {
+		if (isLoading || !pendingEditRef.current) return;
+		const edit = pendingEditRef.current;
+		pendingEditRef.current = null;
+		applyEditRef.current(edit);
+	}, [isLoading]);
+
 	useEffect(() => {
 		function handleHandoff() {
 			const next = takeHandoff("fingerpick");
 			if (!next) return;
+			if (next.kind === "fingerpick-edit") {
+				if (isLoadingRef.current) pendingEditRef.current = next;
+				else applyEditRef.current(next);
+				return;
+			}
 			// Whatever id the stash carried, this is a new pattern of the player's:
 			// a fresh id keeps it from overwriting one they already have.
 			setHandoff({ ...next, pattern: { ...next.pattern, id: crypto.randomUUID() } });
@@ -488,9 +546,10 @@ export default function FingerpickPage() {
 				: undefined;
 		// One-shot sync from persisted (external) storage after async load — the
 		// extra render is intentional and bounded to a single restore.
-		// eslint-disable-next-line react-hooks/set-state-in-effect
+		/* eslint-disable react-hooks/set-state-in-effect */
 		if (match) handleSelectPattern(match); // also flips patternRestored true
 		else setPatternRestored(true);
+		/* eslint-enable react-hooks/set-state-in-effect */
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isLoading, patternRestored]);
 

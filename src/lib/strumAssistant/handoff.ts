@@ -1,7 +1,7 @@
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import { validateBars } from "@/lib/strumBars";
 import type { AssistantProposal } from "@/lib/strumAssistant/types";
-import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { validateFingerpickPattern, type ValidationIssue } from "@/lib/tabImport";
 
 /**
@@ -77,15 +77,31 @@ export interface FingerpickHandoff {
 	warnings: ValidationIssue[];
 }
 
+/**
+ * Bars for a fingerpick pattern the player already has: added to its end,
+ * or in place of one of its bars. The page applies it through the save path
+ * the editor uses; a preset is not changed but copied, bars and all.
+ */
+export interface FingerpickEditHandoff {
+	kind: "fingerpick-edit";
+	op: "append" | "replace";
+	patternId: string;
+	/** For the message shown if the pattern has since been deleted. */
+	patternName: string;
+	/** 0-based; null for an append. */
+	barIndex: number | null;
+	measures: Measure[];
+}
+
 export type StrumHandoff = PatternHandoff | AttachHandoff | RenameHandoff | DeleteHandoff;
 
-export type AssistantHandoff = StrumHandoff | FingerpickHandoff;
+export type AssistantHandoff = StrumHandoff | FingerpickHandoff | FingerpickEditHandoff;
 
 /** Which page a handoff is for. The stash holds one at a time, of either. */
 export type HandoffDomain = "strum" | "fingerpick";
 
 function domainOf(kind: unknown): HandoffDomain {
-	return kind === "fingerpick" ? "fingerpick" : "strum";
+	return kind === "fingerpick" || kind === "fingerpick-edit" ? "fingerpick" : "strum";
 }
 
 export function patternHandoff(proposal: AssistantProposal): PatternHandoff {
@@ -120,7 +136,7 @@ export function stashHandoff(handoff: AssistantHandoff): void {
  * wrong one before the fingerpick page has mounted. So a page names its
  * domain, and a handoff for the other domain is left in the stash untouched.
  */
-export function takeHandoff(domain: "fingerpick"): FingerpickHandoff | null;
+export function takeHandoff(domain: "fingerpick"): FingerpickHandoff | FingerpickEditHandoff | null;
 export function takeHandoff(domain?: "strum"): StrumHandoff | null;
 export function takeHandoff(domain: HandoffDomain = "strum"): AssistantHandoff | null {
 	let raw: string | null = null;
@@ -151,6 +167,7 @@ export function takeHandoff(domain: HandoffDomain = "strum"): AssistantHandoff |
 	if (value === null) return null;
 
 	if (value.kind === "fingerpick") return takeFingerpickHandoff(value);
+	if (value.kind === "fingerpick-edit") return takeFingerpickEditHandoff(value);
 
 	if (value.kind === "rename" || value.kind === "delete") {
 		if (typeof value.patternId !== "string" || value.patternId === "") return null;
@@ -223,4 +240,29 @@ function isValidationIssue(value: unknown): value is ValidationIssue {
 		typeof issue.path === "string" &&
 		typeof issue.message === "string"
 	);
+}
+
+/**
+ * The bars of an edit are validated as a pattern would be — wrapped in one,
+ * since that is the shape the validator reads — and unwrapped again.
+ */
+function takeFingerpickEditHandoff(value: Record<string, unknown>): FingerpickEditHandoff | null {
+	if (value.op !== "append" && value.op !== "replace") return null;
+	if (typeof value.patternId !== "string" || value.patternId === "") return null;
+	if (typeof value.patternName !== "string") return null;
+	const barIndex =
+		typeof value.barIndex === "number" && Number.isInteger(value.barIndex) && value.barIndex >= 0
+			? value.barIndex
+			: null;
+	if (value.op === "replace" && barIndex === null) return null;
+	const { pattern } = validateFingerpickPattern({ measures: value.measures, timeSignature: [4, 4], bpm: 100 });
+	if (pattern === null) return null;
+	return {
+		kind: "fingerpick-edit",
+		op: value.op,
+		patternId: value.patternId,
+		patternName: value.patternName,
+		barIndex: value.op === "append" ? null : barIndex,
+		measures: pattern.measures,
+	};
 }

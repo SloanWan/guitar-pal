@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { CornerDownLeft } from "lucide-react";
 import ProposalPreview from "./ProposalPreview";
 import TabProposalPreview from "./TabProposalPreview";
+import TabEditCard from "./TabEditCard";
 import EditIntentCard from "./EditIntentCard";
 import { Option, Options } from "./Options";
 import { BLANK } from "@/lib/strumAssistant/suggest";
@@ -429,6 +430,16 @@ export default function AssistantPanel({
 									{message.tabProposal && message.streamed === true && (
 										<div className="w-full">
 											<TabProposalPreview proposal={message.tabProposal} />
+										</div>
+									)}
+									{message.tabEdit && message.streamed === true && (
+										<div className="w-full">
+											<TabEditCard
+												edit={message.tabEdit}
+												done={message.editDone === true}
+												onDone={() => markEditDone(message.id)}
+												lang={message.lang ?? "en"}
+											/>
 										</div>
 									)}
 									{message.templates && message.streamed === true && (

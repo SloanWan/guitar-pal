@@ -69,6 +69,8 @@ Types defined in `src/types/database.ts`.
 - Data model in `fingerpickTypes.ts`: `FingerpickPattern` → `Measure[]` → `BeatSlot[]`. Each `BeatSlot` holds 6 `StringFret` entries (fret, technique, tied, muted flags) and a `Duration`. `Technique` covers hammer-on, pull-off, slide-up, slide-down.
 - `fingerpickToVexFlow.ts` converts a `Measure` into VexFlow `TabNote`, `GhostNote`, `TabTie`, `TabSlide`, and `Beam` objects for stave rendering.
 - `TabStaveRow.tsx` renders a row of tab staves using those VexFlow objects.
+- **Meter model is shared with strum** (`src/lib/strumMeter.ts`): a compound meter (6/8, 12/8) is counted in dotted-quarter beats, never in eighths. `beatTicks(ts)` in `fingerpickEdit.ts` is the only way to get "the beat" (24 or 36 ticks of 96 per whole note); nothing reads the denominator directly. **BPM counts the beat** (♩ = 90 in 4/4, ♩. = 60 in 6/8) — `secondsPerQuarter(bpm, ts)` in `fingerpickScheduler.ts` is the one place the meter enters timing, and `changeTimeSignature` rescales the tempo across simple ↔ compound so the eighth note keeps its speed.
+- **Triplets are groups**: `tripletGroups(slots)` (three consecutive same-value triplet slots, chunked from the run start) is the single grouping the grid bracket, the VexFlow `Tuplet` and every structural edit read — deleting, duplicating or inserting around a member acts on the whole group. Triplet entry points are hidden when `isCompound(ts)`.
 
 **Exercise categories** are a fixed `as const` array exported as `CATEGORIES` from `src/types/database.ts`: `"chord" | "chord_change" | "picking" | "scale" | "strumming" | "fingering" | "ear_training" | "arpeggio" | "theory" | "song"`.
 

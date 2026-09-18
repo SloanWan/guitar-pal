@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parsePickSequence, applyPickSequence } from "@/lib/fingerpickPickSequence";
-import { makeEmptySlot, setFret } from "@/lib/fingerpickEdit";
+import { makeEmptySlot, setFret, tripletGroups, usedUnits, measureCapacity } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
@@ -51,6 +51,23 @@ describe("parsePickSequence", () => {
 		]);
 	});
 
+	it("reads 根, R and r as the root, alone or in a pinch, and full-width parentheses", () => {
+		expect(ok("根323").tokens).toEqual([
+			{ strings: [], root: true },
+			{ strings: [2] },
+			{ strings: [1] },
+			{ strings: [2] },
+		]);
+		expect(ok("R3（12）3").tokens).toEqual([
+			{ strings: [], root: true },
+			{ strings: [2] },
+			{ strings: [0, 1] },
+			{ strings: [2] },
+		]);
+		expect(ok("(r1)3").tokens).toEqual([{ strings: [0], root: true }, { strings: [2] }]);
+		expect(parsePickSequence("(根)3", [2, 4]).ok).toBe(true);
+	});
+
 	it("reads 0 and - as rests", () => {
 		expect(ok("3-10").tokens).toEqual([
 			{ strings: [2] },
@@ -77,12 +94,42 @@ describe("parsePickSequence", () => {
 		expect(ok(input, [3, 4]).duration).toBe(duration);
 	});
 
+	it("maps three times a plain count to triplets in a simple meter", () => {
+		expect(ok("321321321321").duration).toBe("eighth-triplet"); // 12 in 4/4
+		expect(ok("321321321321321321321321").duration).toBe("sixteenth-triplet"); // 24 in 4/4
+		expect(ok("321321321", [3, 4]).duration).toBe("eighth-triplet"); // 9 in 3/4
+		expect(ok("321321", [2, 4]).duration).toBe("eighth-triplet"); // 6 in 2/4
+	});
+
+	it("names the quarter-note triplet it cannot write", () => {
+		expect(parsePickSequence("321321", [4, 4])).toEqual({
+			ok: false,
+			error: "6 notes in 4/4 would be quarter-note triplets, which the editor doesn't have yet.",
+		});
+		expect(parsePickSequence("321", [2, 4]).ok).toBe(false);
+	});
+
+	it("reads a compound meter in its dotted beat: 2 / 6 / 12 in 6/8, never quarters or triplets", () => {
+		expect(ok("63", [6, 8]).duration).toBe("dotted-quarter");
+		expect(ok("632123", [6, 8]).duration).toBe("eighth");
+		expect(ok("632123632123", [6, 8]).duration).toBe("sixteenth");
+		expect(ok("6321", [12, 8]).duration).toBe("dotted-quarter");
+		// Three in 6/8 would be quarters across the 3+3 grouping (a hemiola);
+		// four would be dotted eighths; nine would be triplets of a compound beat.
+		expect(parsePickSequence("632", [6, 8])).toEqual({
+			ok: false,
+			error: "3 notes don't fit a 6/8 measure evenly.",
+		});
+		expect(parsePickSequence("6321", [6, 8]).ok).toBe(false);
+		expect(parsePickSequence("632123632", [6, 8]).ok).toBe(false);
+	});
+
 	it("refuses a count that does not divide the measure into plain values", () => {
 		expect(parsePickSequence("321", [4, 4])).toEqual({
 			ok: false,
 			error: "3 notes don't fit a 4/4 measure evenly.",
 		});
-		expect(parsePickSequence("321321", [4, 4]).ok).toBe(false);
+		expect(parsePickSequence("32123", [4, 4]).ok).toBe(false);
 		expect(parsePickSequence("3", [3, 4]).ok).toBe(false);
 	});
 
@@ -121,6 +168,23 @@ describe("applyPickSequence", () => {
 		expect(slots[4].strings[4].fret).toBe(0);
 	});
 
+	it("puts a root token on the root string of the chord in effect", () => {
+		const p = pattern([measure("a", [C, undefined, Am, undefined])]);
+		const { pattern: out, warnings } = applyPickSequence(p, 0, ok("根3根3"), voicingFor);
+		const frets = out.measures[0].slots.map((s) => s.strings.map((sf) => sf.fret));
+		// C's root is the A string at 3; Am's is the A string open.
+		expect(frets[0]).toEqual([null, null, null, null, 3, null]);
+		expect(frets[2]).toEqual([null, null, null, null, 0, null]);
+		expect(warnings).toEqual([]);
+	});
+
+	it("writes a root with no chord in effect on the open low E, and says so", () => {
+		const p = pattern([measure("a", [undefined, undefined, undefined, undefined])]);
+		const { pattern: out, warnings } = applyPickSequence(p, 0, ok("根323"), voicingFor);
+		expect(out.measures[0].slots[0].strings[5].fret).toBe(0);
+		expect(warnings).toHaveLength(1);
+	});
+
 	it("writes a string the shape leaves out as a dead note and says so", () => {
 		const p = pattern([measure("a", [C, undefined, undefined, undefined])]);
 		const { pattern: out, warnings } = applyPickSequence(p, 0, ok("6321"), voicingFor);
@@ -147,6 +211,16 @@ describe("applyPickSequence", () => {
 		const p = pattern([measure("a", [{ root: "B", suffix: "dim7" }, undefined, undefined, undefined])]);
 		const { warnings } = applyPickSequence(p, 0, ok("3212"), voicingFor);
 		expect(warnings).toEqual(["No shape for Bdim7 in the library — its beats are written open."]);
+	});
+
+	it("writes twelve tokens as four aligned triplet groups that exactly fill 4/4", () => {
+		const p = pattern([measure("a", [C, undefined, undefined, undefined])]);
+		const { pattern: out } = applyPickSequence(p, 0, ok("321321321321"), voicingFor);
+		const slots = out.measures[0].slots;
+		expect(slots.every((s) => s.duration === "eighth-triplet")).toBe(true);
+		expect(usedUnits(slots)).toBe(measureCapacity([4, 4]));
+		expect(tripletGroups(slots).map((g) => g.start)).toEqual([0, 3, 6, 9]);
+		expect(slots[0].chord).toEqual(C);
 	});
 
 	it("replaces the measure's old notes and leaves other measures alone", () => {

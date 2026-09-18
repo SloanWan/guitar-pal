@@ -1,3 +1,5 @@
+import type { AssistantDomain } from "@/lib/strumAssistant/types";
+
 /**
  * Where the assistant's conversation waits between openings of the panel,
  * and when it is over.
@@ -27,7 +29,20 @@ export interface StoredConversation<M extends StoredMessage> {
 	touchedAt: number;
 }
 
-export const STORAGE_KEY = "guitarpal:strumAssistantConversation";
+/**
+ * One transcript per assistant. The strum assistant and the tab assistant
+ * are two conversations, not one that changes subject with the page: what
+ * was said on the strum page stays there, and the fingerpick page opens on
+ * its own thread.
+ */
+export function storageKeyFor(domain: AssistantDomain): string {
+	return domain === "tab"
+		? "guitarpal:tabAssistantConversation"
+		: "guitarpal:strumAssistantConversation";
+}
+
+/** The strum key, as it always was. */
+export const STORAGE_KEY = storageKeyFor("strum");
 /** Bound the stored transcript so a long session does not grow without limit. */
 export const MAX_STORED_MESSAGES = 40;
 /** Silence after which the conversation is over. */
@@ -53,9 +68,12 @@ function isMessage(value: unknown): value is StoredMessage {
  * kept, and an older format (a bare array, with no timestamp) is treated as
  * idle rather than guessed at.
  */
-export function readConversation<M extends StoredMessage>(now: number): M[] {
+export function readConversation<M extends StoredMessage>(
+	now: number,
+	domain: AssistantDomain = "strum",
+): M[] {
 	try {
-		const raw = sessionStorage.getItem(STORAGE_KEY);
+		const raw = sessionStorage.getItem(storageKeyFor(domain));
 		if (!raw) return [];
 		const parsed: unknown = JSON.parse(raw);
 		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return [];
@@ -68,17 +86,21 @@ export function readConversation<M extends StoredMessage>(now: number): M[] {
 	}
 }
 
-export function writeConversation<M extends StoredMessage>(messages: M[], now: number): void {
+export function writeConversation<M extends StoredMessage>(
+	messages: M[],
+	now: number,
+	domain: AssistantDomain = "strum",
+): void {
 	try {
 		if (messages.length === 0) {
-			sessionStorage.removeItem(STORAGE_KEY);
+			sessionStorage.removeItem(storageKeyFor(domain));
 			return;
 		}
 		const stored: StoredConversation<M> = {
 			messages: messages.slice(-MAX_STORED_MESSAGES),
 			touchedAt: now,
 		};
-		sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+		sessionStorage.setItem(storageKeyFor(domain), JSON.stringify(stored));
 	} catch {
 		// Private mode or a full quota: the conversation still works, it just
 		// does not survive a refresh.

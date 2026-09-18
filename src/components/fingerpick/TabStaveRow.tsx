@@ -4,12 +4,19 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Renderer, TabStave, Voice, Formatter, Beam, Barline, StemmableNote } from "vexflow";
 
 import { Measure } from "@/lib/fingerpickTypes";
-import { fingerpickToVexFlow, type ChordLabel, type RollMark } from "@/lib/fingerpickToVexFlow";
+import {
+	beamGroupsFor,
+	fingerpickToVexFlow,
+	type ChordLabel,
+	type RollMark,
+} from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 
 // Layout constants — not props because they are fixed design decisions, not data.
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
 export const CLEF_WIDTH = 15;
+// A stable default so the effect does not re-run for callers that pass no meter.
+const DEFAULT_TIME_SIGNATURE: [number, number] = [4, 4];
 // Extra pixels appended to svgWidth so the 1px end-barline stroke is not clipped at the SVG boundary.
 const BARLINE_CLIP_MARGIN = 3;
 const RIGHT_PAD = 15;
@@ -62,6 +69,8 @@ const ROLL_HEAD = 4;
 interface TabStaveRowProps {
 	/** One "row" worth of measures rendered into a single VexFlow context. */
 	measures: Measure[];
+	/** The pattern's meter: sets the voice and how eighths beam (by quarter, or by dotted quarter in 6/8). Default 4/4. */
+	timeSignature?: [number, number];
 	/** Measure number for the first measure in this row (1-indexed). */
 	startMeasureNumber?: number;
 	/** 0-indexed global measure index for this row's first measure; enables cursor data attributes. */
@@ -300,6 +309,7 @@ function drawRoll(
 
 export default function TabStaveRow({
 	measures,
+	timeSignature = DEFAULT_TIME_SIGNATURE,
 	startMeasureNumber,
 	startMeasureIndex,
 	measureWidths,
@@ -402,11 +412,13 @@ export default function TabStaveRow({
 				const { notes, connectors, tuplets, chordLabels, rolls, noteStrings, noteSlots } =
 					fingerpickToVexFlow(measure);
 				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, stave: staves[i] });
-				const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
+				const voice = new Voice({ numBeats: timeSignature[0], beatValue: timeSignature[1] }).setMode(
+					Voice.Mode.SOFT,
+				);
 				voice.addTickables(notes);
 				const noteWidth = staves[i].getNoteEndX() - staves[i].getNoteStartX() - 10;
 				new Formatter().joinVoices([voice]).format([voice], noteWidth);
-				const beams = Beam.applyAndGetBeams(voice, -1);
+				const beams = Beam.applyAndGetBeams(voice, -1, beamGroupsFor(timeSignature));
 				voice.draw(ctx, staves[i]);
 				connectors.forEach((c) => c.setContext(ctx).draw());
 				beams.forEach((b) => b.setContext(ctx).draw());
@@ -570,6 +582,7 @@ export default function TabStaveRow({
 		};
 	}, [
 		measures,
+		timeSignature,
 		startMeasureNumber,
 		startMeasureIndex,
 		measureWidths,

@@ -4,7 +4,9 @@ import {
 	TabTie,
 	TabSlide,
 	Tuplet,
+	Fraction,
 	GhostNote,
+	Stem,
 	StaveNote,
 	StemmableNote,
 	GraceTabNote,
@@ -18,7 +20,27 @@ import {
 
 import { Measure, Duration, Stroke } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
+import { TRIPLET_GROUP_SIZE, tripletGroups } from "@/lib/fingerpickEdit";
+import { isCompound, type Meter } from "@/lib/strumMeter";
 import type { ChordRef } from "@/lib/strumPatterns";
+
+/**
+ * An empty slot's spacer. VexFlow places a tuplet bracket from each member's
+ * stem, and a rest counts as a member — a GhostNote is a rest with no stem, so
+ * an empty triplet slot (a bar just filled from the "All" row) threw from
+ * `Tuplet.draw`. Answering with the stave's top line keeps the bracket where
+ * the sounding notes put it; beams still see a rest and break around it.
+ */
+class SilentNote extends GhostNote {
+	getStemDirection(): number {
+		return Stem.UP;
+	}
+
+	getStemExtents(): { topY: number; baseY: number } {
+		const y = this.checkStave().getYForLine(0);
+		return { topY: y, baseY: y };
+	}
+}
 
 export const VEX_DURATION: Record<Duration, string> = {
 	whole: "w",
@@ -67,6 +89,15 @@ export interface RollMark {
 	/** Index into `notes` of the note the roll belongs to. */
 	noteIndex: number;
 	stroke: Stroke;
+}
+
+/**
+ * How the stave beams a bar: by the meter's beat. A simple meter beams each
+ * quarter (3/4 is 2+2+2 eighths), a compound one each dotted quarter (6/8 is
+ * 3+3). Passed to `Beam.applyAndGetBeams`.
+ */
+export function beamGroupsFor(timeSignature: Meter): Fraction[] {
+	return isCompound(timeSignature) ? [new Fraction(3, 8)] : [new Fraction(1, 4)];
 }
 
 export interface VexFlowRenderData {
@@ -172,7 +203,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		if (positions.length === 0) {
 			pendingGraceNotes = [];
 			const noteIdx = notes.length;
-			notes.push(new GhostNote({ duration }));
+			notes.push(new SilentNote({ duration }));
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
 			writeChordOver(noteIdx);
@@ -314,29 +345,18 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		});
 	}
 
-	// Group consecutive triplet slots (eighth-triplet or sixteenth-triplet) into
-	// sets of 3, each wrapped in a Tuplet. The Tuplet adjusts tick values so the
+	// One Tuplet per triplet group — the same grouping the editor brackets and
+	// edits by (`tripletGroups`), so the stave and the grid never disagree on
+	// which three notes belong together. The Tuplet adjusts tick values so the
 	// Formatter spaces the measure correctly and draws the bracket above the staff.
 	const tuplets: Tuplet[] = [];
-	let si = 0;
-	while (si < measure.slots.length) {
-		const slotDuration = measure.slots[si].duration;
-		if (slotDuration === "eighth-triplet" || slotDuration === "sixteenth-triplet") {
-			const groupStart = si;
-			while (si < measure.slots.length && measure.slots[si].duration === slotDuration) {
-				si++;
-			}
-			for (let j = groupStart; j < si; j += 3) {
-				const group: StemmableNote[] = [];
-				for (let k = j; k < j + 3 && k < si; k++) {
-					const noteIdx = slotNoteIndex[k];
-					if (noteIdx !== null && noteIdx !== undefined) group.push(notes[noteIdx]);
-				}
-				if (group.length === 3) tuplets.push(new Tuplet(group));
-			}
-		} else {
-			si++;
+	for (const group of tripletGroups(measure.slots)) {
+		const notesInGroup: StemmableNote[] = [];
+		for (let k = group.start; k < group.start + TRIPLET_GROUP_SIZE; k++) {
+			const noteIdx = slotNoteIndex[k];
+			if (noteIdx !== null && noteIdx !== undefined) notesInGroup.push(notes[noteIdx]);
 		}
+		if (notesInGroup.length === TRIPLET_GROUP_SIZE) tuplets.push(new Tuplet(notesInGroup));
 	}
 
 	const noteStrings = posIndexMaps.map((posMap) =>

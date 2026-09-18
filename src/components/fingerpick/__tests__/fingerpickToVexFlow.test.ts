@@ -13,9 +13,11 @@ import {
 	Tremolo,
 	Vibrato,
 	Stroke,
+	TabStave,
 } from "vexflow";
 
-import { fingerpickToVexFlow, VEX_DURATION } from "@/lib/fingerpickToVexFlow";
+import { tripletGroups } from "@/lib/fingerpickEdit";
+import { beamGroupsFor, fingerpickToVexFlow, VEX_DURATION } from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, Measure, StringFret, Duration, Technique } from "@/lib/fingerpickTypes";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -324,6 +326,34 @@ describe("fingerpickToVexFlow — isGraceNote", () => {
 	});
 });
 
+// ─── Beam groups ──────────────────────────────────────────────────────────────
+
+describe("beamGroupsFor", () => {
+	it("beams simple meters by the quarter and compound meters by the dotted quarter", () => {
+		for (const ts of [[4, 4], [3, 4], [2, 4]] as const) {
+			const [g] = beamGroupsFor(ts);
+			expect(beamGroupsFor(ts)).toHaveLength(1);
+			expect(g.numerator / g.denominator).toBe(1 / 4);
+		}
+		for (const ts of [[6, 8], [12, 8]] as const) {
+			const [g] = beamGroupsFor(ts);
+			expect(g.numerator / g.denominator).toBe(3 / 8);
+		}
+	});
+
+	it("groups six eighths in 3/4 as 2+2+2 and in 6/8 as 3+3", () => {
+		const eighths = Array.from({ length: 6 }, (_, i) => beatSlot(`e${i}`, "eighth", { 0: { fret: 0 } }));
+		const beamsIn = (ts: [number, number]) => {
+			const { notes } = fingerpickToVexFlow(measure(eighths));
+			const voice = new Voice({ numBeats: ts[0], beatValue: ts[1] }).setMode(Voice.Mode.SOFT);
+			voice.addTickables(notes);
+			return Beam.applyAndGetBeams(voice, -1, beamGroupsFor(ts)).map((b) => b.getNotes().length);
+		};
+		expect(beamsIn([3, 4])).toEqual([2, 2, 2]);
+		expect(beamsIn([6, 8])).toEqual([3, 3]);
+	});
+});
+
 // ─── Tuplet grouping ──────────────────────────────────────────────────────────
 
 describe("fingerpickToVexFlow — eighth-triplet tuplets", () => {
@@ -350,6 +380,41 @@ describe("fingerpickToVexFlow — eighth-triplet tuplets", () => {
 			])
 		);
 		expect(tuplets).toHaveLength(2);
+	});
+
+	it("a 4/4 bar of twelve eighth-triplets renders four Tuplet brackets, one per group", () => {
+		const slots = Array.from({ length: 12 }, (_, i) =>
+			beatSlot(`t${i}`, "eighth-triplet", { 0: { fret: i % 3 } }),
+		);
+		const { tuplets } = fingerpickToVexFlow(measure(slots));
+		expect(tuplets).toHaveLength(4);
+		expect(tripletGroups(slots).map((g) => g.start)).toEqual([0, 3, 6, 9]);
+	});
+
+	it("a tuplet of empty slots can be positioned: ghost notes answer for a stem", () => {
+		// A bar just filled from the All row is three empty triplet slots; VexFlow
+		// positions the bracket from each rest's stem and a plain GhostNote has none.
+		const { notes, tuplets } = fingerpickToVexFlow(
+			measure([
+				beatSlot("t1", "eighth-triplet", {}),
+				beatSlot("t2", "eighth-triplet", { 0: { fret: 5 } }),
+				beatSlot("t3", "eighth-triplet", {}),
+			]),
+		);
+		expect(notes[0]).toBeInstanceOf(GhostNote);
+		const stave = new TabStave(0, 0, 300);
+		notes.forEach((n) => n.setStave(stave));
+		expect(tuplets).toHaveLength(1);
+		expect(() => tuplets[0].getYPosition()).not.toThrow();
+	});
+
+	it("a leftover triplet after a group gets no bracket, matching tripletGroups", () => {
+		const slots = Array.from({ length: 4 }, (_, i) =>
+			beatSlot(`t${i}`, "eighth-triplet", { 0: { fret: 5 } }),
+		);
+		const { tuplets } = fingerpickToVexFlow(measure(slots));
+		expect(tuplets).toHaveLength(tripletGroups(slots).length);
+		expect(tuplets).toHaveLength(1);
 	});
 
 	it("three consecutive sixteenth-triplet slots produce one Tuplet", () => {

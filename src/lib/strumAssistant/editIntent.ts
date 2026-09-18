@@ -85,7 +85,7 @@ const RENAME_VERBS = ["改名", "重命名", "改叫", "命名", "rename", "call
 const NAMING_VERBS = new Set(["命名", "call"]);
 
 /** Where the new name sits after a rename verb, in either language. */
-const NEW_NAME =
+export const NEW_NAME =
 	/(?:改名为|改名成|改名叫|重命名为|改叫|命名为|叫做|叫|\bto\b|\bas\b)\s*[「『《"'`]?([^」』》"'`，。,.!?！？]{1,40})/i;
 
 /** Verbs that put something onto something else. Chinese first, as typed. */

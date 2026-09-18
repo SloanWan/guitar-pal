@@ -5,6 +5,7 @@ import {
 	beatLabels,
 	allowedCellsPerBeat,
 	beatUnitLabel,
+	beatUnitGlyph,
 	cellCountLabel,
 	beatsPerBar,
 	isCompound,
@@ -191,6 +192,15 @@ describe("strumMeter", () => {
 		it("labels a beat count no meter asks for without throwing", () => {
 			expect(() => beatLabels(SIX_EIGHT, 0, 0)).not.toThrow();
 			expect(beatLabels(FOUR_FOUR, 0, 0)).toEqual(["1"]);
+		});
+	});
+
+	describe("beatUnitGlyph", () => {
+		it("is a quarter in simple meters and a dotted quarter in compound ones", () => {
+			expect(beatUnitGlyph([4, 4])).toBe("♩");
+			expect(beatUnitGlyph([3, 4])).toBe("♩");
+			expect(beatUnitGlyph([6, 8])).toBe("♩.");
+			expect(beatUnitGlyph([12, 8])).toBe("♩.");
 		});
 	});
 

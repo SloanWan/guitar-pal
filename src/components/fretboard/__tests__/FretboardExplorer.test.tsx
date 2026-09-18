@@ -548,7 +548,7 @@ describe("FretboardExplorer — progression", () => {
 	it("builds a strip from the degree buttons and presets, names each bar from the key, removes and clears", async () => {
 		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
 		await ex.settle();
-		expect(ex.host.querySelector("[data-testid='progression-panel']")).not.toBeNull();
+		expect(ex.host.querySelector("[data-testid='progression-panel'] h3")?.textContent?.trim()).toBe("Progression");
 		expect(ex.strip()).toEqual([]);
 		for (const numeral of ["I", "V", "vi", "IV"]) act(() => ex.button(`Add ${numeral}`).click());
 		expect(ex.strip()).toEqual(["I C", "V G", "vi Am", "IV F"]);

@@ -43,7 +43,7 @@
  * Marks above it keep the pitch they had — a capo does not transpose them.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Guitar, Piano, Play, Square, Volume2, X } from "lucide-react";
+import { Guitar, ListMusic, Piano, Play, Square, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
@@ -1074,6 +1074,12 @@ export default function FretboardExplorer({
 			    and leaves the numerals where they are. */}
 			{inChords && (
 				<div className="flex flex-col gap-3 border border-line bg-panel p-3" data-testid="progression-panel">
+					{/* The card's name, in the instruments' heading style: what this card is for. */}
+					<h3 className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+						<ListMusic className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+						Progression
+					</h3>
+
 					{/* The hand position: which of the key's chords have a shape inside
 					    the frame. Pressing one lights that shape and strums it. */}
 					{chordBox && (

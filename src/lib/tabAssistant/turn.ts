@@ -123,16 +123,23 @@ export function tabEditMessage(edit: TabEditReading, lang: Lang, presets: readon
 					),
 				)
 				.join(pick(lang, ", ", "、"));
+			// A range longer than the chords: the last chord holds to its end.
+			const lastBar = edit.barIndex + edit.measures.length;
+			const lastMark = edit.marks[edit.marks.length - 1];
+			const holding =
+				lastMark && lastBar > lastMark.bar
+					? pick(lang, `, ${chordSymbolLabel(lastMark.chord)} holding to bar ${lastBar}`, `，${chordSymbolLabel(lastMark.chord)} 延续到第 ${lastBar} 小节`)
+					: "";
 			const what =
 				edit.marks.length === 0
 					? pick(lang, `None of those chords matched — nothing to mark on ${q(edit.pattern.name)}.`, `这些和弦都没匹配上——${q(edit.pattern.name)}上没有可标的。`)
 					: oneRun
 						? pick(
 								lang,
-								`Mark ${labels.join(" ")} on ${where}${beat} of ${q(edit.pattern.name)}?`,
-								`在${q(edit.pattern.name)}的${where}${beat}标上 ${labels.join(" ")}？`,
+								`Mark ${labels.join(" ")} on ${where}${beat}${holding} of ${q(edit.pattern.name)}?`,
+								`在${q(edit.pattern.name)}的${where}${beat}标上 ${labels.join(" ")}${holding}？`,
 							)
-						: pick(lang, `Mark ${each} of ${q(edit.pattern.name)}?`, `在${q(edit.pattern.name)}标上：${each}？`);
+						: pick(lang, `Mark ${each}${holding} of ${q(edit.pattern.name)}?`, `在${q(edit.pattern.name)}标上：${each}${holding}？`);
 			const note =
 				edit.marks.length === 0
 					? ""
@@ -150,8 +157,8 @@ export function tabEditMessage(edit: TabEditReading, lang: Lang, presets: readon
 		case "chords-mismatch":
 			return pick(
 				lang,
-				`${edit.bars} bars but ${edit.chords} chords — write one chord per bar, or one chord for all of them.`,
-				`${edit.bars} 个小节但有 ${edit.chords} 个和弦——每小节一个，或者全部用同一个。`,
+				`${edit.chords} chords for ${edit.bars} bars — that is more chords than bars. Write one per bar, or fewer and the last will hold.`,
+				`${edit.bars} 个小节却有 ${edit.chords} 个和弦——和弦比小节多。每小节一个，或者少写几个，最后一个会延续。`,
 			);
 		case "unknown-pattern":
 			return pick(

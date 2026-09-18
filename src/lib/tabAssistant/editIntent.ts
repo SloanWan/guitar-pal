@@ -92,10 +92,43 @@ const item = (bar: string, barTo: string | undefined, beat: string | undefined, 
 	spec,
 });
 
+/** Whether a fragment can stand as an item of its own: it names a bar. */
+const HAS_BAR_EN = /\bbars?\s+\d/i;
+const HAS_BAR_ZH = /^\s*第\s*\d+/;
+
+/**
+ * The fragments of a list, with a chord list's own commas healed: in
+ * "add Am7, D7, Gm7 to bar 5-8" the first two fragments name no bar, so they
+ * belong to the item that follows; in "第 5 小节 Am7, D7" a fragment that does
+ * not begin with a bar belongs to the item before it.
+ */
+function fragments(list: string, order: "spec-first" | "bar-first"): string[] {
+	const parts = list.split(LIST_SEPARATOR).map((p) => p.trim()).filter((p) => p !== "");
+	const out: string[] = [];
+	if (order === "spec-first") {
+		let held = "";
+		for (const part of parts) {
+			if (HAS_BAR_EN.test(part)) {
+				out.push(held ? `${held}, ${part}` : part);
+				held = "";
+			} else {
+				held = held ? `${held}, ${part}` : part;
+			}
+		}
+		if (held) out.push(held);
+	} else {
+		for (const part of parts) {
+			if (HAS_BAR_ZH.test(part) || out.length === 0) out.push(part);
+			else out[out.length - 1] = `${out[out.length - 1]}, ${part}`;
+		}
+	}
+	return out;
+}
+
 /** Every item of a list, or null if any one of them is not an item. */
 function readItems(list: string, matcher: RegExp, order: "spec-first" | "bar-first"): ChordItem[] | null {
 	const items: ChordItem[] = [];
-	for (const part of list.split(LIST_SEPARATOR).map((p) => p.trim()).filter((p) => p !== "")) {
+	for (const part of fragments(list, order)) {
 		const m = matcher.exec(part);
 		if (!m) return null;
 		items.push(order === "spec-first" ? item(m[2], m[3], m[4], m[1]) : item(m[1], m[2], m[3], m[4]));
@@ -129,11 +162,12 @@ function readClause(text: string): EditClause | null {
 	}
 	m = CHORDS_VERB_EN.exec(text);
 	if (m) return chords(m[5], [item(m[2], m[3], m[4], m[1])]);
-	// "add Cm7 to bar 1 of lick, add F7 to bar 2": the target rides on the first item.
-	const [head, ...tail] = text.split(LIST_SEPARATOR);
+	// "add Cm7 to bar 1 of lick, add F7 to bar 2": the target rides on the first
+	// item — which may itself hold a comma-separated chord list.
+	const [head, ...tail] = fragments(text, "spec-first");
 	m = tail.length > 0 ? CHORDS_VERB_EN.exec(head) : null;
 	if (m) {
-		const rest = readItems(tail.join(","), CHORD_ITEM_EN, "spec-first");
+		const rest = readItems(tail.join(", "), CHORD_ITEM_EN, "spec-first");
 		if (rest) return chords(m[5], [item(m[2], m[3], m[4], m[1]), ...rest]);
 	}
 	// "改成" is a rewrite of the bar, and is read before the chord list that
@@ -304,13 +338,24 @@ function readChordMarks(
 		const to = it.barTo ?? (words.length > 1 ? from + words.length - 1 : from);
 		if (to < from || to > pattern.measures.length) return { kind: "bar-out-of-range", op: "chords", pattern, bar: to };
 		const count = to - from + 1;
-		if (words.length > 1 && words.length !== count) {
+		if (words.length > count) {
 			return { kind: "chords-mismatch", op: "chords", pattern, bars: count, chords: words.length };
 		}
 
 		for (let i = 0; i < count; i++) {
-			const word = words.length === 1 ? words[0] : words[i];
 			const bar = from + i;
+			// Fewer chords than bars: one per bar, and the last holds through the
+			// rest of the range the way a lead sheet reads — so any mark already
+			// on those bars is taken off, or it would cut the chord short.
+			if (words.length > 1 && i >= words.length) {
+				const measure = next.measures[bar - 1];
+				for (let slotIndex = 0; slotIndex < measure.slots.length; slotIndex++) {
+					if (measure.slots[slotIndex].chord) next = setSlotChord(next, { measureIndex: bar - 1, slotIndex }, null);
+				}
+				high = Math.max(high, bar);
+				continue;
+			}
+			const word = words.length === 1 ? words[0] : words[i];
 			if (!word.chord) {
 				warnings.push({
 					code: "UNRESOLVED_CHORD",

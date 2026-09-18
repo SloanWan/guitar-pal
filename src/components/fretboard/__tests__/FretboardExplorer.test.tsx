@@ -61,7 +61,22 @@ const LIBRARY: Record<string, ChordVoicing[]> = {
 	"F# minor": [voicing("244222")],
 	"Eb minor": [voicing("x68876")],
 	"D major": [voicing("xx0232")],
+	"A m7": [voicing("x02010")],
 };
+// The Shape field's name index and grip corpus, served without the network.
+const INDEX = [
+	...Object.keys(LIBRARY).map((k) => ({ root: k.split(" ")[0], suffix: k.split(" ")[1] })),
+	{ root: "D", suffix: "7" }, // in the index, but the library has no shape for it
+];
+vi.mock("@/lib/chords", () => ({ getChordIndex: async () => INDEX }));
+vi.mock("@/components/chords/useChordShapeMatches", () => ({
+	useChordShapeCorpus: () =>
+		Object.entries(LIBRARY).map(([k, chord_voicings]) => ({
+			root: k.split(" ")[0],
+			suffix: k.split(" ")[1],
+			chord_voicings,
+		})),
+}));
 vi.mock("@/lib/chordVoicingCache", () => ({
 	peekVoicings: (root: string, suffix: string) => LIBRARY[`${root} ${suffix}`] ?? [],
 	loadVoicings: async (root: string, suffix: string) => LIBRARY[`${root} ${suffix}`] ?? [],
@@ -108,6 +123,18 @@ function mount(props: React.ComponentProps<typeof FretboardExplorer>) {
 		chordNotes: () =>
 			host.querySelector("[data-testid='chord-readout'] > div:nth-child(2)")?.textContent?.trim() ?? null,
 		button: (label: string) => q<HTMLButtonElement>(`button[aria-label="${label}"]`),
+		/** Type into the Shape field and take the top match with Enter. */
+		searchShape: (text: string) => {
+			const input = q<HTMLInputElement>('input[aria-label="Shape"]');
+			act(() => {
+				input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+				Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text);
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			act(() => {
+				input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+			});
+		},
 		/** The strip's chips as "numeral name", in order. */
 		strip: () =>
 			[...host.querySelectorAll<HTMLElement>("[data-testid='progression-strip'] [data-bar] > div")].map((el) =>
@@ -710,6 +737,85 @@ describe("FretboardExplorer — a hand position in Chords mode", () => {
 		await ex.settle();
 		expect(ex.host.querySelector(".fb-position")).toBeNull();
 		expect(ex.host.querySelector("[data-testid='position-chords']")).toBeNull();
+		ex.unmount();
+	});
+});
+
+describe("FretboardExplorer — a held shape", () => {
+	const pianoMarked = (ex: ReturnType<typeof mount>) =>
+		[...ex.host.querySelectorAll(".pk-board [data-selected], .pk-board [data-tone]")]
+			.map((el) => Number((el as HTMLElement).dataset.midi))
+			.sort((a, b) => a - b);
+
+	it("names a searched shape, draws its voicing, lights what it sounds, strums it, and gives its numeral in the key", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		ex.searchShape("am7");
+		await ex.settle();
+		expect(ex.readout()).toBe("Am7 · vi");
+		expect(ex.title()).toContain("Am7 (vi)");
+		// x02010: A2 E3 G3 C4 E4.
+		expect(ex.lit().sort()).toEqual(["0:0=muted", "1:0=root", "2:2=chordTone", "3:0=chordTone", "4:1=chordTone", "5:0=chordTone"].sort());
+		expect(pianoMarked(ex)).toEqual([45, 52, 55, 60, 64]);
+		expect(sound.playChord).toHaveBeenCalledWith([45, 52, 55, 60, 64], "guitar");
+		expect(ex.host.querySelector("[data-testid='held-readout']")?.textContent).toContain("sounds as written");
+		ex.unmount();
+	});
+
+	it("reads the held shape under the capo: the piano sounds a semitone up, and the key has no numeral for it", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		ex.searchShape("am7");
+		await ex.settle();
+		act(() => ex.toggle("Capo"));
+		await ex.settle();
+		// The shape does not move; what it sounds does. B♭m7 is not C major's chord.
+		expect(ex.readout()).toBe("B♭m7 · Am7 shape");
+		expect(ex.host.querySelector("[data-testid='held-readout']")?.textContent).toBe(
+			"held as Am7, sounds B♭m7 at capo 1",
+		);
+		expect(pianoMarked(ex)).toEqual([46, 53, 56, 61, 65]);
+		expect(ex.lit().every((m) => Number(m.split(":")[1].split("=")[0]) >= 1)).toBe(true);
+		ex.unmount();
+	});
+
+	it("resolves a written grip to the chord held that way", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		// Typed the way a tab reads, first string first: x02010 low to high.
+		ex.searchShape("01020x");
+		await ex.settle();
+		expect(ex.readout()).toBe("Am7 · vi");
+		ex.unmount();
+	});
+
+	it("returns to the last degree pressed when the field is cleared, or when a key is pressed", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		act(() => ex.key(64).click()); // iii
+		await ex.settle();
+		ex.searchShape("am7");
+		await ex.settle();
+		expect(ex.readout()).toBe("Am7 · vi");
+		act(() => ex.button("Clear Shape").click());
+		await ex.settle();
+		expect(ex.readout()).toBe("Em · iii");
+		ex.searchShape("am7");
+		await ex.settle();
+		act(() => ex.key(62).click()); // ii
+		await ex.settle();
+		expect(ex.readout()).toBe("Dm · ii");
+		expect(ex.host.querySelector("[data-testid='held-readout']")).toBeNull();
+		ex.unmount();
+	});
+
+	it("says when the library has no shape for the chord", async () => {
+		const ex = mount({ initialRoot: "C", initialScale: "major", initialMode: "chords" });
+		await ex.settle();
+		ex.searchShape("d7");
+		await ex.settle();
+		expect(ex.readout()).toBe("D7 · no voicing");
+		expect(ex.lit()).toEqual([]);
 		ex.unmount();
 	});
 });

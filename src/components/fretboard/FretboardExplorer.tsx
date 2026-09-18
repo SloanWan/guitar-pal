@@ -21,6 +21,11 @@
  * class, so changing key or scale keeps the degree and transposes the chord
  * with it — that is what makes numerals worth showing.
  *
+ * A chord can also be **held**: name a shape (`Am7`) or write its grip
+ * (`x02010`) in the Shape field and the neck holds it, the piano shows what
+ * it sounds under the capo, and the readout says whether the key has a
+ * numeral for that. Clearing the field returns to the last degree pressed.
+ *
  * Chords mode also carries a **progression**: a strip of bars, each held as an
  * interval like the picked chord, looped one strum per bar. And a **hand
  * position**: a right-press raises a five-fret frame on the neck and the
@@ -37,18 +42,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Guitar, Piano, Play, Square, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
 import Fretboard, { type FretboardHandle } from "@/components/fretboard/Fretboard";
 import PianoKeyboard, { type PianoKeyboardHandle } from "@/components/fretboard/PianoKeyboard";
 import { useNoteSound, type NoteVoice } from "@/components/fretboard/useNoteSound";
 import { useSequencePlayer } from "@/components/fretboard/useSequencePlayer";
+import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
 import MusicalText from "@/components/MusicalText";
 import Fader from "@/components/ui/Fader";
 import Rocker from "@/components/ui/Rocker";
 import { loadVoicings, peekVoicings } from "@/lib/chordVoicingCache";
 import { GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
 import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
-import { chordModeView, inShape, shapeSlots, type ChordModeView } from "@/lib/fretboard/chordMode";
+import { getChordIndex } from "@/lib/chords";
+import type { ChordIndexEntry } from "@/lib/chordSearch";
+import { chordModeView, inShape, shapeSlots } from "@/lib/fretboard/chordMode";
 import { keyChord, keyChords, shapeMarks, shapePitches, type KeyChord } from "@/lib/fretboard/chords";
+import { heldChordView, shownFromKeyChords, type HeldChord, type ShownChord } from "@/lib/fretboard/heldChord";
 import {
 	SCALE_LABELS,
 	SCALE_ROOTS,
@@ -82,7 +92,7 @@ import type { FretMark, FretWindow } from "@/lib/fretboard/types";
 import { PIANO_61, pitchClassOf, type PianoKey, type PianoRange } from "@/lib/piano/keys";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 import { parseMusicalText } from "@/lib/musicalNotation";
-import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
+import { STRUM_CAPO_MAX, type ChordRef } from "@/lib/strumPatterns";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 
 /** A 22-fret neck, the common electric; acoustics simply never use the top frets. */
@@ -202,11 +212,15 @@ function withGlyphs(label: string): string {
 		.join("");
 }
 
-/** The voicing library's key for a chord. */
-const chordKey = (c: KeyChord): string => `${c.root} ${c.suffix}`;
+/** A chord by the library's spelling, whatever else it carries. */
+type Named = { root: string; suffix: string };
 
-/** "Em", "C#dim": a key chord the way a chart writes it. */
-function chordName(chord: KeyChord): string {
+/** The voicing library's key for a chord. */
+const chordKey = (c: Named): string => `${c.root} ${c.suffix}`;
+const sameChord = (a: Named, b: Named): boolean => a.root === b.root && a.suffix === b.suffix;
+
+/** "Em", "C#dim", "Am7": a chord the way a chart writes it. */
+function chordName(chord: Named): string {
 	return chordAbbreviation({ root: chord.root, suffix: chord.suffix });
 }
 
@@ -243,10 +257,11 @@ const LEGEND: readonly { emphasis: FretMark["emphasis"]; tone?: FretMark["tone"]
 	{ emphasis: "scaleTone", label: "Scale tone" },
 ];
 
-/** The standard voicing of a chord, from the cache when it has it. */
-async function standardVoicing(chord: KeyChord): Promise<ChordVoicing | null> {
+/** A chord's voicing, from the cache when it has it: the one asked for by id, else the standard one. */
+async function standardVoicing(chord: Named, voicingId: string | null = null): Promise<ChordVoicing | null> {
 	const cached = peekVoicings(chord.root, chord.suffix);
-	return selectStandardVoicing(cached ?? (await loadVoicings(chord.root, chord.suffix)));
+	const list = cached ?? (await loadVoicings(chord.root, chord.suffix));
+	return (voicingId ? list.find((v) => v.id === voicingId) : undefined) ?? selectStandardVoicing(list);
 }
 
 export default function FretboardExplorer({
@@ -264,7 +279,11 @@ export default function FretboardExplorer({
 	/** Chords mode: semitones above the key's root; 0 (the tonic) until a key is pressed. */
 	const [chordInterval, setChordInterval] = useState(0);
 	/** Chords mode: the fingered chord's voicing, or null while loading / when the library has none. */
-	const [voicing, setVoicing] = useState<{ chord: KeyChord; voicing: ChordVoicing | null } | null>(null);
+	const [voicing, setVoicing] = useState<{ chord: Named; voicing: ChordVoicing | null } | null>(null);
+	/** Chords mode: a shape named or written in the Shape field, shown in place of the degree. */
+	const [held, setHeld] = useState<HeldChord | null>(null);
+	/** The chord library's names, for the Shape field; loaded on entering Chords mode. */
+	const [chordIndex, setChordIndex] = useState<ChordIndexEntry[]>([]);
 	/** Chords mode: the strip, as intervals above the key's root. Session-only. */
 	const [progression, setProgression] = useState<ProgressionStep[]>([]);
 	const [progressionBpm, setProgressionBpm] = useState<number>(PROGRESSION_BPM.default);
@@ -335,20 +354,26 @@ export default function FretboardExplorer({
 	/** While the strip plays, the bar sounding now stands in for the chord picked on the piano. */
 	const playingBar =
 		playing && player.isPlaying && player.currentIndex >= 0 ? (playing.bars[player.currentIndex] ?? null) : null;
-	const activeInterval = playingBar ? mod12(playingBar.sounding.rootPitchClass - rootPc) : chordInterval;
 
-	const view = useMemo<ChordModeView | null>(
-		() => (inChords ? chordModeView(spec, capo, rootPc + activeInterval) : null),
-		[inChords, spec, capo, rootPc, activeInterval],
-	);
+	// What the mode shows, by name: the sounding bar, else the held shape,
+	// else the degree. A held shape's numeral waits for its voicing (below),
+	// since only the notes it sounds can say whether it is the key's.
+	const named = useMemo<ShownChord | null>(() => {
+		if (!inChords) return null;
+		if (playingBar) return shownFromKeyChords(playingBar.sounding, playingBar.shape);
+		if (held) return heldChordView(held, spec, capo, null);
+		const { sounding, shape } = chordModeView(spec, capo, rootPc + chordInterval);
+		return shownFromKeyChords(sounding, shape);
+	}, [inChords, playingBar, held, spec, capo, rootPc, chordInterval]);
 
-	// The fingered chord's standard voicing, fetched when it changes. A stale
-	// answer (the chord moved on while it loaded) is dropped.
+	// The fingered chord's voicing, fetched when it changes: the grip that was
+	// written, else the standard one. A stale answer (the chord moved on while
+	// it loaded) is dropped.
 	useEffect(() => {
-		if (!view) return;
-		const target = view.shape;
+		if (!named) return;
+		const target = named.shape;
 		let live = true;
-		void standardVoicing(target)
+		void standardVoicing(target, held?.voicingId ?? null)
 			.catch(() => null)
 			.then((v) => {
 				if (live) setVoicing({ chord: target, voicing: v });
@@ -356,17 +381,21 @@ export default function FretboardExplorer({
 		return () => {
 			live = false;
 		};
-	}, [view]);
+	}, [named, held]);
 	// A sounding bar brings its own voicing, resolved before play began; a
 	// shape picked from a position stands in while it is that chord's.
-	const sameChord = (a: KeyChord, b: KeyChord) => a.root === b.root && a.suffix === b.suffix;
 	const shapeVoicing = playingBar
 		? playingBar.voicing
-		: view && pinned && sameChord(pinned.chord, view.shape)
+		: named && pinned && sameChord(pinned.chord, named.shape)
 			? pinned.voicing
-			: view && voicing && sameChord(voicing.chord, view.shape)
+			: named && voicing && sameChord(voicing.chord, named.shape)
 				? voicing.voicing
 				: null;
+	/** The chord on show, its numeral settled: a held shape is judged by the notes its voicing sounds. */
+	const shown = useMemo<ShownChord | null>(() => {
+		if (!named || !held || playingBar || !shapeVoicing) return named;
+		return heldChordView(held, spec, capo, shapePitches(shapeVoicing, capo).map(mod12));
+	}, [named, held, playingBar, shapeVoicing, spec, capo]);
 
 	// Behind a capo there is no neck left to play, so the scale starts at the
 	// capo fret; the pitches above it are what they always were.
@@ -379,13 +408,13 @@ export default function FretboardExplorer({
 	const marks = useMemo<FretMark[]>(() => {
 		const label = createLabeler(spec, labelMode);
 		let raw: FretMark[];
-		if (view) {
-			raw = shapeVoicing ? shapeMarks(shapeVoicing, capo, view.shape.rootPitchClass, label) : [];
+		if (shown) {
+			raw = shapeVoicing ? shapeMarks(shapeVoicing, capo, shown.shape.rootPitchClass, label) : [];
 		} else {
 			raw = scaleMarks(spec, playable, labelMode);
 		}
 		return raw.map((m) => ({ ...m, label: showLabels ? withGlyphs(m.label) : "" }));
-	}, [spec, labelMode, showLabels, view, shapeVoicing, capo, playable]);
+	}, [spec, labelMode, showLabels, shown, shapeVoicing, capo, playable]);
 
 	// ── Playing the scale ─────────────────────────────────────────────────────
 	const boxes = useMemo(() => (inChords ? [] : scalePositions(spec, playable)), [inChords, spec, playable]);
@@ -419,15 +448,15 @@ export default function FretboardExplorer({
 	 * voicing there is only the triad to show, so its three tones stand in.
 	 */
 	const chordTones = useMemo(() => {
-		if (!view) return [];
-		const root = view.sounding.rootPitchClass;
+		if (!shown) return [];
+		const root = shown.sounding.rootPitchClass;
 		const describe = (midi: number, withOctave: boolean) => ({
 			name: `${noteName(((midi % 12) + 12) % 12)}${withOctave ? Math.floor(midi / 12) - 1 : ""}`,
 			degree: degreeLabel(midi - root),
 		});
 		if (shapeVoicing) return shapePitches(shapeVoicing, capo).map((midi) => describe(midi, true));
-		return view.sounding.pitchClasses.map((pc) => describe(pc, false));
-	}, [view, shapeVoicing, capo, noteName]);
+		return (shown.triad ?? []).map((pc) => describe(pc, false));
+	}, [shown, shapeVoicing, capo, noteName]);
 
 	/** The string whose run is sounding, so its button can offer to stop it. */
 	const playingString = player.isPlaying && runTarget.kind === "string" ? runTarget.string : null;
@@ -532,14 +561,14 @@ export default function FretboardExplorer({
 	// In Chords mode a note of the shape strums the whole shape on the guitar.
 	const handleSlotPress = useCallback(
 		(slot: SlotNote) => {
-			if (view && shapeVoicing && inShape(marks, slot)) {
+			if (shown && shapeVoicing && inShape(marks, slot)) {
 				soundShape(shapeVoicing, "guitar");
 				return;
 			}
 			piano.current?.strike(slot.midi);
 			void play(slot.midi).catch(() => undefined);
 		},
-		[view, shapeVoicing, marks, soundShape, play],
+		[shown, shapeVoicing, marks, soundShape, play],
 	);
 
 	// Scale mode: a piano key sounds its note and ripples every position of
@@ -559,6 +588,7 @@ export default function FretboardExplorer({
 			const interval = mod12(pc - rootPc);
 			setChordInterval(interval);
 			setPinned(null);
+			setHeld(null);
 			if (!soundOn) return;
 			const next = chordModeView(spec, capo, rootPc + interval);
 			void standardVoicing(next.shape)
@@ -569,6 +599,44 @@ export default function FretboardExplorer({
 				});
 		},
 		[inChords, soundOn, play, spec, capo, rootPc, soundShape],
+	);
+
+	// ── A held shape ──────────────────────────────────────────────────────────
+	// The Shape field searches the library by name or by grip; its index and
+	// the grip corpus are fetched on entering Chords mode and kept.
+	useEffect(() => {
+		if (!inChords || chordIndex.length > 0) return;
+		let live = true;
+		getChordIndex()
+			.then((index) => {
+				if (live) setChordIndex(index);
+			})
+			.catch(() => undefined);
+		return () => {
+			live = false;
+		};
+	}, [inChords, chordIndex.length]);
+	const shapeCorpus = useChordShapeCorpus(inChords);
+
+	/** Hold a shape from the field, and strum it once its voicing is known; clearing returns to the degree. */
+	const handleHeld = useCallback(
+		(ref: ChordRef | null) => {
+			if (!ref) {
+				setHeld(null);
+				return;
+			}
+			const next: HeldChord = { root: ref.root, suffix: ref.suffix, voicingId: ref.voicingId ?? null };
+			setHeld(next);
+			setPinned(null);
+			if (!soundOn) return;
+			void standardVoicing(next, next.voicingId)
+				.catch(() => null)
+				.then((v) => {
+					// The marks land on the next frame; strike after them so lit notes pulse.
+					if (v) requestAnimationFrame(() => soundShape(v, "guitar"));
+				});
+		},
+		[soundOn, soundShape],
 	);
 
 	/** The chord this key sounds, for the numerals and the dimming. */
@@ -594,7 +662,7 @@ export default function FretboardExplorer({
 	// ── A hand position in Chords mode ────────────────────────────────────────
 	// The frame is on the fingered neck, so the chords searched for shapes are
 	// the fingered key's; their degrees are the heard key's degrees.
-	const shapeKeyRoot = view?.shapeKeyRoot ?? root;
+	const shapeKeyRoot = SCALE_ROOTS[mod12(rootPc - capo)];
 	const fingeredChords = useMemo(() => keyChords({ root: shapeKeyRoot, scale }), [shapeKeyRoot, scale]);
 	const voicingsKey = `${shapeKeyRoot}/${scale}`;
 	const voicingsLoaded = keyVoicings?.key === voicingsKey;
@@ -650,6 +718,7 @@ export default function FretboardExplorer({
 		(r: ReachableChord) => {
 			setChordInterval(mod12(r.chord.rootPitchClass + capo - rootPc));
 			setPinned(r);
+			setHeld(null);
 			if (!soundOn) return;
 			// The marks land on the next frame; strike after them so lit notes pulse.
 			requestAnimationFrame(() => soundShape(r.voicing, "guitar"));
@@ -689,7 +758,9 @@ export default function FretboardExplorer({
 	);
 
 	const keyName = `${withGlyphs(root)} ${SCALE_LABELS[scale].toLowerCase()}`;
-	const boardLabel = view ? `${chordName(view.shape)} shape on the fretboard` : `${root} ${SCALE_LABELS[scale]} on the fretboard`;
+	const boardLabel = shown
+		? `${chordName(shown.shape)} shape on the fretboard`
+		: `${root} ${SCALE_LABELS[scale]} on the fretboard`;
 
 	return (
 		<div className="flex flex-col gap-3">
@@ -698,10 +769,11 @@ export default function FretboardExplorer({
 				<h2 className="font-mono text-[13px] text-ink" data-testid="view-title">
 					<MusicalText text={keyName} />
 					{capo > 0 && <span className="text-ink-dim"> · capo {capo}</span>}
-					{view && (
+					{shown && (
 						<span className="text-denim-accent">
 							{" · "}
-							<MusicalText text={chordName(view.sounding)} /> ({view.sounding.numeral})
+							<MusicalText text={chordName(shown.sounding)} />
+							{shown.numeral && ` (${shown.numeral})`}
 						</span>
 					)}
 				</h2>
@@ -771,18 +843,22 @@ export default function FretboardExplorer({
 
 				{/* In Chords mode the keyboard is the chord picker, so the chord it
 				    is picking is named over it. */}
-				{view && (
+				{shown && (
 					<div className="text-center" data-testid="chord-readout">
 						<div className="font-mono text-[13px] text-ink">
-							<MusicalText text={chordName(view.sounding)} />
-							<span className="mx-1.5 text-ink-faint">·</span>
-							<span className="text-denim-accent">{view.sounding.numeral}</span>
+							<MusicalText text={chordName(shown.sounding)} />
+							{shown.numeral && (
+								<>
+									<span className="mx-1.5 text-ink-faint">·</span>
+									<span className="text-denim-accent">{shown.numeral}</span>
+								</>
+							)}
 							{capo > 0 && (
 								<span className="ml-2 text-ink-dim">
-									· <MusicalText text={chordName(view.shape)} /> shape
+									· <MusicalText text={chordName(shown.shape)} /> shape
 								</span>
 							)}
-							{shapeVoicing === null && voicing?.chord === view.shape && (
+							{shapeVoicing === null && voicing && sameChord(voicing.chord, shown.shape) && (
 								<span className="ml-2 text-ink-faint">· no voicing</span>
 							)}
 						</div>
@@ -815,11 +891,11 @@ export default function FretboardExplorer({
 				<PianoKeyboard
 					ref={piano}
 					keys={PIANO_61}
-					selectedPitchClass={view ? view.sounding.rootPitchClass : rootPc}
+					selectedPitchClass={shown ? shown.sounding.rootPitchClass : rootPc}
 					// A scale is a set of names, uncovered one octave at a time under
 					// the pointer; a chord is the six notes its shape actually sounds.
-					tonePitchClasses={view ? undefined : scalePcs}
-					toneMidis={view && shapeVoicing ? shapePitches(shapeVoicing, capo) : undefined}
+					tonePitchClasses={shown ? undefined : scalePcs}
+					toneMidis={shown && shapeVoicing ? shapePitches(shapeVoicing, capo) : undefined}
 					range={GUITAR_RANGE}
 					onSelect={handleKeySelect}
 					labelFor={inChords ? chordKeyLabel : scaleKeyLabel}
@@ -931,6 +1007,27 @@ export default function FretboardExplorer({
 			    and leaves the numerals where they are. */}
 			{inChords && (
 				<div className="flex flex-col gap-3 border border-line bg-panel p-3" data-testid="progression-panel">
+					{/* A shape by name or by grip: the neck holds it, the piano shows
+					    what it sounds under the capo. */}
+					<Field label="Shape">
+						<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+							<ChordSearchSelect chord={held} onChange={handleHeld} index={chordIndex} shapeCorpus={shapeCorpus} ariaLabel="Shape" />
+							{held && shown && (
+								<span className="font-mono text-[11px] text-ink-dim" data-testid="held-readout">
+									{capo > 0 ? (
+										<>
+											held as <MusicalText text={chordName(shown.shape)} />, sounds{" "}
+											<MusicalText text={chordName(shown.sounding)} /> at capo {capo}
+										</>
+									) : (
+										<>sounds as written — add a capo to move it</>
+									)}
+									{shown.numeral && <span className="text-denim-accent"> · {shown.numeral}</span>}
+								</span>
+							)}
+						</div>
+					</Field>
+
 					{/* The hand position: which of the key's chords have a shape inside
 					    the frame. Pressing one lights that shape and strums it. */}
 					{chordBox && (

@@ -80,4 +80,6 @@ export interface AssistantErrorBody {
 	error: string;
 	/** Set when the caller may retry later rather than never. */
 	retryAfterSeconds?: number;
+	/** A guest's free turns, when the refusal is about them. */
+	guest?: { used: number; limit: number };
 }

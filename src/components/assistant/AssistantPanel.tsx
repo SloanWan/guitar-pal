@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowRightLeft, CornerDownLeft } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { ArrowRightLeft, CornerDownLeft, LogIn } from "lucide-react";
 import ProposalPreview from "./strum/ProposalPreview";
 import TabProposalPreview from "./tab/TabProposalPreview";
 import TabEditCard from "./tab/TabEditCard";
@@ -264,6 +265,7 @@ export default function AssistantPanel({
 		mode,
 		setMode,
 		page,
+		guestQuota,
 		nudge,
 		dismissNudge,
 		messages,
@@ -280,6 +282,15 @@ export default function AssistantPanel({
 		markGreeted,
 	} = assistant;
 	const [draft, setDraft] = useState("");
+	/**
+	 * General is the model. A guest has a few free turns a day; once they
+	 * are used the segment locks, and pointing at it, or pressing it, says
+	 * why and where to sign in — rather than a greyed button that explains
+	 * nothing, or a refusal after typing.
+	 */
+	const [askedForGeneral, setAskedForGeneral] = useState(false);
+	const router = useRouter();
+	const pathname = usePathname();
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	/** The conversation itself, inside the scrolling frame — what is watched for growth. */
 	const contentRef = useRef<HTMLDivElement | null>(null);
@@ -288,6 +299,7 @@ export default function AssistantPanel({
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
 	const promptHintId = useId();
 	const { user } = useUser();
+	const guestUsedUp = user === null && guestQuota !== null && guestQuota.used >= guestQuota.limit;
 
 	// Picked once per conversation rather than per render: a line that changed
 	// while being read would be a tic, not a greeting.
@@ -571,24 +583,42 @@ export default function AssistantPanel({
 			    only proposes, once per page, when the two disagree. */}
 			<div className="flex flex-none items-center gap-2 border-t border-line px-2 pt-2">
 				<div role="radiogroup" aria-label="Which assistant" className="flex border border-line-strong">
-					{MODES.map((m, i) => (
-						<button
-							key={m}
-							type="button"
-							role="radio"
-							aria-checked={mode === m}
-							// General is the model, behind the route's sign-in: a guest sees
-							// the segment and why it is off, rather than a 401 after typing.
-							disabled={pending || (m === "general" && user === null)}
-							title={m === "general" && user === null ? "Sign in to use General — it asks a model" : undefined}
-							onClick={() => setMode(m)}
-							className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${i > 0 ? "border-l border-line-strong" : ""} ${mode === m ? "bg-denim text-on-denim" : "text-ink-dim hover:text-denim"}`}
-						>
-							{MODE_LABEL[m]}
-						</button>
-					))}
+					{MODES.map((m, i) => {
+						const locked = m === "general" && guestUsedUp;
+						return (
+							<button
+								key={m}
+								type="button"
+								role="radio"
+								aria-checked={mode === m}
+								aria-disabled={locked || undefined}
+								disabled={pending}
+								onClick={() => (locked ? setAskedForGeneral(true) : setMode(m))}
+								onPointerEnter={locked ? () => setAskedForGeneral(true) : undefined}
+								onPointerLeave={locked ? () => setAskedForGeneral(false) : undefined}
+								onFocus={locked ? () => setAskedForGeneral(true) : undefined}
+								onBlur={locked ? () => setAskedForGeneral(false) : undefined}
+								className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${i > 0 ? "border-l border-line-strong" : ""} ${mode === m ? "bg-denim text-on-denim" : locked ? "text-ink-faint" : "text-ink-dim hover:text-denim"}`}
+							>
+								{MODE_LABEL[m]}
+							</button>
+						);
+					})}
 				</div>
-				{nudge && (
+				{askedForGeneral && guestUsedUp ? (
+					<button
+						type="button"
+						onClick={() => router.push(`/auth?redirect=${encodeURIComponent(pathname ?? "/")}`)}
+						className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-denim-accent transition-colors duration-(--dur-hover) hover:text-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+					>
+						<LogIn className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
+						<span className="truncate">Sign in to use General</span>
+					</button>
+				) : user === null && mode === "general" && guestQuota !== null ? (
+					<span className="min-w-0 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+						{`${guestQuota.used} of ${guestQuota.limit} free today`}
+					</span>
+				) : nudge ? (
 					<button
 						type="button"
 						onClick={() => setMode(page)}
@@ -599,7 +629,7 @@ export default function AssistantPanel({
 							{`Switch to ${MODE_LABEL[page]} for this page?`}
 						</span>
 					</button>
-				)}
+				) : null}
 			</div>
 			<form
 				className="flex flex-none items-end gap-2 p-2"

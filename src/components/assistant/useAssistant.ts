@@ -115,9 +115,24 @@ class RouteError extends Error {
 		readonly status: number,
 		message: string,
 		readonly retryAfterSeconds?: number,
+		readonly guest?: GuestQuota,
 	) {
 		super(message);
 	}
+}
+
+/** A guest's free General turns, as the route last reported them. */
+export interface GuestQuota {
+	used: number;
+	limit: number;
+}
+
+/** "(about 5 min)" / "(about 2 h)": how long until the route will take the next one. */
+function retryIn(seconds: number, lang: Lang): string {
+	const minutes = Math.ceil(seconds / 60);
+	if (minutes < 90) return pick(lang, `(about ${minutes} min)`, `（约 ${minutes} 分钟）`);
+	const hours = Math.ceil(minutes / 60);
+	return pick(lang, `(about ${hours} h)`, `（约 ${hours} 小时）`);
 }
 
 /** A tool's card, as the fields the panel renders it from. */
@@ -259,10 +274,19 @@ export function useAssistant() {
 	const [greeted, setGreeted] = useState(false);
 	const markGreeted = useCallback(() => setGreeted(true), []);
 
+	/**
+	 * A guest's free turns, once the route has said. Unknown until the first
+	 * General turn — the count lives in a cookie only the route reads — so
+	 * the chip opens General to a guest and locks it when the route says no.
+	 */
+	const [guestQuota, setGuestQuota] = useState<GuestQuota | null>(null);
+
 	const reset = useCallback(() => {
 		setMessages([]);
 		setSessionId(newId());
 		setGreeted(false);
+		// Who is asking may have changed; the route will say again.
+		setGuestQuota(null);
 		// A new thread opens in the page's mode, as the first one did.
 		setModeState(pageRef.current);
 		writeMode(null);
@@ -350,20 +374,30 @@ export function useAssistant() {
 			.slice(-MAX_HISTORY_TURNS)
 			.map((m) => ({ role: m.role, content: m.text }));
 
-	/** One model step through the route. Anything but 200 is the route's own sentence, thrown. */
-	const callRoute = useCallback(async (msgs: readonly Anthropic.MessageParam[], context: GeneralContext): Promise<ModelStep> => {
-		const res = await fetch("/api/assistant", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ messages: msgs, context }),
-		});
-		const body: unknown = await res.json().catch(() => null);
-		if (!res.ok) {
-			const b = (body ?? {}) as Partial<AssistantErrorBody>;
-			throw new RouteError(res.status, b.error ?? "The assistant could not be reached.", b.retryAfterSeconds);
-		}
-		return body as ModelStep;
-	}, []);
+	/**
+	 * One model step through the route. Anything but 200 is the route's own
+	 * sentence, thrown. The turn id lets the route count a guest's loop as
+	 * one turn however many steps it takes.
+	 */
+	const callRoute = useCallback(
+		async (msgs: readonly Anthropic.MessageParam[], context: GeneralContext, turnId: string): Promise<ModelStep> => {
+			const res = await fetch("/api/assistant", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ messages: msgs, context, turnId }),
+			});
+			const body: unknown = await res.json().catch(() => null);
+			if (!res.ok) {
+				const b = (body ?? {}) as Partial<AssistantErrorBody>;
+				if (b.guest) setGuestQuota(b.guest);
+				throw new RouteError(res.status, b.error ?? "The assistant could not be reached.", b.retryAfterSeconds, b.guest);
+			}
+			const step = body as ModelStep & { guest?: GuestQuota };
+			if (step.guest) setGuestQuota(step.guest);
+			return step;
+		},
+		[],
+	);
 
 	/**
 	 * One sentence, read by one assistant. The reading is instant; the reply
@@ -412,8 +446,16 @@ export function useAssistant() {
 							return proposeTab(input as ProposeTabInput);
 					}
 				};
+				const turnId = newId();
 				try {
-					const outcome = await resolveGeneralTurn({ text, history, context, call: callRoute, execute, uiLang: uiLang() });
+					const outcome = await resolveGeneralTurn({
+						text,
+						history,
+						context,
+						call: (msgs, ctx) => callRoute(msgs, ctx, turnId),
+						execute,
+						uiLang: uiLang(),
+					});
 					Object.assign(reply, {
 						text: outcome.text,
 						lang: outcome.lang,
@@ -427,7 +469,7 @@ export function useAssistant() {
 					reply.text =
 						e instanceof RouteError
 							? e.retryAfterSeconds
-								? `${e.message} ${pick(lang, `(about ${Math.ceil(e.retryAfterSeconds / 60)} min)`, `（约 ${Math.ceil(e.retryAfterSeconds / 60)} 分钟）`)}`
+								? `${e.message} ${retryIn(e.retryAfterSeconds, lang)}`
 								: e.message
 							: pick(lang, "The assistant could not be reached. Strum and Tab still work offline.", "联系不上助手。扫弦和指弹仍然可以离线用。");
 					if (!(e instanceof RouteError)) console.error("[assistant] general turn failed:", e);
@@ -527,6 +569,7 @@ export function useAssistant() {
 		mode,
 		setMode,
 		page,
+		guestQuota,
 		nudge,
 		dismissNudge,
 		messages,

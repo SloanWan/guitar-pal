@@ -1,5 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createHash } from "node:crypto";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import {
+	admitGuestTurn,
+	decodeGuest,
+	encodeGuest,
+	GUEST_COOKIE,
+	GUEST_TURN_LIMIT,
+	GUEST_WINDOW_MS,
+	newGuest,
+	type GuestQuota,
+} from "@/lib/assistant/general/guest";
 import { callGeneral } from "@/lib/assistant/general/model";
 import { MODEL, type GeneralContext } from "@/lib/assistant/general/request";
 import { isToolName } from "@/lib/assistant/general/tools";
@@ -14,11 +25,15 @@ import type { AssistantErrorBody } from "@/lib/assistant/types";
  * never cost an API call.
  *
  * Abuse controls, in order of how much they actually matter:
- *  1. A signed-in user is required. An open LLM endpoint is a free proxy for
- *     anyone who finds it, and that is how a side project gets a large bill.
- *  2. Per-user rate limiting, per model call (see rateLimit.ts for its
- *     in-process caveat). A turn is at most three calls, so this is a dozen
- *     turns an hour.
+ *  1. A signed-in user gets a per-user rate limit, per model call (see
+ *     rateLimit.ts for its in-process caveat). A turn is at most a few
+ *     calls, so this is a dozen turns an hour.
+ *  2. A guest gets three turns a day, counted in a signed cookie (guest.ts),
+ *     under an hourly cap per IP and a daily budget for all guests together —
+ *     the two that bound a visitor who clears the cookie. An open LLM
+ *     endpoint is otherwise a free proxy for anyone who finds it, and that
+ *     is how a side project gets a large bill; the budget is what keeps the
+ *     worst case a known number.
  *  3. Hard caps on messages, text length and output tokens; tool blocks only
  *     for the tools this app has.
  */
@@ -31,14 +46,58 @@ const MAX_CHARS_PER_RESULT = 1000;
 const MAX_NAMES = 100;
 const MAX_NAME_CHARS = 80;
 
-const limiter = new SlidingWindowLimiter({ limit: 40, windowMs: 60 * 60 * 1000 });
+const HOUR_MS = 60 * 60 * 1000;
+const limiter = new SlidingWindowLimiter({ limit: 40, windowMs: HOUR_MS });
+/** Guests, per IP: enough for a few turns' worth of loops, not for a script. */
+const guestIpLimiter = new SlidingWindowLimiter({ limit: 20, windowMs: HOUR_MS });
+/** Guests, all together, per day — the number the worst case on one instance cannot exceed. */
+const GUEST_DAILY_CALLS = Number(process.env.ASSISTANT_GUEST_DAILY_CALLS) || 300;
+const guestBudget = new SlidingWindowLimiter({ limit: GUEST_DAILY_CALLS, windowMs: GUEST_WINDOW_MS });
+
+/**
+ * The cookie's signing key, derived from the one secret this route already
+ * needs. A signature never reveals the key, and a leaked cookie is worth
+ * three turns.
+ */
+function guestKey(): string {
+	return createHash("sha256").update(`assistant-guest:${process.env.ANTHROPIC_API_KEY ?? ""}`).digest("hex");
+}
+
+/**
+ * The first hop of `x-forwarded-for`, which the platform in front of this
+ * sets. With no proxy every guest shares the one bucket, which errs safe.
+ */
+function clientIp(request: Request): string {
+	const forwarded = request.headers.get("x-forwarded-for");
+	const first = forwarded?.split(",")[0]?.trim();
+	return first || request.headers.get("x-real-ip") || "unknown";
+}
+
+function readCookie(request: Request, name: string): string | undefined {
+	const header = request.headers.get("cookie");
+	if (!header) return undefined;
+	for (const part of header.split(";")) {
+		const [k, ...rest] = part.trim().split("=");
+		if (k === name) return rest.join("=");
+	}
+	return undefined;
+}
+
+function guestCookieHeader(value: string): string {
+	const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+	return `${GUEST_COOKIE}=${value}; Path=/api/assistant; Max-Age=${Math.floor(GUEST_WINDOW_MS / 1000)}; HttpOnly; SameSite=Lax${secure}`;
+}
 
 function json(body: unknown, status: number, headers?: HeadersInit): Response {
 	return Response.json(body, { status, headers });
 }
 
-function error(message: string, status: number, retryAfterSeconds?: number): Response {
-	const body: AssistantErrorBody = { error: message, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
+function error(message: string, status: number, retryAfterSeconds?: number, guest?: GuestQuota): Response {
+	const body: AssistantErrorBody = {
+		error: message,
+		...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+		...(guest ? { guest } : {}),
+	};
 	return json(body, status, retryAfterSeconds ? { "Retry-After": String(retryAfterSeconds) } : undefined);
 }
 
@@ -137,13 +196,36 @@ export async function POST(request: Request): Promise<Response> {
 	const {
 		data: { user },
 	} = await supabase.auth.getUser();
-	if (!user) {
-		return error("Sign in to use the General assistant. Strum and Tab work signed out.", 401);
-	}
 
-	const verdict = limiter.check(user.id);
-	if (!verdict.allowed) {
-		return error("You have used the assistant a lot in the last hour. Try again shortly.", 429, verdict.retryAfterSeconds);
+	/** Who this call is logged as, and — for a guest — the cookie and quota to send back. */
+	let who: string;
+	let guest: { cookie: string; quota: GuestQuota } | null = null;
+	if (user) {
+		who = `user=${user.id}`;
+		const verdict = limiter.check(user.id);
+		if (!verdict.allowed) {
+			return error("You have used the assistant a lot in the last hour. Try again shortly.", 429, verdict.retryAfterSeconds);
+		}
+	} else {
+		const turnId = body.turnId;
+		if (typeof turnId !== "string" || turnId === "" || turnId.length > 64) return error("A guest turn needs a turnId.", 400);
+		const key = guestKey();
+		const record = decodeGuest(readCookie(request, GUEST_COOKIE), key) ?? newGuest();
+		const admitted = admitGuestTurn(record, turnId, Date.now());
+		if (!admitted.allowed) {
+			return error(
+				`Your ${GUEST_TURN_LIMIT} free turns for today are used up. Sign in to keep going.`,
+				429,
+				admitted.retryAfterSeconds,
+				admitted.quota,
+			);
+		}
+		const ip = guestIpLimiter.check(clientIp(request));
+		if (!ip.allowed) return error("Too many free turns from this connection. Sign in, or try again later.", 429, ip.retryAfterSeconds, admitted.quota);
+		const budget = guestBudget.check("all");
+		if (!budget.allowed) return error("Today's free turns are all used up. Sign in to continue.", 429, budget.retryAfterSeconds, admitted.quota);
+		who = `guest=${record.id}`;
+		guest = { cookie: encodeGuest(admitted.record, key), quota: admitted.quota };
 	}
 
 	const client = new Anthropic();
@@ -152,9 +234,10 @@ export async function POST(request: Request): Promise<Response> {
 		const tools = step.content.filter((b) => b.type === "tool_use").map((b) => (b.type === "tool_use" ? b.name : "")).join(",");
 		// One line per model call, with everything a cost-per-call figure needs.
 		console.info(
-			`[assistant] user=${user.id} model=${MODEL} stop=${attempt.stopReason} tools=${tools || "-"} in=${attempt.inputTokens} out=${attempt.outputTokens} cache_read=${attempt.cacheReadTokens} cache_write=${attempt.cacheWriteTokens} latency_ms=${latencyMs}`,
+			`[assistant] ${who} model=${MODEL} stop=${attempt.stopReason} tools=${tools || "-"} in=${attempt.inputTokens} out=${attempt.outputTokens} cache_read=${attempt.cacheReadTokens} cache_write=${attempt.cacheWriteTokens} latency_ms=${latencyMs}`,
 		);
-		return json(step, 200);
+		if (!guest) return json(step, 200);
+		return json({ ...step, guest: guest.quota }, 200, { "Set-Cookie": guestCookieHeader(guest.cookie) });
 	} catch (e) {
 		if (e instanceof Anthropic.RateLimitError) {
 			return error("The assistant is busy. Try again in a moment.", 429);

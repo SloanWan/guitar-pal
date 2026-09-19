@@ -69,6 +69,8 @@ const ask = (content: unknown = "a slow folk strum in C") => ({ messages: [{ rol
 let userSeq = 0;
 beforeEach(() => {
 	vi.clearAllMocks();
+	// A refused call leaves its queued reply unconsumed; the queue must not leak.
+	mocks.create.mockReset();
 	process.env.ANTHROPIC_API_KEY = "sk-ant-test";
 	userSeq += 1;
 	mocks.user = { id: `user-${userSeq}` };
@@ -130,10 +132,10 @@ describe("POST /api/assistant", () => {
 			expect(mocks.create).not.toHaveBeenCalled();
 		});
 
-		it("requires a signed-in user", async () => {
+		it("gives a guest no turn without a turn id", async () => {
 			mocks.user = null;
 			const res = await post(ask());
-			expect(res.status).toBe(401);
+			expect(res.status).toBe(400);
 			expect(mocks.create).not.toHaveBeenCalled();
 		});
 
@@ -145,6 +147,87 @@ describe("POST /api/assistant", () => {
 			expect(res.headers.get("Retry-After")).toMatch(/^\d+$/);
 			expect(await res.json()).toMatchObject({ retryAfterSeconds: expect.any(Number) });
 			expect(mocks.create).toHaveBeenCalledTimes(40);
+		});
+	});
+
+	describe("a guest's free turns", () => {
+		const ok = () => modelMessage([{ type: "text", text: "ok" }]);
+		/** Posts as a guest, carrying the cookie the last reply set, from a given IP. */
+		function guest(ip = "203.0.113.7") {
+			let cookie: string | undefined;
+			return {
+				async turn(turnId: string) {
+					mocks.create.mockResolvedValueOnce(ok());
+					const res = await POST(
+						new Request("http://localhost/api/assistant", {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								"x-forwarded-for": `${ip}, 10.0.0.1`,
+								...(cookie ? { cookie: `other=1; ${cookie}` } : {}),
+							},
+							body: JSON.stringify({ ...ask("C G"), turnId }),
+						}),
+					);
+					const set = res.headers.get("set-cookie");
+					if (set) cookie = set.split(";")[0];
+					return { res, body: await res.json(), set };
+				},
+				get cookie() {
+					return cookie;
+				},
+				set cookie(v: string | undefined) {
+					cookie = v;
+				},
+			};
+		}
+
+		beforeEach(() => {
+			mocks.user = null;
+		});
+
+		it("issues a signed, HttpOnly cookie and counts the turn in the reply", async () => {
+			const g = guest();
+			const { res, body, set } = await g.turn("t1");
+			expect(res.status).toBe(200);
+			expect(body.guest).toEqual({ used: 1, limit: 3 });
+			expect(set).toMatch(/^guitarpal_assistant_guest=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+; Path=\/api\/assistant; Max-Age=86400; HttpOnly; SameSite=Lax$/);
+		});
+
+		it("counts a turn once across its loop, and refuses the fourth turn", async () => {
+			const g = guest("203.0.113.8");
+			expect((await g.turn("t1")).body.guest.used).toBe(1);
+			expect((await g.turn("t1")).body.guest.used).toBe(1);
+			expect((await g.turn("t2")).body.guest.used).toBe(2);
+			expect((await g.turn("t3")).body.guest.used).toBe(3);
+			const { res, body } = await g.turn("t4");
+			expect(res.status).toBe(429);
+			expect(body).toMatchObject({ guest: { used: 3, limit: 3 }, retryAfterSeconds: expect.any(Number) });
+			expect(body.error).toMatch(/Sign in/);
+			expect(mocks.create).toHaveBeenCalledTimes(4);
+		});
+
+		it("treats a tampered cookie as a new guest", async () => {
+			const g = guest("203.0.113.9");
+			await g.turn("t1");
+			await g.turn("t2");
+			await g.turn("t3");
+			g.cookie = `${g.cookie!.slice(0, -3)}xyz`;
+			const { res, body } = await g.turn("t4");
+			expect(res.status).toBe(200);
+			expect(body.guest.used).toBe(1);
+		});
+
+		it("caps guests per IP however many cookies they clear", async () => {
+			const ip = "203.0.113.10";
+			let last: { res: Response; body: { error?: string } } | null = null;
+			for (let i = 0; i < 21; i++) {
+				const g = guest(ip);
+				last = await g.turn(`t${i}`);
+				if (i < 20) expect(last.res.status).toBe(200);
+			}
+			expect(last!.res.status).toBe(429);
+			expect(last!.body.error).toMatch(/connection/);
 		});
 	});
 

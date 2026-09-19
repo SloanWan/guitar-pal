@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import type { TickLevel } from "@/lib/strumMetronome";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { resolveBarChords } from "@/lib/strumBars";
 import { barLocalBeatIndex, setBarChord } from "@/lib/strumBarEdit";
 import { useAudioEngine, type BarPitches } from "@/components/strum/useAudioEngine";

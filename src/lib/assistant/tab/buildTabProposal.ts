@@ -1,4 +1,4 @@
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import type { BeatSlot, Duration, FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import {
 	DURATION_TICKS,

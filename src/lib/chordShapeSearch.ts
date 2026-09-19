@@ -1,6 +1,6 @@
 import { MUTED, voicingToChordShape, type ShapeFret } from "@/lib/chordShape";
 import { getSuffixCategory, isSlashChord } from "@/lib/chordSuffixes";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { TAB_STRING_COUNT } from "@/lib/chordTabSequence";
 import type { UserChordVoicing } from "@/lib/userChordVoicings";
 import type { ChordRef } from "@/lib/strumPatterns";

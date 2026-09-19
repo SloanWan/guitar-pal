@@ -1,4 +1,4 @@
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { loadVoicings, peekVoicings } from "@/lib/chordVoicingCache";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { selectRefVoicing } from "@/lib/strumBars";

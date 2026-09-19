@@ -1,5 +1,5 @@
-import { decodeVoicingStrings } from "./chordVoicingToVexChords";
-import type { ChordVoicing } from "./chordVoicingToVexChords";
+import { decodeVoicingStrings } from "./chordVoicing";
+import type { ChordVoicing } from "./chordVoicing";
 
 // MIDI pitch of each open string: index 0 = string 6 (low E = E2), index 5 = string 1 (high e = E4)
 export const GUITAR_OPEN_MIDI: readonly number[] = [40, 45, 50, 55, 59, 64];

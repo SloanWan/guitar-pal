@@ -12,8 +12,8 @@
  * voicing straddles the window is simply not reachable here. Deriving a shape
  * that the library does not have is the CAGED problem, and not this one.
  */
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
-import { decodeVoicingStrings } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
+import { decodeVoicingStrings } from "@/lib/chordVoicing";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 
 import type { KeyChord } from "./chords";

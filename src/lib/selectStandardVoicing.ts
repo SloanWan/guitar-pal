@@ -1,4 +1,4 @@
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 export function selectStandardVoicing(voicings: ChordVoicing[]): ChordVoicing | null {
   if (voicings.length === 0) return null;

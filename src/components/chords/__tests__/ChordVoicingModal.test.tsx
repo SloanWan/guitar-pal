@@ -9,7 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import ChordVoicingModal from "@/components/chords/ChordVoicingModal";
 import type { ChordPreview } from "@/components/chords/useChordPreview";
 import { toVoicingCards } from "@/lib/chordCards";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 

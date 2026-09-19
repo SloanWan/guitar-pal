@@ -1,4 +1,4 @@
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 /**
  * A chord shape as the player edits it, and its translation to the stored

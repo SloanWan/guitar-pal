@@ -30,7 +30,7 @@ import {
 	STRUM_BPM_MAX,
 	STRUM_BPM_MIN,
 } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 function voicing(overrides: Partial<ChordVoicing>): ChordVoicing {
 	return {
@@ -280,20 +280,15 @@ describe("chordRefToDiagram — the ChordRef → fretboard shape boundary", () =
 		const def = chordRefToDiagram(C_REF, [C_BARRE, C_MAJOR]);
 		// x32010 at the nut: muted low E, then frets 3-2-0-1-0.
 		expect(def).not.toBeNull();
-		expect(def!.position).toBe(1);
-		expect(def!.chord).toEqual([
-			[6, "x"],
-			[5, 3, "3"],
-			[4, 2, "2"],
-			[3, 0],
-			[2, 1, "1"],
-			[1, 0],
-		]);
+		expect(def!.startFret).toBe(1);
+		expect(def!.frets).toEqual([-1, 3, 2, 0, 1, 0]);
+		expect(def!.fingers).toEqual([0, 3, 2, 0, 1, 0]);
 	});
 
 	it("draws the pinned voicing, so the shape matches what sounds", () => {
 		const def = chordRefToDiagram({ ...C_REF, voicingId: "c-barre" }, [C_MAJOR, C_BARRE]);
-		expect(def!.position).toBe(3);
+		expect(def!.startFret).toBe(3);
+		expect(def!.frets).toEqual([-1, 3, 5, 5, 5, 3]);
 	});
 
 	it("returns null for a bar with no chord, and for a chord with no voicings", () => {

@@ -2,7 +2,7 @@
 // nearest the key, the standard one when two are as near.
 import { describe, it, expect } from "vitest";
 
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { voicingNearest } from "@/lib/fretboard/voicingRegister";
 
 function voicing(frets: string, start_fret: number, label: string | null = null): ChordVoicing {

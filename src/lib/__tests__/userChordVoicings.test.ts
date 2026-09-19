@@ -22,7 +22,7 @@ import {
 import { chordShapeToVoicing, MUTED, type ChordShape } from "@/lib/chordShape";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { resolveBarChords, selectRefVoicing } from "@/lib/strumBars";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 const SHAPE: ChordShape = {
 	startFret: 9,

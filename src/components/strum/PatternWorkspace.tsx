@@ -102,6 +102,19 @@ interface Props {
 	userVoicings?: readonly UserChordVoicing[];
 	/** Returns the row the shape actually lives in — its id may not be the one just minted. */
 	onSaveVoicing?: (voicing: UserChordVoicing) => UserChordVoicing;
+	/**
+	 * A shared snapshot: nothing here can be written. The chord line that adds
+	 * a progression, the open progression's edit and delete, and the
+	 * Progressions tab when there is no progression to show, are all hidden.
+	 */
+	readOnly?: boolean;
+	/**
+	 * Copy a link to a snapshot of what is on screen — the pattern, and the
+	 * open progression with it. Absent on a share page, where the viewer
+	 * already holds the link.
+	 */
+	onShare?: () => void;
+	sharing?: boolean;
 }
 
 /**
@@ -178,6 +191,9 @@ export default function PatternWorkspace({
 	onApplyChordShape,
 	userVoicings = [],
 	onSaveVoicing,
+	readOnly = false,
+	onShare,
+	sharing = false,
 }: Props) {
 	const selected = progressions.find((p) => p.id === selectedProgressionId) ?? null;
 
@@ -613,17 +629,31 @@ export default function PatternWorkspace({
 				<TabButton active={tab === "pattern"} onClick={() => onTabChange("pattern")}>
 					Pattern
 				</TabButton>
-				<TabButton
-					active={tab === "progressions"}
-					onClick={() => onTabChange("progressions")}
-				>
-					Progressions{progressions.length > 0 ? ` (${progressions.length})` : ""}
-				</TabButton>
+				{!(readOnly && progressions.length === 0) && (
+					<TabButton
+						active={tab === "progressions"}
+						onClick={() => onTabChange("progressions")}
+					>
+						Progressions{progressions.length > 0 ? ` (${progressions.length})` : ""}
+					</TabButton>
+				)}
 			</div>
 
 			{/* The card header — pattern name and written rhythm — belongs to both
 			    tabs; only the body below it switches. */}
-			<StepGridCard pattern={pattern} onEditPattern={onEditPattern}>
+			<StepGridCard
+				pattern={pattern}
+				onEditPattern={onEditPattern}
+				onShare={onShare}
+				sharing={sharing}
+				shareTitle={
+					tab === "progressions" && progressions.length > 1
+						? "Copy a link to this pattern — choose which progressions go with it"
+						: tab === "progressions" && selected
+							? "Copy a link to this pattern with the open progression"
+							: "Copy a link to this pattern"
+				}
+			>
 				{tab === "pattern" ? (
 					<PatternBarBody
 						meter={meter}
@@ -643,7 +673,7 @@ export default function PatternWorkspace({
 							No chord progressions yet. Type a chord sequence to play {pattern.name}{" "}
 							over it.
 						</p>
-						{composer("full")}
+						{!readOnly && composer("full")}
 					</div>
 				) : selected === null ? (
 					// Nothing opened yet: the list gets the whole body.
@@ -669,7 +699,7 @@ export default function PatternWorkspace({
 								</span>
 							</button>
 						))}
-						{composer("full")}
+						{!readOnly && composer("full")}
 					</div>
 				) : (
 					// One opened: the list shrinks to a rail on the left of the body.
@@ -704,7 +734,7 @@ export default function PatternWorkspace({
 										</button>
 									);
 								})}
-								{composer("rail")}
+								{!readOnly && composer("rail")}
 							</div>
 						</div>
 
@@ -810,24 +840,28 @@ export default function PatternWorkspace({
 											<ChevronsDown size={14} className={autoScrollActive ? "animate-bounce" : ""} />
 										</button>
 										<ChordViewToggle value={chordView} onChange={setChordView} />
-										<button
-											type="button"
-											onClick={() => onEditProgression(selected)}
-											aria-label="Edit progression"
-											title="Edit progression"
-											className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:bg-denim-tint hover:text-denim"
-										>
-											<Pencil size={14} />
-										</button>
-										<button
-											type="button"
-											onClick={() => setDeleteConfirmId(selected.id)}
-											aria-label="Delete progression"
-											title="Delete progression"
-											className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:bg-denim-tint hover:text-destructive"
-										>
-											<Trash2 size={14} />
-										</button>
+										{!readOnly && (
+											<>
+												<button
+													type="button"
+													onClick={() => onEditProgression(selected)}
+													aria-label="Edit progression"
+													title="Edit progression"
+													className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:bg-denim-tint hover:text-denim"
+												>
+													<Pencil size={14} />
+												</button>
+												<button
+													type="button"
+													onClick={() => setDeleteConfirmId(selected.id)}
+													aria-label="Delete progression"
+													title="Delete progression"
+													className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:bg-denim-tint hover:text-destructive"
+												>
+													<Trash2 size={14} />
+												</button>
+											</>
+										)}
 									</div>
 								)}
 							</div>

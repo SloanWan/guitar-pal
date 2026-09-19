@@ -2,9 +2,7 @@
 
 import React from "react";
 
-const OPEN_STRING_MIDI = [40, 45, 50, 55, 59, 64] as const;
-const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"] as const;
-const STRING_LABELS = ["E","A","D","G","B","e"] as const;
+import { GUITAR_OPEN_MIDI, NOTE_NAMES, STRING_LABELS } from "@/lib/chordVoicingToMidi";
 
 // SVG layout (px, "regular" size)
 // viewBox: 0 0 184 158
@@ -77,7 +75,7 @@ export default function ChordDiagramSVG({
   const rootPitchClass = rootMidi !== undefined ? rootMidi % 12 : -1;
 
   function pitchClass(s: number, fret: number): number {
-    return (OPEN_STRING_MIDI[s] + fret) % 12;
+    return (GUITAR_OPEN_MIDI[s] + fret) % 12;
   }
 
   function isRoot(s: number, fret: number): boolean {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { StrumPattern, Beat, Bar } from "@/lib/strumPatterns";
+import { StrumPattern, Beat } from "@/lib/strumPatterns";
 import {
 	normalizeBeats,
 	normalizeBpm,
@@ -7,7 +7,8 @@ import {
 	patternMeter,
 	sortPatternsByNewest,
 } from "@/lib/strumBars";
-import { normalizeMeter, type Meter } from "@/lib/strumMeter";
+import { normalizeMeter } from "@/lib/strumMeter";
+import { patternColumns, STRUM_PATTERNS_STORAGE_KEY } from "@/lib/strumStorage";
 import { createClient } from "@/lib/supabase";
 import { getUser } from "@/lib/auth";
 import { toast } from "sonner";
@@ -33,27 +34,6 @@ function rowToPattern(row: StrumPatternRow): StrumPattern {
 		bpm: normalizeBpm(row.bpm),
 		meter: normalizeMeter(row.meter),
 		createdAt: row.created_at,
-	};
-}
-
-/**
- * Columns written for a pattern. `bars` mirrors the single bar so the column
- * stays consistent with `beats` for any reader still looking at it; chord
- * sequences live in their own table, never here.
- */
-function patternColumns(pattern: StrumPattern): {
-	name: string;
-	beats: Beat[];
-	bars: Bar[];
-	bpm: number;
-	meter: Meter;
-} {
-	return {
-		name: pattern.name,
-		beats: pattern.beats,
-		bars: [{ beats: pattern.beats, chord: null }],
-		bpm: patternBpm(pattern),
-		meter: patternMeter(pattern),
 	};
 }
 
@@ -83,7 +63,7 @@ export async function fetchCustomPatterns(user?: User | null): Promise<StrumPatt
 	const account = user === undefined ? await getUser() : user;
 	if (!account) {
 		try {
-			const saved = localStorage.getItem("customStrumPatterns");
+			const saved = localStorage.getItem(STRUM_PATTERNS_STORAGE_KEY);
 			return saved ? sanitizeStoredPatterns(JSON.parse(saved) as StrumPattern[]) : [];
 		} catch {
 			return [];
@@ -112,7 +92,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		if (loading || user) return;
 		let localPatterns: StrumPattern[] = [];
 		try {
-			const saved = localStorage.getItem("customStrumPatterns");
+			const saved = localStorage.getItem(STRUM_PATTERNS_STORAGE_KEY);
 			if (saved)
 				localPatterns = sanitizeStoredPatterns(JSON.parse(saved) as StrumPattern[]);
 		} catch {
@@ -140,7 +120,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 			const supabase = createClient();
 			let merged = false;
 
-			const savedPatterns = localStorage.getItem("customStrumPatterns");
+			const savedPatterns = localStorage.getItem(STRUM_PATTERNS_STORAGE_KEY);
 			if (savedPatterns) {
 				try {
 					const localPatterns = sanitizeStoredPatterns(
@@ -168,7 +148,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 						);
 						merged = true;
 					}
-					localStorage.removeItem("customStrumPatterns");
+					localStorage.removeItem(STRUM_PATTERNS_STORAGE_KEY);
 				} catch (e) {
 					console.error(e);
 				}
@@ -260,7 +240,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 			};
 			const updated = sortPatternsByNewest([...customPatterns, stamped]);
 			setCustomPatterns(updated);
-			localStorage.setItem("customStrumPatterns", JSON.stringify(updated));
+			localStorage.setItem(STRUM_PATTERNS_STORAGE_KEY, JSON.stringify(updated));
 		}
 	}
 
@@ -286,14 +266,14 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 				}
 			})();
 		} else {
-			localStorage.setItem("customStrumPatterns", JSON.stringify(next));
+			localStorage.setItem(STRUM_PATTERNS_STORAGE_KEY, JSON.stringify(next));
 		}
 	}
 
 	function handleDeleteCustomPattern(id: string) {
 		const updated = customPatterns.filter((p) => p.id !== id);
 		setCustomPatterns(updated);
-		localStorage.setItem("customStrumPatterns", JSON.stringify(updated));
+		localStorage.setItem(STRUM_PATTERNS_STORAGE_KEY, JSON.stringify(updated));
 
 		// A favourite record for a pattern that no longer exists would keep the
 		// favourites tab listing a ghost, so it goes with the pattern.

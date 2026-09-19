@@ -4,8 +4,9 @@ import { validateBars, normalizeBars, normalizeBpm } from "@/lib/strumBars";
 import { normalizeCapo, normalizeProgressionSync } from "@/lib/strumProgressions";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import { progressionColumns, STRUM_PROGRESSIONS_STORAGE_KEY } from "@/lib/strumStorage";
 
-const STORAGE_KEY = "chordProgressions";
+const STORAGE_KEY = STRUM_PROGRESSIONS_STORAGE_KEY;
 
 /** A Supabase row from `user_pattern_progressions`; the table is not code-generated. */
 interface ProgressionRow {
@@ -39,22 +40,6 @@ function rowToProgression(row: ProgressionRow): ChordProgression | null {
 			followsPattern: row.follows_pattern,
 			syncNoticeDismissed: row.sync_notice_dismissed,
 		}),
-	};
-}
-
-function progressionColumns(progression: ChordProgression, userId: string) {
-	return {
-		id: progression.id,
-		user_id: userId,
-		pattern_id: progression.patternId,
-		bars: progression.bars,
-		order_index: progression.orderIndex,
-		name: progression.name?.trim() || null,
-		bpm: progression.bpm === undefined ? null : normalizeBpm(progression.bpm),
-		capo: normalizeCapo(progression.capo),
-		synced_beats: progression.syncedBeats ?? null,
-		follows_pattern: progression.followsPattern ?? null,
-		sync_notice_dismissed: progression.syncNoticeDismissed ?? null,
 	};
 }
 

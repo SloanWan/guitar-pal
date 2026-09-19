@@ -40,6 +40,7 @@ import { TOOL_NAMES } from "@/lib/assistant/general/tools";
 
 function modelMessage(content: unknown[], stopReason = "end_turn") {
 	return {
+		model: "claude-sonnet-5",
 		content,
 		stop_reason: stopReason,
 		usage: { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: 0 },
@@ -152,7 +153,7 @@ describe("POST /api/assistant", () => {
 			mocks.create.mockResolvedValueOnce(modelMessage(TOOL_CALL, "tool_use"));
 			const res = await post(ask("C G Am F"));
 			expect(res.status).toBe(200);
-			expect(await res.json()).toEqual({ content: TOOL_CALL, stopReason: "tool_use" });
+			expect(await res.json()).toEqual({ content: TOOL_CALL, stopReason: "tool_use", model: "claude-sonnet-5" });
 		});
 
 		it("sends the tools, a cached system prefix, the context on the user's message, and every message as data", async () => {
@@ -177,7 +178,7 @@ describe("POST /api/assistant", () => {
 		it("answers a refusal with the fixed line rather than the model's", async () => {
 			mocks.create.mockResolvedValueOnce(modelMessage([{ type: "text", text: "I won't." }], "refusal"));
 			const body = await (await post(ask("something off"))).json();
-			expect(body).toEqual({ content: [{ type: "text", text: REFUSAL_REPLY, citations: null }], stopReason: "refusal" });
+			expect(body).toEqual({ content: [{ type: "text", text: REFUSAL_REPLY, citations: null }], stopReason: "refusal", model: "claude-sonnet-5" });
 		});
 	});
 

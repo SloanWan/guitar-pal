@@ -21,6 +21,8 @@ import type { AssistantTurn } from "@/lib/assistant/types";
 export interface ModelStep {
 	content: Anthropic.ContentBlock[];
 	stopReason: Anthropic.StopReason | null;
+	/** The model that wrote this step, as the API names it — shown under the reply. */
+	model?: string;
 }
 
 export type ToolInput = ReadInput | ProposeStrumInput | ProposeTabInput;
@@ -48,6 +50,8 @@ export interface GeneralTurnOutcome {
 	toolsFailed: boolean;
 	/** Each tool call and what it came back with, for the eval log and the console. */
 	trace: ToolTrace[];
+	/** The model that answered, when a step said. */
+	model?: string;
 }
 
 export interface ToolTrace {
@@ -87,10 +91,12 @@ export async function resolveGeneralTurn({
 	let succeeded = 0;
 	let calls = 0;
 	let spoken = "";
+	let model: string | undefined;
 
 	while (calls < maxCalls) {
 		const step = await call(messages, context);
 		calls += 1;
+		if (step.model) model = step.model;
 		spoken = step.content
 			.filter((b): b is Anthropic.TextBlock => b.type === "text")
 			.map((b) => b.text.trim())
@@ -127,6 +133,7 @@ export async function resolveGeneralTurn({
 		toolsUsed,
 		toolsFailed: toolsUsed.length > 0 && succeeded === 0,
 		trace,
+		...(model ? { model } : {}),
 	};
 }
 

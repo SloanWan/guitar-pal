@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGeneralRequest, contextBlock, withContext, type GeneralContext } from "@/lib/assistant/general/request";
+import { buildGeneralRequest, contextBlock, modelDisplayName, withContext, type GeneralContext } from "@/lib/assistant/general/request";
 import { TOOL_NAMES } from "@/lib/assistant/general/tools";
 
 const ctx: GeneralContext = { page: "strum", strumNames: ["belief"], tabNames: [], lang: "zh" };
@@ -53,5 +53,17 @@ describe("the General request", () => {
 		expect(block).toContain('"belief"');
 		expect(block).toContain("fingerpicking patterns the player has: none");
 		expect(block).toContain("interface language: zh");
+	});
+});
+
+describe("modelDisplayName", () => {
+	it("prints a model id as its name", () => {
+		expect(modelDisplayName("claude-sonnet-5")).toBe("Claude Sonnet 5");
+		expect(modelDisplayName("claude-haiku-4-5")).toBe("Claude Haiku 4.5");
+		expect(modelDisplayName("claude-opus-5")).toBe("Claude Opus 5");
+	});
+
+	it("leaves an id it cannot read alone", () => {
+		expect(modelDisplayName("some-model-20260101")).toBe("some-model-20260101");
 	});
 });

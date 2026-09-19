@@ -92,6 +92,8 @@ export interface AssistantMessage {
 	 * switches the mode and answers again.
 	 */
 	readAs?: { domain: AssistantDomain; text: string };
+	/** The model that wrote this reply, when one did. A rules reply has none. */
+	model?: string;
 	/** Set when the turn failed; rendered as an error rather than as speech. */
 	failed?: boolean;
 	/** True once the edit this message carried was confirmed and handed over. */
@@ -412,7 +414,12 @@ export function useAssistant() {
 				};
 				try {
 					const outcome = await resolveGeneralTurn({ text, history, context, call: callRoute, execute, uiLang: uiLang() });
-					Object.assign(reply, { text: outcome.text, lang: outcome.lang, ...cardFields(outcome.card) });
+					Object.assign(reply, {
+						text: outcome.text,
+						lang: outcome.lang,
+						...(outcome.model ? { model: outcome.model } : {}),
+						...cardFields(outcome.card),
+					});
 				} catch (e) {
 					const lang = uiLang();
 					reply.failed = true;

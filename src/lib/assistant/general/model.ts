@@ -45,7 +45,7 @@ export async function callGeneral(
 	const response = await client.messages.create(buildGeneralRequest(model, messages, context));
 	const step: ModelStep =
 		response.stop_reason === "refusal"
-			? { content: [{ type: "text", text: REFUSAL_REPLY, citations: null }], stopReason: "refusal" }
-			: { content: response.content, stopReason: response.stop_reason };
+			? { content: [{ type: "text", text: REFUSAL_REPLY, citations: null }], stopReason: "refusal", model: response.model }
+			: { content: response.content, stopReason: response.stop_reason, model: response.model };
 	return { step, attempt: attemptOf(response), latencyMs: Date.now() - started };
 }

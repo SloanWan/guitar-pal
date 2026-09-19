@@ -16,6 +16,18 @@ import type { Lang } from "@/lib/assistant/lang";
 export const DEFAULT_MODEL = "claude-sonnet-5";
 export const MODEL = process.env.ASSISTANT_MODEL || DEFAULT_MODEL;
 
+/**
+ * The model's id as a name to print: "claude-sonnet-5" → "Claude Sonnet 5",
+ * "claude-haiku-4-5" → "Claude Haiku 4.5". An id in a shape this does not
+ * know is printed as it is — an honest label beats a wrong one.
+ */
+export function modelDisplayName(id: string): string {
+	const m = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(id);
+	if (!m) return id;
+	const family = m[1][0].toUpperCase() + m[1].slice(1);
+	return `Claude ${family} ${m[3] ? `${m[2]}.${m[3]}` : m[2]}`;
+}
+
 /** Text and at most a few tool calls: a large cap would only widen the blast radius. */
 export const MAX_OUTPUT_TOKENS = 2048;
 

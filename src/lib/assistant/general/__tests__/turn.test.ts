@@ -53,6 +53,12 @@ describe("resolveGeneralTurn", () => {
 		expect(second[2]).toEqual({ role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "Made it.", is_error: false }] });
 	});
 
+	it("remembers which model answered", async () => {
+		const model = scripted([{ ...step([text("ok")]), model: "claude-sonnet-5" }]);
+		const out = await resolveGeneralTurn({ text: "hi", history: [], context: ctx, call: model.call, execute: vi.fn() });
+		expect(out.model).toBe("claude-sonnet-5");
+	});
+
 	it("carries the thread's earlier turns as plain text", async () => {
 		const model = scripted([step([text("ok")])]);
 		await resolveGeneralTurn({

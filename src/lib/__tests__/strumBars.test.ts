@@ -30,7 +30,7 @@ import {
 	STRUM_BPM_MAX,
 	STRUM_BPM_MIN,
 } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 function voicing(overrides: Partial<ChordVoicing>): ChordVoicing {
 	return {

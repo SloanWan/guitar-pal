@@ -1,6 +1,6 @@
 "use client";
 
-import type { VexChordDef } from "@/lib/chordVoicingToVexChords";
+import type { VexChordDef } from "@/lib/chordVoicing";
 import ChordDiagramSVG, {
 	type DiagramMode,
 	type DiagramSize,

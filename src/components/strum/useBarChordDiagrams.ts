@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import { chordRefToDiagram } from "@/lib/strumBars";
 import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
-import type { ChordVoicing, VexChordDef } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing, VexChordDef } from "@/lib/chordVoicing";
 import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**

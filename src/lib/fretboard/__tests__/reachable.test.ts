@@ -3,7 +3,7 @@
 // shape up, and the shape shown is the standard one when it fits.
 import { describe, it, expect } from "vitest";
 
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { keyChords } from "@/lib/fretboard/chords";
 import { MIN_REACHABLE, reachableChords, voicingFits } from "@/lib/fretboard/reachable";
 

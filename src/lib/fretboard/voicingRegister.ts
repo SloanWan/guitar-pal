@@ -8,7 +8,7 @@
  * C gets the open C; pressing a high one gets the barre up the neck. A key
  * above anything the guitar can reach gets the highest shape there is.
  */
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 import { shapePitches } from "./chords";
 

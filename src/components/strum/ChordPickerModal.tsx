@@ -21,7 +21,7 @@ import {
 	userSuffixesFiledUnder,
 	userVoicingCategory,
 } from "@/lib/userChordVoicings";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import {

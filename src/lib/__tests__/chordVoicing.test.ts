@@ -4,7 +4,7 @@ import {
   decodeVoicingStrings,
   selectStandardVoicing,
   type ChordVoicing,
-} from "@/lib/chordVoicingToVexChords";
+} from "@/lib/chordVoicing";
 
 function voicing(overrides: Partial<ChordVoicing>): ChordVoicing {
   return {

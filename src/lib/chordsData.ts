@@ -15,7 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 import { isBrowsableSuffix, sortRoots } from "@/lib/chordSuffixes";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 export interface ChordWithVoicings {
 	id: string;

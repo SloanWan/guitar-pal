@@ -23,7 +23,7 @@ import {
 	type ChordShape,
 } from "@/lib/chordShape";
 import { userVoicingId, type UserChordVoicing } from "@/lib/userChordVoicings";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { chordVoicingToVexChords } from "@/lib/chordVoicing";
 
 // Re-exported so existing importers (the chord detail route) keep their import path.
 export type { VoicingCard };

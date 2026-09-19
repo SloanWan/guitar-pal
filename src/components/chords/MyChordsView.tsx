@@ -13,7 +13,7 @@ import { chordHref } from "@/lib/chordSlug";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { voicingFrets } from "@/lib/chordShapeSearch";
 import { formatTabSequence } from "@/lib/chordTabSequence";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { chordVoicingToVexChords } from "@/lib/chordVoicing";
 import { chordVoicingToMidi, rootPitchClass } from "@/lib/chordVoicingToMidi";
 import {
 	userVoicingCategory,

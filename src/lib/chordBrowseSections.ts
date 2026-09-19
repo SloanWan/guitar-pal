@@ -15,7 +15,7 @@ import {
   chordVoicingToVexChords,
   type ChordVoicing,
   type VexChordDef,
-} from "@/lib/chordVoicingToVexChords";
+} from "@/lib/chordVoicing";
 
 export interface BrowseCard {
   key: string;

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { getChord } from "@/lib/chords";
-import { chordVoicingToVexChords, type ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import { chordVoicingToVexChords, type ChordVoicing } from "@/lib/chordVoicing";
 import {
 	groupSuffixes,
 	getSlashSuffixes,

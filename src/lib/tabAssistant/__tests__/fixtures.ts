@@ -1,5 +1,5 @@
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { isBrowsableSuffix } from "@/lib/chordSuffixes";
 import { CHORD_ROWS } from "@/lib/__fixtures__/chordData.fixture";

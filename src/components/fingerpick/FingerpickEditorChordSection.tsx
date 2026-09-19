@@ -12,7 +12,7 @@ import {
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { selectRefVoicing } from "@/lib/strumBars";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { chordVoicingToVexChords } from "@/lib/chordVoicing";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
 import type { ChordVoicingsState } from "./useChordVoicings";

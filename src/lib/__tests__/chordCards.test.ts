@@ -6,7 +6,7 @@ import {
   type ChordWithVoicingsLike,
 } from "@/lib/chordCards";
 import type { BatchToken } from "@/lib/chordBatchResolve";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 function voicing(overrides: Partial<ChordVoicing> = {}): ChordVoicing {
   return {

@@ -54,7 +54,7 @@ import {
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import { clampBpmToMeter, selectRefVoicing } from "@/lib/strumBars";
 import { beatUnitGlyph } from "@/lib/strumMeter";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { chordVoicingToVexChords } from "@/lib/chordVoicing";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
 import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";

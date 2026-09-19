@@ -57,7 +57,7 @@ import Fader from "@/components/ui/Fader";
 import Rocker from "@/components/ui/Rocker";
 import { loadVoicings, peekVoicings } from "@/lib/chordVoicingCache";
 import { GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { chordModeView, inShape, shapeSlots } from "@/lib/fretboard/chordMode";

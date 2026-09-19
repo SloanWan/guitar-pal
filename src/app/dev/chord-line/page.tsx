@@ -10,8 +10,8 @@ import Fader from "@/components/ui/Fader";
 import { fingerpickToVexFlow, type ChordLabel } from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, Duration, Measure, StringFret } from "@/lib/fingerpickTypes";
 import type { ChordRef } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
+import { chordVoicingToVexChords } from "@/lib/chordVoicing";
 import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";
 import { chordRegionEnd, heldButUnplucked } from "@/lib/fingerpickChords";
 

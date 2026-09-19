@@ -2,7 +2,7 @@ import type { BeatSlot, FingerpickPattern, Measure } from "./fingerpickTypes";
 import { setFret, setInactive, type SlotTarget } from "./fingerpickEdit";
 import type { ChordRef } from "./strumPatterns";
 import { chordAbbreviation, normalizeCapo } from "./strumProgressions";
-import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicingToVexChords";
+import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicing";
 import { chordVoicingToMidi, rootPitchClass } from "./chordVoicingToMidi";
 import { isSlashChord } from "./chordSuffixes";
 

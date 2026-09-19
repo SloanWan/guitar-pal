@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "@/components/AppLink";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import type { DiagramSize } from "@/components/chords/ChordDiagramSVG";
-import type { VexChordDef } from "@/lib/chordVoicingToVexChords";
+import type { VexChordDef } from "@/lib/chordVoicing";
 
 interface Props {
 	def: VexChordDef;

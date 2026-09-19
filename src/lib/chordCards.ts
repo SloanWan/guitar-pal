@@ -6,7 +6,7 @@ import {
   chordVoicingToVexChords,
   type ChordVoicing,
   type VexChordDef,
-} from "@/lib/chordVoicingToVexChords";
+} from "@/lib/chordVoicing";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 import { chordDisplayName } from "@/lib/chordSuffixes";

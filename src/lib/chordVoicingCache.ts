@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 // One client-side cache for `chord_voicings` reads, shared by everything that
 // resolves a `ChordRef`: the strum engine's pitch lookup and the chord-diagram

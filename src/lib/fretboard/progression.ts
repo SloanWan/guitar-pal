@@ -13,7 +13,7 @@
  * One strum per bar on the downbeat, four beats to the bar: the bar is the
  * unit of time and the chord is all that changes. Nothing here is persisted.
  */
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 import { chordModeView, shapeSlots } from "./chordMode";
 import { PARENT_SCALE, shapeMarks, shapePitches, type KeyChord } from "./chords";

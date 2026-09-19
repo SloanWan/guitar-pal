@@ -170,6 +170,19 @@ def _chapter(record: asyncpg.Record) -> ChapterRow:
     )
 
 
+def _exercise(r: asyncpg.Record) -> ExerciseRow:
+    return ExerciseRow(
+        id=str(r["id"]),
+        page=r["page"],
+        kind=r["kind"],
+        source=r["source"],
+        draft=json.loads(r["draft"]),
+        warnings=json.loads(r["warnings"]),
+        crop_path=r["crop_path"],
+        status=r["status"],
+    )
+
+
 def _json_list(value: object) -> list[dict[str, object]]:
     """A jsonb list column as asyncpg hands it over (text), or already decoded."""
     decoded = json.loads(value) if isinstance(value, str) else value
@@ -486,6 +499,25 @@ class BookRepo:
             for r in records
         ]
 
+    async def set_exercise_status(
+        self, user_id: str, exercise_id: str, status: ExerciseStatus
+    ) -> ExerciseRow | None:
+        """The draft's status, through the exercise → chapter → book → user chain."""
+        record = await self._pool.fetchrow(
+            """
+            update book_exercises e
+               set status = $3
+              from book_chapters c
+              join user_books b on b.id = c.book_id
+             where e.id = $2 and e.chapter_id = c.id and b.user_id = $1
+            returning e.id, e.page, e.kind, e.source, e.draft, e.warnings, e.crop_path, e.status
+            """,
+            user_id,
+            exercise_id,
+            status,
+        )
+        return _exercise(record) if record else None
+
     async def list_exercises(self, chapter_id: str) -> list[ExerciseRow]:
         records = await self._pool.fetch(
             """
@@ -494,19 +526,7 @@ class BookRepo:
             """,
             chapter_id,
         )
-        return [
-            ExerciseRow(
-                id=str(r["id"]),
-                page=r["page"],
-                kind=r["kind"],
-                source=r["source"],
-                draft=json.loads(r["draft"]),
-                warnings=json.loads(r["warnings"]),
-                crop_path=r["crop_path"],
-                status=r["status"],
-            )
-            for r in records
-        ]
+        return [_exercise(r) for r in records]
 
     async def replace_chapters(self, book_id: str, chapters: Sequence[Chapter]) -> None:
         """The player's own ranges: `manual` from here on, hint counts recomputed."""

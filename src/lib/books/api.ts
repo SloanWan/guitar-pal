@@ -1,5 +1,13 @@
 import { createClient } from "@/lib/supabase";
-import type { Book, BookDetail, ChapterRange } from "@/lib/books/types";
+import type {
+	Book,
+	BookDetail,
+	Chapter,
+	ChapterExercise,
+	ChapterParse,
+	ChapterRange,
+	ExerciseStatus,
+} from "@/lib/books/types";
 
 /**
  * The browser's side of book import. Everything but the upload goes through
@@ -56,6 +64,24 @@ export const renameBook = (id: string, title: string): Promise<Book> =>
 export const replaceChapters = (id: string, chapters: ChapterRange[]): Promise<BookDetail> =>
 	call(`/${id}/chapters`, { method: "PUT", body: JSON.stringify({ chapters }) });
 export const deleteBook = (id: string): Promise<void> => call(`/${id}`, { method: "DELETE" });
+export const getChapterParse = (bookId: string, chapterId: string): Promise<ChapterParse> =>
+	call(`/${bookId}/chapters/${chapterId}/parse`);
+export const parseChapter = (bookId: string, chapterId: string): Promise<Chapter> =>
+	call(`/${bookId}/chapters/${chapterId}/parse`, { method: "POST" });
+export const setExerciseStatus = (
+	bookId: string,
+	exerciseId: string,
+	status: ExerciseStatus,
+): Promise<ChapterExercise> =>
+	call(`/${bookId}/exercises/${exerciseId}`, { method: "PATCH", body: JSON.stringify({ status }) });
+
+/** A short-lived URL for a crop in the private bucket; null when Storage says no. */
+export async function cropUrl(cropPath: string): Promise<string | null> {
+	const supabase = createClient();
+	const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(cropPath, 60 * 60);
+	if (error || !data) return null;
+	return data.signedUrl;
+}
 
 /**
  * The PDF into the private bucket at the path the service handed out. The

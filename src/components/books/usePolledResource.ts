@@ -15,7 +15,13 @@ export const POLL_INTERVAL_MS = 2000;
 export function usePolledResource<T>(
 	load: () => Promise<T>,
 	shouldPoll: (value: T) => boolean,
-): { value: T | null; error: unknown; refresh: () => Promise<void>; set: (value: T) => void } {
+): {
+	value: T | null;
+	error: unknown;
+	refresh: () => Promise<void>;
+	/** Replace the value, or derive the next one from the current (null before the first load). */
+	set: (next: T | ((current: T | null) => T | null)) => void;
+} {
 	const [value, setValue] = useState<T | null>(null);
 	const [error, setError] = useState<unknown>(null);
 	// The latest request wins; an older, slower one never overwrites it.
@@ -80,9 +86,11 @@ export function usePolledResource<T>(
 		};
 	}, [active, refresh]);
 
-	const set = useCallback((next: T) => {
+	const set = useCallback((next: T | ((current: T | null) => T | null)) => {
 		++generation.current;
-		setValue(next);
+		setValue((current) =>
+			typeof next === "function" ? (next as (current: T | null) => T | null)(current) : next,
+		);
 	}, []);
 
 	return { value, error, refresh, set };

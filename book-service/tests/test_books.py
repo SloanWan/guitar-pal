@@ -58,6 +58,13 @@ def test_books_need_a_session(client: TestClient) -> None:
     assert client.post("/books", json={"title": "x"}).status_code == 401
 
 
+def test_exercise_status_needs_a_session_and_a_database(client: TestClient) -> None:
+    assert client.patch("/books/b/exercises/e", json={"status": "taken"}).status_code == 401
+    headers = {"Authorization": f"Bearer {make_hs256_token()}"}
+    response = client.patch("/books/b/exercises/e", json={"status": "taken"}, headers=headers)
+    assert response.status_code == 503
+
+
 def test_books_without_a_database_are_503(client: TestClient) -> None:
     headers = {"Authorization": f"Bearer {make_hs256_token()}"}
     response = client.get("/books", headers=headers)

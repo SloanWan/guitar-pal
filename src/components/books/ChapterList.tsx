@@ -1,13 +1,26 @@
+import { ChevronRight } from "lucide-react";
 import type { Chapter } from "@/lib/books/types";
 import { MAX_PARSE_PAGES } from "@/lib/books/types";
 import { formatPages } from "@/lib/books/ranges";
 import { MONO_META } from "@/components/books/bookUi";
 
 /**
- * The chapters as the scan (or the player) drew them. Rows are not links
- * yet: opening a chapter is the parse (#202), which lands with its card.
+ * The chapters as the scan (or the player) drew them. A row opens its
+ * chapter card (#202) under itself; one is open at a time. The row shows
+ * the parse's state alongside the hint count, so a parsed chapter reads as
+ * one at a glance.
  */
-export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
+export default function ChapterList({
+	chapters,
+	openId,
+	onOpen,
+	renderCard,
+}: {
+	chapters: Chapter[];
+	openId: string | null;
+	onOpen: (id: string | null) => void;
+	renderCard: (chapter: Chapter) => React.ReactNode;
+}) {
 	if (chapters.length === 0) {
 		return (
 			<div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
@@ -21,17 +34,22 @@ export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
 			{chapters.map((chapter) => {
 				const pages = chapter.page_end - chapter.page_start + 1;
 				const hints = chapter.exercise_hint_count;
+				const open = chapter.id === openId;
 				return (
-					<li
-						key={chapter.id}
-						className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
-					>
+					<li key={chapter.id} className="border-b border-line last:border-b-0">
+						<button
+							type="button"
+							aria-expanded={open}
+							onClick={() => onOpen(open ? null : chapter.id)}
+							className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-(--dur-hover) hover:bg-surface focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:-outline-offset-2 ${open ? "bg-surface" : ""}`}
+						>
 						<span className={`${MONO_META} w-6 flex-none tabular-nums`}>
 							{String(chapter.index + 1).padStart(2, "0")}
 						</span>
 						<span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
 							{chapter.title}
 						</span>
+						<ParseMark chapter={chapter} />
 						{pages > MAX_PARSE_PAGES ? (
 							<span
 								className={`${MONO_META} flex-none`}
@@ -48,9 +66,29 @@ export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
 						>
 							{hints} {hints === 1 ? "hint" : "hints"}
 						</span>
+						<ChevronRight
+							className={`size-3.5 flex-none text-ink-faint transition-transform duration-(--dur-hover) ${open ? "rotate-90" : ""}`}
+							strokeWidth={1.5}
+							aria-hidden="true"
+						/>
+						</button>
+						{open ? renderCard(chapter) : null}
 					</li>
 				);
 			})}
 		</ol>
 	);
+}
+
+/** Where the chapter's parse stands, as one word on the row; nothing for idle. */
+function ParseMark({ chapter }: { chapter: Chapter }) {
+	const label = {
+		idle: null,
+		parsing: "Parsing",
+		ready: "Parsed",
+		failed: "Parse failed",
+	}[chapter.parse_status];
+	if (label === null) return null;
+	const tone = chapter.parse_status === "failed" ? "text-destructive" : "text-denim-accent";
+	return <span className={`${MONO_META} flex-none ${tone}`}>{label}</span>;
 }

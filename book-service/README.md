@@ -144,7 +144,8 @@ another user's book is a 404, the same as no book.
 | `PUT /books/{id}/chapters` `{chapters: [{title, page_start, page_end}]}` | the player's own ranges: sorted, inside the book, non-overlapping (gaps allowed). `toc_source` becomes `manual`; hint counts are recomputed from the tagged pages. |
 | `DELETE /books/{id}` | the PDF (as the player) and every row under the book |
 | `POST /books/{id}/chapters/{chapter_id}/parse` | starts the chapter parse (#202) in the background; 202, 409 if already parsing, 422 over the 40-page cap. Re-parsing replaces what the chapter had. |
-| `GET /books/{id}/chapters/{chapter_id}/parse` | the chapter with its `parse_status`, `parse_error` and `parse_cost`, and once ready its `notes` (knowledge points) and `exercises` (drafts). Poll this. |
+| `GET /books/{id}/chapters/{chapter_id}/parse` | the chapter with its `parse_status`, `parse_error`, `parse_cost` and `parse_warnings`, and once ready its `notes` (knowledge points) and `exercises` (drafts, each with the crop it was read from). Poll this. |
+| `PATCH /books/{id}/exercises/{exercise_id}` `{status}` | `proposed` → `taken` when the draft was opened in its editor (or `dismissed`); the card shows what was used |
 
 A scan reads the PDF with the session token from the request that started
 it, then never needs it again; the model call, if any, uses the server's

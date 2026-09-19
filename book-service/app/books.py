@@ -351,6 +351,25 @@ async def parse_chapter(
     return ChapterOut.of(claimed)
 
 
+class ExerciseStatusIn(BaseModel):
+    status: Literal["proposed", "taken", "dismissed"]
+
+
+@router.patch("/{book_id}/exercises/{exercise_id}", response_model=ExerciseOut)
+async def set_exercise_status(
+    book_id: str,
+    exercise_id: str,
+    body: ExerciseStatusIn,
+    session: CurrentSession,
+    repo: Repo,
+) -> ExerciseOut:
+    """`taken` when a draft was opened in its editor, so the card shows what was used."""
+    row = await repo.set_exercise_status(session.user_id, exercise_id, body.status)
+    if row is None:
+        raise HTTPException(404, "Draft not found.")
+    return ExerciseOut.of(row)
+
+
 @router.delete("/{book_id}", status_code=204)
 async def delete_book(book_id: str, session: CurrentSession, repo: Repo, storage: Storage) -> None:
     """The PDF first, as the player; then the row, and every row under it."""

@@ -5,9 +5,9 @@ import Link from "@/components/AppLink";
 import { Music, Rows4, Hand, Guitar, BookOpen } from "lucide-react";
 
 const links = [
-	{ href: "/chords", label: "Chords Library", Icon: Music },
-	{ href: "/strum", label: "Strumming Playground", Icon: Rows4 },
-	{ href: "/fingerpick", label: "Fingerpicking", Icon: Hand },
+	{ href: "/chords", label: "Chords", Icon: Music },
+	{ href: "/strum", label: "Strumming", Icon: Rows4 },
+	{ href: "/fingerpick", label: "FingerPicking", Icon: Hand },
 	{ href: "/fretboard", label: "Fretboard", Icon: Guitar },
 	{ href: "/books", label: "Books", Icon: BookOpen },
 ];

@@ -13,12 +13,13 @@ import {
 	replaceChapters,
 	scanBook,
 } from "@/lib/books/api";
-import type { BookDetail, ChapterRange } from "@/lib/books/types";
+import type { BookDetail, Chapter, ChapterRange } from "@/lib/books/types";
 import { TOC_SOURCE_LABEL } from "@/lib/books/types";
 import { rangesFromChapters } from "@/lib/books/ranges";
 import { usePolledResource } from "@/components/books/usePolledResource";
 import ScanReadout from "@/components/books/ScanReadout";
 import ChapterList from "@/components/books/ChapterList";
+import ChapterCard from "@/components/books/ChapterCard";
 import ChapterRangeEditor from "@/components/books/ChapterRangeEditor";
 import DeleteBookDialog from "@/components/books/DeleteBookDialog";
 import {
@@ -53,6 +54,18 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+	const [openChapter, setOpenChapter] = useState<string | null>(null);
+
+	// The card polls its own chapter; the row learns the state from it.
+	const updateChapter = useCallback(
+		(chapter: Chapter) =>
+			setBook((current) =>
+				current
+					? { ...current, chapters: current.chapters.map((c) => (c.id === chapter.id ? chapter : c)) }
+					: current,
+			),
+		[setBook],
+	);
 
 	async function rename() {
 		if (!book) return;
@@ -215,7 +228,14 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 										}}
 									/>
 								) : (
-									<ChapterList chapters={book.chapters} />
+									<ChapterList
+										chapters={book.chapters}
+										openId={openChapter}
+										onOpen={setOpenChapter}
+										renderCard={(chapter) => (
+											<ChapterCard bookId={book.id} chapter={chapter} onChapter={updateChapter} />
+										)}
+									/>
 								)}
 							</Panel>
 						)}

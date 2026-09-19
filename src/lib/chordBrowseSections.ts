@@ -12,16 +12,16 @@ import {
 } from "@/lib/chordSuffixes";
 import {
   selectStandardVoicing,
-  chordVoicingToVexChords,
+  voicingToDiagramShape,
   type ChordVoicing,
-  type VexChordDef,
+  type DiagramShape,
 } from "@/lib/chordVoicing";
 
 export interface BrowseCard {
   key: string;
   root: string;
   suffix: string;
-  def: VexChordDef;
+  def: DiagramShape;
   label: string;
   href?: string;
 }
@@ -56,7 +56,7 @@ function makeCard(
     key: `${chord.root}-${chord.suffix}`,
     root: chord.root,
     suffix: chord.suffix,
-    def: chordVoicingToVexChords(voicing),
+    def: voicingToDiagramShape(voicing),
     label: labelMode === "suffix" ? chord.suffix : `${chord.root} ${chord.suffix}`,
     href: buildHref?.(chord.root, chord.suffix),
   };

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  chordVoicingToVexChords,
+  voicingToDiagramShape,
   decodeVoicingStrings,
   selectStandardVoicing,
   type ChordVoicing,
@@ -19,163 +19,103 @@ function voicing(overrides: Partial<ChordVoicing>): ChordVoicing {
   };
 }
 
-// ─── Ground-truth test cases ──────────────────────────────────────────────────
+// ─── voicingToDiagramShape ────────────────────────────────────────────────────
+// Ground truth: absolute frets on the neck, index 0 = low E, -1 muted, 0 open.
 
-describe("chordVoicingToVexChords — open C major", () => {
-  // frets="x32010", fingers="032010", start_fret=1, barre_fret=null, capo=false
-  const result = chordVoicingToVexChords(
+describe("voicingToDiagramShape — open C major", () => {
+  const shape = voicingToDiagramShape(
     voicing({ start_fret: 1, barre_fret: null, capo: false, frets: "x32010", fingers: "032010" })
   );
 
-  it("position = start_fret", () => {
-    expect(result.position).toBe(1);
+  it("frets are on the neck, low E first, -1 for the muted string", () => {
+    expect(shape.frets).toEqual([-1, 3, 2, 0, 1, 0]);
   });
 
-  it("no barres", () => {
-    expect(result.barres).toHaveLength(0);
+  it("fingers read straight off the row", () => {
+    expect(shape.fingers).toEqual([0, 3, 2, 0, 1, 0]);
   });
 
-  it("string 6 is muted", () => {
-    expect(result.chord[0]).toEqual([6, "x"]);
-  });
-
-  it("string 5 has fret 3 with finger 3", () => {
-    expect(result.chord[1]).toEqual([5, 3, "3"]);
-  });
-
-  it("string 4 has fret 2 with finger 2", () => {
-    expect(result.chord[2]).toEqual([4, 2, "2"]);
-  });
-
-  it("string 3 is open with no finger label", () => {
-    expect(result.chord[3]).toEqual([3, 0]);
-  });
-
-  it("string 2 has fret 1 with finger 1", () => {
-    expect(result.chord[4]).toEqual([2, 1, "1"]);
-  });
-
-  it("string 1 is open with no finger label", () => {
-    expect(result.chord[5]).toEqual([1, 0]);
+  it("window starts at the nut, no barre", () => {
+    expect(shape.startFret).toBe(1);
+    expect(shape.barreFret).toBeNull();
   });
 });
 
-describe("chordVoicingToVexChords — C major barre @ fret 8 (full capo, E-shape)", () => {
-  // frets="133211", fingers="134211", start_fret=8, barre_fret=1, capo=true
-  const result = chordVoicingToVexChords(
+describe("voicingToDiagramShape — C major barre @ fret 8 (E-shape)", () => {
+  const shape = voicingToDiagramShape(
     voicing({ start_fret: 8, barre_fret: 1, capo: true, frets: "133211", fingers: "134211" })
   );
 
-  it("position = 8", () => {
-    expect(result.position).toBe(8);
+  it("relative frets become neck frets", () => {
+    expect(shape.frets).toEqual([8, 10, 10, 9, 8, 8]);
   });
 
-  it("one full-width barre at fret 1", () => {
-    expect(result.barres).toHaveLength(1);
-    expect(result.barres[0]).toEqual({ fromString: 6, toString: 1, fret: 1 });
+  it("barre fret is on the neck too", () => {
+    expect(shape.barreFret).toBe(8);
+    expect(shape.startFret).toBe(8);
   });
 
-  it("string 6 has fret 1 with finger 1", () => {
-    expect(result.chord[0]).toEqual([6, 1, "1"]);
-  });
-
-  it("string 5 has fret 3 with finger 3", () => {
-    expect(result.chord[1]).toEqual([5, 3, "3"]);
-  });
-
-  it("string 4 has fret 3 with finger 4", () => {
-    expect(result.chord[2]).toEqual([4, 3, "4"]);
-  });
-
-  it("string 3 has fret 2 with finger 2", () => {
-    expect(result.chord[3]).toEqual([3, 2, "2"]);
-  });
-
-  it("string 2 has fret 1 with finger 1", () => {
-    expect(result.chord[4]).toEqual([2, 1, "1"]);
-  });
-
-  it("string 1 has fret 1 with finger 1", () => {
-    expect(result.chord[5]).toEqual([1, 1, "1"]);
+  it("fingers", () => {
+    expect(shape.fingers).toEqual([1, 3, 4, 2, 1, 1]);
   });
 });
 
-describe("chordVoicingToVexChords — C major partial barre @ fret 5", () => {
-  // frets="xx1114", fingers="001114", start_fret=5, barre_fret=1, capo=false
-  const result = chordVoicingToVexChords(
+describe("voicingToDiagramShape — C major partial barre @ fret 5", () => {
+  const shape = voicingToDiagramShape(
     voicing({ start_fret: 5, barre_fret: 1, capo: false, frets: "xx1114", fingers: "001114" })
   );
 
-  it("position = 5", () => {
-    expect(result.position).toBe(5);
+  it("muted strings stay -1 whatever the window", () => {
+    expect(shape.frets).toEqual([-1, -1, 5, 5, 5, 8]);
   });
 
-  it("one partial barre spanning strings 4 to 2", () => {
-    expect(result.barres).toHaveLength(1);
-    expect(result.barres[0]).toEqual({ fromString: 4, toString: 2, fret: 1 });
-  });
-
-  it("string 6 is muted", () => {
-    expect(result.chord[0]).toEqual([6, "x"]);
-  });
-
-  it("string 5 is muted", () => {
-    expect(result.chord[1]).toEqual([5, "x"]);
-  });
-
-  it("string 4 has fret 1 with finger 1", () => {
-    expect(result.chord[2]).toEqual([4, 1, "1"]);
-  });
-
-  it("string 3 has fret 1 with finger 1", () => {
-    expect(result.chord[3]).toEqual([3, 1, "1"]);
-  });
-
-  it("string 2 has fret 1 with finger 1", () => {
-    expect(result.chord[4]).toEqual([2, 1, "1"]);
-  });
-
-  it("string 1 has fret 4 with finger 4", () => {
-    expect(result.chord[5]).toEqual([1, 4, "4"]);
+  it("capo makes no difference to the shape: the span is the renderer's", () => {
+    const capoed = voicingToDiagramShape(
+      voicing({ start_fret: 5, barre_fret: 1, capo: true, frets: "xx1114", fingers: "001114" })
+    );
+    expect(capoed).toEqual(shape);
   });
 });
 
-// ─── Additional edge cases ─────────────────────────────────────────────────────
-
-describe("chordVoicingToVexChords — edge cases", () => {
-  it("all-open chord produces no barres and all fret 0 entries", () => {
-    const result = chordVoicingToVexChords(
-      voicing({ frets: "000000", fingers: "000000" })
-    );
-    expect(result.barres).toHaveLength(0);
-    for (const entry of result.chord) {
-      expect(entry[1]).toBe(0);
-    }
+describe("voicingToDiagramShape — edge cases", () => {
+  it("all-open chord: every fret 0, no barre", () => {
+    const shape = voicingToDiagramShape(voicing({ frets: "000000", fingers: "000000" }));
+    expect(shape.frets).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(shape.barreFret).toBeNull();
   });
 
-  it("null barre_fret → no barres even when capo=true", () => {
-    const result = chordVoicingToVexChords(
-      voicing({ barre_fret: null, capo: true })
-    );
-    expect(result.barres).toHaveLength(0);
+  it("an open string stays 0 whatever start_fret is", () => {
+    const shape = voicingToDiagramShape(voicing({ start_fret: 5, frets: "0x1234", fingers: "001234" }));
+    expect(shape.frets[0]).toBe(0);
   });
 
-  it("finger 0 on a fretted string emits no label", () => {
-    const result = chordVoicingToVexChords(
-      voicing({ frets: "300000", fingers: "000000" })
-    );
-    // string 6, fret 3, no label
-    expect(result.chord[0]).toHaveLength(2);
-    expect(result.chord[0][1]).toBe(3);
+  it("null barre_fret → null barre even when capo=true", () => {
+    const shape = voicingToDiagramShape(voicing({ barre_fret: null, capo: true }));
+    expect(shape.barreFret).toBeNull();
   });
 
-  it("produces exactly 6 chord entries", () => {
-    const result = chordVoicingToVexChords(voicing({}));
-    expect(result.chord).toHaveLength(6);
+  it("a finger char that is not a digit reads as no finger", () => {
+    const shape = voicingToDiagramShape(voicing({ frets: "300000", fingers: "?00000" }));
+    expect(shape.fingers).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
+  it("always six strings", () => {
+    const shape = voicingToDiagramShape(voicing({ frets: "x32010", fingers: "032010" }));
+    expect(shape.frets).toHaveLength(6);
+    expect(shape.fingers).toHaveLength(6);
+  });
+
+  it("is the shape the picker used to build by hand (same row, same props)", () => {
+    // ChordPickerModal had its own copy of this decode; this pins the one it now shares.
+    const v = voicing({ start_fret: 6, barre_fret: 1, capo: true, frets: "133111", fingers: "134111" });
+    expect(voicingToDiagramShape(v)).toEqual({
+      frets: [6, 8, 8, 6, 6, 6],
+      fingers: [1, 3, 4, 1, 1, 1],
+      startFret: 6,
+      barreFret: 6,
+    });
   });
 });
-
-// ─── decodeVoicingStrings ─────────────────────────────────────────────────────
 
 describe("decodeVoicingStrings — open C major", () => {
   // frets="x32010", fingers="032010", start_fret=1

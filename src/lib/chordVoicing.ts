@@ -8,22 +8,19 @@ export interface ChordVoicing {
   fingers: string;
 }
 
-// [string, fret] or [string, fret, fingerLabel]
-// string 1 = high e, string 6 = low E (vexchords convention)
-type VexChordEntry =
-  | [number, number | "x"]
-  | [number, number | "x", string];
-
-export interface VexBarre {
-  fromString: number;
-  toString: number;
-  fret: number;
-}
-
-export interface VexChordDef {
-  chord: VexChordEntry[];
-  position: number;
-  barres: VexBarre[];
+/**
+ * A shape as the diagram draws it — the data half of `ChordDiagramSVG`'s props,
+ * and what `ChordShapeStrip` takes. Six entries each, index 0 = string 6 (low E).
+ * Frets are on the neck: -1 muted, 0 open. `barreFret` is on the neck too, or
+ * null; which strings the bar spans is the renderer's call, from the strings
+ * sharing the barre finger. (The editor's `ChordShape` in `chordShape.ts` is the
+ * same idea with "x" for a muted string, because there a string is typed into.)
+ */
+export interface DiagramShape {
+  frets: number[];
+  fingers: number[];
+  startFret: number;
+  barreFret: number | null;
 }
 
 /**
@@ -41,7 +38,7 @@ export interface DecodedString {
 
 // Pure adapter — no DOM, no React deps.
 // frets/fingers are 6-char strings: index 0 = string 6 (low E), index 5 = string 1 (high e).
-// Fret chars are diagram-relative (vexchords' position offset convention).
+// Fret chars are diagram-relative: 0 is open, otherwise absolute = start_fret - 1 + rel.
 export function decodeVoicingStrings(voicing: ChordVoicing): DecodedString[] {
   const { frets, fingers, start_fret } = voicing;
   return Array.from({ length: 6 }, (_, i) => {
@@ -54,39 +51,16 @@ export function decodeVoicingStrings(voicing: ChordVoicing): DecodedString[] {
   });
 }
 
-export function chordVoicingToVexChords(voicing: ChordVoicing): VexChordDef {
-  const { start_fret, barre_fret, capo } = voicing;
+export function voicingToDiagramShape(voicing: ChordVoicing): DiagramShape {
+  const { start_fret, barre_fret } = voicing;
   const decoded = decodeVoicingStrings(voicing);
-
-  const chord: VexChordEntry[] = decoded.map(({ stringIndex, absoluteFret, finger }) => {
-    const stringNum = 6 - stringIndex;
-    if (absoluteFret === "x") return [stringNum, "x"];
-    // Convert absolute fret back to diagram-relative for VexChords
-    const diagramFret = absoluteFret === 0 ? 0 : absoluteFret - start_fret + 1;
-    if (finger > 0) return [stringNum, diagramFret, String(finger)];
-    return [stringNum, diagramFret];
-  });
-
-  const barres: VexBarre[] = [];
-  if (barre_fret !== null) {
-    if (capo) {
-      barres.push({ fromString: 6, toString: 1, fret: barre_fret });
-    } else {
-      const absBarreFret = start_fret - 1 + barre_fret;
-      const matchingStrings = decoded
-        .filter(({ absoluteFret }) => absoluteFret !== "x" && absoluteFret === absBarreFret)
-        .map(({ stringIndex }) => 6 - stringIndex);
-      if (matchingStrings.length > 0) {
-        barres.push({
-          fromString: Math.max(...matchingStrings),
-          toString: Math.min(...matchingStrings),
-          fret: barre_fret,
-        });
-      }
-    }
-  }
-
-  return { chord, position: start_fret, barres };
+  return {
+    frets: decoded.map(({ absoluteFret }) => (absoluteFret === "x" ? -1 : absoluteFret)),
+    // A finger char that is not a digit reads as "no finger", never as NaN on the diagram.
+    fingers: decoded.map(({ finger }) => (finger > 0 ? finger : 0)),
+    startFret: start_fret,
+    barreFret: barre_fret === null ? null : start_fret - 1 + barre_fret,
+  };
 }
 
 export { selectStandardVoicing } from "@/lib/selectStandardVoicing";

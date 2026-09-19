@@ -23,7 +23,7 @@ import {
 	type ChordShape,
 } from "@/lib/chordShape";
 import { userVoicingId, type UserChordVoicing } from "@/lib/userChordVoicings";
-import { chordVoicingToVexChords } from "@/lib/chordVoicing";
+import { voicingToDiagramShape } from "@/lib/chordVoicing";
 
 // Re-exported so existing importers (the chord detail route) keep their import path.
 export type { VoicingCard };
@@ -191,7 +191,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 								{myShapes.map((v) => (
 									<div key={v.id} className="flex flex-col items-center gap-2">
 										<ChordDiagram
-											def={chordVoicingToVexChords(v)}
+											def={voicingToDiagramShape(v)}
 											label={v.label ?? "Mine"}
 											mode={mode}
 											rootMidi={rootPitchClass(root)}

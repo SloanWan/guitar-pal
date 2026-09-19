@@ -12,7 +12,7 @@ import {
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { selectRefVoicing } from "@/lib/strumBars";
-import { chordVoicingToVexChords } from "@/lib/chordVoicing";
+import { voicingToDiagramShape } from "@/lib/chordVoicing";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
 import type { ChordVoicingsState } from "./useChordVoicings";
@@ -202,7 +202,7 @@ export default function FingerpickEditorChordSection({
 					    the shape stay put while the player steps through voicings. */}
 					<div className="mx-auto w-36 shrink-0 [&>div]:h-[9.5rem] [&>div]:justify-center">
 						<ChordDiagram
-							def={chordVoicingToVexChords(voicingHere)}
+							def={voicingToDiagramShape(voicingHere)}
 							label={
 								voicingList.length > 1
 									? `${chordSymbolLabel(chordHere)} · ${voicingIndex + 1}/${voicingList.length}`

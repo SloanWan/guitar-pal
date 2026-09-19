@@ -11,8 +11,7 @@ import { fingerpickToVexFlow, type ChordLabel } from "@/lib/fingerpickToVexFlow"
 import type { BeatSlot, Duration, Measure, StringFret } from "@/lib/fingerpickTypes";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicing";
-import { chordVoicingToVexChords } from "@/lib/chordVoicing";
-import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";
+import { voicingToDiagramShape } from "@/lib/chordVoicing";
 import { chordRegionEnd, heldButUnplucked } from "@/lib/fingerpickChords";
 
 /**
@@ -149,7 +148,7 @@ export default function ChordLineLab() {
 				chordRegionEnd(measure, label.slotIndex),
 				voicing,
 			);
-			const { frets, startFret, barreFret } = vexChordDefToSVGProps(chordVoicingToVexChords(voicing));
+			const { frets, startFret, barreFret } = voicingToDiagramShape(voicing);
 			return (
 				<ChordShapeStrip
 					frets={frets}

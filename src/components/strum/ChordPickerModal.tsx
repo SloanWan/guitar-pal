@@ -21,7 +21,7 @@ import {
 	userSuffixesFiledUnder,
 	userVoicingCategory,
 } from "@/lib/userChordVoicings";
-import type { ChordVoicing } from "@/lib/chordVoicing";
+import { voicingToDiagramShape, type ChordVoicing } from "@/lib/chordVoicing";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import {
@@ -92,24 +92,6 @@ interface Props {
 	onConfirm: (chord: ConfirmedChord | null) => void;
 	/** Only root/suffix are read, so a stored ChordRef works as-is. */
 	initialChord?: ChordRef | null;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function voicingToSVGProps(v: ChordVoicing): {
-	frets: number[];
-	fingers: number[];
-	startFret: number;
-	barreFret: number | null;
-} {
-	const frets = v.frets.split("").map((c) => {
-		if (c === "x") return -1;
-		const rel = parseInt(c, 10);
-		return rel === 0 ? 0 : v.start_fret + rel - 1;
-	});
-	const fingers = v.fingers.split("").map((c) => parseInt(c, 10) || 0);
-	const barreFret = v.barre_fret !== null ? v.barre_fret + v.start_fret - 1 : null;
-	return { frets, fingers, startFret: v.start_fret, barreFret };
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -581,7 +563,7 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 							) : voicings.length > 0 ? (
 								<div className="flex gap-3 overflow-x-auto pb-2">
 									{voicings.map((v) => {
-										const svgProps = voicingToSVGProps(v);
+										const svgProps = voicingToDiagramShape(v);
 										const isSelected = selectedVoicingId === v.id;
 										const isPlaying = playingVoicingId === v.id;
 										return (

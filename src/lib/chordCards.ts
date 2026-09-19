@@ -3,9 +3,9 @@
 // __tests__/chordCards.test.ts — so the routes stay thin fetch-and-render shells.
 
 import {
-  chordVoicingToVexChords,
+  voicingToDiagramShape,
   type ChordVoicing,
-  type VexChordDef,
+  type DiagramShape,
 } from "@/lib/chordVoicing";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
@@ -15,7 +15,7 @@ import type { BatchToken } from "@/lib/chordBatchResolve";
 export interface VoicingCard {
   readonly id: string;
   readonly label: string;
-  readonly def: VexChordDef;
+  readonly def: DiagramShape;
   readonly pitches: readonly number[];
 }
 
@@ -32,7 +32,7 @@ export function toVoicingCards(voicings: readonly ChordVoicing[]): VoicingCard[]
   return voicings.map((v) => ({
     id: v.id,
     label: v.label ?? `Pos. ${v.start_fret}`,
-    def: chordVoicingToVexChords(v),
+    def: voicingToDiagramShape(v),
     pitches: chordVoicingToMidi(v).map(({ midi }) => midi),
   }));
 }

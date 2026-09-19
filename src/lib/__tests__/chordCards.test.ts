@@ -49,7 +49,7 @@ describe("toVoicingCards", () => {
 
   it("attaches the diagram definition and the sounding pitches", () => {
     const [card] = toVoicingCards([voicing()]);
-    expect(card.def.position).toBe(1);
+    expect(card.def.startFret).toBe(1);
     // Open C major, low E muted: C3 E3 G3 C4 E4.
     expect(card.pitches).toEqual([48, 52, 55, 60, 64]);
   });

@@ -15,9 +15,9 @@ import {
 	type Meter,
 } from "@/lib/strumMeter";
 import {
-	chordVoicingToVexChords,
+	voicingToDiagramShape,
 	type ChordVoicing,
-	type VexChordDef,
+	type DiagramShape,
 } from "@/lib/chordVoicing";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
@@ -334,10 +334,10 @@ export function chordRefToMidi(
 export function chordRefToDiagram(
 	ref: ChordRef | null,
 	voicings: ChordVoicing[],
-): VexChordDef | null {
+): DiagramShape | null {
 	if (!ref) return null;
 	const voicing = selectRefVoicing(ref, voicings);
-	return voicing ? chordVoicingToVexChords(voicing) : null;
+	return voicing ? voicingToDiagramShape(voicing) : null;
 }
 
 /**

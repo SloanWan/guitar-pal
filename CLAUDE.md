@@ -39,7 +39,7 @@ Never mix the two clients — `createSupabaseServer()` throws at runtime in clie
 
 Env vars required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
-**Data layer:** `src/lib/` contains thin Supabase query functions — no ORM, no server actions (except an unused one in `chords.ts`). All DB calls happen client-side. Lib functions throw on Supabase error rather than returning null. Tables:
+**Data layer:** `src/lib/` contains thin Supabase query functions — no ORM, no server actions (except the two chord reads client components make, in `chords.ts`). All DB calls happen client-side. Lib functions throw on Supabase error rather than returning null. Tables:
 
 - `exercises`, `routines`, `routine_exercises` (join table with `order_index` and `duration_minutes`)
 - `practice_logs` — immutable records written at end of a session

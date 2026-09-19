@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import type { Measure } from "@/lib/fingerpickTypes";
@@ -42,7 +42,11 @@ export default function TabStavePreview({
 		return () => observer.disconnect();
 	}, []);
 
-	const row = layoutMeasureRows(measures.slice(0, PREVIEW_MEASURES), width, 0)[0];
+	// Memoised on what it is laid out from: TabStaveRow redraws its SVG when
+	// the arrays it is given change identity, and the panel re-renders on its
+	// own clock (the rotating placeholder). A fresh layout per render would
+	// clear and redraw the stave every few seconds.
+	const row = useMemo(() => layoutMeasureRows(measures.slice(0, PREVIEW_MEASURES), width, 0)[0], [measures, width]);
 	const shown = row?.measures.length ?? 0;
 	// Held in a ref so a new callback identity does not re-announce the count.
 	const onShownRef = useRef(onShown);

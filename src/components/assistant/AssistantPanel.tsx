@@ -12,6 +12,7 @@ import { recordPick } from "@/lib/assistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
 import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/assistant/greeting";
 import { pick, uiLang } from "@/lib/assistant/lang";
+import { modelDisplayName } from "@/lib/assistant/general/request";
 import type { AssistantDomain, AssistantMode } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
@@ -29,6 +30,8 @@ const MODE_LABEL: Record<AssistantMode, string> = { strum: "Strum", tab: "Tab", 
 const MODE_LABEL_ZH: Record<AssistantDomain, string> = { strum: "扫弦", tab: "指弹" };
 /** How far above the bottom still counts as reading the tail, so a stray pixel does not unpin. */
 const TAIL_SLACK_PX = 24;
+/** How long after a wheel, touch, key or scrollbar press a scroll still counts as the reader's. */
+const USER_SCROLL_WINDOW_MS = 500;
 
 /** Five lines of the field's own text, after which it scrolls instead of growing. */
 const MAX_INPUT_HEIGHT_PX = 104;
@@ -377,9 +380,26 @@ export default function AssistantPanel({
 		observer.observe(el);
 		return () => observer.disconnect();
 	}, []);
+	/**
+	 * When the reader last did something that scrolls — a wheel, a finger, a
+	 * key, the scrollbar. Only a scroll that follows one of those may unpin:
+	 * the browser also scrolls on its own, clamping `scrollTop` when the
+	 * content briefly shrinks (a stave clearing and redrawing its SVG makes
+	 * the first turn shorter than the panel for one layout), and that is not
+	 * the reader leaving the tail. Such a scroll is undone instead — nothing
+	 * else will, since the content's final height is what it was.
+	 */
+	const userScrollAtRef = useRef(0);
+	const noteUserScroll = useCallback(() => {
+		userScrollAtRef.current = performance.now();
+	}, []);
 	const onScroll = useCallback(() => {
 		const el = scrollRef.current;
-		if (el) pinnedRef.current = el.scrollHeight - el.clientHeight - el.scrollTop <= TAIL_SLACK_PX;
+		if (!el) return;
+		const atTail = el.scrollHeight - el.clientHeight - el.scrollTop <= TAIL_SLACK_PX;
+		if (atTail) pinnedRef.current = true;
+		else if (performance.now() - userScrollAtRef.current < USER_SCROLL_WINDOW_MS) pinnedRef.current = false;
+		else if (pinnedRef.current) el.scrollTop = el.scrollHeight;
 	}, []);
 
 	useEffect(() => {
@@ -424,6 +444,10 @@ export default function AssistantPanel({
 			<div
 				ref={scrollRef}
 				onScroll={onScroll}
+				onWheel={noteUserScroll}
+				onTouchMove={noteUserScroll}
+				onPointerDown={noteUserScroll}
+				onKeyDown={noteUserScroll}
 				className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
 				role="log"
 				aria-live="polite"
@@ -460,6 +484,13 @@ export default function AssistantPanel({
 												onDone={() => markStreamed(message.id)}
 											/>
 										</Bubble>
+										{/* Who wrote it. A rules reply says nothing; a model's says which model,
+										    so the player knows when to weigh the words. */}
+										{message.model && message.streamed === true && (
+											<span className="pl-2 font-mono text-[10px] tracking-[0.06em] text-ink-faint">
+												{pick(message.lang ?? "en", `Answered by ${modelDisplayName(message.model)}`, `由 ${modelDisplayName(message.model)} 回答`)}
+											</span>
+										)}
 										{/* The preview is an attachment, not speech: full width under
 										    the bubble, where a 16-cell grid actually fits — and held
 										    back until the message has finished saying what it is. */}

@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 import { ClipboardList, Loader2, MessageCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { exportMisses, readMisses } from "@/lib/strumAssistant/missLog";
+import { exportMisses, readMisses } from "@/lib/assistant/missLog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AssistantPanel from "./AssistantPanel";
-import { domainForPath, useAssistant } from "./useAssistant";
-import { HANDOFF_EVENT } from "@/lib/strumAssistant/handoff";
-import type { AssistantDomain } from "@/lib/strumAssistant/types";
+import { useAssistant } from "./useAssistant";
+import { HANDOFF_EVENT } from "@/lib/assistant/handoff";
 
 /**
- * The topbar's rightmost control: opens the assistant over the page — the strum
- * assistant everywhere but the fingerpick page, where it is the tab assistant.
+ * The topbar's rightmost control: opens the assistant over the page. Which
+ * assistant — strum or tab — is the chip in the panel; the page only sets it.
  *
  * A popover anchored to the topbar rather than a draggable window — dragging
  * buys nothing here and costs mobile layout, focus management and a z-index to
@@ -29,7 +27,7 @@ import type { AssistantDomain } from "@/lib/strumAssistant/types";
 const MIN_PANEL_HEIGHT = 240;
 const MAX_PANEL_HEIGHT = 720;
 const DEFAULT_PANEL_HEIGHT = 480;
-const HEIGHT_KEY = "guitarpal:strumAssistantHeight";
+const HEIGHT_KEY = "guitarpal:assistantHeight";
 
 function clampHeight(px: number): number {
 	// Never taller than the viewport leaves room for, whatever was remembered.
@@ -48,17 +46,10 @@ function readHeight(): number {
 }
 
 /**
- * The page decides which assistant this is. Keyed on the domain, so crossing
- * from the strum page to the fingerpick page unmounts one assistant and
- * mounts the other — its own transcript, its own greeting, its own readers —
- * rather than one assistant changing the subject mid-conversation.
+ * One launcher for the one assistant, mounted in the topbar and so outliving
+ * every route change: the thread, and the mode it is in, carry across pages.
  */
 export default function AssistantLauncher() {
-	const domain = domainForPath(usePathname());
-	return <DomainAssistantLauncher key={domain} domain={domain} />;
-}
-
-function DomainAssistantLauncher({ domain }: { domain: AssistantDomain }) {
 	const [open, setOpen] = useState(false);
 
 	// The conversation's height, dragged from the bottom edge and kept on this
@@ -90,7 +81,7 @@ function DomainAssistantLauncher({ domain }: { domain: AssistantDomain }) {
 			// Private mode: the size holds for this session and no longer.
 		}
 	}
-	const assistant = useAssistant(domain);
+	const assistant = useAssistant();
 	const { messages, pending } = assistant;
 
 	// Development only: the sentences nothing read, one click from the eval set.
@@ -136,7 +127,7 @@ function DomainAssistantLauncher({ domain }: { domain: AssistantDomain }) {
 		return () => window.removeEventListener(HANDOFF_EVENT, close);
 	}, [messages.length]);
 
-	const title = domain === "tab" ? "Tab assistant" : "Strum assistant";
+	const title = "Assistant";
 	const label = pending
 		? `${title} — still writing`
 		: unread

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ChevronsDown, Guitar, List, Loader2, Music, Pencil, Plus, Share2, Trash2, Type, X } from "lucide-react";
+import { ChevronsDown, Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
 import type { Bar, ChordProgression, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,
@@ -637,27 +637,23 @@ export default function PatternWorkspace({
 						Progressions{progressions.length > 0 ? ` (${progressions.length})` : ""}
 					</TabButton>
 				)}
-				{onShare && (
-					<button
-						type="button"
-						onClick={onShare}
-						disabled={sharing}
-						aria-label="Share pattern"
-						title={
-							tab === "progressions" && selected
-								? "Copy a link to this pattern with the open progression"
-								: "Copy a link to this pattern"
-						}
-						className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center border border-line-strong text-ink-dim transition-colors hover:border-denim hover:text-denim disabled:cursor-wait disabled:opacity-50"
-					>
-						{sharing ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
-					</button>
-				)}
 			</div>
 
 			{/* The card header — pattern name and written rhythm — belongs to both
 			    tabs; only the body below it switches. */}
-			<StepGridCard pattern={pattern} onEditPattern={onEditPattern}>
+			<StepGridCard
+				pattern={pattern}
+				onEditPattern={onEditPattern}
+				onShare={onShare}
+				sharing={sharing}
+				shareTitle={
+					tab === "progressions" && progressions.length > 1
+						? "Copy a link to this pattern — choose which progressions go with it"
+						: tab === "progressions" && selected
+							? "Copy a link to this pattern with the open progression"
+							: "Copy a link to this pattern"
+				}
+			>
 				{tab === "pattern" ? (
 					<PatternBarBody
 						meter={meter}

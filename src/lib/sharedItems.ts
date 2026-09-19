@@ -15,8 +15,8 @@ import { normalizeCapo } from "./strumProgressions";
  * link opens the copy in the full player; the sharer's own row is never read
  * by anyone else, and the link outlives edits and deletions of the original.
  *
- * Two kinds: a fingerpick pattern (a tab), and a strum pattern with, when one
- * was open, the chord progression written over it.
+ * Two kinds: a fingerpick pattern (a tab), and a strum pattern with any of
+ * the chord progressions written over it that the sharer chose to send.
  */
 
 export const SHARE_ID_LENGTH = 10;
@@ -30,8 +30,10 @@ export interface SharedFingerpick {
 export interface SharedStrum {
 	kind: "strum";
 	pattern: StrumPattern;
-	/** The progression that was open when the pattern was shared, if any. */
-	progression: ChordProgression | null;
+	/** The progressions sent along, in the sharer's list order; empty for the bare rhythm. */
+	progressions: ChordProgression[];
+	/** Which of them the share opens on — the one the sharer was looking at. */
+	openIndex: number;
 }
 
 export type SharedItem = SharedFingerpick | SharedStrum;
@@ -88,7 +90,7 @@ export function toSharePayload(item: SharedItem): Record<string, unknown> {
 	}
 	// A progression's identity, list position and reconcile bookkeeping are
 	// all about the sharer's library; the viewer's copy starts its own.
-	const { pattern, progression } = item;
+	const { pattern, progressions, openIndex } = item;
 	return {
 		pattern: {
 			name: pattern.name,
@@ -96,14 +98,15 @@ export function toSharePayload(item: SharedItem): Record<string, unknown> {
 			bpm: patternBpm(pattern),
 			meter: patternMeter(pattern),
 		},
-		...(progression
+		...(progressions.length > 0
 			? {
-					progression: {
+					progressions: progressions.map((progression) => ({
 						bars: progression.bars,
 						...(progression.name?.trim() ? { name: progression.name.trim() } : {}),
 						...(progression.bpm === undefined ? {} : { bpm: normalizeBpm(progression.bpm) }),
 						...(normalizeCapo(progression.capo) > 0 ? { capo: normalizeCapo(progression.capo) } : {}),
-					},
+					})),
+					...(openIndex > 0 && openIndex < progressions.length ? { open: openIndex } : {}),
 				}
 			: {}),
 	};
@@ -116,9 +119,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * A strum payload back into a pattern and its progression. The row id becomes
- * the pattern id, and the progression hangs off it under a derived id, so the
- * two stay a pair on screen and neither can collide with the viewer's own.
+ * A strum payload back into a pattern and its progressions. The row id becomes
+ * the pattern id, and each progression hangs off it under a derived id, so
+ * they stay a set on screen and none can collide with the viewer's own.
  */
 function readSharedStrum(rowId: string, payload: unknown): SharedStrum | null {
 	if (!isRecord(payload) || !isRecord(payload.pattern)) return null;
@@ -132,29 +135,34 @@ function readSharedStrum(rowId: string, payload: unknown): SharedStrum | null {
 		meter: normalizeMeter(raw.meter),
 	};
 
-	if (payload.progression === undefined || payload.progression === null) {
-		return { kind: "strum", pattern, progression: null };
+	if (payload.progressions === undefined || payload.progressions === null) {
+		return { kind: "strum", pattern, progressions: [], openIndex: 0 };
 	}
 	// A progression that does not read is a share that does not read: the
 	// chords are what was being shared, and a bare rhythm would say nothing.
-	if (!isRecord(payload.progression)) return null;
-	const rawProgression = payload.progression;
-	if (!validateBars(rawProgression.bars).ok) return null;
-	const name =
-		typeof rawProgression.name === "string" ? rawProgression.name.trim().slice(0, PROGRESSION_NAME_MAX) : "";
-	const progression: ChordProgression = {
-		id: `${rowId}-progression`,
-		patternId: rowId,
-		bars: normalizeBars(rawProgression.bars as Bar[]),
-		orderIndex: 0,
-		...(name ? { name } : {}),
-		...(typeof rawProgression.bpm === "number" ? { bpm: normalizeBpm(rawProgression.bpm) } : {}),
-		...(normalizeCapo(rawProgression.capo) > 0 ? { capo: normalizeCapo(rawProgression.capo) } : {}),
-		// Written as reconciled with the pattern it arrived with, so nothing
-		// asks the viewer to sync a rhythm they have not touched.
-		syncedBeats: pattern.beats.map((beat) => [...beat]),
-	};
-	return { kind: "strum", pattern, progression };
+	if (!Array.isArray(payload.progressions) || payload.progressions.length === 0) return null;
+	const progressions: ChordProgression[] = [];
+	for (const [index, rawProgression] of payload.progressions.entries()) {
+		if (!isRecord(rawProgression) || !validateBars(rawProgression.bars).ok) return null;
+		const name =
+			typeof rawProgression.name === "string" ? rawProgression.name.trim().slice(0, PROGRESSION_NAME_MAX) : "";
+		progressions.push({
+			id: `${rowId}-progression-${index}`,
+			patternId: rowId,
+			bars: normalizeBars(rawProgression.bars as Bar[]),
+			orderIndex: index,
+			...(name ? { name } : {}),
+			...(typeof rawProgression.bpm === "number" ? { bpm: normalizeBpm(rawProgression.bpm) } : {}),
+			...(normalizeCapo(rawProgression.capo) > 0 ? { capo: normalizeCapo(rawProgression.capo) } : {}),
+			// Written as reconciled with the pattern it arrived with, so nothing
+			// asks the viewer to sync a rhythm they have not touched.
+			syncedBeats: pattern.beats.map((beat) => [...beat]),
+		});
+	}
+	const open = payload.open;
+	const openIndex =
+		typeof open === "number" && Number.isInteger(open) && open >= 0 && open < progressions.length ? open : 0;
+	return { kind: "strum", pattern, progressions, openIndex };
 }
 
 /**

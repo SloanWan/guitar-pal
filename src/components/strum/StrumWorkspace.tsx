@@ -89,6 +89,7 @@ import { createShare, newShareId, shareUrl, type SharedStrum } from "@/lib/share
 import { importStrumPattern } from "@/lib/strumStorage";
 import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
 import SharedPatternPanel from "@/components/SharedPatternPanel";
+import ShareStrumDialog from "@/components/strum/ShareStrumDialog";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import { toast } from "sonner";
 import Fader from "@/components/ui/Fader";
@@ -173,6 +174,8 @@ function Segmented({ options, value, onChange, disabled }: SegmentedProps) {
 export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 	const router = useRouter();
 	const isShared = shared !== undefined;
+	// The progression a share opens on: the one the sharer was looking at.
+	const sharedOpen = shared?.progressions[shared.openIndex] ?? null;
 	// Null until the device-local choice has been read: showing a preset first and
 	// swapping it out a tick later reads as a glitch, so the card waits instead.
 	// A shared snapshot is known up front.
@@ -191,9 +194,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 	const [bpm, setBpm] = useState(() =>
 		shared
 			? clampBpmToMeter(
-					shared.progression?.bpm !== undefined
-						? normalizeBpm(shared.progression.bpm)
-						: patternBpm(shared.pattern),
+					sharedOpen?.bpm !== undefined ? normalizeBpm(sharedOpen.bpm) : patternBpm(shared.pattern),
 					patternMeter(shared.pattern),
 				)
 			: patternBpm(PRESET_STRUM_PATTERNS[0]),
@@ -201,10 +202,8 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 	const [tickLevel, setTickLevel] = useState<TickLevel>("beat");
 	// Which view of the pattern is on screen: its own bar, or one of the chord
 	// progressions written over it. A share opens on what was shared.
-	const [tab, setTab] = useState<WorkspaceTab>(shared?.progression ? "progressions" : "pattern");
-	const [openProgressionId, setOpenProgressionId] = useState<string | null>(
-		shared?.progression?.id ?? null,
-	);
+	const [tab, setTab] = useState<WorkspaceTab>(sharedOpen ? "progressions" : "pattern");
+	const [openProgressionId, setOpenProgressionId] = useState<string | null>(sharedOpen?.id ?? null);
 	// Live bars being played. On the pattern tab any chord picked is session-only;
 	// on the progressions tab the bars come from the open progression.
 	const [bars, setBars] = useState<Bar[]>(() => toBars(PRESET_STRUM_PATTERNS[0]));
@@ -305,13 +304,11 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 	} = useChordProgressions(user, loading);
 
 	// The selected pattern's own progressions, in playing order — or, on a share
-	// page, the one progression that came with the snapshot.
+	// page, the ones that came with the snapshot.
 	const patternProgressions = useMemo(
 		() =>
 			shared
-				? shared.progression
-					? [shared.progression]
-					: []
+				? shared.progressions
 				: selectedPattern
 					? progressionsForPattern(progressions, selectedPattern.id)
 					: [],
@@ -968,31 +965,34 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 		scrollUpDistanceRef.current = 0;
 	}
 
-	// What the shared panel says under the name: tempo, meter, and the
-	// progression's length and capo when one came along.
+	// What the shared panel says under the name: tempo, meter, and what came
+	// along — one progression's length and capo, or how many there are.
 	const sharedMeta = selectedPattern
 		? [
-				`${beatUnitGlyph(meter)} = ${shared?.progression?.bpm ?? patternBpm(selectedPattern)}`,
+				`${beatUnitGlyph(meter)} = ${sharedOpen?.bpm ?? patternBpm(selectedPattern)}`,
 				meterLabel(meter),
-				...(shared?.progression
-					? [
-							`${shared.progression.bars.length} bar${shared.progression.bars.length === 1 ? "" : "s"}`,
-							...(progressionCapo(shared.progression) > 0
-								? [`Capo ${progressionCapo(shared.progression)}`]
-								: []),
-						]
-					: ["1 bar"]),
+				...(shared && shared.progressions.length > 1
+					? [`${shared.progressions.length} progressions`]
+					: sharedOpen
+						? [
+								`${sharedOpen.bars.length} bar${sharedOpen.bars.length === 1 ? "" : "s"}`,
+								...(progressionCapo(sharedOpen) > 0 ? [`Capo ${progressionCapo(sharedOpen)}`] : []),
+							]
+						: ["1 bar"]),
 			].join(" · ")
 		: "";
 
-	// Share: the pattern, and the progression open on it — what is on screen —
-	// as a snapshot under a fresh id. The link goes on the clipboard first,
-	// inside the click (Safari refuses a clipboard write after an await), and
-	// the row is written after; if that fails the copied link is a dead one,
-	// and the toast says so. Where the clipboard is off limits (an in-app
-	// browser, http on a LAN) the link is shown to copy by hand.
+	// Share: the pattern, and the progressions chosen to go with it, as a
+	// snapshot under a fresh id. On the pattern tab that is the bare rhythm; on
+	// the progressions tab the open one — and when the pattern has several, a
+	// dialog asks which. The link goes on the clipboard first, inside the click
+	// (Safari refuses a clipboard write after an await), and the row is written
+	// after; if that fails the copied link is a dead one, and the toast says
+	// so. Where the clipboard is off limits (an in-app browser, http on a LAN)
+	// the link is shown to copy by hand.
 	const [sharing, setSharing] = useState(false);
-	async function handleShare() {
+	const [shareDialogOpen, setShareDialogOpen] = useState(false);
+	function handleShare() {
 		if (isShared || sharing || !selectedPattern) return;
 		if (!user) {
 			toast("Sign in to share a pattern.", {
@@ -1000,7 +1000,17 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 			});
 			return;
 		}
-		const progression = tab === "progressions" ? openProgression : null;
+		if (tab === "progressions" && patternProgressions.length > 1) {
+			setShareDialogOpen(true);
+			return;
+		}
+		void shareWith(tab === "progressions" && openProgression ? [openProgression] : []);
+	}
+	async function shareWith(chosen: ChordProgression[]) {
+		if (!user || !selectedPattern) return;
+		setShareDialogOpen(false);
+		// The one on screen opens first for the viewer, when it was sent.
+		const openIndex = Math.max(0, chosen.findIndex((p) => p.id === openProgressionId));
 		const id = newShareId();
 		const url = shareUrl(window.location.origin, id);
 		let copied = false;
@@ -1012,10 +1022,18 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 		}
 		setSharing(true);
 		try {
-			await createShare(createClient(), user, id, { kind: "strum", pattern: selectedPattern, progression });
-			const what = progression
-				? `"${selectedPattern.name}" with ${progressionDisplayName(progression)}`
-				: `"${selectedPattern.name}"`;
+			await createShare(createClient(), user, id, {
+				kind: "strum",
+				pattern: selectedPattern,
+				progressions: chosen,
+				openIndex,
+			});
+			const what =
+				chosen.length === 1
+					? `"${selectedPattern.name}" with ${progressionDisplayName(chosen[0])}`
+					: chosen.length > 1
+						? `"${selectedPattern.name}" with ${chosen.length} progressions`
+						: `"${selectedPattern.name}"`;
 			if (copied) toast(`Link copied — anyone with it can open ${what}.`, { description: url });
 			else window.prompt("Copy this link — anyone with it can open the pattern:", url);
 		} catch (e) {
@@ -1027,7 +1045,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 	}
 
 	// Import: the snapshot becomes a pattern of the viewer's own, with the
-	// progression over it — the browser for a guest, the account when signed
+	// progressions over it — the browser for a guest, the account when signed
 	// in — and the strum page opens on it. Awaited before leaving so the page
 	// finds the rows when it loads.
 	const [importing, setImporting] = useState(false);
@@ -1040,16 +1058,20 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 				id: crypto.randomUUID(),
 				name: uniquePatternName(shared.pattern.name, [...PRESET_STRUM_PATTERNS, ...customPatterns]),
 			};
-			const progression: ChordProgression | null = shared.progression
-				? { ...shared.progression, id: crypto.randomUUID(), patternId: pattern.id, orderIndex: 0 }
-				: null;
+			const imported: ChordProgression[] = shared.progressions.map((progression, index) => ({
+				...progression,
+				id: crypto.randomUUID(),
+				patternId: pattern.id,
+				orderIndex: index,
+			}));
+			const opened = imported[shared.openIndex] ?? null;
 			const supabase = createClient();
-			await importStrumPattern(supabase, user, pattern, progression);
+			await importStrumPattern(supabase, user, pattern, imported);
 			await saveLastPattern(supabase, user, "strum", pattern.id);
 			// Land on what was imported: the pattern, and the progression open.
 			localStorage.setItem("lastStrumPattern", pattern.id);
-			localStorage.setItem(TAB_STORAGE_KEY, progression ? "progressions" : "pattern");
-			if (progression) localStorage.setItem(OPEN_PROGRESSION_STORAGE_KEY, progression.id);
+			localStorage.setItem(TAB_STORAGE_KEY, opened ? "progressions" : "pattern");
+			if (opened) localStorage.setItem(OPEN_PROGRESSION_STORAGE_KEY, opened.id);
 			else localStorage.removeItem(OPEN_PROGRESSION_STORAGE_KEY);
 			stop();
 			if (user) {
@@ -1885,6 +1907,17 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 				existingPatterns={[...PRESET_STRUM_PATTERNS, ...customPatterns]}
 				user={user}
 			/>
+
+			{shareDialogOpen && selectedPattern && (
+				<ShareStrumDialog
+					open
+					onClose={() => setShareDialogOpen(false)}
+					patternName={selectedPattern.name}
+					progressions={patternProgressions}
+					openId={openProgressionId}
+					onShare={(chosen) => void shareWith(chosen)}
+				/>
+			)}
 
 			{editingProgression && (
 				<ProgressionEditModal

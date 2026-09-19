@@ -70,17 +70,17 @@ export function readStoredProgressions(): ChordProgression[] {
 }
 
 /**
- * Write a new pattern and, when there is one, the progression over it — the
- * browser for a guest, the account when signed in. Awaited to the end so a
- * caller that navigates next finds the rows there: the strum page's hooks
- * save in the background and reload, which is right for a page that stays
- * put and wrong for one about to leave.
+ * Write a new pattern and the progressions over it — the browser for a
+ * guest, the account when signed in. Awaited to the end so a caller that
+ * navigates next finds the rows there: the strum page's hooks save in the
+ * background and reload, which is right for a page that stays put and wrong
+ * for one about to leave.
  */
 export async function importStrumPattern(
 	supabase: SupabaseClient,
 	user: User | null,
 	pattern: StrumPattern,
-	progression: ChordProgression | null,
+	progressions: ChordProgression[],
 ): Promise<void> {
 	if (!user) {
 		// No database to stamp it, so the save does: without a creation time a
@@ -97,10 +97,10 @@ export async function importStrumPattern(
 			STRUM_PATTERNS_STORAGE_KEY,
 			JSON.stringify(sortPatternsByNewest([...existing, stamped])),
 		);
-		if (progression) {
+		if (progressions.length > 0) {
 			localStorage.setItem(
 				STRUM_PROGRESSIONS_STORAGE_KEY,
-				JSON.stringify([...readStoredProgressions(), progression]),
+				JSON.stringify([...readStoredProgressions(), ...progressions]),
 			);
 		}
 		return;
@@ -110,10 +110,10 @@ export async function importStrumPattern(
 		.from("user_strum_patterns")
 		.insert({ user_id: user.id, pattern_id: pattern.id, ...patternColumns(pattern) });
 	if (error) throw new Error(error.message);
-	if (progression) {
+	if (progressions.length > 0) {
 		const { error: progressionError } = await supabase
 			.from("user_pattern_progressions")
-			.upsert(progressionColumns(progression, user.id));
+			.upsert(progressions.map((progression) => progressionColumns(progression, user.id)));
 		if (progressionError) throw new Error(progressionError.message);
 	}
 }

@@ -29,15 +29,19 @@ function describe(share: SharedItem): { title: string; description: string } {
 			description: `${beatUnitGlyph(pattern.timeSignature)} = ${pattern.bpm} · ${pattern.timeSignature[0]}/${pattern.timeSignature[1]} · ${bars(pattern.measures.length)}. Open it in the player, then import it to play along or edit.`,
 		};
 	}
-	const { pattern, progression } = share;
+	const { pattern, progressions, openIndex } = share;
 	const meter = patternMeter(pattern);
-	const tempo = progression?.bpm ?? patternBpm(pattern);
-	const size = progression
-		? [
-				`${progressionDisplayName(progression)}, ${bars(progression.bars.length)}`,
-				...(progressionCapo(progression) > 0 ? [`capo ${progressionCapo(progression)}`] : []),
-			].join(" · ")
-		: bars(1);
+	const opened = progressions[openIndex];
+	const tempo = opened?.bpm ?? patternBpm(pattern);
+	const size =
+		progressions.length > 1
+			? `${progressions.length} progressions`
+			: opened
+				? [
+						`${progressionDisplayName(opened)}, ${bars(opened.bars.length)}`,
+						...(progressionCapo(opened) > 0 ? [`capo ${progressionCapo(opened)}`] : []),
+					].join(" · ")
+				: bars(1);
 	return {
 		title: `${pattern.name} — Shared strum pattern | Guitar Pal`,
 		description: `${beatUnitGlyph(meter)} = ${tempo} · ${meterLabel(meter)} · ${size}. Open it in the player, then import it to play along or edit.`,

@@ -4,7 +4,7 @@ import {
 	voicingCacheKey,
 	type VoicingStorage,
 } from "@/lib/chordVoicingCache";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 const C_MAJOR: ChordVoicing = {
 	id: "c-std",

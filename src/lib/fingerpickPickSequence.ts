@@ -10,7 +10,7 @@ import {
 import { chordFretHints, chordRootString, chordSymbolLabel, effectiveChords } from "./fingerpickChords";
 import { isCompound } from "./strumMeter";
 import type { ChordRef } from "./strumPatterns";
-import type { ChordVoicing } from "./chordVoicingToVexChords";
+import type { ChordVoicing } from "./chordVoicing";
 
 /**
  * One beat of a right-hand pattern as typed: the strings plucked together

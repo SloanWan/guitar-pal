@@ -50,12 +50,6 @@ export function pitchClassRoot(pitchClass: number): string {
 	return ROOT_CHROMATIC_ORDER[((pitchClass % 12) + 12) % 12];
 }
 
-/** The lowest note a shape sounds, named. Null when it sounds nothing. */
-export function bassNoteName(frets: readonly ShapeFret[]): string | null {
-	const bass = bassPitchClass(shapeMidi(frets));
-	return bass === null ? null : pitchClassRoot(bass);
-}
-
 /**
  * The notes a shape sounds, named, lowest first and each named once.
  *

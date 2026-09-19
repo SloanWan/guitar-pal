@@ -54,10 +54,9 @@ import {
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import { clampBpmToMeter, selectRefVoicing } from "@/lib/strumBars";
 import { beatUnitGlyph } from "@/lib/strumMeter";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { voicingToDiagramShape } from "@/lib/chordVoicing";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
-import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";
 import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/ChordShapeStrip";
 import ChordViewToggle from "@/components/strum/ChordViewToggle";
 import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
@@ -239,9 +238,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 				chordRegionEnd(measure, label.slotIndex),
 				voicing,
 			);
-			const { frets, startFret, barreFret } = vexChordDefToSVGProps(
-				chordVoicingToVexChords(voicing),
-			);
+			const { frets, startFret, barreFret } = voicingToDiagramShape(voicing);
 			return (
 				<ChordShapeStrip
 					frets={frets}

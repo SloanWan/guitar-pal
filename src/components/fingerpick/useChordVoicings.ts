@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**

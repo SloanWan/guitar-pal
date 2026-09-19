@@ -3,7 +3,7 @@ import { parsePickSequence, applyPickSequence } from "@/lib/fingerpickPickSequen
 import { makeEmptySlot, setFret, tripletGroups, usedUnits, measureCapacity } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import type { ChordRef } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 const C: ChordRef = { root: "C", suffix: "major" };
 const Am: ChordRef = { root: "A", suffix: "minor" };

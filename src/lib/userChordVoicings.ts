@@ -1,4 +1,4 @@
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { CHORD_SHAPE_WINDOW, MAX_SHAPE_START_FRET } from "@/lib/chordShape";
 import {

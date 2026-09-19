@@ -14,7 +14,7 @@
  */
 import { ROOT_CHROMATIC_ORDER } from "@/lib/chordSuffixes";
 import { GUITAR_OPEN_MIDI, chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
-import { decodeVoicingStrings, type ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import { decodeVoicingStrings, type ChordVoicing } from "@/lib/chordVoicing";
 
 import { chordToneRole } from "./overlay";
 import { SCALE_INTERVALS, scaleRootPitchClass, type ScaleSpec, type ScaleType } from "./scales";

@@ -6,7 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import FretboardExplorer from "@/components/fretboard/FretboardExplorer";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import type { SequenceStep } from "@/lib/fretboard/sequence";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;

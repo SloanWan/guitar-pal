@@ -24,7 +24,7 @@ import {
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import type { ChordRef } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 function voicing(overrides: Partial<ChordVoicing> = {}): ChordVoicing {
 	return {

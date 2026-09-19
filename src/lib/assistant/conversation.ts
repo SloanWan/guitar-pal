@@ -1,4 +1,4 @@
-import type { AssistantDomain } from "@/lib/assistant/types";
+import type { AssistantMode } from "@/lib/assistant/types";
 
 /**
  * Where the assistant's conversation waits between openings of the panel,
@@ -99,17 +99,17 @@ export function writeConversation<M extends StoredMessage>(messages: M[], now: n
 	}
 }
 
-export function readMode(): AssistantDomain | null {
+export function readMode(): AssistantMode | null {
 	try {
 		const raw = sessionStorage.getItem(MODE_KEY);
-		return raw === "strum" || raw === "tab" ? raw : null;
+		return raw === "strum" || raw === "tab" || raw === "general" ? raw : null;
 	} catch {
 		return null;
 	}
 }
 
 /** `null` ends the mode with the thread: the next one opens on the page's default. */
-export function writeMode(mode: AssistantDomain | null): void {
+export function writeMode(mode: AssistantMode | null): void {
 	try {
 		if (mode === null) sessionStorage.removeItem(MODE_KEY);
 		else sessionStorage.setItem(MODE_KEY, mode);

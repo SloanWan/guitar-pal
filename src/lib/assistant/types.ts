@@ -7,6 +7,12 @@ import type { Bar, ChordRef } from "@/lib/strumPatterns";
 export type AssistantDomain = "strum" | "tab";
 
 /**
+ * What the chip above the input can be set to: one of the two rules
+ * assistants, or General — the model, which reaches both through tools.
+ */
+export type AssistantMode = AssistantDomain | "general";
+
+/**
  * What the assistant offers the user, before anything is written. Nothing here
  * reaches the database until the user confirms the preview — the model proposes,
  * the person disposes.

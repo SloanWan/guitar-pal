@@ -7,7 +7,7 @@ import type { AssistantDomain, AssistantTurn } from "@/lib/assistant/types";
  *
  * Every case runs offline through the router (`offline.test.ts`, part of
  * `npm test`, zero API calls). The ones the router hands to the model also run
- * through the model in `model.eval.ts` — `npm run evals`, which costs money and
+ * through the General assistant in `general.eval.ts` — `npm run evals`, which costs money and
  * is never part of the test suite.
  *
  * Grading is programmatic on purpose: a case says which path it must take and

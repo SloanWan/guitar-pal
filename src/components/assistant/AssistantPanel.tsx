@@ -12,7 +12,7 @@ import { recordPick } from "@/lib/assistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
 import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/assistant/greeting";
 import { pick, uiLang } from "@/lib/assistant/lang";
-import type { AssistantDomain } from "@/lib/assistant/types";
+import type { AssistantDomain, AssistantMode } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
 
@@ -24,8 +24,8 @@ import type { useAssistant } from "./useAssistant";
 
 const MAX_INPUT_CHARS = 600;
 /** The chip's segments, in the order they sit. */
-const MODES: readonly AssistantDomain[] = ["strum", "tab"];
-const MODE_LABEL: Record<AssistantDomain, string> = { strum: "Strum", tab: "Tab" };
+const MODES: readonly AssistantMode[] = ["strum", "tab", "general"];
+const MODE_LABEL: Record<AssistantMode, string> = { strum: "Strum", tab: "Tab", general: "General" };
 const MODE_LABEL_ZH: Record<AssistantDomain, string> = { strum: "扫弦", tab: "指弹" };
 /** How far above the bottom still counts as reading the tail, so a stray pixel does not unpin. */
 const TAIL_SLACK_PX = 24;
@@ -188,7 +188,7 @@ function Intro({
 	hello: string;
 	/** The line after the greeting: what this does, and for a guest, where their work lives. */
 	aside: string;
-	domain: AssistantDomain;
+	domain: AssistantMode;
 	greeted: boolean;
 	onGreeted: () => void;
 	onExample: (text: string) => void;
@@ -546,7 +546,10 @@ export default function AssistantPanel({
 							type="button"
 							role="radio"
 							aria-checked={mode === m}
-							disabled={pending}
+							// General is the model, behind the route's sign-in: a guest sees
+							// the segment and why it is off, rather than a 401 after typing.
+							disabled={pending || (m === "general" && user === null)}
+							title={m === "general" && user === null ? "Sign in to use General — it asks a model" : undefined}
 							onClick={() => setMode(m)}
 							className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${i > 0 ? "border-l border-line-strong" : ""} ${mode === m ? "bg-denim text-on-denim" : "text-ink-dim hover:text-denim"}`}
 						>
@@ -608,8 +611,8 @@ export default function AssistantPanel({
 						}
 					}}
 					maxLength={MAX_INPUT_CHARS}
-					placeholder={hint || (mode === "tab" ? "A chord and the strings to pick, or a tab" : "Chords, a rhythm, or what you want")}
-					aria-label={mode === "tab" ? "Ask the tab assistant" : "Ask the strum assistant"}
+					placeholder={hint || (mode === "tab" ? "A chord and the strings to pick, or a tab" : mode === "general" ? "Ask anything, or say what you want made" : "Chords, a rhythm, or what you want")}
+					aria-label={mode === "tab" ? "Ask the tab assistant" : mode === "general" ? "Ask the assistant" : "Ask the strum assistant"}
 					aria-describedby={hint ? `${promptHintId}` : undefined}
 					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 				/>

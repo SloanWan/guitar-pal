@@ -1,5 +1,5 @@
 import { pick, type Lang } from "@/lib/assistant/lang";
-import type { AssistantDomain } from "@/lib/assistant/types";
+import type { AssistantMode } from "@/lib/assistant/types";
 import { NICKNAME_KEY } from "@/lib/profile";
 
 /**
@@ -37,9 +37,15 @@ const GREETINGS: Record<Lang, readonly ((name: string | null) => string)[]> = {
  * their patterns stay on this device until they sign in — said once, here,
  * rather than at the moment they try to save.
  */
-export function hint(lang: Lang, signedIn: boolean, domain: AssistantDomain = "strum"): string {
+export function hint(lang: Lang, signedIn: boolean, mode: AssistantMode = "strum"): string {
 	const what =
-		domain === "tab"
+		mode === "general"
+			? pick(
+					lang,
+					"Ask anything about playing or practice, or say what you want and I'll make it — a strum, a progression, a fingerpicking pattern. Written-out chords and rhythms still go through the same readers.",
+					"问我任何关于弹奏和练习的问题，或者说你想要什么，我来做——扫弦、和弦进行、指弹 pattern。直接写出来的和弦和节奏仍然走原来的读法。",
+				)
+			: mode === "tab"
 			? pick(
 					lang,
 					"Chords with the strings to pick, strings and frets written out, a style word over a chord, or six lines of tab pasted in — all read instantly, offline. If a sentence doesn't land, I'll show you ones that would.",
@@ -100,7 +106,7 @@ export function greeting(name: string | null, key?: string, lang: Lang = "en"): 
  * and only then ask a model. Tab takes the one on screen, so each has to be a
  * sentence that works verbatim — nothing here is a description of a sentence.
  */
-const INPUT_PROMPTS: Record<AssistantDomain, readonly string[]> = {
+const INPUT_PROMPTS: Record<AssistantMode, readonly string[]> = {
 	strum: [
 		"C Am F G",
 		"D DU UD",
@@ -119,10 +125,18 @@ const INPUT_PROMPTS: Record<AssistantDomain, readonly string[]> = {
 		"Em 三指法",
 		"waltz in G, 100 bpm",
 	],
+	general: [
+		"a slow folk strum in C G Am F",
+		"a Travis pattern for Am and F",
+		"what chords go with Em?",
+		"something gentle in 3/4 for fingerpicking",
+		"给我一个 C 调的民谣扫弦，慢一点",
+		"how do I practise chord changes?",
+	],
 };
 
-export function inputPrompts(domain: AssistantDomain): readonly string[] {
-	return INPUT_PROMPTS[domain];
+export function inputPrompts(mode: AssistantMode): readonly string[] {
+	return INPUT_PROMPTS[mode];
 }
 
 /**
@@ -130,11 +144,12 @@ export function inputPrompts(domain: AssistantDomain): readonly string[] {
  * On strum a lone "C" would not — one chord is a key, not a progression — so
  * the strum examples start at two chords.
  */
-const EXAMPLES: Record<AssistantDomain, readonly string[]> = {
+const EXAMPLES: Record<AssistantMode, readonly string[]> = {
 	strum: ["C Am F G", "D DU UD", "a slow folk strum in C G Am F"],
 	tab: ["C G Am F: R3231323", "Am: 53231323", "travis picking in C"],
+	general: ["a slow folk strum in C G Am F", "a Travis pattern for Am and F", "what chords go with Em?"],
 };
 
-export function examples(domain: AssistantDomain): readonly string[] {
-	return EXAMPLES[domain];
+export function examples(mode: AssistantMode): readonly string[] {
+	return EXAMPLES[mode];
 }

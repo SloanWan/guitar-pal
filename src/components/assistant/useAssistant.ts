@@ -9,7 +9,8 @@ import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
 import { resolveAssistantTurn } from "@/lib/assistant/strum/turn";
 import { recordMiss } from "@/lib/assistant/missLog";
 import { uiLang, type Lang } from "@/lib/assistant/lang";
-import type { AssistantDomain, AssistantProposal } from "@/lib/assistant/types";
+import type Anthropic from "@anthropic-ai/sdk";
+import type { AssistantDomain, AssistantErrorBody, AssistantMode, AssistantProposal, AssistantTurn } from "@/lib/assistant/types";
 import type { EditIntentExplanation, EditIntentReading } from "@/lib/assistant/strum/editIntent";
 import { resolveTabTurn, type TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import type { TabProposal } from "@/lib/assistant/tab/types";
@@ -26,6 +27,11 @@ import {
 	writeMode,
 } from "@/lib/assistant/conversation";
 import { otherDomainReads } from "@/lib/assistant/readAs";
+import { proposeStrum, proposeTab, strumReadResult, tabReadResult, type ToolCard } from "@/lib/assistant/general/execute";
+import type { GeneralContext } from "@/lib/assistant/general/request";
+import { resolveGeneralTurn, type ModelStep, type ToolInput } from "@/lib/assistant/general/turn";
+import type { ProposeStrumInput, ProposeTabInput, ReadInput, ToolName } from "@/lib/assistant/general/tools";
+import { pick } from "@/lib/assistant/lang";
 import { createClient } from "@/lib/supabase";
 
 /**
@@ -37,6 +43,11 @@ import { createClient } from "@/lib/supabase";
  * with the transcript until they change it or the thread ends. Both read the
  * message by rules and never reach for a model, so every answer is one the
  * app can stand behind, and that can be asserted rather than promised.
+ *
+ * General is the third setting: the model, reached through the route, with
+ * those same readers as its tools. The loop runs here (`resolveGeneralTurn`),
+ * so a pattern the model asks for is made by exactly the code a rules turn
+ * runs, and the card is the reader's, never the model's prose.
  *
  * The page is a default, not a decision: a thread opens in the mode of the
  * page it opens on, and crossing to the other page only prompts — once per
@@ -93,6 +104,27 @@ export interface AssistantMessage {
 	streamed?: boolean;
 }
 
+/** Turns of the thread the model is shown. Capped: the route caps the whole exchange. */
+const MAX_HISTORY_TURNS = 12;
+
+/** The route's answer when it is not a model step. */
+class RouteError extends Error {
+	constructor(
+		readonly status: number,
+		message: string,
+		readonly retryAfterSeconds?: number,
+	) {
+		super(message);
+	}
+}
+
+/** A tool's card, as the fields the panel renders it from. */
+function cardFields(card: ToolCard | undefined): Partial<AssistantMessage> {
+	if (!card) return {};
+	if (card.domain === "strum") return "proposal" in card ? { domain: "strum", proposal: card.proposal } : { domain: "strum", edit: card.edit };
+	return "tabProposal" in card ? { domain: "tab", tabProposal: card.tabProposal } : { domain: "tab", tabEdit: card.tabEdit };
+}
+
 /** How long the assistant appears to think before it answers. */
 const THINK_MIN_MS = 150;
 const THINK_MAX_MS = 2000;
@@ -116,7 +148,7 @@ export function useAssistant() {
 	// The mode the thread was left in, or the page's default for a new one.
 	// Read once, lazily, on the client — nothing that wears the mode is in the
 	// server's markup; the panel mounts on click.
-	const [mode, setModeState] = useState<AssistantDomain>(() =>
+	const [mode, setModeState] = useState<AssistantMode>(() =>
 		typeof window === "undefined" ? page : (readMode() ?? page),
 	);
 	/**
@@ -129,14 +161,15 @@ export function useAssistant() {
 	const dismissNudge = useCallback(() => setNudgedPath(pathname), [pathname]);
 
 	const setMode = useCallback(
-		(next: AssistantDomain) => {
+		(next: AssistantMode) => {
 			setModeState(next);
 			writeMode(next);
 			dismissNudge();
 		},
 		[dismissNudge],
 	);
-	const nudge = hasOwnAssistant(pathname) && mode !== page && nudgedPath !== pathname;
+	// General reaches both workspaces, so the page has nothing to propose to it.
+	const nudge = hasOwnAssistant(pathname) && mode !== "general" && mode !== page && nudgedPath !== pathname;
 
 	// Read once, lazily. Safe to differ between server and client: nothing that
 	// renders the transcript is mounted until the popover opens, so the markup
@@ -301,28 +334,105 @@ export function useAssistant() {
 	}, []);
 
 	/**
+	 * The transcript as the model sees it: text only, the newest turns, no
+	 * cards and no failures. A ref mirror, read when a turn starts, so the
+	 * resolver's identity does not change with every message.
+	 */
+	const messagesRef = useRef<AssistantMessage[]>(messages);
+	useEffect(() => {
+		messagesRef.current = messages;
+	}, [messages]);
+	const historyOf = (all: readonly AssistantMessage[]): AssistantTurn[] =>
+		all
+			.filter((m) => !m.failed && m.text.trim() !== "")
+			.slice(-MAX_HISTORY_TURNS)
+			.map((m) => ({ role: m.role, content: m.text }));
+
+	/** One model step through the route. Anything but 200 is the route's own sentence, thrown. */
+	const callRoute = useCallback(async (msgs: readonly Anthropic.MessageParam[], context: GeneralContext): Promise<ModelStep> => {
+		const res = await fetch("/api/assistant", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ messages: msgs, context }),
+		});
+		const body: unknown = await res.json().catch(() => null);
+		if (!res.ok) {
+			const b = (body ?? {}) as Partial<AssistantErrorBody>;
+			throw new RouteError(res.status, b.error ?? "The assistant could not be reached.", b.retryAfterSeconds);
+		}
+		return body as ModelStep;
+	}, []);
+
+	/**
 	 * One sentence, read by one assistant. The reading is instant; the reply
 	 * is not. A pause of the kind a person takes before answering — random,
 	 * so it never reads as a timer — with the typing dots showing for it. The
 	 * floor keeps the dots from flashing for a frame and vanishing. A tab turn
 	 * may also wait on the chord library for its shapes; the pause runs alongside.
+	 * A General turn is as slow as the model; the pause is lost inside it.
 	 */
 	const resolveIn = useCallback(
-		async (as: AssistantDomain, text: string): Promise<AssistantMessage> => {
+		async (as: AssistantMode, text: string, history: readonly AssistantTurn[] = []): Promise<AssistantMessage> => {
 			const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
 			setIndex(index);
 			const thinking = new Promise((done) =>
 				setTimeout(done, THINK_MIN_MS + Math.random() * (THINK_MAX_MS - THINK_MIN_MS)),
 			);
-			const reply: AssistantMessage = { id: newId(), role: "assistant", text: "", domain: as };
+			const reply: AssistantMessage = { id: newId(), role: "assistant", text: "" };
+			const readStrum = (sentence: string) =>
+				resolveAssistantTurn({ text: sentence, index, patterns: patternList, uiLang: uiLang() });
+			// Tab patterns are re-read per turn rather than cached for the
+			// session: a pattern saved on the page since the last turn has to be
+			// nameable now.
+			tabPatternsRef.current = null;
+			const tabPatterns = await loadTabPatterns();
+			const readTab = (sentence: string) =>
+				resolveTabTurn({ text: sentence, index, patterns: tabPatterns, uiLang: uiLang() });
+
+			if (as === "general") {
+				const context: GeneralContext = {
+					page: hasOwnAssistant(pathname) ? page : null,
+					strumNames: patternList.map((p) => p.name),
+					tabNames: tabPatterns.map((p) => p.name),
+					lang: uiLang(),
+				};
+				const execute = async (name: ToolName, input: ToolInput) => {
+					switch (name) {
+						case "read_strum":
+						case "edit_strum":
+							return strumReadResult(readStrum((input as ReadInput).text));
+						case "read_tab":
+						case "edit_tab":
+							return tabReadResult(await readTab((input as ReadInput).text));
+						case "propose_strum":
+							return proposeStrum(input as ProposeStrumInput, index);
+						case "propose_tab":
+							return proposeTab(input as ProposeTabInput);
+					}
+				};
+				try {
+					const outcome = await resolveGeneralTurn({ text, history, context, call: callRoute, execute, uiLang: uiLang() });
+					Object.assign(reply, { text: outcome.text, lang: outcome.lang, ...cardFields(outcome.card) });
+				} catch (e) {
+					const lang = uiLang();
+					reply.failed = true;
+					reply.lang = lang;
+					reply.text =
+						e instanceof RouteError
+							? e.retryAfterSeconds
+								? `${e.message} ${pick(lang, `(about ${Math.ceil(e.retryAfterSeconds / 60)} min)`, `（约 ${Math.ceil(e.retryAfterSeconds / 60)} 分钟）`)}`
+								: e.message
+							: pick(lang, "The assistant could not be reached. Strum and Tab still work offline.", "联系不上助手。扫弦和指弹仍然可以离线用。");
+					if (!(e instanceof RouteError)) console.error("[assistant] general turn failed:", e);
+				}
+				await thinking;
+				return reply;
+			}
+
+			reply.domain = as;
 			let missed: { seen: EditIntentExplanation; offered: string[] } | null = null;
-			let tabPatterns: readonly FingerpickPattern[];
 			if (as === "tab") {
-				// Re-read per turn rather than cached for the session: a pattern
-				// saved on the page since the last turn has to be nameable now.
-				tabPatternsRef.current = null;
-				tabPatterns = await loadTabPatterns();
-				const outcome = await resolveTabTurn({ text, index, patterns: tabPatterns, uiLang: uiLang() });
+				const outcome = await readTab(text);
 				if (outcome.seen && outcome.templates) missed = { seen: outcome.seen, offered: outcome.templates };
 				Object.assign(reply, {
 					text: outcome.text,
@@ -332,8 +442,7 @@ export function useAssistant() {
 					lang: outcome.lang,
 				});
 			} else {
-				tabPatterns = await loadTabPatterns();
-				const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
+				const outcome = readStrum(text);
 				if (outcome.seen && outcome.templates) missed = { seen: outcome.seen, offered: outcome.templates };
 				Object.assign(reply, {
 					text: outcome.text,
@@ -363,7 +472,7 @@ export function useAssistant() {
 			await thinking;
 			return reply;
 		},
-		[chordIndex, loadPatterns, loadTabPatterns],
+		[callRoute, chordIndex, loadPatterns, loadTabPatterns, page, pathname],
 	);
 
 	const send = useCallback(
@@ -378,7 +487,7 @@ export function useAssistant() {
 			// assistant across pages, where an untouched one still follows the page.
 			writeMode(mode);
 			try {
-				const reply = await resolveIn(mode, text);
+				const reply = await resolveIn(mode, text, historyOf(messagesRef.current));
 				setMessages((prev) => [...prev, reply]);
 			} finally {
 				setPending(false);

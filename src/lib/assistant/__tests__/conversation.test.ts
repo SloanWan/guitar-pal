@@ -97,7 +97,9 @@ describe("mode", () => {
 	});
 
 	it("ignores a value that is not a mode", () => {
-		sessionStorage.setItem(MODE_KEY, "general");
+		sessionStorage.setItem(MODE_KEY, "piano");
 		expect(readMode()).toBeNull();
+		writeMode("general");
+		expect(readMode()).toBe("general");
 	});
 });

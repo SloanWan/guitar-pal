@@ -54,7 +54,7 @@ import {
 	type AttachHandoff,
 	type DeleteHandoff,
 	type RenameHandoff,
-} from "@/lib/strumAssistant/handoff";
+} from "@/lib/assistant/handoff";
 import { withUserVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";

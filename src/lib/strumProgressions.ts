@@ -117,6 +117,8 @@ export interface ChordToken {
 export type ShapeResolver = (frets: ShapeFret[]) => ChordRef | null;
 
 /** The words of a typed sequence, separators dropped. */
+const BARE_NUMBER = /^\d+$/;
+
 function sequenceTokens(input: string): string[] {
 	return input
 		.trim()
@@ -172,7 +174,10 @@ export function parseChordSequence(
 			tokens.push({ input: token, chord: resolveShape?.(frets) ?? null, shape: true });
 			continue;
 		}
-		const match = searchChords(index, token, 1)[0];
+		// A bare number is never a chord: the ranked search would still hand
+		// back its nearest suffix ("5" → C5, "13" → Cmaj13), and a pick order
+		// like "5 3 2 1" would read as a progression.
+		const match = BARE_NUMBER.test(token) ? undefined : searchChords(index, token, 1)[0];
 		tokens.push({
 			input: token,
 			chord: match ? { root: match.root, suffix: match.suffix, voicingId: null } : null,

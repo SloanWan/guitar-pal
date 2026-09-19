@@ -62,7 +62,7 @@ import {
 	type Meter,
 } from "@/lib/strumMeter";
 import { patternNotation } from "@/lib/strumNotation";
-import { parseRhythmInMeter } from "@/lib/strumAssistant/parseRhythm";
+import { parseRhythmInMeter } from "@/lib/assistant/strum/parseRhythm";
 import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
 import { useBarHistory } from "./useBarHistory";
 

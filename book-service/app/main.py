@@ -20,12 +20,13 @@ from app.auth import CurrentUser, build_verifier
 from app.books import router as books_router
 from app.config import Settings, get_settings
 from app.db import close_pool, fail_stale_scans, open_pool
-from app.ingest.model import AnthropicTextTocReader
+from app.ingest.model import AnthropicTextTocReader, AnthropicVisionTocReader
 from app.ingest.pdf import OcrConfig
-from app.ingest.toc import TextTocReader
+from app.parse import ChapterGraph, Parser, text_only_graph
 from app.repo import BookRepo
 from app.scan import Scanner
 from app.storage import StorageClient
+from app.validate import ValidatorClient
 
 log = logging.getLogger("book-service")
 
@@ -43,6 +44,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.pool = None
         app.state.storage = None
         app.state.scanner = None
+        app.state.parser = None
+        app.state.validator = validator_client(settings)
         if settings.database_url is not None:
             try:
                 app.state.pool = await open_pool(settings.database_url)
@@ -55,13 +58,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.supabase_anon_key is not None:
             app.state.storage = StorageClient(settings.storage_url, settings.supabase_anon_key)
         if app.state.pool is not None and app.state.storage is not None:
+            client = model_client(settings)
+            repo = BookRepo(app.state.pool)
+            # One core's worth of PyMuPDF/Tesseract work at a time, scans and parses alike.
+            worker = asyncio.Semaphore(1)
             app.state.scanner = Scanner(
                 storage=app.state.storage,
-                store=BookRepo(app.state.pool),
+                store=repo,
                 ocr=ocr_config(settings),
-                read_text_toc=text_toc_reader(settings),
-                read_vision_toc=None,  # lands with the page rendering work in #202
-                worker=asyncio.Semaphore(1),
+                read_text_toc=AnthropicTextTocReader(client) if client else None,
+                read_vision_toc=AnthropicVisionTocReader(client) if client else None,
+                worker=worker,
+            )
+            app.state.parser = Parser(
+                storage=app.state.storage,
+                store=repo,
+                graph=chapter_graph(client, app.state.validator),
+                worker=worker,
             )
         try:
             yield
@@ -95,9 +108,32 @@ def ocr_config(settings: Settings) -> OcrConfig | None:
     return config
 
 
-def text_toc_reader(settings: Settings) -> TextTocReader | None:
-    """The one model call, when there is a key for it."""
+def model_client(settings: Settings) -> AsyncAnthropic | None:
+    """One SDK client for every model call, when there is a key for it."""
     if settings.anthropic_api_key is None:
-        log.warning("ANTHROPIC_API_KEY unset: unbookmarked books will get manual chapters")
+        log.warning(
+            "ANTHROPIC_API_KEY unset: unbookmarked books get manual chapters,"
+            " chapter parses produce text chunks only"
+        )
         return None
-    return AnthropicTextTocReader(AsyncAnthropic(api_key=settings.anthropic_api_key))
+    return AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+
+def validator_client(settings: Settings) -> ValidatorClient | None:
+    """Where drafts are validated; without it the extractors (B4/B5) cannot run."""
+    if settings.validate_url is None or settings.internal_secret is None:
+        log.warning(
+            "BOOK_SERVICE_VALIDATE_URL / BOOK_SERVICE_INTERNAL_SECRET unset:"
+            " chapter parses will produce notes but no drafts"
+        )
+        return None
+    return ValidatorClient(settings.validate_url, settings.internal_secret)
+
+
+def chapter_graph(client: AsyncAnthropic | None, validator: ValidatorClient | None) -> ChapterGraph:
+    """The parse graph when there is a model to run it with; the text-only pass otherwise."""
+    if client is None:
+        return text_only_graph
+    from app.graph import build_chapter_graph
+
+    return build_chapter_graph(client, validator)

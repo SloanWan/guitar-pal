@@ -48,6 +48,17 @@ class StorageClient:
             raise StorageError(response.status_code, _message(response))
         return response.content
 
+    async def upload_png(self, path: str, data: bytes, token: str) -> None:
+        """A crop beside the PDF, under the player's folder, replacing any old one."""
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                self._object_url(path),
+                headers={**self._headers(token), "Content-Type": "image/png", "x-upsert": "true"},
+                content=data,
+            )
+        if response.status_code != 200:
+            raise StorageError(response.status_code, _message(response))
+
     async def delete(self, path: str, token: str) -> None:
         """Idempotent: a missing object is not an error, the row is what matters."""
         async with httpx.AsyncClient(timeout=30.0) as client:

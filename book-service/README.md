@@ -19,7 +19,11 @@ app/
   ingest/      the whole-book pass: pdf.py (PyMuPDF boundary, OCR), tag.py
                (may_have_exercise rules), toc.py (outline → text TOC → vision TOC →
                whole book), model.py (the one model call), __main__.py (calibration by hand)
-alembic/       migrations for user_books, book_chapters, book_pages
+  parse.py     the chapter parse job (pages → graph → notes/exercises/chunks, cost, warnings)
+  graph/       the parse as a LangGraph: classify pages, knowledge points, route to extractors
+  extract/     the type-specific readers; tab.py (six-line tab + jianpu → fingerpick drafts)
+  validate.py  the one draft validator, called on the Next.js side
+alembic/       migrations for user_books, book_chapters, book_pages, and the parse tables
 docs/          calibration.md — every number behind a rule, from real books
 materials/     gitignored; real textbook excerpts the ingest tests run against
 tessdata/      gitignored; Tesseract language data (tools/fetch-tessdata.sh)
@@ -83,6 +87,18 @@ python -m app.ingest book.pdf --ask    # plus the text-TOC call; logs its token 
 python -m app.ingest book.pdf --tags   # every tagged page with the rules that fired
 ```
 
+The chapter parse has the same kind of switch — the whole graph over a page
+range, no database, drafts printed and crops written next to you:
+
+```bash
+python -m app.graph book.pdf --pages 24-32 --ocr            # classify + knowledge points
+BOOK_SERVICE_VALIDATE_URL=http://localhost:3000 BOOK_SERVICE_INTERNAL_SECRET=... \
+python -m app.graph book.pdf --pages 3-3 --ocr --crops /tmp/crops --dump /tmp/drafts.json
+```
+
+With the validator reachable (a Next.js dev server) the extractors run and
+every tab exercise comes out as a draft; without it, notes only.
+
 Numbers worth keeping go to `docs/calibration.md`; every rule with a number
 in it points there.
 
@@ -127,6 +143,8 @@ another user's book is a 404, the same as no book.
 | `GET /books/{id}` | the book with `status`, `scanned_pages` / `page_count` for progress, `error`, and its chapters with `exercise_hint_count` |
 | `PUT /books/{id}/chapters` `{chapters: [{title, page_start, page_end}]}` | the player's own ranges: sorted, inside the book, non-overlapping (gaps allowed). `toc_source` becomes `manual`; hint counts are recomputed from the tagged pages. |
 | `DELETE /books/{id}` | the PDF (as the player) and every row under the book |
+| `POST /books/{id}/chapters/{chapter_id}/parse` | starts the chapter parse (#202) in the background; 202, 409 if already parsing, 422 over the 40-page cap. Re-parsing replaces what the chapter had. |
+| `GET /books/{id}/chapters/{chapter_id}/parse` | the chapter with its `parse_status`, `parse_error` and `parse_cost`, and once ready its `notes` (knowledge points) and `exercises` (drafts). Poll this. |
 
 A scan reads the PDF with the session token from the request that started
 it, then never needs it again; the model call, if any, uses the server's
@@ -141,6 +159,29 @@ without a database.
 The whole flow against the real project is `tests/test_live_books.py`,
 opt-in with a session token (its docstring says how). It uploads the typeset
 excerpt, scans it, edits its chapters and deletes it again.
+
+## The chapter parse
+
+`app/parse.py` runs the job, `app/graph/` is the LangGraph inside it:
+every page classified in its own branch (text, plus the page image for
+pages without a text layer or tagged `may_have_exercise`), the knowledge
+points in one call over the chapter text alongside, then each classified
+page routed to its reader in `app/extract/`, and every draft validated
+through Next.js's `POST /api/internal/validate` (`app/validate.py`;
+`BOOK_SERVICE_VALIDATE_URL` + `BOOK_SERVICE_INTERNAL_SECRET`). A rejected
+draft goes back to the model once with the errors; a second rejection drops
+it and leaves a warning on the chapter (`parse_warnings`). Without an API
+key the parse still runs: text chunks only; without the validator, notes
+but no drafts. What each parse spent is on the chapter row.
+
+The tab reader (`extract/tab.py`, #202 B5) finds the exercises on a page
+with a cheap call, crops each at 150 dpi and reads it with the parse model
+as two independent readings — the six-line tab and, when the book prints
+one, the jianpu row under it — which the service compares note by note.
+Frets are the tab's; a disagreement is a warning that names both readings.
+The crop it read goes beside the PDF in Storage (`crop_path`). Tab in a
+PDF's text layer is not read (#228). The numbers behind every choice here
+are in `docs/calibration.md` §6.
 
 ## Database
 

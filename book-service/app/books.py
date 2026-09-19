@@ -14,7 +14,8 @@ from pydantic import BaseModel, Field
 from app.auth import CurrentSession
 from app.db import get_pool
 from app.ingest.toc import MAX_TITLE_CHARS, Chapter
-from app.repo import BookRepo, BookRow, ChapterRow
+from app.parse import MAX_PARSE_PAGES, Parser
+from app.repo import BookRepo, BookRow, ChapterRow, ExerciseRow, NoteRow
 from app.scan import Scanner
 from app.storage import StorageClient, StorageError
 
@@ -67,6 +68,12 @@ class BookOut(BaseModel):
         )
 
 
+class ParseCost(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    usd: float
+
+
 class ChapterOut(BaseModel):
     id: str
     index: int
@@ -75,6 +82,10 @@ class ChapterOut(BaseModel):
     page_end: int
     exercise_hint_count: int
     parsed_at: datetime | None
+    parse_status: Literal["idle", "parsing", "ready", "failed"]
+    parse_error: str | None
+    parse_cost: ParseCost
+    parse_warnings: list[dict[str, object]]
 
     @classmethod
     def of(cls, row: ChapterRow) -> "ChapterOut":
@@ -86,11 +97,69 @@ class ChapterOut(BaseModel):
             page_end=row.page_end,
             exercise_hint_count=row.exercise_hint_count,
             parsed_at=row.parsed_at,
+            parse_status=row.parse_status,
+            parse_error=row.parse_error,
+            parse_cost=ParseCost(
+                input_tokens=row.parse_input_tokens,
+                output_tokens=row.parse_output_tokens,
+                usd=row.parse_cost_usd,
+            ),
+            parse_warnings=list(row.parse_warnings),
         )
 
 
 class BookDetail(BookOut):
     chapters: list[ChapterOut]
+
+
+class NoteOut(BaseModel):
+    id: str
+    title: str
+    body: str
+    pages: list[int]
+    draft_ids: list[str]
+
+    @classmethod
+    def of(cls, row: NoteRow) -> "NoteOut":
+        return cls(
+            id=row.id,
+            title=row.title,
+            body=row.body,
+            pages=list(row.pages),
+            draft_ids=list(row.draft_ids),
+        )
+
+
+class ExerciseOut(BaseModel):
+    id: str
+    page: int
+    kind: Literal["strum", "progression", "tab", "chord_diagram"]
+    source: Literal["literal", "derived"]
+    draft: dict[str, object]
+    warnings: list[dict[str, object]]
+    crop_path: str | None
+    status: Literal["proposed", "taken", "dismissed"]
+
+    @classmethod
+    def of(cls, row: ExerciseRow) -> "ExerciseOut":
+        return cls(
+            id=row.id,
+            page=row.page,
+            kind=row.kind,
+            source=row.source,
+            draft=row.draft,
+            warnings=row.warnings,
+            crop_path=row.crop_path,
+            status=row.status,
+        )
+
+
+class ChapterParse(BaseModel):
+    """The chapter card: the chapter's parse state and, once ready, what it produced."""
+
+    chapter: ChapterOut
+    notes: list[NoteOut]
+    exercises: list[ExerciseOut]
 
 
 # --- the manual ranges ----------------------------------------------------------
@@ -137,6 +206,13 @@ def get_scanner(request: Request) -> Scanner:
     return scanner
 
 
+def get_parser(request: Request) -> Parser:
+    parser = getattr(request.app.state, "parser", None)
+    if parser is None:
+        raise HTTPException(503, "Book import is not configured on this deployment.")
+    return parser
+
+
 Repo = Annotated[BookRepo, Depends(get_repo)]
 Storage = Annotated[StorageClient, Depends(get_storage)]
 
@@ -147,6 +223,15 @@ async def owned_book(repo: BookRepo, user_id: str, book_id: str) -> BookRow:
         # Another user's book and a book that does not exist look the same.
         raise HTTPException(404, "Book not found.")
     return book
+
+
+async def owned_chapter(
+    repo: BookRepo, user_id: str, book_id: str, chapter_id: str
+) -> tuple[BookRow, ChapterRow]:
+    found = await repo.get_chapter(user_id, chapter_id)
+    if found is None or found[0].id != book_id:
+        raise HTTPException(404, "Chapter not found.")
+    return found
 
 
 # --- routes ------------------------------------------------------------------
@@ -220,6 +305,50 @@ async def replace_chapters(
         raise HTTPException(409, "Scan the book first, so its page count is known.")
     await repo.replace_chapters(book.id, validate_ranges(body.chapters, book.page_count))
     return await get_book(book_id, session, repo)
+
+
+@router.get("/{book_id}/chapters/{chapter_id}/parse", response_model=ChapterParse)
+async def get_chapter_parse(
+    book_id: str, chapter_id: str, session: CurrentSession, repo: Repo
+) -> ChapterParse:
+    """Status while parsing; the card once ready. Poll this."""
+    _, chapter = await owned_chapter(repo, session.user_id, book_id, chapter_id)
+    return ChapterParse(
+        chapter=ChapterOut.of(chapter),
+        notes=[NoteOut.of(n) for n in await repo.list_notes(chapter.id)],
+        exercises=[ExerciseOut.of(e) for e in await repo.list_exercises(chapter.id)],
+    )
+
+
+@router.post("/{book_id}/chapters/{chapter_id}/parse", status_code=202, response_model=ChapterOut)
+async def parse_chapter(
+    book_id: str,
+    chapter_id: str,
+    session: CurrentSession,
+    repo: Repo,
+    parser: Annotated[Parser, Depends(get_parser)],
+    background: BackgroundTasks,
+) -> ChapterOut:
+    """
+    Schedules the chapter parse. Re-parsing a `ready` or `failed` chapter is
+    allowed and replaces what it produced; a chapter over the page cap is
+    refused with the number, so the client can offer the range editor.
+    """
+    book, chapter = await owned_chapter(repo, session.user_id, book_id, chapter_id)
+    if book.status != "ready":
+        raise HTTPException(409, "Scan the book first.")
+    pages = chapter.page_end - chapter.page_start + 1
+    if pages > MAX_PARSE_PAGES:
+        raise HTTPException(
+            422,
+            f"This chapter is {pages} pages; the parse takes at most {MAX_PARSE_PAGES}."
+            " Split it into shorter chapters first.",
+        )
+    claimed = await repo.start_parse(chapter.id)
+    if claimed is None:
+        raise HTTPException(409, "This chapter is being parsed already.")
+    background.add_task(parser.run, book, claimed, session.token)
+    return ChapterOut.of(claimed)
 
 
 @router.delete("/{book_id}", status_code=204)

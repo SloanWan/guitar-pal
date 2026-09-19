@@ -26,6 +26,13 @@ MIN_TEXT_LAYER_CHARS = 40
 # Enough for a model to read a scanned table of contents; small enough that a
 # page image stays well under a megabyte.
 TOC_RENDER_DPI = 110
+# What the chapter parse reads notation and tab from: legible digits on a
+# tab line, ~3k image tokens for an A4 page — used only on pages an
+# extractor is sent to.
+PARSE_RENDER_DPI = 150
+# What the classifier sees. Calibration: 100 dpi sorted every page the same
+# as 150 and reported the same regions, at ~1.3k image tokens instead of ~3k.
+CLASSIFY_RENDER_DPI = 100
 
 # Calibration (docs/calibration.md): on a scanned Chinese method book the
 # `fast` data at 150 dpi read the most terms and the most headings; higher
@@ -137,3 +144,27 @@ def extract_pages(doc: pymupdf.Document, ocr: OcrConfig | None = None) -> list[P
 def render_page_png(doc: pymupdf.Document, page: int, dpi: int = TOC_RENDER_DPI) -> bytes:
     """One page as a PNG, for the vision steps."""
     return doc[page - 1].get_pixmap(dpi=dpi).tobytes("png")
+
+
+def crop_page_png(
+    doc: pymupdf.Document,
+    page: int,
+    region: tuple[float, float, float, float],
+    dpi: int = PARSE_RENDER_DPI,
+) -> bytes:
+    """
+    Part of a page as a PNG: `region` is (x0, y0, x1, y1) as fractions of the
+    page's width and height, which is how the classifier reports where a
+    thing sits, independent of dpi. Clamped to the page.
+    """
+    rect = doc[page - 1].rect
+    x0, y0, x1, y1 = (min(max(v, 0.0), 1.0) for v in region)
+    clip = pymupdf.Rect(
+        rect.x0 + rect.width * min(x0, x1),
+        rect.y0 + rect.height * min(y0, y1),
+        rect.x0 + rect.width * max(x0, x1),
+        rect.y0 + rect.height * max(y0, y1),
+    )
+    if clip.is_empty:
+        clip = rect
+    return doc[page - 1].get_pixmap(dpi=dpi, clip=clip).tobytes("png")

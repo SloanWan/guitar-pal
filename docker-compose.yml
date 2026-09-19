@@ -22,7 +22,11 @@ services:
     build:
       context: ./book-service
     # The same .env: it reads NEXT_PUBLIC_SUPABASE_URL for the JWT issuer and
-    # JWKS, plus SUPABASE_JWT_SECRET (legacy projects only) and
-    # BOOK_SERVICE_DATABASE_URL. No ports — only `web` talks to it.
+    # JWKS, NEXT_PUBLIC_SUPABASE_ANON_KEY for Storage, ANTHROPIC_API_KEY,
+    # BOOK_SERVICE_INTERNAL_SECRET (shared with `web`), plus SUPABASE_JWT_SECRET
+    # (legacy projects only) and BOOK_SERVICE_DATABASE_URL. No ports — only
+    # `web` talks to it, and it talks back to `web` only to validate drafts.
     env_file: .env
+    environment:
+      BOOK_SERVICE_VALIDATE_URL: http://web:3000
     restart: unless-stopped

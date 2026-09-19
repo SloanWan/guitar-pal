@@ -90,6 +90,26 @@ def test_upload_scan_edit_delete(client: TestClient, typeset_pdf: Path) -> None:
         renamed = client.patch(f"/books/{book_id}", json={"title": " Renamed "}, headers=auth)
         assert renamed.status_code == 200 and renamed.json()["title"] == "Renamed"
 
+        # The chapter parse (#202): classification per page, knowledge points
+        # from the text. With ANTHROPIC_API_KEY this is ~10 model calls on the
+        # excerpt; the notes and the cost are printed for docs/calibration.md.
+        chapter_id = detail["chapters"][-1]["id"]
+        started = client.post(f"/books/{book_id}/chapters/{chapter_id}/parse", headers=auth)
+        assert started.status_code == 202, started.text
+        assert started.json()["parse_status"] == "parsing"
+        parsed = client.get(f"/books/{book_id}/chapters/{chapter_id}/parse", headers=auth).json()
+        chapter = parsed["chapter"]
+        print("parse:", {k: chapter[k] for k in ("parse_status", "parse_error", "parse_cost")})
+        for n in parsed["notes"]:
+            print(f"  note p{n['pages']}: {n['title']} — {n['body']}")
+        for e in parsed["exercises"]:
+            print(f"  exercise p{e['page']} {e['kind']}/{e['source']}")
+        assert chapter["parse_status"] == "ready", chapter
+        assert chapter["parsed_at"] is not None
+        if settings.anthropic_api_key:
+            assert len(parsed["notes"]) >= 1
+            assert chapter["parse_cost"]["input_tokens"] > 0
+
         edited = client.put(
             f"/books/{book_id}/chapters",
             json={

@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, Request
 log = logging.getLogger("book-service")
 
 STALE_SCAN_MESSAGE = "The service restarted while this book was being scanned. Upload it again."
+STALE_PARSE_MESSAGE = "The service restarted while this chapter was being parsed. Parse it again."
 
 
 async def open_pool(database_url: str) -> asyncpg.Pool:
@@ -57,7 +58,18 @@ async def fail_stale_scans(pool: asyncpg.Pool) -> int:
     count = int(result.rsplit(" ", 1)[-1])
     if count:
         log.warning("failed %d scan(s) left over from a previous process", count)
-    return count
+    parses = await pool.execute(
+        """
+        update book_chapters
+           set parse_status = 'failed', parse_error = $1
+         where parse_status = 'parsing'
+        """,
+        STALE_PARSE_MESSAGE,
+    )
+    stale_parses = int(parses.rsplit(" ", 1)[-1])
+    if stale_parses:
+        log.warning("failed %d parse(s) left over from a previous process", stale_parses)
+    return count + stale_parses
 
 
 async def close_pool(app: FastAPI) -> None:

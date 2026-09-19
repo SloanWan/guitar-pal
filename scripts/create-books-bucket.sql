@@ -3,7 +3,8 @@
 -- the project.
 --
 -- Shape:
---   * Private bucket, PDFs only, 100 MB per file.
+--   * Private bucket, 100 MB per file: the PDFs, and the PNG crops a chapter
+--     parse cuts from their pages (`{user_id}/{book_id}/crops/…`).
 --   * Object path is `{user_id}/{book_id}.pdf`. Every policy checks the first
 --     folder of the path against auth.uid(), so a signed-in user can upload,
 --     read and delete under their own id and nothing else.
@@ -13,7 +14,7 @@
 --     server, and "books are private" is enforced by Supabase, not by us.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('books', 'books', false, 104857600, array['application/pdf'])
+values ('books', 'books', false, 104857600, array['application/pdf', 'image/png'])
 on conflict (id) do update
   set public = excluded.public,
       file_size_limit = excluded.file_size_limit,

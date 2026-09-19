@@ -10,15 +10,16 @@ export interface FaderProps {
 	onValue: (value: number) => void;
 	onDragStart?: () => void;
 	onDragEnd?: () => void;
-	// Tick positions as track-width percentages (0–100).
-	ticks: number[];
+	// Tick positions as track-width percentages (0–100). A fader with nothing
+	// worth marking — a volume level — passes none.
+	ticks?: number[];
 	// Snap targets parallel to `ticks`; when set, each tick becomes clickable and
 	// jumps the value directly to its target.
 	tickValues?: number[];
 	// Labels parallel to `ticks`; when set, hovering a tick's segment shows a tooltip.
 	tickLabels?: string[];
-	// Scale labels rendered space-between beneath the track.
-	scale: string[];
+	// Scale labels rendered space-between beneath the track; omit for none.
+	scale?: string[];
 	disabled?: boolean;
 	ariaLabel: string;
 }
@@ -33,7 +34,7 @@ export default function Fader({
 	onValue,
 	onDragStart,
 	onDragEnd,
-	ticks,
+	ticks = [],
 	tickValues,
 	tickLabels,
 	scale,
@@ -219,11 +220,13 @@ export default function Fader({
 						))}
 				</div>
 			</div>
-			<div className="mt-2 flex justify-between font-mono text-[8px] tracking-[0.08em] text-ink-faint">
-				{scale.map((s, i) => (
-					<span key={i}>{s}</span>
-				))}
-			</div>
+			{scale && scale.length > 0 && (
+				<div className="mt-2 flex justify-between font-mono text-[8px] tracking-[0.08em] text-ink-faint">
+					{scale.map((s, i) => (
+						<span key={i}>{s}</span>
+					))}
+				</div>
+			)}
 		</div>
 	);
 }

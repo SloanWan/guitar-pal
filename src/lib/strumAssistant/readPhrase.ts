@@ -153,7 +153,11 @@ export interface ChordSpan {
 	end: number;
 }
 
-function isExactChord(token: string, index: readonly ChordIndexEntry[]): boolean {
+/**
+ * Whether a word names a chord the index has — exactly, not by the nearest
+ * match search would offer. Domain-free: the tab readers use it too.
+ */
+export function isExactChord(token: string, index: readonly ChordIndexEntry[]): boolean {
 	// The identity the word itself names, against the identity search lands on:
 	// equal only for a real chord. "Bad" names B|ad and search offers B|add9,
 	// which is how a fuzzy match is refused without a second matcher.
@@ -239,6 +243,30 @@ function roundToFive(bpm: number): number {
 	return Math.round(bpm / 5) * 5;
 }
 
+/** Blank a span out by position, so what follows is read from the same offsets. */
+export function blankSpan(text: string, start: number, end: number): string {
+	return text.slice(0, start) + " ".repeat(end - start) + text.slice(end);
+}
+
+/**
+ * "name it test", "叫 test": the name a new pattern should carry, taken out
+ * of the sentence so a chord-shaped word inside it ("call it C jam") is not
+ * read as a chord. Domain-free: strum and tab read names the same way.
+ */
+export function readName(input: string): { name: string | null; text: string } {
+	const naming = NAME_CLAUSE.exec(input);
+	if (!naming) return { name: null, text: input };
+	const name = naming[1].trim().replace(NAME_TAIL, "").trim() || null;
+	return { name, text: blankSpan(input, naming.index, naming.index + naming[0].length) };
+}
+
+/** "90 bpm", "90拍": a tempo written out, taken out of the sentence. */
+export function readWrittenBpm(input: string): { bpm: number | null; text: string } {
+	const written = BPM_WRITTEN.exec(input);
+	if (!written) return { bpm: null, text: input };
+	return { bpm: Number(written[1]), text: input.replace(BPM_WRITTEN, " ") };
+}
+
 export function readPhrase(original: string, index: readonly ChordIndexEntry[]): PhraseReading {
 	// The capo first: a number that must not be left over, on a word that must
 	// not be read as a chord.
@@ -246,11 +274,7 @@ export function readPhrase(original: string, index: readonly ChordIndexEntry[]):
 
 	// The name next: it is free text, and blanking it keeps a chord-shaped word
 	// inside it ("C jam") from being read as a chord.
-	const naming = NAME_CLAUSE.exec(rawInput);
-	const name = naming ? (naming[1].trim().replace(NAME_TAIL, "").trim() || null) : null;
-	const input = naming
-		? rawInput.slice(0, naming.index) + " ".repeat(naming[0].length) + rawInput.slice(naming.index + naming[0].length)
-		: rawInput;
+	const { name, text: input } = readName(rawInput);
 
 	// Notation next, and blanked before the chords are read: "D DU UD" holds a
 	// D that is not the chord.
@@ -270,9 +294,9 @@ export function readPhrase(original: string, index: readonly ChordIndexEntry[]):
 	}
 	let text = masked.toLowerCase();
 
-	const written = BPM_WRITTEN.exec(text);
-	const writtenBpm = written ? Number(written[1]) : null;
-	if (written) text = text.replace(BPM_WRITTEN, " ");
+	const written = readWrittenBpm(text);
+	const writtenBpm = written.bpm;
+	text = written.text;
 
 	let style: StyleEntry | null = null;
 	for (const entry of STYLES) {

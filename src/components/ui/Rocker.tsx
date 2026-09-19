@@ -17,16 +17,19 @@ export interface RockerProps {
 	checked: boolean;
 	onChange: (checked: boolean) => void;
 	disabled?: boolean;
+	/** What the switch controls is still getting ready: the block breathes. */
+	loading?: boolean;
 	ariaLabel: string;
 }
 
-export default function Rocker({ checked, onChange, disabled, ariaLabel }: RockerProps) {
+export default function Rocker({ checked, onChange, disabled, loading, ariaLabel }: RockerProps) {
 	return (
 		<button
 			type="button"
 			role="switch"
 			aria-checked={checked}
 			aria-label={ariaLabel}
+			aria-busy={loading || undefined}
 			disabled={disabled}
 			onClick={() => onChange(!checked)}
 			className={`relative h-5 w-10 shrink-0 border transition-colors duration-100 disabled:cursor-not-allowed ${
@@ -37,7 +40,7 @@ export default function Rocker({ checked, onChange, disabled, ariaLabel }: Rocke
 				aria-hidden="true"
 				className={`absolute top-0.5 h-3.5 w-3.5 transition-all duration-100 ${
 					checked ? "left-5 bg-denim-accent" : "left-0.5 bg-ink-faint"
-				}`}
+				} ${loading ? "animate-pulse" : ""}`}
 			/>
 		</button>
 	);

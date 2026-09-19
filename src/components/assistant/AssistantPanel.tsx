@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CornerDownLeft } from "lucide-react";
 import ProposalPreview from "./ProposalPreview";
+import TabProposalPreview from "./TabProposalPreview";
+import TabEditCard from "./TabEditCard";
 import EditIntentCard from "./EditIntentCard";
 import { Option, Options } from "./Options";
 import { BLANK } from "@/lib/strumAssistant/suggest";
 import { recordPick } from "@/lib/strumAssistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
-import { greeting, hint as introHint, playerName, INPUT_PROMPTS } from "@/lib/strumAssistant/greeting";
+import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/strumAssistant/greeting";
 import { uiLang } from "@/lib/strumAssistant/lang";
+import type { AssistantDomain } from "@/lib/strumAssistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
 
@@ -19,14 +22,10 @@ import type { useAssistant } from "./useAssistant";
  * popover closed would be no conversation at all.
  */
 
-/**
- * Shown on an empty panel: chords, a rhythm, and a sentence — each one read by
- * the app, so every click lands. A lone "C" would not: one chord is a key, not
- * a progression, and the sentence reader steps aside for it.
- */
-const EXAMPLES = ["C Am F G", "D DU UD", "a slow folk strum in C G Am F"];
-
 const MAX_INPUT_CHARS = 600;
+/** How far above the bottom still counts as reading the tail, so a stray pixel does not unpin. */
+const TAIL_SLACK_PX = 24;
+
 /** Five lines of the field's own text, after which it scrolls instead of growing. */
 const MAX_INPUT_HEIGHT_PX = 104;
 /** Long enough to read one, short enough to see there are others. */
@@ -176,6 +175,7 @@ const INTRO_TYPING_MS = 1400;
 function Intro({
 	hello,
 	aside,
+	domain,
 	greeted,
 	onGreeted,
 	onExample,
@@ -184,6 +184,7 @@ function Intro({
 	hello: string;
 	/** The line after the greeting: what this does, and for a guest, where their work lives. */
 	aside: string;
+	domain: AssistantDomain;
 	greeted: boolean;
 	onGreeted: () => void;
 	onExample: (text: string) => void;
@@ -225,7 +226,7 @@ function Intro({
 
 			{phase === 3 && (
 				<div className="flex flex-wrap gap-1.5 pl-2">
-					{EXAMPLES.map((example, i) => (
+					{examples(domain).map((example, i) => (
 						<button
 							key={example}
 							type="button"
@@ -253,6 +254,7 @@ export default function AssistantPanel({
 	height: number;
 }) {
 	const {
+		domain,
 		messages,
 		pending,
 		send,
@@ -267,6 +269,10 @@ export default function AssistantPanel({
 	} = assistant;
 	const [draft, setDraft] = useState("");
 	const scrollRef = useRef<HTMLDivElement | null>(null);
+	/** The conversation itself, inside the scrolling frame — what is watched for growth. */
+	const contentRef = useRef<HTMLDivElement | null>(null);
+	/** Whether the reader is at the tail, and so should be carried along as it grows. */
+	const pinnedRef = useRef(true);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
 	const promptHintId = useId();
 	const { user } = useUser();
@@ -278,13 +284,14 @@ export default function AssistantPanel({
 	const lang = uiLang();
 	const name = user ? playerName(user.user_metadata, user.email) : null;
 	const hello = useMemo(() => greeting(name, sessionId, lang), [name, sessionId, lang]);
-	const aside = introHint(lang, user !== null);
+	const aside = introHint(lang, user !== null, domain);
 
 	// The examples take turns while there is nothing typed. Tab takes the one on
 	// screen — only while the field is empty, so Tab still leaves a field with
 	// something in it, and Shift+Tab always walks back the way it should.
 	const [promptSlot, setPromptSlot] = useState(0);
-	const hint = draft === "" ? INPUT_PROMPTS[promptSlot % INPUT_PROMPTS.length] : "";
+	const prompts = inputPrompts(domain);
+	const hint = draft === "" ? prompts[promptSlot % prompts.length] : "";
 	useEffect(() => {
 		if (draft !== "") return;
 		const timer = setInterval(() => setPromptSlot((slot) => slot + 1), PROMPT_ROTATION_MS);
@@ -339,9 +346,32 @@ export default function AssistantPanel({
 	const followTail = useCallback(() => {
 		const el = scrollRef.current;
 		if (el) el.scrollTop = el.scrollHeight;
+		pinnedRef.current = true;
 	}, []);
 
 	useEffect(followTail, [messages, pending, followTail]);
+
+	// The conversation grows after the turn that added to it has rendered — a
+	// preview drawing its stave, a template row popping in, the typing dots —
+	// and each growth would leave the tail below the fold. So the tail is
+	// followed whenever the content's height changes, as long as the reader
+	// was at the bottom: someone who scrolled up to re-read an earlier turn
+	// stays where they are until the next message pins them again.
+	useEffect(() => {
+		const el = scrollRef.current;
+		const content = contentRef.current;
+		if (!el || !content || typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(() => {
+			if (pinnedRef.current) el.scrollTop = el.scrollHeight;
+		});
+		observer.observe(content);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+	const onScroll = useCallback(() => {
+		const el = scrollRef.current;
+		if (el) pinnedRef.current = el.scrollHeight - el.clientHeight - el.scrollTop <= TAIL_SLACK_PX;
+	}, []);
 
 	useEffect(() => {
 		inputRef.current?.focus();
@@ -384,86 +414,105 @@ export default function AssistantPanel({
 		<div className="flex flex-col" style={{ height }}>
 			<div
 				ref={scrollRef}
+				onScroll={onScroll}
 				className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
 				role="log"
 				aria-live="polite"
 				aria-label="Assistant conversation"
 			>
-				{messages.length === 0 ? (
-					// Keyed on the conversation: a new chat remounts the intro and plays
-					// it again from the top, and reopening the panel does not.
-					<Intro
-						key={sessionId}
-						hello={hello}
-						aside={aside}
-						greeted={greeted}
-						onGreeted={markGreeted}
-						onExample={submit}
-						onTick={followTail}
-					/>
-				) : (
-					<ul className="space-y-2.5">
-						{messages.map((message) =>
-							message.role === "user" ? (
-								<li key={message.id} className="flex justify-end">
-									<Bubble side="user">{message.text}</Bubble>
-								</li>
-							) : (
-								<li key={message.id} className="flex flex-col items-start gap-2">
-									<Bubble side="assistant" muted={message.failed}>
-										<StreamedText
-											text={message.text}
-											animate={message.streamed !== true}
-											onTick={followTail}
-											onDone={() => markStreamed(message.id)}
-										/>
-									</Bubble>
-									{/* The preview is an attachment, not speech: full width under
-									    the bubble, where a 16-cell grid actually fits — and held
-									    back until the message has finished saying what it is. */}
-									{message.proposal && message.streamed === true && (
-										<div className="w-full">
-											<ProposalPreview proposal={message.proposal} />
-										</div>
-									)}
-									{message.templates && message.streamed === true && (
-										<Options>
-											{message.templates.map((template, i) => (
-												<Option
-													key={template}
-													order={i}
-													tone="template"
-													onClick={() => take(template, askedBefore(message.id))}
-												>
-													{template}
-												</Option>
-											))}
-										</Options>
-									)}
-									{message.edit && message.streamed === true && (
-										<div className="w-full">
-											<EditIntentCard
-												edit={message.edit}
-												patterns={patterns}
-												index={index}
-												ensureIndex={ensureIndex}
-												done={message.editDone === true}
-												onDone={() => markEditDone(message.id)}
-												lang={message.lang ?? "en"}
+				<div ref={contentRef}>
+					{messages.length === 0 ? (
+						// Keyed on the conversation: a new chat remounts the intro and plays
+						// it again from the top, and reopening the panel does not.
+						<Intro
+							key={sessionId}
+							hello={hello}
+							aside={aside}
+							domain={domain}
+							greeted={greeted}
+							onGreeted={markGreeted}
+							onExample={submit}
+							onTick={followTail}
+						/>
+					) : (
+						<ul className="space-y-2.5">
+							{messages.map((message) =>
+								message.role === "user" ? (
+									<li key={message.id} className="flex justify-end">
+										<Bubble side="user">{message.text}</Bubble>
+									</li>
+								) : (
+									<li key={message.id} className="flex flex-col items-start gap-2">
+										<Bubble side="assistant" muted={message.failed}>
+											<StreamedText
+												text={message.text}
+												animate={message.streamed !== true}
+												onTick={followTail}
+												onDone={() => markStreamed(message.id)}
 											/>
-										</div>
-									)}
-								</li>
-							),
-						)}
-					</ul>
-				)}
+										</Bubble>
+										{/* The preview is an attachment, not speech: full width under
+										    the bubble, where a 16-cell grid actually fits — and held
+										    back until the message has finished saying what it is. */}
+										{message.proposal && message.streamed === true && (
+											<div className="w-full">
+												<ProposalPreview proposal={message.proposal} />
+											</div>
+										)}
+										{message.tabProposal && message.streamed === true && (
+											<div className="w-full">
+												<TabProposalPreview proposal={message.tabProposal} />
+											</div>
+										)}
+										{message.tabEdit && message.streamed === true && (
+											<div className="w-full">
+												<TabEditCard
+													edit={message.tabEdit}
+													done={message.editDone === true}
+													onDone={() => markEditDone(message.id)}
+													lang={message.lang ?? "en"}
+												/>
+											</div>
+										)}
+										{message.templates && message.streamed === true && (
+											<Options>
+												{message.templates.map((template, i) => (
+													<Option
+														key={template}
+														order={i}
+														tone="template"
+														onClick={() => take(template, askedBefore(message.id))}
+													>
+														{template}
+													</Option>
+												))}
+											</Options>
+										)}
+										{message.edit && message.streamed === true && (
+											<div className="w-full">
+												<EditIntentCard
+													edit={message.edit}
+													patterns={patterns}
+													index={index}
+													ensureIndex={ensureIndex}
+													done={message.editDone === true}
+													onDone={() => markEditDone(message.id)}
+													lang={message.lang ?? "en"}
+												/>
+											</div>
+										)}
+									</li>
+								),
+							)}
+						</ul>
+					)}
 
-				{pending && (
-					<div className="mt-2.5 flex justify-start">
-						<TypingBubble />
-					</div>
-				)}
+					{pending && (
+						<div className="mt-2.5 flex justify-start">
+							<TypingBubble />
+						</div>
+					)}
+				</div>
 			</div>
 
 			<form
@@ -505,8 +554,8 @@ export default function AssistantPanel({
 						}
 					}}
 					maxLength={MAX_INPUT_CHARS}
-					placeholder={hint || "Chords, a rhythm, or what you want"}
-					aria-label="Ask the strum assistant"
+					placeholder={hint || (domain === "tab" ? "A chord and the strings to pick, or a tab" : "Chords, a rhythm, or what you want")}
+					aria-label={domain === "tab" ? "Ask the tab assistant" : "Ask the strum assistant"}
 					aria-describedby={hint ? `${promptHintId}` : undefined}
 					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 				/>

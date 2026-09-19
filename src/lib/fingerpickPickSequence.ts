@@ -7,16 +7,22 @@ import {
 	slotDurationUnits,
 	toggleMuted,
 } from "./fingerpickEdit";
-import { chordFretHints, chordSymbolLabel, effectiveChords } from "./fingerpickChords";
+import { chordFretHints, chordRootString, chordSymbolLabel, effectiveChords } from "./fingerpickChords";
 import { isCompound } from "./strumMeter";
 import type { ChordRef } from "./strumPatterns";
 import type { ChordVoicing } from "./chordVoicingToVexChords";
 
 /**
  * One beat of a right-hand pattern as typed: the strings plucked together
- * (fingerpick order, 0 = high e), or a rest.
+ * (fingerpick order, 0 = high e), or a rest. `root` is the thumb on whichever
+ * string the chord's root is on — `根3231323` — resolved against the chord
+ * in effect when the frets are written, never here: `{ strings: [], root: true }`
+ * is a root alone, `{ strings: [0], root: true }` a root pinched with high e.
  */
-export type PickToken = { strings: number[] } | { rest: true };
+export type PickToken = { strings: number[]; root?: true } | { rest: true };
+
+/** How a root is written: the character, or the letter a latin keyboard reaches for. */
+const ROOT_CHARS = new Set(["根", "R", "r"]);
 
 export type PickSequenceParse =
 	| { ok: true; tokens: PickToken[]; duration: Duration }
@@ -55,35 +61,51 @@ const QUARTER_TRIPLET_TICKS = 16;
 /** Highest string number a token may name (1 = high e … 6 = low E). */
 const STRING_COUNT = 6;
 
+export type PickTokenize =
+	| { ok: true; tokens: PickToken[] }
+	| { ok: false; error: string };
+
 /**
- * Read a right-hand picking sequence such as `3212` or `6(32)1(32)`.
+ * The characters of a picking sequence, read into tokens — with no opinion
+ * yet about how long each one lasts.
  *
  *  - Digits `1`–`6` are string numbers, 1 = high e, 6 = low E, the way a
  *    guitarist counts them; `3212` is G B e B.
  *  - Parentheses group strings plucked together (a pinch): `6(32)1(32)`.
+ *    Full-width `（ ）` are read the same.
+ *  - `根`, `R` or `r` is the root: the string the chord's root sits on,
+ *    decided when the frets are written (`chordRootString`). `根3231323`
+ *    is the everyday arpeggio that follows the chord change.
  *  - `0` or `-` is a rest. Whitespace is ignored.
  *
- * The number of tokens sets the note value: `n` tokens divide the measure
- * evenly, so four in 4/4 are quarters and eight are eighths.
+ * Shared by the editor's Pick box, which sizes the notes to the measure, and
+ * the tab assistant, which is told the note value and fills measures instead.
  */
-export function parsePickSequence(
-	input: string,
-	timeSignature: [number, number],
-): PickSequenceParse {
+export function tokenizePickSequence(input: string): PickTokenize {
 	const tokens: PickToken[] = [];
-	let pinch: number[] | null = null;
-	for (const ch of input.replace(/\s+/g, "")) {
+	// The pinch being gathered: its strings, and whether the root is among them.
+	let pinch: { strings: number[]; root: boolean } | null = null;
+	// Full-width parentheses are what a Chinese keyboard writes: `根3（12）3`.
+	for (const ch of input.replace(/\s+/g, "").replace(/（/g, "(").replace(/）/g, ")")) {
 		if (ch === "(") {
 			if (pinch) return { ok: false, error: "A pinch can't open inside another pinch." };
-			pinch = [];
+			pinch = { strings: [], root: false };
 		} else if (ch === ")") {
 			if (!pinch) return { ok: false, error: "A ')' has no '(' before it." };
-			if (pinch.length === 0) return { ok: false, error: "A pinch needs at least one string." };
-			tokens.push({ strings: pinch });
+			if (pinch.strings.length === 0 && !pinch.root) {
+				return { ok: false, error: "A pinch needs at least one string." };
+			}
+			tokens.push(pinch.root ? { strings: pinch.strings, root: true } : { strings: pinch.strings });
 			pinch = null;
 		} else if (ch === "0" || ch === "-") {
 			if (pinch) return { ok: false, error: "A rest can't be part of a pinch." };
 			tokens.push({ rest: true });
+		} else if (ROOT_CHARS.has(ch)) {
+			if (pinch) {
+				pinch.root = true;
+			} else {
+				tokens.push({ strings: [], root: true });
+			}
 		} else if (/^[1-9]$/.test(ch)) {
 			const stringNumber = Number(ch);
 			if (stringNumber > STRING_COUNT) {
@@ -91,16 +113,31 @@ export function parsePickSequence(
 			}
 			const stringIndex = stringNumber - 1;
 			if (pinch) {
-				if (!pinch.includes(stringIndex)) pinch.push(stringIndex);
+				if (!pinch.strings.includes(stringIndex)) pinch.strings.push(stringIndex);
 			} else {
 				tokens.push({ strings: [stringIndex] });
 			}
 		} else {
-			return { ok: false, error: `"${ch}" isn't a string number, a rest (0 or -) or a pinch.` };
+			return { ok: false, error: `"${ch}" isn't a string number, a root (根 or R), a rest (0 or -) or a pinch.` };
 		}
 	}
 	if (pinch) return { ok: false, error: "A pinch was opened with '(' but never closed." };
 	if (tokens.length === 0) return { ok: false, error: "Type string numbers, e.g. 3212." };
+	return { ok: true, tokens };
+}
+
+/**
+ * Read a right-hand picking sequence such as `3212` or `6(32)1(32)` for one
+ * measure. The number of tokens sets the note value: `n` tokens divide the
+ * measure evenly, so four in 4/4 are quarters and eight are eighths.
+ */
+export function parsePickSequence(
+	input: string,
+	timeSignature: [number, number],
+): PickSequenceParse {
+	const tokenized = tokenizePickSequence(input);
+	if (!tokenized.ok) return tokenized;
+	const { tokens } = tokenized;
 
 	const capacity = measureCapacity(timeSignature);
 	const candidates = isCompound(timeSignature) ? COMPOUND_METER_DURATIONS : SIMPLE_METER_DURATIONS;
@@ -117,6 +154,21 @@ export function parsePickSequence(
 		return { ok: false, error: `${count} don't fit a ${meter} measure evenly.` };
 	}
 	return { ok: true, tokens, duration };
+}
+
+/**
+ * The strings a token plucks over a chord: the ones it names, and the root's
+ * string when it asks for one — the one place a root token becomes a string.
+ * A root pinched with the string it lands on is that string once.
+ */
+export function tokenStrings(
+	token: Extract<PickToken, { strings: number[] }>,
+	chord: ChordRef | null,
+	voicing: ChordVoicing | null,
+): number[] {
+	if (!token.root) return token.strings;
+	const root = chordRootString(chord, voicing);
+	return token.strings.includes(root) ? token.strings : [...token.strings, root];
 }
 
 export interface PickSequenceResult {
@@ -174,7 +226,7 @@ export function applyPickSequence(
 		const voicing = ref ? voicingFor(ref) : null;
 		const hints = voicing ? chordFretHints(voicing) : null;
 		if (ref && !voicing) noShape.add(chordSymbolLabel(ref));
-		for (const stringIndex of token.strings) {
+		for (const stringIndex of tokenStrings(token, ref, voicing)) {
 			const cell = { measureIndex, slotIndex, stringIndex };
 			const hint = hints ? hints[stringIndex] : 0;
 			if (hint === "/") {

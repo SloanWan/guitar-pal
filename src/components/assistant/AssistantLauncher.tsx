@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ClipboardList, Loader2, MessageCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { exportMisses, readMisses } from "@/lib/strumAssistant/missLog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AssistantPanel from "./AssistantPanel";
-import { useAssistant } from "./useAssistant";
+import { domainForPath, useAssistant } from "./useAssistant";
 import { HANDOFF_EVENT } from "@/lib/strumAssistant/handoff";
+import type { AssistantDomain } from "@/lib/strumAssistant/types";
 
 /**
- * The topbar's rightmost control: opens the strum assistant over the page.
+ * The topbar's rightmost control: opens the assistant over the page — the strum
+ * assistant everywhere but the fingerpick page, where it is the tab assistant.
  *
  * A popover anchored to the topbar rather than a draggable window — dragging
  * buys nothing here and costs mobile layout, focus management and a z-index to
@@ -44,7 +47,18 @@ function readHeight(): number {
 	}
 }
 
+/**
+ * The page decides which assistant this is. Keyed on the domain, so crossing
+ * from the strum page to the fingerpick page unmounts one assistant and
+ * mounts the other — its own transcript, its own greeting, its own readers —
+ * rather than one assistant changing the subject mid-conversation.
+ */
 export default function AssistantLauncher() {
+	const domain = domainForPath(usePathname());
+	return <DomainAssistantLauncher key={domain} domain={domain} />;
+}
+
+function DomainAssistantLauncher({ domain }: { domain: AssistantDomain }) {
 	const [open, setOpen] = useState(false);
 
 	// The conversation's height, dragged from the bottom edge and kept on this
@@ -76,7 +90,7 @@ export default function AssistantLauncher() {
 			// Private mode: the size holds for this session and no longer.
 		}
 	}
-	const assistant = useAssistant();
+	const assistant = useAssistant(domain);
 	const { messages, pending } = assistant;
 
 	// Development only: the sentences nothing read, one click from the eval set.
@@ -122,11 +136,12 @@ export default function AssistantLauncher() {
 		return () => window.removeEventListener(HANDOFF_EVENT, close);
 	}, [messages.length]);
 
+	const title = domain === "tab" ? "Tab assistant" : "Strum assistant";
 	const label = pending
-		? "Strum assistant — still writing"
+		? `${title} — still writing`
 		: unread
-			? "Strum assistant — a reply is waiting"
-			: "Open the strum assistant";
+			? `${title} — a reply is waiting`
+			: `Open the ${title.toLowerCase()}`;
 
 	return (
 		<Popover open={open} onOpenChange={setPanelOpen}>
@@ -169,7 +184,7 @@ export default function AssistantLauncher() {
 			>
 				<div className="flex items-center justify-between border-b border-line px-3 py-2">
 					<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-						Strum assistant
+						{title}
 					</span>
 					{devMisses > 0 && (
 						<button

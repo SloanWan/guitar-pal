@@ -51,6 +51,23 @@ describe("parsePickSequence", () => {
 		]);
 	});
 
+	it("reads 根, R and r as the root, alone or in a pinch, and full-width parentheses", () => {
+		expect(ok("根323").tokens).toEqual([
+			{ strings: [], root: true },
+			{ strings: [2] },
+			{ strings: [1] },
+			{ strings: [2] },
+		]);
+		expect(ok("R3（12）3").tokens).toEqual([
+			{ strings: [], root: true },
+			{ strings: [2] },
+			{ strings: [0, 1] },
+			{ strings: [2] },
+		]);
+		expect(ok("(r1)3").tokens).toEqual([{ strings: [0], root: true }, { strings: [2] }]);
+		expect(parsePickSequence("(根)3", [2, 4]).ok).toBe(true);
+	});
+
 	it("reads 0 and - as rests", () => {
 		expect(ok("3-10").tokens).toEqual([
 			{ strings: [2] },
@@ -149,6 +166,23 @@ describe("applyPickSequence", () => {
 		// Beat 3 (index 4) plucks string 5 (A): C → 3, Am → 0.
 		expect(slots[0].strings[4].fret).toBe(3);
 		expect(slots[4].strings[4].fret).toBe(0);
+	});
+
+	it("puts a root token on the root string of the chord in effect", () => {
+		const p = pattern([measure("a", [C, undefined, Am, undefined])]);
+		const { pattern: out, warnings } = applyPickSequence(p, 0, ok("根3根3"), voicingFor);
+		const frets = out.measures[0].slots.map((s) => s.strings.map((sf) => sf.fret));
+		// C's root is the A string at 3; Am's is the A string open.
+		expect(frets[0]).toEqual([null, null, null, null, 3, null]);
+		expect(frets[2]).toEqual([null, null, null, null, 0, null]);
+		expect(warnings).toEqual([]);
+	});
+
+	it("writes a root with no chord in effect on the open low E, and says so", () => {
+		const p = pattern([measure("a", [undefined, undefined, undefined, undefined])]);
+		const { pattern: out, warnings } = applyPickSequence(p, 0, ok("根323"), voicingFor);
+		expect(out.measures[0].slots[0].strings[5].fret).toBe(0);
+		expect(warnings).toHaveLength(1);
 	});
 
 	it("writes a string the shape leaves out as a dead note and says so", () => {

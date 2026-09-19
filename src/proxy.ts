@@ -26,9 +26,19 @@ export async function proxy(request: NextRequest) {
 	// Refresh the session cookie on every matched request. The refreshed cookies
 	// live on `response`; when we redirect instead, copy them across so the
 	// refreshed session isn't dropped (Supabase SSR gotcha).
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
+	//
+	// A request that cannot reach Supabase at all (a flaky proxy, no network)
+	// is treated as signed out rather than thrown: the public pages still
+	// render, and the signed-in ones bounce to /auth with a return path, which
+	// beats a 500 on every route until the connection comes back.
+	let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] = null;
+	try {
+		({
+			data: { user },
+		} = await supabase.auth.getUser());
+	} catch (error) {
+		console.warn("[proxy] could not reach Supabase to check the session; treating as signed out:", error);
+	}
 
 	function redirectWithCookies(url: URL) {
 		const redirect = NextResponse.redirect(url);

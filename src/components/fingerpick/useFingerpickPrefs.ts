@@ -1,5 +1,18 @@
 import { useEffect, useState } from "react";
 import type { ChordView } from "@/components/strum/StepGrid";
+import {
+	SCROLL_SPEED_DEFAULT,
+	clampScrollSpeed,
+	readScrollSpeed,
+	writeScrollSpeed,
+} from "@/components/useAutoScroll";
+
+export {
+	SCROLL_SPEED_DEFAULT,
+	SCROLL_SPEED_MAX,
+	SCROLL_SPEED_MIN,
+	clampScrollSpeed,
+} from "@/components/useAutoScroll";
 
 // Device-local preferences for the fingerpick page — not synced to the account.
 
@@ -11,19 +24,11 @@ const CHORD_VIEW_KEY = "fingerpickChordView";
 const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
 // Whether fret numbers outside the chord shape are coloured, in the shape view.
 const OFF_SHAPE_KEY = "fingerpickOffShape";
-// Auto-scroll: how fast the tab creeps upward while reading along, in px/s.
-const SCROLL_SPEED_KEY = "fingerpickScrollSpeed";
+// Auto-scroll speed lives with the hook that creeps (useAutoScroll): the strum
+// progression card reads the same preference.
 // Editor beat labels in a compound meter: the two real beats ("1 + a 2 + a",
 // the default) or the six eighths ("1 2 3 4 5 6"), a teaching aid.
 const COUNT_EIGHTHS_KEY = "fingerpickCountEighths";
-
-export const SCROLL_SPEED_MIN = 4;
-export const SCROLL_SPEED_MAX = 60;
-export const SCROLL_SPEED_DEFAULT = 16;
-export function clampScrollSpeed(raw: number): number {
-	if (!Number.isFinite(raw)) return SCROLL_SPEED_DEFAULT;
-	return Math.min(SCROLL_SPEED_MAX, Math.max(SCROLL_SPEED_MIN, Math.round(raw)));
-}
 
 /** Width range of the shape strip over a chord symbol, in px. */
 export const CHORD_SHAPE_WIDTH_MIN = 40;
@@ -94,13 +99,12 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 		let storedView: string | null = null;
 		let storedWidth: string | null = null;
 		let storedOffShape: string | null = null;
-		let storedSpeed: string | null = null;
 		let storedCountEighths: string | null = null;
+		const storedSpeed = readScrollSpeed();
 		try {
 			storedView = localStorage.getItem(CHORD_VIEW_KEY);
 			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
 			storedOffShape = localStorage.getItem(OFF_SHAPE_KEY);
-			storedSpeed = localStorage.getItem(SCROLL_SPEED_KEY);
 			storedCountEighths = localStorage.getItem(COUNT_EIGHTHS_KEY);
 		} catch {
 			// storage unavailable — the defaults it is
@@ -111,7 +115,7 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 			if (storedView === "diagram") setChordViewState("diagram");
 			if (storedWidth !== null) setChordShapeWidthState(clampShapeWidth(Number(storedWidth)));
 			if (storedOffShape === "off") setOffShapeOnState(false);
-			if (storedSpeed !== null) setScrollSpeedState(clampScrollSpeed(Number(storedSpeed)));
+			setScrollSpeedState(storedSpeed);
 			if (storedCountEighths === "on") setCountEighthsState(true);
 		});
 	}, []);
@@ -132,7 +136,7 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 	function setScrollSpeed(raw: number) {
 		const speed = clampScrollSpeed(raw);
 		setScrollSpeedState(speed);
-		writeItem(SCROLL_SPEED_KEY, String(speed));
+		writeScrollSpeed(speed);
 	}
 	function setCountEighths(on: boolean) {
 		setCountEighthsState(on);

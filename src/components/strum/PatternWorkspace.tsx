@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import { Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronsDown, Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
 import type { Bar, ChordProgression, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,
@@ -41,6 +41,14 @@ import PatternBarBody from "./PatternBarBody";
 import ChordPickerModal, { type ConfirmedChord } from "./ChordPickerModal";
 import ChordShapeChoice from "./ChordShapeChoice";
 import { chordDisplayName } from "@/lib/chordSuffixes";
+import Fader from "@/components/ui/Fader";
+import {
+	SCROLL_SPEED_DEFAULT,
+	SCROLL_SPEED_MAX,
+	SCROLL_SPEED_MIN,
+	useAutoScroll,
+	useScrollSpeedPref,
+} from "@/components/useAutoScroll";
 
 /** Which view of the selected pattern is on screen. */
 export type WorkspaceTab = "pattern" | "progressions";
@@ -94,6 +102,19 @@ interface Props {
 	userVoicings?: readonly UserChordVoicing[];
 	/** Returns the row the shape actually lives in — its id may not be the one just minted. */
 	onSaveVoicing?: (voicing: UserChordVoicing) => UserChordVoicing;
+	/**
+	 * A shared snapshot: nothing here can be written. The chord line that adds
+	 * a progression, the open progression's edit and delete, and the
+	 * Progressions tab when there is no progression to show, are all hidden.
+	 */
+	readOnly?: boolean;
+	/**
+	 * Copy a link to a snapshot of what is on screen — the pattern, and the
+	 * open progression with it. Absent on a share page, where the viewer
+	 * already holds the link.
+	 */
+	onShare?: () => void;
+	sharing?: boolean;
 }
 
 /**
@@ -170,6 +191,9 @@ export default function PatternWorkspace({
 	onApplyChordShape,
 	userVoicings = [],
 	onSaveVoicing,
+	readOnly = false,
+	onShare,
+	sharing = false,
 }: Props) {
 	const selected = progressions.find((p) => p.id === selectedProgressionId) ?? null;
 
@@ -201,6 +225,24 @@ export default function PatternWorkspace({
 	// A progression inherits its pattern's meter — the chords change, the way the
 	// bar is counted does not.
 	const meter = patternMeter(pattern);
+
+	// Auto-scroll, as the fingerpick tab has it: the open sequence creeps upward
+	// at the remembered speed for reading along without a hand free. The
+	// scroller exists only while a progression is open, so the hook is told
+	// when it is there; a sequence that fits the card has nothing to creep.
+	const progressionViewerRef = useRef<HTMLDivElement>(null);
+	const [scrollSpeed, setScrollSpeed] = useScrollSpeedPref();
+	const {
+		contentRef: progressionContentRef,
+		setAutoScroll,
+		tabOverflows: progressionOverflows,
+		autoScrollActive,
+	} = useAutoScroll({
+		viewerRef: progressionViewerRef,
+		scrollSpeed,
+		patternId: selected?.id ?? "",
+		ready: tab === "progressions" && !progressionsLoading && selected !== null,
+	});
 
 	// A bar of the open sequence whose chord is being swapped for another out of
 	// the library. Null while the picker is closed.
@@ -587,17 +629,31 @@ export default function PatternWorkspace({
 				<TabButton active={tab === "pattern"} onClick={() => onTabChange("pattern")}>
 					Pattern
 				</TabButton>
-				<TabButton
-					active={tab === "progressions"}
-					onClick={() => onTabChange("progressions")}
-				>
-					Progressions{progressions.length > 0 ? ` (${progressions.length})` : ""}
-				</TabButton>
+				{!(readOnly && progressions.length === 0) && (
+					<TabButton
+						active={tab === "progressions"}
+						onClick={() => onTabChange("progressions")}
+					>
+						Progressions{progressions.length > 0 ? ` (${progressions.length})` : ""}
+					</TabButton>
+				)}
 			</div>
 
 			{/* The card header — pattern name and written rhythm — belongs to both
 			    tabs; only the body below it switches. */}
-			<StepGridCard pattern={pattern} onEditPattern={onEditPattern}>
+			<StepGridCard
+				pattern={pattern}
+				onEditPattern={onEditPattern}
+				onShare={onShare}
+				sharing={sharing}
+				shareTitle={
+					tab === "progressions" && progressions.length > 1
+						? "Copy a link to this pattern — choose which progressions go with it"
+						: tab === "progressions" && selected
+							? "Copy a link to this pattern with the open progression"
+							: "Copy a link to this pattern"
+				}
+			>
 				{tab === "pattern" ? (
 					<PatternBarBody
 						meter={meter}
@@ -617,7 +673,7 @@ export default function PatternWorkspace({
 							No chord progressions yet. Type a chord sequence to play {pattern.name}{" "}
 							over it.
 						</p>
-						{composer("full")}
+						{!readOnly && composer("full")}
 					</div>
 				) : selected === null ? (
 					// Nothing opened yet: the list gets the whole body.
@@ -643,7 +699,7 @@ export default function PatternWorkspace({
 								</span>
 							</button>
 						))}
-						{composer("full")}
+						{!readOnly && composer("full")}
 					</div>
 				) : (
 					// One opened: the list shrinks to a rail on the left of the body.
@@ -678,7 +734,7 @@ export default function PatternWorkspace({
 										</button>
 									);
 								})}
-								{composer("rail")}
+								{!readOnly && composer("rail")}
 							</div>
 						</div>
 
@@ -739,25 +795,73 @@ export default function PatternWorkspace({
 									</div>
 								) : (
 									<div className="flex shrink-0 items-center">
+										{/* The speed fader is only there while the creep runs, and
+										    only where the strip has room for it. */}
+										{autoScrollActive && (
+											<div className="mr-2 hidden w-20 md:block">
+												<Fader
+													min={SCROLL_SPEED_MIN}
+													max={SCROLL_SPEED_MAX}
+													step={2}
+													value={scrollSpeed}
+													onValue={setScrollSpeed}
+													ticks={[
+														0,
+														((SCROLL_SPEED_DEFAULT - SCROLL_SPEED_MIN) /
+															(SCROLL_SPEED_MAX - SCROLL_SPEED_MIN)) *
+															100,
+														100,
+													]}
+													tickValues={[SCROLL_SPEED_MIN, SCROLL_SPEED_DEFAULT, SCROLL_SPEED_MAX]}
+													scale={[]}
+													ariaLabel="Auto-scroll speed"
+												/>
+											</div>
+										)}
+										<button
+											type="button"
+											onClick={() => setAutoScroll((on) => !on)}
+											disabled={!progressionOverflows}
+											aria-pressed={autoScrollActive}
+											aria-label={autoScrollActive ? "Stop auto-scroll" : "Start auto-scroll"}
+											title={
+												!progressionOverflows
+													? "The whole progression is in view — nothing to scroll"
+													: autoScrollActive
+														? "Stop auto-scroll"
+														: "Auto-scroll the progression"
+											}
+											className={`mr-2 flex h-7 w-7 items-center justify-center border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+												autoScrollActive
+													? "border-denim bg-denim text-on-denim"
+													: "border-line-strong text-ink-dim hover:border-denim hover:text-denim disabled:hover:border-line-strong disabled:hover:text-ink-dim"
+											}`}
+										>
+											<ChevronsDown size={14} className={autoScrollActive ? "animate-bounce" : ""} />
+										</button>
 										<ChordViewToggle value={chordView} onChange={setChordView} />
-										<button
-											type="button"
-											onClick={() => onEditProgression(selected)}
-											aria-label="Edit progression"
-											title="Edit progression"
-											className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:bg-denim-tint hover:text-denim"
-										>
-											<Pencil size={14} />
-										</button>
-										<button
-											type="button"
-											onClick={() => setDeleteConfirmId(selected.id)}
-											aria-label="Delete progression"
-											title="Delete progression"
-											className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:bg-denim-tint hover:text-destructive"
-										>
-											<Trash2 size={14} />
-										</button>
+										{!readOnly && (
+											<>
+												<button
+													type="button"
+													onClick={() => onEditProgression(selected)}
+													aria-label="Edit progression"
+													title="Edit progression"
+													className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:bg-denim-tint hover:text-denim"
+												>
+													<Pencil size={14} />
+												</button>
+												<button
+													type="button"
+													onClick={() => setDeleteConfirmId(selected.id)}
+													aria-label="Delete progression"
+													title="Delete progression"
+													className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:bg-denim-tint hover:text-destructive"
+												>
+													<Trash2 size={14} />
+												</button>
+											</>
+										)}
 									</div>
 								)}
 							</div>
@@ -817,9 +921,13 @@ export default function PatternWorkspace({
 								</div>
 							)}
 
-							{/* Scrolls internally; playback keeps the current bar in view. */}
-							<div className="flex min-h-0 flex-col items-center overflow-y-auto px-3 py-5 sm:px-5">
-								<div className="my-auto w-full">
+							{/* Scrolls internally; playback keeps the current bar in view, and
+							    auto-scroll creeps it when asked. */}
+							<div
+								ref={progressionViewerRef}
+								className="flex min-h-0 flex-col items-center overflow-y-auto px-3 py-5 sm:px-5"
+							>
+								<div ref={progressionContentRef} className="my-auto w-full">
 									<StepGrid
 										bars={bars}
 										activeCell={activeCell}

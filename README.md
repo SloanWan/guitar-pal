@@ -438,6 +438,9 @@ Production runs on a single Tencent Cloud HK VPS (Ubuntu, 2 GB) at `https://guit
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ANTHROPIC_API_KEY=sk-ant-...
+# Shared by both containers: the book service validates drafts through
+# Next.js's internal endpoint with it. `openssl rand -hex 32`.
+BOOK_SERVICE_INTERNAL_SECRET=<random>
 
 # book-service
 BOOK_SERVICE_DATABASE_URL=postgresql://book_service:<password>@<pooler host>:6543/postgres
@@ -448,6 +451,8 @@ SUPABASE_JWT_SECRET=<jwt secret>
 ```
 
 Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` and `src/app/dev/layout.tsx` hide `/dev` unless it is `"1"`. `SUPABASE_SERVICE_ROLE_KEY` is only needed by one-off scripts and stays off the server: the book-service reads Storage with the player's own session token, and its database role can reach nothing but its own tables. The migration URL (an admin role, direct connection on port 5432) is passed to `alembic` by hand and is not in `.env` — see the service README.
+
+The same `.env` feeds `book-service` too: it reads `NEXT_PUBLIC_SUPABASE_URL` (JWT issuer and JWKS), `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the `apikey` on its Storage requests, alongside the player's token) and `ANTHROPIC_API_KEY` (one call per uploaded book to find chapters; skipped without the key). `BOOK_SERVICE_URL` and `BOOK_SERVICE_VALIDATE_URL` are set by `docker-compose.yml` (`http://book-service:8000` and `http://web:3000` — the two containers reach each other on the compose network) and `TESSDATA_PREFIX` by the service's Dockerfile (Tesseract data for scanned PDFs is baked into the image) — neither goes in `.env`. What leaves the server: page text and short page excerpts go to the model API for chapter finding; the PDFs themselves never leave Supabase Storage.
 
 ### First-time setup
 
@@ -491,6 +496,7 @@ Do **not** set `NEXT_PUBLIC_ENABLE_DEV_ROUTES` on the server — `src/proxy.ts` 
 
 - **Deploy** — merge to `main`. CI runs; if it is green, the Deploy workflow rebuilds the container and smoke-tests the site. It can also be re-run by hand from the Actions tab.
 - **Logs** — `docker compose logs -f web` / `docker compose logs -f book-service`
+- **A new book-service migration** (a file under `book-service/alembic/versions/` in the merge) — `alembic upgrade head` with the migration URL from step 5, before or right after the deploy; the service reads columns the migration adds.
 - **Roll back** — `git checkout <sha> && docker compose up --build -d`; the next push to `main` moves it forward again.
 - **Certificate** — renews automatically through `certbot.timer`; `sudo certbot renew --dry-run` checks the setup.
 - **Change a `NEXT_PUBLIC_*` value** — edit `.env`, then `docker compose up --build -d` (the value is baked at build time, a restart is not enough).

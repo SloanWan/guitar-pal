@@ -11,12 +11,16 @@ therefore no autogenerate.
 """
 
 import os
+from logging.config import fileConfig
 
 from sqlalchemy import create_engine
 
 from alembic import context
 
 config = context.config
+# alembic.ini's loggers, so an upgrade says which revisions it ran.
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
 VERSION_TABLE = "book_service_alembic_version"
 

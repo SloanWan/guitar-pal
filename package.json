@@ -4,6 +4,7 @@
 	"private": true,
 	"scripts": {
 		"dev": "next dev",
+		"dev:books": "sh book-service/tools/dev.sh",
 		"build": "next build",
 		"start": "next start",
 		"lint": "eslint",

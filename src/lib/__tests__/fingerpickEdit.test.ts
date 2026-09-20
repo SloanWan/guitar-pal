@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import {
+	canShiftMeasureStrings,
+	shiftMeasureStrings,
 	makeDefaultPattern,
 	makeEmptySlot,
 	makeEmptyMeasure,
@@ -468,6 +470,40 @@ describe("swapMeasures", () => {
 		expect(swapMeasures(measures, 1, 1)).toBe(measures);
 		expect(swapMeasures(measures, 0, 5)).toBe(measures);
 		expect(swapMeasures(measures, -1, 0)).toBe(measures);
+	});
+});
+
+describe("shiftMeasureStrings", () => {
+	it("moves every note one string over, frets and flags intact, and clears what it left", () => {
+		let p = twoMeasurePattern();
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
+		p = setFret(p, { measureIndex: 0, slotIndex: 1, stringIndex: 3 }, 2);
+		p = setTechnique(p, { measureIndex: 0, slotIndex: 1, stringIndex: 3 }, "hammer-on");
+		const up = shiftMeasureStrings(p, 0, -1);
+		expect(up.measures[0].slots[0].strings[4].fret).toBe(3);
+		expect(up.measures[0].slots[0].strings[5].fret).toBeNull();
+		expect(up.measures[0].slots[1].strings[2]).toMatchObject({ fret: 2, technique: "hammer-on" });
+		expect(up.measures[0].slots[1].strings[3].fret).toBeNull();
+		// The other measure is untouched, and the slot ids stay.
+		expect(up.measures[1]).toBe(p.measures[1]);
+		expect(up.measures[0].slots[0].id).toBe(p.measures[0].slots[0].id);
+		// Down again is the original.
+		const back = shiftMeasureStrings(up, 0, 1);
+		expect(back.measures[0].slots.map((s) => s.strings.map((x) => x.fret))).toEqual(
+			p.measures[0].slots.map((s) => s.strings.map((x) => x.fret)),
+		);
+	});
+
+	it("refuses when a note is already on the edge string, or when there is nothing to move", () => {
+		let p = twoMeasurePattern();
+		expect(canShiftMeasureStrings(p.measures[0], -1)).toBe(false);
+		expect(shiftMeasureStrings(p, 0, -1)).toBe(p);
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 0 }, 1);
+		p = setFret(p, { measureIndex: 0, slotIndex: 2, stringIndex: 5 }, 0);
+		expect(canShiftMeasureStrings(p.measures[0], -1)).toBe(false);
+		expect(canShiftMeasureStrings(p.measures[0], 1)).toBe(false);
+		expect(shiftMeasureStrings(p, 0, 1)).toBe(p);
+		expect(shiftMeasureStrings(p, 9, 1)).toBe(p);
 	});
 });
 

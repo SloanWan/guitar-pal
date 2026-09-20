@@ -26,7 +26,6 @@ import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
 import { useAutoScroll } from "@/components/useAutoScroll";
-import { useHideOnScroll } from "@/components/fingerpick/useHideOnScroll";
 import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
 import { useMeasureGeometry } from "@/components/fingerpick/useMeasureGeometry";
 import {
@@ -341,16 +340,11 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		cursorRef,
 		measureHighlightRef,
 		rowRefs,
-		isAutoScrollingRef,
 		resetCursor,
 		snapCursorToNote,
 		startOffsetFor,
 		toExpandedMeasureIndex,
 	} = usePlaybackCursor({ tabViewerRef, expanded, bpm, rows, isPlaying, getPlaybackProgress });
-	const { controlsVisible, restoreControls } = useHideOnScroll({
-		viewerRef: tabViewerRef,
-		isAutoScrollingRef,
-	});
 	const { handleTabClick, takePendingSeek, clearPendingSeek } = useClickToSeek({
 		viewerRef: tabViewerRef,
 		isPlaying,
@@ -358,7 +352,6 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		seekToNote,
 		toExpandedMeasureIndex,
 		snapCursorToNote,
-		onInteract: restoreControls,
 		sectionMode,
 		geometry,
 		onPickMeasure: (measureIndex) => setSection((s) => pickMeasure(s, measureIndex)),
@@ -369,8 +362,6 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 	// is intentional — we only want one preload call per page mount.
 	useEffect(() => {
 		void load();
-		document.body.classList.add("fingerpick-page");
-		return () => document.body.classList.remove("fingerpick-page");
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -1152,11 +1143,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 										setShowLibrary(true);
 									}}
 									aria-label="Open the pattern library"
-									className={`absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
-										controlsVisible
-											? "opacity-100 pointer-events-auto"
-											: "opacity-0 pointer-events-none"
-									}`}
+									className="absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95"
 									style={{ backgroundColor: "var(--denim)" }}
 								>
 									<SquareMenu />
@@ -1165,7 +1152,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 								    at it. Comes and goes with the toggle it points to. */}
 								{libraryHint.show && (
 									<LibraryHint
-										className={`absolute top-0 right-12 z-30 lg:hidden transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`}
+										className="absolute top-0 right-12 z-30 lg:hidden"
 									/>
 								)}
 							</>
@@ -1176,7 +1163,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 				<FingerpickDesktopPanel {...controls} />
 			</div>
 
-			<FingerpickMobileDrawer {...controls} controlsVisible={controlsVisible} />
+			<FingerpickMobileDrawer {...controls} />
 
 			{/* The library owns the editor for its own patterns; a handed-over tab
 			    gets its own instance so it can open without the library on screen. */}

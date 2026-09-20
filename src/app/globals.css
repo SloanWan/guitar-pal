@@ -1088,20 +1088,6 @@
 	}
 }
 
-/* iOS Safari zooms the page into any field set below 16px the moment it is
-   focused, and does not zoom back out. On a coarse-pointer device every
-   field therefore renders at 16px whatever its utility asks for, so tapping
-   the chord search pill or the assistant composer never rescales the page.
-   Unlayered on purpose: a layered rule would lose to the text-sm utility.
-   Desktop keeps the design sizes. */
-@media (pointer: coarse) {
-	input,
-	textarea,
-	select {
-		font-size: max(16px, 1em);
-	}
-}
-
 /* ============================================================================
    KEYFRAMES — consumed via animate-[…] arbitrary utilities. Every consumer
    must pair with motion-reduce:animate-none (decorative motion dies under

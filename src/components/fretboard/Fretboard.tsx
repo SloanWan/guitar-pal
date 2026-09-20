@@ -109,6 +109,8 @@ const PLUCK_TAU_S = 0.09;
 const POP_SCALE = 1.7;
 /** A pointer that travels further than this before lifting is a scroll, not a tap. */
 const TAP_SLOP_PX = 8;
+/** How long a finger rests on a position before it is picked, not played. */
+const LONG_PRESS_MS = 500;
 /** The capo bar: a band just behind its fret wire, square-ended like everything here. */
 const CAPO_W = 7;
 /** Invisible margin each side of the bar, so a finger can catch it. */
@@ -294,6 +296,16 @@ export default function Fretboard({
 	/** Nodes currently carrying a `data-hover`, so leaving clears exactly those. */
 	const hovered = useRef<SVGGElement[]>([]);
 	const pending = useRef<PendingPress | null>(null);
+	/**
+	 * A finger held on a slot: the timer that turns the hold into a position
+	 * pick. A mouse has a right button for that; a touch screen has only time.
+	 */
+	const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const endHold = useCallback(() => {
+		if (hold.current !== null) clearTimeout(hold.current);
+		hold.current = null;
+	}, []);
+	useEffect(() => endHold, [endHold]);
 	/** One running pluck per string, so a re-pluck restarts rather than stacks. */
 	const plucks = useRef(new Map<number, number>());
 	/** Pending staggered strikes, so unmount cancels them (Constraint 4). */
@@ -486,9 +498,10 @@ export default function Fretboard({
 				}
 				return;
 			}
-			if (!canPress) return;
 			const slot = slotFromTarget(e.target);
 			if (!slot) return;
+			// A hold works whether or not the neck can sound: the pick is not a note.
+			if (!canPress && !(e.pointerType === "touch" && onPositionPick)) return;
 			// No preventDefault: on touch the browser must still be free to scroll.
 			pending.current = {
 				pointerId: e.pointerId,
@@ -496,12 +509,34 @@ export default function Fretboard({
 				y: e.clientY,
 				key: slotKey(slot.string, slot.fret),
 			};
+			// Held still on a touch screen, the press picks the position instead
+			// of sounding the note: the release then has nothing to play.
+			endHold();
+			if (e.pointerType === "touch" && onPositionPick) {
+				hold.current = setTimeout(() => {
+					hold.current = null;
+					if (pending.current?.pointerId !== e.pointerId) return;
+					pending.current = null;
+					onPositionPick(slot.fret);
+				}, LONG_PRESS_MS);
+			}
 		},
-		[canPress, onPositionPick],
+		[canPress, onPositionPick, endHold],
+	);
+
+	const handlePointerMove = useCallback(
+		(e: ReactPointerEvent<SVGSVGElement>) => {
+			const press = pending.current;
+			if (!press || press.pointerId !== e.pointerId) return;
+			// A finger that moved is scrolling, not holding.
+			if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP_PX) endHold();
+		},
+		[endHold],
 	);
 
 	const handlePointerUp = useCallback(
 		(e: ReactPointerEvent<SVGSVGElement>) => {
+			endHold();
 			const press = pending.current;
 			pending.current = null;
 			if (!press || !canPress || press.pointerId !== e.pointerId) return;
@@ -516,12 +551,13 @@ export default function Fretboard({
 			if (prefersReducedMotion()) return;
 			feedback(slot.string, slot.fret);
 		},
-		[canPress, capo, onSlotPress, feedback],
+		[canPress, capo, onSlotPress, feedback, endHold],
 	);
 
 	const cancelPress = useCallback(() => {
+		endHold();
 		pending.current = null;
-	}, []);
+	}, [endHold]);
 
 	// ── Capo: drag the bar along the neck, snapping to the fret under the pointer ──
 	const capoMax = maxCapo ?? toFret;
@@ -710,7 +746,9 @@ export default function Fretboard({
 						viewBox={`0 0 ${neckW} ${boardH}`}
 						width={neckW}
 						height={boardH}
-						className="block max-w-none"
+						// No callout or selection on a long press: that press is the
+						// position pick on a touch screen.
+						className="block max-w-none select-none [-webkit-touch-callout:none]"
 						style={{ width: size(neckW), height: size(boardH) }}
 						onContextMenu={onPositionPick ? (e) => e.preventDefault() : undefined}
 						data-from-fret={fromFret}
@@ -721,6 +759,7 @@ export default function Fretboard({
 						onPointerOver={handlePointerOver}
 						onPointerOut={handlePointerOut}
 						onPointerDown={handlePointerDown}
+						onPointerMove={handlePointerMove}
 						onPointerUp={handlePointerUp}
 						onPointerCancel={cancelPress}
 					>

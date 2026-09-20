@@ -6,7 +6,6 @@ import Link from "@/components/AppLink";
 import SignInLink from "./SignInLink";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { profileOf } from "@/lib/profile";
-import NavBarScrollWrapper from "./NavBarScrollWrapper";
 import AssistantLauncher from "./assistant/AssistantLauncher";
 
 /**
@@ -24,7 +23,7 @@ export default async function NavBar({ hideSignIn = false }: { hideSignIn?: bool
 	const profile = user ? profileOf(user) : null;
 
 	return (
-		<NavBarScrollWrapper>
+		<div className="sticky top-0 z-10">
 			<header className="h-13 flex-none border-b border-line bg-topbar">
 				<div className="mx-auto grid h-full w-full max-w-300 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-(--gutter)">
 					<Link
@@ -85,6 +84,6 @@ export default async function NavBar({ hideSignIn = false }: { hideSignIn?: bool
 					</div>
 				</div>
 			</header>
-		</NavBarScrollWrapper>
+		</div>
 	);
 }

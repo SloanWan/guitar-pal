@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ChevronsDown, Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
+import { ChevronsDown, Ellipsis, Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
 import type { Bar, ChordProgression, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,
@@ -217,6 +217,13 @@ export default function PatternWorkspace({
 	// Phone only: the list slides out from the left and pushes the open
 	// progression across, rather than replacing it. Always open from md upwards.
 	const [railOpen, setRailOpen] = useState(false);
+	/**
+	 * Below sm the strip cannot hold the name and its controls side by side —
+	 * the controls used to win and the name vanished. So there the controls
+	 * fold behind one button and drop onto a row of their own when asked;
+	 * the list button and the name always keep the strip.
+	 */
+	const [toolsOpen, setToolsOpen] = useState(false);
 	// Fetched the first time the composer opens, then shared by every parse.
 	const [chordIndex, setChordIndex] = useState<readonly ChordIndexEntry[]>([]);
 	// How the open progression announces its chords: by name, or as the shape to
@@ -743,7 +750,7 @@ export default function PatternWorkspace({
 							{/* h-11: the strip keeps its height whether it shows the controls
 							    or the delete confirmation, so nothing below it jumps. */}
 							<div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-line px-3 md:px-5">
-								<div className="flex min-w-0 items-center gap-2">
+								<div className="flex min-w-0 flex-1 items-center gap-2">
 									<button
 										type="button"
 										onClick={() => setRailOpen((open) => !open)}
@@ -794,7 +801,19 @@ export default function PatternWorkspace({
 										</button>
 									</div>
 								) : (
-									<div className="flex shrink-0 items-center">
+									<>
+									<button
+										type="button"
+										onClick={() => setToolsOpen((open) => !open)}
+										aria-label={toolsOpen ? "Hide progression controls" : "Show progression controls"}
+										aria-expanded={toolsOpen}
+										className={`flex h-7 w-7 shrink-0 items-center justify-center border transition-colors sm:hidden ${
+											toolsOpen ? "border-denim text-denim" : "border-line-strong text-ink-dim"
+										}`}
+									>
+										<Ellipsis size={14} />
+									</button>
+									<div className="hidden shrink-0 items-center sm:flex">
 										{/* The speed fader is only there while the creep runs, and
 										    only where the strip has room for it. */}
 										{autoScrollActive && (
@@ -863,8 +882,49 @@ export default function PatternWorkspace({
 											</>
 										)}
 									</div>
+									</>
 								)}
 							</div>
+							{/* The same controls, on their own row, below sm. */}
+							{toolsOpen && deleteConfirmId !== selected.id && (
+								<div className="flex h-11 shrink-0 items-center justify-end border-b border-line px-3 sm:hidden">
+									<button
+										type="button"
+										onClick={() => setAutoScroll((on) => !on)}
+										disabled={!progressionOverflows}
+										aria-pressed={autoScrollActive}
+										aria-label={autoScrollActive ? "Stop auto-scroll" : "Start auto-scroll"}
+										className={`mr-2 flex h-7 w-7 items-center justify-center border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+											autoScrollActive
+												? "border-denim bg-denim text-on-denim"
+												: "border-line-strong text-ink-dim"
+										}`}
+									>
+										<ChevronsDown size={14} className={autoScrollActive ? "animate-bounce" : ""} />
+									</button>
+									<ChordViewToggle value={chordView} onChange={setChordView} />
+									{!readOnly && (
+										<>
+											<button
+												type="button"
+												onClick={() => onEditProgression(selected)}
+												aria-label="Edit progression"
+												className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:text-denim"
+											>
+												<Pencil size={14} />
+											</button>
+											<button
+												type="button"
+												onClick={() => setDeleteConfirmId(selected.id)}
+												aria-label="Delete progression"
+												className="flex items-center justify-center p-1.5 text-ink-dim transition-colors hover:text-destructive"
+											>
+												<Trash2 size={14} />
+											</button>
+										</>
+									)}
+								</div>
+							)}
 							{/* The pattern moved under this sequence. Asked here, where the
 							    sequence is on screen and the answer can be judged, rather than
 							    applied on the pattern's save where it could not be. Inline

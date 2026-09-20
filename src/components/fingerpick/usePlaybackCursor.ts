@@ -42,11 +42,6 @@ export interface PlaybackCursor {
 	/** One DOM ref per row wrapper div (indexed to match `rows`). */
 	rowRefs: React.RefObject<(HTMLDivElement | null)[]>;
 	/**
-	 * True while the RAF loop's scrollIntoView is in flight; lets a scroll
-	 * listener tell auto-scroll from the player scrolling.
-	 */
-	isAutoScrollingRef: React.RefObject<boolean>;
-	/**
 	 * Put the overlays back on a measure's first note (the pattern's first by
 	 * default; a loop region's first when one is playing).
 	 */
@@ -159,9 +154,6 @@ export function usePlaybackCursor({
 	// Tracks the loop pass index so a pass boundary triggers a cursor snap rather
 	// than a slow exponential chase from the last note back to the first.
 	const lastPassIndexRef = useRef(0);
-	// True while the RAF loop's scrollIntoView is in flight; suppresses the
-	// scroll listener so auto-scroll never triggers the hide behaviour.
-	const isAutoScrollingRef = useRef(false);
 	// Incremented by resetCursor; triggers the cursor-reset effect below, which
 	// places the overlays on resetMeasureRef's first note.
 	const [cursorResetTick, setCursorResetTick] = useState(0);
@@ -617,13 +609,7 @@ export function usePlaybackCursor({
 				}
 				lastScrolledRowRef.current = rowIdx;
 				prevTimestampRef.current = 0;
-				isAutoScrollingRef.current = true;
-				window.dispatchEvent(new CustomEvent("fingerpick-autoscroll-start"));
 				rowRefs.current[rowIdx]?.scrollIntoView({ behavior: "smooth", block: "center" });
-				setTimeout(() => {
-					isAutoScrollingRef.current = false;
-					window.dispatchEvent(new CustomEvent("fingerpick-autoscroll-end"));
-				}, 500);
 			}
 
 			// Measure transition: update the measure background highlight.
@@ -664,7 +650,6 @@ export function usePlaybackCursor({
 		cursorRef,
 		measureHighlightRef,
 		rowRefs,
-		isAutoScrollingRef,
 		resetCursor,
 		snapCursorToNote,
 		startOffsetFor,

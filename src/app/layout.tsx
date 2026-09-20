@@ -3,6 +3,7 @@ import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { NavProgressProvider, NavProgressBar } from "@/components/nav-progress";
+import NoFocusZoom from "@/components/NoFocusZoom";
 
 const mono = JetBrains_Mono({
   subsets: ["latin"],
@@ -47,6 +48,7 @@ export default function RootLayout({
           {children}
         </NavProgressProvider>
         <Toaster />
+        <NoFocusZoom />
       </body>
     </html>
   );

@@ -8,13 +8,17 @@ import { Option, Options } from "../Options";
 import { stashHandoff } from "@/lib/assistant/handoff";
 import { pick, type Lang } from "@/lib/assistant/lang";
 import type { TabTurnOutcome } from "@/lib/assistant/tab/turn";
+import { moveSlotChord } from "@/lib/fingerpickChords";
+import type { Measure } from "@/lib/fingerpickTypes";
 
 /**
  * Bars for a pattern the player already has, before anything is written.
  *
  * The message has said what will happen; this shows the bars as they will
- * look and asks. Confirming hands them to the fingerpick page, which owns
- * the save — a preset is copied there, never changed.
+ * look and asks. A chord mark can be dragged to another slot first — the
+ * reader places marks by beat, and the slot meant is the player's to say.
+ * Confirming hands the bars to the fingerpick page, which owns the save — a
+ * preset is copied there, never changed.
  */
 
 const FINGERPICK_PATH = "/fingerpick";
@@ -37,7 +41,11 @@ export default function TabEditCard({
 	const [dismissed, setDismissed] = useState(false);
 	const [shown, setShown] = useState(0);
 	const bars = edit.kind === "append" || edit.kind === "replace" || edit.kind === "chords";
-	const more = bars ? edit.measures.length - shown : 0;
+	// The bars as the player has arranged them: the reader's, until a chord
+	// mark is dragged elsewhere. What confirming hands over.
+	const [measures, setMeasures] = useState<Measure[]>(bars ? edit.measures : []);
+	const [moved, setMoved] = useState(false);
+	const more = bars ? measures.length - shown : 0;
 
 	function leave() {
 		onDone();
@@ -58,8 +66,8 @@ export default function TabEditCard({
 				op: edit.kind === "append" ? "append" : "replace",
 				...base,
 				barIndex: edit.kind === "append" ? null : edit.barIndex,
-				replaceCount: edit.kind === "append" ? 0 : edit.measures.length,
-				measures: edit.measures,
+				replaceCount: edit.kind === "append" ? 0 : measures.length,
+				measures,
 			});
 		}
 		leave();
@@ -107,7 +115,7 @@ export default function TabEditCard({
 	}
 
 	const firstBar = edit.kind === "append" ? edit.pattern.measures.length + 1 : edit.barIndex + 1;
-	const lastBar = firstBar + edit.measures.length - 1;
+	const lastBar = firstBar + measures.length - 1;
 
 	return (
 		<div className="mt-2 border border-denim bg-surface animate-[proposal-pop_0.18s_ease-out] motion-reduce:animate-none">
@@ -126,11 +134,23 @@ export default function TabEditCard({
 			</div>
 
 			<TabStavePreview
-				measures={edit.measures}
+				measures={measures}
 				timeSignature={edit.pattern.timeSignature}
 				startMeasureNumber={firstBar}
 				onShown={setShown}
+				onMoveChord={(from, to) => {
+					const next = moveSlotChord(measures, from, to);
+					if (!next) return;
+					setMeasures(next);
+					setMoved(true);
+				}}
+				lang={lang}
 			/>
+			{moved && (
+				<div className="border-t border-line px-3 py-2 font-mono text-xs tracking-[0.04em] text-ink-dim">
+					{t("Moved — the bars go in as they are now.", "已移动——按现在的位置写入。")}
+				</div>
+			)}
 
 			{more > 0 && (
 				<div className="border-t border-line px-3 py-2 font-mono text-xs tracking-[0.04em] text-ink-dim">

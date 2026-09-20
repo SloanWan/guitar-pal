@@ -157,6 +157,12 @@ export function tabEditMessage(edit: TabEditReading, lang: Lang, presets: readon
 				`${q(edit.pattern.name)} is in ${edit.pattern.timeSignature[0]}/${edit.pattern.timeSignature[1]} — there is no beat ${edit.beat}.`,
 				`${q(edit.pattern.name)}是 ${edit.pattern.timeSignature[0]}/${edit.pattern.timeSignature[1]} 拍，没有第 ${edit.beat} 拍。`,
 			);
+		case "slot-out-of-range":
+			return pick(
+				lang,
+				`Bar ${edit.bar} of ${q(edit.pattern.name)} has ${edit.slots} slot${edit.slots === 1 ? "" : "s"} — there is no slot ${edit.slot}.`,
+				`${q(edit.pattern.name)}的第 ${edit.bar} 小节只有 ${edit.slots} 格，没有第 ${edit.slot} 格。`,
+			);
 		case "chords-mismatch":
 			return pick(
 				lang,

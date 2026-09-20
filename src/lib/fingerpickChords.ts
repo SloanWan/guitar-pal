@@ -30,6 +30,23 @@ export function patternHasChords(measures: readonly Measure[]): boolean {
 }
 
 /**
+ * A chord mark carried from one slot to another — the assistant's preview
+ * lets the player drag a mark it placed by a beat guess onto the slot they
+ * meant. Null when there is nothing to move, when the slot is the same one,
+ * or when another mark already sits on the target: a drop that would erase
+ * a chord is refused rather than resolved.
+ */
+export function moveSlotChord(measures: readonly Measure[], from: SlotTarget, to: SlotTarget): Measure[] | null {
+	const chord = measures[from.measureIndex]?.slots[from.slotIndex]?.chord;
+	if (!chord) return null;
+	if (from.measureIndex === to.measureIndex && from.slotIndex === to.slotIndex) return null;
+	const target = measures[to.measureIndex]?.slots[to.slotIndex];
+	if (!target || target.chord) return null;
+	const pattern = { measures: [...measures] } as FingerpickPattern;
+	return setSlotChord(setSlotChord(pattern, from, null), to, chord).measures;
+}
+
+/**
  * Put a chord change on a slot, or take it away (`null`). Removing a mark does
  * not silence the region: the previous chord simply runs on through it.
  */

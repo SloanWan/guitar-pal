@@ -3,13 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
+import ChordDragStrip from "./ChordDragStrip";
+import type { SlotTarget } from "@/lib/fingerpickEdit";
 import type { Measure } from "@/lib/fingerpickTypes";
+import type { Lang } from "@/lib/assistant/lang";
 
 /**
  * One row of tab in a card: the same VexFlow path the fingerpick page
  * renders with, so what the player confirms is what they will see. At most
  * two bars are offered to the row; the packer takes what fits, and the
  * caller is told how many were shown so it can say how many were not.
+ * Given `onMoveChord`, the chord marks become chips under the stave that
+ * the player can drag to another slot.
  */
 
 const PREVIEW_MEASURES = 2;
@@ -19,12 +24,17 @@ export default function TabStavePreview({
 	timeSignature,
 	startMeasureNumber = 1,
 	onShown,
+	onMoveChord,
+	lang,
 }: {
 	measures: Measure[];
 	timeSignature: [number, number];
 	startMeasureNumber?: number;
 	/** How many bars made it onto the row, once laid out. */
 	onShown?: (count: number) => void;
+	/** A chord mark dragged from one slot to another, row-local measure indices. */
+	onMoveChord?: (from: SlotTarget, to: SlotTarget) => void;
+	lang?: Lang;
 }) {
 	const staveRef = useRef<HTMLDivElement | null>(null);
 	const [width, setWidth] = useState(0);
@@ -58,14 +68,22 @@ export default function TabStavePreview({
 	}, [shown]);
 
 	return (
-		<div ref={staveRef} className="overflow-x-auto px-2 py-2" data-testid="tab-proposal-stave">
-			{row && (
-				<TabStaveRow
-					measures={row.measures}
-					timeSignature={timeSignature}
-					startMeasureNumber={startMeasureNumber}
-					measureWidths={row.widths}
-				/>
+		<div className="overflow-x-auto">
+			<div ref={staveRef} className="px-2 py-2" data-testid="tab-proposal-stave">
+				{row && (
+					<TabStaveRow
+						measures={row.measures}
+						timeSignature={timeSignature}
+						startMeasureNumber={startMeasureNumber}
+						// Row-local: tags every note with its bar and slot, which the
+						// chord strip reads to place its chips.
+						startMeasureIndex={0}
+						measureWidths={row.widths}
+					/>
+				)}
+			</div>
+			{onMoveChord && row && (
+				<ChordDragStrip measures={row.measures} staveRef={staveRef} onMove={onMoveChord} lang={lang} />
 			)}
 		</div>
 	);

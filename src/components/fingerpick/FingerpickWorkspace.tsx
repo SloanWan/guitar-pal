@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
+import LibraryHint, { useLibraryHint } from "@/components/LibraryHint";
 import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
 import {
 	HANDOFF_EVENT,
@@ -120,6 +121,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 	}
 
 	const [showLibrary, setShowLibrary] = useState(false);
+	const libraryHint = useLibraryHint("fingerpick");
 	// The scrolling tab viewer; the overlays, auto-scroll and click-to-seek all work inside it.
 	const tabViewerRef = useRef<HTMLDivElement>(null);
 	// Repeats flattened into a linear playback timeline (the rendered staves stay compact).
@@ -1143,17 +1145,30 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 
 						{/* Mobile library toggle */}
 						{!shared && !showLibrary && (
-							<button
-								onClick={() => setShowLibrary(true)}
-								className={`absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
-									controlsVisible
-										? "opacity-100 pointer-events-auto"
-										: "opacity-0 pointer-events-none"
-								}`}
-								style={{ backgroundColor: "var(--denim)" }}
-							>
-								<SquareMenu />
-							</button>
+							<>
+								<button
+									onClick={() => {
+										libraryHint.dismiss();
+										setShowLibrary(true);
+									}}
+									aria-label="Open the pattern library"
+									className={`absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
+										controlsVisible
+											? "opacity-100 pointer-events-auto"
+											: "opacity-0 pointer-events-none"
+									}`}
+									style={{ backgroundColor: "var(--denim)" }}
+								>
+									<SquareMenu />
+								</button>
+								{/* First visit only: what the square icon opens, with an arrow
+								    at it. Comes and goes with the toggle it points to. */}
+								{libraryHint.show && (
+									<LibraryHint
+										className={`absolute top-0 right-12 z-30 lg:hidden transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`}
+									/>
+								)}
+							</>
 						)}
 					</div>
 				</div>

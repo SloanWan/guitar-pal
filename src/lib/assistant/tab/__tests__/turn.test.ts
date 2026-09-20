@@ -20,7 +20,7 @@ const TAB = [
 describe("resolveTabTurn", () => {
 	it("answers a question about one chord with its shapes, not a pattern", async () => {
 		const outcome = await resolve("show me Am");
-		expect(outcome.chord).toMatchObject({ root: "A", suffix: "minor" });
+		expect(outcome.chords).toMatchObject([{ root: "A", suffix: "minor" }]);
 		expect(outcome.proposal).toBeUndefined();
 		expect(outcome.templates).toBeUndefined();
 	});

@@ -32,10 +32,10 @@ export interface ReadInput {
 	text: string;
 }
 
-/** What the model names when the player asks how a chord is played. */
+/** What the model names when the player asks how chords are played. */
 export interface ShowChordInput {
-	/** One chord word, as the player wrote it: "F#m7", "Bb", "C/G". */
-	chord: string;
+	/** Chord words in the order asked, each as the player wrote it: ["F#m7"], ["C", "Am", "F", "G"]. */
+	chords: string[];
 }
 
 /** What the model writes when it composes a strumming pattern or progression itself. */
@@ -150,14 +150,18 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 	{
 		name: "show_chord",
 		description:
-			"Show the player how one chord is played: its diagram, every shape the library holds for it, and a link to its page. For \"how do I play F#m7\", \"C和弦怎么按\", \"show me Bm\". One chord per call, the word as the player wrote it. Returns the chord it found, or that the library has none by that name.",
+			"Show the player how chords are played: a diagram per chord with every shape the library holds for it, a link to each chord's page and, for several, to the grid that shows them side by side. For \"how do I play F#m7\", \"C和弦怎么按\", \"show me C Am F G\". The words as the player wrote them. Returns the chords it found, or the words the library has no chord for.",
 		strict: true,
 		input_schema: {
 			type: "object",
 			properties: {
-				chord: { type: "string", description: "One chord word, as the player wrote it: \"F#m7\", \"Bb\", \"C/G\"." },
+				chords: {
+					type: "array",
+					items: { type: "string" },
+					description: "Chord words in the order asked, each as the player wrote it: [\"F#m7\"], [\"C\", \"Am\", \"F\", \"G\"].",
+				},
 			},
-			required: ["chord"],
+			required: ["chords"],
 			additionalProperties: false,
 		},
 	},

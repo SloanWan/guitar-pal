@@ -34,7 +34,7 @@ describe("resolveAssistantTurn", () => {
 	describe("answers a question about one chord with its shapes", () => {
 		it("in English, before any reader takes the chord for a progression", () => {
 			const outcome = resolve("how do I play F#m7?");
-			expect(outcome.chord).toEqual({ root: "F#", suffix: "m7", voicingId: null });
+			expect(outcome.chords).toEqual([{ root: "F#", suffix: "m7", voicingId: null }]);
 			expect(outcome.proposal).toBeUndefined();
 			expect(outcome.templates).toBeUndefined();
 			expect(outcome.text).toMatch(/F#m7/);
@@ -42,13 +42,21 @@ describe("resolveAssistantTurn", () => {
 
 		it("in Chinese, answered in Chinese", () => {
 			const outcome = resolve("C和弦怎么按");
-			expect(outcome.chord).toMatchObject({ root: "C", suffix: "major" });
+			expect(outcome.chords).toMatchObject([{ root: "C", suffix: "major" }]);
 			expect(outcome.lang).toBe("zh");
 			expect(outcome.text).toMatch(/指法/);
 		});
 
+		it("several chords at once, with the grid to see them together", () => {
+			const outcome = resolve("show me C Am F G");
+			expect(outcome.chords?.map((c) => c.root)).toEqual(["C", "A", "F", "G"]);
+			expect(outcome.proposal).toBeUndefined();
+			expect(outcome.text).toMatch(/grid/);
+		});
+
 		it("leaves a chord line alone", () => {
-			expect(resolve("C Am F G").chord).toBeUndefined();
+			expect(resolve("C Am F G").chords).toBeUndefined();
+			expect(resolve("C Am F G").proposal).toBeDefined();
 		});
 	});
 

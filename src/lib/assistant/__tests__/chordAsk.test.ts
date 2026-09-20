@@ -33,37 +33,54 @@ describe("exactChord", () => {
 
 describe("readChordAsk", () => {
 	it("reads an English question with the chord after the asking phrase", () => {
-		expect(ask("how do I play F#m7?")?.chord).toMatchObject({ root: "F#", suffix: "m7" });
-		expect(ask("How to play an F chord")?.chord).toMatchObject({ root: "F", suffix: "major" });
-		expect(ask("show me Bm")?.chord).toMatchObject({ root: "B", suffix: "minor" });
-		expect(ask("Show me the Cmaj7 chord shape")?.chord).toMatchObject({ root: "C", suffix: "maj7" });
-		expect(ask("what's the fingering for G/B")?.chord).toMatchObject({ root: "G", suffix: "/B" });
-		expect(ask("fingering for Am")?.chord).toMatchObject({ root: "A", suffix: "minor" });
-		expect(ask("what is a Dsus4")?.chord).toMatchObject({ root: "D", suffix: "sus4" });
-		expect(ask("where do my fingers go for E7")?.chord).toMatchObject({ root: "E", suffix: "7" });
+		expect(ask("how do I play F#m7?")?.chords[0]).toMatchObject({ root: "F#", suffix: "m7" });
+		expect(ask("How to play an F chord")?.chords[0]).toMatchObject({ root: "F", suffix: "major" });
+		expect(ask("show me Bm")?.chords[0]).toMatchObject({ root: "B", suffix: "minor" });
+		expect(ask("Show me the Cmaj7 chord shape")?.chords[0]).toMatchObject({ root: "C", suffix: "maj7" });
+		expect(ask("what's the fingering for G/B")?.chords[0]).toMatchObject({ root: "G", suffix: "/B" });
+		expect(ask("fingering for Am")?.chords[0]).toMatchObject({ root: "A", suffix: "minor" });
+		expect(ask("what is a Dsus4")?.chords[0]).toMatchObject({ root: "D", suffix: "sus4" });
+		expect(ask("where do my fingers go for E7")?.chords[0]).toMatchObject({ root: "E", suffix: "7" });
 	});
 
 	it("reads an English chord with a noun after it", () => {
-		expect(ask("F chord")?.chord).toMatchObject({ root: "F", suffix: "major" });
-		expect(ask("Bm fingering")?.chord).toMatchObject({ root: "B", suffix: "minor" });
-		expect(ask("the C/G chord shape")?.chord).toMatchObject({ root: "C", suffix: "/G" });
-		expect(ask("Am7 voicings?")?.chord).toMatchObject({ root: "A", suffix: "m7" });
+		expect(ask("F chord")?.chords[0]).toMatchObject({ root: "F", suffix: "major" });
+		expect(ask("Bm fingering")?.chords[0]).toMatchObject({ root: "B", suffix: "minor" });
+		expect(ask("the C/G chord shape")?.chords[0]).toMatchObject({ root: "C", suffix: "/G" });
+		expect(ask("Am7 voicings?")?.chords[0]).toMatchObject({ root: "A", suffix: "m7" });
 	});
 
 	it("reads a Chinese question", () => {
-		expect(ask("C和弦怎么按")?.chord).toMatchObject({ root: "C", suffix: "major" });
-		expect(ask("F#m7 和弦怎么弹？")?.chord).toMatchObject({ root: "F#", suffix: "m7" });
-		expect(ask("Bm 的指法")?.chord).toMatchObject({ root: "B", suffix: "minor" });
-		expect(ask("Am的手型")?.chord).toMatchObject({ root: "A", suffix: "minor" });
-		expect(ask("怎么按 G")?.chord).toMatchObject({ root: "G", suffix: "major" });
-		expect(ask("请问 Cmaj7 怎么弹呢")?.chord).toMatchObject({ root: "C", suffix: "maj7" });
-		expect(ask("看看 Dm7")?.chord).toMatchObject({ root: "D", suffix: "m7" });
-		expect(ask("给我看 E 和弦")?.chord).toMatchObject({ root: "E", suffix: "major" });
-		expect(ask("Bb和弦")?.chord).toMatchObject({ root: "Bb", suffix: "major" });
+		expect(ask("C和弦怎么按")?.chords[0]).toMatchObject({ root: "C", suffix: "major" });
+		expect(ask("F#m7 和弦怎么弹？")?.chords[0]).toMatchObject({ root: "F#", suffix: "m7" });
+		expect(ask("Bm 的指法")?.chords[0]).toMatchObject({ root: "B", suffix: "minor" });
+		expect(ask("Am的手型")?.chords[0]).toMatchObject({ root: "A", suffix: "minor" });
+		expect(ask("怎么按 G")?.chords[0]).toMatchObject({ root: "G", suffix: "major" });
+		expect(ask("请问 Cmaj7 怎么弹呢")?.chords[0]).toMatchObject({ root: "C", suffix: "maj7" });
+		expect(ask("看看 Dm7")?.chords[0]).toMatchObject({ root: "D", suffix: "m7" });
+		expect(ask("给我看 E 和弦")?.chords[0]).toMatchObject({ root: "E", suffix: "major" });
+		expect(ask("Bb和弦")?.chords[0]).toMatchObject({ root: "Bb", suffix: "major" });
 	});
 
-	it("keeps the word the player wrote", () => {
-		expect(ask("how do I play f#m7")?.word).toBe("f#m7");
+	it("keeps the words the player wrote", () => {
+		expect(ask("how do I play f#m7")?.words).toEqual(["f#m7"]);
+	});
+
+	it("reads a run of chords, in the order written", () => {
+		expect(ask("show me C Am F G")?.chords.map((c) => c.root)).toEqual(["C", "A", "F", "G"]);
+		expect(ask("how do I play C, G, Am and F")).toBeNull(); // "and" is a word, not a chord
+		expect(ask("how do I play C, G, Am, F")?.chords).toHaveLength(4);
+		expect(ask("C G Am F chord shapes")?.chords).toHaveLength(4);
+		expect(ask("what are the shapes for Em D C")?.chords.map((c) => c.root)).toEqual(["E", "D", "C"]);
+		expect(ask("C G Am F 的指法")?.chords).toHaveLength(4);
+		expect(ask("看看 C-G-Am-F")?.chords).toHaveLength(4);
+		expect(ask("这几个和弦怎么按 C G Am")).toBeNull();
+		expect(ask("怎么按 C G Am 这几个和弦")?.chords).toHaveLength(3);
+	});
+
+	it("reads nothing of a run with a word the library has no chord for", () => {
+		expect(ask("show me C Zm F")).toBeNull();
+		expect(ask("show me C for G")).toBeNull();
 	});
 
 	it("reads nothing of a chord line, a rhythm, an edit or a bare chord", () => {
@@ -72,6 +89,7 @@ describe("readChordAsk", () => {
 		expect(ask("D DU UD")).toBeNull();
 		expect(ask("add C G to belief")).toBeNull();
 		expect(ask("play C G Am F")).toBeNull();
+		expect(ask("play F")).toBeNull();
 		expect(ask("Am: 5 3 2 1")).toBeNull();
 		expect(ask("a slow folk strum in C G Am F")).toBeNull();
 		expect(ask("给我一个 C-G-Am-F 的民谣扫弦")).toBeNull();

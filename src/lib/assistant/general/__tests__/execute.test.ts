@@ -14,35 +14,44 @@ describe("readInput", () => {
 		expect(readInput("propose_strum", { name: "x", rhythm: "D DU", chords: [1], bpm: 0 })).toMatchObject({ ok: false });
 		expect(readInput("propose_tab", { name: "x", tab: "e|--", bpm: 0, timeSignature: "" })).toMatchObject({ ok: true });
 		expect(readInput("propose_tab", "nope")).toMatchObject({ ok: false });
-		expect(readInput("show_chord", { chord: "F#m7" })).toMatchObject({ ok: true });
-		expect(readInput("show_chord", { chord: " " })).toMatchObject({ ok: false });
+		expect(readInput("show_chord", { chords: ["F#m7"] })).toMatchObject({ ok: true });
+		expect(readInput("show_chord", { chords: [] })).toMatchObject({ ok: false });
+		expect(readInput("show_chord", { chords: [" "] })).toMatchObject({ ok: false });
 	});
 });
 
 describe("show_chord", () => {
 	it("finds the chord and hands back a chord card", () => {
-		const r = showChord({ chord: "F#m7" }, INDEX);
+		const r = showChord({ chords: ["F#m7"] }, INDEX);
 		expect(r.isError).toBe(false);
 		expect(r.result).toMatch(/Found F#m7/);
-		expect(r.card).toEqual({ domain: "chord", chord: { root: "F#", suffix: "m7", voicingId: null } });
+		expect(r.card).toEqual({ domain: "chord", chords: [{ root: "F#", suffix: "m7", voicingId: null }] });
+	});
+
+	it("keeps several chords in the order asked", () => {
+		const r = showChord({ chords: ["C", "Am", "F", "G"] }, INDEX);
+		expect(r.isError).toBe(false);
+		expect(r.result).toMatch(/grid/);
+		expect((r.card as { chords: { root: string }[] }).chords.map((c) => c.root)).toEqual(["C", "A", "F", "G"]);
 	});
 
 	it("accepts the spellings the picker accepts", () => {
-		const r = showChord({ chord: "f♯m" }, INDEX);
+		const r = showChord({ chords: ["f♯m"] }, INDEX);
 		expect(r.isError).toBe(false);
-		expect(r.card).toMatchObject({ domain: "chord", chord: { root: "F#", suffix: "minor" } });
+		expect(r.card).toMatchObject({ domain: "chord", chords: [{ root: "F#", suffix: "minor" }] });
 	});
 
-	it("is an error when nothing in the library is called that", () => {
-		const r = showChord({ chord: "capo" }, INDEX);
+	it("is an error naming the words nothing in the library is called", () => {
+		const r = showChord({ chords: ["C", "capo"] }, INDEX);
 		expect(r.isError).toBe(true);
+		expect(r.result).toMatch(/"capo"/);
 		expect(r.card).toBeUndefined();
 	});
 
 	it("the readers answer a chord ask with the same card", () => {
 		const r = strumReadResult(resolveAssistantTurn({ text: "how do I play Bm", index: INDEX }));
 		expect(r.isError).toBe(false);
-		expect(r.card).toMatchObject({ domain: "chord", chord: { root: "B", suffix: "minor" } });
+		expect(r.card).toMatchObject({ domain: "chord", chords: [{ root: "B", suffix: "minor" }] });
 	});
 });
 

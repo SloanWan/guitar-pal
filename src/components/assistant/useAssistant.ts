@@ -82,8 +82,8 @@ export interface AssistantMessage {
 	tabEdit?: TabTurnOutcome["edit"];
 	/** An edit to an existing pattern, waiting on the player to confirm it. */
 	edit?: EditIntentReading;
-	/** One chord the player asked how to play: the card shows its shapes. */
-	chord?: ChordRef;
+	/** Chords the player asked how to play: the card shows their shapes. */
+	chords?: ChordRef[];
 	/** Sentences offered when nothing read the message, with blanks to fill. */
 	templates?: string[];
 	/** The language this reply was written in; the answers under it follow. */
@@ -145,7 +145,7 @@ function retryIn(seconds: number, lang: Lang): string {
 /** A tool's card, as the fields the panel renders it from. */
 function cardFields(card: ToolCard | undefined): Partial<AssistantMessage> {
 	if (!card) return {};
-	if (card.domain === "chord") return { chord: card.chord };
+	if (card.domain === "chord") return { chords: card.chords };
 	if (card.domain === "strum") return "proposal" in card ? { domain: "strum", proposal: card.proposal } : { domain: "strum", edit: card.edit };
 	return "tabProposal" in card ? { domain: "tab", tabProposal: card.tabProposal } : { domain: "tab", tabEdit: card.tabEdit };
 }
@@ -497,7 +497,7 @@ export function useAssistant() {
 					text: outcome.text,
 					tabProposal: outcome.proposal,
 					tabEdit: outcome.edit,
-					chord: outcome.chord,
+					chords: outcome.chords,
 					templates: outcome.templates,
 					lang: outcome.lang,
 				});
@@ -508,7 +508,7 @@ export function useAssistant() {
 					text: outcome.text,
 					proposal: outcome.proposal,
 					edit: outcome.edit,
-					chord: outcome.chord,
+					chords: outcome.chords,
 					templates: outcome.templates,
 					lang: outcome.lang,
 					...(outcome.failed ? { failed: true } : {}),
@@ -519,7 +519,7 @@ export function useAssistant() {
 			// sentence whole, the reply says so, and offers to.
 			const hasCard =
 				reply.proposal !== undefined ||
-				reply.chord !== undefined ||
+				reply.chords !== undefined ||
 				reply.tabProposal !== undefined ||
 				reply.tabEdit !== undefined ||
 				(reply.edit !== undefined && reply.edit.kind !== "unknown-pattern");

@@ -41,8 +41,8 @@ export interface AssistantTurnOutcome {
 	text: string;
 	/** Present when there is something concrete to preview. */
 	proposal?: AssistantProposal;
-	/** Present when the sentence asked how one chord is played: the chord, for its shapes. */
-	chord?: ChordRef;
+	/** Present when the sentence asked how chords are played: the chords, for their shapes. */
+	chords?: ChordRef[];
 	/**
 	 * Present when the sentence asked for a change to a pattern that already
 	 * exists. Nothing has been written: the player confirms or corrects it first.
@@ -184,7 +184,7 @@ export function resolveAssistantTurn({
 	// answered with its shapes, before any reader can take the F#m7 in it
 	// for a one-chord progression.
 	const ask = readChordAsk(typed, index);
-	if (ask) return { text: chordAskReply(ask, lang), chord: ask.chord, lang };
+	if (ask) return { text: chordAskReply(ask, lang), chords: ask.chords, lang };
 
 	// Typos in the words the readers know are read past, and owned up to.
 	const { text, corrections } = correctStrumTypos(typed, patterns);

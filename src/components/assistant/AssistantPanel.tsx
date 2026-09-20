@@ -536,9 +536,9 @@ export default function AssistantPanel({
 												<ProposalPreview proposal={message.proposal} />
 											</div>
 										)}
-										{message.chord && message.streamed === true && (
+										{message.chords && message.streamed === true && (
 											<div className="w-full">
-												<ChordShapeCard chord={message.chord} lang={message.lang ?? "en"} />
+												<ChordShapeCard chords={message.chords} lang={message.lang ?? "en"} />
 											</div>
 										)}
 										{message.tabProposal && message.streamed === true && (

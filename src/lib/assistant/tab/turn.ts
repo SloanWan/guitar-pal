@@ -38,8 +38,8 @@ export interface TabTurnOutcome {
 	 */
 	edit?: Extract<TabEditReading, { kind: "append" | "replace" | "chords" | "rename" | "delete" | "set" }>;
 	templates?: string[];
-	/** Present when the sentence asked how one chord is played: the chord, for its shapes. */
-	chord?: ChordRef;
+	/** Present when the sentence asked how chords are played: the chords, for their shapes. */
+	chords?: ChordRef[];
 	lang: Lang;
 	/** With `templates`: what the readers saw, for the record that turns misses into eval cases. */
 	seen?: EditIntentExplanation;
@@ -264,7 +264,7 @@ export async function resolveTabTurn({
 	// A question about one chord's shape is answered with the shape, on this
 	// page as on the strum page — the same reader, the same card.
 	const ask = readChordAsk(text, index);
-	if (ask) return { text: chordAskReply(ask, lang), chord: ask.chord, lang };
+	if (ask) return { text: chordAskReply(ask, lang), chords: ask.chords, lang };
 
 	// An edit names its target, so it is read before anything else: "add to
 	// travis: Am: 5 3 2 1" is a chord line to every reader after this one.

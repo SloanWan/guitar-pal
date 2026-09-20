@@ -140,6 +140,23 @@ class ChapterParseGraph:
             warnings=list(state.get("warnings", [])),
         )
 
+    async def notes_only(
+        self, book: BookRow, chapter: ChapterRow, pages: Sequence[ParsePage]
+    ) -> ChapterResult:
+        """The knowledge-points call by itself — what `--notes-only` calibrates (#245)."""
+        out = await self.notes(
+            {"book_title": book.title, "chapter_title": chapter.title, "pages": list(pages)}
+        )
+        calls: list[CallUsage] = out.get("usage", [])  # type: ignore[assignment]
+        return ChapterResult(
+            notes=list(out.get("notes", [])),  # type: ignore[arg-type]
+            usage=Usage(
+                input_tokens=sum(u.input_tokens for u in calls),
+                output_tokens=sum(u.output_tokens for u in calls),
+                cost_usd=round(sum(u.cost_usd for u in calls), 4),
+            ),
+        )
+
     # --- nodes -------------------------------------------------------------
 
     async def classify_page(self, state: PageState) -> dict[str, object]:
@@ -204,15 +221,17 @@ class ChapterParseGraph:
         )
         out = response.parsed_output if response.stop_reason == "end_turn" else None
         page_numbers = {p.page for p in state["pages"]}
-        notes = [
-            NoteRecord(
-                title=n.title.strip()[:200],
-                body=n.body.strip(),
-                pages=tuple(sorted({p for p in n.pages if p in page_numbers})),
-            )
-            for n in (out.notes if out else [])
-            if n.title.strip() and n.body.strip()
-        ]
+        notes: list[NoteRecord] = []
+        for n in out.notes if out else []:
+            if not (n.title.strip() and n.body.strip()):
+                continue
+            pages = note_pages(n.pages, page_numbers)
+            if not pages and n.pages:
+                # The model named pages the chapter does not have — most
+                # likely the book's own printed numbering. The note keeps no
+                # key rather than a wrong one; the log says what it said.
+                log.info("notes: %r cited pages %s, outside the chapter", n.title, n.pages)
+            notes.append(NoteRecord(title=n.title.strip()[:200], body=n.body.strip(), pages=pages))
         return {"notes": notes, "usage": [usage_of(response)]}
 
     async def extract_tab(self, state: ExtractState) -> dict[str, object]:
@@ -313,6 +332,18 @@ class ChapterParseGraph:
         ]
         sends.append(Send("notes", state))
         return sends
+
+
+def note_pages(cited: Sequence[int], chapter_pages: set[int]) -> tuple[int, ...]:
+    """
+    The pages a note keeps (#245): only ones inside the chapter, each once, in
+    the order the model gave them — the first is the one the card opens.
+    """
+    kept: list[int] = []
+    for page in cited:
+        if page in chapter_pages and page not in kept:
+            kept.append(page)
+    return tuple(kept)
 
 
 def _skipped(page: int, why: str) -> dict[str, object]:

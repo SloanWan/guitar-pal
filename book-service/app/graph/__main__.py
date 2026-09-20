@@ -8,6 +8,7 @@ read lands in `--crops` as `p0206-1.png`.
 
     python -m app.graph book.pdf --pages 24-32
     python -m app.graph book.pdf --pages 1-10 --ocr --dpi 100 --crops /tmp/crops
+    python -m app.graph book.pdf --pages 204-207 --ocr --notes-only   # the notes call alone
 """
 
 import argparse
@@ -58,6 +59,11 @@ async def main() -> int:
     parser.add_argument("--all-images", action="store_true", help="send every page's image")
     parser.add_argument("--crops", type=Path, default=Path("crops"), help="where crops go")
     parser.add_argument("--dump", type=Path, help="write the drafts and warnings as JSON here")
+    parser.add_argument(
+        "--notes-only",
+        action="store_true",
+        help="run only the knowledge-points call over the text: no images, no classification",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
     logging.getLogger("book-service").setLevel(logging.INFO)
@@ -75,7 +81,7 @@ async def main() -> int:
         for n in range(first, min(last, len(doc)) + 1):
             text = extract_page(doc[n - 1], n, ocr)
             tagged = tag_text(text.text).may_have_exercise
-            wants = args.all_images or not text.has_text_layer or tagged
+            wants = not args.notes_only and (args.all_images or not text.has_text_layer or tagged)
             pages.append(
                 ParsePage(
                     page=n,
@@ -120,9 +126,12 @@ async def main() -> int:
         print("no BOOK_SERVICE_VALIDATE_URL / BOOK_SERVICE_INTERNAL_SECRET: extractors off")
     graph = ChapterParseGraph(AsyncAnthropic(), validator)
     started = time.perf_counter()
-    with open_pdf(args.pdf) as doc:
-        tools = ParseTools(DocRenderer(doc, asyncio.Semaphore(1)), DirCropSink(args.crops))
-        result = await graph(book, chapter, pages, tools)
+    if args.notes_only:
+        result = await graph.notes_only(book, chapter, pages)
+    else:
+        with open_pdf(args.pdf) as doc:
+            tools = ParseTools(DocRenderer(doc, asyncio.Semaphore(1)), DirCropSink(args.crops))
+            result = await graph(book, chapter, pages, tools)
     seconds = time.perf_counter() - started
 
     with_images = sum(1 for p in pages if p.image is not None)
@@ -154,6 +163,7 @@ async def main() -> int:
         args.dump.write_text(
             json.dumps(
                 {
+                    "notes": [asdict(n) for n in result.notes],
                     "exercises": [asdict(e) for e in result.exercises],
                     "warnings": result.warnings,
                     "usage": asdict(result.usage),

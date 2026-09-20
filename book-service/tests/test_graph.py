@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.graph.chapter import ChapterParseGraph
+from app.graph.chapter import ChapterParseGraph, note_pages
 from app.graph.prompts import (
     CLASSIFY_SYSTEM,
     NOTES_SYSTEM,
@@ -75,7 +75,8 @@ class FakeMessages:
         elif kwargs["system"] == NOTES_SYSTEM:
             out = NotesOut(
                 notes=[
-                    NoteOut(title="Diatonic chords", body="Seven chords fit a key.", pages=[2, 99]),
+                    NoteOut(title="Diatonic chords", body="Seven chords fit.", pages=[3, 99, 2, 3]),
+                    NoteOut(title="Printed numbering", body="Cited p.204.", pages=[204]),
                     NoteOut(title="", body="dropped: no title", pages=[2]),
                 ]
             )
@@ -109,6 +110,12 @@ def _parse_pages(rows: list[PageRow]) -> list[ParsePage]:
     ]
 
 
+def test_note_pages_keeps_the_chapters_pages_once_in_the_order_cited() -> None:
+    assert note_pages([206, 204, 206, 999, 205], {204, 205, 206, 207}) == (206, 204, 205)
+    assert note_pages([], {1, 2}) == ()
+    assert note_pages([9, 10], {1, 2}) == ()
+
+
 @needs_materials
 @pytest.mark.asyncio
 async def test_graph_classifies_every_page_and_writes_notes(typeset_pdf: Path) -> None:
@@ -126,8 +133,11 @@ async def test_graph_classifies_every_page_and_writes_notes(typeset_pdf: Path) -
     # The notes call sees the chapter text page by page.
     assert "[Page 3]" in notes[0]["messages"][0]["content"]
 
-    assert [n.title for n in result.notes] == ["Diatonic chords"]
-    assert result.notes[0].pages == (2,)  # page 99 is not in the chapter
+    assert [n.title for n in result.notes] == ["Diatonic chords", "Printed numbering"]
+    # Pages the chapter has, once each, in the model's order (#245): 99 is out.
+    assert result.notes[0].pages == (3, 2)
+    # A note whose pages are all outside the chapter keeps none, not a wrong one.
+    assert result.notes[1].pages == ()
     assert result.exercises == []  # no validator: no extractor runs
     # Nine classifications on the classifier's model, one notes call on the parse model.
     assert result.usage == Usage(input_tokens=10_000, output_tokens=500, cost_usd=0.0288)

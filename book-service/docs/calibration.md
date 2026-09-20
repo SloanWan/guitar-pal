@@ -338,3 +338,40 @@ Findings and what changed:
 Still open: a tab page **without** a jianpu row (Western books), and one
 with hammer-ons, slides or chords stacked in a slot — none on hand. The
 technique fields of `ImportedTabDraft` stay unexercised until one turns up.
+
+## 7. Knowledge points carry their pages (#245)
+
+Every note of the sample chapter (§6's p204–207, parsed 2026-09-19) came
+back with `pages: []`, though the notes call already saw the text with
+`[Page N]` markers and the schema had a `pages` field. Two things let the
+model skip it: the field had a default, so the SDK's strict schema did not
+list it under `required`; and the prompt asked for pages "as labelled in
+the text", which on a scan is as likely to mean the book's printed
+`204`–`207` — then dropped by the in-chapter filter — as the marker's
+`1`–`4`. Fixed by making `pages` required and telling the prompt what a
+page reference is (the marker's N, never a printed number).
+
+`python -m app.graph … --pages 1-4 --ocr --notes-only` runs the notes
+call alone, 2026-09-21, opus-5 medium:
+
+| run | in / out tokens | cost | notes | with pages | on the page their text sits on |
+|---|---|---|---|---|---|
+| before (2026-09-19 parse, full) | (part of $0.81) | — | 9 | 0 | — |
+| after, notes only | 3860 / 1223 | **$0.0499** | 11 | **11** | **11** (checked by hand against the OCR text) |
+
+Read-outs:
+
+- Page attribution is right on every note: the five method tips and the two
+  scales on p1, the tab scale on p2, the grouped string exercises spanning
+  p2–3, the three combination exercises and the bass exercise on p3–4, each
+  with the page whose OCR text holds its sentences. Two notes span two
+  pages and say so, first page first.
+- Count moved 9 → 11 (§5 already noted the count varies run to run; the
+  content is the same tips with the exercises split finer).
+- The out-of-chapter filter in `note_pages` now logs what the model cited
+  when it drops everything, so a book that makes the model reach for its
+  printed numbering shows up in the parse log rather than silently as `[]`.
+- The sample export (`materials/samples/sanyuetong-dense-tab/parse.json`)
+  took these notes in place of the empty-paged ones (`notes_rerun` records
+  the run); the drafts and chunks are still the 2026-09-19 parse's. The
+  fixture was rebuilt with `scripts/build-book-sample.mjs`.

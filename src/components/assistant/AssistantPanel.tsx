@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRightLeft, CornerDownLeft, LogIn } from "lucide-react";
+import { ArrowRightLeft, CornerDownLeft, LogIn, Sparkles } from "lucide-react";
 import ProposalPreview from "./strum/ProposalPreview";
 import TabProposalPreview from "./tab/TabProposalPreview";
 import TabEditCard from "./tab/TabEditCard";
 import EditIntentCard from "./strum/EditIntentCard";
+import ChordShapeCard from "./ChordShapeCard";
 import { Option, Options } from "./Options";
 import { BLANK } from "@/lib/assistant/blank";
 import { recordPick } from "@/lib/assistant/missLog";
@@ -426,9 +427,27 @@ export default function AssistantPanel({
 
 	function submit(text: string) {
 		if (pending) return;
+		// Nothing typed: the example on show is taken into the composer rather
+		// than sent — what Tab does on a keyboard, on the one control a phone has.
+		// The player reads it as theirs, and sends it, or edits it, themselves.
+		if (text.trim() === "") {
+			if (hint !== "") takeHint();
+			return;
+		}
 		recallRef.current = null;
 		setDraft("");
 		void send(text);
+	}
+
+	/** The example sentence on show, into the field, caret at its end. */
+	function takeHint() {
+		setDraft(hint);
+		requestAnimationFrame(() => {
+			const field = inputRef.current;
+			if (!field) return;
+			field.focus();
+			field.setSelectionRange(field.value.length, field.value.length);
+		});
 	}
 
 	/** The player's message this reply answered — what a picked sentence is a pick for. */
@@ -517,6 +536,11 @@ export default function AssistantPanel({
 												<ProposalPreview proposal={message.proposal} />
 											</div>
 										)}
+										{message.chord && message.streamed === true && (
+											<div className="w-full">
+												<ChordShapeCard chord={message.chord} lang={message.lang ?? "en"} />
+											</div>
+										)}
 										{message.tabProposal && message.streamed === true && (
 											<div className="w-full">
 												<TabProposalPreview proposal={message.tabProposal} />
@@ -546,16 +570,31 @@ export default function AssistantPanel({
 												))}
 											</Options>
 										)}
-										{message.readAs && message.streamed === true && (
+										{(message.readAs || (message.askGeneral && !guestUsedUp)) && message.streamed === true && (
 											<Options>
-												<Option
-													order={message.templates?.length ?? 0}
-													tone="outline"
-													onClick={() => void readAs(message.id, message.readAs!.domain, message.readAs!.text)}
-													icon={<ArrowRightLeft className="size-3" strokeWidth={1.5} aria-hidden="true" />}
-												>
-													{pick(message.lang ?? "en", `Read as ${MODE_LABEL[message.readAs.domain]} instead`, `按${MODE_LABEL_ZH[message.readAs.domain]}读`)}
-												</Option>
+												{message.readAs && (
+													<Option
+														order={message.templates?.length ?? 0}
+														tone="outline"
+														onClick={() => void readAs(message.id, message.readAs!.domain, message.readAs!.text)}
+														icon={<ArrowRightLeft className="size-3" strokeWidth={1.5} aria-hidden="true" />}
+													>
+														{pick(message.lang ?? "en", `Read as ${MODE_LABEL[message.readAs.domain]} instead`, `按${MODE_LABEL_ZH[message.readAs.domain]}读`)}
+													</Option>
+												)}
+												{/* The rules read nothing; the model may. Same sentence, same
+												    thread, answered again by General — hidden from a guest
+												    whose free turns are gone, as the chip's segment is locked. */}
+												{message.askGeneral && !guestUsedUp && (
+													<Option
+														order={(message.templates?.length ?? 0) + (message.readAs ? 1 : 0)}
+														tone="outline"
+														onClick={() => void readAs(message.id, "general", message.askGeneral!.text)}
+														icon={<Sparkles className="size-3" strokeWidth={1.5} aria-hidden="true" />}
+													>
+														{pick(message.lang ?? "en", "Ask General instead", "改问 General")}
+													</Option>
+												)}
 											</Options>
 										)}
 										{message.edit && message.streamed === true && (
@@ -667,7 +706,7 @@ export default function AssistantPanel({
 							// tab to, so the trap loops focus back to the top itself — a move
 							// preventDefault cannot undo, because it is not the browser's.
 							e.stopPropagation();
-							setDraft(hint);
+							takeHint();
 							return;
 						}
 						// Enter sends, as everywhere else a message is typed; the line
@@ -689,8 +728,9 @@ export default function AssistantPanel({
 				</span>
 				<button
 					type="submit"
-					disabled={pending || draft.trim() === ""}
-					aria-label="Send"
+					// Live on an empty field while there is an example to take.
+					disabled={pending || (draft.trim() === "" && hint === "")}
+					aria-label={draft.trim() === "" && hint !== "" ? "Use the example shown" : "Send"}
 					className="flex size-(--h-control) flex-none items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent active:bg-denim-tint active:duration-(--dur-switch) disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 				>
 					<CornerDownLeft className="size-4" strokeWidth={1.5} aria-hidden="true" />

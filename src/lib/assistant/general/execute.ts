@@ -8,8 +8,11 @@ import type { AssistantTurnOutcome } from "@/lib/assistant/strum/turn";
 import { parseAsciiTab } from "@/lib/assistant/tab/parseAsciiTab";
 import type { TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import type { TabProposal } from "@/lib/assistant/tab/types";
-import type { ProposeStrumInput, ProposeTabInput, ReadInput, ToolName } from "@/lib/assistant/general/tools";
+import type { ProposeStrumInput, ProposeTabInput, ReadInput, ShowChordInput, ToolName } from "@/lib/assistant/general/tools";
 import type { AssistantProposal } from "@/lib/assistant/types";
+import type { ChordRef } from "@/lib/strumPatterns";
+import { exactChord } from "@/lib/assistant/chordAsk";
+import { searchChords } from "@/lib/chordSearch";
 
 /**
  * What a tool call comes to, on the client: a line for the model and,
@@ -21,7 +24,9 @@ export type ToolCard =
 	| { domain: "strum"; proposal: AssistantProposal }
 	| { domain: "strum"; edit: EditIntentReading }
 	| { domain: "tab"; tabProposal: TabProposal }
-	| { domain: "tab"; tabEdit: NonNullable<TabTurnOutcome["edit"]> };
+	| { domain: "tab"; tabEdit: NonNullable<TabTurnOutcome["edit"]> }
+	/** One chord's shapes — no page's own, the same card on either. */
+	| { domain: "chord"; chord: ChordRef };
 
 export interface ToolExecution {
 	/** What the model is told. Short: the model narrates, it does not inspect. */
@@ -34,7 +39,7 @@ export interface ToolExecution {
 }
 
 /** A well-formed input for the tool, or why the call cannot run. */
-export function readInput(name: ToolName, input: unknown): { ok: true; input: ReadInput | ProposeStrumInput | ProposeTabInput } | { ok: false; error: string } {
+export function readInput(name: ToolName, input: unknown): { ok: true; input: ReadInput | ProposeStrumInput | ProposeTabInput | ShowChordInput } | { ok: false; error: string } {
 	if (typeof input !== "object" || input === null) return { ok: false, error: "input must be an object." };
 	const v = input as Record<string, unknown>;
 	switch (name) {
@@ -57,11 +62,26 @@ export function readInput(name: ToolName, input: unknown): { ok: true; input: Re
 			return typeof v.name === "string" && typeof v.tab === "string" && typeof v.bpm === "number" && typeof v.timeSignature === "string"
 				? { ok: true, input: { name: v.name, tab: v.tab, bpm: v.bpm, timeSignature: v.timeSignature } }
 				: { ok: false, error: "expected name, tab, bpm and timeSignature." };
+		case "show_chord":
+			return typeof v.chord === "string" && v.chord.trim() !== ""
+				? { ok: true, input: { chord: v.chord } }
+				: { ok: false, error: "chord must be a non-empty string." };
 	}
+}
+
+/** A chord-ask the reader answered, as a line for the model. */
+function chordCard(chord: ChordRef, text: string): ToolExecution {
+	return {
+		result: `The sentence asks how ${chordAbbreviation(chord)} is played. Its shapes are shown to the player as a card.`,
+		isError: false,
+		card: { domain: "chord", chord },
+		text,
+	};
 }
 
 /** The strum reader's outcome, as a line for the model. */
 export function strumReadResult(outcome: AssistantTurnOutcome): ToolExecution {
+	if (outcome.chord) return chordCard(outcome.chord, outcome.text);
 	if (outcome.proposal) {
 		const p = outcome.proposal;
 		const chords = p.chords.length > 0 ? `chords ${p.chords.map(chordAbbreviation).join(" ")}` : "no chords";
@@ -92,6 +112,7 @@ export function strumReadResult(outcome: AssistantTurnOutcome): ToolExecution {
 
 /** The tab reader's outcome, as a line for the model. */
 export function tabReadResult(outcome: TabTurnOutcome): ToolExecution {
+	if (outcome.chord) return chordCard(outcome.chord, outcome.text);
 	if (outcome.proposal) {
 		const p = outcome.proposal;
 		return {
@@ -169,5 +190,27 @@ export function proposeTab(input: ProposeTabInput): ToolExecution {
 		result: `Made "${named.name}": ${named.measures.length} bar(s), ${named.timeSignature.join("/")}${all.length ? ` (${all.length} warning(s): ${all.map((w) => w.message).join("; ")})` : ""}. Shown to the player as a card.`,
 		isError: false,
 		card: { domain: "tab", tabProposal: { name: named.name, pattern: named, bpm, chords: [], warnings: all } },
+	};
+}
+
+/**
+ * The chord the model named, as a card of its shapes. Exact first — the
+ * word as the player wrote it — then the picker's ranked search, since the
+ * model may have already tidied "f sharp minor" into "F#m"; a word that
+ * still matches nothing is an error for the model to say so about.
+ */
+export function showChord(input: ShowChordInput, index: readonly ChordIndexEntry[]): ToolExecution {
+	const word = input.chord.trim();
+	const chord: ChordRef | null =
+		exactChord(word, index) ??
+		(() => {
+			const hit = searchChords(index, word, 1)[0];
+			return hit ? { root: hit.root, suffix: hit.suffix, voicingId: null } : null;
+		})();
+	if (!chord) return { result: `The library has no chord called "${word}".`, isError: true };
+	return {
+		result: `Found ${chordAbbreviation(chord)}. Its shapes are shown to the player as a card, with a link to its page.`,
+		isError: false,
+		card: { domain: "chord", chord },
 	};
 }

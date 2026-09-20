@@ -91,13 +91,14 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 					    nothing the placeholder hasn't already said. The ⌘K dialog keeps that
 					    hint: it opens onto an otherwise blank surface. Width tracks the
 					    expanded pill so the two line up. Below sm the list is capped at
-					    40vh: vh is the layout viewport, and on a phone the software
-					    keyboard takes the bottom third of it, so 60vh of results above
-					    the pill would run off the top of what is actually visible. */}
+					    30vh — about four rows: vh is the layout viewport, and on a phone
+					    the software keyboard takes the bottom third of it, so 60vh of
+					    results above the pill would run off the top of what is actually
+					    visible. */}
 					{inlineOpen && (
 						<CommandList
 							aria-hidden={!inlineListOpen}
-							className={`absolute bottom-full left-1/2 mb-3 max-h-[40vh] w-[min(21.5rem,calc(100vw-2rem))] origin-bottom rounded-2xl bg-popover py-1 shadow-[0_12px_36px_rgba(0,0,0,0.20)] transition-[opacity,transform] duration-300 ease-out sm:max-h-[60vh] ${
+							className={`absolute bottom-full left-1/2 mb-3 max-h-[30vh] w-[min(21.5rem,calc(100vw-2rem))] origin-bottom rounded-2xl bg-popover py-1 shadow-[0_12px_36px_rgba(0,0,0,0.20)] transition-[opacity,transform] duration-300 ease-out sm:max-h-[60vh] ${
 								inlineListOpen
 									? "-translate-x-1/2 translate-y-0 scale-100 opacity-100"
 									: "pointer-events-none -translate-x-1/2 translate-y-2 scale-95 opacity-0"

@@ -31,6 +31,27 @@ const PATTERNS = [
 const resolve = (text: string) => resolveAssistantTurn({ text, index: INDEX, patterns: PATTERNS });
 
 describe("resolveAssistantTurn", () => {
+	describe("answers a question about one chord with its shapes", () => {
+		it("in English, before any reader takes the chord for a progression", () => {
+			const outcome = resolve("how do I play F#m7?");
+			expect(outcome.chord).toEqual({ root: "F#", suffix: "m7", voicingId: null });
+			expect(outcome.proposal).toBeUndefined();
+			expect(outcome.templates).toBeUndefined();
+			expect(outcome.text).toMatch(/F#m7/);
+		});
+
+		it("in Chinese, answered in Chinese", () => {
+			const outcome = resolve("C和弦怎么按");
+			expect(outcome.chord).toMatchObject({ root: "C", suffix: "major" });
+			expect(outcome.lang).toBe("zh");
+			expect(outcome.text).toMatch(/指法/);
+		});
+
+		it("leaves a chord line alone", () => {
+			expect(resolve("C Am F G").chord).toBeUndefined();
+		});
+	});
+
 	describe("reads what it can", () => {
 		it("answers a plain chord line", () => {
 			const outcome = resolve("C Am F G");

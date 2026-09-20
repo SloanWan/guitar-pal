@@ -8,10 +8,11 @@ import { smallTalk } from "@/lib/assistant/smallTalk";
 import type { EditIntentExplanation } from "@/lib/assistant/strum/editIntent";
 import type { AssistantProposal } from "@/lib/assistant/types";
 import type { NamedPattern } from "@/lib/lastPattern";
-import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
+import { PRESET_STRUM_PATTERNS, type ChordRef } from "@/lib/strumPatterns";
 import { detectLang, pick, type Lang } from "@/lib/assistant/lang";
 import { correctionsNote } from "@/lib/assistant/fuzzy";
 import { correctStrumTypos } from "@/lib/assistant/strum/typos";
+import { chordAskReply, readChordAsk } from "@/lib/assistant/chordAsk";
 
 /**
  * One turn of the conversation, decided — by the app, never by a model.
@@ -40,6 +41,8 @@ export interface AssistantTurnOutcome {
 	text: string;
 	/** Present when there is something concrete to preview. */
 	proposal?: AssistantProposal;
+	/** Present when the sentence asked how one chord is played: the chord, for its shapes. */
+	chord?: ChordRef;
 	/**
 	 * Present when the sentence asked for a change to a pattern that already
 	 * exists. Nothing has been written: the player confirms or corrects it first.
@@ -176,6 +179,12 @@ export function resolveAssistantTurn({
 	// to read them as one. Whole-message matches only.
 	const talk = smallTalk(typed, lang);
 	if (talk) return { text: talk.text, templates: talk.templates.length ? talk.templates : undefined, lang };
+
+	// "How do I play F#m7?" is a question about a chord, not a chord line:
+	// answered with its shapes, before any reader can take the F#m7 in it
+	// for a one-chord progression.
+	const ask = readChordAsk(typed, index);
+	if (ask) return { text: chordAskReply(ask, lang), chord: ask.chord, lang };
 
 	// Typos in the words the readers know are read past, and owned up to.
 	const { text, corrections } = correctStrumTypos(typed, patterns);

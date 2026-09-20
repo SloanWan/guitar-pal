@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
-import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
+import { PRESET_STRUM_PATTERNS, type ChordRef, type StrumPattern } from "@/lib/strumPatterns";
 import { resolveAssistantTurn } from "@/lib/assistant/strum/turn";
 import { recordMiss } from "@/lib/assistant/missLog";
 import { uiLang, type Lang } from "@/lib/assistant/lang";
@@ -27,10 +27,10 @@ import {
 	writeMode,
 } from "@/lib/assistant/conversation";
 import { otherDomainReads } from "@/lib/assistant/readAs";
-import { proposeStrum, proposeTab, strumReadResult, tabReadResult, type ToolCard } from "@/lib/assistant/general/execute";
+import { proposeStrum, proposeTab, showChord, strumReadResult, tabReadResult, type ToolCard } from "@/lib/assistant/general/execute";
 import type { GeneralContext } from "@/lib/assistant/general/request";
 import { resolveGeneralTurn, type ModelStep, type ToolInput } from "@/lib/assistant/general/turn";
-import type { ProposeStrumInput, ProposeTabInput, ReadInput, ToolName } from "@/lib/assistant/general/tools";
+import type { ProposeStrumInput, ProposeTabInput, ReadInput, ShowChordInput, ToolName } from "@/lib/assistant/general/tools";
 import { pick } from "@/lib/assistant/lang";
 import { createClient } from "@/lib/supabase";
 
@@ -82,6 +82,8 @@ export interface AssistantMessage {
 	tabEdit?: TabTurnOutcome["edit"];
 	/** An edit to an existing pattern, waiting on the player to confirm it. */
 	edit?: EditIntentReading;
+	/** One chord the player asked how to play: the card shows its shapes. */
+	chord?: ChordRef;
 	/** Sentences offered when nothing read the message, with blanks to fill. */
 	templates?: string[];
 	/** The language this reply was written in; the answers under it follow. */
@@ -92,6 +94,11 @@ export interface AssistantMessage {
 	 * switches the mode and answers again.
 	 */
 	readAs?: { domain: AssistantDomain; text: string };
+	/**
+	 * Present when the rules read nothing of the sentence: the sentence, so one
+	 * click hands it to General — the model, with the thread as context.
+	 */
+	askGeneral?: { text: string };
 	/** The model that wrote this reply, when one did. A rules reply has none. */
 	model?: string;
 	/** Set when the turn failed; rendered as an error rather than as speech. */
@@ -138,6 +145,7 @@ function retryIn(seconds: number, lang: Lang): string {
 /** A tool's card, as the fields the panel renders it from. */
 function cardFields(card: ToolCard | undefined): Partial<AssistantMessage> {
 	if (!card) return {};
+	if (card.domain === "chord") return { chord: card.chord };
 	if (card.domain === "strum") return "proposal" in card ? { domain: "strum", proposal: card.proposal } : { domain: "strum", edit: card.edit };
 	return "tabProposal" in card ? { domain: "tab", tabProposal: card.tabProposal } : { domain: "tab", tabEdit: card.tabEdit };
 }
@@ -444,6 +452,8 @@ export function useAssistant() {
 							return proposeStrum(input as ProposeStrumInput, index);
 						case "propose_tab":
 							return proposeTab(input as ProposeTabInput);
+						case "show_chord":
+							return showChord(input as ShowChordInput, index);
 					}
 				};
 				const turnId = newId();
@@ -487,6 +497,7 @@ export function useAssistant() {
 					text: outcome.text,
 					tabProposal: outcome.proposal,
 					tabEdit: outcome.edit,
+					chord: outcome.chord,
 					templates: outcome.templates,
 					lang: outcome.lang,
 				});
@@ -497,6 +508,7 @@ export function useAssistant() {
 					text: outcome.text,
 					proposal: outcome.proposal,
 					edit: outcome.edit,
+					chord: outcome.chord,
 					templates: outcome.templates,
 					lang: outcome.lang,
 					...(outcome.failed ? { failed: true } : {}),
@@ -507,6 +519,7 @@ export function useAssistant() {
 			// sentence whole, the reply says so, and offers to.
 			const hasCard =
 				reply.proposal !== undefined ||
+				reply.chord !== undefined ||
 				reply.tabProposal !== undefined ||
 				reply.tabEdit !== undefined ||
 				(reply.edit !== undefined && reply.edit.kind !== "unknown-pattern");
@@ -517,7 +530,17 @@ export function useAssistant() {
 			if (other) reply.readAs = { domain: other, text };
 			// A sentence nothing read is worth keeping: it is the next eval case,
 			// and the sentence picked after it is what the rules should have read.
-			if (missed) recordMiss(text, missed.seen, missed.offered, { mode: as, readAs: other });
+			if (missed) {
+				recordMiss(text, missed.seen, missed.offered, { mode: as, readAs: other });
+				// And it may be a question rather than an instruction — General's
+				// to answer. Offered under the templates, never taken on its own.
+				reply.askGeneral = { text };
+				reply.text += pick(
+					reply.lang ?? uiLang(),
+					"\n\nOr ask General — it can take a question, not only an instruction.",
+					"\n\n或者改问 General——它能回答问题，不只是执行指令。",
+				);
+			}
 			await thinking;
 			return reply;
 		},
@@ -548,15 +571,20 @@ export function useAssistant() {
 	/**
 	 * The offer taken: the thread switches to the other assistant and the
 	 * sentence is read again by it. The reply that made the offer is replaced,
-	 * not followed — the sentence was asked once.
+	 * not followed — the sentence was asked once. General is shown the thread
+	 * up to that sentence, as it would have been had it answered first.
 	 */
 	const readAs = useCallback(
-		async (messageId: string, as: AssistantDomain, text: string) => {
+		async (messageId: string, as: AssistantMode, text: string) => {
 			if (pending) return;
 			setMode(as);
 			setPending(true);
 			try {
-				const reply = await resolveIn(as, text);
+				const all = messagesRef.current;
+				const at = all.findIndex((m) => m.id === messageId);
+				// Everything before the user turn this reply answered.
+				const before = at > 0 ? all.slice(0, at - 1) : [];
+				const reply = await resolveIn(as, text, as === "general" ? historyOf(before) : []);
 				setMessages((prev) => prev.map((m) => (m.id === messageId ? reply : m)));
 			} finally {
 				setPending(false);

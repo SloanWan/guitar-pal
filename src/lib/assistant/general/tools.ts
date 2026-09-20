@@ -18,6 +18,7 @@ export const TOOL_NAMES = [
 	"edit_tab",
 	"propose_strum",
 	"propose_tab",
+	"show_chord",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -29,6 +30,12 @@ export function isToolName(value: unknown): value is ToolName {
 /** Every reader tool takes the player's words, verbatim. */
 export interface ReadInput {
 	text: string;
+}
+
+/** What the model names when the player asks how a chord is played. */
+export interface ShowChordInput {
+	/** One chord word, as the player wrote it: "F#m7", "Bb", "C/G". */
+	chord: string;
 }
 
 /** What the model writes when it composes a strumming pattern or progression itself. */
@@ -137,6 +144,20 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 				timeSignature: { type: "string", description: "\"4/4\", \"3/4\" or \"6/8\". Empty for 4/4." },
 			},
 			required: ["name", "tab", "bpm", "timeSignature"],
+			additionalProperties: false,
+		},
+	},
+	{
+		name: "show_chord",
+		description:
+			"Show the player how one chord is played: its diagram, every shape the library holds for it, and a link to its page. For \"how do I play F#m7\", \"C和弦怎么按\", \"show me Bm\". One chord per call, the word as the player wrote it. Returns the chord it found, or that the library has none by that name.",
+		strict: true,
+		input_schema: {
+			type: "object",
+			properties: {
+				chord: { type: "string", description: "One chord word, as the player wrote it: \"F#m7\", \"Bb\", \"C/G\"." },
+			},
+			required: ["chord"],
 			additionalProperties: false,
 		},
 	},

@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { isToolName, type ProposeStrumInput, type ProposeTabInput, type ReadInput, type ToolName } from "@/lib/assistant/general/tools";
+import { isToolName, type ProposeStrumInput, type ProposeTabInput, type ReadInput, type ShowChordInput, type ToolName } from "@/lib/assistant/general/tools";
 import { readInput, type ToolCard, type ToolExecution } from "@/lib/assistant/general/execute";
 import type { GeneralContext } from "@/lib/assistant/general/request";
 import { detectLang, pick, type Lang } from "@/lib/assistant/lang";
@@ -25,7 +25,7 @@ export interface ModelStep {
 	model?: string;
 }
 
-export type ToolInput = ReadInput | ProposeStrumInput | ProposeTabInput;
+export type ToolInput = ReadInput | ProposeStrumInput | ProposeTabInput | ShowChordInput;
 
 export interface GeneralTurnInput {
 	text: string;

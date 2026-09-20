@@ -15,6 +15,7 @@ import { commonPickOrderSentences, suggestTab } from "@/lib/assistant/tab/sugges
 import type { TabProposal } from "@/lib/assistant/tab/types";
 import { correctionsNote } from "@/lib/assistant/fuzzy";
 import { loadVoicingLookup, type VoicingLookup } from "@/lib/assistant/tab/voicings";
+import { chordAskReply, readChordAsk } from "@/lib/assistant/chordAsk";
 
 /**
  * One turn of the conversation on the fingerpick page, decided by the app.
@@ -37,6 +38,8 @@ export interface TabTurnOutcome {
 	 */
 	edit?: Extract<TabEditReading, { kind: "append" | "replace" | "chords" | "rename" | "delete" | "set" }>;
 	templates?: string[];
+	/** Present when the sentence asked how one chord is played: the chord, for its shapes. */
+	chord?: ChordRef;
 	lang: Lang;
 	/** With `templates`: what the readers saw, for the record that turns misses into eval cases. */
 	seen?: EditIntentExplanation;
@@ -257,6 +260,11 @@ export async function resolveTabTurn({
 
 	const talk = smallTalk(text, lang);
 	if (talk) return { text: talk.text, templates: talk.templates.length ? talk.templates : undefined, lang };
+
+	// A question about one chord's shape is answered with the shape, on this
+	// page as on the strum page — the same reader, the same card.
+	const ask = readChordAsk(text, index);
+	if (ask) return { text: chordAskReply(ask, lang), chord: ask.chord, lang };
 
 	// An edit names its target, so it is read before anything else: "add to
 	// travis: Am: 5 3 2 1" is a chord line to every reader after this one.

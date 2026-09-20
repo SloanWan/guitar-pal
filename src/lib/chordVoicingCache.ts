@@ -11,7 +11,7 @@ import type { ChordVoicing } from "@/lib/chordVoicing";
 // session, redraws the same chords without touching the network.
 
 /** Bump when the stored shape changes; old entries are then simply ignored. */
-const STORAGE_VERSION = "v1";
+const STORAGE_VERSION = "v2";
 const STORAGE_PREFIX = `chordVoicings:${STORAGE_VERSION}:`;
 
 export function voicingCacheKey(root: string, suffix: string): string {

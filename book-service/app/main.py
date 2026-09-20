@@ -16,6 +16,11 @@ from pathlib import Path
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI
 
+from app.ask.graph import AskGraph
+from app.ask.strategies import AskStrategy
+from app.ask.strategies.chunks import LexicalStrategy, RagStrategy
+from app.ask.strategies.embeddings import VoyageEmbedder
+from app.ask.strategies.long_context import LongContextStrategy
 from app.auth import CurrentUser, build_verifier
 from app.books import router as books_router
 from app.config import Settings, get_settings
@@ -47,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.scanner = None
         app.state.parser = None
         app.state.pages = None
+        app.state.ask = None
         app.state.validator = validator_client(settings)
         if settings.database_url is not None:
             try:
@@ -79,6 +85,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 worker=worker,
             )
             app.state.pages = PageImages(storage=app.state.storage, repo=repo, worker=worker)
+            if client is not None:
+                strategy = ask_strategy(settings, client, repo, app.state.storage, worker)
+                app.state.ask = AskGraph(client, strategy, repo) if strategy else None
         try:
             yield
         finally:
@@ -131,6 +140,31 @@ def validator_client(settings: Settings) -> ValidatorClient | None:
         )
         return None
     return ValidatorClient(settings.validate_url, settings.internal_secret)
+
+
+def ask_strategy(
+    settings: Settings,
+    client: AsyncAnthropic,
+    repo: BookRepo,
+    storage: StorageClient,
+    worker: asyncio.Semaphore,
+) -> AskStrategy | None:
+    """The chapter Q&A strategy `BOOK_ASK_STRATEGY` names; None (a 503) when it cannot run."""
+    name = settings.ask_strategy
+    if name == "long_context":
+        return LongContextStrategy(client, storage, worker)
+    if name == "lexical":
+        return LexicalStrategy(client, repo)
+    if name == "rag":
+        if settings.voyage_api_key is None:
+            log.warning("BOOK_ASK_STRATEGY=rag needs VOYAGE_API_KEY: chapter Q&A off")
+            return None
+        embedder = VoyageEmbedder(
+            settings.voyage_api_key, settings.embedding_model, settings.embedding_dimension
+        )
+        return RagStrategy(client, repo, embedder)
+    log.warning("BOOK_ASK_STRATEGY=%r is not a strategy: chapter Q&A off", name)
+    return None
 
 
 def chapter_graph(client: AsyncAnthropic | None, validator: ValidatorClient | None) -> ChapterGraph:

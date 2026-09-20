@@ -41,20 +41,38 @@ PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
 }
 
 
+# What a cached prefix costs relative to a fresh read: writing it is 1.25×,
+# reading it back 0.1× (the chapter Q&A caches a whole chapter per thread).
+CACHE_WRITE_FACTOR = 1.25
+CACHE_READ_FACTOR = 0.1
+
+
 @dataclass(frozen=True)
 class CallUsage:
     input_tokens: int
     output_tokens: int
     model: str = MODEL
+    cache_write_tokens: int = 0
+    cache_read_tokens: int = 0
 
     @property
     def cost_usd(self) -> float:
         price_in, price_out = PRICE_PER_MTOK.get(self.model, (0.0, 0.0))
-        return (self.input_tokens * price_in + self.output_tokens * price_out) / 1_000_000
+        written = self.cache_write_tokens * CACHE_WRITE_FACTOR
+        read = self.cache_read_tokens * CACHE_READ_FACTOR
+        cached = (written + read) * price_in
+        return (self.input_tokens * price_in + cached + self.output_tokens * price_out) / 1_000_000
 
 
 def usage_of(response: Message, model: str = MODEL) -> CallUsage:
-    return CallUsage(response.usage.input_tokens, response.usage.output_tokens, model)
+    usage = response.usage
+    return CallUsage(
+        usage.input_tokens,
+        usage.output_tokens,
+        model,
+        cache_write_tokens=getattr(usage, "cache_creation_input_tokens", None) or 0,
+        cache_read_tokens=getattr(usage, "cache_read_input_tokens", None) or 0,
+    )
 
 
 SYSTEM_PROMPT = (

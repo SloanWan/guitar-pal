@@ -145,6 +145,8 @@ describe("textTabCandidates", () => {
 		for (const c of result.candidates) {
 			expect(c.pattern.name).toBe("Page 12");
 			expect(c.pattern.bpm).toBe(72);
+			// Nothing about the name or tempo: the warnings are the reading's own.
+			expect(c.warnings.every((w) => w.code.startsWith("TEXT_TAB_") || w.code.startsWith("ASCII_"))).toBe(true);
 			expect(c.pattern.timeSignature).toEqual([4, 4]);
 			expect(c.pattern.measures.length).toBeGreaterThanOrEqual(2);
 			expect(c.label).not.toBe("");

@@ -12,6 +12,10 @@ import asyncpg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.ask.graph import AskGraph
+from app.ask.limits import SlidingWindowLimiter
+from app.ask.strategies.long_context import ChapterUnavailable
+from app.ask.types import AskContext, AskTurn
 from app.auth import CurrentSession
 from app.db import get_pool
 from app.ingest.toc import MAX_TITLE_CHARS, Chapter
@@ -217,6 +221,17 @@ def get_parser(request: Request) -> Parser:
     return parser
 
 
+def get_ask(request: Request) -> AskGraph:
+    ask = getattr(request.app.state, "ask", None)
+    if ask is None:
+        raise HTTPException(503, "Chapter Q&A is not configured on this deployment.")
+    return ask
+
+
+# One limiter per process, like the Next.js assistant route's.
+ask_limiter = SlidingWindowLimiter()
+
+
 def get_pages(request: Request) -> PageImages:
     pages = getattr(request.app.state, "pages", None)
     if pages is None:
@@ -366,6 +381,93 @@ async def parse_chapter(
         raise HTTPException(409, "This chapter is being parsed already.")
     background.add_task(parser.run, book, claimed, session.token)
     return ChapterOut.of(claimed)
+
+
+# --- chapter Q&A (#203) --------------------------------------------------------
+
+
+class AskMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
+class AskIn(BaseModel):
+    """The thread so far, the player's newest message last."""
+
+    messages: list[AskMessage] = Field(min_length=1, max_length=40)
+
+
+class AskCost(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    usd: float
+
+
+class AskOut(BaseModel):
+    message: str
+    # `book`: from the chapter, with the pages its citations named. `general`:
+    # not from the book — general knowledge, or a decline — and cites nothing.
+    source: Literal["book", "general"]
+    pages: list[int]
+    # A draft the parse extracted, when the message asked for one to play.
+    draft: ExerciseOut | None
+    model: str
+    cost: AskCost
+    strategy: str
+
+
+@router.post("/{book_id}/chapters/{chapter_id}/ask", response_model=AskOut)
+async def ask_chapter(
+    book_id: str,
+    chapter_id: str,
+    body: AskIn,
+    session: CurrentSession,
+    repo: Repo,
+    ask: Annotated[AskGraph, Depends(get_ask)],
+) -> AskOut:
+    """
+    Ask the open chapter. Scoped to it: answered from its text with page
+    references, or as general knowledge plainly labelled, or declined with
+    the chapters that look relevant; a request for an exercise answers with
+    a draft the parse already made. The chapter must be parsed.
+    """
+    if body.messages[-1].role != "user" or not body.messages[-1].content.strip():
+        raise HTTPException(422, "The last message must be the player's question.")
+    allowed, retry_after = ask_limiter.check(session.user_id)
+    if not allowed:
+        raise HTTPException(
+            429,
+            f"Too many questions for now — try again in about {max(1, retry_after // 60)} min.",
+        )
+    book, chapter = await owned_chapter(repo, session.user_id, book_id, chapter_id)
+    if chapter.parse_status != "ready":
+        raise HTTPException(409, "Parse the chapter first, so there is something to ask.")
+    ctx = AskContext(
+        book=book,
+        chapter=chapter,
+        chapters=await repo.list_chapters(book.id),
+        token=session.token,
+    )
+    history = [AskTurn(m.role, m.content) for m in body.messages[:-1]]
+    try:
+        result = await ask(ctx, body.messages[-1].content.strip(), history)
+    except StorageError as e:
+        raise HTTPException(502, f"Storage: {e.message}") from e
+    except ChapterUnavailable as e:
+        raise HTTPException(e.status, e.message) from e
+    return AskOut(
+        message=result.message,
+        source=result.source,
+        pages=list(result.pages),
+        draft=ExerciseOut.of(result.draft) if result.draft else None,
+        model=result.model,
+        cost=AskCost(
+            input_tokens=sum(u.input_tokens for u in result.usage),
+            output_tokens=sum(u.output_tokens for u in result.usage),
+            usd=round(sum(u.cost_usd for u in result.usage), 4),
+        ),
+        strategy=ask.strategy_name,
+    )
 
 
 class PageImageOut(BaseModel):

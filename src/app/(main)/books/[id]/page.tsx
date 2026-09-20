@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import type { BookDetail, Chapter, ChapterRange } from "@/lib/books/types";
 import { TOC_SOURCE_LABEL } from "@/lib/books/types";
 import { rangesFromChapters } from "@/lib/books/ranges";
 import { isSampleBook } from "@/lib/books/sample";
+import { BOOK_LOCATE_EVENT, setBookContext, type BookLocateDetail } from "@/lib/assistant/bookContext";
 import { usePolledResource } from "@/components/books/usePolledResource";
 import ScanReadout from "@/components/books/ScanReadout";
 import ChapterList from "@/components/books/ChapterList";
@@ -79,6 +80,28 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 		setSide((current) => ({ kind: "source", source, entered: current === null }));
 	const readTextTab = (page: number) =>
 		setSide((current) => ({ kind: "textTab", page, entered: current === null }));
+
+	// The open, parsed chapter is what the assistant's Book mode asks (#203);
+	// the sample has no service behind it, so it offers nothing. Cleared when
+	// the chapter closes and when the page goes.
+	const openRow = book?.chapters.find((c) => c.id === openChapter) ?? null;
+	const askable = !readOnly && book !== null && openRow !== null && openRow.parse_status === "ready";
+	const bookTitle = book?.title ?? "";
+	const chapterTitle = openRow?.title ?? "";
+	useEffect(() => {
+		setBookContext(askable ? { bookId: id, chapterId: openChapter!, bookTitle, chapterTitle } : null);
+	}, [askable, id, openChapter, bookTitle, chapterTitle]);
+	useEffect(() => () => setBookContext(null), []);
+	// A page an answer cited, clicked in the panel: open it beside the book.
+	useEffect(() => {
+		function onLocate(event: Event) {
+			const { detail } = event as CustomEvent<BookLocateDetail>;
+			if (detail.bookId !== id) return;
+			locate({ chapterId: detail.chapterId, page: detail.page, pages: [detail.page], title: `p.${detail.page}` });
+		}
+		window.addEventListener(BOOK_LOCATE_EVENT, onLocate);
+		return () => window.removeEventListener(BOOK_LOCATE_EVENT, onLocate);
+	}, [id]);
 	// A crop at full size: a dialog on its own, or over the book's column while
 	// the panel is open (see CropViewer). Closing the panel closes it too.
 	const [crop, setCrop] = useState<CropView | null>(null);

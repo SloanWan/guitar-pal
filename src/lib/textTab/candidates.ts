@@ -40,7 +40,10 @@ export function textTabCandidates(text: string, options: TextTabOptions = {}): T
 	const name = options.name?.trim() || DEFAULT_CANDIDATE_NAME;
 	const candidates: TextTabCandidate[] = [];
 	for (const reading of textTabReadings(columns, timeSignature)) {
-		const { pattern, warnings } = normalizeImportedPattern(reading.draft);
+		// Named and given its tempo before validation, so the validator has
+		// nothing to say about either; what it does say is about the reading.
+		const draft = { ...reading.draft, name, ...(options.bpm ? { bpm: options.bpm } : {}) };
+		const { pattern, warnings } = normalizeImportedPattern(draft);
 		// A reading the validator refuses outright is a bug in the reading, not
 		// a choice for the player; the others still stand.
 		if (pattern === null) continue;
@@ -48,7 +51,7 @@ export function textTabCandidates(text: string, options: TextTabOptions = {}): T
 			id: reading.id,
 			label: reading.label,
 			description: reading.description,
-			pattern: { ...pattern, name, bpm: options.bpm ?? pattern.bpm },
+			pattern,
 			warnings: [...reading.warnings, ...warnings],
 		});
 	}

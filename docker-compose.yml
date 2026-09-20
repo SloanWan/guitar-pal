@@ -32,4 +32,8 @@ services:
     env_file: .env
     environment:
       BOOK_SERVICE_VALIDATE_URL: http://web:3000
+      # Chapter Q&A (#203): how the chapter reaches the model. `long_context`
+      # until the eval (book-service/evals/ask/) has run; its decision rule
+      # says whether `rag` replaces it.
+      BOOK_ASK_STRATEGY: long_context
     restart: unless-stopped

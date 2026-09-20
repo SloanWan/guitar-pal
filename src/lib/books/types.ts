@@ -97,6 +97,28 @@ export function issuePage(issue: ParseIssue): number | null {
 	return m ? Number(m[1]) : null;
 }
 
+/** One turn of a chapter thread, as `POST …/ask` takes it. */
+export interface AskMessage {
+	role: "user" | "assistant";
+	content: string;
+}
+
+/**
+ * `POST /books/{id}/chapters/{chapter_id}/ask` (#203). `source: "book"` is
+ * answered from the chapter with the pages its citations named; `general`
+ * is not the book's — general knowledge, or a decline — and cites nothing.
+ * `draft` is an exercise the parse already extracted, when one was asked for.
+ */
+export interface AskResponse {
+	message: string;
+	source: "book" | "general";
+	pages: number[];
+	draft: ChapterExercise | null;
+	model: string;
+	cost: ParseCost;
+	strategy: string;
+}
+
 /** `GET /books/{id}/chapters/{chapter_id}/parse`: the chapter card. */
 export interface ChapterParse {
 	chapter: Chapter;

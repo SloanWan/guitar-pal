@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     internal_secret: str | None = Field(
         default=None, validation_alias="BOOK_SERVICE_INTERNAL_SECRET"
     )
+    # Chapter Q&A (#203): how the chapter reaches the model. `long_context`
+    # (the chapter as a PDF, cited), `lexical` (full-text search over the
+    # chunks) or `rag` (pgvector; needs the embedding key below). The default
+    # is the eval's call (evals/ask/, decision rule in #203).
+    ask_strategy: str = Field(default="long_context", validation_alias="BOOK_ASK_STRATEGY")
+    # Anthropic has no embeddings endpoint; `rag` embeds with Voyage.
+    voyage_api_key: str | None = Field(default=None, validation_alias="VOYAGE_API_KEY")
+    embedding_model: str = Field(default="voyage-3.5-lite", validation_alias="BOOK_EMBEDDING_MODEL")
+    # Must match migration 0007's `vector(N)`.
+    embedding_dimension: int = Field(default=1024, validation_alias="BOOK_EMBEDDING_DIMENSION")
     tessdata_prefix: str | None = Field(default=None, validation_alias="TESSDATA_PREFIX")
     ocr_languages: str = Field(default="chi_sim+eng", validation_alias="BOOK_SERVICE_OCR_LANGUAGES")
 

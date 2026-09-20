@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRightLeft, CornerDownLeft, LogIn, Sparkles } from "lucide-react";
+import { ArrowRightLeft, ArrowUpRight, BookOpen, CornerDownLeft, LogIn, Sparkles } from "lucide-react";
 import ProposalPreview from "./strum/ProposalPreview";
 import TabProposalPreview from "./tab/TabProposalPreview";
 import TabEditCard from "./tab/TabEditCard";
@@ -16,6 +16,7 @@ import { hasCoarsePointer } from "@/lib/pointer";
 import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/assistant/greeting";
 import { pick, uiLang } from "@/lib/assistant/lang";
 import { modelDisplayName } from "@/lib/assistant/general/request";
+import { locateBookPage } from "@/lib/assistant/bookContext";
 import type { AssistantDomain, AssistantMode } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
@@ -27,9 +28,9 @@ import type { useAssistant } from "./useAssistant";
  */
 
 const MAX_INPUT_CHARS = 600;
-/** The chip's segments, in the order they sit. */
+/** The chip's segments, in the order they sit; Book joins them while a chapter is open. */
 const MODES: readonly AssistantMode[] = ["strum", "tab", "general"];
-const MODE_LABEL: Record<AssistantMode, string> = { strum: "Strum", tab: "Tab", general: "General" };
+const MODE_LABEL: Record<AssistantMode, string> = { strum: "Strum", tab: "Tab", general: "General", book: "Book" };
 const MODE_LABEL_ZH: Record<AssistantDomain, string> = { strum: "扫弦", tab: "指弹" };
 /** How far above the bottom still counts as reading the tail, so a stray pixel does not unpin. */
 const TAIL_SLACK_PX = 24;
@@ -266,9 +267,10 @@ export default function AssistantPanel({
 	const {
 		mode,
 		setMode,
-		page,
+		bookContext,
 		guestQuota,
 		nudge,
+		nudgeTo,
 		dismissNudge,
 		messages,
 		pending,
@@ -302,6 +304,19 @@ export default function AssistantPanel({
 	const promptHintId = useId();
 	const { user } = useUser();
 	const guestUsedUp = user === null && guestQuota !== null && guestQuota.used >= guestQuota.limit;
+	const modes: readonly AssistantMode[] = bookContext ? [...MODES, "book"] : MODES;
+
+	/**
+	 * A page an answer cites, clicked: the book page opens it beside the book
+	 * when it is the page on screen; from anywhere else, go there first.
+	 */
+	function openPage(book: NonNullable<(typeof messages)[number]["book"]>, page: number) {
+		if (pathname === `/books/${book.bookId}`) {
+			locateBookPage({ bookId: book.bookId, chapterId: book.chapterId, page });
+		} else {
+			router.push(`/books/${book.bookId}`);
+		}
+	}
 
 	// Picked once per conversation rather than per render: a line that changed
 	// while being read would be a tic, not a greeting.
@@ -528,6 +543,35 @@ export default function AssistantPanel({
 												{pick(message.lang ?? "en", `Answered by ${modelDisplayName(message.model)}`, `由 ${modelDisplayName(message.model)} 回答`)}
 											</span>
 										)}
+										{/* Where a chapter answer came from (#203): the pages it cites,
+										    each a way to the page beside the book — or a plain word that
+										    it is not the book's. */}
+										{message.book && message.streamed === true && !message.failed && (
+											<span className="flex flex-wrap items-center gap-1.5 pl-2 font-mono text-[10px] tracking-[0.06em] text-ink-faint">
+												{message.book.source === "book" ? (
+													<>
+														<BookOpen className="size-3" strokeWidth={1.5} aria-hidden="true" />
+														{message.book.pages.length > 0
+															? pick(message.lang ?? "en", "From the book:", "出自书中：")
+															: pick(message.lang ?? "en", "From the book", "出自书中")}
+														{message.book.pages.map((page) => (
+															<button
+																key={page}
+																type="button"
+																onClick={() => openPage(message.book!, page)}
+																title={pick(message.lang ?? "en", "See this page of the book", "看书的这一页")}
+																className="inline-flex items-center gap-0.5 border border-line-strong px-1.5 py-0.5 tabular-nums text-ink-dim transition-colors duration-(--dur-hover) hover:border-denim hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+															>
+																p.{page}
+																<ArrowUpRight className="size-2.5" strokeWidth={1.5} aria-hidden="true" />
+															</button>
+														))}
+													</>
+												) : (
+													pick(message.lang ?? "en", "Not from this book", "不是出自这本书")
+												)}
+											</span>
+										)}
 										{/* The preview is an attachment, not speech: full width under
 										    the bubble, where a 16-cell grid actually fits — and held
 										    back until the message has finished saying what it is. */}
@@ -628,7 +672,7 @@ export default function AssistantPanel({
 			    only proposes, once per page, when the two disagree. */}
 			<div className="flex flex-none items-center gap-2 border-t border-line px-2 pt-2">
 				<div role="radiogroup" aria-label="Which assistant" className="flex border border-line-strong">
-					{MODES.map((m, i) => {
+					{modes.map((m, i) => {
 						const locked = m === "general" && guestUsedUp;
 						return (
 							<button
@@ -663,17 +707,22 @@ export default function AssistantPanel({
 					<span className="min-w-0 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">
 						{`${guestQuota.used} of ${guestQuota.limit} free today`}
 					</span>
-				) : nudge ? (
+				) : nudge && nudgeTo ? (
 					<button
 						type="button"
-						onClick={() => setMode(page)}
+						onClick={() => setMode(nudgeTo)}
 						className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-denim-accent transition-colors duration-(--dur-hover) hover:text-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 					>
 						<ArrowRightLeft className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
 						<span className="truncate">
-							{`Switch to ${MODE_LABEL[page]} for this page?`}
+							{nudgeTo === "book" ? "Ask the open chapter?" : `Switch to ${MODE_LABEL[nudgeTo]} for this page?`}
 						</span>
 					</button>
+				) : mode === "book" && bookContext ? (
+					<span className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint" title={`${bookContext.bookTitle} · ${bookContext.chapterTitle}`}>
+						<BookOpen className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
+						<span className="truncate">{bookContext.chapterTitle}</span>
+					</span>
 				) : null}
 			</div>
 			<form
@@ -717,8 +766,8 @@ export default function AssistantPanel({
 						}
 					}}
 					maxLength={MAX_INPUT_CHARS}
-					placeholder={hint || (mode === "tab" ? "A chord and the strings to pick, or a tab" : mode === "general" ? "Ask anything, or say what you want made" : "Chords, a rhythm, or what you want")}
-					aria-label={mode === "tab" ? "Ask the tab assistant" : mode === "general" ? "Ask the assistant" : "Ask the strum assistant"}
+					placeholder={hint || (mode === "book" ? "Ask the open chapter" : mode === "tab" ? "A chord and the strings to pick, or a tab" : mode === "general" ? "Ask anything, or say what you want made" : "Chords, a rhythm, or what you want")}
+					aria-label={mode === "book" ? "Ask the open chapter" : mode === "tab" ? "Ask the tab assistant" : mode === "general" ? "Ask the assistant" : "Ask the strum assistant"}
 					aria-describedby={hint ? `${promptHintId}` : undefined}
 					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 				/>

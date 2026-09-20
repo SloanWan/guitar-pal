@@ -17,6 +17,7 @@ from typing import Literal
 
 import asyncpg
 
+from app.ask.lexical import lexical_text
 from app.ingest.pdf import TextSource
 from app.ingest.toc import Chapter, TocSource
 
@@ -108,6 +109,13 @@ class ChunkRecord:
 
 
 @dataclass(frozen=True)
+class ChunkRow(ChunkRecord):
+    """A `book_chunks` row as retrieval reads it back (#203)."""
+
+    id: str
+
+
+@dataclass(frozen=True)
 class Usage:
     """What a parse spent, as the row records it."""
 
@@ -181,6 +189,15 @@ def _exercise(r: asyncpg.Record) -> ExerciseRow:
         crop_path=r["crop_path"],
         status=r["status"],
     )
+
+
+def _chunk(r: asyncpg.Record) -> ChunkRow:
+    return ChunkRow(id=str(r["id"]), page=r["page"], index=r["index"], text=r["text"])
+
+
+def _vector_literal(values: Sequence[float]) -> str:
+    """pgvector's text form: `[0.1,0.2,…]`."""
+    return "[" + ",".join(repr(float(v)) for v in values) + "]"
 
 
 def _json_list(value: object) -> list[dict[str, object]]:
@@ -481,8 +498,11 @@ class BookRepo:
                 ],
             )
             await conn.executemany(
-                "insert into book_chunks (chapter_id, page, index, text) values ($1, $2, $3, $4)",
-                [(chapter_id, c.page, c.index, c.text) for c in chunks],
+                """
+                insert into book_chunks (chapter_id, page, index, text, tsv)
+                values ($1, $2, $3, $4, to_tsvector('simple', $5))
+                """,
+                [(chapter_id, c.page, c.index, c.text, lexical_text(c.text)) for c in chunks],
             )
             await conn.execute(
                 """
@@ -563,6 +583,80 @@ class BookRepo:
             chapter_id,
         )
         return [_exercise(r) for r in records]
+
+    # --- retrieval (#203) ------------------------------------------------------
+
+    async def list_chunks(self, chapter_id: str) -> list[ChunkRow]:
+        records = await self._pool.fetch(
+            """
+            select id, page, index, text from book_chunks
+             where chapter_id = $1 order by page, index
+            """,
+            chapter_id,
+        )
+        return [_chunk(r) for r in records]
+
+    async def search_chunks_lexical(
+        self, chapter_id: str, query: str, limit: int
+    ) -> list[ChunkRow]:
+        """
+        The chapter's chunks that hold any of the query's tokens, best first.
+        `query` is `lexical_query(question)`; an empty one matches nothing.
+        """
+        if not query:
+            return []
+        records = await self._pool.fetch(
+            """
+            select id, page, index, text
+              from book_chunks
+             where chapter_id = $1 and tsv @@ to_tsquery('simple', $2)
+             order by ts_rank(tsv, to_tsquery('simple', $2)) desc, page, index
+             limit $3
+            """,
+            chapter_id,
+            query,
+            limit,
+        )
+        return [_chunk(r) for r in records]
+
+    async def search_chunks_by_embedding(
+        self, chapter_id: str, embedding: Sequence[float], limit: int
+    ) -> list[ChunkRow]:
+        """The chapter's nearest chunks by cosine distance; unembedded ones are skipped."""
+        records = await self._pool.fetch(
+            """
+            select id, page, index, text
+              from book_chunks
+             where chapter_id = $1 and embedding is not null
+             order by embedding <=> $2::vector, page, index
+             limit $3
+            """,
+            chapter_id,
+            _vector_literal(embedding),
+            limit,
+        )
+        return [_chunk(r) for r in records]
+
+    async def set_chunk_embeddings(self, embeddings: Sequence[tuple[str, Sequence[float]]]) -> None:
+        """(chunk id, vector) pairs, written after the chunks exist."""
+        await self._pool.executemany(
+            "update book_chunks set embedding = $2::vector where id = $1",
+            [(chunk_id, _vector_literal(vector)) for chunk_id, vector in embeddings],
+        )
+
+    async def list_chapters_without_lexical(self) -> list[str]:
+        """Chapters parsed before the tsv column existed; the backfill script fills them."""
+        records = await self._pool.fetch(
+            "select distinct chapter_id from book_chunks where tsv is null"
+        )
+        return [str(r["chapter_id"]) for r in records]
+
+    async def set_chunk_lexical(self, chunk_id: str, text: str) -> None:
+        await self._pool.execute(
+            "update book_chunks set tsv = to_tsvector('simple', $2) where id = $1",
+            chunk_id,
+            lexical_text(text),
+        )
 
     async def replace_chapters(self, book_id: str, chapters: Sequence[Chapter]) -> None:
         """The player's own ranges: `manual` from here on, hint counts recomputed."""

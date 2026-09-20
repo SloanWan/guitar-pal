@@ -23,6 +23,9 @@ app/
   graph/       the parse as a LangGraph: classify pages, knowledge points, route to extractors
   extract/     the type-specific readers; tab.py (six-line tab + jianpu → fingerpick drafts)
   validate.py  the one draft validator, called on the Next.js side
+  ask/         chapter Q&A (#203): the graph (intent → retrieve → answer | general |
+               draft), the strategies (long_context, lexical, rag), the CJK tokeniser
+               behind lexical search, the per-player limit
 alembic/       migrations for user_books, book_chapters, book_pages, and the parse tables
 docs/          calibration.md — every number behind a rule, from real books
 materials/     gitignored; real textbook excerpts the ingest tests run against
@@ -147,6 +150,7 @@ another user's book is a 404, the same as no book.
 | `GET /books/{id}/chapters/{chapter_id}/parse` | the chapter with its `parse_status`, `parse_error`, `parse_cost` and `parse_warnings`, and once ready its `notes` (knowledge points) and `exercises` (drafts, each with the crop it was read from). Poll this. |
 | `GET /books/{id}/pages/{page}/image` | `{path}` of the page as a JPEG (#240): rendered from the PDF at 150 dpi on the first request and kept in Storage under `<user>/pages/<book>/`, `image_path` on `book_pages`; any page of a scanned book. The PDF just fetched stays in memory for ten minutes so the next page of the same book does not download it again. The browser signs the path like a crop's. |
 | `GET /books/{id}/pages/{page}/text` | `{page, text, text_source}` as the scan read it (#228): what the chapter card's text-tab reader starts from when the parse skipped a page whose tab was in the text layer (`TEXT_TAB_SKIPPED` in `parse_warnings`). |
+| `POST /books/{id}/chapters/{chapter_id}/ask` `{messages}` | ask the open chapter (#203): `{message, source, pages, draft?, model, cost, strategy}`. `source: book` is answered from the chapter with the pages its citations named; `general` is general knowledge, plainly not the book's, or a decline naming chapters that look relevant, and cites nothing. A request for an exercise answers with a draft the parse already made — no vision here. The chapter must be parsed; 40 questions an hour per player; 503 until a strategy is configured. |
 | `PATCH /books/{id}/exercises/{exercise_id}` `{status}` | `proposed` → `taken` when the draft was opened in its editor (or `dismissed`); the card shows what was used |
 
 A scan reads the PDF with the session token from the request that started
@@ -194,6 +198,31 @@ skipped with a `TEXT_TAB_SKIPPED` warning and the chapter card offers it
 to the player to read by ear — every rhythm the columns allow, played, and
 the one they pick taken to the fingerpick editor (#228). The numbers behind every choice here
 are in `docs/calibration.md` §6.
+
+## Chapter Q&A
+
+`app/ask/graph.py` answers a question about the open chapter and nothing
+else: a small structured call reads the intent, the strategy retrieves,
+and only when retrieval found something usable is the answer written —
+from documents with citations on, so the pages come off the API's
+citation blocks, never off the prose. An answer that cites nothing is not
+the book's and falls through to the general route, which never sees the
+chapter: it answers as a teacher would, labelled `general`, or declines
+and names other chapters by title. A request for an exercise is a lookup
+over `book_exercises`.
+
+How the chapter reaches the model is `BOOK_ASK_STRATEGY`:
+
+| strategy | the chapter reaches the model as | pages from |
+|---|---|---|
+| `long_context` (default until the eval says otherwise) | its pages cut out of the PDF, one document block, citations on, prompt-cached — the first question of a thread pays for the chapter | `page_location` citations |
+| `lexical` | the top chunks of a Postgres full-text search, one text document each; the tokeniser in `app/ask/lexical.py` splits CJK into bigrams, which `simple` cannot | the cited document's page |
+| `rag` | the nearest chunks by pgvector, same answer step; needs `VOYAGE_API_KEY` (`BOOK_EMBEDDING_MODEL`, `BOOK_EMBEDDING_DIMENSION` must match migration 0007's column). Not exercised live yet. | the cited document's page |
+
+Chunks parsed before migration 0007 get their search column from
+`scripts/backfill_chunks.py` (`--embed` for vectors). The eval that picks
+the default — three chapters, every strategy, the rule written in #203 —
+is `evals/ask/` (its README says how; never in CI).
 
 ## Database
 

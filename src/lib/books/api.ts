@@ -9,6 +9,8 @@ import type {
 	ChapterRange,
 	ExerciseStatus,
 	PageText,
+	AskMessage,
+	AskResponse,
 } from "@/lib/books/types";
 
 /**
@@ -118,6 +120,19 @@ export async function pageImageUrl(bookId: string, page: number): Promise<string
 	if (isSampleBook(bookId)) return samplePageImage(page);
 	const { path } = await call<{ path: string }>(`/${bookId}/pages/${page}/image`);
 	return cropUrl(path);
+}
+
+/**
+ * Ask the open chapter (#203): the thread so far, the question last. The
+ * sample ships no service to ask, so it says so rather than pretending.
+ */
+export function askChapter(bookId: string, chapterId: string, messages: AskMessage[]): Promise<AskResponse> {
+	if (isSampleBook(bookId)) {
+		return Promise.reject(
+			new BookApiError("The sample can't be asked — upload a book of your own to ask its chapters.", 403),
+		);
+	}
+	return call(`/${bookId}/chapters/${chapterId}/ask`, { method: "POST", body: JSON.stringify({ messages }) });
 }
 
 /**

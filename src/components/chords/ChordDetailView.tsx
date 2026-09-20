@@ -8,6 +8,7 @@ import { formatTabSequence } from "@/lib/chordTabSequence";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import ChordModeToggle from "@/components/chords/ChordModeToggle";
 import ChordVoicingModal, { type VoicingCard } from "@/components/chords/ChordVoicingModal";
+import MusicalText from "@/components/MusicalText";
 import { useChordPreview } from "@/components/chords/useChordPreview";
 import { Button } from "@/components/ui/button";
 import { chordVoicingToMidi, rootPitchClass } from "@/lib/chordVoicingToMidi";
@@ -23,7 +24,8 @@ import {
 	type ChordShape,
 } from "@/lib/chordShape";
 import { userVoicingId, type UserChordVoicing } from "@/lib/userChordVoicings";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { voicingToDiagramShape } from "@/lib/chordVoicing";
+import { inversionName } from "@/lib/chordCards";
 
 // Re-exported so existing importers (the chord detail route) keep their import path.
 export type { VoicingCard };
@@ -127,16 +129,16 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 					<ChordModeToggle mode={mode} onChange={setMode} />
 				)}
 				<div className="flex flex-wrap justify-center gap-4">
-					{voicings.map(({ id, label, def, pitches }, index) => (
+					{voicings.map((card, index) => (
 						<div
-							key={id}
+							key={card.id}
 							className="flex flex-col items-center gap-2 cursor-pointer"
 							onClick={() => openModal(index)}
 						>
 							<div className="flex flex-col items-center gap-2">
 								<ChordDiagram
-									def={def}
-									label={label}
+									def={card.def}
+									label={card.label}
 									mode={mode}
 									rootMidi={rootPitchClass(root)}
 									isHovered={hoveredIndex === index}
@@ -153,7 +155,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 									disabled={preview.isPreloading}
 									onClick={(e) => {
 										e.stopPropagation();
-										void preview.play(pitches);
+										void preview.play(card.pitches);
 									}}
 								>
 									{preview.isPreloading ? (
@@ -163,6 +165,23 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 									)}
 									{preview.isPreloading ? "Loading…" : "Play"}
 								</Button>
+								{/* Both captions sit under the card, not in it, so every card in
+								    the row stays the same size. The note is prose — "bass" must
+								    keep its b — so it never goes through MusicalText. */}
+								{(inversionName(card, root, suffix) || card.omits.length > 0) && (
+									<span className="font-mono text-[10px] text-ink-dim">
+										{inversionName(card, root, suffix) && (
+											<MusicalText text={inversionName(card, root, suffix)!} />
+										)}
+										{inversionName(card, root, suffix) && card.omits.length > 0 && " · "}
+										{card.omits.length > 0 && `omits ${card.omits.join(", ")}`}
+									</span>
+								)}
+								{card.note && (
+									<p className="max-w-44 text-center text-[10px] leading-snug text-ink-faint">
+										{card.note}
+									</p>
+								)}
 							</div>
 						</div>
 					))}
@@ -191,7 +210,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 								{myShapes.map((v) => (
 									<div key={v.id} className="flex flex-col items-center gap-2">
 										<ChordDiagram
-											def={chordVoicingToVexChords(v)}
+											def={voicingToDiagramShape(v)}
 											label={v.label ?? "Mine"}
 											mode={mode}
 											rootMidi={rootPitchClass(root)}

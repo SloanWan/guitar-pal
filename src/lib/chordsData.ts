@@ -15,7 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 import { isBrowsableSuffix, sortRoots } from "@/lib/chordSuffixes";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 export interface ChordWithVoicings {
 	id: string;
@@ -26,8 +26,14 @@ export interface ChordWithVoicings {
 
 const VOICING_FIELDS = `
   id, root, suffix,
-  chord_voicings ( id, label, start_fret, barre_fret, capo, frets, fingers )
+  chord_voicings ( id, label, start_fret, barre_fret, capo, frets, fingers, note )
 ` as const;
+
+// Without an ORDER BY an embedded array comes back in physical order, and an
+// UPDATE rewrites a row at the end of the heap — so a Standard the migration
+// touched (scripts/fix-default-voicing-bass.ts) would land last. "Standard"
+// sorts before "Variation n", which keeps the default shape the first card.
+const VOICING_ORDER = { referencedTable: "chord_voicings" } as const;
 
 // Reference data changes only via a migration + redeploy, so a generous
 // revalidate window is safe; the "chords" tag allows on-demand invalidation.
@@ -46,6 +52,7 @@ export const getChord = unstable_cache(
 		const { data } = await publicClient()
 			.from("chords")
 			.select(VOICING_FIELDS)
+			.order("label", VOICING_ORDER)
 			.eq("root", root)
 			.eq("suffix", suffix)
 			.single();
@@ -60,6 +67,7 @@ export const getChordsByRoot = unstable_cache(
 		const { data } = await publicClient()
 			.from("chords")
 			.select(VOICING_FIELDS)
+			.order("label", VOICING_ORDER)
 			.eq("root", root);
 		return (data as ChordWithVoicings[] | null) ?? [];
 	},
@@ -72,6 +80,7 @@ export const getAllChordsWithVoicings = unstable_cache(
 		const { data } = await publicClient()
 			.from("chords")
 			.select(VOICING_FIELDS)
+			.order("label", VOICING_ORDER)
 			.order("root")
 			.order("suffix");
 		return (data as ChordWithVoicings[] | null) ?? [];

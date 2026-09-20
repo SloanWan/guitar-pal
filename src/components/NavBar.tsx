@@ -6,13 +6,12 @@ import Link from "@/components/AppLink";
 import SignInLink from "./SignInLink";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { profileOf } from "@/lib/profile";
-import NavBarScrollWrapper from "./NavBarScrollWrapper";
 import AssistantLauncher from "./assistant/AssistantLauncher";
 
 /**
  * `hideSignIn` is for the sign-in page itself, where a "Sign In" CTA in the
  * topbar would point at the page the visitor is already on. The signed-out
- * cluster then keeps only the dev theme toggle, at every width.
+ * cluster then keeps only the theme toggle, at every width.
  */
 export default async function NavBar({ hideSignIn = false }: { hideSignIn?: boolean } = {}) {
 	const supabase = await createSupabaseServer();
@@ -24,7 +23,7 @@ export default async function NavBar({ hideSignIn = false }: { hideSignIn?: bool
 	const profile = user ? profileOf(user) : null;
 
 	return (
-		<NavBarScrollWrapper>
+		<div className="sticky top-0 z-10">
 			<header className="h-13 flex-none border-b border-line bg-topbar">
 				<div className="mx-auto grid h-full w-full max-w-300 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-(--gutter)">
 					<Link
@@ -63,15 +62,12 @@ export default async function NavBar({ hideSignIn = false }: { hideSignIn?: bool
 							// width and carries theme + sign-out itself, so no collapse menu.
 							<UserMenu profile={profile} />
 						) : hideSignIn ? (
-							process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeToggle />
+							<ThemeToggle />
 						) : (
 							<>
 								{/* ≥ nav: signed-out controls sit inline in the topbar. */}
 								<div className="hidden items-center gap-3 nav:flex">
-									{/* Theme toggle is a dev-only affordance; production ships a
-									    single theme, so it renders only when dev routes are on
-									    (NEXT_PUBLIC_ vars inline at build time). */}
-									{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeToggle />}
+									<ThemeToggle />
 									{/* Single nav-CTA: transparent, denim border, denim-accent
 									    text; hover fills denim; :active press-flashes denim-tint.
 									    Sign-up stays reachable via the auth page tabs. */}
@@ -88,6 +84,6 @@ export default async function NavBar({ hideSignIn = false }: { hideSignIn?: bool
 					</div>
 				</div>
 			</header>
-		</NavBarScrollWrapper>
+		</div>
 	);
 }

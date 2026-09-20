@@ -1136,6 +1136,17 @@
 
 /* A proposal cannot stream in the way its message does — a grid is a shape,
    not a sequence — so it arrives at once and says so by popping. */
+/* A pointer's beckon: the arrow beside a first-visit hint edges toward the
+   control it names and settles back, until the control is used. */
+@keyframes hint-nudge {
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+	50% {
+		transform: translateX(6px);
+	}
+}
 @keyframes proposal-pop {
 	from {
 		opacity: 0;

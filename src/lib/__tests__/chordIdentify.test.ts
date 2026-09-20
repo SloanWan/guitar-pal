@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-	bassNoteName,
 	identifyChords,
 	pitchClassRoot,
 	pitchClassSet,
@@ -35,16 +34,6 @@ describe("the notes a shape sounds", () => {
 
 	it("collapses octaves and doublings to a set of pitch classes", () => {
 		expect(pitchClassSet(shapeMidi(frets("01023x")))).toEqual([0, 4, 7]);
-	});
-
-	it("names the lowest note, which is a fact even when the chord is not", () => {
-		expect(bassNoteName(frets("01023x"))).toBe("C");
-		// x05700 — an E minor seventh sitting on an A.
-		expect(bassNoteName(frets("00750x"))).toBe("A");
-	});
-
-	it("has no bass note for a shape that sounds nothing", () => {
-		expect(bassNoteName([])).toBeNull();
 	});
 
 	it("spells pitch classes the way the library does", () => {

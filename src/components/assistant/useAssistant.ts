@@ -1,43 +1,72 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { fetchCustomPatterns } from "@/components/strum/useStrumPatterns";
-import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
-import { resolveAssistantTurn } from "@/lib/strumAssistant/turn";
-import { recordMiss } from "@/lib/strumAssistant/missLog";
-import { uiLang, type Lang } from "@/lib/strumAssistant/lang";
-import type { AssistantDomain, AssistantProposal } from "@/lib/strumAssistant/types";
-import type { EditIntentReading } from "@/lib/strumAssistant/editIntent";
-import { resolveTabTurn, type TabTurnOutcome } from "@/lib/tabAssistant/turn";
-import type { TabProposal } from "@/lib/tabAssistant/types";
+import { PRESET_STRUM_PATTERNS, type ChordRef, type StrumPattern } from "@/lib/strumPatterns";
+import { resolveAssistantTurn } from "@/lib/assistant/strum/turn";
+import { recordMiss } from "@/lib/assistant/missLog";
+import { uiLang, type Lang } from "@/lib/assistant/lang";
+import type Anthropic from "@anthropic-ai/sdk";
+import type { AssistantDomain, AssistantErrorBody, AssistantMode, AssistantProposal, AssistantTurn } from "@/lib/assistant/types";
+import type { EditIntentExplanation, EditIntentReading } from "@/lib/assistant/strum/editIntent";
+import { resolveTabTurn, type TabTurnOutcome } from "@/lib/assistant/tab/turn";
+import type { TabProposal } from "@/lib/assistant/tab/types";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { loadUserFingerpickPatterns } from "@/lib/fingerpickPatternSync";
 import { getUser } from "@/lib/auth";
-import { IDLE_MS, isIdle, readConversation, writeConversation } from "@/lib/strumAssistant/conversation";
+import {
+	IDLE_MS,
+	isIdle,
+	readConversation,
+	readMode,
+	writeConversation,
+	writeMode,
+} from "@/lib/assistant/conversation";
+import { otherDomainReads } from "@/lib/assistant/readAs";
+import { proposeStrum, proposeTab, showChord, strumReadResult, tabReadResult, type ToolCard } from "@/lib/assistant/general/execute";
+import type { GeneralContext } from "@/lib/assistant/general/request";
+import { resolveGeneralTurn, type ModelStep, type ToolInput } from "@/lib/assistant/general/turn";
+import type { ProposeStrumInput, ProposeTabInput, ReadInput, ShowChordInput, ToolName } from "@/lib/assistant/general/tools";
+import { pick } from "@/lib/assistant/lang";
 import { createClient } from "@/lib/supabase";
 
 /**
- * Drives one assistant conversation.
+ * Drives the assistant conversation.
  *
- * One assistant at a time. The hook is given its domain and is that
- * assistant for as long as it is mounted: the strum assistant reads with
- * `resolveAssistantTurn`, the tab assistant with `resolveTabTurn`, each on
- * its own transcript. Both read the message by rules and never reach for a
- * model — so every answer is one the app can stand behind, and that can be
- * asserted rather than promised.
+ * One thread, one mode. The chip above the input says which assistant the
+ * thread is talking to — the strum one reads with `resolveAssistantTurn`,
+ * the tab one with `resolveTabTurn` — and the choice is the player's, kept
+ * with the transcript until they change it or the thread ends. Both read the
+ * message by rules and never reach for a model, so every answer is one the
+ * app can stand behind, and that can be asserted rather than promised.
  *
- * Which one a page gets is, for now, the page itself: the fingerpick page has
- * the tab assistant, every other page the strum one. That is the whole of the
- * triage today, deliberately, and the thing #191 replaces with a real one.
+ * General is the third setting: the model, reached through the route, with
+ * those same readers as its tools. The loop runs here (`resolveGeneralTurn`),
+ * so a pattern the model asks for is made by exactly the code a rules turn
+ * runs, and the card is the reader's, never the model's prose.
+ *
+ * The page is a default, not a decision: a thread opens in the mode of the
+ * page it opens on, and crossing to the other page only prompts — once per
+ * page — to switch. The one time the mode is second-guessed is when it
+ * plainly failed: the chosen readers made nothing of the sentence and the
+ * other assistant's would have; then the reply offers to read it as that one.
  */
 
+const STRUM_PATH = "/strum";
 const TAB_PATH = "/fingerpick";
 
+/** The mode a thread opens in on this page. */
 export function domainForPath(pathname: string | null): AssistantDomain {
 	return pathname === TAB_PATH ? "tab" : "strum";
+}
+
+/** The pages that have an assistant of their own — the only ones worth a prompt to switch. */
+function hasOwnAssistant(pathname: string | null): boolean {
+	return pathname === STRUM_PATH || pathname === TAB_PATH;
 }
 
 export interface AssistantMessage {
@@ -53,10 +82,25 @@ export interface AssistantMessage {
 	tabEdit?: TabTurnOutcome["edit"];
 	/** An edit to an existing pattern, waiting on the player to confirm it. */
 	edit?: EditIntentReading;
+	/** Chords the player asked how to play: the card shows their shapes. */
+	chords?: ChordRef[];
 	/** Sentences offered when nothing read the message, with blanks to fill. */
 	templates?: string[];
 	/** The language this reply was written in; the answers under it follow. */
 	lang?: Lang;
+	/**
+	 * Present when the selected assistant read nothing and the other would
+	 * have: the domain to read the sentence as, and the sentence, so one click
+	 * switches the mode and answers again.
+	 */
+	readAs?: { domain: AssistantDomain; text: string };
+	/**
+	 * Present when the rules read nothing of the sentence: the sentence, so one
+	 * click hands it to General — the model, with the thread as context.
+	 */
+	askGeneral?: { text: string };
+	/** The model that wrote this reply, when one did. A rules reply has none. */
+	model?: string;
 	/** Set when the turn failed; rendered as an error rather than as speech. */
 	failed?: boolean;
 	/** True once the edit this message carried was confirmed and handed over. */
@@ -69,6 +113,43 @@ export interface AssistantMessage {
 	streamed?: boolean;
 }
 
+/** Turns of the thread the model is shown. Capped: the route caps the whole exchange. */
+const MAX_HISTORY_TURNS = 12;
+
+/** The route's answer when it is not a model step. */
+class RouteError extends Error {
+	constructor(
+		readonly status: number,
+		message: string,
+		readonly retryAfterSeconds?: number,
+		readonly guest?: GuestQuota,
+	) {
+		super(message);
+	}
+}
+
+/** A guest's free General turns, as the route last reported them. */
+export interface GuestQuota {
+	used: number;
+	limit: number;
+}
+
+/** "(about 5 min)" / "(about 2 h)": how long until the route will take the next one. */
+function retryIn(seconds: number, lang: Lang): string {
+	const minutes = Math.ceil(seconds / 60);
+	if (minutes < 90) return pick(lang, `(about ${minutes} min)`, `（约 ${minutes} 分钟）`);
+	const hours = Math.ceil(minutes / 60);
+	return pick(lang, `(about ${hours} h)`, `（约 ${hours} 小时）`);
+}
+
+/** A tool's card, as the fields the panel renders it from. */
+function cardFields(card: ToolCard | undefined): Partial<AssistantMessage> {
+	if (!card) return {};
+	if (card.domain === "chord") return { chords: card.chords };
+	if (card.domain === "strum") return "proposal" in card ? { domain: "strum", proposal: card.proposal } : { domain: "strum", edit: card.edit };
+	return "tabProposal" in card ? { domain: "tab", tabProposal: card.tabProposal } : { domain: "tab", tabEdit: card.tabEdit };
+}
+
 /** How long the assistant appears to think before it answers. */
 const THINK_MIN_MS = 150;
 const THINK_MAX_MS = 2000;
@@ -79,12 +160,47 @@ function newId(): string {
 		: `m${Date.now()}${Math.random()}`;
 }
 
-export function useAssistant(domain: AssistantDomain) {
+export function useAssistant() {
+	const pathname = usePathname();
+	const page = domainForPath(pathname);
+	// A ref for the callbacks that must not change identity with the route:
+	// `reset` is a dependency of the idle timer, and navigating is not talking.
+	const pageRef = useRef(page);
+	useEffect(() => {
+		pageRef.current = page;
+	}, [page]);
+
+	// The mode the thread was left in, or the page's default for a new one.
+	// Read once, lazily, on the client — nothing that wears the mode is in the
+	// server's markup; the panel mounts on click.
+	const [mode, setModeState] = useState<AssistantMode>(() =>
+		typeof window === "undefined" ? page : (readMode() ?? page),
+	);
+	/**
+	 * The page the player was last prompted to switch on. The prompt shows
+	 * when the mode and the page disagree, once per page: dismissed by typing
+	 * or by choosing a mode — either is an answer — and back again on the
+	 * next page that disagrees.
+	 */
+	const [nudgedPath, setNudgedPath] = useState<string | null>(null);
+	const dismissNudge = useCallback(() => setNudgedPath(pathname), [pathname]);
+
+	const setMode = useCallback(
+		(next: AssistantMode) => {
+			setModeState(next);
+			writeMode(next);
+			dismissNudge();
+		},
+		[dismissNudge],
+	);
+	// General reaches both workspaces, so the page has nothing to propose to it.
+	const nudge = hasOwnAssistant(pathname) && mode !== "general" && mode !== page && nudgedPath !== pathname;
+
 	// Read once, lazily. Safe to differ between server and client: nothing that
 	// renders the transcript is mounted until the popover opens, so the markup
 	// React hydrates against does not depend on this.
 	const [messages, setMessages] = useState<AssistantMessage[]>(() =>
-		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now(), domain),
+		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now()),
 	);
 	const [pending, setPending] = useState(false);
 
@@ -166,10 +282,22 @@ export function useAssistant(domain: AssistantDomain) {
 	const [greeted, setGreeted] = useState(false);
 	const markGreeted = useCallback(() => setGreeted(true), []);
 
+	/**
+	 * A guest's free turns, once the route has said. Unknown until the first
+	 * General turn — the count lives in a cookie only the route reads — so
+	 * the chip opens General to a guest and locks it when the route says no.
+	 */
+	const [guestQuota, setGuestQuota] = useState<GuestQuota | null>(null);
+
 	const reset = useCallback(() => {
 		setMessages([]);
 		setSessionId(newId());
 		setGreeted(false);
+		// Who is asking may have changed; the route will say again.
+		setGuestQuota(null);
+		// A new thread opens in the page's mode, as the first one did.
+		setModeState(pageRef.current);
+		writeMode(null);
 	}, []);
 
 	/**
@@ -187,11 +315,11 @@ export function useAssistant(domain: AssistantDomain) {
 	useEffect(() => {
 		const now = Date.now();
 		touchedAtRef.current = now;
-		writeConversation(messages, now, domain);
+		writeConversation(messages, now);
 		if (messages.length === 0) return;
 		const timer = setTimeout(reset, IDLE_MS);
 		return () => clearTimeout(timer);
-	}, [messages, reset, domain]);
+	}, [messages, reset]);
 
 	/**
 	 * For the moment the panel opens: a timer that fired late (a laptop asleep,
@@ -239,6 +367,186 @@ export function useAssistant(domain: AssistantDomain) {
 		);
 	}, []);
 
+	/**
+	 * The transcript as the model sees it: text only, the newest turns, no
+	 * cards and no failures. A ref mirror, read when a turn starts, so the
+	 * resolver's identity does not change with every message.
+	 */
+	const messagesRef = useRef<AssistantMessage[]>(messages);
+	useEffect(() => {
+		messagesRef.current = messages;
+	}, [messages]);
+	const historyOf = (all: readonly AssistantMessage[]): AssistantTurn[] =>
+		all
+			.filter((m) => !m.failed && m.text.trim() !== "")
+			.slice(-MAX_HISTORY_TURNS)
+			.map((m) => ({ role: m.role, content: m.text }));
+
+	/**
+	 * One model step through the route. Anything but 200 is the route's own
+	 * sentence, thrown. The turn id lets the route count a guest's loop as
+	 * one turn however many steps it takes.
+	 */
+	const callRoute = useCallback(
+		async (msgs: readonly Anthropic.MessageParam[], context: GeneralContext, turnId: string): Promise<ModelStep> => {
+			const res = await fetch("/api/assistant", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ messages: msgs, context, turnId }),
+			});
+			const body: unknown = await res.json().catch(() => null);
+			if (!res.ok) {
+				const b = (body ?? {}) as Partial<AssistantErrorBody>;
+				if (b.guest) setGuestQuota(b.guest);
+				throw new RouteError(res.status, b.error ?? "The assistant could not be reached.", b.retryAfterSeconds, b.guest);
+			}
+			const step = body as ModelStep & { guest?: GuestQuota };
+			if (step.guest) setGuestQuota(step.guest);
+			return step;
+		},
+		[],
+	);
+
+	/**
+	 * One sentence, read by one assistant. The reading is instant; the reply
+	 * is not. A pause of the kind a person takes before answering — random,
+	 * so it never reads as a timer — with the typing dots showing for it. The
+	 * floor keeps the dots from flashing for a frame and vanishing. A tab turn
+	 * may also wait on the chord library for its shapes; the pause runs alongside.
+	 * A General turn is as slow as the model; the pause is lost inside it.
+	 */
+	const resolveIn = useCallback(
+		async (as: AssistantMode, text: string, history: readonly AssistantTurn[] = []): Promise<AssistantMessage> => {
+			const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
+			setIndex(index);
+			const thinking = new Promise((done) =>
+				setTimeout(done, THINK_MIN_MS + Math.random() * (THINK_MAX_MS - THINK_MIN_MS)),
+			);
+			const reply: AssistantMessage = { id: newId(), role: "assistant", text: "" };
+			const readStrum = (sentence: string) =>
+				resolveAssistantTurn({ text: sentence, index, patterns: patternList, uiLang: uiLang() });
+			// Tab patterns are re-read per turn rather than cached for the
+			// session: a pattern saved on the page since the last turn has to be
+			// nameable now.
+			tabPatternsRef.current = null;
+			const tabPatterns = await loadTabPatterns();
+			const readTab = (sentence: string) =>
+				resolveTabTurn({ text: sentence, index, patterns: tabPatterns, uiLang: uiLang() });
+
+			if (as === "general") {
+				const context: GeneralContext = {
+					page: hasOwnAssistant(pathname) ? page : null,
+					strumNames: patternList.map((p) => p.name),
+					tabNames: tabPatterns.map((p) => p.name),
+					lang: uiLang(),
+				};
+				const execute = async (name: ToolName, input: ToolInput) => {
+					switch (name) {
+						case "read_strum":
+						case "edit_strum":
+							return strumReadResult(readStrum((input as ReadInput).text));
+						case "read_tab":
+						case "edit_tab":
+							return tabReadResult(await readTab((input as ReadInput).text));
+						case "propose_strum":
+							return proposeStrum(input as ProposeStrumInput, index);
+						case "propose_tab":
+							return proposeTab(input as ProposeTabInput);
+						case "show_chord":
+							return showChord(input as ShowChordInput, index);
+					}
+				};
+				const turnId = newId();
+				try {
+					const outcome = await resolveGeneralTurn({
+						text,
+						history,
+						context,
+						call: (msgs, ctx) => callRoute(msgs, ctx, turnId),
+						execute,
+						uiLang: uiLang(),
+					});
+					Object.assign(reply, {
+						text: outcome.text,
+						lang: outcome.lang,
+						...(outcome.model ? { model: outcome.model } : {}),
+						...cardFields(outcome.card),
+					});
+				} catch (e) {
+					const lang = uiLang();
+					reply.failed = true;
+					reply.lang = lang;
+					reply.text =
+						e instanceof RouteError
+							? e.retryAfterSeconds
+								? `${e.message} ${retryIn(e.retryAfterSeconds, lang)}`
+								: e.message
+							: pick(lang, "The assistant could not be reached. Strum and Tab still work offline.", "联系不上助手。扫弦和指弹仍然可以离线用。");
+					if (!(e instanceof RouteError)) console.error("[assistant] general turn failed:", e);
+				}
+				await thinking;
+				return reply;
+			}
+
+			reply.domain = as;
+			let missed: { seen: EditIntentExplanation; offered: string[] } | null = null;
+			if (as === "tab") {
+				const outcome = await readTab(text);
+				if (outcome.seen && outcome.templates) missed = { seen: outcome.seen, offered: outcome.templates };
+				Object.assign(reply, {
+					text: outcome.text,
+					tabProposal: outcome.proposal,
+					tabEdit: outcome.edit,
+					chords: outcome.chords,
+					templates: outcome.templates,
+					lang: outcome.lang,
+				});
+			} else {
+				const outcome = readStrum(text);
+				if (outcome.seen && outcome.templates) missed = { seen: outcome.seen, offered: outcome.templates };
+				Object.assign(reply, {
+					text: outcome.text,
+					proposal: outcome.proposal,
+					edit: outcome.edit,
+					chords: outcome.chords,
+					templates: outcome.templates,
+					lang: outcome.lang,
+					...(outcome.failed ? { failed: true } : {}),
+				});
+			}
+			// Nothing concrete came of it — no card, or a card that only says the
+			// name is unknown here. If the other assistant would have read the
+			// sentence whole, the reply says so, and offers to.
+			const hasCard =
+				reply.proposal !== undefined ||
+				reply.chords !== undefined ||
+				reply.tabProposal !== undefined ||
+				reply.tabEdit !== undefined ||
+				(reply.edit !== undefined && reply.edit.kind !== "unknown-pattern");
+			const other =
+				hasCard || reply.failed
+					? null
+					: otherDomainReads(as, text, { index, strumPatterns: patternList, tabPatterns });
+			if (other) reply.readAs = { domain: other, text };
+			// A sentence nothing read is worth keeping: it is the next eval case,
+			// and the sentence picked after it is what the rules should have read.
+			if (missed) {
+				recordMiss(text, missed.seen, missed.offered, { mode: as, readAs: other });
+				// And it may be a question rather than an instruction — General's
+				// to answer. Offered under the templates, never taken on its own.
+				reply.askGeneral = { text };
+				reply.text += pick(
+					reply.lang ?? uiLang(),
+					"\n\nOr ask General — it can take a question, not only an instruction.",
+					"\n\n或者改问 General——它能回答问题，不只是执行指令。",
+				);
+			}
+			await thinking;
+			return reply;
+		},
+		[callRoute, chordIndex, loadPatterns, loadTabPatterns, page, pathname],
+	);
+
 	const send = useCallback(
 		async (input: string) => {
 			const text = input.trim();
@@ -247,61 +555,55 @@ export function useAssistant(domain: AssistantDomain) {
 			const userMessage: AssistantMessage = { id: newId(), role: "user", text };
 			setMessages((prev) => [...prev, userMessage]);
 			setPending(true);
-
+			// Talking settles the mode: a thread that has been spoken to keeps its
+			// assistant across pages, where an untouched one still follows the page.
+			writeMode(mode);
 			try {
-				const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
-				setIndex(index);
-				// The reading is instant; the reply is not. A pause of the kind a
-				// person takes before answering — random, so it never reads as a
-				// timer — with the typing dots showing for it. The floor keeps the
-				// dots from flashing for a frame and vanishing. A tab turn may also
-				// wait on the chord library for its shapes; the pause runs alongside.
-				const thinking = new Promise((done) =>
-					setTimeout(done, THINK_MIN_MS + Math.random() * (THINK_MAX_MS - THINK_MIN_MS)),
-				);
-				const reply: AssistantMessage = { id: newId(), role: "assistant", text: "", domain };
-				if (domain === "tab") {
-					// Re-read per turn rather than cached for the session: a pattern
-					// saved on the page since the last turn has to be nameable now.
-					tabPatternsRef.current = null;
-					const tabPatterns = await loadTabPatterns();
-					const outcome = await resolveTabTurn({ text, index, patterns: tabPatterns, uiLang: uiLang() });
-					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
-					Object.assign(reply, {
-						text: outcome.text,
-						tabProposal: outcome.proposal,
-						tabEdit: outcome.edit,
-						templates: outcome.templates,
-						lang: outcome.lang,
-					});
-				} else {
-					const outcome = resolveAssistantTurn({ text, index, patterns: patternList, uiLang: uiLang() });
-					// A sentence nothing read is worth keeping: it is the next eval case,
-					// and the sentence picked after it is what the rules should have read.
-					if (outcome.seen && outcome.templates) recordMiss(text, outcome.seen, outcome.templates);
-					Object.assign(reply, {
-						text: outcome.text,
-						proposal: outcome.proposal,
-						edit: outcome.edit,
-						templates: outcome.templates,
-						lang: outcome.lang,
-						...(outcome.failed ? { failed: true } : {}),
-					});
-				}
-				await thinking;
+				const reply = await resolveIn(mode, text, historyOf(messagesRef.current));
 				setMessages((prev) => [...prev, reply]);
 			} finally {
 				setPending(false);
 			}
 		},
-		[chordIndex, domain, loadPatterns, loadTabPatterns, pending],
+		[mode, pending, resolveIn],
+	);
+
+	/**
+	 * The offer taken: the thread switches to the other assistant and the
+	 * sentence is read again by it. The reply that made the offer is replaced,
+	 * not followed — the sentence was asked once. General is shown the thread
+	 * up to that sentence, as it would have been had it answered first.
+	 */
+	const readAs = useCallback(
+		async (messageId: string, as: AssistantMode, text: string) => {
+			if (pending) return;
+			setMode(as);
+			setPending(true);
+			try {
+				const all = messagesRef.current;
+				const at = all.findIndex((m) => m.id === messageId);
+				// Everything before the user turn this reply answered.
+				const before = at > 0 ? all.slice(0, at - 1) : [];
+				const reply = await resolveIn(as, text, as === "general" ? historyOf(before) : []);
+				setMessages((prev) => prev.map((m) => (m.id === messageId ? reply : m)));
+			} finally {
+				setPending(false);
+			}
+		},
+		[pending, resolveIn, setMode],
 	);
 
 	return {
-		domain,
+		mode,
+		setMode,
+		page,
+		guestQuota,
+		nudge,
+		dismissNudge,
 		messages,
 		pending,
 		send,
+		readAs,
 		reset,
 		expireIfIdle,
 		markStreamed,

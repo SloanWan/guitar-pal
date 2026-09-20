@@ -12,7 +12,7 @@ import {
 } from "@/lib/fingerpickTypes";
 import type { Cell, SlotTarget } from "@/lib/fingerpickEdit";
 import type { ChordRef } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 // Short glyphs shown under each slot column so the current rhythmic value is
 // visible in the grid. A rest keeps its real duration, so it shows the same glyph

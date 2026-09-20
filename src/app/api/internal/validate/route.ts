@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { parseRhythm } from "@/lib/strumAssistant/parseRhythm";
+import { parseRhythm } from "@/lib/assistant/strum/parseRhythm";
 import { normalizeImportedPattern } from "@/lib/tabImport";
 import type { RepeatDirective, ValidationIssue } from "@/lib/tabImport";
 

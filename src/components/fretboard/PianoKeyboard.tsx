@@ -60,6 +60,8 @@ export interface PianoKeyboardHandle {
 	highlight: (midi: number | null) => void;
 	/** Flash the key sounding `midi` once, the way a played key dips. */
 	strike: (midi: number) => void;
+	/** Scroll the keyboard, if it scrolls, until the key sounding `midi` is in view. */
+	reveal: (midi: number) => void;
 }
 
 export interface PianoKeyboardProps {
@@ -193,6 +195,22 @@ export default function PianoKeyboard({
 					else continue;
 					highlighted.current.push(el);
 				}
+			},
+			reveal(midi) {
+				const el = scroller.current;
+				const key = board.current?.querySelector<HTMLElement>(`[data-midi="${midi}"]`);
+				if (!el || !key || typeof el.scrollTo !== "function") return;
+				const left = key.offsetLeft;
+				const width = key.offsetWidth;
+				// A key of slack at each edge, so the key lands inside the view
+				// rather than on its very edge.
+				const min = el.scrollLeft + width;
+				const max = el.scrollLeft + el.clientWidth - 2 * width;
+				if (left >= min && left <= max) return;
+				el.scrollTo({
+					left: Math.max(0, left < min ? left - width : left - el.clientWidth + 3 * width),
+					behavior: prefersReducedMotion() ? "auto" : "smooth",
+				});
 			},
 			strike(midi) {
 				const el = board.current?.querySelector<HTMLElement>(`[data-midi="${midi}"]`);

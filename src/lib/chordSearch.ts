@@ -119,6 +119,13 @@ function normalizeSuffix(rest: string): string {
     case "halfdim":
     case "halfdiminished":
       return "m7b5";
+    // The six-nine chord is stored as "69"; charts also write it as 6/9 and 6add9.
+    case "6/9":
+    case "6add9":
+      return "69";
+    case "m6/9":
+    case "m6add9":
+      return "m69";
     default:
       return s;
   }

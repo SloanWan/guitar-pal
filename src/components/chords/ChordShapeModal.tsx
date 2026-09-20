@@ -13,7 +13,7 @@ import {
 } from "@/lib/chordShape";
 import { userVoicingId, type UserChordVoicing } from "@/lib/userChordVoicings";
 import type { ChordRef } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { normalizeChordName } from "@/lib/chordSearch";
 

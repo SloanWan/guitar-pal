@@ -3,6 +3,7 @@ import {
 	effectiveChords,
 	patternHasChords,
 	setSlotChord,
+	moveSlotChord,
 	chordSymbolLabel,
 	chordFretHints,
 	chordRootString,
@@ -24,7 +25,7 @@ import {
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import type { ChordRef } from "@/lib/strumPatterns";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 function voicing(overrides: Partial<ChordVoicing> = {}): ChordVoicing {
 	return {
@@ -427,5 +428,31 @@ describe("measure replace with hints", () => {
 		expect(out.measures[0].slots[2].strings[3].fret).toBe(2);
 		expect(out.measures[0].slots[3].strings[5].fret).toBeNull();
 		expect(measureDiffersFromHints(out.measures[0], forSlot)).toBe(false);
+	});
+});
+
+describe("moveSlotChord", () => {
+	const bars = [measure("m1", [C, undefined, undefined, undefined]), measure("m2", [Am, undefined, G7, undefined])];
+
+	it("carries a mark to an empty slot, within a bar or across one", () => {
+		const within = moveSlotChord(bars, { measureIndex: 0, slotIndex: 0 }, { measureIndex: 0, slotIndex: 2 });
+		expect(within?.[0].slots.map((s) => s.chord?.root)).toEqual([undefined, undefined, "C", undefined]);
+		expect(within?.[1]).toBe(bars[1]);
+		const across = moveSlotChord(bars, { measureIndex: 1, slotIndex: 2 }, { measureIndex: 0, slotIndex: 3 });
+		expect(across?.[0].slots[3].chord).toEqual(G7);
+		expect(across?.[1].slots[2].chord).toBeUndefined();
+	});
+
+	it("refuses a move onto another mark, onto itself, or from an empty slot", () => {
+		expect(moveSlotChord(bars, { measureIndex: 1, slotIndex: 0 }, { measureIndex: 1, slotIndex: 2 })).toBeNull();
+		expect(moveSlotChord(bars, { measureIndex: 0, slotIndex: 0 }, { measureIndex: 0, slotIndex: 0 })).toBeNull();
+		expect(moveSlotChord(bars, { measureIndex: 0, slotIndex: 1 }, { measureIndex: 0, slotIndex: 2 })).toBeNull();
+		expect(moveSlotChord(bars, { measureIndex: 0, slotIndex: 0 }, { measureIndex: 0, slotIndex: 9 })).toBeNull();
+	});
+
+	it("leaves the input as it was", () => {
+		moveSlotChord(bars, { measureIndex: 0, slotIndex: 0 }, { measureIndex: 0, slotIndex: 1 });
+		expect(bars[0].slots[0].chord).toEqual(C);
+		expect(bars[0].slots[1].chord).toBeUndefined();
 	});
 });

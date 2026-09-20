@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import type { ChapterExercise } from "@/lib/books/types";
-import { takeHandoff } from "@/lib/strumAssistant/handoff";
+import { takeHandoff } from "@/lib/assistant/handoff";
 
 /**
  * The draft panel with the audio engine, the library and the editor stubbed:

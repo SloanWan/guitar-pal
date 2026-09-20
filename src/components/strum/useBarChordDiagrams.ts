@@ -4,14 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import { chordRefToDiagram } from "@/lib/strumBars";
 import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
-import type { ChordVoicing, VexChordDef } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing, DiagramShape } from "@/lib/chordVoicing";
 import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**
  * A bar's fretboard shape, or the fact that it is still on its way. Null — no
  * chord, no voicings, or a lookup that failed — means "show the name instead".
  */
-export type BarChordDiagram = { status: "loading" } | { status: "ready"; def: VexChordDef };
+export type BarChordDiagram = { status: "loading" } | { status: "ready"; def: DiagramShape };
 
 function keyOf(ref: ChordRef): string {
 	return voicingCacheKey(ref.root, ref.suffix);

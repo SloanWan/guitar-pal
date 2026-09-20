@@ -9,7 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import ChordVoicingModal from "@/components/chords/ChordVoicingModal";
 import type { ChordPreview } from "@/components/chords/useChordPreview";
 import { toVoicingCards } from "@/lib/chordCards";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -27,11 +27,11 @@ function voicing(id: string, label: string, startFret: number): ChordVoicing {
 	};
 }
 
-const VOICINGS = toVoicingCards([
-	voicing("a", "Standard", 1),
-	voicing("b", "Pos. 3", 3),
-	voicing("c", "Pos. 5", 5),
-]);
+const VOICINGS = toVoicingCards(
+	[voicing("a", "Standard", 1), voicing("b", "Pos. 3", 3), voicing("c", "Pos. 5", 5)],
+	"C",
+	"major",
+);
 
 function mount(host: HTMLElement, props: Partial<React.ComponentProps<typeof ChordVoicingModal>>) {
 	return (
@@ -47,8 +47,10 @@ function mount(host: HTMLElement, props: Partial<React.ComponentProps<typeof Cho
 	);
 }
 
+// The label line also carries the inversion name and the omitted tones after
+// " · " (#231, #234); the paging tests care about the label alone.
 const shownLabel = (host: HTMLElement) =>
-	host.querySelector("p.text-sm.text-ink-dim")?.textContent ?? null;
+	host.querySelector("p.text-sm.text-ink-dim")?.textContent?.split(" · ")[0] ?? null;
 const click = (host: HTMLElement, label: string) =>
 	(host.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement).click();
 

@@ -2,6 +2,7 @@
 
 import React from "react";
 
+import type { DiagramShape } from "@/lib/chordVoicing";
 import { GUITAR_OPEN_MIDI, NOTE_NAMES, STRING_LABELS } from "@/lib/chordVoicingToMidi";
 
 // SVG layout (px, "regular" size)
@@ -47,11 +48,7 @@ export type DiagramSize = "compact" | "regular" | "large";
 
 const LARGE_W = 256;
 
-export interface ChordDiagramSVGProps {
-  frets: number[];
-  fingers: number[];
-  startFret: number;
-  barreFret?: number | null;
+export interface ChordDiagramSVGProps extends DiagramShape {
   mode?: DiagramMode;
   size?: DiagramSize;
   rootMidi?: number;

@@ -37,7 +37,7 @@ import { fillColumnFromChord, offShapeStrings, type FretHint } from "@/lib/finge
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { selectRefVoicing } from "@/lib/strumBars";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
 import type { ChordVoicingsState } from "./useChordVoicings";
 import type { CommitPattern } from "./useEditHistory";

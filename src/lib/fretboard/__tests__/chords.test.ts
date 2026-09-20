@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { PARENT_SCALE, keyChord, keyChords, shapeMarks, shapePitches } from "@/lib/fretboard/chords";
 import { NOTE_NAMES } from "@/lib/chordVoicingToMidi";
 import { SCALE_TYPES } from "@/lib/fretboard/scales";

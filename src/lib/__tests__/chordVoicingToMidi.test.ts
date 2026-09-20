@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { chordVoicingToMidi, GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 
 function voicing(overrides: Partial<ChordVoicing>): ChordVoicing {
   return {

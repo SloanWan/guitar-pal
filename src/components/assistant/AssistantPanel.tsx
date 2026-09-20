@@ -1,18 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { CornerDownLeft } from "lucide-react";
-import ProposalPreview from "./ProposalPreview";
-import TabProposalPreview from "./TabProposalPreview";
-import TabEditCard from "./TabEditCard";
-import EditIntentCard from "./EditIntentCard";
+import { usePathname, useRouter } from "next/navigation";
+import { ArrowRightLeft, CornerDownLeft, LogIn, Sparkles } from "lucide-react";
+import ProposalPreview from "./strum/ProposalPreview";
+import TabProposalPreview from "./tab/TabProposalPreview";
+import TabEditCard from "./tab/TabEditCard";
+import EditIntentCard from "./strum/EditIntentCard";
+import ChordShapeCard from "./ChordShapeCard";
 import { Option, Options } from "./Options";
-import { BLANK } from "@/lib/strumAssistant/suggest";
-import { recordPick } from "@/lib/strumAssistant/missLog";
+import { BLANK } from "@/lib/assistant/blank";
+import { recordPick } from "@/lib/assistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
-import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/strumAssistant/greeting";
-import { uiLang } from "@/lib/strumAssistant/lang";
-import type { AssistantDomain } from "@/lib/strumAssistant/types";
+import { hasCoarsePointer } from "@/lib/pointer";
+import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/assistant/greeting";
+import { pick, uiLang } from "@/lib/assistant/lang";
+import { modelDisplayName } from "@/lib/assistant/general/request";
+import type { AssistantDomain, AssistantMode } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
 
@@ -23,8 +27,14 @@ import type { useAssistant } from "./useAssistant";
  */
 
 const MAX_INPUT_CHARS = 600;
+/** The chip's segments, in the order they sit. */
+const MODES: readonly AssistantMode[] = ["strum", "tab", "general"];
+const MODE_LABEL: Record<AssistantMode, string> = { strum: "Strum", tab: "Tab", general: "General" };
+const MODE_LABEL_ZH: Record<AssistantDomain, string> = { strum: "扫弦", tab: "指弹" };
 /** How far above the bottom still counts as reading the tail, so a stray pixel does not unpin. */
 const TAIL_SLACK_PX = 24;
+/** How long after a wheel, touch, key or scrollbar press a scroll still counts as the reader's. */
+const USER_SCROLL_WINDOW_MS = 500;
 
 /** Five lines of the field's own text, after which it scrolls instead of growing. */
 const MAX_INPUT_HEIGHT_PX = 104;
@@ -184,7 +194,7 @@ function Intro({
 	hello: string;
 	/** The line after the greeting: what this does, and for a guest, where their work lives. */
 	aside: string;
-	domain: AssistantDomain;
+	domain: AssistantMode;
 	greeted: boolean;
 	onGreeted: () => void;
 	onExample: (text: string) => void;
@@ -254,10 +264,16 @@ export default function AssistantPanel({
 	height: number;
 }) {
 	const {
-		domain,
+		mode,
+		setMode,
+		page,
+		guestQuota,
+		nudge,
+		dismissNudge,
 		messages,
 		pending,
 		send,
+		readAs,
 		markStreamed,
 		markEditDone,
 		patterns,
@@ -268,6 +284,15 @@ export default function AssistantPanel({
 		markGreeted,
 	} = assistant;
 	const [draft, setDraft] = useState("");
+	/**
+	 * General is the model. A guest has a few free turns a day; once they
+	 * are used the segment locks, and pointing at it, or pressing it, says
+	 * why and where to sign in — rather than a greyed button that explains
+	 * nothing, or a refusal after typing.
+	 */
+	const [askedForGeneral, setAskedForGeneral] = useState(false);
+	const router = useRouter();
+	const pathname = usePathname();
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	/** The conversation itself, inside the scrolling frame — what is watched for growth. */
 	const contentRef = useRef<HTMLDivElement | null>(null);
@@ -276,6 +301,7 @@ export default function AssistantPanel({
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
 	const promptHintId = useId();
 	const { user } = useUser();
+	const guestUsedUp = user === null && guestQuota !== null && guestQuota.used >= guestQuota.limit;
 
 	// Picked once per conversation rather than per render: a line that changed
 	// while being read would be a tic, not a greeting.
@@ -284,13 +310,13 @@ export default function AssistantPanel({
 	const lang = uiLang();
 	const name = user ? playerName(user.user_metadata, user.email) : null;
 	const hello = useMemo(() => greeting(name, sessionId, lang), [name, sessionId, lang]);
-	const aside = introHint(lang, user !== null, domain);
+	const aside = introHint(lang, user !== null, mode);
 
 	// The examples take turns while there is nothing typed. Tab takes the one on
 	// screen — only while the field is empty, so Tab still leaves a field with
 	// something in it, and Shift+Tab always walks back the way it should.
 	const [promptSlot, setPromptSlot] = useState(0);
-	const prompts = inputPrompts(domain);
+	const prompts = inputPrompts(mode);
 	const hint = draft === "" ? prompts[promptSlot % prompts.length] : "";
 	useEffect(() => {
 		if (draft !== "") return;
@@ -368,20 +394,60 @@ export default function AssistantPanel({
 		observer.observe(el);
 		return () => observer.disconnect();
 	}, []);
+	/**
+	 * When the reader last did something that scrolls — a wheel, a finger, a
+	 * key, the scrollbar. Only a scroll that follows one of those may unpin:
+	 * the browser also scrolls on its own, clamping `scrollTop` when the
+	 * content briefly shrinks (a stave clearing and redrawing its SVG makes
+	 * the first turn shorter than the panel for one layout), and that is not
+	 * the reader leaving the tail. Such a scroll is undone instead — nothing
+	 * else will, since the content's final height is what it was.
+	 */
+	const userScrollAtRef = useRef(0);
+	const noteUserScroll = useCallback(() => {
+		userScrollAtRef.current = performance.now();
+	}, []);
 	const onScroll = useCallback(() => {
 		const el = scrollRef.current;
-		if (el) pinnedRef.current = el.scrollHeight - el.clientHeight - el.scrollTop <= TAIL_SLACK_PX;
+		if (!el) return;
+		const atTail = el.scrollHeight - el.clientHeight - el.scrollTop <= TAIL_SLACK_PX;
+		if (atTail) pinnedRef.current = true;
+		else if (performance.now() - userScrollAtRef.current < USER_SCROLL_WINDOW_MS) pinnedRef.current = false;
+		else if (pinnedRef.current) el.scrollTop = el.scrollHeight;
 	}, []);
 
+	// Opening the panel puts the cursor in the composer — on a keyboard device.
+	// On a phone, focus raises the software keyboard over half the screen and
+	// the panel underneath it: the player opened the assistant to read, and
+	// taps the field when they mean to type.
 	useEffect(() => {
+		if (hasCoarsePointer()) return;
 		inputRef.current?.focus();
 	}, []);
 
 	function submit(text: string) {
 		if (pending) return;
+		// Nothing typed: the example on show is taken into the composer rather
+		// than sent — what Tab does on a keyboard, on the one control a phone has.
+		// The player reads it as theirs, and sends it, or edits it, themselves.
+		if (text.trim() === "") {
+			if (hint !== "") takeHint();
+			return;
+		}
 		recallRef.current = null;
 		setDraft("");
 		void send(text);
+	}
+
+	/** The example sentence on show, into the field, caret at its end. */
+	function takeHint() {
+		setDraft(hint);
+		requestAnimationFrame(() => {
+			const field = inputRef.current;
+			if (!field) return;
+			field.focus();
+			field.setSelectionRange(field.value.length, field.value.length);
+		});
 	}
 
 	/** The player's message this reply answered — what a picked sentence is a pick for. */
@@ -415,6 +481,10 @@ export default function AssistantPanel({
 			<div
 				ref={scrollRef}
 				onScroll={onScroll}
+				onWheel={noteUserScroll}
+				onTouchMove={noteUserScroll}
+				onPointerDown={noteUserScroll}
+				onKeyDown={noteUserScroll}
 				className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
 				role="log"
 				aria-live="polite"
@@ -428,7 +498,7 @@ export default function AssistantPanel({
 							key={sessionId}
 							hello={hello}
 							aside={aside}
-							domain={domain}
+							domain={mode}
 							greeted={greeted}
 							onGreeted={markGreeted}
 							onExample={submit}
@@ -451,12 +521,24 @@ export default function AssistantPanel({
 												onDone={() => markStreamed(message.id)}
 											/>
 										</Bubble>
+										{/* Who wrote it. A rules reply says nothing; a model's says which model,
+										    so the player knows when to weigh the words. */}
+										{message.model && message.streamed === true && (
+											<span className="pl-2 font-mono text-[10px] tracking-[0.06em] text-ink-faint">
+												{pick(message.lang ?? "en", `Answered by ${modelDisplayName(message.model)}`, `由 ${modelDisplayName(message.model)} 回答`)}
+											</span>
+										)}
 										{/* The preview is an attachment, not speech: full width under
 										    the bubble, where a 16-cell grid actually fits — and held
 										    back until the message has finished saying what it is. */}
 										{message.proposal && message.streamed === true && (
 											<div className="w-full">
 												<ProposalPreview proposal={message.proposal} />
+											</div>
+										)}
+										{message.chords && message.streamed === true && (
+											<div className="w-full">
+												<ChordShapeCard chords={message.chords} lang={message.lang ?? "en"} />
 											</div>
 										)}
 										{message.tabProposal && message.streamed === true && (
@@ -488,6 +570,33 @@ export default function AssistantPanel({
 												))}
 											</Options>
 										)}
+										{(message.readAs || (message.askGeneral && !guestUsedUp)) && message.streamed === true && (
+											<Options>
+												{message.readAs && (
+													<Option
+														order={message.templates?.length ?? 0}
+														tone="outline"
+														onClick={() => void readAs(message.id, message.readAs!.domain, message.readAs!.text)}
+														icon={<ArrowRightLeft className="size-3" strokeWidth={1.5} aria-hidden="true" />}
+													>
+														{pick(message.lang ?? "en", `Read as ${MODE_LABEL[message.readAs.domain]} instead`, `按${MODE_LABEL_ZH[message.readAs.domain]}读`)}
+													</Option>
+												)}
+												{/* The rules read nothing; the model may. Same sentence, same
+												    thread, answered again by General — hidden from a guest
+												    whose free turns are gone, as the chip's segment is locked. */}
+												{message.askGeneral && !guestUsedUp && (
+													<Option
+														order={(message.templates?.length ?? 0) + (message.readAs ? 1 : 0)}
+														tone="outline"
+														onClick={() => void readAs(message.id, "general", message.askGeneral!.text)}
+														icon={<Sparkles className="size-3" strokeWidth={1.5} aria-hidden="true" />}
+													>
+														{pick(message.lang ?? "en", "Ask General instead", "改问 General")}
+													</Option>
+												)}
+											</Options>
+										)}
 										{message.edit && message.streamed === true && (
 											<div className="w-full">
 												<EditIntentCard
@@ -515,8 +624,60 @@ export default function AssistantPanel({
 				</div>
 			</div>
 
+			{/* Which assistant the thread talks to. The player's to set; the page
+			    only proposes, once per page, when the two disagree. */}
+			<div className="flex flex-none items-center gap-2 border-t border-line px-2 pt-2">
+				<div role="radiogroup" aria-label="Which assistant" className="flex border border-line-strong">
+					{MODES.map((m, i) => {
+						const locked = m === "general" && guestUsedUp;
+						return (
+							<button
+								key={m}
+								type="button"
+								role="radio"
+								aria-checked={mode === m}
+								aria-disabled={locked || undefined}
+								disabled={pending}
+								onClick={() => (locked ? setAskedForGeneral(true) : setMode(m))}
+								onPointerEnter={locked ? () => setAskedForGeneral(true) : undefined}
+								onPointerLeave={locked ? () => setAskedForGeneral(false) : undefined}
+								onFocus={locked ? () => setAskedForGeneral(true) : undefined}
+								onBlur={locked ? () => setAskedForGeneral(false) : undefined}
+								className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${i > 0 ? "border-l border-line-strong" : ""} ${mode === m ? "bg-denim text-on-denim" : locked ? "text-ink-faint" : "text-ink-dim hover:text-denim"}`}
+							>
+								{MODE_LABEL[m]}
+							</button>
+						);
+					})}
+				</div>
+				{askedForGeneral && guestUsedUp ? (
+					<button
+						type="button"
+						onClick={() => router.push(`/auth?redirect=${encodeURIComponent(pathname ?? "/")}`)}
+						className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-denim-accent transition-colors duration-(--dur-hover) hover:text-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+					>
+						<LogIn className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
+						<span className="truncate">Sign in to use General</span>
+					</button>
+				) : user === null && mode === "general" && guestQuota !== null ? (
+					<span className="min-w-0 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+						{`${guestQuota.used} of ${guestQuota.limit} free today`}
+					</span>
+				) : nudge ? (
+					<button
+						type="button"
+						onClick={() => setMode(page)}
+						className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-denim-accent transition-colors duration-(--dur-hover) hover:text-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+					>
+						<ArrowRightLeft className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
+						<span className="truncate">
+							{`Switch to ${MODE_LABEL[page]} for this page?`}
+						</span>
+					</button>
+				) : null}
+			</div>
 			<form
-				className="flex flex-none items-end gap-2 border-t border-line p-2"
+				className="flex flex-none items-end gap-2 p-2"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit(draft);
@@ -527,8 +688,10 @@ export default function AssistantPanel({
 					rows={1}
 					value={draft}
 					onChange={(e) => {
-						// Typing turns a recalled message into a draft of its own.
+						// Typing turns a recalled message into a draft of its own — and
+						// answers the prompt to switch: the mode on the chip is the one meant.
 						recallRef.current = null;
+						if (nudge && e.target.value !== "") dismissNudge();
 						setDraft(e.target.value);
 					}}
 					onKeyDown={(e) => {
@@ -543,7 +706,7 @@ export default function AssistantPanel({
 							// tab to, so the trap loops focus back to the top itself — a move
 							// preventDefault cannot undo, because it is not the browser's.
 							e.stopPropagation();
-							setDraft(hint);
+							takeHint();
 							return;
 						}
 						// Enter sends, as everywhere else a message is typed; the line
@@ -554,8 +717,8 @@ export default function AssistantPanel({
 						}
 					}}
 					maxLength={MAX_INPUT_CHARS}
-					placeholder={hint || (domain === "tab" ? "A chord and the strings to pick, or a tab" : "Chords, a rhythm, or what you want")}
-					aria-label={domain === "tab" ? "Ask the tab assistant" : "Ask the strum assistant"}
+					placeholder={hint || (mode === "tab" ? "A chord and the strings to pick, or a tab" : mode === "general" ? "Ask anything, or say what you want made" : "Chords, a rhythm, or what you want")}
+					aria-label={mode === "tab" ? "Ask the tab assistant" : mode === "general" ? "Ask the assistant" : "Ask the strum assistant"}
 					aria-describedby={hint ? `${promptHintId}` : undefined}
 					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
 				/>
@@ -565,8 +728,9 @@ export default function AssistantPanel({
 				</span>
 				<button
 					type="submit"
-					disabled={pending || draft.trim() === ""}
-					aria-label="Send"
+					// Live on an empty field while there is an example to take.
+					disabled={pending || (draft.trim() === "" && hint === "")}
+					aria-label={draft.trim() === "" && hint !== "" ? "Use the example shown" : "Send"}
 					className="flex size-(--h-control) flex-none items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent active:bg-denim-tint active:duration-(--dur-switch) disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 				>
 					<CornerDownLeft className="size-4" strokeWidth={1.5} aria-hidden="true" />

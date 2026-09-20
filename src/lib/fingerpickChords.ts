@@ -2,7 +2,7 @@ import type { BeatSlot, FingerpickPattern, Measure } from "./fingerpickTypes";
 import { setFret, setInactive, type SlotTarget } from "./fingerpickEdit";
 import type { ChordRef } from "./strumPatterns";
 import { chordAbbreviation, normalizeCapo } from "./strumProgressions";
-import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicingToVexChords";
+import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicing";
 import { chordVoicingToMidi, rootPitchClass } from "./chordVoicingToMidi";
 import { isSlashChord } from "./chordSuffixes";
 
@@ -27,6 +27,23 @@ export function effectiveChords(measures: readonly Measure[]): (ChordRef | null)
 /** Whether any slot carries a chord mark — what decides if a chord line is drawn at all. */
 export function patternHasChords(measures: readonly Measure[]): boolean {
 	return measures.some((measure) => measure.slots.some((slot) => slot.chord !== undefined));
+}
+
+/**
+ * A chord mark carried from one slot to another — the assistant's preview
+ * lets the player drag a mark it placed by a beat guess onto the slot they
+ * meant. Null when there is nothing to move, when the slot is the same one,
+ * or when another mark already sits on the target: a drop that would erase
+ * a chord is refused rather than resolved.
+ */
+export function moveSlotChord(measures: readonly Measure[], from: SlotTarget, to: SlotTarget): Measure[] | null {
+	const chord = measures[from.measureIndex]?.slots[from.slotIndex]?.chord;
+	if (!chord) return null;
+	if (from.measureIndex === to.measureIndex && from.slotIndex === to.slotIndex) return null;
+	const target = measures[to.measureIndex]?.slots[to.slotIndex];
+	if (!target || target.chord) return null;
+	const pattern = { measures: [...measures] } as FingerpickPattern;
+	return setSlotChord(setSlotChord(pattern, from, null), to, chord).measures;
 }
 
 /**

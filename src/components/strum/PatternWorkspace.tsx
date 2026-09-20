@@ -743,7 +743,7 @@ export default function PatternWorkspace({
 							{/* h-11: the strip keeps its height whether it shows the controls
 							    or the delete confirmation, so nothing below it jumps. */}
 							<div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-line px-3 md:px-5">
-								<div className="flex min-w-0 items-center gap-2">
+								<div className="flex min-w-0 flex-1 items-center gap-2">
 									<button
 										type="button"
 										onClick={() => setRailOpen((open) => !open)}
@@ -794,7 +794,9 @@ export default function PatternWorkspace({
 										</button>
 									</div>
 								) : (
-									<div className="flex shrink-0 items-center">
+									// With the list open over a phone's strip there is no room for
+									// the controls beside the name, so the name keeps the strip.
+									<div className={`shrink-0 items-center ${railOpen ? "hidden md:flex" : "flex"}`}>
 										{/* The speed fader is only there while the creep runs, and
 										    only where the strip has room for it. */}
 										{autoScrollActive && (

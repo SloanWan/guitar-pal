@@ -15,8 +15,6 @@ export interface ClickToSeekArgs {
 	seekToNote: (expandedMeasureIndex: number, slotIndex: number) => void;
 	toExpandedMeasureIndex: (measureIndex: number) => number;
 	snapCursorToNote: (noteEl: SVGElement, measureIndex: number) => void;
-	/** Any click on the tab counts as an interaction (the controls come back). */
-	onInteract: () => void;
 	/** Section mode: a click picks a measure instead of seeking. */
 	sectionMode: boolean;
 	geometry: readonly MeasureRect[];
@@ -44,7 +42,6 @@ export function useClickToSeek({
 	seekToNote,
 	toExpandedMeasureIndex,
 	snapCursorToNote,
-	onInteract,
 	sectionMode,
 	geometry,
 	onPickMeasure,
@@ -54,8 +51,6 @@ export function useClickToSeek({
 	const pendingSeekRef = useRef<SeekTarget | null>(null);
 
 	function handleTabClick(e: React.MouseEvent<HTMLDivElement>): void {
-		onInteract();
-
 		const container = viewerRef.current;
 		if (!container) return;
 

@@ -3,7 +3,7 @@
 // bar and leaves the numerals alone.
 import { describe, it, expect } from "vitest";
 
-import type { ChordVoicing } from "@/lib/chordVoicingToVexChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import type { KeyChord } from "@/lib/fretboard/chords";
 import {
 	MAX_BARS,

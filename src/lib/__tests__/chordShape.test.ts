@@ -14,7 +14,7 @@ import {
 	type ShapeFret,
 } from "@/lib/chordShape";
 import { chordVoicingToMidi, GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
-import { decodeVoicingStrings } from "@/lib/chordVoicingToVexChords";
+import { decodeVoicingStrings } from "@/lib/chordVoicing";
 
 /** Open C: x 3 2 0 1 0, low E first. */
 const OPEN_C: ChordShape = {

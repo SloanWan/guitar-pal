@@ -154,6 +154,12 @@ const INDEX: readonly ChordIndexEntry[] = [
 ];
 
 describe("parseChordSequence", () => {
+	it("never reads a bare number as a chord", () => {
+		const { chords, unmatched } = parseChordSequence("Am 5 3 2 1", INDEX);
+		expect(chords.map((c) => c.root)).toEqual(["A"]);
+		expect(unmatched).toEqual(["5", "3", "2", "1"]);
+	});
+
 	it("reads a space-separated sequence", () => {
 		const { chords, unmatched } = parseChordSequence("C G Am F", INDEX);
 		expect(unmatched).toEqual([]);

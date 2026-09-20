@@ -10,6 +10,8 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ZoomableImage from "@/components/ZoomableImage";
 import { WARNINGS_SUMMARY } from "@/components/books/IssueList";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import FingerpickEditorChordSection from "./FingerpickEditorChordSection";
 import { Button } from "@/components/ui/button";
 import {
 	Plus,
@@ -250,6 +252,15 @@ export default function FingerpickEditModal({
 	// The chord under every slot, and the distinct chords whose shapes are needed.
 	const chordsInEffect = useMemo(() => effectiveChords(working.measures), [working.measures]);
 	const hasChords = patternHasChords(working.measures);
+	/**
+	 * The slot whose quick chord popover is open — the `+` above a hovered
+	 * column, which puts a chord on that one slot without the column popup
+	 * and its scroll down to the Chord section.
+	 */
+	const [quickChordAt, setQuickChordAt] = useState<SlotTarget | null>(null);
+	// The section keeps itself in view inside the column popup; here it is
+	// the whole popover, so there is nothing to scroll.
+	const quickChordSectionRef = useRef<HTMLDivElement | null>(null);
 	const chordRefs = useMemo(
 		() => working.measures.flatMap((m) => m.slots.flatMap((slot) => (slot.chord ? [slot.chord] : []))),
 		[working.measures],
@@ -963,9 +974,9 @@ export default function FingerpickEditModal({
 								    selector and beat label beneath. */}
 									<div className="flex gap-0.5 items-start">
 										<div className="flex w-5 shrink-0 flex-col gap-0.5">
-											{/* Keeps the string labels level with the cells when the
-											    chord row is shown above the columns. */}
-											{hasChords && <div className="h-4" />}
+											{/* Keeps the string labels level with the cells under the
+											    chord row above the columns. */}
+											<div className="h-4" />
 											{STRING_LABELS.map((label, stringIndex) => {
 												// The row is "hovered" from any of its cells or from the
 												// label itself, so the × stays reachable on the way over.
@@ -1099,8 +1110,12 @@ export default function FingerpickEditModal({
 																		    one running on into this measure at its first column.
 																		    Absolutely placed so a long name can overhang the
 																		    narrow columns, the way it does on the stave. Pressing it
-																		    selects the column, whose popup edits the chord. */}
-																		{hasChords && (
+																		    selects the column, whose popup edits the chord. A
+																		    column with no symbol grows a + while hovered, which
+																		    opens the Chord section alone, over that one slot. Always
+																		    laid out, so the + has a row to sit in before the first
+																		    chord exists. */}
+																		{(
 																			<div className="relative h-4">
 																				{(() => {
 																					const own = slot.chord;
@@ -1112,36 +1127,84 @@ export default function FingerpickEditModal({
 																								]?.[0]
 																							: undefined;
 																					const shown = own ?? carried;
-																					if (!shown) return null;
-																					return (
-																						<button
-																							type="button"
-																							data-column-selector
-																							onClick={() => {
-																								toggleColumn({
-																									measureIndex,
-																									slotIndex,
-																								});
-																								// The chip is about the chord, so the
-																								// popup opens on its Chord section.
-																								bumpRevealChord();
-																							}}
-																							title={
-																								own
-																									? "Chord changes here"
-																									: "Chord running on from an earlier measure"
-																							}
-																							className={`absolute left-0 top-0 whitespace-nowrap font-mono text-[10px] font-bold leading-4 transition-colors hover:text-denim ${
-																								own
-																									? "text-denim-accent"
-																									: "text-ink-faint"
-																							}`}
-																						>
-																							{chordSymbolLabel(
-																								shown,
-																							)}
-																						</button>
-																					);
+																					const target: SlotTarget = { measureIndex, slotIndex };
+																					const open =
+																						quickChordAt?.measureIndex === measureIndex &&
+																						quickChordAt?.slotIndex === slotIndex;
+																					// The symbol is always there and opens the popover; the +
+																					// only while hovered, on a pointer that hovers — a + on
+																					// every column of a touch screen would be clutter, and
+																					// there the column popup is a tap away. Once open, the
+																					// popover stays through the pick: the chord just chosen
+																					// still has shapes to step through.
+																					const offered =
+																						open ||
+																						shown !== undefined ||
+																						(hasFinePointer && hoverInMeasure?.slotIndex === slotIndex);
+																					if (offered) {
+																						return (
+																							<Popover
+																								open={open}
+																								onOpenChange={(next) => setQuickChordAt(next ? target : null)}
+																							>
+																								<PopoverTrigger
+																									aria-label={
+																										shown
+																											? `${chordSymbolLabel(shown)} at measure ${measureIndex + 1} slot ${slotIndex + 1}`
+																											: `Add a chord at measure ${measureIndex + 1} slot ${slotIndex + 1}`
+																									}
+																									title={
+																										own
+																											? "Chord changes here"
+																											: shown
+																												? "Chord running on from an earlier measure"
+																												: "Add a chord here"
+																									}
+																									className={
+																										shown
+																											? `absolute left-0 top-0 whitespace-nowrap font-mono text-[10px] font-bold leading-4 transition-colors hover:text-denim ${
+																													open ? "text-denim" : own ? "text-denim-accent" : "text-ink-faint"
+																												}`
+																											: `absolute left-1/2 top-0 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-sm border border-dashed transition-colors ${
+																													open
+																														? "border-denim bg-denim text-on-denim"
+																														: "border-line-strong text-ink-faint hover:border-denim hover:text-denim"
+																												}`
+																									}
+																								>
+																									{shown ? chordSymbolLabel(shown) : <Plus size={10} strokeWidth={2} aria-hidden="true" />}
+																								</PopoverTrigger>
+																								<PopoverContent
+																									align="start"
+																									sideOffset={6}
+																									className="w-72 bg-popover p-3"
+																									// Typing in the chord search must not reach the
+																									// grid's own key handling underneath.
+																									onKeyDown={(e) => e.stopPropagation()}
+																									// The search blurs its field once a chord is picked;
+																									// that is not leaving. A press outside, or Escape, is.
+																									onFocusOutside={(e) => e.preventDefault()}
+																								>
+																									<FingerpickEditorChordSection
+																										working={working}
+																										commit={commit}
+																										singleTarget={target}
+																										selectedTargets={[target]}
+																										chordAtSelectionStart={chordsInEffect[measureIndex]?.[slotIndex] ?? null}
+																										chordsInEffect={chordsInEffect}
+																										voicingsFor={voicingsFor}
+																										searchIndex={searchIndex}
+																										shapeCorpus={shapeCorpus}
+																										onCreateShape={setShapeCreate}
+																										sectionRef={quickChordSectionRef}
+																										onFocusCapture={() => {}}
+																										onChordEdited={() => {}}
+																									/>
+																								</PopoverContent>
+																							</Popover>
+																						);
+																					}
+																					return null;
 																				})()}
 																			</div>
 																		)}

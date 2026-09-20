@@ -4,14 +4,15 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import FingerpickPatternLibrary from "@/components/fingerpick/FingerpickPatternLibrary";
+import LibraryHint, { useLibraryHint } from "@/components/LibraryHint";
 import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
 import {
 	HANDOFF_EVENT,
 	takeHandoff,
 	type FingerpickAnyHandoff,
 	type FingerpickHandoff,
-} from "@/lib/strumAssistant/handoff";
-import { applySet, applyTabEdit } from "@/lib/tabAssistant/editIntent";
+} from "@/lib/assistant/handoff";
+import { applySet, applyTabEdit } from "@/lib/assistant/tab/editIntent";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/useUser";
@@ -25,7 +26,6 @@ import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
 import { useAutoScroll } from "@/components/useAutoScroll";
-import { useHideOnScroll } from "@/components/fingerpick/useHideOnScroll";
 import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
 import { useMeasureGeometry } from "@/components/fingerpick/useMeasureGeometry";
 import {
@@ -54,10 +54,9 @@ import {
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import { clampBpmToMeter, selectRefVoicing } from "@/lib/strumBars";
 import { beatUnitGlyph } from "@/lib/strumMeter";
-import { chordVoicingToVexChords } from "@/lib/chordVoicingToVexChords";
+import { voicingToDiagramShape } from "@/lib/chordVoicing";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
-import { vexChordDefToSVGProps } from "@/components/chords/ChordDiagram";
 import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/ChordShapeStrip";
 import ChordViewToggle from "@/components/strum/ChordViewToggle";
 import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
@@ -121,6 +120,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 	}
 
 	const [showLibrary, setShowLibrary] = useState(false);
+	const libraryHint = useLibraryHint("fingerpick");
 	// The scrolling tab viewer; the overlays, auto-scroll and click-to-seek all work inside it.
 	const tabViewerRef = useRef<HTMLDivElement>(null);
 	// Repeats flattened into a linear playback timeline (the rendered staves stay compact).
@@ -239,9 +239,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 				chordRegionEnd(measure, label.slotIndex),
 				voicing,
 			);
-			const { frets, startFret, barreFret } = vexChordDefToSVGProps(
-				chordVoicingToVexChords(voicing),
-			);
+			const { frets, startFret, barreFret } = voicingToDiagramShape(voicing);
 			return (
 				<ChordShapeStrip
 					frets={frets}
@@ -342,16 +340,11 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		cursorRef,
 		measureHighlightRef,
 		rowRefs,
-		isAutoScrollingRef,
 		resetCursor,
 		snapCursorToNote,
 		startOffsetFor,
 		toExpandedMeasureIndex,
 	} = usePlaybackCursor({ tabViewerRef, expanded, bpm, rows, isPlaying, getPlaybackProgress });
-	const { controlsVisible, restoreControls } = useHideOnScroll({
-		viewerRef: tabViewerRef,
-		isAutoScrollingRef,
-	});
 	const { handleTabClick, takePendingSeek, clearPendingSeek } = useClickToSeek({
 		viewerRef: tabViewerRef,
 		isPlaying,
@@ -359,7 +352,6 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		seekToNote,
 		toExpandedMeasureIndex,
 		snapCursorToNote,
-		onInteract: restoreControls,
 		sectionMode,
 		geometry,
 		onPickMeasure: (measureIndex) => setSection((s) => pickMeasure(s, measureIndex)),
@@ -370,8 +362,6 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 	// is intentional — we only want one preload call per page mount.
 	useEffect(() => {
 		void load();
-		document.body.classList.add("fingerpick-page");
-		return () => document.body.classList.remove("fingerpick-page");
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -1146,17 +1136,26 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 
 						{/* Mobile library toggle */}
 						{!shared && !showLibrary && (
-							<button
-								onClick={() => setShowLibrary(true)}
-								className={`absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95 ${
-									controlsVisible
-										? "opacity-100 pointer-events-auto"
-										: "opacity-0 pointer-events-none"
-								}`}
-								style={{ backgroundColor: "var(--denim)" }}
-							>
-								<SquareMenu />
-							</button>
+							<>
+								<button
+									onClick={() => {
+										libraryHint.dismiss();
+										setShowLibrary(true);
+									}}
+									aria-label="Open the pattern library"
+									className="absolute top-0 right-0 z-30 lg:hidden flex items-center gap-2 text-white text-sm font-semibold px-2 py-2 transition-all duration-300 active:scale-95"
+									style={{ backgroundColor: "var(--denim)" }}
+								>
+									<SquareMenu />
+								</button>
+								{/* First visit only: what the square icon opens, with an arrow
+								    at it. Comes and goes with the toggle it points to. */}
+								{libraryHint.show && (
+									<LibraryHint
+										className="absolute top-0 right-12 z-30 lg:hidden"
+									/>
+								)}
+							</>
 						)}
 					</div>
 				</div>
@@ -1164,7 +1163,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 				<FingerpickDesktopPanel {...controls} />
 			</div>
 
-			<FingerpickMobileDrawer {...controls} controlsVisible={controlsVisible} />
+			<FingerpickMobileDrawer {...controls} />
 
 			{/* The library owns the editor for its own patterns; a handed-over tab
 			    gets its own instance so it can open without the library on screen. */}

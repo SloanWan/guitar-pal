@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { ChapterExercise } from "@/lib/books/types";
 import { cropUrl, setExerciseStatus } from "@/lib/books/api";
-import { stashHandoff } from "@/lib/strumAssistant/handoff";
+import { stashHandoff } from "@/lib/assistant/handoff";
 import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
 import { clampBpmToMeter } from "@/lib/strumBars";
 import { beatUnitGlyph } from "@/lib/strumMeter";

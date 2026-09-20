@@ -27,6 +27,19 @@ const KEY = "guitarpal:assistantHandoff";
  */
 export const HANDOFF_EVENT = "guitarpal:assistant-handoff";
 
+/**
+ * The panel is put away. Every "open in …" on a card ends the conversation
+ * about the thing it opens — the panel would otherwise stand in front of
+ * the very page the card just led to. A handoff says this itself through
+ * `HANDOFF_EVENT`; a card that only navigates (a chord's page, the grid)
+ * says it through this one.
+ */
+export const ASSISTANT_CLOSE_EVENT = "guitarpal:assistant-close";
+
+export function closeAssistant(): void {
+	window.dispatchEvent(new CustomEvent(ASSISTANT_CLOSE_EVENT));
+}
+
 /** A pattern the assistant made: saved as a pattern, plus a progression if it carries chords. */
 export interface PatternHandoff {
 	kind: "pattern";

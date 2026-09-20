@@ -7,7 +7,7 @@ import { exportMisses, readMisses } from "@/lib/assistant/missLog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AssistantPanel from "./AssistantPanel";
 import { useAssistant } from "./useAssistant";
-import { HANDOFF_EVENT } from "@/lib/assistant/handoff";
+import { ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT } from "@/lib/assistant/handoff";
 
 /**
  * The topbar's rightmost control: opens the assistant over the page. Which
@@ -115,16 +115,21 @@ export default function AssistantLauncher() {
 		setOpen(next);
 	}
 
-	// Handing a proposal over is the end of the conversation about it: the panel
-	// stands in front of the very grid the pattern just landed in. Closed the
-	// same way a click closes it, or the reply just read would come back as a dot.
+	// Handing a proposal over, or opening a chord's page, is the end of the
+	// conversation about it: the panel stands in front of the very page the
+	// card just led to. Closed the same way a click closes it, or the reply
+	// just read would come back as a dot.
 	useEffect(() => {
 		function close() {
 			setSeenCount(messages.length);
 			setOpen(false);
 		}
 		window.addEventListener(HANDOFF_EVENT, close);
-		return () => window.removeEventListener(HANDOFF_EVENT, close);
+		window.addEventListener(ASSISTANT_CLOSE_EVENT, close);
+		return () => {
+			window.removeEventListener(HANDOFF_EVENT, close);
+			window.removeEventListener(ASSISTANT_CLOSE_EVENT, close);
+		};
 	}, [messages.length]);
 
 	const title = "Assistant";

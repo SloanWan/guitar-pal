@@ -12,6 +12,7 @@ import { selectStandardVoicing, voicingToDiagramShape } from "@/lib/chordVoicing
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { pick, type Lang } from "@/lib/assistant/lang";
+import { closeAssistant } from "@/lib/assistant/handoff";
 
 /**
  * Chords, held: the answer to "how do I play F#m7" and to "show me C Am F G".
@@ -74,6 +75,7 @@ function Shape({
 					{pageLink && (
 						<Link
 							href={chordHref(chord.root, chord.suffix)}
+							onClick={closeAssistant}
 							className="flex items-center gap-0.5 text-denim-accent transition-colors duration-(--dur-hover) hover:text-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 						>
 							{pick(lang, "page", "和弦页")}
@@ -134,12 +136,12 @@ export default function ChordShapeCard({ chords, lang = "en" }: { chords: readon
 
 			<div className="border-t border-line p-2">
 				{several ? (
-					<Link href={batchGridHref(chords.map(chordAbbreviation).join(" "))} className={FOOTER_LINK}>
+					<Link href={batchGridHref(chords.map(chordAbbreviation).join(" "))} onClick={closeAssistant} className={FOOTER_LINK}>
 						{pick(lang, `Open all ${chords.length} in the chord grid`, `在网格页并排看这 ${chords.length} 个`)}
 						<ArrowUpRight className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
 					</Link>
 				) : (
-					<Link href={chordHref(chords[0].root, chords[0].suffix)} className={FOOTER_LINK}>
+					<Link href={chordHref(chords[0].root, chords[0].suffix)} onClick={closeAssistant} className={FOOTER_LINK}>
 						{pick(lang, "Open in chords", "在和弦库打开")}
 						<ArrowUpRight className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
 					</Link>

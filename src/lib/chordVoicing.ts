@@ -6,6 +6,12 @@ export interface ChordVoicing {
   capo: boolean;
   frets: string;
   fingers: string;
+  /**
+   * One line the library says under this shape — "Rootless: …", "Hand-written
+   * …" (#230). Only the chord page reads it, so only `chordsData` selects it;
+   * a player's own shape and the strum/fingerpick caches never carry one.
+   */
+  note?: string | null;
 }
 
 /**

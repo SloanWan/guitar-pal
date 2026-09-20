@@ -5,6 +5,7 @@ import { getChord } from "@/lib/chordsData";
 import { slugToRoot, slugToSuffix } from "@/lib/chordSlug";
 import { toVoicingCards } from "@/lib/chordCards";
 import ChordDetailView from "@/components/chords/ChordDetailView";
+import ChordFormulaPanel from "@/components/chords/ChordFormulaPanel";
 import MusicalText from "@/components/MusicalText";
 import { ROOT_CHROMATIC_ORDER, UNKNOWN_ROOT, chordDisplayName } from "@/lib/chordSuffixes";
 
@@ -48,7 +49,7 @@ export default async function ChordDetailPage({ params }: Props) {
 	// their browser can confirm.
 	if (!chord && !isKnownRoot(root)) notFound();
 
-	const voicings = chord ? toVoicingCards(chord.chord_voicings) : [];
+	const voicings = chord ? toVoicingCards(chord.chord_voicings, chord.root, chord.suffix) : [];
 
 	return (
 		<div className="flex-1 bg-surface flex flex-col">
@@ -77,6 +78,7 @@ export default async function ChordDetailPage({ params }: Props) {
 							All Chords →
 						</Link>
 					</div>
+					{chord && <ChordFormulaPanel root={root} suffix={suffix} />}
 					<div className="flex-1 flex items-center justify-center w-full pb-[10%]">
 						<ChordDetailView voicings={voicings} root={root} suffix={suffix} />
 					</div>

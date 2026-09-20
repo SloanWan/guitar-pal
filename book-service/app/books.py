@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.auth import CurrentSession
 from app.db import get_pool
 from app.ingest.toc import MAX_TITLE_CHARS, Chapter
+from app.pages import PageImageError, PageImages
 from app.parse import MAX_PARSE_PAGES, Parser
 from app.repo import BookRepo, BookRow, ChapterRow, ExerciseRow, NoteRow
 from app.scan import Scanner
@@ -213,6 +214,13 @@ def get_parser(request: Request) -> Parser:
     return parser
 
 
+def get_pages(request: Request) -> PageImages:
+    pages = getattr(request.app.state, "pages", None)
+    if pages is None:
+        raise HTTPException(503, "Book import is not configured on this deployment.")
+    return pages
+
+
 Repo = Annotated[BookRepo, Depends(get_repo)]
 Storage = Annotated[StorageClient, Depends(get_storage)]
 
@@ -349,6 +357,36 @@ async def parse_chapter(
         raise HTTPException(409, "This chapter is being parsed already.")
     background.add_task(parser.run, book, claimed, session.token)
     return ChapterOut.of(claimed)
+
+
+class PageImageOut(BaseModel):
+    """A Storage path in the player's own folder; the browser signs it like a crop's."""
+
+    path: str
+
+
+@router.get("/{book_id}/pages/{page}/image", response_model=PageImageOut)
+async def get_page_image(
+    book_id: str,
+    page: int,
+    session: CurrentSession,
+    repo: Repo,
+    pages: Annotated[PageImages, Depends(get_pages)],
+) -> PageImageOut:
+    """
+    The page as printed, for reading a note or a draft against its source
+    (#240). Rendered on the first request and kept, so a second look is only
+    a signed URL. Any page of the book, parsed or not.
+    """
+    book = await owned_book(repo, session.user_id, book_id)
+    if book.page_count is None:
+        raise HTTPException(409, "Scan the book first, so its page count is known.")
+    if not 1 <= page <= book.page_count:
+        raise HTTPException(404, f"The book has pages 1–{book.page_count}.")
+    try:
+        return PageImageOut(path=await pages.get_or_render(book, page, session.token))
+    except PageImageError as e:
+        raise HTTPException(e.status, e.message) from e
 
 
 class ExerciseStatusIn(BaseModel):

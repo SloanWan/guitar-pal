@@ -22,6 +22,7 @@ from app.config import Settings, get_settings
 from app.db import close_pool, fail_stale_scans, open_pool
 from app.ingest.model import AnthropicTextTocReader, AnthropicVisionTocReader
 from app.ingest.pdf import OcrConfig
+from app.pages import PageImages
 from app.parse import ChapterGraph, Parser, text_only_graph
 from app.repo import BookRepo
 from app.scan import Scanner
@@ -45,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.storage = None
         app.state.scanner = None
         app.state.parser = None
+        app.state.pages = None
         app.state.validator = validator_client(settings)
         if settings.database_url is not None:
             try:
@@ -76,6 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 graph=chapter_graph(client, app.state.validator),
                 worker=worker,
             )
+            app.state.pages = PageImages(storage=app.state.storage, repo=repo, worker=worker)
         try:
             yield
         finally:

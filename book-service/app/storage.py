@@ -50,10 +50,14 @@ class StorageClient:
 
     async def upload_png(self, path: str, data: bytes, token: str) -> None:
         """A crop beside the PDF, under the player's folder, replacing any old one."""
+        await self.upload_image(path, data, token, "image/png")
+
+    async def upload_image(self, path: str, data: bytes, token: str, content_type: str) -> None:
+        """An image under the player's folder, replacing any old one."""
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 self._object_url(path),
-                headers={**self._headers(token), "Content-Type": "image/png", "x-upsert": "true"},
+                headers={**self._headers(token), "Content-Type": content_type, "x-upsert": "true"},
                 content=data,
             )
         if response.status_code != 200:

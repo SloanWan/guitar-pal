@@ -367,6 +367,23 @@ class BookRepo:
         chapter = _chapter({k: v for k, v in record.items() if not k.startswith("book_")})
         return book, chapter
 
+    # --- page images (#240) --------------------------------------------------
+
+    async def get_page_image(self, book_id: str, page: int) -> str | None:
+        """The stored render's path, or None when nobody has asked for this page yet."""
+        return await self._pool.fetchval(
+            "select image_path from book_pages where book_id = $1 and page = $2", book_id, page
+        )
+
+    async def set_page_image(self, book_id: str, page: int, path: str) -> None:
+        """Remembers a render. A page the scan never wrote a row for is simply not cached."""
+        await self._pool.execute(
+            "update book_pages set image_path = $3 where book_id = $1 and page = $2",
+            book_id,
+            page,
+            path,
+        )
+
     async def list_pages(self, book_id: str, page_start: int, page_end: int) -> list[PageRow]:
         records = await self._pool.fetch(
             """

@@ -18,6 +18,13 @@ const TAB = [
 ].join("\n");
 
 describe("resolveTabTurn", () => {
+	it("answers a question about one chord with its shapes, not a pattern", async () => {
+		const outcome = await resolve("show me Am");
+		expect(outcome.chords).toMatchObject([{ root: "A", suffix: "minor" }]);
+		expect(outcome.proposal).toBeUndefined();
+		expect(outcome.templates).toBeUndefined();
+	});
+
 	it("answers a chord and an order with a proposal, in the player's language", async () => {
 		const en = await resolve("Am: 5 3 2 1 3 2 1 3");
 		expect(en.proposal?.pattern.measures).toHaveLength(1);

@@ -6,10 +6,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { EVAL_CASES, type EvalCase } from "@/lib/assistant/__evals__/cases";
 import { TAB_EVAL_CASES } from "@/lib/assistant/__evals__/tabCases";
 import { gradeNoDraft, gradeProposal } from "@/lib/assistant/__evals__/grade";
-import { proposeStrum, proposeTab, strumReadResult, tabReadResult, type ToolExecution } from "@/lib/assistant/general/execute";
+import { proposeStrum, proposeTab, showChord, strumReadResult, tabReadResult, type ToolExecution } from "@/lib/assistant/general/execute";
 import { callGeneral, type ModelAttempt } from "@/lib/assistant/general/model";
 import { MODEL, type GeneralContext } from "@/lib/assistant/general/request";
-import type { ProposeStrumInput, ProposeTabInput, ReadInput, ToolName } from "@/lib/assistant/general/tools";
+import type { ProposeStrumInput, ProposeTabInput, ReadInput, ShowChordInput, ToolName } from "@/lib/assistant/general/tools";
 import { resolveGeneralTurn, type GeneralTurnOutcome, type ToolInput } from "@/lib/assistant/general/turn";
 import { resolveAssistantTurn } from "@/lib/assistant/strum/turn";
 import { resolveTabTurn } from "@/lib/assistant/tab/turn";
@@ -73,6 +73,8 @@ const execute = async (name: ToolName, input: ToolInput): Promise<ToolExecution>
 			return proposeStrum(input as ProposeStrumInput, INDEX);
 		case "propose_tab":
 			return proposeTab(input as ProposeTabInput);
+		case "show_chord":
+			return showChord(input as ShowChordInput, INDEX);
 	}
 };
 

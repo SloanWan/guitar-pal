@@ -57,11 +57,9 @@ export default function UserMenu({ profile }: { profile: Profile }) {
 					</Link>
 				</DropdownMenuItem>
 
-				{/* Theme is a dev-only affordance; production ships a single theme, so
-				    the row renders only when dev routes are on (NEXT_PUBLIC_ vars
-				    inline at build time). A control row, not a menu item: the rocker
-				    flips without dismissing the menu. */}
-				{process.env.NEXT_PUBLIC_ENABLE_DEV_ROUTES === "1" && <ThemeRow />}
+				{/* A control row, not a menu item: the rocker flips without
+				    dismissing the menu. */}
+				<ThemeRow />
 
 				<DropdownMenuSeparator className="mx-0 my-2" />
 

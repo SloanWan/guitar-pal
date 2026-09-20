@@ -18,6 +18,7 @@ export const TOOL_NAMES = [
 	"edit_tab",
 	"propose_strum",
 	"propose_tab",
+	"show_chord",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -29,6 +30,12 @@ export function isToolName(value: unknown): value is ToolName {
 /** Every reader tool takes the player's words, verbatim. */
 export interface ReadInput {
 	text: string;
+}
+
+/** What the model names when the player asks how chords are played. */
+export interface ShowChordInput {
+	/** Chord words in the order asked, each as the player wrote it: ["F#m7"], ["C", "Am", "F", "G"]. */
+	chords: string[];
 }
 
 /** What the model writes when it composes a strumming pattern or progression itself. */
@@ -137,6 +144,24 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 				timeSignature: { type: "string", description: "\"4/4\", \"3/4\" or \"6/8\". Empty for 4/4." },
 			},
 			required: ["name", "tab", "bpm", "timeSignature"],
+			additionalProperties: false,
+		},
+	},
+	{
+		name: "show_chord",
+		description:
+			"Show the player how chords are played: a diagram per chord with every shape the library holds for it, a link to each chord's page and, for several, to the grid that shows them side by side. For \"how do I play F#m7\", \"C和弦怎么按\", \"show me C Am F G\". The words as the player wrote them. Returns the chords it found, or the words the library has no chord for.",
+		strict: true,
+		input_schema: {
+			type: "object",
+			properties: {
+				chords: {
+					type: "array",
+					items: { type: "string" },
+					description: "Chord words in the order asked, each as the player wrote it: [\"F#m7\"], [\"C\", \"Am\", \"F\", \"G\"].",
+				},
+			},
+			required: ["chords"],
 			additionalProperties: false,
 		},
 	},

@@ -2,6 +2,7 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { beatTicks, changeTimeSignature, slotDurationUnits } from "@/lib/fingerpickEdit";
 import { clampBpmToMeter } from "@/lib/strumBars";
 import { setSlotChord } from "@/lib/fingerpickChords";
+import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { beatsPerBar } from "@/lib/strumMeter";
 import type { ChordRef } from "@/lib/strumPatterns";
@@ -32,7 +33,7 @@ import type { VoicingLookup } from "@/lib/assistant/tab/voicings";
 
 export type TabEditOp = "append" | "replace" | "chords" | "rename" | "delete" | "set";
 
-/** One place chords go: a bar or a range, a beat, and the chord words. */
+/** One place chords go: a bar or a range, a beat or a slot, and the chord words. */
 interface ChordItem {
 	/** 1-based, as the player counts bars. */
 	bar: number;
@@ -40,6 +41,11 @@ interface ChordItem {
 	barTo: number | null;
 	/** 1-based; null means the first beat. */
 	beat: number | null;
+	/**
+	 * 1-based, the slot as the editor numbers them — named instead of a beat
+	 * by a player looking at the grid. Outranks `beat` when both are given.
+	 */
+	slot: number | null;
 	spec: string;
 }
 
@@ -70,46 +76,58 @@ const SET_EN = /^\s*(?:set|change|make|put)\s+(.+?)\s+(?:to|at|in)\s+(.+?)\s*$/i
 const SET_EN_AT = /^\s*(.+?)\s+(?:at|to)\s+(\d{2,3}\s*bpm)\s*$/i;
 const SET_ZH = /^\s*(?:把|将)?\s*(.+?)\s*(?:设为|设成|设置为|改成|改为|调到|调成|调为)\s*(.+?)\s*$/;
 
+/** A bar by either name: "bar 2", "measure 2". */
+const BAR_EN = String.raw`(?:bars?|measures?)\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?`;
+/** Where in the bar: "beat 3" as the player counts, or "slot 3" as the editor numbers the grid. */
+const WHERE_EN = String.raw`(?:\s*,?\s*(?:on\s+|at\s+)?(?:beat\s+(\d+)|slots?\s+(\d+)))?`;
+
 /**
  * "in lick, add Cm7 to bar 1, add F7 to bar 2": the target once, then a list.
  * The first item may also carry the target itself — "add Cm7 to bar 1 of
  * lick, add F7 to bar 2" — and the rest follow without it.
  */
 const CHORDS_LIST_EN = /^\s*(?:in|on|for)\s+(.+?)\s*[,，:：]\s*((?:add|mark|put|set|write)\s[\s\S]+)$/i;
-const CHORD_ITEM_EN =
-	/^\s*(?:(?:add|mark|put|set|write)\s+)?(?:(?:the\s+)?chords?\s+)?(.+?)\s+(?:to|on|at|in|over)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s*$/i;
+const CHORD_ITEM_EN = new RegExp(
+	String.raw`^\s*(?:(?:add|mark|put|set|write)\s+)?(?:(?:the\s+)?chords?\s+)?(.+?)\s+(?:to|on|at|in|over)\s+${BAR_EN}${WHERE_EN}\s*$`,
+	"i",
+);
 const CHORDS_LIST_ZH_LEAD = /^\s*(?:给|在|把|为)?\s*/;
 const CHORD_ITEM_ZH =
 	/^\s*第\s*(\d+)\s*(?:[-–到至]\s*(\d+))?\s*小节\s*(?:的?\s*第\s*(\d+)\s*拍)?\s*(?:上|里)?\s*(?:加上|添加|标上|标记|加|标|放|配|用|写)?\s*(?:和弦)?\s*[:：]?\s*(.+)$/;
 const LIST_SEPARATOR = /[,，;；\n]+/;
 
-/** "add chord Am to bar 2 beat 3 of lick", "mark C G Am F on bars 1-4 of lick". */
-const CHORDS_VERB_EN =
-	/^\s*(?:add|set|put|write|mark)(?:\s+(?:the\s+)?chords?)?\s+(.+?)\s+(?:to|on|at|in|over)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s+(?:of|in|on)\s+([^,，;；\n]+?)\s*$/i;
+/** "add chord Am to bar 2 beat 3 of lick", "mark C G Am F on bars 1-4 of lick", "add Am to measure 1 slot 3 of lick". */
+const CHORDS_VERB_EN = new RegExp(
+	String.raw`^\s*(?:add|set|put|write|mark)(?:\s+(?:the\s+)?chords?)?\s+(.+?)\s+(?:to|on|at|in|over)\s+${BAR_EN}${WHERE_EN}\s+(?:of|in|on)\s+([^,，;；\n]+?)\s*$`,
+	"i",
+);
 /** "lick bar 2 beat 3: Am", "chords for lick bars 1-4: C G Am F". */
-const CHORDS_COLON_EN =
-	/^\s*(?:(?:set|mark|add|put|write)\s+)?(?:chords?\s+(?:for|on|in|over)\s+)?(.+?)\s+bars?\s+(\d+)(?:\s*(?:[-–]|to)\s*(\d+))?(?:\s*,?\s*(?:on\s+)?beat\s+(\d+))?\s*[:：]\s*(.+)$/i;
+const CHORDS_COLON_EN = new RegExp(
+	String.raw`^\s*(?:(?:set|mark|add|put|write)\s+)?(?:chords?\s+(?:for|on|in|over)\s+)?(.+?)\s+${BAR_EN}${WHERE_EN}\s*[:：]\s*(.+)$`,
+	"i",
+);
 /** "给 lick 第 2 小节第 3 拍加和弦 Am", "lick 第 1-4 小节和弦：C G Am F". */
 const CHORDS_ZH =
 	/^\s*(?:给|在|把|为)?\s*(.+?)\s*的?\s*第\s*(\d+)\s*(?:[-–到至]\s*(\d+))?\s*小节\s*(?:的?\s*第\s*(\d+)\s*拍)?\s*(?:上|里)?\s*(?:加上|添加|标上|标记|加|标|放|配|用|写)?\s*和弦\s*[:：]?\s*(.+)$/;
 
-const APPEND_EN = /^\s*(?:add|append)\s+(?:(?:a\s+)?bars?\s+)?to\s+(.+?)\s*[:：]\s*([\s\S]+)$/i;
+const APPEND_EN = /^\s*(?:add|append)\s+(?:(?:a\s+)?(?:bars?|measures?)\s+)?to\s+(.+?)\s*[:：]\s*([\s\S]+)$/i;
 const APPEND_ZH = /^\s*(?:给|在|往|向)\s*(.+?)\s*(?:里|中)?\s*(?:加上|添加|追加|加)\s*(?:一?小节|bars?)?\s*[:：]?\s*([\s\S]+)$/;
-const REPLACE_EN = /^\s*(?:replace|set|change|rewrite)\s+bar\s+(\d+)\s+(?:of|in|on)\s+(.+?)\s*(?:[:：]|\bto\b|\bwith\b)\s*([\s\S]+)$/i;
+const REPLACE_EN = /^\s*(?:replace|set|change|rewrite)\s+(?:bar|measure)\s+(\d+)\s+(?:of|in|on)\s+(.+?)\s*(?:[:：]|\bto\b|\bwith\b)\s*([\s\S]+)$/i;
 const REPLACE_ZH = /^\s*(?:把|将)?\s*(.+?)\s*的?\s*第\s*(\d+)\s*(?:小节|bar)\s*(?:改成|改为|换成|替换成|替换为|改)\s*[:：]?\s*([\s\S]+)$/;
 
 const num = (raw: string | undefined): number | null => (raw === undefined ? null : Number(raw));
 
 const chords = (name: string, items: ChordItem[]): EditClause => ({ op: "chords", name, bar: null, spec: "", items });
-const item = (bar: string, barTo: string | undefined, beat: string | undefined, spec: string): ChordItem => ({
+const item = (bar: string, barTo: string | undefined, beat: string | undefined, slot: string | undefined, spec: string): ChordItem => ({
 	bar: Number(bar),
 	barTo: num(barTo),
 	beat: num(beat),
+	slot: num(slot),
 	spec,
 });
 
 /** Whether a fragment can stand as an item of its own: it names a bar. */
-const HAS_BAR_EN = /\bbars?\s+\d/i;
+const HAS_BAR_EN = /\b(?:bars?|measures?)\s+\d/i;
 const HAS_BAR_ZH = /^\s*第\s*\d+/;
 
 /**
@@ -147,7 +165,7 @@ function readItems(list: string, matcher: RegExp, order: "spec-first" | "bar-fir
 	for (const part of fragments(list, order)) {
 		const m = matcher.exec(part);
 		if (!m) return null;
-		items.push(order === "spec-first" ? item(m[2], m[3], m[4], m[1]) : item(m[1], m[2], m[3], m[4]));
+		items.push(order === "spec-first" ? item(m[2], m[3], m[4], m[5], m[1]) : item(m[1], m[2], m[3], undefined, m[4]));
 	}
 	return items.length > 0 ? items : null;
 }
@@ -177,25 +195,25 @@ function readClause(text: string): EditClause | null {
 		if (items) return chords(m[1], items);
 	}
 	m = CHORDS_VERB_EN.exec(text);
-	if (m) return chords(m[5], [item(m[2], m[3], m[4], m[1])]);
+	if (m) return chords(m[6], [item(m[2], m[3], m[4], m[5], m[1])]);
 	// "add Cm7 to bar 1 of lick, add F7 to bar 2": the target rides on the first
 	// item — which may itself hold a comma-separated chord list.
 	const [head, ...tail] = fragments(text, "spec-first");
 	m = tail.length > 0 ? CHORDS_VERB_EN.exec(head) : null;
 	if (m) {
 		const rest = readItems(tail.join(", "), CHORD_ITEM_EN, "spec-first");
-		if (rest) return chords(m[5], [item(m[2], m[3], m[4], m[1]), ...rest]);
+		if (rest) return chords(m[6], [item(m[2], m[3], m[4], m[5], m[1]), ...rest]);
 	}
 	// "改成" is a rewrite of the bar, and is read before the chord list that
 	// would otherwise take it for a chord on the bar.
 	m = REPLACE_ZH.exec(text);
 	if (m) return { op: "replace", name: m[1], bar: Number(m[2]), spec: m[3], items: [] };
 	m = CHORDS_ZH.exec(text);
-	if (m) return chords(m[1], [item(m[2], m[3], m[4], m[5])]);
+	if (m) return chords(m[1], [item(m[2], m[3], m[4], undefined, m[5])]);
 	const zhList = readListZh(text);
 	if (zhList) return zhList;
 	m = CHORDS_COLON_EN.exec(text);
-	if (m) return chords(m[1], [item(m[2], m[3], m[4], m[5])]);
+	if (m) return chords(m[1], [item(m[2], m[3], m[4], m[5], m[6])]);
 	m = REPLACE_EN.exec(text);
 	if (m) return { op: "replace", bar: Number(m[1]), name: m[2], spec: m[3], items: [] };
 	m = APPEND_EN.exec(text);
@@ -257,6 +275,7 @@ export type TabEditReading =
 	| { kind: "ambiguous"; op: TabEditOp; name: string; matches: FingerpickPattern[] }
 	| { kind: "bar-out-of-range"; op: "replace" | "chords"; pattern: FingerpickPattern; bar: number }
 	| { kind: "beat-out-of-range"; op: "chords"; pattern: FingerpickPattern; beat: number }
+	| { kind: "slot-out-of-range"; op: "chords"; pattern: FingerpickPattern; bar: number; slot: number; slots: number }
 	| { kind: "chords-mismatch"; op: "chords"; pattern: FingerpickPattern; bars: number; chords: number }
 	| { kind: "segment-unread"; op: TabEditOp; pattern: FingerpickPattern; segment: string }
 	| { kind: "nothing-to-write"; op: TabEditOp; pattern: FingerpickPattern };
@@ -274,14 +293,30 @@ export function tabEditClause(text: string): { op: TabEditOp; name: string; spec
 	return clause ? { op: clause.op, name: clause.name, spec: clause.spec } : null;
 }
 
-/** The pattern a name refers to: exact, case-insensitive; the library keeps names unique. */
+/** The suffix the fingerpick page gives the copy it makes when a shipped pattern is edited. */
+const COPY_SUFFIX = " (mine)";
+
+/**
+ * The pattern a name refers to: exact, case-insensitive; the library keeps
+ * names unique. A shipped pattern is never changed — the page saves an edit
+ * to one as "<name> (mine)" — so once that copy exists, the shipped name
+ * means the copy: the player is editing their pattern, not asking for
+ * another copy each time. A pattern of the player's own outranks a shipped
+ * one of the same name for the same reason.
+ */
 export function findTabPattern(
 	name: string,
 	patterns: readonly FingerpickPattern[],
 ): FingerpickPattern | null {
+	const shipped = new Set(PRESET_FINGERPICK_PATTERNS.map((p) => p.id));
+	const own = (p: FingerpickPattern) => !shipped.has(p.id);
 	for (const wanted of spellings(name)) {
-		const found = patterns.find((p) => p.name.trim().toLowerCase() === wanted);
-		if (found) return found;
+		const named = patterns.filter((p) => p.name.trim().toLowerCase() === wanted);
+		const found = named.find(own) ?? named[0];
+		if (!found) continue;
+		if (own(found)) return found;
+		const copy = patterns.find((p) => own(p) && p.name.trim().toLowerCase() === wanted + COPY_SUFFIX);
+		return copy ?? found;
 	}
 	return null;
 }
@@ -402,6 +437,13 @@ export function applySet(
 	return { kind: "set", pattern, next, bpm: bpm === null ? null : next.bpm, timeSignature, affectedBars };
 }
 
+/** The beat a slot begins in, 1-based — what a slot named by number is said back as. */
+export function beatAtSlot(measure: Measure, slotIndex: number, timeSignature: [number, number]): number {
+	let at = 0;
+	for (let i = 0; i < slotIndex && i < measure.slots.length; i++) at += slotDurationUnits(measure.slots[i].duration);
+	return Math.floor(at / beatTicks(timeSignature)) + 1;
+}
+
 /** The slot a beat falls in: the one whose span holds the beat's first tick. */
 export function slotAtBeat(measure: Measure, beat: number, timeSignature: [number, number]): number {
 	const wanted = (beat - 1) * beatTicks(timeSignature);
@@ -419,8 +461,9 @@ export function slotAtBeat(measure: Measure, beat: number, timeSignature: [numbe
  * written on every bar in it; several are written one per bar, and then the
  * range has to be as long as the list — or absent, in which case the list
  * sets it. The beat is where in each bar the mark goes, the first beat
- * unless one was named. Several items make one edit over the bars from the
- * first touched to the last.
+ * unless one was named — or a slot, when the player counted the grid's
+ * cells instead. Several items make one edit over the bars from the first
+ * touched to the last.
  */
 function readChordMarks(
 	items: readonly ChordItem[],
@@ -440,11 +483,14 @@ function readChordMarks(
 		if (words.length === 0 || reading.leftover !== "") {
 			return { kind: "segment-unread", op: "chords", pattern, segment: it.spec.trim() };
 		}
-		const beat = it.beat ?? 1;
-		if (beat < 1 || beat > beats) return { kind: "beat-out-of-range", op: "chords", pattern, beat };
-
 		const from = it.bar;
 		if (from < 1 || from > pattern.measures.length) return { kind: "bar-out-of-range", op: "chords", pattern, bar: from };
+		const beat = it.beat ?? 1;
+		if (it.slot === null && (beat < 1 || beat > beats)) return { kind: "beat-out-of-range", op: "chords", pattern, beat };
+		if (it.slot !== null) {
+			const slots = pattern.measures[from - 1].slots.length;
+			if (it.slot < 1 || it.slot > slots) return { kind: "slot-out-of-range", op: "chords", pattern, bar: from, slot: it.slot, slots };
+		}
 		const to = it.barTo ?? (words.length > 1 ? from + words.length - 1 : from);
 		if (to < from || to > pattern.measures.length) return { kind: "bar-out-of-range", op: "chords", pattern, bar: to };
 		const count = to - from + 1;
@@ -476,9 +522,15 @@ function readChordMarks(
 				continue;
 			}
 			const measureIndex = bar - 1;
-			const slotIndex = slotAtBeat(pattern.measures[measureIndex], beat, pattern.timeSignature);
+			const measure = pattern.measures[measureIndex];
+			// A named slot is the player's own count of the grid, and wins over a
+			// beat; a bar further along the range may be shorter than the first.
+			const slotIndex =
+				it.slot !== null
+					? Math.min(it.slot - 1, measure.slots.length - 1)
+					: slotAtBeat(measure, beat, pattern.timeSignature);
 			next = setSlotChord(next, { measureIndex, slotIndex }, word.chord);
-			marks.push({ bar, beat, chord: word.chord });
+			marks.push({ bar, beat: it.slot !== null ? beatAtSlot(measure, slotIndex, pattern.timeSignature) : beat, chord: word.chord });
 			low = Math.min(low, bar);
 			high = Math.max(high, bar);
 		}

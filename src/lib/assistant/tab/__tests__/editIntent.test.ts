@@ -71,6 +71,19 @@ describe("readTabEdit", () => {
 		expect(findTabPattern("\"my arp\"", PATTERNS)?.id).toBe("mine");
 	});
 
+	it("takes the player's copy of a shipped pattern once the page has made one", () => {
+		const shipped = PRESET_FINGERPICK_PATTERNS[0];
+		expect(findTabPattern(shipped.name, PATTERNS)?.id).toBe(shipped.id);
+		// The page saves an edit to a shipped pattern as "<name> (mine)"; from
+		// then on the shipped name means that copy, so edits pile up on it.
+		const copy: FingerpickPattern = { ...shipped, id: "copy", name: `${shipped.name} (mine)` };
+		expect(findTabPattern(shipped.name, [...PATTERNS, copy])?.id).toBe("copy");
+		expect(findTabPattern(`${shipped.name} (mine)`, [...PATTERNS, copy])?.id).toBe("copy");
+		// A pattern of the player's own outranks a shipped one of the same name.
+		const twin: FingerpickPattern = { ...shipped, id: "twin" };
+		expect(findTabPattern(shipped.name, [...PATTERNS, twin])?.id).toBe("twin");
+	});
+
 	it("reports a bar that is not there, and a segment it could not read", () => {
 		expect(read("replace bar 5 of my arp: Am: 5 3 2 1")).toMatchObject({ kind: "bar-out-of-range", bar: 5 });
 		expect(read("add to my arp: something nice")).toMatchObject({ kind: "segment-unread", segment: "something nice" });
@@ -101,6 +114,25 @@ describe("chord marks", () => {
 		const onThree = readFour("add chord Am to bar 2 beat 3 of four bars");
 		expect(chordOn(onThree, 2, 2)).toBe("A");
 		expect(chordOn(onThree, 2, 0)).toBeUndefined();
+	});
+
+	it("counts the grid's slots when the player does, and calls a bar a measure", () => {
+		// The shipped 斑马斑马 opens bar 1 with two eighths then sixteenths: its
+		// slot 3 is the second beat's first cell, and is said back as beat 2.
+		const r = read("in pattern 斑马斑马, add Cadd9 to measure 1 slot 1; add D6add9 to measure 1 slot 3");
+		expect(r?.kind).toBe("chords");
+		expect(chordOn(r, 1, 0)).toBe("C");
+		expect(chordOn(r, 1, 2)).toBe("D");
+		expect(r?.kind === "chords" && r.marks.map((m) => `${m.bar}:${m.beat}:${m.chord.root}${m.chord.suffix}`)).toEqual(["1:1:Cadd9", "1:2:D69"]);
+		// Four quarters in the bar: slot 3 is beat 3.
+		const quarters = readFour("add Am to measure 1 slot 3 of four bars");
+		expect(quarters?.kind === "chords" && quarters.marks[0]).toMatchObject({ bar: 1, beat: 3 });
+		expect(chordOn(readFour("add Am to measure 2 slot 2 of four bars"), 2, 1)).toBe("A");
+		expect(chordOn(readFour("four bars measure 2 slot 4: G"), 2, 3)).toBe("G");
+		// A slot the bar does not have is said so, with how many it has.
+		const out = readFour("add Am to bar 1 slot 9 of four bars");
+		expect(out?.kind).toBe("slot-out-of-range");
+		expect(out?.kind === "slot-out-of-range" && [out.bar, out.slot, out.slots]).toEqual([1, 9, 4]);
 	});
 
 	it("reads the colon form and the Chinese form", () => {

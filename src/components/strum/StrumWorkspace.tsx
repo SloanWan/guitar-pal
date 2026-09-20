@@ -2,6 +2,7 @@
 
 import PatternWorkspace, { type WorkspaceTab } from "@/components/strum/PatternWorkspace";
 import StrumPatternLibrary from "@/components/strum/StrumPatternLibrary";
+import LibraryHint, { useLibraryHint } from "@/components/LibraryHint";
 import {
 	PRESET_STRUM_PATTERNS,
 	StrumPattern,
@@ -389,6 +390,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 	const [editingProgression, setEditingProgression] = useState<ChordProgression | null>(null);
 	const [editingPattern, setEditingPattern] = useState<StrumPattern | null>(null);
 	const [showLibrary, setShowLibrary] = useState(false);
+	const libraryHint = useLibraryHint("strum");
 	const [mutHintDismissed, setMutHintDismissed] = useState(false);
 	const [loopGap, setLoopGap] = useState<LoopGapSeconds>(0);
 
@@ -1154,19 +1156,30 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 				>
 					{/* Library toggle — scoped to centre column, 768–1024 px only */}
 					{!shared && !showLibrary && (
-						<button
-							onClick={(e) => {
-								e.stopPropagation();
-								setShowLibrary(true);
-							}}
-							className={`absolute top-3 right-3 z-10 lg:hidden flex items-center bg-denim text-on-denim px-2 py-2 transition-all duration-300 active:scale-95 ${
-								controlsVisible
-									? "opacity-100 pointer-events-auto"
-									: "opacity-0 pointer-events-none"
-							}`}
-						>
-							<SquareMenu />
-						</button>
+						<>
+							<button
+								onClick={(e) => {
+									e.stopPropagation();
+									libraryHint.dismiss();
+									setShowLibrary(true);
+								}}
+								aria-label="Open the pattern library"
+								className={`absolute top-3 right-3 z-10 lg:hidden flex items-center bg-denim text-on-denim px-2 py-2 transition-all duration-300 active:scale-95 ${
+									controlsVisible
+										? "opacity-100 pointer-events-auto"
+										: "opacity-0 pointer-events-none"
+								}`}
+							>
+								<SquareMenu />
+							</button>
+							{/* First visit only: what the square icon opens, with an arrow
+							    at it. Comes and goes with the toggle it points to. */}
+							{libraryHint.show && (
+								<LibraryHint
+									className={`absolute top-3 right-15 z-10 lg:hidden transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`}
+								/>
+							)}
+						</>
 					)}
 					{/* pt below lg: the library toggle floats over this column's top-right
 					    corner, and without the gap it sits on the card's own top edge. */}

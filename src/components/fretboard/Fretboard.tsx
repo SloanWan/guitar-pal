@@ -57,6 +57,7 @@ import {
 	type MarkEmphasis,
 } from "@/lib/fretboard/types";
 import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
+import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 
 // ── Geometry (SVG user units = CSS px) ──────────────────────────────────────
 // Cell k (the space behind fret wire k) spans x = [k·FRET_W, (k+1)·FRET_W]; the
@@ -84,8 +85,9 @@ const MIN_SCALE = 1.25;
 const PLAY_COL_W = 18;
 /** The play/clear controls, sitting above a highlighted position. */
 const BOX_BTN = 14;
+/** The same buttons under a finger: big enough to hit without aiming. */
+const BOX_BTN_TOUCH = 22;
 /** Headroom kept for them, so the board does not jump when a position appears. */
-const BOX_BTN_ROW = BOX_BTN + 4;
 
 
 /** Design width that `VISIBLE_FRETS` occupies, labels included. */
@@ -109,6 +111,8 @@ const PLUCK_TAU_S = 0.09;
 const POP_SCALE = 1.7;
 /** A pointer that travels further than this before lifting is a scroll, not a tap. */
 const TAP_SLOP_PX = 8;
+/** How long a finger rests on a position before it is picked, not played. */
+const LONG_PRESS_MS = 500;
 /** The capo bar: a band just behind its fret wire, square-ended like everything here. */
 const CAPO_W = 7;
 /** Invisible margin each side of the bar, so a finger can catch it. */
@@ -178,9 +182,12 @@ export interface FretboardHandle {
 	/**
 	 * Scroll a fret into view if it is not already, so a run that walks past
 	 * the right edge stays watchable. Does nothing while the fret is comfortably
-	 * inside the viewport, or the neck would twitch on every note.
+	 * inside the viewport, or the neck would twitch on every note. Given
+	 * `within`, it also does nothing when that span is wider than the viewport:
+	 * a run inside a box the screen cannot hold would drag the neck back and
+	 * forth on every note, which is worse than losing sight of a few.
 	 */
-	revealFret: (fret: number) => void;
+	revealFret: (fret: number, within?: { fromFret: number; toFret: number }) => void;
 }
 
 export interface FretboardComponentProps extends FretboardProps {
@@ -294,6 +301,16 @@ export default function Fretboard({
 	/** Nodes currently carrying a `data-hover`, so leaving clears exactly those. */
 	const hovered = useRef<SVGGElement[]>([]);
 	const pending = useRef<PendingPress | null>(null);
+	/**
+	 * A finger held on a slot: the timer that turns the hold into a position
+	 * pick. A mouse has a right button for that; a touch screen has only time.
+	 */
+	const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const endHold = useCallback(() => {
+		if (hold.current !== null) clearTimeout(hold.current);
+		hold.current = null;
+	}, []);
+	useEffect(() => endHold, [endHold]);
 	/** One running pluck per string, so a re-pluck restarts rather than stacks. */
 	const plucks = useRef(new Map<number, number>());
 	/** Pending staggered strikes, so unmount cancels them (Constraint 4). */
@@ -434,7 +451,7 @@ export default function Fretboard({
 	useImperativeHandle(
 		ref,
 		() => ({
-			revealFret(fret) {
+			revealFret(fret, within) {
 				const el = scroller.current;
 				const svg = neck.current;
 				if (!el || !svg || typeof el.scrollTo !== "function") return;
@@ -442,6 +459,7 @@ export default function Fretboard({
 				if (!Number.isFinite(scale) || scale <= 0) return;
 				const left = (fret - fromFret) * FRET_W * scale;
 				const width = FRET_W * scale;
+				if (within && (within.toFret - within.fromFret + 1) * width > el.clientWidth) return;
 				// A cell of slack at each edge, so the neck moves before the
 				// playhead reaches the very edge rather than after.
 				const margin = width;
@@ -486,9 +504,10 @@ export default function Fretboard({
 				}
 				return;
 			}
-			if (!canPress) return;
 			const slot = slotFromTarget(e.target);
 			if (!slot) return;
+			// A hold works whether or not the neck can sound: the pick is not a note.
+			if (!canPress && !(e.pointerType === "touch" && onPositionPick)) return;
 			// No preventDefault: on touch the browser must still be free to scroll.
 			pending.current = {
 				pointerId: e.pointerId,
@@ -496,12 +515,34 @@ export default function Fretboard({
 				y: e.clientY,
 				key: slotKey(slot.string, slot.fret),
 			};
+			// Held still on a touch screen, the press picks the position instead
+			// of sounding the note: the release then has nothing to play.
+			endHold();
+			if (e.pointerType === "touch" && onPositionPick) {
+				hold.current = setTimeout(() => {
+					hold.current = null;
+					if (pending.current?.pointerId !== e.pointerId) return;
+					pending.current = null;
+					onPositionPick(slot.fret);
+				}, LONG_PRESS_MS);
+			}
 		},
-		[canPress, onPositionPick],
+		[canPress, onPositionPick, endHold],
+	);
+
+	const handlePointerMove = useCallback(
+		(e: ReactPointerEvent<SVGSVGElement>) => {
+			const press = pending.current;
+			if (!press || press.pointerId !== e.pointerId) return;
+			// A finger that moved is scrolling, not holding.
+			if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP_PX) endHold();
+		},
+		[endHold],
 	);
 
 	const handlePointerUp = useCallback(
 		(e: ReactPointerEvent<SVGSVGElement>) => {
+			endHold();
 			const press = pending.current;
 			pending.current = null;
 			if (!press || !canPress || press.pointerId !== e.pointerId) return;
@@ -516,12 +557,13 @@ export default function Fretboard({
 			if (prefersReducedMotion()) return;
 			feedback(slot.string, slot.fret);
 		},
-		[canPress, capo, onSlotPress, feedback],
+		[canPress, capo, onSlotPress, feedback, endHold],
 	);
 
 	const cancelPress = useCallback(() => {
+		endHold();
 		pending.current = null;
-	}, []);
+	}, [endHold]);
 
 	// ── Capo: drag the bar along the neck, snapping to the fret under the pointer ──
 	const capoMax = maxCapo ?? toFret;
@@ -623,7 +665,13 @@ export default function Fretboard({
 	const labelW = onStringPlay ? LABEL_W + PLAY_COL_W : LABEL_W;
 	const designW = designWidth(labelW);
 	// Kept whether or not a position is showing, so the board does not jump.
-	const headH = onHighlightPlay || onHighlightClear ? BOX_BTN_ROW : 0;
+	// A finger needs a bigger target than a pointer; the row above the neck
+	// grows with the buttons it holds.
+	const coarse = useCoarsePointer();
+	const boxBtn = coarse ? BOX_BTN_TOUCH : BOX_BTN;
+	const boxBtnRow = boxBtn + 4;
+	const boxIcon = boxBtn - 6;
+	const headH = onHighlightPlay || onHighlightClear ? boxBtnRow : 0;
 	const boardH = H + headH;
 	const size = (units: number) => scaled(units, designW);
 	// Shade by octave above the run's own lowest note, so a line climbing the
@@ -710,7 +758,9 @@ export default function Fretboard({
 						viewBox={`0 0 ${neckW} ${boardH}`}
 						width={neckW}
 						height={boardH}
-						className="block max-w-none"
+						// No callout or selection on a long press: that press is the
+						// position pick on a touch screen.
+						className="block max-w-none select-none [-webkit-touch-callout:none]"
 						style={{ width: size(neckW), height: size(boardH) }}
 						onContextMenu={onPositionPick ? (e) => e.preventDefault() : undefined}
 						data-from-fret={fromFret}
@@ -721,6 +771,7 @@ export default function Fretboard({
 						onPointerOver={handlePointerOver}
 						onPointerOut={handlePointerOut}
 						onPointerDown={handlePointerDown}
+						onPointerMove={handlePointerMove}
 						onPointerUp={handlePointerUp}
 						onPointerCancel={cancelPress}
 					>
@@ -839,25 +890,25 @@ export default function Fretboard({
 										>
 											<rect
 												x={highlight.fromFret * FRET_W}
-												y={-BOX_BTN_ROW}
-												width={BOX_BTN}
-												height={BOX_BTN}
+												y={-boxBtnRow}
+												width={boxBtn}
+												height={boxBtn}
 												fill="none"
 											/>
 											{highlightPlaying ? (
 												<Square
 													x={highlight.fromFret * FRET_W + 3}
-													y={-BOX_BTN_ROW + 3}
-													width={8}
-													height={8}
+													y={-boxBtnRow + 3}
+													width={boxIcon}
+													height={boxIcon}
 													strokeWidth={2.5}
 												/>
 											) : (
 												<Play
 													x={highlight.fromFret * FRET_W + 3}
-													y={-BOX_BTN_ROW + 3}
-													width={8}
-													height={8}
+													y={-boxBtnRow + 3}
+													width={boxIcon}
+													height={boxIcon}
 													strokeWidth={2.5}
 												/>
 											)}
@@ -868,8 +919,8 @@ export default function Fretboard({
 									{onHighlightResize &&
 										(
 											[
-												{ step: -1, label: "Narrow this position", at: BOX_BTN, Icon: ChevronLeft },
-												{ step: 1, label: "Widen this position", at: BOX_BTN * 2, Icon: ChevronRight },
+												{ step: -1, label: "Narrow this position", at: boxBtn, Icon: ChevronLeft },
+												{ step: 1, label: "Widen this position", at: boxBtn * 2, Icon: ChevronRight },
 											] as const
 										).map(({ step, label, at, Icon }) => {
 											const stuck =
@@ -895,16 +946,16 @@ export default function Fretboard({
 												>
 													<rect
 														x={highlight.fromFret * FRET_W + at}
-														y={-BOX_BTN_ROW}
-														width={BOX_BTN}
-														height={BOX_BTN}
+														y={-boxBtnRow}
+														width={boxBtn}
+														height={boxBtn}
 														fill="none"
 													/>
 													<Icon
 														x={highlight.fromFret * FRET_W + at + 3}
-														y={-BOX_BTN_ROW + 3}
-														width={8}
-														height={8}
+														y={-boxBtnRow + 3}
+														width={boxIcon}
+														height={boxIcon}
 														strokeWidth={2.5}
 													/>
 												</g>
@@ -924,17 +975,17 @@ export default function Fretboard({
 											}}
 										>
 											<rect
-												x={(highlight.toFret + 1) * FRET_W - BOX_BTN}
-												y={-BOX_BTN_ROW}
-												width={BOX_BTN}
-												height={BOX_BTN}
+												x={(highlight.toFret + 1) * FRET_W - boxBtn}
+												y={-boxBtnRow}
+												width={boxBtn}
+												height={boxBtn}
 												fill="none"
 											/>
 											<X
-												x={(highlight.toFret + 1) * FRET_W - BOX_BTN + 3}
-												y={-BOX_BTN_ROW + 3}
-												width={8}
-												height={8}
+												x={(highlight.toFret + 1) * FRET_W - boxBtn + 3}
+												y={-boxBtnRow + 3}
+												width={boxIcon}
+												height={boxIcon}
 												strokeWidth={2.5}
 											/>
 										</g>

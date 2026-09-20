@@ -73,6 +73,13 @@ describe("parseQuery — suffix normalization", () => {
     expect(parseQuery("CΔ7").normalizedSuffix).toBe("maj7");
   });
 
+  it("6/9 and 6add9 are the stored 69, in major and minor", () => {
+    expect(parseQuery("C6/9").normalizedSuffix).toBe("69");
+    expect(parseQuery("C6add9").normalizedSuffix).toBe("69");
+    expect(parseQuery("Cm6add9").normalizedSuffix).toBe("m69");
+    expect(parseQuery("C69").normalizedSuffix).toBe("69");
+  });
+
   it("collapses case and whitespace", () => {
     const p = parseQuery("  c MAJ 7  ");
     expect(p.root).toBe("C");

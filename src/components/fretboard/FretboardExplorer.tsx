@@ -104,6 +104,7 @@ import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 import { parseMusicalText } from "@/lib/musicalNotation";
 import { voicingNearest } from "@/lib/fretboard/voicingRegister";
 import { STRUM_CAPO_MAX, type ChordRef } from "@/lib/strumPatterns";
+import { hasCoarsePointer } from "@/lib/pointer";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 
 /** A 22-fret neck, the common electric; acoustics simply never use the top frets. */
@@ -159,9 +160,9 @@ function Segmented<T extends string>({ options, value, onChange, ariaLabel }: Se
 	);
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
 	return (
-		<div className="flex flex-col gap-1.5">
+		<div className={`flex flex-col gap-1.5 ${className}`}>
 			<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">{label}</span>
 			{children}
 		</div>
@@ -173,7 +174,9 @@ const SELECT_CLASS = "h-[30px] border border-line-strong bg-surface px-2 font-mo
 /**
  * An instrument's heading: its name on the left, its own fader on the right.
  * The fader belongs to the instrument it controls rather than to the page, so
- * it sits in the corner of that instrument's block.
+ * it sits in the corner of that instrument's block, and the two instruments'
+ * faders line up. Anything else the instrument carries (the neck's capo and
+ * label choice) goes on a row of its own beneath, where a phone has room.
  */
 function InstrumentHeader({
 	icon,
@@ -193,25 +196,29 @@ function InstrumentHeader({
 	children?: React.ReactNode;
 }) {
 	return (
-		<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-			<span className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-				<span className="flex items-center gap-1.5">
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center justify-between gap-4">
+				<span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
 					<span aria-hidden="true">{icon}</span>
 					{name}
 				</span>
-				{children}
-			</span>
-			<div className="w-28 shrink-0">
-				<Fader
-					min={0}
-					max={100}
-					step={1}
-					value={Math.round(value * 100)}
-					onValue={(v) => onChange(v / 100)}
-					disabled={disabled}
-					ariaLabel={label}
-				/>
+				<div className="w-28 shrink-0">
+					<Fader
+						min={0}
+						max={100}
+						step={1}
+						value={Math.round(value * 100)}
+						onValue={(v) => onChange(v / 100)}
+						disabled={disabled}
+						ariaLabel={label}
+					/>
+				</div>
 			</div>
+			{children && (
+				<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+					{children}
+				</div>
+			)}
 		</div>
 	);
 }
@@ -366,9 +373,14 @@ export default function FretboardExplorer({
 	// Each step of a run lights on both instruments as it sounds. The strike
 	// waits a frame so that a chord's marks, which land with the same step,
 	// are lit before they pulse.
+	// The box a run plays in, for the follow. On a phone a run inside a box
+	// is never followed — the neck swung on every note whatever the box's
+	// width — and on a wider screen only while the box fits the viewport.
+	const runWithinRef = useRef<{ fromFret: number; toFret: number } | null>(null);
 	const handleRunStep = useCallback((step: SequenceStep) => {
 		const first = step.slots[0];
-		if (first) fretboard.current?.revealFret(first.fret);
+		const within = runWithinRef.current;
+		if (first && !(within && hasCoarsePointer())) fretboard.current?.revealFret(first.fret, within ?? undefined);
 		requestAnimationFrame(() => {
 			fretboard.current?.strike(step.slots);
 			for (const midi of step.midis) piano.current?.strike(midi);
@@ -475,6 +487,10 @@ export default function FretboardExplorer({
 	 * one a run would play, so hovering previews without committing.
 	 */
 	const runBox = inChords ? null : runTarget.kind === "box" ? runTarget.box : null;
+	const runWithin = inChords ? chordBox : runBox;
+	useEffect(() => {
+		runWithinRef.current = runWithin;
+	}, [runWithin]);
 
 	/**
 	 * The chord as it actually sounds: every note of the shape, low to high,
@@ -585,12 +601,20 @@ export default function FretboardExplorer({
 	);
 	const handleSlotHover = useCallback((slot: SlotNote | null) => piano.current?.highlight(slot?.midi ?? null), []);
 
-	/** Sound the current shape in a voice and animate it on both instruments. */
+	/**
+	 * Sound the current shape in a voice and animate it on both instruments.
+	 * Whichever instrument was not pressed scrolls to show what it is doing:
+	 * on a phone the neck and the keyboard are both wider than the screen.
+	 */
 	const soundShape = useCallback(
 		(v: ChordVoicing, voice: "guitar" | "piano") => {
 			const pitches = shapePitches(v, capo);
+			const slots = shapeSlots(shapeMarks(v, capo, 0, () => ""));
 			for (const midi of pitches) piano.current?.strike(midi);
-			fretboard.current?.strike(shapeSlots(shapeMarks(v, capo, 0, () => "")));
+			fretboard.current?.strike(slots);
+			if (pitches.length > 0) piano.current?.reveal(Math.min(...pitches));
+			const lowest = slots.reduce<number | null>((low, s) => (low === null || s.fret < low ? s.fret : low), null);
+			if (lowest !== null) fretboard.current?.revealFret(lowest);
 			void playChord(pitches, voice).catch(() => undefined);
 		},
 		[capo, playChord],
@@ -605,6 +629,7 @@ export default function FretboardExplorer({
 				return;
 			}
 			piano.current?.strike(slot.midi);
+			piano.current?.reveal(slot.midi);
 			void play(slot.midi).catch(() => undefined);
 		},
 		[shown, shapeVoicing, marks, soundShape, play],
@@ -620,7 +645,11 @@ export default function FretboardExplorer({
 			if (!inChords) {
 				if (!soundOn) return;
 				piano.current?.strike(midi);
-				fretboard.current?.strike(slotsSounding(midi, NECK));
+				const sounding = slotsSounding(midi, NECK);
+				fretboard.current?.strike(sounding);
+				// The neck follows the key: the lowest position that sounds it.
+				const lowest = sounding.reduce<number | null>((low, s) => (low === null || s.fret < low ? s.fret : low), null);
+				if (lowest !== null) fretboard.current?.revealFret(lowest);
 				void play(midi, "piano").catch(() => undefined);
 				return;
 			}
@@ -846,8 +875,15 @@ export default function FretboardExplorer({
 
 			{/* Key and capo: what both modes work on, always reachable. */}
 			<div className="flex flex-wrap items-end gap-3 border border-line bg-panel p-3">
-				<Field label="Key">
-					<div role="radiogroup" aria-label="Key" className="flex flex-wrap border border-line-strong">
+				{/* The twelve keys on one row. Narrower than the row, the row scrolls
+				    sideways rather than wrapping: a second line of keys read as a
+				    second control. */}
+				<Field label="Key" className="w-full min-w-0 sm:w-auto">
+					<div
+						role="radiogroup"
+						aria-label="Key"
+						className="fp-thin-scroll flex max-w-full overflow-x-auto border border-line-strong"
+					>
 						{SCALE_ROOTS.map((r, i) => {
 							const on = r === root;
 							return (
@@ -857,7 +893,7 @@ export default function FretboardExplorer({
 									role="radio"
 									aria-checked={on}
 									onClick={() => setRoot(r)}
-									className={`min-w-9 px-2 py-1.5 font-mono text-[12px] transition-colors duration-(--dur-hover) ${
+									className={`min-w-9 shrink-0 px-2 py-1.5 font-mono text-[12px] transition-colors duration-(--dur-hover) ${
 										i > 0 ? "border-l border-line-strong" : ""
 									} ${on ? "bg-denim text-on-denim" : "text-ink hover:bg-denim-tint hover:text-denim-accent"}`}
 								>

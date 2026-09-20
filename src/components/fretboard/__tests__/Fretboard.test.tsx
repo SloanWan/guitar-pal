@@ -84,7 +84,7 @@ describe("Fretboard", () => {
 		for (let fret = 0; fret <= 22; fret++) expect(text).toContain(String(fret));
 	});
 
-	it("knows nothing about scales or chords: only the mark model, position facts, motion, icons and the string names", () => {
+	it("knows nothing about scales or chords: only the mark model, position facts, motion, the pointer, icons and the string names", () => {
 		const source = readFileSync(path.resolve(__dirname, "../Fretboard.tsx"), "utf8");
 		const modules = [...source.matchAll(/^import[^;]*from "([^"]+)";/gm)].map((m) => m[1]);
 		expect(new Set(modules)).toEqual(
@@ -95,6 +95,7 @@ describe("Fretboard", () => {
 				"@/lib/fretboard/positions",
 				"@/lib/fretboard/types",
 				"@/lib/motion",
+				"@/hooks/useCoarsePointer",
 			]),
 		);
 		expect(source).toMatch(/import \{ STRING_LABELS \} from "@\/lib\/chordVoicingToMidi"/);
@@ -336,7 +337,55 @@ describe("Fretboard — press", () => {
 		// Nudged just past the edge with a cell of lead, not centred: a run
 		// stepping a fret at a time should creep, not jump half a screen.
 		expect(scrollTo.mock.calls[0][0].left).toBeCloseTo((18 - 10 + 3) * FRET_W);
+		// A box wider than the viewport is not followed at all: the neck would
+		// swing back and forth on every note. A box that fits still is.
+		act(() => handle.current!.revealFret(20, { fromFret: 5, toFret: 20 }));
+		expect(scrollTo).toHaveBeenCalledTimes(1);
+		act(() => handle.current!.revealFret(20, { fromFret: 15, toFret: 20 }));
+		expect(scrollTo).toHaveBeenCalledTimes(2);
 		board.unmount();
+	});
+
+	it("picks a position when a finger rests on a slot, and then plays nothing on lifting", () => {
+		vi.useFakeTimers();
+		const onPositionPick = vi.fn();
+		const onSlotPress = vi.fn();
+		const board = mount({ onPositionPick, onSlotPress });
+		const touch = { pointerType: "touch", clientX: 0, clientY: 0 } as const;
+		pointer(board.hit(3, 7), "pointerdown", touch);
+		act(() => {
+			vi.advanceTimersByTime(499);
+		});
+		expect(onPositionPick).not.toHaveBeenCalled();
+		act(() => {
+			vi.advanceTimersByTime(1);
+		});
+		expect(onPositionPick).toHaveBeenCalledWith(7);
+		pointer(board.hit(3, 7), "pointerup", touch);
+		expect(onSlotPress).not.toHaveBeenCalled();
+
+		// A finger that moves is scrolling: no pick, and a lift where it
+		// landed is not a tap either.
+		pointer(board.hit(3, 9), "pointerdown", touch);
+		pointer(board.hit(3, 9), "pointermove", { ...touch, clientX: 40 });
+		act(() => {
+			vi.advanceTimersByTime(600);
+		});
+		expect(onPositionPick).toHaveBeenCalledTimes(1);
+		// A quick tap is a note, as before.
+		pointer(board.hit(3, 9), "pointerup", touch);
+		pointer(board.hit(2, 4), "pointerdown", touch);
+		pointer(board.hit(2, 4), "pointerup", touch);
+		expect(onSlotPress).toHaveBeenLastCalledWith({ string: 2, fret: 4, midi: expect.any(Number) });
+		expect(onPositionPick).toHaveBeenCalledTimes(1);
+		// A mouse never holds: the right button is its pick.
+		pointer(board.hit(3, 7), "pointerdown", { pointerType: "mouse", clientX: 0, clientY: 0 });
+		act(() => {
+			vi.advanceTimersByTime(600);
+		});
+		expect(onPositionPick).toHaveBeenCalledTimes(1);
+		board.unmount();
+		vi.useRealTimers();
 	});
 
 	it("draws a capo, dims the frets behind it, and reports the capo's pitch for a press behind it", () => {

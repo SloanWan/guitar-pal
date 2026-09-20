@@ -52,10 +52,11 @@ const NRA = (fret: number): StringFret => ({
 	accent: true,
 });
 
-// ── 斑马斑马 ─────────────────────────────────────────────────────────────────
+// ── 斑马斑马 ──────────────────────────────────────────────────────────────────
 // Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
-// Fingerstyle arrangement of the ballad — alternating bass with melodic fills;
-// the chorus (m5–m12) is wrapped in a repeat.
+// The author's arrangement of the ballad, as played and edited in the app —
+// alternating bass with melodic fills, the chorus (m5–m12) repeated. Pinned
+// shapes are library voicings; three of them were written for this arrangement.
 const ZEBRA_ZEBRA: FingerpickPattern = {
 	id: "zebra-zebra",
 	name: "斑马斑马",
@@ -63,432 +64,383 @@ const ZEBRA_ZEBRA: FingerpickPattern = {
 	bpm: 66,
 	timeSignature: [4, 4],
 	measures: [
-		// ── m1 ───────────────────────────────────────────────────────────────
+		// ── m1 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m1",
 			slots: [
-				{ id: "zebra-m1-1", duration: "eighth", strings: [N(0), S(), S(), S(), N(3), S()] },
+				{ id: "zebra-m1-1", duration: "eighth", chord: { root: "C", suffix: "add9", voicingId: null }, strings: [N(0), S(), S(), S(), N(3), S()] },
 				{ id: "zebra-m1-2", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
-				{
-					id: "zebra-m1-3",
-					duration: "sixteenth",
-					strings: [N(0), S(), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m1-4",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m1-5",
-					duration: "sixteenth",
-					strings: [S(), N(3), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m1-6",
-					duration: "sixteenth",
-					strings: [N(0), S(), S(), S(), S(), S()],
-				},
+				{ id: "zebra-m1-3", duration: "sixteenth", strings: [N(0), S(), S(), S(), S(), S()] },
+				{ id: "zebra-m1-4", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "zebra-m1-5", duration: "sixteenth", chord: { root: "D", suffix: "69", voicingId: "8a315435-c1bc-459d-bcf4-8703943388b7" }, strings: [S(), N(3), S(), S(), S(), S()] },
+				{ id: "zebra-m1-6", duration: "sixteenth", strings: [N(0), S(), S(), S(), S(), S()] },
 				{ id: "zebra-m1-7", duration: "eighth", strings: [S(), N(0), S(), S(), N(5), S()] },
 				{ id: "zebra-m1-8", duration: "eighth", strings: [S(), S(), S(), N(4), S(), S()] },
 				{ id: "zebra-m1-9", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
 				{ id: "zebra-m1-10", duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
 			],
 		},
-
-		// ── m2 — pull-off on high-e, hammer-on on G ───────────────────────────
+		// ── m2 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m2",
 			slots: [
-				{ id: "zebra-m2-1", duration: "eighth", strings: [N(2), S(), S(), S(), N(2), S()] },
+				{ id: "zebra-m2-1", duration: "eighth", chord: { root: "B", suffix: "m7", voicingId: "0534ef4e-ad9f-4f2d-8226-56925b9050b6" }, strings: [N(2), S(), S(), S(), N(2), S()] },
 				{ id: "zebra-m2-2", duration: "eighth", strings: [S(), S(), N(2), S(), S(), S()] },
-				{
-					id: "zebra-m2-3",
-					duration: "sixteenth",
-					strings: [N(2), S(), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m2-4",
-					duration: "sixteenth",
-					strings: [Po(0), S(), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m2-5",
-					duration: "sixteenth",
-					strings: [S(), N(0), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m2-6",
-					duration: "sixteenth",
-					strings: [S(), S(), N(0), S(), S(), S()],
-				},
-				{ id: "zebra-m2-7", duration: "eighth", strings: [N(0), S(), S(), S(), S(), N(0)] },
+				{ id: "zebra-m2-3", duration: "sixteenth", strings: [N(2), S(), S(), S(), S(), S()] },
+				{ id: "zebra-m2-4", duration: "sixteenth", strings: [Po(0), S(), S(), S(), S(), S()] },
+				{ id: "zebra-m2-5", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "zebra-m2-6", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "zebra-m2-7", duration: "eighth", chord: { root: "E", suffix: "minor", voicingId: null }, strings: [N(0), S(), S(), S(), S(), N(0)] },
 				{ id: "zebra-m2-8", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
-				{
-					id: "zebra-m2-9",
-					duration: "sixteenth",
-					strings: [S(), S(), N(0), S(), S(), S()],
-				},
-				{
-					id: "zebra-m2-10",
-					duration: "sixteenth",
-					strings: [S(), S(), Hn(2), S(), S(), S()],
-				},
-				{
-					id: "zebra-m2-11",
-					duration: "sixteenth",
-					strings: [S(), N(0), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m2-12",
-					duration: "sixteenth",
-					strings: [N(0), S(), S(), S(), S(), S()],
-				},
+				{ id: "zebra-m2-9", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "zebra-m2-10", duration: "sixteenth", strings: [S(), S(), Hn(2), S(), S(), S()] },
+				{ id: "zebra-m2-11", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "zebra-m2-12", duration: "sixteenth", strings: [N(0), S(), S(), S(), S(), S()] },
 			],
 		},
-
-		// ── m3 — 32nd hammer-on/pull-off ornament on B ────────────────────────
+		// ── m3 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m3",
 			slots: [
-				{ id: "zebra-m3-1", duration: "eighth", strings: [S(), N(0), S(), S(), N(3), S()] },
+				{ id: "zebra-m3-1", duration: "eighth", chord: { root: "C", suffix: "maj7", voicingId: "880eea05-0e36-4d9e-9f2f-d7cfede73643" }, strings: [S(), N(0), S(), S(), N(3), S()] },
 				{ id: "zebra-m3-2", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
 				{ id: "zebra-m3-3", duration: "32nd", strings: [S(), N(0), S(), S(), S(), S()] },
 				{ id: "zebra-m3-4", duration: "32nd", strings: [S(), Hn(1), S(), S(), S(), S()] },
-				{
-					id: "zebra-m3-5",
-					duration: "sixteenth",
-					strings: [S(), Po(0), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m3-6",
-					duration: "sixteenth",
-					strings: [S(), S(), N(0), S(), S(), S()],
-				},
-				{
-					id: "zebra-m3-7",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), N(2), S(), S()],
-				},
-				{ id: "zebra-m3-8", duration: "eighth", strings: [S(), N(0), S(), S(), N(5), S()] },
+				{ id: "zebra-m3-5", duration: "sixteenth", strings: [S(), Po(0), S(), S(), S(), S()] },
+				{ id: "zebra-m3-6", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "zebra-m3-7", duration: "sixteenth", strings: [S(), S(), S(), N(2), S(), S()] },
+				{ id: "zebra-m3-8", duration: "eighth", chord: { root: "D", suffix: "69", voicingId: "8a315435-c1bc-459d-bcf4-8703943388b7" }, strings: [S(), N(0), S(), S(), N(5), S()] },
 				{ id: "zebra-m3-9", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
 				{ id: "zebra-m3-10", duration: "32nd", strings: [S(), N(0), S(), S(), S(), S()] },
 				{ id: "zebra-m3-11", duration: "32nd", strings: [S(), Hn(3), S(), S(), S(), S()] },
-				{
-					id: "zebra-m3-12",
-					duration: "sixteenth",
-					strings: [S(), Po(0), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m3-13",
-					duration: "sixteenth",
-					strings: [S(), S(), N(0), S(), S(), S()],
-				},
-				{
-					id: "zebra-m3-14",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), N(4), S(), S()],
-				},
+				{ id: "zebra-m3-12", duration: "sixteenth", strings: [S(), Po(0), S(), S(), S(), S()] },
+				{ id: "zebra-m3-13", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "zebra-m3-14", duration: "sixteenth", strings: [S(), S(), S(), N(4), S(), S()] },
 			],
 		},
-
-		// ── m4 — chained slide-ups on D, ends with tied note + quarter rest ───
+		// ── m4 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m4",
 			slots: [
-				{
-					id: "zebra-m4-1",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), S(), S(), N(0)],
-				},
-				{
-					id: "zebra-m4-2",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m4-3",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), N(2), S(), S()],
-				},
-				{
-					id: "zebra-m4-4",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), Su(5), S(), S()],
-				},
-				{
-					id: "zebra-m4-5",
-					duration: "sixteenth",
-					strings: [S(), S(), N(0), S(), S(), S()],
-				},
-				{
-					id: "zebra-m4-6",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), N(5), S(), S()],
-				},
-				{
-					id: "zebra-m4-7",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), Su(7), S(), S()],
-				},
-				{
-					id: "zebra-m4-8",
-					duration: "sixteenth",
-					strings: [S(), S(), N(0), S(), S(), S()],
-				},
-				{
-					id: "zebra-m4-9",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), N(7), S(), S()],
-				},
-				{
-					id: "zebra-m4-10",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), Su(9), S(), S()],
-				},
-				{
-					id: "zebra-m4-11",
-					duration: "eighth",
-					strings: [S(), S(), S(), Ti(9), S(), S()],
-				},
-				{
-					id: "zebra-m4-12",
-					duration: "quarter",
-					isRest: true,
-					strings: [S(), S(), S(), S(), S(), S()],
-				},
+				{ id: "zebra-m4-1", duration: "sixteenth", chord: { root: "E", suffix: "minor", voicingId: null }, strings: [S(), S(), S(), S(), S(), N(0)] },
+				{ id: "zebra-m4-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "zebra-m4-3", duration: "sixteenth", strings: [S(), S(), S(), N(2), S(), S()] },
+				{ id: "zebra-m4-4", duration: "sixteenth", strings: [S(), S(), S(), Su(5), S(), S()] },
+				{ id: "zebra-m4-5", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "zebra-m4-6", duration: "sixteenth", strings: [S(), S(), S(), N(5), S(), S()] },
+				{ id: "zebra-m4-7", duration: "sixteenth", strings: [S(), S(), S(), Su(7), S(), S()] },
+				{ id: "zebra-m4-8", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "zebra-m4-9", duration: "sixteenth", strings: [S(), S(), S(), N(7), S(), S()] },
+				{ id: "zebra-m4-10", duration: "sixteenth", strings: [S(), S(), S(), Su(9), S(), S()] },
+				{ id: "zebra-m4-11", duration: "eighth", strings: [S(), S(), S(), Ti(9), S(), S()] },
+				{ id: "zebra-m4-12", duration: "quarter", isRest: true, strings: [S(), S(), S(), S(), S(), S()] },
 			],
 		},
-
-		// ── m5 — chorus start ─────────────────────────────────────────────────
+		// ── m5 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m5",
-			repeatStart: true,
 			slots: [
-				{ id: "zebra-m5-1", duration: "eighth", strings: [S(), N(0), S(), S(), N(3), S()] },
+				{ id: "zebra-m5-1", duration: "eighth", chord: { root: "C", suffix: "maj7", voicingId: "880eea05-0e36-4d9e-9f2f-d7cfede73643" }, strings: [S(), N(0), S(), S(), N(3), S()] },
 				{ id: "zebra-m5-2", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
 				{ id: "zebra-m5-3", duration: "eighth", strings: [S(), S(), S(), S(), N(3), S()] },
 				{ id: "zebra-m5-4", duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
-				{ id: "zebra-m5-5", duration: "eighth", strings: [S(), S(), N(2), N(0), S(), S()] },
+				{ id: "zebra-m5-5", duration: "eighth", chord: { root: "D", suffix: "major", voicingId: null }, strings: [S(), S(), N(2), N(0), S(), S()] },
 				{ id: "zebra-m5-6", duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
 				{ id: "zebra-m5-7", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
 				{ id: "zebra-m5-8", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
 			],
 		},
-
-		// ── m6 ───────────────────────────────────────────────────────────────
+		// ── m6 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m6",
 			slots: [
-				{ id: "zebra-m6-1", duration: "eighth", strings: [S(), N(0), S(), S(), N(2), S()] },
+				{ id: "zebra-m6-1", duration: "eighth", chord: { root: "B", suffix: "minor", voicingId: "b2609c3c-e0db-4282-b697-7f251ce07e6b" }, strings: [S(), N(0), S(), S(), N(2), S()] },
 				{ id: "zebra-m6-2", duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
 				{ id: "zebra-m6-3", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
-				{
-					id: "zebra-m6-4",
-					duration: "sixteenth",
-					strings: [S(), S(), N(0), S(), S(), S()],
-				},
-				{
-					id: "zebra-m6-5",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), N(4), S(), S()],
-				},
-				{ id: "zebra-m6-6", duration: "eighth", strings: [S(), S(), N(0), S(), S(), N(0)] },
+				{ id: "zebra-m6-4", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "zebra-m6-5", duration: "sixteenth", strings: [S(), S(), S(), N(4), S(), S()] },
+				{ id: "zebra-m6-6", duration: "eighth", chord: { root: "E", suffix: "minor", voicingId: null }, strings: [S(), S(), N(0), S(), S(), N(0)] },
 				{ id: "zebra-m6-7", duration: "eighth", strings: [S(), S(), S(), S(), N(2), S()] },
-				{
-					id: "zebra-m6-8",
-					duration: "sixteenth",
-					strings: [S(), S(), N(0), S(), S(), S()],
-				},
-				{
-					id: "zebra-m6-9",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), S(), S(), S()],
-				},
+				{ id: "zebra-m6-8", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "zebra-m6-9", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
 				{ id: "zebra-m6-10", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
 			],
 		},
-
-		// ── m7 ───────────────────────────────────────────────────────────────
+		// ── m7 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m7",
 			slots: [
-				{ id: "zebra-m7-1", duration: "eighth", strings: [S(), N(0), S(), S(), N(3), S()] },
+				{ id: "zebra-m7-1", duration: "eighth", chord: { root: "C", suffix: "maj7", voicingId: "880eea05-0e36-4d9e-9f2f-d7cfede73643" }, strings: [S(), N(0), S(), S(), N(3), S()] },
 				{ id: "zebra-m7-2", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
 				{ id: "zebra-m7-3", duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
-				{
-					id: "zebra-m7-4",
-					duration: "sixteenth",
-					strings: [S(), S(), N(2), S(), S(), S()],
-				},
-				{
-					id: "zebra-m7-5",
-					duration: "sixteenth",
-					strings: [S(), S(), N(2), S(), S(), S()],
-				},
-				{ id: "zebra-m7-6", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
+				{ id: "zebra-m7-4", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "zebra-m7-5", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "zebra-m7-6", duration: "eighth", chord: { root: "D", suffix: "major", voicingId: null }, strings: [S(), S(), S(), N(0), S(), S()] },
 				{ id: "zebra-m7-7", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
-				{
-					id: "zebra-m7-8",
-					duration: "dotted-eighth",
-					strings: [S(), N(3), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m7-9",
-					duration: "sixteenth",
-					strings: [S(), S(), N(2), S(), S(), S()],
-				},
+				{ id: "zebra-m7-8", duration: "dotted-eighth", strings: [S(), N(3), S(), S(), S(), S()] },
+				{ id: "zebra-m7-9", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
 			],
 		},
-
-		// ── m8 ───────────────────────────────────────────────────────────────
+		// ── m8 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m8",
 			slots: [
-				{ id: "zebra-m8-1", duration: "eighth", strings: [S(), S(), N(2), S(), S(), N(3)] },
+				{ id: "zebra-m8-1", duration: "eighth", chord: { root: "G", suffix: "major", voicingId: null }, strings: [S(), S(), N(2), S(), S(), N(3)] },
 				{ id: "zebra-m8-2", duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
 				{ id: "zebra-m8-3", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
-				{
-					id: "zebra-m8-4",
-					duration: "sixteenth",
-					strings: [S(), S(), N(2), S(), S(), S()],
-				},
-				{
-					id: "zebra-m8-5",
-					duration: "sixteenth",
-					strings: [S(), N(0), S(), S(), S(), S()],
-				},
+				{ id: "zebra-m8-4", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "zebra-m8-5", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
 				{ id: "zebra-m8-6", duration: "eighth", strings: [S(), S(), S(), S(), N(2), S()] },
 				{ id: "zebra-m8-7", duration: "eighth", strings: [S(), S(), S(), N(1), S(), S()] },
 				{ id: "zebra-m8-8", duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
-				{
-					id: "zebra-m8-9",
-					duration: "sixteenth",
-					strings: [S(), S(), N(2), S(), S(), S()],
-				},
-				{
-					id: "zebra-m8-10",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), S(), N(2), S()],
-				},
+				{ id: "zebra-m8-9", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "zebra-m8-10", duration: "sixteenth", strings: [S(), S(), S(), S(), N(2), S()] },
 			],
 		},
-
-		// ── m9 ───────────────────────────────────────────────────────────────
+		// ── m9 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m9",
 			slots: [
-				{ id: "zebra-m9-1", duration: "eighth", strings: [S(), N(0), S(), S(), N(3), S()] },
+				{ id: "zebra-m9-1", duration: "eighth", chord: { root: "C", suffix: "maj7", voicingId: "880eea05-0e36-4d9e-9f2f-d7cfede73643" }, strings: [S(), N(0), S(), S(), N(3), S()] },
 				{ id: "zebra-m9-2", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
 				{ id: "zebra-m9-3", duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
-				{
-					id: "zebra-m9-4",
-					duration: "sixteenth",
-					strings: [S(), N(0), S(), S(), S(), S()],
-				},
-				{
-					id: "zebra-m9-5",
-					duration: "sixteenth",
-					strings: [S(), N(0), S(), S(), S(), S()],
-				},
-				{ id: "zebra-m9-6", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
+				{ id: "zebra-m9-4", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "zebra-m9-5", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "zebra-m9-6", duration: "eighth", chord: { root: "D", suffix: "major", voicingId: null }, strings: [S(), S(), S(), N(0), S(), S()] },
 				{ id: "zebra-m9-7", duration: "eighth", strings: [S(), S(), N(2), S(), S(), S()] },
 				{ id: "zebra-m9-8", duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
 				{ id: "zebra-m9-9", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
 			],
 		},
-
-		// ── m10 ──────────────────────────────────────────────────────────────
+		// ── m10 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m10",
 			slots: [
-				{
-					id: "zebra-m10-1",
-					duration: "eighth",
-					strings: [S(), N(0), S(), S(), N(2), S()],
-				},
+				{ id: "zebra-m10-1", duration: "eighth", chord: { root: "B", suffix: "minor", voicingId: "b2609c3c-e0db-4282-b697-7f251ce07e6b" }, strings: [S(), N(0), S(), S(), N(2), S()] },
 				{ id: "zebra-m10-2", duration: "eighth", strings: [S(), S(), S(), N(0), S(), S()] },
 				{ id: "zebra-m10-3", duration: "eighth", strings: [S(), S(), S(), N(4), S(), S()] },
 				{ id: "zebra-m10-4", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
-				{
-					id: "zebra-m10-5",
-					duration: "eighth",
-					strings: [S(), S(), N(0), S(), S(), N(0)],
-				},
+				{ id: "zebra-m10-5", duration: "eighth", chord: { root: "E", suffix: "minor", voicingId: null }, strings: [S(), S(), N(0), S(), S(), N(0)] },
 				{ id: "zebra-m10-6", duration: "eighth", strings: [S(), S(), S(), S(), N(2), S()] },
 				{ id: "zebra-m10-7", duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
 				{ id: "zebra-m10-8", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
 			],
 		},
-
-		// ── m11 — slide-up into the turnaround ────────────────────────────────
+		// ── m11 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m11",
 			slots: [
-				{
-					id: "zebra-m11-1",
-					duration: "eighth",
-					strings: [S(), N(0), S(), S(), N(3), S()],
-				},
+				{ id: "zebra-m11-1", duration: "eighth", chord: { root: "C", suffix: "maj7", voicingId: "880eea05-0e36-4d9e-9f2f-d7cfede73643" }, strings: [S(), N(0), S(), S(), N(3), S()] },
 				{ id: "zebra-m11-2", duration: "eighth", strings: [S(), S(), S(), N(2), S(), S()] },
 				{ id: "zebra-m11-3", duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
-				{
-					id: "zebra-m11-4",
-					duration: "sixteenth",
-					strings: [S(), S(), N(2), S(), S(), S()],
-				},
-				{
-					id: "zebra-m11-5",
-					duration: "sixteenth",
-					strings: [S(), S(), N(2), S(), S(), S()],
-				},
-				{
-					id: "zebra-m11-6",
-					duration: "quarter",
-					strings: [S(), S(), S(), N(0), S(), S()],
-				},
+				{ id: "zebra-m11-4", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "zebra-m11-5", duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
+				{ id: "zebra-m11-6", duration: "quarter", chord: { root: "D", suffix: "major", voicingId: null }, strings: [S(), S(), S(), N(0), S(), S()] },
 				{ id: "zebra-m11-7", duration: "eighth", strings: [S(), S(), S(), N(4), S(), S()] },
-				{
-					id: "zebra-m11-8",
-					duration: "eighth",
-					strings: [S(), S(), S(), Su(5), S(), S()],
-				},
+				{ id: "zebra-m11-8", duration: "eighth", strings: [S(), S(), S(), Su(5), S(), S()] },
 			],
 		},
-
-		// ── m12 — chorus end, roll-down chord + slide-up tail ─────────────────
+		// ── m12 ────────────────────────────────────────────────────────────
 		{
 			id: "zebra-m12",
-			repeatEnd: true,
 			slots: [
-				{
-					id: "zebra-m12-1",
-					duration: "eighth",
-					strings: [S(), S(), S(), N(2), S(), N(0)],
-				},
+				{ id: "zebra-m12-1", duration: "eighth", chord: { root: "E", suffix: "minor", voicingId: null }, strings: [S(), S(), S(), N(2), S(), N(0)] },
 				{ id: "zebra-m12-2", duration: "eighth", strings: [S(), S(), S(), S(), N(2), S()] },
-				{
-					id: "zebra-m12-3",
-					duration: "eighth",
-					stroke: "roll-down",
-					strings: [S(), N(0), N(0), S(), S(), S()],
-				},
-				{
-					id: "zebra-m12-4",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), N(4), S(), S()],
-				},
-				{
-					id: "zebra-m12-5",
-					duration: "sixteenth",
-					strings: [S(), S(), S(), Su(5), S(), S()],
-				},
-				{
-					id: "zebra-m12-6",
-					duration: "quarter",
-					strings: [S(), S(), S(), S(), S(), N(0)],
-				},
+				{ id: "zebra-m12-3", duration: "eighth", stroke: "brush-down", strings: [S(), N(0), N(0), S(), S(), S()] },
+				{ id: "zebra-m12-4", duration: "sixteenth", strings: [S(), S(), S(), N(4), S(), S()] },
+				{ id: "zebra-m12-5", duration: "sixteenth", strings: [S(), S(), S(), Su(5), S(), S()] },
+				{ id: "zebra-m12-6", duration: "quarter", strings: [S(), S(), S(), S(), S(), N(0)] },
 				{ id: "zebra-m12-7", duration: "quarter", strings: [S(), S(), S(), S(), S(), S()] },
+			],
+		},
+	],
+};
+
+// ── Birds of a feather ────────────────────────────────────────────────────
+// The author's arrangement, capo 2: a steady sixteenth-note pattern over the
+// song's four-chord cycle. Pinned shapes are library voicings.
+const BIRDS_OF_A_FEATHER: FingerpickPattern = {
+	id: "birds-of-a-feather",
+	name: "Birds of a feather",
+	description: "I want you to stay.",
+	bpm: 100,
+	timeSignature: [4, 4],
+	capo: 2,
+	measures: [
+		// ── m1 ────────────────────────────────────────────────────────────
+		{
+			id: "birds-m1",
+			slots: [
+				{ id: "birds-m1-1", duration: "sixteenth", chord: { root: "C", suffix: "major", voicingId: null }, strings: [S(), N(1), S(), S(), N(3), S()] },
+				{ id: "birds-m1-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m1-3", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m1-4", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m1-5", duration: "sixteenth", strings: [S(), S(), S(), S(), N(3), S()] },
+				{ id: "birds-m1-6", duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "birds-m1-7", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m1-8", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m1-9", duration: "sixteenth", strings: [S(), N(0), S(), S(), N(3), S()] },
+				{ id: "birds-m1-10", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m1-11", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m1-12", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m1-13", duration: "sixteenth", strings: [S(), S(), S(), S(), N(3), S()] },
+				{ id: "birds-m1-14", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "birds-m1-15", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m1-16", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+			],
+		},
+		// ── m2 ────────────────────────────────────────────────────────────
+		{
+			id: "birds-m2",
+			slots: [
+				{ id: "birds-m2-1", duration: "sixteenth", chord: { root: "C", suffix: "major", voicingId: null }, strings: [S(), N(1), S(), S(), N(3), S()] },
+				{ id: "birds-m2-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m2-3", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m2-4", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m2-5", duration: "sixteenth", strings: [S(), S(), S(), S(), N(3), S()] },
+				{ id: "birds-m2-6", duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "birds-m2-7", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m2-8", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m2-9", duration: "sixteenth", strings: [S(), N(0), S(), S(), N(3), S()] },
+				{ id: "birds-m2-10", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m2-11", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m2-12", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m2-13", duration: "sixteenth", strings: [S(), S(), S(), S(), N(3), S()] },
+				{ id: "birds-m2-14", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "birds-m2-15", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m2-16", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+			],
+		},
+		// ── m3 ────────────────────────────────────────────────────────────
+		{
+			id: "birds-m3",
+			slots: [
+				{ id: "birds-m3-1", duration: "sixteenth", chord: { root: "A", suffix: "m7", voicingId: null }, strings: [S(), N(1), S(), S(), N(0), S()] },
+				{ id: "birds-m3-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m3-3", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m3-4", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m3-5", duration: "sixteenth", strings: [S(), S(), S(), S(), N(0), S()] },
+				{ id: "birds-m3-6", duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "birds-m3-7", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m3-8", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m3-9", duration: "sixteenth", strings: [S(), N(0), S(), S(), N(0), S()] },
+				{ id: "birds-m3-10", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m3-11", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m3-12", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m3-13", duration: "sixteenth", strings: [S(), S(), S(), S(), N(0), S()] },
+				{ id: "birds-m3-14", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "birds-m3-15", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m3-16", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+			],
+		},
+		// ── m4 ────────────────────────────────────────────────────────────
+		{
+			id: "birds-m4",
+			slots: [
+				{ id: "birds-m4-1", duration: "sixteenth", chord: { root: "A", suffix: "m7", voicingId: null }, strings: [S(), N(1), S(), S(), N(0), S()] },
+				{ id: "birds-m4-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m4-3", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m4-4", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m4-5", duration: "sixteenth", strings: [S(), S(), S(), S(), N(0), S()] },
+				{ id: "birds-m4-6", duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "birds-m4-7", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m4-8", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m4-9", duration: "sixteenth", strings: [S(), N(0), S(), S(), N(0), S()] },
+				{ id: "birds-m4-10", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m4-11", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m4-12", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m4-13", duration: "sixteenth", strings: [S(), S(), S(), S(), N(0), S()] },
+				{ id: "birds-m4-14", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "birds-m4-15", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m4-16", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+			],
+		},
+		// ── m5 ────────────────────────────────────────────────────────────
+		{
+			id: "birds-m5",
+			slots: [
+				{ id: "birds-m5-1", duration: "sixteenth", chord: { root: "D", suffix: "m7", voicingId: "1ed30fdf-27f5-4d05-b6c7-2dcdc36c9dd0" }, strings: [S(), N(1), S(), N(0), S(), S()] },
+				{ id: "birds-m5-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m5-3", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m5-4", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m5-5", duration: "sixteenth", strings: [S(), S(), S(), N(0), S(), S()] },
+				{ id: "birds-m5-6", duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "birds-m5-7", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m5-8", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m5-9", duration: "sixteenth", strings: [S(), N(0), S(), N(0), S(), S()] },
+				{ id: "birds-m5-10", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m5-11", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m5-12", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m5-13", duration: "sixteenth", strings: [S(), S(), S(), N(0), S(), S()] },
+				{ id: "birds-m5-14", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "birds-m5-15", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m5-16", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+			],
+		},
+		// ── m6 ────────────────────────────────────────────────────────────
+		{
+			id: "birds-m6",
+			slots: [
+				{ id: "birds-m6-1", duration: "sixteenth", chord: { root: "D", suffix: "m7", voicingId: "1ed30fdf-27f5-4d05-b6c7-2dcdc36c9dd0" }, strings: [S(), N(1), S(), N(0), S(), S()] },
+				{ id: "birds-m6-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m6-3", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m6-4", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m6-5", duration: "sixteenth", strings: [S(), S(), S(), N(0), S(), S()] },
+				{ id: "birds-m6-6", duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "birds-m6-7", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m6-8", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m6-9", duration: "sixteenth", strings: [S(), N(0), S(), N(0), S(), S()] },
+				{ id: "birds-m6-10", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m6-11", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m6-12", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m6-13", duration: "sixteenth", strings: [S(), S(), S(), N(0), S(), S()] },
+				{ id: "birds-m6-14", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "birds-m6-15", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m6-16", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+			],
+		},
+		// ── m7 ────────────────────────────────────────────────────────────
+		{
+			id: "birds-m7",
+			slots: [
+				{ id: "birds-m7-1", duration: "sixteenth", chord: { root: "G", suffix: "add11", voicingId: "8bfc1a81-240a-4225-a061-ff716a308236" }, strings: [S(), N(1), S(), S(), S(), N(3)] },
+				{ id: "birds-m7-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m7-3", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m7-4", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m7-5", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), N(3)] },
+				{ id: "birds-m7-6", duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "birds-m7-7", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m7-8", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m7-9", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), N(3)] },
+				{ id: "birds-m7-10", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m7-11", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m7-12", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m7-13", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), N(3)] },
+				{ id: "birds-m7-14", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "birds-m7-15", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m7-16", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+			],
+		},
+		// ── m8 ────────────────────────────────────────────────────────────
+		{
+			id: "birds-m8",
+			slots: [
+				{ id: "birds-m8-1", duration: "sixteenth", chord: { root: "G", suffix: "add11", voicingId: "8bfc1a81-240a-4225-a061-ff716a308236" }, strings: [S(), N(1), S(), S(), S(), N(3)] },
+				{ id: "birds-m8-2", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m8-3", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m8-4", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m8-5", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), N(3)] },
+				{ id: "birds-m8-6", duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
+				{ id: "birds-m8-7", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m8-8", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m8-9", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), N(3)] },
+				{ id: "birds-m8-10", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
+				{ id: "birds-m8-11", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m8-12", duration: "sixteenth", strings: [N(3), S(), S(), S(), S(), S()] },
+				{ id: "birds-m8-13", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), N(3)] },
+				{ id: "birds-m8-14", duration: "sixteenth", strings: [S(), N(0), S(), S(), S(), S()] },
+				{ id: "birds-m8-15", duration: "sixteenth", strings: [S(), S(), N(0), S(), S(), S()] },
+				{ id: "birds-m8-16", duration: "sixteenth", strings: [S(), S(), S(), S(), S(), S()] },
 			],
 		},
 	],
@@ -760,6 +712,7 @@ const CELTIC_FINGERSTYLE: FingerpickPattern = {
 
 export const PRESET_FINGERPICK_PATTERNS: FingerpickPattern[] = [
 	ZEBRA_ZEBRA,
+	BIRDS_OF_A_FEATHER,
 	TRAVIS_PICKING,
 	ARPEGGIO,
 	WALTZ,

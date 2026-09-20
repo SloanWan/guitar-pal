@@ -65,10 +65,7 @@ function useSheetGesture() {
 	};
 }
 
-export interface FingerpickMobileDrawerProps extends PlaybackControlProps {
-	/** Hide-on-scroll: the drawer slides off the bottom while false. */
-	controlsVisible: boolean;
-}
+export type FingerpickMobileDrawerProps = PlaybackControlProps;
 
 // The unified mobile drawer (below md): an always-visible bottom bar (BPM,
 // loop, metronome, play/stop) with an expandable controls panel above it, plus
@@ -78,7 +75,6 @@ export default function FingerpickMobileDrawer({
 	tempo,
 	metronome,
 	noteSound,
-	controlsVisible,
 }: FingerpickMobileDrawerProps) {
 	const {
 		isLoaded,
@@ -166,8 +162,7 @@ export default function FingerpickMobileDrawer({
 
 		{/* ── Unified mobile drawer ────────────────────────────────────────── */}
 		<div
-			className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden transition-transform duration-300 ease-out"
-			style={{ transform: controlsVisible ? "translateY(0)" : "translateY(100%)" }}
+			className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden"
 			onPointerDown={(e) => {
 				if (!bpmButtonRef.current?.contains(e.target as Node)) {
 					setShowBpmPopover(false);

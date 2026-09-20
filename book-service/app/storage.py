@@ -5,12 +5,18 @@ decide what this service may read or delete — there is no server-side key
 that could reach another user's book.
 """
 
+import logging
 import time
 from dataclasses import dataclass
 
 import httpx
 
 BUCKET = "books"
+# Storage lists at most this many objects per call, and deletes this many per call.
+LIST_PAGE = 1000
+DELETE_BATCH = 100
+
+log = logging.getLogger("book-service")
 
 
 class StorageError(Exception):
@@ -69,6 +75,47 @@ class StorageClient:
             response = await client.delete(self._object_url(path), headers=self._headers(token))
         if response.status_code not in (200, 404):
             raise StorageError(response.status_code, _message(response))
+
+    async def list_objects(self, prefix: str, token: str) -> list[str]:
+        """Every object under a folder, as full paths, across as many pages as it takes."""
+        folder = prefix.rstrip("/")
+        paths: list[str] = []
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            offset = 0
+            while True:
+                response = await client.post(
+                    f"{self.storage_url}/object/list/{BUCKET}",
+                    headers=self._headers(token),
+                    json={"prefix": folder, "limit": LIST_PAGE, "offset": offset},
+                )
+                if response.status_code != 200:
+                    raise StorageError(response.status_code, _message(response))
+                page = response.json()
+                # A folder entry (no id) is a subfolder, not an object.
+                paths += [f"{folder}/{o['name']}" for o in page if o.get("id")]
+                if len(page) < LIST_PAGE:
+                    return paths
+                offset += LIST_PAGE
+
+    async def delete_many(self, paths: list[str], token: str) -> None:
+        """Objects in batches; a missing one is not an error."""
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for start in range(0, len(paths), DELETE_BATCH):
+                response = await client.request(
+                    "DELETE",
+                    f"{self.storage_url}/object/{BUCKET}",
+                    headers=self._headers(token),
+                    json={"prefixes": paths[start : start + DELETE_BATCH]},
+                )
+                if response.status_code not in (200, 404):
+                    raise StorageError(response.status_code, _message(response))
+
+    async def remove_tree(self, prefix: str, token: str) -> int:
+        """Everything under a folder (#243). Returns how many objects went."""
+        paths = await self.list_objects(prefix, token)
+        if paths:
+            await self.delete_many(paths, token)
+        return len(paths)
 
 
 def _message(response: httpx.Response) -> str:

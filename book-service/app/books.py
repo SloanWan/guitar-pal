@@ -4,6 +4,7 @@ repo, hand the long job to the scanner. Every handler starts from the
 verified session, and every repo call takes its `user_id`.
 """
 
+import logging
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -14,11 +15,13 @@ from pydantic import BaseModel, Field
 from app.auth import CurrentSession
 from app.db import get_pool
 from app.ingest.toc import MAX_TITLE_CHARS, Chapter
-from app.pages import PageImageError, PageImages
-from app.parse import MAX_PARSE_PAGES, Parser
+from app.pages import PageImageError, PageImages, pages_folder
+from app.parse import MAX_PARSE_PAGES, Parser, crops_folder
 from app.repo import BookRepo, BookRow, ChapterRow, ExerciseRow, NoteRow
 from app.scan import Scanner
 from app.storage import StorageClient, StorageError
+
+log = logging.getLogger("book-service")
 
 router = APIRouter(prefix="/books", tags=["books"])
 
@@ -410,10 +413,23 @@ async def set_exercise_status(
 
 @router.delete("/{book_id}", status_code=204)
 async def delete_book(book_id: str, session: CurrentSession, repo: Repo, storage: Storage) -> None:
-    """The PDF first, as the player; then the row, and every row under it."""
+    """
+    The PDF first, as the player; then what was written beside it — the
+    page images and every chapter's crops (#243); then the row, and every
+    row under it. A folder that will not clear is logged and left: the
+    book is gone either way, and the leftovers can be swept later.
+    """
     book = await owned_book(repo, session.user_id, book_id)
     try:
         await storage.delete(book.storage_path, session.token)
     except StorageError as e:
         raise HTTPException(502, f"Storage: {e.message}") from e
+    folders = [pages_folder(book.storage_path, book.id)] + [
+        crops_folder(book.storage_path, c.id) for c in await repo.list_chapters(book.id)
+    ]
+    for folder in folders:
+        try:
+            await storage.remove_tree(folder, session.token)
+        except StorageError as e:
+            log.warning("delete %s: %s left behind: %s %s", book.id, folder, e.status, e.message)
     await repo.delete_book(session.user_id, book_id)

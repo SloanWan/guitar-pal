@@ -43,9 +43,14 @@ class PageImageError(Exception):
         self.message = message
 
 
+def pages_folder(storage_path: str, book_id: str) -> str:
+    """Beside the PDF, one folder per book: `<user>/pages/<book>/`."""
+    return posixpath.join(posixpath.dirname(storage_path), "pages", book_id)
+
+
 def page_image_path(storage_path: str, book_id: str, page: int) -> str:
-    """Beside the PDF, one folder per book: `<user>/pages/<book>/p0206.jpg`."""
-    return posixpath.join(posixpath.dirname(storage_path), "pages", book_id, f"p{page:04d}.jpg")
+    """`<user>/pages/<book>/p0206.jpg`."""
+    return posixpath.join(pages_folder(storage_path, book_id), f"p{page:04d}.jpg")
 
 
 class PdfCache:

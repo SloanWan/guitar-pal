@@ -142,7 +142,7 @@ another user's book is a 404, the same as no book.
 | `PATCH /books/{id}` `{title}` | rename |
 | `GET /books/{id}` | the book with `status`, `scanned_pages` / `page_count` for progress, `error`, and its chapters with `exercise_hint_count` |
 | `PUT /books/{id}/chapters` `{chapters: [{title, page_start, page_end}]}` | the player's own ranges: sorted, inside the book, non-overlapping (gaps allowed). `toc_source` becomes `manual`; hint counts are recomputed from the tagged pages. |
-| `DELETE /books/{id}` | the PDF (as the player) and every row under the book |
+| `DELETE /books/{id}` | the PDF (as the player), the page images and every chapter's crops beside it (#243), and every row under the book |
 | `POST /books/{id}/chapters/{chapter_id}/parse` | starts the chapter parse (#202) in the background; 202, 409 if already parsing, 422 over the 40-page cap. Re-parsing replaces what the chapter had. |
 | `GET /books/{id}/chapters/{chapter_id}/parse` | the chapter with its `parse_status`, `parse_error`, `parse_cost` and `parse_warnings`, and once ready its `notes` (knowledge points) and `exercises` (drafts, each with the crop it was read from). Poll this. |
 | `GET /books/{id}/pages/{page}/image` | `{path}` of the page as a JPEG (#240): rendered from the PDF at 150 dpi on the first request and kept in Storage under `<user>/pages/<book>/`, `image_path` on `book_pages`; any page of a scanned book. The PDF just fetched stays in memory for ten minutes so the next page of the same book does not download it again. The browser signs the path like a crop's. |

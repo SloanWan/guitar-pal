@@ -137,13 +137,13 @@ another user's book is a 404, the same as no book.
 | route | what |
 |---|---|
 | `POST /books` `{title}` | the row and its `storage_path` (`{user_id}/{book_id}.pdf`). The browser then uploads the PDF straight to the `books` bucket at that path with its own session. |
-| `POST /books/{id}/scan` | starts the whole-book pass in the background; 202 with the row, 409 if already scanning. Rescanning a `ready` or `failed` book is allowed and replaces its pages and chapters. |
+| `POST /books/{id}/scan` | starts the whole-book pass in the background; 202 with the row, 409 if already scanning. Rescanning a `ready` or `failed` book is allowed and replaces its pages and chapters — and, right before the new rows land, clears the old chapters' crops and the page images beside the PDF (#246). |
 | `GET /books` | the player's books, newest first |
 | `PATCH /books/{id}` `{title}` | rename |
 | `GET /books/{id}` | the book with `status`, `scanned_pages` / `page_count` for progress, `error`, and its chapters with `exercise_hint_count` |
 | `PUT /books/{id}/chapters` `{chapters: [{title, page_start, page_end}]}` | the player's own ranges: sorted, inside the book, non-overlapping (gaps allowed). `toc_source` becomes `manual`; hint counts are recomputed from the tagged pages. |
 | `DELETE /books/{id}` | the PDF (as the player), the page images and every chapter's crops beside it (#243), and every row under the book |
-| `POST /books/{id}/chapters/{chapter_id}/parse` | starts the chapter parse (#202) in the background; 202, 409 if already parsing, 422 over the 40-page cap. Re-parsing replaces what the chapter had. |
+| `POST /books/{id}/chapters/{chapter_id}/parse` | starts the chapter parse (#202) in the background; 202, 409 if already parsing, 422 over the 40-page cap. Re-parsing replaces what the chapter had, crops included: the chapter's crop folder is emptied before the graph runs (#246). |
 | `GET /books/{id}/chapters/{chapter_id}/parse` | the chapter with its `parse_status`, `parse_error`, `parse_cost` and `parse_warnings`, and once ready its `notes` (knowledge points) and `exercises` (drafts, each with the crop it was read from). Poll this. |
 | `GET /books/{id}/pages/{page}/image` | `{path}` of the page as a JPEG (#240): rendered from the PDF at 150 dpi on the first request and kept in Storage under `<user>/pages/<book>/`, `image_path` on `book_pages`; any page of a scanned book. The PDF just fetched stays in memory for ten minutes so the next page of the same book does not download it again. The browser signs the path like a crop's. |
 | `PATCH /books/{id}/exercises/{exercise_id}` `{status}` | `proposed` → `taken` when the draft was opened in its editor (or `dismissed`); the card shows what was used |
@@ -157,6 +157,12 @@ worth of work); others queue behind it while their status already says
 Without `NEXT_PUBLIC_SUPABASE_ANON_KEY` on the service there is no Storage
 client and the scan and delete routes answer 503, like the book routes do
 without a database.
+
+Folders left behind before those sweeps existed — or by a sweep that
+Storage refused — are found by `scripts/sweep-orphan-crops.py` at the repo
+root: it lists a player's `crops/*` and `pages/*` folders, prints the ones
+whose chapter or book is gone from the database, and removes them with
+`--delete`. Its docstring says how to run it.
 
 The whole flow against the real project is `tests/test_live_books.py`,
 opt-in with a session token (its docstring says how). It uploads the typeset

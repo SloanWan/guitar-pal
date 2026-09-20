@@ -41,7 +41,7 @@ from app.repo import (
     PageRow,
     Usage,
 )
-from app.storage import StorageClient, StorageError
+from app.storage import StorageClient, StorageError, sweep_folders
 from app.validate import ValidatorError
 
 log = logging.getLogger("book-service")
@@ -193,9 +193,12 @@ class Parser:
             for r in rows
         ]
         if pdf is not None:
-            crops = StorageCropSink(
-                self.storage, crops_folder(book.storage_path, chapter.id), token
-            )
+            folder = crops_folder(book.storage_path, chapter.id)
+            # A re-parse starts from an empty folder (#246): crops are named by
+            # page and ordinal, so a parse that finds fewer exercises than the
+            # last one would otherwise leave the extra ones behind.
+            await sweep_folders(self.storage, [folder], token, f"parse {chapter.id}")
+            crops = StorageCropSink(self.storage, folder, token)
             try:
                 with open_pdf(pdf) as doc:
                     tools = ParseTools(DocRenderer(doc, self.worker), crops)

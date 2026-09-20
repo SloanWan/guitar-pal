@@ -28,11 +28,28 @@ from tests.test_toc import FakeReader
 @dataclass
 class FakeStorage:
     files: dict[str, bytes]
+    # Folders `remove_tree` was asked to clear, in order (#246).
+    cleared: list[str] = field(default_factory=list)
+    # A folder that refuses to clear, to see the job carry on without it.
+    refuse: str | None = None
 
     async def download(self, path: str, token: str) -> bytes:
         if path not in self.files:
             raise StorageError(404, "Object not found")
         return self.files[path]
+
+    async def upload_png(self, path: str, data: bytes, token: str) -> None:
+        self.files[path] = data
+
+    async def remove_tree(self, prefix: str, token: str) -> int:
+        if prefix == self.refuse:
+            raise StorageError(403, "not yours")
+        self.cleared.append(prefix)
+        folder = prefix.rstrip("/") + "/"
+        gone = [path for path in self.files if path.startswith(folder)]
+        for path in gone:
+            del self.files[path]
+        return len(gone)
 
 
 @dataclass
@@ -105,6 +122,65 @@ async def test_scan_without_a_reader_is_one_manual_chapter(typeset_pdf: Path) ->
     assert store.finished is not None
     assert store.finished["toc_source"] == "manual"
     assert store.finished["chapters"] == (Chapter("Whole book", 1, 9),)
+
+
+@needs_materials
+@pytest.mark.asyncio
+async def test_rescan_clears_the_old_chapters_crops_and_page_images_not_the_new(
+    typeset_pdf: Path,
+) -> None:
+    """#246: what the last scan wrote beside the PDF goes before the new rows land."""
+    store = FakeStore()
+    storage = FakeStorage(
+        {
+            "u/b.pdf": typeset_pdf.read_bytes(),
+            "u/crops/old-1/p0003-1.png": b"old",
+            "u/crops/old-2/p0004-1.png": b"old",
+            "u/pages/b/p0001.jpg": b"old",
+            "u/crops/other-book-chapter/p0001-1.png": b"keep",
+        },
+        refuse="u/crops/old-2",
+    )
+    scanner = Scanner(
+        storage=storage,  # type: ignore[arg-type]
+        store=store,
+        ocr=None,
+        read_text_toc=None,
+        read_vision_toc=None,
+        worker=asyncio.Semaphore(1),
+    )
+    stale = ["u/pages/b", "u/crops/old-1", "u/crops/old-2"]
+
+    await scanner.run("b", "u/b.pdf", "token", stale)
+
+    assert store.failed is None and store.finished is not None
+    assert storage.cleared == ["u/pages/b", "u/crops/old-1"]
+    assert sorted(storage.files) == [
+        "u/b.pdf",
+        "u/crops/old-2/p0004-1.png",  # refused: logged and left, the scan still finished
+        "u/crops/other-book-chapter/p0001-1.png",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_scan_leaves_the_old_folders_alone() -> None:
+    store = FakeStore()
+    storage = FakeStorage({"u/b.pdf": b"not a pdf", "u/crops/old/p0001-1.png": b"old"})
+    await _scanner_with(storage, store).run("b", "u/b.pdf", "t", ["u/crops/old"])
+    assert store.failed == UNREADABLE_MESSAGE
+    assert storage.cleared == []
+    assert "u/crops/old/p0001-1.png" in storage.files
+
+
+def _scanner_with(storage: FakeStorage, store: FakeStore) -> Scanner:
+    return Scanner(
+        storage=storage,  # type: ignore[arg-type]
+        store=store,
+        ocr=None,
+        read_text_toc=None,
+        read_vision_toc=None,
+        worker=asyncio.Semaphore(1),
+    )
 
 
 @pytest.mark.asyncio

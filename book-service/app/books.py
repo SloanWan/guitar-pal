@@ -295,13 +295,19 @@ async def scan_book(
     Schedules the whole-book pass; poll `GET /books/{id}` for progress. A
     book already scanning answers 409 rather than starting a second job.
     """
-    await owned_book(repo, session.user_id, book_id)
+    owned = await owned_book(repo, session.user_id, book_id)
+    # What the last scan wrote beside the PDF (#246): the chapters' crops
+    # (their ids change with the rescan) and the page images (the PDF may have
+    # been re-uploaded). Listed before the claim, while the chapters are there.
+    stale = [pages_folder(owned.storage_path, owned.id)] + [
+        crops_folder(owned.storage_path, c.id) for c in await repo.list_chapters(owned.id)
+    ]
     book = await repo.start_scan(session.user_id, book_id)
     if book is None:
         raise HTTPException(409, "This book is being scanned already.")
     # The scan reads the PDF with this same session token; a token that
     # expires mid-scan only matters for the download, which happens first.
-    background.add_task(scanner.run, book.id, book.storage_path, session.token)
+    background.add_task(scanner.run, book.id, book.storage_path, session.token, stale)
     return BookOut.of(book)
 
 

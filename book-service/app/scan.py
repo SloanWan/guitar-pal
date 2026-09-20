@@ -39,7 +39,7 @@ from app.ingest.toc import (
     vision_toc_pages,
 )
 from app.repo import PageRecord
-from app.storage import StorageClient, StorageError
+from app.storage import StorageClient, StorageError, sweep_folders
 
 log = logging.getLogger("book-service")
 
@@ -79,9 +79,20 @@ class Scanner:
     read_vision_toc: VisionTocReader | None
     worker: asyncio.Semaphore
 
-    async def run(self, book_id: str, storage_path: str, token: str) -> None:
+    async def run(
+        self,
+        book_id: str,
+        storage_path: str,
+        token: str,
+        stale_folders: Sequence[str] = (),
+    ) -> None:
+        """
+        `stale_folders` are what a rescan replaces beside the PDF — the old
+        chapters' crops, the page images (#246). They go right before the new
+        rows are written, so a scan that fails leaves the old book whole.
+        """
         try:
-            await self._scan(book_id, storage_path, token)
+            await self._scan(book_id, storage_path, token, stale_folders)
         except StorageError as e:
             log.warning("scan %s: storage %s %s", book_id, e.status, e.message)
             await self.store.fail_scan(
@@ -93,7 +104,9 @@ class Scanner:
             log.exception("scan %s failed", book_id)
             await self.store.fail_scan(book_id, FAILED_MESSAGE)
 
-    async def _scan(self, book_id: str, storage_path: str, token: str) -> None:
+    async def _scan(
+        self, book_id: str, storage_path: str, token: str, stale_folders: Sequence[str]
+    ) -> None:
         pdf = await self.storage.download(storage_path, token)
         loop = asyncio.get_running_loop()
 
@@ -126,6 +139,7 @@ class Scanner:
             )
             for p in pages
         ]
+        await sweep_folders(self.storage, stale_folders, token, f"scan {book_id}")
         await self.store.finish_scan(
             book_id,
             page_count=len(pages),

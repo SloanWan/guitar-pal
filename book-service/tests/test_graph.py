@@ -222,6 +222,46 @@ async def test_parser_renders_only_the_pages_the_graph_needs(typeset_pdf: Path) 
     assert [c.page for c in store.finished["chunks"]] == list(range(1, 10))
 
 
+@needs_materials
+@pytest.mark.asyncio
+async def test_reparse_starts_from_an_empty_crop_folder(typeset_pdf: Path) -> None:
+    """#246: the last parse's crops go before the graph writes this parse's."""
+    rows = _pages(typeset_pdf)
+    storage = FakeStorage(
+        {
+            "u/b.pdf": typeset_pdf.read_bytes(),
+            "u/crops/c/p0003-1.png": b"last time",
+            "u/crops/c/p0003-2.png": b"last time",
+            "u/crops/other/p0001-1.png": b"another chapter",
+        }
+    )
+
+    async def graph(book, chapter, pages, tools=None):
+        from app.parse import ChapterResult
+
+        assert tools is not None
+        # By the time an extractor saves a crop, the folder is empty.
+        assert not any(path.startswith("u/crops/c/") for path in storage.files)
+        await tools.crops.save("p0003-1.png", b"this time")
+        return ChapterResult()
+
+    parser = Parser(
+        storage=storage,  # type: ignore[arg-type]
+        store=FakeParseStore(rows),
+        graph=graph,
+        worker=asyncio.Semaphore(1),
+    )
+    await parser.run(BOOK, CHAPTER, "token")
+
+    assert storage.cleared == ["u/crops/c"]
+    assert sorted(storage.files) == [
+        "u/b.pdf",
+        "u/crops/c/p0003-1.png",
+        "u/crops/other/p0001-1.png",
+    ]
+    assert storage.files["u/crops/c/p0003-1.png"] == b"this time"
+
+
 @pytest.mark.asyncio
 async def test_parser_without_pages_fails_with_a_rescan_message() -> None:
     store = FakeParseStore([])

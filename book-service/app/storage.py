@@ -7,6 +7,7 @@ that could reach another user's book.
 
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import httpx
@@ -78,8 +79,16 @@ class StorageClient:
 
     async def list_objects(self, prefix: str, token: str) -> list[str]:
         """Every object under a folder, as full paths, across as many pages as it takes."""
+        return [path for path, is_object in await self._list(prefix, token) if is_object]
+
+    async def list_folders(self, prefix: str, token: str) -> list[str]:
+        """The subfolders directly under a folder, as full paths (#246's sweep reads these)."""
+        return [path for path, is_object in await self._list(prefix, token) if not is_object]
+
+    async def _list(self, prefix: str, token: str) -> list[tuple[str, bool]]:
+        """Everything Storage lists under a folder: (full path, whether it is an object)."""
         folder = prefix.rstrip("/")
-        paths: list[str] = []
+        entries: list[tuple[str, bool]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
             offset = 0
             while True:
@@ -92,9 +101,9 @@ class StorageClient:
                     raise StorageError(response.status_code, _message(response))
                 page = response.json()
                 # A folder entry (no id) is a subfolder, not an object.
-                paths += [f"{folder}/{o['name']}" for o in page if o.get("id")]
+                entries += [(f"{folder}/{o['name']}", bool(o.get("id"))) for o in page]
                 if len(page) < LIST_PAGE:
-                    return paths
+                    return entries
                 offset += LIST_PAGE
 
     async def delete_many(self, paths: list[str], token: str) -> None:
@@ -111,7 +120,12 @@ class StorageClient:
                     raise StorageError(response.status_code, _message(response))
 
     async def remove_tree(self, prefix: str, token: str) -> int:
-        """Everything under a folder (#243). Returns how many objects went."""
+        """
+        Everything under a folder (#243). Returns how many objects went.
+        Only the folder's own objects: Storage lists one level, so a nested
+        folder is an entry here, not a set of paths — none of the folders
+        this service writes nest.
+        """
         paths = await self.list_objects(prefix, token)
         if paths:
             await self.delete_many(paths, token)
@@ -124,3 +138,21 @@ def _message(response: httpx.Response) -> str:
     except ValueError:
         return response.text[:200]
     return str(body.get("message") or body.get("error") or body)[:200]
+
+
+async def sweep_folders(
+    storage: StorageClient, folders: Sequence[str], token: str, what: str
+) -> None:
+    """
+    Clears folders about to be written over (#246). A folder that will not
+    clear is logged and left — the rows are what matter, and leftovers can be
+    swept by hand (`scripts/sweep-orphan-crops.py`).
+    """
+    for folder in folders:
+        try:
+            removed = await storage.remove_tree(folder, token)
+        except StorageError as e:
+            log.warning("%s: %s left behind: %s %s", what, folder, e.status, e.message)
+            continue
+        if removed:
+            log.info("%s: cleared %d object(s) under %s", what, removed, folder)

@@ -8,6 +8,7 @@ import type {
 	ChapterParse,
 	ChapterRange,
 	ExerciseStatus,
+	PageText,
 } from "@/lib/books/types";
 
 /**
@@ -117,6 +118,15 @@ export async function pageImageUrl(bookId: string, page: number): Promise<string
 	if (isSampleBook(bookId)) return samplePageImage(page);
 	const { path } = await call<{ path: string }>(`/${bookId}/pages/${page}/image`);
 	return cropUrl(path);
+}
+
+/**
+ * A page's text as the scan read it (#228), for reading a text-layer tab by
+ * ear. The sample is a scan with no text layer, so it has none to offer.
+ */
+export async function pageText(bookId: string, page: number): Promise<PageText | null> {
+	if (isSampleBook(bookId)) return null;
+	return call<PageText>(`/${bookId}/pages/${page}/text`);
 }
 
 /**

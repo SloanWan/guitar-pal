@@ -78,6 +78,25 @@ export interface ChapterExercise {
 	status: ExerciseStatus;
 }
 
+/** `GET /books/{id}/pages/{page}/text`: a page's text as the scan read it (#228). */
+export interface PageText {
+	page: number;
+	text: string;
+	text_source: "layer" | "ocr" | "none";
+}
+
+/**
+ * The parse's warning for a page it left to the player: its tab was in the
+ * text layer, which carries no rhythm, so the card offers it to read by ear.
+ */
+export const TEXT_TAB_SKIPPED = "TEXT_TAB_SKIPPED";
+
+/** The page a skipped-page warning is about, from its `path` ("page 12"). */
+export function issuePage(issue: ParseIssue): number | null {
+	const m = /^page (\d+)$/.exec(issue.path);
+	return m ? Number(m[1]) : null;
+}
+
 /** `GET /books/{id}/chapters/{chapter_id}/parse`: the chapter card. */
 export interface ChapterParse {
 	chapter: Chapter;

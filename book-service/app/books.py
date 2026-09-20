@@ -398,6 +398,30 @@ async def get_page_image(
         raise HTTPException(e.status, e.message) from e
 
 
+class PageTextOut(BaseModel):
+    """A page's text as the scan read it: the layer's, OCR's, or none."""
+
+    page: int
+    text: str
+    text_source: Literal["layer", "ocr", "none"]
+
+
+@router.get("/{book_id}/pages/{page}/text", response_model=PageTextOut)
+async def get_page_text(
+    book_id: str, page: int, session: CurrentSession, repo: Repo
+) -> PageTextOut:
+    """
+    The text of one page (#228): what the text-tab reader on the chapter card
+    starts from when the parse skipped a page whose tab was in the text
+    layer. Nothing is rendered or read here — the scan already did.
+    """
+    book = await owned_book(repo, session.user_id, book_id)
+    row = await repo.get_page(book.id, page)
+    if row is None:
+        raise HTTPException(404, "Page not found. Scan the book first.")
+    return PageTextOut(page=row.page, text=row.text, text_source=row.text_source)
+
+
 class ExerciseStatusIn(BaseModel):
     status: Literal["proposed", "taken", "dismissed"]
 

@@ -369,8 +369,9 @@ async def test_text_layer_tab_and_prose_pages_are_not_read() -> None:
         BOOK, CHAPTER, pages, ParseTools(FakeRenderer(), FakeCrops())
     )
     assert result.exercises == []
-    assert [w["code"] for w in result.warnings] == ["PAGE_SKIPPED"]
-    assert "#228" in result.warnings[0]["message"]
+    assert [w["code"] for w in result.warnings] == ["TEXT_TAB_SKIPPED"]
+    assert result.warnings[0]["path"] == "page 1"
+    assert "read it by ear" in result.warnings[0]["message"]
     assert not any(r["system"] in (SEGMENT_SYSTEM, READ_SYSTEM) for r in model.requests)
 
 

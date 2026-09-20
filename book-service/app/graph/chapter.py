@@ -240,7 +240,13 @@ class ChapterParseGraph:
         stem = f"p{page.page:04d}" + (f"-r{state['ordinal']}" if region else "")
         assert self._tab is not None
         if page.has_text_layer and looks_like_text_tab(page.text):
-            return _skipped(page.page, "the tab is in the text layer — not read here (#228)")
+            # Text tab carries no durations, so it is not read here: the card
+            # offers it to the player to read by ear instead (#228).
+            return _skipped(
+                page.page,
+                "the tab is in the text layer, which carries no rhythm — read it by ear",
+                code="TEXT_TAB_SKIPPED",
+            )
         if tools is None:
             return _skipped(page.page, "no page renderer in this run; tab not read")
 
@@ -346,10 +352,8 @@ def note_pages(cited: Sequence[int], chapter_pages: set[int]) -> tuple[int, ...]
     return tuple(kept)
 
 
-def _skipped(page: int, why: str) -> dict[str, object]:
-    return {
-        "warnings": [{"code": "PAGE_SKIPPED", "path": f"page {page}", "message": f"p{page}: {why}"}]
-    }
+def _skipped(page: int, why: str, code: str = "PAGE_SKIPPED") -> dict[str, object]:
+    return {"warnings": [{"code": code, "path": f"page {page}", "message": f"p{page}: {why}"}]}
 
 
 def _bbox(values: list[float]) -> tuple[float, float, float, float]:

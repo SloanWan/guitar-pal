@@ -4,10 +4,11 @@ import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
 import { beatUnitGlyph } from "@/lib/strumMeter";
 import { User } from "@supabase/supabase-js";
-import { ChevronDown, Copy, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
+import { ChevronDown, ClipboardPaste, Copy, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import FingerpickEditModal from "./FingerpickEditModal";
+import TextTabDialog from "@/components/textTab/TextTabDialog";
 
 interface FingerpickPatternLibraryProps {
 	patterns: FingerpickPattern[];
@@ -245,6 +246,8 @@ export default function FingerpickPatternLibrary({
 	const [presetsOpen, setPresetsOpen] = useState(true);
 	const [editModalOpen, setEditModalOpen] = useState(false);
 	const [editingPattern, setEditingPattern] = useState<FingerpickPattern | null>(null);
+	// A text tab read by ear (#228); the reading taken arrives as a handoff.
+	const [pasteOpen, setPasteOpen] = useState(false);
 	const [filter, setFilter] = useState("");
 
 	const customIds = new Set(customPatterns.map((p) => p.id));
@@ -281,6 +284,14 @@ export default function FingerpickPatternLibrary({
 					Pattern Library
 				</h2>
 				<div className="flex items-center gap-1">
+					<button
+						onClick={() => setPasteOpen(true)}
+						title="Paste a text tab and pick its rhythm by ear"
+						aria-label="Paste a text tab"
+						className="flex items-center gap-1 h-8 px-2 text-[11px] font-semibold text-denim hover:bg-denim-tint transition-colors"
+					>
+						<ClipboardPaste size={14} /> Paste
+					</button>
 					<button
 						onClick={openNewPattern}
 						className="flex items-center gap-1 h-8 px-2 text-[11px] font-semibold text-denim hover:bg-denim-tint transition-colors"
@@ -447,6 +458,7 @@ export default function FingerpickPatternLibrary({
 				onClose={() => setEditModalOpen(false)}
 				onSave={onSaveCustom}
 			/>
+			<TextTabDialog open={pasteOpen} onClose={() => setPasteOpen(false)} />
 		</>
 	);
 }

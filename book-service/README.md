@@ -146,6 +146,7 @@ another user's book is a 404, the same as no book.
 | `POST /books/{id}/chapters/{chapter_id}/parse` | starts the chapter parse (#202) in the background; 202, 409 if already parsing, 422 over the 40-page cap. Re-parsing replaces what the chapter had, crops included: the chapter's crop folder is emptied before the graph runs (#246). |
 | `GET /books/{id}/chapters/{chapter_id}/parse` | the chapter with its `parse_status`, `parse_error`, `parse_cost` and `parse_warnings`, and once ready its `notes` (knowledge points) and `exercises` (drafts, each with the crop it was read from). Poll this. |
 | `GET /books/{id}/pages/{page}/image` | `{path}` of the page as a JPEG (#240): rendered from the PDF at 150 dpi on the first request and kept in Storage under `<user>/pages/<book>/`, `image_path` on `book_pages`; any page of a scanned book. The PDF just fetched stays in memory for ten minutes so the next page of the same book does not download it again. The browser signs the path like a crop's. |
+| `GET /books/{id}/pages/{page}/text` | `{page, text, text_source}` as the scan read it (#228): what the chapter card's text-tab reader starts from when the parse skipped a page whose tab was in the text layer (`TEXT_TAB_SKIPPED` in `parse_warnings`). |
 | `PATCH /books/{id}/exercises/{exercise_id}` `{status}` | `proposed` → `taken` when the draft was opened in its editor (or `dismissed`); the card shows what was used |
 
 A scan reads the PDF with the session token from the request that started
@@ -188,7 +189,10 @@ as two independent readings — the six-line tab and, when the book prints
 one, the jianpu row under it — which the service compares note by note.
 Frets are the tab's; a disagreement is a warning that names both readings.
 The crop it read goes beside the PDF in Storage (`crop_path`). Tab in a
-PDF's text layer is not read (#228). The numbers behind every choice here
+PDF's text layer is not read here: it carries no durations, so the page is
+skipped with a `TEXT_TAB_SKIPPED` warning and the chapter card offers it
+to the player to read by ear — every rhythm the columns allow, played, and
+the one they pick taken to the fingerpick editor (#228). The numbers behind every choice here
 are in `docs/calibration.md` §6.
 
 ## Database

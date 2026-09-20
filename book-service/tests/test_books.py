@@ -70,3 +70,10 @@ def test_books_without_a_database_are_503(client: TestClient) -> None:
     response = client.get("/books", headers=headers)
     assert response.status_code == 503
     assert "not configured" in response.json()["detail"]
+
+
+def test_page_text_needs_a_session_and_a_database(client: TestClient) -> None:
+    """#228: the text-tab reader's source, behind the same checks as every book route."""
+    assert client.get("/books/b/pages/3/text").status_code == 401
+    headers = {"Authorization": f"Bearer {make_hs256_token()}"}
+    assert client.get("/books/b/pages/3/text", headers=headers).status_code == 503

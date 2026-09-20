@@ -1,8 +1,20 @@
 import { ChevronDown, TriangleAlert } from "lucide-react";
 import type { ParseIssue } from "@/lib/books/types";
 
-/** The parse's warnings, one line each — on the chapter card and beside an open draft. */
-export default function IssueList({ issues, className = "" }: { issues: ParseIssue[]; className?: string }) {
+/**
+ * The parse's warnings, one line each — on the chapter card and beside an
+ * open draft. `action` may put something after a line: the way to act on
+ * what the warning says, where there is one.
+ */
+export default function IssueList({
+	issues,
+	className = "",
+	action,
+}: {
+	issues: ParseIssue[];
+	className?: string;
+	action?: (issue: ParseIssue) => React.ReactNode;
+}) {
 	return (
 		<ul className={`flex flex-col gap-1 ${className}`}>
 			{issues.map((issue, i) => (
@@ -12,7 +24,10 @@ export default function IssueList({ issues, className = "" }: { issues: ParseIss
 						strokeWidth={1.5}
 						aria-hidden="true"
 					/>
-					<span>{issue.message}</span>
+					<span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+						<span>{issue.message}</span>
+						{action?.(issue)}
+					</span>
 				</li>
 			))}
 		</ul>

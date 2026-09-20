@@ -384,6 +384,25 @@ class BookRepo:
             path,
         )
 
+    async def get_page(self, book_id: str, page: int) -> PageRow | None:
+        """One page's text as the scan read it, for the text-tab reader (#228)."""
+        r = await self._pool.fetchrow(
+            """
+            select page, text, text_source, may_have_exercise
+              from book_pages where book_id = $1 and page = $2
+            """,
+            book_id,
+            page,
+        )
+        if r is None:
+            return None
+        return PageRow(
+            page=r["page"],
+            text=r["text"],
+            text_source=r["text_source"],
+            may_have_exercise=r["may_have_exercise"],
+        )
+
     async def list_pages(self, book_id: str, page_start: int, page_end: int) -> list[PageRow]:
         records = await self._pool.fetch(
             """

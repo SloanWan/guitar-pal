@@ -92,6 +92,7 @@ let root: Root | null = null;
 const onOpenDraft = vi.fn<(draft: OpenDraft) => void>();
 const onViewCrop = vi.fn<(crop: CropView) => void>();
 const onLocate = vi.fn<(source: SourceView) => void>();
+const onReadTextTab = vi.fn<(page: number) => void>();
 
 function render(chapter: Chapter, onChapter = vi.fn()) {
 	container = document.createElement("div");
@@ -106,6 +107,7 @@ function render(chapter: Chapter, onChapter = vi.fn()) {
 				onOpenDraft={onOpenDraft}
 				onViewCrop={onViewCrop}
 				onLocate={onLocate}
+				onReadTextTab={onReadTextTab}
 			/>,
 		);
 	});
@@ -132,6 +134,7 @@ beforeEach(() => {
 	onOpenDraft.mockReset();
 	onViewCrop.mockReset();
 	onLocate.mockReset();
+	onReadTextTab.mockReset();
 	api.getChapterParse.mockReset();
 	api.parseChapter.mockReset();
 	api.setExerciseStatus.mockReset();
@@ -254,6 +257,26 @@ describe("ChapterCard", () => {
 		expect(onLocate).toHaveBeenLastCalledWith({ chapterId: "c1", page: 204, pages: [204, 205], title: "左手按弦" });
 		// A note without pages has nothing to point at.
 		expect(Array.from(container.querySelectorAll("button")).filter((b) => /^p\./.test(b.textContent ?? ""))).toHaveLength(2);
+	});
+
+	it("offers a page whose tab was in the text layer to read by ear (#228)", async () => {
+		api.getChapterParse.mockResolvedValue({
+			...READY,
+			chapter: {
+				...READY.chapter,
+				parse_warnings: [
+					{ code: "TEXT_TAB_SKIPPED", path: "page 205", message: "p205: the tab is in the text layer" },
+					{ code: "PAGE_SKIPPED", path: "page 207", message: "p207: no renderer" },
+				],
+			},
+		});
+		render(READY.chapter);
+		await settle();
+		expect(container.textContent).toContain("p205: the tab is in the text layer");
+		// Only the text-tab warning has a way to act on it.
+		expect(Array.from(container.querySelectorAll("button")).filter((b) => b.textContent?.includes("Read by ear"))).toHaveLength(1);
+		act(() => button("Read by ear").click());
+		expect(onReadTextTab).toHaveBeenCalledWith(205);
 	});
 
 	it("folds every draft's warnings, one or many, to a count", async () => {

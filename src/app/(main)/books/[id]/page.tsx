@@ -25,6 +25,7 @@ import ChapterList from "@/components/books/ChapterList";
 import ChapterCard from "@/components/books/ChapterCard";
 import ChapterDraftPanel, { type OpenDraft } from "@/components/books/ChapterDraftPanel";
 import ChapterSourcePanel, { type SourceView } from "@/components/books/ChapterSourcePanel";
+import ChapterTextTabPanel from "@/components/books/ChapterTextTabPanel";
 import { CropDialog, CropInspector, type CropView } from "@/components/books/CropViewer";
 import ChapterRangeEditor from "@/components/books/ChapterRangeEditor";
 import DeleteBookDialog from "@/components/books/DeleteBookDialog";
@@ -63,18 +64,21 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
 	const [openChapter, setOpenChapter] = useState<string | null>(null);
-	// What is open beside the book — a draft to play (#233) or a page to read
-	// (#240); one at a time.
+	// What is open beside the book — a draft to play (#233), a page to read
+	// (#240) or a text tab to read by ear (#228); one at a time.
 	// `entered` says whether the panel opened from nothing (it grows into
 	// place) or replaced one already open (it just changes what it shows).
 	type Side =
 		| { kind: "draft"; draft: OpenDraft; entered: boolean }
-		| { kind: "source"; source: SourceView; entered: boolean };
+		| { kind: "source"; source: SourceView; entered: boolean }
+		| { kind: "textTab"; page: number; entered: boolean };
 	const [side, setSide] = useState<Side | null>(null);
 	const openDraft = (draft: OpenDraft) =>
 		setSide((current) => ({ kind: "draft", draft, entered: current === null }));
 	const locate = (source: SourceView) =>
 		setSide((current) => ({ kind: "source", source, entered: current === null }));
+	const readTextTab = (page: number) =>
+		setSide((current) => ({ kind: "textTab", page, entered: current === null }));
 	// A crop at full size: a dialog on its own, or over the book's column while
 	// the panel is open (see CropViewer). Closing the panel closes it too.
 	const [crop, setCrop] = useState<CropView | null>(null);
@@ -291,6 +295,7 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 												onOpenDraft={openDraft}
 												onViewCrop={setCrop}
 												onLocate={locate}
+												onReadTextTab={readOnly ? undefined : readTextTab}
 												readOnly={readOnly}
 											/>
 										)}
@@ -329,6 +334,15 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 							title: side.draft.pattern.name,
 						})
 					}
+				/>
+			) : null}
+			{side?.kind === "textTab" && book ? (
+				<ChapterTextTabPanel
+					key={`text-tab:${side.page}`}
+					book={book}
+					page={side.page}
+					animateOpen={side.entered}
+					onClose={closeSide}
 				/>
 			) : null}
 			{side?.kind === "source" && book

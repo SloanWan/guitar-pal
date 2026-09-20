@@ -517,6 +517,12 @@
 	--color-denim: var(--denim);
 	--color-denim-accent: var(--denim-accent);
 	--color-denim-tint: var(--denim-tint);
+	/* The three the v3 tokens dropped but the app kept using (border-denim-border,
+	   bg-denim-dark, …): derived from the anchor so both themes agree.
+	   border — a light denim line; light — muted rings; dark — a deep hover. */
+	--color-denim-border: color-mix(in oklab, var(--denim) 35%, transparent);
+	--color-denim-light: color-mix(in oklab, var(--denim) 65%, transparent);
+	--color-denim-dark: color-mix(in oklab, var(--denim) 82%, black);
 	--color-on-denim: var(--btn-on-denim);
 	--color-piano-white: var(--piano-white); /* bg-piano-white — keyboard white keys */
 	--color-piano-black: var(--piano-black); /* bg-piano-black — keyboard black keys */

@@ -7,18 +7,21 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    # Textbook import (#200) is not open for use: without BOOK_SERVICE_URL the
+    # /books pages say so and show the sample, and nothing else changes. To
+    # open it, put BOOK_SERVICE_URL=http://book-service:8000 in .env and bring
+    # the service up with `docker compose --profile books up --build -d`.
     env_file: .env
-    environment:
-      # Reached over the compose network; never published on the host.
-      BOOK_SERVICE_URL: http://book-service:8000
     # Loopback only: Nginx on the host is the public entry point.
     ports:
       - "127.0.0.1:3000:3000"
     restart: unless-stopped
-    depends_on:
-      - book-service
 
   book-service:
+    # Opt-in (see `web`): a plain `docker compose up` neither builds nor
+    # starts it, and `--remove-orphans` leaves a stopped one alone only while
+    # the profile is named.
+    profiles: ["books"]
     build:
       context: ./book-service
     # The same .env: it reads NEXT_PUBLIC_SUPABASE_URL for the JWT issuer and

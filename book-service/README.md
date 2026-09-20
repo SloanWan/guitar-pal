@@ -201,6 +201,16 @@ Setup, once per Supabase project:
 3. `BOOK_SERVICE_MIGRATION_DATABASE_URL=... alembic upgrade head` — again after
    every pull that adds a revision under `alembic/versions/`
 
+## Not open yet
+
+Production does not run this service. In `docker-compose.yml` it sits behind
+the `books` profile, so the deploy's `docker compose up --build -d` neither
+builds nor starts it, and `web` has no `BOOK_SERVICE_URL`: the proxy answers
+503, the `/books` pages say "not open for use yet" and show the sample book,
+which needs no service. To open it: `BOOK_SERVICE_URL=http://book-service:8000`
+in the server's `.env`, the setup below, and
+`docker compose --profile books up --build -d`.
+
 Migrations create their tables and grant on them to `book_service` in the same revision, so the role's reach is readable per table. The alembic version table is `book_service_alembic_version`, apart from anything else in the schema.
 
 Why two ports on the same pooler host: 6543 is transaction mode, fine for the service's short queries (the pool sets `statement_cache_size=0` for it) and wrong for a migration that needs one session for its whole transaction; 5432 is session mode.

@@ -6,6 +6,7 @@ import BookUpload from "@/components/books/BookUpload";
 import BookList from "@/components/books/BookList";
 import { usePolledResource } from "@/components/books/usePolledResource";
 import { EYEBROW, MONO_META } from "@/components/books/bookUi";
+import SampleBookPanel from "@/components/books/SampleBookPanel";
 
 // Rows keep moving while any book scans; nothing to watch otherwise.
 const anyScanning = (books: Book[]) => books.some((b) => b.status === "scanning");
@@ -42,6 +43,8 @@ export default function BooksPage() {
 				) : unavailable ? null : (
 					<p className={`${MONO_META} px-1`}>Loading…</p>
 				)}
+				{/* Always there, service or no service: the sample needs neither. */}
+				<SampleBookPanel />
 			</div>
 		</div>
 	);

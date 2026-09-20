@@ -17,7 +17,10 @@ export default function BookList({ books }: { books: Book[] }) {
 			{books.length === 0 ? (
 				<div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
 					<p className={MONO_META}>{"// No books yet"}</p>
-					<p className="text-[13px] text-ink-dim">Upload a textbook PDF and its chapters show up here.</p>
+					<p className="text-[13px] text-ink-dim">
+						Upload a textbook PDF and its chapters show up here. The sample below shows what a parsed
+						chapter looks like.
+					</p>
 				</div>
 			) : (
 				<ul>

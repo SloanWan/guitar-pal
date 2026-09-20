@@ -76,9 +76,10 @@ export async function proxy(request: NextRequest) {
 
 	// d. /home, /settings and /books are the signed-in personal surfaces — a
 	//    signed-out visitor is sent to auth with a return path so they land back
-	//    after signing in.
+	//    after signing in. The one exception is the sample book (#241), which
+	//    is there precisely for someone who has nothing yet.
 	if (
-		(pathname === "/home" || pathname === "/settings" || pathname.startsWith("/books")) &&
+		(pathname === "/home" || pathname === "/settings" || (pathname.startsWith("/books") && pathname !== "/books/sample")) &&
 		!user
 	) {
 		return redirectWithCookies(

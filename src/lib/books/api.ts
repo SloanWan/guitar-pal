@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase";
+import { isSampleBook, sampleBook, sampleChapterParse } from "@/lib/books/sample";
 import type {
 	Book,
 	BookDetail,
@@ -14,6 +15,10 @@ import type {
  * `/api/books/*`, which forwards the session to the Python service; the
  * upload itself goes straight to Storage with the player's own session, so
  * a 100 MB PDF never passes through Next.js.
+ *
+ * The sample book (#241) is answered here without the network: its reads
+ * come from the fixture, its one write (a draft's status) stays local, and
+ * every other mutation is refused.
  */
 
 const BUCKET = "books";
@@ -54,29 +59,51 @@ function readDetail(body: unknown): string | null {
 	return null;
 }
 
+const readOnly = () => Promise.reject(new BookApiError("The sample book is read-only.", 403));
+
 export const listBooks = (): Promise<Book[]> => call("");
-export const getBook = (id: string): Promise<BookDetail> => call(`/${id}`);
+export const getBook = (id: string): Promise<BookDetail> => (isSampleBook(id) ? sampleBook() : call(`/${id}`));
 export const createBook = (title: string): Promise<Book> =>
 	call("", { method: "POST", body: JSON.stringify({ title }) });
-export const scanBook = (id: string): Promise<Book> => call(`/${id}/scan`, { method: "POST" });
+export const scanBook = (id: string): Promise<Book> =>
+	isSampleBook(id) ? readOnly() : call(`/${id}/scan`, { method: "POST" });
 export const renameBook = (id: string, title: string): Promise<Book> =>
-	call(`/${id}`, { method: "PATCH", body: JSON.stringify({ title }) });
+	isSampleBook(id) ? readOnly() : call(`/${id}`, { method: "PATCH", body: JSON.stringify({ title }) });
 export const replaceChapters = (id: string, chapters: ChapterRange[]): Promise<BookDetail> =>
-	call(`/${id}/chapters`, { method: "PUT", body: JSON.stringify({ chapters }) });
-export const deleteBook = (id: string): Promise<void> => call(`/${id}`, { method: "DELETE" });
-export const getChapterParse = (bookId: string, chapterId: string): Promise<ChapterParse> =>
-	call(`/${bookId}/chapters/${chapterId}/parse`);
+	isSampleBook(id) ? readOnly() : call(`/${id}/chapters`, { method: "PUT", body: JSON.stringify({ chapters }) });
+export const deleteBook = (id: string): Promise<void> =>
+	isSampleBook(id) ? readOnly() : call(`/${id}`, { method: "DELETE" });
+export const getChapterParse = async (bookId: string, chapterId: string): Promise<ChapterParse> => {
+	if (!isSampleBook(bookId)) return call(`/${bookId}/chapters/${chapterId}/parse`);
+	const parse = await sampleChapterParse(chapterId);
+	if (!parse) throw new BookApiError("Chapter not found.", 404);
+	return parse;
+};
 export const parseChapter = (bookId: string, chapterId: string): Promise<Chapter> =>
-	call(`/${bookId}/chapters/${chapterId}/parse`, { method: "POST" });
-export const setExerciseStatus = (
+	isSampleBook(bookId) ? readOnly() : call(`/${bookId}/chapters/${chapterId}/parse`, { method: "POST" });
+export const setExerciseStatus = async (
 	bookId: string,
 	exerciseId: string,
 	status: ExerciseStatus,
-): Promise<ChapterExercise> =>
-	call(`/${bookId}/exercises/${exerciseId}`, { method: "PATCH", body: JSON.stringify({ status }) });
+): Promise<ChapterExercise> => {
+	if (!isSampleBook(bookId)) {
+		return call(`/${bookId}/exercises/${exerciseId}`, { method: "PATCH", body: JSON.stringify({ status }) });
+	}
+	// The sample keeps nothing: the card's own state is the whole record.
+	const book = await sampleBook();
+	for (const chapter of book.chapters) {
+		const found = (await sampleChapterParse(chapter.id))?.exercises.find((e) => e.id === exerciseId);
+		if (found) return { ...found, status };
+	}
+	throw new BookApiError("Exercise not found.", 404);
+};
 
-/** A short-lived URL for a crop in the private bucket; null when Storage says no. */
+/**
+ * A short-lived URL for a crop in the private bucket; null when Storage says
+ * no. The sample's crops are public files and come back as they are.
+ */
 export async function cropUrl(cropPath: string): Promise<string | null> {
+	if (cropPath.startsWith("/")) return cropPath;
 	const supabase = createClient();
 	const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(cropPath, 60 * 60);
 	if (error || !data) return null;

@@ -71,6 +71,19 @@ describe("readTabEdit", () => {
 		expect(findTabPattern("\"my arp\"", PATTERNS)?.id).toBe("mine");
 	});
 
+	it("takes the player's copy of a shipped pattern once the page has made one", () => {
+		const shipped = PRESET_FINGERPICK_PATTERNS[0];
+		expect(findTabPattern(shipped.name, PATTERNS)?.id).toBe(shipped.id);
+		// The page saves an edit to a shipped pattern as "<name> (mine)"; from
+		// then on the shipped name means that copy, so edits pile up on it.
+		const copy: FingerpickPattern = { ...shipped, id: "copy", name: `${shipped.name} (mine)` };
+		expect(findTabPattern(shipped.name, [...PATTERNS, copy])?.id).toBe("copy");
+		expect(findTabPattern(`${shipped.name} (mine)`, [...PATTERNS, copy])?.id).toBe("copy");
+		// A pattern of the player's own outranks a shipped one of the same name.
+		const twin: FingerpickPattern = { ...shipped, id: "twin" };
+		expect(findTabPattern(shipped.name, [...PATTERNS, twin])?.id).toBe("twin");
+	});
+
 	it("reports a bar that is not there, and a segment it could not read", () => {
 		expect(read("replace bar 5 of my arp: Am: 5 3 2 1")).toMatchObject({ kind: "bar-out-of-range", bar: 5 });
 		expect(read("add to my arp: something nice")).toMatchObject({ kind: "segment-unread", segment: "something nice" });

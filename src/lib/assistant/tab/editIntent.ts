@@ -2,6 +2,7 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { beatTicks, changeTimeSignature, slotDurationUnits } from "@/lib/fingerpickEdit";
 import { clampBpmToMeter } from "@/lib/strumBars";
 import { setSlotChord } from "@/lib/fingerpickChords";
+import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { beatsPerBar } from "@/lib/strumMeter";
 import type { ChordRef } from "@/lib/strumPatterns";
@@ -292,14 +293,30 @@ export function tabEditClause(text: string): { op: TabEditOp; name: string; spec
 	return clause ? { op: clause.op, name: clause.name, spec: clause.spec } : null;
 }
 
-/** The pattern a name refers to: exact, case-insensitive; the library keeps names unique. */
+/** The suffix the fingerpick page gives the copy it makes when a shipped pattern is edited. */
+const COPY_SUFFIX = " (mine)";
+
+/**
+ * The pattern a name refers to: exact, case-insensitive; the library keeps
+ * names unique. A shipped pattern is never changed — the page saves an edit
+ * to one as "<name> (mine)" — so once that copy exists, the shipped name
+ * means the copy: the player is editing their pattern, not asking for
+ * another copy each time. A pattern of the player's own outranks a shipped
+ * one of the same name for the same reason.
+ */
 export function findTabPattern(
 	name: string,
 	patterns: readonly FingerpickPattern[],
 ): FingerpickPattern | null {
+	const shipped = new Set(PRESET_FINGERPICK_PATTERNS.map((p) => p.id));
+	const own = (p: FingerpickPattern) => !shipped.has(p.id);
 	for (const wanted of spellings(name)) {
-		const found = patterns.find((p) => p.name.trim().toLowerCase() === wanted);
-		if (found) return found;
+		const named = patterns.filter((p) => p.name.trim().toLowerCase() === wanted);
+		const found = named.find(own) ?? named[0];
+		if (!found) continue;
+		if (own(found)) return found;
+		const copy = patterns.find((p) => own(p) && p.name.trim().toLowerCase() === wanted + COPY_SUFFIX);
+		return copy ?? found;
 	}
 	return null;
 }

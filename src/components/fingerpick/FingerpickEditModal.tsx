@@ -8,6 +8,7 @@ import {
 	useCallback,
 } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import ZoomableImage from "@/components/ZoomableImage";
 import { Button } from "@/components/ui/button";
 import {
 	Plus,
@@ -16,6 +17,8 @@ import {
 	Redo2,
 	X as XIcon,
 	TriangleAlert,
+	ChevronDown,
+	Image as ImageIcon,
 } from "lucide-react";
 import {
 	type FingerpickPattern,
@@ -109,6 +112,17 @@ export interface FingerpickEditModalProps {
 	 * could not carry over, so the player knows to check before saving.
 	 */
 	notice?: EditorNotice;
+	/**
+	 * An element to open inside of, instead of over the page: the editor fills
+	 * it, is not modal (the rest of the page stays live — a source image beside
+	 * it can be zoomed), and closes only from its own buttons.
+	 */
+	container?: HTMLElement | null;
+	/**
+	 * The page the pattern was read from, offered as a fold-out strip under
+	 * the header for where nothing beside the editor can show it.
+	 */
+	reference?: { url: string; alt: string };
 	onClose: () => void;
 	onSave: (pattern: FingerpickPattern) => void;
 }
@@ -149,6 +163,8 @@ export default function FingerpickEditModal({
 	pattern: initialPattern,
 	takenNames = [],
 	notice,
+	container,
+	reference,
 	onClose,
 	onSave,
 }: FingerpickEditModalProps) {
@@ -697,12 +713,25 @@ export default function FingerpickEditModal({
 		"--fp-cols": String(lgCols),
 	} as React.CSSProperties;
 
+	// Inside a container the editor is that element, edge to edge, and not
+	// modal: no overlay, no focus trap, and an outside click is not a close —
+	// the page beside it is meant to be used while this is open.
+	const contained = container != null;
+
 	return (
-		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && requestClose()}>
+		<Dialog open={open} modal={!contained} onOpenChange={(isOpen) => !isOpen && requestClose()}>
 			<DialogContent
 				showCloseButton={false}
-				style={dynamicStyle}
-				className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] lg:max-h-[90vh] overflow-hidden flex flex-col p-0"
+				container={contained ? container : undefined}
+				style={contained ? undefined : dynamicStyle}
+				className={
+					contained
+						? "absolute inset-0 top-0 left-0 z-30 h-full max-h-none w-full max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none ring-0 overflow-hidden flex flex-col p-0"
+						: "w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-3xl lg:w-(--fp-w) lg:max-w-[min(var(--fp-w),96vw)] max-h-[80vh] lg:max-h-[90vh] overflow-hidden flex flex-col p-0"
+				}
+				onInteractOutside={(e) => {
+					if (contained) e.preventDefault();
+				}}
 				onKeyDown={(e) => {
 					// Undo/redo scoped to the modal (not window) to avoid clashing with
 					// the page. Skip text fields so their native undo keeps working.
@@ -776,21 +805,51 @@ export default function FingerpickEditModal({
 				{notice && (
 					<div className="shrink-0 border-b border-line bg-denim-tint px-4 py-2 text-xs leading-snug text-ink-dim">
 						<p>{notice.text}</p>
+						{/* The reader's warnings, folded: the count on one line, the
+						    list on demand, so a long list never pushes the grid down. */}
 						{notice.warnings && notice.warnings.length > 0 && (
-							<ul className="mt-1">
-								{notice.warnings.map((line) => (
-									<li key={line} className="flex gap-2 py-0.5">
-										<TriangleAlert
-											className="mt-px size-3.5 shrink-0"
-											strokeWidth={1.5}
-											aria-hidden="true"
-										/>
-										<span>{line}</span>
-									</li>
-								))}
-							</ul>
+							<details className="group mt-1">
+								<summary className="flex cursor-pointer list-none items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+									<TriangleAlert className="size-3" strokeWidth={1.5} aria-hidden="true" />
+									{notice.warnings.length} {notice.warnings.length === 1 ? "warning" : "warnings"}
+									<ChevronDown
+										className="size-3 transition-transform duration-(--dur-hover) group-open:rotate-180"
+										strokeWidth={1.5}
+										aria-hidden="true"
+									/>
+								</summary>
+								<ul className="mt-1">
+									{notice.warnings.map((line) => (
+										<li key={line} className="flex gap-2 py-0.5">
+											<TriangleAlert
+												className="mt-px size-3.5 shrink-0"
+												strokeWidth={1.5}
+												aria-hidden="true"
+											/>
+											<span>{line}</span>
+										</li>
+									))}
+								</ul>
+							</details>
 						)}
 					</div>
+				)}
+
+				{/* The source page, folded under the header. Zoomable, so a fret can
+				    be checked against the print without leaving the grid. */}
+				{reference && (
+					<details className="group shrink-0 border-b border-line">
+						<summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+							<ImageIcon className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+							Source page
+							<ChevronDown
+								className="size-3 transition-transform duration-(--dur-hover) group-open:rotate-180"
+								strokeWidth={1.5}
+								aria-hidden="true"
+							/>
+						</summary>
+						<ZoomableImage src={reference.url} alt={reference.alt} className="max-h-[32vh]" />
+					</details>
 				)}
 
 				<FingerpickEditorMetaFields
@@ -816,7 +875,16 @@ export default function FingerpickEditModal({
 					ref={scrollRef}
 					className="fp-thin-scroll relative min-h-0 flex-1 overflow-auto"
 				>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))] gap-4 px-4 select-none">
+					<div
+						className={`grid gap-4 px-4 select-none ${
+							// Inside a container the width is the container's, not the
+							// measure count's: as many blocks as fit, one at the least.
+							contained
+								? "grid-cols-[repeat(auto-fill,minmax(var(--fp-block),1fr))]"
+								: "grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(var(--fp-cols),minmax(0,1fr))]"
+						}`}
+						style={contained ? ({ "--fp-block": `${MEASURE_BLOCK_REM}rem` } as React.CSSProperties) : undefined}
+					>
 						{working.measures.map((measure, measureIndex) => {
 							const beatLabels = computeBeatLabels(
 								measure.slots,

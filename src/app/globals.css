@@ -1202,6 +1202,17 @@
 	}
 }
 
+/* The chapter draft panel (#233) arriving: it slides in from the right edge,
+   at the drawer pace, while the book's column has already made room. */
+@keyframes draft-panel-in {
+	from {
+		transform: translateX(100%);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
+
 /* Entrance for a control that appears beside another one when a mode turns
    on (the chord line's Size fader and Off-shape switch): a short fade and
    slide in from the switch that revealed it. */

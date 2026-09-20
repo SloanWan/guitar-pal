@@ -3,8 +3,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Chapter, ChapterParse } from "@/lib/books/types";
 
-const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 
 const api = vi.hoisted(() => ({
@@ -16,12 +14,13 @@ const api = vi.hoisted(() => ({
 vi.mock("@/lib/books/api", () => api);
 
 import ChapterCard from "@/components/books/ChapterCard";
-import { takeHandoff } from "@/lib/strumAssistant/handoff";
+import type { OpenDraft } from "@/components/books/ChapterDraftPanel";
+import type { CropView } from "@/components/books/CropViewer";
 
 /**
  * The chapter card with the service mocked: the idle offer and its estimate,
- * the running parse, and a finished one whose draft opens in the fingerpick
- * editor through the handoff stash while its row is marked taken.
+ * the running parse, and a finished one whose draft is handed to the page's
+ * panel, validated and typed, with the callback that marks its row used.
  */
 
 const CHAPTER: Chapter = {
@@ -89,13 +88,23 @@ const READY: ChapterParse = {
 
 let container: HTMLDivElement;
 let root: Root | null = null;
+const onOpenDraft = vi.fn<(draft: OpenDraft) => void>();
+const onViewCrop = vi.fn<(crop: CropView) => void>();
 
 function render(chapter: Chapter, onChapter = vi.fn()) {
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	act(() => {
 		root = createRoot(container);
-		root.render(<ChapterCard bookId="b1" chapter={chapter} onChapter={onChapter} />);
+		root.render(
+			<ChapterCard
+				bookId="b1"
+				chapter={chapter}
+				onChapter={onChapter}
+				onOpenDraft={onOpenDraft}
+				onViewCrop={onViewCrop}
+			/>,
+		);
 	});
 	return onChapter;
 }
@@ -117,7 +126,8 @@ function button(label: string): HTMLButtonElement {
 
 beforeEach(() => {
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-	push.mockReset();
+	onOpenDraft.mockReset();
+	onViewCrop.mockReset();
 	api.getChapterParse.mockReset();
 	api.parseChapter.mockReset();
 	api.setExerciseStatus.mockReset();
@@ -180,23 +190,46 @@ describe("ChapterCard", () => {
 		expect(container.querySelector("img")?.getAttribute("src")).toBe("https://signed/crop.png");
 	});
 
-	it("opens a tab draft in fingerpick through the handoff and marks it taken", async () => {
+	it("hands a tab draft to the page's panel, typed, and marks the row used when told", async () => {
 		api.getChapterParse.mockResolvedValue(READY);
-		api.setExerciseStatus.mockResolvedValue({ ...READY.exercises[0], status: "taken" });
 		render(READY.chapter);
 		await settle();
 		await act(async () => {
-			button("Open in fingerpick").click();
+			button("Open").click();
 		});
+		expect(onOpenDraft).toHaveBeenCalledTimes(1);
+		const draft = onOpenDraft.mock.calls[0][0];
+		expect(draft.exercise.id).toBe("e1");
+		expect(draft.pattern.name).toBe("⑥弦:E–F–G");
+		expect(draft.pattern.measures[0].slots[0].strings[5].fret).toBe(0);
+		// Playing is not using: the row stays as it was until the panel says so.
+		expect(container.textContent).not.toContain("Used");
+		expect(api.setExerciseStatus).not.toHaveBeenCalled();
+		act(() => draft.onTaken());
+		expect(container.textContent).toContain("Used");
+	});
+
+	it("refuses a draft the validator cannot read", async () => {
+		api.getChapterParse.mockResolvedValue({
+			...READY,
+			exercises: [{ ...READY.exercises[0], draft: { name: "broken", measures: "no" } }],
+		});
+		render(READY.chapter);
 		await settle();
-		expect(api.setExerciseStatus).toHaveBeenCalledWith("b1", "e1", "taken");
-		expect(container.textContent).toContain("Opened");
-		expect(push).toHaveBeenCalledWith("/fingerpick");
-		const handoff = takeHandoff("fingerpick");
-		expect(handoff?.kind).toBe("fingerpick");
-		if (handoff?.kind !== "fingerpick") throw new Error("expected a fingerpick handoff");
-		expect(handoff.pattern.name).toBe("⑥弦:E–F–G");
-		expect(handoff.pattern.measures[0].slots[0].strings[5].fret).toBe(0);
-		expect(handoff.warnings.map((w) => w.code)).toEqual(["TAB_JIANPU_OCTAVE"]);
+		await act(async () => {
+			button("Open").click();
+		});
+		expect(onOpenDraft).not.toHaveBeenCalled();
+	});
+
+	it("asks the page for the crop at full size when its thumbnail is clicked", async () => {
+		api.getChapterParse.mockResolvedValue(READY);
+		render(READY.chapter);
+		await settle();
+		await settle();
+		const thumb = Array.from(container.querySelectorAll("button")).find((b) => b.querySelector("img"));
+		if (!thumb) throw new Error("no thumbnail button");
+		act(() => thumb.click());
+		expect(onViewCrop).toHaveBeenCalledWith({ url: "https://signed/crop.png", alt: "Page 206, ⑥弦:E–F–G" });
 	});
 });

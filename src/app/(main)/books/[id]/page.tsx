@@ -16,10 +16,13 @@ import {
 import type { BookDetail, Chapter, ChapterRange } from "@/lib/books/types";
 import { TOC_SOURCE_LABEL } from "@/lib/books/types";
 import { rangesFromChapters } from "@/lib/books/ranges";
+import { isSampleBook } from "@/lib/books/sample";
 import { usePolledResource } from "@/components/books/usePolledResource";
 import ScanReadout from "@/components/books/ScanReadout";
 import ChapterList from "@/components/books/ChapterList";
 import ChapterCard from "@/components/books/ChapterCard";
+import ChapterDraftPanel, { type OpenDraft } from "@/components/books/ChapterDraftPanel";
+import { CropDialog, CropInspector, type CropView } from "@/components/books/CropViewer";
 import ChapterRangeEditor from "@/components/books/ChapterRangeEditor";
 import DeleteBookDialog from "@/components/books/DeleteBookDialog";
 import {
@@ -49,12 +52,23 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const load = useCallback(() => getBook(id), [id]);
 	const { value: book, error, refresh, set: setBook } = usePolledResource(load, isScanning);
 	const missing = error instanceof BookApiError && error.status === 404;
+	// The sample book (#241): the same page, with nothing that would change it.
+	const readOnly = isSampleBook(id);
 	const [editing, setEditing] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
 	const [openChapter, setOpenChapter] = useState<string | null>(null);
+	// The draft open beside the book (#233); one at a time.
+	const [draft, setDraft] = useState<OpenDraft | null>(null);
+	// A crop at full size: a dialog on its own, or over the book's column while
+	// a draft is open (see CropViewer). Closing the draft closes it too.
+	const [crop, setCrop] = useState<CropView | null>(null);
+	function closeDraft() {
+		setDraft(null);
+		setCrop(null);
+	}
 
 	// The card polls its own chapter; the row learns the state from it.
 	const updateChapter = useCallback(
@@ -131,8 +145,13 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 		);
 	}
 
+	// With a draft open the page splits at lg: the book keeps the left column
+	// (its own scroll) and the panel takes the right half, full height. Below
+	// lg the panel is a sheet over the page instead.
 	return (
-		<div className="flex-1 bg-surface">
+		<div className="flex-1 bg-surface lg:flex lg:h-full">
+			<div className="relative min-w-0 flex-1 lg:flex lg:flex-col">
+			<div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
 			<div className="container mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
 				<Link href="/books" className={`${MONO_META} inline-flex items-center gap-1.5 hover:text-ink`}>
 					<ArrowLeft className="size-3.5" strokeWidth={1.5} strokeLinecap="square" aria-hidden="true" />
@@ -151,24 +170,41 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 								</p>
 								<h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold text-ink">
 									<span className="truncate">{book.title}</span>
-									<button
-										type="button"
-										aria-label="Rename book"
-										onClick={rename}
-										className="flex size-7 flex-none items-center justify-center text-ink-faint transition-colors hover:text-denim-accent"
-									>
-										<Pencil className="size-3.5" strokeWidth={1.5} strokeLinecap="square" />
-									</button>
+									{readOnly ? null : (
+										<button
+											type="button"
+											aria-label="Rename book"
+											onClick={rename}
+											className="flex size-7 flex-none items-center justify-center text-ink-faint transition-colors hover:text-denim-accent"
+										>
+											<Pencil className="size-3.5" strokeWidth={1.5} strokeLinecap="square" />
+										</button>
+									)}
 								</h1>
-								<p className={`${MONO_META} mt-2`}>{bookMeta(book)}</p>
+								<p className={`${MONO_META} mt-2`}>{readOnly ? `Sample · ${bookMeta(book)}` : bookMeta(book)}</p>
 							</div>
-							<div className="flex flex-none gap-2">
-								{book.status === "ready" || book.status === "failed" ? (
-									<GhostButton onClick={rescan}>Rescan</GhostButton>
-								) : null}
-								<DangerButton onClick={() => setConfirmDelete(true)}>Delete</DangerButton>
-							</div>
+							{readOnly ? null : (
+								<div className="flex flex-none gap-2">
+									{book.status === "ready" || book.status === "failed" ? (
+										<GhostButton onClick={rescan}>Rescan</GhostButton>
+									) : null}
+									<DangerButton onClick={() => setConfirmDelete(true)}>Delete</DangerButton>
+								</div>
+							)}
 						</header>
+
+						{readOnly ? (
+							<div className="border border-denim-border bg-denim-tint px-4 py-3 text-sm leading-relaxed text-ink">
+								<p className={`${EYEBROW} mb-1 text-denim-accent`}>{"// How this page works"}</p>
+								<p>
+									This is one chapter of a real method book, read once by the import: what it teaches
+									as knowledge points, and what it asks you to play as practice drafts. Open the chapter,
+									press <span className="font-medium">Open</span> on a draft to play it beside the book,
+									click its thumbnail to see the page it was read from, edit it, and take it to the
+									fingerpick page. Upload your own PDF on the books page to do the same with any chapter.
+								</p>
+							</div>
+						) : null}
 
 						{book.status === "scanning" ? (
 							<ScanReadout book={book} />
@@ -208,7 +244,7 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 							<Panel
 								label={editing ? "Chapters · editing" : "Chapters"}
 								aside={
-									editing ? null : (
+									editing || readOnly ? null : (
 										<GhostButton onClick={() => setEditing(true)} className="h-7">
 											Edit ranges
 										</GhostButton>
@@ -233,7 +269,14 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 										openId={openChapter}
 										onOpen={setOpenChapter}
 										renderCard={(chapter) => (
-											<ChapterCard bookId={book.id} chapter={chapter} onChapter={updateChapter} />
+											<ChapterCard
+												bookId={book.id}
+												chapter={chapter}
+												onChapter={updateChapter}
+												onOpenDraft={setDraft}
+												onViewCrop={setCrop}
+												readOnly={readOnly}
+											/>
 										)}
 									/>
 								)}
@@ -250,6 +293,14 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 					</>
 				)}
 			</div>
+			</div>
+			{draft && crop ? <CropInspector crop={crop} onClose={() => setCrop(null)} /> : null}
+			</div>
+			{draft ? null : <CropDialog crop={crop} onClose={() => setCrop(null)} />}
+			{/* Keyed on the exercise: another draft is a fresh panel, not a swap. */}
+			{draft && book ? (
+				<ChapterDraftPanel key={draft.exercise.id} bookId={book.id} draft={draft} onClose={closeDraft} />
+			) : null}
 		</div>
 	);
 }

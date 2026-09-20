@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowUpRight, TriangleAlert } from "lucide-react";
+import { PanelRightOpen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
-import type { FingerpickPattern } from "@/lib/fingerpickTypes";
-import { stashHandoff } from "@/lib/strumAssistant/handoff";
-import { cropUrl, getChapterParse, parseChapter, setExerciseStatus } from "@/lib/books/api";
-import type { Chapter, ChapterExercise, ChapterNote, ChapterParse, ParseIssue } from "@/lib/books/types";
+import { validateFingerpickPattern } from "@/lib/tabImport";
+import { cropUrl, getChapterParse, parseChapter } from "@/lib/books/api";
+import type { Chapter, ChapterExercise, ChapterNote, ChapterParse } from "@/lib/books/types";
 import { MAX_PARSE_PAGES } from "@/lib/books/types";
 import { chapterPages, estimateParseUsd, formatUsd, formatUsdRange } from "@/lib/books/parseCost";
 import { usePolledResource } from "@/components/books/usePolledResource";
+import IssueList from "@/components/books/IssueList";
+import type { CropView } from "@/components/books/CropViewer";
+import type { OpenDraft } from "@/components/books/ChapterDraftPanel";
 import { DenimButton, GhostButton, MONO_META, StatusLed } from "@/components/books/bookUi";
 
 /**
@@ -20,13 +21,12 @@ import { DenimButton, GhostButton, MONO_META, StatusLed } from "@/components/boo
  * knowledge points, the drafts with the crop they were read from, and every
  * warning inline — the #114 honesty rule, on screen.
  *
- * A draft opens in its editor through the same handoff the assistant uses.
- * Nothing is saved from here: the player checks it in the editor and saves
- * it like anything drawn by hand. The draft's row is marked `taken` as it
- * leaves, so the card shows what was already used.
+ * A draft opens beside the book (#233): the page keeps one draft panel,
+ * where it plays, can be edited and saved, and from where it leaves for the
+ * fingerpick page. The panel marks the draft's row `taken` when it is saved
+ * or sent on — not when it is merely played — so the card shows what was
+ * already used.
  */
-
-const FINGERPICK_PATH = "/fingerpick";
 
 const isParsing = (parse: ChapterParse) => parse.chapter.parse_status === "parsing";
 
@@ -34,11 +34,20 @@ export default function ChapterCard({
 	bookId,
 	chapter,
 	onChapter,
+	onOpenDraft,
+	onViewCrop,
+	readOnly = false,
 }: {
 	bookId: string;
 	chapter: Chapter;
 	/** The chapter's row as the card learns it changed (status, cost). */
 	onChapter: (chapter: Chapter) => void;
+	/** A draft to open in the page's panel beside the book. */
+	onOpenDraft: (draft: OpenDraft) => void;
+	/** A draft's crop, to show at full size (a dialog, or beside the draft panel). */
+	onViewCrop: (crop: CropView) => void;
+	/** The sample book: nothing that would run or re-run the parse. */
+	readOnly?: boolean;
 }) {
 	const load = useCallback(() => getChapterParse(bookId, chapter.id), [bookId, chapter.id]);
 	const { value: parse, error, refresh, set } = usePolledResource(load, isParsing);
@@ -66,12 +75,28 @@ export default function ChapterCard({
 		}
 	}
 
-	function taken(exercise: ChapterExercise) {
-		if (!parse) return;
-		set({
-			...parse,
-			exercises: parse.exercises.map((e) => (e.id === exercise.id ? { ...e, status: "taken" } : e)),
-		});
+	// Read through the setter, not the closure: the panel calls this long
+	// after the card rendered, and a re-parse may have replaced the card since.
+	function taken(exerciseId: string) {
+		set((current) =>
+			current
+				? {
+						...current,
+						exercises: current.exercises.map((e) => (e.id === exerciseId ? { ...e, status: "taken" } : e)),
+					}
+				: current,
+		);
+	}
+
+	function openDraft(exercise: ChapterExercise) {
+		// The draft is the validator's own output, so this is a formality that
+		// also gives it its type — and catches a row an older build wrote.
+		const { pattern } = validateFingerpickPattern(exercise.draft);
+		if (pattern === null) {
+			toast.error("This draft can't be opened — re-parse the chapter.");
+			return;
+		}
+		onOpenDraft({ exercise, pattern, onTaken: () => taken(exercise.id) });
 	}
 
 	if (parse === null) {
@@ -112,8 +137,8 @@ export default function ChapterCard({
 					</p>
 				) : (
 					<p className="mb-3 text-sm text-ink-dim">
-						Read the chapter for what it teaches and what it asks you to play. Tab exercises open in
-						the fingerpick editor.
+						Read the chapter for what it teaches and what it asks you to play. Tab exercises open
+						beside the book, and from there in the fingerpick editor.
 					</p>
 				)}
 				<div className="flex flex-wrap items-center gap-3">
@@ -142,14 +167,16 @@ export default function ChapterCard({
 					{notes.length === 1 ? "note" : "notes"} · {exercises.length}{" "}
 					{exercises.length === 1 ? "draft" : "drafts"}
 				</p>
-				<GhostButton
-					onClick={start}
-					disabled={starting || tooLong}
-					className="h-7"
-					title={`Runs the parse again and replaces what it produced — est. ${estimate}`}
-				>
-					Re-parse · est. {estimate}
-				</GhostButton>
+				{readOnly ? null : (
+					<GhostButton
+						onClick={start}
+						disabled={starting || tooLong}
+						className="h-7"
+						title={`Runs the parse again and replaces what it produced — est. ${estimate}`}
+					>
+						Re-parse · est. {estimate}
+					</GhostButton>
+				)}
 			</div>
 
 			{parse.chapter.parse_warnings.length > 0 ? (
@@ -178,9 +205,9 @@ export default function ChapterCard({
 						{exercises.map((exercise) => (
 							<ExerciseItem
 								key={exercise.id}
-								bookId={bookId}
 								exercise={exercise}
-								onTaken={() => taken(exercise)}
+								onOpen={() => openDraft(exercise)}
+								onViewCrop={onViewCrop}
 							/>
 						))}
 					</ul>
@@ -216,43 +243,25 @@ const KIND_LABEL: Record<ChapterExercise["kind"], string> = {
 };
 
 function ExerciseItem({
-	bookId,
 	exercise,
-	onTaken,
+	onOpen,
+	onViewCrop,
 }: {
-	bookId: string;
 	exercise: ChapterExercise;
-	onTaken: () => void;
+	onOpen: () => void;
+	onViewCrop: (crop: CropView) => void;
 }) {
-	const router = useRouter();
-	const [opening, setOpening] = useState(false);
 	const draft = exercise.draft;
 	const name = typeof draft.name === "string" && draft.name ? draft.name : "Untitled";
 	const measures = Array.isArray(draft.measures) ? draft.measures.length : null;
 	const bpm = typeof draft.bpm === "number" ? draft.bpm : null;
 	const taken = exercise.status === "taken";
 
-	async function open() {
-		setOpening(true);
-		try {
-			await setExerciseStatus(bookId, exercise.id, "taken");
-			onTaken();
-		} catch {
-			// The mark is bookkeeping; the draft still opens.
-		}
-		// The draft is the validator's own output, so the editor's validator
-		// will pass it again on the way in.
-		stashHandoff({
-			kind: "fingerpick",
-			pattern: draft as unknown as FingerpickPattern,
-			warnings: exercise.warnings,
-		});
-		router.push(FINGERPICK_PATH);
-	}
-
 	return (
 		<li className="flex gap-3 border border-line bg-panel p-3">
-			{exercise.crop_path ? <CropThumb path={exercise.crop_path} alt={`Page ${exercise.page}, ${name}`} /> : null}
+			{exercise.crop_path ? (
+				<CropThumb path={exercise.crop_path} alt={`Page ${exercise.page}, ${name}`} onView={onViewCrop} />
+			) : null}
 			<div className="flex min-w-0 flex-1 flex-col gap-1.5">
 				<p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 					<span className="min-w-0 truncate text-[13px] font-medium text-ink">{name}</span>
@@ -261,14 +270,14 @@ function ExerciseItem({
 						{measures !== null ? ` · ${measures} ${measures === 1 ? "bar" : "bars"}` : ""}
 						{bpm !== null ? ` · ♩=${bpm}` : ""}
 					</span>
-					{taken ? <span className={`${MONO_META} flex-none text-denim-accent`}>Opened</span> : null}
+					{taken ? <span className={`${MONO_META} flex-none text-denim-accent`}>Used</span> : null}
 				</p>
 				{exercise.warnings.length > 0 ? <IssueList issues={exercise.warnings} /> : null}
 				<div className="mt-1">
 					{exercise.kind === "tab" ? (
-						<GhostButton onClick={open} disabled={opening} className="h-7">
-							Open in fingerpick
-							<ArrowUpRight className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+						<GhostButton onClick={onOpen} className="h-7" title="Open beside the book">
+							Open
+							<PanelRightOpen className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
 						</GhostButton>
 					) : (
 						<span className={MONO_META}>Opens in the strum editor once that reader lands</span>
@@ -279,8 +288,11 @@ function ExerciseItem({
 	);
 }
 
-/** The crop the reader saw, from the private bucket by a short-lived URL. */
-function CropThumb({ path, alt }: { path: string; alt: string }) {
+/**
+ * The crop the reader saw, from the private bucket by a short-lived URL. A
+ * thumbnail in the row; clicked, the page asks for it at full size.
+ */
+function CropThumb({ path, alt, onView }: { path: string; alt: string; onView: (crop: CropView) => void }) {
 	const [url, setUrl] = useState<string | null>(null);
 	useEffect(() => {
 		let cancelled = false;
@@ -293,25 +305,15 @@ function CropThumb({ path, alt }: { path: string; alt: string }) {
 	}, [path]);
 	if (url === null) return <div aria-hidden="true" className="w-32 flex-none border border-line bg-surface" />;
 	return (
-		// A signed, hour-long Storage URL: not a candidate for next/image's loader.
-		// eslint-disable-next-line @next/next/no-img-element
-		<img src={url} alt={alt} className="w-32 flex-none self-start border border-line bg-white object-contain" />
-	);
-}
-
-function IssueList({ issues, className = "" }: { issues: ParseIssue[]; className?: string }) {
-	return (
-		<ul className={`flex flex-col gap-1 ${className}`}>
-			{issues.map((issue, i) => (
-				<li key={`${issue.code}-${issue.path}-${i}`} className="flex items-start gap-1.5 text-[12px] text-ink-dim">
-					<TriangleAlert
-						className="mt-0.5 size-3 flex-none text-denim-accent"
-						strokeWidth={1.5}
-						aria-hidden="true"
-					/>
-					<span>{issue.message}</span>
-				</li>
-			))}
-		</ul>
+		<button
+			type="button"
+			onClick={() => onView({ url, alt })}
+			title="See the page's notation at full size"
+			className="w-32 flex-none cursor-zoom-in self-start border border-line bg-white transition-colors duration-(--dur-hover) hover:border-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+		>
+			{/* A signed, hour-long Storage URL: not a candidate for next/image's loader. */}
+			{/* eslint-disable-next-line @next/next/no-img-element */}
+			<img src={url} alt={alt} className="block w-full object-contain" />
+		</button>
 	);
 }

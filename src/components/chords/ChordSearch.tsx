@@ -64,9 +64,11 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 	// something to list, so its entrance can transition instead of popping in.
 	const inlineListOpen = inlineOpen && query.trim() !== "";
 
+	// The expanded pill and the list above it share one width: 21.5rem, or the
+	// viewport less the band's px-4 on a phone too narrow for that.
 	const pillState = inlineOpen
-		? "cursor-text w-[21.5rem] shadow-none before:opacity-100 after:opacity-30"
-		: "w-14 shadow-[0_10px_25px_rgba(0,0,0,0.10)] before:opacity-0 after:opacity-0 hover:w-[21.5rem] hover:shadow-none hover:before:opacity-100 hover:after:opacity-30";
+		? "cursor-text w-[min(21.5rem,calc(100vw-2rem))] shadow-none before:opacity-100 after:opacity-30"
+		: "w-14 shadow-[0_10px_25px_rgba(0,0,0,0.10)] before:opacity-0 after:opacity-0 hover:w-[min(21.5rem,calc(100vw-2rem))] hover:shadow-none hover:before:opacity-100 hover:after:opacity-30";
 
 	return (
 		<>
@@ -88,11 +90,14 @@ export default function ChordSearch({ index }: { index: readonly ChordIndexEntry
 					    dropdown carrying only a "type a chord name" hint is a card that says
 					    nothing the placeholder hasn't already said. The ⌘K dialog keeps that
 					    hint: it opens onto an otherwise blank surface. Width tracks the
-					    expanded pill (w-[21.5rem]) so the two line up. */}
+					    expanded pill so the two line up. Below sm the list is capped at
+					    40vh: vh is the layout viewport, and on a phone the software
+					    keyboard takes the bottom third of it, so 60vh of results above
+					    the pill would run off the top of what is actually visible. */}
 					{inlineOpen && (
 						<CommandList
 							aria-hidden={!inlineListOpen}
-							className={`absolute bottom-full left-1/2 mb-3 max-h-[60vh] w-[21.5rem] origin-bottom rounded-2xl bg-popover py-1 shadow-[0_12px_36px_rgba(0,0,0,0.20)] transition-[opacity,transform] duration-300 ease-out ${
+							className={`absolute bottom-full left-1/2 mb-3 max-h-[40vh] w-[min(21.5rem,calc(100vw-2rem))] origin-bottom rounded-2xl bg-popover py-1 shadow-[0_12px_36px_rgba(0,0,0,0.20)] transition-[opacity,transform] duration-300 ease-out sm:max-h-[60vh] ${
 								inlineListOpen
 									? "-translate-x-1/2 translate-y-0 scale-100 opacity-100"
 									: "pointer-events-none -translate-x-1/2 translate-y-2 scale-95 opacity-0"

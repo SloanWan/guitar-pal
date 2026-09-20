@@ -11,6 +11,7 @@ import { Option, Options } from "./Options";
 import { BLANK } from "@/lib/assistant/blank";
 import { recordPick } from "@/lib/assistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
+import { hasCoarsePointer } from "@/lib/pointer";
 import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/assistant/greeting";
 import { pick, uiLang } from "@/lib/assistant/lang";
 import { modelDisplayName } from "@/lib/assistant/general/request";
@@ -414,7 +415,12 @@ export default function AssistantPanel({
 		else if (pinnedRef.current) el.scrollTop = el.scrollHeight;
 	}, []);
 
+	// Opening the panel puts the cursor in the composer — on a keyboard device.
+	// On a phone, focus raises the software keyboard over half the screen and
+	// the panel underneath it: the player opened the assistant to read, and
+	// taps the field when they mean to type.
 	useEffect(() => {
+		if (hasCoarsePointer()) return;
 		inputRef.current?.focus();
 	}, []);
 

@@ -13,11 +13,13 @@
 //     ALLOWED, and its lowest note is the root (a slash chord: the slashed bass).
 //   * Variation is another way to hold it — MUST and ALLOWED only. Its bass is
 //     free: inversions are normal on a guitar and stay; the UI names the bass.
-//   * Every voicing sounds the root. A chart shows the chord; rootless voicings
-//     are a playing choice, not a library entry.
+//   * A Variation may leave out the root — the jazz comping shapes do — but only
+//     when its `note` says so ("Rootless: …", written by #230's migration), so
+//     the card tells the player. A Standard always sounds the root.
 //   * Fingering is physically possible.
 //
-// A maintenance script, not a one-off: keep it.
+// A maintenance script, not a one-off: keep it. `checkVoicing` is also what a
+// data migration calibrates its hand-written rows against before writing.
 
 import { config } from "dotenv";
 import { resolve } from "path";
@@ -26,10 +28,6 @@ config({ path: resolve(process.cwd(), ".env.local") });
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-if (!SUPABASE_URL || !ANON_KEY) {
-	console.error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.");
-	process.exit(1);
-}
 
 const STANDARD_ONLY = process.argv.includes("--standard");
 
@@ -119,18 +117,21 @@ const PITCH_CLASS: Record<string, number> = {
 	G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11,
 };
 
-interface VoicingRow {
+export interface VoicingRow {
 	id: string;
 	label: string | null;
 	start_fret: number;
 	barre_fret: number | null;
 	frets: string;
 	fingers: string;
+	note: string | null;
 	chords: { root: string; suffix: string };
 }
 
+const ROOTLESS_NOTE = /^Rootless\b/;
+
 /** Absolute frets, low E first; -1 muted, 0 open. */
-function absoluteFrets(v: VoicingRow): number[] {
+export function absoluteFrets(v: VoicingRow): number[] {
 	return Array.from({ length: 6 }, (_, i) => {
 		const c = v.frets[i];
 		if (c === "x") return -1;
@@ -143,14 +144,14 @@ function soundingMidi(abs: readonly number[]): number[] {
 	return abs.flatMap((f, i) => (f < 0 ? [] : [OPEN_MIDI[i] + f]));
 }
 
-function fmt(abs: readonly number[]): string {
+export function fmt(abs: readonly number[]): string {
 	const parts = abs.map((f) => (f < 0 ? "x" : String(f)));
 	return abs.some((f) => f >= 10) ? parts.join("-") : parts.join("");
 }
 
 // ── Checks ───────────────────────────────────────────────────────────────────
 
-interface Finding {
+export interface Finding {
 	section: "bass" | "formula" | "fingering";
 	chord: string;
 	label: string;
@@ -159,7 +160,7 @@ interface Finding {
 	standard: boolean;
 }
 
-function checkVoicing(v: VoicingRow): Finding[] {
+export function checkVoicing(v: VoicingRow): Finding[] {
 	const { root, suffix } = v.chords;
 	const chord = `${root} ${suffix}`;
 	const label = v.label ?? "—";
@@ -203,9 +204,14 @@ function checkVoicing(v: VoicingRow): Finding[] {
 	if (slashBassPc != null) allowed.add((((slashBassPc - rootPc) % 12) + 12) % 12);
 	const foreign = [...relative].filter((rel) => !allowed.has(rel));
 	if (foreign.length > 0) add("formula", `sounds ${foreign.map(noteName).join(" ")}, not in ${suffix}`);
+	// A Variation that says it is rootless is held to that, both ways.
+	const rootless = !standard && ROOTLESS_NOTE.test(v.note ?? "");
+	if (rootless && relative.has(0)) add("formula", "noted as rootless but sounds the root");
 	const missing = formula.must.filter((alts) => !alts.some((rel) => relative.has(rel)));
-	if (missing.length > 0) {
-		add("formula", `missing ${missing.map((alts) => alts.map(noteName).join("/")).join(", ")}`);
+	const unexcused = rootless ? missing.filter((alts) => !(alts.length === 1 && alts[0] === 0)) : missing;
+	if (unexcused.length > 0) {
+		const hint = !standard && unexcused.some((alts) => alts[0] === 0) ? " (a rootless Variation must say so in `note`)" : "";
+		add("formula", `missing ${unexcused.map((alts) => alts.map(noteName).join("/")).join(", ")}${hint}`);
 	}
 
 	// Bass: the root under a Standard; the slashed note under any slash voicing.
@@ -255,7 +261,7 @@ async function fetchVoicings(): Promise<VoicingRow[]> {
 	// PostgREST caps a response at 1000 rows and says nothing; page explicitly.
 	for (let from = 0; ; from += 1000) {
 		const res = await fetch(
-			`${SUPABASE_URL}/rest/v1/chord_voicings?select=id,label,start_fret,barre_fret,frets,fingers,chords(root,suffix)&order=id`,
+			`${SUPABASE_URL}/rest/v1/chord_voicings?select=id,label,start_fret,barre_fret,frets,fingers,note,chords(root,suffix)&order=id`,
 			{ headers: { apikey: ANON_KEY!, Authorization: `Bearer ${ANON_KEY}`, Range: `${from}-${from + 999}` } },
 		);
 		if (!res.ok) throw new Error(`Fetching voicings: HTTP ${res.status}`);
@@ -270,6 +276,10 @@ async function fetchVoicings(): Promise<VoicingRow[]> {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+	if (!SUPABASE_URL || !ANON_KEY) {
+		console.error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.");
+		process.exit(1);
+	}
 	const rows = await fetchVoicings();
 	const findings = rows.flatMap(checkVoicing).filter((f) => !STANDARD_ONLY || f.standard);
 	const standards = rows.filter((r) => r.label === "Standard").length;
@@ -293,7 +303,9 @@ async function main(): Promise<void> {
 	console.log("Every Standard voicing passes.");
 }
 
-main().catch((err: unknown) => {
-	console.error(err);
-	process.exit(1);
-});
+if (require.main === module) {
+	main().catch((err: unknown) => {
+		console.error(err);
+		process.exit(1);
+	});
+}

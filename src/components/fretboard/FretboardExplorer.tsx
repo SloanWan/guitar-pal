@@ -104,6 +104,7 @@ import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 import { parseMusicalText } from "@/lib/musicalNotation";
 import { voicingNearest } from "@/lib/fretboard/voicingRegister";
 import { STRUM_CAPO_MAX, type ChordRef } from "@/lib/strumPatterns";
+import { hasCoarsePointer } from "@/lib/pointer";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 
 /** A 22-fret neck, the common electric; acoustics simply never use the top frets. */
@@ -372,12 +373,14 @@ export default function FretboardExplorer({
 	// Each step of a run lights on both instruments as it sounds. The strike
 	// waits a frame so that a chord's marks, which land with the same step,
 	// are lit before they pulse.
-	// The box a run plays in, for the follow: a box wider than the screen is
-	// not followed, or the neck would swing on every note.
+	// The box a run plays in, for the follow. On a phone a run inside a box
+	// is never followed — the neck swung on every note whatever the box's
+	// width — and on a wider screen only while the box fits the viewport.
 	const runWithinRef = useRef<{ fromFret: number; toFret: number } | null>(null);
 	const handleRunStep = useCallback((step: SequenceStep) => {
 		const first = step.slots[0];
-		if (first) fretboard.current?.revealFret(first.fret, runWithinRef.current ?? undefined);
+		const within = runWithinRef.current;
+		if (first && !(within && hasCoarsePointer())) fretboard.current?.revealFret(first.fret, within ?? undefined);
 		requestAnimationFrame(() => {
 			fretboard.current?.strike(step.slots);
 			for (const midi of step.midis) piano.current?.strike(midi);

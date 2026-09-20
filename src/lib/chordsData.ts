@@ -26,7 +26,7 @@ export interface ChordWithVoicings {
 
 const VOICING_FIELDS = `
   id, root, suffix,
-  chord_voicings ( id, label, start_fret, barre_fret, capo, frets, fingers )
+  chord_voicings ( id, label, start_fret, barre_fret, capo, frets, fingers, note )
 ` as const;
 
 // Without an ORDER BY an embedded array comes back in physical order, and an

@@ -48,7 +48,7 @@ export default async function ChordDetailPage({ params }: Props) {
 	// their browser can confirm.
 	if (!chord && !isKnownRoot(root)) notFound();
 
-	const voicings = chord ? toVoicingCards(chord.chord_voicings) : [];
+	const voicings = chord ? toVoicingCards(chord.chord_voicings, chord.root, chord.suffix) : [];
 
 	return (
 		<div className="flex-1 bg-surface flex flex-col">

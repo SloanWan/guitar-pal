@@ -7,7 +7,7 @@ import ChordModeToggle from "@/components/chords/ChordModeToggle";
 import { Button } from "@/components/ui/button";
 import MusicalText from "@/components/MusicalText";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
-import type { VoicingCard } from "@/lib/chordCards";
+import { inversionName, type VoicingCard } from "@/lib/chordCards";
 import type { DiagramMode } from "@/components/chords/ChordDiagramSVG";
 import type { ChordPreview } from "@/components/chords/useChordPreview";
 
@@ -151,7 +151,18 @@ export default function ChordVoicingModal({
 							</>
 						)}
 					</h2>
-					<p className="text-sm text-ink-dim">{activeVoicing.label}</p>
+					<p className="text-sm text-ink-dim">
+						{activeVoicing.label}
+						{inversionName(activeVoicing, root, suffix) && (
+							<>
+								{" · "}
+								<MusicalText text={inversionName(activeVoicing, root, suffix)!} />
+							</>
+						)}
+					</p>
+					{activeVoicing.note && (
+						<p className="max-w-xs text-center text-xs leading-snug text-ink-faint">{activeVoicing.note}</p>
+					)}
 				</div>
 
 				<div className="relative flex items-center justify-center w-full px-10 sm:px-14">

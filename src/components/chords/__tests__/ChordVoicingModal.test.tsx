@@ -27,11 +27,11 @@ function voicing(id: string, label: string, startFret: number): ChordVoicing {
 	};
 }
 
-const VOICINGS = toVoicingCards([
-	voicing("a", "Standard", 1),
-	voicing("b", "Pos. 3", 3),
-	voicing("c", "Pos. 5", 5),
-]);
+const VOICINGS = toVoicingCards(
+	[voicing("a", "Standard", 1), voicing("b", "Pos. 3", 3), voicing("c", "Pos. 5", 5)],
+	"C",
+	"major",
+);
 
 function mount(host: HTMLElement, props: Partial<React.ComponentProps<typeof ChordVoicingModal>>) {
 	return (

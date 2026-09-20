@@ -57,6 +57,7 @@ import {
 	type MarkEmphasis,
 } from "@/lib/fretboard/types";
 import { SPRING_POP_EASING, prefersReducedMotion } from "@/lib/motion";
+import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 
 // ── Geometry (SVG user units = CSS px) ──────────────────────────────────────
 // Cell k (the space behind fret wire k) spans x = [k·FRET_W, (k+1)·FRET_W]; the
@@ -84,8 +85,9 @@ const MIN_SCALE = 1.25;
 const PLAY_COL_W = 18;
 /** The play/clear controls, sitting above a highlighted position. */
 const BOX_BTN = 14;
+/** The same buttons under a finger: big enough to hit without aiming. */
+const BOX_BTN_TOUCH = 22;
 /** Headroom kept for them, so the board does not jump when a position appears. */
-const BOX_BTN_ROW = BOX_BTN + 4;
 
 
 /** Design width that `VISIBLE_FRETS` occupies, labels included. */
@@ -180,9 +182,12 @@ export interface FretboardHandle {
 	/**
 	 * Scroll a fret into view if it is not already, so a run that walks past
 	 * the right edge stays watchable. Does nothing while the fret is comfortably
-	 * inside the viewport, or the neck would twitch on every note.
+	 * inside the viewport, or the neck would twitch on every note. Given
+	 * `within`, it also does nothing when that span is wider than the viewport:
+	 * a run inside a box the screen cannot hold would drag the neck back and
+	 * forth on every note, which is worse than losing sight of a few.
 	 */
-	revealFret: (fret: number) => void;
+	revealFret: (fret: number, within?: { fromFret: number; toFret: number }) => void;
 }
 
 export interface FretboardComponentProps extends FretboardProps {
@@ -446,7 +451,7 @@ export default function Fretboard({
 	useImperativeHandle(
 		ref,
 		() => ({
-			revealFret(fret) {
+			revealFret(fret, within) {
 				const el = scroller.current;
 				const svg = neck.current;
 				if (!el || !svg || typeof el.scrollTo !== "function") return;
@@ -454,6 +459,7 @@ export default function Fretboard({
 				if (!Number.isFinite(scale) || scale <= 0) return;
 				const left = (fret - fromFret) * FRET_W * scale;
 				const width = FRET_W * scale;
+				if (within && (within.toFret - within.fromFret + 1) * width > el.clientWidth) return;
 				// A cell of slack at each edge, so the neck moves before the
 				// playhead reaches the very edge rather than after.
 				const margin = width;
@@ -659,7 +665,13 @@ export default function Fretboard({
 	const labelW = onStringPlay ? LABEL_W + PLAY_COL_W : LABEL_W;
 	const designW = designWidth(labelW);
 	// Kept whether or not a position is showing, so the board does not jump.
-	const headH = onHighlightPlay || onHighlightClear ? BOX_BTN_ROW : 0;
+	// A finger needs a bigger target than a pointer; the row above the neck
+	// grows with the buttons it holds.
+	const coarse = useCoarsePointer();
+	const boxBtn = coarse ? BOX_BTN_TOUCH : BOX_BTN;
+	const boxBtnRow = boxBtn + 4;
+	const boxIcon = boxBtn - 6;
+	const headH = onHighlightPlay || onHighlightClear ? boxBtnRow : 0;
 	const boardH = H + headH;
 	const size = (units: number) => scaled(units, designW);
 	// Shade by octave above the run's own lowest note, so a line climbing the
@@ -878,25 +890,25 @@ export default function Fretboard({
 										>
 											<rect
 												x={highlight.fromFret * FRET_W}
-												y={-BOX_BTN_ROW}
-												width={BOX_BTN}
-												height={BOX_BTN}
+												y={-boxBtnRow}
+												width={boxBtn}
+												height={boxBtn}
 												fill="none"
 											/>
 											{highlightPlaying ? (
 												<Square
 													x={highlight.fromFret * FRET_W + 3}
-													y={-BOX_BTN_ROW + 3}
-													width={8}
-													height={8}
+													y={-boxBtnRow + 3}
+													width={boxIcon}
+													height={boxIcon}
 													strokeWidth={2.5}
 												/>
 											) : (
 												<Play
 													x={highlight.fromFret * FRET_W + 3}
-													y={-BOX_BTN_ROW + 3}
-													width={8}
-													height={8}
+													y={-boxBtnRow + 3}
+													width={boxIcon}
+													height={boxIcon}
 													strokeWidth={2.5}
 												/>
 											)}
@@ -907,8 +919,8 @@ export default function Fretboard({
 									{onHighlightResize &&
 										(
 											[
-												{ step: -1, label: "Narrow this position", at: BOX_BTN, Icon: ChevronLeft },
-												{ step: 1, label: "Widen this position", at: BOX_BTN * 2, Icon: ChevronRight },
+												{ step: -1, label: "Narrow this position", at: boxBtn, Icon: ChevronLeft },
+												{ step: 1, label: "Widen this position", at: boxBtn * 2, Icon: ChevronRight },
 											] as const
 										).map(({ step, label, at, Icon }) => {
 											const stuck =
@@ -934,16 +946,16 @@ export default function Fretboard({
 												>
 													<rect
 														x={highlight.fromFret * FRET_W + at}
-														y={-BOX_BTN_ROW}
-														width={BOX_BTN}
-														height={BOX_BTN}
+														y={-boxBtnRow}
+														width={boxBtn}
+														height={boxBtn}
 														fill="none"
 													/>
 													<Icon
 														x={highlight.fromFret * FRET_W + at + 3}
-														y={-BOX_BTN_ROW + 3}
-														width={8}
-														height={8}
+														y={-boxBtnRow + 3}
+														width={boxIcon}
+														height={boxIcon}
 														strokeWidth={2.5}
 													/>
 												</g>
@@ -963,17 +975,17 @@ export default function Fretboard({
 											}}
 										>
 											<rect
-												x={(highlight.toFret + 1) * FRET_W - BOX_BTN}
-												y={-BOX_BTN_ROW}
-												width={BOX_BTN}
-												height={BOX_BTN}
+												x={(highlight.toFret + 1) * FRET_W - boxBtn}
+												y={-boxBtnRow}
+												width={boxBtn}
+												height={boxBtn}
 												fill="none"
 											/>
 											<X
-												x={(highlight.toFret + 1) * FRET_W - BOX_BTN + 3}
-												y={-BOX_BTN_ROW + 3}
-												width={8}
-												height={8}
+												x={(highlight.toFret + 1) * FRET_W - boxBtn + 3}
+												y={-boxBtnRow + 3}
+												width={boxIcon}
+												height={boxIcon}
 												strokeWidth={2.5}
 											/>
 										</g>

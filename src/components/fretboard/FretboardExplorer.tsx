@@ -214,7 +214,7 @@ function InstrumentHeader({
 				</div>
 			</div>
 			{children && (
-				<div className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+				<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
 					{children}
 				</div>
 			)}
@@ -372,9 +372,12 @@ export default function FretboardExplorer({
 	// Each step of a run lights on both instruments as it sounds. The strike
 	// waits a frame so that a chord's marks, which land with the same step,
 	// are lit before they pulse.
+	// The box a run plays in, for the follow: a box wider than the screen is
+	// not followed, or the neck would swing on every note.
+	const runWithinRef = useRef<{ fromFret: number; toFret: number } | null>(null);
 	const handleRunStep = useCallback((step: SequenceStep) => {
 		const first = step.slots[0];
-		if (first) fretboard.current?.revealFret(first.fret);
+		if (first) fretboard.current?.revealFret(first.fret, runWithinRef.current ?? undefined);
 		requestAnimationFrame(() => {
 			fretboard.current?.strike(step.slots);
 			for (const midi of step.midis) piano.current?.strike(midi);
@@ -481,6 +484,10 @@ export default function FretboardExplorer({
 	 * one a run would play, so hovering previews without committing.
 	 */
 	const runBox = inChords ? null : runTarget.kind === "box" ? runTarget.box : null;
+	const runWithin = inChords ? chordBox : runBox;
+	useEffect(() => {
+		runWithinRef.current = runWithin;
+	}, [runWithin]);
 
 	/**
 	 * The chord as it actually sounds: every note of the shape, low to high,

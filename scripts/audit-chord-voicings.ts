@@ -23,6 +23,9 @@
 
 import { config } from "dotenv";
 import { resolve } from "path";
+// The table lives with the app (src/lib/chordFormulas.ts, #234): the chord page
+// spells a chord's tones from the same rows this script judges voicings by.
+import { FORMULAS, SLASH_BASE } from "../src/lib/chordFormulas";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 
@@ -30,83 +33,6 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const STANDARD_ONLY = process.argv.includes("--standard");
-
-// ── Formulas ─────────────────────────────────────────────────────────────────
-// Semitones from the root: 0 R · 1 ♭9 · 2 9 · 3 m3/♯9 · 4 M3 · 5 11 · 6 ♭5/♯11
-// · 7 5 · 8 ♯5/♭13 · 9 6/13 · 10 ♭7 · 11 M7.
-//
-// `allowed`: the only tones the shape may sound. `must`: tones without which it
-// is a different chord — each entry is a list of alternatives, any one of which
-// satisfies it (maj11 wants an 11th, natural or sharp). The 5th is optional
-// everywhere it is unaltered; a 9th is required where it names the chord.
-// The table is the spec; change it here, not in the code below.
-
-interface Formula {
-	allowed: readonly number[];
-	must: readonly (readonly number[])[];
-}
-
-const one = (...tones: number[]): (readonly number[])[] => tones.map((t) => [t]);
-
-const FORMULAS: Record<string, Formula> = {
-	// triads
-	major: { allowed: [0, 4, 7], must: one(0, 4) },
-	minor: { allowed: [0, 3, 7], must: one(0, 3) },
-	dim: { allowed: [0, 3, 6], must: one(0, 3, 6) },
-	aug: { allowed: [0, 4, 8], must: one(0, 4, 8) },
-	"5": { allowed: [0, 7], must: one(0, 7) },
-	// suspensions
-	sus: { allowed: [0, 5, 7], must: one(0, 5) },
-	sus4: { allowed: [0, 5, 7], must: one(0, 5) },
-	sus2: { allowed: [0, 2, 7], must: one(0, 2) },
-	sus2sus4: { allowed: [0, 2, 5, 7], must: one(0, 2, 5) },
-	"7sus4": { allowed: [0, 5, 7, 10], must: one(0, 5, 10) },
-	maj7sus2: { allowed: [0, 2, 7, 11], must: one(0, 2, 11) },
-	// added tones and sixths
-	add9: { allowed: [0, 2, 4, 7], must: one(0, 2, 4) },
-	madd9: { allowed: [0, 2, 3, 7], must: one(0, 2, 3) },
-	add11: { allowed: [0, 4, 5, 7], must: one(0, 4, 5) },
-	"6": { allowed: [0, 4, 7, 9], must: one(0, 4, 9) },
-	m6: { allowed: [0, 3, 7, 9], must: one(0, 3, 9) },
-	"69": { allowed: [0, 2, 4, 7, 9], must: one(0, 2, 4, 9) },
-	m69: { allowed: [0, 2, 3, 7, 9], must: one(0, 2, 3, 9) },
-	// dominant family
-	"7": { allowed: [0, 4, 7, 10], must: one(0, 4, 10) },
-	"9": { allowed: [0, 2, 4, 7, 10], must: one(0, 2, 4, 10) },
-	"11": { allowed: [0, 2, 4, 5, 7, 10], must: one(0, 5, 10) },
-	"13": { allowed: [0, 2, 4, 5, 7, 9, 10], must: one(0, 4, 9, 10) },
-	"7b5": { allowed: [0, 4, 6, 10], must: one(0, 4, 6, 10) },
-	"9b5": { allowed: [0, 2, 4, 6, 10], must: one(0, 2, 4, 6, 10) },
-	aug7: { allowed: [0, 4, 8, 10], must: one(0, 4, 8, 10) },
-	aug9: { allowed: [0, 2, 4, 8, 10], must: one(0, 2, 4, 8, 10) },
-	"7b9": { allowed: [0, 1, 4, 7, 10], must: one(0, 1, 4, 10) },
-	"7#9": { allowed: [0, 3, 4, 7, 10], must: one(0, 3, 4, 10) },
-	// Upstream drops the 9th from half its 9#11 shapes (a 7#11 in all but name).
-	"9#11": { allowed: [0, 2, 4, 6, 7, 10], must: one(0, 4, 6, 10) },
-	// Not the jazz altered dominant: in this library "alt" is the major ♭5 triad,
-	// 47 of 48 upstream shapes. Renaming the suffix is a separate decision.
-	alt: { allowed: [0, 4, 6], must: one(0, 4, 6) },
-	// major-seventh family
-	maj7: { allowed: [0, 4, 7, 11], must: one(0, 4, 11) },
-	maj9: { allowed: [0, 2, 4, 7, 11], must: one(0, 2, 4, 11) },
-	maj11: { allowed: [0, 2, 4, 5, 6, 7, 11], must: [...one(0, 11), [5, 6]] },
-	maj13: { allowed: [0, 2, 4, 5, 6, 7, 9, 11], must: one(0, 4, 9, 11) },
-	"maj7b5": { allowed: [0, 4, 6, 11], must: one(0, 4, 6, 11) },
-	"maj7#5": { allowed: [0, 4, 8, 11], must: one(0, 4, 8, 11) },
-	// minor-seventh family
-	m7: { allowed: [0, 3, 7, 10], must: one(0, 3, 10) },
-	m9: { allowed: [0, 2, 3, 7, 10], must: one(0, 2, 3, 10) },
-	m11: { allowed: [0, 2, 3, 5, 7, 10], must: one(0, 3, 5, 10) },
-	"m7b5": { allowed: [0, 3, 6, 10], must: one(0, 3, 6, 10) },
-	dim7: { allowed: [0, 3, 6, 9], must: one(0, 3, 6, 9) },
-	mmaj7: { allowed: [0, 3, 7, 11], must: one(0, 3, 11) },
-	mmaj9: { allowed: [0, 2, 3, 7, 11], must: one(0, 2, 3, 11) },
-	mmaj11: { allowed: [0, 2, 3, 5, 7, 11], must: one(0, 3, 5, 11) },
-	"mmaj7b5": { allowed: [0, 3, 6, 11], must: one(0, 3, 6, 11) },
-};
-
-// The suffix before the slash, as the tables spell it.
-const SLASH_BASE: Record<string, string> = { "": "major", m: "minor" };
 
 // ── Pitch arithmetic ─────────────────────────────────────────────────────────
 

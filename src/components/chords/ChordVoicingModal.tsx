@@ -159,6 +159,7 @@ export default function ChordVoicingModal({
 								<MusicalText text={inversionName(activeVoicing, root, suffix)!} />
 							</>
 						)}
+						{activeVoicing.omits.length > 0 && ` · omits ${activeVoicing.omits.join(", ")}`}
 					</p>
 					{activeVoicing.note && (
 						<p className="max-w-xs text-center text-xs leading-snug text-ink-faint">{activeVoicing.note}</p>

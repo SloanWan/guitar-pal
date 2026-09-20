@@ -10,6 +10,7 @@ import {
 import { chordVoicingToMidi, rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 import { chordDisplayName, isSlashChord } from "@/lib/chordSuffixes";
+import { omittedTones } from "@/lib/chordFormulas";
 import type { BatchToken } from "@/lib/chordBatchResolve";
 
 export interface VoicingCard {
@@ -28,6 +29,12 @@ export interface VoicingCard {
   readonly bass: string | null;
   /** The library's one-line caption for this shape, if it has one. */
   readonly note: string | null;
+  /**
+   * Chord tones this shape leaves out, as degrees ("5", "root") — empty when it
+   * sounds them all or the suffix has no formula (#234). A rootless shape lists
+   * "root" here and explains itself in `note`; the two lines agree by construction.
+   */
+  readonly omits: readonly string[];
 }
 
 // Spelled the way the root is: a flat root (Bb, Eb, Ab) gets a flat bass, any
@@ -78,6 +85,7 @@ export function toVoicingCards(
       pitches,
       bass: inversionBass(v, pitches, root, suffix),
       note: v.note ?? null,
+      omits: omittedTones(root, suffix, pitches),
     };
   });
 }

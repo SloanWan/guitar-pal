@@ -168,9 +168,13 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 								{/* Both captions sit under the card, not in it, so every card in
 								    the row stays the same size. The note is prose — "bass" must
 								    keep its b — so it never goes through MusicalText. */}
-								{inversionName(card, root, suffix) && (
+								{(inversionName(card, root, suffix) || card.omits.length > 0) && (
 									<span className="font-mono text-[10px] text-ink-dim">
-										<MusicalText text={inversionName(card, root, suffix)!} />
+										{inversionName(card, root, suffix) && (
+											<MusicalText text={inversionName(card, root, suffix)!} />
+										)}
+										{inversionName(card, root, suffix) && card.omits.length > 0 && " · "}
+										{card.omits.length > 0 && `omits ${card.omits.join(", ")}`}
 									</span>
 								)}
 								{card.note && (

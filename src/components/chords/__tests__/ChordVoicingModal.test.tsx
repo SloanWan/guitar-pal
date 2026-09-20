@@ -47,8 +47,10 @@ function mount(host: HTMLElement, props: Partial<React.ComponentProps<typeof Cho
 	);
 }
 
+// The label line also carries the inversion name and the omitted tones after
+// " · " (#231, #234); the paging tests care about the label alone.
 const shownLabel = (host: HTMLElement) =>
-	host.querySelector("p.text-sm.text-ink-dim")?.textContent ?? null;
+	host.querySelector("p.text-sm.text-ink-dim")?.textContent?.split(" · ")[0] ?? null;
 const click = (host: HTMLElement, label: string) =>
 	(host.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement).click();
 

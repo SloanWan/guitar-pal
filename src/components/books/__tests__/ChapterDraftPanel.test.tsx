@@ -139,13 +139,14 @@ let container: HTMLDivElement;
 let root: Root | null = null;
 const onTaken = vi.fn();
 const onClose = vi.fn();
+const onLocate = vi.fn();
 
-function render(draft: OpenDraft = { exercise: EXERCISE, pattern: PATTERN, onTaken }) {
+function render(draft: OpenDraft = { chapterId: "c1", exercise: EXERCISE, pattern: PATTERN, onTaken }) {
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	act(() => {
 		root = createRoot(container);
-		root.render(<ChapterDraftPanel bookId="b1" draft={draft} onClose={onClose} />);
+		root.render(<ChapterDraftPanel bookId="b1" draft={draft} onClose={onClose} onLocate={onLocate} />);
 	});
 }
 
@@ -174,6 +175,7 @@ beforeEach(() => {
 	toast.mockReset();
 	onTaken.mockReset();
 	onClose.mockReset();
+	onLocate.mockReset();
 	auth.user = null;
 	library.isLoading = false;
 	library.saveCustomPattern.mockReset().mockImplementation((p: FingerpickPattern) => ({ pattern: p, isNew: true }));
@@ -193,10 +195,10 @@ afterEach(() => {
 });
 
 describe("draftMeta", () => {
-	it("reads tempo, meter, length and provenance in one line", () => {
-		expect(draftMeta(PATTERN, EXERCISE)).toBe("♩ = 100 · 4/4 · 2 bars · p.206 · Tab · literal");
-		expect(draftMeta({ ...PATTERN, timeSignature: [6, 8], bpm: 60, measures: PATTERN.measures.slice(0, 1) }, EXERCISE)).toBe(
-			"♩. = 60 · 6/8 · 1 bar · p.206 · Tab · literal",
+	it("reads tempo, meter and length", () => {
+		expect(draftMeta(PATTERN)).toBe("♩ = 100 · 4/4 · 2 bars");
+		expect(draftMeta({ ...PATTERN, timeSignature: [6, 8], bpm: 60, measures: PATTERN.measures.slice(0, 1) })).toBe(
+			"♩. = 60 · 6/8 · 1 bar",
 		);
 	});
 });
@@ -280,6 +282,13 @@ describe("ChapterDraftPanel", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
+	it("offers the page it was read from", async () => {
+		render();
+		await settle();
+		act(() => button("p.206").click());
+		expect(onLocate).toHaveBeenCalledTimes(1);
+	});
+
 	it("opens the editor inside the panel, without the crop, in the split layout", async () => {
 		render();
 		await settle();
@@ -292,7 +301,7 @@ describe("ChapterDraftPanel", () => {
 	it("hands the editor the crop as a reference where the panel is a sheet", async () => {
 		window.matchMedia = ((query: string) =>
 			({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList) as typeof window.matchMedia;
-		render({ exercise: { ...EXERCISE, crop_path: "u/b/crops/c1/p0206-2.png" }, pattern: PATTERN, onTaken });
+		render({ chapterId: "c1", exercise: { ...EXERCISE, crop_path: "u/b/crops/c1/p0206-2.png" }, pattern: PATTERN, onTaken });
 		await settle();
 		await settle();
 		expect(api.cropUrl).toHaveBeenCalledWith("u/b/crops/c1/p0206-2.png");

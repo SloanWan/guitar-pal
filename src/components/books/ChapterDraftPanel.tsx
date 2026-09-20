@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, ChevronDown, CirclePause, CirclePlay, CircleStop, Loader2, Pencil, Repeat, TriangleAlert, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, CirclePause, CirclePlay, CircleStop, Loader2, Pencil, Repeat, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { ChapterExercise } from "@/lib/books/types";
@@ -26,7 +26,8 @@ import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
 import Rocker from "@/components/ui/Rocker";
 import IssueList from "@/components/books/IssueList";
-import { DenimButton, EYEBROW, GhostButton, MONO_META } from "@/components/books/bookUi";
+import SidePanel from "@/components/books/SidePanel";
+import { DenimButton, GhostButton, MONO_META } from "@/components/books/bookUi";
 
 /**
  * A chapter draft open beside the book (#233). The page pushes its content
@@ -47,6 +48,8 @@ import { DenimButton, EYEBROW, GhostButton, MONO_META } from "@/components/books
 const FINGERPICK_PATH = "/fingerpick";
 
 export interface OpenDraft {
+	/** The chapter the draft was read in — the source panel's page range. */
+	chapterId: string;
 	exercise: ChapterExercise;
 	/** The exercise's draft, validated (see `ChapterCard.openDraft`). */
 	pattern: FingerpickPattern;
@@ -61,16 +64,13 @@ const KIND_LABEL: Record<ChapterExercise["kind"], string> = {
 	chord_diagram: "Chord",
 };
 
-/** The line under the name: tempo, meter, length, where it came from. */
-export function draftMeta(pattern: FingerpickPattern, exercise: ChapterExercise): string {
+/** The tempo, meter and length half of the line under the name; the page and provenance follow. */
+export function draftMeta(pattern: FingerpickPattern): string {
 	const bars = pattern.measures.length;
 	return [
 		`${beatUnitGlyph(pattern.timeSignature)} = ${pattern.bpm}`,
 		`${pattern.timeSignature[0]}/${pattern.timeSignature[1]}`,
 		`${bars} ${bars === 1 ? "bar" : "bars"}`,
-		`p.${exercise.page}`,
-		KIND_LABEL[exercise.kind],
-		exercise.source,
 	].join(" · ");
 }
 
@@ -78,10 +78,13 @@ export default function ChapterDraftPanel({
 	bookId,
 	draft,
 	onClose,
+	onLocate,
 }: {
 	bookId: string;
 	draft: OpenDraft;
 	onClose: () => void;
+	/** Show the page the draft was read from, in this panel's place (#240). */
+	onLocate: () => void;
 }) {
 	const router = useRouter();
 	const { user, loading } = useUser();
@@ -268,27 +271,27 @@ export default function ChapterDraftPanel({
 	}
 
 	return (
-		<aside
-			ref={setPanelEl}
-			aria-label="Practice draft"
-			data-testid="chapter-draft-panel"
-			className="fixed inset-0 z-50 flex flex-col bg-surface motion-safe:animate-[draft-panel-in_var(--dur-drawer)_var(--ease-drawer)_both] lg:relative lg:z-auto lg:h-full lg:w-1/2 lg:flex-none lg:border-l lg:border-line"
+		<SidePanel
+			label={saved ? "Practice draft · saved" : "Practice draft"}
+			ariaLabel="Practice draft"
+			onClose={onClose}
+			panelRef={setPanelEl}
+			testId="chapter-draft-panel"
 		>
-			<header className="flex h-10 flex-none items-center justify-between gap-3 border-b border-line px-4">
-				<h2 className={`${EYEBROW} text-ink-dim`}>{saved ? "Practice draft · saved" : "Practice draft"}</h2>
-				<button
-					type="button"
-					aria-label="Close"
-					onClick={onClose}
-					className="flex size-7 items-center justify-center text-ink-faint transition-colors duration-(--dur-hover) hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:-outline-offset-2"
-				>
-					<X className="size-4" strokeWidth={1.5} />
-				</button>
-			</header>
-
 			<div className="relative flex-none border-b border-line px-4 py-3">
 				<p className="truncate text-[15px] font-semibold text-ink">{pattern.name}</p>
-				<p className={`${MONO_META} mt-1 tabular-nums`}>{draftMeta(pattern, exercise)}</p>
+				<p className={`${MONO_META} mt-1 tabular-nums`}>
+					{draftMeta(pattern)} ·{" "}
+					<button
+						type="button"
+						onClick={onLocate}
+						title="See this page of the book"
+						className="underline decoration-line-strong underline-offset-2 transition-colors duration-(--dur-hover) hover:text-denim-accent hover:decoration-denim-accent"
+					>
+						p.{exercise.page}
+					</button>{" "}
+					· {KIND_LABEL[exercise.kind]} · {exercise.source}
+				</p>
 				{/* The reader's warnings, folded: the count on a line, the list as a
 				    dropdown over the tab rather than a block that pushes it down. */}
 				{exercise.warnings.length > 0 ? (
@@ -446,7 +449,7 @@ export default function ChapterDraftPanel({
 				onClose={() => setEditing(false)}
 				onSave={handleSave}
 			/>
-		</aside>
+		</SidePanel>
 	);
 }
 

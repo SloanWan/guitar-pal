@@ -17,6 +17,8 @@ export const isSampleBook = (id: string): boolean => id === SAMPLE_BOOK_ID;
 interface SampleFixture {
 	book: BookDetail;
 	parses: Record<string, ChapterParse>;
+	/** The pages as printed, by page number — public files. */
+	pageImages: Record<string, string>;
 }
 
 let fixture: Promise<SampleFixture> | null = null;
@@ -32,4 +34,9 @@ export async function sampleBook(): Promise<BookDetail> {
 /** The chapter's card, or null for an id the sample does not have. */
 export async function sampleChapterParse(chapterId: string): Promise<ChapterParse | null> {
 	return (await load()).parses[chapterId] ?? null;
+}
+
+/** The page as printed, a public path; null for a page the sample does not ship. */
+export async function samplePageImage(page: number): Promise<string | null> {
+	return (await load()).pageImages[String(page)] ?? null;
 }

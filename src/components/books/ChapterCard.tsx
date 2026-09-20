@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PanelRightOpen, TriangleAlert } from "lucide-react";
+import { ChevronDown, PanelRightOpen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import { cropUrl, getChapterParse, parseChapter } from "@/lib/books/api";
@@ -11,6 +11,7 @@ import { chapterPages, estimateParseUsd, formatUsd, formatUsdRange } from "@/lib
 import { usePolledResource } from "@/components/books/usePolledResource";
 import IssueList from "@/components/books/IssueList";
 import type { CropView } from "@/components/books/CropViewer";
+import type { SourceView } from "@/components/books/ChapterSourcePanel";
 import type { OpenDraft } from "@/components/books/ChapterDraftPanel";
 import { DenimButton, GhostButton, MONO_META, StatusLed } from "@/components/books/bookUi";
 
@@ -36,6 +37,7 @@ export default function ChapterCard({
 	onChapter,
 	onOpenDraft,
 	onViewCrop,
+	onLocate,
 	readOnly = false,
 }: {
 	bookId: string;
@@ -46,6 +48,8 @@ export default function ChapterCard({
 	onOpenDraft: (draft: OpenDraft) => void;
 	/** A draft's crop, to show at full size (a dialog, or beside the draft panel). */
 	onViewCrop: (crop: CropView) => void;
+	/** The page a note or a draft came from, beside the book (#240). */
+	onLocate: (source: SourceView) => void;
 	/** The sample book: nothing that would run or re-run the parse. */
 	readOnly?: boolean;
 }) {
@@ -96,7 +100,7 @@ export default function ChapterCard({
 			toast.error("This draft can't be opened — re-parse the chapter.");
 			return;
 		}
-		onOpenDraft({ exercise, pattern, onTaken: () => taken(exercise.id) });
+		onOpenDraft({ chapterId: chapter.id, exercise, pattern, onTaken: () => taken(exercise.id) });
 	}
 
 	if (parse === null) {
@@ -190,7 +194,13 @@ export default function ChapterCard({
 				) : (
 					<ol className="flex flex-col gap-3">
 						{notes.map((note) => (
-							<NoteItem key={note.id} note={note} />
+							<NoteItem
+								key={note.id}
+								note={note}
+								onLocate={() =>
+									onLocate({ chapterId: chapter.id, page: note.pages[0], pages: note.pages, title: note.title })
+								}
+							/>
 						))}
 					</ol>
 				)}
@@ -208,6 +218,9 @@ export default function ChapterCard({
 								exercise={exercise}
 								onOpen={() => openDraft(exercise)}
 								onViewCrop={onViewCrop}
+								onLocate={(title) =>
+									onLocate({ chapterId: chapter.id, page: exercise.page, pages: [exercise.page], title })
+								}
 							/>
 						))}
 					</ul>
@@ -221,13 +234,24 @@ function CardShell({ children }: { children: React.ReactNode }) {
 	return <div className="border-t border-line bg-surface px-4 py-4">{children}</div>;
 }
 
-function NoteItem({ note }: { note: ChapterNote }) {
+const LOCATE =
+	"underline decoration-line-strong underline-offset-2 transition-colors duration-(--dur-hover) hover:text-denim-accent hover:decoration-denim-accent";
+
+/** A note; its pages, when the reader gave any, open the page beside the book. */
+function NoteItem({ note, onLocate }: { note: ChapterNote; onLocate: () => void }) {
 	return (
 		<li className="flex flex-col gap-1">
 			<p className="flex items-baseline gap-2 text-[13px] font-medium text-ink">
 				<span className="min-w-0 flex-1">{note.title}</span>
 				{note.pages.length > 0 ? (
-					<span className={`${MONO_META} flex-none tabular-nums`}>p.{note.pages.join(", ")}</span>
+					<button
+						type="button"
+						onClick={onLocate}
+						title="See where the book says this"
+						className={`${MONO_META} ${LOCATE} flex-none tabular-nums`}
+					>
+						p.{note.pages.join(", ")}
+					</button>
 				) : null}
 			</p>
 			<p className="text-[13px] leading-relaxed text-ink-dim">{note.body}</p>
@@ -246,10 +270,13 @@ function ExerciseItem({
 	exercise,
 	onOpen,
 	onViewCrop,
+	onLocate,
 }: {
 	exercise: ChapterExercise;
 	onOpen: () => void;
 	onViewCrop: (crop: CropView) => void;
+	/** The page beside the book; told the draft's name for the panel's header. */
+	onLocate: (title: string) => void;
 }) {
 	const draft = exercise.draft;
 	const name = typeof draft.name === "string" && draft.name ? draft.name : "Untitled";
@@ -266,13 +293,35 @@ function ExerciseItem({
 				<p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 					<span className="min-w-0 truncate text-[13px] font-medium text-ink">{name}</span>
 					<span className={`${MONO_META} flex-none tabular-nums`}>
-						p.{exercise.page} · {KIND_LABEL[exercise.kind]} · {exercise.source}
+						<button type="button" onClick={() => onLocate(name)} title="See this page of the book" className={LOCATE}>
+							p.{exercise.page}
+						</button>{" "}
+						· {KIND_LABEL[exercise.kind]} · {exercise.source}
 						{measures !== null ? ` · ${measures} ${measures === 1 ? "bar" : "bars"}` : ""}
 						{bpm !== null ? ` · ♩=${bpm}` : ""}
 					</span>
 					{taken ? <span className={`${MONO_META} flex-none text-denim-accent`}>Used</span> : null}
 				</p>
-				{exercise.warnings.length > 0 ? <IssueList issues={exercise.warnings} /> : null}
+				{/* One warning reads inline; more fold to a count, so a draft with a
+				    long list does not push the rest of the chapter down. */}
+				{exercise.warnings.length === 1 ? (
+					<IssueList issues={exercise.warnings} />
+				) : exercise.warnings.length > 1 ? (
+					<details className="group">
+						<summary
+							className={`${MONO_META} flex cursor-pointer list-none items-center gap-1.5 text-denim-accent transition-colors duration-(--dur-hover) hover:text-ink [&::-webkit-details-marker]:hidden`}
+						>
+							<TriangleAlert className="size-3" strokeWidth={1.5} aria-hidden="true" />
+							{exercise.warnings.length} warnings
+							<ChevronDown
+								className="size-3 transition-transform duration-(--dur-hover) group-open:rotate-180"
+								strokeWidth={1.5}
+								aria-hidden="true"
+							/>
+						</summary>
+						<IssueList issues={exercise.warnings} className="mt-1" />
+					</details>
+				) : null}
 				<div className="mt-1">
 					{exercise.kind === "tab" ? (
 						<GhostButton onClick={onOpen} className="h-7" title="Open beside the book">
@@ -313,7 +362,7 @@ function CropThumb({ path, alt, onView }: { path: string; alt: string; onView: (
 		>
 			{/* A signed, hour-long Storage URL: not a candidate for next/image's loader. */}
 			{/* eslint-disable-next-line @next/next/no-img-element */}
-			<img src={url} alt={alt} className="block w-full object-contain" />
+			<img src={url} alt={alt} loading="lazy" className="block w-full object-contain" />
 		</button>
 	);
 }

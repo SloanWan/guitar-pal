@@ -2,13 +2,14 @@
 //   src/lib/books/sample/<slug>.json  and  public/samples/<slug>/<crop>.png
 //
 // The export is what `book-service/materials/samples/<slug>/` holds — a
-// read-only dump of the owner's own parse (parse.json + crops/), made once
-// because the parse is paid for. Run: `node scripts/build-book-sample.mjs
+// read-only dump of the owner's own parse (parse.json + crops/ + pages/,
+// the pages rendered from the PDF as JPEGs), made once because the parse
+// is paid for. Run: `node scripts/build-book-sample.mjs
 // sanyuetong-dense-tab sanyuetong "吉他自学三月通 — sample"`. Maintenance
 // script, per CLAUDE.md /scripts. The JSON is written compact: it is loaded
 // by the sample page alone, on demand, and is a few hundred KB of frets.
 
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, join } from "path";
 
 const [exportName = "sanyuetong-dense-tab", slug = "sanyuetong", title] = process.argv.slice(2);
@@ -83,7 +84,21 @@ for (const chapter of dump.chapters) {
 	};
 }
 
-writeFileSync(outFile, JSON.stringify({ book, parses }) + "\n");
+// The pages as printed, for the source panel (#240): whatever pages/ holds,
+// keyed by page number.
+const pageImages = {};
+const pagesDir = join(exportDir, "pages");
+if (existsSync(pagesDir)) {
+	mkdirSync(join(publicDir, "pages"), { recursive: true });
+	for (const name of readdirSync(pagesDir).sort()) {
+		const m = /^p(\d+)\.(png|jpe?g)$/.exec(name);
+		if (!m) continue;
+		copyFileSync(join(pagesDir, name), join(publicDir, "pages", name));
+		pageImages[Number(m[1])] = `/samples/${slug}/pages/${name}`;
+	}
+}
+
+writeFileSync(outFile, JSON.stringify({ book, parses, pageImages }) + "\n");
 console.log(
-	`${outFile}: ${book.chapters.length} chapter(s), ${dump.notes.length} notes, ${dump.exercises.length} drafts; crops → ${publicDir}`,
+	`${outFile}: ${book.chapters.length} chapter(s), ${dump.notes.length} notes, ${dump.exercises.length} drafts, ${Object.keys(pageImages).length} page images; files → ${publicDir}`,
 );

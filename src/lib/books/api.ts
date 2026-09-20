@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase";
-import { isSampleBook, sampleBook, sampleChapterParse } from "@/lib/books/sample";
+import { isSampleBook, sampleBook, sampleChapterParse, samplePageImage } from "@/lib/books/sample";
 import type {
 	Book,
 	BookDetail,
@@ -97,6 +97,26 @@ export const setExerciseStatus = async (
 	}
 	throw new BookApiError("Exercise not found.", 404);
 };
+
+/**
+ * A page of the book as an image, signed (#240): the service renders it on
+ * the first request and keeps it. Null when Storage would not sign it; the
+ * sample's pages are public files.
+ */
+export async function pageImageUrl(bookId: string, page: number): Promise<string | null> {
+	if (isSampleBook(bookId)) return samplePageImage(page);
+	const { path } = await call<{ path: string }>(`/${bookId}/pages/${page}/image`);
+	return cropUrl(path);
+}
+
+/**
+ * The PDF itself, signed, for opening at a page in the browser's own viewer
+ * (`#page=N`). Null for the sample, which ships no PDF.
+ */
+export async function bookFileUrl(book: { id: string; storage_path: string }): Promise<string | null> {
+	if (isSampleBook(book.id) || !book.storage_path) return null;
+	return cropUrl(book.storage_path);
+}
 
 /**
  * A short-lived URL for a crop in the private bucket; null when Storage says

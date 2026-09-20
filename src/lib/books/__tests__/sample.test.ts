@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { validateFingerpickPattern } from "@/lib/tabImport";
-import { SAMPLE_BOOK_ID, sampleBook, sampleChapterParse } from "@/lib/books/sample";
+import { SAMPLE_BOOK_ID, sampleBook, sampleChapterParse, samplePageImage } from "@/lib/books/sample";
 
 vi.mock("@/lib/supabase", () => ({
 	createClient: () => {
@@ -31,6 +31,12 @@ describe("the sample fixture", () => {
 			expect(parse?.exercises.length).toBeGreaterThan(0);
 		}
 		expect(await sampleChapterParse("nope")).toBeNull();
+		// Every page of the book is there as printed, and really shipped.
+		for (let page = 1; page <= (book.page_count ?? 0); page++) {
+			const image = await samplePageImage(page);
+			expect(image, `page ${page}`).not.toBeNull();
+			expect(existsSync(join(process.cwd(), "public", image ?? ""))).toBe(true);
+		}
 	});
 
 	it("ships drafts the editor accepts, crops that exist, and nothing already taken", async () => {

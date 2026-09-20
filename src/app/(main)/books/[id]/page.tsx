@@ -22,6 +22,7 @@ import ScanReadout from "@/components/books/ScanReadout";
 import ChapterList from "@/components/books/ChapterList";
 import ChapterCard from "@/components/books/ChapterCard";
 import ChapterDraftPanel, { type OpenDraft } from "@/components/books/ChapterDraftPanel";
+import ChapterSourcePanel, { type SourceView } from "@/components/books/ChapterSourcePanel";
 import { CropDialog, CropInspector, type CropView } from "@/components/books/CropViewer";
 import ChapterRangeEditor from "@/components/books/ChapterRangeEditor";
 import DeleteBookDialog from "@/components/books/DeleteBookDialog";
@@ -60,13 +61,18 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
 	const [openChapter, setOpenChapter] = useState<string | null>(null);
-	// The draft open beside the book (#233); one at a time.
-	const [draft, setDraft] = useState<OpenDraft | null>(null);
+	// What is open beside the book — a draft to play (#233) or a page to read
+	// (#240); one at a time.
+	const [side, setSide] = useState<
+		{ kind: "draft"; draft: OpenDraft } | { kind: "source"; source: SourceView } | null
+	>(null);
+	const openDraft = (draft: OpenDraft) => setSide({ kind: "draft", draft });
+	const locate = (source: SourceView) => setSide({ kind: "source", source });
 	// A crop at full size: a dialog on its own, or over the book's column while
-	// a draft is open (see CropViewer). Closing the draft closes it too.
+	// the panel is open (see CropViewer). Closing the panel closes it too.
 	const [crop, setCrop] = useState<CropView | null>(null);
-	function closeDraft() {
-		setDraft(null);
+	function closeSide() {
+		setSide(null);
 		setCrop(null);
 	}
 
@@ -273,8 +279,9 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 												bookId={book.id}
 												chapter={chapter}
 												onChapter={updateChapter}
-												onOpenDraft={setDraft}
+												onOpenDraft={openDraft}
 												onViewCrop={setCrop}
+												onLocate={locate}
 												readOnly={readOnly}
 											/>
 										)}
@@ -294,13 +301,40 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 				)}
 			</div>
 			</div>
-			{draft && crop ? <CropInspector crop={crop} onClose={() => setCrop(null)} /> : null}
+			{side && crop ? <CropInspector crop={crop} onClose={() => setCrop(null)} /> : null}
 			</div>
-			{draft ? null : <CropDialog crop={crop} onClose={() => setCrop(null)} />}
-			{/* Keyed on the exercise: another draft is a fresh panel, not a swap. */}
-			{draft && book ? (
-				<ChapterDraftPanel key={draft.exercise.id} bookId={book.id} draft={draft} onClose={closeDraft} />
+			{side ? null : <CropDialog crop={crop} onClose={() => setCrop(null)} />}
+			{/* Keyed on what is shown: another draft or another locate is a fresh panel, not a swap. */}
+			{side?.kind === "draft" && book ? (
+				<ChapterDraftPanel
+					key={side.draft.exercise.id}
+					bookId={book.id}
+					draft={side.draft}
+					onClose={closeSide}
+					onLocate={() =>
+						locate({
+							chapterId: side.draft.chapterId,
+							page: side.draft.exercise.page,
+							pages: [side.draft.exercise.page],
+							title: side.draft.pattern.name,
+						})
+					}
+				/>
 			) : null}
+			{side?.kind === "source" && book
+				? (() => {
+						const chapter = book.chapters.find((c) => c.id === side.source.chapterId);
+						return chapter ? (
+							<ChapterSourcePanel
+								key={`${chapter.id}:${side.source.title}:${side.source.page}`}
+								book={book}
+								chapter={chapter}
+								source={side.source}
+								onClose={closeSide}
+							/>
+						) : null;
+					})()
+				: null}
 		</div>
 	);
 }

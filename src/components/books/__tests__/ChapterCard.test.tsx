@@ -16,6 +16,7 @@ vi.mock("@/lib/books/api", () => api);
 import ChapterCard from "@/components/books/ChapterCard";
 import type { OpenDraft } from "@/components/books/ChapterDraftPanel";
 import type { CropView } from "@/components/books/CropViewer";
+import type { SourceView } from "@/components/books/ChapterSourcePanel";
 
 /**
  * The chapter card with the service mocked: the idle offer and its estimate,
@@ -90,6 +91,7 @@ let container: HTMLDivElement;
 let root: Root | null = null;
 const onOpenDraft = vi.fn<(draft: OpenDraft) => void>();
 const onViewCrop = vi.fn<(crop: CropView) => void>();
+const onLocate = vi.fn<(source: SourceView) => void>();
 
 function render(chapter: Chapter, onChapter = vi.fn()) {
 	container = document.createElement("div");
@@ -103,6 +105,7 @@ function render(chapter: Chapter, onChapter = vi.fn()) {
 				onChapter={onChapter}
 				onOpenDraft={onOpenDraft}
 				onViewCrop={onViewCrop}
+				onLocate={onLocate}
 			/>,
 		);
 	});
@@ -128,6 +131,7 @@ beforeEach(() => {
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	onOpenDraft.mockReset();
 	onViewCrop.mockReset();
+	onLocate.mockReset();
 	api.getChapterParse.mockReset();
 	api.parseChapter.mockReset();
 	api.setExerciseStatus.mockReset();
@@ -199,6 +203,7 @@ describe("ChapterCard", () => {
 		});
 		expect(onOpenDraft).toHaveBeenCalledTimes(1);
 		const draft = onOpenDraft.mock.calls[0][0];
+		expect(draft.chapterId).toBe("c1");
 		expect(draft.exercise.id).toBe("e1");
 		expect(draft.pattern.name).toBe("⑥弦:E–F–G");
 		expect(draft.pattern.measures[0].slots[0].strings[5].fret).toBe(0);
@@ -231,5 +236,42 @@ describe("ChapterCard", () => {
 		if (!thumb) throw new Error("no thumbnail button");
 		act(() => thumb.click());
 		expect(onViewCrop).toHaveBeenCalledWith({ url: "https://signed/crop.png", alt: "Page 206, ⑥弦:E–F–G" });
+	});
+
+	it("locates a draft's page, and a note's pages when the reader gave any", async () => {
+		api.getChapterParse.mockResolvedValue({
+			...READY,
+			notes: [
+				{ ...READY.notes[0], pages: [204, 205] },
+				{ ...READY.notes[0], id: "n2", title: "No pages", pages: [] },
+			],
+		});
+		render(READY.chapter);
+		await settle();
+		act(() => button("p.206").click());
+		expect(onLocate).toHaveBeenLastCalledWith({ chapterId: "c1", page: 206, pages: [206], title: "⑥弦:E–F–G" });
+		act(() => button("p.204, 205").click());
+		expect(onLocate).toHaveBeenLastCalledWith({ chapterId: "c1", page: 204, pages: [204, 205], title: "左手按弦" });
+		// A note without pages has nothing to point at.
+		expect(Array.from(container.querySelectorAll("button")).filter((b) => /^p\./.test(b.textContent ?? ""))).toHaveLength(2);
+	});
+
+	it("folds a draft's warnings once there is more than one", async () => {
+		const two = [
+			{ code: "A", path: "measures[0]", message: "first thing" },
+			{ code: "B", path: "measures[1]", message: "second thing" },
+		];
+		api.getChapterParse.mockResolvedValue({
+			...READY,
+			exercises: [READY.exercises[0], { ...READY.exercises[0], id: "e2", warnings: two }],
+		});
+		render(READY.chapter);
+		await settle();
+		const folds = container.querySelectorAll("li details");
+		expect(folds).toHaveLength(1);
+		expect(folds[0].querySelector("summary")?.textContent).toContain("2 warnings");
+		expect(folds[0].textContent).toContain("second thing");
+		// The single warning stays inline, outside any fold.
+		expect(container.textContent).toContain("3 note(s) an octave out");
 	});
 });

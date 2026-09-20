@@ -50,12 +50,15 @@ export default function ChapterSourcePanel({
 	chapter,
 	source,
 	onClose,
+	animateOpen,
 }: {
 	book: BookDetail;
 	/** The range the ‹ › steps stay inside. */
 	chapter: Chapter;
 	source: SourceView;
 	onClose: () => void;
+	/** See SidePanel: false when replacing a panel already open. */
+	animateOpen?: boolean;
 }) {
 	const [page, setPage] = useState(source.page);
 	// What each page resolved to: absent while loading, null when it could not be had.
@@ -87,7 +90,13 @@ export default function ChapterSourcePanel({
 	const last = chapter.page_end;
 
 	return (
-		<SidePanel label={`Source · p.${page}`} ariaLabel="Source page" onClose={onClose} testId="chapter-source-panel">
+		<SidePanel
+			label={`Source · p.${page}`}
+			ariaLabel="Source page"
+			onClose={onClose}
+			animateOpen={animateOpen}
+			testId="chapter-source-panel"
+		>
 			<div className="flex flex-none flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2">
 				<p className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{source.title}</p>
 				{source.pages.length > 1 ? (

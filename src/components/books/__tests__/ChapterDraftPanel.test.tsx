@@ -150,8 +150,10 @@ function render(draft: OpenDraft = { chapterId: "c1", exercise: EXERCISE, patter
 	});
 }
 
+// Microtasks, and the two frames the panel's body waits for before mounting.
 async function settle() {
 	await act(async () => {
+		await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 		await Promise.resolve();
 		await Promise.resolve();
 	});
@@ -211,6 +213,13 @@ describe("ChapterDraftPanel", () => {
 		expect(text).toContain("Exercise 3");
 		expect(text).toContain("♩ = 100 · 4/4 · 2 bars · p.206 · Tab · literal");
 		expect(text).toContain("3 note(s) an octave out");
+		// The samples load once the opening motion is over, not before.
+		expect(engine.load).not.toHaveBeenCalled();
+		act(() => {
+			container
+				.querySelector('[data-testid="chapter-draft-panel"]')
+				?.dispatchEvent(new Event("animationend", { bubbles: true }));
+		});
 		expect(engine.load).toHaveBeenCalledTimes(1);
 		expect(staveProps.flatMap((p) => p.measures.map((m) => m.id))).toEqual(["m1", "m2"]);
 	});
@@ -279,6 +288,13 @@ describe("ChapterDraftPanel", () => {
 		await settle();
 		expect(button("Edit").disabled).toBe(true);
 		act(() => button("Close").click());
+		// The close is animated: the owner hears of it when the animation ends.
+		expect(onClose).not.toHaveBeenCalled();
+		act(() => {
+			container
+				.querySelector('[data-testid="chapter-draft-panel"]')
+				?.dispatchEvent(new Event("animationend", { bubbles: true }));
+		});
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 

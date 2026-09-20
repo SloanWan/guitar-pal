@@ -79,12 +79,15 @@ export default function ChapterDraftPanel({
 	draft,
 	onClose,
 	onLocate,
+	animateOpen,
 }: {
 	bookId: string;
 	draft: OpenDraft;
 	onClose: () => void;
 	/** Show the page the draft was read from, in this panel's place (#240). */
 	onLocate: () => void;
+	/** See SidePanel: false when replacing a panel already open. */
+	animateOpen?: boolean;
 }) {
 	const router = useRouter();
 	const { user, loading } = useUser();
@@ -156,26 +159,26 @@ export default function ChapterDraftPanel({
 		applyBpmChange,
 	});
 
-	// Samples load once per mount, so the first Play is not the first fetch.
-	// `load` is recreated every render; one call per mount is the intent.
-	useEffect(() => {
-		void load();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	// Samples load once per mount, so the first Play is not the first fetch —
+	// once the panel has finished opening (SidePanel's onOpened): the load
+	// opens the AudioContext, which can take a good part of a second, and done
+	// during the motion it would freeze it.
 
-	// The staves are packed to the panel's real width, known once it is on screen.
+	// The staves are packed to the panel's real width, known once it is on
+	// screen. The viewer arrives a frame after this component (SidePanel mounts
+	// its body late), so it is watched from a state, not a mount-time ref.
 	const tabViewerRef = useRef<HTMLDivElement>(null);
+	const [viewerEl, setViewerEl] = useState<HTMLDivElement | null>(null);
 	const [containerWidth, setContainerWidth] = useState(0);
 	useEffect(() => {
-		const el = tabViewerRef.current;
-		if (!el) return;
+		if (!viewerEl) return;
 		const observer = new ResizeObserver((entries) => {
 			const entry = entries[0];
 			if (entry) setContainerWidth(Math.floor(entry.contentRect.width));
 		});
-		observer.observe(el);
+		observer.observe(viewerEl);
 		return () => observer.disconnect();
-	}, []);
+	}, [viewerEl]);
 	const rows = useMemo(
 		() => layoutMeasureRows(pattern.measures, containerWidth, 0),
 		[pattern.measures, containerWidth],
@@ -275,6 +278,8 @@ export default function ChapterDraftPanel({
 			label={saved ? "Practice draft · saved" : "Practice draft"}
 			ariaLabel="Practice draft"
 			onClose={onClose}
+			onOpened={() => void load()}
+			animateOpen={animateOpen}
 			panelRef={setPanelEl}
 			testId="chapter-draft-panel"
 		>
@@ -317,7 +322,14 @@ export default function ChapterDraftPanel({
 			{/* The tab, scrolling on its own. The overlays are positioned inside
 			    it, as on the page (see FingerpickWorkspace for why they stack
 			    above the rows). */}
-			<div ref={tabViewerRef} data-tab-viewer className="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-3">
+			<div
+				ref={(el) => {
+					tabViewerRef.current = el;
+					setViewerEl(el);
+				}}
+				data-tab-viewer
+				className="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-3"
+			>
 				<div
 					ref={measureHighlightRef}
 					aria-hidden="true"

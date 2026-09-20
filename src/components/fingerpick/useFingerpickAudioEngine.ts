@@ -1127,7 +1127,11 @@ export function useFingerpickAudioEngine() {
 				}
 			}
 			allMetronomeSources.clear();
-			ctxRef.current?.close();
+			// Once: a context this cleanup already closed (a StrictMode undo, in
+			// development) throws on a second close, as an unhandled rejection.
+			if (ctxRef.current && ctxRef.current.state !== "closed") {
+				void ctxRef.current.close().catch(() => {});
+			}
 		};
 	}, []);
 

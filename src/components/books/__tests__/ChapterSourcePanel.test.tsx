@@ -54,8 +54,10 @@ function render(source = { chapterId: "c1", page: 206, pages: [206], title: "⑥
 	});
 }
 
+// Microtasks, and the two frames the panel's body waits for before mounting.
 async function settle() {
 	await act(async () => {
+		await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 		await Promise.resolve();
 		await Promise.resolve();
 	});
@@ -81,7 +83,6 @@ afterEach(() => {
 describe("ChapterSourcePanel", () => {
 	it("shows the page asked for, steps inside the chapter, and links the PDF at the page", async () => {
 		render();
-		expect(container.textContent).toContain("Rendering page 206");
 		await settle();
 		expect(container.querySelector("img")?.getAttribute("src")).toBe("https://signed/p206.png");
 		expect(container.textContent).toContain("Source · p.206");
@@ -110,6 +111,11 @@ describe("ChapterSourcePanel", () => {
 		expect(container.textContent).toContain("Page 205 could not be shown");
 		expect(button("p.205")?.getAttribute("aria-pressed")).toBe("true");
 		act(() => button("Close")?.click());
+		act(() => {
+			container
+				.querySelector('[data-testid="chapter-source-panel"]')
+				?.dispatchEvent(new Event("animationend", { bubbles: true }));
+		});
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 });

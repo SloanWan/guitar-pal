@@ -369,6 +369,8 @@
 	--dur-theme: 0.2s; /* theme transition: body background+color; LED on/off */
 	--dur-drawer: 0.25s; /* drawers & collapsibles */
 	--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* pairs with --dur-drawer */
+	--dur-panel: 0.6s; /* the side panel beside the book opening and closing */
+	--ease-panel: cubic-bezier(0.4, 0, 0.2, 1); /* even in and out: a place opening, not a snap */
 
 	--beat-dur: 0.625s; /* THE BEAT CLOCK. JS writes 60/bpm + "s" on every BPM
 	                         change; metronome LED pulse consumes it. Fallback
@@ -1202,14 +1204,62 @@
 	}
 }
 
-/* The chapter draft panel (#233) arriving: it slides in from the right edge,
-   at the drawer pace, while the book's column has already made room. */
-@keyframes draft-panel-in {
+/* The side panel beside the book (#233, #240) arriving and leaving. At lg it
+   grows from nothing to half the page, pushing the book's column over as it
+   goes — its content is laid out at its full width from the first frame
+   (see SidePanel), so only the reveal moves. Below lg it is a sheet that
+   slides in from the right edge. Both take --dur-panel: slow enough to be
+   seen as a place opening, not a flicker. */
+@keyframes side-panel-grow {
+	from {
+		width: 0;
+	}
+	to {
+		width: 50%;
+	}
+}
+@keyframes side-panel-shrink {
+	from {
+		width: 50%;
+	}
+	to {
+		width: 0;
+	}
+}
+@keyframes side-panel-slide-in {
 	from {
 		transform: translateX(100%);
 	}
 	to {
 		transform: translateX(0);
+	}
+}
+@keyframes side-panel-slide-out {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(100%);
+	}
+}
+.side-panel {
+	animation: side-panel-slide-in var(--dur-panel) var(--ease-panel) both;
+}
+.side-panel[data-closing] {
+	animation-name: side-panel-slide-out;
+}
+@media (min-width: 1024px) {
+	.side-panel {
+		animation-name: side-panel-grow;
+	}
+	.side-panel[data-closing] {
+		animation-name: side-panel-shrink;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.side-panel,
+	.side-panel[data-closing] {
+		animation: none;
 	}
 }
 

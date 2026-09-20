@@ -63,11 +63,16 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const [openChapter, setOpenChapter] = useState<string | null>(null);
 	// What is open beside the book — a draft to play (#233) or a page to read
 	// (#240); one at a time.
-	const [side, setSide] = useState<
-		{ kind: "draft"; draft: OpenDraft } | { kind: "source"; source: SourceView } | null
-	>(null);
-	const openDraft = (draft: OpenDraft) => setSide({ kind: "draft", draft });
-	const locate = (source: SourceView) => setSide({ kind: "source", source });
+	// `entered` says whether the panel opened from nothing (it grows into
+	// place) or replaced one already open (it just changes what it shows).
+	type Side =
+		| { kind: "draft"; draft: OpenDraft; entered: boolean }
+		| { kind: "source"; source: SourceView; entered: boolean };
+	const [side, setSide] = useState<Side | null>(null);
+	const openDraft = (draft: OpenDraft) =>
+		setSide((current) => ({ kind: "draft", draft, entered: current === null }));
+	const locate = (source: SourceView) =>
+		setSide((current) => ({ kind: "source", source, entered: current === null }));
 	// A crop at full size: a dialog on its own, or over the book's column while
 	// the panel is open (see CropViewer). Closing the panel closes it too.
 	const [crop, setCrop] = useState<CropView | null>(null);
@@ -310,6 +315,7 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 					key={side.draft.exercise.id}
 					bookId={book.id}
 					draft={side.draft}
+					animateOpen={side.entered}
 					onClose={closeSide}
 					onLocate={() =>
 						locate({
@@ -330,6 +336,7 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 								book={book}
 								chapter={chapter}
 								source={side.source}
+								animateOpen={side.entered}
 								onClose={closeSide}
 							/>
 						) : null;

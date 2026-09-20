@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ZoomableImage from "@/components/ZoomableImage";
+import { WARNINGS_SUMMARY } from "@/components/books/IssueList";
 import { Button } from "@/components/ui/button";
 import {
 	Plus,
@@ -809,7 +810,7 @@ export default function FingerpickEditModal({
 						    list on demand, so a long list never pushes the grid down. */}
 						{notice.warnings && notice.warnings.length > 0 && (
 							<details className="group mt-1">
-								<summary className="flex cursor-pointer list-none items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+								<summary className={WARNINGS_SUMMARY}>
 									<TriangleAlert className="size-3" strokeWidth={1.5} aria-hidden="true" />
 									{notice.warnings.length} {notice.warnings.length === 1 ? "warning" : "warnings"}
 									<ChevronDown

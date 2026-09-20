@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, ChevronDown, CirclePause, CirclePlay, CircleStop, Loader2, Pencil, Repeat, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, CirclePause, CirclePlay, CircleStop, Loader2, Pencil, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { ChapterExercise } from "@/lib/books/types";
@@ -25,7 +25,7 @@ import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
 import Rocker from "@/components/ui/Rocker";
-import IssueList from "@/components/books/IssueList";
+import { WarningsFold } from "@/components/books/IssueList";
 import SidePanel from "@/components/books/SidePanel";
 import { DenimButton, GhostButton, MONO_META } from "@/components/books/bookUi";
 
@@ -291,32 +291,15 @@ export default function ChapterDraftPanel({
 						type="button"
 						onClick={onLocate}
 						title="See this page of the book"
-						className="underline decoration-line-strong underline-offset-2 transition-colors duration-(--dur-hover) hover:text-denim-accent hover:decoration-denim-accent"
+						className="inline-flex items-center gap-1 border border-line-strong px-1.5 py-0.5 transition-colors duration-(--dur-hover) hover:border-denim hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 					>
 						p.{exercise.page}
+						<ArrowUpRight className="size-3" strokeWidth={1.5} aria-hidden="true" />
 					</button>{" "}
 					· {KIND_LABEL[exercise.kind]} · {exercise.source}
 				</p>
-				{/* The reader's warnings, folded: the count on a line, the list as a
-				    dropdown over the tab rather than a block that pushes it down. */}
-				{exercise.warnings.length > 0 ? (
-					<details className="group mt-1.5">
-						<summary
-							className={`${MONO_META} flex cursor-pointer list-none items-center gap-1.5 text-denim-accent transition-colors duration-(--dur-hover) hover:text-ink [&::-webkit-details-marker]:hidden`}
-						>
-							<TriangleAlert className="size-3" strokeWidth={1.5} aria-hidden="true" />
-							{exercise.warnings.length} {exercise.warnings.length === 1 ? "warning" : "warnings"}
-							<ChevronDown
-								className="size-3 transition-transform duration-(--dur-hover) group-open:rotate-180"
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-						</summary>
-						<div className="absolute inset-x-0 top-full z-20 border-b border-line bg-surface px-4 py-3 [box-shadow:var(--elev-panel)]">
-							<IssueList issues={exercise.warnings} />
-						</div>
-					</details>
-				) : null}
+				{/* The reader's warnings, folded; the open list floats over the tab. */}
+				<WarningsFold issues={exercise.warnings} dropdown className="mt-1.5" />
 			</div>
 
 			{/* The tab, scrolling on its own. The overlays are positioned inside

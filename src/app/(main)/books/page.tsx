@@ -1,6 +1,6 @@
 "use client";
 
-import { BookApiError, listBooks } from "@/lib/books/api";
+import { BOOKS_NOT_OPEN, isServiceDown, listBooks } from "@/lib/books/api";
 import type { Book } from "@/lib/books/types";
 import BookUpload from "@/components/books/BookUpload";
 import BookList from "@/components/books/BookList";
@@ -13,12 +13,9 @@ const anyScanning = (books: Book[]) => books.some((b) => b.status === "scanning"
 
 export default function BooksPage() {
 	const { value: books, error } = usePolledResource(listBooks, anyScanning);
-	// No service behind the proxy: say so in place of the upload panel.
-	const unavailable =
-		error instanceof BookApiError && (error.status === 503 || error.status === 502)
-			? error.message
-			: null;
-	const failed = error !== null && unavailable === null;
+	// No service behind the proxy: the feature is not open; the sample still is.
+	const unavailable = isServiceDown(error);
+	const failed = error !== null && !unavailable;
 
 	return (
 		<div className="flex-1 bg-surface">
@@ -32,7 +29,9 @@ export default function BooksPage() {
 					</p>
 				</header>
 				{unavailable ? (
-					<p className="border border-line bg-panel px-4 py-3 text-sm text-ink-dim">{unavailable}</p>
+					<p className="border border-line bg-panel px-4 py-3 text-sm text-ink-dim">
+						{BOOKS_NOT_OPEN} Until it is, the sample below shows what it does.
+					</p>
 				) : (
 					<BookUpload />
 				)}

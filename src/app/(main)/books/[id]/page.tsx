@@ -6,9 +6,11 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import Link from "@/components/AppLink";
 import {
+	BOOKS_NOT_OPEN,
 	BookApiError,
 	deleteBook,
 	getBook,
+	isServiceDown,
 	renameBook,
 	replaceChapters,
 	scanBook,
@@ -170,7 +172,9 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 				</Link>
 
 				{book === null ? (
-					<p className={MONO_META}>{error ? "Could not load the book." : "Loading…"}</p>
+					<p className={MONO_META}>
+						{isServiceDown(error) ? BOOKS_NOT_OPEN : error ? "Could not load the book." : "Loading…"}
+					</p>
 				) : (
 					<>
 						<header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

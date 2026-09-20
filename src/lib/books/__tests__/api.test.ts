@@ -4,7 +4,7 @@ const signed = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase", () => ({
 	createClient: () => ({ storage: { from: () => ({ createSignedUrl: signed }) } }),
 }));
-import { BookApiError, bookFileUrl, pageImageUrl } from "@/lib/books/api";
+import { BookApiError, bookFileUrl, isServiceDown, pageImageUrl } from "@/lib/books/api";
 
 /** The page image (#240): the service names the path, Storage signs it. */
 describe("pageImageUrl", () => {
@@ -29,5 +29,13 @@ describe("pageImageUrl", () => {
 		expect(await bookFileUrl({ id: "b1", storage_path: "u1/b1.pdf" })).toBe("https://signed/p0006.png");
 		expect(signed).toHaveBeenLastCalledWith("u1/b1.pdf", 3600);
 		expect(BookApiError).toBeDefined();
+	});
+
+	it("tells a service that is not there from any other failure", () => {
+		expect(isServiceDown(new BookApiError("not configured", 503))).toBe(true);
+		expect(isServiceDown(new BookApiError("not reachable", 502))).toBe(true);
+		expect(isServiceDown(new BookApiError("Book not found.", 404))).toBe(false);
+		expect(isServiceDown(new Error("network"))).toBe(false);
+		expect(isServiceDown(null)).toBe(false);
 	});
 });

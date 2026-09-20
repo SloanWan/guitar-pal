@@ -33,6 +33,16 @@ export class BookApiError extends Error {
 	}
 }
 
+/**
+ * What the pages say when the service is not there (#200): not configured
+ * on this deployment (503) or not reachable (502). To the player that is one
+ * thing — the feature is not open yet — and the sample still is.
+ */
+export const BOOKS_NOT_OPEN = "Textbook import is not open for use yet.";
+
+export const isServiceDown = (error: unknown): boolean =>
+	error instanceof BookApiError && (error.status === 502 || error.status === 503);
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`/api/books${path}`, {
 		...init,

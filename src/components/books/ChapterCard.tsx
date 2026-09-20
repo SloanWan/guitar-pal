@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, PanelRightOpen, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, PanelRightOpen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import { cropUrl, getChapterParse, parseChapter } from "@/lib/books/api";
@@ -9,7 +9,7 @@ import type { Chapter, ChapterExercise, ChapterNote, ChapterParse } from "@/lib/
 import { MAX_PARSE_PAGES } from "@/lib/books/types";
 import { chapterPages, estimateParseUsd, formatUsd, formatUsdRange } from "@/lib/books/parseCost";
 import { usePolledResource } from "@/components/books/usePolledResource";
-import IssueList from "@/components/books/IssueList";
+import IssueList, { WarningsFold } from "@/components/books/IssueList";
 import type { CropView } from "@/components/books/CropViewer";
 import type { SourceView } from "@/components/books/ChapterSourcePanel";
 import type { OpenDraft } from "@/components/books/ChapterDraftPanel";
@@ -234,8 +234,10 @@ function CardShell({ children }: { children: React.ReactNode }) {
 	return <div className="border-t border-line bg-surface px-4 py-4">{children}</div>;
 }
 
+/** The way to a page: a small bordered key with the jump glyph, in mono like the meta it sits in. */
 const LOCATE =
-	"underline decoration-line-strong underline-offset-2 transition-colors duration-(--dur-hover) hover:text-denim-accent hover:decoration-denim-accent";
+	"inline-flex items-center gap-1 border border-line-strong px-1.5 py-0.5 transition-colors duration-(--dur-hover) hover:border-denim hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1";
+const LocateGlyph = () => <ArrowUpRight className="size-3" strokeWidth={1.5} aria-hidden="true" />;
 
 /** A note; its pages, when the reader gave any, open the page beside the book. */
 function NoteItem({ note, onLocate }: { note: ChapterNote; onLocate: () => void }) {
@@ -251,6 +253,7 @@ function NoteItem({ note, onLocate }: { note: ChapterNote; onLocate: () => void 
 						className={`${MONO_META} ${LOCATE} flex-none tabular-nums`}
 					>
 						p.{note.pages.join(", ")}
+						<LocateGlyph />
 					</button>
 				) : null}
 			</p>
@@ -295,6 +298,7 @@ function ExerciseItem({
 					<span className={`${MONO_META} flex-none tabular-nums`}>
 						<button type="button" onClick={() => onLocate(name)} title="See this page of the book" className={LOCATE}>
 							p.{exercise.page}
+							<LocateGlyph />
 						</button>{" "}
 						· {KIND_LABEL[exercise.kind]} · {exercise.source}
 						{measures !== null ? ` · ${measures} ${measures === 1 ? "bar" : "bars"}` : ""}
@@ -302,26 +306,7 @@ function ExerciseItem({
 					</span>
 					{taken ? <span className={`${MONO_META} flex-none text-denim-accent`}>Used</span> : null}
 				</p>
-				{/* One warning reads inline; more fold to a count, so a draft with a
-				    long list does not push the rest of the chapter down. */}
-				{exercise.warnings.length === 1 ? (
-					<IssueList issues={exercise.warnings} />
-				) : exercise.warnings.length > 1 ? (
-					<details className="group">
-						<summary
-							className={`${MONO_META} flex cursor-pointer list-none items-center gap-1.5 text-denim-accent transition-colors duration-(--dur-hover) hover:text-ink [&::-webkit-details-marker]:hidden`}
-						>
-							<TriangleAlert className="size-3" strokeWidth={1.5} aria-hidden="true" />
-							{exercise.warnings.length} warnings
-							<ChevronDown
-								className="size-3 transition-transform duration-(--dur-hover) group-open:rotate-180"
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-						</summary>
-						<IssueList issues={exercise.warnings} className="mt-1" />
-					</details>
-				) : null}
+				<WarningsFold issues={exercise.warnings} />
 				<div className="mt-1">
 					{exercise.kind === "tab" ? (
 						<GhostButton onClick={onOpen} className="h-7" title="Open beside the book">
@@ -358,7 +343,7 @@ function CropThumb({ path, alt, onView }: { path: string; alt: string; onView: (
 			type="button"
 			onClick={() => onView({ url, alt })}
 			title="See the page's notation at full size"
-			className="w-32 flex-none cursor-zoom-in self-start border border-line bg-white transition-colors duration-(--dur-hover) hover:border-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+			className="w-32 flex-none cursor-pointer self-start border border-line bg-white transition-[border-color,box-shadow] duration-(--dur-hover) hover:border-denim hover:[box-shadow:var(--elev-panel)] focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 		>
 			{/* A signed, hour-long Storage URL: not a candidate for next/image's loader. */}
 			{/* eslint-disable-next-line @next/next/no-img-element */}

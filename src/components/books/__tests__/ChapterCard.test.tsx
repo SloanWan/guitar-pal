@@ -256,7 +256,7 @@ describe("ChapterCard", () => {
 		expect(Array.from(container.querySelectorAll("button")).filter((b) => /^p\./.test(b.textContent ?? ""))).toHaveLength(2);
 	});
 
-	it("folds a draft's warnings once there is more than one", async () => {
+	it("folds every draft's warnings, one or many, to a count", async () => {
 		const two = [
 			{ code: "A", path: "measures[0]", message: "first thing" },
 			{ code: "B", path: "measures[1]", message: "second thing" },
@@ -267,11 +267,9 @@ describe("ChapterCard", () => {
 		});
 		render(READY.chapter);
 		await settle();
-		const folds = container.querySelectorAll("li details");
-		expect(folds).toHaveLength(1);
-		expect(folds[0].querySelector("summary")?.textContent).toContain("2 warnings");
-		expect(folds[0].textContent).toContain("second thing");
-		// The single warning stays inline, outside any fold.
-		expect(container.textContent).toContain("3 note(s) an octave out");
+		const folds = Array.from(container.querySelectorAll("li details"));
+		expect(folds.map((f) => f.querySelector("summary")?.textContent?.trim())).toEqual(["1 warning", "2 warnings"]);
+		expect(folds[0].textContent).toContain("3 note(s) an octave out");
+		expect(folds[1].textContent).toContain("second thing");
 	});
 });

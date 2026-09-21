@@ -7,6 +7,7 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
+import { soundingMidi } from "@/lib/fingerpickPitch";
 import { beatTicks } from "@/lib/fingerpickEdit";
 import type { Meter } from "@/lib/strumMeter";
 
@@ -63,11 +64,9 @@ export interface VoiceHandle {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/**
- * Standard guitar tuning MIDI notes for open strings.
- * Index 0 = high e (E4 = 64), index 5 = low E (E2 = 40).
- */
-export const OPEN_STRING_MIDI: readonly number[] = [64, 59, 55, 50, 45, 40];
+// Open-string pitches live with the pitch labels (fingerpickPitch.ts); re-exported
+// here for the callers that have always read them from the scheduler.
+export { OPEN_STRING_MIDI } from "@/lib/fingerpickPitch";
 
 /** Exponential time constant (s) for voice-steal fade. ~5 ms avoids clicks. */
 export const VOICE_STEAL_FADE_TAU = 0.005;
@@ -328,9 +327,9 @@ export function fingerpickPatternToScheduleEvents(
 					const isPlayed = sf.fret !== null || sf.muted;
 					if (!isPlayed) return;
 
-					const openMidi = OPEN_STRING_MIDI[stringIndex] + capo;
 					// fret takes priority over muted for pitch; muted only shapes the envelope.
-					const midi = sf.fret !== null ? openMidi + sf.fret : openMidi;
+					// The same formula the reading page labels frets with, so they agree.
+					const midi = soundingMidi(stringIndex, sf.fret ?? 0, capo);
 
 					const roll = rollOffsets?.get(stringIndex);
 					events.push({

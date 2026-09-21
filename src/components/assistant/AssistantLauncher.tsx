@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ClipboardList, Loader2, MessageCircle, Plus } from "lucide-react";
+import { BookOpen, ClipboardList, Loader2, MessageCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
+import Link from "@/components/AppLink";
 import { exportMisses, readMisses } from "@/lib/assistant/missLog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AssistantPanel from "./AssistantPanel";
@@ -179,8 +180,22 @@ export default function AssistantLauncher() {
 				className="w-[min(24rem,calc(100vw-1.5rem))] bg-surface p-0 [box-shadow:var(--elev-panel)]"
 			>
 				<div className="flex items-center justify-between border-b border-line px-3 py-2">
-					<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-						{title}
+					<span className="flex items-center gap-2">
+						<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
+							{title}
+						</span>
+						{/* What the rules readers understand, as a page. The panel closes
+						    on the way there — it would stand in front of the very thing
+						    the reader is trying to read. */}
+						<Link
+							href="/docs/assistant-grammar"
+							onClick={() => setPanelOpen(false)}
+							title="What the assistant reads"
+							aria-label="What the assistant reads"
+							className="flex items-center text-ink-faint transition-colors duration-(--dur-hover) hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+						>
+							<BookOpen className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+						</Link>
 					</span>
 					{devMisses > 0 && (
 						<button

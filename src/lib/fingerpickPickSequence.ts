@@ -1,9 +1,12 @@
 import type { Duration, FingerpickPattern } from "./fingerpickTypes";
 import {
+	NOTE_LADDER,
+	beatTicks,
 	carryChordMarks,
 	makeEmptySlot,
 	measureCapacity,
 	setFret,
+	setTied,
 	slotDurationUnits,
 	toggleMuted,
 } from "./fingerpickEdit";
@@ -13,16 +16,25 @@ import type { ChordRef } from "./strumPatterns";
 import type { ChordVoicing } from "./chordVoicing";
 
 /**
- * One beat of a right-hand pattern as typed: the strings plucked together
- * (fingerpick order, 0 = high e), or a rest. `root` is the thumb on whichever
- * string the chord's root is on — `根3231323` — resolved against the chord
- * in effect when the frets are written, never here: `{ strings: [], root: true }`
- * is a root alone, `{ strings: [0], root: true }` a root pinched with high e.
+ * One cell of a right-hand pattern as typed: the strings plucked together
+ * (fingerpick order, 0 = high e), a rest, or a hold — the cell before it goes
+ * on sounding. `root` is the thumb on whichever string the chord's root is on
+ * — `根3231323` — resolved against the chord in effect when the frets are
+ * written, never here: `{ strings: [], root: true }` is a root alone,
+ * `{ strings: [0], root: true }` a root pinched with high e.
  */
-export type PickToken = { strings: number[]; root?: true } | { rest: true };
+export type PickToken = { strings: number[]; root?: true } | { rest: true } | { hold: true };
 
 /** How a root is written: the character, or the letter a latin keyboard reaches for. */
 const ROOT_CHARS = new Set(["根", "R", "r"]);
+
+/**
+ * How a hold is written. Both characters are the same token: the sound is the
+ * same either way, and whether the tab shows a longer note or a tie is decided
+ * by where the hold falls (`foldHolds`), never by which was typed. The
+ * full-width forms are what a Chinese keyboard writes for them.
+ */
+const HOLD_CHARS = new Set(["_", "^", "＿", "＾"]);
 
 export type PickSequenceParse =
 	| { ok: true; tokens: PickToken[]; duration: Duration }
@@ -77,6 +89,9 @@ export type PickTokenize =
  *    decided when the frets are written (`chordRootString`). `根3231323`
  *    is the everyday arpeggio that follows the chord change.
  *  - `0` or `-` is a rest. Whitespace is ignored.
+ *  - `_` or `^` is a hold: the cell before it keeps sounding one cell longer.
+ *    `R_32^132` is the thumb for two cells, then 3 and 2, the 2 held into the
+ *    next beat, then 1 3 2. A hold needs a cell before it to hold.
  *
  * Shared by the editor's Pick box, which sizes the notes to the measure, and
  * the tab assistant, which is told the note value and fills measures instead.
@@ -100,6 +115,10 @@ export function tokenizePickSequence(input: string): PickTokenize {
 		} else if (ch === "0" || ch === "-") {
 			if (pinch) return { ok: false, error: "A rest can't be part of a pinch." };
 			tokens.push({ rest: true });
+		} else if (HOLD_CHARS.has(ch)) {
+			if (pinch) return { ok: false, error: "A hold can't be part of a pinch." };
+			if (tokens.length === 0) return { ok: false, error: "A hold (_ or ^) needs a note before it to hold." };
+			tokens.push({ hold: true });
 		} else if (ROOT_CHARS.has(ch)) {
 			if (pinch) {
 				pinch.root = true;
@@ -118,12 +137,80 @@ export function tokenizePickSequence(input: string): PickTokenize {
 				tokens.push({ strings: [stringIndex] });
 			}
 		} else {
-			return { ok: false, error: `"${ch}" isn't a string number, a root (根 or R), a rest (0 or -) or a pinch.` };
+			return { ok: false, error: `"${ch}" isn't a string number, a root (根 or R), a rest (0 or -), a hold (_ or ^) or a pinch.` };
 		}
 	}
 	if (pinch) return { ok: false, error: "A pinch was opened with '(' but never closed." };
 	if (tokens.length === 0) return { ok: false, error: "Type string numbers, e.g. 3212." };
 	return { ok: true, tokens };
+}
+
+/** The plain or dotted value weighing exactly `ticks`, if there is one; triplet values are never returned. */
+export function plainDurationForTicks(ticks: number): Duration | null {
+	return NOTE_LADDER.find((d) => slotDurationUnits(d) === ticks) ?? null;
+}
+
+/** One cell of a sequence before its holds are folded: whether it is a hold, and its length in ticks. */
+export interface HoldCell {
+	hold: boolean;
+	ticks: number;
+}
+
+/**
+ * A cell after folding: the index of the cell whose note it sounds, how long
+ * it now lasts, and whether it continues that note from the cell before —
+ * a tie — rather than starting it.
+ */
+export interface LaidCell {
+	source: number;
+	ticks: number;
+	tied: boolean;
+}
+
+/** A triplet cell is never lengthened: its group of three is the unit, and a tie keeps the bracket whole. */
+const TRIPLET_TICKS = new Set([slotDurationUnits("eighth-triplet"), slotDurationUnits("sixteenth-triplet")]);
+
+/**
+ * Fold the holds of a sequence into the notes before them, the way a
+ * copyist would write them: a hold lengthens the note when the longer note
+ * is a plain value that stays inside its beat (two sixteenths are an eighth,
+ * three a dotted eighth) or lasts whole beats from a place its own size
+ * divides (a half note on beat one or three, never on beat two); otherwise
+ * — across a beat line, across a bar line, or in a triplet — it is written
+ * as a tied note of its own. Positions are
+ * bar-relative: `capacity` is the bar, and cells run on into the next bar.
+ */
+export function foldHolds(cells: readonly HoldCell[], beat: number, capacity: number): LaidCell[] {
+	const laid: (LaidCell & { start: number })[] = [];
+	let pos = 0;
+	for (let i = 0; i < cells.length; i++) {
+		const cell = cells[i];
+		const prev = laid[laid.length - 1];
+		if (!cell.hold || !prev) {
+			// A hold with nothing before it is kept as a cell of its own, so the
+			// caller still sees every tick; the tokenizer refuses it up front.
+			laid.push({ source: i, ticks: cell.ticks, tied: false, start: pos });
+		} else {
+			const merged = prev.ticks + cell.ticks;
+			const startInBar = prev.start % capacity;
+			const sameBar = Math.floor(prev.start / capacity) === Math.floor(pos / capacity);
+			const insideBeat = Math.floor(startInBar / beat) === Math.floor((startInBar + merged - 1) / beat);
+			const wholeBeats = merged % beat === 0 && startInBar % merged === 0;
+			const merges =
+				sameBar &&
+				!TRIPLET_TICKS.has(cell.ticks) &&
+				plainDurationForTicks(merged) !== null &&
+				startInBar + merged <= capacity &&
+				(insideBeat || wholeBeats);
+			if (merges) {
+				prev.ticks = merged;
+			} else {
+				laid.push({ source: prev.source, ticks: cell.ticks, tied: true, start: pos });
+			}
+		}
+		pos += cell.ticks;
+	}
+	return laid.map(({ source, ticks, tied }) => ({ source, ticks, tied }));
 }
 
 /**
@@ -203,11 +290,19 @@ export function applyPickSequence(
 	const measure = pattern.measures[measureIndex];
 	if (!measure) return { pattern, warnings: [] };
 
-	const fresh = parsed.tokens.map((token) =>
-		"rest" in token
-			? { ...makeEmptySlot(parsed.duration), isRest: true }
-			: makeEmptySlot(parsed.duration),
+	// Holds are folded first, so a slot is a note, a rest, or a note carried
+	// on from the slot before it; each laid cell remembers the token it sounds.
+	const unit = slotDurationUnits(parsed.duration);
+	const laid = foldHolds(
+		parsed.tokens.map((token) => ({ hold: "hold" in token, ticks: unit })),
+		beatTicks(pattern.timeSignature),
+		measureCapacity(pattern.timeSignature),
 	);
+	const fresh = laid.map((cell) => {
+		const token = parsed.tokens[cell.source];
+		const duration = plainDurationForTicks(cell.ticks) ?? parsed.duration;
+		return "rest" in token ? { ...makeEmptySlot(duration), isRest: true } : makeEmptySlot(duration);
+	});
 	const slots = carryChordMarks(measure.slots, fresh);
 	let next: FingerpickPattern = {
 		...pattern,
@@ -219,25 +314,33 @@ export function applyPickSequence(
 	const leftOut = new Map<string, Set<number>>();
 	const noShape = new Set<string>();
 	let openWritten = false;
+	// The slot each token starts in: a tied slot frets from the chord its
+	// note started under, not from one that changed while it was held.
+	const headSlot = new Map<number, number>();
 
-	parsed.tokens.forEach((token, slotIndex) => {
-		if ("rest" in token) return;
-		const ref = chords[slotIndex];
+	laid.forEach((cell, slotIndex) => {
+		const token = parsed.tokens[cell.source];
+		if (!("strings" in token)) return;
+		if (!cell.tied) headSlot.set(cell.source, slotIndex);
+		const ref = chords[headSlot.get(cell.source) ?? slotIndex];
 		const voicing = ref ? voicingFor(ref) : null;
 		const hints = voicing ? chordFretHints(voicing) : null;
-		if (ref && !voicing) noShape.add(chordSymbolLabel(ref));
+		if (ref && !voicing && !cell.tied) noShape.add(chordSymbolLabel(ref));
 		for (const stringIndex of tokenStrings(token, ref, voicing)) {
-			const cell = { measureIndex, slotIndex, stringIndex };
+			const position = { measureIndex, slotIndex, stringIndex };
 			const hint = hints ? hints[stringIndex] : 0;
 			if (hint === "/") {
-				next = toggleMuted(next, cell);
-				const label = chordSymbolLabel(ref as ChordRef);
-				if (!leftOut.has(label)) leftOut.set(label, new Set());
-				leftOut.get(label)!.add(stringIndex + 1);
+				next = toggleMuted(next, position);
+				if (!cell.tied) {
+					const label = chordSymbolLabel(ref as ChordRef);
+					if (!leftOut.has(label)) leftOut.set(label, new Set());
+					leftOut.get(label)!.add(stringIndex + 1);
+				}
 			} else {
-				next = setFret(next, cell, hint);
-				if (!ref) openWritten = true;
+				next = setFret(next, position, hint);
+				if (!ref && !cell.tied) openWritten = true;
 			}
+			if (cell.tied) next = setTied(next, position, true);
 		}
 	});
 

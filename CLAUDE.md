@@ -83,6 +83,7 @@ Types defined in `src/types/database.ts`.
 - **One transcript, shared across pages** (`conversation.ts`, one sessionStorage key). Messages carry their `domain`; the card a reply renders is chosen by what the message holds, never by the current page. General is shown the transcript as text only, the last `MAX_HISTORY_TURNS`.
 - The shared core imports from `strum/` in two places by design (`missLog`'s `EditIntentExplanation`, which both turns produce for a miss; `readAs`, which runs both domains' readers), `general/` imports both domains, and `tab/` reaches into `strum/` for `withoutCapo`, `blankSpan`, `Guidance` and `explainEditIntent`. Keep it at that — don't add new core → domain imports.
 - Storage keys are `guitarpal:assistant*`.
+- The sentence grammar the rules readers understand is written down in `docs/assistant-grammar.md` (English forms only, no Chinese characters) and `docs/assistant-grammar.zh.md` (Chinese, listing both languages' forms; same outline, and its example blocks minus the Chinese lines are the English page's — a test checks all of this), served at `/docs/assistant-grammar` with `?lang=`. When a token or sentence form is added to a reader, update both pages and the `general/tools.ts` descriptions together.
 
 **Exercise categories** are a fixed `as const` array exported as `CATEGORIES` from `src/types/database.ts`: `"chord" | "chord_change" | "picking" | "scale" | "strumming" | "fingering" | "ear_training" | "arpeggio" | "theory" | "song"`.
 

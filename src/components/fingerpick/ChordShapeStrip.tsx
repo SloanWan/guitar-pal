@@ -28,6 +28,19 @@ export const CHORD_STRIP_ASPECT = VB_H / VB_W;
 /** How faint a string the player holds but never plucks is drawn. */
 const DIMMED_OPACITY = 0.28;
 
+/**
+ * Type size for a line of chord tones written beside a strip of this width,
+ * so the Size slider scales the two together: 10 px beside the default 64 px
+ * strip, never smaller than a legible 8.
+ */
+export function chordToneFontSize(stripWidth: number): number {
+	return Math.max(8, Math.round(stripWidth * 0.155));
+}
+/** Air between the strip and its tone line, in px. */
+export const CHORD_TONE_GAP = 6;
+/** A mono glyph's advance as a share of the font size, for reserving room. */
+export const CHORD_TONE_CHAR_EM = 0.6;
+
 export interface ChordShapeStripProps {
 	/** Absolute fret per string, index 0 = low E; -1 = not played, 0 = open. */
 	frets: readonly number[];

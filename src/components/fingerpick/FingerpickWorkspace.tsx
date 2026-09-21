@@ -45,6 +45,7 @@ import type { PlaybackControlProps } from "@/components/fingerpick/playbackContr
 import {
 	chordFretHints,
 	chordRegionEnd,
+	chordToneNames,
 	effectiveChords,
 	heldButUnplucked,
 	offShapeStrings,
@@ -59,7 +60,13 @@ import { beatUnitGlyph } from "@/lib/strumMeter";
 import { voicingToDiagramShape } from "@/lib/chordVoicing";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
-import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/ChordShapeStrip";
+import ChordShapeStrip, {
+	CHORD_STRIP_ASPECT,
+	CHORD_TONE_CHAR_EM,
+	CHORD_TONE_GAP,
+	chordToneFontSize,
+} from "@/components/fingerpick/ChordShapeStrip";
+import { chordTones } from "@/lib/chordFormulas";
 import ChordViewToggle from "@/components/strum/ChordViewToggle";
 import type { ChordLabel } from "@/lib/fingerpickToVexFlow";
 import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
@@ -145,6 +152,8 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		setChordShapeWidth,
 		offShapeOn,
 		setOffShapeOn,
+		chordTonesOn,
+		setChordTonesOn,
 		scrollSpeed,
 		setScrollSpeed,
 		pitchLabelsOn,
@@ -181,13 +190,6 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 	});
 	const hasChords = patternHasChords(selectedPattern.measures);
 	const showChordDiagrams = hasChords && chordView === "diagram";
-	const chordShapeSize = useMemo(
-		() => ({
-			width: chordShapeWidth,
-			height: Math.round(chordShapeWidth * CHORD_STRIP_ASPECT),
-		}),
-		[chordShapeWidth],
-	);
 	// Shapes for the chord line's diagram view: the player's own voicings, and
 	// the library's for every chord the pattern names, through the shared cache.
 	const { voicings: userVoicings } = useUserChordVoicings(
@@ -204,6 +206,26 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		[selectedPattern.measures, showChordDiagrams],
 	);
 	const voicingsFor = useChordVoicings(chordRefs, userVoicings);
+	// What the chord line reserves per shape: the strip, plus — with the tones
+	// on — the widest tone line any chord in the pattern writes beside it, so
+	// lanes and the row's right edge are laid out for the whole overlay.
+	const showChordTones = showChordDiagrams && chordTonesOn;
+	const chordShapeSize = useMemo(() => {
+		let width = chordShapeWidth;
+		if (showChordTones) {
+			const fontSize = chordToneFontSize(chordShapeWidth);
+			const widest = Math.max(
+				0,
+				...chordRefs.map(
+					// A chord the formulas do not know is named from its voicing —
+					// at most the six strings' notes, eleven characters with spaces.
+					(ref) => chordTones(ref.root, ref.suffix)?.map((t) => t.note).join(" ").length ?? 11,
+				),
+			);
+			width += CHORD_TONE_GAP + Math.ceil(widest * fontSize * CHORD_TONE_CHAR_EM);
+		}
+		return { width, height: Math.round(chordShapeWidth * CHORD_STRIP_ASPECT) };
+	}, [chordShapeWidth, showChordTones, chordRefs]);
 	// What each string plays in the shape under every slot, for the off-shape
 	// colouring. Recomputed only when the pattern or a shape lookup changes —
 	// never per frame — and it is six comparisons per slot.
@@ -255,7 +277,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 				voicing,
 			);
 			const { frets, startFret, barreFret } = voicingToDiagramShape(voicing);
-			return (
+			const strip = (
 				<ChordShapeStrip
 					frets={frets}
 					startFret={startFret}
@@ -265,8 +287,21 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 					width={chordShapeWidth}
 				/>
 			);
+			if (!showChordTones) return strip;
+			// The chord's tones beside the strip, sized with it.
+			return (
+				<div className="flex items-center" style={{ gap: CHORD_TONE_GAP }}>
+					{strip}
+					<span
+						className="whitespace-nowrap font-mono leading-none text-ink-dim"
+						style={{ fontSize: chordToneFontSize(chordShapeWidth) }}
+					>
+						{chordToneNames(label.chord, voicing).join(" ")}
+					</span>
+				</div>
+			);
 		},
-		[voicingsFor, selectedPattern.measures, chordShapeWidth],
+		[voicingsFor, selectedPattern.measures, chordShapeWidth, showChordTones],
 	);
 	// Pixel width of the tab viewer container; 0 until the ResizeObserver fires on mount.
 	const [containerWidth, setContainerWidth] = useState(0);
@@ -1021,11 +1056,27 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 								</div>
 							</div>
 							{/* Chord line view — only a question for a pattern that names
-							    chords. The size slider appears with the shapes it sizes. */}
+							    chords. The shape view's own controls appear with it: the
+							    tones and off-shape switches, and the size slider. On a phone
+							    each group takes its own line under the view switch. */}
 							{hasChords && (
-							<div className="flex h-9 shrink-0 flex-row-reverse items-center gap-3 sm:flex-row">
+							<div className="flex flex-col-reverse items-start gap-2 py-2 sm:h-9 sm:shrink-0 sm:flex-row sm:items-center sm:gap-3 sm:py-0">
 								{chordView === "diagram" && (
-										<div className="fp-reveal fp-reveal-2 flex flex-row-reverse items-center gap-3 sm:flex-row">
+										<div className="fp-reveal fp-reveal-2 flex items-center gap-3">
+											<div className="flex items-center gap-2">
+											<Rocker
+												checked={chordTonesOn}
+												onChange={setChordTonesOn}
+												ariaLabel="Write the chord's tones beside each shape"
+											/>
+											<span
+												className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
+												title="Write the notes the chord is made of beside each shape"
+											>
+												Tones
+											</span>
+											</div>
+											<span aria-hidden className="h-4 w-px bg-line-strong" />
 											<div className="flex items-center gap-2">
 											<Rocker
 												checked={offShapeOn}
@@ -1039,11 +1090,11 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 												Off-shape
 											</span>
 											</div>
-											<span aria-hidden className="h-4 w-px bg-line-strong" />
+											<span aria-hidden className="hidden h-4 w-px bg-line-strong sm:block" />
 										</div>
 									)}
 								{chordView === "diagram" && (
-										<div className="fp-reveal flex flex-row-reverse items-center gap-3 sm:flex-row">
+										<div className="fp-reveal flex items-center gap-3">
 											<div className="flex items-center gap-2">
 											<span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
 												Size
@@ -1051,7 +1102,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 											{/* The same fader as the transport's, so the header reads as
 											    one set of controls. No scale row: the range is a feel, not
 											    a number anyone needs to read off. */}
-											<div className="w-20 sm:w-28">
+											<div className="w-28">
 												<Fader
 													min={CHORD_SHAPE_WIDTH_MIN}
 													max={CHORD_SHAPE_WIDTH_MAX}
@@ -1075,7 +1126,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 												/>
 											</div>
 											</div>
-											<span aria-hidden className="h-4 w-px bg-line-strong" />
+											<span aria-hidden className="hidden h-4 w-px bg-line-strong sm:block" />
 										</div>
 									)}
 								<ChordViewToggle value={chordView} onChange={setChordView} />

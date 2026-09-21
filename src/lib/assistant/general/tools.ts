@@ -9,6 +9,9 @@ import type Anthropic from "@anthropic-ai/sdk";
  * Shared by the route (where the definitions go to the model) and the client
  * (which executes them and checks names). Pure and per-request-free, so the
  * definitions sit in the cached prefix.
+ *
+ * The sentence forms the reader tools take are written down in
+ * docs/assistant-grammar.md; the descriptions below quote from it.
  */
 
 export const TOOL_NAMES = [

@@ -215,8 +215,9 @@ it could not resolve.
 **In the app, every request is answered without a model call**; the offline
 half of the set — everything but the `llm` cases — runs in `npm test` and makes
 no API calls. The `llm` rows measure the endpoint on its own, for the day it is
-wired to a question-answering job: `npm run evals` costs money (about $0.08 for
-the set), needs `ANTHROPIC_API_KEY`, and writes
+wired to a question-answering job: `npm run evals` costs money (about $0.1 for
+the set on the default model, `ASSISTANT_EVAL_RUNS=3` for three passes), needs
+the chosen model's vendor key (`DEEPSEEK_API_KEY` or `ANTHROPIC_API_KEY`), and writes
 `src/lib/strumAssistant/__evals__/baseline.json` with the pass rate, the
 measured cost per request, latency, and how often the repair loop fired.
 Compare a prompt edit against that file, not against a feeling. (A thirteenth
@@ -437,6 +438,10 @@ Production runs on a single Tencent Cloud HK VPS (Ubuntu, 2 GB) at `https://guit
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+# The assistant's General mode: the vendor follows ASSISTANT_MODEL (default
+# deepseek-flash → DEEPSEEK_API_KEY; a claude-* model → ANTHROPIC_API_KEY).
+DEEPSEEK_API_KEY=sk-...
+# The book service's chapter finding.
 ANTHROPIC_API_KEY=sk-ant-...
 # Shared by both containers: the book service validates drafts through
 # Next.js's internal endpoint with it. `openssl rand -hex 32`.

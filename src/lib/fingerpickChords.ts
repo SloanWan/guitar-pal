@@ -5,6 +5,9 @@ import { chordAbbreviation, normalizeCapo } from "./strumProgressions";
 import { decodeVoicingStrings, type ChordVoicing } from "./chordVoicing";
 import { chordVoicingToMidi, rootPitchClass } from "./chordVoicingToMidi";
 import { isSlashChord } from "./chordSuffixes";
+import { chordTones } from "./chordFormulas";
+import { shapeNoteNames } from "./chordIdentify";
+import { MUTED, type ShapeFret } from "./chordShape";
 
 /**
  * The chord in effect at every slot, index-aligned with `measures[i].slots[j]`.
@@ -80,6 +83,21 @@ export function setSlotChord(
  */
 export function chordSymbolLabel(chord: ChordRef): string {
 	return chordAbbreviation(chord);
+}
+
+/**
+ * The notes a chord is made of, root first, for the line beside its shape:
+ * `C E G`, `D F♯ A C` — spelled by interval, as the chord library's cards
+ * spell them. A suffix the formula table does not know is named by what the
+ * voicing actually sounds, lowest first, so the line is never blank.
+ */
+export function chordToneNames(chord: ChordRef, voicing: ChordVoicing): string[] {
+	const tones = chordTones(chord.root, chord.suffix);
+	if (tones) return tones.map((t) => t.note);
+	const frets: ShapeFret[] = decodeVoicingStrings(voicing).map(({ absoluteFret }) =>
+		absoluteFret === "x" ? MUTED : absoluteFret,
+	);
+	return shapeNoteNames(frets);
 }
 
 /** The capo a pattern is played behind — 0 when it carries none. Same range as strum. */

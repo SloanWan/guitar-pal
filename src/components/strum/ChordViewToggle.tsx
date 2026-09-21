@@ -28,7 +28,9 @@ export default function ChordViewToggle({
 				disabled={disabled}
 				ariaLabel={showingShapes ? "Showing chord shapes" : "Showing chord names"}
 			/>
-			<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
+			{/* A fixed width: the switch stays put when the word beside it changes,
+			    and lines up with a switch labelled differently on the row above. */}
+			<span className="w-14 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
 				{showingShapes ? "Shapes" : "Names"}
 			</span>
 		</div>

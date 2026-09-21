@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ChordView } from "@/components/strum/StepGrid";
+import { isPitchLabelStyle, type PitchLabelStyle } from "@/lib/fingerpickPitch";
 import {
 	SCROLL_SPEED_DEFAULT,
 	clampScrollSpeed,
@@ -24,11 +25,17 @@ const CHORD_VIEW_KEY = "fingerpickChordView";
 const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
 // Whether fret numbers outside the chord shape are coloured, in the shape view.
 const OFF_SHAPE_KEY = "fingerpickOffShape";
+// Whether a chord's tones are written beside its shape, in the shape view.
+const CHORD_TONES_KEY = "fingerpickChordTones";
 // Auto-scroll speed lives with the hook that creeps (useAutoScroll): the strum
 // progression card reads the same preference.
 // Editor beat labels in a compound meter: the two real beats ("1 + a 2 + a",
 // the default) or the six eighths ("1 2 3 4 5 6"), a teaching aid.
 const COUNT_EIGHTHS_KEY = "fingerpickCountEighths";
+// Whether the sounding pitch is written under every fret, and in which style.
+const PITCH_LABELS_KEY = "fingerpickPitchLabels";
+const PITCH_LABEL_STYLE_KEY = "fingerpickPitchLabelStyle";
+export const PITCH_LABEL_STYLE_DEFAULT: PitchLabelStyle = "scientific";
 
 /** Width range of the shape strip over a chord symbol, in px. */
 export const CHORD_SHAPE_WIDTH_MIN = 40;
@@ -76,11 +83,19 @@ export interface FingerpickPrefs {
 	setChordShapeWidth: (raw: number) => void;
 	offShapeOn: boolean;
 	setOffShapeOn: (on: boolean) => void;
+	/** Shape view: write the chord's tones (C E G) beside each shape. */
+	chordTonesOn: boolean;
+	setChordTonesOn: (on: boolean) => void;
 	scrollSpeed: number;
 	setScrollSpeed: (raw: number) => void;
 	/** Editor beat labels in 6/8 and 12/8: count the eighths 1–6 instead of "1 + a 2 + a". */
 	countEighths: boolean;
 	setCountEighths: (on: boolean) => void;
+	/** Write the sounding pitch (capo folded in) under every fret on the reading page. */
+	pitchLabelsOn: boolean;
+	setPitchLabelsOn: (on: boolean) => void;
+	pitchLabelStyle: PitchLabelStyle;
+	setPitchLabelStyle: (style: PitchLabelStyle) => void;
 }
 
 /**
@@ -92,20 +107,30 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 	const [chordView, setChordViewState] = useState<ChordView>("name");
 	const [chordShapeWidth, setChordShapeWidthState] = useState(CHORD_SHAPE_WIDTH_DEFAULT);
 	const [offShapeOn, setOffShapeOnState] = useState(true);
+	const [chordTonesOn, setChordTonesOnState] = useState(false);
 	const [scrollSpeed, setScrollSpeedState] = useState(SCROLL_SPEED_DEFAULT);
 	const [countEighths, setCountEighthsState] = useState(false);
+	const [pitchLabelsOn, setPitchLabelsOnState] = useState(false);
+	const [pitchLabelStyle, setPitchLabelStyleState] =
+		useState<PitchLabelStyle>(PITCH_LABEL_STYLE_DEFAULT);
 
 	useEffect(() => {
 		let storedView: string | null = null;
 		let storedWidth: string | null = null;
 		let storedOffShape: string | null = null;
+		let storedChordTones: string | null = null;
 		let storedCountEighths: string | null = null;
+		let storedPitchLabels: string | null = null;
+		let storedPitchStyle: string | null = null;
 		const storedSpeed = readScrollSpeed();
 		try {
 			storedView = localStorage.getItem(CHORD_VIEW_KEY);
 			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
 			storedOffShape = localStorage.getItem(OFF_SHAPE_KEY);
+			storedChordTones = localStorage.getItem(CHORD_TONES_KEY);
 			storedCountEighths = localStorage.getItem(COUNT_EIGHTHS_KEY);
+			storedPitchLabels = localStorage.getItem(PITCH_LABELS_KEY);
+			storedPitchStyle = localStorage.getItem(PITCH_LABEL_STYLE_KEY);
 		} catch {
 			// storage unavailable — the defaults it is
 		}
@@ -115,8 +140,11 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 			if (storedView === "diagram") setChordViewState("diagram");
 			if (storedWidth !== null) setChordShapeWidthState(clampShapeWidth(Number(storedWidth)));
 			if (storedOffShape === "off") setOffShapeOnState(false);
+			if (storedChordTones === "on") setChordTonesOnState(true);
 			setScrollSpeedState(storedSpeed);
 			if (storedCountEighths === "on") setCountEighthsState(true);
+			if (storedPitchLabels === "on") setPitchLabelsOnState(true);
+			if (isPitchLabelStyle(storedPitchStyle)) setPitchLabelStyleState(storedPitchStyle);
 		});
 	}, []);
 
@@ -133,6 +161,10 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 		setOffShapeOnState(on);
 		writeItem(OFF_SHAPE_KEY, on ? "on" : "off");
 	}
+	function setChordTonesOn(on: boolean) {
+		setChordTonesOnState(on);
+		writeItem(CHORD_TONES_KEY, on ? "on" : "off");
+	}
 	function setScrollSpeed(raw: number) {
 		const speed = clampScrollSpeed(raw);
 		setScrollSpeedState(speed);
@@ -142,6 +174,14 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 		setCountEighthsState(on);
 		writeItem(COUNT_EIGHTHS_KEY, on ? "on" : "off");
 	}
+	function setPitchLabelsOn(on: boolean) {
+		setPitchLabelsOnState(on);
+		writeItem(PITCH_LABELS_KEY, on ? "on" : "off");
+	}
+	function setPitchLabelStyle(style: PitchLabelStyle) {
+		setPitchLabelStyleState(style);
+		writeItem(PITCH_LABEL_STYLE_KEY, style);
+	}
 
 	return {
 		chordView,
@@ -150,9 +190,15 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 		setChordShapeWidth,
 		offShapeOn,
 		setOffShapeOn,
+		chordTonesOn,
+		setChordTonesOn,
 		scrollSpeed,
 		setScrollSpeed,
 		countEighths,
 		setCountEighths,
+		pitchLabelsOn,
+		setPitchLabelsOn,
+		pitchLabelStyle,
+		setPitchLabelStyle,
 	};
 }

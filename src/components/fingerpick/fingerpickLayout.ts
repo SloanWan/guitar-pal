@@ -8,7 +8,22 @@
 
 import type { Measure } from "@/lib/fingerpickTypes";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
-import { computeMeasureMinWidth, CLEF_WIDTH } from "./TabStaveRow";
+import { slotPitchLabels } from "@/lib/fingerpickPitch";
+import { computeMeasureMinWidth, CLEF_WIDTH, pitchLabelWidth } from "./TabStaveRow";
+
+/** Per note of a measure, the widest pitch label written under it (0 for none). */
+export function measurePitchLabelWidths(
+	measure: Measure,
+	noteSlots: readonly number[],
+	pitchLabel: (stringIndex: number, fret: number) => string,
+): number[] {
+	return noteSlots.map((slotIndex) =>
+		Math.max(
+			0,
+			...slotPitchLabels(measure.slots[slotIndex], pitchLabel).map((l) => pitchLabelWidth(l.text)),
+		),
+	);
+}
 
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
 export function hoPoConnectorCount(measure: Measure): number {
@@ -31,11 +46,16 @@ export function computeAllMeasureWidths(
 	measures: Measure[],
 	containerWidth: number,
 	chordDiagramWidth: number,
+	/** The pitch column's labels, when it is shown: a wide label widens its note. */
+	pitchLabel?: (stringIndex: number, fret: number) => string,
 ): number[][] {
 	// Precompute render data once per measure to avoid double adapter calls.
 	const renderData = measures.map((m) => fingerpickToVexFlow(m));
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
 	const repeatBarlines = (m: Measure): number => (m.repeatStart ? 1 : 0) + (m.repeatEnd ? 1 : 0);
+	const pitchWidths = renderData.map((rd, i) =>
+		pitchLabel ? measurePitchLabelWidths(measures[i], rd.noteSlots, pitchLabel) : [],
+	);
 	const widthsFirst = renderData.map((rd, i) =>
 		computeMeasureMinWidth(
 			rd.notes,
@@ -45,6 +65,7 @@ export function computeAllMeasureWidths(
 			rd.chordLabels.length,
 			chordDiagramWidth,
 			rd.rolls.length,
+			pitchWidths[i],
 		),
 	);
 	const widthsNonFirst = renderData.map((rd, i) =>
@@ -56,6 +77,7 @@ export function computeAllMeasureWidths(
 			rd.chordLabels.length,
 			chordDiagramWidth,
 			rd.rolls.length,
+			pitchWidths[i],
 		),
 	);
 
@@ -94,9 +116,10 @@ export function layoutMeasureRows(
 	measures: Measure[],
 	containerWidth: number,
 	chordDiagramWidth: number,
+	pitchLabel?: (stringIndex: number, fret: number) => string,
 ): MeasureRow[] {
 	if (containerWidth === 0) return [];
-	const widthRows = computeAllMeasureWidths(measures, containerWidth, chordDiagramWidth);
+	const widthRows = computeAllMeasureWidths(measures, containerWidth, chordDiagramWidth, pitchLabel);
 	let offset = 0;
 	return widthRows.map((rowWidths) => {
 		const start = offset;

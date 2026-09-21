@@ -83,7 +83,7 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 	{
 		name: "read_tab",
 		description:
-			"Read the player's message as a fingerpicking request: a chord with a pick order (\"Am: 5 3 2 1\"), string and fret lists (\"string:654, fret:0-2-2\"), a named style over chords (\"travis picking in C\"), or a pasted six-line ASCII tab. Returns what the app read, or that it read nothing.",
+			"Read the player's message as a fingerpicking request: a chord with a pick order (\"Am: 5 3 2 1\", \"C G: R_32^132\" — digits are strings, R the root, _ or ^ a held note), string and fret lists (\"string:654, fret:0-2-2\"), a named style over chords (\"travis picking in C\"), or a pasted six-line ASCII tab. Returns what the app read, or that it read nothing.",
 		strict: true,
 		input_schema: READ_SCHEMA,
 	},

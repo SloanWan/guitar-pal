@@ -27,6 +27,14 @@ describe("the General request", () => {
 		expect(haiku).not.toHaveProperty("thinking");
 		expect(haiku).not.toHaveProperty("output_config");
 		expect(buildGeneralRequest("claude-opus-5", [], ctx)).toMatchObject({ thinking: { type: "adaptive" } });
+		// DeepSeek through its Anthropic-compatible endpoint: thinking off like Sonnet, no effort field.
+		const deepseek = buildGeneralRequest("deepseek-flash", [], ctx);
+		expect(deepseek).toMatchObject({ thinking: { type: "disabled" } });
+		expect(deepseek).not.toHaveProperty("output_config");
+		// Any other vendor's model gets neither field.
+		const other = buildGeneralRequest("some-other-model", [], ctx);
+		expect(other).not.toHaveProperty("thinking");
+		expect(other).not.toHaveProperty("output_config");
 	});
 
 	it("rides the context on the turn's user message, leaving tool results alone", () => {
@@ -61,6 +69,8 @@ describe("modelDisplayName", () => {
 		expect(modelDisplayName("claude-sonnet-5")).toBe("Claude Sonnet 5");
 		expect(modelDisplayName("claude-haiku-4-5")).toBe("Claude Haiku 4.5");
 		expect(modelDisplayName("claude-opus-5")).toBe("Claude Opus 5");
+		expect(modelDisplayName("deepseek-flash")).toBe("DeepSeek Flash");
+		expect(modelDisplayName("deepseek-v4-pro")).toBe("DeepSeek V4 Pro");
 	});
 
 	it("leaves an id it cannot read alone", () => {

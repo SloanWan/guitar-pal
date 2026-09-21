@@ -2,13 +2,14 @@ import type { ChordVoicing } from "@/lib/chordVoicing";
 import type { BeatSlot, Duration, FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import {
 	DURATION_TICKS,
+	beatTicks,
 	makeDefaultPattern,
 	makeEmptySlot,
 	measureCapacity,
 } from "@/lib/fingerpickEdit";
 import { chordFretHints, chordSymbolLabel } from "@/lib/fingerpickChords";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
-import { tokenStrings, type PickToken } from "@/lib/fingerpickPickSequence";
+import { foldHolds, plainDurationForTicks, tokenStrings, type PickToken } from "@/lib/fingerpickPickSequence";
 import type { NoteToken } from "@/lib/assistant/tab/parseStringFret";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { clampBpmToMeter } from "@/lib/strumBars";
@@ -32,8 +33,24 @@ import type { ChordWord, PlanSlot, TabProposal } from "@/lib/assistant/tab/types
 /** The order used when only chords were named: one bar of the arpeggio preset. */
 const DEFAULT_STYLE_KEY = "arpeggio";
 
-/** The note value an order is written in when none was named. */
+/** The note value an order is written in when none was named and the count says nothing finer. */
 const DEFAULT_ORDER_DURATION: Duration = "eighth";
+
+/**
+ * The note value of an order that named none: eighths, as a chord sheet
+ * assumes — unless the order has more cells than a bar of eighths and they
+ * divide the bar evenly into a plain value, in which case it is one bar of
+ * those. `R_32^132R_32^132` is sixteen cells, so a bar of sixteenths, not two
+ * bars of eighths; `5 3 2 1 3 2 1 3 5 3 2 1` is twelve, which no plain value
+ * makes a bar of, so it stays eighths and runs over.
+ */
+function inferOrderDuration(cells: number, timeSignature: [number, number]): Duration {
+	const capacity = measureCapacity(timeSignature);
+	if (cells * DURATION_TICKS[DEFAULT_ORDER_DURATION] <= capacity || capacity % cells !== 0) {
+		return DEFAULT_ORDER_DURATION;
+	}
+	return plainDurationForTicks(capacity / cells) ?? DEFAULT_ORDER_DURATION;
+}
 
 export interface BuildTabProposalInput {
 	chordWords: readonly ChordWord[];
@@ -65,15 +82,29 @@ function planTicks(plan: readonly PlanSlot[]): number {
  * The plan laid into bars of the meter. An order shorter than a bar that
  * divides it evenly is repeated to fill it — `5 3 2 1` is the arpeggio, not
  * half a bar of it — and anything else is padded with rests where it ends.
+ * Holds are folded once the repeats are laid out, so where each falls in its
+ * bar decides whether it lengthens the note before it or ties a new one.
  */
 function barsFromPlan(
 	plan: readonly PlanSlot[],
-	capacity: number,
+	timeSignature: [number, number],
 	repeatToFill: boolean,
 ): { bars: PlanSlot[][]; padded: boolean } {
+	const capacity = measureCapacity(timeSignature);
 	const total = planTicks(plan);
 	const times = repeatToFill && total > 0 && total < capacity && capacity % total === 0 ? capacity / total : 1;
-	const slots = Array.from({ length: times }, () => plan).flat();
+	const repeated = Array.from({ length: times }, () => plan).flat();
+	const laid = foldHolds(
+		repeated.map((slot) => ({ hold: slot.hold === true, ticks: DURATION_TICKS[slot.duration] })),
+		beatTicks(timeSignature),
+		capacity,
+	);
+	const slots: PlanSlot[] = laid.map((cell) => {
+		// A hold's source is always the note or rest before it, never a hold itself.
+		const source = repeated[cell.source];
+		const duration = plainDurationForTicks(cell.ticks) ?? source.duration;
+		return cell.tied && source.strings !== null ? { ...source, duration, tied: true } : { ...source, duration };
+	});
 
 	const bars: PlanSlot[][] = [];
 	let bar: PlanSlot[] = [];
@@ -123,20 +154,22 @@ function writeBar(
 			: planSlot.strings;
 		strings.forEach((stringIndex, i) => {
 			// A fret written in the sentence is the fret; the chord only marks the bar.
+			// A tied slot carries the note on: the same fret, struck nothing.
+			const tied = planSlot.tied === true;
 			const written = planSlot.frets?.[i];
 			if (written !== undefined) {
 				slot.strings[stringIndex] =
 					written === "x"
-						? { fret: null, technique: null, tied: false, muted: true }
-						: { fret: written, technique: null, tied: false, muted: false };
+						? { fret: null, technique: null, tied, muted: true }
+						: { fret: written, technique: null, tied, muted: false };
 				return;
 			}
 			const hint = hints ? hints[stringIndex] : 0;
 			if (hint === "/") {
-				slot.strings[stringIndex] = { fret: null, technique: null, tied: false, muted: true };
-				leftOut(chordSymbolLabel(ref as ChordRef), stringIndex + 1);
+				slot.strings[stringIndex] = { fret: null, technique: null, tied, muted: true };
+				if (!tied) leftOut(chordSymbolLabel(ref as ChordRef), stringIndex + 1);
 			} else {
-				slot.strings[stringIndex] = { fret: hint, technique: null, tied: false, muted: false };
+				slot.strings[stringIndex] = { fret: hint, technique: null, tied, muted: false };
 			}
 		});
 		return slot;
@@ -160,11 +193,13 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 		// Each pair the player wrote is its own bar: laid out group by group
 		// below, never repeated to fill.
 	} else if (input.order && input.order.length > 0) {
-		const duration = input.duration ?? DEFAULT_ORDER_DURATION;
+		const duration = input.duration ?? inferOrderDuration(input.order.length, input.timeSignature ?? [4, 4]);
 		plan = input.order.map((token) =>
 			"rest" in token
 				? { strings: null, duration }
-				: { strings: token.strings, ...(token.root ? { root: true as const } : {}), duration },
+				: "hold" in token
+					? { strings: null, hold: true as const, duration }
+					: { strings: token.strings, ...(token.root ? { root: true as const } : {}), duration },
 		);
 		repeatToFill = true;
 	} else {
@@ -186,7 +221,6 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 	}
 
 	const timeSignature: [number, number] = input.timeSignature ?? preset?.timeSignature ?? [4, 4];
-	const capacity = measureCapacity(timeSignature);
 	let bars: PlanSlot[][];
 	let padded: boolean;
 	if (written) {
@@ -194,14 +228,14 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 		const laid = groups.map((group) =>
 			barsFromPlan(
 				group.map((note) => ({ strings: [note.stringIndex], frets: [note.fret], duration })),
-				capacity,
+				timeSignature,
 				false,
 			),
 		);
 		bars = laid.flatMap((l) => l.bars);
 		padded = laid.some((l) => l.padded);
 	} else {
-		({ bars, padded } = barsFromPlan(plan, capacity, repeatToFill));
+		({ bars, padded } = barsFromPlan(plan, timeSignature, repeatToFill));
 	}
 	if (padded) {
 		warnings.push({

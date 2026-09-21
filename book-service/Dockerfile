@@ -17,6 +17,13 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 COPY --chown=book:book app ./app
 COPY --chown=book:book alembic ./alembic
 COPY --chown=book:book alembic.ini pyproject.toml ./
+# Tesseract language data for scanned uploads. PyMuPDF's wheel carries the
+# Tesseract library itself; only these files are needed.
+COPY tools/fetch-tessdata.sh ./tools/
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && sh tools/fetch-tessdata.sh /app/tessdata \
+    && apt-get purge -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+ENV TESSDATA_PREFIX=/app/tessdata
 USER book
 EXPOSE 8000
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

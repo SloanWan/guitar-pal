@@ -938,6 +938,49 @@ export function swapMeasures(measures: Measure[], indexA: number, indexB: number
 	return next;
 }
 
+// Whether every note in a measure can move one string in `direction` (−1 =
+// toward high e, +1 = toward low E): nothing is on the edge string already,
+// and there is something to move. Silent strings (fret null) carry nothing.
+export function canShiftMeasureStrings(measure: Measure, direction: -1 | 1): boolean {
+	const edge = direction === -1 ? 0 : 5;
+	let any = false;
+	for (const slot of measure.slots) {
+		for (let si = 0; si < 6; si++) {
+			if (slot.strings[si].fret === null) continue;
+			if (si === edge) return false;
+			any = true;
+		}
+	}
+	return any;
+}
+
+// Move every note in a measure one string over, frets and all: the fix for a
+// bar a reader put on the wrong string, where the digits were right and only
+// the line was not. The vacated string is left silent. A no-op when
+// `canShiftMeasureStrings` says no, so the caller need not check first.
+export function shiftMeasureStrings(
+	pattern: FingerpickPattern,
+	measureIndex: number,
+	direction: -1 | 1,
+): FingerpickPattern {
+	const measure = pattern.measures[measureIndex];
+	if (!measure || !canShiftMeasureStrings(measure, direction)) return pattern;
+	const shifted: Measure = {
+		...measure,
+		slots: measure.slots.map((slot) => {
+			const strings = slot.strings.map((_, si) => {
+				const from = slot.strings[si - direction];
+				return from && from.fret !== null ? { ...from } : makeEmptyStringFret();
+			}) as BeatSlot["strings"];
+			return { ...slot, strings };
+		}),
+	};
+	return {
+		...pattern,
+		measures: pattern.measures.map((m, i) => (i === measureIndex ? shifted : m)),
+	};
+}
+
 // ── Duration arithmetic (capacity model) ─────────────────────────────────────
 //
 // Every helper here measures rhythm in `DURATION_TICKS` (96 per whole note), so a

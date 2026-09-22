@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import Link from "@/components/AppLink";
+import SignInLink from "@/components/SignInLink";
 import {
 	BOOKS_NOT_OPEN,
 	BookApiError,
@@ -30,6 +31,7 @@ import ChapterRangeEditor from "@/components/books/ChapterRangeEditor";
 import DeleteBookDialog from "@/components/books/DeleteBookDialog";
 import {
 	DangerButton,
+	DENIM_BUTTON,
 	DenimButton,
 	EYEBROW,
 	GhostButton,
@@ -55,6 +57,8 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const load = useCallback(() => getBook(id), [id]);
 	const { value: book, error, refresh, set: setBook } = usePolledResource(load, isScanning);
 	const missing = error instanceof BookApiError && error.status === 404;
+	// Signed out, the API answers 401 for any book but the sample (#262).
+	const unauthorized = error instanceof BookApiError && error.status === 401;
 	// The sample book (#241): the same page, with nothing that would change it.
 	const readOnly = isSampleBook(id);
 	const [editing, setEditing] = useState(false);
@@ -145,14 +149,22 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 		}
 	}
 
-	if (missing) {
+	if (missing || unauthorized) {
 		return (
 			<div className="flex-1 bg-surface">
 				<div className="container mx-auto flex max-w-3xl flex-col items-center gap-3 px-4 py-16 text-center">
-					<p className={MONO_META}>{"// Book not found"}</p>
-					<Link href="/books" className="text-sm text-ink-dim underline hover:text-ink">
-						Back to books
-					</Link>
+					<p className={MONO_META}>{unauthorized ? "// Sign in to open your books" : "// Book not found"}</p>
+					{unauthorized ? (
+						<p className="max-w-md text-sm text-ink-dim">
+							Books stay private to the account that uploaded them. The sample book is open to everyone.
+						</p>
+					) : null}
+					<div className="flex items-center gap-4">
+						{unauthorized ? <SignInLink className={DENIM_BUTTON} /> : null}
+						<Link href="/books" className="text-sm text-ink-dim underline hover:text-ink">
+							Back to books
+						</Link>
+					</div>
 				</div>
 			</div>
 		);

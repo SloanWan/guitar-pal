@@ -60,7 +60,7 @@ export default function FretboardChapter({ index }: { index: number }) {
 							<Pill on>{SCALE_LABELS[FRETBOARD_DEMO_SPEC.scale]}</Pill>
 							<Pill on={s.chord !== null}>Chord {FRETBOARD_DEMO_CHORD_NAME}</Pill>
 							<span className="flex-1" />
-							<span className="max-[900px]:hidden">
+							<span className="max-[640px]:hidden">
 								<Pill>Names</Pill>
 							</span>
 						</div>

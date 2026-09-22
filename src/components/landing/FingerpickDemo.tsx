@@ -20,14 +20,7 @@ import { ENTER } from "./landingUi";
  */
 const TIME_SIGNATURE: [number, number] = [4, 4];
 
-export default function FingerpickDemo({
-	stage,
-	compact = false,
-}: {
-	stage: FingerpickStage;
-	/** Draw only the row holding the story's measure — a phone's stage has room for one. */
-	compact?: boolean;
-}) {
+export default function FingerpickDemo({ stage }: { stage: FingerpickStage }) {
 	const container = useRef<HTMLDivElement>(null);
 	const cursor = useRef<HTMLDivElement>(null);
 	const highlight = useRef<HTMLDivElement>(null);
@@ -43,16 +36,18 @@ export default function FingerpickDemo({
 
 	const measures = useMemo(() => [...FINGERPICK_DEMO_MEASURES], []);
 	const allRows = useMemo(() => layoutMeasureRows(measures, width, 0), [measures, width]);
+	// A stave that has to wrap would not fit the stage: draw only the row
+	// holding the story's measure, the way the viewer follows the playhead.
 	const rows = useMemo(
 		() =>
-			compact
+			allRows.length > 1
 				? allRows.filter(
 						(r) =>
 							stage.focusMeasure >= r.startMeasureNumber - 1 &&
 							stage.focusMeasure < r.startMeasureNumber - 1 + r.measures.length,
 					)
 				: allRows,
-		[allRows, compact, stage.focusMeasure],
+		[allRows, stage.focusMeasure],
 	);
 
 	// A passive effect like TabStaveRow's own draw, which as the child's runs

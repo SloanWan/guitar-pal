@@ -4,8 +4,7 @@ import dynamic from "next/dynamic";
 import { Pause, Play, Square } from "lucide-react";
 import { STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
 import { fingerpickStage } from "@/lib/landing/fingerpickStage";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
-import Chapter, { NARROW_STAGE_QUERY, type ChapterCaption } from "./Chapter";
+import Chapter, { type ChapterCaption } from "./Chapter";
 import { BpmReadout, MODULE_LABEL, Pill, UNIT_LABEL } from "./landingUi";
 
 /* VexFlow is a large dependency the rest of the landing never needs; the
@@ -47,7 +46,6 @@ function TransportButton({ on = false, children }: { on?: boolean; children: Rea
 }
 
 export default function FingerpickChapter({ index }: { index: number }) {
-	const narrow = useMediaQuery(NARROW_STAGE_QUERY);
 	return (
 		<Chapter
 			index={index}
@@ -63,7 +61,7 @@ export default function FingerpickChapter({ index }: { index: number }) {
 				const fill = `${(((s.bpm - STRUM_BPM_MIN) / (STRUM_BPM_MAX - STRUM_BPM_MIN)) * 100).toFixed(1)}%`;
 				return (
 					<>
-						<FingerpickDemo stage={s} compact={narrow} />
+						<FingerpickDemo stage={s} />
 						<div className="mt-4 flex flex-wrap items-end gap-6">
 							<div className="flex gap-2">
 								<TransportButton on={s.cursor !== null}>

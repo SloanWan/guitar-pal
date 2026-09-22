@@ -74,7 +74,8 @@ export default function ChordsChapter({ index }: { index: number }) {
 							ariaLabel="Chord root"
 							className="max-w-[420px]"
 						/>
-						<div className="mt-4 grid grid-cols-2 items-start gap-5 max-[520px]:grid-cols-1">
+						{/* Two columns only where the frame is wide enough for the diagram and the grid side by side. */}
+						<div className="mt-4 grid grid-cols-1 items-start gap-5 @xl:grid-cols-2">
 							<div className="flex flex-col items-center">
 								{/* One diagram for every root: its dots slide to the next shape (ChordDiagramSVG). */}
 								<ChordDiagram def={voicingToDiagramShape(v.voicing)} label={v.name} size="large" />
@@ -115,7 +116,7 @@ export default function ChordsChapter({ index }: { index: number }) {
 									<Pill on={s.ringingString !== null}>▶ Play voicing</Pill>
 								</div>
 							</div>
-							<div className="grid grid-cols-3 gap-px border border-line bg-line max-[520px]:hidden">
+							<div className="grid grid-cols-3 gap-px border border-line bg-line max-[640px]:hidden">
 								{META.map(({ label, value }) => (
 									<div key={label} className="bg-surface px-3 py-2.5">
 										<span className="block font-mono text-[9px] uppercase tracking-[0.12em] text-ink-faint">

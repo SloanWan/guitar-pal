@@ -6,12 +6,11 @@ import { Play } from "lucide-react";
 import ChapterList from "@/components/books/ChapterList";
 import ScanReadout from "@/components/books/ScanReadout";
 import { MONO_META, Panel, StatusLed, STATUS_LABEL } from "@/components/books/bookUi";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { sampleChapterParse } from "@/lib/books/sample";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import { BOOKS_DEMO_BOOK, BOOKS_DEMO_CHAPTER, BOOKS_DEMO_EXERCISE, booksStage } from "@/lib/landing/booksStage";
-import Chapter, { NARROW_STAGE_QUERY, type ChapterCaption } from "./Chapter";
+import Chapter, { type ChapterCaption } from "./Chapter";
 import { AutoHeight, ENTER, Pill } from "./landingUi";
 
 const StaveRows = dynamic(() => import("./StaveRows"), {
@@ -56,7 +55,6 @@ function useSampleDraft(): FingerpickPattern | null {
 }
 
 export default function BooksChapter({ index }: { index: number }) {
-	const narrow = useMediaQuery(NARROW_STAGE_QUERY);
 	const draft = useSampleDraft();
 	return (
 		<Chapter
@@ -79,7 +77,13 @@ export default function BooksChapter({ index }: { index: number }) {
 								<ScanReadout book={s.book} />
 							</div>
 						) : (
-							<div key="ready" className={`flex items-center gap-3 border border-line bg-panel px-4 py-2.5 ${ENTER}`}>
+							// A phone's stage has no room for the file line once the chapters are up.
+							<div
+								key="ready"
+								className={`flex items-center gap-3 border border-line bg-panel px-4 py-2.5 ${ENTER} ${
+									s.chapters.length > 0 ? "max-[640px]:hidden" : ""
+								}`}
+							>
 								<StatusLed status={s.book.status} />
 								<span className="min-w-0 truncate text-[13px] font-medium text-ink">{s.book.title}.pdf</span>
 								<span className={`${MONO_META} ml-auto flex-none tabular-nums`}>
@@ -97,15 +101,15 @@ export default function BooksChapter({ index }: { index: number }) {
 									onOpen={() => {}}
 									renderCard={() => (
 										<div className={`border-t border-line bg-surface px-4 py-3 ${ENTER}`}>
-											<p className={MONO_META}>Parsed · 9 notes · 16 drafts</p>
-											<h3 className={`${MONO_META} mt-3 mb-2`}>Practice drafts</h3>
+											<p className={`${MONO_META} max-[640px]:hidden`}>Parsed · 9 notes · 16 drafts</p>
+											<h3 className={`${MONO_META} mt-3 mb-2 max-[640px]:mt-0`}>Practice drafts</h3>
 											<div className="flex gap-3 border border-line bg-panel p-3">
 												{/* A public crop of the sample book: the notation the reader saw. */}
 												{/* eslint-disable-next-line @next/next/no-img-element */}
 												<img
 													src={BOOKS_DEMO_EXERCISE.cropPath}
 													alt={`Page ${BOOKS_DEMO_EXERCISE.page}, ${BOOKS_DEMO_EXERCISE.name}`}
-													className="w-32 flex-none self-start border border-line bg-white object-contain max-[520px]:w-24"
+													className="w-32 flex-none self-start border border-line bg-white object-contain max-[640px]:w-20"
 												/>
 												<div className="flex min-w-0 flex-1 flex-col gap-1.5">
 													<p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -132,7 +136,6 @@ export default function BooksChapter({ index }: { index: number }) {
 														measures={draft.measures}
 														timeSignature={draft.timeSignature}
 														highlightMeasure={s.playingMeasure}
-														compact={narrow}
 													/>
 												</div>
 											)}

@@ -201,24 +201,26 @@ export default function Home() {
 								))}
 							</div>
 
-							<div className="mt-9 flex flex-wrap gap-4">
-								<Link href="/strum" className={BTN_PRIMARY}>
-									Start practicing →
-								</Link>
-								<Link href="#chapter-1" className={BTN_GHOST}>
-									See it play
-								</Link>
-							</div>
-
-							{/* The page's premise: scrolling plays the demos below. */}
-							<div
-								aria-hidden="true"
-								className="mt-8 inline-flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint"
-							>
-								<span className="relative h-7 w-px overflow-hidden bg-line-strong">
-									<span className="absolute top-[-10px] left-0 h-2.5 w-px animate-[scrollcue_1.6s_ease-in-out_infinite] bg-denim motion-reduce:animate-none" />
-								</span>
-								Scroll — the page plays as you go
+							{/* Buttons, with the page's premise beside them: scrolling plays the
+							    demos below. On a phone the cue drops under the buttons. */}
+							<div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-5">
+								<div className="flex flex-wrap gap-4">
+									<Link href="/strum" className={BTN_PRIMARY}>
+										Start practicing →
+									</Link>
+									<Link href="#chapter-1" className={BTN_GHOST}>
+										See it play
+									</Link>
+								</div>
+								<div
+									aria-hidden="true"
+									className="inline-flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint"
+								>
+									<span className="relative h-7 w-px overflow-hidden bg-line-strong">
+										<span className="absolute top-[-10px] left-0 h-2.5 w-px animate-[scrollcue_1.6s_ease-in-out_infinite] bg-denim motion-reduce:animate-none" />
+									</span>
+									Scroll — the page plays as you go
+								</div>
 							</div>
 						</div>
 					</section>

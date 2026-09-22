@@ -12,8 +12,11 @@ export interface ChapterCaption {
 	text: string;
 }
 
-/** Below this the stage stacks copy over frame, and a chapter trims its demo to fit. */
-export const NARROW_STAGE_QUERY = "(max-width: 900px)";
+/**
+ * A phone: a chapter trims its demo to what fits under the copy (one bar,
+ * no chips). The stage stacks copy over frame earlier, at 900px, in CSS.
+ */
+export const NARROW_STAGE_QUERY = "(max-width: 640px)";
 
 export interface ChapterProps {
 	/** Its place on the page, printed as `01 · NAME`. */
@@ -133,7 +136,8 @@ export default function Chapter({
 							</span>
 						)}
 					</div>
-					<div className="p-5 max-[900px]:p-3.5">{children(progress)}</div>
+					{/* A container, so a demo can lay itself out by the frame's width rather than the viewport's. */}
+					<div className="@container p-5 max-[900px]:p-3.5">{children(progress)}</div>
 				</div>
 			</div>
 		</section>

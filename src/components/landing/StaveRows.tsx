@@ -16,13 +16,10 @@ export default function StaveRows({
 	measures,
 	timeSignature,
 	highlightMeasure = null,
-	/** Draw only the row holding the highlighted measure (or the first row). */
-	compact = false,
 }: {
 	measures: Measure[];
 	timeSignature: [number, number];
 	highlightMeasure?: number | null;
-	compact?: boolean;
 }) {
 	const container = useRef<HTMLDivElement>(null);
 	const block = useRef<HTMLDivElement>(null);
@@ -37,13 +34,15 @@ export default function StaveRows({
 	}, []);
 
 	const allRows = useMemo(() => layoutMeasureRows(measures, width, 0), [measures, width]);
+	// A stave that has to wrap would not fit the stage: draw only the row
+	// holding the highlighted measure (or the first), the way the viewer follows.
 	const rows = useMemo(() => {
-		if (!compact) return allRows;
+		if (allRows.length <= 1) return allRows;
 		const focus = highlightMeasure ?? 0;
 		return allRows.filter(
 			(r) => focus >= r.startMeasureNumber - 1 && focus < r.startMeasureNumber - 1 + r.measures.length,
 		);
-	}, [allRows, compact, highlightMeasure]);
+	}, [allRows, highlightMeasure]);
 
 	// After TabStaveRow's own draw effect, which as the child's runs first; a
 	// stave that has just mounted may still be a frame away from having its

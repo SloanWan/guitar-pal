@@ -12,7 +12,7 @@ import {
 } from "@/lib/landing/strumStage";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Chapter, { NARROW_STAGE_QUERY, type ChapterCaption } from "./Chapter";
-import { BpmReadout, Led, MODULE_LABEL, Pill, UNIT_LABEL } from "./landingUi";
+import { BpmReadout, ENTER, ENTER_SVGS, Led, MODULE_LABEL, Pill, UNIT_LABEL } from "./landingUi";
 
 /* The demo's bar chords drawn from the same fixed voicings the chord chapter
    uses — the shape view needs no database on the landing. */
@@ -81,20 +81,24 @@ export default function StrumChapter({ index }: { index: number }) {
 						{/* One StepGrid per bar: a lone bar only nudges itself into view,
 						    which is a no-op inside the sticky stage; a multi-bar grid would
 						    scroll the page's own scroller to follow its playhead. */}
-						<div className="mt-3 flex flex-col gap-2">
-							{s.bars.map((bar, i) => narrow && i !== (s.activeCell?.barIdx ?? 0) ? null : (
-								<StepGrid
-									key={i}
-									bars={[bar]}
-									activeCell={
-										s.activeCell && s.activeCell.barIdx === i
-											? { ...s.activeCell, barIdx: 0 }
-											: null
-									}
-									chordView={s.chordView}
-									barDiagrams={[DIAGRAMS[i]]}
-								/>
-							))}
+						{/* Every arrow tapped in and every shape drawn is a new SVG: it fades up. */}
+						<div className={`mt-3 flex flex-col gap-2 ${ENTER_SVGS}`}>
+							{s.bars.map((bar, i) =>
+								narrow && i !== (s.activeCell?.barIdx ?? 0) ? null : (
+									<div key={i} className={ENTER}>
+										<StepGrid
+											bars={[bar]}
+											activeCell={
+												s.activeCell && s.activeCell.barIdx === i
+													? { ...s.activeCell, barIdx: 0 }
+													: null
+											}
+											chordView={s.chordView}
+											barDiagrams={[DIAGRAMS[i]]}
+										/>
+									</div>
+								),
+							)}
 						</div>
 
 						<div

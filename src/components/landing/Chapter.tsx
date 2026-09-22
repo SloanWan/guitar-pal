@@ -4,7 +4,7 @@ import { useRef, type ReactNode } from "react";
 import Link from "@/components/AppLink";
 import { captionIndex } from "@/lib/landing/progress";
 import { useChapterProgress } from "./useChapterProgress";
-import { Led } from "./landingUi";
+import { ENTER, Led } from "./landingUi";
 
 export interface ChapterCaption {
 	/** The sentence's bold opening. */
@@ -125,7 +125,12 @@ export default function Chapter({
 							</>
 						)}
 						{position && (
-							<span className="ml-auto text-denim-accent tabular-nums">{position(progress)}</span>
+							<span className="ml-auto text-denim-accent tabular-nums">
+								{/* Keyed on its text, so a new reading fades up instead of flicking. */}
+								<span key={position(progress)} className={`inline-block ${ENTER}`}>
+									{position(progress)}
+								</span>
+							</span>
 						)}
 					</div>
 					<div className="p-5 max-[900px]:p-3.5">{children(progress)}</div>

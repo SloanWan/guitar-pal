@@ -11,7 +11,7 @@ import {
 	stringTones,
 } from "@/lib/landing/chordsStage";
 import Chapter, { type ChapterCaption } from "./Chapter";
-import { Pill } from "./landingUi";
+import { ENTER, Pill } from "./landingUi";
 
 const QUALITY_COUNT = CHORD_SUFFIX_CATEGORIES.reduce((n, c) => n + c.suffixes.length, 0);
 
@@ -76,11 +76,15 @@ export default function ChordsChapter({ index }: { index: number }) {
 						/>
 						<div className="mt-4 grid grid-cols-2 items-start gap-5 max-[520px]:grid-cols-1">
 							<div className="flex flex-col items-center">
-								<ChordDiagram def={voicingToDiagramShape(v.voicing)} label={v.name} size="large" />
+								{/* A new root is a new diagram, arriving rather than snapping. */}
+								<div key={`diagram-${v.name}`} className={ENTER}>
+									<ChordDiagram def={voicingToDiagramShape(v.voicing)} label={v.name} size="large" />
+								</div>
 								{/* The six strings as they sound, low E first; the one being
 								    played lights up in turn. */}
 								<div
-									className="mt-3 grid w-full max-w-[240px] grid-cols-6 gap-px border border-line bg-line"
+									key={`strings-${v.name}`}
+									className={`mt-3 grid w-full max-w-[240px] grid-cols-6 gap-px border border-line bg-line ${ENTER}`}
 									aria-label={`${v.name} string by string`}
 								>
 									{tones.map((t, i) => {

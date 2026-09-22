@@ -8,6 +8,7 @@ import {
 	FINGERPICK_DEMO_MEASURES,
 	type FingerpickStage,
 } from "@/lib/landing/fingerpickStage";
+import { ENTER } from "./landingUi";
 
 /**
  * The fingerpick chapter's stave: the real TabStaveRow drawn by VexFlow,
@@ -79,7 +80,10 @@ export default function FingerpickDemo({
 		measures.forEach((measure, m) => {
 			measure.slots.forEach((_, s) => {
 				const note = noteAt(m, s);
-				if (note) note.style.opacity = flat < stage.revealedSlots ? "1" : "0";
+				if (note) {
+					note.style.transition = "opacity 0.25s ease-out";
+					note.style.opacity = flat < stage.revealedSlots ? "1" : "0";
+				}
 				flat++;
 			});
 		});
@@ -102,12 +106,15 @@ export default function FingerpickDemo({
 			} else toX = fromRect.left;
 			const x = fromRect.left + (toX - fromRect.left) * c.within - box.left;
 			const svgRect = svg?.getBoundingClientRect();
-			line.style.display = "block";
+			// Seen before: glide to the next reading; first seen: land there.
+			const seen = line.style.opacity === "1";
+			line.style.transition = seen ? "transform 0.1s linear, opacity 0.2s ease-out" : "opacity 0.2s ease-out";
 			line.style.transform = `translateX(${Math.round(x - 1)}px)`;
 			line.style.top = `${svgRect ? svgRect.top - box.top : 0}px`;
 			line.style.height = `${svgRect ? svgRect.height : box.height}px`;
+			line.style.opacity = "1";
 		} else {
-			line.style.display = "none";
+			line.style.opacity = "0";
 		}
 
 		// Loop: the looped measure's note area, as the workspace highlights the playing one.
@@ -117,13 +124,13 @@ export default function FingerpickDemo({
 			const x = Number(svg.getAttribute(`data-stave-${m}-x`) ?? 0);
 			const w = Number(svg.getAttribute(`data-stave-${m}-w`) ?? 0);
 			const r = svg.getBoundingClientRect();
-			block.style.display = "block";
 			block.style.left = `${Math.round(r.left - box.left + x)}px`;
 			block.style.top = `${Math.round(r.top - box.top)}px`;
 			block.style.width = `${Math.round(w)}px`;
 			block.style.height = `${Math.round(r.height)}px`;
+			block.style.opacity = "1";
 		} else {
-			block.style.display = "none";
+			block.style.opacity = "0";
 		}
 		};
 		apply();
@@ -135,27 +142,28 @@ export default function FingerpickDemo({
 			<div
 				ref={highlight}
 				aria-hidden="true"
-				className="pointer-events-none absolute border-t border-b border-denim"
-				style={{ display: "none", backgroundColor: "var(--measure-hl)" }}
+				className="pointer-events-none absolute border-t border-b border-denim transition-[opacity,left,width] duration-300 ease-out"
+				style={{ opacity: 0, backgroundColor: "var(--measure-hl)" }}
 			/>
 			{/* The rows measure their own width; until the observer reports one there is nothing to lay out. */}
 			<div className="flex flex-col pt-2">
 				{rows.map((row) => (
-					<TabStaveRow
-						key={row.startMeasureNumber}
-						measures={row.measures}
-						measureWidths={row.widths}
-						startMeasureNumber={row.startMeasureNumber}
-						startMeasureIndex={row.startMeasureNumber - 1}
-						timeSignature={TIME_SIGNATURE}
-					/>
+					<div key={row.startMeasureNumber} className={ENTER}>
+						<TabStaveRow
+							measures={row.measures}
+							measureWidths={row.widths}
+							startMeasureNumber={row.startMeasureNumber}
+							startMeasureIndex={row.startMeasureNumber - 1}
+							timeSignature={TIME_SIGNATURE}
+						/>
+					</div>
 				))}
 			</div>
 			<div
 				ref={cursor}
 				aria-hidden="true"
 				className="pointer-events-none absolute left-0 z-10 w-0.5 bg-denim-accent shadow-(--glow-playhead)"
-				style={{ display: "none" }}
+				style={{ opacity: 0 }}
 			>
 				<span
 					aria-hidden="true"

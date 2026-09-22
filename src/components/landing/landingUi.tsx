@@ -7,6 +7,13 @@ import type { ReactNode } from "react";
 export const MODULE_LABEL =
 	"flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint";
 
+/** Entrance for anything a chapter adds as its story moves on: a short fade up, none under reduced motion. */
+export const ENTER = "animate-[landing-in_0.25s_ease-out_both] motion-reduce:animate-none";
+
+/** The same entrance for every SVG inserted under an element — a step grid's arrows, a bar's shape. */
+export const ENTER_SVGS =
+	"[&_svg]:animate-[landing-in_0.2s_ease-out_both] motion-reduce:[&_svg]:animate-none";
+
 export const UNIT_LABEL = "font-mono text-[8px] uppercase tracking-[0.28em] text-ink-faint";
 
 export function Led({ on = false, breathe = false }: { on?: boolean; breathe?: boolean }) {

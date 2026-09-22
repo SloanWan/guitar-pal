@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import type { Measure } from "@/lib/fingerpickTypes";
+import { ENTER } from "./landingUi";
 
 /**
  * A pattern's measures as the fingerpick page draws them, with one measure
@@ -61,18 +62,18 @@ export default function StaveRows({
 				return;
 			}
 			if (m === null || !svg) {
-				hl.style.display = "none";
+				hl.style.opacity = "0";
 				return;
 			}
 			const box = el.getBoundingClientRect();
 			const r = svg.getBoundingClientRect();
 			const x = Number(svg.getAttribute(`data-stave-${m}-x`) ?? 0);
 			const w = Number(svg.getAttribute(`data-stave-${m}-w`) ?? 0);
-			hl.style.display = "block";
 			hl.style.left = `${Math.round(r.left - box.left + x)}px`;
 			hl.style.top = `${Math.round(r.top - box.top)}px`;
 			hl.style.width = `${Math.round(w)}px`;
 			hl.style.height = `${Math.round(r.height)}px`;
+			hl.style.opacity = "1";
 		};
 		apply();
 		return () => cancelAnimationFrame(frame);
@@ -83,19 +84,20 @@ export default function StaveRows({
 			<div
 				ref={block}
 				aria-hidden="true"
-				className="pointer-events-none absolute border-t border-b border-denim"
-				style={{ display: "none", backgroundColor: "var(--measure-hl)" }}
+				className="pointer-events-none absolute border-t border-b border-denim transition-[opacity,left,top,width] duration-300 ease-out"
+				style={{ opacity: 0, backgroundColor: "var(--measure-hl)" }}
 			/>
 			<div className="flex flex-col pt-2">
 				{rows.map((row) => (
-					<TabStaveRow
-						key={row.startMeasureNumber}
-						measures={row.measures}
-						measureWidths={row.widths}
-						startMeasureNumber={row.startMeasureNumber}
-						startMeasureIndex={row.startMeasureNumber - 1}
-						timeSignature={timeSignature}
-					/>
+					<div key={row.startMeasureNumber} className={ENTER}>
+						<TabStaveRow
+							measures={row.measures}
+							measureWidths={row.widths}
+							startMeasureNumber={row.startMeasureNumber}
+							startMeasureIndex={row.startMeasureNumber - 1}
+							timeSignature={timeSignature}
+						/>
+					</div>
 				))}
 			</div>
 		</div>

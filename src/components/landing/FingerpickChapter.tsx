@@ -82,9 +82,12 @@ export default function FingerpickChapter({ index }: { index: number }) {
 								</div>
 								{/* The rack's fader, at rest: the fill and thumb follow the readout. */}
 								<div className="relative mt-2.5 h-[3px] bg-line-strong" aria-hidden="true">
-									<span className="absolute inset-y-0 left-0 bg-denim" style={{ width: fill }} />
 									<span
-										className="absolute top-1/2 h-[18px] w-2.5 -translate-x-1/2 -translate-y-1/2 bg-ink"
+										className="absolute inset-y-0 left-0 bg-denim transition-[width] duration-150 ease-out"
+										style={{ width: fill }}
+									/>
+									<span
+										className="absolute top-1/2 h-[18px] w-2.5 -translate-x-1/2 -translate-y-1/2 bg-ink transition-[left] duration-150 ease-out"
 										style={{ left: fill }}
 									/>
 								</div>

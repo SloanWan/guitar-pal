@@ -12,7 +12,7 @@ import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import { BOOKS_DEMO_BOOK, BOOKS_DEMO_CHAPTER, BOOKS_DEMO_EXERCISE, booksStage } from "@/lib/landing/booksStage";
 import Chapter, { NARROW_STAGE_QUERY, type ChapterCaption } from "./Chapter";
-import { Pill } from "./landingUi";
+import { ENTER, Pill } from "./landingUi";
 
 const StaveRows = dynamic(() => import("./StaveRows"), {
 	ssr: false,
@@ -74,9 +74,11 @@ export default function BooksChapter({ index }: { index: number }) {
 				return (
 					<div className="flex flex-col gap-3">
 						{scanning ? (
-							<ScanReadout book={s.book} />
+							<div key="scan" className={ENTER}>
+								<ScanReadout book={s.book} />
+							</div>
 						) : (
-							<div className="flex items-center gap-3 border border-line bg-panel px-4 py-2.5">
+							<div key="ready" className={`flex items-center gap-3 border border-line bg-panel px-4 py-2.5 ${ENTER}`}>
 								<StatusLed status={s.book.status} />
 								<span className="min-w-0 truncate text-[13px] font-medium text-ink">{s.book.title}.pdf</span>
 								<span className={`${MONO_META} ml-auto flex-none tabular-nums`}>
@@ -86,13 +88,14 @@ export default function BooksChapter({ index }: { index: number }) {
 						)}
 
 						{s.chapters.length > 0 && (
+							<div className={ENTER}>
 							<Panel label="Chapters">
 								<ChapterList
 									chapters={s.chapters}
 									openId={s.openId}
 									onOpen={() => {}}
 									renderCard={() => (
-										<div className="border-t border-line bg-surface px-4 py-3">
+										<div className={`border-t border-line bg-surface px-4 py-3 ${ENTER}`}>
 											<p className={MONO_META}>Parsed · 9 notes · 16 drafts</p>
 											<h3 className={`${MONO_META} mt-3 mb-2`}>Practice drafts</h3>
 											<div className="flex gap-3 border border-line bg-panel p-3">
@@ -123,7 +126,7 @@ export default function BooksChapter({ index }: { index: number }) {
 												</div>
 											</div>
 											{s.draft && draft && (
-												<div className="mt-3 border border-line bg-panel px-2">
+												<div className={`mt-3 border border-line bg-panel px-2 ${ENTER}`}>
 													<StaveRows
 														measures={draft.measures}
 														timeSignature={draft.timeSignature}
@@ -136,6 +139,7 @@ export default function BooksChapter({ index }: { index: number }) {
 									)}
 								/>
 							</Panel>
+							</div>
 						)}
 					</div>
 				);

@@ -4,7 +4,7 @@ import { CornerDownLeft } from "lucide-react";
 import ProposalPreview from "@/components/assistant/strum/ProposalPreview";
 import { ASSISTANT_DEMO_OUTCOME, assistantStage } from "@/lib/landing/assistantStage";
 import Chapter, { type ChapterCaption } from "./Chapter";
-import { Pill } from "./landingUi";
+import { ENTER, Pill } from "./landingUi";
 
 const CAPTIONS: readonly ChapterCaption[] = [
 	{
@@ -83,7 +83,7 @@ export default function AssistantChapter({ index }: { index: number }) {
 								</Bubble>
 							</li>
 							{s.reply !== null && (
-								<li className="flex flex-col items-start gap-2">
+								<li className={`flex flex-col items-start gap-2 ${ENTER}`}>
 									<Bubble side="assistant">
 										{s.reply}
 										{s.reply.length < ASSISTANT_DEMO_OUTCOME.text.length && (

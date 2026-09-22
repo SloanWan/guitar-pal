@@ -1170,6 +1170,14 @@
 		transform: translateY(40px);
 	}
 }
+
+/* Landing chapters: anything that joins a demo mid-story arrives, never pops. */
+@keyframes landing-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}
 @keyframes ledbreathe {
 	0%,
 	100% {

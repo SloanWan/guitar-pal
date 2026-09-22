@@ -74,14 +74,12 @@ export async function proxy(request: NextRequest) {
 		return redirectWithCookies(new URL(target, request.url));
 	}
 
-	// d. /home, /settings and /books are the signed-in personal surfaces — a
-	//    signed-out visitor is sent to auth with a return path so they land back
-	//    after signing in. The one exception is the sample book (#241), which
-	//    is there precisely for someone who has nothing yet.
-	if (
-		(pathname === "/home" || pathname === "/settings" || (pathname.startsWith("/books") && pathname !== "/books/sample")) &&
-		!user
-	) {
+	// d. /home and /settings are the signed-in personal surfaces — a signed-out
+	//    visitor is sent to auth with a return path so they land back after
+	//    signing in. /books is open to everyone (#262): the page shows what the
+	//    import does and the sample book; uploading and one's own books ask
+	//    for an account on the page itself, not at the door.
+	if ((pathname === "/home" || pathname === "/settings") && !user) {
 		return redirectWithCookies(
 			new URL(`/auth?redirect=${encodeURIComponent(pathname)}`, request.url),
 		);

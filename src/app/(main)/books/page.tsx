@@ -1,18 +1,29 @@
 "use client";
 
+import { useCallback } from "react";
 import { BOOKS_NOT_OPEN, isServiceDown, listBooks } from "@/lib/books/api";
 import type { Book } from "@/lib/books/types";
+import { useUser } from "@/hooks/useUser";
 import BookUpload from "@/components/books/BookUpload";
 import BookList from "@/components/books/BookList";
+import SignInLink from "@/components/SignInLink";
 import { usePolledResource } from "@/components/books/usePolledResource";
-import { EYEBROW, MONO_META } from "@/components/books/bookUi";
+import { DENIM_BUTTON, EYEBROW, MONO_META, Panel } from "@/components/books/bookUi";
 import SampleBookPanel from "@/components/books/SampleBookPanel";
 
 // Rows keep moving while any book scans; nothing to watch otherwise.
 const anyScanning = (books: Book[]) => books.some((b) => b.status === "scanning");
 
+const NO_BOOKS: Book[] = [];
+
 export default function BooksPage() {
-	const { value: books, error } = usePolledResource(listBooks, anyScanning);
+	// The page is open to everyone (#262); the library and the upload are the
+	// signed-in half of it. Signed out, the API is not asked (it would answer
+	// 401) and the sample stands in for a library.
+	const { user, loading: userLoading } = useUser();
+	const signedOut = !userLoading && user === null;
+	const load = useCallback(() => (user ? listBooks() : Promise.resolve(NO_BOOKS)), [user]);
+	const { value: books, error } = usePolledResource(load, anyScanning);
 	// No service behind the proxy: the feature is not open; the sample still is.
 	const unavailable = isServiceDown(error);
 	const failed = error !== null && !unavailable;
@@ -28,21 +39,31 @@ export default function BooksPage() {
 						where the exercises get read.
 					</p>
 				</header>
-				{unavailable ? (
+				{signedOut ? (
+					<Panel label="Upload">
+						<div className="flex flex-col items-start gap-3 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+							<p className="text-sm text-ink-dim">
+								Sign in to upload your own textbook. Books stay private to your account; the sample
+								below is open to everyone.
+							</p>
+							<SignInLink className={`${DENIM_BUTTON} flex-none`} />
+						</div>
+					</Panel>
+				) : unavailable ? (
 					<p className="border border-line bg-panel px-4 py-3 text-sm text-ink-dim">
 						{BOOKS_NOT_OPEN} Until it is, the sample below shows what it does.
 					</p>
-				) : (
+				) : userLoading ? null : (
 					<BookUpload />
 				)}
-				{books !== null ? (
+				{signedOut || userLoading ? null : books !== null ? (
 					<BookList books={books} />
 				) : failed ? (
 					<p className={`${MONO_META} px-1`}>Could not load your books.</p>
 				) : unavailable ? null : (
 					<p className={`${MONO_META} px-1`}>Loading…</p>
 				)}
-				{/* Always there, service or no service: the sample needs neither. */}
+				{/* Always there, service or no service, account or none: the sample needs neither. */}
 				<SampleBookPanel />
 			</div>
 		</div>

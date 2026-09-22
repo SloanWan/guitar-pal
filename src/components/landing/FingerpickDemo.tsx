@@ -61,6 +61,15 @@ export default function FingerpickDemo({
 		const line = cursor.current;
 		const block = highlight.current;
 		if (!el || !line || !block || rows.length === 0) return;
+		let frame = 0;
+		let tries = 0;
+		const apply = () => {
+		// A stave that has just mounted may be a frame away from having its
+		// notes stamped: retry a few frames rather than draw on nothing.
+		if (!el.querySelector("[data-measure-index]") && tries++ < 10) {
+			frame = requestAnimationFrame(apply);
+			return;
+		}
 		const box = el.getBoundingClientRect();
 		const noteAt = (m: number, s: number) =>
 			el.querySelector<SVGElement>(`[data-measure-index="${m}"][data-slot-index="${s}"]`);
@@ -116,6 +125,9 @@ export default function FingerpickDemo({
 		} else {
 			block.style.display = "none";
 		}
+		};
+		apply();
+		return () => cancelAnimationFrame(frame);
 	}, [rows, measures, stage]);
 
 	return (

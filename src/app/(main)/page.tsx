@@ -4,6 +4,7 @@ import TabStripBackdrop from "@/components/TabStripBackdrop";
 import StrumChapter from "@/components/landing/StrumChapter";
 import FingerpickChapter from "@/components/landing/FingerpickChapter";
 import ChordsChapter from "@/components/landing/ChordsChapter";
+import FretboardChapter from "@/components/landing/FretboardChapter";
 import { Led } from "@/components/landing/landingUi";
 import type { TabStripSpec } from "@/lib/fingerpickToTabStrip";
 
@@ -208,6 +209,7 @@ export default function Home() {
 				<StrumChapter index={1} />
 				<FingerpickChapter index={2} />
 				<ChordsChapter index={3} />
+				<FretboardChapter index={4} />
 
 				{/* With an account */}
 				<section className="relative border-b border-line py-27.5 max-sm:py-10">

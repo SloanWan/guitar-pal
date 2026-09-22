@@ -137,10 +137,13 @@ const FOOTER_PRODUCT: readonly { href: string; label: string }[] = [
 	{ href: "/books/sample", label: "Books · PDF parsing (preview)" },
 ];
 
+/* The hero's figures. "2,200+" is the chord_voicings table (2,291 rows on
+   2026-09-22); the rest are the product's own limits. */
 const HERO_META: readonly { value: string; label: string }[] = [
 	{ value: "2,200+", label: "CHORD VOICINGS" },
 	{ value: "REAL", label: "GUITAR SAMPLES" },
 	{ value: "40–220", label: "BPM RANGE" },
+	{ value: "AI", label: "ASSISTANT IN PLAIN ENGLISH" },
 	{ value: "FREE", label: "IN THE BROWSER" },
 ];
 
@@ -189,7 +192,16 @@ export default function Home() {
 								No gamification. Just the tools.
 							</p>
 
-							<div className="mt-11 flex flex-wrap gap-4">
+							{/* The numbers sit above the fold, before the buttons: proof, then action. */}
+							<div className="mt-7 flex gap-x-10 gap-y-3 font-mono text-xs tracking-[0.06em] text-ink-faint max-sm:flex-col max-sm:gap-2 md:flex-wrap">
+								{HERO_META.map(({ value, label }) => (
+									<span key={label} className="whitespace-nowrap">
+										<b className="font-medium text-ink-dim">{value}</b> {label}
+									</span>
+								))}
+							</div>
+
+							<div className="mt-9 flex flex-wrap gap-4">
 								<Link href="/strum" className={BTN_PRIMARY}>
 									Start practicing →
 								</Link>
@@ -198,18 +210,10 @@ export default function Home() {
 								</Link>
 							</div>
 
-							<div className="mt-18 flex gap-12 font-mono text-xs tracking-[0.06em] text-ink-faint max-sm:mt-14 max-sm:flex-col max-sm:gap-3">
-								{HERO_META.map(({ value, label }) => (
-									<span key={label}>
-										<b className="font-medium text-ink-dim">{value}</b> {label}
-									</span>
-								))}
-							</div>
-
 							{/* The page's premise: scrolling plays the demos below. */}
 							<div
 								aria-hidden="true"
-								className="mt-10 inline-flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint"
+								className="mt-8 inline-flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint"
 							>
 								<span className="relative h-7 w-px overflow-hidden bg-line-strong">
 									<span className="absolute top-[-10px] left-0 h-2.5 w-px animate-[scrollcue_1.6s_ease-in-out_infinite] bg-denim motion-reduce:animate-none" />

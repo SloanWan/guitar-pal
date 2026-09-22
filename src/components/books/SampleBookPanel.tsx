@@ -19,7 +19,7 @@ export default function SampleBookPanel() {
 				<StatusLed status="ready" />
 				<span className="min-w-0 flex-1">
 					<span className="block truncate text-[13px] font-medium text-ink">吉他自学三月通 — sample</span>
-					<span className="block truncate text-[11px] text-ink-dim">
+					<span className="line-clamp-2 text-[11px] text-ink-dim sm:line-clamp-none sm:truncate">
 						One parsed chapter: knowledge points, tab drafts you can play beside the book, edit and take
 						to fingerpick.
 					</span>

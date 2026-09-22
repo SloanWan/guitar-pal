@@ -12,7 +12,7 @@ import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import { BOOKS_DEMO_BOOK, BOOKS_DEMO_CHAPTER, BOOKS_DEMO_EXERCISE, booksStage } from "@/lib/landing/booksStage";
 import Chapter, { NARROW_STAGE_QUERY, type ChapterCaption } from "./Chapter";
-import { ENTER, Pill } from "./landingUi";
+import { AutoHeight, ENTER, Pill } from "./landingUi";
 
 const StaveRows = dynamic(() => import("./StaveRows"), {
 	ssr: false,
@@ -72,6 +72,7 @@ export default function BooksChapter({ index }: { index: number }) {
 				const s = booksStage(p);
 				const scanning = s.book.status !== "ready";
 				return (
+					<AutoHeight>
 					<div className="flex flex-col gap-3">
 						{scanning ? (
 							<div key="scan" className={ENTER}>
@@ -142,6 +143,7 @@ export default function BooksChapter({ index }: { index: number }) {
 							</div>
 						)}
 					</div>
+					</AutoHeight>
 				);
 			}}
 		</Chapter>

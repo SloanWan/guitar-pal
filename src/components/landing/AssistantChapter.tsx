@@ -4,7 +4,7 @@ import { CornerDownLeft } from "lucide-react";
 import ProposalPreview from "@/components/assistant/strum/ProposalPreview";
 import { ASSISTANT_DEMO_OUTCOME, assistantStage } from "@/lib/landing/assistantStage";
 import Chapter, { type ChapterCaption } from "./Chapter";
-import { ENTER, Pill } from "./landingUi";
+import { AutoHeight, ENTER, Pill } from "./landingUi";
 
 const CAPTIONS: readonly ChapterCaption[] = [
 	{
@@ -75,7 +75,8 @@ export default function AssistantChapter({ index }: { index: number }) {
 							</span>
 						</div>
 
-						<ul className="flex flex-1 flex-col gap-2.5 py-3">
+						<AutoHeight className="flex-1">
+						<ul className="flex flex-col gap-2.5 py-3">
 							<li className="flex justify-end">
 								<Bubble side="user">
 									{s.typed}
@@ -104,6 +105,7 @@ export default function AssistantChapter({ index }: { index: number }) {
 								</li>
 							)}
 						</ul>
+						</AutoHeight>
 
 						<div className="flex items-end gap-2 border-t border-line pt-2" aria-hidden="true">
 							<span className="min-w-0 flex-1 border border-line-strong bg-panel px-2 py-[0.4375rem] font-mono text-xs text-ink-faint">

@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /* Small hardware quotes the landing's demo frames share. They mirror the app's
    own recipes (LED §5.11, module label §5.9, BPM readout §5.7, pills §5.6)
@@ -61,5 +63,33 @@ export function BpmReadout({ bpm, size = "lg" }: { bpm: number; size?: "lg" | "s
 			</span>
 			<span className="relative tabular-nums">{String(bpm).padStart(3, "0")}</span>
 		</span>
+	);
+}
+
+/**
+ * A box whose height follows its content through a transition, so a demo
+ * that grows as its story goes on — a bar that gains its chord's shape, a
+ * chapter list that opens — eases to its new size instead of jumping. The
+ * first measurement lands without animating; reduced motion never animates.
+ */
+export function AutoHeight({ children, className = "" }: { children: ReactNode; className?: string }) {
+	const inner = useRef<HTMLDivElement>(null);
+	const [height, setHeight] = useState<number | null>(null);
+	useLayoutEffect(() => {
+		const el = inner.current;
+		if (!el) return;
+		const observer = new ResizeObserver(([entry]) => setHeight(entry.contentRect.height));
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+	return (
+		<div
+			className={`overflow-hidden transition-[height] duration-300 ease-out motion-reduce:transition-none ${className}`}
+			style={{ height: height ?? "auto" }}
+		>
+			<div ref={inner} className="flow-root">
+				{children}
+			</div>
+		</div>
 	);
 }

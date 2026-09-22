@@ -116,7 +116,7 @@ export default function BooksChapter({ index }: { index: number }) {
 														<span className="min-w-0 truncate text-[13px] font-medium text-ink">
 															{BOOKS_DEMO_EXERCISE.name}
 														</span>
-														<span className={`${MONO_META} flex-none tabular-nums`}>
+														<span className={`${MONO_META} min-w-0 tabular-nums`}>
 															p.{BOOKS_DEMO_EXERCISE.page} · tab · literal · {BOOKS_DEMO_EXERCISE.bars} bars · ♩=
 															{BOOKS_DEMO_EXERCISE.bpm}
 														</span>

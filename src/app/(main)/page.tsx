@@ -2,6 +2,7 @@ import Link from "@/components/AppLink";
 import { FlaskConical } from "lucide-react";
 import TabStripBackdrop from "@/components/TabStripBackdrop";
 import StrumChapter from "@/components/landing/StrumChapter";
+import FingerpickChapter from "@/components/landing/FingerpickChapter";
 import ChordsChapter from "@/components/landing/ChordsChapter";
 import { Led } from "@/components/landing/landingUi";
 import type { TabStripSpec } from "@/lib/fingerpickToTabStrip";
@@ -205,7 +206,8 @@ export default function Home() {
 
 				{/* The tools, one chapter each: scrolling drives a live demo of the page. */}
 				<StrumChapter index={1} />
-				<ChordsChapter index={2} />
+				<FingerpickChapter index={2} />
+				<ChordsChapter index={3} />
 
 				{/* With an account */}
 				<section className="relative border-b border-line py-27.5 max-sm:py-10">

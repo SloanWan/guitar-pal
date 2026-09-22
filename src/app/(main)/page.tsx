@@ -125,6 +125,18 @@ const ACCOUNT_PERKS: readonly AccountPerk[] = [
 	},
 ];
 
+/* Footer product links: every page the landing tells, in the chapters' order;
+   the assistant lives in the topbar on every page, so its link is the grammar
+   it reads. */
+const FOOTER_PRODUCT: readonly { href: string; label: string }[] = [
+	{ href: "/strum", label: "Strum" },
+	{ href: "/fingerpick", label: "Fingerpick" },
+	{ href: "/chords", label: "Chords" },
+	{ href: "/fretboard", label: "Fretboard" },
+	{ href: "/docs/assistant-grammar", label: "Assistant" },
+	{ href: "/books/sample", label: "Books · PDF parsing (preview)" },
+];
+
 const HERO_META: readonly { value: string; label: string }[] = [
 	{ value: "2,200+", label: "CHORD VOICINGS" },
 	{ value: "REAL", label: "GUITAR SAMPLES" },
@@ -305,21 +317,13 @@ export default function Home() {
 							Product
 						</span>
 						<ul className="flex flex-col gap-3 text-ink-dim">
-							<li>
-								<Link href="/chords" className={FOOTER_LINK}>
-									Chords
-								</Link>
-							</li>
-							<li>
-								<Link href="/strum" className={FOOTER_LINK}>
-									Strum
-								</Link>
-							</li>
-							<li>
-								<Link href="/fingerpick" className={FOOTER_LINK}>
-									Fingerpick
-								</Link>
-							</li>
+							{FOOTER_PRODUCT.map(({ href, label }) => (
+								<li key={href}>
+									<Link href={href} className={FOOTER_LINK}>
+										{label}
+									</Link>
+								</li>
+							))}
 						</ul>
 					</nav>
 
@@ -361,6 +365,7 @@ export default function Home() {
 								>
 									@tombatossals/chords-db
 								</a>
+								, every voicing audited here for validity
 							</li>
 						</ul>
 					</div>

@@ -1171,6 +1171,21 @@
 	}
 }
 
+/* Chord diagram (ChordDiagramSVG): a voicing change moves each string's dot
+   and the barre to their new place and fades the open/muted marks, in the
+   drawer's timing, instead of redrawing the shape. */
+.cd-move {
+	transition:
+		transform var(--dur-drawer) var(--ease-drawer),
+		width var(--dur-drawer) var(--ease-drawer),
+		opacity var(--dur-hover) ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.cd-move {
+		transition: none;
+	}
+}
+
 /* Landing chapters: anything that joins a demo mid-story arrives, never pops. */
 @keyframes landing-in {
 	from {

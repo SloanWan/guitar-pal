@@ -76,10 +76,8 @@ export default function ChordsChapter({ index }: { index: number }) {
 						/>
 						<div className="mt-4 grid grid-cols-2 items-start gap-5 max-[520px]:grid-cols-1">
 							<div className="flex flex-col items-center">
-								{/* A new root is a new diagram, arriving rather than snapping. */}
-								<div key={`diagram-${v.name}`} className={ENTER}>
-									<ChordDiagram def={voicingToDiagramShape(v.voicing)} label={v.name} size="large" />
-								</div>
+								{/* One diagram for every root: its dots slide to the next shape (ChordDiagramSVG). */}
+								<ChordDiagram def={voicingToDiagramShape(v.voicing)} label={v.name} size="large" />
 								{/* The six strings as they sound, low E first; the one being
 								    played lights up in turn. */}
 								<div

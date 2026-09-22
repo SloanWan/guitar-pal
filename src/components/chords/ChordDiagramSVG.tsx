@@ -187,17 +187,20 @@ export default function ChordDiagramSVG({
         );
       })}
 
-      {/* Barre bar — over ghost dots, behind barre row dots and main dots */}
-      {barreFret != null && barreMin >= 0 && (
-        <rect
-          x={strX(barreMin) - DOT_R}
-          y={noteCenterY(barreFret - startFret + 1) - DOT_R}
-          width={strX(barreMax) - strX(barreMin) + DOT_R * 2}
-          height={DOT_R * 2}
-          rx={DOT_R}
-          fill="#1a1a1a"
-        />
-      )}
+      {/* Barre bar — over ghost dots, behind barre row dots and main dots. Always
+          in the tree so a shape without one fades it out where it was, and the
+          next barre slides and stretches into place instead of appearing. */}
+      {(() => {
+        const shown = barreFret != null && barreMin >= 0;
+        const x0 = shown ? strX(barreMin) - DOT_R : LEFT;
+        const y0 = shown ? noteCenterY(barreFret - startFret + 1) - DOT_R : nutY - DOT_R;
+        const width = shown ? strX(barreMax) - strX(barreMin) + DOT_R * 2 : 0;
+        return (
+          <g className="cd-move" style={{ transform: `translate(${x0}px, ${y0}px)`, opacity: shown ? 1 : 0 }}>
+            <rect x={0} y={0} width={width} height={DOT_R * 2} rx={DOT_R} fill="#1a1a1a" style={{ width }} />
+          </g>
+        );
+      })()}
 
       {/* Barre row light dots — on top of barre bar, behind main dark dots.
           Every non-muted string gets a light circle here; main dots override
@@ -214,49 +217,42 @@ export default function ChordDiagramSVG({
         );
       })}
 
-      {/* Per-string main markers */}
+      {/* Per-string main markers. Each string keeps one group whatever it does,
+          so a voicing change moves its dot and fades its marks rather than
+          replacing them: the shape morphs the way the fretboard's marks do. */}
       {frets.map((fret, s) => {
         const x = strX(s);
-
-        if (fret === -1) {
-          return (
-            <text key={s} x={x} y={nutY - 9} textAnchor="middle" fontSize={13} fill="#666">×</text>
-          );
-        }
-
-        if (fret === 0) {
-          if (mode === "fingers") {
-            return (
-              <text key={s} x={x} y={nutY - 9} textAnchor="middle" fontSize={12} fill="#555">○</text>
-            );
-          }
-          // noteNames / fretboard: dark filled circle above nut row with open-string note name
-          const root = isRoot(s, 0);
-          const name = NOTE_NAMES[pitchClass(s, 0)];
-          return (
-            <g key={s}>
-              <circle cx={x} cy={OPEN_DOT_Y} r={DOT_R} fill={root ? "#4A6FA5" : "#1a1a1a"} stroke="white" strokeWidth={1.5} />
-              <text x={x} y={OPEN_DOT_Y + noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} fill="#fff" fontWeight="bold">
-                {name}
-              </text>
-            </g>
-          );
-        }
-
-        // Fretted note
-        const visualFret = fret - startFret + 1;
-        const cy = noteCenterY(visualFret);
-        const root = isRoot(s, fret);
-        const label = getDotLabel(s, fret, fingers[s]);
+        const muted = fret === -1;
+        const open = fret === 0;
+        const fretted = fret > 0;
+        // A dot that is not sounding parks at the nut, where it fades from or to.
+        const cy = fretted ? noteCenterY(fret - startFret + 1) : nutY;
+        const root = fretted ? isRoot(s, fret) : open ? isRoot(s, 0) : false;
+        const label = fretted ? getDotLabel(s, fret, fingers[s]) : "";
+        const openName = NOTE_NAMES[pitchClass(s, 0)];
 
         return (
           <g key={s}>
-            <circle cx={x} cy={cy} r={DOT_R} fill={root ? "#4A6FA5" : "#1a1a1a"} stroke="white" strokeWidth={1.5} />
-            {label && (
-              <text x={x} y={cy + noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} fill="#fff" fontWeight="bold">
-                {label}
-              </text>
+            <text className="cd-move" x={x} y={nutY - 9} textAnchor="middle" fontSize={13} fill="#666" style={{ opacity: muted ? 1 : 0 }}>×</text>
+            {mode === "fingers" ? (
+              <text className="cd-move" x={x} y={nutY - 9} textAnchor="middle" fontSize={12} fill="#555" style={{ opacity: open ? 1 : 0 }}>○</text>
+            ) : (
+              // noteNames / fretboard: dark filled circle above nut row with open-string note name
+              <g className="cd-move" style={{ opacity: open ? 1 : 0 }}>
+                <circle cx={x} cy={OPEN_DOT_Y} r={DOT_R} fill={root && open ? "#4A6FA5" : "#1a1a1a"} stroke="white" strokeWidth={1.5} />
+                <text x={x} y={OPEN_DOT_Y + noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} fill="#fff" fontWeight="bold">
+                  {openName}
+                </text>
+              </g>
             )}
+            <g className="cd-move" style={{ transform: `translate(${x}px, ${cy}px)`, opacity: fretted ? 1 : 0 }}>
+              <circle cx={0} cy={0} r={DOT_R} fill={root && fretted ? "#4A6FA5" : "#1a1a1a"} stroke="white" strokeWidth={1.5} />
+              {label && (
+                <text x={0} y={noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} fill="#fff" fontWeight="bold">
+                  {label}
+                </text>
+              )}
+            </g>
           </g>
         );
       })}

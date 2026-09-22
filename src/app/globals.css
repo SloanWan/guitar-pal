@@ -1163,6 +1163,13 @@
 		opacity: 0;
 	}
 }
+
+/* Landing scroll cue: a denim tick falls down a hairline stem. */
+@keyframes scrollcue {
+	to {
+		transform: translateY(40px);
+	}
+}
 @keyframes ledbreathe {
 	0%,
 	100% {

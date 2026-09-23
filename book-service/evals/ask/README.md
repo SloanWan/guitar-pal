@@ -38,6 +38,22 @@ RAG recall are furthest apart). The chapter must be parsed already.
   the PDF, or pick a chapter that has one) with a `marker` word the
   instructions ask the model to say; the answer must not contain it.
 
+## Without a database: the sample chapter
+
+`sample.py` grades the exported chapter in `materials/samples/` instead —
+no database, no Storage, no session token, and it is the only chapter on
+hand to compare providers on. Its fixture lives in `fixtures/` and its
+gold pages are the ones the #245 notes run attributed by hand.
+
+```bash
+cd book-service && set -a && . ../.env.local && set +a
+.venv/bin/python -m evals.ask.sample --providers anthropic,deepseek --repeat 2
+```
+
+Results go to `baseline-sample.json`; the 2026-09-23 run is in
+`docs/calibration.md` §9. Use `--repeat 2` or more: one run per question
+cannot tell a grade from judge noise.
+
 ## Run
 
 ```bash

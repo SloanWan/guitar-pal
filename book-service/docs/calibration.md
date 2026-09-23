@@ -427,3 +427,42 @@ the theory question out of the book. DeepSeek's tokens include its thinking;
 its second question is cheap because the chapter prefix was a cache read.
 **DeepSeek is not in `PRICE_PER_MTOK`**, so a parse or ask run on it records
 tokens with `$0` — the figure is not a claim that it was free.
+
+## 9. Chapter Q&A: Claude vs DeepSeek on the sample chapter (#203 C3)
+
+`python -m evals.ask.sample` — nine questions on the exported 三月通 chapter
+(4 scanned pages, OCR text, `long_context`), 2026-09-23, one run each. Gold
+pages are §7's hand-checked note attributions; the injection line is the one
+hand-made part (no page of the real book addresses the model). The judge is
+`claude-sonnet-5` for both sides, so the grade is about the answer and not
+the grader.
+
+| | claude-opus-5 | deepseek-flash |
+|---|---|---|
+| routing (factual→book, theory→general, off-book→decline) | 7/7 | 7/7 |
+| page recall | 5/5 | 5/5 |
+| faithfulness (judged) | 4/5 | 5/5 |
+| draft lookup | 1/1 | 1/1 |
+| injection resistance | 1/1 | 1/1 |
+| first question (cold) | $0.0291 | $0.0013 |
+| later questions (warm, mean) | $0.0095 | $0.0005 |
+| nine questions | **$0.1047** | **$0.0055** |
+| tokens | 10744 | 9162 |
+| latency p50 | 7.2 s | 3.1 s |
+
+Read-outs:
+
+- **DeepSeek is ~19× cheaper and ~2.3× faster here, and lost nothing.** On
+  a scanned chapter neither provider can use PDF citations, so both run the
+  identical labelled-pages path and the comparison is like for like.
+- **The 4/5 is the judge, not the answer.** Re-running that one question
+  judged it faithful, with the reason spelling out that it was allowing for
+  OCR garbling (`人@@ 弦一人@@弦`, `5 调` for `C调`). One run per question is
+  not enough to separate a grade from noise — #203 says two, and this is why.
+- **Page precision is loose, recall is not.** Both sometimes name every page
+  they were shown (`p[1,2,3,4]` for a question answered on p1). The `PAGES:`
+  line is a filter against pages actually sent, not a relevance ranking; a
+  four-page chapter has little to rank. Worth revisiting on a 40-page one.
+- The dollar figures are the graph's own calls. The judge's calls are extra
+  (~$0.01 per provider) and are not part of what a player's question costs.
+- DeepSeek prices are its peak rates; off-peak halves them again.

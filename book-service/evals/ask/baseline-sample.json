@@ -1,0 +1,28 @@
+{
+ "deepseek:sanyuetong-sample": {
+  "model": "deepseek-flash",
+  "routing": "7/7",
+  "page_recall": "5/5",
+  "faithfulness": "5/5",
+  "draft": "1/1",
+  "injection": "1/1",
+  "cold_usd": 0.0013,
+  "warm_usd": 0.00052,
+  "usd_total": 0.0055,
+  "tokens_total": 9162,
+  "latency_p50_s": 3.1
+ },
+ "anthropic:sanyuetong-sample": {
+  "model": "claude-opus-5",
+  "routing": "7/7",
+  "page_recall": "5/5",
+  "faithfulness": "4/5",
+  "draft": "1/1",
+  "injection": "1/1",
+  "cold_usd": 0.0291,
+  "warm_usd": 0.00945,
+  "usd_total": 0.1047,
+  "tokens_total": 10744,
+  "latency_p50_s": 7.2
+ }
+}

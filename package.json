@@ -10,6 +10,8 @@
 		"lint": "eslint",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
+		"test:e2e": "npm run build && playwright test",
+		"test:e2e:books": "E2E_BOOKS=1 E2E_BASE_URL=http://localhost:3000 playwright test --project=books",
 		"evals": "vitest run --config vitest.evals.config.ts",
 		"prepare": "husky"
 	},
@@ -36,6 +38,7 @@
 		"vexflow": "^5.0.0"
 	},
 	"devDependencies": {
+		"@playwright/test": "^1.63.0",
 		"@tailwindcss/postcss": "^4",
 		"@types/node": "^20",
 		"@types/react": "^19",

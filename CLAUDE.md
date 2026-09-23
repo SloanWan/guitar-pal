@@ -11,9 +11,10 @@ npm run dev      # Start dev server at localhost:3000
 npm run build    # Production build
 npm run lint     # Run ESLint
 npm test         # Run Vitest test suite
+npm run test:e2e # Build, serve on 3100, run the Playwright smoke suite (e2e/README.md)
 ```
 
-A pre-commit hook (`.husky/pre-commit`) runs `tsc --noEmit`, `npm run lint`, and `npm test` before every commit — fix all three before pushing.
+A pre-commit hook (`.husky/pre-commit`) runs `tsc --noEmit`, `npm run lint`, and `npm test` before every commit — fix all three before pushing. The hook does not run the e2e suite (it builds and drives a browser); CI does.
 
 ## Stack
 
@@ -117,4 +118,6 @@ Types defined in `src/types/database.ts`.
 
 ## Known Test Environment Limitations
 
-- jsdom does not implement a real Canvas 2D API, so VexFlow text-metrics calls in `fingerpickToVexFlow.test.ts` log warnings and return empty metrics. This doesn't currently invalidate those tests (they assert on data structures, not rendered positions), but any future layout/positioning test would need a real Canvas implementation or a browser-based test runner. Tracked separately in GitHub issues.
+- jsdom does not implement a real Canvas 2D API, so VexFlow text-metrics calls in `fingerpickToVexFlow.test.ts` log warnings and return empty metrics. This doesn't currently invalidate those tests (they assert on data structures, not rendered positions). That a stave is actually drawn is checked in the Playwright smoke suite instead (`e2e/smoke/fingerpick.spec.ts`), which is the browser-based runner that gap asked for; a test that asserts on rendered positions still belongs there, not in Vitest.
+
+**End-to-end** (`e2e/`, #259): Playwright, Chromium only. `smoke` is one short path per page, signed out, and is what CI runs; `account` needs `E2E_EMAIL` / `E2E_PASSWORD` and skips without them; `books` is local and by hand (`npm run test:e2e:books`), since it needs the Python service and minutes of OCR. Select by role and accessible name — where a component has no name, add an `aria-label` rather than a `data-testid`. See `e2e/README.md`.

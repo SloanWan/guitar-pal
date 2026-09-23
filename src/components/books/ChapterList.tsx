@@ -8,7 +8,8 @@ import { MONO_META } from "@/components/books/bookUi";
  * The chapters as the scan (or the player) drew them. A row opens its
  * chapter card (#202) under itself; one is open at a time. The row shows
  * the parse's state alongside the hint count, so a parsed chapter reads as
- * one at a glance.
+ * one at a glance. On a phone the meta moves under the title (#261): the
+ * columns' fixed widths left the title no room at all.
  */
 export default function ChapterList({
 	chapters,
@@ -46,25 +47,40 @@ export default function ChapterList({
 						<span className={`${MONO_META} w-6 flex-none tabular-nums`}>
 							{String(chapter.index + 1).padStart(2, "0")}
 						</span>
-						<span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
-							{chapter.title}
-						</span>
-						<ParseMark chapter={chapter} />
-						{pages > MAX_PARSE_PAGES ? (
+						<span className="min-w-0 flex-1">
+							<span className="block truncate text-[13px] font-medium text-ink">{chapter.title}</span>
+							{/* A phone: the meta on its own line under the title. */}
 							<span
-								className={`${MONO_META} flex-none`}
-								title={`Longer than ${MAX_PARSE_PAGES} pages — split it before parsing`}
+								data-testid="chapter-row-meta-stacked"
+								className={`${MONO_META} mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 sm:hidden`}
 							>
-								&gt;{MAX_PARSE_PAGES} P
+								<ParseMark chapter={chapter} />
+								{pages > MAX_PARSE_PAGES ? <span>&gt;{MAX_PARSE_PAGES} P</span> : null}
+								<span className="tabular-nums">{formatPages(chapter.page_start, chapter.page_end)}</span>
+								<span className={`tabular-nums ${hints > 0 ? "text-denim-accent" : ""}`}>
+									{hints} {hints === 1 ? "hint" : "hints"}
+								</span>
 							</span>
-						) : null}
-						<span className={`${MONO_META} w-20 flex-none text-right tabular-nums`}>
-							{formatPages(chapter.page_start, chapter.page_end)}
 						</span>
-						<span
-							className={`${MONO_META} w-16 flex-none text-right tabular-nums ${hints > 0 ? "text-denim-accent" : ""}`}
-						>
-							{hints} {hints === 1 ? "hint" : "hints"}
+						{/* Wider: the meta as columns beside the title. */}
+						<span className="hidden sm:contents">
+							<ParseMark chapter={chapter} />
+							{pages > MAX_PARSE_PAGES ? (
+								<span
+									className={`${MONO_META} flex-none`}
+									title={`Longer than ${MAX_PARSE_PAGES} pages — split it before parsing`}
+								>
+									&gt;{MAX_PARSE_PAGES} P
+								</span>
+							) : null}
+							<span className={`${MONO_META} w-20 flex-none text-right tabular-nums`}>
+								{formatPages(chapter.page_start, chapter.page_end)}
+							</span>
+							<span
+								className={`${MONO_META} w-16 flex-none text-right tabular-nums ${hints > 0 ? "text-denim-accent" : ""}`}
+							>
+								{hints} {hints === 1 ? "hint" : "hints"}
+							</span>
 						</span>
 						<ChevronRight
 							className={`size-3.5 flex-none text-ink-faint transition-transform duration-(--dur-hover) ${open ? "rotate-90" : ""}`}

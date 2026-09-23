@@ -36,4 +36,8 @@ services:
       # until the eval (book-service/evals/ask/) has run; its decision rule
       # says whether `rag` replaces it.
       BOOK_ASK_STRATEGY: long_context
+      # Which model answers: `anthropic`, or `deepseek` for DeepSeek-V4.1-Flash
+      # (DEEPSEEK_API_KEY in .env). See book-service/docs/calibration.md §8 for
+      # what each can read.
+      BOOK_ASK_PROVIDER: anthropic
     restart: unless-stopped

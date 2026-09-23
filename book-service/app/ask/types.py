@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from app.ingest.model import CallUsage
-from app.repo import BookRow, ChapterRow, ChunkRow, ExerciseRow
+from app.repo import BookRow, ChapterRow, ChunkRow, ExerciseRow, PageRow
 
 Intent = Literal["question", "wants_draft"]
 Source = Literal["book", "general"]
@@ -30,6 +30,9 @@ class AskContext:
     chapters: Sequence[ChapterRow]
     # The player's session token: the long-context strategy reads the PDF with it.
     token: str
+    # The chapter's pages as the scan read them, when a strategy needs their
+    # text or needs to know whether the PDF carries a text layer at all.
+    pages: Sequence[PageRow] = ()
 
 
 @dataclass(frozen=True)
@@ -48,10 +51,16 @@ class Retrieval:
 
 @dataclass(frozen=True)
 class Answer:
-    """One answer from the chapter: the prose and the pages its citations named."""
+    """
+    One answer from the chapter: the prose, the pages it rests on, and whether
+    the chapter covered the question at all. `covered` is an explicit signal
+    from the answer step (`NOT_IN_CHAPTER`), never inferred from the absence
+    of citations — a scanned chapter's pages carry none (calibration §8).
+    """
 
     message: str
     pages: tuple[int, ...]
+    covered: bool = True
     usage: Sequence[CallUsage] = ()
     model: str = ""
 

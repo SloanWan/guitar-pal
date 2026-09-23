@@ -14,14 +14,24 @@ from types import SimpleNamespace
 import pytest
 
 from app.ask.graph import NO_DRAFT, AskGraph, pick_draft
+from app.ask.json_out import json_instruction, parse_json_reply
 from app.ask.lexical import lexical_query, lexical_text, lexical_tokens
 from app.ask.limits import SlidingWindowLimiter
-from app.ask.prompts import ANSWER_SYSTEM, GENERAL_SYSTEM, INTENT_SYSTEM, GeneralOut, IntentOut
+from app.ask.prompts import (
+    ANSWER_SYSTEM,
+    GENERAL_SYSTEM,
+    INTENT_SYSTEM,
+    NOT_IN_CHAPTER,
+    GeneralOut,
+    IntentOut,
+)
+from app.ask.provider import Provider
 from app.ask.strategies.chunks import LexicalStrategy
-from app.ask.strategies.long_context import LongContextStrategy, chapter_pdf
+from app.ask.strategies.cited import strip_pages_line
+from app.ask.strategies.long_context import LongContextStrategy, chapter_pdf, has_text_layer
 from app.ask.types import AskContext, AskTurn
 from app.ingest.pdf import open_pdf
-from app.repo import BookRow, ChapterRow, ChunkRow, ExerciseRow
+from app.repo import BookRow, ChapterRow, ChunkRow, ExerciseRow, PageRow
 from tests.conftest import needs_materials
 from tests.test_scan import FakeStorage
 
@@ -96,7 +106,20 @@ def _chapter(chapter_id: str, title: str, start: int, end: int) -> ChapterRow:
 
 CHAPTER = _chapter("c", "实际操练", 204, 207)
 OTHERS = [_chapter("c0", "和弦部分", 100, 150), _chapter("c2", "扫弦节奏", 208, 230)]
-CTX = AskContext(book=BOOK, chapter=CHAPTER, chapters=[OTHERS[0], CHAPTER, OTHERS[1]], token="tok")
+# The real chapter behind these tests is a scan: OCR text, no text layer.
+SCAN_PAGES = [
+    PageRow(
+        page=n, text=f"第 {n} 页：左手按弦要准确果断。", text_source="ocr", may_have_exercise=True
+    )  # noqa: E501
+    for n in range(204, 208)
+]
+CTX = AskContext(
+    book=BOOK,
+    chapter=CHAPTER,
+    chapters=[OTHERS[0], CHAPTER, OTHERS[1]],
+    token="tok",
+    pages=SCAN_PAGES,
+)
 
 CHUNKS = [
     ChunkRow(id="k1", page=204, index=0, text="左手按弦要准确果断，第一关节弯曲。"),
@@ -138,6 +161,8 @@ class FakeModel:
     )
     answer_text: str = "按弦要准确果断。"
     citations: list[object] = field(default_factory=list)
+    # What a provider without structured output answers a schema call with.
+    json_reply: str | None = None
     requests: list[dict] = field(default_factory=list)
 
     @property
@@ -157,8 +182,14 @@ class FakeModel:
 
     async def create(self, **kwargs: object) -> object:
         self.requests.append(kwargs)
-        assert kwargs["system"] == ANSWER_SYSTEM
-        block = SimpleNamespace(type="text", text=self.answer_text, citations=self.citations)
+        system = str(kwargs["system"])
+        if system.startswith(ANSWER_SYSTEM):
+            text, citations = self.answer_text, self.citations
+        else:
+            # A schema call on a provider that has no structured output.
+            assert self.json_reply is not None, f"unexpected create: {system[:40]}"
+            text, citations = self.json_reply, []
+        block = SimpleNamespace(type="text", text=text, citations=citations)
         usage = SimpleNamespace(
             input_tokens=2000, output_tokens=50, cache_creation_input_tokens=1800
         )
@@ -184,8 +215,20 @@ class FakeStore:
         return self.exercises
 
 
-def _lexical(model: FakeModel, store: FakeStore) -> AskGraph:
-    return AskGraph(model, LexicalStrategy(model, store), store)  # type: ignore[arg-type]
+def _provider(model: FakeModel, *, documents: bool = True, structured: bool = True) -> Provider:
+    return Provider(
+        name="fake",
+        client=model,  # type: ignore[arg-type]
+        model="claude-opus-5",
+        small_model="claude-sonnet-5",
+        documents=documents,
+        structured_output=structured,
+    )
+
+
+def _lexical(model: FakeModel, store: FakeStore, **kwargs: bool) -> AskGraph:
+    provider = _provider(model, **kwargs)
+    return AskGraph(provider, LexicalStrategy(provider, store), store)
 
 
 def _systems(model: FakeModel) -> list[str]:
@@ -233,11 +276,50 @@ async def test_nothing_retrieved_goes_to_general_knowledge_labelled_and_uncited(
 
 
 @pytest.mark.asyncio
-async def test_an_answer_that_cites_nothing_is_not_the_books_and_falls_through() -> None:
-    model = FakeModel(citations=[], answer_text="This chapter does not cover that.")
+async def test_an_uncited_answer_is_still_the_books() -> None:
+    """
+    The bug this fixes: a scanned chapter's pages carry no citable text, so
+    every answer came back uncited and was thrown away for a general reply
+    that says it cannot see the chapter. Only NOT_IN_CHAPTER decides now.
+    """
+    model = FakeModel(citations=[], answer_text="按弦要准确果断。")
+    result = await _lexical(model, FakeStore(chunks=CHUNKS))(CTX, "左手怎么按弦？")
+    assert result.source == "book"
+    assert result.message == "按弦要准确果断。"
+    # No citations: the answer rests on the pages retrieval put in front of it.
+    assert result.pages == (204, 206)
+    assert _systems(model) == [INTENT_SYSTEM[:20], ANSWER_SYSTEM[:20]]
+
+
+@pytest.mark.asyncio
+async def test_only_the_not_in_chapter_signal_sends_a_question_to_general() -> None:
+    model = FakeModel(citations=[], answer_text=NOT_IN_CHAPTER)
     result = await _lexical(model, FakeStore(chunks=CHUNKS))(CTX, "How do I hold an F barre?")
     assert result.source == "general"
+    assert result.pages == ()
+    assert NOT_IN_CHAPTER not in result.message
     assert _systems(model) == [INTENT_SYSTEM[:20], ANSWER_SYSTEM[:20], GENERAL_SYSTEM[:20]]
+
+
+@pytest.mark.asyncio
+async def test_a_provider_that_cannot_cite_gets_labelled_pages_and_reads_the_pages_line() -> None:
+    """DeepSeek's path: no document blocks, so the chapter goes over as [Page N]."""
+    model = FakeModel(answer_text="按弦要准确果断。\nPAGES: 206, 999")
+    result = await _lexical(model, FakeStore(chunks=CHUNKS), documents=False)(CTX, "左手？")
+    assert result.source == "book"
+    assert result.message == "按弦要准确果断。"
+    # 999 was never sent, so it is not a page of this answer.
+    assert result.pages == (206,)
+    blocks = model.requests[1]["messages"][0]["content"]  # type: ignore[index]
+    assert [b["type"] for b in blocks] == ["text", "text", "text"]
+    assert blocks[0]["text"].startswith("[Page 204]")
+    assert "PAGES:" in str(model.requests[1]["system"])
+
+
+def test_strip_pages_line_takes_the_numbers_and_leaves_the_prose() -> None:
+    assert strip_pages_line("答案。\nPAGES: 204, 206") == ("答案。", (204, 206))
+    assert strip_pages_line("答案。") == ("答案。", None)
+    assert strip_pages_line("答案。\nPAGES:") == ("答案。", ())
 
 
 @pytest.mark.asyncio
@@ -297,7 +379,18 @@ def test_chapter_pdf_cuts_the_range_out_of_the_book(typeset_pdf: Path) -> None:
 async def test_long_context_sends_the_chapter_as_a_cached_pdf_and_maps_page_citations(
     typeset_pdf: Path,
 ) -> None:
-    ctx = AskContext(book=BOOK, chapter=_chapter("c", "Key sheets", 3, 9), chapters=[], token="tok")
+    typeset = [
+        PageRow(page=n, text=f"page {n}", text_source="layer", may_have_exercise=False)
+        for n in range(3, 10)
+    ]
+    ctx = AskContext(
+        book=BOOK,
+        chapter=_chapter("c", "Key sheets", 3, 9),
+        chapters=[],
+        token="tok",
+        pages=typeset,
+    )
+    assert has_text_layer(ctx), "a typeset chapter is the PDF-citation path"
     model = FakeModel(
         citations=[
             SimpleNamespace(type="page_location", start_page_number=2, end_page_number=3),
@@ -306,8 +399,9 @@ async def test_long_context_sends_the_chapter_as_a_cached_pdf_and_maps_page_cita
         ]
     )
     storage = FakeStorage({"u/b.pdf": typeset_pdf.read_bytes()})
-    strategy = LongContextStrategy(model, storage, asyncio.Semaphore(1))  # type: ignore[arg-type]
-    graph = AskGraph(model, strategy, FakeStore())  # type: ignore[arg-type]
+    provider = _provider(model)
+    strategy = LongContextStrategy(provider, storage, asyncio.Semaphore(1))
+    graph = AskGraph(provider, strategy, FakeStore())
 
     result = await graph(ctx, "What is the IV chord in D?")
 
@@ -322,3 +416,56 @@ async def test_long_context_sends_the_chapter_as_a_cached_pdf_and_maps_page_cita
     storage.files.clear()
     again = await graph(ctx, "And in G?")
     assert again.source == "book"
+
+
+@pytest.mark.asyncio
+async def test_long_context_on_a_scan_sends_its_ocr_text_and_never_downloads_the_pdf() -> None:
+    """
+    A scanned chapter has no text layer, so the PDF carries nothing citable:
+    the chapter goes over as its own OCR text, labelled by page.
+    """
+    model = FakeModel(answer_text="按弦要准确果断。\nPAGES: 204")
+    storage = FakeStorage({})  # a download would raise 404
+    provider = _provider(model)
+    strategy = LongContextStrategy(provider, storage, asyncio.Semaphore(1))
+    result = await AskGraph(provider, strategy, FakeStore())(CTX, "左手怎么按弦？")
+
+    assert result.source == "book"
+    assert result.pages == (204,)
+    blocks = model.requests[1]["messages"][0]["content"]  # type: ignore[index]
+    assert [b["text"].split("]")[0] + "]" for b in blocks[:4]] == [
+        "[Page 204]",
+        "[Page 205]",
+        "[Page 206]",
+        "[Page 207]",
+    ]
+    # The last page carries the cache mark, so the chapter is one cached prefix.
+    assert blocks[3]["cache_control"] == {"type": "ephemeral"}
+
+
+# --- structured replies without structured output ---------------------------------
+
+
+def test_json_instruction_names_every_field_and_its_options() -> None:
+    text = json_instruction(IntentOut)
+    assert '"intent": one of' in text and "'wants_draft'" in text
+    assert '"topic": "…"' in text
+
+
+def test_parse_json_reply_reads_a_wrapped_object_and_refuses_prose() -> None:
+    body = '{"intent": "wants_draft", "kind": "tab", "topic": "组合 {练习}"}'
+    wrapped = f"Sure!\n```json\n{body}\n```"
+    out = parse_json_reply(wrapped, IntentOut)
+    assert out is not None and out.intent == "wants_draft" and out.topic == "组合 {练习}"
+    assert parse_json_reply("无法作答。", IntentOut) is None
+    assert parse_json_reply('{"intent": "nope"}', IntentOut) is None
+
+
+@pytest.mark.asyncio
+async def test_a_provider_without_structured_output_is_answered_in_json() -> None:
+    model = FakeModel(json_reply='{"intent": "question", "kind": "any", "topic": ""}')
+    result = await _lexical(model, FakeStore(chunks=CHUNKS), structured=False)(CTX, "左手？")
+    assert result.source == "book"
+    # Every call went through `create`; nothing asked for output_format.
+    assert all("output_format" not in r for r in model.requests)
+    assert "Reply with one JSON object" in str(model.requests[0]["system"])

@@ -10,10 +10,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from anthropic import AsyncAnthropic
-
 from app.ask.lexical import lexical_query
-from app.ask.strategies.cited import answer_with_documents, text_document
+from app.ask.provider import Provider
+from app.ask.strategies.cited import AnswerRequest, answer_call, labelled_pages, text_document
 from app.ask.types import Answer, AskContext, AskTurn, Retrieval
 from app.repo import ChunkRow
 
@@ -44,12 +43,21 @@ class Embedder(Protocol):
 
 
 async def answer_from_chunks(
-    client: AsyncAnthropic,
+    provider: Provider,
     chunks: Sequence[ChunkRow],
     question: str,
     history: Sequence[AskTurn],
 ) -> Answer:
+    """
+    The retrieved chunks as the chapter. A provider that reads documents gets
+    them cited, one per chunk, and the page comes off the citation; one that
+    does not gets the same text as labelled pages (calibration §8).
+    """
     ordered = sorted(chunks, key=lambda c: (c.page, c.index))
+    if not provider.documents:
+        request: AnswerRequest = labelled_pages([(c.page, c.text) for c in ordered])
+        return await answer_call(provider, request, question, history)
+
     documents = [
         text_document(f"Page {c.page}", c.text, cached=(i == 0)) for i, c in enumerate(ordered)
     ]
@@ -62,12 +70,19 @@ async def answer_from_chunks(
             return ()
         return [ordered[index].page]
 
-    return await answer_with_documents(client, documents, pages_of, question, history)
+    # Pages the chunks carry, as the fallback when nothing was cited: the
+    # answer rests on what retrieval put in front of it either way.
+    request = AnswerRequest(
+        blocks=documents,
+        pages_sent=tuple(dict.fromkeys(c.page for c in ordered)),
+        pages_of=pages_of,
+    )
+    return await answer_call(provider, request, question, history)
 
 
 @dataclass
 class LexicalStrategy:
-    client: AsyncAnthropic
+    provider: Provider
     store: ChunkStore
     name: str = "lexical"
 
@@ -81,12 +96,12 @@ class LexicalStrategy:
     async def answer(
         self, ctx: AskContext, question: str, history: Sequence[AskTurn], retrieval: Retrieval
     ) -> Answer:
-        return await answer_from_chunks(self.client, retrieval.chunks, question, history)
+        return await answer_from_chunks(self.provider, retrieval.chunks, question, history)
 
 
 @dataclass
 class RagStrategy:
-    client: AsyncAnthropic
+    provider: Provider
     store: ChunkStore
     embedder: Embedder
     name: str = "rag"
@@ -100,4 +115,4 @@ class RagStrategy:
     async def answer(
         self, ctx: AskContext, question: str, history: Sequence[AskTurn], retrieval: Retrieval
     ) -> Answer:
-        return await answer_from_chunks(self.client, retrieval.chunks, question, history)
+        return await answer_from_chunks(self.provider, retrieval.chunks, question, history)

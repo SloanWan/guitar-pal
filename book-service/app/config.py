@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     # chunks) or `rag` (pgvector; needs the embedding key below). The default
     # is the eval's call (evals/ask/, decision rule in #203).
     ask_strategy: str = Field(default="long_context", validation_alias="BOOK_ASK_STRATEGY")
+    # Which model answers: `anthropic`, or `deepseek` (DeepSeek-V4.1-Flash over
+    # its Anthropic-compatible endpoint — no document blocks, no structured
+    # output, but it reads page images; see app/ask/provider.py).
+    ask_provider: str = Field(default="anthropic", validation_alias="BOOK_ASK_PROVIDER")
+    deepseek_api_key: str | None = Field(default=None, validation_alias="DEEPSEEK_API_KEY")
     # Anthropic has no embeddings endpoint; `rag` embeds with Voyage.
     voyage_api_key: str | None = Field(default=None, validation_alias="VOYAGE_API_KEY")
     embedding_model: str = Field(default="voyage-3.5-lite", validation_alias="BOOK_EMBEDDING_MODEL")

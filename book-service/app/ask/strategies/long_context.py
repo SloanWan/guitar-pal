@@ -1,13 +1,21 @@
 """
-`long_context`: the chapter itself, as a PDF, in the prompt.
+`long_context`: the whole chapter in the prompt, one way or the other.
 
-The chapter's pages are cut out of the book's PDF (as the player, with the
-session token — the same download the page images make, and the same
-cache) into one document block with citations on and the cache mark, so
-the first question of a thread pays for the chapter and the ones after it
-read it back. There is no retrieval step: everything is in front of the
-model, and whether the chapter covered the question is what its citations
-say — an answer that cites nothing goes down the general route.
+Two shapes, chosen by what can actually be read (calibration §8):
+
+- **The PDF, cited.** Only when the provider reads `document` blocks *and*
+  every page of the chapter carries a text layer. The chapter's pages are
+  cut out of the book's PDF into one document block with citations on and
+  the cache mark, and the pages come off the API's `page_location`
+  citations. This is the exact path, and it is the typeset case.
+- **Labelled pages.** Everything else — every scanned chapter, and every
+  DeepSeek call. A PDF's citations are built from its text layer, so a scan
+  yields none however well the model reads the page images; the chapter
+  goes over as the scan's own text, `[Page N]` at a time, and the pages
+  come from what was sent.
+
+There is no retrieval step either way: the whole chapter is in front of the
+model, and what it did not cover is what the answer step says it did not.
 """
 
 import asyncio
@@ -18,15 +26,19 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pymupdf
-from anthropic import AsyncAnthropic
 
-from app.ask.strategies.cited import answer_with_documents
+from app.ask.provider import Provider
+from app.ask.strategies.cited import AnswerRequest, answer_call, labelled_pages
 from app.ask.types import Answer, AskContext, AskTurn, Retrieval
 from app.ingest.pdf import UnreadablePdf, open_pdf
 from app.pages import PdfCache
 from app.storage import StorageClient
 
 log = logging.getLogger("book-service")
+
+# A page of OCR past this is not what an answer turns on; keeps a 40-page
+# chapter inside a sane prompt.
+MAX_PAGE_CHARS = 8_000
 
 
 class ChapterUnavailable(Exception):
@@ -52,9 +64,24 @@ def chapter_pdf(pdf: bytes, page_start: int, page_end: int) -> bytes:
             out.close()
 
 
+def has_text_layer(ctx: AskContext) -> bool:
+    """Whether every page of the chapter carries text the PDF itself can be cited on."""
+    pages = [p for p in ctx.pages if ctx.chapter.page_start <= p.page <= ctx.chapter.page_end]
+    return bool(pages) and all(p.text_source == "layer" for p in pages)
+
+
+def chapter_pages(ctx: AskContext) -> list[tuple[int, str]]:
+    """The chapter's pages with text, in order, each capped."""
+    return [
+        (p.page, p.text.strip()[:MAX_PAGE_CHARS])
+        for p in ctx.pages
+        if ctx.chapter.page_start <= p.page <= ctx.chapter.page_end and p.text.strip()
+    ]
+
+
 @dataclass
 class LongContextStrategy:
-    client: AsyncAnthropic
+    provider: Provider
     storage: StorageClient
     worker: asyncio.Semaphore
     pdfs: PdfCache = field(default_factory=PdfCache)
@@ -67,6 +94,23 @@ class LongContextStrategy:
     async def answer(
         self, ctx: AskContext, question: str, history: Sequence[AskTurn], retrieval: Retrieval
     ) -> Answer:
+        if self.provider.documents and has_text_layer(ctx):
+            request = await self._pdf_request(ctx)
+        else:
+            pages = chapter_pages(ctx)
+            if not pages:
+                raise ChapterUnavailable(
+                    409, "This chapter has no readable text. Rescan the book, then parse it."
+                )
+            log.info(
+                "ask long_context: %d page(s) as text (%s)",
+                len(pages),
+                "provider reads no documents" if not self.provider.documents else "no text layer",
+            )
+            request = labelled_pages(pages)
+        return await answer_call(self.provider, request, question, history)
+
+    async def _pdf_request(self, ctx: AskContext) -> AnswerRequest:
         pdf = self.pdfs.get(ctx.book.id)
         if pdf is None:
             pdf = await self.storage.download(ctx.book.storage_path, ctx.token)
@@ -95,9 +139,10 @@ class LongContextStrategy:
             if getattr(citation, "type", None) != "page_location":
                 return ()
             start = int(getattr(citation, "start_page_number", 0) or 0)
+            if start < 1:
+                return ()
             end = int(getattr(citation, "end_page_number", start) or start)
-            # end_page_number is exclusive in the API; a one-page citation has end = start + 1.
-            last = max(start, end - 1)
-            return [offset + p for p in range(start, last + 1) if start >= 1]
+            # end_page_number is exclusive: a one-page citation has end = start + 1.
+            return [offset + p for p in range(start, max(start, end - 1) + 1)]
 
-        return await answer_with_documents(self.client, [document], pages_of, question, history)
+        return AnswerRequest(blocks=[document], pages_of=pages_of)

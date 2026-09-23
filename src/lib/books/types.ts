@@ -117,6 +117,8 @@ export interface AskResponse {
 	model: string;
 	cost: ParseCost;
 	strategy: string;
+	/** `anthropic` or `deepseek`; which model wrote it, for the log and the eval. */
+	provider: string;
 }
 
 /** `GET /books/{id}/chapters/{chapter_id}/parse`: the chapter card. */

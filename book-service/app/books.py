@@ -414,6 +414,7 @@ class AskOut(BaseModel):
     model: str
     cost: AskCost
     strategy: str
+    provider: str
 
 
 @router.post("/{book_id}/chapters/{chapter_id}/ask", response_model=AskOut)
@@ -447,6 +448,9 @@ async def ask_chapter(
         chapter=chapter,
         chapters=await repo.list_chapters(book.id),
         token=session.token,
+        # The chapter's own pages: whether its PDF can be cited at all turns on
+        # them, and a scan is answered from their text (#203, calibration §8).
+        pages=await repo.list_pages(book.id, chapter.page_start, chapter.page_end),
     )
     history = [AskTurn(m.role, m.content) for m in body.messages[:-1]]
     try:
@@ -467,6 +471,7 @@ async def ask_chapter(
             usd=round(sum(u.cost_usd for u in result.usage), 4),
         ),
         strategy=ask.strategy_name,
+        provider=ask.provider_name,
     )
 
 

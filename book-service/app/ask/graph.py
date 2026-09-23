@@ -24,20 +24,25 @@ import operator
 from collections.abc import Sequence
 from typing import Annotated, Protocol, TypedDict
 
-from anthropic import AsyncAnthropic
 from langgraph.graph import END, START, StateGraph
 
 from app.ask.prompts import GENERAL_SYSTEM, INTENT_SYSTEM, GeneralOut, IntentOut
+from app.ask.provider import Provider
 from app.ask.strategies import AskStrategy
+from app.ask.structured import structured_call
 from app.ask.types import Answer, AskContext, AskResult, AskTurn, Retrieval
-from app.ingest.model import CLASSIFY_MODEL, MODEL, CallUsage, usage_of
+from app.ingest.model import CallUsage
 from app.repo import ExerciseRow
 
 log = logging.getLogger("book-service")
 
 # Turns of the thread the intent and general calls are shown.
 MAX_HISTORY_TURNS = 8
-MAX_GENERAL_TOKENS = 1024
+# Both caps leave room for a reasoning model's thinking, which is spent before
+# a word of the answer: deepseek-flash writes nothing at all under ~400 tokens.
+# A cap is not a charge — what is billed is what was written.
+MAX_INTENT_TOKENS = 1024
+MAX_GENERAL_TOKENS = 2048
 
 NO_DRAFT = (
     "This chapter's parse found no exercise like that. The drafts it did find are on"
@@ -104,8 +109,8 @@ def pick_draft(
 
 
 class AskGraph:
-    def __init__(self, client: AsyncAnthropic, strategy: AskStrategy, drafts: DraftStore) -> None:
-        self._client = client
+    def __init__(self, provider: Provider, strategy: AskStrategy, drafts: DraftStore) -> None:
+        self._provider = provider
         self._strategy = strategy
         self._drafts = drafts
         self._graph = self._build()
@@ -113,6 +118,10 @@ class AskGraph:
     @property
     def strategy_name(self) -> str:
         return self._strategy.name
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider.name
 
     async def __call__(
         self, ctx: AskContext, question: str, history: Sequence[AskTurn] = ()
@@ -123,8 +132,9 @@ class AskGraph:
         result = state["result"]
         result.usage = list(state.get("usage", []))
         log.info(
-            "ask %s [%s]: intent=%s source=%s pages=%s draft=%s $%.4f",
+            "ask %s [%s/%s]: intent=%s source=%s pages=%s draft=%s $%.4f",
             ctx.chapter.id,
+            self._provider.name,
             self._strategy.name,
             state["intent"].intent,
             result.source,
@@ -137,17 +147,18 @@ class AskGraph:
     # --- nodes -------------------------------------------------------------
 
     async def intent(self, state: AskState) -> dict[str, object]:
-        response = await self._client.messages.parse(
-            model=CLASSIFY_MODEL,
-            max_tokens=256,
+        out, usage = await structured_call(
+            self._provider,
             system=INTENT_SYSTEM,
-            messages=_history_messages(state["history"], state["question"]),  # type: ignore[arg-type]
-            output_format=IntentOut,
-            output_config={"effort": "low"},
+            messages=_history_messages(state["history"], state["question"]),
+            output=IntentOut,
+            max_tokens=MAX_INTENT_TOKENS,
+            effort="low",
+            small=True,
         )
-        out = response.parsed_output if response.stop_reason == "end_turn" else None
+        # An unreadable intent is a question: the chapter is what they opened.
         intent = out or IntentOut(intent="question", kind="any", topic="")
-        return {"intent": intent, "usage": [usage_of(response, CLASSIFY_MODEL)]}
+        return {"intent": intent, "usage": [usage]}
 
     async def retrieve(self, state: AskState) -> dict[str, object]:
         retrieval = await self._strategy.retrieve(state["ctx"], state["question"])
@@ -160,8 +171,14 @@ class AskGraph:
         return {"answer": answer, "usage": list(answer.usage)}
 
     async def cite(self, state: AskState) -> dict[str, object]:
+        """
+        Whether this answer is the book's. Only `covered` decides — the answer
+        step says so outright. Pages are what it rests on and may be empty
+        (a provider that cannot cite, a reply that named none); an answer with
+        no pages is still the chapter's, and the panel simply shows no keys.
+        """
         answer = state["answer"]
-        if not answer.pages or not answer.message:
+        if not answer.covered or not answer.message:
             return {}
         return {
             "result": AskResult(
@@ -180,31 +197,30 @@ class AskGraph:
                 f"The book's other chapters:\n{titles}\n\nThe question:\n{state['question']}"
             ),
         }
-        response = await self._client.messages.parse(
-            model=MODEL,
-            max_tokens=MAX_GENERAL_TOKENS,
+        out, call = await structured_call(
+            self._provider,
             system=GENERAL_SYSTEM,
-            messages=messages,  # type: ignore[arg-type]
-            output_format=GeneralOut,
-            output_config={"effort": "medium"},
+            messages=messages,
+            output=GeneralOut,
+            max_tokens=MAX_GENERAL_TOKENS,
         )
-        out = response.parsed_output if response.stop_reason == "end_turn" else None
-        usage = [usage_of(response)]
+        model = self._provider.model
+        usage = [call]
         if out is None:
             return {
-                "result": AskResult(message=f"{NOT_COVERED}.", source="general", model=MODEL),
+                "result": AskResult(message=f"{NOT_COVERED}.", source="general", model=model),
                 "usage": usage,
             }
         if out.answered:
             return {
-                "result": AskResult(message=out.message.strip(), source="general", model=MODEL),
+                "result": AskResult(message=out.message.strip(), source="general", model=model),
                 "usage": usage,
             }
         named = [others[n - 1].title for n in out.chapters if 1 <= n <= len(others)]
         message = out.message.strip() or f"{NOT_COVERED}."
         if named:
             message += " Chapters that look relevant: " + "; ".join(f"“{t}”" for t in named) + "."
-        return {"result": AskResult(message=message, source="general", model=MODEL), "usage": usage}
+        return {"result": AskResult(message=message, source="general", model=model), "usage": usage}
 
     async def find_draft(self, state: AskState) -> dict[str, object]:
         ctx, intent = state["ctx"], state["intent"]

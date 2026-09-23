@@ -375,3 +375,55 @@ Read-outs:
   took these notes in place of the empty-paged ones (`notes_rerun` records
   the run); the drafts and chunks are still the 2026-09-19 parse's. The
   fixture was rebuilt with `scripts/build-book-sample.mjs`.
+
+## 8. Chapter Q&A: what each provider can actually read (#203)
+
+The first build of the ask graph answered every question with "I can't see
+this chapter". The cause was a rule that looked reasonable and was wrong:
+`cite` treated *an answer with no citations* as *not from the book*, and
+sent it to a general step that is deliberately never shown the chapter.
+
+Probed by hand, 2026-09-23, same prompt, one variable at a time:
+
+| document sent | provider | citations back | answer |
+|---|---|---|---|
+| 三月通 p1–4 as PDF (**scan**, no text layer) | claude-opus-5 | **0** | correct and detailed — read by vision |
+| SongWriting p3–5 as PDF (typeset, text layer) | claude-opus-5 | **5** × `page_location` | correct, pages map correctly |
+| two text `document` blocks | deepseek-flash | **0** | "提供的文档无法读取" — the blocks are not read at all |
+| one scanned page as an `image` block | deepseek-flash | n/a | correct and detailed |
+| `messages.parse(output_format=…)` | deepseek-flash | n/a | ignores the schema, answers in prose (SDK raises) |
+
+Read-outs:
+
+- **PDF citations come from the PDF's text layer.** A scan has none, so no
+  answer about a scanned chapter can ever carry one — on any provider. Since
+  scanned method books are the case this whole feature exists for, the
+  citation gate failed 100% of the time on the only book on hand.
+- **An uncited answer says nothing about coverage.** Coverage is now an
+  explicit signal from the answer step (`NOT_IN_CHAPTER`), and an answer
+  without citations is still the chapter's.
+- **Pages, when the API cannot cite, come from what was sent.** A scanned or
+  DeepSeek chapter goes over as `[Page N]` blocks and the reply ends with a
+  `PAGES:` line; the app keeps only numbers it actually sent (a reply naming
+  p.999 gets none of it) and falls back to every page sent. The model picks
+  among identifiers; it never supplies one.
+- **deepseek-flash needs `effort: low` and room to think.** At its default
+  (`high`) with 300 output tokens it spent the entire budget reasoning and
+  returned empty text — which looks exactly like a broken endpoint. Caps are
+  now 1024 (intent) and 2048 (answer); a cap is not a charge.
+
+Live, the three questions that had failed, through the real graph on the
+scanned chapter (4 pages of OCR, `long_context`):
+
+| question | anthropic (opus-5) | deepseek-flash |
+|---|---|---|
+| "what does this chapter say about the left hand?" | `book`, p1/3/4, 1201 tok | `book`, p1/4, 3564 tok |
+| "这一章哪一部分涉及了音阶练习？" | `book`, p1–4, 1194 tok | `book`, p1/2/4, 711 tok |
+| "什么是 Dorian 调式？" | `general`, no pages, 1740 tok | `general`, no pages, 1028 tok |
+| total | 4135 tok | 5303 tok |
+
+Both answer the two chapter questions correctly from the OCR text and route
+the theory question out of the book. DeepSeek's tokens include its thinking;
+its second question is cheap because the chapter prefix was a cache read.
+**DeepSeek is not in `PRICE_PER_MTOK`**, so a parse or ask run on it records
+tokens with `$0` — the figure is not a claim that it was free.

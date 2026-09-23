@@ -211,13 +211,27 @@ chapter: it answers as a teacher would, labelled `general`, or declines
 and names other chapters by title. A request for an exercise is a lookup
 over `book_exercises`.
 
+Which model answers is `BOOK_ASK_PROVIDER`: `anthropic` (default), or
+`deepseek` — DeepSeek-V4.1-Flash over its Anthropic-compatible endpoint,
+`DEEPSEEK_API_KEY`. They differ in ways the graph branches on
+(`app/ask/provider.py`, measured in `docs/calibration.md` §8): DeepSeek reads
+no `document` blocks and ignores `output_format`, so there the chapter goes
+over as labelled `[Page N]` text and the two structured steps ask for JSON in
+the prompt (`app/ask/json_out.py`). It does read images, and reads a scanned
+page well. It is not in the price table, so its runs record tokens with `$0`.
+
 How the chapter reaches the model is `BOOK_ASK_STRATEGY`:
 
 | strategy | the chapter reaches the model as | pages from |
 |---|---|---|
-| `long_context` (default until the eval says otherwise) | its pages cut out of the PDF, one document block, citations on, prompt-cached — the first question of a thread pays for the chapter | `page_location` citations |
+| `long_context` (default until the eval says otherwise) | the chapter's pages cut out of the PDF as one cited, cached document — **only** when the provider reads documents and every page has a text layer. Otherwise (every scan, every DeepSeek call) the chapter's own text, `[Page N]` at a time. | `page_location` citations, or the pages that were sent |
 | `lexical` | the top chunks of a Postgres full-text search, one text document each; the tokeniser in `app/ask/lexical.py` splits CJK into bigrams, which `simple` cannot | the cited document's page |
 | `rag` | the nearest chunks by pgvector, same answer step; needs `VOYAGE_API_KEY` (`BOOK_EMBEDDING_MODEL`, `BOOK_EMBEDDING_DIMENSION` must match migration 0007's column). Not exercised live yet. | the cited document's page |
+
+Whether the chapter was covered is never inferred from whether the answer
+carried a citation — a scanned chapter's pages carry none, on any provider.
+The answer step says `NOT_IN_CHAPTER` or it does not, and only that sends a
+question to the general step, which is the one step never shown the chapter.
 
 Chunks parsed before migration 0007 get their search column from
 `scripts/backfill_chunks.py` (`--embed` for vectors). The eval that picks

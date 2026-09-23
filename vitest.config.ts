@@ -9,6 +9,9 @@ export default defineConfig({
 	},
 	test: {
 		environment: "jsdom",
+		// Vitest would otherwise claim `e2e/**/*.spec.ts` as its own; those run
+		// under Playwright, against a real browser (`npm run test:e2e`).
+		include: ["src/**/*.{test,spec}.{ts,tsx}"],
 		globals: true,
 		setupFiles: ["src/test/setup.ts"],
 		coverage: {

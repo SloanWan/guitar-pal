@@ -15,16 +15,24 @@ describe("looksLikeChord", () => {
 		}
 	});
 
-	// #287: the digit alternative used to be `\d+` inside a `*`-repeated group,
-	// so a digit run had 2^(n-1) splits and a word that did not match made the
-	// engine walk every one of them. Warm medians for this input: 26 digits ran
-	// 365 ms that way against 0.000 ms this way, a gap of six orders of
-	// magnitude, so the bound below has room on a loaded runner from either
-	// side. The length is picked deliberately — 24 digits only reached 102 ms,
-	// too close to the bound to catch a regression, and 28 took 1.6 s, heading
-	// for Vitest's timeout instead of a readable assertion failure.
+	// #287: two alternatives used to overlap what the outer `*` could match, so
+	// a word that fails to match had 2^n ways to be parsed and the engine walked
+	// every one. Warm medians below are before → after for the input each case
+	// builds. The lengths are picked so a regression fails on the assertion:
+	// shorter ones stay near the bound, longer ones run into Vitest's timeout
+	// instead of reporting anything readable.
 	it("answers a long digit run promptly rather than backtracking over it", () => {
+		// `\d+` inside the repeated group. 26 digits: 365 ms → 0.000 ms.
 		const word = `C${"1".repeat(26)}x`;
+		const started = performance.now();
+		expect(looksLikeChord(word)).toBe(false);
+		expect(performance.now() - started).toBeLessThan(50);
+	});
+
+	it("answers a long run of slash roots promptly", () => {
+		// The trailing `[#b♯♭]?` on the slash alternative, which `#` could also
+		// claim on the next iteration. 26 repetitions: 1054 ms → 0.000 ms.
+		const word = `A${"/A#".repeat(26)}x`;
 		const started = performance.now();
 		expect(looksLikeChord(word)).toBe(false);
 		expect(performance.now() - started).toBeLessThan(50);

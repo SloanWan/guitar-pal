@@ -469,3 +469,29 @@ async def test_a_provider_without_structured_output_is_answered_in_json() -> Non
     # Every call went through `create`; nothing asked for output_format.
     assert all("output_format" not in r for r in model.requests)
     assert "Reply with one JSON object" in str(model.requests[0]["system"])
+
+
+def test_every_column_the_repo_writes_has_a_migration() -> None:
+    """
+    `finish_parse` writes `tsv` on every chunk, so 0007 must exist and must be
+    the head. This is here because nothing else would catch its absence: the
+    tests use fakes, so a column that only Postgres would miss never fails.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    versions = Path(__file__).resolve().parent.parent / "alembic" / "versions"
+    revisions: dict[str, str | None] = {}
+    for path in sorted(versions.glob("[0-9]*.py")):
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        revisions[module.revision] = module.down_revision
+
+    # One unbroken chain, no forks, exactly one head.
+    parents = [down for down in revisions.values() if down is not None]
+    assert len(parents) == len(set(parents)), "two revisions share a parent"
+    heads = set(revisions) - set(parents)
+    assert len(heads) == 1, f"expected one head, found {sorted(heads)}"
+    assert "0007" in revisions, "the chunk retrieval columns have no migration"

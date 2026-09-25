@@ -93,6 +93,19 @@ describe("buildTabProposal", () => {
 			expect(codes(p)).toContain("PADDED");
 		});
 
+		it("reads an order longer than a bar of eighths as one bar of the finer value it divides into", () => {
+			const p = build({ chordWords: [Am], order: order("R_32^132R_32^132") });
+			expect(p.pattern.measures).toHaveLength(1);
+			expect(p.pattern.measures[0].slots[1].duration).toBe("sixteenth");
+			expect(codes(p)).toEqual([]);
+			// One bar per chord word, still.
+			const eight = build({ chordWords: [C, C, Am, Am, G, G, D, C], order: order("R_32^132R_32^132") });
+			expect(eight.pattern.measures).toHaveLength(8);
+			// In 3/4 twelve cells are a bar of sixteenths; in 4/4 they are not, and stay eighths.
+			expect(build({ chordWords: [Am], order: order("5 3 2 1 3 2 1 3 5 3 2 1"), timeSignature: [3, 4] }).pattern.measures).toHaveLength(1);
+			expect(build({ chordWords: [Am], order: order("5 3 2 1 3 2 1 3 5 3 2 1") }).pattern.measures).toHaveLength(2);
+		});
+
 		it("takes the note value and the meter it was given", () => {
 			const p = build({ chordWords: [Am], order: order("5 3 2 1 3 2"), duration: "eighth", timeSignature: [6, 8] });
 			expect(p.pattern.timeSignature).toEqual([6, 8]);
@@ -100,6 +113,40 @@ describe("buildTabProposal", () => {
 			expect(codes(p)).toEqual([]);
 			const s = build({ chordWords: [Am], order: order("5321"), duration: "sixteenth" });
 			expect(s.pattern.measures[0].slots).toHaveLength(16);
+		});
+
+		it("writes a hold as a longer note inside the beat, and as a tied note across the line", () => {
+			const p = build({ chordWords: [Am], order: order("R_32^132R_32^132"), duration: "sixteenth" });
+			expect(p.pattern.measures).toHaveLength(1);
+			const slots = p.pattern.measures[0].slots;
+			expect(usedUnits(slots)).toBe(measureCapacity([4, 4]));
+			expect(slots.map((s) => s.duration)).toEqual([
+				"eighth", "sixteenth", "sixteenth", "sixteenth", "sixteenth", "sixteenth", "sixteenth",
+				"eighth", "sixteenth", "sixteenth", "sixteenth", "sixteenth", "sixteenth", "sixteenth",
+			]);
+			expect(sounded(p.pattern.measures[0])).toEqual([
+				"5:0", "3:2", "2:1", "2:1", "1:0", "3:2", "2:1",
+				"5:0", "3:2", "2:1", "2:1", "1:0", "3:2", "2:1",
+			]);
+			// The fourth cell is the 2 carried over the beat line, not struck again.
+			expect(slots[3].strings[1].tied).toBe(true);
+			expect(slots[2].strings[1].tied).toBe(false);
+			expect(codes(p)).toEqual([]);
+		});
+
+		it("folds holds after the repeats are laid, so a repeated order holds the same way each time", () => {
+			const p = build({ chordWords: [C], order: order("R_3 2"), duration: "eighth" });
+			const slots = p.pattern.measures[0].slots;
+			expect(slots.map((s) => s.duration)).toEqual(["quarter", "eighth", "eighth", "quarter", "eighth", "eighth"]);
+			expect(slots.every((s) => s.strings.every((x) => !x.tied))).toBe(true);
+		});
+
+		it("opens the next bar with a tied note when a hold crosses the bar line", () => {
+			const p = build({ chordWords: [Am], order: order("5 3 2 1 3 2 1 3 _ 2 1 3"), duration: "eighth" });
+			expect(p.pattern.measures).toHaveLength(2);
+			const second = p.pattern.measures[1].slots;
+			expect(second[0].strings[2]).toMatchObject({ fret: 2, tied: true });
+			expect(sounded(p.pattern.measures[1]).slice(0, 4)).toEqual(["3:2", "2:1", "1:0", "3:2"]);
 		});
 
 		it("writes an alternating bass as it was said", () => {

@@ -1,23 +1,9 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { NavProgressProvider, NavProgressBar } from "@/components/nav-progress";
 import NoFocusZoom from "@/components/NoFocusZoom";
-
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  variable: "--font-jbmono",
-  display: "swap",
-});
-
-const sans = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-grotesk",
-  display: "swap",
-});
+import { mono, sans } from "./fonts/fonts";
 
 export const metadata: Metadata = {
   title: "Guitar Pal",

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+	chordToneNames,
 	effectiveChords,
 	patternHasChords,
 	setSlotChord,
@@ -119,6 +120,23 @@ describe("setSlotChord", () => {
 		const input = pattern([measure("a", [undefined])]);
 		setSlotChord(input, { measureIndex: 0, slotIndex: 0 }, C);
 		expect(input.measures[0].slots[0].chord).toBeUndefined();
+	});
+});
+
+describe("chordToneNames", () => {
+	it("lists the chord's tones root first, spelled by interval", () => {
+		expect(chordToneNames(C, voicing())).toEqual(["C", "E", "G"]);
+		expect(chordToneNames(Am, voicing({ frets: "x02210" }))).toEqual(["A", "C", "E"]);
+		expect(chordToneNames({ root: "D", suffix: "7" }, voicing({ frets: "xx0212" }))).toEqual([
+			"D",
+			"F♯",
+			"A",
+			"C",
+		]);
+	});
+
+	it("falls back to what the voicing sounds for a suffix the formulas do not know", () => {
+		expect(chordToneNames({ root: "C", suffix: "mystery" }, voicing())).toEqual(["C", "E", "G"]);
 	});
 });
 

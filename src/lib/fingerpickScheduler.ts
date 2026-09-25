@@ -7,6 +7,7 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
+import { soundingMidi } from "@/lib/fingerpickPitch";
 import { beatTicks } from "@/lib/fingerpickEdit";
 import type { Meter } from "@/lib/strumMeter";
 
@@ -63,11 +64,9 @@ export interface VoiceHandle {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/**
- * Standard guitar tuning MIDI notes for open strings.
- * Index 0 = high e (E4 = 64), index 5 = low E (E2 = 40).
- */
-export const OPEN_STRING_MIDI: readonly number[] = [64, 59, 55, 50, 45, 40];
+// Open-string pitches live with the pitch labels (fingerpickPitch.ts); re-exported
+// here for the callers that have always read them from the scheduler.
+export { OPEN_STRING_MIDI } from "@/lib/fingerpickPitch";
 
 /** Exponential time constant (s) for voice-steal fade. ~5 ms avoids clicks. */
 export const VOICE_STEAL_FADE_TAU = 0.005;
@@ -274,7 +273,9 @@ export function computeRollOffsets(
  *
  * Rules:
  *  - Rest slots advance time but produce no events.
- *  - Tied strings produce no re-attack event (the previous note sustains).
+ *  - Tied strings produce no re-attack event: the previous note on that string
+ *    sustains, its `duration` lengthened by the tied slot so the decay is the
+ *    written length, not the first slot's.
  *  - Pitch is always derived from `fret` when non-null (even for muted strings —
  *    a palm-muted note at fret 5 has the same pitch as an unmuted fret 5; the
  *    `muted` flag only drives preset selection and envelope shaping).
@@ -295,6 +296,8 @@ export function fingerpickPatternToScheduleEvents(
 	const capo = patternCapo(pattern);
 	const events: ScheduleEvent[] = [];
 	let currentTime = 0;
+	// The last event struck on each string, for a tied slot to lengthen.
+	const sounding: (ScheduleEvent | null)[] = [null, null, null, null, null, null];
 	// A roll can place attacks before their slot's nominal start (last-on-beat anchor),
 	// so the flat array is only re-sorted when at least one slot was actually rolled —
 	// a stroke-free pattern keeps its original insertion order (byte-identical output).
@@ -324,16 +327,20 @@ export function fingerpickPatternToScheduleEvents(
 				}
 
 				slot.strings.forEach((sf, stringIndex) => {
-					if (sf.tied) return;
+					if (sf.tied) {
+						const held = sounding[stringIndex];
+						if (held && !slot.isGraceNote) held.duration += slotDuration;
+						return;
+					}
 					const isPlayed = sf.fret !== null || sf.muted;
 					if (!isPlayed) return;
 
-					const openMidi = OPEN_STRING_MIDI[stringIndex] + capo;
 					// fret takes priority over muted for pitch; muted only shapes the envelope.
-					const midi = sf.fret !== null ? openMidi + sf.fret : openMidi;
+					// The same formula the reading page labels frets with, so they agree.
+					const midi = soundingMidi(stringIndex, sf.fret ?? 0, capo);
 
 					const roll = rollOffsets?.get(stringIndex);
-					events.push({
+					const event: ScheduleEvent = {
 						time: currentTime + (roll?.timeOffset ?? 0),
 						duration: slotDuration,
 						stringIndex,
@@ -347,7 +354,9 @@ export function fingerpickPatternToScheduleEvents(
 						...(sf.staccato && { staccato: true }),
 						...(sf.letRing && { letRing: true }),
 						...(roll && { rollGain: roll.gain }),
-					});
+					};
+					events.push(event);
+					sounding[stringIndex] = event;
 				});
 			}
 

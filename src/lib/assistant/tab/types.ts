@@ -31,6 +31,10 @@ export type PlanSlot = {
 	strings: number[] | null;
 	/** The thumb on the chord's root string as well — `根` in the order — decided per bar, from the chord. */
 	root?: true;
+	/** A hold as typed (`_` or `^`): the slot before it goes on. Folded away before a bar is written. */
+	hold?: true;
+	/** This slot carries the slot before it on rather than striking it again: written as a tied note. */
+	tied?: true;
 	/**
 	 * Frets written in the sentence, one per entry of `strings`. Present only
 	 * for notes typed as string-and-fret pairs; every other plan takes its

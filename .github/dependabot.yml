@@ -1,0 +1,52 @@
+version: 2
+
+# Security updates do not come from this file — they come from the repository's
+# Dependabot alerts setting, and they are what actually matters: a PR per real
+# advisory, raised as soon as one is published.
+#
+# This file only ever governed the *scheduled* bumps, the "keep up with latest"
+# kind, and for a project this size those cost more than they save: the first
+# week produced six pull requests, four of them across major versions and two
+# that could not even install. So version updates are off, by the documented
+# means — a limit of zero. Security updates are explicitly not subject to this
+# limit and keep flowing.
+#
+# Deliberately not done with `ignore`, which would be the obvious way to drop
+# only major bumps: `ignore` rules apply to security updates too, so a critical
+# advisory that happens to be fixed in a major release could be silenced along
+# with the noise.
+#
+# To take scheduled updates again, raise the limit (5 is a reasonable number)
+# and the grouping below keeps a quiet week down to one PR per ecosystem.
+updates:
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+      open-pull-requests-limit: 0
+      groups:
+          minor-and-patch:
+              update-types: [minor, patch]
+
+    # book-service declares its dependencies in pyproject.toml under [project],
+    # which Dependabot reads as PEP 621.
+    - package-ecosystem: pip
+      directory: /book-service
+      schedule:
+          interval: weekly
+          day: monday
+      open-pull-requests-limit: 0
+      groups:
+          minor-and-patch:
+              update-types: [minor, patch]
+
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+      open-pull-requests-limit: 0
+      groups:
+          actions:
+              patterns: ["*"]

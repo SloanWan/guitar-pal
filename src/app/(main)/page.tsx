@@ -1,7 +1,13 @@
 import Link from "@/components/AppLink";
-import type { ReactNode } from "react";
 import { FlaskConical } from "lucide-react";
 import TabStripBackdrop from "@/components/TabStripBackdrop";
+import StrumChapter from "@/components/landing/StrumChapter";
+import FingerpickChapter from "@/components/landing/FingerpickChapter";
+import ChordsChapter from "@/components/landing/ChordsChapter";
+import FretboardChapter from "@/components/landing/FretboardChapter";
+import AssistantChapter from "@/components/landing/AssistantChapter";
+import BooksChapter from "@/components/landing/BooksChapter";
+import { Led } from "@/components/landing/landingUi";
 import type { TabStripSpec } from "@/lib/fingerpickToTabStrip";
 
 /* v3 landing — spec: guitar-pal-design-decisions/fable (layout-specs §6,
@@ -90,76 +96,54 @@ const STRIP_BACK: TabStripSpec = {
 	],
 };
 
-/* Feature cards (component-patterns §3, icon recipes additional-components §11) */
+/* What signing in adds — the chapters above are the tools, this is the shelf. */
 
-interface Feature {
+interface AccountPerk {
 	tag: string;
 	title: string;
 	description: string;
-	href: string;
-	icon: ReactNode;
 }
 
-const ICON_PROPS = {
-	width: 24,
-	height: 24,
-	viewBox: "0 0 24 24",
-	fill: "none",
-	strokeWidth: 1.5,
-	strokeLinecap: "square",
-	"aria-hidden": true,
-} as const;
-
-const FEATURES: readonly Feature[] = [
+const ACCOUNT_PERKS: readonly AccountPerk[] = [
 	{
-		tag: "TOOL_01",
-		title: "Strum Machine",
+		tag: "Home",
+		title: "Pick up where you left off",
 		description:
-			"Real guitar samples, tap tempo, and a genre-tuned BPM dial — practice strum patterns that actually sound like a guitar.",
-		href: "/strum",
-		icon: (
-			<svg {...ICON_PROPS}>
-				<path className="stroke-denim-accent" d="M4 6h16M4 12h16M4 18h16" />
-				<path className="stroke-ink" d="M8 3v6M14 9v6M8 15v6" />
-			</svg>
-		),
+			"The last strum and fingerpick pattern you opened, one tap away. Favourites in two columns, strumming and fingerpicking.",
 	},
 	{
-		tag: "TOOL_02",
-		title: "Fingerpick Studio",
+		tag: "Share",
+		title: "Send a pattern as a link",
 		description:
-			"A TAB player with hammer-ons, pull-offs, and slides rendered note by note. Follow the cursor, loop any passage, slow it down.",
-		href: "/fingerpick",
-		icon: (
-			<svg {...ICON_PROPS}>
-				<path className="stroke-denim-accent" d="M3 7h18M3 12h18M3 17h18" />
-				<circle className="stroke-ink" cx="8" cy="7" r="2" />
-				<circle className="stroke-ink" cx="15" cy="12" r="2" />
-				<circle className="stroke-ink" cx="11" cy="17" r="2" />
-			</svg>
-		),
+			"Any pattern or progression becomes a page a friend can play without an account, and import to edit if they want it.",
 	},
 	{
-		tag: "TOOL_03",
-		title: "Chord Library",
+		tag: "Library",
+		title: "Your patterns, your shapes",
 		description:
-			"Every open and barre voicing across all 12 roots — played back string by string so you can hear it before you fret it.",
-		href: "/chords",
-		icon: (
-			<svg {...ICON_PROPS}>
-				<path className="stroke-denim-accent" d="M5 3v18M9 3v18M13 3v18M17 3v18" />
-				<path className="stroke-ink" d="M3 8h18M3 15h18" />
-				<circle className="fill-denim" cx="9" cy="8" r="1.8" stroke="none" />
-				<circle className="fill-denim" cx="13" cy="15" r="1.8" stroke="none" />
-			</svg>
-		),
+			"Custom strum and fingerpick patterns, progressions, your own chord shapes and favourites, saved to your account and there on any device.",
 	},
 ];
 
+/* Footer product links: every page the landing tells, in the chapters' order;
+   the assistant lives in the topbar on every page, so its link is the grammar
+   it reads. */
+const FOOTER_PRODUCT: readonly { href: string; label: string }[] = [
+	{ href: "/strum", label: "Strum" },
+	{ href: "/fingerpick", label: "Fingerpick" },
+	{ href: "/chords", label: "Chords" },
+	{ href: "/fretboard", label: "Fretboard" },
+	{ href: "/docs/assistant-grammar", label: "Assistant" },
+	{ href: "/books/sample", label: "Books · PDF parsing (preview)" },
+];
+
+/* The hero's figures. "2,200+" is the chord_voicings table (2,291 rows on
+   2026-09-22); the rest are the product's own limits. */
 const HERO_META: readonly { value: string; label: string }[] = [
 	{ value: "2,200+", label: "CHORD VOICINGS" },
 	{ value: "REAL", label: "GUITAR SAMPLES" },
 	{ value: "40–220", label: "BPM RANGE" },
+	{ value: "AI", label: "ASSISTANT IN PLAIN ENGLISH" },
 	{ value: "FREE", label: "IN THE BROWSER" },
 ];
 
@@ -168,18 +152,16 @@ export default function Home() {
 	// there is no per-request Supabase round-trip blocking navigation to it.
 	// Identity (sign-in state) is surfaced by the NavBar, not this page.
 
-	// shrink-0 on the root div: it's a flex item of the h-full flex-col <body>. Without
-	// it, flex-shrink collapses the div to one viewport (its min-h-full minimum) while
-	// the taller content overflows and the window scrolls — which caps the sticky NavBar's
-	// containing block at one screen, so it scrolls away past the fold. shrink-0 lets the
-	// div grow to full content height, restoring sticky.
+	// The (main) layout's <main> is the scroller; min-h-full keeps the footer at
+	// the bottom of a short page. The chapters compute their own progress from
+	// that scroller (useChapterProgress), so nothing here reads window.scrollY.
 	return (
-		<div className="flex min-h-full shrink-0 flex-col">
+		<div className="flex min-h-full flex-col">
 			{/* NavBar is provided by (main)/layout.tsx; the semantic <main> lives
 			    there too, so the hero uses a plain <div> to avoid a nested landmark. */}
 			<div>
 				{/* Hero */}
-				<section className="relative flex min-h-[92vh] items-center overflow-hidden border-b border-line">
+				<section className="relative flex min-h-[74vh] items-center overflow-hidden border-b border-line">
 						{/* Animated TAB notation background — confirmed keeper, do not shrink */}
 						<TabStripBackdrop front={STRIP_FRONT} back={STRIP_BACK} />
 
@@ -204,31 +186,54 @@ export default function Home() {
 							</h1>
 
 							<p className="mt-7 max-w-[52ch] text-(length:--text-body-lede) text-ink-dim">
-								Strumming machine, fingerpicking TAB player, and a full chord library —
-								one precise, no-nonsense workspace for building real technique. No
-								streaks. No gamification. Just the tools.
+								A strumming machine, a fingerpicking TAB player, a chord library, a
+								fretboard explorer and an assistant that reads plain English — one
+								precise, no-nonsense workspace for building real technique. No streaks.
+								No gamification. Just the tools.
 							</p>
 
-							<div className="mt-11 flex flex-wrap gap-4">
-								<Link href="/strum" className={BTN_PRIMARY}>
-									Start practicing →
-								</Link>
-								<Link href="/chords" className={BTN_GHOST}>
-									Browse chords
-								</Link>
-							</div>
-
-							<div className="mt-18 flex gap-12 font-mono text-xs tracking-[0.06em] text-ink-faint max-sm:mt-14 max-sm:flex-col max-sm:gap-3">
+							{/* The numbers sit above the fold, before the buttons: proof, then action. */}
+							<div className="mt-7 flex gap-x-10 gap-y-3 font-mono text-xs tracking-[0.06em] text-ink-faint max-sm:flex-col max-sm:gap-2 md:flex-wrap">
 								{HERO_META.map(({ value, label }) => (
-									<span key={label}>
+									<span key={label} className="whitespace-nowrap">
 										<b className="font-medium text-ink-dim">{value}</b> {label}
 									</span>
 								))}
 							</div>
+
+							{/* Buttons, with the page's premise beside them: scrolling plays the
+							    demos below. On a phone the cue drops under the buttons. */}
+							<div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-5">
+								<div className="flex flex-wrap gap-4">
+									<Link href="/strum" className={BTN_PRIMARY}>
+										Start practicing →
+									</Link>
+									<Link href="#chapter-1" className={BTN_GHOST}>
+										See it play
+									</Link>
+								</div>
+								<div
+									aria-hidden="true"
+									className="inline-flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint"
+								>
+									<span className="relative h-7 w-px overflow-hidden bg-line-strong">
+										<span className="absolute top-[-10px] left-0 h-2.5 w-px animate-[scrollcue_1.6s_ease-in-out_infinite] bg-denim motion-reduce:animate-none" />
+									</span>
+									Scroll — the page plays as you go
+								</div>
+							</div>
 						</div>
 					</section>
 
-				{/* Features / toolkit — the launcher. */}
+				{/* The tools, one chapter each: scrolling drives a live demo of the page. */}
+				<StrumChapter index={1} />
+				<FingerpickChapter index={2} />
+				<ChordsChapter index={3} />
+				<FretboardChapter index={4} />
+				<AssistantChapter index={5} />
+				<BooksChapter index={6} />
+
+				{/* With an account */}
 				<section className="relative border-b border-line py-27.5 max-sm:py-10">
 					{/* Dev tool-hub entry — top-right corner, only when the flag is set
 					    (NEXT_PUBLIC_ vars inline at build time). */}
@@ -242,40 +247,41 @@ export default function Home() {
 						</Link>
 					)}
 					<div className="mx-auto max-w-300 px-(--gutter)">
-						<div className="mb-16">
-							<span className={EYEBROW}>{"// Toolkit"}</span>
-							<h2 className="mt-3.5 font-mono text-(length:--text-h2-size) font-bold tracking-(--text-h2-ls)">
-								Three instruments.
-								<br />
-								One interface.
-							</h2>
-						</div>
-						<div className="grid grid-cols-3 border border-line max-[900px]:grid-cols-1">
-							{FEATURES.map(({ tag, title, description, href, icon }) => (
-								<Link
-									key={tag}
-									href={href}
-									className="group relative block border-r border-line px-8 pt-10 pb-12 transition-colors duration-200 last:border-r-0 hover:bg-denim-tint focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-denim-accent max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:last:border-b-0"
-								>
-									<span className="absolute top-4 right-4 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-ink-faint">
-										{/* Dormant LED powers on with the card — teaches LED = active */}
-										<span
-											aria-hidden="true"
-											className="size-1.5 flex-none rounded-full bg-ink-faint transition-[background-color,box-shadow] duration-200 group-hover:bg-denim-accent group-hover:shadow-(--glow-led)"
-										/>
+						<span className={EYEBROW}>{"// With an account"}</span>
+						<h2 className="mt-3.5 font-mono text-(length:--text-h2-size) font-bold tracking-(--text-h2-ls)">
+							Sign in to keep it.
+						</h2>
+						<div className="mt-14 grid grid-cols-3 gap-px border border-line bg-line max-[900px]:grid-cols-1">
+							{ACCOUNT_PERKS.map(({ tag, title, description }) => (
+								<div key={tag} className="bg-surface px-7 pt-8 pb-9">
+									<span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+										<Led />
 										{tag}
 									</span>
-									<div className="mb-7 flex size-12 items-center justify-center border border-line-strong transition-colors duration-200 group-hover:border-denim">
-										{icon}
-									</div>
-									<h3 className="mb-3 font-mono text-(length:--text-h3-size) font-medium tracking-[0.02em]">
+									<h3 className="mt-5 mb-2.5 font-mono text-(length:--text-h3-size) font-medium tracking-[0.02em]">
 										{title}
 									</h3>
-									<p className="text-(length:--text-body-card) text-ink-dim">
-										{description}
-									</p>
-								</Link>
+									<p className="text-(length:--text-body-card) text-ink-dim">{description}</p>
+								</div>
 							))}
+						</div>
+					</div>
+				</section>
+
+				{/* Closing CTA */}
+				<section className="border-b border-line py-27.5 max-sm:py-10">
+					<div className="mx-auto max-w-300 px-(--gutter)">
+						<span className={EYEBROW}>{"// Ready"}</span>
+						<h2 className="mt-3.5 max-w-[16ch] font-mono text-[clamp(30px,4.6vw,56px)] leading-[1.08] font-bold tracking-[-0.03em]">
+							Free. In the browser. No streaks.
+						</h2>
+						<div className="mt-9 flex flex-wrap gap-4">
+							<Link href="/strum" className={BTN_PRIMARY}>
+								Start practicing →
+							</Link>
+							<Link href="/chords" className={BTN_GHOST}>
+								Browse chords
+							</Link>
 						</div>
 					</div>
 				</section>
@@ -317,21 +323,13 @@ export default function Home() {
 							Product
 						</span>
 						<ul className="flex flex-col gap-3 text-ink-dim">
-							<li>
-								<Link href="/chords" className={FOOTER_LINK}>
-									Chords
-								</Link>
-							</li>
-							<li>
-								<Link href="/strum" className={FOOTER_LINK}>
-									Strum
-								</Link>
-							</li>
-							<li>
-								<Link href="/fingerpick" className={FOOTER_LINK}>
-									Fingerpick
-								</Link>
-							</li>
+							{FOOTER_PRODUCT.map(({ href, label }) => (
+								<li key={href}>
+									<Link href={href} className={FOOTER_LINK}>
+										{label}
+									</Link>
+								</li>
+							))}
 						</ul>
 					</nav>
 
@@ -373,6 +371,7 @@ export default function Home() {
 								>
 									@tombatossals/chords-db
 								</a>
+								, every voicing audited here for validity
 							</li>
 						</ul>
 					</div>

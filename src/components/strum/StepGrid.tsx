@@ -13,7 +13,23 @@ import { DEFAULT_METER, beatLabels, type Meter } from "@/lib/strumMeter";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import type { BarChordDiagram } from "./useBarChordDiagrams";
 
-import { MoveDown, MoveUp, X, Dot, Music, Pencil } from "lucide-react";
+import { MoveDown, MoveUp, X, Dot, Music, Pencil, type LucideIcon } from "lucide-react";
+
+/**
+ * What a cell draws for each value, module-level so the icon's component
+ * identity is stable across renders: an icon made inside the component is a
+ * new type every render, which remounts every cell's SVG on every playhead
+ * step. A ghost stroke is the same arrow in the faint ink.
+ */
+const CELL_ICONS: Record<string, { Icon: LucideIcon | null; ghost?: boolean }> = {
+	D: { Icon: MoveDown },
+	U: { Icon: MoveUp },
+	X: { Icon: X },
+	G: { Icon: null },
+	DG: { Icon: MoveDown, ghost: true },
+	UG: { Icon: MoveUp, ghost: true },
+	"": { Icon: Dot },
+};
 
 /** Nearest ancestor that actually scrolls vertically, if any. */
 function scrollableAncestor(el: HTMLElement): HTMLElement | null {
@@ -158,16 +174,6 @@ export default function StepGrid({
 	// The chord row is the interaction surface on the playing card; the small
 	// library preview stays a bare grid.
 	const showChordRow = !isSm;
-
-	const CELL_ARROW_MAP = {
-		D: () => <MoveDown className={iconCls} />,
-		U: () => <MoveUp className={iconCls} />,
-		X: () => <X className={iconCls} />,
-		G: () => <></>,
-		DG: () => <MoveDown className={iconCls} color="var(--ink-faint)" />,
-		UG: () => <MoveUp className={iconCls} color="var(--ink-faint)" />,
-		"": () => <Dot className={iconCls} />,
-	};
 
 	return (
 		// One bar per row; two per row from md upwards only while the bars are
@@ -314,8 +320,7 @@ export default function StepGrid({
 											}`}
 										>
 											{paddedCells.map((cell, cellIdx) => {
-												const Icon =
-													CELL_ARROW_MAP[cell as keyof typeof CELL_ARROW_MAP];
+												const { Icon, ghost } = CELL_ICONS[cell] ?? CELL_ICONS[""];
 												const isActiveCell =
 													isActiveBeat &&
 													cellIdx ===
@@ -327,7 +332,12 @@ export default function StepGrid({
 															cellMinWidth
 														} ${isActiveCell ? "text-denim" : ""}`}
 													>
-														<Icon />
+														{Icon && (
+															<Icon
+																className={iconCls}
+																color={ghost ? "var(--ink-faint)" : undefined}
+															/>
+														)}
 													</div>
 												);
 											})}

@@ -11,6 +11,8 @@ import {
 	type RollMark,
 } from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
+import { slotPitchLabels, splitPitchLabel, type SlotPitchLabel } from "@/lib/fingerpickPitch";
+import { MONO_FAMILY } from "@/app/fonts/fonts";
 
 // Layout constants — not props because they are fixed design decisions, not data.
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
@@ -27,7 +29,7 @@ const STAVE_Y = 10;
 // barline, the symbol over a note, so the two never meet).
 const CHORD_BASELINE_OFFSET = 14;
 const CHORD_FONT = {
-	family: '"JetBrains Mono", ui-monospace, monospace',
+	family: MONO_FAMILY,
 	size: "11pt",
 	weight: "bold",
 };
@@ -65,6 +67,34 @@ const ROLL_X_OFFSET = 8;
 const ROLL_AMPLITUDE = 1.6;
 const ROLL_WAVELENGTH = 6;
 const ROLL_HEAD = 4;
+// The pitch column: the sounding pitch written under each note, one label per
+// played string, stacked top → bottom in string order like the stave. It sits
+// under the stems and beams (which reach ~42 px below the bottom line), so the
+// first baseline is this far below the stave's bottom line.
+const PITCH_FIRST_BASELINE = 54;
+const PITCH_LINE_HEIGHT = 11;
+// Jianpu octave dots sit over and under the digit, so a row that has any
+// starts lower (the top dots clear the beams), is set with taller lines, and
+// keeps more air under its last one.
+const PITCH_FIRST_BASELINE_DOTTED = 64;
+const PITCH_LINE_HEIGHT_DOTTED = 17;
+const PITCH_DOT_RADIUS = 1.1;
+// First dot's distance from the digit (cap height above the baseline, the
+// baseline itself below), and the pitch between stacked dots.
+const PITCH_DOT_GAP = 3;
+const PITCH_DOT_PITCH = 3.2;
+const PITCH_DIGIT_CAP_HEIGHT = 8;
+const PITCH_FONT = {
+	family: MONO_FAMILY,
+	size: "8pt",
+};
+// A mono glyph at 8pt is 0.6 em of 10.67 px; the layout has no canvas to ask.
+const PITCH_LABEL_CHAR_WIDTH = 6.4;
+// Least air between two neighbouring labels.
+const PITCH_LABEL_GAP = 6;
+// Descender and air under the last label, so the column never touches the row below.
+const PITCH_BOTTOM_PAD = 6;
+const PITCH_BOTTOM_PAD_DOTTED = 12;
 
 interface TabStaveRowProps {
 	/** One "row" worth of measures rendered into a single VexFlow context. */
@@ -92,6 +122,12 @@ interface TabStaveRowProps {
 	 * the numbers are recoloured in place after the theme pass.
 	 */
 	offShapeStrings?: (measureIndex: number, slotIndex: number) => readonly number[];
+	/**
+	 * Write the sounding pitch under every played fret: given a string
+	 * (fingerpick order, 0 = high e) and its written fret, the label to draw.
+	 * Given, the stave grows footroom for the column.
+	 */
+	pitchLabel?: (stringIndex: number, fret: number) => string;
 }
 
 /** Where a chord mark landed after formatting, for the diagram overlay. */
@@ -229,6 +265,11 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 	});
 }
 
+/** The width a pitch label takes on the stave, for the layout pass (no canvas there). */
+export function pitchLabelWidth(text: string): number {
+	return splitPitchLabel(text).base.length * PITCH_LABEL_CHAR_WIDTH;
+}
+
 // No DOM side-effects — Formatter.preCalculateMinTotalWidth operates on Tickable objects only.
 export function computeMeasureMinWidth(
 	notes: StemmableNote[],
@@ -239,6 +280,8 @@ export function computeMeasureMinWidth(
 	/** Width of the shape drawn over each symbol in the shape view; 0 = names only. */
 	chordDiagramWidth: number = 0,
 	rollCount: number = 0,
+	/** Per note, the widest pitch label under it (px, `pitchLabelWidth`); empty when the column is off. */
+	pitchLabelWidths: readonly number[] = [],
 ): number {
 	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 	voice.addTickables(notes);
@@ -253,8 +296,87 @@ export function computeMeasureMinWidth(
 		// enough room for a third of its width per change (three lanes).
 		chordLabelCount * Math.max(CHORD_LABEL_EXTRA_WIDTH, Math.ceil(chordDiagramWidth / 3) + 4) +
 		rollCount * ROLL_EXTRA_WIDTH +
+		pitchLabelExtraWidth(notesWidth, notes.length, pitchLabelWidths) +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);
+}
+
+/**
+ * How much wider a measure has to be for its pitch labels not to collide. At
+ * the minimum width a note gets its share of `notesWidth` (VexFlow's own
+ * measure); a label wider than that, plus its gap, is a shortfall. Width added
+ * to a measure is then shared out by the formatter over every note in it,
+ * labelled or not, so the shortfall is scaled up by that share to land where
+ * it is needed — dense sixteenths in a three-character style stay legible.
+ */
+function pitchLabelExtraWidth(
+	notesWidth: number,
+	noteCount: number,
+	pitchLabelWidths: readonly number[],
+): number {
+	if (noteCount === 0) return 0;
+	const noteOwnWidth = notesWidth / noteCount;
+	let labelled = 0;
+	let shortfall = 0;
+	for (const w of pitchLabelWidths) {
+		if (w <= 0) continue;
+		labelled++;
+		shortfall += Math.max(0, w + PITCH_LABEL_GAP - noteOwnWidth);
+	}
+	return labelled > 0 ? (shortfall * noteCount) / labelled : 0;
+}
+
+/**
+ * Write a note's pitch labels under the stave, centred on the note's x like
+ * its fret numbers, one line per string from the top. Raw SVG rather than a
+ * VexFlow `Annotation`: an annotation's y rides on the note's own strings, so
+ * a low-string note would put its label somewhere else than a high-string
+ * one, and `GhostNote` skips modifiers altogether.
+ */
+function drawPitchColumn(
+	svgEl: SVGSVGElement,
+	x: number,
+	firstBaseline: number,
+	lineHeight: number,
+	labels: readonly SlotPitchLabel[],
+): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const g = document.createElementNS(ns, "g");
+	g.setAttribute("class", "vf-pitch");
+	labels.forEach((label, i) => {
+		const baseline = firstBaseline + i * lineHeight;
+		// A held string's label is fainter, as its fret number is.
+		const fill = label.tied ? "var(--ink-faint)" : "var(--ink-dim)";
+		const { base, dotsAbove, dotsBelow } = splitPitchLabel(label.text);
+		const text = document.createElementNS(ns, "text");
+		text.setAttribute("x", String(x));
+		text.setAttribute("y", String(baseline));
+		text.setAttribute("text-anchor", "middle");
+		text.setAttribute("font-family", PITCH_FONT.family);
+		text.setAttribute("font-size", PITCH_FONT.size);
+		text.setAttribute("fill", fill);
+		text.textContent = base;
+		g.appendChild(text);
+		// Jianpu octave dots, drawn as circles rather than left to the font: a
+		// mono face has no combining marks to speak of, and the dots have to
+		// stack. They sit over the digit itself, not over an accidental.
+		const digitX = x + ((base.length - 1) * PITCH_LABEL_CHAR_WIDTH) / 2;
+		const dot = (cy: number) => {
+			const c = document.createElementNS(ns, "circle");
+			c.setAttribute("cx", String(digitX));
+			c.setAttribute("cy", String(cy));
+			c.setAttribute("r", String(PITCH_DOT_RADIUS));
+			c.setAttribute("fill", fill);
+			g.appendChild(c);
+		};
+		for (let k = 0; k < dotsAbove; k++) {
+			dot(baseline - PITCH_DIGIT_CAP_HEIGHT - PITCH_DOT_GAP - k * PITCH_DOT_PITCH);
+		}
+		for (let k = 0; k < dotsBelow; k++) {
+			dot(baseline + PITCH_DOT_GAP + k * PITCH_DOT_PITCH);
+		}
+	});
+	svgEl.appendChild(g);
 }
 
 /**
@@ -316,6 +438,7 @@ export default function TabStaveRow({
 	chordDiagram,
 	chordDiagramSize,
 	offShapeStrings,
+	pitchLabel,
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [anchors, setAnchors] = useState<ChordAnchor[]>([]);
@@ -348,12 +471,39 @@ export default function TabStaveRow({
 				stackHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
 			const headroom = showDiagrams ? Math.max(0, wanted - freeAbove) : 0;
 			const staveY = STAVE_Y + headroom;
+			// Footroom for the pitch column: the tallest stack in the row sets how
+			// far past the stave's usual bottom the SVG has to reach.
+			const pitchStacks = pitchLabel
+				? measures.map((m) => m.slots.map((slot) => slotPitchLabels(slot, pitchLabel)))
+				: [];
+			const rowLabels = pitchStacks.flat();
+			const tallestStack = Math.max(0, ...rowLabels.map((labels) => labels.length));
+			const dotted = rowLabels.some((labels) =>
+				labels.some((l) => {
+					const { dotsAbove, dotsBelow } = splitPitchLabel(l.text);
+					return dotsAbove + dotsBelow > 0;
+				}),
+			);
+			const pitchLineHeight = dotted ? PITCH_LINE_HEIGHT_DOTTED : PITCH_LINE_HEIGHT;
+			const pitchBaselineOffset = dotted ? PITCH_FIRST_BASELINE_DOTTED : PITCH_FIRST_BASELINE;
+			const pitchFirstBaseline =
+				new TabStave(0, 0, 100).getYForLine(5) + STAVE_Y + pitchBaselineOffset;
+			const footroom =
+				tallestStack > 0
+					? Math.max(
+							0,
+							pitchFirstBaseline +
+								(tallestStack - 1) * pitchLineHeight +
+								(dotted ? PITCH_BOTTOM_PAD_DOTTED : PITCH_BOTTOM_PAD) -
+								SVG_HEIGHT,
+						)
+					: 0;
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
-			renderer.resize(svgWidth, SVG_HEIGHT + headroom);
+			renderer.resize(svgWidth, SVG_HEIGHT + headroom + footroom);
 			const ctx = renderer.getContext();
 			const nextAnchors: ChordAnchor[] = [];
 			const placed: PlacedLabel[] = [];
-			ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
+			ctx.setFont({ family: MONO_FAMILY, size: "10pt" });
 
 			// Draw staves, accumulating x from per-measure widths.
 			let staveX = CLEF_WIDTH;
@@ -517,6 +667,18 @@ export default function TabStaveRow({
 				});
 			}
 
+			// The pitch column, one stack per note, under the stems.
+			if (svgEl && pitchStacks.length > 0) {
+				const firstBaseline = staves[0].getYForLine(5) + pitchBaselineOffset;
+				drawn.forEach(({ notes, noteSlots }, i) => {
+					notes.forEach((note, j) => {
+						const labels = pitchStacks[i][noteSlots[j]];
+						if (!labels || labels.length === 0) return;
+						drawPitchColumn(svgEl, note.getAbsoluteX(), firstBaseline, pitchLineHeight, labels);
+					});
+				});
+			}
+
 			// A tied note's second number is drawn lighter: the string is not struck
 			// again there, only held. After the theme pass so the colour sticks. A
 			// TabNote draws one <text> per position, in position order, before any
@@ -590,6 +752,7 @@ export default function TabStaveRow({
 		diagramHeight,
 		chordDiagramSize?.width,
 		offShapeStrings,
+		pitchLabel,
 	]);
 
 	return (

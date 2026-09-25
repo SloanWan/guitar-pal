@@ -309,14 +309,15 @@ function ExerciseItem({
 	const taken = exercise.status === "taken";
 
 	return (
-		<li className="flex gap-3 border border-line bg-panel p-3">
+		// A phone: the crop above the text, at the card's width; wider, beside it.
+		<li className="flex flex-col gap-3 border border-line bg-panel p-3 sm:flex-row">
 			{exercise.crop_path ? (
 				<CropThumb path={exercise.crop_path} alt={`Page ${exercise.page}, ${name}`} onView={onViewCrop} />
 			) : null}
 			<div className="flex min-w-0 flex-1 flex-col gap-1.5">
 				<p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 					<span className="min-w-0 truncate text-[13px] font-medium text-ink">{name}</span>
-					<span className={`${MONO_META} flex-none tabular-nums`}>
+					<span className={`${MONO_META} min-w-0 tabular-nums`}>
 						<button type="button" onClick={() => onLocate(name)} title="See this page of the book" className={LOCATE}>
 							p.{exercise.page}
 							<LocateGlyph />
@@ -358,13 +359,14 @@ function CropThumb({ path, alt, onView }: { path: string; alt: string; onView: (
 			cancelled = true;
 		};
 	}, [path]);
-	if (url === null) return <div aria-hidden="true" className="w-32 flex-none border border-line bg-surface" />;
+	if (url === null)
+		return <div aria-hidden="true" className="h-16 w-full flex-none border border-line bg-surface sm:h-auto sm:w-32" />;
 	return (
 		<button
 			type="button"
 			onClick={() => onView({ url, alt })}
 			title="See the page's notation at full size"
-			className="w-32 flex-none cursor-pointer self-start border border-line bg-white transition-[border-color,box-shadow] duration-(--dur-hover) hover:border-denim hover:[box-shadow:var(--elev-panel)] focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+			className="w-full flex-none cursor-pointer self-start border border-line bg-white transition-[border-color,box-shadow] duration-(--dur-hover) hover:border-denim hover:[box-shadow:var(--elev-panel)] focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 sm:w-32"
 		>
 			{/* A signed, hour-long Storage URL: not a candidate for next/image's loader. */}
 			{/* eslint-disable-next-line @next/next/no-img-element */}

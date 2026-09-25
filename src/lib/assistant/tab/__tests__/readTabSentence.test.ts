@@ -72,6 +72,15 @@ describe("readTabSentence", () => {
 			expect(read("Am 5 3 2 1 十六分音符").duration).toBe("sixteenth");
 		});
 
+		it("reads an order with holds, and the note value beside it", () => {
+			const r = read("Am: R_32^132R_32^132 十六分");
+			expect(r.orderText).toBe("R_32^132R_32^132");
+			expect(r.order).toHaveLength(16);
+			expect(r.duration).toBe("sixteenth");
+			expect(chordTexts(r)).toEqual(["Am"]);
+			expect(r.leftover).toBe("");
+		});
+
 		it("tells 6/8 from an order that ends in 6", () => {
 			const r = read("Am: 5 3 2 1 3 6 6/8");
 			expect(r.timeSignature).toEqual([6, 8]);

@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import type { Measure, StringFret } from "@/lib/fingerpickTypes";
 import { makeEmptySlot } from "@/lib/fingerpickEdit";
-import { CLEF_WIDTH } from "../TabStaveRow";
+import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import { pitchLabel, soundingMidi } from "@/lib/fingerpickPitch";
+import { CLEF_WIDTH, computeMeasureMinWidth, pitchLabelWidth } from "../TabStaveRow";
 import {
 	computeAllMeasureWidths,
 	hoPoConnectorCount,
 	layoutMeasureRows,
+	measurePitchLabelWidths,
 	ROW_TRAILING_PAD,
 } from "../fingerpickLayout";
 
@@ -71,6 +74,23 @@ describe("computeAllMeasureWidths", () => {
 		}
 	});
 
+	it("packs fewer measures per row when the pitch column is on", () => {
+		// Sixteen sixteenths a measure, a label under every one.
+		const dense = [1, 2, 3, 4].map((i) => {
+			const slots = Array.from({ length: 16 }, (_, k) => {
+				const slot = makeEmptySlot("sixteenth");
+				slot.strings[0] = note(k);
+				return slot;
+			});
+			return { id: `d${i}`, slots };
+		});
+		const scientific = (stringIndex: number, fret: number) =>
+			pitchLabel(soundingMidi(stringIndex, fret, 0), "scientific");
+		const off = computeAllMeasureWidths(dense, 1000, 0);
+		const on = computeAllMeasureWidths(dense, 1000, 0, scientific);
+		expect(on.length).toBeGreaterThan(off.length);
+	});
+
 	it("packs fewer measures per row when chord shapes need room", () => {
 		const withChord = measures.map((m) => ({
 			...m,
@@ -102,5 +122,57 @@ describe("layoutMeasureRows", () => {
 			expectedStart += row.measures.length;
 		}
 		expect(seen).toEqual(measures.map((m) => m.id));
+	});
+});
+
+describe("measurePitchLabelWidths", () => {
+	const scientific = (stringIndex: number, fret: number) =>
+		pitchLabel(soundingMidi(stringIndex, fret, 0), "scientific");
+
+	it("is the widest label under each note, and 0 for a rest", () => {
+		const m = quarterMeasure("m");
+		// A chord: E4 over G2 — both two characters wide.
+		m.slots[0].strings[0] = note(0);
+		// F#4: three characters.
+		m.slots[1].strings[0] = note(2);
+		m.slots[2].isRest = true;
+		const { noteSlots } = fingerpickToVexFlow(m);
+		expect(measurePitchLabelWidths(m, noteSlots, scientific)).toEqual([
+			pitchLabelWidth("G2"),
+			pitchLabelWidth("F#4"),
+			0,
+			pitchLabelWidth("A2"),
+		]);
+	});
+
+	it("widens the measure only past the room a note already has", () => {
+		const m = quarterMeasure("m");
+		const { notes, noteSlots } = fingerpickToVexFlow(m);
+		const base = computeMeasureMinWidth(notes, true, 0);
+		const narrow = computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [1, 1, 1, 1]);
+		expect(narrow).toBe(base);
+		const wide = computeMeasureMinWidth(
+			notes,
+			true,
+			0,
+			0,
+			0,
+			0,
+			0,
+			measurePitchLabelWidths(m, noteSlots, scientific).map(() => 40),
+		);
+		expect(wide).toBeGreaterThan(base);
+	});
+
+	it("scales a label's shortfall by the formatter's share-out over every note", () => {
+		const m = quarterMeasure("m");
+		const { notes } = fingerpickToVexFlow(m);
+		const base = computeMeasureMinWidth(notes, true, 0);
+		// One labelled note among four: the formatter spreads added width over all
+		// four, so the shortfall lands on the labelled one only when scaled by four.
+		const one = computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [40, 0, 0, 0]);
+		const all = computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [40, 40, 40, 40]);
+		expect(one - base).toBeCloseTo(all - base, 6);
+		expect(all - base).toBeGreaterThan(0);
 	});
 });

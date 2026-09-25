@@ -1,0 +1,27 @@
+name: Dependency review
+
+# Blocks a pull request that adds a dependency with a known vulnerability,
+# which is the gap Dependabot alone leaves: Dependabot reports what is already
+# in main, this stops the next one getting in.
+on:
+    pull_request:
+        branches: [main]
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    review:
+        name: Review added dependencies
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Dependency review
+              uses: actions/dependency-review-action@v5
+              with:
+                  fail-on-severity: moderate
+                  comment-summary-in-pr: on-failure

@@ -273,3 +273,12 @@ Why two ports on the same pooler host: 6543 is transaction mode, fine for the se
 Row-level security is not what keeps one user out of another's books here. The service connects as one role for everyone, so it filters by the `user_id` read from a **verified** JWT on every query — that check is the whole model. RLS is still on, with a single policy for `book_service`, and the grants Supabase gives `anon` / `authenticated` on new public tables are revoked, so the browser's PostgREST path sees nothing.
 
 Storage works the other way round: the browser uploads straight to the `books` bucket with the player's own session, and this service reads the file back with the same token the proxy forwards. The bucket's policies compare the path's first folder to `auth.uid()`. No service-role key on the server.
+
+## What leaves the server
+
+Page text and short page excerpts go to the model API for chapter finding
+and classification, page images for reading notation, and — when a chapter
+is asked a question under `long_context` — the chapter's pages as a PDF
+(or, for a scan or a DeepSeek call, the chapter's text). Under `rag`, chunk
+text goes to Voyage for embedding. The PDFs themselves otherwise never leave
+Supabase Storage.

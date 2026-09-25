@@ -5,7 +5,7 @@ import { normalizeImportedPattern } from "@/lib/tabImport/normalizeImportedPatte
 import { buildProposal } from "@/lib/assistant/strum/buildProposal";
 import type { EditIntentReading } from "@/lib/assistant/strum/editIntent";
 import type { AssistantTurnOutcome } from "@/lib/assistant/strum/turn";
-import { parseAsciiTab } from "@/lib/assistant/tab/parseAsciiTab";
+import { ASCII_RHYTHM_GUESSED, legalBarWidths, parseAsciiTab } from "@/lib/assistant/tab/parseAsciiTab";
 import type { TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import type { TabProposal } from "@/lib/assistant/tab/types";
 import type { ProposeStrumInput, ProposeTabInput, ReadInput, ShowChordInput, ToolName } from "@/lib/assistant/general/tools";
@@ -179,6 +179,24 @@ export function proposeTab(input: ProposeTabInput): ToolExecution {
 	}
 	const parsed = parseAsciiTab(input.tab, timeSignature ? { timeSignature } : {});
 	if (!parsed.ok) return { result: `The tab could not be read: ${parsed.error}`, isError: true };
+	// A bar the parser had to round, or had to trim, is an error here though it
+	// is only a warning for a tab a player pasted. A paste carries no rhythm but
+	// its spacing, so guessing is the best there is; a draft the model wrote can
+	// be written again at a width that divides the bar, and the loop allows it
+	// one repair. Without this the model is told the card succeeded and dutifully
+	// reports the warnings to the player instead of fixing them.
+	const guessed = parsed.warnings.filter((w) =>
+		(ASCII_RHYTHM_GUESSED as readonly string[]).includes(w.code),
+	);
+	if (guessed.length > 0) {
+		const widths = legalBarWidths(timeSignature ?? [4, 4]).filter((w) => w >= 4);
+		const meter = (timeSignature ?? [4, 4]).join("/");
+		const legal = widths.length > 1 ? `${widths.slice(0, -1).join(", ")} or ${widths[widths.length - 1]}` : String(widths[0]);
+		return {
+			result: `${guessed.map((w) => w.message).join(" ")} One column is one time slot, so in ${meter} a bar has to be ${legal} columns wide. Write every bar at one of those widths, the same on all six lines.`,
+			isError: true,
+		};
+	}
 	const { pattern, errors, warnings } = normalizeImportedPattern(parsed.draft);
 	if (!pattern) {
 		return { result: `The tab did not validate: ${errors.map((e) => e.message).join(" ")}`, isError: true };

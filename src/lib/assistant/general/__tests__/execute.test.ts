@@ -129,6 +129,55 @@ describe("propose_tab", () => {
 		expect(proposeTab({ name: "w", tab: TAB, bpm: 0, timeSignature: "7/8" }).isError).toBe(true);
 	});
 
+	it("refuses a bar whose width does not divide the meter, naming the widths that do", () => {
+		// Ten notes written the ordinary way, a dash between each: 21 columns.
+		const scale = [
+			"e|---------------------|",
+			"B|---------------------|",
+			"G|-------------5-7-----|",
+			"D|-------5-7-----------|",
+			"A|-5-7-----------------|",
+			"E|---------------------|",
+		].join("\n");
+		const r = proposeTab({ name: "pentatonic", tab: scale, bpm: 0, timeSignature: "" });
+		expect(r.isError).toBe(true);
+		expect(r.card).toBeUndefined();
+		expect(r.result).toContain("21 characters wide");
+		expect(r.result).toContain("4, 8, 16 or 32 columns");
+	});
+
+	it("follows the meter when it says which widths are legal", () => {
+		const wide = [
+			"e|----------|",
+			"B|----------|",
+			"G|--0-------|",
+			"D|----------|",
+			"A|0---------|",
+			"E|----------|",
+		].join("\n");
+		const r = proposeTab({ name: "w", tab: wide, bpm: 0, timeSignature: "3/4" });
+		expect(r.isError).toBe(true);
+		expect(r.result).toContain("4, 6, 8, 12 or 24 columns");
+	});
+
+	it("takes a bar that does divide the meter", () => {
+		const even = [
+			"e|----------------|",
+			"B|------------1---|",
+			"G|--------0-------|",
+			"D|----------------|",
+			"A|0---------------|",
+			"E|----------------|",
+		].join("\n");
+		const r = proposeTab({ name: "even", tab: even, bpm: 0, timeSignature: "" });
+		expect(r.isError).toBe(false);
+		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
+			const codes = r.card.tabProposal.warnings.map((w) => w.code);
+			expect(codes).not.toContain("ASCII_UNEVEN_BAR");
+			expect(codes).not.toContain("ASCII_BAR_OVERFLOW");
+		}
+	});
+
 	it("hands an unreadable tab back as an error", () => {
 		const r = proposeTab({ name: "x", tab: "not a tab at all", bpm: 0, timeSignature: "" });
 		expect(r.isError).toBe(true);

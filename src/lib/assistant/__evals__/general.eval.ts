@@ -227,6 +227,20 @@ describe(`General assistant eval set — ${MODEL}`, () => {
 					if (pattern && c.expect.timeSignature && pattern.timeSignature.join("/") !== c.expect.timeSignature.join("/")) {
 						failures.push(`meter ${pattern.timeSignature.join("/")}, expected ${c.expect.timeSignature.join("/")}`);
 					}
+					if (c.expect.noWarnings && "tabProposal" in card && card.tabProposal.warnings.length > 0) {
+						failures.push(card.tabProposal.warnings.map((w) => w.message).join("; "));
+					}
+					if (pattern && c.expect.frets) {
+						const [lo, hi] = c.expect.frets;
+						const out = [
+							...new Set(
+								pattern.measures
+									.flatMap((m) => m.slots.flatMap((slot) => slot.strings.map((sf) => sf.fret)))
+									.filter((f): f is number => f !== null && (f < lo || f > hi)),
+							),
+						];
+						if (out.length > 0) failures.push(`fret(s) ${out.join(", ")} outside ${lo}–${hi}`);
+					}
 				} else if (card) {
 					failures.push("a strum card for a tab case");
 				}

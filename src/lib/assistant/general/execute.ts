@@ -5,7 +5,7 @@ import { normalizeImportedPattern } from "@/lib/tabImport/normalizeImportedPatte
 import { buildProposal } from "@/lib/assistant/strum/buildProposal";
 import type { EditIntentReading } from "@/lib/assistant/strum/editIntent";
 import type { AssistantTurnOutcome } from "@/lib/assistant/strum/turn";
-import { ASCII_RHYTHM_GUESSED, legalBarWidths, parseAsciiTab } from "@/lib/assistant/tab/parseAsciiTab";
+import { buildTabDraft } from "@/lib/assistant/tab/buildTabDraft";
 import type { TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import type { TabProposal } from "@/lib/assistant/tab/types";
 import type { ProposeStrumInput, ProposeTabInput, ReadInput, ShowChordInput, ToolName } from "@/lib/assistant/general/tools";
@@ -39,6 +39,34 @@ export interface ToolExecution {
 }
 
 /** A well-formed input for the tool, or why the call cannot run. */
+/** `bars` as the tool declares it, or null when the model sent something else. */
+function readProposedBars(value: unknown): ProposeTabInput["bars"] | null {
+	if (!Array.isArray(value)) return null;
+	const bars: ProposeTabInput["bars"] = [];
+	for (const bar of value) {
+		if (typeof bar !== "object" || bar === null) return null;
+		const notes = (bar as { notes?: unknown }).notes;
+		if (!Array.isArray(notes)) return null;
+		const read: ProposeTabInput["bars"][number]["notes"] = [];
+		for (const note of notes) {
+			if (typeof note !== "object" || note === null) return null;
+			const n = note as Record<string, unknown>;
+			if (typeof n.string !== "number" || typeof n.fret !== "number" || typeof n.slot !== "number") return null;
+			if (n.technique !== undefined && typeof n.technique !== "string") return null;
+			if (n.muted !== undefined && typeof n.muted !== "boolean") return null;
+			read.push({
+				string: n.string,
+				fret: n.fret,
+				slot: n.slot,
+				...(typeof n.technique === "string" ? { technique: n.technique } : {}),
+				...(n.muted === true ? { muted: true } : {}),
+			});
+		}
+		bars.push({ notes: read });
+	}
+	return bars;
+}
+
 export function readInput(name: ToolName, input: unknown): { ok: true; input: ReadInput | ProposeStrumInput | ProposeTabInput | ShowChordInput } | { ok: false; error: string } {
 	if (typeof input !== "object" || input === null) return { ok: false, error: "input must be an object." };
 	const v = input as Record<string, unknown>;
@@ -58,10 +86,16 @@ export function readInput(name: ToolName, input: unknown): { ok: true; input: Re
 				typeof v.bpm === "number"
 				? { ok: true, input: { name: v.name, rhythm: v.rhythm, chords: v.chords as string[], bpm: v.bpm } }
 				: { ok: false, error: "expected name, rhythm, chords[] and bpm." };
-		case "propose_tab":
-			return typeof v.name === "string" && typeof v.tab === "string" && typeof v.bpm === "number" && typeof v.timeSignature === "string"
-				? { ok: true, input: { name: v.name, tab: v.tab, bpm: v.bpm, timeSignature: v.timeSignature } }
-				: { ok: false, error: "expected name, tab, bpm and timeSignature." };
+		case "propose_tab": {
+			const bars = readProposedBars(v.bars);
+			return typeof v.name === "string" &&
+				typeof v.slotsPerBar === "number" &&
+				bars !== null &&
+				typeof v.bpm === "number" &&
+				typeof v.timeSignature === "string"
+				? { ok: true, input: { name: v.name, slotsPerBar: v.slotsPerBar, bars, bpm: v.bpm, timeSignature: v.timeSignature } }
+				: { ok: false, error: "expected name, slotsPerBar, bars[] of {notes:[{string,fret,slot}]}, bpm and timeSignature." };
+		}
 		case "show_chord":
 			return Array.isArray(v.chords) && v.chords.length > 0 && v.chords.every((c) => typeof c === "string" && c.trim() !== "")
 				? { ok: true, input: { chords: v.chords as string[] } }
@@ -165,9 +199,14 @@ export function proposeStrum(input: ProposeStrumInput, index: readonly ChordInde
 	};
 }
 
-/** The model's tab draft, read by the same parser a pasted tab goes through. */
+/**
+ * The model's tab draft: notes on a grid of slots, validated the way an
+ * imported pattern is. `parseAsciiTab` is not on this path — it reads a tab a
+ * *player* pasted, where the rhythm is only in the spacing and guessing it is
+ * the best that can be done (#268).
+ */
 export function proposeTab(input: ProposeTabInput): ToolExecution {
-	let timeSignature: [number, number] | undefined;
+	let timeSignature: [number, number] = [4, 4];
 	const meter = input.timeSignature.trim();
 	if (meter !== "") {
 		const m = /^(\d+)\s*\/\s*(\d+)$/.exec(meter);
@@ -177,42 +216,22 @@ export function proposeTab(input: ProposeTabInput): ToolExecution {
 		}
 		timeSignature = parsed;
 	}
-	const parsed = parseAsciiTab(input.tab, timeSignature ? { timeSignature } : {});
-	if (!parsed.ok) return { result: `The tab could not be read: ${parsed.error}`, isError: true };
-	// A bar the parser had to round, or had to trim, is an error here though it
-	// is only a warning for a tab a player pasted. A paste carries no rhythm but
-	// its spacing, so guessing is the best there is; a draft the model wrote can
-	// be written again at a width that divides the bar, and the loop allows it
-	// one repair. Without this the model is told the card succeeded and dutifully
-	// reports the warnings to the player instead of fixing them.
-	const guessed = parsed.warnings.filter((w) =>
-		(ASCII_RHYTHM_GUESSED as readonly string[]).includes(w.code),
-	);
-	if (guessed.length > 0) {
-		const widths = legalBarWidths(timeSignature ?? [4, 4]).filter((w) => w >= 4);
-		const meter = (timeSignature ?? [4, 4]).join("/");
-		const legal = widths.length > 1 ? `${widths.slice(0, -1).join(", ")} or ${widths[widths.length - 1]}` : String(widths[0]);
-		return {
-			result: `${guessed.map((w) => w.message).join(" ")} One column is one time slot, so in ${meter} a bar has to be ${legal} columns wide. Write every bar at one of those widths, the same on all six lines.`,
-			isError: true,
-		};
-	}
+	const built = buildTabDraft({ slotsPerBar: input.slotsPerBar, bars: input.bars, timeSignature });
+	if (!built.ok) return { result: built.error, isError: true };
 	// The tempo rides on the draft rather than being patched on afterwards, so
-	// the validator sees the tempo the model asked for. `0` means none was
-	// asked for: the field stays off the draft and is defaulted without a
-	// warning, since a tab the model wrote carries no tempo of its own.
+	// the validator sees the tempo the model asked for. `0` means none was asked
+	// for, and the field stays off.
 	const bpm = input.bpm > 0 ? input.bpm : null;
-	const draft = bpm === null ? parsed.draft : { ...parsed.draft, bpm };
+	const draft = bpm === null ? built.draft : { ...built.draft, bpm };
 	const { pattern, errors, warnings } = normalizeImportedPattern(draft);
 	if (!pattern) {
-		return { result: `The tab did not validate: ${errors.map((e) => e.message).join(" ")}`, isError: true };
+		return { result: `The pattern did not validate: ${errors.map((e) => e.message).join(" ")}`, isError: true };
 	}
 	const named = { ...pattern, name: input.name.trim() || pattern.name };
-	const all = [...parsed.warnings, ...warnings];
 	return {
-		result: `Made "${named.name}": ${named.measures.length} bar(s), ${named.timeSignature.join("/")}${all.length ? ` (${all.length} warning(s): ${all.map((w) => w.message).join("; ")})` : ""}. Shown to the player as a card.`,
+		result: `Made "${named.name}": ${named.measures.length} bar(s), ${named.timeSignature.join("/")}${warnings.length ? ` (${warnings.length} warning(s): ${warnings.map((w) => w.message).join("; ")})` : ""}. Shown to the player as a card.`,
 		isError: false,
-		card: { domain: "tab", tabProposal: { name: named.name, pattern: named, bpm, chords: [], warnings: all } },
+		card: { domain: "tab", tabProposal: { name: named.name, pattern: named, bpm, chords: [], warnings } },
 	};
 }
 

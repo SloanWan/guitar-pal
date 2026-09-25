@@ -5,7 +5,7 @@
 <h1 align="center">Guitar Pal</h1>
 
 <p align="center">
-  A practice studio for guitarists who would rather play than squint at PDFs.<br/>
+  A practice studio for guitar lovers who would rather play than squint at PDFs.<br/>
   <a href="https://guitarpal.sloanwan.com"><b>guitarpal.sloanwan.com</b></a>
 </p>
 

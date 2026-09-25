@@ -203,12 +203,12 @@ are in `docs/calibration.md` §6.
 
 `app/ask/graph.py` answers a question about the open chapter and nothing
 else: a small structured call reads the intent, the strategy retrieves,
-and only when retrieval found something usable is the answer written —
-from documents with citations on, so the pages come off the API's
-citation blocks, never off the prose. An answer that cites nothing is not
-the book's and falls through to the general route, which never sees the
-chapter: it answers as a teacher would, labelled `general`, or declines
-and names other chapters by title. A request for an exercise is a lookup
+and only when retrieval found something usable is the answer written.
+Its pages come off the API's citation blocks where the chapter can be cited,
+or are the pages that were sent (below) — never off the prose. Only an
+answer step that says `NOT_IN_CHAPTER` hands the question to the general
+route, which never sees the chapter: it answers as a teacher would,
+labelled `general`, or declines and names other chapters by title. A request for an exercise is a lookup
 over `book_exercises`.
 
 Which model answers is `BOOK_ASK_PROVIDER`: `anthropic` (default), or
@@ -218,7 +218,9 @@ Which model answers is `BOOK_ASK_PROVIDER`: `anthropic` (default), or
 no `document` blocks and ignores `output_format`, so there the chapter goes
 over as labelled `[Page N]` text and the two structured steps ask for JSON in
 the prompt (`app/ask/json_out.py`). It does read images, and reads a scanned
-page well. It is not in the price table, so its runs record tokens with `$0`.
+page well. Its runs are costed at DeepSeek's peak rates, with a cache hit at
+a fiftieth of a miss (`PRICE_PER_MTOK` / `CACHE_FACTORS` in
+`app/ingest/model.py`).
 
 How the chapter reaches the model is `BOOK_ASK_STRATEGY`:
 

@@ -18,7 +18,7 @@ A pre-commit hook (`.husky/pre-commit`) runs `tsc --noEmit`, `npm run lint`, and
 
 ## Stack
 
-- **Next.js 16.2.10** (App Router) with React 19 — check `node_modules/next/dist/docs/` before using Next.js APIs, as this version may differ from training data
+- **Next.js 16.3.6** (App Router) with React 19 — check `node_modules/next/dist/docs/` before using Next.js APIs, as this version may differ from training data
 - **Supabase** (`@supabase/ssr`) for auth and database
 - **Tailwind CSS v4** for styling
 - **shadcn/ui** components (Radix UI primitives) in `src/components/ui/`

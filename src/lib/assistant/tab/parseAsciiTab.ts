@@ -181,6 +181,28 @@ function emptyStrings(): DraftSlot["strings"] {
 	return Array.from({ length: 6 }, () => ({ fret: null, technique: null, tied: false, muted: false }));
 }
 
+/** The two codes that say a bar's rhythm was inferred rather than read. */
+export const ASCII_RHYTHM_GUESSED = ["ASCII_UNEVEN_BAR", "ASCII_BAR_OVERFLOW"] as const;
+
+/**
+ * The bar widths, in characters, that divide a meter into whole note values.
+ *
+ * A column is `capacity / width` ticks, and that has to come out a whole
+ * number of 32nds, so in 4/4 (96 ticks) only 1, 2, 4, 8, 16 and 32 qualify —
+ * a bar of any other width has its rhythm rounded and flagged. Useful to a
+ * writer, not only to the parser: it is the set a bar has to be written at.
+ */
+export function legalBarWidths(timeSignature: [number, number]): number[] {
+	const capacity = measureCapacity(timeSignature);
+	const smallest = DURATION_TICKS["32nd"];
+	const widths: number[] = [];
+	for (let width = 1; width * smallest <= capacity; width++) {
+		const unit = capacity / width;
+		if (Number.isInteger(unit) && unit % smallest === 0) widths.push(width);
+	}
+	return widths;
+}
+
 export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): AsciiTabParse {
 	const systems = systemsOf(text);
 	if (systems.length === 0) return { ok: false, error: "Six lines of tab are needed, one per string." };

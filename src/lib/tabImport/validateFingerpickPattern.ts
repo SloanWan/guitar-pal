@@ -360,18 +360,23 @@ export function validateFingerpickPattern(raw: unknown): {
 	const description =
 		typeof obj.description === "string" ? obj.description : undefined;
 
+	// An absent tempo is not a defect. ASCII tab carries no bpm at all, so a
+	// draft parsed from one arrives without the field and is given the default
+	// in silence. A bpm that is *present* and unusable is a repair, and says so.
 	let bpm: number;
 	if (typeof obj.bpm === "number" && obj.bpm > 0 && Number.isFinite(obj.bpm)) {
 		bpm = obj.bpm;
 	} else {
 		bpm = 80;
-		warnings.push({
-			code: "INVALID_BPM",
-			path: "bpm",
-			message: "bpm missing or invalid, defaulted to 80",
-			original: obj.bpm,
-			repairedTo: 80,
-		});
+		if (obj.bpm !== undefined && obj.bpm !== null) {
+			warnings.push({
+				code: "INVALID_BPM",
+				path: "bpm",
+				message: "bpm is not a usable tempo, defaulted to 80",
+				original: obj.bpm,
+				repairedTo: 80,
+			});
+		}
 	}
 
 	let timeSignature: [number, number];

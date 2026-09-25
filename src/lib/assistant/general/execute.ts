@@ -179,12 +179,17 @@ export function proposeTab(input: ProposeTabInput): ToolExecution {
 	}
 	const parsed = parseAsciiTab(input.tab, timeSignature ? { timeSignature } : {});
 	if (!parsed.ok) return { result: `The tab could not be read: ${parsed.error}`, isError: true };
-	const { pattern, errors, warnings } = normalizeImportedPattern(parsed.draft);
+	// The tempo rides on the draft rather than being patched on afterwards, so
+	// the validator sees the tempo the model asked for. `0` means none was
+	// asked for: the field stays off the draft and is defaulted without a
+	// warning, since a tab the model wrote carries no tempo of its own.
+	const bpm = input.bpm > 0 ? input.bpm : null;
+	const draft = bpm === null ? parsed.draft : { ...parsed.draft, bpm };
+	const { pattern, errors, warnings } = normalizeImportedPattern(draft);
 	if (!pattern) {
 		return { result: `The tab did not validate: ${errors.map((e) => e.message).join(" ")}`, isError: true };
 	}
-	const bpm = input.bpm > 0 ? input.bpm : null;
-	const named = { ...pattern, name: input.name.trim() || pattern.name, bpm: bpm ?? pattern.bpm };
+	const named = { ...pattern, name: input.name.trim() || pattern.name };
 	const all = [...parsed.warnings, ...warnings];
 	return {
 		result: `Made "${named.name}": ${named.measures.length} bar(s), ${named.timeSignature.join("/")}${all.length ? ` (${all.length} warning(s): ${all.map((w) => w.message).join("; ")})` : ""}. Shown to the player as a card.`,

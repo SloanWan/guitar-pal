@@ -5,6 +5,9 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "./src"),
+			// See the stub for why: the real module is a build-time transform and
+			// throws when a test imports it.
+			"next/font/local": path.resolve(__dirname, "./src/test/nextFontLocalStub.ts"),
 		},
 	},
 	test: {

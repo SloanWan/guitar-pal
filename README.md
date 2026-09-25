@@ -9,8 +9,6 @@
   <a href="https://guitarpal.sloanwan.com"><b>guitarpal.sloanwan.com</b></a>
 </p>
 
-https://github.com/user-attachments/assets/<video-id>
-
 ## What's inside
 
 **Strum machine.** Build a rhythm, write chords over it, and hear it played on a

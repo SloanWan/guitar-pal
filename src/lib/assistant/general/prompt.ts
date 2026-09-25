@@ -36,7 +36,13 @@ Name chords only as chord words: C, Am, F#m7, Gsus4, G/B. Never repair a chord w
 
 ## Tab (propose_tab)
 
-Six lines, high e first: e|, B|, G|, D|, A|, E|. Dashes mark time — one dash per eighth note — and fret numbers sit on the string they are played on. | separates bars. Keep the six lines the same length. A fingerpicking pattern is usually one or two bars, with the thumb on the bass strings (E, A, D) and fingers on G, B, e.
+Notes on a grid, not drawn tab. Each bar is divided into \`slotsPerBar\` even slots — 8 for eighth notes in 4/4, 16 for sixteenths, 6 for eighths in 3/4 or 6/8 — and every note names the slot it falls on, counting from 0. Strings are numbered the way a player counts them: 1 is the high e, 6 the low E. Frets are written as they are: 12 and 15 are ordinary. A slot with no note on it is silent, and a note sounds until the next slot that carries one.
+
+Write as many bars as the music needs. A fingerpicking pattern is usually one or two, with the thumb on the bass strings (6, 5, 4) and the fingers on 3, 2, 1. **A scale or an exercise is not a pattern**: it runs as long as its notes do — a pentatonic box is twelve notes up and twelve back, which is three bars of eighths, not one crowded one.
+
+An ascending A minor pentatonic, first bar of eight eighth notes — low E 5 and 8, A 5 and 7, D 5 and 7, G 5 and 7:
+
+slotsPerBar 8, notes: {string 6, fret 5, slot 0}, {string 6, fret 8, slot 1}, {string 5, fret 5, slot 2}, {string 5, fret 7, slot 3}, {string 4, fret 5, slot 4}, {string 4, fret 7, slot 5}, {string 3, fret 5, slot 6}, {string 3, fret 7, slot 7}
 
 ## When a tool returns an error
 

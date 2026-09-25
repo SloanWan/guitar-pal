@@ -12,7 +12,9 @@ describe("readInput", () => {
 		expect(readInput("read_tab", { text: "  " })).toMatchObject({ ok: false });
 		expect(readInput("propose_strum", { name: "x", rhythm: "D DU", chords: ["C"], bpm: 0 })).toMatchObject({ ok: true });
 		expect(readInput("propose_strum", { name: "x", rhythm: "D DU", chords: [1], bpm: 0 })).toMatchObject({ ok: false });
-		expect(readInput("propose_tab", { name: "x", tab: "e|--", bpm: 0, timeSignature: "" })).toMatchObject({ ok: true });
+		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: 0, slot: 0 }] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: true });
+		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: "0", slot: 0 }] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
+		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: "e|--", bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
 		expect(readInput("propose_tab", "nope")).toMatchObject({ ok: false });
 		expect(readInput("show_chord", { chords: ["F#m7"] })).toMatchObject({ ok: true });
 		expect(readInput("show_chord", { chords: [] })).toMatchObject({ ok: false });
@@ -111,26 +113,67 @@ describe("propose_strum", () => {
 });
 
 describe("propose_tab", () => {
-	const TAB = ["e|--------|", "B|----1---|", "G|--0---0-|", "D|--------|", "A|0-------|", "E|--------|"].join("\n");
+	const scale = (frets: readonly [number, number][]) => ({
+		notes: frets.map(([string, fret], slot) => ({ string, fret, slot })),
+	});
 
-	it("parses and validates a tab the way a paste is", () => {
-		const r = proposeTab({ name: "Am roll", tab: TAB, bpm: 80, timeSignature: "" });
+	it("places notes on the slots it was given", () => {
+		const r = proposeTab({
+			name: "Am roll",
+			slotsPerBar: 8,
+			bars: [{ notes: [{ string: 5, fret: 0, slot: 0 }, { string: 3, fret: 0, slot: 2 }, { string: 2, fret: 1, slot: 4 }] }],
+			bpm: 80,
+			timeSignature: "",
+		});
 		expect(r.isError).toBe(false);
 		expect(r.card).toMatchObject({ domain: "tab", tabProposal: { name: "Am roll", bpm: 80 } });
 		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
-			expect(r.card.tabProposal.pattern.measures.length).toBe(1);
-			expect(r.card.tabProposal.pattern.timeSignature).toEqual([4, 4]);
+			const { pattern, warnings } = r.card.tabProposal;
+			expect(pattern.measures).toHaveLength(1);
+			expect(pattern.timeSignature).toEqual([4, 4]);
+			expect(warnings).toEqual([]);
+			// Slot 0 sounds the A string; slot 4 the B string at the first fret.
+			expect(pattern.measures[0].slots[0].strings[4].fret).toBe(0);
+			expect(pattern.measures[0].slots[2].strings[1].fret).toBe(1);
 		}
 	});
 
-	it("takes a supported meter and refuses one it does not know", () => {
-		const ok = proposeTab({ name: "w", tab: ["e|------|", "B|------|", "G|--0---|", "D|------|", "A|0-----|", "E|------|"].join("\n"), bpm: 0, timeSignature: "3/4" });
-		expect(ok.isError).toBe(false);
-		expect(proposeTab({ name: "w", tab: TAB, bpm: 0, timeSignature: "7/8" }).isError).toBe(true);
+	it("writes a scale over as many bars as its notes need, with no warning", () => {
+		const up = [[6, 5], [6, 8], [5, 5], [5, 7], [4, 5], [4, 7], [3, 5], [3, 7]] as const;
+		const down = [[3, 7], [3, 5], [4, 7], [4, 5], [5, 7], [5, 5], [6, 8], [6, 5]] as const;
+		const r = proposeTab({
+			name: "A minor pentatonic",
+			slotsPerBar: 8,
+			bars: [scale(up), scale(down)],
+			bpm: 80,
+			timeSignature: "",
+		});
+		expect(r.isError).toBe(false);
+		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
+			expect(r.card.tabProposal.pattern.measures).toHaveLength(2);
+			expect(r.card.tabProposal.warnings).toEqual([]);
+		}
+	});
+
+	it("keeps two-digit frets apart — the thing ASCII could not do", () => {
+		const r = proposeTab({
+			name: "twelfth position",
+			slotsPerBar: 8,
+			bars: [scale([[6, 12], [6, 15], [5, 12], [5, 14], [4, 12], [4, 14], [3, 12], [3, 14]])],
+			bpm: 0,
+			timeSignature: "",
+		});
+		expect(r.isError).toBe(false);
+		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
+			const frets = r.card.tabProposal.pattern.measures[0].slots
+				.flatMap((slot) => slot.strings.map((sf) => sf.fret))
+				.filter((f): f is number => f !== null);
+			expect(frets).toEqual([12, 15, 12, 14, 12, 14, 12, 14]);
+		}
 	});
 
 	it("carries the model's tempo without a bpm warning", () => {
-		const r = proposeTab({ name: "Am roll", tab: TAB, bpm: 96, timeSignature: "" });
+		const r = proposeTab({ name: "Am roll", slotsPerBar: 8, bars: [{ notes: [{ string: 5, fret: 0, slot: 0 }] }], bpm: 96, timeSignature: "" });
 		expect(r.result).not.toMatch(/bpm/i);
 		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
 			expect(r.card.tabProposal.pattern.bpm).toBe(96);
@@ -138,64 +181,39 @@ describe("propose_tab", () => {
 	});
 
 	it("says nothing about the tempo when none was asked for", () => {
-		const r = proposeTab({ name: "Am roll", tab: TAB, bpm: 0, timeSignature: "" });
+		const r = proposeTab({ name: "Am roll", slotsPerBar: 8, bars: [{ notes: [{ string: 5, fret: 0, slot: 0 }] }], bpm: 0, timeSignature: "" });
 		expect(r.result).not.toMatch(/bpm/i);
 		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
 			expect(r.card.tabProposal.bpm).toBeNull();
 			expect(r.card.tabProposal.pattern.bpm).toBe(80);
-		}
-	});
-
-	it("refuses a bar whose width does not divide the meter, naming the widths that do", () => {
-		// Ten notes written the ordinary way, a dash between each: 21 columns.
-		const scale = [
-			"e|---------------------|",
-			"B|---------------------|",
-			"G|-------------5-7-----|",
-			"D|-------5-7-----------|",
-			"A|-5-7-----------------|",
-			"E|---------------------|",
-		].join("\n");
-		const r = proposeTab({ name: "pentatonic", tab: scale, bpm: 0, timeSignature: "" });
-		expect(r.isError).toBe(true);
-		expect(r.card).toBeUndefined();
-		expect(r.result).toContain("21 characters wide");
-		expect(r.result).toContain("4, 8, 16 or 32 columns");
-	});
-
-	it("follows the meter when it says which widths are legal", () => {
-		const wide = [
-			"e|----------|",
-			"B|----------|",
-			"G|--0-------|",
-			"D|----------|",
-			"A|0---------|",
-			"E|----------|",
-		].join("\n");
-		const r = proposeTab({ name: "w", tab: wide, bpm: 0, timeSignature: "3/4" });
-		expect(r.isError).toBe(true);
-		expect(r.result).toContain("4, 6, 8, 12 or 24 columns");
-	});
-
-	it("takes a bar that does divide the meter", () => {
-		const even = [
-			"e|----------------|",
-			"B|------------1---|",
-			"G|--------0-------|",
-			"D|----------------|",
-			"A|0---------------|",
-			"E|----------------|",
-		].join("\n");
-		const r = proposeTab({ name: "even", tab: even, bpm: 0, timeSignature: "" });
-		expect(r.isError).toBe(false);
-		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
 			expect(r.card.tabProposal.warnings).toEqual([]);
 		}
 	});
 
-	it("hands an unreadable tab back as an error", () => {
-		const r = proposeTab({ name: "x", tab: "not a tab at all", bpm: 0, timeSignature: "" });
+	it("refuses a slot grid the meter cannot be divided into, naming the ones it can", () => {
+		const r = proposeTab({ name: "x", slotsPerBar: 12, bars: [{ notes: [] }], bpm: 0, timeSignature: "" });
 		expect(r.isError).toBe(true);
-		expect(r.result).toMatch(/could not be read/);
+		expect(r.card).toBeUndefined();
+		expect(r.result).toContain("2, 4, 8, 16 or 32");
+	});
+
+	it("follows the meter when it says which grids are legal", () => {
+		const ok = proposeTab({ name: "w", slotsPerBar: 6, bars: [{ notes: [{ string: 5, fret: 0, slot: 0 }] }], bpm: 0, timeSignature: "3/4" });
+		expect(ok.isError).toBe(false);
+		const no = proposeTab({ name: "w", slotsPerBar: 8, bars: [{ notes: [] }], bpm: 0, timeSignature: "3/4" });
+		expect(no.isError).toBe(true);
+		expect(no.result).toContain("2, 3, 4, 6, 12 or 24");
+	});
+
+	it("takes a supported meter and refuses one it does not know", () => {
+		const bars = [{ notes: [{ string: 5, fret: 0, slot: 0 }] }];
+		expect(proposeTab({ name: "w", slotsPerBar: 6, bars, bpm: 0, timeSignature: "6/8" }).isError).toBe(false);
+		expect(proposeTab({ name: "w", slotsPerBar: 8, bars, bpm: 0, timeSignature: "7/8" }).isError).toBe(true);
+	});
+
+	it("refuses a note that falls outside its bar", () => {
+		const r = proposeTab({ name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: 0, slot: 9 }] }], bpm: 0, timeSignature: "" });
+		expect(r.isError).toBe(true);
+		expect(r.result).toContain("slot 9");
 	});
 });

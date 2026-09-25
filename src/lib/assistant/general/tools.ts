@@ -52,11 +52,18 @@ export interface ProposeStrumInput {
 	bpm: number;
 }
 
-/** What the model writes when it composes a fingerpicking pattern itself. */
+/**
+ * What the model writes when it composes a fingerpicking pattern itself.
+ *
+ * Notes on a grid, not ASCII tab: a column of ASCII is both a unit of time and
+ * a character, so a two-digit fret costs two units and the rhythm ends up
+ * inferred from the spacing (#268). Here every note names its slot.
+ */
 export interface ProposeTabInput {
 	name: string;
-	/** Six lines of ASCII tab, high e first, `|` between bars. */
-	tab: string;
+	/** How many even slots each bar is divided into: 8 eighths, 16 sixteenths. */
+	slotsPerBar: number;
+	bars: { notes: { string: number; fret: number; slot: number; technique?: string; muted?: boolean }[] }[];
 	/** 0 when no tempo was asked for. */
 	bpm: number;
 	/** e.g. "4/4", "3/4", "6/8"; empty for 4/4. */
@@ -132,21 +139,51 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 	{
 		name: "propose_tab",
 		description:
-			"Compose a fingerpicking pattern yourself as ASCII tab, when the player described what they want rather than writing it out. The app parses and validates it; it returns errors to fix if the tab cannot be read.",
+			"Compose a fingerpicking pattern or an exercise yourself, when the player described what they want rather than writing it out. Notes are placed on a grid of even slots, so the rhythm is exact and any fret can be written. The app validates it; it returns errors to fix if a note falls outside its bar.",
 		strict: true,
 		input_schema: {
 			type: "object",
 			properties: {
 				name: { type: "string", description: "Two or three words." },
-				tab: {
-					type: "string",
+				slotsPerBar: {
+					type: "integer",
 					description:
-						"Six lines, high e string first, each starting with the string letter and a pipe (e|, B|, G|, D|, A|, E|), dashes for time, fret numbers on the strings, | between bars. Even spacing: one dash per eighth note.",
+						"How many even slots each bar is divided into. In 4/4: 8 for eighth notes, 16 for sixteenths. In 3/4 or 6/8: 6 for eighths, 12 for sixteenths. Every bar uses the same grid.",
+				},
+				bars: {
+					type: "array",
+					description: "The bars in order. A bar with no notes is a bar of rest. Write as many bars as the music needs.",
+					items: {
+						type: "object",
+						properties: {
+							notes: {
+								type: "array",
+								description: "The notes of this bar, in any order. A slot with no note on it is silent; a note sounds until the next slot that carries one.",
+								items: {
+									type: "object",
+									properties: {
+										string: { type: "integer", description: "1 = high e, 2 = B, 3 = G, 4 = D, 5 = A, 6 = low E." },
+										fret: { type: "integer", description: "0 (open) to 24. Write the fret itself — 12 and 15 are ordinary." },
+										slot: { type: "integer", description: "Which slot of this bar, counting from 0. The last is slotsPerBar - 1." },
+										technique: {
+											type: "string",
+											description: "How the note is reached, when it is not picked: \"hammer-on\", \"pull-off\", \"slide-up\", \"slide-down\".",
+										},
+										muted: { type: "boolean", description: "A dead note — struck, not sounded." },
+									},
+									required: ["string", "fret", "slot"],
+									additionalProperties: false,
+								},
+							},
+						},
+						required: ["notes"],
+						additionalProperties: false,
+					},
 				},
 				bpm: { type: "integer", description: "0 when the player gave no tempo." },
 				timeSignature: { type: "string", description: "\"4/4\", \"3/4\" or \"6/8\". Empty for 4/4." },
 			},
-			required: ["name", "tab", "bpm", "timeSignature"],
+			required: ["name", "slotsPerBar", "bars", "bpm", "timeSignature"],
 			additionalProperties: false,
 		},
 	},

@@ -29,12 +29,20 @@ A pre-commit hook (`.husky/pre-commit`) runs `tsc --noEmit`, `npm run lint`, and
 
 ## Architecture
 
-**Auth flow:** `/auth` page handles sign-in/sign-up via `src/lib/auth.ts`. `src/proxy.ts` is the Next.js 16 middleware entry point (named `proxy.ts`, not `middleware.ts`) and guards `/dashboard/:path*` and `/session/:path*` against unauthenticated access. Authenticated users are redirected away from `/auth` and `/` to `/dashboard`.
+**Auth flow:** `/auth` handles sign-in/sign-up via `src/lib/auth.ts`. `src/proxy.ts` is the Next.js 16 middleware entry point (named `proxy.ts`, not `middleware.ts`) and its matcher runs on nearly every request, not a route list — it refreshes the session cookie on each one, so a redirect has to carry those cookies across (`redirectWithCookies`) or the refresh is dropped. A request that cannot reach Supabase is treated as signed out rather than thrown, so the public pages still render.
+
+- `/home` and `/settings` are the signed-in personal surfaces, matched **exactly**, not as prefixes. A signed-out visitor goes to `/auth?redirect=…` and lands back after signing in.
+- `/` is the public hub. A signed-in visitor is sent to `/home`; a signed-out one stays, deliberately (#127).
+- `/auth` sends a signed-in visitor to the `redirect` param when `safeRedirectPath` accepts it, else to `/home`.
+- `/books` is open to everyone (#262) — uploading asks for an account on the page, not at the door.
+- `/dev` with `NEXT_PUBLIC_ENABLE_DEV_ROUTES` unset returns unchanged so the dev layout can 404 it; redirecting there would leak that the route exists. With the flag on, `/dev/dashboard` and `/dev/session` are the only ones that require a user.
+
+Everything else is public.
 
 **Two Supabase clients:**
 
 - `src/lib/supabase.ts` — `createClient()` via `createBrowserClient`, used in client components and all lib query functions
-- `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components (e.g. `dashboard/page.tsx`, `chords/page.tsx`)
+- `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components and route handlers (`(main)/p/[id]/page.tsx`, `api/assistant/route.ts`, `api/books/[...path]/route.ts`, `dev/dashboard/page.tsx`). Note the chord pages are **not** on this path: they read through `chordsData.ts`, which uses a cookie-free `@supabase/supabase-js` client so `unstable_cache` can wrap the reads
 
 Never mix the two clients — `createSupabaseServer()` throws at runtime in client components.
 
@@ -88,7 +96,7 @@ Types defined in `src/types/database.ts`.
 
 **Exercise categories** are a fixed `as const` array exported as `CATEGORIES` from `src/types/database.ts`: `"chord" | "chord_change" | "picking" | "scale" | "strumming" | "fingering" | "ear_training" | "arpeggio" | "theory" | "song"`.
 
-**Session flow:** `/session/[routineId]` is a client component with a local timer state machine (`idle → running → paused → completed → all_done`). On `all_done`, it collects rating + notes and calls `createPracticeLog()`, then redirects to `/dashboard`.
+**Session flow:** `/dev/session/[routineId]` — a dev-only surface behind `NEXT_PUBLIC_ENABLE_DEV_ROUTES`, not a user route. A client component with a local timer state machine (`idle → running → paused → completed → all_done`). On `all_done`, it collects rating + notes and calls `createPracticeLog()`, then pushes to `/dev/dashboard`.
 
 **Component pattern:** Feature components (e.g. `ExerciseList`, `RoutineList`) live in `src/components/` and are marked `"use client"`. They handle their own data fetching and local state. UI primitives from shadcn live in `src/components/ui/` — don't hand-edit these unless necessary.
 

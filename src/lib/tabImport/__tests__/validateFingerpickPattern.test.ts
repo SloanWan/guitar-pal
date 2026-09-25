@@ -57,17 +57,24 @@ describe("validateFingerpickPattern — gross failures", () => {
 // ─── Pattern-level defaults ───────────────────────────────────────────────────
 
 describe("validateFingerpickPattern — pattern-level defaults", () => {
-	it("defaults bpm to 80 when missing and adds a warning", () => {
+	it("defaults bpm to 80 when missing, without a warning", () => {
 		const { pattern, warnings } = validateFingerpickPattern(
 			makePattern({ bpm: undefined }),
 		);
 		expect(pattern?.bpm).toBe(80);
+		expect(warnings.some((w) => w.code === "INVALID_BPM")).toBe(false);
+	});
+
+	it("defaults bpm to 80 when negative, and warns", () => {
+		const { pattern, warnings } = validateFingerpickPattern(makePattern({ bpm: -10 }));
+		expect(pattern?.bpm).toBe(80);
 		expect(warnings.some((w) => w.code === "INVALID_BPM")).toBe(true);
 	});
 
-	it("defaults bpm to 80 when negative", () => {
-		const { pattern } = validateFingerpickPattern(makePattern({ bpm: -10 }));
+	it("warns for a bpm that is there but not a number", () => {
+		const { pattern, warnings } = validateFingerpickPattern(makePattern({ bpm: "fast" }));
 		expect(pattern?.bpm).toBe(80);
+		expect(warnings.some((w) => w.code === "INVALID_BPM")).toBe(true);
 	});
 
 	it("defaults timeSignature to [4,4] when missing and warns", () => {

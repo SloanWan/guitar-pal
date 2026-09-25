@@ -129,6 +129,23 @@ describe("propose_tab", () => {
 		expect(proposeTab({ name: "w", tab: TAB, bpm: 0, timeSignature: "7/8" }).isError).toBe(true);
 	});
 
+	it("carries the model's tempo without a bpm warning", () => {
+		const r = proposeTab({ name: "Am roll", tab: TAB, bpm: 96, timeSignature: "" });
+		expect(r.result).not.toMatch(/bpm/i);
+		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
+			expect(r.card.tabProposal.pattern.bpm).toBe(96);
+		}
+	});
+
+	it("says nothing about the tempo when none was asked for", () => {
+		const r = proposeTab({ name: "Am roll", tab: TAB, bpm: 0, timeSignature: "" });
+		expect(r.result).not.toMatch(/bpm/i);
+		if (r.card?.domain === "tab" && "tabProposal" in r.card) {
+			expect(r.card.tabProposal.bpm).toBeNull();
+			expect(r.card.tabProposal.pattern.bpm).toBe(80);
+		}
+	});
+
 	it("hands an unreadable tab back as an error", () => {
 		const r = proposeTab({ name: "x", tab: "not a tab at all", bpm: 0, timeSignature: "" });
 		expect(r.isError).toBe(true);

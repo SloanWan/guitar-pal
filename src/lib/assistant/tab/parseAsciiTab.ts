@@ -1,7 +1,7 @@
-import type { Duration, Technique } from "@/lib/fingerpickTypes";
+import type { Technique } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
-import { splitTicks } from "@/lib/assistant/tab/ticks";
+import { barSlots, type DraftSlot, type GridNote } from "@/lib/assistant/tab/draftSlots";
 
 /**
  * A pasted ASCII tab, read into an import draft.
@@ -122,20 +122,13 @@ function barsOf(system: TabLine[]): string[][] {
 	return bars;
 }
 
-interface Note {
-	stringIndex: number;
-	fret: number | null;
-	muted: boolean;
-	technique: Technique;
-}
-
 /** The notes of one bar by the column they start in. */
 function notesByColumn(
 	bar: string[],
 	warnUnknown: (mark: string) => void,
-): Map<number, Note[]> {
-	const byColumn = new Map<number, Note[]>();
-	const add = (col: number, note: Note) => {
+): Map<number, GridNote[]> {
+	const byColumn = new Map<number, GridNote[]>();
+	const add = (col: number, note: GridNote) => {
 		if (!byColumn.has(col)) byColumn.set(col, []);
 		byColumn.get(col)!.push(note);
 	};
@@ -171,38 +164,6 @@ function notesByColumn(
 	return byColumn;
 }
 
-type DraftSlot = {
-	duration: Duration;
-	isRest?: boolean;
-	strings: { fret: number | null; technique: Technique; tied: boolean; muted: boolean }[];
-};
-
-function emptyStrings(): DraftSlot["strings"] {
-	return Array.from({ length: 6 }, () => ({ fret: null, technique: null, tied: false, muted: false }));
-}
-
-/** The two codes that say a bar's rhythm was inferred rather than read. */
-export const ASCII_RHYTHM_GUESSED = ["ASCII_UNEVEN_BAR", "ASCII_BAR_OVERFLOW"] as const;
-
-/**
- * The bar widths, in characters, that divide a meter into whole note values.
- *
- * A column is `capacity / width` ticks, and that has to come out a whole
- * number of 32nds, so in 4/4 (96 ticks) only 1, 2, 4, 8, 16 and 32 qualify —
- * a bar of any other width has its rhythm rounded and flagged. Useful to a
- * writer, not only to the parser: it is the set a bar has to be written at.
- */
-export function legalBarWidths(timeSignature: [number, number]): number[] {
-	const capacity = measureCapacity(timeSignature);
-	const smallest = DURATION_TICKS["32nd"];
-	const widths: number[] = [];
-	for (let width = 1; width * smallest <= capacity; width++) {
-		const unit = capacity / width;
-		if (Number.isInteger(unit) && unit % smallest === 0) widths.push(width);
-	}
-	return widths;
-}
-
 export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): AsciiTabParse {
 	const systems = systemsOf(text);
 	if (systems.length === 0) return { ok: false, error: "Six lines of tab are needed, one per string." };
@@ -223,7 +184,6 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 			const width = bar[0].length;
 			if (width === 0) continue;
 			const byColumn = notesByColumn(bar, (mark) => unknownMarks.add(mark));
-			const onsets = [...byColumn.keys()].sort((a, b) => a - b);
 			const measureIndex = measures.length;
 
 			// A bar's width is its length. When the characters divide the bar
@@ -241,46 +201,14 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 				});
 			}
 
-			const slots: DraftSlot[] = [];
-			let used = 0;
-			const push = (durations: Duration[], first: Note[] | null) => {
-				durations.forEach((duration, i) => {
-					const ticks = DURATION_TICKS[duration];
-					if (used + ticks > capacity) return;
-					used += ticks;
-					const slot: DraftSlot = { duration, strings: emptyStrings() };
-					if (i === 0 && first) {
-						for (const note of first) {
-							slot.strings[note.stringIndex] = {
-								fret: note.fret,
-								technique: note.technique,
-								tied: false,
-								muted: note.muted,
-							};
-						}
-					} else {
-						slot.isRest = true;
-					}
-					slots.push(slot);
-				});
-			};
-
-			if (onsets.length === 0 || onsets[0] > 0) {
-				push(splitTicks((onsets[0] ?? width) * unit), null);
-			}
-			onsets.forEach((col, i) => {
-				const next = onsets[i + 1] ?? width;
-				push(splitTicks((next - col) * unit), byColumn.get(col)!);
-			});
-			if (width * unit > capacity) {
+			const { slots, overflow } = barSlots(byColumn, width, unit, capacity);
+			if (overflow) {
 				warnings.push({
 					code: "ASCII_BAR_OVERFLOW",
 					path: `measures[${measureIndex}]`,
 					message: `Bar ${measureIndex + 1} ran past ${timeSignature[0]}/${timeSignature[1]} — what did not fit was dropped.`,
 				});
 			}
-			if (used < capacity) push(splitTicks(capacity - used), null);
-			if (slots.length === 0) push(splitTicks(capacity), null);
 			measures.push({ slots });
 		}
 	}

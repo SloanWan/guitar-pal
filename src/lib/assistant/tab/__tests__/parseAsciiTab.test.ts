@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { asciiTabProse, legalBarWidths, looksLikeAsciiTab, parseAsciiTab } from "@/lib/assistant/tab/parseAsciiTab";
+import { asciiTabProse, looksLikeAsciiTab, parseAsciiTab } from "@/lib/assistant/tab/parseAsciiTab";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import type { Duration } from "@/lib/fingerpickTypes";
 
@@ -140,31 +140,5 @@ describe("parseAsciiTab", () => {
 
 	it("refuses text that is not a tab", () => {
 		expect(parseAsciiTab("Am: 5 3 2 1").ok).toBe(false);
-	});
-});
-
-describe("legalBarWidths", () => {
-	it("gives the widths that divide 4/4 into whole note values", () => {
-		expect(legalBarWidths([4, 4])).toEqual([1, 2, 4, 8, 16, 32]);
-	});
-
-	it("follows the meter — 3/4 is three quarters, not four", () => {
-		expect(legalBarWidths([3, 4])).toEqual([1, 2, 3, 4, 6, 8, 12, 24]);
-	});
-
-	it("counts a compound meter by its own capacity", () => {
-		expect(legalBarWidths([6, 8])).toEqual(legalBarWidths([3, 4]));
-	});
-
-	it("agrees with the parser about which widths it has to guess at", () => {
-		const bar = (width: number) =>
-			["e", "B", "G", "D", "A", "E"].map((s, i) => `${s}|${(i === 4 ? "0" : "-").padEnd(width, "-")}|`).join("\n");
-		for (const width of [4, 8, 16, 21, 24, 32]) {
-			const parsed = parseAsciiTab(bar(width));
-			expect(parsed.ok).toBe(true);
-			if (!parsed.ok) continue;
-			const guessed = parsed.warnings.some((w) => w.code === "ASCII_UNEVEN_BAR");
-			expect(guessed).toBe(!legalBarWidths([4, 4]).includes(width));
-		}
 	});
 });

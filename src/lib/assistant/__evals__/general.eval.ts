@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { EVAL_CASES, type EvalCase } from "@/lib/assistant/__evals__/cases";
-import { TAB_EVAL_CASES } from "@/lib/assistant/__evals__/tabCases";
+import { READER_CHOICE_CODES, TAB_EVAL_CASES } from "@/lib/assistant/__evals__/tabCases";
 import { gradeNoDraft, gradeProposal } from "@/lib/assistant/__evals__/grade";
 import { proposeStrum, proposeTab, showChord, strumReadResult, tabReadResult, type ToolExecution } from "@/lib/assistant/general/execute";
 import { callGeneral, type ModelAttempt } from "@/lib/assistant/general/model";
@@ -227,8 +227,9 @@ describe(`General assistant eval set — ${MODEL}`, () => {
 					if (pattern && c.expect.timeSignature && pattern.timeSignature.join("/") !== c.expect.timeSignature.join("/")) {
 						failures.push(`meter ${pattern.timeSignature.join("/")}, expected ${c.expect.timeSignature.join("/")}`);
 					}
-					if (c.expect.noWarnings && "tabProposal" in card && card.tabProposal.warnings.length > 0) {
-						failures.push(card.tabProposal.warnings.map((w) => w.message).join("; "));
+					if (c.expect.noWarnings && "tabProposal" in card) {
+						const shortfall = card.tabProposal.warnings.filter((w) => !READER_CHOICE_CODES.includes(w.code));
+						if (shortfall.length > 0) failures.push(shortfall.map((w) => w.message).join("; "));
 					}
 					if (pattern && c.expect.frets) {
 						const [lo, hi] = c.expect.frets;

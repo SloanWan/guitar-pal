@@ -42,18 +42,21 @@ async def structured_call[M: BaseModel](
         parsed = response.parsed_output if response.stop_reason == "end_turn" else None
         return parsed, usage_of(response, model)
 
-    response = await provider.client.messages.create(
+    # Streamed: a reasoning model can think for minutes before its first word,
+    # and a request that sends nothing back that long gets its connection cut.
+    async with provider.client.messages.stream(
         model=model,
-        max_tokens=max_tokens,
+        max_tokens=max_tokens + provider.thinking_tokens,
         system=system + json_instruction(output),
         messages=messages,  # type: ignore[arg-type]
         output_config=provider.config(effort),  # type: ignore[arg-type]
-    )
+    ) as stream:
+        response = await stream.get_final_message()
     text = "".join(getattr(block, "text", "") for block in response.content)
     parsed = parse_json_reply(text, output)
     if parsed is None:
         log.warning(
-            "ask %s: %s did not answer as %s (stop=%s): %r",
+            "%s: %s did not answer as %s (stop=%s): %r",
             provider.name,
             model,
             output.__name__,

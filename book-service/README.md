@@ -222,6 +222,12 @@ page well. Its runs are costed at DeepSeek's peak rates, with a cache hit at
 a fiftieth of a miss (`PRICE_PER_MTOK` / `CACHE_FACTORS` in
 `app/ingest/model.py`).
 
+The parse picks its model the same way, `BOOK_PARSE_PROVIDER`
+(`anthropic` by default). On `deepseek` every structured call asks for JSON
+in the prompt and gets `Provider.thinking_tokens` of room on top of its cap;
+`python -m app.graph --provider deepseek` is the same thing by hand
+(`docs/calibration.md` §10).
+
 How the chapter reaches the model is `BOOK_ASK_STRATEGY`:
 
 | strategy | the chapter reaches the model as | pages from |

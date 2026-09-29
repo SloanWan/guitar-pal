@@ -7,6 +7,7 @@ the eval's business (`evals/ask/`).
 """
 
 import asyncio
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +31,7 @@ from app.ask.strategies.chunks import LexicalStrategy
 from app.ask.strategies.cited import strip_pages_line
 from app.ask.strategies.long_context import LongContextStrategy, chapter_pdf, has_text_layer
 from app.ask.types import AskContext, AskTurn
+from app.extract.tab import SegmentsOut, TabReadingOut
 from app.ingest.pdf import open_pdf
 from app.repo import BookRow, ChapterRow, ChunkRow, ExerciseRow, PageRow
 from tests.conftest import needs_materials
@@ -194,6 +196,25 @@ class FakeModel:
             input_tokens=2000, output_tokens=50, cache_creation_input_tokens=1800
         )
         return SimpleNamespace(stop_reason="end_turn", content=[block], usage=usage)
+
+    def stream(self, **kwargs: object) -> "FakeStream":
+        return FakeStream(self.create(**kwargs))
+
+
+class FakeStream:
+    """`messages.stream(...)` as the SDK hands it back: a context around the final message."""
+
+    def __init__(self, message: Awaitable[object]) -> None:
+        self._message = message
+
+    async def __aenter__(self) -> "FakeStream":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def get_final_message(self) -> object:
+        return await self._message
 
 
 @dataclass
@@ -450,6 +471,14 @@ def test_json_instruction_names_every_field_and_its_options() -> None:
     text = json_instruction(IntentOut)
     assert '"intent": one of' in text and "'wants_draft'" in text
     assert '"topic": "…"' in text
+
+
+def test_json_instruction_writes_nested_models_out() -> None:
+    text = json_instruction(TabReadingOut)
+    assert '"bpm": number or null' in text
+    assert '"tab_bars": ["…", …]' in text
+    nested = json_instruction(SegmentsOut)
+    assert '"exercises": [{' in nested and '"staves": number' in nested
 
 
 def test_parse_json_reply_reads_a_wrapped_object_and_refuses_prose() -> None:

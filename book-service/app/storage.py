@@ -19,6 +19,9 @@ DELETE_BATCH = 100
 
 log = logging.getLogger("book-service")
 
+# A whole-PDF read cut off in transit is tried once more.
+DOWNLOAD_ATTEMPTS = 2
+
 
 class StorageError(Exception):
     def __init__(self, status: int, message: str) -> None:
@@ -48,9 +51,19 @@ class StorageClient:
         query string makes this read miss the cache, so a rescan after the
         player re-uploads to the same path reads the new file.
         """
-        url = f"{self._object_url(path)}?scan={time.time_ns()}"
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
-            response = await client.get(url, headers=self._headers(token))
+        for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+            url = f"{self._object_url(path)}?scan={time.time_ns()}"
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
+                    response = await client.get(url, headers=self._headers(token))
+                break
+            except httpx.TransportError as e:
+                # A long read on a slow link gets cut off mid-body now and then
+                # ("peer closed connection … received 18 of 46 MB"); once more
+                # is usually enough. A refusal (4xx/5xx) is an answer, not this.
+                if attempt == DOWNLOAD_ATTEMPTS:
+                    raise
+                log.warning("download %s: %s; retrying", path, type(e).__name__)
         if response.status_code != 200:
             raise StorageError(response.status_code, _message(response))
         return response.content

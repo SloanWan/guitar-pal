@@ -19,6 +19,7 @@ the chapter card can show it.
 import asyncio
 import logging
 import posixpath
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -32,6 +33,7 @@ from app.ingest.pdf import (
     open_pdf,
     render_page_png,
 )
+from app.pages import PdfCache
 from app.repo import (
     BookRow,
     ChapterRow,
@@ -150,6 +152,8 @@ class Parser:
     store: ParseStore
     graph: ChapterGraph
     worker: asyncio.Semaphore
+    # The service's one cache: chapters parsed together download their book once.
+    pdfs: PdfCache = field(default_factory=PdfCache)
 
     async def run(self, book: BookRow, chapter: ChapterRow, token: str) -> None:
         try:
@@ -169,7 +173,10 @@ class Parser:
             await self.store.fail_parse(chapter.id, FAILED_MESSAGE)
 
     async def _parse(self, book: BookRow, chapter: ChapterRow, token: str) -> None:
+        # Where a parse spends its time, step by step, for the summary line below.
+        steps = _Steps()
         rows = await self.store.list_pages(book.id, chapter.page_start, chapter.page_end)
+        steps.mark("pages")
         if not rows:
             raise _ParseFailed(NO_PAGES_MESSAGE)
 
@@ -178,9 +185,14 @@ class Parser:
         tools: ParseTools | None = None
         pdf: bytes | None = None
         if wanted:
-            pdf = await self.storage.download(book.storage_path, token)
+            pdf = await self.pdfs.fetch(
+                book.id, lambda: self.storage.download(book.storage_path, token)
+            )
+            steps.mark("download")
             async with self.worker:
+                steps.mark("render_wait")
                 images = await asyncio.to_thread(_render, pdf, wanted)
+            steps.mark("render")
 
         pages = [
             ParsePage(
@@ -198,6 +210,7 @@ class Parser:
             # page and ordinal, so a parse that finds fewer exercises than the
             # last one would otherwise leave the extra ones behind.
             await sweep_folders(self.storage, [folder], token, f"parse {chapter.id}")
+            steps.mark("sweep")
             crops = StorageCropSink(self.storage, folder, token)
             try:
                 with open_pdf(pdf) as doc:
@@ -207,6 +220,8 @@ class Parser:
                 raise _ParseFailed(UNREADABLE_MESSAGE) from e
         else:
             result = await self.graph(book, chapter, pages)
+        # The model calls, and for tab pages the crops rendered and uploaded between them.
+        steps.mark("graph")
         if not result.chunks:
             result.chunks = chunks_from_pages(rows)
 
@@ -218,9 +233,10 @@ class Parser:
             usage=result.usage,
             warnings=result.warnings,
         )
+        steps.mark("write")
         log.info(
             "parse %s: %d pages (%d with images), %d notes, %d exercises, %d warnings,"
-            " %d/%d tokens, $%.4f",
+            " %d/%d tokens, $%.4f; %s%s",
             chapter.id,
             len(pages),
             len(images),
@@ -230,7 +246,27 @@ class Parser:
             result.usage.input_tokens,
             result.usage.output_tokens,
             result.usage.cost_usd,
+            steps.summary(),
+            f", pdf {len(pdf) / 2**20:.1f} MB" if pdf is not None else "",
         )
+
+
+class _Steps:
+    """Seconds since the previous mark, by step name, in the order they happened."""
+
+    def __init__(self) -> None:
+        self._started = self._last = time.perf_counter()
+        self.seconds: dict[str, float] = {}
+
+    def mark(self, step: str) -> None:
+        now = time.perf_counter()
+        self.seconds[step] = now - self._last
+        self._last = now
+
+    def summary(self) -> str:
+        total = self._last - self._started
+        parts = " ".join(f"{step} {s:.1f}s" for step, s in self.seconds.items())
+        return f"{total:.1f}s ({parts})"
 
 
 class _ParseFailed(Exception):

@@ -111,10 +111,9 @@ class LongContextStrategy:
         return await answer_call(self.provider, request, question, history)
 
     async def _pdf_request(self, ctx: AskContext) -> AnswerRequest:
-        pdf = self.pdfs.get(ctx.book.id)
-        if pdf is None:
-            pdf = await self.storage.download(ctx.book.storage_path, ctx.token)
-            self.pdfs.put(ctx.book.id, pdf)
+        pdf = await self.pdfs.fetch(
+            ctx.book.id, lambda: self.storage.download(ctx.book.storage_path, ctx.token)
+        )
         async with self.worker:
             try:
                 sliced = await asyncio.to_thread(

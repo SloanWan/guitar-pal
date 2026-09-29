@@ -15,7 +15,7 @@ status polls with the progress the loop reports every few pages.
 import asyncio
 import logging
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.ingest.pdf import (
@@ -38,6 +38,7 @@ from app.ingest.toc import (
     is_scanned,
     vision_toc_pages,
 )
+from app.pages import PdfCache
 from app.repo import PageRecord
 from app.storage import StorageClient, StorageError, sweep_folders
 
@@ -78,6 +79,8 @@ class Scanner:
     read_text_toc: TextTocReader | None
     read_vision_toc: VisionTocReader | None
     worker: asyncio.Semaphore
+    # Shared with the parser: a rescan's download replaces the book's kept PDF.
+    pdfs: PdfCache = field(default_factory=PdfCache)
 
     async def run(
         self,
@@ -108,6 +111,8 @@ class Scanner:
         self, book_id: str, storage_path: str, token: str, stale_folders: Sequence[str]
     ) -> None:
         pdf = await self.storage.download(storage_path, token)
+        # A rescan follows a re-upload: what the others kept may be the old file.
+        self.pdfs.put(book_id, pdf)
         loop = asyncio.get_running_loop()
 
         def report(page_count: int, scanned: int) -> None:

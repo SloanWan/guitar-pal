@@ -57,6 +57,45 @@ def test_the_pdf_cache_forgets_by_age_and_by_size() -> None:
     assert stale.get("a") is None
 
 
+@pytest.mark.asyncio
+async def test_the_pdf_cache_downloads_a_book_once_however_many_ask_at_once() -> None:
+    cache = PdfCache()
+    calls = 0
+    gate = asyncio.Event()
+
+    async def download() -> bytes:
+        nonlocal calls
+        calls += 1
+        await gate.wait()
+        return b"%PDF"
+
+    waiting = [asyncio.create_task(cache.fetch("b1", download)) for _ in range(20)]
+    await asyncio.sleep(0)
+    gate.set()
+    assert await asyncio.gather(*waiting) == [b"%PDF"] * 20
+    assert calls == 1
+    # Kept after: the next chapter does not download at all.
+    assert await cache.fetch("b1", download) == b"%PDF" and calls == 1
+
+
+@pytest.mark.asyncio
+async def test_a_failed_download_fails_its_waiters_and_the_next_ask_tries_again() -> None:
+    cache = PdfCache()
+    answers: list[bytes | Exception] = [StorageError(502, "cut off"), b"%PDF"]
+
+    async def download() -> bytes:
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    first = await asyncio.gather(
+        cache.fetch("b1", download), cache.fetch("b1", download), return_exceptions=True
+    )
+    assert all(isinstance(r, StorageError) for r in first)
+    assert await cache.fetch("b1", download) == b"%PDF"
+
+
 @dataclass
 class FakeStorage:
     pdf: bytes

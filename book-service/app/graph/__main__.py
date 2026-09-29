@@ -9,6 +9,13 @@ read lands in `--crops` as `p0206-1.png`.
     python -m app.graph book.pdf --pages 24-32
     python -m app.graph book.pdf --pages 1-10 --ocr --dpi 100 --crops /tmp/crops
     python -m app.graph book.pdf --pages 204-207 --ocr --notes-only   # the notes call alone
+    python -m app.graph book.pdf --pages 10-16 --ocr --provider deepseek \\
+        --title "第一章 认识吉他" --export materials/samples/syt-ch1   # an eval fixture's chapter
+
+`--provider deepseek` runs every call on DeepSeek (`DEEPSEEK_API_KEY`), the
+schema asked for in the prompt. `--export` writes the chapter as
+`parse.json` in the shape of a database export (`materials/samples/`), so
+`evals.ask.sample` can grade it without a database.
 """
 
 import argparse
@@ -19,10 +26,12 @@ import os
 import sys
 import time
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 
 from anthropic import AsyncAnthropic
 
+from app.ask.provider import Provider, anthropic_provider, deepseek_provider
 from app.graph.chapter import ChapterParseGraph
 from app.ingest.pdf import (
     CLASSIFY_RENDER_DPI,
@@ -33,8 +42,8 @@ from app.ingest.pdf import (
     render_page_png,
 )
 from app.ingest.tag import tag_text
-from app.parse import DocRenderer, ParsePage, ParseTools
-from app.repo import BookRow, ChapterRow
+from app.parse import ChapterResult, DocRenderer, ParsePage, ParseTools, chunks_from_pages
+from app.repo import BookRow, ChapterRow, PageRow
 from app.validate import ValidatorClient
 
 
@@ -59,6 +68,9 @@ async def main() -> int:
     parser.add_argument("--all-images", action="store_true", help="send every page's image")
     parser.add_argument("--crops", type=Path, default=Path("crops"), help="where crops go")
     parser.add_argument("--dump", type=Path, help="write the drafts and warnings as JSON here")
+    parser.add_argument("--provider", choices=("anthropic", "deepseek"), default="anthropic")
+    parser.add_argument("--title", help="the chapter's title, as the book prints it")
+    parser.add_argument("--export", type=Path, help="write the chapter as parse.json here")
     parser.add_argument(
         "--notes-only",
         action="store_true",
@@ -107,7 +119,7 @@ async def main() -> int:
     chapter = ChapterRow(
         id="cli",
         index=0,
-        title=f"pages {first}-{last}",
+        title=args.title or f"pages {first}-{last}",
         page_start=first,
         page_end=last,
         exercise_hint_count=0,
@@ -124,7 +136,7 @@ async def main() -> int:
     validator = ValidatorClient(validate_url, secret) if validate_url and secret else None
     if validator is None:
         print("no BOOK_SERVICE_VALIDATE_URL / BOOK_SERVICE_INTERNAL_SECRET: extractors off")
-    graph = ChapterParseGraph(AsyncAnthropic(), validator)
+    graph = ChapterParseGraph(_provider(args.provider), validator)
     started = time.perf_counter()
     if args.notes_only:
         result = await graph.notes_only(book, chapter, pages)
@@ -172,7 +184,72 @@ async def main() -> int:
                 indent=1,
             )
         )
+    if args.export:
+        _export(args.export, Path(args.pdf).stem, chapter, pages, result, args.provider)
+        print(f"  exported to {args.export / 'parse.json'}")
     return 0
+
+
+def _provider(name: str) -> Provider:
+    if name == "deepseek":
+        key = os.environ.get("DEEPSEEK_API_KEY")
+        if not key:
+            sys.exit("--provider deepseek needs DEEPSEEK_API_KEY")
+        return deepseek_provider(key)
+    return anthropic_provider(AsyncAnthropic())
+
+
+def _export(
+    folder: Path,
+    title: str,
+    chapter: ChapterRow,
+    pages: list[ParsePage],
+    result: ChapterResult,
+    provider: str,
+) -> None:
+    """The chapter as `materials/samples/*/parse.json` holds a database export."""
+    rows = [
+        PageRow(p.page, p.text, "layer" if p.has_text_layer else "ocr" if p.text else "none", True)
+        for p in pages
+    ]
+    ids = folder.name
+    dump = {
+        "exported_at": datetime.now(UTC).isoformat(),
+        "from": f"python -m app.graph --provider {provider}",
+        "book": {"title": title},
+        "chapters": [
+            {
+                "id": ids,
+                "title": chapter.title,
+                "page_start": chapter.page_start,
+                "page_end": chapter.page_end,
+            }
+        ],
+        "pages": [{"page": r.page, "text": r.text, "text_source": r.text_source} for r in rows],
+        "notes": [
+            {"id": f"{ids}-n{i}", "title": n.title, "body": n.body, "pages": list(n.pages)}
+            for i, n in enumerate(result.notes)
+        ],
+        "exercises": [
+            {
+                "id": f"{ids}-e{i}",
+                "page": e.page,
+                "kind": e.kind,
+                "source": e.source,
+                "draft": e.draft,
+                "warnings": e.warnings,
+            }
+            for i, e in enumerate(result.exercises)
+        ],
+        "chunks": [
+            {"id": f"{ids}-k{i}", "page": c.page, "index": c.index, "text": c.text}
+            for i, c in enumerate(chunks_from_pages(rows))
+        ],
+        "usage": asdict(result.usage),
+        "warnings": result.warnings,
+    }
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "parse.json").write_text(json.dumps(dump, ensure_ascii=False, indent=1))
 
 
 if __name__ == "__main__":

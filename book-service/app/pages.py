@@ -16,6 +16,7 @@ import logging
 import posixpath
 import time
 from collections import OrderedDict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 import pymupdf
@@ -58,6 +59,13 @@ class PdfCache:
     The last few PDFs fetched, by book id, for a bounded time and size —
     newest kept, oldest dropped. One process, one dict; nothing survives a
     restart, and nothing needs to.
+
+    One instance serves the whole service (parse, page images, Q&A, scan), and
+    `fetch` downloads a book once however many ask for it at once: twenty
+    chapters parsed together used to be twenty copies of the same PDF
+    fighting over one connection, and the slowest were cut off mid-transfer.
+    A hit skips Storage, so only a caller that has already checked the book
+    is the player's may ask.
     """
 
     def __init__(
@@ -66,6 +74,27 @@ class PdfCache:
         self._seconds = seconds
         self._max_bytes = max_bytes
         self._entries: OrderedDict[str, tuple[float, bytes]] = OrderedDict()
+        self._inflight: dict[str, asyncio.Future[bytes]] = {}
+
+    async def fetch(self, book_id: str, download: Callable[[], Awaitable[bytes]]) -> bytes:
+        """The kept PDF; else the download already running for it; else a new one."""
+        pdf = self.get(book_id)
+        if pdf is not None:
+            return pdf
+        running = self._inflight.get(book_id)
+        if running is None:
+            running = asyncio.ensure_future(self._download(book_id, download))
+            self._inflight[book_id] = running
+        # Shielded: one waiter giving up does not cancel the others' download.
+        return await asyncio.shield(running)
+
+    async def _download(self, book_id: str, download: Callable[[], Awaitable[bytes]]) -> bytes:
+        try:
+            pdf = await download()
+            self.put(book_id, pdf)
+            return pdf
+        finally:
+            self._inflight.pop(book_id, None)
 
     def get(self, book_id: str) -> bytes | None:
         entry = self._entries.get(book_id)
@@ -100,13 +129,12 @@ class PageImages:
         cached = await self.repo.get_page_image(book.id, page)
         if cached:
             return cached
-        pdf = self.pdfs.get(book.id)
-        if pdf is None:
-            try:
-                pdf = await self.storage.download(book.storage_path, token)
-            except StorageError as e:
-                raise PageImageError(502, f"Storage: {e.message}") from e
-            self.pdfs.put(book.id, pdf)
+        try:
+            pdf = await self.pdfs.fetch(
+                book.id, lambda: self.storage.download(book.storage_path, token)
+            )
+        except StorageError as e:
+            raise PageImageError(502, f"Storage: {e.message}") from e
         async with self.worker:
             try:
                 jpeg = await asyncio.to_thread(_render, pdf, page)

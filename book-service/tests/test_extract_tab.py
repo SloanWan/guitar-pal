@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.ask.provider import anthropic_provider
 from app.extract.tab import (
     READ_SYSTEM,
     SEGMENT_SYSTEM,
@@ -294,7 +295,7 @@ def _page(n: int, text: str = "", layer: bool = False, image: bytes | None = b"p
 
 
 def _graph(model: FakeModel, validator: FakeValidator | None) -> ChapterParseGraph:
-    return ChapterParseGraph(SimpleNamespace(messages=model), validator)  # type: ignore[arg-type]
+    return ChapterParseGraph(anthropic_provider(SimpleNamespace(messages=model)), validator)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

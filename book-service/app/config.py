@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     # its Anthropic-compatible endpoint — no document blocks, no structured
     # output, but it reads page images; see app/ask/provider.py).
     ask_provider: str = Field(default="anthropic", validation_alias="BOOK_ASK_PROVIDER")
+    # Which model parses a chapter (classify, notes, tab reading); the same two.
+    parse_provider: str = Field(default="anthropic", validation_alias="BOOK_PARSE_PROVIDER")
     deepseek_api_key: str | None = Field(default=None, validation_alias="DEEPSEEK_API_KEY")
     # Anthropic has no embeddings endpoint; `rag` embeds with Voyage.
     voyage_api_key: str | None = Field(default=None, validation_alias="VOYAGE_API_KEY")

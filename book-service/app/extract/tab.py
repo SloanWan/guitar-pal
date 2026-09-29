@@ -33,25 +33,28 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from anthropic import AsyncAnthropic
 from pydantic import BaseModel, Field
 
-from app.ingest.model import CLASSIFY_MODEL, MODEL, CallUsage, usage_of
+from app.ask.provider import Provider
+from app.ask.structured import structured_call
+from app.ingest.model import CallUsage
 from app.ingest.pdf import CLASSIFY_RENDER_DPI, PARSE_RENDER_DPI
 from app.repo import ExerciseRecord
 from app.validate import ValidatorClient, Verdict
 
 log = logging.getLogger("book-service")
 
-SEGMENT_MODEL = CLASSIFY_MODEL
+# The segmenter runs on the provider's small model, the reader on its large one.
 SEGMENT_DPI = CLASSIFY_RENDER_DPI
-READ_MODEL = MODEL
 READ_DPI = PARSE_RENDER_DPI
 # Segment boxes sit right on the heading and drift ±2% between runs.
 PAD_ABOVE = 0.04
 PAD_BELOW = 0.01
 # Read calls in flight at once, across the chapter's pages. Each is ~30–50 s.
 READ_CONCURRENCY = 3
+# Caps for the answer; a reasoning provider adds its thinking room on top.
+SEGMENT_MAX_TOKENS = 2048
+READ_MAX_TOKENS = 8192
 # One repair round trip, as in askModel.ts.
 MAX_REPAIRS = 1
 # Index 0 = high e (string ①), as fingerpickScheduler.ts holds it.
@@ -442,15 +445,14 @@ class PageExtraction:
 class TabExtractor:
     """Segment, read, reconcile, validate, repair — for one page at a time."""
 
-    def __init__(self, client: AsyncAnthropic, validator: ValidatorClient) -> None:
-        self._client = client
+    def __init__(self, provider: Provider, validator: ValidatorClient) -> None:
+        self._provider = provider
         self._validator = validator
         self._read_slots = asyncio.Semaphore(READ_CONCURRENCY)
 
     async def segment(self, png: bytes, page: int) -> tuple[list[Segment], CallUsage]:
-        response = await self._client.messages.parse(
-            model=SEGMENT_MODEL,
-            max_tokens=2048,
+        out, usage = await structured_call(
+            self._provider,
             system=SEGMENT_SYSTEM,
             messages=[
                 {
@@ -458,16 +460,17 @@ class TabExtractor:
                     "content": [{"type": "text", "text": f"Page {page}."}, _image_block(png)],
                 }
             ],
-            output_format=SegmentsOut,
-            output_config={"effort": "low"},
+            output=SegmentsOut,
+            max_tokens=SEGMENT_MAX_TOKENS,
+            effort="low",
+            small=True,
         )
-        out = response.parsed_output if response.stop_reason == "end_turn" else None
         segments = [
             Segment(s.heading.strip(), max(1, s.staves), _region(s.bbox))
             for s in (out.exercises if out else [])
             if len(s.bbox) == 4
         ]
-        return segments, usage_of(response, SEGMENT_MODEL)
+        return segments, usage
 
     async def read(
         self, png: bytes, repair: tuple[TabReadingOut, Sequence[dict[str, object]]] | None = None
@@ -495,18 +498,17 @@ class TabExtractor:
                 }
             )
         async with self._read_slots:
-            response = await self._client.messages.parse(
-                model=READ_MODEL,
-                max_tokens=8192,
+            out, usage = await structured_call(
+                self._provider,
                 system=READ_SYSTEM,
                 messages=messages,
-                output_format=TabReadingOut,
-                output_config={"effort": "medium"},
+                output=TabReadingOut,
+                max_tokens=READ_MAX_TOKENS,
+                effort="medium",
             )
-        out = response.parsed_output if response.stop_reason == "end_turn" else None
         if out is None:
-            log.warning("tab read did not finish: stop_reason=%s", response.stop_reason)
-        return out, usage_of(response, READ_MODEL)
+            log.warning("tab read did not finish")
+        return out, usage
 
     async def extract_exercise(
         self, png: bytes, page: int, segment: Segment

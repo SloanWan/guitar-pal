@@ -54,6 +54,18 @@ Results go to `baseline-sample.json`; the 2026-09-23 run is in
 `docs/calibration.md` §9. Use `--repeat 2` or more: one run per question
 cannot tell a grade from judge noise.
 
+## Chapters exported by the parse CLI
+
+`python -m app.graph … --provider deepseek --export materials/samples/<name>`
+writes a chapter in the same shape, with no database and no Claude call;
+`syt-ch1…5` and `songwriting` were made that way (calibration §10). A
+fixture may list `other_chapters` — the titles a decline names.
+
+```bash
+.venv/bin/python -m evals.ask.sample --providers deepseek --judge deepseek \
+    --fixture syt-ch1,syt-ch2,syt-ch3,syt-ch4,syt-ch5,songwriting --repeat 2
+```
+
 ## Run
 
 ```bash

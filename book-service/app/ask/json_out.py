@@ -14,39 +14,53 @@ own default; a graph that cannot read an intent still answers.
 """
 
 import json
+from typing import get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
 
 def json_instruction(model: type[BaseModel]) -> str:
     """The lines appended to a system prompt so the reply can be read back."""
-    fields = []
-    for name, field in model.model_fields.items():
-        described = field.description or ""
-        annotation = _type_name(field.annotation)
-        fields.append(f'  "{name}": {annotation}{f"  // {described}" if described else ""}')
-    body = "\n".join(fields)
     return (
         "\n\nReply with one JSON object and nothing else — no prose around it, no"
-        f" code fence:\n{{\n{body}\n}}"
+        f" code fence:\n{_object(model, 0)}"
     )
 
 
-def _type_name(annotation: object) -> str:
-    """A hint the model can act on: the literal's options, or the plain type."""
+def _object(model: type[BaseModel], depth: int) -> str:
+    """A model as a JSON skeleton, nested models written out in place."""
+    pad = "  " * (depth + 1)
+    fields = []
+    for name, field in model.model_fields.items():
+        described = field.description or ""
+        shape = _type_name(field.annotation, depth + 1)
+        fields.append(f'{pad}"{name}": {shape}{f"  // {described}" if described else ""}')
+    body = "\n".join(fields)
+    return f"{{\n{body}\n{'  ' * depth}}}"
+
+
+def _type_name(annotation: object, depth: int = 0) -> str:
+    """A hint the model can act on: the literal's options, a nested object, or the plain type."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return _object(annotation, depth)
+    args = get_args(annotation)
+    if get_origin(annotation) is list and args:
+        item = args[0]
+        if isinstance(item, type) and issubclass(item, BaseModel):
+            return f"[{_object(item, depth)}, …]"
+        return f"[{_type_name(item, depth)}, …]"
     text = str(annotation)
     if "Literal" in text:
         options = text[text.index("[") + 1 : text.rindex("]")]
         return f"one of {options}"
-    if "list[int]" in text:
-        return "[number, …]"
-    if "list[str]" in text:
-        return '["…", …]'
+    optional = "None" in text
     if "bool" in text:
-        return "true or false"
-    if "int" in text:
-        return "number"
-    return '"…"'
+        shape = "true or false"
+    elif "int" in text or "float" in text:
+        shape = "number"
+    else:
+        shape = '"…"'
+    return f"{shape} or null" if optional else shape
 
 
 def parse_json_reply[M: BaseModel](text: str, model: type[M]) -> M | None:

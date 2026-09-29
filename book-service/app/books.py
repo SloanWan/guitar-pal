@@ -4,6 +4,7 @@ repo, hand the long job to the scanner. Every handler starts from the
 verified session, and every repo call takes its `user_id`.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Annotated, Literal
@@ -345,10 +346,15 @@ async def get_chapter_parse(
 ) -> ChapterParse:
     """Status while parsing; the card once ready. Poll this."""
     _, chapter = await owned_chapter(repo, session.user_id, book_id, chapter_id)
+    # Side by side once the chapter is known to be the player's: each is a
+    # database round trip, and from far away a round trip is most of a second.
+    notes, exercises = await asyncio.gather(
+        repo.list_notes(chapter.id), repo.list_exercises(chapter.id)
+    )
     return ChapterParse(
         chapter=ChapterOut.of(chapter),
-        notes=[NoteOut.of(n) for n in await repo.list_notes(chapter.id)],
-        exercises=[ExerciseOut.of(e) for e in await repo.list_exercises(chapter.id)],
+        notes=[NoteOut.of(n) for n in notes],
+        exercises=[ExerciseOut.of(e) for e in exercises],
     )
 
 

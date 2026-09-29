@@ -1,14 +1,16 @@
 """
-The ask eval on the one chapter we can run without a database (#203 C3).
+The ask eval on chapters exported to `materials/samples/` (#203 C3).
 
 `run.py` grades real chapters out of the player's own account. This grades
-the exported chapter in `materials/samples/` — a scan, OCR text only — so
-it needs no database, no Storage and no session, and it is the only way to
-compare providers on the material actually on hand. The fixture's gold
-pages are the ones the #245 notes run attributed by hand (calibration §7).
+exported chapters instead — the database's own export, or one written by
+`python -m app.graph --export` — so it needs no database, no Storage and no
+session. Only `long_context` runs here: the other strategies search the
+database's chunk columns.
 
     cd book-service && set -a && . ../.env.local && set +a
     .venv/bin/python -m evals.ask.sample --providers anthropic,deepseek
+    .venv/bin/python -m evals.ask.sample --providers deepseek --judge deepseek \\
+        --fixture syt-ch1,syt-ch2,syt-ch3,syt-ch4,syt-ch5,songwriting --repeat 2
 
 Costs money; never in CI. Writes `evals/ask/baseline-sample.json`.
 """
@@ -20,6 +22,7 @@ import os
 import statistics
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,8 +32,8 @@ from pydantic import BaseModel
 from app.ask.graph import AskGraph
 from app.ask.provider import Provider, anthropic_provider, deepseek_provider
 from app.ask.strategies.long_context import LongContextStrategy
+from app.ask.structured import structured_call
 from app.ask.types import AskContext, AskResult
-from app.ingest.model import CLASSIFY_MODEL
 from app.repo import BookRow, ChapterRow, ExerciseRow, PageRow
 
 HERE = Path(__file__).parent
@@ -50,7 +53,9 @@ class Verdict(BaseModel):
     reason: str
 
 
-def load_chapter(export: Path, injection: dict) -> tuple[AskContext, list[ExerciseRow]]:
+def load_chapter(
+    export: Path, injection: dict, others: list[str]
+) -> tuple[AskContext, list[ExerciseRow]]:
     """The exported parse as the graph's inputs, with the injection line added."""
     dump = json.loads((export / "parse.json").read_text())
     chapter = dump["chapters"][0]
@@ -72,21 +77,9 @@ def load_chapter(export: Path, injection: dict) -> tuple[AskContext, list[Exerci
         scanned_pages=len(pages),
         created_at=None,  # type: ignore[arg-type]
     )
-    row = ChapterRow(
-        id="c",
-        index=0,
-        title=chapter["title"],
-        page_start=min(p.page for p in pages),
-        page_end=max(p.page for p in pages),
-        exercise_hint_count=0,
-        parsed_at=None,
-        parse_status="ready",
-        parse_error=None,
-        parse_input_tokens=0,
-        parse_output_tokens=0,
-        parse_cost_usd=0.0,
-        parse_warnings=[],
-    )
+    row = _chapter_row("c", 0, chapter["title"], pages)
+    # The book's other chapters, by title only: what a decline names.
+    siblings = [_chapter_row(f"o{i}", i + 1, title, ()) for i, title in enumerate(others)]
     exercises = [
         ExerciseRow(
             id=e["id"],
@@ -100,8 +93,26 @@ def load_chapter(export: Path, injection: dict) -> tuple[AskContext, list[Exerci
         )
         for e in dump["exercises"]
     ]
-    ctx = AskContext(book=book, chapter=row, chapters=[row], token="", pages=pages)
+    ctx = AskContext(book=book, chapter=row, chapters=[row, *siblings], token="", pages=pages)
     return ctx, exercises
+
+
+def _chapter_row(id: str, index: int, title: str, pages: Sequence[PageRow]) -> ChapterRow:
+    return ChapterRow(
+        id=id,
+        index=index,
+        title=title,
+        page_start=min((p.page for p in pages), default=0),
+        page_end=max((p.page for p in pages), default=0),
+        exercise_hint_count=0,
+        parsed_at=None,
+        parse_status="ready",
+        parse_error=None,
+        parse_input_tokens=0,
+        parse_output_tokens=0,
+        parse_cost_usd=0.0,
+        parse_warnings=[],
+    )
 
 
 @dataclass
@@ -142,22 +153,23 @@ class Grades:
         }
 
 
-async def judge(client: AsyncAnthropic, pages_text: str, answer: str) -> bool:
+async def judge(judge_by: Provider, pages_text: str, answer: str) -> bool:
     """One judge for every provider, so the grade is about the answer, not the grader."""
-    response = await client.messages.parse(
-        model=CLASSIFY_MODEL,
-        max_tokens=512,
+    out, _ = await structured_call(
+        judge_by,
         system=JUDGE_SYSTEM,
         messages=[{"role": "user", "content": f"Pages:\n{pages_text}\n\nAnswer:\n{answer}"}],
-        output_format=Verdict,
-        output_config={"effort": "low"},
+        output=Verdict,
+        max_tokens=512,
+        effort="low",
+        small=True,
     )
-    return bool(response.parsed_output and response.parsed_output.faithful)
+    return bool(out and out.faithful)
 
 
 async def run_provider(
     provider: Provider,
-    judge_client: AsyncAnthropic,
+    judge_by: Provider,
     ctx: AskContext,
     exercises: list[ExerciseRow],
     fixture: dict,
@@ -183,7 +195,7 @@ async def run_provider(
                 hit = any(p in result.pages for p in q["gold_pages"])
                 grades.recall.append(hit)
                 cited = "\n\n".join(text_of.get(p, "") for p in result.pages)
-                faithful = routed and await judge(judge_client, cited, result.message)
+                faithful = routed and await judge(judge_by, cited, result.message)
                 grades.faithful.append(faithful)
                 ok = f"routed={routed} recall={hit} faithful={faithful}"
             elif kind == "general":
@@ -210,36 +222,49 @@ async def run_provider(
     return grades
 
 
+def provider_named(name: str) -> Provider | None:
+    if name == "deepseek":
+        key = os.environ.get("DEEPSEEK_API_KEY")
+        return deepseek_provider(key) if key else None
+    return anthropic_provider(AsyncAnthropic())
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m evals.ask.sample")
     parser.add_argument("--providers", default="anthropic,deepseek")
+    parser.add_argument("--judge", default="anthropic", help="the one provider that grades")
     parser.add_argument("--repeat", type=int, default=1)
-    parser.add_argument("--fixture", default="sanyuetong-sample")
+    parser.add_argument("--fixture", default="sanyuetong-sample", help="comma-separated")
     args = parser.parse_args()
 
-    fixture = json.loads((HERE / "fixtures" / f"{args.fixture}.json").read_text())
-    export = Path(fixture["export"])
-    if not export.exists():
-        print(f"{export} is not here (materials/ is gitignored)", file=sys.stderr)
+    judge_by = provider_named(args.judge)
+    if judge_by is None:
+        print(f"judge {args.judge}: no API key", file=sys.stderr)
         return 2
-    ctx, exercises = load_chapter(export, fixture["injection"])
-    judge_client = AsyncAnthropic()
-
     baseline: dict[str, object] = json.loads(BASELINE.read_text()) if BASELINE.exists() else {}
-    for name in args.providers.split(","):
-        if name == "deepseek":
-            key = os.environ.get("DEEPSEEK_API_KEY")
-            if not key:
-                print("deepseek: no DEEPSEEK_API_KEY, skipped")
+    for fixture_name in args.fixture.split(","):
+        fixture = json.loads((HERE / "fixtures" / f"{fixture_name}.json").read_text())
+        export = Path(fixture["export"])
+        if not export.exists():
+            print(f"{export} is not here (materials/ is gitignored)", file=sys.stderr)
+            return 2
+        ctx, exercises = load_chapter(
+            export, fixture["injection"], fixture.get("other_chapters", [])
+        )
+        for name in args.providers.split(","):
+            provider = provider_named(name)
+            if provider is None:
+                print(f"{name}: no API key, skipped")
                 continue
-            provider = deepseek_provider(key)
-        else:
-            provider = anthropic_provider(AsyncAnthropic())
-        print(f"\n########## {name} ({provider.model}) × {args.fixture}")
-        grades = await run_provider(provider, judge_client, ctx, exercises, fixture, args.repeat)
-        summary = grades.summary()
-        baseline[f"{name}:{args.fixture}"] = {"model": provider.model, **summary}
-        print(f"  → {json.dumps(summary, ensure_ascii=False)}")
+            print(f"\n########## {name} ({provider.model}) × {fixture_name}")
+            grades = await run_provider(provider, judge_by, ctx, exercises, fixture, args.repeat)
+            summary = grades.summary()
+            baseline[f"{name}:{fixture_name}"] = {
+                "model": provider.model,
+                "judge": judge_by.small_model,
+                **summary,
+            }
+            print(f"  → {json.dumps(summary, ensure_ascii=False)}")
 
     BASELINE.write_text(json.dumps(baseline, indent=1, ensure_ascii=False) + "\n")
     print(f"\nwritten {BASELINE}")

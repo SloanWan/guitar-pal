@@ -89,3 +89,37 @@ def test_an_empty_folder_deletes_nothing_and_a_refusal_is_named(fake: FakeStorag
         asyncio.run(storage.delete_many(["u1/x.png"], "bad"))
     assert e.value.status == 403
     assert e.value.message == "not yours"
+
+
+def test_a_download_cut_off_in_transit_is_tried_once_more(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = 0
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise httpx.RemoteProtocolError("peer closed connection", request=request)
+        return httpx.Response(200, content=b"%PDF")
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kwargs: real(transport=httpx.MockTransport(handle))
+    )
+    storage = StorageClient("https://x/storage/v1", "anon")
+    assert asyncio.run(storage.download("u1/b1.pdf", "tok")) == b"%PDF"
+    assert attempts == 2
+
+
+def test_a_download_that_keeps_failing_gives_up_after_the_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kwargs: real(transport=httpx.MockTransport(handle))
+    )
+    storage = StorageClient("https://x/storage/v1", "anon")
+    with pytest.raises(httpx.ReadTimeout):
+        asyncio.run(storage.download("u1/b1.pdf", "tok"))

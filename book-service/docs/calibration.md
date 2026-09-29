@@ -466,3 +466,59 @@ Read-outs:
 - The dollar figures are the graph's own calls. The judge's calls are extra
   (~$0.01 per provider) and are not part of what a player's question costs.
 - DeepSeek prices are its peak rates; off-peak halves them again.
+
+## 10. The parse on DeepSeek, and the C3 fixtures it made (#203)
+
+2026-09-25. 《吉他自学三月通》 (the full book: 338 scanned pages, no
+outline, no text layer), first part chapters 1–5 — PDF p10–44, printed
+page + 1 — and *Chord & Songwriting Cheat Sheet* ch 3.1 (9 pages, text
+layer). Parsed with `python -m app.graph --provider deepseek --export`, no
+Claude call anywhere; OCR is `tessdata_fast` chi_sim+eng.
+
+| chapter | pages | notes | drafts | parse $ |
+|---|---|---|---|---|
+| ch1 认识吉他 | 10–16 (7) | 12 | 0 | 0.024 |
+| ch2 演奏知识详解 | 17–28 (12) | 12 | 11 of 18 read (p28) | 0.389 + 0.029 notes |
+| ch3 乐理知识详解 | 29–32 (4) | 11 | 0 | 0.022 |
+| ch4 简谱、六线谱与和弦图 | 33–42 (10) | 12 | 2 | 0.102 |
+| ch5 调式 | 43–44 (2) | 11 | 0 | 0.008 |
+| songwriting 3.1 | 1–9 (9) | 10 | 0 (progression maps: B4) | 0.021 |
+
+What it took:
+
+- **Thinking room.** deepseek-flash spends its reasoning inside
+  `max_tokens`. At the Anthropic caps, classification (4k), the notes call
+  (16k on ch2) and tab reads (16k) ended `max_tokens` with the answer
+  unwritten. `Provider.thinking_tokens` (24k for DeepSeek) now rides on
+  top of every structured call's cap; Anthropic's caps are unchanged.
+- **Streaming.** The ch2 notes call (12 pages of OCR) was cut twice
+  mid-response on a plain request; streamed, it finishes.
+- **Tab reading is slow and costly on DeepSeek.** p28's 24 short
+  finger-combination exercises: 18 segmented, 11 drafts, 7 dropped (4
+  empty readings, 3 unfinished), $0.39 and ~10 min — output tokens are
+  almost all thinking. Not graded against the page; the drafts only feed
+  the draft questions here.
+
+Fixtures (`evals/ask/fixtures/syt-ch1…5.json`, `songwriting.json`): five
+factual questions each, gold pages checked against the page's OCR text
+(a question whose answer OCR lost was rewritten), one general, one
+decline naming a later chapter's topic, a draft request where the parse
+made drafts, and the injection line on one page. Written from the notes,
+not by the owner.
+
+Eval — `evals.ask.sample --providers deepseek --judge deepseek --repeat 2`,
+`long_context` only (the other strategies need the database):
+
+| fixture | routing | recall | faithful | draft | injection | $ total | p50 |
+|---|---|---|---|---|---|---|---|
+| syt-ch1 | 14/14 | 10/10 | 10/10 | — | 2/2 | 0.0106 | 4.1 s |
+| syt-ch2 | 14/14 | 10/10 | 10/10 | 2/2 | 2/2 | 0.0115 | 3.9 s |
+| syt-ch3 | 14/14 | 10/10 | 8/10 | — | 2/2 | 0.0085 | 3.5 s |
+| syt-ch4 | 14/14 | 10/10 | 9/10 | 2/2 | 2/2 | 0.0088 | 3.1 s |
+| syt-ch5 | 14/14 | 10/10 | 9/10 | — | 2/2 | 0.0074 | 2.8 s |
+| songwriting | 14/14 | 10/10 | 9/10 | — | 2/2 | 0.0093 | 3.3 s |
+
+Every faithfulness miss is one run of two on the same question, with the
+right page cited — the judge reading garbled OCR, most likely, not the
+answer. None of these chapters is long: the ~40-page fixture #203 asks for
+is still missing, and it is where `long_context` and `rag` would part.

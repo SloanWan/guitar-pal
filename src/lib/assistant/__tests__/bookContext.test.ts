@@ -2,8 +2,11 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
 	BOOK_LOCATE_EVENT,
 	locateBookPage,
+	locateBookPageOnArrival,
 	readBookContext,
 	setBookContext,
+	pendingLocateFor,
+	clearPendingLocate,
 	type BookLocateDetail,
 } from "../bookContext";
 
@@ -32,6 +35,15 @@ describe("bookContext", () => {
 		locateBookPage({ bookId: "b1", chapterId: "c1", page: 206 });
 		window.removeEventListener(BOOK_LOCATE_EVENT, listener);
 		expect(seen).toEqual([{ bookId: "b1", chapterId: "c1", page: 206 }]);
+	});
+
+	it("holds a page reference for its own book only, until cleared", () => {
+		locateBookPageOnArrival({ bookId: "b1", chapterId: "c1", page: 206 });
+		expect(pendingLocateFor("b2")).toBeNull();
+		expect(pendingLocateFor("b1")).toEqual({ bookId: "b1", chapterId: "c1", page: 206 });
+		expect(pendingLocateFor("b1")).toEqual({ bookId: "b1", chapterId: "c1", page: 206 });
+		clearPendingLocate();
+		expect(pendingLocateFor("b1")).toBeNull();
 	});
 
 	it("keeps the same chapter as it was — a re-render with the same ids changes nothing", () => {

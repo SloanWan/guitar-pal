@@ -132,6 +132,15 @@ export interface BookDetail extends Book {
 	chapters: Chapter[];
 }
 
+/**
+ * Whether the book page should keep asking: a scan, or any chapter's parse,
+ * still running. The rows are the only place a closed chapter's parse can
+ * be seen to finish or fail, so they follow it while it runs.
+ */
+export function bookInFlight(book: BookDetail): boolean {
+	return book.status === "scanning" || book.chapters.some((c) => c.parse_status === "parsing");
+}
+
 /** A chapter as the player draws it; what `PUT /books/{id}/chapters` takes. */
 export interface ChapterRange {
 	title: string;

@@ -17,10 +17,16 @@ import {
 	scanBook,
 } from "@/lib/books/api";
 import type { BookDetail, Chapter, ChapterRange } from "@/lib/books/types";
-import { TOC_SOURCE_LABEL } from "@/lib/books/types";
+import { TOC_SOURCE_LABEL, bookInFlight } from "@/lib/books/types";
 import { rangesFromChapters } from "@/lib/books/ranges";
 import { isSampleBook } from "@/lib/books/sample";
-import { BOOK_LOCATE_EVENT, setBookContext, type BookLocateDetail } from "@/lib/assistant/bookContext";
+import {
+	BOOK_LOCATE_EVENT,
+	setBookContext,
+	clearPendingLocate,
+	pendingLocateFor,
+	type BookLocateDetail,
+} from "@/lib/assistant/bookContext";
 import { usePolledResource } from "@/components/books/usePolledResource";
 import ScanReadout from "@/components/books/ScanReadout";
 import ChapterList from "@/components/books/ChapterList";
@@ -43,7 +49,6 @@ import {
 	StatusLed,
 } from "@/components/books/bookUi";
 
-const isScanning = (book: BookDetail) => book.status === "scanning";
 
 function bookMeta(book: BookDetail): string {
 	const parts: string[] = [];
@@ -53,11 +58,16 @@ function bookMeta(book: BookDetail): string {
 	return parts.join(" · ");
 }
 
+/** A page an answer cited, as the source panel shows it. */
+function citedPage(detail: BookLocateDetail): SourceView {
+	return { chapterId: detail.chapterId, page: detail.page, pages: [detail.page], title: `p.${detail.page}` };
+}
+
 export default function BookPage({ params }: { params: Promise<{ id: string }> }) {
 	const { id } = use(params);
 	const router = useRouter();
 	const load = useCallback(() => getBook(id), [id]);
-	const { value: book, error, refresh, set: setBook } = usePolledResource(load, isScanning);
+	const { value: book, error, refresh, set: setBook } = usePolledResource(load, bookInFlight);
 	const missing = error instanceof BookApiError && error.status === 404;
 	// Signed out, the API answers 401 for any book but the sample (#262).
 	const unauthorized = error instanceof BookApiError && error.status === 401;
@@ -77,7 +87,10 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 		| { kind: "draft"; draft: OpenDraft; entered: boolean }
 		| { kind: "source"; source: SourceView; entered: boolean }
 		| { kind: "textTab"; page: number; entered: boolean };
-	const [side, setSide] = useState<Side | null>(null);
+	const [side, setSide] = useState<Side | null>(() => {
+		const cited = pendingLocateFor(id);
+		return cited ? { kind: "source", source: citedPage(cited), entered: true } : null;
+	});
 	const openDraft = (draft: OpenDraft) =>
 		setSide((current) => ({ kind: "draft", draft, entered: current === null }));
 	const locate = (source: SourceView) =>
@@ -101,11 +114,14 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 		function onLocate(event: Event) {
 			const { detail } = event as CustomEvent<BookLocateDetail>;
 			if (detail.bookId !== id) return;
-			locate({ chapterId: detail.chapterId, page: detail.page, pages: [detail.page], title: `p.${detail.page}` });
+			locate(citedPage(detail));
 		}
 		window.addEventListener(BOOK_LOCATE_EVENT, onLocate);
 		return () => window.removeEventListener(BOOK_LOCATE_EVENT, onLocate);
 	}, [id]);
+	// A click from elsewhere brought the player here: the page opened with it
+	// (the side state's first value); forget it now it has been shown.
+	useEffect(() => clearPendingLocate(), []);
 	// A crop at full size: a dialog on its own, or over the book's column while
 	// the panel is open (see CropViewer). Closing the panel closes it too.
 	const [crop, setCrop] = useState<CropView | null>(null);

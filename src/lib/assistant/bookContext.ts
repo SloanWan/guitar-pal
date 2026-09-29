@@ -62,3 +62,24 @@ export interface BookLocateDetail {
 export function locateBookPage(detail: BookLocateDetail): void {
 	window.dispatchEvent(new CustomEvent<BookLocateDetail>(BOOK_LOCATE_EVENT, { detail }));
 }
+
+/**
+ * A page reference clicked anywhere but its own book's page: nothing is
+ * listening yet, so it is held until `/books/[id]` mounts. The page reads it
+ * as its first state (a read, so a render run twice sees it twice) and
+ * clears it once mounted — whichever book mounted, so a navigation that went
+ * elsewhere cannot open a stale page later.
+ */
+let pendingLocate: BookLocateDetail | null = null;
+
+export function locateBookPageOnArrival(detail: BookLocateDetail): void {
+	pendingLocate = detail;
+}
+
+export function pendingLocateFor(bookId: string): BookLocateDetail | null {
+	return pendingLocate !== null && pendingLocate.bookId === bookId ? pendingLocate : null;
+}
+
+export function clearPendingLocate(): void {
+	pendingLocate = null;
+}

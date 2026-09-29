@@ -57,7 +57,11 @@ export default function ChapterCard({
 	readOnly?: boolean;
 }) {
 	const load = useCallback(() => getChapterParse(bookId, chapter.id), [bookId, chapter.id]);
-	const { value: parse, error, refresh, set } = usePolledResource(load, isParsing);
+	// Only a parsed chapter has anything the row lacks (its notes and drafts);
+	// any other shows at once from the row, a running one polled from there.
+	// Every round trip to the service is a database round trip or three.
+	const seed = chapter.parse_status === "ready" ? null : { chapter, notes: [], exercises: [] };
+	const { value: parse, error, refresh, set } = usePolledResource(load, isParsing, seed);
 	const [starting, setStarting] = useState(false);
 
 	// Whatever the poll learns about the chapter, the list row shows too.

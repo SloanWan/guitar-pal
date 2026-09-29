@@ -70,6 +70,27 @@ describe("usePolledResource", () => {
 		expect(load).toHaveBeenCalledTimes(3);
 	});
 
+	it("starts from an initial value without loading, and polls from it when it should", async () => {
+		const settled = vi.fn(async () => ({ status: "ready" as const }));
+		const idle = renderHook(() => usePolledResource(settled, scanning, { status: "ready" }));
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+		});
+		expect(idle.current().value).toEqual({ status: "ready" });
+		expect(settled).not.toHaveBeenCalled();
+		idle.unmount();
+
+		const load = vi.fn(async () => ({ status: "ready" as const }));
+		const running = renderHook(() => usePolledResource<Row>(load, scanning, { status: "scanning" }));
+		expect(running.current().value).toEqual({ status: "scanning" });
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+		});
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(running.current().value).toEqual({ status: "ready" });
+		running.unmount();
+	});
+
 	it("pauses while the document is hidden and refreshes when it shows again", async () => {
 		const load = vi.fn(async (): Promise<Row> => ({ status: "scanning" }));
 		renderHook(() => usePolledResource(load, scanning));

@@ -16,7 +16,7 @@ import { hasCoarsePointer } from "@/lib/pointer";
 import { greeting, hint as introHint, playerName, inputPrompts, examples } from "@/lib/assistant/greeting";
 import { pick, uiLang } from "@/lib/assistant/lang";
 import { modelDisplayName } from "@/lib/assistant/general/request";
-import { locateBookPage } from "@/lib/assistant/bookContext";
+import { locateBookPage, locateBookPageOnArrival } from "@/lib/assistant/bookContext";
 import type { AssistantDomain, AssistantMode } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
@@ -311,9 +311,11 @@ export default function AssistantPanel({
 	 * when it is the page on screen; from anywhere else, go there first.
 	 */
 	function openPage(book: NonNullable<(typeof messages)[number]["book"]>, page: number) {
+		const detail = { bookId: book.bookId, chapterId: book.chapterId, page };
 		if (pathname === `/books/${book.bookId}`) {
-			locateBookPage({ bookId: book.bookId, chapterId: book.chapterId, page });
+			locateBookPage(detail);
 		} else {
+			locateBookPageOnArrival(detail);
 			router.push(`/books/${book.bookId}`);
 		}
 	}

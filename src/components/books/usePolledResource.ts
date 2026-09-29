@@ -11,10 +11,15 @@ export const POLL_INTERVAL_MS = 2000;
  * thing the page does in the meantime, so it stays this small.
  *
  * `load` is called as given on every fetch; hold it in `useCallback`.
+ *
+ * `initial`, when the caller already holds a value it trusts (a row the page
+ * loaded), is shown at once and the first fetch is skipped; polling still
+ * starts from it when `shouldPoll` holds.
  */
 export function usePolledResource<T>(
 	load: () => Promise<T>,
 	shouldPoll: (value: T) => boolean,
+	initial: T | null = null,
 ): {
 	value: T | null;
 	error: unknown;
@@ -22,7 +27,9 @@ export function usePolledResource<T>(
 	/** Replace the value, or derive the next one from the current (null before the first load). */
 	set: (next: T | ((current: T | null) => T | null)) => void;
 } {
-	const [value, setValue] = useState<T | null>(null);
+	const [value, setValue] = useState<T | null>(initial);
+	// Only the mount is skipped: a later `load` (another resource) still fetches.
+	const seeded = useRef(initial !== null);
 	const [error, setError] = useState<unknown>(null);
 	// The latest request wins; an older, slower one never overwrites it.
 	const generation = useRef(0);
@@ -41,6 +48,10 @@ export function usePolledResource<T>(
 	}, [load]);
 
 	useEffect(() => {
+		if (seeded.current) {
+			seeded.current = false;
+			return;
+		}
 		let cancelled = false;
 		(async () => {
 			const mine = ++generation.current;

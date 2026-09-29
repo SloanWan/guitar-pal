@@ -156,6 +156,23 @@ describe("ChapterCard", () => {
 		expect(button("Parse this chapter").disabled).toBe(false);
 	});
 
+	it("offers the parse from the row alone, without a round trip to the service", async () => {
+		render(CHAPTER);
+		expect(container.textContent).not.toContain("Loading");
+		expect(button("Parse this chapter").disabled).toBe(false);
+		await settle();
+		expect(api.getChapterParse).not.toHaveBeenCalled();
+	});
+
+	it("still loads a parsed chapter, whose notes and drafts the row lacks", async () => {
+		api.getChapterParse.mockResolvedValue(READY);
+		render(READY.chapter);
+		expect(container.textContent).toContain("Loading");
+		await settle();
+		expect(api.getChapterParse).toHaveBeenCalledWith("b1", "c1");
+		expect(container.textContent).toContain("左手按弦");
+	});
+
 	it("refuses a chapter over the cap and says to split it", async () => {
 		const long = { ...CHAPTER, page_end: 260 };
 		api.getChapterParse.mockResolvedValue({ chapter: long, notes: [], exercises: [] });

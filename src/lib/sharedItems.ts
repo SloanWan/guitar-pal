@@ -185,34 +185,63 @@ export function shareUrl(origin: string, id: string): string {
 	return `${origin}${sharePath(id)}`;
 }
 
+export interface CreateShareOptions {
+	/**
+	 * When the link stops opening. Absent means never, which is what a share
+	 * made in the app is; the MCP server sets one (#308), since a conversation
+	 * mints a link per revision.
+	 */
+	expiresAt?: Date;
+}
+
 /**
  * Write a share under an id the caller minted with `newShareId`. The id comes
  * from outside so the link can be put on the clipboard inside the click that
  * asked for it — Safari refuses a clipboard write once an await has passed —
- * and the row written after. Guests cannot share: the row needs an owner.
+ * and the row written after. Guests cannot share: the row needs an owner. The
+ * owner is whoever the client is signed in as, or, under the service role,
+ * whichever account the caller names.
  */
 export async function createShare(
 	supabase: SupabaseClient,
-	user: User,
+	owner: Pick<User, "id">,
 	id: string,
 	item: SharedItem,
+	options: CreateShareOptions = {},
 ): Promise<void> {
 	if (!isShareId(id)) throw new Error(`Not a share id: ${id}`);
-	const { error } = await supabase
-		.from("shared_items")
-		.insert({ id, owner_id: user.id, kind: item.kind, payload: toSharePayload(item) });
+	const { error } = await supabase.from("shared_items").insert({
+		id,
+		owner_id: owner.id,
+		kind: item.kind,
+		payload: toSharePayload(item),
+		...(options.expiresAt ? { expires_at: options.expiresAt.toISOString() } : {}),
+	});
 	if (error) throw new Error(error.message);
 }
 
-/** Read a share by id; null when there is no such row or its payload is unreadable. */
+/** Whether a row's expiry, as the table returns it, has passed. */
+export function isExpired(expiresAt: unknown, now: Date = new Date()): boolean {
+	if (typeof expiresAt !== "string") return false;
+	const at = Date.parse(expiresAt);
+	return Number.isFinite(at) && at <= now.getTime();
+}
+
+/**
+ * Read a share by id; null when there is no such row, it has expired, or its
+ * payload is unreadable. An expired row is absent rather than an error: the
+ * link simply no longer opens, and the cleanup deletes it later.
+ */
 export async function loadShare(supabase: SupabaseClient, id: string): Promise<SharedItem | null> {
 	if (!isShareId(id)) return null;
 	const { data, error } = await supabase
 		.from("shared_items")
-		.select("id, kind, payload")
+		.select("id, kind, payload, expires_at")
 		.eq("id", id)
 		.maybeSingle();
 	if (error) throw new Error(error.message);
 	if (!data) return null;
-	return readSharedItem(data as SharedItemRow);
+	const row = data as SharedItemRow & { expires_at?: unknown };
+	if (isExpired(row.expires_at)) return null;
+	return readSharedItem(row);
 }

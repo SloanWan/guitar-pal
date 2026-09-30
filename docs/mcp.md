@@ -1,18 +1,44 @@
 # Guitar Pal MCP server
 
-Compose in Claude, play in Guitar Pal. The site exposes an
-[MCP](https://modelcontextprotocol.io) server at `/api/mcp`: connect it to
-claude.ai, Claude Desktop or Claude Code, ask for a strumming pattern or a
-fingerpicking tab, and what Claude writes comes back as a link that opens in
-the full player. No account is needed to connect or to open a link.
+Compose in your AI assistant, play in Guitar Pal. The site exposes an
+[MCP](https://modelcontextprotocol.io) server at `/api/mcp`: connect it to any
+MCP client — claude.ai, Claude Desktop, Claude Code, Cursor, VS Code, ChatGPT,
+your own agent — ask for a strumming pattern or a fingerpicking tab, and what
+the model writes comes back as a link that opens in the full player. No account
+is needed to connect or to open a link.
+
+MCP is an open protocol, not tied to one vendor. This server speaks the current
+Streamable HTTP transport, stateless, with JSON responses and no authentication,
+which is the most widely supported combination. What differs between clients is
+the model behind them: `import_tab` asks for a fairly detailed structure, and
+reading a screenshot needs a model that can see images.
 
 ## Connect
 
+The URL is `https://guitarpal.sloanwan.com/api/mcp`.
+
 - **claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector,
-  URL `https://guitarpal.sloanwan.com/api/mcp`. No authentication.
+  paste the URL. No authentication.
 - **Claude Code:** `claude mcp add --transport http guitar-pal https://guitarpal.sloanwan.com/api/mcp`
-- **Any other client:** Streamable HTTP, stateless, JSON responses. POST every
-  request; there is no session and no server-to-client stream.
+- **Cursor** (`~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project):
+
+  ```json
+  { "mcpServers": { "guitar-pal": { "url": "https://guitarpal.sloanwan.com/api/mcp" } } }
+  ```
+
+- **VS Code** (`.vscode/mcp.json`):
+
+  ```json
+  { "servers": { "guitar-pal": { "type": "http", "url": "https://guitarpal.sloanwan.com/api/mcp" } } }
+  ```
+
+- **ChatGPT and other chat products:** add it where the product takes a remote
+  MCP server (connectors / developer mode). Some products insist on OAuth for
+  remote servers; this one has none, so it may be refused there.
+- **Anything else:** point it at the URL as a Streamable HTTP server. POST every
+  request; there is no session, no SSE stream and no `initialize` handshake to
+  keep alive. Clients that only speak the older SSE transport, or only launch
+  stdio servers, need a bridge such as `mcp-remote`.
 
 ## What to ask
 
@@ -32,19 +58,19 @@ a new link — and links made here stop opening after 30 days.
 
 ## Tools
 
-| tool | what Claude gives it | what checks it |
+| tool | what the model gives it | what checks it |
 |---|---|---|
 | `propose_strum` | one bar of rhythm in the app's notation (`D DU UD `), chord names one per bar, tempo, capo | the same builder the in-app assistant uses; every chord is looked up in the library |
 | `propose_tab` | notes on a grid of even slots per bar (`{string, fret, slot}`, 1 = high e), meter, tempo | the same builder the in-app assistant uses, then the import validator |
 | `import_tab` | bars of slots, each with its printed note value and the notes as `{string, fret}` (1 = high e) | the same validator the book import uses, plus a check that no bar overflows its meter |
 | `read_share` | a link or its id | reads the share back as text, and as `import_tab` bars for a tab |
 
-`import_tab` is for a tab Claude read off an image or a printed page, where the
-rhythm is written and should not be re-guessed from spacing. Claude reads the
-image; the server never sees it. What the validator cannot know is whether a
+`import_tab` is for a tab the model read off an image or a printed page, where
+the rhythm is written and should not be re-guessed from spacing. The model reads
+the image; the server never sees it. What the validator cannot know is whether a
 note sits on the right string — a wrong string is still a legal fret — so the
-tool asks Claude to list the places it was unsure of, and writes them under the
-pattern's name on the page. Check those against the original.
+tool asks the model to list the places it was unsure of, and writes them under
+the pattern's name on the page. Check those against the original.
 
 Nothing is stored that did not pass the validators. The model never writes
 frets or MIDI directly into the app: it writes notation, and the app decides

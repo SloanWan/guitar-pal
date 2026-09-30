@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import {
+	isExpired,
 	isShareId,
 	newShareId,
 	readSharedItem,
@@ -42,6 +43,18 @@ describe("sharePath / shareUrl", () => {
 	it("is the public route, absolute when given an origin", () => {
 		expect(sharePath("abcDEF0123")).toBe("/p/abcDEF0123");
 		expect(shareUrl("https://guitar.example", "abcDEF0123")).toBe("https://guitar.example/p/abcDEF0123");
+	});
+});
+
+describe("isExpired", () => {
+	it("is past only for a parseable date at or before now; null and junk never expire", () => {
+		const now = new Date("2026-09-29T12:00:00Z");
+		expect(isExpired(null, now)).toBe(false);
+		expect(isExpired(undefined, now)).toBe(false);
+		expect(isExpired("not a date", now)).toBe(false);
+		expect(isExpired("2026-09-29T12:00:01Z", now)).toBe(false);
+		expect(isExpired("2026-09-29T12:00:00Z", now)).toBe(true);
+		expect(isExpired("2026-09-01T00:00:00Z", now)).toBe(true);
 	});
 });
 

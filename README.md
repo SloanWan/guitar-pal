@@ -32,6 +32,10 @@ language model. The rules it follows are written down in
 
 **Share links.** Send someone a pattern. They can play it without signing up.
 
+**MCP server.** Connect `/api/mcp` to Claude and ask for a pattern or a tab;
+what Claude writes comes back as a link that plays. Setup and the tools are in
+[docs/mcp.md](docs/mcp.md).
+
 Everything works without an account. Signing up just means your stuff is still
 there tomorrow.
 

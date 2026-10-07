@@ -16,6 +16,8 @@ import {
 	DEFAULT_VIBRATO_PARAMS,
 	WIDE_VIBRATO_PARAMS,
 	BEND_TARGET_CENTS,
+	EXPRESSION_RELEASE_MIN_GAIN_RATIO,
+	releaseDecayTc,
 	type BendParams,
 	type VibratoParams,
 } from "@/lib/fingerpickExpression";
@@ -356,6 +358,32 @@ describe("composeExpression", () => {
 	it("keeps the curve the note's length whatever the layering", () => {
 		const long = composeExpression({ bend: { ...fullBend, preBend: true }, vibrato: vib }, 0.25);
 		expect(long.values.length).toBe(curveLength(0.25));
+	});
+});
+
+describe("releaseDecayTc", () => {
+	it("leaves τ alone when there is no release", () => {
+		expect(releaseDecayTc(0.4, bendTimeline(fullBend, 1))).toBe(0.4);
+	});
+
+	it("lengthens τ so the gain at the end of the release is still half the attack", () => {
+		const tl = bendTimeline({ ...fullBend, release: true, holdMs: 200, releaseMs: 150 }, 1);
+		expect(tl.releaseEndS).toBeCloseTo(0.5);
+		const tc = releaseDecayTc(0.4, tl);
+		// e^(−0.5/τ) = 0.5 → τ = 0.5 / ln 2
+		expect(tc).toBeCloseTo(0.5 / Math.LN2, 6);
+		expect(Math.exp(-tl.releaseEndS / tc)).toBeCloseTo(EXPRESSION_RELEASE_MIN_GAIN_RATIO, 6);
+	});
+
+	it("never shortens a τ that is already long enough", () => {
+		const tl = bendTimeline({ ...fullBend, release: true, holdMs: 200, releaseMs: 150 }, 1);
+		expect(releaseDecayTc(1.5, tl)).toBe(1.5);
+	});
+
+	it("ignores a nonsense ratio", () => {
+		const tl = bendTimeline({ ...fullBend, release: true, holdMs: 200, releaseMs: 150 }, 1);
+		expect(releaseDecayTc(0.4, tl, 0)).toBe(0.4);
+		expect(releaseDecayTc(0.4, tl, 1)).toBe(0.4);
 	});
 });
 

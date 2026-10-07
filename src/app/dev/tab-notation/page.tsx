@@ -746,7 +746,7 @@ function computeGroupWidths(measures: Measure[], containerWidth: number): number
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
 	const renderData = measures.map((m) => fingerpickToVexFlow(m));
 	const minWidths = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, i === 0, techniqueConnectorCount(measures[i]), 0, 0, 0, 0, [], rd.bendCount),
+		computeMeasureMinWidth(rd.notes, i === 0, techniqueConnectorCount(measures[i]), 0, 0, 0, 0, [], rd.expression),
 	);
 	const totalMin = minWidths.reduce((a, b) => a + b, 0);
 	const scale = Math.max(1, staveSpace / totalMin);

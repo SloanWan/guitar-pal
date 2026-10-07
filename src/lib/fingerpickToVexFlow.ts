@@ -146,6 +146,13 @@ export function bendMarkFor(technique: Technique, bendTarget?: number): BendMark
 	}
 }
 
+/** How many notes carry each width-hungry modifier (see `VexFlowRenderData.expression`). */
+export interface ExpressionCounts {
+	bends: number;
+	vibratos: number;
+	wideVibratos: number;
+}
+
 // ─── Brackets ────────────────────────────────────────────────────────────────
 
 export type BracketKind = "palm-mute" | "let-ring";
@@ -206,8 +213,12 @@ export interface VexFlowRenderData {
 	rolls: RollMark[];
 	/** Palm-mute and let-ring brackets, drawn by the renderer over their runs. */
 	brackets: BracketSpan[];
-	/** Notes carrying a bend mark; each needs extra width for its arrow and label. */
-	bendCount: number;
+	/**
+	 * Notes carrying a pitch-expression modifier drawn beside the number: a bend
+	 * arrow with its label, a vibrato squiggle, a wide one. Each needs extra
+	 * width that the formatter's own minimum does not include.
+	 */
+	expression: ExpressionCounts;
 	/**
 	 * Per note (index-aligned with `notes`), the string each of its positions
 	 * was written for, in the order the positions — and so VexFlow's fret-number
@@ -231,7 +242,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	let pendingGraceNotes: GraceTabNote[] = [];
 	const chordLabels: ChordLabel[] = [];
 	const rolls: RollMark[] = [];
-	let bendCount = 0;
+	const expression: ExpressionCounts = { bends: 0, vibratos: 0, wideVibratos: 0 };
 	// A chord marked on a grace-note slot has no note of its own to sit over; it
 	// is written at the note the grace resolves into.
 	let pendingChord: { slotIndex: number; chord: ChordRef } | null = null;
@@ -366,6 +377,8 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		// the canvas API. In non-browser environments (jsdom, Node) it throws because
 		// getWidth() returns 0. Wrap in try-catch so the adapter stays test-safe.
 		if (slotVibratoWide || slotVibrato) {
+			if (slotVibratoWide) expression.wideVibratos++;
+			else expression.vibratos++;
 			try {
 				const vib = new Vibrato();
 				if (slotVibratoWide) vib.setVibratoWidth(40);
@@ -390,7 +403,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		}
 		if (slotBend) {
 			const mark: BendMark = slotBend;
-			bendCount++;
+			expression.bends++;
 			if (mark.preBendLabel) {
 				// Right-justified so the label ends at the note and a release arrow
 				// drawn to its right does not run through the text.
@@ -504,7 +517,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		chordLabels,
 		rolls,
 		brackets: bracketSpans(measure, slotNoteIndex),
-		bendCount,
+		expression,
 		noteStrings,
 		noteSlots,
 	};

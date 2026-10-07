@@ -10,6 +10,7 @@ import {
 	type ChordLabel,
 	type RollMark,
 	type BracketSpan,
+	type ExpressionCounts,
 } from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 import { slotPitchLabels, splitPitchLabel, type SlotPitchLabel } from "@/lib/fingerpickPitch";
@@ -57,9 +58,14 @@ const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
 const MIN_MEASURE_WIDTH = 120;
 const HO_PO_EXTRA_WIDTH = 25;
-// A bend's arrow and height label sit right of the fret number; the next note
-// must not run into them.
-const BEND_EXTRA_WIDTH = 30;
+// Pitch-expression modifiers sit right of the fret number, outside what the
+// formatter measures: a bend's arrow plus its "Full" / "1/2" label (VexFlow
+// gives each phrase max(8, label) + 3 and the release another 11), a vibrato
+// squiggle at VexFlow's default 20 px, a wide one at the 40 px we set.
+const BEND_EXTRA_WIDTH = 40;
+const VIBRATO_EXTRA_WIDTH = 20;
+const WIDE_VIBRATO_EXTRA_WIDTH = 40;
+const NO_EXPRESSION: ExpressionCounts = { bends: 0, vibratos: 0, wideVibratos: 0 };
 // Palm-mute / let-ring brackets: a small label then a dashed line over the run,
 // just above the stave's top line (chord symbols sit higher, bend labels higher still).
 const BRACKET_FONT_SIZE = 9;
@@ -300,8 +306,8 @@ export function computeMeasureMinWidth(
 	rollCount: number = 0,
 	/** Per note, the widest pitch label under it (px, `pitchLabelWidth`); empty when the column is off. */
 	pitchLabelWidths: readonly number[] = [],
-	/** Notes carrying a bend arrow (`VexFlowRenderData.bendCount`). */
-	bendCount: number = 0,
+	/** Notes carrying a bend / vibrato modifier (`VexFlowRenderData.expression`). */
+	expression: ExpressionCounts = NO_EXPRESSION,
 ): number {
 	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 	voice.addTickables(notes);
@@ -316,7 +322,9 @@ export function computeMeasureMinWidth(
 		// enough room for a third of its width per change (three lanes).
 		chordLabelCount * Math.max(CHORD_LABEL_EXTRA_WIDTH, Math.ceil(chordDiagramWidth / 3) + 4) +
 		rollCount * ROLL_EXTRA_WIDTH +
-		bendCount * BEND_EXTRA_WIDTH +
+		expression.bends * BEND_EXTRA_WIDTH +
+		expression.vibratos * VIBRATO_EXTRA_WIDTH +
+		expression.wideVibratos * WIDE_VIBRATO_EXTRA_WIDTH +
 		pitchLabelExtraWidth(notesWidth, notes.length, pitchLabelWidths) +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);

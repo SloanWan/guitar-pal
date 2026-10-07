@@ -354,7 +354,7 @@ describe("bendMarkFor", () => {
 });
 
 describe("fingerpickToVexFlow — bends", () => {
-	it("counts the notes carrying a bend, for the width pass", () => {
+	it("counts the notes carrying a bend or vibrato, for the width pass", () => {
 		const rd = fingerpickToVexFlow(
 			measure([
 				beatSlot("s1", "quarter", { 2: { fret: 7, technique: "bend-full" } }),
@@ -363,8 +363,15 @@ describe("fingerpickToVexFlow — bends", () => {
 				beatSlot("s4", "quarter", { 0: { fret: 3, technique: "bend-half" }, 2: { fret: 7, technique: "bend-full" } }),
 			])
 		);
-		expect(rd.bendCount).toBe(3);
-		expect(fingerpickToVexFlow(measure([beatSlot("s1", "quarter", { 2: { fret: 7 } })])).bendCount).toBe(0);
+		expect(rd.expression).toEqual({ bends: 3, vibratos: 0, wideVibratos: 0 });
+		expect(fingerpickToVexFlow(measure([beatSlot("s1", "quarter", { 2: { fret: 7 } })])).expression).toEqual({ bends: 0, vibratos: 0, wideVibratos: 0 });
+		const vib = fingerpickToVexFlow(
+			measure([
+				beatSlot("v1", "half", { 2: { fret: 7, technique: "vibrato" } }),
+				beatSlot("v2", "half", { 2: { fret: 7, technique: "vibrato-wide" } }),
+			])
+		);
+		expect(vib.expression).toEqual({ bends: 0, vibratos: 1, wideVibratos: 1 });
 	});
 
 	it("a pre-bend writes its PB label as an annotation on the note", () => {

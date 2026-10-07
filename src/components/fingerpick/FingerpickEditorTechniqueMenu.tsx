@@ -97,6 +97,11 @@ export default function FingerpickEditorTechniqueMenu({
 		const scroller = scrollRef.current;
 		if (!menu || !scroller) return;
 		const PAD = 8;
+		// With both technique groups the menu is taller than a phone's grid area;
+		// cap it to what the scroll region can show (it scrolls inside) so the
+		// nudge below can always bring the whole box into view instead of pushing
+		// its top out of the region.
+		menu.style.maxHeight = `${Math.max(120, scroller.clientHeight - PAD * 2)}px`;
 		const menuRect = menu.getBoundingClientRect();
 		const viewRect = scroller.getBoundingClientRect();
 		let dx = 0;
@@ -131,7 +136,7 @@ export default function FingerpickEditorTechniqueMenu({
 		<div
 			ref={menuRef}
 			data-technique-menu
-			className="absolute z-60 w-52 border border-line-strong bg-popover py-1 text-sm"
+			className="fp-thin-scroll absolute z-60 w-52 overflow-y-auto border border-line-strong bg-popover py-1 text-sm"
 			style={{ top: y, left: x }}
 		>
 			<div className="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-[0.12em] text-ink-faint">

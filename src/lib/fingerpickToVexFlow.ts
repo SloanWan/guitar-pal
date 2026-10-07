@@ -16,9 +16,10 @@ import {
 	AnnotationVerticalJustify,
 	Tremolo,
 	Vibrato,
+	Bend,
 } from "vexflow";
 
-import { Measure, Duration, Stroke } from "@/lib/fingerpickTypes";
+import { Measure, Duration, Stroke, Technique } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import { TRIPLET_GROUP_SIZE, tripletGroups } from "@/lib/fingerpickEdit";
 import { isCompound, type Meter } from "@/lib/strumMeter";
@@ -100,12 +101,113 @@ export function beamGroupsFor(timeSignature: Meter): Fraction[] {
 	return isCompound(timeSignature) ? [new Fraction(3, 8)] : [new Fraction(1, 4)];
 }
 
+// ─── Bends ───────────────────────────────────────────────────────────────────
+
+export type BendArrow = "up" | "down";
+
+/**
+ * What a bend technique draws over its note: an arrow phrase for VexFlow's
+ * `Bend` (up = bend, down = release) and, for the pre-bend family, a "PB"
+ * label — the string is already bent when picked, so there is no rise to draw.
+ * VexFlow-free so it can be unit-tested without a canvas.
+ */
+export interface BendMark {
+	phrase: { type: BendArrow; text: string }[];
+	preBendLabel?: string;
+}
+
+/** The height label guitar tab writes over a bend arrow, from `bendTarget` semitones. */
+export function bendHeightLabel(semitones: number | undefined): string {
+	const st = semitones === undefined || !(semitones > 0) ? 2 : semitones;
+	if (st === 2) return "Full";
+	if (st === 1) return "1/2";
+	if (st === 0.5) return "1/4";
+	if (st === 1.5) return "1 1/2";
+	return `${st}`;
+}
+
+/** The mark a technique draws, or null when it is not a bend. */
+export function bendMarkFor(technique: Technique, bendTarget?: number): BendMark | null {
+	switch (technique) {
+		case "bend-full":
+			return { phrase: [{ type: "up", text: "Full" }] };
+		case "bend-half":
+			return { phrase: [{ type: "up", text: "1/2" }] };
+		case "bend-quarter":
+			return { phrase: [{ type: "up", text: "1/4" }] };
+		case "bend-release":
+			return { phrase: [{ type: "up", text: bendHeightLabel(bendTarget) }, { type: "down", text: "" }] };
+		case "pre-bend":
+			return { phrase: [], preBendLabel: `PB ${bendHeightLabel(bendTarget)}` };
+		case "pre-bend-release":
+			return { phrase: [{ type: "down", text: "" }], preBendLabel: `PB ${bendHeightLabel(bendTarget)}` };
+		default:
+			return null;
+	}
+}
+
+// ─── Brackets ────────────────────────────────────────────────────────────────
+
+export type BracketKind = "palm-mute" | "let-ring";
+
+/**
+ * A dashed bracket over a run of notes: "P.M." for palm mute, "let ring" for
+ * let ring. Not a VexFlow modifier — the renderer draws it from the first
+ * note's x to the last note's x once the measure is formatted, like rolls.
+ */
+export interface BracketSpan {
+	kind: BracketKind;
+	/** Index into `notes` of the first and last note under the bracket. */
+	fromNoteIndex: number;
+	toNoteIndex: number;
+}
+
+/**
+ * Runs of consecutive slots whose played strings carry the flag, one span per
+ * run and kind. A grace slot has no note of its own and neither starts nor
+ * breaks a run; a rest, an empty slot or a plain note ends it.
+ */
+export function bracketSpans(measure: Measure, slotNoteIndex: readonly (number | null)[]): BracketSpan[] {
+	const spans: BracketSpan[] = [];
+	const kinds: { kind: BracketKind; flag: "palmMute" | "letRing" }[] = [
+		{ kind: "palm-mute", flag: "palmMute" },
+		{ kind: "let-ring", flag: "letRing" },
+	];
+	for (const { kind, flag } of kinds) {
+		let from: number | null = null;
+		let to: number | null = null;
+		const close = () => {
+			if (from !== null && to !== null) spans.push({ kind, fromNoteIndex: from, toNoteIndex: to });
+			from = null;
+			to = null;
+		};
+		measure.slots.forEach((slot, i) => {
+			const noteIndex = slotNoteIndex[i];
+			if (noteIndex === null || noteIndex === undefined) return;
+			const marked =
+				!slot.isRest && slot.strings.some((sf) => (sf.fret !== null || sf.muted) && sf[flag] === true);
+			if (!marked) {
+				close();
+				return;
+			}
+			if (from === null) from = noteIndex;
+			to = noteIndex;
+		});
+		close();
+	}
+	return spans;
+}
+
 export interface VexFlowRenderData {
 	notes: StemmableNote[];
 	connectors: Array<TabTie | TabSlide>;
 	tuplets: Tuplet[];
 	chordLabels: ChordLabel[];
 	rolls: RollMark[];
+	/** Palm-mute and let-ring brackets, drawn by the renderer over their runs. */
+	brackets: BracketSpan[];
+	/** Notes carrying a bend mark; each needs extra width for its arrow and label. */
+	bendCount: number;
 	/**
 	 * Per note (index-aligned with `notes`), the string each of its positions
 	 * was written for, in the order the positions — and so VexFlow's fret-number
@@ -129,6 +231,7 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	let pendingGraceNotes: GraceTabNote[] = [];
 	const chordLabels: ChordLabel[] = [];
 	const rolls: RollMark[] = [];
+	let bendCount = 0;
 	// A chord marked on a grace-note slot has no note of its own to sit over; it
 	// is written at the note the grace resolves into.
 	let pendingChord: { slotIndex: number; chord: ChordRef } | null = null;
@@ -225,8 +328,10 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 		let slotVibratoWide = false;
 		let slotTapping = false;
 		let slotTrill = false;
+		let slotBend: BendMark | null = null;
 		slot.strings.forEach((sf) => {
 			if (sf.fret === null && !sf.muted) return;
+			if (!slotBend) slotBend = bendMarkFor(sf.technique, sf.bendTarget);
 			if (sf.staccato) slotStaccato = true;
 			if (sf.accent) slotAccent = true;
 			if (!slotPickStroke && sf.pickStroke) slotPickStroke = sf.pickStroke;
@@ -282,6 +387,33 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 					.setVerticalJustification(AnnotationVerticalJustify.TOP)
 					.setFont("Geist Mono, monospace", 10),
 			);
+		}
+		if (slotBend) {
+			const mark: BendMark = slotBend;
+			bendCount++;
+			if (mark.preBendLabel) {
+				// Right-justified so the label ends at the note and a release arrow
+				// drawn to its right does not run through the text.
+				tabNote.addModifier(
+					new Annotation(mark.preBendLabel)
+						.setVerticalJustification(AnnotationVerticalJustify.TOP)
+						.setJustification(Annotation.HorizontalJustify.RIGHT)
+						.setFont("Geist Mono, monospace", 10),
+				);
+			}
+			// Bend's constructor measures its label text through the canvas API, like
+			// Vibrato; without one (jsdom / SSR) skip the arrow — it draws in a browser.
+			if (mark.phrase.length > 0) {
+				try {
+					tabNote.addModifier(
+						new Bend(
+							mark.phrase.map((p) => ({ type: p.type === "up" ? Bend.UP : Bend.DOWN, text: p.text })),
+						).setFont("Geist Mono, monospace", 10),
+					);
+				} catch {
+					// No canvas context.
+				}
+			}
 		}
 
 		const noteIdx = notes.length;
@@ -365,5 +497,15 @@ export function fingerpickToVexFlow(measure: Measure): VexFlowRenderData {
 	const noteSlots = slotNoteIndex.flatMap((noteIdx, slotIdx) =>
 		noteIdx === null ? [] : [slotIdx],
 	);
-	return { notes, connectors, tuplets, chordLabels, rolls, noteStrings, noteSlots };
+	return {
+		notes,
+		connectors,
+		tuplets,
+		chordLabels,
+		rolls,
+		brackets: bracketSpans(measure, slotNoteIndex),
+		bendCount,
+		noteStrings,
+		noteSlots,
+	};
 }

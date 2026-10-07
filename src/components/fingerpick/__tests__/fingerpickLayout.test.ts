@@ -149,6 +149,11 @@ describe("measurePitchLabelWidths", () => {
 		const m = quarterMeasure("m");
 		const { notes, noteSlots } = fingerpickToVexFlow(m);
 		const base = computeMeasureMinWidth(notes, true, 0);
+		// A bend's arrow and label need room right of the number.
+		expect(computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [], 1)).toBeGreaterThan(base);
+		expect(computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [], 2) - base).toBeCloseTo(
+			2 * (computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [], 1) - base),
+		);
 		const narrow = computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [1, 1, 1, 1]);
 		expect(narrow).toBe(base);
 		const wide = computeMeasureMinWidth(

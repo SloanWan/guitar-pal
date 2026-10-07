@@ -17,7 +17,14 @@ import {
 } from "vexflow";
 
 import { tripletGroups } from "@/lib/fingerpickEdit";
-import { beamGroupsFor, fingerpickToVexFlow, VEX_DURATION } from "@/lib/fingerpickToVexFlow";
+import {
+	beamGroupsFor,
+	bendHeightLabel,
+	bendMarkFor,
+	bracketSpans,
+	fingerpickToVexFlow,
+	VEX_DURATION,
+} from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, Measure, StringFret, Duration, Technique } from "@/lib/fingerpickTypes";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -301,6 +308,137 @@ describe("fingerpickToVexFlow — new technique values", () => {
 				])
 			)
 		).not.toThrow();
+	});
+});
+
+// ─── Bends ───────────────────────────────────────────────────────────────────
+
+describe("bendHeightLabel", () => {
+	it("writes the heights tab readers expect, defaulting to a full bend", () => {
+		expect(bendHeightLabel(2)).toBe("Full");
+		expect(bendHeightLabel(1)).toBe("1/2");
+		expect(bendHeightLabel(0.5)).toBe("1/4");
+		expect(bendHeightLabel(1.5)).toBe("1 1/2");
+		expect(bendHeightLabel(3)).toBe("3");
+		expect(bendHeightLabel(undefined)).toBe("Full");
+		expect(bendHeightLabel(0)).toBe("Full");
+	});
+});
+
+describe("bendMarkFor", () => {
+	it("named bends draw an up arrow with their own height, ignoring bendTarget", () => {
+		expect(bendMarkFor("bend-full", 0.5)).toEqual({ phrase: [{ type: "up", text: "Full" }] });
+		expect(bendMarkFor("bend-half")).toEqual({ phrase: [{ type: "up", text: "1/2" }] });
+		expect(bendMarkFor("bend-quarter", 2)).toEqual({ phrase: [{ type: "up", text: "1/4" }] });
+	});
+
+	it("a release draws up then down, with the height from bendTarget", () => {
+		expect(bendMarkFor("bend-release", 1)).toEqual({
+			phrase: [{ type: "up", text: "1/2" }, { type: "down", text: "" }],
+		});
+	});
+
+	it("pre-bends carry a PB label; only the release variant draws an arrow", () => {
+		expect(bendMarkFor("pre-bend", 1)).toEqual({ phrase: [], preBendLabel: "PB 1/2" });
+		expect(bendMarkFor("pre-bend-release")).toEqual({
+			phrase: [{ type: "down", text: "" }],
+			preBendLabel: "PB Full",
+		});
+	});
+
+	it("is null for anything that is not a bend", () => {
+		for (const t of [null, "hammer-on", "vibrato", "vibrato-bar", "slide-up", "trill"] as const) {
+			expect(bendMarkFor(t)).toBeNull();
+		}
+	});
+});
+
+describe("fingerpickToVexFlow — bends", () => {
+	it("counts the notes carrying a bend, for the width pass", () => {
+		const rd = fingerpickToVexFlow(
+			measure([
+				beatSlot("s1", "quarter", { 2: { fret: 7, technique: "bend-full" } }),
+				beatSlot("s2", "quarter", { 2: { fret: 7 } }),
+				beatSlot("s3", "quarter", { 2: { fret: 7, technique: "pre-bend-release", bendTarget: 2 } }),
+				beatSlot("s4", "quarter", { 0: { fret: 3, technique: "bend-half" }, 2: { fret: 7, technique: "bend-full" } }),
+			])
+		);
+		expect(rd.bendCount).toBe(3);
+		expect(fingerpickToVexFlow(measure([beatSlot("s1", "quarter", { 2: { fret: 7 } })])).bendCount).toBe(0);
+	});
+
+	it("a pre-bend writes its PB label as an annotation on the note", () => {
+		const rd = fingerpickToVexFlow(
+			measure([beatSlot("s1", "quarter", { 2: { fret: 7, technique: "pre-bend", bendTarget: 1 } })])
+		);
+		const annotations = (rd.notes[0] as TabNote).getModifiers().filter((m) => m instanceof Annotation) as Annotation[];
+		expect(annotations.map((a) => a.getText())).toContain("PB 1/2");
+	});
+});
+
+// ─── Brackets ────────────────────────────────────────────────────────────────
+
+describe("bracketSpans", () => {
+	const pm = (fret: number): Partial<StringFret> => ({ fret, palmMute: true });
+	const lr = (fret: number): Partial<StringFret> => ({ fret, letRing: true });
+
+	it("one bracket per run; a plain note breaks the run", () => {
+		const m = measure([
+			beatSlot("s0", "eighth", { 4: pm(0) }),
+			beatSlot("s1", "eighth", { 4: pm(0) }),
+			beatSlot("s2", "eighth", { 4: { fret: 0 } }),
+			beatSlot("s3", "eighth", { 4: pm(2) }),
+		]);
+		expect(bracketSpans(m, [0, 1, 2, 3])).toEqual([
+			{ kind: "palm-mute", fromNoteIndex: 0, toNoteIndex: 1 },
+			{ kind: "palm-mute", fromNoteIndex: 3, toNoteIndex: 3 },
+		]);
+	});
+
+	it("palm mute and let ring are separate brackets, even on the same notes", () => {
+		const m = measure([
+			beatSlot("s0", "quarter", { 5: { fret: 3, palmMute: true, letRing: true } }),
+			beatSlot("s1", "quarter", { 1: lr(3) }),
+		]);
+		expect(bracketSpans(m, [0, 1])).toEqual([
+			{ kind: "palm-mute", fromNoteIndex: 0, toNoteIndex: 0 },
+			{ kind: "let-ring", fromNoteIndex: 0, toNoteIndex: 1 },
+		]);
+	});
+
+	it("a rest and an empty slot end a run; a grace slot is transparent", () => {
+		const m = measure([
+			beatSlot("s0", "quarter", { 0: lr(0) }),
+			{ ...beatSlot("g", "sixteenth", { 0: { fret: 2 } }), isGraceNote: true },
+			beatSlot("s1", "quarter", { 0: lr(0) }),
+			{ ...beatSlot("r", "quarter"), isRest: true },
+			beatSlot("s2", "quarter", { 0: lr(0) }),
+			beatSlot("e", "quarter"),
+			beatSlot("s3", "quarter", { 0: lr(0) }),
+		]);
+		// Note indexes as the converter assigns them: the grace slot has none.
+		expect(bracketSpans(m, [0, null, 1, 2, 3, 4, 5])).toEqual([
+			{ kind: "let-ring", fromNoteIndex: 0, toNoteIndex: 1 },
+			{ kind: "let-ring", fromNoteIndex: 3, toNoteIndex: 3 },
+			{ kind: "let-ring", fromNoteIndex: 5, toNoteIndex: 5 },
+		]);
+	});
+
+	it("a flag on a silent string does not count", () => {
+		const m = measure([beatSlot("s0", "quarter", { 0: { fret: 5 }, 3: { fret: null, letRing: true } })]);
+		expect(bracketSpans(m, [0])).toEqual([]);
+	});
+
+	it("the converter returns the spans with its own note indexes", () => {
+		const rd = fingerpickToVexFlow(
+			measure([
+				beatSlot("s0", "quarter", { 0: lr(0) }),
+				{ ...beatSlot("g", "sixteenth", { 0: { fret: 2 } }), isGraceNote: true },
+				beatSlot("s1", "quarter", { 0: lr(0) }),
+				beatSlot("s2", "half", { 0: { fret: 0 } }),
+			])
+		);
+		expect(rd.brackets).toEqual([{ kind: "let-ring", fromNoteIndex: 0, toNoteIndex: 1 }]);
 	});
 });
 

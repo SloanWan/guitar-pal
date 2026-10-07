@@ -93,7 +93,7 @@ describe("parseAsciiTab", () => {
 		expect(parsed.warnings.map((w) => w.code)).toEqual(["ASCII_UNEVEN_BAR", "ASCII_UNEVEN_BAR"]);
 	});
 
-	it("maps the techniques the editor can draw, and reports the rest through the validator", () => {
+	it("maps the techniques the editor can draw, bends included, and the validator keeps them", () => {
 		const text = [
 			"e|5h7-7p5-|5/7-7\\5-|--------|",
 			"B|--------|--------|--------|",
@@ -108,8 +108,10 @@ describe("parseAsciiTab", () => {
 		expect(onE(1)).toEqual([null, "slide-up", null, "slide-down"]);
 		expect(slotsOf(parsed, 2)[0].strings[2].technique).toBe("bend-full");
 		expect(slotsOf(parsed, 0)[0].strings[4].muted).toBe(true);
-		const { warnings } = validateFingerpickPattern(parsed.draft);
-		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE" && w.original === "bend-full")).toBe(true);
+		const { pattern, warnings } = validateFingerpickPattern(parsed.draft);
+		// A bend renders and plays now, so the validator passes it through untouched.
+		expect(pattern?.measures[2].slots[0].strings[2].technique).toBe("bend-full");
+		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
 	});
 
 	it("takes the meter it is given", () => {

@@ -1,7 +1,7 @@
-import type { Duration, Technique } from "@/lib/fingerpickTypes";
-import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
+import type { Technique } from "@/lib/fingerpickTypes";
+import { DURATION_TICKS, MAX_FRET, measureCapacity } from "@/lib/fingerpickEdit";
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
-import { splitTicks } from "@/lib/assistant/tab/ticks";
+import { barSlots, type DraftSlot, type GridNote } from "@/lib/assistant/tab/draftSlots";
 
 /**
  * A pasted ASCII tab, read into an import draft.
@@ -122,20 +122,46 @@ function barsOf(system: TabLine[]): string[][] {
 	return bars;
 }
 
-interface Note {
-	stringIndex: number;
-	fret: number | null;
-	muted: boolean;
-	technique: Technique;
+/** One fret read out of a run of digits, and where in the run it started. */
+export interface FretRunPiece {
+	offset: number;
+	fret: number;
+}
+
+/**
+ * A run of digits on one string, read as the frets it was written to mean.
+ *
+ * Nothing separates one fret from the next in ASCII tab, so `1215` is two
+ * notes at the twelfth and fifteenth frets, not the 1215th. Read left to
+ * right, longest first: two digits when they make a fret that exists on a
+ * neck, one digit otherwise. A leading zero always stands alone — `0` is
+ * written `0`, never `03` — which is what keeps two open-ish notes from
+ * collapsing into a plausible single fret and going unnoticed.
+ *
+ * `12` on its own stays the twelfth fret, the way every tab writes it. That
+ * one is genuinely ambiguous — it could be a first fret and a second — and the
+ * conventional reading is the right guess, not a certainty.
+ */
+export function splitFretRun(run: string): FretRunPiece[] {
+	const pieces: FretRunPiece[] = [];
+	let i = 0;
+	while (i < run.length) {
+		const pair = run.slice(i, i + 2);
+		const takesTwo = pair.length === 2 && run[i] !== "0" && Number(pair) <= MAX_FRET;
+		pieces.push({ offset: i, fret: Number(takesTwo ? pair : run[i]) });
+		i += takesTwo ? 2 : 1;
+	}
+	return pieces;
 }
 
 /** The notes of one bar by the column they start in. */
 function notesByColumn(
 	bar: string[],
 	warnUnknown: (mark: string) => void,
-): Map<number, Note[]> {
-	const byColumn = new Map<number, Note[]>();
-	const add = (col: number, note: Note) => {
+	warnSplit: (run: string, frets: readonly number[]) => void,
+): Map<number, GridNote[]> {
+	const byColumn = new Map<number, GridNote[]>();
+	const add = (col: number, note: GridNote) => {
 		if (!byColumn.has(col)) byColumn.set(col, []);
 		byColumn.get(col)!.push(note);
 	};
@@ -146,11 +172,23 @@ function notesByColumn(
 			if (/\d/.test(ch)) {
 				let end = c + 1;
 				while (end < line.length && /\d/.test(line[end])) end += 1;
+				const run = line.slice(c, end);
+				const pieces = splitFretRun(run);
+				if (pieces.length > 1) warnSplit(run, pieces.map((piece) => piece.fret));
 				const before = line[c - 1];
 				const after = line[end];
-				const technique =
-					(before && TECHNIQUE_BEFORE[before]) || (after && TECHNIQUE_AFTER[after]) || null;
-				add(c, { stringIndex, fret: Number(line.slice(c, end)), muted: false, technique });
+				// A mark belongs to the note it touches: the one the run opens
+				// with, and the one it closes with.
+				pieces.forEach((piece, i) => {
+					const opening = i === 0 && before ? TECHNIQUE_BEFORE[before] : undefined;
+					const closing = i === pieces.length - 1 && after ? TECHNIQUE_AFTER[after] : undefined;
+					add(c + piece.offset, {
+						stringIndex,
+						fret: piece.fret,
+						muted: false,
+						technique: opening ?? closing ?? null,
+					});
+				});
 				c = end;
 				continue;
 			}
@@ -171,16 +209,6 @@ function notesByColumn(
 	return byColumn;
 }
 
-type DraftSlot = {
-	duration: Duration;
-	isRest?: boolean;
-	strings: { fret: number | null; technique: Technique; tied: boolean; muted: boolean }[];
-};
-
-function emptyStrings(): DraftSlot["strings"] {
-	return Array.from({ length: 6 }, () => ({ fret: null, technique: null, tied: false, muted: false }));
-}
-
 export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): AsciiTabParse {
 	const systems = systemsOf(text);
 	if (systems.length === 0) return { ok: false, error: "Six lines of tab are needed, one per string." };
@@ -189,6 +217,7 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 	const capacity = measureCapacity(timeSignature);
 	const warnings: ValidationIssue[] = [];
 	const unknownMarks = new Set<string>();
+	const splitRuns = new Map<string, string>();
 
 	// Labels settle which way up the system is: "e" on top is the usual way
 	// and the default; "E" on top with "e" at the bottom is written low-first.
@@ -200,8 +229,11 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 		for (const bar of barsOf(oriented)) {
 			const width = bar[0].length;
 			if (width === 0) continue;
-			const byColumn = notesByColumn(bar, (mark) => unknownMarks.add(mark));
-			const onsets = [...byColumn.keys()].sort((a, b) => a - b);
+			const byColumn = notesByColumn(
+				bar,
+				(mark) => unknownMarks.add(mark),
+				(run, frets) => splitRuns.set(run, frets.join(", ")),
+			);
 			const measureIndex = measures.length;
 
 			// A bar's width is its length. When the characters divide the bar
@@ -219,51 +251,29 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 				});
 			}
 
-			const slots: DraftSlot[] = [];
-			let used = 0;
-			const push = (durations: Duration[], first: Note[] | null) => {
-				durations.forEach((duration, i) => {
-					const ticks = DURATION_TICKS[duration];
-					if (used + ticks > capacity) return;
-					used += ticks;
-					const slot: DraftSlot = { duration, strings: emptyStrings() };
-					if (i === 0 && first) {
-						for (const note of first) {
-							slot.strings[note.stringIndex] = {
-								fret: note.fret,
-								technique: note.technique,
-								tied: false,
-								muted: note.muted,
-							};
-						}
-					} else {
-						slot.isRest = true;
-					}
-					slots.push(slot);
-				});
-			};
-
-			if (onsets.length === 0 || onsets[0] > 0) {
-				push(splitTicks((onsets[0] ?? width) * unit), null);
-			}
-			onsets.forEach((col, i) => {
-				const next = onsets[i + 1] ?? width;
-				push(splitTicks((next - col) * unit), byColumn.get(col)!);
-			});
-			if (width * unit > capacity) {
+			const { slots, overflow } = barSlots(byColumn, width, unit, capacity);
+			if (overflow) {
 				warnings.push({
 					code: "ASCII_BAR_OVERFLOW",
 					path: `measures[${measureIndex}]`,
 					message: `Bar ${measureIndex + 1} ran past ${timeSignature[0]}/${timeSignature[1]} — what did not fit was dropped.`,
 				});
 			}
-			if (used < capacity) push(splitTicks(capacity - used), null);
-			if (slots.length === 0) push(splitTicks(capacity), null);
 			measures.push({ slots });
 		}
 	}
 
 	if (measures.length === 0) return { ok: false, error: "The tab has no bars in it." };
+
+	for (const [run, frets] of splitRuns) {
+		warnings.push({
+			code: "ASCII_FRET_RUN_SPLIT",
+			path: "",
+			message: `"${run}" sits on one string with nothing between the frets — it was read as ${frets}.`,
+			original: run,
+			repairedTo: frets,
+		});
+	}
 
 	for (const mark of unknownMarks) {
 		warnings.push({

@@ -35,14 +35,11 @@ export function Panel({
 const BUTTON_BASE =
 	"inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap border px-3 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 disabled:pointer-events-none disabled:opacity-50 motion-safe:active:translate-y-px";
 
+/** The denim button's dress, for a link that should look like one. */
+export const DENIM_BUTTON = `${BUTTON_BASE} border-denim bg-denim text-on-denim hover:bg-denim-accent`;
+
 export function DenimButton({ className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-	return (
-		<button
-			type="button"
-			{...props}
-			className={`${BUTTON_BASE} border-denim bg-denim text-on-denim hover:bg-denim-accent ${className}`}
-		/>
-	);
+	return <button type="button" {...props} className={`${DENIM_BUTTON} ${className}`} />;
 }
 
 export function GhostButton({ className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {

@@ -8,7 +8,7 @@ const ok = (text: string) => {
 };
 /** String numbers as a guitarist counts them, for reading a result. */
 const numbers = (parsed: ReturnType<typeof ok>) =>
-	parsed.order.map((t) => ("rest" in t ? "-" : t.strings.map((s) => s + 1).join("+")));
+	parsed.order.map((t) => ("rest" in t ? "-" : "hold" in t ? "_" : t.strings.map((s) => s + 1).join("+")));
 
 describe("parsePickOrder", () => {
 	it("reads spaced string numbers", () => {
@@ -32,6 +32,15 @@ describe("parsePickOrder", () => {
 
 	it("reads rests as 0 or -", () => {
 		expect(numbers(ok("5 0 3 -"))).toEqual(["5", "-", "3", "-"]);
+	});
+
+	it("reads holds as _ or ^, spaced or glued", () => {
+		expect(numbers(ok("R_32^132R_32^132"))).toEqual(["", "_", "3", "2", "_", "1", "3", "2", "", "_", "3", "2", "_", "1", "3", "2"]);
+		expect(numbers(ok("R _ 3 2 ^ 1 3 2"))).toEqual(["", "_", "3", "2", "_", "1", "3", "2"]);
+		// The full-width forms a Chinese keyboard writes.
+		expect(numbers(ok("R＿32＾132"))).toEqual(["", "_", "3", "2", "_", "1", "3", "2"]);
+		expect(isOrderWord("R_32^132")).toBe(true);
+		expect(parsePickOrder("_ 3 2")).toMatchObject({ ok: false, error: /needs a note before it/ });
 	});
 
 	it("writes an alternating bass out as two passes", () => {

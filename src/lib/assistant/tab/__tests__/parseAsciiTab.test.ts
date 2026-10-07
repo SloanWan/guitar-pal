@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { asciiTabProse, looksLikeAsciiTab, parseAsciiTab } from "@/lib/assistant/tab/parseAsciiTab";
+import { asciiTabProse, looksLikeAsciiTab, parseAsciiTab, splitFretRun } from "@/lib/assistant/tab/parseAsciiTab";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import type { Duration } from "@/lib/fingerpickTypes";
 
@@ -140,5 +140,72 @@ describe("parseAsciiTab", () => {
 
 	it("refuses text that is not a tab", () => {
 		expect(parseAsciiTab("Am: 5 3 2 1").ok).toBe(false);
+	});
+});
+
+describe("splitFretRun", () => {
+	const frets = (run: string) => splitFretRun(run).map((p) => p.fret);
+	const offsets = (run: string) => splitFretRun(run).map((p) => p.offset);
+
+	it("reads a single fret as itself", () => {
+		expect(frets("0")).toEqual([0]);
+		expect(frets("7")).toEqual([7]);
+		expect(frets("12")).toEqual([12]);
+		expect(frets("24")).toEqual([24]);
+	});
+
+	it("splits a run that would be a fret no neck has", () => {
+		expect(frets("57")).toEqual([5, 7]);
+		expect(frets("1215")).toEqual([12, 15]);
+		expect(frets("579")).toEqual([5, 7, 9]);
+	});
+
+	it("never lets a leading zero swallow the note after it", () => {
+		expect(frets("03")).toEqual([0, 3]);
+		expect(frets("00")).toEqual([0, 0]);
+	});
+
+	it("says where in the run each fret started", () => {
+		expect(offsets("1215")).toEqual([0, 2]);
+		expect(offsets("57")).toEqual([0, 1]);
+		expect(offsets("03")).toEqual([0, 1]);
+	});
+});
+
+describe("parseAsciiTab — frets written with nothing between them", () => {
+	const system = (line: string) =>
+		["e|--------|", "B|--------|", "G|--------|", "D|--------|", `A|${line}|`, "E|--------|"].join("\n");
+
+	it("reads a high position as the two notes it is, not one impossible fret", () => {
+		const parsed = parseAsciiTab(system("1215----"));
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		const slots = (parsed.draft.measures![0] as { slots: { strings: { fret: number | null }[] }[] }).slots;
+		expect(slots[0].strings[4].fret).toBe(12);
+		expect(slots[1].strings[4].fret).toBe(15);
+	});
+
+	it("keeps two low frets apart rather than reading a plausible wrong one", () => {
+		const parsed = parseAsciiTab(system("03------"));
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		const slots = (parsed.draft.measures![0] as { slots: { strings: { fret: number | null }[] }[] }).slots;
+		expect(slots[0].strings[4].fret).toBe(0);
+		expect(slots[1].strings[4].fret).toBe(3);
+	});
+
+	it("says it had to make the call", () => {
+		const parsed = parseAsciiTab(system("1215----"));
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		const split = parsed.warnings.find((w) => w.code === "ASCII_FRET_RUN_SPLIT");
+		expect(split?.message).toContain("12, 15");
+	});
+
+	it("says nothing when a run is one ordinary fret", () => {
+		const parsed = parseAsciiTab(system("12------"));
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.warnings.some((w) => w.code === "ASCII_FRET_RUN_SPLIT")).toBe(false);
 	});
 });

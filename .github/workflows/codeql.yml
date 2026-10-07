@@ -1,0 +1,52 @@
+name: CodeQL
+
+# Static analysis for both halves of the repo: the Next.js app in TypeScript
+# and the book service in Python. Findings land under the Security tab, and on
+# a pull request they are also posted as review comments.
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    # A weekly sweep, so a newly published query still finds old code.
+    schedule:
+        - cron: "24 5 * * 1"
+
+# Never let two analyses of the same ref overlap.
+concurrency:
+    group: codeql-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    analyze:
+        name: Analyze ${{ matrix.language }}
+        runs-on: ubuntu-latest
+
+        permissions:
+            # Uploading the SARIF results is what needs this one.
+            security-events: write
+            actions: read
+            contents: read
+
+        strategy:
+            fail-fast: false
+            matrix:
+                language: [javascript-typescript, python]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            # Neither language is compiled, so CodeQL reads the source directly
+            # and nothing here has to install dependencies or build.
+            - name: Initialize CodeQL
+              uses: github/codeql-action/init@v4
+              with:
+                  languages: ${{ matrix.language }}
+                  build-mode: none
+                  queries: security-extended
+
+            - name: Analyze
+              uses: github/codeql-action/analyze@v4
+              with:
+                  category: /language:${{ matrix.language }}

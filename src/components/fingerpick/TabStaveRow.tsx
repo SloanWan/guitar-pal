@@ -12,6 +12,7 @@ import {
 } from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 import { slotPitchLabels, splitPitchLabel, type SlotPitchLabel } from "@/lib/fingerpickPitch";
+import { MONO_FAMILY } from "@/app/fonts/fonts";
 
 // Layout constants — not props because they are fixed design decisions, not data.
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
@@ -28,7 +29,7 @@ const STAVE_Y = 10;
 // barline, the symbol over a note, so the two never meet).
 const CHORD_BASELINE_OFFSET = 14;
 const CHORD_FONT = {
-	family: '"JetBrains Mono", ui-monospace, monospace',
+	family: MONO_FAMILY,
 	size: "11pt",
 	weight: "bold",
 };
@@ -84,7 +85,7 @@ const PITCH_DOT_GAP = 3;
 const PITCH_DOT_PITCH = 3.2;
 const PITCH_DIGIT_CAP_HEIGHT = 8;
 const PITCH_FONT = {
-	family: '"JetBrains Mono", ui-monospace, monospace',
+	family: MONO_FAMILY,
 	size: "8pt",
 };
 // A mono glyph at 8pt is 0.6 em of 10.67 px; the layout has no canvas to ask.
@@ -502,7 +503,7 @@ export default function TabStaveRow({
 			const ctx = renderer.getContext();
 			const nextAnchors: ChordAnchor[] = [];
 			const placed: PlacedLabel[] = [];
-			ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
+			ctx.setFont({ family: MONO_FAMILY, size: "10pt" });
 
 			// Draw staves, accumulating x from per-measure widths.
 			let staveX = CLEF_WIDTH;

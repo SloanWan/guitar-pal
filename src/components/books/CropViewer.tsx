@@ -21,12 +21,16 @@ export function CropDialog({ crop, onClose }: { crop: CropView | null; onClose: 
 		<Dialog open={crop !== null} onOpenChange={(open) => !open && onClose()}>
 			<DialogContent
 				showCloseButton={false}
-				className="w-[calc(100%-2rem)] max-w-5xl gap-0 rounded-none border border-line-strong p-0 shadow-none sm:max-w-5xl"
+				className="w-[calc(100%-2rem)] max-w-5xl gap-0 overflow-hidden rounded-none border border-line-strong p-0 shadow-none sm:max-w-5xl"
 			>
 				{crop ? (
 					<>
 						<DialogTitle className="sr-only">{crop.alt}</DialogTitle>
-						<ZoomableImage src={crop.url} alt={crop.alt} onClose={onClose} className="max-h-[80vh]" />
+						{/* min-w-0: a grid item otherwise takes the crop's own width and
+						    carries the dialog past a phone's edge (#261). */}
+						<div className="min-w-0">
+							<ZoomableImage src={crop.url} alt={crop.alt} onClose={onClose} className="max-h-[80vh] w-full" />
+						</div>
 					</>
 				) : null}
 			</DialogContent>

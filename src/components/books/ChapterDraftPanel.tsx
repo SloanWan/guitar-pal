@@ -366,7 +366,8 @@ export default function ChapterDraftPanel({
 			</div>
 
 			{/* One row: transport, loop, tempo in ±10 steps, and the two ways out.
-			    It wraps where the panel is too narrow for all of it. */}
+			    Where the panel is too narrow for all of it (a phone), the two ways
+			    out take a full second row between them. */}
 			<footer className="flex flex-none flex-wrap items-center gap-2 border-t border-line px-4 py-3">
 				<button
 					type="button"
@@ -409,16 +410,17 @@ export default function ChapterDraftPanel({
 					</span>
 					<TempoStep label="+10" onClick={() => handleBpmChange(bpm + 10)} />
 				</span>
-				<span className="ml-auto flex items-center gap-2">
+				<span className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
 					<GhostButton
 						onClick={() => setEditing(true)}
 						disabled={libraryLoading}
 						title={libraryLoading ? "Loading your patterns…" : "Edit and save to your patterns"}
+						className="flex-1 sm:flex-none"
 					>
 						<Pencil className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
 						Edit
 					</GhostButton>
-					<DenimButton onClick={handleOpenInFingerpick} disabled={opening}>
+					<DenimButton onClick={handleOpenInFingerpick} disabled={opening} className="flex-1 sm:flex-none">
 						Open in fingerpick
 						<ArrowUpRight className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
 					</DenimButton>

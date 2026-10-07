@@ -486,7 +486,7 @@
 	   labels + inline theme/auth measure ~867px, so below this the center grid
 	   column would overflow into the side columns. 56rem/896px clears that band
 	   with a small buffer; under it, controls consolidate into the menu trigger. */
-	--breakpoint-nav: 56rem;
+	--breakpoint-nav: 70rem; /* five links now (Books joined): full mode measures ~1120px, so the menu takes over below that */
 
 	--font-mono: var(--mono);
 	--font-sans: var(--sans);
@@ -1161,6 +1161,36 @@
 @keyframes blink {
 	50% {
 		opacity: 0;
+	}
+}
+
+/* Landing scroll cue: a denim tick falls down a hairline stem. */
+@keyframes scrollcue {
+	to {
+		transform: translateY(40px);
+	}
+}
+
+/* Chord diagram (ChordDiagramSVG): a voicing change moves each string's dot
+   and the barre to their new place and fades the open/muted marks, in the
+   drawer's timing, instead of redrawing the shape. */
+.cd-move {
+	transition:
+		transform var(--dur-drawer) var(--ease-drawer),
+		width var(--dur-drawer) var(--ease-drawer),
+		opacity var(--dur-hover) ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.cd-move {
+		transition: none;
+	}
+}
+
+/* Landing chapters: anything that joins a demo mid-story arrives, never pops. */
+@keyframes landing-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
 	}
 }
 @keyframes ledbreathe {

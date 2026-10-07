@@ -12,20 +12,33 @@ import type { Lang } from "@/lib/assistant/lang";
  * own user message, after the breakpoint.
  */
 
-/** The orchestrator model; `ASSISTANT_MODEL` overrides it for the eval runs that pick it. */
-export const DEFAULT_MODEL = "claude-sonnet-5";
+/**
+ * The orchestrator model; `ASSISTANT_MODEL` overrides it for the eval runs
+ * that pick it. DeepSeek Flash was chosen on the eval set (#255): level with
+ * Sonnet 5 at a tenth of the cost and a third of the p90 latency. The vendor
+ * it is reached through is decided by its name (`vendor.ts`).
+ */
+export const DEFAULT_MODEL = "deepseek-flash";
 export const MODEL = process.env.ASSISTANT_MODEL || DEFAULT_MODEL;
 
 /**
  * The model's id as a name to print: "claude-sonnet-5" → "Claude Sonnet 5",
- * "claude-haiku-4-5" → "Claude Haiku 4.5". An id in a shape this does not
- * know is printed as it is — an honest label beats a wrong one.
+ * "claude-haiku-4-5" → "Claude Haiku 4.5", "deepseek-flash" → "DeepSeek
+ * Flash", "deepseek-v4-pro" → "DeepSeek V4 Pro". An id in a shape this does
+ * not know is printed as it is — an honest label beats a wrong one.
  */
 export function modelDisplayName(id: string): string {
-	const m = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(id);
-	if (!m) return id;
-	const family = m[1][0].toUpperCase() + m[1].slice(1);
-	return `Claude ${family} ${m[3] ? `${m[2]}.${m[3]}` : m[2]}`;
+	const claude = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(id);
+	if (claude) {
+		const family = claude[1][0].toUpperCase() + claude[1].slice(1);
+		return `Claude ${family} ${claude[3] ? `${claude[2]}.${claude[3]}` : claude[2]}`;
+	}
+	const deepseek = /^deepseek-([a-z0-9-]+)$/.exec(id);
+	if (deepseek) {
+		const words = deepseek[1].split("-").map((w) => (/^v\d+$/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)));
+		return `DeepSeek ${words.join(" ")}`;
+	}
+	return id;
 }
 
 /** Text and at most a few tool calls: a large cap would only widen the blast radius. */
@@ -37,7 +50,7 @@ export interface GeneralContext {
 	page: "strum" | "tab" | null;
 	strumNames: readonly string[];
 	tabNames: readonly string[];
-	/** The interface language — what to answer in when the message itself does not say. */
+	/** The interface language — a fallback; the player's message decides the reply's language. */
 	lang: Lang;
 }
 
@@ -48,7 +61,7 @@ export function contextBlock(context: GeneralContext): string {
 		`page: ${context.page === "strum" ? "strumming machine" : context.page === "tab" ? "fingerpicking editor" : "elsewhere"}`,
 		`strumming patterns the player has: ${names(context.strumNames)}`,
 		`fingerpicking patterns the player has: ${names(context.tabNames)}`,
-		`interface language: ${context.lang}`,
+		`interface language: ${context.lang} (a fallback — reply in the language the player's message is written in)`,
 		"[/context]",
 	].join("\n");
 }
@@ -78,10 +91,15 @@ export function withContext(messages: readonly Anthropic.MessageParam[], context
 /**
  * Thinking and effort are per model. The orchestrator's job is short —
  * pick a tool, say a sentence — so thinking is off where the model allows
- * it and effort is low where the model takes one.
+ * it and effort is low where the model takes one. DeepSeek, reached for an
+ * eval through its Anthropic-compatible endpoint, takes the thinking switch
+ * and is given the same setting as Sonnet so the two are compared alike;
+ * any other vendor's model gets neither field, which are Anthropic's.
  */
 function reasoningParams(model: string): Pick<Anthropic.MessageCreateParams, "thinking" | "output_config"> {
 	if (model.startsWith("claude-haiku-4-5")) return {};
+	if (model.startsWith("deepseek-")) return { thinking: { type: "disabled" } };
+	if (!model.startsWith("claude-")) return {};
 	if (model.startsWith("claude-opus-5") || model.startsWith("claude-fable")) {
 		return { thinking: { type: "adaptive" }, output_config: { effort: "low" } };
 	}

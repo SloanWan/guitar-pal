@@ -241,8 +241,9 @@ export default function FingerpickEditorMeasureFooter({
 			)}
 
 			{/* Pick row: type a right-hand sequence (3212, 6(32)1(32), 0 or -
-			    for a rest) and Enter rewrites the measure, fretting each
-			    string from the chord in effect at that beat. */}
+			    for a rest, _ or ^ to hold the note before) and Enter rewrites
+			    the measure, fretting each string from the chord in effect at
+			    that beat. */}
 			<div className="flex items-center gap-1.5">
 				<span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint mr-0.5">
 					Pick
@@ -263,7 +264,7 @@ export default function FingerpickEditorMeasureFooter({
 					}}
 					placeholder={pickPlaceholder(working.timeSignature)}
 					aria-label={`Right-hand sequence for measure ${measureIndex + 1}`}
-					title="String numbers, 1 = high e … 6 = low E. Parentheses pluck strings together; 0 or - is a rest. Enter writes the measure, fretted from its chord."
+					title="String numbers, 1 = high e … 6 = low E. Parentheses pluck strings together; 0 or - is a rest; _ or ^ holds the note before it one cell longer. Enter writes the measure, fretted from its chord."
 					className="h-7 min-w-0 flex-1 border border-line-strong bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:border-denim"
 				/>
 				<button

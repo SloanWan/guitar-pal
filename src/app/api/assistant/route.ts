@@ -13,6 +13,7 @@ import {
 } from "@/lib/assistant/general/guest";
 import { callGeneral } from "@/lib/assistant/general/model";
 import { MODEL, type GeneralContext } from "@/lib/assistant/general/request";
+import { createAssistantClient, vendorApiKey, vendorFor } from "@/lib/assistant/general/vendor";
 import { isToolName } from "@/lib/assistant/general/tools";
 import { SlidingWindowLimiter } from "@/lib/assistant/rateLimit";
 import type { AssistantErrorBody } from "@/lib/assistant/types";
@@ -56,11 +57,11 @@ const guestBudget = new SlidingWindowLimiter({ limit: GUEST_DAILY_CALLS, windowM
 
 /**
  * The cookie's signing key, derived from the one secret this route already
- * needs. A signature never reveals the key, and a leaked cookie is worth
- * three turns.
+ * needs — the model's vendor key. A signature never reveals the key, and a
+ * leaked cookie is worth three turns.
  */
 function guestKey(): string {
-	return createHash("sha256").update(`assistant-guest:${process.env.ANTHROPIC_API_KEY ?? ""}`).digest("hex");
+	return createHash("sha256").update(`assistant-guest:${vendorApiKey(MODEL) ?? ""}`).digest("hex");
 }
 
 /**
@@ -175,8 +176,8 @@ function readContext(body: Block): GeneralContext | string {
 }
 
 export async function POST(request: Request): Promise<Response> {
-	if (!process.env.ANTHROPIC_API_KEY) {
-		return error("The assistant is not configured on this deployment (ANTHROPIC_API_KEY is unset).", 503);
+	if (!vendorApiKey(MODEL)) {
+		return error(`The assistant is not configured on this deployment (${vendorFor(MODEL).keyName} is unset).`, 503);
 	}
 
 	let body: unknown;
@@ -228,7 +229,7 @@ export async function POST(request: Request): Promise<Response> {
 		guest = { cookie: encodeGuest(admitted.record, key), quota: admitted.quota };
 	}
 
-	const client = new Anthropic();
+	const client = createAssistantClient(MODEL);
 	try {
 		const { step, attempt, latencyMs } = await callGeneral(client, MODEL, messages, context);
 		const tools = step.content.filter((b) => b.type === "tool_use").map((b) => (b.type === "tool_use" ? b.name : "")).join(",");

@@ -503,9 +503,16 @@ export default function PatternWorkspace({
 					} ${rail ? "px-2 py-1.5 text-[11px]" : "px-3 py-2 text-sm"}`}
 				/>
 
-				{/* Live read-out of what the line resolves to, chord by chord. */}
+				{/* Live read-out of what the line resolves to, chord by chord. Spoken
+				    as it changes: typing is the only way to find out whether a word
+				    was recognised, so a reader that cannot see the chips has nothing. */}
 				{parsed.tokens.length > 0 && (
-					<div className="flex flex-wrap items-center gap-1 border border-line bg-surface px-2 py-1.5">
+					<div
+						role="status"
+						aria-live="polite"
+						aria-label="What the chord line resolves to"
+						className="flex flex-wrap items-center gap-1 border border-line bg-surface px-2 py-1.5"
+					>
 						{parsed.tokens.map((token, i) => (
 							<span
 								key={`${token.input}-${i}`}

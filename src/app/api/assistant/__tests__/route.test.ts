@@ -35,6 +35,8 @@ vi.mock("@/lib/supabase-server", () => ({
 }));
 
 import { POST } from "@/app/api/assistant/route";
+import { MODEL } from "@/lib/assistant/general/request";
+import { vendorFor } from "@/lib/assistant/general/vendor";
 import { REFUSAL_REPLY } from "@/lib/assistant/general/model";
 import { TOOL_NAMES } from "@/lib/assistant/general/tools";
 
@@ -71,17 +73,19 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	// A refused call leaves its queued reply unconsumed; the queue must not leak.
 	mocks.create.mockReset();
-	process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+	// The key the chosen model's vendor needs, whichever it is.
+	process.env[vendorFor(MODEL).keyName] = "sk-test";
 	userSeq += 1;
 	mocks.user = { id: `user-${userSeq}` };
 });
 
 describe("POST /api/assistant", () => {
 	describe("refuses before it spends anything", () => {
-		it("says so when the deployment has no key", async () => {
-			delete process.env.ANTHROPIC_API_KEY;
+		it("says so when the deployment has no key, naming the one the model needs", async () => {
+			delete process.env[vendorFor(MODEL).keyName];
 			const res = await post(ask());
 			expect(res.status).toBe(503);
+			expect((await res.json()).error).toContain(vendorFor(MODEL).keyName);
 			expect(mocks.create).not.toHaveBeenCalled();
 		});
 

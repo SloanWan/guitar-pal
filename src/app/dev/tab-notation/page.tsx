@@ -19,6 +19,7 @@ import TabStaveRow, {
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 import type { FingerpickPattern, Measure, StringFret } from "@/lib/fingerpickTypes";
+import { MONO_FAMILY } from "@/app/fonts/fonts";
 
 // ── StringFret factories ──────────────────────────────────────────────────────
 
@@ -754,7 +755,7 @@ function StrokeDemoRow({ typeValue }: { typeValue: number }) {
 			const renderer = new Renderer(div, Renderer.Backends.SVG);
 			renderer.resize(STROKE_STAVE_WIDTH, STROKE_STAVE_HEIGHT);
 			const ctx = renderer.getContext();
-			ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
+			ctx.setFont({ family: MONO_FAMILY, size: "10pt" });
 
 			const stave = new TabStave(10, 10, STROKE_STAVE_WIDTH - 20);
 			stave.addTabGlyph();
@@ -814,7 +815,7 @@ function StrokeControlRow() {
 		const renderer = new Renderer(div, Renderer.Backends.SVG);
 		renderer.resize(STROKE_STAVE_WIDTH, STROKE_STAVE_HEIGHT);
 		const ctx = renderer.getContext();
-		ctx.setFont({ family: '"JetBrains Mono", ui-monospace, monospace', size: "10pt" });
+		ctx.setFont({ family: MONO_FAMILY, size: "10pt" });
 
 		const stave = new TabStave(10, 10, STROKE_STAVE_WIDTH - 20);
 		stave.addTabGlyph();

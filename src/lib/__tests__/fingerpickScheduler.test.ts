@@ -303,6 +303,21 @@ describe("fingerpickPatternToScheduleEvents — tied / silent strings", () => {
 		expect(events[0].time).toBeCloseTo(0);
 	});
 
+	it("a tied slot lengthens the note it carries on, so the decay runs the written length", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 0: { fret: 5 }, 2: { fret: 0 } }),
+			slot("s2", "quarter", { 0: { fret: 5, tied: true }, 2: { fret: 2 } }),
+			slot("s3", "eighth", { 0: { fret: 5, tied: true } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		const quarter = 60 / 120;
+		const highE = events.filter((e) => e.stringIndex === 0);
+		expect(highE).toHaveLength(1);
+		expect(highE[0].duration).toBeCloseTo(quarter * 2.5);
+		// The other string is untouched: two separate strikes, each its own slot long.
+		expect(events.filter((e) => e.stringIndex === 2).map((e) => e.duration)).toEqual([quarter, quarter]);
+	});
+
 	it("slot with all strings silent produces no events", () => {
 		const p = pattern(120, [slot("s1", "quarter")]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);

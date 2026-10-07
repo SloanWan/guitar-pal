@@ -26,6 +26,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "Preset loader and A/B audio comparison for pitch-quality audits.",
 	},
 	{
+		href: "/dev/bend-lab",
+		label: "bend-lab",
+		description: "Fingerpick bend + vibrato lab — detune curves, shapes, onset, A/B against a plain note.",
+	},
+	{
 		href: "/dev/chord-diagram",
 		label: "chord-diagram",
 		description: "Chord diagram SVG rendering showcase across dot styles and card states.",

@@ -47,6 +47,8 @@ describe("techniqueSupport", () => {
 	it("marks audio-engine-handled techniques as audioSupported", () => {
 		const audible: NonNullable<Technique>[] = [
 			"hammer-on", "pull-off", "tapping", "trill",
+			"bend-full", "bend-half", "bend-quarter", "bend-release",
+			"pre-bend", "pre-bend-release", "vibrato", "vibrato-wide",
 		];
 		for (const t of audible) {
 			expect(TECHNIQUE_SUPPORT[t].audioSupported, t).toBe(true);
@@ -55,8 +57,7 @@ describe("techniqueSupport", () => {
 
 	it("marks techniques without audio engine handling as not audioSupported", () => {
 		const silent: NonNullable<Technique>[] = [
-			"slide-up", "slide-down", "vibrato", "vibrato-wide",
-			"bend-full", "grace-note",
+			"slide-up", "slide-down", "vibrato-bar", "grace-note",
 		];
 		for (const t of silent) {
 			expect(TECHNIQUE_SUPPORT[t].audioSupported, t).toBe(false);

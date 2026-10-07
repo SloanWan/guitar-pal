@@ -306,15 +306,23 @@ export function toggleMuted(pattern: FingerpickPattern, cell: Cell): FingerpickP
 	);
 }
 
+// A copy without the bend height: it only means something under a bend technique.
+function withoutBendTarget(sf: StringFret): StringFret {
+	if (sf.bendTarget === undefined) return sf;
+	const copy = { ...sf };
+	delete copy.bendTarget;
+	return copy;
+}
+
 export function setTechnique(
 	pattern: FingerpickPattern,
 	cell: Cell,
 	technique: Technique,
 ): FingerpickPattern {
 	// Technique and tied are mutually exclusive on a string+slot: setting a
-	// technique clears any tie.
+	// technique clears any tie. A bend height only travels with a bend.
 	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) => ({
-		...sf,
+		...(isBendTechnique(technique) ? sf : withoutBendTarget(sf)),
 		technique,
 		tied: technique !== null ? false : sf.tied,
 	}));
@@ -328,7 +336,7 @@ export function setTied(
 	tied: boolean,
 ): FingerpickPattern {
 	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) => ({
-		...sf,
+		...(tied ? withoutBendTarget(sf) : sf),
 		tied,
 		technique: tied ? null : sf.technique,
 	}));
@@ -399,6 +407,119 @@ export function availableTechniques(
 		"slide-down": descending,
 		tied: curr.fret === prev.fret,
 	};
+}
+
+// ── Techniques on the note itself: bends and vibrato ─────────────────────────
+// Unlike a hammer-on or slide, a bend or vibrato connects to nothing: it is
+// done on the note's own string after the pick. What it needs is a fretted
+// finger — an open string cannot be bent or shaken — and, for a bend, room on
+// the neck to reach the target.
+
+export const NOTE_TECHNIQUES = [
+	"bend-quarter",
+	"bend-half",
+	"bend-full",
+	"bend-release",
+	"pre-bend",
+	"pre-bend-release",
+	"vibrato",
+	"vibrato-wide",
+] as const;
+export type NoteTechnique = (typeof NOTE_TECHNIQUES)[number];
+
+const BEND_TECHNIQUES: ReadonlySet<Technique> = new Set<Technique>([
+	"bend-quarter",
+	"bend-half",
+	"bend-full",
+	"bend-release",
+	"pre-bend",
+	"pre-bend-release",
+]);
+
+export function isBendTechnique(technique: Technique): boolean {
+	return BEND_TECHNIQUES.has(technique);
+}
+
+/** Bend heights the editor offers, in semitones: ¼, ½ and a full tone. */
+export const BEND_HEIGHTS: readonly number[] = [0.5, 1, 2];
+export const DEFAULT_BEND_HEIGHT = 2;
+
+/**
+ * The `bendTarget` a technique writes. The named heights carry their own; the
+ * release and pre-bend variants take the chosen one; a vibrato has none.
+ */
+export function bendHeightFor(technique: NoteTechnique, chosen: number = DEFAULT_BEND_HEIGHT): number | undefined {
+	switch (technique) {
+		case "bend-quarter":
+			return 0.5;
+		case "bend-half":
+			return 1;
+		case "bend-full":
+			return 2;
+		case "bend-release":
+		case "pre-bend":
+		case "pre-bend-release":
+			return chosen;
+		default:
+			return undefined;
+	}
+}
+
+/** Why a note cannot take a bend / vibrato, for the menu's disabled hint. */
+export type NoteTechniqueBlock = "no-note" | "muted" | "open-string" | "off-neck";
+
+export interface NoteTechniqueAvailability {
+	vibrato: boolean;
+	bend: boolean;
+	blocked: NoteTechniqueBlock | null;
+}
+
+export function availableNoteTechniques(
+	pattern: FingerpickPattern,
+	cell: Cell,
+	bendSemitones: number = DEFAULT_BEND_HEIGHT,
+): NoteTechniqueAvailability {
+	const sf =
+		pattern.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[cell.stringIndex] ?? null;
+	if (!sf || sf.muted) return { vibrato: false, bend: false, blocked: sf?.muted ? "muted" : "no-note" };
+	if (sf.fret === null) return { vibrato: false, bend: false, blocked: "no-note" };
+	if (sf.fret === 0) return { vibrato: false, bend: false, blocked: "open-string" };
+	const bend = sf.fret + Math.ceil(bendSemitones) <= MAX_FRET;
+	return { vibrato: true, bend, blocked: bend ? null : "off-neck" };
+}
+
+/** Write a bend or vibrato on the note, with its height; clears any tie. */
+export function setNoteTechnique(
+	pattern: FingerpickPattern,
+	cell: Cell,
+	technique: NoteTechnique,
+	bendSemitones: number = DEFAULT_BEND_HEIGHT,
+): FingerpickPattern {
+	const height = bendHeightFor(technique, bendSemitones);
+	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) => ({
+		...withoutBendTarget(sf),
+		technique,
+		tied: false,
+		...(height !== undefined && { bendTarget: height }),
+	}));
+}
+
+// Keyboard cycles: B steps a bend up through its heights and into a release,
+// V toggles vibrato and wide vibrato. Anything else starts the cycle.
+const BEND_CYCLE: readonly NoteTechnique[] = ["bend-quarter", "bend-half", "bend-full", "bend-release"];
+const VIBRATO_CYCLE: readonly NoteTechnique[] = ["vibrato", "vibrato-wide"];
+
+function nextInCycle(current: Technique, cycle: readonly NoteTechnique[]): NoteTechnique {
+	const i = cycle.indexOf(current as NoteTechnique);
+	return cycle[(i + 1) % cycle.length];
+}
+
+export function nextBendTechnique(current: Technique): NoteTechnique {
+	return nextInCycle(current, BEND_CYCLE);
+}
+
+export function nextVibratoTechnique(current: Technique): NoteTechnique {
+	return nextInCycle(current, VIBRATO_CYCLE);
 }
 
 // ── Keyboard navigation ──────────────────────────────────────────────────────

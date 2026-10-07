@@ -93,7 +93,11 @@ export default function FingerpickEditorHintPopover({
 							Click a cell, then use arrow keys to move, number keys to set a fret,{" "}
 							<span className="font-mono">X</span> to mute, or Backspace to clear.
 						</p>
-						<p>Right-click a cell for techniques.</p>
+						<p>
+							<span className="font-mono">B</span> steps a bend on the note (¼ → ½ → full →
+							release), <span className="font-mono">V</span> toggles vibrato. Right-click a
+							cell for every technique.
+						</p>
 					</>
 				) : (
 					<>
@@ -101,7 +105,7 @@ export default function FingerpickEditorHintPopover({
 							Tap a cell to select it, then use the number pad to set a fret, the mute
 							button to mute, or Backspace to clear.
 						</p>
-						<p>Long-press a cell for techniques.</p>
+						<p>Long-press a cell for techniques, bends and vibrato included.</p>
 					</>
 				)}
 			</div>

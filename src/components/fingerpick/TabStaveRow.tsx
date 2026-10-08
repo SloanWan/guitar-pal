@@ -9,6 +9,8 @@ import {
 	fingerpickToVexFlow,
 	type ChordLabel,
 	type RollMark,
+	type BracketSpan,
+	type ExpressionCounts,
 } from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 import { slotPitchLabels, splitPitchLabel, type SlotPitchLabel } from "@/lib/fingerpickPitch";
@@ -56,6 +58,22 @@ const TAB_GLYPH_WIDTH = 40;
 const TECHNIQUE_CONNECTOR_PAD = 20;
 const MIN_MEASURE_WIDTH = 120;
 const HO_PO_EXTRA_WIDTH = 25;
+// Pitch-expression modifiers sit right of the fret number, outside what the
+// formatter measures: a bend's arrow plus its "Full" / "1/2" label (VexFlow
+// gives each phrase max(8, label) + 3 and the release another 11), a vibrato
+// squiggle at VexFlow's default 20 px, a wide one at the 40 px we set.
+const BEND_EXTRA_WIDTH = 40;
+const VIBRATO_EXTRA_WIDTH = 20;
+const WIDE_VIBRATO_EXTRA_WIDTH = 40;
+const NO_EXPRESSION: ExpressionCounts = { bends: 0, vibratos: 0, wideVibratos: 0 };
+// Palm-mute / let-ring brackets: a small label then a dashed line over the run,
+// just above the stave's top line (chord symbols sit higher, bend labels higher still).
+const BRACKET_FONT_SIZE = 9;
+const BRACKET_CHAR_WIDTH = 5.5;
+const BRACKET_BASELINE_OFFSET = 8;
+const BRACKET_LINE_RISE = 4;
+const BRACKET_END_TICK = 3;
+const BRACKET_LABELS: Record<BracketSpan["kind"], string> = { "palm-mute": "P.M.", "let-ring": "let ring" };
 // Extra room for a repeat-begin (|:) / repeat-end (:|) barline's thick line + dots.
 const REPEAT_BARLINE_EXTRA_WIDTH = 14;
 // A roll arrow sits left of its note; a slot needs this much more so it never
@@ -224,6 +242,12 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 			el.setAttribute("paint-order", "stroke fill");
 		});
 		noteGroup.querySelectorAll("rect").forEach((el) => el.setAttribute("fill", "none"));
+		// Modifier drawings inside the note group — a bend's curve and arrowhead, the
+		// vibrato glyph — are stroked / filled in VexFlow's hardcoded black.
+		noteGroup.querySelectorAll("path").forEach((el) => {
+			if (el.getAttribute("fill") !== "none") el.setAttribute("fill", "var(--ink)");
+			if (el.getAttribute("stroke") !== "none") el.setAttribute("stroke", "var(--ink)");
+		});
 	});
 	// Chord symbols on the chord line — written by this component, grouped so they
 	// can carry the brand colour rather than the plain-text ink.
@@ -282,6 +306,8 @@ export function computeMeasureMinWidth(
 	rollCount: number = 0,
 	/** Per note, the widest pitch label under it (px, `pitchLabelWidth`); empty when the column is off. */
 	pitchLabelWidths: readonly number[] = [],
+	/** Notes carrying a bend / vibrato modifier (`VexFlowRenderData.expression`). */
+	expression: ExpressionCounts = NO_EXPRESSION,
 ): number {
 	const voice = new Voice({ numBeats: 4, beatValue: 4 }).setMode(Voice.Mode.SOFT);
 	voice.addTickables(notes);
@@ -296,6 +322,9 @@ export function computeMeasureMinWidth(
 		// enough room for a third of its width per change (three lanes).
 		chordLabelCount * Math.max(CHORD_LABEL_EXTRA_WIDTH, Math.ceil(chordDiagramWidth / 3) + 4) +
 		rollCount * ROLL_EXTRA_WIDTH +
+		expression.bends * BEND_EXTRA_WIDTH +
+		expression.vibratos * VIBRATO_EXTRA_WIDTH +
+		expression.wideVibratos * WIDE_VIBRATO_EXTRA_WIDTH +
 		pitchLabelExtraWidth(notesWidth, notes.length, pitchLabelWidths) +
 		RIGHT_PAD;
 	return Math.max(MIN_MEASURE_WIDTH, raw);
@@ -429,6 +458,36 @@ function drawRoll(
 	svgEl.appendChild(g);
 }
 
+/**
+ * A palm-mute / let-ring bracket: its label at the run's first note, then a
+ * dashed line to the last note with a short tick down at the end. `y` is the
+ * label's baseline.
+ */
+function drawBracket(svgEl: SVGSVGElement, x1: number, x2: number, y: number, label: string): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const g = document.createElementNS(ns, "g");
+	g.setAttribute("class", "vf-bracket");
+	const text = document.createElementNS(ns, "text");
+	text.setAttribute("x", String(x1));
+	text.setAttribute("y", String(y));
+	text.setAttribute("font-family", MONO_FAMILY);
+	text.setAttribute("font-size", `${BRACKET_FONT_SIZE}px`);
+	text.setAttribute("fill", "var(--ink-dim)");
+	text.textContent = label;
+	g.appendChild(text);
+	const lineStart = x1 + label.length * BRACKET_CHAR_WIDTH + 3;
+	const lineEnd = Math.max(x2, lineStart + 8);
+	const lineY = y - BRACKET_LINE_RISE;
+	const line = document.createElementNS(ns, "path");
+	line.setAttribute("d", `M ${lineStart} ${lineY} L ${lineEnd} ${lineY} L ${lineEnd} ${lineY + BRACKET_END_TICK}`);
+	line.setAttribute("fill", "none");
+	line.setAttribute("stroke", "var(--ink-dim)");
+	line.setAttribute("stroke-width", "1");
+	line.setAttribute("stroke-dasharray", "3 2");
+	g.appendChild(line);
+	svgEl.appendChild(g);
+}
+
 export default function TabStaveRow({
 	measures,
 	timeSignature = DEFAULT_TIME_SIGNATURE,
@@ -556,12 +615,13 @@ export default function TabStaveRow({
 				noteStrings: number[][];
 				noteSlots: number[];
 				rolls: RollMark[];
+				brackets: BracketSpan[];
 				stave: TabStave;
 			}[] = [];
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets, chordLabels, rolls, noteStrings, noteSlots } =
+				const { notes, connectors, tuplets, chordLabels, rolls, brackets, noteStrings, noteSlots } =
 					fingerpickToVexFlow(measure);
-				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, stave: staves[i] });
+				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, stave: staves[i] });
 				const voice = new Voice({ numBeats: timeSignature[0], beatValue: timeSignature[1] }).setMode(
 					Voice.Mode.SOFT,
 				);
@@ -663,6 +723,19 @@ export default function TabStaveRow({
 							Math.max(...ys),
 							stroke,
 						);
+					});
+				});
+			}
+
+			// Palm-mute / let-ring brackets over their runs, from the first note's
+			// number to just past the last one's.
+			if (svgEl) {
+				drawn.forEach(({ notes, brackets, stave }) => {
+					const y = stave.getYForLine(0) - BRACKET_BASELINE_OFFSET;
+					brackets.forEach(({ kind, fromNoteIndex, toNoteIndex }) => {
+						const x1 = notes[fromNoteIndex].getAbsoluteX() - 4;
+						const x2 = notes[toNoteIndex].getAbsoluteX() + 10;
+						drawBracket(svgEl, x1, x2, y, BRACKET_LABELS[kind]);
 					});
 				});
 			}

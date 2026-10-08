@@ -66,6 +66,7 @@ export function computeAllMeasureWidths(
 			chordDiagramWidth,
 			rd.rolls.length,
 			pitchWidths[i],
+			rd.expression,
 		),
 	);
 	const widthsNonFirst = renderData.map((rd, i) =>
@@ -78,6 +79,7 @@ export function computeAllMeasureWidths(
 			chordDiagramWidth,
 			rd.rolls.length,
 			pitchWidths[i],
+			rd.expression,
 		),
 	);
 

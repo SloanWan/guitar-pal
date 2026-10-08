@@ -52,21 +52,53 @@ const TECHNIQUE_BEFORE: Record<string, NonNullable<Technique>> = {
 	t: "tapping",
 };
 
-/** The mark after a note that says what happens to it. */
-const TECHNIQUE_AFTER: Record<string, NonNullable<Technique>> = {
-	b: "bend-full",
-	"~": "vibrato",
-};
+/**
+ * What follows a fret and says what is done to the note once struck, the way
+ * tab writes it: `7b9` bends 7 up to the pitch of 9, `7b8r` lets it back
+ * down, `7pb9` is bent before the pick, `5b¼` a quarter bend; `7~` vibrato
+ * and `7~~` the wide kind (a longer run of tildes is a held vibrato, not a
+ * wider one). The whole mark is consumed, so the `9` in `7b9` is never read
+ * as a second note.
+ */
+const NOTE_SUFFIX = /^(pb|b)(?:(¼|1\/4)|(\d{1,2}))?(r(?:\d{1,2})?)?|^~+/;
+
+/** A `P.M.` / `let ring` line under a system: its label, then dashes to the run's end. */
+const BRACKET_RUN = /(P\.?\s?M\.?|let\s?ring|L\.?R\.?)(?:\s?-+)?/gi;
+const BRACKET_LINE = /^\s*(?:P\.?\s?M\.?|let\s?ring|L\.?R\.?)(?![A-Za-z0-9])/i;
 
 interface TabLine {
 	label: string | null;
 	body: string;
+	/** Where `body` starts in the raw line, so a bracket line below can be aligned to it. */
+	bodyStart: number;
+}
+
+/** A bracket line's runs, in raw-line columns (end exclusive). */
+interface BracketRun {
+	flag: "palmMute" | "letRing";
+	start: number;
+	end: number;
+}
+
+function isBracketLine(line: string): boolean {
+	return BRACKET_LINE.test(line);
+}
+
+function bracketRuns(line: string): BracketRun[] {
+	const runs: BracketRun[] = [];
+	for (const m of line.matchAll(BRACKET_RUN)) {
+		const flag = /^l/i.test(m[1]) ? "letRing" : "palmMute";
+		const start = m.index ?? 0;
+		runs.push({ flag, start, end: start + m[0].length });
+	}
+	return runs;
 }
 
 function readTabLine(line: string): TabLine | null {
+	if (isBracketLine(line)) return null;
 	const m = TAB_LINE.exec(line);
 	if (!m) return null;
-	return { label: m[1] ?? null, body: m[2] };
+	return { label: m[1] ?? null, body: m[2], bodyStart: line.indexOf(m[2]) };
 }
 
 /**
@@ -77,17 +109,28 @@ export function looksLikeAsciiTab(text: string): boolean {
 	return systemsOf(text).length > 0;
 }
 
-/** Every block of six consecutive tab lines, top string first. */
-function systemsOf(text: string): TabLine[][] {
+/** Six tab lines, top string first, and the bracket lines written under them. */
+interface TabSystem {
+	lines: TabLine[];
+	brackets: BracketRun[];
+}
+
+/** Every block of six consecutive tab lines, each with the `P.M.` / `let ring` lines that follow it. */
+function systemsOf(text: string): TabSystem[] {
 	const lines = text.split(/\r?\n/);
-	const systems: TabLine[][] = [];
+	const systems: TabSystem[] = [];
 	let run: TabLine[] = [];
 	for (const line of lines) {
+		if (isBracketLine(line)) {
+			const last = systems[systems.length - 1];
+			if (last && run.length === 0) last.brackets.push(...bracketRuns(line));
+			continue;
+		}
 		const tab = readTabLine(line);
 		if (tab && line.trim() !== "") {
 			run.push(tab);
 			if (run.length === 6) {
-				systems.push(run);
+				systems.push({ lines: run, brackets: [] });
 				run = [];
 			}
 		} else {
@@ -101,23 +144,37 @@ function systemsOf(text: string): TabLine[][] {
 export function asciiTabProse(text: string): string {
 	return text
 		.split(/\r?\n/)
-		.filter((line) => line.trim() !== "" && readTabLine(line) === null)
+		.filter((line) => line.trim() !== "" && !isBracketLine(line) && readTabLine(line) === null)
 		.join("\n");
 }
 
+/** One bar of a system: six strings, and where the bar starts in the top string's raw line. */
+interface TabBar {
+	strings: string[];
+	/** Raw-line column of the bar's first character on the top string, for the bracket lines. */
+	rawStart: number;
+}
+
 /** The bars of one system: six strings, each split at its barlines. */
-function barsOf(system: TabLine[]): string[][] {
-	const perString = system.map((line) =>
-		line.body
-			.split(/[|:]+/)
-			.filter((segment, i, all) => !(segment === "" && (i === 0 || i === all.length - 1))),
-	);
+function barsOf(system: TabLine[]): TabBar[] {
+	const perString = system.map((line) => {
+		const segments: { text: string; start: number }[] = [];
+		let at = 0;
+		for (const piece of line.body.split(/([|:]+)/)) {
+			if (!/^[|:]+$/.test(piece)) segments.push({ text: piece, start: at });
+			at += piece.length;
+		}
+		return segments.filter((segment, i, all) => !(segment.text === "" && (i === 0 || i === all.length - 1)));
+	});
 	const count = Math.min(...perString.map((s) => s.length));
-	const bars: string[][] = [];
+	const bars: TabBar[] = [];
 	for (let b = 0; b < count; b++) {
 		const segments = perString.map((s) => s[b]);
-		const width = Math.max(...segments.map((s) => s.length));
-		bars.push(segments.map((s) => s.padEnd(width, "-")));
+		const width = Math.max(...segments.map((s) => s.text.length));
+		bars.push({
+			strings: segments.map((s) => s.text.padEnd(width, "-")),
+			rawStart: system[0].bodyStart + segments[0].start,
+		});
 	}
 	return bars;
 }
@@ -154,11 +211,40 @@ export function splitFretRun(run: string): FretRunPiece[] {
 	return pieces;
 }
 
+/** What a note's suffix mark means, with the bend height it names. */
+function readSuffix(
+	text: string,
+	fret: number,
+	warnBend: (text: string, frets: number) => void,
+): { length: number; technique: NonNullable<Technique>; bendTarget?: number } | null {
+	const m = NOTE_SUFFIX.exec(text);
+	if (!m) return null;
+	if (m[0].startsWith("~")) {
+		return { length: m[0].length, technique: m[0].length === 2 ? "vibrato-wide" : "vibrato" };
+	}
+	const pre = m[1] === "pb";
+	const release = m[4] !== undefined;
+	let semitones = 2;
+	if (m[2] !== undefined) semitones = 0.5;
+	else if (m[3] !== undefined) {
+		const diff = Number(m[3]) - fret;
+		if (diff === 1) semitones = 1;
+		else if (diff > 2) warnBend(m[0], diff);
+		// Anything else — the target written as the fret itself, or below it — reads as a full bend.
+	}
+	let technique: NonNullable<Technique>;
+	if (pre) technique = release ? "pre-bend-release" : "pre-bend";
+	else if (release) technique = "bend-release";
+	else technique = semitones === 0.5 ? "bend-quarter" : semitones === 1 ? "bend-half" : "bend-full";
+	return { length: m[0].length, technique, bendTarget: semitones };
+}
+
 /** The notes of one bar by the column they start in. */
 function notesByColumn(
 	bar: string[],
 	warnUnknown: (mark: string) => void,
 	warnSplit: (run: string, frets: readonly number[]) => void,
+	warnBend: (text: string, frets: number) => void,
 ): Map<number, GridNote[]> {
 	const byColumn = new Map<number, GridNote[]>();
 	const add = (col: number, note: GridNote) => {
@@ -176,31 +262,27 @@ function notesByColumn(
 				const pieces = splitFretRun(run);
 				if (pieces.length > 1) warnSplit(run, pieces.map((piece) => piece.fret));
 				const before = line[c - 1];
-				const after = line[end];
+				const last = pieces[pieces.length - 1];
+				const suffix = readSuffix(line.slice(end), last.fret, warnBend);
 				// A mark belongs to the note it touches: the one the run opens
 				// with, and the one it closes with.
 				pieces.forEach((piece, i) => {
 					const opening = i === 0 && before ? TECHNIQUE_BEFORE[before] : undefined;
-					const closing = i === pieces.length - 1 && after ? TECHNIQUE_AFTER[after] : undefined;
+					const closing = i === pieces.length - 1 && suffix ? suffix : undefined;
 					add(c + piece.offset, {
 						stringIndex,
 						fret: piece.fret,
 						muted: false,
-						technique: opening ?? closing ?? null,
+						technique: opening ?? closing?.technique ?? null,
+						...(!opening && closing?.bendTarget !== undefined ? { bendTarget: closing.bendTarget } : {}),
 					});
 				});
-				c = end;
+				c = end + (suffix?.length ?? 0);
 				continue;
 			}
 			if (ch === "x" || ch === "X") {
 				add(c, { stringIndex, fret: null, muted: true, technique: null });
-			} else if (
-				ch !== "-" &&
-				ch !== "(" &&
-				ch !== ")" &&
-				!(ch in TECHNIQUE_BEFORE) &&
-				!(ch in TECHNIQUE_AFTER)
-			) {
+			} else if (ch !== "-" && ch !== "(" && ch !== ")" && ch !== "~" && ch !== "b" && ch !== "r" && !(ch in TECHNIQUE_BEFORE)) {
 				warnUnknown(ch);
 			}
 			c += 1;
@@ -218,32 +300,40 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 	const warnings: ValidationIssue[] = [];
 	const unknownMarks = new Set<string>();
 	const splitRuns = new Map<string, string>();
+	const wideBends = new Map<string, number>();
 
 	// Labels settle which way up the system is: "e" on top is the usual way
 	// and the default; "E" on top with "e" at the bottom is written low-first.
-	const reversed = systems.some((s) => s[0].label === "E" && s[5].label === "e");
+	const reversed = systems.some((s) => s.lines[0].label === "E" && s.lines[5].label === "e");
 
 	const measures: { slots: DraftSlot[] }[] = [];
 	for (const system of systems) {
-		const oriented = reversed ? [...system].reverse() : system;
+		const oriented = reversed ? [...system.lines].reverse() : system.lines;
 		for (const bar of barsOf(oriented)) {
-			const width = bar[0].length;
+			const width = bar.strings[0].length;
 			if (width === 0) continue;
 			const byColumn = notesByColumn(
-				bar,
+				bar.strings,
 				(mark) => unknownMarks.add(mark),
 				(run, frets) => splitRuns.set(run, frets.join(", ")),
+				(text, frets) => wideBends.set(text, frets),
 			);
+			// A bracket under a column marks every note struck in it.
+			for (const run of system.brackets) {
+				for (const [column, notes] of byColumn) {
+					const raw = bar.rawStart + column;
+					if (raw >= run.start && raw < run.end) for (const note of notes) note[run.flag] = true;
+				}
+			}
 			const measureIndex = measures.length;
 
-			// A bar's width is its length. When the characters divide the bar
-			// into note values — a whole number of 32nds each — every column is
-			// a clean fraction of it; otherwise the nearest such fit is taken
-			// and the bar is flagged for checking.
-			const smallest = DURATION_TICKS["32nd"];
-			let unit = capacity / width;
-			if (!Number.isInteger(unit) || unit % smallest !== 0) {
-				unit = Math.max(smallest, Math.round(unit / smallest) * smallest);
+			// A bar's width is its length, and each note starts where its column
+			// falls in the bar. When the characters divide the bar into note
+			// values — a whole number of 32nds each — every column lands exactly;
+			// otherwise the onsets are read to the nearest 32nd and the bar is
+			// flagged for checking. Either way the bar adds up.
+			const unit = capacity / width;
+			if (!Number.isInteger(unit) || unit % DURATION_TICKS["32nd"] !== 0) {
 				warnings.push({
 					code: "ASCII_UNEVEN_BAR",
 					path: `measures[${measureIndex}]`,
@@ -251,12 +341,12 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 				});
 			}
 
-			const { slots, overflow } = barSlots(byColumn, width, unit, capacity);
+			const { slots, overflow } = barSlots(byColumn, width, capacity);
 			if (overflow) {
 				warnings.push({
 					code: "ASCII_BAR_OVERFLOW",
 					path: `measures[${measureIndex}]`,
-					message: `Bar ${measureIndex + 1} ran past ${timeSignature[0]}/${timeSignature[1]} — what did not fit was dropped.`,
+					message: `Bar ${measureIndex + 1} has more notes than a bar of ${timeSignature[0]}/${timeSignature[1]} can start on 32nds — the ones past its end were dropped.`,
 				});
 			}
 			measures.push({ slots });
@@ -272,6 +362,16 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 			message: `"${run}" sits on one string with nothing between the frets — it was read as ${frets}.`,
 			original: run,
 			repairedTo: frets,
+		});
+	}
+
+	for (const [text, frets] of wideBends) {
+		warnings.push({
+			code: "ASCII_BEND_CLAMPED",
+			path: "",
+			message: `"${text}" bends ${frets} frets up — the app plays bends up to a whole tone, so it was read as a full bend.`,
+			original: text,
+			repairedTo: "bend-full",
 		});
 	}
 

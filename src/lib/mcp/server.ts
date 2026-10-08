@@ -15,6 +15,7 @@ import { chordAbbreviation, progressionCapo } from "@/lib/strumProgressions";
 import { MAX_MEASURES, type ValidationIssue } from "@/lib/tabImport";
 import { patternToAsciiTab } from "./asciiTab";
 import { IMPORT_TAB_SHAPE, importTab, patternToImportBars } from "./importTab";
+import { PROPOSABLE_TECHNIQUES } from "@/lib/assistant/tab/buildTabDraft";
 
 /**
  * The Guitar Pal MCP server (#308): compose in Claude, play in Guitar Pal.
@@ -217,10 +218,18 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 										fret: z.number().int().min(0).max(24).describe("0 (open) to 24."),
 										slot: z.number().int().min(0).describe("Which slot of this bar, counting from 0. The last is slotsPerBar - 1."),
 										technique: z
-											.enum(["hammer-on", "pull-off", "slide-up", "slide-down"])
+											.enum(PROPOSABLE_TECHNIQUES)
 											.optional()
-											.describe("How the note is reached, when it is not picked."),
+											.describe(
+												"How the note is reached when it is not picked (hammer-on, pull-off, slide-up, slide-down), or what is done to it once struck (bend-quarter, bend-half, bend-full, bend-release, pre-bend, pre-bend-release, vibrato, vibrato-wide).",
+											),
 										muted: z.boolean().optional().describe("A dead note — struck, not sounded."),
+										bendTarget: z
+											.union([z.literal(0.5), z.literal(1), z.literal(2)])
+											.optional()
+											.describe("With bend-release, pre-bend or pre-bend-release: how far the bend goes, 0.5 (¼ tone), 1 (½) or 2 (full). A full tone when left out."),
+										palmMute: z.boolean().optional().describe("Palm-muted (P.M.); mark every note under the bracket."),
+										letRing: z.boolean().optional().describe("Let ring; mark every note under the bracket."),
 									}),
 								)
 								.max(6 * 96)

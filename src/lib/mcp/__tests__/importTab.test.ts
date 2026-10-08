@@ -179,6 +179,29 @@ describe("patternToImportBars", () => {
 		);
 	});
 
+	it("carries bends, their heights and the bracket flags both ways", () => {
+		const bars: ImportBar[] = [
+			{
+				slots: [
+					{ duration: "quarter", notes: [{ string: 3, fret: 7, technique: "bend-full" }] },
+					{ duration: "quarter", notes: [{ string: 3, fret: 7, technique: "pre-bend-release", bendTarget: 0.5 }] },
+					{ duration: "quarter", notes: [{ string: 5, fret: 0, palmMute: true }] },
+					{ duration: "quarter", notes: [{ string: 1, fret: 3, technique: "vibrato", letRing: true }] },
+				],
+			},
+		];
+		const first = importTab(input({ bars }), INDEX);
+		expect(first.ok).toBe(true);
+		if (!first.ok) return;
+		const strings = first.pattern.measures[0].slots.map((s) => s.strings);
+		expect(strings[0][2]).toMatchObject({ fret: 7, technique: "bend-full" });
+		expect(strings[1][2]).toMatchObject({ fret: 7, technique: "pre-bend-release", bendTarget: 0.5 });
+		expect(strings[2][4]).toMatchObject({ fret: 0, palmMute: true });
+		expect(strings[3][0]).toMatchObject({ fret: 3, technique: "vibrato", letRing: true });
+		expect(first.warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
+		expect(patternToImportBars(first.pattern)).toEqual(bars);
+	});
+
 	it("writes every preset as bars the tool takes back", () => {
 		for (const preset of PRESET_FINGERPICK_PATTERNS) {
 			const bars = patternToImportBars(preset);

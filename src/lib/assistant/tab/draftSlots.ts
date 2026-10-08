@@ -14,7 +14,15 @@ import { splitTicks } from "@/lib/assistant/tab/ticks";
  */
 
 /** A note on its string, before it has a place in the bar. */
-export interface GridNote {
+/** What a note can carry besides its fret: a bend's height, the brackets over it. */
+export interface NoteMarks {
+	/** Semitones for the release / pre-bend variants (0.5, 1, 2). */
+	bendTarget?: number;
+	palmMute?: boolean;
+	letRing?: boolean;
+}
+
+export interface GridNote extends NoteMarks {
 	/** 0 = high e, 5 = low E — the fingerpick order the editor stores. */
 	stringIndex: number;
 	fret: number | null;
@@ -22,7 +30,7 @@ export interface GridNote {
 	technique: Technique;
 }
 
-export interface DraftStringFret {
+export interface DraftStringFret extends NoteMarks {
 	fret: number | null;
 	technique: Technique;
 	tied: boolean;
@@ -73,6 +81,9 @@ export function barSlots(
 						technique: note.technique,
 						tied: false,
 						muted: note.muted,
+						...(note.bendTarget !== undefined ? { bendTarget: note.bendTarget } : {}),
+						...(note.palmMute ? { palmMute: true } : {}),
+						...(note.letRing ? { letRing: true } : {}),
 					};
 				}
 			} else {

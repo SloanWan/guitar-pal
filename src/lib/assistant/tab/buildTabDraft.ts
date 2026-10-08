@@ -23,6 +23,12 @@ export interface ProposedNote {
 	/** Which slot of its bar the note falls on, counting from 0. */
 	slot: number;
 	technique?: string;
+	/** For bend-release, pre-bend and pre-bend-release: 0.5, 1 or 2 semitones; a full tone when left out. */
+	bendTarget?: number;
+	/** Palm-muted (P.M.) — the bracket spans consecutive notes that carry it. */
+	palmMute?: boolean;
+	/** Let ring — likewise. */
+	letRing?: boolean;
 	/** A dead note: struck but not sounded. The fret is ignored. */
 	muted?: boolean;
 }
@@ -41,13 +47,32 @@ export type BuildTabDraftResult =
 	| { ok: true; draft: ImportedTabDraft }
 	| { ok: false; error: string };
 
-/** The techniques a slot grid can carry, named the way the model is told to name them. */
-const TECHNIQUES: Record<string, NonNullable<Technique>> = {
-	"hammer-on": "hammer-on",
-	"pull-off": "pull-off",
-	"slide-up": "slide-up",
-	"slide-down": "slide-down",
-};
+/**
+ * The techniques a slot grid can carry, named the way the model is told to
+ * name them: the four that connect from the previous note, and the eight done
+ * on the note itself (the bend family and vibrato), which the tab draws and
+ * the player voices.
+ */
+export const PROPOSABLE_TECHNIQUES = [
+	"hammer-on",
+	"pull-off",
+	"slide-up",
+	"slide-down",
+	"bend-quarter",
+	"bend-half",
+	"bend-full",
+	"bend-release",
+	"pre-bend",
+	"pre-bend-release",
+	"vibrato",
+	"vibrato-wide",
+] as const;
+const TECHNIQUES: Record<string, NonNullable<Technique>> = Object.fromEntries(
+	PROPOSABLE_TECHNIQUES.map((t) => [t, t]),
+) as Record<string, NonNullable<Technique>>;
+
+/** Bend heights the editor offers, in semitones. */
+const BEND_TARGETS = [0.5, 1, 2] as const;
 
 /**
  * The slot counts that divide a bar of this meter into one plain note value
@@ -107,6 +132,9 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 			if (note.technique && !technique) {
 				return { ok: false, error: `"${note.technique}" is not a technique this app draws. Use ${Object.keys(TECHNIQUES).join(", ")}, or leave it out.` };
 			}
+			if (note.bendTarget !== undefined && !BEND_TARGETS.includes(note.bendTarget as (typeof BEND_TARGETS)[number])) {
+				return { ok: false, error: `${where} has a bendTarget of ${note.bendTarget}; use 0.5 (¼), 1 (½) or 2 (full).` };
+			}
 			const seat = `${note.slot}:${note.string}`;
 			if (taken.has(seat)) {
 				return { ok: false, error: `${where} puts two notes on string ${note.string} at slot ${note.slot}. A string sounds one note at a time.` };
@@ -120,6 +148,9 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 				fret: note.muted ? null : note.fret,
 				muted: note.muted === true,
 				technique,
+				...(note.bendTarget !== undefined ? { bendTarget: note.bendTarget } : {}),
+				...(note.palmMute ? { palmMute: true } : {}),
+				...(note.letRing ? { letRing: true } : {}),
 			});
 			byPosition.set(note.slot, at);
 		}

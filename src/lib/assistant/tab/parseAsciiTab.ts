@@ -327,14 +327,13 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 			}
 			const measureIndex = measures.length;
 
-			// A bar's width is its length. When the characters divide the bar
-			// into note values — a whole number of 32nds each — every column is
-			// a clean fraction of it; otherwise the nearest such fit is taken
-			// and the bar is flagged for checking.
-			const smallest = DURATION_TICKS["32nd"];
-			let unit = capacity / width;
-			if (!Number.isInteger(unit) || unit % smallest !== 0) {
-				unit = Math.max(smallest, Math.round(unit / smallest) * smallest);
+			// A bar's width is its length, and each note starts where its column
+			// falls in the bar. When the characters divide the bar into note
+			// values — a whole number of 32nds each — every column lands exactly;
+			// otherwise the onsets are read to the nearest 32nd and the bar is
+			// flagged for checking. Either way the bar adds up.
+			const unit = capacity / width;
+			if (!Number.isInteger(unit) || unit % DURATION_TICKS["32nd"] !== 0) {
 				warnings.push({
 					code: "ASCII_UNEVEN_BAR",
 					path: `measures[${measureIndex}]`,
@@ -342,12 +341,12 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 				});
 			}
 
-			const { slots, overflow } = barSlots(byColumn, width, unit, capacity);
+			const { slots, overflow } = barSlots(byColumn, width, capacity);
 			if (overflow) {
 				warnings.push({
 					code: "ASCII_BAR_OVERFLOW",
 					path: `measures[${measureIndex}]`,
-					message: `Bar ${measureIndex + 1} ran past ${timeSignature[0]}/${timeSignature[1]} — what did not fit was dropped.`,
+					message: `Bar ${measureIndex + 1} has more notes than a bar of ${timeSignature[0]}/${timeSignature[1]} can start on 32nds — the ones past its end were dropped.`,
 				});
 			}
 			measures.push({ slots });

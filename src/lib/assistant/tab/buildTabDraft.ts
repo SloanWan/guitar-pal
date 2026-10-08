@@ -110,7 +110,6 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 	}
 
 	const capacity = measureCapacity(timeSignature);
-	const slotTicks = capacity / slotsPerBar;
 	const measures: { slots: ReturnType<typeof barSlots>["slots"] }[] = [];
 
 	for (const [index, bar] of bars.entries()) {
@@ -156,7 +155,7 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 		}
 
 		// A bar is exactly its slots, so `barSlots` cannot overflow here.
-		measures.push({ slots: barSlots(byPosition, slotsPerBar, slotTicks, capacity).slots });
+		measures.push({ slots: barSlots(byPosition, slotsPerBar, capacity).slots });
 	}
 
 	return { ok: true, draft: { timeSignature, measures } };

@@ -148,6 +148,22 @@ describe("parseAsciiTab", () => {
 		expect(parsed.warnings.filter((w) => w.code === "ASCII_UNKNOWN_MARK")).toEqual([]);
 	});
 
+	it("keeps every note of a bar whose width does not divide the meter, and still fills the bar", () => {
+		// 23 columns: four marked notes whose marks widen the bar unevenly.
+		const text = ["e|7b9--7b8r--7pb9r--7b¼--|", ..."BGDAE".split("").map((l) => `${l}|${"-".repeat(23)}|`)].join("\n");
+		const parsed = ok(text);
+		const slots = slotsOf(parsed);
+		expect(slots.filter((s) => !s.isRest).map((s) => s.strings[0].technique)).toEqual(["bend-full", "bend-release", "pre-bend-release", "bend-quarter"]);
+		const ticks = { whole: 96, half: 48, "dotted-quarter": 36, quarter: 24, "dotted-eighth": 18, eighth: 12, sixteenth: 6, "32nd": 3 } as Record<string, number>;
+		expect(slots.reduce((sum, s) => sum + ticks[s.duration], 0)).toBe(96);
+		expect(parsed.warnings.map((w) => w.code)).toEqual(["ASCII_UNEVEN_BAR"]);
+		// 40 columns, thirty-six open notes: more than a bar has 32nds, so the tail is dropped and said so.
+		const dense = ["e|" + "0".repeat(36) + "----|", ..."BGDAE".split("").map((l) => `${l}|${"-".repeat(40)}|`)].join("\n");
+		const packed = ok(dense);
+		expect(slotsOf(packed).filter((s) => !s.isRest)).toHaveLength(32);
+		expect(packed.warnings.map((w) => w.code)).toContain("ASCII_BAR_OVERFLOW");
+	});
+
 	it("reads a bend wider than a whole tone as full, and says so", () => {
 		const text = ["e|7b10----|", "B|--------|", "G|--------|", "D|--------|", "A|--------|", "E|--------|"].join("\n");
 		const parsed = ok(text);
@@ -217,25 +233,16 @@ describe("parseAsciiTab", () => {
 			timeSignature: [4, 4],
 			measures: [
 				{ id: "m1", slots: [
-					// Two-digit frets: the preview's columns then add up to a bar width
-					// the reader's spacing guess keeps whole (it is a preview, not a
-					// storage format, so an uneven width can cost it the last note).
-					slot({ 2: { fret: 12, technique: "bend-full", bendTarget: 2 } }),
-					slot({ 2: { fret: 12, technique: "bend-release", bendTarget: 1 } }),
-					slot({ 2: { fret: 12, technique: "pre-bend-release", bendTarget: 2 } }),
-					slot({ 2: { fret: 12, technique: "bend-quarter", bendTarget: 0.5 } }),
+					slot({ 2: { fret: 7, technique: "bend-full", bendTarget: 2 } }),
+					slot({ 2: { fret: 7, technique: "bend-release", bendTarget: 1 } }),
+					slot({ 2: { fret: 7, technique: "pre-bend-release", bendTarget: 2 } }),
+					slot({ 2: { fret: 7, technique: "bend-quarter", bendTarget: 0.5 } }),
 				] },
-				// Eighths with empty slots between: the "let ring" label widens its
-				// column, and the extra columns keep the bar's width whole for the reader.
 				{ id: "m2", slots: [
-					slot({ 4: { fret: 0, palmMute: true } }, "eighth"),
-					slot({ 4: { fret: 0, palmMute: true } }, "eighth"),
-					slot({ 0: { fret: 3, technique: "vibrato-wide", letRing: true } }, "eighth"),
-					slot({ 0: { fret: 3, technique: "vibrato", letRing: true } }, "eighth"),
-					slot({}, "eighth"),
-					slot({}, "eighth"),
-					slot({}, "eighth"),
-					slot({}, "eighth"),
+					slot({ 4: { fret: 0, palmMute: true } }),
+					slot({ 4: { fret: 0, palmMute: true } }),
+					slot({ 0: { fret: 3, technique: "vibrato-wide", letRing: true } }),
+					slot({ 0: { fret: 3, technique: "vibrato", letRing: true } }),
 				] },
 			],
 		};
@@ -248,10 +255,10 @@ describe("parseAsciiTab", () => {
 					return [n.fret, n.technique, n.bendTarget ?? null, n.palmMute === true, n.letRing === true];
 				});
 		expect(marks(0, 2)).toEqual([
-			[12, "bend-full", 2, false, false],
-			[12, "bend-release", 1, false, false],
-			[12, "pre-bend-release", 2, false, false],
-			[12, "bend-quarter", 0.5, false, false],
+			[7, "bend-full", 2, false, false],
+			[7, "bend-release", 1, false, false],
+			[7, "pre-bend-release", 2, false, false],
+			[7, "bend-quarter", 0.5, false, false],
 		]);
 		expect(marks(1, 4).slice(0, 2)).toEqual([[0, null, null, true, false], [0, null, null, true, false]]);
 		expect(marks(1, 0).slice(2)).toEqual([[3, "vibrato-wide", null, false, true], [3, "vibrato", null, false, true]]);

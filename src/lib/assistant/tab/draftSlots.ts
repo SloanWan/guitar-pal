@@ -49,24 +49,37 @@ export function emptyStrings(): DraftStringFret[] {
 
 export interface BarSlotsResult {
 	slots: DraftSlot[];
-	/** The grid asked for more than the bar holds; the rest was dropped. */
+	/** More onsets than the bar has 32nds to start them on; the rest was dropped. */
 	overflow: boolean;
 }
 
 /**
- * `byPosition` keys are positions on the grid, `positions` is how many the bar
- * has, and `positionTicks` is what one is worth. A bar is filled to `capacity`
- * and no further: anything past it is dropped and reported.
+ * `byPosition` keys are positions on the grid and `positions` is how many the
+ * bar has. Each onset is placed where its position falls in the bar, on the
+ * 32nd grid, and a note lasts until the next onset or the bar's end — so the
+ * bar always adds up to `capacity`, whatever its width in positions. A grid
+ * that divides the bar evenly lands exactly; one that does not is read to the
+ * nearest 32nd. Two onsets that would share a 32nd are kept apart, which can
+ * push the last ones past the bar: those are dropped and reported.
  */
 export function barSlots(
 	byPosition: ReadonlyMap<number, readonly GridNote[]>,
 	positions: number,
-	positionTicks: number,
 	capacity: number,
 ): BarSlotsResult {
 	const onsets = [...byPosition.keys()].sort((a, b) => a - b);
 	const slots: DraftSlot[] = [];
 	let used = 0;
+	const step = DURATION_TICKS["32nd"];
+	const starts: number[] = [];
+	let prev = -step;
+	for (const position of onsets) {
+		let tick = Math.round((position / positions) * capacity / step) * step;
+		if (tick <= prev) tick = prev + step;
+		starts.push(tick);
+		prev = tick;
+	}
+	const kept = starts.filter((tick) => tick < capacity).length;
 
 	const push = (durations: Duration[], first: readonly GridNote[] | null) => {
 		durations.forEach((duration, i) => {
@@ -93,16 +106,15 @@ export function barSlots(
 		});
 	};
 
-	if (onsets.length === 0 || onsets[0] > 0) {
-		push(splitTicks((onsets[0] ?? positions) * positionTicks), null);
+	if (kept === 0 || starts[0] > 0) {
+		push(splitTicks(kept === 0 ? capacity : starts[0]), null);
 	}
-	onsets.forEach((position, i) => {
-		const next = onsets[i + 1] ?? positions;
-		push(splitTicks((next - position) * positionTicks), byPosition.get(position)!);
-	});
+	for (let i = 0; i < kept; i++) {
+		const next = i + 1 < kept ? starts[i + 1] : capacity;
+		push(splitTicks(next - starts[i]), byPosition.get(onsets[i])!);
+	}
 
-	const overflow = positions * positionTicks > capacity;
 	if (used < capacity) push(splitTicks(capacity - used), null);
 	if (slots.length === 0) push(splitTicks(capacity), null);
-	return { slots, overflow };
+	return { slots, overflow: kept < onsets.length };
 }

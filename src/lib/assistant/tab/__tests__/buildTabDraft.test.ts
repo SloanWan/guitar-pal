@@ -144,7 +144,7 @@ describe("buildTabDraft", () => {
 
 	it("refuses a link or an effect it cannot draw, and takes the ones it can", () => {
 		refuses({ slotsPerBar: 8, bars: [{ notes: [note(1, 5, 0, { link: "glide" })] }], timeSignature: [4, 4] }, /not a link/);
-		refuses({ slotsPerBar: 8, bars: [{ notes: [note(1, 5, 0, { effects: { whammy: { kind: "dive" } } })] }], timeSignature: [4, 4] }, /"whammy" is not an effect/);
+		refuses({ slotsPerBar: 8, bars: [{ notes: [note(1, 5, 0, { effects: { flutter: true } })] }], timeSignature: [4, 4] }, /"flutter" is not an effect/);
 		const bar = measures(
 			buildTabDraft({
 				slotsPerBar: 8,

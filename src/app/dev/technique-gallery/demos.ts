@@ -85,12 +85,14 @@ function effectDemo(kind: EffectKind): FingerpickPattern {
 }
 
 function spanDemo(kind: SpanKind): FingerpickPattern {
+	// A slur shows its legato: the third note is hammered under the curve.
+	const third = kind === "slur" ? note(4, { link: { kind: "hammer" } }) : note(2);
 	return base(
 		kind,
 		[
 			slot(`${kind}-1`, { [A]: note(0), [G]: note(2) }),
 			slot(`${kind}-2`, { [A]: note(0), [G]: note(2) }),
-			slot(`${kind}-3`, { [A]: note(0), [G]: note(2) }),
+			slot(`${kind}-3`, { [A]: note(0), [G]: third }),
 			slot(`${kind}-4`, { [A]: note(0), [G]: note(2) }),
 		],
 		{ spans: [{ id: spanIdFor(kind, `${kind}-2`), kind, from: `${kind}-2`, to: `${kind}-3` }] },
@@ -113,24 +115,24 @@ const NOTES: Partial<Record<string, { en: string; zh: string }>> = {
 	slide: { en: "The sounding note glides from 5 up to 7 — one attack, moving pitch.", zh: "正在响的音从 5 品滑到 7 品：一次起音，音高在动。" },
 	bend: { en: "A full-tone bend that comes back down; the arrow shows the height.", zh: "推高一个全音再放回；箭头标出高度。" },
 	vibrato: { en: "Wide vibrato: the pitch wobbles above the fretted note.", zh: "大幅揉弦：音高在按品音之上来回。" },
-	harmonic: { en: "N.H. at the 12th: drawn, not yet voiced.", zh: "12 品自然泛音：有记号，暂无音频。" },
-	tap: { en: "T: a tapped note, no pick attack, at the tapping gain.", zh: "T：点弦，没有拨弦起音，用点弦音量。" },
-	trill: { en: "tr~~~: played at the legato gain through the lowpass.", zh: "tr~~~：以连奏音量经低通播放。" },
+	harmonic: { en: "<12> N.H.: the octave partial, bright and short, with the string's body filtered out.", zh: "<12> 自然泛音：高八度的泛音，明亮而短，滤掉弦的基频。" },
+	tap: { en: "T: a tapped note — the sample starts past its pick transient, eases in, and is lighter.", zh: "T：点弦——跳过采样的拨片瞬态、渐入，并且更轻。" },
+	trill: { en: "tr~~~: the note alternates with the fret above ten times a second, hammered and pulled.", zh: "tr~~~：与上一品每秒交替十次，击弦上去、勾弦回来。" },
 	tremolo: { en: "Tremolo at 16ths: the note is struck four times a beat, every second stroke a touch softer.", zh: "十六分震音：一拍内击弦四次，隔次稍轻。" },
 	pick: { en: "A pick-direction mark; no change to the sound.", zh: "拨片方向记号；声音不变。" },
 	accent: { en: ">: louder.", zh: ">：更响。" },
 	staccato: { en: "·: the note lasts a fifth of its slot.", zh: "·：音只响时值的五分之一。" },
 	ghost: { en: "(7): drawn in parentheses, played at the ghost gain.", zh: "(7)：括号记号，用虚音音量。" },
-	slideIn: { en: "A slide into the note from below: drawn, not yet voiced.", zh: "从下方滑入：有记号，暂无音频。" },
-	slideOut: { en: "A slide out of the note downwards: drawn, not yet voiced.", zh: "向下滑出：有记号，暂无音频。" },
-	whammy: { en: "Whammy dive: neither drawn nor voiced yet.", zh: "摇把下潜：尚未绘制或发声。" },
-	scrape: { en: "Pick scrape: neither drawn nor voiced yet.", zh: "拨片刮弦：尚未绘制或发声。" },
+	slideIn: { en: "A slide into the note from two frets below: the pitch glides up to it as it is struck.", zh: "从下方两品滑入：起音时音高滑上来。" },
+	slideOut: { en: "A slide out of the note downwards: the pitch leaves and the note fades with it.", zh: "向下滑出：音高离开，音随之淡出。" },
+	whammy: { en: "w/bar dive: the whole note drops an octave on the bar; the dashed line shows the depth.", zh: "摇把下潜：整个音用摇把降一个八度；虚线标出深度。" },
+	scrape: { en: "P.S.: a pick scrape — noise swept down the strings, no pitch.", zh: "P.S.：拨片刮弦——沿弦向下扫的噪声，没有音高。" },
 	palmMute: { en: "Beats 2 and 3 under P.M.: damped, dull and short.", zh: "第 2、3 拍在 P.M. 下：闷、暗、短。" },
 	letRing: { en: "Beats 2 and 3 ring on into the next note.", zh: "第 2、3 拍延音到下一个音。" },
-	slur: { en: "A slur span: nothing drawn or voiced yet.", zh: "连音线 span：尚未绘制或发声。" },
+	slur: { en: "One slur over beats 2 and 3: the second note is played legato, no separate arc.", zh: "一条连音线覆盖第 2、3 拍：第二个音连奏，不再单独画弧。" },
 	slap: { en: "Beats 2 and 4 are a slap across the strings, the second accented.", zh: "第 2、4 拍拍弦，第二次带重音。" },
 	thumbSlap: { en: "A thumb slap strikes the bass strings dead.", zh: "拇指拍弦闷击低音弦。" },
-	bodyTap: { en: "A tap on the body: drawn as B, not yet voiced.", zh: "打板：画作 B，暂无音频。" },
+	bodyTap: { en: "A knock on the body: a low thump, drawn as B.", zh: "打板：低沉的一记闷响，画作 B。" },
 };
 
 function demoFor(def: TechniqueDef): FingerpickPattern {

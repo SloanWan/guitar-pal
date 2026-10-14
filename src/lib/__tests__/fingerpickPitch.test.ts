@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { makeEmptySlot } from "@/lib/fingerpickEdit";
 import {
+	harmonicShift,
 	JIANPU_DOT_ABOVE,
 	JIANPU_DOT_BELOW,
 	OPEN_STRING_MIDI,
@@ -146,5 +147,28 @@ describe("slotPitchLabels", () => {
 		grace.isGraceNote = true;
 		grace.strings[5] = { fret: 3, muted: false };
 		expect(slotPitchLabels(grace, scientific)).toEqual([]);
+	});
+});
+
+describe("harmonicShift", () => {
+	it("reads the node table for a natural harmonic and the touch fret for an artificial one", () => {
+		expect(harmonicShift({ type: "natural" }, 12)).toBe(12);
+		expect(harmonicShift({ type: "natural" }, 7)).toBe(19);
+		expect(harmonicShift({ type: "natural" }, 5)).toBe(24);
+		expect(harmonicShift({ type: "natural" }, 8)).toBe(12);
+		expect(harmonicShift({ type: "artificial", touchFret: 12 }, 5)).toBe(19);
+		expect(harmonicShift({ type: "artificial" }, 5)).toBe(12);
+		expect(harmonicShift({ type: "pinch" }, 5)).toBe(12);
+	});
+
+	it("labels a harmonic by the pitch it sounds", () => {
+		const slot = makeEmptySlot("quarter");
+		slot.strings[2] = { fret: 12, muted: false, effects: { harmonic: { type: "natural" } } };
+		const shifts: number[] = [];
+		slotPitchLabels(slot, (_s, _f, shift) => {
+			shifts.push(shift ?? 0);
+			return "";
+		});
+		expect(shifts).toEqual([12]);
 	});
 });

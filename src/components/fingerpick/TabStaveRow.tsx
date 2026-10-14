@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Renderer, TabStave, Voice, Formatter, Beam, Barline, StemmableNote } from "vexflow";
+import {
+	Renderer,
+	TabStave,
+	Voice,
+	Formatter,
+	Beam,
+	Barline,
+	StemmableNote,
+} from "vexflow";
 
 import { Measure } from "@/lib/fingerpickTypes";
 import {
@@ -14,6 +22,9 @@ import {
 	type HitMark,
 	type LeadIn,
 	type RenderContext,
+	type SlideMark,
+	type WhammyMark,
+	type SlurSegment,
 } from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 import { slotPitchLabels, splitPitchLabel, type SlotPitchLabel } from "@/lib/fingerpickPitch";
@@ -85,6 +96,16 @@ const HIT_BASELINE_OFFSET = 30;
 const HOLD_LINE_RISE = 30;
 const HOLD_LINE_START = 28;
 const LEAD_IN_REACH = 14;
+// A slide into / out of a note: a short slanted line beside the number.
+const SLIDE_MARK_REACH = 12;
+// A whammy dive: a dashed line under the stave falling to the bar's depth,
+// labelled; a pull rises instead. A slur: an arc over its notes, above the
+// stave, clear of the bracket line.
+const WHAMMY_LINE_BELOW = 10;
+const WHAMMY_LINE_DROP = 14;
+const WHAMMY_FONT_SIZE = 9;
+const SLUR_RISE = 14;
+const SLUR_HEIGHT = 9;
 // Extra room for a repeat-begin (|:) / repeat-end (:|) barline's thick line + dots.
 const REPEAT_BARLINE_EXTRA_WIDTH = 14;
 // A roll arrow sits left of its note; a slot needs this much more so it never
@@ -156,7 +177,7 @@ interface TabStaveRowProps {
 	 * (fingerpick order, 0 = high e) and its written fret, the label to draw.
 	 * Given, the stave grows footroom for the column.
 	 */
-	pitchLabel?: (stringIndex: number, fret: number) => string;
+	pitchLabel?: (stringIndex: number, fret: number, shift?: number) => string;
 	/**
 	 * The pattern's index (`indexPattern`), so spans crossing a barline are
 	 * drawn as one bracket per measure and a link into a row's first note gets
@@ -526,6 +547,72 @@ function drawLeadIn(svgEl: SVGSVGElement, x: number, y: number, kind: LeadIn["ki
 	svgEl.appendChild(path);
 }
 
+/** A slide into (left of) or out of (right of) a number, rising or falling by where the pitch comes from or goes. */
+function drawSlideMark(svgEl: SVGSVGElement, x: number, y: number, mark: SlideMark): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	path.setAttribute("class", "vf-slide-mark");
+	// A slide in from below rises into the number; out to below falls away from it.
+	const farY = mark.direction === "below" ? y + 5 : y - 5;
+	const near = mark.side === "in" ? x - 5 : x + 9;
+	const far = mark.side === "in" ? x - 5 - SLIDE_MARK_REACH : x + 9 + SLIDE_MARK_REACH;
+	path.setAttribute("d", `M ${far} ${farY} L ${near} ${y}`);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--ink)");
+	path.setAttribute("stroke-width", "1");
+	svgEl.appendChild(path);
+}
+
+/** A whammy-bar dive (falling) or pull (rising): a dashed line from the note to the next, its depth in semitones at the end. */
+function drawWhammy(svgEl: SVGSVGElement, x1: number, x2: number, y: number, mark: WhammyMark): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const g = document.createElementNS(ns, "g");
+	g.setAttribute("class", "vf-whammy");
+	const yEnd = mark.kind === "dive" ? y + WHAMMY_LINE_DROP : y - WHAMMY_LINE_DROP;
+	const line = document.createElementNS(ns, "path");
+	line.setAttribute("d", `M ${x1} ${y} L ${x2} ${yEnd}`);
+	line.setAttribute("fill", "none");
+	line.setAttribute("stroke", "var(--ink)");
+	line.setAttribute("stroke-width", "1");
+	line.setAttribute("stroke-dasharray", "4 3");
+	g.appendChild(line);
+	const text = document.createElementNS(ns, "text");
+	text.setAttribute("x", String(x2 + 2));
+	text.setAttribute("y", String(yEnd + 3));
+	text.setAttribute("font-family", MONO_FAMILY);
+	text.setAttribute("font-size", `${WHAMMY_FONT_SIZE}px`);
+	text.setAttribute("fill", "var(--ink-dim)");
+	text.textContent = mark.label;
+	g.appendChild(text);
+	svgEl.appendChild(g);
+}
+
+/** A slur: one arc over its notes, from the first number to the last. */
+function drawSlur(svgEl: SVGSVGElement, x1: number, x2: number, y: number): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	path.setAttribute("class", "vf-slur");
+	const mid = (x1 + x2) / 2;
+	path.setAttribute("d", `M ${x1} ${y} Q ${mid} ${y - SLUR_HEIGHT * 2} ${x2} ${y}`);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--ink)");
+	path.setAttribute("stroke-width", "1.2");
+	svgEl.appendChild(path);
+}
+
+/** A pick scrape: a heavy diagonal across the six lines at the note. */
+function drawScrape(svgEl: SVGSVGElement, x: number, yTop: number, yBottom: number): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	path.setAttribute("class", "vf-scrape");
+	path.setAttribute("d", `M ${x - 7} ${yBottom + 1} L ${x + 7} ${yTop}`);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--ink)");
+	path.setAttribute("stroke-width", "2.5");
+	path.setAttribute("stroke-linecap", "round");
+	svgEl.appendChild(path);
+}
+
 /**
  * A palm-mute / let-ring bracket: its label at the run's first note, then a
  * dashed line to the last note with a short tick down at the end. `y` is the
@@ -701,12 +788,16 @@ export default function TabStaveRow({
 				hits: HitMark[];
 				holds: number[];
 				leadIns: LeadIn[];
+				slideMarks: SlideMark[];
+				whammies: WhammyMark[];
+				scrapes: number[];
+				slurs: SlurSegment[];
 				stave: TabStave;
 			}[] = [];
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, holds, leadIns, noteStrings, noteSlots } =
+				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, slurs, noteStrings, noteSlots } =
 					fingerpickToVexFlow(measure, renderContext);
-				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, holds, leadIns, stave: staves[i] });
+				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, slurs, stave: staves[i] });
 				const voice = new Voice({ numBeats: timeSignature[0], beatValue: timeSignature[1] }).setMode(
 					Voice.Mode.SOFT,
 				);
@@ -718,6 +809,7 @@ export default function TabStaveRow({
 				connectors.forEach((c) => c.setContext(ctx).draw());
 				beams.forEach((b) => b.setContext(ctx).draw());
 				tuplets.forEach((t) => t.setContext(ctx).draw());
+
 
 				// Chord symbols want the x of the note where the chord changes (known
 				// only now, after formatting); they are drawn once the whole row is
@@ -818,7 +910,7 @@ export default function TabStaveRow({
 			// measure opens a row; one that goes on past the measure runs to the
 			// barline and leaves its closing tick to the segment after.
 			if (svgEl) {
-				drawn.forEach(({ notes, brackets, hits, holds, leadIns, stave }, i) => {
+				drawn.forEach(({ notes, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, slurs, stave }, i) => {
 					const y = stave.getYForLine(0) - BRACKET_BASELINE_OFFSET;
 					brackets.forEach(({ kind, fromNoteIndex, toNoteIndex, continuesBefore, continuesAfter }) => {
 						const x1 = notes[fromNoteIndex].getAbsoluteX() - 4;
@@ -838,6 +930,31 @@ export default function TabStaveRow({
 					});
 					leadIns.forEach(({ noteIndex, stringIndex, kind }) => {
 						drawLeadIn(svgEl, notes[noteIndex].getAbsoluteX(), stave.getYForLine(stringIndex), kind);
+					});
+					slideMarks.forEach((mark) => {
+						drawSlideMark(svgEl, notes[mark.noteIndex].getAbsoluteX(), stave.getYForLine(mark.stringIndex), mark);
+					});
+					// A whammy line sits under the stave, a dive falling and a pull rising,
+					// from the note to the next.
+					const whammyY = stave.getYForLine(5) + WHAMMY_LINE_BELOW;
+					whammies.forEach((mark) => {
+						const x1 = notes[mark.noteIndex].getAbsoluteX() + 2;
+						const next = notes[mark.noteIndex + 1];
+						// Stop short of the next stem so the depth label has room before it.
+						const x2 = next ? next.getAbsoluteX() - 26 : stave.getNoteEndX() - 26;
+						if (x2 > x1) drawWhammy(svgEl, x1, x2, mark.kind === "dive" ? whammyY : whammyY + WHAMMY_LINE_DROP, mark);
+					});
+					// A slur: one arc over its notes. A segment carried over from the
+					// previous measure starts from its first note here; one that goes on
+					// ends on its last — the next measure's segment continues it.
+					const slurY = stave.getYForLine(0) - SLUR_RISE;
+					slurs.forEach(({ fromNoteIndex, toNoteIndex }) => {
+						const x1 = notes[fromNoteIndex].getAbsoluteX();
+						const x2 = notes[toNoteIndex].getAbsoluteX() + 8;
+						if (x2 > x1) drawSlur(svgEl, x1, x2, slurY);
+					});
+					scrapes.forEach((noteIndex) => {
+						drawScrape(svgEl, notes[noteIndex].getAbsoluteX(), stave.getYForLine(0), stave.getYForLine(5));
 					});
 				});
 			}

@@ -62,6 +62,17 @@ export function spanIdFor(kind: Span["kind"], fromSlotId: string): string {
 	return `${kind}:${fromSlotId}`;
 }
 
+/** Whether the note sits inside a slur span on its string, after the span's first note. */
+export function slurredInside(index: PatternIndex, slotId: string, stringIndex: number): boolean {
+	for (const span of index.spansAtSlot.get(slotId) ?? []) {
+		if (span.kind !== "slur") continue;
+		if (span.strings && !span.strings.includes(stringIndex)) continue;
+		const members = index.spanMembers.get(span.id) ?? [];
+		if (members[0] !== slotId) return true;
+	}
+	return false;
+}
+
 export function spanCovers(index: PatternIndex, slotId: string, kind: Span["kind"], stringIndex: number): boolean {
 	const spans = index.spansAtSlot.get(slotId);
 	if (!spans) return false;

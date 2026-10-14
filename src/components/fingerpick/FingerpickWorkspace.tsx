@@ -256,8 +256,8 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 	// chosen style — the same formula playback compiles its events through.
 	const capo = patternCapo(selectedPattern);
 	const pitchLabelAt = useCallback(
-		(stringIndex: number, fret: number): string =>
-			pitchLabel(soundingMidi(stringIndex, fret, capo), pitchLabelStyle),
+		(stringIndex: number, fret: number, shift: number = 0): string =>
+			pitchLabel(soundingMidi(stringIndex, fret, capo) + shift, pitchLabelStyle),
 		[capo, pitchLabelStyle],
 	);
 	const pitchLabelFn = pitchLabelsOn ? pitchLabelAt : undefined;

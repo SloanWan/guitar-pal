@@ -1,5 +1,5 @@
 import { pitchClassRoot } from "@/lib/chordIdentify";
-import type { BeatSlot } from "@/lib/fingerpickTypes";
+import type { BeatSlot, NoteEffects } from "@/lib/fingerpickTypes";
 
 /**
  * The pitch a written fret sounds, and how to write it.
@@ -68,6 +68,33 @@ export function soundingMidi(stringIndex: number, fret: number, capo: number): n
 	return OPEN_STRING_MIDI[stringIndex] + capo + fret;
 }
 
+/** The partial a natural harmonic at a fret sounds, in semitones above the open string. */
+const NATURAL_HARMONIC_NODES: Record<number, number> = {
+	12: 12,
+	7: 19,
+	19: 19,
+	5: 24,
+	24: 24,
+	4: 28,
+	9: 28,
+	16: 28,
+	3: 31,
+};
+
+/**
+ * How far above the fretted (or open) pitch a harmonic sounds. A natural
+ * harmonic reads its node off the fret (an unlisted fret rings the octave);
+ * an artificial one touches `touchFret` above the fretted note (an octave
+ * when unsaid); a pinch harmonic sounds the octave.
+ */
+export function harmonicShift(harmonic: NonNullable<NoteEffects["harmonic"]>, fret: number): number {
+	if (harmonic.type === "natural") return NATURAL_HARMONIC_NODES[fret] ?? 12;
+	if (harmonic.type === "artificial" && harmonic.touchFret !== undefined) {
+		return NATURAL_HARMONIC_NODES[harmonic.touchFret - fret] ?? 12;
+	}
+	return 12;
+}
+
 /**
  * A pitch written in the chosen style: the note name alone (`F#`, spelt as the
  * chord library spells its roots, so the label under a fret agrees with the
@@ -127,13 +154,15 @@ export interface SlotPitchLabel {
  */
 export function slotPitchLabels(
 	slot: Pick<BeatSlot, "strings" | "isRest" | "isGraceNote">,
-	label: (stringIndex: number, fret: number) => string,
+	label: (stringIndex: number, fret: number, shift?: number) => string,
 ): SlotPitchLabel[] {
 	if (slot.isRest || slot.isGraceNote) return [];
 	const labels: SlotPitchLabel[] = [];
 	slot.strings.forEach((sf, stringIndex) => {
 		if (sf.fret === null || sf.muted) return;
-		labels.push({ stringIndex, text: label(stringIndex, sf.fret), tied: sf.link?.kind === "tie" });
+		// A harmonic's label is the partial it sounds, the same shift the scheduler plays.
+		const shift = sf.effects?.harmonic ? harmonicShift(sf.effects.harmonic, sf.fret) : 0;
+		labels.push({ stringIndex, text: label(stringIndex, sf.fret, shift), tied: sf.link?.kind === "tie" });
 	});
 	return labels;
 }

@@ -866,7 +866,95 @@ describe("fingerpickToVexFlow — model v2", () => {
 
 	it("names every kind it draws", () => {
 		expect([...RENDER_KINDS].sort()).toEqual(
-			["tie", "hammer", "pull", "slide", "bend", "ghost", "vibrato", "harmonic", "tap", "trill", "tremolo", "pick", "accent", "staccato", "slideIn", "slideOut", "palmMute", "letRing", "slap", "thumbSlap", "bodyTap"].sort(),
+			["tie", "hammer", "pull", "slide", "bend", "ghost", "vibrato", "harmonic", "tap", "trill", "tremolo", "pick", "accent", "staccato", "slideIn", "slideOut", "whammy", "scrape", "palmMute", "letRing", "slur", "slap", "thumbSlap", "bodyTap"].sort(),
 		);
+	});
+});
+
+describe("fingerpickToVexFlow — the rest of the registry", () => {
+	const v2 = (slots: BeatSlot[], over: Partial<FingerpickPattern> = {}): FingerpickPattern => ({
+		id: "p",
+		name: "p",
+		bpm: 100,
+		timeSignature: [4, 4],
+		schemaVersion: 2,
+		measures: [{ id: "m1", slots }],
+		...over,
+	});
+	const ctx = (p: FingerpickPattern) => ({ index: indexPattern(p) });
+	const texts = (rd: ReturnType<typeof fingerpickToVexFlow>, i: number) =>
+		(rd.notes[i] as TabNote).getModifiers().filter((m) => m instanceof Annotation).map((m) => (m as Annotation).getText());
+
+	it("a harmonic is written in angle brackets with its letters above", () => {
+		const p = v2([beatSlot("s1", "quarter", { 2: { fret: 12, effects: { harmonic: { type: "artificial", touchFret: 24 } } } })]);
+		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
+		expect((rd.notes[0] as TabNote).getPositions()[0].fret).toBe("<12>");
+		expect(texts(rd, 0)).toContain("A.H.");
+	});
+
+	it("slides into and out of a note are marks on their strings, not annotations", () => {
+		const p = v2([beatSlot("s1", "quarter", { 2: { fret: 7, effects: { slideIn: { from: "below" } } }, 0: { fret: 3, effects: { slideOut: { to: "above" } } } })]);
+		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
+		expect(rd.slideMarks).toEqual([
+			{ noteIndex: 0, stringIndex: 0, side: "out", direction: "above" },
+			{ noteIndex: 0, stringIndex: 2, side: "in", direction: "below" },
+		]);
+		expect(texts(rd, 0)).toEqual([]);
+	});
+
+	it("a whammy writes w/bar and a dashed-line mark with its depth; a scrape writes P.S. and a diagonal", () => {
+		const p = v2([
+			beatSlot("s1", "quarter", { 2: { fret: 7, effects: { whammy: { kind: "dive" } } } }),
+			beatSlot("s2", "quarter", { 2: { fret: 7, effects: { whammy: { kind: "pull", semitones: 1 } } } }),
+			beatSlot("s3", "quarter", { 2: { fret: 7, effects: { scrape: true } } }),
+		]);
+		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
+		expect(texts(rd, 0)).toContain("w/bar");
+		expect(rd.whammies).toEqual([
+			{ noteIndex: 0, kind: "dive", label: "-12" },
+			{ noteIndex: 1, kind: "pull", label: "+1" },
+		]);
+		expect(rd.expression.bends).toBe(2);
+		expect(texts(rd, 2)).toContain("P.S.");
+		expect(rd.scrapes).toEqual([2]);
+	});
+
+	it("a slur is one segment over its notes and the hammer / pull arcs inside it are left out", () => {
+		const p = v2(
+			[
+				beatSlot("a", "quarter", { 2: { fret: 5 } }),
+				beatSlot("b", "quarter", { 2: { fret: 7, link: { kind: "hammer" } } }),
+				beatSlot("c", "quarter", { 2: { fret: 5, link: { kind: "pull" } } }),
+				beatSlot("d", "quarter", { 2: { fret: 7, link: { kind: "hammer" } } }),
+			],
+			{ spans: [{ id: "s", kind: "slur", from: "a", to: "c" }] },
+		);
+		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
+		expect(rd.slurs).toEqual([{ fromNoteIndex: 0, toNoteIndex: 2 }]);
+		// Only the hammer outside the slur draws its arc.
+		expect(rd.connectors).toHaveLength(1);
+	});
+
+	it("a slur across a barline is two segments that say they continue", () => {
+		const p: FingerpickPattern = {
+			...v2([]),
+			measures: [
+				{ id: "m1", slots: [beatSlot("a", "half", { 2: { fret: 5 } }), beatSlot("b", "half", { 2: { fret: 7 } })] },
+				{ id: "m2", slots: [beatSlot("c", "half", { 2: { fret: 8 } }), beatSlot("d", "half", { 2: { fret: 7 } })] },
+			],
+			spans: [{ id: "s", kind: "slur", from: "b", to: "c" }],
+		};
+		expect(fingerpickToVexFlow(p.measures[0], ctx(p)).slurs).toEqual([{ fromNoteIndex: 1, toNoteIndex: 1, continuesAfter: true }]);
+		expect(fingerpickToVexFlow(p.measures[1], ctx(p)).slurs).toEqual([{ fromNoteIndex: 0, toNoteIndex: 0, continuesBefore: true }]);
+	});
+
+	it("a shift slide draws the line without the sl. a legato slide carries", () => {
+		const p = v2([
+			beatSlot("a", "quarter", { 2: { fret: 5 } }),
+			beatSlot("b", "quarter", { 2: { fret: 7, link: { kind: "slide", picked: true } } }),
+			beatSlot("c", "quarter", { 2: { fret: 9, link: { kind: "slide" } } }),
+		]);
+		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
+		expect(rd.connectors.map((c) => (c as unknown as { text: string }).text)).toEqual(["", "sl."]);
 	});
 });

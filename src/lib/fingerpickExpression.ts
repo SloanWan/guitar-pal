@@ -263,6 +263,8 @@ export function vibratoCurve(
 
 export interface ExpressionSpec {
 	bend?: BendParams;
+	/** A whammy-bar dive (negative target) or pull, summed onto the finger bend when both are there. */
+	whammy?: BendParams;
 	/**
 	 * With a bend, the vibrato rides on the bend's peak (its onset counts from the
 	 * moment the target is reached) and stops when the release starts.
@@ -292,6 +294,10 @@ export function composeExpression(
 	const values = spec.bend
 		? bendCurve(spec.bend, durationS, samplesPerSecond)
 		: new Float32Array(n);
+	if (spec.whammy) {
+		const bar = bendCurve(spec.whammy, durationS, samplesPerSecond);
+		for (let i = 0; i < n; i++) values[i] += bar[i];
+	}
 
 	if (spec.vibrato) {
 		const window = spec.bend
@@ -408,5 +414,24 @@ export function expressionForEffects(
 		};
 	}
 	if (effects.vibrato) spec.vibrato = effects.vibrato.wide ? defaults.wideVibrato : defaults.vibrato;
-	return spec.bend || spec.vibrato ? spec : null;
+	if (effects.whammy) spec.whammy = whammyParams(effects.whammy, defaults.bend);
+	return spec.bend || spec.vibrato || spec.whammy ? spec : null;
+}
+
+/** How far and how fast a whammy bar moves: a dive drops an octave by default, a pull lifts a tone; the bar is slower than a finger. */
+export const WHAMMY_DIVE_SEMITONES = 12;
+export const WHAMMY_PULL_SEMITONES = 2;
+export const WHAMMY_RISE_MS = 400;
+
+/** The bend curve a whammy effect draws: negative cents for a dive, no overshoot, a slow travel. */
+export function whammyParams(whammy: NonNullable<NoteEffects["whammy"]>, base: BendParams = DEFAULT_BEND_PARAMS): BendParams {
+	const semitones = whammy.semitones ?? (whammy.kind === "dive" ? WHAMMY_DIVE_SEMITONES : WHAMMY_PULL_SEMITONES);
+	return {
+		...base,
+		targetCents: (whammy.kind === "dive" ? -1 : 1) * semitones * 100,
+		overshootCents: 0,
+		riseMs: WHAMMY_RISE_MS,
+		preBend: false,
+		release: whammy.release === true,
+	};
 }

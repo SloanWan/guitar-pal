@@ -11,6 +11,7 @@ import {
 	seededRandom,
 	composeExpression,
 	expressionForEffects,
+	whammyParams,
 	bendTargetToCents,
 	DEFAULT_BEND_PARAMS,
 	DEFAULT_VIBRATO_PARAMS,
@@ -419,4 +420,18 @@ describe("expressionForEffects", () => {
 		expect(both?.vibrato).toBe(DEFAULT_VIBRATO_PARAMS);
 	});
 
+});
+
+describe("whammy", () => {
+	it("is a slow bend the other way: a dive drops an octave, a pull lifts a tone, no overshoot", () => {
+		expect(whammyParams({ kind: "dive" })).toMatchObject({ targetCents: -1200, overshootCents: 0, riseMs: 400, release: false });
+		expect(whammyParams({ kind: "pull" })).toMatchObject({ targetCents: 200 });
+		expect(whammyParams({ kind: "dive", semitones: 3, release: true })).toMatchObject({ targetCents: -300, release: true });
+		expect(expressionForEffects({ whammy: { kind: "dive" } })?.whammy?.targetCents).toBe(-1200);
+	});
+
+	it("sums with a finger bend on the same note", () => {
+		const curve = composeExpression({ bend: { ...DEFAULT_BEND_PARAMS, targetCents: 200, overshootCents: 0 }, whammy: whammyParams({ kind: "dive", semitones: 12 }) }, 1);
+		expect(curve.values[curve.values.length - 1]).toBe(200 - 1200);
+	});
 });

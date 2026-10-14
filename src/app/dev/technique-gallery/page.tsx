@@ -7,11 +7,16 @@ import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickA
 import { hoPoConnectorCount } from "@/components/fingerpick/fingerpickLayout";
 import { indexPattern } from "@/lib/fingerpickIndex";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import { FINGERPICK_SCHEMA_VERSION, type FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { TechniqueCategory } from "@/lib/techniqueRegistry";
 
 import { TECHNIQUE_DEMOS, type TechniqueDemo } from "./demos";
 
 // ── Layout ───────────────────────────────────────────────────────────────────
+// Four techniques a row: each demo is one bar, four bars share a stave row,
+// and the headers above sit over their bars at the widths the row was laid
+// out with.
+const DEMOS_PER_ROW = 4;
 const ROW_TRAILING_PAD = 15;
 
 type Lang = "en" | "zh";
@@ -25,86 +30,133 @@ const CATEGORY_LABEL: Record<TechniqueCategory, { en: string; zh: string }> = {
 };
 const CATEGORY_ORDER: TechniqueCategory[] = ["link", "effect", "span", "slot"];
 
-/** One demo: its registry row, a stave, and a play button on the shared engine. */
-function DemoCard({
-	demo,
+interface GalleryRow {
+	category: TechniqueCategory;
+	/** First row of its category carries the heading. */
+	first: boolean;
+	demos: TechniqueDemo[];
+}
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+	const out: T[][] = [];
+	for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+	return out;
+}
+
+const ROWS: GalleryRow[] = CATEGORY_ORDER.flatMap((category) =>
+	chunk(
+		TECHNIQUE_DEMOS.filter((d) => d.def.category === category),
+		DEMOS_PER_ROW,
+	).map((demos, i) => ({ category, first: i === 0, demos })),
+);
+
+/** The row's bars as one pattern, so spans and lead-ins are read across it. */
+function rowPattern(row: GalleryRow): FingerpickPattern {
+	return {
+		id: `gallery-row-${row.demos.map((d) => d.def.kind).join("-")}`,
+		name: "gallery row",
+		bpm: 72,
+		timeSignature: [4, 4],
+		schemaVersion: FINGERPICK_SCHEMA_VERSION,
+		measures: row.demos.map((d) => d.pattern.measures[0]),
+		spans: row.demos.flatMap((d) => d.pattern.spans ?? []),
+	};
+}
+
+function RowBlock({
+	row,
 	lang,
 	width,
-	playing,
+	activeKind,
 	canPlay,
 	onPlay,
 	onStop,
 }: {
-	demo: TechniqueDemo;
+	row: GalleryRow;
 	lang: Lang;
 	width: number;
-	playing: boolean;
+	activeKind: string | null;
 	canPlay: boolean;
-	onPlay: () => void;
+	onPlay: (demo: TechniqueDemo) => void;
 	onStop: () => void;
 }) {
-	const { def, pattern } = demo;
+	const pattern = useMemo(() => rowPattern(row), [row]);
 	const renderContext = useMemo(() => ({ index: indexPattern(pattern) }), [pattern]);
-	const measure = pattern.measures[0];
-	// One measure a card: it takes the whole row, no narrower than its own minimum.
-	const measureWidth = useMemo(() => {
-		if (width === 0) return 0;
-		const rd = fingerpickToVexFlow(measure, renderContext);
-		const min = computeMeasureMinWidth(rd.notes, true, hoPoConnectorCount(measure), 0, 0, 0, rd.rolls.length, [], rd.expression);
-		return Math.max(min, width - CLEF_WIDTH - ROW_TRAILING_PAD);
-	}, [measure, renderContext, width]);
-	const ascii = def.ascii
-		? Object.entries(def.ascii)
-				.map(([where, mark]) => `${where}: ${mark}`)
-				.join(" · ")
-		: "—";
+	// Each bar no narrower than its own minimum, the row stretched to the width.
+	const widths = useMemo(() => {
+		if (width === 0) return [];
+		const mins = pattern.measures.map((measure, i) => {
+			const rd = fingerpickToVexFlow(measure, renderContext);
+			return computeMeasureMinWidth(rd.notes, i === 0, hoPoConnectorCount(measure), 0, 0, 0, rd.rolls.length, [], rd.expression);
+		});
+		const total = mins.reduce((a, b) => a + b, 0);
+		const scale = Math.max(1, (width - CLEF_WIDTH - ROW_TRAILING_PAD) / total);
+		return mins.map((m) => m * scale);
+	}, [pattern, renderContext, width]);
 
 	return (
-		<li className={`border border-line bg-panel p-4 ${playing ? "ring-1 ring-denim" : ""}`}>
-			<div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-				<span className="font-mono text-[13px] font-semibold text-denim-accent">{def.kind}</span>
-				<span className="font-sans text-[14px] text-ink">{bi(lang, def.label.en, def.label.zh)}</span>
-				<span className="font-mono text-[12px] text-ink-dim" title="glyph">
-					{def.glyph}
-				</span>
-				{def.key && (
-					<span className="font-mono text-[11px] text-ink-faint" title="editor key">
-						key {def.key}
-					</span>
+		<section className="mb-8">
+			{row.first && (
+				<h2 className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-faint">
+					{bi(lang, CATEGORY_LABEL[row.category].en, CATEGORY_LABEL[row.category].zh)}
+				</h2>
+			)}
+			<div className="border border-line bg-panel">
+				{widths.length > 0 && (
+					<>
+						<div className="flex" style={{ paddingLeft: CLEF_WIDTH }}>
+							{row.demos.map((demo, i) => {
+								const { def } = demo;
+								const playing = activeKind === def.kind;
+								return (
+									<div key={def.kind} className="min-w-0 border-r border-line px-2 pt-2 last:border-r-0" style={{ width: widths[i] }}>
+										<div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+											<span className="font-mono text-[12px] font-semibold text-denim-accent">{def.kind}</span>
+											<span className="font-sans text-[12px] text-ink">{bi(lang, def.label.en, def.label.zh)}</span>
+											<span className="font-mono text-[11px] text-ink-dim">{def.glyph}</span>
+											{def.key && <span className="font-mono text-[10px] text-ink-faint">key {def.key}</span>}
+										</div>
+										<div className="mt-1 flex items-center gap-2 font-mono text-[10px]">
+											<span className={def.render ? "text-denim" : "text-ink-faint"}>{def.render ? "✓" : "–"} render</span>
+											<span className={def.audio ? "text-denim" : "text-ink-faint"}>{def.audio ? "✓" : "–"} audio</span>
+											<button
+												type="button"
+												onClick={playing ? onStop : () => onPlay(demo)}
+												disabled={!canPlay}
+												aria-label={playing ? `Stop ${def.kind}` : `Play ${def.kind}`}
+												className={`ml-auto h-6 border px-2 font-mono text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+													playing ? "border-denim bg-denim text-on-denim" : "border-line-strong text-ink-dim hover:bg-denim-tint hover:text-denim"
+												}`}
+											>
+												{playing ? "■" : "▶"}
+											</button>
+										</div>
+									</div>
+								);
+							})}
+						</div>
+						<div className="overflow-hidden">
+							<TabStaveRow measures={pattern.measures} timeSignature={pattern.timeSignature} measureWidths={widths} renderContext={renderContext} />
+						</div>
+						<div className="flex" style={{ paddingLeft: CLEF_WIDTH }}>
+							{row.demos.map((demo, i) => (
+								<p key={demo.def.kind} className="min-w-0 border-r border-line px-2 pb-2 font-sans text-[11px] leading-snug text-ink-dim last:border-r-0" style={{ width: widths[i] }}>
+									{bi(lang, demo.note.en, demo.note.zh)}
+									{demo.def.ascii && (
+										<span className="mt-0.5 block font-mono text-[10px] text-ink-faint">
+											ascii{" "}
+											{Object.entries(demo.def.ascii)
+												.map(([where, mark]) => `${where}: ${mark}`)
+												.join(" · ")}
+										</span>
+									)}
+								</p>
+							))}
+						</div>
+					</>
 				)}
-				<span className="ml-auto flex items-center gap-2 font-mono text-[11px]">
-					<span className={def.render ? "text-denim" : "text-ink-faint"} title="the converter draws it">
-						{def.render ? "✓" : "–"} render
-					</span>
-					<span className={def.audio ? "text-denim" : "text-ink-faint"} title="the scheduler voices it">
-						{def.audio ? "✓" : "–"} audio
-					</span>
-					<button
-						type="button"
-						onClick={playing ? onStop : onPlay}
-						disabled={!canPlay}
-						aria-label={playing ? `Stop ${def.kind}` : `Play ${def.kind}`}
-						className={`h-7 min-w-16 border px-3 font-mono text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-							playing ? "border-denim bg-denim text-on-denim" : "border-line-strong text-ink-dim hover:bg-denim-tint hover:text-denim"
-						}`}
-					>
-						{playing ? "■ Stop" : "▶ Play"}
-					</button>
-				</span>
 			</div>
-			<p className="mt-1 font-sans text-[12px] text-ink-dim">{bi(lang, demo.note.en, demo.note.zh)}</p>
-			<p className="mt-0.5 font-mono text-[10px] text-ink-faint">ascii {ascii}</p>
-			<div className="mt-2 overflow-hidden">
-				{measureWidth > 0 && (
-					<TabStaveRow
-						measures={pattern.measures}
-						timeSignature={pattern.timeSignature}
-						measureWidths={[measureWidth]}
-						renderContext={renderContext}
-					/>
-				)}
-			</div>
-		</li>
+		</section>
 	);
 }
 
@@ -144,11 +196,6 @@ export default function TechniqueGalleryPage() {
 		setActiveKind(null);
 	}
 
-	const groups = useMemo(
-		() => CATEGORY_ORDER.map((category) => ({ category, demos: TECHNIQUE_DEMOS.filter((d) => d.def.category === category) })),
-		[],
-	);
-
 	return (
 		<div className="min-h-screen bg-surface px-(--gutter) py-10 text-ink">
 			<header className="pb-6">
@@ -171,34 +218,25 @@ export default function TechniqueGalleryPage() {
 				<p className="mt-3 max-w-[70ch] font-sans text-[13px] text-ink-dim">
 					{bi(
 						lang,
-						"One bar per kind, built from techniqueRegistry.ts: the stave shows what the converter draws, Play what the scheduler voices. The render / audio marks are the registry's flags, which the test suite ties to the converter's and scheduler's handler tables.",
-						"每种技巧一小节，由 techniqueRegistry.ts 生成：谱面是转换器画出的样子，Play 是调度器发出的声音。render / audio 标记来自注册表，测试会把它们与转换器、调度器的处理表对上。",
+						"One bar per kind, four to a row, built from techniqueRegistry.ts: the stave is what the converter draws, ▶ plays that bar through the scheduler. The render / audio marks are the registry's flags, which the test suite ties to the converter's and scheduler's handler tables.",
+						"每种技巧一小节，一行四个，由 techniqueRegistry.ts 生成：谱面是转换器画出的样子，▶ 用调度器播放那一小节。render / audio 标记来自注册表，测试会把它们与转换器、调度器的处理表对上。",
 					)}
 				</p>
 			</header>
 
 			<div ref={containerRef}>
-				{groups.map(({ category, demos }) => (
-					<section key={category} className="mb-10">
-						<h2 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-faint">
-							{bi(lang, CATEGORY_LABEL[category].en, CATEGORY_LABEL[category].zh)}
-						</h2>
-						<ul className="flex flex-col gap-3">
-							{demos.map((demo) => (
-								<DemoCard
-									key={demo.def.kind}
-									demo={demo}
-									lang={lang}
-									width={width}
-									// A play-once pass ends on its own: the button follows the engine, not the click.
-									playing={isPlaying && activeKind === demo.def.kind}
-									canPlay={isLoaded}
-									onPlay={() => play(demo)}
-									onStop={stop}
-								/>
-							))}
-						</ul>
-					</section>
+				{ROWS.map((row) => (
+					<RowBlock
+						key={row.demos.map((d) => d.def.kind).join("-")}
+						row={row}
+						lang={lang}
+						width={width}
+						// A play-once pass ends on its own: the button follows the engine, not the click.
+						activeKind={isPlaying ? activeKind : null}
+						canPlay={isLoaded}
+						onPlay={play}
+						onStop={stop}
+					/>
 				))}
 			</div>
 		</div>

@@ -15,7 +15,7 @@ import { computeMeasureMinWidth, CLEF_WIDTH, pitchLabelWidth } from "./TabStaveR
 export function measurePitchLabelWidths(
 	measure: Measure,
 	noteSlots: readonly number[],
-	pitchLabel: (stringIndex: number, fret: number) => string,
+	pitchLabel: (stringIndex: number, fret: number, shift?: number) => string,
 ): number[] {
 	return noteSlots.map((slotIndex) =>
 		Math.max(
@@ -47,7 +47,7 @@ export function computeAllMeasureWidths(
 	containerWidth: number,
 	chordDiagramWidth: number,
 	/** The pitch column's labels, when it is shown: a wide label widens its note. */
-	pitchLabel?: (stringIndex: number, fret: number) => string,
+	pitchLabel?: (stringIndex: number, fret: number, shift?: number) => string,
 	/** The pattern's index, for the spans; without it each measure is read on its own. */
 	context?: RenderContext,
 ): number[][] {
@@ -120,7 +120,7 @@ export function layoutMeasureRows(
 	measures: Measure[],
 	containerWidth: number,
 	chordDiagramWidth: number,
-	pitchLabel?: (stringIndex: number, fret: number) => string,
+	pitchLabel?: (stringIndex: number, fret: number, shift?: number) => string,
 	context?: RenderContext,
 ): MeasureRow[] {
 	if (containerWidth === 0) return [];

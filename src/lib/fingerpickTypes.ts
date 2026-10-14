@@ -66,7 +66,8 @@ export interface NoteEffects {
 	ghost?: true;
 	slideIn?: { from: "below" | "above" };
 	slideOut?: { to: "below" | "above" };
-	whammy?: { kind: "dive" | "pull"; semitones?: number };
+	/** `semitones` defaults to 12 for a dive and 2 for a pull; `release` brings the bar back. */
+	whammy?: { kind: "dive" | "pull"; semitones?: number; release?: boolean };
 	scrape?: true;
 }
 export type EffectKind = keyof NoteEffects;

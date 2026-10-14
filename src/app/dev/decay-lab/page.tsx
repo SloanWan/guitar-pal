@@ -90,6 +90,7 @@ const SLIDERS: SliderSpec[] = [
 	{ key: "voiceStealFadeTau", label: "Voice-steal fade τ", min: 0.001, max: 0.1, step: 0.001, unit: "s" },
 	{ key: "letRingDecayTc", label: "letRing decay τ", min: 0.2, max: 4.0, step: 0.1, unit: "s" },
 	{ key: "palmMuteDecayTc", label: "Palm-mute decay τ (ceiling)", min: 0.03, max: 0.5, step: 0.01, unit: "s" },
+	{ key: "harmonicDecayTc", label: "Harmonic decay τ (ceiling)", min: 0.1, max: 2.0, step: 0.05, unit: "s" },
 	{ key: "sourceStopBuffer", label: "Source stop buffer", min: 0.0, max: 0.5, step: 0.01, unit: "s" },
 ];
 

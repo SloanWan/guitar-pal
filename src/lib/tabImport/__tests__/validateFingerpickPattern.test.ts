@@ -233,12 +233,12 @@ describe("validateFingerpickPattern — data written before model v2", () => {
 		expect(warnings.filter((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toHaveLength(0);
 	});
 
-	it("keeps a v1 technique the app does not draw as its effect, with a warning", () => {
+	it("brings a v1 whammy up to its effect", () => {
 		const strings = makeStrings({ 0: { fret: 7, technique: "whammy-dive" } });
 		const raw = makePattern({ measures: [makeMeasure([makeSlot({ strings })])] });
 		const { pattern, warnings } = validateFingerpickPattern(raw);
 		expect(pattern?.measures[0].slots[0].strings[0]).toEqual({ fret: 7, muted: false, effects: { whammy: { kind: "dive" } } });
-		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(true);
+		expect(warnings.filter((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toEqual([]);
 	});
 
 	it("keeps a bend, which renders and plays now, with its height", () => {
@@ -381,10 +381,10 @@ describe("validateFingerpickPattern — technique model v2", () => {
 		expect(warnings.find((w) => w.code === "INVALID_EFFECT")?.path).toMatch(/effects\.bend$/);
 	});
 
-	it("keeps an effect the app cannot draw yet, with a warning", () => {
-		const { pattern, warnings } = validateFingerpickPattern(v2({ effects: { whammy: { kind: "dive" } } }));
-		expect(pattern!.measures[0].slots[0].strings[0].effects).toEqual({ whammy: { kind: "dive" } });
-		expect(warnings.find((w) => w.code === "UNSUPPORTED_TECHNIQUE")?.original).toBe("whammy");
+	it("keeps every registry effect without a warning: they all draw now", () => {
+		const { pattern, warnings } = validateFingerpickPattern(v2({ effects: { whammy: { kind: "dive" }, scrape: true } }));
+		expect(pattern!.measures[0].slots[0].strings[0].effects).toEqual({ whammy: { kind: "dive" }, scrape: true });
+		expect(warnings.filter((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toEqual([]);
 	});
 
 	it("drops a malformed link with a warning", () => {

@@ -179,25 +179,29 @@ describe("patternToImportBars", () => {
 		);
 	});
 
-	it("carries bends, their heights and the bracket flags both ways", () => {
+	it("carries links, effects, the bracket flags and hits both ways, without loss", () => {
 		const bars: ImportBar[] = [
 			{
 				slots: [
-					{ duration: "quarter", notes: [{ string: 3, fret: 7, technique: "bend-full" }] },
-					{ duration: "quarter", notes: [{ string: 3, fret: 7, technique: "pre-bend-release", bendTarget: 0.5 }] },
-					{ duration: "quarter", notes: [{ string: 5, fret: 0, palmMute: true }] },
-					{ duration: "quarter", notes: [{ string: 1, fret: 3, technique: "vibrato", letRing: true }] },
+					{ duration: "quarter", notes: [{ string: 3, fret: 7, effects: { bend: { semitones: 2 } } }] },
+					{ duration: "quarter", notes: [{ string: 3, fret: 7, link: "hammer", effects: { bend: { semitones: 0.5, pre: true, release: true }, accent: true } }] },
+					{ duration: "quarter", notes: [{ string: 5, fret: 0, palmMute: true }], hit: "slap" },
+					{ duration: "quarter", notes: [{ string: 1, fret: 3, effects: { vibrato: {} }, letRing: true }, { string: 6, fret: 0, muted: true }] },
 				],
 			},
 		];
 		const first = importTab(input({ bars }), INDEX);
 		expect(first.ok).toBe(true);
 		if (!first.ok) return;
-		const strings = first.pattern.measures[0].slots.map((s) => s.strings);
-		expect(strings[0][2]).toMatchObject({ fret: 7, technique: "bend-full" });
-		expect(strings[1][2]).toMatchObject({ fret: 7, technique: "pre-bend-release", bendTarget: 0.5 });
+		const slots = first.pattern.measures[0].slots;
+		const strings = slots.map((s) => s.strings);
+		expect(strings[0][2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 2 } }, technique: "bend-full", bendTarget: 2 });
+		expect(strings[1][2]).toMatchObject({ fret: 7, link: { kind: "hammer" }, effects: { bend: { semitones: 0.5, pre: true, release: true }, accent: true } });
 		expect(strings[2][4]).toMatchObject({ fret: 0, palmMute: true });
-		expect(strings[3][0]).toMatchObject({ fret: 3, technique: "vibrato", letRing: true });
+		expect(slots[2].percussion).toEqual({ kind: "slap" });
+		expect(first.pattern.spans?.map((s) => s.kind)).toEqual(["palmMute", "letRing"]);
+		expect(strings[3][0]).toMatchObject({ fret: 3, effects: { vibrato: {} }, letRing: true });
+		expect(strings[3][5]).toMatchObject({ fret: null, muted: true });
 		expect(first.warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
 		expect(patternToImportBars(first.pattern)).toEqual(bars);
 	});

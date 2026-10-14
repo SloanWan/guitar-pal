@@ -181,7 +181,7 @@ describe("the server over a client", () => {
 		const r = await call(client, "propose_tab", {
 			name: "Bend lick",
 			slotsPerBar: 4,
-			bars: [{ notes: [{ string: 3, fret: 7, slot: 0, technique: "bend-release", bendTarget: 1 }, { string: 5, fret: 0, slot: 2, palmMute: true }] }],
+			bars: [{ notes: [{ string: 3, fret: 7, slot: 0, effects: { bend: { semitones: 1, release: true } } }, { string: 5, fret: 0, slot: 2, palmMute: true }], hits: [{ slot: 3, kind: "slap" }] }],
 			bpm: 0,
 			timeSignature: "",
 		});
@@ -189,10 +189,12 @@ describe("the server over a client", () => {
 		const text = textOf(r);
 		expect(text).toMatch(/\nG\|7b8r/);
 		expect(text).toMatch(/\n {2}\s*P\.M\./);
+		expect(text).toMatch(/\n {2}\s+S\s*\n/);
 		const saved = rows.get("share00001");
 		if (saved?.kind !== "fingerpick") throw new Error("not saved as fingerpick");
-		expect(saved.pattern.measures[0].slots[0].strings[2]).toMatchObject({ fret: 7, technique: "bend-release", bendTarget: 1 });
+		expect(saved.pattern.measures[0].slots[0].strings[2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 1, release: true } }, technique: "bend-release", bendTarget: 1 });
 		expect(saved.pattern.measures[0].slots[1].strings[4]).toMatchObject({ fret: 0, palmMute: true });
+		expect(saved.pattern.measures[0].slots[2].percussion).toEqual({ kind: "slap" });
 	});
 
 	it("propose_tab: a note off the grid is an error naming the bar, and nothing is saved", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BeatSlot, FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
+import { syncTechniqueFields } from "@/lib/fingerpickCompat";
 import { patternToAsciiTab } from "@/lib/mcp/asciiTab";
 
 const silent = (): BeatSlot["strings"][number] => ({ fret: null, technique: null, tied: false, muted: false });
@@ -12,14 +13,15 @@ function slot(duration: BeatSlot["duration"], notes: Record<number, Partial<Beat
 }
 
 function pattern(slots: BeatSlot[][], over: Partial<FingerpickPattern> = {}): FingerpickPattern {
-	return {
+	// Through the sync, so bracket flags become the spans the writer reads.
+	return syncTechniqueFields({
 		id: "p",
 		name: "Test",
 		bpm: 80,
 		timeSignature: [4, 4],
 		measures: slots.map((s, i) => ({ id: `m${i}`, slots: s })),
 		...over,
-	};
+	});
 }
 
 describe("patternToAsciiTab", () => {
@@ -47,14 +49,14 @@ describe("patternToAsciiTab", () => {
 		expect(text.split("\n")[0]).toBe("e|1-2-3---|");
 	});
 
-	it("marks techniques, ties and dead notes", () => {
+	it("marks links, ties and dead notes", () => {
 		const text = patternToAsciiTab(
 			pattern([
 				[
 					slot("quarter", { 0: { fret: 5 } }),
-					slot("quarter", { 0: { fret: 7, technique: "hammer-on" } }),
-					slot("quarter", { 0: { fret: 7, tied: true } }),
-					slot("quarter", { 0: { fret: 0, muted: true } }),
+					slot("quarter", { 0: { fret: 7, link: { kind: "hammer" } } }),
+					slot("quarter", { 0: { fret: 7, link: { kind: "tie" } } }),
+					slot("quarter", { 0: { fret: null, muted: true } }),
 				],
 			]),
 		);
@@ -62,23 +64,45 @@ describe("patternToAsciiTab", () => {
 		expect(text.split("\n")[0]).toBe("e|5-h7-(7)-x-|");
 	});
 
-	it("writes bends after the fret the way tab does, and vibrato as a tilde", () => {
+	it("writes bends after the fret the way tab does, vibrato as a tilde, and a trill or tap by its mark", () => {
 		const text = patternToAsciiTab(
 			pattern([
 				[
-					slot("quarter", { 2: { fret: 7, technique: "bend-full" } }),
-					slot("quarter", { 2: { fret: 7, technique: "bend-release", bendTarget: 1 } }),
-					slot("quarter", { 2: { fret: 7, technique: "pre-bend", bendTarget: 2 } }),
-					slot("quarter", { 2: { fret: 7, technique: "vibrato-wide" } }),
+					slot("quarter", { 2: { fret: 7, effects: { bend: { semitones: 2 } } } }),
+					slot("quarter", { 2: { fret: 7, effects: { bend: { semitones: 1, release: true } } } }),
+					slot("quarter", { 2: { fret: 7, effects: { bend: { semitones: 2, pre: true } } } }),
+					slot("quarter", { 2: { fret: 7, effects: { vibrato: { wide: true } } } }),
 				],
 				[
-					slot("half", { 2: { fret: 5, technique: "bend-quarter" } }),
-					slot("half", { 2: { fret: 5, technique: "vibrato" } }),
+					slot("half", { 2: { fret: 5, effects: { bend: { semitones: 0.5 } } } }),
+					slot("half", { 2: { fret: 5, effects: { vibrato: {} } } }),
+				],
+				[
+					slot("half", { 2: { fret: 5, effects: { trill: {} } } }),
+					slot("half", { 2: { fret: 12, effects: { tap: true } } }),
 				],
 			]),
 		);
 		const g = text.split("\n")[2];
-		expect(g).toBe("G|7b9-7b8r-7pb9-7~~-|5b¼-5~--|");
+		expect(g).toBe("G|7b9-7b8r-7pb9-7~~-|5b¼-5~--|5tr-t12-|");
+	});
+
+	it("writes a hit as its letter on a line above the strings", () => {
+		const text = patternToAsciiTab(
+			pattern([
+				[
+					slot("quarter", { 4: { fret: 0 } }),
+					slot("quarter", { 0: { fret: null, muted: true }, 1: { fret: null, muted: true }, 2: { fret: null, muted: true } }, { percussion: { kind: "slap" } }),
+					slot("quarter", { 4: { fret: 0 } }),
+					slot("quarter", {}, { percussion: { kind: "bodyTap" } }),
+				],
+			]),
+		);
+		const lines = text.split("\n");
+		expect(lines).toHaveLength(7);
+		expect(lines[0]).toBe("    S   B");
+		expect(lines[1]).toBe("e|--x-----|");
+		expect(lines[5]).toBe("A|0---0---|");
 	});
 
 	it("writes P.M. and let-ring brackets on lines below, one run each", () => {

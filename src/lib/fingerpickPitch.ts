@@ -82,13 +82,17 @@ const NATURAL_HARMONIC_NODES: Record<number, number> = {
 };
 
 /**
- * How far above the fretted (or open) pitch a harmonic sounds. A natural
- * harmonic reads its node off the fret (an unlisted fret rings the octave);
- * an artificial one touches `touchFret` above the fretted note (an octave
- * when unsaid); a pinch harmonic sounds the octave.
+ * How far above the pitch written at the fret a harmonic sounds — the same
+ * reading TuxGuitar and alphaTab play. A natural harmonic is the OPEN
+ * string's partial: the node at fret 12 sounds the open string an octave up,
+ * fret 7 a twelfth up, fret 5 two octaves up — so relative to the fret's own
+ * pitch the shift is `node − fret` (an unlisted fret rings the octave). An
+ * artificial harmonic is touched `touchFret` above the fretted note and
+ * sounds the fretted note plus that node's interval (an octave when unsaid);
+ * a pinch harmonic sounds the octave.
  */
 export function harmonicShift(harmonic: NonNullable<NoteEffects["harmonic"]>, fret: number): number {
-	if (harmonic.type === "natural") return NATURAL_HARMONIC_NODES[fret] ?? 12;
+	if (harmonic.type === "natural") return (NATURAL_HARMONIC_NODES[fret] ?? 12) - fret;
 	if (harmonic.type === "artificial" && harmonic.touchFret !== undefined) {
 		return NATURAL_HARMONIC_NODES[harmonic.touchFret - fret] ?? 12;
 	}

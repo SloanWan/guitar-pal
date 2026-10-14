@@ -911,7 +911,7 @@ describe("fingerpickToVexFlow — the rest of the registry", () => {
 		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
 		expect(texts(rd, 0)).toContain("w/bar");
 		expect(rd.whammies).toEqual([
-			{ noteIndex: 0, kind: "dive", label: "-12" },
+			{ noteIndex: 0, kind: "dive", label: "-2" },
 			{ noteIndex: 1, kind: "pull", label: "+1" },
 		]);
 		expect(rd.expression.bends).toBe(2);

@@ -55,8 +55,9 @@ const TECHNIQUE_GAIN = 0.5;
 /** Gain for tapping notes — slightly softer than a normal pick attack. */
 /** A tapped note is lighter than a picked one. */
 const TAPPING_GAIN = 0.65;
-/** A harmonic: bright but light. */
-const HARMONIC_GAIN = 0.6;
+/** A harmonic: the partial, lighter than a pluck, with a quiet octave under it. */
+const HARMONIC_GAIN = 0.7;
+const HARMONIC_BODY_GAIN = 0.35;
 /** A pick scrape's noise sweep. */
 const SCRAPE_GAIN = 0.5;
 /** A knock on the body. */
@@ -98,8 +99,8 @@ const LET_RING_LIFETIME_TAUS = 4;
 
 /** Ceiling on a palm-muted note's decay τ (s): the hand on the strings stops them short. */
 const PALM_MUTE_DECAY_TC_S = 0.12;
-/** Ceiling on a harmonic's decay τ (s): a partial dies sooner than the string. */
-const HARMONIC_DECAY_TC_S = 0.6;
+/** Ceiling on a harmonic's decay τ (s): a partial rings, but not as long as a let-ring note. */
+const HARMONIC_DECAY_TC_S = 1.2;
 
 // ─── Envelope parameters ────────────────────────────────────────────────────
 // Tunable per-note envelope constants. Defaults equal the hardcoded production
@@ -430,6 +431,7 @@ export function useFingerpickAudioEngine() {
 					palmMute: PALM_MUTE_GAIN,
 					tremoloAltGain: TREMOLO_ALT_GAIN,
 					harmonic: HARMONIC_GAIN,
+					harmonicBody: HARMONIC_BODY_GAIN,
 					scrape: SCRAPE_GAIN,
 					bodyTap: BODY_TAP_GAIN,
 					accentMultiplier: ACCENT_MULTIPLIER,

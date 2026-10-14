@@ -12,6 +12,8 @@ import {
 	composeExpression,
 	expressionForEffects,
 	whammyParams,
+	whammyCurve,
+	whammyTimeline,
 	bendTargetToCents,
 	DEFAULT_BEND_PARAMS,
 	DEFAULT_VIBRATO_PARAMS,
@@ -423,15 +425,26 @@ describe("expressionForEffects", () => {
 });
 
 describe("whammy", () => {
-	it("is a slow bend the other way: a dive drops an octave, a pull lifts a tone, no overshoot", () => {
-		expect(whammyParams({ kind: "dive" })).toMatchObject({ targetCents: -1200, overshootCents: 0, riseMs: 400, release: false });
-		expect(whammyParams({ kind: "pull" })).toMatchObject({ targetCents: 200 });
-		expect(whammyParams({ kind: "dive", semitones: 3, release: true })).toMatchObject({ targetCents: -300, release: true });
-		expect(expressionForEffects({ whammy: { kind: "dive" } })?.whammy?.targetCents).toBe(-1200);
+	it("defaults to a whole tone, as the tab presets have it, and reads the bar's depth and release", () => {
+		expect(whammyParams({ kind: "dive" })).toEqual({ kind: "dive", semitones: 2, release: false });
+		expect(whammyParams({ kind: "pull", semitones: 1, release: true })).toEqual({ kind: "pull", semitones: 1, release: true });
+	});
+
+	it("dives over three quarters of the note and holds; released, it is back by the end", () => {
+		const dive = whammyCurve(whammyParams({ kind: "dive" }), 1);
+		expect(dive[0]).toBe(0);
+		expect(dive[Math.round(dive.length * 0.375)]).toBeCloseTo(-100, 0);
+		expect(dive[Math.round(dive.length * 0.75)]).toBeCloseTo(-200, 0);
+		expect(dive[dive.length - 1]).toBe(-200);
+		const dip = whammyCurve(whammyParams({ kind: "pull", release: true }), 2);
+		expect(dip[Math.round(dip.length * 0.5)]).toBeCloseTo(200, 0);
+		expect(dip[dip.length - 1]).toBe(0);
+		expect(whammyTimeline(whammyParams({ kind: "dive", release: true }), 2)).toMatchObject({ peakS: 1, releaseStartS: 1, releaseEndS: 2 });
 	});
 
 	it("sums with a finger bend on the same note", () => {
-		const curve = composeExpression({ bend: { ...DEFAULT_BEND_PARAMS, targetCents: 200, overshootCents: 0 }, whammy: whammyParams({ kind: "dive", semitones: 12 }) }, 1);
-		expect(curve.values[curve.values.length - 1]).toBe(200 - 1200);
+		const curve = composeExpression({ bend: { ...DEFAULT_BEND_PARAMS, targetCents: 200, overshootCents: 0 }, whammy: whammyParams({ kind: "dive" }) }, 1);
+		expect(curve.values[curve.values.length - 1]).toBe(200 - 200);
+		expect(expressionForEffects({ whammy: { kind: "dive" } })?.whammy).toEqual({ kind: "dive", semitones: 2, release: false });
 	});
 });

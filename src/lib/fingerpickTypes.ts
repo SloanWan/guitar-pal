@@ -66,7 +66,7 @@ export interface NoteEffects {
 	ghost?: true;
 	slideIn?: { from: "below" | "above" };
 	slideOut?: { to: "below" | "above" };
-	/** `semitones` defaults to 12 for a dive and 2 for a pull; `release` brings the bar back. */
+	/** `semitones` defaults to a whole tone (2), as tab presets have it; `release` brings the bar back by the note's end. */
 	whammy?: { kind: "dive" | "pull"; semitones?: number; release?: boolean };
 	scrape?: true;
 }

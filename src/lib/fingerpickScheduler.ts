@@ -17,6 +17,7 @@ import {
 	composeExpression,
 	expressionForEffects,
 	releaseDecayTc,
+	whammyTimeline,
 } from "@/lib/fingerpickExpression";
 import { indexPattern, slurredInside, spanCovers } from "@/lib/fingerpickIndex";
 import { harmonicShift, soundingMidi } from "@/lib/fingerpickPitch";
@@ -973,8 +974,10 @@ export interface NoteGains {
 	palmMute: number;
 	/** Multiplier on every second stroke of a tremolo. */
 	tremoloAltGain: number;
-	/** A harmonic: bright but light. */
+	/** A harmonic: the partial, lighter than a pluck. */
 	harmonic: number;
+	/** The quiet octave a harmonic carries under its partial, as a share of the harmonic gain. */
+	harmonicBody: number;
 	/** A pick scrape's noise sweep. */
 	scrape: number;
 	/** A knock on the body. */
@@ -1018,8 +1021,6 @@ const EFFECT_GAIN: [EffectKind, (gains: NoteGains) => number][] = [
 /** Lowpass cutoff (Hz) a kind puts on the voice; the lowest of those present applies. */
 const LEGATO_LOWPASS_HZ = 2000;
 const PALM_MUTE_LOWPASS_HZ = 900;
-/** A harmonic loses the string's body: everything under this goes. */
-const HARMONIC_HIGHPASS_HZ = 600;
 /** A tapped note skips the sample's pick transient and eases in. */
 export const TAP_SKIP_S = 0.008;
 const TAP_RAMP_S = 0.005;
@@ -1302,6 +1303,7 @@ export function scheduleFingerpickNote(
 
 	const source = ctx.createBufferSource();
 	source.buffer = noteData.buffer;
+	let harmonicBody: AudioBufferSourceNode | null = null;
 
 	const effectiveDuration = noteDuration;
 	source.playbackRate.value = noteData.playbackRate;
@@ -1352,7 +1354,7 @@ export function scheduleFingerpickNote(
 			decayTc = releaseDecayTc(decayTc, bendTimeline(expression.bend, curveDuration));
 		}
 		if (expression.whammy?.release) {
-			decayTc = releaseDecayTc(decayTc, bendTimeline(expression.whammy, curveDuration));
+			decayTc = releaseDecayTc(decayTc, whammyTimeline(expression.whammy, curveDuration));
 		}
 	}
 	gainNode.gain.setTargetAtTime(0, event.effects?.tap ? when + TAP_RAMP_S : when, decayTc);
@@ -1368,29 +1370,40 @@ export function scheduleFingerpickNote(
 	// Legato lowpass masks the sample's pick transient. Trill keeps it always; hammer/pull
 	// get it only in "current" treatment (the A/B: "gain-only"/"dry" drop the filter).
 	// A palm mute dulls the note further; the lower cutoff wins when both apply.
-	// A harmonic drops the string's body under a highpass (a pinch keeps it: the
-	// pick's edge is part of the sound).
 	const cutoffs: number[] = [];
 	if (legatoFilter(event, legatoTreatment)) cutoffs.push(LEGATO_LOWPASS_HZ);
 	if (event.palmMute) cutoffs.push(PALM_MUTE_LOWPASS_HZ);
-	const filters: BiquadFilterNode[] = [];
 	if (cutoffs.length > 0) {
 		const filter = ctx.createBiquadFilter();
 		filter.type = "lowpass";
 		filter.frequency.value = Math.min(...cutoffs);
 		filter.Q.value = 0.7;
-		filters.push(filter);
+		source.connect(filter).connect(gainNode).connect(target);
+	} else {
+		source.connect(gainNode).connect(target);
 	}
-	if (event.effects?.harmonic && event.effects.harmonic.type !== "pinch") {
-		const filter = ctx.createBiquadFilter();
-		filter.type = "highpass";
-		filter.frequency.value = HARMONIC_HIGHPASS_HZ;
-		filter.Q.value = 0.7;
-		filters.push(filter);
+	// A harmonic is the sample at its partial's pitch — the way TuxGuitar and
+	// alphaTab play one — with a quiet copy an octave under it for the body the
+	// string still gives (TuxGuitar's second, softer note). No filter: the pluck
+	// an octave or two up already chimes.
+	if (event.effects?.harmonic) {
+		const body = resolveNoteData(false, event.midi - 12);
+		if (body) {
+			const under = ctx.createBufferSource();
+			under.buffer = body.buffer;
+			under.playbackRate.value = body.playbackRate;
+			const underGain = ctx.createGain();
+			underGain.gain.value = gains.harmonicBody;
+			under.connect(underGain).connect(gainNode);
+			under.start(when);
+			allSources.add(under);
+			under.onended = () => {
+				allSources.delete(under);
+			};
+			// Stopped with the main source below, by the same clock.
+			harmonicBody = under;
+		}
 	}
-	let head: AudioNode = source;
-	for (const filter of filters) head = head.connect(filter);
-	head.connect(gainNode).connect(target);
 	// A tapped note skips the sample's pick transient.
 	if (event.effects?.tap) source.start(when, TAP_SKIP_S);
 	else source.start(when);
@@ -1398,6 +1411,7 @@ export function scheduleFingerpickNote(
 		? when + env.letRingDecayTc * gains.letRingLifetimeTaus + env.sourceStopBuffer
 		: when + effectiveDuration + env.sourceStopBuffer;
 	source.stop(stopTime);
+	if (harmonicBody) harmonicBody.stop(stopTime);
 
 	allSources.add(source);
 	// Grace notes (very short duration) are not registered so the next same-string note

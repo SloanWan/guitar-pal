@@ -1643,6 +1643,7 @@ const TEST_GAINS: NoteGains = {
 	palmMute: 0.75,
 	tremoloAltGain: 0.85,
 	harmonic: 0.6,
+	harmonicBody: 0.35,
 	scrape: 0.5,
 	bodyTap: 0.8,
 	accentMultiplier: 1.3,
@@ -2495,13 +2496,13 @@ describe("fingerpickPatternToScheduleEvents — trill, harmonic, slur, body tap"
 		expect(wide[1].midi - OPEN_STRING_MIDI[2]).toBe(9);
 	});
 
-	it("a harmonic sounds its partial: the node's interval over the fret", () => {
+	it("a natural harmonic sounds the open string's partial; an artificial or pinch one the fretted note's", () => {
 		const at = (effects: NonNullable<StringFret["effects"]>, fret = 12) =>
 			fingerpickPatternToScheduleEvents(pattern(120, [slot("s1", "quarter", { 2: { fret, effects } })]), 120)[0].midi - OPEN_STRING_MIDI[2];
-		expect(at({ harmonic: { type: "natural" } }, 12)).toBe(24);
-		expect(at({ harmonic: { type: "natural" } }, 7)).toBe(7 + 19);
-		expect(at({ harmonic: { type: "natural" } }, 5)).toBe(5 + 24);
-		expect(at({ harmonic: { type: "natural" } }, 8)).toBe(8 + 12);
+		expect(at({ harmonic: { type: "natural" } }, 12)).toBe(12);
+		expect(at({ harmonic: { type: "natural" } }, 7)).toBe(19);
+		expect(at({ harmonic: { type: "natural" } }, 5)).toBe(24);
+		expect(at({ harmonic: { type: "natural" } }, 8)).toBe(12);
 		expect(at({ harmonic: { type: "artificial", touchFret: 17 } }, 5)).toBe(5 + 12);
 		expect(at({ harmonic: { type: "pinch" } }, 7)).toBe(7 + 12);
 	});
@@ -2517,16 +2518,18 @@ describe("fingerpickPatternToScheduleEvents — trill, harmonic, slur, body tap"
 });
 
 describe("scheduleFingerpickNote — the rest of the registry", () => {
-	it("a harmonic is lighter, highpassed and short; a pinch keeps the pick", () => {
+	it("a harmonic is the sample at its partial, lighter, with a quiet octave under it and no filter", () => {
 		const ctx = mockCtx(0);
-		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { harmonic: { type: "natural" } }, duration: 2 }), 1);
+		const resolve = vi.fn((_muted: boolean, midi: number) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) }));
+		scheduleFingerpickNote(makeDeps(ctx, new Map(), { resolveNoteData: resolve }), noteEvent({ midi: 74, effects: { harmonic: { type: "natural" } }, duration: 2 }), 1);
 		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.harmonic, 1);
-		expect(ctx._filters.map((f) => f.type)).toEqual(["highpass"]);
-		expect(ctx._filters[0].frequency.value).toBe(600);
+		expect(ctx._filters).toHaveLength(0);
+		expect(resolve).toHaveBeenCalledWith(false, 62);
+		expect(ctx._sources).toHaveLength(2);
+		expect(ctx._sources[1].playbackRate.value).toBe(rateFor(62));
+		expect(ctx._gains[1].gain.value).toBe(TEST_GAINS.harmonicBody);
+		expect(ctx._sources[1].stop).toHaveBeenCalledWith(ctx._sources[0].stop.mock.calls[0][0]);
 		expect(ctx._gains[0].gain.setTargetAtTime.mock.calls[0][2]).toBeLessThanOrEqual(TEST_ENV.harmonicDecayTc);
-		const pinch = mockCtx(0);
-		scheduleFingerpickNote(makeDeps(pinch, new Map()), noteEvent({ effects: { harmonic: { type: "pinch" } } }), 1);
-		expect(pinch._filters).toHaveLength(0);
 	});
 
 	it("a tapped note starts past the pick transient, eases in, and takes the legato lowpass", () => {
@@ -2554,12 +2557,14 @@ describe("scheduleFingerpickNote — the rest of the registry", () => {
 		expect(fade[1]).toBeCloseTo(outStart);
 	});
 
-	it("a whammy dive is a detune curve down to the bar's depth, back up when released", () => {
+	it("a whammy dive is a detune curve down a tone over three quarters of the note, back up by its end when released", () => {
 		const ctx = mockCtx(0);
 		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { whammy: { kind: "dive" } }, duration: 1 }), 0);
 		const values = ctx._sources[0].detune.setValueCurveAtTime.mock.calls[0][0] as Float32Array;
 		expect(values[0]).toBe(0);
-		expect(values[values.length - 1]).toBe(-1200);
+		expect(values[Math.round(values.length * 0.375)]).toBeCloseTo(-100, 0);
+		expect(values[Math.round(values.length * 0.75)]).toBeCloseTo(-200, 0);
+		expect(values[values.length - 1]).toBe(-200);
 		const released = mockCtx(0);
 		scheduleFingerpickNote(makeDeps(released, new Map()), noteEvent({ effects: { whammy: { kind: "pull", semitones: 1, release: true } }, duration: 1 }), 0);
 		const back = released._sources[0].detune.setValueCurveAtTime.mock.calls[0][0] as Float32Array;

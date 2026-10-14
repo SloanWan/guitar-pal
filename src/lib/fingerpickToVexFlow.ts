@@ -33,7 +33,7 @@ import {
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import { TRIPLET_GROUP_SIZE, tripletGroups } from "@/lib/fingerpickEdit";
 import { indexPattern, slurredInside, type PatternIndex } from "@/lib/fingerpickIndex";
-import { WHAMMY_DIVE_SEMITONES, WHAMMY_PULL_SEMITONES } from "@/lib/fingerpickExpression";
+import { WHAMMY_SEMITONES } from "@/lib/fingerpickExpression";
 import { isCompound, type Meter } from "@/lib/strumMeter";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { EFFECT_STACK_ORDER, techniqueDef } from "@/lib/techniqueRegistry";
@@ -618,7 +618,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 			EFFECT_MARKS[kind]?.(tabNote, effects, expression);
 			if (kind === "whammy") {
 				const w = effects.whammy!;
-				const semitones = w.semitones ?? (w.kind === "dive" ? WHAMMY_DIVE_SEMITONES : WHAMMY_PULL_SEMITONES);
+				const semitones = w.semitones ?? WHAMMY_SEMITONES;
 				whammies.push({ noteIndex: notes.length, kind: w.kind, label: `${w.kind === "dive" ? "-" : "+"}${semitones}` });
 			}
 			if (kind === "scrape") scrapes.push(notes.length);

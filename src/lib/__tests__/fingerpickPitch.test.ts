@@ -152,10 +152,11 @@ describe("slotPitchLabels", () => {
 
 describe("harmonicShift", () => {
 	it("reads the node table for a natural harmonic and the touch fret for an artificial one", () => {
-		expect(harmonicShift({ type: "natural" }, 12)).toBe(12);
-		expect(harmonicShift({ type: "natural" }, 7)).toBe(19);
-		expect(harmonicShift({ type: "natural" }, 5)).toBe(24);
-		expect(harmonicShift({ type: "natural" }, 8)).toBe(12);
+		// Relative to the fret's own pitch: a natural harmonic is the open string's partial.
+		expect(harmonicShift({ type: "natural" }, 12)).toBe(0);
+		expect(harmonicShift({ type: "natural" }, 7)).toBe(12);
+		expect(harmonicShift({ type: "natural" }, 5)).toBe(19);
+		expect(harmonicShift({ type: "natural" }, 8)).toBe(4);
 		expect(harmonicShift({ type: "artificial", touchFret: 12 }, 5)).toBe(19);
 		expect(harmonicShift({ type: "artificial" }, 5)).toBe(12);
 		expect(harmonicShift({ type: "pinch" }, 5)).toBe(12);
@@ -169,6 +170,6 @@ describe("harmonicShift", () => {
 			shifts.push(shift ?? 0);
 			return "";
 		});
-		expect(shifts).toEqual([12]);
+		expect(shifts).toEqual([0]);
 	});
 });

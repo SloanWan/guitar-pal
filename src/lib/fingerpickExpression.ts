@@ -263,8 +263,8 @@ export function vibratoCurve(
 
 export interface ExpressionSpec {
 	bend?: BendParams;
-	/** A whammy-bar dive (negative target) or pull, summed onto the finger bend when both are there. */
-	whammy?: BendParams;
+	/** A whammy-bar dive or pull, summed onto the finger bend when both are there. */
+	whammy?: WhammyParams;
 	/**
 	 * With a bend, the vibrato rides on the bend's peak (its onset counts from the
 	 * moment the target is reached) and stops when the release starts.
@@ -295,7 +295,7 @@ export function composeExpression(
 		? bendCurve(spec.bend, durationS, samplesPerSecond)
 		: new Float32Array(n);
 	if (spec.whammy) {
-		const bar = bendCurve(spec.whammy, durationS, samplesPerSecond);
+		const bar = whammyCurve(spec.whammy, durationS, samplesPerSecond);
 		for (let i = 0; i < n; i++) values[i] += bar[i];
 	}
 
@@ -414,24 +414,55 @@ export function expressionForEffects(
 		};
 	}
 	if (effects.vibrato) spec.vibrato = effects.vibrato.wide ? defaults.wideVibrato : defaults.vibrato;
-	if (effects.whammy) spec.whammy = whammyParams(effects.whammy, defaults.bend);
+	if (effects.whammy) spec.whammy = whammyParams(effects.whammy);
 	return spec.bend || spec.vibrato || spec.whammy ? spec : null;
 }
 
-/** How far and how fast a whammy bar moves: a dive drops an octave by default, a pull lifts a tone; the bar is slower than a finger. */
-export const WHAMMY_DIVE_SEMITONES = 12;
-export const WHAMMY_PULL_SEMITONES = 2;
-export const WHAMMY_RISE_MS = 400;
+/**
+ * The whammy bar as tab players write it (TuxGuitar's and Guitar Pro's
+ * presets, alphaTab's reading of them): a dive takes the whole note down a
+ * tone over the first three quarters of its length and holds there; a pull
+ * does the same upwards; released, the bar is at its depth by the middle of
+ * the note and back at pitch by its end (a "dip"). The travel is a share of
+ * the note's length, not a fixed time — a long note dives slowly.
+ */
+export const WHAMMY_SEMITONES = 2;
+/** Where the bar reaches its depth, as a share of the note. */
+export const WHAMMY_REACH_FRACTION = 0.75;
+export const WHAMMY_DIP_FRACTION = 0.5;
 
-/** The bend curve a whammy effect draws: negative cents for a dive, no overshoot, a slow travel. */
-export function whammyParams(whammy: NonNullable<NoteEffects["whammy"]>, base: BendParams = DEFAULT_BEND_PARAMS): BendParams {
-	const semitones = whammy.semitones ?? (whammy.kind === "dive" ? WHAMMY_DIVE_SEMITONES : WHAMMY_PULL_SEMITONES);
-	return {
-		...base,
-		targetCents: (whammy.kind === "dive" ? -1 : 1) * semitones * 100,
-		overshootCents: 0,
-		riseMs: WHAMMY_RISE_MS,
-		preBend: false,
-		release: whammy.release === true,
-	};
+export interface WhammyParams {
+	kind: "dive" | "pull";
+	semitones: number;
+	release: boolean;
+}
+
+export function whammyParams(whammy: NonNullable<NoteEffects["whammy"]>): WhammyParams {
+	return { kind: whammy.kind, semitones: whammy.semitones ?? WHAMMY_SEMITONES, release: whammy.release === true };
+}
+
+/** Where a whammy's phases fall inside a note, in seconds from the attack. */
+export function whammyTimeline(p: WhammyParams, durationS: number): BendTimeline {
+	const dur = Math.max(0, durationS);
+	const peakS = dur * (p.release ? WHAMMY_DIP_FRACTION : WHAMMY_REACH_FRACTION);
+	return { peakS, settleEndS: peakS, releaseStartS: p.release ? peakS : dur, releaseEndS: dur, durationS: dur };
+}
+
+/** Cents away from the fretted pitch over a note of `durationS`: a straight travel to the bar's depth, a hold or a straight travel back. */
+export function whammyCurve(p: WhammyParams, durationS: number, samplesPerSecond: number = CURVE_SAMPLES_PER_SECOND): Float32Array {
+	const n = curveLength(durationS, samplesPerSecond);
+	const out = new Float32Array(n);
+	const { peakS, releaseStartS, releaseEndS } = whammyTimeline(p, durationS);
+	const target = (p.kind === "dive" ? -1 : 1) * p.semitones * 100;
+	for (let i = 0; i < n; i++) {
+		const t = i / samplesPerSecond;
+		let cents: number;
+		if (t < peakS) cents = target * (t / peakS);
+		else if (!p.release || t <= releaseStartS) cents = target;
+		else if (t >= releaseEndS || releaseEndS <= releaseStartS) cents = 0;
+		else cents = target * (1 - (t - releaseStartS) / (releaseEndS - releaseStartS));
+		// `-0` at the start of a dive would fail an equality elsewhere; it is 0.
+		out[i] = cents || 0;
+	}
+	return out;
 }

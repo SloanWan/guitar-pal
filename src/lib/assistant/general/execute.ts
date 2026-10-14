@@ -54,12 +54,18 @@ function readProposedBars(value: unknown): ProposeTabInput["bars"] | null {
 			if (typeof n.string !== "number" || typeof n.fret !== "number" || typeof n.slot !== "number") return null;
 			if (n.technique !== undefined && typeof n.technique !== "string") return null;
 			if (n.muted !== undefined && typeof n.muted !== "boolean") return null;
+			if (n.bendTarget !== undefined && typeof n.bendTarget !== "number") return null;
+			if (n.palmMute !== undefined && typeof n.palmMute !== "boolean") return null;
+			if (n.letRing !== undefined && typeof n.letRing !== "boolean") return null;
 			read.push({
 				string: n.string,
 				fret: n.fret,
 				slot: n.slot,
 				...(typeof n.technique === "string" ? { technique: n.technique } : {}),
 				...(n.muted === true ? { muted: true } : {}),
+				...(typeof n.bendTarget === "number" ? { bendTarget: n.bendTarget } : {}),
+				...(n.palmMute === true ? { palmMute: true } : {}),
+				...(n.letRing === true ? { letRing: true } : {}),
 			});
 		}
 		bars.push({ notes: read });

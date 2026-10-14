@@ -24,6 +24,8 @@ describe("techniqueSupport", () => {
 		const rendered: NonNullable<Technique>[] = [
 			"hammer-on", "pull-off", "slide-up", "slide-down",
 			"vibrato", "vibrato-wide", "tapping", "trill",
+			"bend-full", "bend-half", "bend-quarter", "bend-release",
+			"pre-bend", "pre-bend-release",
 		];
 		for (const t of rendered) {
 			expect(TECHNIQUE_SUPPORT[t].renderSupported, t).toBe(true);
@@ -33,9 +35,7 @@ describe("techniqueSupport", () => {
 
 	it("marks unrendered techniques as not renderSupported", () => {
 		const unrendered: NonNullable<Technique>[] = [
-			"bend-full", "bend-half", "bend-quarter", "bend-release",
-			"pre-bend", "pre-bend-release", "vibrato-bar",
-			"harmonic-natural", "harmonic-artificial",
+			"vibrato-bar", "harmonic-natural", "harmonic-artificial",
 			"whammy-dive", "whammy-pull", "pick-scrape", "grace-note",
 		];
 		for (const t of unrendered) {
@@ -46,7 +46,9 @@ describe("techniqueSupport", () => {
 
 	it("marks audio-engine-handled techniques as audioSupported", () => {
 		const audible: NonNullable<Technique>[] = [
-			"hammer-on", "pull-off", "tapping", "trill",
+			"hammer-on", "pull-off", "slide-up", "slide-down", "tapping", "trill",
+			"bend-full", "bend-half", "bend-quarter", "bend-release",
+			"pre-bend", "pre-bend-release", "vibrato", "vibrato-wide",
 		];
 		for (const t of audible) {
 			expect(TECHNIQUE_SUPPORT[t].audioSupported, t).toBe(true);
@@ -55,8 +57,8 @@ describe("techniqueSupport", () => {
 
 	it("marks techniques without audio engine handling as not audioSupported", () => {
 		const silent: NonNullable<Technique>[] = [
-			"slide-up", "slide-down", "vibrato", "vibrato-wide",
-			"bend-full", "grace-note",
+			"vibrato-bar", "harmonic-natural", "harmonic-artificial",
+			"whammy-dive", "whammy-pull", "pick-scrape", "grace-note",
 		];
 		for (const t of silent) {
 			expect(TECHNIQUE_SUPPORT[t].audioSupported, t).toBe(false);

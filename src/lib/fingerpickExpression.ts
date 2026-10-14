@@ -309,6 +309,30 @@ export function composeExpression(
 	return { values, startTime: 0, duration: Math.max(0, durationS), samplesPerSecond };
 }
 
+// ─── Gain under a release ────────────────────────────────────────────────────
+
+/**
+ * A released bend must still be audible when it comes back down. The engine's
+ * decay is `volume · e^(−t/τ)`; this is the lowest fraction of the attack volume
+ * a release variant is allowed to have reached by the end of its release, the
+ * same idea as the slide's `minGainRatio`.
+ */
+export const EXPRESSION_RELEASE_MIN_GAIN_RATIO = 0.5;
+
+/**
+ * Lengthen a note's decay time constant just enough that the gain at the end
+ * of the release is at least `minGainRatio` of the attack. Never shortens τ;
+ * a note without a release gets its τ back unchanged.
+ */
+export function releaseDecayTc(decayTc: number, timeline: BendTimeline, minGainRatio: number = EXPRESSION_RELEASE_MIN_GAIN_RATIO): number {
+	if (timeline.releaseEndS <= timeline.releaseStartS || timeline.releaseEndS >= timeline.durationS && timeline.releaseStartS >= timeline.durationS) {
+		return decayTc;
+	}
+	if (!(minGainRatio > 0 && minGainRatio < 1)) return decayTc;
+	const needed = timeline.releaseEndS / -Math.log(minGainRatio);
+	return Math.max(decayTc, needed);
+}
+
 // ─── Defaults and technique mapping ──────────────────────────────────────────
 
 /** Bend defaults (a full bend). See `/dev/bend-lab` for how these were chosen. */

@@ -176,6 +176,25 @@ describe("the server over a client", () => {
 		expect(saved.pattern.measures[0].slots.every((s) => s.duration === "quarter")).toBe(true);
 	});
 
+	it("propose_tab: a bend with its height and a palm-muted note are saved and shown", async () => {
+		const client = await open(deps);
+		const r = await call(client, "propose_tab", {
+			name: "Bend lick",
+			slotsPerBar: 4,
+			bars: [{ notes: [{ string: 3, fret: 7, slot: 0, technique: "bend-release", bendTarget: 1 }, { string: 5, fret: 0, slot: 2, palmMute: true }] }],
+			bpm: 0,
+			timeSignature: "",
+		});
+		expect(r.isError).toBeUndefined();
+		const text = textOf(r);
+		expect(text).toMatch(/\nG\|7b8r/);
+		expect(text).toMatch(/\n {2}\s*P\.M\./);
+		const saved = rows.get("share00001");
+		if (saved?.kind !== "fingerpick") throw new Error("not saved as fingerpick");
+		expect(saved.pattern.measures[0].slots[0].strings[2]).toMatchObject({ fret: 7, technique: "bend-release", bendTarget: 1 });
+		expect(saved.pattern.measures[0].slots[1].strings[4]).toMatchObject({ fret: 0, palmMute: true });
+	});
+
 	it("propose_tab: a note off the grid is an error naming the bar, and nothing is saved", async () => {
 		const client = await open(deps);
 		const r = await call(client, "propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: 0, slot: 8 }] }], bpm: 0, timeSignature: "" });

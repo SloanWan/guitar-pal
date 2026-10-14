@@ -143,7 +143,7 @@ describe("buildTabDraft", () => {
 	});
 
 	it("refuses a technique it cannot draw, and takes the ones it can", () => {
-		refuses({ slotsPerBar: 8, bars: [{ notes: [note(1, 5, 0, { technique: "tapping" })] }], timeSignature: [4, 4] }, /not a technique/);
+		refuses({ slotsPerBar: 8, bars: [{ notes: [note(1, 5, 0, { technique: "whammy-dive" })] }], timeSignature: [4, 4] }, /not a technique/);
 		const bar = measures(
 			buildTabDraft({
 				slotsPerBar: 8,
@@ -152,6 +152,37 @@ describe("buildTabDraft", () => {
 			}),
 		)[0];
 		expect(bar.slots[1].strings[2]).toMatchObject({ fret: 7, technique: "hammer-on" });
+	});
+
+	it("takes bends with their height, vibrato, and the bracket flags", () => {
+		const bar = measures(
+			buildTabDraft({
+				slotsPerBar: 8,
+				bars: [
+					{
+						notes: [
+							note(3, 7, 0, { technique: "bend-full" }),
+							note(3, 7, 2, { technique: "bend-release", bendTarget: 1 }),
+							note(3, 7, 4, { technique: "vibrato-wide", letRing: true }),
+							note(5, 0, 6, { palmMute: true }),
+						],
+					},
+				],
+				timeSignature: [4, 4],
+			}),
+		)[0];
+		expect(bar.slots[0].strings[2]).toMatchObject({ fret: 7, technique: "bend-full" });
+		expect(bar.slots[1].strings[2]).toMatchObject({ fret: 7, technique: "bend-release", bendTarget: 1 });
+		expect(bar.slots[2].strings[2]).toMatchObject({ fret: 7, technique: "vibrato-wide", letRing: true });
+		expect(bar.slots[3].strings[4]).toMatchObject({ fret: 0, palmMute: true });
+		expect("bendTarget" in bar.slots[0].strings[2]).toBe(false);
+	});
+
+	it("refuses a bend height the editor does not offer", () => {
+		refuses(
+			{ slotsPerBar: 8, bars: [{ notes: [note(3, 7, 0, { technique: "bend-release", bendTarget: 3 })] }], timeSignature: [4, 4] },
+			/bendTarget of 3/,
+		);
 	});
 
 	it("refuses a pattern with no bars", () => {

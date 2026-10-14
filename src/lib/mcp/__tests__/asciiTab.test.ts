@@ -62,6 +62,50 @@ describe("patternToAsciiTab", () => {
 		expect(text.split("\n")[0]).toBe("e|5-h7-(7)-x-|");
 	});
 
+	it("writes bends after the fret the way tab does, and vibrato as a tilde", () => {
+		const text = patternToAsciiTab(
+			pattern([
+				[
+					slot("quarter", { 2: { fret: 7, technique: "bend-full" } }),
+					slot("quarter", { 2: { fret: 7, technique: "bend-release", bendTarget: 1 } }),
+					slot("quarter", { 2: { fret: 7, technique: "pre-bend", bendTarget: 2 } }),
+					slot("quarter", { 2: { fret: 7, technique: "vibrato-wide" } }),
+				],
+				[
+					slot("half", { 2: { fret: 5, technique: "bend-quarter" } }),
+					slot("half", { 2: { fret: 5, technique: "vibrato" } }),
+				],
+			]),
+		);
+		const g = text.split("\n")[2];
+		expect(g).toBe("G|7b9-7b8r-7pb9-7~~-|5b¼-5~--|");
+	});
+
+	it("writes P.M. and let-ring brackets on lines below, one run each", () => {
+		const text = patternToAsciiTab(
+			pattern([
+				[
+					slot("quarter", { 4: { fret: 0, palmMute: true } }),
+					slot("quarter", { 4: { fret: 0, palmMute: true } }),
+					slot("quarter", { 4: { fret: 2 } }),
+					slot("quarter", { 0: { fret: 3, letRing: true }, 4: { fret: 2, palmMute: true } }),
+				],
+			]),
+		);
+		const lines = text.split("\n");
+		expect(lines).toHaveLength(8);
+		const [e, , , , a, , pm, lr] = lines;
+		// A run is its label then dashes to the run's end; a label widens its column.
+		expect(pm).toMatch(/^ {2}P\.M\.-+ +P\.M\.-*$/);
+		expect(lr).toMatch(/^ +let ring-*$/);
+		// Each label starts under the column of the note that opens its run.
+		expect(pm.indexOf("P.M.")).toBe(a.indexOf("0"));
+		expect(pm.lastIndexOf("P.M.")).toBe(a.lastIndexOf("2"));
+		expect(lr.indexOf("let ring")).toBe(e.indexOf("3"));
+		// The dashes stop where the run does: the plain 2 has none under it.
+		expect(pm[a.indexOf("2")]).toBe(" ");
+	});
+
 	it("widens a column for a two-digit fret and writes a rest as dashes", () => {
 		const text = patternToAsciiTab(pattern([[slot("eighth", { 0: { fret: 12 } }), slot("eighth", {}, { isRest: true }), slot("quarter", { 1: { fret: 1 } }), slot("half", {}, { isRest: true })]]));
 		const lines = text.split("\n");
@@ -92,7 +136,9 @@ describe("patternToAsciiTab", () => {
 	it("writes every preset without throwing", () => {
 		for (const preset of PRESET_FINGERPICK_PATTERNS) {
 			const lines = patternToAsciiTab(preset).split("\n");
-			const staff = lines.slice(-6);
+			// The six string lines, wherever the chord line above or the bracket lines below put them.
+			const staff = lines.filter((l) => /^[eBGDAE]\|/.test(l));
+			expect(staff, preset.name).toHaveLength(6);
 			expect(new Set(staff.map((l) => l.length)).size, preset.name).toBe(1);
 		}
 	});

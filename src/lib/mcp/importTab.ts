@@ -50,6 +50,12 @@ export const IMPORT_NOTE_SCHEMA = z.object({
 		.describe("How the note is reached from the previous slot on this string, when the page marks one."),
 	tied: z.boolean().optional().describe("The note is held over from the previous slot, not struck again."),
 	muted: z.boolean().optional().describe("A dead note, printed as x."),
+	bendTarget: z
+		.union([z.literal(0.5), z.literal(1), z.literal(2)])
+		.optional()
+		.describe("With bend-release, pre-bend or pre-bend-release: the printed height, 0.5 (¼), 1 (½) or 2 (full). A full tone when left out."),
+	palmMute: z.boolean().optional().describe("Under a P.M. bracket; mark every note the bracket spans."),
+	letRing: z.boolean().optional().describe("Under a let-ring bracket; mark every note the bracket spans."),
 });
 
 export const IMPORT_SLOT_SCHEMA = z.object({
@@ -164,6 +170,9 @@ export function toImportedTabDraft(
 					technique: note.technique ?? null,
 					tied: note.tied === true,
 					muted: note.muted === true,
+					...(note.bendTarget !== undefined ? { bendTarget: note.bendTarget } : {}),
+					...(note.palmMute ? { palmMute: true } : {}),
+					...(note.letRing ? { letRing: true } : {}),
 				};
 			}
 			const out: BeatSlot = { id: crypto.randomUUID(), duration: slot.duration, strings };
@@ -275,6 +284,9 @@ export function patternToImportBars(pattern: FingerpickPattern): ImportBar[] {
 					if (s.technique) note.technique = s.technique;
 					if (s.tied) note.tied = true;
 					if (s.muted) note.muted = true;
+					if (s.bendTarget === 0.5 || s.bendTarget === 1 || s.bendTarget === 2) note.bendTarget = s.bendTarget;
+					if (s.palmMute) note.palmMute = true;
+					if (s.letRing) note.letRing = true;
 					notes.push(note);
 				});
 				const out: ImportSlot = { duration: slot.duration, notes };

@@ -63,7 +63,19 @@ export interface ProposeTabInput {
 	name: string;
 	/** How many even slots each bar is divided into: 8 eighths, 16 sixteenths. */
 	slotsPerBar: number;
-	bars: { notes: { string: number; fret: number; slot: number; technique?: string; muted?: boolean }[] }[];
+	bars: {
+		notes: {
+			string: number;
+			fret: number;
+			slot: number;
+			technique?: string;
+			muted?: boolean;
+			/** Semitones for the release / pre-bend variants: 0.5, 1 or 2. */
+			bendTarget?: number;
+			palmMute?: boolean;
+			letRing?: boolean;
+		}[];
+	}[];
 	/** 0 when no tempo was asked for. */
 	bpm: number;
 	/** e.g. "4/4", "3/4", "6/8"; empty for 4/4. */
@@ -167,9 +179,16 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 										slot: { type: "integer", description: "Which slot of this bar, counting from 0. The last is slotsPerBar - 1." },
 										technique: {
 											type: "string",
-											description: "How the note is reached, when it is not picked: \"hammer-on\", \"pull-off\", \"slide-up\", \"slide-down\".",
+											description:
+												"How the note is reached, when it is not picked: \"hammer-on\", \"pull-off\", \"slide-up\", \"slide-down\" — or what is done to it once struck: \"bend-quarter\", \"bend-half\", \"bend-full\", \"bend-release\", \"pre-bend\", \"pre-bend-release\", \"vibrato\", \"vibrato-wide\".",
 										},
 										muted: { type: "boolean", description: "A dead note — struck, not sounded." },
+										bendTarget: {
+											type: "number",
+											description: "With bend-release, pre-bend or pre-bend-release: how far the bend goes, 0.5 (¼ tone), 1 (½) or 2 (full). A full tone when left out.",
+										},
+										palmMute: { type: "boolean", description: "Palm-muted (P.M.); mark every note under the bracket." },
+										letRing: { type: "boolean", description: "Let ring; mark every note under the bracket." },
 									},
 									required: ["string", "fret", "slot"],
 									additionalProperties: false,

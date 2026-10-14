@@ -7,6 +7,12 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
+import {
+	bendTimeline,
+	composeExpression,
+	expressionForTechnique,
+	releaseDecayTc,
+} from "@/lib/fingerpickExpression";
 import { soundingMidi } from "@/lib/fingerpickPitch";
 import { beatTicks } from "@/lib/fingerpickEdit";
 import type { Meter } from "@/lib/strumMeter";
@@ -32,6 +38,8 @@ export interface ScheduleEvent {
 	muted: boolean;
 	measureIndex: number;
 	slotIndex: number;
+	/** Bend height in semitones for the release / pre-bend variants (from StringFret). */
+	bendTarget?: number;
 	/** Propagated from StringFret for audio shaping — all optional to preserve backward compat. */
 	ghostNote?: boolean;
 	accent?: boolean;
@@ -349,6 +357,7 @@ export function fingerpickPatternToScheduleEvents(
 						muted: sf.muted,
 						measureIndex,
 						slotIndex,
+						...(sf.bendTarget !== undefined && { bendTarget: sf.bendTarget }),
 						...(sf.ghostNote && { ghostNote: true }),
 						...(sf.accent && { accent: true }),
 						...(sf.staccato && { staccato: true }),
@@ -976,9 +985,25 @@ export function scheduleFingerpickNote(
 
 	const gainNode = ctx.createGain();
 	gainNode.gain.setValueAtTime(volume, when);
-	const decayTc = letRing
+	let decayTc = letRing
 		? env.letRingDecayTc
 		: Math.max(effectiveDuration * env.decayTcRatio, env.minDecayTc);
+
+	// ── Pitch expression: bend / vibrato ─────────────────────────────────────
+	// One detune curve for the note's whole audible life, set once on its own
+	// source. playbackRate is left alone, so a later slide handoff ramping this
+	// voice composes with the curve (the two params multiply). The gain envelope
+	// is untouched except that a released bend keeps enough level to be heard
+	// coming back down.
+	const expression = expressionForTechnique(event.technique, event.bendTarget);
+	if (expression) {
+		const curveDuration = letRing ? env.letRingDecayTc * gains.letRingLifetimeTaus : effectiveDuration;
+		const curve = composeExpression(expression, curveDuration);
+		source.detune.setValueCurveAtTime(curve.values, when + curve.startTime, curve.duration);
+		if (expression.bend?.release) {
+			decayTc = releaseDecayTc(decayTc, bendTimeline(expression.bend, curveDuration));
+		}
+	}
 	gainNode.gain.setTargetAtTime(0, when, decayTc);
 
 	// Legato lowpass masks the sample's pick transient. Trill keeps it always; hammer/pull

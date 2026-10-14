@@ -19,6 +19,14 @@ import {
 	previousSlotFret,
 	hasPreviousNoteOnString,
 	availableTechniques,
+	availableNoteTechniques,
+	setNoteTechnique,
+	bendHeightFor,
+	isBendTechnique,
+	nextBendTechnique,
+	nextVibratoTechnique,
+	NOTE_TECHNIQUES,
+	MAX_FRET,
 	setSlotsRest,
 	splitTargetsForSlot,
 	mergeTargetsForSlot,
@@ -351,6 +359,86 @@ describe("availableTechniques", () => {
 			"slide-down": false,
 			tied: false,
 		});
+	});
+});
+
+describe("note techniques (bend / vibrato)", () => {
+	const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 2 };
+	const at = (p: FingerpickPattern) => p.measures[0].slots[1].strings[2];
+
+	it("needs a fretted, unmuted, non-open note", () => {
+		expect(availableNoteTechniques(makeDefaultPattern(), cell)).toEqual({ vibrato: false, bend: false, blocked: "no-note" });
+		expect(availableNoteTechniques(setFret(makeDefaultPattern(), cell, 0), cell)).toEqual({ vibrato: false, bend: false, blocked: "open-string" });
+		expect(availableNoteTechniques(toggleMuted(makeDefaultPattern(), cell), cell)).toEqual({ vibrato: false, bend: false, blocked: "muted" });
+		expect(availableNoteTechniques(setFret(makeDefaultPattern(), cell, 7), cell)).toEqual({ vibrato: true, bend: true, blocked: null });
+	});
+
+	it("a bend must stay on the neck; a vibrato does not care", () => {
+		const high = setFret(makeDefaultPattern(), cell, MAX_FRET - 1);
+		expect(availableNoteTechniques(high, cell, 2)).toEqual({ vibrato: true, bend: false, blocked: "off-neck" });
+		expect(availableNoteTechniques(high, cell, 1)).toEqual({ vibrato: true, bend: true, blocked: null });
+		expect(availableNoteTechniques(high, cell, 0.5)).toEqual({ vibrato: true, bend: true, blocked: null });
+		expect(availableNoteTechniques(setFret(makeDefaultPattern(), cell, MAX_FRET), cell, 0.5).bend).toBe(false);
+	});
+
+	it("does not depend on the previous note", () => {
+		const p = setFret(makeDefaultPattern(), cell, 5);
+		expect(availableNoteTechniques(p, cell).bend).toBe(true);
+		expect(availableTechniques(p, cell)["hammer-on"]).toBe(false);
+	});
+
+	it("bendHeightFor: named bends carry their own, the others take the chosen height", () => {
+		expect(bendHeightFor("bend-quarter", 2)).toBe(0.5);
+		expect(bendHeightFor("bend-half", 2)).toBe(1);
+		expect(bendHeightFor("bend-full", 0.5)).toBe(2);
+		expect(bendHeightFor("bend-release", 1)).toBe(1);
+		expect(bendHeightFor("pre-bend", 0.5)).toBe(0.5);
+		expect(bendHeightFor("pre-bend-release")).toBe(2);
+		expect(bendHeightFor("vibrato")).toBeUndefined();
+		expect(bendHeightFor("vibrato-wide", 2)).toBeUndefined();
+	});
+
+	it("setNoteTechnique writes the technique and bendTarget, and clears a tie", () => {
+		let p = setFret(makeDefaultPattern(), cell, 7);
+		p = setTied(p, cell, true);
+		p = setNoteTechnique(p, cell, "bend-half");
+		expect(at(p)).toMatchObject({ technique: "bend-half", bendTarget: 1, tied: false });
+		p = setNoteTechnique(p, cell, "bend-release", 0.5);
+		expect(at(p)).toMatchObject({ technique: "bend-release", bendTarget: 0.5 });
+		p = setNoteTechnique(p, cell, "vibrato");
+		expect(at(p).technique).toBe("vibrato");
+		expect("bendTarget" in at(p)).toBe(false);
+	});
+
+	it("every NoteTechnique round-trips through setNoteTechnique", () => {
+		for (const t of NOTE_TECHNIQUES) {
+			const p = setNoteTechnique(setFret(makeDefaultPattern(), cell, 7), cell, t, 1);
+			expect(at(p).technique).toBe(t);
+			expect(at(p).bendTarget !== undefined).toBe(isBendTechnique(t));
+		}
+	});
+
+	it("clearing the technique, tying, or a connecting technique drops bendTarget", () => {
+		const bent = setNoteTechnique(setFret(makeDefaultPattern(), cell, 7), cell, "bend-full");
+		expect(at(bent).bendTarget).toBe(2);
+		expect("bendTarget" in at(setTechnique(bent, cell, null))).toBe(false);
+		expect("bendTarget" in at(setTied(bent, cell, true))).toBe(false);
+		expect("bendTarget" in at(setTechnique(bent, cell, "hammer-on"))).toBe(false);
+		// Another bend keeps it: the height is still meaningful.
+		expect(at(setTechnique(bent, cell, "pre-bend")).bendTarget).toBe(2);
+	});
+
+	it("keyboard cycles: B climbs the bend heights into a release, V toggles vibrato", () => {
+		expect(nextBendTechnique(null)).toBe("bend-quarter");
+		expect(nextBendTechnique("bend-quarter")).toBe("bend-half");
+		expect(nextBendTechnique("bend-half")).toBe("bend-full");
+		expect(nextBendTechnique("bend-full")).toBe("bend-release");
+		expect(nextBendTechnique("bend-release")).toBe("bend-quarter");
+		expect(nextBendTechnique("vibrato")).toBe("bend-quarter");
+		expect(nextVibratoTechnique(null)).toBe("vibrato");
+		expect(nextVibratoTechnique("vibrato")).toBe("vibrato-wide");
+		expect(nextVibratoTechnique("vibrato-wide")).toBe("vibrato");
+		expect(nextVibratoTechnique("bend-full")).toBe("vibrato");
 	});
 });
 

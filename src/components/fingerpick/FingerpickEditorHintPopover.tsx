@@ -95,8 +95,12 @@ export default function FingerpickEditorHintPopover({
 						</p>
 						<p>
 							<span className="font-mono">B</span> steps a bend on the note (¼ → ½ → full →
-							release), <span className="font-mono">V</span> toggles vibrato. Right-click a
-							cell for every technique.
+							release), <span className="font-mono">V</span> toggles vibrato,{" "}
+							<span className="font-mono">H</span> / <span className="font-mono">P</span> /{" "}
+							<span className="font-mono">/</span> link it to the note before,{" "}
+							<span className="font-mono">M</span> / <span className="font-mono">L</span> palm-mute or
+							let a slot ring, <span className="font-mono">S</span> slaps it. Right-click a cell
+							for every technique.
 						</p>
 					</>
 				) : (

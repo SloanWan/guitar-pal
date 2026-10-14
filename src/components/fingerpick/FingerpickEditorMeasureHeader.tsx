@@ -2,10 +2,11 @@ import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpToLine, Copy, RotateCcw,
 import type { Measure } from "@/lib/fingerpickTypes";
 import {
 	canShiftMeasureStrings,
-	cloneMeasure,
+	cloneMeasureInPattern,
 	deleteMeasure,
 	shiftMeasureStrings,
 	swapMeasures,
+	withMeasures,
 } from "@/lib/fingerpickEdit";
 import {
 	measureDiffersFromHints,
@@ -66,7 +67,7 @@ export default function FingerpickEditorMeasureHeader({
 							// Pre-generate the clone's id so the newly appended box can be
 							// highlighted (the copy lands at the last position).
 							const cloneId = crypto.randomUUID();
-							commit((p) => ({ ...p, measures: cloneMeasure(p.measures, measureIndex, cloneId) }));
+							commit((p) => cloneMeasureInPattern(p, measureIndex, cloneId));
 							onHighlight(cloneId);
 						}}
 						aria-label="Copy measure"
@@ -77,10 +78,7 @@ export default function FingerpickEditorMeasureHeader({
 					</button>
 					<button
 						onClick={() => {
-							commit((p) => ({
-								...p,
-								measures: swapMeasures(p.measures, measureIndex, measureIndex - 1),
-							}));
+							commit((p) => withMeasures(p, swapMeasures(p.measures, measureIndex, measureIndex - 1)));
 							onHighlight(measure.id);
 							onNudge("left");
 						}}
@@ -93,10 +91,7 @@ export default function FingerpickEditorMeasureHeader({
 					</button>
 					<button
 						onClick={() => {
-							commit((p) => ({
-								...p,
-								measures: swapMeasures(p.measures, measureIndex, measureIndex + 1),
-							}));
+							commit((p) => withMeasures(p, swapMeasures(p.measures, measureIndex, measureIndex + 1)));
 							onHighlight(measure.id);
 							onNudge("right");
 						}}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Duration, FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
-import { remapMeasure, resetMeasure, slotHasStringData } from "@/lib/fingerpickEdit";
+import { remapMeasure, resetMeasure, slotHasStringData, withMeasures } from "@/lib/fingerpickEdit";
 import { DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
 import {
 	applyPickSequence,
@@ -85,7 +85,7 @@ export default function FingerpickEditorMeasureFooter({
 	// Replace the measure's slots via a Measure[] transform (reset/remap operate on
 	// the measure array, not the whole pattern).
 	function applyMeasures(measures: Measure[]) {
-		commit((prev) => ({ ...prev, measures }));
+		commit((prev) => withMeasures(prev, measures));
 	}
 
 	// ── Quick preset row ─────────────────────────────────────────────────────

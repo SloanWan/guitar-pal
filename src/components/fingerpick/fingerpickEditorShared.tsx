@@ -7,10 +7,12 @@ import {
 	isBrush,
 	strokeDirection,
 	type Duration,
+	type NoteEffects,
 	type StringFret,
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import type { Cell, SlotTarget } from "@/lib/fingerpickEdit";
+import { EFFECT_STACK_ORDER, techniqueDef, type AvailabilityBlock } from "@/lib/techniqueRegistry";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 
@@ -128,6 +130,53 @@ export function cellDisplay(sf: StringFret): string {
 	if (sf.fret !== null) return String(sf.fret);
 	return "–";
 }
+
+/** A bend height as the grid and the menu write it. A full tone is the bare arrow. */
+export const BEND_HEIGHT_LABEL: Record<number, string> = {
+	0.5: "¼",
+	1: "½",
+	1.5: "¾",
+	2: "Full",
+	2.5: "1¼",
+	3: "1½",
+};
+
+function bendGlyph(bend: NonNullable<NoteEffects["bend"]>): string {
+	const height = bend.semitones === 2 ? "" : (BEND_HEIGHT_LABEL[bend.semitones] ?? String(bend.semitones));
+	const up = bend.pre ? "PB" : `${height}⤴`;
+	return bend.release ? `${up}⤵` : up;
+}
+
+/**
+ * The marks a cell shows in its corner: the link's glyph (a tie is drawn as
+ * an arc instead), then each effect's, in stacking order. From the registry,
+ * except a bend's height and a wide vibrato, which are the parameters' own.
+ */
+export function cellGlyph(sf: StringFret): string {
+	const parts: string[] = [];
+	if (sf.link && sf.link.kind !== "tie") parts.push(techniqueDef(sf.link.kind)?.glyph ?? "");
+	const effects = sf.effects;
+	if (effects) {
+		for (const kind of EFFECT_STACK_ORDER) {
+			if (kind === "bend" && effects.bend) parts.push(bendGlyph(effects.bend));
+			else if (kind === "vibrato" && effects.vibrato) parts.push(effects.vibrato.wide ? "≈" : "~");
+			else if (effects[kind]) parts.push(techniqueDef(kind)?.glyph ?? "");
+		}
+	}
+	return parts.filter(Boolean).join("");
+}
+
+/** Why a technique is greyed out, for the menu's tooltip. */
+export const BLOCK_TITLE: Record<AvailabilityBlock, string> = {
+	"no-note": "Needs a note",
+	muted: "A muted note has no pitch to shape",
+	"open-string": "An open string cannot be bent or shaken",
+	"off-neck": "The bend would run off the neck",
+	"no-previous-note": "No previous note on this string",
+	"previous-muted": "The previous note on this string is muted",
+	"wrong-direction": "Not valid for this fret movement",
+	"different-fret": "Not valid for this fret movement",
+};
 
 /**
  * A request to open the shape editor: from a chord search that found nothing

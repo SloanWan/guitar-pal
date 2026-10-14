@@ -166,22 +166,41 @@ function withoutV1Marks(sf: StringFret): StringFret {
 	return copy as unknown as StringFret;
 }
 
+/**
+ * The v1 fields rewritten from the v2 ones, whatever the note held before —
+ * what a v2 writer calls after changing `link` or `effects` (a note with
+ * neither becomes a plain note). `prevFret` for a slide's direction.
+ */
+export function syncNoteFromV2(sf: StringFret, prevFret: number | null | undefined): StringFret {
+	const v1 = noteFromV2(sf, prevFret);
+	const base = withoutV1Marks(sf);
+	const out: StringFret = { ...base, technique: v1.technique, tied: v1.tied };
+	if (v1.bendTarget !== undefined) out.bendTarget = v1.bendTarget;
+	if (v1.staccato) out.staccato = true;
+	if (v1.accent) out.accent = true;
+	if (v1.ghostNote) out.ghostNote = true;
+	if (v1.tremoloPickingSpeed) out.tremoloPickingSpeed = v1.tremoloPickingSpeed;
+	if (v1.pickStroke) out.pickStroke = v1.pickStroke;
+	// An empty effects map means "no effects", same as absent; keep absent for tidiness.
+	if (out.effects && Object.keys(out.effects).length === 0) delete out.effects;
+	if (out.link === undefined) delete out.link;
+	return out;
+}
+
+/** The v2 fields rewritten from the v1 ones — what a v1 writer calls after changing `technique` or `tied`. */
+export function syncNoteFromV1(sf: StringFret): StringFret {
+	const copy: StringFret = { ...sf };
+	delete copy.link;
+	delete copy.effects;
+	const v2 = noteToV2(copy);
+	if (v2.link) copy.link = v2.link;
+	if (v2.effects) copy.effects = v2.effects;
+	return copy;
+}
+
 /** One note with both representations in step; `prevFret` for a slide's direction. */
 export function syncNote(sf: StringFret, prevFret: number | null | undefined): StringFret {
-	if (isV2Note(sf)) {
-		const v1 = noteFromV2(sf, prevFret);
-		const base = withoutV1Marks(sf);
-		const out: StringFret = { ...base, technique: v1.technique, tied: v1.tied };
-		if (v1.bendTarget !== undefined) out.bendTarget = v1.bendTarget;
-		if (v1.staccato) out.staccato = true;
-		if (v1.accent) out.accent = true;
-		if (v1.ghostNote) out.ghostNote = true;
-		if (v1.tremoloPickingSpeed) out.tremoloPickingSpeed = v1.tremoloPickingSpeed;
-		if (v1.pickStroke) out.pickStroke = v1.pickStroke;
-		// An empty effects map means "no effects", same as absent; keep absent for tidiness.
-		if (out.effects && Object.keys(out.effects).length === 0) delete out.effects;
-		return out;
-	}
+	if (isV2Note(sf)) return syncNoteFromV2(sf, prevFret);
 	const v2 = noteToV2(sf);
 	const out: StringFret = { ...sf };
 	if (v2.link) out.link = v2.link;

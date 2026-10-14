@@ -15,9 +15,13 @@ export interface TabEvalCase {
 		bars?: [number, number];
 		timeSignature?: [number, number];
 		/**
-		 * The card carries no validation warning. A pattern whose rhythm was
-		 * guessed, or whose overrunning bar was trimmed, is not the pattern that
-		 * was asked for — the bar count alone would let both through.
+		 * The card carries no warning that says it is not the pattern that was
+		 * asked for — a rhythm rounded, a bar trimmed, a fret clamped. The bar
+		 * count alone would let all of those through.
+		 *
+		 * `READER_CHOICE_CODES` are not counted: a reader saying which picking
+		 * order it chose, or that it padded a short bar, is the card doing its
+		 * job for a sentence that did not say (#303).
 		 */
 		noWarnings?: boolean;
 		/**
@@ -31,6 +35,16 @@ export interface TabEvalCase {
 	};
 	why: string;
 }
+
+/**
+ * Warnings that report a choice rather than a shortfall.
+ *
+ * The tab reader is built to answer a sentence that leaves things out — no
+ * picking order, a phrase shorter than the bar — and to say on the card what
+ * it settled on. `noWarnings` skips these so it scores the card's quality and
+ * not the reader's honesty; everything else counts against it.
+ */
+export const READER_CHOICE_CODES: readonly string[] = ["ORDER_GUESSED", "PADDED"];
 
 export const TAB_EVAL_CASES: readonly TabEvalCase[] = [
 	{

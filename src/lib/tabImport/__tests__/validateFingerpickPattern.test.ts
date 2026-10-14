@@ -388,9 +388,9 @@ describe("validateFingerpickPattern — technique model v2", () => {
 	});
 
 	it("keeps an effect the app cannot draw yet, with a warning", () => {
-		const { pattern, warnings } = validateFingerpickPattern(v2({ effects: { harmonic: { type: "pinch" } } }));
-		expect(pattern!.measures[0].slots[0].strings[0].effects).toEqual({ harmonic: { type: "pinch" } });
-		expect(warnings.find((w) => w.code === "UNSUPPORTED_TECHNIQUE")?.original).toBe("harmonic");
+		const { pattern, warnings } = validateFingerpickPattern(v2({ effects: { whammy: { kind: "dive" } } }));
+		expect(pattern!.measures[0].slots[0].strings[0].effects).toEqual({ whammy: { kind: "dive" } });
+		expect(warnings.find((w) => w.code === "UNSUPPORTED_TECHNIQUE")?.original).toBe("whammy");
 	});
 
 	it("drops a malformed link with a warning", () => {

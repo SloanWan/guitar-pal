@@ -25,7 +25,7 @@ describe("techniqueSupport", () => {
 			"hammer-on", "pull-off", "slide-up", "slide-down",
 			"vibrato", "vibrato-wide", "tapping", "trill",
 			"bend-full", "bend-half", "bend-quarter", "bend-release",
-			"pre-bend", "pre-bend-release",
+			"pre-bend", "pre-bend-release", "harmonic-natural", "harmonic-artificial",
 		];
 		for (const t of rendered) {
 			expect(TECHNIQUE_SUPPORT[t].renderSupported, t).toBe(true);
@@ -35,8 +35,7 @@ describe("techniqueSupport", () => {
 
 	it("marks unrendered techniques as not renderSupported", () => {
 		const unrendered: NonNullable<Technique>[] = [
-			"vibrato-bar", "harmonic-natural", "harmonic-artificial",
-			"whammy-dive", "whammy-pull", "pick-scrape", "grace-note",
+			"vibrato-bar", "whammy-dive", "whammy-pull", "pick-scrape", "grace-note",
 		];
 		for (const t of unrendered) {
 			expect(TECHNIQUE_SUPPORT[t].renderSupported, t).toBe(false);

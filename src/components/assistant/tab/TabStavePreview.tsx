@@ -7,6 +7,7 @@ import ChordDragStrip from "./ChordDragStrip";
 import type { SlotTarget } from "@/lib/fingerpickEdit";
 import type { Measure } from "@/lib/fingerpickTypes";
 import type { Lang } from "@/lib/assistant/lang";
+import type { RenderContext } from "@/lib/fingerpickToVexFlow";
 
 /**
  * One row of tab in a card: the same VexFlow path the fingerpick page
@@ -26,10 +27,13 @@ export default function TabStavePreview({
 	onShown,
 	onMoveChord,
 	lang,
+	renderContext,
 }: {
 	measures: Measure[];
 	timeSignature: [number, number];
 	startMeasureNumber?: number;
+	/** The pattern's index, for spans and lead-in arcs; without it each bar is read on its own. */
+	renderContext?: RenderContext;
 	/** How many bars made it onto the row, once laid out. */
 	onShown?: (count: number) => void;
 	/** A chord mark dragged from one slot to another, row-local measure indices. */
@@ -56,7 +60,10 @@ export default function TabStavePreview({
 	// the arrays it is given change identity, and the panel re-renders on its
 	// own clock (the rotating placeholder). A fresh layout per render would
 	// clear and redraw the stave every few seconds.
-	const row = useMemo(() => layoutMeasureRows(measures.slice(0, PREVIEW_MEASURES), width, 0)[0], [measures, width]);
+	const row = useMemo(
+		() => layoutMeasureRows(measures.slice(0, PREVIEW_MEASURES), width, 0, undefined, renderContext)[0],
+		[measures, width, renderContext],
+	);
 	const shown = row?.measures.length ?? 0;
 	// Held in a ref so a new callback identity does not re-announce the count.
 	const onShownRef = useRef(onShown);
@@ -79,6 +86,7 @@ export default function TabStavePreview({
 						// chord strip reads to place its chips.
 						startMeasureIndex={0}
 						measureWidths={row.widths}
+						renderContext={renderContext}
 					/>
 				)}
 			</div>

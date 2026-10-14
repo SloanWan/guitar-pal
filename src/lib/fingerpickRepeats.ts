@@ -118,9 +118,11 @@ export function expandFingerpickPattern(pattern: FingerpickPattern): ExpandedPat
 	if (error || directives.length === 0) {
 		return { pattern, originMeasureIndices: identity };
 	}
-	const { measures } = expandRepeats(pattern.measures, directives);
+	const { measures, spans } = expandRepeats(pattern.measures, directives, pattern.spans);
 	const originMeasureIndices = expandOriginIndices(pattern.measures.length, directives);
-	return { pattern: { ...pattern, measures }, originMeasureIndices };
+	const expanded: FingerpickPattern = { ...pattern, measures };
+	if (pattern.spans !== undefined) expanded.spans = spans;
+	return { pattern: expanded, originMeasureIndices };
 }
 
 /**

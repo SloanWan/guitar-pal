@@ -17,6 +17,7 @@ import {
 } from "@/lib/techniqueRegistry";
 import { TECHNIQUE_SUPPORT } from "@/lib/tabImport";
 import { AUDIO_KINDS } from "@/lib/fingerpickScheduler";
+import { RENDER_KINDS } from "@/lib/fingerpickToVexFlow";
 import { noteToV2 } from "@/lib/fingerpickCompat";
 import type { Technique } from "@/lib/fingerpickTypes";
 
@@ -44,6 +45,13 @@ describe("technique registry", () => {
 			if (technique === "vibrato-bar") continue;
 			expect(supportOf(kind), technique).toEqual({ render: support.renderSupported, audio: support.audioSupported });
 		}
+	});
+
+	it("flags `render` exactly for the kinds the converter draws", () => {
+		for (const def of TECHNIQUES) {
+			expect(def.render, def.kind).toBe(RENDER_KINDS.has(def.kind));
+		}
+		for (const kind of RENDER_KINDS) expect(techniqueDef(kind), kind).toBeDefined();
 	});
 
 	it("flags `audio` exactly for the kinds the scheduler voices", () => {

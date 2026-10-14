@@ -239,10 +239,12 @@ function sameSet(a: number[], b: number[]): boolean {
 
 /**
  * The spans a pattern's `palmMute` / `letRing` flags describe: one span per
- * run of consecutive slots whose flagged strings are the same set. A rest or
- * an unflagged slot ends a run; a grace slot is transparent. `strings` is
- * written only when the flagged strings are not every sounding string of
- * every slot in the run, so the common case stays small.
+ * run of consecutive slots the flag covers. A run whose every slot is flagged
+ * on all its sounding strings goes on through any slot flagged the same way,
+ * whatever strings those are (a bracket over a melody that moves between
+ * strings); a run flagged on some strings only goes on while the set stays
+ * the same, and writes `strings`. A rest or an unflagged slot ends a run; a
+ * grace slot is transparent.
  */
 export function spansFromFlags(pattern: FingerpickPattern): Span[] {
 	const spans: Span[] = [];
@@ -267,9 +269,10 @@ export function spansFromFlags(pattern: FingerpickPattern): Span[] {
 			}
 			const playedAll = slot.strings.flatMap((sf, i) => (played(sf) ? [i] : []));
 			const coversAll = sameSet(flagged, playedAll);
-			if (run && sameSet(run.set, flagged)) {
+			const extend = run !== null && (run.allPlayed ? coversAll : sameSet(run.set, flagged));
+			if (run && extend) {
 				run.to = slot.id;
-				run.allPlayed = run.allPlayed && coversAll;
+				run.set = flagged;
 			} else {
 				close();
 				run = { from: slot.id, to: slot.id, set: flagged, allPlayed: coversAll };

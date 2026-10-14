@@ -7,7 +7,7 @@
 // row's glyph and padding constants), which src/lib must not depend on.
 
 import type { Measure } from "@/lib/fingerpickTypes";
-import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import { fingerpickToVexFlow, type RenderContext } from "@/lib/fingerpickToVexFlow";
 import { slotPitchLabels } from "@/lib/fingerpickPitch";
 import { computeMeasureMinWidth, CLEF_WIDTH, pitchLabelWidth } from "./TabStaveRow";
 
@@ -26,14 +26,16 @@ export function measurePitchLabelWidths(
 }
 
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
+// Read off the link; a measure still in v1 terms is counted by its technique.
 export function hoPoConnectorCount(measure: Measure): number {
-	return measure.slots.reduce(
-		(count, slot) =>
-			count +
-			slot.strings.filter((sf) => sf.technique === "hammer-on" || sf.technique === "pull-off")
-				.length,
-		0,
-	);
+	let count = 0;
+	for (const slot of measure.slots) {
+		for (const sf of slot.strings) {
+			const kind = sf.link?.kind ?? (sf.technique === "hammer-on" ? "hammer" : sf.technique === "pull-off" ? "pull" : null);
+			if (kind === "hammer" || kind === "pull") count += 1;
+		}
+	}
+	return count;
 }
 
 // Gap between the last row's SVG right edge and the container edge — pure page-level visual choice.
@@ -48,9 +50,11 @@ export function computeAllMeasureWidths(
 	chordDiagramWidth: number,
 	/** The pitch column's labels, when it is shown: a wide label widens its note. */
 	pitchLabel?: (stringIndex: number, fret: number) => string,
+	/** The pattern's index, for the spans; without it each measure is read on its own. */
+	context?: RenderContext,
 ): number[][] {
 	// Precompute render data once per measure to avoid double adapter calls.
-	const renderData = measures.map((m) => fingerpickToVexFlow(m));
+	const renderData = measures.map((m) => fingerpickToVexFlow(m, context));
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
 	const repeatBarlines = (m: Measure): number => (m.repeatStart ? 1 : 0) + (m.repeatEnd ? 1 : 0);
 	const pitchWidths = renderData.map((rd, i) =>
@@ -119,9 +123,10 @@ export function layoutMeasureRows(
 	containerWidth: number,
 	chordDiagramWidth: number,
 	pitchLabel?: (stringIndex: number, fret: number) => string,
+	context?: RenderContext,
 ): MeasureRow[] {
 	if (containerWidth === 0) return [];
-	const widthRows = computeAllMeasureWidths(measures, containerWidth, chordDiagramWidth, pitchLabel);
+	const widthRows = computeAllMeasureWidths(measures, containerWidth, chordDiagramWidth, pitchLabel, context);
 	let offset = 0;
 	return widthRows.map((rowWidths) => {
 		const start = offset;

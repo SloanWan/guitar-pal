@@ -247,7 +247,7 @@ export const TECHNIQUES: readonly TechniqueDef[] = [
 		glyph: "≡",
 		params: z.object({ speed: z.enum(["8th", "16th", "32nd"]) }),
 		render: true,
-		audio: false,
+		audio: true,
 		available: sounding,
 		stackOrder: 50,
 	},

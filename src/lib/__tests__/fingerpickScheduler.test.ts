@@ -14,6 +14,7 @@ import {
 	computeMeasureBoundaries,
 	resolveSlide,
 	isGlide,
+	tremoloStrokes,
 	noteGain,
 	PERCUSSION_STRINGS,
 	applySlideToVoice,
@@ -1636,6 +1637,7 @@ const TEST_GAINS: NoteGains = {
 	ghost: 0.3,
 	slap: 0.7,
 	palmMute: 0.75,
+	tremoloAltGain: 0.85,
 	accentMultiplier: 1.3,
 	letRingLifetimeTaus: 4,
 };
@@ -2405,5 +2407,51 @@ describe("scheduleFingerpickNote — model v2 voices", () => {
 		const ctx = mockCtx(0);
 		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { staccato: true }, duration: 1 }), 0);
 		expect(ctx._sources[0].stop).toHaveBeenCalledWith(0.2 + TEST_ENV.sourceStopBuffer);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — tremolo picking", () => {
+	it("tremoloStrokes spaces the strokes evenly so they always add up to the slot", () => {
+		const quarter = 0.5; // 120 BPM
+		expect(tremoloStrokes(0.5, "16th", quarter)).toEqual([
+			{ offset: 0, duration: 0.125 },
+			{ offset: 0.125, duration: 0.125 },
+			{ offset: 0.25, duration: 0.125 },
+			{ offset: 0.375, duration: 0.125 },
+		]);
+		expect(tremoloStrokes(0.5, "8th", quarter)).toHaveLength(2);
+		expect(tremoloStrokes(0.5, "32nd", quarter)).toHaveLength(8);
+		// A dotted quarter at 16ths: six strokes, no spill.
+		const dotted = tremoloStrokes(0.75, "16th", quarter);
+		expect(dotted).toHaveLength(6);
+		expect(dotted.reduce((sum, s) => sum + s.duration, 0)).toBeCloseTo(0.75);
+		// A slot shorter than a stroke is one stroke the slot's length.
+		expect(tremoloStrokes(0.05, "8th", quarter)).toEqual([{ offset: 0, duration: 0.05 }]);
+	});
+
+	it("a quarter at 120 BPM with a 16th tremolo emits four strokes, every second one softer", () => {
+		const p = pattern(120, [slot("s1", "quarter", { 2: { fret: 7, effects: { tremolo: { speed: "16th" }, accent: true } } })]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(4);
+		expect(events.map((e) => e.time)).toEqual([0, 0.125, 0.25, 0.375]);
+		expect(events.every((e) => e.duration === 0.125 && e.midi === OPEN_STRING_MIDI[2] + 7)).toBe(true);
+		expect(events.map((e) => e.altStroke === true)).toEqual([false, true, false, true]);
+		// The tremolo itself is taken off the strokes; the other effects stay.
+		expect(events.every((e) => e.effects?.tremolo === undefined && e.effects?.accent === true)).toBe(true);
+		expect(events.every((e) => e.measureIndex === 0 && e.slotIndex === 0)).toBe(true);
+	});
+
+	it("a tie after a tremolo lengthens its last stroke only", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 2: { fret: 7, effects: { tremolo: { speed: "8th" } } } }),
+			slot("s2", "quarter", { 2: { fret: 7, link: { kind: "tie" } } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events.map((e) => e.duration)).toEqual([0.25, 0.75]);
+	});
+
+	it("a plain tremolo stroke plays at the normal gain, an alternate one softer", () => {
+		expect(noteGain(noteEvent({}), TEST_GAINS, "current")).toBe(TEST_GAINS.normal);
+		expect(noteGain(noteEvent({ altStroke: true }), TEST_GAINS, "current")).toBeCloseTo(TEST_GAINS.normal * TEST_GAINS.tremoloAltGain);
 	});
 });

@@ -59,6 +59,8 @@ const GHOST_GAIN = 0.3;
 const SLAP_GAIN = 0.7;
 /** Multiplier under a palm mute: the hand takes some of the attack. */
 const PALM_MUTE_GAIN = 0.75;
+/** Every second stroke of a tremolo is a touch softer, so the run reads as a hand. */
+const TREMOLO_ALT_GAIN = 0.85;
 /** Accent boost multiplier applied on top of the technique-derived base gain. */
 const ACCENT_MULTIPLIER = 1.3;
 
@@ -413,6 +415,7 @@ export function useFingerpickAudioEngine() {
 					ghost: GHOST_GAIN,
 					slap: SLAP_GAIN,
 					palmMute: PALM_MUTE_GAIN,
+					tremoloAltGain: TREMOLO_ALT_GAIN,
 					accentMultiplier: ACCENT_MULTIPLIER,
 					letRingLifetimeTaus: LET_RING_LIFETIME_TAUS,
 				},

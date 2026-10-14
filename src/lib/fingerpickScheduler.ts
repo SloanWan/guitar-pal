@@ -54,6 +54,11 @@ export interface ScheduleEvent {
 	/** A right-hand hit this event voices (a slap's dead strike on this string). */
 	percussion?: Percussion;
 	/**
+	 * A tremolo stroke after the first: played a touch softer (`gains.tremoloAltGain`)
+	 * on every second stroke, so the run reads as a hand, not a machine.
+	 */
+	altStroke?: true;
+	/**
 	 * Per-string gain multiplier from a roll's stagger taper (arpeggiated chord). Present
 	 * only on events belonging to a slot that carries a `stroke`; applied on top of the
 	 * normal gain ladder in the engine. Absent on non-rolled slots (backward compat).
@@ -300,6 +305,27 @@ export function computeRollOffsets(
  *    `stroke`, its per-string events are staggered (arpeggiated) per `rollParams`; the
  *    slot's own duration and the following slot's start time are unchanged.
  */
+/** A tremolo speed as the note value it names. */
+const TREMOLO_DURATION: Record<NonNullable<NoteEffects["tremolo"]>["speed"], Duration> = {
+	"8th": "eighth",
+	"16th": "sixteenth",
+	"32nd": "32nd",
+};
+
+/**
+ * Where a tremolo-picked note's strokes fall inside its slot, as seconds from
+ * the slot's start, with each stroke's length. The strokes are spaced evenly
+ * at the nearest count to the speed's note value, so they always add up to
+ * the slot (a dotted slot or an odd grid never leaves a gap or a spill); a
+ * slot shorter than one stroke is one stroke.
+ */
+export function tremoloStrokes(slotDuration: number, speed: NonNullable<NoteEffects["tremolo"]>["speed"], quarter: number): { offset: number; duration: number }[] {
+	const nominal = DURATION_QUARTERS[TREMOLO_DURATION[speed]] * quarter;
+	const count = Math.max(1, Math.round(slotDuration / nominal));
+	const duration = slotDuration / count;
+	return Array.from({ length: count }, (_, k) => ({ offset: k * duration, duration }));
+}
+
 /** The strings a hit of each kind strikes dead; a body tap strikes none (it is not voiced). */
 export const PERCUSSION_STRINGS: Record<PercussionKind, readonly number[]> = {
 	slap: [0, 1, 2, 3, 4, 5],
@@ -365,19 +391,48 @@ export function fingerpickPatternToScheduleEvents(
 					const midi = soundingMidi(stringIndex, sf.fret ?? 0, capo);
 
 					const roll = rollOffsets?.get(stringIndex);
-					const event: ScheduleEvent = {
-						time: currentTime + (roll?.timeOffset ?? 0),
-						duration: slotDuration,
+					const common = {
 						stringIndex,
 						midi,
 						muted: sf.muted,
 						measureIndex,
 						slotIndex,
 						...(sf.link && { link: sf.link }),
-						...(sf.effects && Object.keys(sf.effects).length > 0 && { effects: sf.effects }),
 						...(spanCovers(index, slot.id, "letRing", stringIndex) && { letRing: true }),
 						...(spanCovers(index, slot.id, "palmMute", stringIndex) && { palmMute: true }),
 						...(roll && { rollGain: roll.gain }),
+					};
+					const start = currentTime + (roll?.timeOffset ?? 0);
+
+					// Tremolo picking: the same note struck again and again for the slot's
+					// length — one event per stroke, the tremolo itself taken off them.
+					// A tie after the slot lengthens the last stroke, as a player would.
+					const tremolo = sf.effects?.tremolo;
+					if (tremolo && !slot.isGraceNote) {
+						const { tremolo: _speed, ...rest } = sf.effects ?? {};
+						void _speed;
+						const effects = Object.keys(rest).length > 0 ? { effects: rest as NoteEffects } : {};
+						let last: ScheduleEvent | null = null;
+						tremoloStrokes(slotDuration, tremolo.speed, quarter).forEach((stroke, k) => {
+							const event: ScheduleEvent = {
+								time: start + stroke.offset,
+								duration: stroke.duration,
+								...common,
+								...effects,
+								...(k % 2 === 1 && { altStroke: true as const }),
+							};
+							events.push(event);
+							last = event;
+						});
+						sounding[stringIndex] = last;
+						return;
+					}
+
+					const event: ScheduleEvent = {
+						time: start,
+						duration: slotDuration,
+						...common,
+						...(sf.effects && Object.keys(sf.effects).length > 0 && { effects: sf.effects }),
 					};
 					events.push(event);
 					sounding[stringIndex] = event;
@@ -855,6 +910,8 @@ export interface NoteGains {
 	slap: number;
 	/** Multiplier under a palm mute. */
 	palmMute: number;
+	/** Multiplier on every second stroke of a tremolo. */
+	tremoloAltGain: number;
 	accentMultiplier: number;
 	letRingLifetimeTaus: number;
 }
@@ -916,6 +973,7 @@ export const AUDIO_KINDS: ReadonlySet<string> = new Set([
 	"accent",
 	"staccato",
 	"ghost",
+	"tremolo",
 	"letRing",
 	"palmMute",
 	"slap",
@@ -939,6 +997,7 @@ export function noteGain(event: ScheduleEvent, gains: NoteGains, legato: LegatoT
 	if (volume === null) volume = gains.normal;
 	if (event.effects?.accent || event.percussion?.accent) volume *= gains.accentMultiplier;
 	if (event.palmMute) volume *= gains.palmMute;
+	if (event.altStroke) volume *= gains.tremoloAltGain;
 	if (event.rollGain !== undefined) volume *= event.rollGain;
 	return volume;
 }

@@ -16,6 +16,7 @@ import {
 	type NoteContext,
 } from "@/lib/techniqueRegistry";
 import { TECHNIQUE_SUPPORT } from "@/lib/tabImport";
+import { AUDIO_KINDS } from "@/lib/fingerpickScheduler";
 import { noteToV2 } from "@/lib/fingerpickCompat";
 import type { Technique } from "@/lib/fingerpickTypes";
 
@@ -43,6 +44,13 @@ describe("technique registry", () => {
 			if (technique === "vibrato-bar") continue;
 			expect(supportOf(kind), technique).toEqual({ render: support.renderSupported, audio: support.audioSupported });
 		}
+	});
+
+	it("flags `audio` exactly for the kinds the scheduler voices", () => {
+		for (const def of TECHNIQUES) {
+			expect(def.audio, def.kind).toBe(AUDIO_KINDS.has(def.kind));
+		}
+		for (const kind of AUDIO_KINDS) expect(techniqueDef(kind), kind).toBeDefined();
 	});
 
 	it("validates parameters through the registry schemas", () => {

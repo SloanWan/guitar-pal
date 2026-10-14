@@ -18,7 +18,7 @@
  * defaults can be chosen by ear; wiring them into the scheduler is a follow-up.
  */
 
-import type { Technique } from "@/lib/fingerpickTypes";
+import type { Technique, NoteEffects } from "@/lib/fingerpickTypes";
 
 // ─── Sampling ─────────────────────────────────────────────────────────────────
 
@@ -384,9 +384,38 @@ export function bendTargetToCents(semitones: number | undefined): number {
 }
 
 /**
- * The expression a technique asks for, or null when it has none. Bend techniques
- * that carry their height in the name ignore `bendTarget`; the release variants
- * read it (a released bend can be any height).
+ * The expression a note's effects ask for, or null when they ask for none: a
+ * bend from `effects.bend` (its height in semitones, pre-bent or released as
+ * flagged) and a vibrato from `effects.vibrato` (wide or not), composed when
+ * the note has both.
+ */
+export function expressionForEffects(
+	effects: NoteEffects | undefined,
+	defaults: { bend: BendParams; vibrato: VibratoParams; wideVibrato: VibratoParams } = {
+		bend: DEFAULT_BEND_PARAMS,
+		vibrato: DEFAULT_VIBRATO_PARAMS,
+		wideVibrato: WIDE_VIBRATO_PARAMS,
+	},
+): ExpressionSpec | null {
+	if (!effects) return null;
+	const spec: ExpressionSpec = {};
+	if (effects.bend) {
+		spec.bend = {
+			...defaults.bend,
+			targetCents: bendTargetToCents(effects.bend.semitones),
+			preBend: effects.bend.pre === true,
+			release: effects.bend.release === true,
+		};
+	}
+	if (effects.vibrato) spec.vibrato = effects.vibrato.wide ? defaults.wideVibrato : defaults.vibrato;
+	return spec.bend || spec.vibrato ? spec : null;
+}
+
+/**
+ * The expression a v1 technique asks for, or null when it has none. Bend
+ * techniques that carry their height in the name ignore `bendTarget`; the
+ * release variants read it (a released bend can be any height).
+ * @deprecated the scheduler reads `expressionForEffects`; this serves the bend lab until it moves.
  */
 export function expressionForTechnique(
 	technique: Technique,

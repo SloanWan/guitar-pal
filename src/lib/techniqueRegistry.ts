@@ -348,7 +348,7 @@ export const TECHNIQUES: readonly TechniqueDef[] = [
 		ascii: { line: "P.M." },
 		params: z.object({ kind: z.literal("palmMute") }),
 		render: true,
-		audio: false,
+		audio: true,
 		key: "M",
 	},
 	{
@@ -381,7 +381,7 @@ export const TECHNIQUES: readonly TechniqueDef[] = [
 		ascii: { above: "S" },
 		params: z.object({ kind: z.literal("slap"), accent: z.boolean().optional() }),
 		render: false,
-		audio: false,
+		audio: true,
 		key: "S",
 	},
 	{
@@ -392,7 +392,7 @@ export const TECHNIQUES: readonly TechniqueDef[] = [
 		ascii: { above: "T" },
 		params: z.object({ kind: z.literal("thumbSlap"), accent: z.boolean().optional() }),
 		render: false,
-		audio: false,
+		audio: true,
 	},
 	{
 		kind: "bodyTap",

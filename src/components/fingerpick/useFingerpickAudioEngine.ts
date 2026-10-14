@@ -55,6 +55,10 @@ const TECHNIQUE_GAIN = 0.5;
 const TAPPING_GAIN = 0.8;
 /** Gain for ghost notes (parenthesised/bracketed notes). */
 const GHOST_GAIN = 0.3;
+/** A hit's dead strike across the strings (a slap). */
+const SLAP_GAIN = 0.7;
+/** Multiplier under a palm mute: the hand takes some of the attack. */
+const PALM_MUTE_GAIN = 0.75;
 /** Accent boost multiplier applied on top of the technique-derived base gain. */
 const ACCENT_MULTIPLIER = 1.3;
 
@@ -82,6 +86,9 @@ const LET_RING_DECAY_TC_S = 1.5;
  */
 const LET_RING_LIFETIME_TAUS = 4;
 
+/** Ceiling on a palm-muted note's decay τ (s): the hand on the strings stops them short. */
+const PALM_MUTE_DECAY_TC_S = 0.12;
+
 // ─── Envelope parameters ────────────────────────────────────────────────────
 // Tunable per-note envelope constants. Defaults equal the hardcoded production
 // values above, so an engine consumer that never calls setEnvelopeParams() gets
@@ -97,6 +104,8 @@ export interface EnvelopeParams {
 	voiceStealFadeTau: number;
 	/** Fixed decay time constant (s) used instead of the duration-derived τ when letRing is set. */
 	letRingDecayTc: number;
+	/** Ceiling on a palm-muted note's decay τ (s). */
+	palmMuteDecayTc: number;
 	/** Margin (s) added past a normal note's end before its hard source.stop(). */
 	sourceStopBuffer: number;
 }
@@ -106,6 +115,7 @@ export const DEFAULT_ENVELOPE: EnvelopeParams = {
 	minDecayTc: MIN_DECAY_TC_S,
 	voiceStealFadeTau: VOICE_STEAL_FADE_TAU,
 	letRingDecayTc: LET_RING_DECAY_TC_S,
+	palmMuteDecayTc: PALM_MUTE_DECAY_TC_S,
 	sourceStopBuffer: SOURCE_STOP_BUFFER_S,
 };
 
@@ -401,6 +411,8 @@ export function useFingerpickAudioEngine() {
 					technique: TECHNIQUE_GAIN,
 					tapping: TAPPING_GAIN,
 					ghost: GHOST_GAIN,
+					slap: SLAP_GAIN,
+					palmMute: PALM_MUTE_GAIN,
 					accentMultiplier: ACCENT_MULTIPLIER,
 					letRingLifetimeTaus: LET_RING_LIFETIME_TAUS,
 				},

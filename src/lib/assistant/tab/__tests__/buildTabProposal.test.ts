@@ -129,8 +129,8 @@ describe("buildTabProposal", () => {
 				"5:0", "3:2", "2:1", "2:1", "1:0", "3:2", "2:1",
 			]);
 			// The fourth cell is the 2 carried over the beat line, not struck again.
-			expect(slots[3].strings[1].tied).toBe(true);
-			expect(slots[2].strings[1].tied).toBe(false);
+			expect(slots[3].strings[1].link).toEqual({ kind: "tie" });
+			expect(slots[2].strings[1].link).toBeUndefined();
 			expect(codes(p)).toEqual([]);
 		});
 
@@ -138,14 +138,14 @@ describe("buildTabProposal", () => {
 			const p = build({ chordWords: [C], order: order("R_3 2"), duration: "eighth" });
 			const slots = p.pattern.measures[0].slots;
 			expect(slots.map((s) => s.duration)).toEqual(["quarter", "eighth", "eighth", "quarter", "eighth", "eighth"]);
-			expect(slots.every((s) => s.strings.every((x) => !x.tied))).toBe(true);
+			expect(slots.every((s) => s.strings.every((x) => x.link === undefined))).toBe(true);
 		});
 
 		it("opens the next bar with a tied note when a hold crosses the bar line", () => {
 			const p = build({ chordWords: [Am], order: order("5 3 2 1 3 2 1 3 _ 2 1 3"), duration: "eighth" });
 			expect(p.pattern.measures).toHaveLength(2);
 			const second = p.pattern.measures[1].slots;
-			expect(second[0].strings[2]).toMatchObject({ fret: 2, tied: true });
+			expect(second[0].strings[2]).toMatchObject({ fret: 2, link: { kind: "tie" } });
 			expect(sounded(p.pattern.measures[1]).slice(0, 4)).toEqual(["3:2", "2:1", "1:0", "3:2"]);
 		});
 

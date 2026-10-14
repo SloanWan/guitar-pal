@@ -30,14 +30,11 @@ export interface GridNote extends NoteMarks {
 }
 
 /**
- * A note as the draft holds it: the v2 marks, plus the v1 fields the
- * validator still requires on a note (`technique`, `tied`), which it fills
- * from the marks.
+ * A note as the draft holds it: a note, plus the bracket flags the validator
+ * folds into spans (a draft has no slot ids to anchor a span on yet).
  */
 export interface DraftStringFret extends NoteMarks {
 	fret: number | null;
-	technique: null;
-	tied: false;
 	muted: boolean;
 }
 
@@ -50,12 +47,12 @@ export interface DraftSlot {
 }
 
 export function emptyStrings(): DraftStringFret[] {
-	return Array.from({ length: 6 }, () => ({ fret: null, technique: null, tied: false, muted: false }));
+	return Array.from({ length: 6 }, () => ({ fret: null, muted: false }));
 }
 
 /** A draft note from a grid note: the marks it carries, nothing it does not. */
 export function draftNote(note: GridNote): DraftStringFret {
-	const out: DraftStringFret = { fret: note.fret, technique: null, tied: false, muted: note.muted };
+	const out: DraftStringFret = { fret: note.fret, muted: note.muted };
 	if (note.link) out.link = note.link;
 	if (note.effects && Object.keys(note.effects).length > 0) out.effects = note.effects;
 	if (note.palmMute) out.palmMute = true;

@@ -4,10 +4,10 @@ import type {
 	FingerpickPattern,
 	Measure,
 	StringFret,
-	Technique,
 } from "@/lib/fingerpickTypes";
 import type { ValidationIssue } from "./types";
-import { isRenderSupported } from "./techniqueSupport";
+import { migratePattern } from "./migratePattern";
+import { FINGERPICK_SCHEMA_VERSION } from "@/lib/fingerpickTypes";
 import { normalizeCapo } from "@/lib/strumProgressions";
 import {
 	effectsSchema,
@@ -17,7 +17,6 @@ import {
 	spanSchema,
 	supportOf,
 } from "@/lib/techniqueRegistry";
-import { syncTechniqueFields } from "@/lib/fingerpickCompat";
 import type { NoteEffects, Percussion, Span, Stroke } from "@/lib/fingerpickTypes";
 
 const ALL_STROKES = new Set<Stroke>(["roll-down", "roll-up", "brush-down", "brush-up"]);
@@ -62,23 +61,10 @@ function computeUniformDuration(slotCount: number, ts: [number, number]): Durati
 	return match ? match[0] : "eighth";
 }
 
-// ─── Technique helper ─────────────────────────────────────────────────────────
-
-const ALL_TECHNIQUES = new Set<NonNullable<Technique>>([
-	"hammer-on", "pull-off", "slide-up", "slide-down", "bend-full", "bend-half",
-	"bend-quarter", "bend-release", "pre-bend", "pre-bend-release", "vibrato",
-	"vibrato-wide", "vibrato-bar", "tapping", "trill", "harmonic-natural",
-	"harmonic-artificial", "whammy-dive", "whammy-pull", "pick-scrape", "grace-note",
-]);
-
-function isKnownTechnique(v: unknown): v is NonNullable<Technique> {
-	return typeof v === "string" && ALL_TECHNIQUES.has(v as NonNullable<Technique>);
-}
-
 // ─── Default constructors ─────────────────────────────────────────────────────
 
 function silentStringFret(): StringFret {
-	return { fret: null, technique: null, tied: false, muted: false };
+	return { fret: null, muted: false };
 }
 
 function makeDefaultStrings(): BeatSlot["strings"] {
@@ -129,42 +115,8 @@ function validateStringFret(
 		// non-number, non-null fret → treat as silent (no warning — "malformed → silent default")
 	}
 
-	// Technique
-	let technique: Technique = null;
-	if (obj.technique !== null && obj.technique !== undefined) {
-		if (isKnownTechnique(obj.technique)) {
-			if (!isRenderSupported(obj.technique)) {
-				warnings.push({
-					code: "UNSUPPORTED_TECHNIQUE",
-					path: `${path}.technique`,
-					message: `technique "${obj.technique}" detected but unsupported, dropped to stay renderable`,
-					original: obj.technique,
-					repairedTo: null,
-				});
-			} else {
-				technique = obj.technique;
-			}
-		}
-		// unknown string or non-string → null, no warning
-	}
-
-	const tied   = obj.tied   === true;
-	const muted  = obj.muted  === true;
-
-	const result: StringFret = { fret, technique, tied, muted };
-
-	if (typeof obj.bendTarget === "number")        result.bendTarget = obj.bendTarget;
-	if (obj.palmMute === true)                     result.palmMute = true;
-	if (obj.letRing  === true)                     result.letRing  = true;
-	if (obj.staccato === true)                     result.staccato = true;
-	if (obj.accent   === true)                     result.accent   = true;
-	if (obj.ghostNote === true)                    result.ghostNote = true;
-	if (obj.tremoloPickingSpeed === "8th"  ||
-	    obj.tremoloPickingSpeed === "16th" ||
-	    obj.tremoloPickingSpeed === "32nd")
-		result.tremoloPickingSpeed = obj.tremoloPickingSpeed as "8th" | "16th" | "32nd";
-	if (obj.pickStroke === "down" || obj.pickStroke === "up")
-		result.pickStroke = obj.pickStroke as "down" | "up";
+	const muted = obj.muted === true;
+	const result: StringFret = { fret, muted };
 
 	// ── v2: link + effects, each kind by its registry schema ──────────────
 	if (obj.link !== undefined && obj.link !== null) {
@@ -501,7 +453,8 @@ export function validateFingerpickPattern(raw: unknown): {
 		return { pattern: null, errors, warnings };
 	}
 
-	const obj = raw as Record<string, unknown>;
+	// Data written before the technique model v2 is brought up to it first.
+	const obj = migratePattern(raw) as Record<string, unknown>;
 
 	if (!Array.isArray(obj.measures)) {
 		errors.push({
@@ -573,13 +526,12 @@ export function validateFingerpickPattern(raw: unknown): {
 
 	uniqueSlotIds(measures, warnings);
 
-	const pattern: FingerpickPattern = { id, name, description, bpm, timeSignature, measures };
+	const pattern: FingerpickPattern = { id, name, description, schemaVersion: FINGERPICK_SCHEMA_VERSION, bpm, timeSignature, measures };
 	// Same fold as `normalizeLoadedPattern`: a capo is kept only when it is a
 	// real fret, so no pattern leaves here with one the UI cannot show.
 	const capo = normalizeCapo(obj.capo);
 	if (capo > 0) pattern.capo = capo;
 	const spans = validateSpans(obj.spans, measures, warnings);
 	if (spans !== undefined) pattern.spans = spans;
-	// Both technique representations in step, whichever the input wrote.
-	return { pattern: syncTechniqueFields(pattern), errors, warnings };
+	return { pattern, errors, warnings };
 }

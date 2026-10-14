@@ -20,7 +20,6 @@ import { tripletGroups } from "@/lib/fingerpickEdit";
 import {
 	beamGroupsFor,
 	bendHeightLabel,
-	bendMarkFor,
 	bendMarkForEffect,
 	bracketSpans,
 	fingerpickToVexFlow,
@@ -28,7 +27,7 @@ import {
 	VEX_DURATION,
 } from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, FingerpickPattern, Measure, StringFret, Duration, Technique } from "@/lib/fingerpickTypes";
-import { syncTechniqueFields } from "@/lib/fingerpickCompat";
+import { migratePattern } from "@/lib/tabImport";
 import { indexPattern } from "@/lib/fingerpickIndex";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -38,8 +37,6 @@ function strings6(
 ): [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret] {
 	const make = (i: number): StringFret => ({
 		fret: null,
-		technique: null,
-		tied: false,
 		muted: false,
 		...(overrides[i] ?? {}),
 	});
@@ -54,9 +51,9 @@ function beatSlot(
 	return { id, duration, strings: strings6(strOverrides) };
 }
 
-/** The index of a measure read on its own, its v1 flags folded to spans — what the converter builds without a context. */
+/** The index of measures read as a pattern, their bracket flags folded to spans by the migrator. */
 function indexOf(...measures: Measure[]) {
-	return indexPattern(syncTechniqueFields({ id: "p", name: "p", bpm: 100, timeSignature: [4, 4], measures }));
+	return indexPattern(migratePattern({ id: "p", name: "p", bpm: 100, timeSignature: [4, 4], measures }) as FingerpickPattern);
 }
 
 function measure(slots: BeatSlot[]): Measure {
@@ -180,7 +177,7 @@ describe("fingerpickToVexFlow — technique modifiers", () => {
 		const { notes, connectors } = fingerpickToVexFlow(
 			measure([
 				beatSlot("s1", "quarter", { 0: { fret: 0 } }),
-				beatSlot("s2", "quarter", { 0: { fret: 2, technique: "hammer-on" } }),
+				beatSlot("s2", "quarter", { 0: { fret: 2, link: { kind: "hammer" } } }),
 			])
 		);
 		expect(notes).toHaveLength(2);
@@ -192,7 +189,7 @@ describe("fingerpickToVexFlow — technique modifiers", () => {
 		const { connectors } = fingerpickToVexFlow(
 			measure([
 				beatSlot("s1", "quarter", { 1: { fret: 5 } }),
-				beatSlot("s2", "quarter", { 1: { fret: 3, technique: "pull-off" } }),
+				beatSlot("s2", "quarter", { 1: { fret: 3, link: { kind: "pull" } } }),
 			])
 		);
 		expect(connectors).toHaveLength(1);
@@ -203,7 +200,7 @@ describe("fingerpickToVexFlow — technique modifiers", () => {
 		const { connectors } = fingerpickToVexFlow(
 			measure([
 				beatSlot("s1", "quarter", { 2: { fret: 3 } }),
-				beatSlot("s2", "quarter", { 2: { fret: 5, technique: "slide-up" } }),
+				beatSlot("s2", "quarter", { 2: { fret: 5, link: { kind: "slide" } } }),
 			])
 		);
 		expect(connectors).toHaveLength(1);
@@ -214,7 +211,7 @@ describe("fingerpickToVexFlow — technique modifiers", () => {
 		const { connectors } = fingerpickToVexFlow(
 			measure([
 				beatSlot("s1", "quarter", { 3: { fret: 7 } }),
-				beatSlot("s2", "quarter", { 3: { fret: 5, technique: "slide-down" } }),
+				beatSlot("s2", "quarter", { 3: { fret: 5, link: { kind: "slide" } } }),
 			])
 		);
 		expect(connectors).toHaveLength(1);
@@ -225,7 +222,7 @@ describe("fingerpickToVexFlow — technique modifiers", () => {
 		const { connectors } = fingerpickToVexFlow(
 			measure([
 				beatSlot("s1", "quarter", { 4: { fret: 2 } }),
-				beatSlot("s2", "quarter", { 4: { fret: 2, tied: true } }),
+				beatSlot("s2", "quarter", { 4: { fret: 2, link: { kind: "tie" } } }),
 			])
 		);
 		expect(connectors).toHaveLength(1);
@@ -334,50 +331,22 @@ describe("bendHeightLabel", () => {
 	});
 });
 
-describe("bendMarkFor", () => {
-	it("named bends draw an up arrow with their own height, ignoring bendTarget", () => {
-		expect(bendMarkFor("bend-full", 0.5)).toEqual({ phrase: [{ type: "up", text: "Full" }] });
-		expect(bendMarkFor("bend-half")).toEqual({ phrase: [{ type: "up", text: "1/2" }] });
-		expect(bendMarkFor("bend-quarter", 2)).toEqual({ phrase: [{ type: "up", text: "1/4" }] });
-	});
-
-	it("a release draws up then down, with the height from bendTarget", () => {
-		expect(bendMarkFor("bend-release", 1)).toEqual({
-			phrase: [{ type: "up", text: "1/2" }, { type: "down", text: "" }],
-		});
-	});
-
-	it("pre-bends carry a PB label; only the release variant draws an arrow", () => {
-		expect(bendMarkFor("pre-bend", 1)).toEqual({ phrase: [], preBendLabel: "PB 1/2" });
-		expect(bendMarkFor("pre-bend-release")).toEqual({
-			phrase: [{ type: "down", text: "" }],
-			preBendLabel: "PB Full",
-		});
-	});
-
-	it("is null for anything that is not a bend", () => {
-		for (const t of [null, "hammer-on", "vibrato", "vibrato-bar", "slide-up", "trill"] as const) {
-			expect(bendMarkFor(t)).toBeNull();
-		}
-	});
-});
-
 describe("fingerpickToVexFlow — bends", () => {
 	it("counts the notes carrying a bend or vibrato, for the width pass", () => {
 		const rd = fingerpickToVexFlow(
 			measure([
-				beatSlot("s1", "quarter", { 2: { fret: 7, technique: "bend-full" } }),
+				beatSlot("s1", "quarter", { 2: { fret: 7, effects: { bend: { semitones: 2 } } } }),
 				beatSlot("s2", "quarter", { 2: { fret: 7 } }),
-				beatSlot("s3", "quarter", { 2: { fret: 7, technique: "pre-bend-release", bendTarget: 2 } }),
-				beatSlot("s4", "quarter", { 0: { fret: 3, technique: "bend-half" }, 2: { fret: 7, technique: "bend-full" } }),
+				beatSlot("s3", "quarter", { 2: { fret: 7, effects: { bend: { semitones: 2.0, pre: true, release: true } } } }),
+				beatSlot("s4", "quarter", { 0: { fret: 3, effects: { bend: { semitones: 1 } } }, 2: { fret: 7, effects: { bend: { semitones: 2 } } } }),
 			])
 		);
 		expect(rd.expression).toEqual({ bends: 3, vibratos: 0, wideVibratos: 0 });
 		expect(fingerpickToVexFlow(measure([beatSlot("s1", "quarter", { 2: { fret: 7 } })])).expression).toEqual({ bends: 0, vibratos: 0, wideVibratos: 0 });
 		const vib = fingerpickToVexFlow(
 			measure([
-				beatSlot("v1", "half", { 2: { fret: 7, technique: "vibrato" } }),
-				beatSlot("v2", "half", { 2: { fret: 7, technique: "vibrato-wide" } }),
+				beatSlot("v1", "half", { 2: { fret: 7, effects: { vibrato: {} } } }),
+				beatSlot("v2", "half", { 2: { fret: 7, effects: { vibrato: { wide: true } } } }),
 			])
 		);
 		expect(vib.expression).toEqual({ bends: 0, vibratos: 1, wideVibratos: 1 });
@@ -385,7 +354,7 @@ describe("fingerpickToVexFlow — bends", () => {
 
 	it("a pre-bend writes its PB label as an annotation on the note", () => {
 		const rd = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 2: { fret: 7, technique: "pre-bend", bendTarget: 1 } })])
+			measure([beatSlot("s1", "quarter", { 2: { fret: 7, effects: { bend: { semitones: 1.0, pre: true } } } })])
 		);
 		const annotations = (rd.notes[0] as TabNote).getModifiers().filter((m) => m instanceof Annotation) as Annotation[];
 		expect(annotations.map((a) => a.getText())).toContain("PB 1/2");
@@ -446,14 +415,13 @@ describe("bracketSpans", () => {
 	});
 
 	it("the converter returns the spans with its own note indexes", () => {
-		const rd = fingerpickToVexFlow(
-			measure([
-				beatSlot("s0", "quarter", { 0: lr(0) }),
-				{ ...beatSlot("g", "sixteenth", { 0: { fret: 2 } }), isGraceNote: true },
-				beatSlot("s1", "quarter", { 0: lr(0) }),
-				beatSlot("s2", "half", { 0: { fret: 0 } }),
-			])
-		);
+		const m = measure([
+			beatSlot("s0", "quarter", { 0: lr(0) }),
+			{ ...beatSlot("g", "sixteenth", { 0: { fret: 2 } }), isGraceNote: true },
+			beatSlot("s1", "quarter", { 0: lr(0) }),
+			beatSlot("s2", "half", { 0: { fret: 0 } }),
+		]);
+		const rd = fingerpickToVexFlow(m, { index: indexOf(m) });
 		expect(rd.brackets).toEqual([{ kind: "let-ring", fromNoteIndex: 0, toNoteIndex: 1 }]);
 	});
 });
@@ -586,9 +554,9 @@ describe("fingerpickToVexFlow — eighth-triplet tuplets", () => {
 // ─── Note modifiers (B1) ──────────────────────────────────────────────────────
 
 describe("fingerpickToVexFlow — note modifiers", () => {
-	it("staccato: true attaches an Annotation modifier to the TabNote", () => {
+	it("a staccato effect attaches an Annotation modifier to the TabNote", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, staccato: true } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { staccato: true } } })])
 		);
 		expect(notes[0]).toBeInstanceOf(TabNote);
 		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
@@ -596,28 +564,28 @@ describe("fingerpickToVexFlow — note modifiers", () => {
 
 	it("accent: true attaches an Annotation modifier to the TabNote", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, accent: true } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { accent: true } } })])
 		);
 		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
 	});
 
 	it("pickStroke: 'down' attaches an Annotation modifier to the TabNote", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, pickStroke: "down" } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { pick: { direction: "down" } } } })])
 		);
 		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
 	});
 
 	it("pickStroke: 'up' attaches an Annotation modifier to the TabNote", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, pickStroke: "up" } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { pick: { direction: "up" } } } })])
 		);
 		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
 	});
 
 	it("tremoloPickingSpeed: '8th' attaches a Tremolo(1) modifier", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, tremoloPickingSpeed: "8th" } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { tremolo: { speed: "8th" } } } })])
 		);
 		const tremolo = notes[0].getModifiers().find((m) => m instanceof Tremolo) as
 			| (Tremolo & { num: number })
@@ -628,7 +596,7 @@ describe("fingerpickToVexFlow — note modifiers", () => {
 
 	it("tremoloPickingSpeed: '16th' attaches a Tremolo(2) modifier", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, tremoloPickingSpeed: "16th" } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { tremolo: { speed: "16th" } } } })])
 		);
 		const tremolo = notes[0].getModifiers().find((m) => m instanceof Tremolo) as
 			| (Tremolo & { num: number })
@@ -639,7 +607,7 @@ describe("fingerpickToVexFlow — note modifiers", () => {
 
 	it("tremoloPickingSpeed: '32nd' attaches a Tremolo(3) modifier", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, tremoloPickingSpeed: "32nd" } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { tremolo: { speed: "32nd" } } } })])
 		);
 		const tremolo = notes[0].getModifiers().find((m) => m instanceof Tremolo) as
 			| (Tremolo & { num: number })
@@ -652,14 +620,14 @@ describe("fingerpickToVexFlow — note modifiers", () => {
 	// in jsdom getWidth() returns 0 and throws. These tests require a browser-native runner.
 	it.skip("technique 'vibrato' attaches a Vibrato modifier to the TabNote [needs canvas]", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, technique: "vibrato" } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { vibrato: {} } } })])
 		);
 		expect(notes[0].getModifiers().some((m) => m instanceof Vibrato)).toBe(true);
 	});
 
 	it.skip("technique 'vibrato-wide' attaches a Vibrato modifier with width > 20 [needs canvas]", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, technique: "vibrato-wide" } })])
+			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { vibrato: { wide: true } } } })])
 		);
 		const vibrato = notes[0].getModifiers().find((m) => m instanceof Vibrato) as
 			| (Vibrato & { renderOptions: { width: number } })
@@ -889,15 +857,6 @@ describe("fingerpickToVexFlow — model v2", () => {
 		expect(fingerpickToVexFlow(p.measures[1]).leadIns).toEqual([]);
 	});
 
-	it("a v1 measure read without a context draws the same as its v2 reading", () => {
-		const v1 = measure([
-			beatSlot("s1", "quarter", { 2: { fret: 7, technique: "bend-release", bendTarget: 1, palmMute: true } }),
-			beatSlot("s2", "quarter", { 2: { fret: 7, technique: "vibrato", palmMute: true } }),
-		]);
-		const rd = fingerpickToVexFlow(v1);
-		expect(rd.expression).toEqual({ bends: 1, vibratos: 1, wideVibratos: 0 });
-		expect(rd.brackets).toEqual([{ kind: "palm-mute", fromNoteIndex: 0, toNoteIndex: 1 }]);
-	});
 
 	it("bendMarkForEffect writes the height, the pre-bend label and the release arrow", () => {
 		expect(bendMarkForEffect({ semitones: 1.5 })).toEqual({ phrase: [{ type: "up", text: "1 1/2" }] });

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { BeatSlot, FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
-import { syncTechniqueFields } from "@/lib/fingerpickCompat";
+import { migratePattern } from "@/lib/tabImport";
 import { patternToAsciiTab } from "@/lib/mcp/asciiTab";
 
-const silent = (): BeatSlot["strings"][number] => ({ fret: null, technique: null, tied: false, muted: false });
+const silent = (): BeatSlot["strings"][number] => ({ fret: null, muted: false });
 
 function slot(duration: BeatSlot["duration"], notes: Record<number, Partial<BeatSlot["strings"][number]>>, extra: Partial<BeatSlot> = {}): BeatSlot {
 	const strings = [silent(), silent(), silent(), silent(), silent(), silent()] as BeatSlot["strings"];
@@ -13,15 +13,15 @@ function slot(duration: BeatSlot["duration"], notes: Record<number, Partial<Beat
 }
 
 function pattern(slots: BeatSlot[][], over: Partial<FingerpickPattern> = {}): FingerpickPattern {
-	// Through the sync, so bracket flags become the spans the writer reads.
-	return syncTechniqueFields({
+	// Through the migrator, so bracket flags become the spans the writer reads.
+	return migratePattern({
 		id: "p",
 		name: "Test",
 		bpm: 80,
 		timeSignature: [4, 4],
 		measures: slots.map((s, i) => ({ id: `m${i}`, slots: s })),
 		...over,
-	});
+	}) as FingerpickPattern;
 }
 
 describe("patternToAsciiTab", () => {

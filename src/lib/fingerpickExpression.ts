@@ -18,7 +18,7 @@
  * defaults can be chosen by ear; wiring them into the scheduler is a follow-up.
  */
 
-import type { Technique, NoteEffects } from "@/lib/fingerpickTypes";
+import type { NoteEffects } from "@/lib/fingerpickTypes";
 
 // ─── Sampling ─────────────────────────────────────────────────────────────────
 
@@ -409,42 +409,4 @@ export function expressionForEffects(
 	}
 	if (effects.vibrato) spec.vibrato = effects.vibrato.wide ? defaults.wideVibrato : defaults.vibrato;
 	return spec.bend || spec.vibrato ? spec : null;
-}
-
-/**
- * The expression a v1 technique asks for, or null when it has none. Bend
- * techniques that carry their height in the name ignore `bendTarget`; the
- * release variants read it (a released bend can be any height).
- * @deprecated the scheduler reads `expressionForEffects`; this serves the bend lab until it moves.
- */
-export function expressionForTechnique(
-	technique: Technique,
-	bendTarget?: number,
-	defaults: { bend: BendParams; vibrato: VibratoParams; wideVibrato: VibratoParams } = {
-		bend: DEFAULT_BEND_PARAMS,
-		vibrato: DEFAULT_VIBRATO_PARAMS,
-		wideVibrato: WIDE_VIBRATO_PARAMS,
-	},
-): ExpressionSpec | null {
-	const bend = (over: Partial<BendParams>): ExpressionSpec => ({ bend: { ...defaults.bend, ...over } });
-	switch (technique) {
-		case "bend-quarter":
-			return bend({ targetCents: BEND_TARGET_CENTS.quarter, preBend: false, release: false });
-		case "bend-half":
-			return bend({ targetCents: BEND_TARGET_CENTS.half, preBend: false, release: false });
-		case "bend-full":
-			return bend({ targetCents: BEND_TARGET_CENTS.full, preBend: false, release: false });
-		case "bend-release":
-			return bend({ targetCents: bendTargetToCents(bendTarget), preBend: false, release: true });
-		case "pre-bend":
-			return bend({ targetCents: bendTargetToCents(bendTarget), preBend: true, release: false });
-		case "pre-bend-release":
-			return bend({ targetCents: bendTargetToCents(bendTarget), preBend: true, release: true });
-		case "vibrato":
-			return { vibrato: defaults.vibrato };
-		case "vibrato-wide":
-			return { vibrato: defaults.wideVibrato };
-		default:
-			return null;
-	}
 }

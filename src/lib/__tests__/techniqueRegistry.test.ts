@@ -15,11 +15,8 @@ import {
 	techniqueDef,
 	type NoteContext,
 } from "@/lib/techniqueRegistry";
-import { TECHNIQUE_SUPPORT } from "@/lib/tabImport";
 import { AUDIO_KINDS } from "@/lib/fingerpickScheduler";
 import { RENDER_KINDS } from "@/lib/fingerpickToVexFlow";
-import { noteToV2 } from "@/lib/fingerpickCompat";
-import type { Technique } from "@/lib/fingerpickTypes";
 
 describe("technique registry", () => {
 	it("has unique kinds, each in one category", () => {
@@ -36,16 +33,6 @@ describe("technique registry", () => {
 		expect(new Set(EFFECT_STACK_ORDER).size).toBe(EFFECT_KINDS.length);
 	});
 
-	it("agrees with the v1 support table for every v1 technique that maps to a kind", () => {
-		for (const [technique, support] of Object.entries(TECHNIQUE_SUPPORT)) {
-			const v2 = noteToV2({ fret: 7, technique: technique as Technique, tied: false, muted: false });
-			const kind = v2.link?.kind ?? (v2.effects ? Object.keys(v2.effects)[0] : undefined);
-			if (!kind) continue; // grace-note: a slot flag now
-			// vibrato-bar folds into vibrato, which renders and plays; everything else matches.
-			if (technique === "vibrato-bar") continue;
-			expect(supportOf(kind), technique).toEqual({ render: support.renderSupported, audio: support.audioSupported });
-		}
-	});
 
 	it("flags `render` exactly for the kinds the converter draws", () => {
 		for (const def of TECHNIQUES) {
@@ -69,7 +56,7 @@ describe("technique registry", () => {
 		expect(effectsSchema.safeParse({ bend: { semitones: 3.25 } }).success).toBe(false);
 		expect(effectsSchema.safeParse({ tap: true }).success).toBe(true);
 		expect(effectsSchema.safeParse({ tap: false }).success).toBe(false);
-		expect(percussionSchema.safeParse({ kind: "slap", accent: true }).success).toBe(true);
+		expect(percussionSchema.safeParse({ kind: "slap", effects: { accent: true } }).success).toBe(true);
 		expect(percussionSchema.safeParse({ kind: "clap" }).success).toBe(false);
 		expect(spanSchema.safeParse({ id: "s", kind: "palmMute", from: "a", to: "b", strings: [0, 5] }).success).toBe(true);
 		expect(spanSchema.safeParse({ id: "s", kind: "palmMute", from: "a", to: "b", strings: [6] }).success).toBe(false);

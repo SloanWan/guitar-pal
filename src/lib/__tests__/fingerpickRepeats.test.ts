@@ -111,7 +111,7 @@ describe("expandFingerpickPattern", () => {
 		const slot = (id: string): Measure["slots"][number] => ({
 			id,
 			duration: "quarter",
-			strings: Array.from({ length: 6 }, () => ({ fret: null, technique: null, tied: false, muted: false })) as Measure["slots"][number]["strings"],
+			strings: Array.from({ length: 6 }, () => ({ fret: null, muted: false })) as Measure["slots"][number]["strings"],
 		});
 		const p: FingerpickPattern = {
 			...pattern([

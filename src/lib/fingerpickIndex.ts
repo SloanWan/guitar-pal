@@ -57,6 +57,11 @@ export function indexPattern(pattern: FingerpickPattern): PatternIndex {
 }
 
 /** Whether `slotId` lies under a span of `kind` that covers `stringIndex`. */
+/** A span's id from what it is: deterministic, so a migration is reproducible. */
+export function spanIdFor(kind: Span["kind"], fromSlotId: string): string {
+	return `${kind}:${fromSlotId}`;
+}
+
 export function spanCovers(index: PatternIndex, slotId: string, kind: Span["kind"], stringIndex: number): boolean {
 	const spans = index.spansAtSlot.get(slotId);
 	if (!spans) return false;

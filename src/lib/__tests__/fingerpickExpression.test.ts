@@ -11,7 +11,6 @@ import {
 	seededRandom,
 	composeExpression,
 	expressionForEffects,
-	expressionForTechnique,
 	bendTargetToCents,
 	DEFAULT_BEND_PARAMS,
 	DEFAULT_VIBRATO_PARAMS,
@@ -399,52 +398,11 @@ describe("bendTargetToCents", () => {
 	});
 });
 
-describe("expressionForTechnique", () => {
-	it("named bends carry their height and ignore bendTarget", () => {
-		expect(expressionForTechnique("bend-quarter", 2)?.bend?.targetCents).toBe(50);
-		expect(expressionForTechnique("bend-half")?.bend?.targetCents).toBe(100);
-		expect(expressionForTechnique("bend-full", 0.5)?.bend?.targetCents).toBe(200);
-		expect(expressionForTechnique("bend-full")?.bend?.release).toBe(false);
-		expect(expressionForTechnique("bend-full")?.bend?.preBend).toBe(false);
-		expect(expressionForTechnique("bend-full")?.vibrato).toBeUndefined();
-	});
-
-	it("release and pre-bend variants read bendTarget", () => {
-		const rel = expressionForTechnique("bend-release", 1)?.bend;
-		expect(rel).toMatchObject({ targetCents: 100, preBend: false, release: true });
-		const pre = expressionForTechnique("pre-bend", 0.5)?.bend;
-		expect(pre).toMatchObject({ targetCents: 50, preBend: true, release: false });
-		const preRel = expressionForTechnique("pre-bend-release")?.bend;
-		expect(preRel).toMatchObject({ targetCents: 200, preBend: true, release: true });
-	});
-
-	it("vibrato techniques map to the vibrato defaults", () => {
-		expect(expressionForTechnique("vibrato")).toEqual({ vibrato: DEFAULT_VIBRATO_PARAMS });
-		expect(expressionForTechnique("vibrato-wide")).toEqual({ vibrato: WIDE_VIBRATO_PARAMS });
-	});
-
-	it("other techniques have no expression", () => {
-		for (const t of [null, "hammer-on", "slide-up", "vibrato-bar", "trill", "tapping"] as const) {
-			expect(expressionForTechnique(t)).toBeNull();
-		}
-	});
-
-	it("keeps the caller's tuned parameters when handed as defaults", () => {
-		const bend = { ...DEFAULT_BEND_PARAMS, riseMs: 90, riseShape: "linear" as const };
-		const spec = expressionForTechnique("bend-half", undefined, {
-			bend,
-			vibrato: DEFAULT_VIBRATO_PARAMS,
-			wideVibrato: WIDE_VIBRATO_PARAMS,
-		});
-		expect(spec?.bend).toMatchObject({ targetCents: 100, riseMs: 90, riseShape: "linear" });
-	});
-});
-
 describe("expressionForEffects", () => {
 	it("is null without a bend or a vibrato", () => {
 		expect(expressionForEffects(undefined)).toBeNull();
 		expect(expressionForEffects({})).toBeNull();
-		expect(expressionForEffects({ accent: true, tap: true })).toBeNull();
+		expect(expressionForEffects({ effects: { accent: true }, tap: true })).toBeNull();
 	});
 
 	it("reads a bend's height and shape from its parameters", () => {
@@ -461,20 +419,4 @@ describe("expressionForEffects", () => {
 		expect(both?.vibrato).toBe(DEFAULT_VIBRATO_PARAMS);
 	});
 
-	it("agrees with the v1 reading for every v1 technique", () => {
-		const cases: [Parameters<typeof expressionForTechnique>[0], number | undefined, Parameters<typeof expressionForEffects>[0]][] = [
-			["bend-quarter", undefined, { bend: { semitones: 0.5 } }],
-			["bend-half", undefined, { bend: { semitones: 1 } }],
-			["bend-full", undefined, { bend: { semitones: 2 } }],
-			["bend-release", 1, { bend: { semitones: 1, release: true } }],
-			["pre-bend", 0.5, { bend: { semitones: 0.5, pre: true } }],
-			["pre-bend-release", undefined, { bend: { semitones: 2, pre: true, release: true } }],
-			["vibrato", undefined, { vibrato: {} }],
-			["vibrato-wide", undefined, { vibrato: { wide: true } }],
-			["hammer-on", undefined, undefined],
-		];
-		for (const [technique, target, effects] of cases) {
-			expect(expressionForEffects(effects), technique as string).toEqual(expressionForTechnique(technique, target));
-		}
-	});
 });

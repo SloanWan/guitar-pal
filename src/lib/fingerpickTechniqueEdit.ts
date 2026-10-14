@@ -16,16 +16,13 @@ import {
 	type Cell,
 	type SlotTarget,
 } from "./fingerpickEdit";
-import { spanIdFor, syncNoteFromV2, syncTechniqueFields } from "./fingerpickCompat";
-import { indexPattern } from "./fingerpickIndex";
+import { indexPattern, spanIdFor } from "./fingerpickIndex";
 import { techniqueDef, type AvailabilityBlock, type NoteContext } from "./techniqueRegistry";
 
 /**
- * The editor's technique writes, in model v2 terms: a `link` on the note, an
- * entry in its `effects`, a `percussion` hit on the slot, a span over a run of
- * slots. Every write leaves the v1 fields in step (`syncNoteFromV2`,
- * `syncTechniqueFields`) until the readers are on v2. Pure, like the rest of
- * the edit library.
+ * The editor's technique writes: a `link` on the note, an entry in its
+ * `effects`, a `percussion` hit on the slot, a span over a run of slots.
+ * Pure, like the rest of the edit library.
  */
 
 // ── Availability ─────────────────────────────────────────────────────────────
@@ -76,10 +73,7 @@ function writeNote(
 	cell: Cell,
 	updater: (sf: StringFret) => StringFret,
 ): FingerpickPattern {
-	const prevFret = previousSlotFret(pattern, cell)?.fret ?? null;
-	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) =>
-		syncNoteFromV2(updater(sf), prevFret),
-	);
+	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, updater);
 }
 
 /** Write (or with null, remove) the note's link. A note arrives one way, so this replaces any other link. */
@@ -233,16 +227,12 @@ export function setSpanOver(
 	}
 	const others = (pattern.spans ?? []).filter((s) => s.kind !== kind);
 	const spans = [...others, ...rebuilt];
-	// The anchors were just written on live slots; only the flags need to
-	// follow. An empty list goes through the sync as a list (absent spans would
-	// read as "flags are the source" and bring the run back), then goes.
-	const out = syncTechniqueFields({ ...pattern, spans });
-	if (out.spans && out.spans.length === 0) {
-		const { spans: _none, ...rest } = out;
+	if (spans.length === 0) {
+		const { spans: _none, ...rest } = pattern;
 		void _none;
 		return rest;
 	}
-	return out;
+	return { ...pattern, spans };
 }
 
 /** The span of `kind` off every target when all of them are under one, on otherwise. */

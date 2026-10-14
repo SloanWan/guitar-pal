@@ -4,7 +4,7 @@ import { validateFingerpickPattern } from "../validateFingerpickPattern";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeSf(overrides: Record<string, unknown> = {}) {
-	return { fret: null, technique: null, tied: false, muted: false, ...overrides };
+	return { fret: null, muted: false, ...overrides };
 }
 
 function makeStrings(overrides: Record<number, Record<string, unknown>> = {}) {
@@ -222,43 +222,38 @@ describe("validateFingerpickPattern — strings normalization", () => {
 
 // ─── Technique downgrade ──────────────────────────────────────────────────────
 
-describe("validateFingerpickPattern — technique downgrade", () => {
-	it("drops unsupported technique to null and warns", () => {
-		const strings = makeStrings({ 0: { fret: 7, technique: "whammy-dive" } });
-		const raw = makePattern({
-			measures: [makeMeasure([makeSlot({ strings })])],
-		});
+describe("validateFingerpickPattern — data written before model v2", () => {
+	it("brings a v1 technique up to a link or an effect", () => {
+		const strings = makeStrings({ 0: { fret: 5, technique: "hammer-on" }, 1: { fret: 7, technique: "bend-release", bendTarget: 1 } });
+		const raw = makePattern({ measures: [makeMeasure([makeSlot({ strings })])] });
 		const { pattern, warnings } = validateFingerpickPattern(raw);
-		expect(pattern?.measures[0].slots[0].strings[0].technique).toBeNull();
-		expect(pattern?.measures[0].slots[0].strings[0].fret).toBe(7); // note preserved
+		expect(pattern?.measures[0].slots[0].strings[0]).toEqual({ fret: 5, muted: false, link: { kind: "hammer" } });
+		expect(pattern?.measures[0].slots[0].strings[1]).toEqual({ fret: 7, muted: false, effects: { bend: { semitones: 1, release: true } } });
+		expect(pattern?.schemaVersion).toBe(2);
+		expect(warnings.filter((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toHaveLength(0);
+	});
+
+	it("keeps a v1 technique the app does not draw as its effect, with a warning", () => {
+		const strings = makeStrings({ 0: { fret: 7, technique: "whammy-dive" } });
+		const raw = makePattern({ measures: [makeMeasure([makeSlot({ strings })])] });
+		const { pattern, warnings } = validateFingerpickPattern(raw);
+		expect(pattern?.measures[0].slots[0].strings[0]).toEqual({ fret: 7, muted: false, effects: { whammy: { kind: "dive" } } });
 		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(true);
 	});
 
 	it("keeps a bend, which renders and plays now, with its height", () => {
-		const strings = makeStrings({ 0: { fret: 7, technique: "bend-release", bendTarget: 1 } });
+		const strings = makeStrings({ 0: { fret: 7, effects: { bend: { semitones: 1.0, release: true } } } });
 		const raw = makePattern({ measures: [makeMeasure([makeSlot({ strings })])] });
 		const { pattern, warnings } = validateFingerpickPattern(raw);
-		expect(pattern?.measures[0].slots[0].strings[0]).toMatchObject({ technique: "bend-release", bendTarget: 1 });
+		expect(pattern?.measures[0].slots[0].strings[0]).toMatchObject({ effects: { bend: { semitones: 1.0, release: true } } });
 		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
 	});
 
-	it("preserves render-supported techniques", () => {
-		const strings = makeStrings({ 0: { fret: 5, technique: "hammer-on" } });
-		const raw = makePattern({
-			measures: [makeMeasure([makeSlot({ strings })])],
-		});
-		const { pattern, warnings } = validateFingerpickPattern(raw);
-		expect(pattern?.measures[0].slots[0].strings[0].technique).toBe("hammer-on");
-		expect(warnings.filter((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toHaveLength(0);
-	});
-
-	it("drops unknown technique strings to null silently", () => {
+	it("drops an unknown v1 technique string silently", () => {
 		const strings = makeStrings({ 1: { fret: 3, technique: "totally-fake" } });
-		const raw = makePattern({
-			measures: [makeMeasure([makeSlot({ strings })])],
-		});
+		const raw = makePattern({ measures: [makeMeasure([makeSlot({ strings })])] });
 		const { pattern } = validateFingerpickPattern(raw);
-		expect(pattern?.measures[0].slots[0].strings[1].technique).toBeNull();
+		expect(pattern?.measures[0].slots[0].strings[1]).toEqual({ fret: 3, muted: false });
 	});
 });
 
@@ -362,15 +357,14 @@ describe("validateFingerpickPattern — technique model v2", () => {
 			...extra,
 		});
 
-	it("keeps a well-formed link and effects, and fills the v1 fields from them", () => {
+	it("keeps a well-formed link and effects", () => {
 		const { pattern, warnings } = validateFingerpickPattern(
 			v2({ link: { kind: "slide", picked: true }, effects: { bend: { semitones: 1.5, hold: true }, vibrato: {} } }),
 		);
 		const sf = pattern!.measures[0].slots[0].strings[0];
 		expect(sf.link).toEqual({ kind: "slide", picked: true });
 		expect(sf.effects).toEqual({ bend: { semitones: 1.5, hold: true }, vibrato: {} });
-		expect(sf.technique).toBe("slide-up");
-		expect(sf.bendTarget).toBe(1.5);
+		expect("technique" in sf).toBe(false);
 		expect(pattern!.schemaVersion).toBe(2);
 		expect(warnings.map((w) => w.code)).toEqual([]);
 	});
@@ -423,7 +417,7 @@ describe("validateFingerpickPattern — technique model v2", () => {
 		expect(warnings.map((w) => w.code)).toContain("DUPLICATE_SLOT_ID");
 	});
 
-	it("keeps spans anchored on real slots in order and drops the rest, then writes the flags they mean", () => {
+	it("keeps spans anchored on real slots in order and drops the rest", () => {
 		const raw = makePattern({
 			schemaVersion: 2,
 			measures: [
@@ -440,8 +434,6 @@ describe("validateFingerpickPattern — technique model v2", () => {
 		const { pattern, warnings } = validateFingerpickPattern(raw);
 		expect(pattern!.spans?.map((s) => s.id)).toEqual(["ok"]);
 		expect(warnings.filter((w) => w.code === "INVALID_SPAN")).toHaveLength(3);
-		const flags = pattern!.measures.flatMap((m) => m.slots.map((s) => s.strings[0].palmMute === true));
-		expect(flags).toEqual([true, true, true]);
 	});
 
 	it("a v1 pattern without spans gets them from its flags", () => {

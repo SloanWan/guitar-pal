@@ -133,7 +133,7 @@ export function slotPitchLabels(
 	const labels: SlotPitchLabel[] = [];
 	slot.strings.forEach((sf, stringIndex) => {
 		if (sf.fret === null || sf.muted) return;
-		labels.push({ stringIndex, text: label(stringIndex, sf.fret), tied: sf.tied });
+		labels.push({ stringIndex, text: label(stringIndex, sf.fret), tied: sf.link?.kind === "tie" });
 	});
 	return labels;
 }

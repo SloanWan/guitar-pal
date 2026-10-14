@@ -1,5 +1,4 @@
 import {
-	FINGERPICK_SCHEMA_VERSION,
 	isBrush,
 	strokeDirection,
 	type EffectKind,
@@ -13,7 +12,6 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
-import { syncTechniqueFields } from "@/lib/fingerpickCompat";
 import {
 	bendTimeline,
 	composeExpression,
@@ -310,13 +308,10 @@ export const PERCUSSION_STRINGS: Record<PercussionKind, readonly number[]> = {
 };
 
 export function fingerpickPatternToScheduleEvents(
-	source: FingerpickPattern,
+	pattern: FingerpickPattern,
 	bpm: number,
 	rollParams: RollParams = DEFAULT_ROLL_PARAMS,
 ): ScheduleEvent[] {
-	// The scheduler reads model v2; a pattern still written in v1 terms (a
-	// preset, a lab fixture) is brought up to it here, unchanged if it already is.
-	const pattern = source.schemaVersion === FINGERPICK_SCHEMA_VERSION ? source : syncTechniqueFields(source);
 	const index = indexPattern(pattern);
 	const quarter = secondsPerQuarter(bpm, pattern.timeSignature);
 	// The TAB is written relative to the capo, so every string sounds this much

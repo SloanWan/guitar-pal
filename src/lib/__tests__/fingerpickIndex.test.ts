@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import type { BeatSlot, FingerpickPattern, StringFret } from "@/lib/fingerpickTypes";
 import { indexPattern, spanCovers } from "@/lib/fingerpickIndex";
 
-const silent = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
+const silent = (): StringFret => ({ fret: null, muted: false });
 const slot = (id: string): BeatSlot => ({
 	id,
 	duration: "quarter",

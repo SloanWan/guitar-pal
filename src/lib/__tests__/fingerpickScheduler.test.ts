@@ -52,8 +52,6 @@ function strings6(
 ): [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret] {
 	const make = (i: number): StringFret => ({
 		fret: null,
-		technique: null,
-		tied: false,
 		muted: false,
 		...(overrides[i] ?? {}),
 	});
@@ -274,7 +272,7 @@ describe("fingerpickPatternToScheduleEvents — MIDI resolution", () => {
 describe("fingerpickPatternToScheduleEvents — capo", () => {
 	const slots = [
 		slot("s1", "quarter", { 0: { fret: 3 }, 5: { fret: 0 } }),
-		slot("s2", "quarter", { 3: { muted: true }, 2: { fret: 5, technique: "slide-up" } }),
+		slot("s2", "quarter", { 3: { muted: true }, 2: { fret: 5, link: { kind: "slide" } } }),
 	];
 
 	it("raises every event by the capo, written frets and open dead notes alike", () => {
@@ -305,7 +303,7 @@ describe("fingerpickPatternToScheduleEvents — tied / silent strings", () => {
 	it("tied string produces no event (sustain — no re-attack)", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 5 } }),
-			slot("s2", "quarter", { 0: { fret: 5, tied: true } }),
+			slot("s2", "quarter", { 0: { fret: 5, link: { kind: "tie" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		// Only one event: the initial pluck; the tied slot produces nothing.
@@ -316,8 +314,8 @@ describe("fingerpickPatternToScheduleEvents — tied / silent strings", () => {
 	it("a tied slot lengthens the note it carries on, so the decay runs the written length", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 5 }, 2: { fret: 0 } }),
-			slot("s2", "quarter", { 0: { fret: 5, tied: true }, 2: { fret: 2 } }),
-			slot("s3", "eighth", { 0: { fret: 5, tied: true } }),
+			slot("s2", "quarter", { 0: { fret: 5, link: { kind: "tie" } }, 2: { fret: 2 } }),
+			slot("s3", "eighth", { 0: { fret: 5, link: { kind: "tie" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		const quarter = 60 / 120;
@@ -348,7 +346,7 @@ describe("fingerpickPatternToScheduleEvents — technique events", () => {
 	it("hammer-on technique is carried on the event", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 0 } }),
-			slot("s2", "quarter", { 0: { fret: 2, technique: "hammer-on" } }),
+			slot("s2", "quarter", { 0: { fret: 2, link: { kind: "hammer" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events[1].link).toEqual({ kind: "hammer" });
@@ -359,7 +357,7 @@ describe("fingerpickPatternToScheduleEvents — technique events", () => {
 		// Both source and destination emit separate events; audio plays as normal pluck.
 		const p = pattern(120, [
 			slot("s1", "quarter", { 3: { fret: 7 } }),
-			slot("s2", "quarter", { 3: { fret: 5, technique: "slide-down" } }),
+			slot("s2", "quarter", { 3: { fret: 5, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(2);
@@ -375,7 +373,7 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 	it("slide-up destination emits its own event with technique='slide-up'", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 5 } }),
-			slot("s2", "quarter", { 0: { fret: 7, technique: "slide-up" } }),
+			slot("s2", "quarter", { 0: { fret: 7, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(2);
@@ -388,8 +386,8 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 	it("chained slides (5→9→5): all three slots emit separate events", () => {
 		const p = pattern(120, [
 			slot("s1", "eighth", { 1: { fret: 5 } }),
-			slot("s2", "eighth", { 1: { fret: 9, technique: "slide-up" } }),
-			slot("s3", "half",   { 1: { fret: 5, technique: "slide-down" } }),
+			slot("s2", "eighth", { 1: { fret: 9, link: { kind: "slide" } } }),
+			slot("s3", "half",   { 1: { fret: 5, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(3);
@@ -403,7 +401,7 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 	it("slide destination followed by a normal note: all three slots emit events", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 2: { fret: 3 } }),
-			slot("s2", "quarter", { 2: { fret: 7, technique: "slide-up" } }),
+			slot("s2", "quarter", { 2: { fret: 7, link: { kind: "slide" } } }),
 			slot("s3", "quarter", { 2: { fret: 5 } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
@@ -418,7 +416,7 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 	it("slide destination on str0 does not suppress str3 events in the same slot", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 5 }, 3: { fret: 2 } }),
-			slot("s2", "quarter", { 0: { fret: 9, technique: "slide-up" }, 3: { fret: 4 } }),
+			slot("s2", "quarter", { 0: { fret: 9, link: { kind: "slide" } }, 3: { fret: 4 } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		// str0 s1, str3 s1, str0 s2, str3 s2 = 4 events
@@ -433,7 +431,7 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 	it("slide destination across a measure boundary emits its own event in the correct measure", () => {
 		const p = multiMeasurePattern(120, [
 			[slot("s1", "quarter", { 4: { fret: 0 } })],
-			[slot("s2", "quarter", { 4: { fret: 5, technique: "slide-up" } })],
+			[slot("s2", "quarter", { 4: { fret: 5, link: { kind: "slide" } } })],
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(2);
@@ -454,8 +452,8 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 		// eighth(0.25s) → quarter(0.5s) → half(1.0s)
 		const p = pattern(120, [
 			slot("s1", "eighth",  { 0: { fret: 5 } }),
-			slot("s2", "quarter", { 0: { fret: 7, technique: "slide-up" } }),
-			slot("s3", "half",    { 0: { fret: 9, technique: "slide-up" } }),
+			slot("s2", "quarter", { 0: { fret: 7, link: { kind: "slide" } } }),
+			slot("s3", "half",    { 0: { fret: 9, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(3);
@@ -469,7 +467,7 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 		// slide would otherwise fall back to a re-pluck (two attacks). See promoteSlideOrigins.
 		const p = pattern(120, [
 			slot("s1", "32nd",    { 2: { fret: 5 } }),
-			slot("s2", "quarter", { 2: { fret: 8, technique: "slide-up" } }),
+			slot("s2", "quarter", { 2: { fret: 8, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events[0].letRing).toBe(true); // origin promoted
@@ -1878,8 +1876,8 @@ describe("scheduleFingerpickNote — bend and vibrato detune curves", () => {
 		expect(src.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalled();
 	});
 
-	it("fingerpickPatternToScheduleEvents carries the effects onto the event, from v1 or v2 notes", () => {
-		const bent = pattern(120, [slot("s0", "quarter", { 2: { fret: 7, technique: "bend-release", bendTarget: 1 } })]);
+	it("fingerpickPatternToScheduleEvents carries the effects onto the event", () => {
+		const bent = pattern(120, [slot("s0", "quarter", { 2: { fret: 7, effects: { bend: { semitones: 1.0, release: true } } } })]);
 		const events = fingerpickPatternToScheduleEvents(bent, 120);
 		expect(events).toHaveLength(1);
 		expect(events[0].effects).toEqual({ bend: { semitones: 1, release: true } });
@@ -2315,12 +2313,6 @@ describe("fingerpickPatternToScheduleEvents — model v2 reads", () => {
 		]);
 	});
 
-	it("a v1 pattern is read through the same model: its flags become spans before scheduling", () => {
-		const v1 = pattern(120, [slot("s1", "quarter", { 4: { fret: 0, palmMute: true, technique: "hammer-on" } })]);
-		const [event] = fingerpickPatternToScheduleEvents(v1, 120);
-		expect(event.palmMute).toBe(true);
-		expect(event.link).toEqual({ kind: "hammer" });
-	});
 
 	it("a hit strikes its strings dead, skipping the strings the slot already strikes", () => {
 		const slap = { ...pattern(120, [{ ...slot("s1", "quarter", { 4: { fret: 0 } }), percussion: { kind: "slap" as const } }]), schemaVersion: 2 };
@@ -2328,7 +2320,7 @@ describe("fingerpickPatternToScheduleEvents — model v2 reads", () => {
 		expect(events).toHaveLength(6);
 		expect(events.filter((e) => e.percussion).map((e) => e.stringIndex)).toEqual([0, 1, 2, 3, 5]);
 		expect(events.filter((e) => e.percussion).every((e) => e.muted && e.time === 0)).toBe(true);
-		const thumb = { ...pattern(120, [{ ...slot("s1", "quarter"), percussion: { kind: "thumbSlap" as const, accent: true } }]), schemaVersion: 2 };
+		const thumb = { ...pattern(120, [{ ...slot("s1", "quarter"), percussion: { kind: "thumbSlap" as const, effects: { accent: true } } }]), schemaVersion: 2 };
 		expect(fingerpickPatternToScheduleEvents(thumb, 120).map((e) => e.stringIndex)).toEqual([...PERCUSSION_STRINGS.thumbSlap]);
 		const tap = { ...pattern(120, [{ ...slot("s1", "quarter"), percussion: { kind: "bodyTap" as const } }]), schemaVersion: 2 };
 		expect(fingerpickPatternToScheduleEvents(tap, 120)).toEqual([]);

@@ -1,6 +1,6 @@
 import type { Measure, Span } from "@/lib/fingerpickTypes";
 import { indexPattern } from "@/lib/fingerpickIndex";
-import { spanIdFor } from "@/lib/fingerpickCompat";
+import { spanIdFor } from "@/lib/fingerpickIndex";
 import type { RepeatDirective, ValidationIssue } from "./types";
 
 export const MAX_REPEAT_TIMES = 128;

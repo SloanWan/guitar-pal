@@ -1,63 +1,59 @@
 import { describe, it, expect } from "vitest";
 
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
+import { FINGERPICK_SCHEMA_VERSION } from "@/lib/fingerpickTypes";
 import { fingerpickPatternToScheduleEvents } from "@/lib/fingerpickScheduler";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
-import { stripV2, syncTechniqueFields } from "@/lib/fingerpickCompat";
+import { indexPattern } from "@/lib/fingerpickIndex";
 import { migratePattern, validateFingerpickPattern } from "@/lib/tabImport";
 import { normalizeLoadedPattern } from "@/lib/fingerpickEdit";
-import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 
 /**
- * The technique model v2 must not change what any existing pattern renders
- * or plays. Every preset goes through the migrator and must come out with
- * its v1 fields untouched (so the v1 readers see the same data), and the
- * converter and the scheduler must produce the same structures.
+ * Every preset is written in the technique model v2 and passes through every
+ * read path unchanged: the migrator leaves it alone, the validator keeps it
+ * whole, the load-time fold has nothing to fold, and the converter and the
+ * scheduler read it without a word of v1 on any note.
  */
 
-function renderShape(pattern: FingerpickPattern) {
-	return pattern.measures.map((m) => {
-		const rd = fingerpickToVexFlow(m);
-		return {
-			notes: rd.notes.map((n) => n.getCategory()),
-			modifiers: rd.notes.map((n) => n.getModifiers().map((mod) => mod.getCategory()).sort()),
-			connectors: rd.connectors.map((c) => c.getCategory()),
-			tuplets: rd.tuplets.length,
-			chordLabels: rd.chordLabels,
-			rolls: rd.rolls,
-			brackets: rd.brackets,
-			expression: rd.expression,
-			noteStrings: rd.noteStrings,
-			noteSlots: rd.noteSlots,
-		};
-	});
-}
+const V1_KEYS = ["technique", "tied", "bendTarget", "palmMute", "letRing", "staccato", "accent", "ghostNote", "tremoloPickingSpeed", "pickStroke"];
 
-describe("technique model v2 — golden against every preset", () => {
+describe("technique model v2 — every preset", () => {
 	for (const preset of PRESET_FINGERPICK_PATTERNS) {
 		describe(preset.name, () => {
-			const migrated = migratePattern(structuredClone(preset)) as FingerpickPattern;
-
-			it("keeps every v1 field exactly", () => {
-				expect(stripV2(migrated)).toEqual(preset);
+			it("is written in v2 with nothing of v1 on its notes", () => {
+				expect(preset.schemaVersion).toBe(FINGERPICK_SCHEMA_VERSION);
+				for (const measure of preset.measures) {
+					for (const slot of measure.slots) {
+						for (const sf of slot.strings) {
+							for (const key of V1_KEYS) expect(key in sf, `${slot.id}.${key}`).toBe(false);
+						}
+					}
+				}
 			});
 
-			it("renders the same", () => {
-				expect(renderShape(migrated)).toEqual(renderShape(preset));
+			it("passes the migrator untouched", () => {
+				expect(migratePattern(preset)).toBe(preset);
 			});
 
-			it("schedules the same events", () => {
-				expect(fingerpickPatternToScheduleEvents(migrated, preset.bpm)).toEqual(
-					fingerpickPatternToScheduleEvents(preset, preset.bpm),
-				);
-			});
-
-			it("survives the validator and the load-time fold unchanged", () => {
-				const { pattern, errors } = validateFingerpickPattern(structuredClone(preset));
+			it("survives the validator and the load-time fold whole", () => {
+				const { pattern, errors, warnings } = validateFingerpickPattern(structuredClone(preset));
 				expect(errors).toEqual([]);
-				expect(pattern).not.toBeNull();
-				expect(stripV2(pattern!)).toEqual({ ...preset, description: preset.description ?? "" });
-				expect(normalizeLoadedPattern(structuredClone(preset))).toEqual(syncTechniqueFields(structuredClone(preset)));
+				expect(warnings).toEqual([]);
+				expect(pattern).toEqual({ ...preset, description: preset.description ?? "" });
+				expect(normalizeLoadedPattern(structuredClone(preset))).toEqual(preset);
+			});
+
+			it("anchors every span on live slots", () => {
+				const index = indexPattern(preset);
+				for (const span of preset.spans ?? []) {
+					expect(index.spanMembers.get(span.id)?.length, span.id).toBeGreaterThan(0);
+				}
+			});
+
+			it("renders and schedules", () => {
+				const context = { index: indexPattern(preset) };
+				for (const measure of preset.measures) expect(() => fingerpickToVexFlow(measure, context)).not.toThrow();
+				expect(fingerpickPatternToScheduleEvents(preset, preset.bpm).length).toBeGreaterThan(0);
 			});
 		});
 	}

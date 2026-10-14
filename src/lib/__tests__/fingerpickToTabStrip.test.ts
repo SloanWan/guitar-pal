@@ -3,11 +3,9 @@ import { fingerpickToTabStrip, TAB_STRIP_WIDTH } from "../fingerpickToTabStrip";
 import { PRESET_FINGERPICK_PATTERNS } from "../fingerpickPatterns";
 import type { FingerpickPattern, StringFret } from "../fingerpickTypes";
 
-const silent = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
+const silent = (): StringFret => ({ fret: null, muted: false });
 const note = (fret: number, extra: Partial<StringFret> = {}): StringFret => ({
 	fret,
-	technique: null,
-	tied: false,
 	muted: false,
 	...extra,
 });
@@ -30,7 +28,7 @@ const TWO_BARS: FingerpickPattern = {
 			id: "m2",
 			slots: [
 				{ id: "m2-1", duration: "half", strings: [note(1, { muted: true }), silent(), silent(), silent(), silent(), silent()] },
-				{ id: "m2-2", duration: "half", strings: [note(2, { tied: true }), note(5), silent(), silent(), silent(), silent()] },
+				{ id: "m2-2", duration: "half", strings: [note(2, { link: { kind: "tie" } }), note(5), silent(), silent(), silent(), silent()] },
 			],
 		},
 	],

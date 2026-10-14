@@ -113,9 +113,9 @@ describe("slotPitchLabels", () => {
 
 	it("labels every played string in string order, high e first", () => {
 		const slot = makeEmptySlot("quarter");
-		slot.strings[5] = { fret: 3, technique: null, tied: false, muted: false };
-		slot.strings[1] = { fret: 1, technique: null, tied: false, muted: false };
-		slot.strings[0] = { fret: 0, technique: null, tied: false, muted: false };
+		slot.strings[5] = { fret: 3, muted: false };
+		slot.strings[1] = { fret: 1, muted: false };
+		slot.strings[0] = { fret: 0, muted: false };
 		expect(slotPitchLabels(slot, scientific)).toEqual([
 			{ stringIndex: 0, text: "E4", tied: false },
 			{ stringIndex: 1, text: "C4", tied: false },
@@ -125,26 +125,26 @@ describe("slotPitchLabels", () => {
 
 	it("skips muted strings and strings not in play", () => {
 		const slot = makeEmptySlot("quarter");
-		slot.strings[5] = { fret: null, technique: null, tied: false, muted: true };
-		slot.strings[4] = { fret: 2, technique: null, tied: false, muted: true };
-		slot.strings[2] = { fret: 0, technique: null, tied: false, muted: false };
+		slot.strings[5] = { fret: null, muted: true };
+		slot.strings[4] = { fret: 2, muted: true };
+		slot.strings[2] = { fret: 0, muted: false };
 		expect(slotPitchLabels(slot, scientific)).toEqual([{ stringIndex: 2, text: "G3", tied: false }]);
 	});
 
 	it("keeps a tied string, marked as tied", () => {
 		const slot = makeEmptySlot("quarter");
-		slot.strings[3] = { fret: 2, technique: null, tied: true, muted: false };
+		slot.strings[3] = { fret: 2, link: { kind: "tie" }, muted: false };
 		expect(slotPitchLabels(slot, scientific)).toEqual([{ stringIndex: 3, text: "E3", tied: true }]);
 	});
 
 	it("gives a rest or a grace slot nothing", () => {
 		const rest = makeEmptySlot("quarter");
 		rest.isRest = true;
-		rest.strings[5] = { fret: 3, technique: null, tied: false, muted: false };
+		rest.strings[5] = { fret: 3, muted: false };
 		expect(slotPitchLabels(rest, scientific)).toEqual([]);
 		const grace = makeEmptySlot("eighth");
 		grace.isGraceNote = true;
-		grace.strings[5] = { fret: 3, technique: null, tied: false, muted: false };
+		grace.strings[5] = { fret: 3, muted: false };
 		expect(slotPitchLabels(grace, scientific)).toEqual([]);
 	});
 });

@@ -12,20 +12,10 @@ import {
 	setFret,
 	setInactive,
 	toggleMuted,
-	setTechnique,
-	setTied,
 	setStroke,
 	moveCell,
 	previousSlotFret,
 	hasPreviousNoteOnString,
-	availableTechniques,
-	availableNoteTechniques,
-	setNoteTechnique,
-	bendHeightFor,
-	isBendTechnique,
-	nextBendTechnique,
-	nextVibratoTechnique,
-	NOTE_TECHNIQUES,
 	MAX_FRET,
 	setSlotsRest,
 	splitTargetsForSlot,
@@ -66,6 +56,7 @@ import {
 	type Cell,
 } from "@/lib/fingerpickEdit";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import { setLink } from "@/lib/fingerpickTechniqueEdit";
 import {
 	fingerpickPatternToScheduleEvents,
 	getTotalPatternDuration,
@@ -133,8 +124,6 @@ describe("StringFret edits", () => {
 		p = setInactive(p, cell);
 		expect(p.measures[0].slots[0].strings[5]).toEqual({
 			fret: null,
-			technique: null,
-			tied: false,
 			muted: false,
 		});
 	});
@@ -144,64 +133,18 @@ describe("StringFret edits", () => {
 		p = toggleMuted(p, cell);
 		expect(p.measures[0].slots[0].strings[5]).toEqual({
 			fret: null,
-			technique: null,
-			tied: false,
 			muted: true,
 		});
 		p = toggleMuted(p, cell);
 		expect(p.measures[0].slots[0].strings[5].muted).toBe(false);
 	});
 
-	it("setTechnique writes the technique", () => {
-		const p = setTechnique(setFret(makeDefaultPattern(), cell, 3), cell, "hammer-on");
-		expect(p.measures[0].slots[0].strings[5].technique).toBe("hammer-on");
-	});
 
 	it("does not mutate the input pattern", () => {
 		const p = makeDefaultPattern();
 		const before = structuredClone(p);
 		setFret(p, cell, 9);
 		expect(p).toEqual(before);
-	});
-});
-
-describe("tied / technique mutual exclusion", () => {
-	const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 5 };
-
-	it("setTied(true) clears any existing technique", () => {
-		let p = setFret(makeDefaultPattern(), cell, 5);
-		p = setTechnique(p, cell, "hammer-on");
-		p = setTied(p, cell, true);
-		const sf = p.measures[0].slots[1].strings[5];
-		expect(sf.tied).toBe(true);
-		expect(sf.technique).toBeNull();
-	});
-
-	it("setTechnique(non-null) clears any existing tie", () => {
-		let p = setFret(makeDefaultPattern(), cell, 5);
-		p = setTied(p, cell, true);
-		p = setTechnique(p, cell, "pull-off");
-		const sf = p.measures[0].slots[1].strings[5];
-		expect(sf.technique).toBe("pull-off");
-		expect(sf.tied).toBe(false);
-	});
-
-	it("clearing both leaves technique null and tied false", () => {
-		let p = setFret(makeDefaultPattern(), cell, 5);
-		p = setTied(p, cell, true);
-		// Clear = setTechnique(null) then setTied(false), as wired in the menu.
-		p = setTied(setTechnique(p, cell, null), cell, false);
-		const sf = p.measures[0].slots[1].strings[5];
-		expect(sf.technique).toBeNull();
-		expect(sf.tied).toBe(false);
-	});
-
-	it("greys out (no previous note) when the prior slot has no note on the string", () => {
-		// No note anywhere: previous slot on this string is inactive → cannot tie.
-		expect(hasPreviousNoteOnString(makeDefaultPattern(), cell)).toBe(false);
-		// With a note in the previous slot on the same string, tying is allowed.
-		const p = setFret(makeDefaultPattern(), { ...cell, slotIndex: 0 }, 3);
-		expect(hasPreviousNoteOnString(p, cell)).toBe(true);
 	});
 });
 
@@ -284,163 +227,6 @@ describe("previous-note lookup", () => {
 		expect(hasPreviousNoteOnString(p, { measureIndex: 0, slotIndex: 1, stringIndex: 5 })).toBe(
 			false,
 		);
-	});
-});
-
-describe("availableTechniques", () => {
-	const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 5 };
-	// Set prev-slot fret then current-slot fret on the same string.
-	const withFrets = (prevFret: number, currFret: number): FingerpickPattern => {
-		let p = twoMeasurePattern();
-		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, prevFret);
-		p = setFret(p, cell, currFret);
-		return p;
-	};
-
-	it("allows only hammer-on and slide-up when ascending (1 → 5)", () => {
-		expect(availableTechniques(withFrets(1, 5), cell)).toEqual({
-			"hammer-on": true,
-			"pull-off": false,
-			"slide-up": true,
-			"slide-down": false,
-			tied: false,
-		});
-	});
-
-	it("allows only pull-off and slide-down when descending (5 → 1)", () => {
-		expect(availableTechniques(withFrets(5, 1), cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": true,
-			"slide-up": false,
-			"slide-down": true,
-			tied: false,
-		});
-	});
-
-	it("allows only a tie when both notes share the same fret", () => {
-		expect(availableTechniques(withFrets(3, 3), cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": false,
-			"slide-up": false,
-			"slide-down": false,
-			tied: true,
-		});
-	});
-
-	it("disables everything with no previous sounding note", () => {
-		let p = twoMeasurePattern();
-		p = setFret(p, cell, 4);
-		expect(availableTechniques(p, cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": false,
-			"slide-up": false,
-			"slide-down": false,
-			tied: false,
-		});
-	});
-
-	it("disables everything when the current cell has no fret", () => {
-		let p = twoMeasurePattern();
-		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 2);
-		expect(availableTechniques(p, cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": false,
-			"slide-up": false,
-			"slide-down": false,
-			tied: false,
-		});
-	});
-
-	it("disables everything when the previous note is muted", () => {
-		let p = withFrets(1, 5);
-		p = toggleMuted(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 });
-		expect(availableTechniques(p, cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": false,
-			"slide-up": false,
-			"slide-down": false,
-			tied: false,
-		});
-	});
-});
-
-describe("note techniques (bend / vibrato)", () => {
-	const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 2 };
-	const at = (p: FingerpickPattern) => p.measures[0].slots[1].strings[2];
-
-	it("needs a fretted, unmuted, non-open note", () => {
-		expect(availableNoteTechniques(makeDefaultPattern(), cell)).toEqual({ vibrato: false, bend: false, blocked: "no-note" });
-		expect(availableNoteTechniques(setFret(makeDefaultPattern(), cell, 0), cell)).toEqual({ vibrato: false, bend: false, blocked: "open-string" });
-		expect(availableNoteTechniques(toggleMuted(makeDefaultPattern(), cell), cell)).toEqual({ vibrato: false, bend: false, blocked: "muted" });
-		expect(availableNoteTechniques(setFret(makeDefaultPattern(), cell, 7), cell)).toEqual({ vibrato: true, bend: true, blocked: null });
-	});
-
-	it("a bend must stay on the neck; a vibrato does not care", () => {
-		const high = setFret(makeDefaultPattern(), cell, MAX_FRET - 1);
-		expect(availableNoteTechniques(high, cell, 2)).toEqual({ vibrato: true, bend: false, blocked: "off-neck" });
-		expect(availableNoteTechniques(high, cell, 1)).toEqual({ vibrato: true, bend: true, blocked: null });
-		expect(availableNoteTechniques(high, cell, 0.5)).toEqual({ vibrato: true, bend: true, blocked: null });
-		expect(availableNoteTechniques(setFret(makeDefaultPattern(), cell, MAX_FRET), cell, 0.5).bend).toBe(false);
-	});
-
-	it("does not depend on the previous note", () => {
-		const p = setFret(makeDefaultPattern(), cell, 5);
-		expect(availableNoteTechniques(p, cell).bend).toBe(true);
-		expect(availableTechniques(p, cell)["hammer-on"]).toBe(false);
-	});
-
-	it("bendHeightFor: named bends carry their own, the others take the chosen height", () => {
-		expect(bendHeightFor("bend-quarter", 2)).toBe(0.5);
-		expect(bendHeightFor("bend-half", 2)).toBe(1);
-		expect(bendHeightFor("bend-full", 0.5)).toBe(2);
-		expect(bendHeightFor("bend-release", 1)).toBe(1);
-		expect(bendHeightFor("pre-bend", 0.5)).toBe(0.5);
-		expect(bendHeightFor("pre-bend-release")).toBe(2);
-		expect(bendHeightFor("vibrato")).toBeUndefined();
-		expect(bendHeightFor("vibrato-wide", 2)).toBeUndefined();
-	});
-
-	it("setNoteTechnique writes the technique and bendTarget, and clears a tie", () => {
-		let p = setFret(makeDefaultPattern(), cell, 7);
-		p = setTied(p, cell, true);
-		p = setNoteTechnique(p, cell, "bend-half");
-		expect(at(p)).toMatchObject({ technique: "bend-half", bendTarget: 1, tied: false });
-		p = setNoteTechnique(p, cell, "bend-release", 0.5);
-		expect(at(p)).toMatchObject({ technique: "bend-release", bendTarget: 0.5 });
-		p = setNoteTechnique(p, cell, "vibrato");
-		expect(at(p).technique).toBe("vibrato");
-		expect("bendTarget" in at(p)).toBe(false);
-	});
-
-	it("every NoteTechnique round-trips through setNoteTechnique", () => {
-		for (const t of NOTE_TECHNIQUES) {
-			const p = setNoteTechnique(setFret(makeDefaultPattern(), cell, 7), cell, t, 1);
-			expect(at(p).technique).toBe(t);
-			expect(at(p).bendTarget !== undefined).toBe(isBendTechnique(t));
-		}
-	});
-
-	it("clearing the technique, tying, or a connecting technique drops bendTarget", () => {
-		const bent = setNoteTechnique(setFret(makeDefaultPattern(), cell, 7), cell, "bend-full");
-		expect(at(bent).bendTarget).toBe(2);
-		expect("bendTarget" in at(setTechnique(bent, cell, null))).toBe(false);
-		expect("bendTarget" in at(setTied(bent, cell, true))).toBe(false);
-		expect("bendTarget" in at(setTechnique(bent, cell, "hammer-on"))).toBe(false);
-		// Another bend keeps it: the height is still meaningful.
-		expect(at(setTechnique(bent, cell, "pre-bend")).bendTarget).toBe(2);
-	});
-
-	it("keyboard cycles: B climbs the bend heights into a release, V toggles vibrato", () => {
-		expect(nextBendTechnique(null)).toBe("bend-quarter");
-		expect(nextBendTechnique("bend-quarter")).toBe("bend-half");
-		expect(nextBendTechnique("bend-half")).toBe("bend-full");
-		expect(nextBendTechnique("bend-full")).toBe("bend-release");
-		expect(nextBendTechnique("bend-release")).toBe("bend-quarter");
-		expect(nextBendTechnique("vibrato")).toBe("bend-quarter");
-		expect(nextVibratoTechnique(null)).toBe("vibrato");
-		expect(nextVibratoTechnique("vibrato")).toBe("vibrato-wide");
-		expect(nextVibratoTechnique("vibrato-wide")).toBe("vibrato");
-		expect(nextVibratoTechnique("bend-full")).toBe("vibrato");
 	});
 });
 
@@ -564,15 +350,15 @@ describe("swapMeasures", () => {
 });
 
 describe("shiftMeasureStrings", () => {
-	it("moves every note one string over, frets and flags intact, and clears what it left", () => {
+	it("moves every note one string over, frets and links intact, and clears what it left", () => {
 		let p = twoMeasurePattern();
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
 		p = setFret(p, { measureIndex: 0, slotIndex: 1, stringIndex: 3 }, 2);
-		p = setTechnique(p, { measureIndex: 0, slotIndex: 1, stringIndex: 3 }, "hammer-on");
+		p = setLink(p, { measureIndex: 0, slotIndex: 1, stringIndex: 3 }, { kind: "hammer" });
 		const up = shiftMeasureStrings(p, 0, -1);
 		expect(up.measures[0].slots[0].strings[4].fret).toBe(3);
 		expect(up.measures[0].slots[0].strings[5].fret).toBeNull();
-		expect(up.measures[0].slots[1].strings[2]).toMatchObject({ fret: 2, technique: "hammer-on" });
+		expect(up.measures[0].slots[1].strings[2]).toMatchObject({ fret: 2, link: { kind: "hammer" } });
 		expect(up.measures[0].slots[1].strings[3].fret).toBeNull();
 		// The other measure is untouched, and the slot ids stay.
 		expect(up.measures[1]).toBe(p.measures[1]);
@@ -2014,14 +1800,4 @@ describe("reconcileSpans", () => {
 		expect(reconcileSpans(after).spans).toEqual([{ id: "pm", kind: "palmMute", from: "s1", to: "s1" }]);
 	});
 
-	it("rewrites the v1 flags to match the repaired spans", () => {
-		const before = spanned();
-		const after: FingerpickPattern = {
-			...before,
-			measures: [before.measures[0], { ...before.measures[1], slots: before.measures[1].slots.filter((s) => s.id !== "s4") }],
-		};
-		const out = reconcileSpans(after, before);
-		const flags = out.measures.flatMap((m) => m.slots.map((s) => s.strings[0].palmMute === true));
-		expect(flags).toEqual([false, true, true, true]);
-	});
 });

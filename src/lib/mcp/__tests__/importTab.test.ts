@@ -195,12 +195,12 @@ describe("patternToImportBars", () => {
 		if (!first.ok) return;
 		const slots = first.pattern.measures[0].slots;
 		const strings = slots.map((s) => s.strings);
-		expect(strings[0][2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 2 } }, technique: "bend-full", bendTarget: 2 });
+		expect(strings[0][2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 2 } } });
 		expect(strings[1][2]).toMatchObject({ fret: 7, link: { kind: "hammer" }, effects: { bend: { semitones: 0.5, pre: true, release: true }, accent: true } });
-		expect(strings[2][4]).toMatchObject({ fret: 0, palmMute: true });
+		expect(strings[2][4]).toEqual({ fret: 0, muted: false });
 		expect(slots[2].percussion).toEqual({ kind: "slap" });
 		expect(first.pattern.spans?.map((s) => s.kind)).toEqual(["palmMute", "letRing"]);
-		expect(strings[3][0]).toMatchObject({ fret: 3, effects: { vibrato: {} }, letRing: true });
+		expect(strings[3][0]).toEqual({ fret: 3, muted: false, effects: { vibrato: {} } });
 		expect(strings[3][5]).toMatchObject({ fret: null, muted: true });
 		expect(first.warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
 		expect(patternToImportBars(first.pattern)).toEqual(bars);

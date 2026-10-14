@@ -29,10 +29,8 @@ import {
 	type SpanKind,
 	type StringFret,
 	type Stroke,
-	type Technique,
 } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
-import { syncTechniqueFields } from "@/lib/fingerpickCompat";
 import { TRIPLET_GROUP_SIZE, tripletGroups } from "@/lib/fingerpickEdit";
 import { indexPattern, type PatternIndex } from "@/lib/fingerpickIndex";
 import { isCompound, type Meter } from "@/lib/strumMeter";
@@ -150,29 +148,6 @@ export function bendMarkForEffect(bend: NonNullable<NoteEffects["bend"]>): BendM
 		};
 	}
 	return { phrase: bend.release ? [{ type: "up", text: height }, { type: "down", text: "" }] : [{ type: "up", text: height }] };
-}
-
-/**
- * The mark a v1 technique draws, or null when it is not a bend.
- * @deprecated the converter reads `bendMarkForEffect`; kept while v1 fields exist.
- */
-export function bendMarkFor(technique: Technique, bendTarget?: number): BendMark | null {
-	switch (technique) {
-		case "bend-full":
-			return bendMarkForEffect({ semitones: 2 });
-		case "bend-half":
-			return bendMarkForEffect({ semitones: 1 });
-		case "bend-quarter":
-			return bendMarkForEffect({ semitones: 0.5 });
-		case "bend-release":
-			return bendMarkForEffect({ semitones: bendTarget ?? 2, release: true });
-		case "pre-bend":
-			return bendMarkForEffect({ semitones: bendTarget ?? 2, pre: true });
-		case "pre-bend-release":
-			return bendMarkForEffect({ semitones: bendTarget ?? 2, pre: true, release: true });
-		default:
-			return null;
-	}
 }
 
 /** How many notes carry each width-hungry modifier (see `VexFlowRenderData.expression`). */
@@ -406,18 +381,11 @@ export interface VexFlowRenderData {
 //
 // `context` carries the pattern's index, which says where the spans lie and
 // what comes before the measure's first note. Without it (a measure on its
-// own: a preview, a test) the measure is read as its own pattern, brought up
-// to model v2 if it was written in v1 terms.
-export function fingerpickToVexFlow(source: Measure, context?: RenderContext): VexFlowRenderData {
-	let measure = source;
-	let index: PatternIndex;
-	if (context) {
-		index = context.index;
-	} else {
-		const alone = syncTechniqueFields({ id: "", name: "", bpm: 0, timeSignature: [4, 4], measures: [source] });
-		measure = alone.measures[0];
-		index = indexPattern(alone);
-	}
+// own: a preview, a test) the measure is read as its own pattern, so only
+// the spans it carries itself are known.
+export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): VexFlowRenderData {
+	const index: PatternIndex =
+		context?.index ?? indexPattern({ id: "", name: "", bpm: 0, timeSignature: [4, 4], measures: [measure] });
 	const notes: StemmableNote[] = [];
 	// posIndexMaps[noteIdx].get(stringIdx) = index in that TabNote's positions array.
 	// Indexed parallel to notes[], not to measure.slots[].

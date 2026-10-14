@@ -12,30 +12,6 @@ export type Duration =
 	| "sixteenth-triplet"
 	| "32nd";
 
-export type Technique =
-	| "hammer-on"
-	| "pull-off"
-	| "slide-up"
-	| "slide-down"
-	| "bend-full"
-	| "bend-half"
-	| "bend-quarter"
-	| "bend-release"
-	| "pre-bend"
-	| "pre-bend-release"
-	| "vibrato"
-	| "vibrato-wide"
-	| "vibrato-bar"
-	| "tapping"
-	| "trill"
-	| "harmonic-natural"
-	| "harmonic-artificial"
-	| "whammy-dive"
-	| "whammy-pull"
-	| "pick-scrape"
-	| "grace-note"
-	| null;
-
 /**
  * A right-hand sweep across a slot's strings. Slot-level, never per-string — a
  * sweep is one physical right-hand action. Semantics are defined by the PLAYING
@@ -114,30 +90,10 @@ export const FINGERPICK_SCHEMA_VERSION = 2;
 export type StringFret = {
 	fret: number | null;   // null = string not in play for this slot
 	muted: boolean;        // render as "x" (dead note)
-	/** v2: how the note is reached from the previous note on its string. */
+	/** How the note is reached from the previous note on its string. */
 	link?: Link;
-	/** v2: what is done to the note itself. */
+	/** What is done to the note itself, keyed by kind. */
 	effects?: NoteEffects;
-	/** @deprecated v1 — kept in step with `link` / `effects` by `syncTechniqueFields` until the readers are on v2. */
-	technique: Technique;
-	/** @deprecated v1 — `link: { kind: "tie" }`. */
-	tied: boolean;
-	/** @deprecated v1 — `effects.bend.semitones`. */
-	bendTarget?: number;
-	/** @deprecated v1 — a `palmMute` span. */
-	palmMute?: boolean;
-	/** @deprecated v1 — a `letRing` span. */
-	letRing?: boolean;
-	/** @deprecated v1 — `effects.staccato`. */
-	staccato?: boolean;
-	/** @deprecated v1 — `effects.accent`. */
-	accent?: boolean;
-	/** @deprecated v1 — `effects.ghost`. */
-	ghostNote?: boolean;
-	/** @deprecated v1 — `effects.tremolo`. */
-	tremoloPickingSpeed?: "8th" | "16th" | "32nd";
-	/** @deprecated v1 — `effects.pick`. */
-	pickStroke?: "down" | "up";
 };
 
 export type BeatSlot = {
@@ -177,7 +133,7 @@ export type FingerpickPattern = {
 	id: string;
 	name: string;
 	description?: string;
-	/** Absent on patterns written before the technique model v2; `migratePattern` fills it. */
+	/** `FINGERPICK_SCHEMA_VERSION`; absent only on data written before model v2, which `migratePattern` brings up. */
 	schemaVersion?: number;
 	measures: Measure[];
 	/** v2: marks shared by runs of notes (palm mute, let ring, slur). */

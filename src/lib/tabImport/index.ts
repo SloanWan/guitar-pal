@@ -3,11 +3,9 @@ export type {
 	RepeatDirective,
 	ValidationIssue,
 	NormalizeResult,
-	TechniqueSupport,
 } from "./types";
-export { TECHNIQUE_SUPPORT, isRenderSupported } from "./techniqueSupport";
 export { validateFingerpickPattern } from "./validateFingerpickPattern";
-export { migratePattern } from "./migratePattern";
+export { migratePattern, migrateLoadedPattern } from "./migratePattern";
 export { expandRepeats } from "./expandRepeats";
 export { MAX_MEASURES, capMeasures } from "./capMeasures";
 export { normalizeImportedPattern } from "./normalizeImportedPattern";

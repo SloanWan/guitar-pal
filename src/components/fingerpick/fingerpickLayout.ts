@@ -26,13 +26,11 @@ export function measurePitchLabelWidths(
 }
 
 // Count hammer-on / pull-off connections in a measure (each arc needs extra clearance).
-// Read off the link; a measure still in v1 terms is counted by its technique.
 export function hoPoConnectorCount(measure: Measure): number {
 	let count = 0;
 	for (const slot of measure.slots) {
 		for (const sf of slot.strings) {
-			const kind = sf.link?.kind ?? (sf.technique === "hammer-on" ? "hammer" : sf.technique === "pull-off" ? "pull" : null);
-			if (kind === "hammer" || kind === "pull") count += 1;
+			if (sf.link?.kind === "hammer" || sf.link?.kind === "pull") count += 1;
 		}
 	}
 	return count;

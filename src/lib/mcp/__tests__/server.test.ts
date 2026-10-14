@@ -192,8 +192,8 @@ describe("the server over a client", () => {
 		expect(text).toMatch(/\n {2}\s+S\s*\n/);
 		const saved = rows.get("share00001");
 		if (saved?.kind !== "fingerpick") throw new Error("not saved as fingerpick");
-		expect(saved.pattern.measures[0].slots[0].strings[2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 1, release: true } }, technique: "bend-release", bendTarget: 1 });
-		expect(saved.pattern.measures[0].slots[1].strings[4]).toMatchObject({ fret: 0, palmMute: true });
+		expect(saved.pattern.measures[0].slots[0].strings[2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 1, release: true } }, effects: { bend: { semitones: 1.0, release: true } } });
+		expect(saved.pattern.spans?.map((span) => span.kind)).toEqual(["palmMute"]);
 		expect(saved.pattern.measures[0].slots[2].percussion).toEqual({ kind: "slap" });
 	});
 

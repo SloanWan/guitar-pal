@@ -23,22 +23,16 @@ import {
 	insertSlots,
 	mergeSlots,
 	setFret,
-	setNoteTechnique,
 	setStroke,
-	setTechnique,
-	setTied,
 	shiftMeasureStrings,
 	splitSlot,
 	withMeasures,
 	type Cell,
 } from "@/lib/fingerpickEdit";
-import { stripV2 } from "@/lib/fingerpickCompat";
 
-const silent = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
+const silent = (): StringFret => ({ fret: null, muted: false });
 const note = (fret: number, extra: Partial<StringFret> = {}): StringFret => ({
 	fret,
-	technique: null,
-	tied: false,
 	muted: false,
 	...extra,
 });
@@ -87,27 +81,18 @@ describe("noteContext / techniqueBlock", () => {
 describe("setLink / toggleLink", () => {
 	it("writes the link and the v1 fields it means", () => {
 		const p = setLink(base(), c(1), { kind: "hammer" });
-		expect(at(p, c(1))).toMatchObject({ link: { kind: "hammer" }, technique: "hammer-on", tied: false });
+		expect(at(p, c(1))).toMatchObject({ link: { kind: "hammer" } });
 	});
 
-	it("a slide takes its v1 direction from the frets", () => {
-		expect(at(setLink(base(), c(1), { kind: "slide" }), c(1)).technique).toBe("slide-up");
-		expect(at(setLink(base(), c(3), { kind: "slide", picked: true }), c(3))).toMatchObject({
-			technique: "slide-down",
-			link: { kind: "slide", picked: true },
-		});
-	});
 
-	it("a tie is `tied` in v1 and clears a technique", () => {
+	it("a tie replaces a hammer: a note arrives one way", () => {
 		const p = setLink(setLink(base(), c(2), { kind: "hammer" }), c(2), { kind: "tie" });
-		expect(at(p, c(2))).toMatchObject({ link: { kind: "tie" }, tied: true, technique: null });
+		expect(at(p, c(2))).toMatchObject({ link: { kind: "tie" } });
 	});
 
-	it("removing the link leaves a plain note, with no stale v1 technique", () => {
+	it("removing the link leaves a plain note", () => {
 		const p = setLink(setLink(base(), c(1), { kind: "hammer" }), c(1), null);
-		const sf = at(p, c(1));
-		expect(sf.link).toBeUndefined();
-		expect(sf).toMatchObject({ technique: null, tied: false });
+		expect(at(p, c(1))).toEqual(note(7));
 	});
 
 	it("toggleLink turns the same kind off and another kind over", () => {
@@ -119,9 +104,9 @@ describe("setLink / toggleLink", () => {
 		expect(at(p, c(1)).link).toBeUndefined();
 	});
 
-	it("a link and an effect coexist; v1 shows the link", () => {
+	it("a link and an effect coexist", () => {
 		const p = setEffect(setLink(base(), c(1), { kind: "hammer" }), c(1), "vibrato", {});
-		expect(at(p, c(1))).toMatchObject({ link: { kind: "hammer" }, effects: { vibrato: {} }, technique: "hammer-on" });
+		expect(at(p, c(1))).toMatchObject({ link: { kind: "hammer" }, effects: { vibrato: {} }, link: { kind: "hammer" } });
 	});
 });
 
@@ -131,15 +116,10 @@ describe("setEffect / clearNoteMarks", () => {
 		p = setEffect(p, c(1), "accent", true);
 		expect(at(p, c(1))).toMatchObject({
 			effects: { bend: { semitones: 1, release: true }, accent: true },
-			technique: "bend-release",
-			bendTarget: 1,
-			accent: true,
+			effects: { bend: { semitones: 1, release: true }, accent: true },
 		});
 		p = setEffect(p, c(1), "bend", null);
-		const sf = at(p, c(1));
-		expect(sf.effects).toEqual({ accent: true });
-		expect(sf.technique).toBeNull();
-		expect(sf.bendTarget).toBeUndefined();
+		expect(at(p, c(1)).effects).toEqual({ accent: true });
 	});
 
 	it("removing the last effect drops the map", () => {
@@ -175,20 +155,6 @@ describe("keyboard cycles", () => {
 	});
 });
 
-describe("v1 setters keep v2 in step", () => {
-	it("setTechnique / setTied / setNoteTechnique write link and effects", () => {
-		let p = setTechnique(base(), c(1), "hammer-on");
-		expect(at(p, c(1)).link).toEqual({ kind: "hammer" });
-		p = setTied(p, c(2), true);
-		expect(at(p, c(2)).link).toEqual({ kind: "tie" });
-		p = setNoteTechnique(p, c(1), "bend-release", 1);
-		expect(at(p, c(1))).toMatchObject({ effects: { bend: { semitones: 1, release: true } } });
-		expect(at(p, c(1)).link).toBeUndefined();
-		p = setTechnique(p, c(1), null);
-		expect(at(p, c(1)).effects).toBeUndefined();
-	});
-});
-
 describe("setPercussion", () => {
 	it("is exclusive with a sweep, either way round", () => {
 		const t = { measureIndex: 0, slotIndex: 1 };
@@ -213,14 +179,11 @@ describe("spans over slots", () => {
 		p = setSpanOver(p, "palmMute", [t(1), t(2)], true);
 		expect(p.spans).toEqual([{ id: "palmMute:a", kind: "palmMute", from: "a", to: "c" }]);
 		expect([0, 1, 2, 3].map((i) => spanCoversSlot(p, "palmMute", t(i)))).toEqual([true, true, true, false]);
-		// The flags follow.
-		expect(p.measures[0].slots.map((s) => s.strings[2].palmMute === true)).toEqual([true, true, true, false]);
 		p = setSpanOver(p, "palmMute", [t(1)], false);
 		expect(p.spans).toEqual([
 			{ id: "palmMute:a", kind: "palmMute", from: "a", to: "a" },
 			{ id: "palmMute:c", kind: "palmMute", from: "c", to: "c" },
 		]);
-		expect(p.measures[0].slots.map((s) => s.strings[2].palmMute === true)).toEqual([true, false, true, false]);
 	});
 
 	it("other kinds are untouched and the map goes when empty", () => {
@@ -301,7 +264,6 @@ describe("structural edits carry spans", () => {
 			from: copy.slots[1].id,
 			to: copy.slots[2].id,
 		});
-		expect(copy.slots.map((s) => s.strings[2].palmMute === true)).toEqual([false, true, true, false]);
 	});
 
 	it("a span running out of the measure is not copied", () => {
@@ -316,8 +278,8 @@ describe("structural edits carry spans", () => {
 		});
 		const p = shiftMeasureStrings(s, 0, 1);
 		expect(p.spans).toEqual([{ id: "x", kind: "letRing", from: "a", to: "b", strings: [3] }]);
-		expect(p.measures[0].slots[0].strings[3]).toMatchObject({ fret: 5, letRing: true });
-		expect(p.measures[0].slots[0].strings[2].letRing).toBeUndefined();
+		expect(p.measures[0].slots[0].strings[3]).toEqual({ fret: 5, muted: false });
+		expect(p.measures[0].slots[0].strings[2].fret).toBeNull();
 	});
 
 	it("withMeasures is the identity for the same measures", () => {
@@ -325,14 +287,12 @@ describe("structural edits carry spans", () => {
 		expect(withMeasures(s, s.measures)).toBe(s);
 	});
 
-	it("every structural edit leaves a v1 view a v1 reader can use", () => {
+	it("every structural edit leaves only the model's fields on a note", () => {
 		const s = spanned();
 		for (const p of [deleteSlots(s, [t(0)]), insertSlots(s, [t(3)], "after"), cloneMeasureInPattern(s, 0)]) {
 			for (const m of p.measures) for (const sl of m.slots) for (const sf of sl.strings) {
-				expect(typeof sf.tied).toBe("boolean");
-				expect("technique" in sf).toBe(true);
+				expect(Object.keys(sf).every((k) => ["fret", "muted", "link", "effects"].includes(k))).toBe(true);
 			}
-			expect(stripV2(p).spans).toBeUndefined();
 		}
 	});
 });

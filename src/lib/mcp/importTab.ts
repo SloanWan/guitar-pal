@@ -102,7 +102,7 @@ function resolveChord(word: string, index: readonly ChordIndexEntry[]): ChordRef
 }
 
 function silent(): BeatSlot["strings"][number] {
-	return { fret: null, technique: null, tied: false, muted: false };
+	return { fret: null, muted: false };
 }
 
 const issue = (code: string, path: string, message: string): ValidationIssue => ({ code, path, message });
@@ -156,8 +156,6 @@ export function toImportedTabDraft(
 				strings[note.string - 1] = {
 					// A dead note has no fret: the x is the whole of it.
 					fret: note.muted ? null : note.fret,
-					technique: null,
-					tied: false,
 					muted: note.muted === true,
 					...(note.link !== undefined ? { link: { kind: note.link } as Link } : {}),
 					...(effects && Object.keys(effects).length > 0 ? { effects } : {}),

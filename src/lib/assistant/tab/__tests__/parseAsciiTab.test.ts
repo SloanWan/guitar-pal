@@ -2,8 +2,7 @@ import { describe, it, expect } from "vitest";
 import { asciiTabProse, looksLikeAsciiTab, parseAsciiTab, splitFretRun } from "@/lib/assistant/tab/parseAsciiTab";
 import { patternToAsciiTab } from "@/lib/mcp/asciiTab";
 import type { BeatSlot, FingerpickPattern, Link, NoteEffects } from "@/lib/fingerpickTypes";
-import { syncTechniqueFields } from "@/lib/fingerpickCompat";
-import { validateFingerpickPattern } from "@/lib/tabImport";
+import { migratePattern, validateFingerpickPattern } from "@/lib/tabImport";
 import type { Duration } from "@/lib/fingerpickTypes";
 
 const C_ARPEGGIO = [
@@ -120,9 +119,9 @@ describe("parseAsciiTab", () => {
 		expect(parsed.warnings.filter((w) => w.code === "ASCII_UNKNOWN_MARK")).toEqual([]);
 		const { pattern, warnings } = validateFingerpickPattern(parsed.draft);
 		// Everything here renders, so the validator passes it through, v1 fields filled.
-		expect(pattern?.measures[2].slots[0].strings[2]).toMatchObject({ effects: { bend: { semitones: 2 } }, technique: "bend-full", bendTarget: 2 });
-		expect(pattern?.measures[0].slots[1].strings[0]).toMatchObject({ link: { kind: "hammer" }, technique: "hammer-on" });
-		expect(pattern?.measures[2].slots[0].strings[0]).toMatchObject({ link: { kind: "tie" }, tied: true });
+		expect(pattern?.measures[2].slots[0].strings[2]).toMatchObject({ effects: { bend: { semitones: 2 } }, effects: { bend: { semitones: 2 } } });
+		expect(pattern?.measures[0].slots[1].strings[0]).toMatchObject({ link: { kind: "hammer" }, link: { kind: "hammer" } });
+		expect(pattern?.measures[2].slots[0].strings[0]).toMatchObject({ link: { kind: "tie" }, link: { kind: "tie" } });
 		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
 	});
 
@@ -168,8 +167,8 @@ describe("parseAsciiTab", () => {
 				.filter((s) => !s.isRest)
 				.map((s) => s.strings[2]);
 		expect(g(0)).toEqual([
-			{ fret: 7, technique: null, tied: false, muted: false, effects: { bend: { semitones: 2 } } },
-			{ fret: 7, technique: null, tied: false, muted: false, effects: { bend: { semitones: 1 } } },
+			{ fret: 7, muted: false, effects: { bend: { semitones: 2 } } },
+			{ fret: 7, muted: false, effects: { bend: { semitones: 1 } } },
 		]);
 		expect(g(1).map((s) => s.effects?.bend)).toEqual([{ semitones: 0.5 }, { semitones: 2 }]);
 		// `7b9r7`: the 7 after the r is where the bend lands, not a second note.
@@ -253,14 +252,15 @@ describe("parseAsciiTab", () => {
 	});
 
 	it("round-trips every mark the preview writes", () => {
-		const silent = (): BeatSlot["strings"][number] => ({ fret: null, technique: null, tied: false, muted: false });
+		const silent = (): BeatSlot["strings"][number] => ({ fret: null, muted: false });
 		let id = 0;
 		const slot = (notes: Record<number, Partial<BeatSlot["strings"][number]>>, duration: BeatSlot["duration"] = "quarter"): BeatSlot => {
 			const strings = [silent(), silent(), silent(), silent(), silent(), silent()] as BeatSlot["strings"];
 			for (const [i, n] of Object.entries(notes)) strings[Number(i)] = { ...silent(), ...n };
 			return { id: `s${id++}`, duration, strings };
 		};
-		const pattern: FingerpickPattern = syncTechniqueFields({
+		// The writer reads spans; the flags here fold into them through the migrator.
+		const pattern = migratePattern({
 			id: "p",
 			name: "Marks",
 			bpm: 80,
@@ -286,7 +286,7 @@ describe("parseAsciiTab", () => {
 				] },
 			],
 		});
-		const parsed = ok(patternToAsciiTab(pattern));
+		const parsed = ok(patternToAsciiTab(pattern as FingerpickPattern));
 		const marks = (m: number, string: number) =>
 			slotsOf(parsed, m)
 				.filter((s) => !s.isRest)

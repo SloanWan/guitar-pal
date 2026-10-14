@@ -7,9 +7,12 @@ import type {
 	Stroke,
 	Technique,
 } from "./fingerpickTypes";
+import { FINGERPICK_SCHEMA_VERSION } from "./fingerpickTypes";
 import { rescaleBpmForMeter } from "./strumBars";
 import { isCompound, SUPPORTED_METERS, type Meter } from "./strumMeter";
 import { normalizeCapo } from "./strumProgressions";
+import { syncTechniqueFields } from "./fingerpickCompat";
+import { indexPattern } from "./fingerpickIndex";
 
 // ── Cell / target identity ───────────────────────────────────────────────────
 
@@ -217,6 +220,7 @@ export function makeDefaultPattern(): FingerpickPattern {
 		id: crypto.randomUUID(),
 		name: "",
 		description: "",
+		schemaVersion: FINGERPICK_SCHEMA_VERSION,
 		bpm: 100,
 		timeSignature: [4, 4],
 		measures: [makeEmptyMeasure()],
@@ -1499,6 +1503,44 @@ export function changeTimeSignature(
 // load — quarter duration + isRest, string data cleared — matching the old fixed
 // quarter weight so the measure total is unchanged. Runs on every load path
 // (Supabase rows, localStorage, tab import); a no-op for already-migrated patterns.
+// ── Spans after a structural edit ────────────────────────────────────────────
+
+/**
+ * Spans with their anchors repaired after slots moved, split, merged or went
+ * away. With `previous` (the pattern before the edit) a span's members are
+ * known, so an anchor on a vanished slot shrinks to the nearest surviving
+ * member; `idMap` says which new slots stand for an old one (a split's pieces,
+ * a merge's result), so the span keeps covering them. A span with no member
+ * left, or whose anchors ended up reversed, is dropped. Pure.
+ */
+export function reconcileSpans(
+	pattern: FingerpickPattern,
+	previous?: FingerpickPattern,
+	idMap?: ReadonlyMap<string, readonly string[]>,
+): FingerpickPattern {
+	if (!pattern.spans || pattern.spans.length === 0) return pattern;
+	const index = indexPattern(pattern);
+	const before = previous ? indexPattern(previous) : null;
+	const stands = (id: string): string[] => {
+		const mapped = idMap?.get(id);
+		return mapped && mapped.length > 0 ? [...mapped] : [id];
+	};
+	const spans = pattern.spans.flatMap((span) => {
+		// The slots the span covered, in order, as they stand now.
+		const oldMembers = before?.spanMembers.get(span.id);
+		const candidates = (oldMembers && oldMembers.length > 0 ? oldMembers : [span.from, span.to]).flatMap(stands);
+		const alive = candidates.filter((id) => index.slotPos.has(id));
+		if (alive.length === 0) return [];
+		alive.sort((a, b) => index.slotOrder.indexOf(a) - index.slotOrder.indexOf(b));
+		const from = alive[0];
+		const to = alive[alive.length - 1];
+		if (from === span.from && to === span.to) return [span];
+		return [{ ...span, from, to }];
+	});
+	// Flags follow the spans, so the v1 readers see the repaired runs too.
+	return syncTechniqueFields({ ...pattern, spans });
+}
+
 export function normalizeLoadedPattern(pattern: FingerpickPattern): FingerpickPattern {
 	// A capo is kept only when it is a real fret: out-of-range or junk values are
 	// folded to "no capo" so a stored pattern never carries a capo the UI can't show.
@@ -1521,7 +1563,9 @@ export function normalizeLoadedPattern(pattern: FingerpickPattern): FingerpickPa
 		});
 		return measureTouched ? { ...measure, slots } : measure;
 	});
-	return touched ? { ...pattern, measures } : pattern;
+	const base = touched ? { ...pattern, measures } : pattern;
+	// Technique model v2: both representations in step, spans anchored on live slots.
+	return reconcileSpans(syncTechniqueFields(base));
 }
 
 // Re-home the chord marks of `oldSlots` onto `newSlots` (a uniform rebuild of the

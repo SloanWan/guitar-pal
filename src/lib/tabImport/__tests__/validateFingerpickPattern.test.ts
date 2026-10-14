@@ -351,3 +351,104 @@ describe("validateFingerpickPattern — measure/slot repair", () => {
 		expect(validateFingerpickPattern(makePattern({})).pattern?.capo).toBeUndefined();
 	});
 });
+
+// ─── Technique model v2 ───────────────────────────────────────────────────────
+
+describe("validateFingerpickPattern — technique model v2", () => {
+	const v2 = (strings: Record<string, unknown>, extra: Record<string, unknown> = {}, slotExtra: Record<string, unknown> = {}) =>
+		makePattern({
+			schemaVersion: 2,
+			measures: [makeMeasure([makeSlot({ strings: makeStrings({ 0: { fret: 7, ...strings } }), ...slotExtra })])],
+			...extra,
+		});
+
+	it("keeps a well-formed link and effects, and fills the v1 fields from them", () => {
+		const { pattern, warnings } = validateFingerpickPattern(
+			v2({ link: { kind: "slide", picked: true }, effects: { bend: { semitones: 1.5, hold: true }, vibrato: {} } }),
+		);
+		const sf = pattern!.measures[0].slots[0].strings[0];
+		expect(sf.link).toEqual({ kind: "slide", picked: true });
+		expect(sf.effects).toEqual({ bend: { semitones: 1.5, hold: true }, vibrato: {} });
+		expect(sf.technique).toBe("slide-up");
+		expect(sf.bendTarget).toBe(1.5);
+		expect(pattern!.schemaVersion).toBe(2);
+		expect(warnings.map((w) => w.code)).toEqual([]);
+	});
+
+	it("drops an unknown effect kind with a warning and keeps the known ones", () => {
+		const { pattern, warnings } = validateFingerpickPattern(v2({ effects: { accent: true, flutter: { x: 1 } } }));
+		expect(pattern!.measures[0].slots[0].strings[0].effects).toEqual({ accent: true });
+		expect(warnings.map((w) => w.code)).toContain("UNKNOWN_EFFECT");
+	});
+
+	it("drops an effect with bad parameters, naming it, and keeps the rest", () => {
+		const { pattern, warnings } = validateFingerpickPattern(v2({ effects: { bend: { semitones: 3.25 }, staccato: true } }));
+		expect(pattern!.measures[0].slots[0].strings[0].effects).toEqual({ staccato: true });
+		expect(warnings.find((w) => w.code === "INVALID_EFFECT")?.path).toMatch(/effects\.bend$/);
+	});
+
+	it("keeps an effect the app cannot draw yet, with a warning", () => {
+		const { pattern, warnings } = validateFingerpickPattern(v2({ effects: { harmonic: { type: "pinch" } } }));
+		expect(pattern!.measures[0].slots[0].strings[0].effects).toEqual({ harmonic: { type: "pinch" } });
+		expect(warnings.find((w) => w.code === "UNSUPPORTED_TECHNIQUE")?.original).toBe("harmonic");
+	});
+
+	it("drops a malformed link with a warning", () => {
+		const { pattern, warnings } = validateFingerpickPattern(v2({ link: { kind: "glide" } }));
+		expect(pattern!.measures[0].slots[0].strings[0].link).toBeUndefined();
+		expect(warnings.map((w) => w.code)).toContain("INVALID_LINK");
+	});
+
+	it("keeps a stroke, keeps a percussion, and refuses both on one slot", () => {
+		const swept = validateFingerpickPattern(v2({}, {}, { stroke: "roll-down" }));
+		expect(swept.pattern!.measures[0].slots[0].stroke).toBe("roll-down");
+		const hit = validateFingerpickPattern(v2({}, {}, { percussion: { kind: "slap", accent: true } }));
+		expect(hit.pattern!.measures[0].slots[0].percussion).toEqual({ kind: "slap", accent: true });
+		const both = validateFingerpickPattern(v2({}, {}, { stroke: "brush-up", percussion: { kind: "slap" } }));
+		expect(both.pattern!.measures[0].slots[0].percussion).toBeUndefined();
+		expect(both.pattern!.measures[0].slots[0].stroke).toBe("brush-up");
+		expect(both.warnings.map((w) => w.code)).toContain("PERCUSSION_WITH_STROKE");
+		const junk = validateFingerpickPattern(v2({}, {}, { percussion: { kind: "clap" } }));
+		expect(junk.warnings.map((w) => w.code)).toContain("INVALID_PERCUSSION");
+	});
+
+	it("gives a duplicate slot id a fresh one and says so", () => {
+		const raw = makePattern({
+			measures: [makeMeasure([makeSlot({ id: "same" }), makeSlot({ id: "same" })])],
+		});
+		const { pattern, warnings } = validateFingerpickPattern(raw);
+		const ids = pattern!.measures[0].slots.map((s) => s.id);
+		expect(ids[0]).toBe("same");
+		expect(ids[1]).not.toBe("same");
+		expect(warnings.map((w) => w.code)).toContain("DUPLICATE_SLOT_ID");
+	});
+
+	it("keeps spans anchored on real slots in order and drops the rest, then writes the flags they mean", () => {
+		const raw = makePattern({
+			schemaVersion: 2,
+			measures: [
+				makeMeasure([makeSlot({ id: "a", strings: makeStrings({ 0: { fret: 3 } }) }), makeSlot({ id: "b", strings: makeStrings({ 0: { fret: 3 } }) })]),
+				makeMeasure([makeSlot({ id: "c", strings: makeStrings({ 0: { fret: 3 } }) })]),
+			],
+			spans: [
+				{ id: "ok", kind: "palmMute", from: "a", to: "c" },
+				{ id: "back", kind: "letRing", from: "c", to: "a" },
+				{ id: "gone", kind: "letRing", from: "a", to: "zzz" },
+				{ id: "bad", kind: "palmMute", from: "a" },
+			],
+		});
+		const { pattern, warnings } = validateFingerpickPattern(raw);
+		expect(pattern!.spans?.map((s) => s.id)).toEqual(["ok"]);
+		expect(warnings.filter((w) => w.code === "INVALID_SPAN")).toHaveLength(3);
+		const flags = pattern!.measures.flatMap((m) => m.slots.map((s) => s.strings[0].palmMute === true));
+		expect(flags).toEqual([true, true, true]);
+	});
+
+	it("a v1 pattern without spans gets them from its flags", () => {
+		const raw = makePattern({
+			measures: [makeMeasure([makeSlot({ id: "a", strings: makeStrings({ 0: { fret: 3, letRing: true } }) })])],
+		});
+		const { pattern } = validateFingerpickPattern(raw);
+		expect(pattern!.spans).toEqual([{ id: "letRing:a", kind: "letRing", from: "a", to: "a" }]);
+	});
+});

@@ -31,6 +31,7 @@ import {
 	splitTargetsForSlot,
 	mergeTargetsForSlot,
 	normalizeLoadedPattern,
+	reconcileSpans,
 	insertSlots,
 	duplicateSlots,
 	deleteSlots,
@@ -77,6 +78,7 @@ function twoMeasurePattern(): FingerpickPattern {
 		id: "p",
 		name: "test",
 		description: "",
+		schemaVersion: 2,
 		bpm: 100,
 		timeSignature: [4, 4],
 		measures: [
@@ -1763,6 +1765,7 @@ describe("normalizeLoadedPattern (legacy rest migration)", () => {
 			id: "p",
 			name: "legacy",
 			description: "",
+			schemaVersion: 2,
 			bpm: 100,
 			timeSignature: [4, 4],
 			measures: [{ id: "m0", slots: slots as Measure["slots"] }],
@@ -1954,5 +1957,71 @@ describe("normalizeLoadedPattern (capo)", () => {
 	it("returns the same object when there is nothing to fix", () => {
 		const base = twoMeasurePattern();
 		expect(normalizeLoadedPattern(base)).toBe(base);
+	});
+});
+
+// ─── reconcileSpans (technique model v2) ─────────────────────────────────────
+
+describe("reconcileSpans", () => {
+	const spanned = (): FingerpickPattern => {
+		const p = twoMeasurePattern();
+		// m0: s0 s1 s2 · m1: s3 s4 (ids from makeEmptySlot are random; pin them)
+		p.measures[0].slots = p.measures[0].slots.map((s, i) => ({ ...s, id: `s${i}` }));
+		p.measures[1].slots = p.measures[1].slots.map((s, i) => ({ ...s, id: `s${i + 3}` }));
+		for (const m of p.measures) for (const s of m.slots) s.strings[0] = { ...s.strings[0], fret: 3 };
+		p.spans = [{ id: "pm", kind: "palmMute", from: "s1", to: "s4" }];
+		return p;
+	};
+
+	it("is a no-op when every anchor is live", () => {
+		const p = spanned();
+		expect(reconcileSpans(p, p).spans).toEqual(p.spans);
+	});
+
+	it("shrinks a span whose anchor slot was deleted to the nearest surviving member", () => {
+		const before = spanned();
+		const after: FingerpickPattern = {
+			...before,
+			measures: [before.measures[0], { ...before.measures[1], slots: before.measures[1].slots.filter((s) => s.id !== "s4") }],
+		};
+		expect(reconcileSpans(after, before).spans).toEqual([{ id: "pm", kind: "palmMute", from: "s1", to: "s3" }]);
+	});
+
+	it("drops a span with no member left", () => {
+		const before = spanned();
+		const after: FingerpickPattern = {
+			...before,
+			measures: [
+				{ ...before.measures[0], slots: before.measures[0].slots.filter((s) => s.id === "s0") },
+				{ ...before.measures[1], slots: before.measures[1].slots.filter((s) => s.id === "s5") },
+			],
+		};
+		expect(reconcileSpans(after, before).spans).toEqual([]);
+	});
+
+	it("follows an id map: a split anchor keeps the span over its pieces, a merge moves it", () => {
+		const before = spanned();
+		const pieces = before.measures[1].slots.flatMap((s) => (s.id === "s4" ? [{ ...s, id: "s4a" }, { ...s, id: "s4b" }] : [s]));
+		const after: FingerpickPattern = { ...before, measures: [before.measures[0], { ...before.measures[1], slots: pieces }] };
+		const idMap = new Map([["s4", ["s4a", "s4b"]]]);
+		expect(reconcileSpans(after, before, idMap).spans).toEqual([{ id: "pm", kind: "palmMute", from: "s1", to: "s4b" }]);
+	});
+
+	it("without the previous pattern, falls back to the anchors themselves", () => {
+		const p = spanned();
+		const after: FingerpickPattern = { ...p, measures: [p.measures[0], { ...p.measures[1], slots: p.measures[1].slots.filter((s) => s.id !== "s4") }] };
+		// s4 is gone and nothing says what the span covered: it shrinks to s1 alone.
+		expect(reconcileSpans(after).spans).toEqual([{ id: "pm", kind: "palmMute", from: "s1", to: "s1" }]);
+	});
+
+	it("rewrites the v1 flags to match the repaired spans", () => {
+		const before = spanned();
+		const after: FingerpickPattern = {
+			...before,
+			measures: [before.measures[0], { ...before.measures[1], slots: before.measures[1].slots.filter((s) => s.id !== "s4") }],
+		};
+		const out = reconcileSpans(after, before);
+		const flags = out.measures.flatMap((m) => m.slots.map((s) => s.strings[0].palmMute === true));
+		expect(flags).toEqual([false, true, true, true]);
 	});
 });

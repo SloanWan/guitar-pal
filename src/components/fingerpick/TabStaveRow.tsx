@@ -23,8 +23,7 @@ import {
 	type LeadIn,
 	type RenderContext,
 	type SlideMark,
-	type WhammyMark,
-	type SlurSegment,
+	type WhammyMark
 } from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 import { slotPitchLabels, splitPitchLabel, type SlotPitchLabel } from "@/lib/fingerpickPitch";
@@ -99,13 +98,10 @@ const LEAD_IN_REACH = 14;
 // A slide into / out of a note: a short slanted line beside the number.
 const SLIDE_MARK_REACH = 12;
 // A whammy dive: a dashed line under the stave falling to the bar's depth,
-// labelled; a pull rises instead. A slur: an arc over its notes, above the
-// stave, clear of the bracket line.
+// labelled; a pull rises instead.
 const WHAMMY_LINE_BELOW = 10;
 const WHAMMY_LINE_DROP = 14;
 const WHAMMY_FONT_SIZE = 9;
-const SLUR_RISE = 14;
-const SLUR_HEIGHT = 9;
 // Extra room for a repeat-begin (|:) / repeat-end (:|) barline's thick line + dots.
 const REPEAT_BARLINE_EXTRA_WIDTH = 14;
 // A roll arrow sits left of its note; a slot needs this much more so it never
@@ -587,19 +583,6 @@ function drawWhammy(svgEl: SVGSVGElement, x1: number, x2: number, y: number, mar
 	svgEl.appendChild(g);
 }
 
-/** A slur: one arc over its notes, from the first number to the last. */
-function drawSlur(svgEl: SVGSVGElement, x1: number, x2: number, y: number): void {
-	const ns = "http://www.w3.org/2000/svg";
-	const path = document.createElementNS(ns, "path");
-	path.setAttribute("class", "vf-slur");
-	const mid = (x1 + x2) / 2;
-	path.setAttribute("d", `M ${x1} ${y} Q ${mid} ${y - SLUR_HEIGHT * 2} ${x2} ${y}`);
-	path.setAttribute("fill", "none");
-	path.setAttribute("stroke", "var(--ink)");
-	path.setAttribute("stroke-width", "1.2");
-	svgEl.appendChild(path);
-}
-
 /** A pick scrape: a heavy diagonal across the six lines at the note. */
 function drawScrape(svgEl: SVGSVGElement, x: number, yTop: number, yBottom: number): void {
 	const ns = "http://www.w3.org/2000/svg";
@@ -791,13 +774,12 @@ export default function TabStaveRow({
 				slideMarks: SlideMark[];
 				whammies: WhammyMark[];
 				scrapes: number[];
-				slurs: SlurSegment[];
 				stave: TabStave;
 			}[] = [];
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, slurs, noteStrings, noteSlots } =
+				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, noteStrings, noteSlots } =
 					fingerpickToVexFlow(measure, renderContext);
-				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, slurs, stave: staves[i] });
+				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, stave: staves[i] });
 				const voice = new Voice({ numBeats: timeSignature[0], beatValue: timeSignature[1] }).setMode(
 					Voice.Mode.SOFT,
 				);
@@ -910,7 +892,7 @@ export default function TabStaveRow({
 			// measure opens a row; one that goes on past the measure runs to the
 			// barline and leaves its closing tick to the segment after.
 			if (svgEl) {
-				drawn.forEach(({ notes, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, slurs, stave }, i) => {
+				drawn.forEach(({ notes, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, stave }, i) => {
 					const y = stave.getYForLine(0) - BRACKET_BASELINE_OFFSET;
 					brackets.forEach(({ kind, fromNoteIndex, toNoteIndex, continuesBefore, continuesAfter }) => {
 						const x1 = notes[fromNoteIndex].getAbsoluteX() - 4;
@@ -943,15 +925,6 @@ export default function TabStaveRow({
 						// Stop short of the next stem so the depth label has room before it.
 						const x2 = next ? next.getAbsoluteX() - 26 : stave.getNoteEndX() - 26;
 						if (x2 > x1) drawWhammy(svgEl, x1, x2, mark.kind === "dive" ? whammyY : whammyY + WHAMMY_LINE_DROP, mark);
-					});
-					// A slur: one arc over its notes. A segment carried over from the
-					// previous measure starts from its first note here; one that goes on
-					// ends on its last — the next measure's segment continues it.
-					const slurY = stave.getYForLine(0) - SLUR_RISE;
-					slurs.forEach(({ fromNoteIndex, toNoteIndex }) => {
-						const x1 = notes[fromNoteIndex].getAbsoluteX();
-						const x2 = notes[toNoteIndex].getAbsoluteX() + 8;
-						if (x2 > x1) drawSlur(svgEl, x1, x2, slurY);
 					});
 					scrapes.forEach((noteIndex) => {
 						drawScrape(svgEl, notes[noteIndex].getAbsoluteX(), stave.getYForLine(0), stave.getYForLine(5));

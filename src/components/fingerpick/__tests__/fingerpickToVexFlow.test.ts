@@ -931,8 +931,9 @@ describe("fingerpickToVexFlow — the rest of the registry", () => {
 		);
 		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
 		expect(rd.slurs).toEqual([{ fromNoteIndex: 0, toNoteIndex: 2 }]);
-		// Only the hammer outside the slur draws its arc.
-		expect(rd.connectors).toHaveLength(1);
+		// The slur's own arc between its first and last number, plus the one hammer outside it.
+		expect(rd.connectors).toHaveLength(2);
+		expect(rd.connectors.filter((c) => c instanceof TabTie && (c as unknown as { text: string }).text === "")).toHaveLength(1);
 	});
 
 	it("a slur across a barline is two segments that say they continue", () => {

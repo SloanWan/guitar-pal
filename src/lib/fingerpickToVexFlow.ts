@@ -164,7 +164,7 @@ export type BracketKind = "palm-mute" | "let-ring";
 
 const BRACKET_OF_SPAN: Partial<Record<SpanKind, BracketKind>> = { palmMute: "palm-mute", letRing: "let-ring" };
 
-/** A slur's segment in the measure: drawn as one curve over the notes, the inner link arcs left out. */
+/** A slur's segment in the measure: one tie-shaped arc over its numbers (a `TabTie` in `connectors`), the inner link arcs left out. */
 export interface SlurSegment {
 	fromNoteIndex: number;
 	toNoteIndex: number;
@@ -694,6 +694,35 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 		});
 	}
 
+	// A slur: one arc over the numbers from the segment's first note to its
+	// last, drawn the way a tie is — between the positions, inside the tab —
+	// on the highest string the span covers at each end. A segment that runs
+	// on past the barline (or in from before it) is tied to the stave's edge,
+	// which is how VexFlow draws a tie with one note missing.
+	const slurs = slurSegments(measure, slotNoteIndex, index);
+	for (const seg of slurs) {
+		const span = spansTouching(measure, index).find((s) => s.kind === "slur");
+		const onSpan = (stringIdx: number) => !span?.strings || span.strings.includes(stringIdx);
+		const topPosition = (noteIdx: number): number | undefined => {
+			const posMap = posIndexMaps[noteIdx];
+			const strings = [...posMap.keys()].filter(onSpan).sort((a, b) => a - b);
+			return strings.length > 0 ? posMap.get(strings[0]) : undefined;
+		};
+		const fromPos = topPosition(seg.fromNoteIndex);
+		const toPos = topPosition(seg.toNoteIndex);
+		if (fromPos === undefined || toPos === undefined) continue;
+		const single = seg.fromNoteIndex === seg.toNoteIndex;
+		if (single && !seg.continuesBefore && !seg.continuesAfter) continue;
+		connectors.push(
+			new TabTie({
+				firstNote: single && seg.continuesBefore ? undefined : notes[seg.fromNoteIndex],
+				lastNote: single && !seg.continuesBefore ? undefined : notes[seg.toNoteIndex],
+				firstIndexes: [fromPos],
+				lastIndexes: [toPos],
+			}),
+		);
+	}
+
 	// One Tuplet per triplet group — the same grouping the editor brackets and
 	// edits by (`tripletGroups`), so the stave and the grid never disagree on
 	// which three notes belong together. The Tuplet adjusts tick values so the
@@ -727,7 +756,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 		slideMarks,
 		whammies,
 		scrapes,
-		slurs: slurSegments(measure, slotNoteIndex, index),
+		slurs,
 		expression,
 		noteStrings,
 		noteSlots,

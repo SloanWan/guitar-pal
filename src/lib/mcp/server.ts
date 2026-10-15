@@ -12,10 +12,9 @@ import { patternBpm, patternMeter } from "@/lib/strumBars";
 import { beatUnitGlyph, meterLabel, SUPPORTED_METERS } from "@/lib/strumMeter";
 import { patternNotation } from "@/lib/strumNotation";
 import { chordAbbreviation, progressionCapo } from "@/lib/strumProgressions";
-import { MAX_MEASURES, type ValidationIssue } from "@/lib/tabImport";
+import { MAX_MEASURES, NOTE_MARKS_SHAPE, PERCUSSION_INPUT, type ValidationIssue } from "@/lib/tabImport";
 import { patternToAsciiTab } from "./asciiTab";
 import { IMPORT_TAB_SHAPE, importTab, patternToImportBars } from "./importTab";
-import { PROPOSABLE_TECHNIQUES } from "@/lib/assistant/tab/buildTabDraft";
 
 /**
  * The Guitar Pal MCP server (#308): compose in Claude, play in Guitar Pal.
@@ -217,23 +216,16 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 										string: z.number().int().min(1).max(6).describe("1 = high e, 2 = B, 3 = G, 4 = D, 5 = A, 6 = low E."),
 										fret: z.number().int().min(0).max(24).describe("0 (open) to 24."),
 										slot: z.number().int().min(0).describe("Which slot of this bar, counting from 0. The last is slotsPerBar - 1."),
-										technique: z
-											.enum(PROPOSABLE_TECHNIQUES)
-											.optional()
-											.describe(
-												"How the note is reached when it is not picked (hammer-on, pull-off, slide-up, slide-down), or what is done to it once struck (bend-quarter, bend-half, bend-full, bend-release, pre-bend, pre-bend-release, vibrato, vibrato-wide).",
-											),
-										muted: z.boolean().optional().describe("A dead note — struck, not sounded."),
-										bendTarget: z
-											.union([z.literal(0.5), z.literal(1), z.literal(2)])
-											.optional()
-											.describe("With bend-release, pre-bend or pre-bend-release: how far the bend goes, 0.5 (¼ tone), 1 (½) or 2 (full). A full tone when left out."),
-										palmMute: z.boolean().optional().describe("Palm-muted (P.M.); mark every note under the bracket."),
-										letRing: z.boolean().optional().describe("Let ring; mark every note under the bracket."),
+										...NOTE_MARKS_SHAPE,
 									}),
 								)
 								.max(6 * 96)
 								.describe("The notes of this bar, in any order. A slot with no note on it is silent; a note sounds until the next slot that carries one."),
+							hits: z
+								.array(z.object({ slot: z.number().int().min(0).describe("Which slot of this bar, counting from 0."), kind: PERCUSSION_INPUT }))
+								.max(96)
+								.optional()
+								.describe("Right-hand hits on slots of this bar, when the music has them."),
 						}),
 					)
 					.min(1)

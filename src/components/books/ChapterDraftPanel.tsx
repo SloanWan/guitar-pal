@@ -28,6 +28,7 @@ import Rocker from "@/components/ui/Rocker";
 import { WarningsFold } from "@/components/books/IssueList";
 import SidePanel from "@/components/books/SidePanel";
 import { DenimButton, GhostButton, MONO_META } from "@/components/books/bookUi";
+import { indexPattern } from "@/lib/fingerpickIndex";
 
 /**
  * A chapter draft open beside the book (#233). The page pushes its content
@@ -179,9 +180,10 @@ export default function ChapterDraftPanel({
 		observer.observe(viewerEl);
 		return () => observer.disconnect();
 	}, [viewerEl]);
+	const renderContext = useMemo(() => ({ index: indexPattern(pattern) }), [pattern]);
 	const rows = useMemo(
-		() => layoutMeasureRows(pattern.measures, containerWidth, 0),
-		[pattern.measures, containerWidth],
+		() => layoutMeasureRows(pattern.measures, containerWidth, 0, undefined, renderContext),
+		[pattern.measures, containerWidth, renderContext],
 	);
 
 	const { cursorRef, measureHighlightRef, rowRefs, resetCursor } = usePlaybackCursor({
@@ -359,6 +361,7 @@ export default function ChapterDraftPanel({
 								startMeasureNumber={row.startMeasureNumber}
 								startMeasureIndex={row.startMeasureNumber - 1}
 								measureWidths={row.widths}
+								renderContext={renderContext}
 							/>
 						</div>
 					))}

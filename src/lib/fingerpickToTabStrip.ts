@@ -51,7 +51,7 @@ export function fingerpickToTabStrip(
 		for (const slot of measure.slots) {
 			const x = Math.round(barX + BAR_INSET + (elapsed / capacity) * span);
 			slot.strings.forEach((s, stringIndex) => {
-				if (s.fret === null || s.tied) return;
+				if (s.fret === null || s.link?.kind === "tie") return;
 				const y = TAB_STRIP_LINE_Y[stringIndex] + BASELINE_OFFSET;
 				notes.push([x, y, s.muted ? "x" : String(s.fret)]);
 			});

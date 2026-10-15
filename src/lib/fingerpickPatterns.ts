@@ -1,56 +1,16 @@
-import { FingerpickPattern, StringFret, BeatSlot, Measure } from "./fingerpickTypes";
+import { FINGERPICK_SCHEMA_VERSION, type FingerpickPattern, type StringFret, type BeatSlot, type Measure } from "./fingerpickTypes";
 
 // ── StringFret factory helpers ──────────────────────────────────────────────
-const S = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
-const N = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false });
-const NR = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	letRing: true,
-});
-const HnR = (fret: number): StringFret => ({
-	fret,
-	technique: "hammer-on",
-	tied: false,
-	muted: false,
-	letRing: true,
-});
-const Hn = (fret: number): StringFret => ({
-	fret,
-	technique: "hammer-on",
-	tied: false,
-	muted: false,
-});
-const Po = (fret: number): StringFret => ({
-	fret,
-	technique: "pull-off",
-	tied: false,
-	muted: false,
-});
-const Su = (fret: number): StringFret => ({
-	fret,
-	technique: "slide-up",
-	tied: false,
-	muted: false,
-});
-const Ti = (fret: number): StringFret => ({ fret, technique: null, tied: true, muted: false });
-const Ng = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	ghostNote: true,
-});
-const NRA = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	letRing: true,
-	accent: true,
-});
+// A note is its fret, how it is reached (`link`) and what is done to it
+// (`effects`); let-ring runs are the pattern's `spans`, listed per preset.
+const S = (): StringFret => ({ fret: null, muted: false });
+const N = (fret: number): StringFret => ({ fret, muted: false });
+const Hn = (fret: number): StringFret => ({ fret, muted: false, link: { kind: "hammer" } });
+const Po = (fret: number): StringFret => ({ fret, muted: false, link: { kind: "pull" } });
+const Su = (fret: number): StringFret => ({ fret, muted: false, link: { kind: "slide" } });
+const Ti = (fret: number): StringFret => ({ fret, muted: false, link: { kind: "tie" } });
+const Ng = (fret: number): StringFret => ({ fret, muted: false, effects: { ghost: true } });
+const NA = (fret: number): StringFret => ({ fret, muted: false, effects: { accent: true } });
 
 // ── 斑马斑马 ──────────────────────────────────────────────────────────────────
 // Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
@@ -59,6 +19,7 @@ const NRA = (fret: number): StringFret => ({
 // shapes are library voicings; three of them were written for this arrangement.
 const ZEBRA_ZEBRA: FingerpickPattern = {
 	id: "zebra-zebra",
+	schemaVersion: FINGERPICK_SCHEMA_VERSION,
 	name: "斑马斑马",
 	description: "A beautiful melody, with a repeated chorus",
 	bpm: 66,
@@ -608,6 +569,7 @@ const ZEBRA_ZEBRA: FingerpickPattern = {
 // song's four-chord cycle. Pinned shapes are library voicings.
 const BIRDS_OF_A_FEATHER: FingerpickPattern = {
 	id: "birds-of-a-feather",
+	schemaVersion: FINGERPICK_SCHEMA_VERSION,
 	name: "Birds of a feather",
 	description: "I want you to stay.",
 	bpm: 100,
@@ -1354,11 +1316,11 @@ function makeTravisP2Measure(n: number): Measure {
 	const slots: BeatSlot[] = [
 		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
 		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
-		{ id: `${p}-3`, duration: "eighth", strings: [S(), HnR(0), S(), S(), S(), N(0)] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), Hn(0), S(), S(), S(), N(0)] },
 		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
-		{ id: `${p}-5`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-5`, duration: "eighth", strings: [N(0), S(), S(), S(), S(), N(0)] },
 		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
-		{ id: `${p}-7`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), N(0)] },
+		{ id: `${p}-7`, duration: "eighth", strings: [S(), N(0), S(), S(), S(), N(0)] },
 		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
 	];
 	return { id: p, slots };
@@ -1367,13 +1329,13 @@ function makeTravisP2Measure(n: number): Measure {
 function makeTravisP3Measure(n: number): Measure {
 	const p = `travis-m${n}`;
 	const slots: BeatSlot[] = [
-		{ id: `${p}-1`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-1`, duration: "eighth", strings: [N(0), S(), S(), S(), S(), N(0)] },
 		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
-		{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), N(0)] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), N(0), S(), S(), S(), N(0)] },
 		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
-		{ id: `${p}-5`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), N(0)] },
+		{ id: `${p}-5`, duration: "eighth", strings: [S(), N(0), S(), S(), S(), N(0)] },
 		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
-		{ id: `${p}-7`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-7`, duration: "eighth", strings: [N(0), S(), S(), S(), S(), N(0)] },
 		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), S(), S(), N(0), S()] },
 	];
 	return { id: p, slots };
@@ -1381,6 +1343,37 @@ function makeTravisP3Measure(n: number): Measure {
 
 const TRAVIS_PICKING: FingerpickPattern = {
 	id: "travis-picking",
+	schemaVersion: FINGERPICK_SCHEMA_VERSION,
+	spans: [
+		{ id: "letRing:travis-m5-3", kind: "letRing", from: "travis-m5-3", to: "travis-m5-3", strings: [1] },
+		{ id: "letRing:travis-m5-5", kind: "letRing", from: "travis-m5-5", to: "travis-m5-5", strings: [0] },
+		{ id: "letRing:travis-m5-7", kind: "letRing", from: "travis-m5-7", to: "travis-m5-7", strings: [1] },
+		{ id: "letRing:travis-m6-3", kind: "letRing", from: "travis-m6-3", to: "travis-m6-3", strings: [1] },
+		{ id: "letRing:travis-m6-5", kind: "letRing", from: "travis-m6-5", to: "travis-m6-5", strings: [0] },
+		{ id: "letRing:travis-m6-7", kind: "letRing", from: "travis-m6-7", to: "travis-m6-7", strings: [1] },
+		{ id: "letRing:travis-m7-3", kind: "letRing", from: "travis-m7-3", to: "travis-m7-3", strings: [1] },
+		{ id: "letRing:travis-m7-5", kind: "letRing", from: "travis-m7-5", to: "travis-m7-5", strings: [0] },
+		{ id: "letRing:travis-m7-7", kind: "letRing", from: "travis-m7-7", to: "travis-m7-7", strings: [1] },
+		{ id: "letRing:travis-m8-3", kind: "letRing", from: "travis-m8-3", to: "travis-m8-3", strings: [1] },
+		{ id: "letRing:travis-m8-5", kind: "letRing", from: "travis-m8-5", to: "travis-m8-5", strings: [0] },
+		{ id: "letRing:travis-m8-7", kind: "letRing", from: "travis-m8-7", to: "travis-m8-7", strings: [1] },
+		{ id: "letRing:travis-m9-1", kind: "letRing", from: "travis-m9-1", to: "travis-m9-1", strings: [0] },
+		{ id: "letRing:travis-m9-3", kind: "letRing", from: "travis-m9-3", to: "travis-m9-3", strings: [1] },
+		{ id: "letRing:travis-m9-5", kind: "letRing", from: "travis-m9-5", to: "travis-m9-5", strings: [1] },
+		{ id: "letRing:travis-m9-7", kind: "letRing", from: "travis-m9-7", to: "travis-m9-7", strings: [0] },
+		{ id: "letRing:travis-m10-1", kind: "letRing", from: "travis-m10-1", to: "travis-m10-1", strings: [0] },
+		{ id: "letRing:travis-m10-3", kind: "letRing", from: "travis-m10-3", to: "travis-m10-3", strings: [1] },
+		{ id: "letRing:travis-m10-5", kind: "letRing", from: "travis-m10-5", to: "travis-m10-5", strings: [1] },
+		{ id: "letRing:travis-m10-7", kind: "letRing", from: "travis-m10-7", to: "travis-m10-7", strings: [0] },
+		{ id: "letRing:travis-m11-1", kind: "letRing", from: "travis-m11-1", to: "travis-m11-1", strings: [0] },
+		{ id: "letRing:travis-m11-3", kind: "letRing", from: "travis-m11-3", to: "travis-m11-3", strings: [1] },
+		{ id: "letRing:travis-m11-5", kind: "letRing", from: "travis-m11-5", to: "travis-m11-5", strings: [1] },
+		{ id: "letRing:travis-m11-7", kind: "letRing", from: "travis-m11-7", to: "travis-m11-7", strings: [0] },
+		{ id: "letRing:travis-m12-1", kind: "letRing", from: "travis-m12-1", to: "travis-m12-1", strings: [0] },
+		{ id: "letRing:travis-m12-3", kind: "letRing", from: "travis-m12-3", to: "travis-m12-3", strings: [1] },
+		{ id: "letRing:travis-m12-5", kind: "letRing", from: "travis-m12-5", to: "travis-m12-5", strings: [1] },
+		{ id: "letRing:travis-m12-7", kind: "letRing", from: "travis-m12-7", to: "travis-m12-7", strings: [0] },
+	],
 	name: "Travis Picking",
 	description: "Alternating bass thumb with melody picks on the off-beats",
 	bpm: 100,
@@ -1400,14 +1393,14 @@ const TRAVIS_PICKING: FingerpickPattern = {
 function makeArpeggioP1Measure(n: number): Measure {
 	const p = `arpeggio-m${n}`;
 	const slots: BeatSlot[] = [
-		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
-		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
-		{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
-		{ id: `${p}-4`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
-		{ id: `${p}-5`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
-		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
-		{ id: `${p}-7`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
-		{ id: `${p}-8`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), N(1), S(), S(), S(), S()] },
+		{ id: `${p}-4`, duration: "eighth", strings: [N(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-5`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
+		{ id: `${p}-7`, duration: "eighth", strings: [S(), N(1), S(), S(), S(), S()] },
+		{ id: `${p}-8`, duration: "eighth", strings: [N(0), S(), S(), S(), S(), S()] },
 	];
 	return { id: p, slots };
 }
@@ -1415,14 +1408,14 @@ function makeArpeggioP1Measure(n: number): Measure {
 function makeArpeggioP2Measure(n: number): Measure {
 	const p = `arpeggio-m${n}`;
 	const slots: BeatSlot[] = [
-		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
-		{ id: `${p}-2`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
-		{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
-		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
-		{ id: `${p}-5`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
-		{ id: `${p}-6`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
-		{ id: `${p}-7`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
-		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
+		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-2`, duration: "eighth", strings: [N(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), N(1), S(), S(), S(), S()] },
+		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
+		{ id: `${p}-5`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-6`, duration: "eighth", strings: [N(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-7`, duration: "eighth", strings: [S(), N(1), S(), S(), S(), S()] },
+		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
 	];
 	return { id: p, slots };
 }
@@ -1430,20 +1423,24 @@ function makeArpeggioP2Measure(n: number): Measure {
 function makeArpeggioP3Measure(n: number): Measure {
 	const p = `arpeggio-m${n}`;
 	const slots: BeatSlot[] = [
-		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), NR(0)] },
-		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
-		{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
-		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
-		{ id: `${p}-5`, duration: "eighth", strings: [NR(0), S(), S(), S(), S(), S()] },
-		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
-		{ id: `${p}-7`, duration: "eighth", strings: [S(), NR(1), S(), S(), S(), S()] },
-		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), NR(0), S(), S(), S()] },
+		{ id: `${p}-1`, duration: "eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
+		{ id: `${p}-2`, duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "eighth", strings: [S(), N(1), S(), S(), S(), S()] },
+		{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
+		{ id: `${p}-5`, duration: "eighth", strings: [N(0), S(), S(), S(), S(), S()] },
+		{ id: `${p}-6`, duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
+		{ id: `${p}-7`, duration: "eighth", strings: [S(), N(1), S(), S(), S(), S()] },
+		{ id: `${p}-8`, duration: "eighth", strings: [S(), S(), N(0), S(), S(), S()] },
 	];
 	return { id: p, slots };
 }
 
 const ARPEGGIO: FingerpickPattern = {
 	id: "arpeggio",
+	schemaVersion: FINGERPICK_SCHEMA_VERSION,
+	spans: [
+		{ id: "letRing:arpeggio-m1-1", kind: "letRing", from: "arpeggio-m1-1", to: "arpeggio-m12-8" },
+	],
 	name: "Arpeggio",
 	description: "Classical p-i-m-a arpeggio — bass followed by treble strings in turn",
 	bpm: 80,
@@ -1485,13 +1482,20 @@ function makeWaltzP3Measure(n: number): Measure {
 	const slots: BeatSlot[] = [
 		{ id: `${p}-1`, duration: "dotted-quarter", strings: [S(), S(), S(), S(), S(), N(0)] },
 		{ id: `${p}-2`, duration: "eighth", strings: [N(0), Hn(1), N(0), S(), S(), S()] },
-		{ id: `${p}-3`, duration: "quarter", strings: [NR(0), N(1), N(0), S(), S(), S()] },
+		{ id: `${p}-3`, duration: "quarter", strings: [N(0), N(1), N(0), S(), S(), S()] },
 	];
 	return { id: p, slots };
 }
 
 const WALTZ: FingerpickPattern = {
 	id: "waltz",
+	schemaVersion: FINGERPICK_SCHEMA_VERSION,
+	spans: [
+		{ id: "letRing:waltz-m9-3", kind: "letRing", from: "waltz-m9-3", to: "waltz-m9-3", strings: [0] },
+		{ id: "letRing:waltz-m10-3", kind: "letRing", from: "waltz-m10-3", to: "waltz-m10-3", strings: [0] },
+		{ id: "letRing:waltz-m11-3", kind: "letRing", from: "waltz-m11-3", to: "waltz-m11-3", strings: [0] },
+		{ id: "letRing:waltz-m12-3", kind: "letRing", from: "waltz-m12-3", to: "waltz-m12-3", strings: [0] },
+	],
 	name: "Waltz",
 	description: "Bass-chord waltz in 3/4 — thumb on beat 1, chord strum on beats 2 and 3",
 	bpm: 120,
@@ -1514,11 +1518,11 @@ function makeCelticBaseMeasure(n: number): Measure {
 		slots: [
 			{ id: `${p}-1`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
 			{ id: `${p}-2`, duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
-			{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), S()] },
+			{ id: `${p}-3`, duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
 			{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), Hn(2), S(), S(), S()] },
 			{ id: `${p}-5`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), N(0), S()] },
 			{ id: `${p}-6`, duration: "sixteenth", strings: [S(), N(1), S(), S(), S(), S()] },
-			{ id: `${p}-7`, duration: "quarter", strings: [NR(0), NR(0), NR(2), S(), S(), S()] },
+			{ id: `${p}-7`, duration: "quarter", strings: [N(0), N(0), N(2), S(), S(), S()] },
 		],
 	};
 }
@@ -1530,11 +1534,11 @@ function makeCelticPulloffMeasure(n: number): Measure {
 		slots: [
 			{ id: `${p}-1`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
 			{ id: `${p}-2`, duration: "sixteenth", strings: [S(), S(), N(2), S(), S(), S()] },
-			{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), S()] },
+			{ id: `${p}-3`, duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
 			{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), Po(0), S(), S(), S()] },
 			{ id: `${p}-5`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), N(2), S()] },
 			{ id: `${p}-6`, duration: "sixteenth", strings: [S(), Ng(0), S(), S(), S(), S()] },
-			{ id: `${p}-7`, duration: "quarter", strings: [NR(0), NR(0), NR(2), S(), S(), S()] },
+			{ id: `${p}-7`, duration: "quarter", strings: [N(0), N(0), N(2), S(), S(), S()] },
 		],
 	};
 }
@@ -1546,11 +1550,11 @@ function makeCelticSlideMeasure(n: number): Measure {
 		slots: [
 			{ id: `${p}-1`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
 			{ id: `${p}-2`, duration: "sixteenth", strings: [S(), S(), S(), Su(2), S(), S()] },
-			{ id: `${p}-3`, duration: "eighth", strings: [S(), S(), NR(2), S(), S(), S()] },
+			{ id: `${p}-3`, duration: "eighth", strings: [S(), S(), N(2), S(), S(), S()] },
 			{ id: `${p}-4`, duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
 			{ id: `${p}-5`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), N(0), S()] },
 			{ id: `${p}-6`, duration: "sixteenth", strings: [S(), S(), Hn(0), S(), S(), S()] },
-			{ id: `${p}-7`, duration: "quarter", strings: [NRA(0), NRA(1), NRA(2), S(), S(), S()] },
+			{ id: `${p}-7`, duration: "quarter", strings: [NA(0), NA(1), NA(2), S(), S(), S()] },
 		],
 	};
 }
@@ -1562,14 +1566,14 @@ function makeCelticClimaxMeasure(n: number): Measure {
 		slots: [
 			{ id: `${p}-1`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), S(), N(0)] },
 			{ id: `${p}-2`, duration: "sixteenth", strings: [S(), S(), Hn(2), S(), S(), S()] },
-			{ id: `${p}-3`, duration: "eighth", strings: [S(), NR(0), S(), S(), S(), S()] },
+			{ id: `${p}-3`, duration: "eighth", strings: [S(), N(0), S(), S(), S(), S()] },
 			{ id: `${p}-4`, duration: "eighth", strings: [S(), S(), Po(0), S(), S(), S()] },
 			{ id: `${p}-5`, duration: "dotted-eighth", strings: [S(), S(), S(), S(), N(2), S()] },
 			{ id: `${p}-6`, duration: "sixteenth", strings: [S(), Su(1), S(), S(), S(), S()] },
 			{
 				id: `${p}-7`,
 				duration: "quarter",
-				strings: [NRA(0), NRA(0), NRA(2), NRA(2), S(), S()],
+				strings: [NA(0), NA(0), NA(2), NA(2), S(), S()],
 			},
 		],
 	};
@@ -1577,6 +1581,25 @@ function makeCelticClimaxMeasure(n: number): Measure {
 
 const CELTIC_FINGERSTYLE: FingerpickPattern = {
 	id: "celtic-fingerstyle",
+	schemaVersion: FINGERPICK_SCHEMA_VERSION,
+	spans: [
+		{ id: "letRing:celtic-m1-3", kind: "letRing", from: "celtic-m1-3", to: "celtic-m1-3" },
+		{ id: "letRing:celtic-m1-7", kind: "letRing", from: "celtic-m1-7", to: "celtic-m1-7" },
+		{ id: "letRing:celtic-m2-3", kind: "letRing", from: "celtic-m2-3", to: "celtic-m2-3" },
+		{ id: "letRing:celtic-m2-7", kind: "letRing", from: "celtic-m2-7", to: "celtic-m2-7" },
+		{ id: "letRing:celtic-m3-3", kind: "letRing", from: "celtic-m3-3", to: "celtic-m3-3" },
+		{ id: "letRing:celtic-m3-7", kind: "letRing", from: "celtic-m3-7", to: "celtic-m3-7" },
+		{ id: "letRing:celtic-m4-3", kind: "letRing", from: "celtic-m4-3", to: "celtic-m4-3" },
+		{ id: "letRing:celtic-m4-7", kind: "letRing", from: "celtic-m4-7", to: "celtic-m4-7" },
+		{ id: "letRing:celtic-m5-3", kind: "letRing", from: "celtic-m5-3", to: "celtic-m5-3" },
+		{ id: "letRing:celtic-m5-7", kind: "letRing", from: "celtic-m5-7", to: "celtic-m5-7" },
+		{ id: "letRing:celtic-m6-3", kind: "letRing", from: "celtic-m6-3", to: "celtic-m6-3" },
+		{ id: "letRing:celtic-m6-7", kind: "letRing", from: "celtic-m6-7", to: "celtic-m6-7" },
+		{ id: "letRing:celtic-m7-3", kind: "letRing", from: "celtic-m7-3", to: "celtic-m7-3" },
+		{ id: "letRing:celtic-m7-7", kind: "letRing", from: "celtic-m7-7", to: "celtic-m7-7" },
+		{ id: "letRing:celtic-m8-3", kind: "letRing", from: "celtic-m8-3", to: "celtic-m8-3" },
+		{ id: "letRing:celtic-m8-7", kind: "letRing", from: "celtic-m8-7", to: "celtic-m8-7" },
+	],
 	name: "Celtic Fingerstyle",
 	description: "Celtic-flavoured fingerstyle with ornamental techniques over Em/Am shapes",
 	bpm: 95,

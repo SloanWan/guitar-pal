@@ -31,8 +31,3 @@ export type NormalizeResult = {
 	warnings: ValidationIssue[];
 	truncated: boolean;
 };
-
-export type TechniqueSupport = {
-	renderSupported: boolean;
-	audioSupported: boolean;
-};

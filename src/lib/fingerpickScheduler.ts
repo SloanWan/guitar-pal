@@ -1,19 +1,26 @@
 import {
 	isBrush,
 	strokeDirection,
+	type EffectKind,
 	type FingerpickPattern,
 	type Duration,
-	type Technique,
+	type Link,
+	type LinkKind,
+	type NoteEffects,
+	type Percussion,
+	type PercussionKind,
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
 import {
 	bendTimeline,
 	composeExpression,
-	expressionForTechnique,
+	expressionForEffects,
 	releaseDecayTc,
+	whammyTimeline,
 } from "@/lib/fingerpickExpression";
-import { soundingMidi } from "@/lib/fingerpickPitch";
+import { indexPattern, slurredInside, spanCovers } from "@/lib/fingerpickIndex";
+import { harmonicShift, soundingMidi } from "@/lib/fingerpickPitch";
 import { beatTicks } from "@/lib/fingerpickEdit";
 import type { Meter } from "@/lib/strumMeter";
 
@@ -34,18 +41,26 @@ export interface ScheduleEvent {
 	stringIndex: number;
 	/** Resolved MIDI pitch: open-string MIDI + fret. */
 	midi: number;
-	technique: Technique;
 	muted: boolean;
 	measureIndex: number;
 	slotIndex: number;
-	/** Bend height in semitones for the release / pre-bend variants (from StringFret). */
-	bendTarget?: number;
-	/** Propagated from StringFret for audio shaping — all optional to preserve backward compat. */
-	ghostNote?: boolean;
-	accent?: boolean;
-	staccato?: boolean;
+	/** How the note is reached (model v2): a slide glides the sounding voice, a hammer / pull plays legato. */
+	link?: Link;
+	/** What is done to the note (model v2): bend, vibrato, accent, staccato, ghost, tap, trill … */
+	effects?: NoteEffects;
 	/** Let the note ring past its notated duration; termination comes from voice stealing only. */
 	letRing?: boolean;
+	/** Under a palm-mute span: damped, short and dull. */
+	palmMute?: boolean;
+	/** A right-hand hit this event voices (a slap's dead strike on this string). */
+	percussion?: Percussion;
+	/**
+	 * A tremolo stroke after the first: played a touch softer (`gains.tremoloAltGain`)
+	 * on every second stroke, so the run reads as a hand, not a machine.
+	 */
+	altStroke?: true;
+	/** Inside a slur span, after its first note: played legato, like a hammer-on. */
+	slurred?: true;
 	/**
 	 * Per-string gain multiplier from a roll's stagger taper (arpeggiated chord). Present
 	 * only on events belonging to a slot that carries a `stroke`; applied on top of the
@@ -293,11 +308,56 @@ export function computeRollOffsets(
  *    `stroke`, its per-string events are staggered (arpeggiated) per `rollParams`; the
  *    slot's own duration and the following slot's start time are unchanged.
  */
+/** A tremolo speed as the note value it names. */
+const TREMOLO_DURATION: Record<NonNullable<NoteEffects["tremolo"]>["speed"], Duration> = {
+	"8th": "eighth",
+	"16th": "sixteenth",
+	"32nd": "32nd",
+};
+
+/**
+ * Where a tremolo-picked note's strokes fall inside its slot, as seconds from
+ * the slot's start, with each stroke's length. The strokes are spaced evenly
+ * at the nearest count to the speed's note value, so they always add up to
+ * the slot (a dotted slot or an odd grid never leaves a gap or a spill); a
+ * slot shorter than one stroke is one stroke.
+ */
+export function tremoloStrokes(slotDuration: number, speed: NonNullable<NoteEffects["tremolo"]>["speed"], quarter: number): { offset: number; duration: number }[] {
+	const nominal = DURATION_QUARTERS[TREMOLO_DURATION[speed]] * quarter;
+	const count = Math.max(1, Math.round(slotDuration / nominal));
+	const duration = slotDuration / count;
+	return Array.from({ length: count }, (_, k) => ({ offset: k * duration, duration }));
+}
+
+/** How fast a trill alternates — a hand's speed, whatever the tempo. */
+export const TRILL_RATE_HZ = 10;
+
+/**
+ * Where a trilled note's strokes fall inside its slot: evenly spaced at the
+ * count nearest `TRILL_RATE_HZ`, at least two (the note and its upper
+ * neighbour), so they add up to the slot like tremolo strokes.
+ */
+export function trillStrokes(slotDuration: number): { offset: number; duration: number }[] {
+	const count = Math.max(2, Math.round(slotDuration * TRILL_RATE_HZ));
+	const duration = slotDuration / count;
+	return Array.from({ length: count }, (_, k) => ({ offset: k * duration, duration }));
+}
+
+/** The strings a hit of each kind strikes dead; a body tap strikes none — it is one knock, voiced on its own (`BODY_TAP_STRING`). */
+export const PERCUSSION_STRINGS: Record<PercussionKind, readonly number[]> = {
+	slap: [0, 1, 2, 3, 4, 5],
+	thumbSlap: [3, 4, 5],
+	bodyTap: [],
+};
+/** The string index a body tap's event is filed under; it registers no voice there. */
+export const BODY_TAP_STRING = 5;
+
 export function fingerpickPatternToScheduleEvents(
 	pattern: FingerpickPattern,
 	bpm: number,
 	rollParams: RollParams = DEFAULT_ROLL_PARAMS,
 ): ScheduleEvent[] {
+	const index = indexPattern(pattern);
 	const quarter = secondsPerQuarter(bpm, pattern.timeSignature);
 	// The TAB is written relative to the capo, so every string sounds this much
 	// higher than its written fret — folded in once here, at compile time.
@@ -327,46 +387,136 @@ export function fingerpickPatternToScheduleEvents(
 				if (slot.stroke !== undefined) {
 					const struck: number[] = [];
 					slot.strings.forEach((sf, i) => {
-						if (sf.tied) return;
+						if (sf.link?.kind === "tie") return;
 						if (sf.fret !== null || sf.muted) struck.push(i);
 					});
 					rollOffsets = computeRollOffsets(struck, slot.stroke, slotDuration, rollParams);
 					anyRoll = true;
 				}
 
+				const struckHere = new Set<number>();
 				slot.strings.forEach((sf, stringIndex) => {
-					if (sf.tied) {
+					if (sf.link?.kind === "tie") {
 						const held = sounding[stringIndex];
 						if (held && !slot.isGraceNote) held.duration += slotDuration;
 						return;
 					}
 					const isPlayed = sf.fret !== null || sf.muted;
 					if (!isPlayed) return;
+					struckHere.add(stringIndex);
 
 					// fret takes priority over muted for pitch; muted only shapes the envelope.
-					// The same formula the reading page labels frets with, so they agree.
-					const midi = soundingMidi(stringIndex, sf.fret ?? 0, capo);
+					// The same formula the reading page labels frets with, so they agree; a
+					// harmonic sounds the partial its node gives, not the fret.
+					const midi = soundingMidi(stringIndex, sf.fret ?? 0, capo) + (sf.effects?.harmonic ? harmonicShift(sf.effects.harmonic, sf.fret ?? 0) : 0);
 
 					const roll = rollOffsets?.get(stringIndex);
-					const event: ScheduleEvent = {
-						time: currentTime + (roll?.timeOffset ?? 0),
-						duration: slotDuration,
+					const common = {
 						stringIndex,
 						midi,
-						technique: sf.technique,
 						muted: sf.muted,
 						measureIndex,
 						slotIndex,
-						...(sf.bendTarget !== undefined && { bendTarget: sf.bendTarget }),
-						...(sf.ghostNote && { ghostNote: true }),
-						...(sf.accent && { accent: true }),
-						...(sf.staccato && { staccato: true }),
-						...(sf.letRing && { letRing: true }),
+						...(sf.link && { link: sf.link }),
+						...(spanCovers(index, slot.id, "letRing", stringIndex) && { letRing: true }),
+						...(spanCovers(index, slot.id, "palmMute", stringIndex) && { palmMute: true }),
+						...(slurredInside(index, slot.id, stringIndex) && { slurred: true as const }),
 						...(roll && { rollGain: roll.gain }),
+					};
+					const start = currentTime + (roll?.timeOffset ?? 0);
+
+					// A trill alternates the note with its upper neighbour at a hand's speed:
+					// the first stroke is the picked note, the rest are hammered up and
+					// pulled back down, so the legato treatment falls out of the link.
+					const trill = sf.effects?.trill;
+					if (trill && !slot.isGraceNote && sf.fret !== null) {
+						const { trill: _trill, ...rest } = sf.effects ?? {};
+						void _trill;
+						const effects = Object.keys(rest).length > 0 ? { effects: rest as NoteEffects } : {};
+						const interval = Math.max(1, (trill.fret ?? sf.fret + 1) - sf.fret);
+						let last: ScheduleEvent | null = null;
+						trillStrokes(slotDuration).forEach((stroke, k) => {
+							const upper = k % 2 === 1;
+							const event: ScheduleEvent = {
+								time: start + stroke.offset,
+								duration: stroke.duration,
+								...common,
+								...effects,
+								midi: midi + (upper ? interval : 0),
+								...(k > 0 && { link: { kind: upper ? "hammer" : "pull" } as Link }),
+							};
+							events.push(event);
+							last = event;
+						});
+						sounding[stringIndex] = last;
+						return;
+					}
+
+					// Tremolo picking: the same note struck again and again for the slot's
+					// length — one event per stroke, the tremolo itself taken off them.
+					// A tie after the slot lengthens the last stroke, as a player would.
+					const tremolo = sf.effects?.tremolo;
+					if (tremolo && !slot.isGraceNote) {
+						const { tremolo: _speed, ...rest } = sf.effects ?? {};
+						void _speed;
+						const effects = Object.keys(rest).length > 0 ? { effects: rest as NoteEffects } : {};
+						let last: ScheduleEvent | null = null;
+						tremoloStrokes(slotDuration, tremolo.speed, quarter).forEach((stroke, k) => {
+							const event: ScheduleEvent = {
+								time: start + stroke.offset,
+								duration: stroke.duration,
+								...common,
+								...effects,
+								...(k % 2 === 1 && { altStroke: true as const }),
+							};
+							events.push(event);
+							last = event;
+						});
+						sounding[stringIndex] = last;
+						return;
+					}
+
+					const event: ScheduleEvent = {
+						time: start,
+						duration: slotDuration,
+						...common,
+						...(sf.effects && Object.keys(sf.effects).length > 0 && { effects: sf.effects }),
 					};
 					events.push(event);
 					sounding[stringIndex] = event;
 				});
+
+				// A body tap is one knock, not a strike on any string: one event, filed
+				// under the low E but voiced as noise and never registered as a voice.
+				if (slot.percussion?.kind === "bodyTap") {
+					events.push({
+						time: currentTime,
+						duration: slotDuration,
+						stringIndex: BODY_TAP_STRING,
+						midi: soundingMidi(BODY_TAP_STRING, 0, capo),
+						muted: true,
+						measureIndex,
+						slotIndex,
+						percussion: slot.percussion,
+					});
+				}
+				// A hit strikes its strings dead, over whatever notes the slot holds:
+				// one muted event per string the hit covers that nothing else strikes.
+				if (slot.percussion) {
+					for (const stringIndex of PERCUSSION_STRINGS[slot.percussion.kind]) {
+						if (struckHere.has(stringIndex)) continue;
+						events.push({
+							time: currentTime,
+							duration: slotDuration,
+							stringIndex,
+							midi: soundingMidi(stringIndex, 0, capo),
+							muted: true,
+							measureIndex,
+							slotIndex,
+							percussion: slot.percussion,
+						});
+					}
+				}
 			}
 
 			if (!slot.isGraceNote) {
@@ -400,19 +550,24 @@ export function fingerpickPatternToScheduleEvents(
  * origin and is left to fall back — correctly, since there is nothing to slide from.
  */
 export function promoteSlideOriginsToLetRing(events: ScheduleEvent[]): void {
-	const hasSlide = events.some((e) => e.technique === "slide-up" || e.technique === "slide-down");
+	const hasSlide = events.some((e) => isGlide(e.link));
 	if (!hasSlide) return;
 
 	// Per-string predecessor lookup needs time order; `events` may still be in insertion order.
 	const ordered = [...events].sort((a, b) => a.time - b.time);
 	const lastByString = new Map<number, ScheduleEvent>();
 	for (const ev of ordered) {
-		if (ev.technique === "slide-up" || ev.technique === "slide-down") {
+		if (isGlide(ev.link)) {
 			const origin = lastByString.get(ev.stringIndex);
 			if (origin) origin.letRing = true;
 		}
 		lastByString.set(ev.stringIndex, ev);
 	}
+}
+
+/** A slide that glides the sounding voice: a shift slide (`picked`) strikes its target again instead. */
+export function isGlide(link: Link | undefined): boolean {
+	return link?.kind === "slide" && !link.picked;
 }
 
 /** Sum of all slot durations across all measures, in seconds. */
@@ -672,7 +827,7 @@ export interface SlideOriginVoice {
  * starts in the past (which would make the exponential ramp behave oddly).
  */
 export function resolveSlide(args: {
-	technique: Technique;
+	link: Link | undefined;
 	origin: SlideOriginVoice | undefined;
 	targetMidi: number;
 	targetRate: number;
@@ -682,10 +837,10 @@ export function resolveSlide(args: {
 	params: SlideParams;
 	sourceStopBuffer: number;
 }): SlideResolution {
-	const { technique, origin, targetMidi, targetRate, targetDuration, when, now, params, sourceStopBuffer } =
+	const { link, origin, targetMidi, targetRate, targetDuration, when, now, params, sourceStopBuffer } =
 		args;
 
-	if (technique !== "slide-up" && technique !== "slide-down") {
+	if (!isGlide(link)) {
 		return { action: "fallback", reason: "not-a-slide" };
 	}
 	if (!origin) return { action: "fallback", reason: "no-origin-voice" };
@@ -813,6 +968,20 @@ export interface NoteGains {
 	technique: number;
 	tapping: number;
 	ghost: number;
+	/** A hit's dead strike. */
+	slap: number;
+	/** Multiplier under a palm mute. */
+	palmMute: number;
+	/** Multiplier on every second stroke of a tremolo. */
+	tremoloAltGain: number;
+	/** A harmonic: the partial, lighter than a pluck. */
+	harmonic: number;
+	/** The quiet octave a harmonic carries under its partial, as a share of the harmonic gain. */
+	harmonicBody: number;
+	/** A pick scrape's noise sweep. */
+	scrape: number;
+	/** A knock on the body. */
+	bodyTap: number;
 	accentMultiplier: number;
 	letRingLifetimeTaus: number;
 }
@@ -823,7 +992,121 @@ export interface NoteEnvelope {
 	minDecayTc: number;
 	voiceStealFadeTau: number;
 	letRingDecayTc: number;
+	/** Ceiling on a palm-muted note's decay time constant (s). */
+	palmMuteDecayTc: number;
+	/** Ceiling on a harmonic's decay time constant (s): a partial dies sooner than the string. */
+	harmonicDecayTc: number;
 	sourceStopBuffer: number;
+}
+
+// ─── What each kind does to the voice ────────────────────────────────────────
+// The registry's `audio` flag for a kind means it has an entry here (or in the
+// scheduler's event pass, for spans and hits); a kind with no entry plays as a
+// plain note.
+
+/** The gain a link plays at; a hammer / pull is quieter than a pick unless the legato A/B says "dry". */
+const LINK_GAIN: Partial<Record<LinkKind, (gains: NoteGains, legato: LegatoTreatment) => number>> = {
+	hammer: (gains, legato) => (legato === "dry" ? gains.normal : gains.technique),
+	pull: (gains, legato) => (legato === "dry" ? gains.normal : gains.technique),
+};
+
+/** The gain an effect plays at, in the order they are consulted; the first present wins. */
+const EFFECT_GAIN: [EffectKind, (gains: NoteGains) => number][] = [
+	["ghost", (gains) => gains.ghost],
+	["trill", (gains) => gains.technique],
+	["tap", (gains) => gains.tapping],
+	["harmonic", (gains) => gains.harmonic],
+];
+
+/** Lowpass cutoff (Hz) a kind puts on the voice; the lowest of those present applies. */
+const LEGATO_LOWPASS_HZ = 2000;
+const PALM_MUTE_LOWPASS_HZ = 900;
+/** A tapped note skips the sample's pick transient and eases in. */
+export const TAP_SKIP_S = 0.008;
+const TAP_RAMP_S = 0.005;
+/** A slide into / out of a note travels this far, in semitones. */
+export const SLIDE_IN_OUT_SEMITONES = 2;
+/** A pick scrape's bandpass sweeps from the bridge-side rasp down to the wound strings' thud. */
+const SCRAPE_FROM_HZ = 3000;
+const SCRAPE_TO_HZ = 400;
+const SCRAPE_Q = 2;
+/** A body tap: a low thump with a little wood resonance under it. */
+const BODY_TAP_LOWPASS_HZ = 150;
+const BODY_TAP_TONE_HZ = 80;
+const BODY_TAP_DECAY_TC = 0.06;
+const BODY_TAP_ATTACK_S = 0.002;
+
+/** Whether the legato lowpass masks the pick transient for this event. */
+function legatoFilter(event: ScheduleEvent, legato: LegatoTreatment): boolean {
+	if (event.effects?.trill || event.effects?.tap) return true;
+	const kind = event.link?.kind;
+	return (kind === "hammer" || kind === "pull" || event.slurred === true) && legato === "current";
+}
+
+/** Two seconds of white noise, made once per context — the raw material of a scrape and a body tap. */
+const noiseBuffers = new WeakMap<AudioContext, AudioBuffer>();
+export function noiseBufferFor(ctx: AudioContext): AudioBuffer {
+	const cached = noiseBuffers.get(ctx);
+	if (cached) return cached;
+	const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 2), ctx.sampleRate);
+	const data = buffer.getChannelData(0);
+	for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+	noiseBuffers.set(ctx, buffer);
+	return buffer;
+}
+
+/**
+ * Every kind the scheduler voices: the links it plays legato or glides, the
+ * effects with a gain, a shape or a curve, the spans and hits the event pass
+ * reads. The registry's `audio` flags are tested against this list.
+ */
+export const AUDIO_KINDS: ReadonlySet<string> = new Set([
+	"tie",
+	"hammer",
+	"pull",
+	"slide",
+	"bend",
+	"vibrato",
+	"tap",
+	"trill",
+	"accent",
+	"staccato",
+	"ghost",
+	"tremolo",
+	"harmonic",
+	"slideIn",
+	"slideOut",
+	"whammy",
+	"scrape",
+	"letRing",
+	"palmMute",
+	"slur",
+	"slap",
+	"thumbSlap",
+	"bodyTap",
+]);
+
+/** The attack gain for an event, from the tables above. */
+export function noteGain(event: ScheduleEvent, gains: NoteGains, legato: LegatoTreatment): number {
+	let volume: number | null = null;
+	if (event.percussion) volume = gains.slap;
+	else if (event.effects?.ghost) volume = gains.ghost;
+	else if (event.link && LINK_GAIN[event.link.kind]) volume = LINK_GAIN[event.link.kind]!(gains, legato);
+	else {
+		for (const [kind, gain] of EFFECT_GAIN) {
+			if (event.effects?.[kind]) {
+				volume = gain(gains);
+				break;
+			}
+		}
+	}
+	if (volume === null && event.slurred && LINK_GAIN.hammer) volume = LINK_GAIN.hammer(gains, legato);
+	if (volume === null) volume = gains.normal;
+	if (event.effects?.accent || event.percussion?.accent) volume *= gains.accentMultiplier;
+	if (event.palmMute) volume *= gains.palmMute;
+	if (event.altStroke) volume *= gains.tremoloAltGain;
+	if (event.rollGain !== undefined) volume *= event.rollGain;
+	return volume;
 }
 
 /** Resolves the decoded buffer + playbackRate for a note; returns null if unavailable. */
@@ -863,6 +1146,59 @@ export interface FingerpickNoteSchedulerDeps {
 	slideParams: SlideParams;
 	/** Read-only voice-steal observer; invoked only when a still-ringing voice is stolen. */
 	onVoiceSteal?: (outgoing: SlideActiveVoice, incoming: ScheduleEvent) => void;
+	/** The noise a scrape and a body tap are made of (`noiseBufferFor`); without it they are silent. */
+	noiseBuffer?: AudioBuffer | null;
+}
+
+/**
+ * A sound with no string behind it: a pick scrape (noise swept down through a
+ * bandpass over the slot) or a body tap (a low thump with a little wood under
+ * it). Registers no voice — nothing can be slid from or stolen here — and
+ * leaves the string's own voice alone.
+ */
+export function scheduleNoiseEvent(deps: FingerpickNoteSchedulerDeps, event: ScheduleEvent, when: number): void {
+	const { ctx, target, allSources, gains } = deps;
+	const buffer = deps.noiseBuffer;
+	if (!buffer) return;
+	const source = ctx.createBufferSource();
+	source.buffer = buffer;
+	source.loop = true;
+	const gainNode = ctx.createGain();
+	const filter = ctx.createBiquadFilter();
+	const accent = event.percussion?.accent || event.effects?.accent ? gains.accentMultiplier : 1;
+	let stopTime: number;
+	if (event.percussion?.kind === "bodyTap") {
+		filter.type = "lowpass";
+		filter.frequency.value = BODY_TAP_LOWPASS_HZ;
+		filter.Q.value = 1.5;
+		gainNode.gain.setValueAtTime(0, when);
+		gainNode.gain.linearRampToValueAtTime(gains.bodyTap * accent, when + BODY_TAP_ATTACK_S);
+		gainNode.gain.setTargetAtTime(0, when + BODY_TAP_ATTACK_S, BODY_TAP_DECAY_TC);
+		// The wood: a short sine under the thump, on the same envelope.
+		const tone = ctx.createOscillator();
+		tone.type = "sine";
+		tone.frequency.value = BODY_TAP_TONE_HZ;
+		tone.connect(gainNode);
+		tone.start(when);
+		stopTime = when + BODY_TAP_DECAY_TC * 5;
+		tone.stop(stopTime);
+	} else {
+		const duration = Math.max(event.duration, 0.05);
+		filter.type = "bandpass";
+		filter.Q.value = SCRAPE_Q;
+		filter.frequency.setValueAtTime(SCRAPE_FROM_HZ, when);
+		filter.frequency.exponentialRampToValueAtTime(SCRAPE_TO_HZ, when + duration);
+		gainNode.gain.setValueAtTime(gains.scrape * accent, when);
+		gainNode.gain.setTargetAtTime(0, when, duration * 0.6);
+		stopTime = when + duration + deps.envelope.sourceStopBuffer;
+	}
+	source.connect(filter).connect(gainNode).connect(target);
+	source.start(when);
+	source.stop(stopTime);
+	allSources.add(source);
+	source.onended = () => {
+		allSources.delete(source);
+	};
 }
 
 /**
@@ -888,6 +1224,12 @@ export function scheduleFingerpickNote(
 		slideParams,
 	} = deps;
 
+	// A scrape and a body tap have no string behind them.
+	if (event.effects?.scrape || event.percussion?.kind === "bodyTap") {
+		scheduleNoiseEvent(deps, event, when);
+		return;
+	}
+
 	const noteData = resolveNoteData(event.muted, event.midi);
 	if (!noteData) return;
 
@@ -905,7 +1247,7 @@ export function scheduleFingerpickNote(
 		? existing.currentRate * Math.pow(2, (event.midi - existing.currentMidi) / 12)
 		: noteData.playbackRate;
 	const slide = resolveSlide({
-		technique: event.technique,
+		link: event.link,
 		origin: existing
 			? { currentRate: existing.currentRate, currentMidi: existing.currentMidi, stopTime: existing.stopTime }
 			: undefined,
@@ -920,7 +1262,7 @@ export function scheduleFingerpickNote(
 
 	if (slide.action === "handoff" && existing) {
 		const letRing = event.letRing === true || forceLetRing;
-		const noteDuration = event.staccato ? event.duration * 0.2 : event.duration;
+		const noteDuration = event.effects?.staccato ? event.duration * 0.2 : event.duration;
 		const decayTc = letRing
 			? env.letRingDecayTc
 			: Math.max(noteDuration * env.decayTcRatio, env.minDecayTc);
@@ -953,41 +1295,49 @@ export function scheduleFingerpickNote(
 	// Steal (fade + stop) any ringing voice on this string.
 	stealVoice(voices, event.stringIndex, when, env.voiceStealFadeTau);
 
-	// ── Gain ladder (+ legato A/B for hammer-on / pull-off) ───────────────────
-	const isHammerOrPull = event.technique === "hammer-on" || event.technique === "pull-off";
-	let volume: number;
-	if (event.ghostNote) {
-		volume = gains.ghost;
-	} else if (isHammerOrPull) {
-		// "dry" plays a hammer/pull identically to a plucked note; "current" and
-		// "gain-only" keep the reduced technique gain (they differ only in the filter).
-		volume = legatoTreatment === "dry" ? gains.normal : gains.technique;
-	} else if (event.technique === "trill") {
-		volume = gains.technique;
-	} else if (event.technique === "tapping") {
-		volume = gains.tapping;
-	} else {
-		volume = gains.normal;
-	}
-	if (event.accent) volume *= gains.accentMultiplier;
-	if (event.rollGain !== undefined) volume *= event.rollGain;
+	// ── Gain ladder (+ legato A/B for hammer / pull) ──────────────────────────
+	const volume = noteGain(event, gains, legatoTreatment);
 
 	// Staccato shortens the sounding duration to 20% of the slot duration.
-	const noteDuration = event.staccato ? event.duration * 0.2 : event.duration;
+	const noteDuration = event.effects?.staccato ? event.duration * 0.2 : event.duration;
 
 	const source = ctx.createBufferSource();
 	source.buffer = noteData.buffer;
+	let harmonicBody: AudioBufferSourceNode | null = null;
 
 	const effectiveDuration = noteDuration;
 	source.playbackRate.value = noteData.playbackRate;
 
-	const letRing = event.letRing === true || forceLetRing;
+	// ── Slides into and out of the note: pitch motion on its own voice ────────
+	// A slide in starts the sample a couple of frets away and ramps to pitch
+	// over the slide's travel; a slide out leaves the pitch the same way at the
+	// end of the written duration, the gain fading with it so the note dies on
+	// the way rather than landing anywhere. Both ride on playbackRate, so a
+	// bend or vibrato (on detune) composes with them.
+	const semis = (dir: "below" | "above") => (dir === "below" ? -SLIDE_IN_OUT_SEMITONES : SLIDE_IN_OUT_SEMITONES);
+	const rampS = slideParams.rampDurationS;
+	if (event.effects?.slideIn) {
+		const fromRate = noteData.playbackRate * Math.pow(2, semis(event.effects.slideIn.from) / 12);
+		source.playbackRate.setValueAtTime(fromRate, when);
+		source.playbackRate.exponentialRampToValueAtTime(noteData.playbackRate, when + rampS);
+	}
+
+	// A palm mute damps the string: it cannot ring on, however the playback mode is set.
+	const letRing = (event.letRing === true || forceLetRing) && !event.palmMute;
 
 	const gainNode = ctx.createGain();
-	gainNode.gain.setValueAtTime(volume, when);
+	if (event.effects?.tap) {
+		// No pick on a tapped note: ease the gain in over the first milliseconds.
+		gainNode.gain.setValueAtTime(MIN_RAMP_GAIN, when);
+		gainNode.gain.linearRampToValueAtTime(volume, when + TAP_RAMP_S);
+	} else {
+		gainNode.gain.setValueAtTime(volume, when);
+	}
 	let decayTc = letRing
 		? env.letRingDecayTc
 		: Math.max(effectiveDuration * env.decayTcRatio, env.minDecayTc);
+	if (event.palmMute) decayTc = Math.min(decayTc, env.palmMuteDecayTc);
+	if (event.effects?.harmonic) decayTc = Math.min(decayTc, env.harmonicDecayTc);
 
 	// ── Pitch expression: bend / vibrato ─────────────────────────────────────
 	// One detune curve for the note's whole audible life, set once on its own
@@ -995,7 +1345,7 @@ export function scheduleFingerpickNote(
 	// voice composes with the curve (the two params multiply). The gain envelope
 	// is untouched except that a released bend keeps enough level to be heard
 	// coming back down.
-	const expression = expressionForTechnique(event.technique, event.bendTarget);
+	const expression = expressionForEffects(event.effects);
 	if (expression) {
 		const curveDuration = letRing ? env.letRingDecayTc * gains.letRingLifetimeTaus : effectiveDuration;
 		const curve = composeExpression(expression, curveDuration);
@@ -1003,26 +1353,65 @@ export function scheduleFingerpickNote(
 		if (expression.bend?.release) {
 			decayTc = releaseDecayTc(decayTc, bendTimeline(expression.bend, curveDuration));
 		}
+		if (expression.whammy?.release) {
+			decayTc = releaseDecayTc(decayTc, whammyTimeline(expression.whammy, curveDuration));
+		}
 	}
-	gainNode.gain.setTargetAtTime(0, when, decayTc);
+	gainNode.gain.setTargetAtTime(0, event.effects?.tap ? when + TAP_RAMP_S : when, decayTc);
+
+	if (event.effects?.slideOut) {
+		const outStart = Math.max(when, when + effectiveDuration - rampS);
+		const toRate = noteData.playbackRate * Math.pow(2, semis(event.effects.slideOut.to) / 12);
+		source.playbackRate.setValueAtTime(noteData.playbackRate, outStart);
+		source.playbackRate.exponentialRampToValueAtTime(toRate, outStart + rampS);
+		gainNode.gain.setTargetAtTime(0, outStart, Math.min(decayTc, rampS / 2));
+	}
 
 	// Legato lowpass masks the sample's pick transient. Trill keeps it always; hammer/pull
 	// get it only in "current" treatment (the A/B: "gain-only"/"dry" drop the filter).
-	const applyFilter = event.technique === "trill" || (isHammerOrPull && legatoTreatment === "current");
-	if (applyFilter) {
+	// A palm mute dulls the note further; the lower cutoff wins when both apply.
+	const cutoffs: number[] = [];
+	if (legatoFilter(event, legatoTreatment)) cutoffs.push(LEGATO_LOWPASS_HZ);
+	if (event.palmMute) cutoffs.push(PALM_MUTE_LOWPASS_HZ);
+	if (cutoffs.length > 0) {
 		const filter = ctx.createBiquadFilter();
 		filter.type = "lowpass";
-		filter.frequency.value = 2000;
+		filter.frequency.value = Math.min(...cutoffs);
 		filter.Q.value = 0.7;
 		source.connect(filter).connect(gainNode).connect(target);
 	} else {
 		source.connect(gainNode).connect(target);
 	}
-	source.start(when);
+	// A harmonic is the sample at its partial's pitch — the way TuxGuitar and
+	// alphaTab play one — with a quiet copy an octave under it for the body the
+	// string still gives (TuxGuitar's second, softer note). No filter: the pluck
+	// an octave or two up already chimes.
+	if (event.effects?.harmonic) {
+		const body = resolveNoteData(false, event.midi - 12);
+		if (body) {
+			const under = ctx.createBufferSource();
+			under.buffer = body.buffer;
+			under.playbackRate.value = body.playbackRate;
+			const underGain = ctx.createGain();
+			underGain.gain.value = gains.harmonicBody;
+			under.connect(underGain).connect(gainNode);
+			under.start(when);
+			allSources.add(under);
+			under.onended = () => {
+				allSources.delete(under);
+			};
+			// Stopped with the main source below, by the same clock.
+			harmonicBody = under;
+		}
+	}
+	// A tapped note skips the sample's pick transient.
+	if (event.effects?.tap) source.start(when, TAP_SKIP_S);
+	else source.start(when);
 	const stopTime = letRing
 		? when + env.letRingDecayTc * gains.letRingLifetimeTaus + env.sourceStopBuffer
 		: when + effectiveDuration + env.sourceStopBuffer;
 	source.stop(stopTime);
+	if (harmonicBody) harmonicBody.stop(stopTime);
 
 	allSources.add(source);
 	// Grace notes (very short duration) are not registered so the next same-string note

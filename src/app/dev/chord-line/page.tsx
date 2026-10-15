@@ -46,7 +46,7 @@ const REFS: Record<string, ChordRef> = {
 };
 const keyOf = (ref: ChordRef) => `${ref.root} ${ref.suffix}`;
 
-const S = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
+const S = (): StringFret => ({ fret: null, muted: false });
 function slot(id: string, duration: Duration, frets: Partial<Record<number, number>>, chord?: ChordRef): BeatSlot {
 	const strings = [S(), S(), S(), S(), S(), S()] as BeatSlot["strings"];
 	for (const [i, fret] of Object.entries(frets)) strings[Number(i)] = { ...S(), fret: fret ?? null };

@@ -253,7 +253,7 @@ E|-0-----0-----|
 
 - A line is tab when it has two dashes together somewhere. The string letter and the opening `|` or `:` are optional. High e on top is the default; `E` on top with `e` at the bottom is read the other way up.
 - `|` or `:` are bar lines. Digits are frets (two digits are one fret). `x` is a dead note.
-- Techniques: `h` hammer-on, `p` pull-off, `/` or `s` slide up, `\` slide down, `t` tapping, before the note; `b` bend and `~` vibrato after it. Any other mark is skipped with a warning.
+- Techniques: `h` hammer-on, `p` pull-off, `/`, `\` or `s` slide, `t` tapping, before the note; `(7)` is a tied note; after the fret, `b` a bend (`7b9` to the pitch of 9, `7b8r` released, `7pb9` pre-bent, `5b¼` a quarter bend), `~` vibrato (`~~` wide), `tr` a trill. A column of `x` on four or more strings and nothing fretted is read as a slap of the strings, and flagged. A `P.M.` or `let ring` line under the system marks the notes above its run. Any other mark is skipped with a warning.
 - A bar's width in characters is its length; the distance from one note to the next is how long it lasts. A width that does not divide the bar evenly is rounded to the nearest note value and flagged. Notes past the end of the bar are dropped and flagged.
 - The lines around the tab are read for a name, a tempo and a meter only (`name it lick, 3/4, 90 bpm`); anything else there, a title say, is left alone rather than read as a request.
 

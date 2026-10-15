@@ -44,7 +44,9 @@ describe("a fingerpick handoff", () => {
 		stashHandoff(stashed);
 		const taken = takeHandoff("fingerpick");
 		expect(taken).not.toBeNull();
-		expect(taken?.pattern).toEqual(stashed.pattern);
+		// The validator hands back the technique model v2 on top of what was stashed.
+		expect(taken!.pattern).toEqual({ ...stashed.pattern, schemaVersion: 2 });
+		expect(taken!.pattern.schemaVersion).toBe(2);
 		expect(taken?.warnings).toEqual(stashed.warnings);
 		expect(sessionStorage.getItem(KEY)).toBeNull();
 	});

@@ -231,7 +231,7 @@ export function clearString(
 		if (measureIndex !== undefined && mi !== measureIndex) return p;
 		return measure.slots.reduce((q, slot, slotIndex) => {
 			const cell = slot.strings[stringIndex];
-			if (!cell || (cell.fret === null && !cell.muted && !cell.tied)) return q;
+			if (!cell || (cell.fret === null && !cell.muted && cell.link?.kind !== "tie")) return q;
 			return setInactive(q, { measureIndex: mi, slotIndex, stringIndex });
 		}, p);
 	}, pattern);

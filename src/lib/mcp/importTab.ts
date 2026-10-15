@@ -2,12 +2,13 @@ import * as z from "zod";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { searchChords } from "@/lib/chordSearch";
 import { exactChord } from "@/lib/assistant/chordAsk";
-import type { BeatSlot, Duration, FingerpickPattern, Measure, Technique } from "@/lib/fingerpickTypes";
+import type { BeatSlot, Duration, FingerpickPattern, Link, Measure, NoteEffects } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
+import { indexPattern, spanCovers } from "@/lib/fingerpickIndex";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import { isSupportedMeter, meterLabel, SUPPORTED_METERS, type Meter } from "@/lib/strumMeter";
-import { MAX_MEASURES, normalizeImportedPattern, TECHNIQUE_SUPPORT } from "@/lib/tabImport";
+import { MAX_MEASURES, NOTE_MARKS_SHAPE, PERCUSSION_INPUT, normalizeImportedPattern } from "@/lib/tabImport";
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
 
 /**
@@ -31,31 +32,16 @@ import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
 
 const DURATIONS = Object.keys(DURATION_TICKS) as [Duration, ...Duration[]];
 
-/** Only the techniques the stave can draw; the rest would be dropped with a warning anyway. */
-const TECHNIQUES = (Object.keys(TECHNIQUE_SUPPORT) as NonNullable<Technique>[]).filter(
-	(t) => TECHNIQUE_SUPPORT[t].renderSupported,
-) as [NonNullable<Technique>, ...NonNullable<Technique>[]];
-
 export const MAX_SLOTS_PER_BAR = 64;
 export const MAX_UNCERTAIN = 50;
 const NAME_MAX = 80;
 const UNCERTAIN_MAX_CHARS = 200;
 
+/** A note as the page prints it: its string and fret, and the marks the technique registry offers. */
 export const IMPORT_NOTE_SCHEMA = z.object({
 	string: z.number().int().min(1).max(6).describe("1 = high e, 6 = low E."),
 	fret: z.number().int().min(0).max(24).describe("0 = open string."),
-	technique: z
-		.enum(TECHNIQUES)
-		.optional()
-		.describe("How the note is reached from the previous slot on this string, when the page marks one."),
-	tied: z.boolean().optional().describe("The note is held over from the previous slot, not struck again."),
-	muted: z.boolean().optional().describe("A dead note, printed as x."),
-	bendTarget: z
-		.union([z.literal(0.5), z.literal(1), z.literal(2)])
-		.optional()
-		.describe("With bend-release, pre-bend or pre-bend-release: the printed height, 0.5 (¼), 1 (½) or 2 (full). A full tone when left out."),
-	palmMute: z.boolean().optional().describe("Under a P.M. bracket; mark every note the bracket spans."),
-	letRing: z.boolean().optional().describe("Under a let-ring bracket; mark every note the bracket spans."),
+	...NOTE_MARKS_SHAPE,
 });
 
 export const IMPORT_SLOT_SCHEMA = z.object({
@@ -63,6 +49,7 @@ export const IMPORT_SLOT_SCHEMA = z.object({
 	notes: z.array(IMPORT_NOTE_SCHEMA).max(6).describe("The strings struck together in this slot; empty with rest: true for a rest."),
 	rest: z.boolean().optional().describe("A rest of this duration."),
 	chord: z.string().max(20).optional().describe("A chord name printed above this slot, as printed."),
+	hit: PERCUSSION_INPUT.optional(),
 });
 
 export const IMPORT_BAR_SCHEMA = z.object({
@@ -115,7 +102,7 @@ function resolveChord(word: string, index: readonly ChordIndexEntry[]): ChordRef
 }
 
 function silent(): BeatSlot["strings"][number] {
-	return { fret: null, technique: null, tied: false, muted: false };
+	return { fret: null, muted: false };
 }
 
 const issue = (code: string, path: string, message: string): ValidationIssue => ({ code, path, message });
@@ -165,17 +152,19 @@ export function toImportedTabDraft(
 					continue;
 				}
 				seen.add(note.string);
+				const effects = note.effects as NoteEffects | undefined;
 				strings[note.string - 1] = {
-					fret: note.fret,
-					technique: note.technique ?? null,
-					tied: note.tied === true,
+					// A dead note has no fret: the x is the whole of it.
+					fret: note.muted ? null : note.fret,
 					muted: note.muted === true,
-					...(note.bendTarget !== undefined ? { bendTarget: note.bendTarget } : {}),
+					...(note.link !== undefined ? { link: { kind: note.link } as Link } : {}),
+					...(effects && Object.keys(effects).length > 0 ? { effects } : {}),
 					...(note.palmMute ? { palmMute: true } : {}),
 					...(note.letRing ? { letRing: true } : {}),
 				};
 			}
 			const out: BeatSlot = { id: crypto.randomUUID(), duration: slot.duration, strings };
+			if (slot.hit !== undefined) out.percussion = { kind: slot.hit };
 			if (slot.rest === true) out.isRest = true;
 			else if (slot.notes.length === 0) {
 				warnings.push(
@@ -270,28 +259,30 @@ export function importTab(input: ImportTabInput, index: readonly ChordIndexEntry
 
 /**
  * A pattern back into the tool's bars, so `read_share` hands the model
- * something it can change and send through `import_tab` again without loss.
- * Repeat barlines ride along; a chord mark is written as its abbreviation.
+ * something it can change and send through `import_tab` again without loss:
+ * every link, effect, bracket and hit the pattern holds. Repeat barlines ride
+ * along; a chord mark is written as its abbreviation.
  */
 export function patternToImportBars(pattern: FingerpickPattern): ImportBar[] {
+	const index = indexPattern(pattern);
 	return pattern.measures.map((measure) => {
 		const bar: ImportBar = {
 			slots: measure.slots.map((slot) => {
 				const notes: ImportNote[] = [];
 				slot.strings.forEach((s, i) => {
-					if (s.fret === null) return;
-					const note: ImportNote = { string: i + 1, fret: s.fret };
-					if (s.technique) note.technique = s.technique;
-					if (s.tied) note.tied = true;
+					if (s.fret === null && !s.muted) return;
+					const note: ImportNote = { string: i + 1, fret: s.fret ?? 0 };
+					if (s.link) note.link = s.link.kind;
+					if (s.effects && Object.keys(s.effects).length > 0) note.effects = s.effects as ImportNote["effects"];
 					if (s.muted) note.muted = true;
-					if (s.bendTarget === 0.5 || s.bendTarget === 1 || s.bendTarget === 2) note.bendTarget = s.bendTarget;
-					if (s.palmMute) note.palmMute = true;
-					if (s.letRing) note.letRing = true;
+					if (spanCovers(index, slot.id, "palmMute", i)) note.palmMute = true;
+					if (spanCovers(index, slot.id, "letRing", i)) note.letRing = true;
 					notes.push(note);
 				});
 				const out: ImportSlot = { duration: slot.duration, notes };
 				if (slot.isRest) out.rest = true;
 				if (slot.chord) out.chord = chordAbbreviation(slot.chord);
+				if (slot.percussion) out.hit = slot.percussion.kind;
 				return out;
 			}),
 		};

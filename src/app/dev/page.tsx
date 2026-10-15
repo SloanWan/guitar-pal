@@ -86,6 +86,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "Strum sample × decay-envelope lab — presets, let ring, hard cut, AHDSR.",
 	},
 	{
+		href: "/dev/technique-gallery",
+		label: "technique-gallery",
+		description: "Every technique in the registry: one bar each, drawn by the converter and playable through the scheduler.",
+	},
+	{
 		href: "/dev/tab-notation",
 		label: "tab-notation",
 		description: "VexFlow TAB rendering audit using real fingerpick patterns.",

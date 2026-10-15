@@ -18,7 +18,7 @@
  * defaults can be chosen by ear; wiring them into the scheduler is a follow-up.
  */
 
-import type { Technique } from "@/lib/fingerpickTypes";
+import type { NoteEffects } from "@/lib/fingerpickTypes";
 
 // ─── Sampling ─────────────────────────────────────────────────────────────────
 
@@ -263,6 +263,8 @@ export function vibratoCurve(
 
 export interface ExpressionSpec {
 	bend?: BendParams;
+	/** A whammy-bar dive or pull, summed onto the finger bend when both are there. */
+	whammy?: WhammyParams;
 	/**
 	 * With a bend, the vibrato rides on the bend's peak (its onset counts from the
 	 * moment the target is reached) and stops when the release starts.
@@ -292,6 +294,10 @@ export function composeExpression(
 	const values = spec.bend
 		? bendCurve(spec.bend, durationS, samplesPerSecond)
 		: new Float32Array(n);
+	if (spec.whammy) {
+		const bar = whammyCurve(spec.whammy, durationS, samplesPerSecond);
+		for (let i = 0; i < n; i++) values[i] += bar[i];
+	}
 
 	if (spec.vibrato) {
 		const window = spec.bend
@@ -384,38 +390,79 @@ export function bendTargetToCents(semitones: number | undefined): number {
 }
 
 /**
- * The expression a technique asks for, or null when it has none. Bend techniques
- * that carry their height in the name ignore `bendTarget`; the release variants
- * read it (a released bend can be any height).
+ * The expression a note's effects ask for, or null when they ask for none: a
+ * bend from `effects.bend` (its height in semitones, pre-bent or released as
+ * flagged) and a vibrato from `effects.vibrato` (wide or not), composed when
+ * the note has both.
  */
-export function expressionForTechnique(
-	technique: Technique,
-	bendTarget?: number,
+export function expressionForEffects(
+	effects: NoteEffects | undefined,
 	defaults: { bend: BendParams; vibrato: VibratoParams; wideVibrato: VibratoParams } = {
 		bend: DEFAULT_BEND_PARAMS,
 		vibrato: DEFAULT_VIBRATO_PARAMS,
 		wideVibrato: WIDE_VIBRATO_PARAMS,
 	},
 ): ExpressionSpec | null {
-	const bend = (over: Partial<BendParams>): ExpressionSpec => ({ bend: { ...defaults.bend, ...over } });
-	switch (technique) {
-		case "bend-quarter":
-			return bend({ targetCents: BEND_TARGET_CENTS.quarter, preBend: false, release: false });
-		case "bend-half":
-			return bend({ targetCents: BEND_TARGET_CENTS.half, preBend: false, release: false });
-		case "bend-full":
-			return bend({ targetCents: BEND_TARGET_CENTS.full, preBend: false, release: false });
-		case "bend-release":
-			return bend({ targetCents: bendTargetToCents(bendTarget), preBend: false, release: true });
-		case "pre-bend":
-			return bend({ targetCents: bendTargetToCents(bendTarget), preBend: true, release: false });
-		case "pre-bend-release":
-			return bend({ targetCents: bendTargetToCents(bendTarget), preBend: true, release: true });
-		case "vibrato":
-			return { vibrato: defaults.vibrato };
-		case "vibrato-wide":
-			return { vibrato: defaults.wideVibrato };
-		default:
-			return null;
+	if (!effects) return null;
+	const spec: ExpressionSpec = {};
+	if (effects.bend) {
+		spec.bend = {
+			...defaults.bend,
+			targetCents: bendTargetToCents(effects.bend.semitones),
+			preBend: effects.bend.pre === true,
+			release: effects.bend.release === true,
+		};
 	}
+	if (effects.vibrato) spec.vibrato = effects.vibrato.wide ? defaults.wideVibrato : defaults.vibrato;
+	if (effects.whammy) spec.whammy = whammyParams(effects.whammy);
+	return spec.bend || spec.vibrato || spec.whammy ? spec : null;
+}
+
+/**
+ * The whammy bar as tab players write it (TuxGuitar's and Guitar Pro's
+ * presets, alphaTab's reading of them): a dive takes the whole note down a
+ * tone over the first three quarters of its length and holds there; a pull
+ * does the same upwards; released, the bar is at its depth by the middle of
+ * the note and back at pitch by its end (a "dip"). The travel is a share of
+ * the note's length, not a fixed time — a long note dives slowly.
+ */
+export const WHAMMY_SEMITONES = 2;
+/** Where the bar reaches its depth, as a share of the note. */
+export const WHAMMY_REACH_FRACTION = 0.75;
+export const WHAMMY_DIP_FRACTION = 0.5;
+
+export interface WhammyParams {
+	kind: "dive" | "pull";
+	semitones: number;
+	release: boolean;
+}
+
+export function whammyParams(whammy: NonNullable<NoteEffects["whammy"]>): WhammyParams {
+	return { kind: whammy.kind, semitones: whammy.semitones ?? WHAMMY_SEMITONES, release: whammy.release === true };
+}
+
+/** Where a whammy's phases fall inside a note, in seconds from the attack. */
+export function whammyTimeline(p: WhammyParams, durationS: number): BendTimeline {
+	const dur = Math.max(0, durationS);
+	const peakS = dur * (p.release ? WHAMMY_DIP_FRACTION : WHAMMY_REACH_FRACTION);
+	return { peakS, settleEndS: peakS, releaseStartS: p.release ? peakS : dur, releaseEndS: dur, durationS: dur };
+}
+
+/** Cents away from the fretted pitch over a note of `durationS`: a straight travel to the bar's depth, a hold or a straight travel back. */
+export function whammyCurve(p: WhammyParams, durationS: number, samplesPerSecond: number = CURVE_SAMPLES_PER_SECOND): Float32Array {
+	const n = curveLength(durationS, samplesPerSecond);
+	const out = new Float32Array(n);
+	const { peakS, releaseStartS, releaseEndS } = whammyTimeline(p, durationS);
+	const target = (p.kind === "dive" ? -1 : 1) * p.semitones * 100;
+	for (let i = 0; i < n; i++) {
+		const t = i / samplesPerSecond;
+		let cents: number;
+		if (t < peakS) cents = target * (t / peakS);
+		else if (!p.release || t <= releaseStartS) cents = target;
+		else if (t >= releaseEndS || releaseEndS <= releaseStartS) cents = 0;
+		else cents = target * (1 - (t - releaseStartS) / (releaseEndS - releaseStartS));
+		// `-0` at the start of a dive would fail an equality elsewhere; it is 0.
+		out[i] = cents || 0;
+	}
+	return out;
 }

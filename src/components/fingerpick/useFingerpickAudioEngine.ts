@@ -13,6 +13,7 @@ import {
 	findSlotStartTime,
 	computeMeasureBoundaries,
 	scheduleFingerpickNote,
+	noiseBufferFor,
 	_shutdownEngine,
 	VOICE_STEAL_FADE_TAU,
 	DEFAULT_ROLL_PARAMS,
@@ -52,9 +53,23 @@ const NORMAL_GAIN = 0.8;
 /** Reduced gain for legato technique notes (hammer-on, pull-off, trill). */
 const TECHNIQUE_GAIN = 0.5;
 /** Gain for tapping notes — slightly softer than a normal pick attack. */
-const TAPPING_GAIN = 0.8;
+/** A tapped note is lighter than a picked one. */
+const TAPPING_GAIN = 0.65;
+/** A harmonic: the partial, lighter than a pluck, with a quiet octave under it. */
+const HARMONIC_GAIN = 0.7;
+const HARMONIC_BODY_GAIN = 0.35;
+/** A pick scrape's noise sweep. */
+const SCRAPE_GAIN = 0.5;
+/** A knock on the body. */
+const BODY_TAP_GAIN = 0.8;
 /** Gain for ghost notes (parenthesised/bracketed notes). */
 const GHOST_GAIN = 0.3;
+/** A hit's dead strike across the strings (a slap). */
+const SLAP_GAIN = 0.7;
+/** Multiplier under a palm mute: the hand takes some of the attack. */
+const PALM_MUTE_GAIN = 0.75;
+/** Every second stroke of a tremolo is a touch softer, so the run reads as a hand. */
+const TREMOLO_ALT_GAIN = 0.85;
 /** Accent boost multiplier applied on top of the technique-derived base gain. */
 const ACCENT_MULTIPLIER = 1.3;
 
@@ -82,6 +97,11 @@ const LET_RING_DECAY_TC_S = 1.5;
  */
 const LET_RING_LIFETIME_TAUS = 4;
 
+/** Ceiling on a palm-muted note's decay τ (s): the hand on the strings stops them short. */
+const PALM_MUTE_DECAY_TC_S = 0.12;
+/** Ceiling on a harmonic's decay τ (s): a partial rings, but not as long as a let-ring note. */
+const HARMONIC_DECAY_TC_S = 1.2;
+
 // ─── Envelope parameters ────────────────────────────────────────────────────
 // Tunable per-note envelope constants. Defaults equal the hardcoded production
 // values above, so an engine consumer that never calls setEnvelopeParams() gets
@@ -97,6 +117,10 @@ export interface EnvelopeParams {
 	voiceStealFadeTau: number;
 	/** Fixed decay time constant (s) used instead of the duration-derived τ when letRing is set. */
 	letRingDecayTc: number;
+	/** Ceiling on a palm-muted note's decay τ (s). */
+	palmMuteDecayTc: number;
+	/** Ceiling on a harmonic's decay τ (s). */
+	harmonicDecayTc: number;
 	/** Margin (s) added past a normal note's end before its hard source.stop(). */
 	sourceStopBuffer: number;
 }
@@ -106,6 +130,8 @@ export const DEFAULT_ENVELOPE: EnvelopeParams = {
 	minDecayTc: MIN_DECAY_TC_S,
 	voiceStealFadeTau: VOICE_STEAL_FADE_TAU,
 	letRingDecayTc: LET_RING_DECAY_TC_S,
+	palmMuteDecayTc: PALM_MUTE_DECAY_TC_S,
+	harmonicDecayTc: HARMONIC_DECAY_TC_S,
 	sourceStopBuffer: SOURCE_STOP_BUFFER_S,
 };
 
@@ -401,6 +427,13 @@ export function useFingerpickAudioEngine() {
 					technique: TECHNIQUE_GAIN,
 					tapping: TAPPING_GAIN,
 					ghost: GHOST_GAIN,
+					slap: SLAP_GAIN,
+					palmMute: PALM_MUTE_GAIN,
+					tremoloAltGain: TREMOLO_ALT_GAIN,
+					harmonic: HARMONIC_GAIN,
+					harmonicBody: HARMONIC_BODY_GAIN,
+					scrape: SCRAPE_GAIN,
+					bodyTap: BODY_TAP_GAIN,
 					accentMultiplier: ACCENT_MULTIPLIER,
 					letRingLifetimeTaus: LET_RING_LIFETIME_TAUS,
 				},
@@ -408,6 +441,7 @@ export function useFingerpickAudioEngine() {
 				forceLetRing: forceLetRingRef.current,
 				legatoTreatment: legatoTreatmentRef.current,
 				slideParams: slideParamsRef.current,
+				noiseBuffer: noiseBufferFor(ctx),
 				// Read-only voice-steal instrumentation — no-op unless a dev consumer has
 				// registered an observer. Never fired on a slide handoff (no steal occurs).
 				onVoiceSteal: (outgoing, incoming) => {

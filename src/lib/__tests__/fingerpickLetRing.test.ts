@@ -5,7 +5,7 @@ import type { BeatSlot, FingerpickPattern } from "@/lib/fingerpickTypes";
 
 function makeSlot(overrides: Partial<BeatSlot> = {}): BeatSlot {
 	const sf = (fret: number | null) =>
-		({ fret, technique: null, tied: false, muted: false }) as BeatSlot["strings"][number];
+		({ fret, muted: false }) as BeatSlot["strings"][number];
 	return {
 		id: "slot",
 		duration: "quarter",
@@ -29,27 +29,18 @@ function makePattern(): FingerpickPattern {
 }
 
 describe("withLetRingAll", () => {
-	it("forces letRing on every string of every slot", () => {
-		const out = withLetRingAll(makePattern());
-		for (const measure of out.measures) {
-			for (const slot of measure.slots) {
-				for (const sf of slot.strings) {
-					expect(sf.letRing).toBe(true);
-				}
-			}
-		}
+	it("puts one let-ring span over every slot, first to last, keeping other spans", () => {
+		const out = withLetRingAll({ ...makePattern(), spans: [{ id: "pm", kind: "palmMute", from: "slot", to: "s2" }, { id: "old", kind: "letRing", from: "s2", to: "s2" }] });
+		expect(out.spans).toEqual([
+			{ id: "pm", kind: "palmMute", from: "slot", to: "s2" },
+			{ id: "letRing:slot", kind: "letRing", from: "slot", to: "s3" },
+		]);
 	});
 
 	it("does not mutate the input pattern", () => {
 		const input = makePattern();
 		withLetRingAll(input);
-		for (const measure of input.measures) {
-			for (const slot of measure.slots) {
-				for (const sf of slot.strings) {
-					expect(sf.letRing).toBeUndefined();
-				}
-			}
-		}
+		expect(input.spans).toBeUndefined();
 	});
 
 	it("preserves all non-letRing fields (fret, duration, ids, meta)", () => {

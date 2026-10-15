@@ -25,10 +25,10 @@ describe("the demo measures", () => {
 	it("show a hammer-on, a slide and a pull-off, each on the string of the note before it", () => {
 		const techniques = FINGERPICK_DEMO_MEASURES.flatMap((m, mi) =>
 			m.slots.flatMap((s, si) =>
-				s.strings.flatMap((sf, str) => (sf.technique ? [{ mi, si, str, technique: sf.technique }] : [])),
+				s.strings.flatMap((sf, str) => (sf.link ? [{ mi, si, str, link: sf.link.kind }] : [])),
 			),
 		);
-		expect(techniques.map((t) => t.technique)).toEqual(["hammer-on", "slide-up", "pull-off"]);
+		expect(techniques.map((t) => t.link)).toEqual(["hammer", "slide", "pull"]);
 		for (const t of techniques) {
 			const prev = FINGERPICK_DEMO_MEASURES[t.mi].slots[t.si - 1];
 			expect(prev.strings[t.str].fret).not.toBeNull();

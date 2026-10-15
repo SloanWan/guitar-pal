@@ -6,10 +6,10 @@ import {
 	makeEmptySlot,
 	measureCapacity,
 	setFret,
-	setTied,
 	slotDurationUnits,
 	toggleMuted,
 } from "./fingerpickEdit";
+import { setLink } from "./fingerpickTechniqueEdit";
 import { chordFretHints, chordRootString, chordSymbolLabel, effectiveChords } from "./fingerpickChords";
 import { isCompound } from "./strumMeter";
 import type { ChordRef } from "./strumPatterns";
@@ -340,7 +340,7 @@ export function applyPickSequence(
 				next = setFret(next, position, hint);
 				if (!ref && !cell.tied) openWritten = true;
 			}
-			if (cell.tied) next = setTied(next, position, true);
+			if (cell.tied) next = setLink(next, position, { kind: "tie" });
 		}
 	});
 

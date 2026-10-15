@@ -61,8 +61,8 @@ a new link — and links made here stop opening after 30 days.
 | tool | what the model gives it | what checks it |
 |---|---|---|
 | `propose_strum` | one bar of rhythm in the app's notation (`D DU UD `), chord names one per bar, tempo, capo | the same builder the in-app assistant uses; every chord is looked up in the library |
-| `propose_tab` | notes on a grid of even slots per bar (`{string, fret, slot}`, 1 = high e), meter, tempo | the same builder the in-app assistant uses, then the import validator |
-| `import_tab` | bars of slots, each with its printed note value and the notes as `{string, fret}` (1 = high e) | the same validator the book import uses, plus a check that no bar overflows its meter |
+| `propose_tab` | notes on a grid of even slots per bar (`{string, fret, slot}`, 1 = high e, plus a `link`, an `effects` map and `palmMute` / `letRing` flags from the technique registry), per-bar `hits`, meter, tempo | the same builder the in-app assistant uses, then the import validator |
+| `import_tab` | bars of slots, each with its printed note value, an optional `hit`, and the notes as `{string, fret}` (1 = high e) with the same marks | the same validator the book import uses, plus a check that no bar overflows its meter |
 | `read_share` | a link or its id | reads the share back as text, and as `import_tab` bars for a tab |
 
 `import_tab` is for a tab the model read off an image or a printed page, where

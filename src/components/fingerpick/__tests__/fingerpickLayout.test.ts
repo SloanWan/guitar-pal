@@ -12,8 +12,8 @@ import {
 	ROW_TRAILING_PAD,
 } from "../fingerpickLayout";
 
-function note(fret: number, technique: StringFret["technique"] = null): StringFret {
-	return { fret, technique, tied: false, muted: false };
+function note(fret: number, link?: NonNullable<StringFret["link"]>["kind"]): StringFret {
+	return link ? { fret, muted: false, link: { kind: link } } : { fret, muted: false };
 }
 
 // Four quarter notes, the low E fretted on each.
@@ -31,9 +31,9 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 describe("hoPoConnectorCount", () => {
 	it("counts hammer-ons and pull-offs across every string and slot", () => {
 		const m = quarterMeasure("m");
-		m.slots[1].strings[5] = note(2, "hammer-on");
-		m.slots[2].strings[2] = note(0, "pull-off");
-		m.slots[2].strings[3] = note(1, "slide-up");
+		m.slots[1].strings[5] = note(2, "hammer");
+		m.slots[2].strings[2] = note(0, "pull");
+		m.slots[2].strings[3] = note(1, "slide");
 		expect(hoPoConnectorCount(m)).toBe(2);
 	});
 

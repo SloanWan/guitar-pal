@@ -713,14 +713,18 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 		if (fromPos === undefined || toPos === undefined) continue;
 		const single = seg.fromNoteIndex === seg.toNoteIndex;
 		if (single && !seg.continuesBefore && !seg.continuesAfter) continue;
-		connectors.push(
-			new TabTie({
-				firstNote: single && seg.continuesBefore ? undefined : notes[seg.fromNoteIndex],
-				lastNote: single && !seg.continuesBefore ? undefined : notes[seg.toNoteIndex],
-				firstIndexes: [fromPos],
-				lastIndexes: [toPos],
-			}),
-		);
+		const tie = new TabTie({
+			firstNote: single && seg.continuesBefore ? undefined : notes[seg.fromNoteIndex],
+			lastNote: single && !seg.continuesBefore ? undefined : notes[seg.toNoteIndex],
+			firstIndexes: [fromPos],
+			lastIndexes: [toPos],
+		});
+		// A tie's arc is drawn for two neighbours; a slur over a run rises with
+		// its length, or it reads as a line along the numbers.
+		const reach = Math.max(1, seg.toNoteIndex - seg.fromNoteIndex);
+		tie.renderOptions.cp1 = 9 + 3 * reach;
+		tie.renderOptions.cp2 = 11 + 4 * reach;
+		connectors.push(tie);
 	}
 
 	// One Tuplet per triplet group — the same grouping the editor brackets and

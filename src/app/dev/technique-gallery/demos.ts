@@ -85,14 +85,26 @@ function effectDemo(kind: EffectKind): FingerpickPattern {
 }
 
 function spanDemo(kind: SpanKind): FingerpickPattern {
-	// A slur shows its legato: the third note is hammered under the curve.
-	const third = kind === "slur" ? note(4, { link: { kind: "hammer" } }) : note(2);
+	// A slur runs over the whole bar: a line of 2 4 5 4 hammered and pulled
+	// under one arc, so the inner arcs' absence shows.
+	if (kind === "slur") {
+		return base(
+			kind,
+			[
+				slot(`${kind}-1`, { [G]: note(2) }),
+				slot(`${kind}-2`, { [G]: note(4, { link: { kind: "hammer" } }) }),
+				slot(`${kind}-3`, { [G]: note(5, { link: { kind: "hammer" } }) }),
+				slot(`${kind}-4`, { [G]: note(4, { link: { kind: "pull" } }) }),
+			],
+			{ spans: [{ id: spanIdFor(kind, `${kind}-1`), kind, from: `${kind}-1`, to: `${kind}-4` }] },
+		);
+	}
 	return base(
 		kind,
 		[
 			slot(`${kind}-1`, { [A]: note(0), [G]: note(2) }),
 			slot(`${kind}-2`, { [A]: note(0), [G]: note(2) }),
-			slot(`${kind}-3`, { [A]: note(0), [G]: third }),
+			slot(`${kind}-3`, { [A]: note(0), [G]: note(2) }),
 			slot(`${kind}-4`, { [A]: note(0), [G]: note(2) }),
 		],
 		{ spans: [{ id: spanIdFor(kind, `${kind}-2`), kind, from: `${kind}-2`, to: `${kind}-3` }] },
@@ -129,7 +141,7 @@ const NOTES: Partial<Record<string, { en: string; zh: string }>> = {
 	scrape: { en: "P.S.: a pick scrape — noise swept down the strings, no pitch.", zh: "P.S.：拨片刮弦——沿弦向下扫的噪声，没有音高。" },
 	palmMute: { en: "Beats 2 and 3 under P.M.: damped, dull and short.", zh: "第 2、3 拍在 P.M. 下：闷、暗、短。" },
 	letRing: { en: "Beats 2 and 3 ring on into the next note.", zh: "第 2、3 拍延音到下一个音。" },
-	slur: { en: "One slur over beats 2 and 3: the second note is played legato, no separate arc.", zh: "一条连音线覆盖第 2、3 拍：第二个音连奏，不再单独画弧。" },
+	slur: { en: "One slur over all four notes: 2 4 5 4 hammered and pulled under one arc, the inner arcs left out, the inner notes legato.", zh: "一条连音线覆盖四个音：2 4 5 4 的击弦、勾弦在一条弧下，内部不再画弧，内部的音连奏。" },
 	slap: { en: "Beats 2 and 4 are a slap across the strings, the second accented.", zh: "第 2、4 拍拍弦，第二次带重音。" },
 	thumbSlap: { en: "A thumb slap strikes the bass strings dead.", zh: "拇指拍弦闷击低音弦。" },
 	bodyTap: { en: "A knock on the body: a low thump, drawn as B.", zh: "打板：低沉的一记闷响，画作 B。" },

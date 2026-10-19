@@ -17,6 +17,8 @@ import {
 	tremoloStrokes,
 	trillStrokes,
 	TAP_SKIP_S,
+	SLAP_STRIKE_S,
+	SLAP_DECAY_TC_S,
 	SLIDE_IN_OUT_SEMITONES,
 	noiseBufferFor,
 	noteGain,
@@ -1640,7 +1642,6 @@ const TEST_GAINS: NoteGains = {
 	tapping: 0.8,
 	ghost: 0.3,
 	slap: 0.7,
-	slapThump: 0.4,
 	palmMute: 0.75,
 	tremoloAltGain: 0.85,
 	harmonic: 0.6,
@@ -1795,7 +1796,7 @@ function makeDeps(
 		allSources: new Set<AudioBufferSourceNode>(),
 		resolveNoteData:
 			opts.resolveNoteData ??
-			((_muted, midi) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) })),
+			((midi) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) })),
 		gains: TEST_GAINS,
 		envelope: TEST_ENV,
 		forceLetRing: opts.forceLetRing ?? false,
@@ -2341,39 +2342,25 @@ describe("fingerpickPatternToScheduleEvents — model v2 reads", () => {
 	});
 
 
-	it("a hit strikes its strings dead, skipping the strings the slot already strikes, with one thump under it", () => {
+	it("a hit strikes its strings dead, skipping the strings the slot already strikes", () => {
 		const slap = { ...pattern(120, [{ ...slot("s1", "quarter", { 4: { fret: 0 } }), percussion: { kind: "slap" as const } }]), schemaVersion: 2 };
 		const events = fingerpickPatternToScheduleEvents(slap, 120);
-		expect(events).toHaveLength(7);
-		const strikes = events.filter((e) => e.percussion && !e.thump);
-		expect(strikes.map((e) => e.stringIndex)).toEqual([0, 1, 2, 3, 5]);
-		expect(strikes.every((e) => e.muted && e.time === 0)).toBe(true);
-		// The hand lands once: the thump carries the hit (for its accent), under the low E.
-		expect(events.filter((e) => e.thump)).toMatchObject([{ stringIndex: 5, muted: true, time: 0, percussion: { kind: "slap" } }]);
+		expect(events).toHaveLength(6);
+		expect(events.filter((e) => e.percussion).map((e) => e.stringIndex)).toEqual([0, 1, 2, 3, 5]);
+		expect(events.filter((e) => e.percussion).every((e) => e.muted && e.time === 0)).toBe(true);
 		const thumb = { ...pattern(120, [{ ...slot("s1", "quarter"), percussion: { kind: "thumbSlap" as const, accent: true } }]), schemaVersion: 2 };
-		const thumbEvents = fingerpickPatternToScheduleEvents(thumb, 120);
-		expect(thumbEvents.filter((e) => !e.thump).map((e) => e.stringIndex)).toEqual([...PERCUSSION_STRINGS.thumbSlap]);
-		expect(thumbEvents.filter((e) => e.thump)).toMatchObject([{ percussion: { kind: "thumbSlap", accent: true } }]);
+		expect(fingerpickPatternToScheduleEvents(thumb, 120).map((e) => e.stringIndex)).toEqual([...PERCUSSION_STRINGS.thumbSlap]);
 		const tap = { ...pattern(120, [{ ...slot("s1", "quarter"), percussion: { kind: "bodyTap" as const } }]), schemaVersion: 2 };
-		// A body tap is one knock, filed under the low E, nothing struck and no thump of its own.
+		// A body tap is one knock, filed under the low E, nothing struck.
 		expect(fingerpickPatternToScheduleEvents(tap, 120)).toMatchObject([{ stringIndex: 5, muted: true, percussion: { kind: "bodyTap" } }]);
-		expect(fingerpickPatternToScheduleEvents(tap, 120).some((e) => e.thump)).toBe(false);
 	});
 
-	it("an x is a slap on its string: it sounds with the slot's other notes, and the slot gets one thump however many x's it has", () => {
+	it("an x is a slap on its string, sounding with the slot's other notes", () => {
 		const one = pattern(120, [slot("s1", "quarter", { 5: { muted: true }, 2: { fret: 2 } })]);
-		const events = fingerpickPatternToScheduleEvents(one, 120);
-		expect(events.filter((e) => !e.thump)).toMatchObject([
+		expect(fingerpickPatternToScheduleEvents(one, 120)).toMatchObject([
 			{ stringIndex: 2, midi: OPEN_STRING_MIDI[2] + 2, muted: false, time: 0 },
 			{ stringIndex: 5, midi: OPEN_STRING_MIDI[5], muted: true, time: 0 },
 		]);
-		expect(events.filter((e) => e.thump)).toMatchObject([{ stringIndex: 5, muted: true, time: 0 }]);
-		expect(events.filter((e) => e.thump)[0].percussion).toBeUndefined();
-		const three = pattern(120, [slot("s1", "quarter", { 3: { muted: true }, 4: { muted: true }, 5: { muted: true } })]);
-		expect(fingerpickPatternToScheduleEvents(three, 120).filter((e) => e.thump)).toHaveLength(1);
-		// A slot without an x has no thump; a tied x is not struck again.
-		const none = pattern(120, [slot("s1", "quarter", { 2: { fret: 2 } })]);
-		expect(fingerpickPatternToScheduleEvents(none, 120).some((e) => e.thump)).toBe(false);
 	});
 
 	it("a shift (picked) slide is not a glide: its origin is not promoted", () => {
@@ -2422,12 +2409,22 @@ describe("scheduleFingerpickNote — model v2 voices", () => {
 		expect(ctx._filters[0].frequency.value).toBe(900);
 	});
 
-	it("a hit's event plays the muted sample at the slap gain", () => {
+	it("a slap is the string's own sample at the slap gain, cut off at the strike window, registering no voice", () => {
 		const ctx = mockCtx(0);
-		const resolve = vi.fn((_muted: boolean, midi: number) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) }));
-		scheduleFingerpickNote(makeDeps(ctx, new Map(), { resolveNoteData: resolve }), noteEvent({ muted: true, percussion: { kind: "slap" } }), 1);
-		expect(resolve).toHaveBeenCalledWith(true, 62);
+		const voices = new Map<number, SlideActiveVoice>();
+		const resolve = vi.fn((midi: number) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) }));
+		scheduleFingerpickNote(makeDeps(ctx, voices, { resolveNoteData: resolve, forceLetRing: true }), noteEvent({ muted: true, percussion: { kind: "slap" }, duration: 0.5 }), 1);
+		expect(resolve).toHaveBeenCalledWith(62);
 		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.slap, 1);
+		expect(ctx._gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(0, 1, SLAP_DECAY_TC_S);
+		// Even under let-ring, the strike ends at the window: no ring, no voice to slide from.
+		expect(ctx._sources[0].stop).toHaveBeenCalledWith(expect.closeTo(1 + SLAP_STRIKE_S + TEST_ENV.sourceStopBuffer, 9));
+		expect(voices.size).toBe(0);
+		// An x alone (no hit) is the same strike.
+		const x = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(x, new Map()), noteEvent({ muted: true, duration: 0.5 }), 1);
+		expect(x._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.slap, 1);
+		expect(x._sources[0].stop).toHaveBeenCalledWith(expect.closeTo(1 + SLAP_STRIKE_S + TEST_ENV.sourceStopBuffer, 9));
 	});
 
 	it("a shift slide re-plucks even with a live origin voice", () => {
@@ -2545,11 +2542,11 @@ describe("fingerpickPatternToScheduleEvents — trill, harmonic, slur, body tap"
 describe("scheduleFingerpickNote — the rest of the registry", () => {
 	it("a harmonic is the sample at its partial, lighter, with a quiet octave under it and no filter", () => {
 		const ctx = mockCtx(0);
-		const resolve = vi.fn((_muted: boolean, midi: number) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) }));
+		const resolve = vi.fn((midi: number) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) }));
 		scheduleFingerpickNote(makeDeps(ctx, new Map(), { resolveNoteData: resolve }), noteEvent({ midi: 74, effects: { harmonic: { type: "natural" } }, duration: 2 }), 1);
 		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.harmonic, 1);
 		expect(ctx._filters).toHaveLength(0);
-		expect(resolve).toHaveBeenCalledWith(false, 62);
+		expect(resolve).toHaveBeenCalledWith(62);
 		expect(ctx._sources).toHaveLength(2);
 		expect(ctx._sources[1].playbackRate.value).toBe(rateFor(62));
 		expect(ctx._gains[1].gain.value).toBe(TEST_GAINS.harmonicBody);
@@ -2627,19 +2624,6 @@ describe("scheduleFingerpickNote — the rest of the registry", () => {
 		expect(ctx._oscillators).toHaveLength(1);
 		expect(ctx._oscillators[0].frequency.value).toBe(80);
 		expect(ctx._gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(TEST_GAINS.bodyTap * TEST_GAINS.accentMultiplier, 9), 1.002);
-	});
-
-	it("a slap's thump is the body tap's knock at the thump gain, registering no voice; a hit's accent carries", () => {
-		const ctx = mockCtx(0);
-		const voices = new Map();
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ muted: true, thump: true }), 1);
-		expect(ctx._filters[0].type).toBe("lowpass");
-		expect(ctx._oscillators).toHaveLength(1);
-		expect(ctx._gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(TEST_GAINS.slapThump, 9), 1.002);
-		expect(voices.size).toBe(0);
-		const accented = mockCtx(0);
-		scheduleFingerpickNote(makeDeps(accented, new Map()), noteEvent({ muted: true, thump: true, percussion: { kind: "slap", accent: true } }), 1);
-		expect(accented._gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(TEST_GAINS.slapThump * TEST_GAINS.accentMultiplier, 9), 1.002);
 	});
 
 	it("without a noise buffer a scrape and a body tap are silent, not errors", () => {

@@ -39,8 +39,7 @@ import {
 import {
 	preloadFingerpickPresets,
 	getFingerpickNoteData,
-	type FingerpickSoundType,
-} from "@/components/strum/useGuitarSampleLoader";
+	} from "@/components/strum/useGuitarSampleLoader";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -64,10 +63,8 @@ const SCRAPE_GAIN = 0.5;
 const BODY_TAP_GAIN = 0.8;
 /** Gain for ghost notes (parenthesised/bracketed notes). */
 const GHOST_GAIN = 0.3;
-/** A slap: an x on a string, or a hit's dead strike across the strings. */
-const SLAP_GAIN = 0.7;
-/** The hand landing under a slap: one thump a slot, well under a body tap. */
-const SLAP_THUMP_GAIN = 0.4;
+/** A slap: an x on a string, or a hit's dead strike across the strings — full velocity (alphaTab plays a dead slap at forte). */
+const SLAP_GAIN = 0.8;
 /** Multiplier under a palm mute: the hand takes some of the attack. */
 const PALM_MUTE_GAIN = 0.75;
 /** Every second stroke of a tremolo is a touch softer, so the run reads as a hand. */
@@ -416,10 +413,10 @@ export function useFingerpickAudioEngine() {
 				target,
 				voices: perStringVoicesRef.current,
 				allSources: allSourcesRef.current,
-				resolveNoteData: (muted, midi) => {
-					const soundType: FingerpickSoundType = muted ? "muted" : "pluck";
+				// One sample set: a slap is the same string cut short, not another preset.
+				resolveNoteData: (midi) => {
 					try {
-						return getFingerpickNoteData(soundType, midi);
+						return getFingerpickNoteData("pluck", midi);
 					} catch {
 						return null;
 					}
@@ -430,7 +427,6 @@ export function useFingerpickAudioEngine() {
 					tapping: TAPPING_GAIN,
 					ghost: GHOST_GAIN,
 					slap: SLAP_GAIN,
-					slapThump: SLAP_THUMP_GAIN,
 					palmMute: PALM_MUTE_GAIN,
 					tremoloAltGain: TREMOLO_ALT_GAIN,
 					harmonic: HARMONIC_GAIN,

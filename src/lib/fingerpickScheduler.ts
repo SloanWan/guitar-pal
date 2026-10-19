@@ -55,11 +55,6 @@ export interface ScheduleEvent {
 	/** A right-hand hit this event voices (a slap's dead strike on this string). */
 	percussion?: Percussion;
 	/**
-	 * The hand landing on the strings: one a slot that has an x on any string or a
-	 * slap hit, filed under the low E, voiced as noise and never registered as a voice.
-	 */
-	thump?: true;
-	/**
 	 * A tremolo stroke after the first: played a touch softer (`gains.tremoloAltGain`)
 	 * on every second stroke, so the run reads as a hand, not a machine.
 	 */
@@ -305,11 +300,11 @@ export function computeRollOffsets(
  *    sustains, its `duration` lengthened by the tied slot so the decay is the
  *    written length, not the first slot's.
  *  - Pitch is always derived from `fret` when non-null (even for muted strings —
- *    the `muted` flag only drives preset selection and the gain). Falls back
- *    to open-string MIDI when `fret === null` (an x: a slap on the string).
- *  - An x is a slap, not a silent dead note: its strike is voiced at the slap
- *    gain, and a slot with any x (or a slap hit) gets one `thump` event — the
- *    hand landing — so the hit sounds with the slot's other notes.
+ *    the `muted` flag only sets the strike's gain and length). Falls back to
+ *    open-string MIDI when `fret === null` (an x: a slap on the string).
+ *  - An x is a slap, not a silent dead note: the string's own sample at full
+ *    velocity, cut off as the hand lands (`SLAP_STRIKE_S`) — the way TuxGuitar,
+ *    alphaTab and MuseScore play a dead note — sounding with the slot's notes.
  *  - A slot without a `stroke` behaves exactly as before: all its events share the same
  *    `time`, `measureIndex`, `slotIndex`, and carry no `rollGain`. When a slot HAS a
  *    `stroke`, its per-string events are staggered (arpeggiated) per `rollParams`; the
@@ -402,7 +397,6 @@ export function fingerpickPatternToScheduleEvents(
 				}
 
 				const struckHere = new Set<number>();
-				let slapped = false;
 				slot.strings.forEach((sf, stringIndex) => {
 					if (sf.link?.kind === "tie") {
 						const held = sounding[stringIndex];
@@ -412,7 +406,6 @@ export function fingerpickPatternToScheduleEvents(
 					const isPlayed = sf.fret !== null || sf.muted;
 					if (!isPlayed) return;
 					struckHere.add(stringIndex);
-					if (sf.muted) slapped = true;
 
 					// fret takes priority over muted for pitch; muted only shapes the strike.
 					// The same formula the reading page labels frets with, so they agree; a
@@ -524,23 +517,7 @@ export function fingerpickPatternToScheduleEvents(
 							slotIndex,
 							percussion: slot.percussion,
 						});
-						slapped = true;
 					}
-				}
-				// The hand lands once however many strings it slaps: one thump a slot,
-				// under the strikes. A body tap is its own knock and gets none.
-				if (slapped) {
-					events.push({
-						time: currentTime,
-						duration: slotDuration,
-						stringIndex: BODY_TAP_STRING,
-						midi: soundingMidi(BODY_TAP_STRING, 0, capo),
-						muted: true,
-						measureIndex,
-						slotIndex,
-						thump: true,
-						...(slot.percussion && { percussion: slot.percussion }),
-					});
 				}
 			}
 
@@ -993,10 +970,8 @@ export interface NoteGains {
 	technique: number;
 	tapping: number;
 	ghost: number;
-	/** A slap: an x on a string, and a hit's dead strike across its strings. */
+	/** A slap: an x on a string, and a hit's dead strike across its strings — full velocity, cut short. */
 	slap: number;
-	/** The hand landing on the strings under a slap: one thump a slot, quieter than a body tap. */
-	slapThump: number;
 	/** Multiplier under a palm mute. */
 	palmMute: number;
 	/** Multiplier on every second stroke of a tremolo. */
@@ -1137,11 +1112,19 @@ export function noteGain(event: ScheduleEvent, gains: NoteGains, legato: LegatoT
 	return volume;
 }
 
-/** Resolves the decoded buffer + playbackRate for a note; returns null if unavailable. */
-export type NoteDataResolver = (
-	muted: boolean,
-	midi: number,
-) => { buffer: AudioBuffer; playbackRate: number } | null;
+/** Resolves the decoded buffer + playbackRate for a pitch; returns null if unavailable. */
+export type NoteDataResolver = (midi: number) => { buffer: AudioBuffer; playbackRate: number } | null;
+
+/**
+ * A slap (an x, or a hit's strike on a string) is the string's own sample cut
+ * off as the hand lands: the attack is all that sounds. TuxGuitar and alphaTab
+ * give a dead note 30 ticks at 960 a quarter (≈ 31 ms whatever the tempo),
+ * MuseScore 50 ms, and alphaTab's whole-hand dead slap is a 64th on every open
+ * string at forte — none of them reach for a muted-guitar preset.
+ */
+export const SLAP_STRIKE_S = 0.04;
+/** The strike's gain decay: gone well inside the window. */
+export const SLAP_DECAY_TC_S = 0.012;
 
 /** A live per-string voice, with the extra logical state a slide handoff needs. */
 export interface SlideActiveVoice extends VoiceHandle {
@@ -1180,8 +1163,8 @@ export interface FingerpickNoteSchedulerDeps {
 
 /**
  * A sound with no string behind it: a pick scrape (noise swept down through a
- * bandpass over the slot), a body tap (a low thump with a little wood under
- * it) or a slap's thump (the same knock, quieter). Registers no voice — nothing can be slid from or stolen here — and
+ * bandpass over the slot) or a body tap (a low thump with a little wood under
+ * it). Registers no voice — nothing can be slid from or stolen here — and
  * leaves the string's own voice alone.
  */
 export function scheduleNoiseEvent(deps: FingerpickNoteSchedulerDeps, event: ScheduleEvent, when: number): void {
@@ -1195,14 +1178,12 @@ export function scheduleNoiseEvent(deps: FingerpickNoteSchedulerDeps, event: Sch
 	const filter = ctx.createBiquadFilter();
 	const accent = event.percussion?.accent || event.effects?.accent ? gains.accentMultiplier : 1;
 	let stopTime: number;
-	if (event.percussion?.kind === "bodyTap" || event.thump) {
-		// A slap's thump is the same knock, quieter, under the strings' strikes.
-		const peak = event.thump ? gains.slapThump : gains.bodyTap;
+	if (event.percussion?.kind === "bodyTap") {
 		filter.type = "lowpass";
 		filter.frequency.value = BODY_TAP_LOWPASS_HZ;
 		filter.Q.value = 1.5;
 		gainNode.gain.setValueAtTime(0, when);
-		gainNode.gain.linearRampToValueAtTime(peak * accent, when + BODY_TAP_ATTACK_S);
+		gainNode.gain.linearRampToValueAtTime(gains.bodyTap * accent, when + BODY_TAP_ATTACK_S);
 		gainNode.gain.setTargetAtTime(0, when + BODY_TAP_ATTACK_S, BODY_TAP_DECAY_TC);
 		// The wood: a short sine under the thump, on the same envelope.
 		const tone = ctx.createOscillator();
@@ -1254,13 +1235,13 @@ export function scheduleFingerpickNote(
 		slideParams,
 	} = deps;
 
-	// A scrape, a body tap and a slap's thump have no string behind them.
-	if (event.effects?.scrape || event.percussion?.kind === "bodyTap" || event.thump) {
+	// A scrape and a body tap have no string behind them.
+	if (event.effects?.scrape || event.percussion?.kind === "bodyTap") {
 		scheduleNoiseEvent(deps, event, when);
 		return;
 	}
 
-	const noteData = resolveNoteData(event.muted, event.midi);
+	const noteData = resolveNoteData(event.midi);
 	if (!noteData) return;
 
 	const existing = voices.get(event.stringIndex);
@@ -1328,14 +1309,15 @@ export function scheduleFingerpickNote(
 	// ── Gain ladder (+ legato A/B for hammer / pull) ──────────────────────────
 	const volume = noteGain(event, gains, legatoTreatment);
 
-	// Staccato shortens the sounding duration to 20% of the slot duration.
+	// Staccato shortens the sounding duration to 20% of the slot duration. A slap
+	// is only its strike: the hand is on the string by SLAP_STRIKE_S.
 	const noteDuration = event.effects?.staccato ? event.duration * 0.2 : event.duration;
 
 	const source = ctx.createBufferSource();
 	source.buffer = noteData.buffer;
 	let harmonicBody: AudioBufferSourceNode | null = null;
 
-	const effectiveDuration = noteDuration;
+	const effectiveDuration = event.muted ? SLAP_STRIKE_S : noteDuration;
 	source.playbackRate.value = noteData.playbackRate;
 
 	// ── Slides into and out of the note: pitch motion on its own voice ────────
@@ -1352,8 +1334,9 @@ export function scheduleFingerpickNote(
 		source.playbackRate.exponentialRampToValueAtTime(noteData.playbackRate, when + rampS);
 	}
 
-	// A palm mute damps the string: it cannot ring on, however the playback mode is set.
-	const letRing = (event.letRing === true || forceLetRing) && !event.palmMute;
+	// A palm mute damps the string, and a slap is over before it could ring: neither
+	// rings on, however the playback mode is set.
+	const letRing = (event.letRing === true || forceLetRing) && !event.palmMute && !event.muted;
 
 	const gainNode = ctx.createGain();
 	if (event.effects?.tap) {
@@ -1368,6 +1351,7 @@ export function scheduleFingerpickNote(
 		: Math.max(effectiveDuration * env.decayTcRatio, env.minDecayTc);
 	if (event.palmMute) decayTc = Math.min(decayTc, env.palmMuteDecayTc);
 	if (event.effects?.harmonic) decayTc = Math.min(decayTc, env.harmonicDecayTc);
+	if (event.muted) decayTc = SLAP_DECAY_TC_S;
 
 	// ── Pitch expression: bend / vibrato ─────────────────────────────────────
 	// One detune curve for the note's whole audible life, set once on its own
@@ -1417,7 +1401,7 @@ export function scheduleFingerpickNote(
 	// string still gives (TuxGuitar's second, softer note). No filter: the pluck
 	// an octave or two up already chimes.
 	if (event.effects?.harmonic) {
-		const body = resolveNoteData(false, event.midi - 12);
+		const body = resolveNoteData(event.midi - 12);
 		if (body) {
 			const under = ctx.createBufferSource();
 			under.buffer = body.buffer;
@@ -1445,9 +1429,10 @@ export function scheduleFingerpickNote(
 
 	allSources.add(source);
 	// Grace notes (very short duration) are not registered so the next same-string note
-	// does not steal and immediately silence them. letRing notes are always registered —
-	// voice stealing is their only terminator (and a slide's only origin).
-	if (event.duration >= 0.1 || letRing) {
+	// does not steal and immediately silence them, and a slap is over before anything
+	// could slide from or steal it. letRing notes are always registered — voice
+	// stealing is their only terminator (and a slide's only origin).
+	if ((event.duration >= 0.1 && !event.muted) || letRing) {
 		const voice: SlideActiveVoice = {
 			gainNode,
 			source,

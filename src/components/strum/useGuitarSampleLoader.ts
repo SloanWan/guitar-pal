@@ -652,12 +652,13 @@ export function _setReadyPresetForTesting(presetKey: PresetKey, preset: WafPrese
 /**
  * Tone types for the fingerpick audio engine.
  *   "pluck" → LK Acoustic Steel (0250_LK_AcousticSteel_SF2_file)
- *   "muted" → FluidR3 Muted Guitar (0280_FluidR3_GM_sf2_file)
  *
+ * One set: a slap or dead note is the same string cut short in the scheduler
+ * (as TuxGuitar, alphaTab and MuseScore play one), not a muted-guitar preset.
  * Deliberately distinct from StrumSoundType to prevent accidental cross-use
  * with the strumming machine's SoundBlaster presets.
  */
-export type FingerpickSoundType = "pluck" | "muted";
+export type FingerpickSoundType = "pluck";
 
 /**
  * Full guitar range preloaded for the fingerpick engine and the fretboard:
@@ -671,10 +672,6 @@ const FINGERPICK_PRESET_DEFS: Record<FingerpickSoundType, { key: string; varName
 	pluck: {
 		key: "0250_LK_AcousticSteel_SF2_file",
 		varName: "_tone_0250_LK_AcousticSteel_SF2_file",
-	},
-	muted: {
-		key: "0280_FluidR3_GM_sf2_file",
-		varName: "_tone_0280_FluidR3_GM_sf2_file",
 	},
 };
 
@@ -719,19 +716,18 @@ function _loadFingerpickPreset(type: FingerpickSoundType): Promise<WafPreset> {
 // ─── Fingerpick public API ────────────────────────────────────────────────────
 
 /**
- * Fetch, parse, and decode both fingerpick guitar presets across the full guitar
- * range (MIDI 40–76). Call once before the first getBufferForMidi invocation.
+ * Fetch, parse, and decode the fingerpick guitar preset across the full guitar
+ * range (MIDI 40–86). Call once before the first getBufferForMidi invocation.
  *
  * Presets loaded:
  *   "pluck" → 0250_LK_AcousticSteel_SF2_file (LK Acoustic Steel, GM 25)
- *   "muted" → 0280_FluidR3_GM_sf2_file (FluidR3 Muted Guitar, GM 28)
  *
  * Caching follows the same pattern as preloadStrumPresets: in-flight fetches are
  * deduplicated by _fingerpickPresetCache; decoded buffers are stored on zone.buffer
  * and the ready preset is stored in _readyFingerpickPresets for synchronous access.
  */
 export async function preloadFingerpickPresets(ctx: AudioContext): Promise<void> {
-	const types: FingerpickSoundType[] = ["pluck", "muted"];
+	const types: FingerpickSoundType[] = ["pluck"];
 	const midiRange = Array.from(
 		{ length: FINGERPICK_MIDI_HIGH - FINGERPICK_MIDI_LOW + 1 },
 		(_, i) => FINGERPICK_MIDI_LOW + i,

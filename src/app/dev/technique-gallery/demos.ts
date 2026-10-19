@@ -145,8 +145,8 @@ const NOTES: Partial<Record<string, { en: string; zh: string }>> = {
 	palmMute: { en: "Beats 2 and 3 under P.M.: damped, dull and short.", zh: "第 2、3 拍在 P.M. 下：闷、暗、短。" },
 	letRing: { en: "Beats 2 and 3 ring on into the next note.", zh: "第 2、3 拍延音到下一个音。" },
 	slur: { en: "One slur over all four notes: 2 4 5 4 hammered and pulled under one arc, the inner arcs left out, the inner notes legato.", zh: "一条连音线覆盖四个音：2 4 5 4 的击弦、勾弦在一条弧下，内部不再画弧，内部的音连奏。" },
-	slap: { en: "Beat 2: an x on the low E is a slap on that string, sounding with the G above it (strike + thump). Beat 4: the whole-hand hit, accented.", zh: "第 2 拍：六弦上的 x 是拍弦，与同一列的 G 弦音一起发声（击弦 + 闷响）。第 4 拍：整手拍弦，带重音。" },
-	thumbSlap: { en: "A thumb slap strikes the bass strings dead.", zh: "拇指拍弦闷击低音弦。" },
+	slap: { en: "Beat 2: an x on the low E is a slap on that string, sounding with the G above it: the string's own attack cut off at 40 ms, as TuxGuitar and alphaTab play a dead note. Beat 4: the whole-hand hit (every free string struck the same way), accented.", zh: "第 2 拍：六弦上的 x 是拍弦，与同一列的 G 弦音一起发声：用这根弦自己的起音，在 40 ms 处切断（TuxGuitar、alphaTab 播放死音的做法）。第 4 拍：整手拍弦（每根空弦同样击一下），带重音。" },
+	thumbSlap: { en: "A thumb slap strikes the bass strings dead: three short attacks, nothing rings.", zh: "拇指拍弦击打低音弦：三下短促的起音，不延响。" },
 	bodyTap: { en: "A knock on the body: a low thump, drawn as B.", zh: "打板：低沉的一记闷响，画作 B。" },
 };
 

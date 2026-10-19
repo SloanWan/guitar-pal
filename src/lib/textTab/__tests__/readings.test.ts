@@ -165,3 +165,31 @@ describe("textTabCandidates", () => {
 		});
 	});
 });
+
+describe("marks through every reading", () => {
+	const TAB = [
+		"e|--------|",
+		"B|--------|",
+		"G|7b9-5---|",
+		"D|--------|",
+		"A|--------|",
+		"E|--------|",
+		"  P.M.",
+	].join("\n");
+
+	it("keeps a bend's height and the palm-mute bracket in the even readings", () => {
+		const columns = readTextTab(TAB)!;
+		expect(columns.bars[0].columns.map((c) => c.at)).toEqual([0, 4]);
+		const g = evenReading(columns, [4, 4], "eighth").draft.measures[0].slots.map((s) => s.strings[2]);
+		expect(g[0]).toMatchObject({ fret: 7, technique: "bend-full", bendTarget: 2, palmMute: true });
+		expect(g[1]).toMatchObject({ fret: 5, technique: null });
+		expect(g[1].palmMute).toBeUndefined();
+	});
+
+	it("reports a split fret run once, whichever readings are offered", () => {
+		const columns = readTextTab(TAB.replace("7b9-5---", "1215----"))!;
+		for (const reading of textTabReadings(columns, [4, 4])) {
+			expect(reading.warnings.filter((w) => w.code === "ASCII_FRET_RUN_SPLIT")).toHaveLength(1);
+		}
+	});
+});

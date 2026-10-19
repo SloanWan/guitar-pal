@@ -33,6 +33,13 @@ import {
 	type FingerpickNoteSchedulerDeps,
 	type ScheduleEvent,
 } from "@/lib/fingerpickScheduler";
+import {
+	bendTimeline,
+	curveLength,
+	expressionForTechnique,
+	DEFAULT_VIBRATO_PARAMS,
+	EXPRESSION_RELEASE_MIN_GAIN_RATIO,
+} from "@/lib/fingerpickExpression";
 import type { FingerpickPattern, BeatSlot, StringFret, Duration, Stroke } from "@/lib/fingerpickTypes";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -1661,6 +1668,7 @@ function mockParam(initial = 0) {
 		cancelScheduledValues: vi.fn(),
 		exponentialRampToValueAtTime: vi.fn(),
 		linearRampToValueAtTime: vi.fn(),
+		setValueCurveAtTime: vi.fn(),
 	};
 }
 
@@ -1668,6 +1676,7 @@ function mockSource() {
 	return {
 		buffer: null as unknown,
 		playbackRate: mockParam(1),
+		detune: mockParam(0),
 		connect: vi.fn((node: unknown) => node),
 		start: vi.fn(),
 		stop: vi.fn(),
@@ -1766,6 +1775,115 @@ function makeDeps(
 		slideParams: opts.slideParams ?? DEFAULT_SLIDE_PARAMS,
 	};
 }
+
+describe("scheduleFingerpickNote — bend and vibrato detune curves", () => {
+	function curveCall(src: ReturnType<typeof mockSource>): { values: Float32Array; start: number; duration: number } {
+		expect(src.detune.setValueCurveAtTime).toHaveBeenCalledTimes(1);
+		const [values, start, duration] = src.detune.setValueCurveAtTime.mock.calls[0] as [Float32Array, number, number];
+		return { values, start, duration };
+	}
+
+	it("a plain note gets no curve", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent(), 1);
+		expect(ctx._sources[0].detune.setValueCurveAtTime).not.toHaveBeenCalled();
+	});
+
+	it("a full bend sets one detune curve over the note, leaving playbackRate alone", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ technique: "bend-full", duration: 0.5 }), 1);
+		const src = ctx._sources[0];
+		const { values, start, duration } = curveCall(src);
+		expect(values).toBeInstanceOf(Float32Array);
+		expect(values.length).toBe(curveLength(0.5));
+		expect(start).toBe(1);
+		expect(duration).toBe(0.5);
+		expect(values[0]).toBe(0);
+		expect(values[values.length - 1]).toBe(200);
+		expect(src.playbackRate.value).toBe(rateFor(62));
+		expect(src.playbackRate.setValueAtTime).not.toHaveBeenCalled();
+		expect(src.playbackRate.exponentialRampToValueAtTime).not.toHaveBeenCalled();
+	});
+
+	it("named bend heights and bendTarget both reach the curve", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map());
+		scheduleFingerpickNote(deps, noteEvent({ technique: "bend-half", stringIndex: 0 }), 1);
+		scheduleFingerpickNote(deps, noteEvent({ technique: "pre-bend", bendTarget: 0.5, stringIndex: 1 }), 1);
+		const half = curveCall(ctx._sources[0]).values;
+		const pre = curveCall(ctx._sources[1]).values;
+		expect(half[half.length - 1]).toBe(100);
+		expect(pre[0]).toBe(50);
+	});
+
+	it("a vibrato wobbles only above the fretted pitch, within its depth", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ technique: "vibrato", duration: 1 }), 0);
+		const { values } = curveCall(ctx._sources[0]);
+		let lo = Infinity;
+		let hi = -Infinity;
+		for (const v of values) {
+			lo = Math.min(lo, v);
+			hi = Math.max(hi, v);
+		}
+		expect(lo).toBeGreaterThanOrEqual(0);
+		expect(hi).toBeLessThanOrEqual(DEFAULT_VIBRATO_PARAMS.depthCents + 1e-6);
+		expect(hi).toBeGreaterThan(DEFAULT_VIBRATO_PARAMS.depthCents * 0.9);
+	});
+
+	it("a bend-release ends back at 0 and keeps enough gain to be heard coming down", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ technique: "bend-release", duration: 0.5 }), 0);
+		const { values } = curveCall(ctx._sources[0]);
+		expect(values[values.length - 1]).toBe(0);
+		const tc = ctx._gains[0].gain.setTargetAtTime.mock.calls[0][2] as number;
+		const releaseEnd = bendTimeline(expressionForTechnique("bend-release")!.bend!, 0.5).releaseEndS;
+		expect(Math.exp(-releaseEnd / tc)).toBeGreaterThanOrEqual(EXPRESSION_RELEASE_MIN_GAIN_RATIO - 1e-9);
+		// A plain note of the same length decays faster: τ = 0.5 × 0.8.
+		expect(tc).toBeGreaterThan(0.4);
+	});
+
+	it("a non-release bend keeps the plain note's decay", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ technique: "bend-full", duration: 0.5 }), 0);
+		expect(ctx._gains[0].gain.setTargetAtTime.mock.calls[0][2]).toBeCloseTo(0.4);
+	});
+
+	it("a letRing bend's curve covers the voice's whole lifetime", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ technique: "bend-full", duration: 0.5, letRing: true }), 0);
+		const { duration } = curveCall(ctx._sources[0]);
+		expect(duration).toBeCloseTo(TEST_ENV.letRingDecayTc * TEST_GAINS.letRingLifetimeTaus);
+	});
+
+	it("a staccato bend's curve is as short as the note", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ technique: "bend-full", duration: 0.5, staccato: true }), 0);
+		expect(curveCall(ctx._sources[0]).duration).toBeCloseTo(0.1);
+	});
+
+	it("a bent voice can still be slid from: the handoff ramps playbackRate, the curve stays", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const deps = makeDeps(ctx, voices);
+		scheduleFingerpickNote(deps, noteEvent({ technique: "bend-full", duration: 0.5, letRing: true }), 0);
+		scheduleFingerpickNote(deps, noteEvent({ technique: "slide-up", midi: 64, duration: 0.5 }), 0.5);
+		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
+		const src = ctx._sources[0];
+		expect(src.detune.setValueCurveAtTime).toHaveBeenCalledTimes(1);
+		expect(src.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalled();
+	});
+
+	it("fingerpickPatternToScheduleEvents carries bendTarget onto the event", () => {
+		const bent = pattern(120, [slot("s0", "quarter", { 2: { fret: 7, technique: "bend-release", bendTarget: 1 } })]);
+		const events = fingerpickPatternToScheduleEvents(bent, 120);
+		expect(events).toHaveLength(1);
+		expect(events[0].technique).toBe("bend-release");
+		expect(events[0].bendTarget).toBe(1);
+		const plain = fingerpickPatternToScheduleEvents(pattern(120, [slot("s0", "quarter", { 2: { fret: 7 } })]), 120);
+		expect("bendTarget" in plain[0]).toBe(false);
+	});
+});
 
 describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)", () => {
 	it("a slide with a live origin voice creates NO new source and ramps the origin in place", () => {

@@ -118,6 +118,15 @@ const Tap = (fret: number): StringFret => ({
 	muted: false,
 });
 const Trl = (fret: number): StringFret => ({ fret, technique: "trill", tied: false, muted: false });
+const Bend = (fret: number, technique: StringFret["technique"], bendTarget: number): StringFret => ({
+	fret,
+	technique,
+	tied: false,
+	muted: false,
+	bendTarget,
+});
+const PM = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false, palmMute: true });
+const LR = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false, letRing: true });
 
 // ── Measure definitions ───────────────────────────────────────────────────────
 // Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
@@ -199,6 +208,46 @@ const VIBRATO_MEASURE: Measure = {
 	slots: [
 		{ id: "vib1", duration: "half", strings: [Vib(5), S(), S(), S(), S(), S()] },
 		{ id: "vib2", duration: "half", strings: [VibW(5), S(), S(), S(), S(), S()] },
+	],
+};
+
+// Bend family on the G string: the named heights, a release, then the pre-bends.
+const BEND_M1: Measure = {
+	id: "bend-m1",
+	slots: [
+		{ id: "bd1", duration: "quarter", strings: [S(), S(), Bend(7, "bend-full", 2), S(), S(), S()] },
+		{ id: "bd2", duration: "quarter", strings: [S(), S(), Bend(7, "bend-half", 1), S(), S(), S()] },
+		{ id: "bd3", duration: "quarter", strings: [S(), S(), Bend(7, "bend-quarter", 0.5), S(), S(), S()] },
+		{ id: "bd4", duration: "quarter", strings: [S(), S(), Bend(7, "bend-release", 2), S(), S(), S()] },
+	],
+};
+const BEND_M2: Measure = {
+	id: "bend-m2",
+	slots: [
+		{ id: "bd5", duration: "half", strings: [S(), S(), Bend(7, "pre-bend", 1), S(), S(), S()] },
+		{ id: "bd6", duration: "half", strings: [S(), S(), Bend(7, "pre-bend-release", 2), S(), S(), S()] },
+	],
+};
+
+// Brackets: a palm-muted run on the A string, then a let-ring run broken by a plain note.
+const BRACKET_M1: Measure = {
+	id: "bracket-m1",
+	slots: [
+		{ id: "pm1", duration: "eighth", strings: [S(), S(), S(), S(), PM(0), S()] },
+		{ id: "pm2", duration: "eighth", strings: [S(), S(), S(), S(), PM(0), S()] },
+		{ id: "pm3", duration: "eighth", strings: [S(), S(), S(), S(), PM(2), S()] },
+		{ id: "pm4", duration: "eighth", strings: [S(), S(), S(), S(), PM(2), S()] },
+		{ id: "pm5", duration: "quarter", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: "pm6", duration: "quarter", strings: [S(), S(), S(), S(), PM(3), S()] },
+	],
+};
+const BRACKET_M2: Measure = {
+	id: "bracket-m2",
+	slots: [
+		{ id: "lr1", duration: "quarter", strings: [S(), S(), S(), S(), S(), LR(3)] },
+		{ id: "lr2", duration: "quarter", strings: [S(), LR(3), S(), S(), S(), S()] },
+		{ id: "lr3", duration: "quarter", strings: [LR(0), S(), S(), S(), S(), S()] },
+		{ id: "lr4", duration: "quarter", strings: [S(), S(), N(0), S(), S(), S()] },
 	],
 };
 
@@ -511,6 +560,8 @@ const GROUPS: { label: string; measures: Measure[] }[] = [
 		measures: [TREMOLO_MEASURE],
 	},
 	{ label: "Vibrato (half 1) and Vibrato-Wide (half 2)", measures: [VIBRATO_MEASURE] },
+	{ label: "Bend family: full · ½ · ¼ · release | pre-bend · pre-bend-release", measures: [BEND_M1, BEND_M2] },
+	{ label: "Brackets: palm mute (P.M.) and let ring", measures: [BRACKET_M1, BRACKET_M2] },
 	{ label: "Techniques: Hammer-On, Pull-Off", measures: [HAMMER_PULL_MEASURE] },
 	{ label: "Techniques: Tapping", measures: [TAPPING_MEASURE] },
 	{ label: "Techniques: Trill", measures: [TRILL_MEASURE] },
@@ -568,9 +619,19 @@ const GROUP_METAS: Record<string, GroupMeta> = {
 		zh: "震音拨弦指快速重复同一音符。斜线数量表示速度：1 条=八分音符，2 条=十六分，3 条=三十二分。",
 	},
 	"Vibrato (half 1) and Vibrato-Wide (half 2)": {
-		status: "⏳ Not yet implemented",
-		en: "Vibrato is a repeated small pitch fluctuation that makes a note sing. Wide vibrato is an exaggerated version. Audio simulation is planned for a future issue.",
-		zh: "颤音是对音符音高进行小幅反复波动，让音符更有歌唱感。大幅颤音是其夸张版本。音频模拟计划在后续 issue 中实现。",
+		status: "✅ Rendered; audio as a detune curve on the sounding note (#316)",
+		en: "Vibrato is a repeated small pitch fluctuation that makes a note sing. Wide vibrato is an exaggerated version. Audio: the note's own detune is wobbled above the fretted pitch only (30¢ at 5.5 Hz; wide 80¢ at 5 Hz), starting 150 ms after the pluck — parameters chosen in /dev/bend-lab.",
+		zh: "颤音是对音符音高进行小幅反复波动，让音符更有歌唱感。大幅颤音是其夸张版本。音频：在正在响的那个音上做只往上的音高摆动（30 音分 5.5 Hz；大幅 80 音分 5 Hz），弹响 150 ms 后开始——参数在 /dev/bend-lab 定的。",
+	},
+	"Bend family: full · ½ · ¼ · release | pre-bend · pre-bend-release": {
+		status: "✅ Rendered with VexFlow's Bend (arrow + height); audio as a detune curve (#316)",
+		en: "A bend pushes the string sideways to raise the pitch: full = a whole tone, ½ = a semitone, ¼ = a quarter tone. A release lets it back down (up-then-down arrow). A pre-bend is bent before the pick, so the note starts at the target — written 'PB' with the height; pre-bend-release then lets it down. Audio: the sounding note's detune rises over 150 ms (slow then fast), holds, and for the release variants comes back over 150 ms.",
+		zh: "推弦是把弦横向推开让音升高：full = 全音，½ = 半音，¼ = 四分之一音。回落是推上去再放回来（上下箭头）。预推弦是先推好再弹，音一出来就是目标音——写作 'PB' 加高度；预推弦回落再放回来。音频：在正在响的那个音上 150 ms 推到顶（先慢后快）、保持，回落类再用 150 ms 放回来。",
+	},
+	"Brackets: palm mute (P.M.) and let ring": {
+		status: "✅ Rendered (dashed bracket over the run); audio: let ring sustains, palm mute not yet voiced",
+		en: "A dashed bracket spans every consecutive note carrying the flag. P.M. = rest the picking hand on the strings for a damped sound. Let ring = let the notes sustain into each other. A plain note breaks the run, so measure 1 shows two P.M. brackets.",
+		zh: "虚线括号覆盖连续带标记的音。P.M.（手掌闷音）= 右手掌搭在弦上让声音闷。Let ring = 让音互相延续。普通音会打断，所以第 1 小节有两段 P.M. 括号。",
 	},
 	"Techniques: Hammer-On, Pull-Off": {
 		status: "⚡ Partially implemented — needs further refinement",
@@ -662,6 +723,8 @@ const GROUP_BPM: Record<string, number> = {
 /** Chinese section label shown when lang = "zh". */
 const GROUP_LABEL_ZH: Record<string, string> = {
 	Slide: "滑音",
+	"Bend family: full · ½ · ¼ · release | pre-bend · pre-bend-release": "推弦家族：全音 · ½ · ¼ · 回落 | 预推弦 · 预推弦回落",
+	"Brackets: palm mute (P.M.) and let ring": "括号：手掌闷音（P.M.）和延音",
 	"Stress Test — Dense Mixed Techniques": "压力测试 — 密集混合技法",
 };
 
@@ -683,7 +746,7 @@ function computeGroupWidths(measures: Measure[], containerWidth: number): number
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
 	const renderData = measures.map((m) => fingerpickToVexFlow(m));
 	const minWidths = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, i === 0, techniqueConnectorCount(measures[i])),
+		computeMeasureMinWidth(rd.notes, i === 0, techniqueConnectorCount(measures[i]), 0, 0, 0, 0, [], rd.expression),
 	);
 	const totalMin = minWidths.reduce((a, b) => a + b, 0);
 	const scale = Math.max(1, staveSpace / totalMin);

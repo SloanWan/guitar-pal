@@ -1,9 +1,9 @@
-import type { Duration, Technique } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
+import { barSlots, emptyStrings, type DraftSlot, type DraftStringFret } from "@/lib/assistant/tab/draftSlots";
 import { isCompound, type Meter } from "@/lib/strumMeter";
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
 import { splitTicks } from "@/lib/textTab/ticks";
-import type { TextTabBar, TextTabColumn, TextTabColumns, TextTabNote } from "@/lib/textTab/columns";
+import { columnWarnings, type TextTabBar, type TextTabColumn, type TextTabColumns, type TextTabNote } from "@/lib/textTab/columns";
 
 /**
  * The readings of a text tab: the same columns, each given a duration a
@@ -48,30 +48,26 @@ export const READING_DESCRIPTION: Record<TextTabReadingId, string> = {
 	swing: "Notes in pairs, long–short, three to a beat.",
 };
 
-type DraftString = { fret: number | null; technique: Technique; tied: boolean; muted: boolean };
-
-type DraftSlot = {
-	duration: Duration;
-	isRest?: boolean;
-	strings: DraftString[];
-};
-
 type DraftMeasure = { slots: DraftSlot[] };
 
-function emptyStrings(): DraftString[] {
-	return Array.from({ length: 6 }, () => ({ fret: null, technique: null, tied: false, muted: false }));
-}
-
-function struck(notes: TextTabNote[]): DraftString[] {
+function struck(notes: TextTabNote[]): DraftStringFret[] {
 	const strings = emptyStrings();
 	for (const note of notes) {
-		strings[note.stringIndex] = { fret: note.fret, technique: note.technique, tied: false, muted: note.muted };
+		strings[note.stringIndex] = {
+			fret: note.fret,
+			technique: note.technique,
+			tied: false,
+			muted: note.muted,
+			...(note.bendTarget !== undefined ? { bendTarget: note.bendTarget } : {}),
+			...(note.palmMute ? { palmMute: true } : {}),
+			...(note.letRing ? { letRing: true } : {}),
+		};
 	}
 	return strings;
 }
 
 /** The same strings, sounding on from the slot before: the tied half of a long note. */
-function held(notes: TextTabNote[]): DraftString[] {
+function held(notes: TextTabNote[]): DraftStringFret[] {
 	const strings = emptyStrings();
 	for (const note of notes) {
 		if (note.fret === null) continue;
@@ -93,62 +89,36 @@ function barList(indices: number[]): string {
 // ─── By spacing ───────────────────────────────────────────────────────────────
 
 /**
- * The bar's width in characters is the bar's length, and the distance from
- * one note to the next is how long the note lasts. When the characters
- * divide the bar into note values — a whole number of 32nds each — every
- * column is a clean fraction of it; otherwise the nearest such fit is taken
- * and the bar is flagged for checking.
+ * The bar's width in characters is the bar's length, and each note starts
+ * where its column falls in the bar. When the characters divide the bar into
+ * note values — a whole number of 32nds each — every column lands exactly;
+ * otherwise the onsets are read to the nearest 32nd and the bar is flagged
+ * for checking. Either way the bar adds up (`barSlots`).
  */
 export function spacingReading(columns: TextTabColumns, timeSignature: Meter): TextTabReading {
 	const capacity = measureCapacity(timeSignature);
-	const smallest = DURATION_TICKS["32nd"];
 	const warnings: ValidationIssue[] = [];
 	const measures: DraftMeasure[] = [];
 
 	columns.bars.forEach((bar, measureIndex) => {
 		const { width } = bar;
-		let unit = capacity / width;
-		if (!Number.isInteger(unit) || unit % smallest !== 0) {
-			unit = Math.max(smallest, Math.round(unit / smallest) * smallest);
+		const unit = capacity / width;
+		if (!Number.isInteger(unit) || unit % DURATION_TICKS["32nd"] !== 0) {
 			warnings.push({
 				code: "ASCII_UNEVEN_BAR",
 				path: `measures[${measureIndex}]`,
 				message: `Bar ${measureIndex + 1} is ${width} characters wide, which does not divide the bar evenly — its rhythm was guessed from the spacing.`,
 			});
 		}
-
-		const slots: DraftSlot[] = [];
-		let used = 0;
-		const push = (durations: Duration[], first: TextTabNote[] | null) => {
-			durations.forEach((duration, i) => {
-				const ticks = DURATION_TICKS[duration];
-				if (used + ticks > capacity) return;
-				used += ticks;
-				slots.push(
-					i === 0 && first
-						? { duration, strings: struck(first) }
-						: { duration, isRest: true, strings: emptyStrings() },
-				);
-			});
-		};
-
-		const onsets = bar.columns;
-		if (onsets.length === 0 || onsets[0].at > 0) {
-			push(splitTicks((onsets[0]?.at ?? width) * unit), null);
-		}
-		onsets.forEach((column, i) => {
-			const next = onsets[i + 1]?.at ?? width;
-			push(splitTicks((next - column.at) * unit), column.notes);
-		});
-		if (width * unit > capacity) {
+		const byColumn = new Map(bar.columns.map((column) => [column.at, column.notes]));
+		const { slots, overflow } = barSlots(byColumn, width, capacity);
+		if (overflow) {
 			warnings.push({
 				code: "ASCII_BAR_OVERFLOW",
 				path: `measures[${measureIndex}]`,
-				message: `Bar ${measureIndex + 1} ran past ${timeSignature[0]}/${timeSignature[1]} — what did not fit was dropped.`,
+				message: `Bar ${measureIndex + 1} has more notes than a bar of ${timeSignature[0]}/${timeSignature[1]} can start on 32nds — the ones past its end were dropped.`,
 			});
 		}
-		if (used < capacity) push(splitTicks(capacity - used), null);
-		if (slots.length === 0) push(splitTicks(capacity), null);
 		measures.push({ slots });
 	});
 
@@ -319,12 +289,7 @@ export function textTabReadings(columns: TextTabColumns, timeSignature: Meter): 
 		swingReading(columns, timeSignature),
 	].filter((r): r is TextTabReading => r !== null);
 	const seen = new Set<string>();
-	const unknown: ValidationIssue[] = columns.unknownMarks.map((mark) => ({
-		code: "ASCII_UNKNOWN_MARK",
-		path: "",
-		message: `"${mark}" is not a mark this reader knows — it was skipped.`,
-		original: mark,
-	}));
+	const read = columnWarnings(columns);
 	return all
 		.filter((reading) => {
 			const shape = shapeOf(reading);
@@ -332,5 +297,5 @@ export function textTabReadings(columns: TextTabColumns, timeSignature: Meter): 
 			seen.add(shape);
 			return true;
 		})
-		.map((reading) => ({ ...reading, warnings: [...reading.warnings, ...unknown] }));
+		.map((reading) => ({ ...reading, warnings: [...reading.warnings, ...read] }));
 }

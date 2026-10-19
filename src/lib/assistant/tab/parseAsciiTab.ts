@@ -1,5 +1,5 @@
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
-import { looksLikeTextTab, readTextTab, textTabProse } from "@/lib/textTab/columns";
+import { columnWarnings, looksLikeTextTab, readTextTab, textTabProse } from "@/lib/textTab/columns";
 import { spacingReading } from "@/lib/textTab/readings";
 
 /**
@@ -31,19 +31,13 @@ export const looksLikeAsciiTab = looksLikeTextTab;
 /** Lines that are not tab, for whatever else the paste says (a title, a meter). */
 export const asciiTabProse = textTabProse;
 
+export { splitFretRun, type FretRunPiece } from "@/lib/textTab/columns";
+
 export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): AsciiTabParse {
 	const columns = readTextTab(text);
 	if (columns === null) return { ok: false, error: "Six lines of tab are needed, one per string." };
 	if (columns.bars.length === 0) return { ok: false, error: "The tab has no bars in it." };
 	const reading = spacingReading(columns, options.timeSignature ?? [4, 4]);
-	const warnings: ValidationIssue[] = [
-		...reading.warnings,
-		...columns.unknownMarks.map((mark) => ({
-			code: "ASCII_UNKNOWN_MARK",
-			path: "",
-			message: `"${mark}" is not a mark this reader knows — it was skipped.`,
-			original: mark,
-		})),
-	];
+	const warnings: ValidationIssue[] = [...reading.warnings, ...columnWarnings(columns)];
 	return { ok: true, draft: reading.draft, warnings };
 }

@@ -1,0 +1,120 @@
+import type { Duration, Technique } from "@/lib/fingerpickTypes";
+import { DURATION_TICKS } from "@/lib/fingerpickEdit";
+import { splitTicks } from "@/lib/assistant/tab/ticks";
+
+/**
+ * Notes on a grid, written out as one bar of slots.
+ *
+ * Both ways into a draft land here: a tab a player pasted, whose grid is its
+ * characters, and a pattern the model composed, whose grid is the slots it
+ * asked for. What they share is the reading — a note sounds until the next
+ * position that carries one, or to the end of the bar, the way a tab reads —
+ * so it is written once and the two callers only differ in how they arrive at
+ * the grid.
+ */
+
+/** A note on its string, before it has a place in the bar. */
+/** What a note can carry besides its fret: a bend's height, the brackets over it. */
+export interface NoteMarks {
+	/** Semitones for the release / pre-bend variants (0.5, 1, 2). */
+	bendTarget?: number;
+	palmMute?: boolean;
+	letRing?: boolean;
+}
+
+export interface GridNote extends NoteMarks {
+	/** 0 = high e, 5 = low E — the fingerpick order the editor stores. */
+	stringIndex: number;
+	fret: number | null;
+	muted: boolean;
+	technique: Technique;
+}
+
+export interface DraftStringFret extends NoteMarks {
+	fret: number | null;
+	technique: Technique;
+	tied: boolean;
+	muted: boolean;
+}
+
+export interface DraftSlot {
+	duration: Duration;
+	isRest?: boolean;
+	strings: DraftStringFret[];
+}
+
+export function emptyStrings(): DraftStringFret[] {
+	return Array.from({ length: 6 }, () => ({ fret: null, technique: null, tied: false, muted: false }));
+}
+
+export interface BarSlotsResult {
+	slots: DraftSlot[];
+	/** More onsets than the bar has 32nds to start them on; the rest was dropped. */
+	overflow: boolean;
+}
+
+/**
+ * `byPosition` keys are positions on the grid and `positions` is how many the
+ * bar has. Each onset is placed where its position falls in the bar, on the
+ * 32nd grid, and a note lasts until the next onset or the bar's end — so the
+ * bar always adds up to `capacity`, whatever its width in positions. A grid
+ * that divides the bar evenly lands exactly; one that does not is read to the
+ * nearest 32nd. Two onsets that would share a 32nd are kept apart, which can
+ * push the last ones past the bar: those are dropped and reported.
+ */
+export function barSlots(
+	byPosition: ReadonlyMap<number, readonly GridNote[]>,
+	positions: number,
+	capacity: number,
+): BarSlotsResult {
+	const onsets = [...byPosition.keys()].sort((a, b) => a - b);
+	const slots: DraftSlot[] = [];
+	let used = 0;
+	const step = DURATION_TICKS["32nd"];
+	const starts: number[] = [];
+	let prev = -step;
+	for (const position of onsets) {
+		let tick = Math.round((position / positions) * capacity / step) * step;
+		if (tick <= prev) tick = prev + step;
+		starts.push(tick);
+		prev = tick;
+	}
+	const kept = starts.filter((tick) => tick < capacity).length;
+
+	const push = (durations: Duration[], first: readonly GridNote[] | null) => {
+		durations.forEach((duration, i) => {
+			const ticks = DURATION_TICKS[duration];
+			if (used + ticks > capacity) return;
+			used += ticks;
+			const slot: DraftSlot = { duration, strings: emptyStrings() };
+			if (i === 0 && first) {
+				for (const note of first) {
+					slot.strings[note.stringIndex] = {
+						fret: note.fret,
+						technique: note.technique,
+						tied: false,
+						muted: note.muted,
+						...(note.bendTarget !== undefined ? { bendTarget: note.bendTarget } : {}),
+						...(note.palmMute ? { palmMute: true } : {}),
+						...(note.letRing ? { letRing: true } : {}),
+					};
+				}
+			} else {
+				slot.isRest = true;
+			}
+			slots.push(slot);
+		});
+	};
+
+	if (kept === 0 || starts[0] > 0) {
+		push(splitTicks(kept === 0 ? capacity : starts[0]), null);
+	}
+	for (let i = 0; i < kept; i++) {
+		const next = i + 1 < kept ? starts[i + 1] : capacity;
+		push(splitTicks(next - starts[i]), byPosition.get(onsets[i])!);
+	}
+
+	if (used < capacity) push(splitTicks(capacity - used), null);
+	if (slots.length === 0) push(splitTicks(capacity), null);
+	return { slots, overflow: kept < onsets.length };
+}

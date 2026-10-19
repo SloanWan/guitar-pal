@@ -35,6 +35,12 @@ import {
 	setInactive,
 	toggleMuted,
 	setTechnique,
+	setNoteTechnique,
+	availableNoteTechniques,
+	bendHeightFor,
+	nextBendTechnique,
+	nextVibratoTechnique,
+	type NoteTechnique,
 	setTied,
 	moveCell,
 	addMeasure,
@@ -143,6 +149,14 @@ const TECHNIQUE_GLYPH: Partial<Record<NonNullable<StringFret["technique"]>, stri
 	"pull-off": "p",
 	"slide-up": "↑",
 	"slide-down": "↓",
+	"bend-quarter": "¼⤴",
+	"bend-half": "½⤴",
+	"bend-full": "⤴",
+	"bend-release": "⤴⤵",
+	"pre-bend": "PB",
+	"pre-bend-release": "PB⤵",
+	vibrato: "~",
+	"vibrato-wide": "≈",
 };
 
 const ARROW_DIRECTIONS: Record<string, Direction> = {
@@ -446,6 +460,21 @@ export default function FingerpickEditModal({
 				pendingDigitRef.current = null;
 				return;
 			}
+			// B steps a bend through ¼ → ½ → full → release; V toggles vibrato / wide.
+			// Silently ignored where the note cannot take one (open string, muted, empty).
+			if (key === "b" || key === "B" || key === "v" || key === "V") {
+				const working = workingRef.current;
+				const sf = working.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[cell.stringIndex];
+				if (!sf) return;
+				const isBend = key === "b" || key === "B";
+				const next = isBend ? nextBendTechnique(sf.technique) : nextVibratoTechnique(sf.technique);
+				const avail = availableNoteTechniques(working, cell, bendHeightFor(next));
+				if (!(isBend ? avail.bend : avail.vibrato)) return;
+				e.preventDefault();
+				commit((prev) => setNoteTechnique(prev, cell, next));
+				pendingDigitRef.current = null;
+				return;
+			}
 			if (/^[0-9]$/.test(key)) {
 				e.preventDefault();
 				applyFretDigit(cell, Number(key));
@@ -553,6 +582,13 @@ export default function FingerpickEditModal({
 		if (!techMenu) return;
 		const cell = techMenu.cell;
 		commit((prev) => setTechnique(prev, cell, technique));
+		setTechMenu(null);
+	}
+
+	function applyNoteTechnique(technique: NoteTechnique, bendSemitones: number) {
+		if (!techMenu) return;
+		const cell = techMenu.cell;
+		commit((prev) => setNoteTechnique(prev, cell, technique, bendSemitones));
 		setTechMenu(null);
 	}
 
@@ -1640,6 +1676,7 @@ export default function FingerpickEditModal({
 							y={techMenu.y}
 							scrollRef={scrollRef}
 							onTechnique={applyTechnique}
+							onNoteTechnique={applyNoteTechnique}
 							onTied={applyTied}
 							onClear={applyClearTechnique}
 						/>

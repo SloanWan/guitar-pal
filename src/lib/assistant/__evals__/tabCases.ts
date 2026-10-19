@@ -14,6 +14,18 @@ export interface TabEvalCase {
 		/** A card must be shown, with this many bars (inclusive range). */
 		bars?: [number, number];
 		timeSignature?: [number, number];
+		/**
+		 * The card carries no validation warning. A pattern whose rhythm was
+		 * guessed, or whose overrunning bar was trimmed, is not the pattern that
+		 * was asked for — the bar count alone would let both through.
+		 */
+		noWarnings?: boolean;
+		/**
+		 * Every sounding fret lands in this inclusive range — the position the
+		 * player asked for. Two frets that merged into one read far too high
+		 * (and clamp to 24); a digit dropped reads far too low.
+		 */
+		frets?: [number, number];
 		/** No card: a question, an answer, or a decline. */
 		noCard?: boolean;
 	};
@@ -39,21 +51,21 @@ export const TAB_EVAL_CASES: readonly TabEvalCase[] = [
 		id: "tab-vague-style",
 		input: "a gentle fingerpicking pattern for Am and F, something like a lullaby",
 		tool: ["propose_tab", "read_tab"],
-		expect: { bars: [1, 4] },
+		expect: { bars: [1, 4], noWarnings: true },
 		why: "Described, not written: the reader if it can, else the model composes and the parser validates.",
 	},
 	{
 		id: "tab-vague-meter",
 		input: "something in 3/4 for fingerpicking, in G",
 		tool: ["propose_tab", "read_tab"],
-		expect: { bars: [1, 4], timeSignature: [3, 4] },
+		expect: { bars: [1, 4], timeSignature: [3, 4], noWarnings: true },
 		why: "The meter the player named must survive into the card.",
 	},
 	{
 		id: "tab-vague-zh",
 		input: "给我一个 Em 的分解和弦，慢一点，适合练习",
 		tool: ["propose_tab", "read_tab"],
-		expect: { bars: [1, 4] },
+		expect: { bars: [1, 4], noWarnings: true },
 		why: "The same in Chinese.",
 	},
 	{
@@ -116,28 +128,28 @@ export const TAB_EVAL_CASES: readonly TabEvalCase[] = [
 		id: "tab-style-tempo-prose",
 		input: "a travis-style pattern in D, faster than usual",
 		tool: ["propose_tab", "read_tab"],
-		expect: { bars: [1, 4] },
+		expect: { bars: [1, 4], noWarnings: true },
 		why: "A style word wrapped in prose the reader does not take: the model composes.",
 	},
 	{
 		id: "tab-vague-compound",
 		input: "fingerpicking for a sad song in Am, 6/8",
 		tool: ["propose_tab", "read_tab"],
-		expect: { bars: [1, 4], timeSignature: [6, 8] },
+		expect: { bars: [1, 4], timeSignature: [6, 8], noWarnings: true },
 		why: "A compound meter named in prose must survive into the card.",
 	},
 	{
 		id: "tab-vague-zh-soft",
 		input: "分解和弦 Am F，轻柔一点",
 		tool: ["propose_tab", "read_tab"],
-		expect: { bars: [1, 4] },
+		expect: { bars: [1, 4], noWarnings: true },
 		why: "Chords and a feel in Chinese, no order: the reader misses, so the model composes rather than asks.",
 	},
 	{
 		id: "tab-bars-per-chord",
 		input: "Am F C G 的指弹，每个和弦两小节",
 		tool: ["propose_tab", "read_tab"],
-		expect: { bars: [8, 8] },
+		expect: { bars: [8, 8], noWarnings: true },
 		why: "A bar count said in prose: four chords, two bars each, is eight bars.",
 	},
 	{
@@ -160,5 +172,33 @@ export const TAB_EVAL_CASES: readonly TabEvalCase[] = [
 		tool: null,
 		expect: { noCard: true },
 		why: "A song by name in Chinese: declined, not invented.",
+	},
+	{
+		id: "tab-scale-pentatonic-zh",
+		input: "给我一个五声音阶的练习tab",
+		tool: ["propose_tab", "read_tab"],
+		expect: { bars: [2, 4], noWarnings: true },
+		why: "An exercise is not a fingerpicking shape: a pentatonic box does not fit one bar, so it runs over as many as its notes need rather than being crammed into one and trimmed.",
+	},
+	{
+		id: "tab-scale-up-down",
+		input: "A minor pentatonic ascending and descending, eighth notes",
+		tool: ["propose_tab", "read_tab"],
+		expect: { bars: [2, 6], noWarnings: true },
+		why: "Twelve notes up and twelve back is three bars of eighths — a bar count that has to be worked out, and a rhythm that must be written rather than guessed from spacing.",
+	},
+	{
+		id: "tab-scale-high-position",
+		input: "give me a scale exercise at the 12th fret in A minor",
+		tool: ["propose_tab", "read_tab"],
+		expect: { bars: [1, 6], noWarnings: true, frets: [9, 17] },
+		why: "Two-digit frets: every note must land in the position asked for. Two that merge read as one impossible fret, and one that loses a digit reads near the nut.",
+	},
+	{
+		id: "tab-sixteenths",
+		input: "a sixteenth-note picking exercise in Am",
+		tool: ["propose_tab", "read_tab"],
+		expect: { bars: [1, 4], noWarnings: true },
+		why: "Sixteenths are the resolution the grid has least room for — the one a bar is most likely to overrun.",
 	},
 ];

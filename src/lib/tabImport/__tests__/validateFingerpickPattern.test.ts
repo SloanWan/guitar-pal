@@ -57,17 +57,24 @@ describe("validateFingerpickPattern — gross failures", () => {
 // ─── Pattern-level defaults ───────────────────────────────────────────────────
 
 describe("validateFingerpickPattern — pattern-level defaults", () => {
-	it("defaults bpm to 80 when missing and adds a warning", () => {
+	it("defaults bpm to 80 when missing, without a warning", () => {
 		const { pattern, warnings } = validateFingerpickPattern(
 			makePattern({ bpm: undefined }),
 		);
 		expect(pattern?.bpm).toBe(80);
+		expect(warnings.some((w) => w.code === "INVALID_BPM")).toBe(false);
+	});
+
+	it("defaults bpm to 80 when negative, and warns", () => {
+		const { pattern, warnings } = validateFingerpickPattern(makePattern({ bpm: -10 }));
+		expect(pattern?.bpm).toBe(80);
 		expect(warnings.some((w) => w.code === "INVALID_BPM")).toBe(true);
 	});
 
-	it("defaults bpm to 80 when negative", () => {
-		const { pattern } = validateFingerpickPattern(makePattern({ bpm: -10 }));
+	it("warns for a bpm that is there but not a number", () => {
+		const { pattern, warnings } = validateFingerpickPattern(makePattern({ bpm: "fast" }));
 		expect(pattern?.bpm).toBe(80);
+		expect(warnings.some((w) => w.code === "INVALID_BPM")).toBe(true);
 	});
 
 	it("defaults timeSignature to [4,4] when missing and warns", () => {
@@ -217,7 +224,7 @@ describe("validateFingerpickPattern — strings normalization", () => {
 
 describe("validateFingerpickPattern — technique downgrade", () => {
 	it("drops unsupported technique to null and warns", () => {
-		const strings = makeStrings({ 0: { fret: 7, technique: "bend-full" } });
+		const strings = makeStrings({ 0: { fret: 7, technique: "whammy-dive" } });
 		const raw = makePattern({
 			measures: [makeMeasure([makeSlot({ strings })])],
 		});
@@ -225,6 +232,14 @@ describe("validateFingerpickPattern — technique downgrade", () => {
 		expect(pattern?.measures[0].slots[0].strings[0].technique).toBeNull();
 		expect(pattern?.measures[0].slots[0].strings[0].fret).toBe(7); // note preserved
 		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(true);
+	});
+
+	it("keeps a bend, which renders and plays now, with its height", () => {
+		const strings = makeStrings({ 0: { fret: 7, technique: "bend-release", bendTarget: 1 } });
+		const raw = makePattern({ measures: [makeMeasure([makeSlot({ strings })])] });
+		const { pattern, warnings } = validateFingerpickPattern(raw);
+		expect(pattern?.measures[0].slots[0].strings[0]).toMatchObject({ technique: "bend-release", bendTarget: 1 });
+		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
 	});
 
 	it("preserves render-supported techniques", () => {

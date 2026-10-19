@@ -310,11 +310,11 @@ describe("applyPickSequence", () => {
 		expect(warnings).toHaveLength(1);
 	});
 
-	it("writes a string the shape leaves out as a dead note and says so", () => {
+	it("writes a string the shape leaves out as an x and says so", () => {
 		const p = pattern([measure("a", [C, undefined, undefined, undefined])]);
 		const { pattern: out, warnings } = applyPickSequence(p, 0, ok("6321"), voicingFor);
 		expect(out.measures[0].slots[0].strings[5].muted).toBe(true);
-		expect(warnings).toEqual(["String 6 is not in the C shape — written as dead notes."]);
+		expect(warnings).toEqual(["String 6 is not in the C shape — written as x."]);
 	});
 
 	it("writes rests as rest slots", () => {

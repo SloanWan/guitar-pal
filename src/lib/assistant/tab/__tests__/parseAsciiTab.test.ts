@@ -125,7 +125,7 @@ describe("parseAsciiTab", () => {
 		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
 	});
 
-	it("reads a column of x on most strings as a slap, and says so", () => {
+	it("reads every x as a slap on its own string, never folding a column into a slot hit", () => {
 		const text = [
 			"e|----x---|--x-----|",
 			"B|----x---|--x-----|",
@@ -136,13 +136,12 @@ describe("parseAsciiTab", () => {
 		].join("\n");
 		const parsed = ok(text);
 		const slapped = slotsOf(parsed, 0).filter((s) => !s.isRest);
-		expect(slapped[1].percussion).toEqual({ kind: "slap" });
-		expect(slapped[1].strings[0]).toMatchObject({ fret: null, muted: true });
-		// Two x's are dead notes, not a slap.
-		expect(slotsOf(parsed, 1).filter((s) => !s.isRest)[1].percussion).toBeUndefined();
-		expect(parsed.warnings.map((w) => w.code)).toEqual(["ASCII_SLAP_GUESSED"]);
+		expect(slapped[1].percussion).toBeUndefined();
+		expect(slapped[1].strings.map((s) => s.muted)).toEqual([true, true, true, true, false, false]);
+		expect(slotsOf(parsed, 1).filter((s) => !s.isRest)[1].strings.map((s) => s.muted)).toEqual([true, true, false, false, false, false]);
+		expect(parsed.warnings).toEqual([]);
 		const { pattern } = validateFingerpickPattern(parsed.draft);
-		expect(pattern?.measures[0].slots.find((s) => s.percussion)?.percussion).toEqual({ kind: "slap" });
+		expect(pattern?.measures[0].slots.some((s) => s.percussion)).toBe(false);
 	});
 
 	it("reads bend heights, releases and pre-bends the way tab writes them, consuming the whole mark", () => {
@@ -305,7 +304,9 @@ describe("parseAsciiTab", () => {
 		const third = slotsOf(parsed, 2).filter((s) => !s.isRest);
 		expect(third.map((s) => linkOf(s.strings[0]))).toEqual([null, "hammer", "tie", null]);
 		expect(third[1].strings[0].effects).toEqual({ trill: {} });
-		expect(third[3].percussion).toEqual({ kind: "slap" });
+		// Four x's come back as four slaps on their strings, not a slot hit.
+		expect(third[3].percussion).toBeUndefined();
+		expect(third[3].strings.map((s) => s.muted)).toEqual([true, true, true, true, false, false]);
 	});
 
 	it("takes the meter it is given", () => {

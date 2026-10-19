@@ -191,7 +191,7 @@ Spaces are optional between tokens. A run needs at least two cells and at least 
 
 **Filling the bar.** An order shorter than a bar that divides it evenly is repeated to fill it — `5 3 2 1` is the arpeggio, not half a bar of it. Anything else is padded with rests where it ends, and the card says so. A hold lengthens the note before it when the longer note is a plain value that stays inside its beat, or covers whole beats from a place its own size divides; across a beat line or a bar line it is written as a tied note.
 
-**One pass per chord.** The order is written once over each chord word, in order: `C G: …` is two bars. A string the chord's shape leaves out is written as a dead note and reported. No chord at all writes open strings and says so.
+**One pass per chord.** The order is written once over each chord word, in order: `C G: …` is two bars. A string the chord's shape leaves out is written as an x (a slap on the string) and reported. No chord at all writes open strings and says so.
 
 ### Chords alone, or a style word
 
@@ -233,7 +233,7 @@ string:654 fret:0-2-2 /16
 
 - The keyword is `string` or `strings`; `fret` or `frets`. The colon is optional.
 - Strings are single digits, run together or separated by spaces, commas or dashes.
-- Frets are a separated list (`8-11-10-8`) or run together, one digit each, with a two-digit fret in parentheses: `5768(11)(12)`. `x` is a dead note. A bare two-digit group up to 24 is one fret (`fret:11`); higher than the neck, it can only have meant two.
+- Frets are a separated list (`8-11-10-8`) or run together, one digit each, with a two-digit fret in parentheses: `5768(11)(12)`. `x` is a slap on the string. A bare two-digit group up to 24 is one fret (`fret:11`); higher than the neck, it can only have meant two.
 - The two lists must be the same length, or the reply says which bar is off and by how much.
 - A bar shorter than the meter is padded with rests; one that runs over is split. Several pairs in one message are several bars, in the order written, so a phrase can be typed bar by bar.
 - A chord word before the lists marks the bar; the frets are still the ones written.
@@ -252,8 +252,8 @@ E|-0-----0-----|
 ```
 
 - A line is tab when it has two dashes together somewhere. The string letter and the opening `|` or `:` are optional. High e on top is the default; `E` on top with `e` at the bottom is read the other way up.
-- `|` or `:` are bar lines. Digits are frets (two digits are one fret). `x` is a dead note.
-- Techniques: `h` hammer-on, `p` pull-off, `/`, `\` or `s` slide, `t` tapping, before the note; `(7)` is a tied note; after the fret, `b` a bend (`7b9` to the pitch of 9, `7b8r` released, `7pb9` pre-bent, `5b¼` a quarter bend), `~` vibrato (`~~` wide), `tr` a trill. A column of `x` on four or more strings and nothing fretted is read as a slap of the strings, and flagged. A `P.M.` or `let ring` line under the system marks the notes above its run. Any other mark is skipped with a warning.
+- `|` or `:` are bar lines. Digits are frets (two digits are one fret). `x` is a slap on the string, sounding with the column's other notes.
+- Techniques: `h` hammer-on, `p` pull-off, `/`, `\` or `s` slide, `t` tapping, before the note; `(7)` is a tied note; after the fret, `b` a bend (`7b9` to the pitch of 9, `7b8r` released, `7pb9` pre-bent, `5b¼` a quarter bend), `~` vibrato (`~~` wide), `tr` a trill. Every `x` is a slap on its own string, read as written. A `P.M.` or `let ring` line under the system marks the notes above its run. Any other mark is skipped with a warning.
 - A bar's width in characters is its length; the distance from one note to the next is how long it lasts. A width that does not divide the bar evenly is rounded to the nearest note value and flagged. Notes past the end of the bar are dropped and flagged.
 - The lines around the tab are read for a name, a tempo and a meter only (`name it lick, 3/4, 90 bpm`); anything else there, a title say, is left alone rather than read as a request.
 

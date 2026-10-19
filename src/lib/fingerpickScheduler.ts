@@ -55,6 +55,11 @@ export interface ScheduleEvent {
 	/** A right-hand hit this event voices (a slap's dead strike on this string). */
 	percussion?: Percussion;
 	/**
+	 * The hand landing on the strings: one a slot that has an x on any string or a
+	 * slap hit, filed under the low E, voiced as noise and never registered as a voice.
+	 */
+	thump?: true;
+	/**
 	 * A tremolo stroke after the first: played a touch softer (`gains.tremoloAltGain`)
 	 * on every second stroke, so the run reads as a hand, not a machine.
 	 */
@@ -300,9 +305,11 @@ export function computeRollOffsets(
  *    sustains, its `duration` lengthened by the tied slot so the decay is the
  *    written length, not the first slot's.
  *  - Pitch is always derived from `fret` when non-null (even for muted strings —
- *    a palm-muted note at fret 5 has the same pitch as an unmuted fret 5; the
- *    `muted` flag only drives preset selection and envelope shaping).
- *    Falls back to open-string MIDI when `fret === null` (open dead note).
+ *    the `muted` flag only drives preset selection and the gain). Falls back
+ *    to open-string MIDI when `fret === null` (an x: a slap on the string).
+ *  - An x is a slap, not a silent dead note: its strike is voiced at the slap
+ *    gain, and a slot with any x (or a slap hit) gets one `thump` event — the
+ *    hand landing — so the hit sounds with the slot's other notes.
  *  - A slot without a `stroke` behaves exactly as before: all its events share the same
  *    `time`, `measureIndex`, `slotIndex`, and carry no `rollGain`. When a slot HAS a
  *    `stroke`, its per-string events are staggered (arpeggiated) per `rollParams`; the
@@ -395,6 +402,7 @@ export function fingerpickPatternToScheduleEvents(
 				}
 
 				const struckHere = new Set<number>();
+				let slapped = false;
 				slot.strings.forEach((sf, stringIndex) => {
 					if (sf.link?.kind === "tie") {
 						const held = sounding[stringIndex];
@@ -404,8 +412,9 @@ export function fingerpickPatternToScheduleEvents(
 					const isPlayed = sf.fret !== null || sf.muted;
 					if (!isPlayed) return;
 					struckHere.add(stringIndex);
+					if (sf.muted) slapped = true;
 
-					// fret takes priority over muted for pitch; muted only shapes the envelope.
+					// fret takes priority over muted for pitch; muted only shapes the strike.
 					// The same formula the reading page labels frets with, so they agree; a
 					// harmonic sounds the partial its node gives, not the fret.
 					const midi = soundingMidi(stringIndex, sf.fret ?? 0, capo) + (sf.effects?.harmonic ? harmonicShift(sf.effects.harmonic, sf.fret ?? 0) : 0);
@@ -515,7 +524,23 @@ export function fingerpickPatternToScheduleEvents(
 							slotIndex,
 							percussion: slot.percussion,
 						});
+						slapped = true;
 					}
+				}
+				// The hand lands once however many strings it slaps: one thump a slot,
+				// under the strikes. A body tap is its own knock and gets none.
+				if (slapped) {
+					events.push({
+						time: currentTime,
+						duration: slotDuration,
+						stringIndex: BODY_TAP_STRING,
+						midi: soundingMidi(BODY_TAP_STRING, 0, capo),
+						muted: true,
+						measureIndex,
+						slotIndex,
+						thump: true,
+						...(slot.percussion && { percussion: slot.percussion }),
+					});
 				}
 			}
 
@@ -968,8 +993,10 @@ export interface NoteGains {
 	technique: number;
 	tapping: number;
 	ghost: number;
-	/** A hit's dead strike. */
+	/** A slap: an x on a string, and a hit's dead strike across its strings. */
 	slap: number;
+	/** The hand landing on the strings under a slap: one thump a slot, quieter than a body tap. */
+	slapThump: number;
 	/** Multiplier under a palm mute. */
 	palmMute: number;
 	/** Multiplier on every second stroke of a tremolo. */
@@ -1089,7 +1116,8 @@ export const AUDIO_KINDS: ReadonlySet<string> = new Set([
 /** The attack gain for an event, from the tables above. */
 export function noteGain(event: ScheduleEvent, gains: NoteGains, legato: LegatoTreatment): number {
 	let volume: number | null = null;
-	if (event.percussion) volume = gains.slap;
+	// An x is a slap on its string, hit or not.
+	if (event.percussion || event.muted) volume = gains.slap;
 	else if (event.effects?.ghost) volume = gains.ghost;
 	else if (event.link && LINK_GAIN[event.link.kind]) volume = LINK_GAIN[event.link.kind]!(gains, legato);
 	else {
@@ -1152,8 +1180,8 @@ export interface FingerpickNoteSchedulerDeps {
 
 /**
  * A sound with no string behind it: a pick scrape (noise swept down through a
- * bandpass over the slot) or a body tap (a low thump with a little wood under
- * it). Registers no voice — nothing can be slid from or stolen here — and
+ * bandpass over the slot), a body tap (a low thump with a little wood under
+ * it) or a slap's thump (the same knock, quieter). Registers no voice — nothing can be slid from or stolen here — and
  * leaves the string's own voice alone.
  */
 export function scheduleNoiseEvent(deps: FingerpickNoteSchedulerDeps, event: ScheduleEvent, when: number): void {
@@ -1167,12 +1195,14 @@ export function scheduleNoiseEvent(deps: FingerpickNoteSchedulerDeps, event: Sch
 	const filter = ctx.createBiquadFilter();
 	const accent = event.percussion?.accent || event.effects?.accent ? gains.accentMultiplier : 1;
 	let stopTime: number;
-	if (event.percussion?.kind === "bodyTap") {
+	if (event.percussion?.kind === "bodyTap" || event.thump) {
+		// A slap's thump is the same knock, quieter, under the strings' strikes.
+		const peak = event.thump ? gains.slapThump : gains.bodyTap;
 		filter.type = "lowpass";
 		filter.frequency.value = BODY_TAP_LOWPASS_HZ;
 		filter.Q.value = 1.5;
 		gainNode.gain.setValueAtTime(0, when);
-		gainNode.gain.linearRampToValueAtTime(gains.bodyTap * accent, when + BODY_TAP_ATTACK_S);
+		gainNode.gain.linearRampToValueAtTime(peak * accent, when + BODY_TAP_ATTACK_S);
 		gainNode.gain.setTargetAtTime(0, when + BODY_TAP_ATTACK_S, BODY_TAP_DECAY_TC);
 		// The wood: a short sine under the thump, on the same envelope.
 		const tone = ctx.createOscillator();
@@ -1224,8 +1254,8 @@ export function scheduleFingerpickNote(
 		slideParams,
 	} = deps;
 
-	// A scrape and a body tap have no string behind them.
-	if (event.effects?.scrape || event.percussion?.kind === "bodyTap") {
+	// A scrape, a body tap and a slap's thump have no string behind them.
+	if (event.effects?.scrape || event.percussion?.kind === "bodyTap" || event.thump) {
 		scheduleNoiseEvent(deps, event, when);
 		return;
 	}

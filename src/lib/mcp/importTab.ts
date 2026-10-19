@@ -154,7 +154,7 @@ export function toImportedTabDraft(
 				seen.add(note.string);
 				const effects = note.effects as NoteEffects | undefined;
 				strings[note.string - 1] = {
-					// A dead note has no fret: the x is the whole of it.
+					// A slap (x) has no fret: the x is the whole of it.
 					fret: note.muted ? null : note.fret,
 					muted: note.muted === true,
 					...(note.link !== undefined ? { link: { kind: note.link } as Link } : {}),

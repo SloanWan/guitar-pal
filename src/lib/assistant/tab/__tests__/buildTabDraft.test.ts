@@ -85,7 +85,7 @@ describe("buildTabDraft", () => {
 		expect(bar.slots[1].strings[5].fret).toBe(15);
 	});
 
-	it("carries a dead note with no fret on it", () => {
+	it("carries an x (a slap) with no fret on it", () => {
 		const bar = measures(
 			buildTabDraft({ slotsPerBar: 8, bars: [{ notes: [note(5, 0, 0, { muted: true })] }], timeSignature: [4, 4] }),
 		)[0];

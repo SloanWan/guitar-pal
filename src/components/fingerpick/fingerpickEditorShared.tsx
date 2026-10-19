@@ -169,11 +169,11 @@ export function cellGlyph(sf: StringFret): string {
 /** Why a technique is greyed out, for the menu's tooltip. */
 export const BLOCK_TITLE: Record<AvailabilityBlock, string> = {
 	"no-note": "Needs a note",
-	muted: "A muted note has no pitch to shape",
+	muted: "An x is a slap: there is no pitch to shape",
 	"open-string": "An open string cannot be bent or shaken",
 	"off-neck": "The bend would run off the neck",
 	"no-previous-note": "No previous note on this string",
-	"previous-muted": "The previous note on this string is muted",
+	"previous-muted": "The previous note on this string is a slap",
 	"wrong-direction": "Not valid for this fret movement",
 	"different-fret": "Not valid for this fret movement",
 };

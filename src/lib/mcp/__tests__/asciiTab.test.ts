@@ -49,7 +49,7 @@ describe("patternToAsciiTab", () => {
 		expect(text.split("\n")[0]).toBe("e|1-2-3---|");
 	});
 
-	it("marks links, ties and dead notes", () => {
+	it("marks links, ties and slaps", () => {
 		const text = patternToAsciiTab(
 			pattern([
 				[

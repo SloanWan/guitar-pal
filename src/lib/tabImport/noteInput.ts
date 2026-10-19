@@ -37,7 +37,7 @@ export const PERCUSSION_INPUT = z
 export const NOTE_MARKS_SHAPE = {
 	link: LINK_INPUT.optional(),
 	effects: EFFECTS_INPUT.optional(),
-	muted: z.boolean().optional().describe("A dead note, printed as x: struck, not sounded."),
+	muted: z.boolean().optional().describe("An x: a slap on this string — a percussive hit that sounds with the slot's other notes, not a silent dead note. The fret is ignored."),
 	palmMute: z.boolean().optional().describe("Under a P.M. bracket; mark every note the bracket spans."),
 	letRing: z.boolean().optional().describe("Under a let-ring bracket; mark every note the bracket spans."),
 };

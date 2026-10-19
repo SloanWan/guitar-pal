@@ -282,7 +282,7 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 		warnings.push({
 			code: "STRING_NOT_IN_SHAPE",
 			path: "measures",
-			message: `String${strings.size === 1 ? "" : "s"} ${list} ${strings.size === 1 ? "is" : "are"} not in the ${label} shape — written as dead notes.`,
+			message: `String${strings.size === 1 ? "" : "s"} ${list} ${strings.size === 1 ? "is" : "are"} not in the ${label} shape — written as x.`,
 		});
 	}
 	for (const label of noShape) {

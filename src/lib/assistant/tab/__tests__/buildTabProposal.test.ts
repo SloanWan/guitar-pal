@@ -165,7 +165,7 @@ describe("buildTabProposal", () => {
 			expect(w?.message).toContain("Cmaj13#11");
 		});
 
-		it("writes a string the shape leaves out as a dead note, and says so", () => {
+		it("writes a string the shape leaves out as an x, and says so", () => {
 			// D is xx0232: strings 6 and 5 are not in the shape.
 			const p = build({ chordWords: [D], order: order("6 3 2 1") });
 			expect(sounded(p.pattern.measures[0])[0]).toBe("6:x");

@@ -112,9 +112,12 @@ function spanDemo(kind: SpanKind): FingerpickPattern {
 }
 
 function percussionDemo(kind: PercussionKind): FingerpickPattern {
+	// A slap is first shown the way tab writes it — an x on the low E under a
+	// sounding note — then as the whole-hand hit on its own.
+	const slapX = kind === "slap" ? { [5]: { fret: null, muted: true } as StringFret, [G]: note(2) } : {};
 	return base(kind, [
 		slot(`${kind}-1`, { [A]: note(0), [G]: note(2) }),
-		slot(`${kind}-2`, {}, { percussion: { kind } }),
+		slot(`${kind}-2`, slapX, { ...(kind !== "slap" && { percussion: { kind } }) }),
 		slot(`${kind}-3`, { [A]: note(0), [G]: note(2) }),
 		slot(`${kind}-4`, {}, { percussion: { kind, accent: true } }),
 	]);
@@ -142,7 +145,7 @@ const NOTES: Partial<Record<string, { en: string; zh: string }>> = {
 	palmMute: { en: "Beats 2 and 3 under P.M.: damped, dull and short.", zh: "第 2、3 拍在 P.M. 下：闷、暗、短。" },
 	letRing: { en: "Beats 2 and 3 ring on into the next note.", zh: "第 2、3 拍延音到下一个音。" },
 	slur: { en: "One slur over all four notes: 2 4 5 4 hammered and pulled under one arc, the inner arcs left out, the inner notes legato.", zh: "一条连音线覆盖四个音：2 4 5 4 的击弦、勾弦在一条弧下，内部不再画弧，内部的音连奏。" },
-	slap: { en: "Beats 2 and 4 are a slap across the strings, the second accented.", zh: "第 2、4 拍拍弦，第二次带重音。" },
+	slap: { en: "Beat 2: an x on the low E is a slap on that string, sounding with the G above it (strike + thump). Beat 4: the whole-hand hit, accented.", zh: "第 2 拍：六弦上的 x 是拍弦，与同一列的 G 弦音一起发声（击弦 + 闷响）。第 4 拍：整手拍弦，带重音。" },
 	thumbSlap: { en: "A thumb slap strikes the bass strings dead.", zh: "拇指拍弦闷击低音弦。" },
 	bodyTap: { en: "A knock on the body: a low thump, drawn as B.", zh: "打板：低沉的一记闷响，画作 B。" },
 };

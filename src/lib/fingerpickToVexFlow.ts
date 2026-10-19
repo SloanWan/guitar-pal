@@ -550,7 +550,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 			const isPlayed = sf.fret !== null || sf.muted;
 			if (!isPlayed) return;
 			posMap.set(stringIdx, positions.length);
-			// A ghost note is written in parentheses, a harmonic in angle brackets, a dead one as x.
+			// A ghost note is written in parentheses, a harmonic in angle brackets, a slap as x.
 			const fret: number | string = sf.muted
 				? "x"
 				: sf.effects?.ghost

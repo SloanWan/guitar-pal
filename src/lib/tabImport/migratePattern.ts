@@ -13,8 +13,8 @@ import { spanIdFor } from "@/lib/fingerpickIndex";
  * `link`, `effects` and `spans`: a palm-mute / let-ring run of consecutive
  * flagged notes is one span, across barlines. A note already written with
  * `link` or `effects` keeps them; its v1 fields are dropped. Slide direction
- * is dropped — the frets say it. A column of `x` stays dead notes: a slap
- * cannot be told from them here. An import draft may still mark `palmMute` /
+ * is dropped — the frets say it. A column of `x` stays x's: each is a slap on
+ * its string already. An import draft may still mark `palmMute` /
  * `letRing` on its notes (a model has no slot ids to anchor a span on); they
  * are folded the same way.
  *

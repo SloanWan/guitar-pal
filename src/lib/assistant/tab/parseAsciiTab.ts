@@ -1,4 +1,4 @@
-import type { EffectKind, Link, NoteEffects, Percussion } from "@/lib/fingerpickTypes";
+import type { EffectKind, Link, NoteEffects } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, MAX_FRET, measureCapacity } from "@/lib/fingerpickEdit";
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
 import { EFFECT_DEFS, LINK_DEFS, isEffectKind, isLinkKind } from "@/lib/techniqueRegistry";
@@ -77,8 +77,6 @@ const NOTE_SUFFIX = /^(pb|b)(?:(¼|1\/4)|(\d{1,2}))?(r(?:\d{1,2})?)?|^~+/;
 /** Characters that are never a note and never a mark to report. */
 const SILENT_CHARS = new Set(["-", "(", ")", "~", "b", "r", ...Object.keys(MARK_BEFORE), ...MARK_AFTER.flatMap((m) => [...m.mark])]);
 
-/** How many dead strings in one column read as a slap of the strings rather than dead notes. */
-const SLAP_STRINGS = 4;
 
 /** A `P.M.` / `let ring` line under a system: its label, then dashes to the run's end. */
 const BRACKET_RUN = /(P\.?\s?M\.?|let\s?ring|L\.?R\.?)(?:\s?-+)?/gi;
@@ -265,7 +263,7 @@ function notesByColumn(
 	warnUnknown: (mark: string) => void,
 	warnSplit: (run: string, frets: readonly number[]) => void,
 	warnBend: (text: string, frets: number) => void,
-): { byColumn: Map<number, GridNote[]>; hits: Map<number, Percussion> } {
+): Map<number, GridNote[]> {
 	const byColumn = new Map<number, GridNote[]>();
 	const add = (col: number, note: GridNote) => {
 		if (!byColumn.has(col)) byColumn.set(col, []);
@@ -314,13 +312,9 @@ function notesByColumn(
 			c += 1;
 		}
 	});
-	// A column of dead notes on most of the strings and nothing fretted is a
-	// slap: the hand hits the strings, written as x's for want of a mark.
-	const hits = new Map<number, Percussion>();
-	for (const [column, notes] of byColumn) {
-		if (notes.length >= SLAP_STRINGS && notes.every((note) => note.muted)) hits.set(column, { kind: "slap" });
-	}
-	return { byColumn, hits };
+	// An x is a slap on its string and stays one: a column of them is read as
+	// written, never folded into a slot hit.
+	return byColumn;
 }
 
 export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): AsciiTabParse {
@@ -344,7 +338,7 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 		for (const bar of barsOf(oriented)) {
 			const width = bar.strings[0].length;
 			if (width === 0) continue;
-			const { byColumn, hits } = notesByColumn(
+			const byColumn = notesByColumn(
 				bar.strings,
 				(mark) => unknownMarks.add(mark),
 				(run, frets) => splitRuns.set(run, frets.join(", ")),
@@ -373,14 +367,7 @@ export function parseAsciiTab(text: string, options: AsciiTabOptions = {}): Asci
 				});
 			}
 
-			if (hits.size > 0) {
-				warnings.push({
-					code: "ASCII_SLAP_GUESSED",
-					path: `measures[${measureIndex}]`,
-					message: `Bar ${measureIndex + 1} has ${hits.size === 1 ? "a column" : `${hits.size} columns`} of x on ${SLAP_STRINGS} or more strings — read as a slap; change it to dead notes if the strings are only muted.`,
-				});
-			}
-			const { slots, overflow } = barSlots(byColumn, width, capacity, hits);
+			const { slots, overflow } = barSlots(byColumn, width, capacity);
 			if (overflow) {
 				warnings.push({
 					code: "ASCII_BAR_OVERFLOW",

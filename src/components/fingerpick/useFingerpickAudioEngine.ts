@@ -18,6 +18,8 @@ import {
 	VOICE_STEAL_FADE_TAU,
 	DEFAULT_ROLL_PARAMS,
 	DEFAULT_SLIDE_PARAMS,
+	DEFAULT_SLAP_PARAMS,
+	type SlapParams,
 	type ScheduleEvent,
 	type MeasureBoundary,
 	type RollParams,
@@ -272,6 +274,9 @@ export function useFingerpickAudioEngine() {
 	// a change takes effect on the next scheduled note (next loop pass / next play).
 	const [slideParams, setSlideParams] = useState<SlideParams>(DEFAULT_SLIDE_PARAMS);
 	const slideParamsRef = useRef<SlideParams>(DEFAULT_SLIDE_PARAMS);
+	// Slap voicing (strike, clack, thud). Read via slapParamsRef inside scheduleNote.
+	const [slapParams, setSlapParams] = useState<SlapParams>(DEFAULT_SLAP_PARAMS);
+	const slapParamsRef = useRef<SlapParams>(DEFAULT_SLAP_PARAMS);
 	// Hammer-on / pull-off gain+filter treatment (A/B). "current" = production behaviour.
 	// Read via legatoTreatmentRef inside scheduleNote; takes effect on the next note.
 	const [legatoTreatment, setLegatoTreatment] = useState<LegatoTreatment>("current");
@@ -362,6 +367,9 @@ export function useFingerpickAudioEngine() {
 		slideParamsRef.current = slideParams;
 	}, [slideParams]);
 	useEffect(() => {
+		slapParamsRef.current = slapParams;
+	}, [slapParams]);
+	useEffect(() => {
 		legatoTreatmentRef.current = legatoTreatment;
 	}, [legatoTreatment]);
 
@@ -440,6 +448,7 @@ export function useFingerpickAudioEngine() {
 				forceLetRing: forceLetRingRef.current,
 				legatoTreatment: legatoTreatmentRef.current,
 				slideParams: slideParamsRef.current,
+				slapParams: slapParamsRef.current,
 				noiseBuffer: noiseBufferFor(ctx),
 				// Read-only voice-steal instrumentation — no-op unless a dev consumer has
 				// registered an observer. Never fired on a slide handoff (no steal occurs).
@@ -1116,6 +1125,16 @@ export function useFingerpickAudioEngine() {
 		setSlideParams(DEFAULT_SLIDE_PARAMS);
 	}
 
+	/** Merge tunable slap parameters; takes effect on the next scheduled note (`/dev/slap-lab`). */
+	function setSlapParamsPartial(partial: Partial<SlapParams>): void {
+		setSlapParams((prev) => ({ ...prev, ...partial }));
+	}
+
+	/** Restore the slap voicing to its production defaults. */
+	function resetSlapParams(): void {
+		setSlapParams(DEFAULT_SLAP_PARAMS);
+	}
+
 	/**
 	 * Set the hammer-on / pull-off treatment (A/B). Read via legatoTreatmentRef inside
 	 * scheduleNote; takes effect on the next scheduled note. Default "current" leaves
@@ -1204,6 +1223,9 @@ export function useFingerpickAudioEngine() {
 		slideParams,
 		setSlideParams: setSlideParamsPartial,
 		resetSlideParams,
+		slapParams,
+		setSlapParams: setSlapParamsPartial,
+		resetSlapParams,
 		legatoTreatment,
 		setLegatoTreatment: handleSetLegatoTreatment,
 		setVoiceStealObserver,

@@ -55,6 +55,13 @@ export interface ScheduleEvent {
 	/** A right-hand hit this event voices (a slap's dead strike on this string). */
 	percussion?: Percussion;
 	/**
+	 * The hand landing on the strings: one a slot that has an x on any string or a
+	 * slap hit, filed under the low E, voiced as noise (`scheduleSlapNoise`) and
+	 * never registered as a voice. `slapStrings` are the strings it lands on.
+	 */
+	slapNoise?: true;
+	slapStrings?: number[];
+	/**
 	 * A tremolo stroke after the first: played a touch softer (`gains.tremoloAltGain`)
 	 * on every second stroke, so the run reads as a hand, not a machine.
 	 */
@@ -303,8 +310,10 @@ export function computeRollOffsets(
  *    the `muted` flag only sets the strike's gain and length). Falls back to
  *    open-string MIDI when `fret === null` (an x: a slap on the string).
  *  - An x is a slap, not a silent dead note: the string's own sample at full
- *    velocity, cut off as the hand lands (`SLAP_STRIKE_S`) — the way TuxGuitar,
- *    alphaTab and MuseScore play a dead note — sounding with the slot's notes.
+ *    velocity, cut off as the hand lands (`SlapParams.strikeS`, the way TuxGuitar,
+ *    alphaTab and MuseScore play a dead note), plus one `slapNoise` event a slot
+ *    — the strings hitting the frets and the body under them, which a MIDI
+ *    engine cannot make — sounding with the slot's other notes.
  *  - A slot without a `stroke` behaves exactly as before: all its events share the same
  *    `time`, `measureIndex`, `slotIndex`, and carry no `rollGain`. When a slot HAS a
  *    `stroke`, its per-string events are staggered (arpeggiated) per `rollParams`; the
@@ -397,6 +406,7 @@ export function fingerpickPatternToScheduleEvents(
 				}
 
 				const struckHere = new Set<number>();
+				const slapped: number[] = [];
 				slot.strings.forEach((sf, stringIndex) => {
 					if (sf.link?.kind === "tie") {
 						const held = sounding[stringIndex];
@@ -406,6 +416,7 @@ export function fingerpickPatternToScheduleEvents(
 					const isPlayed = sf.fret !== null || sf.muted;
 					if (!isPlayed) return;
 					struckHere.add(stringIndex);
+					if (sf.muted) slapped.push(stringIndex);
 
 					// fret takes priority over muted for pitch; muted only shapes the strike.
 					// The same formula the reading page labels frets with, so they agree; a
@@ -517,7 +528,24 @@ export function fingerpickPatternToScheduleEvents(
 							slotIndex,
 							percussion: slot.percussion,
 						});
+						slapped.push(stringIndex);
 					}
+				}
+				// The hand lands once however many strings it slaps: one noise event a
+				// slot, under the strikes. A body tap is its own knock and gets none.
+				if (slapped.length > 0) {
+					events.push({
+						time: currentTime,
+						duration: slotDuration,
+						stringIndex: BODY_TAP_STRING,
+						midi: soundingMidi(BODY_TAP_STRING, 0, capo),
+						muted: true,
+						measureIndex,
+						slotIndex,
+						slapNoise: true,
+						slapStrings: slapped.sort((a, b) => a - b),
+						...(slot.percussion && { percussion: slot.percussion }),
+					});
 				}
 			}
 
@@ -1116,15 +1144,59 @@ export function noteGain(event: ScheduleEvent, gains: NoteGains, legato: LegatoT
 export type NoteDataResolver = (midi: number) => { buffer: AudioBuffer; playbackRate: number } | null;
 
 /**
- * A slap (an x, or a hit's strike on a string) is the string's own sample cut
- * off as the hand lands: the attack is all that sounds. TuxGuitar and alphaTab
- * give a dead note 30 ticks at 960 a quarter (≈ 31 ms whatever the tempo),
- * MuseScore 50 ms, and alphaTab's whole-hand dead slap is a 64th on every open
- * string at forte — none of them reach for a muted-guitar preset.
+ * How a slap sounds (an x on a string, or a hit's strike), in three layers:
+ *
+ *  - the strike: the string's own sample cut off as the hand lands, the attack
+ *    being all that sounds. TuxGuitar and alphaTab give a dead note 30 ticks at
+ *    960 a quarter (≈ 31 ms whatever the tempo), MuseScore 50 ms, and alphaTab's
+ *    whole-hand dead slap is a 64th on every open string at forte — none of
+ *    them reach for a muted-guitar preset;
+ *  - the clack: the strings hitting the frets, a bandpassed noise burst a few
+ *    milliseconds long, once a slot;
+ *  - the thud: the hand on the body, lowpassed noise with a sine dropping under
+ *    it, once a slot and mostly on the bass strings.
+ *
+ * A MIDI engine stops at the first layer; the other two are what a listener
+ * hears as a slap. Tuned by ear on `/dev/slap-lab`.
  */
-export const SLAP_STRIKE_S = 0.04;
-/** The strike's gain decay: gone well inside the window. */
-export const SLAP_DECAY_TC_S = 0.012;
+export interface SlapParams {
+	/** The strike's length (s) and gain decay τ (s). */
+	strikeS: number;
+	strikeTc: number;
+	/** The clack: bandpass centre (Hz), its Q, gain decay τ (s) and gain. */
+	clackHz: number;
+	clackQ: number;
+	clackTc: number;
+	clackGain: number;
+	/** The thud: lowpass cutoff (Hz), gain decay τ (s), gain, and the sine's start and end (Hz). */
+	thudHz: number;
+	thudTc: number;
+	thudGain: number;
+	thudToneFromHz: number;
+	thudToneToHz: number;
+	/** How much of the thud a slap on the treble strings alone keeps. */
+	trebleThud: number;
+}
+
+export const DEFAULT_SLAP_PARAMS: SlapParams = {
+	strikeS: 0.06,
+	strikeTc: 0.02,
+	clackHz: 2500,
+	clackQ: 1.2,
+	clackTc: 0.008,
+	clackGain: 0.5,
+	thudHz: 200,
+	thudTc: 0.045,
+	thudGain: 0.55,
+	thudToneFromHz: 110,
+	thudToneToHz: 60,
+	trebleThud: 0.35,
+};
+
+/** Attack ramp for the thud (s), so it does not click. */
+const SLAP_THUD_ATTACK_S = 0.002;
+/** Strings whose slap carries the whole thud (the bass side). */
+const SLAP_BASS_FROM_STRING = 3;
 
 /** A live per-string voice, with the extra logical state a slide handoff needs. */
 export interface SlideActiveVoice extends VoiceHandle {
@@ -1157,8 +1229,10 @@ export interface FingerpickNoteSchedulerDeps {
 	slideParams: SlideParams;
 	/** Read-only voice-steal observer; invoked only when a still-ringing voice is stolen. */
 	onVoiceSteal?: (outgoing: SlideActiveVoice, incoming: ScheduleEvent) => void;
-	/** The noise a scrape and a body tap are made of (`noiseBufferFor`); without it they are silent. */
+	/** The noise a scrape, a body tap and a slap's clack and thud are made of (`noiseBufferFor`); without it they are silent. */
 	noiseBuffer?: AudioBuffer | null;
+	/** How a slap is voiced; `DEFAULT_SLAP_PARAMS` when absent. */
+	slapParams?: SlapParams;
 }
 
 /**
@@ -1213,6 +1287,68 @@ export function scheduleNoiseEvent(deps: FingerpickNoteSchedulerDeps, event: Sch
 }
 
 /**
+ * The hand landing on the strings: the clack of the strings on the frets and the
+ * thud of the body, one of each a slot (`slapNoise` events). Registers no voice;
+ * the strings' own strikes are separate events through `scheduleFingerpickNote`.
+ */
+export function scheduleSlapNoise(deps: FingerpickNoteSchedulerDeps, event: ScheduleEvent, when: number): void {
+	const { ctx, target, allSources, gains } = deps;
+	const buffer = deps.noiseBuffer;
+	if (!buffer) return;
+	const p = deps.slapParams ?? DEFAULT_SLAP_PARAMS;
+	const accent = event.percussion?.accent ? gains.accentMultiplier : 1;
+	const bass = (event.slapStrings ?? []).some((i) => i >= SLAP_BASS_FROM_STRING);
+	const track = (source: AudioBufferSourceNode) => {
+		allSources.add(source);
+		source.onended = () => {
+			allSources.delete(source);
+		};
+	};
+
+	// The clack: strings on the frets.
+	const clack = ctx.createBufferSource();
+	clack.buffer = buffer;
+	clack.loop = true;
+	const clackFilter = ctx.createBiquadFilter();
+	clackFilter.type = "bandpass";
+	clackFilter.frequency.value = p.clackHz;
+	clackFilter.Q.value = p.clackQ;
+	const clackGain = ctx.createGain();
+	clackGain.gain.setValueAtTime(p.clackGain * accent, when);
+	clackGain.gain.setTargetAtTime(0, when, p.clackTc);
+	clack.connect(clackFilter).connect(clackGain).connect(target);
+	clack.start(when);
+	clack.stop(when + p.clackTc * 6);
+	track(clack);
+
+	// The thud: the hand on the body, with a sine dropping under it.
+	const thud = ctx.createBufferSource();
+	thud.buffer = buffer;
+	thud.loop = true;
+	const thudFilter = ctx.createBiquadFilter();
+	thudFilter.type = "lowpass";
+	thudFilter.frequency.value = p.thudHz;
+	thudFilter.Q.value = 1;
+	const thudGain = ctx.createGain();
+	const peak = p.thudGain * (bass ? 1 : p.trebleThud) * accent;
+	thudGain.gain.setValueAtTime(0, when);
+	thudGain.gain.linearRampToValueAtTime(peak, when + SLAP_THUD_ATTACK_S);
+	thudGain.gain.setTargetAtTime(0, when + SLAP_THUD_ATTACK_S, p.thudTc);
+	const tone = ctx.createOscillator();
+	tone.type = "sine";
+	tone.frequency.setValueAtTime(p.thudToneFromHz, when);
+	tone.frequency.exponentialRampToValueAtTime(p.thudToneToHz, when + p.thudTc * 2);
+	const thudStop = when + SLAP_THUD_ATTACK_S + p.thudTc * 5;
+	thud.connect(thudFilter).connect(thudGain).connect(target);
+	tone.connect(thudGain);
+	thud.start(when);
+	thud.stop(thudStop);
+	tone.start(when);
+	tone.stop(thudStop);
+	track(thud);
+}
+
+/**
  * Schedule one note. A slide with a live origin voice bends that voice in place (no new
  * source); every other event — including a slide that falls back — creates a source
  * exactly as the pre-slide engine did.
@@ -1235,7 +1371,11 @@ export function scheduleFingerpickNote(
 		slideParams,
 	} = deps;
 
-	// A scrape and a body tap have no string behind them.
+	// A scrape, a body tap and a slap's landing have no string behind them.
+	if (event.slapNoise) {
+		scheduleSlapNoise(deps, event, when);
+		return;
+	}
 	if (event.effects?.scrape || event.percussion?.kind === "bodyTap") {
 		scheduleNoiseEvent(deps, event, when);
 		return;
@@ -1310,14 +1450,15 @@ export function scheduleFingerpickNote(
 	const volume = noteGain(event, gains, legatoTreatment);
 
 	// Staccato shortens the sounding duration to 20% of the slot duration. A slap
-	// is only its strike: the hand is on the string by SLAP_STRIKE_S.
+	// is only its strike: the hand is on the string by `strikeS`.
 	const noteDuration = event.effects?.staccato ? event.duration * 0.2 : event.duration;
+	const slap = deps.slapParams ?? DEFAULT_SLAP_PARAMS;
 
 	const source = ctx.createBufferSource();
 	source.buffer = noteData.buffer;
 	let harmonicBody: AudioBufferSourceNode | null = null;
 
-	const effectiveDuration = event.muted ? SLAP_STRIKE_S : noteDuration;
+	const effectiveDuration = event.muted ? slap.strikeS : noteDuration;
 	source.playbackRate.value = noteData.playbackRate;
 
 	// ── Slides into and out of the note: pitch motion on its own voice ────────
@@ -1351,7 +1492,7 @@ export function scheduleFingerpickNote(
 		: Math.max(effectiveDuration * env.decayTcRatio, env.minDecayTc);
 	if (event.palmMute) decayTc = Math.min(decayTc, env.palmMuteDecayTc);
 	if (event.effects?.harmonic) decayTc = Math.min(decayTc, env.harmonicDecayTc);
-	if (event.muted) decayTc = SLAP_DECAY_TC_S;
+	if (event.muted) decayTc = slap.strikeTc;
 
 	// ── Pitch expression: bend / vibrato ─────────────────────────────────────
 	// One detune curve for the note's whole audible life, set once on its own

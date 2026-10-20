@@ -133,10 +133,12 @@ function validateStringFret(
 		}
 	}
 	if (typeof obj.effects === "object" && obj.effects !== null && !Array.isArray(obj.effects)) {
-		const known: Record<string, unknown> = {};
-		for (const [kind, value] of Object.entries(obj.effects as Record<string, unknown>)) {
-			if (value === undefined || value === null) continue;
-			if (!isEffectKind(kind)) {
+		// Built with Object.fromEntries after the registry filter rather than by
+		// writing `known[kind]` from the input's own keys (CodeQL property injection).
+		const known: Record<string, unknown> = Object.fromEntries(
+			Object.entries(obj.effects as Record<string, unknown>).filter(([kind, value]) => {
+				if (value === undefined || value === null) return false;
+				if (isEffectKind(kind)) return true;
 				warnings.push({
 					code: "UNKNOWN_EFFECT",
 					path: `${path}.effects.${kind}`,
@@ -144,10 +146,9 @@ function validateStringFret(
 					original: kind,
 					repairedTo: null,
 				});
-				continue;
-			}
-			known[kind] = value;
-		}
+				return false;
+			}),
+		);
 		const parsed = effectsSchema.safeParse(known);
 		if (parsed.success) {
 			const effects = parsed.data as NoteEffects;
@@ -164,11 +165,9 @@ function validateStringFret(
 			if (Object.keys(effects).length > 0) result.effects = effects;
 		} else {
 			// Keep the kinds that parse on their own; drop and name the rest.
-			const kept: Record<string, unknown> = {};
-			for (const [kind, value] of Object.entries(known)) {
-				const one = effectsSchema.safeParse({ [kind]: value });
-				if (one.success) kept[kind] = value;
-				else {
+			const kept = Object.fromEntries(
+				Object.entries(known).filter(([kind, value]) => {
+					if (effectsSchema.safeParse(Object.fromEntries([[kind, value]])).success) return true;
 					warnings.push({
 						code: "INVALID_EFFECT",
 						path: `${path}.effects.${kind}`,
@@ -176,8 +175,9 @@ function validateStringFret(
 						original: value,
 						repairedTo: null,
 					});
-				}
-			}
+					return false;
+				}),
+			);
 			if (Object.keys(kept).length > 0) result.effects = kept as NoteEffects;
 		}
 	}

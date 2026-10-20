@@ -1,5 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import type { FingerpickPattern, Measure } from "./fingerpickTypes";
+import type { FingerpickPattern, Measure, Span } from "./fingerpickTypes";
 import { normalizeLoadedPattern } from "./fingerpickEdit";
 import { patternCapo } from "./fingerpickChords";
 import { sortPatternsByNewest } from "./strumBars";
@@ -21,6 +21,8 @@ type FingerpickPatternRow = {
 	measures: Measure[];
 	/** Null for rows written before the column existed, and for no capo. */
 	capo: number | null;
+	/** Palm-mute / let-ring runs; null for rows written before the column existed, and for none. */
+	spans: Span[] | null;
 	created_at: string;
 };
 
@@ -33,6 +35,7 @@ function rowToPattern(row: FingerpickPatternRow): FingerpickPattern {
 		bpm: row.bpm,
 		timeSignature: row.time_signature,
 		measures: row.measures,
+		...(row.spans && row.spans.length > 0 ? { spans: row.spans } : {}),
 		...(row.capo ? { capo: row.capo } : {}),
 		createdAt: row.created_at,
 	});
@@ -47,6 +50,7 @@ function patternToRow(user: User, pattern: FingerpickPattern) {
 		bpm: pattern.bpm,
 		time_signature: pattern.timeSignature,
 		measures: pattern.measures,
+		spans: pattern.spans && pattern.spans.length > 0 ? pattern.spans : null,
 		capo: patternCapo(pattern) || null,
 	};
 }

@@ -6,10 +6,10 @@ import {
 	makeEmptySlot,
 	measureCapacity,
 	setFret,
-	setTied,
 	slotDurationUnits,
 	toggleMuted,
 } from "./fingerpickEdit";
+import { setLink } from "./fingerpickTechniqueEdit";
 import { chordFretHints, chordRootString, chordSymbolLabel, effectiveChords } from "./fingerpickChords";
 import { isCompound } from "./strumMeter";
 import type { ChordRef } from "./strumPatterns";
@@ -262,7 +262,7 @@ export interface PickSequenceResult {
 	pattern: FingerpickPattern;
 	/**
 	 * What could not be written as asked, one line each: strings the chord
-	 * shape leaves out (written as dead notes so they are seen and fixed), and
+	 * shape leaves out (written as x so they are seen and fixed), and
 	 * a measure with no chord in effect (open strings written).
 	 */
 	warnings: string[];
@@ -274,8 +274,8 @@ export interface PickSequenceResult {
  *
  * The measure's chord marks stay where they are in time, so a chord change
  * mid-measure still frets the beats after it from the new shape. A string the
- * shape leaves out becomes a dead note rather than vanishing: in the editor a
- * dead note is played, so the player sees it and changes it. With no chord in
+ * shape leaves out becomes an x rather than vanishing: in the editor an x is
+ * played (as a slap), so the player sees it and changes it. With no chord in
  * effect every plucked string is written open (fret 0).
  *
  * `voicingFor` is injected so the resolution boundary stays testable without
@@ -340,14 +340,14 @@ export function applyPickSequence(
 				next = setFret(next, position, hint);
 				if (!ref && !cell.tied) openWritten = true;
 			}
-			if (cell.tied) next = setTied(next, position, true);
+			if (cell.tied) next = setLink(next, position, { kind: "tie" });
 		}
 	});
 
 	for (const [label, strings] of leftOut) {
 		const list = [...strings].sort((a, b) => a - b).join(", ");
 		warnings.push(
-			`String${strings.size === 1 ? "" : "s"} ${list} ${strings.size === 1 ? "is" : "are"} not in the ${label} shape — written as dead notes.`,
+			`String${strings.size === 1 ? "" : "s"} ${list} ${strings.size === 1 ? "is" : "are"} not in the ${label} shape — written as x.`,
 		);
 	}
 	for (const label of noShape) {

@@ -1,6 +1,7 @@
-import type { Technique } from "@/lib/fingerpickTypes";
+import type { EffectKind, Link, NoteEffects } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, MAX_FRET, measureCapacity } from "@/lib/fingerpickEdit";
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
+import { EFFECT_DEFS, LINK_DEFS, isEffectKind, isLinkKind } from "@/lib/techniqueRegistry";
 import { barSlots, type DraftSlot, type GridNote } from "@/lib/assistant/tab/draftSlots";
 
 /**
@@ -42,15 +43,26 @@ export type AsciiTabParse =
  */
 const TAB_LINE = /^\s*(?:([eEBGDAa])\s*)?[|:]?\s*(\S*--\S*)\s*$/;
 
-/** The mark before a note that says how it is reached, where the tab can draw it. */
-const TECHNIQUE_BEFORE: Record<string, NonNullable<Technique>> = {
-	h: "hammer-on",
-	p: "pull-off",
-	"/": "slide-up",
-	"\\": "slide-down",
-	s: "slide-up",
-	t: "tapping",
-};
+/**
+ * The mark before a note, as the registry writes it: a link (`h7`, `p5`,
+ * `/7`) or an effect done as the note is struck (`t12`, a tap). `\\` and `s`
+ * are the other ways tab writes a slide; a tie is `(7)`, read where the
+ * digits are.
+ */
+const MARK_BEFORE: Record<string, { link?: Link; effects?: NoteEffects }> = {};
+for (const def of LINK_DEFS) {
+	if (def.ascii?.before && def.kind !== "tie" && isLinkKind(def.kind)) MARK_BEFORE[def.ascii.before] = { link: { kind: def.kind } as Link };
+}
+for (const def of EFFECT_DEFS) {
+	if (def.ascii?.before && isEffectKind(def.kind)) MARK_BEFORE[def.ascii.before] = { effects: { [def.kind]: true } as NoteEffects };
+}
+MARK_BEFORE["\\"] = { link: { kind: "slide" } };
+MARK_BEFORE["s"] = { link: { kind: "slide" } };
+
+/** Marks after the fret that the registry names (`7tr`); a bend and the tildes have their own reading below. */
+const MARK_AFTER: { mark: string; kind: EffectKind; params: NoteEffects[EffectKind] }[] = EFFECT_DEFS.filter(
+	(def) => def.ascii?.after && def.kind !== "vibrato" && isEffectKind(def.kind),
+).map((def) => ({ mark: def.ascii!.after!, kind: def.kind as EffectKind, params: def.params.parse({}) as NoteEffects[EffectKind] }));
 
 /**
  * What follows a fret and says what is done to the note once struck, the way
@@ -61,6 +73,10 @@ const TECHNIQUE_BEFORE: Record<string, NonNullable<Technique>> = {
  * as a second note.
  */
 const NOTE_SUFFIX = /^(pb|b)(?:(¼|1\/4)|(\d{1,2}))?(r(?:\d{1,2})?)?|^~+/;
+
+/** Characters that are never a note and never a mark to report. */
+const SILENT_CHARS = new Set(["-", "(", ")", "~", "b", "r", ...Object.keys(MARK_BEFORE), ...MARK_AFTER.flatMap((m) => [...m.mark])]);
+
 
 /** A `P.M.` / `let ring` line under a system: its label, then dashes to the run's end. */
 const BRACKET_RUN = /(P\.?\s?M\.?|let\s?ring|L\.?R\.?)(?:\s?-+)?/gi;
@@ -211,16 +227,19 @@ export function splitFretRun(run: string): FretRunPiece[] {
 	return pieces;
 }
 
-/** What a note's suffix mark means, with the bend height it names. */
+/** What a note's suffix mark means: the effect it writes, with a bend's height. */
 function readSuffix(
 	text: string,
 	fret: number,
 	warnBend: (text: string, frets: number) => void,
-): { length: number; technique: NonNullable<Technique>; bendTarget?: number } | null {
+): { length: number; effects: NoteEffects } | null {
+	for (const { mark, kind, params } of MARK_AFTER) {
+		if (text.startsWith(mark)) return { length: mark.length, effects: { [kind]: params } as NoteEffects };
+	}
 	const m = NOTE_SUFFIX.exec(text);
 	if (!m) return null;
 	if (m[0].startsWith("~")) {
-		return { length: m[0].length, technique: m[0].length === 2 ? "vibrato-wide" : "vibrato" };
+		return { length: m[0].length, effects: { vibrato: m[0].length === 2 ? { wide: true } : {} } };
 	}
 	const pre = m[1] === "pb";
 	const release = m[4] !== undefined;
@@ -232,14 +251,13 @@ function readSuffix(
 		else if (diff > 2) warnBend(m[0], diff);
 		// Anything else — the target written as the fret itself, or below it — reads as a full bend.
 	}
-	let technique: NonNullable<Technique>;
-	if (pre) technique = release ? "pre-bend-release" : "pre-bend";
-	else if (release) technique = "bend-release";
-	else technique = semitones === 0.5 ? "bend-quarter" : semitones === 1 ? "bend-half" : "bend-full";
-	return { length: m[0].length, technique, bendTarget: semitones };
+	const bend: NonNullable<NoteEffects["bend"]> = { semitones };
+	if (pre) bend.pre = true;
+	if (release) bend.release = true;
+	return { length: m[0].length, effects: { bend } };
 }
 
-/** The notes of one bar by the column they start in. */
+/** The notes of one bar by the column they start in, and the columns that read as a slap. */
 function notesByColumn(
 	bar: string[],
 	warnUnknown: (mark: string) => void,
@@ -265,29 +283,37 @@ function notesByColumn(
 				const last = pieces[pieces.length - 1];
 				const suffix = readSuffix(line.slice(end), last.fret, warnBend);
 				// A mark belongs to the note it touches: the one the run opens
-				// with, and the one it closes with.
+				// with, and the one it closes with. `(7)` is a tie: the note held
+				// on from the previous slot.
 				pieces.forEach((piece, i) => {
-					const opening = i === 0 && before ? TECHNIQUE_BEFORE[before] : undefined;
-					const closing = i === pieces.length - 1 && suffix ? suffix : undefined;
-					add(c + piece.offset, {
-						stringIndex,
-						fret: piece.fret,
-						muted: false,
-						technique: opening ?? closing?.technique ?? null,
-						...(!opening && closing?.bendTarget !== undefined ? { bendTarget: closing.bendTarget } : {}),
-					});
+					const note: GridNote = { stringIndex, fret: piece.fret, muted: false };
+					// A tied note starts where its bracket opens: `(5)` is in the
+					// column of the `(`, level with the notes written beside it.
+					let column = c + piece.offset;
+					if (i === 0 && before === "(") {
+						note.link = { kind: "tie" };
+						column -= 1;
+					} else if (i === 0 && before && MARK_BEFORE[before]) {
+						const mark = MARK_BEFORE[before];
+						if (mark.link) note.link = mark.link;
+						if (mark.effects) note.effects = { ...mark.effects };
+					}
+					if (i === pieces.length - 1 && suffix) note.effects = { ...note.effects, ...suffix.effects };
+					add(column, note);
 				});
 				c = end + (suffix?.length ?? 0);
 				continue;
 			}
 			if (ch === "x" || ch === "X") {
-				add(c, { stringIndex, fret: null, muted: true, technique: null });
-			} else if (ch !== "-" && ch !== "(" && ch !== ")" && ch !== "~" && ch !== "b" && ch !== "r" && !(ch in TECHNIQUE_BEFORE)) {
+				add(c, { stringIndex, fret: null, muted: true });
+			} else if (!SILENT_CHARS.has(ch)) {
 				warnUnknown(ch);
 			}
 			c += 1;
 		}
 	});
+	// An x is a slap on its string and stays one: a column of them is read as
+	// written, never folded into a slot hit.
 	return byColumn;
 }
 

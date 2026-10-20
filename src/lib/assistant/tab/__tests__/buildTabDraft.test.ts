@@ -85,7 +85,7 @@ describe("buildTabDraft", () => {
 		expect(bar.slots[1].strings[5].fret).toBe(15);
 	});
 
-	it("carries a dead note with no fret on it", () => {
+	it("carries an x (a slap) with no fret on it", () => {
 		const bar = measures(
 			buildTabDraft({ slotsPerBar: 8, bars: [{ notes: [note(5, 0, 0, { muted: true })] }], timeSignature: [4, 4] }),
 		)[0];
@@ -142,47 +142,51 @@ describe("buildTabDraft", () => {
 		);
 	});
 
-	it("refuses a technique it cannot draw, and takes the ones it can", () => {
-		refuses({ slotsPerBar: 8, bars: [{ notes: [note(1, 5, 0, { technique: "whammy-dive" })] }], timeSignature: [4, 4] }, /not a technique/);
+	it("refuses a link or an effect it cannot draw, and takes the ones it can", () => {
+		refuses({ slotsPerBar: 8, bars: [{ notes: [note(1, 5, 0, { link: "glide" })] }], timeSignature: [4, 4] }, /not a link/);
+		refuses({ slotsPerBar: 8, bars: [{ notes: [note(1, 5, 0, { effects: { flutter: true } })] }], timeSignature: [4, 4] }, /"flutter" is not an effect/);
 		const bar = measures(
 			buildTabDraft({
 				slotsPerBar: 8,
-				bars: [{ notes: [note(3, 5, 0), note(3, 7, 1, { technique: "hammer-on" })] }],
+				bars: [{ notes: [note(3, 5, 0), note(3, 7, 1, { link: "hammer" })] }],
 				timeSignature: [4, 4],
 			}),
 		)[0];
-		expect(bar.slots[1].strings[2]).toMatchObject({ fret: 7, technique: "hammer-on" });
+		expect(bar.slots[1].strings[2]).toMatchObject({ fret: 7, link: { kind: "hammer" } });
 	});
 
-	it("takes bends with their height, vibrato, and the bracket flags", () => {
-		const bar = measures(
-			buildTabDraft({
-				slotsPerBar: 8,
-				bars: [
-					{
-						notes: [
-							note(3, 7, 0, { technique: "bend-full" }),
-							note(3, 7, 2, { technique: "bend-release", bendTarget: 1 }),
-							note(3, 7, 4, { technique: "vibrato-wide", letRing: true }),
-							note(5, 0, 6, { palmMute: true }),
-						],
-					},
-				],
-				timeSignature: [4, 4],
-			}),
-		)[0];
-		expect(bar.slots[0].strings[2]).toMatchObject({ fret: 7, technique: "bend-full" });
-		expect(bar.slots[1].strings[2]).toMatchObject({ fret: 7, technique: "bend-release", bendTarget: 1 });
-		expect(bar.slots[2].strings[2]).toMatchObject({ fret: 7, technique: "vibrato-wide", letRing: true });
+	it("takes bends with their parameters, vibrato, the bracket flags and a hit", () => {
+		const result = buildTabDraft({
+			slotsPerBar: 8,
+			bars: [
+				{
+					notes: [
+						note(3, 7, 0, { effects: { bend: { semitones: 2 } } }),
+						note(3, 7, 2, { effects: { bend: { semitones: 1, release: true }, accent: true } }),
+						note(3, 7, 4, { effects: { vibrato: { wide: true } }, letRing: true }),
+						note(5, 0, 6, { palmMute: true }),
+					],
+					hits: [{ slot: 6, kind: "slap" }],
+				},
+			],
+			timeSignature: [4, 4],
+		});
+		const bar = measures(result)[0];
+		expect(bar.slots[0].strings[2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 2 } } });
+		expect(bar.slots[1].strings[2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 1, release: true }, accent: true } });
+		expect(bar.slots[2].strings[2]).toMatchObject({ fret: 7, effects: { vibrato: { wide: true } }, letRing: true });
 		expect(bar.slots[3].strings[4]).toMatchObject({ fret: 0, palmMute: true });
-		expect("bendTarget" in bar.slots[0].strings[2]).toBe(false);
+		expect((bar.slots[3] as { percussion?: unknown }).percussion).toEqual({ kind: "slap" });
+		expect("link" in bar.slots[0].strings[2]).toBe(false);
 	});
 
-	it("refuses a bend height the editor does not offer", () => {
+	it("refuses a bend height the app does not offer, and a hit it does not know", () => {
 		refuses(
-			{ slotsPerBar: 8, bars: [{ notes: [note(3, 7, 0, { technique: "bend-release", bendTarget: 3 })] }], timeSignature: [4, 4] },
-			/bendTarget of 3/,
+			{ slotsPerBar: 8, bars: [{ notes: [note(3, 7, 0, { effects: { bend: { semitones: 4 } } })] }], timeSignature: [4, 4] },
+			/bend\.semitones/,
 		);
+		refuses({ slotsPerBar: 8, bars: [{ notes: [], hits: [{ slot: 0, kind: "clap" }] }], timeSignature: [4, 4] }, /not a hit/);
+		refuses({ slotsPerBar: 8, bars: [{ notes: [], hits: [{ slot: 8, kind: "slap" }] }], timeSignature: [4, 4] }, /hit on slot 8/);
 	});
 
 	it("refuses a pattern with no bars", () => {

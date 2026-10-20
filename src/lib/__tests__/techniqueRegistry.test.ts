@@ -1,0 +1,87 @@
+import { describe, it, expect } from "vitest";
+
+import {
+	EFFECT_KINDS,
+	EFFECT_STACK_ORDER,
+	LINK_KINDS,
+	PERCUSSION_KINDS,
+	SPAN_KINDS,
+	TECHNIQUES,
+	effectsSchema,
+	linkSchema,
+	percussionSchema,
+	spanSchema,
+	supportOf,
+	techniqueDef,
+	type NoteContext,
+} from "@/lib/techniqueRegistry";
+import { AUDIO_KINDS } from "@/lib/fingerpickScheduler";
+import { RENDER_KINDS } from "@/lib/fingerpickToVexFlow";
+
+describe("technique registry", () => {
+	it("has unique kinds, each in one category", () => {
+		const kinds = TECHNIQUES.map((t) => t.kind);
+		expect(new Set(kinds).size).toBe(kinds.length);
+		expect(LINK_KINDS).toEqual(["tie", "hammer", "pull", "slide"]);
+		expect(EFFECT_KINDS).toContain("bend");
+		expect(SPAN_KINDS).toEqual(["palmMute", "letRing", "slur"]);
+		expect(PERCUSSION_KINDS).toEqual(["slap", "thumbSlap", "bodyTap"]);
+	});
+
+	it("stacks effects in a stable order with bend first", () => {
+		expect(EFFECT_STACK_ORDER[0]).toBe("bend");
+		expect(new Set(EFFECT_STACK_ORDER).size).toBe(EFFECT_KINDS.length);
+	});
+
+
+	it("flags `render` exactly for the kinds the converter draws", () => {
+		for (const def of TECHNIQUES) {
+			expect(def.render, def.kind).toBe(RENDER_KINDS.has(def.kind));
+		}
+		for (const kind of RENDER_KINDS) expect(techniqueDef(kind), kind).toBeDefined();
+	});
+
+	it("flags `audio` exactly for the kinds the scheduler voices", () => {
+		for (const def of TECHNIQUES) {
+			expect(def.audio, def.kind).toBe(AUDIO_KINDS.has(def.kind));
+		}
+		for (const kind of AUDIO_KINDS) expect(techniqueDef(kind), kind).toBeDefined();
+	});
+
+	it("validates parameters through the registry schemas", () => {
+		expect(linkSchema.safeParse({ kind: "slide", picked: true }).success).toBe(true);
+		expect(linkSchema.safeParse({ kind: "slide", picked: "yes" }).success).toBe(false);
+		expect(linkSchema.safeParse({ kind: "glide" }).success).toBe(false);
+		expect(effectsSchema.safeParse({ bend: { semitones: 1.5, hold: true }, vibrato: {} }).success).toBe(true);
+		expect(effectsSchema.safeParse({ bend: { semitones: 3.25 } }).success).toBe(false);
+		expect(effectsSchema.safeParse({ tap: true }).success).toBe(true);
+		expect(effectsSchema.safeParse({ tap: false }).success).toBe(false);
+		expect(percussionSchema.safeParse({ kind: "slap", effects: { accent: true } }).success).toBe(true);
+		expect(percussionSchema.safeParse({ kind: "clap" }).success).toBe(false);
+		expect(spanSchema.safeParse({ id: "s", kind: "palmMute", from: "a", to: "b", strings: [0, 5] }).success).toBe(true);
+		expect(spanSchema.safeParse({ id: "s", kind: "palmMute", from: "a", to: "b", strings: [6] }).success).toBe(false);
+	});
+
+	it("availability rules read the note and its predecessor", () => {
+		const ctx = (fret: number | null, prev: NoteContext["prev"], muted = false): NoteContext => ({ fret, muted, prev, maxFret: 24 });
+		const avail = (kind: string, c: NoteContext) => techniqueDef(kind)!.available!(c);
+		expect(avail("hammer", ctx(7, { fret: 5, muted: false }))).toBeNull();
+		expect(avail("hammer", ctx(5, { fret: 7, muted: false }))).toBe("wrong-direction");
+		expect(avail("pull", ctx(5, { fret: 7, muted: false }))).toBeNull();
+		expect(avail("slide", ctx(5, { fret: 5, muted: false }))).toBe("different-fret");
+		expect(avail("tie", ctx(5, { fret: 5, muted: false }))).toBeNull();
+		expect(avail("tie", ctx(5, { fret: 7, muted: false }))).toBe("different-fret");
+		expect(avail("hammer", ctx(7, null))).toBe("no-previous-note");
+		expect(avail("hammer", ctx(7, { fret: 5, muted: true }))).toBe("previous-muted");
+		expect(avail("bend", ctx(0, null))).toBe("open-string");
+		expect(avail("bend", ctx(null, null))).toBe("no-note");
+		expect(avail("bend", ctx(null, null, true))).toBe("muted");
+		expect(avail("accent", ctx(0, null))).toBeNull();
+		expect(avail("vibrato", ctx(7, null))).toBeNull();
+	});
+
+	it("knows nothing about kinds it does not have", () => {
+		expect(techniqueDef("flutter")).toBeUndefined();
+		expect(supportOf("flutter")).toEqual({ render: false, audio: false });
+	});
+});

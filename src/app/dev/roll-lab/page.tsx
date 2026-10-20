@@ -39,7 +39,7 @@ function techniqueConnectorCount(measure: Measure): number {
 	return measure.slots.reduce(
 		(count, slot) =>
 			count +
-			slot.strings.filter((sf) => sf.technique === "hammer-on" || sf.technique === "pull-off")
+			slot.strings.filter((sf) => sf.link?.kind === "hammer" || sf.link?.kind === "pull")
 				.length,
 		0,
 	);

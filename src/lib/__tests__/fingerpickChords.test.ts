@@ -209,7 +209,7 @@ describe("fillColumnFromChord", () => {
 		]);
 	});
 
-	it("leaves cells that already hold a fret or a dead note alone", () => {
+	it("leaves cells that already hold a fret or an x alone", () => {
 		let p = pattern([measure("a", [undefined])]);
 		p = setFret(p, { ...target, stringIndex: 1 }, 5);
 		p = toggleMuted(p, { ...target, stringIndex: 2 });
@@ -250,7 +250,7 @@ describe("pattern capo", () => {
 
 describe("clearLeftOutStrings", () => {
 	// C (x32010) leaves out the low E: fingerpick index 5.
-	it("clears notes and dead notes on the shape's left-out strings, under that chord only", () => {
+	it("clears notes and x's on the shape's left-out strings, under that chord only", () => {
 		let p = pattern([measure("a", [C, undefined, Am, undefined])]);
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
 		p = toggleMuted(p, { measureIndex: 0, slotIndex: 1, stringIndex: 5 });
@@ -335,7 +335,7 @@ describe("offShapeStrings", () => {
 		expect(offShapeStrings(p.measures[0].slots[0], hints)).toEqual([1, 5]);
 	});
 
-	it("ignores dead notes and silent strings, and reports nothing without a shape", () => {
+	it("ignores x's and silent strings, and reports nothing without a shape", () => {
 		let p = pattern([measure("a", [C])]);
 		p = toggleMuted(p, { measureIndex: 0, slotIndex: 0, stringIndex: 1 });
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 2 }, 7);

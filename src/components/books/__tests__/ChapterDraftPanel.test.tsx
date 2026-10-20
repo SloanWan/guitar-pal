@@ -108,7 +108,7 @@ globalThis.ResizeObserver = class {
 	disconnect() {}
 };
 
-const OPEN = { fret: null, technique: null, tied: false, muted: false } as const;
+const OPEN = { fret: null, muted: false } as const;
 const slot = (id: string, fret: number) => ({
 	id,
 	duration: "quarter" as const,

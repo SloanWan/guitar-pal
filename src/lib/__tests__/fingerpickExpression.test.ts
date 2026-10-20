@@ -10,7 +10,10 @@ import {
 	vibratoCurve,
 	seededRandom,
 	composeExpression,
-	expressionForTechnique,
+	expressionForEffects,
+	whammyParams,
+	whammyCurve,
+	whammyTimeline,
 	bendTargetToCents,
 	DEFAULT_BEND_PARAMS,
 	DEFAULT_VIBRATO_PARAMS,
@@ -398,43 +401,50 @@ describe("bendTargetToCents", () => {
 	});
 });
 
-describe("expressionForTechnique", () => {
-	it("named bends carry their height and ignore bendTarget", () => {
-		expect(expressionForTechnique("bend-quarter", 2)?.bend?.targetCents).toBe(50);
-		expect(expressionForTechnique("bend-half")?.bend?.targetCents).toBe(100);
-		expect(expressionForTechnique("bend-full", 0.5)?.bend?.targetCents).toBe(200);
-		expect(expressionForTechnique("bend-full")?.bend?.release).toBe(false);
-		expect(expressionForTechnique("bend-full")?.bend?.preBend).toBe(false);
-		expect(expressionForTechnique("bend-full")?.vibrato).toBeUndefined();
+describe("expressionForEffects", () => {
+	it("is null without a bend or a vibrato", () => {
+		expect(expressionForEffects(undefined)).toBeNull();
+		expect(expressionForEffects({})).toBeNull();
+		expect(expressionForEffects({ effects: { accent: true }, tap: true })).toBeNull();
 	});
 
-	it("release and pre-bend variants read bendTarget", () => {
-		const rel = expressionForTechnique("bend-release", 1)?.bend;
-		expect(rel).toMatchObject({ targetCents: 100, preBend: false, release: true });
-		const pre = expressionForTechnique("pre-bend", 0.5)?.bend;
-		expect(pre).toMatchObject({ targetCents: 50, preBend: true, release: false });
-		const preRel = expressionForTechnique("pre-bend-release")?.bend;
-		expect(preRel).toMatchObject({ targetCents: 200, preBend: true, release: true });
+	it("reads a bend's height and shape from its parameters", () => {
+		expect(expressionForEffects({ bend: { semitones: 0.5 } })?.bend).toMatchObject({ targetCents: 50, preBend: false, release: false });
+		expect(expressionForEffects({ bend: { semitones: 1.5, pre: true, release: true } })?.bend).toMatchObject({ targetCents: 150, preBend: true, release: true });
+		expect(expressionForEffects({ bend: { semitones: 2 } })?.vibrato).toBeUndefined();
 	});
 
-	it("vibrato techniques map to the vibrato defaults", () => {
-		expect(expressionForTechnique("vibrato")).toEqual({ vibrato: DEFAULT_VIBRATO_PARAMS });
-		expect(expressionForTechnique("vibrato-wide")).toEqual({ vibrato: WIDE_VIBRATO_PARAMS });
+	it("reads a vibrato's width, and composes it with a bend", () => {
+		expect(expressionForEffects({ vibrato: {} })).toEqual({ vibrato: DEFAULT_VIBRATO_PARAMS });
+		expect(expressionForEffects({ vibrato: { wide: true } })?.vibrato).toBe(WIDE_VIBRATO_PARAMS);
+		const both = expressionForEffects({ bend: { semitones: 2 }, vibrato: {} });
+		expect(both?.bend?.targetCents).toBe(200);
+		expect(both?.vibrato).toBe(DEFAULT_VIBRATO_PARAMS);
 	});
 
-	it("other techniques have no expression", () => {
-		for (const t of [null, "hammer-on", "slide-up", "vibrato-bar", "trill", "tapping"] as const) {
-			expect(expressionForTechnique(t)).toBeNull();
-		}
+});
+
+describe("whammy", () => {
+	it("defaults to a whole tone, as the tab presets have it, and reads the bar's depth and release", () => {
+		expect(whammyParams({ kind: "dive" })).toEqual({ kind: "dive", semitones: 2, release: false });
+		expect(whammyParams({ kind: "pull", semitones: 1, release: true })).toEqual({ kind: "pull", semitones: 1, release: true });
 	});
 
-	it("keeps the caller's tuned parameters when handed as defaults", () => {
-		const bend = { ...DEFAULT_BEND_PARAMS, riseMs: 90, riseShape: "linear" as const };
-		const spec = expressionForTechnique("bend-half", undefined, {
-			bend,
-			vibrato: DEFAULT_VIBRATO_PARAMS,
-			wideVibrato: WIDE_VIBRATO_PARAMS,
-		});
-		expect(spec?.bend).toMatchObject({ targetCents: 100, riseMs: 90, riseShape: "linear" });
+	it("dives over three quarters of the note and holds; released, it is back by the end", () => {
+		const dive = whammyCurve(whammyParams({ kind: "dive" }), 1);
+		expect(dive[0]).toBe(0);
+		expect(dive[Math.round(dive.length * 0.375)]).toBeCloseTo(-100, 0);
+		expect(dive[Math.round(dive.length * 0.75)]).toBeCloseTo(-200, 0);
+		expect(dive[dive.length - 1]).toBe(-200);
+		const dip = whammyCurve(whammyParams({ kind: "pull", release: true }), 2);
+		expect(dip[Math.round(dip.length * 0.5)]).toBeCloseTo(200, 0);
+		expect(dip[dip.length - 1]).toBe(0);
+		expect(whammyTimeline(whammyParams({ kind: "dive", release: true }), 2)).toMatchObject({ peakS: 1, releaseStartS: 1, releaseEndS: 2 });
+	});
+
+	it("sums with a finger bend on the same note", () => {
+		const curve = composeExpression({ bend: { ...DEFAULT_BEND_PARAMS, targetCents: 200, overshootCents: 0 }, whammy: whammyParams({ kind: "dive" }) }, 1);
+		expect(curve.values[curve.values.length - 1]).toBe(200 - 200);
+		expect(expressionForEffects({ whammy: { kind: "dive" } })?.whammy).toEqual({ kind: "dive", semitones: 2, release: false });
 	});
 });

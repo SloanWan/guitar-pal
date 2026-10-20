@@ -3,13 +3,16 @@ import type {
 	Duration,
 	FingerpickPattern,
 	Measure,
+	Span,
 	StringFret,
 	Stroke,
-	Technique,
 } from "./fingerpickTypes";
+import { FINGERPICK_SCHEMA_VERSION } from "./fingerpickTypes";
 import { rescaleBpmForMeter } from "./strumBars";
 import { isCompound, SUPPORTED_METERS, type Meter } from "./strumMeter";
 import { normalizeCapo } from "./strumProgressions";
+import { indexPattern, spanIdFor } from "./fingerpickIndex";
+import { migrateLoadedPattern } from "./tabImport/migratePattern";
 
 // ── Cell / target identity ───────────────────────────────────────────────────
 
@@ -182,7 +185,7 @@ export function defaultFillDuration(timeSignature: Meter): Duration {
 // ── Factories ────────────────────────────────────────────────────────────────
 
 export function makeEmptyStringFret(): StringFret {
-	return { fret: null, technique: null, tied: false, muted: false };
+	return { fret: null, muted: false };
 }
 
 function makeStrings(): BeatSlot["strings"] {
@@ -217,6 +220,7 @@ export function makeDefaultPattern(): FingerpickPattern {
 		id: crypto.randomUUID(),
 		name: "",
 		description: "",
+		schemaVersion: FINGERPICK_SCHEMA_VERSION,
 		bpm: 100,
 		timeSignature: [4, 4],
 		measures: [makeEmptyMeasure()],
@@ -244,7 +248,7 @@ function cloneSlotWithoutChord(slot: BeatSlot): BeatSlot {
 
 // ── StringFret-level edits ───────────────────────────────────────────────────
 
-function updateStringFret(
+export function updateStringFret(
 	pattern: FingerpickPattern,
 	measureIndex: number,
 	slotIndex: number,
@@ -300,46 +304,8 @@ export function setInactive(pattern: FingerpickPattern, cell: Cell): FingerpickP
 // Toggle the muted ("x") state on a cell. Muting clears any fret/technique.
 export function toggleMuted(pattern: FingerpickPattern, cell: Cell): FingerpickPattern {
 	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) =>
-		sf.muted
-			? makeEmptyStringFret()
-			: { fret: null, technique: null, tied: false, muted: true },
+		sf.muted ? makeEmptyStringFret() : { fret: null, muted: true },
 	);
-}
-
-// A copy without the bend height: it only means something under a bend technique.
-function withoutBendTarget(sf: StringFret): StringFret {
-	if (sf.bendTarget === undefined) return sf;
-	const copy = { ...sf };
-	delete copy.bendTarget;
-	return copy;
-}
-
-export function setTechnique(
-	pattern: FingerpickPattern,
-	cell: Cell,
-	technique: Technique,
-): FingerpickPattern {
-	// Technique and tied are mutually exclusive on a string+slot: setting a
-	// technique clears any tie. A bend height only travels with a bend.
-	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) => ({
-		...(isBendTechnique(technique) ? sf : withoutBendTarget(sf)),
-		technique,
-		tied: technique !== null ? false : sf.tied,
-	}));
-}
-
-// Toggle the tied flag on a cell. Tied and technique are mutually exclusive, so
-// setting tied clears the technique. Clearing tied leaves the technique alone.
-export function setTied(
-	pattern: FingerpickPattern,
-	cell: Cell,
-	tied: boolean,
-): FingerpickPattern {
-	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) => ({
-		...(tied ? withoutBendTarget(sf) : sf),
-		tied,
-		technique: tied ? null : sf.technique,
-	}));
 }
 
 // The StringFret occupying the same string in the slot immediately before `cell`
@@ -362,164 +328,6 @@ export function previousSlotFret(pattern: FingerpickPattern, cell: Cell): String
 export function hasPreviousNoteOnString(pattern: FingerpickPattern, cell: Cell): boolean {
 	const sf = previousSlotFret(pattern, cell);
 	return !!sf && sf.fret !== null && !sf.muted;
-}
-
-// Which connecting markers are musically valid for the note in `cell`, given the
-// note it connects from (same string, previous slot). A technique/tie needs a
-// sounding note on both ends; the fret relationship then dictates the direction:
-// ascending (hammer-on / slide-up), descending (pull-off / slide-down), or same
-// pitch (tie). Anything else is disabled so the UI can only offer what makes
-// sense — e.g. prev fret 1 → current fret 5 allows only hammer-on and slide-up.
-export interface TechniqueAvailability {
-	"hammer-on": boolean;
-	"pull-off": boolean;
-	"slide-up": boolean;
-	"slide-down": boolean;
-	tied: boolean;
-}
-
-export function availableTechniques(
-	pattern: FingerpickPattern,
-	cell: Cell,
-): TechniqueAvailability {
-	const none: TechniqueAvailability = {
-		"hammer-on": false,
-		"pull-off": false,
-		"slide-up": false,
-		"slide-down": false,
-		tied: false,
-	};
-	const prev = previousSlotFret(pattern, cell);
-	const curr =
-		pattern.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[
-			cell.stringIndex
-		] ?? null;
-	if (!prev || !curr) return none;
-	if (prev.fret === null || curr.fret === null || prev.muted || curr.muted) {
-		return none;
-	}
-	const ascending = curr.fret > prev.fret;
-	const descending = curr.fret < prev.fret;
-	return {
-		"hammer-on": ascending,
-		"pull-off": descending,
-		"slide-up": ascending,
-		"slide-down": descending,
-		tied: curr.fret === prev.fret,
-	};
-}
-
-// ── Techniques on the note itself: bends and vibrato ─────────────────────────
-// Unlike a hammer-on or slide, a bend or vibrato connects to nothing: it is
-// done on the note's own string after the pick. What it needs is a fretted
-// finger — an open string cannot be bent or shaken — and, for a bend, room on
-// the neck to reach the target.
-
-export const NOTE_TECHNIQUES = [
-	"bend-quarter",
-	"bend-half",
-	"bend-full",
-	"bend-release",
-	"pre-bend",
-	"pre-bend-release",
-	"vibrato",
-	"vibrato-wide",
-] as const;
-export type NoteTechnique = (typeof NOTE_TECHNIQUES)[number];
-
-const BEND_TECHNIQUES: ReadonlySet<Technique> = new Set<Technique>([
-	"bend-quarter",
-	"bend-half",
-	"bend-full",
-	"bend-release",
-	"pre-bend",
-	"pre-bend-release",
-]);
-
-export function isBendTechnique(technique: Technique): boolean {
-	return BEND_TECHNIQUES.has(technique);
-}
-
-/** Bend heights the editor offers, in semitones: ¼, ½ and a full tone. */
-export const BEND_HEIGHTS: readonly number[] = [0.5, 1, 2];
-export const DEFAULT_BEND_HEIGHT = 2;
-
-/**
- * The `bendTarget` a technique writes. The named heights carry their own; the
- * release and pre-bend variants take the chosen one; a vibrato has none.
- */
-export function bendHeightFor(technique: NoteTechnique, chosen: number = DEFAULT_BEND_HEIGHT): number | undefined {
-	switch (technique) {
-		case "bend-quarter":
-			return 0.5;
-		case "bend-half":
-			return 1;
-		case "bend-full":
-			return 2;
-		case "bend-release":
-		case "pre-bend":
-		case "pre-bend-release":
-			return chosen;
-		default:
-			return undefined;
-	}
-}
-
-/** Why a note cannot take a bend / vibrato, for the menu's disabled hint. */
-export type NoteTechniqueBlock = "no-note" | "muted" | "open-string" | "off-neck";
-
-export interface NoteTechniqueAvailability {
-	vibrato: boolean;
-	bend: boolean;
-	blocked: NoteTechniqueBlock | null;
-}
-
-export function availableNoteTechniques(
-	pattern: FingerpickPattern,
-	cell: Cell,
-	bendSemitones: number = DEFAULT_BEND_HEIGHT,
-): NoteTechniqueAvailability {
-	const sf =
-		pattern.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[cell.stringIndex] ?? null;
-	if (!sf || sf.muted) return { vibrato: false, bend: false, blocked: sf?.muted ? "muted" : "no-note" };
-	if (sf.fret === null) return { vibrato: false, bend: false, blocked: "no-note" };
-	if (sf.fret === 0) return { vibrato: false, bend: false, blocked: "open-string" };
-	const bend = sf.fret + Math.ceil(bendSemitones) <= MAX_FRET;
-	return { vibrato: true, bend, blocked: bend ? null : "off-neck" };
-}
-
-/** Write a bend or vibrato on the note, with its height; clears any tie. */
-export function setNoteTechnique(
-	pattern: FingerpickPattern,
-	cell: Cell,
-	technique: NoteTechnique,
-	bendSemitones: number = DEFAULT_BEND_HEIGHT,
-): FingerpickPattern {
-	const height = bendHeightFor(technique, bendSemitones);
-	return updateStringFret(pattern, cell.measureIndex, cell.slotIndex, cell.stringIndex, (sf) => ({
-		...withoutBendTarget(sf),
-		technique,
-		tied: false,
-		...(height !== undefined && { bendTarget: height }),
-	}));
-}
-
-// Keyboard cycles: B steps a bend up through its heights and into a release,
-// V toggles vibrato and wide vibrato. Anything else starts the cycle.
-const BEND_CYCLE: readonly NoteTechnique[] = ["bend-quarter", "bend-half", "bend-full", "bend-release"];
-const VIBRATO_CYCLE: readonly NoteTechnique[] = ["vibrato", "vibrato-wide"];
-
-function nextInCycle(current: Technique, cycle: readonly NoteTechnique[]): NoteTechnique {
-	const i = cycle.indexOf(current as NoteTechnique);
-	return cycle[(i + 1) % cycle.length];
-}
-
-export function nextBendTechnique(current: Technique): NoteTechnique {
-	return nextInCycle(current, BEND_CYCLE);
-}
-
-export function nextVibratoTechnique(current: Technique): NoteTechnique {
-	return nextInCycle(current, VIBRATO_CYCLE);
 }
 
 // ── Keyboard navigation ──────────────────────────────────────────────────────
@@ -875,7 +683,10 @@ export function setStroke(
 						void _dropped;
 						return rest;
 					}
-					return { ...slot, stroke };
+					// A sweep and a hit cannot share a slot: the sweep replaces the hit.
+					const { percussion: _hit, ...rest } = slot;
+					void _hit;
+					return { ...rest, stroke };
 				}),
 			};
 		}),
@@ -893,7 +704,7 @@ export function insertSlots(
 ): FingerpickPattern {
 	const grouped = groupTargetsByMeasure(targets);
 	const fill = defaultFillDuration(pattern.timeSignature);
-	return {
+	return reconcileSpans({
 		...pattern,
 		measures: pattern.measures.map((measure, mi) => {
 			const selected = grouped.get(mi);
@@ -912,7 +723,7 @@ export function insertSlots(
 			});
 			return { ...measure, slots: newSlots };
 		}),
-	};
+	}, pattern);
 }
 
 // Duplicate each targeted slot, placing the copy immediately after the original.
@@ -923,7 +734,7 @@ export function duplicateSlots(
 	targets: SlotTarget[],
 ): FingerpickPattern {
 	const grouped = groupTargetsByMeasure(targets);
-	return {
+	return reconcileSpans({
 		...pattern,
 		measures: pattern.measures.map((measure, mi) => {
 			const selected = grouped.get(mi);
@@ -948,7 +759,7 @@ export function duplicateSlots(
 			}
 			return { ...measure, slots: newSlots };
 		}),
-	};
+	}, pattern);
 }
 
 // Delete every targeted slot; a target in a triplet group deletes the whole
@@ -959,7 +770,7 @@ export function deleteSlots(
 	targets: SlotTarget[],
 ): FingerpickPattern {
 	const grouped = groupTargetsByMeasure(targets);
-	return {
+	return reconcileSpans({
 		...pattern,
 		measures: pattern.measures.map((measure, mi) => {
 			const picked = grouped.get(mi);
@@ -989,7 +800,7 @@ export function deleteSlots(
 			const fresh = makeEmptySlot(defaultFillDuration(pattern.timeSignature));
 			return { ...measure, slots: [carried !== undefined ? { ...fresh, chord: carried } : fresh] };
 		}),
-	};
+	}, pattern);
 }
 
 // Append a slot of the meter's default value (all strings inactive) to a measure.
@@ -1017,7 +828,49 @@ export function deleteMeasure(
 	measureIndex: number,
 ): FingerpickPattern {
 	if (pattern.measures.length <= 1) return pattern;
-	return { ...pattern, measures: pattern.measures.filter((_, mi) => mi !== measureIndex) };
+	return reconcileSpans(
+		{ ...pattern, measures: pattern.measures.filter((_, mi) => mi !== measureIndex) },
+		pattern,
+	);
+}
+
+/**
+ * A pattern with `measures` swapped in after a measure-level edit (split,
+ * merge, reset, remap, clone, swap): the spans are re-anchored on the slots
+ * that survived. The one way components apply a `Measure[]` result.
+ */
+export function withMeasures(pattern: FingerpickPattern, measures: Measure[]): FingerpickPattern {
+	if (measures === pattern.measures) return pattern;
+	return reconcileSpans({ ...pattern, measures }, pattern);
+}
+
+/**
+ * `cloneMeasure` on the pattern: the copy is appended, and the spans that
+ * lie wholly inside the source measure are copied with it, anchored on the
+ * copy's slots. A span that runs into the next measure is not copied — the
+ * copy sits at the end, where that run does not continue.
+ */
+export function cloneMeasureInPattern(
+	pattern: FingerpickPattern,
+	measureIndex: number,
+	newId?: string,
+): FingerpickPattern {
+	const measures = cloneMeasure(pattern.measures, measureIndex, newId);
+	if (measures === pattern.measures) return pattern;
+	const source = pattern.measures[measureIndex];
+	const copy = measures[measures.length - 1];
+	const idMap = new Map(source.slots.map((slot, i) => [slot.id, copy.slots[i].id]));
+	const index = indexPattern(pattern);
+	const copied: Span[] = [];
+	for (const span of pattern.spans ?? []) {
+		const members = index.spanMembers.get(span.id) ?? [];
+		if (members.length === 0 || !members.every((id) => idMap.has(id))) continue;
+		const from = idMap.get(span.from)!;
+		copied.push({ ...span, id: spanIdFor(span.kind, from), from, to: idMap.get(span.to)! });
+	}
+	const next: FingerpickPattern = { ...pattern, measures };
+	if (copied.length > 0) next.spans = [...(pattern.spans ?? []), ...copied];
+	return reconcileSpans(next, pattern);
 }
 
 // Deep-clone the measure at `measureIndex` and insert the copy immediately after
@@ -1096,10 +949,24 @@ export function shiftMeasureStrings(
 			return { ...slot, strings };
 		}),
 	};
-	return {
+	const next: FingerpickPattern = {
 		...pattern,
 		measures: pattern.measures.map((m, i) => (i === measureIndex ? shifted : m)),
 	};
+	// A span naming strings moves with them when it lies inside this measure;
+	// one that runs on into another measure keeps its strings (it covers notes
+	// that did not move).
+	if (pattern.spans && pattern.spans.some((span) => span.strings)) {
+		const index = indexPattern(pattern);
+		const inMeasure = new Set(measure.slots.map((slot) => slot.id));
+		next.spans = pattern.spans.flatMap((span) => {
+			const members = index.spanMembers.get(span.id) ?? [];
+			if (!span.strings || members.length === 0 || !members.every((id) => inMeasure.has(id))) return [span];
+			const strings = span.strings.map((si) => si + direction).filter((si) => si >= 0 && si <= 5);
+			return strings.length > 0 ? [{ ...span, strings }] : [];
+		});
+	}
+	return reconcileSpans(next, pattern);
 }
 
 // ── Duration arithmetic (capacity model) ─────────────────────────────────────
@@ -1176,9 +1043,10 @@ export function splitSlot(
 		if (i === 0) {
 			// First sub-slot inherits the original string data, the roll stroke AND the
 			// rest flag (splitting a rest keeps the head silent), consistent with the
-			// "first sub-slot inherits" rule; the rest are empty notes.
+			// "first sub-slot inherits" rule; the rest are empty notes. It keeps the
+			// slot's id too, so a span anchored on the note stays anchored.
 			subSlots.push({
-				id: crypto.randomUUID(),
+				id: slot.id,
 				duration: targetDuration,
 				strings: cloneStrings(slot.strings),
 				...(slot.stroke !== undefined ? { stroke: slot.stroke } : {}),
@@ -1261,7 +1129,8 @@ export function mergeSlots(
 	// after the merge takes over from there anyway.
 	const mergedChord = measure.slots.slice(slotIndex, end).find((s) => s.chord)?.chord;
 	const merged: BeatSlot = {
-		id: crypto.randomUUID(),
+		// The first slot's id, so a span anchored on the note it keeps stays anchored.
+		id: first.id,
 		duration: targetDuration,
 		strings: cloneStrings(first.strings),
 		...(first.stroke !== undefined ? { stroke: first.stroke } : {}),
@@ -1473,20 +1342,23 @@ export function changeTimeSignature(
 		return fitted;
 	});
 	const bpm = Math.round(rescaleBpmForMeter(pattern.bpm, pattern.timeSignature, timeSignature));
-	const fitted: FingerpickPattern = { ...pattern, timeSignature, bpm, measures: fittedMeasures };
-	const cleared: FingerpickPattern = {
-		...fitted,
-		measures: fittedMeasures.map((m, i) =>
-			affectedMeasures.includes(i) ? { ...m, slots: makeEmptyMeasure(timeSignature).slots } : m,
-		),
-	};
+	const fitted = reconcileSpans({ ...pattern, timeSignature, bpm, measures: fittedMeasures }, pattern);
+	const cleared = reconcileSpans(
+		{
+			...fitted,
+			measures: fittedMeasures.map((m, i) =>
+				affectedMeasures.includes(i) ? { ...m, slots: makeEmptyMeasure(timeSignature).slots } : m,
+			),
+		},
+		pattern,
+	);
 	const oldCapacity = measureCapacity(pattern.timeSignature);
 	const newCapacity = measureCapacity(timeSignature);
 	const parts = oldCapacity / newCapacity;
 	const splitMeasuresOrNull =
 		Number.isInteger(parts) && parts >= 2 ? splitMeasures(pattern.measures, timeSignature, parts) : null;
 	const split = splitMeasuresOrNull
-		? { ...pattern, timeSignature, bpm, measures: splitMeasuresOrNull }
+		? reconcileSpans({ ...pattern, timeSignature, bpm, measures: splitMeasuresOrNull }, pattern)
 		: null;
 	return { fitted, cleared, split, affectedMeasures };
 }
@@ -1499,7 +1371,46 @@ export function changeTimeSignature(
 // load — quarter duration + isRest, string data cleared — matching the old fixed
 // quarter weight so the measure total is unchanged. Runs on every load path
 // (Supabase rows, localStorage, tab import); a no-op for already-migrated patterns.
-export function normalizeLoadedPattern(pattern: FingerpickPattern): FingerpickPattern {
+// ── Spans after a structural edit ────────────────────────────────────────────
+
+/**
+ * Spans with their anchors repaired after slots moved, split, merged or went
+ * away. With `previous` (the pattern before the edit) a span's members are
+ * known, so an anchor on a vanished slot shrinks to the nearest surviving
+ * member; `idMap` says which new slots stand for an old one (a split's pieces,
+ * a merge's result), so the span keeps covering them. A span with no member
+ * left, or whose anchors ended up reversed, is dropped. Pure.
+ */
+export function reconcileSpans(
+	pattern: FingerpickPattern,
+	previous?: FingerpickPattern,
+	idMap?: ReadonlyMap<string, readonly string[]>,
+): FingerpickPattern {
+	if (!pattern.spans || pattern.spans.length === 0) return pattern;
+	const index = indexPattern(pattern);
+	const before = previous ? indexPattern(previous) : null;
+	const stands = (id: string): string[] => {
+		const mapped = idMap?.get(id);
+		return mapped && mapped.length > 0 ? [...mapped] : [id];
+	};
+	const spans = pattern.spans.flatMap((span) => {
+		// The slots the span covered, in order, as they stand now.
+		const oldMembers = before?.spanMembers.get(span.id);
+		const candidates = (oldMembers && oldMembers.length > 0 ? oldMembers : [span.from, span.to]).flatMap(stands);
+		const alive = candidates.filter((id) => index.slotPos.has(id));
+		if (alive.length === 0) return [];
+		alive.sort((a, b) => index.slotOrder.indexOf(a) - index.slotOrder.indexOf(b));
+		const from = alive[0];
+		const to = alive[alive.length - 1];
+		if (from === span.from && to === span.to) return [span];
+		return [{ ...span, from, to }];
+	});
+	return { ...pattern, spans };
+}
+
+export function normalizeLoadedPattern(loaded: FingerpickPattern): FingerpickPattern {
+	// Data written before the technique model v2 is brought up to it first.
+	let pattern = migrateLoadedPattern(loaded);
 	// A capo is kept only when it is a real fret: out-of-range or junk values are
 	// folded to "no capo" so a stored pattern never carries a capo the UI can't show.
 	const capo = normalizeCapo(pattern.capo);
@@ -1521,7 +1432,9 @@ export function normalizeLoadedPattern(pattern: FingerpickPattern): FingerpickPa
 		});
 		return measureTouched ? { ...measure, slots } : measure;
 	});
-	return touched ? { ...pattern, measures } : pattern;
+	const base = touched ? { ...pattern, measures } : pattern;
+	// Spans anchored on live slots only.
+	return reconcileSpans(base);
 }
 
 // Re-home the chord marks of `oldSlots` onto `newSlots` (a uniform rebuild of the

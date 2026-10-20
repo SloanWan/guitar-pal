@@ -1,56 +1,92 @@
 import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
-import type { FingerpickPattern, StringFret } from "@/lib/fingerpickTypes";
+import type { EffectKind, FingerpickPattern, LinkKind, NoteEffects, SpanKind } from "@/lib/fingerpickTypes";
+import { type Cell } from "@/lib/fingerpickEdit";
+import { slotOf, spanCoversSlot, techniqueBlock } from "@/lib/fingerpickTechniqueEdit";
 import {
-	availableNoteTechniques,
-	availableTechniques,
-	bendHeightFor,
-	hasPreviousNoteOnString,
-	BEND_HEIGHTS,
-	DEFAULT_BEND_HEIGHT,
-	type Cell,
-	type NoteTechnique,
-	type NoteTechniqueBlock,
-	type TechniqueAvailability,
-} from "@/lib/fingerpickEdit";
-import { useIsomorphicLayoutEffect } from "./fingerpickEditorShared";
+	BEND_HEIGHTS_SEMITONES,
+	EFFECT_DEFS,
+	LINK_DEFS,
+	SPAN_DEFS,
+	type TechniqueDef,
+} from "@/lib/techniqueRegistry";
+import { BEND_HEIGHT_LABEL, BLOCK_TITLE, useIsomorphicLayoutEffect } from "./fingerpickEditorShared";
 
-// Only the direction-bearing techniques are offered in the context menu; each
-// value must be a key of TechniqueAvailability so per-option enablement type-checks.
-const TECHNIQUE_OPTIONS: {
-	label: string;
-	value: Exclude<keyof TechniqueAvailability, "tied">;
-}[] = [
-	{ label: "Hammer-on (H)", value: "hammer-on" },
-	{ label: "Pull-off (P)", value: "pull-off" },
-	{ label: "Slide up (↑)", value: "slide-up" },
-	{ label: "Slide down (↓)", value: "slide-down" },
-];
+// The menu is the registry's: every link, every effect the app draws or
+// plays, and the spans, in that order. Bend and vibrato have parameters the
+// player sets here; the other effects with a parameter get a default and a
+// chip to change it.
+const LINKS = LINK_DEFS;
+const EFFECTS = EFFECT_DEFS.filter((t) => (t.render || t.audio) && t.kind !== "bend" && t.kind !== "vibrato");
+const SPANS = SPAN_DEFS.filter((t) => t.render || t.audio);
 
-// Techniques done on the note itself. The release and pre-bend variants take
-// the height picked in the menu; the named bends carry their own.
-const NOTE_TECHNIQUE_OPTIONS: { label: string; value: NoteTechnique; usesHeight: boolean }[] = [
-	{ label: "Bend ¼", value: "bend-quarter", usesHeight: false },
-	{ label: "Bend ½", value: "bend-half", usesHeight: false },
-	{ label: "Bend full", value: "bend-full", usesHeight: false },
-	{ label: "Bend & release", value: "bend-release", usesHeight: true },
-	{ label: "Pre-bend", value: "pre-bend", usesHeight: true },
-	{ label: "Pre-bend & release", value: "pre-bend-release", usesHeight: true },
-	{ label: "Vibrato (V)", value: "vibrato", usesHeight: false },
-	{ label: "Wide vibrato", value: "vibrato-wide", usesHeight: false },
-];
-
-const HEIGHT_LABEL: Record<number, string> = { 0.5: "¼", 1: "½", 2: "Full" };
-
-const BLOCK_TITLE: Record<NoteTechniqueBlock, string> = {
-	"no-note": "Needs a fretted note",
-	muted: "A muted note has no pitch to shape",
-	"open-string": "An open string cannot be bent or shaken",
-	"off-neck": "The bend would run off the neck",
+/**
+ * What an effect writes when switched on from the menu — every kind, so a
+ * kind added to the registry cannot be offered with nothing to write. Bend
+ * and vibrato have their own rows.
+ */
+const DEFAULT_PARAMS: { [K in EffectKind]: NonNullable<NoteEffects[K]> } = {
+	bend: { semitones: 2 },
+	vibrato: {},
+	harmonic: { type: "natural" },
+	tap: true,
+	trill: {},
+	tremolo: { speed: "16th" },
+	pick: { direction: "down" },
+	accent: true,
+	staccato: true,
+	ghost: true,
+	slideIn: { from: "below" },
+	slideOut: { to: "below" },
+	whammy: { kind: "dive" },
+	scrape: true,
 };
 
+/** The choices an effect's parameter offers, as chips beside its row. */
+const VARIANTS: { [K in EffectKind]?: { label: string; title: string; params: NoteEffects[K] }[] } = {
+	harmonic: [
+		{ label: "N.H.", title: "Natural harmonic: touch the string over the fret", params: { type: "natural" } },
+		{ label: "A.H.", title: "Artificial harmonic: fret the note, touch an octave up", params: { type: "artificial" } },
+		{ label: "P.H.", title: "Pinch harmonic: the thumb catches the string as it is picked", params: { type: "pinch" } },
+	],
+	tremolo: [
+		{ label: "8", title: "Eighth-note strokes", params: { speed: "8th" } },
+		{ label: "16", title: "Sixteenth-note strokes", params: { speed: "16th" } },
+		{ label: "32", title: "Thirty-second-note strokes", params: { speed: "32nd" } },
+	],
+	pick: [
+		{ label: "⊓", title: "Downstroke", params: { direction: "down" } },
+		{ label: "V", title: "Upstroke", params: { direction: "up" } },
+	],
+	slideIn: [
+		{ label: "↗", title: "Slide in from below", params: { from: "below" } },
+		{ label: "↘", title: "Slide in from above", params: { from: "above" } },
+	],
+	slideOut: [
+		{ label: "↘", title: "Slide out downwards", params: { to: "below" } },
+		{ label: "↗", title: "Slide out upwards", params: { to: "above" } },
+	],
+	whammy: [
+		{ label: "dive", title: "Dive a tone and hold", params: { kind: "dive" } },
+		{ label: "dive↩", title: "Dive a tone and come back by the note's end", params: { kind: "dive", release: true } },
+		{ label: "pull", title: "Pull up a tone and hold", params: { kind: "pull" } },
+		{ label: "pull↩", title: "Pull up a tone and come back", params: { kind: "pull", release: true } },
+	],
+};
+
+function sameParams(a: unknown, b: unknown): boolean {
+	return JSON.stringify(a) === JSON.stringify(b);
+}
+
 const OPTION_CLASS =
-	"w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors";
+	"w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors aria-pressed:text-denim aria-pressed:font-semibold";
+const CHIP_CLASS = "px-1 py-0.5 text-[10px] leading-none transition-colors";
+const chipClass = (on: boolean) =>
+	`${CHIP_CLASS} ${on ? "bg-denim text-[var(--btn-on-denim)]" : "text-ink-faint hover:text-denim"}`;
+
+function keyHint(def: TechniqueDef): string {
+	return def.key ? ` (${def.key})` : "";
+}
 
 export interface FingerpickEditorTechniqueMenuProps {
 	working: FingerpickPattern;
@@ -61,10 +97,15 @@ export interface FingerpickEditorTechniqueMenuProps {
 	y: number;
 	/** The scroll region the menu is anchored in, nudged to bring the menu into view. */
 	scrollRef: React.RefObject<HTMLDivElement | null>;
-	onTechnique: (technique: NonNullable<StringFret["technique"]>) => void;
-	/** A bend or vibrato on the note itself, with the bend height in semitones. */
-	onNoteTechnique: (technique: NoteTechnique, bendSemitones: number) => void;
-	onTied: () => void;
+	/** A link on (or, when the note already has it, off). */
+	onLink: (kind: LinkKind) => void;
+	/** The `picked` flag of a slide. */
+	onSlidePicked: (picked: boolean) => void;
+	/** An effect written with these parameters, or removed with null. */
+	onEffect: <K extends EffectKind>(kind: K, params: NoteEffects[K] | null) => void;
+	/** A span of this kind toggled over the cell's slot. */
+	onSpan: (kind: SpanKind) => void;
+	/** The note's link and effects cleared. */
 	onClear: () => void;
 }
 
@@ -77,15 +118,20 @@ export default function FingerpickEditorTechniqueMenu({
 	x,
 	y,
 	scrollRef,
-	onTechnique,
-	onNoteTechnique,
-	onTied,
+	onLink,
+	onSlidePicked,
+	onEffect,
+	onSpan,
 	onClear,
 }: FingerpickEditorTechniqueMenuProps) {
 	const menuRef = useRef<HTMLDivElement>(null);
-	// Height for the release / pre-bend variants; the menu is short-lived, so a
-	// fresh open starts from a full bend again.
-	const [bendHeight, setBendHeight] = useState<number>(DEFAULT_BEND_HEIGHT);
+	const sf = working.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[cell.stringIndex];
+	const bend = sf?.effects?.bend;
+	// The bend's parameters as the menu holds them: the note's own while it has
+	// a bend, otherwise a full bend to start from. The menu is short-lived, so
+	// a fresh open starts over.
+	const [draftBend, setDraftBend] = useState<NonNullable<NoteEffects["bend"]>>(bend ?? { semitones: 2 });
+	const bendParams = bend ?? draftBend;
 
 	// When the menu opens near the grid's edge (e.g. right-clicking the last cell
 	// in a row), it's clipped by the scroll area. Nudge the scroll area just
@@ -97,10 +143,10 @@ export default function FingerpickEditorTechniqueMenu({
 		const scroller = scrollRef.current;
 		if (!menu || !scroller) return;
 		const PAD = 8;
-		// With both technique groups the menu is taller than a phone's grid area;
-		// cap it to what the scroll region can show (it scrolls inside) so the
-		// nudge below can always bring the whole box into view instead of pushing
-		// its top out of the region.
+		// With every group the menu is taller than a phone's grid area; cap it to
+		// what the scroll region can show (it scrolls inside) so the nudge below
+		// can always bring the whole box into view instead of pushing its top out
+		// of the region.
 		menu.style.maxHeight = `${Math.max(120, scroller.clientHeight - PAD * 2)}px`;
 		const menuRect = menu.getBoundingClientRect();
 		const viewRect = scroller.getBoundingClientRect();
@@ -113,87 +159,185 @@ export default function FingerpickEditorTechniqueMenu({
 		if (dx !== 0 || dy !== 0) scroller.scrollBy({ left: dx, top: dy, behavior: "smooth" });
 	}, [cell, x, y, scrollRef]);
 
-	const hasPrev = hasPreviousNoteOnString(working, cell);
-	const avail = availableTechniques(working, cell);
-	// When a previous note exists but a marker is still off, it's the fret
-	// movement that rules it out (not a missing note).
-	const disabledTitle = (ok: boolean) =>
-		ok ? undefined : hasPrev ? "Not valid for this fret movement" : "No previous note on this string";
-	// Clear only makes sense when the target note actually carries a marker
-	// (technique or tie) to remove.
-	const sf = working.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[cell.stringIndex];
-	const hasMarker = !!sf && (sf.technique !== null || sf.tied);
-	// Each bend is checked against the height it would write, so a 7th-fret note
-	// can still take a ¼ bend when a full one would leave the neck.
-	const noteAvail = (opt: (typeof NOTE_TECHNIQUE_OPTIONS)[number]) => {
-		const height = bendHeightFor(opt.value, bendHeight) ?? DEFAULT_BEND_HEIGHT;
-		const a = availableNoteTechniques(working, cell, height);
-		const ok = opt.value.startsWith("vibrato") ? a.vibrato : a.bend;
-		return { ok, title: ok ? undefined : BLOCK_TITLE[a.blocked ?? "no-note"] };
+	const hasMarker = !!sf && (sf.link !== undefined || sf.effects !== undefined);
+	const blockOf = (kind: string, semitones?: number) => techniqueBlock(working, cell, kind, semitones);
+	const titleOf = (kind: string, semitones?: number) => {
+		const block = blockOf(kind, semitones);
+		return block ? BLOCK_TITLE[block] : undefined;
 	};
+
+	// Bend: the row switches it on with the draft parameters; the chips set a
+	// parameter, writing straight to the note when it already has a bend.
+	function updateBend(patch: Partial<NonNullable<NoteEffects["bend"]>>) {
+		const next = { ...bendParams, ...patch };
+		for (const key of ["pre", "release", "hold"] as const) if (!next[key]) delete next[key];
+		setDraftBend(next);
+		if (bend) onEffect("bend", next);
+	}
+	const bendBlock = blockOf("bend", bendParams.semitones);
+	const slot = slotOf(cell);
 
 	return (
 		<div
 			ref={menuRef}
 			data-technique-menu
-			className="fp-thin-scroll absolute z-60 w-52 overflow-y-auto border border-line-strong bg-popover py-1 text-sm"
+			className="fp-thin-scroll absolute z-60 w-56 overflow-y-auto border border-line-strong bg-popover py-1 text-sm"
 			style={{ top: y, left: x }}
 		>
 			<div className="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-[0.12em] text-ink-faint">
 				From the previous note
 			</div>
-			{TECHNIQUE_OPTIONS.map((opt) => (
-				<button
-					key={opt.value}
-					disabled={!avail[opt.value]}
-					onClick={() => onTechnique(opt.value)}
-					title={disabledTitle(avail[opt.value])}
-					className="w-full text-left px-3 py-1.5 text-ink-dim hover:bg-denim-tint hover:text-denim disabled:text-ink-faint disabled:hover:bg-transparent disabled:hover:text-ink-faint disabled:cursor-not-allowed transition-colors"
-				>
-					{opt.label}
-				</button>
-			))}
-			<button
-				disabled={!avail.tied}
-				onClick={onTied}
-				title={disabledTitle(avail.tied)}
-				className={OPTION_CLASS}
-			>
-				Tied (⌒)
-			</button>
-			<div className="border-t border-line my-1" />
-			<div className="flex items-center justify-between px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-[0.12em] text-ink-faint">
-				<span>On this note</span>
-				<span className="flex items-center gap-0.5 normal-case tracking-normal" title="Height for release and pre-bend">
-					{BEND_HEIGHTS.map((h) => (
+			{LINKS.map((def) => {
+				const on = sf?.link?.kind === def.kind;
+				const block = on ? null : blockOf(def.kind);
+				return (
+					<div key={def.kind} className="flex items-center">
 						<button
-							key={h}
-							type="button"
-							onClick={() => setBendHeight(h)}
-							aria-pressed={bendHeight === h}
-							className={`px-1 py-0.5 text-[10px] leading-none transition-colors ${
-								bendHeight === h ? "bg-denim text-[var(--btn-on-denim)]" : "text-ink-faint hover:text-denim"
-							}`}
+							disabled={block !== null}
+							aria-pressed={on}
+							onClick={() => onLink(def.kind as LinkKind)}
+							title={block ? BLOCK_TITLE[block] : undefined}
+							className={OPTION_CLASS}
 						>
-							{HEIGHT_LABEL[h]}
+							{def.label.en}
+							{keyHint(def)}
 						</button>
-					))}
-				</span>
+						{def.kind === "slide" && sf?.link?.kind === "slide" && (
+							<button
+								type="button"
+								onClick={() => onSlidePicked(!(sf.link?.kind === "slide" && sf.link.picked))}
+								aria-pressed={!!sf.link.picked}
+								title="Shift slide: the arriving note is picked again"
+								className={`mr-2 ${chipClass(!!sf.link.picked)}`}
+							>
+								picked
+							</button>
+						)}
+					</div>
+				);
+			})}
+			<div className="border-t border-line my-1" />
+			<div className="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-[0.12em] text-ink-faint">On this note</div>
+			{/* Bend: the row, then its height and shape chips. */}
+			<button
+				disabled={!bend && bendBlock !== null}
+				aria-pressed={!!bend}
+				onClick={() => onEffect("bend", bend ? null : bendParams)}
+				title={bend ? undefined : titleOf("bend", bendParams.semitones)}
+				className={`${OPTION_CLASS} flex items-center justify-between gap-2`}
+			>
+				<span>Bend (B)</span>
+				<span className="text-[10px] text-ink-faint">{BEND_HEIGHT_LABEL[bendParams.semitones]}</span>
+			</button>
+			<div className="flex flex-wrap items-center gap-0.5 px-3 pb-1" title="Bend height">
+				{BEND_HEIGHTS_SEMITONES.map((h) => (
+					<button
+						key={h}
+						type="button"
+						onClick={() => updateBend({ semitones: h })}
+						aria-pressed={bendParams.semitones === h}
+						disabled={blockOf("bend", h) === "off-neck"}
+						title={blockOf("bend", h) === "off-neck" ? BLOCK_TITLE["off-neck"] : undefined}
+						className={`${chipClass(bendParams.semitones === h)} disabled:text-ink-faint/50`}
+					>
+						{BEND_HEIGHT_LABEL[h]}
+					</button>
+				))}
 			</div>
-			{NOTE_TECHNIQUE_OPTIONS.map((opt) => {
-				const { ok, title } = noteAvail(opt);
+			<div className="flex flex-wrap items-center gap-0.5 px-3 pb-1">
+				{(
+					[
+						["pre", "pre-bend", "Pre-bend: bent before it is picked"],
+						["release", "release", "Released back after the bend"],
+						["hold", "hold", "Held bent into the next note"],
+					] as const
+				).map(([key, label, title]) => (
+					<button
+						key={key}
+						type="button"
+						onClick={() => updateBend({ [key]: !bendParams[key] })}
+						aria-pressed={!!bendParams[key]}
+						title={title}
+						className={chipClass(!!bendParams[key])}
+					>
+						{label}
+					</button>
+				))}
+			</div>
+			{/* Vibrato and its width. */}
+			<div className="flex items-center">
+				<button
+					disabled={!sf?.effects?.vibrato && blockOf("vibrato") !== null}
+					aria-pressed={!!sf?.effects?.vibrato}
+					onClick={() => onEffect("vibrato", sf?.effects?.vibrato ? null : {})}
+					title={sf?.effects?.vibrato ? undefined : titleOf("vibrato")}
+					className={OPTION_CLASS}
+				>
+					Vibrato (V)
+				</button>
+				{sf?.effects?.vibrato && (
+					<button
+						type="button"
+						onClick={() => onEffect("vibrato", sf.effects?.vibrato?.wide ? {} : { wide: true })}
+						aria-pressed={!!sf.effects.vibrato.wide}
+						title="Wide vibrato"
+						className={`mr-2 ${chipClass(!!sf.effects.vibrato.wide)}`}
+					>
+						wide
+					</button>
+				)}
+			</div>
+			{EFFECTS.map((def) => {
+				const kind = def.kind as EffectKind;
+				const current = sf?.effects?.[kind];
+				const on = current !== undefined;
+				const block = on ? null : blockOf(kind);
+				const variants = VARIANTS[kind];
+				return (
+					<div key={kind} className="flex items-center">
+						<button
+							disabled={block !== null}
+							aria-pressed={on}
+							onClick={() => onEffect(kind, on ? null : DEFAULT_PARAMS[kind])}
+							title={block ? BLOCK_TITLE[block] : undefined}
+							className={OPTION_CLASS}
+						>
+							{def.label.en}
+							{keyHint(def)}
+						</button>
+						{on && variants && (
+							<span className="mr-2 flex items-center gap-0.5">
+								{variants.map((v) => (
+									<button
+										key={v.label}
+										type="button"
+										onClick={() => onEffect(kind, v.params as NoteEffects[typeof kind])}
+										aria-pressed={sameParams(current, v.params)}
+										title={v.title}
+										className={chipClass(sameParams(current, v.params))}
+									>
+										{v.label}
+									</button>
+								))}
+							</span>
+						)}
+					</div>
+				);
+			})}
+			<div className="border-t border-line my-1" />
+			<div className="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-[0.12em] text-ink-faint">Across notes</div>
+			{SPANS.map((def) => {
+				const on = spanCoversSlot(working, def.kind as SpanKind, slot);
 				return (
 					<button
-						key={opt.value}
-						disabled={!ok}
-						onClick={() => onNoteTechnique(opt.value, bendHeight)}
-						title={title}
-						className={`${OPTION_CLASS} flex items-center justify-between gap-2`}
+						key={def.kind}
+						aria-pressed={on}
+						onClick={() => onSpan(def.kind as SpanKind)}
+						title={on ? `Take this slot out of the ${def.label.en.toLowerCase()}` : `${def.label.en} over this slot; press again on the next to extend it`}
+						className={OPTION_CLASS}
 					>
-						<span>{opt.label}</span>
-						{opt.usesHeight && !opt.value.startsWith("vibrato") && (
-							<span className="text-[10px] text-ink-faint">{HEIGHT_LABEL[bendHeight]}</span>
-						)}
+						{def.label.en}
+						{keyHint(def)}
 					</button>
 				);
 			})}

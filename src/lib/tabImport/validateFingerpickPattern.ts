@@ -4,11 +4,22 @@ import type {
 	FingerpickPattern,
 	Measure,
 	StringFret,
-	Technique,
 } from "@/lib/fingerpickTypes";
 import type { ValidationIssue } from "./types";
-import { isRenderSupported } from "./techniqueSupport";
+import { migratePattern } from "./migratePattern";
+import { FINGERPICK_SCHEMA_VERSION } from "@/lib/fingerpickTypes";
 import { normalizeCapo } from "@/lib/strumProgressions";
+import {
+	effectsSchema,
+	isEffectKind,
+	linkSchema,
+	percussionSchema,
+	spanSchema,
+	supportOf,
+} from "@/lib/techniqueRegistry";
+import type { NoteEffects, Percussion, Span, Stroke } from "@/lib/fingerpickTypes";
+
+const ALL_STROKES = new Set<Stroke>(["roll-down", "roll-up", "brush-down", "brush-up"]);
 
 // ─── Duration helpers ─────────────────────────────────────────────────────────
 
@@ -50,23 +61,10 @@ function computeUniformDuration(slotCount: number, ts: [number, number]): Durati
 	return match ? match[0] : "eighth";
 }
 
-// ─── Technique helper ─────────────────────────────────────────────────────────
-
-const ALL_TECHNIQUES = new Set<NonNullable<Technique>>([
-	"hammer-on", "pull-off", "slide-up", "slide-down", "bend-full", "bend-half",
-	"bend-quarter", "bend-release", "pre-bend", "pre-bend-release", "vibrato",
-	"vibrato-wide", "vibrato-bar", "tapping", "trill", "harmonic-natural",
-	"harmonic-artificial", "whammy-dive", "whammy-pull", "pick-scrape", "grace-note",
-]);
-
-function isKnownTechnique(v: unknown): v is NonNullable<Technique> {
-	return typeof v === "string" && ALL_TECHNIQUES.has(v as NonNullable<Technique>);
-}
-
 // ─── Default constructors ─────────────────────────────────────────────────────
 
 function silentStringFret(): StringFret {
-	return { fret: null, technique: null, tied: false, muted: false };
+	return { fret: null, muted: false };
 }
 
 function makeDefaultStrings(): BeatSlot["strings"] {
@@ -117,42 +115,72 @@ function validateStringFret(
 		// non-number, non-null fret → treat as silent (no warning — "malformed → silent default")
 	}
 
-	// Technique
-	let technique: Technique = null;
-	if (obj.technique !== null && obj.technique !== undefined) {
-		if (isKnownTechnique(obj.technique)) {
-			if (!isRenderSupported(obj.technique)) {
+	const muted = obj.muted === true;
+	const result: StringFret = { fret, muted };
+
+	// ── v2: link + effects, each kind by its registry schema ──────────────
+	if (obj.link !== undefined && obj.link !== null) {
+		const parsed = linkSchema.safeParse(obj.link);
+		if (parsed.success) result.link = parsed.data as StringFret["link"];
+		else {
+			warnings.push({
+				code: "INVALID_LINK",
+				path: `${path}.link`,
+				message: `link is not one of the known kinds with valid parameters, dropped`,
+				original: obj.link,
+				repairedTo: null,
+			});
+		}
+	}
+	if (typeof obj.effects === "object" && obj.effects !== null && !Array.isArray(obj.effects)) {
+		// Built with Object.fromEntries after the registry filter rather than by
+		// writing `known[kind]` from the input's own keys (CodeQL property injection).
+		const known: Record<string, unknown> = Object.fromEntries(
+			Object.entries(obj.effects as Record<string, unknown>).filter(([kind, value]) => {
+				if (value === undefined || value === null) return false;
+				if (isEffectKind(kind)) return true;
 				warnings.push({
-					code: "UNSUPPORTED_TECHNIQUE",
-					path: `${path}.technique`,
-					message: `technique "${obj.technique}" detected but unsupported, dropped to stay renderable`,
-					original: obj.technique,
+					code: "UNKNOWN_EFFECT",
+					path: `${path}.effects.${kind}`,
+					message: `effect "${kind}" is not one this app knows, dropped`,
+					original: kind,
 					repairedTo: null,
 				});
-			} else {
-				technique = obj.technique;
+				return false;
+			}),
+		);
+		const parsed = effectsSchema.safeParse(known);
+		if (parsed.success) {
+			const effects = parsed.data as NoteEffects;
+			for (const kind of Object.keys(effects)) {
+				if (!supportOf(kind).render) {
+					warnings.push({
+						code: "UNSUPPORTED_TECHNIQUE",
+						path: `${path}.effects.${kind}`,
+						message: `effect "${kind}" is kept but not drawn yet`,
+						original: kind,
+					});
+				}
 			}
+			if (Object.keys(effects).length > 0) result.effects = effects;
+		} else {
+			// Keep the kinds that parse on their own; drop and name the rest.
+			const kept = Object.fromEntries(
+				Object.entries(known).filter(([kind, value]) => {
+					if (effectsSchema.safeParse(Object.fromEntries([[kind, value]])).success) return true;
+					warnings.push({
+						code: "INVALID_EFFECT",
+						path: `${path}.effects.${kind}`,
+						message: `effect "${kind}" has invalid parameters, dropped`,
+						original: value,
+						repairedTo: null,
+					});
+					return false;
+				}),
+			);
+			if (Object.keys(kept).length > 0) result.effects = kept as NoteEffects;
 		}
-		// unknown string or non-string → null, no warning
 	}
-
-	const tied   = obj.tied   === true;
-	const muted  = obj.muted  === true;
-
-	const result: StringFret = { fret, technique, tied, muted };
-
-	if (typeof obj.bendTarget === "number")        result.bendTarget = obj.bendTarget;
-	if (obj.palmMute === true)                     result.palmMute = true;
-	if (obj.letRing  === true)                     result.letRing  = true;
-	if (obj.staccato === true)                     result.staccato = true;
-	if (obj.accent   === true)                     result.accent   = true;
-	if (obj.ghostNote === true)                    result.ghostNote = true;
-	if (obj.tremoloPickingSpeed === "8th"  ||
-	    obj.tremoloPickingSpeed === "16th" ||
-	    obj.tremoloPickingSpeed === "32nd")
-		result.tremoloPickingSpeed = obj.tremoloPickingSpeed as "8th" | "16th" | "32nd";
-	if (obj.pickStroke === "down" || obj.pickStroke === "up")
-		result.pickStroke = obj.pickStroke as "down" | "up";
 
 	return result;
 }
@@ -235,7 +263,98 @@ function validateSlot(
 	// silently otherwise — a mark is a label, and a malformed label is no label.
 	const chord = validateChord(obj.chord);
 	if (chord) slot.chord = chord;
+	// A sweep is kept as written; a stored pattern (a share, a library row)
+	// carries them and dropping one would silently flatten a rolled chord.
+	if (typeof obj.stroke === "string" && ALL_STROKES.has(obj.stroke as Stroke)) slot.stroke = obj.stroke as Stroke;
+	if (obj.percussion !== undefined && obj.percussion !== null) {
+		const parsed = percussionSchema.safeParse(obj.percussion);
+		if (!parsed.success) {
+			warnings.push({
+				code: "INVALID_PERCUSSION",
+				path: `${path}.percussion`,
+				message: "percussion is not a known hit with valid parameters, dropped",
+				original: obj.percussion,
+				repairedTo: null,
+			});
+		} else if (slot.stroke) {
+			warnings.push({
+				code: "PERCUSSION_WITH_STROKE",
+				path: `${path}.percussion`,
+				message: "a slot is either swept or hit, not both; the hit was dropped",
+				original: obj.percussion,
+				repairedTo: null,
+			});
+		} else {
+			slot.percussion = parsed.data as Percussion;
+		}
+	}
 	return slot;
+}
+
+/** Duplicate slot ids get fresh ones: spans anchor on them, so two slots sharing one is ambiguous. */
+function uniqueSlotIds(measures: Measure[], warnings: ValidationIssue[]): void {
+	const seen = new Set<string>();
+	measures.forEach((measure, m) => {
+		measure.slots.forEach((slot, i) => {
+			if (seen.has(slot.id)) {
+				const fresh = crypto.randomUUID();
+				warnings.push({
+					code: "DUPLICATE_SLOT_ID",
+					path: `measures[${m}].slots[${i}].id`,
+					message: `slot id "${slot.id}" is used twice, the later slot was given a new id`,
+					original: slot.id,
+					repairedTo: fresh,
+				});
+				measure.slots[i] = { ...slot, id: fresh };
+			}
+			seen.add(measure.slots[i].id);
+		});
+	});
+}
+
+/** Spans whose anchors exist, in order; the rest are dropped with a reason. */
+function validateSpans(raw: unknown, measures: Measure[], warnings: ValidationIssue[]): Span[] | undefined {
+	if (raw === undefined || raw === null) return undefined;
+	if (!Array.isArray(raw)) {
+		warnings.push({ code: "INVALID_SPANS", path: "spans", message: "spans is not an array, dropped", original: raw });
+		return undefined;
+	}
+	const order = new Map<string, number>();
+	measures.forEach((measure) => measure.slots.forEach((slot) => order.set(slot.id, order.size)));
+	const spans: Span[] = [];
+	const ids = new Set<string>();
+	raw.forEach((entry, i) => {
+		const parsed = spanSchema.safeParse(entry);
+		if (!parsed.success) {
+			warnings.push({ code: "INVALID_SPAN", path: `spans[${i}]`, message: "span is malformed, dropped", original: entry });
+			return;
+		}
+		const span = parsed.data as Span;
+		const from = order.get(span.from);
+		const to = order.get(span.to);
+		if (from === undefined || to === undefined) {
+			warnings.push({
+				code: "INVALID_SPAN",
+				path: `spans[${i}]`,
+				message: `span "${span.id}" anchors on a slot that does not exist, dropped`,
+				original: entry,
+			});
+			return;
+		}
+		if (from > to) {
+			warnings.push({
+				code: "INVALID_SPAN",
+				path: `spans[${i}]`,
+				message: `span "${span.id}" ends before it starts, dropped`,
+				original: entry,
+			});
+			return;
+		}
+		if (ids.has(span.id)) span.id = crypto.randomUUID();
+		ids.add(span.id);
+		spans.push(span);
+	});
+	return spans;
 }
 
 function validateChord(raw: unknown): BeatSlot["chord"] | null {
@@ -334,7 +453,8 @@ export function validateFingerpickPattern(raw: unknown): {
 		return { pattern: null, errors, warnings };
 	}
 
-	const obj = raw as Record<string, unknown>;
+	// Data written before the technique model v2 is brought up to it first.
+	const obj = migratePattern(raw) as Record<string, unknown>;
 
 	if (!Array.isArray(obj.measures)) {
 		errors.push({
@@ -404,10 +524,14 @@ export function validateFingerpickPattern(raw: unknown): {
 		validateMeasure(rawMeasure, i, timeSignature, warnings),
 	);
 
-	const pattern: FingerpickPattern = { id, name, description, bpm, timeSignature, measures };
+	uniqueSlotIds(measures, warnings);
+
+	const pattern: FingerpickPattern = { id, name, description, schemaVersion: FINGERPICK_SCHEMA_VERSION, bpm, timeSignature, measures };
 	// Same fold as `normalizeLoadedPattern`: a capo is kept only when it is a
 	// real fret, so no pattern leaves here with one the UI cannot show.
 	const capo = normalizeCapo(obj.capo);
 	if (capo > 0) pattern.capo = capo;
+	const spans = validateSpans(obj.spans, measures, warnings);
+	if (spans !== undefined) pattern.spans = spans;
 	return { pattern, errors, warnings };
 }

@@ -10,7 +10,7 @@ import {
 import Fader from "@/components/ui/Fader";
 import {
 	composeExpression,
-	expressionForTechnique,
+	expressionForEffects,
 	bendTimeline,
 	DEFAULT_BEND_PARAMS,
 	DEFAULT_VIBRATO_PARAMS,
@@ -24,7 +24,7 @@ import {
 } from "@/lib/fingerpickExpression";
 import { pitchLabel, soundingMidi } from "@/lib/fingerpickPitch";
 import { centsBetween, estimatePitchHz, midiToHz } from "@/lib/pitchEstimate";
-import type { Technique } from "@/lib/fingerpickTypes";
+import type { NoteEffects } from "@/lib/fingerpickTypes";
 
 // ── Copy in two languages ───────────────────────────────────────────────────
 
@@ -53,23 +53,19 @@ const STRING_NAMES = ["e", "B", "G", "D", "A", "E"] as const;
 
 // ── Technique chips ─────────────────────────────────────────────────────────
 
-type LabTechnique = Exclude<
-	Technique,
-	| null
-	| "hammer-on"
-	| "pull-off"
-	| "slide-up"
-	| "slide-down"
-	| "vibrato-bar"
-	| "tapping"
-	| "trill"
-	| "harmonic-natural"
-	| "harmonic-artificial"
-	| "whammy-dive"
-	| "whammy-pull"
-	| "pick-scrape"
-	| "grace-note"
->;
+/** What each chip writes on the note, in the model's terms. */
+const LAB_EFFECTS = {
+	"bend-full": { bend: { semitones: 2 } },
+	"bend-half": { bend: { semitones: 1 } },
+	"bend-quarter": { bend: { semitones: 0.5 } },
+	"bend-release": { bend: { semitones: 2, release: true } },
+	"pre-bend": { bend: { semitones: 2, pre: true } },
+	"pre-bend-release": { bend: { semitones: 2, pre: true, release: true } },
+	vibrato: { vibrato: {} },
+	"vibrato-wide": { vibrato: { wide: true } },
+} as const satisfies Record<string, NoteEffects>;
+
+type LabTechnique = keyof typeof LAB_EFFECTS;
 
 interface TechniqueChip {
 	value: LabTechnique;
@@ -656,7 +652,7 @@ export default function BendLabPage() {
 	// rise/shape/onset survive switching chips; only what the chip names (height,
 	// pre-bend/release, slight vs wide depth and rate) is overwritten.
 	function applyTechnique(next: LabTechnique, b: BendParams, v: VibratoParams): void {
-		const s = expressionForTechnique(next, undefined, {
+		const s = expressionForEffects(LAB_EFFECTS[next], {
 			bend: b,
 			vibrato: { ...v, depthCents: DEFAULT_VIBRATO_PARAMS.depthCents, rateHz: DEFAULT_VIBRATO_PARAMS.rateHz },
 			wideVibrato: { ...v, depthCents: WIDE_VIBRATO_PARAMS.depthCents, rateHz: WIDE_VIBRATO_PARAMS.rateHz },

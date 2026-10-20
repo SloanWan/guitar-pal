@@ -14,6 +14,8 @@ import {
 	type Duration,
 	type FingerpickPattern,
 	type Measure,
+	type Percussion,
+	type PercussionKind,
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import {
@@ -32,8 +34,11 @@ import {
 	splitSlot,
 	splitTargetsForSlot,
 	type SlotTarget,
+	withMeasures,
 } from "@/lib/fingerpickEdit";
 import { fillColumnFromChord, offShapeStrings, type FretHint } from "@/lib/fingerpickChords";
+import { setPercussion } from "@/lib/fingerpickTechniqueEdit";
+import { PERCUSSION_DEFS } from "@/lib/techniqueRegistry";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { selectRefVoicing } from "@/lib/strumBars";
@@ -212,7 +217,7 @@ export default function FingerpickEditorColumnPopup({
 	// Replace a measure's slots via a Measure[] transform (split/merge/reset all
 	// operate on the measure array, not the whole pattern).
 	function applyMeasures(measures: Measure[]) {
-		commit((prev) => ({ ...prev, measures }));
+		commit((prev) => withMeasures(prev, measures));
 	}
 
 	// ── Split / merge / replace-with-whole (single selected column) ──────────
@@ -297,6 +302,29 @@ export default function FingerpickEditorColumnPopup({
 		const first = strokes[0];
 		return strokes.every((s) => s === first) ? (first ?? "none") : "mixed";
 	})();
+
+	// The hit shared by every selected slot, the same way; its accent likewise.
+	const selectedHit: "none" | PercussionKind | "mixed" = (() => {
+		const targets = columnTargets();
+		if (targets.length === 0) return "none";
+		const kinds = targets.map((t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.percussion?.kind);
+		const first = kinds[0];
+		return kinds.every((k) => k === first) ? (first ?? "none") : "mixed";
+	})();
+	const selectedHitAccent = (() => {
+		const targets = columnTargets();
+		return (
+			targets.length > 0 &&
+			targets.every((t) => !!working.measures[t.measureIndex]?.slots[t.slotIndex]?.percussion?.accent)
+		);
+	})();
+
+	// Apply (or clear) a hit on every selected column in one commit. A hit
+	// replaces a sweep on the slot (the lib keeps the two exclusive).
+	function applyHit(percussion: Percussion | undefined) {
+		const targets = columnTargets();
+		commit((prev) => targets.reduce((p, t) => setPercussion(p, t, percussion), prev));
+	}
 
 	// The popup is anchored below the first selected column's selector.
 	const firstSelectedColumn: SlotTarget | null =
@@ -675,6 +703,58 @@ export default function FingerpickEditorColumnPopup({
 							{s.label}
 						</button>
 					))}
+				</div>
+			</div>
+
+			{/* Hit — a right-hand percussion on the slot (slap, thumb slap, body tap),
+			    slot-level like the sweep, and never together with one. */}
+			<div className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+				<PopupSectionLabel
+					label="Hit"
+					hint="A right-hand hit on this slot: slap the strings, slap with the thumb, or tap the body. Replaces a sweep."
+				/>
+				<div className="flex items-stretch border border-line-strong">
+					<button
+						onClick={() => applyHit(undefined)}
+						title="No hit"
+						className={`h-7 px-2 font-mono text-[11px] font-semibold transition-colors ${
+							selectedHit === "none" ? "bg-denim text-on-denim" : "text-ink-dim hover:bg-denim-tint hover:text-denim"
+						}`}
+					>
+						Off
+					</button>
+					{PERCUSSION_DEFS.map((def) => {
+						const on = selectedHit === def.kind;
+						return (
+							<button
+								key={def.kind}
+								onClick={() =>
+									applyHit({ kind: def.kind as PercussionKind, ...(selectedHitAccent ? { accent: true } : {}) })
+								}
+								title={def.label.en}
+								aria-label={def.label.en}
+								className={`h-7 px-2 border-l border-line-strong font-mono text-[11px] font-semibold transition-colors ${
+									on ? "bg-denim text-on-denim" : "text-ink-dim hover:bg-denim-tint hover:text-denim"
+								}`}
+							>
+								{def.glyph}
+							</button>
+						);
+					})}
+					{selectedHit !== "none" && selectedHit !== "mixed" && (
+						<button
+							onClick={() =>
+								applyHit({ kind: selectedHit, ...(selectedHitAccent ? {} : { accent: true }) })
+							}
+							aria-pressed={selectedHitAccent}
+							title="Accented hit"
+							className={`h-7 px-2 border-l border-line-strong font-mono text-[11px] font-semibold transition-colors ${
+								selectedHitAccent ? "bg-denim text-on-denim" : "text-ink-dim hover:bg-denim-tint hover:text-denim"
+							}`}
+						>
+							&gt;
+						</button>
+					)}
 				</div>
 			</div>
 

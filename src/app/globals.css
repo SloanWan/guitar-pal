@@ -23,7 +23,8 @@
      needs an edge a border alone does not give it. Every other shadow token
      is a GLOW signalling "live/active", never elevation.
    - Components must reference tokens, never raw hex. The single permitted
-     hardcoded value is denim #4A6FA5 inside the logo playhead rect.
+     hardcoded value was denim #4A6FA5 in the old logo's playhead rect; the
+     logo is now the pick mark (#352), coloured by the --gp-lg* tokens.
    ========================================================================= */
 
 /* ----------------------------------------------------------------------------

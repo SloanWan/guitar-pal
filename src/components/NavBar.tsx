@@ -2,7 +2,7 @@ import NavLinks from "./NavLinks";
 import NavBarMenu from "./NavBarMenu";
 import ThemeToggle from "./ThemeToggle";
 import UserMenu from "./UserMenu";
-import Link from "@/components/AppLink";
+import BrandLink from "./BrandLink";
 import SignInLink from "./SignInLink";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { profileOf } from "@/lib/profile";
@@ -26,32 +26,9 @@ export default async function NavBar({ hideSignIn = false }: { hideSignIn?: bool
 		<div className="sticky top-0 z-10">
 			<header className="h-13 flex-none border-b border-line bg-topbar">
 				<div className="mx-auto grid h-full w-full max-w-300 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-(--gutter)">
-					<Link
-						href="/"
-						className="flex min-w-0 items-center gap-2 justify-self-start text-ink focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-					>
-						{/* Guitar Pal mark: strings inherit text color via currentColor;
-					    the playhead rect stays denim in both themes (the one
-					    permitted hardcoded hex in the token system). */}
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 24 24"
-							fill="none"
-							className="size-6"
-							aria-hidden="true"
-						>
-							<path
-								d="M3 4h18M3 7.2h18M3 10.4h18M3 13.6h18M3 16.8h18M3 20h18"
-								stroke="currentColor"
-								strokeWidth="1.5"
-								strokeLinecap="square"
-							/>
-							<rect x="14" y="2" width="2" height="20" fill="#4A6FA5" />
-						</svg>
-						<span className="hidden font-mono text-[13px] font-bold tracking-[0.06em] nav:block">
-							GUITAR_PAL
-						</span>
-					</Link>
+					{/* The pick mark (#352). Its gap hairline takes the topbar colour so the
+					    overlapping picks stay apart at this size. */}
+					<BrandLink className="flex min-w-0 items-center gap-2 justify-self-start text-ink [--mk-gap:var(--topbar-bg)] focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1" />
 					<NavLinks />
 					<div className="flex min-w-0 items-center gap-3 justify-self-end">
 						{/* The assistant sits just left of the account control at every

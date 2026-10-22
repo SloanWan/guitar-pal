@@ -3,7 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { NavProgressProvider, NavProgressBar } from "@/components/nav-progress";
 import NoFocusZoom from "@/components/NoFocusZoom";
-import { mono, sans } from "./fonts/fonts";
+import { figtree, mono, sans } from "./fonts/fonts";
 
 export const metadata: Metadata = {
   title: "Guitar Pal",
@@ -23,7 +23,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${mono.variable} ${sans.variable} h-full antialiased`}
+      className={`${mono.variable} ${sans.variable} ${figtree.variable} h-full antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />

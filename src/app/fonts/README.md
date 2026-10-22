@@ -10,6 +10,8 @@ three days — once on a branch that changed nothing but a Markdown file. On
 |---|---|---|---|
 | `JetBrainsMono-latin-greek.woff2` | JetBrains Mono | 2.211 | `wght 400–800` |
 | `SpaceGrotesk-Variable-latin.woff2` | Space Grotesk | 2.000 | `wght 300–700` |
+| `Figtree-Variable-latin.woff2` | Figtree | 2.002 | `wght 400–800` |
+| `Figtree-Italic-Variable-latin.woff2` | Figtree Italic | 2.002 | `wght 400–800` |
 
 Both are the files Google was serving, at the versions and weight axes the
 previous `next/font/google` build shipped, so no glyph or metric moved. The
@@ -56,6 +58,32 @@ now import `MONO_FAMILY` from `fonts.ts`. **Do not spell a family name out again
 That is also why the loaders live in `fonts.ts` rather than in `layout.tsx`:
 anything needing the name can import them.
 
+## Figtree (Candy redesign, #351)
+
+The Candy UI face (epic #349): one family with a **real italic**, which the hover
+underline uses. It enters alongside the v3 faces; JetBrains Mono and Space Grotesk
+go only when the last page using them has migrated (#363).
+
+- Source: the variable TTFs in `google/fonts` (`ofl/figtree/Figtree[wght].ttf`,
+  `Figtree-Italic[wght].ttf`, version 2.002), not the CSS API.
+- Subset with `fontTools` to Basic Latin, Latin-1 Supplement and the punctuation
+  the app writes (– — ‘ ’ “ ” • … € ™ ← ↑ → ↓ − ≤ ≥), keeping every OpenType
+  feature (`tnum` included), then the `wght` axis limited to **400–800** — the
+  range the design uses. Upright 19.0KB + italic 19.6KB.
+- **Not in Figtree** and so drawn by the fallback stack: ♩ ♪ ♭ ♮ ♯ Δ τ ′ ″ ⌘ ⇧.
+  Chord names and the stave keep their own face (below), so this only affects
+  UI copy such as "♩ = 66".
+- Chinese is never shipped: `--gp-f-*` in `tokens.css` read
+  `var(--font-figtree, …)` followed by the device CJK stack, and CJK italics are a
+  synthesised slant (`font-synthesis-style: auto`, the browser default).
+
+**The tab stave keeps JetBrains Mono** (decided in #351). Figtree's default
+figures are proportional — `1` is 410 units wide, `0` 638 — and VexFlow measures
+text through canvas, which cannot apply `tnum`. With Figtree the measured widths
+and the drawn SVG text would disagree on every two-digit fret and pitch label.
+If the stave should move to Figtree later (#360), the route is a separate subset
+with `tnum` frozen into the default digits, so canvas and SVG agree.
+
 ## Refreshing them
 
 1. Fetch the CSS with a browser User-Agent, or Google answers with `ttf` URLs:
@@ -75,5 +103,5 @@ Mono tag is 2.304 against Google's 2.211.
 
 ## Licence
 
-Both families are SIL Open Font License 1.1, which allows redistribution here.
-`OFL-JetBrainsMono.txt` and `OFL-SpaceGrotesk.txt` are alongside.
+All three families are SIL Open Font License 1.1, which allows redistribution here.
+`OFL-JetBrainsMono.txt`, `OFL-SpaceGrotesk.txt` and `OFL-Figtree.txt` are alongside.

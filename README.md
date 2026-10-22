@@ -48,7 +48,7 @@ there tomorrow.
 ## Standing on
 
 - [VexFlow](https://github.com/0xfe/vexflow): draws every tab stave
-- [WebAudioFont](https://github.com/surikov/webaudiofontdata): the guitar samples, fetched at runtime
+- [WebAudioFont](https://github.com/surikov/webaudiofontdata): the guitar and piano samples, bundled as JSON
 - [chords-db](https://github.com/tombatossals/chords-db): the chord voicings, audited and corrected here
 
 ## How it's built

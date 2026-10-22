@@ -353,7 +353,7 @@ export default function Home() {
 							<li>
 								audio samples via{" "}
 								<a
-									href="https://github.com/surikov/webaudiofont"
+									href="https://github.com/surikov/webaudiofontdata"
 									target="_blank"
 									rel="noopener noreferrer"
 									className={`text-ink ${FOOTER_LINK}`}

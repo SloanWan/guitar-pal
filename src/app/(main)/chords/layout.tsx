@@ -30,7 +30,7 @@ export default async function ChordsLayout({ children }: { children: React.React
 				</a>
 				{" · "}audio samples via{" "}
 				<a
-					href="https://github.com/surikov/webaudiofont"
+					href="https://github.com/surikov/webaudiofontdata"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="underline hover:text-ink"

@@ -119,7 +119,7 @@ export function setPatternCapo(pattern: FingerpickPattern, capo: number): Finger
 
 /**
  * What a string plays in a chord shape: its fret, or `"/"` for a string the
- * shape leaves out. Not `"x"` — in the editor that is a struck dead note, a
+ * shape leaves out. Not `"x"` — in the editor that is a slap on the string, a
  * different thing from a string that simply is not part of the chord.
  */
 export type FretHint = number | "/";
@@ -169,7 +169,7 @@ export function chordRootString(chord: ChordRef | null, voicing: ChordVoicing | 
 
 /**
  * Write the shape's frets into a slot's empty cells. Cells that already hold a
- * fret or a dead note are left alone — the shape fills in around what the
+ * fret or an x are left alone — the shape fills in around what the
  * player wrote, never over it — and strings the shape leaves out stay empty.
  */
 export function fillColumnFromChord(
@@ -191,7 +191,7 @@ export function fillColumnFromChord(
  * across the slots where `chord` is in effect there. The complement of
  * `fillColumnFromChord`: a shape written over an older one leaves notes on
  * strings the new shape does not sound, and those are the ones to take away.
- * Dead notes on those strings go too — they were put there by the old shape.
+ * An x on those strings goes too — it was put there by the old shape.
  */
 export function clearLeftOutStrings(
 	pattern: FingerpickPattern,
@@ -219,7 +219,7 @@ export function clearLeftOutStrings(
 
 /**
  * Empty one string — every slot of one measure, or of the whole pattern when
- * `measureIndex` is omitted. Frets, dead notes, ties and techniques all go:
+ * `measureIndex` is omitted. Frets, x's, ties and techniques all go:
  * the string is returned to "not in play".
  */
 export function clearString(
@@ -231,7 +231,7 @@ export function clearString(
 		if (measureIndex !== undefined && mi !== measureIndex) return p;
 		return measure.slots.reduce((q, slot, slotIndex) => {
 			const cell = slot.strings[stringIndex];
-			if (!cell || (cell.fret === null && !cell.muted && !cell.tied)) return q;
+			if (!cell || (cell.fret === null && !cell.muted && cell.link?.kind !== "tie")) return q;
 			return setInactive(q, { measureIndex: mi, slotIndex, stringIndex });
 		}, p);
 	}, pattern);
@@ -241,7 +241,7 @@ export function clearString(
  * Strings the shape holds that nothing in `slots[from, to)` plucks — index 0 =
  * high e, the fingerpick order. Drawn faintly on a chord diagram, so the player
  * can tell the fingers the pattern actually sounds from the ones held only to
- * complete the chord. A dead note counts as plucked: the string is struck.
+ * complete the chord. An x counts as plucked: the string is slapped.
  * A string the shape leaves out is never reported — there is nothing to hold.
  */
 export function heldButUnplucked(
@@ -276,7 +276,7 @@ export function chordRegionEnd(measure: Measure, slotIndex: number): number {
  * Strings a slot plays outside the chord shape in effect — index list in
  * fingerpick order (0 = high e). A note is off the shape when its fret is not
  * the shape's fret for that string, or the shape does not sound that string at
- * all. Dead notes are never reported: a percussive mute is rhythm, not a
+ * all. An x is never reported: a slap is rhythm, not a
  * fingering. With no shape (`hints` null) nothing is reported either.
  */
 export function offShapeStrings(slot: BeatSlot, hints: readonly FretHint[] | null): number[] {
@@ -371,7 +371,7 @@ export function rowDiffersFromHints(
 /**
  * Rewrite every fretted cell on one string of one measure to what the chord
  * shape has there: the shape's fret, or nothing at all on a string the shape
- * leaves out. Cells without a fret (including dead notes), and slots with no
+ * leaves out. Cells without a fret (including an x), and slots with no
  * chord in effect, are left as they are.
  */
 export function replaceRowWithHints(

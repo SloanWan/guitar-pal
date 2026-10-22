@@ -96,6 +96,7 @@ import {
 import {
 	type LoopGapSeconds,
 } from "@/components/fingerpick/playbackConstants";
+import { indexPattern } from "@/lib/fingerpickIndex";
 
 /**
  * The fingerpick player and editor. On /fingerpick it opens the player's
@@ -255,8 +256,8 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 	// chosen style — the same formula playback compiles its events through.
 	const capo = patternCapo(selectedPattern);
 	const pitchLabelAt = useCallback(
-		(stringIndex: number, fret: number): string =>
-			pitchLabel(soundingMidi(stringIndex, fret, capo), pitchLabelStyle),
+		(stringIndex: number, fret: number, shift: number = 0): string =>
+			pitchLabel(soundingMidi(stringIndex, fret, capo) + shift, pitchLabelStyle),
 		[capo, pitchLabelStyle],
 	);
 	const pitchLabelFn = pitchLabelsOn ? pitchLabelAt : undefined;
@@ -376,6 +377,8 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 	// ── Cursor / scroll ─────────────────────────────────────────────────────
 	// Greedy row layout driven by content width; guard: render nothing until the
 	// ResizeObserver fires with the real container width on mount.
+	// Where the pattern's spans lie, for the staves' brackets and lead-in arcs.
+	const renderContext = useMemo(() => ({ index: indexPattern(selectedPattern) }), [selectedPattern]);
 	const rows = useMemo(
 		() =>
 			layoutMeasureRows(
@@ -383,8 +386,9 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 				containerWidth,
 				showChordDiagrams ? chordShapeSize.width : 0,
 				pitchLabelFn,
+				renderContext,
 			),
-		[selectedPattern.measures, containerWidth, showChordDiagrams, chordShapeSize.width, pitchLabelFn],
+		[selectedPattern.measures, containerWidth, showChordDiagrams, chordShapeSize.width, pitchLabelFn, renderContext],
 	);
 
 	const {
@@ -1235,6 +1239,7 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 											chordDiagramSize={chordShapeSize}
 											offShapeStrings={showOffShape ? offShapeAt : undefined}
 											pitchLabel={pitchLabelFn}
+											renderContext={renderContext}
 										/>
 									</div>
 								))}

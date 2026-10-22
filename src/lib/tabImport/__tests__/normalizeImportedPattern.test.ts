@@ -3,7 +3,7 @@ import { normalizeImportedPattern } from "../normalizeImportedPattern";
 import { MAX_MEASURES } from "../capMeasures";
 
 function makeSf() {
-	return { fret: null, technique: null, tied: false, muted: false };
+	return { fret: null, muted: false };
 }
 
 function makeStrings() {

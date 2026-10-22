@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, Music, Pencil, Plus, Replace, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import TabStavePreview from "./TabStavePreview";
@@ -10,6 +10,7 @@ import { pick, type Lang } from "@/lib/assistant/lang";
 import type { TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import { moveSlotChord } from "@/lib/fingerpickChords";
 import type { Measure } from "@/lib/fingerpickTypes";
+import { indexPattern } from "@/lib/fingerpickIndex";
 
 /**
  * Bars for a pattern the player already has, before anything is written.
@@ -44,6 +45,8 @@ export default function TabEditCard({
 	// The bars as the player has arranged them: the reader's, until a chord
 	// mark is dragged elsewhere. What confirming hands over.
 	const [measures, setMeasures] = useState<Measure[]>(bars ? edit.measures : []);
+	// Where the bars' spans lie, for the preview's brackets; the bars keep the pattern's slot ids.
+	const renderContext = useMemo(() => ({ index: indexPattern({ ...edit.pattern, measures }) }), [edit.pattern, measures]);
 	const [moved, setMoved] = useState(false);
 	const more = bars ? measures.length - shown : 0;
 
@@ -136,6 +139,7 @@ export default function TabEditCard({
 			<TabStavePreview
 				measures={measures}
 				timeSignature={edit.pattern.timeSignature}
+				renderContext={renderContext}
 				startMeasureNumber={firstBar}
 				onShown={setShown}
 				onMoveChord={(from, to) => {

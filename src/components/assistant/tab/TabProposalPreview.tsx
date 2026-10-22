@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowUpRight, TriangleAlert } from "lucide-react";
 import TabStavePreview from "./TabStavePreview";
@@ -8,6 +8,7 @@ import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import { beatUnitGlyph } from "@/lib/strumMeter";
 import { stashHandoff } from "@/lib/assistant/handoff";
 import type { TabProposal } from "@/lib/assistant/tab/types";
+import { indexPattern } from "@/lib/fingerpickIndex";
 
 /**
  * What the tab assistant is offering, drawn as the real stave rather than
@@ -27,6 +28,7 @@ export default function TabProposalPreview({ proposal }: { proposal: TabProposal
 	const pathname = usePathname();
 	const { pattern } = proposal;
 	const [shown, setShown] = useState(0);
+	const renderContext = useMemo(() => ({ index: indexPattern(pattern) }), [pattern]);
 	const more = pattern.measures.length - shown;
 
 	function openInFingerpick() {
@@ -54,7 +56,12 @@ export default function TabProposalPreview({ proposal }: { proposal: TabProposal
 				</span>
 			</div>
 
-			<TabStavePreview measures={pattern.measures} timeSignature={pattern.timeSignature} onShown={setShown} />
+			<TabStavePreview
+				measures={pattern.measures}
+				timeSignature={pattern.timeSignature}
+				onShown={setShown}
+				renderContext={renderContext}
+			/>
 
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2">
 				<span className="font-mono text-xs tracking-[0.04em] text-ink-dim">

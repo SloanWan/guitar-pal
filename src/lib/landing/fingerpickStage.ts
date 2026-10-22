@@ -1,4 +1,4 @@
-import type { BeatSlot, Measure, StringFret, Technique } from "@/lib/fingerpickTypes";
+import type { BeatSlot, LinkKind, Measure, StringFret } from "@/lib/fingerpickTypes";
 import { seg } from "./progress";
 
 /**
@@ -7,20 +7,15 @@ import { seg } from "./progress";
  * bar is looped and slowed down.
  */
 
-const rest = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
-const note = (fret: number, technique: Technique = null): StringFret => ({
-	fret,
-	technique,
-	tied: false,
-	muted: false,
-});
+const rest = (): StringFret => ({ fret: null, muted: false });
+const note = (fret: number, link?: LinkKind): StringFret => (link ? { fret, muted: false, link: { kind: link } } : { fret, muted: false });
 
 /** Strings are written high e first (index 0) in the fingerpick model. */
-type Pick = { string: number; fret: number; technique?: Technique };
+type Pick = { string: number; fret: number; link?: LinkKind };
 
 function slot(id: string, pick: Pick, chord?: BeatSlot["chord"]): BeatSlot {
 	const strings = [rest(), rest(), rest(), rest(), rest(), rest()] as BeatSlot["strings"];
-	strings[pick.string] = note(pick.fret, pick.technique ?? null);
+	strings[pick.string] = note(pick.fret, pick.link);
 	return { id, duration: "eighth", strings, ...(chord ? { chord } : {}) };
 }
 
@@ -36,7 +31,7 @@ export const FINGERPICK_DEMO_MEASURES: readonly Measure[] = [
 			slot("landing-m1-4", { string: E, fret: 0 }),
 			slot("landing-m1-5", { string: A, fret: 0 }),
 			slot("landing-m1-6", { string: B, fret: 1 }),
-			slot("landing-m1-7", { string: B, fret: 3, technique: "hammer-on" }),
+			slot("landing-m1-7", { string: B, fret: 3, link: "hammer" }),
 			slot("landing-m1-8", { string: G, fret: 2 }),
 		],
 	},
@@ -46,10 +41,10 @@ export const FINGERPICK_DEMO_MEASURES: readonly Measure[] = [
 			slot("landing-m2-1", { string: A, fret: 3 }, { root: "C", suffix: "major" }),
 			slot("landing-m2-2", { string: B, fret: 1 }),
 			slot("landing-m2-3", { string: D, fret: 2 }),
-			slot("landing-m2-4", { string: D, fret: 4, technique: "slide-up" }),
+			slot("landing-m2-4", { string: D, fret: 4, link: "slide" }),
 			slot("landing-m2-5", { string: 5, fret: 3 }),
 			slot("landing-m2-6", { string: G, fret: 2 }),
-			slot("landing-m2-7", { string: G, fret: 0, technique: "pull-off" }),
+			slot("landing-m2-7", { string: G, fret: 0, link: "pull" }),
 			slot("landing-m2-8", { string: E, fret: 0 }),
 		],
 	},

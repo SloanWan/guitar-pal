@@ -12,30 +12,6 @@ export type Duration =
 	| "sixteenth-triplet"
 	| "32nd";
 
-export type Technique =
-	| "hammer-on"
-	| "pull-off"
-	| "slide-up"
-	| "slide-down"
-	| "bend-full"
-	| "bend-half"
-	| "bend-quarter"
-	| "bend-release"
-	| "pre-bend"
-	| "pre-bend-release"
-	| "vibrato"
-	| "vibrato-wide"
-	| "vibrato-bar"
-	| "tapping"
-	| "trill"
-	| "harmonic-natural"
-	| "harmonic-artificial"
-	| "whammy-dive"
-	| "whammy-pull"
-	| "pick-scrape"
-	| "grace-note"
-	| null;
-
 /**
  * A right-hand sweep across a slot's strings. Slot-level, never per-string — a
  * sweep is one physical right-hand action. Semantics are defined by the PLAYING
@@ -57,19 +33,68 @@ export function isBrush(stroke: Stroke): boolean {
 	return stroke === "brush-down" || stroke === "brush-up";
 }
 
+// ─── Technique model v2 ──────────────────────────────────────────────────────
+// A mark on a note is one of three things, and each has its own place:
+//  - a `link`: how the note is reached from the previous note on its string
+//    (one per note — a note arrives one way);
+//  - an effect in `effects`: what is done to the note itself, keyed by kind so
+//    several can coexist and each kind at most once;
+//  - a `Span` on the pattern: a mark shared by a run of notes, anchored on slot
+//    ids so it crosses barlines and survives edits elsewhere.
+// A right-hand hit is a `Percussion` on the slot, like a `Stroke`.
+// The technique registry (`techniqueRegistry.ts`) is the one list of kinds.
+
+export type Link =
+	| { kind: "tie" }
+	| { kind: "hammer" }
+	| { kind: "pull" }
+	/** Direction is the frets'; `picked` is a shift slide (the target is struck again). */
+	| { kind: "slide"; picked?: boolean };
+export type LinkKind = Link["kind"];
+
+export interface NoteEffects {
+	/** `semitones` in quarter steps (0.5 = ¼, 1 = ½, 2 = full, 3 = 1½); `hold` draws the dashed hold line. */
+	bend?: { semitones: number; pre?: boolean; release?: boolean; hold?: boolean };
+	vibrato?: { wide?: boolean; bar?: boolean };
+	harmonic?: { type: "natural" | "artificial" | "pinch"; touchFret?: number };
+	tap?: true;
+	trill?: { fret?: number };
+	tremolo?: { speed: "8th" | "16th" | "32nd" };
+	pick?: { direction: "down" | "up" };
+	accent?: true;
+	staccato?: true;
+	ghost?: true;
+	slideIn?: { from: "below" | "above" };
+	slideOut?: { to: "below" | "above" };
+	/** `semitones` defaults to a whole tone (2), as tab presets have it; `release` brings the bar back by the note's end. */
+	whammy?: { kind: "dive" | "pull"; semitones?: number; release?: boolean };
+	scrape?: true;
+}
+export type EffectKind = keyof NoteEffects;
+
+export type PercussionKind = "slap" | "thumbSlap" | "bodyTap";
+export type Percussion = { kind: PercussionKind; accent?: boolean };
+
+export type SpanKind = "palmMute" | "letRing" | "slur";
+export type Span = {
+	id: string;
+	kind: SpanKind;
+	/** First and last `BeatSlot.id` under the mark, inclusive. */
+	from: string;
+	to: string;
+	/** The strings it applies to; absent = every sounding string of each slot. */
+	strings?: number[];
+};
+
+export const FINGERPICK_SCHEMA_VERSION = 2;
+
 export type StringFret = {
 	fret: number | null;   // null = string not in play for this slot
-	technique: Technique;  // technique used to arrive at this note from the previous slot
-	tied: boolean;         // ties this note to the same string in the previous slot
-	muted: boolean;        // render as "x" (palm mute / dead note)
-	bendTarget?: number;                             // semitones: full=2, half=1, quarter=0.5
-	palmMute?: boolean;                              // P.M.
-	letRing?: boolean;                               // let note ring beyond written duration
-	staccato?: boolean;
-	accent?: boolean;
-	ghostNote?: boolean;                             // bracketed note (7)
-	tremoloPickingSpeed?: "8th" | "16th" | "32nd";  // rapid repeat-picking on one note
-	pickStroke?: "down" | "up";
+	muted: boolean;        // render as "x": a slap on this string, sounding with the slot's other notes
+	/** How the note is reached from the previous note on its string. */
+	link?: Link;
+	/** What is done to the note itself, keyed by kind. */
+	effects?: NoteEffects;
 };
 
 export type BeatSlot = {
@@ -79,6 +104,8 @@ export type BeatSlot = {
 	isGraceNote?: boolean;  // no rhythmic duration; scheduling uses fixed 1/32 beat
 	isRest?: boolean;       // silent slot — keeps its rhythmic `duration` but produces no sound (rest glyph)
 	stroke?: Stroke;        // roll (arpeggiated chord) across this slot's strings — slot-level, not per-string
+	/** A right-hand hit on this slot (slap, thumb slap, body tap). Exclusive with `stroke`. */
+	percussion?: Percussion;
 	/**
 	 * A chord change at this slot. The chord stays in effect until the next slot
 	 * that carries one, across measure boundaries, like a lead sheet — so a
@@ -107,7 +134,11 @@ export type FingerpickPattern = {
 	id: string;
 	name: string;
 	description?: string;
+	/** `FINGERPICK_SCHEMA_VERSION`; absent only on data written before model v2, which `migratePattern` brings up. */
+	schemaVersion?: number;
 	measures: Measure[];
+	/** v2: marks shared by runs of notes (palm mute, let ring, slur). */
+	spans?: Span[];
 	bpm: number;
 	timeSignature: [number, number];
 	/**

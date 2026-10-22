@@ -68,11 +68,6 @@ describe("getBufferForMidi — error paths", () => {
 		expect(() => getBufferForMidi("pluck", 60)).toThrow("not loaded");
 	});
 
-	it("throws SampleLoadError when the muted preset has not been loaded", () => {
-		expect(() => getBufferForMidi("muted", 60)).toThrow(SampleLoadError);
-		expect(() => getBufferForMidi("muted", 60)).toThrow("not loaded");
-	});
-
 	it("throws SampleLoadError when the zone for the requested pitch has no decoded buffer", () => {
 		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86 })]);
 		_setReadyFingerpickPresetForTesting("pluck", preset);
@@ -80,11 +75,6 @@ describe("getBufferForMidi — error paths", () => {
 		expect(() => getBufferForMidi("pluck", 60)).toThrow("No decoded buffer");
 	});
 
-	it("throws independently for each type — loading pluck does not satisfy muted", () => {
-		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: makeBuf("x") })]);
-		_setReadyFingerpickPresetForTesting("pluck", preset);
-		expect(() => getBufferForMidi("muted", 60)).toThrow(SampleLoadError);
-	});
 });
 
 // ─── getBufferForMidi — zone resolution across MIDI 40–86 ────────────────────
@@ -150,31 +140,6 @@ describe("getBufferForMidi — zone resolution across full guitar range", () => 
 	});
 });
 
-// ─── getBufferForMidi — muted preset ─────────────────────────────────────────
-
-describe("getBufferForMidi — muted preset resolves independently", () => {
-	beforeEach(() => {
-		_resetFingerpickCachesForTesting();
-	});
-
-	it("returns the muted-preset buffer at edge pitches 40 and 86", () => {
-		const mutedBuf = makeBuf("muted");
-		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: mutedBuf })]);
-		_setReadyFingerpickPresetForTesting("muted", preset);
-		expect(getBufferForMidi("muted", FINGERPICK_MIDI_LOW)).toBe(mutedBuf);
-		expect(getBufferForMidi("muted", FINGERPICK_MIDI_HIGH)).toBe(mutedBuf);
-	});
-
-	it("returns a decoded buffer for every MIDI note in 40–86 from the muted preset", () => {
-		const mutedBuf = makeBuf("muted");
-		const preset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: mutedBuf })]);
-		_setReadyFingerpickPresetForTesting("muted", preset);
-		for (let midi = FINGERPICK_MIDI_LOW; midi <= FINGERPICK_MIDI_HIGH; midi++) {
-			expect(() => getBufferForMidi("muted", midi)).not.toThrow();
-		}
-	});
-});
-
 // ─── Cache separation ─────────────────────────────────────────────────────────
 
 describe("cache separation — fingerpick and strum caches are independent", () => {
@@ -235,8 +200,8 @@ describe("cache separation — fingerpick and strum caches are independent", () 
 		const fpPreset = makePreset([makeZone({ keyRangeLow: 40, keyRangeHigh: 86, buffer: fpBuf })]);
 		_setReadyFingerpickPresetForTesting("pluck", fpPreset);
 
-		// Strum preset was reset — should still throw/noop, not accidentally use fingerpick preset
-		expect(() => getBufferForMidi("muted", 60)).toThrow(SampleLoadError);
+		// The fingerpick preset resolves; the strum caches were reset and stay empty.
+		expect(getBufferForMidi("pluck", 60)).toBe(fpBuf);
 	});
 });
 
@@ -266,7 +231,6 @@ describe.skipIf(!process.env.INTEGRATION)(
 	() => {
 		it.each([
 			["0250_LK_AcousticSteel_SF2_file", "_tone_0250_LK_AcousticSteel_SF2_file", "pluck"] as const,
-			["0280_FluidR3_GM_sf2_file", "_tone_0280_FluidR3_GM_sf2_file", "muted"] as const,
 		])(
 			"parses live CDN preset %s with correct structure",
 			async (key, _varName, _type: FingerpickSoundType) => {

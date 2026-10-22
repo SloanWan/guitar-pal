@@ -1,5 +1,5 @@
 import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
-import { barSlots, emptyStrings, type DraftSlot, type DraftStringFret } from "@/lib/assistant/tab/draftSlots";
+import { barSlots, draftNote, emptyStrings, type DraftSlot, type DraftStringFret } from "@/lib/assistant/tab/draftSlots";
 import { isCompound, type Meter } from "@/lib/strumMeter";
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
 import { splitTicks } from "@/lib/textTab/ticks";
@@ -52,17 +52,7 @@ type DraftMeasure = { slots: DraftSlot[] };
 
 function struck(notes: TextTabNote[]): DraftStringFret[] {
 	const strings = emptyStrings();
-	for (const note of notes) {
-		strings[note.stringIndex] = {
-			fret: note.fret,
-			technique: note.technique,
-			tied: false,
-			muted: note.muted,
-			...(note.bendTarget !== undefined ? { bendTarget: note.bendTarget } : {}),
-			...(note.palmMute ? { palmMute: true } : {}),
-			...(note.letRing ? { letRing: true } : {}),
-		};
-	}
+	for (const note of notes) strings[note.stringIndex] = draftNote(note);
 	return strings;
 }
 
@@ -71,7 +61,7 @@ function held(notes: TextTabNote[]): DraftStringFret[] {
 	const strings = emptyStrings();
 	for (const note of notes) {
 		if (note.fret === null) continue;
-		strings[note.stringIndex] = { fret: note.fret, technique: null, tied: true, muted: false };
+		strings[note.stringIndex] = { fret: note.fret, muted: false, link: { kind: "tie" } };
 	}
 	return strings;
 }

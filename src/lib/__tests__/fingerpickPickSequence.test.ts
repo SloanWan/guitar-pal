@@ -310,11 +310,11 @@ describe("applyPickSequence", () => {
 		expect(warnings).toHaveLength(1);
 	});
 
-	it("writes a string the shape leaves out as a dead note and says so", () => {
+	it("writes a string the shape leaves out as an x and says so", () => {
 		const p = pattern([measure("a", [C, undefined, undefined, undefined])]);
 		const { pattern: out, warnings } = applyPickSequence(p, 0, ok("6321"), voicingFor);
 		expect(out.measures[0].slots[0].strings[5].muted).toBe(true);
-		expect(warnings).toEqual(["String 6 is not in the C shape — written as dead notes."]);
+		expect(warnings).toEqual(["String 6 is not in the C shape — written as x."]);
 	});
 
 	it("writes rests as rest slots", () => {
@@ -358,9 +358,9 @@ describe("applyPickSequence", () => {
 		]);
 		expect(usedUnits(slots)).toBe(measureCapacity([4, 4]));
 		// The root lasts an eighth; the 2 before the beat line is carried on, tied, at the same fret.
-		expect(slots[0].strings[4]).toMatchObject({ fret: 3, tied: false });
-		expect(slots[2].strings[1]).toMatchObject({ fret: 1, tied: false });
-		expect(slots[3].strings[1]).toMatchObject({ fret: 1, tied: true });
+		expect(slots[0].strings[4]).toMatchObject({ fret: 3 });
+		expect(slots[2].strings[1]).toMatchObject({ fret: 1 });
+		expect(slots[3].strings[1]).toMatchObject({ fret: 1, link: { kind: "tie" } });
 		expect(slots[3].strings.filter((s) => s.fret !== null)).toHaveLength(1);
 		expect(warnings).toEqual([]);
 	});
@@ -370,10 +370,10 @@ describe("applyPickSequence", () => {
 		const p = pattern([measure("a", [C, undefined, Am, undefined])]);
 		const { pattern: out } = applyPickSequence(p, 0, ok("32_1"), voicingFor);
 		const slots = out.measures[0].slots;
-		expect(slots[1].strings[1]).toMatchObject({ fret: 1, tied: false });
-		expect(slots[2].strings[1]).toMatchObject({ fret: 1, tied: true });
+		expect(slots[1].strings[1]).toMatchObject({ fret: 1 });
+		expect(slots[2].strings[1]).toMatchObject({ fret: 1, link: { kind: "tie" } });
 		expect(slots[2].chord).toEqual(Am);
-		expect(slots[3].strings[0]).toMatchObject({ fret: 0, tied: false });
+		expect(slots[3].strings[0]).toMatchObject({ fret: 0 });
 	});
 
 	it("lengthens a rest with a hold", () => {

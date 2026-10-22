@@ -13,10 +13,13 @@ import {
 	findSlotStartTime,
 	computeMeasureBoundaries,
 	scheduleFingerpickNote,
+	noiseBufferFor,
 	_shutdownEngine,
 	VOICE_STEAL_FADE_TAU,
 	DEFAULT_ROLL_PARAMS,
 	DEFAULT_SLIDE_PARAMS,
+	DEFAULT_SLAP_PARAMS,
+	type SlapParams,
 	type ScheduleEvent,
 	type MeasureBoundary,
 	type RollParams,
@@ -38,8 +41,7 @@ import {
 import {
 	preloadFingerpickPresets,
 	getFingerpickNoteData,
-	type FingerpickSoundType,
-} from "@/components/strum/useGuitarSampleLoader";
+	} from "@/components/strum/useGuitarSampleLoader";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,9 +54,23 @@ const NORMAL_GAIN = 0.8;
 /** Reduced gain for legato technique notes (hammer-on, pull-off, trill). */
 const TECHNIQUE_GAIN = 0.5;
 /** Gain for tapping notes — slightly softer than a normal pick attack. */
-const TAPPING_GAIN = 0.8;
+/** A tapped note is lighter than a picked one. */
+const TAPPING_GAIN = 0.65;
+/** A harmonic: the partial, lighter than a pluck, with a quiet octave under it. */
+const HARMONIC_GAIN = 0.7;
+const HARMONIC_BODY_GAIN = 0.35;
+/** A pick scrape's noise sweep. */
+const SCRAPE_GAIN = 0.5;
+/** A knock on the body. */
+const BODY_TAP_GAIN = 0.8;
 /** Gain for ghost notes (parenthesised/bracketed notes). */
 const GHOST_GAIN = 0.3;
+/** A slap: an x on a string, or a hit's dead strike across the strings — full velocity (alphaTab plays a dead slap at forte). */
+const SLAP_GAIN = 0.8;
+/** Multiplier under a palm mute: the hand takes some of the attack. */
+const PALM_MUTE_GAIN = 0.75;
+/** Every second stroke of a tremolo is a touch softer, so the run reads as a hand. */
+const TREMOLO_ALT_GAIN = 0.85;
 /** Accent boost multiplier applied on top of the technique-derived base gain. */
 const ACCENT_MULTIPLIER = 1.3;
 
@@ -82,6 +98,11 @@ const LET_RING_DECAY_TC_S = 1.5;
  */
 const LET_RING_LIFETIME_TAUS = 4;
 
+/** Ceiling on a palm-muted note's decay τ (s): the hand on the strings stops them short. */
+const PALM_MUTE_DECAY_TC_S = 0.12;
+/** Ceiling on a harmonic's decay τ (s): a partial rings, but not as long as a let-ring note. */
+const HARMONIC_DECAY_TC_S = 1.2;
+
 // ─── Envelope parameters ────────────────────────────────────────────────────
 // Tunable per-note envelope constants. Defaults equal the hardcoded production
 // values above, so an engine consumer that never calls setEnvelopeParams() gets
@@ -97,6 +118,10 @@ export interface EnvelopeParams {
 	voiceStealFadeTau: number;
 	/** Fixed decay time constant (s) used instead of the duration-derived τ when letRing is set. */
 	letRingDecayTc: number;
+	/** Ceiling on a palm-muted note's decay τ (s). */
+	palmMuteDecayTc: number;
+	/** Ceiling on a harmonic's decay τ (s). */
+	harmonicDecayTc: number;
 	/** Margin (s) added past a normal note's end before its hard source.stop(). */
 	sourceStopBuffer: number;
 }
@@ -106,6 +131,8 @@ export const DEFAULT_ENVELOPE: EnvelopeParams = {
 	minDecayTc: MIN_DECAY_TC_S,
 	voiceStealFadeTau: VOICE_STEAL_FADE_TAU,
 	letRingDecayTc: LET_RING_DECAY_TC_S,
+	palmMuteDecayTc: PALM_MUTE_DECAY_TC_S,
+	harmonicDecayTc: HARMONIC_DECAY_TC_S,
 	sourceStopBuffer: SOURCE_STOP_BUFFER_S,
 };
 
@@ -247,6 +274,9 @@ export function useFingerpickAudioEngine() {
 	// a change takes effect on the next scheduled note (next loop pass / next play).
 	const [slideParams, setSlideParams] = useState<SlideParams>(DEFAULT_SLIDE_PARAMS);
 	const slideParamsRef = useRef<SlideParams>(DEFAULT_SLIDE_PARAMS);
+	// Slap voicing (strike, clack, thud). Read via slapParamsRef inside scheduleNote.
+	const [slapParams, setSlapParams] = useState<SlapParams>(DEFAULT_SLAP_PARAMS);
+	const slapParamsRef = useRef<SlapParams>(DEFAULT_SLAP_PARAMS);
 	// Hammer-on / pull-off gain+filter treatment (A/B). "current" = production behaviour.
 	// Read via legatoTreatmentRef inside scheduleNote; takes effect on the next note.
 	const [legatoTreatment, setLegatoTreatment] = useState<LegatoTreatment>("current");
@@ -337,6 +367,9 @@ export function useFingerpickAudioEngine() {
 		slideParamsRef.current = slideParams;
 	}, [slideParams]);
 	useEffect(() => {
+		slapParamsRef.current = slapParams;
+	}, [slapParams]);
+	useEffect(() => {
 		legatoTreatmentRef.current = legatoTreatment;
 	}, [legatoTreatment]);
 
@@ -388,10 +421,10 @@ export function useFingerpickAudioEngine() {
 				target,
 				voices: perStringVoicesRef.current,
 				allSources: allSourcesRef.current,
-				resolveNoteData: (muted, midi) => {
-					const soundType: FingerpickSoundType = muted ? "muted" : "pluck";
+				// One sample set: a slap is the same string cut short, not another preset.
+				resolveNoteData: (midi) => {
 					try {
-						return getFingerpickNoteData(soundType, midi);
+						return getFingerpickNoteData("pluck", midi);
 					} catch {
 						return null;
 					}
@@ -401,6 +434,13 @@ export function useFingerpickAudioEngine() {
 					technique: TECHNIQUE_GAIN,
 					tapping: TAPPING_GAIN,
 					ghost: GHOST_GAIN,
+					slap: SLAP_GAIN,
+					palmMute: PALM_MUTE_GAIN,
+					tremoloAltGain: TREMOLO_ALT_GAIN,
+					harmonic: HARMONIC_GAIN,
+					harmonicBody: HARMONIC_BODY_GAIN,
+					scrape: SCRAPE_GAIN,
+					bodyTap: BODY_TAP_GAIN,
 					accentMultiplier: ACCENT_MULTIPLIER,
 					letRingLifetimeTaus: LET_RING_LIFETIME_TAUS,
 				},
@@ -408,6 +448,8 @@ export function useFingerpickAudioEngine() {
 				forceLetRing: forceLetRingRef.current,
 				legatoTreatment: legatoTreatmentRef.current,
 				slideParams: slideParamsRef.current,
+				slapParams: slapParamsRef.current,
+				noiseBuffer: noiseBufferFor(ctx),
 				// Read-only voice-steal instrumentation — no-op unless a dev consumer has
 				// registered an observer. Never fired on a slide handoff (no steal occurs).
 				onVoiceSteal: (outgoing, incoming) => {
@@ -1083,6 +1125,16 @@ export function useFingerpickAudioEngine() {
 		setSlideParams(DEFAULT_SLIDE_PARAMS);
 	}
 
+	/** Merge tunable slap parameters; takes effect on the next scheduled note (`/dev/slap-lab`). */
+	function setSlapParamsPartial(partial: Partial<SlapParams>): void {
+		setSlapParams((prev) => ({ ...prev, ...partial }));
+	}
+
+	/** Restore the slap voicing to its production defaults. */
+	function resetSlapParams(): void {
+		setSlapParams(DEFAULT_SLAP_PARAMS);
+	}
+
 	/**
 	 * Set the hammer-on / pull-off treatment (A/B). Read via legatoTreatmentRef inside
 	 * scheduleNote; takes effect on the next scheduled note. Default "current" leaves
@@ -1171,6 +1223,9 @@ export function useFingerpickAudioEngine() {
 		slideParams,
 		setSlideParams: setSlideParamsPartial,
 		resetSlideParams,
+		slapParams,
+		setSlapParams: setSlapParamsPartial,
+		resetSlapParams,
 		legatoTreatment,
 		setLegatoTreatment: handleSetLegatoTreatment,
 		setVoiceStealObserver,

@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Renderer, TabStave, Voice, Formatter, Beam, Barline, StemmableNote } from "vexflow";
+import {
+	Renderer,
+	TabStave,
+	Voice,
+	Formatter,
+	Beam,
+	Barline,
+	StemmableNote,
+} from "vexflow";
 
 import { Measure } from "@/lib/fingerpickTypes";
 import {
@@ -11,6 +19,11 @@ import {
 	type RollMark,
 	type BracketSpan,
 	type ExpressionCounts,
+	type HitMark,
+	type LeadIn,
+	type RenderContext,
+	type SlideMark,
+	type WhammyMark
 } from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 import { slotPitchLabels, splitPitchLabel, type SlotPitchLabel } from "@/lib/fingerpickPitch";
@@ -74,6 +87,21 @@ const BRACKET_BASELINE_OFFSET = 8;
 const BRACKET_LINE_RISE = 4;
 const BRACKET_END_TICK = 3;
 const BRACKET_LABELS: Record<BracketSpan["kind"], string> = { "palm-mute": "P.M.", "let-ring": "let ring" };
+// A hit's letter (S, T, B) over its column, above the bracket line; a held
+// bend's dashed line runs at the arrow's height to the next note; a lead-in
+// arc reaches into the row's first note from the barline.
+const HIT_FONT_SIZE = 10;
+const HIT_BASELINE_OFFSET = 30;
+const HOLD_LINE_RISE = 30;
+const HOLD_LINE_START = 28;
+const LEAD_IN_REACH = 14;
+// A slide into / out of a note: a short slanted line beside the number.
+const SLIDE_MARK_REACH = 12;
+// A whammy dive: a dashed line under the stave falling to the bar's depth,
+// labelled; a pull rises instead.
+const WHAMMY_LINE_BELOW = 10;
+const WHAMMY_LINE_DROP = 14;
+const WHAMMY_FONT_SIZE = 9;
 // Extra room for a repeat-begin (|:) / repeat-end (:|) barline's thick line + dots.
 const REPEAT_BARLINE_EXTRA_WIDTH = 14;
 // A roll arrow sits left of its note; a slot needs this much more so it never
@@ -145,7 +173,13 @@ interface TabStaveRowProps {
 	 * (fingerpick order, 0 = high e) and its written fret, the label to draw.
 	 * Given, the stave grows footroom for the column.
 	 */
-	pitchLabel?: (stringIndex: number, fret: number) => string;
+	pitchLabel?: (stringIndex: number, fret: number, shift?: number) => string;
+	/**
+	 * The pattern's index (`indexPattern`), so spans crossing a barline are
+	 * drawn as one bracket per measure and a link into a row's first note gets
+	 * its half arc. Without it each measure is read on its own.
+	 */
+	renderContext?: RenderContext;
 }
 
 /** Where a chord mark landed after formatting, for the diagram overlay. */
@@ -458,28 +492,145 @@ function drawRoll(
 	svgEl.appendChild(g);
 }
 
+/** A hit's letter centred over its column. */
+function drawHit(svgEl: SVGSVGElement, x: number, y: number, label: string): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const text = document.createElementNS(ns, "text");
+	text.setAttribute("class", "vf-hit");
+	text.setAttribute("x", String(x));
+	text.setAttribute("y", String(y));
+	text.setAttribute("text-anchor", "middle");
+	text.setAttribute("font-family", MONO_FAMILY);
+	text.setAttribute("font-size", `${HIT_FONT_SIZE}px`);
+	text.setAttribute("font-weight", "600");
+	text.setAttribute("fill", "var(--ink)");
+	text.textContent = label;
+	svgEl.appendChild(text);
+}
+
+/** A held bend: a dashed line at the arrow's height from the bent note to the next. */
+function drawHold(svgEl: SVGSVGElement, x1: number, x2: number, y: number): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const line = document.createElementNS(ns, "path");
+	line.setAttribute("class", "vf-hold");
+	line.setAttribute("d", `M ${x1} ${y} L ${x2} ${y}`);
+	line.setAttribute("fill", "none");
+	line.setAttribute("stroke", "var(--ink)");
+	line.setAttribute("stroke-width", "1");
+	line.setAttribute("stroke-dasharray", "4 3");
+	svgEl.appendChild(line);
+}
+
+/**
+ * A link into a row's first note from the note before the barline: half an
+ * arc (tie, hammer, pull) or a short slanted line (slide) reaching the note
+ * from the left, the way a stave continues a tie across a line break.
+ */
+function drawLeadIn(svgEl: SVGSVGElement, x: number, y: number, kind: LeadIn["kind"]): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	path.setAttribute("class", "vf-lead-in");
+	const x0 = x - LEAD_IN_REACH;
+	if (kind === "slide") {
+		path.setAttribute("d", `M ${x0} ${y + 4} L ${x - 4} ${y - 4}`);
+	} else {
+		// A quarter arc rising from the left into the number.
+		path.setAttribute("d", `M ${x0} ${y - 2} Q ${x0 + LEAD_IN_REACH * 0.6} ${y - 8} ${x - 3} ${y - 7}`);
+	}
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--ink)");
+	path.setAttribute("stroke-width", "1");
+	svgEl.appendChild(path);
+}
+
+/** A slide into (left of) or out of (right of) a number, rising or falling by where the pitch comes from or goes. */
+function drawSlideMark(svgEl: SVGSVGElement, x: number, y: number, mark: SlideMark): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	path.setAttribute("class", "vf-slide-mark");
+	// A slide in from below rises into the number; out to below falls away from it.
+	const farY = mark.direction === "below" ? y + 5 : y - 5;
+	const near = mark.side === "in" ? x - 5 : x + 9;
+	const far = mark.side === "in" ? x - 5 - SLIDE_MARK_REACH : x + 9 + SLIDE_MARK_REACH;
+	path.setAttribute("d", `M ${far} ${farY} L ${near} ${y}`);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--ink)");
+	path.setAttribute("stroke-width", "1");
+	svgEl.appendChild(path);
+}
+
+/** A whammy-bar dive (falling) or pull (rising): a dashed line from the note to the next, its depth in semitones at the end. */
+function drawWhammy(svgEl: SVGSVGElement, x1: number, x2: number, y: number, mark: WhammyMark): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const g = document.createElementNS(ns, "g");
+	g.setAttribute("class", "vf-whammy");
+	const yEnd = mark.kind === "dive" ? y + WHAMMY_LINE_DROP : y - WHAMMY_LINE_DROP;
+	const line = document.createElementNS(ns, "path");
+	line.setAttribute("d", `M ${x1} ${y} L ${x2} ${yEnd}`);
+	line.setAttribute("fill", "none");
+	line.setAttribute("stroke", "var(--ink)");
+	line.setAttribute("stroke-width", "1");
+	line.setAttribute("stroke-dasharray", "4 3");
+	g.appendChild(line);
+	const text = document.createElementNS(ns, "text");
+	text.setAttribute("x", String(x2 + 2));
+	text.setAttribute("y", String(yEnd + 3));
+	text.setAttribute("font-family", MONO_FAMILY);
+	text.setAttribute("font-size", `${WHAMMY_FONT_SIZE}px`);
+	text.setAttribute("fill", "var(--ink-dim)");
+	text.textContent = mark.label;
+	g.appendChild(text);
+	svgEl.appendChild(g);
+}
+
+/** A pick scrape: a heavy diagonal across the six lines at the note. */
+function drawScrape(svgEl: SVGSVGElement, x: number, yTop: number, yBottom: number): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	path.setAttribute("class", "vf-scrape");
+	path.setAttribute("d", `M ${x - 7} ${yBottom + 1} L ${x + 7} ${yTop}`);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--ink)");
+	path.setAttribute("stroke-width", "2.5");
+	path.setAttribute("stroke-linecap", "round");
+	svgEl.appendChild(path);
+}
+
 /**
  * A palm-mute / let-ring bracket: its label at the run's first note, then a
  * dashed line to the last note with a short tick down at the end. `y` is the
  * label's baseline.
  */
-function drawBracket(svgEl: SVGSVGElement, x1: number, x2: number, y: number, label: string): void {
+function drawBracket(
+	svgEl: SVGSVGElement,
+	x1: number,
+	x2: number,
+	y: number,
+	label: string,
+	/** A run continuing from the previous row's end: no label, the line starts at the note. */
+	continued = false,
+	/** A run that goes on past this measure: no closing tick. */
+	open = false,
+): void {
 	const ns = "http://www.w3.org/2000/svg";
 	const g = document.createElementNS(ns, "g");
 	g.setAttribute("class", "vf-bracket");
-	const text = document.createElementNS(ns, "text");
-	text.setAttribute("x", String(x1));
-	text.setAttribute("y", String(y));
-	text.setAttribute("font-family", MONO_FAMILY);
-	text.setAttribute("font-size", `${BRACKET_FONT_SIZE}px`);
-	text.setAttribute("fill", "var(--ink-dim)");
-	text.textContent = label;
-	g.appendChild(text);
-	const lineStart = x1 + label.length * BRACKET_CHAR_WIDTH + 3;
+	let lineStart = x1;
+	if (!continued) {
+		const text = document.createElementNS(ns, "text");
+		text.setAttribute("x", String(x1));
+		text.setAttribute("y", String(y));
+		text.setAttribute("font-family", MONO_FAMILY);
+		text.setAttribute("font-size", `${BRACKET_FONT_SIZE}px`);
+		text.setAttribute("fill", "var(--ink-dim)");
+		text.textContent = label;
+		g.appendChild(text);
+		lineStart = x1 + label.length * BRACKET_CHAR_WIDTH + 3;
+	}
 	const lineEnd = Math.max(x2, lineStart + 8);
 	const lineY = y - BRACKET_LINE_RISE;
 	const line = document.createElementNS(ns, "path");
-	line.setAttribute("d", `M ${lineStart} ${lineY} L ${lineEnd} ${lineY} L ${lineEnd} ${lineY + BRACKET_END_TICK}`);
+	line.setAttribute("d", `M ${lineStart} ${lineY} L ${lineEnd} ${lineY}${open ? "" : ` L ${lineEnd} ${lineY + BRACKET_END_TICK}`}`);
 	line.setAttribute("fill", "none");
 	line.setAttribute("stroke", "var(--ink-dim)");
 	line.setAttribute("stroke-width", "1");
@@ -498,6 +649,7 @@ export default function TabStaveRow({
 	chordDiagramSize,
 	offShapeStrings,
 	pitchLabel,
+	renderContext,
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [anchors, setAnchors] = useState<ChordAnchor[]>([]);
@@ -616,12 +768,18 @@ export default function TabStaveRow({
 				noteSlots: number[];
 				rolls: RollMark[];
 				brackets: BracketSpan[];
+				hits: HitMark[];
+				holds: number[];
+				leadIns: LeadIn[];
+				slideMarks: SlideMark[];
+				whammies: WhammyMark[];
+				scrapes: number[];
 				stave: TabStave;
 			}[] = [];
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets, chordLabels, rolls, brackets, noteStrings, noteSlots } =
-					fingerpickToVexFlow(measure);
-				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, stave: staves[i] });
+				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, noteStrings, noteSlots } =
+					fingerpickToVexFlow(measure, renderContext);
+				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, stave: staves[i] });
 				const voice = new Voice({ numBeats: timeSignature[0], beatValue: timeSignature[1] }).setMode(
 					Voice.Mode.SOFT,
 				);
@@ -633,6 +791,7 @@ export default function TabStaveRow({
 				connectors.forEach((c) => c.setContext(ctx).draw());
 				beams.forEach((b) => b.setContext(ctx).draw());
 				tuplets.forEach((t) => t.setContext(ctx).draw());
+
 
 				// Chord symbols want the x of the note where the chord changes (known
 				// only now, after formatting); they are drawn once the whole row is
@@ -728,14 +887,47 @@ export default function TabStaveRow({
 			}
 
 			// Palm-mute / let-ring brackets over their runs, from the first note's
-			// number to just past the last one's.
+			// number to just past the last one's. A run carried over from the
+			// previous measure keeps its line but repeats its label only when the
+			// measure opens a row; one that goes on past the measure runs to the
+			// barline and leaves its closing tick to the segment after.
 			if (svgEl) {
-				drawn.forEach(({ notes, brackets, stave }) => {
+				drawn.forEach(({ notes, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, stave }, i) => {
 					const y = stave.getYForLine(0) - BRACKET_BASELINE_OFFSET;
-					brackets.forEach(({ kind, fromNoteIndex, toNoteIndex }) => {
+					brackets.forEach(({ kind, fromNoteIndex, toNoteIndex, continuesBefore, continuesAfter }) => {
 						const x1 = notes[fromNoteIndex].getAbsoluteX() - 4;
-						const x2 = notes[toNoteIndex].getAbsoluteX() + 10;
-						drawBracket(svgEl, x1, x2, y, BRACKET_LABELS[kind]);
+						const x2 = continuesAfter ? stave.getNoteEndX() : notes[toNoteIndex].getAbsoluteX() + 10;
+						drawBracket(svgEl, x1, x2, y, BRACKET_LABELS[kind], continuesBefore === true && i > 0, continuesAfter === true);
+					});
+					const hitY = stave.getYForLine(0) - HIT_BASELINE_OFFSET;
+					hits.forEach(({ noteIndex, label }) => {
+						drawHit(svgEl, notes[noteIndex].getAbsoluteX() + 4, hitY, label);
+					});
+					const holdY = stave.getYForLine(0) - HOLD_LINE_RISE;
+					holds.forEach((noteIndex) => {
+						const x1 = notes[noteIndex].getAbsoluteX() + HOLD_LINE_START;
+						const next = notes[noteIndex + 1];
+						const x2 = next ? next.getAbsoluteX() - 2 : stave.getNoteEndX();
+						if (x2 > x1) drawHold(svgEl, x1, x2, holdY);
+					});
+					leadIns.forEach(({ noteIndex, stringIndex, kind }) => {
+						drawLeadIn(svgEl, notes[noteIndex].getAbsoluteX(), stave.getYForLine(stringIndex), kind);
+					});
+					slideMarks.forEach((mark) => {
+						drawSlideMark(svgEl, notes[mark.noteIndex].getAbsoluteX(), stave.getYForLine(mark.stringIndex), mark);
+					});
+					// A whammy line sits under the stave, a dive falling and a pull rising,
+					// from the note to the next.
+					const whammyY = stave.getYForLine(5) + WHAMMY_LINE_BELOW;
+					whammies.forEach((mark) => {
+						const x1 = notes[mark.noteIndex].getAbsoluteX() + 2;
+						const next = notes[mark.noteIndex + 1];
+						// Stop short of the next stem so the depth label has room before it.
+						const x2 = next ? next.getAbsoluteX() - 26 : stave.getNoteEndX() - 26;
+						if (x2 > x1) drawWhammy(svgEl, x1, x2, mark.kind === "dive" ? whammyY : whammyY + WHAMMY_LINE_DROP, mark);
+					});
+					scrapes.forEach((noteIndex) => {
+						drawScrape(svgEl, notes[noteIndex].getAbsoluteX(), stave.getYForLine(0), stave.getYForLine(5));
 					});
 				});
 			}
@@ -765,7 +957,7 @@ export default function TabStaveRow({
 					const texts = el.querySelectorAll("text");
 					noteStrings[j].forEach((stringIndex, pos) => {
 						const sf = slot.strings[stringIndex];
-						if (sf.tied && !sf.muted) texts[pos]?.setAttribute("fill", "var(--ink-dim)");
+						if (sf.link?.kind === "tie" && !sf.muted) texts[pos]?.setAttribute("fill", "var(--ink-dim)");
 					});
 				});
 			});
@@ -826,6 +1018,7 @@ export default function TabStaveRow({
 		chordDiagramSize?.width,
 		offShapeStrings,
 		pitchLabel,
+		renderContext,
 	]);
 
 	return (

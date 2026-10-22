@@ -241,7 +241,7 @@ export default function FingerpickEditorChordSection({
 					<button
 						type="button"
 						onClick={applyFillFromChord}
-						title="Write this shape's frets into the slot's empty cells. Cells already holding a fret or a dead note are left alone."
+						title="Write this shape's frets into the slot's empty cells. Cells already holding a fret or an x are left alone."
 						className="h-7 border border-line-strong px-2 font-mono text-xs font-semibold text-ink-dim hover:bg-denim-tint hover:text-denim transition-colors"
 					>
 						Fill column

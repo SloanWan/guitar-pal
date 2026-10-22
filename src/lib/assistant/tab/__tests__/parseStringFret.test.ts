@@ -37,7 +37,7 @@ describe("readStringFret", () => {
 		expect(notes("string:6654 fret:8 11 10 8")).toEqual(["6:8", "6:11", "5:10", "4:8"]);
 	});
 
-	it("reads x as a dead note", () => {
+	it("reads x as a slap on the string", () => {
 		expect(notes("string:654 fret:3-x-0")).toEqual(["6:3", "5:x", "4:0"]);
 	});
 

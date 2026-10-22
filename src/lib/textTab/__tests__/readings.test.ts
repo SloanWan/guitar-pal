@@ -25,12 +25,12 @@ const TIGHT = [
 	"E|-0-0-0-|-3--3--|",
 ].join("\n");
 
-type Slot = { duration: Duration; isRest?: boolean; strings: { fret: number | null; tied: boolean }[] };
+type Slot = { duration: Duration; isRest?: boolean; strings: { fret: number | null; link?: { kind: string } }[] };
 const measuresOf = (draft: { measures?: unknown[] }) => draft.measures as { slots: Slot[] }[];
 const rhythm = (slots: Slot[]) => slots.map((s) => `${s.isRest ? "r" : ""}${s.duration}`);
 const frets = (slot: Slot) =>
 	slot.strings
-		.map((s, i) => (s.fret === null ? null : `${i + 1}:${s.fret}${s.tied ? "~" : ""}`))
+		.map((s, i) => (s.fret === null ? null : `${i + 1}:${s.fret}${s.link?.kind === "tie" ? "~" : ""}`))
 		.filter((s): s is string => s !== null)
 		.join(" ");
 
@@ -181,9 +181,8 @@ describe("marks through every reading", () => {
 		const columns = readTextTab(TAB)!;
 		expect(columns.bars[0].columns.map((c) => c.at)).toEqual([0, 4]);
 		const g = evenReading(columns, [4, 4], "eighth").draft.measures[0].slots.map((s) => s.strings[2]);
-		expect(g[0]).toMatchObject({ fret: 7, technique: "bend-full", bendTarget: 2, palmMute: true });
-		expect(g[1]).toMatchObject({ fret: 5, technique: null });
-		expect(g[1].palmMute).toBeUndefined();
+		expect(g[0]).toMatchObject({ fret: 7, effects: { bend: { semitones: 2 } }, palmMute: true });
+		expect(g[1]).toEqual({ fret: 5, muted: false });
 	});
 
 	it("reports a split fret run once, whichever readings are offered", () => {

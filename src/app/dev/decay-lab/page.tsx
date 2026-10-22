@@ -35,12 +35,10 @@ import { DECAY_LAB_FIXTURE } from "./fixture";
 // exercise the letRing τ at all.
 const PATTERN_OPTIONS: FingerpickPattern[] = [DECAY_LAB_FIXTURE, ...PRESET_FINGERPICK_PATTERNS];
 
-// True when any string in any slot has letRing set (i.e. the pattern's authored
-// sound depends on the letRing decay τ).
+// True when the pattern carries a let-ring span (i.e. its authored sound
+// depends on the letRing decay τ).
 function patternHasLetRing(pattern: FingerpickPattern): boolean {
-	return pattern.measures.some((m) =>
-		m.slots.some((slot) => slot.strings.some((sf) => sf.letRing === true)),
-	);
+	return (pattern.spans ?? []).some((span) => span.kind === "letRing");
 }
 
 // ── Width computation (mirrors the tab-notation dev page) ───────────────────
@@ -57,7 +55,7 @@ function techniqueConnectorCount(measure: Measure): number {
 	return measure.slots.reduce(
 		(count, slot) =>
 			count +
-			slot.strings.filter((sf) => sf.technique === "hammer-on" || sf.technique === "pull-off")
+			slot.strings.filter((sf) => sf.link?.kind === "hammer" || sf.link?.kind === "pull")
 				.length,
 		0,
 	);
@@ -91,6 +89,8 @@ const SLIDERS: SliderSpec[] = [
 	{ key: "minDecayTc", label: "Min decay τ", min: 0.01, max: 0.5, step: 0.01, unit: "s" },
 	{ key: "voiceStealFadeTau", label: "Voice-steal fade τ", min: 0.001, max: 0.1, step: 0.001, unit: "s" },
 	{ key: "letRingDecayTc", label: "letRing decay τ", min: 0.2, max: 4.0, step: 0.1, unit: "s" },
+	{ key: "palmMuteDecayTc", label: "Palm-mute decay τ (ceiling)", min: 0.03, max: 0.5, step: 0.01, unit: "s" },
+	{ key: "harmonicDecayTc", label: "Harmonic decay τ (ceiling)", min: 0.1, max: 2.0, step: 0.05, unit: "s" },
 	{ key: "sourceStopBuffer", label: "Source stop buffer", min: 0.0, max: 0.5, step: 0.01, unit: "s" },
 ];
 

@@ -71,6 +71,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "Fingerpick roll technique lab — stagger, gap, and anchor modes.",
 	},
 	{
+		href: "/dev/slap-lab",
+		label: "slap-lab",
+		description: "How a slap sounds — the strike, the clack on the frets and the body thud as faders over looping bars; copy into DEFAULT_SLAP_PARAMS.",
+	},
+	{
 		href: "/dev/slide-lab",
 		label: "slide-lab",
 		description: "Fingerpick slide technique lab — duration scaling, anchors, legato.",
@@ -84,6 +89,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		href: "/dev/strum-sound-lab",
 		label: "strum-sound-lab",
 		description: "Strum sample × decay-envelope lab — presets, let ring, hard cut, AHDSR.",
+	},
+	{
+		href: "/dev/technique-gallery",
+		label: "technique-gallery",
+		description: "Every technique in the registry: one bar each, drawn by the converter and playable through the scheduler.",
 	},
 	{
 		href: "/dev/tab-notation",

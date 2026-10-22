@@ -26,7 +26,6 @@ import {
 import {
 	type FingerpickPattern,
 	type Measure,
-	type StringFret,
 } from "@/lib/fingerpickTypes";
 import {
 	makeDefaultPattern,
@@ -34,14 +33,6 @@ import {
 	setFret,
 	setInactive,
 	toggleMuted,
-	setTechnique,
-	setNoteTechnique,
-	availableNoteTechniques,
-	bendHeightFor,
-	nextBendTechnique,
-	nextVibratoTechnique,
-	type NoteTechnique,
-	setTied,
 	moveCell,
 	addMeasure,
 	computeBeatLabels,
@@ -58,6 +49,21 @@ import {
 	type SlotTarget,
 } from "@/lib/fingerpickEdit";
 import { deriveRepeatDirectives } from "@/lib/fingerpickRepeats";
+import {
+	clearNoteMarks,
+	nextBend,
+	nextVibrato,
+	setEffect,
+	setLink,
+	setPercussion,
+	slotOf,
+	techniqueBlock,
+	toggleLink,
+	toggleSpanOver,
+} from "@/lib/fingerpickTechniqueEdit";
+import { indexPattern, spanCovers } from "@/lib/fingerpickIndex";
+import { isLinkKind, isSpanKind, techniqueDef, LINK_DEFS, SPAN_DEFS } from "@/lib/techniqueRegistry";
+import type { EffectKind, LinkKind, NoteEffects, SpanKind } from "@/lib/fingerpickTypes";
 import {
 	chordFretHints,
 	chordSymbolLabel,
@@ -100,6 +106,7 @@ import {
 	MEASURE_BLOCK_REM,
 	MODAL_CHROME_REM,
 	cellDisplay,
+	cellGlyph,
 	cellKey,
 	columnKey,
 	hoverAxisBg,
@@ -144,20 +151,10 @@ export interface EditorNotice {
 }
 
 
-const TECHNIQUE_GLYPH: Partial<Record<NonNullable<StringFret["technique"]>, string>> = {
-	"hammer-on": "h",
-	"pull-off": "p",
-	"slide-up": "↑",
-	"slide-down": "↓",
-	"bend-quarter": "¼⤴",
-	"bend-half": "½⤴",
-	"bend-full": "⤴",
-	"bend-release": "⤴⤵",
-	"pre-bend": "PB",
-	"pre-bend-release": "PB⤵",
-	vibrato: "~",
-	"vibrato-wide": "≈",
-};
+// Keys that toggle a link or a span, from the registry (H, P, / and M, L).
+const LINK_KEYS = new Map(LINK_DEFS.filter((t) => t.key).map((t) => [t.key!.toLowerCase(), t.kind]));
+const SPAN_KEYS = new Map(SPAN_DEFS.filter((t) => t.key).map((t) => [t.key!.toLowerCase(), t.kind]));
+const PERCUSSION_WASH = "rgba(74, 111, 165, 0.1)";
 
 const ARROW_DIRECTIONS: Record<string, Direction> = {
 	ArrowUp: "up",
@@ -265,6 +262,8 @@ export default function FingerpickEditModal({
 	}, [open, chordIndex.length]);
 	// The chord under every slot, and the distinct chords whose shapes are needed.
 	const chordsInEffect = useMemo(() => effectiveChords(working.measures), [working.measures]);
+	// Where every span lies, for the cells' palm-mute / let-ring underlines.
+	const spanIndex = useMemo(() => indexPattern(working), [working]);
 	const hasChords = patternHasChords(working.measures);
 	/**
 	 * The slot whose quick chord popover is open — the `+` above a hovered
@@ -467,11 +466,45 @@ export default function FingerpickEditModal({
 				const sf = working.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[cell.stringIndex];
 				if (!sf) return;
 				const isBend = key === "b" || key === "B";
-				const next = isBend ? nextBendTechnique(sf.technique) : nextVibratoTechnique(sf.technique);
-				const avail = availableNoteTechniques(working, cell, bendHeightFor(next));
-				if (!(isBend ? avail.bend : avail.vibrato)) return;
+				const bend = isBend ? nextBend(sf.effects?.bend) : null;
+				if (techniqueBlock(working, cell, isBend ? "bend" : "vibrato", bend?.semitones)) return;
 				e.preventDefault();
-				commit((prev) => setNoteTechnique(prev, cell, next));
+				commit((prev) =>
+					isBend ? setEffect(prev, cell, "bend", bend) : setEffect(prev, cell, "vibrato", nextVibrato(sf.effects?.vibrato)),
+				);
+				pendingDigitRef.current = null;
+				return;
+			}
+			// H, P and / toggle the link from the previous note; silently ignored
+			// where the frets rule it out.
+			const linkKind = LINK_KEYS.get(key.toLowerCase());
+			if (linkKind && isLinkKind(linkKind)) {
+				const working = workingRef.current;
+				const sf = working.measures[cell.measureIndex]?.slots[cell.slotIndex]?.strings[cell.stringIndex];
+				if (!sf) return;
+				if (sf.link?.kind !== linkKind && techniqueBlock(working, cell, linkKind)) return;
+				e.preventDefault();
+				commit((prev) => toggleLink(prev, cell, linkKind));
+				pendingDigitRef.current = null;
+				return;
+			}
+			// M and L toggle a palm mute / let ring over the cell's slot; pressed on
+			// the next slot they extend the run.
+			const spanKind = SPAN_KEYS.get(key.toLowerCase());
+			if (spanKind && isSpanKind(spanKind)) {
+				e.preventDefault();
+				commit((prev) => toggleSpanOver(prev, spanKind, [slotOf(cell)]));
+				pendingDigitRef.current = null;
+				return;
+			}
+			// S toggles a slap on the slot.
+			if (key === "s" || key === "S") {
+				e.preventDefault();
+				const slot = slotOf(cell);
+				commit((prev) => {
+					const current = prev.measures[slot.measureIndex]?.slots[slot.slotIndex]?.percussion;
+					return setPercussion(prev, slot, current?.kind === "slap" ? undefined : { kind: "slap" });
+				});
 				pendingDigitRef.current = null;
 				return;
 			}
@@ -578,32 +611,39 @@ export default function FingerpickEditModal({
 		}
 	}
 
-	function applyTechnique(technique: NonNullable<StringFret["technique"]>) {
+	// The menu's writes. Links close the menu (a note arrives one way); effects
+	// and spans keep it open, since several may stack and a parameter chip is
+	// often the next click.
+	function applyLink(kind: LinkKind) {
 		if (!techMenu) return;
 		const cell = techMenu.cell;
-		commit((prev) => setTechnique(prev, cell, technique));
+		commit((prev) => toggleLink(prev, cell, kind));
 		setTechMenu(null);
 	}
 
-	function applyNoteTechnique(technique: NoteTechnique, bendSemitones: number) {
+	function applySlidePicked(picked: boolean) {
 		if (!techMenu) return;
 		const cell = techMenu.cell;
-		commit((prev) => setNoteTechnique(prev, cell, technique, bendSemitones));
-		setTechMenu(null);
+		commit((prev) => setLink(prev, cell, picked ? { kind: "slide", picked: true } : { kind: "slide" }));
 	}
 
-	function applyTied() {
+	function applyEffect<K extends EffectKind>(kind: K, params: NoteEffects[K] | null) {
 		if (!techMenu) return;
 		const cell = techMenu.cell;
-		commit((prev) => setTied(prev, cell, true));
-		setTechMenu(null);
+		commit((prev) => setEffect(prev, cell, kind, params));
 	}
 
-	// Clear both technique and tied on the target cell.
+	function applySpan(kind: SpanKind) {
+		if (!techMenu) return;
+		const slot = slotOf(techMenu.cell);
+		commit((prev) => toggleSpanOver(prev, kind, [slot]));
+	}
+
+	// Clear the note's link and effects.
 	function applyClearTechnique() {
 		if (!techMenu) return;
 		const cell = techMenu.cell;
-		commit((prev) => setTied(setTechnique(prev, cell, null), cell, false));
+		commit((prev) => clearNoteMarks(prev, cell));
 		setTechMenu(null);
 	}
 
@@ -1267,17 +1307,25 @@ export default function FingerpickEditModal({
 																					selectedCell.stringIndex ===
 																						stringIndex;
 																				const glyph =
-																					sf.technique
-																						? TECHNIQUE_GLYPH[
-																								sf
-																									.technique
-																							]
-																						: undefined;
+																					cellGlyph(sf) ||
+																					undefined;
 																				// Muted cells can't be tied — treat
 																				// a tied+muted cell as untied here.
 																				const tiedDisplay =
-																					sf.tied &&
+																					sf.link?.kind === "tie" &&
 																					!sf.muted;
+																				// A span over this note: palm mute
+																				// (dashed) or let ring (dotted) underline.
+																				// Only under a sounding note, or a muted
+																				// column would be six dashed lines.
+																				const underSpan =
+																					sf.fret === null
+																						? null
+																						: spanCovers(spanIndex, slot.id, "palmMute", stringIndex)
+																						? "palmMute"
+																						: spanCovers(spanIndex, slot.id, "letRing", stringIndex)
+																							? "letRing"
+																							: null;
 																				// The shape's fret for this string, offered only
 																				// while the cell is hovered and empty: a chord is a
 																				// suggestion, and not every string gets played.
@@ -1435,7 +1483,9 @@ export default function FingerpickEditModal({
 																													stringIndex,
 																												),
 																										}
-																									: undefined
+																									: slot.percussion && !isRest
+																										? { backgroundColor: PERCUSSION_WASH }
+																										: undefined
 																						}
 																						className={`relative h-7 min-w-0 overflow-hidden flex items-center justify-center font-mono text-xs transition-colors select-none touch-manipulation ${
 																							isSelected
@@ -1474,6 +1524,18 @@ export default function FingerpickEditModal({
 																								style={{
 																									borderColor:
 																										"rgba(74, 111, 165, 0.5)",
+																								}}
+																							/>
+																						)}
+																						{underSpan && (
+																							<span
+																								aria-hidden
+																								className={`pointer-events-none absolute bottom-0 left-0.5 right-0.5 border-b ${
+																									underSpan === "palmMute" ? "border-dashed" : "border-dotted"
+																								}`}
+																								style={{
+																									borderColor:
+																										"rgba(74, 111, 165, 0.7)",
 																								}}
 																							/>
 																						)}
@@ -1562,6 +1624,14 @@ export default function FingerpickEditModal({
 																			}
 																			className="pt-1 text-center font-mono text-[10px] leading-none text-muted-foreground"
 																		>
+																			{slot.percussion && (
+																				<span
+																					className="mr-0.5 text-denim"
+																					title={techniqueDef(slot.percussion.kind)?.label.en}
+																				>
+																					{techniqueDef(slot.percussion.kind)?.glyph}
+																				</span>
+																			)}
 																			{beatLabels[slotIndex]}
 																		</span>
 																	</div>
@@ -1675,9 +1745,10 @@ export default function FingerpickEditModal({
 							x={techMenu.x}
 							y={techMenu.y}
 							scrollRef={scrollRef}
-							onTechnique={applyTechnique}
-							onNoteTechnique={applyNoteTechnique}
-							onTied={applyTied}
+							onLink={applyLink}
+							onSlidePicked={applySlidePicked}
+							onEffect={applyEffect}
+							onSpan={applySpan}
 							onClear={applyClearTechnique}
 						/>
 					)}

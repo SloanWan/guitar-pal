@@ -107,6 +107,35 @@ describe("expandFingerpickPattern", () => {
 		expect(originMeasureIndices).toEqual([0, 1, 1, 1]);
 	});
 
+	it("copies the spans inside a repeated range onto each pass, anchored on the copies", () => {
+		const slot = (id: string): Measure["slots"][number] => ({
+			id,
+			duration: "quarter",
+			strings: Array.from({ length: 6 }, () => ({ fret: null, muted: false })) as Measure["slots"][number]["strings"],
+		});
+		const p: FingerpickPattern = {
+			...pattern([
+				{ id: "A", slots: [slot("a1"), slot("a2")], repeatStart: true, repeatEnd: true, repeatTimes: 3 },
+				{ id: "B", slots: [slot("b1")] },
+			]),
+			spans: [
+				{ id: "pm", kind: "palmMute", from: "a1", to: "a2" },
+				{ id: "lr", kind: "letRing", from: "a2", to: "b1" },
+			],
+		};
+		const { pattern: out } = expandFingerpickPattern(p);
+		expect(out.measures).toHaveLength(4);
+		const palm = out.spans!.filter((s) => s.kind === "palmMute");
+		expect(palm).toHaveLength(3);
+		expect(palm.map((s) => [s.from, s.to])).toEqual([
+			["a1", "a2"],
+			[out.measures[1].slots[0].id, out.measures[1].slots[1].id],
+			[out.measures[2].slots[0].id, out.measures[2].slots[1].id],
+		]);
+		// The let ring runs out of the range: it is not copied.
+		expect(out.spans!.filter((s) => s.kind === "letRing")).toEqual([p.spans![1]]);
+	});
+
 	it("returns the pattern unexpanded on invalid markup", () => {
 		const p = pattern([m("A", { repeatEnd: true }), m("B")]);
 		const { pattern: out, originMeasureIndices } = expandFingerpickPattern(p);

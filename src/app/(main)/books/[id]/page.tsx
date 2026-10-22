@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -17,15 +17,23 @@ import {
 	scanBook,
 } from "@/lib/books/api";
 import type { BookDetail, Chapter, ChapterRange } from "@/lib/books/types";
-import { TOC_SOURCE_LABEL } from "@/lib/books/types";
+import { TOC_SOURCE_LABEL, bookInFlight } from "@/lib/books/types";
 import { rangesFromChapters } from "@/lib/books/ranges";
 import { isSampleBook } from "@/lib/books/sample";
+import {
+	BOOK_LOCATE_EVENT,
+	setBookContext,
+	clearPendingLocate,
+	pendingLocateFor,
+	type BookLocateDetail,
+} from "@/lib/assistant/bookContext";
 import { usePolledResource } from "@/components/books/usePolledResource";
 import ScanReadout from "@/components/books/ScanReadout";
 import ChapterList from "@/components/books/ChapterList";
 import ChapterCard from "@/components/books/ChapterCard";
 import ChapterDraftPanel, { type OpenDraft } from "@/components/books/ChapterDraftPanel";
 import ChapterSourcePanel, { type SourceView } from "@/components/books/ChapterSourcePanel";
+import ChapterTextTabPanel from "@/components/books/ChapterTextTabPanel";
 import { CropDialog, CropInspector, type CropView } from "@/components/books/CropViewer";
 import ChapterRangeEditor from "@/components/books/ChapterRangeEditor";
 import DeleteBookDialog from "@/components/books/DeleteBookDialog";
@@ -41,7 +49,6 @@ import {
 	StatusLed,
 } from "@/components/books/bookUi";
 
-const isScanning = (book: BookDetail) => book.status === "scanning";
 
 function bookMeta(book: BookDetail): string {
 	const parts: string[] = [];
@@ -51,11 +58,16 @@ function bookMeta(book: BookDetail): string {
 	return parts.join(" · ");
 }
 
+/** A page an answer cited, as the source panel shows it. */
+function citedPage(detail: BookLocateDetail): SourceView {
+	return { chapterId: detail.chapterId, page: detail.page, pages: [detail.page], title: `p.${detail.page}` };
+}
+
 export default function BookPage({ params }: { params: Promise<{ id: string }> }) {
 	const { id } = use(params);
 	const router = useRouter();
 	const load = useCallback(() => getBook(id), [id]);
-	const { value: book, error, refresh, set: setBook } = usePolledResource(load, isScanning);
+	const { value: book, error, refresh, set: setBook } = usePolledResource(load, bookInFlight);
 	const missing = error instanceof BookApiError && error.status === 404;
 	// Signed out, the API answers 401 for any book but the sample (#262).
 	const unauthorized = error instanceof BookApiError && error.status === 401;
@@ -67,18 +79,49 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
 	const [openChapter, setOpenChapter] = useState<string | null>(null);
-	// What is open beside the book — a draft to play (#233) or a page to read
-	// (#240); one at a time.
+	// What is open beside the book — a draft to play (#233), a page to read
+	// (#240) or a text tab to read by ear (#228); one at a time.
 	// `entered` says whether the panel opened from nothing (it grows into
 	// place) or replaced one already open (it just changes what it shows).
 	type Side =
 		| { kind: "draft"; draft: OpenDraft; entered: boolean }
-		| { kind: "source"; source: SourceView; entered: boolean };
-	const [side, setSide] = useState<Side | null>(null);
+		| { kind: "source"; source: SourceView; entered: boolean }
+		| { kind: "textTab"; page: number; entered: boolean };
+	const [side, setSide] = useState<Side | null>(() => {
+		const cited = pendingLocateFor(id);
+		return cited ? { kind: "source", source: citedPage(cited), entered: true } : null;
+	});
 	const openDraft = (draft: OpenDraft) =>
 		setSide((current) => ({ kind: "draft", draft, entered: current === null }));
 	const locate = (source: SourceView) =>
 		setSide((current) => ({ kind: "source", source, entered: current === null }));
+	const readTextTab = (page: number) =>
+		setSide((current) => ({ kind: "textTab", page, entered: current === null }));
+
+	// The open, parsed chapter is what the assistant's Book mode asks (#203);
+	// the sample has no service behind it, so it offers nothing. Cleared when
+	// the chapter closes and when the page goes.
+	const openRow = book?.chapters.find((c) => c.id === openChapter) ?? null;
+	const askable = !readOnly && book !== null && openRow !== null && openRow.parse_status === "ready";
+	const bookTitle = book?.title ?? "";
+	const chapterTitle = openRow?.title ?? "";
+	useEffect(() => {
+		setBookContext(askable ? { bookId: id, chapterId: openChapter!, bookTitle, chapterTitle } : null);
+	}, [askable, id, openChapter, bookTitle, chapterTitle]);
+	useEffect(() => () => setBookContext(null), []);
+	// A page an answer cited, clicked in the panel: open it beside the book.
+	useEffect(() => {
+		function onLocate(event: Event) {
+			const { detail } = event as CustomEvent<BookLocateDetail>;
+			if (detail.bookId !== id) return;
+			locate(citedPage(detail));
+		}
+		window.addEventListener(BOOK_LOCATE_EVENT, onLocate);
+		return () => window.removeEventListener(BOOK_LOCATE_EVENT, onLocate);
+	}, [id]);
+	// A click from elsewhere brought the player here: the page opened with it
+	// (the side state's first value); forget it now it has been shown.
+	useEffect(() => clearPendingLocate(), []);
 	// A crop at full size: a dialog on its own, or over the book's column while
 	// the panel is open (see CropViewer). Closing the panel closes it too.
 	const [crop, setCrop] = useState<CropView | null>(null);
@@ -303,6 +346,7 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 												onOpenDraft={openDraft}
 												onViewCrop={setCrop}
 												onLocate={locate}
+												onReadTextTab={readOnly ? undefined : readTextTab}
 												readOnly={readOnly}
 											/>
 										)}
@@ -341,6 +385,15 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 							title: side.draft.pattern.name,
 						})
 					}
+				/>
+			) : null}
+			{side?.kind === "textTab" && book ? (
+				<ChapterTextTabPanel
+					key={`text-tab:${side.page}`}
+					book={book}
+					page={side.page}
+					animateOpen={side.entered}
+					onClose={closeSide}
 				/>
 			) : null}
 			{side?.kind === "source" && book

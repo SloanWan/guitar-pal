@@ -34,11 +34,31 @@ MAX_OUTPUT_TOKENS = 4096
 # default; `BOOK_SERVICE_CLASSIFY_MODEL` overrides.
 CLASSIFY_MODEL = os.environ.get("BOOK_SERVICE_CLASSIFY_MODEL", "claude-sonnet-5")
 
-# USD per million tokens, for the per-parse cost the chapter records.
+# USD per million tokens (input, output), for the cost a parse or an ask
+# records. DeepSeek's are its **peak** rates (01:00–04:00 and 06:00–10:00 UTC
+# on weekdays); off-peak is half, so a figure here is the worst case, never an
+# understatement. Read 2026-09-23 from api-docs.deepseek.com/quick_start/pricing.
 PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-opus-5": (5.0, 25.0),
     "claude-sonnet-5": (2.0, 10.0),
+    "deepseek-flash": (0.30, 1.20),
+    "deepseek-v4-pro": (1.32, 3.96),
 }
+
+# What a cached prefix costs relative to a fresh read of it, per family.
+# Anthropic charges 1.25× to write and 0.1× to read. DeepSeek does not price a
+# write at all — a miss is just input — and a hit is $0.006 against $0.30, a
+# fiftieth. (Assumed from its cache-hit/cache-miss input prices; if a bill ever
+# disagrees, this table is the one place to fix.)
+CACHE_FACTORS: dict[str, tuple[float, float]] = {
+    "deepseek-flash": (1.0, 0.02),
+    "deepseek-v4-pro": (1.0, 0.02),
+}
+
+
+# The Anthropic default, when a model is not in CACHE_FACTORS.
+CACHE_WRITE_FACTOR = 1.25
+CACHE_READ_FACTOR = 0.1
 
 
 @dataclass(frozen=True)
@@ -46,15 +66,30 @@ class CallUsage:
     input_tokens: int
     output_tokens: int
     model: str = MODEL
+    cache_write_tokens: int = 0
+    cache_read_tokens: int = 0
 
     @property
     def cost_usd(self) -> float:
         price_in, price_out = PRICE_PER_MTOK.get(self.model, (0.0, 0.0))
-        return (self.input_tokens * price_in + self.output_tokens * price_out) / 1_000_000
+        write_factor, read_factor = CACHE_FACTORS.get(
+            self.model, (CACHE_WRITE_FACTOR, CACHE_READ_FACTOR)
+        )
+        cached = (
+            self.cache_write_tokens * write_factor + self.cache_read_tokens * read_factor
+        ) * price_in
+        return (self.input_tokens * price_in + cached + self.output_tokens * price_out) / 1_000_000
 
 
 def usage_of(response: Message, model: str = MODEL) -> CallUsage:
-    return CallUsage(response.usage.input_tokens, response.usage.output_tokens, model)
+    usage = response.usage
+    return CallUsage(
+        usage.input_tokens,
+        usage.output_tokens,
+        model,
+        cache_write_tokens=getattr(usage, "cache_creation_input_tokens", None) or 0,
+        cache_read_tokens=getattr(usage, "cache_read_input_tokens", None) or 0,
+    )
 
 
 SYSTEM_PROMPT = (

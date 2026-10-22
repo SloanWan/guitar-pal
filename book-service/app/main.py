@@ -16,13 +16,19 @@ from pathlib import Path
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI
 
+from app.ask.graph import AskGraph
+from app.ask.provider import Provider, build_provider
+from app.ask.strategies import AskStrategy
+from app.ask.strategies.chunks import LexicalStrategy, RagStrategy
+from app.ask.strategies.embeddings import VoyageEmbedder
+from app.ask.strategies.long_context import LongContextStrategy
 from app.auth import CurrentUser, build_verifier
 from app.books import router as books_router
 from app.config import Settings, get_settings
 from app.db import close_pool, fail_stale_scans, open_pool
 from app.ingest.model import AnthropicTextTocReader, AnthropicVisionTocReader
 from app.ingest.pdf import OcrConfig
-from app.pages import PageImages
+from app.pages import PageImages, PdfCache
 from app.parse import ChapterGraph, Parser, text_only_graph
 from app.repo import BookRepo
 from app.scan import Scanner
@@ -38,6 +44,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     against its own settings, and importing this module reads no environment.
     """
     settings = settings or get_settings()
+    # uvicorn configures only its own loggers; without this the service's
+    # `log.info` lines (a parse's timings and cost, the Q&A provider) fall
+    # to the root logger's WARNING and are never printed.
+    logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
+    log.setLevel(logging.INFO)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -47,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.scanner = None
         app.state.parser = None
         app.state.pages = None
+        app.state.ask = None
         app.state.validator = validator_client(settings)
         if settings.database_url is not None:
             try:
@@ -64,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             repo = BookRepo(app.state.pool)
             # One core's worth of PyMuPDF/Tesseract work at a time, scans and parses alike.
             worker = asyncio.Semaphore(1)
+            pdfs = PdfCache()
             app.state.scanner = Scanner(
                 storage=app.state.storage,
                 store=repo,
@@ -71,14 +84,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 read_text_toc=AnthropicTextTocReader(client) if client else None,
                 read_vision_toc=AnthropicVisionTocReader(client) if client else None,
                 worker=worker,
+                pdfs=pdfs,
             )
             app.state.parser = Parser(
                 storage=app.state.storage,
                 store=repo,
-                graph=chapter_graph(client, app.state.validator),
+                graph=chapter_graph(
+                    build_provider(
+                        settings.parse_provider,
+                        client,
+                        settings.deepseek_api_key,
+                        setting="BOOK_PARSE_PROVIDER",
+                    ),
+                    app.state.validator,
+                ),
                 worker=worker,
+                pdfs=pdfs,
             )
-            app.state.pages = PageImages(storage=app.state.storage, repo=repo, worker=worker)
+            app.state.pages = PageImages(
+                storage=app.state.storage, repo=repo, worker=worker, pdfs=pdfs
+            )
+            provider = build_provider(settings.ask_provider, client, settings.deepseek_api_key)
+            if provider is not None:
+                strategy = ask_strategy(settings, provider, repo, app.state.storage, worker, pdfs)
+                if strategy is not None:
+                    app.state.ask = AskGraph(provider, strategy, repo)
+                    log.info(
+                        "chapter Q&A: %s / %s (%s)",
+                        provider.name,
+                        settings.ask_strategy,
+                        provider.model,
+                    )
         try:
             yield
         finally:
@@ -115,8 +151,8 @@ def model_client(settings: Settings) -> AsyncAnthropic | None:
     """One SDK client for every model call, when there is a key for it."""
     if settings.anthropic_api_key is None:
         log.warning(
-            "ANTHROPIC_API_KEY unset: unbookmarked books get manual chapters,"
-            " chapter parses produce text chunks only"
+            "ANTHROPIC_API_KEY unset: unbookmarked books get manual chapters;"
+            " parse and Q&A run only where their provider is deepseek"
         )
         return None
     return AsyncAnthropic(api_key=settings.anthropic_api_key)
@@ -133,10 +169,36 @@ def validator_client(settings: Settings) -> ValidatorClient | None:
     return ValidatorClient(settings.validate_url, settings.internal_secret)
 
 
-def chapter_graph(client: AsyncAnthropic | None, validator: ValidatorClient | None) -> ChapterGraph:
+def ask_strategy(
+    settings: Settings,
+    provider: Provider,
+    repo: BookRepo,
+    storage: StorageClient,
+    worker: asyncio.Semaphore,
+    pdfs: PdfCache | None = None,
+) -> AskStrategy | None:
+    """The chapter Q&A strategy `BOOK_ASK_STRATEGY` names; None (a 503) when it cannot run."""
+    name = settings.ask_strategy
+    if name == "long_context":
+        return LongContextStrategy(provider, storage, worker, pdfs or PdfCache())
+    if name == "lexical":
+        return LexicalStrategy(provider, repo)
+    if name == "rag":
+        if settings.voyage_api_key is None:
+            log.warning("BOOK_ASK_STRATEGY=rag needs VOYAGE_API_KEY: chapter Q&A off")
+            return None
+        embedder = VoyageEmbedder(
+            settings.voyage_api_key, settings.embedding_model, settings.embedding_dimension
+        )
+        return RagStrategy(provider, repo, embedder)
+    log.warning("BOOK_ASK_STRATEGY=%r is not a strategy: chapter Q&A off", name)
+    return None
+
+
+def chapter_graph(provider: Provider | None, validator: ValidatorClient | None) -> ChapterGraph:
     """The parse graph when there is a model to run it with; the text-only pass otherwise."""
-    if client is None:
+    if provider is None:
         return text_only_graph
     from app.graph import build_chapter_graph
 
-    return build_chapter_graph(client, validator)
+    return build_chapter_graph(provider, validator)

@@ -32,4 +32,15 @@ services:
     env_file: .env
     environment:
       BOOK_SERVICE_VALIDATE_URL: http://web:3000
+      # Chapter Q&A (#203): how the chapter reaches the model. `long_context`
+      # until the eval (book-service/evals/ask/) has run; its decision rule
+      # says whether `rag` replaces it.
+      BOOK_ASK_STRATEGY: long_context
+      # Which model answers: `anthropic`, or `deepseek` for DeepSeek-V4.1-Flash
+      # (DEEPSEEK_API_KEY in .env). See book-service/docs/calibration.md §8 for
+      # what each can read.
+      BOOK_ASK_PROVIDER: anthropic
+      # Which model parses a chapter; the same two. DeepSeek needs room to
+      # think and reads tab slowly (calibration.md §10).
+      BOOK_PARSE_PROVIDER: anthropic
     restart: unless-stopped

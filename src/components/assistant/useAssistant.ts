@@ -33,6 +33,9 @@ import { resolveGeneralTurn, type ModelStep, type ToolInput } from "@/lib/assist
 import type { ProposeStrumInput, ProposeTabInput, ReadInput, ShowChordInput, ToolName } from "@/lib/assistant/general/tools";
 import { pick } from "@/lib/assistant/lang";
 import { createClient } from "@/lib/supabase";
+import { readBookContext, useBookContext } from "@/lib/assistant/bookContext";
+import { askChapter, BookApiError } from "@/lib/books/api";
+import { validateFingerpickPattern } from "@/lib/tabImport";
 
 /**
  * Drives the assistant conversation.
@@ -54,6 +57,11 @@ import { createClient } from "@/lib/supabase";
  * page — to switch. The one time the mode is second-guessed is when it
  * plainly failed: the chosen readers made nothing of the sentence and the
  * other assistant's would have; then the reply offers to read it as that one.
+ *
+ * Book is the fourth setting, there only while a parsed chapter is open on
+ * a book page (#203): the turn goes to the chapter's ask endpoint, and the
+ * reply says whether it came from the book (with the pages it cites) or
+ * not. The chapter closing takes the setting with it.
  */
 
 const STRUM_PATH = "/strum";
@@ -75,6 +83,11 @@ export interface AssistantMessage {
 	text: string;
 	/** Which assistant answered; a restored transcript renders the right card by it. Absent on older turns, which were all strum. */
 	domain?: AssistantDomain;
+	/**
+	 * A reply from the open chapter (#203): where it came from — the book,
+	 * with the pages it cites, or general knowledge, marked as not the book's.
+	 */
+	book?: { bookId: string; chapterId: string; source: "book" | "general"; pages: number[] };
 	proposal?: AssistantProposal;
 	/** The tab assistant's offer: a whole pattern, for the fingerpick editor. */
 	tabProposal?: TabProposal;
@@ -193,8 +206,20 @@ export function useAssistant() {
 		},
 		[dismissNudge],
 	);
+	// The chapter open on a book page, if any: what Book mode asks. When it
+	// goes — the chapter closed, the page left — a thread in Book mode falls
+	// back to the page's own assistant rather than asking nothing.
+	const bookContext = useBookContext();
+	const effectiveMode: AssistantMode = mode === "book" && bookContext === null ? page : mode;
 	// General reaches both workspaces, so the page has nothing to propose to it.
-	const nudge = hasOwnAssistant(pathname) && mode !== "general" && mode !== page && nudgedPath !== pathname;
+	// A book page with a chapter open proposes Book, the same way, once.
+	const nudgeTo: AssistantMode | null =
+		bookContext !== null && effectiveMode !== "book"
+			? "book"
+			: hasOwnAssistant(pathname) && effectiveMode !== "general" && effectiveMode !== page
+				? page
+				: null;
+	const nudge = nudgeTo !== null && nudgedPath !== pathname;
 
 	// Read once, lazily. Safe to differ between server and client: nothing that
 	// renders the transcript is mounted until the popover opens, so the markup
@@ -433,6 +458,45 @@ export function useAssistant() {
 			const readTab = (sentence: string) =>
 				resolveTabTurn({ text: sentence, index, patterns: tabPatterns, uiLang: uiLang() });
 
+			if (as === "book") {
+				const book = readBookContext();
+				const lang = uiLang();
+				reply.lang = lang;
+				if (book === null) {
+					reply.failed = true;
+					reply.text = pick(lang, "Open a parsed chapter on a book page to ask it.", "先在书的页面打开一个已解析的章节，再问它。");
+					await thinking;
+					return reply;
+				}
+				try {
+					const answer = await askChapter(book.bookId, book.chapterId, [
+						...history.map((t) => ({ role: t.role, content: t.content })),
+						{ role: "user", content: text },
+					]);
+					reply.text = answer.message;
+					reply.model = answer.model;
+					reply.book = { bookId: book.bookId, chapterId: book.chapterId, source: answer.source, pages: answer.pages };
+					// A draft the parse made, as the tab card: the same preview and
+					// handoff a tab the assistant made would get.
+					if (answer.draft && answer.draft.kind === "tab") {
+						const { pattern, warnings } = validateFingerpickPattern(answer.draft.draft);
+						if (pattern) {
+							reply.domain = "tab";
+							reply.tabProposal = { name: pattern.name, pattern, bpm: pattern.bpm, chords: [], warnings: [...answer.draft.warnings, ...warnings] };
+						}
+					}
+				} catch (e) {
+					reply.failed = true;
+					reply.text =
+						e instanceof BookApiError
+							? e.message
+							: pick(lang, "The chapter could not be asked. Try again.", "问不到这一章，再试一次。");
+					if (!(e instanceof BookApiError)) console.error("[assistant] book turn failed:", e);
+				}
+				await thinking;
+				return reply;
+			}
+
 			if (as === "general") {
 				const context: GeneralContext = {
 					page: hasOwnAssistant(pathname) ? page : null,
@@ -557,15 +621,15 @@ export function useAssistant() {
 			setPending(true);
 			// Talking settles the mode: a thread that has been spoken to keeps its
 			// assistant across pages, where an untouched one still follows the page.
-			writeMode(mode);
+			writeMode(effectiveMode);
 			try {
-				const reply = await resolveIn(mode, text, historyOf(messagesRef.current));
+				const reply = await resolveIn(effectiveMode, text, historyOf(messagesRef.current));
 				setMessages((prev) => [...prev, reply]);
 			} finally {
 				setPending(false);
 			}
 		},
-		[mode, pending, resolveIn],
+		[effectiveMode, pending, resolveIn],
 	);
 
 	/**
@@ -584,7 +648,7 @@ export function useAssistant() {
 				const at = all.findIndex((m) => m.id === messageId);
 				// Everything before the user turn this reply answered.
 				const before = at > 0 ? all.slice(0, at - 1) : [];
-				const reply = await resolveIn(as, text, as === "general" ? historyOf(before) : []);
+				const reply = await resolveIn(as, text, as === "general" || as === "book" ? historyOf(before) : []);
 				setMessages((prev) => prev.map((m) => (m.id === messageId ? reply : m)));
 			} finally {
 				setPending(false);
@@ -594,11 +658,13 @@ export function useAssistant() {
 	);
 
 	return {
-		mode,
+		mode: effectiveMode,
 		setMode,
 		page,
+		bookContext,
 		guestQuota,
 		nudge,
+		nudgeTo,
 		dismissNudge,
 		messages,
 		pending,

@@ -20,7 +20,10 @@ STALE_PARSE_MESSAGE = "The service restarted while this chapter was being parsed
 async def open_pool(database_url: str) -> asyncpg.Pool:
     return await asyncpg.create_pool(
         database_url,
-        min_size=1,
+        # Two held open: the chapter card's notes and drafts are read side by
+        # side, and opening a connection costs several round trips (seconds,
+        # from far from the database's region).
+        min_size=2,
         max_size=5,
         # Supabase's pooler runs in transaction mode, where server-side prepared
         # statements outlive the transaction they were made in and collide.

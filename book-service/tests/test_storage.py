@@ -72,6 +72,15 @@ def test_remove_tree_lists_every_page_and_deletes_in_batches(fake: FakeStorage) 
     assert fake.objects == ["u1/other.pdf"], "only the folder's objects went"
 
 
+def test_list_folders_names_the_subfolders_and_not_the_objects(fake: FakeStorage) -> None:
+    """The one-off sweep (#246) reads a player's chapter folders this way."""
+    fake.objects = ["u1/crops/c1/p0001-1.png", "u1/crops/c2/p0002-1.png"]
+    storage = StorageClient("https://x/storage/v1", "anon")
+    # The fake lists one subfolder entry ("sub", no id) beside every page of objects.
+    assert asyncio.run(storage.list_folders("u1/crops", "tok")) == ["u1/crops/sub"]
+    assert asyncio.run(storage.list_objects("u1/crops/c1", "tok")) == ["u1/crops/c1/p0001-1.png"]
+
+
 def test_an_empty_folder_deletes_nothing_and_a_refusal_is_named(fake: FakeStorage) -> None:
     storage = StorageClient("https://x/storage/v1", "anon")
     assert asyncio.run(storage.remove_tree("u1/pages/b1", "tok")) == 0
@@ -80,3 +89,37 @@ def test_an_empty_folder_deletes_nothing_and_a_refusal_is_named(fake: FakeStorag
         asyncio.run(storage.delete_many(["u1/x.png"], "bad"))
     assert e.value.status == 403
     assert e.value.message == "not yours"
+
+
+def test_a_download_cut_off_in_transit_is_tried_once_more(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = 0
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise httpx.RemoteProtocolError("peer closed connection", request=request)
+        return httpx.Response(200, content=b"%PDF")
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kwargs: real(transport=httpx.MockTransport(handle))
+    )
+    storage = StorageClient("https://x/storage/v1", "anon")
+    assert asyncio.run(storage.download("u1/b1.pdf", "tok")) == b"%PDF"
+    assert attempts == 2
+
+
+def test_a_download_that_keeps_failing_gives_up_after_the_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kwargs: real(transport=httpx.MockTransport(handle))
+    )
+    storage = StorageClient("https://x/storage/v1", "anon")
+    with pytest.raises(httpx.ReadTimeout):
+        asyncio.run(storage.download("u1/b1.pdf", "tok"))

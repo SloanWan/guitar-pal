@@ -78,6 +78,49 @@ export interface ChapterExercise {
 	status: ExerciseStatus;
 }
 
+/** `GET /books/{id}/pages/{page}/text`: a page's text as the scan read it (#228). */
+export interface PageText {
+	page: number;
+	text: string;
+	text_source: "layer" | "ocr" | "none";
+}
+
+/**
+ * The parse's warning for a page it left to the player: its tab was in the
+ * text layer, which carries no rhythm, so the card offers it to read by ear.
+ */
+export const TEXT_TAB_SKIPPED = "TEXT_TAB_SKIPPED";
+
+/** The page a skipped-page warning is about, from its `path` ("page 12"). */
+export function issuePage(issue: ParseIssue): number | null {
+	const m = /^page (\d+)$/.exec(issue.path);
+	return m ? Number(m[1]) : null;
+}
+
+/** One turn of a chapter thread, as `POST …/ask` takes it. */
+export interface AskMessage {
+	role: "user" | "assistant";
+	content: string;
+}
+
+/**
+ * `POST /books/{id}/chapters/{chapter_id}/ask` (#203). `source: "book"` is
+ * answered from the chapter with the pages its citations named; `general`
+ * is not the book's — general knowledge, or a decline — and cites nothing.
+ * `draft` is an exercise the parse already extracted, when one was asked for.
+ */
+export interface AskResponse {
+	message: string;
+	source: "book" | "general";
+	pages: number[];
+	draft: ChapterExercise | null;
+	model: string;
+	cost: ParseCost;
+	strategy: string;
+	/** `anthropic` or `deepseek`; which model wrote it, for the log and the eval. */
+	provider: string;
+}
+
 /** `GET /books/{id}/chapters/{chapter_id}/parse`: the chapter card. */
 export interface ChapterParse {
 	chapter: Chapter;
@@ -87,6 +130,15 @@ export interface ChapterParse {
 
 export interface BookDetail extends Book {
 	chapters: Chapter[];
+}
+
+/**
+ * Whether the book page should keep asking: a scan, or any chapter's parse,
+ * still running. The rows are the only place a closed chapter's parse can
+ * be seen to finish or fail, so they follow it while it runs.
+ */
+export function bookInFlight(book: BookDetail): boolean {
+	return book.status === "scanning" || book.chapters.some((c) => c.parse_status === "parsing");
 }
 
 /** A chapter as the player draws it; what `PUT /books/{id}/chapters` takes. */

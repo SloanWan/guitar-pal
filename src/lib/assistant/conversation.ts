@@ -102,7 +102,7 @@ export function writeConversation<M extends StoredMessage>(messages: M[], now: n
 export function readMode(): AssistantMode | null {
 	try {
 		const raw = sessionStorage.getItem(MODE_KEY);
-		return raw === "strum" || raw === "tab" || raw === "general" ? raw : null;
+		return raw === "strum" || raw === "tab" || raw === "general" || raw === "book" ? raw : null;
 	} catch {
 		return null;
 	}

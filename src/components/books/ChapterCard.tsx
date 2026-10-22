@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import { cropUrl, getChapterParse, parseChapter } from "@/lib/books/api";
 import type { Chapter, ChapterExercise, ChapterNote, ChapterParse } from "@/lib/books/types";
-import { MAX_PARSE_PAGES } from "@/lib/books/types";
+import { MAX_PARSE_PAGES, TEXT_TAB_SKIPPED, issuePage } from "@/lib/books/types";
 import { chapterPages, estimateParseUsd, formatUsd, formatUsdRange } from "@/lib/books/parseCost";
 import { usePolledResource } from "@/components/books/usePolledResource";
 import IssueList, { WarningsFold } from "@/components/books/IssueList";
@@ -38,6 +38,7 @@ export default function ChapterCard({
 	onOpenDraft,
 	onViewCrop,
 	onLocate,
+	onReadTextTab,
 	readOnly = false,
 }: {
 	bookId: string;
@@ -50,11 +51,17 @@ export default function ChapterCard({
 	onViewCrop: (crop: CropView) => void;
 	/** The page a note or a draft came from, beside the book (#240). */
 	onLocate: (source: SourceView) => void;
+	/** A page whose tab was in the text layer, to read by ear beside the book (#228). */
+	onReadTextTab?: (page: number) => void;
 	/** The sample book: nothing that would run or re-run the parse. */
 	readOnly?: boolean;
 }) {
 	const load = useCallback(() => getChapterParse(bookId, chapter.id), [bookId, chapter.id]);
-	const { value: parse, error, refresh, set } = usePolledResource(load, isParsing);
+	// Only a parsed chapter has anything the row lacks (its notes and drafts);
+	// any other shows at once from the row, a running one polled from there.
+	// Every round trip to the service is a database round trip or three.
+	const seed = chapter.parse_status === "ready" ? null : { chapter, notes: [], exercises: [] };
+	const { value: parse, error, refresh, set } = usePolledResource(load, isParsing, seed);
 	const [starting, setStarting] = useState(false);
 
 	// Whatever the poll learns about the chapter, the list row shows too.
@@ -184,7 +191,25 @@ export default function ChapterCard({
 			</div>
 
 			{parse.chapter.parse_warnings.length > 0 ? (
-				<IssueList issues={parse.chapter.parse_warnings} className="mt-3" />
+				<IssueList
+					issues={parse.chapter.parse_warnings}
+					className="mt-3"
+					action={(issue) => {
+						const page = issue.code === TEXT_TAB_SKIPPED ? issuePage(issue) : null;
+						if (page === null || !onReadTextTab) return null;
+						return (
+							<button
+								type="button"
+								onClick={() => onReadTextTab(page)}
+								title="Play each rhythm the text allows and take the one that sounds right"
+								className={`${MONO_META} ${LOCATE} flex-none`}
+							>
+								Read by ear
+								<LocateGlyph />
+							</button>
+						);
+					}}
+				/>
 			) : null}
 
 			<section className="mt-5">

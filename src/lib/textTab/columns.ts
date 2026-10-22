@@ -1,0 +1,415 @@
+import type { EffectKind, Link, NoteEffects } from "@/lib/fingerpickTypes";
+import { MAX_FRET } from "@/lib/fingerpickEdit";
+import type { ValidationIssue } from "@/lib/tabImport";
+import { EFFECT_DEFS, LINK_DEFS, isEffectKind, isLinkKind } from "@/lib/techniqueRegistry";
+import type { NoteMarks } from "@/lib/assistant/tab/draftSlots";
+
+/**
+ * A text tab, read into columns.
+ *
+ * ```
+ * e|--0--3--|
+ * B|--1-----|
+ * G|--0-----|
+ * D|--2-----|
+ * A|--3-----|
+ * E|--------|
+ * ```
+ *
+ * Text tab writes pitch exactly — a fret on a string — and order exactly —
+ * left to right — and rhythm not at all, beyond how far apart the notes were
+ * typed. So this reads what the text does hold: for every bar, its width in
+ * characters and every column that starts a note, with the notes stacked in
+ * it. What a column *lasts* is not read here; the readings in `readings.ts`
+ * each answer that a different way, and the player picks one by ear (#228).
+ */
+
+/**
+ * One note as typed: which string, which fret (null for a muted `x`), and the
+ * marks around it — how it is reached (`link`), what is done to it
+ * (`effects`), and the `P.M.` / `let ring` brackets over it.
+ */
+export interface TextTabNote extends NoteMarks {
+	/** 0 = the top line (high e when labelled the usual way). */
+	stringIndex: number;
+	fret: number | null;
+	muted: boolean;
+}
+
+/** A column that starts at least one note. */
+export interface TextTabColumn {
+	/** Character offset from the bar's start. */
+	at: number;
+	notes: TextTabNote[];
+}
+
+/** One bar as typed: its width in characters and its columns, left to right. */
+export interface TextTabBar {
+	width: number;
+	columns: TextTabColumn[];
+}
+
+export interface TextTabColumns {
+	bars: TextTabBar[];
+	/** Characters the reader did not know — reported, then skipped. */
+	unknownMarks: string[];
+	/** Digit runs read as more than one fret (`1215` → 12, 15), with the frets read. */
+	splitRuns: { run: string; frets: string }[];
+	/** Bends written higher than a whole tone, read as full bends, with the frets written. */
+	wideBends: { text: string; frets: number }[];
+}
+
+/**
+ * A line of tab: an optional string label, an optional bar, then one unbroken
+ * run of dashes and marks. Any mark is allowed in — an unknown one is
+ * reported, not a reason to read the line as prose — but two dashes together
+ * are required, which a chord line written `C - G - Am` never has.
+ */
+const TAB_LINE = /^\s*(?:([eEBGDAa])\s*)?[|:]?\s*(\S*--\S*)\s*$/;
+
+
+/**
+ * The mark before a note, as the registry writes it: a link (`h7`, `p5`,
+ * `/7`) or an effect done as the note is struck (`t12`, a tap). `\\` and `s`
+ * are the other ways tab writes a slide; a tie is `(7)`, read where the
+ * digits are.
+ */
+const MARK_BEFORE: Record<string, { link?: Link; effects?: NoteEffects }> = {};
+for (const def of LINK_DEFS) {
+	if (def.ascii?.before && def.kind !== "tie" && isLinkKind(def.kind)) MARK_BEFORE[def.ascii.before] = { link: { kind: def.kind } as Link };
+}
+for (const def of EFFECT_DEFS) {
+	if (def.ascii?.before && isEffectKind(def.kind)) MARK_BEFORE[def.ascii.before] = { effects: { [def.kind]: true } as NoteEffects };
+}
+MARK_BEFORE["\\"] = { link: { kind: "slide" } };
+MARK_BEFORE["s"] = { link: { kind: "slide" } };
+
+/** Marks after the fret that the registry names (`7tr`); a bend and the tildes have their own reading below. */
+const MARK_AFTER: { mark: string; kind: EffectKind; params: NoteEffects[EffectKind] }[] = EFFECT_DEFS.filter(
+	(def) => def.ascii?.after && def.kind !== "vibrato" && isEffectKind(def.kind),
+).map((def) => ({ mark: def.ascii!.after!, kind: def.kind as EffectKind, params: def.params.parse({}) as NoteEffects[EffectKind] }));
+
+/**
+ * What follows a fret and says what is done to the note once struck, the way
+ * tab writes it: `7b9` bends 7 up to the pitch of 9, `7b8r` lets it back
+ * down, `7pb9` is bent before the pick, `5b¼` a quarter bend; `7~` vibrato
+ * and `7~~` the wide kind (a longer run of tildes is a held vibrato, not a
+ * wider one). The whole mark is consumed, so the `9` in `7b9` is never read
+ * as a second note.
+ */
+const NOTE_SUFFIX = /^(pb|b)(?:(¼|1\/4)|(\d{1,2}))?(r(?:\d{1,2})?)?|^~+/;
+
+/** Characters that are never a note and never a mark to report. */
+const SILENT_CHARS = new Set(["-", "(", ")", "~", "b", "r", ...Object.keys(MARK_BEFORE), ...MARK_AFTER.flatMap((m) => [...m.mark])]);
+
+/** A `P.M.` / `let ring` line under a system: its label, then dashes to the run's end. */
+const BRACKET_RUN = /(P\.?\s?M\.?|let\s?ring|L\.?R\.?)(?:\s?-+)?/gi;
+const BRACKET_LINE = /^\s*(?:P\.?\s?M\.?|let\s?ring|L\.?R\.?)(?![A-Za-z0-9])/i;
+
+interface TabLine {
+	label: string | null;
+	body: string;
+	/** Where `body` starts in the raw line, so a bracket line below can be aligned to it. */
+	bodyStart: number;
+}
+
+/** A bracket line's runs, in raw-line columns (end exclusive). */
+interface BracketRun {
+	flag: "palmMute" | "letRing";
+	start: number;
+	end: number;
+}
+
+function isBracketLine(line: string): boolean {
+	return BRACKET_LINE.test(line);
+}
+
+function bracketRuns(line: string): BracketRun[] {
+	const runs: BracketRun[] = [];
+	for (const m of line.matchAll(BRACKET_RUN)) {
+		const flag = /^l/i.test(m[1]) ? "letRing" : "palmMute";
+		const start = m.index ?? 0;
+		runs.push({ flag, start, end: start + m[0].length });
+	}
+	return runs;
+}
+
+function readTabLine(line: string): TabLine | null {
+	if (isBracketLine(line)) return null;
+	const m = TAB_LINE.exec(line);
+	if (!m) return null;
+	return { label: m[1] ?? null, body: m[2], bodyStart: line.indexOf(m[2]) };
+}
+
+/** Six tab lines, top string first, and the bracket lines written under them. */
+interface TabSystem {
+	lines: TabLine[];
+	brackets: BracketRun[];
+}
+
+/** Every block of six consecutive tab lines, each with the `P.M.` / `let ring` lines that follow it. */
+function systemsOf(text: string): TabSystem[] {
+	const lines = text.split(/\r?\n/);
+	const systems: TabSystem[] = [];
+	let run: TabLine[] = [];
+	for (const line of lines) {
+		if (isBracketLine(line)) {
+			const last = systems[systems.length - 1];
+			if (last && run.length === 0) last.brackets.push(...bracketRuns(line));
+			continue;
+		}
+		const tab = readTabLine(line);
+		if (tab && line.trim() !== "") {
+			run.push(tab);
+			if (run.length === 6) {
+				systems.push({ lines: run, brackets: [] });
+				run = [];
+			}
+		} else {
+			run = [];
+		}
+	}
+	return systems;
+}
+
+/**
+ * Whether the text holds at least one system of six tab lines — what a
+ * router asks before anything reads the sentence as words.
+ */
+export function looksLikeTextTab(text: string): boolean {
+	return systemsOf(text).length > 0;
+}
+
+/** Lines that are not tab, for whatever else the paste says (a title, a meter). */
+export function textTabProse(text: string): string {
+	return text
+		.split(/\r?\n/)
+		.filter((line) => line.trim() !== "" && !isBracketLine(line) && readTabLine(line) === null)
+		.join("\n");
+}
+
+/** One bar of a system: six strings, and where the bar starts in the top string's raw line. */
+interface TabBar {
+	strings: string[];
+	/** Raw-line column of the bar's first character on the top string, for the bracket lines. */
+	rawStart: number;
+}
+
+/** The bars of one system: six strings, each split at its barlines. */
+function barsOf(system: TabLine[]): TabBar[] {
+	const perString = system.map((line) => {
+		const segments: { text: string; start: number }[] = [];
+		let at = 0;
+		for (const piece of line.body.split(/([|:]+)/)) {
+			if (!/^[|:]+$/.test(piece)) segments.push({ text: piece, start: at });
+			at += piece.length;
+		}
+		return segments.filter((segment, i, all) => !(segment.text === "" && (i === 0 || i === all.length - 1)));
+	});
+	const count = Math.min(...perString.map((s) => s.length));
+	const bars: TabBar[] = [];
+	for (let b = 0; b < count; b++) {
+		const segments = perString.map((s) => s[b]);
+		const width = Math.max(...segments.map((s) => s.text.length));
+		bars.push({
+			strings: segments.map((s) => s.text.padEnd(width, "-")),
+			rawStart: system[0].bodyStart + segments[0].start,
+		});
+	}
+	return bars;
+}
+
+/** One fret read out of a run of digits, and where in the run it started. */
+export interface FretRunPiece {
+	offset: number;
+	fret: number;
+}
+
+/**
+ * A run of digits on one string, read as the frets it was written to mean.
+ *
+ * Nothing separates one fret from the next in ASCII tab, so `1215` is two
+ * notes at the twelfth and fifteenth frets, not the 1215th. Read left to
+ * right, longest first: two digits when they make a fret that exists on a
+ * neck, one digit otherwise. A leading zero always stands alone — `0` is
+ * written `0`, never `03` — which is what keeps two open-ish notes from
+ * collapsing into a plausible single fret and going unnoticed.
+ *
+ * `12` on its own stays the twelfth fret, the way every tab writes it. That
+ * one is genuinely ambiguous — it could be a first fret and a second — and the
+ * conventional reading is the right guess, not a certainty.
+ */
+export function splitFretRun(run: string): FretRunPiece[] {
+	const pieces: FretRunPiece[] = [];
+	let i = 0;
+	while (i < run.length) {
+		const pair = run.slice(i, i + 2);
+		const takesTwo = pair.length === 2 && run[i] !== "0" && Number(pair) <= MAX_FRET;
+		pieces.push({ offset: i, fret: Number(takesTwo ? pair : run[i]) });
+		i += takesTwo ? 2 : 1;
+	}
+	return pieces;
+}
+
+/** What a note's suffix mark means: the effect it writes, with a bend's height. */
+function readSuffix(
+	text: string,
+	fret: number,
+	warnBend: (text: string, frets: number) => void,
+): { length: number; effects: NoteEffects } | null {
+	for (const { mark, kind, params } of MARK_AFTER) {
+		if (text.startsWith(mark)) return { length: mark.length, effects: { [kind]: params } as NoteEffects };
+	}
+	const m = NOTE_SUFFIX.exec(text);
+	if (!m) return null;
+	if (m[0].startsWith("~")) {
+		return { length: m[0].length, effects: { vibrato: m[0].length === 2 ? { wide: true } : {} } };
+	}
+	const pre = m[1] === "pb";
+	const release = m[4] !== undefined;
+	let semitones = 2;
+	if (m[2] !== undefined) semitones = 0.5;
+	else if (m[3] !== undefined) {
+		const diff = Number(m[3]) - fret;
+		if (diff === 1) semitones = 1;
+		else if (diff > 2) warnBend(m[0], diff);
+		// Anything else — the target written as the fret itself, or below it — reads as a full bend.
+	}
+	const bend: NonNullable<NoteEffects["bend"]> = { semitones };
+	if (pre) bend.pre = true;
+	if (release) bend.release = true;
+	return { length: m[0].length, effects: { bend } };
+}
+
+/** The notes of one bar by the column they start in. */
+function notesByColumn(
+	bar: string[],
+	warnUnknown: (mark: string) => void,
+	warnSplit: (run: string, frets: readonly number[]) => void,
+	warnBend: (text: string, frets: number) => void,
+): Map<number, TextTabNote[]> {
+	const byColumn = new Map<number, TextTabNote[]>();
+	const add = (col: number, note: TextTabNote) => {
+		if (!byColumn.has(col)) byColumn.set(col, []);
+		byColumn.get(col)!.push(note);
+	};
+	bar.forEach((line, stringIndex) => {
+		let c = 0;
+		while (c < line.length) {
+			const ch = line[c];
+			if (/\d/.test(ch)) {
+				let end = c + 1;
+				while (end < line.length && /\d/.test(line[end])) end += 1;
+				const run = line.slice(c, end);
+				const pieces = splitFretRun(run);
+				if (pieces.length > 1) warnSplit(run, pieces.map((piece) => piece.fret));
+				const before = line[c - 1];
+				const last = pieces[pieces.length - 1];
+				const suffix = readSuffix(line.slice(end), last.fret, warnBend);
+				// A mark belongs to the note it touches: the one the run opens
+				// with, and the one it closes with. `(7)` is a tie: the note held
+				// on from the previous slot.
+				pieces.forEach((piece, i) => {
+					const note: TextTabNote = { stringIndex, fret: piece.fret, muted: false };
+					// A tied note starts where its bracket opens: `(5)` is in the
+					// column of the `(`, level with the notes written beside it.
+					let column = c + piece.offset;
+					if (i === 0 && before === "(") {
+						note.link = { kind: "tie" };
+						column -= 1;
+					} else if (i === 0 && before && MARK_BEFORE[before]) {
+						const mark = MARK_BEFORE[before];
+						if (mark.link) note.link = mark.link;
+						if (mark.effects) note.effects = { ...mark.effects };
+					}
+					if (i === pieces.length - 1 && suffix) note.effects = { ...note.effects, ...suffix.effects };
+					add(column, note);
+				});
+				c = end + (suffix?.length ?? 0);
+				continue;
+			}
+			if (ch === "x" || ch === "X") {
+				add(c, { stringIndex, fret: null, muted: true });
+			} else if (!SILENT_CHARS.has(ch)) {
+				warnUnknown(ch);
+			}
+			c += 1;
+		}
+	});
+	// An x is a slap on its string and stays one: a column of them is read as
+	// written, never folded into a slot hit.
+	return byColumn;
+}
+
+/**
+ * The text's bars and columns, or null when it holds no system of six
+ * lines. Labels settle which way up a system is: "e" on top is the usual
+ * way and the default; "E" on top with "e" at the bottom is written
+ * low-first and is turned over. Empty bars (a `||` with nothing between)
+ * are skipped. A `P.M.` / `let ring` line under a system marks every note
+ * struck in the columns it spans.
+ */
+export function readTextTab(text: string): TextTabColumns | null {
+	const systems = systemsOf(text);
+	if (systems.length === 0) return null;
+	const reversed = systems.some((s) => s.lines[0].label === "E" && s.lines[5].label === "e");
+	const unknown = new Set<string>();
+	const splitRuns = new Map<string, string>();
+	const wideBends = new Map<string, number>();
+	const bars: TextTabBar[] = [];
+	for (const system of systems) {
+		const oriented = reversed ? [...system.lines].reverse() : system.lines;
+		for (const bar of barsOf(oriented)) {
+			const width = bar.strings[0].length;
+			if (width === 0) continue;
+			const byColumn = notesByColumn(
+				bar.strings,
+				(mark) => unknown.add(mark),
+				(run, frets) => splitRuns.set(run, frets.join(", ")),
+				(text, frets) => wideBends.set(text, frets),
+			);
+			for (const run of system.brackets) {
+				for (const [column, notes] of byColumn) {
+					const raw = bar.rawStart + column;
+					if (raw >= run.start && raw < run.end) for (const note of notes) note[run.flag] = true;
+				}
+			}
+			const columns = [...byColumn.entries()]
+				.sort(([a], [b]) => a - b)
+				.map(([at, notes]) => ({ at, notes }));
+			bars.push({ width, columns });
+		}
+	}
+	return {
+		bars,
+		unknownMarks: [...unknown],
+		splitRuns: [...splitRuns].map(([run, frets]) => ({ run, frets })),
+		wideBends: [...wideBends].map(([text, frets]) => ({ text, frets })),
+	};
+}
+
+/** What reading the columns had to repair or skip, whichever rhythm is put on them. */
+export function columnWarnings(columns: TextTabColumns): ValidationIssue[] {
+	return [
+		...columns.splitRuns.map(({ run, frets }) => ({
+			code: "ASCII_FRET_RUN_SPLIT",
+			path: "",
+			message: `"${run}" sits on one string with nothing between the frets — it was read as ${frets}.`,
+			original: run,
+			repairedTo: frets,
+		})),
+		...columns.wideBends.map(({ text, frets }) => ({
+			code: "ASCII_BEND_CLAMPED",
+			path: "",
+			message: `"${text}" bends ${frets} frets up — the app plays bends up to a whole tone, so it was read as a full bend.`,
+			original: text,
+			repairedTo: "bend-full",
+		})),
+		...columns.unknownMarks.map((mark) => ({
+			code: "ASCII_UNKNOWN_MARK",
+			path: "",
+			message: `"${mark}" is not a mark this reader knows — it was skipped.`,
+			original: mark,
+		})),
+	];
+}

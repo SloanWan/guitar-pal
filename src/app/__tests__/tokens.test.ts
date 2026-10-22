@@ -57,7 +57,7 @@ const darkMedia = collect((p) => p === DARK_MEDIA);
 const darkAttr = collect((p) => p === ':root[data-theme="dark"]');
 
 /** Keys deliberately fixed across themes (app-icon tiles wear their own slots; role labels sit on light tints). */
-const FIXED = new Set(["--gp-tile-l", "--gp-tile-d", "--gp-on-role", "--gp-focus"]);
+const FIXED = new Set(["--gp-tile-l", "--gp-tile-d", "--gp-on-role", "--gp-focus", "--gp-a2-light"]);
 const isFixed = (k: string) => FIXED.has(k) || /^--gp-lg[ld]\d$/.test(k);
 /** A colour or shadow value — literally, or through a var() chain that ends in one. */
 function isColour(v: string, depth = 0): boolean {
@@ -150,3 +150,42 @@ describe("tokens.css — contrast targets (spec v1.1 §3)", () => {
 		}
 	});
 });
+
+/** `a` mixed into `b` at `share` (sRGB, close enough to the oklab mix for a contrast floor). */
+function mix(a: string, b: string, share: number): string {
+	const ch = (hex: string, i: number) => parseInt(hex.slice(i, i + 2), 16);
+	return (
+		"#" +
+		[1, 3, 5]
+			.map((i) => Math.round(ch(a, i) * share + ch(b, i) * (1 - share)))
+			.map((n) => n.toString(16).padStart(2, "0"))
+			.join("")
+	);
+}
+
+describe("tokens.css — primitives II cues (#355)", () => {
+	it("a Lift-selected card stands off the page: its 3px module shadow in light (3:1)", () => {
+		for (const m of MODULES) expect(contrast(resolve(`--gp-${m}-sh`, light), resolve("--gp-page", light)), m).toBeGreaterThanOrEqual(3);
+	});
+
+	it("and its 60% module ring in dark (3:1 on the page)", () => {
+		for (const m of MODULES) {
+			const ring = mix(resolve(`--gp-${m}-500`, darkAttr), resolve("--gp-face", darkAttr), 0.6);
+			expect(contrast(ring, resolve("--gp-page", darkAttr)), m).toBeGreaterThanOrEqual(3);
+		}
+	});
+
+	it("toast text reaches 4.5:1 on the ink toast in both themes", () => {
+		for (const theme of [light, darkAttr]) expect(contrast(resolve("--gp-on-ink", theme), resolve("--gp-ink", theme))).toBeGreaterThanOrEqual(4.5);
+	});
+
+	it("the toast's pick (the other theme's slot) reads on the ink toast (3:1)", () => {
+		for (let slot = 0; slot <= 5; slot++) {
+			expect(contrast(resolve(`--gp-lgd${slot}`, light), resolve("--gp-ink", light)), `light ${slot}`).toBeGreaterThanOrEqual(3);
+		}
+		for (const key of ["--gp-lgl0", "--gp-lgl1", "--gp-lgl2", "--gp-lgl3", "--gp-lgl5", "--gp-a2-light"]) {
+			expect(contrast(resolve(key, light), resolve("--gp-ink", darkAttr)), `dark ${key}`).toBeGreaterThanOrEqual(3);
+		}
+	});
+});
+

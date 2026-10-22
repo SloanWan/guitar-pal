@@ -141,3 +141,13 @@ describe("createLogoPlayer", () => {
 		expect(f.raf).not.toHaveBeenCalled();
 	});
 });
+
+describe("the CSS pick mask", () => {
+	it("draws the same outline as PICK_PATH", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const { PICK_PATH } = await import("@/lib/brand/pickMark");
+		const css = readFileSync(resolve(__dirname, "../../../app/primitives.css"), "utf8");
+		expect(css).toContain(`d='${PICK_PATH}'`);
+	});
+});

@@ -64,3 +64,27 @@ test("a stepper steps, and a toggle chip turns on", async ({ page }) => {
 	await up.click();
 	await expect(up).toHaveAttribute("aria-pressed", "true");
 });
+
+test("a nav card hops when pointed at and settles 2px up", async ({ page }) => {
+	const card = page.getByRole("button", { name: /On the beat/ });
+	await card.hover();
+	await expect.poll(() => card.evaluate(offset)).toEqual([0, -2]);
+	await page.mouse.move(0, 0);
+	await expect.poll(() => card.evaluate(offset)).toEqual([0, 0]);
+});
+
+test("a sheet opens and closes by keyboard and hands focus back", async ({ page }) => {
+	const trigger = page.getByRole("button", { name: "Open sheet" });
+	await trigger.focus();
+	await page.keyboard.press("Enter");
+	const sheet = page.getByRole("dialog", { name: "Pattern options" });
+	await expect(sheet).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(sheet).toBeHidden();
+	await expect(trigger).toBeFocused();
+});
+
+test("a toast drops in", async ({ page }) => {
+	await page.getByRole("button", { name: "Show toast" }).click();
+	await expect(page.getByRole("region", { name: /Notifications/ }).getByText("Pattern saved")).toBeVisible();
+});

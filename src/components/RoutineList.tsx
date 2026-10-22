@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/legacy-button";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/legacy-input";
 import { Label } from "@/components/ui/label";
 import {
 	Select,

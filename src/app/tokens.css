@@ -121,6 +121,12 @@
   --gp-tile-l:#FFFFFF; --gp-tile-d:#18191B;
   --gp-lgl0:#823883; --gp-lgl1:#0078B9; --gp-lgl2:#23762C; --gp-lgl3:#C63C3C; --gp-lgl4:#EBD14D;
   --gp-lgd0:#C586C4; --gp-lgd1:#71B8EF; --gp-lgd2:#A1E1A3; --gp-lgd3:#F17F79; --gp-lgd4:#E7D169;
+  /* slot 5, wood: the fretboard's 500 in each ramp — the toast (an inverted surface) wears the
+     other theme's slots so its pick still reads */
+  --gp-lgl5:#5F320E; --gp-lgd5:#A48260;
+  /* Home's toast pick in dark: the toast is light there, where yellow would vanish — the light
+     theme's orange accent instead */
+  --gp-a2-light:#E56636;
 }
 /* dark ramps: 500 lifts to a light step, 700 is the lightest (text), sh = the deep 300,
    sh-n = near-black tinted by the hue, on = the dark page */

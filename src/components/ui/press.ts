@@ -4,6 +4,17 @@ import { useCallback, type Ref, type RefCallback } from "react";
 
 /** A press shows for at least this long, so a quick tap still reads as a sink (spec §7). */
 export const PRESS_MIN_HOLD_MS = 90;
+/** A touch on a navigable card hops it for this long — a finger has no hover (spec §6). */
+export const TAP_HOP_MS = 280;
+
+export interface PressOptions {
+	/**
+	 * A navigable card: a mouse press flattens it (`.is-down`), but a touch or pen hops
+	 * it (`.is-hop`, held TAP_HOP_MS) — the hover a finger cannot give.
+	 */
+	hop?: boolean;
+	now?: () => number;
+}
 
 const PRESS_KEYS = new Set([" ", "Enter"]);
 
@@ -13,9 +24,11 @@ const PRESS_KEYS = new Set([" ", "Enter"]);
  * the sink from that class. Returns the unbind, which removes every listener and any
  * pending release.
  */
-export function bindPress(el: HTMLElement, now: () => number = Date.now): () => void {
+export function bindPress(el: HTMLElement, { hop = false, now = Date.now }: PressOptions = {}): () => void {
 	let downAt = 0;
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	let cls = "is-down";
+	let hold = PRESS_MIN_HOLD_MS;
 
 	const clear = () => {
 		if (timer !== null) clearTimeout(timer);
@@ -28,28 +41,31 @@ export function bindPress(el: HTMLElement, now: () => number = Date.now): () => 
 		window[method]("pointercancel", up);
 	};
 	const disabled = () => el.matches(":disabled, [aria-disabled='true']");
-	const down = () => {
+	const down = (tap = false) => {
 		clear();
-		el.classList.add("is-down");
+		el.classList.remove(cls);
+		cls = tap ? "is-hop" : "is-down";
+		hold = tap ? TAP_HOP_MS : PRESS_MIN_HOLD_MS;
+		el.classList.add(cls);
 		downAt = now();
 	};
 	const up = () => {
 		watchRelease(false);
-		if (!el.classList.contains("is-down") || timer !== null) return;
-		const left = PRESS_MIN_HOLD_MS - (now() - downAt);
+		if (!el.classList.contains(cls) || timer !== null) return;
+		const left = hold - (now() - downAt);
 		if (left <= 0) {
-			el.classList.remove("is-down");
+			el.classList.remove(cls);
 			return;
 		}
 		timer = setTimeout(() => {
 			timer = null;
-			el.classList.remove("is-down");
+			el.classList.remove(cls);
 		}, left);
 	};
 
 	const onPointerDown = (e: PointerEvent) => {
 		if (e.button !== 0 || disabled()) return;
-		down();
+		down(hop && e.pointerType !== "" && e.pointerType !== "mouse");
 		watchRelease(true);
 	};
 	const onKeyDown = (e: KeyboardEvent) => {
@@ -71,7 +87,7 @@ export function bindPress(el: HTMLElement, now: () => number = Date.now): () => 
 		for (const [type, fn] of listeners) el.removeEventListener(type, fn);
 		watchRelease(false);
 		clear();
-		el.classList.remove("is-down");
+		el.classList.remove("is-down", "is-hop");
 	};
 }
 
@@ -85,17 +101,17 @@ function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
  * the press while the element is mounted. Pass the component's own `ref` prop through
  * so a caller's ref still lands on the element.
  */
-export function usePress<T extends HTMLElement>(ref?: Ref<T>): RefCallback<T> {
+export function usePress<T extends HTMLElement>(ref?: Ref<T>, { hop = false }: { hop?: boolean } = {}): RefCallback<T> {
 	return useCallback(
 		(el: T | null) => {
 			assignRef(ref, el);
 			if (!el) return;
-			const unbind = bindPress(el);
+			const unbind = bindPress(el, { hop });
 			return () => {
 				unbind();
 				assignRef(ref, null);
 			};
 		},
-		[ref],
+		[ref, hop],
 	);
 }

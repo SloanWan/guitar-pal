@@ -121,3 +121,29 @@ function watchWindowListeners(): Set<string> {
 	});
 	return live;
 }
+
+describe("bindPress, hop mode", () => {
+	const touch = (type: string) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerType: "touch" }));
+
+	it("hops a card under a finger and holds the hop for a tap", async () => {
+		const { TAP_HOP_MS } = await import("@/components/ui/press");
+		const unbind = bindPress(el, { hop: true });
+		touch("pointerdown");
+		expect(el.classList.contains("is-hop")).toBe(true);
+		expect(el.classList.contains("is-down")).toBe(false);
+		window.dispatchEvent(new PointerEvent("pointerup", { button: 0 }));
+		vi.advanceTimersByTime(TAP_HOP_MS - 1);
+		expect(el.classList.contains("is-hop")).toBe(true);
+		vi.advanceTimersByTime(1);
+		expect(el.classList.contains("is-hop")).toBe(false);
+		unbind();
+	});
+
+	it("still flattens under a mouse", () => {
+		const unbind = bindPress(el, { hop: true });
+		el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
+		expect(el.classList.contains("is-down")).toBe(true);
+		expect(el.classList.contains("is-hop")).toBe(false);
+		unbind();
+	});
+});

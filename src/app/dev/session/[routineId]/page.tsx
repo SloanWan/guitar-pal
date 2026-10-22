@@ -9,7 +9,7 @@ import { Routine, Exercise, RoutineExercise } from "@/types/database";
 import { createPracticeLog } from "@/lib/practiceLogs";
 
 import { Button } from "@/components/ui/legacy-button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/legacy-card";
 import {
 	Play,
 	Pause,

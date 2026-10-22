@@ -1,0 +1,510 @@
+/* =====================================================================================
+   Candy primitives (#353) — Button, PlayPick, Chip, Segmented, Switch, Stepper.
+   Spec v1.1 §6–§8. Everything reads the --gp-* tokens (tokens.css); module colour comes
+   through the --gp-m-* aliases, so a primitive follows the [data-m] it sits in.
+
+   The press language: a pressable wears a tonal hard shadow, diagonal down-right with no
+   blur (chips 2px, buttons 3px, the Play pick 4px). Hover lifts it 1px and grows the
+   shadow 1px; pressing sinks it into its shadow in 90ms (held ≥ 90ms by usePress) and
+   release springs back in 220ms. `.is-down` is set by usePress for pointer and keyboard.
+   Under reduced motion nothing moves: the press only changes the face colour.
+
+   In @layer components so a utility class on a call site (w-full, mt-4) still wins.
+   ===================================================================================== */
+@layer components {
+	/* ---- tones: what a pressable is painted with ------------------------------------- */
+	.gp-tone-primary {
+		--gp-p-face: var(--gp-m-500);
+		--gp-p-face-down: var(--gp-m-600, var(--gp-m-700));
+		--gp-p-ink: var(--gp-m-on);
+		--gp-p-sh: var(--gp-m-sh);
+		--gp-p-ring: var(--gp-ring-m);
+	}
+	.gp-tone-neutral {
+		--gp-p-face: var(--gp-face);
+		--gp-p-face-down: var(--gp-face-down);
+		--gp-p-ink: var(--gp-ink);
+		--gp-p-sh: var(--gp-shn);
+		--gp-p-ring: var(--gp-ring-shn);
+	}
+	.gp-tone-ink {
+		--gp-p-face: var(--gp-ink-fill);
+		--gp-p-face-down: color-mix(in oklab, var(--gp-ink-fill), var(--gp-ink-3) 22%);
+		--gp-p-ink: var(--gp-on-ink);
+		--gp-p-sh: var(--gp-ink-sh);
+		--gp-p-ring: var(--gp-ring-m);
+	}
+	.gp-tone-danger {
+		--gp-p-face: var(--gp-bad-fill);
+		--gp-p-face-down: color-mix(in oklab, var(--gp-bad-fill), var(--gp-bad-sh) 30%);
+		--gp-p-ink: #fff;
+		--gp-p-sh: var(--gp-bad-sh);
+		--gp-p-ring: var(--gp-ring-m);
+	}
+
+	/* ---- the press ------------------------------------------------------------------- */
+	.gp-press {
+		--o: var(--gp-o-btn);
+		background-color: var(--gp-p-face);
+		color: var(--gp-p-ink);
+		box-shadow: var(--gp-p-ring), var(--o) var(--o) 0 0 var(--gp-p-sh);
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) var(--gp-ease-state),
+			color var(--gp-d-state) var(--gp-ease-state);
+	}
+	@media (hover: hover) {
+		.gp-press:not(:disabled, [aria-disabled="true"], [aria-pressed="false"], .is-down):hover {
+			transform: translate(-1px, -1px);
+			box-shadow: var(--gp-p-ring), calc(var(--o) + 1px) calc(var(--o) + 1px) 0 0 var(--gp-p-sh);
+		}
+	}
+	.gp-press.is-down {
+		background-color: var(--gp-p-face-down);
+		transform: translate(var(--o), var(--o));
+		box-shadow: var(--gp-p-ring), 0 0 0 0 var(--gp-p-sh);
+		transition:
+			transform var(--gp-d-sink) var(--gp-e-sink),
+			box-shadow var(--gp-d-sink) var(--gp-e-sink),
+			background-color 60ms linear;
+	}
+	.gp-press:is(:disabled, [aria-disabled="true"]) {
+		background-color: var(--gp-s2);
+		color: var(--gp-ink-mute);
+		box-shadow: none;
+		transform: none;
+		cursor: default;
+	}
+	.gp-press:focus-visible,
+	.gp-focus:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 2px;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-press,
+		.gp-press.is-down,
+		.gp-press:hover {
+			transform: none !important;
+		}
+		.gp-press.is-down {
+			box-shadow: var(--gp-p-ring), var(--o) var(--o) 0 0 var(--gp-p-sh);
+			transition:
+				background-color 100ms linear,
+				color 100ms linear;
+		}
+	}
+
+	/* ---- Button ---------------------------------------------------------------------- */
+	.gp-btn {
+		position: relative;
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		height: 44px;
+		padding: 0 18px;
+		border-radius: var(--gp-r-m);
+		font: 600 15px/1 var(--gp-f-body);
+		white-space: nowrap;
+		user-select: none;
+		cursor: pointer;
+	}
+	/* the content, kept in one box so loading can hide it without changing the width */
+	.gp-btn-label {
+		display: inline-flex;
+		align-items: center;
+		gap: inherit;
+	}
+	.gp-btn svg {
+		width: 18px;
+		height: 18px;
+		flex: none;
+	}
+	.gp-btn[data-size="sm"] {
+		height: 40px;
+		padding: 0 14px;
+		font-size: 14px;
+	}
+	.gp-btn[data-size="xs"] {
+		height: 34px;
+		padding: 0 11px;
+		font-size: 13px;
+		border-radius: var(--gp-r-s);
+	}
+	@media (min-width: 960px) {
+		.gp-btn {
+			height: 40px;
+		}
+		.gp-btn[data-size="sm"] {
+			height: 36px;
+		}
+		.gp-btn[data-size="xs"] {
+			height: 32px;
+		}
+	}
+	.gp-btn[data-variant="icon"] {
+		aspect-ratio: 1;
+		padding: 0;
+	}
+	.gp-btn[data-variant="icon"] svg {
+		width: 20px;
+		height: 20px;
+	}
+	/* a text button is a link, not a pressable: no shadow, and the title hover */
+	.gp-btn[data-variant="ghost"] {
+		padding: 0 12px;
+		color: var(--gp-m-700);
+		background: transparent;
+		transition: background-color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-btn[data-variant="ghost"].is-down {
+		background: var(--gp-well);
+	}
+	@media (hover: hover) {
+		/* the underline belongs to the words; an svg beside them takes none */
+		.gp-btn[data-variant="ghost"]:not(:disabled):hover .gp-btn-label {
+			font-style: italic;
+			text-decoration: underline;
+			text-decoration-thickness: 1.5px;
+			text-underline-offset: 3px;
+		}
+	}
+	.gp-btn[data-variant="ghost"]:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.gp-btn[data-loading] {
+		cursor: progress;
+	}
+	.gp-btn[data-loading] > .gp-btn-label {
+		visibility: hidden;
+	}
+	/* loading: three small picks, fanned like the logo's hand, bounce in turn */
+	.gp-btn-picks {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+	}
+	.gp-btn .gp-btn-picks svg {
+		width: 11px;
+		height: 12px;
+		rotate: -16deg;
+		animation: gp-pick-bounce 900ms var(--gp-ease-state) infinite;
+	}
+	.gp-btn .gp-btn-picks svg:nth-child(2) {
+		rotate: 0deg;
+		animation-delay: 120ms;
+	}
+	.gp-btn .gp-btn-picks svg:nth-child(3) {
+		rotate: 16deg;
+		animation-delay: 240ms;
+	}
+	@keyframes gp-pick-bounce {
+		0%,
+		60%,
+		100% {
+			translate: 0 0;
+		}
+		30% {
+			translate: 0 -4px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-btn .gp-btn-picks svg {
+			animation-name: gp-pick-fade;
+		}
+		@keyframes gp-pick-fade {
+			0%,
+			60%,
+			100% {
+				opacity: 1;
+			}
+			30% {
+				opacity: 0.35;
+			}
+		}
+	}
+
+	/* ---- PlayPick: the pick-shaped Play button, the one 4px shadow --------------------- */
+	.gp-playpick {
+		--o: var(--gp-o-play);
+		position: relative;
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 60px;
+		height: 65px;
+		margin: 0 var(--o) var(--o) 0;
+		border-radius: var(--gp-r-l);
+		color: var(--gp-m-on);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+	.gp-playpick[data-size="sm"] {
+		--o: var(--gp-o-btn);
+		width: 46px;
+		height: 50px;
+	}
+	.gp-playpick > .gp-playpick-shape {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		overflow: visible;
+		fill: var(--gp-m-500);
+		filter: drop-shadow(var(--o) var(--o) 0 var(--gp-m-sh));
+		transition:
+			fill var(--gp-d-state) linear,
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			filter var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.gp-playpick > .gp-playpick-icon {
+		position: relative;
+		width: 24px;
+		height: 24px;
+		margin-top: -9px;
+		transition: transform var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.gp-playpick[data-size="sm"] > .gp-playpick-icon {
+		width: 18px;
+		height: 18px;
+		margin-top: -7px;
+	}
+	.gp-playpick.is-down > .gp-playpick-shape {
+		fill: var(--gp-m-600, var(--gp-m-700));
+		transform: translate(var(--o), var(--o));
+		filter: drop-shadow(0 0 0 var(--gp-m-sh));
+		transition:
+			fill 60ms linear,
+			transform var(--gp-d-sink) var(--gp-e-sink),
+			filter var(--gp-d-sink) var(--gp-e-sink);
+	}
+	.gp-playpick.is-down > .gp-playpick-icon {
+		transform: translate(var(--o), var(--o));
+		transition: transform var(--gp-d-sink) var(--gp-e-sink);
+	}
+	@media (hover: hover) {
+		.gp-playpick:not(.is-down, :disabled):hover > :is(.gp-playpick-shape, .gp-playpick-icon) {
+			transform: translate(-1px, -1px);
+		}
+		.gp-playpick:not(.is-down, :disabled):hover > .gp-playpick-shape {
+			filter: drop-shadow(calc(var(--o) + 1px) calc(var(--o) + 1px) 0 var(--gp-m-sh));
+		}
+	}
+	.gp-playpick:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.gp-playpick:disabled > .gp-playpick-shape {
+		fill: var(--gp-s2);
+		filter: none;
+	}
+	.gp-playpick:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 2px;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-playpick > :is(.gp-playpick-shape, .gp-playpick-icon) {
+			transform: none !important;
+		}
+		.gp-playpick.is-down > .gp-playpick-shape {
+			filter: drop-shadow(var(--o) var(--o) 0 var(--gp-m-sh));
+		}
+	}
+
+	/* ---- Chip: an action chip is raised; a toggle chip is flat until chosen ------------- */
+	.gp-chip {
+		--o: var(--gp-o-chip);
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 6px;
+		height: 34px;
+		padding: 0 12px;
+		border-radius: var(--gp-r-s);
+		font: 600 13.5px/1 var(--gp-f-body);
+		white-space: nowrap;
+		user-select: none;
+		cursor: pointer;
+	}
+	.gp-chip svg {
+		width: 16px;
+		height: 16px;
+		flex: none;
+	}
+	.gp-chip[aria-pressed="false"] {
+		--o: 0px;
+		background-color: transparent;
+		color: var(--gp-ink-2);
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+	}
+	.gp-chip[aria-pressed="false"].is-down {
+		background-color: var(--gp-well);
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+	}
+	.gp-chip[aria-pressed="false"]:disabled {
+		background-color: transparent;
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+	}
+
+	/* ---- Segmented: a well track with one raised thumb --------------------------------- */
+	.gp-seg {
+		position: relative;
+		display: inline-grid;
+		grid-auto-columns: 1fr;
+		grid-auto-flow: column;
+		height: 38px;
+		padding: 3px 5px 5px 3px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-well);
+	}
+	.gp-seg[data-full] {
+		display: grid;
+		width: 100%;
+	}
+	.gp-seg[data-dense] {
+		height: 36px;
+	}
+	/* --i / --n come from segmentThumb(): equal columns, so the thumb is one column wide
+	   and moves a whole column per step (translateX % is of its own width) */
+	.gp-seg-thumb {
+		position: absolute;
+		top: 3px;
+		bottom: 5px;
+		left: 3px;
+		width: calc((100% - 8px) / var(--n));
+		transform: translateX(calc(var(--i) * 100%));
+		border-radius: var(--gp-r-s);
+		background: var(--gp-face);
+		box-shadow: var(--gp-ring-shn), var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-shn);
+		transition: transform var(--gp-d-tab) var(--gp-spring-tab);
+		pointer-events: none;
+	}
+	.gp-seg > button {
+		position: relative;
+		z-index: 1;
+		padding: 0 12px;
+		border-radius: var(--gp-r-s);
+		font: 600 13.5px/1 var(--gp-f-body);
+		color: var(--gp-ink-3);
+		white-space: nowrap;
+		cursor: pointer;
+		transition: color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-seg[data-dense] > button {
+		padding: 0 10px;
+		font-size: 13px;
+	}
+	.gp-seg > button[aria-checked="true"] {
+		color: var(--gp-ink);
+	}
+	@media (hover: hover) {
+		.gp-seg > button[aria-checked="false"]:not(:disabled):hover {
+			color: var(--gp-ink-2);
+		}
+	}
+	.gp-seg > button:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-seg-thumb {
+			transition: none;
+		}
+	}
+
+	/* ---- Switch ---------------------------------------------------------------------- */
+	.gp-sw {
+		position: relative;
+		flex: none;
+		width: 44px;
+		height: 26px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-edge);
+		cursor: pointer;
+		transition: background-color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-sw[data-state="checked"] {
+		background: var(--gp-m-500);
+	}
+	.gp-sw-thumb {
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		background: var(--gp-thumb);
+		box-shadow: var(--gp-ring-shn), 1.5px 1.5px 0 0 var(--gp-shn);
+		transition:
+			transform var(--gp-d-tab) var(--gp-spring-tab),
+			box-shadow var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-sw[data-state="checked"] .gp-sw-thumb {
+		transform: translateX(18px);
+		box-shadow: var(--gp-ring-m), 1.5px 1.5px 0 0 var(--gp-m-sh);
+	}
+	.gp-sw:disabled {
+		background: var(--gp-s2);
+		cursor: default;
+	}
+	.gp-sw:disabled .gp-sw-thumb {
+		box-shadow: none;
+	}
+	.gp-sw-row {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		min-height: var(--gp-hit);
+		font: 500 15px/1.3 var(--gp-f-body);
+		color: var(--gp-ink);
+		cursor: pointer;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-sw-thumb {
+			transition: none;
+		}
+	}
+
+	/* ---- Stepper --------------------------------------------------------------------- */
+	.gp-stepper {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.gp-stepper-btn {
+		--o: var(--gp-o-chip);
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border-radius: var(--gp-r-m);
+		cursor: pointer;
+		touch-action: manipulation;
+		user-select: none;
+	}
+	.gp-stepper-btn svg {
+		width: 18px;
+		height: 18px;
+	}
+	.gp-stepper-val {
+		min-width: 3.2ch;
+		text-align: center;
+		font: 650 20px/1 var(--gp-f-num);
+		font-variant-numeric: tabular-nums;
+		color: var(--gp-ink);
+	}
+	.gp-stepper-unit {
+		margin-left: 3px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--gp-ink-3);
+	}
+}

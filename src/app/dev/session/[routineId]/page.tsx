@@ -8,7 +8,7 @@ import { getRoutineById, getRoutineExercises } from "@/lib/routines";
 import { Routine, Exercise, RoutineExercise } from "@/types/database";
 import { createPracticeLog } from "@/lib/practiceLogs";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
 	Play,

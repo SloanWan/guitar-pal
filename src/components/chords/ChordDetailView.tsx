@@ -10,7 +10,7 @@ import ChordModeToggle from "@/components/chords/ChordModeToggle";
 import ChordVoicingModal, { type VoicingCard } from "@/components/chords/ChordVoicingModal";
 import MusicalText from "@/components/MusicalText";
 import { useChordPreview } from "@/components/chords/useChordPreview";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 import { chordVoicingToMidi, rootPitchClass } from "@/lib/chordVoicingToMidi";
 import type { DiagramMode } from "@/components/chords/ChordDiagramSVG";
 import ChordShapeEditor from "@/components/chords/ChordShapeEditor";

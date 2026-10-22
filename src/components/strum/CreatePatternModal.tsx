@@ -4,7 +4,7 @@ import { useState, useEffect, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 import {
 	MoveDown,
 	MoveUp,

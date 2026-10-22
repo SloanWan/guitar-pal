@@ -107,8 +107,15 @@ describe("tokens.css — structure", () => {
 		expect(Object.fromEntries(darkMedia)).toEqual(Object.fromEntries(darkAttr));
 	});
 
-	it("never sets color-scheme (the v3 theme owns it until the shell flips the default)", () => {
-		expect(css).not.toMatch(/(?<!prefers-)color-scheme\s*:/);
+	it("sets color-scheme with the theme: light by default, dark under either dark selector", () => {
+		const scheme = (selector: string) =>
+			rules(css)
+				.filter(([p]) => p === selector)
+				.map(([, body]) => body.match(/color-scheme\s*:\s*(\w+)/)?.[1])
+				.find(Boolean);
+		expect(scheme(":root")).toBe("light");
+		expect(scheme(':root[data-theme="dark"]')).toBe("dark");
+		expect(scheme(DARK_MEDIA)).toBe("dark");
 	});
 
 	it("points every module alias at its own ramp", () => {

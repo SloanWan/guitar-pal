@@ -86,6 +86,12 @@
   --gp-scrim:rgba(0,0,0,.6); --gp-shadow-pop:0 2px 6px rgba(0,0,0,.5), 0 20px 40px -16px rgba(0,0,0,.85);
 }
 
+/* the browser's own surfaces (scrollbars, form controls, the canvas behind the page)
+   follow the theme; light is the default since the shell flipped it (#356) */
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+
 /* -------------------------------------------------------------------------------------
    2. MODULE RAMPS — Gauge v2 (decided 2026-10-23)
    Inspired by the classic gauge-coloured picks (confirmed by the owner). The brand name

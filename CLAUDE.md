@@ -102,6 +102,8 @@ Types defined in `src/types/database.ts`.
 
 **Session flow:** `/dev/session/[routineId]` — a dev-only surface behind `NEXT_PUBLIC_ENABLE_DEV_ROUTES`, not a user route. A client component with a local timer state machine (`idle → running → paused → completed → all_done`). On `all_done`, it collects rating + notes and calls `createPracticeLog()`, then pushes to `/dev/dashboard`.
 
+**Shell** (`src/components/shell/`, `src/app/shell.css`, #356): both route groups wrap their page in `AppShell` — one header for every width (a 52px app bar on a phone: brand, Ask, ⋯ More; a 56px header from 720px: brand, `NavLinks`, Ask, the account), then the page's `<main>`, then the phone `TabBar` (Home, Strum, Tab, Chords, Me; < 720px). The tab bar is part of the flex column, after `<main>`, so it never covers content; a page's own fixed bottom bar sits at `bottom-(--gp-tabbar-h)` and a full-height calc subtracts `var(--gp-chrome-h)`. `src/lib/navigation.ts` maps a route to its header item and tab (`/fingerpick/edit/*` → Tab, Books and Fretboard → More). The theme defaults to **light**: the boot script sets `data-theme` to `light` unless `dark` was saved, and `tokens.css` owns `color-scheme`; the theme control is a `ThemeSwitch` in the account menu, More and Settings (and a header button for a signed-out visitor).
+
 **Component pattern:** Feature components (e.g. `ExerciseList`, `RoutineList`) live in `src/components/` and are marked `"use client"`. They handle their own data fetching and local state. UI primitives from shadcn live in `src/components/ui/` — don't hand-edit these unless necessary.
 
 ## Conventions

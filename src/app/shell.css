@@ -1,0 +1,342 @@
+/* =====================================================================================
+   The Candy shell (#356) — header, phone app bar, tab bar. Spec v1.1 §4, §8, §9.
+
+   One header serves every width: 52px on a phone (the brand, Ask and ⋯ More), 56px from
+   720px with the nav in the middle and the account on the right. Below 720px a 62px tab
+   bar closes the column under <main>; it is part of the flex column, never over it, so it
+   cannot cover content. Pages with their own fixed bars lift them by --gp-tabbar-h.
+   ===================================================================================== */
+:root {
+	--gp-header-h: 52px;
+	--gp-tabbar-h: calc(62px + env(safe-area-inset-bottom));
+	/* everything the shell takes from the viewport's height */
+	--gp-chrome-h: calc(var(--gp-header-h) + var(--gp-tabbar-h));
+}
+@media (min-width: 720px) {
+	:root {
+		--gp-header-h: 56px;
+		--gp-tabbar-h: 0px;
+	}
+}
+
+@layer components {
+	.gp-header {
+		position: relative;
+		z-index: 20;
+		flex: none;
+		height: var(--gp-header-h);
+		background: var(--gp-page);
+		box-shadow: 0 1px 0 var(--gp-line);
+		color: var(--gp-ink);
+		font-family: var(--gp-f-body);
+	}
+	.gp-header-in {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		max-width: 1200px;
+		height: 100%;
+		margin: 0 auto;
+		padding: 0 8px 0 16px;
+	}
+	@media (min-width: 720px) {
+		.gp-header-in {
+			gap: 16px;
+			padding: 0 24px;
+		}
+	}
+	@media (min-width: 960px) {
+		.gp-header-in {
+			padding: 0 32px;
+		}
+	}
+	.gp-header-end {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 8px;
+		margin-left: auto;
+	}
+	/* what only one side of 720px shows */
+	@media (max-width: 719.98px) {
+		.gp-wide-only {
+			display: none !important;
+		}
+	}
+	@media (min-width: 720px) {
+		.gp-phone-only {
+			display: none !important;
+		}
+	}
+
+	/* ---- the nav icon: an outline at rest, filled in the module colour when current ---- */
+	.gp-nic {
+		position: relative;
+		display: inline-grid;
+		flex: none;
+		width: 18px;
+		height: 18px;
+	}
+	.gp-nic > svg {
+		grid-area: 1 / 1;
+		width: 100%;
+		height: 100%;
+		transition:
+			opacity 160ms var(--gp-ease-state),
+			transform 260ms var(--gp-spring-press);
+	}
+	.gp-nic-o {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.gp-nic-f {
+		fill: var(--gp-m-500);
+		opacity: 0;
+		transform: scale(0.6);
+	}
+	[aria-current="page"] > .gp-nic > .gp-nic-o {
+		opacity: 0;
+		transform: scale(0.85);
+	}
+	[aria-current="page"] > .gp-nic > .gp-nic-f {
+		opacity: 1;
+		transform: none;
+	}
+
+	/* ---- header nav (≥ 720px) ---------------------------------------------------------- */
+	.gp-nav {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+		height: 100%;
+		margin: 0 auto;
+	}
+	.gp-nav a {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		height: 38px;
+		padding: 0 12px;
+		border-radius: var(--gp-r-m);
+		font: 600 14px/1 var(--gp-f-body);
+		color: var(--gp-ink-3);
+		white-space: nowrap;
+		text-decoration: none;
+		transition: color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-nav a[aria-current="page"] {
+		color: var(--gp-ink);
+	}
+	.gp-nav a:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 0;
+	}
+	/* hover: a 2px ink line, skewed −24°, drawn from the left under the whole link, and the
+	   label leans into italic. The current item never shows it — it has its icon and pick. */
+	.gp-nav a::after {
+		content: "";
+		position: absolute;
+		right: 12px;
+		bottom: 3px;
+		left: 12px;
+		height: 2px;
+		border-radius: 1px;
+		background: currentColor;
+		transform: skewX(-24deg) scaleX(0);
+		transform-origin: 0 50%;
+		transition: transform 320ms var(--gp-ease-state);
+		pointer-events: none;
+	}
+	@media (hover: hover) {
+		.gp-nav a:not([aria-current="page"]):hover {
+			color: var(--gp-ink);
+		}
+		.gp-nav a:not([aria-current="page"]):hover::after {
+			transform: skewX(-24deg) scaleX(1);
+		}
+		.gp-nav a:not([aria-current="page"]):hover .gp-nav-l {
+			font-style: italic;
+			font-synthesis-style: auto;
+		}
+	}
+	.gp-nav a:not([aria-current="page"]):focus-visible::after {
+		transform: skewX(-24deg) scaleX(1);
+	}
+	/* a tablet (720–959px) has no room for six icon-and-label rows side by side: each item
+	   stacks its label under its icon, the way the phone tab bar does */
+	@media (max-width: 959.98px) {
+		.gp-nav a {
+			flex-direction: column;
+			justify-content: center;
+			gap: 3px;
+			height: 48px;
+			padding: 0 8px;
+			font-size: 11.5px;
+		}
+		.gp-nav a::after {
+			right: 8px;
+			bottom: 0;
+			left: 8px;
+		}
+	}
+	/* the pick that hangs under the current item and springs between items */
+	.gp-nav-ind {
+		position: absolute;
+		top: calc(100% - 7px);
+		left: 0;
+		display: block;
+		width: 12px;
+		height: 13px;
+		color: var(--gp-ind, var(--gp-ink));
+		pointer-events: none;
+		transition:
+			transform var(--gp-d-tab) var(--gp-spring-tab),
+			opacity var(--gp-d-state) linear,
+			color var(--gp-d-state) linear;
+	}
+	.gp-nav-ind[data-placed="false"] {
+		opacity: 0;
+		transition: none;
+	}
+
+	/* ---- the account control (≥ 720px) --------------------------------------------------- */
+	.gp-avatar-btn {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		cursor: pointer;
+	}
+	.gp-avatar-btn:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 2px;
+	}
+	.gp-avatar-btn > * {
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+	}
+
+	/* ---- phone tab bar (< 720px) ---------------------------------------------------------- */
+	.gp-tabbar {
+		position: relative;
+		z-index: 20;
+		display: grid;
+		flex: none;
+		grid-template-columns: repeat(5, 1fr);
+		height: var(--gp-tabbar-h);
+		padding-bottom: env(safe-area-inset-bottom);
+		background: var(--gp-page);
+		box-shadow: 0 -1px 0 var(--gp-line);
+		font-family: var(--gp-f-body);
+	}
+	@media (min-width: 720px) {
+		.gp-tabbar {
+			display: none;
+		}
+	}
+	.gp-tabbar a {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		padding-top: 6px;
+		font: 600 11.5px/1 var(--gp-f-body);
+		color: var(--gp-ink-3);
+		text-decoration: none;
+		-webkit-tap-highlight-color: transparent;
+	}
+	.gp-tabbar a:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: -4px;
+		border-radius: var(--gp-r-m);
+	}
+	.gp-tabbar .gp-nic {
+		width: 22px;
+		height: 22px;
+	}
+	.gp-tabbar a[aria-current="page"] {
+		color: var(--gp-ink);
+	}
+	.gp-tabbar a[aria-current="page"] > .gp-nic {
+		animation: gp-squash 260ms var(--gp-spring-press);
+	}
+	/* the pick hangs from the top edge over the current tab, dropping in with one squash */
+	.gp-tab-ind {
+		position: absolute;
+		top: 0;
+		left: 0;
+		display: flex;
+		justify-content: center;
+		width: 20%;
+		color: var(--gp-ind, var(--gp-ink));
+		pointer-events: none;
+		transform: translateX(calc(var(--i, 0) * 100%));
+		transition:
+			transform var(--gp-d-tab) var(--gp-spring-tab),
+			color var(--gp-d-state) linear;
+	}
+	.gp-tab-ind > svg {
+		width: 12px;
+		height: 13px;
+		animation: gp-dropin 300ms var(--gp-spring-pop);
+	}
+	.gp-tab-ind[hidden] {
+		display: none;
+	}
+	@keyframes gp-dropin {
+		0% {
+			transform: translateY(-7px) scale(1, 1.1);
+		}
+		55% {
+			transform: translateY(0) scale(1.14, 0.86);
+		}
+		100% {
+			transform: none;
+		}
+	}
+	@keyframes gp-squash {
+		40% {
+			transform: scale(1.12, 0.88);
+		}
+		100% {
+			transform: none;
+		}
+	}
+
+	/* ---- the More sheet's settings rows ----------------------------------------------- */
+	.gp-more-foot {
+		display: grid;
+		gap: 4px;
+		margin-top: 16px;
+		padding-top: 12px;
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.gp-nav-ind,
+		.gp-tab-ind {
+			transition: opacity 150ms linear, color 150ms linear;
+		}
+		.gp-tab-ind > svg,
+		.gp-tabbar a[aria-current="page"] > .gp-nic {
+			animation: none;
+		}
+		.gp-nic > svg {
+			transform: none !important;
+			transition: opacity 120ms linear;
+		}
+		.gp-nav a::after {
+			transition: none;
+		}
+	}
+}

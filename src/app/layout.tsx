@@ -11,8 +11,10 @@ export const metadata: Metadata = {
 };
 
 // Runs synchronously during HTML parsing, before first paint, so the saved
-// theme applies without a flash. Dark is the token default on :root.
-const themeInitScript = `(function(){var t=localStorage.getItem("gp-theme");if(!t)t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";document.documentElement.dataset.theme=t;})()`;
+// theme applies without a flash. Light is the default (#356): only a visitor who
+// chose dark gets it. The attribute is always set, so the v3 tokens (dark on
+// :root) and the Candy tokens (light on :root) agree from the first frame.
+const themeInitScript = `(function(){var t;try{t=localStorage.getItem("gp-theme")}catch(e){}document.documentElement.dataset.theme=t==="dark"?"dark":"light";})()`;
 
 export default function RootLayout({
   children,

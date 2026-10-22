@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "./tokens.css"; /* Candy tokens (--gp-*), #349 / #350 */
 @import "./primitives.css"; /* Candy primitives (gp-btn, gp-chip, …), #353 */
+@import "./shell.css"; /* Candy shell: header, tab bar, chrome heights, #356 */
 
 /* dark: utilities still exist in un-migrated shadcn primitives; the variant now
    follows the data-theme attribute instead of the retired .dark class. Prefer

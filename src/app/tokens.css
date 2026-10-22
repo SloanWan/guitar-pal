@@ -1,0 +1,282 @@
+/* =====================================================================================
+   Guitar Pal design tokens · Candy v1.1 (2026-10-23) — epic #349, this layer #350
+   page = Snow, palette = Gauge v2, selection = Lift, card hover = Hop, type = Figtree.
+   Custom properties only: nothing here styles an element by itself.
+
+   Runtime tokens are --gp-*. They follow two attributes:
+     <html data-theme="light" | "dark">  set by the init script in layout.tsx (the dark
+                                         blocks also answer prefers-color-scheme when the
+                                         attribute is absent)
+     data-m="strum" | "tab" | "chords" | "fb" | "books" | "home"
+                                         on <main> (ModuleScope), re-points the --gp-m-*
+                                         "current module" aliases for that subtree
+
+   Utilities: globals.css exposes these under an INTERIM `gp-` namespace in @theme inline
+   (bg-gp-page, text-gp-ink-3, bg-gp-m-500, rounded-gp-lg, ease-gp-spring, …) because
+   several bare names (ink, line, card, panel, surface, accent) still carry v3 values.
+   The bare names are reclaimed when the last page has migrated (#363 cleanup).
+
+   color-scheme is deliberately NOT set here: the v3 theme still owns the default (dark)
+   until the shell flips it in #356.
+
+   Layer order (lowest → highest):
+     1. neutral ramp      — page, card, well, field, line, ink (by data-theme)
+     2. module ramps      — --gp-<module>-100…700/on/sh/sh-n (by data-theme)
+     3. module alias      — [data-m] → --gp-m-*
+     4. role overrides    — pressable shadow/ring picked per element by the primitives
+   Every key the light base defines is defined again in BOTH dark blocks (tested).
+   ===================================================================================== */
+
+/* -------------------------------------------------------------------------------------
+   1. NEUTRAL RAMP · light · Snow (decided 2026-10-23)
+   The page is ONE neutral. Cards, panels and sheets are white; wells, inputs, inactive
+   cells, dividers and ink are neutral. Nothing is tinted by the module at rest.
+   On Snow a white panel already reads against the page, so panels carry NO hairline.
+   ------------------------------------------------------------------------------------- */
+:root {
+  --gp-page: #F7F7F8;      /* the page */
+  --gp-card: #FFFFFF;      /* cards, panels */
+  --gp-sheet: #FFFFFF;     /* sheets, menus, side panel */
+  --gp-face: #FFFFFF;      /* neutral pressable face (secondary button, chip, struck cell) */
+  --gp-face-down: #F1F2F4; /* that face while pressed */
+  --gp-thumb: #FFFFFF;     /* switch / slider thumb */
+  --gp-well: #EEEFF1;      /* wells, rest cells, segmented track, skeleton */
+  --gp-field: #EEEFF1;     /* text inputs */
+  --gp-s2: #E4E5E8;        /* pressed well, disabled fill */
+  --gp-line: #E2E3E6;      /* dividers, input hairline */
+  --gp-edge: #C6C8CD;      /* stronger edge: off toggle chip, slider track, switch off */
+  --gp-ink: #17181B;       /* 16.6:1 on page · 17.8:1 on card · 15.4:1 on well */
+  --gp-ink-2: #43464C;     /*  8.8:1 on page ·  8.2:1 on well */
+  --gp-ink-3: #5F636A;     /*  5.6:1 on page ·  5.3:1 on well (meta, captions) */
+  --gp-ink-mute: #9599A0;  /*  2.7:1 — disabled text and decoration ONLY, never content */
+  --gp-ink-fill: #222428;  /* ink button face */
+  --gp-ink-sh: #0A0B0D;    /* ink button shadow */
+  --gp-on-ink: #FFFFFF;
+  /* the neutral pressable shadow on module-less pages (Home, Settings) */
+  --gp-sh-n: #C6C8CD;
+  --gp-ring-n: inset 0 0 0 1px #C6C8CD;   /* light: a 1px edge in the shadow colour */
+  --gp-ring-c: inset 0 0 0 1px #E2E3E6;   /* resting hairline of a navigable card */
+  --gp-ring-m: 0 0 #0000;                 /* module-filled pressable: no rim in light */
+  --gp-scrim: rgba(18, 20, 24, .40);
+  --gp-shadow-pop: 0 2px 6px rgba(18, 20, 24, .06), 0 16px 36px -16px rgba(18, 20, 24, .28); /* sheets, menus, toasts only */
+}
+
+/* -------------------------------------------------------------------------------------
+   1b. NEUTRAL RAMP · dark (the face is 13 L* above the page so its near-black shadow
+   reads, plus a light top-left rim)
+   ------------------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --gp-page:#18191B; --gp-card:#25262A; --gp-sheet:#292A2E; --gp-face:#37393D; --gp-face-down:#2E3034; --gp-thumb:#E3E5E8;
+    --gp-well:#1E1F22; --gp-field:#1C1D20; --gp-s2:#323338; --gp-line:#323338; --gp-edge:#4E5056;
+    --gp-ink:#F2F3F5; --gp-ink-2:#D3D6DB; --gp-ink-3:#AAAFB7; --gp-ink-mute:#767B83;
+    --gp-ink-fill:#E3E5E8; --gp-ink-sh:#5D6169; --gp-on-ink:#18191B;
+    --gp-sh-n:#08090A; --gp-ring-n:inset 1px 1px 0 0 rgba(255,255,255,.10); --gp-ring-c:inset 1px 1px 0 0 rgba(255,255,255,.08);
+    --gp-ring-m:inset 1px 1px 0 0 rgba(255,255,255,.30);
+    --gp-scrim:rgba(0,0,0,.6); --gp-shadow-pop:0 2px 6px rgba(0,0,0,.5), 0 20px 40px -16px rgba(0,0,0,.85);
+  }
+}
+:root[data-theme="dark"] {
+  --gp-page:#18191B; --gp-card:#25262A; --gp-sheet:#292A2E; --gp-face:#37393D; --gp-face-down:#2E3034; --gp-thumb:#E3E5E8;
+  --gp-well:#1E1F22; --gp-field:#1C1D20; --gp-s2:#323338; --gp-line:#323338; --gp-edge:#4E5056;
+  --gp-ink:#F2F3F5; --gp-ink-2:#D3D6DB; --gp-ink-3:#AAAFB7; --gp-ink-mute:#767B83;
+  --gp-ink-fill:#E3E5E8; --gp-ink-sh:#5D6169; --gp-on-ink:#18191B;
+  --gp-sh-n:#08090A; --gp-ring-n:inset 1px 1px 0 0 rgba(255,255,255,.10); --gp-ring-c:inset 1px 1px 0 0 rgba(255,255,255,.08);
+  --gp-ring-m:inset 1px 1px 0 0 rgba(255,255,255,.30);
+  --gp-scrim:rgba(0,0,0,.6); --gp-shadow-pop:0 2px 6px rgba(0,0,0,.5), 0 20px 40px -16px rgba(0,0,0,.85);
+}
+
+/* -------------------------------------------------------------------------------------
+   2. MODULE RAMPS — Gauge v2 (decided 2026-10-23)
+   Inspired by the classic gauge-coloured picks (confirmed by the owner). The brand name
+   and its logo NEVER appear in the UI, the code or the docs that ship.
+   Hue map: strum = green .88 · tab = blue 1.0 · chords = red .50 · fretboard = rosewood
+   (always wood) · books = purple 1.14 · accents yellow .73 / orange .60 (ink text only).
+   ≈70% of the reference chroma at the reference hue angles, kept matte; the green is
+   deeper and cooler than Duolingo's.
+   Per module: 100 tint · 300 ring · 500 fill · 700 text/strong · on (text on 500)
+               sh   = shadow of a 500-filled pressable (light: 700, dark: 300)
+               sh-n = shadow (and light ring) of a NEUTRAL pressable on that module's page
+   Module colour may appear ONLY on: the selected object, a 500 fill of a primary
+   control, pressable shadows/rings, the pick marker, playhead/now states, data marks.
+   Colour vision: Strum vs Chords is the closest pair (OKLab ΔE ≈ 7.0 protan / 7.3
+   deutan in light), so a module colour ALWAYS travels with its icon and its label.
+   Contrast on Snow (#F7F7F8): every 500 ≥ 3:1 as a graphic (lowest Tab 4.47); text on
+   every 500 ≥ 4.5:1 (lowest Tab 4.79); every 700 on white ≥ 8:1.
+   ------------------------------------------------------------------------------------- */
+:root {
+  --gp-strum-100:#D0E8D0;  --gp-strum-300:#A1CCA1;  --gp-strum-500:#23762C;  --gp-strum-700:#065114;  --gp-strum-on:#FFFFFF;  --gp-strum-sh:var(--gp-strum-700);   --gp-strum-sh-n:#91B791;
+  --gp-tab-100:#CBE4FA;    --gp-tab-300:#97C7ED;    --gp-tab-500:#0078B9;    --gp-tab-700:#055380;    --gp-tab-on:#FFFFFF;    --gp-tab-sh:var(--gp-tab-700);       --gp-tab-sh-n:#86B3D8;
+  --gp-chords-100:#FED8D5; --gp-chords-300:#FDADA6; --gp-chords-500:#C63C3C; --gp-chords-700:#94131C; --gp-chords-on:#FFFFFF; --gp-chords-sh:var(--gp-chords-700); --gp-chords-sh-n:#E29C96;
+  --gp-fb-100:#EFDED3;     --gp-fb-300:#DABBA8;     --gp-fb-500:#5F320E;     --gp-fb-700:#3C1B00;     --gp-fb-on:#FFFFFF;     --gp-fb-sh:var(--gp-fb-700);         --gp-fb-sh-n:#C9A987;
+  --gp-books-100:#F3DAF2;  --gp-books-300:#DFB3DE;  --gp-books-500:#823883;  --gp-books-700:#58155A;  --gp-books-on:#FFFFFF;  --gp-books-sh:var(--gp-books-700);   --gp-books-sh-n:#CF9ECE;
+  /* accents (Home toasts, the logo's resting pick). Both carry INK text (11.6:1 · 5.3:1);
+     yellow is 1.43:1 on Snow, so it is never a graphic on the page by itself. */
+  --gp-a1:#EBD14D; --gp-a2:#E56636; --gp-a-on:#17181B;
+  /* logo slots: 0–3 the hand back → front, 4 the resting pick (purple · blue · green · red + yellow) */
+  --gp-lg0:#823883; --gp-lg1:#0078B9; --gp-lg2:#23762C; --gp-lg3:#C63C3C; --gp-lg4:#EBD14D;
+  /* fretboard interval roles (light tints in both themes; labels use --gp-on-role) */
+  --gp-role-3:#F9BEB8; --gp-role-5:#A7CEED; --gp-role-7:#DAD09B; --gp-role-x:#E2DFDB; --gp-on-role:#17181A;
+  /* app icon: fixed per tile, NOT per theme (a light tile always wears the light slots) */
+  --gp-tile-l:#FFFFFF; --gp-tile-d:#18191B;
+  --gp-lgl0:#823883; --gp-lgl1:#0078B9; --gp-lgl2:#23762C; --gp-lgl3:#C63C3C; --gp-lgl4:#EBD14D;
+  --gp-lgd0:#C586C4; --gp-lgd1:#71B8EF; --gp-lgd2:#A1E1A3; --gp-lgd3:#F17F79; --gp-lgd4:#E7D169;
+}
+/* dark ramps: 500 lifts to a light step, 700 is the lightest (text), sh = the deep 300,
+   sh-n = near-black tinted by the hue, on = the dark page */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --gp-strum-100:#263A27;  --gp-strum-300:#355B36;  --gp-strum-500:#A1E1A3;  --gp-strum-700:#C2DFC1;  --gp-strum-on:#18191B;  --gp-strum-sh:var(--gp-strum-300);   --gp-strum-sh-n:#0B160B;
+    --gp-tab-100:#21384A;    --gp-tab-300:#2A5677;    --gp-tab-500:#71B8EF;    --gp-tab-700:#BBDCF6;    --gp-tab-on:#18191B;    --gp-tab-sh:var(--gp-tab-300);       --gp-tab-sh-n:#07151F;
+    --gp-chords-100:#512C29; --gp-chords-300:#833E3A; --gp-chords-500:#F17F79; --gp-chords-700:#FECBC6; --gp-chords-on:#18191B; --gp-chords-sh:var(--gp-chords-300); --gp-chords-sh-n:#220E0C;
+    --gp-fb-100:#3F3328;     --gp-fb-300:#55402B;     --gp-fb-500:#A48260;     --gp-fb-700:#E6D4C3;     --gp-fb-on:#18191B;     --gp-fb-sh:var(--gp-fb-300);         --gp-fb-sh-n:#1B1108;
+    --gp-books-100:#432F43;  --gp-books-300:#6C456B;  --gp-books-500:#C586C4;  --gp-books-700:#EDCEEC;  --gp-books-on:#18191B;  --gp-books-sh:var(--gp-books-300);   --gp-books-sh-n:#1D0E1D;
+    --gp-a1:#E7D169; --gp-a2:#FC9571; --gp-a-on:#18191B;
+    --gp-lg0:#C586C4; --gp-lg1:#71B8EF; --gp-lg2:#A1E1A3; --gp-lg3:#F17F79; --gp-lg4:#E7D169;
+    --gp-role-3:#D69D97; --gp-role-5:#87ADCB; --gp-role-7:#BCB17E; --gp-role-x:#C3C1BC;
+  }
+}
+:root[data-theme="dark"] {
+  --gp-strum-100:#263A27;  --gp-strum-300:#355B36;  --gp-strum-500:#A1E1A3;  --gp-strum-700:#C2DFC1;  --gp-strum-on:#18191B;  --gp-strum-sh:var(--gp-strum-300);   --gp-strum-sh-n:#0B160B;
+  --gp-tab-100:#21384A;    --gp-tab-300:#2A5677;    --gp-tab-500:#71B8EF;    --gp-tab-700:#BBDCF6;    --gp-tab-on:#18191B;    --gp-tab-sh:var(--gp-tab-300);       --gp-tab-sh-n:#07151F;
+  --gp-chords-100:#512C29; --gp-chords-300:#833E3A; --gp-chords-500:#F17F79; --gp-chords-700:#FECBC6; --gp-chords-on:#18191B; --gp-chords-sh:var(--gp-chords-300); --gp-chords-sh-n:#220E0C;
+  --gp-fb-100:#3F3328;     --gp-fb-300:#55402B;     --gp-fb-500:#A48260;     --gp-fb-700:#E6D4C3;     --gp-fb-on:#18191B;     --gp-fb-sh:var(--gp-fb-300);         --gp-fb-sh-n:#1B1108;
+  --gp-books-100:#432F43;  --gp-books-300:#6C456B;  --gp-books-500:#C586C4;  --gp-books-700:#EDCEEC;  --gp-books-on:#18191B;  --gp-books-sh:var(--gp-books-300);   --gp-books-sh-n:#1D0E1D;
+  --gp-a1:#E7D169; --gp-a2:#FC9571; --gp-a-on:#18191B;
+  --gp-lg0:#C586C4; --gp-lg1:#71B8EF; --gp-lg2:#A1E1A3; --gp-lg3:#F17F79; --gp-lg4:#E7D169;
+  --gp-role-3:#D69D97; --gp-role-5:#87ADCB; --gp-role-7:#BCB17E; --gp-role-x:#C3C1BC;
+}
+
+/* -------------------------------------------------------------------------------------
+   3. MODULE ALIAS — [data-m] re-points --gp-m-* for a subtree. The shell carries the
+   page's module; on Home each card / row carries its own (mixed lists colour per row).
+   Module-less pages (Home chrome, Settings) use ink as their "module".
+   ------------------------------------------------------------------------------------- */
+:root, [data-m="home"] {
+  --gp-m-100: var(--gp-well); --gp-m-300: var(--gp-edge); --gp-m-500: var(--gp-ink); --gp-m-700: var(--gp-ink);
+  --gp-m-on: var(--gp-on-ink); --gp-m-sh: var(--gp-ink-sh); --gp-m-fill: var(--gp-ink-fill);
+  --gp-shn: var(--gp-sh-n);
+}
+[data-m="strum"]  { --gp-m-100:var(--gp-strum-100);  --gp-m-300:var(--gp-strum-300);  --gp-m-500:var(--gp-strum-500);  --gp-m-700:var(--gp-strum-700);  --gp-m-on:var(--gp-strum-on);  --gp-m-sh:var(--gp-strum-sh);  --gp-m-fill:var(--gp-strum-500);  --gp-shn:var(--gp-strum-sh-n); }
+[data-m="tab"]    { --gp-m-100:var(--gp-tab-100);    --gp-m-300:var(--gp-tab-300);    --gp-m-500:var(--gp-tab-500);    --gp-m-700:var(--gp-tab-700);    --gp-m-on:var(--gp-tab-on);    --gp-m-sh:var(--gp-tab-sh);    --gp-m-fill:var(--gp-tab-500);    --gp-shn:var(--gp-tab-sh-n); }
+[data-m="chords"] { --gp-m-100:var(--gp-chords-100); --gp-m-300:var(--gp-chords-300); --gp-m-500:var(--gp-chords-500); --gp-m-700:var(--gp-chords-700); --gp-m-on:var(--gp-chords-on); --gp-m-sh:var(--gp-chords-sh); --gp-m-fill:var(--gp-chords-500); --gp-shn:var(--gp-chords-sh-n); }
+[data-m="fb"]     { --gp-m-100:var(--gp-fb-100);     --gp-m-300:var(--gp-fb-300);     --gp-m-500:var(--gp-fb-500);     --gp-m-700:var(--gp-fb-700);     --gp-m-on:var(--gp-fb-on);     --gp-m-sh:var(--gp-fb-sh);     --gp-m-fill:var(--gp-fb-500);     --gp-shn:var(--gp-fb-sh-n); }
+[data-m="books"]  { --gp-m-100:var(--gp-books-100);  --gp-m-300:var(--gp-books-300);  --gp-m-500:var(--gp-books-500);  --gp-m-700:var(--gp-books-700);  --gp-m-on:var(--gp-books-on);  --gp-m-sh:var(--gp-books-sh);  --gp-m-fill:var(--gp-books-500);  --gp-shn:var(--gp-books-sh-n); }
+[data-m] { --gp-m-600: color-mix(in oklab, var(--gp-m-500), var(--gp-m-700) 30%); }
+/* the ring of a neutral pressable follows its shadow colour in light; dark keeps the rim */
+:root, [data-m] { --gp-ring-shn: inset 0 0 0 1px var(--gp-shn); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]), :root:not([data-theme="light"]) [data-m] { --gp-ring-shn: inset 1px 1px 0 0 rgba(255,255,255,.10); } }
+:root[data-theme="dark"], :root[data-theme="dark"] [data-m] { --gp-ring-shn: inset 1px 1px 0 0 rgba(255,255,255,.10); }
+
+/* -------------------------------------------------------------------------------------
+   4. SEMANTIC — ink only (text and icons), never a large fill; danger is the one fill
+   ------------------------------------------------------------------------------------- */
+:root { --gp-ok:#2C6464; --gp-warn:#8A4A00; --gp-bad:#A51B2E; --gp-bad-fill:#A51B2E; --gp-bad-sh:#6B0F1C; --gp-focus: var(--gp-ink); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --gp-ok:#86C5C2; --gp-warn:#F0B878; --gp-bad:#FF97AC; --gp-bad-fill:#D2405A; --gp-bad-sh:#5A1622; } }
+:root[data-theme="dark"] { --gp-ok:#86C5C2; --gp-warn:#F0B878; --gp-bad:#FF97AC; --gp-bad-fill:#D2405A; --gp-bad-sh:#5A1622; }
+
+/* -------------------------------------------------------------------------------------
+   5. SHAPE · SPACE · ELEVATION
+   ------------------------------------------------------------------------------------- */
+:root {
+  /* radius: chips 8 · buttons/inputs 10 · cards/panels 14 · sheets 16 · tags/switch pill.
+     Never 0 (no DAW boxes) and never one radius for everything. */
+  --gp-r-xs: 6px; --gp-r-s: 8px; --gp-r-m: 10px; --gp-r-l: 14px; --gp-r-xl: 16px; --gp-r-pill: 999px;
+  /* spacing: 8px rhythm (4 only for tight intra-control gaps) */
+  --gp-sp-1: 4px; --gp-sp-2: 8px; --gp-sp-3: 12px; --gp-sp-4: 16px; --gp-sp-6: 24px; --gp-sp-8: 32px; --gp-sp-10: 40px; --gp-sp-12: 48px;
+  --gp-gutter-phone: 16px; --gp-gutter-tablet: 24px; --gp-gutter-desktop: 32px;
+  --gp-hit: 44px;            /* minimum touch target */
+  --gp-ctl-h: 44px;          /* button / input height on phone; 40px ≥ 960px */
+  --gp-side-panel: 296px;    /* desktop contextual panel (strum); 264–340 by page */
+  --gp-inspector: 288px;     /* tab editor inspector ≥ 960px */
+  /* hard offset shadow: diagonal down-right, no blur, tonal (never ink-black, never a bottom lip) */
+  --gp-o-chip: 2px;          /* chips, steppers, struck cells, segmented thumb, switch thumb */
+  --gp-o-btn: 3px;           /* buttons, chord buttons, selected (Lift) cards */
+  --gp-o-play: 4px;          /* the pick-shaped Play button only */
+  /* navigable cards: flat at rest; hop lifts 2px (peaks at 4px), shadow = 1.5 × lift */
+  --gp-hop-lift: 2px; --gp-hop-shadow-k: 1.5;
+}
+
+/* -------------------------------------------------------------------------------------
+   6. MOTION — durations, easings, springs. linear() springs behind @supports; the
+   cubic-bezier fallbacks are close enough for WeChat's WebView and older Safari.
+   ------------------------------------------------------------------------------------- */
+:root {
+  --gp-d-sink: 90ms;     /* press: sink into the shadow (held ≥ 90ms so it reads) */
+  --gp-d-rise: 220ms;    /* release: spring back, ≤ 2–3% overshoot */
+  --gp-d-state: 140ms;   /* colour / opacity / border */
+  --gp-d-tab: 300ms;     /* segmented thumb, nav pick indicator, switch thumb */
+  --gp-d-in: 280ms;      /* screen enter (16px rise) — in-page only until routes are wired */
+  --gp-d-out: 160ms;     /* screen leave (6px up, fade) */
+  --gp-d-sheet: 340ms;   /* sheet / side panel in; out 200ms */
+  --gp-d-sheet-out: 200ms;
+  --gp-d-land: 420ms;    /* list items arriving */
+  --gp-stagger: 35ms;    /* per item, ≤ 40ms, total ≤ 400ms; no stagger past 10 items */
+  --gp-d-toast-in: 440ms; --gp-d-toast-hold: 2100ms; --gp-d-toast-out: 150ms;
+  --gp-d-skeleton: 1200ms; /* shimmer period; show only after 300ms of waiting */
+  --gp-d-hop: 440ms;     /* card hop up; drop back 220ms */
+  --gp-d-drop: 220ms;
+  --gp-d-underline: 300ms; /* hover underline grows in; nav skewed line 320ms */
+  --gp-d-logo: 780ms;    /* logo arrival; 120ms collapse first when replayed from a click */
+  --gp-d-logo-close: 120ms;
+  --gp-d-pop: 420ms;     /* picks pop in, chord dots, squash-and-settle */
+  --gp-d-book: 640ms;    /* book covers bounce onto the shelf */
+  --gp-two-digit: 800ms; /* tab editor: a second digit within this window makes a two-digit fret (≤ 24) */
+
+  --gp-ease-state: cubic-bezier(.2, 0, 0, 1);
+  --gp-ease-in: cubic-bezier(.05, .7, .1, 1);     /* entering */
+  --gp-ease-out: cubic-bezier(.3, 0, .8, .15);    /* leaving */
+  --gp-e-sink: cubic-bezier(.2, 0, 0, 1);
+  --gp-e-rise: cubic-bezier(.25, 1.04, .4, 1);
+  --gp-spring-press: cubic-bezier(.3, 1.12, .5, 1);
+  --gp-spring-tab: cubic-bezier(.3, 1.2, .45, 1);
+  --gp-spring-sheet: cubic-bezier(.2, 1.08, .35, 1);
+  --gp-spring-land: cubic-bezier(.25, 1.1, .45, 1);
+  --gp-spring-pop: cubic-bezier(.3, 1.45, .45, 1);
+  --gp-hop: cubic-bezier(.3, 2.1, .5, 1);         /* drives a 0 → 2px lift through 4px */
+  --gp-ease-book: cubic-bezier(.3, .7, .4, 1);
+}
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --gp-e-rise: linear(0, .14 10%, .4 20%, .63 30%, .81 40%, .92 50%, .98 60%, 1.012 70%, 1.02 80%, 1.008 90%, 1);
+    --gp-spring-press: linear(0, .176, .468, .707, .862, .947, .987, 1.003, 1.006, 1.005, 1.004, 1.002, 1.001, 1);
+    --gp-spring-tab: linear(0, .103, .31, .528, .71, .843, .931, .982, 1.008, 1.019, 1.02, 1.017, 1.012, 1.008, 1.005, 1.002, 1.001, 1);
+    --gp-spring-sheet: linear(0, .108, .315, .522, .69, .812, .894, .945, .975, .991, .999, 1.002, 1.003, 1.003, 1.002, 1.002, 1.001, 1);
+    --gp-spring-land: linear(0, .146, .421, .679, .864, .973, 1.024, 1.032, 1.028, 1.02, 1.012, 1.006, 1.002, 1);
+    --gp-spring-pop: linear(0, .146, .421, .679, .864, .973, 1.024, 1.038, 1.034, 1.024, 1.014, 1.006, 1.002, .999, .999, .999, 1);
+    --gp-hop: linear(0, .42 6%, .98 13%, 1.5 20%, 1.86 27%, 2 33%, 1.94 39%, 1.72 47%, 1.44 57%, 1.2 68%, 1.06 80%, 1.01 90%, 1);
+  }
+}
+/* reduced motion: no transforms; state changes become ≤ 150ms linear fades (components
+   also drop their keyframes; the logo animation becomes a 200ms fade) */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --gp-d-rise: 100ms; --gp-d-sink: 100ms; --gp-d-in: 140ms; --gp-d-out: 120ms; --gp-d-sheet: 150ms;
+    --gp-d-hop: 120ms; --gp-hop: linear; --gp-e-rise: linear; --gp-spring-press: linear; --gp-spring-tab: linear;
+    --gp-spring-sheet: linear; --gp-spring-land: linear; --gp-spring-pop: linear; --gp-stagger: 0ms;
+  }
+}
+
+/* -------------------------------------------------------------------------------------
+   7. TYPE — Figtree only, loaded in #351 as --font-figtree (next/font/local, as in #291);
+   Chinese uses the device stack (never shipped). Numerals are tabular wherever digits
+   line up. In code, reference the family through the next/font CSS variable, never by
+   spelling "Figtree" (next/font/local names the family after the variable).
+   ------------------------------------------------------------------------------------- */
+:root {
+  --gp-cjk: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --gp-f-body: var(--font-figtree, ui-sans-serif, system-ui), var(--gp-cjk);
+  --gp-f-disp: var(--font-figtree, ui-sans-serif, system-ui), var(--gp-cjk);
+  --gp-f-num: var(--font-figtree, ui-sans-serif, system-ui), var(--gp-cjk);
+  --gp-f-it: var(--gp-f-body);      /* hover italic uses Figtree's REAL italic */
+  --gp-disp-w: 700; --gp-disp-w-s: 650; --gp-zh-disp-w: 600; --gp-num-w: 650;
+  --gp-disp-track: -0.01em;
+  /* scale (phone → ≥ 960px) */
+  --gp-t-hero: 34px;  --gp-t-hero-lg: 52px;
+  --gp-t-xl: 26px;    --gp-t-xl-lg: 30px;
+  --gp-t-l: 21px;     --gp-t-l-lg: 23px;
+  --gp-t-h: 16px;     /* card / section title (.h-s) */
+  --gp-t-body: 15px;  --gp-t-row: 14.5px; --gp-t-ui: 14px; --gp-t-cap: 13px; --gp-t-small: 12px; --gp-t-tab: 11.5px;
+  --gp-t-num: 44px;   --gp-t-num-lg: 48px;
+  --gp-lh-body: 1.5;  --gp-lh-zh: 1.6; --gp-lh-head: 1.15;
+}

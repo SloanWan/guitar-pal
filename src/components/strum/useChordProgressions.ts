@@ -81,9 +81,10 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 		});
 	}, [user, loading]);
 
+	const userId = user?.id;
 	useEffect(() => {
-		if (!user) return;
-		const currentUser = user;
+		if (!userId) return;
+		const currentUserId = userId;
 
 		async function mergeAndReload() {
 			const supabase = createClient();
@@ -92,7 +93,7 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 				try {
 					const { error } = await supabase
 						.from("user_pattern_progressions")
-						.upsert(local.map((p) => progressionColumns(p, currentUser.id)));
+						.upsert(local.map((p) => progressionColumns(p, currentUserId)));
 					if (error) throw new Error(error.message);
 					localStorage.removeItem(STORAGE_KEY);
 				} catch (e) {
@@ -107,7 +108,7 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 				// the field writes fine and simply never comes back, which is how the
 				// reconcile fields were dead on arrival until this was noticed.
 				.select("*")
-				.eq("user_id", currentUser.id);
+				.eq("user_id", currentUserId);
 			if (error) console.error("[useChordProgressions] load failed:", error.message);
 			setProgressions(
 				(data ?? [])
@@ -118,7 +119,7 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 		}
 
 		mergeAndReload();
-	}, [user?.id]);
+	}, [userId]);
 
 	function persist(next: ChordProgression[]) {
 		setProgressions(next);

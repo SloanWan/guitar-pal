@@ -1,13 +1,6 @@
 import DashboardContent from "@/components/DashboardContent";
 
-import { createSupabaseServer } from "@/lib/supabase-server";
-
-export default async function DashboardPage() {
-	const supabase = await createSupabaseServer();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-
+export default function DashboardPage() {
 	return (
 		<div className="min-h-screen bg-background">
 			{/* Main content — two-column grid on large screens */}

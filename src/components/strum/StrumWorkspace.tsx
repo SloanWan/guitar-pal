@@ -643,6 +643,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 			setBpm(clampBpmToMeter(patternBpm(next), patternMeter(next)));
 			setPatternRestored(true);
 		});
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- runs until custom patterns arrive, then the ref stops it; applyHandoff is a new function every render
 	}, [patternsLoading, customPatterns]);
 
 	useEffect(() => {
@@ -653,6 +654,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 			stop();
 			queueMicrotask(() => setSelectedPattern(null));
 		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- checks for a deleted pattern when the library changes, not on every selection; stop is a new function every render
 	}, [customPatterns, patternsLoading, isShared]);
 
 	function handleHitPlayAndPause() {
@@ -681,6 +683,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 			// Restored either way — a saved id the list no longer holds is gone.
 			setProgressionRestored(true);
 		});
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- bpmFor is a new function every render, over state already listed
 	}, [progressionRestored, progressionsLoading, patternRestored, patternProgressions]);
 
 	useEffect(() => {
@@ -810,6 +813,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 		const quiet = openSyncState?.kind === "backfill" || openSyncState?.kind === "no-change";
 		if (isShared || !quiet || !openProgression || !selectedPattern) return;
 		handleSaveProgression(markPatternSynced(openProgression, selectedPattern.beats));
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- settles once per sync outcome of the open sequence; listing the save handler (new every render) would save on every render
 	}, [openSyncState?.kind, openProgression?.id]);
 
 	function handleApplyPatternSync() {

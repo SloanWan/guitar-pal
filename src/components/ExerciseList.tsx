@@ -52,6 +52,7 @@ export default function ExerciseList({
 		if (!activeCategory) return;
 		if (presentCategories.includes(activeCategory as Exercise["category"])) return;
 		queueMicrotask(() => setActiveCategory(null));
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- only a change to the list can take the active category away
 	}, [exercises]);
 
 	const filteredExercises = activeCategory

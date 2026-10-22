@@ -561,19 +561,6 @@ export function triggerChordPreview(
 }
 
 /**
- * @deprecated Use preloadStrumPresets + triggerStrum instead.
- * Retained as a stub so useAudioEngine.ts compiles unchanged until 53-b
- * replaces the AudioBuffer-based scheduler with triggerStrum.
- */
-export function getStrumBuffer(_type: StrumSoundType, _ctx: AudioContext): Promise<AudioBuffer> {
-	return Promise.reject(
-		new SampleLoadError(
-			"getStrumBuffer is deprecated — use preloadStrumPresets + triggerStrum",
-		),
-	);
-}
-
-/**
  * React hook wrapper. Caches are module-level; multiple hook instances share
  * the same presets and active-source set.
  */

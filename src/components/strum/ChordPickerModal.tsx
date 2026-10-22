@@ -147,7 +147,6 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 	const categories = [...CHORD_SUFFIX_CATEGORIES, ...ownSections];
 
 	const [selectedVoicingId, setSelectedVoicingId] = useState<string | null>(null);
-	const [loadingVoicings, setLoadingVoicings] = useState(false);
 	const [availableSuffixes, setAvailableSuffixes] = useState<string[]>([]);
 	const [voicingsFor, setVoicingsFor] = useState<string | null>(null);
 
@@ -291,7 +290,6 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 		let cancelled = false;
 
 		(async () => {
-			setLoadingVoicings(true);
 			setLibraryVoicings([]);
 			setSelectedVoicingId(null);
 			// Through the shared cache: a chord already resolved for playback or
@@ -312,12 +310,10 @@ export default function ChordPickerModal({ open, onClose, onConfirm, initialChor
 			const preselected = pinned ?? vs.find((v) => v.label === "Standard") ?? vs[0] ?? null;
 			setSelectedVoicingId(preselected?.id ?? null);
 			setVoicingsFor(`${selectedRoot}|${selectedSuffix}`);
-			setLoadingVoicings(false);
 		})().catch((err) => {
 			if (!cancelled) {
 				console.error("[ChordPickerModal]", err);
 				setVoicingsFor(`${selectedRoot}|${selectedSuffix}`);
-				setLoadingVoicings(false);
 			}
 		});
 

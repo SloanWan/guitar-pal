@@ -31,7 +31,6 @@ const Hn = (fret: number): StringFret => withLink(fret, "hammer");
 const Po = (fret: number): StringFret => withLink(fret, "pull");
 const Su = (fret: number): StringFret => withLink(fret, "slide");
 const Sd = (fret: number): StringFret => withLink(fret, "slide");
-const Ti = (fret: number): StringFret => withLink(fret, "tie");
 const Sta = (fret: number): StringFret => withEffects(fret, { staccato: true });
 const Acc = (fret: number): StringFret => withEffects(fret, { accent: true });
 const Pd = (fret: number): StringFret => withEffects(fret, { pick: { direction: "down" } });
@@ -903,9 +902,9 @@ export default function TabNotationDevPage() {
 	const { isPlaying } = engine;
 
 	// Preload audio presets once on mount so the first Play click is instant.
-	// eslint-disable-next-line react-hooks/exhaustive-deps
 	useEffect(() => {
 		void engine.load();
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount; the engine object is new every render
 	}, []);
 
 	// Derive the effective playing section from both state and the engine's isPlaying flag.

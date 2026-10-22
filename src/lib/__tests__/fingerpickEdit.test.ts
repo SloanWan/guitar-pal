@@ -16,7 +16,6 @@ import {
 	moveCell,
 	previousSlotFret,
 	hasPreviousNoteOnString,
-	MAX_FRET,
 	setSlotsRest,
 	splitTargetsForSlot,
 	mergeTargetsForSlot,

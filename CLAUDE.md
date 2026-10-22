@@ -42,7 +42,7 @@ Everything else is public.
 **Two Supabase clients:**
 
 - `src/lib/supabase.ts` — `createClient()` via `createBrowserClient`, used in client components and all lib query functions
-- `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components and route handlers (`(main)/p/[id]/page.tsx`, `api/assistant/route.ts`, `api/books/[...path]/route.ts`, `dev/dashboard/page.tsx`). Note the chord pages are **not** on this path: they read through `chordsData.ts`, which uses a cookie-free `@supabase/supabase-js` client so `unstable_cache` can wrap the reads
+- `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components and route handlers (`(main)/p/[id]/page.tsx`, `api/assistant/route.ts`, `api/books/[...path]/route.ts`). Note the chord pages are **not** on this path: they read through `chordsData.ts`, which uses a cookie-free `@supabase/supabase-js` client so `unstable_cache` can wrap the reads
 
 Never mix the two clients — `createSupabaseServer()` throws at runtime in client components.
 

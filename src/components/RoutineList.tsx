@@ -91,7 +91,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 		getRoutineExercises(editingRoutineId).then((exs) =>
 			setRoutineExercisesMap((prev) => ({ ...prev, [editingRoutineId]: exs })),
 		);
-	}, [editingRoutineId]);
+	}, [editingRoutineId, routineExercisesMap]);
 
 	async function handleAddRoutine() {
 		if (!title.trim()) return;

@@ -112,9 +112,10 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		});
 	}, [user, loading]);
 
+	const userId = user?.id;
 	useEffect(() => {
-		if (!user) return;
-		const currentUser = user;
+		if (!userId) return;
+		const currentUserId = userId;
 
 		async function mergeAndReload() {
 			const supabase = createClient();
@@ -129,7 +130,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 					const { data: existing } = await supabase
 						.from("user_strum_patterns")
 						.select("pattern_id")
-						.eq("user_id", currentUser.id);
+						.eq("user_id", currentUserId);
 					const existingIds = new Set(
 						(existing ?? []).map((r) => r.pattern_id as string),
 					);
@@ -137,7 +138,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 					if (toInsert.length > 0) {
 						await supabase.from("user_strum_patterns").insert(
 							toInsert.map((p) => ({
-								user_id: currentUser.id,
+								user_id: currentUserId,
 								pattern_id: p.id,
 								...patternColumns(p),
 								// Signing in is not creating: carry the times the guest's
@@ -161,14 +162,14 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 					const { data: existingFavs } = await supabase
 						.from("user_favourite_patterns")
 						.select("pattern_id")
-						.eq("user_id", currentUser.id);
+						.eq("user_id", currentUserId);
 					const existingFavIds = new Set(
 						(existingFavs ?? []).map((r) => r.pattern_id as string),
 					);
 					const toInsertFavs = localFavIds.filter((id) => !existingFavIds.has(id));
 					if (toInsertFavs.length > 0) {
 						await supabase.from("user_favourite_patterns").insert(
-							toInsertFavs.map((id) => ({ user_id: currentUser.id, pattern_id: id })),
+							toInsertFavs.map((id) => ({ user_id: currentUserId, pattern_id: id })),
 						);
 						merged = true;
 					}
@@ -181,7 +182,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 			const { data: patterns } = await supabase
 				.from("user_strum_patterns")
 				.select("*")
-				.eq("user_id", currentUser.id)
+				.eq("user_id", currentUserId)
 				// Newest first: the pattern someone just made is the one they are
 				// working on, and the database is the only place the creation time
 				// is recorded.
@@ -194,7 +195,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 			const { data: favs } = await supabase
 				.from("user_favourite_patterns")
 				.select("pattern_id")
-				.eq("user_id", currentUser.id);
+				.eq("user_id", currentUserId);
 			setFavouriteIds((favs ?? []).map((r) => r.pattern_id as string));
 
 			if (merged) {
@@ -203,7 +204,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 		}
 
 		mergeAndReload();
-	}, [user?.id]);
+	}, [userId]);
 
 	function handleSaveCustomPattern(pattern: StrumPattern) {
 		if (user) {

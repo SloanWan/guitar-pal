@@ -4,7 +4,7 @@
 // reproduce that — the "select first item" pass is scheduled from the search update — so
 // this test mounts one.
 import { describe, it, expect } from "vitest";
-import { useState, act } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { Command, CommandInput, CommandList } from "@/components/ui/command";

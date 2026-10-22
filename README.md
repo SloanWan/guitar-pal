@@ -9,11 +9,17 @@
   <a href="https://guitarpal.sloanwan.com"><b>guitarpal.sloanwan.com</b></a>
 </p>
 
+<p align="center">
+  <img src="docs/images/fingerpick.png" width="860" alt="The fingerpicking page: a tab with chord names and hammer-ons, the pattern library on the left, transport and tempo on the right" />
+</p>
+
 ## What's inside
 
 **Strum machine.** Build a rhythm, write chords over it, and hear it played on a
 real guitar sample. The strings keep ringing into the next strum, so it sounds
 like a guitar, not a drum machine with opinions.
+
+<img src="docs/images/strum.png" width="640" alt="The strumming page: a one-bar pattern of down and up strokes, the preset library, and the tempo and metronome controls" />
 
 **Fingerpick tabs.** Write a tab, play it back, loop the hard bar. Triplets, 6/8,
 hammer-ons and slides all play, and every fret can show the note it sounds.
@@ -45,8 +51,54 @@ there tomorrow.
 - [WebAudioFont](https://github.com/surikov/webaudiofontdata): the guitar samples, fetched at runtime
 - [chords-db](https://github.com/tombatossals/chords-db): the chord voicings, audited and corrected here
 
-## About this repo
+## How it's built
 
-This is the source of [guitarpal.sloanwan.com](https://guitarpal.sloanwan.com).
-It is not set up for self-hosting: the database schema and chord data are not
-included.
+- **Web app:** Next.js 16 (App Router), React 19, TypeScript in strict mode,
+  Tailwind CSS v4, shadcn/ui on Radix.
+- **Data and auth:** Supabase (Postgres, Auth, Storage), read through thin
+  query functions in `src/lib/`, no ORM. A guest's work stays in the browser.
+- **Audio:** the Web Audio API with a lookahead scheduler. Each string is its
+  own sampled voice, scheduled ahead of time and left to ring.
+- **Notation:** VexFlow draws the tab staves.
+- **Assistant:** rule-based readers for strum and tab sentences
+  (`src/lib/assistant/`). General mode runs a model (DeepSeek or Claude) that
+  calls those same readers as tools, so every card comes from a reader. An
+  offline eval set keeps score.
+- **Book import:** `book-service/`, a Python service (FastAPI, asyncpg,
+  LangGraph, PyMuPDF and Tesseract) the app proxies to. See its
+  [README](book-service/README.md).
+- **Tests and CI:** Vitest unit tests, a Playwright smoke suite and pytest for
+  the book service, run by GitHub Actions on every pull request alongside
+  CodeQL. A green `main` deploys to the server with Docker.
+
+## Repo layout
+
+```
+src/app/         routes: the pages, auth, api/ (assistant, books proxy, MCP); dev/ labs are off in production
+src/components/  feature components by area: strum, fingerpick, chords, assistant, books, …
+src/lib/         the logic: pattern models, schedulers, chord data, assistant readers
+book-service/    the Python book-import service
+e2e/             Playwright suites
+scripts/         SQL migrations and one-off data scripts
+docs/            assistant grammar, MCP setup
+```
+
+## Running it locally
+
+This is the source of [guitarpal.sloanwan.com](https://guitarpal.sloanwan.com),
+not a package for self-hosting. The database schema exists as the migrations in
+`scripts/*.sql` but not yet as one baseline ([#264](https://github.com/SloanWan/guitar-pal/issues/264)), and the chord data lives in
+the database, so pages that read it need those tables. With a Supabase project
+of your own:
+
+```bash
+cp .env.example .env.local   # fill in the Supabase URL and anon key
+npm ci
+npm run dev                  # http://localhost:3000
+npm test                     # unit tests
+npm run test:e2e             # Playwright smoke suite
+```
+
+## License
+
+All rights reserved. See [LICENSE](LICENSE).

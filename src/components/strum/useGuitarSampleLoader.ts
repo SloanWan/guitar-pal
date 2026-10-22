@@ -2,7 +2,7 @@
 
 /**
  * Guitar strum player that renders multi-string chords using Web Audio API
- * scheduling and webaudiofont CDN preset data.
+ * scheduling and WebAudioFont preset data.
  *
  * Sound-type → preset mapping:
  *  "down"  → Acoustic Steel Guitar (GM 25, preset 0250), pitches played low→high
@@ -19,27 +19,29 @@
  *   [48 C3, 52 E3, 55 G3, 60 C4, 64 E4]
  *   Low E string muted / not played. A future issue will let users pick the chord.
  *
- * Preset data is fetched from the webaudiofontdata CDN, parsed with Function(),
- * and decoded (16-bit PCM or compressed audio) into AudioBuffer objects. Decoded
- * buffers are cached on zone.buffer for reuse across strums.
+ * Preset data is read as JSON from PRESET_BASE_URL (the webaudiofontdata files,
+ * converted once by scripts/convert-webaudiofont-presets.mjs), checked by
+ * parsePreset, and decoded (16-bit PCM or compressed audio) into AudioBuffer
+ * objects. Decoded buffers are cached on zone.buffer for reuse across strums.
  *
  * Playback rate for each note is adjusted so the sampled zone sounds at the
  * target MIDI pitch, matching the technique used by webaudiofont's queueWaveTable:
  *   playbackRate = 2 ^ ((100 × midiPitch − baseDetune) / 1200)
  *   baseDetune  = originalPitch − 100 × coarseTune − fineTune
  *
- * Loop points (stored as sample indices in CDN data) are converted to seconds
+ * Loop points (stored as sample indices in the preset data) are converted to seconds
  * on the fly when scheduling: loopStartSec = loopStart / sampleRate.
  *
  * Caching:
- *   _presetCache  — deduplicates in-flight CDN fetches (Map<PresetKey, Promise<WafPreset>>).
+ *   _presetCache  — deduplicates in-flight fetches (Map<PresetKey, Promise<WafPreset>>).
  *   _readyPresets — synchronous access for the audio scheduler (Map<PresetKey, WafPreset>).
  *
  * Security note:
- *   parsePresetFromJs evaluates the extracted object literal from the pinned
- *   WAF_BASE_URL CDN with Function(). No user input reaches Function(). The app
- *   does not currently set a strict CSP, but Function() requires 'unsafe-eval'
- *   if one is ever added.
+ *   Presets are served from our own origin and read with response.json(); nothing
+ *   downloaded is evaluated (#366). Evaluating the CDN's JS files would let whoever
+ *   controls that host run code beside the player's session cookie. The /dev
+ *   audition pages, which browse the whole CDN, keep their own parser in
+ *   src/app/dev/_lib.
  */
 
 // ─── Public types ──────────────────────────────────────────────────────────────
@@ -58,7 +60,7 @@ export interface WafZone {
 	originalPitch: number;
 	coarseTune: number;
 	fineTune: number;
-	/** Loop start as a sample index in CDN files; converted to seconds on playback. */
+	/** Loop start as a sample index in the preset data; converted to seconds on playback. */
 	loopStart: number;
 	loopEnd: number;
 	sampleRate: number;
@@ -84,18 +86,16 @@ export class SampleLoadError extends Error {
 
 // ─── Preset configuration ──────────────────────────────────────────────────────
 
-/** The pinned sample CDN (GPL-3.0 data, fetched at runtime). Shared with the piano loader. */
-export const WAF_BASE_URL = "https://surikov.github.io/webaudiofontdata/sound/";
+/**
+ * Where the bundled presets are served: public/audio/webaudiofont/, the
+ * webaudiofontdata files (MIT, see NOTICE.md there) as JSON. Shared with the
+ * piano loader.
+ */
+export const PRESET_BASE_URL = "/audio/webaudiofont/";
 
 const PRESET_DEFS = {
-	steelGuitar: {
-		key: "0250_LK_AcousticSteel_SF2_file",
-		varName: "_tone_0250_LK_AcousticSteel_SF2_file",
-	},
-	mutedGuitar: {
-		key: "0280_Chaos_sf2_file",
-		varName: "_tone_0280_Chaos_sf2_file",
-	},
+	steelGuitar: { key: "0250_LK_AcousticSteel_SF2_file" },
+	mutedGuitar: { key: "0280_Chaos_sf2_file" },
 } as const;
 
 export type PresetKey = keyof typeof PRESET_DEFS;
@@ -181,90 +181,64 @@ const _activeSources = new Set<AudioBufferSourceNode>();
 
 // ─── Preset parsing ────────────────────────────────────────────────────────────
 
+const ZONE_NUMBER_FIELDS = [
+	"keyRangeLow",
+	"keyRangeHigh",
+	"originalPitch",
+	"coarseTune",
+	"fineTune",
+	"loopStart",
+	"loopEnd",
+	"sampleRate",
+] as const;
+
 /**
- * Extract and evaluate the preset object from a webaudiofont instrument JS file.
- * The CDN file format is valid JavaScript but not valid JSON:
- *   console.log('load _tone_XXXX_...');
- *   var _tone_XXXX_...={zones:[{midi:25,originalPitch:7400,...,sample:'BASE64...'}]};
- *
- * CDN quirks handled by delegating to the JS engine via Function():
- *   - Unquoted identifier keys  (midi:25)
- *   - Single-quoted strings     (sample:'BASE64...')
- *   - Inline // comments        (//_tone.mgtr between last property and closing })
- *
- * Extraction: a regex locates the variable assignment; brace-counting (tracking
- * only double-quote strings, sufficient since base64 contains no braces) finds
- * the matching closing brace. The extracted text is the sole input to Function() —
- * the full file script is never executed, so the leading console.log() is skipped.
+ * Check a parsed preset file against what the scheduler reads: a non-empty
+ * zones array, every zone with its numeric fields and its audio as a base64
+ * string (`file` or `sample`). Fields the scheduler ignores (midi, anchor) pass
+ * through. Throws SampleLoadError naming the first thing missing.
  */
-export function parsePresetFromJs(text: string, varName: string): WafPreset {
-	const assignmentRe = new RegExp(String.raw`\b${varName}\s*=\s*\{`);
-	const match = assignmentRe.exec(text);
-	if (!match) {
-		throw new SampleLoadError(`Preset variable "${varName}" not found in fetched content`);
+export function parsePreset(value: unknown, key: string): WafPreset {
+	const zones = typeof value === "object" && value !== null ? (value as { zones?: unknown }).zones : undefined;
+	if (!Array.isArray(zones) || zones.length === 0) {
+		throw new SampleLoadError(`Preset "${key}" has no zones`);
 	}
-
-	const jsStart = match.index + match[0].length - 1;
-
-	let depth = 0;
-	let inString = false;
-	let escape = false;
-	let jsEnd = -1;
-
-	for (let i = jsStart; i < text.length; i++) {
-		const ch = text[i];
-		if (escape) {
-			escape = false;
-			continue;
+	zones.forEach((zone: unknown, i) => {
+		if (typeof zone !== "object" || zone === null) {
+			throw new SampleLoadError(`Preset "${key}" zone ${i} is not an object`);
 		}
-		if (ch === "\\" && inString) {
-			escape = true;
-			continue;
-		}
-		if (ch === '"') {
-			inString = !inString;
-			continue;
-		}
-		if (inString) continue;
-		if (ch === "{") depth++;
-		else if (ch === "}") {
-			depth--;
-			if (depth === 0) {
-				jsEnd = i;
-				break;
+		const fields = zone as Record<string, unknown>;
+		for (const field of ZONE_NUMBER_FIELDS) {
+			if (typeof fields[field] !== "number" || !Number.isFinite(fields[field])) {
+				throw new SampleLoadError(`Preset "${key}" zone ${i} has no numeric ${field}`);
 			}
 		}
-	}
-
-	if (jsEnd === -1) {
-		throw new SampleLoadError(`Unbalanced braces parsing preset "${varName}"`);
-	}
-
-	const jsText = text.slice(jsStart, jsEnd + 1);
-	let result: unknown;
-	try {
-		result = new Function(`"use strict"; return (${jsText})`)();
-	} catch (err) {
-		throw new SampleLoadError(
-			`Failed to evaluate preset "${varName}" as a JavaScript object`,
-			err,
-		);
-	}
-
-	if (!isWafPreset(result)) {
-		throw new SampleLoadError(`Preset "${varName}" has unexpected shape (missing zones array)`);
-	}
-
-	return result;
+		if (typeof fields.file !== "string" && typeof fields.sample !== "string") {
+			throw new SampleLoadError(`Preset "${key}" zone ${i} has neither file nor sample data`);
+		}
+	});
+	return value as WafPreset;
 }
 
-function isWafPreset(value: unknown): value is WafPreset {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		"zones" in value &&
-		Array.isArray((value as Record<string, unknown>).zones)
-	);
+/** Fetch and check one bundled preset by its webaudiofontdata name. Shared with the piano loader. */
+export async function fetchPreset(key: string): Promise<WafPreset> {
+	const url = `${PRESET_BASE_URL}${key}.json`;
+	let response: Response;
+	try {
+		response = await fetch(url);
+	} catch (err) {
+		throw new SampleLoadError(`Network error fetching preset "${key}" from ${url}`, err);
+	}
+	if (!response.ok) {
+		throw new SampleLoadError(`HTTP ${response.status} fetching preset "${key}" from ${url}`);
+	}
+	let data: unknown;
+	try {
+		data = await response.json();
+	} catch (err) {
+		throw new SampleLoadError(`Preset "${key}" from ${url} is not valid JSON`, err);
+	}
+	return parsePreset(data, key);
 }
 
 // ─── Audio decoding ────────────────────────────────────────────────────────────
@@ -374,7 +348,7 @@ function _scheduleNote(
 	source.buffer = buffer;
 	source.playbackRate.value = playbackRate;
 
-	// Loop points are sample indices in CDN data; convert to seconds.
+	// Loop points are sample indices in the preset data; convert to seconds.
 	const loopStartSec = zone.loopStart / zone.sampleRate;
 	const loopEndSec = zone.loopEnd / zone.sampleRate;
 	if (loopStartSec > 0 && loopEndSec > loopStartSec) {
@@ -405,28 +379,7 @@ function loadPreset(presetKey: PresetKey): Promise<WafPreset> {
 	const cached = _presetCache.get(presetKey);
 	if (cached) return cached;
 
-	const def = PRESET_DEFS[presetKey];
-	const url = `${WAF_BASE_URL}${def.key}.js`;
-
-	const promise = (async (): Promise<WafPreset> => {
-		let response: Response;
-		try {
-			response = await fetch(url);
-		} catch (err) {
-			throw new SampleLoadError(
-				`Network error fetching preset "${presetKey}" from ${url}`,
-				err,
-			);
-		}
-		if (!response.ok) {
-			throw new SampleLoadError(
-				`HTTP ${response.status} fetching preset "${presetKey}" from ${url}`,
-			);
-		}
-		const text = await response.text();
-		return parsePresetFromJs(text, def.varName);
-	})();
-
+	const promise = fetchPreset(PRESET_DEFS[presetKey].key);
 	_presetCache.set(presetKey, promise);
 	promise.catch(() => _presetCache.delete(presetKey));
 	return promise;
@@ -666,11 +619,8 @@ export type FingerpickSoundType = "pluck";
 export const FINGERPICK_MIDI_LOW = 40;
 export const FINGERPICK_MIDI_HIGH = 86;
 
-const FINGERPICK_PRESET_DEFS: Record<FingerpickSoundType, { key: string; varName: string }> = {
-	pluck: {
-		key: "0250_LK_AcousticSteel_SF2_file",
-		varName: "_tone_0250_LK_AcousticSteel_SF2_file",
-	},
+const FINGERPICK_PRESET_DEFS: Record<FingerpickSoundType, { key: string }> = {
+	pluck: { key: "0250_LK_AcousticSteel_SF2_file" },
 };
 
 // ─── Fingerpick module-level state ────────────────────────────────────────────
@@ -684,28 +634,7 @@ function _loadFingerpickPreset(type: FingerpickSoundType): Promise<WafPreset> {
 	const cached = _fingerpickPresetCache.get(type);
 	if (cached) return cached;
 
-	const def = FINGERPICK_PRESET_DEFS[type];
-	const url = `${WAF_BASE_URL}${def.key}.js`;
-
-	const promise = (async (): Promise<WafPreset> => {
-		let response: Response;
-		try {
-			response = await fetch(url);
-		} catch (err) {
-			throw new SampleLoadError(
-				`Network error fetching fingerpick preset "${type}" from ${url}`,
-				err,
-			);
-		}
-		if (!response.ok) {
-			throw new SampleLoadError(
-				`HTTP ${response.status} fetching fingerpick preset "${type}" from ${url}`,
-			);
-		}
-		const text = await response.text();
-		return parsePresetFromJs(text, def.varName);
-	})();
-
+	const promise = fetchPreset(FINGERPICK_PRESET_DEFS[type].key);
 	_fingerpickPresetCache.set(type, promise);
 	promise.catch(() => _fingerpickPresetCache.delete(type));
 	return promise;

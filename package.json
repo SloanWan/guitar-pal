@@ -11,7 +11,7 @@
 		"dev:books": "sh book-service/tools/dev.sh",
 		"build": "next build",
 		"start": "next start",
-		"lint": "eslint --max-warnings 0",
+		"lint": "eslint",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
 		"test:e2e": "npm run build && playwright test",

@@ -160,12 +160,10 @@ export default function AssistantLauncher() {
 				align="end"
 				sideOffset={8}
 				collisionPadding={12}
-				// The system's one elevation shadow: this panel floats over content it
-				// does not own, where a 1px border alone can disappear into a busy
-				// background. See --elev-panel in globals.css.
-				// The page's own background, not the panel surface: a conversation
+				// The page's own background, not the sheet surface: a conversation
 				// reads as a place of its own, and the bubbles carry the contrast.
-				className="w-[min(24rem,calc(100vw-1.5rem))] bg-surface p-0 [box-shadow:var(--elev-panel)]"
+				// The pop shadow comes from PopoverContent.
+				className="w-[min(24rem,calc(100vw-1.5rem))] bg-gp-page p-0"
 			>
 				<div className="flex items-center justify-between border-b border-line px-3 py-2">
 					<span className="flex items-center gap-2">

@@ -8,7 +8,7 @@ export default async function ChordsLayout({ children }: { children: React.React
 	const index = await getChordIndex();
 
 	return (
-		<div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
+		<div className="flex flex-col min-h-[calc(100vh_-_var(--gp-chrome-h))]">
 			{children}
 			{/* Bottom-anchored search: rests at the page bottom on short pages
 			    (mt-auto) and floats pinned to the viewport once content scrolls

@@ -9,6 +9,7 @@ import AssistantChapter from "@/components/landing/AssistantChapter";
 import BooksChapter from "@/components/landing/BooksChapter";
 import { Led } from "@/components/landing/landingUi";
 import type { TabStripSpec } from "@/lib/fingerpickToTabStrip";
+import { PickMark } from "@/components/ui/pick";
 
 /* v3 landing — spec: guitar-pal-design-decisions/fable (layout-specs §6,
    component-patterns §2/§3/§8, additional-components §1/§7/§8/§10/§11);
@@ -292,25 +293,9 @@ export default function Home() {
 				<div className="mx-auto grid max-w-300 grid-cols-[1.6fr_1fr_1.2fr] gap-10 px-(--gutter) pt-14 pb-10 max-[900px]:grid-cols-2 max-sm:grid-cols-1 max-sm:gap-9 max-sm:pt-10">
 					{/* Brand */}
 					<div className="max-w-[34ch] max-[900px]:col-span-2 max-sm:col-span-1">
-						<span className="flex items-center gap-2 text-ink">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 24 24"
-								fill="none"
-								className="size-6"
-								aria-hidden="true"
-							>
-								<path
-									d="M3 4h18M3 7.2h18M3 10.4h18M3 13.6h18M3 16.8h18M3 20h18"
-									stroke="currentColor"
-									strokeWidth="1.5"
-									strokeLinecap="square"
-								/>
-								<rect x="14" y="2" width="2" height="20" fill="#4A6FA5" />
-							</svg>
-							<span className="text-[13px] font-bold tracking-[0.06em]">
-								GUITAR_PAL
-							</span>
+						<span className="flex items-center gap-2 text-ink [--mk-gap:var(--bg)]">
+							<PickMark className="size-7 flex-none" />
+							<span className="font-gp-display text-[17px] font-bold tracking-[-0.01em]">Guitar Pal</span>
 						</span>
 						<p className="mt-4 max-w-[30ch] leading-relaxed text-ink-dim">
 							A browser-based practice studio for self-taught guitarists.

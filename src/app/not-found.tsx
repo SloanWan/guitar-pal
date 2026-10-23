@@ -1,6 +1,6 @@
 import Link from "@/components/AppLink";
 import { Guitar } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 
 export default function NotFound() {
 	return (

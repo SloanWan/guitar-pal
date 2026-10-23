@@ -1,0 +1,1103 @@
+/* =====================================================================================
+   Candy primitives (#353) — Button, PlayPick, Chip, Segmented, Switch, Stepper.
+   Spec v1.1 §6–§8. Everything reads the --gp-* tokens (tokens.css); module colour comes
+   through the --gp-m-* aliases, so a primitive follows the [data-m] it sits in.
+
+   The press language: a pressable wears a tonal hard shadow, diagonal down-right with no
+   blur (chips 2px, buttons 3px, the Play pick 4px). Hover lifts it 1px and grows the
+   shadow 1px; pressing sinks it into its shadow in 90ms (held ≥ 90ms by usePress) and
+   release springs back in 220ms. `.is-down` is set by usePress for pointer and keyboard.
+   Under reduced motion nothing moves: the press only changes the face colour.
+
+   In @layer components so a utility class on a call site (w-full, mt-4) still wins.
+
+   Primitives II (#355) — Card / NavCard / ListRow, Panel, Input / Search, Slider, Sheet,
+   Toast, Skeleton — follow below the first set.
+   ===================================================================================== */
+
+/* the Hop animates a registered length; where @property is unsupported the custom property
+   is not animatable and the card simply jumps to its 2px rest */
+@property --gp-lift {
+	syntax: "<length>";
+	inherits: false;
+	initial-value: 0px;
+}
+
+@layer components {
+	/* ---- tones: what a pressable is painted with ------------------------------------- */
+	.gp-tone-primary {
+		--gp-p-face: var(--gp-m-500);
+		--gp-p-face-down: var(--gp-m-600, var(--gp-m-700));
+		--gp-p-ink: var(--gp-m-on);
+		--gp-p-sh: var(--gp-m-sh);
+		--gp-p-ring: var(--gp-ring-m);
+	}
+	.gp-tone-neutral {
+		--gp-p-face: var(--gp-face);
+		--gp-p-face-down: var(--gp-face-down);
+		--gp-p-ink: var(--gp-ink);
+		--gp-p-sh: var(--gp-shn);
+		--gp-p-ring: var(--gp-ring-shn);
+	}
+	.gp-tone-ink {
+		--gp-p-face: var(--gp-ink-fill);
+		--gp-p-face-down: color-mix(in oklab, var(--gp-ink-fill), var(--gp-ink-3) 22%);
+		--gp-p-ink: var(--gp-on-ink);
+		--gp-p-sh: var(--gp-ink-sh);
+		--gp-p-ring: var(--gp-ring-m);
+	}
+	.gp-tone-danger {
+		--gp-p-face: var(--gp-bad-fill);
+		--gp-p-face-down: color-mix(in oklab, var(--gp-bad-fill), var(--gp-bad-sh) 30%);
+		--gp-p-ink: #fff;
+		--gp-p-sh: var(--gp-bad-sh);
+		--gp-p-ring: var(--gp-ring-m);
+	}
+
+	/* ---- the press ------------------------------------------------------------------- */
+	.gp-press {
+		--o: var(--gp-o-btn);
+		background-color: var(--gp-p-face);
+		color: var(--gp-p-ink);
+		box-shadow: var(--gp-p-ring), var(--o) var(--o) 0 0 var(--gp-p-sh);
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) var(--gp-ease-state),
+			color var(--gp-d-state) var(--gp-ease-state);
+	}
+	@media (hover: hover) {
+		.gp-press:not(:disabled, [aria-disabled="true"], [aria-pressed="false"], .is-down):hover {
+			transform: translate(-1px, -1px);
+			box-shadow: var(--gp-p-ring), calc(var(--o) + 1px) calc(var(--o) + 1px) 0 0 var(--gp-p-sh);
+		}
+	}
+	.gp-press.is-down {
+		background-color: var(--gp-p-face-down);
+		transform: translate(var(--o), var(--o));
+		box-shadow: var(--gp-p-ring), 0 0 0 0 var(--gp-p-sh);
+		transition:
+			transform var(--gp-d-sink) var(--gp-e-sink),
+			box-shadow var(--gp-d-sink) var(--gp-e-sink),
+			background-color 60ms linear;
+	}
+	.gp-press:is(:disabled, [aria-disabled="true"]) {
+		background-color: var(--gp-s2);
+		color: var(--gp-ink-mute);
+		box-shadow: none;
+		transform: none;
+		cursor: default;
+	}
+	.gp-press:focus-visible,
+	.gp-focus:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 2px;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-press,
+		.gp-press.is-down,
+		.gp-press:hover {
+			transform: none !important;
+		}
+		.gp-press.is-down {
+			box-shadow: var(--gp-p-ring), var(--o) var(--o) 0 0 var(--gp-p-sh);
+			transition:
+				background-color 100ms linear,
+				color 100ms linear;
+		}
+	}
+
+	/* ---- Button ---------------------------------------------------------------------- */
+	.gp-btn {
+		position: relative;
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		height: 44px;
+		padding: 0 18px;
+		border-radius: var(--gp-r-m);
+		font: 600 15px/1 var(--gp-f-body);
+		white-space: nowrap;
+		user-select: none;
+		cursor: pointer;
+	}
+	/* the content, kept in one box so loading can hide it without changing the width */
+	.gp-btn-label {
+		display: inline-flex;
+		align-items: center;
+		gap: inherit;
+	}
+	.gp-btn svg {
+		width: 18px;
+		height: 18px;
+		flex: none;
+	}
+	.gp-btn[data-size="sm"] {
+		height: 40px;
+		padding: 0 14px;
+		font-size: 14px;
+	}
+	.gp-btn[data-size="xs"] {
+		height: 34px;
+		padding: 0 11px;
+		font-size: 13px;
+		border-radius: var(--gp-r-s);
+	}
+	@media (min-width: 960px) {
+		.gp-btn {
+			height: 40px;
+		}
+		.gp-btn[data-size="sm"] {
+			height: 36px;
+		}
+		.gp-btn[data-size="xs"] {
+			height: 32px;
+		}
+	}
+	.gp-btn[data-variant="icon"] {
+		aspect-ratio: 1;
+		padding: 0;
+	}
+	.gp-btn[data-variant="icon"] svg {
+		width: 20px;
+		height: 20px;
+	}
+	/* a text button is a link, not a pressable: no shadow, and the title hover */
+	.gp-btn[data-variant="ghost"] {
+		padding: 0 12px;
+		color: var(--gp-m-700);
+		background: transparent;
+		transition: background-color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-btn[data-variant="ghost"].is-down {
+		background: var(--gp-well);
+	}
+	.gp-btn[data-variant="ghost"]:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.gp-btn[data-loading] {
+		cursor: progress;
+	}
+	.gp-btn[data-loading] > .gp-btn-label {
+		visibility: hidden;
+	}
+	/* loading: three small picks, fanned like the logo's hand, bounce in turn */
+	.gp-btn-picks {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+	}
+	.gp-btn .gp-btn-picks svg {
+		width: 11px;
+		height: 12px;
+		rotate: -16deg;
+		animation: gp-pick-bounce 900ms var(--gp-ease-state) infinite;
+	}
+	.gp-btn .gp-btn-picks svg:nth-child(2) {
+		rotate: 0deg;
+		animation-delay: 120ms;
+	}
+	.gp-btn .gp-btn-picks svg:nth-child(3) {
+		rotate: 16deg;
+		animation-delay: 240ms;
+	}
+	@keyframes gp-pick-bounce {
+		0%,
+		60%,
+		100% {
+			translate: 0 0;
+		}
+		30% {
+			translate: 0 -4px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-btn .gp-btn-picks svg {
+			animation-name: gp-pick-fade;
+		}
+		@keyframes gp-pick-fade {
+			0%,
+			60%,
+			100% {
+				opacity: 1;
+			}
+			30% {
+				opacity: 0.35;
+			}
+		}
+	}
+
+	/* ---- PlayPick: the pick-shaped Play button, the one 4px shadow --------------------- */
+	.gp-playpick {
+		--o: var(--gp-o-play);
+		position: relative;
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 60px;
+		height: 65px;
+		margin: 0 var(--o) var(--o) 0;
+		border-radius: var(--gp-r-l);
+		color: var(--gp-m-on);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+	.gp-playpick[data-size="sm"] {
+		--o: var(--gp-o-btn);
+		width: 46px;
+		height: 50px;
+	}
+	.gp-playpick > .gp-playpick-shape {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		overflow: visible;
+		fill: var(--gp-m-500);
+		filter: drop-shadow(var(--o) var(--o) 0 var(--gp-m-sh));
+		transition:
+			fill var(--gp-d-state) linear,
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			filter var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.gp-playpick > .gp-playpick-icon {
+		position: relative;
+		width: 24px;
+		height: 24px;
+		margin-top: -9px;
+		transition: transform var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.gp-playpick[data-size="sm"] > .gp-playpick-icon {
+		width: 18px;
+		height: 18px;
+		margin-top: -7px;
+	}
+	.gp-playpick.is-down > .gp-playpick-shape {
+		fill: var(--gp-m-600, var(--gp-m-700));
+		transform: translate(var(--o), var(--o));
+		filter: drop-shadow(0 0 0 var(--gp-m-sh));
+		transition:
+			fill 60ms linear,
+			transform var(--gp-d-sink) var(--gp-e-sink),
+			filter var(--gp-d-sink) var(--gp-e-sink);
+	}
+	.gp-playpick.is-down > .gp-playpick-icon {
+		transform: translate(var(--o), var(--o));
+		transition: transform var(--gp-d-sink) var(--gp-e-sink);
+	}
+	@media (hover: hover) {
+		.gp-playpick:not(.is-down, :disabled):hover > :is(.gp-playpick-shape, .gp-playpick-icon) {
+			transform: translate(-1px, -1px);
+		}
+		.gp-playpick:not(.is-down, :disabled):hover > .gp-playpick-shape {
+			filter: drop-shadow(calc(var(--o) + 1px) calc(var(--o) + 1px) 0 var(--gp-m-sh));
+		}
+	}
+	.gp-playpick:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.gp-playpick:disabled > .gp-playpick-shape {
+		fill: var(--gp-s2);
+		filter: none;
+	}
+	.gp-playpick:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 2px;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-playpick > :is(.gp-playpick-shape, .gp-playpick-icon) {
+			transform: none !important;
+		}
+		.gp-playpick.is-down > .gp-playpick-shape {
+			filter: drop-shadow(var(--o) var(--o) 0 var(--gp-m-sh));
+		}
+	}
+
+	/* ---- Chip: an action chip is raised; a toggle chip is flat until chosen ------------- */
+	.gp-chip {
+		--o: var(--gp-o-chip);
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 6px;
+		height: 34px;
+		padding: 0 12px;
+		border-radius: var(--gp-r-s);
+		font: 600 13.5px/1 var(--gp-f-body);
+		white-space: nowrap;
+		user-select: none;
+		cursor: pointer;
+	}
+	.gp-chip svg {
+		width: 16px;
+		height: 16px;
+		flex: none;
+	}
+	.gp-chip[aria-pressed="false"] {
+		--o: 0px;
+		background-color: transparent;
+		color: var(--gp-ink-2);
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+	}
+	.gp-chip[aria-pressed="false"].is-down {
+		background-color: var(--gp-well);
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+	}
+	.gp-chip[aria-pressed="false"]:disabled {
+		background-color: transparent;
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+	}
+
+	/* ---- Segmented: a well track with one raised thumb --------------------------------- */
+	.gp-seg {
+		position: relative;
+		display: inline-grid;
+		grid-auto-columns: 1fr;
+		grid-auto-flow: column;
+		height: 38px;
+		padding: 3px 5px 5px 3px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-well);
+	}
+	.gp-seg[data-full] {
+		display: grid;
+		width: 100%;
+	}
+	.gp-seg[data-dense] {
+		height: 36px;
+	}
+	/* --i / --n come from segmentThumb(): equal columns, so the thumb is one column wide
+	   and moves a whole column per step (translateX % is of its own width) */
+	.gp-seg-thumb {
+		position: absolute;
+		top: 3px;
+		bottom: 5px;
+		left: 3px;
+		width: calc((100% - 8px) / var(--n));
+		transform: translateX(calc(var(--i) * 100%));
+		border-radius: var(--gp-r-s);
+		background: var(--gp-face);
+		box-shadow: var(--gp-ring-shn), var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-shn);
+		transition: transform var(--gp-d-tab) var(--gp-spring-tab);
+		pointer-events: none;
+	}
+	.gp-seg > button {
+		position: relative;
+		z-index: 1;
+		padding: 0 12px;
+		border-radius: var(--gp-r-s);
+		font: 600 13.5px/1 var(--gp-f-body);
+		color: var(--gp-ink-3);
+		white-space: nowrap;
+		cursor: pointer;
+		transition: color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-seg[data-dense] > button {
+		padding: 0 10px;
+		font-size: 13px;
+	}
+	.gp-seg > button[aria-checked="true"] {
+		color: var(--gp-ink);
+	}
+	@media (hover: hover) {
+		.gp-seg > button[aria-checked="false"]:not(:disabled):hover {
+			color: var(--gp-ink-2);
+		}
+	}
+	.gp-seg > button:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-seg-thumb {
+			transition: none;
+		}
+	}
+
+	/* ---- Switch ---------------------------------------------------------------------- */
+	.gp-sw {
+		position: relative;
+		flex: none;
+		width: 44px;
+		height: 26px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-edge);
+		cursor: pointer;
+		transition: background-color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-sw[data-state="checked"] {
+		background: var(--gp-m-500);
+	}
+	.gp-sw-thumb {
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		background: var(--gp-thumb);
+		box-shadow: var(--gp-ring-shn), 1.5px 1.5px 0 0 var(--gp-shn);
+		transition:
+			transform var(--gp-d-tab) var(--gp-spring-tab),
+			box-shadow var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-sw[data-state="checked"] .gp-sw-thumb {
+		transform: translateX(18px);
+		box-shadow: var(--gp-ring-m), 1.5px 1.5px 0 0 var(--gp-m-sh);
+	}
+	.gp-sw:disabled {
+		background: var(--gp-s2);
+		cursor: default;
+	}
+	.gp-sw:disabled .gp-sw-thumb {
+		box-shadow: none;
+	}
+	.gp-sw-row {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		min-height: var(--gp-hit);
+		font: 500 15px/1.3 var(--gp-f-body);
+		color: var(--gp-ink);
+		cursor: pointer;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-sw-thumb {
+			transition: none;
+		}
+	}
+
+	/* ---- Stepper --------------------------------------------------------------------- */
+	.gp-stepper {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.gp-stepper-btn {
+		--o: var(--gp-o-chip);
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border-radius: var(--gp-r-m);
+		cursor: pointer;
+		touch-action: manipulation;
+		user-select: none;
+	}
+	.gp-stepper-btn svg {
+		width: 18px;
+		height: 18px;
+	}
+	.gp-stepper-val {
+		min-width: 3.2ch;
+		text-align: center;
+		font: 650 20px/1 var(--gp-f-num);
+		font-variant-numeric: tabular-nums;
+		color: var(--gp-ink);
+	}
+	.gp-stepper-unit {
+		margin-left: 3px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--gp-ink-3);
+	}
+
+	/* =================================================================================
+	   Primitives II (#355)
+	   ================================================================================= */
+
+	/* ---- title hover: a real italic and an underline grown from the left (spec §4) ----
+	   On a NavCard, a ListRow and a ghost button. Chinese has no italic face; the browser
+	   slants it (font-synthesis-style). Selection never uses the italic — that is Lift. */
+	.gp-title {
+		background: linear-gradient(currentColor 0 0) 0 100% / 0 1.5px no-repeat;
+		transition: background-size var(--gp-d-underline) var(--gp-ease-state);
+	}
+	@media (hover: hover) {
+		:is(.gp-hop, .gp-btn[data-variant="ghost"]):not(:disabled):hover .gp-title {
+			font-style: italic;
+			font-synthesis-style: auto;
+			background-size: 100% 1.5px;
+		}
+	}
+	:is(.gp-hop, .gp-btn[data-variant="ghost"]):focus-visible .gp-title {
+		font-style: italic;
+		font-synthesis-style: auto;
+		background-size: 100% 1.5px;
+	}
+
+	/* ---- NavCard / ListRow: flat at rest, the Hop when pointed at ----------------------
+	   Up through a 4px peak to a 2px rest in 440ms (the --gp-hop value curve peaks at twice
+	   its target), the shadow 1.5 × the lift; 220ms back down; a press flattens it. A touch
+	   tap hops it for 280ms (usePress, hop mode). */
+	.gp-hop {
+		--gp-lift: 0px;
+		--gp-hop-ring: var(--gp-ring-c);
+		--gp-hop-sh: var(--gp-shn);
+		position: relative;
+		display: block;
+		width: 100%;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		color: var(--gp-ink);
+		text-align: left;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		transform: translateY(calc(var(--gp-lift) * -1));
+		box-shadow:
+			var(--gp-hop-ring),
+			calc(var(--gp-lift) * 1.5) calc(var(--gp-lift) * 1.5) 0 0 var(--gp-hop-sh);
+		transition:
+			--gp-lift var(--gp-d-drop) var(--gp-e-sink),
+			background-color var(--gp-d-state) var(--gp-ease-state),
+			color var(--gp-d-state) var(--gp-ease-state);
+	}
+	@media (hover: hover) {
+		.gp-hop:not(.is-down, :disabled):hover {
+			--gp-lift: var(--gp-hop-lift);
+			transition:
+				--gp-lift var(--gp-d-hop) var(--gp-hop),
+				background-color var(--gp-d-state) var(--gp-ease-state);
+		}
+	}
+	.gp-hop:is(:focus-visible, .is-hop) {
+		--gp-lift: var(--gp-hop-lift);
+		transition:
+			--gp-lift var(--gp-d-hop) var(--gp-hop),
+			background-color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-hop:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 3px;
+	}
+	/* Lift: the chosen one is the only raised item — a module 300 ring, settled 2px up */
+	.gp-hop:is([aria-current="true"], [aria-current="page"], [aria-pressed="true"]) {
+		--gp-lift: var(--gp-hop-lift);
+		--gp-hop-ring: inset 0 0 0 1px var(--gp-m-300);
+		--gp-hop-sh: var(--gp-m-sh);
+		transition:
+			--gp-lift var(--gp-d-hop) var(--gp-hop),
+			background-color var(--gp-d-state) var(--gp-ease-state);
+	}
+	:root[data-theme="dark"] .gp-hop:is([aria-current="true"], [aria-current="page"], [aria-pressed="true"]) {
+		--gp-hop-ring: inset 1px 1px 0 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px color-mix(in oklab, var(--gp-m-500) 60%, transparent);
+		--gp-hop-sh: var(--gp-sh-n);
+		background: var(--gp-face);
+	}
+	.gp-hop.is-down {
+		--gp-lift: 0px;
+		transition:
+			--gp-lift var(--gp-d-sink) var(--gp-e-sink),
+			background-color 60ms linear;
+	}
+	.gp-hop:disabled {
+		cursor: default;
+		color: var(--gp-ink-mute);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-hop {
+			transform: none !important;
+		}
+		.gp-title {
+			transition: none;
+		}
+	}
+
+	/* ListRow: ≥ 56px — a badge, the title and its subline, a trailing slot */
+	.gp-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		min-height: 56px;
+		padding: 8px 12px 8px 10px;
+	}
+	.gp-row-main {
+		display: grid;
+		flex: 1;
+		min-width: 0;
+		gap: 2px;
+	}
+	.gp-row-t {
+		justify-self: start;
+		max-width: 100%;
+		overflow: hidden;
+		font: 600 14.5px/1.3 var(--gp-f-body);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+	.gp-row-s {
+		overflow: hidden;
+		font: 400 12.5px/1.3 var(--gp-f-body);
+		color: var(--gp-ink-3);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+	.gp-row-trail {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 8px;
+		color: var(--gp-ink-3);
+	}
+	.gp-row-trail svg {
+		width: 18px;
+		height: 18px;
+	}
+	/* the module badge: the row's icon on a pick of its module */
+	.gp-badge {
+		position: relative;
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 32px;
+		height: 35px;
+		color: var(--gp-m-on);
+	}
+	.gp-badge > .gp-badge-pick {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		fill: var(--gp-m-500);
+	}
+	.gp-badge > .gp-badge-icon {
+		position: relative;
+		width: 15px;
+		height: 15px;
+		margin-top: -5px;
+	}
+
+	/* ---- Card (static) and Panel ------------------------------------------------------ */
+	/* static content sits on the page itself: no fill, no edge, no radius, no shadow */
+	.gp-card {
+		display: grid;
+		gap: 8px;
+	}
+	/* a panel holds controls: white on Snow, 14px, no shadow and no hairline */
+	.gp-panel {
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		padding: 16px;
+		color: var(--gp-ink);
+	}
+	.gp-panel-title {
+		margin-bottom: 12px;
+		font: 650 16px/1.3 var(--gp-f-disp);
+	}
+	/* inside a sheet the sheet is the panel */
+	.gp-sheet .gp-panel {
+		padding: 0;
+		background: none;
+	}
+
+	/* ---- Input / Search ------------------------------------------------------------------ */
+	.gp-field {
+		display: grid;
+		gap: 6px;
+	}
+	.gp-field-label {
+		font: 600 13px/1.3 var(--gp-f-body);
+		color: var(--gp-ink-2);
+	}
+	.gp-field-help {
+		font: 400 12.5px/1.4 var(--gp-f-body);
+		color: var(--gp-ink-3);
+	}
+	.gp-field-help[data-error] {
+		color: var(--gp-bad);
+	}
+	.gp-input {
+		width: 100%;
+		height: 44px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-field);
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+		font: 400 15px/1 var(--gp-f-body);
+		color: var(--gp-ink);
+		transition: box-shadow var(--gp-d-state) var(--gp-ease-state);
+	}
+	.gp-input::placeholder {
+		color: var(--gp-ink-3);
+	}
+	@media (hover: hover) {
+		.gp-input:not(:disabled, :focus, [aria-invalid="true"]):hover {
+			box-shadow: inset 0 0 0 1px var(--gp-edge);
+		}
+	}
+	.gp-input:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 1px;
+	}
+	.gp-input[aria-invalid="true"] {
+		box-shadow: inset 0 0 0 2px var(--gp-bad);
+	}
+	.gp-input:disabled {
+		background: var(--gp-s2);
+		color: var(--gp-ink-mute);
+	}
+	.gp-search {
+		position: relative;
+	}
+	.gp-search > svg {
+		position: absolute;
+		top: 50%;
+		left: 12px;
+		width: 18px;
+		height: 18px;
+		translate: 0 -50%;
+		color: var(--gp-ink-3);
+		pointer-events: none;
+	}
+	.gp-search > .gp-input {
+		padding-left: 38px;
+	}
+
+	/* ---- Slider: a 4px track filled in the module colour, a thumb that sinks while held ---- */
+	.gp-slider {
+		position: relative;
+		display: flex;
+		align-items: center;
+		width: 100%;
+		height: 28px;
+		touch-action: none;
+		user-select: none;
+	}
+	.gp-slider-track {
+		position: relative;
+		flex: 1;
+		height: 4px;
+		border-radius: 4px;
+		background: var(--gp-edge);
+	}
+	.gp-slider-range {
+		position: absolute;
+		height: 100%;
+		border-radius: 4px;
+		background: var(--gp-m-500);
+	}
+	.gp-slider-thumb {
+		display: block;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		background: var(--gp-thumb);
+		box-shadow: var(--gp-ring-shn), var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-shn);
+		cursor: grab;
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.gp-slider:active .gp-slider-thumb {
+		transform: translate(var(--gp-o-chip), var(--gp-o-chip));
+		box-shadow: var(--gp-ring-shn), 0 0 0 0 var(--gp-shn);
+		cursor: grabbing;
+		transition:
+			transform var(--gp-d-sink) var(--gp-e-sink),
+			box-shadow var(--gp-d-sink) var(--gp-e-sink);
+	}
+	.gp-slider-thumb:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 2px;
+	}
+	/* ticks sit under the track, inset by half a thumb the way the thumb itself is */
+	.gp-slider-ticks {
+		position: absolute;
+		top: calc(50% + 5px);
+		right: 10px;
+		left: 10px;
+		height: 5px;
+		pointer-events: none;
+	}
+	.gp-slider-ticks > span {
+		position: absolute;
+		width: 1.5px;
+		height: 100%;
+		border-radius: 1px;
+		translate: -50% 0;
+		background: var(--gp-edge);
+	}
+	.gp-slider[data-disabled] .gp-slider-range {
+		background: var(--gp-ink-mute);
+	}
+	.gp-slider[data-disabled] .gp-slider-thumb {
+		box-shadow: var(--gp-ring-shn);
+		cursor: default;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-slider .gp-slider-thumb {
+			transform: none !important;
+		}
+	}
+
+	/* ---- Sheet: a bottom sheet on a phone, a 380px right panel from 720px ------------------ */
+	.gp-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		background: var(--gp-scrim);
+	}
+	.gp-scrim[data-state="open"] {
+		animation: gp-fade-in 150ms linear both;
+	}
+	.gp-scrim[data-state="closed"] {
+		animation: gp-fade-out var(--gp-d-sheet-out) linear both;
+	}
+	.gp-sheet {
+		position: fixed;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 51;
+		display: flex;
+		flex-direction: column;
+		max-height: 88dvh;
+		border-radius: var(--gp-r-xl) var(--gp-r-xl) 0 0;
+		background: var(--gp-sheet);
+		box-shadow: var(--gp-shadow-pop);
+		color: var(--gp-ink);
+		outline: none;
+	}
+	.gp-sheet[data-state="open"] {
+		animation: gp-sheet-up var(--gp-d-sheet) var(--gp-spring-sheet) both;
+	}
+	.gp-sheet[data-state="closed"] {
+		animation: gp-sheet-down var(--gp-d-sheet-out) var(--gp-ease-out) both;
+	}
+	.gp-sheet[data-side="right"] {
+		top: 0;
+		left: auto;
+		width: 380px;
+		max-width: 100vw;
+		max-height: none;
+		border-radius: 0;
+		box-shadow: var(--gp-shadow-pop), -1px 0 0 var(--gp-line);
+	}
+	.gp-sheet[data-side="right"][data-state="open"] {
+		animation-name: gp-panel-in;
+	}
+	.gp-sheet[data-side="right"][data-state="closed"] {
+		animation-name: gp-panel-out;
+	}
+	.gp-sheet-grab {
+		display: grid;
+		flex: none;
+		place-items: center;
+		height: 22px;
+	}
+	.gp-sheet-grab::before {
+		content: "";
+		width: 36px;
+		height: 4px;
+		border-radius: 4px;
+		background: var(--gp-edge);
+	}
+	.gp-sheet[data-side="right"] .gp-sheet-grab {
+		display: none;
+	}
+	.gp-sheet-head {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 8px;
+		padding: 0 10px 8px 16px;
+	}
+	.gp-sheet[data-side="right"] .gp-sheet-head {
+		margin-bottom: 12px;
+		padding: 16px 10px 10px 20px;
+		box-shadow: 0 1px 0 var(--gp-line);
+	}
+	.gp-sheet-title {
+		flex: 1;
+		min-width: 0;
+		font: 650 17px/1.3 var(--gp-f-disp);
+	}
+	.gp-sheet-desc {
+		padding: 0 16px 8px;
+		font: 400 13.5px/1.4 var(--gp-f-body);
+		color: var(--gp-ink-3);
+	}
+	.gp-sheet[data-side="right"] .gp-sheet-desc {
+		padding: 0 20px 8px;
+	}
+	.gp-sheet-body {
+		min-height: 0;
+		overflow: auto;
+		padding: 4px 16px calc(20px + env(safe-area-inset-bottom));
+	}
+	.gp-sheet[data-side="right"] .gp-sheet-body {
+		padding: 4px 20px 20px;
+	}
+	@keyframes gp-sheet-up {
+		0% {
+			transform: translateY(100%);
+		}
+		82% {
+			transform: translateY(0);
+		}
+		91% {
+			transform: scaleY(0.992);
+		}
+		100% {
+			transform: none;
+		}
+	}
+	@keyframes gp-sheet-down {
+		to {
+			transform: translateY(100%);
+		}
+	}
+	@keyframes gp-panel-in {
+		from {
+			transform: translateX(100%);
+		}
+	}
+	@keyframes gp-panel-out {
+		to {
+			transform: translateX(100%);
+		}
+	}
+	@keyframes gp-fade-in {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes gp-fade-out {
+		to {
+			opacity: 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-sheet[data-state="open"],
+		.gp-sheet[data-side="right"][data-state="open"] {
+			animation: gp-fade-in 150ms linear both;
+		}
+		.gp-sheet[data-state="closed"],
+		.gp-sheet[data-side="right"][data-state="closed"] {
+			animation: gp-fade-out 150ms linear both;
+		}
+	}
+
+	/* ---- Toast: ink, a pick of the page's module, dropping from the top ------------------
+	   Sonner positions and stacks the toasts; these rules are the look. The toast is an
+	   inverted surface, so its pick wears the other theme's slot (fretboard: slot 5). */
+	.gp-toaster {
+		--gp-toast-pick: var(--gp-lgd4);
+	}
+	.gp-toaster[data-m="strum"] {
+		--gp-toast-pick: var(--gp-lgd2);
+	}
+	.gp-toaster[data-m="tab"] {
+		--gp-toast-pick: var(--gp-lgd1);
+	}
+	.gp-toaster[data-m="chords"] {
+		--gp-toast-pick: var(--gp-lgd3);
+	}
+	.gp-toaster[data-m="fb"] {
+		--gp-toast-pick: var(--gp-lgd5);
+	}
+	.gp-toaster[data-m="books"] {
+		--gp-toast-pick: var(--gp-lgd0);
+	}
+	:root[data-theme="dark"] .gp-toaster {
+		--gp-toast-pick: var(--gp-a2-light);
+	}
+	:root[data-theme="dark"] .gp-toaster[data-m="strum"] {
+		--gp-toast-pick: var(--gp-lgl2);
+	}
+	:root[data-theme="dark"] .gp-toaster[data-m="tab"] {
+		--gp-toast-pick: var(--gp-lgl1);
+	}
+	:root[data-theme="dark"] .gp-toaster[data-m="chords"] {
+		--gp-toast-pick: var(--gp-lgl3);
+	}
+	:root[data-theme="dark"] .gp-toaster[data-m="fb"] {
+		--gp-toast-pick: var(--gp-lgl5);
+	}
+	:root[data-theme="dark"] .gp-toaster[data-m="books"] {
+		--gp-toast-pick: var(--gp-lgl0);
+	}
+	.gp-toast {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: max-content;
+		min-height: 44px;
+		max-width: min(360px, calc(100vw - 32px));
+		padding: 10px 16px 10px 14px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-ink);
+		box-shadow: var(--gp-shadow-pop);
+		font: 600 14px/1.3 var(--gp-f-body);
+		color: var(--gp-on-ink);
+	}
+	.gp-toast::before {
+		content: "";
+		flex: none;
+		width: 13px;
+		height: 14px;
+		background: var(--gp-toast-pick);
+		mask: var(--gp-pick-mask) center / contain no-repeat;
+	}
+	.gp-toast[data-type="error"]::before {
+		background: var(--gp-a2);
+	}
+	/* the pick is the icon; sonner's own only for a pending toast */
+	.gp-toast:not([data-type="loading"]) [data-icon] {
+		display: none;
+	}
+	.gp-toast [data-description] {
+		font-weight: 400;
+		opacity: 0.8;
+	}
+	.gp-toast [data-button] {
+		margin-left: 6px;
+		padding: 6px 10px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-on-ink);
+		color: var(--gp-ink);
+		font-weight: 600;
+	}
+
+	/* ---- Skeleton: a well block that shimmers, shown after 300ms of waiting ---------------- */
+	.gp-skeleton {
+		position: relative;
+		overflow: hidden;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-well);
+	}
+	.gp-skeleton::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--gp-s2) 80%, transparent), transparent);
+		transform: translateX(-100%);
+		animation: gp-shimmer var(--gp-d-skeleton) linear infinite;
+	}
+	@keyframes gp-shimmer {
+		to {
+			transform: translateX(100%);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-skeleton::after {
+			animation: none;
+			display: none;
+		}
+	}
+}
+
+/* the pick outline as a mask, for decoration drawn in CSS (the toast's pick) */
+:root {
+	--gp-pick-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 26'%3E%3Cpath d='M12 25.2C10.6 25.2 3.4 15.8 1.6 10.2C.4 6.4 1.4 2.6 5.6 1.5C8 .9 10 .8 12 .8C14 .8 16 .9 18.4 1.5C22.6 2.6 23.6 6.4 22.4 10.2C20.6 15.8 13.4 25.2 12 25.2Z'/%3E%3C/svg%3E");
+}

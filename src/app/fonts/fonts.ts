@@ -29,5 +29,17 @@ export const sans = localFont({
 	display: "swap",
 });
 
+// The Candy UI face (#351): upright and a real italic, one variable file each.
+// Tokens reach it through --font-figtree (see tokens.css); the tab stave stays on
+// `mono` because Figtree's default figures are proportional (README.md).
+export const figtree = localFont({
+	src: [
+		{ path: "./Figtree-Variable-latin.woff2", weight: "400 800", style: "normal" },
+		{ path: "./Figtree-Italic-Variable-latin.woff2", weight: "400 800", style: "italic" },
+	],
+	variable: "--font-figtree",
+	display: "swap",
+});
+
 /** For canvas and SVG text, which cannot read the CSS variable. */
 export const MONO_FAMILY = `${mono.style.fontFamily}, ui-monospace, monospace`;

@@ -4,19 +4,18 @@ import UserAvatar from "./UserAvatar";
 /**
  * The "who am I" row at the top of an account panel: chip, display name, and
  * the email underneath (the login identity, kept visible even when the name is
- * a nickname). Shared by the desktop UserMenu and the collapsed NavBarMenu so
- * both panels read identically.
+ * a nickname), at the top of the account menu.
  */
 export default function UserIdentity({ profile }: { profile: Profile }) {
 	return (
 		<div className="flex min-w-0 items-center gap-2.5">
 			<UserAvatar profile={profile} />
 			<div className="flex min-w-0 flex-col gap-0.5">
-				<span className="truncate font-mono text-[12px] font-medium tracking-[0.02em] text-ink">
+				<span className="truncate font-gp-body text-[14px] font-semibold text-gp-ink">
 					{profile.displayName}
 				</span>
 				{profile.email && (
-					<span className="truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+					<span className="truncate font-gp-body text-[12.5px] text-gp-ink-3">
 						{profile.email}
 					</span>
 				)}

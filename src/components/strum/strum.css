@@ -982,6 +982,74 @@
 			var(--gp-ring-c),
 			var(--gp-shadow-pop);
 	}
+	/* What the drag moves; the remote above it only places the dock. */
+	.st-pill-move[data-dragging] .st-pill {
+		cursor: grabbing;
+		box-shadow:
+			var(--gp-ring-c),
+			0 24px 48px -18px rgb(0 0 0 / 0.35);
+	}
+	.st-pill-grip {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 22px;
+		height: 40px;
+		margin-left: -8px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-mute);
+		cursor: grab;
+		touch-action: none;
+		transition:
+			color var(--gp-d-state) linear,
+			background-color var(--gp-d-state) linear;
+	}
+	.st-pill-grip:hover {
+		background: var(--gp-well);
+		color: var(--gp-ink-3);
+	}
+	.st-pill-grip svg {
+		width: 18px;
+		height: 18px;
+	}
+	/* Docked on the left: the pill stands up, the same controls top to bottom. */
+	.st-remote[data-dock="left"] {
+		top: 50%;
+		bottom: auto;
+		left: 16px;
+		max-height: calc(100% - 24px);
+		transform: translateY(-50%);
+	}
+	.st-remote[data-dock="left"] .st-pill {
+		flex-direction: column;
+		gap: 8px;
+		padding: 8px 8px 12px;
+	}
+	.st-remote[data-dock="left"] .st-pill-grip {
+		width: 40px;
+		height: 22px;
+		margin: 0 0 -2px;
+	}
+	.st-remote[data-dock="left"] .st-pill-now {
+		align-items: center;
+		width: 72px;
+		text-align: center;
+	}
+	.st-remote[data-dock="left"] .st-bar-now small {
+		display: block;
+	}
+	.st-remote[data-dock="left"] .st-bpm {
+		flex-direction: column;
+		align-items: center;
+		min-width: 0;
+	}
+	/* The stage makes room beside the pill instead of under it. */
+	.st-stage-wrap[data-dock="left"] {
+		--st-pill-room: 24px;
+	}
+	.st-stage-wrap[data-dock="left"] .st-stage {
+		padding-left: 132px;
+	}
 	.st-pill-now {
 		display: flex;
 		flex-direction: column;

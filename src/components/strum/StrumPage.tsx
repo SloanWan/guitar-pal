@@ -3,7 +3,7 @@
 import "./strum.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { PanelRightOpen } from "lucide-react";
-import { Sheet } from "@/components/ui/sheet";
+import { Sheet, useSheetSide } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import SharedPatternPanel from "@/components/SharedPatternPanel";
 import PlayBar from "@/components/playback/PlayBar";
@@ -32,6 +32,7 @@ import { barLabel, progressionCapo } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
 import { withUserVoicings } from "@/lib/userChordVoicings";
 import type { SharedStrum } from "@/lib/sharedItems";
+import { PLAYER_DOCK_KEY, readDock, type PlayerDock } from "@/lib/playerDock";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import { showPress } from "@/components/ui/press";
 
@@ -147,6 +148,27 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 		}
 	}
 	const [libraryOpen, setLibraryOpen] = useState(false);
+	// Where the player floats. A phone has no room beside the stage, so there it
+	// stays at the bottom whatever was chosen on a wider screen.
+	const [dockChoice, setDockChoice] = useState<PlayerDock>("bottom");
+	useEffect(() => {
+		try {
+			const saved = readDock(localStorage.getItem(PLAYER_DOCK_KEY));
+			queueMicrotask(() => setDockChoice(saved));
+		} catch {
+			// unreadable storage: the bottom
+		}
+	}, []);
+	const canDock = useSheetSide(true) === "right";
+	const dock: PlayerDock = canDock ? dockChoice : "bottom";
+	function moveDock(next: PlayerDock) {
+		setDockChoice(next);
+		try {
+			localStorage.setItem(PLAYER_DOCK_KEY, next);
+		} catch {
+			// remembered for this visit only
+		}
+	}
 	const [composer, setComposer] = useState<"new" | "edit" | null>(null);
 	/** The composer has a play key of its own; the page's falls silent while it is open. */
 	function openComposer(mode: "new" | "edit") {
@@ -197,7 +219,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	return (
 		<div className="st-page" data-m="strum">
 			<div className="st-shell" data-lib={folded && !isShared ? "closed" : "open"}>
-				<div className="st-stage-wrap">
+				<div className="st-stage-wrap" data-dock={dock}>
 					{/* Outside the scrolling stage, so it stays put however far the page scrolls. */}
 					{!isShared && folded && (
 						<button
@@ -316,6 +338,9 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					onLoop={(loop) => playback.setPlayOnce(!loop)}
 					loopGap={playback.loopGap}
 					onLoopGap={playback.setLoopGap}
+					dock={dock}
+					onDock={moveDock}
+					canDock={canDock}
 					strum={{
 						enabled: playback.strumEnabled,
 						onEnabledChange: playback.setStrumEnabled,

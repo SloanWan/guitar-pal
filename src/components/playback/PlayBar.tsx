@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, type Ref } from "react";
-import { Repeat, SlidersHorizontal } from "lucide-react";
+import { GripHorizontal, GripVertical, Repeat, SlidersHorizontal } from "lucide-react";
 import { Button, PlayPick } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import type { TickLevel } from "@/lib/strumMetronome";
 import type { ModuleKey } from "@/lib/moduleForPath";
+import type { PlayerDock } from "@/lib/playerDock";
+import { usePillDrag } from "./usePillDrag";
 import MixerChannel, { type ChannelState } from "./MixerChannel";
 import SubdivisionPicker from "./SubdivisionPicker";
 import { TempoFields, clampTempo, type TempoProps } from "./TempoControl";
@@ -36,13 +38,19 @@ export interface PlayBarProps {
 	onLoopGap: (seconds: number) => void;
 	strum: ChannelState;
 	click: ChannelState;
+	/** Where the pill sits: along the bottom, or standing up the left side. */
+	dock: PlayerDock;
+	onDock: (dock: PlayerDock) => void;
+	/** Whether there is room to move it at all; a phone keeps it at the bottom. */
+	canDock: boolean;
 }
 
 /**
- * The transport, floating over the bottom of the stage: where the pass is, loop,
- * slower / play / faster and the tempo. Everything else — the tempo in full, the
- * metronome, the mix — is in a tray that rises above it, so the pill stays small
- * and the page under it stays the practice object.
+ * The transport, floating over the stage: where the pass is, loop, slower / play /
+ * faster and the tempo. Everything else — the tempo in full, the metronome, the
+ * mix — is in a tray that opens beside it, so the pill stays small and the page
+ * under it stays the practice object. Its handle drags it between the bottom of
+ * the stage and its left side (`usePillDrag`).
  */
 export default function PlayBar({
 	module,
@@ -61,15 +69,32 @@ export default function PlayBar({
 	onLoopGap,
 	strum,
 	click,
+	dock,
+	onDock,
+	canDock,
 }: PlayBarProps) {
 	const [trayOpen, setTrayOpen] = useState(false);
+	const { moveRef, dragging, handleProps } = usePillDrag(dock, onDock);
+	const side = dock === "left" ? "right" : "top";
 	const step = (delta: number) => tempo.onBpm(clampTempo(tempo.bpm + delta, tempo.meter));
 
 	return (
-		<div className="st-remote">
+		<div className="st-remote" data-dock={dock}>
+			<div ref={moveRef} className="st-pill-move" data-dragging={dragging ? "" : undefined}>
 			<Popover open={trayOpen} onOpenChange={setTrayOpen}>
 				<PopoverAnchor asChild>
 					<div className="st-pill" role="region" aria-label="Playback">
+						{canDock && (
+							<button
+								type="button"
+								className="st-pill-grip"
+								aria-label={dock === "left" ? "Move the player to the bottom" : "Move the player to the left"}
+								title="Drag to move the player, or click to switch sides"
+								{...handleProps}
+							>
+								{dock === "left" ? <GripHorizontal aria-hidden /> : <GripVertical aria-hidden />}
+							</button>
+						)}
 						<div className="st-pill-now">
 							<span className="st-lab st-num">
 								Bar {status.bar} of {status.bars}
@@ -124,12 +149,12 @@ export default function PlayBar({
 					</div>
 				</PopoverAnchor>
 				<PopoverContent
-					side="top"
+					side={side}
 					align="center"
 					sideOffset={10}
 					data-m={module}
 					aria-label="Playback settings"
-					className="st-tray w-(--radix-popper-anchor-width) px-4.5 py-4"
+					className={`st-tray px-4.5 py-4 ${dock === "left" ? "w-[min(452px,calc(100vw-24px))]" : "w-(--radix-popper-anchor-width)"}`}
 					// The pill is how the tray is reached; clicking it again is not "outside".
 					onInteractOutside={(e) => {
 						if ((e.target as Element | null)?.closest(".st-pill")) e.preventDefault();
@@ -168,6 +193,7 @@ export default function PlayBar({
 					<p className="st-lab st-tray-hint">No sound? Check your phone&apos;s mute switch.</p>
 				</PopoverContent>
 			</Popover>
+			</div>
 		</div>
 	);
 }

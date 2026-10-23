@@ -73,4 +73,15 @@ test.describe("strum machine", () => {
 		await expect(page.getByRole("option", { name: /Four Chords/ })).toBeVisible();
 		await expect(page.getByRole("button", { name: /^Bar 4: F\b/ })).toBeVisible();
 	});
+
+	test("moves the player to the left and back", async ({ page }) => {
+		await page.goto("/strum");
+		await page.getByRole("button", { name: "Move the player to the left" }).click();
+		const back = page.getByRole("button", { name: "Move the player to the bottom" });
+		await expect(back).toBeVisible();
+		// Still the player: it plays from its new place.
+		await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+		await back.click();
+		await expect(page.getByRole("button", { name: "Move the player to the left" })).toBeVisible();
+	});
 });

@@ -46,4 +46,19 @@ test.describe("strum machine", () => {
 		await note.getByRole("button", { name: "Save", exact: true }).click();
 		await expect(note).toBeHidden();
 	});
+
+	test("makes a two-bar pattern from typed strokes", async ({ page }) => {
+		await page.goto("/strum");
+		await page.getByRole("button", { name: "New" }).first().click();
+		const dialog = page.getByRole("dialog", { name: "New pattern" });
+		await dialog.getByRole("textbox", { name: "Strokes" }).fill("D DU UDU | D D D D");
+		// The grid follows the strokes: a second bar appears.
+		await expect(dialog.getByText("Bar 2", { exact: true })).toBeVisible();
+		await dialog.getByRole("textbox", { name: "Pattern name" }).fill("Smoke two-bar");
+		await dialog.getByRole("button", { name: "Create", exact: true }).click();
+		// A guest is offered the browser or an account.
+		await dialog.getByRole("button", { name: "Save in this browser" }).click();
+		await expect(page.getByRole("heading", { level: 1, name: "Smoke two-bar" })).toBeVisible();
+		await expect(page.getByText("My pattern · 4/4 · 2 bars")).toBeVisible();
+	});
 });

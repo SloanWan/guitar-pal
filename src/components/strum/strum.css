@@ -784,6 +784,33 @@
 		box-shadow: 0 -1px 0 var(--gp-line);
 	}
 
+	/* ── Pattern composer ─────────────────────────────────────────────────── */
+	/* Portaled out of the page, the composer measures itself the same way. */
+	.st-contain {
+		container: strum / inline-size;
+	}
+	.st-starters {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.st-cbar {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		padding: 8px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-page);
+	}
+	.st-cbar .st-barline {
+		justify-content: flex-start;
+	}
+	@media (max-width: 719px) {
+		.st-starters {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
 	/* ── Play bar ─────────────────────────────────────────────────────────── */
 	.st-bar {
 		position: relative;

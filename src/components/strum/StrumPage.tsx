@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import SharedPatternPanel from "@/components/SharedPatternPanel";
 import PlayBar from "@/components/playback/PlayBar";
 import ShareStrumDialog from "@/components/strum/ShareStrumDialog";
-import CreatePatternModal from "@/components/strum/CreatePatternModal";
+import PatternComposer from "@/components/strum/composer/PatternComposer";
 import PatternLibrary from "@/components/strum/library/PatternLibrary";
 import PatternHeader from "@/components/strum/stage/PatternHeader";
 import NowCard from "@/components/strum/stage/NowCard";
@@ -129,6 +129,12 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	}
 	const [libraryOpen, setLibraryOpen] = useState(false);
 	const [composer, setComposer] = useState<"new" | "edit" | null>(null);
+	/** The composer has a play key of its own; the page's falls silent while it is open. */
+	function openComposer(mode: "new" | "edit") {
+		stop();
+		setLibraryOpen(false);
+		setComposer(mode);
+	}
 
 	const progressionBars = openProgression?.bars ?? [];
 	const diagrams = useBarChordDiagrams(progressionBars, progressionBars.length > 0, userVoicings);
@@ -166,10 +172,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 		selectedId: selectedPattern?.id ?? null,
 		favouriteIds: library.favouriteIds,
 		onToggleFavourite: library.handleToggleFavourite,
-		onNew: () => {
-			setLibraryOpen(false);
-			setComposer("new");
-		},
+		onNew: () => openComposer("new"),
 	};
 
 	return (
@@ -217,7 +220,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 									onSave={session.owned ? () => session.saveRhythm(draft.rhythm) : undefined}
 									onSaveAsNew={() => session.saveRhythmAsNew(draft.rhythm)}
 									owned={session.owned}
-									onEdit={isShared ? undefined : () => setComposer("edit")}
+									onEdit={isShared ? undefined : () => openComposer("edit")}
 									onDelete={isShared ? undefined : () => session.removePattern(selectedPattern.id)}
 									onShare={isShared ? undefined : shareState.share}
 									sharing={shareState.sharing}
@@ -339,17 +342,16 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					</div>
 				</Sheet>
 			)}
-			{!isShared && (
-				<CreatePatternModal
-					open={composer !== null}
+			{!isShared && composer !== null && (
+				<PatternComposer
+					editing={composer === "edit" && selectedPattern ? selectedPattern : undefined}
+					existingPatterns={session.allPatterns}
+					user={user}
 					onClose={() => setComposer(null)}
 					onSave={(pattern) => {
 						if (composer === "edit") session.savePattern(pattern);
 						else session.createPattern(pattern);
 					}}
-					editPattern={composer === "edit" && selectedPattern ? selectedPattern : undefined}
-					existingPatterns={session.allPatterns}
-					user={user}
 				/>
 			)}
 			{shareState.dialogOpen && selectedPattern && (

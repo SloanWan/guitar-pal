@@ -4,8 +4,8 @@ import {
 	hasShapeToken,
 	progressionBarsFromTokens,
 	keptTokens,
-	syncBarsToPattern,
 	chordAbbreviation,
+	barLabel,
 	defaultProgressionName,
 	progressionDisplayName,
 	sortProgressions,
@@ -14,13 +14,6 @@ import {
 	normalizeCapo,
 	progressionCapo,
 	NO_CHORD_LABEL,
-	patternSyncState,
-	applyPatternSync,
-	declinePatternSync,
-	resumePatternSync,
-	dismissPatternNotice,
-	markPatternSynced,
-	normalizeProgressionSync,
 } from "@/lib/strumProgressions";
 import { STRUM_CAPO_MAX } from "@/lib/strumPatterns";
 import type { Bar, Beat, ChordProgression } from "@/lib/strumPatterns";
@@ -291,7 +284,7 @@ describe("keptTokens — the answer to the unknown-chord prompt", () => {
 describe("progressionBarsFromTokens", () => {
 	it("gives every chord a bar of the pattern's rhythm", () => {
 		const beats = [["D", ""], ["", "U"]];
-		const bars = progressionBarsFromTokens(beats, parseChordSequence("C G", INDEX).tokens);
+		const bars = progressionBarsFromTokens([beats], parseChordSequence("C G", INDEX).tokens);
 		expect(bars).toHaveLength(2);
 		expect(bars[0].beats).toEqual(beats);
 		expect(bars[1].chord).toMatchObject({ root: "G" });
@@ -301,322 +294,29 @@ describe("progressionBarsFromTokens", () => {
 
 	it("keeps a word the library could not match as the bar's name", () => {
 		const beats: Beat[] = [["D", ""]];
-		const bars = progressionBarsFromTokens(beats, parseChordSequence("C zzz", INDEX).tokens);
+		const bars = progressionBarsFromTokens([beats], parseChordSequence("C zzz", INDEX).tokens);
 		expect(bars).toHaveLength(2);
 		expect(bars[1].chord).toBeNull();
 		expect(bars[1].unknownChord).toBe("zzz");
 	});
 
 	it("leaves a resolved bar with no name to carry", () => {
-		const bars = progressionBarsFromTokens([["D"]], parseChordSequence("C", INDEX).tokens);
+		const bars = progressionBarsFromTokens([[["D"]]], parseChordSequence("C", INDEX).tokens);
 		expect(bars[0].unknownChord).toBeUndefined();
 	});
-});
 
-describe("syncBarsToPattern", () => {
-	const OLD: Beat[] = [
-		["D", ""],
-		["D", ""],
-	];
-	const NEW: Beat[] = [
-		["D", "U"],
-		["", "U"],
-	];
-	const HAND_EDITED: Beat[] = [["X", "X"], ["D", "U"]];
-
-	it("rewrites bars that still play the pattern's old rhythm, keeping their chords", () => {
-		const bars: Bar[] = [
-			{ beats: OLD.map((b) => [...b]), chord: { root: "C", suffix: "major" } },
-			{ beats: OLD.map((b) => [...b]), chord: { root: "G", suffix: "major" } },
-		];
-		const next = syncBarsToPattern(bars, OLD, NEW);
-		expect(next.map((b) => b.beats)).toEqual([NEW, NEW]);
-		expect(next.map((b) => b.chord?.root)).toEqual(["C", "G"]);
-	});
-
-	it("leaves a bar the user re-wrote in the progression editor alone", () => {
-		const bars: Bar[] = [
-			{ beats: OLD.map((b) => [...b]), chord: null },
-			{ beats: HAND_EDITED.map((b) => [...b]), chord: null },
-		];
-		const next = syncBarsToPattern(bars, OLD, NEW);
-		expect(next[0].beats).toEqual(NEW);
-		expect(next[1].beats).toEqual(HAND_EDITED);
-	});
-
-	it("returns the input untouched when the rhythm did not change", () => {
-		const bars: Bar[] = [{ beats: OLD.map((b) => [...b]), chord: null }];
-		expect(syncBarsToPattern(bars, OLD, OLD.map((b) => [...b]))).toBe(bars);
-	});
-
-	it("returns the input untouched when no bar matched the old rhythm", () => {
-		const bars: Bar[] = [{ beats: HAND_EDITED.map((b) => [...b]), chord: null }];
-		expect(syncBarsToPattern(bars, OLD, NEW)).toBe(bars);
-	});
-
-	it("copies the new beats per bar rather than sharing one array", () => {
-		const bars: Bar[] = [
-			{ beats: OLD.map((b) => [...b]), chord: null },
-			{ beats: OLD.map((b) => [...b]), chord: null },
-		];
-		const next = syncBarsToPattern(bars, OLD, NEW);
-		next[0].beats[0][0] = "X";
-		expect(next[1].beats[0][0]).toBe("D");
-		expect(NEW[0][0]).toBe("D");
+	it("walks a longer rhythm bar by bar, and round again", () => {
+		const a: Beat[] = [["D", ""]];
+		const b: Beat[] = [["", "U"]];
+		const bars = progressionBarsFromTokens([a, b], parseChordSequence("C G Am", INDEX).tokens);
+		expect(bars.map((bar) => bar.beats)).toEqual([a, b, a]);
 	});
 });
 
-describe("reconciling a progression with its pattern", () => {
-	const OLD: Beat[] = [["D", ""], ["D", "U"]];
-	const NEW: Beat[] = [["D", "U"], ["D", "U"]];
-	const OWN: Beat[] = [["X", "X"], ["X", "X"]];
-
-	function progression(over: Partial<ChordProgression> = {}): ChordProgression {
-		return {
-			id: "p1",
-			patternId: "pat",
-			orderIndex: 0,
-			bars: [
-				{ beats: OLD.map((b) => [...b]), chord: { root: "C", suffix: "major" } },
-				{ beats: OLD.map((b) => [...b]), chord: { root: "G", suffix: "major" } },
-			],
-			...over,
-		};
-	}
-
-	describe("patternSyncState", () => {
-		it("asks when the pattern has moved since the sequence was reconciled", () => {
-			const state = patternSyncState(progression({ syncedBeats: OLD }), NEW);
-			expect(state.kind).toBe("ask");
-			if (state.kind !== "ask") return;
-			expect(state.previousBeats).toEqual(OLD);
-		});
-
-		it("stays quiet when the sequence already plays the pattern's rhythm", () => {
-			expect(patternSyncState(progression({ syncedBeats: NEW }), NEW).kind).toBe("in-sync");
-		});
-
-		it("never asks a sequence written before the prompt existed", () => {
-			// No baseline to diff or to sync from; asking would be a question with
-			// no describable answer.
-			expect(patternSyncState(progression(), NEW).kind).toBe("backfill");
-		});
-
-		it("stays quiet once the player has declined", () => {
-			const declined = progression({ syncedBeats: OLD, followsPattern: false });
-			expect(patternSyncState(declined, NEW).kind).toBe("detached");
-		});
-
-		it("compares by content, not by reference", () => {
-			const copy = OLD.map((b) => [...b]);
-			expect(patternSyncState(progression({ syncedBeats: copy }), OLD).kind).toBe("in-sync");
-		});
-	});
-
-	describe("answering yes", () => {
-		it("carries the pattern's new rhythm into the bars that still followed it", () => {
-			const next = applyPatternSync(progression({ syncedBeats: OLD }), NEW);
-			expect(next.bars[0].beats).toEqual(NEW);
-			expect(next.bars[1].beats).toEqual(NEW);
-		});
-
-		it("leaves a bar the player re-wrote inside the progression alone", () => {
-			const p = progression({ syncedBeats: OLD });
-			p.bars[1] = { ...p.bars[1], beats: OWN.map((b) => [...b]) };
-			const next = applyPatternSync(p, NEW);
-			expect(next.bars[0].beats).toEqual(NEW);
-			expect(next.bars[1].beats).toEqual(OWN);
-		});
-
-		it("never touches the chords", () => {
-			const next = applyPatternSync(progression({ syncedBeats: OLD }), NEW);
-			expect(next.bars.map((b) => b.chord?.root)).toEqual(["C", "G"]);
-		});
-
-		it("records the answer, so the same edit is not asked about twice", () => {
-			const next = applyPatternSync(progression({ syncedBeats: OLD }), NEW);
-			expect(patternSyncState(next, NEW).kind).toBe("in-sync");
-		});
-	});
-
-	describe("answering no", () => {
-		it("stops the sequence following the pattern", () => {
-			const next = declinePatternSync(progression({ syncedBeats: OLD }));
-			expect(patternSyncState(next, NEW).kind).toBe("detached");
-		});
-
-		it("changes no bar", () => {
-			const p = progression({ syncedBeats: OLD });
-			expect(declinePatternSync(p).bars).toEqual(p.bars);
-		});
-
-		it("stays quiet through a later pattern edit", () => {
-			const declined = declinePatternSync(progression({ syncedBeats: OLD }));
-			expect(patternSyncState(declined, OWN).kind).toBe("detached");
-		});
-
-		it("leaves the snapshot where it was, so following again still has a baseline", () => {
-			// Moving it would strand the sequence: its bars would match no snapshot
-			// the pattern will ever have, and "follow again" would do nothing.
-			const declined = declinePatternSync(progression({ syncedBeats: OLD }));
-			expect(declined.syncedBeats).toEqual(OLD);
-		});
-	});
-
-	describe("following again", () => {
-		it("only lifts the refusal", () => {
-			const declined = declinePatternSync(progression({ syncedBeats: OLD }));
-			const resumed = resumePatternSync(declined);
-			expect(resumed.bars).toEqual(declined.bars);
-			expect(resumed.followsPattern).toBe(true);
-		});
-
-		it("asks again rather than applying a later edit unseen", () => {
-			const declined = declinePatternSync(progression({ syncedBeats: OLD }));
-			expect(patternSyncState(resumePatternSync(declined), OWN).kind).toBe("ask");
-		});
-	});
-
-	describe("reading the fields back from storage", () => {
-		it("keeps a well-formed snapshot and a refusal", () => {
-			expect(normalizeProgressionSync({ syncedBeats: OLD, followsPattern: false })).toEqual({
-				syncedBeats: OLD,
-				followsPattern: false,
-			});
-		});
-
-		it("drops a snapshot that is not a bar's worth of beats", () => {
-			for (const junk of [null, "D DU", 5, [], [[]], {}, [["D", "U", "U", "U", "U"]]]) {
-				expect(normalizeProgressionSync({ syncedBeats: junk }).syncedBeats).toBeUndefined();
-			}
-		});
-
-		it("checks the shape here and the cell values on the way in", () => {
-			// validateBars still only judges the shape, but a snapshot crosses the
-			// storage boundary like every other rhythm: a retired ghost reads back as
-			// the unstruck cell it always was, and a value from nowhere reads as one
-			// too rather than being carried around as a rhythm nothing can play.
-			expect(normalizeProgressionSync({ syncedBeats: [["D", "UG"]] }).syncedBeats).toEqual([
-				["D", ""],
-			]);
-			expect(normalizeProgressionSync({ syncedBeats: [["Q"]] }).syncedBeats).toEqual([[""]]);
-		});
-
-		it("treats anything but an explicit false as still following", () => {
-			for (const value of [undefined, true, "false", 0, null]) {
-				expect(normalizeProgressionSync({ followsPattern: value }).followsPattern).toBeUndefined();
-			}
-		});
-
-		it("makes a dropped snapshot backfill rather than prompt", () => {
-			const restored = { ...progression(), ...normalizeProgressionSync({ syncedBeats: "junk" }) };
-			expect(patternSyncState(restored, NEW).kind).toBe("backfill");
-		});
-	});
-
-	it("copies the snapshot rather than aliasing the pattern's own beats", () => {
-		const patternBeats: Beat[] = [["D", ""]];
-		const next = markPatternSynced(progression(), patternBeats);
-		expect(next.syncedBeats).toEqual(patternBeats);
-		expect(next.syncedBeats?.[0]).not.toBe(patternBeats[0]);
-	});
-});
-
-describe("a pattern edit only asks when this sequence would actually change", () => {
-	const OLD: Beat[] = [["D", ""], ["D", "U"]];
-	const NEW: Beat[] = [["D", "U"], ["D", "U"]];
-	const OWN: Beat[] = [["X", "X"], ["X", "X"]];
-
-	function withBars(beats: Beat[][], syncedBeats: Beat[]): ChordProgression {
-		return {
-			id: "p1",
-			patternId: "pat",
-			orderIndex: 0,
-			syncedBeats,
-			bars: beats.map((b) => ({ beats: b.map((x) => [...x]), chord: null })),
-		};
-	}
-
-	it("asks when at least one bar still follows the pattern", () => {
-		expect(patternSyncState(withBars([OLD, OWN], OLD), NEW).kind).toBe("ask");
-	});
-
-	it("stays quiet when every bar has been re-written in the progression editor", () => {
-		// The pattern moved, but nothing here follows it, so there is no question
-		// to put — only noise on every future pattern edit.
-		expect(patternSyncState(withBars([OWN, OWN], OLD), NEW).kind).toBe("no-change");
-	});
-
-	it("stays quiet when the bars already read the way the pattern now does", () => {
-		// Reached by editing the progression to match the pattern's new rhythm by
-		// hand: the snapshot is stale, but applying it would change nothing.
-		expect(patternSyncState(withBars([NEW, NEW], OLD), NEW).kind).toBe("no-change");
-	});
-
-	it("does not ask again once the quiet case has been settled", () => {
-		const settled = markPatternSynced(withBars([OWN, OWN], OLD), NEW);
-		expect(patternSyncState(settled, NEW).kind).toBe("in-sync");
-	});
-
-	it("still asks a sequence that follows, even beside one that does not", () => {
-		const mixed = withBars([OWN, OLD, OWN], OLD);
-		const state = patternSyncState(mixed, NEW);
-		expect(state.kind).toBe("ask");
-		if (state.kind !== "ask") return;
-		// And applying touches only the bar that followed.
-		const next = applyPatternSync(mixed, NEW);
-		expect(next.bars.map((b) => b.beats)).toEqual([OWN, NEW, OWN]);
-	});
-});
-
-describe("dismissing the not-following notice", () => {
-	const OLD: Beat[] = [["D", ""], ["D", "U"]];
-	const NEW: Beat[] = [["D", "U"], ["D", "U"]];
-
-	function declined(): ChordProgression {
-		return declinePatternSync({
-			id: "p1",
-			patternId: "pat",
-			orderIndex: 0,
-			syncedBeats: OLD,
-			bars: [{ beats: OLD.map((b) => [...b]), chord: null }],
-		});
-	}
-
-	it("shows the notice until it is dismissed", () => {
-		expect(patternSyncState(declined(), NEW).kind).toBe("detached");
-		expect(patternSyncState(dismissPatternNotice(declined()), NEW).kind).toBe(
-			"detached-dismissed",
-		);
-	});
-
-	it("changes nothing about the sequence itself", () => {
-		const before = declined();
-		const after = dismissPatternNotice(before);
-		expect(after.bars).toEqual(before.bars);
-		expect(after.followsPattern).toBe(false);
-		expect(after.syncedBeats).toEqual(OLD);
-	});
-
-	it("stays dismissed through later pattern edits", () => {
-		const dismissed = dismissPatternNotice(declined());
-		expect(patternSyncState(dismissed, [["X", "X"]]).kind).toBe("detached-dismissed");
-	});
-
-	it("is lifted by following again, so a later refusal is visible", () => {
-		// The silence was agreed to about one decision; re-engaging should not
-		// inherit it for the next.
-		const resumed = resumePatternSync(dismissPatternNotice(declined()));
-		expect(resumed.syncNoticeDismissed).toBeUndefined();
-		expect(patternSyncState(declinePatternSync(resumed), NEW).kind).toBe("detached");
-	});
-
-	it("is only read from storage when it is exactly true", () => {
-		for (const value of [undefined, false, "true", 1, null]) {
-			expect(
-				normalizeProgressionSync({ syncNoticeDismissed: value }).syncNoticeDismissed,
-			).toBeUndefined();
-		}
-		expect(normalizeProgressionSync({ syncNoticeDismissed: true }).syncNoticeDismissed).toBe(true);
+describe("barLabel", () => {
+	it("names a bar by its chord, its kept name, or a dash", () => {
+		expect(barLabel({ beats: [], chord: { root: "A", suffix: "minor" } })).toBe("Am");
+		expect(barLabel({ beats: [], chord: null, unknownChord: "Hm7" })).toBe("Hm7");
+		expect(barLabel({ beats: [], chord: null })).toBe(NO_CHORD_LABEL);
 	});
 });

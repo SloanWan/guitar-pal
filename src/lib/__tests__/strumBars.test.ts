@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-	toBars,
 	sortPatternsByNewest,
 	patternNameTakenBy,
 	samePatternName,
@@ -8,7 +7,6 @@ import {
 	normalizeStep,
 	normalizeBeats,
 	normalizeBars,
-	barsToLegacyBeats,
 	validateBars,
 	selectRefVoicing,
 	chordRefToMidi,
@@ -85,48 +83,6 @@ describe("normalizing what storage gives back", () => {
 		const bars = normalizeBars([{ beats: [["D", "UG"]], chord: C_REF }]);
 		expect(bars[0].beats).toEqual([["D", ""]]);
 		expect(bars[0].chord).toEqual(C_REF);
-	});
-
-	it("folds them on the pattern read path too", () => {
-		expect(toBars(pattern({ beats: [["D", "UG"]] }))[0].beats).toEqual([["D", ""]]);
-	});
-});
-
-describe("toBars — the single read path", () => {
-	it("reads a pattern as one chordless bar", () => {
-		const p = pattern({ beats: [["D", ""], ["", "U"]] });
-		expect(toBars(p)).toEqual([{ beats: p.beats, chord: null }]);
-	});
-
-	it("every preset normalizes to a single valid bar", () => {
-		for (const preset of PRESET_STRUM_PATTERNS) {
-			const bars = toBars(preset);
-			expect(bars).toHaveLength(1);
-			expect(bars[0].chord).toBeNull();
-			// Equal, not identical: the read normalizes, which also means a bar can
-			// no longer reach back into the preset constant it came from.
-			expect(bars[0].beats).toEqual(preset.beats);
-			expect(validateBars(bars).ok).toBe(true);
-		}
-	});
-});
-
-describe("barsToLegacyBeats — the double-write source", () => {
-	it("keeps only the first bar's beats", () => {
-		const bars: Bar[] = [
-			{ beats: [["D", ""]], chord: C_REF },
-			{ beats: [["X", "X"]], chord: G_REF },
-		];
-		expect(barsToLegacyBeats(bars)).toEqual([["D", ""]]);
-	});
-
-	it("round-trips a legacy pattern unchanged", () => {
-		const p = pattern({ beats: [["D", ""], ["", "U"]] });
-		expect(barsToLegacyBeats(toBars(p))).toEqual(p.beats);
-	});
-
-	it("returns an empty list for empty bars rather than throwing", () => {
-		expect(barsToLegacyBeats([])).toEqual([]);
 	});
 });
 

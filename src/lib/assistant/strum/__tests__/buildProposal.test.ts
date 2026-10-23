@@ -114,6 +114,16 @@ describe("buildProposal", () => {
 		expect(pattern.id).toBe("assistant-1");
 		expect(pattern.bpm).toBe(90);
 		expect(pattern.beats).toEqual(p.bars[0].beats);
+		// One rhythm under two chords is a one-bar pattern.
+		expect(pattern.extraBars).toBeUndefined();
+	});
+
+	it("saves a rhythm written bar by bar as a pattern of that many bars", () => {
+		const p = unwrap(build({ rhythm: "D DU UD | D D D D" }));
+		expect(p.bars).toHaveLength(2);
+		const pattern = proposalToPattern(p, "assistant-2");
+		expect(pattern.beats).toEqual(p.bars[0].beats);
+		expect(pattern.extraBars).toEqual([p.bars[1].beats]);
 	});
 });
 

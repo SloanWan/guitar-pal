@@ -48,7 +48,6 @@ vi.mock("@/components/fretboard/useSequencePlayer", async (original) => {
 		},
 	};
 });
-vi.mock("@/components/strum/ChordPickerModal", () => ({ default: () => null }));
 
 function voicing(frets: string, fingers = "000000", start_fret = 1): ChordVoicing {
 	return {

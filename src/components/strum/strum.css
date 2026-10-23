@@ -1,0 +1,1119 @@
+/* =====================================================================================
+   The Strum page on Candy (#363 step 1). Layout follows the "Responsive" design: a stage
+   with the library beside it from 960px, a centred stage on a tablet, one bar a line on
+   a phone. Widths are the page's own (a container query), not the viewport's, so the
+   library folding away gives the stage its room back.
+   Shared pieces (buttons, chips, segmented, sliders, sheets) are the primitives; what is
+   here is only what the page itself draws.
+   ===================================================================================== */
+@layer components {
+	.st-page {
+		container: strum / inline-size;
+		height: 100%;
+		background: var(--gp-page);
+		color: var(--gp-ink);
+		font-family: var(--gp-f-body);
+	}
+	.st-shell {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 296px;
+		grid-template-rows: minmax(0, 1fr) auto;
+		height: 100%;
+		transition: grid-template-columns var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.st-shell[data-lib="closed"] {
+		grid-template-columns: minmax(0, 1fr) 0px;
+	}
+	.st-stage {
+		position: relative;
+		min-height: 0;
+		overflow-y: auto;
+		padding: 22px 36px 28px;
+	}
+	.st-stage-in {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		max-width: 900px;
+		margin: 0 auto;
+	}
+
+	/* ── Library ──────────────────────────────────────────────────────────── */
+	.st-lib {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-width: 0;
+		min-height: 0;
+		padding: 16px 14px 16px 16px;
+		overflow: hidden;
+		box-shadow: -1px 0 0 var(--gp-line);
+	}
+	.st-shell[data-lib="closed"] .st-lib {
+		visibility: hidden;
+		padding: 0;
+	}
+	.st-lib-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-height: 0;
+		margin: 0 -4px;
+		padding: 4px;
+		overflow-y: auto;
+	}
+	/* The expand control while the library is folded away: a floating icon, no rail. */
+	.st-lib-fab {
+		position: absolute;
+		top: 14px;
+		right: 14px;
+		z-index: 6;
+		animation: st-pop var(--gp-d-pop) var(--gp-spring-pop);
+	}
+	.st-libbtn,
+	.st-shared-strip {
+		display: none;
+	}
+	.st-row {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+	.st-row > .gp-row {
+		flex: 1;
+		min-width: 0;
+	}
+	.st-row .gp-row-t {
+		text-transform: capitalize;
+	}
+	.st-fav {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-edge);
+		cursor: pointer;
+		transition:
+			color var(--gp-d-state) linear,
+			transform var(--gp-d-pop) var(--gp-spring-pop);
+	}
+	.st-fav:hover {
+		color: var(--gp-ink-3);
+	}
+	.st-fav[aria-pressed="true"] {
+		color: var(--gp-m-500);
+		transform: rotate(-12deg);
+	}
+	.st-fav svg {
+		width: 16px;
+		height: 17px;
+	}
+	.st-mini {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 5px;
+	}
+	.st-mini > span {
+		display: flex;
+		gap: 2px;
+	}
+	.st-mini i {
+		width: 6px;
+		height: 9px;
+		border-radius: 2px;
+		background: var(--gp-s2);
+	}
+	.st-mini i[data-hit] {
+		background: var(--gp-ink-2);
+	}
+
+	/* ── Title row ────────────────────────────────────────────────────────── */
+	.st-titlerow {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-height: 52px;
+	}
+	.st-title {
+		flex: 1;
+		min-width: 0;
+	}
+	.st-title h1 {
+		margin: 2px 0 0;
+		overflow: hidden;
+		font-size: 24px;
+		font-weight: 750;
+		letter-spacing: -0.015em;
+		text-overflow: ellipsis;
+		text-transform: capitalize;
+		white-space: nowrap;
+	}
+	.st-lab {
+		color: var(--gp-ink-3);
+		font-size: 11.5px;
+		font-weight: 600;
+	}
+	.st-num {
+		font-variant-numeric: tabular-nums;
+	}
+	.st-dirty {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 4px 4px 12px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+		animation: st-pop var(--gp-d-pop) var(--gp-spring-pop);
+	}
+	.st-dirty-text {
+		margin-right: 2px;
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.st-pact {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.st-icon {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		cursor: pointer;
+		transition:
+			color var(--gp-d-state) linear,
+			background-color var(--gp-d-state) linear;
+	}
+	.st-icon svg {
+		width: 19px;
+		height: 19px;
+	}
+	.st-icon:hover {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+	}
+	.st-icon[data-tone="bad"]:hover,
+	.st-icon[data-tone="bad"][aria-expanded="true"] {
+		background: color-mix(in srgb, var(--gp-bad) 12%, transparent);
+		color: var(--gp-bad);
+	}
+	.st-icon:disabled {
+		background: transparent;
+		color: var(--gp-edge);
+		cursor: default;
+	}
+	.st-icon[aria-pressed="true"] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.st-icon[data-muted] {
+		color: var(--gp-ink-mute);
+	}
+	.st-confirm {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		font-size: 13.5px;
+	}
+	.st-confirm-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 6px;
+	}
+
+	/* ── Now card ─────────────────────────────────────────────────────────── */
+	.st-now-card {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		grid-template-areas: "now grid next";
+		align-items: center;
+		gap: 24px;
+		padding: 20px 26px;
+		border-radius: var(--gp-r-xl);
+		background: var(--gp-card);
+	}
+	.st-now-card[data-chords="none"] {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas: "grid";
+	}
+	.st-now {
+		display: flex;
+		grid-area: now;
+		flex-direction: column;
+		align-items: center;
+		min-width: 130px;
+	}
+	.st-now-name {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
+	.st-next {
+		display: flex;
+		grid-area: next;
+		flex-direction: column;
+		align-items: center;
+		min-width: 80px;
+		opacity: 0.6;
+	}
+	.st-chord-big {
+		font-size: 60px;
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		line-height: 1;
+		white-space: nowrap;
+	}
+	.st-chord-next {
+		font-size: 32px;
+		font-weight: 750;
+		letter-spacing: -0.02em;
+		white-space: nowrap;
+	}
+	.st-gridzone {
+		display: flex;
+		grid-area: grid;
+		flex-direction: column;
+		align-items: center;
+		gap: 14px;
+		min-width: 0;
+	}
+
+	/* Chord diagrams: the shared SVG, sized by its box and drawn in the page's inks
+	   (it still paints the v3 greys until the chord pages migrate). */
+	.st-dg {
+		display: block;
+		width: 92px;
+	}
+	.st-dg svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	.st-dg svg [fill="#1a1a1a"],
+	.st-dg svg [fill="#333"] {
+		fill: var(--gp-ink);
+	}
+	.st-dg svg [fill="#555"],
+	.st-dg svg [fill="#666"],
+	.st-dg svg [fill="#6b7280"] {
+		fill: var(--gp-ink-3);
+	}
+	.st-dg svg [fill="#fff"],
+	.st-dg svg [fill="white"] {
+		fill: var(--gp-card);
+	}
+	.st-dg svg [stroke="#bbb"] {
+		stroke: var(--gp-ink-3);
+	}
+	.st-dg svg [stroke="#333"] {
+		stroke: var(--gp-ink);
+	}
+	.st-dg svg [stroke="white"] {
+		stroke: var(--gp-card);
+	}
+	.st-dg[data-size="sm"] {
+		width: 64px;
+	}
+	.st-dg-empty {
+		display: grid;
+		place-items: center;
+		aspect-ratio: 184 / 158;
+		color: var(--gp-ink-mute);
+		font-size: 12px;
+	}
+
+	/* ── Rhythm grid ──────────────────────────────────────────────────────── */
+	.st-barline {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+		max-width: 100%;
+	}
+	.st-barno {
+		padding-top: 16px;
+		white-space: nowrap;
+	}
+	.st-beats {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 10px 12px;
+	}
+	.st-beat {
+		display: flex;
+		gap: 3px;
+	}
+	.st-cw {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 6px;
+	}
+	.st-cell {
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 52px;
+		padding: 0;
+		border-radius: 9px;
+		background: var(--gp-well);
+		color: var(--gp-ink-mute);
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-state) linear,
+			background-color var(--gp-d-state) linear;
+	}
+	button.st-cell {
+		cursor: pointer;
+	}
+	.st-cell svg {
+		width: 21px;
+		height: 21px;
+	}
+	.st-cell[data-v=""] i {
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+		background: currentColor;
+	}
+	button.st-cell[data-v=""]:hover {
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+	}
+	.st-cell:not([data-v=""]) {
+		background: var(--gp-face);
+		color: var(--gp-ink);
+		box-shadow:
+			var(--gp-ring-n),
+			2px 2px 0 0 var(--gp-shn);
+	}
+	.st-cell[data-v="X"] {
+		color: var(--gp-ink-3);
+	}
+	.st-cell[data-now]:not([data-v=""]) {
+		transform: translateY(-3px);
+		background: var(--gp-m-500);
+		color: var(--gp-m-on);
+		box-shadow:
+			var(--gp-ring-m),
+			2px 2px 0 0 var(--gp-m-sh);
+	}
+	.st-cell[data-now][data-v=""] {
+		box-shadow: inset 0 0 0 2px var(--gp-m-500);
+	}
+	.st-cnt {
+		color: var(--gp-ink-3);
+		font-size: 11.5px;
+		font-weight: 600;
+		text-align: center;
+	}
+	.st-cnt[data-beat] {
+		color: var(--gp-ink);
+	}
+
+	/* The metronome: one dot a click, a larger one on the beat. */
+	.st-pulse {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		height: 16px;
+	}
+	.st-pulse i {
+		display: block;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--gp-s2);
+		transition:
+			background-color 60ms linear,
+			transform 120ms var(--gp-e-rise);
+	}
+	.st-pulse i[data-beat] {
+		width: 12px;
+		height: 12px;
+		margin-left: 6px;
+	}
+	.st-pulse i[data-beat]:first-child {
+		margin-left: 0;
+	}
+	.st-pulse i[data-on] {
+		transform: scale(1.25);
+		background: var(--gp-m-500);
+	}
+
+	/* ── Progressions ──────────────────────────────────────────────────────── */
+	.st-prog {
+		display: grid;
+		grid-template-columns: 236px minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
+		grid-template-areas:
+			"head main"
+			"list main";
+		gap: 8px 14px;
+		padding: 16px;
+		border-radius: var(--gp-r-xl);
+		background: var(--gp-card);
+	}
+	.st-prog-head {
+		display: flex;
+		grid-area: head;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding-right: 14px;
+		box-shadow: 1px 0 0 var(--gp-line);
+	}
+	.st-prog-title {
+		margin: 0;
+		font-size: 15px;
+		font-weight: 700;
+	}
+	.st-prog-picker {
+		display: none;
+	}
+	.st-plist {
+		display: flex;
+		grid-area: list;
+		flex-direction: column;
+		align-content: start;
+		gap: 4px;
+		max-height: 300px;
+		margin: -4px 0 -4px -4px;
+		padding: 4px 18px 4px 4px;
+		overflow-y: auto;
+		box-shadow: 1px 0 0 var(--gp-line);
+	}
+	.st-pitem {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		width: 100%;
+		padding: 9px 12px;
+		border-radius: var(--gp-r-m);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color var(--gp-d-state) linear,
+			box-shadow var(--gp-d-rise) var(--gp-e-rise),
+			transform var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.st-pitem:hover {
+		background: var(--gp-well);
+	}
+	.st-pitem[aria-current="true"] {
+		transform: translateY(-1px);
+		background: var(--gp-card);
+		box-shadow:
+			inset 0 0 0 1px var(--gp-m-300),
+			2px 2px 0 0 var(--gp-m-sh);
+	}
+	.st-pitem-name {
+		font-size: 13.5px;
+		font-weight: 650;
+	}
+	.st-prog-main {
+		display: flex;
+		grid-area: main;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.st-editor {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.st-editor-foot {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 8px;
+		min-height: 40px;
+		margin-top: auto;
+	}
+	.st-title-in {
+		flex: 1;
+		min-width: 0;
+		margin-left: -8px;
+		padding: 4px 8px;
+		border-radius: var(--gp-r-s);
+		background: transparent;
+		font-size: 18px;
+		font-weight: 750;
+		outline: none;
+	}
+	.st-title-in::placeholder {
+		color: var(--gp-ink);
+		opacity: 1;
+	}
+	.st-title-in:hover,
+	.st-title-in:focus {
+		background: var(--gp-well);
+	}
+	.st-title-in:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 1px;
+	}
+	.st-note {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 6px 6px 12px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c), var(--gp-shadow-pop);
+		animation: st-pop var(--gp-d-pop) var(--gp-spring-pop);
+	}
+	.st-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+		padding: 8px 4px;
+	}
+	.st-tiles {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+	.st-tile {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+		width: 96px;
+		padding: 10px 0;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-page);
+		box-shadow: var(--gp-ring-c);
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear;
+	}
+	button.st-tile {
+		cursor: pointer;
+	}
+	button.st-tile:hover {
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+	}
+	button.st-tile:hover .st-tile-name {
+		font-style: italic;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.st-tile[data-now] {
+		transform: translateY(-2px);
+		background: var(--gp-card);
+		box-shadow:
+			inset 0 0 0 1px var(--gp-m-300),
+			3px 3px 0 0 var(--gp-m-sh);
+	}
+	.st-tile[data-silent] .st-tile-name {
+		color: var(--gp-bad);
+	}
+	.st-tile[data-add] {
+		justify-content: center;
+		gap: 4px;
+		min-height: 96px;
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--gp-edge);
+		color: var(--gp-ink-3);
+	}
+	.st-tile[data-add] svg {
+		width: 20px;
+		height: 20px;
+	}
+	.st-tile-name {
+		font-size: 16px;
+		font-weight: 750;
+	}
+
+	/* The chord-line composer, at the head of the list. */
+	.st-composer {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		margin-bottom: 4px;
+		padding: 8px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-page);
+		box-shadow: inset 0 0 0 1px var(--gp-m-300);
+		animation: st-pop var(--gp-d-pop) var(--gp-spring-pop);
+	}
+	.st-readout {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+	}
+	.st-readout span {
+		padding: 1px 7px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+		font-size: 12px;
+		font-weight: 650;
+	}
+	.st-readout span[data-bad] {
+		background: color-mix(in srgb, var(--gp-bad) 12%, transparent);
+		color: var(--gp-bad);
+	}
+	.st-answer {
+		padding: 3px 9px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-well);
+		color: var(--gp-ink-2);
+		font-size: 12px;
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.st-answer[aria-selected="true"] {
+		background: var(--gp-ink-fill);
+		color: var(--gp-on-ink);
+	}
+	.st-presets {
+		display: flex;
+		flex-direction: column;
+		max-height: 220px;
+		overflow-y: auto;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-card);
+	}
+	.st-presets-group {
+		position: sticky;
+		top: 0;
+		margin: 0;
+		padding: 6px 8px 2px;
+		background: var(--gp-card);
+		color: var(--gp-ink-3);
+		font-size: 11px;
+		font-weight: 700;
+	}
+	.st-preset {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 1px;
+		width: 100%;
+		padding: 6px 8px;
+		font-size: 13px;
+		text-align: left;
+		cursor: pointer;
+	}
+	.st-preset:hover {
+		background: var(--gp-well);
+	}
+
+	/* The chord sheet: shapes and search results as a grid of small diagrams. */
+	.st-slide {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+		animation: st-over 300ms var(--gp-spring-sheet) both;
+	}
+	@keyframes st-over {
+		0% {
+			opacity: 0;
+			transform: translateX(40px);
+		}
+	}
+	.st-shapes {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.st-shape {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		padding: 10px 6px 8px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-page);
+		box-shadow: var(--gp-ring-c);
+		cursor: pointer;
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear;
+	}
+	.st-shape:hover {
+		transform: translateY(-2px);
+		background: var(--gp-card);
+		box-shadow:
+			var(--gp-ring-c),
+			3px 3px 0 0 var(--gp-shn);
+	}
+	.st-shape[aria-pressed="true"] {
+		transform: translateY(-2px);
+		background: var(--gp-card);
+		box-shadow:
+			inset 0 0 0 1px var(--gp-m-300),
+			3px 3px 0 0 var(--gp-m-sh);
+	}
+	.st-shape[data-add] {
+		justify-content: center;
+		min-height: 96px;
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--gp-edge);
+		color: var(--gp-ink-2);
+	}
+	.st-shape[data-add] svg {
+		width: 20px;
+		height: 20px;
+	}
+	.st-sheet-foot {
+		position: sticky;
+		bottom: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 0 -4px;
+		padding: 12px 4px 4px;
+		background: var(--gp-sheet);
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+
+	/* ── Pattern composer ─────────────────────────────────────────────────── */
+	/* Portaled out of the page, the composer measures itself the same way. */
+	.st-contain {
+		container: strum / inline-size;
+	}
+	.st-starters {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.st-cbar {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		padding: 8px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-page);
+	}
+	.st-cbar .st-barline {
+		justify-content: flex-start;
+	}
+	@media (max-width: 719px) {
+		.st-starters {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	/* ── Play bar ─────────────────────────────────────────────────────────── */
+	.st-bar {
+		position: relative;
+		z-index: 5;
+		grid-column: 1 / -1;
+		background: var(--gp-card);
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+	.st-bar-wide {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		align-items: center;
+		gap: 16px;
+		padding: 8px 24px 10px;
+	}
+	.st-bar-phone {
+		display: none;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 12px 8px 14px;
+	}
+	.st-bar-now {
+		font-size: 20px;
+		font-weight: 750;
+		white-space: nowrap;
+	}
+	.st-bar-now small {
+		color: var(--gp-ink-3);
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.st-transport {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.st-bpm {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 4px;
+		padding: 2px 8px;
+		border-radius: var(--gp-r-s);
+		font-size: 13px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.st-bpm:hover {
+		background: var(--gp-well);
+	}
+	.st-chan {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.st-chan .gp-slider {
+		width: 110px;
+	}
+	.st-chan-label {
+		width: 40px;
+	}
+	.st-mute-hint {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		padding: 4px 12px 0;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+	}
+
+	/* ── Bubble rise: the page's pieces arrive one after another ─────────── */
+	.st-rise > * {
+		animation: st-bubble 560ms cubic-bezier(0.3, 1.45, 0.45, 1) both;
+		animation-delay: calc(var(--i, 0) * 45ms);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.st-rise > * {
+			animation: st-fade 150ms linear both;
+			animation-delay: 0ms;
+		}
+	}
+	@keyframes st-bubble {
+		0% {
+			opacity: 0;
+			transform: translateY(22px) scale(0.94);
+		}
+		60% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	@keyframes st-fade {
+		0% {
+			opacity: 0;
+		}
+	}
+	@keyframes st-pop {
+		0% {
+			opacity: 0;
+			transform: scale(0.92);
+		}
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
+	/* ── Tablet: no side library, the stage centred ──────────────────────── */
+	@container strum (max-width: 959px) {
+		.st-shell,
+		.st-shell[data-lib="closed"] {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.st-lib,
+		.st-lib-fab,
+		.st-lib-fold {
+			display: none;
+		}
+		.st-libbtn {
+			display: inline-flex;
+		}
+		.st-shared-strip {
+			display: block;
+		}
+		.st-stage {
+			padding: 20px 28px 24px;
+		}
+		.st-chan .gp-slider {
+			width: 80px;
+		}
+		.st-subd-wide {
+			display: none;
+		}
+		.st-prog {
+			grid-template-columns: 210px minmax(0, 1fr);
+		}
+	}
+	@container strum (min-width: 720px) and (max-width: 959px) {
+		.st-stage-in {
+			justify-content: center;
+			gap: 22px;
+			min-height: 100%;
+		}
+		.st-now-card {
+			gap: 20px;
+			padding: 26px 28px;
+		}
+		.st-chord-big {
+			font-size: 72px;
+		}
+		.st-cell {
+			width: 50px;
+			height: 60px;
+		}
+		.st-cell svg {
+			width: 24px;
+			height: 24px;
+		}
+		.st-title h1 {
+			font-size: 28px;
+		}
+	}
+
+	/* ── Phone: one bar a line, the bar's settings in a sheet ────────────── */
+	@container strum (max-width: 719px) {
+		.st-stage {
+			padding: 12px 14px 16px;
+		}
+		.st-stage-in {
+			gap: 12px;
+		}
+		.st-title h1 {
+			font-size: 20px;
+		}
+		.st-titlerow {
+			min-height: 46px;
+		}
+		.st-titlerow[data-dirty] .st-pact {
+			display: none;
+		}
+		.st-dirty {
+			gap: 4px;
+			padding: 3px;
+			background: transparent;
+			box-shadow: none;
+		}
+		.st-dirty-text {
+			display: none;
+		}
+		.st-bar-wide {
+			display: none;
+		}
+		.st-bar-phone {
+			display: flex;
+		}
+		.st-mute-hint {
+			display: flex;
+		}
+		.st-now-card {
+			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-areas:
+				"now next"
+				"grid grid";
+			gap: 12px;
+			padding: 14px 12px;
+		}
+		.st-now-card[data-chords="none"] {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-areas: "grid";
+		}
+		.st-now {
+			flex-direction: row;
+			align-items: center;
+			gap: 14px;
+			min-width: 0;
+		}
+		.st-chord-big {
+			font-size: 46px;
+		}
+		.st-next {
+			min-width: 0;
+		}
+		.st-gridzone {
+			width: 100%;
+		}
+		.st-barline {
+			width: 100%;
+			gap: 6px;
+		}
+		.st-beats {
+			flex-wrap: nowrap;
+			gap: 6px;
+			width: 100%;
+		}
+		.st-beat {
+			flex: var(--n) 1 0;
+			gap: 2px;
+			min-width: 0;
+		}
+		.st-cw {
+			flex: 1 1 0;
+			gap: 4px;
+			min-width: 0;
+		}
+		.st-cell {
+			width: 100%;
+			height: 44px;
+			border-radius: 7px;
+		}
+		.st-cell svg {
+			width: min(18px, 70%);
+			height: 18px;
+		}
+		.st-cnt {
+			font-size: 10.5px;
+		}
+		.st-prog {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-areas:
+				"head"
+				"list"
+				"main";
+			padding: 12px;
+		}
+		.st-prog-head {
+			padding-right: 0;
+			box-shadow: none;
+		}
+		.st-prog-title {
+			display: none;
+		}
+		.st-prog-picker {
+			display: inline-flex;
+		}
+		.st-plist {
+			display: none;
+			max-height: 260px;
+			margin: 0;
+			padding: 6px;
+			border-radius: var(--gp-r-m);
+			background: var(--gp-page);
+			box-shadow: none;
+		}
+		.st-prog[data-list="open"] .st-plist {
+			display: flex;
+		}
+		.st-tiles {
+			display: grid;
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+			gap: 6px;
+		}
+		.st-tile {
+			width: auto;
+			padding: 8px 0;
+		}
+		.st-tile-name {
+			font-size: 14px;
+		}
+		.st-tile .st-dg {
+			width: min(64px, 90%);
+		}
+	}
+}

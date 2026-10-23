@@ -15,13 +15,39 @@ import { isCompound, type Meter } from "@/lib/strumMeter";
  */
 
 /**
- * The metronome's three levels. Named for the musical hierarchy rather than for
- * note values, because the note values differ by meter: the beat is a quarter in
- * 4/4 and a dotted quarter in 6/8.
+ * The metronome's levels. Named for the musical hierarchy rather than for note
+ * values, because the note values differ by meter: the beat is a quarter in 4/4
+ * and a dotted quarter in 6/8.
+ *
+ * `triplet` divides a simple beat in three. A compound beat already divides in
+ * three, so there it is the same click as `division` and is not offered.
  */
-export type TickLevel = "beat" | "division" | "subdivision";
+export type TickLevel = "beat" | "division" | "triplet" | "subdivision";
 
-export const TICK_LEVELS: readonly TickLevel[] = ["beat", "division", "subdivision"];
+export const TICK_LEVELS: readonly TickLevel[] = ["beat", "division", "triplet", "subdivision"];
+
+/** The levels worth offering in a meter, coarsest first. */
+export function tickLevelsFor(meter: Meter): TickLevel[] {
+	return isCompound(meter) ? ["beat", "division", "subdivision"] : [...TICK_LEVELS];
+}
+
+/**
+ * The note a level clicks on, as a glyph for a compact control, and the words
+ * for its accessible name. In 6/8 the beat is a dotted quarter.
+ */
+export function tickLevelGlyph(meter: Meter, level: TickLevel): { glyph: string; name: string } {
+	const compound = isCompound(meter);
+	switch (level) {
+		case "beat":
+			return compound ? { glyph: "♩.", name: "Dotted quarter notes" } : { glyph: "♩", name: "Quarter notes" };
+		case "division":
+			return { glyph: "♫", name: "Eighth notes" };
+		case "triplet":
+			return { glyph: "3", name: "Triplets" };
+		case "subdivision":
+			return { glyph: "♬", name: "Sixteenth notes" };
+	}
+}
 
 /**
  * Clicks per beat.
@@ -29,11 +55,12 @@ export const TICK_LEVELS: readonly TickLevel[] = ["beat", "division", "subdivisi
  * The whole difference between the meter families lives on one line: a simple
  * beat divides in two, a compound beat in three.
  *
- *   4/4 -> 1, 2, 4 per beat (4, 8, 16 per bar)
+ *   4/4 -> 1, 2, 4 per beat (4, 8, 16 per bar), and 3 for triplets
  *   6/8 -> 1, 3, 6 per beat (2, 6, 12 per bar)
  */
 export function ticksPerBeat(meter: Meter, level: TickLevel): number {
 	if (level === "beat") return 1;
+	if (level === "triplet") return 3;
 	const division = isCompound(meter) ? 3 : 2;
 	return level === "division" ? division : division * 2;
 }
@@ -50,9 +77,10 @@ export function tickLevelLabel(meter: Meter, level: TickLevel): string {
 	if (isCompound(meter)) {
 		// The beat is three of the bottom note value: 6/8 counts dotted quarters.
 		if (level === "beat") return `3/${bottom}`;
-		return level === "division" ? `1/${bottom}` : `1/${bottom * 2}`;
+		return level === "division" || level === "triplet" ? `1/${bottom}` : `1/${bottom * 2}`;
 	}
 	if (level === "beat") return `1/${bottom}`;
+	if (level === "triplet") return `1/${bottom * 2}T`;
 	return level === "division" ? `1/${bottom * 2}` : `1/${bottom * 4}`;
 }
 

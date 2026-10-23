@@ -11,6 +11,7 @@ import { isShareId, SHARE_ID_LENGTH, sharePath, type SharedItem, type SharedStru
 import { patternBpm, patternMeter } from "@/lib/strumBars";
 import { beatUnitGlyph, meterLabel, SUPPORTED_METERS } from "@/lib/strumMeter";
 import { patternNotation } from "@/lib/strumNotation";
+import { patternRhythm } from "@/lib/strumRhythm";
 import { chordAbbreviation, progressionCapo } from "@/lib/strumProgressions";
 import { MAX_MEASURES, NOTE_MARKS_SHAPE, PERCUSSION_INPUT, type ValidationIssue } from "@/lib/tabImport";
 import { patternToAsciiTab } from "./asciiTab";
@@ -112,7 +113,7 @@ export function describeStrum(share: SharedStrum): string {
 	const tempo = opened?.bpm ?? patternBpm(pattern);
 	const lines = [
 		`Name: ${pattern.name}`,
-		`Rhythm: ${patternNotation(pattern.beats)}  (${meterLabel(meter)}, ${beatUnitGlyph(meter)} = ${tempo}; D down, U up, X mute, one character per cell)`,
+		`Rhythm: ${patternRhythm(pattern).map(patternNotation).join(" | ")}  (${meterLabel(meter)}, ${beatUnitGlyph(meter)} = ${tempo}; D down, U up, X mute, one character per cell${patternRhythm(pattern).length > 1 ? ", bars separated by |" : ""})`,
 	];
 	if (opened) {
 		const chords = opened.bars.map((bar) => (bar.chord ? chordAbbreviation(bar.chord) : bar.unknownChord ?? "—"));

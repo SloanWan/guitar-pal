@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { makeDefaultPattern } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
-import { toBars } from "@/lib/strumBars";
+import { toBars } from "@/lib/strumRhythm";
 import {
 	HANDOFF_EVENT,
 	stashHandoff,

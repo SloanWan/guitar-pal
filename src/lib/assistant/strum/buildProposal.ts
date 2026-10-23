@@ -2,6 +2,7 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import type { Bar, Beat, StrumPattern } from "@/lib/strumPatterns";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
 import { normalizeBpm } from "@/lib/strumBars";
+import { rhythmOfBars, withRhythm } from "@/lib/strumRhythm";
 import { patternNotation } from "@/lib/strumNotation";
 import {
 	chordAbbreviation,
@@ -56,7 +57,7 @@ function barsFor(rhythmBars: Beat[][], chords: Bar["chord"][]): Bar[] {
 	// same assembly the progression editor uses when a sequence is typed.
 	if (rhythmBars.length === 1) {
 		return progressionBarsFromTokens(
-			rhythmBars[0],
+			[rhythmBars[0]],
 			// Every chord here has resolved, so `input` is never read back — it is
 			// what a token that did *not* resolve would be kept under.
 			chords
@@ -108,12 +109,19 @@ export function buildProposal(input: BuildProposalInput): BuildProposalResult {
 	};
 }
 
-/** The pattern a confirmed proposal is saved as. Bars carry any chords. */
+/**
+ * The pattern a confirmed proposal is saved as: the shortest rhythm its bars
+ * repeat (four bars of one rhythm under four chords is a one-bar pattern). Any
+ * chords go in a progression over it, never here.
+ */
 export function proposalToPattern(proposal: AssistantProposal, id: string): StrumPattern {
-	return {
-		id,
-		name: proposal.name,
-		beats: proposal.bars[0]?.beats ?? [],
-		...(proposal.bpm == null ? {} : { bpm: proposal.bpm }),
-	};
+	return withRhythm(
+		{
+			id,
+			name: proposal.name,
+			beats: [],
+			...(proposal.bpm == null ? {} : { bpm: proposal.bpm }),
+		},
+		rhythmOfBars(proposal.bars),
+	);
 }

@@ -34,7 +34,7 @@ export default async function AppShell({ hideSignIn = false, children }: { hideS
 				<div className="gp-header-in">
 					{/* The pick mark (#352). Its gap hairline takes the header colour so the
 					    overlapping picks stay apart at this size. */}
-					<BrandLink className="flex min-w-0 flex-none items-center gap-2 rounded-gp-s text-gp-ink [--mk-gap:var(--gp-page)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gp-focus" />
+					<BrandLink className="flex min-w-0 flex-none items-center gap-2 rounded-gp-sm text-gp-ink [--mk-gap:var(--gp-page)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gp-focus" />
 					<NavLinks className="gp-wide-only" />
 					<div className="gp-header-end">
 						{/* The assistant sits just left of the account at every width — a

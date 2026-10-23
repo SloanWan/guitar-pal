@@ -16,7 +16,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const ITEM = "flex h-10 cursor-pointer items-center gap-2.5 rounded-gp-s px-2.5 font-gp-body text-[14px] font-medium text-gp-ink focus:bg-gp-well [&_svg]:size-[18px] [&_svg]:text-gp-ink-2";
+const ITEM = "flex h-10 cursor-pointer items-center gap-2.5 rounded-gp-sm px-2.5 font-gp-body text-[14px] font-medium text-gp-ink focus:bg-gp-well [&_svg]:size-[18px] [&_svg]:text-gp-ink-2";
 
 /**
  * The signed-in account control, rightmost in the header from 720px (a phone has the Me

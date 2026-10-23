@@ -17,6 +17,7 @@
 		"test:e2e": "npm run build && playwright test",
 		"test:e2e:books": "E2E_BOOKS=1 E2E_BASE_URL=http://localhost:3000 playwright test --project=books",
 		"evals": "vitest run --config vitest.evals.config.ts",
+		"db:schema": "node scripts/dump-schema.mjs",
 		"prepare": "husky"
 	},
 	"dependencies": {

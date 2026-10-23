@@ -48,7 +48,7 @@ Never mix the two clients — `createSupabaseServer()` throws at runtime in clie
 
 Env vars required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
-**Data layer:** `src/lib/` contains thin Supabase query functions — no ORM, no server actions (except the two chord reads client components make, in `chords.ts`). All DB calls happen client-side. Lib functions throw on Supabase error rather than returning null. Tables:
+**Data layer:** `src/lib/` contains thin Supabase query functions — no ORM, no server actions (except the two chord reads client components make, in `chords.ts`). All DB calls happen client-side. Lib functions throw on Supabase error rather than returning null. The full structure (columns, indexes, RLS policies, grants) is `scripts/schema.sql`; the main tables:
 
 - `exercises`, `routines`, `routine_exercises` (join table with `order_index` and `duration_minutes`)
 - `practice_logs` — immutable records written at end of a session
@@ -122,7 +122,8 @@ Types defined in `src/types/database.ts`.
 - **Small PRs:** resolve one issue at a time, broken into the smallest deployable chunks.
 - **Don't over-engineer:** don't extract components or abstractions with no current reuse value.
 - **Don't commit on behalf of me:**: do not commit changes until i specify so
-- **One-time migration scripts** live in `/scripts`, excluded from `tsconfig.json`'s type-check scope. Before writing to the database, calibrate the transform logic against a small set of known ground-truth rows already in the database — abort if calibration fails. Safe to delete after a successful run; not covered by the "core logic needs unit tests" constraint.
+- **Schema snapshot** (#264): `scripts/schema.sql` is the written record of the database structure. After any schema change — a table, column, index, policy or grant, whether from `scripts/*.sql`, an Alembic revision or the Supabase dashboard — run `npm run db:schema` (`scripts/dump-schema.mjs`, pg_dump of the `public` schema; reads `SCHEMA_DATABASE_URL` or `BOOK_SERVICE_MIGRATION_DATABASE_URL`) and commit the snapshot in the same PR. `schemaBaseline.test.ts` fails when the code queries, or a migration creates, a table the snapshot lacks; it cannot see a new column or policy, so for those the rule is the only guard.
+- **One-time migration scripts** live in `/scripts` (`schema.sql` and `dump-schema.mjs` are not one-time), excluded from `tsconfig.json`'s type-check scope. Before writing to the database, calibrate the transform logic against a small set of known ground-truth rows already in the database — abort if calibration fails. Safe to delete after a successful run; not covered by the "core logic needs unit tests" constraint.
 - **Verify third-party field semantics before writing adapters** — when integrating an external dataset or API, pull a small sample of real rows (at least one simple case and one edge case) and reverse-verify each field's meaning against known-correct values before writing any transform code. Semantics guessed wrong produce silent bugs rather than compile/runtime errors, making them more expensive to catch later.
 
 ## Constraints (apply to every task unless explicitly told otherwise)

@@ -54,7 +54,7 @@ export default function ShareStrumDialog({
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
 			<DialogContent
 				showCloseButton={false}
-				className="w-[calc(100%-2rem)] max-w-100 flex flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
+				className="w-[calc(100%-2rem)] max-w-100 flex flex-col gap-0 overflow-hidden p-0"
 			>
 				<DialogHeader className="shrink-0 p-4 pb-3">
 					<DialogTitle>Share {patternName}</DialogTitle>

@@ -311,6 +311,19 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 		return progression;
 	}
 
+	/** A copy of a progression under a new id, put after the others and opened. */
+	function saveProgressionAsNew(progression: ChordProgression) {
+		const name = progression.name?.trim();
+		const copy: ChordProgression = {
+			...progression,
+			id: crypto.randomUUID(),
+			name: name ? `${name} (2)` : "",
+			orderIndex: nextOrderIndex(patternProgressions),
+		};
+		saveProgression(copy);
+		openProgressionById(copy.id);
+	}
+
 	/**
 	 * Write a changed pattern back, and carry its rhythm into the sequences over
 	 * it so what they store reads the way they play.
@@ -396,6 +409,7 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 		selectPattern,
 		openProgressionById,
 		saveProgression,
+		saveProgressionAsNew,
 		addProgression,
 		savePattern,
 		createPattern,

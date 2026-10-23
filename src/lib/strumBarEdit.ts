@@ -113,6 +113,17 @@ export function setBarChord(bars: Bar[], barIdx: number, chord: ChordRef | null)
 	});
 }
 
+/**
+ * Add a bar to a chord sequence, holding the chord the last one ended on — the
+ * likeliest next chord is the one already under the hand, and it is a starting
+ * point to change rather than a blank to fill.
+ */
+export function appendChordBar(bars: Bar[]): Bar[] {
+	const last = bars[bars.length - 1];
+	if (!last) return [{ beats: [], chord: null }];
+	return [...bars, { ...last, beats: last.beats.map((beat) => [...beat]) }];
+}
+
 /** What pinning a shape needs to know about it: its id and the chord it is filed under. */
 export interface VoicingPin {
 	id: string;
@@ -173,6 +184,21 @@ export function applyVoicingToBars(
 			...rest,
 			chord: { root: voicing.root, suffix: voicing.suffix, voicingId: voicing.id },
 		};
+	});
+}
+
+/**
+ * Give a chord to the bars a change at `barIdx` reaches (`voicingReach`): the one
+ * bar, or every bar of its chord — or, for a bar kept under a name, every bar
+ * kept under that name. Each reached bar takes the chord and its shape outright,
+ * and any placeholder retires.
+ */
+export function setChordInReach(bars: Bar[], barIdx: number, chord: ChordRef, scope: VoicingScope): Bar[] {
+	const reach = voicingReach(bars, barIdx, scope);
+	return bars.map((bar, i) => {
+		if (!reach[i]) return bar;
+		const { unknownChord: _retired, ...rest } = bar;
+		return { ...rest, chord: { ...chord } };
 	});
 }
 

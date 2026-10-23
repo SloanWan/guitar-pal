@@ -6,11 +6,14 @@ import { Button, PlayPick } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Sheet } from "@/components/ui/sheet";
 import type { TickLevel } from "@/lib/strumMetronome";
+import type { ModuleKey } from "@/lib/moduleForPath";
 import MixerChannel, { type ChannelState } from "./MixerChannel";
 import SubdivisionPicker from "./SubdivisionPicker";
 import TempoControl, { TempoFields, clampTempo, useTapTempo, type TempoProps } from "./TempoControl";
 
 export interface PlayBarProps {
+	/** The page's module, re-applied inside the sheet and popover it portals out. */
+	module: ModuleKey;
 	/** Where a pass is, and the chords around it; `now` is null with no chords open. */
 	status: { bar: number; bars: number; now: string | null; next: string | null };
 	playing: boolean;
@@ -44,6 +47,7 @@ function NowNext({ status, compact }: { status: PlayBarProps["status"]; compact?
  * mix. The play key sits in the middle; on a phone the settings fold into a sheet.
  */
 export default function PlayBar({
+	module,
 	status,
 	playing,
 	preparing,
@@ -95,7 +99,7 @@ export default function PlayBar({
 							Tap
 						</Button>
 					</div>
-					<TempoControl {...tempo} />
+					<TempoControl {...tempo} module={module} />
 				</div>
 				<div className="flex flex-col items-end">
 					<MixerChannel kind="strum" channel={strum} />
@@ -137,7 +141,7 @@ export default function PlayBar({
 			</div>
 
 			<Sheet open={sheetOpen} onOpenChange={setSheetOpen} title="Playback">
-				<div className="flex flex-col gap-4 pb-2">
+				<div className="flex flex-col gap-4 pb-2" data-m={module}>
 					<TempoFields {...tempo} />
 					<div className="flex items-center justify-between">
 						<span className="text-[15px] font-semibold">Metronome</span>

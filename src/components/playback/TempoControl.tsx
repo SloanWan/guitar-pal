@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { bpmFaderMarks } from "@/components/fingerpick/playbackConstants";
 import { pushTap, tapTempo } from "@/lib/stepper";
 import { isCompound, type Meter } from "@/lib/strumMeter";
+import type { ModuleKey } from "@/lib/moduleForPath";
 
 export interface TempoProps {
 	bpm: number;
@@ -88,7 +89,7 @@ export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault }: Te
 }
 
 /** The bar's tempo readout; clicking it opens the full tempo control beside it. */
-export default function TempoControl(props: TempoProps) {
+export default function TempoControl({ module, ...props }: TempoProps & { module: ModuleKey }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
@@ -97,7 +98,7 @@ export default function TempoControl(props: TempoProps) {
 					{props.bpm} <span className="st-lab">BPM</span>
 				</button>
 			</PopoverTrigger>
-			<PopoverContent side="top" align="center" className="w-80" aria-label="Tempo">
+			<PopoverContent side="top" align="center" className="w-80" aria-label="Tempo" data-m={module}>
 				<TempoFields {...props} />
 			</PopoverContent>
 		</Popover>

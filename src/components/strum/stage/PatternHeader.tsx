@@ -114,7 +114,7 @@ export default function PatternHeader({
 									<Trash2 aria-hidden />
 								</button>
 							</PopoverTrigger>
-							<PopoverContent role="alertdialog" aria-label="Delete pattern" className="w-auto max-w-75">
+							<PopoverContent role="alertdialog" aria-label="Delete pattern" className="w-auto max-w-75" data-m="strum">
 								<div className="st-confirm">
 									<span>
 										Delete <b className="capitalize">{name}</b>? Its progressions go with it.

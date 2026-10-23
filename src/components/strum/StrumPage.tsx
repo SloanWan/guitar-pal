@@ -4,7 +4,6 @@ import "./strum.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { PanelRightOpen } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
-import { Chip } from "@/components/ui/chip";
 import { Skeleton } from "@/components/ui/skeleton";
 import SharedPatternPanel from "@/components/SharedPatternPanel";
 import PlayBar from "@/components/playback/PlayBar";
@@ -15,6 +14,8 @@ import PatternHeader from "@/components/strum/stage/PatternHeader";
 import NowCard from "@/components/strum/stage/NowCard";
 import RhythmGrid from "@/components/strum/stage/RhythmGrid";
 import BeatPulse from "@/components/strum/stage/BeatPulse";
+import ProgressionPanel from "@/components/strum/progressions/ProgressionPanel";
+import { useProgressionDraft } from "@/components/strum/useProgressionDraft";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import { useChordProgressions } from "@/components/strum/useChordProgressions";
 import { useBarChordDiagrams } from "@/components/strum/useBarChordDiagrams";
@@ -27,7 +28,7 @@ import { useUser } from "@/hooks/useUser";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
 import { patternBpm } from "@/lib/strumBars";
 import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
-import { barLabel, progressionCapo, progressionDisplayName } from "@/lib/strumProgressions";
+import { barLabel, progressionCapo } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
 import { withUserVoicings } from "@/lib/userChordVoicings";
 import type { SharedStrum } from "@/lib/sharedItems";
@@ -47,7 +48,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	const library = useStrumPatterns(user, loading);
 	const sequences = useChordProgressions(user, loading);
 	// Held here because sound, diagrams and the shape editor need the same list.
-	const { voicings: userVoicings } = useUserChordVoicings(user, loading);
+	const { voicings: userVoicings, saveVoicing } = useUserChordVoicings(user, loading);
 	const lookupVoicings = useMemo(() => withUserVoicings(loadVoicings, userVoicings), [userVoicings]);
 	const voicingsKey = useMemo(
 		() => userVoicings.map((v) => `${v.id}:${v.start_fret}:${v.frets}`).join("|"),
@@ -59,10 +60,13 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	const stopRef = useRef<() => void>(() => {});
 	const stop = useCallback(() => stopRef.current(), []);
 	const session = useStrumSession({ shared, user, library, sequences, stop });
-	const { selectedPattern, openProgression, meter } = session;
+	const { selectedPattern, meter } = session;
 	// On a share page the grid is read-only, so the draft is only ever the snapshot's rhythm.
 	const draft = useRhythmDraft(selectedPattern);
 	const rhythm = draft.rhythm;
+	// What plays is the open progression with its unsaved edits: a chord changed is a chord heard.
+	const progressionDraft = useProgressionDraft(session.openProgression);
+	const openProgression = progressionDraft.progression;
 	const playback = useStrumPlayback({
 		rhythm,
 		progression: openProgression,
@@ -79,7 +83,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 		user,
 		pattern: selectedPattern,
 		progressions: session.patternProgressions,
-		openProgression,
+		openProgression: session.openProgression,
 		customPatterns: library.customPatterns,
 		patternsLoading: library.patternsLoading,
 		shared,
@@ -238,22 +242,27 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 									/>
 								</NowCard>
 							</div>
-							{session.patternProgressions.length > 0 && (
-								<div className="flex flex-wrap gap-2" style={{ "--i": 2 } as CSSProperties}>
-									<Chip pressed={openProgression === null} onPressedChange={() => session.openProgressionById(null)}>
-										Rhythm only
-									</Chip>
-									{session.patternProgressions.map((p) => (
-										<Chip
-											key={p.id}
-											pressed={p.id === openProgression?.id}
-											onPressedChange={() => session.openProgressionById(p.id)}
-										>
-											{progressionDisplayName(p)}
-										</Chip>
-									))}
-								</div>
-							)}
+							<div style={{ "--i": 2 } as CSSProperties}>
+								<ProgressionPanel
+									patternName={selectedPattern.name}
+									progressions={session.patternProgressions}
+									draft={progressionDraft}
+									loading={!session.progressionsReady}
+									readOnly={isShared}
+									playingBar={playback.isPlaying ? playback.chordBar : null}
+									diagrams={diagrams}
+									userVoicings={userVoicings}
+									onSaveVoicing={saveVoicing}
+									onOpen={session.openProgressionById}
+									onCreate={(tokens) => session.addProgression(tokens)}
+									onSave={session.saveProgression}
+									onSaveAsNew={(progression) => {
+										progressionDraft.revert();
+										session.saveProgressionAsNew(progression);
+									}}
+									onDelete={session.removeProgression}
+								/>
+							</div>
 						</div>
 					)}
 				</main>
@@ -277,6 +286,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 				</aside>
 
 				<PlayBar
+					module="strum"
 					status={{
 						bar: playback.isPlaying ? playback.currBar + 1 : 1,
 						bars: playback.playBars.length,
@@ -317,7 +327,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 
 			{!isShared && (
 				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title="Patterns">
-					<div className="flex min-h-0 flex-col gap-3">
+					<div className="flex min-h-0 flex-col gap-3" data-m="strum">
 						<PatternLibrary
 							{...libraryProps}
 							variant="sheet"

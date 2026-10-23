@@ -32,8 +32,6 @@ import type { SequenceStep } from "@/lib/fretboard/sequence";
 /** Which instrument a sequence is heard on. Both shows the same notes twice over. */
 export type RunVoice = NoteVoice | "both";
 
-export const RUN_VOICES: readonly RunVoice[] = ["guitar", "piano", "both"];
-
 /** Scheduled a little ahead, so the first step is not already late. */
 const LEAD_IN_S = 0.12;
 

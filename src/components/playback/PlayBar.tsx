@@ -74,11 +74,14 @@ export default function PlayBar({
 	canDock,
 }: PlayBarProps) {
 	const [trayOpen, setTrayOpen] = useState(false);
-	const { moveRef, dragging, handleProps } = usePillDrag(dock, onDock);
+	const { moveRef, dragging, target, handleProps } = usePillDrag(dock, onDock);
 	const side = dock === "left" ? "right" : "top";
 	const step = (delta: number) => tempo.onBpm(clampTempo(tempo.bpm + delta, tempo.meter));
 
 	return (
+		<>
+		{/* Where the pill will land if let go: a soft outline that pops when the landing moves. */}
+		{target && <div key={target} className="st-dock-ghost" data-dock={target} aria-hidden />}
 		<div className="st-remote" data-dock={dock}>
 			<div ref={moveRef} className="st-pill-move" data-dragging={dragging ? "" : undefined}>
 			<Popover open={trayOpen} onOpenChange={setTrayOpen}>
@@ -113,11 +116,12 @@ export default function PlayBar({
 						>
 							<Repeat aria-hidden />
 						</button>
-						<Button variant="icon" size="xs" aria-label="Slower" onClick={() => step(-1)}>
+						<Button variant="icon" size="xs" className="st-pill-slower" aria-label="Slower" onClick={() => step(-1)}>
 							−
 						</Button>
 						<PlayPick
 							ref={pickRef}
+							className="st-pill-play"
 							playing={playing}
 							size="sm"
 							onClick={onTogglePlay}
@@ -125,7 +129,7 @@ export default function PlayBar({
 							// PlayPick names itself Play / Stop; only the wait for samples is said instead.
 							{...(preparing ? { "aria-label": "Loading samples" } : {})}
 						/>
-						<Button variant="icon" size="xs" aria-label="Faster" onClick={() => step(1)}>
+						<Button variant="icon" size="xs" className="st-pill-faster" aria-label="Faster" onClick={() => step(1)}>
 							+
 						</Button>
 						<button
@@ -139,7 +143,7 @@ export default function PlayBar({
 						</button>
 						<button
 							type="button"
-							className="st-icon"
+							className="st-icon st-pill-tray"
 							aria-label="Playback settings"
 							aria-expanded={trayOpen}
 							onClick={() => setTrayOpen((open) => !open)}
@@ -154,7 +158,8 @@ export default function PlayBar({
 					sideOffset={10}
 					data-m={module}
 					aria-label="Playback settings"
-					className={`st-tray px-4.5 py-4 ${dock === "left" ? "w-[min(452px,calc(100vw-24px))]" : "w-(--radix-popper-anchor-width)"}`}
+					data-dock={dock}
+					className={`st-tray px-4.5 ${dock === "left" ? "h-(--radix-popper-anchor-height) w-[min(440px,calc(100vw-24px))] py-3.5" : "w-(--radix-popper-anchor-width) py-4"}`}
 					// The pill is how the tray is reached; clicking it again is not "outside".
 					onInteractOutside={(e) => {
 						if ((e.target as Element | null)?.closest(".st-pill")) e.preventDefault();
@@ -195,5 +200,6 @@ export default function PlayBar({
 			</Popover>
 			</div>
 		</div>
+		</>
 	);
 }

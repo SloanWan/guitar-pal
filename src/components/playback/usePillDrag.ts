@@ -18,6 +18,8 @@ const SNAP = "transform 380ms cubic-bezier(0.3, 1.25, 0.45, 1)";
 export function usePillDrag(dock: PlayerDock, onDock: (dock: PlayerDock) => void) {
 	const moveRef = useRef<HTMLDivElement>(null);
 	const [dragging, setDragging] = useState(false);
+	/** Where the pill would land if let go now, while it is being dragged. */
+	const [target, setTarget] = useState<PlayerDock | null>(null);
 	const flipFrom = useRef<DOMRect | null>(null);
 	const suppressClick = useRef(false);
 	const detach = useRef<(() => void) | null>(null);
@@ -50,7 +52,9 @@ export function usePillDrag(dock: PlayerDock, onDock: (dock: PlayerDock) => void
 		const el = moveRef.current;
 		if (e.button !== 0 || !el) return;
 		const startX = e.clientX, startY = e.clientY;
+		const area = el.closest(".st-stage-wrap")?.getBoundingClientRect();
 		let moved = false;
+		let aiming: PlayerDock | null = null;
 
 		const move = (ev: PointerEvent) => {
 			const dx = ev.clientX - startX, dy = ev.clientY - startY;
@@ -61,21 +65,27 @@ export function usePillDrag(dock: PlayerDock, onDock: (dock: PlayerDock) => void
 				el.style.transition = "none";
 			}
 			el.style.transform = `translate(${dx}px, ${dy}px)`;
+			// Set only when it changes: the hint pops each time the landing moves.
+			const next = area ? dockFor({ x: ev.clientX, y: ev.clientY }, area) : dock;
+			if (next !== aiming) {
+				aiming = next;
+				setTarget(next);
+			}
 		};
 		const up = (ev: PointerEvent) => {
 			detach.current?.();
 			if (!moved) return;
 			suppressClick.current = true;
 			setDragging(false);
+			setTarget(null);
 			const from = el.getBoundingClientRect();
-			const area = el.closest(".st-stage-wrap")?.getBoundingClientRect();
-			const target = area ? dockFor({ x: ev.clientX, y: ev.clientY }, area) : dock;
-			if (target === dock) {
+			const landing = area ? dockFor({ x: ev.clientX, y: ev.clientY }, area) : dock;
+			if (landing === dock) {
 				glideFrom(from);
 				return;
 			}
 			flipFrom.current = from;
-			onDock(target);
+			onDock(landing);
 		};
 		window.addEventListener("pointermove", move);
 		window.addEventListener("pointerup", up);
@@ -100,5 +110,5 @@ export function usePillDrag(dock: PlayerDock, onDock: (dock: PlayerDock) => void
 		onDock(otherDock(dock));
 	}
 
-	return { moveRef, dragging, handleProps: { onPointerDown, onClick } };
+	return { moveRef, dragging, target, handleProps: { onPointerDown, onClick } };
 }

@@ -219,7 +219,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	return (
 		<div className="st-page" data-m="strum">
 			<div className="st-shell" data-lib={folded && !isShared ? "closed" : "open"}>
-				<div className="st-stage-wrap" data-dock={dock}>
+				<div className="st-stage-wrap">
 					{/* Outside the scrolling stage, so it stays put however far the page scrolls. */}
 					{!isShared && folded && (
 						<button

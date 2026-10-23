@@ -24,9 +24,10 @@
 	.st-shell[data-lib="closed"] {
 		grid-template-columns: minmax(0, 1fr) 0px;
 	}
-	/* The stage's cell: the scrolling stage, and the play pill floating over its foot.
-	   The pill takes no room from the stage — the progression panel is sized to the
-	   whole window — but the stage scrolls a pill's height further, so the panel's
+	/* The stage's cell: the scrolling stage, and the play pill floating over it.
+	   The pill takes no room from the stage and the page never moves for it, wherever
+	   it is docked — the progression panel is sized to the whole window. The stage
+	   only scrolls a pill's height further, the same for either dock, so the panel's
 	   foot can always be brought up above it. */
 	.st-stage-wrap {
 		--st-pill-room: 104px;
@@ -65,11 +66,12 @@
 		min-height: calc(100% - 14px);
 		margin: 0 auto;
 	}
+	/* Never so short that two rows of chord shapes do not show. */
 	.st-prog-slot {
 		display: flex;
 		flex: 1 1 0;
 		flex-direction: column;
-		min-height: 260px;
+		min-height: 400px;
 	}
 
 	/* ── Library ──────────────────────────────────────────────────────────── */
@@ -656,7 +658,8 @@
 		--st-cl-max: 0;
 		position: relative;
 		flex: 1 1 0;
-		min-height: 120px;
+		/* two rows of shape tiles and the gap between them */
+		min-height: calc(2 * 120px + var(--st-tile-gap));
 		margin: -4px;
 		padding: 4px;
 		overflow-y: auto;
@@ -1012,7 +1015,9 @@
 		width: 18px;
 		height: 18px;
 	}
-	/* Docked on the left: the pill stands up, the same controls top to bottom. */
+	/* Docked on the left: the pill stands up, in groups — the handle, what is
+	   sounding, play with slower / faster under it, the tempo, then loop and the
+	   tray — tight within a group, looser between them. */
 	.st-remote[data-dock="left"] {
 		top: 50%;
 		bottom: auto;
@@ -1021,34 +1026,105 @@
 		transform: translateY(-50%);
 	}
 	.st-remote[data-dock="left"] .st-pill {
-		flex-direction: column;
-		gap: 8px;
-		padding: 8px 8px 12px;
+		display: grid;
+		grid-template-columns: 36px 36px;
+		grid-template-areas:
+			"grip grip"
+			"now now"
+			"play play"
+			"slower faster"
+			"bpm bpm"
+			"loop tray";
+		justify-items: center;
+		gap: 6px;
+		padding: 8px 12px 12px;
 	}
 	.st-remote[data-dock="left"] .st-pill-grip {
+		grid-area: grip;
 		width: 40px;
-		height: 22px;
-		margin: 0 0 -2px;
+		height: 20px;
+		margin: 0;
 	}
 	.st-remote[data-dock="left"] .st-pill-now {
+		grid-area: now;
 		align-items: center;
-		width: 72px;
+		width: 78px;
+		margin: 6px 0 12px;
 		text-align: center;
 	}
 	.st-remote[data-dock="left"] .st-bar-now small {
 		display: block;
 	}
+	.st-remote[data-dock="left"] .st-pill-play {
+		grid-area: play;
+		margin-bottom: 8px;
+	}
+	.st-remote[data-dock="left"] .st-pill-slower {
+		grid-area: slower;
+	}
+	.st-remote[data-dock="left"] .st-pill-faster {
+		grid-area: faster;
+	}
 	.st-remote[data-dock="left"] .st-bpm {
+		grid-area: bpm;
 		flex-direction: column;
 		align-items: center;
+		gap: 0;
 		min-width: 0;
+		width: 100%;
+		line-height: 1.15;
 	}
-	/* The stage makes room beside the pill instead of under it. */
-	.st-stage-wrap[data-dock="left"] {
-		--st-pill-room: 24px;
+	/* loop and the tray sit apart from the transport, over a hairline */
+	.st-remote[data-dock="left"] .st-pill-loop,
+	.st-remote[data-dock="left"] .st-pill-tray {
+		margin-top: 14px;
+		box-shadow: 0 -12px 0 -11px var(--gp-line);
 	}
-	.st-stage-wrap[data-dock="left"] .st-stage {
-		padding-left: 132px;
+	.st-remote[data-dock="left"] .st-pill-loop {
+		grid-area: loop;
+	}
+	.st-remote[data-dock="left"] .st-pill-tray {
+		grid-area: tray;
+	}
+	/* While the pill is dragged: where it will land if let go — an outline the
+	   pill's shape at that dock, popping in each time the landing changes. */
+	.st-dock-ghost {
+		position: absolute;
+		z-index: 19;
+		border: 2px dashed color-mix(in srgb, var(--gp-m-500) 55%, transparent);
+		border-radius: 22px;
+		background: color-mix(in srgb, var(--gp-m-500) 8%, transparent);
+		pointer-events: none;
+		animation: st-ghost-in 260ms cubic-bezier(0.3, 1.45, 0.45, 1) both;
+	}
+	.st-dock-ghost[data-dock="bottom"] {
+		bottom: 18px;
+		left: 50%;
+		width: min(480px, calc(100% - 24px));
+		height: 68px;
+		translate: -50% 0;
+	}
+	.st-dock-ghost[data-dock="left"] {
+		top: 50%;
+		left: 16px;
+		width: 100px;
+		height: min(324px, calc(100% - 24px));
+		translate: 0 -50%;
+	}
+	@keyframes st-ghost-in {
+		0% {
+			opacity: 0;
+			scale: 0.9;
+		}
+		100% {
+			opacity: 1;
+			scale: 1;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.st-dock-ghost {
+			animation: st-fade 150ms linear both;
+		}
 	}
 	.st-pill-now {
 		display: flex;
@@ -1090,6 +1166,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
+	}
+	/* Beside the standing pill the tray is the pill's height: a little tighter, its
+	   groups spread over that height, scrolling only if a short window forces it. */
+	.st-tray[data-dock="left"] {
+		justify-content: space-between;
+		gap: 12px;
+		overflow-y: auto;
 	}
 	.st-tempo-val {
 		min-width: 6.5ch;

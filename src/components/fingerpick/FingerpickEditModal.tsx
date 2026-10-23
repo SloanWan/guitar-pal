@@ -12,7 +12,7 @@ import ZoomableImage from "@/components/ZoomableImage";
 import { WARNINGS_SUMMARY } from "@/components/books/IssueList";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import FingerpickEditorChordSection from "./FingerpickEditorChordSection";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 import {
 	Plus,
 	CornerDownLeft,

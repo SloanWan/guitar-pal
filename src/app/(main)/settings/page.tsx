@@ -31,6 +31,8 @@ import {
 import type { AvatarColor, AvatarIcon } from "@/lib/profile";
 import { passwordStrength } from "@/lib/passwordStrength";
 import UserAvatar from "@/components/UserAvatar";
+import { ThemeSwitch } from "@/components/ThemeToggle";
+import { Panel } from "@/components/ui/panel";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 import { BUTTON, HELP, INPUT, LABEL, PRIMARY, SECONDARY } from "@/components/auth/formStyles";
 
@@ -53,6 +55,12 @@ export default function SettingsPage() {
 			<h1 className="mb-6 font-mono text-(length:--text-h3-size) font-medium tracking-[0.02em]">
 				Settings
 			</h1>
+
+			{/* The theme moved here and into the account menu with the Candy shell (#356);
+			    the rest of the page migrates in #363. */}
+			<Panel title="Appearance" className="mb-5">
+				<ThemeSwitch />
+			</Panel>
 
 			{loading || !user ? (
 				// The proxy guards /settings, so a resolved null user is only ever a

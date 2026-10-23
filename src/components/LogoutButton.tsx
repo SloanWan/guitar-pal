@@ -6,11 +6,12 @@ import { LogOut } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-export default function LogoutButton({ className }: { className?: string }) {
+/** Signs out, then goes to the landing page; `loading` covers the round trip. */
+export function useLogout(): { logout: () => Promise<void>; loading: boolean } {
 	const [loading, setLoading] = useState(false);
 	const router = useRouter();
 
-	async function handleLogout() {
+	async function logout() {
 		setLoading(true);
 		try {
 			await signOut();
@@ -24,6 +25,12 @@ export default function LogoutButton({ className }: { className?: string }) {
 			setLoading(false);
 		}
 	}
+
+	return { logout, loading };
+}
+
+export default function LogoutButton({ className }: { className?: string }) {
+	const { logout: handleLogout, loading } = useLogout();
 
 	return (
 		<button

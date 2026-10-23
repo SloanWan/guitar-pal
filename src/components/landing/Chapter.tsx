@@ -65,8 +65,8 @@ export default function Chapter({
 			className="relative h-[320vh] border-b border-line max-[900px]:h-[260vh] motion-reduce:h-auto motion-reduce:py-20"
 		>
 			{/* Sticky under the (main) layout's scroller; its height is that scrollport,
-			    i.e. the viewport minus the h-13 NavBar above it. */}
-			<div className="sticky top-0 mx-auto grid h-[calc(100dvh-3.25rem)] max-w-300 grid-cols-[minmax(260px,5fr)_minmax(0,7fr)] items-center gap-12 overflow-hidden px-(--gutter) max-[900px]:grid-cols-1 max-[900px]:grid-rows-[auto_minmax(0,1fr)] max-[900px]:items-start max-[900px]:gap-5 max-[900px]:pt-5 motion-reduce:static motion-reduce:h-auto motion-reduce:overflow-visible">
+			    i.e. the viewport minus the shell around it (--gp-chrome-h). */}
+			<div className="sticky top-0 mx-auto grid h-[calc(100dvh_-_var(--gp-chrome-h))] max-w-300 grid-cols-[minmax(260px,5fr)_minmax(0,7fr)] items-center gap-12 overflow-hidden px-(--gutter) max-[900px]:grid-cols-1 max-[900px]:grid-rows-[auto_minmax(0,1fr)] max-[900px]:items-start max-[900px]:gap-5 max-[900px]:pt-5 motion-reduce:static motion-reduce:h-auto motion-reduce:overflow-visible">
 				<div className="flex flex-col">
 					<span className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] text-denim-accent before:h-[1.5px] before:w-6 before:bg-denim">
 						{num} · {name}

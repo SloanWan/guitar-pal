@@ -7,7 +7,7 @@ import ChordDiagram from "@/components/chords/ChordDiagram";
 import { useChordPreview } from "@/components/chords/useChordPreview";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useUser } from "@/hooks/useUser";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 import { CirclePlay, Loader2 } from "lucide-react";
 import { chordHref } from "@/lib/chordSlug";
 import { chordDisplayName } from "@/lib/chordSuffixes";

@@ -1151,7 +1151,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 				<div
 					// items-start, not centred: the card grows downwards with its tab's
 					// content while the tab strip keeps a constant place on screen.
-					className="relative h-[calc(100dvh-3.5rem-3.5rem)] md:h-auto md:flex-1 flex items-start justify-center overflow-hidden px-4 py-4 md:px-8 md:py-6"
+					className="relative h-[calc(100dvh_-_var(--gp-chrome-h)_-_3.5rem)] md:h-auto md:flex-1 flex items-start justify-center overflow-hidden px-4 py-4 md:px-8 md:py-6"
 					onClick={restoreControls}
 				>
 					{/* Library toggle — scoped to centre column, 768–1024 px only */}
@@ -1558,7 +1558,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 
 			{/* ── Mobile fixed bottom drawer ───────────────────────────────────── */}
 			<div
-				className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden transition-transform duration-300 ease-out"
+				className="md:hidden fixed bottom-(--gp-tabbar-h) left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden transition-transform duration-300 ease-out"
 				style={{ transform: controlsVisible ? "translateY(0)" : "translateY(100%)" }}
 				onPointerDown={(e) => {
 					if (!bpmButtonRef.current?.contains(e.target as Node)) {

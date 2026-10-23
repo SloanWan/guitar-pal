@@ -10,7 +10,7 @@ import { buildAllChordsRootFirst, buildAllChordsCategories } from "@/lib/chordBr
 import BrowseGrid from "@/components/chords/BrowseGrid";
 import ChordToc from "@/components/chords/ChordToc";
 import ChordTocIndicator from "@/components/chords/ChordTocIndicator";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 
 export const metadata: Metadata = {
 	title: "All Guitar Chords | Guitar Pal",

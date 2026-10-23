@@ -25,6 +25,13 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // `const { omitted: _x, ...rest } = obj` is how a field is dropped from a
+    // copy; the named sibling exists only to keep it out of `rest`.
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", { ignoreRestSiblings: true }],
+    },
+  },
+  {
     // AppLink is the one sanctioned importer of next/link.
     files: ["src/components/AppLink.tsx"],
     rules: { "no-restricted-imports": "off" },

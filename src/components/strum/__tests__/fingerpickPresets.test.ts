@@ -12,7 +12,7 @@ import {
 	_setReadyPresetForTesting,
 	triggerStrum,
 } from "@/components/strum/useGuitarSampleLoader";
-import type { WafPreset, WafZone, FingerpickSoundType } from "@/components/strum/useGuitarSampleLoader";
+import type { WafPreset, WafZone } from "@/components/strum/useGuitarSampleLoader";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -221,32 +221,3 @@ describe("findZoneForMidi — zone selection verified on fingerpick fixture", ()
 		}
 	});
 });
-
-// ─── Live CDN integration (opt-in) ───────────────────────────────────────────
-
-const CDN_BASE = "https://surikov.github.io/webaudiofontdata/sound/";
-
-describe.skipIf(!process.env.INTEGRATION)(
-	"getBufferForMidi — live CDN integration (INTEGRATION=1 npm test)",
-	() => {
-		it.each([
-			["0250_LK_AcousticSteel_SF2_file", "_tone_0250_LK_AcousticSteel_SF2_file", "pluck"] as const,
-		])(
-			"parses live CDN preset %s with correct structure",
-			async (key, _varName, _type: FingerpickSoundType) => {
-				const { parsePresetFromJs } = await import("@/components/strum/useGuitarSampleLoader");
-				const res = await fetch(`${CDN_BASE}${key}.js`);
-				expect(res.ok).toBe(true);
-				const text = await res.text();
-				const preset = parsePresetFromJs(text, _varName);
-				expect(preset.zones.length).toBeGreaterThan(0);
-				for (const zone of preset.zones) {
-					expect(zone.sampleRate).toBeGreaterThan(0);
-					expect(zone.keyRangeHigh).toBeGreaterThan(zone.keyRangeLow);
-					expect(zone.sample !== undefined || zone.file !== undefined).toBe(true);
-				}
-			},
-			15_000,
-		);
-	},
-);

@@ -2,8 +2,8 @@
  * The piano root selector's own voice: one WebAudioFont piano preset, fetched
  * once and decoded only for the zones the 61-key keyboard can reach.
  *
- * Reuses the guitar loader's parser, decoder and zone lookup so the CDN
- * handling lives in one place; what is separate is the cache (a piano is not
+ * Reuses the guitar loader's fetch, decoder and zone lookup so preset loading
+ * lives in one place; what is separate is the cache (a piano is not
  * a fingerpick preset), the ring (a piano key sustains longer than a pluck)
  * and the active-source set (`cancelPianoNotes` stops only piano notes).
  *
@@ -12,20 +12,15 @@
  */
 import {
 	SOURCE_STOP_BUFFER_S,
-	SampleLoadError,
-	WAF_BASE_URL,
 	_decodeZone,
+	fetchPreset,
 	findZoneForMidi,
-	parsePresetFromJs,
 	type WafPreset,
 	type WafZone,
 } from "@/components/strum/useGuitarSampleLoader";
 import { PIANO_61, type PianoRange } from "@/lib/piano/keys";
 
-export const PIANO_PRESET = {
-	key: "0000_Chaos_sf2_file",
-	varName: "_tone_0000_Chaos_sf2_file",
-} as const;
+export const PIANO_PRESET = { key: "0000_Chaos_sf2_file" } as const;
 
 /** How long a key rings after it is struck; the decay time constant is a third of it. */
 export const PIANO_RING_SECONDS = 2.5;
@@ -42,18 +37,6 @@ export function zonesCovering(preset: WafPreset, range: PianoRange): WafZone[] {
 	return preset.zones.filter((zone) => wanted.has(zone));
 }
 
-async function fetchPreset(): Promise<WafPreset> {
-	const url = `${WAF_BASE_URL}${PIANO_PRESET.key}.js`;
-	let response: Response;
-	try {
-		response = await fetch(url);
-	} catch (err) {
-		throw new SampleLoadError(`Network error fetching piano preset from ${url}`, err);
-	}
-	if (!response.ok) throw new SampleLoadError(`HTTP ${response.status} fetching piano preset from ${url}`);
-	return parsePresetFromJs(await response.text(), PIANO_PRESET.varName);
-}
-
 /**
  * Fetch and decode the piano once. Concurrent callers share the download; a
  * failure is forgotten so the next call retries. Only the zones `range`
@@ -63,7 +46,7 @@ export async function preloadPianoPreset(ctx: AudioContext, range: PianoRange = 
 	if (_readyPreset) return;
 	if (!_presetPromise) {
 		_presetPromise = (async () => {
-			const preset = await fetchPreset();
+			const preset = await fetchPreset(PIANO_PRESET.key);
 			for (const zone of zonesCovering(preset, range)) zone.buffer = await _decodeZone(zone, ctx);
 			return preset;
 		})();

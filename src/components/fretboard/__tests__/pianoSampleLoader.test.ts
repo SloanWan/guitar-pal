@@ -11,7 +11,7 @@ import {
 	triggerPianoNote,
 	zonesCovering,
 } from "@/components/fretboard/pianoSampleLoader";
-import { SOURCE_STOP_BUFFER_S, type WafPreset, type WafZone } from "@/components/strum/useGuitarSampleLoader";
+import { PRESET_BASE_URL, SOURCE_STOP_BUFFER_S, type WafPreset, type WafZone } from "@/components/strum/useGuitarSampleLoader";
 import { PIANO_61 } from "@/lib/piano/keys";
 
 function makeZone(overrides: Partial<WafZone> = {}): WafZone {
@@ -78,13 +78,10 @@ function makeCtx() {
 	return { ctx, sources, gain };
 }
 
-/** A CDN-shaped preset file: a JS object literal, zones carrying 2-sample PCM. */
-function presetJs(zones: { lo: number; hi: number }[]): string {
+/** A bundled preset file as the loader reads it: zones carrying 2-sample PCM. */
+function presetJson(zones: { lo: number; hi: number }[]): WafPreset {
 	const sample = btoa(String.fromCharCode(0, 0, 0, 64));
-	const body = zones
-		.map((z) => `{keyRangeLow:${z.lo},keyRangeHigh:${z.hi},originalPitch:6000,coarseTune:0,fineTune:0,loopStart:0,loopEnd:0,sampleRate:44100,sample:"${sample}"}`)
-		.join(",");
-	return `console.log("preamble"); var ${PIANO_PRESET.varName} = { zones: [${body}] };`;
+	return { zones: zones.map((z) => makeZone({ keyRangeLow: z.lo, keyRangeHigh: z.hi, sample })) };
 }
 
 beforeEach(() => _resetPianoCacheForTesting());
@@ -102,8 +99,8 @@ describe("preloadPianoPreset", () => {
 	it("fetches the chosen preset once and decodes only the zones the keyboard reaches", async () => {
 		const fetchMock = vi.fn(async () => ({
 			ok: true,
-			text: async () =>
-				presetJs([
+			json: async () =>
+				presetJson([
 					{ lo: 0, hi: 35 },
 					{ lo: 36, hi: 60 },
 					{ lo: 61, hi: 96 },
@@ -117,7 +114,7 @@ describe("preloadPianoPreset", () => {
 		await preloadPianoPreset(ctx);
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock.mock.calls[0][0]).toBe(`https://surikov.github.io/webaudiofontdata/sound/${PIANO_PRESET.key}.js`);
+		expect(fetchMock.mock.calls[0][0]).toBe(`${PRESET_BASE_URL}${PIANO_PRESET.key}.json`);
 		expect(ctx.createBuffer).toHaveBeenCalledTimes(2);
 
 		// A key inside the decoded band sounds; one outside it is silent.
@@ -131,7 +128,7 @@ describe("preloadPianoPreset", () => {
 		const fetchMock = vi
 			.fn()
 			.mockRejectedValueOnce(new Error("offline"))
-			.mockResolvedValueOnce({ ok: true, text: async () => presetJs([{ lo: 0, hi: 127 }]) });
+			.mockResolvedValueOnce({ ok: true, json: async () => presetJson([{ lo: 0, hi: 127 }]) });
 		vi.stubGlobal("fetch", fetchMock);
 		const { ctx } = makeCtx();
 		await expect(preloadPianoPreset(ctx)).rejects.toThrow(/Network error/);

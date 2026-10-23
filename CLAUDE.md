@@ -23,7 +23,7 @@ A pre-commit hook (`.husky/pre-commit`) runs `tsc --noEmit`, `npm run lint`, and
 - **Tailwind CSS v4** for styling
 - **shadcn/ui** components (Radix UI primitives) in `src/components/ui/`
 - **VexFlow** for TAB rendering (fingerpicking feature)
-- **webaudiofontdata CDN** (`surikov.github.io/webaudiofontdata`, GPL-3.0) — guitar sample data fetched at runtime; the `webaudiofont` npm package is not used
+- **WebAudioFont presets** (`surikov/webaudiofontdata`, MIT) — three instrument presets bundled as JSON in `public/audio/webaudiofont/` (sources, hashes and license in `NOTICE.md` there); the GPL-3.0 `webaudiofont` player and its npm package are not used
 - **Vitest** for unit tests
 - **TypeScript** (strict mode) throughout
 
@@ -42,7 +42,7 @@ Everything else is public.
 **Two Supabase clients:**
 
 - `src/lib/supabase.ts` — `createClient()` via `createBrowserClient`, used in client components and all lib query functions
-- `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components and route handlers (`(main)/p/[id]/page.tsx`, `api/assistant/route.ts`, `api/books/[...path]/route.ts`, `dev/dashboard/page.tsx`). Note the chord pages are **not** on this path: they read through `chordsData.ts`, which uses a cookie-free `@supabase/supabase-js` client so `unstable_cache` can wrap the reads
+- `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components and route handlers (`(main)/p/[id]/page.tsx`, `api/assistant/route.ts`, `api/books/[...path]/route.ts`). Note the chord pages are **not** on this path: they read through `chordsData.ts`, which uses a cookie-free `@supabase/supabase-js` client so `unstable_cache` can wrap the reads
 
 Never mix the two clients — `createSupabaseServer()` throws at runtime in client components.
 
@@ -62,7 +62,7 @@ Types defined in `src/types/database.ts`.
 **Strumming machine audio engine** (`src/components/strum/`):
 
 - `useAudioEngine.ts` — setTimeout-based lookahead scheduler (100 ms window, 25 ms reschedule). All scheduler-read state lives in `useRef`, never `useState`, to avoid stale closures and re-render-triggered timing drift. Do not read `ref.current` values inside React render logic.
-- `useGuitarSampleLoader.ts` — fetches and parses WebAudioFont preset data from the pinned CDN (`surikov.github.io/webaudiofontdata`). Presets are JS object literals, not strict JSON — parsed via sandboxed `new Function()` evaluation, not `JSON.parse` or a hand-rolled tokenizer (this was tried and repeatedly broke on real CDN content — do not reintroduce a custom parser). Exposes `triggerStrum(type, ctx, target, when, noteDuration, customPitches?)`, which directly schedules one `AudioBufferSourceNode` per string (5 strings, 10 ms stagger, 0.9× volume taper) using the Web Audio API. `customPitches` carries the sounding bar's chord (resolved by `resolveBarChords`); without it the default C-major voicing (MIDI [48, 52, 55, 60, 64]) plays. The `WebAudioFontPlayer` class is not used. Down strum: low→high pitch order; up strum: high→low. Exposes `preloadStrumPresets(ctx)` (call once on playback start) and `cancelStrums()` (call on stop and unmount).
+- `useGuitarSampleLoader.ts` — reads the bundled presets: `fetchPreset(key)` gets `PRESET_BASE_URL` + key + `.json` from our own origin and `parsePreset` checks every zone; `pianoSampleLoader.ts` uses the same pair. **Nothing downloaded is evaluated** (#366): the CDN's files are JavaScript, so `scripts/convert-webaudiofont-presets.mjs` converted them to JSON once, offline, against pinned SHA-256s. To add a preset, add it to that script and re-run it; never fetch the CDN at runtime. Only the `/dev` audition pages, which browse the whole CDN, still parse its JS (`src/app/dev/_lib/parsePresetFromJs.ts`, `new Function()`; a hand-rolled tokenizer was tried there and broke on real CDN content) — keep that module out of anything outside `src/app/dev`. Exposes `triggerStrum(type, ctx, target, when, noteDuration, customPitches?)`, which directly schedules one `AudioBufferSourceNode` per string (5 strings, 10 ms stagger, 0.9× volume taper) using the Web Audio API. `customPitches` carries the sounding bar's chord (resolved by `resolveBarChords`); without it the default C-major voicing (MIDI [48, 52, 55, 60, 64]) plays. The `WebAudioFontPlayer` class is not used. Down strum: low→high pitch order; up strum: high→low. Exposes `preloadStrumPresets(ctx)` (call once on playback start) and `cancelStrums()` (call on stop and unmount).
 - Struck strings **let ring**: down/up strums decay over `STRUM_RING_SECONDS` (1.5 s, τ = ring/3) regardless of tempo, so consecutive strums overlap the way a real guitar does. `noteDuration` (= `secondsPerCell`) now only bounds the muted chuck, which stays capped at `MUTED_MAX_DURATION_S` and keeps the BPM-scaled decay. Play-once therefore waits a full ring before `cancelStrums()`, or it clips its own closing chord. Settings were chosen in `/dev/strum-sound-lab`.
 
 **Strum pattern model** (`src/lib/strumPatterns.ts`, `strumBars.ts`, `strumNotation.ts`, `strumProgressions.ts`, `strumGridLayout.ts`):

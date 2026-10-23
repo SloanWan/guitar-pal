@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-	parsePresetFromJs,
 	findZoneForMidi,
 	_decodeZone,
 	STRUM_PITCHES,
@@ -14,6 +13,7 @@ import {
 	type WafPreset,
 	type WafZone,
 } from "@/components/strum/useGuitarSampleLoader";
+import { parsePresetFromJs } from "@/app/dev/_lib/parsePresetFromJs";
 
 // The lab drives the CDN directly so it can audition presets the production
 // loader does not ship with. Parsing, zone selection and sample decoding are the

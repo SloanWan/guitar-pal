@@ -23,7 +23,6 @@ const DOT_STYLES = [
   "outline-only",
   "text-only",
 ] as const;
-type GhostDotStyle = typeof DOT_STYLES[number];
 
 const SECTIONS: { label: string; cardClass: string }[] = [
   { label: "A — No card background",                      cardClass: "" },

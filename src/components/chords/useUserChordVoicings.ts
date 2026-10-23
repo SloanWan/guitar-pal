@@ -39,9 +39,10 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 		});
 	}, [user, loading]);
 
+	const userId = user?.id;
 	useEffect(() => {
-		if (!user) return;
-		const currentUser = user;
+		if (!userId) return;
+		const currentUserId = userId;
 
 		async function mergeAndReload() {
 			const supabase = createClient();
@@ -50,7 +51,7 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 				try {
 					const { error } = await supabase
 						.from("user_chord_voicings")
-						.upsert(local.map((v) => userVoicingColumns(v, currentUser.id)));
+						.upsert(local.map((v) => userVoicingColumns(v, currentUserId)));
 					if (error) throw new Error(error.message);
 					clearLocalVoicings();
 				} catch (e) {
@@ -59,7 +60,7 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 			}
 
 			try {
-				setVoicings(await fetchAccountVoicings(currentUser.id));
+				setVoicings(await fetchAccountVoicings(currentUserId));
 			} catch (e) {
 				console.error("[useUserChordVoicings] load failed:", e);
 			}
@@ -67,7 +68,7 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 		}
 
 		mergeAndReload();
-	}, [user?.id]);
+	}, [userId]);
 
 	/**
 	 * Store a shape and return the row it actually lives in.

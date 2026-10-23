@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ChevronsDown, Guitar, List, Music, Pencil, Plus, Trash2, Type, X } from "lucide-react";
+import { ChevronsDown, List, Music, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { Bar, ChordProgression, StrumPattern } from "@/lib/strumPatterns";
 import {
 	progressionDisplayName,

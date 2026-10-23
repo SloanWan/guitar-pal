@@ -8,6 +8,7 @@ import { SearchInput } from "@/components/ui/input";
 import type { StrumPattern } from "@/lib/strumPatterns";
 import { libraryEmptyText, libraryPatterns, type LibraryFilter } from "@/lib/strumLibrary";
 import PatternRow from "./PatternRow";
+import "./library.css";
 
 const FILTERS: { value: LibraryFilter; label: string }[] = [
 	{ value: "all", label: "All" },
@@ -42,6 +43,8 @@ export default function PatternLibrary({
 }: Props) {
 	const [filter, setFilter] = useState<LibraryFilter>("all");
 	const [query, setQuery] = useState("");
+	// Rows pop in after a filter change, not on first mount and not while typing a search.
+	const [pop, setPop] = useState(false);
 	const visible = libraryPatterns(customPatterns, favouriteIds, filter, query);
 
 	return (
@@ -65,17 +68,32 @@ export default function PatternLibrary({
 					</button>
 				)}
 			</div>
-			<Segmented options={FILTERS} value={filter} onChange={setFilter} label="Show" dense full />
+			<Segmented
+				options={FILTERS}
+				value={filter}
+				onChange={(next) => {
+					setFilter(next);
+					setPop(true);
+				}}
+				label="Show"
+				full
+				className="st-lib-filter"
+			/>
 			<SearchInput
 				value={query}
-				onChange={(e) => setQuery(e.target.value)}
+				onChange={(e) => {
+					setQuery(e.target.value);
+					setPop(false);
+				}}
 				placeholder="Search patterns"
 				aria-label="Search patterns"
 			/>
-			<div className="st-lib-list">
-				{visible.map((pattern) => (
+			{/* re-keyed on the filter so a new choice mounts fresh rows and replays the pop */}
+			<div key={filter} className="st-lib-list" data-pop={pop ? "" : undefined}>
+				{visible.map((pattern, i) => (
 					<PatternRow
 						key={pattern.id}
+						index={i}
 						pattern={pattern}
 						selected={pattern.id === selectedId}
 						favourite={favouriteIds.includes(pattern.id)}

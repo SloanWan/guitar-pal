@@ -1,19 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { Repeat, SlidersHorizontal, X } from "lucide-react";
+import { useState, type Ref } from "react";
+import { Repeat, SlidersHorizontal } from "lucide-react";
 import { Button, PlayPick } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Sheet } from "@/components/ui/sheet";
+import { Slider } from "@/components/ui/slider";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import type { TickLevel } from "@/lib/strumMetronome";
 import type { ModuleKey } from "@/lib/moduleForPath";
 import MixerChannel, { type ChannelState } from "./MixerChannel";
 import SubdivisionPicker from "./SubdivisionPicker";
-import TempoControl, { TempoFields, clampTempo, useTapTempo, type TempoProps } from "./TempoControl";
+import { TempoFields, clampTempo, type TempoProps } from "./TempoControl";
+
+/** The silences offered between passes, in seconds. */
+export const LOOP_GAPS = [0, 2, 5, 10] as const;
 
 export interface PlayBarProps {
-	/** The page's module, re-applied inside the sheet and popover it portals out. */
+	/** The page's module, re-applied inside the tray it portals out. */
 	module: ModuleKey;
+	/** The play key, so a page shortcut can show it being pressed. */
+	pickRef?: Ref<HTMLButtonElement>;
 	/** Where a pass is, and the chords around it; `now` is null with no chords open. */
 	status: { bar: number; bars: number; now: string | null; next: string | null };
 	playing: boolean;
@@ -25,29 +31,22 @@ export interface PlayBarProps {
 	onTickLevel: (level: TickLevel) => void;
 	loop: boolean;
 	onLoop: (loop: boolean) => void;
+	/** Seconds of silence between passes while looping. */
+	loopGap: number;
+	onLoopGap: (seconds: number) => void;
 	strum: ChannelState;
 	click: ChannelState;
 }
 
-function NowNext({ status, compact }: { status: PlayBarProps["status"]; compact?: boolean }) {
-	return (
-		<div className="flex min-w-0 flex-col gap-1">
-			<span className="st-lab st-num">{compact ? `Bar ${status.bar}/${status.bars}` : `Bar ${status.bar} of ${status.bars}`}</span>
-			{status.now !== null && (
-				<span className={compact ? "st-bar-now text-lg" : "st-bar-now"}>
-					{status.now} {status.next !== null && <small>→ {status.next}</small>}
-				</span>
-			)}
-		</div>
-	);
-}
-
 /**
- * The bar under the page: what is playing, the transport with its tempo, and the
- * mix. The play key sits in the middle; on a phone the settings fold into a sheet.
+ * The transport, floating over the bottom of the stage: where the pass is, loop,
+ * slower / play / faster and the tempo. Everything else — the tempo in full, the
+ * metronome, the mix — is in a tray that rises above it, so the pill stays small
+ * and the page under it stays the practice object.
  */
 export default function PlayBar({
 	module,
+	pickRef,
 	status,
 	playing,
 	preparing,
@@ -58,102 +57,117 @@ export default function PlayBar({
 	onTickLevel,
 	loop,
 	onLoop,
+	loopGap,
+	onLoopGap,
 	strum,
 	click,
 }: PlayBarProps) {
-	const [sheetOpen, setSheetOpen] = useState(false);
-	const [hintDismissed, setHintDismissed] = useState(false);
+	const [trayOpen, setTrayOpen] = useState(false);
 	const step = (delta: number) => tempo.onBpm(clampTempo(tempo.bpm + delta, tempo.meter));
-	const tap = useTapTempo((bpm) => tempo.onBpm(clampTempo(bpm, tempo.meter)));
-	const play = (size: "md" | "sm") => (
-		<PlayPick
-			playing={playing}
-			size={size}
-			onClick={onTogglePlay}
-			disabled={!canPlay}
-			// PlayPick names itself Play / Stop; only the wait for samples is said instead.
-			{...(preparing ? { "aria-label": "Loading samples" } : {})}
-		/>
-	);
 
 	return (
-		<div className="st-bar" role="region" aria-label="Playback">
-			<div className="st-bar-wide">
-				<div className="flex min-w-0 items-center gap-3.5">
-					<NowNext status={status} />
-					<SubdivisionPicker meter={tempo.meter} value={tickLevel} onChange={onTickLevel} className="st-subd-wide" />
-				</div>
-				<div className="flex flex-col items-center gap-0.5">
-					<div className="st-transport">
-						<button type="button" className="st-icon" aria-pressed={loop} aria-label="Loop" title="Loop" onClick={() => onLoop(!loop)}>
+		<div className="st-remote">
+			<Popover open={trayOpen} onOpenChange={setTrayOpen}>
+				<PopoverAnchor asChild>
+					<div className="st-pill" role="region" aria-label="Playback">
+						<div className="st-pill-now">
+							<span className="st-lab st-num">
+								Bar {status.bar} of {status.bars}
+							</span>
+							<span className="st-bar-now">
+								{status.now ?? "Rhythm"} {status.next !== null && <small>→ {status.next}</small>}
+							</span>
+						</div>
+						<button
+							type="button"
+							className="st-icon st-pill-loop"
+							aria-pressed={loop}
+							aria-label="Loop"
+							title="Loop"
+							onClick={() => onLoop(!loop)}
+						>
 							<Repeat aria-hidden />
 						</button>
 						<Button variant="icon" size="xs" aria-label="Slower" onClick={() => step(-1)}>
 							−
 						</Button>
-						{play("md")}
+						<PlayPick
+							ref={pickRef}
+							playing={playing}
+							size="sm"
+							onClick={onTogglePlay}
+							disabled={!canPlay}
+							// PlayPick names itself Play / Stop; only the wait for samples is said instead.
+							{...(preparing ? { "aria-label": "Loading samples" } : {})}
+						/>
 						<Button variant="icon" size="xs" aria-label="Faster" onClick={() => step(1)}>
 							+
 						</Button>
-						<Button variant="secondary" size="xs" onClick={tap} aria-label="Tap the tempo">
-							Tap
-						</Button>
+						<button
+							type="button"
+							className="st-bpm st-num"
+							aria-label={`Tempo ${tempo.bpm} BPM — change`}
+							aria-expanded={trayOpen}
+							onClick={() => setTrayOpen(true)}
+						>
+							{tempo.bpm} <span className="st-lab">BPM</span>
+						</button>
+						<button
+							type="button"
+							className="st-icon"
+							aria-label="Playback settings"
+							aria-expanded={trayOpen}
+							onClick={() => setTrayOpen((open) => !open)}
+						>
+							<SlidersHorizontal aria-hidden />
+						</button>
 					</div>
-					<TempoControl {...tempo} module={module} />
-				</div>
-				<div className="flex flex-col items-end">
-					<MixerChannel kind="strum" channel={strum} />
-					<MixerChannel kind="click" channel={click} />
-				</div>
-			</div>
-
-			{!hintDismissed && (
-				<p className="st-mute-hint">
-					No sound? Check your phone&apos;s mute switch.
-					<button type="button" className="st-icon size-7" onClick={() => setHintDismissed(true)} aria-label="Dismiss hint">
-						<X aria-hidden />
-					</button>
-				</p>
-			)}
-			<div className="st-bar-phone">
-				<div className="min-w-0 flex-1">
-					<NowNext status={status} compact />
-				</div>
-				<div className="flex flex-col items-center">
-					<div className="flex items-center gap-2">
-						<Button variant="icon" size="xs" aria-label="Slower" onClick={() => step(-1)}>
-							−
-						</Button>
-						{play("sm")}
-						<Button variant="icon" size="xs" aria-label="Faster" onClick={() => step(1)}>
-							+
-						</Button>
+				</PopoverAnchor>
+				<PopoverContent
+					side="top"
+					align="center"
+					sideOffset={10}
+					data-m={module}
+					aria-label="Playback settings"
+					className="st-tray w-(--radix-popper-anchor-width) px-4.5 py-4"
+					// The pill is how the tray is reached; clicking it again is not "outside".
+					onInteractOutside={(e) => {
+						if ((e.target as Element | null)?.closest(".st-pill")) e.preventDefault();
+					}}
+				>
+					<div>
+						<TempoFields {...tempo} />
 					</div>
-					<span className="st-num text-xs font-bold">
-						{tempo.bpm} <span className="st-lab">BPM</span>
-					</span>
-				</div>
-				<div className="flex flex-1 justify-end">
-					<Button variant="icon" size="xs" aria-label="Playback settings" aria-expanded={sheetOpen} onClick={() => setSheetOpen(true)}>
-						<SlidersHorizontal aria-hidden />
-					</Button>
-				</div>
-			</div>
-
-			<Sheet open={sheetOpen} onOpenChange={setSheetOpen} title="Playback">
-				<div className="flex flex-col gap-4 pb-2" data-m={module}>
-					<TempoFields {...tempo} />
-					<div className="flex items-center justify-between">
-						<span className="text-[15px] font-semibold">Metronome</span>
-						<SubdivisionPicker meter={tempo.meter} value={tickLevel} onChange={onTickLevel} />
+					{/* One row a sound, each with what shapes it: the click's subdivision
+					    sits with the click's level, the gap with the loop it belongs to. */}
+					<div className="st-mix">
+						<MixerChannel kind="strum" channel={strum} />
+						<MixerChannel
+							kind="click"
+							channel={click}
+							extra={<SubdivisionPicker meter={tempo.meter} value={tickLevel} onChange={onTickLevel} />}
+						/>
+						<div className="st-mix-row" role="group" aria-label="Loop">
+							<Switch checked={loop} onCheckedChange={onLoop} aria-label="Loop" />
+							<span className="st-mix-name">Loop</span>
+							<span className="st-mix-extra st-lab">Gap between passes</span>
+							<Slider
+								value={Math.max(0, LOOP_GAPS.indexOf(loopGap as (typeof LOOP_GAPS)[number]))}
+								onChange={(i) => onLoopGap(LOOP_GAPS[i] ?? 0)}
+								label="Gap between passes"
+								min={0}
+								max={LOOP_GAPS.length - 1}
+								step={1}
+								ticks={LOOP_GAPS.map((_, i) => i)}
+								valueText={(i) => `${LOOP_GAPS[i] ?? 0} seconds`}
+								disabled={!loop}
+							/>
+							<span className="st-lab st-num st-mix-val">{loopGap} s</span>
+						</div>
 					</div>
-					<Switch checked={loop} onCheckedChange={onLoop} label="Loop" />
-					<div className="flex flex-col gap-1">
-						<MixerChannel kind="strum" channel={strum} wide />
-						<MixerChannel kind="click" channel={click} wide />
-					</div>
-				</div>
-			</Sheet>
+					<p className="st-lab st-tray-hint">No sound? Check your phone&apos;s mute switch.</p>
+				</PopoverContent>
+			</Popover>
 		</div>
 	);
 }

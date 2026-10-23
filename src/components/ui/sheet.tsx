@@ -46,15 +46,17 @@ export interface SheetProps {
 	/** The control that opens it; focus returns there on close. */
 	trigger?: ReactNode;
 	children: ReactNode;
+	/** Actions pinned under the content, outside the part that scrolls. */
+	footer?: ReactNode;
 }
 
 /**
  * A sheet (spec §8): rises from the bottom below 720px (a grabber, at most 88% tall, a 40%
  * scrim), a 380px right panel from 720px. Escape and the scrim close it; focus is trapped
- * inside and handed back on close; the page behind does not scroll. `dialog.tsx` stays for
- * confirms.
+ * inside and handed back on close; the page behind does not scroll. A `footer` stays put at
+ * the bottom while the content scrolls above it. `dialog.tsx` stays for confirms.
  */
-export function Sheet({ open, onOpenChange, title, description, trigger, children }: SheetProps) {
+export function Sheet({ open, onOpenChange, title, description, trigger, children, footer }: SheetProps) {
 	const side = useSheetSide(open);
 	return (
 		<Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -80,6 +82,7 @@ export function Sheet({ open, onOpenChange, title, description, trigger, childre
 						<Dialog.Description className="gp-sheet-desc">{description}</Dialog.Description>
 					) : null}
 					<div className="gp-sheet-body">{children}</div>
+					{footer ? <div className="gp-sheet-foot">{footer}</div> : null}
 				</Dialog.Content>
 			</Dialog.Portal>
 		</Dialog.Root>

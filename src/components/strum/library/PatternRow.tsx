@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { ListRow } from "@/components/ui/list-row";
 import { Pick } from "@/components/ui/pick";
 import type { StrumPattern } from "@/lib/strumPatterns";
@@ -9,6 +10,8 @@ import { patternRhythm } from "@/lib/strumRhythm";
 
 interface Props {
 	pattern: StrumPattern;
+	/** Its place in the list, read as `--i` by the pop-in stagger. */
+	index: number;
 	selected: boolean;
 	favourite: boolean;
 	onSelect: () => void;
@@ -27,9 +30,9 @@ export function patternRowMeta(pattern: StrumPattern): string {
 }
 
 /** One pattern in the library: its name over a miniature of its rhythm, and a favourite pick. */
-export default function PatternRow({ pattern, selected, favourite, onSelect, onToggleFavourite }: Props) {
+export default function PatternRow({ pattern, index, selected, favourite, onSelect, onToggleFavourite }: Props) {
 	return (
-		<div className="st-row">
+		<div className="st-row" style={{ "--i": index } as CSSProperties}>
 			<ListRow
 				title={pattern.name}
 				subline={

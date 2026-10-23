@@ -33,6 +33,7 @@ import { loadVoicings } from "@/lib/chordVoicingCache";
 import { withUserVoicings } from "@/lib/userChordVoicings";
 import type { SharedStrum } from "@/lib/sharedItems";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
+import { showPress } from "@/components/ui/press";
 
 /** Per-viewer: whether the library beside the stage is folded away. */
 const LIBRARY_FOLDED_KEY = "strumLibraryFolded";
@@ -101,14 +102,32 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	useEffect(() => {
 		togglePlayRef.current = togglePlay;
 	});
+	// The play key sinks under space the way it sinks under a click: down on the
+	// key going down, back up when it is let go.
+	const pickRef = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
+		let release: (() => void) | null = null;
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
 			e.preventDefault();
+			// A held key repeats; one press is one toggle.
+			if (e.repeat) return;
+			release?.();
+			release = pickRef.current ? showPress(pickRef.current) : null;
 			togglePlayRef.current();
 		}
+		function handleKeyUp(e: KeyboardEvent) {
+			if (e.code !== "Space") return;
+			release?.();
+			release = null;
+		}
 		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
+		window.addEventListener("keyup", handleKeyUp);
+		return () => {
+			release?.();
+			window.removeEventListener("keydown", handleKeyDown);
+			window.removeEventListener("keyup", handleKeyUp);
+		};
 	}, []);
 
 	const [folded, setFolded] = useState(false);
@@ -178,7 +197,8 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	return (
 		<div className="st-page" data-m="strum">
 			<div className="st-shell" data-lib={folded && !isShared ? "closed" : "open"}>
-				<main className="st-stage">
+				<div className="st-stage-wrap">
+					{/* Outside the scrolling stage, so it stays put however far the page scrolls. */}
 					{!isShared && folded && (
 						<button
 							type="button"
@@ -191,6 +211,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 							<PanelRightOpen aria-hidden />
 						</button>
 					)}
+				<main className="st-stage">
 					{!session.patternRestored || !selectedPattern ? (
 						<div className="st-stage-in" aria-busy="true">
 							<Skeleton className="h-13 w-60" />
@@ -245,7 +266,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 									/>
 								</NowCard>
 							</div>
-							<div style={{ "--i": 2 } as CSSProperties}>
+							<div className="st-prog-slot" style={{ "--i": 2 } as CSSProperties}>
 								<ProgressionPanel
 									patternName={selectedPattern.name}
 									progressions={session.patternProgressions}
@@ -257,7 +278,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 									userVoicings={userVoicings}
 									onSaveVoicing={saveVoicing}
 									onOpen={session.openProgressionById}
-									onCreate={(tokens) => session.addProgression(tokens)}
+									onCreate={(tokens, name) => session.addProgression(tokens, name)}
 									onSave={session.saveProgression}
 									onSaveAsNew={(progression) => {
 										progressionDraft.revert();
@@ -269,6 +290,48 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 						</div>
 					)}
 				</main>
+				<PlayBar
+					module="strum"
+					pickRef={pickRef}
+					status={{
+						bar: playback.isPlaying ? playback.currBar + 1 : 1,
+						bars: playback.playBars.length,
+						now: nowBar ? barLabel(nowBar) : null,
+						next: nextBar ? barLabel(nextBar) : null,
+					}}
+					playing={playback.isPlaying}
+					preparing={playback.isPreparing}
+					canPlay={selectedPattern !== null}
+					onTogglePlay={togglePlay}
+					tempo={{
+						bpm: session.bpm,
+						onBpm: session.setBpm,
+						meter,
+						defaultBpm: session.defaultBpm,
+						onSaveDefault: session.canSaveTempo ? session.saveDefaultTempo : undefined,
+					}}
+					tickLevel={playback.tickLevel}
+					onTickLevel={playback.setTickLevel}
+					loop={!playback.playOnce}
+					onLoop={(loop) => playback.setPlayOnce(!loop)}
+					loopGap={playback.loopGap}
+					onLoopGap={playback.setLoopGap}
+					strum={{
+						enabled: playback.strumEnabled,
+						onEnabledChange: playback.setStrumEnabled,
+						gain: playback.strumGain,
+						onGainChange: playback.setStrumGain,
+						max: 2,
+					}}
+					click={{
+						enabled: playback.metronomeEnabled,
+						onEnabledChange: playback.setMetronomeEnabled,
+						gain: playback.metronomeGain,
+						onGainChange: playback.setMetronomeGain,
+						max: 1,
+					}}
+				/>
+				</div>
 
 				<aside className="st-lib" aria-label={isShared ? "Shared pattern" : "Pattern library"}>
 					{shared && selectedPattern ? (
@@ -288,44 +351,6 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					)}
 				</aside>
 
-				<PlayBar
-					module="strum"
-					status={{
-						bar: playback.isPlaying ? playback.currBar + 1 : 1,
-						bars: playback.playBars.length,
-						now: nowBar ? barLabel(nowBar) : null,
-						next: nextBar && progressionBars.length > 1 ? barLabel(nextBar) : null,
-					}}
-					playing={playback.isPlaying}
-					preparing={playback.isPreparing}
-					canPlay={selectedPattern !== null}
-					onTogglePlay={togglePlay}
-					tempo={{
-						bpm: session.bpm,
-						onBpm: session.setBpm,
-						meter,
-						defaultBpm: session.defaultBpm,
-						onSaveDefault: session.canSaveTempo ? session.saveDefaultTempo : undefined,
-					}}
-					tickLevel={playback.tickLevel}
-					onTickLevel={playback.setTickLevel}
-					loop={!playback.playOnce}
-					onLoop={(loop) => playback.setPlayOnce(!loop)}
-					strum={{
-						enabled: playback.strumEnabled,
-						onEnabledChange: playback.setStrumEnabled,
-						gain: playback.strumGain,
-						onGainChange: playback.setStrumGain,
-						max: 2,
-					}}
-					click={{
-						enabled: playback.metronomeEnabled,
-						onEnabledChange: playback.setMetronomeEnabled,
-						gain: playback.metronomeGain,
-						onGainChange: playback.setMetronomeGain,
-						max: 1,
-					}}
-				/>
 			</div>
 
 			{!isShared && (

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ListMusic, Pencil, RotateCcw, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import "./icons.css";
 
 interface Props {
 	name: string;
@@ -80,6 +81,7 @@ export default function PatternHeader({
 						<button
 							type="button"
 							className="st-icon"
+							data-anim="edit"
 							onClick={onEdit}
 							disabled={!owned}
 							aria-label="Edit this pattern"
@@ -92,6 +94,7 @@ export default function PatternHeader({
 						<button
 							type="button"
 							className="st-icon"
+							data-anim="share"
 							onClick={onShare}
 							disabled={sharing}
 							aria-label="Share this pattern"
@@ -107,6 +110,7 @@ export default function PatternHeader({
 									type="button"
 									className="st-icon"
 									data-tone="bad"
+									data-anim="delete"
 									disabled={!owned}
 									aria-label="Delete this pattern"
 									title={owned ? "Delete this pattern" : "Presets can't be deleted"}

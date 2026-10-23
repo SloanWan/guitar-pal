@@ -930,13 +930,32 @@
 	.gp-sheet[data-side="right"] .gp-sheet-desc {
 		padding: 0 20px 8px;
 	}
+	/* The body takes the room left and scrolls; on a full-height panel that keeps a footer
+	   on the bottom edge, and a bottom sheet is only as tall as it needs. */
 	.gp-sheet-body {
+		flex: 1 1 auto;
 		min-height: 0;
 		overflow: auto;
 		padding: 4px 16px calc(20px + env(safe-area-inset-bottom));
 	}
+	/* With a footer under it, the footer clears the home indicator instead. */
+	.gp-sheet-body:not(:last-child) {
+		padding-bottom: 20px;
+	}
 	.gp-sheet[data-side="right"] .gp-sheet-body {
 		padding: 4px 20px 20px;
+	}
+	.gp-sheet-foot {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+		background: var(--gp-sheet);
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+	.gp-sheet[data-side="right"] .gp-sheet-foot {
+		padding: 12px 20px 16px;
 	}
 	@keyframes gp-sheet-up {
 		0% {

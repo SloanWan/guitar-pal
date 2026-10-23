@@ -17,25 +17,59 @@
 	.st-shell {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 296px;
-		grid-template-rows: minmax(0, 1fr) auto;
+		grid-template-rows: minmax(0, 1fr);
 		height: 100%;
 		transition: grid-template-columns var(--gp-d-rise) var(--gp-e-rise);
 	}
 	.st-shell[data-lib="closed"] {
 		grid-template-columns: minmax(0, 1fr) 0px;
 	}
-	.st-stage {
+	/* The stage's cell: the scrolling stage, and the play pill floating over its foot.
+	   The pill takes no room from the stage — the progression panel is sized to the
+	   whole window — but the stage scrolls a pill's height further, so the panel's
+	   foot can always be brought up above it. */
+	.st-stage-wrap {
+		--st-pill-room: 104px;
 		position: relative;
-		min-height: 0;
-		overflow-y: auto;
-		padding: 22px 36px 28px;
-	}
-	.st-stage-in {
 		display: flex;
 		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+	}
+	.st-stage {
+		position: relative;
+		box-sizing: border-box;
+		display: flex;
+		flex: 1 1 0;
+		flex-direction: column;
+		min-height: 0;
+		overflow-y: auto;
+		padding: 22px 36px 0;
+	}
+	.st-stage::after {
+		flex: none;
+		height: var(--st-pill-room);
+		content: "";
+	}
+	/* Fills the stage, so the progression panel takes what is left and scrolls inside
+	   itself: the rhythm above it never leaves the screen. */
+	.st-stage-in {
+		display: flex;
+		flex: none;
+		flex-direction: column;
 		gap: 16px;
+		box-sizing: border-box;
+		width: 100%;
 		max-width: 900px;
+		/* the window's height, less the stage's top padding and a little air under the panel */
+		min-height: calc(100% - 14px);
 		margin: 0 auto;
+	}
+	.st-prog-slot {
+		display: flex;
+		flex: 1 1 0;
+		flex-direction: column;
+		min-height: 260px;
 	}
 
 	/* ── Library ──────────────────────────────────────────────────────────── */
@@ -196,12 +230,13 @@
 		width: 19px;
 		height: 19px;
 	}
-	.st-icon:hover {
+	/* A disabled icon answers nothing: no hover, whatever its tone. */
+	.st-icon:not(:disabled):hover {
 		background: var(--gp-well);
 		color: var(--gp-ink);
 	}
-	.st-icon[data-tone="bad"]:hover,
-	.st-icon[data-tone="bad"][aria-expanded="true"] {
+	.st-icon[data-tone="bad"]:not(:disabled):hover,
+	.st-icon[data-tone="bad"][aria-expanded="true"]:not(:disabled) {
 		background: color-mix(in srgb, var(--gp-bad) 12%, transparent);
 		color: var(--gp-bad);
 	}
@@ -230,9 +265,10 @@
 	}
 
 	/* ── Now card ─────────────────────────────────────────────────────────── */
+	/* The chord columns keep one width whatever they hold, so the grid between never moves. */
 	.st-now-card {
 		display: grid;
-		grid-template-columns: auto minmax(0, 1fr) auto;
+		grid-template-columns: 150px minmax(0, 1fr) 96px;
 		grid-template-areas: "now grid next";
 		align-items: center;
 		gap: 24px;
@@ -240,50 +276,77 @@
 		border-radius: var(--gp-r-xl);
 		background: var(--gp-card);
 	}
-	.st-now-card[data-chords="none"] {
-		grid-template-columns: minmax(0, 1fr);
-		grid-template-areas: "grid";
-	}
 	.st-now {
 		display: flex;
 		grid-area: now;
 		flex-direction: column;
 		align-items: center;
-		min-width: 130px;
+		min-width: 0;
+	}
+	.st-now[data-empty] .st-dg,
+	.st-now[data-empty] .st-chord-big,
+	.st-next[data-empty] {
+		opacity: 0.35;
 	}
 	.st-now-name {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		max-width: 100%;
 	}
 	.st-next {
 		display: flex;
 		grid-area: next;
 		flex-direction: column;
 		align-items: center;
-		min-width: 80px;
+		min-width: 0;
 		opacity: 0.6;
+	}
+	.st-chord-big,
+	.st-chord-next {
+		display: block;
+		max-width: 100%;
+		overflow: hidden;
+		line-height: 1.05;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.st-chord-big {
 		font-size: 60px;
 		font-weight: 800;
 		letter-spacing: -0.03em;
-		line-height: 1;
-		white-space: nowrap;
+	}
+	/* Long names step down rather than widen the column. */
+	.st-chord-big[data-len="l"] {
+		font-size: 44px;
+	}
+	.st-chord-big[data-len="xl"] {
+		font-size: 32px;
 	}
 	.st-chord-next {
-		font-size: 32px;
+		font-size: 28px;
 		font-weight: 750;
 		letter-spacing: -0.02em;
-		white-space: nowrap;
 	}
 	.st-gridzone {
+		/* The grid's measurements: RhythmGrid reads these to decide where a bar breaks. */
+		--st-cell: 44px;
+		--st-cell-gap: 3px;
+		--st-beat-gap: 12px;
+		--st-barno: 34px;
 		display: flex;
 		grid-area: grid;
 		flex-direction: column;
 		align-items: center;
 		gap: 14px;
 		min-width: 0;
+	}
+	.st-rhythm {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
 	}
 
 	/* Chord diagrams: the shared SVG, sized by its box and drawn in the page's inks
@@ -338,18 +401,19 @@
 		max-width: 100%;
 	}
 	.st-barno {
+		width: 24px;
+		flex: none;
 		padding-top: 16px;
 		white-space: nowrap;
 	}
 	.st-beats {
 		display: flex;
-		flex-wrap: wrap;
 		justify-content: center;
-		gap: 10px 12px;
+		gap: var(--st-beat-gap);
 	}
 	.st-beat {
 		display: flex;
-		gap: 3px;
+		gap: var(--st-cell-gap);
 	}
 	.st-cw {
 		display: flex;
@@ -360,7 +424,7 @@
 	.st-cell {
 		display: grid;
 		place-items: center;
-		width: 44px;
+		width: var(--st-cell);
 		height: 52px;
 		padding: 0;
 		border-radius: 9px;
@@ -456,7 +520,9 @@
 		grid-template-areas:
 			"head main"
 			"list main";
+		flex: 1 1 0;
 		gap: 8px 14px;
+		min-height: 0;
 		padding: 16px;
 		border-radius: var(--gp-r-xl);
 		background: var(--gp-card);
@@ -484,17 +550,24 @@
 		flex-direction: column;
 		align-content: start;
 		gap: 4px;
-		max-height: 300px;
+		min-width: 0;
+		min-height: 0;
 		margin: -4px 0 -4px -4px;
 		padding: 4px 18px 4px 4px;
 		overflow-y: auto;
 		box-shadow: 1px 0 0 var(--gp-line);
 	}
+	/* The list's items are the library's row cards; they keep their height in a short list. */
+	.st-plist > .gp-row {
+		flex: none;
+	}
 	.st-pitem {
 		display: flex;
+		flex: none;
 		flex-direction: column;
 		gap: 3px;
 		width: 100%;
+		min-width: 0;
 		padding: 9px 12px;
 		border-radius: var(--gp-r-m);
 		text-align: left;
@@ -518,26 +591,115 @@
 		font-size: 13.5px;
 		font-weight: 650;
 	}
+	/* A long name ends in an ellipsis inside its card, never past it. */
+	.st-pitem-name,
+	.st-pitem-line {
+		display: block;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.st-prog-main {
 		display: flex;
 		grid-area: main;
 		flex-direction: column;
 		min-width: 0;
+		min-height: 0;
 	}
 	.st-editor {
 		display: flex;
 		flex: 1;
 		flex-direction: column;
 		gap: 12px;
+		min-height: 0;
 	}
-	.st-editor-foot {
+	.st-editor-head,
+	.st-editor-tools {
 		display: flex;
+		flex: none;
 		flex-wrap: wrap;
 		align-items: center;
-		justify-content: flex-end;
-		gap: 8px;
-		min-height: 40px;
-		margin-top: auto;
+		gap: 8px 12px;
+	}
+	.st-editor-tools {
+		justify-content: space-between;
+	}
+	.st-editor-name {
+		flex: 1;
+		min-width: 0;
+		margin: 0;
+		overflow: hidden;
+		font-size: 18px;
+		font-weight: 750;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.st-capo {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 6px;
+	}
+	.st-capo-val {
+		min-width: 22px;
+		font-weight: 750;
+		text-align: center;
+	}
+	/* The chords scroll inside the panel; following playback scrolls this, not the page. */
+	.st-chords-scroll {
+		--st-tile: 96px;
+		--st-tile-min: 84px;
+		--st-tile-gap: 10px;
+		--st-tile-max: 0;
+		--st-cl-cell: 84px;
+		--st-cl-max: 0;
+		position: relative;
+		flex: 1 1 0;
+		min-height: 120px;
+		margin: -4px;
+		padding: 4px;
+		overflow-y: auto;
+	}
+	.st-chordline {
+		display: grid;
+		grid-template-columns: repeat(var(--per), minmax(0, 1fr));
+		row-gap: 10px;
+	}
+	.st-cl-cell {
+		display: flex;
+		align-items: center;
+		min-width: 0;
+		height: 46px;
+		padding: 0 12px;
+		overflow: hidden;
+		border-left: 2px solid var(--gp-ink-3);
+		background: transparent;
+		color: var(--gp-ink);
+		font-size: 19px;
+		font-weight: 750;
+		text-align: left;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		transition: background-color var(--gp-d-state) linear, color var(--gp-d-state) linear;
+	}
+	.st-cl-cell[data-end] {
+		border-right: 2px solid var(--gp-ink-3);
+	}
+	button.st-cl-cell {
+		cursor: pointer;
+	}
+	button.st-cl-cell:hover {
+		font-style: italic;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.st-cl-cell[data-now] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.st-cl-cell[data-silent] {
+		color: var(--gp-bad);
 	}
 	.st-title-in {
 		flex: 1;
@@ -581,9 +743,9 @@
 		padding: 8px 4px;
 	}
 	.st-tiles {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 10px;
+		display: grid;
+		grid-template-columns: repeat(var(--per), minmax(var(--st-tile-min), var(--st-tile)));
+		gap: var(--st-tile-gap);
 	}
 	.st-tile {
 		position: relative;
@@ -591,7 +753,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 2px;
-		width: 96px;
+		min-width: 0;
 		padding: 10px 0;
 		border-radius: var(--gp-r-m);
 		background: var(--gp-page);
@@ -772,17 +934,6 @@
 		width: 20px;
 		height: 20px;
 	}
-	.st-sheet-foot {
-		position: sticky;
-		bottom: 0;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin: 0 -4px;
-		padding: 12px 4px 4px;
-		background: var(--gp-sheet);
-		box-shadow: 0 -1px 0 var(--gp-line);
-	}
 
 	/* ── Pattern composer ─────────────────────────────────────────────────── */
 	/* Portaled out of the page, the composer measures itself the same way. */
@@ -811,74 +962,142 @@
 		}
 	}
 
-	/* ── Play bar ─────────────────────────────────────────────────────────── */
-	.st-bar {
-		position: relative;
-		z-index: 5;
-		grid-column: 1 / -1;
-		background: var(--gp-card);
-		box-shadow: 0 -1px 0 var(--gp-line);
+	/* ── Play pill: the transport floating over the stage's foot ────────── */
+	.st-remote {
+		position: absolute;
+		bottom: 18px;
+		left: 50%;
+		z-index: 20;
+		max-width: calc(100% - 24px);
+		transform: translateX(-50%);
 	}
-	.st-bar-wide {
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		align-items: center;
-		gap: 16px;
-		padding: 8px 24px 10px;
-	}
-	.st-bar-phone {
-		display: none;
+	.st-pill {
+		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 8px 12px 8px 14px;
+		padding: 8px 10px 8px 16px;
+		border-radius: 22px;
+		background: var(--gp-card);
+		box-shadow:
+			var(--gp-ring-c),
+			var(--gp-shadow-pop);
+	}
+	.st-pill-now {
+		display: flex;
+		flex-direction: column;
+		width: 112px;
+		min-width: 0;
 	}
 	.st-bar-now {
-		font-size: 20px;
+		overflow: hidden;
+		font-size: 17px;
 		font-weight: 750;
+		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.st-bar-now small {
 		color: var(--gp-ink-3);
-		font-size: 13px;
+		font-size: 12px;
 		font-weight: 600;
-	}
-	.st-transport {
-		display: flex;
-		align-items: center;
-		gap: 10px;
 	}
 	.st-bpm {
 		display: inline-flex;
 		align-items: baseline;
 		gap: 4px;
+		min-width: 70px;
 		padding: 2px 8px;
 		border-radius: var(--gp-r-s);
-		font-size: 13px;
-		font-weight: 700;
+		font-size: 15px;
+		font-weight: 750;
 		cursor: pointer;
 	}
 	.st-bpm:hover {
 		background: var(--gp-well);
 	}
-	.st-chan {
+	/* The tray over the pill: the tempo, then one row a sound — each with what shapes
+	   it — on one grid, so every level slider starts at the same place. */
+	.st-tray {
+		/* Portaled out of the page, the tray answers to its own width. */
+		container: tray / inline-size;
 		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.st-tempo-val {
+		min-width: 6.5ch;
+		font-size: 24px;
+		font-weight: 800;
+	}
+	.st-mix {
+		display: grid;
+		grid-template-columns: 44px 44px auto minmax(88px, 1fr) 36px;
 		align-items: center;
-		gap: 6px;
+		gap: 12px 10px;
+		padding-top: 14px;
+		box-shadow: 0 -1px 0 var(--gp-line);
 	}
-	.st-chan .gp-slider {
-		width: 110px;
+	.st-mix-row {
+		display: contents;
 	}
-	.st-chan-label {
-		width: 40px;
+	.st-mix-row > :first-child {
+		justify-self: center;
 	}
-	.st-mute-hint {
+	.st-mix-name {
+		font-size: 14px;
+		font-weight: 650;
+	}
+	.st-mix-extra {
+		justify-self: start;
+	}
+	.st-mix-val {
+		min-width: 36px;
+		text-align: right;
+	}
+	/* Too narrow for five columns: each sound takes a line of its own, wrapping its
+	   level under it only when it has to. */
+	@container tray (max-width: 400px) {
+		.st-mix {
+			display: flex;
+			flex-direction: column;
+			align-items: stretch;
+			gap: 14px;
+		}
+		/* Two lines a sound, the same for all three: what it is, then its level. */
+		.st-mix-row {
+			display: grid;
+			grid-template-columns: 44px minmax(0, 1fr) auto auto;
+			grid-template-areas:
+				"icon name extra extra"
+				"level level level value";
+			align-items: center;
+			gap: 6px 10px;
+		}
+		.st-mix-row > :first-child {
+			grid-area: icon;
+		}
+		.st-mix-name {
+			grid-area: name;
+		}
+		.st-mix-extra {
+			grid-area: extra;
+			justify-self: end;
+		}
+		.st-mix-row > .gp-slider {
+			grid-area: level;
+		}
+		.st-mix-val {
+			grid-area: value;
+		}
+	}
+	/* The mute switch is a phone's (and a tablet's) problem: only a touch screen says so. */
+	.st-tray-hint {
 		display: none;
-		align-items: center;
-		justify-content: center;
-		gap: 6px;
-		padding: 4px 12px 0;
-		color: var(--gp-ink-3);
-		font-size: 12px;
+		margin: 0;
+	}
+	@media (hover: none) and (pointer: coarse) {
+		.st-tray-hint {
+			display: block;
+		}
 	}
 
 	/* ── Bubble rise: the page's pieces arrive one after another ─────────── */
@@ -939,13 +1158,7 @@
 			display: block;
 		}
 		.st-stage {
-			padding: 20px 28px 24px;
-		}
-		.st-chan .gp-slider {
-			width: 80px;
-		}
-		.st-subd-wide {
-			display: none;
+			padding: 20px 28px 0;
 		}
 		.st-prog {
 			grid-template-columns: 210px minmax(0, 1fr);
@@ -953,19 +1166,17 @@
 	}
 	@container strum (min-width: 720px) and (max-width: 959px) {
 		.st-stage-in {
-			justify-content: center;
-			gap: 22px;
-			min-height: 100%;
+			gap: 20px;
 		}
 		.st-now-card {
 			gap: 20px;
 			padding: 26px 28px;
 		}
-		.st-chord-big {
-			font-size: 72px;
+		.st-gridzone {
+			/* a touch wider than desktop, but two sixteenth beats still share a row */
+			--st-cell: 46px;
 		}
 		.st-cell {
-			width: 50px;
 			height: 60px;
 		}
 		.st-cell svg {
@@ -979,11 +1190,42 @@
 
 	/* ── Phone: one bar a line, the bar's settings in a sheet ────────────── */
 	@container strum (max-width: 719px) {
-		.st-stage {
-			padding: 12px 14px 16px;
+		.st-stage-wrap {
+			--st-pill-room: 84px;
 		}
+		.st-stage {
+			padding: 12px 14px 0;
+		}
+		/* A phone scrolls the page as a whole; the chords still scroll in their own box. */
 		.st-stage-in {
+			flex: none;
 			gap: 12px;
+		}
+		.st-prog-slot,
+		.st-prog {
+			flex: none;
+			min-height: 0;
+		}
+		.st-chords-scroll {
+			--st-tile: 64px;
+			--st-tile-min: 64px;
+			--st-tile-gap: 6px;
+			--st-tile-max: 4;
+			--st-cl-cell: 64px;
+			--st-cl-max: 4;
+			flex: none;
+			max-height: 46vh;
+		}
+		.st-pill-now,
+		.st-pill-loop {
+			display: none;
+		}
+		.st-pill {
+			gap: 8px;
+			padding: 6px 8px 6px 12px;
+		}
+		.st-remote {
+			bottom: 10px;
 		}
 		.st-title h1 {
 			font-size: 20px;
@@ -1003,26 +1245,13 @@
 		.st-dirty-text {
 			display: none;
 		}
-		.st-bar-wide {
-			display: none;
-		}
-		.st-bar-phone {
-			display: flex;
-		}
-		.st-mute-hint {
-			display: flex;
-		}
 		.st-now-card {
-			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-columns: minmax(0, 1fr) 76px;
 			grid-template-areas:
 				"now next"
 				"grid grid";
 			gap: 12px;
 			padding: 14px 12px;
-		}
-		.st-now-card[data-chords="none"] {
-			grid-template-columns: minmax(0, 1fr);
-			grid-template-areas: "grid";
 		}
 		.st-now {
 			flex-direction: row;
@@ -1030,27 +1259,43 @@
 			gap: 14px;
 			min-width: 0;
 		}
+		.st-now-name {
+			width: 112px;
+		}
 		.st-chord-big {
 			font-size: 46px;
+		}
+		.st-chord-big[data-len="l"] {
+			font-size: 34px;
+		}
+		.st-chord-big[data-len="xl"] {
+			font-size: 26px;
+		}
+		.st-chord-next {
+			font-size: 24px;
 		}
 		.st-next {
 			min-width: 0;
 		}
 		.st-gridzone {
+			--st-cell: 24px;
+			--st-cell-gap: 2px;
+			--st-beat-gap: 6px;
+			--st-barno: 22px;
 			width: 100%;
 		}
 		.st-barline {
 			width: 100%;
 			gap: 6px;
 		}
+		.st-barno {
+			width: 16px;
+		}
 		.st-beats {
-			flex-wrap: nowrap;
-			gap: 6px;
 			width: 100%;
 		}
 		.st-beat {
 			flex: var(--n) 1 0;
-			gap: 2px;
 			min-width: 0;
 		}
 		.st-cw {
@@ -1101,12 +1346,9 @@
 			display: flex;
 		}
 		.st-tiles {
-			display: grid;
-			grid-template-columns: repeat(4, minmax(0, 1fr));
-			gap: 6px;
+			grid-template-columns: repeat(var(--per), minmax(0, 1fr));
 		}
 		.st-tile {
-			width: auto;
 			padding: 8px 0;
 		}
 		.st-tile-name {

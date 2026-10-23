@@ -17,7 +17,6 @@ import {
 	type ChordToken,
 	type UnknownChordChoice,
 } from "@/lib/strumProgressions";
-import { PROGRESSION_PRESETS, filterPresets, groupPresets, type ProgressionPreset } from "@/lib/strumProgressionPresets";
 
 /** Ordered as the arrow keys walk them; keeping comes first, as it throws nothing away. */
 const UNKNOWN_ANSWERS = [
@@ -41,8 +40,8 @@ interface Props {
 /**
  * A new progression, typed as a chord line: one bar per chord, by name or by
  * shape. What the line resolves to is read out under it as it is typed; chords
- * the library does not have are asked about rather than guessed at; known
- * progressions narrow as the line grows.
+ * the library does not have are asked about rather than guessed at. Known
+ * progressions are offered apart from this (`PresetSheet`).
  */
 export default function ChordLineComposer({ onCreate, onCancel, userVoicings }: Props) {
 	const [line, setLine] = useState("");
@@ -77,7 +76,6 @@ export default function ChordLineComposer({ onCreate, onCancel, userVoicings }: 
 	/** Shapes in the line that nothing is held with — chords waiting to be written. */
 	const unwritten = parsed.tokens.filter((t) => t.shape && t.chord === null);
 	const { goToCreateChord } = useChordSearchNavigation(onCancel);
-	const presets = filterPresets(PROGRESSION_PRESETS, line);
 	const answers: { key: UnknownAnswer; label: string; hint: string }[] = unwritten[0]
 		? [
 				{ key: "create", label: `Write ${unwritten[0].input} down`, hint: "Draw it, name it, and it is yours" },
@@ -126,12 +124,6 @@ export default function ChordLineComposer({ onCreate, onCancel, userVoicings }: 
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- fires once, when the index the queued Enter waited for arrives
 	}, [queued, chordIndex.length]);
-
-	function applyPreset(preset: ProgressionPreset) {
-		setLine(preset.chords);
-		setError(null);
-		setAsking(false);
-	}
 
 	return (
 		<div className="st-composer">
@@ -231,27 +223,6 @@ export default function ChordLineComposer({ onCreate, onCancel, userVoicings }: 
 							Create
 						</Button>
 					</span>
-				</div>
-			)}
-			{presets.length > 0 && (
-				<div className="st-presets">
-					{groupPresets(presets).map(({ group, presets: list }) => (
-						<div key={group}>
-							<p className="st-presets-group">{group}</p>
-							{list.map((preset) => (
-								<button
-									key={preset.id}
-									type="button"
-									className="st-preset"
-									onMouseDown={(e) => e.preventDefault()}
-									onClick={() => applyPreset(preset)}
-								>
-									<span className="font-semibold">{preset.name}</span>
-									<span className="st-lab">{preset.chords}</span>
-								</button>
-							))}
-						</div>
-					))}
 				</div>
 			)}
 		</div>

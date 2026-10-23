@@ -1,16 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ListMusic, Plus, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ListRow } from "@/components/ui/list-row";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { BarChordDiagram } from "@/components/strum/useBarChordDiagrams";
 import type { ProgressionDraft } from "@/components/strum/useProgressionDraft";
 import ChordSheet from "@/components/strum/chords/ChordSheet";
 import type { ChordProgression } from "@/lib/strumPatterns";
-import { barLabel, progressionCapo, progressionDisplayName, type ChordToken } from "@/lib/strumProgressions";
-import type { UserChordVoicing } from "@/lib/userChordVoicings";
+import { getChordIndex } from "@/lib/chords";
+import type { ProgressionPreset } from "@/lib/strumProgressionPresets";
+import { barLabel, parseChordSequence, progressionCapo, progressionDisplayName, type ChordToken } from "@/lib/strumProgressions";
+import { chordIndexWithUser, type UserChordVoicing } from "@/lib/userChordVoicings";
+import { prefersReducedMotion } from "@/lib/motion";
 import ChordLineComposer from "./ChordLineComposer";
-import ProgressionEditor, { type PendingSwitch } from "./ProgressionEditor";
+import PresetSheet from "./PresetSheet";
+import ProgressionEditor, { type ChordView, type PendingSwitch } from "./ProgressionEditor";
+
+/** Per-viewer: how the open progression's chords are shown, and whether the view follows the playhead. */
+const VIEW_KEY = "strumProgressionView";
+const FOLLOW_KEY = "strumProgressionFollow";
 
 interface Props {
 	patternName: string;
@@ -24,7 +39,7 @@ interface Props {
 	userVoicings: readonly UserChordVoicing[];
 	onSaveVoicing: (voicing: UserChordVoicing) => UserChordVoicing;
 	onOpen: (id: string | null) => void;
-	onCreate: (tokens: ChordToken[]) => void;
+	onCreate: (tokens: ChordToken[], name?: string) => void;
 	onSave: (progression: ChordProgression) => void;
 	onSaveAsNew: (progression: ChordProgression) => void;
 	onDelete: (progression: ChordProgression) => void;
@@ -42,7 +57,7 @@ function itemLine(progression: ChordProgression): string {
 /**
  * The progressions over the open pattern: a list beside the editor of the open
  * one (above it on a phone, folded behind a picker). Opening another while the
- * open one has changes asks first.
+ * open one has changes asks first. A new one starts from a preset or a typed line.
  */
 export default function ProgressionPanel({
 	patternName,
@@ -60,11 +75,48 @@ export default function ProgressionPanel({
 	onSaveAsNew,
 	onDelete,
 }: Props) {
-	const [adding, setAdding] = useState(false);
+	const [typing, setTyping] = useState(false);
+	const [presetsOpen, setPresetsOpen] = useState(false);
 	const [listOpen, setListOpen] = useState(false);
 	const [pending, setPending] = useState<{ label: string; run: () => void } | null>(null);
 	const [sheetBar, setSheetBar] = useState<number | null>(null);
+	const [view, setView] = useState<ChordView>("shapes");
+	const [follow, setFollow] = useState(true);
 	const open = draft.progression;
+	const listRef = useRef<HTMLDivElement>(null);
+	const openId = open?.id ?? null;
+
+	// The chosen item is always in view in the list — a new one, a copy saved as new
+	// or one restored on arrival lands at the end. Only the list scrolls, never the page.
+	useEffect(() => {
+		const list = listRef.current;
+		const row = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+		if (!list || !row) return;
+		const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+		const bottom = top + row.offsetHeight;
+		if (top >= list.scrollTop && bottom <= list.scrollTop + list.clientHeight) return;
+		list.scrollTo({ top: Math.max(0, top - 8), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+	}, [openId, progressions.length, listOpen]);
+
+	useEffect(() => {
+		try {
+			const savedView = localStorage.getItem(VIEW_KEY);
+			const savedFollow = localStorage.getItem(FOLLOW_KEY);
+			queueMicrotask(() => {
+				if (savedView === "names" || savedView === "shapes") setView(savedView);
+				if (savedFollow === "0") setFollow(false);
+			});
+		} catch {
+			// unreadable storage: the defaults stand
+		}
+	}, []);
+	function remember(key: string, value: string) {
+		try {
+			localStorage.setItem(key, value);
+		} catch {
+			// remembered for this visit only
+		}
+	}
 
 	/** Run `action` now, or once the open progression's changes are saved or let go. */
 	function guard(label: string, action: () => void) {
@@ -77,6 +129,18 @@ export default function ProgressionPanel({
 		if (id === (open?.id ?? null)) return;
 		const target = progressions.find((p) => p.id === id);
 		guard(target ? progressionDisplayName(target) : "the rhythm alone", () => onOpen(id));
+	}
+
+	async function createFromPreset(preset: ProgressionPreset) {
+		setPresetsOpen(false);
+		try {
+			const index = chordIndexWithUser(await getChordIndex(), userVoicings);
+			const { tokens } = parseChordSequence(preset.chords, index);
+			const chords = tokens.filter((t) => t.chord !== null);
+			if (chords.length > 0) guard(preset.name, () => onCreate(chords, preset.name));
+		} catch (e) {
+			console.error("[ProgressionPanel] preset:", e);
+		}
 	}
 
 	const pendingSwitch: PendingSwitch | null = pending && {
@@ -94,48 +158,8 @@ export default function ProgressionPanel({
 		},
 	};
 
-	const items = (
-		<div className="st-plist" role="listbox" aria-label="Saved progressions">
-			{adding && (
-				<ChordLineComposer
-					userVoicings={userVoicings}
-					onCancel={() => setAdding(false)}
-					onCreate={(tokens) => {
-						setAdding(false);
-						guard("the new progression", () => onCreate(tokens));
-					}}
-				/>
-			)}
-			<button
-				type="button"
-				role="option"
-				className="st-pitem"
-				aria-selected={open === null}
-				aria-current={open === null ? "true" : undefined}
-				onClick={() => pick(null)}
-			>
-				<span className="st-pitem-name">Just the rhythm</span>
-				<span className="st-lab">No chords — the default voicing</span>
-			</button>
-			{progressions.map((p) => (
-				<button
-					key={p.id}
-					type="button"
-					role="option"
-					className="st-pitem"
-					aria-selected={p.id === open?.id}
-					aria-current={p.id === open?.id ? "true" : undefined}
-					onClick={() => pick(p.id)}
-				>
-					<span className="st-pitem-name">{progressionDisplayName(p.id === open?.id ? open : p)}</span>
-					<span className="st-lab">{itemLine(p.id === open?.id ? open : p)}</span>
-				</button>
-			))}
-		</div>
-	);
-
 	return (
-		<section className="st-prog" aria-label="Progressions" data-list={listOpen || adding ? "open" : undefined}>
+		<section className="st-prog" aria-label="Progressions" data-list={listOpen || typing ? "open" : undefined}>
 			<div className="st-prog-head">
 				<h2 className="st-prog-title">Progressions</h2>
 				<Button
@@ -145,29 +169,72 @@ export default function ProgressionPanel({
 					aria-expanded={listOpen}
 					onClick={() => {
 						setListOpen((v) => !v);
-						setAdding(false);
+						setTyping(false);
 					}}
 				>
 					{progressions.length} progression{progressions.length === 1 ? "" : "s"}
 					<ChevronDown aria-hidden />
 				</Button>
 				{!readOnly && (
-					<Button
-						variant="secondary"
-						size="xs"
-						aria-expanded={adding}
-						aria-label="Add progression"
-						onClick={() => {
-							setAdding((v) => !v);
-							setListOpen(false);
-						}}
-					>
-						<Plus aria-hidden />
-						Add
-					</Button>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="secondary" size="xs" aria-label="Add progression">
+								<Plus aria-hidden />
+								Add
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" data-m="strum">
+							<DropdownMenuItem onSelect={() => setPresetsOpen(true)}>
+								<ListMusic aria-hidden />
+								Start from a preset
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								onSelect={() => {
+									setTyping(true);
+									setListOpen(false);
+								}}
+							>
+								<Type aria-hidden />
+								Type chords
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				)}
 			</div>
-			{items}
+			<div ref={listRef} className="st-plist" role="listbox" aria-label="Saved progressions">
+				{typing && (
+					<ChordLineComposer
+						userVoicings={userVoicings}
+						onCancel={() => setTyping(false)}
+						onCreate={(tokens) => {
+							setTyping(false);
+							guard("the new progression", () => onCreate(tokens));
+						}}
+					/>
+				)}
+				<ListRow
+					role="option"
+					aria-selected={open === null}
+					selected={open === null}
+					title="Just the rhythm"
+					subline="No chords — the default voicing"
+					onClick={() => pick(null)}
+				/>
+				{progressions.map((p) => {
+					const shown = p.id === open?.id ? open : p;
+					return (
+						<ListRow
+							key={p.id}
+							role="option"
+							aria-selected={p.id === open?.id}
+							selected={p.id === open?.id}
+							title={progressionDisplayName(shown)}
+							subline={itemLine(shown)}
+							onClick={() => pick(p.id)}
+						/>
+					);
+				})}
+			</div>
 			<div className="st-prog-main">
 				{loading ? (
 					<p className="st-lab">Loading progressions…</p>
@@ -178,6 +245,16 @@ export default function ProgressionPanel({
 						readOnly={readOnly}
 						playingBar={playingBar}
 						diagrams={diagrams}
+						view={view}
+						onView={(next) => {
+							setView(next);
+							remember(VIEW_KEY, next);
+						}}
+						follow={follow}
+						onFollow={(next) => {
+							setFollow(next);
+							remember(FOLLOW_KEY, next ? "1" : "0");
+						}}
 						onEditBar={setSheetBar}
 						onAddBar={() => setSheetBar(draft.addBar())}
 						onSave={() => onSave(open)}
@@ -193,23 +270,33 @@ export default function ProgressionPanel({
 						<p className="st-lab m-0">
 							{readOnly
 								? "Pick a progression to hear its chords."
-								: "Add a chord line — one chord a bar — to play it over this rhythm."}
+								: "Start from a preset or type a chord line — one chord a bar — to play it over this rhythm."}
 						</p>
-						{!readOnly && !adding && (
-							<Button
-								size="xs"
-								onClick={() => {
-									setAdding(true);
-									setListOpen(false);
-								}}
-							>
-								<Plus aria-hidden />
-								Add a progression
-							</Button>
+						{!readOnly && !typing && (
+							<span className="flex flex-wrap gap-2">
+								<Button size="xs" onClick={() => setPresetsOpen(true)}>
+									<ListMusic aria-hidden />
+									Start from a preset
+								</Button>
+								<Button
+									variant="secondary"
+									size="xs"
+									onClick={() => {
+										setTyping(true);
+										setListOpen(false);
+									}}
+								>
+									<Type aria-hidden />
+									Type chords
+								</Button>
+							</span>
 						)}
 					</div>
 				)}
 			</div>
+			{!readOnly && (
+				<PresetSheet open={presetsOpen} onOpenChange={setPresetsOpen} onPick={(preset) => void createFromPreset(preset)} />
+			)}
 			{!readOnly && open && (
 				<ChordSheet
 					barIndex={sheetBar}

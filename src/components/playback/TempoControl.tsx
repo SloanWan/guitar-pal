@@ -1,14 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Slider } from "@/components/ui/slider";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { bpmFaderMarks } from "@/components/fingerpick/playbackConstants";
 import { pushTap, tapTempo } from "@/lib/stepper";
 import { isCompound, type Meter } from "@/lib/strumMeter";
-import type { ModuleKey } from "@/lib/moduleForPath";
 
 export interface TempoProps {
 	bpm: number;
@@ -37,7 +35,12 @@ export function useTapTempo(onTempo: (bpm: number) => void): () => void {
 	};
 }
 
-/** The slider with the genre marks under it, the coarse steps and a reset: the body of every tempo control. */
+/**
+ * The body of every tempo control: the tempo with its quick steps on its own row,
+ * the slider with the genre marks, and what to do with a changed tempo. Nothing
+ * here appears or disappears as the tempo moves — Reset and "Open at …" are
+ * always there and only enable — so the panel holding it never changes size.
+ */
 export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault }: TempoProps) {
 	const marks = bpmFaderMarks(meter);
 	const set = (value: number) => onBpm(clampTempo(value, meter));
@@ -46,13 +49,23 @@ export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault }: Te
 		(best, v, i) => (Math.abs(v - bpm) < Math.abs(marks.values[best] - bpm) ? i : best),
 		0,
 	);
+	const changed = bpm !== defaultBpm;
 	return (
 		<div className="flex flex-col gap-3">
-			<div className="flex items-baseline justify-between">
-				<span className="text-2xl font-extrabold st-num">
+			<div className="flex items-center gap-1.5">
+				<span className="st-tempo-val st-num">
 					{bpm} <span className="st-lab">{isCompound(meter) ? "BPM ♩." : "BPM"}</span>
 				</span>
-				<span className="st-lab">{marks.labels[nearest]}</span>
+				<span className="st-lab min-w-0 flex-1 truncate">{marks.labels[nearest]}</span>
+				<Chip onClick={() => set(bpm - 10)} aria-label="Ten slower">
+					−10
+				</Chip>
+				<Chip onClick={() => set(bpm + 10)} aria-label="Ten faster">
+					+10
+				</Chip>
+				<Chip onClick={tap} aria-label="Tap the tempo">
+					Tap
+				</Chip>
 			</div>
 			<Slider
 				value={bpm}
@@ -65,42 +78,16 @@ export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault }: Te
 				valueText={(v) => `${v} BPM`}
 			/>
 			<div className="flex items-center gap-1.5">
-				<Chip onClick={() => set(bpm - 10)} aria-label="Ten slower">
-					−10
-				</Chip>
-				<Chip onClick={() => set(bpm + 10)} aria-label="Ten faster">
-					+10
-				</Chip>
-				<Chip onClick={tap} aria-label="Tap the tempo">
-					Tap
-				</Chip>
+				<Button variant="ghost" size="xs" disabled={!changed} onClick={() => onBpm(defaultBpm)} title={`Back to ${defaultBpm}`}>
+					Reset to {defaultBpm}
+				</Button>
 				<span className="flex-1" />
-				<Button variant="ghost" size="xs" disabled={bpm === defaultBpm} onClick={() => onBpm(defaultBpm)} title={`Back to ${defaultBpm}`}>
-					Reset
-				</Button>
+				{onSaveDefault && (
+					<Button variant="secondary" size="xs" disabled={!changed} onClick={onSaveDefault} className="st-num">
+						Open at {bpm} from now on
+					</Button>
+				)}
 			</div>
-			{onSaveDefault && bpm !== defaultBpm && (
-				<Button variant="secondary" size="xs" onClick={onSaveDefault}>
-					Open at {bpm} from now on
-				</Button>
-			)}
 		</div>
-	);
-}
-
-/** The bar's tempo readout; clicking it opens the full tempo control beside it. */
-export default function TempoControl({ module, ...props }: TempoProps & { module: ModuleKey }) {
-	const [open, setOpen] = useState(false);
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
-				<button type="button" className="st-bpm st-num" aria-label={`Tempo ${props.bpm} BPM — change`}>
-					{props.bpm} <span className="st-lab">BPM</span>
-				</button>
-			</PopoverTrigger>
-			<PopoverContent side="top" align="center" className="w-80" aria-label="Tempo" data-m={module}>
-				<TempoFields {...props} />
-			</PopoverContent>
-		</Popover>
 	);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { Play, Redo2, Square, Undo2, X } from "lucide-react";
@@ -69,12 +69,16 @@ export default function PatternComposer({ editing, existingPatterns, user, onSav
 	const [pristine] = useState(() => JSON.stringify({ name: editing?.name ?? "", bpm, meter: startMeter, rhythm: startRhythm }));
 	const dirty = JSON.stringify({ name, bpm, meter, rhythm }) !== pristine;
 
-	const engine = useAudioEngine(asBars(rhythm), bpm, "beat", undefined, meter);
-	const { setPlayOnce, setMetronomeEnabled } = engine;
+	const playBars = asBars(rhythm);
+	const engine = useAudioEngine(playBars, bpm, "beat", undefined, meter);
+	// Once, on open: the engine's setters are new every render, and setting the
+	// metronome while playing restarts playback — run on every render, that
+	// restarted it forever and nothing was ever heard.
+	const engineSetupRef = useRef(engine);
 	useEffect(() => {
-		setPlayOnce(true);
-		setMetronomeEnabled(false);
-	}, [setPlayOnce, setMetronomeEnabled]);
+		engineSetupRef.current.setPlayOnce(true);
+		engineSetupRef.current.setMetronomeEnabled(false);
+	}, []);
 
 	const subdivision = rhythmSubdivision(rhythm);
 	const { min, max } = bpmRangeForMeter(meter);
@@ -271,7 +275,7 @@ export default function PatternComposer({ editing, existingPatterns, user, onSav
 										meter={meter}
 										position={
 											engine.isPlaying && engine.currBar === bi
-												? { bar: 0, beat: barLocalBeatIndex(asBars(rhythm), engine.currBeat), cell: engine.currCell }
+												? { bar: 0, beat: barLocalBeatIndex(playBars, engine.currBeat), cell: engine.currCell }
 												: null
 										}
 										onToggle={(_b, beat, cell) => commit(cycleRhythmCell(rhythm, bi, beat, cell))}

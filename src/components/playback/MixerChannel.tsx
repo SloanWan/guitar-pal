@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Slider } from "@/components/ui/slider";
 
 export type ChannelKind = "strum" | "click";
@@ -31,24 +32,26 @@ function ChannelIcon({ kind, muted }: { kind: ChannelKind; muted: boolean }) {
 }
 
 /**
- * One sound on the bar: a mute button, its name and its level. The level stays
- * where it was while muted, so un-muting brings back the same mix.
+ * One sound in the playback tray, laid out as a row of the tray's grid: its mute,
+ * its name, anything that shapes it (`extra` — the metronome's subdivision), its
+ * level and the level as a number. The level stays where it was while muted, so
+ * un-muting brings back the same mix.
  */
 export default function MixerChannel({
 	kind,
 	channel,
-	wide = false,
+	extra,
 }: {
 	kind: ChannelKind;
 	channel: ChannelState;
-	/** In a sheet the slider takes the rest of the row. */
-	wide?: boolean;
+	/** What else belongs to this sound, between its name and its level. */
+	extra?: ReactNode;
 }) {
 	const { label, noun } = NAMES[kind];
 	const muted = !channel.enabled;
 	const percent = Math.round((channel.gain / channel.max) * 100);
 	return (
-		<div className={wide ? "st-chan gap-2.5" : "st-chan"}>
+		<div className="st-mix-row" role="group" aria-label={label}>
 			<button
 				type="button"
 				className="st-icon"
@@ -60,15 +63,16 @@ export default function MixerChannel({
 			>
 				<ChannelIcon kind={kind} muted={muted} />
 			</button>
-			<span className={wide ? "w-13 text-sm font-semibold" : "st-lab st-chan-label"}>{label}</span>
+			<span className="st-mix-name">{label}</span>
+			<span className="st-mix-extra">{extra}</span>
 			<Slider
-				className={wide ? "flex-1" : undefined}
 				value={percent}
 				onChange={(v) => channel.onGainChange((v / 100) * channel.max)}
 				label={`${label} volume`}
 				valueText={(v) => `${v}%`}
 				disabled={muted}
 			/>
+			<span className="st-lab st-num st-mix-val">{percent}%</span>
 		</div>
 	);
 }

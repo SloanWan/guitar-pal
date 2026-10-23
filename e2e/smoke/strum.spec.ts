@@ -15,6 +15,7 @@ test.describe("strum machine", () => {
 	test("reads a typed chord line into a progression", async ({ page }) => {
 		await page.goto("/strum");
 		await page.getByRole("button", { name: "Add progression" }).click();
+		await page.getByRole("menuitem", { name: "Type chords" }).click();
 
 		const line = page.getByRole("textbox", { name: "Chord sequence" });
 		await line.fill("C G Am F");
@@ -31,6 +32,7 @@ test.describe("strum machine", () => {
 	test("changes a bar's chord in the sheet, then saves it", async ({ page }) => {
 		await page.goto("/strum");
 		await page.getByRole("button", { name: "Add progression" }).click();
+		await page.getByRole("menuitem", { name: "Type chords" }).click();
 		await page.getByRole("textbox", { name: "Chord sequence" }).fill("C G");
 		await page.getByRole("textbox", { name: "Chord sequence" }).press("Enter");
 
@@ -60,5 +62,15 @@ test.describe("strum machine", () => {
 		await dialog.getByRole("button", { name: "Save in this browser" }).click();
 		await expect(page.getByRole("heading", { level: 1, name: "Smoke two-bar" })).toBeVisible();
 		await expect(page.getByText("My pattern · 4/4 · 2 bars")).toBeVisible();
+	});
+
+	test("starts a progression from a preset", async ({ page }) => {
+		await page.goto("/strum");
+		await page.getByRole("button", { name: "Add progression" }).click();
+		await page.getByRole("menuitem", { name: "Start from a preset" }).click();
+		const sheet = page.getByRole("dialog", { name: "Start from a preset" });
+		await sheet.getByRole("button", { name: /^Four Chords/ }).click();
+		await expect(page.getByRole("option", { name: /Four Chords/ })).toBeVisible();
+		await expect(page.getByRole("button", { name: /^Bar 4: F\b/ })).toBeVisible();
 	});
 });

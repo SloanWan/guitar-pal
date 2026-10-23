@@ -91,6 +91,25 @@ export function bindPress(el: HTMLElement, { hop = false, now = Date.now }: Pres
 	};
 }
 
+/**
+ * Show a press on `el` from somewhere else — a page shortcut standing in for a
+ * click on it (space on the play key). Returns the release, which keeps the
+ * sink for at least PRESS_MIN_HOLD_MS, as a real press does; calling it twice
+ * does nothing more.
+ */
+export function showPress(el: HTMLElement, now: () => number = Date.now): () => void {
+	const downAt = now();
+	el.classList.add("is-down");
+	let released = false;
+	return () => {
+		if (released) return;
+		released = true;
+		const left = PRESS_MIN_HOLD_MS - (now() - downAt);
+		if (left <= 0) el.classList.remove("is-down");
+		else setTimeout(() => el.classList.remove("is-down"), left);
+	};
+}
+
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
 	if (typeof ref === "function") ref(value);
 	else if (ref) ref.current = value;

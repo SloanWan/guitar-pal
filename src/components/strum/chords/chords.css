@@ -1,0 +1,12 @@
+/* The chord sheet's own pieces; the sheet itself is the primitive (`.gp-sheet*`). */
+@layer components {
+	/* A footer row in the sheet's pinned footer, carrying the strum module's colours
+	   (the sheet is portaled out of the page's `data-m`). */
+	.st-chord-foot {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+}

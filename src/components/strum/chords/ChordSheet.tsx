@@ -18,8 +18,9 @@ import { loadVoicings } from "@/lib/chordVoicingCache";
 import { getChordIndex } from "@/lib/chords";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 import { chordIndexWithUser, isUserVoicingId, mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
-import CustomShapeEditor from "./CustomShapeEditor";
+import CustomShapeEditor, { CustomShapeFooter, startDraft, type ShapeDraft } from "./CustomShapeEditor";
 import { useChordPreview } from "./useChordPreview";
+import "./chords.css";
 
 /** How many chords the search offers at once. */
 const RESULT_LIMIT = 12;
@@ -46,24 +47,24 @@ function sameChord(a: ChordRef | null, b: ChordRef | null): boolean {
  * pending, heard with "Hear it", and the bar keeps playing what it had.
  */
 export default function ChordSheet(props: Props) {
-	const open = props.barIndex !== null;
-	return (
-		<Sheet
-			open={open}
-			onOpenChange={(next) => (next ? undefined : props.onClose())}
-			title={open ? `Bar ${(props.barIndex ?? 0) + 1}` : "Chord"}
-		>
-			{/* Portaled out of the page, so the module's colours are named again here. */}
-			{open && (
-				<div data-m="strum">
-					<ChordChooser key={props.barIndex} {...props} barIndex={props.barIndex ?? 0} />
-				</div>
-			)}
-		</Sheet>
-	);
+	// The bar on show outlives the close, so the sheet slides away with its content
+	// instead of emptying first; each opening (or a move to another bar) counts up
+	// and keys a fresh chooser, so a choice left pending is not there next time.
+	const [shown, setShown] = useState({ from: props.barIndex, bar: props.barIndex, opening: 0 });
+	if (props.barIndex !== shown.from) {
+		setShown(
+			props.barIndex === null
+				? { ...shown, from: null }
+				: { from: props.barIndex, bar: props.barIndex, opening: shown.opening + 1 },
+		);
+	}
+	if (shown.bar === null) return null;
+	return <ChordChooser key={shown.opening} {...props} open={props.barIndex !== null} barIndex={shown.bar} />;
 }
 
+/** The sheet and everything in it; its footer reads the pending choice, so both live here. */
 function ChordChooser({
+	open,
 	barIndex,
 	bars,
 	userVoicings,
@@ -71,13 +72,14 @@ function ChordChooser({
 	onApply,
 	onRemove,
 	onClose,
-}: Omit<Props, "barIndex"> & { barIndex: number }) {
+}: Omit<Props, "barIndex"> & { open: boolean; barIndex: number }) {
 	const bar = bars[barIndex];
 	const kept = bar ? barPlaceholder(bar) : null;
 	const current = bar?.chord ?? null;
 	const [pending, setPending] = useState<ChordRef | null>(current);
 	const [query, setQuery] = useState(kept ?? "");
-	const [custom, setCustom] = useState(false);
+	// "My own shape" while there is a draft, the chord list otherwise.
+	const [draft, setDraft] = useState<ShapeDraft | null>(null);
 	const [library, setLibrary] = useState<{ key: string; voicings: ChordVoicing[] } | null>(null);
 	const [index, setIndex] = useState<readonly ChordIndexEntry[]>([]);
 	const preview = useChordPreview();
@@ -123,13 +125,13 @@ function ChordChooser({
 		userVoicings,
 	);
 
-	if (!bar) return null;
 	const reach = voicingReach(bars, barIndex, "chord").filter(Boolean).length;
 	const unchanged = sameChord(pending, current) && (pending?.voicingId ?? null) === (current?.voicingId ?? null);
 	// Offered when the change can mean more than this bar: re-shaping a chord that
 	// plays elsewhere too, or naming a chord kept under a name used again.
 	const canApplyAll = pending !== null && reach > 1 && (kept !== null || sameChord(pending, current));
 	const pendingName = pending ? chordAbbreviation(pending) : kept ?? "No chord";
+	const back = () => setDraft(null);
 
 	function apply(scope: VoicingScope) {
 		if (!pending) return;
@@ -138,24 +140,7 @@ function ChordChooser({
 		onClose();
 	}
 
-	if (custom) {
-		return (
-			<CustomShapeEditor
-				chord={pending}
-				namingFrom={pending ? null : kept}
-				initialVoicing={selected}
-				onBack={() => setCustom(false)}
-				onHear={(voicing) => void preview.play(voicing)}
-				onSave={(voicing) => {
-					const stored = onSaveVoicing(voicing);
-					setPending({ root: stored.root, suffix: stored.suffix, voicingId: stored.id });
-					setCustom(false);
-				}}
-			/>
-		);
-	}
-
-	return (
+	const list = (
 		<div className="st-slide">
 			<div>
 				<span className="st-lab">{kept && !pending ? `"${kept}" isn't in the chord library` : "Chord"}</span>
@@ -180,7 +165,7 @@ function ChordChooser({
 							<span className="st-lab">{voicing.label ?? (isUserVoicingId(voicing.id) ? "Mine" : "—")}</span>
 						</button>
 					))}
-					<button type="button" className="st-shape" data-add onClick={() => setCustom(true)}>
+					<button type="button" className="st-shape" data-add onClick={() => setDraft(startDraft(selected, pending ? null : kept))}>
 						<Plus aria-hidden />
 						<span className="st-lab">My own shape</span>
 					</button>
@@ -215,32 +200,76 @@ function ChordChooser({
 				</div>
 				{query.trim() !== "" && results.length === 0 && <p className="st-lab m-0">No chord called “{query.trim()}”.</p>}
 			</section>
-
-			<div className="st-sheet-foot">
-				<Button
-					variant="ghost"
-					size="xs"
-					disabled={bars.length <= 1}
-					onClick={() => {
-						onRemove(barIndex);
-						onClose();
-					}}
-				>
-					Remove bar
-				</Button>
-				<span className="flex-1" />
-				<Button variant="secondary" size="xs" disabled={!selected} onClick={() => selected && void preview.play(selected)}>
-					Hear it
-				</Button>
-				{canApplyAll && (
-					<Button variant="secondary" size="xs" onClick={() => apply("chord")}>
-						Apply to all {reach}
-					</Button>
-				)}
-				<Button size="xs" disabled={!pending} onClick={() => apply("bar")}>
-					{unchanged ? "Done" : "Apply"}
-				</Button>
-			</div>
 		</div>
+	);
+
+	const chooserFoot = (
+		<div className="st-chord-foot" data-m="strum">
+			<Button
+				variant="ghost"
+				size="xs"
+				disabled={bars.length <= 1}
+				onClick={() => {
+					onRemove(barIndex);
+					onClose();
+				}}
+			>
+				Remove bar
+			</Button>
+			<span className="flex-1" />
+			<Button variant="secondary" size="xs" disabled={!selected} onClick={() => selected && void preview.play(selected)}>
+				Hear it
+			</Button>
+			{canApplyAll && (
+				<Button variant="secondary" size="xs" onClick={() => apply("chord")}>
+					Apply to all {reach}
+				</Button>
+			)}
+			<Button size="xs" disabled={!pending} onClick={() => apply("bar")}>
+				{unchanged ? "Done" : "Apply"}
+			</Button>
+		</div>
+	);
+
+	const customFoot = draft && (
+		<div className="st-chord-foot" data-m="strum">
+			<CustomShapeFooter
+				chord={pending}
+				draft={draft}
+				onBack={back}
+				onHear={(voicing) => void preview.play(voicing)}
+				onSave={(voicing) => {
+					const stored = onSaveVoicing(voicing);
+					setPending({ root: stored.root, suffix: stored.suffix, voicingId: stored.id });
+					setDraft(null);
+				}}
+			/>
+		</div>
+	);
+
+	return (
+		<Sheet
+			open={open}
+			onOpenChange={(next) => (next ? undefined : onClose())}
+			title={`Bar ${barIndex + 1}`}
+			// a bar removed as the sheet closes leaves nothing to show while it slides away
+			footer={bar ? customFoot || chooserFoot : null}
+		>
+			{/* Portaled out of the page, so the module's colours are named again here (and on the footer). */}
+			{bar && (
+				<div data-m="strum">
+					{draft ? (
+						<CustomShapeEditor
+							chord={pending}
+							draft={draft}
+							onDraftChange={(update) => setDraft((d) => d && update(d))}
+							onBack={back}
+						/>
+					) : (
+						list
+					)}
+				</div>
+			)}
+		</Sheet>
 	);
 }

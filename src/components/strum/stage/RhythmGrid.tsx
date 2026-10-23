@@ -3,6 +3,8 @@
 import type { CSSProperties } from "react";
 import type { Beat, StepValue } from "@/lib/strumPatterns";
 import { cellCountLabels, type Meter } from "@/lib/strumMeter";
+import { balancedRowSizes, splitRows } from "@/lib/balancedRows";
+import { cssPx, useElementWidth } from "@/components/strum/useElementWidth";
 
 /** Where the playhead is, in the rhythm's own bars. */
 export interface RhythmPosition {
@@ -37,16 +39,27 @@ function StrokeIcon({ value }: { value: StepValue }) {
  * The pattern's rhythm, every cell a button: click to cycle it (down / up / muted /
  * rest, leading with the stroke the hand is already travelling in). Each beat is
  * only as wide as its cells; on a phone the beats share the line by cell count.
+ *
+ * A bar too wide for the line breaks between beats into rows of the same number of
+ * beats (`balancedRowSizes`): sixteenths in 4/4 go two and two, never three and one.
+ * The cell sizes it measures with are the stylesheet's (`--st-cell` and friends).
  */
 export default function RhythmGrid({ rhythm, meter, position, onToggle }: Props) {
 	const multiBar = rhythm.length > 1;
+	const [measure, width, node] = useElementWidth<HTMLDivElement>();
+	const cell = cssPx(node, "--st-cell"), cellGap = cssPx(node, "--st-cell-gap"), beatGap = cssPx(node, "--st-beat-gap");
+	const room = width - (multiBar ? cssPx(node, "--st-barno") : 0);
+	const beatWidth = (beat: Beat) => beat.length * cell + (beat.length - 1) * cellGap;
 	return (
-		<>
-			{rhythm.map((beats, bi) => (
-				<div key={bi} className="st-barline">
-					{multiBar && <span className="st-lab st-num st-barno">{bi + 1}</span>}
+		<div ref={measure} className="st-rhythm">
+			{rhythm.map((beats, bi) => {
+				const sizes = width > 0 && cell > 0 ? balancedRowSizes(beats.map(beatWidth), room, beatGap) : [beats.length];
+				const rows = splitRows(beats.map((beat, ti) => ({ beat, ti })), sizes);
+				return rows.map((row, ri) => (
+				<div key={`${bi}-${ri}`} className="st-barline">
+					{multiBar && <span className="st-lab st-num st-barno">{ri === 0 ? bi + 1 : ""}</span>}
 					<div className="st-beats" role="group" aria-label={multiBar ? `Bar ${bi + 1}` : "Rhythm"}>
-						{beats.map((beat, ti) => {
+						{row.map(({ beat, ti }) => {
 							const counts = cellCountLabels(meter, ti, beat.length);
 							return (
 								<div key={ti} className="st-beat" style={{ "--n": String(beat.length) } as CSSProperties}>
@@ -86,7 +99,8 @@ export default function RhythmGrid({ rhythm, meter, position, onToggle }: Props)
 						})}
 					</div>
 				</div>
-			))}
-		</>
+				));
+			})}
+		</div>
 	);
 }

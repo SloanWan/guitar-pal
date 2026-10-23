@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Stepper } from "@/components/ui/stepper";
+import { Segmented } from "@/components/ui/segmented";
+import { Switch } from "@/components/ui/switch";
 import type { BarChordDiagram } from "@/components/strum/useBarChordDiagrams";
 import type { ProgressionDraft } from "@/components/strum/useProgressionDraft";
+import { cssPx, useElementWidth } from "@/components/strum/useElementWidth";
 import { STRUM_CAPO_MAX, type ChordProgression } from "@/lib/strumPatterns";
 import { barPlaceholder } from "@/lib/strumBars";
 import { barLabel, defaultProgressionName, progressionCapo, progressionDisplayName } from "@/lib/strumProgressions";
+import { balancedPerRow } from "@/lib/balancedRows";
 import { prefersReducedMotion } from "@/lib/motion";
 import ChordTile from "./ChordTile";
+
+/** How the open progression's chords are shown: a chart line of names, or a tile each with its shape. */
+export type ChordView = "names" | "shapes";
 
 /** A question waiting on the open progression's unsaved changes. */
 export interface PendingSwitch {
@@ -29,6 +35,11 @@ interface Props {
 	/** The bar sounding now, while playing. */
 	playingBar: number | null;
 	diagrams: (BarChordDiagram | null)[];
+	view: ChordView;
+	onView: (view: ChordView) => void;
+	/** Keep the sounding chord in view, scrolling the chords — never the page. */
+	follow: boolean;
+	onFollow: (follow: boolean) => void;
 	onEditBar: (index: number) => void;
 	onAddBar: () => void;
 	onSave: () => void;
@@ -37,9 +48,16 @@ interface Props {
 	pendingSwitch: PendingSwitch | null;
 }
 
+const VIEWS: { value: ChordView; label: string }[] = [
+	{ value: "names", label: "Names" },
+	{ value: "shapes", label: "Shapes" },
+];
+
 /**
- * The open progression: its name and capo, a tile a bar, and what to do with
- * changes. A tile opens the chord sheet; nothing is written until Save.
+ * The open progression: its name and capo, its chords — a chart line or a tile
+ * each — and what to do with changes. A chord opens the chord sheet; nothing is
+ * written until Save. The chords scroll inside the panel, so the stage above
+ * them stays where it is.
  */
 export default function ProgressionEditor({
 	progression,
@@ -47,6 +65,10 @@ export default function ProgressionEditor({
 	readOnly,
 	playingBar,
 	diagrams,
+	view,
+	onView,
+	follow,
+	onFollow,
 	onEditBar,
 	onAddBar,
 	onSave,
@@ -55,28 +77,39 @@ export default function ProgressionEditor({
 	pendingSwitch,
 }: Props) {
 	const [confirmDelete, setConfirmDelete] = useState(false);
-	const tiles = useRef<(HTMLButtonElement | null)[]>([]);
+	const [measure, width, scroller] = useElementWidth<HTMLDivElement>();
 	const capo = progressionCapo(progression);
+	const bars = progression.bars;
 
-	// The bar sounding stays in view, however long the progression runs.
+	// One row when the chords fit on one (tiles may narrow to --st-tile-min for it);
+	// otherwise rows as even as they can be. Only the chords count: "Add chord"
+	// follows them, into the last row's gap or onto a row of its own.
+	const per =
+		view === "shapes"
+			? balancedPerRow(bars.length, width, cssPx(scroller, "--st-tile-min"), cssPx(scroller, "--st-tile-gap"), cssPx(scroller, "--st-tile-max") || Infinity)
+			: balancedPerRow(bars.length, width, cssPx(scroller, "--st-cl-cell"), 0, cssPx(scroller, "--st-cl-max") || Infinity);
+	const columns = { "--per": String(Math.max(1, per)) } as CSSProperties;
+
+	// The sounding chord stays in view: the chords scroll, the page does not.
 	useEffect(() => {
-		if (playingBar === null) return;
-		tiles.current[playingBar]?.scrollIntoView({
-			block: "nearest",
-			behavior: prefersReducedMotion() ? "auto" : "smooth",
-		});
-	}, [playingBar]);
+		if (!follow || playingBar === null || !scroller) return;
+		const el = scroller.querySelector<HTMLElement>(`[data-bar="${playingBar}"]`);
+		if (!el) return;
+		const top = el.offsetTop, bottom = top + el.offsetHeight;
+		if (top >= scroller.scrollTop && bottom <= scroller.scrollTop + scroller.clientHeight) return;
+		scroller.scrollTo({ top: Math.max(0, top - 8), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+	}, [follow, playingBar, scroller, view]);
 
 	return (
 		<div className="st-editor">
-			<div className="flex flex-wrap items-center gap-2">
+			<div className="st-editor-head">
 				{readOnly ? (
-					<h3 className="m-0 flex-1 text-lg font-extrabold">{progressionDisplayName(progression)}</h3>
+					<h3 className="st-editor-name">{progressionDisplayName(progression)}</h3>
 				) : (
 					<input
 						className="st-title-in"
 						aria-label="Progression name"
-						placeholder={defaultProgressionName(progression.bars)}
+						placeholder={defaultProgressionName(bars)}
 						value={progression.name ?? ""}
 						onChange={(e) => draft.setName(e.target.value)}
 					/>
@@ -84,11 +117,57 @@ export default function ProgressionEditor({
 				{readOnly ? (
 					capo > 0 && <span className="st-lab">Capo {capo}</span>
 				) : (
-					<span className="flex items-center gap-2">
+					<span className="st-capo" role="group" aria-label="Capo">
 						<span className="st-lab">Capo</span>
-						<Stepper label="Capo" value={capo} onChange={draft.setCapo} min={0} max={STRUM_CAPO_MAX} />
+						<Button variant="icon" size="xs" aria-label="Capo down" disabled={capo <= 0} onClick={() => draft.setCapo(capo - 1)}>
+							−
+						</Button>
+						<output className="st-num st-capo-val">{capo === 0 ? "—" : capo}</output>
+						<Button variant="icon" size="xs" aria-label="Capo up" disabled={capo >= STRUM_CAPO_MAX} onClick={() => draft.setCapo(capo + 1)}>
+							+
+						</Button>
 					</span>
 				)}
+				{!readOnly && (
+					<button
+						type="button"
+						className="st-icon"
+						data-tone="bad"
+						data-anim="delete"
+						aria-expanded={confirmDelete}
+						aria-label="Delete this progression"
+						title="Delete this progression"
+						onClick={() => setConfirmDelete((v) => !v)}
+					>
+						<Trash2 aria-hidden />
+					</button>
+				)}
+			</div>
+
+			{confirmDelete && (
+				<div className="st-note" role="alertdialog" aria-label="Delete progression">
+					<span className="flex-1 text-[13px]">
+						Delete <b>{progressionDisplayName(progression)}</b>? This can&apos;t be undone.
+					</span>
+					<Button variant="ghost" size="xs" onClick={() => setConfirmDelete(false)}>
+						Cancel
+					</Button>
+					<Button
+						variant="danger"
+						size="xs"
+						onClick={() => {
+							setConfirmDelete(false);
+							onDelete();
+						}}
+					>
+						Delete
+					</Button>
+				</div>
+			)}
+
+			<div className="st-editor-tools">
+				<Segmented label="Chord view" dense options={VIEWS} value={view} onChange={onView} />
+				<Switch checked={follow} onCheckedChange={onFollow} label="Follow playback" />
 			</div>
 
 			{pendingSwitch ? (
@@ -123,64 +202,60 @@ export default function ProgressionEditor({
 				)
 			)}
 
-			<div className="st-tiles">
-				{progression.bars.map((bar, i) => (
-					<ChordTile
-						key={i}
-						ref={(el) => {
-							tiles.current[i] = el;
-						}}
-						index={i}
-						label={barLabel(bar)}
-						diagram={diagrams[i] ?? null}
-						now={playingBar === i}
-						silent={barPlaceholder(bar) !== null}
-						onOpen={readOnly ? undefined : () => onEditBar(i)}
-					/>
-				))}
-				{!readOnly && (
-					<button type="button" className="st-tile" data-add onClick={onAddBar}>
+			<div ref={measure} className="st-chords-scroll">
+				{view === "shapes" ? (
+					<div className="st-tiles" style={columns}>
+						{bars.map((bar, i) => (
+							<ChordTile
+								key={i}
+								index={i}
+								label={barLabel(bar)}
+								diagram={diagrams[i] ?? null}
+								now={playingBar === i}
+								silent={barPlaceholder(bar) !== null}
+								onOpen={readOnly ? undefined : () => onEditBar(i)}
+							/>
+						))}
+						{!readOnly && (
+							<button type="button" className="st-tile" data-add onClick={onAddBar}>
+								<Plus aria-hidden />
+								<span className="text-xs font-semibold">Add chord</span>
+							</button>
+						)}
+					</div>
+				) : (
+					<div className="st-chordline" style={columns} role="list" aria-label="Chords, one a bar">
+						{bars.map((bar, i) => {
+							const label = barLabel(bar);
+							const props = {
+								className: "st-cl-cell",
+								"data-bar": i,
+								"data-now": playingBar === i ? "" : undefined,
+								"data-silent": barPlaceholder(bar) !== null ? "" : undefined,
+								"data-end": (i + 1) % Math.max(1, per) === 0 || i === bars.length - 1 ? "" : undefined,
+							};
+							return (
+								<span key={i} role="listitem" className="contents">
+									{readOnly ? (
+										<span {...props}>{label}</span>
+									) : (
+										<button type="button" {...props} aria-label={`Bar ${i + 1}: ${label}. Change`} onClick={() => onEditBar(i)}>
+											{label}
+										</button>
+									)}
+								</span>
+							);
+						})}
+					</div>
+				)}
+				{view === "names" && !readOnly && (
+					<Button variant="ghost" size="xs" className="mt-2" onClick={onAddBar}>
 						<Plus aria-hidden />
-						<span className="text-xs font-semibold">Add chord</span>
-					</button>
+						Add chord
+					</Button>
 				)}
 			</div>
 
-			{!readOnly && (
-				<div className="st-editor-foot">
-					{confirmDelete && (
-						<div className="st-note" role="alertdialog" aria-label="Delete progression">
-							<span className="text-[13px]">
-								Delete <b>{progressionDisplayName(progression)}</b>? This can&apos;t be undone.
-							</span>
-							<Button variant="ghost" size="xs" onClick={() => setConfirmDelete(false)}>
-								Cancel
-							</Button>
-							<Button
-								variant="danger"
-								size="xs"
-								onClick={() => {
-									setConfirmDelete(false);
-									onDelete();
-								}}
-							>
-								Delete
-							</Button>
-						</div>
-					)}
-					<button
-						type="button"
-						className="st-icon"
-						data-tone="bad"
-						aria-expanded={confirmDelete}
-						aria-label="Delete this progression"
-						title="Delete this progression"
-						onClick={() => setConfirmDelete((v) => !v)}
-					>
-						<Trash2 aria-hidden />
-					</button>
-				</div>
-			)}
 		</div>
 	);
 }

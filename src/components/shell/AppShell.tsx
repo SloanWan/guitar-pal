@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import NavLinks from "./NavLinks";
 import MoreMenu from "./MoreMenu";
 import TabBar from "./TabBar";
+import PointerFocusRelease from "./PointerFocusRelease";
 
 /**
  * The page's frame (#356): the header, the page between, and the phone tab bar under it.
@@ -58,6 +59,7 @@ export default async function AppShell({ hideSignIn = false, children }: { hideS
 			</header>
 			{children}
 			<TabBar signedIn={!!profile} />
+			<PointerFocusRelease />
 		</>
 	);
 }

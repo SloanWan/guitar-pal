@@ -27,7 +27,7 @@ const ChordTile = forwardRef<HTMLButtonElement, Props>(function ChordTile({ inde
 	);
 	if (!onOpen) {
 		return (
-			<span className="st-tile" data-now={now ? "" : undefined} data-silent={silent ? "" : undefined}>
+			<span className="st-tile" data-bar={index} data-now={now ? "" : undefined} data-silent={silent ? "" : undefined}>
 				{body}
 			</span>
 		);
@@ -37,6 +37,7 @@ const ChordTile = forwardRef<HTMLButtonElement, Props>(function ChordTile({ inde
 			ref={ref}
 			type="button"
 			className="st-tile"
+			data-bar={index}
 			data-now={now ? "" : undefined}
 			data-silent={silent ? "" : undefined}
 			aria-label={`Bar ${index + 1}: ${label}${silent ? ", not in the chord library" : ""}. Change`}

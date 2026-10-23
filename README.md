@@ -86,10 +86,10 @@ docs/            assistant grammar, MCP setup
 ## Running it locally
 
 This is the source of [guitarpal.sloanwan.com](https://guitarpal.sloanwan.com),
-not a package for self-hosting. The database schema exists as the migrations in
-`scripts/*.sql` but not yet as one baseline ([#264](https://github.com/SloanWan/guitar-pal/issues/264)), and the chord data lives in
-the database, so pages that read it need those tables. With a Supabase project
-of your own:
+not a package for self-hosting. The database structure is in
+`scripts/schema.sql` (tables, indexes, RLS policies and grants; `psql -f` it into
+a Supabase project of your own), but the chord library's rows are not, so the
+chord pages start empty. Then:
 
 ```bash
 cp .env.example .env.local   # fill in the Supabase URL and anon key

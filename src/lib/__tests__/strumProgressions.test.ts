@@ -5,6 +5,7 @@ import {
 	progressionBarsFromTokens,
 	keptTokens,
 	chordAbbreviation,
+	barLabel,
 	defaultProgressionName,
 	progressionDisplayName,
 	sortProgressions,
@@ -309,5 +310,13 @@ describe("progressionBarsFromTokens", () => {
 		const b: Beat[] = [["", "U"]];
 		const bars = progressionBarsFromTokens([a, b], parseChordSequence("C G Am", INDEX).tokens);
 		expect(bars.map((bar) => bar.beats)).toEqual([a, b, a]);
+	});
+});
+
+describe("barLabel", () => {
+	it("names a bar by its chord, its kept name, or a dash", () => {
+		expect(barLabel({ beats: [], chord: { root: "A", suffix: "minor" } })).toBe("Am");
+		expect(barLabel({ beats: [], chord: null, unknownChord: "Hm7" })).toBe("Hm7");
+		expect(barLabel({ beats: [], chord: null })).toBe(NO_CHORD_LABEL);
 	});
 });

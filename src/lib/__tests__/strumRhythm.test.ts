@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	alignToRhythm,
+	cycleRhythmCell,
 	extraBarsFromColumn,
 	followsRhythm,
 	patternRhythm,
@@ -152,5 +153,20 @@ describe("rhythmOfBars", () => {
 		const bars = [bar(A), bar(B), bar(A), bar(B)];
 		const rhythm = rhythmOfBars(bars);
 		expect(followsRhythm(bars, rhythm)).toBe(true);
+	});
+});
+
+describe("cycleRhythmCell", () => {
+	it("cycles one cell, leading with the stroke of its position", () => {
+		const rest: Beat[][] = [[["", ""]], [["", ""]]];
+		expect(cycleRhythmCell(rest, 1, 0, 0)[1][0]).toEqual(["D", ""]);
+		expect(cycleRhythmCell(rest, 1, 0, 1)[1][0]).toEqual(["", "U"]);
+	});
+
+	it("leaves every other bar the same object", () => {
+		const rhythm: Beat[][] = [A, B];
+		const next = cycleRhythmCell(rhythm, 1, 0, 0);
+		expect(next[0]).toBe(A);
+		expect(rhythm[1]).toBe(B);
 	});
 });

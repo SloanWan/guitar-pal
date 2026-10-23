@@ -1,5 +1,6 @@
 import type { Bar, Beat, StrumPattern } from "@/lib/strumPatterns";
 import { normalizeBeats, validateBars } from "@/lib/strumBars";
+import { cycleStep } from "@/lib/strumBarEdit";
 
 /**
  * A pattern's rhythm as bars, and how a chord sequence is laid over it.
@@ -115,4 +116,18 @@ export function rhythmOfBars(bars: readonly Bar[]): Beat[][] {
 		}
 	}
 	return bars.map((bar) => copyBeats(bar.beats));
+}
+
+/**
+ * Cycle one cell of a rhythm, the way a click on the grid does: an even cell
+ * leads with a downstroke, an odd one with the upstroke that returns from it.
+ */
+export function cycleRhythmCell(rhythm: readonly Beat[][], bar: number, beat: number, cell: number): Beat[][] {
+	return rhythm.map((beats, bi) =>
+		bi !== bar
+			? beats
+			: beats.map((cells, ti) =>
+					ti !== beat ? cells : cells.map((value, ci) => (ci === cell ? cycleStep(value, ci % 2 === 0 ? "D" : "U") : value)),
+				),
+	);
 }

@@ -7,6 +7,7 @@ import {
 	beatUnitLabel,
 	beatUnitGlyph,
 	cellCountLabel,
+	cellCountLabels,
 	beatsPerBar,
 	isCompound,
 	isSupportedMeter,
@@ -267,5 +268,19 @@ describe("cellCountLabel", () => {
 				expect(cellCountLabel(meter, cells)).not.toBe("");
 			}
 		}
+	});
+});
+
+describe("cellCountLabels", () => {
+	it("gives one label a cell, the beat's number first", () => {
+		expect(cellCountLabels([4, 4], 0, 1)).toEqual(["1"]);
+		expect(cellCountLabels([4, 4], 1, 2)).toEqual(["2", "+"]);
+		expect(cellCountLabels([4, 4], 2, 3)).toEqual(["3", "trip", "let"]);
+		expect(cellCountLabels([4, 4], 3, 4)).toEqual(["4", "e", "+", "a"]);
+	});
+
+	it("counts a compound beat in its own syllables", () => {
+		expect(cellCountLabels([6, 8], 1, 3)).toEqual(["2", "la", "li"]);
+		expect(cellCountLabels([6, 8], 0, 6)).toHaveLength(6);
 	});
 });

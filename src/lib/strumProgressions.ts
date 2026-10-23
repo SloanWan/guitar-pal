@@ -44,6 +44,14 @@ export function chordAbbreviation(chord: ChordRef): string {
 }
 
 /**
+ * What a bar is called on screen: its chord as a chart writes it, the name it was
+ * kept under when the library has no such chord, or a dash for no chord at all.
+ */
+export function barLabel(bar: Bar): string {
+	return bar.chord ? chordAbbreviation(bar.chord) : (barPlaceholder(bar) ?? NO_CHORD_LABEL);
+}
+
+/**
  * The name a progression takes when the user gives it none: `"C|G|Am|F"`.
  *
  * A bar kept as a name the library has no chord for is listed under that name,
@@ -52,13 +60,7 @@ export function chordAbbreviation(chord: ChordRef): string {
  */
 export function defaultProgressionName(bars: Bar[]): string {
 	if (bars.length === 0) return NO_CHORD_LABEL;
-	return bars
-		.map((bar) =>
-			bar.chord
-				? chordAbbreviation(bar.chord)
-				: (barPlaceholder(bar) ?? NO_CHORD_LABEL),
-		)
-		.join(NAME_SEPARATOR);
+	return bars.map(barLabel).join(NAME_SEPARATOR);
 }
 
 /** What a progression is listed under: its own name, else its chords. */

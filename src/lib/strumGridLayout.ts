@@ -78,8 +78,6 @@ export function maxBarDisplayCells(bars: Bar[]): number {
  * `min-w-3.5 sm:min-w-5 md:min-w-6` in StepGrid — change both together.
  */
 export const CELL_MIN_WIDTHS_PX = { base: 14, sm: 20, md: 24 } as const;
-/** The desktop width, which the two-column threshold below is derived from. */
-export const CELL_MIN_WIDTH_PX = CELL_MIN_WIDTHS_PX.md;
 
 /**
  * The widest a bar can get: four beats of sixteenths.

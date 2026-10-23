@@ -6,6 +6,7 @@ import type { Bar, Beat, ChordProgression, StrumPattern } from "./strumPatterns"
 import { normalizeBars, normalizeBeats, normalizeBpm, patternBpm, patternMeter, validateBars } from "./strumBars";
 import { normalizeMeter } from "./strumMeter";
 import { normalizeCapo } from "./strumProgressions";
+import { withRhythm } from "./strumRhythm";
 
 /**
  * Public share links (issue #215).
@@ -88,13 +89,14 @@ export function toSharePayload(item: SharedItem): Record<string, unknown> {
 		void _createdAt;
 		return pattern;
 	}
-	// A progression's identity, list position and reconcile bookkeeping are
-	// all about the sharer's library; the viewer's copy starts its own.
+	// A progression's identity and list position are about the sharer's
+	// library; the viewer's copy starts its own.
 	const { pattern, progressions, openIndex } = item;
 	return {
 		pattern: {
 			name: pattern.name,
 			beats: pattern.beats,
+			...(pattern.extraBars?.length ? { extraBars: pattern.extraBars } : {}),
 			bpm: patternBpm(pattern),
 			meter: patternMeter(pattern),
 		},
@@ -127,13 +129,20 @@ function readSharedStrum(rowId: string, payload: unknown): SharedStrum | null {
 	if (!isRecord(payload) || !isRecord(payload.pattern)) return null;
 	const raw = payload.pattern;
 	if (!validateBars([{ beats: raw.beats, chord: null }]).ok) return null;
-	const pattern: StrumPattern = {
-		id: rowId,
-		name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Shared pattern",
-		beats: normalizeBeats(raw.beats as Beat[]),
-		bpm: normalizeBpm(raw.bpm),
-		meter: normalizeMeter(raw.meter),
-	};
+	// The further bars of a longer rhythm. A payload whose extra bars do not read
+	// is not trusted with any of them: half a rhythm is not what was shared.
+	const extra = Array.isArray(raw.extraBars) ? raw.extraBars : [];
+	if (extra.length > 0 && !validateBars(extra.map((beats) => ({ beats, chord: null }))).ok) return null;
+	const pattern: StrumPattern = withRhythm(
+		{
+			id: rowId,
+			name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Shared pattern",
+			beats: [],
+			bpm: normalizeBpm(raw.bpm),
+			meter: normalizeMeter(raw.meter),
+		},
+		[normalizeBeats(raw.beats as Beat[]), ...extra.map((beats) => normalizeBeats(beats as Beat[]))],
+	);
 
 	if (payload.progressions === undefined || payload.progressions === null) {
 		return { kind: "strum", pattern, progressions: [], openIndex: 0 };
@@ -154,9 +163,6 @@ function readSharedStrum(rowId: string, payload: unknown): SharedStrum | null {
 			...(name ? { name } : {}),
 			...(typeof rawProgression.bpm === "number" ? { bpm: normalizeBpm(rawProgression.bpm) } : {}),
 			...(normalizeCapo(rawProgression.capo) > 0 ? { capo: normalizeCapo(rawProgression.capo) } : {}),
-			// Written as reconciled with the pattern it arrived with, so nothing
-			// asks the viewer to sync a rhythm they have not touched.
-			syncedBeats: pattern.beats.map((beat) => [...beat]),
 		});
 	}
 	const open = payload.open;

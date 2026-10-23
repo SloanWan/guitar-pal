@@ -1,10 +1,15 @@
 import { useState, useEffect } from "react";
 import type { Bar, ChordProgression } from "@/lib/strumPatterns";
 import { validateBars, normalizeBars, normalizeBpm } from "@/lib/strumBars";
-import { normalizeCapo, normalizeProgressionSync } from "@/lib/strumProgressions";
+import { normalizeCapo } from "@/lib/strumProgressions";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
-import { progressionColumns, STRUM_PROGRESSIONS_STORAGE_KEY } from "@/lib/strumStorage";
+import {
+	migrateGuestStrumStorage,
+	progressionColumns,
+	readStoredProgressions,
+	STRUM_PROGRESSIONS_STORAGE_KEY,
+} from "@/lib/strumStorage";
 
 const STORAGE_KEY = STRUM_PROGRESSIONS_STORAGE_KEY;
 
@@ -17,10 +22,6 @@ interface ProgressionRow {
 	name: string | null;
 	bpm: number | null;
 	capo: number | null;
-	/** All absent on rows written before the reconcile prompt existed. */
-	synced_beats?: unknown;
-	follows_pattern?: unknown;
-	sync_notice_dismissed?: unknown;
 }
 
 /** Drop rows whose bars no longer validate — a bad row must not break the list. */
@@ -35,25 +36,7 @@ function rowToProgression(row: ProgressionRow): ChordProgression | null {
 		// Null means "no tempo of its own" — the pattern's tempo is used instead.
 		bpm: row.bpm === null ? undefined : normalizeBpm(row.bpm),
 		capo: normalizeCapo(row.capo),
-		...normalizeProgressionSync({
-			syncedBeats: row.synced_beats,
-			followsPattern: row.follows_pattern,
-			syncNoticeDismissed: row.sync_notice_dismissed,
-		}),
 	};
-}
-
-function readStored(): ChordProgression[] {
-	try {
-		const saved = localStorage.getItem(STORAGE_KEY);
-		if (!saved) return [];
-		return (JSON.parse(saved) as ChordProgression[])
-			.filter((p) => validateBars(p.bars).ok)
-			// Local storage is as untrusted as the database; the same guard applies.
-			.map((p) => ({ ...p, bars: normalizeBars(p.bars), ...normalizeProgressionSync(p) }));
-	} catch {
-		return [];
-	}
 }
 
 function writeStored(progressions: ChordProgression[]) {
@@ -74,7 +57,8 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 
 	useEffect(() => {
 		if (loading || user) return;
-		const local = readStored();
+		migrateGuestStrumStorage();
+		const local = readStoredProgressions();
 		queueMicrotask(() => {
 			setProgressions(local);
 			setProgressionsLoading(false);
@@ -88,7 +72,8 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 
 		async function mergeAndReload() {
 			const supabase = createClient();
-			const local = readStored();
+			migrateGuestStrumStorage();
+			const local = readStoredProgressions();
 			if (local.length > 0) {
 				try {
 					const { error } = await supabase
@@ -106,7 +91,8 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 				// select("*"), as useStrumPatterns does: an explicit column list is a
 				// second place to remember a new column, and forgetting it is silent —
 				// the field writes fine and simply never comes back, which is how the
-				// reconcile fields were dead on arrival until this was noticed.
+				// reconcile fields of an earlier model were dead on arrival until
+				// this was noticed.
 				.select("*")
 				.eq("user_id", currentUserId);
 			if (error) console.error("[useChordProgressions] load failed:", error.message);

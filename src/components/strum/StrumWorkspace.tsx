@@ -12,7 +12,6 @@ import {
 	type ChordRef,
 } from "@/lib/strumPatterns";
 import {
-	toBars,
 	barPlaceholder,
 	resolveBarChords,
 	transposeBarPitches,
@@ -24,7 +23,8 @@ import {
 	uniquePatternName,
 } from "@/lib/strumBars";
 import { DEFAULT_METER, isCompound } from "@/lib/strumMeter";
-import { TICK_LEVELS, tickLevelLabel, type TickLevel } from "@/lib/strumMetronome";
+import { tickLevelsFor, tickLevelLabel, type TickLevel } from "@/lib/strumMetronome";
+import { patternRhythm, progressionPlayback, rhythmOfBars, toBars, withRhythm } from "@/lib/strumRhythm";
 import { STRUM_PITCHES } from "@/components/strum/useGuitarSampleLoader";
 import {
 	setBarChord,
@@ -38,12 +38,6 @@ import {
 	progressionBarsFromTokens,
 	progressionCapo,
 	progressionDisplayName,
-	patternSyncState,
-	applyPatternSync,
-	declinePatternSync,
-	resumePatternSync,
-	dismissPatternNotice,
-	markPatternSynced,
 	type ChordToken,
 	normalizeCapo,
 } from "@/lib/strumProgressions";
@@ -323,7 +317,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 	// user picked on the pattern tab this session.
 	const sourceBarsKey = JSON.stringify(
 		tab === "progressions" && openProgression
-			? openProgression.bars
+			? progressionPlayback(patternRhythm(selectedPattern ?? PRESET_STRUM_PATTERNS[0]), openProgression)
 			: toBars(selectedPattern ?? PRESET_STRUM_PATTERNS[0]),
 	);
 
@@ -492,14 +486,17 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 		if (handoff.kind === "rename") return applyRenameHandoff(handoff);
 		if (handoff.kind === "delete") return applyDeleteHandoff(handoff);
 
-		const pattern: StrumPattern = {
-			id: crypto.randomUUID(),
-			// The player confirmed this already; a name clash is not a reason to
-			// send them back, so it takes a number instead.
-			name: uniquePatternName(handoff.name, [...PRESET_STRUM_PATTERNS, ...customPatterns]),
-			beats: handoff.bars[0].beats,
-			...(handoff.bpm === null ? {} : { bpm: handoff.bpm }),
-		};
+		const pattern: StrumPattern = withRhythm(
+			{
+				id: crypto.randomUUID(),
+				// The player confirmed this already; a name clash is not a reason to
+				// send them back, so it takes a number instead.
+				name: uniquePatternName(handoff.name, [...PRESET_STRUM_PATTERNS, ...customPatterns]),
+				beats: [],
+				...(handoff.bpm === null ? {} : { bpm: handoff.bpm }),
+			},
+			rhythmOfBars(handoff.bars),
+		);
 		handleSaveCustomPattern(pattern);
 		// Chords live in the progression table, never on the pattern row, so a
 		// proposal carrying chords becomes a pattern plus one progression over it.
@@ -742,10 +739,8 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 		const progression: ChordProgression = {
 			id: crypto.randomUUID(),
 			patternId: selectedPattern.id,
-			bars: progressionBarsFromTokens(selectedPattern.beats, tokens),
+			bars: progressionBarsFromTokens(patternRhythm(selectedPattern), tokens),
 			orderIndex: nextOrderIndex(patternProgressions),
-			// Written from the pattern as it stands, so it starts reconciled.
-			syncedBeats: selectedPattern.beats.map((beat) => [...beat]),
 		};
 		handleSaveProgression(progression);
 		stop();
@@ -788,48 +783,6 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 		handleSaveProgression(next);
 		stop();
 		if (openProgressionId === next.id) setBpm(bpmFor(next));
-	}
-
-	/**
-	 * Reconcile the open sequence with its pattern, or ask to.
-	 *
-	 * A pattern edit used to rewrite every sequence over it on save, silently and
-	 * while the player was looking at the pattern editor. The decision now happens
-	 * here, where the sequence is on screen and the answer can be judged.
-	 *
-	 * A sequence written before the prompt existed has no baseline to diff, so it
-	 * is backfilled without a word rather than asked about a change nobody could
-	 * describe.
-	 */
-	const openSyncState =
-		openProgression && selectedPattern
-			? patternSyncState(openProgression, selectedPattern.beats)
-			: null;
-
-	useEffect(() => {
-		// Both quiet outcomes settle the same way: record the pattern's rhythm and
-		// say nothing. One has no baseline to diff, the other has one but nothing
-		// that would change.
-		const quiet = openSyncState?.kind === "backfill" || openSyncState?.kind === "no-change";
-		if (isShared || !quiet || !openProgression || !selectedPattern) return;
-		handleSaveProgression(markPatternSynced(openProgression, selectedPattern.beats));
-	// eslint-disable-next-line react-hooks/exhaustive-deps -- settles once per sync outcome of the open sequence; listing the save handler (new every render) would save on every render
-	}, [openSyncState?.kind, openProgression?.id]);
-
-	function handleApplyPatternSync() {
-		if (!openProgression || !selectedPattern) return;
-		stop();
-		handleSaveProgression(applyPatternSync(openProgression, selectedPattern.beats));
-	}
-
-	function handleDeclinePatternSync() {
-		if (!openProgression) return;
-		handleSaveProgression(declinePatternSync(openProgression));
-	}
-
-	function handleResumePatternSync() {
-		if (!openProgression) return;
-		handleSaveProgression(resumePatternSync(openProgression));
 	}
 
 	/**
@@ -876,11 +829,6 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 		);
 		setBars((prev) => applyVoicingToBars(prev, barIdx, voicing, scope));
 		setBarPitches((prev) => prev.map((p, i) => (reach[i] ? pitches : p)));
-	}
-
-	function handleDismissPatternNotice() {
-		if (!openProgression) return;
-		handleSaveProgression(dismissPatternNotice(openProgression));
 	}
 
 	/** Deleting a pattern takes the progressions written over it with it. */
@@ -1229,16 +1177,6 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 								progressionsLoading={progressionsLoading || !progressionRestored}
 								selectedProgressionId={openProgressionId}
 								onSelectProgression={handleOpenProgression}
-								// "detached-dismissed" and the quiet outcomes render nothing.
-								patternSync={
-									!isShared && (openSyncState?.kind === "ask" || openSyncState?.kind === "detached")
-										? openSyncState.kind
-										: null
-								}
-								onApplyPatternSync={handleApplyPatternSync}
-								onDeclinePatternSync={handleDeclinePatternSync}
-								onResumePatternSync={handleResumePatternSync}
-								onDismissPatternNotice={handleDismissPatternNotice}
 								// Pinning a shape writes to the account; not from a share page.
 								onApplyChordShape={isShared ? undefined : handleApplyChordShape}
 								userVoicings={userVoicings}
@@ -1511,7 +1449,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 									Subdivision
 								</div>
 								<Segmented
-									options={TICK_LEVELS.map((level) => ({
+									options={tickLevelsFor(meter).map((level) => ({
 										value: level,
 										label: tickLevelLabel(meter, level),
 									}))}
@@ -1722,7 +1660,7 @@ export default function StrumWorkspace({ shared }: { shared?: SharedStrum }) {
 								Subdivision
 							</div>
 							<Segmented
-								options={TICK_LEVELS.map((level) => ({
+								options={tickLevelsFor(meter).map((level) => ({
 									value: level,
 									label: tickLevelLabel(meter, level),
 								}))}

@@ -9,6 +9,9 @@ import {
 	stringsAtFret,
 	suggestFingers,
 	validateChordShape,
+	validateStrumShape,
+	soundingStrings,
+	MIN_STRUM_SHAPE_STRINGS,
 	voicingToChordShape,
 	type ChordShape,
 	type ShapeFret,
@@ -117,6 +120,26 @@ describe("validateChordShape", () => {
 		const junk = { startFret: 1, frets: [], fingers: [], barreFret: 3 } as unknown as ChordShape;
 		expect(() => validateChordShape(junk)).not.toThrow();
 		expect(validateChordShape(junk).ok).toBe(false);
+	});
+});
+
+describe("validateStrumShape", () => {
+	it("passes a full chord", () => {
+		expect(validateStrumShape(OPEN_C).ok).toBe(true);
+		expect(soundingStrings(OPEN_C)).toBe(5);
+	});
+
+	it("refuses a shape that sounds fewer strings than a strum needs", () => {
+		const dyad: ChordShape = { ...OPEN_C, frets: [MUTED, 3, 2, MUTED, MUTED, MUTED], fingers: [0, 3, 2, 0, 0, 0] };
+		expect(soundingStrings(dyad)).toBe(MIN_STRUM_SHAPE_STRINGS - 1);
+		const result = validateStrumShape(dyad);
+		expect(result.ok).toBe(false);
+		expect(validateChordShape(dyad).ok).toBe(true);
+	});
+
+	it("still reports the base problems, and only those, for an empty neck", () => {
+		const empty = emptyChordShape();
+		expect(validateStrumShape(empty).errors).toEqual(validateChordShape(empty).errors);
 	});
 });
 

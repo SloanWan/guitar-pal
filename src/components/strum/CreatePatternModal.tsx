@@ -25,8 +25,8 @@ import {
 	StepValue,
 	DEFAULT_STRUM_BPM,
 } from "@/lib/strumPatterns";
+import { toBars } from "@/lib/strumRhythm";
 import {
-	toBars,
 	validateBars,
 	patternBpm,
 	patternMeter,
@@ -226,6 +226,8 @@ export default function CreatePatternModal({
 			id: editPattern?.id ?? crypto.randomUUID(),
 			name: name.trim(),
 			beats,
+			// This editor writes one bar; a longer rhythm keeps the bars after it.
+			...(editPattern?.extraBars ? { extraBars: editPattern.extraBars } : {}),
 			bpm: parsedBpm(),
 			meter,
 		};

@@ -46,9 +46,9 @@ export interface Bar {
 }
 
 /**
- * A strum pattern is one bar of rhythm. Chords never live here — the pattern
- * tab's chord picker is session-only, and saved chord sequences are
- * `ChordProgression`s hanging off the pattern.
+ * A strum pattern is the rhythm: one bar, or a few that play in turn. Chords
+ * never live here — saved chord sequences are `ChordProgression`s hanging off
+ * the pattern, and they always play this rhythm.
  *
  * There is no stored description: it is written from `beats` on read by
  * `patternNotation` in strumNotation.ts.
@@ -56,7 +56,14 @@ export interface Bar {
 export interface StrumPattern {
 	id: string;
 	name: string;
+	/** The first bar. Every pattern has one; read all of them through `patternRhythm`. */
 	beats: Beat[];
+	/**
+	 * The bars after the first, for a rhythm longer than one bar. Absent on a
+	 * one-bar pattern, which is what every preset and every pattern stored before
+	 * multi-bar rhythms existed is.
+	 */
+	extraBars?: Beat[][];
 	/** Tempo the pattern loads at. Read it through `patternBpm`. */
 	bpm?: number;
 	/**
@@ -80,9 +87,14 @@ export interface StrumPattern {
 }
 
 /**
- * A chord sequence played over a pattern: one or more bars, each carrying its
- * own rhythm and chord. Stored per user, and attachable to preset patterns as
- * well as the user's own.
+ * A chord sequence played over a pattern: one chord per bar, every bar playing
+ * the pattern's rhythm (`progressionPlayback` in strumBars.ts lays one over the
+ * other). Stored per user, and attachable to preset patterns as well as the
+ * user's own.
+ *
+ * Each bar still carries `beats`, written from the pattern whenever the
+ * sequence is saved, so a reader that only knows `Bar[]` — a share, the
+ * assistant — sees what plays. The pattern is what playback reads.
  */
 export interface ChordProgression {
 	id: string;
@@ -100,26 +112,9 @@ export interface ChordProgression {
 	 * player holds, so playback sounds this many semitones higher. 0 = no capo.
 	 */
 	capo?: number;
-	/**
-	 * The pattern rhythm this sequence was last reconciled with.
-	 *
-	 * Also the "before" argument `syncBarsToPattern` needs, which is why this is
-	 * a snapshot and not a dirty flag. Absent means the sequence predates the
-	 * reconcile prompt: there is no baseline to diff or to sync from, so it is
-	 * backfilled silently rather than being asked about.
-	 */
-	syncedBeats?: Beat[];
-	/** False once the player has declined to follow the pattern. */
-	followsPattern?: boolean;
-	/**
-	 * True once the player has dismissed the "not following" notice. A third
-	 * piece of information, not derivable from the other two: a sequence can have
-	 * stopped following and still want to be reminded that it has.
-	 */
-	syncNoticeDismissed?: boolean;
 }
 
-/** Tempo bounds shared by the transport fader and the pattern editor. */
+/** Tempo bounds shared by the tempo control and the pattern composer. */
 export const STRUM_BPM_MIN = 40;
 export const STRUM_BPM_MAX = 220;
 /** Tempo a pattern loads at when it carries no BPM of its own. */

@@ -5,7 +5,8 @@ import { User } from "@supabase/supabase-js";
 import { ChevronDown, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import StepGrid from "./StepGrid";
-import { toBars, patternMeter } from "@/lib/strumBars";
+import { patternMeter } from "@/lib/strumBars";
+import { toBars } from "@/lib/strumRhythm";
 import { patternNotation } from "@/lib/strumNotation";
 
 interface StrumPatternLibraryProps {

@@ -1,13 +1,13 @@
 "use client";
 
-import { Moon, Settings, Sun } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import Link from "@/components/AppLink";
 import type { Profile } from "@/lib/profile";
+import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import UserIdentity from "./UserIdentity";
-import LogoutButton from "./LogoutButton";
-import { useTheme } from "./ThemeToggle";
-import Rocker from "@/components/ui/Rocker";
+import { useLogout } from "./LogoutButton";
+import { ThemeSwitch } from "./ThemeToggle";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -16,13 +16,15 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+const ITEM = "flex h-10 cursor-pointer items-center gap-2.5 rounded-gp-sm px-2.5 font-gp-body text-[14px] font-medium text-gp-ink focus:bg-gp-well [&_svg]:size-[18px] [&_svg]:text-gp-ink-2";
+
 /**
- * The signed-in account control, rightmost in the topbar at every width: the
- * avatar chip is the trigger, and the panel carries the identity row, the
- * settings page, the theme rocker and sign-out. Trigger chrome matches the
- * other square topbar controls (same border, hover, open state).
+ * The signed-in account control, rightmost in the header from 720px (a phone has the Me
+ * tab instead): the avatar is the trigger, and the menu carries the identity, Settings,
+ * the theme switch and sign-out.
  */
-export default function UserMenu({ profile }: { profile: Profile }) {
+export default function UserMenu({ profile, className }: { profile: Profile; className?: string }) {
+	const { logout, loading } = useLogout();
 	return (
 		// Non-modal on purpose. Modal mode sets `pointer-events: none` on <body>
 		// while open, so the closing click of a double-click never reaches the
@@ -30,73 +32,43 @@ export default function UserMenu({ profile }: { profile: Profile }) {
 		// selects the nearest text on the page. Without the lock the second click
 		// hits the button, where text is not selectable to begin with.
 		<DropdownMenu modal={false}>
-			<DropdownMenuTrigger
-				aria-label={`Account: ${profile.displayName}`}
-				className="flex size-(--h-control) items-center justify-center border border-line-strong transition-[border-color,opacity] duration-(--dur-hover) ease-out hover:border-denim hover:opacity-90 active:border-denim active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 data-[state=open]:border-denim"
-			>
-				{/* Inset by the trigger's 1px border, so the fill sits inside the frame
-				    rather than under it. */}
-				<UserAvatar profile={profile} className="size-[calc(var(--h-control)-2px)]" />
+			<DropdownMenuTrigger aria-label={`Account: ${profile.displayName}`} className={cn("gp-avatar-btn", className)}>
+				<UserAvatar profile={profile} />
 			</DropdownMenuTrigger>
 
-			<DropdownMenuContent align="end" sideOffset={8} className="w-60 p-2">
-				<UserIdentity profile={profile} />
+			<DropdownMenuContent
+				align="end"
+				sideOffset={10}
+				className="w-64 rounded-gp-lg border-0 bg-gp-sheet p-1.5 text-gp-ink shadow-[var(--gp-shadow-pop)]"
+			>
+				<div className="px-2.5 py-2">
+					<UserIdentity profile={profile} />
+				</div>
 
-				<DropdownMenuSeparator className="mx-0 my-2" />
+				<DropdownMenuSeparator className="mx-1 bg-gp-line" />
 
 				{/* Classes go on the item, not the link: the item runs them through
 				    tailwind-merge against its defaults, while asChild's Slot would only
 				    concatenate a className set on the Link. */}
-				<DropdownMenuItem
-					asChild
-					className="h-(--h-control) cursor-pointer gap-2 rounded-none px-2 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim focus:bg-denim-tint focus:text-denim-accent"
-				>
+				<DropdownMenuItem asChild className={ITEM}>
 					<Link href="/settings">
-						<Settings className="size-3.5" strokeWidth={1.5} strokeLinecap="square" />
+						<Settings aria-hidden />
 						Settings
 					</Link>
 				</DropdownMenuItem>
 
-				{/* A control row, not a menu item: the rocker flips without
-				    dismissing the menu. */}
-				<ThemeRow />
+				{/* A control row, not a menu item: the switch flips without dismissing the menu. */}
+				<div className="px-2.5">
+					<ThemeSwitch />
+				</div>
 
-				<DropdownMenuSeparator className="mx-0 my-2" />
+				<DropdownMenuSeparator className="mx-1 bg-gp-line" />
 
-				<LogoutButton className="w-full justify-center" />
+				<DropdownMenuItem className={ITEM} disabled={loading} onSelect={() => void logout()}>
+					<LogOut aria-hidden />
+					Sign out
+				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
-	);
-}
-
-/** `Theme  ☀ [rocker] ☾` — the block sits under the icon of the active theme. */
-function ThemeRow() {
-	const { theme, setTheme } = useTheme();
-	const dark = theme === "dark";
-	return (
-		<div className="flex h-(--h-control) items-center justify-between gap-4 px-2">
-			<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-				Theme
-			</span>
-			<span className="flex items-center gap-1.5">
-				<Sun
-					className={`size-3.5 ${dark ? "text-ink-faint" : "text-denim-accent"}`}
-					strokeWidth={1.5}
-					strokeLinecap="square"
-					aria-hidden="true"
-				/>
-				<Rocker
-					checked={dark}
-					onChange={(next) => setTheme(next ? "dark" : "light")}
-					ariaLabel="Dark mode"
-				/>
-				<Moon
-					className={`size-3.5 ${dark ? "text-denim-accent" : "text-ink-faint"}`}
-					strokeWidth={1.5}
-					strokeLinecap="square"
-					aria-hidden="true"
-				/>
-			</span>
-		</div>
 	);
 }

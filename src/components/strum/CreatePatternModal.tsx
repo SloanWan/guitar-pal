@@ -4,7 +4,7 @@ import { useState, useEffect, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 import {
 	MoveDown,
 	MoveUp,
@@ -424,7 +424,7 @@ export default function CreatePatternModal({
 				<DialogContent
 					showCloseButton={false}
 					onKeyDown={handleDialogKeyDown}
-					className="w-[calc(100%-2rem)] max-w-100 flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 rounded-none border border-line-strong shadow-none"
+					className="w-[calc(100%-2rem)] max-w-100 flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0"
 				>
 					<DialogHeader className="shrink-0 flex-row items-center justify-between gap-2 p-4 pb-0">
 						<DialogTitle>{editPattern ? "Edit pattern" : "Create pattern"}</DialogTitle>

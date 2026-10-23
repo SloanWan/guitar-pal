@@ -162,7 +162,7 @@ export default function FingerpickMobileDrawer({
 
 		{/* ── Unified mobile drawer ────────────────────────────────────────── */}
 		<div
-			className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden"
+			className="md:hidden fixed bottom-(--gp-tabbar-h) left-0 right-0 z-30 bg-popover border-t border-line-strong overflow-hidden"
 			onPointerDown={(e) => {
 				if (!bpmButtonRef.current?.contains(e.target as Node)) {
 					setShowBpmPopover(false);

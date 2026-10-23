@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import Link from "@/components/AppLink";
 import { exportMisses, readMisses } from "@/lib/assistant/missLog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import AssistantPanel from "./AssistantPanel";
 import { useAssistant } from "./useAssistant";
 import { ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT } from "@/lib/assistant/handoff";
@@ -134,50 +135,35 @@ export default function AssistantLauncher() {
 	}, [messages.length]);
 
 	const title = "Assistant";
-	const label = pending
-		? `${title} — still writing`
-		: unread
-			? `${title} — a reply is waiting`
-			: `Open the ${title.toLowerCase()}`;
+	// every name starts with the visible word, so a voice user can say "Ask"
+	const ask = `Ask the ${title.toLowerCase()}`;
+	const label = pending ? `${ask} — still writing` : unread ? `${ask} — a reply is waiting` : ask;
 
 	return (
 		<Popover open={open} onOpenChange={setPanelOpen}>
-			<PopoverTrigger
-				aria-label={label}
-				className="relative flex size-(--h-control) items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent active:border-denim active:bg-denim-tint active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 data-[state=open]:border-denim data-[state=open]:text-denim-accent"
-			>
-				{/* The icon says what the conversation is doing while the panel is
-				    shut: turning while a reply is being written, and wearing a dot
-				    once one has landed unseen. Plain CSS animation — this is state
-				    display, not an interaction. */}
-				{pending ? (
-					<Loader2 className="size-4 animate-spin" strokeWidth={1.5} aria-hidden="true" />
-				) : (
-					<MessageCircle
-						className="size-4"
-						strokeWidth={1.5}
-						strokeLinecap="square"
-						aria-hidden="true"
-					/>
-				)}
-				{unread && (
-					<span
-						aria-hidden="true"
-						className="absolute right-1 top-1 size-1.5 rounded-full bg-denim"
-					/>
-				)}
+			<PopoverTrigger asChild>
+				{/* Ask: a secondary button, worded from 720px and an icon on a phone's app bar */}
+				<Button variant="secondary" size="sm" aria-label={label} className="max-[719.98px]:aspect-square max-[719.98px]:px-0">
+					{/* The icon says what the conversation is doing while the panel is
+					    shut: turning while a reply is being written, and wearing a dot
+					    once one has landed unseen. Plain CSS animation — this is state
+					    display, not an interaction. */}
+					{pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <MessageCircle aria-hidden="true" />}
+					<span className="gp-wide-only">Ask</span>
+					{unread && (
+						<span aria-hidden="true" className="absolute right-1.5 top-1.5 size-2 rounded-full bg-gp-a2" />
+					)}
+				</Button>
 			</PopoverTrigger>
 
 			<PopoverContent
 				align="end"
 				sideOffset={8}
 				collisionPadding={12}
-				// The system's one elevation shadow: this panel floats over content it
-				// does not own, where a 1px border alone can disappear into a busy
-				// background. See --elev-panel in globals.css.
-				// The page's own background, not the panel surface: a conversation
+				// The page's own background, not the sheet surface: a conversation
 				// reads as a place of its own, and the bubbles carry the contrast.
-				className="w-[min(24rem,calc(100vw-1.5rem))] bg-surface p-0 [box-shadow:var(--elev-panel)]"
+				// The pop shadow comes from PopoverContent.
+				className="w-[min(24rem,calc(100vw-1.5rem))] bg-gp-page p-0"
 			>
 				<div className="flex items-center justify-between border-b border-line px-3 py-2">
 					<span className="flex items-center gap-2">

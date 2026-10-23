@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CirclePlay, CirclePause, Loader2, ChevronLeft, ChevronRight, X } from "lucide-react";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import ChordModeToggle from "@/components/chords/ChordModeToggle";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 import MusicalText from "@/components/MusicalText";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { inversionName, type VoicingCard } from "@/lib/chordCards";

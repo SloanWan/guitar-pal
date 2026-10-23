@@ -2,6 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 
 export type Theme = "dark" | "light";
 
@@ -17,12 +19,12 @@ function subscribeToTheme(onChange: () => void): () => void {
 }
 
 function getTheme(): Theme {
-	return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+	return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
 function getServerTheme(): Theme {
-	// Dark is the token default on :root; the boot script overrides before paint.
-	return "dark";
+	// Light is the default (#356); the boot script applies a saved dark before paint.
+	return "light";
 }
 
 function applyTheme(next: Theme): void {
@@ -32,49 +34,45 @@ function applyTheme(next: Theme): void {
 
 /**
  * The current theme and a setter, backed by `<html data-theme>` rather than
- * React state so every consumer (this button, the rocker row in the account
- * menu) agrees with the FOUC boot script and with each other.
+ * React state so every consumer (the header button, the switch in the account
+ * menu, More and Settings) agrees with the FOUC boot script and with each other.
  */
 export function useTheme(): { theme: Theme; setTheme: (next: Theme) => void } {
 	const theme = useSyncExternalStore(subscribeToTheme, getTheme, getServerTheme);
 	return { theme, setTheme: applyTheme };
 }
 
-export default function ThemeToggle() {
-	// Icon visibility is pure CSS via the data-theme-bound `dark:` variant, so SSR
-	// markup matches the client (both icons render; CSS reveals exactly one). The
-	// store only drives the accessible pressed state and the click target.
+/** "Dark theme" as a switch — the control in the account menu, More and Settings. */
+export function ThemeSwitch({ className }: { className?: string }) {
 	const { theme, setTheme } = useTheme();
-
 	return (
-		<button
-			type="button"
-			aria-label="Toggle dark mode"
+		<Switch
+			label="Dark theme"
+			className={className}
+			checked={theme === "dark"}
+			onCheckedChange={(on) => setTheme(on ? "dark" : "light")}
+		/>
+	);
+}
+
+/**
+ * The header's theme button for a signed-out visitor, who has no account menu to hold
+ * the switch. The icon is the theme a press switches to; CSS picks it from data-theme,
+ * so the server markup already shows the right one.
+ */
+export default function ThemeToggle({ className }: { className?: string }) {
+	const { theme, setTheme } = useTheme();
+	return (
+		<Button
+			variant="icon"
+			size="sm"
+			aria-label="Dark theme"
 			aria-pressed={theme === "dark"}
+			className={className}
 			onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-			className="flex size-(--h-control) items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color,transform,translate] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent motion-safe:active:translate-y-px active:border-denim active:bg-denim-tint active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
 		>
-			{/* Mechanical two-sided flip driven purely by [data-theme] (SSR-safe,
-			    no mount-flash): the container rotates and backface-visibility swaps
-			    Sun↔Moon at the 90° midpoint so it reads as a relay switch, not a
-			    cross-fade. The visible icon shows the theme the click switches TO —
-			    Sun in dark (→ light), Moon in light (→ dark). */}
-			<span className="block size-[18px] [perspective:420px]">
-				<span className="relative block size-[18px] rotate-y-180 transform-3d transition-transform duration-(--dur-theme) ease-out motion-reduce:transition-none dark:rotate-y-0">
-					<Sun
-						className="absolute inset-0 size-[18px] backface-hidden"
-						strokeWidth={1.5}
-						strokeLinecap="square"
-						aria-hidden="true"
-					/>
-					<Moon
-						className="absolute inset-0 size-[18px] rotate-y-180 backface-hidden"
-						strokeWidth={1.5}
-						strokeLinecap="square"
-						aria-hidden="true"
-					/>
-				</span>
-			</span>
-		</button>
+			<Moon className="dark:hidden" aria-hidden />
+			<Sun className="hidden dark:block" aria-hidden />
+		</Button>
 	);
 }

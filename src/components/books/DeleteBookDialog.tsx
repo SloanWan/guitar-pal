@@ -19,7 +19,7 @@ export default function DeleteBookDialog({
 }) {
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && !busy && onClose()}>
-			<DialogContent className="w-[calc(100%-2rem)] max-w-sm gap-0 rounded-none border border-line-strong p-0 shadow-none">
+			<DialogContent className="w-[calc(100%-2rem)] max-w-sm gap-0 p-0">
 				<DialogHeader className="p-4 pb-2">
 					<DialogTitle className="text-sm">Delete “{title}”?</DialogTitle>
 				</DialogHeader>

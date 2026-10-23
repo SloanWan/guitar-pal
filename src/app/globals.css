@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./tokens.css"; /* Candy tokens (--gp-*), #349 / #350 */
+@import "./primitives.css"; /* Candy primitives (gp-btn, gp-chip, …), #353 */
+@import "./shell.css"; /* Candy shell: header, tab bar, chrome heights, #356 */
 
 /* dark: utilities still exist in un-migrated shadcn primitives; the variant now
    follows the data-theme attribute instead of the retired .dark class. Prefer
@@ -22,7 +25,8 @@
      needs an edge a border alone does not give it. Every other shadow token
      is a GLOW signalling "live/active", never elevation.
    - Components must reference tokens, never raw hex. The single permitted
-     hardcoded value is denim #4A6FA5 inside the logo playhead rect.
+     hardcoded value was denim #4A6FA5 in the old logo's playhead rect; the
+     logo is now the pick mark (#352), coloured by the --gp-lg* tokens.
    ========================================================================= */
 
 /* ----------------------------------------------------------------------------
@@ -570,6 +574,91 @@
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
+
+	/* ---- Candy tokens (#350) under the INTERIM gp- namespace: bg-gp-page, text-gp-ink-3,
+	   bg-gp-m-500 (follows the nearest [data-m]), bg-gp-chords-500 (fixed), rounded-gp-lg,
+	   ease-gp-spring, font-gp-body. The bare names come back in the #363 cleanup, once the
+	   last v3 use of ink / line / card / panel / surface is gone. Durations have no theme
+	   namespace: write duration-(--gp-d-state). Pressable shadows are component classes. */
+	--color-gp-page: var(--gp-page);
+	--color-gp-card: var(--gp-card);
+	--color-gp-sheet: var(--gp-sheet);
+	--color-gp-face: var(--gp-face);
+	--color-gp-face-down: var(--gp-face-down);
+	--color-gp-thumb: var(--gp-thumb);
+	--color-gp-well: var(--gp-well);
+	--color-gp-field: var(--gp-field);
+	--color-gp-s2: var(--gp-s2);
+	--color-gp-line: var(--gp-line);
+	--color-gp-edge: var(--gp-edge);
+	--color-gp-ink: var(--gp-ink);
+	--color-gp-ink-2: var(--gp-ink-2);
+	--color-gp-ink-3: var(--gp-ink-3);
+	--color-gp-ink-mute: var(--gp-ink-mute);
+	--color-gp-ink-fill: var(--gp-ink-fill);
+	--color-gp-on-ink: var(--gp-on-ink);
+	--color-gp-focus: var(--gp-focus);
+	--color-gp-scrim: var(--gp-scrim);
+	--color-gp-m-100: var(--gp-m-100);
+	--color-gp-m-300: var(--gp-m-300);
+	--color-gp-m-500: var(--gp-m-500);
+	--color-gp-m-600: var(--gp-m-600);
+	--color-gp-m-700: var(--gp-m-700);
+	--color-gp-m-on: var(--gp-m-on);
+	--color-gp-m-fill: var(--gp-m-fill);
+	--color-gp-a1: var(--gp-a1);
+	--color-gp-a2: var(--gp-a2);
+	--color-gp-a-on: var(--gp-a-on);
+	--color-gp-ok: var(--gp-ok);
+	--color-gp-warn: var(--gp-warn);
+	--color-gp-bad: var(--gp-bad);
+	--color-gp-bad-fill: var(--gp-bad-fill);
+	--color-gp-strum-100: var(--gp-strum-100);
+	--color-gp-strum-300: var(--gp-strum-300);
+	--color-gp-strum-500: var(--gp-strum-500);
+	--color-gp-strum-700: var(--gp-strum-700);
+	--color-gp-strum-on: var(--gp-strum-on);
+	--color-gp-tab-100: var(--gp-tab-100);
+	--color-gp-tab-300: var(--gp-tab-300);
+	--color-gp-tab-500: var(--gp-tab-500);
+	--color-gp-tab-700: var(--gp-tab-700);
+	--color-gp-tab-on: var(--gp-tab-on);
+	--color-gp-chords-100: var(--gp-chords-100);
+	--color-gp-chords-300: var(--gp-chords-300);
+	--color-gp-chords-500: var(--gp-chords-500);
+	--color-gp-chords-700: var(--gp-chords-700);
+	--color-gp-chords-on: var(--gp-chords-on);
+	--color-gp-fb-100: var(--gp-fb-100);
+	--color-gp-fb-300: var(--gp-fb-300);
+	--color-gp-fb-500: var(--gp-fb-500);
+	--color-gp-fb-700: var(--gp-fb-700);
+	--color-gp-fb-on: var(--gp-fb-on);
+	--color-gp-books-100: var(--gp-books-100);
+	--color-gp-books-300: var(--gp-books-300);
+	--color-gp-books-500: var(--gp-books-500);
+	--color-gp-books-700: var(--gp-books-700);
+	--color-gp-books-on: var(--gp-books-on);
+	--radius-gp-xs: var(--gp-r-xs);
+	--radius-gp-sm: var(--gp-r-s);
+	--radius-gp-md: var(--gp-r-m);
+	--radius-gp-lg: var(--gp-r-l);
+	--radius-gp-xl: var(--gp-r-xl);
+	--radius-gp-pill: var(--gp-r-pill);
+	--ease-gp-state: var(--gp-ease-state);
+	--ease-gp-in: var(--gp-ease-in);
+	--ease-gp-out: var(--gp-ease-out);
+	--ease-gp-sink: var(--gp-e-sink);
+	--ease-gp-rise: var(--gp-e-rise);
+	--ease-gp-spring: var(--gp-spring-press);
+	--ease-gp-spring-tab: var(--gp-spring-tab);
+	--ease-gp-spring-sheet: var(--gp-spring-sheet);
+	--ease-gp-spring-land: var(--gp-spring-land);
+	--ease-gp-spring-pop: var(--gp-spring-pop);
+	--ease-gp-hop: var(--gp-hop);
+	--ease-gp-book: var(--gp-ease-book);
+	--font-gp-body: var(--gp-f-body);
+	--font-gp-display: var(--gp-f-disp);
+	--font-gp-num: var(--gp-f-num);
 }
 
 /* ----------------------------------------------------------------------------

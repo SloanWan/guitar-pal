@@ -12,7 +12,7 @@ import ZoomableImage from "@/components/ZoomableImage";
 import { WARNINGS_SUMMARY } from "@/components/books/IssueList";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import FingerpickEditorChordSection from "./FingerpickEditorChordSection";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/legacy-button";
 import {
 	Plus,
 	CornerDownLeft,
@@ -1253,7 +1253,7 @@ export default function FingerpickEditModal({
 																								<PopoverContent
 																									align="start"
 																									sideOffset={6}
-																									className="w-72 bg-popover p-3"
+																									className="w-72 p-3"
 																									// Typing in the chord search must not reach the
 																									// grid's own key handling underneath.
 																									onKeyDown={(e) => e.stopPropagation()}

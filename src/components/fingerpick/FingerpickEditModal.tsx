@@ -1253,7 +1253,7 @@ export default function FingerpickEditModal({
 																								<PopoverContent
 																									align="start"
 																									sideOffset={6}
-																									className="w-72 bg-popover p-3"
+																									className="w-72 p-3"
 																									// Typing in the chord search must not reach the
 																									// grid's own key handling underneath.
 																									onKeyDown={(e) => e.stopPropagation()}

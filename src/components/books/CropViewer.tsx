@@ -21,7 +21,7 @@ export function CropDialog({ crop, onClose }: { crop: CropView | null; onClose: 
 		<Dialog open={crop !== null} onOpenChange={(open) => !open && onClose()}>
 			<DialogContent
 				showCloseButton={false}
-				className="w-[calc(100%-2rem)] max-w-5xl gap-0 overflow-hidden rounded-none border border-line-strong p-0 shadow-none sm:max-w-5xl"
+				className="w-[calc(100%-2rem)] max-w-5xl gap-0 overflow-hidden p-0 sm:max-w-5xl"
 			>
 				{crop ? (
 					<>

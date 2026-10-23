@@ -11,7 +11,7 @@ import TextTabPicker from "@/components/textTab/TextTabPicker";
 export default function TextTabDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-			<DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 rounded-none border border-line-strong p-0 shadow-none">
+			<DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 p-0">
 				<DialogHeader className="border-b border-line p-4 pb-3">
 					<DialogTitle className="text-sm">Paste a text tab</DialogTitle>
 					<DialogDescription className="text-[12px] text-ink-dim">

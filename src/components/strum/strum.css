@@ -579,9 +579,11 @@
 	.st-plist > .gp-row {
 		flex: none;
 	}
-	/* The open progression — the one that plays — is tinted the module's light, not only
-	   lifted, so it reads from across the list (both themes; beats the dark Lift's face). */
-	.st-prog .st-plist > .gp-row.gp-hop[aria-current="true"] {
+	/* The open pattern and the open progression — what plays — are tinted the module's
+	   light, not only lifted, so they read from across a list (both themes; beats the
+	   dark Lift's face). */
+	.st-prog .st-plist > .gp-row.gp-hop[aria-current="true"],
+	.st-lib-list .st-row > .gp-row.gp-hop[aria-current="true"] {
 		background: var(--gp-m-100);
 	}
 	/* A preset group's heading, in the module's colour so the groups read apart. */

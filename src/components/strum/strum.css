@@ -465,9 +465,9 @@
 	.st-cell[data-v="X"] {
 		color: var(--gp-ink-3);
 	}
-	/* The sounding stroke rises and takes a colour by kind, within the module's own
-	   ramp: a down strum is the full fill, an up strum its light tint, a muted chuck
-	   grey — no pitch, no module colour. The arrows still say which is which. */
+	/* The sounding stroke says what it is while it flies by, by its fill: down is
+	   the module's green, up the warm orange accent (ink on it, as the accents
+	   always carry), a muted chuck ink. At rest every mark stays ink. */
 	.st-cell[data-now]:not([data-v=""]) {
 		transform: translateY(-3px);
 		background: var(--gp-m-500);
@@ -477,15 +477,13 @@
 			2px 2px 0 0 var(--gp-m-sh);
 	}
 	.st-cell[data-now][data-v="U"] {
-		background: var(--gp-m-100);
-		color: var(--gp-m-700);
-		box-shadow:
-			inset 0 0 0 1.5px var(--gp-m-500),
-			2px 2px 0 0 var(--gp-m-sh);
+		background: var(--gp-a2);
+		color: var(--gp-a-on);
+		box-shadow: 2px 2px 0 0 color-mix(in srgb, var(--gp-a2), var(--gp-ink-sh) 45%);
 	}
 	.st-cell[data-now][data-v="X"] {
-		background: var(--gp-ink-3);
-		color: var(--gp-card);
+		background: var(--gp-ink-fill);
+		color: var(--gp-on-ink);
 		box-shadow: 2px 2px 0 0 var(--gp-ink-sh);
 	}
 	.st-cell[data-now][data-v=""] {

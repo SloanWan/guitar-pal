@@ -30,7 +30,7 @@ export default function PresetSheet({ open, onOpenChange, onPick }: Props) {
 				{groups.length === 0 && <p className="st-lab m-0">No preset matches “{query.trim()}”.</p>}
 				{groups.map(({ group, presets }) => (
 					<section key={group} className="flex flex-col gap-1" aria-label={group}>
-						<h3 className="st-lab m-0 px-1">{group}</h3>
+						<h3 className="st-pgroup">{group}</h3>
 						{presets.map((preset) => (
 							<button key={preset.id} type="button" className="st-pitem" onClick={() => onPick(preset)}>
 								<span className="flex items-baseline justify-between gap-2">

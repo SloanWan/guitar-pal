@@ -90,15 +90,16 @@ export default function ProgressionEditor({
 			: balancedPerRow(bars.length, width, cssPx(scroller, "--st-cl-cell"), 0, cssPx(scroller, "--st-cl-max") || Infinity);
 	const columns = { "--per": String(Math.max(1, per)) } as CSSProperties;
 
-	// The sounding chord stays in view: the chords scroll, the page does not.
+	// The sounding chord's row is the first one shown, so what comes next is below it:
+	// the chords scroll, the page does not. The last rows stop where the list ends.
 	useEffect(() => {
 		if (!follow || playingBar === null || !scroller) return;
 		const el = scroller.querySelector<HTMLElement>(`[data-bar="${playingBar}"]`);
 		if (!el) return;
-		const top = el.offsetTop, bottom = top + el.offsetHeight;
-		if (top >= scroller.scrollTop && bottom <= scroller.scrollTop + scroller.clientHeight) return;
-		scroller.scrollTo({ top: Math.max(0, top - 8), behavior: prefersReducedMotion() ? "auto" : "smooth" });
-	}, [follow, playingBar, scroller, view]);
+		const top = Math.max(0, el.offsetTop - cssPx(scroller, "padding-top"));
+		if (Math.abs(scroller.scrollTop - top) < 1) return;
+		scroller.scrollTo({ top, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+	}, [follow, playingBar, scroller, view, per]);
 
 	return (
 		<div className="st-editor">

@@ -84,19 +84,26 @@ export default function ProgressionPanel({
 	const [follow, setFollow] = useState(true);
 	const open = draft.progression;
 	const listRef = useRef<HTMLDivElement>(null);
+	const typingPicked = useRef(false);
 	const openId = open?.id ?? null;
 
 	// The chosen item is always in view in the list — a new one, a copy saved as new
-	// or one restored on arrival lands at the end. Only the list scrolls, never the page.
+	// or one restored on arrival lands at the end — unless a chord line is being typed:
+	// then the list goes back to the top, where its field is. Only the list scrolls,
+	// never the page.
 	useEffect(() => {
 		const list = listRef.current;
+		if (list && typing) {
+			list.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+			return;
+		}
 		const row = list?.querySelector<HTMLElement>('[aria-selected="true"]');
 		if (!list || !row) return;
 		const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
 		const bottom = top + row.offsetHeight;
 		if (top >= list.scrollTop && bottom <= list.scrollTop + list.clientHeight) return;
 		list.scrollTo({ top: Math.max(0, top - 8), behavior: prefersReducedMotion() ? "auto" : "smooth" });
-	}, [openId, progressions.length, listOpen]);
+	}, [openId, progressions.length, listOpen, typing]);
 
 	useEffect(() => {
 		try {
@@ -183,13 +190,25 @@ export default function ProgressionPanel({
 								Add
 							</Button>
 						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" data-m="strum">
+						<DropdownMenuContent
+							align="end"
+							data-m="strum"
+							// Closing, the menu hands focus back to its trigger; after Type chords it
+							// goes to the chord line's field instead, so the line can be typed at once.
+							onCloseAutoFocus={(e) => {
+								if (!typingPicked.current) return;
+								typingPicked.current = false;
+								e.preventDefault();
+								listRef.current?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+							}}
+						>
 							<DropdownMenuItem onSelect={() => setPresetsOpen(true)}>
 								<ListMusic aria-hidden />
 								Start from a preset
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								onSelect={() => {
+									typingPicked.current = true;
 									setTyping(true);
 									setListOpen(false);
 								}}

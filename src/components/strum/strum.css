@@ -1105,6 +1105,28 @@
 		line-height: 1.15;
 	}
 	/* loop and the tray sit apart from the transport, over a hairline */
+	.st-pill-loop {
+		position: relative;
+	}
+	/* The loop's gap between passes, a small tag on the button's corner: the button
+	   keeps its size whether it shows or not. */
+	.st-loop-gap {
+		position: absolute;
+		right: -5px;
+		bottom: -4px;
+		min-width: 18px;
+		padding: 1px 4px;
+		border-radius: 999px;
+		background: var(--gp-m-500);
+		color: var(--gp-m-on);
+		box-shadow: 0 0 0 2px var(--gp-card);
+		font-size: 10px;
+		font-weight: 750;
+		line-height: 13px;
+		text-align: center;
+		pointer-events: none;
+		animation: st-fade var(--gp-d-state) linear;
+	}
 	.st-remote[data-dock="left"] .st-pill-loop,
 	.st-remote[data-dock="left"] .st-pill-tray {
 		margin-top: 14px;

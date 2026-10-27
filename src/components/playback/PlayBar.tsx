@@ -111,10 +111,12 @@ export default function PlayBar({
 							className="st-icon st-pill-loop"
 							aria-pressed={loop}
 							aria-label="Loop"
-							title="Loop"
+							title={loop && loopGap > 0 ? `Loop, ${loopGap} s between passes` : "Loop"}
 							onClick={() => onLoop(!loop)}
 						>
 							<Repeat aria-hidden />
+							{/* The gap set in the tray, worn on the button while it applies. */}
+							{loop && loopGap > 0 && <span className="st-loop-gap st-num" aria-hidden>{loopGap}s</span>}
 						</button>
 						<Button variant="icon" size="xs" className="st-pill-slower" aria-label="Slower" onClick={() => step(-1)}>
 							−

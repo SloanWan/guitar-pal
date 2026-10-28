@@ -160,15 +160,24 @@
 		border-radius: 50%;
 		background: var(--gp-m-500);
 	}
-	.hb-adjust-pop {
+	/* The Adjust sheet: one row a setting, its name on the left and its stepper on the right. */
+	.hb-adjust-sheet {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
-		width: auto;
+		align-self: stretch;
 	}
-	.hb-adjust-pop .hb-control {
-		display: grid;
-		grid-template-columns: 80px auto;
+	.hb-adjust-sheet .hb-control {
+		justify-content: space-between;
+		min-height: 56px;
+		box-shadow: 0 1px 0 var(--gp-line);
+	}
+	.hb-adjust-sheet .hb-control:last-child {
+		box-shadow: none;
+	}
+	.hb-adjust-sheet .hb-meta {
+		color: var(--gp-ink);
+		font-size: 15px;
+		font-weight: 650;
 	}
 	.hb-control {
 		display: flex;

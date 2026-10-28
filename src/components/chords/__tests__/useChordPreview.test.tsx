@@ -65,6 +65,8 @@ describe("useChordPreview", () => {
 			[[55], 10 + 2 * ARPEGGIO_GAP_S],
 		]);
 		expect(result.current.playing).toBe("arpeggio");
+		// Counted once its notes are scheduled, so a diagram's plucks start with the sound.
+		expect(result.current.arpeggioRun).toBe(1);
 	});
 
 	it("counts the arpeggio as playing until its last note has rung", async () => {

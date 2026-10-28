@@ -64,6 +64,11 @@ export interface ChordDiagramSVGProps extends DiagramShape {
   rootMidi?: number;
   /** Draws the root's notes in the module's colour, not only square. */
   rootTone?: boolean;
+  /**
+   * An arpeggio being played: each sounding string, low first, is plucked `gapS`
+   * after the one before. A new `run` starts the plucks again.
+   */
+  pluck?: { run: number; gapS: number } | null;
 }
 
 interface GhostDot {
@@ -81,6 +86,7 @@ export default function ChordDiagramSVG({
   size = "regular",
   rootMidi,
   rootTone = false,
+  pluck = null,
 }: ChordDiagramSVGProps) {
   const rootPitchClass = rootMidi !== undefined ? rootMidi % 12 : -1;
 
@@ -274,6 +280,26 @@ export default function ChordDiagramSVG({
           </g>
         );
       })}
+
+      {/* Arpeggio: the strings plucked one by one — the string shakes and a ring leaves its note. */}
+      {pluck && (
+        <g key={pluck.run} aria-hidden>
+          {frets
+            .map((fret, s) => ({ fret, s }))
+            .filter(({ fret }) => fret >= 0)
+            .map(({ fret, s }, k) => {
+              const x = strX(s);
+              const cy = fret > 0 ? noteCenterY(fret - startFret + 1) : mode === "fingers" ? nutY - 13 : OPEN_DOT_Y;
+              const delay = { animationDelay: `${k * pluck.gapS}s` };
+              return (
+                <g key={s}>
+                  <line className="cd-pluck-string stroke-gp-m-500" x1={x} y1={nutY} x2={x} y2={fretLineY(NUM_FRETS)} strokeWidth={2.5} style={delay} />
+                  <circle className="cd-pluck-ring stroke-gp-m-500" cx={x} cy={cy} r={DOT_R + 1} fill="none" strokeWidth={2} style={delay} />
+                </g>
+              );
+            })}
+        </g>
+      )}
 
       {/* String labels */}
       {STRING_LABELS.map((lbl, s) => (

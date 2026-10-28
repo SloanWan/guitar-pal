@@ -71,3 +71,25 @@ describe("ChordDiagramSVG markup", () => {
 		expect(html).not.toMatch(/(fill|stroke)="#/);
 	});
 });
+
+describe("ChordDiagramSVG root tone and plucks", () => {
+	const { openC } = SHAPES;
+	const draw = (extra: object) =>
+		renderToStaticMarkup(<ChordDiagramSVG {...openC} frets={[...openC.frets]} fingers={[...openC.fingers]} {...extra} />);
+
+	it("paints the root in the module's colour only when asked", () => {
+		expect(draw({})).not.toContain("fill-gp-m-500");
+		expect(draw({ rootTone: true })).toContain("fill-gp-m-500");
+	});
+
+	it("plucks each sounding string in turn, low first, muted ones skipped", () => {
+		const html = draw({ pluck: { run: 1, gapS: 0.32 } });
+		const delays = [...html.matchAll(/cd-pluck-string[^>]*animation-delay:([\d.]+)s/g)].map((m) => Number(m[1]));
+		expect(delays).toEqual([0, 0.32, 0.64, 0.96, 1.28]);
+		expect(html.match(/cd-pluck-ring/g)).toHaveLength(5);
+	});
+
+	it("draws no plucks without an arpeggio", () => {
+		expect(draw({})).not.toContain("cd-pluck");
+	});
+});

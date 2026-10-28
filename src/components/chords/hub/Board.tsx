@@ -9,7 +9,7 @@ import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import ChordRequestButton from "@/components/chords/ChordRequestButton";
 import { useChordPreview } from "@/components/chords/useChordPreview";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Stepper } from "@/components/ui/stepper";
 import { stashHandoff } from "@/lib/assistant/handoff";
@@ -100,6 +100,7 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 	const [bpm, setBpm] = useState(DEFAULT_STRUM_BPM);
 	const run = usePlayThrough();
 	const cardsRef = useRef<HTMLDivElement>(null);
+	const [adjustOpen, setAdjustOpen] = useState(false);
 
 	// A board wider than its row scrolls sideways: keep the sounding card in view.
 	useEffect(() => {
@@ -152,7 +153,7 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 		}
 	}
 
-	/** Transpose, capo and tempo: in the head on a desktop, in the Adjust popover below it (`labelled` names the tempo there). */
+	/** Transpose, capo and tempo: in the head on a desktop, in the Adjust sheet below it (`labelled` names the tempo there). */
 	const steppers = (labelled: boolean) => (
 		<>
 			<div className="hb-control">
@@ -202,19 +203,23 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 			<div className="hb-board-head">
 				<h2>Board</h2>
 				<div className="hb-controls">{steppers(false)}</div>
-				{/* Below the desktop width the steppers fold into one button, so the head stays one row. */}
-				<Popover>
-					<PopoverTrigger asChild>
+				{/* Below the desktop width the steppers fold into one button and rise in a sheet, as Strum's and Tab's settings do. */}
+				<Sheet
+					open={adjustOpen}
+					onOpenChange={setAdjustOpen}
+					title="Transpose, capo and tempo"
+					trigger={
 						<Button variant="secondary" size="sm" className="hb-adjust" aria-label="Transpose, capo and tempo">
 							<SlidersHorizontal aria-hidden />
 							Adjust
 							{(transpose !== 0 || capo !== 0) && <span className="hb-adjust-dot" aria-hidden />}
 						</Button>
-					</PopoverTrigger>
-					<PopoverContent className="hb-adjust-pop" data-m="chords" collisionPadding={12}>
+					}
+				>
+					<div className="hb-adjust-sheet" data-m="chords">
 						{steppers(true)}
-					</PopoverContent>
-				</Popover>
+					</div>
+				</Sheet>
 				<Button size="sm" className="hb-play" disabled={found === 0} loading={run.loading} onClick={playThrough}>
 					{/* Both labels laid in one cell, so the button is as wide either way. */}
 					<span className="hb-swap">

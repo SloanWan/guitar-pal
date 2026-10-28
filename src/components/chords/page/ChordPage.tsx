@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { AudioLines, ChevronLeft, ChevronRight, Library, PanelRightOpen, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import Link from "@/components/AppLink";
 import ChordDiagramSVG, { type DiagramMode } from "@/components/chords/ChordDiagramSVG";
-import { useChordPreview } from "@/components/chords/useChordPreview";
+import { ARPEGGIO_GAP_S, useChordPreview } from "@/components/chords/useChordPreview";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -69,6 +69,8 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [draft, setDraft] = useState<Draft | null>(null);
 	const preview = useChordPreview();
+	/** The shape the last arpeggio was played on: its plucks are drawn only while that shape is shown. */
+	const [arpeggioOf, setArpeggioOf] = useState<string | null>(null);
 
 	const symbol = chordSymbol(root, suffix);
 	const rootMidi = rootPitchClass(root);
@@ -226,7 +228,18 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 											<ChevronLeft aria-hidden />
 										</Button>
 										<span className="ch-big" role="img" aria-label={`${symbol}, ${shape.label}`}>
-											<ChordDiagramSVG {...shape.def} mode={mode} rootMidi={rootMidi} rootTone size="large" />
+											<ChordDiagramSVG
+												{...shape.def}
+												mode={mode}
+												rootMidi={rootMidi}
+												rootTone
+												size="large"
+												pluck={
+													preview.playing === "arpeggio" && arpeggioOf === shape.id
+														? { run: preview.arpeggioRun, gapS: ARPEGGIO_GAP_S }
+														: null
+												}
+											/>
 										</span>
 										<Button
 											variant="icon"
@@ -260,7 +273,10 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 											</Button>
 											<Button
 												variant="secondary"
-												onClick={() => void preview.arpeggiate(shape.pitches)}
+												onClick={() => {
+													setArpeggioOf(shape.id);
+													void preview.arpeggiate(shape.pitches);
+												}}
 												loading={preview.isPreloading}
 												aria-pressed={preview.playing === "arpeggio"}
 											>

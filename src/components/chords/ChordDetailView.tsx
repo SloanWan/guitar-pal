@@ -11,7 +11,7 @@ import ChordVoicingModal, { type VoicingCard } from "@/components/chords/ChordVo
 import MusicalText from "@/components/MusicalText";
 import { useChordPreview } from "@/components/chords/useChordPreview";
 import { Button } from "@/components/ui/legacy-button";
-import { chordVoicingToMidi, rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { rootPitchClass, voicingPitches } from "@/lib/chordVoicingToMidi";
 import type { DiagramMode } from "@/components/chords/ChordDiagramSVG";
 import ChordShapeEditor from "@/components/chords/ChordShapeEditor";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
@@ -225,7 +225,7 @@ export default function ChordDetailView({ voicings, root, suffix }: Props) {
 											className="gap-1 rounded-none border-line-strong text-denim hover:bg-denim-tint"
 											disabled={preview.isPreloading}
 											onClick={() =>
-												void preview.play(chordVoicingToMidi(v).map((n) => n.midi))
+												void preview.play(voicingPitches(v))
 											}
 										>
 											{preview.isPreloading ? (

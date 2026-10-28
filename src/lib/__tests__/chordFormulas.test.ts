@@ -5,11 +5,11 @@ import {
   chordSpec,
   chordTones,
   omittedTones,
-  rootPc,
   spellDegree,
   withGlyphs,
 } from "@/lib/chordFormulas";
 import { CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
+import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 
 const spelled = (root: string, suffix: string) => chordTones(root, suffix)!.map((t) => t.note).join(" ");
 const degrees = (root: string, suffix: string) => chordTones(root, suffix)!.map((t) => t.degree).join(" ");
@@ -45,14 +45,14 @@ describe("chordSpec", () => {
   });
 });
 
-describe("rootPc and glyphs", () => {
+describe("root pitch classes and glyphs", () => {
   it("reads the tables' spellings and nothing else", () => {
-    expect(rootPc("C")).toBe(0);
-    expect(rootPc("C#")).toBe(1);
-    expect(rootPc("Db")).toBe(1);
-    expect(rootPc("Bb")).toBe(10);
-    expect(rootPc("?")).toBeUndefined();
-    expect(rootPc("H")).toBeUndefined();
+    expect(rootPitchClass("C")).toBe(0);
+    expect(rootPitchClass("C#")).toBe(1);
+    expect(rootPitchClass("Db")).toBe(1);
+    expect(rootPitchClass("Bb")).toBe(10);
+    expect(rootPitchClass("?")).toBeUndefined();
+    expect(rootPitchClass("H")).toBeUndefined();
   });
 
   it("turns a chord name's accidentals into glyphs", () => {

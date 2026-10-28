@@ -10,12 +10,8 @@ import {
   EXCLUDED_SUFFIXES,
   sortRoots,
 } from "@/lib/chordSuffixes";
-import {
-  selectStandardVoicing,
-  voicingToDiagramShape,
-  type ChordVoicing,
-  type DiagramShape,
-} from "@/lib/chordVoicing";
+import { voicingToDiagramShape, type ChordVoicing, type DiagramShape } from "@/lib/chordVoicing";
+import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 
 export interface BrowseCard {
   key: string;

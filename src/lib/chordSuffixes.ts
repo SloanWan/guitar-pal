@@ -89,6 +89,20 @@ export function getSuffixCategory(suffix: string): string | null {
   return null;
 }
 
+/** The category a chord is listed under: its quality's, "Slash Chords", or "Other". */
+export function displayCategory(suffix: string): string {
+  return isSlashChord(suffix) ? "Slash Chords" : (getSuffixCategory(suffix) ?? "Other");
+}
+
+const SUFFIX_RANK = new Map(
+  CHORD_SUFFIX_CATEGORIES.flatMap(({ suffixes }) => suffixes).map((s, i) => [s, i]),
+);
+
+/** Taxonomy order for sorting: category, then position within it; strangers, then slash chords, last. */
+export function suffixRank(suffix: string): number {
+  return SUFFIX_RANK.get(suffix) ?? (isSlashChord(suffix) ? 100_000 : 90_000);
+}
+
 // Single source of truth for "should this suffix be reachable in the product":
 // a suffix is browsable iff it is not excluded AND it either belongs to a quality
 // category or is a slash chord. Both the browse builders and the search index derive

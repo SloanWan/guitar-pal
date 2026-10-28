@@ -1,7 +1,7 @@
 import Link from "@/components/AppLink";
 import type { Metadata } from "next";
-import { getChordRoots } from "@/lib/chordsData";
 import { rootToSlug } from "@/lib/chordSlug";
+import { ROOT_CHROMATIC_ORDER } from "@/lib/chordSuffixes";
 import MusicalText from "@/components/MusicalText";
 
 export const metadata: Metadata = {
@@ -9,8 +9,8 @@ export const metadata: Metadata = {
 	description: "Browse guitar chord diagrams by root note or quality.",
 };
 
-export default async function ChordsPage() {
-	const roots = await getChordRoots();
+export default function ChordsPage() {
+	const roots = ROOT_CHROMATIC_ORDER;
 
 	return (
 		<div className="flex-1 bg-surface">

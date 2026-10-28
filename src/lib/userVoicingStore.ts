@@ -48,6 +48,27 @@ export function clearLocalVoicings(): void {
 	localStorage.removeItem(STORAGE_KEY);
 }
 
+/** Writes shapes to the account, keeping the ids they already have. */
+export async function upsertAccountVoicings(
+	voicings: readonly UserChordVoicing[],
+	userId: string,
+): Promise<void> {
+	if (voicings.length === 0) return;
+	const { error } = await createClient()
+		.from("user_chord_voicings")
+		.upsert(voicings.map((v) => userVoicingColumns(v, userId)));
+	if (error) throw new Error(error.message);
+}
+
+export async function deleteAccountVoicing(id: string, userId: string): Promise<void> {
+	const { error } = await createClient()
+		.from("user_chord_voicings")
+		.delete()
+		.eq("id", rawUserVoicingId(id))
+		.eq("user_id", userId);
+	if (error) throw new Error(error.message);
+}
+
 /** Every shape one signed-in player has written. */
 export async function fetchAccountVoicings(userId: string): Promise<UserChordVoicing[]> {
 	// select("*") on purpose: an explicit column list is a second place to

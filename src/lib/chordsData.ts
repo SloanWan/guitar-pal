@@ -13,7 +13,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
-import { isBrowsableSuffix, sortRoots } from "@/lib/chordSuffixes";
+import { isBrowsableSuffix } from "@/lib/chordSuffixes";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 
@@ -47,66 +47,64 @@ function publicClient() {
 	);
 }
 
+// Each read throws on a Supabase error rather than returning an empty answer:
+// `unstable_cache` keeps whatever comes back, so an outage returned as `null`
+// or `[]` would be served as "no such chord" for the whole revalidate window.
+function rows<T>({ data, error }: { data: unknown; error: { message: string } | null }): T {
+	if (error) throw new Error(error.message);
+	return data as T;
+}
+
 export const getChord = unstable_cache(
-	async (root: string, suffix: string): Promise<ChordWithVoicings | null> => {
-		const { data } = await publicClient()
-			.from("chords")
-			.select(VOICING_FIELDS)
-			.order("label", VOICING_ORDER)
-			.eq("root", root)
-			.eq("suffix", suffix)
-			.single();
-		return data as ChordWithVoicings | null;
-	},
+	async (root: string, suffix: string): Promise<ChordWithVoicings | null> =>
+		rows<ChordWithVoicings | null>(
+			await publicClient()
+				.from("chords")
+				.select(VOICING_FIELDS)
+				.order("label", VOICING_ORDER)
+				.eq("root", root)
+				.eq("suffix", suffix)
+				// A chord the library does not carry is an answer (null), not an error.
+				.maybeSingle(),
+		),
 	["chords:getChord"],
 	CACHE_OPTS,
 );
 
 export const getChordsByRoot = unstable_cache(
-	async (root: string): Promise<ChordWithVoicings[]> => {
-		const { data } = await publicClient()
-			.from("chords")
-			.select(VOICING_FIELDS)
-			.order("label", VOICING_ORDER)
-			.eq("root", root);
-		return (data as ChordWithVoicings[] | null) ?? [];
-	},
+	async (root: string): Promise<ChordWithVoicings[]> =>
+		rows<ChordWithVoicings[] | null>(
+			await publicClient()
+				.from("chords")
+				.select(VOICING_FIELDS)
+				.order("label", VOICING_ORDER)
+				.eq("root", root),
+		) ?? [],
 	["chords:getChordsByRoot"],
 	CACHE_OPTS,
 );
 
 export const getAllChordsWithVoicings = unstable_cache(
-	async (): Promise<ChordWithVoicings[]> => {
-		const { data } = await publicClient()
-			.from("chords")
-			.select(VOICING_FIELDS)
-			.order("label", VOICING_ORDER)
-			.order("root")
-			.order("suffix");
-		return (data as ChordWithVoicings[] | null) ?? [];
-	},
+	async (): Promise<ChordWithVoicings[]> =>
+		rows<ChordWithVoicings[] | null>(
+			await publicClient()
+				.from("chords")
+				.select(VOICING_FIELDS)
+				.order("label", VOICING_ORDER)
+				.order("root")
+				.order("suffix"),
+		) ?? [],
 	["chords:getAllChordsWithVoicings"],
 	CACHE_OPTS,
 );
 
-// Sorted, de-duplicated root list for the `/chords` index selector.
-export const getChordRoots = unstable_cache(
-	async (): Promise<string[]> => {
-		const { data } = await publicClient().from("chords").select("root");
-		return sortRoots([...new Set((data ?? []).map((c) => c.root as string))]);
-	},
-	["chords:getChordRoots"],
-	CACHE_OPTS,
-);
-
-// Browsable (root, suffix) pairs for the search palette — cached so the
-// `/chords` layout no longer runs a per-request Supabase query (which, via
-// cookies, would force the whole `/chords/*` subtree to render dynamically).
+// Browsable (root, suffix) pairs for the search palette.
 export const getChordIndex = unstable_cache(
 	async (): Promise<ChordIndexEntry[]> => {
-		const { data } = await publicClient().from("chords").select("root, suffix");
-		const rows = (data ?? []) as { root: string; suffix: string }[];
-		return rows
+		const data = rows<{ root: string; suffix: string }[] | null>(
+			await publicClient().from("chords").select("root, suffix"),
+		);
+		return (data ?? [])
 			.filter((c) => isBrowsableSuffix(c.suffix))
 			.map((c) => ({ root: c.root, suffix: c.suffix }));
 	},

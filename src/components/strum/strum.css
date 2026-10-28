@@ -372,28 +372,6 @@
 		width: 100%;
 		height: auto;
 	}
-	.st-dg svg [fill="#1a1a1a"],
-	.st-dg svg [fill="#333"] {
-		fill: var(--gp-ink);
-	}
-	.st-dg svg [fill="#555"],
-	.st-dg svg [fill="#666"],
-	.st-dg svg [fill="#6b7280"] {
-		fill: var(--gp-ink-3);
-	}
-	.st-dg svg [fill="#fff"],
-	.st-dg svg [fill="white"] {
-		fill: var(--gp-card);
-	}
-	.st-dg svg [stroke="#bbb"] {
-		stroke: var(--gp-ink-3);
-	}
-	.st-dg svg [stroke="#333"] {
-		stroke: var(--gp-ink);
-	}
-	.st-dg svg [stroke="white"] {
-		stroke: var(--gp-card);
-	}
 	.st-dg[data-size="sm"] {
 		width: 64px;
 	}

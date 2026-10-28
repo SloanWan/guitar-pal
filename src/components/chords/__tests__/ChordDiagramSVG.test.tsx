@@ -1,8 +1,5 @@
-// Characterization snapshots for ChordDiagramSVG. The component has no other
-// tests, and its open-string / note-name tables are being moved to a shared
-// module: these pin the rendered markup so that move can be shown not to
-// change a single pixel. Cover every mode and every size, plus the three
-// shapes that exercise different code paths (open chord, barre, high position).
+// Snapshots of ChordDiagramSVG in every mode and size, over the three shapes
+// that take different code paths (open chord, barre, high position).
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -19,6 +16,9 @@ const SHAPES = {
 	// A-shape C at fret 3: startFret > 1 shows the fret number instead of the nut.
 	highC: { frets: [-1, 3, 5, 5, 5, 3], fingers: [0, 1, 3, 3, 3, 1], startFret: 3, barreFret: 3, rootMidi: 48 },
 } as const;
+
+// The corner radius only the root marker carries (DOT_R × 0.45).
+const ROOT_SQUARE = 'rx="3.6"';
 
 const MODES: readonly DiagramMode[] = ["fingers", "noteNames", "fretboard"];
 const SIZES: readonly DiagramSize[] = ["compact", "regular", "large"];
@@ -50,7 +50,24 @@ describe("ChordDiagramSVG markup", () => {
 		const html = renderToStaticMarkup(
 			<ChordDiagramSVG frets={[...openC.frets]} fingers={[...openC.fingers]} startFret={1} mode="noteNames" />,
 		);
-		expect(html).not.toContain("#4A6FA5");
+		expect(html).not.toContain(ROOT_SQUARE);
 		expect(html).toMatchSnapshot();
+	});
+
+	it("draws the root as a rounded square when rootMidi is given", () => {
+		const { openC } = SHAPES;
+		const html = renderToStaticMarkup(
+			<ChordDiagramSVG {...openC} frets={[...openC.frets]} fingers={[...openC.fingers]} />,
+		);
+		// Open C's root sounds twice: the A string at fret 3 and the B string at fret 1.
+		expect(html.split(ROOT_SQUARE).length - 1).toBe(2);
+	});
+
+	it("draws in theme tokens, never fixed colours", () => {
+		const { barreF } = SHAPES;
+		const html = renderToStaticMarkup(
+			<ChordDiagramSVG {...barreF} frets={[...barreF.frets]} fingers={[...barreF.fingers]} mode="fretboard" />,
+		);
+		expect(html).not.toMatch(/(fill|stroke)="#/);
 	});
 });

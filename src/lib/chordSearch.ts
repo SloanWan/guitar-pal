@@ -7,12 +7,11 @@
 
 import {
   ROOT_CHROMATIC_ORDER,
-  CHORD_SUFFIX_CATEGORIES,
   UNKNOWN_PREFIX,
   UNKNOWN_ROOT,
   UNKNOWN_SUFFIX,
-  getSuffixCategory,
-  isSlashChord,
+  displayCategory,
+  suffixRank,
 } from "@/lib/chordSuffixes";
 
 /** `uk-` followed by a shape: frets, mutes and the dashes between them. */
@@ -186,22 +185,8 @@ export function parseQuery(raw: string): ParsedQuery {
 // suffixes by category-then-within-category position (slash chords last).
 const ROOT_ORDER = new Map(ROOT_CHROMATIC_ORDER.map((r, i) => [r, i]));
 
-const SUFFIX_ORDER = new Map<string, number>();
-{
-  let n = 0;
-  for (const { suffixes } of CHORD_SUFFIX_CATEGORIES) {
-    for (const s of suffixes) SUFFIX_ORDER.set(s, n++);
-  }
-}
-
 function rootOrderKey(root: string): number {
   return ROOT_ORDER.get(root) ?? Number.MAX_SAFE_INTEGER;
-}
-
-function suffixOrderKey(suffix: string): number {
-  const k = SUFFIX_ORDER.get(suffix);
-  if (k !== undefined) return k;
-  return isSlashChord(suffix) ? 100_000 : 90_000;
 }
 
 // --- fuzzy fallback --------------------------------------------------------
@@ -243,10 +228,7 @@ function scoreSuffix(suffixLower: string, rest: string, normSuffix: string): { t
 }
 
 function toResult(entry: ChordIndexEntry): ChordSearchResult {
-  const category = isSlashChord(entry.suffix)
-    ? "Slash Chords"
-    : (getSuffixCategory(entry.suffix) ?? "Other");
-  return { root: entry.root, suffix: entry.suffix, category };
+  return { root: entry.root, suffix: entry.suffix, category: displayCategory(entry.suffix) };
 }
 
 function compareScored(a: Scored, b: Scored): number {
@@ -254,7 +236,7 @@ function compareScored(a: Scored, b: Scored): number {
   if (a.dist !== b.dist) return a.dist - b.dist;
   const rk = rootOrderKey(a.entry.root) - rootOrderKey(b.entry.root);
   if (rk !== 0) return rk;
-  const sk = suffixOrderKey(a.entry.suffix) - suffixOrderKey(b.entry.suffix);
+  const sk = suffixRank(a.entry.suffix) - suffixRank(b.entry.suffix);
   if (sk !== 0) return sk;
   return a.entry.suffix.localeCompare(b.entry.suffix);
 }

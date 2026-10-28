@@ -1,5 +1,5 @@
 import { MUTED, voicingToChordShape, type ShapeFret } from "@/lib/chordShape";
-import { getSuffixCategory, isSlashChord } from "@/lib/chordSuffixes";
+import { displayCategory } from "@/lib/chordSuffixes";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 import { TAB_STRING_COUNT } from "@/lib/chordTabSequence";
 import type { UserChordVoicing } from "@/lib/userChordVoicings";
@@ -159,10 +159,6 @@ function matchRank(match: ShapeMatchKind): number {
 	return MAX_DIFFERENCES + 1 + Math.abs(match.semitones);
 }
 
-function categoryOf(suffix: string): string {
-	return isSlashChord(suffix) ? "Slash Chords" : (getSuffixCategory(suffix) ?? "Other");
-}
-
 const DEFAULT_LIMIT = 8;
 
 /**
@@ -191,7 +187,7 @@ export function searchChordsByShape(
 			best.set(key, {
 				root: chord.root,
 				suffix: chord.suffix,
-				category: categoryOf(chord.suffix),
+				category: displayCategory(chord.suffix),
 				voicing,
 				frets,
 				match,

@@ -7,7 +7,7 @@ import {
   type ChordVoicing,
   type DiagramShape,
 } from "@/lib/chordVoicing";
-import { chordVoicingToMidi, rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { rootPitchClass, voicingPitches } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 import { chordDisplayName, isSlashChord } from "@/lib/chordSuffixes";
 import { omittedTones } from "@/lib/chordFormulas";
@@ -77,7 +77,7 @@ export function toVoicingCards(
   suffix: string,
 ): VoicingCard[] {
   return voicings.map((v) => {
-    const pitches = chordVoicingToMidi(v).map(({ midi }) => midi);
+    const pitches = voicingPitches(v);
     return {
       id: v.id,
       label: v.label ?? `Pos. ${v.start_fret}`,

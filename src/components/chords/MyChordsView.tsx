@@ -14,7 +14,7 @@ import { chordDisplayName } from "@/lib/chordSuffixes";
 import { voicingFrets } from "@/lib/chordShapeSearch";
 import { formatTabSequence } from "@/lib/chordTabSequence";
 import { voicingToDiagramShape } from "@/lib/chordVoicing";
-import { chordVoicingToMidi, rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { rootPitchClass, voicingPitches } from "@/lib/chordVoicingToMidi";
 import {
 	userVoicingCategory,
 	type UserChordVoicing,
@@ -131,7 +131,7 @@ export default function MyChordsView() {
 										className="gap-1 rounded-none border-line-strong text-denim hover:bg-denim-tint"
 										disabled={preview.isPreloading}
 										onClick={() =>
-											void preview.play(chordVoicingToMidi(v).map((n) => n.midi))
+											void preview.play(voicingPitches(v))
 										}
 									>
 										{preview.isPreloading ? (

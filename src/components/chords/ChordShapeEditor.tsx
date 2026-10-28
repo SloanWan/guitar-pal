@@ -7,6 +7,7 @@ import {
 	MAX_FINGER,
 	MAX_SHAPE_START_FRET,
 	MUTED,
+	fretInWindow,
 	stringsAtFret,
 	suggestFingers,
 	validateChordShape,
@@ -19,15 +20,8 @@ import {
 } from "@/lib/chordTabSequence";
 
 /**
- * A chord shape, edited as the grid it is drawn as.
- *
- * Six columns, low E on the left, over the five frets of the diagram window. The
- * editing surface *is* the diagram rather than a form beside a preview: what the
- * player is choosing is a picture, and two representations of it would be two
- * things to keep in step.
- *
- * Controlled: the shape and every edit belong to the caller, so undo, dirty
- * checks and validation live in one place rather than being duplicated here.
+ * A chord shape, edited as the grid it is drawn as: six columns, low E on the
+ * left, over the five frets of the window. Controlled — the caller owns the shape.
  */
 
 interface Props {
@@ -39,28 +33,12 @@ interface Props {
 const STRING_LABELS = ["E", "A", "D", "G", "B", "e"];
 
 export default function ChordShapeEditor({ shape, onChange }: Props) {
-	/**
-	 * Whether the player has set a finger by hand.
-	 *
-	 * Until they do, the fingering follows the shape: changing a note re-suggests
-	 * the whole hand, which is what makes the suggestion useful rather than
-	 * something to correct twice. After they do, it stays put — re-deciding for
-	 * them would be arguing with an instruction.
-	 */
+	// Until the player sets a finger, the fingering is re-suggested on every edit.
 	const [fingersTouched, setFingersTouched] = useState(false);
-	/**
-	 * The shortcut field: a shape written the way a tab writes it.
-	 *
-	 * Starts empty and is never written back to from the grid. It is a way in,
-	 * not a second view of the shape — a field that re-wrote itself under the
-	 * player's cursor every time they clicked a fret would be worse than one that
-	 * simply holds what they typed.
-	 */
+	// A way in, not a second view: never rewritten from the grid under the cursor.
 	const [tabInput, setTabInput] = useState("");
 	const tabParse = parseTabSequence(tabInput);
-	// A sequence too short to be one yet is unfinished, not wrong: telling a
-	// player their three characters are not six strings while they are still
-	// typing the fourth is an error message about nothing.
+	// Fewer than six characters is still being typed, not wrong.
 	const tabError =
 		tabInput.trim().length < TAB_STRING_COUNT ? null : tabParse.error;
 	const tabFieldId = useId();
@@ -70,15 +48,21 @@ export default function ChordShapeEditor({ shape, onChange }: Props) {
 	);
 	const validation = validateChordShape(shape);
 
-	function setString(stringIdx: number, value: ChordShape["frets"][number]) {
-		const frets = shape.frets.map((f, i) => (i === stringIdx ? value : f));
-		// A barre that no longer has two strings under it is not a barre; dropping
-		// it here means the editor cannot be left holding an invalid one.
-		const next: ChordShape = { ...shape, frets };
-		const stillBarred =
-			next.barreFret !== null && stringsAtFret(next, next.barreFret).length >= 2;
-		const settled: ChordShape = { ...next, barreFret: stillBarred ? next.barreFret : null };
+	/**
+	 * Hand an edit back: a barre left outside the window or with fewer than two
+	 * strings under it is dropped, and the fingering follows the shape until the
+	 * player has set a finger themselves.
+	 */
+	function commit(next: ChordShape) {
+		const barre = next.barreFret;
+		const barred =
+			barre !== null && fretInWindow(barre, next.startFret) && stringsAtFret(next, barre).length >= 2;
+		const settled: ChordShape = { ...next, barreFret: barred ? barre : null };
 		onChange(fingersTouched ? settled : { ...settled, fingers: suggestFingers(settled) });
+	}
+
+	function setString(stringIdx: number, value: ChordShape["frets"][number]) {
+		commit({ ...shape, frets: shape.frets.map((f, i) => (i === stringIdx ? value : f)) });
 	}
 
 	/** Fingering is optional, so the cycle passes through "none". */
@@ -99,32 +83,16 @@ export default function ChordShapeEditor({ shape, onChange }: Props) {
 	}
 
 	function moveWindow(delta: number) {
-		const startFret = Math.min(
-			MAX_SHAPE_START_FRET,
-			Math.max(1, shape.startFret + delta),
-		);
+		const startFret = Math.min(MAX_SHAPE_START_FRET, Math.max(1, shape.startFret + delta));
 		if (startFret === shape.startFret) return;
 		// The window moves, the notes do not: a fret that falls outside is released
-		// rather than silently transposed, which would rewrite the shape.
-		const frets = shape.frets.map((f) =>
-			f === MUTED || f === 0 || (f >= startFret && f <= startFret + CHORD_SHAPE_WINDOW - 1)
-				? f
-				: MUTED,
-		);
-		const next: ChordShape = { ...shape, startFret, frets };
-		const stillBarred =
-			next.barreFret !== null &&
-			next.barreFret >= startFret &&
-			next.barreFret <= startFret + CHORD_SHAPE_WINDOW - 1 &&
-			stringsAtFret(next, next.barreFret).length >= 2;
-		const settled: ChordShape = { ...next, barreFret: stillBarred ? next.barreFret : null };
-		onChange(fingersTouched ? settled : { ...settled, fingers: suggestFingers(settled) });
+		// rather than silently transposed.
+		const frets = shape.frets.map((f) => (fretInWindow(f, startFret) ? f : MUTED));
+		commit({ ...shape, startFret, frets });
 	}
 
 	function toggleBarre(fret: number) {
-		const next: ChordShape = { ...shape, barreFret: shape.barreFret === fret ? null : fret };
-		// A barre changes which finger holds what, so the suggestion follows it.
-		onChange(fingersTouched ? next : { ...next, fingers: suggestFingers(next) });
+		commit({ ...shape, barreFret: shape.barreFret === fret ? null : fret });
 	}
 
 	/** Draw what has been typed, once it reads as a whole shape. */

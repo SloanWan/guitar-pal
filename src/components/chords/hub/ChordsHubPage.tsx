@@ -1,12 +1,13 @@
 import ChordsHub from "./ChordsHub";
 import { getChordIndex, getChordsByRoot, getChordsBySuffix } from "@/lib/chordsData";
+import type { BoardParams } from "@/lib/chordBoard";
 import type { HubView } from "@/lib/chordsHub";
 
 interface Props {
 	view: HubView;
 	root: string;
 	quality: string;
-	board: string | null;
+	board: BoardParams | null;
 }
 
 /** The hub with what its library view needs read on the server, so it draws on first paint. */

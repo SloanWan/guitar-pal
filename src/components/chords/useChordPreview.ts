@@ -13,6 +13,8 @@ export interface ChordPreview {
 	readonly isPlaying: boolean;
 	/** True while the sample presets for the first playback are still downloading. */
 	readonly isPreloading: boolean;
+	/** Makes the audio context and loads the samples, so a timed run of plays starts on time. */
+	prepare: () => Promise<void>;
 	play: (pitches: readonly number[]) => Promise<void>;
 }
 
@@ -36,8 +38,7 @@ export function useChordPreview(): ChordPreview {
 		[],
 	);
 
-	const play = useCallback(async (pitches: readonly number[]) => {
-		if (pitches.length === 0) return;
+	const ready = useCallback(async (): Promise<AudioContext> => {
 		if (!ctxRef.current) {
 			ctxRef.current = new AudioContext();
 			setIsPreloading(true);
@@ -46,6 +47,16 @@ export function useChordPreview(): ChordPreview {
 		const ctx = ctxRef.current;
 		if (ctx.state === "suspended") await ctx.resume();
 		await preloadRef.current;
+		return ctx;
+	}, []);
+
+	const prepare = useCallback(async () => {
+		await ready();
+	}, [ready]);
+
+	const play = useCallback(async (pitches: readonly number[]) => {
+		if (pitches.length === 0) return;
+		const ctx = await ready();
 
 		if (timerRef.current !== null) clearTimeout(timerRef.current);
 		setIsPlaying(true);
@@ -57,7 +68,7 @@ export function useChordPreview(): ChordPreview {
 			},
 			(CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000,
 		);
-	}, []);
+	}, [ready]);
 
-	return { isPlaying, isPreloading, play };
+	return { isPlaying, isPreloading, prepare, play };
 }

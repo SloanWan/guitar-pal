@@ -1,38 +1,183 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { ChevronLeft, ChevronRight, MoveLeft, MoveRight, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, MoveLeft, MoveRight, Play, Square, X } from "lucide-react";
+import { toast } from "sonner";
 import Link from "@/components/AppLink";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import ChordRequestButton from "@/components/chords/ChordRequestButton";
+import { useChordPreview } from "@/components/chords/useChordPreview";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { moveOnBoard, pageOnBoard, removeFromBoard, type BoardItem } from "@/lib/chordBoard";
+import { Stepper } from "@/components/ui/stepper";
+import { stashHandoff } from "@/lib/assistant/handoff";
+import {
+	BOARD_CAPO_MAX,
+	BOARD_TRANSPOSE_LIMIT,
+	boardProgression,
+	moveOnBoard,
+	pageOnBoard,
+	removeFromBoard,
+	type BoardChord,
+	type BoardItem,
+} from "@/lib/chordBoard";
 import { withGlyphs } from "@/lib/chordFormulas";
 import { chordHref } from "@/lib/chordSlug";
 import { chordSymbol } from "@/lib/chordSuffixes";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { DEFAULT_STRUM_BPM, LAST_STRUM_PATTERN_KEY, PRESET_STRUM_PATTERNS, STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
 import type { BoardCard } from "./useBoard";
+
+/** Beats each chord is held for when the board is played through. */
+const BEATS_PER_CHORD = 4;
 
 interface Props {
 	items: readonly BoardItem[];
 	cards: readonly BoardCard[];
+	transpose: number;
+	capo: number;
 	onChange: (items: BoardItem[]) => void;
+	onTranspose: (semitones: number) => void;
+	onCapo: (fret: number) => void;
+}
+
+/** The shape a found card is showing, or undefined while its shapes load. */
+function shownShape(card: Extract<BoardCard, { status: "found" }>) {
+	const count = card.shapes?.length ?? 0;
+	return count > 0 ? card.shapes?.[Math.min(card.item.shape, count - 1)] : undefined;
+}
+
+/**
+ * Plays the board's chords in turn, one every `BEATS_PER_CHORD` beats. Its timers
+ * are cleared on stop and on unmount.
+ */
+function usePlayThrough() {
+	const preview = useChordPreview();
+	const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+	/** Bumped by every stop, so a run still waiting on the samples knows it was called off. */
+	const runId = useRef(0);
+	const [playing, setPlaying] = useState<number | null>(null);
+
+	const stop = useCallback(() => {
+		runId.current += 1;
+		timers.current.forEach(clearTimeout);
+		timers.current = [];
+		setPlaying(null);
+	}, []);
+	useEffect(() => stop, [stop]);
+
+	const start = async (steps: readonly { index: number; pitches: readonly number[] }[], bpm: number) => {
+		stop();
+		if (steps.length === 0) return;
+		const id = runId.current;
+		setPlaying(steps[0].index);
+		// The samples first, so the first chord is not late against the rest.
+		await preview.prepare();
+		if (runId.current !== id) return;
+		const every = Math.round((60 / bpm) * BEATS_PER_CHORD * 1000);
+		steps.forEach((step, n) =>
+			timers.current.push(
+				setTimeout(() => {
+					setPlaying(step.index);
+					void preview.play(step.pitches);
+				}, n * every),
+			),
+		);
+		timers.current.push(setTimeout(stop, steps.length * every));
+	};
+
+	return { playing, loading: preview.isPreloading, start, stop };
 }
 
 /** The chords side by side, each on the shape the player paged to. */
-export default function Board({ items, cards, onChange }: Props) {
+export default function Board({ items, cards, transpose, capo, onChange, onTranspose, onCapo }: Props) {
+	const router = useRouter();
+	const [bpm, setBpm] = useState(DEFAULT_STRUM_BPM);
+	const run = usePlayThrough();
 	const found = cards.filter((c) => c.status === "found").length;
+	// A run plays the cards as they were when it started; any change ends it.
+	const change = (next: BoardItem[]) => {
+		run.stop();
+		onChange(next);
+	};
+
+	function playThrough() {
+		if (run.playing !== null) return run.stop();
+		const steps = cards.flatMap((card, index) => {
+			const shape = card.status === "found" ? shownShape(card) : undefined;
+			return shape ? [{ index, pitches: shape.pitches.map((p) => p + capo) }] : [];
+		});
+		void run.start(steps, bpm);
+	}
+
+	function openInStrum() {
+		let patternId = PRESET_STRUM_PATTERNS[0].id;
+		try {
+			patternId = localStorage.getItem(LAST_STRUM_PATTERN_KEY) ?? patternId;
+		} catch {
+			// no storage: the first preset
+		}
+		// The shapes as drawn: under a capo, Strum plays what is held and sounds it higher.
+		const chords: BoardChord[] = cards.map((card) =>
+			card.status === "found"
+				? { chord: { root: card.root, suffix: card.suffix, voicingId: shownShape(card)?.id ?? null } }
+				: { unknown: card.name },
+		);
+		stashHandoff(boardProgression(chords, patternId, capo));
+		router.push("/strum");
+	}
+
+	async function copyLink() {
+		try {
+			await navigator.clipboard.writeText(window.location.href);
+			toast("Link copied — it opens this board.");
+		} catch {
+			toast("Could not copy. The address bar holds the same link.");
+		}
+	}
+
 	return (
 		<section className="hb-board" aria-label="Board">
 			<div className="hb-board-head">
 				<h2>Board</h2>
 				{cards.length > 0 && (
-					<span className="hb-meta">
+					<span className="hb-meta hb-board-line">
 						{found} chord{found === 1 ? "" : "s"} · each keeps the shape you page to
 					</span>
 				)}
+				<div className="hb-controls">
+					<div className="hb-control">
+						<span className="hb-meta">Transpose</span>
+						<Stepper label="Transpose" value={transpose}
+							onChange={(n) => {
+								run.stop();
+								onTranspose(n);
+							}} min={-BOARD_TRANSPOSE_LIMIT} max={BOARD_TRANSPOSE_LIMIT} />
+					</div>
+					<div className="hb-control">
+						<span className="hb-meta">Capo</span>
+						<Stepper label="Capo" value={capo}
+							onChange={(n) => {
+								run.stop();
+								onCapo(n);
+							}} max={BOARD_CAPO_MAX} />
+					</div>
+					<div className="hb-control">
+						<span className="hb-meta">Tempo</span>
+						<Stepper label="Tempo" value={bpm} onChange={setBpm} min={STRUM_BPM_MIN} max={STRUM_BPM_MAX} unit="BPM" />
+					</div>
+					<Button size="sm" disabled={found === 0} loading={run.loading} onClick={playThrough}>
+						{run.playing !== null ? <Square aria-hidden /> : <Play aria-hidden />}
+						{run.playing !== null ? "Stop" : "Play through"}
+					</Button>
+				</div>
 			</div>
+			{capo > 0 && (
+				<p className="hb-meta hb-capo-note">
+					With a capo on fret {capo}, play these shapes — the names on top are what sounds.
+				</p>
+			)}
 			<div className="hb-cards">
 				{cards.length === 0 && (
 					<p className="hb-meta hb-board-empty">
@@ -40,13 +185,14 @@ export default function Board({ items, cards, onChange }: Props) {
 					</p>
 				)}
 				{cards.map((card, i) => {
+					const name = withGlyphs(card.name);
 					const remove = (
 						<Button
 							variant="ghost"
 							size="xs"
 							className="hb-remove"
-							aria-label={`Take ${card.item.token} off the board`}
-							onClick={() => onChange(removeFromBoard(items, i))}
+							aria-label={`Take ${name} off the board`}
+							onClick={() => change(removeFromBoard(items, i))}
 						>
 							<X aria-hidden />
 						</Button>
@@ -55,23 +201,28 @@ export default function Board({ items, cards, onChange }: Props) {
 						return (
 							<div key={i} className="hb-card" data-miss="" style={{ "--i": i } as CSSProperties}>
 								{remove}
-								<span className="hb-card-name">{card.item.token}</span>
+								<span className="hb-card-name">{name}</span>
 								<span className="hb-meta">No chord found</span>
-								<ChordRequestButton key={card.item.token} query={card.item.token} label="Report as missing" />
+								<ChordRequestButton key={card.name} query={card.name} label="Report as missing" />
 							</div>
 						);
 					}
-					const name = withGlyphs(chordSymbol(card.root, card.suffix));
+					const held = withGlyphs(chordSymbol(card.root, card.suffix));
 					const count = card.shapes?.length ?? 0;
 					const at = count > 0 ? Math.min(card.item.shape, count - 1) : 0;
-					const shape = card.shapes?.[at];
+					const shape = shownShape(card);
 					return (
-						<div key={i} className="hb-card" style={{ "--i": i } as CSSProperties}>
+						<div
+							key={i}
+							className="hb-card"
+							data-now={run.playing === i ? "" : undefined}
+							style={{ "--i": i } as CSSProperties}
+						>
 							{remove}
-							<Link className="hb-card-name gp-focus" href={chordHref(card.root, card.suffix)}>
+							<Link className="hb-card-name gp-focus" href={chordHref(card.root, card.suffix)} title={`Open ${held}`}>
 								<span className="gp-title">{name}</span>
 							</Link>
-							<span className="hb-meta hb-card-label">{shape?.label ?? " "}</span>
+							<span className="hb-meta hb-card-label">{capo > 0 ? `Play the ${held} shape` : (shape?.label ?? " ")}</span>
 							<span className="hb-card-dg" aria-hidden>
 								{shape ? (
 									<ChordDiagramSVG {...shape.def} rootMidi={rootPitchClass(card.root)} size="compact" />
@@ -80,14 +231,14 @@ export default function Board({ items, cards, onChange }: Props) {
 								)}
 							</span>
 							<div className="hb-card-tools">
-								<Button variant="ghost" size="xs" aria-label={`Move ${name} left`} disabled={i === 0} onClick={() => onChange(moveOnBoard(items, i, -1))}>
+								<Button variant="ghost" size="xs" aria-label={`Move ${name} left`} disabled={i === 0} onClick={() => change(moveOnBoard(items, i, -1))}>
 									<MoveLeft aria-hidden />
 								</Button>
-								<Button variant="ghost" size="xs" aria-label={`Previous shape of ${name}`} disabled={count < 2} onClick={() => onChange(pageOnBoard(items, i, -1, count))}>
+								<Button variant="ghost" size="xs" aria-label={`Previous shape of ${name}`} disabled={count < 2} onClick={() => change(pageOnBoard(items, i, -1, count))}>
 									<ChevronLeft aria-hidden />
 								</Button>
 								<span className="hb-meta hb-count">{count > 0 ? `${at + 1}/${count}` : "–"}</span>
-								<Button variant="ghost" size="xs" aria-label={`Next shape of ${name}`} disabled={count < 2} onClick={() => onChange(pageOnBoard(items, i, 1, count))}>
+								<Button variant="ghost" size="xs" aria-label={`Next shape of ${name}`} disabled={count < 2} onClick={() => change(pageOnBoard(items, i, 1, count))}>
 									<ChevronRight aria-hidden />
 								</Button>
 								<Button
@@ -95,7 +246,7 @@ export default function Board({ items, cards, onChange }: Props) {
 									size="xs"
 									aria-label={`Move ${name} right`}
 									disabled={i === cards.length - 1}
-									onClick={() => onChange(moveOnBoard(items, i, 1))}
+									onClick={() => change(moveOnBoard(items, i, 1))}
 								>
 									<MoveRight aria-hidden />
 								</Button>
@@ -106,9 +257,17 @@ export default function Board({ items, cards, onChange }: Props) {
 			</div>
 			<div className="hb-board-foot">
 				{cards.length > 0 && (
-					<Button variant="ghost" size="xs" onClick={() => onChange([])}>
-						Clear
-					</Button>
+					<>
+						<Button variant="secondary" size="sm" disabled={found === 0} onClick={openInStrum}>
+							Open in Strum as a progression
+						</Button>
+						<Button variant="secondary" size="sm" onClick={() => void copyLink()}>
+							Copy a link
+						</Button>
+						<Button variant="ghost" size="sm" onClick={() => change([])}>
+							Clear
+						</Button>
+					</>
 				)}
 				<p className="hb-hint">Add chords with the search above, or the + on any chord in the library</p>
 			</div>

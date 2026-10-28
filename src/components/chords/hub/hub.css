@@ -136,8 +136,23 @@
 	.hb-board-head {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: baseline;
+		align-items: center;
 		gap: 10px;
+	}
+	.hb-controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 14px;
+		margin-left: auto;
+	}
+	.hb-control {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.hb-capo-note {
+		margin: -4px 0 0;
 	}
 	.hb-board-head h2,
 	.hb-library-head h2 {
@@ -166,6 +181,10 @@
 		background: var(--gp-page);
 		animation: hb-pop var(--gp-d-pop) var(--gp-spring-pop) both;
 		animation-delay: calc(min(var(--i, 0), 10) * var(--gp-stagger));
+	}
+	.hb-card[data-now] {
+		box-shadow: 0 0 0 2px var(--gp-m-500);
+		transition: box-shadow var(--gp-d-state) linear;
 	}
 	.hb-card[data-miss] {
 		justify-content: center;
@@ -465,6 +484,22 @@
 		.hb-hint {
 			margin: 0;
 			text-align: left;
+		}
+		.hb-board-line {
+			display: none;
+		}
+		.hb-controls {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			align-items: end;
+			gap: 10px 12px;
+			width: 100%;
+			margin-left: 0;
+		}
+		.hb-control {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 4px;
 		}
 		.hb-grid {
 			grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import {
 	DEFAULT_STRUM_BPM,
+	LAST_STRUM_PATTERN_KEY,
 	PRESET_STRUM_PATTERNS,
 	type Beat,
 	type ChordProgression,
@@ -33,7 +34,7 @@ import type { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import type { useChordProgressions } from "@/components/strum/useChordProgressions";
 
 /** Device-local memory of which pattern and which progression were open. */
-export const LAST_PATTERN_KEY = "lastStrumPattern";
+export const LAST_PATTERN_KEY = LAST_STRUM_PATTERN_KEY;
 export const OPEN_PROGRESSION_KEY = "strumOpenProgression";
 
 interface Args {

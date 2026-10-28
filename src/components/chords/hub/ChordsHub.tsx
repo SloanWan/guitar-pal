@@ -4,7 +4,7 @@ import "./hub.css";
 import { useMemo } from "react";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useUser } from "@/hooks/useUser";
-import { addToBoard } from "@/lib/chordBoard";
+import { addToBoard, type BoardParams } from "@/lib/chordBoard";
 import { buildChordLookup } from "@/lib/chordBatchResolve";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import type { ChordWithVoicings } from "@/lib/chordsData";
@@ -21,8 +21,8 @@ export interface ChordsHubProps {
 	quality: string;
 	chords: readonly ChordWithVoicings[];
 	index: readonly ChordIndexEntry[];
-	/** `?board=` as the page was asked for it; null when the URL carries none. */
-	board: string | null;
+	/** The board's parameters as the page was asked for them; null when the URL carries no board. */
+	board: BoardParams | null;
 }
 
 /** /chords: look chords up, lay them side by side on the board, and browse the library. */
@@ -31,13 +31,21 @@ export default function ChordsHub({ view, root, quality, chords, index, board }:
 	const { voicings: userVoicings } = useUserChordVoicings(user, loading);
 	const searchIndex = useMemo(() => chordIndexWithUser(index, userVoicings), [index, userVoicings]);
 	const lookup = useMemo(() => buildChordLookup(searchIndex), [searchIndex]);
-	const { items, cards, update } = useBoard(board, index, userVoicings);
+	const { items, transpose, capo, cards, update, setTranspose, setCapo } = useBoard(board, index, userVoicings);
 
 	return (
 		<div className="hb-page">
 			<div className="hb-in">
 				<AskBar index={searchIndex} lookup={lookup} onAdd={(added) => update(addToBoard(items, added))} />
-				<Board items={items} cards={cards} onChange={update} />
+				<Board
+					items={items}
+					cards={cards}
+					transpose={transpose}
+					capo={capo}
+					onChange={update}
+					onTranspose={setTranspose}
+					onCapo={setCapo}
+				/>
 				<HubLibrary
 					view={view}
 					root={root}

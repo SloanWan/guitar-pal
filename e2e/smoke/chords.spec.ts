@@ -41,6 +41,26 @@ test("several chords typed go on the board, and the board is in the address", as
 	await expect(board.getByRole("link", { name: "Am" })).toHaveCount(0);
 });
 
+test("the board transposes, and goes to Strum as a progression", async ({ page }) => {
+	await page.goto("/chords?board=C%20Am");
+	const board = page.getByRole("region", { name: "Board" });
+	await expect(board.getByRole("link", { name: "Am" })).toBeVisible();
+
+	await board.getByRole("button", { name: "Increase Transpose" }).click();
+	await board.getByRole("button", { name: "Increase Transpose" }).click();
+	await expect(board.getByRole("link", { name: "Bm" })).toBeVisible();
+	await expect(page).toHaveURL(/transpose=2/);
+
+	// Under a capo on 2 the names stay what sounds; the shapes are C and Am again.
+	await board.getByRole("button", { name: "Increase Capo" }).click();
+	await board.getByRole("button", { name: "Increase Capo" }).click();
+	await expect(board.getByText("Play the Am shape")).toBeVisible();
+
+	await board.getByRole("button", { name: "Open in Strum as a progression" }).click();
+	await expect(page).toHaveURL(/\/strum/);
+	await expect(page.getByText("C|Am").first()).toBeVisible();
+});
+
 test("an old side-by-side link lands on a board of the same chords", async ({ page }) => {
 	await page.goto("/chords/grid?q=Em,C");
 	await expect(page).toHaveURL(/\/chords\?board=/);

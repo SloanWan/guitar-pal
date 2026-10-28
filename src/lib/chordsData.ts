@@ -31,7 +31,7 @@ const VOICING_FIELDS = `
 
 // Without an ORDER BY an embedded array comes back in physical order, and an
 // UPDATE rewrites a row at the end of the heap — so a Standard the migration
-// touched (scripts/fix-default-voicing-bass.ts) would land last. "Standard"
+// touched (#226, the default-voicing bass fix) would land last. "Standard"
 // sorts before "Variation n", which keeps the default shape the first card.
 const VOICING_ORDER = { referencedTable: "chord_voicings" } as const;
 

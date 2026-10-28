@@ -37,14 +37,4 @@ export async function createPracticeLog({
 	return data;
 }
 
-export async function getPracticeLogs(): Promise<PracticeLog[]> {
-	const supabase = createClient();
-	const { data, error } = await supabase
-		.from("practice_logs")
-		.select("*")
-		.order("completed_at", { ascending: false });
-	if (error) throw new Error(error.message);
-	return data;
-}
-
 // note: no need to write update or delete functions for practice logs, since they are immutable records of past practice sessions

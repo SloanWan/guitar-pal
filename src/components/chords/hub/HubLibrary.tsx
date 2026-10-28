@@ -131,7 +131,7 @@ export default function HubLibrary({ view, root, quality, chords, index, userVoi
 							<Fragment key={group.label}>
 								<tr className="hb-table-cat">
 									<th colSpan={13} scope="rowgroup">
-										{group.label}
+										<span>{group.label}</span>
 									</th>
 								</tr>
 								{group.suffixes.map((s) => (

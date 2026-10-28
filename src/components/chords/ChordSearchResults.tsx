@@ -8,7 +8,7 @@ import MusicalText from "@/components/MusicalText";
 import ChordRequestButton from "@/components/chords/ChordRequestButton";
 import { useChordShapeMatches, type ChordShapeMatches } from "@/components/chords/useChordShapeMatches";
 import { formatTabSequence } from "@/lib/chordTabSequence";
-import type { ShapeMatch } from "@/lib/chordShapeSearch";
+import { shapeMatchNote, type ShapeMatch } from "@/lib/chordShapeSearch";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { buildChordLookup, classifyBatchQuery } from "@/lib/chordBatchResolve";
 import {
@@ -76,16 +76,6 @@ function NoteRow({ ask, example }: { ask: string; example: string }) {
 			<span className="shrink-0 font-mono text-xs tracking-[0.08em] text-ink">{example}</span>
 		</div>
 	);
-}
-
-/** How a shape answered, in the words a player would use. */
-function shapeMatchNote(match: ShapeMatch["match"]): string {
-	if (match.kind === "exact") return "same shape";
-	if (match.kind === "near") {
-		return match.differences === 1 ? "one string differs" : `${match.differences} strings differ`;
-	}
-	const frets = Math.abs(match.semitones);
-	return `same grip, ${frets} fret${frets === 1 ? "" : "s"} ${match.semitones > 0 ? "up" : "down"}`;
 }
 
 export interface ChordPaletteRows {

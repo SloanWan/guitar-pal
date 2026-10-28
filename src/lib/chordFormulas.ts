@@ -183,6 +183,33 @@ export function degreeOf(semitones: number, formula: Formula, baseSuffix: string
   }
 }
 
+/** What each degree is called, for a line under the note: "♭3" → "minor third". */
+const DEGREE_NAMES: Readonly<Record<string, string>> = {
+  "1": "root",
+  "♭9": "flat ninth",
+  "9": "ninth",
+  "2": "second",
+  "♯9": "sharp ninth",
+  "♭3": "minor third",
+  "3": "major third",
+  "11": "eleventh",
+  "4": "fourth",
+  "♯11": "sharp eleventh",
+  "♭5": "flat fifth",
+  "5": "fifth",
+  "♭13": "flat thirteenth",
+  "♯5": "sharp fifth",
+  "♭♭7": "diminished seventh",
+  "13": "thirteenth",
+  "6": "sixth",
+  "♭7": "minor seventh",
+  "7": "major seventh",
+};
+
+export function degreeName(degree: string): string {
+  return DEGREE_NAMES[degree] ?? degree;
+}
+
 // ── Spelling ─────────────────────────────────────────────────────────────────
 // Decided under #234: spell by interval — each degree on the letter its `steps`
 // say, with whatever accidental lands it on the pitch — then fold the four

@@ -5,6 +5,7 @@
 // voicings loaded server-side, which keeps the result shareable/refreshable and spares
 // the client a second round-trip. Editing the query re-navigates.
 
+import LegacyBrowseChrome from "@/components/chords/LegacyBrowseChrome";
 import type { Metadata } from "next";
 import Link from "@/components/AppLink";
 import { getChordIndex, getChordsBatch } from "@/lib/chordsData";
@@ -34,19 +35,21 @@ export default async function ChordGridPage({ searchParams }: Props) {
 	const cards = buildBatchGridCards(tokens, chords);
 
 	return (
-		<div className="flex-1 bg-surface">
-			<div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
-				<div className="flex items-center justify-between">
-					<Link href="/chords" className="text-sm text-ink-dim hover:text-ink">
-						← Chords
-					</Link>
-					<h1 className="text-2xl font-semibold text-ink">Chords Result</h1>
-					<Link href="/chords/all" className="text-sm text-ink-dim hover:text-ink">
-						All Chords →
-					</Link>
+		<LegacyBrowseChrome>
+			<div className="flex-1 bg-surface">
+				<div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+					<div className="flex items-center justify-between">
+						<Link href="/chords" className="text-sm text-ink-dim hover:text-ink">
+							← Chords
+						</Link>
+						<h1 className="text-2xl font-semibold text-ink">Chords Result</h1>
+						<Link href="/chords/all" className="text-sm text-ink-dim hover:text-ink">
+							All Chords →
+						</Link>
+					</div>
+					<ChordBatchGrid cards={cards} truncated={truncated} />
 				</div>
-				<ChordBatchGrid cards={cards} truncated={truncated} />
 			</div>
-		</div>
+		</LegacyBrowseChrome>
 	);
 }

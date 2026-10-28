@@ -4,6 +4,7 @@ import {
   QUALITY_NAMES,
   chordSpec,
   chordTones,
+  degreeName,
   omittedTones,
   spellDegree,
   withGlyphs,
@@ -123,5 +124,20 @@ describe("omittedTones", () => {
   it("is empty when everything sounds, or when there is no formula", () => {
     expect(omittedTones("C", "major", [48, 52, 55, 60, 64])).toEqual([]);
     expect(omittedTones("C", "7sg", [48, 52, 55])).toEqual([]);
+  });
+});
+
+describe("degreeName", () => {
+  it("names every degree chordTones can produce", () => {
+    const degrees = new Set<string>();
+    for (const suffix of Object.keys(FORMULAS)) {
+      for (const tone of chordTones("C", suffix) ?? []) degrees.add(tone.degree);
+    }
+    for (const degree of degrees) expect(degreeName(degree)).not.toBe(degree);
+  });
+
+  it("reads a third as a chart does", () => {
+    expect(degreeName("♭3")).toBe("minor third");
+    expect(degreeName("1")).toBe("root");
   });
 });

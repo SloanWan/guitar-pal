@@ -1,18 +1,18 @@
 import { getChordIndex } from "@/lib/chordsData";
 import ChordSearch from "@/components/chords/ChordSearch";
 
-// The search index comes from a cookie-free cached read (getChordIndex), so this
-// layout carries no per-request/dynamic dependency and no longer forces the
-// /chords/* subtree to render dynamically or hit Supabase on every visit.
-export default async function ChordsLayout({ children }: { children: React.ReactNode }) {
+/**
+ * The bottom search pill and the data credits, for the chord pages still on the
+ * old browse design. Goes away with them when the chords hub lands (#363 step 10).
+ */
+export default async function LegacyBrowseChrome({ children }: { children: React.ReactNode }) {
 	const index = await getChordIndex();
 
 	return (
 		<div className="flex flex-col min-h-[calc(100vh_-_var(--gp-chrome-h))]">
 			{children}
-			{/* Bottom-anchored search: rests at the page bottom on short pages
-			    (mt-auto) and floats pinned to the viewport once content scrolls
-			    (sticky). The band is click-through; only the pill takes clicks. */}
+			{/* Rests at the page bottom on short pages and pins to the viewport once content
+			    scrolls. The band is click-through; only the pill takes clicks. */}
 			<div className="mt-auto sticky bottom-4 z-30 flex justify-center px-4 pt-4 pb-6 pointer-events-none">
 				<div className="pointer-events-auto">
 					<ChordSearch index={index} />

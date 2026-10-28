@@ -159,6 +159,16 @@ function matchRank(match: ShapeMatchKind): number {
 	return MAX_DIFFERENCES + 1 + Math.abs(match.semitones);
 }
 
+/** How a shape answered a typed one, in the words a player would use. */
+export function shapeMatchNote(match: ShapeMatchKind): string {
+	if (match.kind === "exact") return "same shape";
+	if (match.kind === "near") {
+		return match.differences === 1 ? "one string differs" : `${match.differences} strings differ`;
+	}
+	const frets = Math.abs(match.semitones);
+	return `same grip, ${frets} fret${frets === 1 ? "" : "s"} ${match.semitones > 0 ? "up" : "down"}`;
+}
+
 const DEFAULT_LIMIT = 8;
 
 /**

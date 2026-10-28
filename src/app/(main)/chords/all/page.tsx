@@ -2,6 +2,7 @@
 // No real root slug collides with "all" — root slugs are chromatic note names
 // (a, ab, b, bb, c, c-sharp, d, db, e, eb, f, f-sharp, g, gb).
 
+import LegacyBrowseChrome from "@/components/chords/LegacyBrowseChrome";
 import Link from "@/components/AppLink";
 import type { Metadata } from "next";
 import { getAllChordsWithVoicings } from "@/lib/chordsData";
@@ -34,45 +35,47 @@ export default async function AllChordsPage({ searchParams }: Props) {
 			: buildAllChordsRootFirst(allChords, buildHref);
 
 	return (
-		<>
-			<ChordToc sections={sections} />
-			<ChordTocIndicator sections={sections} />
-			<div className="flex-1 bg-surface">
-				<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-					<div className="flex flex-col items-center gap-6">
-						<div className="flex w-full items-center gap-2">
-							<Link
-								href="/chords"
-								className="flex-1 text-sm text-ink-dim hover:text-ink"
-							>
-								← Chord Library
-							</Link>
-							<h1 className="text-2xl font-semibold text-ink">All Chords</h1>
-							<div className="flex-1" aria-hidden />
-						</div>
+		<LegacyBrowseChrome>
+			<>
+				<ChordToc sections={sections} />
+				<ChordTocIndicator sections={sections} />
+				<div className="flex-1 bg-surface">
+					<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+						<div className="flex flex-col items-center gap-6">
+							<div className="flex w-full items-center gap-2">
+								<Link
+									href="/chords"
+									className="flex-1 text-sm text-ink-dim hover:text-ink"
+								>
+									← Chord Library
+								</Link>
+								<h1 className="text-2xl font-semibold text-ink">All Chords</h1>
+								<div className="flex-1" aria-hidden />
+							</div>
 
-						{/* Grouping toggle — display preference, stays as query param */}
-						<div className="flex gap-2">
-							<Button
-								asChild
-								size="sm"
-								variant={grouping === "root-first" ? "default" : "outline"}
-							>
-								<Link href="/chords/all">By Root</Link>
-							</Button>
-							<Button
-								asChild
-								size="sm"
-								variant={grouping === "category-first" ? "default" : "outline"}
-							>
-								<Link href="/chords/all?group=category">By Category</Link>
-							</Button>
-						</div>
+							{/* Grouping toggle — display preference, stays as query param */}
+							<div className="flex gap-2">
+								<Button
+									asChild
+									size="sm"
+									variant={grouping === "root-first" ? "default" : "outline"}
+								>
+									<Link href="/chords/all">By Root</Link>
+								</Button>
+								<Button
+									asChild
+									size="sm"
+									variant={grouping === "category-first" ? "default" : "outline"}
+								>
+									<Link href="/chords/all?group=category">By Category</Link>
+								</Button>
+							</div>
 
-						<BrowseGrid sections={sections} />
+							<BrowseGrid sections={sections} />
+						</div>
 					</div>
 				</div>
-			</div>
-		</>
+			</>
+		</LegacyBrowseChrome>
 	);
 }

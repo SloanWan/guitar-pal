@@ -81,6 +81,14 @@ export function chordDisplayName(root: string, suffix: string): string {
   return isSlashChord(suffix) ? `${root}${suffix}` : `${root} ${suffix}`;
 }
 
+/** A chord as a chart writes it: "C", "Am", "Cmaj7", "C/E". */
+export function chordSymbol(root: string, suffix: string): string {
+  if (isUnknownChord(root, suffix)) return suffix;
+  if (suffix === "major") return root;
+  if (suffix === "minor") return `${root}m`;
+  return `${root}${suffix}`;
+}
+
 // Returns the category name for a suffix, or null if it belongs to none.
 export function getSuffixCategory(suffix: string): string | null {
   for (const { category, suffixes } of CHORD_SUFFIX_CATEGORIES) {

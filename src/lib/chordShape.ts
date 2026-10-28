@@ -1,4 +1,4 @@
-import type { ChordVoicing } from "@/lib/chordVoicing";
+import type { ChordVoicing, DiagramShape } from "@/lib/chordVoicing";
 
 /**
  * A chord shape as the player edits it, and its translation to the stored
@@ -259,5 +259,15 @@ export function voicingToChordShape(voicing: ChordVoicing): ChordShape {
 		frets,
 		fingers,
 		barreFret: voicing.barre_fret === null ? null : startFret - 1 + voicing.barre_fret,
+	};
+}
+
+/** A drawn shape as an editable one: the diagram writes a muted string as -1. */
+export function diagramToChordShape(def: DiagramShape): ChordShape {
+	return {
+		startFret: def.startFret,
+		frets: def.frets.map((fret) => (fret < 0 ? MUTED : fret)),
+		fingers: [...def.fingers],
+		barreFret: def.barreFret,
 	};
 }

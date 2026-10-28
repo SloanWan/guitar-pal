@@ -207,6 +207,7 @@ export default function PrimitivesPage() {
 					<div className="flex flex-col items-start gap-4">
 						<Stepper label="tempo" unit="BPM" value={bpm} min={40} max={240} onChange={setBpm} tap />
 						<Stepper label="capo" value={capo} min={0} max={12} onChange={setCapo} />
+						<Stepper label="capo (small)" value={capo} min={0} max={12} onChange={setCapo} size="sm" />
 						<Stepper label="bars" value={4} onChange={() => {}} disabled />
 					</div>
 				</Section>

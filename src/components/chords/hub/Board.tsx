@@ -118,7 +118,7 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 		} catch {
 			// no storage: the first preset
 		}
-		// The shapes as drawn: under a capo, Strum plays what is held and sounds it higher.
+		// The shapes as drawn, and the capo: Strum plays what is held and sounds it higher.
 		const chords: BoardChord[] = cards.map((card) =>
 			card.status === "found"
 				? { chord: { root: card.root, suffix: card.suffix, voicingId: shownShape(card)?.id ?? null } }
@@ -141,15 +141,10 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 		<section className="hb-board" aria-label="Board">
 			<div className="hb-board-head">
 				<h2>Board</h2>
-				{cards.length > 0 && (
-					<span className="hb-meta hb-board-line">
-						{found} chord{found === 1 ? "" : "s"} · each keeps the shape you page to
-					</span>
-				)}
 				<div className="hb-controls">
 					<div className="hb-control">
 						<span className="hb-meta">Transpose</span>
-						<Stepper label="Transpose" value={transpose}
+						<Stepper label="Transpose" size="sm" value={transpose}
 							onChange={(n) => {
 								run.stop();
 								onTranspose(n);
@@ -157,27 +152,30 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 					</div>
 					<div className="hb-control">
 						<span className="hb-meta">Capo</span>
-						<Stepper label="Capo" value={capo}
+						<Stepper label="Capo" size="sm" value={capo}
 							onChange={(n) => {
 								run.stop();
 								onCapo(n);
 							}} max={BOARD_CAPO_MAX} />
 					</div>
 					<div className="hb-control">
-						<span className="hb-meta">Tempo</span>
-						<Stepper label="Tempo" value={bpm} onChange={setBpm} min={STRUM_BPM_MIN} max={STRUM_BPM_MAX} unit="BPM" />
+						<Stepper label="Tempo" size="sm" value={bpm} onChange={setBpm} min={STRUM_BPM_MIN} max={STRUM_BPM_MAX} unit="BPM" />
 					</div>
 					<Button size="sm" disabled={found === 0} loading={run.loading} onClick={playThrough}>
-						{run.playing !== null ? <Square aria-hidden /> : <Play aria-hidden />}
-						{run.playing !== null ? "Stop" : "Play through"}
+						{/* Both labels laid in one cell, so the button is as wide either way. */}
+						<span className="hb-swap">
+							<span data-shown={run.playing === null || undefined}>
+								<Play aria-hidden />
+								Play through
+							</span>
+							<span data-shown={run.playing !== null || undefined}>
+								<Square aria-hidden />
+								Stop
+							</span>
+						</span>
 					</Button>
 				</div>
 			</div>
-			{capo > 0 && (
-				<p className="hb-meta hb-capo-note">
-					With a capo on fret {capo}, play these shapes — the names on top are what sounds.
-				</p>
-			)}
 			<div className="hb-cards">
 				{cards.length === 0 && (
 					<p className="hb-meta hb-board-empty">
@@ -185,7 +183,7 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 					</p>
 				)}
 				{cards.map((card, i) => {
-					const name = withGlyphs(card.name);
+					const name = withGlyphs(card.status === "found" ? chordSymbol(card.root, card.suffix) : card.name);
 					const remove = (
 						<Button
 							variant="ghost"
@@ -207,7 +205,6 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 							</div>
 						);
 					}
-					const held = withGlyphs(chordSymbol(card.root, card.suffix));
 					const count = card.shapes?.length ?? 0;
 					const at = count > 0 ? Math.min(card.item.shape, count - 1) : 0;
 					const shape = shownShape(card);
@@ -219,10 +216,11 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 							style={{ "--i": i } as CSSProperties}
 						>
 							{remove}
-							<Link className="hb-card-name gp-focus" href={chordHref(card.root, card.suffix)} title={`Open ${held}`}>
+							<Link className="hb-card-name gp-focus" href={chordHref(card.root, card.suffix)}>
 								<span className="gp-title">{name}</span>
 							</Link>
-							<span className="hb-meta hb-card-label">{capo > 0 ? `Play the ${held} shape` : (shape?.label ?? " ")}</span>
+							<span className="hb-card-sounds">{card.sounds && `sounds ${withGlyphs(card.sounds)}`}</span>
+							<span className="hb-meta hb-card-label">{shape?.label ?? " "}</span>
 							<span className="hb-card-dg" aria-hidden>
 								{shape ? (
 									<ChordDiagramSVG {...shape.def} rootMidi={rootPitchClass(card.root)} size="compact" />
@@ -255,22 +253,20 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 					);
 				})}
 			</div>
-			<div className="hb-board-foot">
-				{cards.length > 0 && (
-					<>
-						<Button variant="secondary" size="sm" disabled={found === 0} onClick={openInStrum}>
-							Open in Strum as a progression
-						</Button>
-						<Button variant="secondary" size="sm" onClick={() => void copyLink()}>
-							Copy a link
-						</Button>
-						<Button variant="ghost" size="sm" onClick={() => change([])}>
-							Clear
-						</Button>
-					</>
-				)}
-				<p className="hb-hint">Add chords with the search above, or the + on any chord in the library</p>
-			</div>
+			{cards.length > 0 && (
+				<div className="hb-board-foot">
+					<Button variant="secondary" size="sm" disabled={found === 0} onClick={openInStrum}>
+						Open in Strum as a progression
+					</Button>
+					<Button variant="secondary" size="sm" onClick={() => void copyLink()}>
+						Copy a link
+					</Button>
+					<Button variant="ghost" size="sm" onClick={() => change([])}>
+						Clear
+					</Button>
+					<p className="hb-hint">Add more with the search above, or the + on any chord in the library</p>
+				</div>
+			)}
 		</section>
 	);
 }

@@ -151,8 +151,18 @@
 		align-items: center;
 		gap: 6px;
 	}
-	.hb-capo-note {
-		margin: -4px 0 0;
+	.hb-swap {
+		display: grid;
+	}
+	.hb-swap > span {
+		display: inline-flex;
+		grid-area: 1 / 1;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+	}
+	.hb-swap > span:not([data-shown]) {
+		visibility: hidden;
 	}
 	.hb-board-head h2,
 	.hb-library-head h2 {
@@ -192,6 +202,15 @@
 		background: transparent;
 		box-shadow: inset 0 0 0 1.5px var(--gp-edge);
 		text-align: center;
+	}
+	/* What a card sounds behind the capo. The line is kept without one, so a capo moves nothing. */
+	.hb-card-sounds {
+		height: 15px;
+		margin-top: -4px;
+		color: var(--gp-m-700);
+		font-size: 12px;
+		font-weight: 650;
+		line-height: 15px;
 	}
 	.hb-remove {
 		position: absolute;
@@ -484,9 +503,6 @@
 		.hb-hint {
 			margin: 0;
 			text-align: left;
-		}
-		.hb-board-line {
-			display: none;
 		}
 		.hb-controls {
 			display: grid;

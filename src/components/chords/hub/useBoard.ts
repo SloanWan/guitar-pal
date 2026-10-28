@@ -19,17 +19,16 @@ import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingC
 import { chordIndexWithUser, mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**
- * A card on the board, read against the library. `name` is what sounds; `root`
- * and `suffix` are the chord whose shapes are drawn — the same chord unless a
- * capo is on, when they are the shapes held under it.
+ * A card on the board, read against the library: the chord held, as typed and
+ * transposed. `sounds` is what it sounds as behind the capo, null without one.
  */
 export type BoardCard =
 	| {
 			readonly status: "found";
 			readonly item: BoardItem;
-			readonly name: string;
 			readonly root: string;
 			readonly suffix: string;
+			readonly sounds: string | null;
 			readonly shapes: VoicingCard[] | null;
 	  }
 	| { readonly status: "missing"; readonly item: BoardItem; readonly name: string };
@@ -78,25 +77,23 @@ export function useBoard(initial: BoardParams | null, index: readonly ChordIndex
 	const setCapo = (next: number) => write({ ...state, capo: next });
 
 	const lookup = useMemo(() => buildChordLookup(chordIndexWithUser(index, userVoicings)), [index, userVoicings]);
-	// Each card twice over: the chord that sounds, and the one whose shapes are held.
-	const resolved = useMemo(
+	// Each card's chord as held: the typed chord, transposed.
+	const held = useMemo(
 		() =>
 			items.map((item) => {
 				const typed = resolveChordToken(lookup, item.token);
-				if (!typed) return { sounds: null, held: null };
-				const sounds = transposeChord(typed.root, typed.suffix, transpose);
-				const shifted = transposeChord(typed.root, typed.suffix, transpose - capo);
-				const held = transpose === capo ? typed : shifted && resolveChordToken(lookup, chordSymbol(shifted.root, shifted.suffix));
-				return { sounds, held };
+				if (!typed || transpose === 0) return typed;
+				const shifted = transposeChord(typed.root, typed.suffix, transpose);
+				return shifted && resolveChordToken(lookup, chordSymbol(shifted.root, shifted.suffix));
 			}),
-		[items, lookup, transpose, capo],
+		[items, lookup, transpose],
 	);
 
 	// Each chord's shapes, from the shared voicing cache (in memory or this browser's storage first).
 	const [loaded, setLoaded] = useState<Record<string, readonly ChordVoicing[]>>({});
 	const wanted = useMemo(
-		() => [...new Map(resolved.flatMap(({ held }) => (held ? [[voicingCacheKey(held.root, held.suffix), held] as const] : []))).values()],
-		[resolved],
+		() => [...new Map(held.flatMap((chord) => (chord ? [[voicingCacheKey(chord.root, chord.suffix), chord] as const] : []))).values()],
+		[held],
 	);
 	useEffect(() => {
 		let cancelled = false;
@@ -117,14 +114,14 @@ export function useBoard(initial: BoardParams | null, index: readonly ChordIndex
 	}, [wanted, loaded]);
 
 	const cards: BoardCard[] = items.map((item, i) => {
-		const { sounds, held } = resolved[i];
-		const name = sounds ? chordSymbol(sounds.root, sounds.suffix) : item.token;
-		if (!held) return { status: "missing", item, name };
-		const library = loaded[voicingCacheKey(held.root, held.suffix)];
-		const shapes = library
-			? toVoicingCards(mergeVoicings(library, userVoicings, held.root, held.suffix), held.root, held.suffix)
-			: null;
-		return { status: "found", item, name, root: held.root, suffix: held.suffix, shapes };
+		const chord = held[i];
+		if (!chord) return { status: "missing", item, name: item.token };
+		const { root, suffix } = chord;
+		const library = loaded[voicingCacheKey(root, suffix)];
+		const shapes = library ? toVoicingCards(mergeVoicings(library, userVoicings, root, suffix), root, suffix) : null;
+		const shifted = capo > 0 ? transposeChord(root, suffix, capo) : null;
+		const sounds = shifted && chordSymbol(shifted.root, shifted.suffix);
+		return { status: "found", item, root, suffix, sounds, shapes };
 	});
 
 	return { items, transpose, capo, cards, update, setTranspose, setCapo };

@@ -510,6 +510,24 @@
 		font-weight: 600;
 		color: var(--gp-ink-3);
 	}
+	.gp-stepper-sm {
+		gap: 4px;
+	}
+	.gp-stepper-sm .gp-stepper-btn {
+		width: 28px;
+		height: 28px;
+		border-radius: var(--gp-r-s);
+	}
+	.gp-stepper-sm .gp-stepper-btn svg {
+		width: 14px;
+		height: 14px;
+	}
+	.gp-stepper-sm .gp-stepper-val {
+		font-size: 15px;
+	}
+	.gp-stepper-sm .gp-stepper-unit {
+		font-size: 11.5px;
+	}
 
 	/* =================================================================================
 	   Primitives II (#355)

@@ -51,14 +51,15 @@ test("the board transposes, and goes to Strum as a progression", async ({ page }
 	await expect(board.getByRole("link", { name: "Bm" })).toBeVisible();
 	await expect(page).toHaveURL(/transpose=2/);
 
-	// Under a capo on 2 the names stay what sounds; the shapes are C and Am again.
+	// A capo leaves the cards as held and says what they sound.
 	await board.getByRole("button", { name: "Increase Capo" }).click();
 	await board.getByRole("button", { name: "Increase Capo" }).click();
-	await expect(board.getByText("Play the Am shape")).toBeVisible();
+	await expect(board.getByRole("link", { name: "Bm" })).toBeVisible();
+	await expect(board.getByText("sounds C♯m")).toBeVisible();
 
 	await board.getByRole("button", { name: "Open in Strum as a progression" }).click();
 	await expect(page).toHaveURL(/\/strum/);
-	await expect(page.getByText("C|Am").first()).toBeVisible();
+	await expect(page.getByText("D|Bm").first()).toBeVisible();
 });
 
 test("an old side-by-side link lands on a board of the same chords", async ({ page }) => {

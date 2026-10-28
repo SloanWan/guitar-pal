@@ -26,8 +26,8 @@ export const BOARD_CAPO_MAX = STRUM_CAPO_MAX;
 
 /**
  * The board as a whole: its cards, how far they are transposed, and the capo they
- * are played behind. The names on the cards are what sounds; with a capo on, the
- * shapes drawn are the ones held under it.
+ * are played behind. The cards are what is held, the way a chord sheet writes
+ * "Capo 3: C Am F G": transposing changes them, a capo only changes what they sound.
  */
 export interface BoardState {
 	readonly items: readonly BoardItem[];

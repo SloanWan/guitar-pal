@@ -32,7 +32,7 @@ export function patternRowMeta(pattern: StrumPattern): string {
 /** One pattern in the library: its name over a miniature of its rhythm, and a favourite pick. */
 export default function PatternRow({ pattern, index, selected, favourite, onSelect, onToggleFavourite }: Props) {
 	return (
-		<div className="st-row" style={{ "--i": index } as CSSProperties}>
+		<div className="lib-row" style={{ "--i": index } as CSSProperties}>
 			<ListRow
 				title={pattern.name}
 				subline={
@@ -54,7 +54,7 @@ export default function PatternRow({ pattern, index, selected, favourite, onSele
 			/>
 			<button
 				type="button"
-				className="st-fav"
+				className="lib-fav"
 				aria-pressed={favourite}
 				aria-label={`Favourite ${pattern.name}`}
 				onClick={onToggleFavourite}

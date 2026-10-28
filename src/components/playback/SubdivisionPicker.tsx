@@ -9,14 +9,18 @@ export default function SubdivisionPicker({
 	meter,
 	value,
 	onChange,
+	levels,
 	className,
 }: {
 	meter: Meter;
 	value: TickLevel;
 	onChange: (level: TickLevel) => void;
+	/** The levels this page's metronome can click, when it cannot click them all. */
+	levels?: readonly TickLevel[];
 	className?: string;
 }) {
-	const options = tickLevelsFor(meter).map((level) => {
+	const offered = tickLevelsFor(meter).filter((level) => !levels || levels.includes(level));
+	const options = offered.map((level) => {
 		const { glyph, name } = tickLevelGlyph(meter, level);
 		return {
 			value: level,

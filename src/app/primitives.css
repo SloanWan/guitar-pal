@@ -504,6 +504,22 @@
 		font-variant-numeric: tabular-nums;
 		color: var(--gp-ink);
 	}
+	.gp-stepper[data-dense] {
+		gap: 4px;
+	}
+	.gp-stepper[data-dense] .gp-stepper-btn {
+		width: 26px;
+		height: 26px;
+		border-radius: var(--gp-r-s);
+	}
+	.gp-stepper[data-dense] .gp-stepper-btn svg {
+		width: 14px;
+		height: 14px;
+	}
+	.gp-stepper[data-dense] .gp-stepper-val {
+		min-width: 2.2ch;
+		font-size: 15px;
+	}
 	.gp-stepper-unit {
 		margin-left: 3px;
 		font-size: 13px;

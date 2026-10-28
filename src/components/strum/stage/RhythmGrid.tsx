@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import type { Beat, StepValue } from "@/lib/strumPatterns";
 import { cellCountLabels, type Meter } from "@/lib/strumMeter";
 import { balancedRowSizes, splitRows } from "@/lib/balancedRows";
-import { cssPx, useElementWidth } from "@/components/strum/useElementWidth";
+import { cssPx, useElementWidth } from "@/components/useElementWidth";
 
 /** Where the playhead is, in the rhythm's own bars. */
 export interface RhythmPosition {

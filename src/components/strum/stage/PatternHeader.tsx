@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ListMusic, Pencil, RotateCcw, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import "./icons.css";
+import "@/components/playback/icons.css";
 
 interface Props {
 	name: string;
@@ -143,7 +143,7 @@ export default function PatternHeader({
 						</Popover>
 					)}
 					{onOpenLibrary && (
-						<Button variant="secondary" size="sm" className="st-libbtn" onClick={onOpenLibrary}>
+						<Button variant="secondary" size="sm" className="lib-btn" onClick={onOpenLibrary}>
 							<ListMusic aria-hidden />
 							Patterns
 						</Button>

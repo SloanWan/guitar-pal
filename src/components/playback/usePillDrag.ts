@@ -52,7 +52,7 @@ export function usePillDrag(dock: PlayerDock, onDock: (dock: PlayerDock) => void
 		const el = moveRef.current;
 		if (e.button !== 0 || !el) return;
 		const startX = e.clientX, startY = e.clientY;
-		const area = el.closest(".st-stage-wrap")?.getBoundingClientRect();
+		const area = el.closest(".pb-area")?.getBoundingClientRect();
 		let moved = false;
 		let aiming: PlayerDock | null = null;
 

@@ -8,21 +8,11 @@
    ===================================================================================== */
 @layer components {
 	.st-page {
-		container: strum / inline-size;
+		container: strum gp-page / inline-size;
 		height: 100%;
 		background: var(--gp-page);
 		color: var(--gp-ink);
 		font-family: var(--gp-f-body);
-	}
-	.st-shell {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) 296px;
-		grid-template-rows: minmax(0, 1fr);
-		height: 100%;
-		transition: grid-template-columns var(--gp-d-rise) var(--gp-e-rise);
-	}
-	.st-shell[data-lib="closed"] {
-		grid-template-columns: minmax(0, 1fr) 0px;
 	}
 	/* The stage's cell: the scrolling stage, and the play pill floating over it.
 	   The pill takes no room from the stage and the page never moves for it, wherever
@@ -76,77 +66,11 @@
 		flex-direction: column;
 	}
 
-	/* ── Library ──────────────────────────────────────────────────────────── */
-	.st-lib {
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		min-width: 0;
-		min-height: 0;
-		padding: 16px 14px 16px 16px;
-		overflow: hidden;
-		box-shadow: -1px 0 0 var(--gp-line);
-	}
-	.st-shell[data-lib="closed"] .st-lib {
-		visibility: hidden;
-		padding: 0;
-	}
-	.st-lib-list {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		min-height: 0;
-		margin: 0 -4px;
-		padding: 4px;
-		overflow-y: auto;
-	}
-	/* The expand control while the library is folded away: a floating icon, no rail. */
-	.st-lib-fab {
-		position: absolute;
-		top: 14px;
-		right: 14px;
-		z-index: 6;
-		animation: st-pop var(--gp-d-pop) var(--gp-spring-pop);
-	}
-	.st-libbtn,
 	.st-shared-strip {
 		display: none;
 	}
-	.st-row {
-		display: flex;
-		align-items: center;
-		gap: 2px;
-	}
-	.st-row > .gp-row {
-		flex: 1;
-		min-width: 0;
-	}
-	.st-row .gp-row-t {
+	.st-page .lib-list .gp-row-t {
 		text-transform: capitalize;
-	}
-	.st-fav {
-		display: grid;
-		flex: none;
-		place-items: center;
-		width: 36px;
-		height: 36px;
-		border-radius: var(--gp-r-s);
-		color: var(--gp-edge);
-		cursor: pointer;
-		transition:
-			color var(--gp-d-state) linear,
-			transform var(--gp-d-pop) var(--gp-spring-pop);
-	}
-	.st-fav:hover {
-		color: var(--gp-ink-3);
-	}
-	.st-fav[aria-pressed="true"] {
-		color: var(--gp-m-500);
-		transform: rotate(-12deg);
-	}
-	.st-fav svg {
-		width: 16px;
-		height: 17px;
 	}
 	.st-mini {
 		display: flex;
@@ -589,11 +513,9 @@
 	.st-plist > .gp-row {
 		flex: none;
 	}
-	/* The open pattern and the open progression — what plays — are tinted the module's
-	   light, not only lifted, so they read from across a list (both themes; beats the
-	   dark Lift's face). */
-	.st-prog .st-plist > .gp-row.gp-hop[aria-current="true"],
-	.st-lib-list .st-row > .gp-row.gp-hop[aria-current="true"] {
+	/* The open progression — what plays — is tinted the module's light, not only
+	   lifted, so it reads from across the list (the open pattern's is in library.css). */
+	.st-prog .st-plist > .gp-row.gp-hop[aria-current="true"] {
 		background: var(--gp-m-100);
 	}
 	/* A preset group's heading, in the module's colour so the groups read apart. */
@@ -676,17 +598,6 @@
 		font-weight: 750;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.st-capo {
-		display: flex;
-		flex: none;
-		align-items: center;
-		gap: 6px;
-	}
-	.st-capo-val {
-		min-width: 22px;
-		font-weight: 750;
-		text-align: center;
 	}
 	/* The chords scroll inside the panel; following playback scrolls this, not the page. */
 	.st-chords-scroll {
@@ -1005,314 +916,6 @@
 		}
 	}
 
-	/* ── Play pill: the transport floating over the stage's foot ────────── */
-	.st-remote {
-		position: absolute;
-		bottom: 18px;
-		left: 50%;
-		z-index: 20;
-		max-width: calc(100% - 24px);
-		transform: translateX(-50%);
-	}
-	.st-pill {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 8px 10px 8px 16px;
-		border-radius: 22px;
-		background: var(--gp-card);
-		box-shadow:
-			var(--gp-ring-c),
-			var(--gp-shadow-pop);
-	}
-	/* What the drag moves; the remote above it only places the dock. */
-	.st-pill-move[data-dragging] .st-pill {
-		cursor: grabbing;
-		box-shadow:
-			var(--gp-ring-c),
-			0 24px 48px -18px rgb(0 0 0 / 0.35);
-	}
-	.st-pill-grip {
-		display: grid;
-		flex: none;
-		place-items: center;
-		width: 22px;
-		height: 40px;
-		margin-left: -8px;
-		border-radius: var(--gp-r-s);
-		color: var(--gp-ink-mute);
-		cursor: grab;
-		touch-action: none;
-		transition:
-			color var(--gp-d-state) linear,
-			background-color var(--gp-d-state) linear;
-	}
-	.st-pill-grip:hover {
-		background: var(--gp-well);
-		color: var(--gp-ink-3);
-	}
-	.st-pill-grip svg {
-		width: 18px;
-		height: 18px;
-	}
-	/* Docked on the left: the pill stands up, in groups — the handle, what is
-	   sounding, play with slower / faster under it, the tempo, then loop and the
-	   tray — tight within a group, looser between them. */
-	.st-remote[data-dock="left"] {
-		top: 50%;
-		bottom: auto;
-		left: 16px;
-		max-height: calc(100% - 24px);
-		transform: translateY(-50%);
-	}
-	.st-remote[data-dock="left"] .st-pill {
-		display: grid;
-		grid-template-columns: 36px 36px;
-		grid-template-areas:
-			"grip grip"
-			"now now"
-			"play play"
-			"slower faster"
-			"bpm bpm"
-			"loop tray";
-		justify-items: center;
-		gap: 6px;
-		padding: 8px 12px 12px;
-	}
-	.st-remote[data-dock="left"] .st-pill-grip {
-		grid-area: grip;
-		width: 40px;
-		height: 20px;
-		margin: 0;
-	}
-	.st-remote[data-dock="left"] .st-pill-now {
-		grid-area: now;
-		align-items: center;
-		width: 78px;
-		margin: 6px 0 12px;
-		text-align: center;
-	}
-	.st-remote[data-dock="left"] .st-bar-now small {
-		display: block;
-	}
-	.st-remote[data-dock="left"] .st-pill-play {
-		grid-area: play;
-		margin-bottom: 8px;
-	}
-	.st-remote[data-dock="left"] .st-pill-slower {
-		grid-area: slower;
-	}
-	.st-remote[data-dock="left"] .st-pill-faster {
-		grid-area: faster;
-	}
-	.st-remote[data-dock="left"] .st-bpm {
-		grid-area: bpm;
-		flex-direction: column;
-		align-items: center;
-		gap: 0;
-		min-width: 0;
-		width: 100%;
-		line-height: 1.15;
-	}
-	/* loop and the tray sit apart from the transport, over a hairline */
-	.st-pill-loop {
-		position: relative;
-	}
-	/* The loop's gap between passes, a small tag on the button's corner: the button
-	   keeps its size whether it shows or not. */
-	.st-loop-gap {
-		position: absolute;
-		right: -5px;
-		bottom: -4px;
-		min-width: 18px;
-		padding: 1px 4px;
-		border-radius: 999px;
-		background: var(--gp-m-500);
-		color: var(--gp-m-on);
-		box-shadow: 0 0 0 2px var(--gp-card);
-		font-size: 10px;
-		font-weight: 750;
-		line-height: 13px;
-		text-align: center;
-		pointer-events: none;
-		animation: st-fade var(--gp-d-state) linear;
-	}
-	.st-remote[data-dock="left"] .st-pill-loop,
-	.st-remote[data-dock="left"] .st-pill-tray {
-		margin-top: 14px;
-		box-shadow: 0 -12px 0 -11px var(--gp-line);
-	}
-	.st-remote[data-dock="left"] .st-pill-loop {
-		grid-area: loop;
-	}
-	.st-remote[data-dock="left"] .st-pill-tray {
-		grid-area: tray;
-	}
-	/* While the pill is dragged: where it will land if let go — an outline the
-	   pill's shape at that dock, popping in each time the landing changes. */
-	.st-dock-ghost {
-		position: absolute;
-		z-index: 19;
-		border: 2px dashed color-mix(in srgb, var(--gp-m-500) 55%, transparent);
-		border-radius: 22px;
-		background: color-mix(in srgb, var(--gp-m-500) 8%, transparent);
-		pointer-events: none;
-		animation: st-ghost-in 260ms cubic-bezier(0.3, 1.45, 0.45, 1) both;
-	}
-	.st-dock-ghost[data-dock="bottom"] {
-		bottom: 18px;
-		left: 50%;
-		width: min(480px, calc(100% - 24px));
-		height: 68px;
-		translate: -50% 0;
-	}
-	.st-dock-ghost[data-dock="left"] {
-		top: 50%;
-		left: 16px;
-		width: 100px;
-		height: min(324px, calc(100% - 24px));
-		translate: 0 -50%;
-	}
-	@keyframes st-ghost-in {
-		0% {
-			opacity: 0;
-			scale: 0.9;
-		}
-		100% {
-			opacity: 1;
-			scale: 1;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.st-dock-ghost {
-			animation: st-fade 150ms linear both;
-		}
-	}
-	.st-pill-now {
-		display: flex;
-		flex-direction: column;
-		width: 112px;
-		min-width: 0;
-	}
-	.st-bar-now {
-		overflow: hidden;
-		font-size: 17px;
-		font-weight: 750;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.st-bar-now small {
-		color: var(--gp-ink-3);
-		font-size: 12px;
-		font-weight: 600;
-	}
-	.st-bpm {
-		display: inline-flex;
-		align-items: baseline;
-		gap: 4px;
-		min-width: 70px;
-		padding: 2px 8px;
-		border-radius: var(--gp-r-s);
-		font-size: 15px;
-		font-weight: 750;
-		cursor: pointer;
-	}
-	.st-bpm:hover {
-		background: var(--gp-well);
-	}
-	/* The tray over the pill: the tempo, then one row a sound — each with what shapes
-	   it — on one grid, so every level slider starts at the same place. */
-	.st-tray {
-		/* Portaled out of the page, the tray answers to its own width. */
-		container: tray / inline-size;
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-	}
-	/* Beside the standing pill the tray is the pill's height: a little tighter, its
-	   groups spread over that height, scrolling only if a short window forces it. */
-	.st-tray[data-dock="left"] {
-		justify-content: space-between;
-		gap: 12px;
-		overflow-y: auto;
-	}
-	.st-tempo-val {
-		min-width: 6.5ch;
-		font-size: 24px;
-		font-weight: 800;
-	}
-	.st-mix {
-		display: grid;
-		grid-template-columns: 44px 44px auto minmax(88px, 1fr) 36px;
-		align-items: center;
-		gap: 12px 10px;
-		padding-top: 14px;
-		box-shadow: 0 -1px 0 var(--gp-line);
-	}
-	.st-mix-row {
-		display: contents;
-	}
-	.st-mix-row > :first-child {
-		justify-self: center;
-	}
-	.st-mix-name {
-		font-size: 14px;
-		font-weight: 650;
-	}
-	.st-mix-extra {
-		justify-self: start;
-	}
-	.st-mix-val {
-		min-width: 36px;
-		text-align: right;
-	}
-	/* Too narrow for five columns: each sound takes a line of its own, wrapping its
-	   level under it only when it has to. */
-	@container tray (max-width: 400px) {
-		.st-mix {
-			display: flex;
-			flex-direction: column;
-			align-items: stretch;
-			gap: 14px;
-		}
-		/* Two lines a sound, the same for all three: what it is, then its level. */
-		.st-mix-row {
-			display: grid;
-			grid-template-columns: 44px minmax(0, 1fr) auto auto;
-			grid-template-areas:
-				"icon name extra extra"
-				"level level level value";
-			align-items: center;
-			gap: 6px 10px;
-		}
-		.st-mix-row > :first-child {
-			grid-area: icon;
-		}
-		.st-mix-name {
-			grid-area: name;
-		}
-		.st-mix-extra {
-			grid-area: extra;
-			justify-self: end;
-		}
-		.st-mix-row > .gp-slider {
-			grid-area: level;
-		}
-		.st-mix-val {
-			grid-area: value;
-		}
-	}
-	/* The mute switch is a phone's (and a tablet's) problem: only a touch screen says so. */
-	.st-tray-hint {
-		display: none;
-		margin: 0;
-	}
-	@media (hover: none) and (pointer: coarse) {
-		.st-tray-hint {
-			display: block;
-		}
-	}
-
 	/* ── Bubble rise: the page's pieces arrive one after another ─────────── */
 	.st-rise > * {
 		animation: st-bubble 560ms cubic-bezier(0.3, 1.45, 0.45, 1) both;
@@ -1355,18 +958,6 @@
 
 	/* ── Tablet: no side library, the stage centred ──────────────────────── */
 	@container strum (max-width: 959px) {
-		.st-shell,
-		.st-shell[data-lib="closed"] {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.st-lib,
-		.st-lib-fab,
-		.st-lib-fold {
-			display: none;
-		}
-		.st-libbtn {
-			display: inline-flex;
-		}
 		.st-shared-strip {
 			display: block;
 		}
@@ -1428,17 +1019,6 @@
 			--st-cl-max: 4;
 			flex: none;
 			max-height: 46vh;
-		}
-		.st-pill-now,
-		.st-pill-loop {
-			display: none;
-		}
-		.st-pill {
-			gap: 8px;
-			padding: 6px 8px 6px 12px;
-		}
-		.st-remote {
-			bottom: 10px;
 		}
 		.st-title h1 {
 			font-size: 20px;

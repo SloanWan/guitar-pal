@@ -8,6 +8,8 @@ import { percentOf, snapToPoints } from "@/lib/snap";
 export interface SliderProps {
 	value: number;
 	onChange: (value: number) => void;
+	/** Where a drag ends, or a key press lands: the value to act on when acting on every step is too dear. */
+	onCommit?: (value: number) => void;
 	/** The thumb's accessible name. */
 	label: string;
 	min?: number;
@@ -27,7 +29,7 @@ export interface SliderProps {
  * A slider (spec §8): a 4px track filled in the module colour, a 20px thumb on a 2px
  * shadow that sinks while it is held. Replaces Fader as pages migrate.
  */
-export function Slider({ value, onChange, label, min = 0, max = 100, step = 1, ticks, snap, valueText, disabled, className }: SliderProps) {
+export function Slider({ value, onChange, onCommit, label, min = 0, max = 100, step = 1, ticks, snap, valueText, disabled, className }: SliderProps) {
 	return (
 		<SliderPrimitive.Root
 			className={cn("gp-slider", className)}
@@ -37,6 +39,7 @@ export function Slider({ value, onChange, label, min = 0, max = 100, step = 1, t
 			step={step}
 			disabled={disabled}
 			onValueChange={([v]) => onChange(snap ? snapToPoints(v, snap.points, snap.within) : v)}
+			onValueCommit={onCommit && (([v]) => onCommit(snap ? snapToPoints(v, snap.points, snap.within) : v))}
 		>
 			<SliderPrimitive.Track className="gp-slider-track">
 				<SliderPrimitive.Range className="gp-slider-range" />

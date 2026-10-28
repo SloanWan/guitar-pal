@@ -7,12 +7,13 @@ import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import type { BarChordDiagram } from "@/components/strum/useBarChordDiagrams";
 import type { ProgressionDraft } from "@/components/strum/useProgressionDraft";
-import { cssPx, useElementWidth } from "@/components/strum/useElementWidth";
-import { STRUM_CAPO_MAX, type ChordProgression } from "@/lib/strumPatterns";
+import { cssPx, useElementWidth } from "@/components/useElementWidth";
+import type { ChordProgression } from "@/lib/strumPatterns";
 import { barPlaceholder } from "@/lib/strumBars";
 import { barLabel, defaultProgressionName, progressionCapo, progressionDisplayName } from "@/lib/strumProgressions";
 import { balancedPerRow } from "@/lib/balancedRows";
 import { prefersReducedMotion } from "@/lib/motion";
+import CapoStepper from "@/components/playback/CapoStepper";
 import ChordTile from "./ChordTile";
 
 /** How the open progression's chords are shown: a chart line of names, or a tile each with its shape. */
@@ -118,16 +119,7 @@ export default function ProgressionEditor({
 				{readOnly ? (
 					capo > 0 && <span className="st-lab">Capo {capo}</span>
 				) : (
-					<span className="st-capo" role="group" aria-label="Capo">
-						<span className="st-lab">Capo</span>
-						<Button variant="icon" size="xs" aria-label="Capo down" disabled={capo <= 0} onClick={() => draft.setCapo(capo - 1)}>
-							−
-						</Button>
-						<output className="st-num st-capo-val">{capo === 0 ? "—" : capo}</output>
-						<Button variant="icon" size="xs" aria-label="Capo up" disabled={capo >= STRUM_CAPO_MAX} onClick={() => draft.setCapo(capo + 1)}>
-							+
-						</Button>
-					</span>
+					<CapoStepper capo={capo} onCapo={draft.setCapo} />
 				)}
 				{!readOnly && (
 					<button

@@ -46,3 +46,13 @@ test("an old side-by-side link lands on a board of the same chords", async ({ pa
 	await expect(page).toHaveURL(/\/chords\?board=/);
 	await expect(page.getByRole("region", { name: "Board" }).getByRole("link", { name: "Em" })).toBeVisible();
 });
+
+test("a shape the library lacks can be written down", async ({ page }) => {
+	await page.goto("/chords/create?frets=00770x");
+	await expect(page.getByRole("heading", { name: "Write a chord", level: 1 })).toBeVisible();
+	const create = page.getByRole("button", { name: "Create chord" });
+	await expect(create).toBeDisabled();
+	// The library names the notes; taking its first answer is enough to file the chord.
+	await page.getByRole("region", { name: "What the notes say" }).getByRole("button").first().click();
+	await expect(create).toBeEnabled();
+});

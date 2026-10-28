@@ -9,7 +9,6 @@
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import Link from "@/components/AppLink";
 import { parseTabSequence } from "@/lib/chordTabSequence";
 import { identifyChords } from "@/lib/chordIdentify";
 import { getAllChordsWithVoicings } from "@/lib/chordsData";
@@ -36,22 +35,5 @@ export default async function CreateChordPage({ searchParams }: Props) {
 	// side. Only the handful of names it comes back with crosses the wire.
 	const guesses = identifyChords(await getAllChordsWithVoicings(), parsed.frets);
 
-	return (
-		<div className="flex flex-1 flex-col bg-surface">
-			<div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-				<div className="flex w-full items-center justify-between">
-					<Link href="/chords" className="text-sm text-ink-dim hover:text-ink">
-						← Chords
-					</Link>
-					<h1 className="text-2xl font-semibold text-ink">Write a chord</h1>
-					<Link href="/chords?view=table" className="text-sm text-ink-dim hover:text-ink">
-						All Chords →
-					</Link>
-				</div>
-				<div className="flex flex-1 justify-center">
-					<CreateChordView frets={parsed.frets} written={written} guesses={guesses} />
-				</div>
-			</div>
-		</div>
-	);
+	return <CreateChordView frets={parsed.frets} written={written} guesses={guesses} />;
 }

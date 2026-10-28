@@ -4,6 +4,7 @@ import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
 import { regionForSelection } from "@/lib/fingerpickLoopRegion";
 import { clampBpmToMeter } from "@/lib/strumBars";
 import type { TickLevel } from "@/lib/strumMetronome";
+import { DEFAULT_SPEED_TRAINER, trainerBpm, trainerPercent, type SpeedTrainer } from "@/lib/speedTrainer";
 import { useFingerpickAudioEngine, type MetronomeSubdivision } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
 import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
@@ -50,6 +51,15 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 	const [bpm, setBpmState] = useState(() => tabBpm(pattern));
 	const [dragBpm, setDragBpm] = useState<number | null>(null);
 	const [loopGap, setLoopGapState] = useState(0);
+	// Speed up each pass: the run's passes count from `passBase`, the pass it was switched on in.
+	const [trainerOn, setTrainerOn] = useState(false);
+	const [trainer, setTrainer] = useState<SpeedTrainer>(DEFAULT_SPEED_TRAINER);
+	const [pass, setPass] = useState(0);
+	const [passBase, setPassBase] = useState(0);
+	const running = engine.isPlaying || engine.isPaused;
+	const percent = trainerOn && running ? trainerPercent(pass - passBase, trainer) : 100;
+	// The tempo actually playing: what the engine and the cursor's timeline both run at.
+	const playBpm = trainerBpm(bpm, percent);
 	// The bar under the playhead, for the pill; the cursor reports it.
 	const [measure, setMeasure] = useState(0);
 	// The notes' level stays where it was while muted, so un-muting brings back the same mix.
@@ -59,11 +69,12 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 	const cursor = usePlaybackCursor({
 		tabViewerRef: viewerRef,
 		expanded,
-		bpm,
+		bpm: playBpm,
 		rows,
 		isPlaying: engine.isPlaying,
 		getPlaybackProgress: engine.getPlaybackProgress,
 		onMeasure: setMeasure,
+		onPass: setPass,
 	});
 	const seek = useClickToSeek({
 		viewerRef,
@@ -94,13 +105,14 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 		setLoopRegionRef.current(sectionRange ? regionForSelection(expanded.originMeasureIndices, sectionRange) : null);
 	}, [sectionRange, expanded]);
 
-	// One place hands the engine a new tempo, once, whatever changed it.
-	const appliedBpmRef = useRef(bpm);
+	// One place hands the engine a new tempo: whatever changed it — the tempo set, a
+	// pass of the trainer, the trainer switched — the engine follows here, once.
+	const appliedBpmRef = useRef(playBpm);
 	useEffect(() => {
-		if (bpm === appliedBpmRef.current) return;
-		appliedBpmRef.current = bpm;
-		engine.applyBpmChange(bpm);
-	}, [bpm, engine]);
+		if (playBpm === appliedBpmRef.current) return;
+		appliedBpmRef.current = playBpm;
+		engine.applyBpmChange(playBpm);
+	}, [playBpm, engine]);
 
 	const options = { loop: true, loopGapSeconds: loopGap, forceLetRing: true };
 
@@ -111,9 +123,15 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 		engine.play({ ...expandFingerpickPattern(next).pattern, bpm: startBpm }, options, offset);
 	}
 
+	function resetRun() {
+		setPass(0);
+		setPassBase(0);
+	}
+
 	function play() {
 		const pending = seek.takePendingSeek();
-		startAt(pattern, bpm, pending ? cursor.startOffsetFor(pending) : 0);
+		resetRun();
+		startAt(pattern, trainerBpm(bpm, trainerOn ? trainer.start : 100), pending ? cursor.startOffsetFor(pending) : 0);
 	}
 
 	function togglePlay() {
@@ -126,6 +144,7 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 	function stop() {
 		engine.stop();
 		seek.clearPendingSeek();
+		resetRun();
 		cursor.resetCursor(sectionRange?.startMeasure ?? 0);
 	}
 
@@ -133,6 +152,7 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 	function open(next: FingerpickPattern) {
 		engine.stop();
 		seek.clearPendingSeek();
+		resetRun();
 		setBpmState(tabBpm(next));
 		setDragBpm(null);
 		cursor.resetCursor();
@@ -146,7 +166,7 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 	function restart(next: FingerpickPattern) {
 		const wasPlaying = engine.isPlaying;
 		engine.stop();
-		if (wasPlaying) startAt(next, bpm);
+		if (wasPlaying) startAt(next, playBpm);
 		cursor.resetCursor();
 	}
 
@@ -157,6 +177,8 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 
 	function setLoop(next: boolean) {
 		engine.setPlayOnce(!next);
+		// Played once, there is no next pass to speed up.
+		if (!next) setTrainerOn(false);
 	}
 
 	function setLoopGap(seconds: number) {
@@ -178,6 +200,17 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 		slideBpm: setDragBpm,
 		loop: !engine.playOnce,
 		setLoop,
+		speedUp: {
+			on: trainerOn,
+			onOn: (on: boolean) => {
+				setTrainerOn(on);
+				// The run starts with the pass it is switched on in.
+				setPassBase(pass);
+			},
+			trainer,
+			onTrainer: setTrainer,
+			progress: trainerOn && running ? { pass: pass - passBase, percent } : null,
+		},
 		loopGap,
 		setLoopGap,
 		tickLevel: engine.metronomeSubdivision as TickLevel,

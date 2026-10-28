@@ -6,6 +6,16 @@ import { Button, PlayPick } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Segmented } from "@/components/ui/segmented";
+import {
+	SPEED_START_MAX,
+	SPEED_START_MIN,
+	SPEED_START_STEP,
+	SPEED_STEPS,
+	speedUpLine,
+	trainerBpm,
+	type SpeedTrainer,
+} from "@/lib/speedTrainer";
 import type { TickLevel } from "@/lib/strumMetronome";
 import type { ModuleKey } from "@/lib/moduleForPath";
 import type { PlayerDock } from "@/lib/playerDock";
@@ -17,6 +27,18 @@ import "./playback.css";
 
 /** The silences offered between passes, in seconds. */
 export const LOOP_GAPS = [0, 2, 5, 10] as const;
+
+const STEP_OPTIONS = SPEED_STEPS.map((n) => ({ value: String(n), label: `+${n}%` }));
+
+/** Speed up each pass (#386): the trainer's settings, and where the run is while it plays. */
+export interface SpeedUpProps {
+	on: boolean;
+	onOn: (on: boolean) => void;
+	trainer: SpeedTrainer;
+	onTrainer: (trainer: SpeedTrainer) => void;
+	/** The pass under way (from 0) and its share of the tempo; null while stopped. */
+	progress: { pass: number; percent: number } | null;
+}
 
 export interface PlayBarProps {
 	/** The page's module, re-applied inside the tray it portals out. */
@@ -57,6 +79,8 @@ export interface PlayBarProps {
 	onDock: (dock: PlayerDock) => void;
 	/** Whether there is room to move it at all; a phone keeps it at the bottom. */
 	canDock: boolean;
+	/** A page whose loop can speed up a pass at a time; absent, the tray has no such row. */
+	speedUp?: SpeedUpProps;
 }
 
 /**
@@ -90,11 +114,15 @@ export default function PlayBar({
 	dock,
 	onDock,
 	canDock,
+	speedUp,
 }: PlayBarProps) {
 	const [trayOpen, setTrayOpen] = useState(false);
 	const { moveRef, dragging, target, handleProps } = usePillDrag(dock, onDock);
 	const side = dock === "left" ? "right" : "top";
 	const step = (delta: number) => tempo.onBpm(clampTempo(tempo.bpm + delta, tempo.meter));
+	// While the trainer runs, the pill says the tempo this pass plays at.
+	const training = speedUp?.on && speedUp.progress ? speedUp.progress : null;
+	const shownBpm = training ? trainerBpm(tempo.bpm, training.percent) : tempo.bpm;
 
 	return (
 		<>
@@ -167,11 +195,13 @@ export default function PlayBar({
 						<button
 							type="button"
 							className="pb-bpm pb-num"
-							aria-label={`Tempo ${tempo.bpm} BPM — change`}
+							aria-label={`Tempo ${shownBpm} BPM — change`}
 							aria-expanded={trayOpen}
 							onClick={() => setTrayOpen(true)}
 						>
-							{tempo.bpm} <span className="pb-lab">BPM</span>
+							{shownBpm} <span className="pb-lab">BPM</span>
+							{/* The trainer, worn on the tempo while it is on: the button keeps its size. */}
+							{speedUp?.on && <span className="pb-loop-gap pb-bpm-tag pb-num" aria-hidden>+{speedUp.trainer.step}%</span>}
 						</button>
 						<button
 							type="button"
@@ -226,6 +256,47 @@ export default function PlayBar({
 							/>
 							<span className="pb-lab pb-num pb-mix-val">{loopGap} s</span>
 						</div>
+						{speedUp && (
+							<div className="pb-mix-row" role="group" aria-label="Speed up each pass">
+								<Switch
+									checked={speedUp.on}
+									onCheckedChange={speedUp.onOn}
+									aria-label="Speed up each pass"
+									// A pass has to come round again to be faster.
+									disabled={!loop}
+								/>
+								<span className="pb-mix-name">Speed up</span>
+								<span className="pb-mix-extra">
+									<Segmented
+										options={STEP_OPTIONS}
+										value={String(speedUp.trainer.step)}
+										onChange={(v) => speedUp.onTrainer({ ...speedUp.trainer, step: Number(v) })}
+										label="Faster by, each pass"
+										dense
+										disabled={!speedUp.on}
+									/>
+								</span>
+								<Slider
+									value={speedUp.trainer.start}
+									onChange={(start) => speedUp.onTrainer({ ...speedUp.trainer, start })}
+									label="First pass, as a share of the tempo"
+									min={SPEED_START_MIN}
+									max={SPEED_START_MAX}
+									step={SPEED_START_STEP}
+									valueText={(v) => `First pass at ${v}% of the tempo`}
+									disabled={!speedUp.on}
+								/>
+								<span className="pb-lab pb-num pb-mix-val">{speedUp.trainer.start}%</span>
+								<div className="pb-speed">
+									<span className="pb-speed-meter" data-off={speedUp.on ? undefined : ""} aria-hidden>
+										<i style={{ width: `${speedUp.on ? (training?.percent ?? speedUp.trainer.start) : 0}%` }} />
+									</span>
+									<span className="pb-lab pb-num" role="status">
+										{speedUpLine(tempo.bpm, speedUp.trainer, { loop, on: speedUp.on, progress: speedUp.progress })}
+									</span>
+								</div>
+							</div>
+						)}
 					</div>
 					<p className="pb-lab pb-tray-hint">No sound? Check your phone&apos;s mute switch.</p>
 				</PopoverContent>

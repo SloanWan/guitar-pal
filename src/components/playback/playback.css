@@ -386,6 +386,46 @@
 		}
 	}
 
+	/* The trainer's step, a tag on the tempo's corner like the loop's gap. */
+	.pb-bpm {
+		position: relative;
+	}
+	.pb-bpm-tag {
+		top: -8px;
+		right: -6px;
+		bottom: auto;
+	}
+	/* Under the Speed up row: how far the run has come, and what it is doing. */
+	.pb-speed {
+		display: flex;
+		flex-direction: column;
+		grid-column: 2 / -1;
+		gap: 6px;
+		margin-top: -6px;
+	}
+	.pb-speed-meter {
+		display: block;
+		height: 6px;
+		overflow: hidden;
+		border-radius: 6px;
+		background: var(--gp-well);
+	}
+	.pb-speed-meter > i {
+		display: block;
+		height: 100%;
+		border-radius: 6px;
+		background: var(--gp-m-500);
+		transition: width var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.pb-speed-meter[data-off] > i {
+		background: var(--gp-edge);
+	}
+	@container tray (max-width: 400px) {
+		.pb-speed {
+			grid-column: 1 / -1;
+		}
+	}
+
 	/* A phone: what is sounding and the loop step back into the tray. */
 	@container gp-page (max-width: 719px) {
 		.pb-pill-now,

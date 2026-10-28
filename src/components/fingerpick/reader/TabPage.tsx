@@ -327,6 +327,7 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 						soundKind="notes"
 						sound={playback.notes}
 						click={playback.click}
+						speedUp={playback.speedUp}
 					/>
 				</div>
 

@@ -140,7 +140,10 @@
 	}
 	.ch-tone[data-root] {
 		background: var(--gp-card);
-		box-shadow: inset 0 0 0 1.5px var(--gp-ink);
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+	}
+	.ch-tone[data-root] b {
+		color: var(--gp-m-700);
 	}
 	.ch-tone[data-gone] b,
 	.ch-tone[data-gone] .ch-dgr {
@@ -168,6 +171,11 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 12px;
+	}
+	.ch-plays {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
 	}
 	.ch-vlabel {
 		font-size: 18px;
@@ -270,6 +278,156 @@
 		font-size: 10.5px;
 		font-weight: 700;
 	}
+	/* ── On the neck ──────────────────────────────────────────────────────── */
+	.ch-neck-wrap {
+		--ch-wood: color-mix(in oklab, var(--gp-well), #b98a5c 16%);
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.ch-neck-scroll {
+		margin: 0 -4px;
+		padding: 0 4px;
+		overflow-x: auto;
+	}
+	.ch-neck-nums,
+	.ch-neck-picks {
+		position: relative;
+	}
+	.ch-neck-nums {
+		height: 18px;
+	}
+	.ch-neck-nums span {
+		position: absolute;
+		transform: translateX(-50%);
+		color: var(--gp-ink-3);
+		font-size: 11px;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+	}
+	.ch-neck {
+		position: relative;
+		height: 124px;
+		overflow: hidden;
+		border-radius: var(--gp-r-l);
+		background: var(--ch-wood);
+	}
+	.ch-neck-string {
+		position: absolute;
+		right: 0;
+		height: 1.5px;
+		margin-top: -0.75px;
+		background: var(--gp-ink-3);
+		opacity: 0.55;
+	}
+	.ch-neck-fret {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 1.5px;
+		background: var(--gp-edge);
+	}
+	.ch-neck-nut {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 4px;
+		margin-left: -4px;
+		background: var(--gp-ink);
+	}
+	.ch-neck-inlay {
+		position: absolute;
+		top: 50%;
+		width: 8px;
+		height: 8px;
+		margin: -4px 0 0 -4px;
+		border-radius: 50%;
+		background: var(--gp-edge);
+		opacity: 0.6;
+	}
+	.ch-neck-box {
+		position: absolute;
+		top: 4px;
+		bottom: 4px;
+		border-radius: 9px;
+		box-shadow: inset 0 0 0 2px var(--gp-m-500);
+		transition:
+			left var(--gp-d-rise) var(--gp-e-rise),
+			width var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.ch-neck-dot {
+		position: absolute;
+		display: grid;
+		place-items: center;
+		width: 18px;
+		height: 18px;
+		margin: -9px 0 0 -9px;
+		border-radius: 50%;
+		background: var(--ch-wood);
+		box-shadow: inset 0 0 0 1.5px var(--gp-ink-3);
+		color: var(--gp-ink-2);
+		font-size: 8.5px;
+		font-weight: 750;
+		line-height: 1;
+		transition:
+			transform var(--gp-d-state) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear,
+			color var(--gp-d-state) linear;
+	}
+	/* The root is square, and in the module's colour wherever it is. */
+	.ch-neck-dot[data-root] {
+		border-radius: 28%;
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	.ch-neck-dot[data-held] {
+		z-index: 1;
+		transform: scale(1.2);
+		background: var(--gp-ink);
+		box-shadow: none;
+		color: var(--gp-page);
+	}
+	.ch-neck-dot[data-root][data-held] {
+		background: var(--gp-m-500);
+		color: var(--gp-m-on);
+	}
+	.ch-neck-picks {
+		height: 30px;
+	}
+	.ch-neck-picks button {
+		position: absolute;
+		top: 2px;
+		min-width: 26px;
+		height: 26px;
+		padding: 0 7px;
+		transform: translateX(-50%);
+		border-radius: var(--gp-r-s);
+		background: var(--gp-face);
+		box-shadow:
+			var(--gp-ring-n),
+			2px 2px 0 0 var(--gp-shn);
+		color: var(--gp-ink);
+		font-size: 12px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		cursor: pointer;
+		transition:
+			left var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear;
+	}
+	.ch-neck-picks button[data-mine] {
+		box-shadow:
+			inset 0 0 0 1.5px var(--gp-m-300),
+			2px 2px 0 0 var(--gp-shn);
+	}
+	.ch-neck-picks button[aria-pressed="true"] {
+		background: var(--gp-m-500);
+		box-shadow:
+			var(--gp-ring-m),
+			2px 2px 0 0 var(--gp-m-sh);
+		color: var(--gp-m-on);
+	}
+
 	.ch-credit {
 		margin: 0;
 		padding-top: 16px;
@@ -382,7 +540,10 @@
 			animation: none;
 		}
 		.ch-shape,
-		.ch-shell {
+		.ch-shell,
+		.ch-neck-box,
+		.ch-neck-dot,
+		.ch-neck-picks button {
 			transition: none;
 		}
 	}
@@ -472,6 +633,13 @@
 		}
 		.ch-shape {
 			width: 104px;
+		}
+		/* The neck keeps a readable fret width and scrolls sideways. */
+		.ch-neck-in {
+			min-width: 640px;
+		}
+		.ch-neck {
+			height: 108px;
 		}
 	}
 }

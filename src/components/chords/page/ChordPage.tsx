@@ -2,7 +2,7 @@
 
 import "./chord-page.css";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronLeft, ChevronRight, Library, PanelRightOpen, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { AudioLines, ChevronLeft, ChevronRight, Library, PanelRightOpen, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import Link from "@/components/AppLink";
 import ChordDiagramSVG, { type DiagramMode } from "@/components/chords/ChordDiagramSVG";
 import { useChordPreview } from "@/components/chords/useChordPreview";
@@ -22,6 +22,7 @@ import type { ChordWithVoicings } from "@/lib/chordsData";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import { userVoicingId } from "@/lib/userChordVoicings";
 import ChordLibrary from "./ChordLibrary";
+import ChordNeck from "./ChordNeck";
 import ShapeDraft, { draftTitle, type Draft } from "./ShapeDraft";
 
 /** Per-viewer: whether the library beside the stage is folded away. */
@@ -225,7 +226,7 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 											<ChevronLeft aria-hidden />
 										</Button>
 										<span className="ch-big" role="img" aria-label={`${symbol}, ${shape.label}`}>
-											<ChordDiagramSVG {...shape.def} mode={mode} rootMidi={rootMidi} size="large" />
+											<ChordDiagramSVG {...shape.def} mode={mode} rootMidi={rootMidi} rootTone size="large" />
 										</span>
 										<Button
 											variant="icon"
@@ -247,10 +248,26 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 											{shape.note && <span className="ch-note-line">{shape.note}</span>}
 											<span className="ch-tab">{shape.tab}</span>
 										</div>
-										<Button onClick={() => void preview.play(shape.pitches)} disabled={preview.isPreloading}>
-											<Play aria-hidden />
-											{preview.isPreloading ? "Loading…" : preview.isPlaying ? "Playing" : "Play"}
-										</Button>
+										{/* Labels that never change, so neither button moves while samples load or a chord rings. */}
+										<div className="ch-plays">
+											<Button
+												onClick={() => void preview.play(shape.pitches)}
+												loading={preview.isPreloading}
+												aria-pressed={preview.playing === "strum"}
+											>
+												<Play aria-hidden />
+												Play
+											</Button>
+											<Button
+												variant="secondary"
+												onClick={() => void preview.arpeggiate(shape.pitches)}
+												loading={preview.isPreloading}
+												aria-pressed={preview.playing === "arpeggio"}
+											>
+												<AudioLines aria-hidden />
+												Arpeggio
+											</Button>
+										</div>
 										{shape.mine &&
 											(confirmDelete ? (
 												<div className="flex items-center gap-1.5">
@@ -322,7 +339,7 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 												onClick={() => select(i)}
 											>
 												<span className="ch-shape-dg" aria-hidden>
-													<ChordDiagramSVG {...s.def} rootMidi={rootMidi} size="compact" />
+													<ChordDiagramSVG {...s.def} rootMidi={rootMidi} rootTone size="compact" />
 												</span>
 												<span className="ch-shape-label gp-title">{s.label}</span>
 												{s.mine && <span className="ch-chip">Mine</span>}
@@ -332,7 +349,17 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 								</section>
 							)}
 
-							<p className="ch-credit" style={{ "--i": 3 } as CSSProperties}>
+							{shape && (
+								<section className="ch-neck-wrap" aria-label="On the neck" style={{ "--i": 3 } as CSSProperties}>
+									<div className="ch-shapes-head">
+										<h2>On the neck</h2>
+										<span className="ch-meta">every tone up to the 15th fret · the box is this shape</span>
+									</div>
+									<ChordNeck symbol={withGlyphs(symbol)} rootPc={rootMidi ?? -1} tones={tones} shapes={shapes} at={at} onSelect={select} />
+								</section>
+							)}
+
+							<p className="ch-credit" style={{ "--i": 4 } as CSSProperties}>
 								Voicing data via{" "}
 								<a href="https://github.com/tombatossals/chords-db" target="_blank" rel="noopener noreferrer">
 									tombatossals/chords-db

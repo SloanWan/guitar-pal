@@ -43,9 +43,9 @@ function noteCenterY(visualFret: number): number {
   return TOP + (visualFret - 0.5) * FRET_H;
 }
 
-/** A sounding note: a disc, or a rounded square when it is the chord's root. */
-function NoteDot({ cx, cy, root }: { cx: number; cy: number; root: boolean }) {
-  const shared = { className: "fill-gp-ink stroke-gp-card", strokeWidth: 1.5 };
+/** A sounding note: a disc, or a rounded square when it is the chord's root (in the module's colour with `tone`). */
+function NoteDot({ cx, cy, root, tone }: { cx: number; cy: number; root: boolean; tone: boolean }) {
+  const shared = { className: root && tone ? "fill-gp-m-500 stroke-gp-card" : "fill-gp-ink stroke-gp-card", strokeWidth: 1.5 };
   return root ? (
     <rect x={cx - DOT_R} y={cy - DOT_R} width={DOT_R * 2} height={DOT_R * 2} rx={DOT_R * 0.45} {...shared} />
   ) : (
@@ -62,6 +62,8 @@ export interface ChordDiagramSVGProps extends DiagramShape {
   mode?: DiagramMode;
   size?: DiagramSize;
   rootMidi?: number;
+  /** Draws the root's notes in the module's colour, not only square. */
+  rootTone?: boolean;
 }
 
 interface GhostDot {
@@ -78,6 +80,7 @@ export default function ChordDiagramSVG({
   mode = "fingers",
   size = "regular",
   rootMidi,
+  rootTone = false,
 }: ChordDiagramSVGProps) {
   const rootPitchClass = rootMidi !== undefined ? rootMidi % 12 : -1;
 
@@ -153,6 +156,11 @@ export default function ChordDiagramSVG({
     }
   }
 
+  /** The text on a dot: the card colour, or what reads on the module's colour for a toned root. */
+  const labelFill = (root: boolean) => (root && rootTone ? "fill-gp-m-on" : "fill-gp-card");
+  /** A name on a light (unplayed) cell: the root's in the module's colour. */
+  const ghostFill = (s: number, fret: number) => (rootTone && isRoot(s, fret) ? "fill-gp-m-700" : "fill-gp-ink-3");
+
   const gridRight = strX(5);
   const nutY = fretLineY(0);
   const noteFontSize = mode === "fingers" ? 9 : 7;
@@ -192,7 +200,7 @@ export default function ChordDiagramSVG({
         return (
           <g key={`ghost-${s}-${visualFret}`}>
             <circle cx={x} cy={cy} r={DOT_R} className="fill-gp-card" />
-            <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} className="fill-gp-ink-3" fontWeight="bold">{name}</text>
+            <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} className={ghostFill(s, absoluteFret)} fontWeight="bold">{name}</text>
           </g>
         );
       })}
@@ -222,7 +230,7 @@ export default function ChordDiagramSVG({
         return (
           <g key={`barre-row-${s}`}>
             <circle cx={x} cy={cy} r={DOT_R} className="fill-gp-card" />
-            <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} className="fill-gp-ink-3" fontWeight="bold">{name}</text>
+            <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} className={ghostFill(s, barreAbsoluteFret)} fontWeight="bold">{name}</text>
           </g>
         );
       })}
@@ -245,20 +253,20 @@ export default function ChordDiagramSVG({
           <g key={s}>
             <text className="cd-move fill-gp-ink-3" x={x} y={nutY - 9} textAnchor="middle" fontSize={13} style={{ opacity: muted ? 1 : 0 }}>×</text>
             {mode === "fingers" ? (
-              <text className="cd-move fill-gp-ink-3" x={x} y={nutY - 9} textAnchor="middle" fontSize={12} style={{ opacity: open ? 1 : 0 }}>○</text>
+              <text className={`cd-move ${rootTone && root ? "fill-gp-m-500" : "fill-gp-ink-3"}`} x={x} y={nutY - 9} textAnchor="middle" fontSize={12} fontWeight={rootTone && root ? "bold" : undefined} style={{ opacity: open ? 1 : 0 }}>○</text>
             ) : (
               // noteNames / fretboard: dark filled circle above nut row with open-string note name
               <g className="cd-move" style={{ opacity: open ? 1 : 0 }}>
-                <NoteDot cx={x} cy={OPEN_DOT_Y} root={root && open} />
-                <text x={x} y={OPEN_DOT_Y + noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} className="fill-gp-card" fontWeight="bold">
+                <NoteDot cx={x} cy={OPEN_DOT_Y} root={root && open} tone={rootTone} />
+                <text x={x} y={OPEN_DOT_Y + noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} className={labelFill(root && open)} fontWeight="bold">
                   {openName}
                 </text>
               </g>
             )}
             <g className="cd-move" style={{ transform: `translate(${x}px, ${cy}px)`, opacity: fretted ? 1 : 0 }}>
-              <NoteDot cx={0} cy={0} root={root && fretted} />
+              <NoteDot cx={0} cy={0} root={root && fretted} tone={rootTone} />
               {label && (
-                <text x={0} y={noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} className="fill-gp-card" fontWeight="bold">
+                <text x={0} y={noteFontSize * 0.42} textAnchor="middle" fontSize={noteFontSize} className={labelFill(root && fretted)} fontWeight="bold">
                   {label}
                 </text>
               )}

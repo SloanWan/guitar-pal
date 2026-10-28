@@ -28,6 +28,18 @@ test("the hub opens a chord, and the chord page moves to the next", async ({ pag
 	await expect(page.getByRole("heading", { name: "Cm", level: 1 })).toBeVisible();
 });
 
+test("the chord page arpeggiates and shows the chord on the neck", async ({ page }) => {
+	await page.goto("/chords/c/major");
+	await expect(page.getByRole("button", { name: "Arpeggio" })).toBeVisible();
+	const neck = page.getByRole("region", { name: "On the neck" });
+	await expect(neck.getByRole("img", { name: /shape 1 boxed/ })).toBeVisible();
+
+	// A marker under the neck moves the stage to that shape.
+	await neck.getByRole("group", { name: "Jump to a shape on the neck" }).getByRole("button").nth(1).click();
+	await expect(page.getByText("Shape 2 of")).toBeVisible();
+	await expect(neck.getByRole("img", { name: /shape 2 boxed/ })).toBeVisible();
+});
+
 test("several chords typed go on the board, and the board is in the address", async ({ page }) => {
 	await page.goto("/chords");
 	await page.getByRole("textbox", { name: "Look up chords" }).fill("C Am F G");

@@ -8,18 +8,25 @@ import {
 	SOURCE_STOP_BUFFER_S,
 } from "@/components/strum/useGuitarSampleLoader";
 
+/** Seconds between the strings of an arpeggio. */
+export const ARPEGGIO_GAP_S = 0.32;
+
 export interface ChordPreview {
 	/** True from the moment a preview starts until its notes have decayed. */
 	readonly isPlaying: boolean;
+	/** How the sounding preview was played, null when none is. */
+	readonly playing: "strum" | "arpeggio" | null;
 	/** True while the sample presets for the first playback are still downloading. */
 	readonly isPreloading: boolean;
 	/** Makes the audio context and loads the samples, so a timed run of plays starts on time. */
 	prepare: () => Promise<void>;
 	play: (pitches: readonly number[]) => Promise<void>;
+	/** The notes one at a time, in the order given (low string first), each left to ring. */
+	arpeggiate: (pitches: readonly number[]) => Promise<void>;
 }
 
 /**
- * One strum of a chord, on an audio context made on the first play (browsers
+ * One strum of a chord, or its notes one by one, on an audio context made on the first play (browsers
  * refuse one made before a gesture) and closed, with its decay timer, on unmount.
  * One instance per surface, so every diagram on it shares the context and presets.
  */
@@ -28,7 +35,7 @@ export function useChordPreview(): ChordPreview {
 	const preloadRef = useRef<Promise<void> | null>(null);
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [isPreloading, setIsPreloading] = useState(false);
-	const [isPlaying, setIsPlaying] = useState(false);
+	const [playing, setPlaying] = useState<"strum" | "arpeggio" | null>(null);
 
 	useEffect(
 		() => () => {
@@ -54,21 +61,29 @@ export function useChordPreview(): ChordPreview {
 		await ready();
 	}, [ready]);
 
-	const play = useCallback(async (pitches: readonly number[]) => {
-		if (pitches.length === 0) return;
-		const ctx = await ready();
+	const sound = useCallback(
+		async (pitches: readonly number[], how: "strum" | "arpeggio") => {
+			if (pitches.length === 0) return;
+			const ctx = await ready();
 
-		if (timerRef.current !== null) clearTimeout(timerRef.current);
-		setIsPlaying(true);
-		triggerChordPreview(pitches, ctx, ctx.destination, ctx.currentTime);
-		timerRef.current = setTimeout(
-			() => {
-				setIsPlaying(false);
-				timerRef.current = null;
-			},
-			(CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000,
-		);
-	}, [ready]);
+			if (timerRef.current !== null) clearTimeout(timerRef.current);
+			setPlaying(how);
+			const at = ctx.currentTime;
+			if (how === "strum") triggerChordPreview(pitches, ctx, ctx.destination, at);
+			else pitches.forEach((pitch, i) => triggerChordPreview([pitch], ctx, ctx.destination, at + i * ARPEGGIO_GAP_S));
+			const spread = how === "arpeggio" ? (pitches.length - 1) * ARPEGGIO_GAP_S : 0;
+			timerRef.current = setTimeout(
+				() => {
+					setPlaying(null);
+					timerRef.current = null;
+				},
+				(spread + CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000,
+			);
+		},
+		[ready],
+	);
+	const play = useCallback((pitches: readonly number[]) => sound(pitches, "strum"), [sound]);
+	const arpeggiate = useCallback((pitches: readonly number[]) => sound(pitches, "arpeggio"), [sound]);
 
-	return { isPlaying, isPreloading, prepare, play };
+	return { isPlaying: playing !== null, playing, isPreloading, prepare, play, arpeggiate };
 }

@@ -209,6 +209,53 @@ export function bracketSpans(
 	}));
 }
 
+/** A bracket placed on a stave row: its x span in the row's SVG, and how its ends are drawn. */
+export interface PlacedBracket {
+	kind: BracketKind;
+	x1: number;
+	x2: number;
+	/** Carried over from the previous row: no label, the line starts at the note. */
+	continued: boolean;
+	/** Goes on past this row: no closing tick. */
+	open: boolean;
+}
+
+/** The shortest line a bracket draws past its label. */
+export const BRACKET_MIN_LINE = 8;
+
+/**
+ * Brackets of one kind too close to stand apart, drawn as one: a bracket that
+ * starts within a label's width (plus `gap`) of where the previous one ends, or
+ * before that one's own label and line are done, extends its line instead of
+ * writing a label of its own. Let-ring notes every other note read
+ * "let ring - - - -|", not a smear of labels. `labelRoom(kind)` is the width a
+ * label takes before its line starts.
+ */
+export function joinCrowdedBrackets(
+	brackets: readonly PlacedBracket[],
+	labelRoom: (kind: BracketKind) => number,
+	gap: number,
+): PlacedBracket[] {
+	const reach = (b: PlacedBracket) =>
+		Math.max(b.x2 + labelRoom(b.kind), b.x1 + (b.continued ? 0 : labelRoom(b.kind)) + BRACKET_MIN_LINE);
+	const last = new Map<BracketKind, PlacedBracket>();
+	const joined: PlacedBracket[] = [];
+	for (const b of [...brackets].sort((a, c) => a.x1 - c.x1)) {
+		const prev = last.get(b.kind);
+		if (prev && b.x1 < reach(prev) + gap) {
+			if (b.x2 >= prev.x2) {
+				prev.x2 = b.x2;
+				prev.open = b.open;
+			}
+			continue;
+		}
+		const next = { ...b };
+		joined.push(next);
+		last.set(b.kind, next);
+	}
+	return joined;
+}
+
 /** The measure's slur segments, the same walk as the brackets. */
 export function slurSegments(measure: Measure, slotNoteIndex: readonly (number | null)[], index: PatternIndex): SlurSegment[] {
 	return spanSegments(measure, slotNoteIndex, index, (kind) => kind === "slur").map((seg) => ({

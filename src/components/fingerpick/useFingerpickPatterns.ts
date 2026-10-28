@@ -60,18 +60,21 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 			if (savedFavs) {
 				try {
 					const localFavIds = JSON.parse(savedFavs) as string[];
-					const { data: existingFavs } = await supabase
+					const { data: existingFavs, error } = await supabase
 						.from("user_favourite_fingerpick_patterns")
 						.select("pattern_id")
 						.eq("user_id", currentUser.id);
+					// Unread, the browser's favourites are kept for the next try rather than dropped.
+					if (error) throw new Error(error.message);
 					const existingFavIds = new Set(
 						(existingFavs ?? []).map((r) => r.pattern_id as string),
 					);
 					const toInsert = localFavIds.filter((id) => !existingFavIds.has(id));
 					if (toInsert.length > 0) {
-						await supabase
+						const { error: insertError } = await supabase
 							.from("user_favourite_fingerpick_patterns")
 							.insert(toInsert.map((id) => ({ user_id: currentUser.id, pattern_id: id })));
+						if (insertError) throw new Error(insertError.message);
 						merged = true;
 					}
 					localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -98,10 +101,11 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 				console.error(e);
 			}
 
-			const { data: favs } = await supabase
+			const { data: favs, error: favsError } = await supabase
 				.from("user_favourite_fingerpick_patterns")
 				.select("pattern_id")
 				.eq("user_id", currentUser.id);
+			if (favsError) console.error(favsError);
 			setFavouriteIds((favs ?? []).map((r) => r.pattern_id as string));
 			setIsLoading(false);
 
@@ -116,35 +120,19 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 
 	function toggleFavourite(patternId: string) {
 		const isFav = favouriteIds.includes(patternId);
-		const updated = isFav
-			? favouriteIds.filter((id) => id !== patternId)
-			: [...favouriteIds, patternId];
+		const updated = isFav ? favouriteIds.filter((id) => id !== patternId) : [...favouriteIds, patternId];
 		setFavouriteIds(updated);
 		if (!user) {
 			localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+			return;
 		}
-		if (user) {
-			(async () => {
-				try {
-					const supabase = createClient();
-					if (isFav) {
-						const { error } = await supabase
-							.from("user_favourite_fingerpick_patterns")
-							.delete()
-							.eq("pattern_id", patternId)
-							.eq("user_id", user.id);
-						if (error) throw new Error(error.message);
-					} else {
-						const { error } = await supabase
-							.from("user_favourite_fingerpick_patterns")
-							.insert({ user_id: user.id, pattern_id: patternId });
-						if (error) throw new Error(error.message);
-					}
-				} catch (e) {
-					console.error(e);
-				}
-			})();
-		}
+		const table = createClient().from("user_favourite_fingerpick_patterns");
+		const write = isFav
+			? table.delete().eq("pattern_id", patternId).eq("user_id", user.id)
+			: table.insert({ user_id: user.id, pattern_id: patternId });
+		void write.then(({ error }) => {
+			if (error) console.error(error);
+		});
 	}
 
 	// Insert or update a custom pattern (create + edit both route here). Returns

@@ -101,6 +101,8 @@ export interface MeasureGeometryArgs {
 	viewerRef: React.RefObject<HTMLDivElement | null>;
 	/** The rows container inside the viewer; watched for the staves (re)drawing. */
 	contentRef: React.RefObject<HTMLDivElement | null>;
+	/** Whether the viewer is mounted yet; it is looked for again when this turns true. */
+	ready?: boolean;
 }
 
 /**
@@ -109,13 +111,13 @@ export interface MeasureGeometryArgs {
  * by a MutationObserver on the rows container — TabStaveRow renders on its own
  * schedule (ResizeObserver + rAF) — and coalesced to one read per frame.
  */
-export function useMeasureGeometry({ viewerRef, contentRef }: MeasureGeometryArgs): MeasureRect[] {
+export function useMeasureGeometry({ viewerRef, contentRef, ready = true }: MeasureGeometryArgs): MeasureRect[] {
 	const [geometry, setGeometry] = useState<MeasureRect[]>([]);
 
 	useEffect(() => {
 		const viewer = viewerRef.current;
 		const content = contentRef.current;
-		if (!viewer || !content) return;
+		if (!ready || !viewer || !content) return;
 		let raf = 0;
 		const read = () => {
 			raf = 0;
@@ -134,7 +136,7 @@ export function useMeasureGeometry({ viewerRef, contentRef }: MeasureGeometryArg
 			window.removeEventListener("resize", schedule);
 			if (raf !== 0) cancelAnimationFrame(raf);
 		};
-	}, [viewerRef, contentRef]);
+	}, [viewerRef, contentRef, ready]);
 
 	return geometry;
 }

@@ -10,7 +10,7 @@ import { ListRow } from "@/components/ui/list-row";
 import { SearchInput } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { buildRootSections, type BrowseSection } from "@/lib/chordBrowseSections";
-import { batchGridHref, buildChordLookup, classifyBatchQuery } from "@/lib/chordBatchResolve";
+import { boardHref, buildChordLookup, classifyBatchQuery } from "@/lib/chordBatchResolve";
 import { chordQualityLine } from "@/lib/chordPage";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 import { shapeMatchNote } from "@/lib/chordShapeSearch";
@@ -77,7 +77,7 @@ export default function ChordLibrary({
 	}, [listRoot, byRoot]);
 
 	const sections: BrowseSection[] = useMemo(
-		() => (byRoot[listRoot] ? buildRootSections([...byRoot[listRoot]], chordHref) : []),
+		() => (byRoot[listRoot] ? buildRootSections(byRoot[listRoot]) : []),
 		[byRoot, listRoot],
 	);
 	const searchIndex = useMemo(() => chordIndexWithUser(index, userVoicings), [index, userVoicings]);
@@ -118,8 +118,8 @@ export default function ChordLibrary({
 		);
 	} else if (batch?.shouldOffer) {
 		body = (
-			<Link className="ch-note ch-link gp-focus" href={batchGridHref(trimmed)} onClick={onNavigate}>
-				See {batch.tokens.length} chords side by side →
+			<Link className="ch-note ch-link gp-focus" href={boardHref(trimmed)} onClick={onNavigate}>
+				Put {batch.tokens.length} chords on the board →
 			</Link>
 		);
 	} else if (trimmed) {
@@ -176,7 +176,7 @@ export default function ChordLibrary({
 			<SearchInput
 				value={query}
 				onChange={(e) => setQuery(e.target.value)}
-				placeholder="Am7 · C Am F G · x32010"
+				placeholder="Am7 · C Am F G · 01023x"
 				aria-label="Find a chord"
 			/>
 			<PianoRoots

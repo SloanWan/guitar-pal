@@ -86,6 +86,8 @@ export interface ShapeMatch {
 	/** Display category, the same one the name search reports. */
 	category: string;
 	voicing: ChordVoicing;
+	/** Where that voicing sits in the chord's list. */
+	voicingIndex: number;
 	/** The voicing's frets on the neck, low E first. */
 	frets: ShapeFret[];
 	match: ShapeMatchKind;
@@ -186,7 +188,7 @@ export function searchChordsByShape(
 	const best = new Map<string, ShapeMatch>();
 
 	for (const chord of chords) {
-		for (const voicing of chord.chord_voicings ?? []) {
+		for (const [voicingIndex, voicing] of (chord.chord_voicings ?? []).entries()) {
 			const frets = voicingFrets(voicing);
 			const match = shapeMatch(target, frets);
 			if (!match) continue;
@@ -199,6 +201,7 @@ export function searchChordsByShape(
 				suffix: chord.suffix,
 				category: displayCategory(chord.suffix),
 				voicing,
+				voicingIndex,
 				frets,
 				match,
 				mine: chord.mine === true,

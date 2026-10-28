@@ -283,11 +283,9 @@ export function searchChords(
 }
 
 // --- browse shortcuts ------------------------------------------------------
-// Beyond matching individual chords, the palette offers "jump to browse" links:
-// a root query ("B", "Db") points at that root's section on the all-chords page,
-// and a quality word ("minor", "dim", "sus") points at that category's section.
-// The component turns these into /chords/all deep-links via the shared
-// tocSectionId anchors — this module stays routing-agnostic and just classifies.
+// Beyond matching chords, a query can point at a part of the hub's library: a root
+// ("B", "Db") at that root's chords, a quality word ("minor", "dim") at that quality.
+// This module only classifies; `shortcutHref` turns a shortcut into an address.
 
 export type NavShortcut =
   | { readonly kind: "root"; readonly root: string } // stored root spelling, e.g. "C#"

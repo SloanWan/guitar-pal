@@ -1,65 +1,23 @@
-import LegacyBrowseChrome from "@/components/chords/LegacyBrowseChrome";
 import { notFound } from "next/navigation";
-import Link from "@/components/AppLink";
 import type { Metadata } from "next";
-import { getChordsByRoot } from "@/lib/chordsData";
-import { slugToRoot, suffixToSlug } from "@/lib/chordSlug";
-import { buildRootSections } from "@/lib/chordBrowseSections";
-import MusicalText from "@/components/MusicalText";
-import BrowseGrid from "@/components/chords/BrowseGrid";
-import ChordToc from "@/components/chords/ChordToc";
-import ChordTocIndicator from "@/components/chords/ChordTocIndicator";
+import ChordsHubPage from "@/components/chords/hub/ChordsHubPage";
+import { withGlyphs } from "@/lib/chordFormulas";
+import { slugToRoot } from "@/lib/chordSlug";
+import { ROOT_CHROMATIC_ORDER } from "@/lib/chordSuffixes";
+import { DEFAULT_HUB_QUALITY } from "@/lib/chordsHub";
 
-type Props = { params: Promise<{ rootSlug: string }> };
+type Props = { params: Promise<{ rootSlug: string }>; searchParams: Promise<{ board?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const { rootSlug } = await params;
-	const root = slugToRoot(rootSlug);
-	return { title: `${root} Chords — Chord Charts | Guitar Pal` };
+	return { title: `${withGlyphs(slugToRoot(rootSlug))} Chords — Chord Charts | Guitar Pal` };
 }
 
-export default async function RootPage({ params }: Props) {
+// The hub, opened on one root's chords: a root keeps an address of its own.
+export default async function RootPage({ params, searchParams }: Props) {
 	const { rootSlug } = await params;
 	const root = slugToRoot(rootSlug);
-	const chords = await getChordsByRoot(root);
-
-	if (chords.length === 0) notFound();
-
-	const sections = buildRootSections(
-		chords,
-		(_r, suffix) => `/chords/${rootSlug}/${suffixToSlug(suffix)}`,
-	);
-
-	return (
-		<LegacyBrowseChrome>
-			<>
-			<ChordToc sections={sections} />
-			<ChordTocIndicator sections={sections} />
-			<div className="flex-1 bg-surface">
-				<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-					<div className="flex flex-col items-center gap-6">
-						<div className="flex w-full items-center justify-between">
-							<Link
-								href="/chords"
-								className="text-sm text-ink-dim hover:text-ink"
-							>
-								← All Roots
-							</Link>
-							<h1 className="text-2xl font-semibold text-ink">
-								<MusicalText text={root} /> Chords
-							</h1>
-							<Link
-								href="/chords/all"
-								className="text-sm text-ink-dim hover:text-ink"
-							>
-								All Chords →
-							</Link>
-						</div>
-						<BrowseGrid sections={sections} />
-					</div>
-				</div>
-			</div>
-			</>
-		</LegacyBrowseChrome>
-	);
+	if (!ROOT_CHROMATIC_ORDER.includes(root)) notFound();
+	const { board } = await searchParams;
+	return <ChordsHubPage view="root" root={root} quality={DEFAULT_HUB_QUALITY} board={board ?? null} />;
 }

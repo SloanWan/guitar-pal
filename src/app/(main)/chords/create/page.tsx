@@ -7,7 +7,6 @@
 // shape in the URL there is nothing here to do — so a bare /chords/create is a
 // 404 rather than an empty form nobody arrived at on purpose.
 
-import LegacyBrowseChrome from "@/components/chords/LegacyBrowseChrome";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "@/components/AppLink";
@@ -38,23 +37,21 @@ export default async function CreateChordPage({ searchParams }: Props) {
 	const guesses = identifyChords(await getAllChordsWithVoicings(), parsed.frets);
 
 	return (
-		<LegacyBrowseChrome>
-			<div className="flex flex-1 flex-col bg-surface">
-				<div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-					<div className="flex w-full items-center justify-between">
-						<Link href="/chords" className="text-sm text-ink-dim hover:text-ink">
-							← Chords
-						</Link>
-						<h1 className="text-2xl font-semibold text-ink">Write a chord</h1>
-						<Link href="/chords/all" className="text-sm text-ink-dim hover:text-ink">
-							All Chords →
-						</Link>
-					</div>
-					<div className="flex flex-1 justify-center">
-						<CreateChordView frets={parsed.frets} written={written} guesses={guesses} />
-					</div>
+		<div className="flex flex-1 flex-col bg-surface">
+			<div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+				<div className="flex w-full items-center justify-between">
+					<Link href="/chords" className="text-sm text-ink-dim hover:text-ink">
+						← Chords
+					</Link>
+					<h1 className="text-2xl font-semibold text-ink">Write a chord</h1>
+					<Link href="/chords?view=table" className="text-sm text-ink-dim hover:text-ink">
+						All Chords →
+					</Link>
+				</div>
+				<div className="flex flex-1 justify-center">
+					<CreateChordView frets={parsed.frets} written={written} guesses={guesses} />
 				</div>
 			</div>
-		</LegacyBrowseChrome>
+		</div>
 	);
 }

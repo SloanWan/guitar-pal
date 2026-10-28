@@ -1,0 +1,466 @@
+/* =====================================================================================
+   The chords hub (/chords, #363 step 10): search first, the board under it, the
+   library below. Widths are the page's own (a container query).
+   ===================================================================================== */
+@layer components {
+	.hb-page {
+		container: hub / inline-size;
+		min-height: 100%;
+		padding: 28px 32px 48px;
+		background: var(--gp-page);
+		color: var(--gp-ink);
+		font-family: var(--gp-f-body);
+	}
+	.hb-in {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+		max-width: 1080px;
+		margin: 0 auto;
+	}
+	.hb-meta {
+		color: var(--gp-ink-3);
+		font-size: 13px;
+		font-weight: 550;
+	}
+
+	/* ── Search ───────────────────────────────────────────────────────────── */
+	.hb-hero {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 10px;
+	}
+	.hb-ask {
+		position: relative;
+		width: 100%;
+		max-width: 720px;
+	}
+	.hb-ask-icon {
+		position: absolute;
+		top: 18px;
+		left: 18px;
+		width: 22px;
+		height: 22px;
+		color: var(--gp-ink-3);
+		pointer-events: none;
+	}
+	.hb-ask-input {
+		box-sizing: border-box;
+		width: 100%;
+		height: 58px;
+		padding: 0 300px 0 52px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+		color: var(--gp-ink);
+		font-size: 19px;
+		font-weight: 550;
+		outline: none;
+	}
+	.hb-ask-input::placeholder {
+		color: var(--gp-ink-3);
+		font-weight: 500;
+	}
+	.hb-ask-input:focus-visible {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 2px;
+	}
+	.hb-ask-btns {
+		position: absolute;
+		top: 11px;
+		right: 10px;
+		display: flex;
+		gap: 8px;
+	}
+	.hb-reading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		min-height: 34px;
+		max-width: 760px;
+		color: var(--gp-ink-2);
+		font-size: 14px;
+		text-align: center;
+	}
+	.hb-reading b {
+		color: var(--gp-ink);
+	}
+	.hb-reading b[data-miss] {
+		color: var(--gp-ink-mute);
+		text-decoration: line-through;
+	}
+	.hb-eg {
+		height: 30px;
+		padding: 0 11px;
+		border-radius: 99px;
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+		color: var(--gp-ink-2);
+		font-size: 13px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.hb-eg:hover {
+		box-shadow: inset 0 0 0 1px var(--gp-ink-3);
+		font-style: italic;
+	}
+	.hb-hit {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 32px;
+		padding: 0 10px 0 12px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+		color: var(--gp-ink);
+		font-size: 13.5px;
+	}
+	.hb-hit span:last-child {
+		color: var(--gp-ink-3);
+		font-size: 12px;
+	}
+
+	/* ── Board ────────────────────────────────────────────────────────────── */
+	.hb-board {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		padding: 16px 18px 14px;
+		border-radius: var(--gp-r-xl);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	.hb-board-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 10px;
+	}
+	.hb-board-head h2,
+	.hb-library-head h2 {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 760;
+	}
+	.hb-cards {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px;
+	}
+	.hb-board-empty {
+		margin: 4px 0;
+	}
+	.hb-card {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		box-sizing: border-box;
+		width: 152px;
+		padding: 12px 6px 6px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-page);
+		animation: hb-pop var(--gp-d-pop) var(--gp-spring-pop) both;
+		animation-delay: calc(min(var(--i, 0), 10) * var(--gp-stagger));
+	}
+	.hb-card[data-miss] {
+		justify-content: center;
+		min-height: 210px;
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--gp-edge);
+		text-align: center;
+	}
+	.hb-remove {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+	}
+	.hb-card-name {
+		color: var(--gp-ink);
+		font-size: 24px;
+		font-weight: 800;
+		letter-spacing: -0.02em;
+	}
+	.hb-card-label {
+		min-height: 17px;
+		font-size: 12px;
+	}
+	.hb-card-dg svg {
+		display: block;
+		width: 112px;
+		height: auto;
+	}
+	.hb-card-tools {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		max-width: 100%;
+	}
+	.hb-card-tools .gp-btn {
+		width: 26px;
+		min-width: 0;
+		padding: 0;
+	}
+	.hb-count {
+		min-width: 32px;
+		font-size: 12px;
+		text-align: center;
+	}
+	.hb-board-foot {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.hb-hint {
+		margin: 0 0 0 auto;
+		color: var(--gp-ink-3);
+		font-size: 12.5px;
+		text-align: right;
+	}
+	@keyframes hb-pop {
+		0% {
+			opacity: 0;
+			transform: translateY(10px) scale(0.94);
+		}
+		60% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
+	/* ── Library ──────────────────────────────────────────────────────────── */
+	.hb-library {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.hb-library-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px;
+	}
+	.hb-qualities {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+	}
+	.hb-sep {
+		padding: 0 4px;
+		color: var(--gp-edge);
+		font-size: 18px;
+	}
+	.hb-library-body {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+		transition: opacity var(--gp-d-state) linear;
+	}
+	.hb-library-body[data-pending] {
+		opacity: 0.55;
+	}
+	.hb-group {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		scroll-margin-top: 16px;
+	}
+	.hb-group h3 {
+		margin: 4px 0 2px;
+		color: var(--gp-ink-2);
+		font-size: 14px;
+		font-weight: 720;
+	}
+	.hb-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+		gap: 8px;
+	}
+	.hb-lc {
+		position: relative;
+	}
+	.hb-chord.gp-hop {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 3px;
+		padding: 10px 4px 9px;
+		border-radius: var(--gp-r-m);
+		color: var(--gp-ink);
+		text-align: center;
+	}
+	.hb-chord-dg svg {
+		display: block;
+		width: 84px;
+		height: auto;
+	}
+	.hb-chord-name {
+		font-size: 16px;
+		font-weight: 760;
+	}
+	.hb-chord-q {
+		color: var(--gp-ink-3);
+		font-size: 11px;
+		font-weight: 550;
+		line-height: 1.2;
+	}
+	.hb-pin {
+		position: absolute;
+		top: 6px;
+		right: 6px;
+		opacity: 0;
+		transition: opacity var(--gp-d-state) linear;
+	}
+	.hb-lc:hover .hb-pin,
+	.hb-pin:focus-visible {
+		opacity: 1;
+	}
+	@media (hover: none) {
+		.hb-pin {
+			opacity: 1;
+		}
+	}
+	.hb-table-wrap {
+		max-height: 560px;
+		overflow: auto;
+		padding: 6px 10px 12px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	.hb-table {
+		border-collapse: separate;
+		border-spacing: 3px;
+	}
+	.hb-table thead th {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		padding: 6px 4px;
+		background: var(--gp-card);
+		font-size: 13px;
+		font-weight: 750;
+	}
+	.hb-table tbody th {
+		position: sticky;
+		left: 0;
+		z-index: 1;
+		padding-right: 10px;
+		background: var(--gp-card);
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 650;
+		text-align: left;
+		white-space: nowrap;
+	}
+	.hb-table .hb-table-cat th {
+		position: static;
+		padding-top: 12px;
+		color: var(--gp-ink-2);
+		font-size: 11.5px;
+		font-weight: 750;
+	}
+	.hb-table td a {
+		display: grid;
+		place-items: center;
+		width: 64px;
+		height: 30px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-2);
+		font-size: 12.5px;
+		font-weight: 650;
+		white-space: nowrap;
+	}
+	.hb-table td a:hover {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+		font-style: italic;
+	}
+	.hb-credit {
+		margin: 0;
+		padding-top: 16px;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+	.hb-credit a {
+		color: var(--gp-ink-2);
+		text-decoration: underline;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.hb-card {
+			animation: none;
+		}
+	}
+
+	/* ── Tablet ───────────────────────────────────────────────────────────── */
+	@container hub (max-width: 959px) {
+		.hb-page {
+			padding: 24px 24px 40px;
+		}
+	}
+
+	/* ── Phone: the board scrolls sideways, the buttons sit under the search ─ */
+	@container hub (max-width: 719px) {
+		.hb-page {
+			padding: 14px 14px 28px;
+		}
+		.hb-in {
+			gap: 16px;
+		}
+		.hb-ask-input {
+			height: 50px;
+			padding: 0 12px 0 44px;
+			font-size: 16px;
+		}
+		.hb-ask-icon {
+			top: 14px;
+			left: 14px;
+		}
+		.hb-ask-btns {
+			position: static;
+			justify-content: center;
+			margin-top: 10px;
+		}
+		.hb-board {
+			margin: 0 -4px;
+			padding: 12px;
+		}
+		.hb-cards {
+			flex-wrap: nowrap;
+			margin: 0 -12px;
+			padding: 4px 12px 8px;
+			overflow-x: auto;
+		}
+		.hb-card {
+			flex: none;
+			width: 132px;
+		}
+		.hb-hint {
+			margin: 0;
+			text-align: left;
+		}
+		.hb-grid {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: 4px;
+		}
+		.hb-qualities {
+			flex-wrap: nowrap;
+			margin: 0 -14px;
+			padding: 2px 14px 6px;
+			overflow-x: auto;
+		}
+		.hb-library-head .gp-seg {
+			width: 100%;
+		}
+	}
+}

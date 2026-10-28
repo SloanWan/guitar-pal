@@ -171,7 +171,7 @@ export default function CreateChordView({ frets, written, guesses }: Props) {
 						Keep editing
 					</button>
 					<Link
-						href="/chords/my"
+						href="/chords?view=mine"
 						className="flex h-(--h-control) items-center border border-line-strong px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors hover:border-denim hover:text-denim-accent"
 					>
 						My chords

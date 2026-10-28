@@ -8,7 +8,7 @@ import { isUserVoicingId, type UserChordVoicing } from "@/lib/userChordVoicings"
 /** One shape on the chord page: the library's, or the player's own (`mine`). */
 export interface PageShape extends VoicingCard {
 	readonly mine: boolean;
-	/** The shape as a tab writes it, first string first: `x32010`. */
+	/** The shape as a tab writes it, first string first: open C is `01023x`. */
 	readonly tab: string;
 	/** What the shape is under the name: "C/E · omits 5"; empty when nothing to say. */
 	readonly caption: string;

@@ -119,8 +119,7 @@ export function classifyBatchQuery(lookup: ChordLookup, raw: string): BatchQuery
   return { tokens, resolvedCount, shouldOffer, truncated: rawCount > MAX_BATCH_TOKENS };
 }
 
-// Canonical link to the grid for a raw query. Kept here rather than in a component so
-// the search palette can link to the grid without importing it.
-export function batchGridHref(query: string): string {
-  return `/chords/grid?q=${encodeURIComponent(query)}`;
+/** The chords hub with these chords on its board. */
+export function boardHref(query: string): string {
+  return `/chords?board=${encodeURIComponent(query.trim())}`;
 }

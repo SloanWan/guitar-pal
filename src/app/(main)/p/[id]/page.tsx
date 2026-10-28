@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import FingerpickWorkspace from "@/components/fingerpick/FingerpickWorkspace";
-import StrumWorkspace from "@/components/strum/StrumWorkspace";
+import StrumPage from "@/components/strum/StrumPage";
 import { loadShare, type SharedItem } from "@/lib/sharedItems";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { patternBpm, patternMeter } from "@/lib/strumBars";
@@ -62,6 +62,6 @@ export default async function SharedItemPage({ params }: Props) {
 	return share.kind === "fingerpick" ? (
 		<FingerpickWorkspace shared={share} />
 	) : (
-		<StrumWorkspace shared={share} />
+		<StrumPage shared={share} />
 	);
 }

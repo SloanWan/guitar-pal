@@ -14,7 +14,8 @@ import {
 import { patternHandoff, stashHandoff } from "@/lib/assistant/handoff";
 import { buildProposal } from "@/lib/assistant/strum/buildProposal";
 import { isPreset } from "@/lib/assistant/strum/turn";
-import { patternNameTakenBy, toBars } from "@/lib/strumBars";
+import { patternNameTakenBy } from "@/lib/strumBars";
+import { patternRhythm } from "@/lib/strumRhythm";
 import type { NamedPattern } from "@/lib/lastPattern";
 import { STRUM_CAPO_MAX, type StrumPattern } from "@/lib/strumPatterns";
 import { pick, type Lang } from "@/lib/assistant/lang";
@@ -146,7 +147,7 @@ export default function EditIntentCard({
 		if (op === "attach") {
 			if (parsed.tokens.length === 0) return setError("Write at least one chord.");
 			if (parsed.chords.length === 0) return setError("None of those match a chord in the library.");
-			const bars = progressionBarsFromTokens(toBars(pattern)[0].beats, parsed.tokens);
+			const bars = progressionBarsFromTokens(patternRhythm(pattern), parsed.tokens);
 			if (bars.length === 0) return setError("That leaves nothing to save.");
 			stashHandoff({ kind: "attach", patternId: pattern.id, patternName: pattern.name, bars, capo });
 			setOutcome(

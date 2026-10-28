@@ -1,0 +1,47 @@
+/* The pattern library's own pieces: the filter and the rows popping in when it changes. */
+@layer components {
+	/* The aside is a height-capped flex column, so a long list shrank the filter: its
+	   36px is only a specified size, and a flex item may shrink to its content (~21px).
+	   Held at a 44px touch target here, with columns that stay equal (minmax(0, …)) so
+	   "Favourites" can neither widen its column past the thumb nor wrap. */
+	.gp-seg.st-lib-filter {
+		flex: none;
+		grid-auto-columns: minmax(0, 1fr);
+		height: 44px;
+	}
+	.gp-seg.st-lib-filter > button {
+		padding: 0 6px;
+		font-size: 14px;
+	}
+
+	/* A filter change re-keys the list; its rows rise and pop in one after another.
+	   --i is the row's index, the stagger stops at the tenth (spec: ≤ 400ms in all). */
+	.st-lib-list[data-pop] > .st-row {
+		animation: st-lib-pop var(--gp-d-pop) var(--gp-spring-pop) both;
+		animation-delay: calc(min(var(--i, 0), 10) * var(--gp-stagger));
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.st-lib-list[data-pop] > .st-row {
+			animation: st-lib-fade 150ms linear both;
+			animation-delay: 0ms;
+		}
+	}
+	@keyframes st-lib-pop {
+		0% {
+			opacity: 0;
+			transform: translateY(10px) scale(0.94);
+		}
+		60% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	@keyframes st-lib-fade {
+		0% {
+			opacity: 0;
+		}
+	}
+}

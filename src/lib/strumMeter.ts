@@ -190,3 +190,26 @@ export function beatLabels(meter: Meter, beatIdx: number, cellCount: number): st
 			return [number, ...blanks(cellCount - 1)];
 	}
 }
+
+/**
+ * The count under each cell of an unpadded beat, one label per cell — what the
+ * Strum page's grid writes, where a beat is only as wide as its cells.
+ *
+ * A simple beat is counted `1 + `, `1 e + a`, and a triplet `1 trip let`: the
+ * beat's number stays on its first cell, so the bar can always be counted along.
+ * A compound beat counts the way `beatLabels` does.
+ */
+export function cellCountLabels(meter: Meter, beatIdx: number, cellCount: number): string[] {
+	const number = `${beatIdx + 1}`;
+	if (isCompound(meter)) return beatLabels(meter, beatIdx, cellCount).slice(0, cellCount);
+	switch (cellCount) {
+		case 2:
+			return [number, "+"];
+		case 3:
+			return [number, "trip", "let"];
+		case 4:
+			return [number, "e", "+", "a"];
+		default:
+			return [number, ...Array.from({ length: Math.max(0, cellCount - 1) }, () => "")];
+	}
+}

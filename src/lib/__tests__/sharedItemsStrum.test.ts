@@ -28,9 +28,6 @@ const progression: ChordProgression = {
 	name: "  Verse  ",
 	bpm: 88,
 	capo: 2,
-	syncedBeats: pattern.beats,
-	followsPattern: false,
-	syncNoticeDismissed: true,
 };
 
 function roundTrip(item: SharedStrum, rowId = "abcDEF0123") {
@@ -102,7 +99,6 @@ describe("readSharedItem (strum)", () => {
 				name: "Verse",
 				bpm: 88,
 				capo: 2,
-				syncedBeats: pattern.beats,
 			},
 			{
 				id: "abcDEF0123-progression-1",
@@ -110,12 +106,23 @@ describe("readSharedItem (strum)", () => {
 				bars: second.bars,
 				orderIndex: 1,
 				name: "Chorus",
-				syncedBeats: pattern.beats,
 			},
 		]);
 		expect(item.openIndex).toBe(1);
-		expect(item.progressions[0].followsPattern).toBeUndefined();
-		expect(item.progressions[0].syncNoticeDismissed).toBeUndefined();
+	});
+
+	it("carries a rhythm of several bars, and refuses one whose extra bars do not read", () => {
+		const two = { ...pattern, extraBars: [[["X", "X"], ["D", ""], ["D", ""], ["D", ""]]] as typeof pattern.beats[] };
+		const item = roundTrip({ kind: "strum", pattern: two, progressions: [], openIndex: 0 });
+		if (item?.kind !== "strum") throw new Error("expected a strum share");
+		expect(item.pattern.extraBars).toEqual(two.extraBars);
+		expect(
+			readSharedItem({
+				id: "abcDEF0123",
+				kind: "strum",
+				payload: { pattern: { name: "x", beats: pattern.beats, extraBars: [[["D", "D", "D", "D", "D"]]] } },
+			}),
+		).toBeNull();
 	});
 
 	it("opens on the first progression when the recorded index is missing or out of range", () => {

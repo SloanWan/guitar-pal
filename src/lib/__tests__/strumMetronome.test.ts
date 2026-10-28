@@ -3,6 +3,8 @@ import {
 	TICK_LEVELS,
 	beatSteps,
 	tickLevelLabel,
+	tickLevelGlyph,
+	tickLevelsFor,
 	ticksPerBeat,
 	type TickLevel,
 } from "@/lib/strumMetronome";
@@ -67,6 +69,7 @@ describe("tickLevelLabel", () => {
 		expect(TICK_LEVELS.map((l) => tickLevelLabel(FOUR_FOUR, l))).toEqual([
 			"1/4",
 			"1/8",
+			"1/8T",
 			"1/16",
 		]);
 	});
@@ -75,8 +78,28 @@ describe("tickLevelLabel", () => {
 		expect(TICK_LEVELS.map((l) => tickLevelLabel(SIX_EIGHT, l))).toEqual([
 			"3/8",
 			"1/8",
+			"1/8",
 			"1/16",
 		]);
+	});
+});
+
+describe("the triplet level", () => {
+	it("clicks three times a simple beat", () => {
+		expect(ticksPerBeat(FOUR_FOUR, "triplet")).toBe(3);
+		expect(ticksPerBeat(THREE_FOUR, "triplet")).toBe(3);
+	});
+
+	it("is only offered where it differs from the beat's own division", () => {
+		expect(tickLevelsFor(FOUR_FOUR)).toEqual(["beat", "division", "triplet", "subdivision"]);
+		expect(tickLevelsFor(SIX_EIGHT)).toEqual(["beat", "division", "subdivision"]);
+		// Were it reached anyway, a compound beat's triplet is its division.
+		expect(ticksPerBeat(SIX_EIGHT, "triplet")).toBe(ticksPerBeat(SIX_EIGHT, "division"));
+	});
+
+	it("names every level for the control and for assistive tech", () => {
+		expect(tickLevelGlyph(FOUR_FOUR, "triplet")).toEqual({ glyph: "3", name: "Triplets" });
+		expect(tickLevelGlyph(SIX_EIGHT, "beat").glyph).toBe("♩.");
 	});
 
 	it("gives 3/4 the same note values as 4/4, since only the bar length differs", () => {

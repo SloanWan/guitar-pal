@@ -4,6 +4,7 @@ import {
 	_flattenBars,
 	_pitchesForBar,
 	type BarPitches,
+	_loopGapAfter,
 } from "@/components/strum/useAudioEngine";
 import type { Bar } from "@/lib/strumPatterns";
 
@@ -164,5 +165,18 @@ describe("_pitchesForBar — bar index to chord pitches", () => {
 
 	it("a one-element table reproduces the old single-chord behaviour", () => {
 		expect(_pitchesForBar([C], 0)).toEqual(C);
+	});
+});
+
+describe("_loopGapAfter — the silence between passes", () => {
+	it("waits the gap only when a pass has just ended", () => {
+		expect(_loopGapAfter(true, 5)).toBe(5);
+		expect(_loopGapAfter(false, 5)).toBe(0);
+	});
+
+	it("never waits a negative or broken gap", () => {
+		expect(_loopGapAfter(true, -2)).toBe(0);
+		expect(_loopGapAfter(true, Number.NaN)).toBe(0);
+		expect(_loopGapAfter(true, 0)).toBe(0);
 	});
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PRESS_MIN_HOLD_MS, bindPress } from "@/components/ui/press";
+import { PRESS_MIN_HOLD_MS, bindPress, showPress } from "@/components/ui/press";
 
 const pointer = (target: EventTarget, type: string, button = 0) =>
 	target.dispatchEvent(new PointerEvent(type, { bubbles: true, button }));
@@ -145,5 +145,27 @@ describe("bindPress, hop mode", () => {
 		expect(el.classList.contains("is-down")).toBe(true);
 		expect(el.classList.contains("is-hop")).toBe(false);
 		unbind();
+	});
+});
+
+describe("showPress", () => {
+	it("sinks the element until released, and for the minimum hold at least", () => {
+		const release = showPress(el);
+		expect(el.classList.contains("is-down")).toBe(true);
+		release();
+		expect(el.classList.contains("is-down")).toBe(true);
+		vi.advanceTimersByTime(PRESS_MIN_HOLD_MS);
+		expect(el.classList.contains("is-down")).toBe(false);
+	});
+
+	it("lets go at once after a long hold, and only once", () => {
+		let t = 0;
+		const release = showPress(el, () => t);
+		t = PRESS_MIN_HOLD_MS + 50;
+		release();
+		expect(el.classList.contains("is-down")).toBe(false);
+		el.classList.add("is-down");
+		release();
+		expect(el.classList.contains("is-down")).toBe(true);
 	});
 });

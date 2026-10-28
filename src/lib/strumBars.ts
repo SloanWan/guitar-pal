@@ -22,7 +22,6 @@ import {
 import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 
-/** Max cells a single beat may hold (quarter / eighth / triplet / sixteenth). */
 /**
  * Cells one beat can hold. Six, not four, because a compound beat divides into
  * three eighths and each of those halves again — the finest division 6/8 asks
@@ -30,15 +29,6 @@ import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
  * cap: see `allowedCellsPerBeat` in strumMeter.ts.
  */
 export const MAX_CELLS_PER_BEAT = 6;
-
-/**
- * The single read path for every pattern consumer: a pattern is one chordless
- * bar. Multi-bar, chord-carrying sequences are `ChordProgression`s, which are
- * already stored as `Bar[]` and need no lifting.
- */
-export function toBars(pattern: StrumPattern): Bar[] {
-	return [{ beats: normalizeBeats(pattern.beats), chord: null }];
-}
 
 /**
  * Step values written by earlier versions of the app, and what they mean now.
@@ -211,14 +201,6 @@ export function clampBpmToMeter(bpm: number, meter: Meter): number {
 export function rescaleBpmForMeter(bpm: number, from: Meter, to: Meter): number {
 	if (isCompound(from) === isCompound(to)) return bpm;
 	return isCompound(to) ? (bpm * 2) / 3 : (bpm * 3) / 2;
-}
-
-/**
- * Flatten bars back into a pattern's `beats`. Only the first bar survives —
- * a progression edited down to its rhythm is the pattern it extends.
- */
-export function barsToLegacyBeats(bars: Bar[]): Beat[] {
-	return bars[0]?.beats ?? [];
 }
 
 export interface BarsValidationResult {

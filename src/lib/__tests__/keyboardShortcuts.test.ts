@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import {
 	isTypingTarget,
 	isModalOpen,
+	releasesPointerFocus,
 	shouldRunPageShortcut,
 } from "@/lib/keyboardShortcuts";
 
@@ -57,6 +58,36 @@ describe("isModalOpen", () => {
 		document.body.innerHTML = "";
 		el("div", { role: "alertdialog" });
 		expect(isModalOpen()).toBe(true);
+	});
+
+	it("does not count a popover, which leaves the page in charge", () => {
+		const wrapper = el("div", { "data-radix-popper-content-wrapper": "" });
+		const pop = document.createElement("div");
+		pop.setAttribute("role", "dialog");
+		wrapper.appendChild(pop);
+		expect(isModalOpen()).toBe(false);
+	});
+});
+
+describe("releasesPointerFocus", () => {
+	it("lets go of buttons, sliders and links left focused by a click", () => {
+		expect(releasesPointerFocus(el("button"))).toBe(true);
+		expect(releasesPointerFocus(el("span", { role: "slider" }))).toBe(true);
+		expect(releasesPointerFocus(el("input", { type: "range" }))).toBe(true);
+	});
+
+	it("keeps text fields, and anything inside a dialog or a menu", () => {
+		expect(releasesPointerFocus(el("input", { type: "text" }))).toBe(false);
+		const dialog = el("div", { role: "dialog" });
+		const inner = document.createElement("button");
+		dialog.appendChild(inner);
+		expect(releasesPointerFocus(inner)).toBe(false);
+		const menu = el("div", { role: "menu" });
+		const item = document.createElement("div");
+		item.setAttribute("role", "button");
+		menu.appendChild(item);
+		expect(releasesPointerFocus(item)).toBe(false);
+		expect(releasesPointerFocus(null)).toBe(false);
 	});
 });
 

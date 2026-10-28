@@ -194,10 +194,19 @@
 	--destructive-tint: oklch(0.53 0.17 27 / 0.2);
 }
 
-/* Text selection is fixed across BOTH themes */
+/* Text selection is the page's module colour (Candy "Fill": module 500 behind its
+   "on" text), so Strum selects green, Tab blue, Home ink. The --gp-m-* aliases
+   resolve on the selected element, so a card carrying its own module selects in
+   that module's colour. */
 ::selection {
-	background: var(--denim);
-	color: #f0f0f0;
+	background: var(--gp-m-500);
+	color: var(--gp-m-on);
+}
+/* On a module-filled control the fill would select nothing you can see: invert. */
+.gp-tone-primary ::selection,
+.gp-tone-primary::selection {
+	background: var(--gp-m-on);
+	color: var(--gp-m-500);
 }
 /* …except on a denim surface, where denim-on-denim selects nothing you can
    see. There the selection inverts to the fill's own text colour — the light

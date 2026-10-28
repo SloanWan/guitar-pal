@@ -72,6 +72,14 @@ export function _flattenBars(bars: Bar[]): FlatBars {
 }
 
 /**
+ * Silence added before the loop starts over: the gap between passes, only when a
+ * pass has just ended. Exported for unit testing only.
+ */
+export function _loopGapAfter(wrapped: boolean, gapSeconds: number): number {
+	return wrapped && Number.isFinite(gapSeconds) ? Math.max(0, gapSeconds) : 0;
+}
+
+/**
  * Pitches for the bar currently sounding. Undefined (not null) is the "use the
  * sample loader's default voicing" signal triggerStrum expects.
  * Exported for unit testing only.
@@ -106,6 +114,8 @@ export function useAudioEngine(
 	const [metronomeEnabled, setMetronomeEnabled] = useState(true);
 	const [metronomeGain, setMetronomeGain] = useState(0.15);
 	const [playOnce, setPlayOnce] = useState(false);
+	/** Seconds of silence between passes while looping. */
+	const [loopGap, setLoopGap] = useState(0);
 
 	const isPlayingRef = useRef(false);
 	const flatBarsRef = useRef(_flattenBars(bars));
@@ -124,6 +134,7 @@ export function useAudioEngine(
 	const metronomeEnabledRef = useRef(metronomeEnabled);
 	const metronomeGainRef = useRef(metronomeGain);
 	const playOnceRef = useRef(playOnce);
+	const loopGapRef = useRef(loopGap);
 	const barPitchesRef = useRef(barPitches);
 
 	// Active source nodes tracked for cleanup on stop() and unmount.
@@ -163,6 +174,9 @@ export function useAudioEngine(
 	useEffect(() => {
 		playOnceRef.current = playOnce;
 	}, [playOnce]);
+	useEffect(() => {
+		loopGapRef.current = loopGap;
+	}, [loopGap]);
 	useEffect(() => {
 		barPitchesRef.current = barPitches;
 	}, [barPitches]);
@@ -330,9 +344,11 @@ export function useAudioEngine(
 			setCurrBar(barIndex);
 
 			currStepIdxRef.current += 1;
+			let wrapped = false;
 			if (currStepIdxRef.current >= steps.length) {
 				currStepIdxRef.current = 0;
 				currBeatIdxref.current = (currBeatIdxref.current + 1) % flat.beats.length;
+				wrapped = currBeatIdxref.current === 0;
 				if (playOnceRef.current && currBeatIdxref.current === 0) {
 					// Do not call stop() here: it would invoke cancelStrums() synchronously,
 					// killing the just-scheduled last-note sources before they play.
@@ -360,7 +376,8 @@ export function useAudioEngine(
 				}
 			}
 
-			nextStepTimeRef.current += secondsPerStep;
+			// A pass that has just ended waits out the gap before the next begins.
+			nextStepTimeRef.current += secondsPerStep + _loopGapAfter(wrapped, loopGapRef.current);
 		}
 
 		schedulerRef.current = window.setTimeout(scheduler, 25);
@@ -427,5 +444,7 @@ export function useAudioEngine(
 		setMetronomeGain,
 		playOnce,
 		setPlayOnce,
+		loopGap,
+		setLoopGap,
 	};
 }

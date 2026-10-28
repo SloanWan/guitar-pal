@@ -12,6 +12,7 @@ import {
 	removeFromBoard,
 	serializeBoard,
 	transposeChord,
+	revealScrollLeft,
 } from "@/lib/chordBoard";
 import { MAX_BATCH_TOKENS } from "@/lib/chordBatchResolve";
 import { validateBars } from "@/lib/strumBars";
@@ -141,5 +142,21 @@ describe("boardProgression", () => {
 		expect(handoff.patternId).toBe("my-own");
 		expect(handoff.capo).toBeNull();
 		expect(validateBars(handoff.bars).ok).toBe(true);
+	});
+});
+
+describe("revealScrollLeft", () => {
+	it("leaves a row alone while the item is in view", () => {
+		expect(revealScrollLeft(0, 300, 140, 132, 12)).toBeNull();
+		expect(revealScrollLeft(200, 300, 300, 132, 12)).toBeNull();
+	});
+
+	it("brings an item past the right edge to the start", () => {
+		expect(revealScrollLeft(0, 300, 280, 132, 12)).toBe(268);
+	});
+
+	it("brings an item scrolled past on the left back, never before the start", () => {
+		expect(revealScrollLeft(400, 300, 140, 132, 12)).toBe(128);
+		expect(revealScrollLeft(400, 300, 4, 132, 12)).toBe(0);
 	});
 });

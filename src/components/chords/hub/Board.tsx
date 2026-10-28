@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, MoveLeft, MoveRight, Play, Square, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoveLeft, MoveRight, Play, SlidersHorizontal, Square } from "lucide-react";
 import { toast } from "sonner";
 import Link from "@/components/AppLink";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import ChordRequestButton from "@/components/chords/ChordRequestButton";
 import { useChordPreview } from "@/components/chords/useChordPreview";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Stepper } from "@/components/ui/stepper";
 import { stashHandoff } from "@/lib/assistant/handoff";
@@ -19,6 +20,7 @@ import {
 	moveOnBoard,
 	pageOnBoard,
 	removeFromBoard,
+	revealScrollLeft,
 	type BoardChord,
 	type BoardItem,
 } from "@/lib/chordBoard";
@@ -26,7 +28,9 @@ import { withGlyphs } from "@/lib/chordFormulas";
 import { chordHref } from "@/lib/chordSlug";
 import { chordSymbol } from "@/lib/chordSuffixes";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
+import { prefersReducedMotion } from "@/lib/motion";
 import { DEFAULT_STRUM_BPM, LAST_STRUM_PATTERN_KEY, PRESET_STRUM_PATTERNS, STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
+import CornerButton from "./CornerButton";
 import type { BoardCard } from "./useBoard";
 
 /** Beats each chord is held for when the board is played through. */
@@ -95,6 +99,17 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 	const router = useRouter();
 	const [bpm, setBpm] = useState(DEFAULT_STRUM_BPM);
 	const run = usePlayThrough();
+	const cardsRef = useRef<HTMLDivElement>(null);
+
+	// A board wider than its row scrolls sideways: keep the sounding card in view.
+	useEffect(() => {
+		const row = cardsRef.current;
+		const card = run.playing === null ? null : row?.querySelector<HTMLElement>(`[data-card="${run.playing}"]`);
+		if (!row || !card) return;
+		const left = card.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft;
+		const to = revealScrollLeft(row.scrollLeft, row.clientWidth, left, card.offsetWidth, 12);
+		if (to !== null) row.scrollTo({ left: to, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+	}, [run.playing]);
 	const found = cards.filter((c) => c.status === "found").length;
 	// A run plays the cards as they were when it started; any change ends it.
 	const change = (next: BoardItem[]) => {
@@ -137,46 +152,84 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 		}
 	}
 
+	/** Transpose, capo and tempo: in the head on a desktop, in the Adjust popover below it (`labelled` names the tempo there). */
+	const steppers = (labelled: boolean) => (
+		<>
+			<div className="hb-control">
+				<span className="hb-meta">Transpose</span>
+				<Stepper
+					label="Transpose"
+					size="sm"
+					value={transpose}
+					onChange={(n) => {
+						run.stop();
+						onTranspose(n);
+					}}
+					min={-BOARD_TRANSPOSE_LIMIT}
+					max={BOARD_TRANSPOSE_LIMIT}
+				/>
+			</div>
+			<div className="hb-control">
+				<span className="hb-meta">Capo</span>
+				<Stepper
+					label="Capo"
+					size="sm"
+					value={capo}
+					onChange={(n) => {
+						run.stop();
+						onCapo(n);
+					}}
+					max={BOARD_CAPO_MAX}
+				/>
+			</div>
+			<div className="hb-control">
+				{labelled && <span className="hb-meta">Tempo</span>}
+				<Stepper
+					label="Tempo"
+					size="sm"
+					value={bpm}
+					onChange={setBpm}
+					min={STRUM_BPM_MIN}
+					max={STRUM_BPM_MAX}
+					unit={labelled ? undefined : "BPM"}
+				/>
+			</div>
+		</>
+	);
+
 	return (
 		<section className="hb-board" aria-label="Board">
 			<div className="hb-board-head">
 				<h2>Board</h2>
-				<div className="hb-controls">
-					<div className="hb-control">
-						<span className="hb-meta">Transpose</span>
-						<Stepper label="Transpose" size="sm" value={transpose}
-							onChange={(n) => {
-								run.stop();
-								onTranspose(n);
-							}} min={-BOARD_TRANSPOSE_LIMIT} max={BOARD_TRANSPOSE_LIMIT} />
-					</div>
-					<div className="hb-control">
-						<span className="hb-meta">Capo</span>
-						<Stepper label="Capo" size="sm" value={capo}
-							onChange={(n) => {
-								run.stop();
-								onCapo(n);
-							}} max={BOARD_CAPO_MAX} />
-					</div>
-					<div className="hb-control">
-						<Stepper label="Tempo" size="sm" value={bpm} onChange={setBpm} min={STRUM_BPM_MIN} max={STRUM_BPM_MAX} unit="BPM" />
-					</div>
-					<Button size="sm" disabled={found === 0} loading={run.loading} onClick={playThrough}>
-						{/* Both labels laid in one cell, so the button is as wide either way. */}
-						<span className="hb-swap">
-							<span data-shown={run.playing === null || undefined}>
-								<Play aria-hidden />
-								Play through
-							</span>
-							<span data-shown={run.playing !== null || undefined}>
-								<Square aria-hidden />
-								Stop
-							</span>
+				<div className="hb-controls">{steppers(false)}</div>
+				{/* Below the desktop width the steppers fold into one button, so the head stays one row. */}
+				<Popover>
+					<PopoverTrigger asChild>
+						<Button variant="secondary" size="sm" className="hb-adjust" aria-label="Transpose, capo and tempo">
+							<SlidersHorizontal aria-hidden />
+							Adjust
+							{(transpose !== 0 || capo !== 0) && <span className="hb-adjust-dot" aria-hidden />}
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent className="hb-adjust-pop" data-m="chords" collisionPadding={12}>
+						{steppers(true)}
+					</PopoverContent>
+				</Popover>
+				<Button size="sm" className="hb-play" disabled={found === 0} loading={run.loading} onClick={playThrough}>
+					{/* Both labels laid in one cell, so the button is as wide either way. */}
+					<span className="hb-swap">
+						<span data-shown={run.playing === null || undefined}>
+							<Play aria-hidden />
+							Play through
 						</span>
-					</Button>
-				</div>
+						<span data-shown={run.playing !== null || undefined}>
+							<Square aria-hidden />
+							Stop
+						</span>
+					</span>
+				</Button>
 			</div>
-			<div className="hb-cards">
+			<div className="hb-cards" ref={cardsRef}>
 				{cards.length === 0 && (
 					<p className="hb-meta hb-board-empty">
 						The board is empty. Type a few chords above — <b>C Am F G</b> — and put them here side by side.
@@ -185,15 +238,7 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 				{cards.map((card, i) => {
 					const name = withGlyphs(card.status === "found" ? chordSymbol(card.root, card.suffix) : card.name);
 					const remove = (
-						<Button
-							variant="ghost"
-							size="xs"
-							className="hb-remove"
-							aria-label={`Take ${name} off the board`}
-							onClick={() => change(removeFromBoard(items, i))}
-						>
-							<X aria-hidden />
-						</Button>
+						<CornerButton kind="remove" className="hb-remove" label={`Take ${name} off the board`} onClick={() => change(removeFromBoard(items, i))} />
 					);
 					if (card.status === "missing") {
 						return (
@@ -212,6 +257,7 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 						<div
 							key={i}
 							className="hb-card"
+							data-card={i}
 							data-now={run.playing === i ? "" : undefined}
 							style={{ "--i": i } as CSSProperties}
 						>

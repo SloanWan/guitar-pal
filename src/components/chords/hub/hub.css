@@ -135,16 +135,40 @@
 	}
 	.hb-board-head {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
 		gap: 10px;
 	}
+	.hb-board-head h2 {
+		flex: 1;
+	}
 	.hb-controls {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 8px 14px;
-		margin-left: auto;
+		gap: 14px;
+	}
+	.hb-adjust {
+		position: relative;
+		display: none;
+	}
+	/* Something is set away from its default. */
+	.hb-adjust-dot {
+		position: absolute;
+		top: 5px;
+		right: 5px;
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--gp-m-500);
+	}
+	.hb-adjust-pop {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		width: auto;
+	}
+	.hb-adjust-pop .hb-control {
+		display: grid;
+		grid-template-columns: 80px auto;
 	}
 	.hb-control {
 		display: flex;
@@ -212,10 +236,10 @@
 		font-weight: 650;
 		line-height: 15px;
 	}
-	.hb-remove {
+	.hb-corner.hb-remove {
 		position: absolute;
-		top: 4px;
-		right: 4px;
+		top: 8px;
+		right: 8px;
 	}
 	.hb-card-name {
 		color: var(--gp-ink);
@@ -326,45 +350,117 @@
 	.hb-lc {
 		position: relative;
 	}
+	/* A library card: its name and quality on top, the add button beside them, the
+	   diagram below — so the button has its own corner and never covers the diagram. */
 	.hb-chord.gp-hop {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		gap: 3px;
-		padding: 10px 4px 9px;
+		gap: 1px;
+		padding: 9px 10px 8px;
 		border-radius: var(--gp-r-m);
 		color: var(--gp-ink);
-		text-align: center;
+	}
+	/* The name shares its row with the add button; the quality has the card's width. */
+	.hb-chord-name {
+		max-width: calc(100% - 26px);
+	}
+	.hb-chord-name,
+	.hb-chord-q {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.hb-chord-name {
+		font-size: 16px;
+		font-weight: 760;
+		line-height: 1.3;
+	}
+	.hb-chord-q {
+		color: var(--gp-ink-3);
+		font-size: 11px;
+		font-weight: 550;
+		line-height: 1.3;
+	}
+	.hb-chord-dg {
+		align-self: center;
+		margin-top: 4px;
 	}
 	.hb-chord-dg svg {
 		display: block;
 		width: 84px;
 		height: auto;
 	}
-	.hb-chord-name {
-		font-size: 16px;
-		font-weight: 760;
-	}
-	.hb-chord-q {
-		color: var(--gp-ink-3);
-		font-size: 11px;
-		font-weight: 550;
-		line-height: 1.2;
-	}
-	.hb-pin {
+	.hb-corner.hb-pin {
 		position: absolute;
-		top: 6px;
-		right: 6px;
-		opacity: 0;
-		transition: opacity var(--gp-d-state) linear;
+		top: 8px;
+		right: 8px;
 	}
-	.hb-lc:hover .hb-pin,
-	.hb-pin:focus-visible {
-		opacity: 1;
-	}
-	@media (hover: none) {
+	/* With a pointer the add waits for the card to be pointed at; on touch it is always there. */
+	@media (hover: hover) {
 		.hb-pin {
+			opacity: 0;
+			transition:
+				opacity var(--gp-d-state) linear,
+				transform var(--gp-d-hop) var(--gp-hop);
+		}
+		.hb-lc:hover .hb-pin,
+		.hb-pin:focus-visible,
+		.hb-pin[data-done] {
 			opacity: 1;
+		}
+		/* Rides the card's hop. */
+		.hb-lc:hover .hb-pin {
+			transform: translateY(calc(var(--gp-hop-lift) * -1));
+		}
+	}
+
+	/* ── Corner button: add on the library's cards, remove on the board's ──── */
+	.hb-corner {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			background-color var(--gp-d-state) linear,
+			color var(--gp-d-state) linear,
+			scale var(--gp-d-state) var(--gp-e-rise);
+	}
+	/* A finger-sized target around a small mark. */
+	.hb-corner::before {
+		position: absolute;
+		inset: -8px;
+		content: "";
+	}
+	.hb-corner svg {
+		width: 14px;
+		height: 14px;
+		stroke-width: 2.6;
+	}
+	.hb-corner.is-down {
+		scale: 0.88;
+	}
+	.hb-corner[data-done] {
+		background: var(--gp-m-500);
+		color: var(--gp-m-on);
+	}
+	.hb-corner[data-kind="remove"] {
+		background: transparent;
+		color: var(--gp-ink-3);
+	}
+	@media (hover: hover) {
+		.hb-corner:hover {
+			background: var(--gp-m-500);
+			color: var(--gp-m-on);
+		}
+		.hb-corner[data-kind="remove"]:hover {
+			background: var(--gp-well);
+			color: var(--gp-ink);
 		}
 	}
 	/* The wrap has no top or left padding: a sticky cell sticks to the content edge,
@@ -462,6 +558,12 @@
 		.hb-page {
 			padding: 24px 24px 40px;
 		}
+		.hb-controls {
+			display: none;
+		}
+		.hb-adjust {
+			display: inline-flex;
+		}
 	}
 
 	/* ── Phone: the board scrolls sideways, the buttons sit under the search ─ */
@@ -503,19 +605,6 @@
 		.hb-hint {
 			margin: 0;
 			text-align: left;
-		}
-		.hb-controls {
-			display: grid;
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-			align-items: end;
-			gap: 10px 12px;
-			width: 100%;
-			margin-left: 0;
-		}
-		.hb-control {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 4px;
 		}
 		.hb-grid {
 			grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -2,11 +2,10 @@
 
 import { Fragment, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
 import Link from "@/components/AppLink";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import PianoRoots from "@/components/chords/PianoRoots";
-import { Button } from "@/components/ui/button";
+import CornerButton from "./CornerButton";
 import { NavCard } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { Segmented } from "@/components/ui/segmented";
@@ -63,22 +62,19 @@ export default function HubLibrary({ view, root, quality, chords, index, userVoi
 			<div key={`${r}|${s}`} className="hb-lc">
 				<NavCard asChild className="hb-chord">
 					<Link href={chordHref(r, s)}>
+						<span className="hb-chord-name gp-title">{name}</span>
+						<span className="hb-chord-q">{subline ?? chordQualityLine(r, s)}</span>
 						<span className="hb-chord-dg" aria-hidden>
 							{def ? <ChordDiagramSVG {...def} rootMidi={rootPitchClass(r)} size="compact" /> : null}
 						</span>
-						<span className="hb-chord-name gp-title">{name}</span>
-						<span className="hb-chord-q">{subline ?? chordQualityLine(r, s)}</span>
 					</Link>
 				</NavCard>
-				<Button
-					variant="secondary"
-					size="xs"
+				<CornerButton
+					kind="add"
 					className="hb-pin"
-					aria-label={`Put ${name} on the board`}
+					label={`Put ${name} on the board`}
 					onClick={() => onAdd([{ token: chordSymbol(r, s), shape: 0 }])}
-				>
-					<Plus aria-hidden />
-				</Button>
+				/>
 			</div>
 		);
 	};

@@ -151,3 +151,13 @@ export function pageOnBoard(items: readonly BoardItem[], index: number, delta: n
 	if (count <= 0) return [...items];
 	return items.map((item, i) => (i === index ? { ...item, shape: (((item.shape + delta) % count) + count) % count } : item));
 }
+
+/**
+ * Where a sideways-scrolling row should scroll so the item at `itemLeft` (in the
+ * row's scrolled content, `itemWidth` wide) is in view: unchanged (null) while it
+ * already is, else with the item at the start, `pad` in, so what follows it shows.
+ */
+export function revealScrollLeft(scrollLeft: number, viewWidth: number, itemLeft: number, itemWidth: number, pad: number): number | null {
+	if (itemLeft >= scrollLeft && itemLeft + itemWidth <= scrollLeft + viewWidth) return null;
+	return Math.max(0, itemLeft - pad);
+}

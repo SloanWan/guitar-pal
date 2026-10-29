@@ -1,5 +1,7 @@
 import type { EffectKind, FingerpickPattern, LinkKind, PercussionKind, SpanKind, Stroke } from "@/lib/fingerpickTypes";
-import type { Cell, SlotTarget } from "@/lib/fingerpickEdit";
+import { setInactive, setStroke, slotHasStringData, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
+import { chordFretHints, fillColumnFromChord, offShapeStrings } from "@/lib/fingerpickChords";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import { spanCoversSlot, techniqueBlock } from "@/lib/fingerpickTechniqueEdit";
 import { EFFECT_DEFS, LINK_DEFS, PERCUSSION_DEFS, SPAN_DEFS, type TechniqueDef } from "@/lib/techniqueRegistry";
 import { BLOCK_REASON } from "@/lib/tabEditorCursor";
@@ -107,3 +109,51 @@ export function sectionsFor(runLength: number): { note: boolean; effects: boolea
 	const one = runLength <= 1;
 	return { note: one, effects: one, spans: true };
 }
+
+/** The shape in effect at a slot, or null with no chord (or its shapes not here yet). */
+export type VoicingAt = (target: SlotTarget) => ChordVoicing | null;
+
+function fillFromShape(pattern: FingerpickPattern, target: SlotTarget, voicingAt: VoicingAt): FingerpickPattern {
+	const voicing = voicingAt(target);
+	return voicing ? fillColumnFromChord(pattern, target, voicing) : pattern;
+}
+
+/**
+ * A sweep over the run. A roll or a brush is a chord being sounded, so an empty
+ * slot is filled from the shape in effect there; a slot holding notes outside
+ * the shape is left as it is and returned in `offShape`, for the player to say
+ * whether the shape should replace them. Turning the sweep off changes only the sweep.
+ */
+export function applySweep(
+	pattern: FingerpickPattern,
+	targets: readonly SlotTarget[],
+	stroke: Stroke | undefined,
+	voicingAt: VoicingAt,
+): { pattern: FingerpickPattern; offShape: SlotTarget[] } {
+	const offShape: SlotTarget[] = [];
+	const next = targets.reduce((p, t) => {
+		const swept = setStroke(p, t, stroke);
+		if (!stroke) return swept;
+		const slot = swept.measures[t.measureIndex]?.slots[t.slotIndex];
+		const voicing = voicingAt(t);
+		if (!slot || !voicing) return swept;
+		if (!slotHasStringData(slot)) return fillColumnFromChord(swept, t, voicing);
+		if (offShapeStrings(slot, chordFretHints(voicing)).length > 0) offShape.push(t);
+		return swept;
+	}, pattern);
+	return { pattern: next, offShape };
+}
+
+/** The slots' notes replaced by the shape in effect at each: the "Overwrite" of a sweep's question. */
+export function replaceWithShape(
+	pattern: FingerpickPattern,
+	targets: readonly SlotTarget[],
+	voicingAt: VoicingAt,
+): FingerpickPattern {
+	return targets.reduce((p, t) => {
+		let cleared = p;
+		for (let stringIndex = 0; stringIndex < 6; stringIndex++) cleared = setInactive(cleared, { ...t, stringIndex });
+		return fillFromShape(cleared, t, voicingAt);
+	}, pattern);
+}
+

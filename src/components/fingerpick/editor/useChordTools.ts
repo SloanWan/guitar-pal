@@ -41,18 +41,24 @@ export function useChordTools(pattern: FingerpickPattern, user: User | null, loa
 	const searchIndex = useMemo(() => chordIndexWithUser(chordIndex, userVoicings), [chordIndex, userVoicings]);
 	const shapeCorpus = useChordShapeCorpus(true);
 
-	const hintsAt = useCallback(
-		(measureIndex: number, slotIndex: number): FretHint[] | null => {
-			const ref = chordsInEffect[measureIndex]?.[slotIndex];
+	const voicingAt = useCallback(
+		(target: { measureIndex: number; slotIndex: number }) => {
+			const ref = chordsInEffect[target.measureIndex]?.[target.slotIndex];
 			if (!ref) return null;
 			const state = voicingsFor(ref);
-			const voicing = state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
-			return voicing ? chordFretHints(voicing) : null;
+			return state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
 		},
 		[chordsInEffect, voicingsFor],
 	);
+	const hintsAt = useCallback(
+		(measureIndex: number, slotIndex: number): FretHint[] | null => {
+			const voicing = voicingAt({ measureIndex, slotIndex });
+			return voicing ? chordFretHints(voicing) : null;
+		},
+		[voicingAt],
+	);
 
-	return { chordsInEffect, voicingsFor, searchIndex, shapeCorpus, saveVoicing, hintsAt };
+	return { chordsInEffect, voicingsFor, voicingAt, searchIndex, shapeCorpus, saveVoicing, hintsAt };
 }
 
 export type ChordTools = ReturnType<typeof useChordTools>;

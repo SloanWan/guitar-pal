@@ -12,7 +12,6 @@ import {
 	resetMeasure,
 	setFret,
 	setInactive,
-	setStroke,
 	toggleMuted,
 	withMeasures,
 	type Cell,
@@ -26,6 +25,8 @@ import { BEND_HEIGHTS_SEMITONES } from "@/lib/techniqueRegistry";
 import { BEND_HEIGHT_LABEL, DEFAULT_PARAMS, VARIANTS } from "@/lib/techniqueEditDefaults";
 import {
 	INSPECTOR_HITS,
+	applySweep,
+	replaceWithShape,
 	effectOptions,
 	hitOf,
 	linkOptions,
@@ -103,6 +104,8 @@ function Reasons<K extends string>({ options }: { options: readonly InspectorOpt
 export default function EditorInspector({ working, commit, cursor, slots, onCursor, chordTools, only }: Props) {
 	const [fillAsk, setFillAsk] = useState<{ duration: Duration; cleared: FingerpickPattern } | null>(null);
 	const [wholeAsk, setWholeAsk] = useState<FingerpickPattern | null>(null);
+	// Swept slots holding notes outside the shape: replace them with it?
+	const [sweepAsk, setSweepAsk] = useState<SlotTarget[] | null>(null);
 	const shown = (tab: InspectorTab) => only === undefined || only === tab;
 	const can = sectionsFor(slots.length);
 	const m = cursor.measureIndex;
@@ -379,12 +382,38 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 								type="button"
 								className="te-chip"
 								aria-pressed={stroke.kind === "one" && stroke.value === o.value}
-								onClick={() => forRun((p, t) => setStroke(p, t, o.value === "none" ? undefined : o.value))}
+								onClick={() => {
+									const swept = applySweep(working, slots, o.value === "none" ? undefined : o.value, chordTools.voicingAt);
+									commit(() => swept.pattern);
+									setSweepAsk(swept.offShape.length > 0 ? swept.offShape : null);
+								}}
 							>
 								{o.label}
 							</button>
 						))}
 					</div>
+					{sweepAsk && (
+						<div className="te-ask" role="alertdialog" aria-label="Overwrite with the shape">
+							<span>
+								{sweepAsk.length === 1 ? "This slot has" : `${sweepAsk.length} slots have`} notes outside the chord&apos;s
+								shape. Overwrite {sweepAsk.length === 1 ? "it" : "them"} with the shape?
+							</span>
+							<div className="te-ask-row">
+								<Button
+									size="xs"
+									onClick={() => {
+										commit((p) => replaceWithShape(p, sweepAsk, chordTools.voicingAt));
+										setSweepAsk(null);
+									}}
+								>
+									Overwrite
+								</Button>
+								<Button size="xs" variant="ghost" onClick={() => setSweepAsk(null)}>
+									Keep the notes
+								</Button>
+							</div>
+						</div>
+					)}
 					<h3>Hit {hit.kind === "mixed" && <span className="pb-lab">mixed</span>}</h3>
 					<div className="te-chips" role="group" aria-label="Hit">
 						{[{ kind: "none", label: "Off" }, ...INSPECTOR_HITS.map((t) => ({ kind: t.kind, label: t.label.en }))].map((o) => (

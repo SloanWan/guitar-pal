@@ -36,9 +36,12 @@ export default function EditorColumn({ column, slot, cursorString, selected, onP
 		"--te-x": `${column.noteX - column.left}px`,
 	} as CSSProperties;
 	const on = cursorString !== null;
+	// A slot with nothing struck draws nothing on the stave: the editor marks where it is.
+	const empty = !!slot && !slot.isRest && !slot.strings.some((sf) => sf.fret !== null || sf.muted);
 	return (
 		<div className="te-col" style={style} data-cur={on ? "" : undefined} data-sel={selected ? "" : undefined}>
 			{(on || selected) && <span className="te-col-wash" aria-hidden />}
+			{empty && <span className="te-empty" aria-hidden />}
 			{column.lineYs.map((_, stringIndex) => (
 				<button
 					key={stringIndex}

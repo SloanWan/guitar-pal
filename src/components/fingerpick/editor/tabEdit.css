@@ -417,6 +417,14 @@
 		mix-blend-mode: var(--te-blend);
 		pointer-events: none;
 	}
+	.te-empty {
+		position: absolute;
+		top: calc(var(--te-top) + var(--te-gap) / 2);
+		left: calc(var(--te-x) - 0.75px);
+		height: calc(5 * var(--te-gap));
+		border-left: 1.5px dotted var(--gp-edge);
+		pointer-events: none;
+	}
 	.te-hit {
 		position: absolute;
 		right: 0;

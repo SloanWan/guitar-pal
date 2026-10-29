@@ -4,8 +4,11 @@ import { setPercussion, toggleSpanOver } from "@/lib/fingerpickTechniqueEdit";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { EFFECT_DEFS, LINK_DEFS, PERCUSSION_DEFS, SPAN_DEFS } from "@/lib/techniqueRegistry";
 import { BLOCK_REASON } from "@/lib/tabEditorCursor";
+import type { ChordVoicing } from "@/lib/chordVoicing";
 import {
 	INSPECTOR_HITS,
+	applySweep,
+	replaceWithShape,
 	effectOptions,
 	hitOf,
 	linkOptions,
@@ -84,5 +87,35 @@ describe("sectionsFor", () => {
 	it("keeps the one-note parts for a single slot", () => {
 		expect(sectionsFor(1)).toEqual({ note: true, effects: true, spans: true });
 		expect(sectionsFor(3)).toEqual({ note: false, effects: false, spans: true });
+	});
+});
+
+describe("applySweep", () => {
+	// A C shape, low E to high e: x 3 2 0 1 0.
+	const C: ChordVoicing = { id: "c", label: null, start_fret: 1, barre_fret: null, capo: false, frets: "x32010", fingers: "032010" };
+	const voicingAt = () => C;
+
+	it("fills an empty slot from the shape as it rolls", () => {
+		const out = applySweep(tab(), [run[0]], "roll-down", voicingAt);
+		const strings = out.pattern.measures[0].slots[0].strings.map((s) => s.fret);
+		expect(strings).toEqual([0, 1, 0, 2, 3, null]);
+		expect(out.pattern.measures[0].slots[0].stroke).toBe("roll-down");
+		expect(out.offShape).toEqual([]);
+	});
+
+	it("leaves notes outside the shape alone and asks about them", () => {
+		const p = setFret(tab(), { measureIndex: 0, slotIndex: 0, stringIndex: 0 }, 7);
+		const out = applySweep(p, [run[0]], "brush-up", voicingAt);
+		expect(out.offShape).toEqual([run[0]]);
+		expect(out.pattern.measures[0].slots[0].strings[0].fret).toBe(7);
+		const replaced = replaceWithShape(out.pattern, out.offShape, voicingAt);
+		expect(replaced.measures[0].slots[0].strings.map((s) => s.fret)).toEqual([0, 1, 0, 2, 3, null]);
+	});
+
+	it("turning it off changes only the sweep", () => {
+		const rolled = applySweep(tab(), [run[0]], "roll-down", voicingAt).pattern;
+		const off = applySweep(rolled, [run[0]], undefined, voicingAt);
+		expect(off.pattern.measures[0].slots[0].stroke).toBeUndefined();
+		expect(off.pattern.measures[0].slots[0].strings[1].fret).toBe(1);
 	});
 });

@@ -178,6 +178,209 @@
 		background: var(--gp-line);
 	}
 
+	/* ── Toolbar (#361) ─────────────────────────────────────────────────── */
+	/* Stays at the top of the stage while the tab scrolls under it. */
+	.te-tool {
+		position: sticky;
+		z-index: 8;
+		top: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 8px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c), var(--gp-shadow-pop);
+	}
+	.te-seg {
+		display: inline-grid;
+		flex: none;
+		grid-auto-columns: 1fr;
+		grid-auto-flow: column;
+		box-sizing: border-box;
+		height: 34px;
+		padding: 3px 5px 5px 3px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-well);
+	}
+	.te-seg button {
+		display: grid;
+		place-items: center;
+		padding: 0 5px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		cursor: pointer;
+	}
+	.te-seg button svg {
+		width: 20px;
+		height: 20px;
+	}
+	.te-seg button[aria-pressed="true"] {
+		background: var(--gp-face);
+		box-shadow: var(--gp-ring-n), var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-sh-n);
+		color: var(--gp-ink);
+	}
+	.te-seg button:disabled {
+		color: var(--gp-edge);
+		cursor: default;
+	}
+	.te-tbtn {
+		display: grid;
+		flex: none;
+		place-items: center;
+		box-sizing: border-box;
+		min-width: 32px;
+		height: 32px;
+		padding: 0 6px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		font-size: 13.5px;
+		font-weight: 750;
+		cursor: pointer;
+	}
+	.te-tbtn svg {
+		width: 19px;
+		height: 19px;
+	}
+	.te-tbtn:not(:disabled):hover {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+	}
+	.te-tbtn[aria-pressed="true"] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.te-tbtn:disabled {
+		color: var(--gp-edge);
+		cursor: default;
+	}
+	.te-fill {
+		overflow: hidden;
+		color: var(--gp-warn);
+		font-size: 12.5px;
+		font-weight: 650;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.te-fill[data-kind="over"] {
+		color: var(--gp-bad);
+	}
+	.te-barbtn {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 4px;
+		height: 32px;
+		padding: 0 8px 0 10px;
+		border-radius: var(--gp-r-s);
+		font-size: 13px;
+		font-weight: 700;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.te-barbtn:hover,
+	.te-barbtn[aria-expanded="true"] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.te-barbtn svg {
+		width: 15px;
+		height: 15px;
+	}
+	.te-menu {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 8px;
+	}
+	.te-menu > button {
+		display: flex;
+		align-items: center;
+		box-sizing: border-box;
+		width: 100%;
+		height: 36px;
+		padding: 0 10px;
+		border-radius: var(--gp-r-s);
+		font-size: 13.5px;
+		font-weight: 650;
+		text-align: left;
+		cursor: pointer;
+	}
+	.te-menu > button:not(:disabled):hover {
+		background: var(--gp-well);
+	}
+	.te-menu > button:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.te-menu > button[data-bad] {
+		color: var(--gp-bad);
+	}
+	.te-menu-sep {
+		height: 1px;
+		margin: 4px 6px;
+		background: var(--gp-line);
+	}
+	.te-menu-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 2px 4px;
+	}
+	.te-chip {
+		height: 30px;
+		padding: 0 9px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-face);
+		box-shadow: var(--gp-ring-n), var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-sh-n);
+		font-size: 12.5px;
+		font-weight: 650;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.te-chip[aria-pressed="true"] {
+		background: var(--gp-m-500);
+		box-shadow: var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-m-sh);
+		color: var(--gp-m-on);
+	}
+	.te-times {
+		min-width: 30px;
+		font-weight: 780;
+		text-align: center;
+	}
+	.te-keys h3 {
+		margin: 0 0 8px;
+		font-size: 14px;
+		font-weight: 750;
+	}
+	.te-keys dl {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 6px 12px;
+		margin: 0 0 12px;
+		color: var(--gp-ink-2);
+		font-size: 12.5px;
+		line-height: 1.35;
+	}
+	.te-keys dt {
+		padding: 1px 6px;
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-well);
+		color: var(--gp-ink);
+		font-size: 11.5px;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.te-keys dd {
+		margin: 0;
+	}
+	.te-keys p {
+		margin: 0;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		line-height: 1.4;
+	}
+
 	/* ── The tab as the editing surface (#360) ────────────────────────────── */
 	/* The tab takes the keys; its focus ring is the card's. */
 	.te-sheet {
@@ -489,6 +692,130 @@
 		box-shadow: -1px 0 0 var(--gp-line);
 	}
 
+	.te-insp-in {
+		display: flex;
+		flex-direction: column;
+	}
+	.te-grp {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 14px 0 16px;
+		border-bottom: 1px solid var(--gp-line);
+	}
+	.te-grp:last-child {
+		border-bottom: 0;
+	}
+	.te-grp h2 {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		margin: 0;
+		font-size: 15px;
+		font-weight: 780;
+	}
+	.te-grp h3 {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 4px 0 0;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 700;
+	}
+	.te-irow {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.te-rl {
+		flex: none;
+		width: 48px;
+		font-size: 13px;
+		font-weight: 650;
+	}
+	.te-irow > .gp-seg {
+		flex: 1;
+	}
+	.te-indent {
+		padding-left: 56px;
+	}
+	.te-stp {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.te-stp output {
+		min-width: 28px;
+		font-size: 15px;
+		font-weight: 780;
+		text-align: center;
+	}
+	.te-why {
+		margin: 0;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		line-height: 1.4;
+	}
+	.te-why:empty {
+		display: none;
+	}
+	.te-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.te-chip:disabled {
+		background: transparent;
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.te-chip[data-bad] {
+		color: var(--gp-bad);
+	}
+	.te-chip kbd {
+		margin-left: 5px;
+		padding: 0 4px;
+		border-radius: 4px;
+		background: var(--gp-well);
+		color: var(--gp-ink-3);
+		font-family: inherit;
+		font-size: 10px;
+	}
+	.te-chip[aria-pressed="true"] kbd {
+		background: rgba(255, 255, 255, 0.22);
+		color: inherit;
+	}
+	.te-ib2,
+	.te-ib3 {
+		display: grid;
+		gap: 6px;
+	}
+	.te-ib2 {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.te-ib3 {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.te-fillnote {
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 650;
+	}
+	.te-fillnote[data-kind="short"] {
+		color: var(--gp-warn);
+	}
+	.te-fillnote[data-kind="over"] {
+		color: var(--gp-bad);
+	}
+	.te-sheet-tools {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
 	/* ── Source page (a book's draft) ───────────────────────────────────── */
 	.te-src {
 		display: flex;
@@ -631,6 +958,18 @@
 		.te-titlerow {
 			column-gap: 6px;
 			padding: 0 2px;
+		}
+		.te-tool {
+			gap: 2px;
+			padding: 4px;
+			overflow-x: auto;
+		}
+		.te-seg button {
+			padding: 0 3px;
+		}
+		.te-seg button svg {
+			width: 18px;
+			height: 18px;
 		}
 		.te-name {
 			font-size: 20px;

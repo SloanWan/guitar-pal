@@ -14,6 +14,7 @@ import {
 import type { Cell, SlotTarget } from "@/lib/fingerpickEdit";
 import { EFFECT_STACK_ORDER, techniqueDef } from "@/lib/techniqueRegistry";
 import { BLOCK_REASON } from "@/lib/tabEditorCursor";
+import { BEND_HEIGHT_LABEL } from "@/lib/techniqueEditDefaults";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 
@@ -132,15 +133,7 @@ export function cellDisplay(sf: StringFret): string {
 	return "–";
 }
 
-/** A bend height as the grid and the menu write it. A full tone is the bare arrow. */
-export const BEND_HEIGHT_LABEL: Record<number, string> = {
-	0.5: "¼",
-	1: "½",
-	1.5: "¾",
-	2: "Full",
-	2.5: "1¼",
-	3: "1½",
-};
+export { BEND_HEIGHT_LABEL };
 
 function bendGlyph(bend: NonNullable<NoteEffects["bend"]>): string {
 	const height = bend.semitones === 2 ? "" : (BEND_HEIGHT_LABEL[bend.semitones] ?? String(bend.semitones));

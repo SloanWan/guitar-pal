@@ -92,3 +92,36 @@ test("the fretboard writes at the cursor, clears on a second click, and Shift gi
 	await dock.getByRole("button", { name: "String 6, fret 1", exact: true }).click({ modifiers: ["Shift"] });
 	await expect(page.getByRole("button", { name: "Bar 1, slot 1, E string: x" })).toBeAttached();
 });
+
+test("the toolbar splits a note so the bar still adds up, and the bar menu copies a bar", async ({ page }) => {
+	await page.goto("/fingerpick/edit/new");
+	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
+
+	// Four quarters; the first split into eighths makes five slots.
+	await page.getByRole("toolbar", { name: "Edit tools" }).getByRole("button", { name: "Eighth", exact: true }).click();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 5, B string: empty" })).toBeAttached();
+	await page.keyboard.type("3");
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 3" })).toBeAttached();
+
+	await page.getByRole("button", { name: "Bar 1 actions" }).click();
+	await page.getByRole("menuitem", { name: "Copy this bar" }).click();
+	await expect(page.getByRole("status", { name: "Cursor" })).toHaveText("Bar 2 · slot 1 · B string");
+	await expect(page.getByRole("button", { name: "Bar 2, slot 1, B string: fret 3" })).toBeAttached();
+});
+
+test("the inspector writes a link and says why the others cannot go on", async ({ page }) => {
+	await page.goto("/fingerpick/edit/new");
+	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
+	await page.keyboard.type("5");
+	await page.keyboard.press("ArrowRight");
+	await page.keyboard.type("7");
+
+	const inspector = page.getByRole("complementary", { name: "Inspector" });
+	await expect(inspector.getByText("Tied, Pull-off: Not valid for this fret movement.")).toBeVisible();
+	await expect(inspector.getByRole("button", { name: /^Pull-off/ })).toBeDisabled();
+	await inspector.getByRole("button", { name: /^Hammer-on/ }).click();
+	await expect(page.locator("svg text").filter({ hasText: /^H$/ })).toHaveCount(1);
+	await expect(inspector.getByRole("button", { name: /^Hammer-on/ })).toHaveAttribute("aria-pressed", "true");
+});

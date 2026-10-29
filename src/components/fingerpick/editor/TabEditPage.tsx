@@ -7,11 +7,13 @@ import "./tabEdit.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Play, Redo2, SlidersHorizontal, Square, TriangleAlert, Undo2, X } from "lucide-react";
+import { Play, Redo2, SlidersHorizontal, Square, TriangleAlert, Undo2, Wrench, X } from "lucide-react";
 import Link from "@/components/AppLink";
 import ZoomableImage from "@/components/ZoomableImage";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Segmented } from "@/components/ui/segmented";
+import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import TabSheet from "@/components/fingerpick/reader/TabSheet";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
@@ -43,6 +45,9 @@ import type { EditableStave } from "@/components/fingerpick/TabStaveRow";
 import { patternCapo } from "@/lib/fingerpickChords";
 import { dockWrite } from "@/lib/fretboardDock";
 import EditorColumn, { noteText } from "./EditorColumn";
+import EditorInspector from "./EditorInspector";
+import EditorToolbar from "./EditorToolbar";
+import type { InspectorTab } from "@/lib/tabEditorInspector";
 import FretboardDock from "./FretboardDock";
 import TabSettingsSheet from "./TabSettingsSheet";
 import { useEditorPlayback } from "./useEditorPlayback";
@@ -198,6 +203,10 @@ export default function TabEditPage({ id }: { id: string }) {
 	const tabRef = useRef<HTMLDivElement>(null);
 	// A phone's width: the tab bar's breakpoint, where auto-advance starts on.
 	const phone = useMediaQuery("(max-width: 719px)", false);
+	// Below 960px the inspector is a sheet, opened from the status line, one tab at a time.
+	const narrow = useMediaQuery("(max-width: 959px)", false);
+	const [toolsOpen, setToolsOpen] = useState(false);
+	const [toolsTab, setToolsTab] = useState<InspectorTab>("note");
 	function togglePlay(from: SlotTarget) {
 		if (playback.isPlaying) playback.stop();
 		else playback.playFrom(from);
@@ -428,6 +437,16 @@ export default function TabEditPage({ id }: { id: string }) {
 											</Button>
 										</div>
 									</div>
+									<EditorToolbar
+										working={working}
+										commit={commit}
+										cursor={cursor}
+										slots={selectedSlots(working, cursor, selection)}
+										onBlocked={(reason) => toast(reason)}
+										onBar={(measureIndex) =>
+											tabCursor.moveTo({ measureIndex, slotIndex: 0, stringIndex: cursor.stringIndex })
+										}
+									/>
 									<div
 										ref={tabRef}
 										className="te-sheet"
@@ -473,6 +492,13 @@ export default function TabEditPage({ id }: { id: string }) {
 						<span className="te-status-note pb-num" data-pending={pending ? "" : undefined}>
 							{statusNote}
 						</span>
+						<span className="tb-grow" />
+						{narrow && (
+							<Button size="xs" onClick={() => setToolsOpen(true)} disabled={!ready}>
+								<Wrench aria-hidden />
+								Tools
+							</Button>
+						)}
 					</div>
 					{ready && (
 						<FretboardDock
@@ -491,7 +517,44 @@ export default function TabEditPage({ id }: { id: string }) {
 						/>
 					)}
 				</div>
+				{ready && !narrow && (
+					<aside className="te-insp" aria-label="Inspector">
+						<EditorInspector
+							working={working}
+							commit={commit}
+							cursor={cursor}
+							slots={selectedSlots(working, cursor, selection)}
+							onCursor={(cell) => tabCursor.moveTo(cell, selection)}
+						/>
+					</aside>
+				)}
 			</div>
+			{ready && narrow && (
+				<Sheet open={toolsOpen} onOpenChange={setToolsOpen} title="Tools">
+					<div className="te-sheet-tools" data-m="tab">
+						<Segmented
+							label="Tools"
+							full
+							options={[
+								{ value: "note", label: "Note" },
+								{ value: "effects", label: "Effects" },
+								{ value: "slot", label: "Slot" },
+								{ value: "bar", label: "Bar" },
+							]}
+							value={toolsTab}
+							onChange={setToolsTab}
+						/>
+						<EditorInspector
+							working={working}
+							commit={commit}
+							cursor={cursor}
+							slots={selectedSlots(working, cursor, selection)}
+							onCursor={(cell) => tabCursor.moveTo(cell, selection)}
+							only={toolsTab}
+						/>
+					</div>
+				</Sheet>
+			)}
 
 			{ready && (
 				<TabSettingsSheet

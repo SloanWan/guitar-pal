@@ -52,29 +52,27 @@ export default function SettingsPage() {
 	return (
 		/* One column of panels at every width: every section is a set of controls,
 		   and a settings page is read top to bottom, not scanned side by side. */
-		<div className={`mx-auto box-content max-w-160 py-8 max-sm:py-6 ${PAGE_GUTTER}`}>
-			<h1 className="mb-6 font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-gp-ink min-[960px]:text-(length:--gp-t-xl-lg)">
+		<div className={`gp-rise mx-auto box-content flex max-w-160 flex-col gap-4 py-8 max-sm:py-6 ${PAGE_GUTTER}`}>
+			<h1 className="mb-2 font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-gp-ink min-[960px]:text-(length:--gp-t-xl-lg)">
 				Settings
 			</h1>
 
-			<div className="flex flex-col gap-4">
-				<Section icon={<Palette />} anim="palette" title="Appearance">
-					<ThemeSwitch />
-				</Section>
+			<Section icon={<Palette />} anim="palette" title="Appearance">
+				<ThemeSwitch />
+			</Section>
 
-				{loading || !user ? (
-					// The proxy guards /settings, so a resolved null user is only ever a
-					// sign-out mid-visit; the skeleton is the right thing either way.
-					<Skeleton className="h-[560px] rounded-gp-lg" />
-				) : (
-					<>
-						<IdentityCard user={user} />
-						<EmailCard user={user} />
-						<PasswordCard email={user.email} />
-						<DeleteCard user={user} />
-					</>
-				)}
-			</div>
+			{loading || !user ? (
+				// The proxy guards /settings, so a resolved null user is only ever a
+				// sign-out mid-visit; the skeleton is the right thing either way.
+				<Skeleton className="h-[560px] rounded-gp-lg" />
+			) : (
+				<>
+					<IdentityCard user={user} />
+					<EmailCard user={user} />
+					<PasswordCard email={user.email} />
+					<DeleteCard user={user} />
+				</>
+			)}
 		</div>
 	);
 }

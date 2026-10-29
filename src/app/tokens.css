@@ -123,6 +123,10 @@
   --gp-lg0:#823883; --gp-lg1:#0078B9; --gp-lg2:#23762C; --gp-lg3:#C63C3C; --gp-lg4:#EBD14D;
   /* fretboard interval roles (light tints in both themes; labels use --gp-on-role) */
   --gp-role-3:#F9BEB8; --gp-role-5:#A7CEED; --gp-role-7:#DAD09B; --gp-role-x:#E2DFDB; --gp-on-role:#17181A;
+  /* the fretboard's neck: a neutral well in light, the wood in dark (frets, nut, strings on it) */
+  --gp-neck:#EEEFF1; --gp-neck-fret:#C6C8CD; --gp-neck-nut:#9599A0; --gp-neck-string:#9599A0;
+  /* a piano's black keys: dark in both themes, below the white keys' face */
+  --gp-key-black:#222428; --gp-key-black-sh:#0A0B0D; --gp-on-key-black:#FFFFFF;
   /* app icon: fixed per tile, NOT per theme (a light tile always wears the light slots) */
   --gp-tile-l:#FFFFFF; --gp-tile-d:#18191B;
   --gp-lgl0:#823883; --gp-lgl1:#0078B9; --gp-lgl2:#23762C; --gp-lgl3:#C63C3C; --gp-lgl4:#EBD14D;
@@ -146,6 +150,8 @@
     --gp-a1:#E7D169; --gp-a2:#FC9571; --gp-a-on:#18191B;
     --gp-lg0:#C586C4; --gp-lg1:#71B8EF; --gp-lg2:#A1E1A3; --gp-lg3:#F17F79; --gp-lg4:#E7D169;
     --gp-role-3:#D69D97; --gp-role-5:#87ADCB; --gp-role-7:#BCB17E; --gp-role-x:#C3C1BC;
+    --gp-neck:#3F3328; --gp-neck-fret:#6E5A45; --gp-neck-nut:#C9B8A6; --gp-neck-string:#A8957F;
+    --gp-key-black:#0E0F11; --gp-key-black-sh:#000000; --gp-on-key-black:#D3D6DB;
   }
 }
 :root[data-theme="dark"] {
@@ -157,6 +163,8 @@
   --gp-a1:#E7D169; --gp-a2:#FC9571; --gp-a-on:#18191B;
   --gp-lg0:#C586C4; --gp-lg1:#71B8EF; --gp-lg2:#A1E1A3; --gp-lg3:#F17F79; --gp-lg4:#E7D169;
   --gp-role-3:#D69D97; --gp-role-5:#87ADCB; --gp-role-7:#BCB17E; --gp-role-x:#C3C1BC;
+  --gp-neck:#3F3328; --gp-neck-fret:#6E5A45; --gp-neck-nut:#C9B8A6; --gp-neck-string:#A8957F;
+  --gp-key-black:#0E0F11; --gp-key-black-sh:#000000; --gp-on-key-black:#D3D6DB;
 }
 
 /* -------------------------------------------------------------------------------------

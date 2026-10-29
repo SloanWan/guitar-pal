@@ -1,60 +1,65 @@
 "use client";
 
 /**
- * The fretboard page: a key, two instruments showing it, and a mode saying
- * what to do with them.
+ * The fretboard page (#363 step 11, Candy): the instruments are the page, the settings
+ * are one panel beside them.
  *
- * Zones, top to bottom. **Key**: the root and scale everything else is derived
- * from, plus the capo — always reachable, in either mode, because they
- * describe the material rather than the activity. **Piano** and **neck**: two
- * displays of the same key, never pickers. A press means one thing per mode.
- * **Mode panel**: what you are doing with the key. **Display**: how it is
- * drawn.
+ * Layout. The stage holds, top to bottom: what is showing (the key and its step formula,
+ * and in Chords mode the chord), the **piano**, the **neck** and the **circle of fifths**.
+ * The piano and the circle can each be put away and brought back (`panels`, kept per
+ * device); the neck cannot. The panel, a card of its own, holds what the instruments show
+ * and what to do with them — key, scale, mode, the mode's tools (in Chords mode the
+ * chord, the **progression** and the hand position), display and sound — beside the stage
+ * from 960px, and in a sheet opened from the dock below that.
  *
- * Scale mode: the neck shows the scale across the neck, the piano tints its
- * pitch classes, a chord from the picker lays its tones over the scale, and
- * pressing anything sounds that note. Chords mode: the piano's keys become the
- * key's chords, pressing one lights that chord's shape on the neck and sounds
- * it; pressing a note of the shape strums the shape. The octave of the key
- * picks the shape: a guitar changes register by changing position, so a low
- * key holds the open shape and a high one the barre up the neck.
+ * Scale mode: the neck shows the scale across the neck, the piano tints its pitch
+ * classes, and pressing anything sounds that note. Chords mode: the piano's keys become
+ * the key's chords, pressing one lights that chord's shape on the neck and sounds it;
+ * pressing a note of the shape strums the shape. The octave of the key picks the shape: a
+ * guitar changes register by changing position, so a low key holds the open shape and a
+ * high one the barre up the neck. The panel's chord chips and the circle's wedge pick the
+ * same chords, in the standard shape.
  *
- * The chord is held as **semitones above the key's root**, not as a pitch
- * class, so changing key or scale keeps the degree and transposes the chord
- * with it — that is what makes numerals worth showing.
+ * The chord is held as **semitones above the key's root**, not as a pitch class, so
+ * changing key or scale keeps the degree and transposes the chord with it — that is what
+ * makes numerals worth showing.
  *
- * The readout over the piano is two search fields, "D · C shape": the chord
- * heard and, with a capo, the shape that holds it. Either can be typed into —
- * a name or a grip — and the other side follows at the capo's distance, so a
- * player can ask what a shape sounds here, or which shape sounds a chord
- * here. Pressing a key or a numeral fills both. Clearing returns to the
- * degree.
+ * The readout is two search fields, "D · C shape": the chord heard and, with a capo, the
+ * shape that holds it. Either can be typed into — a name or a grip — and the other side
+ * follows at the capo's distance. Pressing a key or a numeral fills both. Clearing returns
+ * to the degree.
  *
- * Chords mode also carries a **progression**: a strip of bars, each held as an
- * interval like the picked chord, looped one strum per bar. And a **hand
- * position**: a right-press raises a five-fret frame on the neck and the
- * panel lists the key's chords with a shape inside it — pressing one lights
- * that shape, and the frame's play button walks them once through.
+ * Chords mode also carries a **progression**: a strip of bars, each held as an interval
+ * like the picked chord, looped one strum per bar. And a **hand position**: a right-press
+ * raises a five-fret frame on the neck and the panel lists the key's chords with a shape
+ * inside it — pressing one lights that shape, and the frame's play button walks them once
+ * through.
  *
- * A capo follows the strum page's rule: a chord names the shape the player
- * holds, so the neck shows the fingered chord and the piano the heard one.
- * It also shortens the neck: nothing behind the capo can be played, so the
- * scale's marks start at the capo fret, which becomes the new open string.
- * Marks above it keep the pitch they had — a capo does not transpose them.
+ * A capo follows the strum page's rule: a chord names the shape the player holds, so the
+ * neck shows the fingered chord and the piano the heard one. It also shortens the neck:
+ * nothing behind the capo can be played, so the scale's marks start at the capo fret,
+ * which becomes the new open string. Marks above it keep the pitch they had.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Guitar, ListMusic, Piano, Play, Square, Volume2, X } from "lucide-react";
+import { CircleDot, Guitar, Piano, Play, SlidersHorizontal, Square } from "lucide-react";
 import { toast } from "sonner";
 
 import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
+import CircleOfFifths from "@/components/fretboard/CircleOfFifths";
 import Fretboard, { type FretboardHandle } from "@/components/fretboard/Fretboard";
 import PianoKeyboard, { type PianoKeyboardHandle } from "@/components/fretboard/PianoKeyboard";
 import { useNoteSound, type NoteVoice } from "@/components/fretboard/useNoteSound";
 import { useSequencePlayer } from "@/components/fretboard/useSequencePlayer";
 import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
+import { CardHead, CardToggle, ChoiceChip, ScaleSteps, StripBar, ToneList, TuningPicker } from "@/components/fretboard/parts";
 import MusicalText from "@/components/MusicalText";
-import Fader from "@/components/ui/Fader";
-import Rocker from "@/components/ui/Rocker";
+import { Button, PlayPick } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
+import { Segmented } from "@/components/ui/segmented";
+import { Sheet } from "@/components/ui/sheet";
+import { Slider } from "@/components/ui/slider";
+import { Stepper } from "@/components/ui/stepper";
+import { Switch } from "@/components/ui/switch";
 import { loadVoicings, peekVoicings } from "@/lib/chordVoicingCache";
 import { GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
 import type { ChordVoicing } from "@/lib/chordVoicing";
@@ -62,6 +67,7 @@ import { getChordIndex } from "@/lib/chords";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { chordModeView, inShape, shapeSlots } from "@/lib/fretboard/chordMode";
 import { keyChord, keyChords, shapeMarks, shapePitches, type KeyChord } from "@/lib/fretboard/chords";
+import { circlePitchClass, keyFromCircle, keyIndex } from "@/lib/fretboard/circleOfFifths";
 import {
 	heldChordView,
 	shownFromKeyChords,
@@ -69,6 +75,15 @@ import {
 	type HeldChord,
 	type ShownChord,
 } from "@/lib/fretboard/heldChord";
+import { DEFAULT_PANELS, PANELS_STORAGE_KEY, parsePanels, type FretboardPanels } from "@/lib/fretboard/panels";
+import {
+	TUNING_LABELS,
+	TUNING_OFFSET,
+	TUNING_STORAGE_KEY,
+	parseTuning,
+	stringNames,
+	type Tuning,
+} from "@/lib/fretboard/tuning";
 import {
 	SCALE_LABELS,
 	SCALE_ROOTS,
@@ -116,7 +131,7 @@ export const GUITAR_RANGE: PianoRange = {
 	toMidi: GUITAR_OPEN_MIDI[GUITAR_OPEN_MIDI.length - 1] + NECK.toFret,
 };
 
-/** Device-local memory of the SOUND rocker; absent means on. */
+/** Device-local memory of the Sound switch; absent means on. */
 export const SOUND_STORAGE_KEY = "fretboardSound";
 
 export type ExplorerMode = "scale" | "chords";
@@ -128,100 +143,6 @@ export interface FretboardExplorerProps {
 }
 
 const mod12 = (n: number): number => ((n % 12) + 12) % 12;
-
-interface SegmentedProps<T extends string> {
-	options: readonly { value: T; label: string }[];
-	value: T;
-	onChange: (value: T) => void;
-	ariaLabel: string;
-}
-
-function Segmented<T extends string>({ options, value, onChange, ariaLabel }: SegmentedProps<T>) {
-	return (
-		<div role="radiogroup" aria-label={ariaLabel} className="flex border border-line-strong">
-			{options.map((opt, i) => {
-				const on = opt.value === value;
-				return (
-					<button
-						key={opt.value}
-						type="button"
-						role="radio"
-						aria-checked={on}
-						onClick={() => onChange(opt.value)}
-						className={`px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) ${
-							i > 0 ? "border-l border-line-strong" : ""
-						} ${on ? "bg-denim text-on-denim" : "text-ink-dim hover:text-denim-accent"}`}
-					>
-						{opt.label}
-					</button>
-				);
-			})}
-		</div>
-	);
-}
-
-function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
-	return (
-		<div className={`flex flex-col gap-1.5 ${className}`}>
-			<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">{label}</span>
-			{children}
-		</div>
-	);
-}
-
-const SELECT_CLASS = "h-[30px] border border-line-strong bg-surface px-2 font-mono text-[12px] text-ink";
-
-/**
- * An instrument's heading: its name on the left, its own fader on the right.
- * The fader belongs to the instrument it controls rather than to the page, so
- * it sits in the corner of that instrument's block, and the two instruments'
- * faders line up. Anything else the instrument carries (the neck's capo and
- * label choice) goes on a row of its own beneath, where a phone has room.
- */
-function InstrumentHeader({
-	icon,
-	name,
-	label,
-	value,
-	onChange,
-	disabled,
-	children,
-}: {
-	icon: React.ReactNode;
-	name: string;
-	label: string;
-	value: number;
-	onChange: (level: number) => void;
-	disabled?: boolean;
-	children?: React.ReactNode;
-}) {
-	return (
-		<div className="flex flex-col gap-2">
-			<div className="flex items-center justify-between gap-4">
-				<span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-					<span aria-hidden="true">{icon}</span>
-					{name}
-				</span>
-				<div className="w-28 shrink-0">
-					<Fader
-						min={0}
-						max={100}
-						step={1}
-						value={Math.round(value * 100)}
-						onValue={(v) => onChange(v / 100)}
-						disabled={disabled}
-						ariaLabel={label}
-					/>
-				</div>
-			</div>
-			{children && (
-				<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-					{children}
-				</div>
-			)}
-		</div>
-	);
-}
 
 /** "Bb" → "B♭", "b3" → "♭3": the board prints glyphs, the model keeps ASCII. */
 function withGlyphs(label: string): string {
@@ -259,7 +180,6 @@ const LABEL_MODES: readonly { value: LabelChoice; label: string }[] = [
 /** ₀…₉, for an octave written small after a numeral. */
 const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
 
-/** The frets a capo actually lands on, for one-press access. */
 /** Where a capo lands when it is switched on: the first fret, then drag it. */
 const DEFAULT_CAPO = 1;
 
@@ -268,14 +188,21 @@ const DEFAULT_BPM = 90;
 /** A run's fixed tempo and voice, now that neither has a control. */
 const RUN_BPM = DEFAULT_BPM;
 const RUN_VOICE: NoteVoice = "guitar";
+/** A tempo held still this long restarts a playing strip at it, so a held step button restarts once. */
+const TEMPO_SETTLE_MS = 350;
 
-const LEGEND: readonly { emphasis: FretMark["emphasis"]; tone?: FretMark["tone"]; label: string }[] = [
-	{ emphasis: "root", label: "Root" },
-	{ emphasis: "chordTone", tone: "third", label: "3rd" },
-	{ emphasis: "chordTone", tone: "fifth", label: "5th" },
-	{ emphasis: "chordTone", tone: "seventh", label: "7th" },
-	{ emphasis: "chordTone", tone: "extension", label: "9 / 11 / 13 / sus" },
-	{ emphasis: "scaleTone", label: "Scale tone" },
+const LEGEND: readonly {
+	emphasis: FretMark["emphasis"];
+	tone?: FretMark["tone"];
+	label: string;
+	mode: ExplorerMode | "both";
+}[] = [
+	{ emphasis: "root", label: "Root", mode: "both" },
+	{ emphasis: "chordTone", tone: "third", label: "3rd", mode: "chords" },
+	{ emphasis: "chordTone", tone: "fifth", label: "5th", mode: "chords" },
+	{ emphasis: "chordTone", tone: "seventh", label: "7th", mode: "chords" },
+	{ emphasis: "chordTone", tone: "extension", label: "9 / 11 / 13 / sus", mode: "chords" },
+	{ emphasis: "scaleTone", label: "Scale tone", mode: "scale" },
 ];
 
 /** One of a chord's voicings, chosen by `pick` from the cache when it has them. */
@@ -296,8 +223,8 @@ const byId =
 		(id ? list.find((v) => v.id === id) : undefined) ?? selectStandardVoicing(list);
 
 export default function FretboardExplorer({
-	initialRoot = "A",
-	initialScale = "minorPentatonic",
+	initialRoot = "C",
+	initialScale = "major",
 	initialMode = "scale",
 }: FretboardExplorerProps) {
 	const [root, setRoot] = useState(initialRoot);
@@ -305,6 +232,17 @@ export default function FretboardExplorer({
 	const [labelChoice, setLabelChoice] = useState<LabelChoice>("note");
 	const [mode, setMode] = useState<ExplorerMode>(initialMode);
 	const [capo, setCapo] = useState(0);
+	/** The whole guitar tuned down (#396): restored after mount, like the sound switch. */
+	const [tuning, setTuning] = useState<Tuning>("standard");
+	const [tuningRestored, setTuningRestored] = useState(false);
+	/** Semitones every string sits from standard: a capo below the nut. */
+	const tune = TUNING_OFFSET[tuning];
+	/**
+	 * What the capo and the tuning do to pitch together: a shape held sounds this many
+	 * semitones from where it would in standard tuning without a capo. Pitch reads through
+	 * this; where a shape sits on the neck reads through the capo alone.
+	 */
+	const shift = capo + tune;
 	/** Scale mode: what a run plays — the whole neck, a hand position, or one string. */
 	const [runChoice, setRunChoice] = useState("neck");
 	/** Chords mode: semitones above the key's root; 0 (the tonic) until a key is pressed. */
@@ -348,6 +286,24 @@ export default function FretboardExplorer({
 		if (!soundRestored) return;
 		localStorage.setItem(SOUND_STORAGE_KEY, soundOn ? "on" : "off");
 	}, [soundOn, soundRestored]);
+
+	useEffect(() => {
+		const stored = localStorage.getItem(TUNING_STORAGE_KEY);
+		queueMicrotask(() => {
+			setTuning(parseTuning(stored));
+			setTuningRestored(true);
+		});
+	}, []);
+	useEffect(() => {
+		if (!tuningRestored) return;
+		localStorage.setItem(TUNING_STORAGE_KEY, tuning);
+	}, [tuning, tuningRestored]);
+	/** The open strings' names in this tuning, and the band of what the neck sounds under the piano. */
+	const strings = useMemo(() => stringNames(tuning).map(withGlyphs), [tuning]);
+	const range = useMemo<PianoRange>(
+		() => ({ fromMidi: GUITAR_RANGE.fromMidi + tune, toMidi: GUITAR_RANGE.toMidi + tune }),
+		[tune],
+	);
 
 	// The first press downloads a voice's samples, which takes seconds on a
 	// cold cache. Say so, and take it back when the wait is over, so a silent
@@ -399,10 +355,10 @@ export default function FretboardExplorer({
 	const named = useMemo<ShownChord | null>(() => {
 		if (!inChords) return null;
 		if (playingBar) return shownFromKeyChords(playingBar.sounding, playingBar.shape);
-		if (held) return heldChordView(held, spec, capo, null);
-		const { sounding, shape } = chordModeView(spec, capo, rootPc + chordInterval);
+		if (held) return heldChordView(held, spec, shift, null);
+		const { sounding, shape } = chordModeView(spec, shift, rootPc + chordInterval);
 		return shownFromKeyChords(sounding, shape);
-	}, [inChords, playingBar, held, spec, capo, rootPc, chordInterval]);
+	}, [inChords, playingBar, held, spec, shift, rootPc, chordInterval]);
 
 	// The fingered chord's voicing, fetched when it changes: the grip that was
 	// written, else the standard one. A stale answer (the chord moved on while
@@ -417,7 +373,7 @@ export default function FretboardExplorer({
 			held && sameChord(held, target)
 				? byId(held.voicingId)
 				: !held && chordKeyMidi !== null
-					? (list: ChordVoicing[]) => voicingNearest(list, chordKeyMidi, capo)
+					? (list: ChordVoicing[]) => voicingNearest(list, chordKeyMidi, shift)
 					: selectStandardVoicing;
 		void chordVoicing(target, pick)
 			.catch(() => null)
@@ -427,7 +383,7 @@ export default function FretboardExplorer({
 		return () => {
 			live = false;
 		};
-	}, [named, held, chordKeyMidi, capo]);
+	}, [named, held, chordKeyMidi, shift]);
 	// A sounding bar brings its own voicing, resolved before play began; a
 	// shape picked from a position stands in while it is that chord's.
 	const shapeVoicing = playingBar
@@ -440,8 +396,8 @@ export default function FretboardExplorer({
 	/** The chord on show, its numeral settled: a held shape is judged by the notes its voicing sounds. */
 	const shown = useMemo<ShownChord | null>(() => {
 		if (!named || !held || playingBar || !shapeVoicing) return named;
-		return heldChordView(held, spec, capo, shapePitches(shapeVoicing, capo).map(mod12));
-	}, [named, held, playingBar, shapeVoicing, spec, capo]);
+		return heldChordView(held, spec, shift, shapePitches(shapeVoicing, shift).map(mod12));
+	}, [named, held, playingBar, shapeVoicing, spec, shift]);
 
 	// Behind a capo there is no neck left to play, so the scale starts at the
 	// capo fret; the pitches above it are what they always were.
@@ -455,15 +411,21 @@ export default function FretboardExplorer({
 		const label = createLabeler(spec, labelMode);
 		let raw: FretMark[];
 		if (shown) {
-			raw = shapeVoicing ? shapeMarks(shapeVoicing, capo, shown.shape.rootPitchClass, label) : [];
+			// The marks sit where the shape is held; each names what it sounds.
+			raw = shapeVoicing
+				? shapeMarks(shapeVoicing, capo, shown.shape.rootPitchClass, (pc) => label(pc + tune))
+				: [];
 		} else {
-			raw = scaleMarks(spec, playable, labelMode);
+			raw = scaleMarks(spec, playable, labelMode, tune);
 		}
 		return raw.map((m) => ({ ...m, label: showLabels ? withGlyphs(m.label) : "" }));
-	}, [spec, labelMode, showLabels, shown, shapeVoicing, capo, playable]);
+	}, [spec, labelMode, showLabels, shown, shapeVoicing, capo, tune, playable]);
 
 	// ── Playing the scale ─────────────────────────────────────────────────────
-	const boxes = useMemo(() => (inChords ? [] : scalePositions(spec, playable)), [inChords, spec, playable]);
+	const boxes = useMemo(
+		() => (inChords ? [] : scalePositions(spec, playable, tune)),
+		[inChords, spec, playable, tune],
+	);
 	const targetFor = useCallback(
 		(choice: string): RunTarget => {
 			const [kind, index] = choice.split(":");
@@ -479,8 +441,8 @@ export default function FretboardExplorer({
 	);
 	const runTarget = useMemo(() => targetFor(runChoice), [targetFor, runChoice]);
 	const runNotes = useMemo(
-		() => (inChords ? [] : scaleRun(spec, playable, runTarget)),
-		[inChords, spec, playable, runTarget],
+		() => (inChords ? [] : scaleRun(spec, playable, runTarget, tune)),
+		[inChords, spec, playable, runTarget, tune],
 	);
 	/**
 	 * The box outlined on the neck: whichever tag the pointer is over, else the
@@ -504,9 +466,9 @@ export default function FretboardExplorer({
 			name: `${noteName(((midi % 12) + 12) % 12)}${withOctave ? Math.floor(midi / 12) - 1 : ""}`,
 			degree: degreeLabel(midi - root),
 		});
-		if (shapeVoicing) return shapePitches(shapeVoicing, capo).map((midi) => describe(midi, true));
+		if (shapeVoicing) return shapePitches(shapeVoicing, shift).map((midi) => describe(midi, true));
 		return (shown.triad ?? []).map((pc) => describe(pc, false));
-	}, [shown, shapeVoicing, capo, noteName]);
+	}, [shown, shapeVoicing, shift, noteName]);
 
 	/** The string whose run is sounding, so its button can offer to stop it. */
 	const playingString = player.isPlaying && runTarget.kind === "string" ? runTarget.string : null;
@@ -519,7 +481,7 @@ export default function FretboardExplorer({
 	}, [stopRun]);
 	// A run or a progression describes the key it started in; changing any of
 	// that ends it, as does editing the strip under it.
-	useEffect(() => stopPlayback, [stopPlayback, root, scale, capo, mode, soundOn, progression]);
+	useEffect(() => stopPlayback, [stopPlayback, root, scale, capo, tuning, mode, soundOn, progression]);
 
 	/** Load whatever the run needs, then play it. */
 	const startRun = useCallback(
@@ -538,8 +500,8 @@ export default function FretboardExplorer({
 	const progressionPlaying = playing?.source === "strip" && player.isPlaying;
 	/** The strip's bars named through the key, for the chips; no voicing needed to name them. */
 	const stripBars = useMemo(
-		() => (inChords ? resolveProgression(progression, spec, capo, () => null) : []),
-		[inChords, progression, spec, capo],
+		() => (inChords ? resolveProgression(progression, spec, capo, () => null, tune) : []),
+		[inChords, progression, spec, capo, tune],
 	);
 
 	/**
@@ -554,7 +516,7 @@ export default function FretboardExplorer({
 		if (!soundOn || progression.length === 0) return;
 		const token = ++playToken.current;
 		const shapes = new Map<string, KeyChord>();
-		for (const bar of resolveProgression(progression, spec, capo, () => null)) shapes.set(chordKey(bar.shape), bar.shape);
+		for (const bar of resolveProgression(progression, spec, capo, () => null, tune)) shapes.set(chordKey(bar.shape), bar.shape);
 		const table = new Map<string, ChordVoicing | null>();
 		void Promise.all(
 			[...shapes].map(async ([key, shape]) => {
@@ -566,15 +528,14 @@ export default function FretboardExplorer({
 			.then(() => prepare(RUN_VOICE))
 			.then((ready) => {
 				if (!ready || token !== playToken.current) return;
-				const bars = resolveProgression(progression, spec, capo, (c) => table.get(chordKey(c)) ?? null);
+				const bars = resolveProgression(progression, spec, capo, (c) => table.get(chordKey(c)) ?? null, tune);
 				setPlaying({ bars, source: "strip" });
 				player.play(progressionSteps(bars), barSeconds(progressionBpm), RUN_VOICE, { loop: true });
 			})
 			.catch(() => undefined);
-	}, [soundOn, progression, spec, capo, prepare, player, progressionBpm, chordBox]);
+	}, [soundOn, progression, spec, capo, tune, prepare, player, progressionBpm, chordBox]);
 
 	/** A new tempo while the strip plays restarts it at that tempo; between runs it just waits. */
-	const tempoDragging = useRef(false);
 	const applyTempo = useCallback(
 		(bpm: number) => {
 			if (playing?.source !== "strip" || !player.isPlaying) return;
@@ -582,11 +543,22 @@ export default function FretboardExplorer({
 		},
 		[playing, player],
 	);
+	// Stepping restarts once the tempo settles, rather than on every step of a held button.
+	const tempoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => {
+			if (tempoTimer.current) clearTimeout(tempoTimer.current);
+		},
+		[],
+	);
 	const handleTempo = useCallback(
 		(bpm: number) => {
 			setProgressionBpm(bpm);
-			// A drag restarts once, when it lets go, rather than on every step.
-			if (!tempoDragging.current) applyTempo(bpm);
+			if (tempoTimer.current) clearTimeout(tempoTimer.current);
+			tempoTimer.current = setTimeout(() => {
+				tempoTimer.current = null;
+				applyTempo(bpm);
+			}, TEMPO_SETTLE_MS);
 		},
 		[applyTempo],
 	);
@@ -595,11 +567,14 @@ export default function FretboardExplorer({
 	const runChoiceSelected = useCallback(
 		(choice: string) => {
 			setRunChoice(choice);
-			startRun(scaleRun(spec, playable, targetFor(choice)));
+			startRun(scaleRun(spec, playable, targetFor(choice), tune));
 		},
-		[startRun, spec, playable, targetFor],
+		[startRun, spec, playable, targetFor, tune],
 	);
-	const handleSlotHover = useCallback((slot: SlotNote | null) => piano.current?.highlight(slot?.midi ?? null), []);
+	const handleSlotHover = useCallback(
+		(slot: SlotNote | null) => piano.current?.highlight(slot ? slot.midi + tune : null),
+		[tune],
+	);
 
 	/**
 	 * Sound the current shape in a voice and animate it on both instruments.
@@ -608,7 +583,7 @@ export default function FretboardExplorer({
 	 */
 	const soundShape = useCallback(
 		(v: ChordVoicing, voice: "guitar" | "piano") => {
-			const pitches = shapePitches(v, capo);
+			const pitches = shapePitches(v, shift);
 			const slots = shapeSlots(shapeMarks(v, capo, 0, () => ""));
 			for (const midi of pitches) piano.current?.strike(midi);
 			fretboard.current?.strike(slots);
@@ -617,7 +592,7 @@ export default function FretboardExplorer({
 			if (lowest !== null) fretboard.current?.revealFret(lowest);
 			void playChord(pitches, voice).catch(() => undefined);
 		},
-		[capo, playChord],
+		[capo, shift, playChord],
 	);
 
 	// A press that cannot sound (samples still failing to load) is just silent.
@@ -628,11 +603,13 @@ export default function FretboardExplorer({
 				soundShape(shapeVoicing, "guitar");
 				return;
 			}
-			piano.current?.strike(slot.midi);
-			piano.current?.reveal(slot.midi);
-			void play(slot.midi).catch(() => undefined);
+			// The board reports a slot's pitch in standard tuning; the tuning moves what sounds.
+			const midi = slot.midi + tune;
+			piano.current?.strike(midi);
+			piano.current?.reveal(midi);
+			void play(midi).catch(() => undefined);
 		},
-		[shown, shapeVoicing, marks, soundShape, play],
+		[shown, shapeVoicing, marks, soundShape, play, tune],
 	);
 
 	// Scale mode: a piano key sounds its note and ripples every position of
@@ -645,7 +622,7 @@ export default function FretboardExplorer({
 			if (!inChords) {
 				if (!soundOn) return;
 				piano.current?.strike(midi);
-				const sounding = slotsSounding(midi, NECK);
+				const sounding = slotsSounding(midi, NECK, tune);
 				fretboard.current?.strike(sounding);
 				// The neck follows the key: the lowest position that sounds it.
 				const lowest = sounding.reduce<number | null>((low, s) => (low === null || s.fret < low ? s.fret : low), null);
@@ -659,15 +636,15 @@ export default function FretboardExplorer({
 			setPinned(null);
 			setHeld(null);
 			if (!soundOn) return;
-			const next = chordModeView(spec, capo, rootPc + interval);
-			void chordVoicing(next.shape, (list) => voicingNearest(list, midi, capo))
+			const next = chordModeView(spec, shift, rootPc + interval);
+			void chordVoicing(next.shape, (list) => voicingNearest(list, midi, shift))
 				.catch(() => null)
 				.then((v) => {
 					// The marks land on the next frame; strike after them so lit notes pulse.
 					if (v) requestAnimationFrame(() => soundShape(v, "piano"));
 				});
 		},
-		[inChords, soundOn, play, spec, capo, rootPc, soundShape],
+		[inChords, soundOn, play, spec, shift, tune, rootPc, soundShape],
 	);
 
 	// ── A held shape ──────────────────────────────────────────────────────────
@@ -699,7 +676,7 @@ export default function FretboardExplorer({
 			setPinned(null);
 			if (!soundOn) return;
 			// The shape to sound is the named chord itself, or the one the capo puts under it.
-			const shape = side === "shape" ? next : transposeChord(next.root, next.suffix, -capo);
+			const shape = side === "shape" ? next : transposeChord(next.root, next.suffix, -shift);
 			void chordVoicing(shape, byId(sameChord(shape, next) ? next.voicingId : null))
 				.catch(() => null)
 				.then((v) => {
@@ -707,7 +684,7 @@ export default function FretboardExplorer({
 					if (v) requestAnimationFrame(() => soundShape(v, "guitar"));
 				});
 		},
-		[soundOn, soundShape, capo],
+		[soundOn, soundShape, shift],
 	);
 	/** The readout's fields write chords the way the readout always has: "Am7", "E♭m". */
 	const fieldName = useCallback((root: string, suffix: string) => withGlyphs(chordName({ root, suffix })), []);
@@ -742,7 +719,7 @@ export default function FretboardExplorer({
 	// ── A hand position in Chords mode ────────────────────────────────────────
 	// The frame is on the fingered neck, so the chords searched for shapes are
 	// the fingered key's; their degrees are the heard key's degrees.
-	const shapeKeyRoot = SCALE_ROOTS[mod12(rootPc - capo)];
+	const shapeKeyRoot = SCALE_ROOTS[mod12(rootPc - shift)];
 	const fingeredChords = useMemo(() => keyChords({ root: shapeKeyRoot, scale }), [shapeKeyRoot, scale]);
 	const voicingsKey = `${shapeKeyRoot}/${scale}`;
 	const voicingsLoaded = keyVoicings?.key === voicingsKey;
@@ -810,30 +787,30 @@ export default function FretboardExplorer({
 	/** Pressing a numeral on the position: that chord, in that shape, strummed. */
 	const pickReachable = useCallback(
 		(r: ReachableChord) => {
-			setChordInterval(mod12(r.chord.rootPitchClass + capo - rootPc));
+			setChordInterval(mod12(r.chord.rootPitchClass + shift - rootPc));
 			setPinned(r);
 			setHeld(null);
 			if (!soundOn) return;
 			// The marks land on the next frame; strike after them so lit notes pulse.
 			requestAnimationFrame(() => soundShape(r.voicing, "guitar"));
 		},
-		[capo, rootPc, soundOn, soundShape],
+		[shift, rootPc, soundOn, soundShape],
 	);
 	/** Walk the position's chords in degree order, one bar each, once through. */
 	const walkPosition = useCallback(() => {
 		if (!soundOn || reachable.length === 0) return;
 		const token = ++playToken.current;
 		const table = new Map(reachable.map((r) => [chordKey(r.chord), r.voicing]));
-		const steps = reachable.map((r) => ({ interval: mod12(r.chord.rootPitchClass + capo - rootPc) }));
+		const steps = reachable.map((r) => ({ interval: mod12(r.chord.rootPitchClass + shift - rootPc) }));
 		void prepare(RUN_VOICE)
 			.then((ready) => {
 				if (!ready || token !== playToken.current) return;
-				const bars = resolveProgression(steps, spec, capo, (c) => table.get(chordKey(c)) ?? null);
+				const bars = resolveProgression(steps, spec, capo, (c) => table.get(chordKey(c)) ?? null, tune);
 				setPlaying({ bars, source: "position" });
 				player.play(progressionSteps(bars), barSeconds(progressionBpm), RUN_VOICE);
 			})
 			.catch(() => undefined);
-	}, [soundOn, reachable, capo, rootPc, prepare, spec, player, progressionBpm]);
+	}, [soundOn, reachable, capo, shift, tune, rootPc, prepare, spec, player, progressionBpm]);
 
 	/**
 	 * Scale mode: a key of the scale is named with its octave — A2, C3 — so the
@@ -851,65 +828,111 @@ export default function FretboardExplorer({
 		[scalePcs, noteName],
 	);
 
+	/** Written with glyphs already: never through MusicalText, which reads the b of "blues" as a flat. */
 	const keyName = `${withGlyphs(root)} ${SCALE_LABELS[scale].toLowerCase()}`;
 	const boardLabel = shown
 		? `${chordName(shown.shape)} shape on the fretboard`
 		: `${root} ${SCALE_LABELS[scale]} on the fretboard`;
 
-	return (
-		<div className="flex flex-col gap-3">
-			{/* Title: what you are looking at, and the one switch that silences it. */}
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<h2 className="font-mono text-[13px] text-ink" data-testid="view-title">
-					<MusicalText text={keyName} />
-					{capo > 0 && <span className="text-ink-dim"> · capo {capo}</span>}
-					{shown && (
-						<span className="text-denim-accent">
-							{" · "}
-							<MusicalText text={chordName(shown.sounding)} />
-							{shown.numeral && ` (${shown.numeral})`}
-						</span>
-					)}
-				</h2>
-			</div>
+	// ── Cards and the panel ───────────────────────────────────────────────────
+	// Both optional cards are shown until put away; the choice is restored after
+	// mount, like the sound switch, so the server and the first client render agree.
+	const [panels, setPanels] = useState<FretboardPanels>(DEFAULT_PANELS);
+	const [panelsRestored, setPanelsRestored] = useState(false);
+	useEffect(() => {
+		const stored = localStorage.getItem(PANELS_STORAGE_KEY);
+		queueMicrotask(() => {
+			setPanels(parsePanels(stored));
+			setPanelsRestored(true);
+		});
+	}, []);
+	useEffect(() => {
+		if (!panelsRestored) return;
+		localStorage.setItem(PANELS_STORAGE_KEY, JSON.stringify(panels));
+	}, [panels, panelsRestored]);
+	const showPanel = useCallback(
+		(which: keyof FretboardPanels, on: boolean) => setPanels((p) => ({ ...p, [which]: on })),
+		[],
+	);
+	/**
+	 * The card in use: the last one pressed or keyed into. Its icon fills in the module
+	 * colour and gives a squash, the way the nav marks the current page.
+	 */
+	const [currentCard, setCurrentCard] = useState<"piano" | "guitar" | "circle" | null>(null);
+	const cardProps = (key: "piano" | "guitar" | "circle") => ({
+		"data-current": currentCard === key || undefined,
+		onPointerDown: () => setCurrentCard(key),
+		onFocus: () => setCurrentCard(key),
+	});
+	/** Below 960px the panel is a sheet, opened from the dock. */
+	const [controlsOpen, setControlsOpen] = useState(false);
 
-			{/* Key and capo: what both modes work on, always reachable. */}
-			<div className="flex flex-wrap items-end gap-3 border border-line bg-panel p-3">
-				{/* The twelve keys on one row. Narrower than the row, the row scrolls
-				    sideways rather than wrapping: a second line of keys read as a
-				    second control. */}
-				<Field label="Key" className="w-full min-w-0 sm:w-auto">
-					<div
-						role="radiogroup"
-						aria-label="Key"
-						className="fp-thin-scroll flex max-w-full overflow-x-auto border border-line-strong"
-					>
-						{SCALE_ROOTS.map((r, i) => {
-							const on = r === root;
-							return (
-								<button
-									key={r}
-									type="button"
-									role="radio"
-									aria-checked={on}
-									onClick={() => setRoot(r)}
-									className={`min-w-9 shrink-0 px-2 py-1.5 font-mono text-[12px] transition-colors duration-(--dur-hover) ${
-										i > 0 ? "border-l border-line-strong" : ""
-									} ${on ? "bg-denim text-on-denim" : "text-ink hover:bg-denim-tint hover:text-denim-accent"}`}
-								>
-									<MusicalText text={r} />
-								</button>
-							);
-						})}
-					</div>
-				</Field>
+	/**
+	 * A chord of the key picked by its degree — a chip in the panel, a chord in the
+	 * circle's wedge: no key pressed, so the standard shape, strummed on the guitar.
+	 */
+	const pickDegree = useCallback(
+		(interval: number) => {
+			setChordInterval(mod12(interval));
+			setChordKeyMidi(null);
+			setPinned(null);
+			setHeld(null);
+			if (!soundOn) return;
+			const next = chordModeView(spec, shift, rootPc + interval);
+			void chordVoicing(next.shape, selectStandardVoicing)
+				.catch(() => null)
+				.then((v) => {
+					// The marks land on the next frame; strike after them so lit notes pulse.
+					if (v) requestAnimationFrame(() => soundShape(v, "guitar"));
+				});
+		},
+		[soundOn, spec, shift, rootPc, soundShape],
+	);
+	const changeMode = useCallback(
+		(next: ExplorerMode) => {
+			setMode(next);
+			clearChordBox();
+		},
+		[clearChordBox],
+	);
+	/** A key pressed on the circle: that tonic, the scale kept when it is of the ring's kind. */
+	const moveKey = useCallback(
+		(ring: "major" | "minor", index: number) => {
+			const next = keyFromCircle(spec, ring, index);
+			setRoot(next.root);
+			setScale(next.scale);
+		},
+		[spec],
+	);
 
-				<Field label="Scale">
+	/** The whole-neck run is sounding, so its button offers to stop it. */
+	const neckPlaying = !inChords && player.isPlaying && runTarget.kind === "neck";
+	/** The major key the scale is spelled in: the circle's wedge, named. */
+	const parentKey = withGlyphs(SCALE_ROOTS[circlePitchClass("major", keyIndex(spec))]);
+	const isParent = scale === "major";
+	const noVoicing = shown !== null && shapeVoicing === null && voicing !== null && sameChord(voicing.chord, shown.shape);
+	/** Whether a chip names the chord on show: a picked degree, not a typed shape or a sounding bar. */
+	const isPicked = (c: KeyChord) => !!shown && !held && !playingBar && shown.sounding.rootPitchClass === c.rootPitchClass;
+
+	// ── The panel: what the instruments show ──────────────────────────────────
+	const controls = (
+		<>
+			<section className="fbx-sec" aria-label="Key and scale">
+				<h2 className="fbx-h">Key</h2>
+				<div className="fbx-keys" role="radiogroup" aria-label="Key">
+					{SCALE_ROOTS.map((r) => (
+						<ChoiceChip key={r} on={r === root} onChoose={() => setRoot(r)}>
+							<MusicalText text={r} />
+						</ChoiceChip>
+					))}
+				</div>
+				<label className="fbx-fl">
+					<span className="fbx-lbl">Scale</span>
 					<select
 						aria-label="Scale"
 						value={scale}
 						onChange={(e) => setScale(e.target.value as ScaleType)}
-						className={SELECT_CLASS}
+						className="gp-input fbx-select"
 					>
 						{SCALE_TYPES.map((t) => (
 							<option key={t} value={t}>
@@ -917,410 +940,584 @@ export default function FretboardExplorer({
 							</option>
 						))}
 					</select>
-				</Field>
-
-				<Field label="Mode">
-					<Segmented
-						options={MODES}
-						value={mode}
-						onChange={(m) => {
-							setMode(m);
-							clearChordBox();
-						}}
-						ariaLabel="Mode"
-					/>
-				</Field>
-			</div>
-
-			{/* The two instruments, adjacent: the same key seen twice. */}
-			<div className="flex flex-col gap-3 border border-line bg-surface p-3 sm:p-4">
-				{/* The card's own switch: everything below it is what makes sound. */}
-				<div className="flex items-center justify-end gap-2">
-					<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Sound</span>
-					<Volume2 className="size-3.5 shrink-0 text-ink-dim" strokeWidth={1.5} />
-					{/* The wait is announced in a toast; the rocker only breathes. */}
-					<Rocker checked={soundOn} onChange={setSoundOn} loading={soundLoading} ariaLabel="Sound" />
+				</label>
+				<div className="fbx-fl">
+					<span className="fbx-lbl">Mode</span>
+					<Segmented options={MODES} value={mode} onChange={changeMode} label="Mode" full />
 				</div>
+			</section>
 
-				{/* In Chords mode the keyboard is the chord picker, so the chord it
-				    is picking is named over it. */}
-				{shown && (
-					<div className="text-center" data-testid="chord-readout">
-						{/* "D · C shape", both halves searchable: the chord heard, and with a
-						    capo the shape that holds it. A key press fills them; typing into
-						    one moves the other the capo's distance. */}
-						<div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-mono text-[13px] text-ink">
-							<ChordSearchSelect
-								chord={{ root: shown.sounding.root, suffix: shown.sounding.suffix }}
-								onChange={(ref) => handleHeld(ref, "sounding")}
-								index={chordIndex}
-								shapeCorpus={shapeCorpus}
-								ariaLabel="Chord"
-								format={fieldName}
-							/>
-							{shown.numeral && (
-								<>
-									<span className="text-ink-faint">·</span>
-									<span className="text-denim-accent" data-testid="numeral">
-										{shown.numeral}
-									</span>
-								</>
-							)}
-							{capo > 0 && (
-								<>
-									<span className="text-ink-faint">·</span>
-									<ChordSearchSelect
-										chord={{ root: shown.shape.root, suffix: shown.shape.suffix }}
-										onChange={(ref) => handleHeld(ref, "shape")}
-										index={chordIndex}
-										shapeCorpus={shapeCorpus}
-										ariaLabel="Shape"
-										format={fieldName}
-									/>
-									<span className="text-ink-dim">shape</span>
-								</>
-							)}
-							{shapeVoicing === null && voicing && sameChord(voicing.chord, shown.shape) && (
-								<span className="text-ink-faint" data-testid="no-voicing">
-									· no voicing
-								</span>
-							)}
-						</div>
-						{/* What the chord is made of: each note the shape sounds, in the
-						    key's spelling, with which degree of the chord it is. */}
-						<div className="mt-0.5 font-mono text-[10px] tracking-[0.08em] text-ink-faint">
-							{chordTones.map((tone, i) => (
-								<span key={`${tone.name}-${i}`}>
-									{i > 0 && <span className="mx-1">·</span>}
-									<MusicalText text={tone.name} />
-									<span className="text-denim-accent">
-										{" ("}
-										<MusicalText text={tone.degree} />
-										{")"}
-									</span>
-								</span>
+			{inChords ? (
+				<>
+					<section className="fbx-sec" aria-label="Chord">
+						<h2 className="fbx-h">Chord</h2>
+						<div className="fbx-row" role="group" aria-label="Chords in the key">
+							{degreeChords.map((c) => (
+								<Chip
+									key={c.numeral}
+									pressed={isPicked(c)}
+									onClick={() => pickDegree(c.rootPitchClass - rootPc)}
+									className="fbx-deg"
+								>
+									<b>{c.numeral}</b>
+									<small>
+										<MusicalText text={chordName(c)} />
+									</small>
+								</Chip>
 							))}
 						</div>
-					</div>
-				)}
-
-				<InstrumentHeader
-					icon={<Piano className="size-3.5" strokeWidth={1.5} />}
-					name="Piano"
-					label="Piano volume"
-					value={volumes.piano}
-					onChange={(v) => setVolume("piano", v)}
-					disabled={!soundOn}
-				/>
-				<PianoKeyboard
-					ref={piano}
-					keys={PIANO_61}
-					selectedPitchClass={shown ? shown.sounding.rootPitchClass : rootPc}
-					// A scale is a set of names, uncovered one octave at a time under
-					// the pointer; a chord is the six notes its shape actually sounds.
-					tonePitchClasses={shown ? undefined : scalePcs}
-					toneMidis={shown && shapeVoicing ? shapePitches(shapeVoicing, capo) : undefined}
-					range={GUITAR_RANGE}
-					onSelect={handleKeySelect}
-					labelFor={inChords ? chordKeyLabel : scaleKeyLabel}
-					dimmed={inChords ? keyDimmed : undefined}
-					ariaLabel={inChords ? "Chord" : "Piano"}
-				/>
-
-				<InstrumentHeader
-					icon={<Guitar className="size-3.5" strokeWidth={1.5} />}
-					name="Guitar"
-					label="Guitar volume"
-					value={volumes.guitar}
-					onChange={(v) => setVolume("guitar", v)}
-					disabled={!soundOn}
-				>
-					{/* Both belong to the neck rather than to the key: where the capo
-					    is, and what the dots say. */}
-					<span className="flex items-center gap-1.5">
-						<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Capo</span>
-						<Rocker checked={capo > 0} onChange={(on) => setCapo(on ? DEFAULT_CAPO : 0)} ariaLabel="Capo" />
-					</span>
-					<Segmented options={LABEL_MODES} value={labelChoice} onChange={setLabelChoice} ariaLabel="Labels" />
-				</InstrumentHeader>
-				<div className="select-none">
-					<Fretboard
-						ref={fretboard}
-						marks={marks}
-						fromFret={NECK.fromFret}
-						toFret={NECK.toFret}
-						capo={capo}
-						onCapoChange={(fret) => {
-							setCapo(fret);
-							// Dragged past the edge, the capo would vanish under the scroll.
-							fretboard.current?.revealFret(fret);
-						}}
-						maxCapo={STRUM_CAPO_MAX}
-						highlight={inChords ? chordBox : runBox}
-						runSlots={runBox ? runNotes : undefined}
-						onStringPlay={
-							inChords
-								? undefined
-								: (s) => (playingString === s ? player.stop() : runChoiceSelected(`string:${s}`))
-						}
-						playingString={playingString}
-						// The same frame in both modes: a run's box in Scale mode, the
-						// hand position's in Chords mode.
-						onPositionPick={
-							inChords
-								? pickChordBox
-								: (fret) => runChoiceSelected(`pick:${fret}-${Math.min(NECK.toFret, fret + BOX_FRETS - 1)}`)
-						}
-						onHighlightResize={
-							inChords
-								? chordBox
-									? resizeChordBox
-									: undefined
-								: runBox
-									? (to) => setRunChoice(`pick:${runBox.fromFret}-${to}`)
-									: undefined
-						}
-						onHighlightPlay={
-							inChords
-								? chordBox && reachable.length > 0
-									? () => (positionPlaying ? stopPlayback() : walkPosition())
-									: undefined
-								: runBox
-									? () => (player.isPlaying ? player.stop() : startRun(scaleRun(spec, playable, runTarget)))
-									: undefined
-						}
-						onHighlightClear={
-							inChords
-								? chordBox
-									? clearChordBox
-									: undefined
-								: runBox
-									? () => {
-											setRunChoice("neck");
-											player.stop();
-										}
-									: undefined
-						}
-						highlightPlaying={inChords ? positionPlaying : player.isPlaying && runTarget.kind === "box"}
-						label={boardLabel}
-						onSlotPress={handleSlotPress}
-						onSlotHover={handleSlotHover}
-						pressable={soundOn}
-					/>
-					<ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1" aria-hidden="true">
-						{LEGEND.map(({ emphasis, tone, label }) => (
-							<li
-								key={label}
-								className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim"
-							>
-								<svg width="18" height="18" viewBox="0 0 18 18" className="shrink-0">
-									<g className="fb-mark" data-emphasis={emphasis} data-tone={tone}>
-										<circle className="fb-ring" cx="9" cy="9" r="8" />
-										<circle className="fb-dot" cx="9" cy="9" r="5.5" strokeWidth={1.25} />
-									</g>
-								</svg>
-								{label}
-							</li>
-						))}
-					</ul>
-				</div>
-			</div>
-
-			{/* Mode panel — Chords: a progression written in degrees over the key.
-			    The strip stores intervals, so a key change transposes every bar
-			    and leaves the numerals where they are. */}
-			{inChords && (
-				<div className="flex flex-col gap-3 border border-line bg-panel p-3" data-testid="progression-panel">
-					{/* The card's name, in the instruments' heading style: what this card is for. */}
-					<h3 className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-						<ListMusic className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-						Progression
-					</h3>
-
-					{/* The hand position: which of the key's chords have a shape inside
-					    the frame. Pressing one lights that shape and strums it. */}
-					{chordBox && (
-						<Field label={`Position ${chordBox.fromFret}–${chordBox.toFret}`}>
-							<div className="flex flex-wrap items-center gap-2" data-testid="position-chords">
-								{!voicingsLoaded ? (
-									<span className="font-mono text-[11px] text-ink-faint">Looking for shapes…</span>
-								) : (
-									<>
-										{reachable.length < MIN_REACHABLE && (
-											<span className="font-mono text-[11px] text-ink-faint" data-testid="position-note">
-												{reachable.length === 0
-													? "Nothing fits here."
-													: `Only ${reachable[0].chord.numeral} fits here.`}
-											</span>
-										)}
-										{reachable.map((r) => {
-											const on = !playingBar && pinned?.voicing.id === r.voicing.id;
-											const heard = chordsByPc[mod12(r.chord.rootPitchClass + capo)];
-											return (
-												<button
-													key={r.chord.numeral}
-													type="button"
-													aria-label={`Play ${r.chord.numeral} here`}
-													aria-pressed={on}
-													onClick={() => pickReachable(r)}
-													className={`flex flex-col items-center border px-2.5 py-1 font-mono transition-colors duration-(--dur-hover) ${
-														on
-															? "border-denim bg-denim-tint text-denim-accent"
-															: "border-line-strong text-ink hover:bg-denim-tint hover:text-denim-accent"
-													}`}
-												>
-													<span className="text-[12px]">{r.chord.numeral}</span>
-													<span className="text-[10px] text-ink-dim">
-														<MusicalText text={chordName(heard)} />
-													</span>
-												</button>
-											);
-										})}
-									</>
-								)}
-							</div>
-						</Field>
-					)}
-
-					<div className="flex flex-wrap items-end gap-x-5 gap-y-3">
-						<Field label="Add a bar">
-							<div className="flex flex-wrap items-center gap-1" role="group" aria-label="Degrees">
-								{degreeChords.map((c) => (
-									<button
-										key={c.numeral}
-										type="button"
-										aria-label={`Add ${c.numeral}`}
-										disabled={progression.length >= MAX_BARS}
-										onClick={() => setProgression((p) => appendStep(p, c.rootPitchClass - rootPc))}
-										className="min-w-9 border border-line-strong px-2 py-1.5 font-mono text-[12px] text-ink transition-colors duration-(--dur-hover) hover:bg-denim-tint hover:text-denim-accent disabled:opacity-40"
-									>
-										{c.numeral}
-									</button>
-								))}
-								<span className="mx-1 text-ink-faint" aria-hidden="true">
-									·
-								</span>
-								{chromaticChords.map((c) => (
-									<button
-										key={c.numeral}
-										type="button"
-										aria-label={`Add ${c.numeral}`}
-										disabled={progression.length >= MAX_BARS}
-										onClick={() => setProgression((p) => appendStep(p, c.rootPitchClass - rootPc))}
-										className="min-w-8 border border-line px-1.5 py-1.5 font-mono text-[11px] text-ink-dim transition-colors duration-(--dur-hover) hover:bg-denim-tint hover:text-denim-accent disabled:opacity-40"
-									>
-										{c.numeral}
-									</button>
-								))}
-							</div>
-						</Field>
-						<Field label="Presets">
-							<div className="flex flex-wrap gap-1" role="group" aria-label="Presets">
-								{PROGRESSION_PRESETS.map((preset) => (
-									<button
-										key={preset.name}
-										type="button"
-										onClick={() => setProgression(presetSteps(preset, spec))}
-										// Not uppercased: the case of a numeral is its quality.
-										className="border border-line-strong px-2 py-1.5 font-mono text-[11px] tracking-[0.04em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent"
-									>
-										{preset.name}
-									</button>
-								))}
-							</div>
-						</Field>
-					</div>
-
-					{/* The strip: numerals over chord names, the sounding bar lit. */}
-					<div className="flex flex-wrap items-center gap-2" data-testid="progression-strip">
-						{stripBars.length === 0 ? (
-							<span className="font-mono text-[11px] text-ink-faint">Press a degree to add a bar.</span>
-						) : (
-							stripBars.map((bar, i) => {
-								const current = progressionPlaying && player.currentIndex === i;
-								return (
-									<div
-										key={i}
-										data-bar={i}
-										data-current={current || undefined}
-										className={`flex items-stretch border transition-colors duration-(--dur-hover) ${
-											current ? "border-denim bg-denim-tint" : "border-line-strong"
-										}`}
-									>
-										<div className="flex flex-col items-center px-2.5 py-1 font-mono">
-											<span className={`text-[12px] ${current ? "text-denim-accent" : "text-ink"}`}>
-												{bar.sounding.numeral}
-											</span>
-											<span className="text-[10px] text-ink-dim">
-												<MusicalText text={chordName(bar.sounding)} />
-											</span>
-										</div>
-										<button
-											type="button"
-											aria-label={`Remove bar ${i + 1}`}
-											onClick={() => setProgression((p) => removeStep(p, i))}
-											className="border-l border-line-strong px-1 text-ink-faint transition-colors duration-(--dur-hover) hover:text-denim-accent"
-										>
-											<X className="size-3" strokeWidth={1.5} />
-										</button>
-									</div>
-								);
-							})
-						)}
-					</div>
-
-					{/* Transport: play or stop the loop, and its tempo. */}
-					<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-						<button
-							type="button"
-							aria-label={progressionPlaying ? "Stop progression" : "Play progression"}
-							disabled={!soundOn || progression.length === 0}
-							onClick={() => (progressionPlaying ? stopPlayback() : startProgression())}
-							className="flex h-[30px] items-center gap-1.5 border border-denim bg-denim px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-on-denim transition-colors duration-(--dur-hover) hover:bg-denim-accent disabled:opacity-40"
-						>
-							{progressionPlaying ? (
-								<Square className="size-3" strokeWidth={2.5} />
-							) : (
-								<Play className="size-3" strokeWidth={2.5} />
-							)}
-							{progressionPlaying ? "Stop" : "Play"}
-						</button>
-						<div className="flex items-center gap-2">
-							<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">Tempo</span>
-							<div className="w-36">
-								<Fader
-									min={PROGRESSION_BPM.min}
-									max={PROGRESSION_BPM.max}
-									step={1}
-									value={progressionBpm}
-									onValue={handleTempo}
-									onDragStart={() => {
-										tempoDragging.current = true;
-									}}
-									onDragEnd={() => {
-										tempoDragging.current = false;
-										applyTempo(progressionBpm);
-									}}
-									disabled={!soundOn}
-									ariaLabel="Tempo"
-								/>
-							</div>
-							<span className="font-mono text-[12px] tabular-nums text-ink" data-testid="tempo-readout">
-								{progressionBpm} BPM
-							</span>
+						<div className="fbx-row" role="group" aria-label="Chords outside the key">
+							{chromaticChords.map((c) => (
+								<Chip
+									key={c.numeral}
+									pressed={isPicked(c)}
+									onClick={() => pickDegree(c.rootPitchClass - rootPc)}
+									className="fbx-deg"
+									data-outside=""
+								>
+									<b>{c.numeral}</b>
+									<small>
+										<MusicalText text={chordName(c)} />
+									</small>
+								</Chip>
+							))}
 						</div>
-						{progression.length > 0 && (
-							<button
-								type="button"
+						<p className="fbx-meta">Or press a key on the piano, a chord on the circle, or type any chord into the field above.</p>
+					</section>
+					{/* A progression written in degrees over the key. The strip stores
+					    intervals, so a key change transposes every bar and leaves the
+					    numerals where they are. */}
+					<section className="fbx-sec" aria-label="Progression" data-testid="progression-panel">
+						<h2 className="fbx-h">Progression</h2>
+						<p className="fbx-meta">
+							{progression.length} of {MAX_BARS} bars · one strum a bar, looped
+						</p>
+						<div className="fbx-strip" data-testid="progression-strip">
+							{stripBars.length === 0 ? (
+								<span className="fbx-meta">Add a degree below to start a strip.</span>
+							) : (
+								stripBars.map((bar, i) => (
+									<StripBar
+										key={i}
+										index={i}
+										numeral={bar.sounding.numeral}
+										chord={chordName(bar.sounding)}
+										current={progressionPlaying && player.currentIndex === i}
+										onRemove={() => setProgression((p) => removeStep(p, i))}
+									/>
+								))
+							)}
+						</div>
+						<div className="fbx-prow">
+							<span className="fbx-lbl">Add</span>
+							<div className="fbx-row" role="group" aria-label="Degrees">
+								{degreeChords.map((c) => (
+									<Chip
+										key={c.numeral}
+										aria-label={`Add ${c.numeral}`}
+										disabled={progression.length >= MAX_BARS}
+										onClick={() => setProgression((p) => appendStep(p, c.rootPitchClass - rootPc))}
+									>
+										{c.numeral}
+									</Chip>
+								))}
+								{chromaticChords.map((c) => (
+									<Chip
+										key={c.numeral}
+										aria-label={`Add ${c.numeral}`}
+										disabled={progression.length >= MAX_BARS}
+										onClick={() => setProgression((p) => appendStep(p, c.rootPitchClass - rootPc))}
+										data-outside=""
+									>
+										{c.numeral}
+									</Chip>
+								))}
+							</div>
+						</div>
+						<div className="fbx-prow">
+							<span className="fbx-lbl">Presets</span>
+							<div className="fbx-row" role="group" aria-label="Presets">
+								{PROGRESSION_PRESETS.map((preset) => (
+									<Chip key={preset.name} onClick={() => setProgression(presetSteps(preset, spec))}>
+										{preset.name}
+									</Chip>
+								))}
+							</div>
+						</div>
+						<div className="fbx-transport">
+							<PlayPick
+								playing={progressionPlaying}
+								size="sm"
+								aria-label={progressionPlaying ? "Stop progression" : "Play progression"}
+								disabled={!soundOn || progression.length === 0}
+								onClick={() => (progressionPlaying ? stopPlayback() : startProgression())}
+							/>
+							<Stepper
+								label="Tempo"
+								value={progressionBpm}
+								min={PROGRESSION_BPM.min}
+								max={PROGRESSION_BPM.max}
+								unit="BPM"
+								tap
+								disabled={!soundOn}
+								onChange={handleTempo}
+							/>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="fbx-clear"
+								disabled={progression.length === 0}
 								onClick={() => setProgression([])}
-								className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent"
 							>
 								Clear
-							</button>
+							</Button>
+						</div>
+					</section>
+					<section className="fbx-sec" aria-label="Hand position">
+						<h2 className="fbx-h">Hand position</h2>
+						{chordBox ? (
+							<>
+								<p className="fbx-meta">
+									Frets {chordBox.fromFret}–{chordBox.toFret}
+								</p>
+								<div className="fbx-row" data-testid="position-chords">
+									{!voicingsLoaded ? (
+										<span className="fbx-meta">Looking for shapes…</span>
+									) : (
+										<>
+											{reachable.length < MIN_REACHABLE && (
+												<span className="fbx-meta" data-testid="position-note">
+													{reachable.length === 0
+														? "Nothing fits here."
+														: `Only ${reachable[0].chord.numeral} fits here.`}
+												</span>
+											)}
+											{reachable.map((r) => {
+												const on = !playingBar && pinned?.voicing.id === r.voicing.id;
+												const heard = chordsByPc[mod12(r.chord.rootPitchClass + shift)];
+												return (
+													<Chip
+														key={r.chord.numeral}
+														pressed={on}
+														aria-label={`Play ${r.chord.numeral} here`}
+														onClick={() => pickReachable(r)}
+														className="fbx-deg"
+													>
+														<span>{r.chord.numeral}</span>
+														<span className="fbx-deg-name">
+															<MusicalText text={chordName(heard)} />
+														</span>
+													</Chip>
+												);
+											})}
+										</>
+									)}
+								</div>
+								<div className="fbx-row">
+									<Button
+										variant="secondary"
+										size="sm"
+										disabled={!soundOn || reachable.length === 0}
+										onClick={() => (positionPlaying ? stopPlayback() : walkPosition())}
+									>
+										{positionPlaying ? <Square aria-hidden /> : <Play aria-hidden />}
+										{positionPlaying ? "Stop" : "Play them in turn"}
+									</Button>
+									<Button variant="ghost" size="sm" onClick={clearChordBox}>
+										Clear the frame
+									</Button>
+								</div>
+							</>
+						) : (
+							<p className="fbx-meta">
+								Right-click or long-press a fret on the neck to frame five frets there, and see which of the key&apos;s chords fit.
+							</p>
 						)}
+					</section>
+				</>
+			) : (
+				<section className="fbx-sec" aria-label="Play the scale">
+					<h2 className="fbx-h">Play the scale</h2>
+					<div className="fbx-row">
+						<Button
+							disabled={!soundOn}
+							onClick={() => (neckPlaying ? player.stop() : runChoiceSelected("neck"))}
+						>
+							{neckPlaying ? <Square aria-hidden /> : <Play aria-hidden />}
+							{neckPlaying ? "Stop" : "Whole neck"}
+						</Button>
+					</div>
+					<span className="fbx-lbl">Hand positions</span>
+					<div className="fbx-row" role="group" aria-label="Hand positions">
+						{boxes.map((box, i) => (
+							<Chip
+								key={box.fromFret}
+								pressed={runChoice === `box:${i}`}
+								onClick={() => runChoiceSelected(`box:${i}`)}
+							>
+								{box.fromFret === 0 ? "Open" : `Fret ${box.fromFret}`}
+							</Chip>
+						))}
+					</div>
+					<p className="fbx-meta">
+						A string&apos;s name on the neck runs that string. Right-click or long-press a fret to frame five frets of your own.
+					</p>
+				</section>
+			)}
+
+			<section className="fbx-sec" aria-label="Display">
+				<h2 className="fbx-h">Display</h2>
+				<div className="fbx-fl">
+					<span className="fbx-lbl">Labels on the dots</span>
+					<Segmented options={LABEL_MODES} value={labelChoice} onChange={setLabelChoice} label="Labels" full />
+				</div>
+				<div className="fbx-line">
+					<Switch
+						label="Capo"
+						aria-label="Capo"
+						checked={capo > 0}
+						onCheckedChange={(on) => setCapo(on ? DEFAULT_CAPO : 0)}
+					/>
+					<Stepper
+						label="Capo fret"
+						size="sm"
+						value={capo > 0 ? capo : DEFAULT_CAPO}
+						min={1}
+						max={STRUM_CAPO_MAX}
+						disabled={capo === 0}
+						onChange={setCapo}
+					/>
+				</div>
+			</section>
+
+			<section className="fbx-sec" aria-label="Sound">
+				<h2 className="fbx-h">Sound</h2>
+				<Switch label="Sound on" aria-label="Sound" checked={soundOn} onCheckedChange={setSoundOn} />
+				<label className="fbx-vol">
+					<span className="fbx-lbl">Piano</span>
+					<Slider
+						label="Piano volume"
+						value={Math.round(volumes.piano * 100)}
+						onChange={(v) => setVolume("piano", v / 100)}
+						disabled={!soundOn}
+					/>
+				</label>
+				<label className="fbx-vol">
+					<span className="fbx-lbl">Guitar</span>
+					<Slider
+						label="Guitar volume"
+						value={Math.round(volumes.guitar * 100)}
+						onChange={(v) => setVolume("guitar", v / 100)}
+						disabled={!soundOn}
+					/>
+				</label>
+			</section>
+		</>
+	);
+
+	return (
+		<div className="fbx">
+			<div className="fbx-shell">
+				<div className="fbx-stage">
+					<div className="fbx-stage-in gp-rise">
+						<header className="fbx-head">
+							<div className="fbx-head-row">
+								<h1 className="fbx-title">Fretboard</h1>
+								{/* The two cards that can be put away, brought back from here. */}
+								<div className="fbx-cardtoggles" role="group" aria-label="Cards">
+									<CardToggle
+										icon={<Piano />}
+										label="Show the piano"
+										on={panels.piano}
+										onChange={(on) => showPanel("piano", on)}
+									/>
+									<CardToggle
+										icon={<CircleDot />}
+										label="Show the circle of fifths"
+										on={panels.circle}
+										onChange={(on) => showPanel("circle", on)}
+									/>
+								</div>
+							</div>
+							<p className="fbx-meta">See a scale across the neck, then lay a chord over it to find the safe notes.</p>
+						</header>
+
+						{/* What is showing: the key, and in Chords mode the chord, both searchable. */}
+						<section className="fbx-card fbx-now" aria-label="Now showing">
+							<div className="fbx-now-key">
+								<h2 className="fbx-key" data-testid="view-title">
+									{keyName}
+								</h2>
+								{capo > 0 && (
+									<span className="fbx-tag" data-testid="capo-tag">
+										Capo {capo}
+									</span>
+								)}
+								{tune !== 0 && (
+									<span className="fbx-tag" data-testid="tuning-tag">
+										{TUNING_LABELS[tuning]}
+									</span>
+								)}
+								<ScaleSteps scale={scale} />
+							</div>
+							{shown ? (
+								<div className="fbx-readout" data-testid="chord-readout">
+									{/* "D · V · C shape": the chord heard and, with a capo, the shape
+									    that holds it. A key press fills them; typing into one moves
+									    the other the capo's distance. */}
+									<div className="fbx-readout-row">
+										<ChordSearchSelect
+											chord={{ root: shown.sounding.root, suffix: shown.sounding.suffix }}
+											onChange={(ref) => handleHeld(ref, "sounding")}
+											index={chordIndex}
+											shapeCorpus={shapeCorpus}
+											ariaLabel="Chord"
+											format={fieldName}
+											skin="candy"
+										/>
+										{shown.numeral && (
+											<span className="fbx-num" data-testid="numeral">
+												{shown.numeral}
+											</span>
+										)}
+										{shift !== 0 && (
+											<span className="fbx-shape">
+												<ChordSearchSelect
+													chord={{ root: shown.shape.root, suffix: shown.shape.suffix }}
+													onChange={(ref) => handleHeld(ref, "shape")}
+													index={chordIndex}
+													shapeCorpus={shapeCorpus}
+													ariaLabel="Shape"
+													format={fieldName}
+													skin="candy"
+												/>
+												<span className="fbx-meta">shape</span>
+											</span>
+										)}
+										{noVoicing && (
+											<span className="fbx-meta" data-testid="no-voicing">
+												No shape in the library
+											</span>
+										)}
+									</div>
+									{/* What the chord is made of: each note the shape sounds, in the
+									    key's spelling, with which degree of the chord it is. */}
+									<ToneList tones={chordTones} label="Chord tones" testId="chord-tones" />
+								</div>
+							) : (
+								<ToneList
+									tones={scalePcs.map((pc) => ({ name: noteName(pc), degree: degreeLabel(pc - rootPc) }))}
+									label="Scale tones"
+								/>
+							)}
+						</section>
+
+						{panels.piano && (
+							<section className="fbx-card" aria-label="Piano" {...cardProps("piano")}>
+								<CardHead
+									icon={<Piano />}
+									title="Piano"
+									hint={inChords ? "A key picks the chord on its degree" : "A key sounds its note and finds it on the neck"}
+									onClose={() => showPanel("piano", false)}
+									closeLabel="Hide the piano"
+								/>
+								<PianoKeyboard
+									ref={piano}
+									keys={PIANO_61}
+									selectedPitchClass={shown ? shown.sounding.rootPitchClass : rootPc}
+									// A scale is a set of names, uncovered one octave at a time under
+									// the pointer; a chord is the six notes its shape actually sounds.
+									tonePitchClasses={shown ? undefined : scalePcs}
+									toneMidis={shown && shapeVoicing ? shapePitches(shapeVoicing, shift) : undefined}
+									range={range}
+									onSelect={handleKeySelect}
+									labelFor={inChords ? chordKeyLabel : scaleKeyLabel}
+									dimmed={inChords ? keyDimmed : undefined}
+									ariaLabel={inChords ? "Chord" : "Piano"}
+								/>
+							</section>
+						)}
+
+						<section className="fbx-card" aria-label="Guitar" {...cardProps("guitar")}>
+							<CardHead
+								icon={<Guitar />}
+								title="Guitar"
+								hint={
+									inChords
+										? "A note of the shape strums it · drag the capo along the neck"
+										: "A dot sounds its note · drag the capo along the neck"
+								}
+								control={<TuningPicker value={tuning} onChange={setTuning} />}
+							/>
+							<div className="select-none">
+								<Fretboard
+									ref={fretboard}
+									marks={marks}
+									fromFret={NECK.fromFret}
+									toFret={NECK.toFret}
+									capo={capo}
+									stringNames={strings}
+									onCapoChange={(fret) => {
+										setCapo(fret);
+										// Dragged past the edge, the capo would vanish under the scroll.
+										fretboard.current?.revealFret(fret);
+									}}
+									maxCapo={STRUM_CAPO_MAX}
+									highlight={inChords ? chordBox : runBox}
+									runSlots={runBox ? runNotes : undefined}
+									onStringPlay={
+										inChords
+											? undefined
+											: (s) => (playingString === s ? player.stop() : runChoiceSelected(`string:${s}`))
+									}
+									playingString={playingString}
+									// The same frame in both modes: a run's box in Scale mode, the
+									// hand position's in Chords mode.
+									onPositionPick={
+										inChords
+											? pickChordBox
+											: (fret) => runChoiceSelected(`pick:${fret}-${Math.min(NECK.toFret, fret + BOX_FRETS - 1)}`)
+									}
+									onHighlightResize={
+										inChords
+											? chordBox
+												? resizeChordBox
+												: undefined
+											: runBox
+												? (to) => setRunChoice(`pick:${runBox.fromFret}-${to}`)
+												: undefined
+									}
+									onHighlightPlay={
+										inChords
+											? chordBox && reachable.length > 0
+												? () => (positionPlaying ? stopPlayback() : walkPosition())
+												: undefined
+											: runBox
+												? () => (player.isPlaying ? player.stop() : startRun(scaleRun(spec, playable, runTarget, tune)))
+												: undefined
+									}
+									onHighlightClear={
+										inChords
+											? chordBox
+												? clearChordBox
+												: undefined
+											: runBox
+												? () => {
+														setRunChoice("neck");
+														player.stop();
+													}
+												: undefined
+									}
+									highlightPlaying={inChords ? positionPlaying : player.isPlaying && runTarget.kind === "box"}
+									label={boardLabel}
+									onSlotPress={handleSlotPress}
+									onSlotHover={handleSlotHover}
+									pressable={soundOn}
+								/>
+								<ul className="fbx-legend" aria-hidden="true">
+									{LEGEND.filter((l) => l.mode === "both" || l.mode === mode).map(({ emphasis, tone, label }) => (
+										<li key={label}>
+											<svg width="18" height="18" viewBox="0 0 18 18">
+												<g className="fb-mark" data-emphasis={emphasis} data-tone={tone}>
+													<circle className="fb-ring" cx="9" cy="9" r="8" />
+													<circle className="fb-dot" cx="9" cy="9" r="6.5" strokeWidth={1.25} />
+												</g>
+											</svg>
+											{label}
+										</li>
+									))}
+								</ul>
+							</div>
+						</section>
+
+						{panels.circle && (
+							<section className="fbx-card" aria-label="Circle of fifths" {...cardProps("circle")}>
+								<CardHead
+									icon={<CircleDot />}
+									title="Circle of fifths"
+									hint={inChords ? "A lit chord plays · any other key moves there" : "A key moves the page to it"}
+									onClose={() => showPanel("circle", false)}
+									closeLabel="Hide the circle of fifths"
+								/>
+								<div className="fbx-cof-body">
+									<CircleOfFifths
+										spec={spec}
+										chord={
+											shown ? { rootPitchClass: shown.sounding.rootPitchClass, suffix: shown.sounding.suffix } : null
+										}
+										picking={inChords}
+										onKey={moveKey}
+										onChord={(pc) => pickDegree(pc - rootPc)}
+									/>
+									<div className="fbx-cof-side">
+										<p className="fbx-cof-lead">
+											{isParent ? (
+												<>
+													The shaded wedge is the seven chords of <MusicalText text={parentKey} /> major.
+												</>
+											) : (
+												<>
+													{keyName} is spelled in <MusicalText text={parentKey} /> major: the
+													shaded wedge is its seven chords.
+												</>
+											)}
+										</p>
+										<dl className="fbx-cof-key">
+											<div>
+												<dt>Outside</dt>
+												<dd>The twelve major keys, a fifth apart.</dd>
+											</div>
+											<div>
+												<dt>Middle</dt>
+												<dd>Each key&apos;s relative minor.</dd>
+											</div>
+											<div>
+												<dt>Inside</dt>
+												<dd>The diminished chord on its seventh.</dd>
+											</div>
+										</dl>
+									</div>
+								</div>
+							</section>
+						)}
+
 					</div>
 				</div>
-			)}
+
+				<aside className="fbx-panel" aria-label="Controls">
+					{controls}
+				</aside>
+			</div>
+
+			{/* Below 960px: what is showing, and the panel one press away. */}
+			<div className="fbx-dock">
+				<div className="fbx-dock-sum">
+					<b>
+						{keyName}
+						{capo > 0 && ` · capo ${capo}`}
+						{tune !== 0 && ` · ${TUNING_LABELS[tuning].toLowerCase()}`}
+					</b>
+					<span>
+						{shown ? (
+							<>
+								<MusicalText text={chordName(shown.sounding)} />
+								{shown.numeral && ` · ${shown.numeral}`}
+							</>
+						) : (
+							`${MODES.find((m) => m.value === mode)?.label} mode`
+						)}
+					</span>
+				</div>
+				<Button onClick={() => setControlsOpen(true)}>
+					<SlidersHorizontal aria-hidden />
+					Controls
+				</Button>
+			</div>
+			<Sheet open={controlsOpen} onOpenChange={setControlsOpen} title="Controls">
+				<div className="fbx-sheet" data-m="fb">
+					{controls}
+				</div>
+			</Sheet>
 		</div>
 	);
 }

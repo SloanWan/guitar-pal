@@ -21,7 +21,7 @@ export default function StatusScreen({
 	return (
 		<div className="flex min-h-full flex-col justify-center py-12 max-sm:py-8">
 			<div className="w-full px-(--gp-gutter-phone) min-[720px]:px-(--gp-gutter-tablet) min-[960px]:px-(--gp-gutter-desktop)">
-				<div className="mx-auto flex max-w-140 flex-col items-center text-center">
+				<div className="gp-rise mx-auto flex max-w-140 flex-col items-center text-center">
 					{art}
 					<h1 className="mt-7 font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-balance text-gp-ink min-[960px]:text-(length:--gp-t-xl-lg)">
 						{title}

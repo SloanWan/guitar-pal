@@ -257,7 +257,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 							<Skeleton className="h-60 w-full rounded-gp-xl" />
 						</div>
 					) : pending ? (
-						<div className="st-stage-in st-rise">
+						<div className="st-stage-in gp-rise">
 							<div style={{ "--i": 0 } as CSSProperties}>
 								<PendingChords
 									bars={pending.bars}
@@ -275,7 +275,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 							</div>
 						</div>
 					) : (
-						<div className="st-stage-in st-rise">
+						<div className="st-stage-in gp-rise">
 							{shared && (
 								<div className="st-shared-strip" style={{ "--i": 0 } as CSSProperties}>
 									<SharedPatternPanel

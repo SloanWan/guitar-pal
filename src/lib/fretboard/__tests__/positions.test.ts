@@ -85,3 +85,12 @@ describe("relatedSlots", () => {
 		expect(relatedSlots(5, 22, NECK).unison).toEqual([]);
 	});
 });
+
+describe("slotsSounding, tuned down", () => {
+	it("finds a pitch a fret higher on a guitar a half step down", () => {
+		// A2 is the open A string in standard, its first fret a half step down.
+		expect(slotsSounding(45, { fromFret: 0, toFret: 22 })).toContainEqual({ string: 1, fret: 0 });
+		expect(slotsSounding(45, { fromFret: 0, toFret: 22 }, -1)).toContainEqual({ string: 1, fret: 1 });
+		expect(slotsSounding(45, { fromFret: 0, toFret: 22 }, -1)).toContainEqual({ string: 0, fret: 6 });
+	});
+});

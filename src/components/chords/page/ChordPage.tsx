@@ -180,7 +180,7 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 						</button>
 					)}
 					<div className="ch-stage">
-						<div className="ch-stage-in ch-rise">
+						<div className="ch-stage-in gp-rise">
 							<nav className="ch-crumbs" aria-label="Breadcrumb" style={{ "--i": 0 } as CSSProperties}>
 								<Button asChild variant="ghost" size="xs" className="ch-back">
 									<Link href="/chords">

@@ -47,10 +47,10 @@ export const AVATAR_ICON_COMPONENTS: Record<AvatarIcon, LucideIcon> = {
 };
 
 /**
- * The user's initial — or their chosen icon — on a coloured square. Square,
- * not round: the v3 system is `--radius: 0` everywhere and the chip sits among
- * other square topbar controls at the same height. Decorative by default; the
- * trigger that wraps it carries the accessible name.
+ * The user's initial — or their chosen icon — on a coloured chip. The shape is
+ * the caller's: the header's account button rounds it, and Settings previews it
+ * the same way. Decorative by default; the trigger that wraps it carries the
+ * accessible name.
  *
  * Sizing: `size-*` sets the square; the glyph scales with the font size, so
  * pass `text-*` alongside for anything but the topbar size. The icon is drawn
@@ -68,13 +68,13 @@ export default function UserAvatar({
 		<span
 			aria-hidden="true"
 			className={cn(
-				"flex size-(--h-control) shrink-0 select-none items-center justify-center font-mono text-[15px] font-bold leading-none",
+				"flex size-(--h-control) shrink-0 select-none items-center justify-center font-gp-display text-[15px] font-bold leading-none",
 				COLOR_CLASS[profile.color],
 				className,
 			)}
 		>
 			{Icon ? (
-				<Icon className="size-[1.2em]" strokeWidth={2} strokeLinecap="square" />
+				<Icon className="size-[1.2em]" strokeWidth={2} strokeLinecap="round" />
 			) : (
 				profile.initial
 			)}

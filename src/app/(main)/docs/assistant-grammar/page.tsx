@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import DocLangSwitch from "@/components/docs/DocLangSwitch";
 import DocToc from "@/components/docs/DocToc";
+import { PAGE_GUTTER } from "@/components/auth/formText";
 import { isDocLang, preferredDocLang, type DocLang } from "@/lib/docs/docLang";
 import { renderDoc, type RenderedDoc } from "@/lib/docs/renderDoc";
 import "./doc.css";
@@ -66,10 +67,12 @@ export default async function AssistantGrammarPage({ searchParams }: { searchPar
 	const lang = await resolveLang(searchParams);
 	const doc = loadDoc(lang);
 	return (
-		<div className="mx-auto flex w-full max-w-300 flex-col gap-0 px-(--gutter) py-8 max-sm:py-6 md:flex-row md:gap-12">
+		<div
+			className={`mx-auto flex w-full max-w-300 flex-col py-8 max-sm:py-6 min-[960px]:flex-row min-[960px]:gap-12 ${PAGE_GUTTER}`}
+		>
 			<DocToc entries={doc.toc} label={COPY[lang].toc} />
-			<div className="min-w-0 flex-1">
-				<div className="mb-5 flex justify-end md:mb-2">
+			<div className="doc-column min-w-0 flex-1">
+				<div className="mb-5 flex justify-end min-[960px]:mb-2">
 					<DocLangSwitch lang={lang} />
 				</div>
 				<article lang={lang} className="doc-prose" dangerouslySetInnerHTML={{ __html: doc.html }} />

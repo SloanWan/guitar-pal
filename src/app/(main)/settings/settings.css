@@ -1,0 +1,206 @@
+/*
+ * The section icons and the delete buttons on /settings.
+ *
+ * Each section's icon sits on a tile that answers a hover the way the strum
+ * page's edit / share / delete icons do (src/components/strum/stage/icons.css):
+ * the tile tints, the icon fills and hops, plus a touch of its own —
+ *   palette  tips, as if being picked up
+ *   profile  the head pops
+ *   email    the flap dips
+ *   password the key turns
+ *   delete   the can wiggles and its lid lifts, in red
+ * They are not buttons: nothing happens on a click, and the tile is not
+ * focusable. Reduced-motion users get the tint and the fill only.
+ *
+ * `.set-danger` turns a neutral button red under the pointer, and keeps it red
+ * while the confirm it opened is showing — a destructive action says so
+ * before it is pressed.
+ */
+@layer components {
+	.set-icon {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		margin: -8px 0 -8px -7px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		transition:
+			color var(--gp-d-state) linear,
+			background-color var(--gp-d-state) linear;
+	}
+	.set-icon svg {
+		width: 18px;
+		height: 18px;
+	}
+
+	/* ---- Fill (everyone) ------------------------------------------------- */
+
+	/* Lucide sets fill="none"; filling the parts at zero opacity keeps rest
+	   identical. Lines have no area, so only shapes fill. The palette's paint
+	   dots and the key's hole are already solid (r=".5", filled by attribute)
+	   and are left as drawn. */
+	.set-icon svg :is(path, circle:not([r=".5"]), rect) {
+		fill: currentColor;
+		fill-opacity: 0;
+		transition: fill-opacity var(--gp-d-state) linear;
+	}
+	.set-icon:hover {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.set-icon:hover svg :is(path, circle:not([r=".5"]), rect) {
+		fill: var(--gp-m-500);
+		fill-opacity: 0.28;
+	}
+	.set-icon[data-anim="delete"]:hover {
+		background: color-mix(in srgb, var(--gp-bad) 12%, transparent);
+		color: var(--gp-bad);
+	}
+	.set-icon[data-anim="delete"]:hover svg path {
+		fill: var(--gp-bad);
+		fill-opacity: 0.22;
+	}
+
+	/* ---- Motion ---------------------------------------------------------- */
+
+	@media (prefers-reduced-motion: no-preference) {
+		/* The hop: up, then land with a small overshoot. `translate` is its own
+		   property, so a tilt or turn (`rotate`) composes with it. */
+		.set-icon:hover svg {
+			animation: set-icon-hop 400ms both;
+		}
+
+		/* Palette and key hold their tilt while hovered. */
+		.set-icon:is([data-anim="palette"], [data-anim="password"]) svg {
+			transition: rotate 220ms var(--gp-ease-state);
+		}
+		.set-icon[data-anim="palette"] svg {
+			transform-origin: 20% 80%;
+		}
+		.set-icon[data-anim="palette"]:hover svg {
+			rotate: -14deg;
+			transition: rotate 360ms var(--gp-spring-pop);
+		}
+		/* The key turns about its bow (the ring, top right). */
+		.set-icon[data-anim="password"] svg {
+			transform-origin: 68% 32%;
+		}
+		.set-icon[data-anim="password"]:hover svg {
+			rotate: 28deg;
+			transition: rotate 380ms var(--gp-spring-pop);
+		}
+
+		/* Profile: the head pops after the hop has started. */
+		.set-icon[data-anim="profile"] svg circle {
+			transform-box: fill-box;
+			transform-origin: center;
+		}
+		.set-icon[data-anim="profile"]:hover svg circle {
+			animation: set-icon-pop 320ms 90ms both;
+		}
+
+		/* Email: the flap (the envelope's V) dips and comes back. */
+		.set-icon[data-anim="email"]:hover svg path {
+			animation: set-icon-dip 420ms 60ms both;
+		}
+
+		/* Delete: the can wiggles on its base during the hop… */
+		.set-icon[data-anim="delete"] svg {
+			transform-origin: 50% 100%;
+		}
+		.set-icon[data-anim="delete"]:hover svg {
+			animation:
+				set-icon-hop 400ms both,
+				set-icon-wiggle 420ms ease-out both;
+		}
+		/* …and the lid (the 4th and 5th paths: rim and handle) lifts on a hinge
+		   at the rim's left end (3, 6 in the 24-unit view box). */
+		.set-icon[data-anim="delete"] svg path:is(:nth-of-type(4), :nth-of-type(5)) {
+			transform-box: view-box;
+			transform-origin: 3px 6px;
+			transition:
+				translate 200ms var(--gp-ease-state),
+				rotate 200ms var(--gp-ease-state),
+				fill-opacity var(--gp-d-state) linear;
+		}
+		.set-icon[data-anim="delete"]:hover svg path:is(:nth-of-type(4), :nth-of-type(5)) {
+			translate: 0 -1.5px;
+			rotate: -12deg;
+			transition:
+				translate 380ms var(--gp-spring-pop),
+				rotate 380ms var(--gp-spring-pop),
+				fill-opacity var(--gp-d-state) linear;
+		}
+	}
+
+	@keyframes set-icon-hop {
+		0% {
+			translate: 0 0;
+			animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
+		}
+		40% {
+			translate: 0 -4px;
+			animation-timing-function: cubic-bezier(0.3, 1.45, 0.45, 1);
+		}
+		100% {
+			translate: 0 0;
+		}
+	}
+
+	@keyframes set-icon-pop {
+		0% {
+			scale: 1;
+		}
+		45% {
+			scale: 1.3;
+		}
+		75% {
+			scale: 0.93;
+		}
+		100% {
+			scale: 1;
+		}
+	}
+
+	@keyframes set-icon-dip {
+		0% {
+			translate: 0 0;
+		}
+		40% {
+			translate: 0 1.5px;
+		}
+		100% {
+			translate: 0 0;
+		}
+	}
+
+	@keyframes set-icon-wiggle {
+		0% {
+			rotate: 0deg;
+		}
+		25% {
+			rotate: -9deg;
+		}
+		50% {
+			rotate: 7deg;
+		}
+		75% {
+			rotate: -3deg;
+		}
+		100% {
+			rotate: 0deg;
+		}
+	}
+
+	/* ---- Delete buttons -------------------------------------------------- */
+
+	.set-danger:not(:disabled):is(:hover, [aria-expanded="true"]) {
+		--gp-p-face: color-mix(in oklab, var(--gp-face), var(--gp-bad) 10%);
+		--gp-p-face-down: color-mix(in oklab, var(--gp-face-down), var(--gp-bad) 16%);
+		--gp-p-ink: var(--gp-bad);
+		--gp-p-sh: var(--gp-bad-sh);
+		--gp-p-ring: inset 0 0 0 1px color-mix(in srgb, var(--gp-bad) 45%, transparent);
+	}
+}

@@ -1,4 +1,5 @@
 import type { PasswordStrength, StrengthLevel } from "@/lib/passwordStrength";
+import { FORM_HELP } from "./formText";
 
 const LEVEL_LABEL: Record<StrengthLevel, string> = {
 	weak: "Weak",
@@ -14,7 +15,7 @@ const LIT: Record<StrengthLevel, number> = { weak: 1, fair: 2, good: 3, strong: 
 /**
  * Four segments and one line of advice under a password field. Renders
  * nothing for an empty field, so the form reads clean until typing starts.
- * Shared by the change-password form and (later) sign-up.
+ * Shared by sign-up, the reset page and the change-password form.
  */
 export default function PasswordStrengthMeter({
 	strength,
@@ -25,31 +26,29 @@ export default function PasswordStrengthMeter({
 }) {
 	if (empty) return null;
 	const lit = LIT[strength.level];
-	const fill = strength.acceptable ? "bg-denim-accent" : "bg-destructive";
+	const fill = strength.acceptable ? "bg-gp-ok" : "bg-gp-bad";
 	return (
 		<div className="flex flex-col gap-1.5" aria-live="polite">
-			<div className="flex items-center gap-2">
+			<div className="flex items-center gap-2.5">
 				<div className="flex flex-1 gap-1" aria-hidden="true">
 					{[0, 1, 2, 3].map((i) => (
 						<span
 							key={i}
-							className={`h-1 flex-1 transition-colors duration-(--dur-hover) ${
-								i < lit ? fill : "bg-line-strong"
+							className={`h-1.5 flex-1 rounded-gp-pill transition-colors duration-(--gp-d-state) ${
+								i < lit ? fill : "bg-gp-well"
 							}`}
 						/>
 					))}
 				</div>
 				<span
-					className={`w-12 text-right font-mono text-[10px] uppercase tracking-[0.1em] ${
-						strength.acceptable ? "text-denim-accent" : "text-destructive"
+					className={`w-14 text-right text-(length:--gp-t-cap) font-semibold ${
+						strength.acceptable ? "text-gp-ok" : "text-gp-bad"
 					}`}
 				>
 					{LEVEL_LABEL[strength.level]}
 				</span>
 			</div>
-			{strength.hint && (
-				<p className="font-mono text-[11px] tracking-[0.02em] text-ink-dim">{strength.hint}</p>
-			)}
+			{strength.hint && <p className={FORM_HELP}>{strength.hint}</p>}
 		</div>
 	);
 }

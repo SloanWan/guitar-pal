@@ -48,6 +48,11 @@ export interface SheetProps {
 	children: ReactNode;
 	/** Actions pinned under the content, outside the part that scrolls. */
 	footer?: ReactNode;
+	/**
+	 * A bottom sheet stands at its full height whatever it holds, so a list that is filtered
+	 * or folded inside it does not make the sheet jump.
+	 */
+	fixedHeight?: boolean;
 }
 
 /**
@@ -56,7 +61,7 @@ export interface SheetProps {
  * inside and handed back on close; the page behind does not scroll. A `footer` stays put at
  * the bottom while the content scrolls above it. `dialog.tsx` stays for confirms.
  */
-export function Sheet({ open, onOpenChange, title, description, trigger, children, footer }: SheetProps) {
+export function Sheet({ open, onOpenChange, title, description, trigger, children, footer, fixedHeight = false }: SheetProps) {
 	const side = useSheetSide(open);
 	return (
 		<Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -66,6 +71,7 @@ export function Sheet({ open, onOpenChange, title, description, trigger, childre
 				<Dialog.Content
 					className="gp-sheet"
 					data-side={side}
+					data-fixed={fixedHeight ? "" : undefined}
 					// without a description, say so — Radix otherwise warns that one is missing
 					{...(description ? {} : { "aria-describedby": undefined })}
 				>

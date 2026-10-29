@@ -287,7 +287,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 			</div>
 
 			{!isShared && (
-				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title="Patterns">
+				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title="Patterns" fixedHeight>
 					<div className="flex min-h-0 flex-col gap-3" data-m="strum">
 						<PatternLibrary
 							{...libraryProps}

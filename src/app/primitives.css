@@ -884,6 +884,9 @@
 		color: var(--gp-ink);
 		outline: none;
 	}
+	.gp-sheet[data-fixed] {
+		height: 88dvh;
+	}
 	.gp-sheet[data-state="open"] {
 		animation: gp-sheet-up var(--gp-d-sheet) var(--gp-spring-sheet) both;
 	}
@@ -896,6 +899,7 @@
 		width: 380px;
 		max-width: 100vw;
 		max-height: none;
+		height: auto;
 		border-radius: 0;
 		box-shadow: var(--gp-shadow-pop), -1px 0 0 var(--gp-line);
 	}
@@ -947,7 +951,7 @@
 		padding: 0 20px 8px;
 	}
 	/* The body takes the room left and scrolls; on a full-height panel that keeps a footer
-	   on the bottom edge, and a bottom sheet is only as tall as it needs. */
+	   on the bottom edge, and a bottom sheet is only as tall as it needs unless it is fixed. */
 	.gp-sheet-body {
 		flex: 1 1 auto;
 		min-height: 0;

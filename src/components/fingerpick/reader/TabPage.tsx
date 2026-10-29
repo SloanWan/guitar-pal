@@ -333,7 +333,7 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 			</div>
 
 			{!isShared && (
-				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title="Tabs">
+				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title="Tabs" fixedHeight>
 					<div className="flex min-h-0 flex-col gap-3" data-m="tab">
 						<TabLibrary
 							{...libraryProps}

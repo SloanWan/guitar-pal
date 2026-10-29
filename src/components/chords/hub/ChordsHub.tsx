@@ -37,7 +37,7 @@ export default function ChordsHub({ view, root, quality, chords, index, board }:
 
 	return (
 		<div className="hb-page">
-			<div className="hb-in">
+			<div className="hb-in gp-rise">
 				<AskBar index={searchIndex} lookup={lookup} onAdd={(added) => update(addToBoard(items, added))} />
 				<Board
 					items={items}

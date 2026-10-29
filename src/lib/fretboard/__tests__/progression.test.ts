@@ -127,3 +127,28 @@ describe("noteSteps", () => {
 		expect(noteSteps([{ string: 0, fret: 5, midi: 45 }])).toEqual([{ midis: [45], slots: [{ string: 0, fret: 5 }] }]);
 	});
 });
+
+describe("resolveProgression, tuned down", () => {
+	it("moves what sounds by the tuning and leaves the shape where it is held", () => {
+		// B major a half step down: the I is held as a C shape and sounds B.
+		const [bar] = resolveProgression([{ interval: 0 }], { root: "B", scale: "major" }, 0, voicingFor, -1);
+		expect(bar.sounding.root).toBe("B");
+		expect(bar.shape.root).toBe("C");
+		expect(bar.voicing).toBe(LIBRARY["C major"]);
+		expect(bar.midis).toEqual([47, 51, 54, 59, 63]);
+		expect(bar.slots).toEqual([
+			{ string: 1, fret: 3 },
+			{ string: 2, fret: 2 },
+			{ string: 3, fret: 0 },
+			{ string: 4, fret: 1 },
+			{ string: 5, fret: 0 },
+		]);
+	});
+
+	it("adds the tuning to the capo: a whole step down with capo 2 sounds standard pitch", () => {
+		const [bar] = resolveProgression([{ interval: 0 }], C_MAJOR, 2, voicingFor, -2);
+		expect(bar.shape.root).toBe("C");
+		expect(bar.midis).toEqual([48, 52, 55, 60, 64]);
+		expect(bar.slots.every((s) => s.fret >= 2)).toBe(true);
+	});
+});

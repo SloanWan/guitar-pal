@@ -53,11 +53,11 @@ function intersect(a: FretWindow, b: FretWindow): FretWindow | null {
  * clipped to a stub — a hand position is five frets or it is not one. A box
  * with no octave left inside the window is left out.
  */
-export function scalePositions(spec: ScaleSpec, window: FretWindow): FretWindow[] {
+export function scalePositions(spec: ScaleSpec, window: FretWindow, tune = 0): FretWindow[] {
 	const boxes: FretWindow[] = [];
 	const seen = new Set<number>();
 	for (const pc of scalePitchClasses(spec)) {
-		const base = mod12(pc - GUITAR_OPEN_MIDI[0]);
+		const base = mod12(pc - GUITAR_OPEN_MIDI[0] - tune);
 		if (seen.has(base)) continue;
 		seen.add(base);
 		let fromFret = base;
@@ -71,9 +71,10 @@ export function scalePositions(spec: ScaleSpec, window: FretWindow): FretWindow[
 /**
  * The notes of a run, ascending by pitch, one slot per pitch, starting on the
  * lowest root. `window` is what the board can play — pass `{ fromFret: capo }`
- * and a capo shortens every run with it.
+ * and a capo shortens every run with it. `tune` is how far the guitar is tuned
+ * from standard; each note's `midi` is what it sounds.
  */
-export function scaleRun(spec: ScaleSpec, window: FretWindow, target: RunTarget): SlotNote[] {
+export function scaleRun(spec: ScaleSpec, window: FretWindow, target: RunTarget, tune = 0): SlotNote[] {
 	const inScale = new Set(scalePitchClasses(spec));
 	const rootPc = scaleRootPitchClass(spec.root);
 	const frets = target.kind === "box" ? intersect(target.box, window) : window;
@@ -88,7 +89,7 @@ export function scaleRun(spec: ScaleSpec, window: FretWindow, target: RunTarget)
 	const candidates: SlotNote[] = [];
 	for (const string of strings) {
 		for (let fret = frets.fromFret; fret <= frets.toFret; fret++) {
-			const midi = slotMidi(string, fret);
+			const midi = slotMidi(string, fret) + tune;
 			if (inScale.has(mod12(midi))) candidates.push({ string, fret, midi });
 		}
 	}

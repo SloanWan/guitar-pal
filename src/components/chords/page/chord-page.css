@@ -230,6 +230,41 @@
 		align-self: center;
 		margin: -8px -4px;
 	}
+	/* Adding a shape is the module's: its colour at rest, a tint behind it under
+	   a pointer, and the plus hops and turns a quarter (motion below). */
+	.ch-add {
+		color: var(--gp-m-500);
+	}
+	.ch-add:is(:hover, :focus-visible) {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.ch-add svg {
+		stroke-width: 2.6;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.ch-add svg {
+			transition: rotate 220ms var(--gp-ease-state);
+		}
+		.ch-add:is(:hover, :focus-visible) svg {
+			rotate: 90deg;
+			animation: ch-add-hop 400ms both;
+			transition: rotate 420ms var(--gp-spring-pop);
+		}
+	}
+	@keyframes ch-add-hop {
+		0% {
+			translate: 0 0;
+			animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
+		}
+		40% {
+			translate: 0 -4px;
+			animation-timing-function: cubic-bezier(0.3, 1.45, 0.45, 1);
+		}
+		100% {
+			translate: 0 0;
+		}
+	}
 	.ch-film {
 		display: flex;
 		gap: 10px;

@@ -342,7 +342,7 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 										<h2>Shapes</h2>
 										<button
 											type="button"
-											className="ch-icon gp-focus"
+											className="ch-icon ch-add gp-focus"
 											onClick={() => openDraft(false)}
 											aria-label="Draw my own shape"
 											title="Draw my own shape"

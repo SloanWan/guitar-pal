@@ -395,85 +395,489 @@
 		line-height: 1.4;
 	}
 
-	/* ── The tab as the editing surface (#360) ────────────────────────────── */
-	/* The tab takes the keys; its focus ring is the card's. */
+	/* ── The tab as a grid of bar blocks (#362) ──────────────────────────── */
+	/* The grid takes the keys; its focus ring is the cursor's cell, not a box. */
 	.te-sheet {
-		border-radius: var(--gp-r-xl);
 		outline: none;
 	}
-	.te-sheet:focus-visible {
-		box-shadow: 0 0 0 2px var(--gp-focus);
+	.te-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(304px, 1fr));
+		gap: 14px;
 	}
-	/* The reader's playhead shows only while the tab plays from the cursor. */
-	.te-sheet:not([data-playing]) .tb-playhead,
-	.te-sheet:not([data-playing]) .tb-measure-hl {
-		visibility: hidden;
+	.te-mb {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 0;
+		padding: 10px 12px 12px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+		transition: box-shadow var(--gp-d-state) ease;
+		user-select: none;
 	}
-	/* One slot's column: its wash (the cursor's slot, a selected run) and a button
-	   per string. The wash sits over the numbers and multiplies with them, so a
-	   number's halo takes the wash's colour instead of standing out white. */
-	.te-col {
-		--te-blend: multiply;
-		position: absolute;
-		inset: 0;
+	/* The cursor's bar: the block a copy or a move lands on is the cursor's too. */
+	.te-mb[data-cur] {
+		box-shadow:
+			0 0 0 2px var(--gp-m-500),
+			0 0 14px color-mix(in srgb, var(--gp-m-500) 28%, transparent);
 	}
-	.te-col-wash {
-		position: absolute;
-		top: var(--te-top);
-		right: 1px;
-		left: 1px;
-		height: calc(6 * var(--te-gap));
-		border-radius: var(--gp-r-xs);
-		background: var(--gp-m-100);
-		mix-blend-mode: var(--te-blend);
-		pointer-events: none;
+	.te-mb[data-nudge="left"] {
+		animation: te-nudge-from-right 0.22s ease-out;
 	}
-	.te-empty {
-		position: absolute;
-		top: calc(var(--te-top) + var(--te-gap) / 2);
-		left: calc(var(--te-x) - 0.75px);
-		height: calc(5 * var(--te-gap));
-		border-left: 1.5px dotted var(--gp-edge);
-		pointer-events: none;
+	.te-mb[data-nudge="right"] {
+		animation: te-nudge-from-left 0.22s ease-out;
 	}
-	/* Under the stems, as the grid wrote them: the beat's number darker than the counts between. */
-	.te-count {
-		position: absolute;
-		top: calc(var(--te-top) + 6 * var(--te-gap) + 44px);
-		left: var(--te-x);
-		transform: translateX(-50%);
-		color: var(--gp-ink-mute);
-		font-size: 10.5px;
-		font-weight: 650;
-		pointer-events: none;
+	@keyframes te-nudge-from-right {
+		from {
+			transform: translateX(14px);
+		}
 	}
-	.te-count[data-beat] {
+	@keyframes te-nudge-from-left {
+		from {
+			transform: translateX(-14px);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.te-mb[data-nudge] {
+			animation: none;
+		}
+	}
+	.te-mb-head,
+	.te-mb-row {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		min-height: 28px;
+	}
+	.te-mb-head {
+		justify-content: space-between;
+	}
+	.te-mb-tools {
+		display: flex;
+		align-items: center;
+		gap: 1px;
+	}
+	.te-mb-lab {
+		flex: none;
+		margin-right: 2px;
 		color: var(--gp-ink-3);
+		font-family: var(--gp-f-num);
+		font-size: 10.5px;
 		font-weight: 750;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		white-space: nowrap;
 	}
-	.te-hit {
-		position: absolute;
-		right: 0;
-		left: 0;
-		height: var(--te-gap);
-		padding: 0;
-		border: 0;
-		background: none;
+	.te-mb-div {
+		width: 1px;
+		height: 16px;
+		margin: 0 4px;
+		background: var(--gp-line);
+	}
+	.te-mb-ic {
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-3);
 		cursor: pointer;
 	}
-	.te-hit:hover {
+	.te-mb-ic svg {
+		width: 14px;
+		height: 14px;
+	}
+	.te-mb-ic:hover:not(:disabled) {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.te-mb-ic[data-danger]:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--gp-bad) 12%, transparent);
+		color: var(--gp-bad);
+	}
+	.te-mb-ic:disabled {
+		opacity: 0.32;
+		cursor: not-allowed;
+	}
+
+	/* The grid: the string names · the slot columns (scrolling sideways when a bar
+	   is cut fine) · each row's snap. */
+	.te-mb-body {
+		display: flex;
+		align-items: flex-start;
+		gap: 2px;
+	}
+	.te-mb-side {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		gap: 2px;
+		width: 20px;
+	}
+	.te-mb-chordrow {
+		position: relative;
+		height: 16px;
+	}
+	.te-mb-name {
+		position: relative;
+		display: grid;
+		place-items: center;
+		height: 28px;
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 10.5px;
+		font-weight: 700;
+	}
+	.te-mb-name[data-on] {
+		color: var(--gp-m-700);
+	}
+	/* A row's clear (at its left, in the block's padding) and its snap: there while
+	   the row is hovered, laid out always so nothing shifts. */
+	.te-mb-clear {
+		position: absolute;
+		top: 50%;
+		left: -14px;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-mute);
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(-50%);
+		transition: opacity 0.1s;
+		cursor: pointer;
+	}
+	.te-mb-side:last-child .te-mb-clear {
+		left: 2px;
+	}
+	.te-mb-clear svg {
+		width: 12px;
+		height: 12px;
+	}
+	.te-mb-clear[data-shown] {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.te-mb-clear:hover:not(:disabled) {
+		color: var(--gp-bad);
+	}
+	.te-mb-side:last-child .te-mb-clear:hover:not(:disabled) {
+		color: var(--gp-m-700);
+	}
+	.te-mb-clear:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+	.te-mb-side:last-child .te-mb-clear:disabled:not([data-shown]) {
+		opacity: 0;
+	}
+	.te-mb-scroll {
+		flex: 1;
+		min-width: 0;
+		overflow-x: auto;
+		overflow-y: hidden;
+		padding-bottom: 4px;
+		scrollbar-width: thin;
+	}
+	.te-mb-beats {
+		display: flex;
+		align-items: flex-start;
+		gap: 2px;
+	}
+	/* The hovered beat: a faint wash over its columns, cells and labels alike. */
+	.te-mb-beat {
+		display: flex;
+		flex-basis: 0;
+		flex-grow: 1;
+		gap: 2px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-mb-beat[data-on] {
+		background: color-mix(in srgb, var(--gp-m-500) 6%, transparent);
+	}
+	.te-mb-col {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 20px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-mb-col[data-rest] {
+		background: var(--gp-well);
+	}
+	.te-mb-col[data-sub] {
+		background: color-mix(in srgb, var(--gp-m-500) 9%, transparent);
+	}
+	.te-mb-col[data-sel] {
+		background: color-mix(in srgb, var(--gp-m-500) 16%, transparent);
+	}
+	/* The slot sounding while the tab plays from the cursor (set by the playhead). */
+	.te-mb-col[data-playing] {
+		background: color-mix(in srgb, var(--gp-m-500) 30%, transparent);
+	}
+	.te-mb-cell {
+		position: relative;
+		display: grid;
+		place-items: center;
+		height: 28px;
+		min-width: 0;
+		overflow: hidden;
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-2);
+		font-family: var(--gp-f-num);
+		font-size: 12.5px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		cursor: pointer;
+		touch-action: manipulation;
+	}
+	.te-mb-cell[data-empty] {
+		color: var(--gp-ink-mute);
+		font-weight: 500;
+	}
+	.te-mb-cell:hover {
 		background: color-mix(in oklab, var(--gp-ink) 6%, transparent);
 	}
-	/* The cursor's string: a ring where its number stands. */
-	.te-hit[data-cur]::after {
-		position: absolute;
-		top: -1px;
-		bottom: -1px;
-		left: calc(var(--te-x) - 11px);
-		width: 22px;
-		border-radius: var(--gp-r-xs);
+	/* The cross under the pointer: its column and its row, summing on the cell. */
+	.te-mb-cell[data-h="1"] {
+		background: color-mix(in srgb, var(--gp-m-500) 14%, transparent);
+	}
+	.te-mb-cell[data-h="2"] {
+		background: color-mix(in srgb, var(--gp-m-500) 26%, transparent);
+	}
+	/* The chord shape's fret, offered in an empty cell; "/" for a string it leaves out. */
+	.te-mb-cell[data-hint=""] {
+		color: var(--gp-m-700);
+		font-weight: 750;
+	}
+	.te-mb-cell[data-hint="off"] {
+		color: var(--gp-ink-mute);
+	}
+	.te-mb-cell[data-cur] {
+		background: var(--gp-m-100);
 		box-shadow: inset 0 0 0 2px var(--gp-m-500);
-		content: "";
+		color: var(--gp-m-700);
+	}
+	.te-sheet:not(:focus-within) .te-mb-cell[data-cur] {
+		box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gp-m-500) 55%, transparent);
+	}
+	.te-mb-glyph {
+		position: absolute;
+		top: 1px;
+		right: 2px;
+		color: var(--gp-m-700);
+		font-size: 8.5px;
+		line-height: 1;
+	}
+	.te-mb-tie {
+		position: absolute;
+		top: 1px;
+		left: 50%;
+		width: 12px;
+		height: 6px;
+		border-top: 2px solid;
+		border-radius: 6px 6px 0 0;
+		transform: translateX(-50%);
+		pointer-events: none;
+	}
+	.te-mb-span {
+		position: absolute;
+		right: 3px;
+		bottom: 1px;
+		left: 3px;
+		border-bottom: 1.5px dashed var(--gp-m-500);
+		pointer-events: none;
+	}
+	.te-mb-span[data-kind="letRing"] {
+		border-bottom-style: dotted;
+	}
+	/* The chord row: a symbol where a chord changes (or runs into the bar), a + to add one. */
+	.te-mb-chord {
+		position: absolute;
+		top: 0;
+		left: 0;
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 10.5px;
+		font-weight: 780;
+		line-height: 16px;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.te-mb-chord[data-own] {
+		color: var(--gp-m-700);
+	}
+	.te-mb-chord:hover,
+	.te-mb-chord[data-open] {
+		color: var(--gp-m-500);
+	}
+	.te-mb-addchord {
+		position: absolute;
+		top: 0;
+		left: 50%;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		border: 1px dashed var(--gp-edge);
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-mute);
+		transform: translateX(-50%);
+		cursor: pointer;
+	}
+	.te-mb-addchord svg {
+		width: 10px;
+		height: 10px;
+	}
+	.te-mb-addchord:hover,
+	.te-mb-addchord[data-open] {
+		border-color: var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	.te-quickchord {
+		width: 288px;
+		padding: 12px;
+	}
+	.te-quickchord h3 {
+		margin: 0 0 8px;
+		font-size: 13px;
+	}
+	.te-mb-trip {
+		height: 12px;
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 8.5px;
+		line-height: 12px;
+		text-align: center;
+	}
+	.te-mb-trip[data-role] {
+		border-top: 1px solid var(--gp-ink-mute);
+	}
+	.te-mb-trip[data-role="start"] {
+		border-left: 1px solid var(--gp-ink-mute);
+	}
+	.te-mb-trip[data-role="end"] {
+		border-right: 1px solid var(--gp-ink-mute);
+	}
+	.te-mb-dur {
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 9.5px;
+		line-height: 1;
+		text-align: center;
+	}
+	.te-mb-colsel-row {
+		display: flex;
+		justify-content: center;
+		padding-top: 3px;
+	}
+	.te-mb-colsel {
+		width: 14px;
+		height: 14px;
+		border-radius: 4px;
+		box-shadow: inset 0 0 0 1.5px var(--gp-edge);
+		cursor: pointer;
+	}
+	.te-mb-colsel:hover {
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+	}
+	.te-mb-colsel[aria-pressed="true"] {
+		background: var(--gp-m-500);
+		box-shadow: none;
+	}
+	.te-mb-count {
+		padding-top: 3px;
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 10px;
+		font-weight: 650;
+		line-height: 1;
+		text-align: center;
+	}
+	.te-mb-count[data-beat] {
+		color: var(--gp-ink-3);
+		font-weight: 780;
+	}
+	.te-mb-hit {
+		margin-right: 1px;
+		color: var(--gp-m-700);
+	}
+	/* The footer: one-value fills, the repeat barlines and their count, the pick sequence. */
+	.te-mb-foot {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding-top: 8px;
+		border-top: 1px solid var(--gp-line);
+	}
+	.te-mb-fill {
+		display: inline-grid;
+		grid-auto-flow: column;
+		place-items: center;
+		width: 30px;
+		height: 28px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+		font-size: 12px;
+		font-weight: 750;
+		cursor: pointer;
+	}
+	.te-mb-fill svg {
+		width: 18px;
+		height: 18px;
+	}
+	.te-mb-fill sup {
+		margin-left: -2px;
+		font-size: 8px;
+	}
+	.te-mb-fill:hover {
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	.te-mb-fill[aria-pressed="true"] {
+		background: var(--gp-m-100);
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	.te-mb-times {
+		display: inline-flex;
+		align-items: center;
+		color: var(--gp-ink-2);
+		font-size: 12px;
+		font-weight: 750;
+	}
+	.te-mb-times[data-off] {
+		visibility: hidden;
+	}
+	.te-mb-foot .te-irow {
+		margin: 0;
+	}
+	.te-mb-add {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		min-height: 160px;
+		border: 1.5px dashed var(--gp-edge);
+		border-radius: var(--gp-r-l);
+		color: var(--gp-ink-3);
+		font-size: 13.5px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.te-mb-add svg {
+		width: 16px;
+		height: 16px;
+	}
+	.te-mb-add:hover {
+		border-color: var(--gp-m-500);
+		color: var(--gp-m-700);
 	}
 
 	/* ── Status line ────────────────────────────────────────────────────── */
@@ -972,16 +1376,6 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: 8px;
-	}
-
-	/* Dark: the wash lightens the card, so it screens instead (kept the same in both dark blocks). */
-	@media (prefers-color-scheme: dark) {
-		:root:not([data-theme="light"]) .te-col {
-			--te-blend: screen;
-		}
-	}
-	:root[data-theme="dark"] .te-col {
-		--te-blend: screen;
 	}
 
 	.te-phone-only {

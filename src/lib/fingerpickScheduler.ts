@@ -702,6 +702,45 @@ export function computeMeasureBoundaries(
 	return boundaries;
 }
 
+/** Where one slot starts, in seconds from the pattern's start. */
+export interface SlotStart {
+	measureIndex: number;
+	slotIndex: number;
+	time: number;
+}
+
+/**
+ * The start of every slot, in order — a rest or an empty slot as much as a
+ * sounding one, since a slot with nothing struck has no event to find it by.
+ */
+export function computeSlotStarts(pattern: FingerpickPattern, bpm: number): SlotStart[] {
+	const quarter = secondsPerQuarter(bpm, pattern.timeSignature);
+	const starts: SlotStart[] = [];
+	let time = 0;
+	pattern.measures.forEach((measure, measureIndex) => {
+		measure.slots.forEach((slot, slotIndex) => {
+			starts.push({ measureIndex, slotIndex, time });
+			time += DURATION_QUARTERS[slot.duration] * quarter;
+		});
+	});
+	return starts;
+}
+
+/** The slot sounding `elapsed` seconds in (the last to have started); null before the first. */
+export function slotAtTime(starts: readonly SlotStart[], elapsed: number): SlotStart | null {
+	let lo = 0;
+	let hi = starts.length - 1;
+	let found: SlotStart | null = null;
+	while (lo <= hi) {
+		const mid = (lo + hi) >> 1;
+		if (starts[mid].time <= elapsed) {
+			found = starts[mid];
+			lo = mid + 1;
+		} else hi = mid - 1;
+	}
+	return found;
+}
+
 // ─── Voice stealing ───────────────────────────────────────────────────────────
 
 /**

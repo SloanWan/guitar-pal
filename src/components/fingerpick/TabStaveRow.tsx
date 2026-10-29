@@ -186,46 +186,6 @@ interface TabStaveRowProps {
 	 * its half arc. Without it each measure is read on its own.
 	 */
 	renderContext?: RenderContext;
-	/**
-	 * The editor's surface (#360): what to lay over each slot's column once the
-	 * notes are placed — the cursor, the selection, a button per string. Needs
-	 * `startMeasureIndex`. Without it the stave is the reader's and draws exactly
-	 * as before; it only reads the geometry, never changes the drawing.
-	 */
-	editable?: EditableStave;
-}
-
-/** One slot's column on the stave, in the SVG's (= the row wrapper's) pixels. */
-export interface StaveColumn {
-	measureIndex: number;
-	slotIndex: number;
-	left: number;
-	width: number;
-	/** Where the slot's numbers stand. */
-	noteX: number;
-	/** Each string's line, 0 = high e. */
-	lineYs: readonly number[];
-}
-
-export interface EditableStave {
-	renderColumn: (column: StaveColumn) => ReactNode;
-}
-
-/**
- * Columns from the notes' x: each slot reaches halfway to its neighbours, the
- * first from the stave's note start and the last to its end. A grace slot draws
- * no note of its own and gets no column.
- */
-export function slotColumns(
-	notes: readonly { slotIndex: number; x: number }[],
-	noteStart: number,
-	noteEnd: number,
-): { slotIndex: number; left: number; width: number; noteX: number }[] {
-	return notes.map((note, j) => {
-		const left = j === 0 ? noteStart : (notes[j - 1].x + note.x) / 2;
-		const right = j === notes.length - 1 ? noteEnd : (note.x + notes[j + 1].x) / 2;
-		return { slotIndex: note.slotIndex, left, width: Math.max(0, right - left), noteX: note.x };
-	});
 }
 
 /** Where a chord mark landed after formatting, for the diagram overlay. */
@@ -711,12 +671,9 @@ export default function TabStaveRow({
 	offShapeStrings,
 	pitchLabel,
 	renderContext,
-	editable,
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [anchors, setAnchors] = useState<ChordAnchor[]>([]);
-	const [columns, setColumns] = useState<StaveColumn[]>([]);
-	const isEditable = editable !== undefined && startMeasureIndex !== undefined;
 	const showDiagrams = chordDiagram !== undefined;
 	const diagramHeight = showDiagrams ? (chordDiagramSize?.height ?? 0) : 0;
 
@@ -1041,20 +998,6 @@ export default function TabStaveRow({
 					});
 				});
 			}
-			// The editor's columns, read from where the notes were placed.
-			if (isEditable) {
-				setColumns(
-					drawn.flatMap(({ notes, noteSlots, stave }, i) => {
-						const lineYs = [0, 1, 2, 3, 4, 5].map((line) => stave.getYForLine(line));
-						const placedNotes = notes.map((note, j) => ({ slotIndex: noteSlots[j], x: note.getAbsoluteX() }));
-						return slotColumns(placedNotes, stave.getNoteStartX(), stave.getNoteEndX()).map((c) => ({
-							...c,
-							measureIndex: startMeasureIndex + i,
-							lineYs,
-						}));
-					}),
-				);
-			}
 			// Same anchors → same state, so a resize that moved nothing re-renders nothing.
 			setAnchors((prev) =>
 				prev.length === nextAnchors.length &&
@@ -1088,7 +1031,6 @@ export default function TabStaveRow({
 		offShapeStrings,
 		pitchLabel,
 		renderContext,
-		isEditable,
 	]);
 
 	return (
@@ -1105,16 +1047,6 @@ export default function TabStaveRow({
 						style={{ left: anchor.x - 2, top: anchor.y }}
 					>
 						{chordDiagram(anchor.label)}
-					</div>
-				))}
-			{isEditable &&
-				columns.map((column) => (
-					<div
-						key={`${column.measureIndex}:${column.slotIndex}`}
-						className="absolute top-0 bottom-0"
-						style={{ left: column.left, width: column.width }}
-					>
-						{editable.renderColumn(column)}
 					</div>
 				))}
 		</div>

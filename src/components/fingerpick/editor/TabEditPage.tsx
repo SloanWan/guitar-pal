@@ -4,7 +4,7 @@ import "@/components/fingerpick/reader/tab.css";
 import "@/components/playback/icons.css";
 import "@/components/playback/playback.css";
 import "./tabEdit.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Play, Redo2, SlidersHorizontal, Square, TriangleAlert, Undo2, Wrench, X } from "lucide-react";
@@ -15,17 +15,13 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Segmented } from "@/components/ui/segmented";
 import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import TabSheet from "@/components/fingerpick/reader/TabSheet";
-import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import { useEditHistory } from "@/components/fingerpick/useEditHistory";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import { autoAdvanceOn, useFingerpickPrefs, writeLastPatternId } from "@/components/fingerpick/useFingerpickPrefs";
-import { useElementWidth } from "@/components/useElementWidth";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useUser } from "@/hooks/useUser";
 import { cropUrl, setExerciseStatus } from "@/lib/books/api";
-import { STRING_LABELS, clonePatternForEdit, computeBeatLabels, makeDefaultPattern, type SlotTarget } from "@/lib/fingerpickEdit";
-import { indexPattern } from "@/lib/fingerpickIndex";
+import { STRING_LABELS, clonePatternForEdit, makeDefaultPattern, setFret, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
 import { deriveRepeatDirectives } from "@/lib/fingerpickRepeats";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { clampBpmToMeter } from "@/lib/strumBars";
@@ -40,11 +36,11 @@ import {
 	type EditorBookSource,
 	type EditorNotice,
 } from "@/lib/tabEditorEntry";
-import { inSelection, selectedSlots } from "@/lib/tabEditorCursor";
-import type { EditableStave } from "@/components/fingerpick/TabStaveRow";
+import { selectedSlots } from "@/lib/tabEditorCursor";
 import { patternCapo } from "@/lib/fingerpickChords";
 import { dockWrite } from "@/lib/fretboardDock";
-import EditorColumn, { noteText } from "./EditorColumn";
+import { noteText } from "./MeasureBlock";
+import MeasureGrid from "./MeasureGrid";
 import EditorInspector from "./EditorInspector";
 import EditorToolbar from "./EditorToolbar";
 import type { InspectorTab } from "@/lib/tabEditorInspector";
@@ -61,13 +57,10 @@ type Opened =
 	| { status: "missing" }
 	| { status: "ready"; isNew: boolean; notice?: EditorNotice; book?: EditorBookSource };
 
-// The reader's section bands; the editor draws none.
-const NO_BANDS: [] = [];
-
 /**
  * The tab editor (#358): `/fingerpick/edit/<id>` for one of the player's tabs,
  * `/fingerpick/edit/new` for a blank one or a handed-over draft. The tab is
- * drawn as the reader draws it. Saving goes through the library's own save (a
+ * edited as a grid of bar blocks, a row a string. Saving goes through the library's own save (a
  * guest's tab to the browser, a player's to the account) and back to where the
  * editor was opened from; leaving with unsaved edits asks first.
  */
@@ -181,25 +174,11 @@ export default function TabEditPage({ id }: { id: string }) {
 		guard.discard();
 	}
 
-	// The tab, drawn as the reader draws it, packed to the card's width.
-	const [measureViewer, viewerWidth] = useElementWidth<HTMLDivElement>();
-	const renderContext = useMemo(() => ({ index: indexPattern(working) }), [working]);
-	const rows = useMemo(
-		() => layoutMeasureRows(working.measures, viewerWidth, 0, undefined, renderContext),
-		[working.measures, viewerWidth, renderContext],
-	);
-	const rowsRef = useRef<HTMLDivElement>(null);
-	const viewerRef = useRef<HTMLDivElement | null>(null);
-	const setViewer = useCallback(
-		(el: HTMLDivElement | null) => {
-			viewerRef.current = el;
-			measureViewer(el);
-		},
-		[measureViewer],
-	);
-	const playback = useEditorPlayback({ pattern: working, rows, viewerRef });
+	// The grid, whose slot columns the playhead marks.
+	const gridRef = useRef<HTMLDivElement>(null);
+	const playback = useEditorPlayback({ pattern: working, gridRef });
 
-	// The cursor and the keys over the stave (#360).
+	// The cursor and the keys over the grid (#360).
 	const tabRef = useRef<HTMLDivElement>(null);
 	// A phone's width: the tab bar's breakpoint, where auto-advance starts on.
 	const phone = useMediaQuery("(max-width: 719px)", false);
@@ -221,30 +200,38 @@ export default function TabEditPage({ id }: { id: string }) {
 		onWrote: (cell, fret) => playback.preview(cell.stringIndex, fret),
 	});
 	const { cursor, selection, pending } = tabCursor;
-	// The counts under every slot, by bar: "1 + 2 +", or a compound bar's eighths when the player counts them.
-	const counts = useMemo(
-		() => working.measures.map((m) => computeBeatLabels(m.slots, working.timeSignature, prefs.countEighths ? "eighths" : "beats")),
-		[working.measures, working.timeSignature, prefs.countEighths],
-	);
-	const editable: EditableStave = {
-		renderColumn: (column) => (
-			<EditorColumn
-				column={column}
-				slot={working.measures[column.measureIndex]?.slots[column.slotIndex]}
-				cursorString={
-					column.measureIndex === cursor.measureIndex && column.slotIndex === cursor.slotIndex
-						? cursor.stringIndex
-						: null
-				}
-				selected={inSelection(working, selection, column)}
-				count={counts[column.measureIndex]?.[column.slotIndex] ?? ""}
-				onPick={(cell, shift) => {
-					tabRef.current?.focus({ preventScroll: true });
-					tabCursor.pick(cell, shift);
-				}}
-			/>
-		),
-	};
+	const inspectorRef = useRef<HTMLElement>(null);
+	// The tools for what was just picked: the sheet on that tab when narrow, else that section in view.
+	function showTools(tab: InspectorTab) {
+		if (narrow) {
+			setToolsTab(tab);
+			setToolsOpen(true);
+			return;
+		}
+		const name = tab === "note" ? "Note" : tab === "effects" ? "Effects" : tab === "slot" ? "Slot" : "Bar";
+		inspectorRef.current?.querySelector(`section[aria-label="${name}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+	}
+	const focusTab = () => tabRef.current?.focus({ preventScroll: true });
+	function gridPick(cell: Cell, shift: boolean, take: number | null) {
+		focusTab();
+		tabCursor.pick(cell, shift);
+		// The chord shape's fret the empty cell offered: written, and heard.
+		if (take !== null) {
+			commit((p) => setFret(p, cell, take));
+			playback.preview(cell.stringIndex, take);
+		}
+	}
+	function gridColumn(target: SlotTarget, shift: boolean) {
+		focusTab();
+		tabCursor.pick({ ...target, stringIndex: cursor.stringIndex }, shift);
+		showTools("slot");
+	}
+	function gridMenu() {
+		showTools("effects");
+	}
+	function gridBar(measureIndex: number) {
+		tabCursor.moveTo({ measureIndex, slotIndex: 0, stringIndex: cursor.stringIndex });
+	}
 	const cursorSlot = working.measures[cursor.measureIndex]?.slots[cursor.slotIndex];
 
 	// The fretboard writes at the cursor's slot, on the string clicked (#359).
@@ -461,24 +448,22 @@ export default function TabEditPage({ id }: { id: string }) {
 										ref={tabRef}
 										className="te-sheet"
 										role="application"
-										aria-label="Tab. Click a string to place the cursor, then type a fret."
+										aria-label="Tab. Click a cell to place the cursor, then type a fret."
 										tabIndex={0}
 										onKeyDown={tabCursor.onKeyDown}
-										data-playing={playback.isPlaying ? "" : undefined}
 									>
-										<TabSheet
-											rows={rows}
-											timeSignature={working.timeSignature}
-											renderContext={renderContext}
-											chordDiagramSize={{ width: 0, height: 0 }}
-											viewerRef={setViewer}
-											rowsRef={rowsRef}
-											rowRefs={playback.cursor.rowRefs}
-											cursorRef={playback.cursor.cursorRef}
-											highlightRef={playback.cursor.measureHighlightRef}
-											bands={NO_BANDS}
-											onClick={() => {}}
-											editable={editable}
+										<MeasureGrid
+											ref={gridRef}
+											working={working}
+											commit={commit}
+											cursor={cursor}
+											selection={selection}
+											chordTools={chordTools}
+											countEighths={prefs.countEighths}
+											onPick={gridPick}
+											onColumn={gridColumn}
+											onMenu={gridMenu}
+											onBar={gridBar}
 										/>
 									</div>
 								</>
@@ -528,7 +513,7 @@ export default function TabEditPage({ id }: { id: string }) {
 					)}
 				</div>
 				{ready && !narrow && (
-					<aside className="te-insp" aria-label="Inspector">
+					<aside ref={inspectorRef} className="te-insp" aria-label="Inspector">
 						<EditorInspector
 							working={working}
 							commit={commit}

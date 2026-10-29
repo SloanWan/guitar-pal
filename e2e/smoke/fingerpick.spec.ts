@@ -22,7 +22,7 @@ test("New opens the editor; a named tab saves and the reader opens on it", async
 	await page.goto("/fingerpick");
 	await page.getByRole("button", { name: "New", exact: true }).click();
 	await expect(page).toHaveURL(/\/fingerpick\/edit\/new$/);
-	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 
 	await page.getByRole("button", { name: "Tab settings" }).click();
 	await page.getByRole("textbox", { name: "Name" }).fill("Smoke tab");
@@ -52,9 +52,9 @@ test("leaving the editor with unsaved edits asks first", async ({ page }) => {
 	await expect(page).toHaveURL(/\/fingerpick$/);
 });
 
-test("the tab is the editing surface: click, type a fret, add a hammer-on, undo", async ({ page }) => {
+test("the grid is the editing surface: click, type a fret, add a hammer-on, undo", async ({ page }) => {
 	await page.goto("/fingerpick/edit/new");
-	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 	await page.keyboard.type("12");
@@ -66,17 +66,16 @@ test("the tab is the editing surface: click, type a fret, add a hammer-on, undo"
 	await page.keyboard.press("ArrowRight");
 	await page.keyboard.type("4");
 	await page.keyboard.press("h");
-	const hammer = page.locator("svg text").filter({ hasText: /^H$/ });
-	await expect(hammer).toHaveCount(1);
+	const second = page.getByRole("button", { name: "Bar 1, slot 2, B string: fret 4" });
+	await expect(second).toHaveText("4h");
 
 	await page.keyboard.press("ControlOrMeta+z");
-	await expect(hammer).toHaveCount(0);
-	await expect(page.getByRole("button", { name: "Bar 1, slot 2, B string: fret 4" })).toBeAttached();
+	await expect(second).toHaveText("4");
 });
 
 test("the fretboard writes at the cursor, clears on a second click, and Shift gives an x", async ({ page }) => {
 	await page.goto("/fingerpick/edit/new");
-	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 	const dock = page.getByRole("region", { name: "Fretboard" });
 
 	await dock.getByRole("button", { name: "String 5, fret 3", exact: true }).click();
@@ -95,7 +94,7 @@ test("the fretboard writes at the cursor, clears on a second click, and Shift gi
 
 test("the toolbar splits a note so the bar still adds up, and the bar menu copies a bar", async ({ page }) => {
 	await page.goto("/fingerpick/edit/new");
-	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 
 	// Four quarters; the first split into eighths makes five slots.
@@ -112,7 +111,7 @@ test("the toolbar splits a note so the bar still adds up, and the bar menu copie
 
 test("the inspector writes a link and says why the others cannot go on", async ({ page }) => {
 	await page.goto("/fingerpick/edit/new");
-	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 	await page.keyboard.type("5");
 	await page.keyboard.press("ArrowRight");
@@ -122,20 +121,20 @@ test("the inspector writes a link and says why the others cannot go on", async (
 	await expect(inspector.getByText("Tied, Pull-off: Not valid for this fret movement.")).toBeVisible();
 	await expect(inspector.getByRole("button", { name: /^Pull-off/ })).toBeDisabled();
 	await inspector.getByRole("button", { name: /^Hammer-on/ }).click();
-	await expect(page.locator("svg text").filter({ hasText: /^H$/ })).toHaveCount(1);
+	await expect(page.getByRole("button", { name: "Bar 1, slot 2, B string: fret 7" })).toHaveText("7h");
 	await expect(inspector.getByRole("button", { name: /^Hammer-on/ })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("a chord marked from the inspector frets a typed pick sequence", async ({ page }) => {
 	await page.goto("/fingerpick/edit/new");
-	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 	const inspector = page.getByRole("complementary", { name: "Inspector" });
 
 	const search = inspector.getByRole("combobox", { name: "Chord at bar 1, slot 1" });
 	await search.fill("C");
 	await page.getByRole("option", { name: /^C\b/ }).first().click();
-	await expect(page.locator("svg text").filter({ hasText: /^C$/ })).toHaveCount(1);
+	await expect(page.getByRole("button", { name: "C at bar 1 slot 1" })).toBeVisible();
 	// Its shapes arrive from the chord library; until then a sequence is refused, with the reason.
 	await expect(inspector.getByRole("button", { name: "Fill the slot" })).toBeVisible();
 
@@ -144,4 +143,33 @@ test("a chord marked from the inspector frets a typed pick sequence", async ({ p
 	// The C shape: A string 3rd fret, G open, B 1st, e open.
 	await expect(page.getByRole("button", { name: "Bar 1, slot 1, A string: fret 3" })).toBeAttached();
 	await expect(page.getByRole("button", { name: "Bar 1, slot 3, B string: fret 1" })).toBeAttached();
+});
+
+test("in a bar with a chord, an empty cell offers the shape's fret, and a row clears in one click", async ({ page }) => {
+	await page.goto("/fingerpick/edit/new");
+	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
+	const inspector = page.getByRole("complementary", { name: "Inspector" });
+	await inspector.getByRole("combobox", { name: "Chord at bar 1, slot 1" }).fill("C");
+	await page.getByRole("option", { name: /^C\b/ }).first().click();
+	await expect(inspector.getByRole("button", { name: "Fill the slot" })).toBeVisible();
+
+	// Hovered, the A string's empty cell shows the C shape's 3; a click writes it.
+	const cell = page.getByRole("button", { name: "Bar 1, slot 2, A string: empty" });
+	await cell.hover();
+	await expect(cell).toHaveText("3");
+	await cell.click();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 2, A string: fret 3" })).toBeAttached();
+
+	await page.getByRole("button", { name: "Bar 1, slot 3, A string: empty" }).click();
+	await page.keyboard.type("5");
+	await page.getByRole("button", { name: "Bar 1, slot 3, A string: fret 5" }).hover();
+	await page.getByRole("button", { name: "Clear the A string in measure 1" }).click();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 2, A string: empty" })).toBeAttached();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 3, A string: empty" })).toBeAttached();
+});
+
+test("a bar fills with one note value from its footer", async ({ page }) => {
+	await page.goto("/fingerpick/edit/new");
+	await page.getByRole("button", { name: "Fill bar 1 with eighth notes" }).click();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 8, B string: empty" })).toBeAttached();
 });

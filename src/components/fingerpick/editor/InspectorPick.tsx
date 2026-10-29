@@ -14,7 +14,9 @@ interface Props {
 	working: FingerpickPattern;
 	commit: CommitPattern;
 	measureIndex: number;
-	tools: ChordTools;
+	tools: Pick<ChordTools, "chordsInEffect" | "voicingsFor">;
+	/** In a bar's footer: the label on the field's row, not a heading. */
+	inline?: boolean;
 }
 
 type Parsed = Extract<PickSequenceParse, { ok: true }>;
@@ -25,8 +27,9 @@ type Parsed = Extract<PickSequenceParse, { ok: true }>;
  * the note before; written over the bar, fretted from the chord in effect at
  * each beat. A bar with notes asks first; what could not be written as asked is
  * said after. Shapes still loading stop it rather than writing open strings.
+ * The inspector's Bar section and every bar's footer write through it.
  */
-export default function InspectorPick({ working, commit, measureIndex, tools }: Props) {
+export default function InspectorPick({ working, commit, measureIndex, tools, inline = false }: Props) {
 	const [text, setText] = useState("");
 	const [notice, setNotice] = useState<{ kind: "error" | "warning"; lines: readonly string[] } | null>(null);
 	const [ask, setAsk] = useState<Parsed | null>(null);
@@ -61,10 +64,13 @@ export default function InspectorPick({ working, commit, measureIndex, tools }: 
 
 	return (
 		<>
-			<h3>
-				Pick sequence <span className="pb-lab">strings, from the chord&apos;s shape</span>
-			</h3>
+			{!inline && (
+				<h3>
+					Pick sequence <span className="pb-lab">strings, from the chord&apos;s shape</span>
+				</h3>
+			)}
 			<div className="te-irow te-nowrap">
+				{inline && <span className="te-mb-lab">Pick</span>}
 				<Input
 					className="te-mono"
 					value={text}
@@ -77,6 +83,8 @@ export default function InspectorPick({ working, commit, measureIndex, tools }: 
 						setAsk(null);
 					}}
 					onKeyDown={(e) => {
+						// The tab's keys stay out of the field.
+						e.stopPropagation();
 						if (e.key !== "Enter") return;
 						e.preventDefault();
 						request();

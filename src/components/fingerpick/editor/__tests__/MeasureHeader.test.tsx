@@ -3,12 +3,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { makeDefaultPattern, setFret } from "@/lib/fingerpickEdit";
-import FingerpickEditorMeasureHeader from "@/components/fingerpick/FingerpickEditorMeasureHeader";
+import MeasureHeader from "@/components/fingerpick/editor/MeasureHeader";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** The string-shift controls: live when the whole bar can move, and moving it through `commit`. */
-describe("FingerpickEditorMeasureHeader string shifts", () => {
+describe("MeasureHeader string shifts", () => {
 	function mount(pattern: FingerpickPattern) {
 		const host = document.createElement("div");
 		document.body.appendChild(host);
@@ -19,14 +19,14 @@ describe("FingerpickEditorMeasureHeader string shifts", () => {
 		});
 		act(() =>
 			root.render(
-				<FingerpickEditorMeasureHeader
+				<MeasureHeader
 					measure={pattern.measures[0]}
 					measureIndex={0}
 					measureCount={pattern.measures.length}
 					commit={commit}
 					hasChords={false}
 					hints={undefined}
-					onHighlight={() => {}}
+					onBar={() => {}}
 					onNudge={() => {}}
 				/>,
 			),

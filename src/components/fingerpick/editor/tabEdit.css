@@ -425,6 +425,21 @@
 		border-left: 1.5px dotted var(--gp-edge);
 		pointer-events: none;
 	}
+	/* Under the stems, as the grid wrote them: the beat's number darker than the counts between. */
+	.te-count {
+		position: absolute;
+		top: calc(var(--te-top) + 6 * var(--te-gap) + 44px);
+		left: var(--te-x);
+		transform: translateX(-50%);
+		color: var(--gp-ink-mute);
+		font-size: 10.5px;
+		font-weight: 650;
+		pointer-events: none;
+	}
+	.te-count[data-beat] {
+		color: var(--gp-ink-3);
+		font-weight: 750;
+	}
 	.te-hit {
 		position: absolute;
 		right: 0;

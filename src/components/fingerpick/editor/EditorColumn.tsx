@@ -11,6 +11,8 @@ interface Props {
 	/** The cursor's string when it is on this slot, else null. */
 	cursorString: number | null;
 	selected: boolean;
+	/** The count under the slot ("1", "+", "e"…), as the grid always wrote it. */
+	count: string;
 	onPick: (cell: Cell, shift: boolean) => void;
 }
 
@@ -28,7 +30,7 @@ export function noteText(slot: BeatSlot | undefined, stringIndex: number): strin
  * there (Shift extends the run). The buttons keep focus on the tab, so its
  * keys keep working; they are not in the tab order — the tab itself is.
  */
-export default function EditorColumn({ column, slot, cursorString, selected, onPick }: Props) {
+export default function EditorColumn({ column, slot, cursorString, selected, count, onPick }: Props) {
 	const gap = column.lineYs[1] - column.lineYs[0];
 	const style = {
 		"--te-top": `${column.lineYs[0] - gap / 2}px`,
@@ -42,6 +44,11 @@ export default function EditorColumn({ column, slot, cursorString, selected, onP
 		<div className="te-col" style={style} data-cur={on ? "" : undefined} data-sel={selected ? "" : undefined}>
 			{(on || selected) && <span className="te-col-wash" aria-hidden />}
 			{empty && <span className="te-empty" aria-hidden />}
+			{count && (
+				<span className="te-count" aria-hidden data-beat={/^\d+$/.test(count) ? "" : undefined}>
+					{count}
+				</span>
+			)}
 			{column.lineYs.map((_, stringIndex) => (
 				<button
 					key={stringIndex}

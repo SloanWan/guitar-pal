@@ -292,7 +292,7 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 			</Popover>
 			<Popover>
 				<PopoverTrigger asChild>
-					<button type="button" className="pb-icon te-mid-up" aria-label="Editing keys" title="Editing keys">
+					<button type="button" className="pb-icon" aria-label="Editing keys" title="Editing keys">
 						<Keyboard aria-hidden />
 					</button>
 				</PopoverTrigger>

@@ -19,7 +19,14 @@ import {
 } from "@/lib/fingerpickEdit";
 import { clearNoteMarks, setEffect, setLink, setPercussion, toggleLink, toggleSpanOver } from "@/lib/fingerpickTechniqueEdit";
 import { pitchLabel, soundingMidi } from "@/lib/fingerpickPitch";
-import { patternCapo } from "@/lib/fingerpickChords";
+import {
+	clearString,
+	measureDiffersFromHints,
+	patternCapo,
+	replaceMeasureWithHints,
+	replaceRowWithHints,
+	rowDiffersFromHints,
+} from "@/lib/fingerpickChords";
 import { isCompound } from "@/lib/strumMeter";
 import { BEND_HEIGHTS_SEMITONES } from "@/lib/techniqueRegistry";
 import { BEND_HEIGHT_LABEL, DEFAULT_PARAMS, VARIANTS } from "@/lib/techniqueEditDefaults";
@@ -119,6 +126,12 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 	const stroke = strokeOf(working, slots);
 	const { hit, accent } = hitOf(working, slots);
 	const fill = measure ? barFill(measure, working.timeSignature) : null;
+	// The shape's frets under each slot of the cursor's bar, for snapping to them.
+	const hintFor = (slotIndex: number) => chordTools.hintsAt(m, slotIndex);
+	const rowOff = measure ? rowDiffersFromHints(measure, cursor.stringIndex, hintFor) : false;
+	const rowHasNotes = measure?.slots.some((slot) => slot.strings[cursor.stringIndex].fret !== null || slot.strings[cursor.stringIndex].muted) ?? false;
+	const barOff = measure ? measureDiffersFromHints(measure, hintFor) : false;
+	const stringName = STRING_LABELS[cursor.stringIndex];
 	const where = slots.length > 1 ? `${slots.length} slots` : `bar ${m + 1} · slot ${cursor.slotIndex + 1}`;
 
 	function toggleEffect(kind: EffectKind, on: boolean) {
@@ -215,6 +228,29 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 									No marks
 								</button>
 							</div>
+							<h3>
+								The {stringName} string in bar {m + 1}
+							</h3>
+							<div className="te-chips">
+								<button
+									type="button"
+									className="te-chip"
+									disabled={!rowOff}
+									title={rowOff ? undefined : "Every note on it already plays the chord's shape"}
+									onClick={() => commit((p) => replaceRowWithHints(p, m, cursor.stringIndex, hintFor))}
+								>
+									Snap to the shape
+								</button>
+								<button
+									type="button"
+									className="te-chip"
+									disabled={!rowHasNotes}
+									onClick={() => commit((p) => clearString(p, cursor.stringIndex, m))}
+								>
+									Clear the string
+								</button>
+							</div>
+							{!rowOff && rowHasNotes && <p className="te-why">Its notes already play the chord&apos;s shape.</p>}
 							<h3>Link from the note before</h3>
 							<div className="te-chips">
 								<button
@@ -515,6 +551,17 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 							</span>
 						)}
 					</h2>
+					<div className="te-chips">
+						<button
+							type="button"
+							className="te-chip"
+							disabled={!barOff}
+							onClick={() => commit((p) => replaceMeasureWithHints(p, m, hintFor))}
+						>
+							Snap the bar to its chord shapes
+						</button>
+					</div>
+					{!barOff && <p className="te-why">Every fretted note already plays the shape of its chord.</p>}
 					<h3>Fill the bar with</h3>
 					<div className="te-chips">
 						{(isCompound(working.timeSignature) ? COMPOUND_FILLS : SIMPLE_FILLS).map((f) => (

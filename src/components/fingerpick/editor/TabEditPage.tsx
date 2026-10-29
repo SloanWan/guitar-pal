@@ -24,7 +24,7 @@ import { useElementWidth } from "@/components/useElementWidth";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useUser } from "@/hooks/useUser";
 import { cropUrl, setExerciseStatus } from "@/lib/books/api";
-import { STRING_LABELS, clonePatternForEdit, makeDefaultPattern, type SlotTarget } from "@/lib/fingerpickEdit";
+import { STRING_LABELS, clonePatternForEdit, computeBeatLabels, makeDefaultPattern, type SlotTarget } from "@/lib/fingerpickEdit";
 import { indexPattern } from "@/lib/fingerpickIndex";
 import { deriveRepeatDirectives } from "@/lib/fingerpickRepeats";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
@@ -221,6 +221,11 @@ export default function TabEditPage({ id }: { id: string }) {
 		onWrote: (cell, fret) => playback.preview(cell.stringIndex, fret),
 	});
 	const { cursor, selection, pending } = tabCursor;
+	// The counts under every slot, by bar: "1 + 2 +", or a compound bar's eighths when the player counts them.
+	const counts = useMemo(
+		() => working.measures.map((m) => computeBeatLabels(m.slots, working.timeSignature, prefs.countEighths ? "eighths" : "beats")),
+		[working.measures, working.timeSignature, prefs.countEighths],
+	);
 	const editable: EditableStave = {
 		renderColumn: (column) => (
 			<EditorColumn
@@ -232,6 +237,7 @@ export default function TabEditPage({ id }: { id: string }) {
 						: null
 				}
 				selected={inSelection(working, selection, column)}
+				count={counts[column.measureIndex]?.[column.slotIndex] ?? ""}
 				onPick={(cell, shift) => {
 					tabRef.current?.focus({ preventScroll: true });
 					tabCursor.pick(cell, shift);
@@ -430,8 +436,10 @@ export default function TabEditPage({ id }: { id: string }) {
 												size="xs"
 												onClick={() => void save()}
 												loading={saving}
-												disabled={!named}
-												title={named ? "Save to your tabs" : "Name the tab to save it"}
+												disabled={!named || library.isLoading}
+												title={
+													!named ? "Name the tab to save it" : library.isLoading ? "Loading your tabs…" : "Save to your tabs"
+												}
 											>
 												Save
 											</Button>

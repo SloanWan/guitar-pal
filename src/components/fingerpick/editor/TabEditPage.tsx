@@ -52,7 +52,7 @@ import FretboardDock from "./FretboardDock";
 import TabSettingsSheet from "./TabSettingsSheet";
 import { useEditorPlayback } from "./useEditorPlayback";
 import { useLeaveGuard } from "./useLeaveGuard";
-import { useShapeHints } from "./useShapeHints";
+import { useChordTools } from "./useChordTools";
 import { useTabCursor } from "./useTabCursor";
 
 /** What the editor opened on, once it is known. */
@@ -242,7 +242,7 @@ export default function TabEditPage({ id }: { id: string }) {
 	const cursorSlot = working.measures[cursor.measureIndex]?.slots[cursor.slotIndex];
 
 	// The fretboard writes at the cursor's slot, on the string clicked (#359).
-	const hintsAt = useShapeHints(working, user, loading);
+	const chordTools = useChordTools(working, user, loading);
 	function dockHit(stringIndex: number, fret: number, shift: boolean, pointer: boolean) {
 		if (pointer) tabRef.current?.focus({ preventScroll: true });
 		const cell = { measureIndex: cursor.measureIndex, slotIndex: cursor.slotIndex, stringIndex };
@@ -505,7 +505,7 @@ export default function TabEditPage({ id }: { id: string }) {
 							pattern={working}
 							cursor={cursor}
 							capo={patternCapo(working)}
-							hints={hintsAt(cursor.measureIndex, cursor.slotIndex)}
+							hints={chordTools.hintsAt(cursor.measureIndex, cursor.slotIndex)}
 							paged={phone}
 							labels={prefs.dockLabels}
 							onLabels={prefs.setDockLabels}
@@ -525,6 +525,7 @@ export default function TabEditPage({ id }: { id: string }) {
 							cursor={cursor}
 							slots={selectedSlots(working, cursor, selection)}
 							onCursor={(cell) => tabCursor.moveTo(cell, selection)}
+							chordTools={chordTools}
 						/>
 					</aside>
 				)}
@@ -550,6 +551,7 @@ export default function TabEditPage({ id }: { id: string }) {
 							cursor={cursor}
 							slots={selectedSlots(working, cursor, selection)}
 							onCursor={(cell) => tabCursor.moveTo(cell, selection)}
+							chordTools={chordTools}
 							only={toolsTab}
 						/>
 					</div>

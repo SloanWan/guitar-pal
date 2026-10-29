@@ -125,3 +125,23 @@ test("the inspector writes a link and says why the others cannot go on", async (
 	await expect(page.locator("svg text").filter({ hasText: /^H$/ })).toHaveCount(1);
 	await expect(inspector.getByRole("button", { name: /^Hammer-on/ })).toHaveAttribute("aria-pressed", "true");
 });
+
+test("a chord marked from the inspector frets a typed pick sequence", async ({ page }) => {
+	await page.goto("/fingerpick/edit/new");
+	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
+	const inspector = page.getByRole("complementary", { name: "Inspector" });
+
+	const search = inspector.getByRole("combobox", { name: "Chord at bar 1, slot 1" });
+	await search.fill("C");
+	await page.getByRole("option", { name: /^C\b/ }).first().click();
+	await expect(page.locator("svg text").filter({ hasText: /^C$/ })).toHaveCount(1);
+	// Its shapes arrive from the chord library; until then a sequence is refused, with the reason.
+	await expect(inspector.getByRole("button", { name: "Fill the slot" })).toBeVisible();
+
+	await inspector.getByRole("textbox", { name: "Pick sequence for bar 1" }).fill("5321");
+	await inspector.getByRole("button", { name: "Write", exact: true }).click();
+	// The C shape: A string 3rd fret, G open, B 1st, e open.
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, A string: fret 3" })).toBeAttached();
+	await expect(page.getByRole("button", { name: "Bar 1, slot 3, B string: fret 1" })).toBeAttached();
+});

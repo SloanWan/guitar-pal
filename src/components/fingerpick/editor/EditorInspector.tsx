@@ -40,6 +40,9 @@ import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import type { CommitPattern } from "@/components/fingerpick/useEditHistory";
+import InspectorChord from "./InspectorChord";
+import InspectorPick from "./InspectorPick";
+import type { ChordTools } from "./useChordTools";
 
 interface Props {
 	working: FingerpickPattern;
@@ -49,6 +52,8 @@ interface Props {
 	slots: readonly SlotTarget[];
 	/** The cursor to another string, or to a slot an edit made. */
 	onCursor: (cell: Cell) => void;
+	/** The chords in effect, their shapes and the search's index. */
+	chordTools: ChordTools;
 	/** Beside the tab every section shows; in the phone's sheet one tab at a time. */
 	only?: InspectorTab;
 }
@@ -95,7 +100,7 @@ function Reasons<K extends string>({ options }: { options: readonly InspectorOpt
  * technique registry's, every blocked choice disabled with its reason written
  * out. Writes go through the lib's edits and `commit`, so each is one undo.
  */
-export default function EditorInspector({ working, commit, cursor, slots, onCursor, only }: Props) {
+export default function EditorInspector({ working, commit, cursor, slots, onCursor, chordTools, only }: Props) {
 	const [fillAsk, setFillAsk] = useState<{ duration: Duration; cleared: FingerpickPattern } | null>(null);
 	const [wholeAsk, setWholeAsk] = useState<FingerpickPattern | null>(null);
 	const shown = (tab: InspectorTab) => only === undefined || only === tab;
@@ -365,6 +370,7 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 					<h2>
 						Slot <span className="pb-lab pb-num">{where}</span>
 					</h2>
+					<InspectorChord working={working} commit={commit} slots={slots} tools={chordTools} />
 					<h3>Sweep {stroke.kind === "mixed" && <span className="pb-lab">mixed</span>}</h3>
 					<div className="te-chips" role="group" aria-label="Sweep">
 						{STROKES.map((o) => (
@@ -519,6 +525,7 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 							</div>
 						</div>
 					)}
+					<InspectorPick working={working} commit={commit} measureIndex={m} tools={chordTools} />
 				</section>
 			)}
 		</div>

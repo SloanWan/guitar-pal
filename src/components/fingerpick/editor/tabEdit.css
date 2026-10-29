@@ -328,6 +328,9 @@
 		padding: 2px 4px;
 	}
 	.te-chip {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		height: 30px;
 		padding: 0 9px;
 		border-radius: var(--gp-r-s);
@@ -809,6 +812,46 @@
 	}
 	.te-fillnote[data-kind="over"] {
 		color: var(--gp-bad);
+	}
+	.te-chip-ic {
+		width: 13px;
+		height: 13px;
+		margin-right: 4px;
+		vertical-align: -2px;
+	}
+	.te-chordbox {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 6px;
+		padding: 8px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	/* A fixed footprint whatever the label says, so the arrows stay put while stepping. */
+	.te-chordshape {
+		display: grid;
+		place-items: center;
+		width: 140px;
+		height: 150px;
+	}
+	.te-nowrap {
+		flex-wrap: nowrap;
+	}
+	.te-mono {
+		font-family: var(--gp-f-num);
+	}
+	.te-notes {
+		margin: 0;
+		padding-left: 16px;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		line-height: 1.4;
+	}
+	.te-notes[data-kind="error"] {
+		color: var(--gp-bad);
+		font-weight: 650;
 	}
 	.te-sheet-tools {
 		display: flex;

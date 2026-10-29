@@ -5,6 +5,7 @@ import { DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
 import {
 	applyPickSequence,
 	parsePickSequence,
+	pickPlaceholder,
 	type PickSequenceParse,
 } from "@/lib/fingerpickPickSequence";
 import { selectRefVoicing } from "@/lib/strumBars";
@@ -24,12 +25,6 @@ const REPEAT_TIMES_MAX = 16;
 const COMPOUND_METER_PRESET_DURATIONS: readonly Duration[] = ["dotted-quarter", "eighth", "sixteenth"];
 // An example the Pick field's own meter would accept: four or eight tokens in
 // 4/4, three in 3/4, six in 6/8 (see parsePickSequence).
-function pickPlaceholder(timeSignature: [number, number]): string {
-	if (isCompound(timeSignature)) return timeSignature[0] === 6 ? "e.g. 632123 or 6(32)" : "e.g. 632123632123";
-	if (timeSignature[0] === 3) return "e.g. 321 or 6(32)1";
-	if (timeSignature[0] === 2) return "e.g. 32 or 3212";
-	return "e.g. 3212 or 6(32)1(32)";
-}
 
 const SIMPLE_METER_PRESET_DURATIONS: readonly Duration[] = [
 	"quarter",

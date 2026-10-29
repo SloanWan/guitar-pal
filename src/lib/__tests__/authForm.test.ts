@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
+	forgetSignIn,
 	isPlausibleEmail,
 	parseAuthMode,
 	readLastMethod,
@@ -56,6 +57,14 @@ describe("remembered email and method", () => {
 	it("ignores a stored value it does not understand", () => {
 		localStorage.setItem(REMEMBERED_EMAIL_KEY, "");
 		localStorage.setItem("gp-auth-method", "carrier-pigeon");
+		expect(readRememberedEmail()).toBeNull();
+		expect(readLastMethod()).toBeNull();
+	});
+
+	it("forgets both after the account is deleted", () => {
+		rememberEmail("you@example.com");
+		rememberMethod("email");
+		forgetSignIn();
 		expect(readRememberedEmail()).toBeNull();
 		expect(readLastMethod()).toBeNull();
 	});

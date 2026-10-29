@@ -124,3 +124,36 @@ export async function setRecoveredPassword(password: string) {
 	const { data, error } = await supabase.auth.updateUser({ password });
 	return { data, error };
 }
+
+/**
+ * Deletes the signed-in player's data (`"data"`, keeping the account) or the
+ * whole account (`"account"`). Runs on the server, which has the admin key;
+ * after `"account"` the local session is cleared too, since its tokens now
+ * name a user that no longer exists. `password` is required (by the server)
+ * when the account has a password sign-in.
+ */
+export async function deleteAccountData(
+	scope: "data" | "account",
+	password: string | null,
+): Promise<{ error: Error | null }> {
+	let res: Response;
+	try {
+		res = await fetch(`/api/account${scope === "data" ? "?scope=data" : ""}`, {
+			method: "DELETE",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(password === null ? {} : { password }),
+		});
+	} catch {
+		return { error: new Error("Couldn't reach the server. Check your connection and try again.") };
+	}
+	if (!res.ok) {
+		const body: unknown = await res.json().catch(() => null);
+		const message =
+			typeof body === "object" && body !== null && "error" in body && typeof body.error === "string"
+				? body.error
+				: "Something went wrong. Try again.";
+		return { error: new Error(message) };
+	}
+	if (scope === "account") await createClient().auth.signOut({ scope: "local" });
+	return { error: null };
+}

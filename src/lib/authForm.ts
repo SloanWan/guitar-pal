@@ -57,3 +57,10 @@ export function readLastMethod(): AuthMethod | null {
 export function rememberMethod(method: AuthMethod): void {
 	storage()?.setItem(LAST_METHOD_KEY, method);
 }
+
+/** Forgets the remembered email and method — for an account that no longer exists. */
+export function forgetSignIn(): void {
+	const store = storage();
+	store?.removeItem(REMEMBERED_EMAIL_KEY);
+	store?.removeItem(LAST_METHOD_KEY);
+}

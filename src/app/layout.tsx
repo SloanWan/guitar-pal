@@ -3,6 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { NavProgressProvider, NavProgressBar } from "@/components/nav-progress";
 import NoFocusZoom from "@/components/NoFocusZoom";
+import { GrainDefs } from "@/components/ui/grain";
 import { figtree, mono, sans } from "./fonts/fonts";
 
 export const metadata: Metadata = {
@@ -31,6 +32,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="h-full flex flex-col">
+        <GrainDefs />
         <NavProgressProvider>
           <NavProgressBar />
           {children}

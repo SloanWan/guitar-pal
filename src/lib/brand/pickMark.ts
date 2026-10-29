@@ -80,9 +80,20 @@ export function pickTransform(p: MarkPick): string {
 	return `rotate(${p.r} ${p.px} ${p.py}) translate(${p.x.toFixed(2)} ${p.y.toFixed(2)}) scale(${(p.w / 24).toFixed(4)})`;
 }
 
-/** The ground-coloured gap stroke, ≈ 1.15 mark units whatever the pick's own scale. */
-export function gapStrokeWidth(p: MarkPick): number {
-	return Number((1.15 / (p.w / 24)).toFixed(2));
+/** How far a pick's gap is cast, in mark units (decided 2026-10-30, "medium"). */
+export const GAP_CAST = 1.4;
+
+/**
+ * Where a pick's gap lies: the pick's own outline in the ground colour, drawn under it and
+ * cast toward the pick behind, so the white between two picks is a crescent that follows
+ * the pick's edge — a projection, not an even stroke (whose overlaps at the tips kinked).
+ * The hand's picks lie to the left of the one in front; the resting pick's (the hand's
+ * front pick) to its upper left. The back pick has nothing behind it: null.
+ */
+export function gapOffset(index: number): readonly [number, number] | null {
+	if (index <= 0 || index >= MARK_PICKS.length) return null;
+	if (index === MARK_PICKS.length - 1) return [-GAP_CAST * 0.8, -GAP_CAST * 0.7];
+	return [-GAP_CAST, GAP_CAST * 0.32];
 }
 
 /* ------------------------------------------------------------------------------------

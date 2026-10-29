@@ -4,7 +4,8 @@ import {
 	LOGO_OPEN_MS,
 	MARK_PICKS,
 	createLogoPlayer,
-	gapStrokeWidth,
+	GAP_CAST,
+	gapOffset,
 	logoPose,
 	markViewBox,
 	springE,
@@ -24,9 +25,19 @@ describe("the mark's geometry (spec v1.1 §2)", () => {
 		expect(MARK_PICKS[4]).toMatchObject({ px: 21.6, py: 20.2, w: 13, r: 74 });
 	});
 
-	it("keeps the gap stroke ≈ 1.15 mark units at each pick's own scale", () => {
-		expect(gapStrokeWidth(MARK_PICKS[0])).toBeCloseTo(1.97, 2);
-		expect(gapStrokeWidth(MARK_PICKS[4])).toBeCloseTo(2.12, 2);
+	it("casts each pick's gap toward the pick behind it, and none behind the back pick", () => {
+		expect(gapOffset(0)).toBeNull();
+		expect(gapOffset(MARK_PICKS.length)).toBeNull();
+		// the hand: to the left (and a little down), one cast's length
+		for (const j of [1, 2, 3]) {
+			const [dx, dy] = gapOffset(j)!;
+			expect(dx).toBe(-GAP_CAST);
+			expect(dy).toBeGreaterThan(0);
+		}
+		// the resting pick: up and to the left, onto the hand's front pick
+		const [dx, dy] = gapOffset(4)!;
+		expect(dx).toBeLessThan(0);
+		expect(dy).toBeLessThan(0);
 	});
 });
 

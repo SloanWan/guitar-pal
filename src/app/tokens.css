@@ -1,6 +1,6 @@
 /* =====================================================================================
    Guitar Pal design tokens · Candy v1.1 (2026-10-23) — epic #349, this layer #350
-   page = Snow, palette = Gauge v2, selection = Lift, card hover = Hop, type = Figtree.
+   page = Snow, palette = matte gauge, selection = Lift, card hover = Hop, type = Figtree.
    Custom properties only: nothing here styles an element by itself.
 
    Runtime tokens are --gp-*. They follow two attributes:
@@ -93,43 +93,54 @@
 :root[data-theme="dark"] { color-scheme: dark; }
 
 /* -------------------------------------------------------------------------------------
-   2. MODULE RAMPS — Gauge v2 (decided 2026-10-23)
-   Inspired by the classic gauge-coloured picks (confirmed by the owner). The brand name
-   and its logo NEVER appear in the UI, the code or the docs that ship.
+   2. MODULE RAMPS — matte gauge (decided 2026-10-29; Gauge v2 of 2026-10-23 before it)
+   Inspired by the classic gauge-coloured picks (confirmed by the owner) — and by their
+   MATTE surface: Gauge v2 read as light, this reads as pigment. The brand name and its logo
+   NEVER appear in the UI, the code or the docs that ship.
    Hue map: strum = green .88 · tab = blue 1.0 · chords = red .50 · fretboard = rosewood
    (always wood) · books = purple 1.14 · accents yellow .73 / orange .60 (ink text only).
-   ≈70% of the reference chroma at the reference hue angles, kept matte; the green is
-   deeper and cooler than Duolingo's.
+   ≈45% of the reference chroma (OKLCH) at the reference hue angles, slightly greyed; the
+   chords red sits deeper (brick) than its siblings so it stays apart from the strum green
+   under colour-vision loss (below).
    Per module: 100 tint · 300 ring · 500 fill · 700 text/strong · on (text on 500)
                sh   = shadow of a 500-filled pressable (light: 700, dark: 300)
                sh-n = shadow (and light ring) of a NEUTRAL pressable on that module's page
    Module colour may appear ONLY on: the selected object, a 500 fill of a primary
    control, pressable shadows/rings, the pick marker, playhead/now states, data marks.
-   Colour vision: Strum vs Chords is the closest pair (OKLab ΔE ≈ 7.0 protan / 7.3
-   deutan in light), so a module colour ALWAYS travels with its icon and its label.
-   Contrast on Snow (#F7F7F8): every 500 ≥ 3:1 as a graphic (lowest Tab 4.47); text on
-   every 500 ≥ 4.5:1 (lowest Tab 4.79); every 700 on white ≥ 8:1.
+   In a MIXED list (Home) a row's badge is neutral with the icon in its 700, and fills
+   with the 500 only on the hovered or selected row (`.gp-badge-quiet`).
+   Colour vision: Strum vs Chords is the closest pair (OKLab ΔE ≈ 7.8 deutan / 14.5 protan
+   in light, 7.9 / 15.8 in dark), so a module colour ALWAYS travels with its icon and label.
+   Contrast on Snow (#F7F7F8): every 500 ≥ 3:1 as a graphic (lowest Strum 4.64); text on
+   every 500 ≥ 4.5:1 (lowest Strum 4.97); every 700 on white ≥ 9:1.
    ------------------------------------------------------------------------------------- */
 :root {
-  --gp-strum-100:#D0E8D0;  --gp-strum-300:#A1CCA1;  --gp-strum-500:#23762C;  --gp-strum-700:#065114;  --gp-strum-on:#FFFFFF;  --gp-strum-sh:var(--gp-strum-700);   --gp-strum-sh-n:#91B791;
-  --gp-tab-100:#CBE4FA;    --gp-tab-300:#97C7ED;    --gp-tab-500:#0078B9;    --gp-tab-700:#055380;    --gp-tab-on:#FFFFFF;    --gp-tab-sh:var(--gp-tab-700);       --gp-tab-sh-n:#86B3D8;
-  --gp-chords-100:#FED8D5; --gp-chords-300:#FDADA6; --gp-chords-500:#C63C3C; --gp-chords-700:#94131C; --gp-chords-on:#FFFFFF; --gp-chords-sh:var(--gp-chords-700); --gp-chords-sh-n:#E29C96;
-  --gp-fb-100:#EFDED3;     --gp-fb-300:#DABBA8;     --gp-fb-500:#5F320E;     --gp-fb-700:#3C1B00;     --gp-fb-on:#FFFFFF;     --gp-fb-sh:var(--gp-fb-700);         --gp-fb-sh-n:#C9A987;
-  --gp-books-100:#F3DAF2;  --gp-books-300:#DFB3DE;  --gp-books-500:#823883;  --gp-books-700:#58155A;  --gp-books-on:#FFFFFF;  --gp-books-sh:var(--gp-books-700);   --gp-books-sh-n:#CF9ECE;
+  --gp-strum-100:#E3F1E5;  --gp-strum-300:#BAD7BF;  --gp-strum-500:#4C7A56;  --gp-strum-700:#2C4E34;  --gp-strum-on:#FFFFFF;  --gp-strum-sh:var(--gp-strum-700);   --gp-strum-sh-n:#B0C4B3;
+  --gp-tab-100:#E0EFFA;    --gp-tab-300:#B4D2E9;    --gp-tab-500:#427394;    --gp-tab-700:#244962;    --gp-tab-on:#FFFFFF;    --gp-tab-sh:var(--gp-tab-700);       --gp-tab-sh-n:#ACC1D1;
+  --gp-chords-100:#FFE5E2; --gp-chords-300:#F7BDB8; --gp-chords-500:#823F3B; --gp-chords-700:#572623; --gp-chords-on:#FFFFFF; --gp-chords-sh:var(--gp-chords-700); --gp-chords-sh-n:#DBB2AE;
+  --gp-fb-100:#F7EAE2;     --gp-fb-300:#E1C8B8;     --gp-fb-500:#624634;     --gp-fb-700:#3F2B1F;     --gp-fb-on:#FFFFFF;     --gp-fb-sh:var(--gp-fb-700);         --gp-fb-sh-n:#CBBAAE;
+  --gp-books-100:#F6E8F4;  --gp-books-300:#DFC4DC;  --gp-books-500:#865D82;  --gp-books-700:#573954;  --gp-books-on:#FFFFFF;  --gp-books-sh:var(--gp-books-700);   --gp-books-sh-n:#CAB7C8;
   /* accents (Home toasts, the logo's resting pick). Both carry INK text (11.6:1 · 5.3:1);
      yellow is 1.43:1 on Snow, so it is never a graphic on the page by itself. */
   --gp-a1:#EBD14D; --gp-a2:#E56636; --gp-a-on:#17181B;
-  /* logo slots: 0–3 the hand back → front, 4 the resting pick (purple · blue · green · red + yellow) */
-  --gp-lg0:#823883; --gp-lg1:#0078B9; --gp-lg2:#23762C; --gp-lg3:#C63C3C; --gp-lg4:#EBD14D;
+  /* logo slots: 0–3 the hand back → front, 4 the resting pick (green · wood · blue · red + yellow,
+     decided 2026-10-30). The red is the logo's own, brighter than the chords ramp's brick so it
+     does not read as a second wood. */
+  --gp-lg0:#4C7A56; --gp-lg1:#624634; --gp-lg2:#427394; --gp-lg3:#A5504B; --gp-lg4:#EBD14D;
   /* fretboard interval roles (light tints in both themes; labels use --gp-on-role) */
   --gp-role-3:#F9BEB8; --gp-role-5:#A7CEED; --gp-role-7:#DAD09B; --gp-role-x:#E2DFDB; --gp-on-role:#17181A;
   /* app icon: fixed per tile, NOT per theme (a light tile always wears the light slots) */
   --gp-tile-l:#FFFFFF; --gp-tile-d:#18191B;
-  --gp-lgl0:#823883; --gp-lgl1:#0078B9; --gp-lgl2:#23762C; --gp-lgl3:#C63C3C; --gp-lgl4:#EBD14D;
-  --gp-lgd0:#C586C4; --gp-lgd1:#71B8EF; --gp-lgd2:#A1E1A3; --gp-lgd3:#F17F79; --gp-lgd4:#E7D169;
+  /* grain: the matte picks' surface. A 140px grey fractal-noise tile laid over a fill with
+     overlay blending (HTML fills); SVG pick shapes take the #gp-grain filter (GrainDefs) */
+  --gp-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2' intercept='-.5'/%3E%3CfeFuncG type='linear' slope='2' intercept='-.5'/%3E%3CfeFuncB type='linear' slope='2' intercept='-.5'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
+  --gp-lgl0:#4C7A56; --gp-lgl1:#624634; --gp-lgl2:#427394; --gp-lgl3:#A5504B; --gp-lgl4:#EBD14D;
+  --gp-lgd0:#95C19D; --gp-lgd1:#AE927F; --gp-lgd2:#8BBBDD; --gp-lgd3:#F09A92; --gp-lgd4:#E7D169;
   /* slot 5, wood: the fretboard's 500 in each ramp — the toast (an inverted surface) wears the
      other theme's slots so its pick still reads */
-  --gp-lgl5:#5F320E; --gp-lgd5:#A48260;
+  --gp-lgl5:#624634; --gp-lgd5:#AE927F;
+  /* slot 6, purple: books — the toast's pick on a Books page; the logo itself no longer wears it */
+  --gp-lgl6:#865D82; --gp-lgd6:#CEA5CA;
   /* Home's toast pick in dark: the toast is light there, where yellow would vanish — the light
      theme's orange accent instead */
   --gp-a2-light:#E56636;
@@ -138,24 +149,24 @@
    sh-n = near-black tinted by the hue, on = the dark page */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --gp-strum-100:#263A27;  --gp-strum-300:#355B36;  --gp-strum-500:#A1E1A3;  --gp-strum-700:#C2DFC1;  --gp-strum-on:#18191B;  --gp-strum-sh:var(--gp-strum-300);   --gp-strum-sh-n:#0B160B;
-    --gp-tab-100:#21384A;    --gp-tab-300:#2A5677;    --gp-tab-500:#71B8EF;    --gp-tab-700:#BBDCF6;    --gp-tab-on:#18191B;    --gp-tab-sh:var(--gp-tab-300);       --gp-tab-sh-n:#07151F;
-    --gp-chords-100:#512C29; --gp-chords-300:#833E3A; --gp-chords-500:#F17F79; --gp-chords-700:#FECBC6; --gp-chords-on:#18191B; --gp-chords-sh:var(--gp-chords-300); --gp-chords-sh-n:#220E0C;
-    --gp-fb-100:#3F3328;     --gp-fb-300:#55402B;     --gp-fb-500:#A48260;     --gp-fb-700:#E6D4C3;     --gp-fb-on:#18191B;     --gp-fb-sh:var(--gp-fb-300);         --gp-fb-sh-n:#1B1108;
-    --gp-books-100:#432F43;  --gp-books-300:#6C456B;  --gp-books-500:#C586C4;  --gp-books-700:#EDCEEC;  --gp-books-on:#18191B;  --gp-books-sh:var(--gp-books-300);   --gp-books-sh-n:#1D0E1D;
+    --gp-strum-100:#253127;  --gp-strum-300:#3B513F;  --gp-strum-500:#95C19D;  --gp-strum-700:#CBE2CF;  --gp-strum-on:#18191B;  --gp-strum-sh:var(--gp-strum-300);   --gp-strum-sh-n:#0D140E;
+    --gp-tab-100:#223039;    --gp-tab-300:#364E5E;    --gp-tab-500:#8BBBDD;    --gp-tab-700:#C7DEF0;    --gp-tab-on:#18191B;    --gp-tab-sh:var(--gp-tab-300);       --gp-tab-sh-n:#0C1318;
+    --gp-chords-100:#3F2624; --gp-chords-300:#673D3A; --gp-chords-500:#EA756A; --gp-chords-700:#FCCEC9; --gp-chords-on:#18191B; --gp-chords-sh:var(--gp-chords-300); --gp-chords-sh-n:#1B0E0D;
+    --gp-fb-100:#362B24;     --gp-fb-300:#58463A;     --gp-fb-500:#AE927F;     --gp-fb-700:#EAD6CA;     --gp-fb-on:#18191B;     --gp-fb-sh:var(--gp-fb-300);         --gp-fb-sh-n:#16100D;
+    --gp-books-100:#352934;  --gp-books-300:#574355;  --gp-books-500:#CEA5CA;  --gp-books-700:#E9D3E6;  --gp-books-on:#18191B;  --gp-books-sh:var(--gp-books-300);   --gp-books-sh-n:#150F15;
     --gp-a1:#E7D169; --gp-a2:#FC9571; --gp-a-on:#18191B;
-    --gp-lg0:#C586C4; --gp-lg1:#71B8EF; --gp-lg2:#A1E1A3; --gp-lg3:#F17F79; --gp-lg4:#E7D169;
+    --gp-lg0:#95C19D; --gp-lg1:#AE927F; --gp-lg2:#8BBBDD; --gp-lg3:#F09A92; --gp-lg4:#E7D169;
     --gp-role-3:#D69D97; --gp-role-5:#87ADCB; --gp-role-7:#BCB17E; --gp-role-x:#C3C1BC;
   }
 }
 :root[data-theme="dark"] {
-  --gp-strum-100:#263A27;  --gp-strum-300:#355B36;  --gp-strum-500:#A1E1A3;  --gp-strum-700:#C2DFC1;  --gp-strum-on:#18191B;  --gp-strum-sh:var(--gp-strum-300);   --gp-strum-sh-n:#0B160B;
-  --gp-tab-100:#21384A;    --gp-tab-300:#2A5677;    --gp-tab-500:#71B8EF;    --gp-tab-700:#BBDCF6;    --gp-tab-on:#18191B;    --gp-tab-sh:var(--gp-tab-300);       --gp-tab-sh-n:#07151F;
-  --gp-chords-100:#512C29; --gp-chords-300:#833E3A; --gp-chords-500:#F17F79; --gp-chords-700:#FECBC6; --gp-chords-on:#18191B; --gp-chords-sh:var(--gp-chords-300); --gp-chords-sh-n:#220E0C;
-  --gp-fb-100:#3F3328;     --gp-fb-300:#55402B;     --gp-fb-500:#A48260;     --gp-fb-700:#E6D4C3;     --gp-fb-on:#18191B;     --gp-fb-sh:var(--gp-fb-300);         --gp-fb-sh-n:#1B1108;
-  --gp-books-100:#432F43;  --gp-books-300:#6C456B;  --gp-books-500:#C586C4;  --gp-books-700:#EDCEEC;  --gp-books-on:#18191B;  --gp-books-sh:var(--gp-books-300);   --gp-books-sh-n:#1D0E1D;
+  --gp-strum-100:#253127;  --gp-strum-300:#3B513F;  --gp-strum-500:#95C19D;  --gp-strum-700:#CBE2CF;  --gp-strum-on:#18191B;  --gp-strum-sh:var(--gp-strum-300);   --gp-strum-sh-n:#0D140E;
+  --gp-tab-100:#223039;    --gp-tab-300:#364E5E;    --gp-tab-500:#8BBBDD;    --gp-tab-700:#C7DEF0;    --gp-tab-on:#18191B;    --gp-tab-sh:var(--gp-tab-300);       --gp-tab-sh-n:#0C1318;
+  --gp-chords-100:#3F2624; --gp-chords-300:#673D3A; --gp-chords-500:#EA756A; --gp-chords-700:#FCCEC9; --gp-chords-on:#18191B; --gp-chords-sh:var(--gp-chords-300); --gp-chords-sh-n:#1B0E0D;
+  --gp-fb-100:#362B24;     --gp-fb-300:#58463A;     --gp-fb-500:#AE927F;     --gp-fb-700:#EAD6CA;     --gp-fb-on:#18191B;     --gp-fb-sh:var(--gp-fb-300);         --gp-fb-sh-n:#16100D;
+  --gp-books-100:#352934;  --gp-books-300:#574355;  --gp-books-500:#CEA5CA;  --gp-books-700:#E9D3E6;  --gp-books-on:#18191B;  --gp-books-sh:var(--gp-books-300);   --gp-books-sh-n:#150F15;
   --gp-a1:#E7D169; --gp-a2:#FC9571; --gp-a-on:#18191B;
-  --gp-lg0:#C586C4; --gp-lg1:#71B8EF; --gp-lg2:#A1E1A3; --gp-lg3:#F17F79; --gp-lg4:#E7D169;
+  --gp-lg0:#95C19D; --gp-lg1:#AE927F; --gp-lg2:#8BBBDD; --gp-lg3:#F09A92; --gp-lg4:#E7D169;
   --gp-role-3:#D69D97; --gp-role-5:#87ADCB; --gp-role-7:#BCB17E; --gp-role-x:#C3C1BC;
 }
 

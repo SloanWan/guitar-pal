@@ -24,7 +24,10 @@ export function ModuleBadge({ icon: IconComp, className }: { icon: Icon; classNa
 export interface ListRowProps extends Omit<ComponentProps<"button">, "title"> {
 	title: ReactNode;
 	subline?: ReactNode;
-	/** The badge's icon; with `module`, the row wears that module's colour (a mixed list colours per row). */
+	/**
+	 * The badge's icon. With `module` the row is in a mixed list and wears that module's
+	 * colour — quietly: the badge fills only on the row pointed at or chosen.
+	 */
 	icon?: Icon;
 	module?: ModuleKey;
 	/** A favourite pick, a chevron, a mini grid. */
@@ -57,7 +60,8 @@ export function ListRow({
 	const pressRef = usePress(ref, { hop: true });
 	const body = (
 		<>
-			{icon && <ModuleBadge icon={icon} />}
+			{/* A row with its own module sits in a mixed list: its badge rests quiet (primitives.css). */}
+			{icon && <ModuleBadge icon={icon} className={module ? "gp-badge-quiet" : undefined} />}
 			<span className="gp-row-main">
 				<span className="gp-row-t gp-title">{title}</span>
 				{subline && <span className="gp-row-s">{subline}</span>}

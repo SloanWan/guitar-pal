@@ -33,6 +33,22 @@ function applyTheme(next: Theme): void {
 }
 
 /**
+ * Puts the saved theme back on `<html>`. The boot script sets it before first
+ * paint, but when a render error makes React rebuild the document on the
+ * client the attribute is dropped, and the page falls back to the v3 dark
+ * tokens under the Candy light ones. The error screens call this.
+ */
+export function restoreSavedTheme(): void {
+	let saved: string | null = null;
+	try {
+		saved = localStorage.getItem(THEME_STORAGE_KEY);
+	} catch {
+		// Storage can be blocked; light is the default anyway.
+	}
+	document.documentElement.dataset.theme = saved === "dark" ? "dark" : "light";
+}
+
+/**
  * The current theme and a setter, backed by `<html data-theme>` rather than
  * React state so every consumer (the header button, the switch in the account
  * menu, More and Settings) agrees with the FOUC boot script and with each other.

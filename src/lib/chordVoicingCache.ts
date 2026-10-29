@@ -11,7 +11,7 @@ import type { ChordVoicing } from "@/lib/chordVoicing";
 // session, redraws the same chords without touching the network.
 
 /** Bump when the stored shape changes; old entries are then simply ignored. */
-const STORAGE_VERSION = "v2";
+const STORAGE_VERSION = "v3";
 const STORAGE_PREFIX = `chordVoicings:${STORAGE_VERSION}:`;
 
 export function voicingCacheKey(root: string, suffix: string): string {
@@ -109,6 +109,8 @@ const fetchFromDatabase: VoicingFetcher = async (root, suffix) => {
 	const { data, error } = await createClient()
 		.from("chords")
 		.select("chord_voicings(id, label, start_fret, barre_fret, capo, frets, fingers)")
+		// Ordered as `chordsData` orders them, so shape n is the same shape on every page.
+		.order("label", { referencedTable: "chord_voicings" })
 		.eq("root", root)
 		.eq("suffix", suffix)
 		// maybeSingle, not single: a chord the library does not carry is an empty

@@ -1,157 +1,55 @@
-// Pure functions to build BrowseSection arrays from chord data.
-// Exported types (BrowseCard, BrowseSection, BrowseSubsection) are the single
-// source of truth; BrowseGrid re-exports them for backward compatibility.
+// One root's chords grouped by quality, for the hub's "By root" view and the
+// chord page's library.
 
-import {
-  CHORD_SUFFIX_CATEGORIES,
-  groupSuffixes,
-  getSlashSuffixes,
-  isSlashChord,
-  EXCLUDED_SUFFIXES,
-  sortRoots,
-} from "@/lib/chordSuffixes";
-import {
-  selectStandardVoicing,
-  voicingToDiagramShape,
-  type ChordVoicing,
-  type DiagramShape,
-} from "@/lib/chordVoicing";
+import { groupSuffixes, getSlashSuffixes } from "@/lib/chordSuffixes";
+import { voicingToDiagramShape, type ChordVoicing, type DiagramShape } from "@/lib/chordVoicing";
+import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 
 export interface BrowseCard {
   key: string;
   root: string;
   suffix: string;
+  /** The chord's standard shape. */
   def: DiagramShape;
-  label: string;
-  href?: string;
-}
-
-export interface BrowseSubsection {
-  label: string;
-  cards: BrowseCard[];
 }
 
 export interface BrowseSection {
   label: string;
   cards: BrowseCard[];
-  subsections?: BrowseSubsection[];
 }
 
-// Structurally compatible with ChordWithVoicings from @/lib/chords.
-// Defined locally to avoid importing from a "use server" module.
+// Structurally compatible with ChordWithVoicings; declared here so this module
+// never imports a Supabase-touching one.
 interface ChordData {
   root: string;
   suffix: string;
   chord_voicings: ChordVoicing[];
 }
 
-function makeCard(
-  chord: ChordData,
-  labelMode: "suffix" | "root-suffix",
-  buildHref?: (root: string, suffix: string) => string,
-): BrowseCard | null {
+function makeCard(chord: ChordData): BrowseCard | null {
   const voicing = selectStandardVoicing(chord.chord_voicings);
   if (!voicing) return null;
-  return {
-    key: `${chord.root}-${chord.suffix}`,
-    root: chord.root,
-    suffix: chord.suffix,
-    def: voicingToDiagramShape(voicing),
-    label: labelMode === "suffix" ? chord.suffix : `${chord.root} ${chord.suffix}`,
-    href: buildHref?.(chord.root, chord.suffix),
-  };
+  return { key: `${chord.root}-${chord.suffix}`, root: chord.root, suffix: chord.suffix, def: voicingToDiagramShape(voicing) };
 }
 
-export function buildRootSections(
-  data: ChordData[],
-  buildHref?: (root: string, suffix: string) => string,
-): BrowseSection[] {
-  const byRoot = new Map(data.map((c) => [c.suffix, c]));
+/** One root's chords as sections by quality, slash chords last; chords with no shape are left out. */
+export function buildRootSections(data: readonly ChordData[]): BrowseSection[] {
+  const bySuffix = new Map(data.map((c) => [c.suffix, c]));
   const suffixes = data.map((c) => c.suffix);
-  const categoryGroups = groupSuffixes(suffixes);
-  const slashSuffs = getSlashSuffixes(suffixes);
 
-  function makeCards(suffs: readonly string[]): BrowseCard[] {
-    return suffs.flatMap((s) => {
-      const chord = byRoot.get(s);
-      if (!chord) return [];
-      const card = makeCard(chord, "root-suffix", buildHref);
+  const makeCards = (suffs: readonly string[]): BrowseCard[] =>
+    suffs.flatMap((s) => {
+      const chord = bySuffix.get(s);
+      const card = chord ? makeCard(chord) : null;
       return card ? [card] : [];
     });
-  }
 
-  const sections: BrowseSection[] = categoryGroups
+  const sections: BrowseSection[] = groupSuffixes(suffixes)
     .map(({ category, suffixes: gs }) => ({ label: category, cards: makeCards(gs) }))
     .filter((s) => s.cards.length > 0);
 
-  const slashCards = makeCards(slashSuffs);
+  const slashCards = makeCards(getSlashSuffixes(suffixes));
   if (slashCards.length > 0) sections.push({ label: "Slash Chords", cards: slashCards });
-
-  return sections;
-}
-
-export function buildAllChordsRootFirst(
-  allChords: ChordData[],
-  buildHref?: (root: string, suffix: string) => string,
-): BrowseSection[] {
-  const rootOrder = sortRoots([...new Set(allChords.map((c) => c.root))]);
-  return rootOrder.flatMap((root) => {
-    const forRoot = allChords.filter((c) => c.root === root);
-    const suffixes = forRoot.map((c) => c.suffix);
-    const groups = groupSuffixes(suffixes);
-    const slashSuffs = getSlashSuffixes(suffixes);
-
-    function makeCards(suffs: readonly string[]): BrowseCard[] {
-      return suffs.flatMap((s) => {
-        const chord = forRoot.find((c) => c.suffix === s);
-        if (!chord) return [];
-        const card = makeCard(chord, "root-suffix", buildHref);
-        return card ? [card] : [];
-      });
-    }
-
-    const subsections: BrowseSubsection[] = [
-      ...groups
-        .map(({ category, suffixes: gs }) => ({ label: category, cards: makeCards(gs) }))
-        .filter((s) => s.cards.length > 0),
-      ...(slashSuffs.length > 0 ? [{ label: "Slash Chords", cards: makeCards(slashSuffs) }] : []),
-    ];
-
-    return subsections.length > 0 ? [{ label: root, cards: [], subsections }] : [];
-  });
-}
-
-export function buildAllChordsCategories(
-  allChords: ChordData[],
-  buildHref?: (root: string, suffix: string) => string,
-): BrowseSection[] {
-  const rootOrder = sortRoots([...new Set(allChords.map((c) => c.root))]);
-
-  function rootSubsections(
-    filterFn: (c: ChordData) => boolean,
-  ): BrowseSubsection[] {
-    return rootOrder.flatMap((root) => {
-      const cards = allChords
-        .filter((c) => c.root === root && filterFn(c))
-        .flatMap((c) => {
-          const card = makeCard(c, "root-suffix", buildHref);
-          return card ? [card] : [];
-        });
-      return cards.length > 0 ? [{ label: root, cards }] : [];
-    });
-  }
-
-  const sections: BrowseSection[] = CHORD_SUFFIX_CATEGORIES.flatMap(({ category, suffixes }) => {
-    const subs = rootSubsections((c) => suffixes.includes(c.suffix));
-    return subs.length > 0 ? [{ label: category, cards: [], subsections: subs }] : [];
-  });
-
-  const slashSubs = rootSubsections(
-    (c) => isSlashChord(c.suffix) && !EXCLUDED_SUFFIXES.includes(c.suffix),
-  );
-  if (slashSubs.length > 0) {
-    sections.push({ label: "Slash Chords", cards: [], subsections: slashSubs });
-  }
 
   return sections;
 }

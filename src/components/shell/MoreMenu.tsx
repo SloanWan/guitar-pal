@@ -15,7 +15,7 @@ import type { ModuleKey } from "@/lib/moduleForPath";
 const PLACES: readonly { href: string; title: string; subline: string; icon: typeof BookOpen; module: ModuleKey }[] = [
 	{ href: "/books", title: "Books", subline: "Your method books, chapter by chapter", icon: BookOpen, module: "books" },
 	{ href: "/fretboard", title: "Fretboard", subline: "Notes, intervals and shapes", icon: Guitar, module: "fb" },
-	{ href: "/chords/my", title: "My chords", subline: "The shapes you saved", icon: Music, module: "chords" },
+	{ href: "/chords?view=mine", title: "My chords", subline: "The shapes you saved", icon: Music, module: "chords" },
 ];
 
 /**

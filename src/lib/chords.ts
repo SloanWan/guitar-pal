@@ -10,6 +10,7 @@
 import {
 	getAllChordsWithVoicings as getAllChordsWithVoicingsCached,
 	getChordIndex as getChordIndexCached,
+	getChordsByRoot as getChordsByRootCached,
 	type ChordWithVoicings,
 } from "@/lib/chordsData";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
@@ -26,4 +27,9 @@ export async function getAllChordsWithVoicings(): Promise<ChordWithVoicings[]> {
 
 export async function getChordIndex(): Promise<ChordIndexEntry[]> {
 	return getChordIndexCached();
+}
+
+/** One root's chords, for the chord page's library when the player picks another root. */
+export async function getChordsByRoot(root: string): Promise<ChordWithVoicings[]> {
+	return getChordsByRootCached(root);
 }

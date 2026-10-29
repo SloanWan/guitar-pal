@@ -1,62 +1,34 @@
-import { notFound } from "next/navigation";
-import Link from "@/components/AppLink";
+import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
-import { getChordsByRoot } from "@/lib/chordsData";
-import { slugToRoot, suffixToSlug } from "@/lib/chordSlug";
-import { buildRootSections } from "@/lib/chordBrowseSections";
-import MusicalText from "@/components/MusicalText";
-import BrowseGrid from "@/components/chords/BrowseGrid";
-import ChordToc from "@/components/chords/ChordToc";
-import ChordTocIndicator from "@/components/chords/ChordTocIndicator";
+import ChordsHubPage from "@/components/chords/hub/ChordsHubPage";
+import { withGlyphs } from "@/lib/chordFormulas";
+import { canonicalSlug, libraryRoot, rootToSlug, slugToRoot } from "@/lib/chordSlug";
+import { ROOT_CHROMATIC_ORDER } from "@/lib/chordSuffixes";
+import type { BoardParams } from "@/lib/chordBoard";
+import { DEFAULT_HUB_QUALITY } from "@/lib/chordsHub";
 
-type Props = { params: Promise<{ rootSlug: string }> };
+type Props = { params: Promise<{ rootSlug: string }>; searchParams: Promise<BoardParams> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const { rootSlug } = await params;
-	const root = slugToRoot(rootSlug);
-	return { title: `${root} Chords — Chord Charts | Guitar Pal` };
+	const root = libraryRoot(slugToRoot(rootSlug));
+	return {
+		title: `${withGlyphs(root)} Chords — Chord Charts | Guitar Pal`,
+		alternates: { canonical: `/chords/${rootToSlug(root)}` },
+	};
 }
 
-export default async function RootPage({ params }: Props) {
+// The hub, opened on one root's chords: a root keeps an address of its own, under
+// either spelling — /chords/g-sharp and /chords/a-flat are the same chords.
+export default async function RootPage({ params, searchParams }: Props) {
 	const { rootSlug } = await params;
-	const root = slugToRoot(rootSlug);
-	const chords = await getChordsByRoot(root);
-
-	if (chords.length === 0) notFound();
-
-	const sections = buildRootSections(
-		chords,
-		(_r, suffix) => `/chords/${rootSlug}/${suffixToSlug(suffix)}`,
-	);
-
-	return (
-		<>
-		<ChordToc sections={sections} />
-		<ChordTocIndicator sections={sections} />
-		<div className="flex-1 bg-surface">
-			<div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-				<div className="flex flex-col items-center gap-6">
-					<div className="flex w-full items-center justify-between">
-						<Link
-							href="/chords"
-							className="text-sm text-ink-dim hover:text-ink"
-						>
-							← All Roots
-						</Link>
-						<h1 className="text-2xl font-semibold text-ink">
-							<MusicalText text={root} /> Chords
-						</h1>
-						<Link
-							href="/chords/all"
-							className="text-sm text-ink-dim hover:text-ink"
-						>
-							All Chords →
-						</Link>
-					</div>
-					<BrowseGrid sections={sections} />
-				</div>
-			</div>
-		</div>
-		</>
-	);
+	const board = await searchParams;
+	const moved = canonicalSlug(rootSlug, slugToRoot, rootToSlug);
+	if (moved !== null) {
+		const query = new URLSearchParams(Object.entries(board).filter((e): e is [string, string] => typeof e[1] === "string"));
+		permanentRedirect(`/chords/${moved}${query.size > 0 ? `?${query}` : ""}`);
+	}
+	const root = libraryRoot(slugToRoot(rootSlug));
+	if (!ROOT_CHROMATIC_ORDER.includes(root)) notFound();
+	return <ChordsHubPage view="root" root={root} quality={DEFAULT_HUB_QUALITY} board={board.board === undefined ? null : board} />;
 }

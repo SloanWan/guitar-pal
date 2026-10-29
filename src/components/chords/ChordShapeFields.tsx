@@ -1,17 +1,14 @@
 "use client";
 
 import ChordShapeEditor from "@/components/chords/ChordShapeEditor";
+import { Field, Input } from "@/components/ui/input";
 import { normalizeChordName } from "@/lib/chordSearch";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import type { ChordShape } from "@/lib/chordShape";
 
 /**
- * What writing a chord shape asks for, wherever it is asked.
- *
- * Shared by the dialog a bar opens and the page a chord is invented on, so the
- * two are the same three questions in the same order — what the chord is called,
- * what this shape is called, and what it looks like — and only the action
- * underneath them differs.
+ * What writing a chord shape asks for, wherever it is asked: the chord's name
+ * (only while it has none), the shape's own name, and the shape.
  */
 
 interface Props {
@@ -22,8 +19,8 @@ interface Props {
 	onNameChange: (name: string) => void;
 	/**
 	 * Given, the chord itself is still to be named and the field for it is shown.
-	 * Left out where the chord is already known — renaming it there would move
-	 * every bar pinned to it.
+	 * Left out where the chord is known — renaming it there would move every bar
+	 * pinned to it.
 	 */
 	chordName?: string;
 	onChordNameChange?: (name: string) => void;
@@ -38,48 +35,42 @@ export default function ChordShapeFields({
 	onChordNameChange,
 }: Props) {
 	const naming = chordName !== undefined && onChordNameChange !== undefined;
-	// The same reading the search does, so a chord filed here can be typed back
-	// later and land on itself.
+	// The same reading search does, so a chord filed here can be typed back later.
 	const identity = naming ? normalizeChordName(chordName) : null;
 
 	return (
 		<>
 			{naming && (
-				<div className="flex flex-col gap-1">
-					<input
-						type="text"
-						value={chordName}
-						onChange={(e) => onChordNameChange(e.target.value)}
-						placeholder="What is this chord called? e.g. Cadd9#11"
-						aria-label="Chord name"
-						className={`h-(--h-control) w-full border bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:outline-none ${
-							identity
-								? "border-line-strong focus-visible:border-denim"
-								: "border-destructive"
-						}`}
-					/>
-					<p
-						className={`font-mono text-[10px] ${
-							identity ? "text-ink-faint" : "text-destructive"
-						}`}
-					>
-						{identity
-							? `Saved as ${chordDisplayName(identity.root, identity.suffix)} — you can write this chord again next time.`
-							: "Start with a root note (A–G) so the chord can be filed."}
-					</p>
-				</div>
+				<Field
+					label="What is this chord called?"
+					help={identity ? `Saved as ${chordDisplayName(identity.root, identity.suffix)}.` : undefined}
+					error={identity || chordName.trim() === "" ? undefined : "Start with a root note (A–G) so the chord can be filed."}
+				>
+					{(control) => (
+						<Input
+							{...control}
+							type="text"
+							value={chordName}
+							onChange={(e) => onChordNameChange(e.target.value)}
+							placeholder="e.g. Cadd9#11"
+							aria-label="Chord name"
+						/>
+					)}
+				</Field>
 			)}
 
-			{/* The shape's name, not the chord's: one chord is played several ways,
-			    and this is what tells them apart in the list. */}
-			<input
-				type="text"
-				value={name}
-				onChange={(e) => onNameChange(e.target.value)}
-				placeholder="Name this shape (optional) — e.g. up at the 7th"
-				aria-label="Name for this shape"
-				className="h-(--h-control) w-full border border-line-strong bg-surface px-2 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
-			/>
+			<Field label="Name this shape (optional)">
+				{(control) => (
+					<Input
+						{...control}
+						type="text"
+						value={name}
+						onChange={(e) => onNameChange(e.target.value)}
+						placeholder="e.g. up at the seventh"
+						aria-label="Name for this shape"
+					/>
+				)}
+			</Field>
 
 			<ChordShapeEditor shape={shape} onChange={onShapeChange} />
 		</>

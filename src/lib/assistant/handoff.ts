@@ -61,6 +61,17 @@ export interface AttachHandoff {
 	capo: number | null;
 }
 
+/**
+ * Chords with no pattern yet (the Chords board's "Open in Strum"): the page
+ * asks which pattern they go on — or for a new one — and saves nothing until
+ * the player confirms. Bars carry a placeholder rhythm until then.
+ */
+export interface ChordsHandoff {
+	kind: "chords";
+	bars: Bar[];
+	capo: number | null;
+}
+
 /** A pattern of the player's own, given a new name. */
 export interface RenameHandoff {
 	kind: "rename";
@@ -133,7 +144,7 @@ export interface FingerpickSetHandoff {
 	timeSignature: [number, number] | null;
 }
 
-export type StrumHandoff = PatternHandoff | AttachHandoff | RenameHandoff | DeleteHandoff;
+export type StrumHandoff = PatternHandoff | AttachHandoff | ChordsHandoff | RenameHandoff | DeleteHandoff;
 
 export type FingerpickAnyHandoff =
 	| FingerpickHandoff
@@ -240,6 +251,8 @@ export function takeHandoff(domain: HandoffDomain = "strum"): AssistantHandoff |
 
 	// A capo read back from storage: a fret, or nothing.
 	const capo = typeof value.capo === "number" && Number.isFinite(value.capo) ? value.capo : null;
+
+	if (value.kind === "chords") return { kind: "chords", bars: value.bars as Bar[], capo };
 
 	if (value.kind === "attach") {
 		if (typeof value.patternId !== "string" || value.patternId === "") return null;

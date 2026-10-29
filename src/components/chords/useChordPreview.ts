@@ -8,64 +8,86 @@ import {
 	SOURCE_STOP_BUFFER_S,
 } from "@/components/strum/useGuitarSampleLoader";
 
+/** Seconds between the strings of an arpeggio. */
+export const ARPEGGIO_GAP_S = 0.32;
+
 export interface ChordPreview {
 	/** True from the moment a preview starts until its notes have decayed. */
 	readonly isPlaying: boolean;
+	/** How the sounding preview was played, null when none is. */
+	readonly playing: "strum" | "arpeggio" | null;
+	/** Counts plays as their notes are scheduled, so a drawing can start its plucks with the sound. */
+	readonly run: number;
 	/** True while the sample presets for the first playback are still downloading. */
 	readonly isPreloading: boolean;
+	/** Makes the audio context and loads the samples, so a timed run of plays starts on time. */
+	prepare: () => Promise<void>;
 	play: (pitches: readonly number[]) => Promise<void>;
+	/** The notes one at a time, in the order given (low string first), each left to ring. */
+	arpeggiate: (pitches: readonly number[]) => Promise<void>;
 }
 
-// Owns one AudioContext for chord playback and shares it across every diagram that
-// wants to sound — the inline voicing gallery and the modal both consume a single
-// instance, so a preview never opens a second context or re-downloads presets.
-//
-// The context is created lazily on first play (browsers reject one built before a user
-// gesture) and closed on unmount along with the pending decay timer, so an unmounted
-// component leaves no live audio node or scheduled callback behind.
+/**
+ * One strum of a chord, or its notes one by one, on an audio context made on the first play (browsers
+ * refuse one made before a gesture) and closed, with its decay timer, on unmount.
+ * One instance per surface, so every diagram on it shares the context and presets.
+ */
 export function useChordPreview(): ChordPreview {
 	const ctxRef = useRef<AudioContext | null>(null);
 	const preloadRef = useRef<Promise<void> | null>(null);
-	const playingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [isPreloading, setIsPreloading] = useState(false);
-	const [isPlaying, setIsPlaying] = useState(false);
+	const [playing, setPlaying] = useState<"strum" | "arpeggio" | null>(null);
+	const [run, setRun] = useState(0);
 
-	useEffect(() => {
-		return () => {
+	useEffect(
+		() => () => {
+			if (timerRef.current !== null) clearTimeout(timerRef.current);
 			ctxRef.current?.close().catch(() => undefined);
-			if (playingTimerRef.current !== null) clearTimeout(playingTimerRef.current);
-		};
-	}, []);
+		},
+		[],
+	);
 
-	const play = useCallback(async (pitches: readonly number[]) => {
+	const ready = useCallback(async (): Promise<AudioContext> => {
 		if (!ctxRef.current) {
 			ctxRef.current = new AudioContext();
 			setIsPreloading(true);
-			preloadRef.current = preloadFingerpickPresets(ctxRef.current).finally(() => {
-				setIsPreloading(false);
-			});
+			preloadRef.current = preloadFingerpickPresets(ctxRef.current).finally(() => setIsPreloading(false));
 		}
-		if (ctxRef.current.state === "suspended") {
-			await ctxRef.current.resume();
-		}
+		const ctx = ctxRef.current;
+		if (ctx.state === "suspended") await ctx.resume();
 		await preloadRef.current;
-
-		if (playingTimerRef.current !== null) clearTimeout(playingTimerRef.current);
-		setIsPlaying(true);
-		triggerChordPreview(
-			pitches,
-			ctxRef.current,
-			ctxRef.current.destination,
-			ctxRef.current.currentTime,
-		);
-		playingTimerRef.current = setTimeout(
-			() => {
-				setIsPlaying(false);
-				playingTimerRef.current = null;
-			},
-			(CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000,
-		);
+		return ctx;
 	}, []);
 
-	return { isPlaying, isPreloading, play };
+	const prepare = useCallback(async () => {
+		await ready();
+	}, [ready]);
+
+	const sound = useCallback(
+		async (pitches: readonly number[], how: "strum" | "arpeggio") => {
+			if (pitches.length === 0) return;
+			const ctx = await ready();
+
+			if (timerRef.current !== null) clearTimeout(timerRef.current);
+			setPlaying(how);
+			const at = ctx.currentTime;
+			if (how === "strum") triggerChordPreview(pitches, ctx, ctx.destination, at);
+			else pitches.forEach((pitch, i) => triggerChordPreview([pitch], ctx, ctx.destination, at + i * ARPEGGIO_GAP_S));
+			setRun((n) => n + 1);
+			const spread = how === "arpeggio" ? (pitches.length - 1) * ARPEGGIO_GAP_S : 0;
+			timerRef.current = setTimeout(
+				() => {
+					setPlaying(null);
+					timerRef.current = null;
+				},
+				(spread + CHORD_PREVIEW_DURATION_S + SOURCE_STOP_BUFFER_S) * 1000,
+			);
+		},
+		[ready],
+	);
+	const play = useCallback((pitches: readonly number[]) => sound(pitches, "strum"), [sound]);
+	const arpeggiate = useCallback((pitches: readonly number[]) => sound(pitches, "arpeggio"), [sound]);
+
+	return { isPlaying: playing !== null, playing, run, isPreloading, prepare, play, arpeggiate };
 }

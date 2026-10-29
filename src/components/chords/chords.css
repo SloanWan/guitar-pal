@@ -1,0 +1,79 @@
+/* Pieces the chords hub and the chord page share. */
+@layer components {
+	/* ── Piano roots: seven white keys, five black ones on the gaps ───────── */
+	.ch-piano {
+		position: relative;
+		display: grid;
+		flex: none;
+		grid-template-columns: repeat(7, minmax(0, 1fr));
+		gap: 3px;
+		width: 336px;
+		height: 62px;
+	}
+	.ch-piano[data-wide] {
+		width: 100%;
+		height: 58px;
+	}
+	.ch-wk,
+	.ch-bk {
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		font-weight: 700;
+		cursor: pointer;
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear;
+	}
+	.ch-wk {
+		padding-bottom: 6px;
+		border-radius: 0 0 9px 9px;
+		background: var(--gp-face);
+		box-shadow:
+			var(--gp-ring-shn),
+			2px 2px 0 0 var(--gp-shn);
+		color: var(--gp-ink);
+		font-size: 13px;
+	}
+	.ch-bk {
+		position: absolute;
+		top: 0;
+		left: calc(var(--at) * 100%);
+		z-index: 1;
+		width: 28px;
+		height: 36px;
+		margin-left: -15px;
+		padding-bottom: 4px;
+		border-radius: 0 0 7px 7px;
+		background: var(--gp-ink-fill);
+		box-shadow: 2px 2px 0 0 var(--gp-shn);
+		color: var(--gp-on-ink);
+		font-size: 10.5px;
+	}
+	.ch-piano[data-wide] .ch-bk {
+		width: 24px;
+		height: 33px;
+		margin-left: -13px;
+		font-size: 9.5px;
+	}
+	.ch-wk:hover,
+	.ch-bk:hover {
+		transform: translate(-1px, -1px);
+	}
+	.ch-wk[aria-pressed="true"],
+	.ch-bk[aria-pressed="true"] {
+		background: var(--gp-m-500);
+		box-shadow:
+			var(--gp-ring-m, 0 0 #0000),
+			3px 3px 0 0 var(--gp-m-sh);
+		color: var(--gp-m-on);
+		transform: translateY(-2px);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ch-wk,
+		.ch-bk {
+			transition: none;
+		}
+	}
+}

@@ -15,6 +15,7 @@ import NowCard from "@/components/strum/stage/NowCard";
 import RhythmGrid from "@/components/strum/stage/RhythmGrid";
 import BeatPulse from "@/components/strum/stage/BeatPulse";
 import ProgressionPanel from "@/components/strum/progressions/ProgressionPanel";
+import PendingChords from "@/components/strum/progressions/PendingChords";
 import { useProgressionDraft } from "@/components/strum/useProgressionDraft";
 import { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import { useChordProgressions } from "@/components/strum/useChordProgressions";
@@ -69,9 +70,14 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	// What plays is the open progression with its unsaved edits: a chord changed is a chord heard.
 	const progressionDraft = useProgressionDraft(session.openProgression);
 	const openProgression = progressionDraft.progression;
+	// Chords from the Chords board wait for a pattern; once one is picked they play on it, unsaved.
+	const pending = session.pending;
+	const picking = pending !== null;
+	const canPlay = selectedPattern !== null && (!picking || pending.chosen);
+	const playing = picking ? session.pendingProgression : openProgression;
 	const playback = useStrumPlayback({
 		rhythm,
-		progression: openProgression,
+		progression: playing,
 		meter,
 		bpm: session.bpm,
 		lookupVoicings,
@@ -95,7 +101,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	function togglePlay() {
 		navigator.vibrate?.(10);
 		if (playback.isPlaying) playback.stop();
-		else if (selectedPattern) playback.start();
+		else if (canPlay) playback.start();
 	}
 	// Space is the transport anywhere on the page (see shouldRunPageShortcut).
 	// Subscribed once; the ref always holds the current toggle.
@@ -148,6 +154,16 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 		}
 	}
 	const [libraryOpen, setLibraryOpen] = useState(false);
+	// Chords arriving for a pattern open the list: beside the stage (unfolded for
+	// this visit), or in its sheet where there is no room beside it.
+	const asideRef = useRef<HTMLElement>(null);
+	useEffect(() => {
+		if (!picking) return;
+		queueMicrotask(() => {
+			setFolded(false);
+			if (asideRef.current && getComputedStyle(asideRef.current).display === "none") setLibraryOpen(true);
+		});
+	}, [picking]);
 	// Where the player floats. A phone has no room beside the stage, so there it
 	// stays at the bottom whatever was chosen on a wider screen.
 	const [dockChoice, setDockChoice] = useState<PlayerDock>("bottom");
@@ -177,7 +193,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 		setComposer(mode);
 	}
 
-	const progressionBars = openProgression?.bars ?? [];
+	const progressionBars = playing?.bars ?? [];
 	const diagrams = useBarChordDiagrams(progressionBars, progressionBars.length > 0, userVoicings);
 	const chordBar = playback.chordBar;
 	const nowBar = chordBar !== null ? progressionBars[chordBar] : undefined;
@@ -210,7 +226,8 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	const libraryProps = {
 		customPatterns: library.customPatterns,
 		loading: library.patternsLoading,
-		selectedId: selectedPattern?.id ?? null,
+		// Until the waiting chords have a pattern, the one open underneath is not an answer.
+		selectedId: picking && !pending.chosen ? null : selectedPattern?.id ?? null,
 		favouriteIds: library.favouriteIds,
 		onToggleFavourite: library.handleToggleFavourite,
 		onNew: () => openComposer("new"),
@@ -238,6 +255,24 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 						<div className="st-stage-in" aria-busy="true">
 							<Skeleton className="h-13 w-60" />
 							<Skeleton className="h-60 w-full rounded-gp-xl" />
+						</div>
+					) : pending ? (
+						<div className="st-stage-in st-rise">
+							<div style={{ "--i": 0 } as CSSProperties}>
+								<PendingChords
+									bars={pending.bars}
+									capo={pending.capo}
+									pattern={pending.chosen ? selectedPattern : null}
+									meta={meta}
+									rhythm={rhythm}
+									meter={meter}
+									position={playback.rhythmPosition}
+									onOpenLibrary={() => setLibraryOpen(true)}
+									onNewPattern={() => openComposer("new")}
+									onConfirm={session.confirmPending}
+									onCancel={session.cancelPending}
+								/>
+							</div>
 						</div>
 					) : (
 						<div className="st-stage-in st-rise">
@@ -323,7 +358,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					}}
 					playing={playback.isPlaying}
 					preparing={playback.isPreparing}
-					canPlay={selectedPattern !== null}
+					canPlay={canPlay}
 					onTogglePlay={togglePlay}
 					tempo={{
 						bpm: session.bpm,
@@ -358,7 +393,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 				/>
 				</div>
 
-				<aside className="st-lib" aria-label={isShared ? "Shared pattern" : "Pattern library"}>
+				<aside ref={asideRef} className="st-lib" aria-label={isShared ? "Shared pattern" : "Pattern library"}>
 					{shared && selectedPattern ? (
 						<SharedPatternPanel
 							variant="sidebar"
@@ -371,7 +406,12 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 						/>
 					) : (
 						!folded && (
-							<PatternLibrary {...libraryProps} variant="aside" onSelect={session.selectPattern} onFold={() => fold(true)} />
+							<PatternLibrary
+								{...libraryProps}
+								variant="aside"
+								onSelect={picking ? session.choosePendingPattern : session.selectPattern}
+								onFold={() => fold(true)}
+							/>
 						)
 					)}
 				</aside>
@@ -379,13 +419,14 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 			</div>
 
 			{!isShared && (
-				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title="Patterns">
+				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title={picking ? "Choose a pattern" : "Patterns"}>
 					<div className="flex min-h-0 flex-col gap-3" data-m="strum">
 						<PatternLibrary
 							{...libraryProps}
 							variant="sheet"
 							onSelect={(pattern) => {
-								session.selectPattern(pattern);
+								if (picking) session.choosePendingPattern(pattern);
+								else session.selectPattern(pattern);
 								setLibraryOpen(false);
 							}}
 						/>
@@ -400,6 +441,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					onClose={() => setComposer(null)}
 					onSave={(pattern) => {
 						if (composer === "edit") session.savePattern(pattern);
+						else if (picking) session.createPendingPattern(pattern);
 						else session.createPattern(pattern);
 					}}
 				/>

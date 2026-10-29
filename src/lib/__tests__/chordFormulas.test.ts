@@ -4,12 +4,13 @@ import {
   QUALITY_NAMES,
   chordSpec,
   chordTones,
+  degreeName,
   omittedTones,
-  rootPc,
   spellDegree,
   withGlyphs,
 } from "@/lib/chordFormulas";
 import { CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
+import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 
 const spelled = (root: string, suffix: string) => chordTones(root, suffix)!.map((t) => t.note).join(" ");
 const degrees = (root: string, suffix: string) => chordTones(root, suffix)!.map((t) => t.degree).join(" ");
@@ -45,14 +46,14 @@ describe("chordSpec", () => {
   });
 });
 
-describe("rootPc and glyphs", () => {
+describe("root pitch classes and glyphs", () => {
   it("reads the tables' spellings and nothing else", () => {
-    expect(rootPc("C")).toBe(0);
-    expect(rootPc("C#")).toBe(1);
-    expect(rootPc("Db")).toBe(1);
-    expect(rootPc("Bb")).toBe(10);
-    expect(rootPc("?")).toBeUndefined();
-    expect(rootPc("H")).toBeUndefined();
+    expect(rootPitchClass("C")).toBe(0);
+    expect(rootPitchClass("C#")).toBe(1);
+    expect(rootPitchClass("Db")).toBe(1);
+    expect(rootPitchClass("Bb")).toBe(10);
+    expect(rootPitchClass("?")).toBeUndefined();
+    expect(rootPitchClass("H")).toBeUndefined();
   });
 
   it("turns a chord name's accidentals into glyphs", () => {
@@ -123,5 +124,20 @@ describe("omittedTones", () => {
   it("is empty when everything sounds, or when there is no formula", () => {
     expect(omittedTones("C", "major", [48, 52, 55, 60, 64])).toEqual([]);
     expect(omittedTones("C", "7sg", [48, 52, 55])).toEqual([]);
+  });
+});
+
+describe("degreeName", () => {
+  it("names every degree chordTones can produce", () => {
+    const degrees = new Set<string>();
+    for (const suffix of Object.keys(FORMULAS)) {
+      for (const tone of chordTones("C", suffix) ?? []) degrees.add(tone.degree);
+    }
+    for (const degree of degrees) expect(degreeName(degree)).not.toBe(degree);
+  });
+
+  it("reads a third as a chart does", () => {
+    expect(degreeName("♭3")).toBe("minor third");
+    expect(degreeName("1")).toBe("root");
   });
 });

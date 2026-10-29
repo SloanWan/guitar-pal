@@ -32,6 +32,11 @@ export function chordVoicingToMidi(voicing: ChordVoicing): ChordMidiNote[] {
     }));
 }
 
+/** The MIDI pitches a voicing sounds, low string first — what a preview plays. */
+export function voicingPitches(voicing: ChordVoicing): number[] {
+  return chordVoicingToMidi(voicing).map((n) => n.midi);
+}
+
 // Pitch class (0-11) of a chord root, keyed by every spelling the tables use plus the
 // enharmonic partners a caller might hand in. Diagrams use it to highlight root notes.
 export const ROOT_PITCH_CLASS: Readonly<Record<string, number>> = {
@@ -54,6 +59,13 @@ export const ROOT_PITCH_CLASS: Readonly<Record<string, number>> = {
   B: 11,
 };
 
+const LETTER_PITCH_CLASS: Readonly<Record<string, number>> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+/** Pitch class of a note name — a letter and at most one # or b — or undefined for anything else. */
 export function rootPitchClass(root: string | undefined): number | undefined {
-  return root === undefined ? undefined : ROOT_PITCH_CLASS[root];
+  if (root === undefined || root.length === 0 || root.length > 2) return undefined;
+  const letter = LETTER_PITCH_CLASS[root[0]];
+  const accidental = root.length === 1 ? 0 : root[1] === "#" ? 1 : root[1] === "b" ? -1 : undefined;
+  if (letter === undefined || accidental === undefined) return undefined;
+  return (letter + accidental + 12) % 12;
 }

@@ -7,7 +7,7 @@ import {
 } from "@/lib/strumPatterns";
 import { barPlaceholder } from "@/lib/strumBars";
 import { rhythmBarAt } from "@/lib/strumRhythm";
-import { chordDisplayName } from "@/lib/chordSuffixes";
+import { chordSymbol } from "@/lib/chordSuffixes";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 import { parseTabSequence } from "@/lib/chordTabSequence";
 import type { ShapeFret } from "@/lib/chordShape";
@@ -38,9 +38,7 @@ const NAME_SEPARATOR = "|";
  * the stored suffix.
  */
 export function chordAbbreviation(chord: ChordRef): string {
-	if (chord.suffix === "major") return chord.root;
-	if (chord.suffix === "minor") return `${chord.root}m`;
-	return chordDisplayName(chord.root, chord.suffix).replace(" ", "");
+	return chordSymbol(chord.root, chord.suffix);
 }
 
 /**

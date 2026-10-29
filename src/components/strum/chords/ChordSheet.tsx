@@ -19,7 +19,8 @@ import { getChordIndex } from "@/lib/chords";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 import { chordIndexWithUser, isUserVoicingId, mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 import CustomShapeEditor, { CustomShapeFooter, startDraft, type ShapeDraft } from "./CustomShapeEditor";
-import { useChordPreview } from "./useChordPreview";
+import { useChordPreview } from "@/components/chords/useChordPreview";
+import { voicingPitches } from "@/lib/chordVoicingToMidi";
 import "./chords.css";
 
 /** How many chords the search offers at once. */
@@ -217,7 +218,7 @@ function ChordChooser({
 				Remove bar
 			</Button>
 			<span className="flex-1" />
-			<Button variant="secondary" size="xs" disabled={!selected} onClick={() => selected && void preview.play(selected)}>
+			<Button variant="secondary" size="xs" disabled={!selected} onClick={() => selected && void preview.play(voicingPitches(selected))}>
 				Hear it
 			</Button>
 			{canApplyAll && (
@@ -237,7 +238,7 @@ function ChordChooser({
 				chord={pending}
 				draft={draft}
 				onBack={back}
-				onHear={(voicing) => void preview.play(voicing)}
+				onHear={(voicing) => void preview.play(voicingPitches(voicing))}
 				onSave={(voicing) => {
 					const stored = onSaveVoicing(voicing);
 					setPending({ root: stored.root, suffix: stored.suffix, voicingId: stored.id });

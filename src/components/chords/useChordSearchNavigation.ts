@@ -4,31 +4,31 @@ import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import { useNavTransition } from "@/components/nav-progress";
-import { chordHref } from "@/lib/chordSlug";
-import { tocSectionId, tocSubsectionId } from "@/lib/chordToc";
-import { batchGridHref } from "@/lib/chordBatchResolve";
+import { chordHref, rootToSlug } from "@/lib/chordSlug";
+import { boardHref } from "@/lib/chordBatchResolve";
+import { CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
 import type { ChordSearchResult, NavShortcut } from "@/lib/chordSearch";
+import { hubCategoryId, hubQualityHref } from "@/lib/chordsHub";
 
-// Deep-links a browse shortcut into /chords/all via the shared tocSectionId anchors.
-// Root (and root+category) shortcuts land on the default root-first grouping — where
-// each root section carries per-category subsections (id "b-minor"); a bare category
-// flips to the category-first grouping (?group=category) where its heading lives.
+/** Where a browse shortcut lands on the chords hub: a root's chords, or one quality in every key. */
 export function shortcutHref(s: NavShortcut): string {
 	switch (s.kind) {
 		case "root":
-			return `/chords/all#${tocSectionId(s.root)}`;
+			return `/chords/${rootToSlug(s.root)}`;
 		case "root-category":
-			return `/chords/all#${tocSubsectionId(s.root, s.category)}`;
-		case "category":
-			return `/chords/all?group=category#${tocSectionId(s.category)}`;
+			return `/chords/${rootToSlug(s.root)}#${hubCategoryId(s.category)}`;
+		case "category": {
+			const first = CHORD_SUFFIX_CATEGORIES.find((c) => c.category === s.category)?.suffixes[0] ?? "major";
+			return hubQualityHref(first);
+		}
 	}
 }
 
 export interface ChordSearchNavigation {
 	goToChord: (result: ChordSearchResult) => void;
 	goToBrowse: (shortcut: NavShortcut) => void;
-	/** Multi-chord queries leave the palette for the batch grid. */
-	goToGrid: (query: string) => void;
+	/** Several chords at once go on the board. */
+	goToBoard: (query: string) => void;
 	/** A shape nothing in the library is held with can be written down instead. */
 	goToCreateChord: (frets: string) => void;
 }
@@ -59,11 +59,7 @@ export function useChordSearchNavigation(onNavigate: () => void): ChordSearchNav
 		[navigate],
 	);
 	const goToBrowse = useCallback((s: NavShortcut) => navigate(shortcutHref(s)), [navigate]);
-	// A grid of diagrams does not belong inside a command list (and its voicing
-	// modal would nest inside the dialog), so the palette routes there instead.
-	const goToGrid = useCallback((query: string) => navigate(batchGridHref(query.trim())), [
-		navigate,
-	]);
+	const goToBoard = useCallback((query: string) => navigate(boardHref(query)), [navigate]);
 
 	// The only way in: /chords/create is linked from nowhere else, and without a
 	// shape in the URL it has nothing to write down.
@@ -72,5 +68,5 @@ export function useChordSearchNavigation(onNavigate: () => void): ChordSearchNav
 		[navigate],
 	);
 
-	return { goToChord, goToBrowse, goToGrid, goToCreateChord };
+	return { goToChord, goToBrowse, goToBoard, goToCreateChord };
 }

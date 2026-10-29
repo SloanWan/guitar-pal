@@ -403,6 +403,25 @@ CREATE TABLE public.user_favourite_fingerpick_patterns (
 
 
 --
+-- Name: user_favourite_chords; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_favourite_chords (
+    user_id uuid NOT NULL,
+    root text NOT NULL,
+    suffix text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE user_favourite_chords; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.user_favourite_chords IS 'Chords a player keeps, by name (root + suffix) so a favourite outlives any voicing change.';
+
+
+--
 -- Name: user_favourite_patterns; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -718,6 +737,14 @@ ALTER TABLE ONLY public.user_favourite_fingerpick_patterns
 
 
 --
+-- Name: user_favourite_chords user_favourite_chords_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_favourite_chords
+    ADD CONSTRAINT user_favourite_chords_pkey PRIMARY KEY (user_id, root, suffix);
+
+
+--
 -- Name: user_favourite_patterns user_favourite_patterns_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -967,6 +994,14 @@ ALTER TABLE ONLY public.user_favourite_fingerpick_patterns
 
 
 --
+-- Name: user_favourite_chords user_favourite_chords_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_favourite_chords
+    ADD CONSTRAINT user_favourite_chords_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: user_favourite_patterns user_favourite_patterns_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1025,6 +1060,27 @@ CREATE POLICY "Public read chords" ON public.chords FOR SELECT USING (true);
 --
 
 CREATE POLICY "Users can manage their own favourites" ON public.user_favourite_fingerpick_patterns USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_favourite_chords own favourite chords are deletable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own favourite chords are deletable" ON public.user_favourite_chords FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
+-- Name: user_favourite_chords own favourite chords are insertable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own favourite chords are insertable" ON public.user_favourite_chords FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_favourite_chords own favourite chords are readable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own favourite chords are readable" ON public.user_favourite_chords FOR SELECT USING ((auth.uid() = user_id));
 
 
 --
@@ -1284,6 +1340,12 @@ ALTER TABLE public.user_chord_voicings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_favourite_fingerpick_patterns ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: user_favourite_chords; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_favourite_chords ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: user_favourite_patterns; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -1515,6 +1577,15 @@ GRANT ALL ON TABLE public.user_chord_voicings TO service_role;
 GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO anon;
 GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO authenticated;
 GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO service_role;
+
+
+--
+-- Name: TABLE user_favourite_chords; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.user_favourite_chords TO anon;
+GRANT ALL ON TABLE public.user_favourite_chords TO authenticated;
+GRANT ALL ON TABLE public.user_favourite_chords TO service_role;
 
 
 --

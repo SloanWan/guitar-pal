@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  canonicalSlug,
   chordHref,
+  libraryRoot,
   rootToSlug,
   slugToRoot,
   suffixToSlug,
@@ -52,11 +54,47 @@ describe("root slug round-trip", () => {
 
 describe("rootToSlug known values", () => {
   it("A → a", () => expect(rootToSlug("A")).toBe("a"));
-  it("Ab → ab", () => expect(rootToSlug("Ab")).toBe("ab"));
+  it("Ab → a-flat", () => expect(rootToSlug("Ab")).toBe("a-flat"));
   it("C# → c-sharp", () => expect(rootToSlug("C#")).toBe("c-sharp"));
   it("F# → f-sharp", () => expect(rootToSlug("F#")).toBe("f-sharp"));
-  it("Bb → bb", () => expect(rootToSlug("Bb")).toBe("bb"));
-  it("Db → db", () => expect(rootToSlug("Db")).toBe("db"));
+  it("Bb → b-flat", () => expect(rootToSlug("Bb")).toBe("b-flat"));
+  it("Db → d-flat", () => expect(rootToSlug("Db")).toBe("d-flat"));
+});
+
+describe("a root under either spelling", () => {
+  it("reads a note as it is spelled", () => {
+    expect(slugToRoot("g-sharp")).toBe("G#");
+    expect(slugToRoot("a-flat")).toBe("Ab");
+  });
+
+  it("files both spellings under the library's one", () => {
+    expect(libraryRoot(slugToRoot("g-sharp"))).toBe("Ab");
+    expect(libraryRoot(slugToRoot("a-flat"))).toBe("Ab");
+    expect(libraryRoot("Db")).toBe("C#");
+    expect(libraryRoot("A#")).toBe("Bb");
+    expect(libraryRoot("C")).toBe("C");
+    expect(libraryRoot(UNKNOWN_ROOT)).toBe(UNKNOWN_ROOT);
+  });
+
+  it("still reads the old one-word flats", () => {
+    expect(slugToRoot("ab")).toBe("Ab");
+    expect(slugToRoot("bb")).toBe("Bb");
+    expect(slugToRoot("b")).toBe("B");
+  });
+
+  it("moves an old or oddly written address to the one the app writes, and an enharmonic nowhere", () => {
+    expect(canonicalSlug("ab", slugToRoot, rootToSlug)).toBe("a-flat");
+    expect(canonicalSlug("A", slugToRoot, rootToSlug)).toBe("a");
+    expect(canonicalSlug("a-flat", slugToRoot, rootToSlug)).toBeNull();
+    expect(canonicalSlug("g-sharp", slugToRoot, rootToSlug)).toBeNull();
+    expect(canonicalSlug("m-over-bb", slugToSuffix, suffixToSlug)).toBe("m-over-b-flat");
+    expect(canonicalSlug("major", slugToSuffix, suffixToSlug)).toBeNull();
+  });
+
+  it("leaves alone a slug it could not write back the same", () => {
+    // 'M7' decodes as itself but encodes as 'm7', a different chord.
+    expect(canonicalSlug("M7", slugToSuffix, suffixToSlug)).toBeNull();
+  });
 });
 
 // ─── Suffix round-trip (taxonomy) ────────────────────────────────────────────
@@ -119,7 +157,7 @@ describe("suffixToSlug known values", () => {
   it("/C# → over-c-sharp", () => expect(suffixToSlug("/C#")).toBe("over-c-sharp"));
   it("m/C → m-over-c", () => expect(suffixToSlug("m/C")).toBe("m-over-c"));
   it("m/C# → m-over-c-sharp", () => expect(suffixToSlug("m/C#")).toBe("m-over-c-sharp"));
-  it("m/Bb → m-over-bb", () => expect(suffixToSlug("m/Bb")).toBe("m-over-bb"));
+  it("m/Bb → m-over-b-flat", () => expect(suffixToSlug("m/Bb")).toBe("m-over-b-flat"));
   it("m9/A → m9-over-a", () => expect(suffixToSlug("m9/A")).toBe("m9-over-a"));
   it("m9/B → m9-over-b", () => expect(suffixToSlug("m9/B")).toBe("m9-over-b"));
   it("m9/E → m9-over-e", () => expect(suffixToSlug("m9/E")).toBe("m9-over-e"));
@@ -162,6 +200,8 @@ describe("chordHref — where a chord is read", () => {
   it("addresses a chord by its name", () => {
     expect(chordHref("C", "major")).toBe("/chords/c/major");
     expect(chordHref("C", "/G")).toBe("/chords/c/over-g");
+    expect(chordHref("Ab", "major")).toBe("/chords/a-flat/major");
+    expect(chordHref("Eb", "m/Bb")).toBe("/chords/e-flat/m-over-b-flat");
   });
 
   it("addresses an unnamed chord by the grip it is named after", () => {

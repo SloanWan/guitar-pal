@@ -8,7 +8,7 @@ import MusicalText from "@/components/MusicalText";
 import ChordRequestButton from "@/components/chords/ChordRequestButton";
 import { useChordShapeMatches, type ChordShapeMatches } from "@/components/chords/useChordShapeMatches";
 import { formatTabSequence } from "@/lib/chordTabSequence";
-import type { ShapeMatch } from "@/lib/chordShapeSearch";
+import { shapeMatchNote, type ShapeMatch } from "@/lib/chordShapeSearch";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import { buildChordLookup, classifyBatchQuery } from "@/lib/chordBatchResolve";
 import {
@@ -76,16 +76,6 @@ function NoteRow({ ask, example }: { ask: string; example: string }) {
 			<span className="shrink-0 font-mono text-xs tracking-[0.08em] text-ink">{example}</span>
 		</div>
 	);
-}
-
-/** How a shape answered, in the words a player would use. */
-function shapeMatchNote(match: ShapeMatch["match"]): string {
-	if (match.kind === "exact") return "same shape";
-	if (match.kind === "near") {
-		return match.differences === 1 ? "one string differs" : `${match.differences} strings differ`;
-	}
-	const frets = Math.abs(match.semitones);
-	return `same grip, ${frets} fret${frets === 1 ? "" : "s"} ${match.semitones > 0 ? "up" : "down"}`;
 }
 
 export interface ChordPaletteRows {
@@ -181,7 +171,7 @@ export default function ChordSearchResults({
 										<MusicalText text={chordDisplayName(m.root, m.suffix)} />
 									</span>
 									{m.mine && (
-										<span className="shrink-0 border border-denim-border bg-denim-tint px-1 font-mono text-[9px] uppercase tracking-[0.08em] text-denim">
+										<span className="shrink-0 rounded-gp-sm bg-gp-well px-1.5 text-[10.5px] font-bold text-gp-ink-2">
 											yours
 										</span>
 									)}
@@ -204,7 +194,7 @@ export default function ChordSearchResults({
 										e.stopPropagation();
 										onCreateChord(formatTabSequence(m.frets));
 									}}
-									className="-my-1 shrink-0 p-1 text-ink-faint transition-colors hover:text-denim-accent"
+									className="-my-1 shrink-0 p-1 text-gp-ink-3 transition-colors hover:text-gp-ink"
 								>
 									<PencilIcon className="size-3.5" />
 								</button>
@@ -263,15 +253,15 @@ export default function ChordSearchResults({
 			)}
 
 			{batch.shouldOffer && !isShape && (
-				<CommandGroup heading="Chords Result">
+				<CommandGroup heading="Board">
 					<CommandItem value={BATCH_VALUE} onSelect={onSelectBatch}>
 						<span className="flex flex-col gap-0.5">
 							<span className="font-medium text-ink">
 								{/* An explicit comma forces batch mode even when nothing
 								    resolves, so the count can legitimately be 0 or 1. */}
 								{batch.resolvedCount === 0
-									? "Look these up as chords"
-									: `Show ${batch.resolvedCount} chord${batch.resolvedCount === 1 ? "" : "s"} side by side`}
+									? "Put these on the board"
+									: `Put ${batch.resolvedCount} chord${batch.resolvedCount === 1 ? "" : "s"} on the board`}
 							</span>
 							<span className="flex flex-wrap gap-x-1.5 text-xs text-ink-dim">
 								{batch.tokens.map((t) =>

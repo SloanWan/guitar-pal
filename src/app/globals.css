@@ -1283,6 +1283,80 @@
 		transition: none;
 	}
 }
+/* An arpeggio's pluck: the string flashes and shakes as it sounds, a ring leaves
+   its note. Hidden until its turn (each string's delay), gone after. */
+.cd-pluck-string {
+	opacity: 0;
+	animation: cd-pluck-shake 720ms ease-out both;
+}
+.cd-pluck-ring {
+	opacity: 0;
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: cd-pluck-ring 640ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes cd-pluck-shake {
+	0% {
+		opacity: 0;
+		transform: translateX(0);
+	}
+	6% {
+		opacity: 1;
+		transform: translateX(1.8px);
+	}
+	16% {
+		transform: translateX(-1.5px);
+	}
+	27% {
+		transform: translateX(1.1px);
+	}
+	40% {
+		transform: translateX(-0.8px);
+	}
+	55% {
+		opacity: 0.8;
+		transform: translateX(0.45px);
+	}
+	72% {
+		transform: translateX(-0.2px);
+	}
+	100% {
+		opacity: 0;
+		transform: translateX(0);
+	}
+}
+@keyframes cd-pluck-ring {
+	0% {
+		opacity: 0;
+		transform: scale(1);
+	}
+	6% {
+		opacity: 0.9;
+	}
+	100% {
+		opacity: 0;
+		transform: scale(2.2);
+	}
+}
+@keyframes cd-pluck-flash {
+	0%,
+	100% {
+		opacity: 0;
+	}
+	6%,
+	50% {
+		opacity: 1;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	/* No movement: the string only lights up in its turn. */
+	.cd-pluck-string {
+		animation-name: cd-pluck-flash;
+	}
+	.cd-pluck-ring {
+		display: none;
+	}
+}
 
 /* Landing chapters: anything that joins a demo mid-story arrives, never pops. */
 @keyframes landing-in {

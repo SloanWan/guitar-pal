@@ -120,6 +120,9 @@ export const STRUM_BPM_MAX = 220;
 /** Tempo a pattern loads at when it carries no BPM of its own. */
 export const DEFAULT_STRUM_BPM = 80;
 
+/** The Strum pattern last opened, which the chords board hands a progression to. */
+export const LAST_STRUM_PATTERN_KEY = "lastStrumPattern";
+
 /** Highest capo fret offered; past this the samples stop sounding like a guitar. */
 export const STRUM_CAPO_MAX = 12;
 

@@ -5,10 +5,11 @@ import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "@/components/AppLink";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
-import { batchGridHref } from "@/lib/chordBatchResolve";
+import { boardHref } from "@/lib/chordBatchResolve";
 import { chordHref } from "@/lib/chordSlug";
 import { chordDisplayName } from "@/lib/chordSuffixes";
-import { selectStandardVoicing, voicingToDiagramShape } from "@/lib/chordVoicing";
+import { voicingToDiagramShape } from "@/lib/chordVoicing";
+import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { pick, type Lang } from "@/lib/assistant/lang";
@@ -136,7 +137,7 @@ export default function ChordShapeCard({ chords, lang = "en" }: { chords: readon
 
 			<div className="border-t border-line p-2">
 				{several ? (
-					<Link href={batchGridHref(chords.map(chordAbbreviation).join(" "))} onClick={closeAssistant} className={FOOTER_LINK}>
+					<Link href={boardHref(chords.map(chordAbbreviation).join(" "))} onClick={closeAssistant} className={FOOTER_LINK}>
 						{pick(lang, `Open all ${chords.length} in the chord grid`, `在网格页并排看这 ${chords.length} 个`)}
 						<ArrowUpRight className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
 					</Link>

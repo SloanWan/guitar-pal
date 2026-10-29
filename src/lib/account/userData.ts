@@ -38,6 +38,7 @@ export const USER_TABLES: readonly UserTable[] = [
 	{ table: "user_favourite_fingerpick_patterns", column: "user_id", action: "delete" },
 	{ table: "user_last_pattern", column: "user_id", action: "delete" },
 	{ table: "user_chord_voicings", column: "user_id", action: "delete" },
+	{ table: "user_favourite_chords", column: "user_id", action: "delete" },
 	{ table: "user_books", column: "user_id", action: "delete" },
 	{ table: "shared_items", column: "owner_id", action: "delete" },
 	// A chord request is a suggestion for the shared library: the account

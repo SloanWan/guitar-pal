@@ -94,24 +94,27 @@ export interface ResolvedBar {
 /**
  * Resolve every bar through the key and the capo. `voicingFor` answers from
  * whatever the caller has loaded; a bar it has nothing for keeps its place in
- * time and sounds nothing, like an unknown chord on the strum page.
+ * time and sounds nothing, like an unknown chord on the strum page. `tune` is
+ * how far the whole guitar is tuned from standard: it moves what sounds, as a
+ * capo does, but not where the shape sits on the neck.
  */
 export function resolveProgression(
 	steps: readonly ProgressionStep[],
 	spec: ScaleSpec,
 	capo: number,
 	voicingFor: (chord: KeyChord) => ChordVoicing | null,
+	tune = 0,
 ): ResolvedBar[] {
 	const rootPc = scaleRootPitchClass(spec.root);
 	return steps.map(({ interval }) => {
-		const { sounding, shape } = chordModeView(spec, capo, rootPc + interval);
+		const { sounding, shape } = chordModeView(spec, capo + tune, rootPc + interval);
 		const voicing = voicingFor(shape);
 		if (!voicing) return { sounding, shape, voicing: null, midis: [], slots: [] };
 		return {
 			sounding,
 			shape,
 			voicing,
-			midis: shapePitches(voicing, capo),
+			midis: shapePitches(voicing, capo + tune),
 			slots: shapeSlots(shapeMarks(voicing, capo, shape.rootPitchClass, () => "")),
 		};
 	});

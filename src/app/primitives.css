@@ -54,6 +54,18 @@
 		--gp-p-ring: var(--gp-ring-m);
 	}
 
+	/* ---- grain: the matte surface on every filled pressable and every pick shape ------- */
+	/* Filled tones only: on a white neutral face grain reads as dirt. */
+	.gp-press:is(.gp-tone-primary, .gp-tone-ink, .gp-tone-danger):not(:disabled, [aria-disabled="true"]) {
+		background-image: var(--gp-grain);
+		background-size: 140px;
+		background-blend-mode: overlay;
+	}
+	.gp-playpick > .gp-playpick-shape > path,
+	.gp-badge > .gp-badge-pick > path {
+		filter: url(#gp-grain);
+	}
+
 	/* ---- the press ------------------------------------------------------------------- */
 	.gp-press {
 		--o: var(--gp-o-btn);
@@ -718,6 +730,41 @@
 		height: 15px;
 		margin-top: -5px;
 	}
+	/* In a mixed list (rows carrying their own module, e.g. Home) the badge rests quiet — a
+	   neutral pick with the icon in the module's 700 — and fills with the 500 only on the
+	   row pointed at, focused or chosen, so ten rows of five modules read calm. A kept
+	   favourite pick in such a row is ink, and takes the module's colour with the row. */
+	.gp-badge-quiet {
+		color: var(--gp-m-700);
+		transition: color var(--gp-d-state) linear;
+	}
+	.gp-badge-quiet > .gp-badge-pick {
+		fill: var(--gp-well);
+		transition: fill var(--gp-d-state) linear;
+	}
+	.gp-row:is([aria-current="true"], :focus-visible) > .gp-badge-quiet {
+		color: var(--gp-m-on);
+	}
+	.gp-row:is([aria-current="true"], :focus-visible) > .gp-badge-quiet > .gp-badge-pick {
+		fill: var(--gp-m-500);
+	}
+	.gp-row[data-m] .gp-pick-toggle[aria-pressed="true"] {
+		color: var(--gp-ink);
+	}
+	.gp-row[data-m][aria-current="true"] .gp-pick-toggle[aria-pressed="true"] {
+		color: var(--gp-m-500);
+	}
+	@media (hover: hover) {
+		.gp-row:hover > .gp-badge-quiet {
+			color: var(--gp-m-on);
+		}
+		.gp-row:hover > .gp-badge-quiet > .gp-badge-pick {
+			fill: var(--gp-m-500);
+		}
+		.gp-row[data-m]:hover .gp-pick-toggle[aria-pressed="true"] {
+			color: var(--gp-m-500);
+		}
+	}
 
 	/* ---- Card (static) and Panel ------------------------------------------------------ */
 	/* static content sits on the page itself: no fill, no edge, no radius, no shadow */
@@ -1052,15 +1099,16 @@
 
 	/* ---- Toast: ink, a pick of the page's module, dropping from the top ------------------
 	   Sonner positions and stacks the toasts; these rules are the look. The toast is an
-	   inverted surface, so its pick wears the other theme's slot (fretboard: slot 5). */
+	   inverted surface, so its pick wears the other theme's slot: strum 0 · tab 2 · chords 3 ·
+	   fretboard 5 · books 6 (the logo's order; slot 6 is books' own, outside the logo). */
 	.gp-toaster {
 		--gp-toast-pick: var(--gp-lgd4);
 	}
 	.gp-toaster[data-m="strum"] {
-		--gp-toast-pick: var(--gp-lgd2);
+		--gp-toast-pick: var(--gp-lgd0);
 	}
 	.gp-toaster[data-m="tab"] {
-		--gp-toast-pick: var(--gp-lgd1);
+		--gp-toast-pick: var(--gp-lgd2);
 	}
 	.gp-toaster[data-m="chords"] {
 		--gp-toast-pick: var(--gp-lgd3);
@@ -1069,16 +1117,16 @@
 		--gp-toast-pick: var(--gp-lgd5);
 	}
 	.gp-toaster[data-m="books"] {
-		--gp-toast-pick: var(--gp-lgd0);
+		--gp-toast-pick: var(--gp-lgd6);
 	}
 	:root[data-theme="dark"] .gp-toaster {
 		--gp-toast-pick: var(--gp-a2-light);
 	}
 	:root[data-theme="dark"] .gp-toaster[data-m="strum"] {
-		--gp-toast-pick: var(--gp-lgl2);
+		--gp-toast-pick: var(--gp-lgl0);
 	}
 	:root[data-theme="dark"] .gp-toaster[data-m="tab"] {
-		--gp-toast-pick: var(--gp-lgl1);
+		--gp-toast-pick: var(--gp-lgl2);
 	}
 	:root[data-theme="dark"] .gp-toaster[data-m="chords"] {
 		--gp-toast-pick: var(--gp-lgl3);
@@ -1087,7 +1135,7 @@
 		--gp-toast-pick: var(--gp-lgl5);
 	}
 	:root[data-theme="dark"] .gp-toaster[data-m="books"] {
-		--gp-toast-pick: var(--gp-lgl0);
+		--gp-toast-pick: var(--gp-lgl6);
 	}
 	.gp-toast {
 		display: flex;
@@ -1129,6 +1177,41 @@
 		background: var(--gp-on-ink);
 		color: var(--gp-ink);
 		font-weight: 600;
+	}
+
+	/* ---- Page rise: every page's pieces bubble up one after another as it arrives ---------- */
+	/* On the element holding the page's sections: each child rises from 22px below at 94%,
+	   springing past and settling, 45ms after the one before. The order comes from the child's
+	   place (the first eight); a child that should arrive with another sets `--i` itself. */
+	.gp-rise > * {
+		animation: gp-bubble 560ms cubic-bezier(0.3, 1.45, 0.45, 1) both;
+		animation-delay: calc(var(--i, 0) * 45ms);
+	}
+	.gp-rise > :nth-child(2) { --i: 1; }
+	.gp-rise > :nth-child(3) { --i: 2; }
+	.gp-rise > :nth-child(4) { --i: 3; }
+	.gp-rise > :nth-child(5) { --i: 4; }
+	.gp-rise > :nth-child(6) { --i: 5; }
+	.gp-rise > :nth-child(7) { --i: 6; }
+	.gp-rise > :nth-child(n + 8) { --i: 7; }
+	@keyframes gp-bubble {
+		0% {
+			opacity: 0;
+			transform: translateY(22px) scale(0.94);
+		}
+		60% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-rise > * {
+			animation: gp-fade-in 150ms linear both;
+			animation-delay: 0ms;
+		}
 	}
 
 	/* ---- Skeleton: a well block that shimmers, shown after 300ms of waiting ---------------- */

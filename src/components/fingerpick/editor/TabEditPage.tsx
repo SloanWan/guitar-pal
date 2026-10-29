@@ -445,16 +445,18 @@ export default function TabEditPage({ id }: { id: string }) {
 											</Button>
 										</div>
 									</div>
-									<EditorToolbar
-										working={working}
-										commit={commit}
-										cursor={cursor}
-										slots={selectedSlots(working, cursor, selection)}
-										onBlocked={(reason) => toast(reason)}
-										onBar={(measureIndex) =>
-											tabCursor.moveTo({ measureIndex, slotIndex: 0, stringIndex: cursor.stringIndex })
-										}
-									/>
+									<div className="te-toolbay">
+										<EditorToolbar
+											working={working}
+											commit={commit}
+											cursor={cursor}
+											slots={selectedSlots(working, cursor, selection)}
+											onBlocked={(reason) => toast(reason)}
+											onBar={(measureIndex) =>
+												tabCursor.moveTo({ measureIndex, slotIndex: 0, stringIndex: cursor.stringIndex })
+											}
+										/>
+									</div>
 									<div
 										ref={tabRef}
 										className="te-sheet"

@@ -40,12 +40,14 @@
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
-		padding: 18px 32px 28px;
+		--te-stage-top: 18px;
+		padding: var(--te-stage-top) 32px 28px;
 	}
 	.te-stage-in {
+		--te-stack-gap: 12px;
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--te-stack-gap);
 		max-width: 1120px;
 		margin: 0 auto;
 	}
@@ -179,11 +181,20 @@
 	}
 
 	/* ── Toolbar (#361) ─────────────────────────────────────────────────── */
-	/* Stays at the top of the stage while the tab scrolls under it. */
-	.te-tool {
+	/* Stays at the top of the stage while the tab scrolls under it. The bay is what
+	   sticks: it reaches up to the stage's very top (past its padding) on the page's
+	   colour, taking the gap above the toolbar as its own and a little either side (the
+	   card's edge), so nothing scrolling by shows around the toolbar. It sits over the
+	   playhead (10), as the reader's does. */
+	.te-toolbay {
 		position: sticky;
-		z-index: 8;
-		top: 0;
+		z-index: 12;
+		top: calc(-1 * var(--te-stage-top));
+		margin: calc(-1 * var(--te-stack-gap)) -6px 0;
+		padding: var(--te-stack-gap) 6px 0;
+		background: var(--gp-page);
+	}
+	.te-tool {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -1005,7 +1016,8 @@
 			display: none;
 		}
 		.te-stage {
-			padding: 16px 24px 24px;
+			--te-stage-top: 16px;
+			padding: var(--te-stage-top) 24px 24px;
 		}
 	}
 	@container te (max-width: 719px) {
@@ -1016,10 +1028,11 @@
 			display: inline-flex;
 		}
 		.te-stage {
-			padding: 10px 10px 16px;
+			--te-stage-top: 10px;
+			padding: var(--te-stage-top) 10px 16px;
 		}
 		.te-stage-in {
-			gap: 10px;
+			--te-stack-gap: 10px;
 		}
 		.te-titlerow {
 			column-gap: 6px;

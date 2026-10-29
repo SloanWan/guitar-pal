@@ -29,12 +29,14 @@ import { chordHref } from "@/lib/chordSlug";
 import { chordSymbol } from "@/lib/chordSuffixes";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { prefersReducedMotion } from "@/lib/motion";
-import { DEFAULT_STRUM_BPM, LAST_STRUM_PATTERN_KEY, PRESET_STRUM_PATTERNS, STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
+import { LAST_STRUM_PATTERN_KEY, PRESET_STRUM_PATTERNS, STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
 import CornerButton from "./CornerButton";
 import type { BoardCard } from "./useBoard";
 
 /** Beats each chord is held for when the board is played through. */
 const BEATS_PER_CHORD = 4;
+/** The board's own starting tempo, quicker than Strum's: it runs through chords, not a rhythm. */
+const DEFAULT_BOARD_BPM = 120;
 
 interface Props {
 	items: readonly BoardItem[];
@@ -97,7 +99,7 @@ function usePlayThrough() {
 /** The chords side by side, each on the shape the player paged to. */
 export default function Board({ items, cards, transpose, capo, onChange, onTranspose, onCapo }: Props) {
 	const router = useRouter();
-	const [bpm, setBpm] = useState(DEFAULT_STRUM_BPM);
+	const [bpm, setBpm] = useState(DEFAULT_BOARD_BPM);
 	const run = usePlayThrough();
 	const cardsRef = useRef<HTMLDivElement>(null);
 	const [adjustOpen, setAdjustOpen] = useState(false);

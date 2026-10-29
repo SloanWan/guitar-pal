@@ -118,7 +118,7 @@ function ResetPageInner() {
 	return (
 		<div className="flex min-h-full flex-col justify-center py-10 max-sm:py-6">
 			<div className={`w-full ${PAGE_GUTTER}`}>
-				<div className="mx-auto max-w-110">
+				<div className="gp-rise mx-auto max-w-110">
 					<Panel className="p-7 max-sm:p-5" aria-busy={stage === "verifying" || undefined}>
 						<h1 className="mb-5 font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-gp-ink">
 							{TITLE[stage]}

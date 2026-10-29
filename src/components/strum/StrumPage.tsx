@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { PanelRightOpen } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import SharedPatternPanel from "@/components/SharedPatternPanel";
+import { ShareNote } from "@/components/share/SharedSnapshot";
 import PlayBar from "@/components/playback/PlayBar";
 import ShareStrumDialog from "@/components/strum/ShareStrumDialog";
 import PatternComposer from "@/components/strum/composer/PatternComposer";
@@ -28,9 +28,8 @@ import { useStrumShare } from "@/components/strum/useStrumShare";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useUser } from "@/hooks/useUser";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
-import { patternBpm } from "@/lib/strumBars";
-import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
-import { barLabel, progressionCapo } from "@/lib/strumProgressions";
+import { meterLabel } from "@/lib/strumMeter";
+import { barLabel } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
 import { withUserVoicings } from "@/lib/userChordVoicings";
 import type { SharedStrum } from "@/lib/sharedItems";
@@ -121,26 +120,12 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	const isPreset = selectedPattern !== null && PRESET_STRUM_PATTERNS.some((p) => p.id === selectedPattern.id);
 	const meta = selectedPattern
 		? [
-				isShared ? "Shared" : session.owned ? "My pattern" : isPreset ? "Preset" : "Pattern",
+				// on a share page the badge says whose it is
+				...(isShared ? [] : [session.owned ? "My pattern" : isPreset ? "Preset" : "Pattern"]),
 				meterLabel(meter),
 				`${rhythm.length} bar${rhythm.length === 1 ? "" : "s"}`,
 			].join(" · ")
 		: "";
-	const sharedMeta =
-		shared && selectedPattern
-			? [
-					`${beatUnitGlyph(meter)} = ${openProgression?.bpm ?? patternBpm(selectedPattern)}`,
-					meterLabel(meter),
-					...(shared.progressions.length > 1
-						? [`${shared.progressions.length} progressions`]
-						: openProgression
-							? [
-									`${openProgression.bars.length} bar${openProgression.bars.length === 1 ? "" : "s"}`,
-									...(progressionCapo(openProgression) > 0 ? [`Capo ${progressionCapo(openProgression)}`] : []),
-								]
-							: []),
-				].join(" · ")
-			: "";
 
 	const libraryProps = {
 		customPatterns: library.customPatterns,
@@ -153,7 +138,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 
 	return (
 		<div className="st-page" data-m="strum">
-			<div className="lib-shell" data-lib={folded && !isShared ? "closed" : "open"}>
+			<div className="lib-shell" data-lib={isShared ? "none" : folded ? "closed" : "open"}>
 				<div className="st-stage-wrap pb-area">
 					{/* Outside the scrolling stage, so it stays put however far the page scrolls. */}
 					{!isShared && folded && (
@@ -176,19 +161,6 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 						</div>
 					) : (
 						<div className="st-stage-in st-rise">
-							{shared && (
-								<div className="st-shared-strip" style={{ "--i": 0 } as CSSProperties}>
-									<SharedPatternPanel
-										variant="strip"
-										name={selectedPattern.name}
-										meta={sharedMeta}
-										user={user}
-										loading={loading}
-										importing={shareState.importing}
-										onImport={shareState.importShared}
-									/>
-								</div>
-							)}
 							<div style={{ "--i": 0 } as CSSProperties}>
 								<PatternHeader
 									name={selectedPattern.name}
@@ -203,7 +175,17 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 									onShare={isShared ? undefined : shareState.share}
 									sharing={shareState.sharing}
 									onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
+									shared={
+										isShared
+											? {
+													onImport: shareState.importShared,
+													importing: shareState.importing,
+													disabled: loading || library.patternsLoading,
+												}
+											: undefined
+									}
 								/>
+								{isShared && <ShareNote guest={!loading && !user} />}
 							</div>
 							<div style={{ "--i": 1 } as CSSProperties}>
 								<NowCard
@@ -294,23 +276,13 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 				/>
 				</div>
 
-				<aside className="lib-aside" aria-label={isShared ? "Shared pattern" : "Pattern library"}>
-					{shared && selectedPattern ? (
-						<SharedPatternPanel
-							variant="sidebar"
-							name={selectedPattern.name}
-							meta={sharedMeta}
-							user={user}
-							loading={loading}
-							importing={shareState.importing}
-							onImport={shareState.importShared}
-						/>
-					) : (
-						!folded && (
+				{!isShared && (
+					<aside className="lib-aside" aria-label="Pattern library">
+						{!folded && (
 							<PatternLibrary {...libraryProps} variant="aside" onSelect={session.selectPattern} onFold={() => fold(true)} />
-						)
-					)}
-				</aside>
+						)}
+					</aside>
+				)}
 
 			</div>
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { PanelRightOpen, Pencil, Share2, Trash2 } from "lucide-react";
+import { Loader2, PanelRightOpen, Pencil, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import "@/components/playback/icons.css";
 import CapoStepper from "@/components/playback/CapoStepper";
+import { ImportCopy, SharedBadge } from "@/components/share/SharedSnapshot";
 
 interface Props {
 	name: string;
@@ -29,6 +30,8 @@ interface Props {
 	onDelete?: () => void;
 	/** The player's own tab, which edit and delete act on. */
 	owned?: boolean;
+	/** On a share page: a badge leads the meta line and Import takes the actions' place. */
+	shared?: { onImport: () => void; importing: boolean; disabled: boolean };
 }
 
 /**
@@ -47,11 +50,15 @@ export default function TabHeader({
 	sharing = false,
 	onDelete,
 	owned = false,
+	shared,
 }: Props) {
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	return (
 		<div className="tb-titlerow">
-			<span className="pb-lab pb-num tb-meta">{meta}</span>
+			<span className="pb-lab pb-num tb-meta">
+				{shared && <SharedBadge />}
+				{meta}
+			</span>
 			{onOpenLibrary && (
 				<button
 					type="button"
@@ -66,6 +73,7 @@ export default function TabHeader({
 			<h1>{name}</h1>
 			<div className="tb-pact">
 				<CapoStepper capo={capo} onCapo={onCapo} className="tb-capo" />
+				{shared && <ImportCopy {...shared} />}
 				{onEdit && (
 					<button
 						type="button"
@@ -86,10 +94,11 @@ export default function TabHeader({
 						data-anim="share"
 						onClick={onShare}
 						disabled={sharing}
+						aria-busy={sharing || undefined}
 						aria-label="Share this tab"
-						title="Copy a link to this tab"
+						title={sharing ? "Making the link…" : "Copy a link to this tab"}
 					>
-						<Share2 aria-hidden />
+						{sharing ? <Loader2 aria-hidden className="animate-spin" /> : <Share2 aria-hidden />}
 					</button>
 				)}
 				{onDelete && (

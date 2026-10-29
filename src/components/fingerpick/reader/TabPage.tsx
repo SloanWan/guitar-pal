@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanelRightOpen } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import SharedPatternPanel from "@/components/SharedPatternPanel";
+import { ShareNote } from "@/components/share/SharedSnapshot";
 import PlayBar from "@/components/playback/PlayBar";
 import { usePlayerDock } from "@/components/playback/usePlayerDock";
 import { usePlayKey } from "@/components/playback/usePlayKey";
@@ -181,17 +181,12 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 	const meterText = meterLabel(pattern.timeSignature);
 	const barsText = `${bars} bar${bars === 1 ? "" : "s"}`;
 	const capo = patternCapo(pattern);
+	// On a share page the badge says whose it is.
 	const meta = [
-		isShared ? "Shared" : session.owned ? "My tab" : "Preset",
+		...(isShared ? [] : [session.owned ? "My tab" : "Preset"]),
 		`${beatUnitGlyph(pattern.timeSignature)} = ${tabBpm(pattern)}`,
 		meterText,
 		barsText,
-	].join(" · ");
-	const sharedMeta = [
-		`${beatUnitGlyph(pattern.timeSignature)} = ${pattern.bpm}`,
-		meterText,
-		barsText,
-		...(capo > 0 ? [`Capo ${capo}`] : []),
 	].join(" · ");
 
 	const libraryProps = {
@@ -210,7 +205,7 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 
 	return (
 		<div className="tb-page" data-m="tab">
-			<div className="lib-shell" data-lib={folded && !isShared ? "closed" : "open"}>
+			<div className="lib-shell" data-lib={isShared ? "none" : folded ? "closed" : "open"}>
 				<div className="tb-stage-wrap pb-area">
 					{/* Where the library's own fold button sits, so folding and unfolding never move it. */}
 					{!isShared && folded && (
@@ -234,19 +229,6 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 								</div>
 							) : (
 								<>
-									{shared && (
-										<div className="tb-shared-strip">
-											<SharedPatternPanel
-												variant="strip"
-												name={pattern.name}
-												meta={sharedMeta}
-												user={user}
-												loading={loading}
-												importing={shareState.importing}
-												onImport={shareState.importShared}
-											/>
-										</div>
-									)}
 									<TabHeader
 										name={pattern.name}
 										meta={meta}
@@ -258,7 +240,17 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 										sharing={shareState.sharing}
 										onDelete={isShared ? undefined : () => session.remove(pattern.id)}
 										owned={session.owned}
+										shared={
+											isShared
+												? {
+														onImport: shareState.importShared,
+														importing: shareState.importing,
+														disabled: loading || session.isLoading,
+													}
+												: undefined
+										}
 									/>
+									{isShared && <ShareNote guest={!loading && !user} />}
 									<TabToolbar
 										onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
 										hasChords={chordLine.hasChords}
@@ -331,21 +323,13 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 					/>
 				</div>
 
-				<aside className="lib-aside" aria-label={isShared ? "Shared tab" : "Tab library"}>
-					{shared ? (
-						<SharedPatternPanel
-							variant="sidebar"
-							name={pattern.name}
-							meta={sharedMeta}
-							user={user}
-							loading={loading}
-							importing={shareState.importing}
-							onImport={shareState.importShared}
-						/>
-					) : (
-						!folded && <TabLibrary {...libraryProps} variant="aside" onSelect={session.select} onFold={() => fold(true)} />
-					)}
-				</aside>
+				{!isShared && (
+					<aside className="lib-aside" aria-label="Tab library">
+						{!folded && (
+							<TabLibrary {...libraryProps} variant="aside" onSelect={session.select} onFold={() => fold(true)} />
+						)}
+					</aside>
+				)}
 			</div>
 
 			{!isShared && (

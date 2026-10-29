@@ -36,11 +36,14 @@ export function useTabShare({ user, pattern, shared, takenNames, loading, stop }
 	// clipboard write after an await — and the row is written after; if that fails
 	// the copied link is a dead one, and the toast says so. Where the clipboard is
 	// off limits (an in-app browser, http on a LAN) the link is shown to copy by hand.
+	// The button is busy from the click until the link is out, so the wait reads as work.
 	async function share() {
+		if (sharing) return;
 		if (!user) {
 			askToSignIn("Sign in to share a tab.");
 			return;
 		}
+		setSharing(true);
 		const id = newShareId();
 		const url = shareUrl(window.location.origin, id);
 		let copied = false;
@@ -50,7 +53,6 @@ export function useTabShare({ user, pattern, shared, takenNames, loading, stop }
 		} catch {
 			// shown to copy by hand below
 		}
-		setSharing(true);
 		try {
 			await createShare(createClient(), user, id, { kind: "fingerpick", pattern });
 			if (copied) toast(`Link copied — anyone with it can open "${pattern.name}".`, { description: url });

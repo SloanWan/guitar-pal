@@ -15,6 +15,10 @@
 	.lib-shell[data-lib="closed"] {
 		grid-template-columns: minmax(0, 1fr) 0px;
 	}
+	/* A shared snapshot has no library: the stage takes the width. */
+	.lib-shell[data-lib="none"] {
+		grid-template-columns: minmax(0, 1fr);
+	}
 	.lib-aside {
 		display: flex;
 		flex-direction: column;

@@ -66,8 +66,9 @@
 		flex-direction: column;
 	}
 
-	.st-shared-strip {
-		display: none;
+	/* under the title, inside its block */
+	.st-page .sh-note {
+		margin-top: 4px;
 	}
 	.st-page .lib-list .gp-row-t {
 		text-transform: capitalize;
@@ -958,9 +959,6 @@
 
 	/* ── Tablet: no side library, the stage centred ──────────────────────── */
 	@container strum (max-width: 959px) {
-		.st-shared-strip {
-			display: block;
-		}
 		.st-stage {
 			padding: 20px 28px 0;
 		}

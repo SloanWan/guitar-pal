@@ -48,9 +48,6 @@
 		max-width: 1000px;
 		margin: 0 auto;
 	}
-	.tb-shared-strip {
-		display: none;
-	}
 
 	/* ── Title row ──────────────────────────────────────────────────────── */
 	/* The meta line and the library's button share the top line; the name and what
@@ -104,6 +101,10 @@
 	}
 	.tb-capo {
 		margin-right: 8px;
+	}
+	/* under the title row, on its inset */
+	.tb-page .sh-note {
+		padding: 0 6px;
 	}
 	.tb-confirm {
 		display: flex;
@@ -311,9 +312,6 @@
 		.tb-libopen.pb-icon {
 			display: grid;
 		}
-		.tb-shared-strip {
-			display: block;
-		}
 	}
 	@container tab (max-width: 959px) {
 		.tb-stage {
@@ -345,7 +343,8 @@
 		.tb-stage-in {
 			gap: 10px;
 		}
-		.tb-titlerow {
+		.tb-titlerow,
+		.tb-page .sh-note {
 			column-gap: 8px;
 			padding: 0 2px;
 		}

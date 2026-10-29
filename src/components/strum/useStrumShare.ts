@@ -60,6 +60,8 @@ export function useStrumShare({ user, pattern, progressions, openProgression, cu
 	async function shareWith(chosen: ChordProgression[]) {
 		if (!user || !pattern) return;
 		setDialogOpen(false);
+		// Busy from the click until the link is out, so the wait reads as work.
+		setSharing(true);
 		const openIndex = Math.max(0, chosen.findIndex((p) => p.id === openProgression?.id));
 		const id = newShareId();
 		const url = shareUrl(window.location.origin, id);
@@ -70,7 +72,6 @@ export function useStrumShare({ user, pattern, progressions, openProgression, cu
 		} catch {
 			copied = false;
 		}
-		setSharing(true);
 		try {
 			await createShare(createClient(), user, id, { kind: "strum", pattern, progressions: chosen, openIndex });
 			const what =

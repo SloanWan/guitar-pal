@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ListMusic, Pencil, RotateCcw, Share2, Trash2 } from "lucide-react";
+import { ListMusic, Loader2, Pencil, RotateCcw, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import "@/components/playback/icons.css";
+import { ImportCopy, SharedBadge } from "@/components/share/SharedSnapshot";
 
 interface Props {
 	name: string;
@@ -28,6 +29,8 @@ interface Props {
 	sharing?: boolean;
 	/** Opens the library below 960px, where it is not beside the stage. */
 	onOpenLibrary?: () => void;
+	/** On a share page: a badge leads the meta line and Import takes the actions' place. */
+	shared?: { onImport: () => void; importing: boolean; disabled: boolean };
 }
 
 /**
@@ -47,14 +50,18 @@ export default function PatternHeader({
 	onShare,
 	sharing = false,
 	onOpenLibrary,
+	shared,
 }: Props) {
 	const [confirmDelete, setConfirmDelete] = useState(false);
-	const hasActions = onEdit || onDelete || onShare || onOpenLibrary;
+	const hasActions = onEdit || onDelete || onShare || onOpenLibrary || shared;
 
 	return (
 		<div className="st-titlerow" data-dirty={dirty ? "" : undefined}>
 			<div className="st-title">
-				<span className="st-lab">{meta}</span>
+				<span className="st-lab">
+					{shared && <SharedBadge />}
+					{meta}
+				</span>
 				<h1>{name}</h1>
 			</div>
 			{dirty && (
@@ -77,6 +84,7 @@ export default function PatternHeader({
 			)}
 			{hasActions && (
 				<div className="st-pact">
+					{shared && <ImportCopy {...shared} />}
 					{onEdit && (
 						<button
 							type="button"
@@ -97,10 +105,11 @@ export default function PatternHeader({
 							data-anim="share"
 							onClick={onShare}
 							disabled={sharing}
+							aria-busy={sharing || undefined}
 							aria-label="Share this pattern"
-							title="Copy a link to this pattern"
+							title={sharing ? "Making the link…" : "Copy a link to this pattern"}
 						>
-							<Share2 aria-hidden />
+							{sharing ? <Loader2 aria-hidden className="animate-spin" /> : <Share2 aria-hidden />}
 						</button>
 					)}
 					{onDelete && (

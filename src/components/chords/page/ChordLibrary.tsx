@@ -6,11 +6,14 @@ import Link from "@/components/AppLink";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import PianoRoots from "@/components/chords/PianoRoots";
 import { useChordShapeMatches } from "@/components/chords/useChordShapeMatches";
+import type { FavouriteChords } from "@/components/chords/useFavouriteChords";
 import { ListRow } from "@/components/ui/list-row";
+import { PickToggle } from "@/components/ui/pick-toggle";
 import { SearchInput } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { buildRootSections, type BrowseSection } from "@/lib/chordBrowseSections";
 import { boardHref, buildChordLookup, classifyBatchQuery } from "@/lib/chordBatchResolve";
+import { withGlyphs } from "@/lib/chordFormulas";
 import { chordQualityLine } from "@/lib/chordPage";
 import { searchChords, type ChordIndexEntry } from "@/lib/chordSearch";
 import { shapeMatchNote } from "@/lib/chordShapeSearch";
@@ -19,11 +22,12 @@ import { ROOT_CHROMATIC_ORDER, chordSymbol } from "@/lib/chordSuffixes";
 import type { ChordWithVoicings } from "@/lib/chordsData";
 import { chordIndexWithUser, type UserChordVoicing } from "@/lib/userChordVoicings";
 
-type Filter = "all" | "mine";
+type Filter = "all" | "mine" | "favourites";
 
 const FILTERS: { value: Filter; label: string }[] = [
 	{ value: "all", label: "All" },
 	{ value: "mine", label: "Mine" },
+	{ value: "favourites", label: "Favourites" },
 ];
 
 interface Props {
@@ -35,6 +39,7 @@ interface Props {
 	/** The page's root's chords, so the list draws without a round trip. */
 	initialChords: readonly ChordWithVoicings[];
 	userVoicings: readonly UserChordVoicing[];
+	favourites: FavouriteChords;
 	/** Beside the stage it has a heading and folds away; in a sheet the sheet has both. */
 	variant: "aside" | "sheet";
 	onFold?: () => void;
@@ -49,6 +54,7 @@ export default function ChordLibrary({
 	index,
 	initialChords,
 	userVoicings,
+	favourites,
 	variant,
 	onFold,
 	onNavigate,
@@ -88,23 +94,30 @@ export default function ChordLibrary({
 	const named = trimmed && !shape.target && !batch?.shouldOffer ? searchChords(searchIndex, query, 20) : [];
 
 	const current = (r: string, s: string) => r === root && s === suffix;
+	// A row and its pick, side by side as the Strum library's are.
 	const row = (key: string, r: string, s: string, subline: string, diagram?: BrowseSection["cards"][number]["def"]) => (
-		<ListRow
-			key={key}
-			asChild
-			title={chordSymbol(r, s)}
-			subline={subline}
-			selected={current(r, s)}
-			trailing={
-				diagram ? (
-					<span className="ch-mini" aria-hidden>
-						<ChordDiagramSVG {...diagram} size="compact" />
-					</span>
-				) : undefined
-			}
-		>
-			<Link href={chordHref(r, s)} onClick={onNavigate} />
-		</ListRow>
+		<div key={key} className="ch-lrow">
+			<ListRow
+				asChild
+				title={chordSymbol(r, s)}
+				subline={subline}
+				selected={current(r, s)}
+				trailing={
+					diagram ? (
+						<span className="ch-mini" aria-hidden>
+							<ChordDiagramSVG {...diagram} size="compact" />
+						</span>
+					) : undefined
+				}
+			>
+				<Link href={chordHref(r, s)} onClick={onNavigate} />
+			</ListRow>
+			<PickToggle
+				pressed={favourites.isFavourite(r, s)}
+				onPressedChange={() => favourites.toggle(r, s)}
+				label={`Favourite ${withGlyphs(chordSymbol(r, s))}`}
+			/>
+		</div>
 	);
 
 	let body: React.ReactNode;
@@ -129,6 +142,14 @@ export default function ChordLibrary({
 			) : (
 				named.map((r) => row(`${r.root}|${r.suffix}`, r.root, r.suffix, chordQualityLine(r.root, r.suffix)))
 			);
+	} else if (filter === "favourites") {
+		body = favourites.favouritesLoading ? (
+			<p className="ch-lab ch-note">Loading…</p>
+		) : favourites.favourites.length === 0 ? (
+			<p className="ch-lab ch-note">Chords you keep with the pick land here.</p>
+		) : (
+			favourites.favourites.map((f) => row(`fav-${f.root}|${f.suffix}`, f.root, f.suffix, chordQualityLine(f.root, f.suffix)))
+		);
 	} else if (filter === "mine") {
 		const seen = new Set<string>();
 		const mine = userVoicings.filter((v) => {

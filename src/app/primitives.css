@@ -510,6 +510,31 @@
 		font-weight: 600;
 		color: var(--gp-ink-3);
 	}
+	/* Pick toggle: a favourite mark, grey until kept, then the module's colour and tilted. */
+	.gp-pick-toggle {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-edge);
+		cursor: pointer;
+		transition:
+			color var(--gp-d-state) linear,
+			transform var(--gp-d-pop) var(--gp-spring-pop);
+	}
+	.gp-pick-toggle:hover {
+		color: var(--gp-ink-3);
+	}
+	.gp-pick-toggle[aria-pressed="true"] {
+		color: var(--gp-m-500);
+		transform: rotate(-12deg);
+	}
+	.gp-pick-toggle svg {
+		width: 16px;
+		height: 17px;
+	}
 	.gp-stepper-sm {
 		gap: 4px;
 	}

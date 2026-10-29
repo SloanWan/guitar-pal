@@ -8,6 +8,7 @@ import { Chip } from "@/components/ui/chip";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Stepper } from "@/components/ui/stepper";
+import { PickToggle } from "@/components/ui/pick-toggle";
 import { NavCard } from "@/components/ui/card";
 import { ListRow } from "@/components/ui/list-row";
 import { Panel } from "@/components/ui/panel";
@@ -65,6 +66,7 @@ export default function PrimitivesPage() {
 	const [countIn, setCountIn] = useState(true);
 	const [bpm, setBpm] = useState(96);
 	const [capo, setCapo] = useState(0);
+	const [kept, setKept] = useState(false);
 	const [card, setCard] = useState("old-faithful");
 	const [row, setRow] = useState(1);
 	const [name, setName] = useState("");
@@ -209,6 +211,12 @@ export default function PrimitivesPage() {
 						<Stepper label="capo" value={capo} min={0} max={12} onChange={setCapo} />
 						<Stepper label="capo (small)" value={capo} min={0} max={12} onChange={setCapo} size="sm" />
 						<Stepper label="bars" value={4} onChange={() => {}} disabled />
+					</div>
+				</Section>
+				<Section title="Pick toggle">
+					<div className="flex items-center gap-2">
+						<PickToggle pressed={kept} onPressedChange={setKept} label="Favourite Am7" />
+						<span className="text-sm text-gp-ink-3">{kept ? "kept" : "not kept"}</span>
 					</div>
 				</Section>
 

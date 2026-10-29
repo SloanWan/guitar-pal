@@ -98,6 +98,25 @@ test("a chord is read under either spelling of its root, and an old address move
 	await expect(page.getByRole("heading", { level: 1, name: "A♭" })).toBeVisible();
 });
 
+test("a chord kept with the pick waits in Favourites, and its page knows it", async ({ page }) => {
+	await page.goto("/chords/c");
+	const library = page.getByRole("region", { name: "Library" });
+	await library.getByRole("button", { name: "Favourite Cm", exact: true }).click();
+	await expect(library.getByRole("button", { name: "Favourite Cm", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+	await library.getByRole("radio", { name: "Favourites" }).click();
+	await expect(page).toHaveURL(/view=favourites/);
+	const kept = library.getByRole("region", { name: "Favourites" });
+	await expect(kept.getByRole("link", { name: /^Cm/ })).toBeVisible();
+
+	await kept.getByRole("link", { name: /^Cm/ }).click();
+	await expect(page).toHaveURL(/\/chords\/c\/minor$/);
+	const pick = page.locator(".ch-title").getByRole("button", { name: "Favourite Cm" });
+	await expect(pick).toHaveAttribute("aria-pressed", "true");
+	await pick.click();
+	await expect(pick).toHaveAttribute("aria-pressed", "false");
+});
+
 test("a shape the library lacks can be written down", async ({ page }) => {
 	await page.goto("/chords/create?frets=00770x");
 	await expect(page.getByRole("heading", { name: "Write a chord", level: 1 })).toBeVisible();

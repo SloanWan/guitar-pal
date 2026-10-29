@@ -1,34 +1,40 @@
 "use client";
 
-import { Fragment, useTransition } from "react";
+import { Fragment, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/AppLink";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import PianoRoots from "@/components/chords/PianoRoots";
 import CornerButton from "./CornerButton";
+import type { FavouriteChords } from "@/components/chords/useFavouriteChords";
 import { NavCard } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
+import { PickToggle } from "@/components/ui/pick-toggle";
 import { Segmented } from "@/components/ui/segmented";
 import { usePublishPending } from "@/components/nav-progress";
 import { buildRootSections } from "@/lib/chordBrowseSections";
 import type { BoardItem } from "@/lib/chordBoard";
 import { withGlyphs } from "@/lib/chordFormulas";
+import { favouriteKey, type FavouriteChord } from "@/lib/favouriteChords";
 import { chordQualityLine } from "@/lib/chordPage";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { chordHref } from "@/lib/chordSlug";
 import { CHORD_SUFFIX_CATEGORIES, ROOT_CHROMATIC_ORDER, chordSymbol, isSlashChord } from "@/lib/chordSuffixes";
-import { voicingToDiagramShape, type DiagramShape } from "@/lib/chordVoicing";
+import { voicingToDiagramShape, type ChordVoicing, type DiagramShape } from "@/lib/chordVoicing";
+import { loadVoicings } from "@/lib/chordVoicingCache";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 import type { ChordWithVoicings } from "@/lib/chordsData";
 import { hubCategoryId, hubQualityHref, hubRootHref, hubViewHref, qualityLabel, type HubView } from "@/lib/chordsHub";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
-import type { UserChordVoicing } from "@/lib/userChordVoicings";
+import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
+// Read under the switcher's label, "Browse by": short enough that five fit on a phone.
 const VIEWS: { value: HubView; label: string }[] = [
-	{ value: "root", label: "By root" },
-	{ value: "quality", label: "By quality" },
+	{ value: "root", label: "Root" },
+	{ value: "quality", label: "Quality" },
 	{ value: "table", label: "Table" },
 	{ value: "mine", label: "Mine" },
+	{ value: "favourites", label: "Favourites" },
 ];
 
 interface Props {
@@ -39,22 +45,57 @@ interface Props {
 	chords: readonly ChordWithVoicings[];
 	index: readonly ChordIndexEntry[];
 	userVoicings: readonly UserChordVoicing[];
+	favourites: FavouriteChords;
 	onAdd: (items: BoardItem[]) => void;
 }
 
 interface Card {
 	root: string;
 	suffix: string;
-	def: DiagramShape | null;
+	/** Undefined while it is still being read. */
+	def: DiagramShape | null | undefined;
 	subline?: string;
 }
 
+/**
+ * Each kept chord's standard shape. The server reads the other views' chords;
+ * favourites are the player's, so their shapes are read here, once each.
+ */
+function useStandardShapes(chords: readonly FavouriteChord[], userVoicings: readonly UserChordVoicing[], active: boolean) {
+	const [library, setLibrary] = useState<Record<string, ChordVoicing[]>>({});
+	useEffect(() => {
+		if (!active) return;
+		const missing = chords.filter((c) => library[favouriteKey(c.root, c.suffix)] === undefined);
+		if (missing.length === 0) return;
+		let cancelled = false;
+		Promise.all(
+			missing.map((c) =>
+				loadVoicings(c.root, c.suffix)
+					.catch(() => [])
+					.then((voicings) => [favouriteKey(c.root, c.suffix), voicings] as const),
+			),
+		).then((read) => {
+			if (!cancelled) setLibrary((prev) => ({ ...prev, ...Object.fromEntries(read) }));
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [active, chords, library]);
+	return (root: string, suffix: string): DiagramShape | null | undefined => {
+		const read = library[favouriteKey(root, suffix)];
+		if (read === undefined) return undefined;
+		const voicing = selectStandardVoicing(mergeVoicings(read, userVoicings, root, suffix));
+		return voicing ? voicingToDiagramShape(voicing) : null;
+	};
+}
+
 /** Every chord to browse from the hub, as cards that open the chord or go on the board. */
-export default function HubLibrary({ view, root, quality, chords, index, userVoicings, onAdd }: Props) {
+export default function HubLibrary({ view, root, quality, chords, index, userVoicings, favourites, onAdd }: Props) {
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
 	usePublishPending(pending);
 	const go = (href: string) => startTransition(() => router.push(href, { scroll: false }));
+	const keptShape = useStandardShapes(favourites.favourites, userVoicings, view === "favourites");
 
 	const card = ({ root: r, suffix: s, def, subline }: Card) => {
 		const name = withGlyphs(chordSymbol(r, s));
@@ -64,17 +105,26 @@ export default function HubLibrary({ view, root, quality, chords, index, userVoi
 					<Link href={chordHref(r, s)}>
 						<span className="hb-chord-name gp-title">{name}</span>
 						<span className="hb-chord-q">{subline ?? chordQualityLine(r, s)}</span>
-						<span className="hb-chord-dg" aria-hidden>
+						<span className="hb-chord-dg" data-loading={def === undefined ? "" : undefined} aria-hidden>
 							{def ? <ChordDiagramSVG {...def} rootMidi={rootPitchClass(r)} size="compact" /> : null}
 						</span>
 					</Link>
 				</NavCard>
-				<CornerButton
-					kind="add"
-					className="hb-pin"
-					label={`Put ${name} on the board`}
-					onClick={() => onAdd([{ token: chordSymbol(r, s), shape: 0 }])}
-				/>
+				{/* Add by the name, the pick under it by the quality; later in order, so its hit area wins where they meet. */}
+				<div className="hb-acts">
+					<CornerButton
+						kind="add"
+						className="hb-pin"
+						label={`Put ${name} on the board`}
+						onClick={() => onAdd([{ token: chordSymbol(r, s), shape: 0 }])}
+					/>
+					<PickToggle
+						className="hb-fav"
+						pressed={favourites.isFavourite(r, s)}
+						onPressedChange={() => favourites.toggle(r, s)}
+						label={`Favourite ${name}`}
+					/>
+				</div>
 			</div>
 		);
 	};
@@ -149,6 +199,21 @@ export default function HubLibrary({ view, root, quality, chords, index, userVoi
 					</tbody>
 				</table>
 			</div>
+		);
+	} else if (view === "favourites") {
+		const kept = favourites.favourites;
+		body = favourites.favouritesLoading ? (
+			<p className="hb-meta">Loading your favourites…</p>
+		) : kept.length === 0 ? (
+			<p className="hb-meta">
+				Nothing kept yet. Tap the pick on any chord — here or on its page — and it waits for you here, on every device you
+				sign in on.
+			</p>
+		) : (
+			<section className="hb-group" aria-label="Favourites">
+				<h3>Chords you keep</h3>
+				<div className="hb-grid">{kept.map((c) => card({ root: c.root, suffix: c.suffix, def: keptShape(c.root, c.suffix) }))}</div>
+			</section>
 		);
 	} else {
 		const seen = new Set<string>();

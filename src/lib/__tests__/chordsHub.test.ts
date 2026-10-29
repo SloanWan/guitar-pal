@@ -16,11 +16,13 @@ describe("chords hub addresses", () => {
 		expect(hubRootHref("?")).toBe("/chords");
 		expect(hubQualityHref("7#9")).toBe("/chords?view=quality&quality=7%239");
 		expect(hubViewHref("table", "C", "m7")).toBe("/chords?view=table");
+		expect(hubViewHref("favourites", "C", "m7")).toBe("/chords?view=favourites");
 		expect(hubViewHref("root", "Eb", "m7")).toBe("/chords/e-flat");
 	});
 
 	it("reads a view and a quality, falling back for anything else", () => {
 		expect(parseHubView("mine")).toBe("mine");
+		expect(parseHubView("favourites")).toBe("favourites");
 		expect(parseHubView("grid")).toBe("root");
 		expect(parseHubView(undefined)).toBe("root");
 		expect(parseHubQuality("maj7")).toBe("maj7");

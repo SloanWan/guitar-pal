@@ -124,30 +124,6 @@
 	.st-row .gp-row-t {
 		text-transform: capitalize;
 	}
-	.st-fav {
-		display: grid;
-		flex: none;
-		place-items: center;
-		width: 36px;
-		height: 36px;
-		border-radius: var(--gp-r-s);
-		color: var(--gp-edge);
-		cursor: pointer;
-		transition:
-			color var(--gp-d-state) linear,
-			transform var(--gp-d-pop) var(--gp-spring-pop);
-	}
-	.st-fav:hover {
-		color: var(--gp-ink-3);
-	}
-	.st-fav[aria-pressed="true"] {
-		color: var(--gp-m-500);
-		transform: rotate(-12deg);
-	}
-	.st-fav svg {
-		width: 16px;
-		height: 17px;
-	}
 	.st-mini {
 		display: flex;
 		flex-wrap: wrap;

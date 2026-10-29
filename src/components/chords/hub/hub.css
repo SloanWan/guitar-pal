@@ -359,8 +359,9 @@
 	.hb-lc {
 		position: relative;
 	}
-	/* A library card: its name and quality on top, the add button beside them, the
-	   diagram below — so the button has its own corner and never covers the diagram. */
+	/* A library card: its name and quality on top, the add and favourite buttons
+	   stacked beside them (add by the name, the pick by the quality), the diagram
+	   below — so the buttons have their own corner and never cover the diagram. */
 	.hb-chord.gp-hop {
 		display: flex;
 		flex-direction: column;
@@ -369,9 +370,10 @@
 		border-radius: var(--gp-r-m);
 		color: var(--gp-ink);
 	}
-	/* The name shares its row with the add button; the quality has the card's width. */
-	.hb-chord-name {
-		max-width: calc(100% - 26px);
+	/* The name and the quality each share their row with one button. */
+	.hb-chord-name,
+	.hb-chord-q {
+		max-width: calc(100% - 24px);
 	}
 	.hb-chord-name,
 	.hb-chord-q {
@@ -392,33 +394,64 @@
 	}
 	.hb-chord-dg {
 		align-self: center;
-		margin-top: 4px;
+		/* clear of the pick stacked in the corner above it */
+		margin-top: 7px;
 	}
 	.hb-chord-dg svg {
 		display: block;
 		width: 84px;
 		height: auto;
 	}
-	.hb-corner.hb-pin {
+	.hb-acts {
 		position: absolute;
-		top: 8px;
-		right: 8px;
+		top: 6px;
+		right: 7px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
 	}
-	/* With a pointer the add waits for the card to be pointed at; on touch it is always there. */
+	.gp-pick-toggle.hb-fav {
+		position: relative;
+		width: 24px;
+		height: 22px;
+	}
+	.hb-fav::before {
+		position: absolute;
+		inset: 0 -8px -4px;
+		content: "";
+	}
+	.hb-fav svg {
+		width: 14px;
+		height: 15px;
+	}
+	/* A favourite still being read keeps a diagram's room, so the card does not grow when it lands. */
+	.hb-chord-dg[data-loading] {
+		width: 84px;
+		height: 72px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-well);
+	}
+	/* With a pointer the buttons wait for the card to be pointed at — a kept chord's
+	   pick always shows; on touch both are always there. */
 	@media (hover: hover) {
-		.hb-pin {
+		.hb-pin,
+		.hb-fav:not([aria-pressed="true"]) {
 			opacity: 0;
 			transition:
 				opacity var(--gp-d-state) linear,
-				transform var(--gp-d-hop) var(--gp-hop);
+				color var(--gp-d-state) linear,
+				transform var(--gp-d-pop) var(--gp-spring-pop);
 		}
-		.hb-lc:hover .hb-pin,
-		.hb-pin:focus-visible,
+		.hb-acts {
+			transition: transform var(--gp-d-hop) var(--gp-hop);
+		}
+		.hb-lc:hover :is(.hb-pin, .hb-fav),
+		:is(.hb-pin, .hb-fav):focus-visible,
 		.hb-pin[data-done] {
 			opacity: 1;
 		}
 		/* Rides the card's hop. */
-		.hb-lc:hover .hb-pin {
+		.hb-lc:hover .hb-acts {
 			transform: translateY(calc(var(--gp-hop-lift) * -1));
 		}
 	}

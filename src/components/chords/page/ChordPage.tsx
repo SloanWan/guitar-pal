@@ -6,7 +6,9 @@ import { AudioLines, ChevronLeft, ChevronRight, Library, PanelRightOpen, Pencil,
 import Link from "@/components/AppLink";
 import ChordDiagramSVG, { type DiagramMode } from "@/components/chords/ChordDiagramSVG";
 import { ARPEGGIO_GAP_S, useChordPreview } from "@/components/chords/useChordPreview";
+import { useFavouriteChords } from "@/components/chords/useFavouriteChords";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
+import { PickToggle } from "@/components/ui/pick-toggle";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { Sheet } from "@/components/ui/sheet";
@@ -57,6 +59,7 @@ export interface ChordPageProps {
 export default function ChordPage({ root, suffix, tones, slashBass, library, index, rootChords }: ChordPageProps) {
 	const { user, loading } = useUser();
 	const { voicings: userVoicings, saveVoicing, deleteVoicing } = useUserChordVoicings(user, loading);
+	const favourites = useFavouriteChords(user, loading);
 	const mine = useMemo(() => userVoicings.filter((v) => v.root === root && v.suffix === suffix), [userVoicings, root, suffix]);
 	const shapes = useMemo(() => pageShapes(library, mine, root, suffix), [library, mine, root, suffix]);
 
@@ -143,7 +146,7 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 		closeDraft();
 	}
 
-	const libraryProps = { root, suffix, index, initialChords: rootChords, userVoicings };
+	const libraryProps = { root, suffix, index, initialChords: rootChords, userVoicings, favourites };
 	const drawer = (variant: "aside" | "sheet") =>
 		draft ? (
 			<ShapeDraft
@@ -198,7 +201,15 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 									{category}
 									{root !== UNKNOWN_ROOT && ` · ${withGlyphs(root)} root`}
 								</span>
-								<h1>{withGlyphs(symbol)}</h1>
+								<div className="ch-title-row">
+									<h1>{withGlyphs(symbol)}</h1>
+									<PickToggle
+										className="ch-fav"
+										pressed={favourites.isFavourite(root, suffix)}
+										onPressedChange={() => favourites.toggle(root, suffix)}
+										label={`Favourite ${withGlyphs(symbol)}`}
+									/>
+								</div>
 								<span className="ch-meta">
 									{chordQualityLine(root, suffix)} · {shapes.length} shape{shapes.length === 1 ? "" : "s"}
 								</span>

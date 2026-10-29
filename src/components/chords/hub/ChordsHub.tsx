@@ -2,6 +2,7 @@
 
 import "./hub.css";
 import { useMemo } from "react";
+import { useFavouriteChords } from "@/components/chords/useFavouriteChords";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useUser } from "@/hooks/useUser";
 import { addToBoard, type BoardParams } from "@/lib/chordBoard";
@@ -29,6 +30,7 @@ export interface ChordsHubProps {
 export default function ChordsHub({ view, root, quality, chords, index, board }: ChordsHubProps) {
 	const { user, loading } = useUser();
 	const { voicings: userVoicings } = useUserChordVoicings(user, loading);
+	const favourites = useFavouriteChords(user, loading);
 	const searchIndex = useMemo(() => chordIndexWithUser(index, userVoicings), [index, userVoicings]);
 	const lookup = useMemo(() => buildChordLookup(searchIndex), [searchIndex]);
 	const { items, transpose, capo, cards, update, setTranspose, setCapo } = useBoard(board, index, userVoicings);
@@ -53,6 +55,7 @@ export default function ChordsHub({ view, root, quality, chords, index, board }:
 					chords={chords}
 					index={index}
 					userVoicings={userVoicings}
+					favourites={favourites}
 					onAdd={(added) => update(addToBoard(items, added))}
 				/>
 				<p className="hb-credit">

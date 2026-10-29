@@ -54,6 +54,7 @@ Env vars required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 - `practice_logs` — immutable records written at end of a session
 - `exercise_logs` — per-exercise records (currently unused by any UI)
 - `user_strum_patterns`, `user_favourite_patterns` — custom strum pattern storage
+- `user_favourite_chords` — the chords a player keeps, by `root` + `suffix` (never a voicing); signed out they live in localStorage and join the account on the first signed-in load (`useFavouriteChords`). The pick toggle is the shared `ui/pick-toggle.tsx`, also the Strum library's
 - `user_pattern_progressions` — chord sequences a user attached to a strum pattern (`pattern_id` is a plain text id, not a foreign key: a progression can hang off a preset pattern as well as a custom one)
 - `chords`, `chord_voicings` — shared/read-only reference data
 

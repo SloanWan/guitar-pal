@@ -1,10 +1,10 @@
 import { CHORD_SUFFIX_CATEGORIES, ROOT_CHROMATIC_ORDER } from "@/lib/chordSuffixes";
 import { rootToSlug } from "@/lib/chordSlug";
 
-/** The chords hub's library: one root's chords, one quality in every key, the table, or the player's own. */
-export type HubView = "root" | "quality" | "table" | "mine";
+/** The chords hub's library: one root's chords, one quality in every key, the table, the player's own shapes, or the chords they keep. */
+export type HubView = "root" | "quality" | "table" | "mine" | "favourites";
 
-const VIEWS: readonly HubView[] = ["root", "quality", "table", "mine"];
+const VIEWS: readonly HubView[] = ["root", "quality", "table", "mine", "favourites"];
 
 /** Every quality the "By quality" view offers, in taxonomy order. */
 export const HUB_QUALITIES: readonly string[] = CHORD_SUFFIX_CATEGORIES.flatMap((c) => c.suffixes);

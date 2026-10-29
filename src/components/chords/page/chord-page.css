@@ -97,6 +97,20 @@
 		flex-direction: column;
 		gap: 2px;
 	}
+	.ch-title-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	/* Beside the name, a size up from a list's, its pick read at the title's scale. */
+	.gp-pick-toggle.ch-fav {
+		width: 40px;
+		height: 40px;
+	}
+	.ch-fav svg {
+		width: 20px;
+		height: 21px;
+	}
 	.ch-title h1 {
 		margin: 2px 0;
 		font-size: 52px;
@@ -505,6 +519,15 @@
 		flex-direction: column;
 		gap: 12px;
 		min-height: 0;
+	}
+	.ch-lrow {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+	.ch-lrow > :first-child {
+		flex: 1;
+		min-width: 0;
 	}
 	.ch-list {
 		display: flex;

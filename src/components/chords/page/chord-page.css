@@ -584,26 +584,7 @@
 		}
 	}
 
-	/* ── Bubble rise, the way the Strum page arrives ─────────────────────── */
-	.ch-rise > * {
-		animation: ch-bubble 560ms cubic-bezier(0.3, 1.45, 0.45, 1) both;
-		animation-delay: calc(var(--i, 0) * 45ms);
-	}
-	@keyframes ch-bubble {
-		0% {
-			opacity: 0;
-			transform: translateY(22px) scale(0.94);
-		}
-		60% {
-			opacity: 1;
-		}
-		100% {
-			opacity: 1;
-			transform: none;
-		}
-	}
 	@media (prefers-reduced-motion: reduce) {
-		.ch-rise > *,
 		.ch-draft {
 			animation: none;
 		}

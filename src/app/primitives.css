@@ -1131,6 +1131,41 @@
 		font-weight: 600;
 	}
 
+	/* ---- Page rise: every page's pieces bubble up one after another as it arrives ---------- */
+	/* On the element holding the page's sections: each child rises from 22px below at 94%,
+	   springing past and settling, 45ms after the one before. The order comes from the child's
+	   place (the first eight); a child that should arrive with another sets `--i` itself. */
+	.gp-rise > * {
+		animation: gp-bubble 560ms cubic-bezier(0.3, 1.45, 0.45, 1) both;
+		animation-delay: calc(var(--i, 0) * 45ms);
+	}
+	.gp-rise > :nth-child(2) { --i: 1; }
+	.gp-rise > :nth-child(3) { --i: 2; }
+	.gp-rise > :nth-child(4) { --i: 3; }
+	.gp-rise > :nth-child(5) { --i: 4; }
+	.gp-rise > :nth-child(6) { --i: 5; }
+	.gp-rise > :nth-child(7) { --i: 6; }
+	.gp-rise > :nth-child(n + 8) { --i: 7; }
+	@keyframes gp-bubble {
+		0% {
+			opacity: 0;
+			transform: translateY(22px) scale(0.94);
+		}
+		60% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gp-rise > * {
+			animation: gp-fade-in 150ms linear both;
+			animation-delay: 0ms;
+		}
+	}
+
 	/* ---- Skeleton: a well block that shimmers, shown after 300ms of waiting ---------------- */
 	.gp-skeleton {
 		position: relative;

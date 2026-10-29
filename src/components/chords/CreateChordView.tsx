@@ -152,7 +152,7 @@ export default function CreateChordView({ frets, written, guesses }: Props) {
 
 	return (
 		<div className="wr-page">
-			<div className="wr-in">
+			<div className="wr-in gp-rise">
 				{editing && mine
 					? header(
 							`Edit ${withGlyphs(chordSymbol(mine.root, mine.suffix))}`,

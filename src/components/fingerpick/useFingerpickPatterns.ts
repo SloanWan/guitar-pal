@@ -136,8 +136,14 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 	}
 
 	// Insert or update a custom pattern (create + edit both route here). Returns
-	// what was stored (the name may have gained a counter) and whether it is new.
-	function saveCustomPattern(saved: FingerpickPattern): { pattern: FingerpickPattern; isNew: boolean } {
+	// what was stored (the name may have gained a counter), whether it is new,
+	// and the write itself — for a caller about to leave for a page that reads
+	// the library on load (the editor page), which must not get there first.
+	function saveCustomPattern(saved: FingerpickPattern): {
+		pattern: FingerpickPattern;
+		isNew: boolean;
+		written: Promise<void>;
+	} {
 		// A new pattern is stamped now and goes to the top; an edit keeps its
 		// stamp and its place. The list is newest first, as the library shows it.
 		// Names are unique across presets and customs ("Waltz" → "Waltz (1)"),
@@ -154,7 +160,7 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 				: [pattern, ...prev],
 		);
 		if (selectedPattern.id === pattern.id) setSelectedPattern(pattern);
-		(async () => {
+		const written = (async () => {
 			try {
 				const supabase = createClient();
 				await saveUserFingerpickPattern(supabase, user, pattern);
@@ -162,7 +168,7 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 				console.error(e);
 			}
 		})();
-		return { pattern, isNew: !existing };
+		return { pattern, isNew: !existing, written };
 	}
 
 	function deleteCustomPattern(patternId: string) {

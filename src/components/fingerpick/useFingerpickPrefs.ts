@@ -1,4 +1,5 @@
 import { isPitchLabelStyle, type PitchLabelStyle } from "@/lib/fingerpickPitch";
+import { isDockLabelStyle, type DockLabelStyle } from "@/lib/fretboardDock";
 import { useStoredState, type StoredCodec } from "@/components/useStoredState";
 
 // Device-local preferences for the fingerpick pages — not synced to the account.
@@ -44,6 +45,15 @@ const PITCH_STYLE: StoredCodec<PitchLabelStyle> = {
 function clamped(clamp: (raw: number) => number): StoredCodec<number> {
 	return { parse: (raw) => clamp(Number(raw)), format: String };
 }
+/** Unset (null) until the player chooses: the device's own default then. */
+const CHOSEN_ON_OFF: StoredCodec<boolean | null> = {
+	parse: ON_OFF.parse,
+	format: (on) => (on ? "on" : "off"),
+};
+const DOCK_LABELS: StoredCodec<DockLabelStyle> = {
+	parse: (raw) => (isDockLabelStyle(raw) ? raw : null),
+	format: (style) => style,
+};
 const SHAPE_WIDTH = clamped(clampShapeWidth);
 const SCROLL_SPEED = clamped(clampScrollSpeed);
 
@@ -89,6 +99,23 @@ export interface FingerpickPrefs {
 	setPitchLabelsOn: (on: boolean) => void;
 	pitchLabelStyle: PitchLabelStyle;
 	setPitchLabelStyle: (style: PitchLabelStyle) => void;
+	/**
+	 * The editor moves the cursor on a slot after a note is written. Null until
+	 * the player sets it: on for a phone, off for a desktop (`autoAdvanceOn`).
+	 */
+	autoAdvance: boolean | null;
+	setAutoAdvance: (on: boolean) => void;
+	/** What the editor's fretboard writes on its frets: the numbers, or the notes they sound. */
+	dockLabels: DockLabelStyle;
+	setDockLabels: (style: DockLabelStyle) => void;
+	/** The editor's fretboard is open (not folded to its header). */
+	dockOpen: boolean;
+	setDockOpen: (open: boolean) => void;
+}
+
+/** Whether the editor advances after a note: the player's choice, else on for a phone. */
+export function autoAdvanceOn(choice: boolean | null, phone: boolean): boolean {
+	return choice ?? phone;
 }
 
 /** The remembered view settings; every setter clamps, applies and stores. */
@@ -101,6 +128,9 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 	const [countEighths, setCountEighths] = useStoredState("fingerpickCountEighths", false, ON_OFF);
 	const [pitchLabelsOn, setPitchLabelsOn] = useStoredState("fingerpickPitchLabels", false, ON_OFF);
 	const [pitchLabelStyle, setPitchLabelStyle] = useStoredState("fingerpickPitchLabelStyle", PITCH_LABEL_STYLE_DEFAULT, PITCH_STYLE);
+	const [autoAdvance, setAutoAdvance] = useStoredState<boolean | null>("fingerpickAutoAdvance", null, CHOSEN_ON_OFF);
+	const [dockLabels, setDockLabels] = useStoredState<DockLabelStyle>("fingerpickDockLabels", "fret", DOCK_LABELS);
+	const [dockOpen, setDockOpen] = useStoredState("fingerpickDockOpen", true, ON_OFF);
 	return {
 		chordView,
 		setChordView,
@@ -118,5 +148,11 @@ export function useFingerpickPrefs(): FingerpickPrefs {
 		setPitchLabelsOn,
 		pitchLabelStyle,
 		setPitchLabelStyle,
+		autoAdvance,
+		setAutoAdvance,
+		dockLabels,
+		setDockLabels,
+		dockOpen,
+		setDockOpen,
 	};
 }

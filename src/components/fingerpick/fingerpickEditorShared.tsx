@@ -12,7 +12,8 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import type { Cell, SlotTarget } from "@/lib/fingerpickEdit";
-import { EFFECT_STACK_ORDER, techniqueDef, type AvailabilityBlock } from "@/lib/techniqueRegistry";
+import { EFFECT_STACK_ORDER, techniqueDef } from "@/lib/techniqueRegistry";
+import { BLOCK_REASON } from "@/lib/tabEditorCursor";
 import type { ChordRef } from "@/lib/strumPatterns";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 
@@ -167,16 +168,7 @@ export function cellGlyph(sf: StringFret): string {
 }
 
 /** Why a technique is greyed out, for the menu's tooltip. */
-export const BLOCK_TITLE: Record<AvailabilityBlock, string> = {
-	"no-note": "Needs a note",
-	muted: "An x is a slap: there is no pitch to shape",
-	"open-string": "An open string cannot be bent or shaken",
-	"off-neck": "The bend would run off the neck",
-	"no-previous-note": "No previous note on this string",
-	"previous-muted": "The previous note on this string is a slap",
-	"wrong-direction": "Not valid for this fret movement",
-	"different-fret": "Not valid for this fret movement",
-};
+export const BLOCK_TITLE = BLOCK_REASON;
 
 /**
  * A request to open the shape editor: from a chord search that found nothing

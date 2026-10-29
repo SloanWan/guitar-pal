@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import {
@@ -8,6 +9,7 @@ import {
 	type FingerpickHandoff,
 } from "@/lib/assistant/handoff";
 import { applySet, applyTabEdit } from "@/lib/assistant/tab/editIntent";
+import { editorHref, stashEditorDraft } from "@/lib/tabEditorEntry";
 import type { TabSession } from "./useTabSession";
 
 /** An assistant change to a tab the player has, as opposed to a new tab to check. */
@@ -53,16 +55,23 @@ function asOwn(pattern: FingerpickPattern, isPreset: boolean): FingerpickPattern
 	return isPreset ? { ...pattern, id: crypto.randomUUID(), name: `${pattern.name} (mine)`, createdAt: undefined } : pattern;
 }
 
+/** The notice over a handed-over tab in the editor. */
+export const HANDOFF_NOTICE = {
+	title: "Check this tab",
+	text: "Made from what you asked for — check the frets and the rhythm, then save it as your own.",
+};
+
 /**
- * What the assistant hands this page. A new tab opens in the editor to be checked
- * and saved (nothing is saved on arrival); a change to one the player has —
+ * What the assistant hands this page. A new tab opens in the editor page to be
+ * checked and saved (nothing is saved on arrival); a change to one the player has —
  * bars added or rewritten, a new name, tempo or meter, a delete — goes through
  * the same saves the editor and the library use. The assistant lives in the
  * header, so a handoff usually lands with the page on screen; the event covers
  * that and the mount read covers arriving with one waiting.
  */
 export function useTabHandoff(session: TabSession, isShared: boolean) {
-	const [handoff, setHandoff] = useState<FingerpickHandoff | null>(null);
+	const router = useRouter();
+	const routerRef = useRef(router);
 
 	function apply(edit: TabEdit) {
 		const target = session.patterns.find((p) => p.id === edit.patternId);
@@ -104,6 +113,7 @@ export function useTabHandoff(session: TabSession, isShared: boolean) {
 	useEffect(() => {
 		applyRef.current = apply;
 		loadingRef.current = session.isLoading;
+		routerRef.current = router;
 	});
 	useEffect(() => {
 		if (session.isLoading || !pendingRef.current) return;
@@ -123,14 +133,22 @@ export function useTabHandoff(session: TabSession, isShared: boolean) {
 				else applyRef.current(next);
 				return;
 			}
-			// A new tab of the player's, whatever id the stash carried: a fresh one keeps
-			// it from overwriting one they have.
-			setHandoff({ ...next, pattern: { ...next.pattern, id: crypto.randomUUID() } });
+			routerRef.current.push(editorHref({ kind: "draft", token: stashEditorDraft(draftOf(next)) }));
 		}
 		take();
 		window.addEventListener(HANDOFF_EVENT, take);
 		return () => window.removeEventListener(HANDOFF_EVENT, take);
 	}, [isShared]);
 
-	return { handoff, closeHandoff: () => setHandoff(null) };
+}
+
+/**
+ * A new tab of the player's, whatever id the stash carried: a fresh one keeps it
+ * from overwriting one they have.
+ */
+function draftOf(handoff: FingerpickHandoff) {
+	return {
+		pattern: { ...handoff.pattern, id: crypto.randomUUID() },
+		notice: { ...HANDOFF_NOTICE, warnings: handoff.warnings.map((w) => w.message) },
+	};
 }

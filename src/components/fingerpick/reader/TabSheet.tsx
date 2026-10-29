@@ -2,7 +2,7 @@
 
 import type { ReactNode, Ref, RefObject } from "react";
 import type { ChordLabel, RenderContext } from "@/lib/fingerpickToVexFlow";
-import TabStaveRow from "@/components/fingerpick/TabStaveRow";
+import TabStaveRow, { type EditableStave } from "@/components/fingerpick/TabStaveRow";
 import type { MeasureRow } from "@/components/fingerpick/fingerpickLayout";
 import type { SectionBand } from "@/components/fingerpick/sectionSelection";
 
@@ -24,6 +24,8 @@ interface Props {
 	/** The chosen section, one band a row; empty outside section mode. */
 	bands: readonly SectionBand[];
 	onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+	/** The editor's surface over every slot (#360); the reader passes none. */
+	editable?: EditableStave;
 }
 
 /**
@@ -47,6 +49,7 @@ export default function TabSheet({
 	highlightRef,
 	bands,
 	onClick,
+	editable,
 }: Props) {
 	return (
 		<section className="tb-sheet" aria-label="Tab">
@@ -83,6 +86,7 @@ export default function TabSheet({
 								offShapeStrings={offShapeAt}
 								pitchLabel={pitchLabel}
 								renderContext={renderContext}
+								editable={editable}
 							/>
 						</div>
 					))}

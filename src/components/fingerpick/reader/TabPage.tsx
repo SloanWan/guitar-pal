@@ -3,6 +3,7 @@
 import "@/components/library/library.css";
 import "./tab.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PanelRightOpen } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,7 +11,6 @@ import { ShareNote } from "@/components/share/SharedSnapshot";
 import PlayBar from "@/components/playback/PlayBar";
 import { usePlayerDock } from "@/components/playback/usePlayerDock";
 import { usePlayKey } from "@/components/playback/usePlayKey";
-import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
 import TextTabDialog from "@/components/textTab/TextTabDialog";
 import { useFingerpickPrefs } from "@/components/fingerpick/useFingerpickPrefs";
 import { useMeasureGeometry } from "@/components/fingerpick/useMeasureGeometry";
@@ -33,6 +33,7 @@ import { indexPattern } from "@/lib/fingerpickIndex";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
 import type { SharedFingerpick } from "@/lib/sharedItems";
+import { editorHref, type EditorEntry } from "@/lib/tabEditorEntry";
 import TabHeader from "./TabHeader";
 import TabSheet from "./TabSheet";
 import TabToolbar from "./TabToolbar";
@@ -45,9 +46,6 @@ import { useTabShare } from "./useTabShare";
 
 /** Per-viewer: whether the library beside the stage is folded away. */
 const LIBRARY_FOLDED_KEY = "tabLibraryFolded";
-
-/** The editor, open on a tab of the player's own or on a new one (null). */
-type Editing = { pattern: FingerpickPattern | null } | null;
 
 /**
  * The Tab page. On /fingerpick it opens the player's library; given `shared`, it
@@ -158,13 +156,14 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 		loading: session.isLoading,
 		stop: playback.stop,
 	});
-	const { handoff, closeHandoff } = useTabHandoff(session, isShared);
-	const [editing, setEditing] = useState<Editing>(null);
+	useTabHandoff(session, isShared);
 	const [pasteOpen, setPasteOpen] = useState(false);
-	function openEditor(next: Editing) {
+	// The editor is a page of its own (#358).
+	const router = useRouter();
+	function openEditor(entry: EditorEntry) {
 		playback.stop();
 		setLibraryOpen(false);
-		setEditing(next);
+		router.push(editorHref(entry));
 	}
 
 	const [folded, fold] = useStoredState(LIBRARY_FOLDED_KEY, false, FLAG_CODEC);
@@ -195,13 +194,12 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 		selectedId: pattern.id,
 		favouriteIds: session.favouriteIds,
 		onToggleFavourite: session.toggleFavourite,
-		onNew: () => openEditor({ pattern: null }),
+		onNew: () => openEditor({ kind: "new" }),
 		onPaste: () => {
 			setLibraryOpen(false);
 			setPasteOpen(true);
 		},
 	};
-	const editorPattern = handoff ? handoff.pattern : (editing?.pattern ?? null);
 
 	return (
 		<div className="tb-page" data-m="tab">
@@ -235,7 +233,7 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 										capo={capo}
 										onCapo={session.setCapo}
 										onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
-										onEdit={isShared ? undefined : () => openEditor({ pattern })}
+										onEdit={isShared ? undefined : () => openEditor({ kind: "edit", id: pattern.id })}
 										onShare={isShared ? undefined : () => void shareState.share()}
 										sharing={shareState.sharing}
 										onDelete={isShared ? undefined : () => session.remove(pattern.id)}
@@ -346,27 +344,6 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 					</div>
 				</Sheet>
 			)}
-			{/* One editor: a tab the assistant made, to be checked; or one of the player's own, or a new one. */}
-			<FingerpickEditModal
-				key={editorPattern?.id ?? "new"}
-				open={handoff !== null || editing !== null}
-				pattern={editorPattern}
-				takenNames={session.patterns.filter((p) => p.id !== editorPattern?.id).map((p) => p.name)}
-				notice={
-					handoff
-						? {
-								title: "Check this tab",
-								text: "Made from what you asked for — check the frets and the rhythm, then save it as your own.",
-								warnings: handoff.warnings.map((w) => w.message),
-							}
-						: undefined
-				}
-				onClose={() => {
-					closeHandoff();
-					setEditing(null);
-				}}
-				onSave={session.save}
-			/>
 			<TextTabDialog open={pasteOpen} onClose={() => setPasteOpen(false)} />
 		</div>
 	);

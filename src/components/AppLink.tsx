@@ -6,11 +6,14 @@
 //
 // useLinkStatus only works inside a Link, so the reporter is rendered as a child
 // of Link. It renders no DOM (returns null), so it never affects link layout.
+//
+// It is also where a page with unsaved work holds a navigation (src/lib/leaveGuard.ts).
 
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { forwardRef, type ComponentProps } from "react";
 import { usePublishPending } from "@/components/nav-progress";
+import { mayNavigate } from "@/lib/leaveGuard";
 
 function LinkPending() {
 	const { pending } = useLinkStatus();
@@ -21,11 +24,19 @@ function LinkPending() {
 export type AppLinkProps = ComponentProps<typeof Link>;
 
 const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(function AppLink(
-	{ children, ...props },
+	{ children, onNavigate, ...props },
 	ref,
 ) {
 	return (
-		<Link ref={ref} {...props}>
+		<Link
+			ref={ref}
+			{...props}
+			onNavigate={(e) => {
+				onNavigate?.(e);
+				const href = typeof props.href === "string" ? props.href : (props.href.pathname ?? "/");
+				if (!mayNavigate(href)) e.preventDefault();
+			}}
+		>
 			{children}
 			<LinkPending />
 		</Link>

@@ -29,7 +29,7 @@ import { chordHref } from "@/lib/chordSlug";
 import { chordSymbol } from "@/lib/chordSuffixes";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { prefersReducedMotion } from "@/lib/motion";
-import { LAST_STRUM_PATTERN_KEY, PRESET_STRUM_PATTERNS, STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
+import { STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
 import CornerButton from "./CornerButton";
 import type { BoardCard } from "./useBoard";
 
@@ -130,19 +130,14 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 	}
 
 	function openInStrum() {
-		let patternId = PRESET_STRUM_PATTERNS[0].id;
-		try {
-			patternId = localStorage.getItem(LAST_STRUM_PATTERN_KEY) ?? patternId;
-		} catch {
-			// no storage: the first preset
-		}
 		// The shapes as drawn, and the capo: Strum plays what is held and sounds it higher.
+		// Which pattern they go on is asked there.
 		const chords: BoardChord[] = cards.map((card) =>
 			card.status === "found"
 				? { chord: { root: card.root, suffix: card.suffix, voicingId: shownShape(card)?.id ?? null } }
 				: { unknown: card.name },
 		);
-		stashHandoff(boardProgression(chords, patternId, capo));
+		stashHandoff(boardProgression(chords, capo));
 		router.push("/strum");
 	}
 

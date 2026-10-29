@@ -69,8 +69,18 @@ test("the board transposes, and goes to Strum as a progression", async ({ page }
 	await expect(board.getByRole("link", { name: "Bm" })).toBeVisible();
 	await expect(board.getByText("sounds C♯m")).toBeVisible();
 
+	// Strum asks which pattern the chords go on, and saves nothing until they are added.
 	await board.getByRole("button", { name: "Open in Strum as a progression" }).click();
 	await expect(page).toHaveURL(/\/strum/);
+	const waiting = page.getByRole("region", { name: "New progression" });
+	await expect(waiting.getByRole("heading", { name: "Choose a pattern" })).toBeVisible();
+	await expect(waiting.getByRole("list", { name: "Chords" })).toHaveText(/D\s*Bm/);
+	const add = waiting.getByRole("button", { name: "Add the progression" });
+	await expect(add).toBeDisabled();
+
+	await page.getByRole("complementary", { name: "Pattern library" }).getByRole("button", { name: /old faithful/i }).first().click();
+	await expect(waiting.getByRole("heading", { name: "old faithful" })).toBeVisible();
+	await add.click();
 	await expect(page.getByText("D|Bm").first()).toBeVisible();
 });
 

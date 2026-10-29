@@ -23,6 +23,7 @@ import {
 	HANDOFF_EVENT,
 	takeHandoff,
 	type AttachHandoff,
+	type ChordsHandoff,
 	type DeleteHandoff,
 	type RenameHandoff,
 	type StrumHandoff,
@@ -32,6 +33,20 @@ import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
 import type { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import type { useChordProgressions } from "@/components/strum/useChordProgressions";
+
+/**
+ * Chords waiting for a pattern (the Chords board's handoff). `chosen` is false
+ * until the player picks one: the pattern open underneath is only where the
+ * page was, not an answer.
+ */
+export interface PendingChords {
+	bars: ChordProgression["bars"];
+	capo: number | null;
+	chosen: boolean;
+}
+
+/** The id the waiting chords play under before they are saved. */
+export const PENDING_PROGRESSION_ID = "pending";
 
 /** Device-local memory of which pattern and which progression were open. */
 export const LAST_PATTERN_KEY = LAST_STRUM_PATTERN_KEY;
@@ -65,6 +80,7 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 	const [patternRestored, setPatternRestored] = useState(isShared);
 	const [openProgressionId, setOpenProgressionId] = useState<string | null>(sharedOpen?.id ?? null);
 	const [progressionRestored, setProgressionRestored] = useState(isShared);
+	const [pending, setPending] = useState<PendingChords | null>(null);
 	const meter = selectedPattern ? patternMeter(selectedPattern) : DEFAULT_METER;
 	const [bpm, setBpmRaw] = useState(() =>
 		shared
@@ -89,6 +105,20 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 		[progressions, selectedPattern, shared],
 	);
 	const openProgression = patternProgressions.find((p) => p.id === openProgressionId) ?? null;
+	/** The waiting chords on the chosen pattern's rhythm, to hear before they are saved. */
+	const pendingProgression = useMemo<ChordProgression | null>(
+		() =>
+			pending?.chosen && selectedPattern
+				? {
+						id: PENDING_PROGRESSION_ID,
+						patternId: selectedPattern.id,
+						bars: alignToRhythm(pending.bars, patternRhythm(selectedPattern)),
+						orderIndex: 0,
+						...(pending.capo === null ? {} : { capo: normalizeCapo(pending.capo) }),
+					}
+				: null,
+		[pending, selectedPattern],
+	);
 
 	/** The tempo something opens at: the progression's own, else the pattern's. */
 	function bpmFor(progression: ChordProgression | null, pattern: StrumPattern | null = selectedPattern): number {
@@ -125,6 +155,7 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 	 */
 	function applyHandoff(handoff: StrumHandoff) {
 		if (handoff.kind === "attach") return applyAttachHandoff(handoff);
+		if (handoff.kind === "chords") return applyChordsHandoff(handoff);
 		if (handoff.kind === "rename") return applyRenameHandoff(handoff);
 		if (handoff.kind === "delete") return applyDeleteHandoff(handoff);
 
@@ -184,6 +215,47 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 		});
 	}
 
+	/**
+	 * Chords that still need a pattern: nothing is saved, the page asks. What was
+	 * open stays open underneath (or the last pattern, on arrival), so cancelling
+	 * returns to it.
+	 */
+	function applyChordsHandoff(handoff: ChordsHandoff) {
+		stop();
+		setPending({ bars: handoff.bars, capo: handoff.capo, chosen: false });
+		if (!patternRestoredRef.current || selectedPattern === null) queueMicrotask(() => openPattern(restoredPattern()));
+	}
+
+	/** The pattern the waiting chords go on: opened, so its rhythm shows and plays under them. */
+	function choosePendingPattern(pattern: StrumPattern) {
+		selectPattern(pattern);
+		setPending((p) => (p ? { ...p, chosen: true } : p));
+	}
+
+	/** A pattern written for the waiting chords, saved and chosen. */
+	function createPendingPattern(pattern: StrumPattern) {
+		library.handleSaveCustomPattern(pattern);
+		choosePendingPattern(pattern);
+	}
+
+	/** The waiting chords, saved as a new progression on the chosen pattern, and opened. */
+	function confirmPending() {
+		if (!pendingProgression || !selectedPattern) return;
+		const progression: ChordProgression = {
+			...pendingProgression,
+			id: crypto.randomUUID(),
+			orderIndex: nextOrderIndex(progressionsForPattern(progressions, selectedPattern.id)),
+		};
+		handleSaveProgression(progression);
+		setPending(null);
+		openProgressionById(progression.id);
+	}
+
+	function cancelPending() {
+		stop();
+		setPending(null);
+	}
+
 	/** Rename one of the player's own patterns; a preset never reaches here. */
 	function applyRenameHandoff(handoff: RenameHandoff) {
 		const pattern = customPatterns.find((p) => p.id === handoff.patternId);
@@ -226,6 +298,13 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 		return () => window.removeEventListener(HANDOFF_EVENT, handleHandoff);
 	}, [isShared]);
 
+	/** The pattern the page opens on: a `?pattern=` deep link, else the last one opened here. */
+	function restoredPattern(): StrumPattern {
+		const queryId = new URLSearchParams(window.location.search).get("pattern");
+		const savedId = queryId ?? localStorage.getItem(LAST_PATTERN_KEY);
+		return (savedId ? allPatterns.find((p) => p.id === savedId) : undefined) ?? PRESET_STRUM_PATTERNS[0];
+	}
+
 	// Restore the opening pattern once the player's own have loaded. A handoff
 	// wins, then a `?pattern=` deep link, then the last one opened here.
 	const patternRestoredRef = useRef(isShared);
@@ -237,10 +316,7 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 			applyHandoff(handoff);
 			return;
 		}
-		const queryId = new URLSearchParams(window.location.search).get("pattern");
-		const savedId = queryId ?? localStorage.getItem(LAST_PATTERN_KEY);
-		const found = savedId ? allPatterns.find((p) => p.id === savedId) : undefined;
-		const next = found ?? PRESET_STRUM_PATTERNS[0];
+		const next = restoredPattern();
 		queueMicrotask(() => openPattern(next));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- runs until the player's patterns arrive, then the ref stops it
 	}, [patternsLoading, customPatterns]);
@@ -419,6 +495,12 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 		removePattern,
 		removeProgression,
 		saveDefaultTempo,
+		pending,
+		pendingProgression,
+		choosePendingPattern,
+		createPendingPattern,
+		confirmPending,
+		cancelPending,
 	};
 }
 

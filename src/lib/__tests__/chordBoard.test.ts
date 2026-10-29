@@ -16,8 +16,6 @@ import {
 } from "@/lib/chordBoard";
 import { MAX_BATCH_TOKENS } from "@/lib/chordBatchResolve";
 import { validateBars } from "@/lib/strumBars";
-import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
-import { patternRhythm } from "@/lib/strumRhythm";
 
 describe("parseBoard / serializeBoard", () => {
 	it("reads chords and the shape each is on, counting shapes from 1", () => {
@@ -120,28 +118,19 @@ describe("transposeChord", () => {
 });
 
 describe("boardProgression", () => {
-	const preset = PRESET_STRUM_PATTERNS[1];
-
-	it("puts one chord a bar on the pattern's rhythm, behind the capo", () => {
-		const handoff = boardProgression(
-			[{ chord: { root: "G", suffix: "major", voicingId: "v2" } }, { unknown: "Hmaj7" }],
-			preset.id,
-			3,
-		);
-		expect(handoff).toMatchObject({ kind: "attach", patternId: preset.id, patternName: preset.name, capo: 3 });
+	it("hands Strum one chord a bar, behind the capo, with no pattern chosen", () => {
+		const handoff = boardProgression([{ chord: { root: "G", suffix: "major", voicingId: "v2" } }, { unknown: "Hmaj7" }], 3);
+		expect(handoff).toMatchObject({ kind: "chords", capo: 3 });
+		expect(handoff).not.toHaveProperty("patternId");
 		expect(handoff.bars.map((b) => [b.chord, b.unknownChord])).toEqual([
 			[{ root: "G", suffix: "major", voicingId: "v2" }, undefined],
 			[null, "Hmaj7"],
 		]);
-		expect(handoff.bars[0].beats).toEqual(patternRhythm(preset)[0]);
 		expect(validateBars(handoff.bars).ok).toBe(true);
 	});
 
-	it("goes to a pattern of the player's own on a preset's rhythm, and leaves out a capo of 0", () => {
-		const handoff = boardProgression([{ chord: { root: "C", suffix: "major" } }], "my-own", 0);
-		expect(handoff.patternId).toBe("my-own");
-		expect(handoff.capo).toBeNull();
-		expect(validateBars(handoff.bars).ok).toBe(true);
+	it("leaves out a capo of 0", () => {
+		expect(boardProgression([{ chord: { root: "C", suffix: "major" } }], 0).capo).toBeNull();
 	});
 });
 

@@ -1,4 +1,4 @@
-import type { AttachHandoff } from "@/lib/assistant/handoff";
+import type { ChordsHandoff } from "@/lib/assistant/handoff";
 import { MAX_BATCH_TOKENS } from "@/lib/chordBatchResolve";
 import { ROOT_CHROMATIC_ORDER } from "@/lib/chordSuffixes";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
@@ -111,19 +111,15 @@ export function transposeChord(root: string, suffix: string, semitones: number):
 export type BoardChord = { readonly chord: ChordRef } | { readonly unknown: string };
 
 /**
- * The board as a progression on the Strum pattern `patternId`: one bar a chord,
- * behind the board's capo. Bars carry a preset's rhythm when the pattern is the
- * player's own, which this page cannot read; Strum lays them over the pattern's
- * rhythm when it takes them.
+ * The board as chords for Strum: one bar a chord, behind the board's capo. Which
+ * pattern they go on is asked there; the bars carry the first preset's rhythm
+ * until then, and take the chosen pattern's when they are saved.
  */
-export function boardProgression(chords: readonly BoardChord[], patternId: string, capo: number): AttachHandoff {
-	const preset = PRESET_STRUM_PATTERNS.find((p) => p.id === patternId);
+export function boardProgression(chords: readonly BoardChord[], capo: number): ChordsHandoff {
 	const bars = chords.map((c) => ("chord" in c ? { beats: [], chord: c.chord } : { beats: [], chord: null, unknownChord: c.unknown }));
 	return {
-		kind: "attach",
-		patternId,
-		patternName: preset?.name ?? "The pattern you last opened",
-		bars: alignToRhythm(bars, patternRhythm(preset ?? PRESET_STRUM_PATTERNS[0])),
+		kind: "chords",
+		bars: alignToRhythm(bars, patternRhythm(PRESET_STRUM_PATTERNS[0])),
 		capo: capo > 0 ? capo : null,
 	};
 }

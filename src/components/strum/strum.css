@@ -278,6 +278,78 @@
 
 	/* ── Now card ─────────────────────────────────────────────────────────── */
 	/* The chord columns keep one width whatever they hold, so the grid between never moves. */
+	/* Chords from the Chords board waiting for a pattern, in place of the stage. */
+	.st-pending {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.st-pending .st-title h1[data-sentence] {
+		text-transform: none;
+	}
+	.st-pending-chords {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 10px;
+	}
+	.st-pending-chords ol {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.st-pending-chords li {
+		padding: 6px 12px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-card);
+		font-size: 17px;
+		font-weight: 750;
+	}
+	.st-pending-rhythm {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-height: 200px;
+		padding: 20px 26px;
+		border-radius: var(--gp-r-xl);
+		background: var(--gp-card);
+	}
+	.st-pending-meta {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		min-height: 28px;
+	}
+	.st-pending-empty {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 14px;
+		color: var(--gp-ink-3);
+		font-size: 14px;
+		text-align: center;
+	}
+	.st-pending-empty p {
+		max-width: 34ch;
+		margin: 0;
+	}
+	.st-pending-picks,
+	.st-pending-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+	}
+	.st-pending-actions {
+		justify-content: flex-end;
+	}
 	.st-now-card {
 		display: grid;
 		grid-template-columns: 150px minmax(0, 1fr) 96px;

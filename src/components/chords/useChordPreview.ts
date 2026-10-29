@@ -16,8 +16,8 @@ export interface ChordPreview {
 	readonly isPlaying: boolean;
 	/** How the sounding preview was played, null when none is. */
 	readonly playing: "strum" | "arpeggio" | null;
-	/** Counts arpeggios as their notes are scheduled, so a drawing can start its plucks with the sound. */
-	readonly arpeggioRun: number;
+	/** Counts plays as their notes are scheduled, so a drawing can start its plucks with the sound. */
+	readonly run: number;
 	/** True while the sample presets for the first playback are still downloading. */
 	readonly isPreloading: boolean;
 	/** Makes the audio context and loads the samples, so a timed run of plays starts on time. */
@@ -38,7 +38,7 @@ export function useChordPreview(): ChordPreview {
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [isPreloading, setIsPreloading] = useState(false);
 	const [playing, setPlaying] = useState<"strum" | "arpeggio" | null>(null);
-	const [arpeggioRun, setArpeggioRun] = useState(0);
+	const [run, setRun] = useState(0);
 
 	useEffect(
 		() => () => {
@@ -73,10 +73,8 @@ export function useChordPreview(): ChordPreview {
 			setPlaying(how);
 			const at = ctx.currentTime;
 			if (how === "strum") triggerChordPreview(pitches, ctx, ctx.destination, at);
-			else {
-				pitches.forEach((pitch, i) => triggerChordPreview([pitch], ctx, ctx.destination, at + i * ARPEGGIO_GAP_S));
-				setArpeggioRun((n) => n + 1);
-			}
+			else pitches.forEach((pitch, i) => triggerChordPreview([pitch], ctx, ctx.destination, at + i * ARPEGGIO_GAP_S));
+			setRun((n) => n + 1);
 			const spread = how === "arpeggio" ? (pitches.length - 1) * ARPEGGIO_GAP_S : 0;
 			timerRef.current = setTimeout(
 				() => {
@@ -91,5 +89,5 @@ export function useChordPreview(): ChordPreview {
 	const play = useCallback((pitches: readonly number[]) => sound(pitches, "strum"), [sound]);
 	const arpeggiate = useCallback((pitches: readonly number[]) => sound(pitches, "arpeggio"), [sound]);
 
-	return { isPlaying: playing !== null, playing, arpeggioRun, isPreloading, prepare, play, arpeggiate };
+	return { isPlaying: playing !== null, playing, run, isPreloading, prepare, play, arpeggiate };
 }

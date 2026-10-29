@@ -80,6 +80,14 @@ test("an old side-by-side link lands on a board of the same chords", async ({ pa
 	await expect(page.getByRole("region", { name: "Board" }).getByRole("link", { name: "Em" })).toBeVisible();
 });
 
+test("a chord is read under either spelling of its root, and an old address moves", async ({ page }) => {
+	await page.goto("/chords/g-sharp/major");
+	await expect(page.getByRole("heading", { level: 1, name: "A♭" })).toBeVisible();
+	await page.goto("/chords/ab/major");
+	await expect(page).toHaveURL(/\/chords\/a-flat\/major$/);
+	await expect(page.getByRole("heading", { level: 1, name: "A♭" })).toBeVisible();
+});
+
 test("a shape the library lacks can be written down", async ({ page }) => {
 	await page.goto("/chords/create?frets=00770x");
 	await expect(page.getByRole("heading", { name: "Write a chord", level: 1 })).toBeVisible();

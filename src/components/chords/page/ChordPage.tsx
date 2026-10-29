@@ -69,8 +69,8 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [draft, setDraft] = useState<Draft | null>(null);
 	const preview = useChordPreview();
-	/** The shape the last arpeggio was played on: its plucks are drawn only while that shape is shown. */
-	const [arpeggioOf, setArpeggioOf] = useState<string | null>(null);
+	/** The shape last played: its plucks are drawn only while that shape is shown. */
+	const [soundingOf, setSoundingOf] = useState<string | null>(null);
 
 	const symbol = chordSymbol(root, suffix);
 	const rootMidi = rootPitchClass(root);
@@ -179,7 +179,7 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 					<div className="ch-stage">
 						<div className="ch-stage-in ch-rise">
 							<nav className="ch-crumbs" aria-label="Breadcrumb" style={{ "--i": 0 } as CSSProperties}>
-								<Button asChild variant="ghost" size="xs">
+								<Button asChild variant="ghost" size="xs" className="ch-back">
 									<Link href="/chords">
 										<ChevronLeft aria-hidden />
 										Chords
@@ -235,8 +235,8 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 												rootTone
 												size="large"
 												pluck={
-													preview.playing === "arpeggio" && arpeggioOf === shape.id
-														? { run: preview.arpeggioRun, gapS: ARPEGGIO_GAP_S }
+													preview.playing !== null && soundingOf === shape.id
+														? { run: preview.run, gapS: preview.playing === "arpeggio" ? ARPEGGIO_GAP_S : 0 }
 														: null
 												}
 											/>
@@ -264,7 +264,10 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 										{/* Labels that never change, so neither button moves while samples load or a chord rings. */}
 										<div className="ch-plays">
 											<Button
-												onClick={() => void preview.play(shape.pitches)}
+												onClick={() => {
+													setSoundingOf(shape.id);
+													void preview.play(shape.pitches);
+												}}
 												loading={preview.isPreloading}
 												aria-pressed={preview.playing === "strum"}
 											>
@@ -274,7 +277,7 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 											<Button
 												variant="secondary"
 												onClick={() => {
-													setArpeggioOf(shape.id);
+													setSoundingOf(shape.id);
 													void preview.arpeggiate(shape.pitches);
 												}}
 												loading={preview.isPreloading}
@@ -337,12 +340,16 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 								<section className="ch-shapes" aria-label="Every shape" style={{ "--i": 2 } as CSSProperties}>
 									<div className="ch-shapes-head">
 										<h2>Shapes</h2>
-										<span className="ch-meta">{mine.length > 0 ? "yours sit at the end" : "the library's, standard first"}</span>
-										<span className="flex-1" />
-										<Button variant="secondary" size="xs" onClick={() => openDraft(false)}>
+										<button
+											type="button"
+											className="ch-icon gp-focus"
+											onClick={() => openDraft(false)}
+											aria-label="Draw my own shape"
+											title="Draw my own shape"
+										>
 											<Plus aria-hidden />
-											My own shape
-										</Button>
+										</button>
+										<span className="ch-meta">{mine.length > 0 ? "yours sit at the end" : "the library's, standard first"}</span>
 									</div>
 									<div className="ch-film">
 										{shapes.map((s, i) => (

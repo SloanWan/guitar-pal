@@ -54,6 +54,7 @@ describe("useChordPreview", () => {
 		expect(trigger).toHaveBeenCalledTimes(1);
 		expect(trigger.mock.calls[0][0]).toEqual([48, 52, 55]);
 		expect(result.current.playing).toBe("strum");
+		expect(result.current.run).toBe(1);
 	});
 
 	it("plays an arpeggio a note at a time, in the order given", async () => {
@@ -66,7 +67,7 @@ describe("useChordPreview", () => {
 		]);
 		expect(result.current.playing).toBe("arpeggio");
 		// Counted once its notes are scheduled, so a diagram's plucks start with the sound.
-		expect(result.current.arpeggioRun).toBe(1);
+		expect(result.current.run).toBe(1);
 	});
 
 	it("counts the arpeggio as playing until its last note has rung", async () => {

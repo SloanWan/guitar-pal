@@ -16,7 +16,7 @@ describe("chords hub addresses", () => {
 		expect(hubRootHref("?")).toBe("/chords");
 		expect(hubQualityHref("7#9")).toBe("/chords?view=quality&quality=7%239");
 		expect(hubViewHref("table", "C", "m7")).toBe("/chords?view=table");
-		expect(hubViewHref("root", "Eb", "m7")).toBe("/chords/eb");
+		expect(hubViewHref("root", "Eb", "m7")).toBe("/chords/e-flat");
 	});
 
 	it("reads a view and a quality, falling back for anything else", () => {

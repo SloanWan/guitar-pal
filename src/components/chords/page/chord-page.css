@@ -84,6 +84,11 @@
 		gap: 4px;
 		margin-bottom: -8px;
 	}
+	/* The chevron's stroke, not the button's box, lines up with the title below:
+	   the button's padding plus the blank left of the icon's stroke. */
+	.ch-back {
+		margin-left: -18px;
+	}
 	.ch-libbtn {
 		display: none;
 	}
@@ -219,6 +224,11 @@
 		margin: 0;
 		font-size: 17px;
 		font-weight: 750;
+	}
+	/* Beside the heading, centred on it, without making the row any taller. */
+	.ch-shapes-head .ch-icon {
+		align-self: center;
+		margin: -8px -4px;
 	}
 	.ch-film {
 		display: flex;

@@ -89,7 +89,23 @@ describe("ChordDiagramSVG root tone and plucks", () => {
 		expect(html.match(/cd-pluck-ring/g)).toHaveLength(5);
 	});
 
-	it("draws no plucks without an arpeggio", () => {
+	it("shakes a string from the held note down, and an open one whole", () => {
+		const html = draw({ pluck: { run: 1, gapS: 0.32 } });
+		// Open C, low string first: A at 3, D at 2, G open, B at 1, e open.
+		const [a, d, g, b, e] = [...html.matchAll(/cd-pluck-string[^>]*y1="([\d.]+)"/g)].map((m) => Number(m[1]));
+		expect(a).toBeGreaterThan(d);
+		expect(d).toBeGreaterThan(b);
+		expect(b).toBeGreaterThan(g);
+		expect(e).toBe(g);
+	});
+
+	it("plucks every string at once for a strum", () => {
+		const html = draw({ pluck: { run: 1, gapS: 0 } });
+		const delays = [...html.matchAll(/cd-pluck-string[^>]*animation-delay:([\d.]+)s/g)].map((m) => Number(m[1]));
+		expect(delays).toEqual([0, 0, 0, 0, 0]);
+	});
+
+	it("draws no plucks while nothing plays", () => {
 		expect(draw({})).not.toContain("cd-pluck");
 	});
 });

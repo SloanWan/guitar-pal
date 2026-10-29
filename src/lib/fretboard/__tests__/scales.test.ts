@@ -10,6 +10,8 @@ import {
 	pitchClassAt,
 	scaleMarks,
 	scalePitchClasses,
+	scaleSteps,
+	stepName,
 	usesFlats,
 } from "@/lib/fretboard/scales";
 import type { FretMark } from "@/lib/fretboard/types";
@@ -154,5 +156,41 @@ describe("scaleMarks", () => {
 	it("note labels agree with the shared note table up to spelling", () => {
 		const marks = scaleMarks({ root: "C", scale: "major" }, FULL_NECK, "note");
 		for (const m of marks) expect(m.label).toBe(NOTE_NAMES[pitchClassAt(m.string, m.fret)]);
+	});
+});
+
+describe("scaleSteps", () => {
+	it("writes each scale as the steps between its notes, back up to the octave", () => {
+		expect(scaleSteps("major").map(stepName)).toEqual(["W", "W", "H", "W", "W", "W", "H"]);
+		expect(scaleSteps("naturalMinor").map(stepName)).toEqual(["W", "H", "W", "W", "H", "W", "W"]);
+		expect(scaleSteps("minorPentatonic").map(stepName)).toEqual(["W+H", "W", "W", "W+H", "W"]);
+		expect(scaleSteps("blues").map(stepName)).toEqual(["W+H", "W", "H", "H", "W+H", "W"]);
+		expect(scaleSteps("dorian").map(stepName)).toEqual(["W", "H", "W", "W", "W", "H", "W"]);
+		expect(scaleSteps("mixolydian").map(stepName)).toEqual(["W", "W", "H", "W", "W", "H", "W"]);
+	});
+
+	it("always adds up to an octave, one step per note", () => {
+		for (const scale of SCALE_TYPES) {
+			const steps = scaleSteps(scale);
+			expect(steps).toHaveLength(SCALE_INTERVALS[scale].length);
+			expect(steps.reduce((a, b) => a + b, 0)).toBe(12);
+		}
+	});
+
+	it("names wider steps by their halves", () => {
+		expect(stepName(4)).toBe("2W");
+		expect(stepName(5)).toBe("5H");
+	});
+});
+
+describe("scaleMarks, tuned down", () => {
+	it("moves the scale a fret up the neck a half step down, each mark naming what sounds", () => {
+		const marks = scaleMarks({ root: "A", scale: "minorPentatonic" }, FULL_NECK, "note", -1);
+		const at = (s: number, f: number) => marks.find((m) => m.string === s && m.fret === f);
+		// The low string is E♭ now: A is at its sixth fret, not its fifth.
+		expect(at(0, 6)).toMatchObject({ label: "A", emphasis: "root" });
+		expect(at(0, 5)).toBeUndefined();
+		// Its open string sounds E♭, which A minor pentatonic does not hold.
+		expect(at(0, 0)).toBeUndefined();
 	});
 });

@@ -45,6 +45,7 @@
 	}
 	.te-stage-in {
 		--te-stack-gap: 12px;
+		--te-bleed: 16px;
 		display: flex;
 		flex-direction: column;
 		gap: var(--te-stack-gap);
@@ -190,8 +191,9 @@
 		position: sticky;
 		z-index: 12;
 		top: calc(-1 * var(--te-stage-top));
-		margin: calc(-1 * var(--te-stack-gap)) -6px 0;
-		padding: var(--te-stack-gap) 6px 0;
+		/* Wide enough to cover the cursor bar's glow (14px) as it scrolls under. */
+		margin: calc(-1 * var(--te-stack-gap)) calc(-1 * var(--te-bleed)) 0;
+		padding: var(--te-stack-gap) var(--te-bleed) 0;
 		background: var(--gp-page);
 	}
 	.te-tool {
@@ -1489,6 +1491,7 @@
 		}
 		.te-stage-in {
 			--te-stack-gap: 10px;
+			--te-bleed: 10px;
 		}
 		.te-titlerow {
 			column-gap: 6px;

@@ -269,7 +269,7 @@ export default function TabEditPage({ id }: { id: string }) {
 		return (
 			<div className="te-page" data-m="tab">
 				<div className="te-stage">
-					<div className="te-stage-in">
+					<div className="te-stage-in gp-rise">
 						<h1 className="te-name">This tab isn&apos;t in your tabs</h1>
 						<p className="pb-lab">It may have been deleted, or saved in another browser.</p>
 						<div>
@@ -308,7 +308,7 @@ export default function TabEditPage({ id }: { id: string }) {
 				)}
 				<div className="te-main">
 					<div className="te-stage">
-						<div className="te-stage-in">
+						<div className="te-stage-in gp-rise">
 							{!ready ? (
 								<div className="flex flex-col gap-4" aria-busy="true">
 									<Skeleton className="h-13 w-60" />
@@ -513,7 +513,7 @@ export default function TabEditPage({ id }: { id: string }) {
 					)}
 				</div>
 				{ready && !narrow && (
-					<aside ref={inspectorRef} className="te-insp" aria-label="Inspector">
+					<aside ref={inspectorRef} className="te-insp gp-rise" aria-label="Inspector">
 						<EditorInspector
 							working={working}
 							commit={commit}

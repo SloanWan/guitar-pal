@@ -37,7 +37,20 @@ export function safeHref(href: string): string | null {
 	return null;
 }
 
-const stripTags = (html: string) => html.replace(/<[^>]*>/g, "");
+/**
+ * Raw HTML down to its words. Repeated until nothing changes, so a tag split
+ * by another (`<scr<b>ipt>`) cannot reassemble once the inner one is gone.
+ * The text is drawn as text either way; this keeps it from even reading as markup.
+ */
+function stripTags(html: string): string {
+	let text = html;
+	let previous;
+	do {
+		previous = text;
+		text = text.replace(/<[^>]*>/g, "");
+	} while (text !== previous);
+	return text;
+}
 
 function inlines(tokens: readonly Token[] | undefined): MdInline[] {
 	const out: MdInline[] = [];

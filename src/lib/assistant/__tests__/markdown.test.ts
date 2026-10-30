@@ -46,6 +46,12 @@ describe("parseReply", () => {
 		]);
 	});
 
+	it("strips a tag hidden inside another", () => {
+		// Taken out once, the inner tag would leave `<script>` behind.
+		const tree = parseReply("<div><scr<i>ipt>alert(1)</scr<i>ipt></div>\n\n<scr<b>ipt>x");
+		expect(JSON.stringify(tree)).not.toMatch(/<script/i);
+	});
+
 	it("never lets the model's words become markup", () => {
 		const tree = parseReply('<b>hi</b> ![pic](http://x/y.png) <script>alert(1)</script>\n\n<div onclick="x">block</div>');
 		expect(JSON.stringify(tree)).not.toContain("<");

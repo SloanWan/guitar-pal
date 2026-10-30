@@ -89,10 +89,10 @@
 		transform: none;
 		cursor: default;
 	}
+	/* No focus ring (Sloan, 2026-10-30): a press, a hop or a field's tint says where focus is. */
 	.gp-press:focus-visible,
 	.gp-focus:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 2px;
+		outline: none;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.gp-press,
@@ -309,8 +309,7 @@
 		filter: none;
 	}
 	.gp-playpick:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 2px;
+		outline: none;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.gp-playpick > :is(.gp-playpick-shape, .gp-playpick-icon) {
@@ -592,8 +591,7 @@
 			background-color var(--gp-d-state) var(--gp-ease-state);
 	}
 	.gp-hop:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 3px;
+		outline: none;
 	}
 	/* Lift: the chosen one is the only raised item — a module 300 ring, settled 2px up */
 	.gp-hop:is([aria-current="true"], [aria-current="page"], [aria-pressed="true"]) {
@@ -751,9 +749,10 @@
 			box-shadow: inset 0 0 0 1px var(--gp-edge);
 		}
 	}
+	/* A field being typed into: its line in the module's light tint, never a ring round it. */
 	.gp-input:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 1px;
+		outline: none;
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-300);
 	}
 	.gp-input[aria-invalid="true"] {
 		box-shadow: inset 0 0 0 2px var(--gp-bad);
@@ -823,8 +822,7 @@
 			box-shadow var(--gp-d-sink) var(--gp-e-sink);
 	}
 	.gp-slider-thumb:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 2px;
+		outline: none;
 	}
 	/* ticks sit under the track, inset by half a thumb the way the thumb itself is */
 	.gp-slider-ticks {

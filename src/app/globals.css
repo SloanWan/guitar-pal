@@ -606,7 +606,6 @@
 	--color-gp-ink-mute: var(--gp-ink-mute);
 	--color-gp-ink-fill: var(--gp-ink-fill);
 	--color-gp-on-ink: var(--gp-on-ink);
-	--color-gp-focus: var(--gp-focus);
 	--color-gp-scrim: var(--gp-scrim);
 	--color-gp-m-100: var(--gp-m-100);
 	--color-gp-m-300: var(--gp-m-300);
@@ -1184,6 +1183,11 @@
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
+	}
+	/* No browser focus ring (Sloan, 2026-10-30). A v3 page's own ring is a utility and
+	   still wins over this layer until that page migrates. */
+	:focus-visible {
+		outline: none;
 	}
 	body {
 		@apply bg-background text-foreground font-sans;

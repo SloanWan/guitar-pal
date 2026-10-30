@@ -31,8 +31,7 @@
 		}
 	}
 	.csel-field:focus-within {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 1px;
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-300);
 	}
 	.csel-field[data-state="unknown"] {
 		color: var(--gp-bad);

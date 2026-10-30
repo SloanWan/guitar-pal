@@ -57,7 +57,7 @@ const darkMedia = collect((p) => p === DARK_MEDIA);
 const darkAttr = collect((p) => p === ':root[data-theme="dark"]');
 
 /** Keys deliberately fixed across themes (app-icon tiles wear their own slots; role labels sit on light tints). */
-const FIXED = new Set(["--gp-tile-l", "--gp-tile-d", "--gp-on-role", "--gp-focus", "--gp-a2-light"]);
+const FIXED = new Set(["--gp-tile-l", "--gp-tile-d", "--gp-on-role", "--gp-a2-light"]);
 const isFixed = (k: string) => FIXED.has(k) || /^--gp-lg[ld]\d$/.test(k);
 /** A colour or shadow value — literally, or through a var() chain that ends in one. */
 function isColour(v: string, depth = 0): boolean {

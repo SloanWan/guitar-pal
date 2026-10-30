@@ -134,8 +134,7 @@
 		color: var(--gp-ink);
 	}
 	.gp-nav a:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 0;
+		outline: none;
 	}
 	/* hover: a 2px ink line, skewed −24°, drawn from the left under the whole link, and the
 	   label leans into italic. The current item never shows it — it has its icon and pick. */
@@ -216,8 +215,7 @@
 		cursor: pointer;
 	}
 	.gp-avatar-btn:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 2px;
+		outline: none;
 	}
 	.gp-avatar-btn > * {
 		width: 34px;
@@ -256,8 +254,7 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 	.gp-tabbar a:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: -4px;
+		outline: none;
 		border-radius: var(--gp-r-m);
 	}
 	.gp-tabbar .gp-nic {

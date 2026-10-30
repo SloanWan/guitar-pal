@@ -183,7 +183,7 @@
 /* -------------------------------------------------------------------------------------
    4. SEMANTIC — ink only (text and icons), never a large fill; danger is the one fill
    ------------------------------------------------------------------------------------- */
-:root { --gp-ok:#2C6464; --gp-warn:#8A4A00; --gp-bad:#A51B2E; --gp-bad-fill:#A51B2E; --gp-bad-sh:#6B0F1C; --gp-focus: var(--gp-ink); }
+:root { --gp-ok:#2C6464; --gp-warn:#8A4A00; --gp-bad:#A51B2E; --gp-bad-fill:#A51B2E; --gp-bad-sh:#6B0F1C; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --gp-ok:#86C5C2; --gp-warn:#F0B878; --gp-bad:#FF97AC; --gp-bad-fill:#D2405A; --gp-bad-sh:#5A1622; } }
 :root[data-theme="dark"] { --gp-ok:#86C5C2; --gp-warn:#F0B878; --gp-bad:#FF97AC; --gp-bad-fill:#D2405A; --gp-bad-sh:#5A1622; }
 

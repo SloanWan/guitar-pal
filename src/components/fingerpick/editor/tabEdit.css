@@ -1077,8 +1077,7 @@
 	}
 	.te-fc:focus-visible {
 		z-index: 1;
-		outline: 2px solid var(--gp-focus);
-		outline-offset: -2px;
+		outline: none;
 	}
 	.te-fc span {
 		display: grid;
@@ -1193,12 +1192,6 @@
 		gap: 5px;
 		padding: 0 3px 0 8px;
 		border-radius: var(--gp-r-s);
-	}
-	/* A ring in the module's colour, as the old field's border turned: the page's 2px
-	   ink ring is heavier than a field this small. */
-	.te-irow .csel-field:focus-within {
-		outline: none;
-		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
 	}
 	.te-irow .csel-icon {
 		width: 11px;

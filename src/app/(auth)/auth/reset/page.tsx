@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { MailCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase";
 import PasswordField from "@/components/auth/PasswordField";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 import { FORM_ERROR, FORM_HELP, FORM_LEAD, PAGE_GUTTER, TEXT_LINK } from "@/components/auth/formText";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** Seconds before the recovery email can be sent again. */
 const RESEND_COOLDOWN_S = 60;
@@ -42,7 +43,7 @@ const TITLE: Record<Stage, string> = {
 };
 
 function ResetPageInner() {
-	const router = useRouter();
+	const router = useNavRouter();
 	const searchParams = useSearchParams();
 	const hasCode = searchParams.has("code");
 

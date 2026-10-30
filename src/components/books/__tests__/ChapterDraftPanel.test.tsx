@@ -13,7 +13,8 @@ import { takeHandoff } from "@/lib/assistant/handoff";
  */
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/books/b1" }));
+vi.mock("@/components/nav-progress", () => ({ useNavRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/books/b1" }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
 

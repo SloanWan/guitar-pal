@@ -24,7 +24,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useState, useEffect, useRef } from "react";
-import { useNavPush } from "@/components/nav-progress";
+import { useNavRouter } from "@/components/nav-progress";
 import {
 	createRoutine,
 	getRoutines,
@@ -64,7 +64,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 
 	const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
 
-	const pushNav = useNavPush();
+	const router = useNavRouter();
 	const filteredExercises = exercises.filter((ex) => ex.category === selectedCategory);
 
 	const editingRoutine = routines.find((r) => r.id === editingRoutineId) ?? null;
@@ -319,7 +319,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 												variant="secondary"
 												onClick={(e) => {
 													e.stopPropagation();
-													pushNav(`/dev/session/${routine.id}`);
+													router.push(`/dev/session/${routine.id}`);
 												}}
 											>
 												<Play className="size-3.5" />

@@ -23,8 +23,8 @@ vi.mock("@/components/fingerpick/TabStaveRow", async (importOriginal) => ({
 
 const push = vi.fn();
 let pathname = "/strum";
+vi.mock("@/components/nav-progress", () => ({ useNavRouter: () => ({ push }) }));
 vi.mock("next/navigation", () => ({
-	useRouter: () => ({ push }),
 	usePathname: () => pathname,
 }));
 

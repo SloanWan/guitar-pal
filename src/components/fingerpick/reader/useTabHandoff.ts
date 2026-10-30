@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import {
@@ -11,6 +10,7 @@ import {
 import { applySet, applyTabEdit } from "@/lib/assistant/tab/editIntent";
 import { editorHref, stashEditorDraft } from "@/lib/tabEditorEntry";
 import type { TabSession } from "./useTabSession";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** An assistant change to a tab the player has, as opposed to a new tab to check. */
 export type TabEdit = Exclude<FingerpickAnyHandoff, FingerpickHandoff>;
@@ -70,7 +70,7 @@ export const HANDOFF_NOTICE = {
  * that and the mount read covers arriving with one waiting.
  */
 export function useTabHandoff(session: TabSession, isShared: boolean) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const routerRef = useRef(router);
 
 	function apply(edit: TabEdit) {

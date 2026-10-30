@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ArrowDownUp, ArrowRightLeft, ArrowUp, ArrowUpRight, BookOpen, Lock, Rows3, Sparkles, Square, X, Zap } from "lucide-react";
 import ProposalPreview from "./strum/ProposalPreview";
 import TabProposalPreview from "./tab/TabProposalPreview";
@@ -29,6 +29,7 @@ import { hasModelReply } from "@/lib/assistant/chatLibrary";
 import type { AssistantDomain, AssistantMode } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * The conversation, rendered. The state is the launcher's — this only mounts
@@ -283,7 +284,7 @@ export default function AssistantPanel({
 	 * nothing, or a refusal after typing.
 	 */
 	const [askedForGeneral, setAskedForGeneral] = useState(false);
-	const router = useRouter();
+	const router = useNavRouter();
 	const pathname = usePathname();
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	/** The conversation itself, inside the scrolling frame — what is watched for growth. */

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { EditIntentReading, EditOp } from "@/lib/assistant/strum/editIntent";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import {
@@ -21,6 +21,7 @@ import { STRUM_CAPO_MAX, type StrumPattern } from "@/lib/strumPatterns";
 import { pick, type Lang } from "@/lib/assistant/lang";
 import { Button } from "@/components/ui/button";
 import { Option, Options } from "../Options";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * What the assistant understood, before anything is written.
@@ -76,7 +77,7 @@ export default function EditIntentCard({
 	/** The reply's language; the answers under it follow, the card's chrome does not. */
 	lang?: Lang;
 }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const pathname = usePathname();
 	const t = (en: string, zh: string) => pick(lang, en, zh);
 

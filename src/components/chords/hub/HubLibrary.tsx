@@ -1,7 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { Fragment, useEffect, useState } from "react";
 import Link from "@/components/AppLink";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import PianoRoots from "@/components/chords/PianoRoots";
@@ -11,7 +10,7 @@ import { NavCard } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { PickToggle } from "@/components/ui/pick-toggle";
 import { Segmented } from "@/components/ui/segmented";
-import { usePublishPending } from "@/components/nav-progress";
+import { useNavRouter } from "@/components/nav-progress";
 import { buildRootSections } from "@/lib/chordBrowseSections";
 import type { BoardItem } from "@/lib/chordBoard";
 import { withGlyphs } from "@/lib/chordFormulas";
@@ -91,10 +90,9 @@ function useStandardShapes(chords: readonly FavouriteChord[], userVoicings: read
 
 /** Every chord to browse from the hub, as cards that open the chord or go on the board. */
 export default function HubLibrary({ view, root, quality, chords, index, userVoicings, favourites, onAdd }: Props) {
-	const router = useRouter();
-	const [pending, startTransition] = useTransition();
-	usePublishPending(pending);
-	const go = (href: string) => startTransition(() => router.push(href, { scroll: false }));
+	const router = useNavRouter();
+	const pending = router.pending;
+	const go = (href: string) => router.push(href, { scroll: false });
 	const keptShape = useStandardShapes(favourites.favourites, userVoicings, view === "favourites");
 
 	const card = ({ root: r, suffix: s, def, subline }: Card) => {

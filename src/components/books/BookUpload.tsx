@@ -1,11 +1,11 @@
 "use client";
 
 import { useRef, useState, type DragEvent } from "react";
-import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
 import { BookApiError, createBook, scanBook, titleFromFileName, uploadBookFile } from "@/lib/books/api";
 import { DenimButton, MONO_META, Panel } from "@/components/books/bookUi";
+import { useNavRouter } from "@/components/nav-progress";
 
 const MAX_BYTES = 100 * 1024 * 1024; // the bucket's own limit
 
@@ -15,7 +15,7 @@ const MAX_BYTES = 100 * 1024 * 1024; // the bucket's own limit
  * session, and the scan is kicked off before the page moves to the book.
  */
 export default function BookUpload() {
-	const router = useRouter();
+	const router = useNavRouter();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [busy, setBusy] = useState<string | null>(null);
 	const [dragging, setDragging] = useState(false);

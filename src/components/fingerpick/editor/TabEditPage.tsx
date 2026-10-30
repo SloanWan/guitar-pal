@@ -5,7 +5,7 @@ import "@/components/playback/icons.css";
 import "@/components/playback/playback.css";
 import "./tabEdit.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Play, Redo2, SlidersHorizontal, Square, TriangleAlert, Undo2, Wrench, X } from "lucide-react";
 import Link from "@/components/AppLink";
@@ -50,6 +50,7 @@ import { useEditorPlayback } from "./useEditorPlayback";
 import { useLeaveGuard } from "./useLeaveGuard";
 import { useChordTools } from "./useChordTools";
 import { useTabCursor } from "./useTabCursor";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** What the editor opened on, once it is known. */
 type Opened =
@@ -65,7 +66,7 @@ type Opened =
  * editor was opened from; leaving with unsaved edits asks first.
  */
 export default function TabEditPage({ id }: { id: string }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const search = useSearchParams();
 	const entry = useMemo(() => readEditorEntry(id, search), [id, search]);
 	const { user, loading } = useUser();

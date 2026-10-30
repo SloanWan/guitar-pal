@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { PRESET_STRUM_PATTERNS, type ChordProgression, type StrumPattern } from "@/lib/strumPatterns";
@@ -10,6 +9,7 @@ import { importStrumPattern } from "@/lib/strumStorage";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
 import { LAST_PATTERN_KEY, OPEN_PROGRESSION_KEY } from "@/components/strum/useStrumSession";
+import { useNavRouter } from "@/components/nav-progress";
 
 interface Args {
 	user: User | null;
@@ -36,7 +36,7 @@ interface Args {
  * progressions with it, and the strum page opens on it.
  */
 export function useStrumShare({ user, pattern, progressions, openProgression, customPatterns, patternsLoading, shared, stop }: Args) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const [sharing, setSharing] = useState(false);
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [importing, setImporting] = useState(false);

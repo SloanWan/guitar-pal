@@ -18,7 +18,7 @@
 // Two sources feed the store, both resolving to the same "navigation pending"
 // signal:
 //   - <AppLink> publishes useLinkStatus() (link clicks / prefetch-in-flight)
-//   - useNavPush() publishes a useTransition() around router.push()
+//   - useNavRouter() publishes a useTransition() around router.push() / replace()
 // The counter (not a boolean) keeps overlapping navigations from cancelling out.
 //
 // Both also name where they are going (`aim`), so the bar is drawn in the colour of
@@ -29,6 +29,7 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 	useSyncExternalStore,
@@ -117,20 +118,38 @@ export function usePublishPending(pending: boolean): void {
 	}, [pending, store]);
 }
 
-// router.push() inside a transition wired to the store, so programmatic navigations
-// drive the bar. React keeps the current page visible during the transition, which
-// is exactly the "old page stays, bar runs" behaviour we want.
-export function useNavPush(): (href: string) => void {
+/** The router every component navigates with: Next's, with push / replace run through the bar. */
+export interface NavRouter {
+	push: (href: string, options?: { scroll?: boolean }) => void;
+	replace: (href: string, options?: { scroll?: boolean }) => void;
+	refresh: () => void;
+	/** A push or replace from this router is in flight. */
+	pending: boolean;
+}
+
+// router.push() / replace() inside a transition wired to the store, so programmatic
+// navigations drive the bar. React keeps the current page visible during the
+// transition, which is exactly the "old page stays, bar runs" behaviour we want.
+// The one place `useRouter` may be imported (enforced by no-restricted-imports).
+export function useNavRouter(): NavRouter {
 	const store = useNavStore();
 	const router = useRouter();
 	const [isPending, startTransition] = useTransition();
 	usePublishPending(isPending);
-	return useCallback(
-		(href: string) => {
-			store.aim(href);
-			startTransition(() => router.push(href));
-		},
-		[store, router],
+	return useMemo(
+		() => ({
+			push(href, options) {
+				store.aim(href);
+				startTransition(() => router.push(href, options));
+			},
+			replace(href, options) {
+				store.aim(href);
+				startTransition(() => router.replace(href, options));
+			},
+			refresh: () => router.refresh(),
+			pending: isPending,
+		}),
+		[store, router, isPending],
 	);
 }
 

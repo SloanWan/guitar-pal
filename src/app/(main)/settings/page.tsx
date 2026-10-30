@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { User, UserIdentity } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { KeyRound, Mail, Palette, Trash2, UserRound } from "lucide-react";
@@ -42,6 +41,7 @@ import PasswordField from "@/components/auth/PasswordField";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 import { FORM_ERROR, FORM_HELP, FORM_LEAD, PAGE_GUTTER } from "@/components/auth/formText";
 import "./settings.css";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** Seconds before the one-time code can be sent again. */
 const RESEND_COOLDOWN_S = 60;
@@ -164,7 +164,7 @@ function Choice({
    renders, fed the unsaved values, so what you see is what will ship.
    ------------------------------------------------------------------------ */
 function IdentityCard({ user }: { user: User }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const chosenColor = user.user_metadata?.[AVATAR_COLOR_KEY];
 	// What is saved right now — the baseline "dirty" is measured against.
 	const [saved, setSaved] = useState({
@@ -669,7 +669,7 @@ const DELETE_COPY: Record<
 };
 
 function DeleteCard({ user }: { user: User }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const hasPassword = (user.identities ?? []).some((i) => i.provider === "email");
 	// Without a password to ask for, the player types their email (or the
 	// word, for an account with none) — a deliberate act, not a stray tap.

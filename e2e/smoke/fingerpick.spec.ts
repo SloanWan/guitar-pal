@@ -33,6 +33,18 @@ test("New opens the editor; a named tab saves and the reader opens on it", async
 	await expect(page.getByRole("heading", { name: "Smoke tab" })).toBeVisible();
 });
 
+test("the progress bar runs, in the tab colour, while the editor loads", async ({ page }) => {
+	await page.goto("/fingerpick");
+	// Hold the route's payload back so the bar outlives its show delay.
+	await page.route("**/fingerpick/edit/new*", async (route) => {
+		if (route.request().headers()["rsc"]) await new Promise((done) => setTimeout(done, 1200));
+		await route.continue();
+	});
+	await page.getByRole("button", { name: "New", exact: true }).click();
+	await expect(page.locator('.nav-progress[data-m="tab"]')).toBeVisible();
+	await expect(page).toHaveURL(/\/fingerpick\/edit\/new$/);
+});
+
 test("leaving the editor with unsaved edits asks first", async ({ page }) => {
 	await page.goto("/fingerpick/edit/new");
 	await page.getByRole("button", { name: "Tab settings" }).click();

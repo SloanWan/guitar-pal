@@ -3,7 +3,6 @@
 import "@/components/library/library.css";
 import "./tab.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { PanelRightOpen } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,6 +42,7 @@ import { useTabHandoff } from "./useTabHandoff";
 import { TAB_TICK_LEVELS, tabBpm, useTabPlayback } from "./useTabPlayback";
 import { useTabSession } from "./useTabSession";
 import { useTabShare } from "./useTabShare";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** Per-viewer: whether the library beside the stage is folded away. */
 const LIBRARY_FOLDED_KEY = "tabLibraryFolded";
@@ -159,7 +159,7 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 	useTabHandoff(session, isShared);
 	const [pasteOpen, setPasteOpen] = useState(false);
 	// The editor is a page of its own (#358).
-	const router = useRouter();
+	const router = useNavRouter();
 	function openEditor(entry: EditorEntry) {
 		playback.stop();
 		setLibraryOpen(false);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ArrowUpRight, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import HearButton from "../HearButton";
@@ -12,6 +12,7 @@ import { beatUnitGlyph } from "@/lib/strumMeter";
 import { stashHandoff } from "@/lib/assistant/handoff";
 import type { TabProposal } from "@/lib/assistant/tab/types";
 import { indexPattern } from "@/lib/fingerpickIndex";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * What the tab assistant is offering, drawn as the real stave rather than
@@ -27,7 +28,7 @@ import { indexPattern } from "@/lib/fingerpickIndex";
 const FINGERPICK_PATH = "/fingerpick";
 
 export default function TabProposalPreview({ proposal }: { proposal: TabProposal }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const pathname = usePathname();
 	const { pattern } = proposal;
 	const [shown, setShown] = useState(0);

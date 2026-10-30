@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { MailCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +27,7 @@ import { safeRedirectPath } from "@/lib/safeRedirect";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 import PasswordField from "@/components/auth/PasswordField";
 import { FORM_ERROR, FORM_HELP, FORM_LEAD, PAGE_GUTTER, TEXT_LINK } from "@/components/auth/formText";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** Seconds before the confirmation email can be sent again. */
 const RESEND_COOLDOWN_S = 60;
@@ -47,7 +48,7 @@ const MODES = [
 ] as const satisfies readonly { value: AuthMode; label: string }[];
 
 function AuthPageInner() {
-	const router = useRouter();
+	const router = useNavRouter();
 	const searchParams = useSearchParams();
 	const redirect = safeRedirectPath(searchParams.get("redirect"));
 	const mode = parseAuthMode(searchParams.get("mode"));

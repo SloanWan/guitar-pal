@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ArrowUpRight, CirclePause, CirclePlay, CircleStop, Loader2, Pencil, Repeat } from "lucide-react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { ChapterExercise } from "@/lib/books/types";
@@ -22,6 +22,7 @@ import SidePanel from "@/components/books/SidePanel";
 import { DenimButton, GhostButton, MONO_META } from "@/components/books/bookUi";
 import { indexPattern } from "@/lib/fingerpickIndex";
 import { editorHref, stashEditorDraft } from "@/lib/tabEditorEntry";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * A chapter draft open beside the book (#233). The page pushes its content
@@ -84,7 +85,7 @@ export default function ChapterDraftPanel({
 	/** See SidePanel: false when replacing a panel already open. */
 	animateOpen?: boolean;
 }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const pathname = usePathname();
 	const { exercise } = draft;
 

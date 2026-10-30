@@ -19,8 +19,8 @@ vi.mock("@/components/AppLink", () => ({
 		</a>
 	),
 }));
+vi.mock("@/components/nav-progress", () => ({ useNavRouter: () => ({ push: vi.fn() }) }));
 vi.mock("next/navigation", () => ({
-	useRouter: () => ({ push: vi.fn() }),
 	usePathname: () => "/books",
 	useSearchParams: () => new URLSearchParams(),
 }));

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
@@ -8,6 +7,7 @@ import { saveUserFingerpickPattern } from "@/lib/fingerpickPatternSync";
 import { saveLastPattern } from "@/lib/lastPattern";
 import { uniquePatternName } from "@/lib/uniquePatternName";
 import { createClient } from "@/lib/supabase";
+import { useNavRouter } from "@/components/nav-progress";
 
 interface Args {
 	user: User | null;
@@ -24,7 +24,7 @@ interface Args {
 
 /** Share (a link to a snapshot of what is on screen) and, on a share page, import. */
 export function useTabShare({ user, pattern, shared, takenNames, loading, stop }: Args) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const [sharing, setSharing] = useState(false);
 	const [importing, setImporting] = useState(false);
 

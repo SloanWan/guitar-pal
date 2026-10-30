@@ -12,7 +12,7 @@
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { forwardRef, type ComponentProps } from "react";
-import { usePublishPending } from "@/components/nav-progress";
+import { useNavStore, usePublishPending } from "@/components/nav-progress";
 import { mayNavigate } from "@/lib/leaveGuard";
 
 function LinkPending() {
@@ -27,6 +27,7 @@ const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(function AppLink(
 	{ children, onNavigate, ...props },
 	ref,
 ) {
+	const store = useNavStore();
 	return (
 		<Link
 			ref={ref}
@@ -35,6 +36,7 @@ const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(function AppLink(
 				onNavigate?.(e);
 				const href = typeof props.href === "string" ? props.href : (props.href.pathname ?? "/");
 				if (!mayNavigate(href)) e.preventDefault();
+				else store.aim(href);
 			}}
 		>
 			{children}

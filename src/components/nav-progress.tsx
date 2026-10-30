@@ -18,8 +18,11 @@
 // Two sources feed the store, both resolving to the same "navigation pending"
 // signal:
 //   - <AppLink> publishes useLinkStatus() (link clicks / prefetch-in-flight)
-//   - useNavTransition() publishes a useTransition() around router.push()
+//   - useNavPush() publishes a useTransition() around router.push()
 // The counter (not a boolean) keeps overlapping navigations from cancelling out.
+//
+// Both also name where they are going (`aim`), so the bar is drawn in the colour of
+// the module it is heading to, not the one being left.
 
 import {
 	createContext,
@@ -31,19 +34,24 @@ import {
 	useSyncExternalStore,
 	useTransition,
 	type ReactNode,
-	type TransitionStartFunction,
 } from "react";
+import { useRouter } from "next/navigation";
+import { moduleForHref, type ModuleKey } from "@/lib/moduleForPath";
 
 interface NavStore {
 	begin: () => void;
 	end: () => void;
+	/** Where the navigation about to start is going; the latest one wins. */
+	aim: (href: string) => void;
 	subscribe: (onChange: () => void) => () => void;
 	getPending: () => boolean;
+	getTarget: () => string | null;
 }
 
 function createNavStore(): NavStore {
 	let count = 0;
 	let pending = false;
+	let target: string | null = null;
 	const listeners = new Set<() => void>();
 	// Only notify when the derived boolean flips, so overlapping navigations
 	// (count 1→2→1) don't churn the single subscriber.
@@ -63,12 +71,18 @@ function createNavStore(): NavStore {
 			count = Math.max(0, count - 1);
 			sync();
 		},
+		aim(href) {
+			target = href;
+		},
 		subscribe(onChange) {
 			listeners.add(onChange);
 			return () => listeners.delete(onChange);
 		},
 		getPending() {
 			return pending;
+		},
+		getTarget() {
+			return target;
 		},
 	};
 }
@@ -83,7 +97,7 @@ export function NavProgressProvider({ children }: { children: ReactNode }) {
 	);
 }
 
-function useNavStore(): NavStore {
+export function useNavStore(): NavStore {
 	const store = useContext(NavStoreContext);
 	if (!store) {
 		throw new Error("useNavProgress must be used within <NavProgressProvider>");
@@ -103,13 +117,21 @@ export function usePublishPending(pending: boolean): void {
 	}, [pending, store]);
 }
 
-// useTransition wired to the store — wrap router.push() so programmatic navigations
+// router.push() inside a transition wired to the store, so programmatic navigations
 // drive the bar. React keeps the current page visible during the transition, which
 // is exactly the "old page stays, bar runs" behaviour we want.
-export function useNavTransition(): TransitionStartFunction {
+export function useNavPush(): (href: string) => void {
+	const store = useNavStore();
+	const router = useRouter();
 	const [isPending, startTransition] = useTransition();
 	usePublishPending(isPending);
-	return startTransition;
+	return useCallback(
+		(href: string) => {
+			store.aim(href);
+			startTransition(() => router.push(href));
+		},
+		[store, router],
+	);
 }
 
 // Simulated progress. Real completion is unknowable for an RSC navigation, so the
@@ -134,6 +156,9 @@ export function NavProgressBar() {
 
 	const [progress, setProgress] = useState(0);
 	const [phase, setPhase] = useState<Phase>("hidden");
+	// The destination's module, read when the bar appears and kept through the
+	// fade, so the bar never changes colour as the new page arrives.
+	const [module, setModule] = useState<ModuleKey>("home");
 	// Mirror phase into a ref (updated alongside every setPhase) so the pending
 	// effect can read the current phase without listing it as a dependency —
 	// writing the ref during render is disallowed, so it is done at each setter.
@@ -166,6 +191,7 @@ export function NavProgressBar() {
 			// warm ~10ms cache hits never flash the bar.
 			after(SHOW_DELAY_MS, () => {
 				shownAt.current = Date.now();
+				setModule(moduleForHref(store.getTarget(), window.location.pathname));
 				setPhaseBoth("active");
 				if (reducedMotion) {
 					setProgress(100); // static bar; no simulated motion
@@ -198,7 +224,7 @@ export function NavProgressBar() {
 				});
 			});
 		}
-	}, [pending, reducedMotion, setPhaseBoth]);
+	}, [pending, reducedMotion, setPhaseBoth, store]);
 
 	useEffect(
 		() => () => {
@@ -217,6 +243,7 @@ export function NavProgressBar() {
 			{phase !== "hidden" && (
 				<div
 					aria-hidden="true"
+					data-m={module}
 					className={`nav-progress${phase === "exiting" ? " is-exiting" : ""}`}
 				>
 					<div className="nav-progress-fill" style={{ width: `${progress}%` }} />

@@ -325,7 +325,10 @@ function StrumIt() {
 					sweep.current = null;
 				}}
 			>
-				<RhythmGrid rhythm={SONG_RHYTHM} meter={SONG.meter} position={previewing ? preview : rhythmPosition} />
+				{/* the grid zone carries the cell sizes RhythmGrid measures with */}
+				<div className="st-gridzone">
+					<RhythmGrid rhythm={SONG_RHYTHM} meter={SONG.meter} position={previewing ? preview : rhythmPosition} />
+				</div>
 			</div>
 			<PreviewNote on={previewing} />
 		</div>

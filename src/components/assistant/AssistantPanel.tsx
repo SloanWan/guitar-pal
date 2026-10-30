@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowDownUp, ArrowRightLeft, ArrowUp, ArrowUpRight, BookOpen, Lock, Rows3, Sparkles, X, Zap } from "lucide-react";
+import { ArrowDownUp, ArrowRightLeft, ArrowUp, ArrowUpRight, BookOpen, Lock, Rows3, Sparkles, Square, X, Zap } from "lucide-react";
 import ProposalPreview from "./strum/ProposalPreview";
 import TabProposalPreview from "./tab/TabProposalPreview";
 import TabEditCard from "./tab/TabEditCard";
@@ -258,6 +258,7 @@ export default function AssistantPanel({
 		pending,
 		send,
 		readAs,
+		stop,
 		markStreamed,
 		markEditDone,
 		patterns,
@@ -848,16 +849,23 @@ export default function AssistantPanel({
 						Press Tab to use the example shown, Shift and Enter for a new line, Up and Down
 						for messages you have sent.
 					</span>
-					<Button
-						type="submit"
-						size="sm"
-						// Live on an empty field while there is an example to take.
-						disabled={pending || (draft.trim() === "" && hint === "")}
-						aria-label={draft.trim() === "" && hint !== "" ? "Use the example shown" : "Send"}
-						className="as-send"
-					>
-						<ArrowUp aria-hidden="true" />
-					</Button>
+					{/* While a reply is on its way, the same place stops it. */}
+					{pending ? (
+						<Button type="button" size="sm" aria-label="Stop the reply" title="Stop" onClick={stop} className="as-send">
+							<Square aria-hidden="true" className="as-stop" />
+						</Button>
+					) : (
+						<Button
+							type="submit"
+							size="sm"
+							// Live on an empty field while there is an example to take.
+							disabled={draft.trim() === "" && hint === ""}
+							aria-label={draft.trim() === "" && hint !== "" ? "Use the example shown" : "Send"}
+							className="as-send"
+						>
+							<ArrowUp aria-hidden="true" />
+						</Button>
+					)}
 				</div>
 				<div className="as-hint" aria-hidden="true">
 					<span className="as-kbd">Tab</span> takes the example · <span className="as-kbd">↑</span> what you sent

@@ -235,6 +235,8 @@ export function useAssistant() {
 		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now()),
 	);
 	const [pending, setPending] = useState(false);
+	/** The turn being answered, so Stop (or a new thread) can drop it. */
+	const turnRef = useRef<AbortController | null>(null);
 
 	const indexRef = useRef<Promise<readonly ChordIndexEntry[]> | null>(null);
 	const patternsRef = useRef<Promise<readonly StrumPattern[]> | null>(null);
@@ -344,6 +346,10 @@ export function useAssistant() {
 	const hideSavedLine = useCallback(() => setSavedLineHiddenFor(savedChatIdRef.current), []);
 
 	const reset = useCallback(() => {
+		// A reply still on its way belongs to the old thread.
+		turnRef.current?.abort();
+		turnRef.current = null;
+		setPending(false);
 		setMessages([]);
 		linkChat(null);
 		setSaveState("idle");
@@ -517,11 +523,17 @@ export function useAssistant() {
 	 * one turn however many steps it takes.
 	 */
 	const callRoute = useCallback(
-		async (msgs: readonly Anthropic.MessageParam[], context: GeneralContext, turnId: string): Promise<ModelStep> => {
+		async (
+			msgs: readonly Anthropic.MessageParam[],
+			context: GeneralContext,
+			turnId: string,
+			signal?: AbortSignal,
+		): Promise<ModelStep> => {
 			const res = await fetch("/api/assistant", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ messages: msgs, context, turnId }),
+				signal,
 			});
 			const body: unknown = await res.json().catch(() => null);
 			if (!res.ok) {
@@ -543,9 +555,18 @@ export function useAssistant() {
 	 * floor keeps the dots from flashing for a frame and vanishing. A tab turn
 	 * may also wait on the chord library for its shapes; the pause runs alongside.
 	 * A General turn is as slow as the model; the pause is lost inside it.
+	 *
+	 * `signal` is the player's Stop: a model or chapter call in flight is
+	 * dropped and the turn rejects. A rules turn just runs out; its reply is
+	 * not shown.
 	 */
 	const resolveIn = useCallback(
-		async (as: AssistantMode, text: string, history: readonly AssistantTurn[] = []): Promise<AssistantMessage> => {
+		async (
+			as: AssistantMode,
+			text: string,
+			history: readonly AssistantTurn[] = [],
+			signal?: AbortSignal,
+		): Promise<AssistantMessage> => {
 			const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
 			setIndex(index);
 			const thinking = new Promise((done) =>
@@ -573,10 +594,12 @@ export function useAssistant() {
 					return reply;
 				}
 				try {
-					const answer = await askChapter(book.bookId, book.chapterId, [
-						...history.map((t) => ({ role: t.role, content: t.content })),
-						{ role: "user", content: text },
-					]);
+					const answer = await askChapter(
+						book.bookId,
+						book.chapterId,
+						[...history.map((t) => ({ role: t.role, content: t.content })), { role: "user", content: text }],
+						signal,
+					);
 					reply.text = answer.message;
 					reply.model = answer.model;
 					reply.book = { bookId: book.bookId, chapterId: book.chapterId, source: answer.source, pages: answer.pages };
@@ -590,6 +613,7 @@ export function useAssistant() {
 						}
 					}
 				} catch (e) {
+					if (signal?.aborted) throw e;
 					reply.failed = true;
 					reply.text =
 						e instanceof BookApiError
@@ -630,9 +654,10 @@ export function useAssistant() {
 						text,
 						history,
 						context,
-						call: (msgs, ctx) => callRoute(msgs, ctx, turnId),
+						call: (msgs, ctx) => callRoute(msgs, ctx, turnId, signal),
 						execute,
 						uiLang: uiLang(),
+						signal,
 					});
 					Object.assign(reply, {
 						text: outcome.text,
@@ -641,6 +666,7 @@ export function useAssistant() {
 						...cardFields(outcome.card),
 					});
 				} catch (e) {
+					if (signal?.aborted) throw e;
 					const lang = uiLang();
 					reply.failed = true;
 					reply.lang = lang;
@@ -726,14 +752,21 @@ export function useAssistant() {
 			const userMessage: AssistantMessage = { id: newId(), role: "user", text };
 			setMessages((prev) => [...prev, userMessage]);
 			setPending(true);
+			const turn = new AbortController();
+			turnRef.current = turn;
 			// Talking settles the mode: a thread that has been spoken to keeps its
 			// assistant across pages, where an untouched one still follows the page.
 			writeMode(answerIn);
 			try {
-				const reply = await resolveIn(answerIn, text, historyOf(messagesRef.current));
-				setMessages((prev) => [...prev, reply]);
+				const reply = await resolveIn(answerIn, text, historyOf(messagesRef.current), turn.signal);
+				if (!turn.signal.aborted) setMessages((prev) => [...prev, reply]);
+			} catch (e) {
+				if (!turn.signal.aborted) throw e;
 			} finally {
-				setPending(false);
+				if (turnRef.current === turn) {
+					turnRef.current = null;
+					setPending(false);
+				}
 			}
 		},
 		[effectiveMode, pending, resolveIn, setMode],
@@ -750,19 +783,52 @@ export function useAssistant() {
 			if (pending) return;
 			setMode(as);
 			setPending(true);
+			const turn = new AbortController();
+			turnRef.current = turn;
 			try {
 				const all = messagesRef.current;
 				const at = all.findIndex((m) => m.id === messageId);
 				// Everything before the user turn this reply answered.
 				const before = at > 0 ? all.slice(0, at - 1) : [];
-				const reply = await resolveIn(as, text, as === "general" || as === "book" ? historyOf(before) : []);
-				setMessages((prev) => prev.map((m) => (m.id === messageId ? reply : m)));
+				const reply = await resolveIn(as, text, as === "general" || as === "book" ? historyOf(before) : [], turn.signal);
+				if (!turn.signal.aborted) setMessages((prev) => prev.map((m) => (m.id === messageId ? reply : m)));
+			} catch (e) {
+				if (!turn.signal.aborted) throw e;
 			} finally {
-				setPending(false);
+				if (turnRef.current === turn) {
+					turnRef.current = null;
+					setPending(false);
+				}
 			}
 		},
 		[pending, resolveIn, setMode],
 	);
+
+	/**
+	 * Stop: the reply on its way is dropped — the model call with it, so a
+	 * long answer is not paid for — and the thread says so in a quiet line,
+	 * kept out of what the model is shown. The question stays, to ask again.
+	 */
+	const stop = useCallback(() => {
+		const turn = turnRef.current;
+		if (turn === null) return;
+		turnRef.current = null;
+		turn.abort();
+		setPending(false);
+		const lang = uiLang();
+		const note: AssistantMessage = {
+			id: newId(),
+			role: "assistant",
+			text: pick(lang, "Stopped.", "已停止。"),
+			lang,
+			failed: true,
+			streamed: true,
+		};
+		setMessages((prev) => [...prev, note]);
+	}, []);
+
+	// Nothing answers into a panel that has gone.
+	useEffect(() => () => turnRef.current?.abort(), []);
 
 	return {
 		mode: effectiveMode,
@@ -777,6 +843,7 @@ export function useAssistant() {
 		pending,
 		send,
 		readAs,
+		stop,
 		reset,
 		expireIfIdle,
 		markStreamed,

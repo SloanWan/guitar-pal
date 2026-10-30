@@ -110,7 +110,7 @@ export default function HomePage() {
 
 				{data && (
 					<div className="hm-arrive gp-rise">
-						<HomeSide week={data.week} kept={data.kept} links={data.links} now={now} onKeep={keep} />
+						<HomeSide week={data.week} kept={data.kept} opened={data.opened} links={data.links} now={now} onKeep={keep} />
 					</div>
 				)}
 			</div>

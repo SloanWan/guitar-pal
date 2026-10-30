@@ -14,7 +14,19 @@ import { PRESET_STRUM_PATTERNS, type ChordProgression, type StrumPattern } from 
 import { progressionDisplayName } from "@/lib/strumProgressions";
 import { patternFromRow, progressionFromRow, type ProgressionRow, type StrumPatternRow } from "@/lib/strumStorage";
 import { addAccountFavourites, removeAccountFavourite } from "@/lib/favouriteChordStore";
-import { countSince, sortKept, weekStart, type KeepTarget, type KeptItem, type WeekCounts } from "./home";
+import { readChordVisitTarget } from "@/lib/visits";
+import {
+	countSince,
+	sortKept,
+	topOpened,
+	weekStart,
+	type KeepTarget,
+	type KeptItem,
+	type OpenedItem,
+	type OpenedThing,
+	type VisitRow,
+	type WeekCounts,
+} from "./home";
 
 export interface HomeContinue {
 	pattern: StrumPattern;
@@ -53,9 +65,15 @@ export interface HomeData {
 	/** The newest book, when the book service answers. */
 	book: Book | null;
 	kept: KeptItem[];
+	/** The things opened most, most first. */
+	opened: OpenedItem[];
 	links: SharedLink[];
 	week: WeekCounts;
 }
+
+/** "Most opened" lists five; a few more are read in case some are gone. */
+const OPENED_SHOWN = 5;
+const OPENED_READ = 20;
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
 	if (res.error) throw new Error(res.error.message);
@@ -74,7 +92,7 @@ export async function loadHome(
 	now: Date,
 ): Promise<HomeData> {
 	const uid = user.id;
-	const [last, strumRows, progressionRows, strumFavs, tabCustoms, tabFavs, chordRows, shapeRows, shareRows, book] =
+	const [last, strumRows, progressionRows, strumFavs, tabCustoms, tabFavs, chordRows, shapeRows, shareRows, visitRows, books] =
 		await Promise.all([
 			supabase.from("user_last_pattern").select("tool, pattern_id, updated_at").eq("user_id", uid).then(check),
 			supabase.from("user_strum_patterns").select("*").eq("user_id", uid).then(check),
@@ -90,11 +108,20 @@ export async function loadHome(
 				.eq("owner_id", uid)
 				.order("created_at", { ascending: false })
 				.then(check),
+			// More than are shown: rows for things since deleted are skipped.
+			supabase
+				.from("user_visits")
+				.select("kind, target, count, last_at")
+				.eq("user_id", uid)
+				.order("count", { ascending: false })
+				.order("last_at", { ascending: false })
+				.limit(OPENED_READ)
+				.then(check),
 			// The book service is its own process and may be away; Home goes on without it.
-			listBooks()
-				.then((books) => [...books].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0] ?? null)
-				.catch(() => null),
+			listBooks().catch((): Book[] => []),
 		]);
+
+	const book = [...books].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0] ?? null;
 
 	const lastRows = (last ?? []) as { tool: string; pattern_id: string; updated_at: string }[];
 	const lastOf = (tool: string) => lastRows.find((r) => r.tool === tool) ?? null;
@@ -208,6 +235,39 @@ export async function loadHome(
 		}),
 	]);
 
+	const bookById = new Map(books.map((b) => [b.id, b]));
+	const opened = topOpened(
+		(visitRows ?? []) as VisitRow[],
+		(row): OpenedThing | null => {
+			const href = (path: string, id: string) => `${path}?pattern=${encodeURIComponent(id)}`;
+			switch (row.kind) {
+				case "strum": {
+					const p = strumById.get(row.target);
+					return p
+						? { module: "strum", title: p.name, label: `Pattern · ${isCustomStrum.has(p.id) ? "Yours" : "Preset"}`, href: href("/strum", p.id) }
+						: null;
+				}
+				case "tab": {
+					const p = tabById.get(row.target);
+					return p
+						? { module: "tab", title: p.name, label: `Tab · ${isCustomTab.has(p.id) ? "Yours" : "Preset"}`, href: href("/fingerpick", p.id) }
+						: null;
+				}
+				case "chord": {
+					const c = readChordVisitTarget(row.target);
+					return c ? { module: "chords", title: withGlyphs(chordSymbol(c.root, c.suffix)), label: "Chord", href: chordHref(c.root, c.suffix) } : null;
+				}
+				case "book": {
+					const b = bookById.get(row.target);
+					return b ? { module: "books", title: b.title, label: "Book", href: `/books/${b.id}` } : null;
+				}
+				default:
+					return null;
+			}
+		},
+		OPENED_SHOWN,
+	);
+
 	const live = ((shareRows ?? []) as { id: string; kind: string; payload: unknown; created_at: string; expires_at: string | null }[]).filter(
 		(r) => !isExpired(r.expires_at, now),
 	);
@@ -235,7 +295,7 @@ export async function loadHome(
 		),
 	};
 
-	return { continued, tab, chords, shapes: shapes.length, book, kept, links, week };
+	return { continued, tab, chords, shapes: shapes.length, book, kept, opened, links, week };
 }
 
 const FAVOURITE_TABLE = { strum: "user_favourite_patterns", tab: "user_favourite_fingerpick_patterns" } as const;

@@ -103,6 +103,50 @@ export function sortKept(items: readonly KeptItem[]): KeptItem[] {
 		.map(({ item }) => item);
 }
 
+/** A `user_visits` row: how often one thing was opened (#399). */
+export interface VisitRow {
+	kind: string;
+	target: string;
+	count: number;
+	last_at: string;
+}
+
+/** What a visit row is, found among the player's things. */
+export interface OpenedThing {
+	module: Extract<ModuleKey, "strum" | "tab" | "chords" | "books">;
+	title: string;
+	/** What it is: "Pattern · Yours", "Chord". */
+	label: string;
+	href: string;
+}
+
+export interface OpenedItem extends OpenedThing {
+	key: string;
+	count: number;
+	subline: string;
+}
+
+/**
+ * The things opened most, most first (the newer visit breaks a tie); a row
+ * `find` cannot place — a deleted pattern, a book the service did not list — is skipped.
+ */
+export function topOpened(
+	rows: readonly VisitRow[],
+	find: (row: VisitRow) => OpenedThing | null,
+	limit: number,
+): OpenedItem[] {
+	const out: OpenedItem[] = [];
+	const ranked = [...rows].sort((a, b) => b.count - a.count || Date.parse(b.last_at) - Date.parse(a.last_at));
+	for (const row of ranked) {
+		if (out.length === limit) break;
+		const thing = find(row);
+		if (!thing) continue;
+		const times = row.count === 1 ? "once" : `${row.count} times`;
+		out.push({ ...thing, key: `${row.kind}:${row.target}`, count: row.count, subline: `${thing.label} · opened ${times}` });
+	}
+	return out;
+}
+
 /** A tab note as the tile's preview draws it: which string (0 = high e) and what is written there. */
 export interface PreviewNote {
 	string: number;

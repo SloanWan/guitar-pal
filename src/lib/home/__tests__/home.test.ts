@@ -7,10 +7,13 @@ import {
 	sortKept,
 	tabPreview,
 	todayLabel,
+	topOpened,
 	weekIsEmpty,
 	weekStart,
 	whenLabel,
 	type KeptItem,
+	type OpenedThing,
+	type VisitRow,
 } from "../home";
 
 // Thursday 29 October 2026, 21:40, local time.
@@ -85,6 +88,32 @@ describe("sortKept", () => {
 			item("new", "2026-10-29T10:00:00Z"),
 		]);
 		expect(sorted.map((i) => i.key)).toEqual(["new", "old", "undated-a", "undated-b"]);
+	});
+});
+
+describe("topOpened", () => {
+	const row = (target: string, count: number, last_at = "2026-10-20T10:00:00Z"): VisitRow => ({ kind: "strum", target, count, last_at });
+	const find = (r: VisitRow): OpenedThing | null =>
+		r.target.startsWith("gone") ? null : { module: "strum", title: r.target, label: "Pattern", href: `/strum?pattern=${r.target}` };
+
+	it("ranks by count, the newer visit first on a tie", () => {
+		const top = topOpened(
+			[row("few", 2), row("older", 5, "2026-10-01T10:00:00Z"), row("newer", 5, "2026-10-28T10:00:00Z")],
+			find,
+			5,
+		);
+		expect(top.map((t) => t.title)).toEqual(["newer", "older", "few"]);
+	});
+
+	it("skips what is gone and still fills the list", () => {
+		const top = topOpened([row("gone-a", 9), row("a", 4), row("gone-b", 3), row("b", 2), row("c", 1)], find, 2);
+		expect(top.map((t) => t.title)).toEqual(["a", "b"]);
+	});
+
+	it("says how many times", () => {
+		const [many, once] = topOpened([row("a", 12), row("b", 1)], find, 5);
+		expect(many).toMatchObject({ key: "strum:a", count: 12, subline: "Pattern · opened 12 times" });
+		expect(once.subline).toBe("Pattern · opened once");
 	});
 });
 

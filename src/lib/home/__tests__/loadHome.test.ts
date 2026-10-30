@@ -23,6 +23,7 @@ function fakeClient(rows: Rows, failing?: string): SupabaseClient {
 				select: () => query,
 				eq: () => query,
 				order: () => query,
+				limit: () => query,
 				then: <T>(resolve: (r: typeof result) => T, reject?: (e: unknown) => T) => Promise.resolve(result).then(resolve, reject),
 			};
 			return query;
@@ -140,6 +141,31 @@ describe("loadHome", () => {
 		const data = await loadHome(client, USER, null, NOW);
 		expect(data.week).toEqual({ progressions: 1, chords: 1, links: 1 });
 		expect(data.links).toEqual([{ id: "AAAAAAAAAA", kind: "strum", title: PRESET.name, createdAt: THIS_WEEK }]);
+	});
+
+	it("lists the most opened, placing each among the player's things and skipping what is gone", async () => {
+		books.list.mockResolvedValue([
+			{ id: "bk", title: "Folk Book", page_count: 10, storage_path: "", status: "ready", toc_source: null, error: null, scanned_pages: 10, created_at: LAST_WEEK },
+		]);
+		const client = fakeClient({
+			user_strum_patterns: [{ pattern_id: "late", name: "Late train", beats: [["D"]], created_at: LAST_WEEK }],
+			user_visits: [
+				{ kind: "strum", target: "late", count: 9, last_at: THIS_WEEK },
+				{ kind: "strum", target: "deleted", count: 8, last_at: THIS_WEEK },
+				{ kind: "tab", target: TAB_PRESET.id, count: 4, last_at: THIS_WEEK },
+				{ kind: "chord", target: "A|m7", count: 3, last_at: THIS_WEEK },
+				{ kind: "book", target: "bk", count: 2, last_at: THIS_WEEK },
+				{ kind: "book", target: "unlisted", count: 2, last_at: THIS_WEEK },
+			],
+		});
+		const { opened } = await loadHome(client, USER, null, NOW);
+		expect(opened.map((o) => [o.module, o.title, o.href])).toEqual([
+			["strum", "Late train", "/strum?pattern=late"],
+			["tab", TAB_PRESET.name, `/fingerpick?pattern=${encodeURIComponent(TAB_PRESET.id)}`],
+			["chords", "Am7", "/chords/a/m7"],
+			["books", "Folk Book", "/books/bk"],
+		]);
+		expect(opened[0].subline).toBe("Pattern · Yours · opened 9 times");
 	});
 
 	it("shows the newest book, and goes on without the book service", async () => {

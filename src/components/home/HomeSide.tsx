@@ -1,15 +1,15 @@
 "use client";
 
-import { ArrowDownUp, Grid3x3, Link2, ListMusic } from "lucide-react";
+import { ArrowDownUp, BookOpen, Grid3x3, Link2, ListMusic } from "lucide-react";
 import Link from "@/components/AppLink";
 import { OPEN_PROGRESSION_KEY } from "@/components/strum/useStrumSession";
 import { ListRow } from "@/components/ui/list-row";
 import { PickToggle } from "@/components/ui/pick-toggle";
 import type { SharedLink } from "@/lib/home/loadHome";
-import { weekIsEmpty, whenLabel, type KeptItem, type WeekCounts } from "@/lib/home/home";
+import { weekIsEmpty, whenLabel, type KeptItem, type OpenedItem, type WeekCounts } from "@/lib/home/home";
 import { sharePath } from "@/lib/sharedItems";
 
-const ICON = { strum: ArrowDownUp, tab: ListMusic, chords: Grid3x3 } as const;
+const ICON = { strum: ArrowDownUp, tab: ListMusic, chords: Grid3x3, books: BookOpen } as const;
 
 /** The newest few; everything is still on its own page. */
 const KEPT_SHOWN = 7;
@@ -21,6 +21,7 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 interface Props {
 	week: WeekCounts;
 	kept: readonly KeptItem[];
+	opened: readonly OpenedItem[];
 	links: readonly SharedLink[];
 	now: Date | null;
 	onKeep: (item: KeptItem, kept: boolean) => void;
@@ -28,10 +29,10 @@ interface Props {
 
 /**
  * The panel beside the page: what this week added (gone in a week that added
- * nothing — no zeros, no streaks), what the player kept and made, and the
- * links they sent out.
+ * nothing — no zeros, no streaks), what the player comes back to most, what
+ * they kept and made, and the links they sent out.
  */
-export default function HomeSide({ week, kept, links, now, onKeep }: Props) {
+export default function HomeSide({ week, kept, opened, links, now, onKeep }: Props) {
 	return (
 		<aside className="hm-side" aria-label="Yours">
 			{!weekIsEmpty(week) && (
@@ -60,6 +61,23 @@ export default function HomeSide({ week, kept, links, now, onKeep }: Props) {
 						)}
 					</ul>
 					<p className="hm-meta">Since Monday.</p>
+				</section>
+			)}
+
+			{opened.length > 0 && (
+				<section className="hm-blk" aria-labelledby="hm-opened">
+					<h2 id="hm-opened" className="hm-blk-h">
+						Most opened
+					</h2>
+					<div className="hm-list">
+						{opened.map((item) => (
+							<div key={item.key} className="hm-item" data-m={item.module}>
+								<ListRow asChild module={item.module} icon={ICON[item.module]} title={item.title} subline={item.subline}>
+									<Link href={item.href} />
+								</ListRow>
+							</div>
+						))}
+					</div>
 				</section>
 			)}
 

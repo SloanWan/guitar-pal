@@ -7,6 +7,7 @@ import { rangesFromChapters } from "@/lib/books/ranges";
 import { setBookContext } from "@/lib/assistant/bookContext";
 import { useRecordVisit } from "@/hooks/useRecordVisit";
 import { useUser } from "@/hooks/useUser";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PAGE_GUTTER } from "@/components/auth/formText";
 import { useBookDetail } from "@/components/books/book/useBookDetail";
@@ -20,7 +21,7 @@ import ChapterCard from "@/components/books/chapter/ChapterCard";
 import DraftPanel from "@/components/books/panel/DraftPanel";
 import SourcePanel from "@/components/books/panel/SourcePanel";
 import TextTabPanel from "@/components/books/panel/TextTabPanel";
-import CropDialog, { type CropView } from "@/components/books/panel/CropDialog";
+import CropDialog, { CropInspector, type CropView } from "@/components/books/panel/CropDialog";
 
 /**
  * A book (#404, scheme A): its header and ⋯ menu, its chapters as cards that
@@ -37,7 +38,14 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const { user } = useUser();
 	useRecordVisit(user, "book", book && !readOnly ? id : null);
 	const [openChapter, setOpenChapter] = useState<string | null>(null);
+	// A crop at full size: over the book's column beside the panel from 960px,
+	// a dialog over the sheet below that. It goes when the panel does.
 	const [crop, setCrop] = useState<CropView | null>(null);
+	const wide = useMediaQuery("(min-width: 960px)");
+	const closeSide = () => {
+		panel.close();
+		setCrop(null);
+	};
 
 	// The open, parsed chapter is what the assistant's Book mode asks (#203);
 	// the sample has no service behind it, so it offers nothing. Cleared when
@@ -150,7 +158,7 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 						bookId={book.id}
 						draft={view.draft}
 						animateOpen={side?.entered}
-						onClose={panel.close}
+						onClose={closeSide}
 						onViewCrop={setCrop}
 						onLocate={() =>
 							panel.locate(
@@ -170,7 +178,7 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 						book={book}
 						page={view.page}
 						animateOpen={side?.entered}
-						onClose={panel.close}
+						onClose={closeSide}
 					/>
 				) : (
 					(() => {
@@ -183,14 +191,18 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 								chapter={chapter}
 								source={view.source}
 								animateOpen={side?.entered}
-								onClose={panel.close}
+								onClose={closeSide}
 								onBack={back ? () => panel.openDraft(back) : undefined}
 							/>
 						) : null;
 					})()
 				)
 			) : null}
-			<CropDialog crop={crop} onClose={() => setCrop(null)} />
+			{wide ? (
+				crop && side ? <CropInspector crop={crop} onClose={() => setCrop(null)} /> : null
+			) : (
+				<CropDialog crop={crop} onClose={() => setCrop(null)} />
+			)}
 		</div>
 	);
 }

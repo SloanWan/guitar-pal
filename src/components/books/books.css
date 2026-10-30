@@ -1253,6 +1253,49 @@
 		color: var(--gp-ink-3);
 	}
 
+	/* A crop at full size, over the book's column beside the panel (CropDialog.tsx). */
+	.bk-inspector {
+		position: fixed;
+		top: calc(var(--gp-header-h) + 24px);
+		right: calc(420px + var(--gp-gutter-desktop) + 24px);
+		bottom: 24px;
+		left: var(--gp-gutter-desktop);
+		z-index: 40;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		pointer-events: none;
+	}
+	.bk-inspector-card {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		max-width: 820px;
+		max-height: 100%;
+		overflow: hidden;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-sheet);
+		box-shadow:
+			var(--gp-shadow-pop),
+			var(--gp-ring-c);
+		pointer-events: auto;
+		animation: bk-pop-in var(--gp-d-pop) var(--gp-spring-pop) both;
+	}
+	.bk-inspector-img {
+		background: #fff;
+	}
+	@keyframes bk-pop-in {
+		from {
+			opacity: 0;
+			transform: scale(0.96);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.bk-inspector-card {
+			animation: none;
+		}
+	}
+
 	/* Wide: a card beside the chapters, kept in view while the page scrolls. */
 	.bk-scrim {
 		display: none;

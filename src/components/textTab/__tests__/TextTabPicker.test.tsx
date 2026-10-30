@@ -128,7 +128,7 @@ describe("TextTabPicker", () => {
 	it("hands the chosen reading to fingerpick with the by-ear warning first, and goes there when asked", () => {
 		const onTaken = vi.fn();
 		render({ initialText: TIGHT, initialName: "Book p.12", navigate: true, onTaken });
-		act(() => button("Open in fingerpick").click());
+		act(() => button("Open in Tab").click());
 		expect(engine.stop).toHaveBeenCalled();
 		expect(onTaken).toHaveBeenCalledTimes(1);
 		expect(push).toHaveBeenCalledWith("/fingerpick");
@@ -142,7 +142,7 @@ describe("TextTabPicker", () => {
 
 	it("stays put on the fingerpick page itself, where the handoff lands in place", () => {
 		render({ initialText: TIGHT });
-		act(() => button("Open in fingerpick").click());
+		act(() => button("Open in Tab").click());
 		expect(push).not.toHaveBeenCalled();
 		expect(takeHandoff("fingerpick")?.kind).toBe("fingerpick");
 	});

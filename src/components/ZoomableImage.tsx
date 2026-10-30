@@ -44,7 +44,7 @@ export function anchoredScroll(args: {
 }
 
 const TOOL =
-	"flex size-7 items-center justify-center text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent disabled:opacity-30 disabled:hover:text-ink-dim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:-outline-offset-2 aria-pressed:bg-denim aria-pressed:text-on-denim aria-pressed:hover:text-on-denim";
+	"flex size-8 items-center justify-center rounded-gp-sm text-gp-ink-2 transition-colors duration-(--gp-d-state) hover:text-gp-ink disabled:opacity-35 disabled:hover:text-gp-ink-2 aria-pressed:bg-gp-m-500 aria-pressed:text-gp-m-on aria-pressed:hover:text-gp-m-on [&_svg]:size-4";
 
 export default function ZoomableImage({
 	src,
@@ -99,8 +99,8 @@ export default function ZoomableImage({
 
 	return (
 		<div className="flex min-h-0 flex-col">
-			<div className="flex h-9 flex-none items-center gap-1 border-b border-line px-2">
-				<span className="min-w-0 flex-1 truncate px-1 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
+			<div className="flex h-10 flex-none items-center gap-1 border-b border-gp-line px-2">
+				<span className="min-w-0 flex-1 truncate px-1 text-(length:--gp-t-cap) font-semibold text-gp-ink-2">
 					{title ?? alt}
 				</span>
 				<button
@@ -112,9 +112,9 @@ export default function ZoomableImage({
 					onClick={() => arm("out")}
 					className={TOOL}
 				>
-					<Minus className="size-3.5" strokeWidth={1.5} />
+					<Minus aria-hidden />
 				</button>
-				<span className="w-10 text-center font-mono text-[11px] tabular-nums text-ink-dim">
+				<span className="w-11 text-center text-(length:--gp-t-cap) font-semibold tabular-nums text-gp-ink-2">
 					{Math.round(scale * 100)}%
 				</span>
 				<button
@@ -126,7 +126,7 @@ export default function ZoomableImage({
 					onClick={() => arm("in")}
 					className={TOOL}
 				>
-					<Plus className="size-3.5" strokeWidth={1.5} />
+					<Plus aria-hidden />
 				</button>
 				{/* Back to fit. The glyph says which way that is from here: shrink
 				    when zoomed in, grow when zoomed out, a plain frame at fit. */}
@@ -142,16 +142,16 @@ export default function ZoomableImage({
 					className={TOOL}
 				>
 					{scale > 1 ? (
-						<Shrink className="size-3.5" strokeWidth={1.5} />
+						<Shrink aria-hidden />
 					) : scale < 1 ? (
-						<Expand className="size-3.5" strokeWidth={1.5} />
+						<Expand aria-hidden />
 					) : (
-						<Scan className="size-3.5" strokeWidth={1.5} />
+						<Scan aria-hidden />
 					)}
 				</button>
 				{onClose ? (
 					<button type="button" aria-label="Close" onClick={onClose} className={`${TOOL} ml-1`}>
-						<X className="size-4" strokeWidth={1.5} />
+						<X aria-hidden />
 					</button>
 				) : null}
 			</div>

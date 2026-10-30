@@ -19,7 +19,7 @@ import {
 	type ChordVoicing,
 	type DiagramShape,
 } from "@/lib/chordVoicing";
-import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
+import { voicingPitches } from "@/lib/chordVoicingToMidi";
 import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 
 /**
@@ -303,7 +303,7 @@ export function chordRefToMidi(
 	if (!ref) return null;
 	const voicing = selectRefVoicing(ref, voicings);
 	if (!voicing) return null;
-	const pitches = chordVoicingToMidi(voicing).map((n) => n.midi);
+	const pitches = voicingPitches(voicing);
 	return pitches.length > 0 ? pitches : null;
 }
 

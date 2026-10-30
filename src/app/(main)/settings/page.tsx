@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User, UserIdentity } from "@supabase/supabase-js";
 import { toast } from "sonner";
-import { KeyRound, Mail, UserRound } from "lucide-react";
+import { KeyRound, Mail, Palette, Trash2, UserRound } from "lucide-react";
 
 import { useUser } from "@/hooks/useUser";
 import {
+	deleteAccountData,
 	refreshSession,
 	sendReauthenticationCode,
 	unlinkIdentity,
@@ -30,17 +31,17 @@ import {
 } from "@/lib/profile";
 import type { AvatarColor, AvatarIcon } from "@/lib/profile";
 import { passwordStrength } from "@/lib/passwordStrength";
+import { forgetSignIn } from "@/lib/authForm";
 import UserAvatar from "@/components/UserAvatar";
 import { ThemeSwitch } from "@/components/ThemeToggle";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/input";
 import { Panel } from "@/components/ui/panel";
+import { Skeleton } from "@/components/ui/skeleton";
+import PasswordField from "@/components/auth/PasswordField";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
-import { BUTTON, HELP, INPUT, LABEL, PRIMARY, SECONDARY } from "@/components/auth/formStyles";
-
-const DANGER = `${BUTTON} self-start bg-destructive text-white hover:bg-destructive/90`;
-
-/* Two columns from 900px up (the same break the home grid uses), stacked
-   below, each card aligned to the top of its column. */
-const GRID = "grid grid-cols-2 items-start gap-5 max-[900px]:grid-cols-1";
+import { FORM_ERROR, FORM_HELP, FORM_LEAD, PAGE_GUTTER } from "@/components/auth/formText";
+import "./settings.css";
 
 /** Seconds before the one-time code can be sent again. */
 const RESEND_COOLDOWN_S = 60;
@@ -49,70 +50,82 @@ export default function SettingsPage() {
 	const { user, loading } = useUser();
 
 	return (
-		<div className="mx-auto max-w-300 px-(--gutter) py-8 max-sm:py-6">
-			{/* One line, not the home page's display size: this page has to fit a
-			    laptop viewport with all three cards in view. */}
-			<h1 className="mb-6 font-mono text-(length:--text-h3-size) font-medium tracking-[0.02em]">
+		/* One column of panels at every width: every section is a set of controls,
+		   and a settings page is read top to bottom, not scanned side by side. */
+		<div className={`gp-rise mx-auto box-content flex max-w-160 flex-col gap-4 py-8 max-sm:py-6 ${PAGE_GUTTER}`}>
+			<h1 className="mb-2 font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-gp-ink min-[960px]:text-(length:--gp-t-xl-lg)">
 				Settings
 			</h1>
 
-			{/* The theme moved here and into the account menu with the Candy shell (#356);
-			    the rest of the page migrates in #363. */}
-			<Panel title="Appearance" className="mb-5">
+			<Section icon={<Palette />} anim="palette" title="Appearance">
 				<ThemeSwitch />
-			</Panel>
+			</Section>
 
 			{loading || !user ? (
 				// The proxy guards /settings, so a resolved null user is only ever a
 				// sign-out mid-visit; the skeleton is the right thing either way.
-				<div className={GRID}>
-					<div className="h-96 animate-pulse border border-line bg-denim-tint" />
-					<div className="flex flex-col gap-5">
-						<div className="h-40 animate-pulse border border-line bg-denim-tint" />
-						<div className="h-40 animate-pulse border border-line bg-denim-tint" />
-					</div>
-				</div>
+				<Skeleton className="h-[560px] rounded-gp-lg" />
 			) : (
-				<div className={GRID}>
+				<>
 					<IdentityCard user={user} />
-					{/* Sign-in credentials stack in the right column; identity, the
-					    taller card, holds the left on its own. */}
-					<div className="flex flex-col gap-5">
-						<EmailCard user={user} />
-						<PasswordCard email={user.email} />
-					</div>
-				</div>
+					<EmailCard user={user} />
+					<PasswordCard email={user.email} />
+					<DeleteCard user={user} />
+				</>
 			)}
 		</div>
 	);
 }
 
-function Card({
+/** Which hover touch a section's icon gets (settings.css). */
+type SectionIcon = "palette" | "profile" | "email" | "password" | "delete";
+
+/** A Panel whose title carries its icon — one per section of the page. The
+ *  icon answers a hover like the strum page's tool icons, but is not a button. */
+function Section({
 	icon,
+	anim,
 	title,
 	children,
 }: {
 	icon: React.ReactNode;
+	anim: SectionIcon;
 	title: string;
 	children: React.ReactNode;
 }) {
 	return (
-		<section className="border border-line bg-panel p-4">
-			<h2 className="mb-4 flex items-center gap-2 font-mono text-[length:var(--text-eyebrow-size)] uppercase tracking-[var(--text-eyebrow-ls)] text-ink-dim">
-				<span className="text-denim-accent">{icon}</span>
-				{title}
-			</h2>
+		<Panel
+			className="p-5 max-sm:p-4"
+			title={
+				<span className="flex items-center gap-2">
+					<span className="set-icon" data-anim={anim} aria-hidden="true">
+						{icon}
+					</span>
+					{title}
+				</span>
+			}
+		>
 			{children}
-		</section>
+		</Panel>
 	);
 }
 
 function ErrorLine({ message }: { message: string | null }) {
 	if (!message) return null;
 	return (
-		<p role="alert" className="font-mono text-[11px] tracking-[0.02em] text-destructive">
+		<p role="alert" className={FORM_ERROR}>
 			{message}
 		</p>
+	);
+}
+
+/** A row's label over its value: what is set now, beside the buttons that change it. */
+function Current({ label, children }: { label: string; children: React.ReactNode }) {
+	return (
+		<div className="flex min-w-0 flex-col gap-1">
+			<span className="gp-field-label">{label}</span>
+			<span className="truncate text-(length:--gp-t-body) text-gp-ink">{children}</span>
+		</div>
 	);
 }
 
@@ -136,8 +149,8 @@ function Choice({
 			aria-label={label}
 			title={label}
 			onClick={onSelect}
-			className={`transition-[outline-color,opacity] duration-(--dur-hover) hover:opacity-90 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-2 ${
-				selected ? "outline-2 outline-offset-2 outline-denim-accent" : ""
+			className={`gp-focus rounded-full outline-offset-2 transition-[outline-color,opacity] duration-(--gp-d-state) hover:opacity-90 ${
+				selected ? "outline-2 outline-gp-ink" : ""
 			}`}
 		>
 			{children}
@@ -203,35 +216,38 @@ function IdentityCard({ user }: { user: User }) {
 	}
 
 	return (
-		<Card icon={<UserRound className="size-3.5" strokeWidth={1.5} />} title="Identity">
-			<form onSubmit={handleSubmit} className="flex flex-col gap-4">
+		<Section icon={<UserRound />} anim="profile" title="Profile">
+			<form onSubmit={handleSubmit} className="flex flex-col gap-5">
 				{/* Preview and nickname share a row: the chip is the thing the name
 				    changes, so they read as one control. */}
-				<div className="flex items-end gap-4">
-					<UserAvatar profile={preview} className="size-16 text-2xl" />
-					<div className="flex min-w-0 flex-1 flex-col gap-1.5">
-						<label htmlFor="nickname" className={LABEL}>
-							Nickname
-						</label>
-						<input
-							id="nickname"
-							type="text"
-							autoComplete="nickname"
-							value={nickname}
-							onChange={(e) => setNickname(e.target.value)}
-							placeholder={providerNameOf(user) ?? user.email?.split("@")[0] ?? ""}
-							maxLength={NICKNAME_MAX_LENGTH}
-							className={INPUT}
-						/>
-					</div>
+				<div className="flex items-start gap-4">
+					<UserAvatar profile={preview} className="mt-[22px] size-16 rounded-full text-2xl" />
+					<Field
+						className="min-w-0 flex-1"
+						label="Nickname"
+						help={
+							<>
+								Shown as <span className="font-semibold text-gp-ink-2">{preview.displayName}</span>. Empty falls
+								back to your account name. {nickname.length}/{NICKNAME_MAX_LENGTH}
+							</>
+						}
+					>
+						{(control) => (
+							<Input
+								{...control}
+								type="text"
+								autoComplete="nickname"
+								value={nickname}
+								onChange={(e) => setNickname(e.target.value)}
+								placeholder={providerNameOf(user) ?? user.email?.split("@")[0] ?? ""}
+								maxLength={NICKNAME_MAX_LENGTH}
+							/>
+						)}
+					</Field>
 				</div>
-				<span className="-mt-2 font-mono text-[10px] tracking-[0.04em] text-ink-faint">
-					Shown as <span className="text-ink-dim">{preview.displayName}</span>. Empty falls back
-					to your account name. {nickname.length}/{NICKNAME_MAX_LENGTH}
-				</span>
 
-				<div className="flex flex-col gap-1.5">
-					<span className={LABEL}>On the chip</span>
+				<div className="gp-field">
+					<span className="gp-field-label">On the chip</span>
 					{/* The initial first, then the icons, all drawn in the colour picked
 					    below so switching either updates the other's previews. */}
 					<div
@@ -250,7 +266,7 @@ function IdentityCard({ user }: { user: User }) {
 									color: preview.color,
 									icon: null,
 								}}
-								className="size-8 text-[12px]"
+								className="size-9 rounded-full text-[13px]"
 							/>
 						</Choice>
 						{AVATAR_ICONS.map((id) => (
@@ -266,22 +282,22 @@ function IdentityCard({ user }: { user: User }) {
 										color: preview.color,
 										icon: id,
 									}}
-									className="size-8 text-[12px]"
+									className="size-9 rounded-full text-[13px]"
 								/>
 							</Choice>
 						))}
 					</div>
 				</div>
 
-				<div className="flex flex-col gap-1.5">
-					<span className={LABEL}>Colour</span>
+				<div className="gp-field">
+					<span className="gp-field-label">Colour</span>
 					<div role="radiogroup" aria-label="Colour" className="flex flex-wrap gap-2">
 						<Choice
 							selected={color === null}
 							onSelect={() => setColor(null)}
 							label={`Auto (${hashed})`}
 						>
-							<span className="flex size-8 items-center justify-center border border-line-strong font-mono text-[9px] uppercase tracking-[0.1em] text-ink-dim">
+							<span className="flex size-9 items-center justify-center rounded-full bg-gp-well text-[11.5px] font-semibold text-gp-ink-2">
 								Auto
 							</span>
 						</Choice>
@@ -298,7 +314,7 @@ function IdentityCard({ user }: { user: User }) {
 										color: c,
 										icon: preview.icon,
 									}}
-									className="size-8 text-[12px]"
+									className="size-9 rounded-full text-[13px]"
 								/>
 							</Choice>
 						))}
@@ -306,11 +322,11 @@ function IdentityCard({ user }: { user: User }) {
 				</div>
 
 				<ErrorLine message={error} />
-				<button type="submit" disabled={!dirty || busy} className={PRIMARY}>
-					{busy ? "Saving…" : "Save profile"}
-				</button>
+				<Button type="submit" loading={busy} disabled={!dirty} className="self-start">
+					Save profile
+				</Button>
 			</form>
-		</Card>
+		</Section>
 	);
 }
 
@@ -375,97 +391,82 @@ function EmailCard({ user }: { user: User }) {
 	}
 
 	return (
-		<Card icon={<Mail className="size-3.5" strokeWidth={1.5} />} title="Email">
+		<Section icon={<Mail />} anim="email" title="Email">
 			<div className="flex flex-col gap-5">
 				<div className="flex flex-wrap items-end justify-between gap-3">
-					<div className="flex min-w-0 flex-col gap-1.5">
-						<span className={LABEL}>Current</span>
-						<span className="truncate font-mono text-sm text-ink">{email ?? "—"}</span>
-					</div>
+					<Current label="Current">{email ?? "—"}</Current>
 					<div className="flex gap-2">
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => open("change")}
 							aria-expanded={mode === "change"}
-							className={`${SECONDARY} ${mode === "change" ? "border-denim text-denim-accent" : ""}`}
 						>
 							Change
-						</button>
-						<button
-							type="button"
+						</Button>
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => open("unlink")}
 							disabled={!canUnlink}
 							aria-expanded={mode === "unlink"}
 							title={canUnlink ? undefined : "Email is your only way to sign in"}
-							className={`${SECONDARY} ${mode === "unlink" ? "border-denim text-denim-accent" : ""}`}
 						>
 							Unlink
-						</button>
+						</Button>
 					</div>
 				</div>
 
 				{!canUnlink && (
-					<p className={HELP}>
+					<p className={FORM_HELP}>
 						Email is your only sign-in method, so it can be changed but not unlinked.
 					</p>
 				)}
 
 				{pendingTo && (
-					<p className="border border-denim bg-denim-tint px-3 py-2 font-mono text-[11px] tracking-[0.02em] text-ink">
-						Confirmation links are on their way to both {email} and {pendingTo}. The
-						change completes once you click both.
+					<p className="rounded-gp-md bg-gp-well px-3.5 py-3 text-(length:--gp-t-ui) leading-(--gp-lh-body) text-gp-ink-2">
+						Confirmation links are on their way to both <span className="font-semibold text-gp-ink">{email}</span>{" "}
+						and <span className="font-semibold text-gp-ink">{pendingTo}</span>. The change completes once you
+						click both.
 					</p>
 				)}
 
 				{mode === "change" && (
-					<form
-						onSubmit={handleChange}
-						className="flex flex-col gap-4 border-t border-line pt-5"
-					>
-						<div className="flex flex-col gap-1.5">
-							<label htmlFor="new-email" className={LABEL}>
-								New email
-							</label>
-							<input
-								id="new-email"
-								type="email"
-								autoComplete="email"
-								autoFocus
-								value={next}
-								onChange={(e) => setNext(e.target.value)}
-								placeholder="you@example.com"
-								className={INPUT}
-							/>
-							<span className={HELP}>
-								We&apos;ll send a confirmation link to both addresses.
-							</span>
-						</div>
+					<form onSubmit={handleChange} className="flex flex-col gap-4 border-t border-gp-line pt-5">
+						<Field label="New email" help="We'll send a confirmation link to both addresses.">
+							{(control) => (
+								<Input
+									{...control}
+									type="email"
+									autoComplete="email"
+									autoFocus
+									value={next}
+									onChange={(e) => setNext(e.target.value)}
+									placeholder="you@example.com"
+								/>
+							)}
+						</Field>
 						<ErrorLine message={error} />
-						<button type="submit" disabled={!validEmail || busy} className={PRIMARY}>
-							{busy ? "Sending…" : "Send confirmation"}
-						</button>
+						<Button type="submit" loading={busy} disabled={!validEmail} className="self-start">
+							Send confirmation
+						</Button>
 					</form>
 				)}
 
 				{mode === "unlink" && (
-					<div className="flex flex-col gap-4 border-t border-line pt-5">
-						<p className={HELP}>
+					<div className="flex flex-col gap-4 border-t border-gp-line pt-5">
+						<p className={FORM_LEAD}>
 							You&apos;ll no longer be able to sign in with {email} and a password.
 							Your other sign-in method keeps working.
 						</p>
 						<ErrorLine message={error} />
-						<button
-							type="button"
-							onClick={handleUnlink}
-							disabled={busy}
-							className={DANGER}
-						>
-							{busy ? "Unlinking…" : "Unlink email"}
-						</button>
+						<Button variant="danger" onClick={handleUnlink} loading={busy} className="self-start">
+							Unlink email
+						</Button>
 					</div>
 				)}
 			</div>
-		</Card>
+		</Section>
 	);
 }
 
@@ -535,140 +536,252 @@ function PasswordCard({ email }: { email: string | undefined }) {
 	}
 
 	return (
-		<Card icon={<KeyRound className="size-3.5" strokeWidth={1.5} />} title="Password">
+		<Section icon={<KeyRound />} anim="password" title="Password">
 			{step !== "sent" ? (
 				<div className="flex flex-col gap-5">
 					<div className="flex flex-wrap items-end justify-between gap-3">
-						<div className="flex flex-col gap-1.5">
-							<span className={LABEL}>Current</span>
-							<span className="font-mono text-sm text-ink">••••••••</span>
-						</div>
-						<button
-							type="button"
+						<Current label="Current">••••••••</Current>
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => {
 								setStep((s) => (s === "confirm" ? "idle" : "confirm"));
 								setError(null);
 							}}
 							aria-expanded={step === "confirm"}
-							className={`${SECONDARY} ${step === "confirm" ? "border-denim text-denim-accent" : ""}`}
 						>
 							Change password
-						</button>
+						</Button>
 					</div>
 
 					{step === "confirm" && (
-						<div className="flex flex-col gap-4 border-t border-line pt-5">
-							<p className={HELP}>
+						<div className="flex flex-col gap-4 border-t border-gp-line pt-5">
+							<p className={FORM_LEAD}>
 								Changing your password needs a one-time code. We&apos;ll email it to{" "}
-								<span className="text-ink">{email}</span>. Send it now?
+								<span className="font-semibold text-gp-ink">{email}</span>. Send it now?
 							</p>
 							<ErrorLine message={error} />
 							<div className="flex gap-2">
-								<button
-									type="button"
-									onClick={sendCode}
-									disabled={busy}
-									className={SECONDARY}
-								>
-									{busy ? "Sending…" : "Send code"}
-								</button>
-								<button
-									type="button"
-									onClick={() => setStep("idle")}
-									disabled={busy}
-									className={`${BUTTON} text-ink-faint hover:text-ink-dim`}
-								>
+								<Button onClick={sendCode} loading={busy}>
+									Send code
+								</Button>
+								<Button variant="ghost" onClick={() => setStep("idle")} disabled={busy}>
 									Cancel
-								</button>
+								</Button>
 							</div>
 						</div>
 					)}
 				</div>
 			) : (
 				<form onSubmit={handleSubmit} className="flex flex-col gap-5">
-					<div className="flex flex-col gap-1.5">
-						<label htmlFor="reauth-code" className={LABEL}>
-							Code from your email
-						</label>
-						<div className="flex gap-2">
-							<input
-								id="reauth-code"
-								type="text"
-								inputMode="numeric"
-								autoComplete="one-time-code"
-								autoFocus
-								value={code}
-								onChange={(e) => setCode(e.target.value)}
-								placeholder="123456"
-								className={`${INPUT} max-w-40`}
-							/>
-							<button
-								type="button"
-								onClick={sendCode}
-								disabled={busy || cooldown > 0}
-								className={SECONDARY}
-							>
-								{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend"}
-							</button>
-						</div>
-						<span className={HELP}>
-							Sent to {email}. Codes expire after a few minutes.
-						</span>
-					</div>
+					<Field label="Code from your email" help={`Sent to ${email}. Codes expire after a few minutes.`}>
+						{(control) => (
+							<div className="flex gap-2">
+								<Input
+									{...control}
+									type="text"
+									inputMode="numeric"
+									autoComplete="one-time-code"
+									autoFocus
+									value={code}
+									onChange={(e) => setCode(e.target.value)}
+									placeholder="123456"
+									className="max-w-40 font-gp-num tabular-nums"
+								/>
+								<Button variant="secondary" onClick={sendCode} disabled={busy || cooldown > 0}>
+									{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend"}
+								</Button>
+							</div>
+						)}
+					</Field>
 
-					<div className="flex flex-col gap-1.5">
-						<label htmlFor="new-password" className={LABEL}>
+					<div className="gp-field">
+						<label htmlFor="new-password" className="gp-field-label">
 							New password
 						</label>
-						<input
+						<PasswordField
 							id="new-password"
-							type="password"
 							autoComplete="new-password"
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
-							className={INPUT}
 						/>
 						<PasswordStrengthMeter strength={strength} empty={password.length === 0} />
 					</div>
 
-					<div className="flex flex-col gap-1.5">
-						<label htmlFor="confirm-password" className={LABEL}>
+					<div className="gp-field">
+						<label htmlFor="confirm-password" className="gp-field-label">
 							Confirm
 						</label>
-						<input
+						<PasswordField
 							id="confirm-password"
-							type="password"
 							autoComplete="new-password"
 							value={confirm}
 							onChange={(e) => setConfirm(e.target.value)}
-							aria-invalid={confirm.length > 0 && !matches}
-							className={INPUT}
+							aria-invalid={(confirm.length > 0 && !matches) || undefined}
 						/>
-						{confirm.length > 0 && !matches && (
-							<span className="font-mono text-[11px] tracking-[0.02em] text-destructive">
-								Doesn&apos;t match
-							</span>
-						)}
+						{confirm.length > 0 && !matches && <span className={FORM_ERROR}>Doesn&apos;t match</span>}
 					</div>
 
 					<ErrorLine message={error} />
 					<div className="flex gap-2">
-						<button type="submit" disabled={!canSubmit || busy} className={PRIMARY}>
-							{busy ? "Updating…" : "Change password"}
-						</button>
+						<Button type="submit" loading={busy} disabled={!canSubmit}>
+							Change password
+						</Button>
 						{/* Backs out and clears the typed fields; the emailed code stays
 						    valid, so the resend cooldown is left running. */}
-						<button
-							type="button"
-							onClick={reset}
-							disabled={busy}
-							className={`${BUTTON} text-ink-faint hover:text-ink-dim`}
-						>
+						<Button variant="ghost" onClick={reset} disabled={busy}>
 							Cancel
-						</button>
+						</Button>
 					</div>
 				</form>
 			)}
-		</Card>
+		</Section>
+	);
+}
+
+/* ---------------------------------------------------------------------------
+   Delete. Two ways out: the data alone (the account and profile stay), or the
+   account with it. Either asks again inline — the password for a password
+   account, the email typed out otherwise — and the server checks the same.
+   ------------------------------------------------------------------------ */
+type DeleteScope = "data" | "account";
+
+const DELETE_COPY: Record<
+	DeleteScope,
+	{ label: string; summary: string; open: string; warning: string; action: string }
+> = {
+	data: {
+		label: "Your data",
+		summary: "Patterns, progressions, tabs, chords, favourites, books and share links.",
+		open: "Delete data",
+		warning:
+			"Everything you have saved goes: patterns, progressions, tabs, your chords and favourites, uploaded books and the links you shared. Your account, sign-in and profile stay. This can't be undone.",
+		action: "Delete my data",
+	},
+	account: {
+		label: "Account",
+		summary: "All of your data, plus the account and its sign-in.",
+		open: "Delete account",
+		warning:
+			"Your account and everything in it go, and you are signed out. Signing up again with this email starts an empty account. This can't be undone.",
+		action: "Delete my account",
+	},
+};
+
+function DeleteCard({ user }: { user: User }) {
+	const router = useRouter();
+	const hasPassword = (user.identities ?? []).some((i) => i.provider === "email");
+	// Without a password to ask for, the player types their email (or the
+	// word, for an account with none) — a deliberate act, not a stray tap.
+	const phrase = user.email ?? "delete";
+
+	const [open, setOpen] = useState<DeleteScope | null>(null);
+	const [proof, setProof] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	const ready = hasPassword
+		? proof.length > 0
+		: proof.trim().toLowerCase() === phrase.toLowerCase();
+
+	function toggle(scope: DeleteScope) {
+		setOpen((current) => (current === scope ? null : scope));
+		setProof("");
+		setError(null);
+	}
+
+	async function handleDelete(e: React.FormEvent) {
+		e.preventDefault();
+		if (!open || !ready || busy) return;
+		setBusy(true);
+		setError(null);
+		const { error } = await deleteAccountData(open, hasPassword ? proof : null);
+		setBusy(false);
+		if (error) {
+			setError(error.message);
+			return;
+		}
+		if (open === "account") {
+			forgetSignIn();
+			toast.success("Your account is deleted");
+			router.replace("/");
+			return;
+		}
+		setOpen(null);
+		setProof("");
+		toast.success("Your data is deleted");
+		router.refresh();
+	}
+
+	return (
+		<Section icon={<Trash2 />} anim="delete" title="Delete">
+			<div className="flex flex-col gap-5">
+				{(["data", "account"] as const).map((scope) => {
+					const copy = DELETE_COPY[scope];
+					return (
+						<div key={scope} className="flex flex-col gap-5">
+							<div className="flex flex-wrap items-end justify-between gap-3">
+								<div className="flex min-w-0 flex-col gap-1">
+									<span className="gp-field-label">{copy.label}</span>
+									<span className={FORM_HELP}>{copy.summary}</span>
+								</div>
+								<Button
+									variant="secondary"
+									size="sm"
+									className="set-danger"
+									onClick={() => toggle(scope)}
+									aria-expanded={open === scope}
+								>
+									{copy.open}
+								</Button>
+							</div>
+
+							{open === scope && (
+								<form onSubmit={handleDelete} className="flex flex-col gap-4 border-t border-gp-line pt-5">
+									<p className={FORM_LEAD}>{copy.warning}</p>
+									{hasPassword ? (
+										<div className="gp-field">
+											<label htmlFor="delete-password" className="gp-field-label">
+												Your password
+											</label>
+											<PasswordField
+												id="delete-password"
+												autoComplete="current-password"
+												autoFocus
+												value={proof}
+												onChange={(e) => setProof(e.target.value)}
+											/>
+										</div>
+									) : (
+										<Field label={`Type ${phrase} to confirm`}>
+											{(control) => (
+												<Input
+													{...control}
+													autoComplete="off"
+													autoCapitalize="off"
+													spellCheck={false}
+													autoFocus
+													value={proof}
+													onChange={(e) => setProof(e.target.value)}
+												/>
+											)}
+										</Field>
+									)}
+									<ErrorLine message={error} />
+									<div className="flex flex-wrap gap-2">
+										<Button type="submit" variant="danger" loading={busy} disabled={!ready}>
+											{copy.action}
+										</Button>
+										<Button type="button" variant="ghost" onClick={() => toggle(scope)} disabled={busy}>
+											Cancel
+										</Button>
+									</div>
+								</form>
+							)}
+						</div>
+					);
+				})}
+			</div>
+		</Section>
 	);
 }

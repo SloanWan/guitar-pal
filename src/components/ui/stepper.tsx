@@ -27,6 +27,8 @@ export interface StepperProps {
 	/** 26px buttons and body-size type, for a title row or a toolbar. */
 	dense?: boolean;
 	disabled?: boolean;
+	/** `sm` for a toolbar of several values side by side. */
+	size?: "md" | "sm";
 	className?: string;
 }
 
@@ -45,6 +47,7 @@ export function Stepper({
 	tap,
 	dense,
 	disabled,
+	size = "md",
 	className,
 }: StepperProps) {
 	const range: StepRange = { min, max, step };
@@ -72,7 +75,12 @@ export function Stepper({
 	};
 
 	return (
-		<div role="group" aria-label={label} className={cn("gp-stepper", className)} data-dense={dense ? "" : undefined}>
+		<div
+			role="group"
+			aria-label={label}
+			className={cn("gp-stepper", size === "sm" && "gp-stepper-sm", className)}
+			data-dense={dense ? "" : undefined}
+		>
 			<StepButton direction={-1} label={label} disabled={disabled || value <= min} onStep={stepBy} />
 			<output className="gp-stepper-val" aria-live="polite">
 				{value}

@@ -201,6 +201,11 @@ export interface FretboardComponentProps extends FretboardProps {
 	 */
 	capo?: number;
 	/**
+	 * The open strings' names, low E first: a guitar tuned down says so here.
+	 * Standard tuning's `E A D G B e` when absent.
+	 */
+	stringNames?: readonly string[];
+	/**
 	 * Called as the capo bar is dragged or keyed to another fret. Without it
 	 * the bar is drawn but inert.
 	 */
@@ -278,6 +283,7 @@ export default function Fretboard({
 	toFret,
 	className,
 	capo = 0,
+	stringNames: names = STRING_LABELS,
 	onCapoChange,
 	maxCapo,
 	highlight = null,
@@ -674,6 +680,8 @@ export default function Fretboard({
 	const headH = onHighlightPlay || onHighlightClear ? boxBtnRow : 0;
 	const boardH = H + headH;
 	const size = (units: number) => scaled(units, designW);
+	/** The board starts at the nut when the open cell is shown, else at the first cell. */
+	const boardFrom = fromFret === 0 ? wireX(0) : fromFret * FRET_W;
 	// Shade by octave above the run's own lowest note, so a line climbing the
 	// neck darkens and lightens with the register rather than reading flat.
 	const runShades = new Map<string, number>();
@@ -709,9 +717,9 @@ export default function Fretboard({
 								y={stringY(string) + 3}
 								textAnchor="end"
 								fontSize={9}
-								className="fill-ink-faint font-mono"
+								className="fb-sname fill-ink-faint font-mono"
 							>
-								{STRING_LABELS[string]}
+								{names[string]}
 							</text>
 						))}
 						{/* One button per string, left of its name: run the scale along it. */}
@@ -728,7 +736,7 @@ export default function Fretboard({
 										role="button"
 										tabIndex={0}
 										aria-label={
-											playing ? `Stop the ${STRING_LABELS[string]} string` : `Play the ${STRING_LABELS[string]} string`
+											playing ? `Stop the ${names[string]} string` : `Play the ${names[string]} string`
 										}
 										onClick={() => onStringPlay(string)}
 										onKeyDown={(e) => {
@@ -779,6 +787,17 @@ export default function Fretboard({
 							className="fb-neck"
 							style={{ transform: `translate(${EDGE - fromFret * FRET_W}px, ${headH}px)` }}
 						>
+							{/* The board under the strings, from the nut (or the first cell
+							    shown) to the last fret: bare unless a page fills it. */}
+							<rect
+								className="fb-board"
+								fill="none"
+								x={boardFrom}
+								y={stringY(STRING_COUNT - 1) - 6}
+								width={wireX(toFret) - boardFrom}
+								height={stringY(0) - stringY(STRING_COUNT - 1) + 12}
+							/>
+
 							{/* Inlays: squares, so they are not mistaken for marks. */}
 							{frets.map((fret) => {
 								if (SINGLE_INLAYS.includes(fret)) {
@@ -789,7 +808,7 @@ export default function Fretboard({
 											y={betweenStringsY(2) - INLAY / 2}
 											width={INLAY}
 											height={INLAY}
-											className="fill-ink-faint"
+											className="fb-inlay fill-ink-faint"
 											opacity={0.6}
 										/>
 									);
@@ -798,7 +817,7 @@ export default function Fretboard({
 									return (
 										<g
 											key={`inlay-${fret}`}
-											className="fill-ink-faint"
+											className="fb-inlay fill-ink-faint"
 											opacity={0.6}
 										>
 											<rect
@@ -831,7 +850,7 @@ export default function Fretboard({
 										y2={stringY(0) + 6}
 										strokeWidth={1}
 										shapeRendering="crispEdges"
-										className="stroke-line-strong"
+										className="fb-wire stroke-line-strong"
 									/>
 								))}
 							{fromFret === 0 && (
@@ -842,7 +861,7 @@ export default function Fretboard({
 									y2={stringY(0) + 6}
 									strokeWidth={3}
 									shapeRendering="crispEdges"
-									className="stroke-ink"
+									className="fb-nut stroke-ink"
 								/>
 							)}
 
@@ -1001,7 +1020,7 @@ export default function Fretboard({
 									y={NUMBERS_Y}
 									textAnchor="middle"
 									fontSize={9}
-									className="fill-ink-faint font-mono"
+									className="fb-fnum fill-ink-faint font-mono"
 								>
 									{fret}
 								</text>

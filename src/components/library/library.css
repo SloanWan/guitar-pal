@@ -119,31 +119,6 @@
 	.lib-list .lib-row > .gp-row.gp-hop[aria-current="true"] {
 		background: var(--gp-m-100);
 	}
-	.lib-fav {
-		display: grid;
-		flex: none;
-		place-items: center;
-		width: 36px;
-		height: 36px;
-		border-radius: var(--gp-r-s);
-		color: var(--gp-edge);
-		cursor: pointer;
-		transition:
-			color var(--gp-d-state) linear,
-			transform var(--gp-d-pop) var(--gp-spring-pop);
-	}
-	.lib-fav:hover {
-		color: var(--gp-ink-3);
-	}
-	.lib-fav[aria-pressed="true"] {
-		color: var(--gp-m-500);
-		transform: rotate(-12deg);
-	}
-	.lib-fav svg {
-		width: 16px;
-		height: 17px;
-	}
-
 	/* The aside is a height-capped flex column, so a long list shrank the filter: its
 	   36px is only a specified size, and a flex item may shrink to its content (~21px).
 	   Held at a 44px touch target here, with columns that stay equal (minmax(0, …)) so

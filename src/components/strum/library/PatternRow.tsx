@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { ListRow } from "@/components/ui/list-row";
-import { Pick } from "@/components/ui/pick";
+import { PickToggle } from "@/components/ui/pick-toggle";
 import type { StrumPattern } from "@/lib/strumPatterns";
 import { patternBpm, patternMeter } from "@/lib/strumBars";
 import { beatUnitGlyph, meterLabel, metersEqual, DEFAULT_METER } from "@/lib/strumMeter";
@@ -52,15 +52,7 @@ export default function PatternRow({ pattern, index, selected, favourite, onSele
 				selected={selected}
 				onClick={onSelect}
 			/>
-			<button
-				type="button"
-				className="lib-fav"
-				aria-pressed={favourite}
-				aria-label={`Favourite ${pattern.name}`}
-				onClick={onToggleFavourite}
-			>
-				<Pick />
-			</button>
+			<PickToggle pressed={favourite} onPressedChange={onToggleFavourite} label={`Favourite ${pattern.name}`} />
 		</div>
 	);
 }

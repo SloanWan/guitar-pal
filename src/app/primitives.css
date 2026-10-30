@@ -54,6 +54,18 @@
 		--gp-p-ring: var(--gp-ring-m);
 	}
 
+	/* ---- grain: the matte surface on every filled pressable and every pick shape ------- */
+	/* Filled tones only: on a white neutral face grain reads as dirt. */
+	.gp-press:is(.gp-tone-primary, .gp-tone-ink, .gp-tone-danger):not(:disabled, [aria-disabled="true"]) {
+		background-image: var(--gp-grain);
+		background-size: 140px;
+		background-blend-mode: overlay;
+	}
+	.gp-playpick > .gp-playpick-shape > path,
+	.gp-badge > .gp-badge-pick > path {
+		filter: url(#gp-grain);
+	}
+
 	/* ---- the press ------------------------------------------------------------------- */
 	.gp-press {
 		--o: var(--gp-o-btn);
@@ -525,6 +537,49 @@
 		font-weight: 600;
 		color: var(--gp-ink-3);
 	}
+	/* Pick toggle: a favourite mark, grey until kept, then the module's colour and tilted. */
+	.gp-pick-toggle {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-edge);
+		cursor: pointer;
+		transition:
+			color var(--gp-d-state) linear,
+			transform var(--gp-d-pop) var(--gp-spring-pop);
+	}
+	.gp-pick-toggle:hover {
+		color: var(--gp-ink-3);
+	}
+	.gp-pick-toggle[aria-pressed="true"] {
+		color: var(--gp-m-500);
+		transform: rotate(-12deg);
+	}
+	.gp-pick-toggle svg {
+		width: 16px;
+		height: 17px;
+	}
+	.gp-stepper-sm {
+		gap: 4px;
+	}
+	.gp-stepper-sm .gp-stepper-btn {
+		width: 28px;
+		height: 28px;
+		border-radius: var(--gp-r-s);
+	}
+	.gp-stepper-sm .gp-stepper-btn svg {
+		width: 14px;
+		height: 14px;
+	}
+	.gp-stepper-sm .gp-stepper-val {
+		font-size: 15px;
+	}
+	.gp-stepper-sm .gp-stepper-unit {
+		font-size: 11.5px;
+	}
 
 	/* =================================================================================
 	   Primitives II (#355)
@@ -688,6 +743,41 @@
 		width: 15px;
 		height: 15px;
 		margin-top: -5px;
+	}
+	/* In a mixed list (rows carrying their own module, e.g. Home) the badge rests quiet — a
+	   neutral pick with the icon in the module's 700 — and fills with the 500 only on the
+	   row pointed at, focused or chosen, so ten rows of five modules read calm. A kept
+	   favourite pick in such a row is ink, and takes the module's colour with the row. */
+	.gp-badge-quiet {
+		color: var(--gp-m-700);
+		transition: color var(--gp-d-state) linear;
+	}
+	.gp-badge-quiet > .gp-badge-pick {
+		fill: var(--gp-well);
+		transition: fill var(--gp-d-state) linear;
+	}
+	.gp-row:is([aria-current="true"], :focus-visible) > .gp-badge-quiet {
+		color: var(--gp-m-on);
+	}
+	.gp-row:is([aria-current="true"], :focus-visible) > .gp-badge-quiet > .gp-badge-pick {
+		fill: var(--gp-m-500);
+	}
+	.gp-row[data-m] .gp-pick-toggle[aria-pressed="true"] {
+		color: var(--gp-ink);
+	}
+	.gp-row[data-m][aria-current="true"] .gp-pick-toggle[aria-pressed="true"] {
+		color: var(--gp-m-500);
+	}
+	@media (hover: hover) {
+		.gp-row:hover > .gp-badge-quiet {
+			color: var(--gp-m-on);
+		}
+		.gp-row:hover > .gp-badge-quiet > .gp-badge-pick {
+			fill: var(--gp-m-500);
+		}
+		.gp-row[data-m]:hover .gp-pick-toggle[aria-pressed="true"] {
+			color: var(--gp-m-500);
+		}
 	}
 
 	/* ---- Card (static) and Panel ------------------------------------------------------ */
@@ -1027,15 +1117,16 @@
 
 	/* ---- Toast: ink, a pick of the page's module, dropping from the top ------------------
 	   Sonner positions and stacks the toasts; these rules are the look. The toast is an
-	   inverted surface, so its pick wears the other theme's slot (fretboard: slot 5). */
+	   inverted surface, so its pick wears the other theme's slot: strum 0 · tab 2 · chords 3 ·
+	   fretboard 5 · books 6 (the logo's order; slot 6 is books' own, outside the logo). */
 	.gp-toaster {
 		--gp-toast-pick: var(--gp-lgd4);
 	}
 	.gp-toaster[data-m="strum"] {
-		--gp-toast-pick: var(--gp-lgd2);
+		--gp-toast-pick: var(--gp-lgd0);
 	}
 	.gp-toaster[data-m="tab"] {
-		--gp-toast-pick: var(--gp-lgd1);
+		--gp-toast-pick: var(--gp-lgd2);
 	}
 	.gp-toaster[data-m="chords"] {
 		--gp-toast-pick: var(--gp-lgd3);
@@ -1044,16 +1135,16 @@
 		--gp-toast-pick: var(--gp-lgd5);
 	}
 	.gp-toaster[data-m="books"] {
-		--gp-toast-pick: var(--gp-lgd0);
+		--gp-toast-pick: var(--gp-lgd6);
 	}
 	:root[data-theme="dark"] .gp-toaster {
 		--gp-toast-pick: var(--gp-a2-light);
 	}
 	:root[data-theme="dark"] .gp-toaster[data-m="strum"] {
-		--gp-toast-pick: var(--gp-lgl2);
+		--gp-toast-pick: var(--gp-lgl0);
 	}
 	:root[data-theme="dark"] .gp-toaster[data-m="tab"] {
-		--gp-toast-pick: var(--gp-lgl1);
+		--gp-toast-pick: var(--gp-lgl2);
 	}
 	:root[data-theme="dark"] .gp-toaster[data-m="chords"] {
 		--gp-toast-pick: var(--gp-lgl3);
@@ -1062,7 +1153,7 @@
 		--gp-toast-pick: var(--gp-lgl5);
 	}
 	:root[data-theme="dark"] .gp-toaster[data-m="books"] {
-		--gp-toast-pick: var(--gp-lgl0);
+		--gp-toast-pick: var(--gp-lgl6);
 	}
 	.gp-toast {
 		display: flex;

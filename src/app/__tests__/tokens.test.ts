@@ -90,10 +90,10 @@ function contrast(a: string, b: string): number {
 const MODULES = ["strum", "tab", "chords", "fb", "books"] as const;
 
 describe("tokens.css — structure", () => {
-	it("defines the decided values: Snow page and the Gauge v2 500s", () => {
+	it("defines the decided values: Snow page and the matte gauge 500s", () => {
 		expect(light.get("--gp-page")).toBe("#F7F7F8");
 		expect(darkAttr.get("--gp-page")).toBe("#18191B");
-		expect(MODULES.map((m) => light.get(`--gp-${m}-500`))).toEqual(["#23762C", "#0078B9", "#C63C3C", "#5F320E", "#823883"]);
+		expect(MODULES.map((m) => light.get(`--gp-${m}-500`))).toEqual(["#4C7A56", "#427394", "#823F3B", "#624634", "#865D82"]);
 	});
 
 	it("defines every theme-dependent key of the light base in both dark blocks", () => {
@@ -187,10 +187,10 @@ describe("tokens.css — primitives II cues (#355)", () => {
 	});
 
 	it("the toast's pick (the other theme's slot) reads on the ink toast (3:1)", () => {
-		for (let slot = 0; slot <= 5; slot++) {
+		for (let slot = 0; slot <= 6; slot++) {
 			expect(contrast(resolve(`--gp-lgd${slot}`, light), resolve("--gp-ink", light)), `light ${slot}`).toBeGreaterThanOrEqual(3);
 		}
-		for (const key of ["--gp-lgl0", "--gp-lgl1", "--gp-lgl2", "--gp-lgl3", "--gp-lgl5", "--gp-a2-light"]) {
+		for (const key of ["--gp-lgl0", "--gp-lgl1", "--gp-lgl2", "--gp-lgl3", "--gp-lgl5", "--gp-lgl6", "--gp-a2-light"]) {
 			expect(contrast(resolve(key, light), resolve("--gp-ink", darkAttr)), `dark ${key}`).toBeGreaterThanOrEqual(3);
 		}
 	});

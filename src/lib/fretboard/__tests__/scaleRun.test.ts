@@ -174,3 +174,26 @@ describe("noteSpacingSeconds", () => {
 		expect(noteSpacingSeconds(90, "eighth")).toBeCloseTo(1 / 3);
 	});
 });
+
+describe("tuned down", () => {
+	const NECK = { fromFret: 0, toFret: 22 };
+	const A_MINOR_PENT: ScaleSpec = { root: "A", scale: "minorPentatonic" };
+
+	it("moves every box up the neck by the tuning", () => {
+		const standard = scalePositions(A_MINOR_PENT, NECK).map((b) => b.fromFret);
+		const halfDown = scalePositions(A_MINOR_PENT, NECK, -1).map((b) => b.fromFret);
+		expect(standard).toContain(5);
+		expect(halfDown).toContain(6);
+		// Every box starts one fret above where it did, an octave apart or not.
+		const standardStarts = new Set(standard.map((f) => f % 12));
+		for (const f of halfDown) expect(standardStarts.has((f - 1 + 12) % 12)).toBe(true);
+	});
+
+	it("runs the same pitches from one fret higher, each note's midi what it sounds", () => {
+		const standard = scaleRun(A_MINOR_PENT, NECK, { kind: "string", string: 0 });
+		const halfDown = scaleRun(A_MINOR_PENT, NECK, { kind: "string", string: 0 }, -1);
+		expect(halfDown[0]).toEqual({ string: 0, fret: 6, midi: 45 });
+		expect(standard[0]).toEqual({ string: 0, fret: 5, midi: 45 });
+		for (const slot of halfDown) expect(slot.midi).toBe(slotMidi(slot.string, slot.fret) - 1);
+	});
+});

@@ -7,6 +7,10 @@ import { MailCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import Link from "@/components/AppLink";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/input";
+import { Panel } from "@/components/ui/panel";
+import { Segmented } from "@/components/ui/segmented";
 import { resendSignUpConfirmation, signIn, signUp } from "@/lib/auth";
 import { authErrorMessage } from "@/lib/authErrors";
 import {
@@ -22,24 +26,25 @@ import { displayNameOf } from "@/lib/profile";
 import { safeRedirectPath } from "@/lib/safeRedirect";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 import PasswordField from "@/components/auth/PasswordField";
-import TabStripBackdrop from "@/components/TabStripBackdrop";
-import { fingerpickToTabStrip } from "@/lib/fingerpickToTabStrip";
-import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
-import { ERROR_TEXT, HELP, INPUT, LABEL, PRIMARY, SECONDARY } from "@/components/auth/formStyles";
+import { FORM_ERROR, FORM_HELP, FORM_LEAD, PAGE_GUTTER, TEXT_LINK } from "@/components/auth/formText";
 
 /** Seconds before the confirmation email can be sent again. */
 const RESEND_COOLDOWN_S = 60;
 
-/* The waltz preset drifts behind the card, the way the landing hero's strips
-   do — laid out once at module load; it never changes. */
-const WALTZ_STRIP = fingerpickToTabStrip(
-	PRESET_FINGERPICK_PATTERNS.find((p) => p.id === "waltz") ?? PRESET_FINGERPICK_PATTERNS[0],
-);
-
-const COPY: Record<AuthMode, { title: string; submit: string; pending: string }> = {
-	signin: { title: "Sign in", submit: "Sign in", pending: "Signing in…" },
-	signup: { title: "Create account", submit: "Create account", pending: "Creating account…" },
+const COPY: Record<AuthMode, { title: string; lead: string; submit: string }> = {
+	signin: { title: "Welcome back", lead: "Sign in to pick up your patterns and tabs.", submit: "Sign in" },
+	signup: {
+		title: "Create your account",
+		lead: "Save patterns, tabs and chords, and play them on any device.",
+		submit: "Create account",
+	},
 };
+
+/* Links, not state: each tab is deep-linkable (`?mode=signup`) and survives a reload. */
+const MODES = [
+	{ value: "signin", label: "Sign in" },
+	{ value: "signup", label: "Create account" },
+] as const satisfies readonly { value: AuthMode; label: string }[];
 
 function AuthPageInner() {
 	const router = useRouter();
@@ -141,189 +146,144 @@ function AuthPageInner() {
 	const errorId = error ? "auth-error" : undefined;
 
 	return (
-		<div className="relative flex min-h-full flex-col justify-center overflow-hidden py-10 max-sm:py-6">
-			<TabStripBackdrop front={WALTZ_STRIP} back={WALTZ_STRIP} direction="right" />
-			<div className="relative z-2 mx-auto w-full max-w-105 px-(--gutter)">
-				{/* Sign-up sits on a denim wash so the two tabs read as two places,
-				    not one form with a different label. The wash is translucent, so
-				    it is painted over an opaque panel (as a ::before, kept under the
-				    content) rather than straight over the TAB strips behind. */}
-				<section
-					className={`relative isolate border bg-panel p-6 transition-[border-color] duration-(--dur-hover) before:absolute before:inset-0 before:-z-10 before:bg-denim-tint before:transition-opacity before:duration-(--dur-hover) before:content-[''] max-sm:p-5 ${
-						mode === "signup" ? "border-denim before:opacity-100" : "border-line before:opacity-0"
-					}`}
-				>
-					{/* Eyebrow + LED: the lamp lights while a request is in flight,
-					    the same "LED = active" the topbar teaches. */}
-					<div className="mb-1 flex items-center justify-between">
-						<span className="font-mono text-[length:var(--text-eyebrow-size)] uppercase tracking-[var(--text-eyebrow-ls)] text-ink-dim">
-							Account
-						</span>
-						<span
-							className={`size-1.5 rounded-full transition-[background,box-shadow] duration-200 ${
-								busy ? "bg-denim-accent shadow-(--glow-led)" : "bg-ink-faint"
-							}`}
-							aria-hidden="true"
-						/>
-					</div>
-					<h1 className="mb-6 font-mono text-(length:--text-h3-size) font-medium tracking-[0.02em]">
-						{awaitingConfirmation ? "Check your inbox" : copy.title}
-					</h1>
+		<div className="flex min-h-full flex-col justify-center py-10 max-sm:py-6">
+			{/* Full width, then capped: a flex item with auto margins would shrink to
+			    its content, and the two modes' content differs. */}
+			<div className={`w-full ${PAGE_GUTTER}`}>
+				<div className="gp-rise mx-auto max-w-110">
+					<Panel className="p-7 max-sm:p-5">
+						<h1 className="font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-gp-ink">
+							{awaitingConfirmation ? "Check your inbox" : copy.title}
+						</h1>
 
-					{awaitingConfirmation ? (
-						<InboxNotice
-							email={email.trim()}
-							onBack={() => {
-								setAwaitingConfirmation(false);
-								setPassword("");
-								router.replace(hrefFor("signin"));
-							}}
-						/>
-					) : (
-						<>
-							<ModeTabs mode={mode} hrefFor={hrefFor} disabled={busy} />
-
-							<form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-5">
-								<fieldset disabled={busy} className="flex flex-col gap-5">
-									<div className="flex flex-col gap-1.5">
-										<label htmlFor="auth-email" className={LABEL}>
-											Email
-										</label>
-										<input
-											ref={emailRef}
-											id="auth-email"
-											name="email"
-											type="email"
-											autoComplete="email"
-											inputMode="email"
-											spellCheck={false}
-											placeholder="you@example.com"
-											value={email}
-											onChange={(e) => setEmail(e.target.value)}
-											onBlur={() => setEmailTouched(true)}
-											aria-invalid={showEmailError || undefined}
-											aria-describedby={showEmailError ? "auth-email-error" : errorId}
-											className={INPUT}
-										/>
-										{showEmailError && (
-											<span id="auth-email-error" className={ERROR_TEXT}>
-												Enter a valid email address
-											</span>
-										)}
-									</div>
-
-									<div className="flex flex-col gap-1.5">
-										<div className="flex items-baseline justify-between">
-											<label htmlFor="auth-password" className={LABEL}>
-												Password
-											</label>
-											{mode === "signin" && (
-												<Link
-													href={email ? `/auth/reset?email=${encodeURIComponent(email.trim())}` : "/auth/reset"}
-													className="font-mono text-[10px] tracking-[0.04em] text-ink-dim underline-offset-4 hover:text-denim-accent hover:underline"
-												>
-													Forgot password?
-												</Link>
-											)}
-										</div>
-										<PasswordField
-											ref={passwordRef}
-											id="auth-password"
-											name="password"
-											autoComplete={mode === "signin" ? "current-password" : "new-password"}
-											placeholder={mode === "signup" ? "8+ characters" : "••••••••"}
-											value={password}
-											onChange={(e) => setPassword(e.target.value)}
-											aria-describedby={errorId}
-										/>
-										{strength && (
-											<PasswordStrengthMeter strength={strength} empty={password.length === 0} />
-										)}
-									</div>
-								</fieldset>
-
-								{/* Always mounted so the live region exists before the first
-								    error lands — screen readers ignore a region that appears
-								    with its content. */}
-								<p id="auth-error" role="alert" aria-live="polite" className={`${ERROR_TEXT} empty:hidden`}>
-									{error}
-								</p>
-
-								<button type="submit" disabled={busy || !canSubmit} className={`${PRIMARY} w-full self-stretch`}>
-									{busy ? copy.pending : copy.submit}
-								</button>
-							</form>
-						</>
-					)}
-				</section>
-
-				{!awaitingConfirmation && (
-					<p className={`${HELP} mt-5 text-center`}>
-						{mode === "signin" ? (
-							<>
-								No account?{" "}
-								<Link href={hrefFor("signup")} replace scroll={false} className="text-denim-accent underline-offset-4 hover:underline">
-									Create one
-								</Link>
-							</>
+						{awaitingConfirmation ? (
+							<InboxNotice
+								email={email.trim()}
+								onBack={() => {
+									setAwaitingConfirmation(false);
+									setPassword("");
+									router.replace(hrefFor("signin"));
+								}}
+							/>
 						) : (
 							<>
-								Have an account?{" "}
-								<Link href={hrefFor("signin")} replace scroll={false} className="text-denim-accent underline-offset-4 hover:underline">
-									Sign in
-								</Link>
+								{/* Both leads in one cell, the other one hidden, so the card is as
+								    tall in either mode however the lines wrap. */}
+								<div className="mt-1.5 grid">
+									{MODES.map(({ value }) => (
+										<p
+											key={value}
+											aria-hidden={value !== mode}
+											className={`${FORM_LEAD} col-start-1 row-start-1 ${value === mode ? "" : "invisible"}`}
+										>
+											{COPY[value].lead}
+										</p>
+									))}
+								</div>
+
+								<Segmented
+									className="mt-6"
+									full
+									label="Sign in or create account"
+									options={MODES}
+									value={mode}
+									disabled={busy}
+									onChange={(next) => router.replace(hrefFor(next), { scroll: false })}
+								/>
+
+								<form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-5">
+									<fieldset disabled={busy} className="flex flex-col gap-5">
+										<Field
+											label="Email"
+											error={showEmailError ? "Enter a valid email address" : undefined}
+										>
+											{(control) => (
+												<Input
+													{...control}
+													ref={emailRef}
+													name="email"
+													type="email"
+													autoComplete="email"
+													inputMode="email"
+													spellCheck={false}
+													placeholder="you@example.com"
+													value={email}
+													onChange={(e) => setEmail(e.target.value)}
+													onBlur={() => setEmailTouched(true)}
+													aria-describedby={control["aria-describedby"] ?? errorId}
+												/>
+											)}
+										</Field>
+
+										<div className="gp-field">
+											<label htmlFor="auth-password" className="gp-field-label">
+												Password
+											</label>
+											<PasswordField
+												ref={passwordRef}
+												id="auth-password"
+												name="password"
+												autoComplete={mode === "signin" ? "current-password" : "new-password"}
+												placeholder={mode === "signup" ? "8+ characters" : "••••••••"}
+												value={password}
+												onChange={(e) => setPassword(e.target.value)}
+												aria-describedby={errorId}
+											/>
+											{/* One slot, as tall as the meter with its hint, in both modes:
+											    sign-up's strength meter, sign-in's reset link. Typing or
+											    switching modes never changes the card's size. */}
+											<div className="min-h-11">
+												{strength ? (
+													<PasswordStrengthMeter strength={strength} empty={password.length === 0} />
+												) : (
+													<Link
+														href={email ? `/auth/reset?email=${encodeURIComponent(email.trim())}` : "/auth/reset"}
+														className={`${TEXT_LINK} text-(length:--gp-t-cap) font-medium`}
+													>
+														Forgot password?
+													</Link>
+												)}
+											</div>
+										</div>
+									</fieldset>
+
+									{/* Always mounted so the live region exists before the first
+									    error lands — screen readers ignore a region that appears
+									    with its content. */}
+									<p id="auth-error" role="alert" aria-live="polite" className={`${FORM_ERROR} empty:hidden`}>
+										{error}
+									</p>
+
+									<Button type="submit" loading={busy} disabled={!canSubmit} className="w-full">
+										{copy.submit}
+									</Button>
+								</form>
 							</>
 						)}
-					</p>
-				)}
+					</Panel>
+
+					{!awaitingConfirmation && (
+						<p className={`${FORM_HELP} mt-5 text-center text-(length:--gp-t-ui)`}>
+							{mode === "signin" ? (
+								<>
+									No account?{" "}
+									<Link href={hrefFor("signup")} replace scroll={false} className={TEXT_LINK}>
+										Create one
+									</Link>
+								</>
+							) : (
+								<>
+									Have an account?{" "}
+									<Link href={hrefFor("signin")} replace scroll={false} className={TEXT_LINK}>
+										Sign in
+									</Link>
+								</>
+							)}
+						</p>
+					)}
+				</div>
 			</div>
 		</div>
-	);
-}
-
-/**
- * Hairline segmented switch, latched like the topbar nav: the open tab sits
- * on `bg-surface`, sunk 1px. Links, not buttons, so a tab is deep-linkable
- * (`?mode=signup`) and survives a reload.
- */
-function ModeTabs({
-	mode,
-	hrefFor,
-	disabled,
-}: {
-	mode: AuthMode;
-	hrefFor: (target: AuthMode) => string;
-	disabled: boolean;
-}) {
-	const tabs: { value: AuthMode; label: string }[] = [
-		{ value: "signin", label: "Sign in" },
-		{ value: "signup", label: "Create account" },
-	];
-	return (
-		<nav
-			aria-label="Sign in or create account"
-			className={`flex divide-x divide-line-strong border border-line-strong ${disabled ? "pointer-events-none opacity-60" : ""}`}
-		>
-			{tabs.map(({ value, label }) => {
-				const active = value === mode;
-				return (
-					<Link
-						key={value}
-						href={hrefFor(value)}
-						replace
-						scroll={false}
-						aria-current={active ? "page" : undefined}
-						className={`flex h-(--h-control) flex-1 items-center justify-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] transition-[color,background-color] duration-(--dur-hover) ease-out focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${
-							active
-								? "bg-surface font-medium text-denim-accent"
-								: "text-ink hover:text-denim-accent"
-						}`}
-					>
-						<span className={active ? "translate-y-px" : ""}>{label}</span>
-					</Link>
-				);
-			})}
-		</nav>
 	);
 }
 
@@ -357,36 +317,29 @@ function InboxNotice({ email, onBack }: { email: string; onBack: () => void }) {
 	}
 
 	return (
-		<div className="flex flex-col gap-5">
+		<div className="mt-5 flex flex-col gap-5">
 			<div className="flex items-start gap-3">
-				<span className="flex size-9 flex-none items-center justify-center border border-line-strong text-denim-accent">
-					<MailCheck className="size-4" strokeWidth={1.5} aria-hidden="true" />
+				<span className="flex size-10 flex-none items-center justify-center rounded-gp-md bg-gp-well text-gp-ink">
+					<MailCheck className="size-5" strokeWidth={1.75} aria-hidden="true" />
 				</span>
-				<p className="font-sans text-sm text-ink-dim">
+				<p className={FORM_LEAD}>
 					We sent a confirmation link to{" "}
-					<span className="font-mono text-ink">{email}</span>. Open it to finish
+					<span className="font-semibold break-all text-gp-ink">{email}</span>. Open it to finish
 					creating your account, then sign in.
 				</p>
 			</div>
 
-			<p className={`${HELP} empty:hidden`} aria-live="polite">
+			<p className={`${FORM_HELP} empty:hidden`} aria-live="polite">
 				{note}
 			</p>
 
-			<div className="flex gap-2">
-				<button type="button" onClick={onBack} className={PRIMARY}>
-					Back to sign in
-				</button>
-				<button
-					type="button"
-					onClick={resend}
-					disabled={sending || cooldown > 0}
-					className={SECONDARY}
-				>
-					{sending ? "Sending…" : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend email"}
-				</button>
+			<div className="flex flex-wrap gap-2">
+				<Button onClick={onBack}>Back to sign in</Button>
+				<Button variant="secondary" onClick={resend} loading={sending} disabled={cooldown > 0}>
+					{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend email"}
+				</Button>
 			</div>
-			<p className={HELP}>Wrong address? Go back and try again with the right one.</p>
+			<p className={FORM_HELP}>Wrong address? Go back and try again with the right one.</p>
 		</div>
 	);
 }

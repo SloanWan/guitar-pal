@@ -1,0 +1,51 @@
+/*
+ * The status pages' TAB staff, played (an easter egg): a pressed fret number
+ * pops, and a mended string flashes as it rings. Reduced motion keeps the
+ * sound and drops the movement.
+ */
+@layer components {
+	.status-tab .status-press {
+		cursor: pointer;
+		outline: none;
+	}
+	@media (hover: hover) {
+		.status-tab .status-press:hover > text {
+			fill: var(--gp-m-500);
+		}
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.status-tab .status-pop {
+			transform-box: fill-box;
+			transform-origin: center;
+			animation: status-pop 360ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
+		}
+		.status-tab .status-mended > path {
+			animation: status-ring 900ms ease-out both;
+		}
+	}
+
+	@keyframes status-pop {
+		0% {
+			scale: 1;
+		}
+		40% {
+			scale: 1.35;
+			translate: 0 -2px;
+		}
+		100% {
+			scale: 1;
+			translate: 0 0;
+		}
+	}
+	@keyframes status-ring {
+		0% {
+			stroke: var(--gp-m-500);
+			stroke-width: 2.5;
+		}
+		100% {
+			stroke: var(--gp-edge);
+			stroke-width: 1.5;
+		}
+	}
+}

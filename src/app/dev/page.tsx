@@ -46,6 +46,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "v3 DAW-aesthetic component audit — faders, rockers, LEDs, BPM readouts.",
 	},
 	{
+		href: "/dev/fretboard-parts",
+		label: "fretboard-parts",
+		description: "The fretboard page's own pieces — chord search field, tones, step formula, strip bars, circle of fifths — in every state.",
+	},
+	{
 		href: "/dev/primitives",
 		label: "primitives",
 		description: "Candy primitives — every button, chip, segmented, switch and stepper variant and state.",

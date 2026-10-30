@@ -8,6 +8,7 @@ import type { SharedFingerpick } from "@/lib/sharedItems";
 import { createClient } from "@/lib/supabase";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import { readLastPatternId, writeLastPatternId } from "@/components/fingerpick/useFingerpickPrefs";
+import { useRecordVisit } from "@/hooks/useRecordVisit";
 
 interface Args {
 	/** A share page's snapshot: what is open, and the only thing that can be. */
@@ -95,6 +96,8 @@ export function useTabSession({ shared, user, loading, onOpen, onChanged }: Args
 	useEffect(() => {
 		if (restored && !shared) writeLastPatternId(selected.id);
 	}, [selected.id, restored, shared]);
+	// Opened, picked or restored, counts toward Home's "Most opened"; a share is someone else's.
+	useRecordVisit(user, "tab", !shared && restored ? selected.id : null);
 
 	return {
 		patterns: library.patterns,

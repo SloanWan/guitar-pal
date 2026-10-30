@@ -1,5 +1,5 @@
 import { MUTED, voicingToChordShape, type ShapeFret } from "@/lib/chordShape";
-import { getSuffixCategory, isSlashChord } from "@/lib/chordSuffixes";
+import { displayCategory } from "@/lib/chordSuffixes";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 import { TAB_STRING_COUNT } from "@/lib/chordTabSequence";
 import type { UserChordVoicing } from "@/lib/userChordVoicings";
@@ -86,6 +86,8 @@ export interface ShapeMatch {
 	/** Display category, the same one the name search reports. */
 	category: string;
 	voicing: ChordVoicing;
+	/** Where that voicing sits in the chord's list. */
+	voicingIndex: number;
 	/** The voicing's frets on the neck, low E first. */
 	frets: ShapeFret[];
 	match: ShapeMatchKind;
@@ -159,8 +161,14 @@ function matchRank(match: ShapeMatchKind): number {
 	return MAX_DIFFERENCES + 1 + Math.abs(match.semitones);
 }
 
-function categoryOf(suffix: string): string {
-	return isSlashChord(suffix) ? "Slash Chords" : (getSuffixCategory(suffix) ?? "Other");
+/** How a shape answered a typed one, in the words a player would use. */
+export function shapeMatchNote(match: ShapeMatchKind): string {
+	if (match.kind === "exact") return "same shape";
+	if (match.kind === "near") {
+		return match.differences === 1 ? "one string differs" : `${match.differences} strings differ`;
+	}
+	const frets = Math.abs(match.semitones);
+	return `same grip, ${frets} fret${frets === 1 ? "" : "s"} ${match.semitones > 0 ? "up" : "down"}`;
 }
 
 const DEFAULT_LIMIT = 8;
@@ -180,7 +188,7 @@ export function searchChordsByShape(
 	const best = new Map<string, ShapeMatch>();
 
 	for (const chord of chords) {
-		for (const voicing of chord.chord_voicings ?? []) {
+		for (const [voicingIndex, voicing] of (chord.chord_voicings ?? []).entries()) {
 			const frets = voicingFrets(voicing);
 			const match = shapeMatch(target, frets);
 			if (!match) continue;
@@ -191,8 +199,9 @@ export function searchChordsByShape(
 			best.set(key, {
 				root: chord.root,
 				suffix: chord.suffix,
-				category: categoryOf(chord.suffix),
+				category: displayCategory(chord.suffix),
 				voicing,
+				voicingIndex,
 				frets,
 				match,
 				mine: chord.mine === true,

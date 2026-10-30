@@ -35,11 +35,12 @@ export interface RelatedSlots {
 /**
  * Every slot on the board that sounds exactly `midi`, low string to high:
  * the positions to strike when that pitch is played elsewhere (the piano).
+ * `tune` is how far the whole guitar is tuned from standard.
  */
-export function slotsSounding(midi: number, window: FretWindow): SlotPosition[] {
+export function slotsSounding(midi: number, window: FretWindow, tune = 0): SlotPosition[] {
 	const slots: SlotPosition[] = [];
 	for (let string = 0; string < STRING_COUNT; string++) {
-		const fret = midi - GUITAR_OPEN_MIDI[string];
+		const fret = midi - GUITAR_OPEN_MIDI[string] - tune;
 		if (fret >= window.fromFret && fret <= window.toFret) slots.push({ string, fret });
 	}
 	return slots;

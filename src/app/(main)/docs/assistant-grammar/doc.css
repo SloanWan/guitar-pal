@@ -1,52 +1,65 @@
 /* A document page's prose, rendered from Markdown and so styled by element
-   rather than by class. Scoped under .doc-prose; nothing here leaks. Sans for
-   sentences, mono for headings and anything typed, as everywhere else. */
+   rather than by class. Scoped under .doc-prose; nothing here leaks. Figtree
+   for everything read; a monospace only for what is typed, since an ASCII tab
+   lines up only in one. */
 
-.doc-prose {
-	font-family: var(--sans);
-	font-size: 15px;
-	line-height: 1.65;
-	color: var(--ink);
+/* The article and the language switch above it share one measure, so the
+   switch ends where the lines do. `ch` is the prose font's, set here. */
+.doc-column {
+	font-family: var(--gp-f-body);
+	font-size: var(--gp-t-body);
 	max-width: 72ch;
 }
 
+.doc-prose {
+	--doc-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	line-height: var(--gp-lh-body);
+	color: var(--gp-ink-2);
+}
+
+.doc-prose h1,
+.doc-prose h2,
+.doc-prose h3,
+.doc-prose h4 {
+	font-family: var(--gp-f-disp);
+	color: var(--gp-ink);
+	text-wrap: balance;
+	scroll-margin-top: 1rem;
+}
+
 .doc-prose h1 {
-	font-family: var(--mono);
-	font-size: var(--text-h2-size);
-	font-weight: 500;
-	letter-spacing: 0.02em;
-	line-height: 1.2;
+	font-size: var(--gp-t-xl);
+	font-weight: 700;
+	letter-spacing: -0.015em;
+	line-height: var(--gp-lh-head);
 	margin: 0 0 1rem;
 }
 
+@media (min-width: 960px) {
+	.doc-prose h1 {
+		font-size: var(--gp-t-xl-lg);
+	}
+}
+
 .doc-prose h2 {
-	font-family: var(--mono);
-	font-size: 18px;
-	font-weight: 500;
-	letter-spacing: 0.02em;
-	margin: 2.5rem 0 0.75rem;
-	padding-top: 1.25rem;
-	border-top: 1px solid var(--line);
-	scroll-margin-top: 1rem;
+	font-size: 22px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	line-height: 1.25;
+	margin: 3rem 0 0.75rem;
 }
 
 .doc-prose h3 {
-	font-family: var(--mono);
-	font-size: 12px;
-	font-weight: 500;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--ink-dim);
+	font-size: 17px;
+	font-weight: 650;
+	line-height: 1.3;
 	margin: 2rem 0 0.5rem;
-	scroll-margin-top: 1rem;
 }
 
 .doc-prose h4 {
-	font-family: var(--mono);
-	font-size: 13px;
-	font-weight: 500;
+	font-size: 15px;
+	font-weight: 650;
 	margin: 1.5rem 0 0.5rem;
-	scroll-margin-top: 1rem;
 }
 
 .doc-prose p {
@@ -60,11 +73,15 @@
 }
 
 .doc-prose ul {
-	list-style: square;
+	list-style: disc;
 }
 
 .doc-prose li {
 	margin: 0.3rem 0;
+}
+
+.doc-prose li::marker {
+	color: var(--gp-ink-3);
 }
 
 .doc-prose li > p {
@@ -76,34 +93,49 @@
 }
 
 .doc-prose strong {
-	font-weight: 600;
+	font-weight: 650;
+	color: var(--gp-ink);
 }
 
 .doc-prose a {
-	color: var(--denim-accent);
+	font-weight: 600;
+	color: var(--gp-ink);
 	text-decoration: underline;
-	text-underline-offset: 2px;
+	text-decoration-color: var(--gp-edge);
+	text-underline-offset: 4px;
+	border-radius: var(--gp-r-xs);
+	transition: text-decoration-color var(--gp-d-state);
 }
 
-/* Anything typed — a sentence, a token, an example block — sits on the denim
-   tint, so what the reader can type reads apart from the prose around it. */
+.doc-prose a:hover {
+	text-decoration-color: var(--gp-ink);
+}
+
+.doc-prose a:focus-visible {
+	text-decoration-color: var(--gp-ink);
+}
+
+/* Anything typed — a sentence, a token, an example block — sits in a well,
+   so what the reader can type reads apart from the prose around it. */
 .doc-prose code {
-	font-family: var(--mono);
+	font-family: var(--doc-mono);
 	font-size: 0.88em;
+	color: var(--gp-ink);
 	white-space: pre-wrap;
-	padding: 0.08em 0.35em;
-	border: 1px solid color-mix(in oklab, var(--denim) 25%, transparent);
-	background: var(--denim-tint);
+	padding: 0.1em 0.4em;
+	border-radius: var(--gp-r-xs);
+	background: var(--gp-well);
 }
 
 .doc-prose pre {
-	font-family: var(--mono);
+	font-family: var(--doc-mono);
 	font-size: 13px;
 	line-height: 1.6;
+	color: var(--gp-ink);
 	margin: 0 0 1rem;
-	padding: 0.75rem 1rem;
-	border: 1px solid color-mix(in oklab, var(--denim) 25%, transparent);
-	background: var(--denim-tint);
+	padding: 0.85rem 1rem;
+	border-radius: var(--gp-r-m);
+	background: var(--gp-well);
 	overflow-x: auto;
 }
 
@@ -111,11 +143,12 @@
 	font-size: inherit;
 	white-space: pre;
 	padding: 0;
-	border: 0;
+	border-radius: 0;
 	background: none;
 }
 
-/* A table scrolls sideways on a narrow screen rather than pushing the page. */
+/* A table is a card, and scrolls sideways on a narrow screen rather than
+   pushing the page. */
 .doc-prose table {
 	display: block;
 	width: 100%;
@@ -123,29 +156,32 @@
 	margin: 0 0 1rem;
 	overflow-x: auto;
 	border-collapse: collapse;
+	border-radius: var(--gp-r-m);
+	background: var(--gp-card);
 	font-size: 14px;
 }
 
 .doc-prose th,
 .doc-prose td {
-	padding: 0.4rem 0.65rem;
-	border: 1px solid var(--line);
+	padding: 0.5rem 0.75rem;
 	text-align: left;
 	vertical-align: top;
 }
 
+.doc-prose tr + tr > td,
+.doc-prose thead + tbody > tr:first-child > td {
+	border-top: 1px solid var(--gp-line);
+}
+
 .doc-prose th {
-	font-family: var(--mono);
-	font-size: 11px;
-	font-weight: 500;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--ink-dim);
-	background: var(--bg-panel);
+	font-size: var(--gp-t-cap);
+	font-weight: 650;
+	color: var(--gp-ink-3);
+	white-space: nowrap;
 }
 
 .doc-prose hr {
 	margin: 2rem 0;
 	border: 0;
-	border-top: 1px solid var(--line);
+	border-top: 1px solid var(--gp-line);
 }

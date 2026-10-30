@@ -52,7 +52,7 @@ export const SCALE_INTERVALS: Readonly<Record<ScaleType, readonly number[]>> = {
  * pentatonics sit a minor third below their relative major; dorian a major
  * second above; mixolydian a perfect fifth above.
  */
-const RELATIVE_MAJOR_OFFSET: Readonly<Record<ScaleType, number>> = {
+export const RELATIVE_MAJOR_OFFSET: Readonly<Record<ScaleType, number>> = {
 	major: 0,
 	naturalMinor: 3,
 	majorPentatonic: 0,
@@ -137,15 +137,17 @@ export function pitchClassAt(string: number, fret: number): number {
 /**
  * Every position of the scale inside the window, low E first, nut to body.
  * Roots are emphasised as `root`, every other scale tone as `scaleTone`.
+ * `tune` is how far the whole guitar is tuned from standard (−1 a half step
+ * down): the scale moves up the neck by as much, and each mark names what sounds.
  */
-export function scaleMarks(spec: ScaleSpec, window: FretWindow, mode: LabelMode): FretMark[] {
+export function scaleMarks(spec: ScaleSpec, window: FretWindow, mode: LabelMode, tune = 0): FretMark[] {
 	const rootPc = scaleRootPitchClass(spec.root);
 	const inScale = new Set(scalePitchClasses(spec));
 	const label = createLabeler(spec, mode);
 	const marks: FretMark[] = [];
 	for (let string = 0; string < STRING_COUNT; string++) {
 		for (let fret = window.fromFret; fret <= window.toFret; fret++) {
-			const pc = pitchClassAt(string, fret);
+			const pc = (pitchClassAt(string, fret) + tune + 12) % 12;
 			if (!inScale.has(pc)) continue;
 			marks.push({
 				string,
@@ -156,4 +158,22 @@ export function scaleMarks(spec: ScaleSpec, window: FretWindow, mode: LabelMode)
 		}
 	}
 	return marks;
+}
+
+/**
+ * The scale as a formula of steps: semitones from each note to the next, the last one back
+ * up to the octave, so they always add to 12. Major is 2 2 1 2 2 2 1.
+ */
+export function scaleSteps(scale: ScaleType): number[] {
+	const iv = SCALE_INTERVALS[scale];
+	return iv.map((from, i) => (i + 1 < iv.length ? iv[i + 1] : 12) - from);
+}
+
+/** A step the way a method book writes it: H (half), W (whole), W+H (a step and a half), 2W. */
+export function stepName(semitones: number): string {
+	if (semitones === 1) return "H";
+	if (semitones === 2) return "W";
+	if (semitones === 3) return "W+H";
+	if (semitones === 4) return "2W";
+	return `${semitones}H`;
 }

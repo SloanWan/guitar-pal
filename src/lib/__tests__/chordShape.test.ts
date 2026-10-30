@@ -4,6 +4,7 @@ import {
 	MAX_SHAPE_START_FRET,
 	MUTED,
 	chordShapeToVoicing,
+	diagramToChordShape,
 	emptyChordShape,
 	fretInWindow,
 	stringsAtFret,
@@ -302,5 +303,13 @@ describe("suggestFingers", () => {
 		const fingers = suggestFingers(crowded);
 		expect(Math.max(...fingers)).toBeLessThanOrEqual(4);
 		expect(validateChordShape({ ...crowded, fingers }).ok).toBe(true);
+	});
+});
+
+describe("diagramToChordShape", () => {
+	it("reads a muted string back as muted and keeps the window", () => {
+		const shape = diagramToChordShape({ frets: [-1, 3, 2, 0, 1, 0], fingers: [0, 3, 2, 0, 1, 0], startFret: 1, barreFret: null });
+		expect(shape).toEqual({ startFret: 1, frets: [MUTED, 3, 2, 0, 1, 0], fingers: [0, 3, 2, 0, 1, 0], barreFret: null });
+		expect(validateChordShape(shape).ok).toBe(true);
 	});
 });

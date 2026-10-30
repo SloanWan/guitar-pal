@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { reportChordRequest, type SubmissionVerdict } from "@/lib/chordRequests";
 
 const REPORT_MESSAGES: Record<SubmissionVerdict, string> = {
@@ -15,16 +16,11 @@ type ReportState = "idle" | "sending" | { done: SubmissionVerdict } | { error: t
 interface Props {
 	query: string;
 	label?: string;
-	className?: string;
 }
 
-// "Report a missing chord" button plus its result copy. Carries no reset logic of its
-// own — callers key it on the query so a new query mounts a fresh button.
-export default function ChordRequestButton({
-	query,
-	label = "Report this chord as missing",
-	className = "rounded-md bg-denim px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-denim-dark",
-}: Props) {
+// "Report a missing chord" and what came of it. Callers key it on the query, so a
+// new query mounts a fresh button.
+export default function ChordRequestButton({ query, label = "Report this chord as missing" }: Props) {
 	const [state, setState] = useState<ReportState>("idle");
 
 	const submit = useCallback(async () => {
@@ -36,27 +32,13 @@ export default function ChordRequestButton({
 		}
 	}, [query]);
 
-	if (state === "sending") return <p className="text-sm text-ink-dim">Sending…</p>;
-
 	if (typeof state === "object" && "done" in state) {
-		return <p className="text-sm text-denim">{REPORT_MESSAGES[state.done]}</p>;
-	}
-
-	if (typeof state === "object" && "error" in state) {
-		return (
-			<button
-				type="button"
-				onClick={submit}
-				className="text-sm text-denim underline hover:text-denim-dark"
-			>
-				Couldn&apos;t send — tap to retry
-			</button>
-		);
+		return <p className="m-0 text-sm text-gp-ink-2">{REPORT_MESSAGES[state.done]}</p>;
 	}
 
 	return (
-		<button type="button" onClick={submit} className={className}>
-			{label}
-		</button>
+		<Button variant="secondary" size="xs" loading={state === "sending"} onClick={submit}>
+			{typeof state === "object" ? "Couldn't send — try again" : label}
+		</Button>
 	);
 }

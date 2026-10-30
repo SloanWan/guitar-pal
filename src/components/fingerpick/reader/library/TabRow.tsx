@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { ListRow } from "@/components/ui/list-row";
-import { Pick } from "@/components/ui/pick";
+import { PickToggle } from "@/components/ui/pick-toggle";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
 import { beatUnitGlyph, meterLabel, metersEqual, DEFAULT_METER } from "@/lib/strumMeter";
@@ -39,15 +39,7 @@ export default function TabRow({ pattern, index, selected, favourite, onSelect, 
 				selected={selected}
 				onClick={onSelect}
 			/>
-			<button
-				type="button"
-				className="lib-fav"
-				aria-pressed={favourite}
-				aria-label={`Favourite ${pattern.name}`}
-				onClick={onToggleFavourite}
-			>
-				<Pick />
-			</button>
+			<PickToggle pressed={favourite} onPressedChange={onToggleFavourite} label={`Favourite ${pattern.name}`} />
 		</div>
 	);
 }

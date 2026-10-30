@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Chapter, ChapterParse } from "@/lib/books/types";
+import { ASSISTANT_ASK_EVENT } from "@/lib/assistant/handoff";
 
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 
@@ -239,6 +240,18 @@ describe("ChapterCard", () => {
 		act(() => draft.onTaken());
 		expect(container.textContent).toContain("Used");
 		expect(container.textContent).toContain("1 used");
+	});
+
+	it("opens the assistant in Book mode on a parsed chapter, sending nothing (#406)", async () => {
+		api.getChapterParse.mockResolvedValue(READY);
+		render(READY.chapter);
+		await settle();
+		const asks: unknown[] = [];
+		const listen = (e: Event) => asks.push((e as CustomEvent).detail);
+		window.addEventListener(ASSISTANT_ASK_EVENT, listen);
+		act(() => button("Ask this chapter").click());
+		window.removeEventListener(ASSISTANT_ASK_EVENT, listen);
+		expect(asks).toEqual([{ text: "", mode: "book" }]);
 	});
 
 	it("marks the draft open in the panel", async () => {

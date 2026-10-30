@@ -4,6 +4,7 @@ import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
 import { toBars } from "@/lib/strumRhythm";
 import {
+	opensOnly,
 	HANDOFF_EVENT,
 	stashHandoff,
 	takeHandoff,
@@ -109,5 +110,13 @@ describe("one stash, two pages", () => {
 		void _kind;
 		sessionStorage.setItem(KEY, JSON.stringify(legacy));
 		expect(takeHandoff()?.kind).toBe("pattern");
+	});
+});
+
+describe("opensOnly", () => {
+	it("is an ask with nothing to send: it opens the panel in its mode (#406)", () => {
+		expect(opensOnly({ text: "", mode: "book" })).toBe(true);
+		expect(opensOnly({ text: "  ", mode: "book" })).toBe(true);
+		expect(opensOnly({ text: "what does p.61 say?", mode: "book" })).toBe(false);
 	});
 });

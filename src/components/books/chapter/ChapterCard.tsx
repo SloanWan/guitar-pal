@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, MessageCircle, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { validateFingerpickPattern } from "@/lib/tabImport";
 import { getChapterParse, parseChapter } from "@/lib/books/api";
+import { askAssistant } from "@/lib/assistant/handoff";
 import type { Chapter, ChapterExercise, ChapterParse } from "@/lib/books/types";
 import { MAX_PARSE_PAGES, TEXT_TAB_SKIPPED, issuePage } from "@/lib/books/types";
 import { chapterPages, estimateParseUsd, formatUsd, formatUsdRange } from "@/lib/books/parseCost";
@@ -21,7 +22,8 @@ import type { OpenDraft } from "@/components/books/panel/DraftPanel";
  * chapter, under its row in the chapter list. Idle chapters offer the parse
  * with what it is likely to cost; a running parse is polled; a finished one
  * shows its warnings on top — the #114 honesty rule, on screen — then the
- * drafts or the notes, one at a time.
+ * drafts or the notes, one at a time, and opens the assistant's Book mode
+ * on it (#406).
  *
  * A draft opens beside the book (#233): the page keeps one panel, where it
  * plays and from where it is edited or taken to the Tab page. The panel marks
@@ -192,6 +194,11 @@ export default function ChapterCard({
 							title={`Runs the parse again and replaces what it produced — est. ${estimate}`}
 						>
 							Re-parse · est. {estimate}
+						</Button>
+						{/* The page hands this chapter to Book mode while it is open (#203). */}
+						<Button variant="secondary" size="sm" onClick={() => askAssistant({ text: "", mode: "book" })}>
+							<MessageCircle aria-hidden />
+							Ask this chapter
 						</Button>
 					</span>
 				)}

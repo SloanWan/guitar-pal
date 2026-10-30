@@ -43,14 +43,19 @@ export function closeAssistant(): void {
 /**
  * A sentence asked from a page rather than from the panel (Home's Ask): the
  * panel opens in the mode the player chose there and is sent the sentence,
- * as if it had been typed into it.
+ * as if it had been typed into it. With no sentence (a chapter's "Ask this
+ * chapter", #406) it only opens in that mode, ready to type.
  */
 export const ASSISTANT_ASK_EVENT = "guitarpal:assistant-ask";
 
 export interface AssistantAsk {
+	/** Sent as typed; blank opens the panel without sending anything. */
 	text: string;
 	mode: AssistantMode;
 }
+
+/** Whether an ask only opens the panel in its mode. */
+export const opensOnly = (ask: AssistantAsk): boolean => ask.text.trim() === "";
 
 export function askAssistant(ask: AssistantAsk): void {
 	window.dispatchEvent(new CustomEvent<AssistantAsk>(ASSISTANT_ASK_EVENT, { detail: ask }));

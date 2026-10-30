@@ -231,7 +231,7 @@ export async function POST(request: Request): Promise<Response> {
 
 	const client = createAssistantClient(MODEL);
 	try {
-		const { step, attempt, latencyMs } = await callGeneral(client, MODEL, messages, context);
+		const { step, attempt, latencyMs } = await callGeneral(client, MODEL, messages, context, request.signal);
 		const tools = step.content.filter((b) => b.type === "tool_use").map((b) => (b.type === "tool_use" ? b.name : "")).join(",");
 		// One line per model call, with everything a cost-per-call figure needs.
 		console.info(
@@ -240,6 +240,8 @@ export async function POST(request: Request): Promise<Response> {
 		if (!guest) return json(step, 200);
 		return json({ ...step, guest: guest.quota }, 200, { "Set-Cookie": guestCookieHeader(guest.cookie) });
 	} catch (e) {
+		// The player pressed Stop: nobody is waiting for an answer, and it is not a failure.
+		if (request.signal.aborted) return error("Stopped.", 499);
 		if (e instanceof Anthropic.RateLimitError) {
 			return error("The assistant is busy. Try again in a moment.", 429);
 		}

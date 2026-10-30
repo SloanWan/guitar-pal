@@ -2,13 +2,19 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRightLeft, ArrowUpRight, BookOpen, CornerDownLeft, LogIn, Sparkles } from "lucide-react";
+import { ArrowDownUp, ArrowRightLeft, ArrowUp, ArrowUpRight, BookOpen, Lock, Rows3, Sparkles, Square, X, Zap } from "lucide-react";
 import ProposalPreview from "./strum/ProposalPreview";
 import TabProposalPreview from "./tab/TabProposalPreview";
 import TabEditCard from "./tab/TabEditCard";
 import EditIntentCard from "./strum/EditIntentCard";
 import ChordShapeCard from "./ChordShapeCard";
+import ReplyMarkdown from "./ReplyMarkdown";
+import ChatLibrary, { SaveLine } from "./ChatLibrary";
 import { Option, Options } from "./Options";
+import { Button } from "@/components/ui/button";
+import { Pick } from "@/components/ui/pick";
+import { usePress } from "@/components/ui/press";
+import { Segmented } from "@/components/ui/segmented";
 import { BLANK } from "@/lib/assistant/blank";
 import { recordPick } from "@/lib/assistant/missLog";
 import { prefersReducedMotion } from "@/lib/motion";
@@ -17,6 +23,9 @@ import { greeting, hint as introHint, playerName, inputPrompts, examples } from 
 import { pick, uiLang } from "@/lib/assistant/lang";
 import { modelDisplayName } from "@/lib/assistant/general/request";
 import { locateBookPage, locateBookPageOnArrival } from "@/lib/assistant/bookContext";
+import { modeModule, replyModule, statusLine } from "@/lib/assistant/panelView";
+import { parseReply, visibleLength } from "@/lib/assistant/markdown";
+import { hasModelReply } from "@/lib/assistant/chatLibrary";
 import type { AssistantDomain, AssistantMode } from "@/lib/assistant/types";
 import { useUser } from "@/hooks/useUser";
 import type { useAssistant } from "./useAssistant";
@@ -31,6 +40,7 @@ const MAX_INPUT_CHARS = 600;
 /** The chip's segments, in the order they sit; Book joins them while a chapter is open. */
 const MODES: readonly AssistantMode[] = ["strum", "tab", "general"];
 const MODE_LABEL: Record<AssistantMode, string> = { strum: "Strum", tab: "Tab", general: "General", book: "Book" };
+const MODE_ICON: Record<AssistantMode, typeof Sparkles> = { strum: ArrowDownUp, tab: Rows3, general: Sparkles, book: BookOpen };
 const MODE_LABEL_ZH: Record<AssistantDomain, string> = { strum: "扫弦", tab: "指弹" };
 /** How far above the bottom still counts as reading the tail, so a stray pixel does not unpin. */
 const TAIL_SLACK_PX = 24;
@@ -56,16 +66,22 @@ const TICK_MS = 24;
  */
 function StreamedText({
 	text,
+	markdown = false,
 	animate,
 	onTick,
 	onDone,
 }: {
 	text: string;
+	/** Read the text as Markdown — a model's reply; the readers' words are plain. */
+	markdown?: boolean;
 	animate: boolean;
 	onTick: () => void;
 	onDone: () => void;
 }) {
-	const [shown, setShown] = useState(() => (animate ? 0 : text.length));
+	const tree = useMemo(() => (markdown ? parseReply(text) : null), [markdown, text]);
+	// What the typing reveals: the formatted words, not the markup around them.
+	const total = tree ? visibleLength(tree) : text.length;
+	const [shown, setShown] = useState(() => (animate ? 0 : total));
 	// Held in a ref so a new callback identity cannot restart the typing.
 	const callbacks = useRef({ onTick, onDone });
 	useEffect(() => {
@@ -76,101 +92,66 @@ function StreamedText({
 		if (!animate) return;
 		// Reduced motion takes the same path with one step: the message lands
 		// whole, and everything waiting on the end of it still fires.
-		const step = prefersReducedMotion()
-			? text.length
-			: Math.max(1, Math.ceil(text.length / (REVEAL_MS / TICK_MS)));
+		const step = prefersReducedMotion() ? total : Math.max(1, Math.ceil(total / (REVEAL_MS / TICK_MS)));
 		let revealed = 0;
 		const timer = setInterval(() => {
-			revealed = Math.min(text.length, revealed + step);
+			revealed = Math.min(total, revealed + step);
 			setShown(revealed);
 			callbacks.current.onTick();
-			if (revealed >= text.length) {
+			if (revealed >= total) {
 				clearInterval(timer);
 				callbacks.current.onDone();
 			}
 		}, TICK_MS);
 		return () => clearInterval(timer);
-	}, [animate, text]);
+	}, [animate, total]);
 
-	return <>{text.slice(0, shown)}</>;
+	return tree ? <ReplyMarkdown tree={tree} shown={shown} /> : <>{text.slice(0, shown)}</>;
 }
 
-/**
- * The tail, as a shape rather than a block.
- *
- * A square stepped off the corner read as a stray pixel; this is the curved
- * fin a chat bubble actually has. Its straight edge is the bubble's own edge,
- * so the two abut exactly — which matters more than it sounds, because the
- * assistant's fill is translucent and any overlap would show as a darker seam.
- */
-function Tail({ side }: { side: "user" | "assistant" }) {
-	const isUser = side === "user";
-	return (
-		<svg
-			aria-hidden="true"
-			width="8"
-			height="10"
-			viewBox="0 0 8 10"
-			className={`absolute bottom-0 ${isUser ? "-right-2" : "-left-2 -scale-x-100"}`}
-			style={{ fill: isUser ? "var(--denim)" : "var(--denim-tint)" }}
-		>
-			<path d="M0 0C0 5.5 1.8 8.6 8 10H0Z" />
-		</svg>
-	);
+/** The assistant's mark at the foot of each thing it says: a pick in the reply's colour. */
+function Who() {
+	return <Pick className="as-who" />;
 }
 
-/**
- * One turn, as a bubble.
- *
- * The shape a chat wants — sides, fills, a tail — in this system's vocabulary
- * rather than iMessage's: square corners and a flat fill instead of a rounded
- * capsule and a shadow, with the tail the one curve in it.
- */
-function Bubble({
-	side,
-	muted,
-	children,
-}: {
-	side: "user" | "assistant";
-	/** A turn that failed — read as an aside, not as the assistant speaking. */
-	muted?: boolean;
-	children: React.ReactNode;
-}) {
-	const isUser = side === "user";
+/** The assistant, mid-sentence: a bubble of dots, in the colour of the mode it is answering in. */
+function TypingBubble({ mode }: { mode: AssistantMode }) {
 	return (
-		<div
-			className={`relative max-w-[85%] whitespace-pre-line px-2.5 py-1.5 text-sm leading-snug ${
-				isUser
-					? "bg-denim text-on-denim"
-					: `bg-denim-tint ${muted ? "text-ink-dim italic" : "text-ink"}`
-			}`}
-		>
-			{children}
-			<Tail side={side} />
+		<div className="as-row" data-m={modeModule(mode)}>
+			<Who />
+			<div className="as-stack">
+				<div className="as-bub">
+					<span className="as-typing" aria-label="Writing a reply">
+						<i />
+						<i />
+						<i />
+					</span>
+				</div>
+			</div>
 		</div>
-	);
-}
-
-/** The assistant, mid-sentence. */
-function TypingBubble() {
-	return (
-		<Bubble side="assistant">
-			<span className="flex items-center gap-1 py-0.5" aria-label="Writing a reply">
-				{[0, 0.15, 0.3].map((delay) => (
-					<span
-						key={delay}
-						aria-hidden="true"
-						className="size-[5px] bg-ink-dim animate-[typing-tick_1.05s_ease-in-out_infinite] motion-reduce:animate-none"
-						style={{ animationDelay: `${delay}s` }}
-					/>
-				))}
-			</span>
-		</Bubble>
 	);
 }
 
 /** How long the assistant appears to think before it says hello. */
 const INTRO_TYPING_MS = 1400;
+
+/** An example under the greeting: a sentence to send as it is. */
+function Example({ order, onClick, children }: { order: number; onClick: () => void; children: string }) {
+	const pressRef = usePress<HTMLButtonElement>();
+	return (
+		<button
+			ref={pressRef}
+			type="button"
+			onClick={onClick}
+			className="gp-chip gp-press gp-tone-neutral as-opt"
+			// Each one lands a beat after the last. backwards fill keeps it
+			// invisible until its own animation starts.
+			style={{ animationDelay: `${order * 0.14}s` }}
+		>
+			{children}
+		</button>
+	);
+}
 
 /**
  * An empty conversation, arriving the way a reply does.
@@ -211,45 +192,41 @@ function Intro({
 		return () => clearTimeout(timer);
 	}, [phase]);
 
+	if (phase === 0) return <TypingBubble mode={domain} />;
+
 	return (
-		<div className="flex flex-col items-start gap-2.5">
-			{phase === 0 && <TypingBubble />}
-
-			{phase >= 1 && (
-				<Bubble side="assistant">
-					<StreamedText text={hello} animate={phase === 1} onTick={onTick} onDone={() => setPhase(2)} />
-				</Bubble>
-			)}
-
-			{phase >= 2 && (
-				<Bubble side="assistant">
-					<StreamedText
-						text={aside}
-						animate={phase === 2}
-						onTick={onTick}
-						onDone={() => {
-							setPhase(3);
-							onGreeted();
-						}}
-					/>
-				</Bubble>
-			)}
-
+		<div className="as-reply" data-m={modeModule(domain)}>
+			<div className="as-row">
+				<Who />
+				<div className="as-stack">
+					{/* One group: the greeting opens it, the hint closes it with the tail. */}
+					<div className="as-bub" data-lead="" data-pos={phase >= 2 ? "top" : undefined}>
+						<StreamedText text={hello} animate={phase === 1} onTick={onTick} onDone={() => setPhase(2)} />
+					</div>
+					{phase >= 2 && (
+						<div className="as-bub" data-soft="" data-pos="end">
+							<StreamedText
+								text={aside}
+								animate={phase === 2}
+								onTick={onTick}
+								onDone={() => {
+									setPhase(3);
+									onGreeted();
+								}}
+							/>
+						</div>
+					)}
+				</div>
+			</div>
 			{phase === 3 && (
-				<div className="flex flex-wrap gap-1.5 pl-2">
-					{examples(domain).map((example, i) => (
-						<button
-							key={example}
-							type="button"
-							onClick={() => onExample(example)}
-							// Each one lands a beat after the last. backwards fill keeps
-							// it invisible until its own animation starts.
-							className="border border-line-strong px-2 py-1 font-mono text-[11px] tracking-[0.04em] text-ink-dim transition-[color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 animate-[proposal-pop_0.35s_ease-out_backwards] motion-reduce:animate-none"
-							style={{ animationDelay: `${i * 0.14}s` }}
-						>
-							{example}
-						</button>
-					))}
+				<div className="as-after">
+					<div className="as-opts">
+						{examples(domain).map((example, i) => (
+							<Example key={example} order={i} onClick={() => onExample(example)}>
+								{example}
+							</Example>
+						))}
+					</div>
 				</div>
 			)}
 		</div>
@@ -259,10 +236,15 @@ function Intro({
 export default function AssistantPanel({
 	assistant,
 	height,
+	view,
+	onView,
 }: {
 	assistant: ReturnType<typeof useAssistant>;
 	/** Set by the launcher's grip; the panel only wears it. */
 	height: number;
+	/** The thread, or the saved chats in its place (#401); the head's Chats button switches. */
+	view: "thread" | "chats";
+	onView: (view: "thread" | "chats") => void;
 }) {
 	const {
 		mode,
@@ -276,6 +258,7 @@ export default function AssistantPanel({
 		pending,
 		send,
 		readAs,
+		stop,
 		markStreamed,
 		markEditDone,
 		patterns,
@@ -284,6 +267,13 @@ export default function AssistantPanel({
 		sessionId,
 		greeted,
 		markGreeted,
+		savedChatId,
+		saveState,
+		savedLineHidden,
+		hideSavedLine,
+		saveChat,
+		openChat,
+		forgetChat,
 	} = assistant;
 	const [draft, setDraft] = useState("");
 	/**
@@ -493,8 +483,129 @@ export default function AssistantPanel({
 		});
 	}
 
+	const status = statusLine({
+		mode,
+		signedIn: user !== null,
+		guestQuota,
+		askedForGeneral,
+		nudgeTo: nudge ? nudgeTo : null,
+		bookContext,
+	});
+	const signIn = () => router.push(`/auth?redirect=${encodeURIComponent(pathname ?? "/")}`);
+
+	if (view === "chats") {
+		return (
+			<div className="as-panel" style={{ "--as-h": `${height}px` } as React.CSSProperties}>
+				<ChatLibrary
+					userId={user?.id ?? null}
+					pathname={pathname}
+					currentId={savedChatId}
+					busy={pending}
+					onOpen={async (id) => {
+						const opened = await openChat(id);
+						if (opened) onView("thread");
+						return opened;
+					}}
+					onDeleted={forgetChat}
+					onBack={() => onView("thread")}
+				/>
+			</div>
+		);
+	}
+
 	return (
-		<div className="flex flex-col" style={{ height }}>
+		<div className="as-panel" style={{ "--as-h": `${height}px` } as React.CSSProperties}>
+			{/* Which assistant the thread talks to. The player's to set; the page
+			    only proposes, once per page, when the two disagree. */}
+			<div className="as-modes">
+				<Segmented
+					label="Which assistant"
+					full
+					dense
+					value={mode}
+					disabled={pending}
+					onChange={(next) => {
+						// A locked General says why in the status line rather than refusing silently.
+						if (next === "general" && guestUsedUp) setAskedForGeneral(true);
+						else {
+							setAskedForGeneral(false);
+							setMode(next);
+						}
+					}}
+					options={modes.map((m) => {
+						const Icon = MODE_ICON[m];
+						const locked = m === "general" && guestUsedUp;
+						return {
+							value: m,
+							label: (
+								<>
+									<Icon className="as-mode-icon" aria-hidden="true" />
+									{MODE_LABEL[m]}
+									{locked && <Lock className="as-lock" aria-label="locked" />}
+								</>
+							),
+						};
+					})}
+				/>
+			</div>
+
+			<div className="as-status" aria-live="polite">
+				{status.kind === "locked" ? (
+					<>
+						<Lock aria-hidden="true" />
+						<span className="as-status-text">Today&apos;s free General turns are used ·</span>
+						<button type="button" className="as-link" onClick={signIn}>
+							Sign in to keep going
+						</button>
+					</>
+				) : status.kind === "nudge" ? (
+					<>
+						<ArrowRightLeft aria-hidden="true" />
+						<button type="button" className="as-link as-status-text" onClick={() => setMode(status.to)}>
+							{status.to === "book" ? "Ask the open chapter" : `Switch to ${MODE_LABEL[status.to]} for this page`}
+						</button>
+						<button type="button" className="as-x" aria-label="Keep this mode" onClick={dismissNudge}>
+							<X aria-hidden="true" />
+						</button>
+					</>
+				) : status.kind === "quota" ? (
+					<>
+						<span className="as-picks" aria-hidden="true">
+							{/* a pick for each turn left, an outline for each one spent */}
+							{Array.from({ length: status.limit }, (_, i) => (
+								<Pick key={i} className={i < status.left ? undefined : "as-pip-used"} />
+							))}
+						</span>
+						<span className="as-status-text">
+							<b>
+								{status.left} of {status.limit}
+							</b>{" "}
+							free today ·{" "}
+						</span>
+						<button type="button" className="as-link" onClick={signIn}>
+							Sign in for more
+						</button>
+					</>
+				) : status.kind === "book" ? (
+					<>
+						<BookOpen aria-hidden="true" />
+						<span className="as-status-text" title={`${status.title} · ${status.chapter}`}>
+							Book · <b>{status.chapter}</b>
+						</span>
+					</>
+				) : status.kind === "model" ? (
+					<>
+						<Sparkles aria-hidden="true" />
+						<span className="as-status-text">Asks a model · a reply takes a moment</span>
+					</>
+				) : (
+					<>
+						<Zap aria-hidden="true" />
+						<span className="as-status-text">Reads instantly, offline</span>
+					</>
+				)}
+			</div>
+
 			<div
 				ref={scrollRef}
 				onScroll={onScroll}
@@ -502,7 +613,7 @@ export default function AssistantPanel({
 				onTouchMove={noteUserScroll}
 				onPointerDown={noteUserScroll}
 				onKeyDown={noteUserScroll}
-				className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+				className="as-log"
 				role="log"
 				aria-live="polite"
 				aria-label="Assistant conversation"
@@ -522,270 +633,243 @@ export default function AssistantPanel({
 							onTick={followTail}
 						/>
 					) : (
-						<ul className="space-y-2.5">
-							{messages.map((message) =>
-								message.role === "user" ? (
-									<li key={message.id} className="flex justify-end">
-										<Bubble side="user">{message.text}</Bubble>
-									</li>
-								) : (
-									<li key={message.id} className="flex flex-col items-start gap-2">
-										<Bubble side="assistant" muted={message.failed}>
-											<StreamedText
-												text={message.text}
-												animate={message.streamed !== true}
-												onTick={followTail}
-												onDone={() => markStreamed(message.id)}
-											/>
-										</Bubble>
-										{/* Who wrote it. A rules reply says nothing; a model's says which model,
-										    so the player knows when to weigh the words. */}
-										{message.model && message.streamed === true && (
-											<span className="pl-2 font-mono text-[10px] tracking-[0.06em] text-ink-faint">
-												{pick(message.lang ?? "en", `Answered by ${modelDisplayName(message.model)}`, `由 ${modelDisplayName(message.model)} 回答`)}
-											</span>
-										)}
-										{/* Where a chapter answer came from (#203): the pages it cites,
-										    each a way to the page beside the book — or a plain word that
-										    it is not the book's. */}
-										{message.book && message.streamed === true && !message.failed && (
-											<span className="flex flex-wrap items-center gap-1.5 pl-2 font-mono text-[10px] tracking-[0.06em] text-ink-faint">
-												{message.book.source === "book" ? (
-													<>
-														<BookOpen className="size-3" strokeWidth={1.5} aria-hidden="true" />
-														{message.book.pages.length > 0
-															? pick(message.lang ?? "en", "From the book:", "出自书中：")
-															: pick(message.lang ?? "en", "From the book", "出自书中")}
-														{message.book.pages.map((page) => (
-															<button
-																key={page}
-																type="button"
-																onClick={() => openPage(message.book!, page)}
-																title={pick(message.lang ?? "en", "See this page of the book", "看书的这一页")}
-																className="inline-flex items-center gap-0.5 border border-line-strong px-1.5 py-0.5 tabular-nums text-ink-dim transition-colors duration-(--dur-hover) hover:border-denim hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+						<ul className="as-thread">
+							{messages.map((message) => {
+								if (message.role === "user") {
+									return (
+										<li key={message.id} className="as-you">
+											{message.text}
+										</li>
+									);
+								}
+								const lang = message.lang ?? "en";
+								// Everything but the words waits until they have been said.
+								const said = message.streamed === true;
+								const answers =
+									said && (message.templates || message.readAs || (message.askGeneral && !guestUsedUp));
+								const credits = said && (message.model || (message.book && !message.failed));
+								return (
+									<li key={message.id} className="as-reply" data-m={replyModule(message)}>
+										<div className="as-row">
+											<Who />
+											{/* One group: the words, then the card they introduce as its
+											    last piece — full width, where a grid actually fits. */}
+											<div className="as-stack">
+												<div className="as-bub" data-muted={message.failed ? "" : undefined}>
+													<StreamedText
+														text={message.text}
+														markdown={Boolean(message.model)}
+														animate={!said}
+														onTick={followTail}
+														onDone={() => markStreamed(message.id)}
+													/>
+												</div>
+												{said && message.proposal && <ProposalPreview proposal={message.proposal} />}
+												{said && message.chords && <ChordShapeCard chords={message.chords} lang={lang} />}
+												{said && message.tabProposal && <TabProposalPreview proposal={message.tabProposal} />}
+												{said && message.tabEdit && (
+													<TabEditCard
+														edit={message.tabEdit}
+														done={message.editDone === true}
+														onDone={() => markEditDone(message.id)}
+														lang={lang}
+													/>
+												)}
+												{said && message.edit && (
+													<EditIntentCard
+														edit={message.edit}
+														patterns={patterns}
+														index={index}
+														ensureIndex={ensureIndex}
+														done={message.editDone === true}
+														onDone={() => markEditDone(message.id)}
+														lang={lang}
+													/>
+												)}
+											</div>
+										</div>
+
+										{(answers || credits) && (
+											<div className="as-after">
+												{said && message.templates && (
+													<Options>
+														{message.templates.map((template, i) => (
+															<Option
+																key={template}
+																order={i}
+																tone="template"
+																onClick={() => take(template, askedBefore(message.id))}
 															>
-																p.{page}
-																<ArrowUpRight className="size-2.5" strokeWidth={1.5} aria-hidden="true" />
-															</button>
+																{template}
+															</Option>
 														))}
-													</>
-												) : (
-													pick(message.lang ?? "en", "Not from this book", "不是出自这本书")
+													</Options>
 												)}
-											</span>
-										)}
-										{/* The preview is an attachment, not speech: full width under
-										    the bubble, where a 16-cell grid actually fits — and held
-										    back until the message has finished saying what it is. */}
-										{message.proposal && message.streamed === true && (
-											<div className="w-full">
-												<ProposalPreview proposal={message.proposal} />
-											</div>
-										)}
-										{message.chords && message.streamed === true && (
-											<div className="w-full">
-												<ChordShapeCard chords={message.chords} lang={message.lang ?? "en"} />
-											</div>
-										)}
-										{message.tabProposal && message.streamed === true && (
-											<div className="w-full">
-												<TabProposalPreview proposal={message.tabProposal} />
-											</div>
-										)}
-										{message.tabEdit && message.streamed === true && (
-											<div className="w-full">
-												<TabEditCard
-													edit={message.tabEdit}
-													done={message.editDone === true}
-													onDone={() => markEditDone(message.id)}
-													lang={message.lang ?? "en"}
-												/>
-											</div>
-										)}
-										{message.templates && message.streamed === true && (
-											<Options>
-												{message.templates.map((template, i) => (
-													<Option
-														key={template}
-														order={i}
-														tone="template"
-														onClick={() => take(template, askedBefore(message.id))}
-													>
-														{template}
-													</Option>
-												))}
-											</Options>
-										)}
-										{(message.readAs || (message.askGeneral && !guestUsedUp)) && message.streamed === true && (
-											<Options>
-												{message.readAs && (
-													<Option
-														order={message.templates?.length ?? 0}
-														tone="outline"
-														onClick={() => void readAs(message.id, message.readAs!.domain, message.readAs!.text)}
-														icon={<ArrowRightLeft className="size-3" strokeWidth={1.5} aria-hidden="true" />}
-													>
-														{pick(message.lang ?? "en", `Read as ${MODE_LABEL[message.readAs.domain]} instead`, `按${MODE_LABEL_ZH[message.readAs.domain]}读`)}
-													</Option>
+												{said && (message.readAs || (message.askGeneral && !guestUsedUp)) && (
+													<Options>
+														{message.readAs && (
+															<Option
+																order={message.templates?.length ?? 0}
+																tone="outline"
+																onClick={() => void readAs(message.id, message.readAs!.domain, message.readAs!.text)}
+																icon={<ArrowRightLeft aria-hidden="true" />}
+															>
+																{pick(lang, `Read as ${MODE_LABEL[message.readAs.domain]} instead`, `按${MODE_LABEL_ZH[message.readAs.domain]}读`)}
+															</Option>
+														)}
+														{/* The rules read nothing; the model may. Same sentence, same
+														    thread, answered again by General — hidden from a guest
+														    whose free turns are gone, as the chip's segment is locked. */}
+														{message.askGeneral && !guestUsedUp && (
+															<Option
+																order={(message.templates?.length ?? 0) + (message.readAs ? 1 : 0)}
+																tone="outline"
+																onClick={() => void readAs(message.id, "general", message.askGeneral!.text)}
+																icon={<Sparkles aria-hidden="true" />}
+															>
+																{pick(lang, "Ask General instead", "改问 General")}
+															</Option>
+														)}
+													</Options>
 												)}
-												{/* The rules read nothing; the model may. Same sentence, same
-												    thread, answered again by General — hidden from a guest
-												    whose free turns are gone, as the chip's segment is locked. */}
-												{message.askGeneral && !guestUsedUp && (
-													<Option
-														order={(message.templates?.length ?? 0) + (message.readAs ? 1 : 0)}
-														tone="outline"
-														onClick={() => void readAs(message.id, "general", message.askGeneral!.text)}
-														icon={<Sparkles className="size-3" strokeWidth={1.5} aria-hidden="true" />}
-													>
-														{pick(message.lang ?? "en", "Ask General instead", "改问 General")}
-													</Option>
+												{/* Who wrote it. A rules reply says nothing; a model's says which
+												    model, so the player knows when to weigh the words. */}
+												{said && message.model && (
+													<span className="as-byline">
+														<Sparkles aria-hidden="true" />
+														{pick(lang, `Answered by ${modelDisplayName(message.model)}`, `由 ${modelDisplayName(message.model)} 回答`)}
+													</span>
 												)}
-											</Options>
-										)}
-										{message.edit && message.streamed === true && (
-											<div className="w-full">
-												<EditIntentCard
-													edit={message.edit}
-													patterns={patterns}
-													index={index}
-													ensureIndex={ensureIndex}
-													done={message.editDone === true}
-													onDone={() => markEditDone(message.id)}
-													lang={message.lang ?? "en"}
-												/>
+												{/* Where a chapter answer came from (#203): the pages it cites,
+												    each a way to the page beside the book — or a plain word that
+												    it is not the book's. */}
+												{said && message.book && !message.failed && (
+													<span className="as-byline">
+														{message.book.source === "book" ? (
+															<>
+																<BookOpen aria-hidden="true" />
+																{message.book.pages.length > 0
+																	? pick(lang, "From the book:", "出自书中：")
+																	: pick(lang, "From the book", "出自书中")}
+																{message.book.pages.map((page) => (
+																	<button
+																		key={page}
+																		type="button"
+																		onClick={() => openPage(message.book!, page)}
+																		title={pick(lang, "See this page of the book", "看书的这一页")}
+																		className="as-page"
+																	>
+																		p.{page}
+																		<ArrowUpRight aria-hidden="true" />
+																	</button>
+																))}
+															</>
+														) : (
+															pick(lang, "Not from this book", "不是出自这本书")
+														)}
+													</span>
+												)}
 											</div>
 										)}
 									</li>
-								),
-							)}
+								);
+							})}
 						</ul>
 					)}
 
 					{pending && (
-						<div className="mt-2.5 flex justify-start">
-							<TypingBubble />
+						<div style={{ marginTop: 14 }}>
+							<TypingBubble mode={mode} />
 						</div>
+					)}
+
+					{/* Once the model has answered, the thread can be kept — never without asking. */}
+					{hasModelReply(messages) && !savedLineHidden && (
+						<SaveLine
+							signedIn={user !== null}
+							saved={savedChatId !== null}
+							state={saveState}
+							pathname={pathname}
+							onSave={() => user && void saveChat(user.id)}
+							onOpenLibrary={() => onView("chats")}
+							onHide={hideSavedLine}
+						/>
 					)}
 				</div>
 			</div>
 
-			{/* Which assistant the thread talks to. The player's to set; the page
-			    only proposes, once per page, when the two disagree. */}
-			<div className="flex flex-none items-center gap-2 border-t border-line px-2 pt-2">
-				<div role="radiogroup" aria-label="Which assistant" className="flex border border-line-strong">
-					{modes.map((m, i) => {
-						const locked = m === "general" && guestUsedUp;
-						return (
-							<button
-								key={m}
-								type="button"
-								role="radio"
-								aria-checked={mode === m}
-								aria-disabled={locked || undefined}
-								disabled={pending}
-								onClick={() => (locked ? setAskedForGeneral(true) : setMode(m))}
-								onPointerEnter={locked ? () => setAskedForGeneral(true) : undefined}
-								onPointerLeave={locked ? () => setAskedForGeneral(false) : undefined}
-								onFocus={locked ? () => setAskedForGeneral(true) : undefined}
-								onBlur={locked ? () => setAskedForGeneral(false) : undefined}
-								className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 ${i > 0 ? "border-l border-line-strong" : ""} ${mode === m ? "bg-denim text-on-denim" : locked ? "text-ink-faint" : "text-ink-dim hover:text-denim"}`}
-							>
-								{MODE_LABEL[m]}
-							</button>
-						);
-					})}
-				</div>
-				{askedForGeneral && guestUsedUp ? (
-					<button
-						type="button"
-						onClick={() => router.push(`/auth?redirect=${encodeURIComponent(pathname ?? "/")}`)}
-						className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-denim-accent transition-colors duration-(--dur-hover) hover:text-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-					>
-						<LogIn className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
-						<span className="truncate">Sign in to use General</span>
-					</button>
-				) : user === null && mode === "general" && guestQuota !== null ? (
-					<span className="min-w-0 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint">
-						{`${guestQuota.used} of ${guestQuota.limit} free today`}
-					</span>
-				) : nudge && nudgeTo ? (
-					<button
-						type="button"
-						onClick={() => setMode(nudgeTo)}
-						className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-denim-accent transition-colors duration-(--dur-hover) hover:text-denim focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-					>
-						<ArrowRightLeft className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
-						<span className="truncate">
-							{nudgeTo === "book" ? "Ask the open chapter?" : `Switch to ${MODE_LABEL[nudgeTo]} for this page?`}
-						</span>
-					</button>
-				) : mode === "book" && bookContext ? (
-					<span className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] tracking-[0.04em] text-ink-faint" title={`${bookContext.bookTitle} · ${bookContext.chapterTitle}`}>
-						<BookOpen className="size-3 flex-none" strokeWidth={1.5} aria-hidden="true" />
-						<span className="truncate">{bookContext.chapterTitle}</span>
-					</span>
-				) : null}
-			</div>
 			<form
-				className="flex flex-none items-end gap-2 p-2"
+				className="as-composer"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit(draft);
 				}}
 			>
-				<textarea
-					ref={inputRef}
-					rows={1}
-					value={draft}
-					onChange={(e) => {
-						// Typing turns a recalled message into a draft of its own — and
-						// answers the prompt to switch: the mode on the chip is the one meant.
-						recallRef.current = null;
-						if (nudge && e.target.value !== "") dismissNudge();
-						setDraft(e.target.value);
-					}}
-					onKeyDown={(e) => {
-						if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.altKey && !e.metaKey) {
-							if (recall(e.key === "ArrowUp" ? -1 : 1)) e.preventDefault();
-							return;
-						}
-						if (e.key === "Tab" && !e.shiftKey && hint !== "") {
-							e.preventDefault();
-							// And kept from the popover: with the send button disabled on an
-							// empty field, this textarea is the last thing a focus trap can
-							// tab to, so the trap loops focus back to the top itself — a move
-							// preventDefault cannot undo, because it is not the browser's.
-							e.stopPropagation();
-							takeHint();
-							return;
-						}
-						// Enter sends, as everywhere else a message is typed; the line
-						// break is the shifted one.
-						if (e.key === "Enter" && !e.shiftKey) {
-							e.preventDefault();
-							submit(draft);
-						}
-					}}
-					maxLength={MAX_INPUT_CHARS}
-					placeholder={hint || (mode === "book" ? "Ask the open chapter" : mode === "tab" ? "A chord and the strings to pick, or a tab" : mode === "general" ? "Ask anything, or say what you want made" : "Chords, a rhythm, or what you want")}
-					aria-label={mode === "book" ? "Ask the open chapter" : mode === "tab" ? "Ask the tab assistant" : mode === "general" ? "Ask the assistant" : "Ask the strum assistant"}
-					aria-describedby={hint ? `${promptHintId}` : undefined}
-					className="min-w-0 flex-1 resize-none overflow-y-auto border border-line-strong bg-panel px-2 py-[0.4375rem] text-sm leading-snug text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
-				/>
-				<span id={promptHintId} className="sr-only">
-					Press Tab to use the example shown, Shift and Enter for a new line, Up and Down
-					for messages you have sent.
-				</span>
-				<button
-					type="submit"
-					// Live on an empty field while there is an example to take.
-					disabled={pending || (draft.trim() === "" && hint === "")}
-					aria-label={draft.trim() === "" && hint !== "" ? "Use the example shown" : "Send"}
-					className="flex size-(--h-control) flex-none items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent active:bg-denim-tint active:duration-(--dur-switch) disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-				>
-					<CornerDownLeft className="size-4" strokeWidth={1.5} aria-hidden="true" />
-				</button>
+				<div className="as-field">
+					<textarea
+						ref={inputRef}
+						rows={1}
+						value={draft}
+						onChange={(e) => {
+							// Typing turns a recalled message into a draft of its own — and
+							// answers the prompt to switch: the mode on the chip is the one meant.
+							recallRef.current = null;
+							if (nudge && e.target.value !== "") dismissNudge();
+							setDraft(e.target.value);
+						}}
+						onKeyDown={(e) => {
+							if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.altKey && !e.metaKey) {
+								if (recall(e.key === "ArrowUp" ? -1 : 1)) e.preventDefault();
+								return;
+							}
+							if (e.key === "Tab" && !e.shiftKey && hint !== "") {
+								e.preventDefault();
+								// And kept from the popover: with the send button disabled on an
+								// empty field, this textarea is the last thing a focus trap can
+								// tab to, so the trap loops focus back to the top itself — a move
+								// preventDefault cannot undo, because it is not the browser's.
+								e.stopPropagation();
+								takeHint();
+								return;
+							}
+							// Enter sends, as everywhere else a message is typed; the line
+							// break is the shifted one.
+							if (e.key === "Enter" && !e.shiftKey) {
+								e.preventDefault();
+								submit(draft);
+							}
+						}}
+						maxLength={MAX_INPUT_CHARS}
+						placeholder={hint || (mode === "book" ? "Ask the open chapter" : mode === "tab" ? "A chord and the strings to pick, or a tab" : mode === "general" ? "Ask anything, or say what you want made" : "Chords, a rhythm, or what you want")}
+						aria-label={mode === "book" ? "Ask the open chapter" : mode === "tab" ? "Ask the tab assistant" : mode === "general" ? "Ask the assistant" : "Ask the strum assistant"}
+						aria-describedby={hint ? `${promptHintId}` : undefined}
+						className="as-input"
+					/>
+					<span id={promptHintId} className="sr-only">
+						Press Tab to use the example shown, Shift and Enter for a new line, Up and Down
+						for messages you have sent.
+					</span>
+					{/* While a reply is on its way, the same place stops it. */}
+					{pending ? (
+						<Button type="button" size="sm" aria-label="Stop the reply" title="Stop" onClick={stop} className="as-send">
+							<Square aria-hidden="true" className="as-stop" />
+						</Button>
+					) : (
+						<Button
+							type="submit"
+							size="sm"
+							// Live on an empty field while there is an example to take.
+							disabled={draft.trim() === "" && hint === ""}
+							aria-label={draft.trim() === "" && hint !== "" ? "Use the example shown" : "Send"}
+							className="as-send"
+						>
+							<ArrowUp aria-hidden="true" />
+						</Button>
+					)}
+				</div>
+				<div className="as-hint" aria-hidden="true">
+					<span className="as-kbd">Tab</span> takes the example · <span className="as-kbd">↑</span> what you sent
+				</div>
 			</form>
 		</div>
 	);

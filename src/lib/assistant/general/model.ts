@@ -40,9 +40,11 @@ export async function callGeneral(
 	model: string,
 	messages: readonly Anthropic.MessageParam[],
 	context: GeneralContext,
+	/** The player's stop, through the route: the vendor call is dropped with it. */
+	signal?: AbortSignal,
 ): Promise<CallGeneralResult> {
 	const started = Date.now();
-	const response = await client.messages.create(buildGeneralRequest(model, messages, context));
+	const response = await client.messages.create(buildGeneralRequest(model, messages, context), signal ? { signal } : undefined);
 	const step: ModelStep =
 		response.stop_reason === "refusal"
 			? { content: [{ type: "text", text: REFUSAL_REPLY, citations: null }], stopReason: "refusal", model: response.model }

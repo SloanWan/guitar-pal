@@ -345,6 +345,29 @@ COMMENT ON COLUMN public.shared_items.expires_at IS 'After this the link no long
 
 
 --
+-- Name: user_assistant_chats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_assistant_chats (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid DEFAULT auth.uid() NOT NULL,
+    title text NOT NULL,
+    messages jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT user_assistant_chats_messages_check CHECK ((jsonb_typeof(messages) = 'array'::text)),
+    CONSTRAINT user_assistant_chats_title_check CHECK (((char_length(title) >= 1) AND (char_length(title) <= 120)))
+);
+
+
+--
+-- Name: TABLE user_assistant_chats; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.user_assistant_chats IS 'General assistant conversations a player saved; the transcript as jsonb, updated as the conversation goes on.';
+
+
+--
 -- Name: user_books; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -751,6 +774,14 @@ ALTER TABLE ONLY public.shared_items
 
 
 --
+-- Name: user_assistant_chats user_assistant_chats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_assistant_chats
+    ADD CONSTRAINT user_assistant_chats_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: user_books user_books_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -864,6 +895,13 @@ CREATE INDEX shared_items_expires_idx ON public.shared_items USING btree (expire
 --
 
 CREATE INDEX shared_items_owner_idx ON public.shared_items USING btree (owner_id, created_at DESC);
+
+
+--
+-- Name: user_assistant_chats_user_updated_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX user_assistant_chats_user_updated_idx ON public.user_assistant_chats USING btree (user_id, updated_at DESC);
 
 
 --
@@ -1020,6 +1058,14 @@ ALTER TABLE ONLY public.routines
 
 ALTER TABLE ONLY public.shared_items
     ADD CONSTRAINT shared_items_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_assistant_chats user_assistant_chats_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_assistant_chats
+    ADD CONSTRAINT user_assistant_chats_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 
 --
@@ -1266,6 +1312,34 @@ CREATE POLICY "book_service owns the rows" ON public.book_pages TO book_service 
 
 
 --
+-- Name: user_assistant_chats own assistant chats are deletable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own assistant chats are deletable" ON public.user_assistant_chats FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
+-- Name: user_assistant_chats own assistant chats are insertable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own assistant chats are insertable" ON public.user_assistant_chats FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_assistant_chats own assistant chats are readable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own assistant chats are readable" ON public.user_assistant_chats FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
+-- Name: user_assistant_chats own assistant chats are updatable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own assistant chats are updatable" ON public.user_assistant_chats FOR UPDATE USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
+
+
+--
 -- Name: user_books book_service owns the rows; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1402,6 +1476,12 @@ ALTER TABLE public.shared_items ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "update own progressions" ON public.user_pattern_progressions FOR UPDATE TO authenticated USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
 
+
+--
+-- Name: user_assistant_chats; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_assistant_chats ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: user_books; Type: ROW SECURITY; Schema: public; Owner: -
@@ -1649,6 +1729,15 @@ GRANT ALL ON TABLE public.routines TO service_role;
 GRANT ALL ON TABLE public.shared_items TO anon;
 GRANT ALL ON TABLE public.shared_items TO authenticated;
 GRANT ALL ON TABLE public.shared_items TO service_role;
+
+
+--
+-- Name: TABLE user_assistant_chats; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.user_assistant_chats TO anon;
+GRANT ALL ON TABLE public.user_assistant_chats TO authenticated;
+GRANT ALL ON TABLE public.user_assistant_chats TO service_role;
 
 
 --

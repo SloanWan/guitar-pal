@@ -194,3 +194,22 @@ test("the chord search offers the tab's chords and hears a match without taking 
 	await page.getByRole("button", { name: "C", exact: true }).click();
 	await expect(page.getByRole("button", { name: "C at bar 1 slot 3" })).toBeVisible();
 });
+
+test("a new shape for the held chord asks before throwing an edit away, and applies", async ({ page }) => {
+	await page.goto("/fingerpick/edit/new");
+	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
+	const inspector = page.getByRole("complementary", { name: "Inspector" });
+	await inspector.getByRole("combobox", { name: "Chord at bar 1, slot 1" }).fill("C");
+	await page.getByRole("option", { name: /^C\b/ }).first().click();
+	await inspector.getByRole("button", { name: "New shape" }).click();
+
+	const dialog = page.getByRole("dialog", { name: "C major" });
+	await expect(dialog.getByRole("button", { name: "Hear it" })).toBeEnabled();
+	await dialog.getByLabel("Name for this shape").fill("open");
+	await dialog.getByRole("button", { name: "Close" }).click();
+	await expect(dialog.getByText("Discard changes?")).toBeVisible();
+	await dialog.getByRole("button", { name: "Keep" }).click();
+	await dialog.getByRole("button", { name: "Apply" }).click();
+	await expect(dialog).toBeHidden();
+	await expect(page.getByRole("button", { name: "C at bar 1 slot 1" })).toBeVisible();
+});

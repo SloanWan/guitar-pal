@@ -18,7 +18,7 @@ import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
  * the shape corpus typed frets are matched against, and the shape under a slot as
  * the frets each string plays (index 0 = high e, "/" for a string it leaves out) —
  * the dock's faint hints. All of it loads with the editor and only with it.
- * `hear` plays a shape; `hearChord` finds a chord's shape (loading it if need be)
+ * `hear` plays a shape (handed back as `hearShape`); `hearChord` finds a chord's shape (loading it if need be)
  * and plays that. The result keeps its identity while nothing in it changes, so
  * the bar blocks it is handed to stay memoized.
  */
@@ -84,8 +84,19 @@ export function useChordTools(
 	const used = useMemo(() => chordsUsed(pattern.measures), [pattern.measures]);
 
 	return useMemo(
-		() => ({ chordsInEffect, chordsUsed: used, voicingsFor, voicingAt, searchIndex, shapeCorpus, saveVoicing, hintsAt, hearChord }),
-		[chordsInEffect, used, voicingsFor, voicingAt, searchIndex, shapeCorpus, saveVoicing, hintsAt, hearChord],
+		() => ({
+			chordsInEffect,
+			chordsUsed: used,
+			voicingsFor,
+			voicingAt,
+			searchIndex,
+			shapeCorpus,
+			saveVoicing,
+			hintsAt,
+			hearChord,
+			hearShape: hear,
+		}),
+		[chordsInEffect, used, voicingsFor, voicingAt, searchIndex, shapeCorpus, saveVoicing, hintsAt, hearChord, hear],
 	);
 }
 

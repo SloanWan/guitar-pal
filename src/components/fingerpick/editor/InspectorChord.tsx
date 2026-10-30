@@ -271,6 +271,8 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 					onClose={() => setShapeCreate(null)}
 					onApply={shapeMade}
 					matchingBarCount={1}
+					onHear={(voicing) => tools.hearShape(chordFretHints(voicing))}
+					module="tab"
 				/>
 			)}
 		</>

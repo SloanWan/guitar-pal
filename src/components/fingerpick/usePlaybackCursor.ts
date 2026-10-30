@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	computeMeasureBoundaries,
+	computeSlotStarts,
 	findSlotStartTime,
 	fingerpickPatternToScheduleEvents,
 	getProgressAtTime,
+	getTotalPatternDuration,
 	type MeasureBoundary,
 	type ScheduleEvent,
+	type SlotStart,
 } from "@/lib/fingerpickScheduler";
 import { mapOriginToExpandedIndex, type ExpandedPattern } from "@/lib/fingerpickRepeats";
+import { leadInX } from "@/lib/playheadLeadIn";
 import type { MeasureRow } from "./fingerpickLayout";
 
 // Higher = tighter/snappier following, lower = smoother/more lag.
@@ -118,12 +122,21 @@ function showMeasure(highlight: HTMLElement, box: MeasureBox): void {
 	highlight.style.display = "block";
 }
 
+/** The expanded timeline's slots, read by measure, for a measure's opening silence. */
+interface MeasureTimes {
+	slots: SlotStart[];
+	end: number;
+}
+
+const slotKey = (measureIndex: number, slotIndex: number) => `${measureIndex}:${slotIndex}`;
+
 /**
  * The playhead and measure highlight over the tab, driven by the audio engine's
  * progress. All cursor updates go through direct DOM mutation — no React
  * setState — from a RAF loop that runs only while playing. Between notes the
- * cursor interpolates by time; a rest at a measure's start drifts from the
- * measure's left edge; a row change scrolls the new row into view.
+ * cursor interpolates by time; a measure's opening silence — rests drawn or
+ * slots left empty — is walked by time (`leadInX`); a row change scrolls the new
+ * row into view.
  */
 export function usePlaybackCursor({
 	tabViewerRef,
@@ -151,6 +164,10 @@ export function usePlaybackCursor({
 	// the note-to-note interpolation — and the measures' start times (rest-at-start).
 	const scheduleEventsRef = useRef<ScheduleEvent[]>([]);
 	const measureBoundariesRef = useRef<MeasureBoundary[]>([]);
+	// Every slot's start by expanded measure, and when each struck slot first sounds,
+	// so a measure that opens with silence is walked by time, not by events.
+	const measureTimesRef = useRef<MeasureTimes[]>([]);
+	const soundsAtRef = useRef<Map<string, number>>(new Map());
 	// expanded-measure-index -> rendered-measure-index, kept in sync with the events
 	// so the RAF cursor and click-to-seek can bridge the two index spaces.
 	const originMeasureIndicesRef = useRef<number[]>([]);
@@ -171,8 +188,24 @@ export function usePlaybackCursor({
 	}, []);
 
 	useEffect(() => {
-		scheduleEventsRef.current = fingerpickPatternToScheduleEvents(expanded.pattern, bpm);
-		measureBoundariesRef.current = computeMeasureBoundaries(expanded.pattern, bpm);
+		const events = fingerpickPatternToScheduleEvents(expanded.pattern, bpm);
+		const boundaries = computeMeasureBoundaries(expanded.pattern, bpm);
+		const total = getTotalPatternDuration(expanded.pattern, bpm);
+		const measureTimes: MeasureTimes[] = boundaries.map((_, i) => ({
+			slots: [],
+			end: boundaries[i + 1]?.startTime ?? total,
+		}));
+		for (const start of computeSlotStarts(expanded.pattern, bpm)) measureTimes[start.measureIndex]?.slots.push(start);
+		const soundsAt = new Map<string, number>();
+		for (const e of events) {
+			const key = slotKey(e.measureIndex, e.slotIndex);
+			const at = soundsAt.get(key);
+			if (at === undefined || e.time < at) soundsAt.set(key, e.time);
+		}
+		scheduleEventsRef.current = events;
+		measureBoundariesRef.current = boundaries;
+		measureTimesRef.current = measureTimes;
+		soundsAtRef.current = soundsAt;
 		originMeasureIndicesRef.current = expanded.originMeasureIndices;
 	}, [expanded, bpm]);
 
@@ -303,20 +336,30 @@ export function usePlaybackCursor({
 			const measureRight = box.left + box.width;
 			const noteEl = noteAt(container, measureIndex, slotIndex);
 			let targetX = box.left;
-			if (!noteEl) {
-				// A rest (no element): drift from the measure's left edge to its first
-				// note over the rest's duration, or sit at the edge with none to reach.
-				const first = events.find((e) => e.measureIndex === expandedMeasureIndex);
-				const firstEl = first ? noteAt(container, measureIndex, first.slotIndex) : null;
-				if (first && firstEl) {
-					const start =
-						measureBoundariesRef.current.find((b) => b.measureIndex === expandedMeasureIndex)?.startTime ?? first.time;
-					const rest = first.time - start;
-					const frac = rest > 0 ? Math.max(0, Math.min(1, (elapsed - start) / rest)) : 0;
-					targetX = box.left + (noteX(firstEl, containerRect) - box.left) * frac;
-				} else {
-					prevTimestampRef.current = 0;
-				}
+			const soundsAt = soundsAtRef.current;
+			const times = measureTimesRef.current[expandedMeasureIndex];
+			if (!soundsAt.has(slotKey(expandedMeasureIndex, slotIndex)) && times) {
+				// Nothing struck yet in this measure (the position is the measure's own
+				// start): walk its opening silence by time — a drawn rest has a place on
+				// the stave but no event, so it must not hold the playhead still.
+				targetX = leadInX(
+					{
+						slots: times.slots.map((slot) => {
+							const el = noteAt(container, measureIndex, slot.slotIndex);
+							return {
+								start: slot.time,
+								x: el ? noteX(el, containerRect) : null,
+								soundsAt: soundsAt.get(slotKey(expandedMeasureIndex, slot.slotIndex)) ?? null,
+							};
+						}),
+						end: times.end,
+						left: box.left,
+						right: measureRight,
+					},
+					elapsed,
+				);
+			} else if (!noteEl) {
+				prevTimestampRef.current = 0;
 			} else {
 				const x0 = noteX(noteEl, containerRect);
 				targetX = x0;

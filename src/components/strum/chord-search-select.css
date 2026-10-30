@@ -1,0 +1,141 @@
+/* =====================================================================================
+   ChordSearchSelect, skin="candy": the field reads as the chord it holds (bold, sized by
+   its host through --csel-size), a well only while it is being typed into, and the
+   matches in a popover under it. The v3 look (no skin) is untouched until its last
+   host migrates.
+   ===================================================================================== */
+@layer components {
+	.csel {
+		--csel-size: 15px;
+		position: relative;
+		display: inline-flex;
+		min-width: 0;
+	}
+	/* A compact text field (the Input's well and hairline), sized by its host: the chord it
+	   holds is the field's text, bold, at --csel-size. */
+	.csel-field {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: calc(var(--csel-size) + 21px);
+		padding: 0 4px 0 10px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-field);
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+		color: var(--gp-ink);
+		transition: box-shadow var(--gp-d-state) var(--gp-ease-state);
+	}
+	@media (hover: hover) {
+		.csel-field:hover {
+			box-shadow: inset 0 0 0 1px var(--gp-edge);
+		}
+	}
+	.csel-field:focus-within {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 1px;
+	}
+	.csel-field[data-state="unknown"] {
+		color: var(--gp-bad);
+	}
+	.csel-icon {
+		flex: none;
+		width: 15px;
+		height: 15px;
+		color: var(--gp-ink-3);
+	}
+	/* One width whatever it holds, so picking or typing a chord never moves what sits beside
+	   the field; a name too long for it trails off. */
+	.csel-input {
+		width: 6.5em;
+		min-width: 0;
+		border: 0;
+		background: transparent;
+		font: 700 var(--csel-size) / 1 var(--gp-f-body);
+		letter-spacing: -0.01em;
+		color: inherit;
+		text-overflow: ellipsis;
+		outline: none;
+	}
+	/* The hint is a size under body text, whatever size the chord is drawn at. */
+	.csel-input::placeholder {
+		color: var(--gp-ink-3);
+		font-size: 13px;
+		font-weight: 500;
+		letter-spacing: 0;
+	}
+	.csel-clear {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-3);
+		cursor: pointer;
+	}
+	.csel-clear[data-away] {
+		visibility: hidden;
+	}
+	.csel-clear:hover {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+	}
+	.csel-list {
+		position: absolute;
+		top: calc(100% + 6px);
+		left: 0;
+		z-index: 50;
+		width: 240px;
+		max-height: 264px;
+		overflow-y: auto;
+		padding: 6px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-sheet);
+		box-shadow: var(--gp-shadow-pop);
+		list-style: none;
+		margin: 0;
+	}
+	.csel-list[data-inline] {
+		position: static;
+		margin-top: 6px;
+	}
+	.csel-opt {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		min-height: 40px;
+		padding: 0 10px;
+		border-radius: var(--gp-r-s);
+		text-align: left;
+		cursor: pointer;
+	}
+	.csel-opt[aria-selected="true"] {
+		background: var(--gp-m-100);
+	}
+	.csel-name {
+		font: 700 14.5px/1 var(--gp-f-body);
+		color: var(--gp-ink);
+	}
+	.csel-cat {
+		margin-left: auto;
+		font: 550 12px/1 var(--gp-f-body);
+		color: var(--gp-ink-3);
+	}
+	.csel-note {
+		padding: 12px 8px;
+		text-align: center;
+		font: 500 13px/1.3 var(--gp-f-body);
+		color: var(--gp-ink-3);
+	}
+	.csel-create {
+		margin-top: 4px;
+		box-shadow: 0 -1px 0 var(--gp-line);
+		border-radius: 0 0 var(--gp-r-s) var(--gp-r-s);
+		font: 650 13.5px/1.2 var(--gp-f-body);
+		color: var(--gp-m-700);
+	}
+	.csel-create:hover {
+		background: var(--gp-m-100);
+	}
+}

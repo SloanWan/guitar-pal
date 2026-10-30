@@ -94,6 +94,7 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 						index={tools.searchIndex}
 						shapeCorpus={tools.shapeCorpus}
 						inlineList
+						skin="candy"
 						ariaLabel={`Chord for the ${slots.length} selected slots`}
 					/>
 					{chordHere && (
@@ -118,6 +119,7 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 							index={tools.searchIndex}
 							shapeCorpus={tools.shapeCorpus}
 							inlineList
+							skin="candy"
 							ariaLabel={`Chord at bar ${single.measureIndex + 1}, slot ${single.slotIndex + 1}`}
 						/>
 						{!ownChord && chordHere && (

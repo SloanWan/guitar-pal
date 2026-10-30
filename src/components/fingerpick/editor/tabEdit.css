@@ -1179,6 +1179,75 @@
 	.te-irow > .gp-seg {
 		flex: 1;
 	}
+	/* The chord search on Candy at the old editor's size: an 11px field the width of a
+	   chord name, its matches in flow under it (the inspector and the popover scroll). */
+	.te-irow:has(.csel) {
+		align-items: flex-start;
+	}
+	.te-irow .csel {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	.te-irow .csel-field {
+		height: 26px;
+		gap: 5px;
+		padding: 0 3px 0 8px;
+		border-radius: var(--gp-r-s);
+	}
+	/* A ring in the module's colour, as the old field's border turned: the page's 2px
+	   ink ring is heavier than a field this small. */
+	.te-irow .csel-field:focus-within {
+		outline: none;
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+	}
+	.te-irow .csel-icon {
+		width: 11px;
+		height: 11px;
+	}
+	.te-irow .csel-input {
+		width: 96px;
+		font: 650 11px / 1 var(--gp-f-body);
+		letter-spacing: 0;
+	}
+	.te-irow .csel-input::placeholder {
+		font-size: 11px;
+		font-weight: 400;
+	}
+	.te-irow .csel-clear {
+		width: 18px;
+		height: 18px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-irow .csel-clear svg {
+		width: 10px;
+		height: 10px;
+	}
+	.te-irow .csel-list {
+		width: 208px;
+		max-height: 176px;
+		margin-top: 4px;
+		padding: 4px;
+		border-radius: var(--gp-r-s);
+	}
+	.te-irow .csel-opt {
+		min-height: 28px;
+		padding: 0 8px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-irow .csel-name {
+		font-size: 11px;
+		font-weight: 650;
+	}
+	.te-irow .csel-cat {
+		font-size: 9px;
+	}
+	.te-irow .csel-note {
+		padding: 8px;
+		font-size: 10px;
+	}
+	.te-irow .csel-create {
+		font-size: 11px;
+	}
 	.te-indent {
 		padding-left: 56px;
 	}

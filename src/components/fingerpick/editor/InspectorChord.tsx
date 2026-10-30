@@ -18,10 +18,12 @@ import { loadVoicings, peekVoicings } from "@/lib/chordVoicingCache";
 import { parseRecentChords, pushRecentChord, RECENT_CHORDS_KEY, sameChord } from "@/lib/recentChords";
 import { voicingToDiagramShape, type ChordVoicing } from "@/lib/chordVoicing";
 import { parseTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
+import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 import { chordShapeToVoicing } from "@/lib/chordShape";
 import type { UserChordVoicing } from "@/lib/userChordVoicings";
-import ChordDiagram from "@/components/chords/ChordDiagram";
+import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import ChordShapeModal from "@/components/chords/ChordShapeModal";
+import MusicalText from "@/components/MusicalText";
 import ChordSearchSelect, { type ChordSuggestionRow } from "@/components/strum/ChordSearchSelect";
 import ChordShapeStrip from "@/components/fingerpick/ChordShapeStrip";
 import { useStoredState, type StoredCodec } from "@/components/useStoredState";
@@ -199,10 +201,13 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 					)}
 					{chordHere && voicing && (
 						<div className="te-chordbox">
-							<div className="te-chordshape">
-								<ChordDiagram def={voicingToDiagramShape(voicing)} label={chordSymbolLabel(chordHere)} size="compact" />
-							</div>
+							<span className="te-chordshape" role="img" aria-label={`${chordSymbolLabel(chordHere)} shape`}>
+								<ChordDiagramSVG {...voicingToDiagramShape(voicing)} rootMidi={rootPitchClass(chordHere.root)} rootTone size="compact" />
+							</span>
 							<div className="te-chordside">
+								<span className="te-chordname gp-title">
+									<MusicalText text={chordSymbolLabel(chordHere)} />
+								</span>
 								<div className="te-chordstep">
 									<button type="button" className="pb-icon" aria-label="Previous shape" disabled={voicings.length < 2} onClick={() => stepShape(-1)}>
 										<ChevronLeft aria-hidden />

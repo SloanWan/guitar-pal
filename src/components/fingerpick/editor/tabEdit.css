@@ -654,7 +654,10 @@
 	}
 	/* The chord shape's fret, offered in an empty cell; "/" for a string it leaves out. */
 	.te-mb-cell[data-hint=""] {
-		color: var(--gp-m-700);
+		background: var(--gp-m-100);
+		outline: 1.5px dashed var(--gp-m-300);
+		outline-offset: -1.5px;
+		color: var(--gp-m-500);
 		font-weight: 750;
 	}
 	.te-mb-cell[data-hint="off"] {
@@ -1362,19 +1365,29 @@
 		border-radius: var(--gp-r-m);
 		background: var(--gp-well);
 	}
-	/* A fixed footprint whatever the label says, so nothing beside it moves while stepping. */
+	/* The chord page's diagram (the root square, in the module's colour), at a fixed width. */
 	.te-chordshape {
-		display: grid;
+		display: block;
 		flex: none;
-		place-items: center;
-		width: 108px;
-		height: 132px;
+		width: 112px;
+	}
+	.te-chordshape svg {
+		display: block;
+		width: 100%;
+		height: auto;
 	}
 	.te-chordside {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 6px;
 		min-width: 0;
+	}
+	.te-chordname {
+		padding-left: 6px;
+		font-size: 20px;
+		font-weight: 800;
+		line-height: 1.1;
+		color: var(--gp-ink);
 	}
 	.te-chordstep {
 		display: flex;

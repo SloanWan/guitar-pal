@@ -225,7 +225,12 @@
 	.csel-nm .csel-cat {
 		margin-left: 0;
 	}
+	/* The tab-wise strip draws in the v3 ink names; here they are the Candy ramp. */
 	.csel-shape {
+		--ink: var(--gp-ink);
+		--ink-dim: var(--gp-ink-3);
+		--ink-faint: var(--gp-ink-3);
+		--line-strong: var(--gp-edge);
 		display: grid;
 		flex: none;
 		place-items: center;

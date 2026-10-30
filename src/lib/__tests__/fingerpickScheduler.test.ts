@@ -1797,7 +1797,7 @@ function makeDeps(
 		ctx: ctx as unknown as AudioContext,
 		target,
 		voices,
-		allSources: new Set<AudioBufferSourceNode>(),
+		allSources: new Set<AudioScheduledSourceNode>(),
 		resolveNoteData:
 			opts.resolveNoteData ??
 			((midi) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) })),
@@ -2676,6 +2676,17 @@ describe("scheduleFingerpickNote — the rest of the registry", () => {
 		expect(ctx._oscillators).toHaveLength(1);
 		expect(ctx._oscillators[0].frequency.value).toBe(80);
 		expect(ctx._gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(TEST_GAINS.bodyTap * TEST_GAINS.accentMultiplier, 9), 1.002);
+	});
+
+	it("a stop reaches every node a slap or a body tap scheduled ahead, the sines under them included", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map());
+		scheduleFingerpickNote(deps, noteEvent({ muted: true, slapNoise: true, slapStrings: [5] }), 5);
+		scheduleFingerpickNote(deps, noteEvent({ muted: true, percussion: { kind: "bodyTap" } }), 6);
+		expect(deps.allSources.size).toBe(ctx._sources.length + ctx._oscillators.length);
+		_shutdownEngine(new Map(), [], deps.allSources);
+		for (const node of [...ctx._sources, ...ctx._oscillators]) expect(node.stop).toHaveBeenLastCalledWith();
+		expect(deps.allSources.size).toBe(0);
 	});
 
 	it("without a noise buffer a scrape and a body tap are silent, not errors", () => {

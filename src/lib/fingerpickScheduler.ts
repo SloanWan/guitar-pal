@@ -1259,7 +1259,8 @@ export interface FingerpickNoteSchedulerDeps {
 	ctx: AudioContext;
 	target: AudioNode;
 	voices: Map<number, SlideActiveVoice>;
-	allSources: Set<AudioBufferSourceNode>;
+	/** Every node this pass started, held until it ends so a pause or stop can silence it. */
+	allSources: Set<AudioScheduledSourceNode>;
 	resolveNoteData: NoteDataResolver;
 	gains: NoteGains;
 	envelope: NoteEnvelope;
@@ -1272,6 +1273,17 @@ export interface FingerpickNoteSchedulerDeps {
 	noiseBuffer?: AudioBuffer | null;
 	/** How a slap is voiced; `DEFAULT_SLAP_PARAMS` when absent. */
 	slapParams?: SlapParams;
+}
+
+/**
+ * Keep a node in `allSources` until it ends. A pass is scheduled whole, so a node
+ * left out of the set would still sound at its time after a pause or stop.
+ */
+function trackSource(allSources: Set<AudioScheduledSourceNode>, node: AudioScheduledSourceNode): void {
+	allSources.add(node);
+	node.onended = () => {
+		allSources.delete(node);
+	};
 }
 
 /**
@@ -1306,6 +1318,7 @@ export function scheduleNoiseEvent(deps: FingerpickNoteSchedulerDeps, event: Sch
 		tone.start(when);
 		stopTime = when + BODY_TAP_DECAY_TC * 5;
 		tone.stop(stopTime);
+		trackSource(allSources, tone);
 	} else {
 		const duration = Math.max(event.duration, 0.05);
 		filter.type = "bandpass";
@@ -1319,10 +1332,7 @@ export function scheduleNoiseEvent(deps: FingerpickNoteSchedulerDeps, event: Sch
 	source.connect(filter).connect(gainNode).connect(target);
 	source.start(when);
 	source.stop(stopTime);
-	allSources.add(source);
-	source.onended = () => {
-		allSources.delete(source);
-	};
+	trackSource(allSources, source);
 }
 
 /**
@@ -1337,12 +1347,6 @@ export function scheduleSlapNoise(deps: FingerpickNoteSchedulerDeps, event: Sche
 	const p = deps.slapParams ?? DEFAULT_SLAP_PARAMS;
 	const accent = event.percussion?.accent ? gains.accentMultiplier : 1;
 	const bass = (event.slapStrings ?? []).some((i) => i >= SLAP_BASS_FROM_STRING);
-	const track = (source: AudioBufferSourceNode) => {
-		allSources.add(source);
-		source.onended = () => {
-			allSources.delete(source);
-		};
-	};
 
 	// The clack: strings on the frets.
 	const clack = ctx.createBufferSource();
@@ -1358,7 +1362,7 @@ export function scheduleSlapNoise(deps: FingerpickNoteSchedulerDeps, event: Sche
 	clack.connect(clackFilter).connect(clackGain).connect(target);
 	clack.start(when);
 	clack.stop(when + p.clackTc * 6);
-	track(clack);
+	trackSource(allSources, clack);
 
 	// The thud: the hand on the body, with a sine dropping under it.
 	const thud = ctx.createBufferSource();
@@ -1384,7 +1388,9 @@ export function scheduleSlapNoise(deps: FingerpickNoteSchedulerDeps, event: Sche
 	thud.stop(thudStop);
 	tone.start(when);
 	tone.stop(thudStop);
-	track(thud);
+	trackSource(allSources, thud);
+	// The sine is the thump heard as a heartbeat if a pause leaves it scheduled.
+	trackSource(allSources, tone);
 }
 
 /**

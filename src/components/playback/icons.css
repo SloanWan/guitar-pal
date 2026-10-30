@@ -5,6 +5,7 @@
  *   edit   the pencil tilts as if about to write
  *   share  the three nodes pop, left one first
  *   delete the can wiggles and its lid lifts
+ *   close  the cross turns a quarter (the ⌘K chord palette)
  * Runs on :hover and :focus-visible, never on a disabled button. Reduced-motion
  * users get only the fill. Layers on top of the base icon rules: every rule
  * here outranks those by specificity, so import order does not matter.
@@ -81,6 +82,15 @@
 		}
 		:is(.st-icon, .pb-icon)[data-anim="share"]:not(:disabled):is(:hover, :focus-visible) svg circle:is(:nth-of-type(1), :nth-of-type(3)) {
 			animation-delay: 170ms;
+		}
+
+		/* Close: the cross turns a quarter and holds it while hovered. */
+		:is(.st-icon, .pb-icon)[data-anim="close"] svg {
+			transition: rotate 220ms var(--gp-ease-state);
+		}
+		:is(.st-icon, .pb-icon)[data-anim="close"]:not(:disabled):is(:hover, :focus-visible) svg {
+			rotate: 90deg;
+			transition: rotate 380ms var(--gp-spring-pop);
 		}
 
 		/* Delete: the can wiggles on its base during the hop… */

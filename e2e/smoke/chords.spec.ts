@@ -126,3 +126,19 @@ test("a shape the library lacks can be written down", async ({ page }) => {
 	await page.getByRole("region", { name: "What the notes say" }).getByRole("button").first().click();
 	await expect(create).toBeEnabled();
 });
+
+test("⌘K finds a chord from another page, and its close button puts it away", async ({ page }) => {
+	await page.goto("/strum");
+	const palette = page.getByRole("dialog", { name: "Chord search" });
+
+	await page.keyboard.press("ControlOrMeta+k");
+	await expect(palette).toBeVisible();
+	await palette.getByRole("button", { name: "Close" }).click();
+	await expect(palette).toBeHidden();
+
+	await page.keyboard.press("ControlOrMeta+k");
+	await palette.getByRole("combobox").fill("Am");
+	await expect(palette.getByRole("option", { name: /^A minor/ })).toBeVisible();
+	await page.keyboard.press("Enter");
+	await expect(page).toHaveURL(/\/chords\/a\/minor/);
+});

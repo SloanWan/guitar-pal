@@ -37,7 +37,9 @@ export function sweepWashBg(stroke: Stroke, stringIndex: number): string {
 	// stringIndex 0 = high e. A down sweep travels low → high, so the high e is deepest.
 	const progress = strokeDirection(stroke) === "up" ? stringIndex / 5 : (5 - stringIndex) / 5;
 	const alpha = SWEEP_WASH_MIN + (SWEEP_WASH_MAX - SWEEP_WASH_MIN) * progress;
-	return isBrush(stroke) ? `rgba(34, 197, 94, ${alpha})` : `rgba(245, 158, 11, ${alpha})`;
+	// The hues and a dark theme's damping are the page's (`--te-brush`, `--te-roll`, `--te-sweep-k` in tabEdit.css).
+	const pct = `calc(${Math.round(alpha * 100)}% * var(--te-sweep-k, 1))`;
+	return `color-mix(in srgb, var(${isBrush(stroke) ? "--te-brush, #22c55e" : "--te-roll, #f59e0b"}) ${pct}, transparent)`;
 }
 
 // Fine-pointer (mouse/trackpad) capability, read via useSyncExternalStore so it

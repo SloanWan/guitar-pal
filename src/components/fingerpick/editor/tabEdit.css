@@ -14,6 +14,35 @@
 		display: none;
 	}
 
+	/* The grid's washes and marks, tuned per theme: on the dark card a module tint
+	   reads stronger and greyer, so the washes step back and what is picked (the
+	   cursor, an offered fret) steps forward; the sweeps take their lighter hues. */
+	.te-page {
+		--te-wash-beat: 6%;
+		--te-wash-sub: 9%;
+		--te-wash-line: 14%;
+		--te-wash-sel: 16%;
+		--te-wash-cross: 26%;
+		--te-wash-play: 30%;
+		--te-pick: var(--gp-m-100);
+		--te-hint-edge: var(--gp-m-300);
+		--te-roll: #f59e0b;
+		--te-brush: #22c55e;
+		--te-sweep-k: 1;
+	}
+	:root[data-theme="dark"] .te-page {
+		--te-wash-beat: 4%;
+		--te-wash-sub: 6%;
+		--te-wash-line: 8%;
+		--te-wash-sel: 12%;
+		--te-wash-cross: 14%;
+		--te-wash-play: 24%;
+		--te-pick: color-mix(in srgb, var(--gp-m-500) 32%, var(--gp-card));
+		--te-hint-edge: color-mix(in srgb, var(--gp-m-500) 70%, transparent);
+		--te-roll: var(--gp-a2);
+		--te-brush: var(--gp-strum-500);
+		--te-sweep-k: 1;
+	}
 	.te-page {
 		container: te gp-page / inline-size;
 		display: flex;
@@ -340,6 +369,11 @@
 		gap: 6px;
 		padding: 2px 4px;
 	}
+	/* The repeat count's − / + fit beside the two repeat chips. */
+	.te-menu-row .pb-icon {
+		width: 28px;
+		height: 28px;
+	}
 	.te-chip {
 		display: inline-flex;
 		align-items: center;
@@ -599,7 +633,7 @@
 		border-radius: var(--gp-r-xs);
 	}
 	.te-mb-beat[data-on] {
-		background: color-mix(in srgb, var(--gp-m-500) 6%, transparent);
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-beat), transparent);
 	}
 	.te-mb-col {
 		display: flex;
@@ -613,14 +647,14 @@
 		background: var(--gp-well);
 	}
 	.te-mb-col[data-sub] {
-		background: color-mix(in srgb, var(--gp-m-500) 9%, transparent);
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-sub), transparent);
 	}
 	.te-mb-col[data-sel] {
-		background: color-mix(in srgb, var(--gp-m-500) 16%, transparent);
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-sel), transparent);
 	}
 	/* The slot sounding while the tab plays from the cursor (set by the playhead). */
 	.te-mb-col[data-playing] {
-		background: color-mix(in srgb, var(--gp-m-500) 30%, transparent);
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-play), transparent);
 	}
 	.te-mb-cell {
 		position: relative;
@@ -647,15 +681,15 @@
 	}
 	/* The cross under the pointer: its column and its row, summing on the cell. */
 	.te-mb-cell[data-h="1"] {
-		background: color-mix(in srgb, var(--gp-m-500) 14%, transparent);
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-line), transparent);
 	}
 	.te-mb-cell[data-h="2"] {
-		background: color-mix(in srgb, var(--gp-m-500) 26%, transparent);
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-cross), transparent);
 	}
 	/* The chord shape's fret, offered in an empty cell; "/" for a string it leaves out. */
 	.te-mb-cell[data-hint=""] {
-		background: var(--gp-m-100);
-		outline: 1.5px dashed var(--gp-m-300);
+		background: var(--te-pick);
+		outline: 1.5px dashed var(--te-hint-edge);
 		outline-offset: -1.5px;
 		color: var(--gp-m-500);
 		font-weight: 750;
@@ -664,7 +698,7 @@
 		color: var(--gp-ink-mute);
 	}
 	.te-mb-cell[data-cur] {
-		background: var(--gp-m-100);
+		background: var(--te-pick);
 		box-shadow: inset 0 0 0 2px var(--gp-m-500);
 		color: var(--gp-m-700);
 	}
@@ -1142,9 +1176,9 @@
 		color: var(--gp-m-on);
 	}
 	.te-fc[data-hint] span {
-		background: var(--gp-m-100);
+		background: var(--te-pick);
 		color: var(--gp-m-700);
-		outline: 1.5px dashed var(--gp-m-300);
+		outline: 1.5px dashed var(--te-hint-edge);
 		outline-offset: -1.5px;
 	}
 	.te-fc span[data-faint] {

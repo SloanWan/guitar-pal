@@ -27,6 +27,22 @@ export function effectiveChords(measures: readonly Measure[]): (ChordRef | null)
 	);
 }
 
+/**
+ * Each chord the tab marks, once, in the order it first appears — the chord
+ * search's "In this tab" row. Two marks of one chord held different ways count
+ * once, as the first one is held.
+ */
+export function chordsUsed(measures: readonly Measure[]): ChordRef[] {
+	const seen = new Map<string, ChordRef>();
+	for (const measure of measures) {
+		for (const slot of measure.slots) {
+			const chord = slot.chord;
+			if (chord && !seen.has(`${chord.root} ${chord.suffix}`)) seen.set(`${chord.root} ${chord.suffix}`, chord);
+		}
+	}
+	return [...seen.values()];
+}
+
 /** Whether any slot carries a chord mark — what decides if a chord line is drawn at all. */
 export function patternHasChords(measures: readonly Measure[]): boolean {
 	return measures.some((measure) => measure.slots.some((slot) => slot.chord !== undefined));

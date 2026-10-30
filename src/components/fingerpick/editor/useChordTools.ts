@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { chordFretHints, effectiveChords, type FretHint } from "@/lib/fingerpickChords";
+import { chordFretHints, chordsUsed, effectiveChords, type FretHint } from "@/lib/fingerpickChords";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { getChordIndex } from "@/lib/chords";
+import { loadVoicings } from "@/lib/chordVoicingCache";
+import type { ChordRef } from "@/lib/strumPatterns";
 import { selectRefVoicing } from "@/lib/strumBars";
 import { chordIndexWithUser } from "@/lib/userChordVoicings";
 import { useChordShapeCorpus } from "@/components/chords/useChordShapeMatches";
@@ -16,8 +18,16 @@ import { useChordVoicings } from "@/components/fingerpick/useChordVoicings";
  * the shape corpus typed frets are matched against, and the shape under a slot as
  * the frets each string plays (index 0 = high e, "/" for a string it leaves out) —
  * the dock's faint hints. All of it loads with the editor and only with it.
+ * `hear` plays a shape; `hearChord` finds a chord's shape (loading it if need be)
+ * and plays that. The result keeps its identity while nothing in it changes, so
+ * the bar blocks it is handed to stay memoized.
  */
-export function useChordTools(pattern: FingerpickPattern, user: User | null, loading: boolean) {
+export function useChordTools(
+	pattern: FingerpickPattern,
+	user: User | null,
+	loading: boolean,
+	hear: (hints: readonly FretHint[]) => void,
+) {
 	const { voicings: userVoicings, saveVoicing } = useUserChordVoicings(user, loading);
 	const chordsInEffect = useMemo(() => effectiveChords(pattern.measures), [pattern.measures]);
 	const refs = useMemo(
@@ -58,7 +68,25 @@ export function useChordTools(pattern: FingerpickPattern, user: User | null, loa
 		[voicingAt],
 	);
 
-	return { chordsInEffect, voicingsFor, voicingAt, searchIndex, shapeCorpus, saveVoicing, hintsAt };
+	const hearChord = useCallback(
+		(ref: ChordRef) => {
+			const play = () => {
+				const state = voicingsFor(ref);
+				const voicing = state.status === "ready" ? selectRefVoicing(ref, state.voicings) : null;
+				if (voicing) hear(chordFretHints(voicing));
+			};
+			if (voicingsFor(ref).status === "ready") play();
+			// Read back through the shared cache once it has the chord.
+			else loadVoicings(ref.root, ref.suffix).then(play, (e: unknown) => console.error("[tab editor] chord shapes:", e));
+		},
+		[voicingsFor, hear],
+	);
+	const used = useMemo(() => chordsUsed(pattern.measures), [pattern.measures]);
+
+	return useMemo(
+		() => ({ chordsInEffect, chordsUsed: used, voicingsFor, voicingAt, searchIndex, shapeCorpus, saveVoicing, hintsAt, hearChord }),
+		[chordsInEffect, used, voicingsFor, voicingAt, searchIndex, shapeCorpus, saveVoicing, hintsAt, hearChord],
+	);
 }
 
 export type ChordTools = ReturnType<typeof useChordTools>;

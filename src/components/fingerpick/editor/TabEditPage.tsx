@@ -4,7 +4,7 @@ import "@/components/fingerpick/reader/tab.css";
 import "@/components/playback/icons.css";
 import "@/components/playback/playback.css";
 import "./tabEdit.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Play, Redo2, SlidersHorizontal, Square, TriangleAlert, Undo2, Wrench, X } from "lucide-react";
@@ -37,7 +37,7 @@ import {
 	type EditorNotice,
 } from "@/lib/tabEditorEntry";
 import { selectedSlots } from "@/lib/tabEditorCursor";
-import { patternCapo } from "@/lib/fingerpickChords";
+import { patternCapo, type FretHint } from "@/lib/fingerpickChords";
 import { dockWrite } from "@/lib/fretboardDock";
 import { noteText } from "./MeasureBlock";
 import MeasureGrid from "./MeasureGrid";
@@ -235,7 +235,13 @@ export default function TabEditPage({ id }: { id: string }) {
 	const cursorSlot = working.measures[cursor.measureIndex]?.slots[cursor.slotIndex];
 
 	// The fretboard writes at the cursor's slot, on the string clicked (#359).
-	const chordTools = useChordTools(working, user, loading);
+	// The playback hook is new each render; the chord tools want one stable way to sound a shape.
+	const previewChordRef = useRef(playback.previewChord);
+	useEffect(() => {
+		previewChordRef.current = playback.previewChord;
+	});
+	const hearShape = useCallback((hints: readonly FretHint[]) => previewChordRef.current(hints), []);
+	const chordTools = useChordTools(working, user, loading, hearShape);
 	function dockHit(stringIndex: number, fret: number, shift: boolean, pointer: boolean) {
 		if (pointer) tabRef.current?.focus({ preventScroll: true });
 		const cell = { measureIndex: cursor.measureIndex, slotIndex: cursor.slotIndex, stringIndex };

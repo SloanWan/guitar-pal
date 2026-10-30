@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, CornerDownLeft, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, CornerDownLeft, Play, Plus } from "lucide-react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { SlotTarget } from "@/lib/fingerpickEdit";
 import {
@@ -14,13 +14,17 @@ import {
 } from "@/lib/fingerpickChords";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { selectRefVoicing } from "@/lib/strumBars";
+import { loadVoicings, peekVoicings } from "@/lib/chordVoicingCache";
+import { parseRecentChords, pushRecentChord, RECENT_CHORDS_KEY, sameChord } from "@/lib/recentChords";
 import { voicingToDiagramShape, type ChordVoicing } from "@/lib/chordVoicing";
 import { parseTabSequence, tabSequenceToShape } from "@/lib/chordTabSequence";
 import { chordShapeToVoicing } from "@/lib/chordShape";
 import type { UserChordVoicing } from "@/lib/userChordVoicings";
 import ChordDiagram from "@/components/chords/ChordDiagram";
 import ChordShapeModal from "@/components/chords/ChordShapeModal";
-import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
+import ChordSearchSelect, { type ChordSuggestionRow } from "@/components/strum/ChordSearchSelect";
+import ChordShapeStrip from "@/components/fingerpick/ChordShapeStrip";
+import { useStoredState, type StoredCodec } from "@/components/useStoredState";
 import type { CommitPattern } from "@/components/fingerpick/useEditHistory";
 import type { ChordTools } from "./useChordTools";
 
@@ -30,6 +34,29 @@ interface Props {
 	/** The run: one slot gets a chord mark, several get one chord over them all. */
 	slots: readonly SlotTarget[];
 	tools: ChordTools;
+}
+
+const RECENT_CODEC: StoredCodec<ChordRef[]> = { parse: parseRecentChords, format: (list) => JSON.stringify(list) };
+
+/** A match's shape, small and laid like the tab: fetched as the match appears, nothing until it has come. */
+function MatchShape({ chord, tools }: { chord: ChordRef; tools: ChordTools }) {
+	const [, setArrived] = useState(0);
+	useEffect(() => {
+		if (peekVoicings(chord.root, chord.suffix) !== null) return;
+		let live = true;
+		loadVoicings(chord.root, chord.suffix).then(
+			() => live && setArrived((n) => n + 1),
+			() => {},
+		);
+		return () => {
+			live = false;
+		};
+	}, [chord.root, chord.suffix]);
+	const state = tools.voicingsFor(chord);
+	const voicing = state.status === "ready" ? selectRefVoicing(chord, state.voicings) : null;
+	if (!voicing) return null;
+	const { frets, startFret, barreFret } = voicingToDiagramShape(voicing);
+	return <ChordShapeStrip frets={frets} startFret={startFret} barreFret={barreFret} width={40} />;
 }
 
 /** The shape editor's start: a failed search's name or frets, or a chord's shape to vary. */
@@ -53,6 +80,25 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 	const voicings = state?.status === "ready" ? state.voicings : [];
 	const voicing = chordHere && voicings.length > 0 ? selectRefVoicing(chordHere, voicings) : null;
 	const at = voicing ? voicings.findIndex((v) => v.id === voicing.id) : -1;
+
+	// The search's empty-field rows: the tab's own chords, then this device's recent picks.
+	const [recent, setRecent] = useStoredState(RECENT_CHORDS_KEY, [] as ChordRef[], RECENT_CODEC);
+	const suggestions: ChordSuggestionRow[] = [
+		{ label: "In this tab", chords: tools.chordsUsed, current: chordHere },
+		{ label: "Recent", chords: recent.filter((r) => !tools.chordsUsed.some((u) => sameChord(u, r))) },
+	];
+	function remember(chord: ChordRef | null) {
+		if (chord) setRecent(pushRecentChord(recent, chord));
+	}
+	const searchProps = {
+		index: tools.searchIndex,
+		shapeCorpus: tools.shapeCorpus,
+		inlineList: true,
+		skin: "candy",
+		suggestions,
+		onHear: tools.hearChord,
+		renderShape: (chord: ChordRef) => <MatchShape chord={chord} tools={tools} />,
+	} as const;
 
 	function markChord(target: SlotTarget, chord: ChordRef | null) {
 		commit((p) => setSlotChord(p, target, chord));
@@ -89,12 +135,12 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 			{!single ? (
 				<div className="te-irow">
 					<ChordSearchSelect
+						{...searchProps}
 						chord={null}
-						onChange={(chord) => chord && commit((p) => setChordOnSlots(p, [...slots], chord))}
-						index={tools.searchIndex}
-						shapeCorpus={tools.shapeCorpus}
-						inlineList
-						skin="candy"
+						onChange={(chord) => {
+							remember(chord);
+							if (chord) commit((p) => setChordOnSlots(p, [...slots], chord));
+						}}
 						ariaLabel={`Chord for the ${slots.length} selected slots`}
 					/>
 					{chordHere && (
@@ -113,15 +159,27 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 				<>
 					<div className="te-irow">
 						<ChordSearchSelect
+							{...searchProps}
 							chord={ownChord}
-							onChange={(chord) => markChord(single, chord)}
+							onChange={(chord) => {
+								remember(chord);
+								markChord(single, chord);
+							}}
 							onCreate={(query) => setShapeCreate({ target: single, query })}
-							index={tools.searchIndex}
-							shapeCorpus={tools.shapeCorpus}
-							inlineList
-							skin="candy"
 							ariaLabel={`Chord at bar ${single.measureIndex + 1}, slot ${single.slotIndex + 1}`}
 						/>
+						{ownChord && (
+							<button
+								type="button"
+								className="te-chip"
+								disabled={!voicing}
+								onClick={() => tools.hearChord(ownChord)}
+								aria-label={`Hear ${chordSymbolLabel(ownChord)}`}
+							>
+								<Play aria-hidden className="te-chip-ic" />
+								Hear
+							</button>
+						)}
 						{!ownChord && chordHere && (
 							<button
 								type="button"
@@ -141,19 +199,26 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 					)}
 					{chordHere && voicing && (
 						<div className="te-chordbox">
-							<button type="button" className="pb-icon" aria-label="Previous shape" disabled={voicings.length < 2} onClick={() => stepShape(-1)}>
-								<ChevronLeft aria-hidden />
-							</button>
 							<div className="te-chordshape">
-								<ChordDiagram
-									def={voicingToDiagramShape(voicing)}
-									label={voicings.length > 1 ? `${chordSymbolLabel(chordHere)} · ${at + 1}/${voicings.length}` : chordSymbolLabel(chordHere)}
-									size="compact"
-								/>
+								<ChordDiagram def={voicingToDiagramShape(voicing)} label={chordSymbolLabel(chordHere)} size="compact" />
 							</div>
-							<button type="button" className="pb-icon" aria-label="Next shape" disabled={voicings.length < 2} onClick={() => stepShape(1)}>
-								<ChevronRight aria-hidden />
-							</button>
+							<div className="te-chordside">
+								<div className="te-chordstep">
+									<button type="button" className="pb-icon" aria-label="Previous shape" disabled={voicings.length < 2} onClick={() => stepShape(-1)}>
+										<ChevronLeft aria-hidden />
+									</button>
+									<span className="pb-num">{voicings.length > 1 ? `${at + 1} of ${voicings.length}` : "One shape"}</span>
+									<button type="button" className="pb-icon" aria-label="Next shape" disabled={voicings.length < 2} onClick={() => stepShape(1)}>
+										<ChevronRight aria-hidden />
+									</button>
+								</div>
+								<span className="te-chordfrets pb-num">
+									{[...chordFretHints(voicing)]
+										.reverse()
+										.map((hint) => (hint === "/" ? "x" : hint))
+										.join(" ")}
+								</span>
+							</div>
 						</div>
 					)}
 					{chordHere && state?.status === "ready" && (

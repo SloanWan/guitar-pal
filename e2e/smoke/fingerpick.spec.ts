@@ -173,3 +173,24 @@ test("a bar fills with one note value from its footer", async ({ page }) => {
 	await page.getByRole("button", { name: "Fill bar 1 with eighth notes" }).click();
 	await expect(page.getByRole("button", { name: "Bar 1, slot 8, B string: empty" })).toBeAttached();
 });
+
+test("the chord search offers the tab's chords and hears a match without taking it", async ({ page }) => {
+	await page.goto("/fingerpick/edit/new");
+	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
+	const inspector = page.getByRole("complementary", { name: "Inspector" });
+	await inspector.getByRole("combobox", { name: "Chord at bar 1, slot 1" }).fill("C");
+	await page.getByRole("option", { name: /^C\b/ }).first().click();
+
+	await page.getByRole("button", { name: "Bar 1, slot 3, B string: empty" }).click();
+	const search = inspector.getByRole("combobox", { name: "Chord at bar 1, slot 3" });
+	await search.fill("am");
+	// Heard, the match is not taken: the list stays and nothing is marked.
+	await page.getByRole("button", { name: "Hear A minor" }).click();
+	await expect(page.getByRole("listbox")).toBeVisible();
+	await expect(page.getByRole("button", { name: /^Am at bar 1 slot 3/ })).toHaveCount(0);
+
+	// Emptied, the field offers the chords the tab already uses; one click takes one.
+	await search.fill("");
+	await page.getByRole("button", { name: "C", exact: true }).click();
+	await expect(page.getByRole("button", { name: "C at bar 1 slot 3" })).toBeVisible();
+});

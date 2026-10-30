@@ -1218,8 +1218,8 @@
 		height: 10px;
 	}
 	.te-irow .csel-list {
-		width: 208px;
-		max-height: 176px;
+		width: 236px;
+		max-height: 236px;
 		margin-top: 4px;
 		padding: 4px;
 		border-radius: var(--gp-r-s);
@@ -1242,6 +1242,37 @@
 	}
 	.te-irow .csel-create {
 		font-size: 11px;
+	}
+	.te-irow .csel-sec {
+		padding: 6px 6px 4px;
+		font-size: 9px;
+	}
+	.te-irow .csel-chips {
+		padding: 0 4px 6px;
+	}
+	.te-irow .csel-chip {
+		height: 22px;
+		padding: 0 8px;
+		font-size: 11px;
+	}
+	.te-irow .csel-row {
+		padding-left: 4px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-irow .csel-row .csel-opt {
+		min-height: 38px;
+		padding-left: 4px;
+	}
+	.te-irow .csel-play {
+		width: 20px;
+		height: 20px;
+	}
+	.te-irow .csel-play svg {
+		width: 8px;
+		height: 8px;
+	}
+	.te-irow .csel-shape {
+		width: 40px;
 	}
 	.te-indent {
 		padding-left: 56px;
@@ -1321,22 +1352,47 @@
 		margin-right: 4px;
 		vertical-align: -2px;
 	}
+	/* The chord held here: its diagram on a well, which of its shapes beside it with
+	   the frets that shape plays. */
 	.te-chordbox {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 6px;
-		padding: 8px;
-		border-radius: var(--gp-r-l);
-		background: var(--gp-card);
-		box-shadow: var(--gp-ring-c);
+		gap: 10px;
+		padding: 8px 10px 8px 6px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-well);
 	}
-	/* A fixed footprint whatever the label says, so the arrows stay put while stepping. */
+	/* A fixed footprint whatever the label says, so nothing beside it moves while stepping. */
 	.te-chordshape {
 		display: grid;
+		flex: none;
 		place-items: center;
-		width: 140px;
-		height: 150px;
+		width: 108px;
+		height: 132px;
+	}
+	.te-chordside {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 0;
+	}
+	.te-chordstep {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--gp-ink-2);
+	}
+	.te-chordstep .pb-num {
+		min-width: 4.5em;
+		text-align: center;
+	}
+	.te-chordfrets {
+		padding-left: 6px;
+		font-size: 11px;
+		letter-spacing: 0.04em;
+		color: var(--gp-ink-3);
 	}
 	.te-nowrap {
 		flex-wrap: nowrap;

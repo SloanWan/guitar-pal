@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { SlotTarget } from "@/lib/fingerpickEdit";
 import { expandFingerpickPattern, mapOriginToExpandedIndex } from "@/lib/fingerpickRepeats";
 import { computeSlotStarts, slotAtTime } from "@/lib/fingerpickScheduler";
-import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import type { BeatSlot, FingerpickPattern, Stroke } from "@/lib/fingerpickTypes";
+import type { FretHint } from "@/lib/fingerpickChords";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { tabBpm } from "@/components/fingerpick/reader/useTabPlayback";
 
@@ -12,6 +13,9 @@ interface Args {
 	/** The measure grid: its slot columns carry `data-col="<bar>:<slot>"`. */
 	gridRef: React.RefObject<HTMLDivElement | null>;
 }
+
+/** The six strings, index 0 = high e. */
+const STRINGS = [0, 1, 2, 3, 4, 5];
 
 /** The column the playhead marks, set straight on the DOM so playing never re-renders the grid. */
 const PLAYING_ATTR = "data-playing";
@@ -90,22 +94,32 @@ export function useEditorPlayback({ pattern, gridRef }: Args) {
 		engine.play({ ...expanded.pattern, bpm }, { forceLetRing: true }, start);
 	}
 
-	/** One note, as it sounds in the tab: the dock's and the keyboard's preview. Stops the tab playing. */
-	function preview(stringIndex: number, fret: number) {
+	/** One slot on its own, through the tab's own engine and capo. Stops the tab playing. */
+	function previewSlot(frets: readonly (number | null)[], stroke?: Stroke) {
 		if (!engine.isLoaded) return;
 		setPlaying("preview");
-		const strings = pattern.measures[0].slots[0].strings.map((_, i) => ({
-			fret: i === stringIndex ? fret : null,
-			muted: false,
-		})) as FingerpickPattern["measures"][number]["slots"][number]["strings"];
+		const strings = frets.map((fret) => ({ fret, muted: false })) as BeatSlot["strings"];
 		engine.play(
 			{
 				...pattern,
 				spans: undefined,
 				bpm,
-				measures: [{ id: "preview", slots: [{ id: "preview", duration: "quarter", strings }] }],
+				measures: [{ id: "preview", slots: [{ id: "preview", duration: "quarter", strings, stroke }] }],
 			},
 			{ forceLetRing: true },
+		);
+	}
+
+	/** One note, as it sounds in the tab: the dock's and the keyboard's preview. */
+	function preview(stringIndex: number, fret: number) {
+		previewSlot(STRINGS.map((i) => (i === stringIndex ? fret : null)));
+	}
+
+	/** A chord shape (index 0 = high e, "/" for a string it leaves out), rolled down like a quick strum. */
+	function previewChord(hints: readonly FretHint[]) {
+		previewSlot(
+			hints.map((hint) => (hint === "/" ? null : hint)),
+			"roll-down",
 		);
 	}
 
@@ -115,6 +129,7 @@ export function useEditorPlayback({ pattern, gridRef }: Args) {
 		isPlaying: tabPlaying,
 		playFrom,
 		preview,
+		previewChord,
 		stop: () => engine.stop(),
 	};
 }

@@ -23,6 +23,7 @@ interface Props {
 	onColumn: (target: SlotTarget, shift: boolean) => void;
 	onMenu: (cell: Cell) => void;
 	onBar: (measureIndex: number) => void;
+	onBlank: (measureIndex: number, slotIndex: number | null) => void;
 }
 
 /**
@@ -59,6 +60,10 @@ const MeasureGrid = forwardRef<HTMLDivElement, Props>(function MeasureGrid(props
 	const onColumn = useCallback((target: SlotTarget, shift: boolean) => handlers.current.onColumn(target, shift), []);
 	const onMenu = useCallback((cell: Cell) => handlers.current.onMenu(cell), []);
 	const onBar = useCallback((measureIndex: number) => handlers.current.onBar(measureIndex), []);
+	const onBlank = useCallback(
+		(measureIndex: number, slotIndex: number | null) => handlers.current.onBlank(measureIndex, slotIndex),
+		[],
+	);
 
 	return (
 		<div ref={ref} className="te-grid">
@@ -85,6 +90,7 @@ const MeasureGrid = forwardRef<HTMLDivElement, Props>(function MeasureGrid(props
 					onColumn={onColumn}
 					onMenu={onMenu}
 					onBar={onBar}
+					onBlank={onBlank}
 				/>
 			))}
 			<button

@@ -232,6 +232,12 @@ export default function TabEditPage({ id }: { id: string }) {
 	function gridBar(measureIndex: number) {
 		tabCursor.moveTo({ measureIndex, slotIndex: 0, stringIndex: cursor.stringIndex });
 	}
+	// A click on a bar's blank space: the keys go to the tab, the cursor to that slot or, if it is elsewhere, the bar.
+	function gridBlank(measureIndex: number, slotIndex: number | null) {
+		focusTab();
+		if (slotIndex !== null) tabCursor.moveTo({ measureIndex, slotIndex, stringIndex: cursor.stringIndex });
+		else if (cursor.measureIndex !== measureIndex) gridBar(measureIndex);
+	}
 	const cursorSlot = working.measures[cursor.measureIndex]?.slots[cursor.slotIndex];
 
 	// The fretboard writes at the cursor's slot, on the string clicked (#359).
@@ -470,6 +476,7 @@ export default function TabEditPage({ id }: { id: string }) {
 											onColumn={gridColumn}
 											onMenu={gridMenu}
 											onBar={gridBar}
+											onBlank={gridBlank}
 										/>
 									</div>
 								</>

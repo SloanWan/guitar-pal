@@ -73,6 +73,8 @@ export interface MeasureBlockProps {
 	onMenu: (cell: Cell) => void;
 	/** The cursor to a bar a copy or a move landed on. */
 	onBar: (measureIndex: number) => void;
+	/** The bar's blank space clicked: under a column, that slot; elsewhere, the bar. */
+	onBlank: (measureIndex: number, slotIndex: number | null) => void;
 }
 
 const WASH_TIE = "color-mix(in srgb, var(--gp-m-500) 55%, transparent)";
@@ -107,6 +109,7 @@ function MeasureBlock({
 	onColumn,
 	onMenu,
 	onBar,
+	onBlank,
 }: MeasureBlockProps) {
 	const [quickChordAt, setQuickChordAt] = useState<number | null>(null);
 	const [nudge, setNudge] = useState<"left" | "right" | null>(null);
@@ -142,6 +145,14 @@ function MeasureBlock({
 			data-nudge={nudge ?? undefined}
 			onAnimationEnd={() => setNudge(null)}
 			onMouseLeave={() => onHover(null)}
+			onClick={(e) => {
+				// Not a control, and not a portaled popover's click bubbling up through React.
+				const target = e.target as Element;
+				const control = target.closest("button, input, select, textarea, a, label, [role]");
+				if (!e.currentTarget.contains(target) || (control && e.currentTarget.contains(control))) return;
+				const col = target.closest<HTMLElement>("[data-col]")?.dataset.col;
+				onBlank(measureIndex, col ? Number(col.split(":")[1]) : null);
+			}}
 		>
 			<MeasureHeader
 				measure={measure}

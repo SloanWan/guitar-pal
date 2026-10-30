@@ -1422,8 +1422,9 @@
 		gap: 6px;
 		min-width: 0;
 	}
+	/* Name, shape and frets start on one left edge; the steppers trail the count,
+	   inside the well. */
 	.te-chordname {
-		padding-left: 6px;
 		font-size: 20px;
 		font-weight: 800;
 		line-height: 1.1;
@@ -1437,12 +1438,24 @@
 		font-weight: 600;
 		color: var(--gp-ink-2);
 	}
+	/* Fixed, so the arrows stay put from "1 of 4" to "12 of 12". */
 	.te-chordstep .pb-num {
 		min-width: 4.5em;
-		text-align: center;
+	}
+	.te-chordstep .pb-icon {
+		width: 26px;
+		height: 26px;
+	}
+	.te-chordstep .pb-icon svg {
+		width: 16px;
+		height: 16px;
+	}
+	/* A hover wash would be the well's own colour: the arrow darkens instead. */
+	.te-chordstep .pb-icon:not(:disabled):hover {
+		background: transparent;
+		color: var(--gp-ink);
 	}
 	.te-chordfrets {
-		padding-left: 6px;
 		font-size: 11px;
 		letter-spacing: 0.04em;
 		color: var(--gp-ink-3);

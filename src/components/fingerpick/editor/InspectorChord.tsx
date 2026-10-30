@@ -209,10 +209,10 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 									<MusicalText text={chordSymbolLabel(chordHere)} />
 								</span>
 								<div className="te-chordstep">
+									<span className="pb-num">{voicings.length > 1 ? `${at + 1} of ${voicings.length}` : "One shape"}</span>
 									<button type="button" className="pb-icon" aria-label="Previous shape" disabled={voicings.length < 2} onClick={() => stepShape(-1)}>
 										<ChevronLeft aria-hidden />
 									</button>
-									<span className="pb-num">{voicings.length > 1 ? `${at + 1} of ${voicings.length}` : "One shape"}</span>
 									<button type="button" className="pb-icon" aria-label="Next shape" disabled={voicings.length < 2} onClick={() => stepShape(1)}>
 										<ChevronRight aria-hidden />
 									</button>

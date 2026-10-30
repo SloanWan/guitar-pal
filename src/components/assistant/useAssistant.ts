@@ -23,9 +23,13 @@ import {
 	isIdle,
 	readConversation,
 	readMode,
+	readSavedChatId,
 	writeConversation,
 	writeMode,
+	writeSavedChatId,
 } from "@/lib/assistant/conversation";
+import { chatTitle } from "@/lib/assistant/chatLibrary";
+import { createChat, loadChat, updateChat } from "@/lib/assistantChatStore";
 import { otherDomainReads } from "@/lib/assistant/readAs";
 import { proposeStrum, proposeTab, showChord, strumReadResult, tabReadResult, type ToolCard } from "@/lib/assistant/general/execute";
 import type { GeneralContext } from "@/lib/assistant/general/request";
@@ -125,6 +129,9 @@ export interface AssistantMessage {
 	 */
 	streamed?: boolean;
 }
+
+/** Quiet before a saved chat is written over: a turn lands as a few quick changes. */
+const SAVE_DEBOUNCE_MS = 1200;
 
 /** Turns of the thread the model is shown. Capped: the route caps the whole exchange. */
 const MAX_HISTORY_TURNS = 12;
@@ -228,6 +235,8 @@ export function useAssistant() {
 		typeof window === "undefined" ? [] : readConversation<AssistantMessage>(Date.now()),
 	);
 	const [pending, setPending] = useState(false);
+	/** The turn being answered, so Stop (or a new thread) can drop it. */
+	const turnRef = useRef<AbortController | null>(null);
 
 	const indexRef = useRef<Promise<readonly ChordIndexEntry[]> | null>(null);
 	const patternsRef = useRef<Promise<readonly StrumPattern[]> | null>(null);
@@ -314,8 +323,36 @@ export function useAssistant() {
 	 */
 	const [guestQuota, setGuestQuota] = useState<GuestQuota | null>(null);
 
+	/**
+	 * The saved chat this thread is (#401), once the player saved it or opened
+	 * it from the library; later turns are written over it. Null for a thread
+	 * nobody has saved.
+	 */
+	const [savedChatId, setSavedChatId] = useState<string | null>(() =>
+		typeof window === "undefined" ? null : readSavedChatId(),
+	);
+	const savedChatIdRef = useRef(savedChatId);
+	const linkChat = useCallback((id: string | null) => {
+		savedChatIdRef.current = id;
+		setSavedChatId(id);
+		writeSavedChatId(id);
+	}, []);
+	const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
+	/**
+	 * The saved chat whose "Saved" line the player put away. Kept here, past the
+	 * panel's closing, and by chat: another saved thread shows its line again.
+	 */
+	const [savedLineHiddenFor, setSavedLineHiddenFor] = useState<string | null>(null);
+	const hideSavedLine = useCallback(() => setSavedLineHiddenFor(savedChatIdRef.current), []);
+
 	const reset = useCallback(() => {
+		// A reply still on its way belongs to the old thread.
+		turnRef.current?.abort();
+		turnRef.current = null;
+		setPending(false);
 		setMessages([]);
+		linkChat(null);
+		setSaveState("idle");
 		setSessionId(newId());
 		setGreeted(false);
 		// Who is asking may have changed; the route will say again.
@@ -323,7 +360,7 @@ export function useAssistant() {
 		// A new thread opens in the page's mode, as the first one did.
 		setModeState(pageRef.current);
 		writeMode(null);
-	}, []);
+	}, [linkChat]);
 
 	/**
 	 * When the transcript last changed. A ref, not state: it is read by the
@@ -401,6 +438,79 @@ export function useAssistant() {
 	useEffect(() => {
 		messagesRef.current = messages;
 	}, [messages]);
+	/** The thread as last written to its saved copy, so an unchanged thread is not written again. */
+	const lastSavedRef = useRef<string | null>(null);
+	const sessionIdRef = useRef(sessionId);
+	useEffect(() => {
+		sessionIdRef.current = sessionId;
+	}, [sessionId]);
+
+	/** Keep this thread in the player's chat library. Signed-in players only. */
+	const saveChat = useCallback(
+		async (userId: string) => {
+			if (savedChatIdRef.current !== null) return;
+			const session = sessionIdRef.current;
+			const thread = messagesRef.current;
+			setSaveState("saving");
+			try {
+				const id = await createChat(userId, chatTitle(thread), thread);
+				// A new chat started while this was saving: the save belongs to the old one.
+				if (sessionIdRef.current !== session) return;
+				lastSavedRef.current = JSON.stringify(thread);
+				linkChat(id);
+				setSaveState("idle");
+			} catch (err) {
+				console.error("[assistant] saving the chat failed:", err);
+				if (sessionIdRef.current === session) setSaveState("error");
+			}
+		},
+		[linkChat],
+	);
+
+	/** A saved chat back in the panel, in General, ready to carry on. False when it is gone. */
+	const openChat = useCallback(
+		async (id: string): Promise<boolean> => {
+			const thread = await loadChat<AssistantMessage>(id);
+			if (!thread || thread.length === 0) return false;
+			lastSavedRef.current = JSON.stringify(thread);
+			setMessages(thread);
+			setSessionId(newId());
+			setGreeted(true);
+			setSaveState("idle");
+			setModeState("general");
+			writeMode("general");
+			linkChat(id);
+			return true;
+		},
+		[linkChat],
+	);
+
+	/** A chat was deleted from the library: if it was this thread's copy, the thread is unsaved again. */
+	const forgetChat = useCallback(
+		(id: string) => {
+			if (savedChatIdRef.current === id) linkChat(null);
+		},
+		[linkChat],
+	);
+
+	// A saved thread follows the conversation: each change is written over its
+	// copy once the turn has settled. One timer at most, cleared on the next change.
+	useEffect(() => {
+		if (savedChatId === null || messages.length === 0) return;
+		const snapshot = JSON.stringify(messages);
+		if (snapshot === lastSavedRef.current) return;
+		const timer = setTimeout(() => {
+			lastSavedRef.current = snapshot;
+			updateChat(savedChatId, messages)
+				.then((found) => {
+					// Deleted from another tab: the thread is no longer anyone's copy.
+					if (!found && savedChatIdRef.current === savedChatId) linkChat(null);
+				})
+				.catch((err: unknown) => console.error("[assistant] updating the saved chat failed:", err));
+		}, SAVE_DEBOUNCE_MS);
+		return () => clearTimeout(timer);
+	}, [messages, savedChatId, linkChat]);
+
 	const historyOf = (all: readonly AssistantMessage[]): AssistantTurn[] =>
 		all
 			.filter((m) => !m.failed && m.text.trim() !== "")
@@ -413,11 +523,17 @@ export function useAssistant() {
 	 * one turn however many steps it takes.
 	 */
 	const callRoute = useCallback(
-		async (msgs: readonly Anthropic.MessageParam[], context: GeneralContext, turnId: string): Promise<ModelStep> => {
+		async (
+			msgs: readonly Anthropic.MessageParam[],
+			context: GeneralContext,
+			turnId: string,
+			signal?: AbortSignal,
+		): Promise<ModelStep> => {
 			const res = await fetch("/api/assistant", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ messages: msgs, context, turnId }),
+				signal,
 			});
 			const body: unknown = await res.json().catch(() => null);
 			if (!res.ok) {
@@ -439,9 +555,18 @@ export function useAssistant() {
 	 * floor keeps the dots from flashing for a frame and vanishing. A tab turn
 	 * may also wait on the chord library for its shapes; the pause runs alongside.
 	 * A General turn is as slow as the model; the pause is lost inside it.
+	 *
+	 * `signal` is the player's Stop: a model or chapter call in flight is
+	 * dropped and the turn rejects. A rules turn just runs out; its reply is
+	 * not shown.
 	 */
 	const resolveIn = useCallback(
-		async (as: AssistantMode, text: string, history: readonly AssistantTurn[] = []): Promise<AssistantMessage> => {
+		async (
+			as: AssistantMode,
+			text: string,
+			history: readonly AssistantTurn[] = [],
+			signal?: AbortSignal,
+		): Promise<AssistantMessage> => {
 			const [index, patternList] = await Promise.all([chordIndex(), loadPatterns()]);
 			setIndex(index);
 			const thinking = new Promise((done) =>
@@ -469,10 +594,12 @@ export function useAssistant() {
 					return reply;
 				}
 				try {
-					const answer = await askChapter(book.bookId, book.chapterId, [
-						...history.map((t) => ({ role: t.role, content: t.content })),
-						{ role: "user", content: text },
-					]);
+					const answer = await askChapter(
+						book.bookId,
+						book.chapterId,
+						[...history.map((t) => ({ role: t.role, content: t.content })), { role: "user", content: text }],
+						signal,
+					);
 					reply.text = answer.message;
 					reply.model = answer.model;
 					reply.book = { bookId: book.bookId, chapterId: book.chapterId, source: answer.source, pages: answer.pages };
@@ -486,6 +613,7 @@ export function useAssistant() {
 						}
 					}
 				} catch (e) {
+					if (signal?.aborted) throw e;
 					reply.failed = true;
 					reply.text =
 						e instanceof BookApiError
@@ -526,9 +654,10 @@ export function useAssistant() {
 						text,
 						history,
 						context,
-						call: (msgs, ctx) => callRoute(msgs, ctx, turnId),
+						call: (msgs, ctx) => callRoute(msgs, ctx, turnId, signal),
 						execute,
 						uiLang: uiLang(),
+						signal,
 					});
 					Object.assign(reply, {
 						text: outcome.text,
@@ -537,6 +666,7 @@ export function useAssistant() {
 						...cardFields(outcome.card),
 					});
 				} catch (e) {
+					if (signal?.aborted) throw e;
 					const lang = uiLang();
 					reply.failed = true;
 					reply.lang = lang;
@@ -622,14 +752,21 @@ export function useAssistant() {
 			const userMessage: AssistantMessage = { id: newId(), role: "user", text };
 			setMessages((prev) => [...prev, userMessage]);
 			setPending(true);
+			const turn = new AbortController();
+			turnRef.current = turn;
 			// Talking settles the mode: a thread that has been spoken to keeps its
 			// assistant across pages, where an untouched one still follows the page.
 			writeMode(answerIn);
 			try {
-				const reply = await resolveIn(answerIn, text, historyOf(messagesRef.current));
-				setMessages((prev) => [...prev, reply]);
+				const reply = await resolveIn(answerIn, text, historyOf(messagesRef.current), turn.signal);
+				if (!turn.signal.aborted) setMessages((prev) => [...prev, reply]);
+			} catch (e) {
+				if (!turn.signal.aborted) throw e;
 			} finally {
-				setPending(false);
+				if (turnRef.current === turn) {
+					turnRef.current = null;
+					setPending(false);
+				}
 			}
 		},
 		[effectiveMode, pending, resolveIn, setMode],
@@ -646,19 +783,52 @@ export function useAssistant() {
 			if (pending) return;
 			setMode(as);
 			setPending(true);
+			const turn = new AbortController();
+			turnRef.current = turn;
 			try {
 				const all = messagesRef.current;
 				const at = all.findIndex((m) => m.id === messageId);
 				// Everything before the user turn this reply answered.
 				const before = at > 0 ? all.slice(0, at - 1) : [];
-				const reply = await resolveIn(as, text, as === "general" || as === "book" ? historyOf(before) : []);
-				setMessages((prev) => prev.map((m) => (m.id === messageId ? reply : m)));
+				const reply = await resolveIn(as, text, as === "general" || as === "book" ? historyOf(before) : [], turn.signal);
+				if (!turn.signal.aborted) setMessages((prev) => prev.map((m) => (m.id === messageId ? reply : m)));
+			} catch (e) {
+				if (!turn.signal.aborted) throw e;
 			} finally {
-				setPending(false);
+				if (turnRef.current === turn) {
+					turnRef.current = null;
+					setPending(false);
+				}
 			}
 		},
 		[pending, resolveIn, setMode],
 	);
+
+	/**
+	 * Stop: the reply on its way is dropped — the model call with it, so a
+	 * long answer is not paid for — and the thread says so in a quiet line,
+	 * kept out of what the model is shown. The question stays, to ask again.
+	 */
+	const stop = useCallback(() => {
+		const turn = turnRef.current;
+		if (turn === null) return;
+		turnRef.current = null;
+		turn.abort();
+		setPending(false);
+		const lang = uiLang();
+		const note: AssistantMessage = {
+			id: newId(),
+			role: "assistant",
+			text: pick(lang, "Stopped.", "已停止。"),
+			lang,
+			failed: true,
+			streamed: true,
+		};
+		setMessages((prev) => [...prev, note]);
+	}, []);
+
+	// Nothing answers into a panel that has gone.
+	useEffect(() => () => turnRef.current?.abort(), []);
 
 	return {
 		mode: effectiveMode,
@@ -673,6 +843,7 @@ export function useAssistant() {
 		pending,
 		send,
 		readAs,
+		stop,
 		reset,
 		expireIfIdle,
 		markStreamed,
@@ -683,5 +854,12 @@ export function useAssistant() {
 		sessionId,
 		greeted,
 		markGreeted,
+		savedChatId,
+		saveState,
+		savedLineHidden: savedChatId !== null && savedLineHiddenFor === savedChatId,
+		hideSavedLine,
+		saveChat,
+		openChat,
+		forgetChat,
 	};
 }

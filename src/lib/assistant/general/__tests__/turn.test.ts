@@ -141,4 +141,43 @@ describe("resolveGeneralTurn", () => {
 		expect(out.text).toBe("Hm.");
 		expect(out.toolsFailed).toBe(true);
 	});
+
+	describe("stopped", () => {
+		it("makes no call once stopped", async () => {
+			const model = scripted([step([text("never")])]);
+			const stop = new AbortController();
+			stop.abort();
+			await expect(
+				resolveGeneralTurn({ text: "hi", history: [], context: ctx, call: model.call, execute: vi.fn(), signal: stop.signal }),
+			).rejects.toThrow();
+			expect(model.call).not.toHaveBeenCalled();
+		});
+
+		it("runs no tool and makes no next call when stopped while the model was answering", async () => {
+			const stop = new AbortController();
+			const call = vi.fn(async () => {
+				stop.abort();
+				return step([use("t1", "read_strum", { text: "C G" })], "tool_use");
+			});
+			const execute = vi.fn(async () => made);
+			await expect(
+				resolveGeneralTurn({ text: "C G", history: [], context: ctx, call, execute, signal: stop.signal }),
+			).rejects.toThrow();
+			expect(call).toHaveBeenCalledTimes(1);
+			expect(execute).not.toHaveBeenCalled();
+		});
+
+		it("makes no next call when stopped while a tool ran", async () => {
+			const stop = new AbortController();
+			const model = scripted([step([use("t1", "read_strum", { text: "C G" })], "tool_use"), step([text("never")])]);
+			const execute = vi.fn(async () => {
+				stop.abort();
+				return made;
+			});
+			await expect(
+				resolveGeneralTurn({ text: "C G", history: [], context: ctx, call: model.call, execute, signal: stop.signal }),
+			).rejects.toThrow();
+			expect(model.call).toHaveBeenCalledTimes(1);
+		});
+	});
 });

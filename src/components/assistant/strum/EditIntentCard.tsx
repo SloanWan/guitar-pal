@@ -19,6 +19,7 @@ import { patternRhythm } from "@/lib/strumRhythm";
 import type { NamedPattern } from "@/lib/lastPattern";
 import { STRUM_CAPO_MAX, type StrumPattern } from "@/lib/strumPatterns";
 import { pick, type Lang } from "@/lib/assistant/lang";
+import { Button } from "@/components/ui/button";
 import { Option, Options } from "../Options";
 
 /**
@@ -197,8 +198,8 @@ export default function EditIntentCard({
 
 	if (done) {
 		return (
-			<p className="flex items-center gap-1.5 pl-2 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent">
-				<Check className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+			<p className="as-done">
+				<Check aria-hidden="true" />
 				{outcome ?? "Done"}
 			</p>
 		);
@@ -231,14 +232,14 @@ export default function EditIntentCard({
 			<>
 				<Options>
 					{canCreate && edit.kind === "unknown-pattern" && (
-						<Option order={0} tone="outline" onClick={createNamed} icon={<Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
+						<Option order={0} tone="outline" onClick={createNamed} icon={<Plus aria-hidden="true" />}>
 							{t(`Make “${edit.name}”`, `新建「${edit.name}」`)}
 						</Option>
 					)}
-					<Option order={canCreate ? 1 : 0} tone="outline" onClick={openFields} icon={<Pencil className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
+					<Option order={canCreate ? 1 : 0} tone="outline" onClick={openFields} icon={<Pencil aria-hidden="true" />}>
 						{edit.kind === "unknown-pattern" ? t("Pick one", "选一个") : t("Fill it in", "填一下")}
 					</Option>
-					<Option order={canCreate ? 2 : 1} tone="ghost" onClick={() => setDismissed(true)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
+					<Option order={canCreate ? 2 : 1} tone="ghost" onClick={() => setDismissed(true)} icon={<X aria-hidden="true" />}>
 						{t("Not now", "先不了")}
 					</Option>
 				</Options>
@@ -252,10 +253,10 @@ export default function EditIntentCard({
 		return (
 			<>
 				<Options>
-					<Option order={0} tone="ghost" onClick={() => setDismissed(true)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
+					<Option order={0} tone="ghost" onClick={() => setDismissed(true)} icon={<X aria-hidden="true" />}>
 						{t("Keep it", "留着")}
 					</Option>
-					<Option order={1} tone="danger" onClick={confirm} icon={<Trash2 className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
+					<Option order={1} tone="danger" onClick={confirm} icon={<Trash2 aria-hidden="true" />}>
 						{t("Delete", "删除")}
 					</Option>
 				</Options>
@@ -266,139 +267,135 @@ export default function EditIntentCard({
 
 	return (
 		<Card>
-			<Row label={op === "attach" ? "Add to" : "Rename"}>
-				{editing ? (
-					<select
-						value={target?.id ?? ""}
-						onChange={(e) => {
-							const next = patterns.find((p) => p.id === e.target.value) ?? null;
-							setTarget(next ? { id: next.id, name: next.name } : null);
-						}}
-						aria-label={op === "attach" ? "Pattern to add the chords to" : "Pattern to rename"}
-						className="w-full border border-line-strong bg-panel px-2 py-1 font-mono text-xs text-ink focus-visible:border-denim focus-visible:outline-none"
-					>
-						<option value="">Pick a pattern…</option>
-						{patterns
-							.filter((p) => op === "attach" || !isPreset(p.id))
-							.map((p) => (
-								<option key={p.id} value={p.id}>
-									{p.name}
-								</option>
-							))}
-					</select>
-				) : (
-					<span className="font-mono text-xs text-ink">{target?.name}</span>
-				)}
-			</Row>
+			<div className="as-card-b">
+				<dl className="as-fields">
+					<Row label={op === "attach" ? "Add to" : "Rename"}>
+						{editing ? (
+							<select
+								value={target?.id ?? ""}
+								onChange={(e) => {
+									const next = patterns.find((p) => p.id === e.target.value) ?? null;
+									setTarget(next ? { id: next.id, name: next.name } : null);
+								}}
+								aria-label={op === "attach" ? "Pattern to add the chords to" : "Pattern to rename"}
+								className="as-field-input"
+							>
+								<option value="">Pick a pattern…</option>
+								{patterns
+									.filter((p) => op === "attach" || !isPreset(p.id))
+									.map((p) => (
+										<option key={p.id} value={p.id}>
+											{p.name}
+										</option>
+									))}
+							</select>
+						) : (
+							<span>{target?.name}</span>
+						)}
+					</Row>
 
-			{op === "attach" && (
-				<Row label="Chords">
-					{editing ? (
-						<input
-							type="text"
-							autoFocus={chordLine === ""}
-							value={chordLine}
-							onChange={(e) => setChordLine(e.target.value)}
-							onKeyDown={(e) => submitOnEnter(e, confirm)}
-							onBlur={() => setChordLine((line) => canonicalLine(line, index))}
-							aria-label="Chords to add, in order"
-							spellCheck={false}
-							className="w-full border border-line-strong bg-panel px-2 py-1 font-mono text-xs tracking-[0.08em] text-ink focus-visible:border-denim focus-visible:outline-none"
-						/>
-					) : (
-						<span className="flex flex-wrap gap-x-2 gap-y-1 font-mono text-xs">
-							{parsed.tokens.length === 0 && (
-								<span className="text-ink-faint">not said — write them here</span>
-							)}
-							{parsed.tokens.map((token, i) => (
-								<span
-									key={`${token.input}-${i}`}
-									// Shown as the library spells it, not as it was typed: "d#"
-									// coming back as "Eb" is how you see it was understood. A word
-									// the library cannot place keeps the player's own spelling and
-									// is shown, not dropped — it would be saved as a bar that holds
-									// its time and sounds nothing until a shape is drawn for it.
-									className={token.chord || !indexReady ? "text-ink" : "text-destructive"}
-									title={
-										token.chord || !indexReady ? undefined : `${token.input} — not in the chord library`
-									}
-								>
-									{token.chord ? chordAbbreviation(token.chord) : token.input}
+					{op === "attach" && (
+						<Row label="Chords">
+							{editing ? (
+								<input
+									type="text"
+									autoFocus={chordLine === ""}
+									value={chordLine}
+									onChange={(e) => setChordLine(e.target.value)}
+									onKeyDown={(e) => submitOnEnter(e, confirm)}
+									onBlur={() => setChordLine((line) => canonicalLine(line, index))}
+									aria-label="Chords to add, in order"
+									spellCheck={false}
+									className="as-field-input"
+								/>
+							) : (
+								<span className="as-chordwords">
+									{parsed.tokens.length === 0 && (
+										<span className="as-card-note">not said — write them here</span>
+									)}
+									{parsed.tokens.map((token, i) => (
+										<span
+											key={`${token.input}-${i}`}
+											// Shown as the library spells it, not as it was typed: "d#"
+											// coming back as "Eb" is how you see it was understood. A word
+											// the library cannot place keeps the player's own spelling and
+											// is shown, not dropped — it would be saved as a bar that holds
+											// its time and sounds nothing until a shape is drawn for it.
+											className="as-chordword"
+											data-unknown={token.chord || !indexReady ? undefined : ""}
+											title={
+												token.chord || !indexReady ? undefined : `${token.input} — not in the chord library`
+											}
+										>
+											{token.chord ? chordAbbreviation(token.chord) : token.input}
+										</span>
+									))}
 								</span>
-							))}
-						</span>
+							)}
+						</Row>
 					)}
-				</Row>
-			)}
 
-			{op === "attach" && (editing || capo !== null) && (
-				<Row label="Capo">
-					{editing ? (
-						<input
-							type="number"
-							min={0}
-							max={STRUM_CAPO_MAX}
-							value={capoText}
-							onChange={(e) => setCapoText(e.target.value)}
-							onKeyDown={(e) => submitOnEnter(e, confirm)}
-							aria-label="Capo fret, empty for none"
-							placeholder="none"
-							className="w-20 border border-line-strong bg-panel px-2 py-1 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:border-denim focus-visible:outline-none"
-						/>
-					) : (
-						<span className="font-mono text-xs text-ink">fret {capo}</span>
+					{op === "attach" && (editing || capo !== null) && (
+						<Row label="Capo">
+							{editing ? (
+								<input
+									type="number"
+									min={0}
+									max={STRUM_CAPO_MAX}
+									value={capoText}
+									onChange={(e) => setCapoText(e.target.value)}
+									onKeyDown={(e) => submitOnEnter(e, confirm)}
+									aria-label="Capo fret, empty for none"
+									placeholder="none"
+									className="as-field-input"
+									style={{ width: 80 }}
+								/>
+							) : (
+								<span>fret {capo}</span>
+							)}
+						</Row>
 					)}
-				</Row>
-			)}
 
-			{op === "rename" && (
-				<Row label="To">
-					{editing ? (
-						<input
-							type="text"
-							autoFocus={newName === ""}
-							value={newName}
-							onChange={(e) => setNewName(e.target.value)}
-							onKeyDown={(e) => submitOnEnter(e, confirm)}
-							aria-label="New name"
-							maxLength={60}
-							className="w-full border border-line-strong bg-panel px-2 py-1 font-mono text-xs text-ink focus-visible:border-denim focus-visible:outline-none"
-						/>
-					) : (
-						<span className="font-mono text-xs text-ink">{newName}</span>
+					{op === "rename" && (
+						<Row label="To">
+							{editing ? (
+								<input
+									type="text"
+									autoFocus={newName === ""}
+									value={newName}
+									onChange={(e) => setNewName(e.target.value)}
+									onKeyDown={(e) => submitOnEnter(e, confirm)}
+									aria-label="New name"
+									maxLength={60}
+									className="as-field-input"
+								/>
+							) : (
+								<span>{newName}</span>
+							)}
+						</Row>
 					)}
-				</Row>
-			)}
+				</dl>
 
-			{op === "attach" && indexReady && parsed.unmatched.length > 0 && !editing && (
-				<Problem>
-					{parsed.unmatched.join(", ")} {parsed.unmatched.length === 1 ? "is" : "are"} not in
-					the chord library — those bars will keep their place and sound nothing.
-				</Problem>
-			)}
-
-			{error && <Problem>{error}</Problem>}
-
-			<div className="flex items-center justify-end gap-2 border-t border-line px-2 py-2">
-				{editing ? (
-					<>
-						<GhostButton onClick={() => setEditing(false)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							{t("Cancel", "取消")}
-						</GhostButton>
-						<FillButton onClick={confirm} icon={<Check className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							{t("Submit", "提交")}
-						</FillButton>
-					</>
-				) : (
-					<>
-						<GhostButton onClick={openFields} icon={<Pencil className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							{t("Edit", "修改")}
-						</GhostButton>
-						<FillButton onClick={confirm} icon={<Check className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-							{t("Confirm", "确认")}
-						</FillButton>
-					</>
+				{op === "attach" && indexReady && parsed.unmatched.length > 0 && !editing && (
+					<Problem>
+						{parsed.unmatched.join(", ")} {parsed.unmatched.length === 1 ? "is" : "are"} not in
+						the chord library — those bars will keep their place and sound nothing.
+					</Problem>
 				)}
+
+				{error && <Problem>{error}</Problem>}
+			</div>
+
+			{/* One footer for both states, the same height: the card does not jump into edit mode. */}
+			<div className="as-card-f">
+				<Button variant="ghost" size="sm" onClick={editing ? () => setEditing(false) : openFields}>
+					{editing ? <X aria-hidden="true" /> : <Pencil aria-hidden="true" />}
+					{editing ? t("Cancel", "取消") : t("Edit", "修改")}
+				</Button>
+				<Button size="sm" onClick={confirm}>
+					<Check aria-hidden="true" />
+					{editing ? t("Submit", "提交") : t("Confirm", "确认")}
+				</Button>
 			</div>
 		</Card>
 	);
@@ -414,55 +411,22 @@ function submitOnEnter(e: React.KeyboardEvent, submit: () => void) {
 
 function Card({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="mt-2 w-full border border-denim bg-surface animate-[proposal-pop_0.18s_ease-out] motion-reduce:animate-none">
+		<div className="as-card" data-m="strum">
 			{children}
 		</div>
 	);
 }
 
+/** A label, then what will be written: one row of the card's list. */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
 	return (
-		<div className="flex items-baseline gap-2 px-3 py-2">
-			<span className="w-14 shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-ink-faint">
-				{label}
-			</span>
-			<span className="min-w-0 flex-1">{children}</span>
-		</div>
+		<>
+			<dt>{label}</dt>
+			<dd>{children}</dd>
+		</>
 	);
 }
 
 function Problem({ children }: { children: React.ReactNode }) {
-	return <p className="px-3 pb-2 text-[11px] leading-snug text-destructive">{children}</p>;
+	return <p className="as-problem">{children}</p>;
 }
-
-const BUTTON =
-	"flex items-center gap-1 px-2 py-1 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors duration-(--dur-hover) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1";
-
-interface ButtonProps {
-	onClick: () => void;
-	icon: React.ReactNode;
-	children: React.ReactNode;
-}
-
-function GhostButton({ onClick, icon, children }: ButtonProps) {
-	return (
-		<button type="button" onClick={onClick} className={`${BUTTON} text-ink-dim hover:text-ink`}>
-			{icon}
-			{children}
-		</button>
-	);
-}
-
-function FillButton({ onClick, icon, children }: ButtonProps) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={`${BUTTON} border border-denim bg-denim text-on-denim hover:bg-denim-accent`}
-		>
-			{icon}
-			{children}
-		</button>
-	);
-}
-

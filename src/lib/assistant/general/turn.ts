@@ -37,6 +37,12 @@ export interface GeneralTurnInput {
 	uiLang?: Lang;
 	/** Model calls per turn — a read, a compose, one repair, the reply. Never a loop on the player's money. */
 	maxCalls?: number;
+	/**
+	 * The player's Stop. Checked before every model call and every tool, so a
+	 * stopped turn makes no further call; `call` is expected to drop the one
+	 * in flight. The turn then rejects with the signal's reason.
+	 */
+	signal?: AbortSignal;
 }
 
 export interface GeneralTurnOutcome {
@@ -78,6 +84,7 @@ export async function resolveGeneralTurn({
 	execute,
 	uiLang = "en",
 	maxCalls = MAX_CALLS,
+	signal,
 }: GeneralTurnInput): Promise<GeneralTurnOutcome> {
 	const lang = detectLang(text, uiLang);
 	const messages: Anthropic.MessageParam[] = [
@@ -94,7 +101,9 @@ export async function resolveGeneralTurn({
 	let model: string | undefined;
 
 	while (calls < maxCalls) {
+		signal?.throwIfAborted();
 		const step = await call(messages, context);
+		signal?.throwIfAborted();
 		calls += 1;
 		if (step.model) model = step.model;
 		spoken = step.content
@@ -108,6 +117,7 @@ export async function resolveGeneralTurn({
 		messages.push({ role: "assistant", content: step.content });
 		const results: Anthropic.ToolResultBlockParam[] = [];
 		for (const use of uses) {
+			signal?.throwIfAborted();
 			const outcome = await run(use, execute);
 			trace.push({ name: use.name, input: use.input, result: outcome.result, isError: outcome.isError });
 			if (isToolName(use.name)) toolsUsed.push(use.name);

@@ -2,13 +2,23 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowUpRight, TriangleAlert } from "lucide-react";
-import StepGrid from "@/components/strum/StepGrid";
+import { Button } from "@/components/ui/button";
+import RhythmGrid from "@/components/strum/stage/RhythmGrid";
 import { chordAbbreviation } from "@/lib/strumProgressions";
+import { DEFAULT_STRUM_BPM } from "@/lib/strumPatterns";
+import { rhythmOfBars } from "@/lib/strumRhythm";
+import { DEFAULT_METER, SUPPORTED_METERS, beatsPerBar, type Meter } from "@/lib/strumMeter";
 import { patternHandoff, stashHandoff } from "@/lib/assistant/handoff";
 import type { AssistantProposal } from "@/lib/assistant/types";
+import HearButton from "../HearButton";
+import { useStrumAudition } from "./useStrumAudition";
+import "@/components/strum/strum.css";
 
 /**
  * What the assistant is offering, drawn as the real grid rather than described.
+ *
+ * "Hear it" plays the bars once, the playhead walking the grid and the
+ * sounding chord lit above it.
  *
  * Nothing is written from here. The proposal is handed to the strum page, which
  * owns saving patterns and progressions, so there is exactly one write path in
@@ -31,10 +41,26 @@ function warningLines(proposal: AssistantProposal): string[] {
 
 const STRUM_PATH = "/strum";
 
+/** A proposal carries no meter: it is the simple one its bars have the beats of. */
+function proposalMeter(proposal: AssistantProposal): Meter {
+	const beats = proposal.bars[0]?.beats.length ?? 0;
+	return SUPPORTED_METERS.find((m) => m[1] === 4 && beatsPerBar(m) === beats) ?? DEFAULT_METER;
+}
+
 export default function ProposalPreview({ proposal }: { proposal: AssistantProposal }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const warnings = warningLines(proposal);
+	const rhythm = rhythmOfBars(proposal.bars);
+	const audition = useStrumAudition({
+		bars: proposal.bars,
+		bpm: proposal.bpm ?? DEFAULT_STRUM_BPM,
+		capo: proposal.capo ?? 0,
+		meter: proposalMeter(proposal),
+		rhythmBars: rhythm.length,
+	});
+	// Bar i carries chord i of the line; a bar past the last chord has none.
+	const soundingChord = audition.bar !== null && audition.bar < proposal.chords.length ? audition.bar : null;
 
 	function openInStrum() {
 		// The stash announces itself, so a strum page already on screen picks it
@@ -44,54 +70,52 @@ export default function ProposalPreview({ proposal }: { proposal: AssistantPropo
 	}
 
 	return (
-		<div className="mt-2 border border-denim bg-surface animate-[proposal-pop_0.18s_ease-out] motion-reduce:animate-none">
-			<div className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2">
-				<span className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-					{proposal.name}
-				</span>
-				<span className="flex shrink-0 gap-2 font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+		<div className="as-card" data-m="strum">
+			<div className="as-card-h">
+				<span className="as-card-t">{proposal.name}</span>
+				<span className="as-card-meta">
 					{proposal.capo !== null && <span>capo {proposal.capo}</span>}
 					{proposal.bpm !== null && <span>{proposal.bpm} BPM</span>}
 				</span>
 			</div>
 
-			<div className="overflow-x-auto px-3 py-3">
-				<StepGrid bars={proposal.bars} activeCell={null} size="sm" showLabels={false} />
-			</div>
-
-			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2">
-				<span className="font-mono text-xs tracking-[0.08em] text-ink">{proposal.rhythm}</span>
+			<div className="as-card-b">
 				{proposal.chords.length > 0 && (
-					<span className="font-mono text-xs tracking-[0.04em] text-ink-dim">
-						{proposal.chords.map(chordAbbreviation).join(" · ")}
-					</span>
+					<div className="as-chordline">
+						{proposal.chords.map((chord, i) => (
+							<span key={i} data-on={i === soundingChord ? "" : undefined}>
+								{chordAbbreviation(chord)}
+							</span>
+						))}
+					</div>
+				)}
+				<div className="as-rhythm">
+					{/* The rhythm once, as the pattern will hold it — the chords above say how many bars it plays. */}
+					<RhythmGrid rhythm={rhythm} meter={proposalMeter(proposal)} position={audition.position} />
+				</div>
+				{warnings.length > 0 && (
+					<ul className="as-warn">
+						{warnings.map((line) => (
+							<li key={line}>
+								<TriangleAlert aria-hidden="true" />
+								<span>{line}</span>
+							</li>
+						))}
+					</ul>
 				)}
 			</div>
 
-			{warnings.length > 0 && (
-				<ul className="border-t border-line px-3 py-2">
-					{warnings.map((line) => (
-						<li key={line} className="flex gap-2 py-0.5 text-xs leading-snug text-ink-dim">
-							<TriangleAlert
-								className="mt-px size-3.5 shrink-0"
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-							<span>{line}</span>
-						</li>
-					))}
-				</ul>
-			)}
-
-			<div className="border-t border-line p-2">
-				<button
-					type="button"
-					onClick={openInStrum}
-					className="flex h-(--h-control) w-full items-center justify-center gap-1.5 border border-denim bg-transparent px-3 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-				>
-					Open in strum
-					<ArrowUpRight className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-				</button>
+			<div className="as-card-f">
+				<HearButton
+					playing={audition.isPlaying}
+					preparing={audition.isPreparing}
+					disabled={!audition.ready}
+					onClick={audition.toggle}
+				/>
+				<Button size="sm" onClick={openInStrum}>
+					Open in Strum
+					<ArrowUpRight aria-hidden="true" />
+				</Button>
 			</div>
 		</div>
 	);

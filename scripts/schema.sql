@@ -36,6 +36,21 @@ CREATE SCHEMA public;
 COMMENT ON SCHEMA public IS 'standard public schema';
 
 
+--
+-- Name: record_visit(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.record_visit(p_kind text, p_target text) RETURNS void
+    LANGUAGE sql
+    SET search_path TO ''
+    AS $$
+  insert into public.user_visits (user_id, kind, target)
+  values (auth.uid(), p_kind, p_target)
+  on conflict (user_id, kind, target)
+  do update set count = public.user_visits.count + 1, last_at = now();
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -569,6 +584,29 @@ COMMENT ON COLUMN public.user_strum_patterns.meter IS 'Time signature as [top, b
 
 
 --
+-- Name: user_visits; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_visits (
+    user_id uuid NOT NULL,
+    kind text NOT NULL,
+    target text NOT NULL,
+    count integer DEFAULT 1 NOT NULL,
+    last_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT user_visits_count_check CHECK ((count > 0)),
+    CONSTRAINT user_visits_kind_check CHECK ((kind = ANY (ARRAY['strum'::text, 'tab'::text, 'chord'::text, 'book'::text]))),
+    CONSTRAINT user_visits_target_check CHECK (((char_length(target) >= 1) AND (char_length(target) <= 200)))
+);
+
+
+--
+-- Name: TABLE user_visits; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.user_visits IS 'How many times a player opened each strum pattern, tab, chord and book; Home lists the most opened.';
+
+
+--
 -- Name: book_chapters book_chapters_book_id_index_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -793,6 +831,14 @@ ALTER TABLE ONLY public.user_strum_patterns
 
 
 --
+-- Name: user_visits user_visits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_visits
+    ADD CONSTRAINT user_visits_pkey PRIMARY KEY (user_id, kind, target);
+
+
+--
 -- Name: book_chunks_tsv_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -839,6 +885,13 @@ CREATE INDEX user_chord_voicings_user_chord_idx ON public.user_chord_voicings US
 --
 
 CREATE INDEX user_pattern_progressions_owner_idx ON public.user_pattern_progressions USING btree (user_id, pattern_id, order_index);
+
+
+--
+-- Name: user_visits_top_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX user_visits_top_idx ON public.user_visits USING btree (user_id, count DESC, last_at DESC);
 
 
 --
@@ -1042,6 +1095,14 @@ ALTER TABLE ONLY public.user_strum_patterns
 
 
 --
+-- Name: user_visits user_visits_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_visits
+    ADD CONSTRAINT user_visits_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: chord_voicings Public read chord_voicings; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1116,6 +1177,27 @@ CREATE POLICY "Users manage own last pattern" ON public.user_last_pattern USING 
 --
 
 CREATE POLICY "anyone can report a missing chord" ON public.chord_requests FOR INSERT TO authenticated, anon WITH CHECK (true);
+
+
+--
+-- Name: user_visits insert own visits; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "insert own visits" ON public.user_visits FOR INSERT TO authenticated WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_visits read own visits; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "read own visits" ON public.user_visits FOR SELECT TO authenticated USING ((auth.uid() = user_id));
+
+
+--
+-- Name: user_visits update own visits; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "update own visits" ON public.user_visits FOR UPDATE TO authenticated USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
 
 
 --
@@ -1383,6 +1465,13 @@ CREATE POLICY "users can manage their own exercise_logs" ON public.exercise_logs
 
 
 --
+-- Name: user_visits; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_visits ENABLE ROW LEVEL SECURITY;
+
+
+--
 -- Name: exercises users can manage their own exercises; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1421,6 +1510,15 @@ GRANT USAGE ON SCHEMA public TO anon;
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT USAGE ON SCHEMA public TO service_role;
 GRANT USAGE ON SCHEMA public TO book_service;
+
+
+--
+-- Name: FUNCTION record_visit(p_kind text, p_target text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.record_visit(p_kind text, p_target text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.record_visit(p_kind text, p_target text) TO authenticated;
+GRANT ALL ON FUNCTION public.record_visit(p_kind text, p_target text) TO service_role;
 
 
 --
@@ -1631,6 +1729,15 @@ GRANT ALL ON TABLE public.user_pattern_progressions TO service_role;
 GRANT ALL ON TABLE public.user_strum_patterns TO anon;
 GRANT ALL ON TABLE public.user_strum_patterns TO authenticated;
 GRANT ALL ON TABLE public.user_strum_patterns TO service_role;
+
+
+--
+-- Name: TABLE user_visits; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.user_visits TO anon;
+GRANT ALL ON TABLE public.user_visits TO authenticated;
+GRANT ALL ON TABLE public.user_visits TO service_role;
 
 
 --

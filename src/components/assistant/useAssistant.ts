@@ -611,25 +611,28 @@ export function useAssistant() {
 		[callRoute, chordIndex, loadPatterns, loadTabPatterns, page, pathname],
 	);
 
+	/** `as` answers in that mode and settles the thread on it — a page asking for the player (Home's Ask). */
 	const send = useCallback(
-		async (input: string) => {
+		async (input: string, as?: AssistantMode) => {
 			const text = input.trim();
 			if (text === "" || pending) return;
+			const answerIn = as ?? effectiveMode;
+			if (as) setMode(as);
 
 			const userMessage: AssistantMessage = { id: newId(), role: "user", text };
 			setMessages((prev) => [...prev, userMessage]);
 			setPending(true);
 			// Talking settles the mode: a thread that has been spoken to keeps its
 			// assistant across pages, where an untouched one still follows the page.
-			writeMode(effectiveMode);
+			writeMode(answerIn);
 			try {
-				const reply = await resolveIn(effectiveMode, text, historyOf(messagesRef.current));
+				const reply = await resolveIn(answerIn, text, historyOf(messagesRef.current));
 				setMessages((prev) => [...prev, reply]);
 			} finally {
 				setPending(false);
 			}
 		},
-		[effectiveMode, pending, resolveIn],
+		[effectiveMode, pending, resolveIn, setMode],
 	);
 
 	/**

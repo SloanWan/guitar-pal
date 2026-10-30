@@ -1,6 +1,6 @@
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import { validateBars } from "@/lib/strumBars";
-import type { AssistantProposal } from "@/lib/assistant/types";
+import type { AssistantMode, AssistantProposal } from "@/lib/assistant/types";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { validateFingerpickPattern, type ValidationIssue } from "@/lib/tabImport";
 import { isSupportedMeter } from "@/lib/strumMeter";
@@ -38,6 +38,22 @@ export const ASSISTANT_CLOSE_EVENT = "guitarpal:assistant-close";
 
 export function closeAssistant(): void {
 	window.dispatchEvent(new CustomEvent(ASSISTANT_CLOSE_EVENT));
+}
+
+/**
+ * A sentence asked from a page rather than from the panel (Home's Ask): the
+ * panel opens in the mode the player chose there and is sent the sentence,
+ * as if it had been typed into it.
+ */
+export const ASSISTANT_ASK_EVENT = "guitarpal:assistant-ask";
+
+export interface AssistantAsk {
+	text: string;
+	mode: AssistantMode;
+}
+
+export function askAssistant(ask: AssistantAsk): void {
+	window.dispatchEvent(new CustomEvent<AssistantAsk>(ASSISTANT_ASK_EVENT, { detail: ask }));
 }
 
 /** A pattern the assistant made: saved as a pattern, plus a progression if it carries chords. */

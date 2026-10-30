@@ -97,6 +97,7 @@ import {
 	type LoopGapSeconds,
 } from "@/components/fingerpick/playbackConstants";
 import { indexPattern } from "@/lib/fingerpickIndex";
+import { useRecordVisit } from "@/hooks/useRecordVisit";
 
 /**
  * The fingerpick player and editor. On /fingerpick it opens the player's
@@ -660,6 +661,9 @@ export default function FingerpickWorkspace({ shared }: { shared?: SharedFingerp
 		/* eslint-enable react-hooks/set-state-in-effect */
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isLoading, patternRestored]);
+
+	// Opened, picked or restored, counts toward Home's "Most opened"; a share is someone else's.
+	useRecordVisit(user, "tab", !shared && patternRestored ? selectedPattern.id : null);
 
 	// Persist the current pattern so a refresh reopens it. Gated on the restore
 	// flag so the initial default doesn't clobber the saved id before restore runs.

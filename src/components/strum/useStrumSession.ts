@@ -31,6 +31,7 @@ import {
 import type { SharedStrum } from "@/lib/sharedItems";
 import { createClient } from "@/lib/supabase";
 import { saveLastPattern } from "@/lib/lastPattern";
+import { useRecordVisit } from "@/hooks/useRecordVisit";
 import type { useStrumPatterns } from "@/components/strum/useStrumPatterns";
 import type { useChordProgressions } from "@/components/strum/useChordProgressions";
 
@@ -350,6 +351,9 @@ export function useStrumSession({ shared, user, library, sequences, stop }: Args
 		if (openProgressionId) localStorage.setItem(OPEN_PROGRESSION_KEY, openProgressionId);
 		else localStorage.removeItem(OPEN_PROGRESSION_KEY);
 	}, [isShared, progressionRestored, openProgressionId]);
+
+	// Opened, picked or restored, counts toward Home's "Most opened"; a share is someone else's.
+	useRecordVisit(user, "strum", !isShared && patternRestored && selectedPattern ? selectedPattern.id : null);
 
 	function selectPattern(pattern: StrumPattern) {
 		stop();

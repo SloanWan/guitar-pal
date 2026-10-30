@@ -1,43 +1,17 @@
 import { useState, useEffect } from "react";
-import type { Bar, ChordProgression } from "@/lib/strumPatterns";
-import { validateBars, normalizeBars, normalizeBpm } from "@/lib/strumBars";
-import { normalizeCapo } from "@/lib/strumProgressions";
+import type { ChordProgression } from "@/lib/strumPatterns";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 import {
 	migrateGuestStrumStorage,
 	progressionColumns,
+	progressionFromRow,
+	type ProgressionRow,
 	readStoredProgressions,
 	STRUM_PROGRESSIONS_STORAGE_KEY,
 } from "@/lib/strumStorage";
 
 const STORAGE_KEY = STRUM_PROGRESSIONS_STORAGE_KEY;
-
-/** A Supabase row from `user_pattern_progressions`; the table is not code-generated. */
-interface ProgressionRow {
-	id: string;
-	pattern_id: string;
-	bars: unknown;
-	order_index: number | null;
-	name: string | null;
-	bpm: number | null;
-	capo: number | null;
-}
-
-/** Drop rows whose bars no longer validate — a bad row must not break the list. */
-function rowToProgression(row: ProgressionRow): ChordProgression | null {
-	if (!validateBars(row.bars).ok) return null;
-	return {
-		id: row.id,
-		patternId: row.pattern_id,
-		bars: normalizeBars(row.bars as Bar[]),
-		orderIndex: row.order_index ?? 0,
-		name: row.name ?? "",
-		// Null means "no tempo of its own" — the pattern's tempo is used instead.
-		bpm: row.bpm === null ? undefined : normalizeBpm(row.bpm),
-		capo: normalizeCapo(row.capo),
-	};
-}
 
 function writeStored(progressions: ChordProgression[]) {
 	localStorage.setItem(STORAGE_KEY, JSON.stringify(progressions));
@@ -98,7 +72,7 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 			if (error) console.error("[useChordProgressions] load failed:", error.message);
 			setProgressions(
 				(data ?? [])
-					.map((row) => rowToProgression(row as ProgressionRow))
+					.map((row) => progressionFromRow(row as ProgressionRow))
 					.filter((p): p is ChordProgression => p !== null),
 			);
 			setProgressionsLoading(false);

@@ -744,13 +744,53 @@
 		border-color: var(--gp-m-500);
 		color: var(--gp-m-700);
 	}
+	/* The bar's chord popover: one column with room between its parts — the title,
+	   the search with Hear beside it (the matches open under the field, Hear stays
+	   put), the held shape, its actions. */
 	.te-quickchord {
-		width: 288px;
-		padding: 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		width: 320px;
+		padding: 16px 16px 18px;
 	}
 	.te-quickchord h3 {
-		margin: 0 0 8px;
-		font-size: 13px;
+		margin: 0;
+		font-size: 15px;
+		font-weight: 750;
+		letter-spacing: -0.01em;
+	}
+	.te-quickchord .te-irow {
+		flex-wrap: nowrap;
+	}
+	.te-quickchord .te-irow .csel {
+		flex: 1;
+		min-width: 0;
+	}
+	.te-quickchord .te-irow .csel-field {
+		align-self: stretch;
+	}
+	.te-quickchord .te-irow .csel-input {
+		flex: 1;
+		width: auto;
+		min-width: 0;
+	}
+	.te-quickchord .te-irow .csel-list {
+		width: 100%;
+		margin-top: 8px;
+	}
+	.te-quickchord .te-irow > .te-chip {
+		height: 26px;
+	}
+	.te-quickchord .te-why {
+		line-height: 1.5;
+	}
+	.te-quickchord .te-chordbox {
+		gap: 16px;
+		padding: 12px 16px 12px 10px;
+	}
+	.te-quickchord .te-chips {
+		gap: 8px;
 	}
 	.te-mb-trip {
 		height: 12px;

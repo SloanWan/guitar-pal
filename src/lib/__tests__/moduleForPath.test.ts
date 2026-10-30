@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moduleForPath } from "../moduleForPath";
+import { moduleForHref, moduleForPath } from "../moduleForPath";
 
 describe("moduleForPath", () => {
 	it("maps each module route and its sub-routes", () => {
@@ -28,5 +28,23 @@ describe("moduleForPath", () => {
 		expect(moduleForPath(null)).toBe("home");
 		expect(moduleForPath(undefined)).toBe("home");
 		expect(moduleForPath("")).toBe("home");
+	});
+});
+
+describe("moduleForHref", () => {
+	it("reads the path past a query or hash", () => {
+		expect(moduleForHref("/strum?pattern=abc", "/home")).toBe("strum");
+		expect(moduleForHref("/fingerpick#top", "/home")).toBe("tab");
+		expect(moduleForHref("/chords/create?frets=x32010", "/strum")).toBe("chords");
+	});
+
+	it("resolves a relative href against the page it is followed from", () => {
+		expect(moduleForHref("?pattern=abc", "/strum")).toBe("strum");
+		expect(moduleForHref("edit/new", "/fingerpick/")).toBe("tab");
+	});
+
+	it("is the page itself without an href", () => {
+		expect(moduleForHref(null, "/books/42")).toBe("books");
+		expect(moduleForHref("/", "/books/42")).toBe("home");
 	});
 });

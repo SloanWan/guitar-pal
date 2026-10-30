@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Slider } from "@/components/ui/slider";
-import { bpmFaderMarks } from "@/components/fingerpick/playbackConstants";
+import { bpmFaderMarks } from "@/lib/tempoMarks";
 import { pushTap, tapTempo } from "@/lib/stepper";
 import { isCompound, type Meter } from "@/lib/strumMeter";
 
@@ -16,6 +16,11 @@ export interface TempoProps {
 	defaultBpm: number;
 	/** Make the tempo on screen the one it opens at. Absent where nothing can be saved. */
 	onSaveDefault?: () => void;
+	/**
+	 * Where the slider reports while it is dragged, when playing every step of a drag
+	 * is too dear: the drag's end then goes to `onBpm`. Without it every step does.
+	 */
+	onSliding?: (bpm: number) => void;
 }
 
 /** A tempo clamped to the meter's range and rounded to a whole beat. */
@@ -41,7 +46,7 @@ export function useTapTempo(onTempo: (bpm: number) => void): () => void {
  * here appears or disappears as the tempo moves — Reset and "Open at …" are
  * always there and only enable — so the panel holding it never changes size.
  */
-export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault }: TempoProps) {
+export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault, onSliding }: TempoProps) {
 	const marks = bpmFaderMarks(meter);
 	const set = (value: number) => onBpm(clampTempo(value, meter));
 	const tap = useTapTempo(set);
@@ -53,10 +58,10 @@ export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault }: Te
 	return (
 		<div className="flex flex-col gap-3">
 			<div className="flex items-center gap-1.5">
-				<span className="st-tempo-val st-num">
-					{bpm} <span className="st-lab">{isCompound(meter) ? "BPM ♩." : "BPM"}</span>
+				<span className="pb-tempo-val pb-num">
+					{bpm} <span className="pb-lab">{isCompound(meter) ? "BPM ♩." : "BPM"}</span>
 				</span>
-				<span className="st-lab min-w-0 flex-1 truncate">{marks.labels[nearest]}</span>
+				<span className="pb-lab min-w-0 flex-1 truncate">{marks.labels[nearest]}</span>
 				<Chip onClick={() => set(bpm - 10)} aria-label="Ten slower">
 					−10
 				</Chip>
@@ -69,7 +74,8 @@ export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault }: Te
 			</div>
 			<Slider
 				value={bpm}
-				onChange={set}
+				onChange={onSliding ? (value) => onSliding(clampTempo(value, meter)) : set}
+				onCommit={onSliding ? set : undefined}
 				label="Tempo in BPM"
 				min={marks.min}
 				max={marks.max}
@@ -83,7 +89,7 @@ export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault }: Te
 				</Button>
 				<span className="flex-1" />
 				{onSaveDefault && (
-					<Button variant="secondary" size="xs" disabled={!changed} onClick={onSaveDefault} className="st-num">
+					<Button variant="secondary" size="xs" disabled={!changed} onClick={onSaveDefault} className="pb-num">
 						Open at {bpm} from now on
 					</Button>
 				)}

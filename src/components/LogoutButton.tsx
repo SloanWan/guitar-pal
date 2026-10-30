@@ -1,13 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "@/lib/auth";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** Signs out, then goes to the landing page; `loading` covers the round trip. */
 export function useLogout(): { logout: () => Promise<void>; loading: boolean } {
 	const [loading, setLoading] = useState(false);
-	const router = useRouter();
+	const router = useNavRouter();
 
 	async function logout() {
 		setLoading(true);

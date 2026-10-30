@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { Play, Redo2, Square, Undo2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -28,6 +27,7 @@ import {
 	rhythmText,
 	setRhythmBarCount,
 } from "@/lib/strumComposer";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** The starting points offered for a new pattern. */
 const STARTERS = ["4-4 old faithful", "4-4 on the beats", "4-4 boaf", "muted"]
@@ -52,7 +52,7 @@ const asBars = (rhythm: Beat[][]) => rhythm.map((beats) => ({ beats, chord: null
  * once, name it. Mounted only while open, so its engine lives no longer.
  */
 export default function PatternComposer({ editing, existingPatterns, user, onSave, onClose }: Props) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const startMeter = editing ? patternMeter(editing) : DEFAULT_METER;
 	const startRhythm = editing ? patternRhythm(editing) : [emptyRhythmBar(DEFAULT_METER)];
 	const [meter, setMeter] = useState<Meter>(startMeter);

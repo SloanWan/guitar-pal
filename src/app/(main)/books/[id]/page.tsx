@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import Link from "@/components/AppLink";
@@ -50,6 +49,7 @@ import {
 	STATUS_LABEL,
 	StatusLed,
 } from "@/components/books/bookUi";
+import { useNavRouter } from "@/components/nav-progress";
 
 
 function bookMeta(book: BookDetail): string {
@@ -67,7 +67,7 @@ function citedPage(detail: BookLocateDetail): SourceView {
 
 export default function BookPage({ params }: { params: Promise<{ id: string }> }) {
 	const { id } = use(params);
-	const router = useRouter();
+	const router = useNavRouter();
 	const load = useCallback(() => getBook(id), [id]);
 	const { value: book, error, refresh, set: setBook } = usePolledResource(load, bookInFlight);
 	const missing = error instanceof BookApiError && error.status === 404;

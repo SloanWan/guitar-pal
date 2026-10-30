@@ -358,3 +358,11 @@ export function applyPickSequence(
 	}
 	return { pattern: next, warnings };
 }
+
+/** An example sequence a bar of this meter takes, for the field's placeholder. */
+export function pickPlaceholder(timeSignature: [number, number]): string {
+	if (isCompound(timeSignature)) return timeSignature[0] === 6 ? "e.g. 632123 or 6(32)" : "e.g. 632123632123";
+	if (timeSignature[0] === 3) return "e.g. 321 or 6(32)1";
+	if (timeSignature[0] === 2) return "e.g. 32 or 3212";
+	return "e.g. 3212 or 6(32)1(32)";
+}

@@ -101,10 +101,10 @@
 		transform: none;
 		cursor: default;
 	}
+	/* No focus ring (Sloan, 2026-10-30): a press, a hop or a field's tint says where focus is. */
 	.gp-press:focus-visible,
 	.gp-focus:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 2px;
+		outline: none;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.gp-press,
@@ -321,8 +321,7 @@
 		filter: none;
 	}
 	.gp-playpick:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 2px;
+		outline: none;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.gp-playpick > :is(.gp-playpick-shape, .gp-playpick-icon) {
@@ -516,6 +515,22 @@
 		font-variant-numeric: tabular-nums;
 		color: var(--gp-ink);
 	}
+	.gp-stepper[data-dense] {
+		gap: 4px;
+	}
+	.gp-stepper[data-dense] .gp-stepper-btn {
+		width: 26px;
+		height: 26px;
+		border-radius: var(--gp-r-s);
+	}
+	.gp-stepper[data-dense] .gp-stepper-btn svg {
+		width: 14px;
+		height: 14px;
+	}
+	.gp-stepper[data-dense] .gp-stepper-val {
+		min-width: 2.2ch;
+		font-size: 15px;
+	}
 	.gp-stepper-unit {
 		margin-left: 3px;
 		font-size: 13px;
@@ -631,8 +646,7 @@
 			background-color var(--gp-d-state) var(--gp-ease-state);
 	}
 	.gp-hop:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 3px;
+		outline: none;
 	}
 	/* Lift: the chosen one is the only raised item — a module 300 ring, settled 2px up */
 	.gp-hop:is([aria-current="true"], [aria-current="page"], [aria-pressed="true"]) {
@@ -825,9 +839,10 @@
 			box-shadow: inset 0 0 0 1px var(--gp-edge);
 		}
 	}
+	/* A field being typed into: its line in the module's light tint, never a ring round it. */
 	.gp-input:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 1px;
+		outline: none;
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-300);
 	}
 	.gp-input[aria-invalid="true"] {
 		box-shadow: inset 0 0 0 2px var(--gp-bad);
@@ -897,8 +912,7 @@
 			box-shadow var(--gp-d-sink) var(--gp-e-sink);
 	}
 	.gp-slider-thumb:focus-visible {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 2px;
+		outline: none;
 	}
 	/* ticks sit under the track, inset by half a thumb the way the thumb itself is */
 	.gp-slider-ticks {
@@ -958,6 +972,9 @@
 		color: var(--gp-ink);
 		outline: none;
 	}
+	.gp-sheet[data-fixed] {
+		height: 88dvh;
+	}
 	.gp-sheet[data-state="open"] {
 		animation: gp-sheet-up var(--gp-d-sheet) var(--gp-spring-sheet) both;
 	}
@@ -970,6 +987,7 @@
 		width: 380px;
 		max-width: 100vw;
 		max-height: none;
+		height: auto;
 		border-radius: 0;
 		box-shadow: var(--gp-shadow-pop), -1px 0 0 var(--gp-line);
 	}
@@ -1021,7 +1039,7 @@
 		padding: 0 20px 8px;
 	}
 	/* The body takes the room left and scrolls; on a full-height panel that keeps a footer
-	   on the bottom edge, and a bottom sheet is only as tall as it needs. */
+	   on the bottom edge, and a bottom sheet is only as tall as it needs unless it is fixed. */
 	.gp-sheet-body {
 		flex: 1 1 auto;
 		min-height: 0;

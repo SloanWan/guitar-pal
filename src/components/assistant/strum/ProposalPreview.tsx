@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ArrowUpRight, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import RhythmGrid from "@/components/strum/stage/RhythmGrid";
@@ -13,6 +13,7 @@ import type { AssistantProposal } from "@/lib/assistant/types";
 import HearButton from "../HearButton";
 import { useStrumAudition } from "./useStrumAudition";
 import "@/components/strum/strum.css";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * What the assistant is offering, drawn as the real grid rather than described.
@@ -48,7 +49,7 @@ function proposalMeter(proposal: AssistantProposal): Meter {
 }
 
 export default function ProposalPreview({ proposal }: { proposal: AssistantProposal }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const pathname = usePathname();
 	const warnings = warningLines(proposal);
 	const rhythm = rhythmOfBars(proposal.bars);

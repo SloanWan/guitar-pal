@@ -1,45 +1,40 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ArrowUpRight, CirclePause, CirclePlay, CircleStop, Loader2, Pencil, Repeat } from "lucide-react";
-import { toast } from "sonner";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { ChapterExercise } from "@/lib/books/types";
-import { cropUrl, setExerciseStatus } from "@/lib/books/api";
+import { setExerciseStatus } from "@/lib/books/api";
 import { stashHandoff } from "@/lib/assistant/handoff";
 import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
 import { clampBpmToMeter } from "@/lib/strumBars";
 import { beatUnitGlyph } from "@/lib/strumMeter";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
-import { createClient } from "@/lib/supabase";
-import { saveLastPattern } from "@/lib/lastPattern";
-import { saveUserFingerpickPattern } from "@/lib/fingerpickPatternSync";
-import { useUser } from "@/hooks/useUser";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { useTempo } from "@/components/fingerpick/useTempo";
 import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
-import FingerpickEditModal from "@/components/fingerpick/FingerpickEditModal";
 import Rocker from "@/components/ui/Rocker";
 import { WarningsFold } from "@/components/books/IssueList";
 import SidePanel from "@/components/books/SidePanel";
 import { DenimButton, GhostButton, MONO_META } from "@/components/books/bookUi";
 import { indexPattern } from "@/lib/fingerpickIndex";
+import { editorHref, stashEditorDraft } from "@/lib/tabEditorEntry";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * A chapter draft open beside the book (#233). The page pushes its content
  * left and this takes the right half: the tab as the fingerpick page draws
  * it, a playhead, transport and tempo, and two ways out — Edit, which opens
- * the fingerpick editor on the draft and saves it to the player's library
- * through the same save that page uses; and Open in fingerpick, which takes
+ * the tab editor's page on the draft, with this page of the book beside it,
+ * and saves it to the player's library there; and Open in fingerpick, which takes
  * it there (by handoff while it is still a draft, by id once it is saved).
  *
- * The draft's row is marked `taken` on either of those, not on playing: a
- * draft that was only listened to has not been used.
+ * The draft's row is marked `taken` on either of those (the editor marks it
+ * when it saves), not on playing: a draft that was only listened to has not
+ * been used.
  *
  * One instance per draft — the page keys it on the exercise — so a switch
  * starts clean: a fresh audio context, the new draft's tempo, the cursor at
@@ -90,46 +85,17 @@ export default function ChapterDraftPanel({
 	/** See SidePanel: false when replacing a panel already open. */
 	animateOpen?: boolean;
 }) {
-	const router = useRouter();
-	const { user, loading } = useUser();
-	// The library, for the save: it keeps names unique and knows whether a
-	// pattern is new. Nothing here lists it.
-	const { patterns, saveCustomPattern, isLoading: libraryLoading } = useFingerpickPatterns(user, loading);
+	const router = useNavRouter();
+	const pathname = usePathname();
 	const { exercise } = draft;
 
 	// Whatever id the service gave the draft, a save makes a new pattern of the
 	// player's own: a fresh id keeps it from landing on one they already have.
-	const [pattern, setPattern] = useState<FingerpickPattern>(() => ({
+	const [pattern] = useState<FingerpickPattern>(() => ({
 		...draft.pattern,
 		id: crypto.randomUUID(),
 	}));
-	// Set by the first save; from then on the pattern on screen is the library's.
-	const [saved, setSaved] = useState(false);
-	const [editing, setEditing] = useState(false);
 	const [opening, setOpening] = useState(false);
-
-	// The editor opens inside the panel, not over the page: at lg the book's
-	// column stays live beside it (the source image can be zoomed there); in
-	// the sheet below lg it fills the sheet as before. A state, not a ref, so
-	// the editor gets the element once it exists.
-	const [panelEl, setPanelEl] = useState<HTMLElement | null>(null);
-
-	// Below lg nothing beside the editor can show the page, so the crop goes
-	// into the editor as a fold-out strip instead. Signed only when needed.
-	const split = useMediaQuery("(min-width: 1024px)", true);
-	const [cropSrc, setCropSrc] = useState<string | null>(null);
-	const cropPath = split ? null : exercise.crop_path;
-	useEffect(() => {
-		if (!cropPath) return;
-		let cancelled = false;
-		void cropUrl(cropPath).then((url) => {
-			if (!cancelled) setCropSrc(url);
-		});
-		return () => {
-			cancelled = true;
-		};
-	}, [cropPath]);
-	const reference = !split && cropSrc ? { url: cropSrc, alt: `Page ${exercise.page}, ${pattern.name}` } : undefined;
 
 	// Repeats flattened for playback; the staves stay compact. See FingerpickWorkspace.
 	const expanded = useMemo(() => expandFingerpickPattern(pattern), [pattern]);
@@ -151,7 +117,7 @@ export default function ChapterDraftPanel({
 
 	const patternBpm = clampBpmToMeter(pattern.bpm, pattern.timeSignature);
 	// Only the two ±10 steps here; the page has the fader, tap and reset.
-	const { bpm, resetBpm, handleBpmChange } = useTempo({
+	const { bpm, handleBpmChange } = useTempo({
 		initialBpm: patternBpm,
 		timeSignature: pattern.timeSignature,
 		isPlaying,
@@ -234,55 +200,41 @@ export default function ChapterDraftPanel({
 		void setExerciseStatus(bookId, exercise.id, "taken").catch(() => {});
 	}
 
-	// The editor's save, through the library's own: the name is kept unique,
-	// a guest's copy goes to the browser and a player's to the account. The
-	// panel then shows what was stored, at its tempo, from bar one.
-	function handleSave(next: FingerpickPattern) {
+	// The editor's page, with this page of the book beside it; its save goes
+	// through the library's own (a guest's copy to the browser, a player's to
+	// the account), marks the draft taken and comes back here.
+	function handleEdit() {
 		stop();
-		const { pattern: stored } = saveCustomPattern(next);
-		setPattern(stored);
-		setSaved(true);
-		resetBpm(clampBpmToMeter(stored.bpm, stored.timeSignature));
-		resetCursor();
-		markTaken();
-		if (user) toast(`Saved "${stored.name}" to your patterns.`);
-		else toast(`Saved "${stored.name}" to this browser.`, { description: "Sign in to keep it on your account." });
+		const token = stashEditorDraft({
+			pattern,
+			notice: {
+				title: "Check this pattern",
+				text: "Read from the book's page — check the frets and the rhythm, then save it as your own.",
+				warnings: exercise.warnings.map((w) => w.message),
+			},
+			book: { bookId, exerciseId: exercise.id, cropPath: exercise.crop_path, page: exercise.page },
+		});
+		router.push(editorHref({ kind: "draft", token, from: pathname }));
 	}
 
 	// A draft goes over the way the assistant's tabs do and opens in the
-	// editor there; a saved pattern is already in the library, so the page is
-	// opened on it by id — after the row is confirmed written, since the
-	// library's save does not wait and the page reads the library on load.
-	async function handleOpenInFingerpick() {
+	// editor there.
+	function handleOpenInFingerpick() {
 		if (opening) return;
 		setOpening(true);
 		stop();
 		markTaken();
-		if (!saved) {
-			stashHandoff({ kind: "fingerpick", pattern, warnings: exercise.warnings });
-			router.push(FINGERPICK_PATH);
-			return;
-		}
-		try {
-			const supabase = createClient();
-			await saveUserFingerpickPattern(supabase, user, pattern);
-			await saveLastPattern(supabase, user, "fingerpick", pattern.id);
-			router.push(`${FINGERPICK_PATH}?pattern=${pattern.id}`);
-		} catch (e) {
-			console.error(e);
-			toast.error("Couldn't open the pattern — try again.");
-			setOpening(false);
-		}
+		stashHandoff({ kind: "fingerpick", pattern, warnings: exercise.warnings });
+		router.push(FINGERPICK_PATH);
 	}
 
 	return (
 		<SidePanel
-			label={saved ? "Practice draft · saved" : "Practice draft"}
+			label="Practice draft"
 			ariaLabel="Practice draft"
 			onClose={onClose}
 			onOpened={() => void load()}
 			animateOpen={animateOpen}
-			panelRef={setPanelEl}
 			testId="chapter-draft-panel"
 		>
 			<div className="relative flex-none border-b border-line px-4 py-3">
@@ -414,12 +366,7 @@ export default function ChapterDraftPanel({
 					<TempoStep label="+10" onClick={() => handleBpmChange(bpm + 10)} />
 				</span>
 				<span className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
-					<GhostButton
-						onClick={() => setEditing(true)}
-						disabled={libraryLoading}
-						title={libraryLoading ? "Loading your patterns…" : "Edit and save to your patterns"}
-						className="flex-1 sm:flex-none"
-					>
+					<GhostButton onClick={handleEdit} title="Edit and save to your patterns" className="flex-1 sm:flex-none">
 						<Pencil className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
 						Edit
 					</GhostButton>
@@ -430,25 +377,6 @@ export default function ChapterDraftPanel({
 				</span>
 			</footer>
 
-			<FingerpickEditModal
-				key={pattern.id}
-				open={editing}
-				pattern={pattern}
-				takenNames={patterns.filter((p) => p.id !== pattern.id).map((p) => p.name)}
-				container={panelEl}
-				reference={reference}
-				notice={
-					saved
-						? undefined
-						: {
-								title: "Check this pattern",
-								text: "Read from the book's page — check the frets and the rhythm, then save it as your own.",
-								warnings: exercise.warnings.map((w) => w.message),
-							}
-				}
-				onClose={() => setEditing(false)}
-				onSave={handleSave}
-			/>
 		</SidePanel>
 	);
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Check, Music, Pencil, Plus, Replace, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import TabStavePreview from "./TabStavePreview";
 import { useTabAudition } from "./useTabAudition";
 import HearButton from "../HearButton";
@@ -14,6 +14,7 @@ import type { TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import { moveSlotChord } from "@/lib/fingerpickChords";
 import type { Measure } from "@/lib/fingerpickTypes";
 import { indexPattern } from "@/lib/fingerpickIndex";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * Bars for a pattern the player already has, before anything is written.
@@ -39,7 +40,7 @@ export default function TabEditCard({
 	onDone: () => void;
 	lang?: Lang;
 }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const pathname = usePathname();
 	const t = (en: string, zh: string) => pick(lang, en, zh);
 	const [dismissed, setDismissed] = useState(false);

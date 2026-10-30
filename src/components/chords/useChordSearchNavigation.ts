@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback } from "react";
-import { useRouter } from "next/navigation";
 
-import { useNavTransition } from "@/components/nav-progress";
+import { useNavRouter } from "@/components/nav-progress";
 import { chordHref, rootToSlug } from "@/lib/chordSlug";
 import { boardHref } from "@/lib/chordBatchResolve";
 import { CHORD_SUFFIX_CATEGORIES } from "@/lib/chordSuffixes";
@@ -41,17 +40,16 @@ export interface ChordSearchNavigation {
  * `onNavigate` is called first, for a surface that has to close itself.
  */
 export function useChordSearchNavigation(onNavigate: () => void): ChordSearchNavigation {
-	const router = useRouter();
-	const startNav = useNavTransition();
+	const router = useNavRouter();
 
 	const navigate = useCallback(
 		(href: string) => {
 			onNavigate();
-			// Inside a transition, so the global progress bar takes over while the
-			// destination route is in flight.
-			startNav(() => router.push(href));
+			// Through the progress bar, which takes over while the destination route
+			// is in flight.
+			router.push(href);
 		},
-		[onNavigate, router, startNav],
+		[onNavigate, router],
 	);
 
 	const goToChord = useCallback(

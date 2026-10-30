@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowUpRight, CirclePlay, CircleStop, Loader2 } from "lucide-react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { SUPPORTED_METERS, beatUnitGlyph, meterLabel, type Meter } from "@/lib/strumMeter";
@@ -13,6 +12,7 @@ import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { WarningsFold } from "@/components/books/IssueList";
 import { DenimButton, GhostButton, MONO_META } from "@/components/books/bookUi";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * A text tab, read by ear (#228). Six lines of tab carry every fret and the
@@ -47,7 +47,7 @@ export default function TextTabPicker({
 	/** The text came from a book page: shown as read, not edited. */
 	readOnlyText?: boolean;
 }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const [text, setText] = useState(initialText);
 	const [meter, setMeter] = useState<Meter>([4, 4]);
 	const [bpm, setBpm] = useState(DEFAULT_BPM);

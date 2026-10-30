@@ -57,12 +57,12 @@ const SEARCH_HINTS: readonly { readonly ask: string; readonly example: string }[
  * say are laid out and spaced the same way rather than each in its own style.
  */
 function PaletteNote({ children }: { children: React.ReactNode }) {
-	return <div className="flex flex-col px-4 py-2">{children}</div>;
+	return <div className="flex flex-col px-4 py-1.5">{children}</div>;
 }
 
 /** The lead sentence of a note. */
 function NoteLead({ children }: { children: React.ReactNode }) {
-	return <p className="py-2.5 text-sm leading-snug text-ink-dim">{children}</p>;
+	return <p className="py-2.5 text-[13.5px] leading-snug text-gp-ink-2">{children}</p>;
 }
 
 /**
@@ -71,9 +71,9 @@ function NoteLead({ children }: { children: React.ReactNode }) {
  */
 function NoteRow({ ask, example }: { ask: string; example: string }) {
 	return (
-		<div className="flex items-baseline justify-between gap-4 border-t border-line py-2.5 first:border-t-0">
-			<span className="min-w-0 text-xs leading-snug text-ink-dim">{ask}</span>
-			<span className="shrink-0 font-mono text-xs tracking-[0.08em] text-ink">{example}</span>
+		<div className="flex items-center justify-between gap-4 border-t border-gp-line py-2.5 first:border-t-0">
+			<span className="min-w-0 text-[13px] leading-snug text-gp-ink-2">{ask}</span>
+			<kbd className="ck-kbd ck-example shrink-0">{example}</kbd>
 		</div>
 	);
 }
@@ -167,22 +167,14 @@ export default function ChordSearchResults({
 						>
 							<span className="flex min-w-0 flex-col gap-0.5">
 								<span className="flex items-baseline gap-1.5">
-									<span className="font-medium text-ink">
+									<span className="ck-name">
 										<MusicalText text={chordDisplayName(m.root, m.suffix)} />
 									</span>
-									{m.mine && (
-										<span className="shrink-0 rounded-gp-sm bg-gp-well px-1.5 text-[10.5px] font-bold text-gp-ink-2">
-											yours
-										</span>
-									)}
+									{m.mine && <span className="ck-mine">yours</span>}
 								</span>
-								<span className="font-mono text-xs tracking-[0.12em] text-ink-dim">
-									{formatTabSequence(m.frets)}
-								</span>
+								<span className="ck-frets">{formatTabSequence(m.frets)}</span>
 							</span>
-							<span className="ml-auto shrink-0 text-xs text-ink-dim">
-								{shapeMatchNote(m.match)}
-							</span>
+							<span className="ck-meta">{shapeMatchNote(m.match)}</span>
 							{/* The row opens the chord; this opens the page it was written on,
 							    where its name and its filing can be changed. */}
 							{m.mine && (
@@ -194,9 +186,10 @@ export default function ChordSearchResults({
 										e.stopPropagation();
 										onCreateChord(formatTabSequence(m.frets));
 									}}
-									className="-my-1 shrink-0 p-1 text-gp-ink-3 transition-colors hover:text-gp-ink"
+									className="pb-icon"
+									data-anim="edit"
 								>
-									<PencilIcon className="size-3.5" />
+									<PencilIcon aria-hidden className="text-current" />
 								</button>
 							)}
 						</CommandItem>
@@ -214,7 +207,7 @@ export default function ChordSearchResults({
 				<PaletteNote>
 					<NoteLead>
 						No chord in the library is held like{" "}
-						<span className="font-mono text-ink">{trimmed}</span>.
+						<span className="ck-frets text-gp-ink">{trimmed}</span>.
 					</NoteLead>
 					<NoteRow ask="Frets are read first string first" example={SHAPE_EXAMPLE} />
 				</PaletteNote>
@@ -226,12 +219,10 @@ export default function ChordSearchResults({
 				<CommandGroup heading="Not in the library">
 					<CommandItem value={CREATE_VALUE} onSelect={() => onCreateChord(trimmed)}>
 						<span className="flex min-w-0 flex-col gap-0.5">
-							<span className="font-medium text-ink">Create this chord?</span>
-							<span className="font-mono text-xs tracking-[0.12em] text-ink-dim">
-								{trimmed}
-							</span>
+							<span className="ck-name">Create this chord?</span>
+							<span className="ck-frets">{trimmed}</span>
 						</span>
-						<ArrowRightIcon className="ml-auto size-4 text-ink-dim" />
+						<ArrowRightIcon className="ml-auto size-4 text-gp-ink-3" />
 					</CommandItem>
 				</CommandGroup>
 			)}
@@ -242,10 +233,10 @@ export default function ChordSearchResults({
 						const key = chordValue(r);
 						return (
 							<CommandItem key={key} value={key} onSelect={() => onSelectChord(r)}>
-								<span className="font-medium text-ink">
+								<span className="ck-name">
 									<MusicalText text={chordDisplayName(r.root, r.suffix)} />
 								</span>
-								<span className="ml-auto text-xs text-ink-dim">{r.category}</span>
+								<span className="ck-meta">{r.category}</span>
 							</CommandItem>
 						);
 					})}
@@ -256,14 +247,14 @@ export default function ChordSearchResults({
 				<CommandGroup heading="Board">
 					<CommandItem value={BATCH_VALUE} onSelect={onSelectBatch}>
 						<span className="flex flex-col gap-0.5">
-							<span className="font-medium text-ink">
+							<span className="ck-name">
 								{/* An explicit comma forces batch mode even when nothing
 								    resolves, so the count can legitimately be 0 or 1. */}
 								{batch.resolvedCount === 0
 									? "Put these on the board"
 									: `Put ${batch.resolvedCount} chord${batch.resolvedCount === 1 ? "" : "s"} on the board`}
 							</span>
-							<span className="flex flex-wrap gap-x-1.5 text-xs text-ink-dim">
+							<span className="flex flex-wrap gap-x-1.5 text-[12.5px] text-gp-ink-3">
 								{batch.tokens.map((t) =>
 									t.status === "resolved" ? (
 										// Stored spelling, so the user can see that Db resolved
@@ -273,14 +264,14 @@ export default function ChordSearchResults({
 											text={chordDisplayName(t.root, t.suffix)}
 										/>
 									) : (
-										<span key={t.key} className="text-ink-faint line-through">
+										<span key={t.key} className="text-gp-ink-mute line-through">
 											{t.token}
 										</span>
 									),
 								)}
 							</span>
 						</span>
-						<ArrowRightIcon className="ml-auto size-4 text-ink-dim" />
+						<ArrowRightIcon className="ml-auto size-4 text-gp-ink-3" />
 					</CommandItem>
 				</CommandGroup>
 			)}
@@ -291,7 +282,7 @@ export default function ChordSearchResults({
 						value={shortcutValue(shortcut)}
 						onSelect={() => onSelectShortcut(shortcut)}
 					>
-						<span className="font-medium text-ink">
+						<span className="ck-name">
 							{shortcut.kind === "root" ? (
 								<>
 									Show all <MusicalText text={shortcut.root} /> chords
@@ -307,7 +298,7 @@ export default function ChordSearchResults({
 								`Show all ${shortcut.category}${/chord/i.test(shortcut.category) ? "s" : " chords"}`
 							)}
 						</span>
-						<ArrowRightIcon className="ml-auto size-4 text-ink-dim" />
+						<ArrowRightIcon className="ml-auto size-4 text-gp-ink-3" />
 					</CommandItem>
 				</CommandGroup>
 			)}
@@ -323,10 +314,10 @@ export default function ChordSearchResults({
 			{!batch.shouldOffer && !isShape && trimmed !== "" && results.length === 0 && (
 				<PaletteNote>
 					<NoteLead>
-						No chord found for “<span className="text-ink">{trimmed}</span>”.
+						No chord found for “<span className="font-semibold text-gp-ink">{trimmed}</span>”.
 					</NoteLead>
 					{/* Keyed on the query so a new search always gets a fresh button. */}
-					<div className="border-t border-line py-2.5">
+					<div className="border-t border-gp-line py-2.5">
 						<ChordRequestButton key={trimmed} query={trimmed} />
 					</div>
 				</PaletteNote>

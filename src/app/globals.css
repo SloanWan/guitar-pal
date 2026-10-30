@@ -606,7 +606,6 @@
 	--color-gp-ink-mute: var(--gp-ink-mute);
 	--color-gp-ink-fill: var(--gp-ink-fill);
 	--color-gp-on-ink: var(--gp-on-ink);
-	--color-gp-focus: var(--gp-focus);
 	--color-gp-scrim: var(--gp-scrim);
 	--color-gp-m-100: var(--gp-m-100);
 	--color-gp-m-300: var(--gp-m-300);
@@ -1185,6 +1184,11 @@
 	* {
 		@apply border-border outline-ring/50;
 	}
+	/* No browser focus ring (Sloan, 2026-10-30). A v3 page's own ring is a utility and
+	   still wins over this layer until that page migrates. */
+	:focus-visible {
+		outline: none;
+	}
 	body {
 		@apply bg-background text-foreground font-sans;
 		-webkit-font-smoothing: antialiased;
@@ -1569,7 +1573,8 @@
 	z-index: 100; /* above --z-nav (50) */
 	overflow: hidden;
 	pointer-events: none;
-	background: var(--denim-tint);
+	/* data-m on the bar is the destination's module (nav-progress.tsx) */
+	background: var(--gp-m-100);
 	opacity: 1;
 	transition: opacity 0.2s ease-out;
 }
@@ -1580,8 +1585,8 @@
    transition smooths the ~200ms trickle steps and the final snap to 100%. */
 .nav-progress-fill {
 	height: 100%;
-	background: var(--denim);
-	box-shadow: 0 0 8px 1px var(--denim-glow);
+	background: var(--gp-m-500);
+	box-shadow: 0 0 8px 1px color-mix(in srgb, var(--gp-m-500) 50%, transparent);
 	transition: width 0.2s ease-out;
 	will-change: width;
 }

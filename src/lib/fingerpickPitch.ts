@@ -19,14 +19,33 @@ import type { BeatSlot, NoteEffects } from "@/lib/fingerpickTypes";
 export const OPEN_STRING_MIDI: readonly number[] = [64, 59, 55, 50, 45, 40];
 
 /** How a sounding pitch is written under its fret. */
-export type PitchLabelStyle = "name" | "scientific" | "midi" | "jianpu";
+export type PitchLabelStyle = "name" | "scientific" | "solfege" | "jianpu";
 
 export const PITCH_LABEL_STYLES: readonly PitchLabelStyle[] = [
 	"name",
 	"scientific",
-	"midi",
+	"solfege",
 	"jianpu",
 ];
+
+/**
+ * Solfège, fixed-do (C is do whatever the key), do re mi fa so la ti:
+ * the accidental before the syllable as jianpu writes it, no octave.
+ */
+const SOLFEGE: Readonly<Record<string, string>> = {
+	C: "do",
+	"C#": "♯do",
+	D: "re",
+	Eb: "♭mi",
+	E: "mi",
+	F: "fa",
+	"F#": "♯fa",
+	G: "so",
+	Ab: "♭la",
+	A: "la",
+	Bb: "♭ti",
+	B: "ti",
+};
 
 /**
  * Jianpu (numbered notation), fixed-do in C: the degree 1–7, an accidental
@@ -102,14 +121,14 @@ export function harmonicShift(harmonic: NonNullable<NoteEffects["harmonic"]>, fr
 /**
  * A pitch written in the chosen style: the note name alone (`F#`, spelt as the
  * chord library spells its roots, so the label under a fret agrees with the
- * chord symbol over it), scientific pitch (`F#4`, middle C = C4 = 60), or the
- * MIDI number.
+ * chord symbol over it), scientific pitch (`F#4`, middle C = C4 = 60), the
+ * solfège syllable, or the jianpu degree.
  */
 export function pitchLabel(midi: number, style: PitchLabelStyle): string {
 	const octave = Math.floor(midi / 12) - 1;
 	switch (style) {
-		case "midi":
-			return String(midi);
+		case "solfege":
+			return SOLFEGE[pitchClassRoot(midi % 12)];
 		case "name":
 			return pitchClassRoot(midi % 12);
 		case "scientific":

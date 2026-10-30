@@ -298,7 +298,7 @@ export function useFingerpickAudioEngine() {
 	// Every AudioBufferSourceNode created in the current playback pass.
 	// Superset of perStringVoicesRef's sources; contains intermediate (voice-stolen)
 	// sources that are pre-scheduled but no longer in the last-voice map.
-	const allSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+	const allSourcesRef = useRef<Set<AudioScheduledSourceNode>>(new Set());
 
 	/** All scheduled metronome OscillatorNodes — cancelled on pause/stop. */
 	const allMetronomeSourcesRef = useRef<Set<OscillatorNode>>(new Set());

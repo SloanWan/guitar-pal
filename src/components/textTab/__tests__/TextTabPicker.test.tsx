@@ -12,7 +12,7 @@ import { takeHandoff } from "@/lib/assistant/handoff";
  */
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("@/components/nav-progress", () => ({ useNavRouter: () => ({ push }) }));
 
 const engine = vi.hoisted(() => ({
 	isLoaded: true,

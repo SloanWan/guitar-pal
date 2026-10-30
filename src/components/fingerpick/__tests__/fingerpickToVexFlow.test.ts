@@ -25,6 +25,8 @@ import {
 	fingerpickToVexFlow,
 	RENDER_KINDS,
 	VEX_DURATION,
+	joinCrowdedBrackets,
+	type PlacedBracket,
 } from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, FingerpickPattern, Measure, StringFret, Duration, Technique } from "@/lib/fingerpickTypes";
 import { migratePattern } from "@/lib/tabImport";
@@ -427,6 +429,41 @@ describe("bracketSpans", () => {
 });
 
 // ─── isGraceNote ──────────────────────────────────────────────────────────────
+
+describe("joinCrowdedBrackets", () => {
+	// "let ring" takes 47 px before its line.
+	const room = () => 47;
+	const lr = (x1: number, x2: number, more: Partial<PlacedBracket> = {}): PlacedBracket => ({
+		kind: "let-ring",
+		x1,
+		x2,
+		continued: false,
+		open: false,
+		...more,
+	});
+
+	it("joins single notes whose labels would overlap into one bracket", () => {
+		expect(joinCrowdedBrackets([lr(0, 14), lr(40, 54), lr(80, 94)], room, 6)).toEqual([lr(0, 94)]);
+	});
+
+	it("keeps brackets with room for their own label apart", () => {
+		expect(joinCrowdedBrackets([lr(0, 14), lr(100, 114)], room, 6)).toEqual([lr(0, 14), lr(100, 114)]);
+	});
+
+	it("joins a run however long, each next note within a label's width", () => {
+		const run = [0, 40, 80, 120, 160].map((x) => lr(x, x + 14));
+		expect(joinCrowdedBrackets(run, room, 6)).toEqual([lr(0, 174)]);
+	});
+
+	it("the joined bracket ends the way its last member does", () => {
+		expect(joinCrowdedBrackets([lr(0, 14), lr(40, 200, { open: true })], room, 6)).toEqual([lr(0, 200, { open: true })]);
+	});
+
+	it("never joins different kinds, and takes input in any order", () => {
+		const pm: PlacedBracket = { ...lr(20, 34), kind: "palm-mute" };
+		expect(joinCrowdedBrackets([lr(40, 54), pm, lr(0, 14)], room, 6)).toEqual([lr(0, 54), pm]);
+	});
+});
 
 describe("fingerpickToVexFlow — isGraceNote", () => {
 	it("isGraceNote slot is excluded from notes[] and attaches a GraceNoteGroup of GraceTabNotes to the following TabNote", () => {

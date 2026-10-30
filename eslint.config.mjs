@@ -19,6 +19,12 @@ const eslintConfig = defineConfig([
               message:
                 "Import the default export from '@/components/AppLink' instead of 'next/link', so navigations feed the global progress bar. (next/link / useLinkStatus may only be imported inside AppLink itself.)",
             },
+            {
+              name: "next/navigation",
+              importNames: ["useRouter"],
+              message:
+                "Use useNavRouter() from '@/components/nav-progress' instead of useRouter(), so programmatic navigations feed the global progress bar.",
+            },
           ],
         },
       ],
@@ -32,8 +38,8 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    // AppLink is the one sanctioned importer of next/link.
-    files: ["src/components/AppLink.tsx"],
+    // AppLink is the one sanctioned importer of next/link, nav-progress of useRouter.
+    files: ["src/components/AppLink.tsx", "src/components/nav-progress.tsx"],
     rules: { "no-restricted-imports": "off" },
   },
   // Override default ignores of eslint-config-next.

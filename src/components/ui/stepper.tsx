@@ -24,6 +24,8 @@ export interface StepperProps {
 	unit?: string;
 	/** Adds a TAP chip: tapping a beat sets the value to its tempo. */
 	tap?: boolean;
+	/** 26px buttons and body-size type, for a title row or a toolbar. */
+	dense?: boolean;
 	disabled?: boolean;
 	/** `sm` for a toolbar of several values side by side. */
 	size?: "md" | "sm";
@@ -34,7 +36,20 @@ export interface StepperProps {
  * Two step buttons around a tabular readout (spec §8). A click steps once; holding a
  * button repeats until release or a bound.
  */
-export function Stepper({ label, value, onChange, min = 0, max = 999, step = 1, unit, tap, disabled, size = "md", className }: StepperProps) {
+export function Stepper({
+	label,
+	value,
+	onChange,
+	min = 0,
+	max = 999,
+	step = 1,
+	unit,
+	tap,
+	dense,
+	disabled,
+	size = "md",
+	className,
+}: StepperProps) {
 	const range: StepRange = { min, max, step };
 	const valueRef = useRef(value);
 	useEffect(() => {
@@ -60,7 +75,12 @@ export function Stepper({ label, value, onChange, min = 0, max = 999, step = 1, 
 	};
 
 	return (
-		<div role="group" aria-label={label} className={cn("gp-stepper", size === "sm" && "gp-stepper-sm", className)}>
+		<div
+			role="group"
+			aria-label={label}
+			className={cn("gp-stepper", size === "sm" && "gp-stepper-sm", className)}
+			data-dense={dense ? "" : undefined}
+		>
 			<StepButton direction={-1} label={label} disabled={disabled || value <= min} onStep={stepBy} />
 			<output className="gp-stepper-val" aria-live="polite">
 				{value}

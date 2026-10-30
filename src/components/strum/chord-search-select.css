@@ -31,8 +31,7 @@
 		}
 	}
 	.csel-field:focus-within {
-		outline: 2px solid var(--gp-focus);
-		outline-offset: 1px;
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-300);
 	}
 	.csel-field[data-state="unknown"] {
 		color: var(--gp-bad);
@@ -137,5 +136,104 @@
 	}
 	.csel-create:hover {
 		background: var(--gp-m-100);
+	}
+
+	/* Chords offered while the field is empty: a small heading over a row of chips. */
+	.csel-sec {
+		padding: 8px 8px 5px;
+		font: 700 10px/1 var(--gp-f-body);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--gp-ink-3);
+	}
+	.csel-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		padding: 0 6px 8px;
+	}
+	.csel-chip {
+		display: inline-flex;
+		align-items: center;
+		height: 28px;
+		padding: 0 10px;
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-well);
+		font: 650 13px/1 var(--gp-f-body);
+		color: var(--gp-ink);
+		cursor: pointer;
+		transition: background-color var(--gp-d-state) var(--gp-ease-state);
+	}
+	.csel-chip:hover {
+		background: var(--gp-s2);
+	}
+	.csel-chip[data-now] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+
+	/* A match as a row (a host that hears or draws them): its ▶, its name over its
+	   kind, its shape. The row is what lights, so the ▶ sits on the same wash. */
+	.csel-row {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		padding-left: 6px;
+		border-radius: var(--gp-r-s);
+	}
+	.csel-row[data-hi] {
+		background: var(--gp-m-100);
+	}
+	.csel-row .csel-opt {
+		flex: 1;
+		min-width: 0;
+		padding-left: 6px;
+	}
+	.csel-row .csel-opt[aria-selected="true"] {
+		background: transparent;
+	}
+	.csel-play {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-card);
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+		color: var(--gp-m-500);
+		cursor: pointer;
+	}
+	.csel-play svg {
+		width: 9px;
+		height: 9px;
+		margin-left: 1px;
+		fill: currentColor;
+	}
+	.csel-row[data-hi] .csel-play {
+		background: var(--gp-m-500);
+		box-shadow: none;
+		color: var(--gp-m-on);
+	}
+	.csel-nm {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 3px;
+		min-width: 0;
+	}
+	.csel-nm .csel-cat {
+		margin-left: 0;
+	}
+	/* The tab-wise strip draws in the v3 ink names; here they are the Candy ramp. */
+	.csel-shape {
+		--ink: var(--gp-ink);
+		--ink-dim: var(--gp-ink-3);
+		--ink-faint: var(--gp-ink-3);
+		--line-strong: var(--gp-edge);
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 44px;
 	}
 }

@@ -6,31 +6,20 @@ import type { ChapterExercise } from "@/lib/books/types";
 import { takeHandoff } from "@/lib/assistant/handoff";
 
 /**
- * The draft panel with the audio engine, the library and the editor stubbed:
- * what it says about the draft, what it hands the stave, and its two ways
- * out — a draft goes to fingerpick by handoff, a saved pattern by id — each
- * marking the row used. Playing alone marks nothing.
+ * The draft panel with the audio engine stubbed: what it says about the draft,
+ * what it hands the stave, and its two ways out — Edit opens the editor's page
+ * on the draft with the book's page beside it, Open in fingerpick hands it over
+ * and marks the row used. Playing alone marks nothing.
  */
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("@/components/nav-progress", () => ({ useNavRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/books/b1" }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
 
 const api = vi.hoisted(() => ({ setExerciseStatus: vi.fn(), cropUrl: vi.fn() }));
 vi.mock("@/lib/books/api", () => api);
-
-const auth = vi.hoisted(() => ({ user: null as { id: string } | null, loading: false }));
-vi.mock("@/hooks/useUser", () => ({ useUser: () => auth }));
-
-const library = vi.hoisted(() => ({
-	patterns: [{ id: "preset", name: "Travis" }],
-	isLoading: false,
-	saveCustomPattern: vi.fn(),
-}));
-vi.mock("@/components/fingerpick/useFingerpickPatterns", () => ({
-	useFingerpickPatterns: () => library,
-}));
 
 const engine = vi.hoisted(() => ({
 	isLoaded: true,
@@ -50,42 +39,6 @@ vi.mock("@/components/fingerpick/useFingerpickAudioEngine", () => ({
 	useFingerpickAudioEngine: () => engine,
 }));
 
-const sync = vi.hoisted(() => ({
-	saveUserFingerpickPattern: vi.fn(async () => {}),
-	saveLastPattern: vi.fn(async () => {}),
-}));
-vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }));
-vi.mock("@/lib/fingerpickPatternSync", () => ({ saveUserFingerpickPattern: sync.saveUserFingerpickPattern }));
-vi.mock("@/lib/lastPattern", () => ({ saveLastPattern: sync.saveLastPattern }));
-
-// The editor is a page of its own; here it is a button that saves a renamed
-// copy, and a record of what it was opened inside of and shown beside.
-interface EditorProps {
-	open: boolean;
-	pattern: FingerpickPattern | null;
-	container?: HTMLElement | null;
-	reference?: { url: string; alt: string };
-	onSave: (p: FingerpickPattern) => void;
-	onClose: () => void;
-}
-const editorProps: EditorProps[] = [];
-vi.mock("@/components/fingerpick/FingerpickEditModal", () => ({
-	default: (props: EditorProps) => {
-		editorProps.push(props);
-		const { open, pattern, onSave, onClose } = props;
-		return open && pattern ? (
-			<button
-				type="button"
-				data-testid="editor-save"
-				onClick={() => {
-					onSave({ ...pattern, name: "Exercise 3 (mine)" });
-					onClose();
-				}}
-			/>
-		) : null;
-	},
-}));
-
 // The stave is VexFlow, which jsdom cannot draw (#56): assert on its props.
 const staveProps: { measures: Measure[]; measureWidths: number[] }[] = [];
 vi.mock("@/components/fingerpick/TabStaveRow", async (importOriginal) => ({
@@ -97,6 +50,7 @@ vi.mock("@/components/fingerpick/TabStaveRow", async (importOriginal) => ({
 }));
 
 import ChapterDraftPanel, { draftMeta, type OpenDraft } from "@/components/books/ChapterDraftPanel";
+import { readEditorDraft } from "@/lib/tabEditorEntry";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.ResizeObserver = class {
@@ -169,21 +123,12 @@ function button(label: string): HTMLButtonElement {
 
 beforeEach(() => {
 	staveProps.length = 0;
-	editorProps.length = 0;
-	api.cropUrl.mockReset().mockResolvedValue("https://signed/crop.png");
-	// jsdom has no matchMedia: the panel takes its fallback, the split layout.
-	delete (window as { matchMedia?: unknown }).matchMedia;
 	push.mockReset();
 	toast.mockReset();
 	onTaken.mockReset();
 	onClose.mockReset();
 	onLocate.mockReset();
-	auth.user = null;
-	library.isLoading = false;
-	library.saveCustomPattern.mockReset().mockImplementation((p: FingerpickPattern) => ({ pattern: p, isNew: true }));
 	api.setExerciseStatus.mockReset().mockResolvedValue({ ...EXERCISE, status: "taken" });
-	sync.saveUserFingerpickPattern.mockClear();
-	sync.saveLastPattern.mockClear();
 	engine.play.mockReset();
 	engine.stop.mockReset();
 	engine.load.mockClear();
@@ -254,39 +199,27 @@ describe("ChapterDraftPanel", () => {
 		expect(handoff.warnings.map((w) => w.code)).toEqual(["TAB_JIANPU_OCTAVE"]);
 	});
 
-	it("saves an edit through the library, shows what was stored, then opens fingerpick on it by id", async () => {
-		auth.user = { id: "u1" };
-		render();
+	it("opens the editor's page on the draft, with the book's page, and comes back here", async () => {
+		render({ chapterId: "c1", exercise: { ...EXERCISE, crop_path: "u/b/crops/c1/p0206-2.png" }, pattern: PATTERN, onTaken });
 		await settle();
 		act(() => button("Edit").click());
-		await act(async () => {
-			container.querySelector<HTMLButtonElement>('[data-testid="editor-save"]')?.click();
-		});
-		expect(library.saveCustomPattern).toHaveBeenCalledTimes(1);
-		const stored = library.saveCustomPattern.mock.calls[0][0] as FingerpickPattern;
-		expect(stored.name).toBe("Exercise 3 (mine)");
-		expect(stored.id).not.toBe("service-id");
-		expect(container.textContent).toContain("Exercise 3 (mine)");
-		expect(container.textContent).toContain("Practice draft · saved");
-		expect(onTaken).toHaveBeenCalledTimes(1);
-		expect(toast).toHaveBeenCalledWith('Saved "Exercise 3 (mine)" to your patterns.');
-
-		await act(async () => {
-			button("Open in fingerpick").click();
-		});
-		await settle();
-		// The row is confirmed written before the page is asked to open it.
-		expect(sync.saveUserFingerpickPattern).toHaveBeenCalledWith({}, auth.user, stored);
-		expect(sync.saveLastPattern).toHaveBeenCalledWith({}, auth.user, "fingerpick", stored.id);
-		expect(push).toHaveBeenCalledWith(`/fingerpick?pattern=${stored.id}`);
-		expect(takeHandoff("fingerpick")).toBeNull();
+		expect(engine.stop).toHaveBeenCalled();
+		expect(push).toHaveBeenCalledTimes(1);
+		const url = new URL(push.mock.calls[0][0] as string, "https://x.test");
+		expect(url.pathname).toBe("/fingerpick/edit/new");
+		expect(url.searchParams.get("from")).toBe("/books/b1");
+		const draft = readEditorDraft(url.searchParams.get("draft")!);
+		expect(draft?.pattern.name).toBe("Exercise 3");
+		expect(draft?.pattern.id).not.toBe("service-id");
+		expect(draft?.notice.warnings).toEqual(["3 note(s) an octave out"]);
+		expect(draft?.book).toEqual({ bookId: "b1", exerciseId: "e1", cropPath: "u/b/crops/c1/p0206-2.png", page: 206 });
+		// The editor marks the row when it saves; opening it is not using the draft.
+		expect(onTaken).not.toHaveBeenCalled();
 	});
 
-	it("keeps Edit shut until the library is loaded, and closes on the header button", async () => {
-		library.isLoading = true;
+	it("closes on the header button", async () => {
 		render();
 		await settle();
-		expect(button("Edit").disabled).toBe(true);
 		act(() => button("Close").click());
 		// The close is animated: the owner hears of it when the animation ends.
 		expect(onClose).not.toHaveBeenCalled();
@@ -303,25 +236,5 @@ describe("ChapterDraftPanel", () => {
 		await settle();
 		act(() => button("p.206").click());
 		expect(onLocate).toHaveBeenCalledTimes(1);
-	});
-
-	it("opens the editor inside the panel, without the crop, in the split layout", async () => {
-		render();
-		await settle();
-		const last = editorProps[editorProps.length - 1];
-		expect(last.container).toBe(container.querySelector('[data-testid="chapter-draft-panel"]'));
-		expect(last.reference).toBeUndefined();
-		expect(api.cropUrl).not.toHaveBeenCalled();
-	});
-
-	it("hands the editor the crop as a reference where the panel is a sheet", async () => {
-		window.matchMedia = ((query: string) =>
-			({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList) as typeof window.matchMedia;
-		render({ chapterId: "c1", exercise: { ...EXERCISE, crop_path: "u/b/crops/c1/p0206-2.png" }, pattern: PATTERN, onTaken });
-		await settle();
-		await settle();
-		expect(api.cropUrl).toHaveBeenCalledWith("u/b/crops/c1/p0206-2.png");
-		const last = editorProps[editorProps.length - 1];
-		expect(last.reference).toEqual({ url: "https://signed/crop.png", alt: "Page 206, Exercise 3" });
 	});
 });

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, MoveLeft, MoveRight, Play, SlidersHorizontal, Square } from "lucide-react";
 import { toast } from "sonner";
 import Link from "@/components/AppLink";
@@ -32,6 +31,7 @@ import { prefersReducedMotion } from "@/lib/motion";
 import { STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
 import CornerButton from "./CornerButton";
 import type { BoardCard } from "./useBoard";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** Beats each chord is held for when the board is played through. */
 const BEATS_PER_CHORD = 4;
@@ -98,7 +98,7 @@ function usePlayThrough() {
 
 /** The chords side by side, each on the shape the player paged to. */
 export default function Board({ items, cards, transpose, capo, onChange, onTranspose, onCapo }: Props) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const [bpm, setBpm] = useState(DEFAULT_BOARD_BPM);
 	const run = usePlayThrough();
 	const cardsRef = useRef<HTMLDivElement>(null);

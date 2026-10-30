@@ -12,6 +12,8 @@ import {
 	computeRollOffsets,
 	BRUSH_STAGGER_SECONDS,
 	computeMeasureBoundaries,
+	computeSlotStarts,
+	slotAtTime,
 	resolveSlide,
 	isGlide,
 	tremoloStrokes,
@@ -51,6 +53,7 @@ import {
 	EXPRESSION_RELEASE_MIN_GAIN_RATIO,
 } from "@/lib/fingerpickExpression";
 import type { FingerpickPattern, BeatSlot, StringFret, Duration, Stroke } from "@/lib/fingerpickTypes";
+import { makeDefaultPattern } from "@/lib/fingerpickEdit";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -1794,7 +1797,7 @@ function makeDeps(
 		ctx: ctx as unknown as AudioContext,
 		target,
 		voices,
-		allSources: new Set<AudioBufferSourceNode>(),
+		allSources: new Set<AudioScheduledSourceNode>(),
 		resolveNoteData:
 			opts.resolveNoteData ??
 			((midi) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) })),
@@ -2675,6 +2678,17 @@ describe("scheduleFingerpickNote — the rest of the registry", () => {
 		expect(ctx._gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(TEST_GAINS.bodyTap * TEST_GAINS.accentMultiplier, 9), 1.002);
 	});
 
+	it("a stop reaches every node a slap or a body tap scheduled ahead, the sines under them included", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map());
+		scheduleFingerpickNote(deps, noteEvent({ muted: true, slapNoise: true, slapStrings: [5] }), 5);
+		scheduleFingerpickNote(deps, noteEvent({ muted: true, percussion: { kind: "bodyTap" } }), 6);
+		expect(deps.allSources.size).toBe(ctx._sources.length + ctx._oscillators.length);
+		_shutdownEngine(new Map(), [], deps.allSources);
+		for (const node of [...ctx._sources, ...ctx._oscillators]) expect(node.stop).toHaveBeenLastCalledWith();
+		expect(deps.allSources.size).toBe(0);
+	});
+
 	it("without a noise buffer a scrape and a body tap are silent, not errors", () => {
 		const ctx = mockCtx(0);
 		scheduleFingerpickNote(makeDeps(ctx, new Map(), { noiseBuffer: null }), noteEvent({ effects: { scrape: true } }), 1);
@@ -2684,5 +2698,35 @@ describe("scheduleFingerpickNote — the rest of the registry", () => {
 	it("noiseBufferFor makes one buffer per context", () => {
 		const ctx = mockCtx(0) as unknown as AudioContext;
 		expect(noiseBufferFor(ctx)).toBe(noiseBufferFor(ctx));
+	});
+});
+
+describe("computeSlotStarts / slotAtTime", () => {
+	// 4/4 at 60 bpm: a quarter is a second. Bar 1: a half, then two quarters; bar 2: four quarters.
+	const pattern = makeDefaultPattern();
+	pattern.bpm = 60;
+	pattern.measures[0].slots = pattern.measures[0].slots.slice(0, 3).map((slot, i) => ({ ...slot, duration: i === 0 ? "half" : "quarter" }));
+	pattern.measures.push({ ...makeDefaultPattern().measures[0], id: "m2" });
+	const starts = computeSlotStarts(pattern, 60);
+
+	it("starts every slot, empty ones too, at its place in time", () => {
+		expect(starts.map((s) => [s.measureIndex, s.slotIndex, s.time])).toEqual([
+			[0, 0, 0],
+			[0, 1, 2],
+			[0, 2, 3],
+			[1, 0, 4],
+			[1, 1, 5],
+			[1, 2, 6],
+			[1, 3, 7],
+		]);
+	});
+
+	it("finds the slot sounding at a time, through slots with nothing struck", () => {
+		expect(slotAtTime(starts, -0.1)).toBeNull();
+		expect(slotAtTime(starts, 0)).toMatchObject({ measureIndex: 0, slotIndex: 0 });
+		expect(slotAtTime(starts, 1.9)).toMatchObject({ measureIndex: 0, slotIndex: 0 });
+		expect(slotAtTime(starts, 2.5)).toMatchObject({ measureIndex: 0, slotIndex: 1 });
+		expect(slotAtTime(starts, 5.2)).toMatchObject({ measureIndex: 1, slotIndex: 1 });
+		expect(slotAtTime(starts, 99)).toMatchObject({ measureIndex: 1, slotIndex: 3 });
 	});
 });

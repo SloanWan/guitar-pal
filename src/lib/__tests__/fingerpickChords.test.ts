@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
 	chordToneNames,
 	effectiveChords,
+	chordsUsed,
 	patternHasChords,
 	setSlotChord,
 	moveSlotChord,
@@ -84,6 +85,22 @@ describe("effectiveChords", () => {
 		const measures = [measure("a", [undefined, C, undefined]), measure("b", [Am, undefined])];
 		const out = effectiveChords(measures);
 		expect(out.map((row) => row.length)).toEqual(measures.map((m) => m.slots.length));
+	});
+});
+
+describe("chordsUsed", () => {
+	it("lists each chord once, in the order it first appears", () => {
+		const out = chordsUsed([measure("a", [C, undefined, Am]), measure("b", [C, G7, Am])]);
+		expect(out).toEqual([C, Am, G7]);
+	});
+
+	it("counts a chord held two ways once, as it is first held", () => {
+		const pinned = { ...Am, voicingId: "v2" };
+		expect(chordsUsed([measure("a", [pinned, Am])])).toEqual([pinned]);
+	});
+
+	it("is empty when nothing is marked", () => {
+		expect(chordsUsed([measure("a", [undefined])])).toEqual([]);
 	});
 });
 

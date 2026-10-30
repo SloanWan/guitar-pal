@@ -29,11 +29,10 @@ export interface ClickToSeek {
 }
 
 /**
- * Clicking anywhere in the tab viewer seeks to the nearest note in the clicked
- * row (nearest by x-distance). Clicks outside all rows clamp to the nearest
- * row. While playing or paused the engine seeks at once; while stopped the
- * target is kept for the next play(). In section mode a click picks the
- * measure under it instead.
+ * Clicking anywhere in the tab seeks to the nearest note in the clicked row
+ * (nearest by x); a click between or outside rows takes the nearest row. While
+ * playing or paused the engine seeks at once; while stopped the target is kept
+ * for the next play(). In section mode a click picks the measure under it.
  */
 export function useClickToSeek({
 	viewerRef,
@@ -53,79 +52,40 @@ export function useClickToSeek({
 	function handleTabClick(e: React.MouseEvent<HTMLDivElement>): void {
 		const container = viewerRef.current;
 		if (!container) return;
-
+		const rect = container.getBoundingClientRect();
+		const measure = measureAtPoint(geometry, e.clientX - rect.left, e.clientY - rect.top + container.scrollTop);
+		if (measure === null) return;
 		if (sectionMode) {
-			const rect = container.getBoundingClientRect();
-			const measure = measureAtPoint(
-				geometry,
-				e.clientX - rect.left + container.scrollLeft,
-				e.clientY - rect.top + container.scrollTop,
-			);
-			if (measure !== null) onPickMeasure(measure);
+			onPickMeasure(measure);
 			return;
 		}
 
-		const noteEls = Array.from(
-			container.querySelectorAll<SVGElement>("[data-measure-index][data-slot-index]"),
-		);
-		if (noteEls.length === 0) return;
-
-		const allSvgs = Array.from(container.querySelectorAll<SVGElement>("svg"));
-		if (allSvgs.length === 0) return;
-
-		const clickYVp = e.clientY;
-		const clickXVp = e.clientX;
-
-		// Find the row SVG the click landed in by viewport Y.
-		let targetSvg = allSvgs.find((svg) => {
-			const r = svg.getBoundingClientRect();
-			return clickYVp >= r.top && clickYVp <= r.bottom;
-		});
-
-		// Click was between or outside rows — clamp to nearest by Y distance.
-		if (!targetSvg) {
-			let minDist = Infinity;
-			for (const svg of allSvgs) {
-				const r = svg.getBoundingClientRect();
-				const dist = Math.min(Math.abs(clickYVp - r.top), Math.abs(clickYVp - r.bottom));
-				if (dist < minDist) {
-					minDist = dist;
-					targetSvg = svg;
-				}
-			}
-		}
-		if (!targetSvg) return;
-
-		// Notes in the target row only.
-		const rowNotes = noteEls.filter((el) => targetSvg!.contains(el));
-		if (rowNotes.length === 0) return;
-
-		// Nearest note by X distance.
-		let nearestEl: SVGElement | null = null;
-		let minXDist = Infinity;
-		for (const el of rowNotes) {
+		// The nearest note by x among the clicked row's measures; a row of rests has none.
+		const rowIndex = geometry.find((r) => r.measureIndex === measure)?.rowIndex;
+		const rowMeasures = new Set(geometry.filter((r) => r.rowIndex === rowIndex).map((r) => String(r.measureIndex)));
+		let nearest: SVGElement | null = null;
+		let best = Infinity;
+		for (const el of container.querySelectorAll<SVGElement>("[data-measure-index][data-slot-index]")) {
+			if (!rowMeasures.has(el.dataset.measureIndex ?? "")) continue;
 			const r = el.getBoundingClientRect();
-			const dist = Math.abs(r.left + r.width / 2 - clickXVp);
-			if (dist < minXDist) {
-				minXDist = dist;
-				nearestEl = el;
+			const distance = Math.abs(r.left + r.width / 2 - e.clientX);
+			if (distance < best) {
+				best = distance;
+				nearest = el;
 			}
 		}
-		if (!nearestEl) return;
+		if (!nearest) return;
 
-		const measureIndex = parseInt(nearestEl.getAttribute("data-measure-index") ?? "0", 10);
-		const slotIndex = parseInt(nearestEl.getAttribute("data-slot-index") ?? "0", 10);
-
+		const measureIndex = Number(nearest.dataset.measureIndex);
+		const slotIndex = Number(nearest.dataset.slotIndex);
 		if (isPlaying || isPaused) {
-			// Audio engine handles the reschedule (playing) or saved-position update (paused).
-			// The engine runs on the expanded timeline, so map the clicked original measure
-			// to its first expanded occurrence.
+			// The engine runs on the expanded timeline: the clicked measure's first occurrence.
 			seekToNote(toExpandedMeasureIndex(measureIndex), slotIndex);
 		} else {
-			// Stopped: record the target so the next play() starts from here.
+			// Stopped: the next play() starts from here.
 			pendingSeekRef.current = { measureIndex, slotIndex };
 		}
-		snapCursorToNote(nearestEl, measureIndex);
+		snapCursorToNote(nearest, measureIndex);
 	}
 
 	const takePendingSeek = useCallback((): SeekTarget | null => {

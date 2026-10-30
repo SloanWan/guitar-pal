@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
 	ArrowDownUp,
 	ArrowRight,
@@ -44,6 +43,7 @@ import { useAirStrum } from "./Eggs";
 import { strumFromSweep } from "@/lib/landing/eggs";
 import "@/components/strum/strum.css";
 import "./landing.css";
+import { useNavRouter } from "@/components/nav-progress";
 
 const SongTab = dynamic(() => import("./SongTab"), {
 	ssr: false,
@@ -136,7 +136,7 @@ function PreviewNote({ on }: { on: boolean }) {
 /* ---- 1 · Say it: the sentence is typed, then read ---------------------- */
 
 function SayIt() {
-	const router = useRouter();
+	const router = useNavRouter();
 	const ref = useRef<HTMLDivElement>(null);
 	const inView = useInView(ref);
 	const typed = useTypewriter(SONG_SENTENCE, inView);

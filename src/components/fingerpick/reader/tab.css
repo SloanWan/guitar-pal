@@ -1,0 +1,385 @@
+/* =====================================================================================
+   The Tab page on Candy (#363 step 2): the score first — the title, a toolbar that stays
+   at the top, the tab on a card — with Strum's library beside it from 960px and Strum's
+   player floating over its foot. Widths are the page's own (a container query), so the
+   library folding away gives the tab its room back.
+   ===================================================================================== */
+@layer components {
+	.tb-page {
+		container: tab gp-page / inline-size;
+		height: 100%;
+		background: var(--gp-page);
+		color: var(--gp-ink);
+		font-family: var(--gp-f-body);
+	}
+	.tb-stage-wrap {
+		--tb-pill-room: 104px;
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+	}
+	/* What scrolls (and what auto-scroll creeps). It scrolls a pill's height further,
+	   so the tab's last row can always be brought up above the player. */
+	.tb-stage {
+		position: relative;
+		display: flex;
+		flex: 1 1 0;
+		flex-direction: column;
+		box-sizing: border-box;
+		min-height: 0;
+		overflow-y: auto;
+		--tb-pad-top: 22px;
+		--tb-tool-gap: 10px;
+		padding: var(--tb-pad-top) 36px 0;
+	}
+	.tb-stage::after {
+		flex: none;
+		height: var(--tb-pill-room);
+		content: "";
+	}
+	.tb-stage-in {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		box-sizing: border-box;
+		width: 100%;
+		max-width: 1000px;
+		margin: 0 auto;
+	}
+
+	/* ── Title row ──────────────────────────────────────────────────────── */
+	/* The meta line and the library's button share the top line; the name and what
+	   can be done to the tab share the second, so the button never crowds the actions.
+	   The top line keeps its height whether the button shows or not. */
+	.tb-titlerow {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		column-gap: 16px;
+		padding: 0 6px;
+	}
+	.tb-meta {
+		display: flex;
+		align-items: center;
+		height: 30px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* Below 1200px it opens the library's sheet; from 1200px the library is beside the
+	   stage and folds by its own button (and `.lib-fab` where that button was). On a phone
+	   the toolbar has it. The meta line keeps its height either way. */
+	.tb-libopen.pb-icon {
+		display: none;
+		justify-self: end;
+		width: 30px;
+		height: 30px;
+		margin-right: -4px;
+	}
+	.tb-libopen svg {
+		width: 18px;
+		height: 18px;
+	}
+	.tb-titlerow h1 {
+		grid-column: 1;
+		margin: 0;
+		overflow: hidden;
+		font-size: 28px;
+		font-weight: 780;
+		letter-spacing: -0.02em;
+		line-height: 1.2;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.tb-pact {
+		display: flex;
+		grid-column: 2;
+		align-items: center;
+		gap: 6px;
+	}
+	.tb-capo {
+		margin-right: 8px;
+	}
+	/* under the title row, on its inset */
+	.tb-page .sh-note {
+		padding: 0 6px;
+	}
+	.tb-confirm {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		font-size: 13.5px;
+	}
+	.tb-confirm-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 6px;
+	}
+
+	/* ── Toolbar: stays at the top while the tab scrolls ──────────────────── */
+	/* A sticky top counts from the stage's padding edge, so it is pulled up by that
+	   padding and the gap left above it is painted over: nothing the tab scrolls
+	   past shows above the toolbar. The page-coloured shadow, raised by the radius,
+	   fills the corners its rounding leaves open. It sits over the playhead (10). */
+	.tb-tool {
+		position: sticky;
+		top: calc(var(--tb-tool-gap) - var(--tb-pad-top));
+		z-index: 12;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 10px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow:
+			var(--gp-ring-c),
+			var(--gp-shadow-pop),
+			0 calc(-1 * var(--gp-r-l)) 0 var(--gp-page);
+	}
+	.tb-tool::before {
+		position: absolute;
+		right: 0;
+		bottom: 100%;
+		left: 0;
+		height: var(--tb-tool-gap);
+		background: var(--gp-page);
+		content: "";
+	}
+	.tb-seglab {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 8px;
+	}
+	.tb-grow {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-align: right;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* Scoped, so they outrank the shared icon and capo classes whichever sheet loads last. */
+	.tb-tool .tb-phone,
+	.tb-tool .tb-viewchip {
+		display: none;
+	}
+	.tb-viewchip svg {
+		width: 15px;
+		height: 15px;
+	}
+	.tb-view {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.tb-view-gap {
+		margin-top: 8px;
+	}
+	.tb-view-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		min-height: 24px;
+	}
+	.tb-view-on {
+		padding: 2px 6px;
+		margin-right: -6px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-m-700);
+		font-size: 13px;
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.tb-view-on:hover {
+		background: var(--gp-m-100);
+	}
+	.tb-view-group {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		transition: opacity var(--gp-d-state) linear;
+	}
+	/* Shapes are off: every control in the group reads as unavailable, the labels too. */
+	.tb-view-group[data-off] {
+		opacity: 0.45;
+	}
+	.tb-view-group[data-off] .gp-sw-row {
+		cursor: default;
+	}
+	.tb-view-row {
+		display: grid;
+		grid-template-columns: 52px minmax(0, 1fr);
+		align-items: center;
+		gap: 10px;
+	}
+	.tb-view-name {
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	/* ── The tab ──────────────────────────────────────────────────────────── */
+	/* The stave draws in the --tab-* colours (TabStaveRow); here they are Candy's. */
+	.tb-sheet {
+		--tab-ink: var(--gp-ink);
+		--tab-dim: var(--gp-ink-3);
+		--tab-faint: var(--gp-ink-3);
+		--tab-line: var(--gp-edge);
+		--tab-paper: var(--gp-card);
+		--tab-chord: var(--gp-m-700);
+		/* Off-shape frets: orange, the tab blue's complement, so they stand out from the ink
+		   and from the module's own chord line and playhead (5.2:1 on the light card, 6.6:1 dark). */
+		--tab-off-shape: light-dark(#c2410c, #fb8c4a);
+		padding: 26px 30px 30px;
+		border-radius: var(--gp-r-xl);
+		background: var(--gp-card);
+	}
+	.tb-viewer {
+		position: relative;
+		cursor: pointer;
+	}
+	/* Headroom for the playhead's cap over the first row. */
+	.tb-rows {
+		display: flex;
+		flex-direction: column;
+		padding-top: 8px;
+	}
+	.tb-tones {
+		color: var(--gp-ink-3);
+		font-family: var(--gp-f-num);
+		line-height: 1;
+		white-space: nowrap;
+	}
+	/* Over the staves: translucent, and above the fret numbers' halos. */
+	.tb-band,
+	.tb-measure-hl,
+	.tb-playhead {
+		position: absolute;
+		z-index: 10;
+		pointer-events: none;
+	}
+	.tb-band {
+		background: color-mix(in srgb, var(--gp-m-500) 10%, transparent);
+	}
+	.tb-band[data-start] {
+		box-shadow: inset 2px 0 0 var(--gp-m-500);
+	}
+	.tb-band[data-end] {
+		box-shadow: inset -2px 0 0 var(--gp-m-500);
+	}
+	.tb-band[data-start][data-end] {
+		box-shadow:
+			inset 2px 0 0 var(--gp-m-500),
+			inset -2px 0 0 var(--gp-m-500);
+	}
+	/* Placed and shown by the cursor once the stave is drawn. */
+	.tb-measure-hl {
+		display: none;
+		border-radius: var(--gp-r-s);
+		background: color-mix(in srgb, var(--gp-m-500) 9%, transparent);
+	}
+	.tb-playhead {
+		display: none;
+		left: 0;
+		width: 2px;
+		border-radius: 1px;
+		background: var(--gp-m-500);
+	}
+	.tb-playhead::before {
+		position: absolute;
+		top: -6px;
+		left: -4px;
+		border-top: 6px solid var(--gp-m-500);
+		border-right: 5px solid transparent;
+		border-left: 5px solid transparent;
+		content: "";
+	}
+
+	/* ── Below 1200px: no side library ────────────────────────────────────
+	   The toolbar wants its one row, so the library leaves the stage's side earlier
+	   than Strum's (960px): the meta line's button opens it as a sheet instead. */
+	@container tab (max-width: 1199px) {
+		.tb-page .lib-shell,
+		.tb-page .lib-shell[data-lib="closed"] {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.tb-page .lib-aside,
+		.tb-page .lib-fab {
+			display: none;
+		}
+		.tb-libopen.pb-icon {
+			display: grid;
+		}
+	}
+	@container tab (max-width: 959px) {
+		.tb-stage {
+			--tb-pad-top: 20px;
+			padding: var(--tb-pad-top) 28px 0;
+		}
+	}
+	/* The toolbar's one row needs ~740px: narrower, the chord line and pitch go into the View sheet. */
+	@container tab (max-width: 819px) {
+		.tb-tool .tb-wide {
+			display: none;
+		}
+		.tb-tool .tb-viewchip {
+			display: flex;
+		}
+	}
+
+	/* ── Phone: one column; the toolbar holds the library, a View sheet and the capo ── */
+	@container tab (max-width: 719px) {
+		.tb-stage-wrap {
+			--tb-pill-room: 84px;
+		}
+		/* Full bleed and square here, so it sticks flush to the top. */
+		.tb-stage {
+			--tb-pad-top: 12px;
+			--tb-tool-gap: 0px;
+			padding: var(--tb-pad-top) 12px 0;
+		}
+		.tb-stage-in {
+			gap: 10px;
+		}
+		.tb-titlerow,
+		.tb-page .sh-note {
+			column-gap: 8px;
+			padding: 0 2px;
+		}
+		.tb-meta {
+			height: 22px;
+		}
+		.tb-titlerow h1 {
+			font-size: 20px;
+		}
+		.tb-pact {
+			gap: 2px;
+		}
+		/* The capo comes down into the toolbar; the toolbar opens the library. */
+		.tb-pact .tb-capo,
+		.tb-libopen.pb-icon {
+			display: none;
+		}
+		.tb-tool .tb-phone {
+			display: flex;
+		}
+		.tb-tool .pb-icon.tb-phone {
+			display: grid;
+		}
+		.tb-tool {
+			gap: 6px;
+			margin: 0 -12px;
+			padding: 6px 12px;
+			border-radius: 0;
+			box-shadow:
+				var(--gp-ring-c),
+				var(--gp-shadow-pop);
+		}
+		.tb-sheet {
+			padding: 12px 10px 14px;
+			border-radius: var(--gp-r-l);
+		}
+	}
+}

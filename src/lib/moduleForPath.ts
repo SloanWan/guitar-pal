@@ -20,3 +20,16 @@ export function moduleForPath(pathname: string | null | undefined): ModuleKey {
 	}
 	return "home";
 }
+
+/**
+ * The module a link's href leads to: its path, without query or hash, read against
+ * the page it is followed from (`base`, a pathname). No href is the page itself.
+ */
+export function moduleForHref(href: string | null, base: string): ModuleKey {
+	if (href === null) return moduleForPath(base);
+	try {
+		return moduleForPath(new URL(href, `http://x${base}`).pathname);
+	} catch {
+		return moduleForPath(base);
+	}
+}

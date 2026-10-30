@@ -1,11 +1,13 @@
 "use client";
 
+import "@/components/library/library.css";
+import { FLAG_CODEC, useStoredState } from "@/components/useStoredState";
 import "./strum.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { PanelRightOpen } from "lucide-react";
-import { Sheet, useSheetSide } from "@/components/ui/sheet";
+import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import SharedPatternPanel from "@/components/SharedPatternPanel";
+import { ShareNote } from "@/components/share/SharedSnapshot";
 import PlayBar from "@/components/playback/PlayBar";
 import ShareStrumDialog from "@/components/strum/ShareStrumDialog";
 import PatternComposer from "@/components/strum/composer/PatternComposer";
@@ -27,15 +29,13 @@ import { useStrumShare } from "@/components/strum/useStrumShare";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
 import { useUser } from "@/hooks/useUser";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
-import { patternBpm } from "@/lib/strumBars";
-import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
-import { barLabel, progressionCapo } from "@/lib/strumProgressions";
+import { meterLabel } from "@/lib/strumMeter";
+import { barLabel } from "@/lib/strumProgressions";
 import { loadVoicings } from "@/lib/chordVoicingCache";
 import { withUserVoicings } from "@/lib/userChordVoicings";
 import type { SharedStrum } from "@/lib/sharedItems";
-import { PLAYER_DOCK_KEY, readDock, type PlayerDock } from "@/lib/playerDock";
-import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
-import { showPress } from "@/components/ui/press";
+import { usePlayerDock } from "@/components/playback/usePlayerDock";
+import { usePlayKey } from "@/components/playback/usePlayKey";
 
 /** Per-viewer: whether the library beside the stage is folded away. */
 const LIBRARY_FOLDED_KEY = "strumLibraryFolded";
@@ -103,88 +103,29 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 		if (playback.isPlaying) playback.stop();
 		else if (canPlay) playback.start();
 	}
-	// Space is the transport anywhere on the page (see shouldRunPageShortcut).
-	// Subscribed once; the ref always holds the current toggle.
-	const togglePlayRef = useRef(togglePlay);
-	useEffect(() => {
-		togglePlayRef.current = togglePlay;
-	});
-	// The play key sinks under space the way it sinks under a click: down on the
-	// key going down, back up when it is let go.
 	const pickRef = useRef<HTMLButtonElement>(null);
-	useEffect(() => {
-		let release: (() => void) | null = null;
-		function handleKeyDown(e: KeyboardEvent) {
-			if (e.code !== "Space" || !shouldRunPageShortcut(e)) return;
-			e.preventDefault();
-			// A held key repeats; one press is one toggle.
-			if (e.repeat) return;
-			release?.();
-			release = pickRef.current ? showPress(pickRef.current) : null;
-			togglePlayRef.current();
-		}
-		function handleKeyUp(e: KeyboardEvent) {
-			if (e.code !== "Space") return;
-			release?.();
-			release = null;
-		}
-		window.addEventListener("keydown", handleKeyDown);
-		window.addEventListener("keyup", handleKeyUp);
-		return () => {
-			release?.();
-			window.removeEventListener("keydown", handleKeyDown);
-			window.removeEventListener("keyup", handleKeyUp);
-		};
-	}, []);
+	usePlayKey(pickRef, togglePlay);
 
-	const [folded, setFolded] = useState(false);
-	useEffect(() => {
-		try {
-			if (localStorage.getItem(LIBRARY_FOLDED_KEY) === "1") queueMicrotask(() => setFolded(true));
-		} catch {
-			// unreadable storage: the library starts open
-		}
-	}, []);
+	const [foldedStored, storeFolded] = useStoredState(LIBRARY_FOLDED_KEY, false, FLAG_CODEC);
+	// Chords arriving for a pattern unfold the list for this visit, not for good.
+	const [openForChords, setOpenForChords] = useState(false);
+	const folded = foldedStored && !openForChords;
 	function fold(next: boolean) {
-		setFolded(next);
-		try {
-			localStorage.setItem(LIBRARY_FOLDED_KEY, next ? "1" : "0");
-		} catch {
-			// remembered for this visit only
-		}
+		setOpenForChords(false);
+		storeFolded(next);
 	}
 	const [libraryOpen, setLibraryOpen] = useState(false);
-	// Chords arriving for a pattern open the list: beside the stage (unfolded for
-	// this visit), or in its sheet where there is no room beside it.
+	// Chords arriving for a pattern open the list: beside the stage, or in its sheet
+	// where there is no room beside it.
 	const asideRef = useRef<HTMLElement>(null);
 	useEffect(() => {
 		if (!picking) return;
 		queueMicrotask(() => {
-			setFolded(false);
+			setOpenForChords(true);
 			if (asideRef.current && getComputedStyle(asideRef.current).display === "none") setLibraryOpen(true);
 		});
 	}, [picking]);
-	// Where the player floats. A phone has no room beside the stage, so there it
-	// stays at the bottom whatever was chosen on a wider screen.
-	const [dockChoice, setDockChoice] = useState<PlayerDock>("bottom");
-	useEffect(() => {
-		try {
-			const saved = readDock(localStorage.getItem(PLAYER_DOCK_KEY));
-			queueMicrotask(() => setDockChoice(saved));
-		} catch {
-			// unreadable storage: the bottom
-		}
-	}, []);
-	const canDock = useSheetSide(true) === "right";
-	const dock: PlayerDock = canDock ? dockChoice : "bottom";
-	function moveDock(next: PlayerDock) {
-		setDockChoice(next);
-		try {
-			localStorage.setItem(PLAYER_DOCK_KEY, next);
-		} catch {
-			// remembered for this visit only
-		}
-	}
+	const { dock, canDock, moveDock } = usePlayerDock();
 	const [composer, setComposer] = useState<"new" | "edit" | null>(null);
 	/** The composer has a play key of its own; the page's falls silent while it is open. */
 	function openComposer(mode: "new" | "edit") {
@@ -202,32 +143,18 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	const isPreset = selectedPattern !== null && PRESET_STRUM_PATTERNS.some((p) => p.id === selectedPattern.id);
 	const meta = selectedPattern
 		? [
-				isShared ? "Shared" : session.owned ? "My pattern" : isPreset ? "Preset" : "Pattern",
+				// on a share page the badge says whose it is
+				...(isShared ? [] : [session.owned ? "My pattern" : isPreset ? "Preset" : "Pattern"]),
 				meterLabel(meter),
 				`${rhythm.length} bar${rhythm.length === 1 ? "" : "s"}`,
 			].join(" · ")
 		: "";
-	const sharedMeta =
-		shared && selectedPattern
-			? [
-					`${beatUnitGlyph(meter)} = ${openProgression?.bpm ?? patternBpm(selectedPattern)}`,
-					meterLabel(meter),
-					...(shared.progressions.length > 1
-						? [`${shared.progressions.length} progressions`]
-						: openProgression
-							? [
-									`${openProgression.bars.length} bar${openProgression.bars.length === 1 ? "" : "s"}`,
-									...(progressionCapo(openProgression) > 0 ? [`Capo ${progressionCapo(openProgression)}`] : []),
-								]
-							: []),
-				].join(" · ")
-			: "";
 
 	const libraryProps = {
 		customPatterns: library.customPatterns,
 		loading: library.patternsLoading,
 		// Until the waiting chords have a pattern, the one open underneath is not an answer.
-		selectedId: picking && !pending.chosen ? null : selectedPattern?.id ?? null,
+		selectedId: picking && !pending.chosen ? null : (selectedPattern?.id ?? null),
 		favouriteIds: library.favouriteIds,
 		onToggleFavourite: library.handleToggleFavourite,
 		onNew: () => openComposer("new"),
@@ -235,13 +162,13 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 
 	return (
 		<div className="st-page" data-m="strum">
-			<div className="st-shell" data-lib={folded && !isShared ? "closed" : "open"}>
-				<div className="st-stage-wrap">
+			<div className="lib-shell" data-lib={isShared ? "none" : folded ? "closed" : "open"}>
+				<div className="st-stage-wrap pb-area">
 					{/* Outside the scrolling stage, so it stays put however far the page scrolls. */}
 					{!isShared && folded && (
 						<button
 							type="button"
-							className="st-icon st-lib-fab"
+							className="st-icon lib-fab"
 							onClick={() => fold(false)}
 							aria-label="Show the pattern list"
 							title="Show the pattern list"
@@ -276,19 +203,6 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 						</div>
 					) : (
 						<div className="st-stage-in gp-rise">
-							{shared && (
-								<div className="st-shared-strip" style={{ "--i": 0 } as CSSProperties}>
-									<SharedPatternPanel
-										variant="strip"
-										name={selectedPattern.name}
-										meta={sharedMeta}
-										user={user}
-										loading={loading}
-										importing={shareState.importing}
-										onImport={shareState.importShared}
-									/>
-								</div>
-							)}
 							<div style={{ "--i": 0 } as CSSProperties}>
 								<PatternHeader
 									name={selectedPattern.name}
@@ -303,7 +217,17 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 									onShare={isShared ? undefined : shareState.share}
 									sharing={shareState.sharing}
 									onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
+									shared={
+										isShared
+											? {
+													onImport: shareState.importShared,
+													importing: shareState.importing,
+													disabled: loading || library.patternsLoading,
+												}
+											: undefined
+									}
 								/>
+								{isShared && <ShareNote guest={!loading && !user} />}
 							</div>
 							<div style={{ "--i": 1 } as CSSProperties}>
 								<NowCard
@@ -376,7 +300,8 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					dock={dock}
 					onDock={moveDock}
 					canDock={canDock}
-					strum={{
+					soundKind="strum"
+					sound={{
 						enabled: playback.strumEnabled,
 						onEnabledChange: playback.setStrumEnabled,
 						gain: playback.strumGain,
@@ -393,33 +318,23 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 				/>
 				</div>
 
-				<aside ref={asideRef} className="st-lib" aria-label={isShared ? "Shared pattern" : "Pattern library"}>
-					{shared && selectedPattern ? (
-						<SharedPatternPanel
-							variant="sidebar"
-							name={selectedPattern.name}
-							meta={sharedMeta}
-							user={user}
-							loading={loading}
-							importing={shareState.importing}
-							onImport={shareState.importShared}
-						/>
-					) : (
-						!folded && (
+				{!isShared && (
+					<aside ref={asideRef} className="lib-aside" aria-label="Pattern library">
+						{!folded && (
 							<PatternLibrary
 								{...libraryProps}
 								variant="aside"
 								onSelect={picking ? session.choosePendingPattern : session.selectPattern}
 								onFold={() => fold(true)}
 							/>
-						)
-					)}
-				</aside>
+						)}
+					</aside>
+				)}
 
 			</div>
 
 			{!isShared && (
-				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title={picking ? "Choose a pattern" : "Patterns"}>
+				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title={picking ? "Choose a pattern" : "Patterns"} fixedHeight>
 					<div className="flex min-h-0 flex-col gap-3" data-m="strum">
 						<PatternLibrary
 							{...libraryProps}

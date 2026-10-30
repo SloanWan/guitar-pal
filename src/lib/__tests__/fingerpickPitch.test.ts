@@ -31,8 +31,12 @@ describe("soundingMidi", () => {
 });
 
 describe("pitchLabel", () => {
-	it("writes MIDI as the number", () => {
-		expect(pitchLabel(64, "midi")).toBe("64");
+	it("sings fixed-do solfège, the accidental first, no octave", () => {
+		expect(OPEN_STRING_MIDI.map((m) => pitchLabel(m, "solfege"))).toEqual(["mi", "ti", "so", "re", "la", "mi"]);
+		expect(pitchLabel(60, "solfege")).toBe("do");
+		expect(pitchLabel(61, "solfege")).toBe("♯do");
+		expect(pitchLabel(63, "solfege")).toBe("♭mi");
+		expect(pitchLabel(70, "solfege")).toBe("♭ti");
 	});
 
 	it("spells names the way the chord library spells its roots", () => {
@@ -101,7 +105,9 @@ describe("isPitchLabelStyle", () => {
 	it("accepts the four styles and nothing else", () => {
 		expect(isPitchLabelStyle("name")).toBe(true);
 		expect(isPitchLabelStyle("scientific")).toBe(true);
-		expect(isPitchLabelStyle("midi")).toBe(true);
+		expect(isPitchLabelStyle("solfege")).toBe(true);
+		// Retired: a stored "midi" falls back to the default.
+		expect(isPitchLabelStyle("midi")).toBe(false);
 		expect(isPitchLabelStyle("jianpu")).toBe(true);
 		expect(isPitchLabelStyle("E4")).toBe(false);
 		expect(isPitchLabelStyle(null)).toBe(false);

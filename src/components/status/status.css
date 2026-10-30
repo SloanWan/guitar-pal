@@ -8,10 +8,6 @@
 		cursor: pointer;
 		outline: none;
 	}
-	.status-tab .status-press:focus-visible > rect {
-		stroke: var(--gp-focus);
-		stroke-width: 2;
-	}
 	@media (hover: hover) {
 		.status-tab .status-press:hover > text {
 			fill: var(--gp-m-500);

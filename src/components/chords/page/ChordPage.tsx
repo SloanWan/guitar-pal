@@ -23,6 +23,8 @@ import { rootPitchClass, voicingPitches } from "@/lib/chordVoicingToMidi";
 import type { ChordWithVoicings } from "@/lib/chordsData";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import { userVoicingId } from "@/lib/userChordVoicings";
+import { chordVisitTarget } from "@/lib/visits";
+import { useRecordVisit } from "@/hooks/useRecordVisit";
 import ChordLibrary from "./ChordLibrary";
 import ChordNeck from "./ChordNeck";
 import ShapeDraft, { draftTitle, type Draft } from "./ShapeDraft";
@@ -60,6 +62,7 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 	const { user, loading } = useUser();
 	const { voicings: userVoicings, saveVoicing, deleteVoicing } = useUserChordVoicings(user, loading);
 	const favourites = useFavouriteChords(user, loading);
+	useRecordVisit(user, "chord", chordVisitTarget(root, suffix));
 	const mine = useMemo(() => userVoicings.filter((v) => v.root === root && v.suffix === suffix), [userVoicings, root, suffix]);
 	const shapes = useMemo(() => pageShapes(library, mine, root, suffix), [library, mine, root, suffix]);
 

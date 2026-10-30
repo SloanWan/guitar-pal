@@ -20,6 +20,7 @@ test.describe("account", () => {
 
 		// The return path is honoured, not the default home.
 		await expect(page).toHaveURL(/\/home$/);
+		await expect(page.getByRole("heading", { name: "Jump back in" })).toBeVisible();
 
 		// And signing in is remembered: /auth sends a signed-in visitor away.
 		await page.goto("/auth");

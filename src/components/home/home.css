@@ -1,0 +1,537 @@
+/*
+ * /home (#363 step 13, scheme C "Today"). A greeting and the assistant, the
+ * song last strummed ready to play, the three latest things, and one panel
+ * of the player's own: this week, what they kept, the links they shared.
+ *
+ * Home has no module of its own (ink), and its lists mix five: every card and
+ * row carries its module, but rests quiet — neutral badges, the module's
+ * colour only on what is pointed at. At rest the one module fill on the page
+ * is the Play pick.
+ *
+ * Widths are the page's own (a `home` container), not the viewport's: a
+ * content column and the panel beside it from 960px, one column below.
+ */
+@layer components {
+	.hm {
+		container: home / inline-size;
+	}
+	.hm-lay {
+		display: grid;
+		gap: 32px;
+		max-width: 1200px;
+		margin: 0 auto;
+		padding-block: 24px 40px;
+	}
+	@container home (min-width: 720px) {
+		.hm-lay {
+			padding-block: 36px 56px;
+		}
+	}
+	@container home (min-width: 960px) {
+		.hm-lay {
+			grid-template-columns: minmax(0, 1fr) 312px;
+			gap: 40px;
+			align-items: start;
+		}
+	}
+	.hm-col {
+		display: grid;
+		gap: 32px;
+		align-content: start;
+		min-width: 0;
+	}
+	/* What the load brings bubbles in when it lands, laid out as if the wrapper were not there.
+	   It counts from 0 again: `--i` inherits, so it would start from the rise around it. */
+	.hm-arrive {
+		display: contents;
+		--i: 0;
+	}
+
+	/* ---- greeting --------------------------------------------------------- */
+	.hm-greet {
+		display: grid;
+		gap: 8px;
+		/* the time arrives with the client: room for the line and two of the title */
+		min-height: 92px;
+		align-content: start;
+	}
+	.hm-today {
+		font: 600 var(--gp-t-ui) / 1.3 var(--gp-f-body);
+		color: var(--gp-ink-3);
+		font-variant-numeric: tabular-nums;
+		min-height: 1.3em;
+	}
+	.hm-h1 {
+		font: 700 clamp(30px, 4.2cqi, 46px) / 1.08 var(--gp-f-disp);
+		letter-spacing: -0.02em;
+		color: var(--gp-ink);
+		text-wrap: balance;
+	}
+	.hm-h2 {
+		font: 700 19px / 1.2 var(--gp-f-disp);
+		letter-spacing: -0.01em;
+		color: var(--gp-ink);
+	}
+	.hm-sec {
+		display: grid;
+		gap: 14px;
+		min-width: 0;
+	}
+
+	/* ---- ask -------------------------------------------------------------- */
+	.hm-ask {
+		display: grid;
+		gap: 12px;
+		padding: 14px;
+		border-radius: 18px;
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	@container home (min-width: 720px) {
+		.hm-ask {
+			padding: 18px;
+		}
+	}
+	.hm-askbox {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-height: 52px;
+		padding: 6px 6px 6px 14px;
+		border-radius: 12px;
+		background: var(--gp-field);
+	}
+	.hm-askbox:focus-within {
+		outline: 2px solid var(--gp-focus);
+		outline-offset: 2px;
+	}
+	.hm-askbox input {
+		flex: 1;
+		min-width: 0;
+		background: none;
+		border: 0;
+		outline: none;
+		font: 500 15.5px / 1.4 var(--gp-f-body);
+		color: var(--gp-ink);
+	}
+	.hm-askbox input::placeholder {
+		color: var(--gp-ink-3);
+	}
+	.hm-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+
+	/* ---- the song last strummed -------------------------------------------- */
+	.hm-cont {
+		display: grid;
+		gap: 14px;
+		min-width: 0;
+		padding: 16px;
+		border-radius: 18px;
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	@container home (min-width: 720px) {
+		.hm-cont {
+			gap: 16px;
+			padding: 22px;
+		}
+	}
+	.hm-cont-top {
+		display: grid;
+		gap: 4px;
+		min-width: 0;
+	}
+	.hm-modline {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font: 650 var(--gp-t-cap) / 1 var(--gp-f-body);
+		color: var(--gp-ink-2);
+	}
+	.hm-modline .gp-badge {
+		width: 26px;
+		height: 28px;
+	}
+	.hm-modline .gp-badge > .gp-badge-icon {
+		width: 12px;
+		height: 12px;
+		margin-top: -4px;
+	}
+	.hm-cont-name {
+		overflow: hidden;
+		font: 700 26px / 1.1 var(--gp-f-disp);
+		letter-spacing: -0.02em;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	@container home (min-width: 720px) {
+		.hm-cont-name {
+			font-size: 30px;
+		}
+	}
+	.hm-meta {
+		font-size: var(--gp-t-cap);
+		color: var(--gp-ink-3);
+		font-variant-numeric: tabular-nums;
+	}
+	.hm-meta a {
+		text-decoration: underline;
+		text-decoration-color: var(--gp-edge);
+		text-underline-offset: 4px;
+		transition: color var(--gp-d-state);
+	}
+	.hm-meta a:hover {
+		color: var(--gp-ink);
+	}
+	/* one tile a bar: eight to a row, four on a phone */
+	.hm-bars {
+		display: grid;
+		grid-template-columns: repeat(min(var(--n), 4), minmax(0, 1fr));
+		gap: 6px;
+	}
+	@container home (min-width: 560px) {
+		.hm-bars {
+			grid-template-columns: repeat(min(var(--n), 8), minmax(0, 1fr));
+		}
+	}
+	.hm-bar {
+		display: grid;
+		place-items: center;
+		align-content: center;
+		gap: 4px;
+		min-width: 0;
+		height: 50px;
+		padding: 0 2px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-well);
+		color: var(--gp-ink);
+		font: 700 16px / 1 var(--gp-f-disp);
+		transition:
+			background-color var(--gp-d-state),
+			color var(--gp-d-state),
+			box-shadow var(--gp-d-state);
+	}
+	@container home (min-width: 720px) {
+		.hm-bar {
+			height: 54px;
+			font-size: 17px;
+		}
+	}
+	.hm-bar > span {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.hm-bar small {
+		font: 600 10.5px / 1 var(--gp-f-body);
+		color: var(--gp-ink-3);
+	}
+	.hm-bar[aria-current="true"] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+	}
+	.hm-bar[aria-current="true"] small {
+		color: inherit;
+	}
+	.hm-ctl {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px 16px;
+	}
+	.hm-status {
+		display: grid;
+		flex: 1;
+		gap: 2px;
+		min-width: 12ch;
+	}
+	.hm-status b {
+		font: 650 var(--gp-t-ui) / 1.3 var(--gp-f-body);
+		color: var(--gp-ink);
+	}
+
+	/* ---- the three latest things ------------------------------------------- */
+	.hm-latest {
+		display: grid;
+		gap: 10px;
+	}
+	@container home (min-width: 720px) {
+		.hm-latest {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: 14px;
+		}
+	}
+	.hm-tile {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) 108px;
+		grid-template-areas: "b m p" "b t p";
+		align-items: center;
+		gap: 2px 12px;
+		min-width: 0;
+		padding: 12px;
+		border-radius: var(--gp-r-l);
+		text-align: left;
+	}
+	@container home (min-width: 720px) {
+		.hm-tile {
+			grid-template-columns: auto minmax(0, 1fr);
+			grid-template-areas: "b m" "p p" "t t";
+			align-items: start;
+			gap: 12px 10px;
+			padding: 14px;
+		}
+	}
+	.hm-tile > .gp-badge {
+		grid-area: b;
+	}
+	.hm-tile-m {
+		grid-area: m;
+		overflow: hidden;
+		font: 600 12.5px / 1.2 var(--gp-f-body);
+		color: var(--gp-ink-3);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	@container home (min-width: 720px) {
+		.hm-tile-m {
+			align-self: center;
+		}
+	}
+	.hm-tile-m b {
+		font-weight: 700;
+		color: var(--gp-ink-2);
+	}
+	.hm-tile-p {
+		grid-area: p;
+		display: grid;
+		place-items: center;
+		min-height: 62px;
+		padding: 6px 8px;
+		overflow: hidden;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-well);
+	}
+	@container home (min-width: 720px) {
+		.hm-tile-p {
+			min-height: 86px;
+		}
+	}
+	.hm-tile-t {
+		grid-area: t;
+		display: grid;
+		gap: 2px;
+		min-width: 0;
+	}
+	.hm-tile-name {
+		justify-self: start;
+		max-width: 100%;
+		overflow: hidden;
+		font: 700 15px / 1.25 var(--gp-f-disp);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.hm-tile-s {
+		overflow: hidden;
+		font-size: 12.5px;
+		color: var(--gp-ink-3);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* a tile wears its module only when pointed at, the way a mixed row does */
+	.hm-tile:is([aria-current="true"], :focus-visible) > .gp-badge-quiet {
+		color: var(--gp-m-on);
+	}
+	.hm-tile:is([aria-current="true"], :focus-visible) > .gp-badge-quiet > .gp-badge-pick {
+		fill: var(--gp-m-500);
+	}
+	@media (hover: hover) {
+		.hm-tile:hover > .gp-badge-quiet {
+			color: var(--gp-m-on);
+		}
+		.hm-tile:hover > .gp-badge-quiet > .gp-badge-pick {
+			fill: var(--gp-m-500);
+		}
+	}
+
+	/* mini tab */
+	.hm-tab {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	.hm-tab .ln {
+		stroke: var(--gp-ink-3);
+		stroke-width: 1;
+		opacity: 0.45;
+	}
+	.hm-tab .bl {
+		stroke: var(--gp-ink-3);
+		stroke-width: 1.3;
+	}
+	.hm-tab .ko {
+		fill: var(--gp-well);
+	}
+	.hm-tab .nt {
+		fill: var(--gp-ink);
+		font: 700 11.5px / 1 var(--gp-f-body);
+		text-anchor: middle;
+		dominant-baseline: central;
+	}
+
+	/* kept chords */
+	.hm-shapes {
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		gap: 6px;
+	}
+	.hm-shape {
+		display: grid;
+		justify-items: center;
+		gap: 2px;
+		width: 62px;
+		font: 700 10.5px / 1 var(--gp-f-body);
+		color: var(--gp-ink-2);
+	}
+	.hm-shape svg {
+		width: 100%;
+		height: auto;
+	}
+	.hm-shape + .hm-shape {
+		width: 48px;
+	}
+	@container home (max-width: 719px) {
+		.hm-shape + .hm-shape {
+			display: none;
+		}
+	}
+
+	/* a book's pages, and how far the scan has got */
+	.hm-pages {
+		display: grid;
+		gap: 6px;
+		width: 100%;
+	}
+	.hm-pages i {
+		display: block;
+		height: 5px;
+		border-radius: 3px;
+		background: var(--gp-s2);
+	}
+	.hm-pages i:nth-child(2) {
+		width: 82%;
+	}
+	.hm-pages i:nth-child(3) {
+		width: 64%;
+	}
+	.hm-meter {
+		height: 6px;
+		overflow: hidden;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-s2);
+	}
+	.hm-meter > span {
+		display: block;
+		width: var(--p);
+		height: 100%;
+		border-radius: inherit;
+		background: var(--gp-ink-3);
+	}
+
+	/* ---- the panel: this week, kept, shared --------------------------------- */
+	.hm-side {
+		display: grid;
+		align-content: start;
+		min-width: 0;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	.hm-blk {
+		display: grid;
+		gap: 12px;
+		min-width: 0;
+		padding: 18px 16px;
+	}
+	.hm-blk + .hm-blk {
+		box-shadow: inset 0 1px 0 var(--gp-line);
+	}
+	.hm-blk-h {
+		font: 700 15px / 1.2 var(--gp-f-disp);
+		color: var(--gp-ink);
+	}
+	.hm-week {
+		display: grid;
+		gap: 8px;
+	}
+	.hm-week li {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-width: 0;
+		font: 500 var(--gp-t-ui) / 1.3 var(--gp-f-body);
+		color: var(--gp-ink-2);
+	}
+	.hm-week b {
+		min-width: 20px;
+		font: 700 20px / 1 var(--gp-f-num);
+		color: var(--gp-ink);
+		font-variant-numeric: tabular-nums;
+	}
+	.hm-list {
+		display: grid;
+		gap: 4px;
+		margin-inline: -6px;
+	}
+	.hm-list .gp-row {
+		border-radius: 12px;
+	}
+	/* a row's pick sits beside its link, not in it: a button in a link is no button */
+	.hm-item {
+		position: relative;
+		min-width: 0;
+	}
+	.hm-item:has(> .gp-pick-toggle) > .gp-row {
+		padding-right: 52px;
+	}
+	.hm-item > .gp-pick-toggle {
+		position: absolute;
+		top: 50%;
+		right: 8px;
+		margin-top: -18px;
+	}
+	/* in a mixed list a kept pick is ink, and takes its row's colour with the row */
+	.hm-item > .gp-pick-toggle[aria-pressed="true"] {
+		color: var(--gp-ink);
+	}
+	.hm-item:has(> .gp-row:is([aria-current="true"], :focus-visible)) > .gp-pick-toggle[aria-pressed="true"] {
+		color: var(--gp-m-500);
+	}
+	@media (hover: hover) {
+		.hm-item:hover > .gp-pick-toggle[aria-pressed="true"] {
+			color: var(--gp-m-500);
+		}
+		.hm-item:hover > .gp-row > .gp-badge-quiet {
+			color: var(--gp-m-on);
+		}
+		.hm-item:hover > .gp-row > .gp-badge-quiet > .gp-badge-pick {
+			fill: var(--gp-m-500);
+		}
+	}
+	.hm-empty {
+		font-size: var(--gp-t-ui);
+		line-height: var(--gp-lh-body);
+		color: var(--gp-ink-3);
+	}
+
+	/* the one skeleton: where the song card will be */
+	.hm-sk {
+		height: 320px;
+		border-radius: 18px;
+	}
+}

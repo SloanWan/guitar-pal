@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button, buttonClasses } from "@/components/ui/button";
 import AssistantPanel from "./AssistantPanel";
 import { useAssistant } from "./useAssistant";
-import { ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT } from "@/lib/assistant/handoff";
+import { ASSISTANT_ASK_EVENT, ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT, type AssistantAsk } from "@/lib/assistant/handoff";
 import "./assistant.css";
 
 /**
@@ -138,6 +138,24 @@ export default function AssistantLauncher() {
 			window.removeEventListener(ASSISTANT_CLOSE_EVENT, close);
 		};
 	}, [messages.length]);
+
+	// A page asking for the player (Home's Ask): the panel opens on the
+	// conversation — never on the saved chats — and the sentence goes in, in
+	// the mode chosen there.
+	const askRef = useRef({ open: setPanelOpen, send: assistant.send });
+	useEffect(() => {
+		askRef.current = { open: setPanelOpen, send: assistant.send };
+	});
+	useEffect(() => {
+		function ask(e: Event) {
+			const { text, mode } = (e as CustomEvent<AssistantAsk>).detail;
+			setView("thread");
+			askRef.current.open(true);
+			void askRef.current.send(text, mode);
+		}
+		window.addEventListener(ASSISTANT_ASK_EVENT, ask);
+		return () => window.removeEventListener(ASSISTANT_ASK_EVENT, ask);
+	}, []);
 
 	const title = "Assistant";
 	// every name starts with the visible word, so a voice user can say "Ask"

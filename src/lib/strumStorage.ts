@@ -99,6 +99,34 @@ export function progressionColumns(progression: ChordProgression, userId: string
 	};
 }
 
+/** A Supabase row from `user_pattern_progressions`; the table is not code-generated. */
+export interface ProgressionRow {
+	id: string;
+	pattern_id: string;
+	bars: unknown;
+	order_index: number | null;
+	name: string | null;
+	bpm: number | null;
+	capo: number | null;
+	/** Written by the database on insert. */
+	created_at?: string;
+}
+
+/** A stored row back into a progression; null when its bars no longer validate — a bad row must not break a list. */
+export function progressionFromRow(row: ProgressionRow): ChordProgression | null {
+	if (!validateBars(row.bars).ok) return null;
+	return {
+		id: row.id,
+		patternId: row.pattern_id,
+		bars: normalizeBars(row.bars as Bar[]),
+		orderIndex: row.order_index ?? 0,
+		name: row.name ?? "",
+		// Null means "no tempo of its own" — the pattern's tempo is used instead.
+		bpm: row.bpm === null ? undefined : normalizeBpm(row.bpm),
+		capo: normalizeCapo(row.capo),
+	};
+}
+
 /** A guest's stored progressions, with the same guard the hook applies on read. */
 export function readStoredProgressions(): ChordProgression[] {
 	try {

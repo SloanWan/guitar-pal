@@ -1,0 +1,185 @@
+/*
+ * The landing's step cards. Each step's module badge (the pick with the
+ * tool's icon) is a size smaller than the shared one, and plays when the
+ * pointer is anywhere on its step — the pick hops and rocks, the icon pops.
+ * The demos' own motion (typing, items arriving, the scan) lives here too.
+ * Reduced motion keeps every end state and drops the movement.
+ */
+@layer components {
+	.ld-step .gp-badge {
+		width: 26px;
+		height: 28px;
+	}
+	.ld-step .gp-badge > .gp-badge-icon {
+		width: 12px;
+		height: 12px;
+		margin-top: -4px;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.ld-step .gp-badge {
+			transform-origin: 50% 90%;
+		}
+		.ld-step:hover .gp-badge {
+			animation:
+				ld-badge-hop 420ms both,
+				ld-badge-rock 520ms ease-out both;
+		}
+		.ld-step:hover .gp-badge > .gp-badge-icon {
+			animation: ld-icon-pop 360ms 80ms both;
+		}
+
+		/* Something arriving in a demo: up and in. */
+		.ld-in {
+			animation: ld-in 320ms var(--gp-ease-in) both;
+		}
+
+		/* The caret while a sentence is being typed. */
+		.ld-caret::after {
+			content: "";
+			display: inline-block;
+			width: 2px;
+			height: 1em;
+			margin-left: 2px;
+			vertical-align: -0.15em;
+			background: currentColor;
+			animation: ld-blink 900ms steps(1) infinite;
+		}
+
+		/* A page being read: a bright band sweeps down it once. */
+		.ld-scan {
+			position: relative;
+			overflow: hidden;
+		}
+		.ld-scan::after {
+			content: "";
+			position: absolute;
+			inset-inline: 0;
+			top: -30%;
+			height: 30%;
+			background: linear-gradient(
+				to bottom,
+				transparent,
+				color-mix(in srgb, var(--gp-m-300) 55%, transparent),
+				transparent
+			);
+			animation: ld-scan 1100ms ease-in-out both;
+		}
+
+		/* Waiting on a tool: three dots taking turns. */
+		.ld-dots > i {
+			display: inline-block;
+			width: 4px;
+			height: 4px;
+			margin-left: 3px;
+			border-radius: 50%;
+			background: currentColor;
+			animation: ld-dot 900ms infinite both;
+		}
+		.ld-dots > i:nth-child(2) {
+			animation-delay: 150ms;
+		}
+		.ld-dots > i:nth-child(3) {
+			animation-delay: 300ms;
+		}
+	}
+
+	@keyframes ld-badge-hop {
+		0% {
+			translate: 0 0;
+			animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
+		}
+		40% {
+			translate: 0 -5px;
+			animation-timing-function: cubic-bezier(0.3, 1.45, 0.45, 1);
+		}
+		100% {
+			translate: 0 0;
+		}
+	}
+	@keyframes ld-badge-rock {
+		0% {
+			rotate: 0deg;
+		}
+		30% {
+			rotate: -12deg;
+		}
+		60% {
+			rotate: 8deg;
+		}
+		100% {
+			rotate: 0deg;
+		}
+	}
+	@keyframes ld-icon-pop {
+		0% {
+			scale: 1;
+		}
+		50% {
+			scale: 1.3;
+		}
+		100% {
+			scale: 1;
+		}
+	}
+	@keyframes ld-in {
+		from {
+			opacity: 0;
+			translate: 0 8px;
+		}
+		to {
+			opacity: 1;
+			translate: 0 0;
+		}
+	}
+	@keyframes ld-blink {
+		50% {
+			opacity: 0;
+		}
+	}
+	@keyframes ld-scan {
+		to {
+			top: 100%;
+		}
+	}
+	@keyframes ld-dot {
+		0%,
+		60%,
+		100% {
+			opacity: 0.25;
+		}
+		30% {
+			opacity: 1;
+		}
+	}
+}
+
+/* Easter egg: the Play pick, pressed seven times, flies off with a spin, lands and settles. */
+@layer components {
+	@media (prefers-reduced-motion: no-preference) {
+		.ld-pick-drop {
+			animation: ld-pick-drop 1100ms both;
+		}
+	}
+	@keyframes ld-pick-drop {
+		0% {
+			translate: 0 0;
+			rotate: 0deg;
+			animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+		}
+		35% {
+			translate: 26px -70px;
+			rotate: 220deg;
+			animation-timing-function: cubic-bezier(0.5, 0, 0.8, 0.4);
+		}
+		70% {
+			translate: 8px 6px;
+			rotate: 350deg;
+			animation-timing-function: cubic-bezier(0.3, 1.5, 0.5, 1);
+		}
+		100% {
+			translate: 0 0;
+			rotate: 360deg;
+		}
+	}
+}

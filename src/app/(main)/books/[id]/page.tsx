@@ -28,6 +28,8 @@ import {
 	type BookLocateDetail,
 } from "@/lib/assistant/bookContext";
 import { usePolledResource } from "@/components/books/usePolledResource";
+import { useRecordVisit } from "@/hooks/useRecordVisit";
+import { useUser } from "@/hooks/useUser";
 import ScanReadout from "@/components/books/ScanReadout";
 import ChapterList from "@/components/books/ChapterList";
 import ChapterCard from "@/components/books/ChapterCard";
@@ -73,6 +75,9 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 	const unauthorized = error instanceof BookApiError && error.status === 401;
 	// The sample book (#241): the same page, with nothing that would change it.
 	const readOnly = isSampleBook(id);
+	// Counted once it has loaded: Home lists the player's own books, never the sample.
+	const { user } = useUser();
+	useRecordVisit(user, "book", book && !readOnly ? id : null);
 	const [editing, setEditing] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);

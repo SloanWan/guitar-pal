@@ -23,9 +23,13 @@ import {
 	isIdle,
 	readConversation,
 	readMode,
+	readSavedChatId,
 	writeConversation,
 	writeMode,
+	writeSavedChatId,
 } from "@/lib/assistant/conversation";
+import { chatTitle } from "@/lib/assistant/chatLibrary";
+import { createChat, loadChat, updateChat } from "@/lib/assistantChatStore";
 import { otherDomainReads } from "@/lib/assistant/readAs";
 import { proposeStrum, proposeTab, showChord, strumReadResult, tabReadResult, type ToolCard } from "@/lib/assistant/general/execute";
 import type { GeneralContext } from "@/lib/assistant/general/request";
@@ -125,6 +129,9 @@ export interface AssistantMessage {
 	 */
 	streamed?: boolean;
 }
+
+/** Quiet before a saved chat is written over: a turn lands as a few quick changes. */
+const SAVE_DEBOUNCE_MS = 1200;
 
 /** Turns of the thread the model is shown. Capped: the route caps the whole exchange. */
 const MAX_HISTORY_TURNS = 12;
@@ -314,8 +321,32 @@ export function useAssistant() {
 	 */
 	const [guestQuota, setGuestQuota] = useState<GuestQuota | null>(null);
 
+	/**
+	 * The saved chat this thread is (#401), once the player saved it or opened
+	 * it from the library; later turns are written over it. Null for a thread
+	 * nobody has saved.
+	 */
+	const [savedChatId, setSavedChatId] = useState<string | null>(() =>
+		typeof window === "undefined" ? null : readSavedChatId(),
+	);
+	const savedChatIdRef = useRef(savedChatId);
+	const linkChat = useCallback((id: string | null) => {
+		savedChatIdRef.current = id;
+		setSavedChatId(id);
+		writeSavedChatId(id);
+	}, []);
+	const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
+	/**
+	 * The saved chat whose "Saved" line the player put away. Kept here, past the
+	 * panel's closing, and by chat: another saved thread shows its line again.
+	 */
+	const [savedLineHiddenFor, setSavedLineHiddenFor] = useState<string | null>(null);
+	const hideSavedLine = useCallback(() => setSavedLineHiddenFor(savedChatIdRef.current), []);
+
 	const reset = useCallback(() => {
 		setMessages([]);
+		linkChat(null);
+		setSaveState("idle");
 		setSessionId(newId());
 		setGreeted(false);
 		// Who is asking may have changed; the route will say again.
@@ -323,7 +354,7 @@ export function useAssistant() {
 		// A new thread opens in the page's mode, as the first one did.
 		setModeState(pageRef.current);
 		writeMode(null);
-	}, []);
+	}, [linkChat]);
 
 	/**
 	 * When the transcript last changed. A ref, not state: it is read by the
@@ -401,6 +432,79 @@ export function useAssistant() {
 	useEffect(() => {
 		messagesRef.current = messages;
 	}, [messages]);
+	/** The thread as last written to its saved copy, so an unchanged thread is not written again. */
+	const lastSavedRef = useRef<string | null>(null);
+	const sessionIdRef = useRef(sessionId);
+	useEffect(() => {
+		sessionIdRef.current = sessionId;
+	}, [sessionId]);
+
+	/** Keep this thread in the player's chat library. Signed-in players only. */
+	const saveChat = useCallback(
+		async (userId: string) => {
+			if (savedChatIdRef.current !== null) return;
+			const session = sessionIdRef.current;
+			const thread = messagesRef.current;
+			setSaveState("saving");
+			try {
+				const id = await createChat(userId, chatTitle(thread), thread);
+				// A new chat started while this was saving: the save belongs to the old one.
+				if (sessionIdRef.current !== session) return;
+				lastSavedRef.current = JSON.stringify(thread);
+				linkChat(id);
+				setSaveState("idle");
+			} catch (err) {
+				console.error("[assistant] saving the chat failed:", err);
+				if (sessionIdRef.current === session) setSaveState("error");
+			}
+		},
+		[linkChat],
+	);
+
+	/** A saved chat back in the panel, in General, ready to carry on. False when it is gone. */
+	const openChat = useCallback(
+		async (id: string): Promise<boolean> => {
+			const thread = await loadChat<AssistantMessage>(id);
+			if (!thread || thread.length === 0) return false;
+			lastSavedRef.current = JSON.stringify(thread);
+			setMessages(thread);
+			setSessionId(newId());
+			setGreeted(true);
+			setSaveState("idle");
+			setModeState("general");
+			writeMode("general");
+			linkChat(id);
+			return true;
+		},
+		[linkChat],
+	);
+
+	/** A chat was deleted from the library: if it was this thread's copy, the thread is unsaved again. */
+	const forgetChat = useCallback(
+		(id: string) => {
+			if (savedChatIdRef.current === id) linkChat(null);
+		},
+		[linkChat],
+	);
+
+	// A saved thread follows the conversation: each change is written over its
+	// copy once the turn has settled. One timer at most, cleared on the next change.
+	useEffect(() => {
+		if (savedChatId === null || messages.length === 0) return;
+		const snapshot = JSON.stringify(messages);
+		if (snapshot === lastSavedRef.current) return;
+		const timer = setTimeout(() => {
+			lastSavedRef.current = snapshot;
+			updateChat(savedChatId, messages)
+				.then((found) => {
+					// Deleted from another tab: the thread is no longer anyone's copy.
+					if (!found && savedChatIdRef.current === savedChatId) linkChat(null);
+				})
+				.catch((err: unknown) => console.error("[assistant] updating the saved chat failed:", err));
+		}, SAVE_DEBOUNCE_MS);
+		return () => clearTimeout(timer);
+	}, [messages, savedChatId, linkChat]);
+
 	const historyOf = (all: readonly AssistantMessage[]): AssistantTurn[] =>
 		all
 			.filter((m) => !m.failed && m.text.trim() !== "")
@@ -680,5 +784,12 @@ export function useAssistant() {
 		sessionId,
 		greeted,
 		markGreeted,
+		savedChatId,
+		saveState,
+		savedLineHidden: savedChatId !== null && savedLineHiddenFor === savedChatId,
+		hideSavedLine,
+		saveChat,
+		openChat,
+		forgetChat,
 	};
 }

@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="public/guitar-pal-logo-mark.svg" width="72" alt="" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/guitar-pal-logo-mark-dark.svg" />
+    <img src="public/guitar-pal-logo-mark.svg" width="72" alt="" />
+  </picture>
 </p>
 
 <h1 align="center">Guitar Pal</h1>
@@ -9,41 +12,28 @@
   <a href="https://guitarpal.sloanwan.com"><b>guitarpal.sloanwan.com</b></a>
 </p>
 
-<p align="center">
-  <img src="docs/images/fingerpick.png" width="860" alt="The fingerpicking page: a tab with chord names and hammer-ons, the pattern library on the left, transport and tempo on the right" />
-</p>
-
 ## What's inside
 
-**Strum machine.** Build a rhythm, write chords over it, and hear it played on a
-real guitar sample. The strings keep ringing into the next strum, so it sounds
-like a guitar, not a drum machine with opinions.
+- **Strum** — build a rhythm, type a chord line over it, and hear it on a real
+  guitar sample that keeps ringing into the next strum.
+- **Tab** — play a tab back, loop the hard bar, and read the note under each fret
+  as a name, do re mi or 简谱. Triplets, 6/8, bends, slides and harmonics all sound.
+- **Tab editor** — a grid, a fretboard that writes at the cursor, and an inspector
+  for every technique.
+- **Chords** — hundreds of chords with several voicings each (bass notes checked);
+  search by name, by a few at once or by shape, and play them through.
+- **Fretboard** — a scale across the neck with a piano and a circle of fifths;
+  lay a chord over it to find the safe notes.
+- **Books** — upload a method PDF, scans included, and get its exercises back as
+  playable drafts beside the page they came from.
+- **Assistant** — type `C G Am F, slow folk strum` or paste an ASCII tab and get a
+  card you can play. Read by plain rules
+  ([grammar](docs/assistant-grammar.md)); General mode adds a model on top.
+- **Share links** — anyone can play a shared pattern without signing up.
+- **MCP server** — connect `/api/mcp` to Claude, Cursor or any MCP client; what
+  the model writes comes back as a link that plays ([setup](docs/mcp.md)).
 
-<img src="docs/images/strum.png" width="640" alt="The strumming page: a one-bar pattern of down and up strokes, the preset library, and the tempo and metronome controls" />
-
-**Fingerpick tabs.** Write a tab, play it back, loop the hard bar. Triplets, 6/8,
-hammer-ons and slides all play, and every fret can show the note it sounds.
-
-**Books.** Upload a guitar method PDF, scanned pages included. Guitar Pal finds
-the chapters, reads the exercises off the page, and gives them back as drafts
-you can check, fix and save as playable patterns.
-
-**Chord library.** Hundreds of chords with several voicings each, and yes,
-somebody checked the bass notes.
-
-**Assistant.** Type `C G Am F, slow folk strum` or paste an ASCII tab and get
-back a card you can press play on. Most of it is read by plain rules, not a
-language model. The rules it follows are written down in
-[docs/assistant-grammar.md](docs/assistant-grammar.md).
-
-**Share links.** Send someone a pattern. They can play it without signing up.
-
-**MCP server.** Connect `/api/mcp` to Claude, Cursor, VS Code or any other MCP
-client and ask for a pattern or a tab; what the model writes comes back as a
-link that plays. Setup and the tools are in [docs/mcp.md](docs/mcp.md).
-
-Everything works without an account. Signing up just means your stuff is still
-there tomorrow.
+Everything but uploading a book works without an account.
 
 ## Standing on
 
@@ -54,7 +44,8 @@ there tomorrow.
 ## How it's built
 
 - **Web app:** Next.js 16 (App Router), React 19, TypeScript in strict mode,
-  Tailwind CSS v4, shadcn/ui on Radix.
+  Tailwind CSS v4, Radix primitives under a design system of its own (tokens in
+  `src/app/tokens.css`, components in `src/components/ui/`).
 - **Data and auth:** Supabase (Postgres, Auth, Storage), read through thin
   query functions in `src/lib/`, no ORM. A guest's work stays in the browser.
 - **Audio:** the Web Audio API with a lookahead scheduler. Each string is its
@@ -81,22 +72,6 @@ book-service/    the Python book-import service
 e2e/             Playwright suites
 scripts/         SQL migrations and one-off data scripts
 docs/            assistant grammar, MCP setup
-```
-
-## Running it locally
-
-This is the source of [guitarpal.sloanwan.com](https://guitarpal.sloanwan.com),
-not a package for self-hosting. The database structure is in
-`scripts/schema.sql` (tables, indexes, RLS policies and grants; `psql -f` it into
-a Supabase project of your own), but the chord library's rows are not, so the
-chord pages start empty. Then:
-
-```bash
-cp .env.example .env.local   # fill in the Supabase URL and anon key
-npm ci
-npm run dev                  # http://localhost:3000
-npm test                     # unit tests
-npm run test:e2e             # Playwright smoke suite
 ```
 
 ## License

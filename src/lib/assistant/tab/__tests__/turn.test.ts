@@ -3,6 +3,7 @@ import { resolveTabTurn } from "@/lib/assistant/tab/turn";
 import { suggestTab } from "@/lib/assistant/tab/suggest";
 import { readTabSentence } from "@/lib/assistant/tab/readTabSentence";
 import { BLANK } from "@/lib/assistant/blank";
+import { READER_CHOICE_CODES } from "@/lib/assistant/__evals__/tabCases";
 import { INDEX, voicingFor } from "./fixtures";
 
 const resolve = (text: string, uiLang: "en" | "zh" = "en") =>
@@ -18,6 +19,15 @@ const TAB = [
 ].join("\n");
 
 describe("resolveTabTurn", () => {
+	it("reports the choices it made for a sentence that left them out, and nothing worse", async () => {
+		// The eval case tab-vague-meter. Nothing here names a picking order, so
+		// the reader picks one and says so; the card is sound (#303).
+		const outcome = await resolve("something in 3/4 for fingerpicking, in G");
+		const codes = (outcome.proposal?.warnings ?? []).map((w) => w.code);
+		expect(codes).toContain("ORDER_GUESSED");
+		expect(codes.filter((c) => !READER_CHOICE_CODES.includes(c))).toEqual([]);
+	});
+
 	it("answers a question about one chord with its shapes, not a pattern", async () => {
 		const outcome = await resolve("show me Am");
 		expect(outcome.chords).toMatchObject([{ root: "A", suffix: "minor" }]);

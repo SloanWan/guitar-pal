@@ -26,6 +26,8 @@ export interface SongPlayer {
 	/** Pressed, samples still on their way. */
 	preparing: boolean;
 	toggle: () => void;
+	/** Plays the song in `mode` from the top, whatever was playing before. */
+	playAs: (mode: SongMode) => void;
 	/** The song's bar sounding (0–7), or null while stopped. */
 	bar: number | null;
 	/** Where the strum grid's playhead is, while strumming. */
@@ -137,6 +139,15 @@ export function SongPlayerProvider({ children }: { children: React.ReactNode }) 
 		else startMode(mode);
 	}, [playing, mode, stopAll, startMode]);
 
+	const playAs = useCallback(
+		(next: SongMode) => {
+			setModeState(next);
+			stopAll();
+			startMode(next);
+		},
+		[stopAll, startMode],
+	);
+
 	const setMode = useCallback(
 		(next: SongMode) => {
 			if (next === mode) return;
@@ -165,11 +176,12 @@ export function SongPlayerProvider({ children }: { children: React.ReactNode }) 
 			playing,
 			preparing: strum.isPreparing || pickPending,
 			toggle,
+			playAs,
 			bar,
 			rhythmPosition: mode === "strum" ? strum.rhythmPosition : null,
 			tabSlot: mode === "pick" ? tabSlot : null,
 		}),
-		[mode, setMode, playing, strum.isPreparing, pickPending, toggle, bar, strum.rhythmPosition, tabSlot],
+		[mode, setMode, playing, strum.isPreparing, pickPending, toggle, playAs, bar, strum.rhythmPosition, tabSlot],
 	);
 
 	return <SongPlayerContext.Provider value={value}>{children}</SongPlayerContext.Provider>;

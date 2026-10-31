@@ -219,7 +219,7 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 						</button>
 					)}
 					<main ref={stageRef} className="tb-stage">
-						<div ref={stageInRef} className="tb-stage-in">
+						<div ref={stageInRef} className={session.restored ? "tb-stage-in gp-rise" : "tb-stage-in"}>
 							{!session.restored ? (
 								<div className="flex flex-col gap-4" aria-busy="true">
 									<Skeleton className="h-13 w-60" />

@@ -78,7 +78,7 @@ export default function Home() {
 			<TuningEgg />
 			<SongPlayerProvider>
 				<div className={WRAP}>
-					<section className="grid items-center gap-8 pt-14 pb-12 max-sm:pt-8 max-sm:pb-8 min-[960px]:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] min-[960px]:gap-14 min-[960px]:pt-20 min-[960px]:pb-16">
+					<section className="gp-rise grid items-center gap-8 pt-14 pb-12 max-sm:pt-8 max-sm:pb-8 min-[960px]:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] min-[960px]:gap-14 min-[960px]:pt-20 min-[960px]:pb-16">
 						<div className="flex flex-col items-start gap-5">
 							<h1 className="font-gp-display text-(length:--gp-t-hero) leading-[1.04] font-bold tracking-[-0.025em] text-balance text-gp-ink min-[960px]:text-(length:--gp-t-hero-lg)">
 								One song, all the way to your hands.

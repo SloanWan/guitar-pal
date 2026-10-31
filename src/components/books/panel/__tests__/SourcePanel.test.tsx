@@ -6,7 +6,7 @@ import type { BookDetail, Chapter } from "@/lib/books/types";
 const api = vi.hoisted(() => ({ pageImageUrl: vi.fn(), bookFileUrl: vi.fn() }));
 vi.mock("@/lib/books/api", () => api);
 
-import ChapterSourcePanel from "@/components/books/ChapterSourcePanel";
+import SourcePanel from "@/components/books/panel/SourcePanel";
 
 /**
  * The source panel (#240): the page asked for, the chapter's range as the
@@ -45,12 +45,12 @@ let container: HTMLDivElement;
 let root: Root | null = null;
 const onClose = vi.fn();
 
-function render(source = { chapterId: "c1", page: 206, pages: [206], title: "⑥弦:E–F–G" }) {
+function render(source = { chapterId: "c1", page: 206, pages: [206], title: "⑥弦:E–F–G" }, onBack?: () => void) {
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	act(() => {
 		root = createRoot(container);
-		root.render(<ChapterSourcePanel book={BOOK} chapter={CHAPTER} source={source} onClose={onClose} />);
+		root.render(<SourcePanel book={BOOK} chapter={CHAPTER} source={source} onClose={onClose} onBack={onBack} />);
 	});
 }
 
@@ -80,12 +80,12 @@ afterEach(() => {
 	container?.remove();
 });
 
-describe("ChapterSourcePanel", () => {
+describe("SourcePanel", () => {
 	it("shows the page asked for, steps inside the chapter, and links the PDF at the page", async () => {
 		render();
 		await settle();
 		expect(container.querySelector("img")?.getAttribute("src")).toBe("https://signed/p206.png");
-		expect(container.textContent).toContain("Source · p.206");
+		expect(container.textContent).toContain("Page 206");
 		expect(container.textContent).toContain("204–207");
 		expect(container.querySelector("a")?.getAttribute("href")).toBe("https://signed/book.pdf#page=206");
 
@@ -117,5 +117,19 @@ describe("ChapterSourcePanel", () => {
 				?.dispatchEvent(new Event("animationend", { bubbles: true }));
 		});
 		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
+	it("goes back to the draft it was opened from, and offers no way back otherwise", async () => {
+		const onBack = vi.fn();
+		render(undefined, onBack);
+		await settle();
+		act(() => button("Back to the draft")?.click());
+		expect(onBack).toHaveBeenCalledTimes(1);
+		act(() => root?.unmount());
+		root = null;
+		container.remove();
+		render();
+		await settle();
+		expect(container.querySelector('button[aria-label="Back to the draft"]')).toBeNull();
 	});
 });

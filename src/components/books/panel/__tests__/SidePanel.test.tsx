@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import SidePanel from "@/components/books/SidePanel";
+import SidePanel from "@/components/books/panel/SidePanel";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -15,7 +15,7 @@ describe("SidePanel", () => {
 		const root = createRoot(host);
 		act(() =>
 			root.render(
-				<SidePanel label="Thing" onClose={onClose} onOpened={onOpened} animateOpen={animateOpen} testId="p">
+				<SidePanel eyebrow="Kind" title="Thing" ariaLabel="Thing" onClose={onClose} onOpened={onOpened} animateOpen={animateOpen} testId="p">
 					<div data-testid="body" />
 				</SidePanel>,
 			),
@@ -27,7 +27,7 @@ describe("SidePanel", () => {
 
 	it("grows in: no body and no onOpened until the entrance has played", async () => {
 		const { host, aside, onOpened, cleanup } = mount(true);
-		expect(aside.classList.contains("side-panel")).toBe(true);
+		expect(aside.hasAttribute("data-motion")).toBe(true);
 		expect(host.querySelector('[data-testid="body"]')).toBeNull();
 		expect(onOpened).not.toHaveBeenCalled();
 		await act(async () => {
@@ -41,16 +41,31 @@ describe("SidePanel", () => {
 
 	it("replaces: the body and onOpened at once, and still closes with motion", () => {
 		const { host, aside, onOpened, onClose, cleanup } = mount(false);
-		expect(aside.classList.contains("side-panel")).toBe(false);
+		expect(aside.hasAttribute("data-motion")).toBe(false);
 		expect(host.querySelector('[data-testid="body"]')).not.toBeNull();
 		expect(onOpened).toHaveBeenCalledTimes(1);
 		act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Close"]')?.click());
 		expect(aside.hasAttribute("data-closing")).toBe(true);
-		expect(aside.classList.contains("side-panel")).toBe(true);
+		expect(aside.hasAttribute("data-motion")).toBe(true);
 		expect(onClose).not.toHaveBeenCalled();
 		act(() => aside.dispatchEvent(new Event("animationend")));
 		expect(onClose).toHaveBeenCalledTimes(1);
 		cleanup();
+	});
+
+	it("closes on Escape and on the scrim, each once the exit has played", () => {
+		const { aside, onClose, cleanup } = mount(false);
+		act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+		expect(aside.hasAttribute("data-closing")).toBe(true);
+		act(() => aside.dispatchEvent(new Event("animationend")));
+		expect(onClose).toHaveBeenCalledTimes(1);
+		cleanup();
+
+		const again = mount(false);
+		act(() => again.host.querySelector<HTMLElement>(".bk-scrim")?.click());
+		act(() => again.aside.dispatchEvent(new Event("animationend")));
+		expect(again.onClose).toHaveBeenCalledTimes(1);
+		again.cleanup();
 	});
 
 	it("opens again after a mount that was undone and redone (StrictMode)", () => {
@@ -62,7 +77,7 @@ describe("SidePanel", () => {
 		act(() =>
 			root.render(
 				<StrictMode>
-					<SidePanel label="Thing" onClose={() => {}} onOpened={onOpened} animateOpen={false}>
+					<SidePanel eyebrow="Kind" title="Thing" ariaLabel="Thing" onClose={() => {}} onOpened={onOpened} animateOpen={false}>
 						<div />
 					</SidePanel>
 				</StrictMode>,

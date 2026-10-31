@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import ChapterList from "@/components/books/ChapterList";
+import ChapterList from "@/components/books/chapter/ChapterList";
 import type { Chapter } from "@/lib/books/types";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,13 +36,13 @@ describe("ChapterList", () => {
 		const row = host.querySelector("button[aria-expanded]");
 		expect(row).not.toBeNull();
 		expect(row?.textContent).toContain("第三篇 实际操练");
-		// The stacked meta line, shown below sm only, carries the same facts as the columns.
+		// The stacked meta line, shown on a phone only (books.css), carries the same facts as the columns.
 		const stacked = host.querySelector('[data-testid="chapter-row-meta-stacked"]');
-		expect(stacked?.className).toContain("sm:hidden");
+		expect(stacked?.className).toContain("bk-ch-stacked");
 		expect(stacked?.textContent).toContain("Parsed");
 		expect(stacked?.textContent).toContain("p1–4");
 		expect(stacked?.textContent).toContain("4 hints");
-		const columns = host.querySelector(".sm\\:contents");
+		const columns = host.querySelector(".bk-ch-m");
 		expect(columns?.textContent).toContain("p1–4");
 		expect(columns?.textContent).toContain("4 hints");
 		unmount();

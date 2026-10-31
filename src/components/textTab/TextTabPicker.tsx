@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, CirclePlay, CircleStop, Loader2 } from "lucide-react";
+import "./textTab.css";
+import { ArrowUpRight, Play, Square } from "lucide-react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { SUPPORTED_METERS, beatUnitGlyph, meterLabel, type Meter } from "@/lib/strumMeter";
 import { clampBpmToMeter } from "@/lib/strumBars";
@@ -11,7 +12,7 @@ import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickA
 import { layoutMeasureRows } from "@/components/fingerpick/fingerpickLayout";
 import TabStaveRow from "@/components/fingerpick/TabStaveRow";
 import { WarningsFold } from "@/components/books/IssueList";
-import { DenimButton, GhostButton, MONO_META } from "@/components/books/bookUi";
+import { Button } from "@/components/ui/button";
 import { useNavRouter } from "@/components/nav-progress";
 
 /**
@@ -19,7 +20,7 @@ import { useNavRouter } from "@/components/nav-progress";
  * order of the notes, and no durations at all — so instead of guessing one
  * rhythm and calling it read, this offers each reading the columns allow,
  * plays any of them, and takes the one the player says sounds right to the
- * fingerpick page through the ordinary handoff, marked as chosen by ear.
+ * Tab page through the ordinary handoff, marked as chosen by ear.
  *
  * Self-contained: it owns its audio engine (opened on mount, closed on
  * unmount, like the draft panel beside a book) and the text it reads. The
@@ -120,8 +121,8 @@ export default function TextTabPicker({
 	);
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col" data-testid="text-tab-picker">
-			<div className="flex flex-none flex-col gap-3 border-b border-line px-4 py-3">
+		<div className="tt" data-testid="text-tab-picker">
+			<div className="tt-top">
 				<textarea
 					value={text}
 					onChange={(e) => changeText(e.target.value)}
@@ -130,10 +131,10 @@ export default function TextTabPicker({
 					rows={7}
 					placeholder={"e|--0--3--|\nB|--1-----|\nG|--0-----|\nD|--2-----|\nA|--3-----|\nE|--------|"}
 					aria-label="Text tab"
-					className="w-full resize-y border border-line-strong bg-surface px-3 py-2 font-mono text-[12px] leading-[1.35] text-ink whitespace-pre placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent read-only:text-ink-dim"
+					className="tt-text"
 				/>
-				<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-					<label className={`${MONO_META} flex items-center gap-2`}>
+				<div className="tt-fields">
+					<label className="tt-field">
 						Meter
 						<select
 							value={meterLabel(meter)}
@@ -141,7 +142,7 @@ export default function TextTabPicker({
 								const next = SUPPORTED_METERS.find((m) => meterLabel(m) === e.target.value);
 								if (next) changeMeter([next[0], next[1]]);
 							}}
-							className="h-7 border border-line-strong bg-surface px-2 font-mono text-[11px] text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+							className="tt-input"
 						>
 							{SUPPORTED_METERS.map((m) => (
 								<option key={meterLabel(m)} value={meterLabel(m)}>
@@ -150,7 +151,7 @@ export default function TextTabPicker({
 							))}
 						</select>
 					</label>
-					<label className={`${MONO_META} flex items-center gap-2`}>
+					<label className="tt-field">
 						{beatUnitGlyph(meter)} =
 						<input
 							type="number"
@@ -159,10 +160,10 @@ export default function TextTabPicker({
 							value={bpm}
 							onChange={(e) => setBpm(Number(e.target.value) || DEFAULT_BPM)}
 							aria-label="Tempo"
-							className="h-7 w-16 border border-line-strong bg-surface px-2 font-mono text-[11px] text-ink tabular-nums focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+							className="tt-input tt-num"
 						/>
 					</label>
-					<label className={`${MONO_META} flex min-w-0 flex-1 items-center gap-2`}>
+					<label className="tt-field tt-grow">
 						Name
 						<input
 							type="text"
@@ -170,67 +171,54 @@ export default function TextTabPicker({
 							onChange={(e) => setName(e.target.value)}
 							placeholder="Text tab"
 							aria-label="Pattern name"
-							className="h-7 min-w-0 flex-1 border border-line-strong bg-surface px-2 font-mono text-[11px] text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-denim-accent"
+							className="tt-input tt-grow"
 						/>
 					</label>
 				</div>
 			</div>
 
-			<div className="min-h-0 flex-1 overflow-y-auto">
+			<div className="tt-body">
 				{!read.ok ? (
-					<p className="px-4 py-6 text-[13px] text-ink-dim">
-						{text.trim() === "" ? "Paste six lines of tab, one per string." : read.error}
-					</p>
+					<p className="tt-empty">{text.trim() === "" ? "Paste six lines of tab, one per string." : read.error}</p>
 				) : (
 					<>
-						<ul className="flex flex-col border-b border-line" role="radiogroup" aria-label="Readings">
+						<ul className="tt-readings" role="radiogroup" aria-label="Readings">
 							{candidates.map((c) => {
 								const selected = candidate?.id === c.id;
 								const sounding = playingId === c.id;
 								return (
-									<li
-										key={c.id}
-										className={`flex items-center gap-3 border-l-2 px-4 py-2.5 transition-colors duration-(--dur-hover) ${
-											selected ? "border-l-denim bg-denim-tint" : "border-l-transparent hover:bg-sidebar-hover"
-										}`}
-									>
-										<button
-											type="button"
+									<li key={c.id} className="tt-reading" aria-current={selected ? "true" : undefined}>
+										<Button
+											variant="icon"
+											size="sm"
 											onClick={() => (isLoaded ? listen(c) : undefined)}
 											disabled={!isLoaded}
 											aria-label={!isLoaded ? "Loading samples" : sounding ? `Stop ${c.label}` : `Play ${c.label}`}
-											className="flex size-9 flex-none items-center justify-center border border-denim bg-denim text-on-denim transition-colors hover:bg-denim-accent disabled:pointer-events-none disabled:opacity-30"
 										>
-											{!isLoaded ? (
-												<Loader2 size={16} strokeWidth={1.5} className="animate-spin" />
-											) : sounding ? (
-												<CircleStop size={16} strokeWidth={1.5} />
-											) : (
-												<CirclePlay size={16} strokeWidth={1.5} />
-											)}
-										</button>
+											{sounding ? <Square fill="currentColor" aria-hidden /> : <Play aria-hidden />}
+										</Button>
 										<button
 											type="button"
 											role="radio"
 											aria-checked={selected}
 											onClick={() => setChosen(c.id)}
-											className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left"
+											className="tt-pick"
 										>
-											<span className={`text-[13px] font-medium ${selected ? "text-denim-accent" : "text-ink"}`}>
+											<b>
 												{c.label}
-												<span className={`${MONO_META} ml-2 tabular-nums`}>
+												<span className="tt-meta">
 													{c.pattern.measures.length} {c.pattern.measures.length === 1 ? "bar" : "bars"}
 												</span>
-											</span>
-											<span className="text-[12px] text-ink-dim">{c.description}</span>
+											</b>
+											<span>{c.description}</span>
 										</button>
-										<WarningsFold issues={c.warnings} className="flex-none" />
+										<WarningsFold issues={c.warnings} />
 									</li>
 								);
 							})}
 						</ul>
 						{candidate ? (
-							<div ref={setViewerEl} data-tab-viewer className="px-4 py-3">
+							<div ref={setViewerEl} data-tab-viewer className="tt-staves">
 								{rows.map((row) => (
 									<TabStaveRow
 										key={row.measures[0].id}
@@ -247,21 +235,21 @@ export default function TextTabPicker({
 				)}
 			</div>
 
-			<footer className="flex flex-none flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-3">
-				<p className={MONO_META}>
+			<footer className="tt-foot">
+				<p className="tt-meta">
 					{candidate ? `${candidate.label} · ${meterLabel(meter)} · ${beatUnitGlyph(meter)} = ${bpm}` : "Nothing to open yet"}
 				</p>
-				<span className="flex items-center gap-2">
+				<span className="tt-acts">
 					{playingId ? (
-						<GhostButton onClick={() => stop()}>
-							<CircleStop className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+						<Button variant="secondary" size="sm" onClick={() => stop()}>
+							<Square fill="currentColor" aria-hidden />
 							Stop
-						</GhostButton>
+						</Button>
 					) : null}
-					<DenimButton onClick={take} disabled={!candidate || opening} title="Take this reading to the fingerpick editor">
-						Open in fingerpick
-						<ArrowUpRight className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-					</DenimButton>
+					<Button size="sm" onClick={take} disabled={!candidate} loading={opening} title="Take this reading to the Tab page">
+						Open in Tab
+						<ArrowUpRight aria-hidden />
+					</Button>
 				</span>
 			</footer>
 		</div>

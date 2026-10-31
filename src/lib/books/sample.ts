@@ -14,6 +14,13 @@ export const SAMPLE_BOOK_ID = "sample";
 
 export const isSampleBook = (id: string): boolean => id === SAMPLE_BOOK_ID;
 
+/** The shelf's card for the sample, without loading the fixture: its first page, its size. */
+export const SAMPLE_SHELF = {
+	title: "吉他自学三月通 — sample",
+	cover: "/samples/sanyuetong/pages/p0001.jpg",
+	meta: "4 pages · 1 chapter · 11 notes · 16 drafts",
+} as const;
+
 interface SampleFixture {
 	book: BookDetail;
 	parses: Record<string, ChapterParse>;

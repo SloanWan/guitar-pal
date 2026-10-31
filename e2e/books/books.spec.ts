@@ -31,7 +31,7 @@ test.describe("book import", () => {
 
 		// The proxy answers 503 when BOOK_SERVICE_URL is unset; say so rather
 		// than failing later on a missing control.
-		const upload = page.getByRole("button", { name: "Choose a PDF" });
+		const upload = page.getByRole("button", { name: "Upload a PDF" });
 		await expect(upload, "is `npm run dev:books` running, with BOOK_SERVICE_URL set?").toBeVisible();
 
 		await page.locator('input[type="file"]').setInputFiles(PDF!);
@@ -41,19 +41,21 @@ test.describe("book import", () => {
 
 		// The scan is a background job the page polls; chapters are what it
 		// leaves behind, and there is always at least one (a `manual` chapter
-		// spanning the book when nothing was found).
-		const chapters = page.getByRole("button", { name: /Parse this chapter/ });
+		// spanning the book when nothing was found). A chapter's row opens its card.
+		const chapters = page.locator("button[aria-expanded]");
 		await expect(chapters.first()).toBeVisible({ timeout: SCAN_TIMEOUT });
+		await chapters.first().click();
+		const parse = page.getByRole("button", { name: /Parse this chapter/ });
+		await expect(parse).toBeVisible();
 
 		if (WITH_PARSE) {
-			await chapters.first().click();
+			await parse.click();
 			await expect(page.getByText(/^Parsed /)).toBeVisible({ timeout: PARSE_TIMEOUT });
 		}
 
-		await page.getByRole("button", { name: /Delete/ }).first().click();
+		await page.getByRole("button", { name: "Book actions" }).click();
+		await page.getByRole("menuitem", { name: /Delete book/ }).click();
 		await page.getByRole("button", { name: "Delete book" }).click();
-		await expect(page.getByRole("button", { name: /Parse this chapter/ })).toBeHidden({
-			timeout: 60_000,
-		});
+		await expect(page).toHaveURL(/\/books$/, { timeout: 60_000 });
 	});
 });

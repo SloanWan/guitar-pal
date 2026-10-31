@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Chapter, ChapterParse } from "@/lib/books/types";
+import { ASSISTANT_ASK_EVENT } from "@/lib/assistant/handoff";
 
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 
@@ -13,15 +14,15 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/books/api", () => api);
 
-import ChapterCard from "@/components/books/ChapterCard";
-import type { OpenDraft } from "@/components/books/ChapterDraftPanel";
-import type { CropView } from "@/components/books/CropViewer";
-import type { SourceView } from "@/components/books/ChapterSourcePanel";
+import ChapterCard from "@/components/books/chapter/ChapterCard";
+import type { OpenDraft } from "@/components/books/panel/DraftPanel";
+import type { SourceView } from "@/components/books/panel/SourcePanel";
 
 /**
  * The chapter card with the service mocked: the idle offer and its estimate,
- * the running parse, and a finished one whose draft is handed to the page's
- * panel, validated and typed, with the callback that marks its row used.
+ * the running parse, and a finished one — warnings on top, then its drafts or
+ * its notes — whose draft is handed to the page's panel, validated and typed,
+ * with the callback that marks its row used.
  */
 
 const CHAPTER: Chapter = {
@@ -90,11 +91,10 @@ const READY: ChapterParse = {
 let container: HTMLDivElement;
 let root: Root | null = null;
 const onOpenDraft = vi.fn<(draft: OpenDraft) => void>();
-const onViewCrop = vi.fn<(crop: CropView) => void>();
 const onLocate = vi.fn<(source: SourceView) => void>();
 const onReadTextTab = vi.fn<(page: number) => void>();
 
-function render(chapter: Chapter, onChapter = vi.fn()) {
+function render(chapter: Chapter, onChapter = vi.fn(), openExerciseId: string | null = null) {
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	act(() => {
@@ -104,14 +104,20 @@ function render(chapter: Chapter, onChapter = vi.fn()) {
 				bookId="b1"
 				chapter={chapter}
 				onChapter={onChapter}
+				openExerciseId={openExerciseId}
 				onOpenDraft={onOpenDraft}
-				onViewCrop={onViewCrop}
 				onLocate={onLocate}
 				onReadTextTab={onReadTextTab}
 			/>,
 		);
 	});
 	return onChapter;
+}
+
+function showNotes() {
+	const tab = Array.from(container.querySelectorAll('[role="radio"]')).find((b) => b.textContent?.startsWith("Notes"));
+	if (!(tab instanceof HTMLButtonElement)) throw new Error("no Notes segment");
+	act(() => tab.click());
 }
 
 async function settle() {
@@ -132,7 +138,6 @@ function button(label: string): HTMLButtonElement {
 beforeEach(() => {
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	onOpenDraft.mockReset();
-	onViewCrop.mockReset();
 	onLocate.mockReset();
 	onReadTextTab.mockReset();
 	api.getChapterParse.mockReset();
@@ -170,7 +175,7 @@ describe("ChapterCard", () => {
 		expect(container.textContent).toContain("Loading");
 		await settle();
 		expect(api.getChapterParse).toHaveBeenCalledWith("b1", "c1");
-		expect(container.textContent).toContain("左手按弦");
+		expect(container.textContent).toContain("⑥弦:E–F–G");
 	});
 
 	it("refuses a chapter over the cap and says to split it", async () => {
@@ -198,20 +203,22 @@ describe("ChapterCard", () => {
 		expect(onChapter).toHaveBeenLastCalledWith(expect.objectContaining({ parse_status: "parsing" }));
 	});
 
-	it("shows notes, drafts, warnings and the cost once ready", async () => {
+	it("shows the cost and warnings, then the drafts, and the notes one switch away", async () => {
 		api.getChapterParse.mockResolvedValue(READY);
 		render(READY.chapter);
 		await settle();
 		const text = container.textContent ?? "";
 		expect(text).toContain("$0.27");
-		expect(text).toContain("左手按弦");
 		expect(text).toContain("p207: one draft dropped");
 		expect(text).toContain("⑥弦:E–F–G");
 		expect(text).toContain("p.206 · Tab · literal · 1 bar · ♩=100");
-		expect(text).toContain("3 note(s) an octave out");
 		expect(text).toContain("Re-parse · est. $0.05–1.00");
+		expect(text).not.toContain("左手按弦");
 		await settle();
-		expect(container.querySelector("img")?.getAttribute("src")).toBe("https://signed/crop.png");
+		expect(container.querySelector(".bk-crop img")?.getAttribute("src")).toBe("https://signed/crop.png");
+		showNotes();
+		expect(container.textContent).toContain("左手按弦");
+		expect(container.textContent).not.toContain("⑥弦:E–F–G");
 	});
 
 	it("hands a tab draft to the page's panel, typed, and marks the row used when told", async () => {
@@ -232,6 +239,26 @@ describe("ChapterCard", () => {
 		expect(api.setExerciseStatus).not.toHaveBeenCalled();
 		act(() => draft.onTaken());
 		expect(container.textContent).toContain("Used");
+		expect(container.textContent).toContain("1 used");
+	});
+
+	it("opens the assistant in Book mode on a parsed chapter, sending nothing (#406)", async () => {
+		api.getChapterParse.mockResolvedValue(READY);
+		render(READY.chapter);
+		await settle();
+		const asks: unknown[] = [];
+		const listen = (e: Event) => asks.push((e as CustomEvent).detail);
+		window.addEventListener(ASSISTANT_ASK_EVENT, listen);
+		act(() => button("Ask this chapter").click());
+		window.removeEventListener(ASSISTANT_ASK_EVENT, listen);
+		expect(asks).toEqual([{ text: "", mode: "book" }]);
+	});
+
+	it("marks the draft open in the panel", async () => {
+		api.getChapterParse.mockResolvedValue(READY);
+		render(READY.chapter, vi.fn(), "e1");
+		await settle();
+		expect(container.querySelector('li[aria-current="true"]')?.textContent).toContain("⑥弦:E–F–G");
 	});
 
 	it("refuses a draft the validator cannot read", async () => {
@@ -247,17 +274,6 @@ describe("ChapterCard", () => {
 		expect(onOpenDraft).not.toHaveBeenCalled();
 	});
 
-	it("asks the page for the crop at full size when its thumbnail is clicked", async () => {
-		api.getChapterParse.mockResolvedValue(READY);
-		render(READY.chapter);
-		await settle();
-		await settle();
-		const thumb = Array.from(container.querySelectorAll("button")).find((b) => b.querySelector("img"));
-		if (!thumb) throw new Error("no thumbnail button");
-		act(() => thumb.click());
-		expect(onViewCrop).toHaveBeenCalledWith({ url: "https://signed/crop.png", alt: "Page 206, ⑥弦:E–F–G" });
-	});
-
 	it("locates a draft's page, and a note's pages when the reader gave any", async () => {
 		api.getChapterParse.mockResolvedValue({
 			...READY,
@@ -270,10 +286,13 @@ describe("ChapterCard", () => {
 		await settle();
 		act(() => button("p.206").click());
 		expect(onLocate).toHaveBeenLastCalledWith({ chapterId: "c1", page: 206, pages: [206], title: "⑥弦:E–F–G" });
+		// The page key sits over the row: locating does not open the draft.
+		expect(onOpenDraft).not.toHaveBeenCalled();
+		showNotes();
 		act(() => button("p.204, 205").click());
 		expect(onLocate).toHaveBeenLastCalledWith({ chapterId: "c1", page: 204, pages: [204, 205], title: "左手按弦" });
 		// A note without pages has nothing to point at.
-		expect(Array.from(container.querySelectorAll("button")).filter((b) => /^p\./.test(b.textContent ?? ""))).toHaveLength(2);
+		expect(Array.from(container.querySelectorAll("button")).filter((b) => /^p\./.test(b.textContent ?? ""))).toHaveLength(1);
 	});
 
 	it("offers a page whose tab was in the text layer to read by ear (#228)", async () => {
@@ -296,7 +315,7 @@ describe("ChapterCard", () => {
 		expect(onReadTextTab).toHaveBeenCalledWith(205);
 	});
 
-	it("folds every draft's warnings, one or many, to a count", async () => {
+	it("counts every draft's warnings on its row, the messages in its title", async () => {
 		const two = [
 			{ code: "A", path: "measures[0]", message: "first thing" },
 			{ code: "B", path: "measures[1]", message: "second thing" },
@@ -307,9 +326,9 @@ describe("ChapterCard", () => {
 		});
 		render(READY.chapter);
 		await settle();
-		const folds = Array.from(container.querySelectorAll("li details"));
-		expect(folds.map((f) => f.querySelector("summary")?.textContent?.trim())).toEqual(["1 warning", "2 warnings"]);
-		expect(folds[0].textContent).toContain("3 note(s) an octave out");
-		expect(folds[1].textContent).toContain("second thing");
+		const counts = Array.from(container.querySelectorAll('li .bk-st[data-tone="warn"]'));
+		expect(counts.map((c) => c.getAttribute("aria-label"))).toEqual(["1 warning", "2 warnings"]);
+		expect(counts[0].getAttribute("title")).toBe("3 note(s) an octave out");
+		expect(counts[1].getAttribute("title")).toBe("first thing\nsecond thing");
 	});
 });

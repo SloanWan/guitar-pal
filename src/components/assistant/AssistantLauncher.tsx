@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button, buttonClasses } from "@/components/ui/button";
 import AssistantPanel from "./AssistantPanel";
 import { useAssistant } from "./useAssistant";
-import { ASSISTANT_ASK_EVENT, ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT, type AssistantAsk } from "@/lib/assistant/handoff";
+import { ASSISTANT_ASK_EVENT, ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT, opensOnly, type AssistantAsk } from "@/lib/assistant/handoff";
 import "./assistant.css";
 
 /**
@@ -141,17 +141,19 @@ export default function AssistantLauncher() {
 
 	// A page asking for the player (Home's Ask): the panel opens on the
 	// conversation — never on the saved chats — and the sentence goes in, in
-	// the mode chosen there.
-	const askRef = useRef({ open: setPanelOpen, send: assistant.send });
+	// the mode chosen there. Without a sentence (a book chapter's Ask, #406)
+	// the panel opens in that mode for the player to type.
+	const askRef = useRef({ open: setPanelOpen, send: assistant.send, setMode: assistant.setMode });
 	useEffect(() => {
-		askRef.current = { open: setPanelOpen, send: assistant.send };
+		askRef.current = { open: setPanelOpen, send: assistant.send, setMode: assistant.setMode };
 	});
 	useEffect(() => {
 		function ask(e: Event) {
-			const { text, mode } = (e as CustomEvent<AssistantAsk>).detail;
+			const detail = (e as CustomEvent<AssistantAsk>).detail;
 			setView("thread");
+			if (opensOnly(detail)) askRef.current.setMode(detail.mode);
 			askRef.current.open(true);
-			void askRef.current.send(text, mode);
+			if (!opensOnly(detail)) void askRef.current.send(detail.text, detail.mode);
 		}
 		window.addEventListener(ASSISTANT_ASK_EVENT, ask);
 		return () => window.removeEventListener(ASSISTANT_ASK_EVENT, ask);

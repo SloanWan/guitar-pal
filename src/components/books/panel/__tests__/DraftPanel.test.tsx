@@ -8,8 +8,8 @@ import { takeHandoff } from "@/lib/assistant/handoff";
 /**
  * The draft panel with the audio engine stubbed: what it says about the draft,
  * what it hands the stave, and its two ways out — Edit opens the editor's page
- * on the draft with the book's page beside it, Open in fingerpick hands it over
- * and marks the row used. Playing alone marks nothing.
+ * on the draft with the book's page beside it, Open in Tab hands it over and
+ * marks the row used. Playing alone marks nothing.
  */
 
 const push = vi.fn();
@@ -49,7 +49,7 @@ vi.mock("@/components/fingerpick/TabStaveRow", async (importOriginal) => ({
 	},
 }));
 
-import ChapterDraftPanel, { draftMeta, type OpenDraft } from "@/components/books/ChapterDraftPanel";
+import DraftPanel, { draftMeta, type OpenDraft } from "@/components/books/panel/DraftPanel";
 import { readEditorDraft } from "@/lib/tabEditorEntry";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -94,13 +94,16 @@ let root: Root | null = null;
 const onTaken = vi.fn();
 const onClose = vi.fn();
 const onLocate = vi.fn();
+const onViewCrop = vi.fn();
 
 function render(draft: OpenDraft = { chapterId: "c1", exercise: EXERCISE, pattern: PATTERN, onTaken }) {
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	act(() => {
 		root = createRoot(container);
-		root.render(<ChapterDraftPanel bookId="b1" draft={draft} onClose={onClose} onLocate={onLocate} />);
+		root.render(
+			<DraftPanel bookId="b1" draft={draft} onClose={onClose} onLocate={onLocate} onViewCrop={onViewCrop} />,
+		);
 	});
 }
 
@@ -128,6 +131,8 @@ beforeEach(() => {
 	onTaken.mockReset();
 	onClose.mockReset();
 	onLocate.mockReset();
+	onViewCrop.mockReset();
+	api.cropUrl.mockReset().mockResolvedValue("https://signed/crop.png");
 	api.setExerciseStatus.mockReset().mockResolvedValue({ ...EXERCISE, status: "taken" });
 	engine.play.mockReset();
 	engine.stop.mockReset();
@@ -150,7 +155,7 @@ describe("draftMeta", () => {
 	});
 });
 
-describe("ChapterDraftPanel", () => {
+describe("DraftPanel", () => {
 	it("shows the draft, lays out its bars and preloads the samples", async () => {
 		render();
 		await settle();
@@ -182,16 +187,17 @@ describe("ChapterDraftPanel", () => {
 		expect(api.setExerciseStatus).not.toHaveBeenCalled();
 	});
 
-	it("sends an unsaved draft to fingerpick by handoff, under a fresh id, and marks the row used", async () => {
+	it("sends an unsaved draft to the Tab page by handoff, under a fresh id, and marks the row used", async () => {
 		render();
 		await settle();
 		await act(async () => {
-			button("Open in fingerpick").click();
+			button("Open in Tab").click();
 		});
 		expect(engine.stop).toHaveBeenCalled();
 		expect(onTaken).toHaveBeenCalledTimes(1);
 		expect(api.setExerciseStatus).toHaveBeenCalledWith("b1", "e1", "taken");
 		expect(push).toHaveBeenCalledWith("/fingerpick");
+		expect(container.textContent).toContain("Used");
 		const handoff = takeHandoff("fingerpick");
 		if (handoff?.kind !== "fingerpick") throw new Error("expected a fingerpick handoff");
 		expect(handoff.pattern.name).toBe("Exercise 3");
@@ -236,5 +242,14 @@ describe("ChapterDraftPanel", () => {
 		await settle();
 		act(() => button("p.206").click());
 		expect(onLocate).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows the crop it was read from, and asks the page for it at full size", async () => {
+		render({ chapterId: "c1", exercise: { ...EXERCISE, crop_path: "u/b/crops/c1/p0206-2.png" }, pattern: PATTERN, onTaken });
+		await settle();
+		const crop = container.querySelector<HTMLButtonElement>(".bk-bookcrop");
+		expect(crop?.querySelector("img")?.getAttribute("src")).toBe("https://signed/crop.png");
+		act(() => crop?.click());
+		expect(onViewCrop).toHaveBeenCalledWith({ url: "https://signed/crop.png", alt: "Page 206, Exercise 3" });
 	});
 });

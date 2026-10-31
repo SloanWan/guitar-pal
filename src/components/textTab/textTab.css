@@ -1,0 +1,178 @@
+/* =====================================================================================
+   The text-tab picker (#228) on Candy (#404): the text and its fields on top, the
+   readings to hear and choose between, the chosen one as staves, and the way out at the
+   foot. It fills its host — a panel beside a book, a dialog on the Tab page — and scrolls
+   its middle.
+   ===================================================================================== */
+@layer components {
+	.tt {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+		color: var(--gp-ink);
+		font-family: var(--gp-f-body);
+	}
+	.tt-top {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		gap: 12px;
+		padding: 0 18px 14px;
+		box-shadow: inset 0 -1px 0 var(--gp-line);
+	}
+	.tt-text {
+		width: 100%;
+		padding: 10px 12px;
+		border: 0;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-field);
+		color: var(--gp-ink);
+		font: 12.5px / 1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+		white-space: pre;
+		resize: vertical;
+		outline: none;
+	}
+	.tt-text:focus {
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-300);
+	}
+	.tt-text:read-only {
+		background: var(--gp-well);
+		color: var(--gp-ink-2);
+	}
+	.tt-text::placeholder {
+		color: var(--gp-ink-3);
+	}
+	.tt-fields {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 14px;
+	}
+	.tt-field {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-weight: 600;
+		font-size: var(--gp-t-cap);
+		color: var(--gp-ink-3);
+	}
+	.tt-input {
+		height: 34px;
+		min-width: 0;
+		padding: 0 10px;
+		border: 0;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-field);
+		color: var(--gp-ink);
+		font: 500 var(--gp-t-ui) / 1 var(--gp-f-body);
+		outline: none;
+	}
+	.tt-input:focus {
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-300);
+	}
+	.tt-num {
+		width: 72px;
+		font-variant-numeric: tabular-nums;
+	}
+	.tt-grow {
+		flex: 1 1 140px;
+	}
+	.tt-body {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+	.tt-empty {
+		margin: 0;
+		padding: 20px 18px;
+		font-size: var(--gp-t-ui);
+		color: var(--gp-ink-2);
+	}
+	.tt-readings {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin: 0;
+		padding: 14px 18px;
+		list-style: none;
+	}
+	.tt-reading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 12px;
+		padding: 10px 12px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	/* The chosen reading: lifted, with the module's ring. */
+	.tt-reading[aria-current="true"] {
+		transform: translateY(-2px);
+		box-shadow:
+			inset 0 0 0 1.5px var(--gp-m-500),
+			3px 3px 0 0 var(--gp-m-sh);
+	}
+	.tt-pick {
+		display: flex;
+		flex: 1 1 180px;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.tt-pick b {
+		font-weight: 650;
+		font-size: var(--gp-t-ui);
+	}
+	.tt-pick > span {
+		font-size: var(--gp-t-cap);
+		color: var(--gp-ink-2);
+	}
+	.tt-meta {
+		margin: 0 0 0 8px;
+		font-weight: 500;
+		font-size: var(--gp-t-cap);
+		color: var(--gp-ink-3);
+		font-variant-numeric: tabular-nums;
+	}
+	p.tt-meta {
+		margin: 0;
+	}
+	.tt-staves {
+		--tab-ink: var(--gp-ink);
+		--tab-dim: var(--gp-ink-3);
+		--tab-faint: var(--gp-ink-3);
+		--tab-line: var(--gp-edge);
+		--tab-paper: var(--gp-card);
+		--tab-chord: var(--gp-m-700);
+		margin: 0 18px 16px;
+		padding: 10px 8px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	.tt-foot {
+		display: flex;
+		flex: none;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px 12px;
+		padding: 12px 18px 16px;
+		box-shadow: inset 0 1px 0 var(--gp-line);
+	}
+	.tt-acts {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+}

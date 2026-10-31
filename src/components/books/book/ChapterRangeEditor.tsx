@@ -4,10 +4,8 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import type { ChapterRange } from "@/lib/books/types";
 import { validateRanges } from "@/lib/books/ranges";
-import { DenimButton, GhostButton, MONO_META } from "@/components/books/bookUi";
-
-const FIELD =
-	"h-8 border border-line-strong bg-surface px-2 font-mono text-[12px] text-ink focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 /**
  * The player's own chapters, edited in place: a title and a page span per
@@ -48,29 +46,26 @@ export default function ChapterRangeEditor({
 	}
 
 	return (
-		<div>
-			<ul>
+		<section className="bk-card bk-ranges" aria-label="Chapter ranges">
+			<div className="bk-ranges-h">
+				<h2 className="bk-h2">Chapter ranges</h2>
+				<span className="bk-meta">{pageCount} pages in the PDF</span>
+			</div>
+			<ol className="bk-ranges-list">
 				{ranges.map((range, index) => {
 					const problem = problemFor(index);
 					return (
-						<li
-							key={index}
-							className={`flex flex-col gap-2 border-b border-line px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 ${
-								problem ? "bg-destructive-tint" : ""
-							}`}
-						>
-							<span className={`${MONO_META} w-6 flex-none tabular-nums`}>
-								{String(index + 1).padStart(2, "0")}
-							</span>
-							<input
+						<li key={index} className="bk-range" data-problem={problem ? "" : undefined}>
+							<span className="bk-range-n">{String(index + 1).padStart(2, "0")}</span>
+							<Input
 								aria-label={`Chapter ${index + 1} title`}
 								value={range.title}
 								onChange={(e) => update(index, { title: e.target.value })}
-								className={`${FIELD} min-w-0 flex-1`}
+								className="bk-range-title"
 								maxLength={200}
 							/>
-							<span className="flex items-center gap-1.5">
-								<input
+							<span className="bk-range-pages">
+								<Input
 									aria-label={`Chapter ${index + 1} first page`}
 									type="number"
 									inputMode="numeric"
@@ -78,10 +73,10 @@ export default function ChapterRangeEditor({
 									max={pageCount}
 									value={range.page_start}
 									onChange={(e) => update(index, { page_start: e.target.valueAsNumber })}
-									className={`${FIELD} w-16 text-right tabular-nums`}
+									className="bk-range-page"
 								/>
-								<span className={MONO_META}>–</span>
-								<input
+								<span className="bk-meta">–</span>
+								<Input
 									aria-label={`Chapter ${index + 1} last page`}
 									type="number"
 									inputMode="numeric"
@@ -89,41 +84,39 @@ export default function ChapterRangeEditor({
 									max={pageCount}
 									value={range.page_end}
 									onChange={(e) => update(index, { page_end: e.target.valueAsNumber })}
-									className={`${FIELD} w-16 text-right tabular-nums`}
+									className="bk-range-page"
 								/>
-								<button
-									type="button"
+								<Button
+									variant="ghost"
+									size="sm"
 									aria-label={`Remove chapter ${index + 1}`}
 									onClick={() => setRanges((current) => current.filter((_, i) => i !== index))}
 									disabled={ranges.length === 1}
-									className="flex size-8 items-center justify-center text-ink-faint transition-colors hover:text-destructive disabled:opacity-40"
+									className="bk-range-x"
 								>
-									<X className="size-3.5" strokeWidth={1.5} strokeLinecap="square" />
-								</button>
+									<X aria-hidden />
+								</Button>
 							</span>
-							{problem ? (
-								<p className="text-[11px] text-destructive sm:w-full sm:pl-9">{problem}</p>
-							) : null}
+							{problem ? <p className="bk-range-problem">{problem}</p> : null}
 						</li>
 					);
 				})}
-			</ul>
-			<div className="flex flex-wrap items-center gap-3 px-4 py-3">
-				<GhostButton onClick={add}>
-					<Plus className="size-3.5" strokeWidth={1.5} strokeLinecap="square" aria-hidden="true" />
+			</ol>
+			<div className="bk-ranges-f">
+				<Button variant="secondary" size="sm" onClick={add}>
+					<Plus aria-hidden />
 					Add chapter
-				</GhostButton>
-				<span className="flex-1 text-[11px] text-destructive">{serverError}</span>
-				<GhostButton onClick={onCancel} disabled={saving}>
+				</Button>
+				<span className="bk-range-problem bk-grow" role={serverError ? "alert" : undefined}>
+					{serverError}
+				</span>
+				<Button variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
 					Cancel
-				</GhostButton>
-				<DenimButton
-					onClick={() => onSave(ranges.map((r) => ({ ...r, title: r.title.trim() })))}
-					disabled={saving || problems.length > 0}
-				>
-					{saving ? "Saving…" : "Save ranges"}
-				</DenimButton>
+				</Button>
+				<Button size="sm" onClick={() => onSave(ranges.map((r) => ({ ...r, title: r.title.trim() })))} disabled={problems.length > 0} loading={saving}>
+					Save ranges
+				</Button>
 			</div>
-		</div>
+		</section>
 	);
 }

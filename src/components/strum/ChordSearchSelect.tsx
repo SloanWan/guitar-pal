@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { Music, Play, Plus, Search, X } from "lucide-react";
+import { Play, Plus, Search, X } from "lucide-react";
 import "./chord-search-select.css";
 import MusicalText from "@/components/MusicalText";
 import { chordDisplayName } from "@/lib/chordSuffixes";
@@ -57,13 +57,11 @@ interface Props {
 	inlineList?: boolean;
 	/** How the picked chord is written in the field; the library's display name by default. */
 	format?: (root: string, suffix: string) => string;
-	/** `candy` for a page on the new design system (`csel-*`); left out, the v3 look. */
-	skin?: "candy";
-	/** Candy only: rows of chords shown while the field is focused and empty. */
+	/** Rows of chords shown while the field is focused and empty. */
 	suggestions?: readonly ChordSuggestionRow[];
-	/** Candy only: a ▶ before every match, which plays it without taking it. */
+	/** A ▶ before every match, which plays it without taking it. */
 	onHear?: (chord: ChordRef) => void;
-	/** Candy only: drawn at the end of every match — its shape, small. */
+	/** Drawn at the end of every match — its shape, small. */
 	renderShape?: (chord: ChordRef) => ReactNode;
 }
 
@@ -83,14 +81,12 @@ export default function ChordSearchSelect({
 	onCreate,
 	inlineList = false,
 	format = chordDisplayName,
-	skin,
 	suggestions = [],
 	onHear,
 	renderShape,
 }: Props) {
-	const candy = skin === "candy";
 	// A match laid out as a row: its ▶, its name over its kind, its shape.
-	const rich = candy && (onHear !== undefined || renderShape !== undefined);
+	const rich = onHear !== undefined || renderShape !== undefined;
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(false);
 	const [highlighted, setHighlighted] = useState(0);
@@ -113,7 +109,7 @@ export default function ChordSearchSelect({
 		[index, query, editing, shape],
 	);
 	const typed = query.trim() !== "";
-	const offered = candy && !typed ? suggestions.filter((row) => row.chords.length > 0) : [];
+	const offered = !typed ? suggestions.filter((row) => row.chords.length > 0) : [];
 	const open = editing && (results.length > 0 || shape !== null || typed || offered.length > 0);
 	/**
 	 * What the query names, when the library has no chord of that name: "c/d"
@@ -204,23 +200,17 @@ export default function ChordSearchSelect({
 			: (unknown ?? "");
 
 	return (
-		<div ref={containerRef} className={candy ? "csel" : "relative"}>
+		<div ref={containerRef} className="csel">
 			<div
-				data-state={candy ? (chord && !editing ? "chord" : unknown && !editing ? "unknown" : undefined) : undefined}
+				data-state={chord && !editing ? "chord" : unknown && !editing ? "unknown" : undefined}
 				title={
 					unknown && !editing
 						? `${unknown} — not in the chord library, so this bar sounds nothing`
 						: undefined
 				}
-				className={candy ? "csel-field" : `flex items-center gap-1.5 border px-2 py-1 transition-colors ${
-					chord && !editing
-						? "border-denim bg-denim-tint text-denim"
-						: unknown && !editing
-							? "border-destructive bg-destructive-tint text-destructive"
-							: "border-line-strong text-ink-dim focus-within:border-denim"
-				}`}
+				className="csel-field"
 			>
-				{candy ? <Search className="csel-icon" aria-hidden /> : <Music size={10} className="shrink-0" />}
+				<Search className="csel-icon" aria-hidden />
 				<input
 					ref={inputRef}
 					type="text"
@@ -240,11 +230,7 @@ export default function ChordSearchSelect({
 						setHighlighted(0);
 					}}
 					onKeyDown={handleKeyDown}
-					className={
-						candy
-							? "csel-input"
-							: "w-24 bg-transparent font-mono text-[11px] font-semibold placeholder:font-normal placeholder:text-ink-dim focus:outline-none"
-					}
+					className="csel-input"
 				/>
 				{/* Clearing a kept name goes through the same path a chord does:
 				    `setBarChord` retires the placeholder either way. */}
@@ -254,32 +240,22 @@ export default function ChordSearchSelect({
 						onClick={() => onChange(null)}
 						aria-label={`Clear ${ariaLabel}`}
 						title="Clear chord"
-						className={
-							candy
-								? "csel-clear"
-								: `shrink-0 transition-colors ${chord ? "text-denim hover:text-destructive" : "text-destructive hover:text-ink"}`
-						}
+						className="csel-clear"
 					>
-						<X size={candy ? 14 : 10} />
+						<X size={14} />
 					</button>
 				)}
-				{/* The candy field keeps the clear button's room while it is away, so the
-				    field is one width empty, typed into, or holding a chord. */}
-				{candy && !((chord || unknown) && !editing) && <span className="csel-clear" aria-hidden data-away="" />}
+				{/* The field keeps the clear button's room while it is away, so it is
+				    one width empty, typed into, or holding a chord. */}
+				{!((chord || unknown) && !editing) && <span className="csel-clear" aria-hidden data-away="" />}
 			</div>
 
 			{open && (
 				<ul
 					id={listboxId}
 					role="listbox"
-					data-inline={candy && inlineList ? "" : undefined}
-					className={
-						candy
-							? "csel-list"
-							: `z-50 mt-1 max-h-44 w-52 overflow-y-auto border border-line-strong bg-popover ${
-									inlineList ? "" : "absolute left-0 top-full"
-								}`
-					}
+					data-inline={inlineList ? "" : undefined}
+					className="csel-list"
 				>
 					{offered.map((row) => (
 						<li key={row.label} role="presentation">
@@ -369,20 +345,12 @@ export default function ChordSearchSelect({
 										e.preventDefault();
 										commit(r);
 									}}
-									className={
-										candy
-											? "csel-opt"
-											: `flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors ${
-													i === highlighted ? "bg-denim-tint" : ""
-												}`
-									}
+									className="csel-opt"
 								>
-									<span className={candy ? "csel-name" : "font-mono text-[11px] font-semibold text-ink"}>
+									<span className="csel-name">
 										<MusicalText text={chordDisplayName(r.root, r.suffix)} />
 									</span>
-									<span className={candy ? "csel-cat" : "ml-auto font-mono text-[9px] text-ink-faint"}>
-										{r.category}
-									</span>
+									<span className="csel-cat">{r.category}</span>
 								</button>
 							</li>
 						);
@@ -439,26 +407,24 @@ export default function ChordSearchSelect({
 									e.preventDefault();
 									commitShape(shapeChord);
 								}}
-								className={candy ? "csel-opt" : "flex w-full items-center gap-2 bg-denim-tint px-2 py-1.5 text-left"}
+								className="csel-opt"
 							>
-								<span className={candy ? "csel-name" : "font-mono text-[11px] font-semibold text-ink"}>
+								<span className="csel-name">
 									<MusicalText text={chordDisplayName(shapeChord.root, shapeChord.suffix)} />
 								</span>
-								<span className={candy ? "csel-cat" : "ml-auto font-mono text-[9px] text-ink-faint"}>
-									held this way
-								</span>
+								<span className="csel-cat">held this way</span>
 							</button>
 						</li>
 					)}
 
 					{shape && !shapeChord && (
-						<li className={candy ? "csel-note" : "px-2 py-2 text-center font-mono text-[10px] text-ink-faint"}>
+						<li className="csel-note">
 							{shapeCorpus === null ? "Looking for that shape…" : "Nothing is held that way"}
 						</li>
 					)}
 
 					{!shape && results.length === 0 && (typed || offered.length === 0) && (
-						<li className={candy ? "csel-note" : "px-2 py-2 text-center font-mono text-[10px] text-ink-faint"}>
+						<li className="csel-note">
 							{index.length === 0 ? "Loading chords…" : "No match"}
 						</li>
 					)}
@@ -476,11 +442,7 @@ export default function ChordSearchSelect({
 									stopEditing();
 									inputRef.current?.blur();
 								}}
-								className={
-									candy
-										? "csel-opt csel-create"
-										: "flex w-full items-center gap-2 border-t border-line px-2 py-1.5 text-left font-mono text-[11px] font-semibold text-denim-accent transition-colors hover:bg-denim-tint"
-								}
+								className="csel-opt csel-create"
 							>
 								<Plus size={11} className="shrink-0" />
 								{exact && exactMissing ? (

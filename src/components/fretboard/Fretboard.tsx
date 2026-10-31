@@ -45,6 +45,7 @@ import {
 } from "react";
 
 import { ChevronLeft, ChevronRight, Play, Square, X } from "lucide-react";
+import "./instruments.css";
 
 import { STRING_LABELS } from "@/lib/chordVoicingToMidi";
 import { relatedSlots, slotMidi, type SlotNote, type SlotPosition } from "@/lib/fretboard/positions";
@@ -717,7 +718,7 @@ export default function Fretboard({
 								y={stringY(string) + 3}
 								textAnchor="end"
 								fontSize={9}
-								className="fb-sname fill-ink-faint font-mono"
+								className="fb-sname"
 							>
 								{names[string]}
 							</text>
@@ -808,7 +809,7 @@ export default function Fretboard({
 											y={betweenStringsY(2) - INLAY / 2}
 											width={INLAY}
 											height={INLAY}
-											className="fb-inlay fill-ink-faint"
+											className="fb-inlay"
 											opacity={0.6}
 										/>
 									);
@@ -817,7 +818,7 @@ export default function Fretboard({
 									return (
 										<g
 											key={`inlay-${fret}`}
-											className="fb-inlay fill-ink-faint"
+											className="fb-inlay"
 											opacity={0.6}
 										>
 											<rect
@@ -850,7 +851,7 @@ export default function Fretboard({
 										y2={stringY(0) + 6}
 										strokeWidth={1}
 										shapeRendering="crispEdges"
-										className="fb-wire stroke-line-strong"
+										className="fb-wire"
 									/>
 								))}
 							{fromFret === 0 && (
@@ -861,7 +862,7 @@ export default function Fretboard({
 									y2={stringY(0) + 6}
 									strokeWidth={3}
 									shapeRendering="crispEdges"
-									className="fb-nut stroke-ink"
+									className="fb-nut"
 								/>
 							)}
 
@@ -871,7 +872,7 @@ export default function Fretboard({
 							{strings.map((string) => (
 								<path
 									key={`string-${string}`}
-									className="fb-string stroke-line-strong"
+									className="fb-string"
 									data-string={string}
 									d={straightString(fromFret * FRET_W, wireX(toFret), stringY(string))}
 									fill="none"
@@ -1020,7 +1021,7 @@ export default function Fretboard({
 									y={NUMBERS_Y}
 									textAnchor="middle"
 									fontSize={9}
-									className="fb-fnum fill-ink-faint font-mono"
+									className="fb-fnum"
 								>
 									{fret}
 								</text>
@@ -1052,7 +1053,7 @@ export default function Fretboard({
 												strokeWidth={1.25}
 											/>
 											<text
-												className="fb-label font-mono"
+												className="fb-label"
 												x={cx}
 												y={cy + 3}
 												textAnchor="middle"

@@ -12,12 +12,8 @@
                                          "current module" aliases for that subtree
 
    Utilities: globals.css exposes these under an INTERIM `gp-` namespace in @theme inline
-   (bg-gp-page, text-gp-ink-3, bg-gp-m-500, rounded-gp-lg, ease-gp-spring, …) because
-   several bare names (ink, line, card, panel, surface, accent) still carry v3 values.
-   The bare names are reclaimed when the last page has migrated (#363 cleanup).
-
-   color-scheme is deliberately NOT set here: the v3 theme still owns the default (dark)
-   until the shell flips it in #356.
+   (bg-gp-page, text-gp-ink-3, bg-gp-m-500, rounded-gp-lg, ease-gp-spring, …). The v3
+   tokens that held the bare names are gone (#363 cleanup); the rename is its own step.
 
    Layer order (lowest → highest):
      1. neutral ramp      — page, card, well, field, line, ink (by data-theme)
@@ -289,8 +285,9 @@
 }
 
 /* -------------------------------------------------------------------------------------
-   7. TYPE — Figtree only, loaded in #351 as --font-figtree (next/font/local, as in #291);
-   Chinese uses the device stack (never shipped). Numerals are tabular wherever digits
+   7. TYPE — Figtree, loaded in #351 as --font-figtree (next/font/local, as in #291), for
+   everything read; JetBrains Mono (--gp-f-mono) only for the tab stave's digits and text
+   that is typed. Chinese uses the device stack (never shipped). Numerals are tabular wherever digits
    line up. In code, reference the family through the next/font CSS variable, never by
    spelling "Figtree" (next/font/local names the family after the variable).
    ------------------------------------------------------------------------------------- */
@@ -300,6 +297,7 @@
   --gp-f-disp: var(--font-figtree, ui-sans-serif, system-ui), var(--gp-cjk);
   --gp-f-num: var(--font-figtree, ui-sans-serif, system-ui), var(--gp-cjk);
   --gp-f-it: var(--gp-f-body);      /* hover italic uses Figtree's REAL italic */
+  --gp-f-mono: var(--font-jbmono), ui-monospace, monospace;
   --gp-disp-w: 700; --gp-disp-w-s: 650; --gp-zh-disp-w: 600; --gp-num-w: 650;
   --gp-disp-track: -0.01em;
   /* scale (phone → ≥ 960px) */

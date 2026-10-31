@@ -22,7 +22,7 @@
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import Rocker from "@/components/ui/Rocker";
+import Rocker from "@/app/dev/_components/Rocker";
 
 // ════════════════════════════════════════════════════════════════════════════
 // THEME — reuses the app's mechanism (localStorage "gp-theme" + dataset.theme)

@@ -3,8 +3,8 @@ import localFont from "next/font/local";
 // Self-hosted rather than fetched from Google at build time (#291): that fetch
 // failed three times in three days, once on a branch that changed nothing but a
 // Markdown file, and a flaked build on main silently skips the deploy. The files
-// are the ones Google was serving — JetBrains Mono 2.211, Space Grotesk 2.000,
-// the same variable weight axes — so no glyph or metric moves. See README.md
+// are the ones Google was serving — JetBrains Mono 2.211, the same variable
+// weight axis — so no glyph or metric moves. See README.md
 // here for how they were fetched and how to refresh them.
 //
 // Declared in their own module, not in `layout.tsx`, because the family name
@@ -21,17 +21,10 @@ export const mono = localFont({
 	display: "swap",
 });
 
-export const sans = localFont({
-	src: "./SpaceGrotesk-Variable-latin.woff2",
-	weight: "300 700",
-	style: "normal",
-	variable: "--font-grotesk",
-	display: "swap",
-});
-
 // The Candy UI face (#351): upright and a real italic, one variable file each.
-// Tokens reach it through --font-figtree (see tokens.css); the tab stave stays on
-// `mono` because Figtree's default figures are proportional (README.md).
+// Tokens reach it through --font-figtree (see tokens.css); the tab stave and typed
+// text stay on `mono` (--gp-f-mono) because Figtree's default figures are
+// proportional (README.md).
 export const figtree = localFont({
 	src: [
 		{ path: "./Figtree-Variable-latin.woff2", weight: "400 800", style: "normal" },

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import "./globals.css";
-import { figtree, mono, sans } from "./fonts/fonts";
+import { figtree, mono } from "./fonts/fonts";
 import StatusScreen, { StatusTab } from "@/components/status/StatusScreen";
 import { MUTES } from "@/components/status/ErrorScreen";
 import { restoreSavedTheme } from "@/components/ThemeToggle";
@@ -21,7 +21,7 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
 	}, [error]);
 
 	return (
-		<html lang="en" className={`${mono.variable} ${sans.variable} ${figtree.variable} h-full antialiased`}>
+		<html lang="en" className={`${mono.variable} ${figtree.variable} h-full antialiased`}>
 			<body className="h-full bg-gp-page">
 				<title>Something went wrong · Guitar Pal</title>
 				<StatusScreen

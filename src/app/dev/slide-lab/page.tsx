@@ -7,7 +7,7 @@ import TabStaveRow, {
 	CLEF_WIDTH,
 } from "@/components/fingerpick/TabStaveRow";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
-import Fader from "@/components/ui/Fader";
+import Fader from "@/app/dev/_components/Fader";
 import {
 	fingerpickPatternToScheduleEvents,
 	computeMeasureBoundaries,

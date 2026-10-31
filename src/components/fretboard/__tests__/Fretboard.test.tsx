@@ -73,8 +73,8 @@ describe("Fretboard", () => {
 		const neck = host.querySelector("svg[data-from-fret]") as SVGElement;
 		expect(neck.getAttribute("data-from-fret")).toBe("5");
 		expect(neck.getAttribute("data-to-fret")).toBe("9");
-		expect(host.querySelector(".stroke-ink")).toBeNull();
-		expect(render(A_ROOTS, 0, 5).querySelector(".stroke-ink")).not.toBeNull();
+		expect(host.querySelector(".fb-nut")).toBeNull();
+		expect(render(A_ROOTS, 0, 5).querySelector(".fb-nut")).not.toBeNull();
 	});
 
 	it("labels the strings low E to high e and numbers every fret", () => {

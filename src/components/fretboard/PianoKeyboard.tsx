@@ -41,6 +41,7 @@ import {
 	type Ref,
 } from "react";
 
+import "./instruments.css";
 import MusicalText from "@/components/MusicalText";
 import { prefersReducedMotion } from "@/lib/motion";
 import { keyLabel, pianoKeys, type PianoKey, type PianoRange } from "@/lib/piano/keys";
@@ -294,7 +295,7 @@ export default function PianoKeyboard({
 			>
 				{isTone(key) && <span className="pk-dot" aria-hidden="true" />}
 				{label && (
-					<span className="pk-label font-mono">
+					<span className="pk-label">
 						<MusicalText text={label} />
 					</span>
 				)}
@@ -331,7 +332,7 @@ export default function PianoKeyboard({
 							aria-hidden="true"
 							style={{ top: WHITE_H, left: centreOf(bandKeys.from), right: `calc(100% - ${centreOf(bandKeys.to)})` }}
 						>
-							<span className="pk-band-label font-mono">
+							<span className="pk-band-label">
 								Guitar <MusicalText text={keyLabel(bandKeys.from.midi)} />
 								{" – "}
 								<MusicalText text={keyLabel(bandKeys.to.midi)} />

@@ -35,8 +35,8 @@ function applyTheme(next: Theme): void {
 /**
  * Puts the saved theme back on `<html>`. The boot script sets it before first
  * paint, but when a render error makes React rebuild the document on the
- * client the attribute is dropped, and the page falls back to the v3 dark
- * tokens under the Candy light ones. The error screens call this.
+ * client the attribute is dropped, and the page falls back to the system's
+ * preference instead of the player's choice. The error screens call this.
  */
 export function restoreSavedTheme(): void {
 	let saved: string | null = null;

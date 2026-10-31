@@ -96,7 +96,6 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 		index: tools.searchIndex,
 		shapeCorpus: tools.shapeCorpus,
 		inlineList: true,
-		skin: "candy",
 		suggestions,
 		onHear: tools.hearChord,
 		renderShape: (chord: ChordRef) => <MatchShape chord={chord} tools={tools} />,

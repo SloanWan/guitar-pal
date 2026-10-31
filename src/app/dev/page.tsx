@@ -10,17 +10,6 @@ interface DevRoute {
 
 const DEV_ROUTES: readonly DevRoute[] = [
 	{
-		href: "/dev/dashboard",
-		label: "dashboard",
-		description: "Practice dashboard — routines, exercises, and practice logs.",
-	},
-	{
-		href: "/dev/dashboard",
-		label: "session",
-		description:
-			"Practice session runner at /dev/session/[routineId] — start one from the dashboard's Start button.",
-	},
-	{
 		href: "/dev/audio-sample",
 		label: "audio-sample",
 		description: "Preset loader and A/B audio comparison for pitch-quality audits.",

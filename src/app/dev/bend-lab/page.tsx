@@ -7,7 +7,7 @@ import {
 	preloadFingerpickPresets,
 	getFingerpickNoteData,
 } from "@/components/strum/useGuitarSampleLoader";
-import Fader from "@/components/ui/Fader";
+import Fader from "@/app/dev/_components/Fader";
 import {
 	composeExpression,
 	expressionForEffects,

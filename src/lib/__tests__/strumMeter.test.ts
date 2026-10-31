@@ -131,10 +131,9 @@ describe("strumMeter", () => {
 	});
 
 	describe("beatLabels", () => {
-		describe("simple meters keep exactly what StepGrid draws today", () => {
-			// These four rows are the current BEAT_LABELS table. If they change,
-			// every existing pattern is relabelled, so they are pinned here and the
-			// StepGrid change becomes a pure refactor.
+		describe("simple meters keep the labels the grid has always drawn", () => {
+			// These four rows were the original BEAT_LABELS table. If they change,
+			// every existing pattern is relabelled, so they are pinned here.
 			it("one cell", () => {
 				expect(beatLabels(FOUR_FOUR, 0, 1)).toEqual(["1", "", "+", ""]);
 			});
@@ -182,7 +181,7 @@ describe("strumMeter", () => {
 			// paddedBeatCells widens a one- or two-cell simple beat to four columns;
 			// a compound beat is always three. Anything else (a compound beat the
 			// player has cut down by hand) is labelled short on purpose, and
-			// StepGrid renders the missing columns blank rather than guessing.
+			// the grid renders the missing columns blank rather than guessing.
 			for (const meter of SUPPORTED_METERS) {
 				const cells = naturalCellsPerBeat(meter);
 				const columns = isCompound(meter) ? cells : 4;

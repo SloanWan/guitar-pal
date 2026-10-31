@@ -1278,7 +1278,6 @@ export default function FretboardExplorer({
 											shapeCorpus={shapeCorpus}
 											ariaLabel="Chord"
 											format={fieldName}
-											skin="candy"
 										/>
 										{shown.numeral && (
 											<span className="fbx-num" data-testid="numeral">
@@ -1294,7 +1293,6 @@ export default function FretboardExplorer({
 													shapeCorpus={shapeCorpus}
 													ariaLabel="Shape"
 													format={fieldName}
-													skin="candy"
 												/>
 												<span className="fbx-meta">shape</span>
 											</span>

@@ -58,7 +58,7 @@ export function chordToneRole(semitonesAboveRoot: number): ChordToneRole {
  * `chordTone` mark (the chord root becomes the `root`), whether or not it is in
  * the scale — an outside note is exactly what a player needs to see. Scale
  * tones the chord does not use stay `scaleTone`, the scale's own root among
- * them: denim marks what is sounding, and the degree label still says "1".
+ * them: the module's colour marks what is sounding, and the degree label still says "1".
  *
  * Labels are the scale's, so a chord tone reads in the key the player is
  * thinking in; a non-diatonic tone is named through the same labeler.

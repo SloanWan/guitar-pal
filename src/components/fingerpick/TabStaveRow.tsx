@@ -249,24 +249,24 @@ function layoutChordLine(labels: PlacedLabel[], diagramWidth: number, rightLimit
 // (black stave lines/fret numbers, a white occlusion patch behind each fret
 // number) inherited from the root <svg>'s fill="black"/stroke="black" — it has
 // no theme awareness. This walks the finished render and overwrites those
-// attributes with theme-aware custom properties: the `--tab-*` set, which a page
-// on the new palette defines (tab.css), each falling back to its v3 token on the
-// pages that have not moved yet. Runs after every draw() call;
+// attributes with theme-aware custom properties: the `--tab-*` set, which a host
+// may define (tab.css, a card's own surface), each falling back to the Candy
+// ramp. Runs after every draw() call;
 // never touches note construction, layout, or the data-* cursor attributes.
 function applyStaveTheme(svgEl: SVGSVGElement): void {
 	svgEl.querySelectorAll<SVGPathElement>("g.vf-stave > path").forEach((el) => {
-		el.setAttribute("stroke", "var(--tab-line, var(--line-strong))");
+		el.setAttribute("stroke", "var(--tab-line, var(--gp-edge))");
 	});
 	svgEl.querySelectorAll<SVGRectElement>("g.vf-stavebarline > rect").forEach((el) => {
-		el.setAttribute("fill", "var(--tab-line, var(--line-strong))");
+		el.setAttribute("fill", "var(--tab-line, var(--gp-edge))");
 	});
 	// Repeat barlines (|: / :|) draw their dots as filled <path>/<circle> elements inside
 	// the barline group — hardcoded black by VexFlow. Track theme so they show in dark mode.
 	svgEl
 		.querySelectorAll<SVGElement>("g.vf-stavebarline path, g.vf-stavebarline circle")
-		.forEach((el) => el.setAttribute("fill", "var(--tab-line, var(--line-strong))"));
+		.forEach((el) => el.setAttribute("fill", "var(--tab-line, var(--gp-edge))"));
 	svgEl.querySelectorAll<SVGTextElement>("g.vf-clef text").forEach((el) => {
-		el.setAttribute("fill", "var(--tab-faint, var(--ink-faint))");
+		el.setAttribute("fill", "var(--tab-faint, var(--gp-ink-3))");
 	});
 	svgEl.querySelectorAll<SVGGElement>("g.vf-tabnote").forEach((noteGroup) => {
 		// A fret number masks the stave line through it with a halo hugging its
@@ -276,8 +276,8 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 		// The halo hides only the line where the glyph is, and stays invisible
 		// on its own because it is the surface's colour.
 		noteGroup.querySelectorAll("text").forEach((el) => {
-			el.setAttribute("fill", "var(--tab-ink, var(--ink))");
-			el.setAttribute("stroke", "var(--tab-paper, var(--workspace-bg))");
+			el.setAttribute("fill", "var(--tab-ink, var(--gp-ink))");
+			el.setAttribute("stroke", "var(--tab-paper, var(--gp-card))");
 			el.setAttribute("stroke-width", "3");
 			el.setAttribute("stroke-linejoin", "round");
 			el.setAttribute("paint-order", "stroke fill");
@@ -286,33 +286,33 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 		// Modifier drawings inside the note group — a bend's curve and arrowhead, the
 		// vibrato glyph — are stroked / filled in VexFlow's hardcoded black.
 		noteGroup.querySelectorAll("path").forEach((el) => {
-			if (el.getAttribute("fill") !== "none") el.setAttribute("fill", "var(--tab-ink, var(--ink))");
-			if (el.getAttribute("stroke") !== "none") el.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+			if (el.getAttribute("fill") !== "none") el.setAttribute("fill", "var(--tab-ink, var(--gp-ink))");
+			if (el.getAttribute("stroke") !== "none") el.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 		});
 	});
 	// Chord symbols on the chord line — written by this component, grouped so they
 	// can carry the brand colour rather than the plain-text ink.
 	svgEl.querySelectorAll<SVGTextElement>("g.vf-chord-label text").forEach((el) => {
-		el.setAttribute("fill", "var(--tab-chord, var(--denim-accent))");
+		el.setAttribute("fill", "var(--tab-chord, var(--gp-m-700))");
 	});
 	svgEl.querySelectorAll<SVGPathElement>("g.vf-stem path").forEach((el) => {
-		el.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+		el.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 	});
 	// Rest glyphs are StaveNotes (g.vf-stavenote), not tabnotes; VexFlow draws the rest
 	// as a path with hardcoded black fill. Track theme ink so rests stay visible in dark
 	// mode (and match fret-number ink in light mode).
 	svgEl
 		.querySelectorAll<SVGElement>("g.vf-stavenote path, g.vf-stavenote text")
-		.forEach((el) => el.setAttribute("fill", "var(--tab-ink, var(--ink))"));
+		.forEach((el) => el.setAttribute("fill", "var(--tab-ink, var(--gp-ink))"));
 	svgEl.querySelectorAll<SVGPathElement>("g.vf-beam path").forEach((el) => {
-		el.setAttribute("fill", "var(--tab-ink, var(--ink))");
+		el.setAttribute("fill", "var(--tab-ink, var(--gp-ink))");
 	});
 	svgEl.querySelectorAll<SVGTextElement>("g.vf-tuplet text").forEach((el) => {
-		el.setAttribute("fill", "var(--tab-ink, var(--ink))");
+		el.setAttribute("fill", "var(--tab-ink, var(--gp-ink))");
 	});
 	// Tie / hammer-on / pull-off connectors: closed filled arc shapes (stroke: none).
 	svgEl.querySelectorAll<SVGPathElement>("g.vf-stavetie path").forEach((el) => {
-		el.setAttribute("fill", "var(--tab-ink, var(--ink))");
+		el.setAttribute("fill", "var(--tab-ink, var(--gp-ink))");
 	});
 	// Slide connectors and measure-number/technique-annotation text are all
 	// emitted as bare elements directly under <svg> (VexFlow opens no group
@@ -322,10 +322,10 @@ function applyStaveTheme(svgEl: SVGSVGElement): void {
 	// ungrouped <text> at the fixed 8pt VexFlow uses for that label.
 	Array.from(svgEl.children).forEach((child) => {
 		if (child.tagName === "path" && child.getAttribute("fill") === "none") {
-			child.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+			child.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 		} else if (child.tagName === "text") {
 			const isMeasureNumber = child.getAttribute("font-size") === "8pt";
-			child.setAttribute("fill", isMeasureNumber ? "var(--tab-faint, var(--ink-faint))" : "var(--tab-ink, var(--ink))");
+			child.setAttribute("fill", isMeasureNumber ? "var(--tab-faint, var(--gp-ink-3))" : "var(--tab-ink, var(--gp-ink))");
 		}
 	});
 }
@@ -418,7 +418,7 @@ function drawPitchColumn(
 	labels.forEach((label, i) => {
 		const baseline = firstBaseline + i * lineHeight;
 		// A held string's label is fainter, as its fret number is.
-		const fill = label.tied ? "var(--tab-faint, var(--ink-faint))" : "var(--tab-dim, var(--ink-dim))";
+		const fill = label.tied ? "var(--tab-faint, var(--gp-ink-3))" : "var(--tab-dim, var(--gp-ink-3))";
 		const { base, dotsAbove, dotsBelow } = splitPitchLabel(label.text);
 		const text = document.createElementNS(ns, "text");
 		text.setAttribute("x", String(x));
@@ -489,14 +489,14 @@ function drawRoll(
 	const shaft = document.createElementNS(ns, "path");
 	shaft.setAttribute("d", d);
 	shaft.setAttribute("fill", "none");
-	shaft.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+	shaft.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 	shaft.setAttribute("stroke-width", isBrush(stroke) ? "1.4" : "1");
 	g.appendChild(shaft);
 	const head = document.createElementNS(ns, "path");
 	const tipY = headAtTop ? yTop : yBottom;
 	const baseY = headAtTop ? yTop + ROLL_HEAD : yBottom - ROLL_HEAD;
 	head.setAttribute("d", `M ${x} ${tipY} L ${x - ROLL_HEAD / 2 - 0.5} ${baseY} L ${x + ROLL_HEAD / 2 + 0.5} ${baseY} Z`);
-	head.setAttribute("fill", "var(--tab-ink, var(--ink))");
+	head.setAttribute("fill", "var(--tab-ink, var(--gp-ink))");
 	g.appendChild(head);
 	svgEl.appendChild(g);
 }
@@ -512,7 +512,7 @@ function drawHit(svgEl: SVGSVGElement, x: number, y: number, label: string): voi
 	text.setAttribute("font-family", MONO_FAMILY);
 	text.setAttribute("font-size", `${HIT_FONT_SIZE}px`);
 	text.setAttribute("font-weight", "600");
-	text.setAttribute("fill", "var(--tab-ink, var(--ink))");
+	text.setAttribute("fill", "var(--tab-ink, var(--gp-ink))");
 	text.textContent = label;
 	svgEl.appendChild(text);
 }
@@ -524,7 +524,7 @@ function drawHold(svgEl: SVGSVGElement, x1: number, x2: number, y: number): void
 	line.setAttribute("class", "vf-hold");
 	line.setAttribute("d", `M ${x1} ${y} L ${x2} ${y}`);
 	line.setAttribute("fill", "none");
-	line.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+	line.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 	line.setAttribute("stroke-width", "1");
 	line.setAttribute("stroke-dasharray", "4 3");
 	svgEl.appendChild(line);
@@ -547,7 +547,7 @@ function drawLeadIn(svgEl: SVGSVGElement, x: number, y: number, kind: LeadIn["ki
 		path.setAttribute("d", `M ${x0} ${y - 2} Q ${x0 + LEAD_IN_REACH * 0.6} ${y - 8} ${x - 3} ${y - 7}`);
 	}
 	path.setAttribute("fill", "none");
-	path.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+	path.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 	path.setAttribute("stroke-width", "1");
 	svgEl.appendChild(path);
 }
@@ -563,7 +563,7 @@ function drawSlideMark(svgEl: SVGSVGElement, x: number, y: number, mark: SlideMa
 	const far = mark.side === "in" ? x - 5 - SLIDE_MARK_REACH : x + 9 + SLIDE_MARK_REACH;
 	path.setAttribute("d", `M ${far} ${farY} L ${near} ${y}`);
 	path.setAttribute("fill", "none");
-	path.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+	path.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 	path.setAttribute("stroke-width", "1");
 	svgEl.appendChild(path);
 }
@@ -577,7 +577,7 @@ function drawWhammy(svgEl: SVGSVGElement, x1: number, x2: number, y: number, mar
 	const line = document.createElementNS(ns, "path");
 	line.setAttribute("d", `M ${x1} ${y} L ${x2} ${yEnd}`);
 	line.setAttribute("fill", "none");
-	line.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+	line.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 	line.setAttribute("stroke-width", "1");
 	line.setAttribute("stroke-dasharray", "4 3");
 	g.appendChild(line);
@@ -586,7 +586,7 @@ function drawWhammy(svgEl: SVGSVGElement, x1: number, x2: number, y: number, mar
 	text.setAttribute("y", String(yEnd + 3));
 	text.setAttribute("font-family", MONO_FAMILY);
 	text.setAttribute("font-size", `${WHAMMY_FONT_SIZE}px`);
-	text.setAttribute("fill", "var(--tab-dim, var(--ink-dim))");
+	text.setAttribute("fill", "var(--tab-dim, var(--gp-ink-3))");
 	text.textContent = mark.label;
 	g.appendChild(text);
 	svgEl.appendChild(g);
@@ -599,7 +599,7 @@ function drawScrape(svgEl: SVGSVGElement, x: number, yTop: number, yBottom: numb
 	path.setAttribute("class", "vf-scrape");
 	path.setAttribute("d", `M ${x - 7} ${yBottom + 1} L ${x + 7} ${yTop}`);
 	path.setAttribute("fill", "none");
-	path.setAttribute("stroke", "var(--tab-ink, var(--ink))");
+	path.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
 	path.setAttribute("stroke-width", "2.5");
 	path.setAttribute("stroke-linecap", "round");
 	svgEl.appendChild(path);
@@ -637,7 +637,7 @@ function drawBracket(
 		text.setAttribute("y", String(y));
 		text.setAttribute("font-family", MONO_FAMILY);
 		text.setAttribute("font-size", `${BRACKET_FONT_SIZE}px`);
-		text.setAttribute("fill", "var(--tab-dim, var(--ink-dim))");
+		text.setAttribute("fill", "var(--tab-dim, var(--gp-ink-3))");
 		text.textContent = label;
 		g.appendChild(text);
 		lineStart = x1 + bracketLabelRoom(label);
@@ -653,7 +653,7 @@ function drawBracket(
 	const line = document.createElementNS(ns, "path");
 	line.setAttribute("d", d);
 	line.setAttribute("fill", "none");
-	line.setAttribute("stroke", "var(--tab-dim, var(--ink-dim))");
+	line.setAttribute("stroke", "var(--tab-dim, var(--gp-ink-3))");
 	line.setAttribute("stroke-width", "1");
 	line.setAttribute("stroke-dasharray", "3 2");
 	g.appendChild(line);
@@ -974,7 +974,7 @@ export default function TabStaveRow({
 					const texts = el.querySelectorAll("text");
 					noteStrings[j].forEach((stringIndex, pos) => {
 						const sf = slot.strings[stringIndex];
-						if (sf.link?.kind === "tie" && !sf.muted) texts[pos]?.setAttribute("fill", "var(--tab-dim, var(--ink-dim))");
+						if (sf.link?.kind === "tie" && !sf.muted) texts[pos]?.setAttribute("fill", "var(--tab-dim, var(--gp-ink-3))");
 					});
 				});
 			});
@@ -992,7 +992,7 @@ export default function TabStaveRow({
 						off.forEach((stringIndex) => {
 							const pos = noteStrings[j].indexOf(stringIndex);
 							if (pos < 0) return;
-							texts[pos]?.setAttribute("fill", "var(--tab-off-shape, var(--off-shape))");
+							texts[pos]?.setAttribute("fill", "var(--tab-off-shape, var(--gp-warn))");
 							texts[pos]?.setAttribute("font-weight", "bold");
 						});
 					});

@@ -102,7 +102,7 @@ export default function FretboardPartsPage() {
 
 				<Part title="Chord search field" note="Skin candy. Type a name (am7, dmaj7) or a grip (x32010).">
 					<Row label="Empty">
-						<ChordSearchSelect chord={empty} onChange={setEmpty} index={index} ariaLabel="Empty chord" skin="candy" />
+						<ChordSearchSelect chord={empty} onChange={setEmpty} index={index} ariaLabel="Empty chord" />
 					</Row>
 					<Row label="Holding a chord">
 						<ChordSearchSelect
@@ -111,7 +111,6 @@ export default function FretboardPartsPage() {
 							index={index}
 							ariaLabel="Chord"
 							format={name}
-							skin="candy"
 						/>
 					</Row>
 					<Row label="Long name">
@@ -121,7 +120,6 @@ export default function FretboardPartsPage() {
 							index={index}
 							ariaLabel="Long chord"
 							format={name}
-							skin="candy"
 						/>
 					</Row>
 					<Row label="Not in the library">
@@ -131,7 +129,6 @@ export default function FretboardPartsPage() {
 							onChange={() => undefined}
 							index={index}
 							ariaLabel="Unknown chord"
-							skin="candy"
 						/>
 					</Row>
 					<Row label="Readout row">
@@ -143,7 +140,6 @@ export default function FretboardPartsPage() {
 									index={index}
 									ariaLabel="Heard"
 									format={name}
-									skin="candy"
 								/>
 								<span className="fbx-num">vi</span>
 								<span className="fbx-shape">
@@ -153,7 +149,6 @@ export default function FretboardPartsPage() {
 										index={index}
 										ariaLabel="Shape"
 										format={name}
-										skin="candy"
 									/>
 									<span className="fbx-meta">shape</span>
 								</span>

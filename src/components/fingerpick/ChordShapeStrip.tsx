@@ -6,8 +6,8 @@
  * glance-sized companion to a chord symbol on a stave, not a diagram to learn
  * a fingering from — so there are no finger numbers, only where the dots are.
  *
- * Drawn in theme tokens (`--ink`, `--line-strong`, …) so it reads on the
- * workspace in both themes without a backing chip.
+ * Drawn in the stave's inks (`--tab-ink`, `--tab-line`, …, falling back to the
+ * Candy ramp) so it reads beside the tab in both themes without a backing chip.
  */
 
 /** viewBox width; the height follows from the geometry below. Fret cells are
@@ -94,7 +94,7 @@ export default function ChordShapeStrip({
 			{/* Nut, or — for a shape up the neck — the number of the window's first
 			    fret, written over that fret's cell so it labels the cell it means. */}
 			{startFret === 1 ? (
-				<rect x={nutX - 2} y={stringY(5) - 1} width={2.4} height={STRING_GAP * 5 + 2} fill="var(--ink)" />
+				<rect x={nutX - 2} y={stringY(5) - 1} width={2.4} height={STRING_GAP * 5 + 2} fill="var(--tab-ink, var(--gp-ink))" />
 			) : (
 				<text
 					x={fretX(1)}
@@ -102,7 +102,7 @@ export default function ChordShapeStrip({
 					textAnchor="middle"
 					fontSize={6.5}
 					fontFamily="ui-monospace, monospace"
-					fill="var(--ink-dim)"
+					fill="var(--tab-dim, var(--gp-ink-3))"
 				>
 					{startFret}
 				</text>
@@ -116,7 +116,7 @@ export default function ChordShapeStrip({
 					y1={stringY(5)}
 					x2={LEFT + i * CELL_W}
 					y2={stringY(0)}
-					stroke="var(--line-strong)"
+					stroke="var(--tab-line, var(--gp-edge))"
 					strokeWidth={i === 0 ? 0 : 0.8}
 				/>
 			))}
@@ -129,7 +129,7 @@ export default function ChordShapeStrip({
 					y1={stringY(s)}
 					x2={rightX}
 					y2={stringY(s)}
-					stroke="var(--ink-dim)"
+					stroke="var(--tab-dim, var(--gp-ink-3))"
 					strokeWidth={0.9}
 					opacity={dim(s)}
 				/>
@@ -142,7 +142,7 @@ export default function ChordShapeStrip({
 					width={DOT_R * 2}
 					height={stringY(barre.from) - stringY(barre.to) + DOT_R * 2}
 					rx={DOT_R}
-					fill="var(--ink)"
+					fill="var(--tab-ink, var(--gp-ink))"
 				/>
 			)}
 
@@ -158,7 +158,7 @@ export default function ChordShapeStrip({
 							textAnchor="middle"
 							fontSize={7.5}
 							fontFamily="ui-monospace, monospace"
-							fill="var(--ink-faint)"
+							fill="var(--tab-faint, var(--gp-ink-3))"
 						>
 							×
 						</text>
@@ -172,7 +172,7 @@ export default function ChordShapeStrip({
 							cy={y}
 							r={2.4}
 							fill="none"
-							stroke="var(--ink)"
+							stroke="var(--tab-ink, var(--gp-ink))"
 							strokeWidth={0.9}
 							opacity={dim(s)}
 						/>
@@ -184,7 +184,7 @@ export default function ChordShapeStrip({
 						cx={fretX(fret - startFret + 1)}
 						cy={y}
 						r={DOT_R}
-						fill="var(--ink)"
+						fill="var(--tab-ink, var(--gp-ink))"
 						opacity={dim(s)}
 					/>
 				);

@@ -324,8 +324,7 @@ function Neck() {
 			<p className="text-(length:--gp-t-cap) text-gp-ink-3">
 				Frets counted from the capo · C major, {SONG_SHAPES[shown].name} on top
 			</p>
-			{/* The Fretboard page's neck: its wood, frets and chord-tone roles (fretboard-page.css). */}
-			<div className="fb-candy">
+			<div>
 				<div className="overflow-x-auto">
 					<div className="min-w-[560px]">
 						<Fretboard

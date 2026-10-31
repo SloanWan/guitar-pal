@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
-import Fader from "@/components/ui/Fader";
+import Fader from "@/app/dev/_components/Fader";
 import { DEFAULT_SLAP_PARAMS, type SlapParams } from "@/lib/fingerpickScheduler";
 import { FINGERPICK_SCHEMA_VERSION, type BeatSlot, type FingerpickPattern, type StringFret } from "@/lib/fingerpickTypes";
 

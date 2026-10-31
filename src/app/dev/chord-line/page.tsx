@@ -6,7 +6,7 @@ import TabStaveRow, {
 	CLEF_WIDTH,
 } from "@/components/fingerpick/TabStaveRow";
 import ChordShapeStrip, { CHORD_STRIP_ASPECT } from "@/components/fingerpick/ChordShapeStrip";
-import Fader from "@/components/ui/Fader";
+import Fader from "@/app/dev/_components/Fader";
 import { fingerpickToVexFlow, type ChordLabel } from "@/lib/fingerpickToVexFlow";
 import type { BeatSlot, Duration, Measure, StringFret } from "@/lib/fingerpickTypes";
 import type { ChordRef } from "@/lib/strumPatterns";

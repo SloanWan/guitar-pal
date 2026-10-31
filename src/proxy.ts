@@ -55,26 +55,14 @@ export async function proxy(request: NextRequest) {
 		return response;
 	}
 
-	// b. Protected dev sub-areas with the flag on but no user → send to auth.
-	if (
-		pathname.startsWith("/dev") &&
-		devEnabled &&
-		!user &&
-		(pathname.startsWith("/dev/dashboard") || pathname.startsWith("/dev/session"))
-	) {
-		return redirectWithCookies(
-			new URL(`/auth?redirect=${encodeURIComponent(pathname)}`, request.url),
-		);
-	}
-
-	// c. A logged-in user hitting /auth → the redirect param if it is a local
+	// b. A logged-in user hitting /auth → the redirect param if it is a local
 	//    path, else the personal home.
 	if (pathname === "/auth" && user) {
 		const target = safeRedirectPath(request.nextUrl.searchParams.get("redirect"));
 		return redirectWithCookies(new URL(target, request.url));
 	}
 
-	// d. /home and /settings are the signed-in personal surfaces — a signed-out
+	// c. /home and /settings are the signed-in personal surfaces — a signed-out
 	//    visitor is sent to auth with a return path so they land back after
 	//    signing in. /books is open to everyone (#262): the page shows what the
 	//    import does and the sample book; uploading and one's own books ask
@@ -85,13 +73,13 @@ export async function proxy(request: NextRequest) {
 		);
 	}
 
-	// e. A signed-in user hitting the public hub → their personal home. Signed-out
+	// d. A signed-in user hitting the public hub → their personal home. Signed-out
 	//    visitors keep seeing the public hub at / (no redirect, per issue #127).
 	if (pathname === "/" && user) {
 		return redirectWithCookies(new URL("/home", request.url));
 	}
 
-	// f. Everything else is public.
+	// e. Everything else is public.
 	return response;
 }
 

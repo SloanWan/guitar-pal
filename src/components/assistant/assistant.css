@@ -421,7 +421,7 @@
 	}
 	.as-md code,
 	.as-md pre {
-		font-family: var(--mono);
+		font-family: var(--gp-f-mono);
 		font-size: 0.88em;
 	}
 	.as-md code {
@@ -807,22 +807,18 @@
 	}
 
 	/* the tab stave inside a card */
-	/* The stave is the fingerpick page's, coloured through the v3 names it reads;
-	   here they point at the card's Candy tokens, in both themes. */
+	/* The stave is the fingerpick page's, coloured through its --tab-* inks; here
+	   they point at the card's own tokens, in both themes. */
 	.as-stave {
-		--ink: var(--gp-ink);
-		--ink-dim: var(--gp-ink-2);
-		--ink-faint: var(--gp-ink-mute);
-		--line-strong: var(--gp-edge);
-		--off-shape: var(--gp-warn);
-		--workspace-bg: var(--as-card-bg);
-		--denim-accent: var(--gp-m-700);
+		--tab-dim: var(--gp-ink-2);
+		--tab-faint: var(--gp-ink-mute);
+		--tab-paper: var(--as-card-bg);
 		margin: 0 -6px;
 		overflow-x: auto;
 	}
 	/* On the dark card the edge token is too close to the surface for a stave line. */
 	:root[data-theme="dark"] .as-stave {
-		--line-strong: color-mix(in srgb, var(--gp-edge) 45%, var(--gp-ink-mute));
+		--tab-line: color-mix(in srgb, var(--gp-edge) 45%, var(--gp-ink-mute));
 	}
 
 	/* ---- the composer ---------------------------------------------------------------- */

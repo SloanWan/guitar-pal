@@ -1,8 +1,7 @@
 /* =====================================================================================
-   ChordSearchSelect, skin="candy": the field reads as the chord it holds (bold, sized by
-   its host through --csel-size), a well only while it is being typed into, and the
-   matches in a popover under it. The v3 look (no skin) is untouched until its last
-   host migrates.
+   ChordSearchSelect: the field reads as the chord it holds (bold, sized by its host
+   through --csel-size), a well only while it is being typed into, and the matches in a
+   popover under it.
    ===================================================================================== */
 @layer components {
 	.csel {
@@ -225,12 +224,7 @@
 	.csel-nm .csel-cat {
 		margin-left: 0;
 	}
-	/* The tab-wise strip draws in the v3 ink names; here they are the Candy ramp. */
 	.csel-shape {
-		--ink: var(--gp-ink);
-		--ink-dim: var(--gp-ink-3);
-		--ink-faint: var(--gp-ink-3);
-		--line-strong: var(--gp-edge);
 		display: grid;
 		flex: none;
 		place-items: center;

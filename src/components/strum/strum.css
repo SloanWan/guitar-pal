@@ -358,8 +358,7 @@
 		width: 100%;
 	}
 
-	/* Chord diagrams: the shared SVG, sized by its box and drawn in the page's inks
-	   (it still paints the v3 greys until the chord pages migrate). */
+	/* Chord diagrams: the shared SVG, sized by its box and drawn in the page's inks. */
 	.st-dg {
 		display: block;
 		width: 92px;

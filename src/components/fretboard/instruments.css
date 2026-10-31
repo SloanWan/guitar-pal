@@ -1,0 +1,517 @@
+/* =====================================================================================
+   The instruments: the neck (Fretboard.tsx, `fb-*`) and the keyboard (PianoKeyboard.tsx,
+   `pk-*`), wherever they are drawn — the Fretboard page and the landing alike. Colours
+   come from the page's module (`--gp-m-*`), the neck's own tokens (`--gp-neck*`) and the
+   interval roles (`--gp-role-*`).
+   ===================================================================================== */
+
+.fp-thin-scroll {
+	scrollbar-width: thin; /* Firefox */
+	scrollbar-color: var(--gp-edge) transparent;
+}
+.fp-thin-scroll::-webkit-scrollbar {
+	height: 4px;
+	width: 4px;
+}
+.fp-thin-scroll::-webkit-scrollbar-track {
+	background: transparent;
+}
+.fp-thin-scroll::-webkit-scrollbar-thumb {
+	border-radius: 2px;
+	background: var(--gp-edge);
+}
+.fp-thin-scroll::-webkit-scrollbar-thumb:hover {
+	background: var(--gp-ink-mute);
+}
+
+/* ── The neck ─────────────────────────────────────────────────────────── */
+.fb-board {
+	fill: var(--gp-neck);
+}
+.fb-wire {
+	stroke: var(--gp-neck-fret);
+	stroke-width: 2px;
+}
+.fb-nut {
+	stroke: var(--gp-neck-nut);
+	stroke-width: 5px;
+}
+.fb-string {
+	stroke: var(--gp-neck-string);
+}
+.fb-inlay {
+	fill: var(--gp-neck-fret);
+}
+.fb-sname,
+.fb-fnum {
+	fill: var(--gp-ink-3);
+	font-family: var(--gp-f-body);
+	font-weight: 650;
+}
+
+/* The marks: every slot is always present, a FretMark lights one up. */
+.fb-mark {
+	transform-box: fill-box;
+	transform-origin: center;
+	transition:
+		opacity var(--gp-d-state) ease-out,
+		transform var(--gp-d-state) ease-out;
+}
+.fb-dot,
+.fb-ring,
+.fb-label {
+	transition:
+		fill var(--gp-d-state),
+		stroke var(--gp-d-state),
+		opacity var(--gp-d-state);
+}
+/* Dormant: invisible and shrunk, so lighting up is a fade rather than a jump. */
+.fb-mark[data-emphasis="none"] {
+	opacity: 0;
+	transform: scale(0.4);
+	pointer-events: none;
+}
+.fb-dot {
+	fill: var(--gp-role-x);
+	stroke: var(--gp-role-x);
+}
+.fb-ring {
+	fill: none;
+	opacity: 0;
+}
+.fb-label {
+	fill: var(--gp-on-role);
+	font-family: var(--gp-f-body);
+	font-weight: 700;
+}
+.fb-mark[data-emphasis="root"] .fb-dot {
+	fill: var(--gp-m-500);
+	stroke: var(--gp-m-500);
+}
+.fb-mark[data-emphasis="root"] .fb-label {
+	fill: var(--gp-m-on);
+}
+/* The root's hard shadow, the way a pressable carries one. */
+.fb-mark[data-emphasis="root"] .fb-ring {
+	opacity: 1;
+	fill: var(--gp-m-sh);
+	stroke: none;
+	r: 8px;
+	transform: translate(1.5px, 1.5px);
+}
+.fb-mark[data-emphasis="chordTone"] .fb-dot {
+	fill: var(--gp-role-x);
+	stroke: var(--gp-role-x);
+}
+/* Chord-tone roles: each member of the chord in its own fill. A chord tone without a
+   role (root unknown) keeps the plain fill above. */
+.fb-mark[data-tone="third"] .fb-dot {
+	fill: var(--gp-role-3);
+	stroke: var(--gp-role-3);
+}
+.fb-mark[data-tone="fifth"] .fb-dot {
+	fill: var(--gp-role-5);
+	stroke: var(--gp-role-5);
+}
+.fb-mark[data-tone="seventh"] .fb-dot {
+	fill: var(--gp-role-7);
+	stroke: var(--gp-role-7);
+}
+.fb-mark[data-tone="extension"] .fb-dot {
+	fill: var(--gp-role-x);
+	stroke: var(--gp-ink-3);
+}
+.fb-mark[data-emphasis="muted"] {
+	transform: scale(0.45);
+}
+.fb-mark[data-emphasis="muted"] .fb-dot {
+	fill: var(--gp-ink-mute);
+	stroke: var(--gp-ink-mute);
+}
+.fb-mark[data-emphasis="muted"] .fb-label {
+	opacity: 0;
+}
+/* A slot the current run will play: tinted with the module, so the line through a
+   position reads before a note sounds, and darker the lower the octave. */
+.fb-mark[data-run] .fb-dot {
+	stroke: var(--gp-m-500);
+}
+.fb-mark[data-run="0"] .fb-dot {
+	fill: color-mix(in oklab, var(--gp-m-500) 45%, var(--gp-card));
+}
+.fb-mark[data-run="1"] .fb-dot {
+	fill: color-mix(in oklab, var(--gp-m-500) 30%, var(--gp-card));
+}
+.fb-mark[data-run="2"] .fb-dot {
+	fill: color-mix(in oklab, var(--gp-m-500) 18%, var(--gp-card));
+}
+.fb-mark[data-run="3"] .fb-dot {
+	fill: color-mix(in oklab, var(--gp-m-500) 10%, var(--gp-card));
+}
+.fb-mark[data-run] .fb-label {
+	fill: var(--gp-ink);
+}
+
+/* Run the scale along one string: a small disc left of the string's name. */
+.fb-string-play {
+	cursor: pointer;
+}
+.fb-string-play:focus-visible {
+	outline: none;
+}
+.fb-string-play-bg {
+	fill: var(--gp-m-100);
+	stroke: var(--gp-m-300);
+	stroke-width: 0.75;
+	transition:
+		fill var(--gp-d-state),
+		stroke var(--gp-d-state);
+}
+.fb-string-play path,
+.fb-string-play rect {
+	fill: var(--gp-m-700);
+	transition: fill var(--gp-d-state);
+}
+.fb-string-play:hover .fb-string-play-bg,
+.fb-string-play:focus-visible .fb-string-play-bg,
+.fb-string-play[data-playing] .fb-string-play-bg {
+	fill: var(--gp-m-500);
+	stroke: var(--gp-m-500);
+}
+.fb-string-play:hover path,
+.fb-string-play:hover rect,
+.fb-string-play:focus-visible path,
+.fb-string-play:focus-visible rect,
+.fb-string-play[data-playing] path,
+.fb-string-play[data-playing] rect {
+	fill: var(--gp-m-on);
+}
+
+/* The hand position a run is played in: a frame, not a fill, so the marks inside it
+   keep their own colours. */
+.fb-position {
+	fill: none;
+	stroke: var(--gp-m-700);
+	stroke-width: 1.5;
+	stroke-dasharray: 4 3;
+	pointer-events: none;
+}
+
+/* The play and clear buttons above a highlighted position: bare icons, with a ground
+   only under the pointer. The browser draws its own focus ring around an SVG element as
+   a rounded halo, so that is turned off and the same hover ground stands in for it. */
+.fb-box-btn {
+	cursor: pointer;
+	outline: none;
+}
+.fb-box-btn > rect:first-child {
+	fill: transparent;
+	transition: fill var(--gp-d-state);
+}
+.fb-box-btn svg {
+	color: var(--gp-m-700);
+	pointer-events: none;
+}
+.fb-box-btn:hover > rect:first-child,
+.fb-box-btn:focus-visible > rect:first-child {
+	fill: var(--gp-m-100);
+}
+/* A width already at its narrowest or widest: still there, plainly spent, and inert. */
+.fb-box-btn[data-stuck] {
+	opacity: 0.3;
+	pointer-events: none;
+}
+
+/* A capo: the frets behind it sink into shade, the bar clamps the strings. */
+.fb-capo-shade {
+	fill: var(--gp-card);
+	opacity: 0.55;
+	pointer-events: none;
+}
+.fb-capo-bar {
+	fill: var(--gp-ink-fill);
+	stroke: none;
+	pointer-events: none;
+}
+/* A wider invisible handle, so the bar can be caught by a finger. */
+.fb-capo-grip {
+	fill: transparent;
+	cursor: grab;
+	touch-action: none;
+}
+.fb-capo-grip:active {
+	cursor: grabbing;
+}
+/* Hovering the capo draws a dashed outline around the span it can be dragged through:
+   still, quiet, and the usual sign that a thing is loose. */
+.fb-capo-ripple {
+	fill: none;
+	stroke: none;
+	stroke-width: 1;
+	stroke-dasharray: 3 3;
+	pointer-events: none;
+	transition: stroke var(--gp-d-state);
+}
+.fb-capo:hover .fb-capo-ripple,
+.fb-capo:focus-visible .fb-capo-ripple {
+	stroke: var(--gp-m-500);
+}
+.fb-capo:hover .fb-capo-bar,
+.fb-capo:focus-visible .fb-capo-bar {
+	fill: var(--gp-ink);
+}
+.fb-capo:focus-visible {
+	outline: none;
+}
+.fb-capo:focus-visible .fb-capo-bar {
+	fill: var(--gp-m-500);
+}
+
+/* The touch layer over the marks: an invisible hit area per slot, a hover ring that
+   lights the hovered slot, its unisons and, fainter, its octaves, and the ring a pluck
+   sends out. Marks stay pointer-inert; this layer takes the hits. The rings are toggled
+   by `data-hover` straight on the DOM, no re-render. */
+.fb-hit {
+	fill: transparent;
+	pointer-events: all;
+}
+[data-pressable] .fb-hit {
+	cursor: pointer;
+}
+.fb-hover,
+.fb-pop {
+	fill: none;
+	stroke: var(--gp-m-500);
+	opacity: 0;
+	pointer-events: none;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+.fb-hover {
+	transition: opacity var(--gp-d-state) ease-out;
+}
+.fb-slot[data-hover="self"] .fb-hover {
+	opacity: 1;
+	stroke-width: 2;
+}
+.fb-slot[data-hover="unison"] .fb-hover {
+	opacity: 0.8;
+	stroke-width: 1.5;
+}
+.fb-slot[data-hover="octave"] .fb-hover {
+	opacity: 0.35;
+	stroke-width: 1.25;
+}
+.fb-pop {
+	stroke-width: 1.25;
+}
+@media (prefers-reduced-motion: reduce) {
+	.fb-mark,
+	.fb-dot,
+	.fb-ring,
+	.fb-label,
+	.fb-hover {
+		transition: none;
+	}
+}
+
+/* ── The keyboard ─────────────────────────────────────────────────────── */
+/* White keys in a row, black keys over their gaps, the selected pitch class in the
+   module's colour on every key that sounds it. */
+.pk-key {
+	position: absolute;
+	top: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 3px;
+	padding-bottom: 4px;
+	border: 0;
+	font-family: var(--gp-f-body);
+	cursor: pointer;
+	transition:
+		background-color var(--gp-d-state),
+		color var(--gp-d-state),
+		opacity var(--gp-d-state);
+}
+.pk-white {
+	z-index: 0;
+	border-radius: 0 0 6px 6px;
+	background: var(--gp-face);
+	box-shadow: inset 0 0 0 1px var(--gp-line);
+	color: var(--gp-ink-3);
+}
+.pk-black {
+	z-index: 1;
+	border-radius: 0 0 4px 4px;
+	background: var(--gp-key-black);
+	box-shadow: 1.5px 1.5px 0 0 var(--gp-key-black-sh);
+	color: var(--gp-on-key-black);
+}
+.pk-white:hover {
+	background: var(--gp-m-100);
+	color: var(--gp-m-700);
+}
+.pk-black:hover {
+	background: color-mix(in oklab, var(--gp-key-black), var(--gp-ink-3) 30%);
+}
+.pk-key:active {
+	transform: translateY(1px);
+}
+.pk-key[data-selected] {
+	background: var(--gp-m-500);
+	box-shadow: none;
+	color: var(--gp-m-on);
+	font-weight: 700;
+}
+/* Outside the guitar's range, or greyed by the caller (a chord outside the key): still
+   pressable, but faded, and selected only in outline. */
+.pk-key[data-outside],
+.pk-key[data-dimmed] {
+	opacity: 0.45;
+}
+.pk-key[data-dimmed][data-selected],
+.pk-key[data-outside][data-selected] {
+	background: var(--gp-face);
+	box-shadow: inset 0 0 0 2px var(--gp-m-500);
+	color: var(--gp-m-700);
+	opacity: 0.8;
+}
+.pk-black[data-dimmed][data-selected],
+.pk-black[data-outside][data-selected] {
+	background: var(--gp-key-black);
+	color: var(--gp-on-key-black);
+}
+/* A key in the scale or chord: a dot on a key that stays a key. The dots wait until the
+   pointer is over their octave, so a set is uncovered a register at a time instead of
+   covering the whole board; exact pitches, being a handful of keys, do not wait. */
+.pk-dot {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--gp-m-500);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--gp-d-state) ease-out;
+}
+.pk-black .pk-dot {
+	background: var(--gp-m-300);
+}
+.pk-key[data-scale] .pk-dot,
+.pk-key[data-exact] .pk-dot {
+	opacity: 1;
+}
+/* A scale key's degree waits for its octave the same way its dot does; the tonic is
+   filled and says "1" whatever the pointer is doing. */
+.pk-key[data-tone] .pk-label {
+	opacity: 0;
+	transition: opacity var(--gp-d-state) ease-out;
+}
+.pk-key[data-scale] .pk-label,
+.pk-key[data-exact] .pk-label {
+	opacity: 1;
+}
+.pk-white[data-tone] {
+	color: var(--gp-m-700);
+}
+/* Following the fretboard: the key sounding the hovered slot, and its octaves. */
+.pk-key[data-hover="self"] {
+	box-shadow: inset 0 0 0 2px var(--gp-m-500);
+	color: var(--gp-m-700);
+}
+.pk-key[data-hover="octave"] {
+	box-shadow: inset 0 0 0 1px var(--gp-m-500);
+}
+.pk-key[data-selected][data-hover] {
+	color: var(--gp-m-on);
+}
+/* A key that just sounded dips and flashes, the way a played key does. */
+.pk-key[data-struck] {
+	animation: pk-strike 300ms ease-out;
+}
+.pk-key[data-selected][data-struck] {
+	animation-name: pk-strike-selected;
+}
+@keyframes pk-strike {
+	0% {
+		transform: translateY(2px);
+		background-color: var(--gp-m-500);
+		color: var(--gp-m-on);
+	}
+	30% {
+		transform: translateY(2px);
+	}
+	100% {
+		transform: translateY(0);
+	}
+}
+@keyframes pk-strike-selected {
+	0% {
+		transform: translateY(2px);
+		background-color: var(--gp-m-700);
+	}
+	30% {
+		transform: translateY(2px);
+	}
+	100% {
+		transform: translateY(0);
+	}
+}
+.pk-label {
+	font-family: var(--gp-f-body);
+	font-size: 10px;
+	font-weight: 650;
+	line-height: 1;
+	pointer-events: none;
+}
+.pk-band {
+	position: absolute;
+	height: 0;
+	border-top: 1px solid var(--gp-m-500);
+	margin-top: 7px;
+}
+.pk-band::before,
+.pk-band::after {
+	content: "";
+	position: absolute;
+	top: -4px;
+	width: 1px;
+	height: 7px;
+	background: var(--gp-m-500);
+}
+.pk-band::before {
+	left: 0;
+}
+.pk-band::after {
+	right: 0;
+}
+/* One line tall even with an accidental in it (MusicalText draws ♭ as an inline block),
+   so a tuned-down range is not cut off at the keyboard's foot. */
+.pk-band-label,
+.pk-band-label * {
+	line-height: 1;
+}
+.pk-band-label {
+	position: absolute;
+	left: 50%;
+	top: 1px;
+	transform: translateX(-50%);
+	padding: 0 4px;
+	background: var(--gp-card);
+	color: var(--gp-ink-3);
+	font-family: var(--gp-f-body);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+	.pk-key {
+		transition: none;
+		animation: none;
+	}
+	.pk-dot {
+		transition: none;
+	}
+}

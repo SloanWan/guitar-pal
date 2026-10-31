@@ -13,6 +13,9 @@
 // everywhere it is unaltered; a 9th is required where it names the chord.
 // The table is the spec; change it here, not in the code below.
 
+// Relative, not "@/": scripts/audit-chord-voicings.ts imports this file directly.
+import { rootPitchClass } from "./chordVoicingToMidi";
+
 export interface Formula {
   readonly allowed: readonly number[];
   readonly must: readonly (readonly number[])[];
@@ -180,6 +183,33 @@ export function degreeOf(semitones: number, formula: Formula, baseSuffix: string
   }
 }
 
+/** What each degree is called, for a line under the note: "♭3" → "minor third". */
+const DEGREE_NAMES: Readonly<Record<string, string>> = {
+  "1": "root",
+  "♭9": "flat ninth",
+  "9": "ninth",
+  "2": "second",
+  "♯9": "sharp ninth",
+  "♭3": "minor third",
+  "3": "major third",
+  "11": "eleventh",
+  "4": "fourth",
+  "♯11": "sharp eleventh",
+  "♭5": "flat fifth",
+  "5": "fifth",
+  "♭13": "flat thirteenth",
+  "♯5": "sharp fifth",
+  "♭♭7": "diminished seventh",
+  "13": "thirteenth",
+  "6": "sixth",
+  "♭7": "minor seventh",
+  "7": "major seventh",
+};
+
+export function degreeName(degree: string): string {
+  return DEGREE_NAMES[degree] ?? degree;
+}
+
 // ── Spelling ─────────────────────────────────────────────────────────────────
 // Decided under #234: spell by interval — each degree on the letter its `steps`
 // say, with whatever accidental lands it on the pitch — then fold the four
@@ -194,22 +224,13 @@ const SHARP_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A
 const FLAT_NAMES = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"] as const;
 const FOLD: Readonly<Record<string, string>> = { "E♯": "F", "B♯": "C", "C♭": "B", "F♭": "E" };
 
-/** Pitch class of a root as the tables spell it (C, C#, Db, …); undefined for a root that is not a note. */
-export function rootPc(root: string): number | undefined {
-  const letter = LETTER_PC[root[0]];
-  if (letter === undefined || root.length > 2) return undefined;
-  const accidental = root[1] === "#" ? 1 : root[1] === "b" ? -1 : root.length === 1 ? 0 : undefined;
-  if (accidental === undefined) return undefined;
-  return (letter + accidental + 12) % 12;
-}
-
 /** A chord name's accidentals as glyphs: "Bb" → "B♭", "C#" → "C♯". For notes, not prose. */
 export function withGlyphs(name: string): string {
   return name.replace(/b/g, "♭").replace(/#/g, "♯");
 }
 
 export function spellDegree(root: string, semitones: number, steps: number): string {
-  const pc = rootPc(root);
+  const pc = rootPitchClass(root);
   const rootLetter = LETTERS.indexOf(root[0] as (typeof LETTERS)[number]);
   if (pc === undefined || rootLetter === -1) return "?";
   const targetPc = (pc + semitones) % 12;
@@ -231,7 +252,7 @@ export interface ChordTone {
 /** Every tone the chord may sound, root first and stacked upward the way the name reads (1 3 5 ♭7 9 …). */
 export function chordTones(root: string, suffix: string): ChordTone[] | null {
   const spec = chordSpec(suffix);
-  if (!spec || rootPc(root) === undefined) return null;
+  if (!spec || rootPitchClass(root) === undefined) return null;
   const { formula, baseSuffix } = spec;
   // Stacked in thirds: the 9th is written a letter above the root but read
   // after the 7th, so an extension sorts a full octave of letters later.
@@ -253,7 +274,7 @@ export function chordTones(root: string, suffix: string): ChordTone[] | null {
  */
 export function omittedTones(root: string, suffix: string, pitches: readonly number[]): string[] {
   const tones = chordTones(root, suffix);
-  const pc = rootPc(root);
+  const pc = rootPitchClass(root);
   if (!tones || pc === undefined) return [];
   const sounded = new Set(pitches.map((p) => (((p - pc) % 12) + 12) % 12));
   return tones.filter((t) => !sounded.has(t.semitones)).map((t) => (t.degree === "1" ? "root" : t.degree));

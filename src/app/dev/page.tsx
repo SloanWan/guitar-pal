@@ -26,6 +26,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "Preset loader and A/B audio comparison for pitch-quality audits.",
 	},
 	{
+		href: "/dev/bend-lab",
+		label: "bend-lab",
+		description: "Fingerpick bend + vibrato lab — detune curves, shapes, onset, A/B against a plain note.",
+	},
+	{
 		href: "/dev/chord-diagram",
 		label: "chord-diagram",
 		description: "Chord diagram SVG rendering showcase across dot styles and card states.",
@@ -39,6 +44,16 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		href: "/dev/design-system",
 		label: "design-system",
 		description: "v3 DAW-aesthetic component audit — faders, rockers, LEDs, BPM readouts.",
+	},
+	{
+		href: "/dev/fretboard-parts",
+		label: "fretboard-parts",
+		description: "The fretboard page's own pieces — chord search field, tones, step formula, strip bars, circle of fifths — in every state.",
+	},
+	{
+		href: "/dev/primitives",
+		label: "primitives",
+		description: "Candy primitives — every button, chip, segmented, switch and stepper variant and state.",
 	},
 	{
 		href: "/dev/fretboard-lab",
@@ -66,6 +81,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "Fingerpick roll technique lab — stagger, gap, and anchor modes.",
 	},
 	{
+		href: "/dev/slap-lab",
+		label: "slap-lab",
+		description: "How a slap sounds — the strike, the clack on the frets and the body thud as faders over looping bars; copy into DEFAULT_SLAP_PARAMS.",
+	},
+	{
 		href: "/dev/slide-lab",
 		label: "slide-lab",
 		description: "Fingerpick slide technique lab — duration scaling, anchors, legato.",
@@ -79,6 +99,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		href: "/dev/strum-sound-lab",
 		label: "strum-sound-lab",
 		description: "Strum sample × decay-envelope lab — presets, let ring, hard cut, AHDSR.",
+	},
+	{
+		href: "/dev/technique-gallery",
+		label: "technique-gallery",
+		description: "Every technique in the registry: one bar each, drawn by the converter and playable through the scheduler.",
 	},
 	{
 		href: "/dev/tab-notation",

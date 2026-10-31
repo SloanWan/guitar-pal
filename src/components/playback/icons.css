@@ -1,0 +1,174 @@
+/*
+ * Hover animations for the title row's icon buttons (Strum's `.st-icon`, the
+ * player's `.pb-icon`, which Tab uses), opted into with `data-anim`:
+ * the icon fills with colour and hops, plus a touch of its own —
+ *   edit   the pencil tilts as if about to write
+ *   share  the three nodes pop, left one first
+ *   delete the can wiggles and its lid lifts
+ *   close  the cross turns a quarter (the ⌘K chord palette)
+ * Runs on :hover and :focus-visible, never on a disabled button. Reduced-motion
+ * users get only the fill. Layers on top of the base icon rules: every rule
+ * here outranks those by specificity, so import order does not matter.
+ */
+@layer components {
+	/* ---- Busy (a share link being made) ---------------------------------- */
+
+	/* Disabled so it is not pressed twice, but tinted, not greyed: it is working, not off. */
+	:is(.st-icon, .pb-icon)[aria-busy="true"]:disabled {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+		cursor: progress;
+	}
+
+	/* ---- Fill (everyone) ------------------------------------------------- */
+
+	/* Lucide sets fill="none" on the svg; filling the parts at zero opacity keeps
+	   rest identical. Lines and open strokes have no area, so only shapes fill. */
+	:is(.st-icon, .pb-icon)[data-anim] svg :is(path, circle) {
+		fill: currentColor;
+		fill-opacity: 0;
+		transition: fill-opacity var(--gp-d-state) linear;
+	}
+	:is(.st-icon, .pb-icon)[data-anim]:not(:disabled):is(:hover, :focus-visible) svg :is(path, circle) {
+		fill-opacity: 0.28;
+	}
+
+	:is(.st-icon, .pb-icon):is([data-anim="edit"], [data-anim="share"]):not(:disabled):is(:hover, :focus-visible) {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	:is(.st-icon, .pb-icon):is([data-anim="edit"], [data-anim="share"]):not(:disabled):is(:hover, :focus-visible)
+		svg
+		:is(path, circle) {
+		fill: var(--gp-m-500);
+	}
+
+	/* Stays filled while its confirm popover is open. */
+	:is(.st-icon, .pb-icon)[data-anim="delete"]:not(:disabled):is(:hover, :focus-visible, [aria-expanded="true"]) {
+		background: color-mix(in srgb, var(--gp-bad) 12%, transparent);
+		color: var(--gp-bad);
+	}
+	:is(.st-icon, .pb-icon)[data-anim="delete"]:not(:disabled):is(:hover, :focus-visible, [aria-expanded="true"]) svg path {
+		fill: var(--gp-bad);
+		fill-opacity: 0.22;
+	}
+
+	/* ---- Motion ---------------------------------------------------------- */
+
+	@media (prefers-reduced-motion: no-preference) {
+		/* The hop: up, then land with a small overshoot. `translate` is its own
+		   property, so a tilt or wiggle (`rotate`) composes with it. */
+		:is(.st-icon, .pb-icon)[data-anim]:not(:disabled):is(:hover, :focus-visible) svg {
+			animation: st-icon-hop 400ms both;
+		}
+
+		/* Edit: tilt toward the tip and hold it while hovered. */
+		:is(.st-icon, .pb-icon)[data-anim="edit"] svg {
+			transform-origin: 15% 85%;
+			transition: rotate 220ms var(--gp-ease-state);
+		}
+		:is(.st-icon, .pb-icon)[data-anim="edit"]:not(:disabled):is(:hover, :focus-visible) svg {
+			rotate: -14deg;
+			transition: rotate 360ms var(--gp-spring-pop);
+		}
+
+		/* Share: each node pops; the left one first, then the two it sends to. */
+		:is(.st-icon, .pb-icon)[data-anim="share"] svg circle {
+			transform-box: fill-box;
+			transform-origin: center;
+		}
+		:is(.st-icon, .pb-icon)[data-anim="share"]:not(:disabled):is(:hover, :focus-visible) svg circle {
+			animation: st-icon-node-pop 320ms 90ms both;
+		}
+		:is(.st-icon, .pb-icon)[data-anim="share"]:not(:disabled):is(:hover, :focus-visible) svg circle:is(:nth-of-type(1), :nth-of-type(3)) {
+			animation-delay: 170ms;
+		}
+
+		/* Close: the cross turns a quarter and holds it while hovered. */
+		:is(.st-icon, .pb-icon)[data-anim="close"] svg {
+			transition: rotate 220ms var(--gp-ease-state);
+		}
+		:is(.st-icon, .pb-icon)[data-anim="close"]:not(:disabled):is(:hover, :focus-visible) svg {
+			rotate: 90deg;
+			transition: rotate 380ms var(--gp-spring-pop);
+		}
+
+		/* Delete: the can wiggles on its base during the hop… */
+		:is(.st-icon, .pb-icon)[data-anim="delete"] svg {
+			transform-origin: 50% 100%;
+		}
+		:is(.st-icon, .pb-icon)[data-anim="delete"]:not(:disabled):is(:hover, :focus-visible) svg {
+			animation:
+				st-icon-hop 400ms both,
+				st-icon-wiggle 420ms ease-out both;
+		}
+		/* …and the lid (the 4th and 5th paths: rim and handle) lifts on a hinge at
+		   the rim's left end (3, 6 in the 24-unit view box), held while hovered
+		   or while the confirm is open. */
+		:is(.st-icon, .pb-icon)[data-anim="delete"] svg path:is(:nth-of-type(4), :nth-of-type(5)) {
+			transform-box: view-box;
+			transform-origin: 3px 6px;
+			transition:
+				translate 200ms var(--gp-ease-state),
+				rotate 200ms var(--gp-ease-state),
+				fill-opacity var(--gp-d-state) linear;
+		}
+		:is(.st-icon, .pb-icon)[data-anim="delete"]:not(:disabled):is(:hover, :focus-visible, [aria-expanded="true"])
+			svg
+			path:is(:nth-of-type(4), :nth-of-type(5)) {
+			translate: 0 -1.5px;
+			rotate: -12deg;
+			transition:
+				translate 380ms var(--gp-spring-pop),
+				rotate 380ms var(--gp-spring-pop),
+				fill-opacity var(--gp-d-state) linear;
+		}
+	}
+
+	@keyframes st-icon-hop {
+		0% {
+			translate: 0 0;
+			animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
+		}
+		40% {
+			translate: 0 -4px;
+			animation-timing-function: cubic-bezier(0.3, 1.45, 0.45, 1);
+		}
+		100% {
+			translate: 0 0;
+		}
+	}
+
+	@keyframes st-icon-node-pop {
+		0% {
+			scale: 1;
+		}
+		45% {
+			scale: 1.35;
+		}
+		75% {
+			scale: 0.92;
+		}
+		100% {
+			scale: 1;
+		}
+	}
+
+	@keyframes st-icon-wiggle {
+		0% {
+			rotate: 0deg;
+		}
+		25% {
+			rotate: -9deg;
+		}
+		50% {
+			rotate: 7deg;
+		}
+		75% {
+			rotate: -3deg;
+		}
+		100% {
+			rotate: 0deg;
+		}
+	}
+}

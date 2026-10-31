@@ -13,7 +13,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
-import { isBrowsableSuffix, sortRoots } from "@/lib/chordSuffixes";
+import { isBrowsableSuffix } from "@/lib/chordSuffixes";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 
@@ -31,7 +31,7 @@ const VOICING_FIELDS = `
 
 // Without an ORDER BY an embedded array comes back in physical order, and an
 // UPDATE rewrites a row at the end of the heap — so a Standard the migration
-// touched (scripts/fix-default-voicing-bass.ts) would land last. "Standard"
+// touched (#226, the default-voicing bass fix) would land last. "Standard"
 // sorts before "Variation n", which keeps the default shape the first card.
 const VOICING_ORDER = { referencedTable: "chord_voicings" } as const;
 
@@ -47,80 +47,81 @@ function publicClient() {
 	);
 }
 
+// Each read throws on a Supabase error rather than returning an empty answer:
+// `unstable_cache` keeps whatever comes back, so an outage returned as `null`
+// or `[]` would be served as "no such chord" for the whole revalidate window.
+function rows<T>({ data, error }: { data: unknown; error: { message: string } | null }): T {
+	if (error) throw new Error(error.message);
+	return data as T;
+}
+
 export const getChord = unstable_cache(
-	async (root: string, suffix: string): Promise<ChordWithVoicings | null> => {
-		const { data } = await publicClient()
-			.from("chords")
-			.select(VOICING_FIELDS)
-			.order("label", VOICING_ORDER)
-			.eq("root", root)
-			.eq("suffix", suffix)
-			.single();
-		return data as ChordWithVoicings | null;
-	},
+	async (root: string, suffix: string): Promise<ChordWithVoicings | null> =>
+		rows<ChordWithVoicings | null>(
+			await publicClient()
+				.from("chords")
+				.select(VOICING_FIELDS)
+				.order("label", VOICING_ORDER)
+				.eq("root", root)
+				.eq("suffix", suffix)
+				// A chord the library does not carry is an answer (null), not an error.
+				.maybeSingle(),
+		),
 	["chords:getChord"],
 	CACHE_OPTS,
 );
 
 export const getChordsByRoot = unstable_cache(
-	async (root: string): Promise<ChordWithVoicings[]> => {
-		const { data } = await publicClient()
-			.from("chords")
-			.select(VOICING_FIELDS)
-			.order("label", VOICING_ORDER)
-			.eq("root", root);
-		return (data as ChordWithVoicings[] | null) ?? [];
-	},
+	async (root: string): Promise<ChordWithVoicings[]> =>
+		rows<ChordWithVoicings[] | null>(
+			await publicClient()
+				.from("chords")
+				.select(VOICING_FIELDS)
+				.order("label", VOICING_ORDER)
+				.eq("root", root),
+		) ?? [],
 	["chords:getChordsByRoot"],
 	CACHE_OPTS,
 );
 
 export const getAllChordsWithVoicings = unstable_cache(
-	async (): Promise<ChordWithVoicings[]> => {
-		const { data } = await publicClient()
-			.from("chords")
-			.select(VOICING_FIELDS)
-			.order("label", VOICING_ORDER)
-			.order("root")
-			.order("suffix");
-		return (data as ChordWithVoicings[] | null) ?? [];
-	},
+	async (): Promise<ChordWithVoicings[]> =>
+		rows<ChordWithVoicings[] | null>(
+			await publicClient()
+				.from("chords")
+				.select(VOICING_FIELDS)
+				.order("label", VOICING_ORDER)
+				.order("root")
+				.order("suffix"),
+		) ?? [],
 	["chords:getAllChordsWithVoicings"],
 	CACHE_OPTS,
 );
 
-// Sorted, de-duplicated root list for the `/chords` index selector.
-export const getChordRoots = unstable_cache(
-	async (): Promise<string[]> => {
-		const { data } = await publicClient().from("chords").select("root");
-		return sortRoots([...new Set((data ?? []).map((c) => c.root as string))]);
-	},
-	["chords:getChordRoots"],
+/** One quality in every key, for the hub's "By quality" view. */
+export const getChordsBySuffix = unstable_cache(
+	async (suffix: string): Promise<ChordWithVoicings[]> =>
+		rows<ChordWithVoicings[] | null>(
+			await publicClient()
+				.from("chords")
+				.select(VOICING_FIELDS)
+				.order("label", VOICING_ORDER)
+				.eq("suffix", suffix),
+		) ?? [],
+	["chords:getChordsBySuffix"],
 	CACHE_OPTS,
 );
 
-// Browsable (root, suffix) pairs for the search palette — cached so the
-// `/chords` layout no longer runs a per-request Supabase query (which, via
-// cookies, would force the whole `/chords/*` subtree to render dynamically).
+// Browsable (root, suffix) pairs for the search palette.
 export const getChordIndex = unstable_cache(
 	async (): Promise<ChordIndexEntry[]> => {
-		const { data } = await publicClient().from("chords").select("root, suffix");
-		const rows = (data ?? []) as { root: string; suffix: string }[];
-		return rows
+		const data = rows<{ root: string; suffix: string }[] | null>(
+			await publicClient().from("chords").select("root, suffix"),
+		);
+		return (data ?? [])
 			.filter((c) => isBrowsableSuffix(c.suffix))
 			.map((c) => ({ root: c.root, suffix: c.suffix }));
 	},
 	["chords:getChordIndex"],
 	CACHE_OPTS,
 );
-
-// Resolves many (root, suffix) pairs in one server round-trip. Deliberately NOT wrapped
-// in unstable_cache itself: it composes the already-cached getChord above, so each chord
-// reuses its existing cache entry and an arbitrary pair list never mints a new key.
-// Misses are dropped — the caller renders a "not found" card from its own token list.
-export async function getChordsBatch(
-	pairs: readonly { root: string; suffix: string }[],
-): Promise<ChordWithVoicings[]> {
-	const chords = await Promise.all(pairs.map(({ root, suffix }) => getChord(root, suffix)));
-	return chords.filter((c): c is ChordWithVoicings => c !== null);
-}

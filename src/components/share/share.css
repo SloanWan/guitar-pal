@@ -1,0 +1,50 @@
+/* A shared snapshot's badge, Import and note (`SharedSnapshot.tsx`), on Strum and Tab. */
+@layer components {
+	.sh-badge {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 5px;
+		height: 22px;
+		margin-right: 8px;
+		padding: 0 8px;
+		border-radius: 99px;
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+		font-size: 11.5px;
+		font-weight: 700;
+	}
+	.sh-badge svg {
+		width: 13px;
+		height: 13px;
+	}
+	.sh-import {
+		flex: none;
+	}
+	.sh-note {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		column-gap: 10px;
+		margin: 0;
+		color: var(--gp-ink-2);
+		font-size: 13.5px;
+		line-height: 1.45;
+	}
+	.sh-note a {
+		color: var(--gp-m-700);
+		font-weight: 650;
+		text-underline-offset: 3px;
+	}
+	.sh-note a:hover {
+		text-decoration: underline;
+	}
+	@container gp-page (max-width: 719px) {
+		.sh-wide {
+			display: none;
+		}
+		.sh-note {
+			font-size: 13px;
+		}
+	}
+}

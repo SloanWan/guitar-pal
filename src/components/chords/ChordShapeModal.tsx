@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Play, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import ChordShapeFields from "@/components/chords/ChordShapeFields";
 import {
 	chordShapeToVoicing,
@@ -55,6 +57,10 @@ interface Props {
 	 * same thing.
 	 */
 	matchingBarCount: number;
+	/** Plays the shape as drawn; without it there is no Hear button. */
+	onHear?: (voicing: ChordVoicing) => void;
+	/** The module the dialog is coloured by: it is portaled, out of the page's `data-m`. */
+	module?: "strum" | "tab" | "chords";
 }
 
 export default function ChordShapeModal({
@@ -65,6 +71,8 @@ export default function ChordShapeModal({
 	onClose,
 	onApply,
 	matchingBarCount,
+	onHear,
+	module,
 }: Props) {
 	const [shape, setShape] = useState<ChordShape>(() => emptyChordShape());
 	const [name, setName] = useState("");
@@ -133,96 +141,87 @@ export default function ChordShapeModal({
 	return (
 		<Dialog open={open} onOpenChange={(next) => (next ? undefined : requestClose())}>
 			<DialogContent
+				data-m={module}
 				showCloseButton={false}
-				className="w-[calc(100%-2rem)] max-w-lg gap-4 border-line-strong p-4"
+				className="flex max-h-[88dvh] flex-col gap-0 p-0 sm:max-w-[440px]"
 				onEscapeKeyDown={(e) => {
 					e.preventDefault();
 					requestClose();
 				}}
 			>
-				{/* min-h and a control-height close button so swapping in the discard
-				    question cannot move the dialog under the player's cursor. The title
-				    wraps rather than pushing the row taller. */}
-				<DialogHeader className="min-h-(--h-control) flex-row items-center justify-between gap-2 space-y-0">
-					<DialogTitle className="min-w-0 break-words text-base leading-tight">
-						{label} — my shape
-					</DialogTitle>
-					{discardConfirm ? (
-						<div className="flex shrink-0 items-center gap-2">
-							<span className="font-mono text-[11px] tracking-[0.04em] text-ink-dim">
-								Discard?
-							</span>
-							<button
-								type="button"
-								onClick={onClose}
-								className="flex h-(--h-control) items-center border border-destructive px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-destructive transition-colors hover:bg-destructive hover:text-on-denim"
-							>
-								Discard
-							</button>
-							<button
-								type="button"
-								onClick={() => setDiscardConfirm(false)}
-								className="flex h-(--h-control) items-center border border-line-strong px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors hover:border-denim hover:text-denim-accent"
-							>
-								Keep editing
-							</button>
-						</div>
-					) : (
-						<button
-							type="button"
-							onClick={requestClose}
-							aria-label="Close"
-							className="flex h-(--h-control) shrink-0 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors hover:text-denim-accent"
-						>
-							Close
-						</button>
-					)}
-				</DialogHeader>
+				{/* The close button and the discard question share one slot beside the title,
+				    and nothing else sits in that row, so swapping them cannot move the
+				    dialog under the player's cursor. */}
+				<div className="flex min-h-16 items-start gap-3 px-6 pt-5">
+					<div className="min-w-0 flex-1">
+						<span className="text-[12px] font-semibold text-gp-ink-3">{naming ? "A new chord" : "My own shape"}</span>
+						<DialogTitle className="mt-0.5 text-[19px] leading-tight font-bold break-words">{label}</DialogTitle>
+						<DialogDescription className="sr-only">Draw the shape; it is kept with your shapes and used here.</DialogDescription>
+					</div>
+					<span className="flex h-8 shrink-0 items-center gap-1.5">
+						{discardConfirm ? (
+							<>
+								<span className="text-[12px] font-semibold text-gp-ink-3">Discard changes?</span>
+								<Button variant="danger" size="xs" onClick={onClose}>
+									Discard
+								</Button>
+								<Button variant="secondary" size="xs" onClick={() => setDiscardConfirm(false)}>
+									Keep
+								</Button>
+							</>
+						) : (
+							<Button variant="icon" size="xs" aria-label="Close" onClick={requestClose}>
+								<X aria-hidden />
+							</Button>
+						)}
+					</span>
+				</div>
 
 				{/* The chord-name field appears only for a chord that has none yet: a
 				    named chord's identity is not editable here, since renaming it would
 				    move every bar pinned to it. */}
-				<ChordShapeFields
-					shape={shape}
-					onShapeChange={setShape}
-					name={name}
-					onNameChange={setName}
-					chordName={naming ? chordName : undefined}
-					onChordNameChange={naming ? setChordName : undefined}
-				/>
+				<div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pt-3.5 pb-5">
+					<ChordShapeFields
+						shape={shape}
+						onShapeChange={setShape}
+						name={name}
+						onNameChange={setName}
+						chordName={naming ? chordName : undefined}
+						onChordNameChange={naming ? setChordName : undefined}
+					/>
+				</div>
 
-				{/* The two scopes only. Leaving is the close control and Escape, both
-				    of which go through the same discard guard — a third button
-				    repeating that just widened the row. */}
-				<div className="flex flex-wrap gap-2">
+				{/* Leaving is Cancel, the close button and Escape, all through the same
+				    discard guard; applying is one button per scope the change can reach. */}
+				<div className="flex flex-wrap items-center gap-2.5 px-6 pt-3.5 pb-4.5 shadow-[0_-1px_0_var(--gp-line)]">
+					<Button variant="ghost" size="sm" onClick={requestClose}>
+						Cancel
+					</Button>
+					<span className="flex-1" />
+					{onHear && (
+						<Button
+							variant="secondary"
+							size="sm"
+							disabled={!validateChordShape(shape).ok}
+							onClick={() => onHear(chordShapeToVoicing(shape, "preview", null))}
+						>
+							<Play aria-hidden />
+							Hear it
+						</Button>
+					)}
 					{matchingBarCount > 1 ? (
 						<>
-							<button
-								type="button"
-								onClick={() => apply("chord")}
-								disabled={!valid}
-								className="flex h-(--h-control) items-center border border-denim bg-denim px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-on-denim transition-colors hover:bg-denim-dark disabled:cursor-not-allowed disabled:opacity-30"
-							>
-								Apply to whole pattern
-							</button>
-							<button
-								type="button"
-								onClick={() => apply("bar")}
-								disabled={!valid}
-								className="flex h-(--h-control) items-center border border-denim px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent transition-colors hover:bg-denim hover:text-on-denim disabled:cursor-not-allowed disabled:opacity-30"
-							>
+							<Button variant="secondary" size="sm" disabled={!valid} onClick={() => apply("bar")}>
 								This bar only
-							</button>
+							</Button>
+							<Button size="sm" disabled={!valid} onClick={() => apply("chord")}>
+								Whole pattern
+							</Button>
 						</>
 					) : (
-						<button
-							type="button"
-							onClick={() => apply("bar")}
-							disabled={!valid}
-							className="flex h-(--h-control) items-center border border-denim bg-denim px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-on-denim transition-colors hover:bg-denim-dark disabled:cursor-not-allowed disabled:opacity-30"
-						>
+						<Button size="sm" disabled={!valid} onClick={() => apply("bar")}>
 							Apply
-						</button>
+						</Button>
 					)}
 				</div>
 			</DialogContent>

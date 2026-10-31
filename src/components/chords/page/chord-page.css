@@ -1,0 +1,694 @@
+/* =====================================================================================
+   The chord page (#363 step 10): one chord on the stage, the chord library beside it
+   from 960px and in a sheet below that. Widths are the page's own (a container query).
+   ===================================================================================== */
+@layer components {
+	.ch-page {
+		container: chord / inline-size;
+		height: 100%;
+		background: var(--gp-page);
+		color: var(--gp-ink);
+		font-family: var(--gp-f-body);
+	}
+	.ch-shell {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 304px;
+		grid-template-rows: minmax(0, 1fr);
+		height: 100%;
+		transition: grid-template-columns var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.ch-shell[data-lib="closed"] {
+		grid-template-columns: minmax(0, 1fr) 0px;
+	}
+	.ch-stage-wrap {
+		position: relative;
+		display: flex;
+		min-width: 0;
+		min-height: 0;
+	}
+	.ch-stage {
+		flex: 1 1 0;
+		min-height: 0;
+		overflow-y: auto;
+		padding: 16px 36px 36px;
+	}
+	.ch-stage-in {
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+		max-width: 920px;
+		margin: 0 auto;
+	}
+	.ch-lab {
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 650;
+	}
+	.ch-meta {
+		color: var(--gp-ink-3);
+		font-size: 13px;
+		font-weight: 550;
+	}
+	.ch-icon {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		cursor: pointer;
+		transition:
+			color var(--gp-d-state) linear,
+			background-color var(--gp-d-state) linear;
+	}
+	.ch-icon svg {
+		width: 19px;
+		height: 19px;
+	}
+	.ch-icon:hover {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+	}
+	.ch-lib-fab {
+		position: absolute;
+		top: 14px;
+		right: 14px;
+		z-index: 6;
+	}
+
+	/* ── Title ────────────────────────────────────────────────────────────── */
+	.ch-crumbs {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		margin-bottom: -8px;
+	}
+	/* The chevron's stroke, not the button's box, lines up with the title below:
+	   the button's padding plus the blank left of the icon's stroke. */
+	.ch-back {
+		margin-left: -18px;
+	}
+	.ch-libbtn {
+		display: none;
+	}
+	.ch-title {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.ch-title-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	/* Beside the name, a size up from a list's, its pick read at the title's scale. */
+	.gp-pick-toggle.ch-fav {
+		width: 40px;
+		height: 40px;
+	}
+	.ch-fav svg {
+		width: 20px;
+		height: 21px;
+	}
+	.ch-title h1 {
+		margin: 2px 0;
+		font-size: 52px;
+		font-weight: 820;
+		letter-spacing: -0.035em;
+		line-height: 1;
+	}
+
+	/* ── The shape on stage ───────────────────────────────────────────────── */
+	.ch-main {
+		display: grid;
+		grid-template-columns: 200px minmax(0, 1fr) 210px;
+		grid-template-areas: "tones center side";
+		align-items: center;
+		gap: 24px;
+	}
+	.ch-tones {
+		display: flex;
+		grid-area: tones;
+		flex-direction: column;
+		gap: 6px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.ch-tone {
+		display: grid;
+		grid-template-columns: 40px 34px minmax(0, 1fr);
+		align-items: baseline;
+		gap: 6px;
+		padding: 6px 10px;
+		border-radius: var(--gp-r-s);
+	}
+	.ch-tone b {
+		font-size: 20px;
+		font-weight: 780;
+	}
+	.ch-dgr {
+		color: var(--gp-ink-2);
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.ch-dname {
+		color: var(--gp-ink-3);
+		font-size: 12px;
+	}
+	.ch-tone[data-root] {
+		background: var(--gp-card);
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+	}
+	.ch-tone[data-root] b {
+		color: var(--gp-m-700);
+	}
+	.ch-tone[data-gone] b,
+	.ch-tone[data-gone] .ch-dgr {
+		color: var(--gp-ink-mute);
+	}
+	.ch-tone[data-gone] .ch-dname::after {
+		content: " · not in this shape";
+	}
+	.ch-bass {
+		padding: 2px 10px;
+	}
+	.ch-center {
+		display: flex;
+		grid-area: center;
+		align-items: center;
+		justify-content: center;
+		gap: 16px;
+	}
+	.ch-big svg {
+		display: block;
+	}
+	.ch-side {
+		display: flex;
+		grid-area: side;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+	}
+	.ch-plays {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.ch-vlabel {
+		font-size: 18px;
+		font-weight: 760;
+	}
+	.ch-note-line {
+		max-width: 26ch;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		line-height: 1.35;
+	}
+	.ch-tab {
+		margin-top: 4px;
+		color: var(--gp-ink-2);
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.08em;
+	}
+	.ch-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+		padding: 8px 0;
+		color: var(--gp-ink-2);
+	}
+
+	/* ── Every shape, side by side ────────────────────────────────────────── */
+	.ch-shapes {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.ch-shapes-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 10px;
+	}
+	.ch-shapes-head h2 {
+		margin: 0;
+		font-size: 17px;
+		font-weight: 750;
+	}
+	/* Beside the heading, centred on it, without making the row any taller. */
+	.ch-shapes-head .ch-icon {
+		align-self: center;
+		margin: -8px -4px;
+	}
+	/* Adding a shape is the module's: its colour at rest, a tint behind it under
+	   a pointer, and the plus hops and turns a quarter (motion below). */
+	.ch-add {
+		color: var(--gp-m-500);
+	}
+	.ch-add:is(:hover, :focus-visible) {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.ch-add svg {
+		stroke-width: 2.6;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.ch-add svg {
+			transition: rotate 220ms var(--gp-ease-state);
+		}
+		.ch-add:is(:hover, :focus-visible) svg {
+			rotate: 90deg;
+			animation: ch-add-hop 400ms both;
+			transition: rotate 420ms var(--gp-spring-pop);
+		}
+	}
+	@keyframes ch-add-hop {
+		0% {
+			translate: 0 0;
+			animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
+		}
+		40% {
+			translate: 0 -4px;
+			animation-timing-function: cubic-bezier(0.3, 1.45, 0.45, 1);
+		}
+		100% {
+			translate: 0 0;
+		}
+	}
+	.ch-film {
+		display: flex;
+		gap: 10px;
+		margin: 0 -4px;
+		padding: 6px 4px 10px;
+		overflow-x: auto;
+	}
+	.ch-shape {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		width: 120px;
+		padding: 10px 0 9px;
+		border-radius: var(--gp-r-m);
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+		cursor: pointer;
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear;
+	}
+	.ch-shape:hover {
+		transform: translateY(-3px);
+		background: var(--gp-card);
+		box-shadow:
+			var(--gp-ring-c),
+			3px 3px 0 0 var(--gp-shn);
+	}
+	.ch-shape[aria-pressed="true"] {
+		transform: translateY(-2px);
+		background: var(--gp-card);
+		box-shadow:
+			inset 0 0 0 1px var(--gp-m-300),
+			3px 3px 0 0 var(--gp-m-sh);
+	}
+	.ch-shape-dg svg {
+		display: block;
+		width: 88px;
+		height: auto;
+	}
+	.ch-shape-label {
+		max-width: 108px;
+		overflow: hidden;
+		font-size: 12.5px;
+		font-weight: 680;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ch-chip {
+		padding: 1px 6px;
+		border-radius: 6px;
+		background: var(--gp-well);
+		color: var(--gp-ink-2);
+		font-size: 10.5px;
+		font-weight: 700;
+	}
+	/* ── On the neck ──────────────────────────────────────────────────────── */
+	.ch-neck-wrap {
+		--ch-wood: color-mix(in oklab, var(--gp-well), #b98a5c 16%);
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.ch-neck-scroll {
+		margin: 0 -4px;
+		padding: 0 4px;
+		overflow-x: auto;
+	}
+	.ch-neck-nums,
+	.ch-neck-picks {
+		position: relative;
+	}
+	.ch-neck-nums {
+		height: 18px;
+	}
+	.ch-neck-nums span {
+		position: absolute;
+		transform: translateX(-50%);
+		color: var(--gp-ink-3);
+		font-size: 11px;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+	}
+	.ch-neck {
+		position: relative;
+		height: 124px;
+		overflow: hidden;
+		border-radius: var(--gp-r-l);
+		background: var(--ch-wood);
+	}
+	.ch-neck-string {
+		position: absolute;
+		right: 0;
+		height: 1.5px;
+		margin-top: -0.75px;
+		background: var(--gp-ink-3);
+		opacity: 0.55;
+	}
+	.ch-neck-fret {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 1.5px;
+		background: var(--gp-edge);
+	}
+	.ch-neck-nut {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 4px;
+		margin-left: -4px;
+		background: var(--gp-ink);
+	}
+	.ch-neck-inlay {
+		position: absolute;
+		top: 50%;
+		width: 8px;
+		height: 8px;
+		margin: -4px 0 0 -4px;
+		border-radius: 50%;
+		background: var(--gp-edge);
+		opacity: 0.6;
+	}
+	.ch-neck-box {
+		position: absolute;
+		top: 4px;
+		bottom: 4px;
+		border-radius: 9px;
+		box-shadow: inset 0 0 0 2px var(--gp-m-500);
+		transition:
+			left var(--gp-d-rise) var(--gp-e-rise),
+			width var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.ch-neck-dot {
+		position: absolute;
+		display: grid;
+		place-items: center;
+		width: 18px;
+		height: 18px;
+		margin: -9px 0 0 -9px;
+		border-radius: 50%;
+		background: var(--ch-wood);
+		box-shadow: inset 0 0 0 1.5px var(--gp-ink-3);
+		color: var(--gp-ink-2);
+		font-size: 8.5px;
+		font-weight: 750;
+		line-height: 1;
+		transition:
+			transform var(--gp-d-state) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear,
+			color var(--gp-d-state) linear;
+	}
+	/* The root is square, and in the module's colour wherever it is. */
+	.ch-neck-dot[data-root] {
+		border-radius: 28%;
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	.ch-neck-dot[data-held] {
+		z-index: 1;
+		transform: scale(1.2);
+		background: var(--gp-ink);
+		box-shadow: none;
+		color: var(--gp-page);
+	}
+	.ch-neck-dot[data-root][data-held] {
+		background: var(--gp-m-500);
+		color: var(--gp-m-on);
+	}
+	.ch-neck-picks {
+		height: 30px;
+	}
+	.ch-neck-picks button {
+		position: absolute;
+		top: 2px;
+		min-width: 26px;
+		height: 26px;
+		padding: 0 7px;
+		transform: translateX(-50%);
+		border-radius: var(--gp-r-s);
+		background: var(--gp-face);
+		box-shadow:
+			var(--gp-ring-n),
+			2px 2px 0 0 var(--gp-shn);
+		color: var(--gp-ink);
+		font-size: 12px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		cursor: pointer;
+		transition:
+			left var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear;
+	}
+	.ch-neck-picks button[data-mine] {
+		box-shadow:
+			inset 0 0 0 1.5px var(--gp-m-300),
+			2px 2px 0 0 var(--gp-shn);
+	}
+	.ch-neck-picks button[aria-pressed="true"] {
+		background: var(--gp-m-500);
+		box-shadow:
+			var(--gp-ring-m),
+			2px 2px 0 0 var(--gp-m-sh);
+		color: var(--gp-m-on);
+	}
+
+	.ch-credit {
+		margin: 0;
+		padding-top: 16px;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+	.ch-credit a {
+		color: var(--gp-ink-2);
+		text-decoration: underline;
+	}
+
+	/* ── Library ──────────────────────────────────────────────────────────── */
+	.ch-lib {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-width: 0;
+		min-height: 0;
+		padding: 16px 14px 0 16px;
+		overflow: hidden;
+		box-shadow: -1px 0 0 var(--gp-line);
+	}
+	.ch-shell[data-lib="closed"] .ch-lib {
+		visibility: hidden;
+		padding: 0;
+	}
+	.ch-sheet {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-height: 0;
+	}
+	.ch-lrow {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+	.ch-lrow > :first-child {
+		flex: 1;
+		min-width: 0;
+	}
+	.ch-list {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 4px;
+		min-height: 0;
+		margin: 0 -4px;
+		padding: 4px 4px 16px;
+		overflow-y: auto;
+	}
+	.ch-group {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.ch-lgrp {
+		margin: 8px 8px 2px;
+		color: var(--gp-ink-3);
+		font-size: 11.5px;
+		font-weight: 700;
+	}
+	.ch-mini svg {
+		display: block;
+		width: 38px;
+		height: auto;
+	}
+	.ch-note {
+		margin: 6px 8px;
+	}
+	.ch-link {
+		color: var(--gp-ink);
+		font-weight: 650;
+		text-decoration: underline;
+	}
+	.ch-draft {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		min-height: 0;
+		padding-bottom: 16px;
+		overflow-y: auto;
+		animation: ch-over 300ms var(--gp-spring-sheet) both;
+	}
+	.ch-draft-foot {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	@keyframes ch-over {
+		0% {
+			opacity: 0;
+			transform: translateX(24px);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ch-draft {
+			animation: none;
+		}
+		.ch-shape,
+		.ch-shell,
+		.ch-neck-box,
+		.ch-neck-dot,
+		.ch-neck-picks button {
+			transition: none;
+		}
+	}
+
+	/* ── Tablet: the library in a sheet, tones above the shape ───────────── */
+	@container chord (max-width: 959px) {
+		.ch-shell,
+		.ch-shell[data-lib="closed"] {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.ch-lib,
+		.ch-lib-fab {
+			display: none;
+		}
+		.ch-libbtn {
+			display: inline-flex;
+		}
+		.ch-stage {
+			padding: 16px 24px 32px;
+		}
+		.ch-main {
+			grid-template-columns: minmax(0, 1fr) 220px;
+			grid-template-areas:
+				"tones tones"
+				"center side";
+		}
+		.ch-tones {
+			flex-direction: row;
+			flex-wrap: wrap;
+		}
+		.ch-tone {
+			display: flex;
+			background: var(--gp-well);
+		}
+		.ch-tone[data-root] {
+			background: var(--gp-card);
+		}
+		.ch-dname {
+			display: none;
+		}
+		.ch-title h1 {
+			font-size: 46px;
+		}
+	}
+
+	/* ── Phone: one column ───────────────────────────────────────────────── */
+	@container chord (max-width: 719px) {
+		.ch-stage {
+			padding: 10px 14px 28px;
+		}
+		.ch-stage-in {
+			gap: 16px;
+		}
+		.ch-title h1 {
+			font-size: 40px;
+		}
+		.ch-main {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-areas:
+				"tones"
+				"center"
+				"side";
+			justify-items: center;
+		}
+		.ch-tones {
+			justify-content: center;
+		}
+		.ch-tone {
+			flex-direction: column;
+			align-items: center;
+			gap: 0;
+			min-width: 40px;
+			padding: 5px 8px;
+		}
+		.ch-center {
+			gap: 6px;
+		}
+		.ch-big svg {
+			width: 220px;
+			height: auto;
+		}
+		.ch-side {
+			flex-direction: row;
+			flex-wrap: wrap;
+			align-items: center;
+			justify-content: center;
+		}
+		.ch-shape {
+			width: 104px;
+		}
+		/* The neck keeps a readable fret width and scrolls sideways. */
+		.ch-neck-in {
+			min-width: 640px;
+		}
+		.ch-neck {
+			height: 108px;
+		}
+	}
+}

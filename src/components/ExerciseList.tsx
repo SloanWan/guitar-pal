@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/legacy-button";
+import { Input } from "@/components/ui/legacy-input";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -52,6 +52,7 @@ export default function ExerciseList({
 		if (!activeCategory) return;
 		if (presentCategories.includes(activeCategory as Exercise["category"])) return;
 		queueMicrotask(() => setActiveCategory(null));
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- only a change to the list can take the active category away
 	}, [exercises]);
 
 	const filteredExercises = activeCategory

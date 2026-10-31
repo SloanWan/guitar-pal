@@ -103,3 +103,18 @@ describe("mode", () => {
 		expect(readMode()).toBe("general");
 	});
 });
+
+describe("mode storage", () => {
+	beforeEach(() => sessionStorage.clear());
+
+	it("keeps every mode the chip can be set to, Book included, and nothing else", () => {
+		for (const mode of ["strum", "tab", "general", "book"] as const) {
+			writeMode(mode);
+			expect(readMode()).toBe(mode);
+		}
+		sessionStorage.setItem(MODE_KEY, "chapter");
+		expect(readMode()).toBeNull();
+		writeMode(null);
+		expect(readMode()).toBeNull();
+	});
+});

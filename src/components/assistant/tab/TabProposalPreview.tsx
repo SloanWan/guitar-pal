@@ -1,19 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ArrowUpRight, TriangleAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import HearButton from "../HearButton";
 import TabStavePreview from "./TabStavePreview";
+import { useTabAudition } from "./useTabAudition";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import { beatUnitGlyph } from "@/lib/strumMeter";
 import { stashHandoff } from "@/lib/assistant/handoff";
 import type { TabProposal } from "@/lib/assistant/tab/types";
+import { indexPattern } from "@/lib/fingerpickIndex";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * What the tab assistant is offering, drawn as the real stave rather than
  * described — the same VexFlow path the fingerpick page renders with, so what
  * the player confirms is what they will see. One row only; the editor is
- * where the whole pattern is read.
+ * where the whole pattern is read. "Hear it" plays all of it, once.
  *
  * Nothing is written from here. The proposal is handed to the fingerpick
  * page, which opens it in its editor for checking and saves it the way a
@@ -23,11 +28,13 @@ import type { TabProposal } from "@/lib/assistant/tab/types";
 const FINGERPICK_PATH = "/fingerpick";
 
 export default function TabProposalPreview({ proposal }: { proposal: TabProposal }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const pathname = usePathname();
 	const { pattern } = proposal;
 	const [shown, setShown] = useState(0);
+	const renderContext = useMemo(() => ({ index: indexPattern(pattern) }), [pattern]);
 	const more = pattern.measures.length - shown;
+	const audition = useTabAudition(pattern);
 
 	function openInFingerpick() {
 		// The stash announces itself, so a fingerpick page already on screen
@@ -38,12 +45,10 @@ export default function TabProposalPreview({ proposal }: { proposal: TabProposal
 	}
 
 	return (
-		<div className="mt-2 border border-denim bg-surface animate-[proposal-pop_0.18s_ease-out] motion-reduce:animate-none">
-			<div className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2">
-				<span className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-					{proposal.name}
-				</span>
-				<span className="flex shrink-0 gap-2 font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+		<div className="as-card" data-m="tab">
+			<div className="as-card-h">
+				<span className="as-card-t">{proposal.name}</span>
+				<span className="as-card-meta">
 					{pattern.capo !== undefined && pattern.capo > 0 && <span>capo {pattern.capo}</span>}
 					<span>
 						{pattern.timeSignature[0]}/{pattern.timeSignature[1]}
@@ -54,43 +59,44 @@ export default function TabProposalPreview({ proposal }: { proposal: TabProposal
 				</span>
 			</div>
 
-			<TabStavePreview measures={pattern.measures} timeSignature={pattern.timeSignature} onShown={setShown} />
-
-			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2">
-				<span className="font-mono text-xs tracking-[0.04em] text-ink-dim">
+			<div className="as-card-b">
+				{proposal.chords.length > 0 && (
+					<div className="as-chordline">
+						{proposal.chords.map((chord, i) => (
+							<span key={i}>{chordSymbolLabel(chord)}</span>
+						))}
+					</div>
+				)}
+				<div className="as-stave">
+					<TabStavePreview
+						measures={pattern.measures}
+						timeSignature={pattern.timeSignature}
+						onShown={setShown}
+						renderContext={renderContext}
+					/>
+				</div>
+				<span className="as-card-note">
 					{pattern.measures.length} {pattern.measures.length === 1 ? "bar" : "bars"}
 					{more > 0 && ` · ${more} more in the editor`}
 				</span>
-				{proposal.chords.length > 0 && (
-					<span className="font-mono text-xs tracking-[0.04em] text-ink">
-						{proposal.chords.map(chordSymbolLabel).join(" · ")}
-					</span>
+				{proposal.warnings.length > 0 && (
+					<ul className="as-warn">
+						{proposal.warnings.map((warning) => (
+							<li key={`${warning.code}:${warning.path}:${warning.message}`}>
+								<TriangleAlert aria-hidden="true" />
+								<span>{warning.message}</span>
+							</li>
+						))}
+					</ul>
 				)}
 			</div>
 
-			{proposal.warnings.length > 0 && (
-				<ul className="border-t border-line px-3 py-2">
-					{proposal.warnings.map((warning) => (
-						<li
-							key={`${warning.code}:${warning.path}:${warning.message}`}
-							className="flex gap-2 py-0.5 text-xs leading-snug text-ink-dim"
-						>
-							<TriangleAlert className="mt-px size-3.5 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-							<span>{warning.message}</span>
-						</li>
-					))}
-				</ul>
-			)}
-
-			<div className="border-t border-line p-2">
-				<button
-					type="button"
-					onClick={openInFingerpick}
-					className="flex h-(--h-control) w-full items-center justify-center gap-1.5 border border-denim bg-transparent px-3 font-mono text-xs uppercase tracking-[0.08em] text-denim-accent transition-[color,background-color,border-color,translate] duration-(--dur-hover) ease-out hover:bg-denim hover:text-on-denim motion-safe:active:translate-y-px active:bg-denim-tint active:text-denim-accent active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-				>
-					Open in fingerpick
-					<ArrowUpRight className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-				</button>
+			<div className="as-card-f">
+				<HearButton playing={audition.isPlaying} preparing={audition.isPreparing} onClick={audition.toggle} />
+				<Button size="sm" onClick={openInFingerpick}>
+					Open in Tab
+					<ArrowUpRight aria-hidden="true" />
+				</Button>
 			</div>
 		</div>
 	);

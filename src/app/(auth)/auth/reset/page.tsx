@@ -2,11 +2,14 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { MailCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import Link from "@/components/AppLink";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/input";
+import { Panel } from "@/components/ui/panel";
 import { requestPasswordReset, setRecoveredPassword } from "@/lib/auth";
 import { authErrorMessage } from "@/lib/authErrors";
 import { isPlausibleEmail, readRememberedEmail, rememberEmail } from "@/lib/authForm";
@@ -14,7 +17,8 @@ import { passwordStrength } from "@/lib/passwordStrength";
 import { createClient } from "@/lib/supabase";
 import PasswordField from "@/components/auth/PasswordField";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
-import { ERROR_TEXT, HELP, INPUT, LABEL, PRIMARY, SECONDARY } from "@/components/auth/formStyles";
+import { FORM_ERROR, FORM_HELP, FORM_LEAD, PAGE_GUTTER, TEXT_LINK } from "@/components/auth/formText";
+import { useNavRouter } from "@/components/nav-progress";
 
 /** Seconds before the recovery email can be sent again. */
 const RESEND_COOLDOWN_S = 60;
@@ -39,7 +43,7 @@ const TITLE: Record<Stage, string> = {
 };
 
 function ResetPageInner() {
-	const router = useRouter();
+	const router = useNavRouter();
 	const searchParams = useSearchParams();
 	const hasCode = searchParams.has("code");
 
@@ -114,148 +118,132 @@ function ResetPageInner() {
 
 	return (
 		<div className="flex min-h-full flex-col justify-center py-10 max-sm:py-6">
-			<div className="mx-auto w-full max-w-105 px-(--gutter)">
-				<section className="border border-line bg-panel p-6 max-sm:p-5">
-					<div className="mb-1 flex items-center justify-between">
-						<span className="font-mono text-[length:var(--text-eyebrow-size)] uppercase tracking-[var(--text-eyebrow-ls)] text-ink-dim">
-							Account
-						</span>
-						<span
-							className={`size-1.5 rounded-full transition-[background,box-shadow] duration-200 ${
-								busy || stage === "verifying"
-									? "bg-denim-accent shadow-(--glow-led)"
-									: "bg-ink-faint"
-							}`}
-							aria-hidden="true"
-						/>
-					</div>
-					<h1 className="mb-6 font-mono text-(length:--text-h3-size) font-medium tracking-[0.02em]">
-						{TITLE[stage]}
-					</h1>
+			<div className={`w-full ${PAGE_GUTTER}`}>
+				<div className="gp-rise mx-auto max-w-110">
+					<Panel className="p-7 max-sm:p-5" aria-busy={stage === "verifying" || undefined}>
+						<h1 className="mb-5 font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-gp-ink">
+							{TITLE[stage]}
+						</h1>
 
-					{stage === "request" && (
-						<form onSubmit={handleRequest} noValidate className="flex flex-col gap-5">
-							<p className="font-sans text-sm text-ink-dim">
-								Enter the email on your account and we&apos;ll send a link to set a new
-								password.
-							</p>
-							<fieldset disabled={busy} className="flex flex-col gap-1.5">
-								<label htmlFor="reset-email" className={LABEL}>
-									Email
-								</label>
-								<input
-									id="reset-email"
-									name="email"
-									type="email"
-									autoComplete="email"
-									inputMode="email"
-									spellCheck={false}
-									autoFocus
-									placeholder="you@example.com"
-									value={email}
-									onChange={(e) => setEmail(e.target.value)}
-									onBlur={() => setEmailTouched(true)}
-									aria-invalid={showEmailError || undefined}
-									aria-describedby={showEmailError ? "reset-email-error" : errorId}
-									className={INPUT}
-								/>
-								{showEmailError && (
-									<span id="reset-email-error" className={ERROR_TEXT}>
-										Enter a valid email address
-									</span>
-								)}
-							</fieldset>
-							<p id="reset-error" role="alert" aria-live="polite" className={`${ERROR_TEXT} empty:hidden`}>
-								{error}
-							</p>
-							<button type="submit" disabled={busy || !emailOk} className={`${PRIMARY} w-full self-stretch`}>
-								{busy ? "Sending…" : "Send reset link"}
-							</button>
-						</form>
-					)}
-
-					{stage === "sent" && (
-						<div className="flex flex-col gap-5">
-							<div className="flex items-start gap-3">
-								<span className="flex size-9 flex-none items-center justify-center border border-line-strong text-denim-accent">
-									<MailCheck className="size-4" strokeWidth={1.5} aria-hidden="true" />
-								</span>
-								<p className="font-sans text-sm text-ink-dim">
-									If <span className="font-mono text-ink">{email.trim()}</span> has an
-									account, a reset link is on its way. Open it in this browser to choose
-									a new password.
+						{stage === "request" && (
+							<form onSubmit={handleRequest} noValidate className="flex flex-col gap-5">
+								<p className={FORM_LEAD}>
+									Enter the email on your account and we&apos;ll send a link to set a new
+									password.
 								</p>
+								<fieldset disabled={busy}>
+									<Field
+										label="Email"
+										error={showEmailError ? "Enter a valid email address" : undefined}
+									>
+										{(control) => (
+											<Input
+												{...control}
+												name="email"
+												type="email"
+												autoComplete="email"
+												inputMode="email"
+												spellCheck={false}
+												autoFocus
+												placeholder="you@example.com"
+												value={email}
+												onChange={(e) => setEmail(e.target.value)}
+												onBlur={() => setEmailTouched(true)}
+												aria-describedby={control["aria-describedby"] ?? errorId}
+											/>
+										)}
+									</Field>
+								</fieldset>
+								<p id="reset-error" role="alert" aria-live="polite" className={`${FORM_ERROR} empty:hidden`}>
+									{error}
+								</p>
+								<Button type="submit" loading={busy} disabled={!emailOk} className="w-full">
+									Send reset link
+								</Button>
+							</form>
+						)}
+
+						{stage === "sent" && (
+							<div className="flex flex-col gap-5">
+								<div className="flex items-start gap-3">
+									<span className="flex size-10 flex-none items-center justify-center rounded-gp-md bg-gp-well text-gp-ink">
+										<MailCheck className="size-5" strokeWidth={1.75} aria-hidden="true" />
+									</span>
+									<p className={FORM_LEAD}>
+										If <span className="font-semibold break-all text-gp-ink">{email.trim()}</span> has an
+										account, a reset link is on its way. Open it in this browser to choose
+										a new password.
+									</p>
+								</div>
+								<p id="reset-error" role="alert" aria-live="polite" className={`${FORM_ERROR} empty:hidden`}>
+									{error}
+								</p>
+								<div className="flex flex-wrap gap-2">
+									<Button
+										variant="secondary"
+										onClick={() => void sendLink()}
+										loading={busy}
+										disabled={cooldown > 0}
+									>
+										{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend link"}
+									</Button>
+									<Button
+										variant="ghost"
+										onClick={() => {
+											setError(null);
+											setStage("request");
+										}}
+									>
+										Change email
+									</Button>
+								</div>
 							</div>
-							<p id="reset-error" role="alert" aria-live="polite" className={`${ERROR_TEXT} empty:hidden`}>
-								{error}
-							</p>
-							<div className="flex gap-2">
-								<button
-									type="button"
-									onClick={() => void sendLink()}
-									disabled={busy || cooldown > 0}
-									className={SECONDARY}
-								>
-									{busy ? "Sending…" : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend link"}
-								</button>
-								<button
-									type="button"
+						)}
+
+						{stage === "verifying" && (
+							<p className={FORM_LEAD}>Checking your link…</p>
+						)}
+
+						{stage === "update" && (
+							<UpdateForm
+								email={email}
+								onDone={() => {
+									rememberEmail(email);
+									toast.success("Password updated");
+									router.push("/home");
+								}}
+							/>
+						)}
+
+						{stage === "expired" && (
+							<div className="flex flex-col gap-5">
+								<p className={FORM_LEAD}>
+									This link has expired or was opened in a different browser from the one
+									that requested it. Request a new one below and open it here.
+								</p>
+								<Button
 									onClick={() => {
 										setError(null);
+										router.replace("/auth/reset");
 										setStage("request");
 									}}
-									className={SECONDARY}
+									className="w-full"
 								>
-									Change email
-								</button>
+									Request a new link
+								</Button>
 							</div>
-						</div>
-					)}
+						)}
+					</Panel>
 
-					{stage === "verifying" && (
-						<p className="font-sans text-sm text-ink-dim">Checking your link…</p>
+					{(stage === "request" || stage === "sent" || stage === "expired") && (
+						<p className={`${FORM_HELP} mt-5 text-center text-(length:--gp-t-ui)`}>
+							Remembered it?{" "}
+							<Link href="/auth" className={TEXT_LINK}>
+								Sign in
+							</Link>
+						</p>
 					)}
-
-					{stage === "update" && (
-						<UpdateForm
-							email={email}
-							onDone={() => {
-								rememberEmail(email);
-								toast.success("Password updated");
-								router.push("/home");
-							}}
-						/>
-					)}
-
-					{stage === "expired" && (
-						<div className="flex flex-col gap-5">
-							<p className="font-sans text-sm text-ink-dim">
-								This link has expired or was opened in a different browser from the one
-								that requested it. Request a new one below and open it here.
-							</p>
-							<button
-								type="button"
-								onClick={() => {
-									setError(null);
-									router.replace("/auth/reset");
-									setStage("request");
-								}}
-								className={`${PRIMARY} w-full self-stretch`}
-							>
-								Request a new link
-							</button>
-						</div>
-					)}
-				</section>
-
-				{(stage === "request" || stage === "sent" || stage === "expired") && (
-					<p className={`${HELP} mt-5 text-center`}>
-						Remembered it?{" "}
-						<Link href="/auth" className="text-denim-accent underline-offset-4 hover:underline">
-							Sign in
-						</Link>
-					</p>
-				)}
+				</div>
 			</div>
 		</div>
 	);
@@ -293,12 +281,12 @@ function UpdateForm({ email, onDone }: { email: string; onDone: () => void }) {
 
 	return (
 		<form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-			<p className="font-sans text-sm text-ink-dim">
-				Signed in as <span className="font-mono text-ink">{email}</span>.
+			<p className={FORM_LEAD}>
+				Signed in as <span className="font-semibold break-all text-gp-ink">{email}</span>.
 			</p>
 			<fieldset disabled={busy} className="flex flex-col gap-5">
-				<div className="flex flex-col gap-1.5">
-					<label htmlFor="new-password" className={LABEL}>
+				<div className="gp-field">
+					<label htmlFor="new-password" className="gp-field-label">
 						New password
 					</label>
 					<PasswordField
@@ -313,8 +301,8 @@ function UpdateForm({ email, onDone }: { email: string; onDone: () => void }) {
 					/>
 					<PasswordStrengthMeter strength={strength} empty={password.length === 0} />
 				</div>
-				<div className="flex flex-col gap-1.5">
-					<label htmlFor="confirm-password" className={LABEL}>
+				<div className="gp-field">
+					<label htmlFor="confirm-password" className="gp-field-label">
 						Confirm
 					</label>
 					<PasswordField
@@ -327,18 +315,18 @@ function UpdateForm({ email, onDone }: { email: string; onDone: () => void }) {
 						aria-describedby={confirm.length > 0 && !matches ? "confirm-error" : errorId}
 					/>
 					{confirm.length > 0 && !matches && (
-						<span id="confirm-error" className={ERROR_TEXT}>
+						<span id="confirm-error" className={FORM_ERROR}>
 							Doesn&apos;t match
 						</span>
 					)}
 				</div>
 			</fieldset>
-			<p id="reset-error" role="alert" aria-live="polite" className={`${ERROR_TEXT} empty:hidden`}>
+			<p id="reset-error" role="alert" aria-live="polite" className={`${FORM_ERROR} empty:hidden`}>
 				{error}
 			</p>
-			<button type="submit" disabled={busy || !canSubmit} className={`${PRIMARY} w-full self-stretch`}>
-				{busy ? "Updating…" : "Set new password"}
-			</button>
+			<Button type="submit" loading={busy} disabled={!canSubmit} className="w-full">
+				Set new password
+			</Button>
 		</form>
 	);
 }

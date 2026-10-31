@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/legacy-button";
+import { Input } from "@/components/ui/legacy-input";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -24,8 +24,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useNavTransition } from "@/components/nav-progress";
+import { useNavRouter } from "@/components/nav-progress";
 import {
 	createRoutine,
 	getRoutines,
@@ -65,8 +64,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 
 	const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
 
-	const router = useRouter();
-	const startNav = useNavTransition();
+	const router = useNavRouter();
 	const filteredExercises = exercises.filter((ex) => ex.category === selectedCategory);
 
 	const editingRoutine = routines.find((r) => r.id === editingRoutineId) ?? null;
@@ -91,7 +89,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 		getRoutineExercises(editingRoutineId).then((exs) =>
 			setRoutineExercisesMap((prev) => ({ ...prev, [editingRoutineId]: exs })),
 		);
-	}, [editingRoutineId]);
+	}, [editingRoutineId, routineExercisesMap]);
 
 	async function handleAddRoutine() {
 		if (!title.trim()) return;
@@ -321,7 +319,7 @@ export default function RoutineList({ exercises }: { exercises: Exercise[] }) {
 												variant="secondary"
 												onClick={(e) => {
 													e.stopPropagation();
-													startNav(() => router.push(`/dev/session/${routine.id}`));
+													router.push(`/dev/session/${routine.id}`);
 												}}
 											>
 												<Play className="size-3.5" />

@@ -1,21 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, Music, Pencil, Plus, Replace, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import TabStavePreview from "./TabStavePreview";
+import { useTabAudition } from "./useTabAudition";
+import HearButton from "../HearButton";
+import { Button } from "@/components/ui/button";
 import { Option, Options } from "../Options";
 import { stashHandoff } from "@/lib/assistant/handoff";
 import { pick, type Lang } from "@/lib/assistant/lang";
 import type { TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import { moveSlotChord } from "@/lib/fingerpickChords";
 import type { Measure } from "@/lib/fingerpickTypes";
+import { indexPattern } from "@/lib/fingerpickIndex";
+import { useNavRouter } from "@/components/nav-progress";
 
 /**
  * Bars for a pattern the player already has, before anything is written.
  *
  * The message has said what will happen; this shows the bars as they will
- * look and asks. A chord mark can be dragged to another slot first — the
+ * look and asks, and can play them ("Hear it", the bars alone). A chord mark can be dragged to another slot first — the
  * reader places marks by beat, and the slot meant is the player's to say.
  * Confirming hands the bars to the fingerpick page, which owns the save — a
  * preset is copied there, never changed.
@@ -35,7 +40,7 @@ export default function TabEditCard({
 	onDone: () => void;
 	lang?: Lang;
 }) {
-	const router = useRouter();
+	const router = useNavRouter();
 	const pathname = usePathname();
 	const t = (en: string, zh: string) => pick(lang, en, zh);
 	const [dismissed, setDismissed] = useState(false);
@@ -44,6 +49,11 @@ export default function TabEditCard({
 	// The bars as the player has arranged them: the reader's, until a chord
 	// mark is dragged elsewhere. What confirming hands over.
 	const [measures, setMeasures] = useState<Measure[]>(bars ? edit.measures : []);
+	// The pattern's settings over the bars alone: what "Hear it" plays.
+	const heard = useMemo(() => ({ ...edit.pattern, measures }), [edit.pattern, measures]);
+	// Where the bars' spans lie, for the preview's brackets; the bars keep the pattern's slot ids.
+	const renderContext = useMemo(() => ({ index: indexPattern(heard) }), [heard]);
+	const audition = useTabAudition(heard);
 	const [moved, setMoved] = useState(false);
 	const more = bars ? measures.length - shown : 0;
 
@@ -83,8 +93,8 @@ export default function TabEditCard({
 			set: t("Changed", "已修改"),
 		};
 		return (
-			<p className="flex items-center gap-1.5 pl-2 font-mono text-[11px] uppercase tracking-[0.08em] text-denim-accent">
-				<Check className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+			<p className="as-done">
+				<Check aria-hidden="true" />
 				{said[edit.kind]}
 			</p>
 		);
@@ -96,15 +106,15 @@ export default function TabEditCard({
 	if (!bars) {
 		const icon =
 			edit.kind === "rename" ? (
-				<Pencil className="size-3" strokeWidth={1.5} aria-hidden="true" />
+				<Pencil aria-hidden="true" />
 			) : edit.kind === "delete" ? (
-				<Trash2 className="size-3" strokeWidth={1.5} aria-hidden="true" />
+				<Trash2 aria-hidden="true" />
 			) : (
-				<Settings2 className="size-3" strokeWidth={1.5} aria-hidden="true" />
+				<Settings2 aria-hidden="true" />
 			);
 		return (
 			<Options>
-				<Option order={0} tone="ghost" onClick={() => setDismissed(true)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
+				<Option order={0} tone="ghost" onClick={() => setDismissed(true)} icon={<X aria-hidden="true" />}>
 					{edit.kind === "delete" ? t("Keep it", "留着") : t("Leave it", "算了")}
 				</Option>
 				<Option order={1} tone={edit.kind === "delete" ? "danger" : "outline"} onClick={confirm} icon={icon}>
@@ -118,13 +128,13 @@ export default function TabEditCard({
 	const lastBar = firstBar + measures.length - 1;
 
 	return (
-		<div className="mt-2 border border-denim bg-surface animate-[proposal-pop_0.18s_ease-out] motion-reduce:animate-none">
-			<div className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2">
-				<span className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
+		<div className="as-card" data-m="tab">
+			<div className="as-card-h">
+				<span className="as-card-t">
 					{edit.kind === "append" ? t("Add to", "加到") : edit.kind === "replace" ? t("Replace in", "替换") : t("Chords on", "标和弦")}{" "}
 					{edit.pattern.name}
 				</span>
-				<span className="shrink-0 font-mono text-[11px] tracking-[0.04em] text-ink-faint">
+				<span className="as-card-meta">
 					{edit.kind === "append"
 						? t(`bar ${firstBar} on`, `第 ${firstBar} 小节起`)
 						: lastBar > firstBar
@@ -133,68 +143,65 @@ export default function TabEditCard({
 				</span>
 			</div>
 
-			<TabStavePreview
-				measures={measures}
-				timeSignature={edit.pattern.timeSignature}
-				startMeasureNumber={firstBar}
-				onShown={setShown}
-				onMoveChord={(from, to) => {
-					const next = moveSlotChord(measures, from, to);
-					if (!next) return;
-					setMeasures(next);
-					setMoved(true);
-				}}
-				lang={lang}
-			/>
-			{moved && (
-				<div className="border-t border-line px-3 py-2 font-mono text-xs tracking-[0.04em] text-ink-dim">
-					{t("Moved — the bars go in as they are now.", "已移动——按现在的位置写入。")}
+			<div className="as-card-b">
+				<div className="as-stave">
+					<TabStavePreview
+						measures={measures}
+						timeSignature={edit.pattern.timeSignature}
+						renderContext={renderContext}
+						startMeasureNumber={firstBar}
+						onShown={setShown}
+						onMoveChord={(from, to) => {
+							const next = moveSlotChord(measures, from, to);
+							if (!next) return;
+							setMeasures(next);
+							setMoved(true);
+						}}
+						lang={lang}
+					/>
 				</div>
-			)}
+				{/* Reserved, so moving a chord does not push the footer down. */}
+				<span className="as-card-note">
+					{moved
+						? t("Moved — the bars go in as they are now.", "已移动——按现在的位置写入。")
+						: more > 0
+							? t(`${more} more in the editor`, `还有 ${more} 小节在编辑器里`)
+							: edit.kind === "chords"
+								? t("Drag a chord to another slot to move it.", "拖动和弦可以换到别的格。")
+								: " "}
+				</span>
+				{edit.warnings.length > 0 && (
+					<ul className="as-warn">
+						{edit.warnings.map((warning) => (
+							<li key={`${warning.code}:${warning.path}:${warning.message}`}>
+								<TriangleAlert aria-hidden="true" />
+								<span>{warning.message}</span>
+							</li>
+						))}
+					</ul>
+				)}
+			</div>
 
-			{more > 0 && (
-				<div className="border-t border-line px-3 py-2 font-mono text-xs tracking-[0.04em] text-ink-dim">
-					{t(`${more} more in the editor`, `还有 ${more} 小节在编辑器里`)}
-				</div>
-			)}
-
-			{edit.warnings.length > 0 && (
-				<ul className="border-t border-line px-3 py-2">
-					{edit.warnings.map((warning) => (
-						<li key={`${warning.code}:${warning.path}:${warning.message}`} className="flex gap-2 py-0.5 text-xs leading-snug text-ink-dim">
-							<TriangleAlert className="mt-px size-3.5 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-							<span>{warning.message}</span>
-						</li>
-					))}
-				</ul>
-			)}
-
-			<div className="border-t border-line p-2">
-				<Options>
-					<Option order={0} tone="ghost" onClick={() => setDismissed(true)} icon={<X className="size-3" strokeWidth={1.5} aria-hidden="true" />}>
-						{t("Leave it", "算了")}
-					</Option>
-					<Option
-						order={1}
-						tone="outline"
-						onClick={confirm}
-						icon={
-							edit.kind === "append" ? (
-								<Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />
-							) : edit.kind === "replace" ? (
-								<Replace className="size-3" strokeWidth={1.5} aria-hidden="true" />
-							) : (
-								<Music className="size-3" strokeWidth={1.5} aria-hidden="true" />
-							)
-						}
-					>
-						{edit.kind === "append"
-							? t("Add the bars", "加上")
-							: edit.kind === "replace"
-								? t("Replace the bar", "替换")
-								: t("Mark the chords", "标上")}
-					</Option>
-				</Options>
+			<div className="as-card-f">
+				<Button variant="ghost" size="sm" onClick={() => setDismissed(true)}>
+					<X aria-hidden="true" />
+					{t("Leave it", "算了")}
+				</Button>
+				<HearButton playing={audition.isPlaying} preparing={audition.isPreparing} onClick={audition.toggle} lang={lang} />
+				<Button size="sm" onClick={confirm}>
+					{edit.kind === "append" ? (
+						<Plus aria-hidden="true" />
+					) : edit.kind === "replace" ? (
+						<Replace aria-hidden="true" />
+					) : (
+						<Music aria-hidden="true" />
+					)}
+					{edit.kind === "append"
+						? t("Add the bars", "加上")
+						: edit.kind === "replace"
+							? t("Replace the bar", "替换")
+							: t("Mark the chords", "标上")}
+				</Button>
 			</div>
 		</div>
 	);

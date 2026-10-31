@@ -51,7 +51,7 @@ export function isIdle(touchedAt: number, now: number): boolean {
 	return now - touchedAt >= IDLE_MS;
 }
 
-function isMessage(value: unknown): value is StoredMessage {
+export function isMessage(value: unknown): value is StoredMessage {
 	if (typeof value !== "object" || value === null) return false;
 	const m = value as Partial<StoredMessage>;
 	return (
@@ -99,10 +99,34 @@ export function writeConversation<M extends StoredMessage>(messages: M[], now: n
 	}
 }
 
+/**
+ * The saved chat (#401) this thread is, when the player saved it or opened it
+ * from the library: later turns are written over that copy. Kept beside the
+ * transcript, so a refresh does not cut the thread from its saved copy.
+ */
+export const SAVED_CHAT_KEY = "guitarpal:assistantSavedChat";
+
+export function readSavedChatId(): string | null {
+	try {
+		return sessionStorage.getItem(SAVED_CHAT_KEY);
+	} catch {
+		return null;
+	}
+}
+
+export function writeSavedChatId(id: string | null): void {
+	try {
+		if (id === null) sessionStorage.removeItem(SAVED_CHAT_KEY);
+		else sessionStorage.setItem(SAVED_CHAT_KEY, id);
+	} catch {
+		// Private mode or a full quota: the link lasts for this page only.
+	}
+}
+
 export function readMode(): AssistantMode | null {
 	try {
 		const raw = sessionStorage.getItem(MODE_KEY);
-		return raw === "strum" || raw === "tab" || raw === "general" ? raw : null;
+		return raw === "strum" || raw === "tab" || raw === "general" || raw === "book" ? raw : null;
 	} catch {
 		return null;
 	}

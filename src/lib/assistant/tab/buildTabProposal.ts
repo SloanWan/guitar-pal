@@ -156,20 +156,19 @@ function writeBar(
 			// A fret written in the sentence is the fret; the chord only marks the bar.
 			// A tied slot carries the note on: the same fret, struck nothing.
 			const tied = planSlot.tied === true;
+			const held = tied ? { link: { kind: "tie" as const } } : {};
 			const written = planSlot.frets?.[i];
 			if (written !== undefined) {
 				slot.strings[stringIndex] =
-					written === "x"
-						? { fret: null, technique: null, tied, muted: true }
-						: { fret: written, technique: null, tied, muted: false };
+					written === "x" ? { fret: null, muted: true, ...held } : { fret: written, muted: false, ...held };
 				return;
 			}
 			const hint = hints ? hints[stringIndex] : 0;
 			if (hint === "/") {
-				slot.strings[stringIndex] = { fret: null, technique: null, tied, muted: true };
+				slot.strings[stringIndex] = { fret: null, muted: true, ...held };
 				if (!tied) leftOut(chordSymbolLabel(ref as ChordRef), stringIndex + 1);
 			} else {
-				slot.strings[stringIndex] = { fret: hint, technique: null, tied, muted: false };
+				slot.strings[stringIndex] = { fret: hint, muted: false, ...held };
 			}
 		});
 		return slot;
@@ -283,7 +282,7 @@ export function buildTabProposal(input: BuildTabProposalInput): BuildTabProposal
 		warnings.push({
 			code: "STRING_NOT_IN_SHAPE",
 			path: "measures",
-			message: `String${strings.size === 1 ? "" : "s"} ${list} ${strings.size === 1 ? "is" : "are"} not in the ${label} shape — written as dead notes.`,
+			message: `String${strings.size === 1 ? "" : "s"} ${list} ${strings.size === 1 ? "is" : "are"} not in the ${label} shape — written as x.`,
 		});
 	}
 	for (const label of noShape) {

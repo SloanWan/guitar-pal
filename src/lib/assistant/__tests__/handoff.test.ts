@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { makeDefaultPattern } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
-import { toBars } from "@/lib/strumBars";
+import { toBars } from "@/lib/strumRhythm";
 import {
+	opensOnly,
 	HANDOFF_EVENT,
 	stashHandoff,
 	takeHandoff,
@@ -44,7 +45,9 @@ describe("a fingerpick handoff", () => {
 		stashHandoff(stashed);
 		const taken = takeHandoff("fingerpick");
 		expect(taken).not.toBeNull();
-		expect(taken?.pattern).toEqual(stashed.pattern);
+		// The validator hands back the technique model v2 on top of what was stashed.
+		expect(taken!.pattern).toEqual({ ...stashed.pattern, schemaVersion: 2 });
+		expect(taken!.pattern.schemaVersion).toBe(2);
 		expect(taken?.warnings).toEqual(stashed.warnings);
 		expect(sessionStorage.getItem(KEY)).toBeNull();
 	});
@@ -107,5 +110,13 @@ describe("one stash, two pages", () => {
 		void _kind;
 		sessionStorage.setItem(KEY, JSON.stringify(legacy));
 		expect(takeHandoff()?.kind).toBe("pattern");
+	});
+});
+
+describe("opensOnly", () => {
+	it("is an ask with nothing to send: it opens the panel in its mode (#406)", () => {
+		expect(opensOnly({ text: "", mode: "book" })).toBe(true);
+		expect(opensOnly({ text: "  ", mode: "book" })).toBe(true);
+		expect(opensOnly({ text: "what does p.61 say?", mode: "book" })).toBe(false);
 	});
 });

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.ask.provider import anthropic_provider
 from app.extract.tab import (
     READ_SYSTEM,
     SEGMENT_SYSTEM,
@@ -294,7 +295,7 @@ def _page(n: int, text: str = "", layer: bool = False, image: bytes | None = b"p
 
 
 def _graph(model: FakeModel, validator: FakeValidator | None) -> ChapterParseGraph:
-    return ChapterParseGraph(SimpleNamespace(messages=model), validator)  # type: ignore[arg-type]
+    return ChapterParseGraph(anthropic_provider(SimpleNamespace(messages=model)), validator)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -369,8 +370,9 @@ async def test_text_layer_tab_and_prose_pages_are_not_read() -> None:
         BOOK, CHAPTER, pages, ParseTools(FakeRenderer(), FakeCrops())
     )
     assert result.exercises == []
-    assert [w["code"] for w in result.warnings] == ["PAGE_SKIPPED"]
-    assert "#228" in result.warnings[0]["message"]
+    assert [w["code"] for w in result.warnings] == ["TEXT_TAB_SKIPPED"]
+    assert result.warnings[0]["path"] == "page 1"
+    assert "read it by ear" in result.warnings[0]["message"]
     assert not any(r["system"] in (SEGMENT_SYSTEM, READ_SYSTEM) for r in model.requests)
 
 

@@ -1,8 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Command as Cmdk } from "cmdk";
+import { SearchIcon, XIcon } from "lucide-react";
 
-import { CommandDialog, CommandInput, CommandList } from "@/components/ui/command";
+import "@/components/playback/playback.css";
+import "@/components/playback/icons.css";
+import "./chord-search.css";
+import { Command, CommandList } from "@/components/ui/command";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import ChordSearchResults, { useChordPaletteRows } from "@/components/chords/ChordSearchResults";
 import { useChordSearchNavigation } from "@/components/chords/useChordSearchNavigation";
 import { getChordIndex } from "@/lib/chords";
@@ -58,7 +64,7 @@ export default function ChordSearchDialog() {
 		setQuery("");
 	}, []);
 
-	const { goToChord, goToBrowse, goToGrid, goToCreateChord } =
+	const { goToChord, goToBrowse, goToBoard, goToCreateChord } =
 		useChordSearchNavigation(close);
 	const rows = useChordPaletteRows(index, query);
 
@@ -68,31 +74,59 @@ export default function ChordSearchDialog() {
 	}, []);
 
 	return (
-		<CommandDialog
-			open={open}
-			onOpenChange={handleOpenChange}
-			shouldFilter={false}
-			title="Chord search"
-			description="Search the chord library by name — try Cmaj7, F#m7b5, or C/G. Type several chords to compare them side by side."
-		>
-			<CommandInput
-				value={query}
-				onValueChange={setQuery}
-				placeholder={
-					index.length === 0
-						? "Loading chords…"
-						: "Search chords — e.g. Cmaj7, or C Am F G"
-				}
-			/>
-			<CommandList>
-				<ChordSearchResults
-					rows={rows}
-					onSelectChord={goToChord}
-					onSelectShortcut={goToBrowse}
-					onSelectBatch={() => goToGrid(query)}
-					onCreateChord={goToCreateChord}
-				/>
-			</CommandList>
-		</CommandDialog>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
+			<DialogContent
+				data-m="chords"
+				showCloseButton={false}
+				// Hung from a fixed line, not centred: typing moves only the bottom edge.
+				className="top-[12dvh] translate-y-0 gap-0 overflow-hidden rounded-gp-xl p-0 sm:max-w-[560px]"
+			>
+				<DialogTitle className="sr-only">Chord search</DialogTitle>
+				<DialogDescription className="sr-only">
+					Search the chord library by name — try Cmaj7, F#m7b5, or C/G. Type several chords to compare them side
+					by side.
+				</DialogDescription>
+				<Command shouldFilter={false} label="Chord search" className="rounded-none bg-transparent">
+					<div className="ck-head">
+						<SearchIcon aria-hidden className="ck-glass" />
+						<Cmdk.Input
+							value={query}
+							onValueChange={setQuery}
+							className="ck-input"
+							placeholder={index.length === 0 ? "Loading chords…" : "Search chords — e.g. Cmaj7, or C Am F G"}
+						/>
+						<DialogClose asChild>
+							<button type="button" className="pb-icon" data-anim="close" aria-label="Close">
+								<XIcon aria-hidden />
+							</button>
+						</DialogClose>
+					</div>
+					<CommandList className="ck-list max-h-[min(420px,56dvh)]">
+						<ChordSearchResults
+							rows={rows}
+							onSelectChord={goToChord}
+							onSelectShortcut={goToBrowse}
+							onSelectBatch={() => goToBoard(query)}
+							onCreateChord={goToCreateChord}
+						/>
+					</CommandList>
+					<div className="ck-foot" aria-hidden>
+						<span>
+							<kbd className="ck-kbd">↑</kbd>
+							<kbd className="ck-kbd">↓</kbd>
+							Move
+						</span>
+						<span>
+							<kbd className="ck-kbd">↵</kbd>
+							Open
+						</span>
+						<span>
+							<kbd className="ck-kbd">esc</kbd>
+							Close
+						</span>
+					</div>
+				</Command>
+			</DialogContent>
+		</Dialog>
 	);
 }

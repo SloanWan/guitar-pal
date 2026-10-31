@@ -1,40 +1,15 @@
-import { useEffect, useState } from "react";
-import type { ChordView } from "@/components/strum/StepGrid";
 import { isPitchLabelStyle, type PitchLabelStyle } from "@/lib/fingerpickPitch";
-import {
-	SCROLL_SPEED_DEFAULT,
-	clampScrollSpeed,
-	readScrollSpeed,
-	writeScrollSpeed,
-} from "@/components/useAutoScroll";
+import { isDockLabelStyle, type DockLabelStyle } from "@/lib/fretboardDock";
+import { useStoredState, type StoredCodec } from "@/components/useStoredState";
 
-export {
-	SCROLL_SPEED_DEFAULT,
-	SCROLL_SPEED_MAX,
-	SCROLL_SPEED_MIN,
-	clampScrollSpeed,
-} from "@/components/useAutoScroll";
+// Device-local preferences for the fingerpick pages — not synced to the account.
+// The keys and their stored forms are the ones the page has always written, so a
+// preference set before survives.
 
-// Device-local preferences for the fingerpick page — not synced to the account.
+/** Whether the chord line shows names or the shapes to hold. */
+export type ChordLineView = "name" | "diagram";
 
-// Remembers the last-viewed pattern id so a page refresh reopens it instead of
-// defaulting back to the first preset.
 const LAST_PATTERN_KEY = "lastFingerpickPatternId";
-// Whether the chord line shows names or shapes, and how wide a shape is drawn.
-const CHORD_VIEW_KEY = "fingerpickChordView";
-const CHORD_SHAPE_WIDTH_KEY = "fingerpickChordShapeWidth";
-// Whether fret numbers outside the chord shape are coloured, in the shape view.
-const OFF_SHAPE_KEY = "fingerpickOffShape";
-// Whether a chord's tones are written beside its shape, in the shape view.
-const CHORD_TONES_KEY = "fingerpickChordTones";
-// Auto-scroll speed lives with the hook that creeps (useAutoScroll): the strum
-// progression card reads the same preference.
-// Editor beat labels in a compound meter: the two real beats ("1 + a 2 + a",
-// the default) or the six eighths ("1 2 3 4 5 6"), a teaching aid.
-const COUNT_EIGHTHS_KEY = "fingerpickCountEighths";
-// Whether the sounding pitch is written under every fret, and in which style.
-const PITCH_LABELS_KEY = "fingerpickPitchLabels";
-const PITCH_LABEL_STYLE_KEY = "fingerpickPitchLabelStyle";
 export const PITCH_LABEL_STYLE_DEFAULT: PitchLabelStyle = "scientific";
 
 /** Width range of the shape strip over a chord symbol, in px. */
@@ -46,41 +21,69 @@ export function clampShapeWidth(raw: number): number {
 	return Math.min(CHORD_SHAPE_WIDTH_MAX, Math.max(CHORD_SHAPE_WIDTH_MIN, Math.round(raw)));
 }
 
-function writeItem(key: string, value: string): void {
-	try {
-		localStorage.setItem(key, value);
-	} catch {
-		// ignore unavailable/blocked storage
-	}
+/** Auto-scroll's creep speed, in px/s. */
+export const SCROLL_SPEED_MIN = 4;
+export const SCROLL_SPEED_MAX = 60;
+export const SCROLL_SPEED_DEFAULT = 16;
+export function clampScrollSpeed(raw: number): number {
+	if (!Number.isFinite(raw)) return SCROLL_SPEED_DEFAULT;
+	return Math.min(SCROLL_SPEED_MAX, Math.max(SCROLL_SPEED_MIN, Math.round(raw)));
 }
+
+const ON_OFF: StoredCodec<boolean> = {
+	parse: (raw) => (raw === "on" ? true : raw === "off" ? false : null),
+	format: (on) => (on ? "on" : "off"),
+};
+const CHORD_VIEW: StoredCodec<ChordLineView> = {
+	parse: (raw) => (raw === "name" || raw === "diagram" ? raw : null),
+	format: (view) => view,
+};
+const PITCH_STYLE: StoredCodec<PitchLabelStyle> = {
+	parse: (raw) => (isPitchLabelStyle(raw) ? raw : null),
+	format: (style) => style,
+};
+function clamped(clamp: (raw: number) => number): StoredCodec<number> {
+	return { parse: (raw) => clamp(Number(raw)), format: String };
+}
+/** Unset (null) until the player chooses: the device's own default then. */
+const CHOSEN_ON_OFF: StoredCodec<boolean | null> = {
+	parse: ON_OFF.parse,
+	format: (on) => (on ? "on" : "off"),
+};
+const DOCK_LABELS: StoredCodec<DockLabelStyle> = {
+	parse: (raw) => (isDockLabelStyle(raw) ? raw : null),
+	format: (style) => style,
+};
+const SHAPE_WIDTH = clamped(clampShapeWidth);
+const SCROLL_SPEED = clamped(clampScrollSpeed);
 
 /**
  * The pattern to reopen: a `?pattern=<id>` deep link (e.g. from /home) takes
  * priority over the device-local last-viewed id. Null when neither is there or
- * storage is unavailable.
+ * storage is unavailable. Called from effects only, so the window is there.
  */
 export function readLastPatternId(): string | null {
 	try {
-		const queryId =
-			typeof window !== "undefined"
-				? new URLSearchParams(window.location.search).get("pattern")
-				: null;
-		return queryId ?? localStorage.getItem(LAST_PATTERN_KEY);
+		return new URLSearchParams(window.location.search).get("pattern") ?? localStorage.getItem(LAST_PATTERN_KEY);
 	} catch {
 		return null;
 	}
 }
 
 export function writeLastPatternId(id: string): void {
-	writeItem(LAST_PATTERN_KEY, id);
+	try {
+		localStorage.setItem(LAST_PATTERN_KEY, id);
+	} catch {
+		// remembered for this visit only
+	}
 }
 
 export interface FingerpickPrefs {
-	/** Chord line: names, or the shapes to hold. */
-	chordView: ChordView;
-	setChordView: (view: ChordView) => void;
+	chordView: ChordLineView;
+	setChordView: (view: ChordLineView) => void;
 	chordShapeWidth: number;
 	setChordShapeWidth: (raw: number) => void;
+	/** Shape view: colour the fret numbers that are not part of the chord shape. */
 	offShapeOn: boolean;
 	setOffShapeOn: (on: boolean) => void;
 	/** Shape view: write the chord's tones (C E G) beside each shape. */
@@ -96,109 +99,60 @@ export interface FingerpickPrefs {
 	setPitchLabelsOn: (on: boolean) => void;
 	pitchLabelStyle: PitchLabelStyle;
 	setPitchLabelStyle: (style: PitchLabelStyle) => void;
+	/**
+	 * The editor moves the cursor on a slot after a note is written. Null until
+	 * the player sets it: on for a phone, off for a desktop (`autoAdvanceOn`).
+	 */
+	autoAdvance: boolean | null;
+	setAutoAdvance: (on: boolean) => void;
+	/** What the editor's fretboard writes on its frets: the numbers, or the notes they sound. */
+	dockLabels: DockLabelStyle;
+	setDockLabels: (style: DockLabelStyle) => void;
+	/** The editor's fretboard is open (not folded to its header). */
+	dockOpen: boolean;
+	setDockOpen: (open: boolean) => void;
 }
 
-/**
- * The remembered view settings. Read back from storage on mount (not in the
- * initializers — the server render has no storage to read); every setter
- * clamps, applies and persists.
- */
+/** Whether the editor advances after a note: the player's choice, else on for a phone. */
+export function autoAdvanceOn(choice: boolean | null, phone: boolean): boolean {
+	return choice ?? phone;
+}
+
+/** The remembered view settings; every setter clamps, applies and stores. */
 export function useFingerpickPrefs(): FingerpickPrefs {
-	const [chordView, setChordViewState] = useState<ChordView>("name");
-	const [chordShapeWidth, setChordShapeWidthState] = useState(CHORD_SHAPE_WIDTH_DEFAULT);
-	const [offShapeOn, setOffShapeOnState] = useState(true);
-	const [chordTonesOn, setChordTonesOnState] = useState(false);
-	const [scrollSpeed, setScrollSpeedState] = useState(SCROLL_SPEED_DEFAULT);
-	const [countEighths, setCountEighthsState] = useState(false);
-	const [pitchLabelsOn, setPitchLabelsOnState] = useState(false);
-	const [pitchLabelStyle, setPitchLabelStyleState] =
-		useState<PitchLabelStyle>(PITCH_LABEL_STYLE_DEFAULT);
-
-	useEffect(() => {
-		let storedView: string | null = null;
-		let storedWidth: string | null = null;
-		let storedOffShape: string | null = null;
-		let storedChordTones: string | null = null;
-		let storedCountEighths: string | null = null;
-		let storedPitchLabels: string | null = null;
-		let storedPitchStyle: string | null = null;
-		const storedSpeed = readScrollSpeed();
-		try {
-			storedView = localStorage.getItem(CHORD_VIEW_KEY);
-			storedWidth = localStorage.getItem(CHORD_SHAPE_WIDTH_KEY);
-			storedOffShape = localStorage.getItem(OFF_SHAPE_KEY);
-			storedChordTones = localStorage.getItem(CHORD_TONES_KEY);
-			storedCountEighths = localStorage.getItem(COUNT_EIGHTHS_KEY);
-			storedPitchLabels = localStorage.getItem(PITCH_LABELS_KEY);
-			storedPitchStyle = localStorage.getItem(PITCH_LABEL_STYLE_KEY);
-		} catch {
-			// storage unavailable — the defaults it is
-		}
-		// Deferred, as the other storage restores are: a one-shot sync after
-		// mount, not a state change inside the render that scheduled it.
-		queueMicrotask(() => {
-			if (storedView === "diagram") setChordViewState("diagram");
-			if (storedWidth !== null) setChordShapeWidthState(clampShapeWidth(Number(storedWidth)));
-			if (storedOffShape === "off") setOffShapeOnState(false);
-			if (storedChordTones === "on") setChordTonesOnState(true);
-			setScrollSpeedState(storedSpeed);
-			if (storedCountEighths === "on") setCountEighthsState(true);
-			if (storedPitchLabels === "on") setPitchLabelsOnState(true);
-			if (isPitchLabelStyle(storedPitchStyle)) setPitchLabelStyleState(storedPitchStyle);
-		});
-	}, []);
-
-	function setChordView(view: ChordView) {
-		setChordViewState(view);
-		writeItem(CHORD_VIEW_KEY, view);
-	}
-	function setChordShapeWidth(raw: number) {
-		const width = clampShapeWidth(raw);
-		setChordShapeWidthState(width);
-		writeItem(CHORD_SHAPE_WIDTH_KEY, String(width));
-	}
-	function setOffShapeOn(on: boolean) {
-		setOffShapeOnState(on);
-		writeItem(OFF_SHAPE_KEY, on ? "on" : "off");
-	}
-	function setChordTonesOn(on: boolean) {
-		setChordTonesOnState(on);
-		writeItem(CHORD_TONES_KEY, on ? "on" : "off");
-	}
-	function setScrollSpeed(raw: number) {
-		const speed = clampScrollSpeed(raw);
-		setScrollSpeedState(speed);
-		writeScrollSpeed(speed);
-	}
-	function setCountEighths(on: boolean) {
-		setCountEighthsState(on);
-		writeItem(COUNT_EIGHTHS_KEY, on ? "on" : "off");
-	}
-	function setPitchLabelsOn(on: boolean) {
-		setPitchLabelsOnState(on);
-		writeItem(PITCH_LABELS_KEY, on ? "on" : "off");
-	}
-	function setPitchLabelStyle(style: PitchLabelStyle) {
-		setPitchLabelStyleState(style);
-		writeItem(PITCH_LABEL_STYLE_KEY, style);
-	}
-
+	const [chordView, setChordView] = useStoredState("fingerpickChordView", "name", CHORD_VIEW);
+	const [chordShapeWidth, setWidth] = useStoredState("fingerpickChordShapeWidth", CHORD_SHAPE_WIDTH_DEFAULT, SHAPE_WIDTH);
+	const [offShapeOn, setOffShapeOn] = useStoredState("fingerpickOffShape", true, ON_OFF);
+	const [chordTonesOn, setChordTonesOn] = useStoredState("fingerpickChordTones", false, ON_OFF);
+	const [scrollSpeed, setSpeed] = useStoredState("fingerpickScrollSpeed", SCROLL_SPEED_DEFAULT, SCROLL_SPEED);
+	const [countEighths, setCountEighths] = useStoredState("fingerpickCountEighths", false, ON_OFF);
+	const [pitchLabelsOn, setPitchLabelsOn] = useStoredState("fingerpickPitchLabels", false, ON_OFF);
+	const [pitchLabelStyle, setPitchLabelStyle] = useStoredState("fingerpickPitchLabelStyle", PITCH_LABEL_STYLE_DEFAULT, PITCH_STYLE);
+	const [autoAdvance, setAutoAdvance] = useStoredState<boolean | null>("fingerpickAutoAdvance", null, CHOSEN_ON_OFF);
+	const [dockLabels, setDockLabels] = useStoredState<DockLabelStyle>("fingerpickDockLabels", "fret", DOCK_LABELS);
+	const [dockOpen, setDockOpen] = useStoredState("fingerpickDockOpen", true, ON_OFF);
 	return {
 		chordView,
 		setChordView,
 		chordShapeWidth,
-		setChordShapeWidth,
+		setChordShapeWidth: (raw) => setWidth(clampShapeWidth(raw)),
 		offShapeOn,
 		setOffShapeOn,
 		chordTonesOn,
 		setChordTonesOn,
 		scrollSpeed,
-		setScrollSpeed,
+		setScrollSpeed: (raw) => setSpeed(clampScrollSpeed(raw)),
 		countEighths,
 		setCountEighths,
 		pitchLabelsOn,
 		setPitchLabelsOn,
 		pitchLabelStyle,
 		setPitchLabelStyle,
+		autoAdvance,
+		setAutoAdvance,
+		dockLabels,
+		setDockLabels,
+		dockOpen,
+		setDockOpen,
 	};
 }

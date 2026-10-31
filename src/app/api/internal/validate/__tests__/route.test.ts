@@ -18,7 +18,7 @@ function post(body: unknown, secret: string | null = SECRET): Promise<Response> 
 /** A one-measure tab draft in the editor's shape. */
 function tabDraft(): unknown {
 	const strings = () =>
-		Array.from({ length: 6 }, () => ({ fret: null, technique: null, tied: false, muted: false }));
+		Array.from({ length: 6 }, () => ({ fret: null, muted: false }));
 	return {
 		name: "Read from p3",
 		bpm: 80,

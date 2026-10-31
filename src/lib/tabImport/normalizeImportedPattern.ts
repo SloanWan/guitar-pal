@@ -13,9 +13,10 @@ export function normalizeImportedPattern(
 		return { pattern: null, errors, warnings, truncated: false };
 	}
 
-	const { measures: expanded, warnings: expandWarnings } = expandRepeats(
+	const { measures: expanded, warnings: expandWarnings, spans } = expandRepeats(
 		pattern.measures,
 		repeats,
+		pattern.spans,
 	);
 	warnings.push(...expandWarnings);
 
@@ -32,8 +33,10 @@ export function normalizeImportedPattern(
 		});
 	}
 
+	const out = { ...pattern, measures: capped };
+	if (pattern.spans !== undefined) out.spans = spans;
 	return {
-		pattern: { ...pattern, measures: capped },
+		pattern: out,
 		errors,
 		warnings,
 		truncated,

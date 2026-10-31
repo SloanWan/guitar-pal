@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, ClipboardList, Loader2, MessageCircle, Plus } from "lucide-react";
+import { BookOpen, ClipboardList, History, Loader2, MessageCircle, Plus, X } from "lucide-react";
+import { Popover as PopoverPrimitive } from "radix-ui";
 import { toast } from "sonner";
 import Link from "@/components/AppLink";
 import { exportMisses, readMisses } from "@/lib/assistant/missLog";
+import { modeModule } from "@/lib/assistant/panelView";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button, buttonClasses } from "@/components/ui/button";
 import AssistantPanel from "./AssistantPanel";
 import { useAssistant } from "./useAssistant";
-import { ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT } from "@/lib/assistant/handoff";
+import { ASSISTANT_ASK_EVENT, ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT, opensOnly, type AssistantAsk } from "@/lib/assistant/handoff";
+import "./assistant.css";
 
 /**
  * The topbar's rightmost control: opens the assistant over the page. Which
@@ -52,6 +56,8 @@ function readHeight(): number {
  */
 export default function AssistantLauncher() {
 	const [open, setOpen] = useState(false);
+	/** What the panel shows: the thread, or the saved chats in its place. */
+	const [view, setView] = useState<"thread" | "chats">("thread");
 
 	// The conversation's height, dragged from the bottom edge and kept on this
 	// device: a size someone settled on is a preference, not a session.
@@ -133,96 +139,127 @@ export default function AssistantLauncher() {
 		};
 	}, [messages.length]);
 
+	// A page asking for the player (Home's Ask): the panel opens on the
+	// conversation — never on the saved chats — and the sentence goes in, in
+	// the mode chosen there. Without a sentence (a book chapter's Ask, #406)
+	// the panel opens in that mode for the player to type.
+	const askRef = useRef({ open: setPanelOpen, send: assistant.send, setMode: assistant.setMode });
+	useEffect(() => {
+		askRef.current = { open: setPanelOpen, send: assistant.send, setMode: assistant.setMode };
+	});
+	useEffect(() => {
+		function ask(e: Event) {
+			const detail = (e as CustomEvent<AssistantAsk>).detail;
+			setView("thread");
+			if (opensOnly(detail)) askRef.current.setMode(detail.mode);
+			askRef.current.open(true);
+			if (!opensOnly(detail)) void askRef.current.send(detail.text, detail.mode);
+		}
+		window.addEventListener(ASSISTANT_ASK_EVENT, ask);
+		return () => window.removeEventListener(ASSISTANT_ASK_EVENT, ask);
+	}, []);
+
 	const title = "Assistant";
-	const label = pending
-		? `${title} — still writing`
-		: unread
-			? `${title} — a reply is waiting`
-			: `Open the ${title.toLowerCase()}`;
+	// every name starts with the visible word, so a voice user can say "Ask"
+	const ask = `Ask the ${title.toLowerCase()}`;
+	const label = pending ? `${ask} — still writing` : unread ? `${ask} — a reply is waiting` : ask;
 
 	return (
 		<Popover open={open} onOpenChange={setPanelOpen}>
-			<PopoverTrigger
-				aria-label={label}
-				className="relative flex size-(--h-control) items-center justify-center border border-line-strong text-ink-dim transition-[color,background-color,border-color] duration-(--dur-hover) ease-out hover:border-denim hover:text-denim-accent active:border-denim active:bg-denim-tint active:duration-(--dur-switch) focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1 data-[state=open]:border-denim data-[state=open]:text-denim-accent"
-			>
-				{/* The icon says what the conversation is doing while the panel is
-				    shut: turning while a reply is being written, and wearing a dot
-				    once one has landed unseen. Plain CSS animation — this is state
-				    display, not an interaction. */}
-				{pending ? (
-					<Loader2 className="size-4 animate-spin" strokeWidth={1.5} aria-hidden="true" />
-				) : (
-					<MessageCircle
-						className="size-4"
-						strokeWidth={1.5}
-						strokeLinecap="square"
-						aria-hidden="true"
-					/>
-				)}
-				{unread && (
-					<span
-						aria-hidden="true"
-						className="absolute right-1 top-1 size-1.5 rounded-full bg-denim"
-					/>
-				)}
+			<PopoverTrigger asChild>
+				{/* Ask: a secondary button, worded from 720px and an icon on a phone's app bar */}
+				<Button variant="secondary" size="sm" aria-label={label} className="max-[719.98px]:aspect-square max-[719.98px]:px-0">
+					{/* The icon says what the conversation is doing while the panel is
+					    shut: turning while a reply is being written, and wearing a dot
+					    once one has landed unseen. Plain CSS animation — this is state
+					    display, not an interaction. */}
+					{pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <MessageCircle aria-hidden="true" />}
+					<span className="gp-wide-only">Ask</span>
+					{unread && (
+						<span aria-hidden="true" className="absolute right-1.5 top-1.5 size-2 rounded-full bg-gp-a2" />
+					)}
+				</Button>
 			</PopoverTrigger>
 
 			<PopoverContent
 				align="end"
 				sideOffset={8}
-				collisionPadding={12}
-				// The system's one elevation shadow: this panel floats over content it
-				// does not own, where a 1px border alone can disappear into a busy
-				// background. See --elev-panel in globals.css.
-				// The page's own background, not the panel surface: a conversation
-				// reads as a place of its own, and the bubbles carry the contrast.
-				className="w-[min(24rem,calc(100vw-1.5rem))] bg-surface p-0 [box-shadow:var(--elev-panel)]"
+				collisionPadding={8}
+				// Portaled out of <main>, so it carries the module itself: the mode's
+				// colour for the chip's thumb and the send button. Each reply in the
+				// thread re-points it to its own.
+				data-m={modeModule(assistant.mode)}
+				className="as-pop"
+				// A field that answers Escape itself (renaming a saved chat) keeps the panel open.
+				onEscapeKeyDown={(e) => {
+					if (document.activeElement?.closest("[data-own-escape]")) e.preventDefault();
+				}}
 			>
-				<div className="flex items-center justify-between border-b border-line px-3 py-2">
-					<span className="flex items-center gap-2">
-						<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
-							{title}
-						</span>
-						{/* What the rules readers understand, as a page. The panel closes
-						    on the way there — it would stand in front of the very thing
-						    the reader is trying to read. */}
-						<Link
-							href="/docs/assistant-grammar"
-							onClick={() => setPanelOpen(false)}
-							title="What the assistant reads"
-							aria-label="What the assistant reads"
-							className="flex items-center text-ink-faint transition-colors duration-(--dur-hover) hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-						>
-							<BookOpen className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-						</Link>
-					</span>
+				<div className="as-head">
+					<span className="as-title">{title}</span>
+					{/* What the rules readers understand, as a page. The panel closes
+					    on the way there — it would stand in front of the very thing
+					    the reader is trying to read. */}
+					<Link
+						href="/docs/assistant-grammar"
+						onClick={() => setPanelOpen(false)}
+						title="What the assistant reads"
+						aria-label="What the assistant reads"
+						className={buttonClasses("ghost", "as-icon-btn")}
+						data-size="xs"
+					>
+						<BookOpen aria-hidden="true" />
+					</Link>
 					{devMisses > 0 && (
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="xs"
 							onClick={copyMisses}
 							title="Development only: copy every sentence nothing read, as eval-set JSON"
-							className="mr-auto ml-3 flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-faint transition-colors duration-(--dur-hover) hover:text-denim-accent focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
+							aria-label={`Copy ${devMisses} misses`}
+							className="as-misses"
 						>
-							<ClipboardList className="size-3" strokeWidth={1.5} aria-hidden="true" />
-							misses · {devMisses}
-						</button>
+							<ClipboardList aria-hidden="true" />
+							{devMisses}
+						</Button>
 					)}
-					{assistant.messages.length > 0 && (
-						<button
-							type="button"
-							onClick={assistant.reset}
-							disabled={assistant.pending}
-							className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim transition-colors duration-(--dur-hover) hover:text-denim-accent disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-						>
-							<Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />
-							New chat
-						</button>
-					)}
+					<span className="as-spacer" />
+					{/* The saved chats (#401) take the panel's place; pressed again, the thread comes back. */}
+					<Button
+						variant="ghost"
+						size="xs"
+						className="as-icon-btn"
+						aria-label="Your saved chats"
+						title="Your saved chats"
+						aria-pressed={view === "chats"}
+						onClick={() => setView(view === "chats" ? "thread" : "chats")}
+					>
+						<History aria-hidden="true" />
+					</Button>
+					{/* Always there, so the head never shifts: there is nothing to start
+					    over from until something has been said. */}
+					<Button
+						variant="ghost"
+						size="xs"
+						onClick={() => {
+							assistant.reset();
+							setView("thread");
+						}}
+						disabled={assistant.messages.length === 0 || assistant.pending}
+					>
+						<Plus aria-hidden="true" />
+						New chat
+					</Button>
+					<PopoverPrimitive.Close asChild>
+						<Button variant="ghost" size="xs" aria-label="Close the assistant" className="as-icon-btn">
+							<X aria-hidden="true" />
+						</Button>
+					</PopoverPrimitive.Close>
 				</div>
-				{open && <AssistantPanel assistant={assistant} height={height} />}
+				{open && <AssistantPanel assistant={assistant} height={height} view={view} onView={setView} />}
 				{/* The grip: the panel's bottom edge, draggable. touch-action none so a
-				    finger dragging it resizes the panel rather than scrolling the page. */}
+				    finger dragging it resizes the panel rather than scrolling the page.
+				    A phone's panel fills the window and has none. */}
 				<div
 					role="separator"
 					aria-orientation="horizontal"
@@ -241,13 +278,8 @@ export default function AssistantLauncher() {
 						e.preventDefault();
 						setHeight((h) => clampHeight(h + (e.key === "ArrowDown" ? 24 : -24)));
 					}}
-					className="group flex h-2.5 cursor-ns-resize touch-none items-center justify-center border-t border-line focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1"
-				>
-					<span
-						aria-hidden="true"
-						className="h-0.5 w-8 bg-line-strong transition-colors duration-(--dur-hover) group-hover:bg-denim"
-					/>
-				</div>
+					className="as-grip"
+				/>
 			</PopoverContent>
 		</Popover>
 	);

@@ -39,7 +39,13 @@ const GREETINGS: Record<Lang, readonly ((name: string | null) => string)[]> = {
  */
 export function hint(lang: Lang, signedIn: boolean, mode: AssistantMode = "strum"): string {
 	const what =
-		mode === "general"
+		mode === "book"
+			? pick(
+					lang,
+					"Ask the open chapter: what it says, what a term means, or for one of its exercises. Answers from the book cite their pages; anything else is marked as not from the book.",
+					"问打开的这一章：它讲了什么、某个术语是什么意思，或者要它的某条练习。来自书的回答会标出页码；其他的会标明不是出自这本书。",
+				)
+			: mode === "general"
 			? pick(
 					lang,
 					"Ask anything about playing or practice, or say what you want and I'll make it — a strum, a progression, a fingerpicking pattern. Written-out chords and rhythms still go through the same readers.",
@@ -133,6 +139,13 @@ const INPUT_PROMPTS: Record<AssistantMode, readonly string[]> = {
 		"给我一个 C 调的民谣扫弦，慢一点",
 		"how do I practise chord changes?",
 	],
+	book: [
+		"what does this chapter say about the left hand?",
+		"这一章的重点是什么？",
+		"give me the first exercise in this chapter",
+		"what does the book mean by 把位?",
+		"which pages explain the scale?",
+	],
 };
 
 export function inputPrompts(mode: AssistantMode): readonly string[] {
@@ -148,6 +161,7 @@ const EXAMPLES: Record<AssistantMode, readonly string[]> = {
 	strum: ["C Am F G", "D DU UD", "a slow folk strum in C G Am F"],
 	tab: ["C G Am F: R3231323", "Am: 53231323", "travis picking in C"],
 	general: ["a slow folk strum in C G Am F", "a Travis pattern for Am and F", "what chords go with Em?"],
+	book: ["what does this chapter teach?", "这一章的重点是什么？", "give me the first exercise in this chapter"],
 };
 
 export function examples(mode: AssistantMode): readonly string[] {

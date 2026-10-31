@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Music, Plus, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Music, Play, Plus, Search, X } from "lucide-react";
+import "./chord-search-select.css";
 import MusicalText from "@/components/MusicalText";
 import { chordDisplayName } from "@/lib/chordSuffixes";
 import {
@@ -13,6 +14,16 @@ import {
 import { parseTabSequence } from "@/lib/chordTabSequence";
 import { resolveShapeToChord, type ShapeSearchChord } from "@/lib/chordShapeSearch";
 import type { ChordRef } from "@/lib/strumPatterns";
+import { chordAbbreviation } from "@/lib/strumProgressions";
+import { sameChord } from "@/lib/recentChords";
+
+/** A row of chords offered while the field is empty: one click takes one. */
+export interface ChordSuggestionRow {
+	label: string;
+	chords: readonly ChordRef[];
+	/** The one to tint: the chord in effect where the search was opened. */
+	current?: ChordRef | null;
+}
 
 interface Props {
 	chord: ChordRef | null;
@@ -46,6 +57,14 @@ interface Props {
 	inlineList?: boolean;
 	/** How the picked chord is written in the field; the library's display name by default. */
 	format?: (root: string, suffix: string) => string;
+	/** `candy` for a page on the new design system (`csel-*`); left out, the v3 look. */
+	skin?: "candy";
+	/** Candy only: rows of chords shown while the field is focused and empty. */
+	suggestions?: readonly ChordSuggestionRow[];
+	/** Candy only: a ▶ before every match, which plays it without taking it. */
+	onHear?: (chord: ChordRef) => void;
+	/** Candy only: drawn at the end of every match — its shape, small. */
+	renderShape?: (chord: ChordRef) => ReactNode;
 }
 
 /**
@@ -64,7 +83,14 @@ export default function ChordSearchSelect({
 	onCreate,
 	inlineList = false,
 	format = chordDisplayName,
+	skin,
+	suggestions = [],
+	onHear,
+	renderShape,
 }: Props) {
+	const candy = skin === "candy";
+	// A match laid out as a row: its ▶, its name over its kind, its shape.
+	const rich = candy && (onHear !== undefined || renderShape !== undefined);
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(false);
 	const [highlighted, setHighlighted] = useState(0);
@@ -86,7 +112,9 @@ export default function ChordSearchSelect({
 		() => (editing && !shape ? searchChords(index, query) : []),
 		[index, query, editing, shape],
 	);
-	const open = editing && (results.length > 0 || shape !== null || query.trim() !== "");
+	const typed = query.trim() !== "";
+	const offered = candy && !typed ? suggestions.filter((row) => row.chords.length > 0) : [];
+	const open = editing && (results.length > 0 || shape !== null || typed || offered.length > 0);
 	/**
 	 * What the query names, when the library has no chord of that name: "c/d"
 	 * finds C/E and C/G, which is not the C/D the player asked for. Offered for
@@ -98,7 +126,7 @@ export default function ChordSearchSelect({
 	const offerCreate =
 		onCreate !== undefined &&
 		((shape !== null && !shapeChord && shapeCorpus !== null) ||
-			(shape === null && index.length > 0 && (results.length === 0 || exactMissing)));
+			(shape === null && typed && index.length > 0 && (results.length === 0 || exactMissing)));
 
 	// Close on a press anywhere outside, the way the other in-modal popovers do.
 	useEffect(() => {
@@ -176,14 +204,15 @@ export default function ChordSearchSelect({
 			: (unknown ?? "");
 
 	return (
-		<div ref={containerRef} className="relative">
+		<div ref={containerRef} className={candy ? "csel" : "relative"}>
 			<div
+				data-state={candy ? (chord && !editing ? "chord" : unknown && !editing ? "unknown" : undefined) : undefined}
 				title={
 					unknown && !editing
 						? `${unknown} — not in the chord library, so this bar sounds nothing`
 						: undefined
 				}
-				className={`flex items-center gap-1.5 border px-2 py-1 transition-colors ${
+				className={candy ? "csel-field" : `flex items-center gap-1.5 border px-2 py-1 transition-colors ${
 					chord && !editing
 						? "border-denim bg-denim-tint text-denim"
 						: unknown && !editing
@@ -191,7 +220,7 @@ export default function ChordSearchSelect({
 							: "border-line-strong text-ink-dim focus-within:border-denim"
 				}`}
 			>
-				<Music size={10} className="shrink-0" />
+				{candy ? <Search className="csel-icon" aria-hidden /> : <Music size={10} className="shrink-0" />}
 				<input
 					ref={inputRef}
 					type="text"
@@ -211,7 +240,11 @@ export default function ChordSearchSelect({
 						setHighlighted(0);
 					}}
 					onKeyDown={handleKeyDown}
-					className="w-24 bg-transparent font-mono text-[11px] font-semibold placeholder:font-normal placeholder:text-ink-dim focus:outline-none"
+					className={
+						candy
+							? "csel-input"
+							: "w-24 bg-transparent font-mono text-[11px] font-semibold placeholder:font-normal placeholder:text-ink-dim focus:outline-none"
+					}
 				/>
 				{/* Clearing a kept name goes through the same path a chord does:
 				    `setBarChord` retires the placeholder either way. */}
@@ -221,24 +254,107 @@ export default function ChordSearchSelect({
 						onClick={() => onChange(null)}
 						aria-label={`Clear ${ariaLabel}`}
 						title="Clear chord"
-						className={`shrink-0 transition-colors ${
-							chord ? "text-denim hover:text-destructive" : "text-destructive hover:text-ink"
-						}`}
+						className={
+							candy
+								? "csel-clear"
+								: `shrink-0 transition-colors ${chord ? "text-denim hover:text-destructive" : "text-destructive hover:text-ink"}`
+						}
 					>
-						<X size={10} />
+						<X size={candy ? 14 : 10} />
 					</button>
 				)}
+				{/* The candy field keeps the clear button's room while it is away, so the
+				    field is one width empty, typed into, or holding a chord. */}
+				{candy && !((chord || unknown) && !editing) && <span className="csel-clear" aria-hidden data-away="" />}
 			</div>
 
 			{open && (
 				<ul
 					id={listboxId}
 					role="listbox"
-					className={`z-50 mt-1 max-h-44 w-52 overflow-y-auto border border-line-strong bg-popover ${
-						inlineList ? "" : "absolute left-0 top-full"
-					}`}
+					data-inline={candy && inlineList ? "" : undefined}
+					className={
+						candy
+							? "csel-list"
+							: `z-50 mt-1 max-h-44 w-52 overflow-y-auto border border-line-strong bg-popover ${
+									inlineList ? "" : "absolute left-0 top-full"
+								}`
+					}
 				>
-					{results.map((r, i) => {
+					{offered.map((row) => (
+						<li key={row.label} role="presentation">
+							<div className="csel-sec">{row.label}</div>
+							<div className="csel-chips">
+								{row.chords.map((chord) => (
+									<button
+										key={`${chord.root} ${chord.suffix}`}
+										type="button"
+										tabIndex={-1}
+										className="csel-chip"
+										data-now={row.current && sameChord(row.current, chord) ? "" : undefined}
+										onPointerDown={(e) => {
+											e.preventDefault();
+											commitShape(chord);
+										}}
+									>
+										<MusicalText text={chordAbbreviation(chord)} />
+									</button>
+								))}
+							</div>
+						</li>
+					))}
+					{rich &&
+						results.map((r, i) => {
+							const ref: ChordRef = { root: r.root, suffix: r.suffix, voicingId: null };
+							const name = chordDisplayName(r.root, r.suffix);
+							return (
+								<li
+									key={`${r.root} ${r.suffix}`}
+									className="csel-row"
+									data-hi={i === highlighted ? "" : undefined}
+									onMouseEnter={() => setHighlighted(i)}
+								>
+									{onHear && (
+										<button
+											type="button"
+											tabIndex={-1}
+											className="csel-play"
+											aria-label={`Hear ${name}`}
+											// Heard, not taken: the field keeps its focus and the list stays open.
+											onPointerDown={(e) => {
+												e.preventDefault();
+												onHear(ref);
+											}}
+										>
+											<Play aria-hidden />
+										</button>
+									)}
+									<button
+										type="button"
+										role="option"
+										aria-selected={i === highlighted}
+										onPointerDown={(e) => {
+											e.preventDefault();
+											commit(r);
+										}}
+										className="csel-opt"
+									>
+										<span className="csel-nm">
+											<span className="csel-name">
+												<MusicalText text={name} />
+											</span>
+											<span className="csel-cat">{r.category}</span>
+										</span>
+										{renderShape && (
+											<span className="csel-shape" aria-hidden>
+												{renderShape(ref)}
+											</span>
+										)}
+									</button>
+								</li>
+							);
+						})}
+					{!rich && results.map((r, i) => {
 						const key = `${r.root} ${r.suffix}`;
 						return (
 							<li key={key}>
@@ -253,14 +369,18 @@ export default function ChordSearchSelect({
 										e.preventDefault();
 										commit(r);
 									}}
-									className={`flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors ${
-										i === highlighted ? "bg-denim-tint" : ""
-									}`}
+									className={
+										candy
+											? "csel-opt"
+											: `flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors ${
+													i === highlighted ? "bg-denim-tint" : ""
+												}`
+									}
 								>
-									<span className="font-mono text-[11px] font-semibold text-ink">
+									<span className={candy ? "csel-name" : "font-mono text-[11px] font-semibold text-ink"}>
 										<MusicalText text={chordDisplayName(r.root, r.suffix)} />
 									</span>
-									<span className="ml-auto font-mono text-[9px] text-ink-faint">
+									<span className={candy ? "csel-cat" : "ml-auto font-mono text-[9px] text-ink-faint"}>
 										{r.category}
 									</span>
 								</button>
@@ -269,7 +389,47 @@ export default function ChordSearchSelect({
 					})}
 					{/* A written shape offers exactly one answer: the chord held that
 					    way, pinned to the very voicing that was written. */}
-					{shape && shapeChord && (
+					{rich && shape && shapeChord && (
+						<li className="csel-row" data-hi="">
+							{onHear && (
+								<button
+									type="button"
+									tabIndex={-1}
+									className="csel-play"
+									aria-label={`Hear ${chordDisplayName(shapeChord.root, shapeChord.suffix)}`}
+									onPointerDown={(e) => {
+										e.preventDefault();
+										onHear(shapeChord);
+									}}
+								>
+									<Play aria-hidden />
+								</button>
+							)}
+							<button
+								type="button"
+								role="option"
+								aria-selected
+								onPointerDown={(e) => {
+									e.preventDefault();
+									commitShape(shapeChord);
+								}}
+								className="csel-opt"
+							>
+								<span className="csel-nm">
+									<span className="csel-name">
+										<MusicalText text={chordDisplayName(shapeChord.root, shapeChord.suffix)} />
+									</span>
+									<span className="csel-cat">held this way</span>
+								</span>
+								{renderShape && (
+									<span className="csel-shape" aria-hidden>
+										{renderShape(shapeChord)}
+									</span>
+								)}
+							</button>
+						</li>
+					)}
+					{!rich && shape && shapeChord && (
 						<li>
 							<button
 								type="button"
@@ -279,12 +439,12 @@ export default function ChordSearchSelect({
 									e.preventDefault();
 									commitShape(shapeChord);
 								}}
-								className="flex w-full items-center gap-2 bg-denim-tint px-2 py-1.5 text-left"
+								className={candy ? "csel-opt" : "flex w-full items-center gap-2 bg-denim-tint px-2 py-1.5 text-left"}
 							>
-								<span className="font-mono text-[11px] font-semibold text-ink">
+								<span className={candy ? "csel-name" : "font-mono text-[11px] font-semibold text-ink"}>
 									<MusicalText text={chordDisplayName(shapeChord.root, shapeChord.suffix)} />
 								</span>
-								<span className="ml-auto font-mono text-[9px] text-ink-faint">
+								<span className={candy ? "csel-cat" : "ml-auto font-mono text-[9px] text-ink-faint"}>
 									held this way
 								</span>
 							</button>
@@ -292,13 +452,13 @@ export default function ChordSearchSelect({
 					)}
 
 					{shape && !shapeChord && (
-						<li className="px-2 py-2 text-center font-mono text-[10px] text-ink-faint">
+						<li className={candy ? "csel-note" : "px-2 py-2 text-center font-mono text-[10px] text-ink-faint"}>
 							{shapeCorpus === null ? "Looking for that shape…" : "Nothing is held that way"}
 						</li>
 					)}
 
-					{!shape && results.length === 0 && (
-						<li className="px-2 py-2 text-center font-mono text-[10px] text-ink-faint">
+					{!shape && results.length === 0 && (typed || offered.length === 0) && (
+						<li className={candy ? "csel-note" : "px-2 py-2 text-center font-mono text-[10px] text-ink-faint"}>
 							{index.length === 0 ? "Loading chords…" : "No match"}
 						</li>
 					)}
@@ -316,7 +476,11 @@ export default function ChordSearchSelect({
 									stopEditing();
 									inputRef.current?.blur();
 								}}
-								className="flex w-full items-center gap-2 border-t border-line px-2 py-1.5 text-left font-mono text-[11px] font-semibold text-denim-accent transition-colors hover:bg-denim-tint"
+								className={
+									candy
+										? "csel-opt csel-create"
+										: "flex w-full items-center gap-2 border-t border-line px-2 py-1.5 text-left font-mono text-[11px] font-semibold text-denim-accent transition-colors hover:bg-denim-tint"
+								}
 							>
 								<Plus size={11} className="shrink-0" />
 								{exact && exactMissing ? (

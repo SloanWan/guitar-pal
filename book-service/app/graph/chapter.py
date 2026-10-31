@@ -20,10 +20,11 @@ import logging
 from collections.abc import Sequence
 from dataclasses import replace
 
-from anthropic import AsyncAnthropic
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from app.ask.provider import Provider
+from app.ask.structured import structured_call
 from app.extract.tab import (
     READ_DPI,
     SEGMENT_DPI,
@@ -47,7 +48,7 @@ from app.graph.state import (
     PageState,
     Region,
 )
-from app.ingest.model import CLASSIFY_MODEL, MODEL, CallUsage, usage_of
+from app.ingest.model import CallUsage
 from app.parse import ChapterResult, ParsePage, ParseTools
 from app.repo import BookRow, ChapterRow, ExerciseRecord, NoteRecord, Usage
 from app.validate import ValidatorClient
@@ -60,6 +61,9 @@ CLASSIFY_TEXT_CHARS = 6_000
 NOTES_TEXT_CHARS = 160_000
 # Classification calls in flight at once.
 CLASSIFY_CONCURRENCY = 4
+# Caps for the answer; a reasoning provider adds its thinking room on top.
+CLASSIFY_MAX_TOKENS = 1024
+NOTES_MAX_TOKENS = 8192
 
 KINDS: frozenset[str] = frozenset(
     {
@@ -91,12 +95,12 @@ def _image_block(png: bytes) -> dict[str, object]:
 
 
 class ChapterParseGraph:
-    """`ChapterGraph` over the Anthropic API."""
+    """`ChapterGraph` over a model provider — Anthropic in the service; DeepSeek by hand."""
 
-    def __init__(self, client: AsyncAnthropic, validator: ValidatorClient | None = None) -> None:
-        self._client = client
+    def __init__(self, provider: Provider, validator: ValidatorClient | None = None) -> None:
+        self._provider = provider
         self._classify_slots = asyncio.Semaphore(CLASSIFY_CONCURRENCY)
-        self._tab = TabExtractor(client, validator) if validator is not None else None
+        self._tab = TabExtractor(provider, validator) if validator is not None else None
         self._graph = self._build()
 
     async def __call__(
@@ -140,6 +144,23 @@ class ChapterParseGraph:
             warnings=list(state.get("warnings", [])),
         )
 
+    async def notes_only(
+        self, book: BookRow, chapter: ChapterRow, pages: Sequence[ParsePage]
+    ) -> ChapterResult:
+        """The knowledge-points call by itself — what `--notes-only` calibrates (#245)."""
+        out = await self.notes(
+            {"book_title": book.title, "chapter_title": chapter.title, "pages": list(pages)}
+        )
+        calls: list[CallUsage] = out.get("usage", [])  # type: ignore[assignment]
+        return ChapterResult(
+            notes=list(out.get("notes", [])),  # type: ignore[arg-type]
+            usage=Usage(
+                input_tokens=sum(u.input_tokens for u in calls),
+                output_tokens=sum(u.output_tokens for u in calls),
+                cost_usd=round(sum(u.cost_usd for u in calls), 4),
+            ),
+        )
+
     # --- nodes -------------------------------------------------------------
 
     async def classify_page(self, state: PageState) -> dict[str, object]:
@@ -165,15 +186,15 @@ class ChapterParseGraph:
             return {"classified": [PageClass(page.page, "other", (), "blank page")], "usage": []}
 
         async with self._classify_slots:
-            response = await self._client.messages.parse(
-                model=CLASSIFY_MODEL,
-                max_tokens=1024,
+            out, usage = await structured_call(
+                self._provider,
                 system=CLASSIFY_SYSTEM,
                 messages=[{"role": "user", "content": content}],
-                output_format=PageClassOut,
-                output_config={"effort": "low"},
+                output=PageClassOut,
+                max_tokens=CLASSIFY_MAX_TOKENS,
+                effort="low",
+                small=True,
             )
-        out = response.parsed_output if response.stop_reason == "end_turn" else None
         if out is None:
             classified = PageClass(page.page, "other", (), "classification did not finish")
         else:
@@ -181,15 +202,14 @@ class ChapterParseGraph:
                 Region(_kind(r.kind), _bbox(r.bbox)) for r in out.regions if len(r.bbox) == 4
             )
             classified = PageClass(page.page, _kind(out.kind), regions, out.note.strip())
-        return {"classified": [classified], "usage": [usage_of(response, CLASSIFY_MODEL)]}
+        return {"classified": [classified], "usage": [usage]}
 
     async def notes(self, state: ChapterState) -> dict[str, object]:
         text = _chapter_text(state["pages"])
         if not text.strip():
             return {"notes": [], "usage": []}
-        response = await self._client.messages.parse(
-            model=MODEL,
-            max_tokens=8192,
+        out, usage = await structured_call(
+            self._provider,
             system=NOTES_SYSTEM,
             messages=[
                 {
@@ -199,21 +219,23 @@ class ChapterParseGraph:
                     ),
                 }
             ],
-            output_format=NotesOut,
-            output_config={"effort": "medium"},
+            output=NotesOut,
+            max_tokens=NOTES_MAX_TOKENS,
+            effort="medium",
         )
-        out = response.parsed_output if response.stop_reason == "end_turn" else None
         page_numbers = {p.page for p in state["pages"]}
-        notes = [
-            NoteRecord(
-                title=n.title.strip()[:200],
-                body=n.body.strip(),
-                pages=tuple(sorted({p for p in n.pages if p in page_numbers})),
-            )
-            for n in (out.notes if out else [])
-            if n.title.strip() and n.body.strip()
-        ]
-        return {"notes": notes, "usage": [usage_of(response)]}
+        notes: list[NoteRecord] = []
+        for n in out.notes if out else []:
+            if not (n.title.strip() and n.body.strip()):
+                continue
+            pages = note_pages(n.pages, page_numbers)
+            if not pages and n.pages:
+                # The model named pages the chapter does not have — most
+                # likely the book's own printed numbering. The note keeps no
+                # key rather than a wrong one; the log says what it said.
+                log.info("notes: %r cited pages %s, outside the chapter", n.title, n.pages)
+            notes.append(NoteRecord(title=n.title.strip()[:200], body=n.body.strip(), pages=pages))
+        return {"notes": notes, "usage": [usage]}
 
     async def extract_tab(self, state: ExtractState) -> dict[str, object]:
         """One tab page, or one tab region of a mixed page: segment, then read each exercise."""
@@ -221,7 +243,13 @@ class ChapterParseGraph:
         stem = f"p{page.page:04d}" + (f"-r{state['ordinal']}" if region else "")
         assert self._tab is not None
         if page.has_text_layer and looks_like_text_tab(page.text):
-            return _skipped(page.page, "the tab is in the text layer — not read here (#228)")
+            # Text tab carries no durations, so it is not read here: the card
+            # offers it to the player to read by ear instead (#228).
+            return _skipped(
+                page.page,
+                "the tab is in the text layer, which carries no rhythm — read it by ear",
+                code="TEXT_TAB_SKIPPED",
+            )
         if tools is None:
             return _skipped(page.page, "no page renderer in this run; tab not read")
 
@@ -315,10 +343,20 @@ class ChapterParseGraph:
         return sends
 
 
-def _skipped(page: int, why: str) -> dict[str, object]:
-    return {
-        "warnings": [{"code": "PAGE_SKIPPED", "path": f"page {page}", "message": f"p{page}: {why}"}]
-    }
+def note_pages(cited: Sequence[int], chapter_pages: set[int]) -> tuple[int, ...]:
+    """
+    The pages a note keeps (#245): only ones inside the chapter, each once, in
+    the order the model gave them — the first is the one the card opens.
+    """
+    kept: list[int] = []
+    for page in cited:
+        if page in chapter_pages and page not in kept:
+            kept.append(page)
+    return tuple(kept)
+
+
+def _skipped(page: int, why: str, code: str = "PAGE_SKIPPED") -> dict[str, object]:
+    return {"warnings": [{"code": code, "path": f"page {page}", "message": f"p{page}: {why}"}]}
 
 
 def _bbox(values: list[float]) -> tuple[float, float, float, float]:

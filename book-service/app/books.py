@@ -4,6 +4,7 @@ repo, hand the long job to the scanner. Every handler starts from the
 verified session, and every repo call takes its `user_id`.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Annotated, Literal
@@ -12,6 +13,10 @@ import asyncpg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.ask.graph import AskGraph
+from app.ask.limits import SlidingWindowLimiter
+from app.ask.strategies.long_context import ChapterUnavailable
+from app.ask.types import AskContext, AskTurn
 from app.auth import CurrentSession
 from app.db import get_pool
 from app.ingest.toc import MAX_TITLE_CHARS, Chapter
@@ -217,6 +222,17 @@ def get_parser(request: Request) -> Parser:
     return parser
 
 
+def get_ask(request: Request) -> AskGraph:
+    ask = getattr(request.app.state, "ask", None)
+    if ask is None:
+        raise HTTPException(503, "Chapter Q&A is not configured on this deployment.")
+    return ask
+
+
+# One limiter per process, like the Next.js assistant route's.
+ask_limiter = SlidingWindowLimiter()
+
+
 def get_pages(request: Request) -> PageImages:
     pages = getattr(request.app.state, "pages", None)
     if pages is None:
@@ -295,13 +311,19 @@ async def scan_book(
     Schedules the whole-book pass; poll `GET /books/{id}` for progress. A
     book already scanning answers 409 rather than starting a second job.
     """
-    await owned_book(repo, session.user_id, book_id)
+    owned = await owned_book(repo, session.user_id, book_id)
+    # What the last scan wrote beside the PDF (#246): the chapters' crops
+    # (their ids change with the rescan) and the page images (the PDF may have
+    # been re-uploaded). Listed before the claim, while the chapters are there.
+    stale = [pages_folder(owned.storage_path, owned.id)] + [
+        crops_folder(owned.storage_path, c.id) for c in await repo.list_chapters(owned.id)
+    ]
     book = await repo.start_scan(session.user_id, book_id)
     if book is None:
         raise HTTPException(409, "This book is being scanned already.")
     # The scan reads the PDF with this same session token; a token that
     # expires mid-scan only matters for the download, which happens first.
-    background.add_task(scanner.run, book.id, book.storage_path, session.token)
+    background.add_task(scanner.run, book.id, book.storage_path, session.token, stale)
     return BookOut.of(book)
 
 
@@ -324,10 +346,15 @@ async def get_chapter_parse(
 ) -> ChapterParse:
     """Status while parsing; the card once ready. Poll this."""
     _, chapter = await owned_chapter(repo, session.user_id, book_id, chapter_id)
+    # Side by side once the chapter is known to be the player's: each is a
+    # database round trip, and from far away a round trip is most of a second.
+    notes, exercises = await asyncio.gather(
+        repo.list_notes(chapter.id), repo.list_exercises(chapter.id)
+    )
     return ChapterParse(
         chapter=ChapterOut.of(chapter),
-        notes=[NoteOut.of(n) for n in await repo.list_notes(chapter.id)],
-        exercises=[ExerciseOut.of(e) for e in await repo.list_exercises(chapter.id)],
+        notes=[NoteOut.of(n) for n in notes],
+        exercises=[ExerciseOut.of(e) for e in exercises],
     )
 
 
@@ -362,6 +389,98 @@ async def parse_chapter(
     return ChapterOut.of(claimed)
 
 
+# --- chapter Q&A (#203) --------------------------------------------------------
+
+
+class AskMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
+class AskIn(BaseModel):
+    """The thread so far, the player's newest message last."""
+
+    messages: list[AskMessage] = Field(min_length=1, max_length=40)
+
+
+class AskCost(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    usd: float
+
+
+class AskOut(BaseModel):
+    message: str
+    # `book`: from the chapter, with the pages its citations named. `general`:
+    # not from the book — general knowledge, or a decline — and cites nothing.
+    source: Literal["book", "general"]
+    pages: list[int]
+    # A draft the parse extracted, when the message asked for one to play.
+    draft: ExerciseOut | None
+    model: str
+    cost: AskCost
+    strategy: str
+    provider: str
+
+
+@router.post("/{book_id}/chapters/{chapter_id}/ask", response_model=AskOut)
+async def ask_chapter(
+    book_id: str,
+    chapter_id: str,
+    body: AskIn,
+    session: CurrentSession,
+    repo: Repo,
+    ask: Annotated[AskGraph, Depends(get_ask)],
+) -> AskOut:
+    """
+    Ask the open chapter. Scoped to it: answered from its text with page
+    references, or as general knowledge plainly labelled, or declined with
+    the chapters that look relevant; a request for an exercise answers with
+    a draft the parse already made. The chapter must be parsed.
+    """
+    if body.messages[-1].role != "user" or not body.messages[-1].content.strip():
+        raise HTTPException(422, "The last message must be the player's question.")
+    allowed, retry_after = ask_limiter.check(session.user_id)
+    if not allowed:
+        raise HTTPException(
+            429,
+            f"Too many questions for now — try again in about {max(1, retry_after // 60)} min.",
+        )
+    book, chapter = await owned_chapter(repo, session.user_id, book_id, chapter_id)
+    if chapter.parse_status != "ready":
+        raise HTTPException(409, "Parse the chapter first, so there is something to ask.")
+    ctx = AskContext(
+        book=book,
+        chapter=chapter,
+        chapters=await repo.list_chapters(book.id),
+        token=session.token,
+        # The chapter's own pages: whether its PDF can be cited at all turns on
+        # them, and a scan is answered from their text (#203, calibration §8).
+        pages=await repo.list_pages(book.id, chapter.page_start, chapter.page_end),
+    )
+    history = [AskTurn(m.role, m.content) for m in body.messages[:-1]]
+    try:
+        result = await ask(ctx, body.messages[-1].content.strip(), history)
+    except StorageError as e:
+        raise HTTPException(502, f"Storage: {e.message}") from e
+    except ChapterUnavailable as e:
+        raise HTTPException(e.status, e.message) from e
+    return AskOut(
+        message=result.message,
+        source=result.source,
+        pages=list(result.pages),
+        draft=ExerciseOut.of(result.draft) if result.draft else None,
+        model=result.model,
+        cost=AskCost(
+            input_tokens=sum(u.input_tokens for u in result.usage),
+            output_tokens=sum(u.output_tokens for u in result.usage),
+            usd=round(sum(u.cost_usd for u in result.usage), 4),
+        ),
+        strategy=ask.strategy_name,
+        provider=ask.provider_name,
+    )
+
+
 class PageImageOut(BaseModel):
     """A Storage path in the player's own folder; the browser signs it like a crop's."""
 
@@ -390,6 +509,30 @@ async def get_page_image(
         return PageImageOut(path=await pages.get_or_render(book, page, session.token))
     except PageImageError as e:
         raise HTTPException(e.status, e.message) from e
+
+
+class PageTextOut(BaseModel):
+    """A page's text as the scan read it: the layer's, OCR's, or none."""
+
+    page: int
+    text: str
+    text_source: Literal["layer", "ocr", "none"]
+
+
+@router.get("/{book_id}/pages/{page}/text", response_model=PageTextOut)
+async def get_page_text(
+    book_id: str, page: int, session: CurrentSession, repo: Repo
+) -> PageTextOut:
+    """
+    The text of one page (#228): what the text-tab reader on the chapter card
+    starts from when the parse skipped a page whose tab was in the text
+    layer. Nothing is rendered or read here — the scan already did.
+    """
+    book = await owned_book(repo, session.user_id, book_id)
+    row = await repo.get_page(book.id, page)
+    if row is None:
+        raise HTTPException(404, "Page not found. Scan the book first.")
+    return PageTextOut(page=row.page, text=row.text, text_source=row.text_source)
 
 
 class ExerciseStatusIn(BaseModel):

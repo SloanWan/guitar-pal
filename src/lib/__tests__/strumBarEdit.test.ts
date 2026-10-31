@@ -22,6 +22,8 @@ import {
 	swapBeats,
 	setCell,
 	stepCellPosition,
+	appendChordBar,
+	setChordInReach,
 } from "@/lib/strumBarEdit";
 import { MAX_CELLS_PER_BEAT } from "@/lib/strumBars";
 import type { Bar, ChordRef, Beat, StepValue } from "@/lib/strumPatterns";
@@ -862,5 +864,55 @@ describe("setBarBeats", () => {
 		const before = bars(1);
 		expect(setBarBeats(before, 3, written)).toBe(before);
 		expect(setBarBeats(before, -1, written)).toBe(before);
+	});
+});
+
+describe("appendChordBar", () => {
+	it("adds a bar holding the last bar's chord and shape", () => {
+		const bars: Bar[] = [
+			{ beats: [["D", ""]], chord: { root: "C", suffix: "major" } },
+			{ beats: [["D", ""]], chord: { root: "G", suffix: "major", voicingId: "v1" } },
+		];
+		const next = appendChordBar(bars);
+		expect(next).toHaveLength(3);
+		expect(next[2].chord).toEqual({ root: "G", suffix: "major", voicingId: "v1" });
+		next[2].beats[0][0] = "X";
+		expect(bars[1].beats[0][0]).toBe("D");
+	});
+
+	it("starts an empty sequence with a chordless bar", () => {
+		expect(appendChordBar([])).toEqual([{ beats: [], chord: null }]);
+	});
+});
+
+describe("setChordInReach", () => {
+	const C = { root: "C", suffix: "major" };
+	const G = { root: "G", suffix: "major" };
+	const bars: Bar[] = [
+		{ beats: [], chord: { ...C, voicingId: "c-open" } },
+		{ beats: [], chord: G },
+		{ beats: [], chord: C },
+		{ beats: [], chord: null, unknownChord: "Hm7" },
+		{ beats: [], chord: null, unknownChord: "Hm7" },
+	];
+
+	it("changes only the bar asked for under the bar scope", () => {
+		const next = setChordInReach(bars, 1, { ...C, voicingId: null }, "bar");
+		expect(next[1].chord).toEqual({ ...C, voicingId: null });
+		expect(next[0]).toBe(bars[0]);
+	});
+
+	it("re-shapes every bar of the same chord under the chord scope", () => {
+		const next = setChordInReach(bars, 0, { ...C, voicingId: "c-barre" }, "chord");
+		expect(next[0].chord?.voicingId).toBe("c-barre");
+		expect(next[2].chord?.voicingId).toBe("c-barre");
+		expect(next[1]).toBe(bars[1]);
+	});
+
+	it("names every bar kept under the same name, retiring the name", () => {
+		const next = setChordInReach(bars, 3, { root: "B", suffix: "m7", voicingId: null }, "chord");
+		expect(next[3].chord?.root).toBe("B");
+		expect(next[4].chord?.root).toBe("B");
+		expect(next[4].unknownChord).toBeUndefined();
 	});
 });

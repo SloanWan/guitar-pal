@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { asciiTabProse, looksLikeAsciiTab, parseAsciiTab, splitFretRun } from "@/lib/assistant/tab/parseAsciiTab";
-import { validateFingerpickPattern } from "@/lib/tabImport";
+import { patternToAsciiTab } from "@/lib/mcp/asciiTab";
+import type { BeatSlot, FingerpickPattern, Link, NoteEffects } from "@/lib/fingerpickTypes";
+import { migratePattern, validateFingerpickPattern } from "@/lib/tabImport";
 import type { Duration } from "@/lib/fingerpickTypes";
 
 const C_ARPEGGIO = [
@@ -17,7 +19,9 @@ const ok = (text: string, ts?: [number, number]) => {
 	if (!parsed.ok) throw new Error(parsed.error);
 	return parsed;
 };
-type Slot = { duration: Duration; isRest?: boolean; strings: { fret: number | null; muted: boolean; technique: string | null }[] };
+type Note = { fret: number | null; muted: boolean; link?: Link; effects?: NoteEffects; palmMute?: boolean; letRing?: boolean };
+type Slot = { duration: Duration; isRest?: boolean; percussion?: { kind: string }; strings: Note[] };
+const linkOf = (n: Note) => n.link?.kind ?? null;
 const slotsOf = (parsed: ReturnType<typeof ok>, m = 0) =>
 	(parsed.draft.measures![m] as { slots: Slot[] }).slots;
 const sounded = (slots: Slot[]) =>
@@ -93,23 +97,216 @@ describe("parseAsciiTab", () => {
 		expect(parsed.warnings.map((w) => w.code)).toEqual(["ASCII_UNEVEN_BAR", "ASCII_UNEVEN_BAR"]);
 	});
 
-	it("maps the techniques the editor can draw, and reports the rest through the validator", () => {
+	it("maps the links and effects the registry writes, and the validator keeps them", () => {
 		const text = [
-			"e|5h7-7p5-|5/7-7\\5-|--------|",
+			"e|5h7-7p5-|5/7-7\\5-|(5)--t12|",
 			"B|--------|--------|--------|",
-			"G|--------|--------|7b------|",
+			"G|--------|--------|7b----7tr|",
 			"D|--------|--------|--------|",
 			"A|x-------|--------|--------|",
 			"E|--------|--------|--------|",
 		].join("\n");
 		const parsed = ok(text);
-		const onE = (m: number) => slotsOf(parsed, m).filter((s) => !s.isRest).map((s) => s.strings[0].technique);
-		expect(onE(0)).toEqual([null, "hammer-on", null, "pull-off"]);
-		expect(onE(1)).toEqual([null, "slide-up", null, "slide-down"]);
-		expect(slotsOf(parsed, 2)[0].strings[2].technique).toBe("bend-full");
+		const onE = (m: number) => slotsOf(parsed, m).filter((s) => !s.isRest).map((s) => linkOf(s.strings[0]));
+		expect(onE(0)).toEqual([null, "hammer", null, "pull"]);
+		expect(onE(1)).toEqual([null, "slide", null, "slide"]);
+		const third = slotsOf(parsed, 2).filter((s) => !s.isRest);
+		expect(third[0].strings[0]).toMatchObject({ fret: 5, link: { kind: "tie" } });
+		expect(third[0].strings[2]).toMatchObject({ fret: 7, effects: { bend: { semitones: 2 } } });
+		expect(third[1].strings[0]).toMatchObject({ fret: 12, effects: { tap: true } });
+		expect(third[1].strings[2]).toMatchObject({ fret: 7, effects: { trill: {} } });
 		expect(slotsOf(parsed, 0)[0].strings[4].muted).toBe(true);
-		const { warnings } = validateFingerpickPattern(parsed.draft);
-		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE" && w.original === "bend-full")).toBe(true);
+		expect(parsed.warnings.filter((w) => w.code === "ASCII_UNKNOWN_MARK")).toEqual([]);
+		const { pattern, warnings } = validateFingerpickPattern(parsed.draft);
+		// Everything here renders, so the validator passes it through, v1 fields filled.
+		expect(pattern?.measures[2].slots[0].strings[2]).toMatchObject({ effects: { bend: { semitones: 2 } }, effects: { bend: { semitones: 2 } } });
+		expect(pattern?.measures[0].slots[1].strings[0]).toMatchObject({ link: { kind: "hammer" }, link: { kind: "hammer" } });
+		expect(pattern?.measures[2].slots[0].strings[0]).toMatchObject({ link: { kind: "tie" }, link: { kind: "tie" } });
+		expect(warnings.some((w) => w.code === "UNSUPPORTED_TECHNIQUE")).toBe(false);
+	});
+
+	it("reads every x as a slap on its own string, never folding a column into a slot hit", () => {
+		const text = [
+			"e|----x---|--x-----|",
+			"B|----x---|--x-----|",
+			"G|----x---|--------|",
+			"D|----x---|--------|",
+			"A|0-------|0-------|",
+			"E|--------|--------|",
+		].join("\n");
+		const parsed = ok(text);
+		const slapped = slotsOf(parsed, 0).filter((s) => !s.isRest);
+		expect(slapped[1].percussion).toBeUndefined();
+		expect(slapped[1].strings.map((s) => s.muted)).toEqual([true, true, true, true, false, false]);
+		expect(slotsOf(parsed, 1).filter((s) => !s.isRest)[1].strings.map((s) => s.muted)).toEqual([true, true, false, false, false, false]);
+		expect(parsed.warnings).toEqual([]);
+		const { pattern } = validateFingerpickPattern(parsed.draft);
+		expect(pattern?.measures[0].slots.some((s) => s.percussion)).toBe(false);
+	});
+
+	it("reads bend heights, releases and pre-bends the way tab writes them, consuming the whole mark", () => {
+		const text = [
+			"e|--------|--------|",
+			"B|--------|--------|",
+			"G|7b9-7b8-|7b¼-7b--|",
+			"D|--------|--------|",
+			"A|--------|--------|",
+			"E|--------|--------|",
+			"",
+			"e|--------|----------------|",
+			"B|--------|----------------|",
+			"G|7b9r7-7-|7pb9----7pb8r---|",
+			"D|--------|----------------|",
+			"A|--------|----------------|",
+			"E|--------|----------------|",
+		].join("\n");
+		const parsed = ok(text);
+		const g = (m: number) =>
+			slotsOf(parsed, m)
+				.filter((s) => !s.isRest)
+				.map((s) => s.strings[2]);
+		expect(g(0)).toEqual([
+			{ fret: 7, muted: false, effects: { bend: { semitones: 2 } } },
+			{ fret: 7, muted: false, effects: { bend: { semitones: 1 } } },
+		]);
+		expect(g(1).map((s) => s.effects?.bend)).toEqual([{ semitones: 0.5 }, { semitones: 2 }]);
+		// `7b9r7`: the 7 after the r is where the bend lands, not a second note.
+		expect(g(2).map((s) => [s.fret, s.effects?.bend])).toEqual([[7, { semitones: 2, release: true }], [7, undefined]]);
+		expect(g(3).map((s) => s.effects?.bend)).toEqual([{ semitones: 2, pre: true }, { semitones: 1, pre: true, release: true }]);
+		expect(parsed.warnings.filter((w) => w.code === "ASCII_UNKNOWN_MARK")).toEqual([]);
+	});
+
+	it("keeps every note of a bar whose width does not divide the meter, and still fills the bar", () => {
+		// 23 columns: four marked notes whose marks widen the bar unevenly.
+		const text = ["e|7b9--7b8r--7pb9r--7b¼--|", ..."BGDAE".split("").map((l) => `${l}|${"-".repeat(23)}|`)].join("\n");
+		const parsed = ok(text);
+		const slots = slotsOf(parsed);
+		expect(slots.filter((s) => !s.isRest).map((s) => s.strings[0].effects?.bend)).toEqual([
+			{ semitones: 2 },
+			{ semitones: 1, release: true },
+			{ semitones: 2, pre: true, release: true },
+			{ semitones: 0.5 },
+		]);
+		const ticks = { whole: 96, half: 48, "dotted-quarter": 36, quarter: 24, "dotted-eighth": 18, eighth: 12, sixteenth: 6, "32nd": 3 } as Record<string, number>;
+		expect(slots.reduce((sum, s) => sum + ticks[s.duration], 0)).toBe(96);
+		expect(parsed.warnings.map((w) => w.code)).toEqual(["ASCII_UNEVEN_BAR"]);
+		// 40 columns, thirty-six open notes: more than a bar has 32nds, so the tail is dropped and said so.
+		const dense = ["e|" + "0".repeat(36) + "----|", ..."BGDAE".split("").map((l) => `${l}|${"-".repeat(40)}|`)].join("\n");
+		const packed = ok(dense);
+		expect(slotsOf(packed).filter((s) => !s.isRest)).toHaveLength(32);
+		expect(packed.warnings.map((w) => w.code)).toContain("ASCII_BAR_OVERFLOW");
+	});
+
+	it("reads a bend wider than a whole tone as full, and says so", () => {
+		const text = ["e|7b10----|", "B|--------|", "G|--------|", "D|--------|", "A|--------|", "E|--------|"].join("\n");
+		const parsed = ok(text);
+		expect(slotsOf(parsed)[0].strings[0]).toMatchObject({ fret: 7, effects: { bend: { semitones: 2 } } });
+		expect(parsed.warnings.map((w) => w.code)).toContain("ASCII_BEND_CLAMPED");
+	});
+
+	it("reads one tilde as vibrato, two as wide, a long run as a held vibrato", () => {
+		const text = ["e|7~--7~~-7~~~~---|", "B|----------------|", "G|----------------|", "D|----------------|", "A|----------------|", "E|----------------|"].join("\n");
+		const notes = slotsOf(ok(text)).filter((s) => !s.isRest).map((s) => s.strings[0].effects?.vibrato);
+		expect(notes).toEqual([{}, { wide: true }, {}]);
+	});
+
+	it("keeps a mark before the note and one after it both: 5h7b9 is a hammer-on that is then bent", () => {
+		const text = ["e|5h7b9---|", "B|--------|", "G|--------|", "D|--------|", "A|--------|", "E|--------|"].join("\n");
+		const notes = slotsOf(ok(text)).filter((s) => !s.isRest).map((s) => s.strings[0]);
+		expect(notes.map((n) => [n.fret, linkOf(n), n.effects])).toEqual([[5, null, undefined], [7, "hammer", { bend: { semitones: 2 } }]]);
+	});
+
+	it("reads P.M. and let-ring lines under a system onto the notes below their runs", () => {
+		const text = [
+			"e|------------3-3-|",
+			"B|----------------|",
+			"G|----------------|",
+			"D|----------------|",
+			"A|0-0-2-2---------|",
+			"E|----------------|",
+			"  P.M.        let ring",
+			"",
+			"e|--------|",
+			"B|--------|",
+			"G|--------|",
+			"D|--------|",
+			"A|3-------|",
+			"E|--------|",
+		].join("\n");
+		const parsed = ok(text);
+		// The bracket line is neither a seventh tab line nor prose: both systems still read.
+		expect(parsed.draft.measures).toHaveLength(2);
+		expect(asciiTabProse(text)).toBe("");
+		const a = slotsOf(parsed)
+			.filter((s) => !s.isRest)
+			.map((s) => (s.strings[4].fret !== null ? s.strings[4] : s.strings[0]));
+		expect(a.map((n) => [n.fret, n.palmMute === true, n.letRing === true])).toEqual([
+			[0, true, false],
+			[0, true, false],
+			[2, false, false],
+			[2, false, false],
+			[3, false, true],
+			[3, false, true],
+		]);
+	});
+
+	it("round-trips every mark the preview writes", () => {
+		const silent = (): BeatSlot["strings"][number] => ({ fret: null, muted: false });
+		let id = 0;
+		const slot = (notes: Record<number, Partial<BeatSlot["strings"][number]>>, duration: BeatSlot["duration"] = "quarter"): BeatSlot => {
+			const strings = [silent(), silent(), silent(), silent(), silent(), silent()] as BeatSlot["strings"];
+			for (const [i, n] of Object.entries(notes)) strings[Number(i)] = { ...silent(), ...n };
+			return { id: `s${id++}`, duration, strings };
+		};
+		// The writer reads spans; the flags here fold into them through the migrator.
+		const pattern = migratePattern({
+			id: "p",
+			name: "Marks",
+			bpm: 80,
+			timeSignature: [4, 4],
+			measures: [
+				{ id: "m1", slots: [
+					slot({ 2: { fret: 7, effects: { bend: { semitones: 2 } } } }),
+					slot({ 2: { fret: 7, effects: { bend: { semitones: 1, release: true } } } }),
+					slot({ 2: { fret: 7, effects: { bend: { semitones: 2, pre: true, release: true } } } }),
+					slot({ 2: { fret: 7, effects: { bend: { semitones: 0.5 } } } }),
+				] },
+				{ id: "m2", slots: [
+					slot({ 4: { fret: 0, palmMute: true } }),
+					slot({ 4: { fret: 0, palmMute: true } }, "quarter"),
+					slot({ 0: { fret: 3, effects: { vibrato: { wide: true } }, letRing: true } }),
+					slot({ 0: { fret: 3, effects: { vibrato: {} }, letRing: true } }),
+				] },
+				{ id: "m3", slots: [
+					slot({ 0: { fret: 5 } }),
+					slot({ 0: { fret: 7, link: { kind: "hammer" }, effects: { trill: {} } } }),
+					slot({ 0: { fret: 7, link: { kind: "tie" } } }),
+					slot({ 0: { fret: null, muted: true }, 1: { fret: null, muted: true }, 2: { fret: null, muted: true }, 3: { fret: null, muted: true } }, "quarter"),
+				] },
+			],
+		});
+		const parsed = ok(patternToAsciiTab(pattern as FingerpickPattern));
+		const marks = (m: number, string: number) =>
+			slotsOf(parsed, m)
+				.filter((s) => !s.isRest)
+				.map((s) => {
+					const n = s.strings[string];
+					return [n.fret, n.effects ?? null, n.palmMute === true, n.letRing === true];
+				});
+		expect(marks(0, 2)).toEqual([
+			[7, { bend: { semitones: 2 } }, false, false],
+			[7, { bend: { semitones: 1, release: true } }, false, false],
+			[7, { bend: { semitones: 2, pre: true, release: true } }, false, false],
+			[7, { bend: { semitones: 0.5 } }, false, false],
+		]);
+		expect(marks(1, 4).slice(0, 2)).toEqual([[0, null, true, false], [0, null, true, false]]);
+		expect(marks(1, 0).slice(2)).toEqual([[3, { vibrato: { wide: true } }, false, true], [3, { vibrato: {} }, false, true]]);
+		const third = slotsOf(parsed, 2).filter((s) => !s.isRest);
+		expect(third.map((s) => linkOf(s.strings[0]))).toEqual([null, "hammer", "tie", null]);
+		expect(third[1].strings[0].effects).toEqual({ trill: {} });
+		// Four x's come back as four slaps on their strings, not a slot hit.
+		expect(third[3].percussion).toBeUndefined();
+		expect(third[3].strings.map((s) => s.muted)).toEqual([true, true, true, true, false, false]);
 	});
 
 	it("takes the meter it is given", () => {

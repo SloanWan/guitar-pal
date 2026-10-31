@@ -45,12 +45,18 @@ class PageClassOut(BaseModel):
 NOTES_SYSTEM = (
     "You are reading one chapter of a guitar textbook and writing down what it teaches,"
     " as short knowledge points a learner can review without the book.\n\n"
+    "The chapter's text is given page by page. Each page starts with a marker line"
+    " `[Page N]`; N is the page's number in the PDF and is what a page reference"
+    " means here. A number printed on the page itself (a running page number in the"
+    " book's own numbering, a chapter number) is not a page reference.\n\n"
     "Return 3 to 12 points, in the order the chapter introduces them. Each has:\n"
     "- title: a few words naming the concept, in the book's language.\n"
     "- body: one to four sentences in the book's own terms — what it is, how it is"
     " used, any rule or tip the book gives. Do not add facts the chapter does not"
     " state.\n"
-    "- pages: the page numbers (as labelled in the text) the point comes from.\n\n"
+    "- pages: the N of every `[Page N]` block the point is taken from, in order —"
+    " usually one, more when the book carries the point across pages. Never empty:"
+    " every point comes from somewhere in the text.\n\n"
     "Skip advertising, contact details and copyright text. If the text is OCR output,"
     " it may contain wrong characters; read through them and do not repeat them. If"
     " the chapter teaches nothing (a bare exercise list, a cover), return an empty list."
@@ -60,7 +66,9 @@ NOTES_SYSTEM = (
 class NoteOut(BaseModel):
     title: str
     body: str
-    pages: list[int] = Field(default_factory=list)
+    pages: list[int] = Field(
+        description="The N of each [Page N] marker the point comes from, in order; never empty"
+    )
 
 
 class NotesOut(BaseModel):

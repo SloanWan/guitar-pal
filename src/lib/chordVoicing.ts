@@ -69,4 +69,3 @@ export function voicingToDiagramShape(voicing: ChordVoicing): DiagramShape {
   };
 }
 
-export { selectStandardVoicing } from "@/lib/selectStandardVoicing";

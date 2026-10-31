@@ -12,17 +12,15 @@ import {
 	setFret,
 	setInactive,
 	toggleMuted,
-	setTechnique,
-	setTied,
 	setStroke,
 	moveCell,
 	previousSlotFret,
 	hasPreviousNoteOnString,
-	availableTechniques,
 	setSlotsRest,
 	splitTargetsForSlot,
 	mergeTargetsForSlot,
 	normalizeLoadedPattern,
+	reconcileSpans,
 	insertSlots,
 	duplicateSlots,
 	deleteSlots,
@@ -57,6 +55,7 @@ import {
 	type Cell,
 } from "@/lib/fingerpickEdit";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
+import { setLink } from "@/lib/fingerpickTechniqueEdit";
 import {
 	fingerpickPatternToScheduleEvents,
 	getTotalPatternDuration,
@@ -69,6 +68,7 @@ function twoMeasurePattern(): FingerpickPattern {
 		id: "p",
 		name: "test",
 		description: "",
+		schemaVersion: 2,
 		bpm: 100,
 		timeSignature: [4, 4],
 		measures: [
@@ -123,8 +123,6 @@ describe("StringFret edits", () => {
 		p = setInactive(p, cell);
 		expect(p.measures[0].slots[0].strings[5]).toEqual({
 			fret: null,
-			technique: null,
-			tied: false,
 			muted: false,
 		});
 	});
@@ -134,64 +132,18 @@ describe("StringFret edits", () => {
 		p = toggleMuted(p, cell);
 		expect(p.measures[0].slots[0].strings[5]).toEqual({
 			fret: null,
-			technique: null,
-			tied: false,
 			muted: true,
 		});
 		p = toggleMuted(p, cell);
 		expect(p.measures[0].slots[0].strings[5].muted).toBe(false);
 	});
 
-	it("setTechnique writes the technique", () => {
-		const p = setTechnique(setFret(makeDefaultPattern(), cell, 3), cell, "hammer-on");
-		expect(p.measures[0].slots[0].strings[5].technique).toBe("hammer-on");
-	});
 
 	it("does not mutate the input pattern", () => {
 		const p = makeDefaultPattern();
 		const before = structuredClone(p);
 		setFret(p, cell, 9);
 		expect(p).toEqual(before);
-	});
-});
-
-describe("tied / technique mutual exclusion", () => {
-	const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 5 };
-
-	it("setTied(true) clears any existing technique", () => {
-		let p = setFret(makeDefaultPattern(), cell, 5);
-		p = setTechnique(p, cell, "hammer-on");
-		p = setTied(p, cell, true);
-		const sf = p.measures[0].slots[1].strings[5];
-		expect(sf.tied).toBe(true);
-		expect(sf.technique).toBeNull();
-	});
-
-	it("setTechnique(non-null) clears any existing tie", () => {
-		let p = setFret(makeDefaultPattern(), cell, 5);
-		p = setTied(p, cell, true);
-		p = setTechnique(p, cell, "pull-off");
-		const sf = p.measures[0].slots[1].strings[5];
-		expect(sf.technique).toBe("pull-off");
-		expect(sf.tied).toBe(false);
-	});
-
-	it("clearing both leaves technique null and tied false", () => {
-		let p = setFret(makeDefaultPattern(), cell, 5);
-		p = setTied(p, cell, true);
-		// Clear = setTechnique(null) then setTied(false), as wired in the menu.
-		p = setTied(setTechnique(p, cell, null), cell, false);
-		const sf = p.measures[0].slots[1].strings[5];
-		expect(sf.technique).toBeNull();
-		expect(sf.tied).toBe(false);
-	});
-
-	it("greys out (no previous note) when the prior slot has no note on the string", () => {
-		// No note anywhere: previous slot on this string is inactive → cannot tie.
-		expect(hasPreviousNoteOnString(makeDefaultPattern(), cell)).toBe(false);
-		// With a note in the previous slot on the same string, tying is allowed.
-		const p = setFret(makeDefaultPattern(), { ...cell, slotIndex: 0 }, 3);
-		expect(hasPreviousNoteOnString(p, cell)).toBe(true);
 	});
 });
 
@@ -274,83 +226,6 @@ describe("previous-note lookup", () => {
 		expect(hasPreviousNoteOnString(p, { measureIndex: 0, slotIndex: 1, stringIndex: 5 })).toBe(
 			false,
 		);
-	});
-});
-
-describe("availableTechniques", () => {
-	const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 5 };
-	// Set prev-slot fret then current-slot fret on the same string.
-	const withFrets = (prevFret: number, currFret: number): FingerpickPattern => {
-		let p = twoMeasurePattern();
-		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, prevFret);
-		p = setFret(p, cell, currFret);
-		return p;
-	};
-
-	it("allows only hammer-on and slide-up when ascending (1 → 5)", () => {
-		expect(availableTechniques(withFrets(1, 5), cell)).toEqual({
-			"hammer-on": true,
-			"pull-off": false,
-			"slide-up": true,
-			"slide-down": false,
-			tied: false,
-		});
-	});
-
-	it("allows only pull-off and slide-down when descending (5 → 1)", () => {
-		expect(availableTechniques(withFrets(5, 1), cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": true,
-			"slide-up": false,
-			"slide-down": true,
-			tied: false,
-		});
-	});
-
-	it("allows only a tie when both notes share the same fret", () => {
-		expect(availableTechniques(withFrets(3, 3), cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": false,
-			"slide-up": false,
-			"slide-down": false,
-			tied: true,
-		});
-	});
-
-	it("disables everything with no previous sounding note", () => {
-		let p = twoMeasurePattern();
-		p = setFret(p, cell, 4);
-		expect(availableTechniques(p, cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": false,
-			"slide-up": false,
-			"slide-down": false,
-			tied: false,
-		});
-	});
-
-	it("disables everything when the current cell has no fret", () => {
-		let p = twoMeasurePattern();
-		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 2);
-		expect(availableTechniques(p, cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": false,
-			"slide-up": false,
-			"slide-down": false,
-			tied: false,
-		});
-	});
-
-	it("disables everything when the previous note is muted", () => {
-		let p = withFrets(1, 5);
-		p = toggleMuted(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 });
-		expect(availableTechniques(p, cell)).toEqual({
-			"hammer-on": false,
-			"pull-off": false,
-			"slide-up": false,
-			"slide-down": false,
-			tied: false,
-		});
 	});
 });
 
@@ -474,15 +349,15 @@ describe("swapMeasures", () => {
 });
 
 describe("shiftMeasureStrings", () => {
-	it("moves every note one string over, frets and flags intact, and clears what it left", () => {
+	it("moves every note one string over, frets and links intact, and clears what it left", () => {
 		let p = twoMeasurePattern();
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
 		p = setFret(p, { measureIndex: 0, slotIndex: 1, stringIndex: 3 }, 2);
-		p = setTechnique(p, { measureIndex: 0, slotIndex: 1, stringIndex: 3 }, "hammer-on");
+		p = setLink(p, { measureIndex: 0, slotIndex: 1, stringIndex: 3 }, { kind: "hammer" });
 		const up = shiftMeasureStrings(p, 0, -1);
 		expect(up.measures[0].slots[0].strings[4].fret).toBe(3);
 		expect(up.measures[0].slots[0].strings[5].fret).toBeNull();
-		expect(up.measures[0].slots[1].strings[2]).toMatchObject({ fret: 2, technique: "hammer-on" });
+		expect(up.measures[0].slots[1].strings[2]).toMatchObject({ fret: 2, link: { kind: "hammer" } });
 		expect(up.measures[0].slots[1].strings[3].fret).toBeNull();
 		// The other measure is untouched, and the slot ids stay.
 		expect(up.measures[1]).toBe(p.measures[1]);
@@ -1675,6 +1550,7 @@ describe("normalizeLoadedPattern (legacy rest migration)", () => {
 			id: "p",
 			name: "legacy",
 			description: "",
+			schemaVersion: 2,
 			bpm: 100,
 			timeSignature: [4, 4],
 			measures: [{ id: "m0", slots: slots as Measure["slots"] }],
@@ -1867,4 +1743,60 @@ describe("normalizeLoadedPattern (capo)", () => {
 		const base = twoMeasurePattern();
 		expect(normalizeLoadedPattern(base)).toBe(base);
 	});
+});
+
+// ─── reconcileSpans (technique model v2) ─────────────────────────────────────
+
+describe("reconcileSpans", () => {
+	const spanned = (): FingerpickPattern => {
+		const p = twoMeasurePattern();
+		// m0: s0 s1 s2 · m1: s3 s4 (ids from makeEmptySlot are random; pin them)
+		p.measures[0].slots = p.measures[0].slots.map((s, i) => ({ ...s, id: `s${i}` }));
+		p.measures[1].slots = p.measures[1].slots.map((s, i) => ({ ...s, id: `s${i + 3}` }));
+		for (const m of p.measures) for (const s of m.slots) s.strings[0] = { ...s.strings[0], fret: 3 };
+		p.spans = [{ id: "pm", kind: "palmMute", from: "s1", to: "s4" }];
+		return p;
+	};
+
+	it("is a no-op when every anchor is live", () => {
+		const p = spanned();
+		expect(reconcileSpans(p, p).spans).toEqual(p.spans);
+	});
+
+	it("shrinks a span whose anchor slot was deleted to the nearest surviving member", () => {
+		const before = spanned();
+		const after: FingerpickPattern = {
+			...before,
+			measures: [before.measures[0], { ...before.measures[1], slots: before.measures[1].slots.filter((s) => s.id !== "s4") }],
+		};
+		expect(reconcileSpans(after, before).spans).toEqual([{ id: "pm", kind: "palmMute", from: "s1", to: "s3" }]);
+	});
+
+	it("drops a span with no member left", () => {
+		const before = spanned();
+		const after: FingerpickPattern = {
+			...before,
+			measures: [
+				{ ...before.measures[0], slots: before.measures[0].slots.filter((s) => s.id === "s0") },
+				{ ...before.measures[1], slots: before.measures[1].slots.filter((s) => s.id === "s5") },
+			],
+		};
+		expect(reconcileSpans(after, before).spans).toEqual([]);
+	});
+
+	it("follows an id map: a split anchor keeps the span over its pieces, a merge moves it", () => {
+		const before = spanned();
+		const pieces = before.measures[1].slots.flatMap((s) => (s.id === "s4" ? [{ ...s, id: "s4a" }, { ...s, id: "s4b" }] : [s]));
+		const after: FingerpickPattern = { ...before, measures: [before.measures[0], { ...before.measures[1], slots: pieces }] };
+		const idMap = new Map([["s4", ["s4a", "s4b"]]]);
+		expect(reconcileSpans(after, before, idMap).spans).toEqual([{ id: "pm", kind: "palmMute", from: "s1", to: "s4b" }]);
+	});
+
+	it("without the previous pattern, falls back to the anchors themselves", () => {
+		const p = spanned();
+		const after: FingerpickPattern = { ...p, measures: [p.measures[0], { ...p.measures[1], slots: p.measures[1].slots.filter((s) => s.id !== "s4") }] };
+		// s4 is gone and nothing says what the span covered: it shrinks to s1 alone.
+		expect(reconcileSpans(after).spans).toEqual([{ id: "pm", kind: "palmMute", from: "s1", to: "s1" }]);
+	});
+
 });

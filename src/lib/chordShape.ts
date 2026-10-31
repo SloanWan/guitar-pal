@@ -1,4 +1,4 @@
-import type { ChordVoicing } from "@/lib/chordVoicing";
+import type { ChordVoicing, DiagramShape } from "@/lib/chordVoicing";
 
 /**
  * A chord shape as the player edits it, and its translation to the stored
@@ -129,6 +129,31 @@ export function validateChordShape(shape: ChordShape): ShapeValidation {
 }
 
 /**
+ * Strings a shape written on the strum page must sound. The strum plays every
+ * string the shape holds, so a one- or two-string shape is a lone note or a dyad
+ * where the player meant a chord.
+ */
+export const MIN_STRUM_SHAPE_STRINGS = 3;
+
+/** How many strings a shape sounds — every string that is not muted. */
+export function soundingStrings(shape: ChordShape): number {
+	return shape.frets.filter((fret) => fret !== MUTED).length;
+}
+
+/** `validateChordShape`, plus the strum page's floor on sounding strings. */
+export function validateStrumShape(shape: ChordShape): ShapeValidation {
+	const base = validateChordShape(shape);
+	const sounding = soundingStrings(shape);
+	if (sounding > 0 && sounding < MIN_STRUM_SHAPE_STRINGS) {
+		return {
+			ok: false,
+			errors: [...base.errors, `a strummed shape sounds at least ${MIN_STRUM_SHAPE_STRINGS} strings`],
+		};
+	}
+	return base;
+}
+
+/**
  * A fingering for a shape, to fill the editor in before the player adjusts it.
  *
  * One rule does most of the work: **the finger number rises with the fret**.
@@ -234,5 +259,15 @@ export function voicingToChordShape(voicing: ChordVoicing): ChordShape {
 		frets,
 		fingers,
 		barreFret: voicing.barre_fret === null ? null : startFret - 1 + voicing.barre_fret,
+	};
+}
+
+/** A drawn shape as an editable one: the diagram writes a muted string as -1. */
+export function diagramToChordShape(def: DiagramShape): ChordShape {
+	return {
+		startFret: def.startFret,
+		frets: def.frets.map((fret) => (fret < 0 ? MUTED : fret)),
+		fingers: [...def.fingers],
+		barreFret: def.barreFret,
 	};
 }

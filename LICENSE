@@ -1,0 +1,5 @@
+Copyright (c) 2026 Sloan Wan. All rights reserved.
+
+Third-party components keep their own licenses: VexFlow (MIT), chords-db (MIT),
+the WebAudioFont sample data in public/audio/webaudiofont/ (MIT, see NOTICE.md
+there) and the packages in package.json.

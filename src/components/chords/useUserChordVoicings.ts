@@ -2,18 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase";
-import {
-	dedupeUserVoicing,
-	rawUserVoicingId,
-	userVoicingColumns,
-	type UserChordVoicing,
-} from "@/lib/userChordVoicings";
+import { dedupeUserVoicing, type UserChordVoicing } from "@/lib/userChordVoicings";
 import {
 	clearLocalVoicings,
+	deleteAccountVoicing,
 	fetchAccountVoicings,
 	invalidateUserVoicings,
 	readLocalVoicings,
+	upsertAccountVoicings,
 	writeLocalVoicings,
 } from "@/lib/userVoicingStore";
 
@@ -21,11 +17,8 @@ import {
  * The chord shapes the player has written, across every chord.
  *
  * Signed out they live in localStorage and are pushed to the account on the
- * first signed-in load, mirroring how `useStrumPatterns` and
- * `useChordProgressions` treat a player who starts before signing up. The list
- * is small enough to hold whole and filter per chord where it is used.
+ * first signed-in load, as `useStrumPatterns` and `useChordProgressions` do.
  */
-
 export function useUserChordVoicings(user: User | null, loading: boolean) {
 	const [voicings, setVoicings] = useState<UserChordVoicing[]>([]);
 	const [voicingsLoading, setVoicingsLoading] = useState(true);
@@ -39,108 +32,77 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 		});
 	}, [user, loading]);
 
+	const userId = user?.id;
 	useEffect(() => {
-		if (!user) return;
-		const currentUser = user;
+		if (!userId) return;
+		let cancelled = false;
 
-		async function mergeAndReload() {
-			const supabase = createClient();
+		(async () => {
 			const local = readLocalVoicings();
-			if (local.length > 0) {
-				try {
-					const { error } = await supabase
-						.from("user_chord_voicings")
-						.upsert(local.map((v) => userVoicingColumns(v, currentUser.id)));
-					if (error) throw new Error(error.message);
-					clearLocalVoicings();
-				} catch (e) {
-					console.error("[useUserChordVoicings] merge failed:", e);
-				}
-			}
-
 			try {
-				setVoicings(await fetchAccountVoicings(currentUser.id));
+				await upsertAccountVoicings(local, userId);
+				if (local.length > 0) clearLocalVoicings();
+			} catch (e) {
+				console.error("[useUserChordVoicings] merge failed:", e);
+			}
+			try {
+				const fetched = await fetchAccountVoicings(userId);
+				if (!cancelled) setVoicings(fetched);
 			} catch (e) {
 				console.error("[useUserChordVoicings] load failed:", e);
 			}
-			setVoicingsLoading(false);
-		}
+			if (!cancelled) setVoicingsLoading(false);
+		})();
 
-		mergeAndReload();
-	}, [user?.id]);
+		return () => {
+			cancelled = true;
+		};
+	}, [userId]);
+
+	/** Writes the list a change produced: to this device when signed out, then drops stale reads. */
+	const commitLocal = useCallback(
+		(next: UserChordVoicing[]) => {
+			if (user) return;
+			writeLocalVoicings(next);
+			invalidateUserVoicings();
+		},
+		[user],
+	);
 
 	/**
-	 * Store a shape and return the row it actually lives in.
-	 *
-	 * Deduplication happens here rather than at the three places that save, so
-	 * none of them can forget it: every save mints a fresh id, so writing the
-	 * same grip twice — which takes no more than opening the editor and pressing
-	 * apply again — would otherwise file it twice.
-	 *
-	 * The stored row comes back because its id may differ from the one just
-	 * minted, and the caller is about to pin a bar to it.
+	 * Store a shape and return the row it actually lives in — an existing row
+	 * when the same grip is already on record, so a bar pinned to it stays pinned.
 	 */
 	const saveVoicing = useCallback(
 		(voicing: UserChordVoicing): UserChordVoicing => {
 			const stored = dedupeUserVoicing(voicings, voicing);
-			setVoicings((prev) => {
-				const next = prev.some((v) => v.id === stored.id)
-					? prev.map((v) => (v.id === stored.id ? stored : v))
-					: [...prev, stored];
-				if (!user) {
-					writeLocalVoicings(next);
-					// After the write, never before it: anything holding a fetched copy
-					// has to fetch it again, and invalidating a cache while the old
-					// value is still the stored one simply refills it with the old one.
-					invalidateUserVoicings();
-				}
-				return next;
-			});
-			if (!user) return stored;
-			(async () => {
-				try {
-					const supabase = createClient();
-					const { error } = await supabase
-						.from("user_chord_voicings")
-						.upsert(userVoicingColumns(stored, user.id));
-					if (error) throw new Error(error.message);
-					invalidateUserVoicings();
-				} catch (e) {
-					console.error("[useUserChordVoicings] save failed:", e);
-				}
-			})();
+			const next = voicings.some((v) => v.id === stored.id)
+				? voicings.map((v) => (v.id === stored.id ? stored : v))
+				: [...voicings, stored];
+			setVoicings(next);
+			commitLocal(next);
+			if (user) {
+				upsertAccountVoicings([stored], user.id)
+					.then(invalidateUserVoicings)
+					.catch((e: unknown) => console.error("[useUserChordVoicings] save failed:", e));
+			}
 			return stored;
 		},
-		[user, voicings],
+		[user, voicings, commitLocal],
 	);
 
 	const deleteVoicing = useCallback(
 		(id: string) => {
-			setVoicings((prev) => {
-				const next = prev.filter((v) => v.id !== id);
-				if (!user) {
-					writeLocalVoicings(next);
-					invalidateUserVoicings();
-				}
-				return next;
-			});
-			if (!user) return;
-			(async () => {
-				try {
-					const supabase = createClient();
-					const { error } = await supabase
-						.from("user_chord_voicings")
-						.delete()
-						.eq("id", rawUserVoicingId(id))
-						.eq("user_id", user.id);
-					if (error) throw new Error(error.message);
-					invalidateUserVoicings();
-				} catch (e) {
-					console.error("[useUserChordVoicings] delete failed:", e);
-				}
-			})();
+			const next = voicings.filter((v) => v.id !== id);
+			setVoicings(next);
+			commitLocal(next);
+			if (user) {
+				deleteAccountVoicing(id, user.id)
+					.then(invalidateUserVoicings)
+					.catch((e: unknown) => console.error("[useUserChordVoicings] delete failed:", e));
+			}
 		},
-		[user],
+		[user, voicings, commitLocal],
 	);
 
 	return { voicings, voicingsLoading, saveVoicing, deleteVoicing };

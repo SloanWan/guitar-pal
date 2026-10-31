@@ -1,24 +1,20 @@
-import type { BeatSlot, FingerpickPattern } from "@/lib/fingerpickTypes";
+import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { spanIdFor } from "@/lib/fingerpickIndex";
 
 /**
- * Return a deep copy of `pattern` with `letRing: true` forced on every string of
- * every slot. Pure — never mutates the input.
+ * A copy of `pattern` with every note under one let-ring span, first slot to
+ * last. Pure — never mutates the input.
  *
- * `letRing` only affects the audio envelope (a played note rings at the fixed
- * long `letRingDecayTc` τ and is terminated only by voice stealing); it does not
- * change note timing, positions, or the rendered notation. Strings that are not
- * actually played in a slot (fret === null and not muted) still carry the flag
- * but produce no event, so the flag is a no-op there.
+ * A let ring only affects the audio envelope (a played note rings at the
+ * fixed long `letRingDecayTc` τ and is terminated only by voice stealing)
+ * and the bracket the stave draws; it does not change note timing or
+ * positions.
  */
 export function withLetRingAll(pattern: FingerpickPattern): FingerpickPattern {
-	return {
-		...pattern,
-		measures: pattern.measures.map((measure) => ({
-			...measure,
-			slots: measure.slots.map((slot) => ({
-				...slot,
-				strings: slot.strings.map((sf) => ({ ...sf, letRing: true })) as BeatSlot["strings"],
-			})),
-		})),
-	};
+	const slots = pattern.measures.flatMap((measure) => measure.slots);
+	if (slots.length === 0) return pattern;
+	const from = slots[0].id;
+	const to = slots[slots.length - 1].id;
+	const others = (pattern.spans ?? []).filter((span) => span.kind !== "letRing");
+	return { ...pattern, spans: [...others, { id: spanIdFor("letRing", from), kind: "letRing", from, to }] };
 }

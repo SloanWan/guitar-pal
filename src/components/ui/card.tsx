@@ -1,103 +1,41 @@
-import * as React from "react"
+"use client";
 
-import { cn } from "@/lib/utils"
+import type { ComponentProps, Ref } from "react";
+import { Slot } from "radix-ui";
+import { cn } from "@/lib/utils";
+import { usePress } from "@/components/ui/press";
 
-function Card({
-  className,
-  size = "default",
-  ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
-  return (
-    <div
-      data-slot="card"
-      data-size={size}
-      className={cn(
-        "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        className
-      )}
-      {...props}
-    />
-  )
+/**
+ * Static content (spec §6): a title, its meta, a description. It sits on the page itself —
+ * no fill, no edge, no radius, no shadow. Controls go in a Panel instead.
+ */
+export function Card({ className, ...props }: ComponentProps<"div">) {
+	return <div className={cn("gp-card", className)} {...props} />;
 }
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3",
-        className
-      )}
-      {...props}
-    />
-  )
+export interface NavCardProps extends ComponentProps<"button"> {
+	/** Lift: the chosen card in a set is the one raised, with a module ring. */
+	selected?: boolean;
+	/** Renders the child (a link) with the card's look and hop instead of a <button>. */
+	asChild?: boolean;
+	ref?: Ref<HTMLButtonElement>;
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn(
-        "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
-      {...props}
-    />
-  )
-}
-
-function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-content"
-      className={cn("px-4 group-data-[size=sm]/card:px-3", className)}
-      {...props}
-    />
-  )
-}
-
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn(
-        "flex items-center rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/card:p-3",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-export {
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardAction,
-  CardDescription,
-  CardContent,
+/**
+ * A navigable card (spec §6): white, 14px, a hairline at rest; it hops when pointed at,
+ * focused, chosen or tapped, and flattens under a press. Put the title in a `gp-title`
+ * element so it leans into italic and grows its underline on hover.
+ */
+export function NavCard({ selected, asChild = false, className, ref, type, ...props }: NavCardProps) {
+	const pressRef = usePress(ref, { hop: true });
+	const Comp = asChild ? Slot.Root : "button";
+	return (
+		<Comp
+			ref={pressRef}
+			type={asChild ? undefined : (type ?? "button")}
+			aria-current={selected ? "true" : undefined}
+			className={cn("gp-hop", className)}
+			{...props}
+		/>
+	);
 }

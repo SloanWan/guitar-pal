@@ -1,0 +1,208 @@
+/* The chord-shape editor (ChordShapeEditor): drawn as the diagram it edits — strings
+   down, frets across, a dot where a finger holds. Used on the chord page, in Strum's
+   "My own shape" and on the Write a chord page. */
+@layer components {
+	.cs-editor {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		/* also in a sheet, which is portaled outside any page that sets the font */
+		font-family: var(--gp-f-body);
+	}
+	.cs-lab {
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 650;
+	}
+	.cs-window {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.cs-window .cs-lab {
+		flex: 1;
+	}
+	.cs-window-at {
+		min-width: 40px;
+		font-size: 13px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		text-align: center;
+	}
+	.cs-step {
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-well);
+		color: var(--gp-ink-2);
+		cursor: pointer;
+	}
+	.cs-step svg {
+		width: 16px;
+		height: 16px;
+	}
+	.cs-step:not(:disabled):hover {
+		color: var(--gp-ink);
+		background: var(--gp-s2);
+	}
+	.cs-step:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+
+	.cs-grid {
+		display: grid;
+		grid-template-columns: 24px repeat(6, minmax(26px, 36px)) 48px;
+		align-items: center;
+		justify-content: center;
+		row-gap: 0;
+		padding: 10px 8px 12px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	.cs-string {
+		padding-bottom: 2px;
+		color: var(--gp-ink-3);
+		font-size: 11.5px;
+		font-weight: 650;
+		text-align: center;
+	}
+	.cs-mark {
+		height: 28px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-2);
+		font-size: 15px;
+		font-weight: 750;
+		cursor: pointer;
+	}
+	.cs-mark:hover {
+		background: var(--gp-well);
+	}
+	.cs-fret {
+		color: var(--gp-ink-3);
+		font-size: 11.5px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		text-align: center;
+	}
+	/* A cell is a stretch of string over one fret: the string runs down its middle, the
+	   fret wire along its foot, the nut along the top of the first row at the nut. */
+	.cs-cell {
+		position: relative;
+		height: 40px;
+		cursor: pointer;
+	}
+	.cs-cell::before {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 50%;
+		width: 1.5px;
+		margin-left: -0.75px;
+		background: var(--gp-ink-3);
+		content: "";
+	}
+	.cs-cell::after {
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		height: 1.5px;
+		background: var(--gp-edge);
+		content: "";
+	}
+	.cs-cell[data-nut] {
+		box-shadow: inset 0 4px 0 var(--gp-ink);
+	}
+	.cs-cell i {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		margin: 7px auto;
+		border-radius: 50%;
+		color: var(--gp-card);
+		font-size: 12px;
+		font-style: normal;
+		font-weight: 750;
+		transition:
+			transform var(--gp-d-pop) var(--gp-spring-pop),
+			background-color var(--gp-d-state) linear;
+	}
+	.cs-cell:hover i {
+		background: var(--gp-s2);
+	}
+	.cs-cell[aria-pressed="true"] i {
+		background: var(--gp-ink);
+		transform: scale(1.04);
+	}
+	.cs-barre {
+		justify-self: end;
+		height: 26px;
+		padding: 0 7px;
+		border-radius: 99px;
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+		color: var(--gp-ink-2);
+		font-size: 11px;
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.cs-barre:not(:disabled):hover {
+		box-shadow: inset 0 0 0 1px var(--gp-ink-3);
+	}
+	.cs-barre[aria-pressed="true"] {
+		background: var(--gp-ink-fill);
+		box-shadow: none;
+		color: var(--gp-on-ink);
+	}
+	.cs-barre:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+	.cs-fingers-lab {
+		grid-column: 1 / -1;
+		padding: 10px 0 0 24px;
+	}
+	.cs-finger {
+		height: 28px;
+		margin: 4px 3px 0;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-well);
+		color: var(--gp-ink);
+		font-size: 13px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.cs-finger:not(:disabled):hover {
+		background: var(--gp-s2);
+	}
+	.cs-finger:disabled {
+		background: transparent;
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.cs-errors {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0;
+		padding: 0;
+		color: var(--gp-bad);
+		font-size: 12.5px;
+		list-style: none;
+	}
+	.cs-tab {
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.08em;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.cs-cell i {
+			transition: none;
+		}
+	}
+}

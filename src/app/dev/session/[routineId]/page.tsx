@@ -1,15 +1,14 @@
 "use client";
 
 import { use, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { getRoutineById, getRoutineExercises } from "@/lib/routines";
 import { Routine, Exercise, RoutineExercise } from "@/types/database";
 import { createPracticeLog } from "@/lib/practiceLogs";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/legacy-button";
+import { Card, CardContent } from "@/components/ui/legacy-card";
 import {
 	Play,
 	Pause,
@@ -21,6 +20,7 @@ import {
 	CheckCircle2,
 	Clock,
 } from "lucide-react";
+import { useNavRouter } from "@/components/nav-progress";
 
 type RoutineExerciseWithExercise = RoutineExercise & { exercise: Exercise };
 type SessionStatus = "idle" | "running" | "paused" | "completed" | "all_done";
@@ -46,7 +46,7 @@ function formatTime(seconds: number): string {
 
 export default function SessionPage({ params }: { params: Promise<{ routineId: string }> }) {
 	const { routineId } = use(params);
-	const router = useRouter();
+	const router = useNavRouter();
 
 	const [status, setStatus] = useState<SessionStatus>("idle");
 	const [routine, setRoutine] = useState<Routine | null>(null);

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
 	chordToneNames,
 	effectiveChords,
+	chordsUsed,
 	patternHasChords,
 	setSlotChord,
 	moveSlotChord,
@@ -84,6 +85,22 @@ describe("effectiveChords", () => {
 		const measures = [measure("a", [undefined, C, undefined]), measure("b", [Am, undefined])];
 		const out = effectiveChords(measures);
 		expect(out.map((row) => row.length)).toEqual(measures.map((m) => m.slots.length));
+	});
+});
+
+describe("chordsUsed", () => {
+	it("lists each chord once, in the order it first appears", () => {
+		const out = chordsUsed([measure("a", [C, undefined, Am]), measure("b", [C, G7, Am])]);
+		expect(out).toEqual([C, Am, G7]);
+	});
+
+	it("counts a chord held two ways once, as it is first held", () => {
+		const pinned = { ...Am, voicingId: "v2" };
+		expect(chordsUsed([measure("a", [pinned, Am])])).toEqual([pinned]);
+	});
+
+	it("is empty when nothing is marked", () => {
+		expect(chordsUsed([measure("a", [undefined])])).toEqual([]);
 	});
 });
 
@@ -209,7 +226,7 @@ describe("fillColumnFromChord", () => {
 		]);
 	});
 
-	it("leaves cells that already hold a fret or a dead note alone", () => {
+	it("leaves cells that already hold a fret or an x alone", () => {
 		let p = pattern([measure("a", [undefined])]);
 		p = setFret(p, { ...target, stringIndex: 1 }, 5);
 		p = toggleMuted(p, { ...target, stringIndex: 2 });
@@ -250,7 +267,7 @@ describe("pattern capo", () => {
 
 describe("clearLeftOutStrings", () => {
 	// C (x32010) leaves out the low E: fingerpick index 5.
-	it("clears notes and dead notes on the shape's left-out strings, under that chord only", () => {
+	it("clears notes and x's on the shape's left-out strings, under that chord only", () => {
 		let p = pattern([measure("a", [C, undefined, Am, undefined])]);
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
 		p = toggleMuted(p, { measureIndex: 0, slotIndex: 1, stringIndex: 5 });
@@ -335,7 +352,7 @@ describe("offShapeStrings", () => {
 		expect(offShapeStrings(p.measures[0].slots[0], hints)).toEqual([1, 5]);
 	});
 
-	it("ignores dead notes and silent strings, and reports nothing without a shape", () => {
+	it("ignores x's and silent strings, and reports nothing without a shape", () => {
 		let p = pattern([measure("a", [C])]);
 		p = toggleMuted(p, { measureIndex: 0, slotIndex: 0, stringIndex: 1 });
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 2 }, 7);

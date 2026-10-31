@@ -1,4 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import * as z from "zod";
+import { NOTE_MARKS_SHAPE, PERCUSSION_INPUT, jsonSchemaOf } from "@/lib/tabImport";
 
 /**
  * The tools the General assistant can reach — the only way it produces a
@@ -29,6 +31,23 @@ export type ToolName = (typeof TOOL_NAMES)[number];
 export function isToolName(value: unknown): value is ToolName {
 	return typeof value === "string" && (TOOL_NAMES as readonly string[]).includes(value);
 }
+
+/** A note of `propose_tab`, with its marks read off the technique registry. */
+const PROPOSED_NOTE_SCHEMA = jsonSchemaOf(
+	z.object({
+		string: z.number().int().describe("1 = high e, 2 = B, 3 = G, 4 = D, 5 = A, 6 = low E."),
+		fret: z.number().int().describe("0 (open) to 24. Write the fret itself — 12 and 15 are ordinary."),
+		slot: z.number().int().describe("Which slot of this bar, counting from 0. The last is slotsPerBar - 1."),
+		...NOTE_MARKS_SHAPE,
+	}),
+);
+
+const PROPOSED_HIT_SCHEMA = jsonSchemaOf(
+	z.object({
+		slot: z.number().int().describe("Which slot of this bar, counting from 0."),
+		kind: PERCUSSION_INPUT,
+	}),
+);
 
 /** Every reader tool takes the player's words, verbatim. */
 export interface ReadInput {
@@ -63,7 +82,21 @@ export interface ProposeTabInput {
 	name: string;
 	/** How many even slots each bar is divided into: 8 eighths, 16 sixteenths. */
 	slotsPerBar: number;
-	bars: { notes: { string: number; fret: number; slot: number; technique?: string; muted?: boolean }[] }[];
+	bars: {
+		notes: {
+			string: number;
+			fret: number;
+			slot: number;
+			/** A link kind from the technique registry. */
+			link?: string;
+			/** The registry's effects map; `buildTabDraft` checks it. */
+			effects?: unknown;
+			muted?: boolean;
+			palmMute?: boolean;
+			letRing?: boolean;
+		}[];
+		hits?: { slot: number; kind: string }[];
+	}[];
 	/** 0 when no tempo was asked for. */
 	bpm: number;
 	/** e.g. "4/4", "3/4", "6/8"; empty for 4/4. */
@@ -159,21 +192,12 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 							notes: {
 								type: "array",
 								description: "The notes of this bar, in any order. A slot with no note on it is silent; a note sounds until the next slot that carries one.",
-								items: {
-									type: "object",
-									properties: {
-										string: { type: "integer", description: "1 = high e, 2 = B, 3 = G, 4 = D, 5 = A, 6 = low E." },
-										fret: { type: "integer", description: "0 (open) to 24. Write the fret itself — 12 and 15 are ordinary." },
-										slot: { type: "integer", description: "Which slot of this bar, counting from 0. The last is slotsPerBar - 1." },
-										technique: {
-											type: "string",
-											description: "How the note is reached, when it is not picked: \"hammer-on\", \"pull-off\", \"slide-up\", \"slide-down\".",
-										},
-										muted: { type: "boolean", description: "A dead note — struck, not sounded." },
-									},
-									required: ["string", "fret", "slot"],
-									additionalProperties: false,
-								},
+								items: PROPOSED_NOTE_SCHEMA,
+							},
+							hits: {
+								type: "array",
+								description: "Right-hand hits on slots of this bar, when the music has them: a slap of the strings, a thumb slap, a tap on the body.",
+								items: PROPOSED_HIT_SCHEMA,
 							},
 						},
 						required: ["notes"],

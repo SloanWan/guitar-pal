@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./tokens.css"; /* Candy tokens (--gp-*), #349 / #350 */
+@import "./primitives.css"; /* Candy primitives (gp-btn, gp-chip, …), #353 */
+@import "./shell.css"; /* Candy shell: header, tab bar, chrome heights, #356 */
 
 /* dark: utilities still exist in un-migrated shadcn primitives; the variant now
    follows the data-theme attribute instead of the retired .dark class. Prefer
@@ -22,7 +25,8 @@
      needs an edge a border alone does not give it. Every other shadow token
      is a GLOW signalling "live/active", never elevation.
    - Components must reference tokens, never raw hex. The single permitted
-     hardcoded value is denim #4A6FA5 inside the logo playhead rect.
+     hardcoded value was denim #4A6FA5 in the old logo's playhead rect; the
+     logo is now the pick mark (#352), coloured by the --gp-lg* tokens.
    ========================================================================= */
 
 /* ----------------------------------------------------------------------------
@@ -190,10 +194,19 @@
 	--destructive-tint: oklch(0.53 0.17 27 / 0.2);
 }
 
-/* Text selection is fixed across BOTH themes */
+/* Text selection is the page's module colour (Candy "Fill": module 500 behind its
+   "on" text), so Strum selects green, Tab blue, Home ink. The --gp-m-* aliases
+   resolve on the selected element, so a card carrying its own module selects in
+   that module's colour. */
 ::selection {
-	background: var(--denim);
-	color: #f0f0f0;
+	background: var(--gp-m-500);
+	color: var(--gp-m-on);
+}
+/* On a module-filled control the fill would select nothing you can see: invert. */
+.gp-tone-primary ::selection,
+.gp-tone-primary::selection {
+	background: var(--gp-m-on);
+	color: var(--gp-m-500);
 }
 /* …except on a denim surface, where denim-on-denim selects nothing you can
    see. There the selection inverts to the fill's own text colour — the light
@@ -369,8 +382,6 @@
 	--dur-theme: 0.2s; /* theme transition: body background+color; LED on/off */
 	--dur-drawer: 0.25s; /* drawers & collapsibles */
 	--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* pairs with --dur-drawer */
-	--dur-panel: 0.6s; /* the side panel beside the book opening and closing */
-	--ease-panel: cubic-bezier(0.4, 0, 0.2, 1); /* even in and out: a place opening, not a snap */
 
 	--beat-dur: 0.625s; /* THE BEAT CLOCK. JS writes 60/bpm + "s" on every BPM
 	                         change; metronome LED pulse consumes it. Fallback
@@ -570,6 +581,90 @@
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
+
+	/* ---- Candy tokens (#350) under the INTERIM gp- namespace: bg-gp-page, text-gp-ink-3,
+	   bg-gp-m-500 (follows the nearest [data-m]), bg-gp-chords-500 (fixed), rounded-gp-lg,
+	   ease-gp-spring, font-gp-body. The bare names come back in the #363 cleanup, once the
+	   last v3 use of ink / line / card / panel / surface is gone. Durations have no theme
+	   namespace: write duration-(--gp-d-state). Pressable shadows are component classes. */
+	--color-gp-page: var(--gp-page);
+	--color-gp-card: var(--gp-card);
+	--color-gp-sheet: var(--gp-sheet);
+	--color-gp-face: var(--gp-face);
+	--color-gp-face-down: var(--gp-face-down);
+	--color-gp-thumb: var(--gp-thumb);
+	--color-gp-well: var(--gp-well);
+	--color-gp-field: var(--gp-field);
+	--color-gp-s2: var(--gp-s2);
+	--color-gp-line: var(--gp-line);
+	--color-gp-edge: var(--gp-edge);
+	--color-gp-ink: var(--gp-ink);
+	--color-gp-ink-2: var(--gp-ink-2);
+	--color-gp-ink-3: var(--gp-ink-3);
+	--color-gp-ink-mute: var(--gp-ink-mute);
+	--color-gp-ink-fill: var(--gp-ink-fill);
+	--color-gp-on-ink: var(--gp-on-ink);
+	--color-gp-scrim: var(--gp-scrim);
+	--color-gp-m-100: var(--gp-m-100);
+	--color-gp-m-300: var(--gp-m-300);
+	--color-gp-m-500: var(--gp-m-500);
+	--color-gp-m-600: var(--gp-m-600);
+	--color-gp-m-700: var(--gp-m-700);
+	--color-gp-m-on: var(--gp-m-on);
+	--color-gp-m-fill: var(--gp-m-fill);
+	--color-gp-a1: var(--gp-a1);
+	--color-gp-a2: var(--gp-a2);
+	--color-gp-a-on: var(--gp-a-on);
+	--color-gp-ok: var(--gp-ok);
+	--color-gp-warn: var(--gp-warn);
+	--color-gp-bad: var(--gp-bad);
+	--color-gp-bad-fill: var(--gp-bad-fill);
+	--color-gp-strum-100: var(--gp-strum-100);
+	--color-gp-strum-300: var(--gp-strum-300);
+	--color-gp-strum-500: var(--gp-strum-500);
+	--color-gp-strum-700: var(--gp-strum-700);
+	--color-gp-strum-on: var(--gp-strum-on);
+	--color-gp-tab-100: var(--gp-tab-100);
+	--color-gp-tab-300: var(--gp-tab-300);
+	--color-gp-tab-500: var(--gp-tab-500);
+	--color-gp-tab-700: var(--gp-tab-700);
+	--color-gp-tab-on: var(--gp-tab-on);
+	--color-gp-chords-100: var(--gp-chords-100);
+	--color-gp-chords-300: var(--gp-chords-300);
+	--color-gp-chords-500: var(--gp-chords-500);
+	--color-gp-chords-700: var(--gp-chords-700);
+	--color-gp-chords-on: var(--gp-chords-on);
+	--color-gp-fb-100: var(--gp-fb-100);
+	--color-gp-fb-300: var(--gp-fb-300);
+	--color-gp-fb-500: var(--gp-fb-500);
+	--color-gp-fb-700: var(--gp-fb-700);
+	--color-gp-fb-on: var(--gp-fb-on);
+	--color-gp-books-100: var(--gp-books-100);
+	--color-gp-books-300: var(--gp-books-300);
+	--color-gp-books-500: var(--gp-books-500);
+	--color-gp-books-700: var(--gp-books-700);
+	--color-gp-books-on: var(--gp-books-on);
+	--radius-gp-xs: var(--gp-r-xs);
+	--radius-gp-sm: var(--gp-r-s);
+	--radius-gp-md: var(--gp-r-m);
+	--radius-gp-lg: var(--gp-r-l);
+	--radius-gp-xl: var(--gp-r-xl);
+	--radius-gp-pill: var(--gp-r-pill);
+	--ease-gp-state: var(--gp-ease-state);
+	--ease-gp-in: var(--gp-ease-in);
+	--ease-gp-out: var(--gp-ease-out);
+	--ease-gp-sink: var(--gp-e-sink);
+	--ease-gp-rise: var(--gp-e-rise);
+	--ease-gp-spring: var(--gp-spring-press);
+	--ease-gp-spring-tab: var(--gp-spring-tab);
+	--ease-gp-spring-sheet: var(--gp-spring-sheet);
+	--ease-gp-spring-land: var(--gp-spring-land);
+	--ease-gp-spring-pop: var(--gp-spring-pop);
+	--ease-gp-hop: var(--gp-hop);
+	--ease-gp-book: var(--gp-ease-book);
+	--font-gp-body: var(--gp-f-body);
+	--font-gp-display: var(--gp-f-disp);
+	--font-gp-num: var(--gp-f-num);
 }
 
 /* ----------------------------------------------------------------------------
@@ -1087,6 +1182,11 @@
 	* {
 		@apply border-border outline-ring/50;
 	}
+	/* No browser focus ring (Sloan, 2026-10-30). A v3 page's own ring is a utility and
+	   still wins over this layer until that page migrates. */
+	:focus-visible {
+		outline: none;
+	}
 	body {
 		@apply bg-background text-foreground font-sans;
 		-webkit-font-smoothing: antialiased;
@@ -1185,6 +1285,80 @@
 		transition: none;
 	}
 }
+/* An arpeggio's pluck: the string flashes and shakes as it sounds, a ring leaves
+   its note. Hidden until its turn (each string's delay), gone after. */
+.cd-pluck-string {
+	opacity: 0;
+	animation: cd-pluck-shake 720ms ease-out both;
+}
+.cd-pluck-ring {
+	opacity: 0;
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: cd-pluck-ring 640ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes cd-pluck-shake {
+	0% {
+		opacity: 0;
+		transform: translateX(0);
+	}
+	6% {
+		opacity: 1;
+		transform: translateX(1.8px);
+	}
+	16% {
+		transform: translateX(-1.5px);
+	}
+	27% {
+		transform: translateX(1.1px);
+	}
+	40% {
+		transform: translateX(-0.8px);
+	}
+	55% {
+		opacity: 0.8;
+		transform: translateX(0.45px);
+	}
+	72% {
+		transform: translateX(-0.2px);
+	}
+	100% {
+		opacity: 0;
+		transform: translateX(0);
+	}
+}
+@keyframes cd-pluck-ring {
+	0% {
+		opacity: 0;
+		transform: scale(1);
+	}
+	6% {
+		opacity: 0.9;
+	}
+	100% {
+		opacity: 0;
+		transform: scale(2.2);
+	}
+}
+@keyframes cd-pluck-flash {
+	0%,
+	100% {
+		opacity: 0;
+	}
+	6%,
+	50% {
+		opacity: 1;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	/* No movement: the string only lights up in its turn. */
+	.cd-pluck-string {
+		animation-name: cd-pluck-flash;
+	}
+	.cd-pluck-ring {
+		display: none;
+	}
+}
 
 /* Landing chapters: anything that joins a demo mid-story arrives, never pops. */
 @keyframes landing-in {
@@ -1247,65 +1421,6 @@
 @media (prefers-reduced-motion: reduce) {
 	.fp-nudge-left,
 	.fp-nudge-right {
-		animation: none;
-	}
-}
-
-/* The side panel beside the book (#233, #240) arriving and leaving. At lg it
-   grows from nothing to half the page, pushing the book's column over as it
-   goes — its content is laid out at its full width from the first frame
-   (see SidePanel), so only the reveal moves. Below lg it is a sheet that
-   slides in from the right edge. Both take --dur-panel: slow enough to be
-   seen as a place opening, not a flicker. */
-@keyframes side-panel-grow {
-	from {
-		width: 0;
-	}
-	to {
-		width: 50%;
-	}
-}
-@keyframes side-panel-shrink {
-	from {
-		width: 50%;
-	}
-	to {
-		width: 0;
-	}
-}
-@keyframes side-panel-slide-in {
-	from {
-		transform: translateX(100%);
-	}
-	to {
-		transform: translateX(0);
-	}
-}
-@keyframes side-panel-slide-out {
-	from {
-		transform: translateX(0);
-	}
-	to {
-		transform: translateX(100%);
-	}
-}
-.side-panel {
-	animation: side-panel-slide-in var(--dur-panel) var(--ease-panel) both;
-}
-.side-panel[data-closing] {
-	animation-name: side-panel-slide-out;
-}
-@media (min-width: 1024px) {
-	.side-panel {
-		animation-name: side-panel-grow;
-	}
-	.side-panel[data-closing] {
-		animation-name: side-panel-shrink;
-	}
-}
-@media (prefers-reduced-motion: reduce) {
-	.side-panel,
-	.side-panel[data-closing] {
 		animation: none;
 	}
 }
@@ -1397,7 +1512,8 @@
 	z-index: 100; /* above --z-nav (50) */
 	overflow: hidden;
 	pointer-events: none;
-	background: var(--denim-tint);
+	/* data-m on the bar is the destination's module (nav-progress.tsx) */
+	background: var(--gp-m-100);
 	opacity: 1;
 	transition: opacity 0.2s ease-out;
 }
@@ -1408,8 +1524,8 @@
    transition smooths the ~200ms trickle steps and the final snap to 100%. */
 .nav-progress-fill {
 	height: 100%;
-	background: var(--denim);
-	box-shadow: 0 0 8px 1px var(--denim-glow);
+	background: var(--gp-m-500);
+	box-shadow: 0 0 8px 1px color-mix(in srgb, var(--gp-m-500) 50%, transparent);
 	transition: width 0.2s ease-out;
 	will-change: width;
 }

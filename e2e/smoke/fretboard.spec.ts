@@ -7,7 +7,7 @@ import { expect, test } from "../fixtures";
  */
 test("fretboard lays a chosen scale over the neck", async ({ page }) => {
 	await page.goto("/fretboard");
-	await expect(page.getByRole("heading", { name: "Fretboard Playground" })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Fretboard", exact: true, level: 1 })).toBeVisible();
 
 	await page
 		.getByRole("radiogroup", { name: "Key" })

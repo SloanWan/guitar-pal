@@ -1,6 +1,6 @@
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import { validateBars } from "@/lib/strumBars";
-import type { AssistantProposal } from "@/lib/assistant/types";
+import type { AssistantMode, AssistantProposal } from "@/lib/assistant/types";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { validateFingerpickPattern, type ValidationIssue } from "@/lib/tabImport";
 import { isSupportedMeter } from "@/lib/strumMeter";
@@ -40,6 +40,27 @@ export function closeAssistant(): void {
 	window.dispatchEvent(new CustomEvent(ASSISTANT_CLOSE_EVENT));
 }
 
+/**
+ * A sentence asked from a page rather than from the panel (Home's Ask): the
+ * panel opens in the mode the player chose there and is sent the sentence,
+ * as if it had been typed into it. With no sentence (a chapter's "Ask this
+ * chapter", #406) it only opens in that mode, ready to type.
+ */
+export const ASSISTANT_ASK_EVENT = "guitarpal:assistant-ask";
+
+export interface AssistantAsk {
+	/** Sent as typed; blank opens the panel without sending anything. */
+	text: string;
+	mode: AssistantMode;
+}
+
+/** Whether an ask only opens the panel in its mode. */
+export const opensOnly = (ask: AssistantAsk): boolean => ask.text.trim() === "";
+
+export function askAssistant(ask: AssistantAsk): void {
+	window.dispatchEvent(new CustomEvent<AssistantAsk>(ASSISTANT_ASK_EVENT, { detail: ask }));
+}
+
 /** A pattern the assistant made: saved as a pattern, plus a progression if it carries chords. */
 export interface PatternHandoff {
 	kind: "pattern";
@@ -57,6 +78,17 @@ export interface AttachHandoff {
 	patternId: string;
 	/** For the message shown if the pattern has since been deleted. */
 	patternName: string;
+	bars: Bar[];
+	capo: number | null;
+}
+
+/**
+ * Chords with no pattern yet (the Chords board's "Open in Strum"): the page
+ * asks which pattern they go on — or for a new one — and saves nothing until
+ * the player confirms. Bars carry a placeholder rhythm until then.
+ */
+export interface ChordsHandoff {
+	kind: "chords";
 	bars: Bar[];
 	capo: number | null;
 }
@@ -133,7 +165,7 @@ export interface FingerpickSetHandoff {
 	timeSignature: [number, number] | null;
 }
 
-export type StrumHandoff = PatternHandoff | AttachHandoff | RenameHandoff | DeleteHandoff;
+export type StrumHandoff = PatternHandoff | AttachHandoff | ChordsHandoff | RenameHandoff | DeleteHandoff;
 
 export type FingerpickAnyHandoff =
 	| FingerpickHandoff
@@ -240,6 +272,8 @@ export function takeHandoff(domain: HandoffDomain = "strum"): AssistantHandoff |
 
 	// A capo read back from storage: a fret, or nothing.
 	const capo = typeof value.capo === "number" && Number.isFinite(value.capo) ? value.capo : null;
+
+	if (value.kind === "chords") return { kind: "chords", bars: value.bars as Bar[], capo };
 
 	if (value.kind === "attach") {
 		if (typeof value.patternId !== "string" || value.patternId === "") return null;

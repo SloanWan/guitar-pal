@@ -12,8 +12,8 @@ import {
 	ROW_TRAILING_PAD,
 } from "../fingerpickLayout";
 
-function note(fret: number, technique: StringFret["technique"] = null): StringFret {
-	return { fret, technique, tied: false, muted: false };
+function note(fret: number, link?: NonNullable<StringFret["link"]>["kind"]): StringFret {
+	return link ? { fret, muted: false, link: { kind: link } } : { fret, muted: false };
 }
 
 // Four quarter notes, the low E fretted on each.
@@ -31,9 +31,9 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 describe("hoPoConnectorCount", () => {
 	it("counts hammer-ons and pull-offs across every string and slot", () => {
 		const m = quarterMeasure("m");
-		m.slots[1].strings[5] = note(2, "hammer-on");
-		m.slots[2].strings[2] = note(0, "pull-off");
-		m.slots[2].strings[3] = note(1, "slide-up");
+		m.slots[1].strings[5] = note(2, "hammer");
+		m.slots[2].strings[2] = note(0, "pull");
+		m.slots[2].strings[3] = note(1, "slide");
 		expect(hoPoConnectorCount(m)).toBe(2);
 	});
 
@@ -149,6 +149,13 @@ describe("measurePitchLabelWidths", () => {
 		const m = quarterMeasure("m");
 		const { notes, noteSlots } = fingerpickToVexFlow(m);
 		const base = computeMeasureMinWidth(notes, true, 0);
+		// A bend's arrow and label, and a vibrato squiggle, need room right of the number.
+		const ex = (bends: number, vibratos = 0, wideVibratos = 0) =>
+			computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [], { bends, vibratos, wideVibratos });
+		expect(ex(1)).toBeGreaterThan(base);
+		expect(ex(2) - base).toBeCloseTo(2 * (ex(1) - base));
+		expect(ex(0, 1)).toBeGreaterThan(base);
+		expect(ex(0, 0, 1)).toBeGreaterThan(ex(0, 1));
 		const narrow = computeMeasureMinWidth(notes, true, 0, 0, 0, 0, 0, [1, 1, 1, 1]);
 		expect(narrow).toBe(base);
 		const wide = computeMeasureMinWidth(

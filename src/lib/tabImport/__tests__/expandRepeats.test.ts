@@ -8,12 +8,12 @@ function makeMeasure(label: string): Measure {
 	return {
 		id: label,
 		slots: [{ id: `${label}-s0`, duration: "quarter", strings: [
-			{ fret: null, technique: null, tied: false, muted: false },
-			{ fret: null, technique: null, tied: false, muted: false },
-			{ fret: null, technique: null, tied: false, muted: false },
-			{ fret: null, technique: null, tied: false, muted: false },
-			{ fret: null, technique: null, tied: false, muted: false },
-			{ fret: null, technique: null, tied: false, muted: false },
+			{ fret: null, muted: false },
+			{ fret: null, muted: false },
+			{ fret: null, muted: false },
+			{ fret: null, muted: false },
+			{ fret: null, muted: false },
+			{ fret: null, muted: false },
 		] }],
 	};
 }

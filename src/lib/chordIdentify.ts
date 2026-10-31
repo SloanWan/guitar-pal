@@ -1,27 +1,12 @@
 import { MUTED, type ShapeFret } from "@/lib/chordShape";
-import { GUITAR_OPEN_MIDI } from "@/lib/chordVoicingToMidi";
-import { chordVoicingToMidi } from "@/lib/chordVoicingToMidi";
-import {
-	CHORD_SUFFIX_CATEGORIES,
-	ROOT_CHROMATIC_ORDER,
-	getSuffixCategory,
-	isSlashChord,
-} from "@/lib/chordSuffixes";
+import { GUITAR_OPEN_MIDI, voicingPitches } from "@/lib/chordVoicingToMidi";
+import { ROOT_CHROMATIC_ORDER, displayCategory, suffixRank } from "@/lib/chordSuffixes";
 import type { ShapeSearchChord } from "@/lib/chordShapeSearch";
 
 /**
- * Naming a shape from the notes it sounds.
- *
- * A player who has read a grip off a tab often does not know what it is called —
- * that is frequently why the tab gave the grip. The notes, though, are not a
- * matter of opinion: six frets in standard tuning sound a definite set of pitch
- * classes, and a chord is a name for a set of pitch classes.
- *
- * The names come from the library rather than from a table of formulas written
- * here. The library already holds 587 chords across 77 qualities, each with its
- * own voicings, so "which chord has exactly these notes" is a question its own
- * data answers — and answering it that way means this can never name a chord the
- * rest of the app cannot then browse, play or draw.
+ * Naming a shape from the notes it sounds. The candidate names come from the
+ * library's own voicings, not a formula table, so every name offered is a chord
+ * the app can also browse, play and draw.
  */
 
 /** MIDI pitches a shape sounds, lowest string first. Muted strings contribute none. */
@@ -93,23 +78,6 @@ function sameSet(a: readonly number[], b: readonly number[]): boolean {
 	return a.length === b.length && a.every((pc, i) => pc === b[i]);
 }
 
-/** Simpler qualities before richer ones, slash chords and strangers last. */
-const SUFFIX_ORDER = new Map<string, number>();
-{
-	let n = 0;
-	for (const { suffixes } of CHORD_SUFFIX_CATEGORIES) {
-		for (const suffix of suffixes) SUFFIX_ORDER.set(suffix, n++);
-	}
-}
-
-function suffixOrder(suffix: string): number {
-	return SUFFIX_ORDER.get(suffix) ?? (isSlashChord(suffix) ? 100_000 : 90_000);
-}
-
-function categoryOf(suffix: string): string {
-	return isSlashChord(suffix) ? "Slash Chords" : (getSuffixCategory(suffix) ?? "Other");
-}
-
 const DEFAULT_LIMIT = 4;
 
 /**
@@ -141,7 +109,7 @@ export function identifyChords(
 
 	for (const chord of library) {
 		for (const voicing of chord.chord_voicings ?? []) {
-			const voiced = chordVoicingToMidi(voicing).map((n) => n.midi);
+			const voiced = voicingPitches(voicing);
 			if (voiced.length === 0) continue;
 			const set = pitchClassSet(voiced);
 			const exact = sameSet(set, target);
@@ -150,7 +118,7 @@ export function identifyChords(
 			const guess: ChordGuess = {
 				root: chord.root,
 				suffix: chord.suffix,
-				category: categoryOf(chord.suffix),
+				category: displayCategory(chord.suffix),
 				exact,
 				sameBass: bass !== null && bassPitchClass(voiced) === bass,
 			};
@@ -168,7 +136,7 @@ export function identifyChords(
 		.sort(
 			(a, b) =>
 				rank(a) - rank(b) ||
-				suffixOrder(a.suffix) - suffixOrder(b.suffix) ||
+				suffixRank(a.suffix) - suffixRank(b.suffix) ||
 				a.root.localeCompare(b.root),
 		)
 		.slice(0, limit);

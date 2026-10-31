@@ -23,8 +23,8 @@ vi.mock("@/components/fingerpick/TabStaveRow", async (importOriginal) => ({
 
 const push = vi.fn();
 let pathname = "/strum";
+vi.mock("@/components/nav-progress", () => ({ useNavRouter: () => ({ push }) }));
 vi.mock("next/navigation", () => ({
-	useRouter: () => ({ push }),
 	usePathname: () => pathname,
 }));
 
@@ -67,7 +67,7 @@ describe("TabProposalPreview", () => {
 		await act(async () => root.render(<TabProposalPreview proposal={proposal} />));
 		expect(host.textContent).toContain("C G Am picking");
 		expect(host.textContent).toContain("4/4");
-		expect(host.textContent).toContain("C · G · Am");
+		expect([...host.querySelectorAll(".as-chordline span")].map((s) => s.textContent)).toEqual(["C", "G", "Am"]);
 		const last = staveProps[staveProps.length - 1];
 		expect(last.measures.length).toBeLessThanOrEqual(2);
 		expect(last.measureWidths).toHaveLength(last.measures.length);
@@ -85,7 +85,7 @@ describe("TabProposalPreview", () => {
 	it("hands the pattern to the fingerpick page and goes there", async () => {
 		const proposal = proposalOf([chord("A", "minor", "Am")]);
 		await act(async () => root.render(<TabProposalPreview proposal={proposal} />));
-		const button = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Open in fingerpick"));
+		const button = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Open in Tab"));
 		await act(async () => button!.click());
 		const handoff = takeHandoff("fingerpick");
 		expect(handoff?.pattern.name).toBe(proposal.pattern.name);
@@ -97,7 +97,7 @@ describe("TabProposalPreview", () => {
 		pathname = "/fingerpick";
 		const proposal = proposalOf([chord("A", "minor", "Am")]);
 		await act(async () => root.render(<TabProposalPreview proposal={proposal} />));
-		const button = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Open in fingerpick"));
+		const button = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Open in Tab"));
 		await act(async () => button!.click());
 		expect(push).not.toHaveBeenCalled();
 		expect(takeHandoff("fingerpick")).not.toBeNull();

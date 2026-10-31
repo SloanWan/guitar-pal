@@ -17,10 +17,10 @@ import { useRef, useState } from "react";
 import {
 	_pcmSampleToBuffer,
 	findZoneForMidi,
-	parsePresetFromJs,
 	type WafPreset,
 	type WafZone,
 } from "@/components/strum/useGuitarSampleLoader";
+import { parsePresetFromJs } from "@/app/dev/_lib/parsePresetFromJs";
 import { NOTE_NAMES } from "@/lib/chordVoicingToMidi";
 
 // ── Preset catalog ────────────────────────────────────────────────────────────

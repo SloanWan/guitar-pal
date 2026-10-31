@@ -8,9 +8,11 @@ export type AssistantDomain = "strum" | "tab";
 
 /**
  * What the chip above the input can be set to: one of the two rules
- * assistants, or General — the model, which reaches both through tools.
+ * assistants, General — the model, which reaches both through tools — or
+ * Book, the open chapter of an uploaded textbook, offered only while one
+ * is open (#203).
  */
-export type AssistantMode = AssistantDomain | "general";
+export type AssistantMode = AssistantDomain | "general" | "book";
 
 /**
  * What the assistant offers the user, before anything is written. Nothing here

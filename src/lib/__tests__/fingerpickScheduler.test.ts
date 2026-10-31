@@ -12,7 +12,18 @@ import {
 	computeRollOffsets,
 	BRUSH_STAGGER_SECONDS,
 	computeMeasureBoundaries,
+	computeSlotStarts,
+	slotAtTime,
 	resolveSlide,
+	isGlide,
+	tremoloStrokes,
+	trillStrokes,
+	TAP_SKIP_S,
+	DEFAULT_SLAP_PARAMS,
+	SLIDE_IN_OUT_SEMITONES,
+	noiseBufferFor,
+	noteGain,
+	PERCUSSION_STRINGS,
 	applySlideToVoice,
 	promoteSlideOriginsToLetRing,
 	scheduleFingerpickNote,
@@ -24,6 +35,7 @@ import {
 	ROLL_HARD_SPAN_CEILING,
 	type RollParams,
 	type SlideParams,
+	type SlapParams,
 	type SlidePlan,
 	type SlideActiveVoice,
 	type NoteGains,
@@ -33,7 +45,15 @@ import {
 	type FingerpickNoteSchedulerDeps,
 	type ScheduleEvent,
 } from "@/lib/fingerpickScheduler";
+import {
+	bendTimeline,
+	curveLength,
+	expressionForEffects,
+	DEFAULT_VIBRATO_PARAMS,
+	EXPRESSION_RELEASE_MIN_GAIN_RATIO,
+} from "@/lib/fingerpickExpression";
 import type { FingerpickPattern, BeatSlot, StringFret, Duration, Stroke } from "@/lib/fingerpickTypes";
+import { makeDefaultPattern } from "@/lib/fingerpickEdit";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -42,8 +62,6 @@ function strings6(
 ): [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret] {
 	const make = (i: number): StringFret => ({
 		fret: null,
-		technique: null,
-		tied: false,
 		muted: false,
 		...(overrides[i] ?? {}),
 	});
@@ -264,10 +282,10 @@ describe("fingerpickPatternToScheduleEvents — MIDI resolution", () => {
 describe("fingerpickPatternToScheduleEvents — capo", () => {
 	const slots = [
 		slot("s1", "quarter", { 0: { fret: 3 }, 5: { fret: 0 } }),
-		slot("s2", "quarter", { 3: { muted: true }, 2: { fret: 5, technique: "slide-up" } }),
+		slot("s2", "quarter", { 3: { muted: true }, 2: { fret: 5, link: { kind: "slide" } } }),
 	];
 
-	it("raises every event by the capo, written frets and open dead notes alike", () => {
+	it("raises every event by the capo, written frets and open x's alike", () => {
 		const plain = fingerpickPatternToScheduleEvents(pattern(120, slots), 120);
 		const behind = fingerpickPatternToScheduleEvents({ ...pattern(120, slots), capo: 3 }, 120);
 		expect(behind).toHaveLength(plain.length);
@@ -295,7 +313,7 @@ describe("fingerpickPatternToScheduleEvents — tied / silent strings", () => {
 	it("tied string produces no event (sustain — no re-attack)", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 5 } }),
-			slot("s2", "quarter", { 0: { fret: 5, tied: true } }),
+			slot("s2", "quarter", { 0: { fret: 5, link: { kind: "tie" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		// Only one event: the initial pluck; the tied slot produces nothing.
@@ -306,8 +324,8 @@ describe("fingerpickPatternToScheduleEvents — tied / silent strings", () => {
 	it("a tied slot lengthens the note it carries on, so the decay runs the written length", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 5 }, 2: { fret: 0 } }),
-			slot("s2", "quarter", { 0: { fret: 5, tied: true }, 2: { fret: 2 } }),
-			slot("s3", "eighth", { 0: { fret: 5, tied: true } }),
+			slot("s2", "quarter", { 0: { fret: 5, link: { kind: "tie" } }, 2: { fret: 2 } }),
+			slot("s3", "eighth", { 0: { fret: 5, link: { kind: "tie" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		const quarter = 60 / 120;
@@ -338,10 +356,10 @@ describe("fingerpickPatternToScheduleEvents — technique events", () => {
 	it("hammer-on technique is carried on the event", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 0 } }),
-			slot("s2", "quarter", { 0: { fret: 2, technique: "hammer-on" } }),
+			slot("s2", "quarter", { 0: { fret: 2, link: { kind: "hammer" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
-		expect(events[1].technique).toBe("hammer-on");
+		expect(events[1].link).toEqual({ kind: "hammer" });
 	});
 
 	it("slide-down destination emits its own event with technique='slide-down'", () => {
@@ -349,15 +367,15 @@ describe("fingerpickPatternToScheduleEvents — technique events", () => {
 		// Both source and destination emit separate events; audio plays as normal pluck.
 		const p = pattern(120, [
 			slot("s1", "quarter", { 3: { fret: 7 } }),
-			slot("s2", "quarter", { 3: { fret: 5, technique: "slide-down" } }),
+			slot("s2", "quarter", { 3: { fret: 5, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(2);
 		expect(events[0].stringIndex).toBe(3);
 		expect(events[0].midi).toBe(OPEN_STRING_MIDI[3] + 7); // source pitch
-		expect(events[0].technique).toBeNull();
+		expect(events[0].link).toBeUndefined();
 		expect(events[1].midi).toBe(OPEN_STRING_MIDI[3] + 5); // destination pitch
-		expect(events[1].technique).toBe("slide-down");
+		expect(events[1].link).toEqual({ kind: "slide" });
 	});
 });
 
@@ -365,50 +383,50 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 	it("slide-up destination emits its own event with technique='slide-up'", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 5 } }),
-			slot("s2", "quarter", { 0: { fret: 7, technique: "slide-up" } }),
+			slot("s2", "quarter", { 0: { fret: 7, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(2);
 		expect(events[0].midi).toBe(OPEN_STRING_MIDI[0] + 5);
-		expect(events[0].technique).toBeNull();
+		expect(events[0].link).toBeUndefined();
 		expect(events[1].midi).toBe(OPEN_STRING_MIDI[0] + 7);
-		expect(events[1].technique).toBe("slide-up");
+		expect(events[1].link).toEqual({ kind: "slide" });
 	});
 
 	it("chained slides (5→9→5): all three slots emit separate events", () => {
 		const p = pattern(120, [
 			slot("s1", "eighth", { 1: { fret: 5 } }),
-			slot("s2", "eighth", { 1: { fret: 9, technique: "slide-up" } }),
-			slot("s3", "half",   { 1: { fret: 5, technique: "slide-down" } }),
+			slot("s2", "eighth", { 1: { fret: 9, link: { kind: "slide" } } }),
+			slot("s3", "half",   { 1: { fret: 5, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(3);
 		expect(events[0].midi).toBe(OPEN_STRING_MIDI[1] + 5);
 		expect(events[1].midi).toBe(OPEN_STRING_MIDI[1] + 9);
-		expect(events[1].technique).toBe("slide-up");
+		expect(events[1].link).toEqual({ kind: "slide" });
 		expect(events[2].midi).toBe(OPEN_STRING_MIDI[1] + 5);
-		expect(events[2].technique).toBe("slide-down");
+		expect(events[2].link).toEqual({ kind: "slide" });
 	});
 
 	it("slide destination followed by a normal note: all three slots emit events", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 2: { fret: 3 } }),
-			slot("s2", "quarter", { 2: { fret: 7, technique: "slide-up" } }),
+			slot("s2", "quarter", { 2: { fret: 7, link: { kind: "slide" } } }),
 			slot("s3", "quarter", { 2: { fret: 5 } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(3);
 		expect(events[0].midi).toBe(OPEN_STRING_MIDI[2] + 3);
 		expect(events[1].midi).toBe(OPEN_STRING_MIDI[2] + 7);
-		expect(events[1].technique).toBe("slide-up");
+		expect(events[1].link).toEqual({ kind: "slide" });
 		expect(events[2].midi).toBe(OPEN_STRING_MIDI[2] + 5);
-		expect(events[2].technique).toBeNull();
+		expect(events[2].link).toBeUndefined();
 	});
 
 	it("slide destination on str0 does not suppress str3 events in the same slot", () => {
 		const p = pattern(120, [
 			slot("s1", "quarter", { 0: { fret: 5 }, 3: { fret: 2 } }),
-			slot("s2", "quarter", { 0: { fret: 9, technique: "slide-up" }, 3: { fret: 4 } }),
+			slot("s2", "quarter", { 0: { fret: 9, link: { kind: "slide" } }, 3: { fret: 4 } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		// str0 s1, str3 s1, str0 s2, str3 s2 = 4 events
@@ -416,27 +434,27 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 		const str0Events = events.filter((e) => e.stringIndex === 0);
 		const str3Events = events.filter((e) => e.stringIndex === 3);
 		expect(str0Events).toHaveLength(2);
-		expect(str0Events[1].technique).toBe("slide-up");
+		expect(str0Events[1].link).toEqual({ kind: "slide" });
 		expect(str3Events).toHaveLength(2);
 	});
 
 	it("slide destination across a measure boundary emits its own event in the correct measure", () => {
 		const p = multiMeasurePattern(120, [
 			[slot("s1", "quarter", { 4: { fret: 0 } })],
-			[slot("s2", "quarter", { 4: { fret: 5, technique: "slide-up" } })],
+			[slot("s2", "quarter", { 4: { fret: 5, link: { kind: "slide" } } })],
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(2);
 		expect(events[0].measureIndex).toBe(0);
 		expect(events[1].measureIndex).toBe(1);
 		expect(events[1].midi).toBe(OPEN_STRING_MIDI[4] + 5);
-		expect(events[1].technique).toBe("slide-up");
+		expect(events[1].link).toEqual({ kind: "slide" });
 	});
 
 	it("a note without slide technique emits normally with no slideChain field", () => {
 		const p = pattern(120, [slot("s1", "quarter", { 0: { fret: 5 } })]);
 		const [ev] = fingerpickPatternToScheduleEvents(p, 120);
-		expect(ev.technique).toBeNull();
+		expect(ev.link).toBeUndefined();
 		expect((ev as Record<string, unknown>)["slideChain"]).toBeUndefined();
 	});
 
@@ -444,8 +462,8 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 		// eighth(0.25s) → quarter(0.5s) → half(1.0s)
 		const p = pattern(120, [
 			slot("s1", "eighth",  { 0: { fret: 5 } }),
-			slot("s2", "quarter", { 0: { fret: 7, technique: "slide-up" } }),
-			slot("s3", "half",    { 0: { fret: 9, technique: "slide-up" } }),
+			slot("s2", "quarter", { 0: { fret: 7, link: { kind: "slide" } } }),
+			slot("s3", "half",    { 0: { fret: 9, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events).toHaveLength(3);
@@ -459,7 +477,7 @@ describe("fingerpickPatternToScheduleEvents — slide destinations", () => {
 		// slide would otherwise fall back to a re-pluck (two attacks). See promoteSlideOrigins.
 		const p = pattern(120, [
 			slot("s1", "32nd",    { 2: { fret: 5 } }),
-			slot("s2", "quarter", { 2: { fret: 8, technique: "slide-up" } }),
+			slot("s2", "quarter", { 2: { fret: 8, link: { kind: "slide" } } }),
 		]);
 		const events = fingerpickPatternToScheduleEvents(p, 120);
 		expect(events[0].letRing).toBe(true); // origin promoted
@@ -474,7 +492,6 @@ describe("promoteSlideOriginsToLetRing", () => {
 			duration: 0.5,
 			stringIndex: 0,
 			midi: 60,
-			technique: null,
 			muted: false,
 			measureIndex: 0,
 			slotIndex: 0,
@@ -483,39 +500,39 @@ describe("promoteSlideOriginsToLetRing", () => {
 	}
 
 	it("marks the immediate same-string predecessor of a slide as letRing", () => {
-		const origin = ev({ time: 0, technique: null });
-		const slide = ev({ time: 0.5, technique: "slide-up" });
+		const origin = ev({ time: 0 });
+		const slide = ev({ time: 0.5, link: { kind: "slide" } });
 		promoteSlideOriginsToLetRing([origin, slide]);
 		expect(origin.letRing).toBe(true);
 		expect(slide.letRing).toBeUndefined();
 	});
 
 	it("promotes across intervening time order even if the array is not pre-sorted", () => {
-		const slide = ev({ time: 0.5, technique: "slide-down" });
-		const origin = ev({ time: 0, technique: null });
+		const slide = ev({ time: 0.5, link: { kind: "slide" } });
+		const origin = ev({ time: 0 });
 		promoteSlideOriginsToLetRing([slide, origin]); // slide listed first
 		expect(origin.letRing).toBe(true);
 	});
 
 	it("only promotes the SAME string's predecessor, not another string's", () => {
-		const otherString = ev({ time: 0, stringIndex: 3, technique: null });
-		const origin = ev({ time: 0.1, stringIndex: 2, technique: null });
-		const slide = ev({ time: 0.5, stringIndex: 2, technique: "slide-up" });
+		const otherString = ev({ time: 0, stringIndex: 3 });
+		const origin = ev({ time: 0.1, stringIndex: 2 });
+		const slide = ev({ time: 0.5, stringIndex: 2, link: { kind: "slide" } });
 		promoteSlideOriginsToLetRing([otherString, origin, slide]);
 		expect(origin.letRing).toBe(true);
 		expect(otherString.letRing).toBeUndefined();
 	});
 
 	it("leaves a first-note slide (no predecessor on its string) to fall back", () => {
-		const slide = ev({ time: 0, stringIndex: 4, technique: "slide-up" });
+		const slide = ev({ time: 0, stringIndex: 4, link: { kind: "slide" } });
 		promoteSlideOriginsToLetRing([slide]);
 		expect(slide.letRing).toBeUndefined();
 	});
 
 	it("chained slides promote each hop's origin (the intermediate slide too)", () => {
-		const a = ev({ time: 0, technique: null });
-		const b = ev({ time: 0.25, technique: "slide-up" });
-		const c = ev({ time: 0.5, technique: "slide-down" });
+		const a = ev({ time: 0 });
+		const b = ev({ time: 0.25, link: { kind: "slide" } });
+		const c = ev({ time: 0.5, link: { kind: "slide" } });
 		promoteSlideOriginsToLetRing([a, b, c]);
 		expect(a.letRing).toBe(true); // origin of the first slide
 		expect(b.letRing).toBe(true); // b is the origin of the second slide
@@ -1627,6 +1644,13 @@ const TEST_GAINS: NoteGains = {
 	technique: 0.5,
 	tapping: 0.8,
 	ghost: 0.3,
+	slap: 0.7,
+	palmMute: 0.75,
+	tremoloAltGain: 0.85,
+	harmonic: 0.6,
+	harmonicBody: 0.35,
+	scrape: 0.5,
+	bodyTap: 0.8,
 	accentMultiplier: 1.3,
 	letRingLifetimeTaus: 4,
 };
@@ -1636,6 +1660,8 @@ const TEST_ENV: NoteEnvelope = {
 	minDecayTc: 0.03,
 	voiceStealFadeTau: 0.005,
 	letRingDecayTc: 1.5,
+	palmMuteDecayTc: 0.12,
+	harmonicDecayTc: 0.6,
 	sourceStopBuffer: 0.05,
 };
 
@@ -1645,7 +1671,6 @@ function noteEvent(overrides: Partial<ScheduleEvent> = {}): ScheduleEvent {
 		duration: 0.5,
 		stringIndex: 2,
 		midi: 62,
-		technique: null,
 		muted: false,
 		measureIndex: 0,
 		slotIndex: 0,
@@ -1661,6 +1686,7 @@ function mockParam(initial = 0) {
 		cancelScheduledValues: vi.fn(),
 		exponentialRampToValueAtTime: vi.fn(),
 		linearRampToValueAtTime: vi.fn(),
+		setValueCurveAtTime: vi.fn(),
 	};
 }
 
@@ -1668,6 +1694,7 @@ function mockSource() {
 	return {
 		buffer: null as unknown,
 		playbackRate: mockParam(1),
+		detune: mockParam(0),
 		connect: vi.fn((node: unknown) => node),
 		start: vi.fn(),
 		stop: vi.fn(),
@@ -1685,18 +1712,31 @@ function mockGain() {
 function mockFilter() {
 	return {
 		type: "" as BiquadFilterType,
-		frequency: { value: 0 },
+		frequency: mockParam(0),
 		Q: { value: 0 },
 		connect: vi.fn((node: unknown) => node),
 	};
+}
+
+function mockOscillator() {
+	return { type: "sine" as OscillatorType, frequency: mockParam(0), connect: vi.fn((node: unknown) => node), start: vi.fn(), stop: vi.fn() };
 }
 
 function mockCtx(currentTime = 0) {
 	const sources: ReturnType<typeof mockSource>[] = [];
 	const gains: ReturnType<typeof mockGain>[] = [];
 	const filters: ReturnType<typeof mockFilter>[] = [];
+	const oscillators: ReturnType<typeof mockOscillator>[] = [];
 	return {
 		currentTime,
+		sampleRate: 1000,
+		createBuffer: vi.fn((_channels: number, length: number) => ({ length, getChannelData: () => new Float32Array(length) })),
+		createOscillator: vi.fn(() => {
+			const o = mockOscillator();
+			oscillators.push(o);
+			return o;
+		}),
+		_oscillators: oscillators,
 		createBufferSource: vi.fn(() => {
 			const s = mockSource();
 			sources.push(s);
@@ -1748,6 +1788,8 @@ function makeDeps(
 		slideParams?: SlideParams;
 		resolveNoteData?: NoteDataResolver;
 		forceLetRing?: boolean;
+		noiseBuffer?: AudioBuffer | null;
+		slapParams?: SlapParams;
 	} = {},
 ): FingerpickNoteSchedulerDeps {
 	const target = {} as AudioNode;
@@ -1755,17 +1797,129 @@ function makeDeps(
 		ctx: ctx as unknown as AudioContext,
 		target,
 		voices,
-		allSources: new Set<AudioBufferSourceNode>(),
+		allSources: new Set<AudioScheduledSourceNode>(),
 		resolveNoteData:
 			opts.resolveNoteData ??
-			((_muted, midi) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) })),
+			((midi) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) })),
 		gains: TEST_GAINS,
 		envelope: TEST_ENV,
 		forceLetRing: opts.forceLetRing ?? false,
 		legatoTreatment: opts.legatoTreatment ?? "current",
 		slideParams: opts.slideParams ?? DEFAULT_SLIDE_PARAMS,
+		...(opts.slapParams && { slapParams: opts.slapParams }),
+		noiseBuffer: opts.noiseBuffer === undefined ? ({} as AudioBuffer) : opts.noiseBuffer,
 	};
 }
+
+describe("scheduleFingerpickNote — bend and vibrato detune curves", () => {
+	function curveCall(src: ReturnType<typeof mockSource>): { values: Float32Array; start: number; duration: number } {
+		expect(src.detune.setValueCurveAtTime).toHaveBeenCalledTimes(1);
+		const [values, start, duration] = src.detune.setValueCurveAtTime.mock.calls[0] as [Float32Array, number, number];
+		return { values, start, duration };
+	}
+
+	it("a plain note gets no curve", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent(), 1);
+		expect(ctx._sources[0].detune.setValueCurveAtTime).not.toHaveBeenCalled();
+	});
+
+	it("a full bend sets one detune curve over the note, leaving playbackRate alone", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { bend: { semitones: 2 } }, duration: 0.5 }), 1);
+		const src = ctx._sources[0];
+		const { values, start, duration } = curveCall(src);
+		expect(values).toBeInstanceOf(Float32Array);
+		expect(values.length).toBe(curveLength(0.5));
+		expect(start).toBe(1);
+		expect(duration).toBe(0.5);
+		expect(values[0]).toBe(0);
+		expect(values[values.length - 1]).toBe(200);
+		expect(src.playbackRate.value).toBe(rateFor(62));
+		expect(src.playbackRate.setValueAtTime).not.toHaveBeenCalled();
+		expect(src.playbackRate.exponentialRampToValueAtTime).not.toHaveBeenCalled();
+	});
+
+	it("named bend heights and bendTarget both reach the curve", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map());
+		scheduleFingerpickNote(deps, noteEvent({ effects: { bend: { semitones: 1 } }, stringIndex: 0 }), 1);
+		scheduleFingerpickNote(deps, noteEvent({ effects: { bend: { semitones: 0.5, pre: true } }, stringIndex: 1 }), 1);
+		const half = curveCall(ctx._sources[0]).values;
+		const pre = curveCall(ctx._sources[1]).values;
+		expect(half[half.length - 1]).toBe(100);
+		expect(pre[0]).toBe(50);
+	});
+
+	it("a vibrato wobbles only above the fretted pitch, within its depth", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { vibrato: {} }, duration: 1 }), 0);
+		const { values } = curveCall(ctx._sources[0]);
+		let lo = Infinity;
+		let hi = -Infinity;
+		for (const v of values) {
+			lo = Math.min(lo, v);
+			hi = Math.max(hi, v);
+		}
+		expect(lo).toBeGreaterThanOrEqual(0);
+		expect(hi).toBeLessThanOrEqual(DEFAULT_VIBRATO_PARAMS.depthCents + 1e-6);
+		expect(hi).toBeGreaterThan(DEFAULT_VIBRATO_PARAMS.depthCents * 0.9);
+	});
+
+	it("a bend-release ends back at 0 and keeps enough gain to be heard coming down", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { bend: { semitones: 2, release: true } }, duration: 0.5 }), 0);
+		const { values } = curveCall(ctx._sources[0]);
+		expect(values[values.length - 1]).toBe(0);
+		const tc = ctx._gains[0].gain.setTargetAtTime.mock.calls[0][2] as number;
+		const releaseEnd = bendTimeline(expressionForEffects({ bend: { semitones: 2, release: true } })!.bend!, 0.5).releaseEndS;
+		expect(Math.exp(-releaseEnd / tc)).toBeGreaterThanOrEqual(EXPRESSION_RELEASE_MIN_GAIN_RATIO - 1e-9);
+		// A plain note of the same length decays faster: τ = 0.5 × 0.8.
+		expect(tc).toBeGreaterThan(0.4);
+	});
+
+	it("a non-release bend keeps the plain note's decay", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { bend: { semitones: 2 } }, duration: 0.5 }), 0);
+		expect(ctx._gains[0].gain.setTargetAtTime.mock.calls[0][2]).toBeCloseTo(0.4);
+	});
+
+	it("a letRing bend's curve covers the voice's whole lifetime", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { bend: { semitones: 2 } }, duration: 0.5, letRing: true }), 0);
+		const { duration } = curveCall(ctx._sources[0]);
+		expect(duration).toBeCloseTo(TEST_ENV.letRingDecayTc * TEST_GAINS.letRingLifetimeTaus);
+	});
+
+	it("a staccato bend's curve is as short as the note", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { bend: { semitones: 2 }, staccato: true }, duration: 0.5 }), 0);
+		expect(curveCall(ctx._sources[0]).duration).toBeCloseTo(0.1);
+	});
+
+	it("a bent voice can still be slid from: the handoff ramps playbackRate, the curve stays", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const deps = makeDeps(ctx, voices);
+		scheduleFingerpickNote(deps, noteEvent({ effects: { bend: { semitones: 2 } }, duration: 0.5, letRing: true }), 0);
+		scheduleFingerpickNote(deps, noteEvent({ link: { kind: "slide" }, midi: 64, duration: 0.5 }), 0.5);
+		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
+		const src = ctx._sources[0];
+		expect(src.detune.setValueCurveAtTime).toHaveBeenCalledTimes(1);
+		expect(src.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalled();
+	});
+
+	it("fingerpickPatternToScheduleEvents carries the effects onto the event", () => {
+		const bent = pattern(120, [slot("s0", "quarter", { 2: { fret: 7, effects: { bend: { semitones: 1.0, release: true } } } })]);
+		const events = fingerpickPatternToScheduleEvents(bent, 120);
+		expect(events).toHaveLength(1);
+		expect(events[0].effects).toEqual({ bend: { semitones: 1, release: true } });
+		const v2 = pattern(120, [slot("s0", "quarter", { 2: { fret: 7, effects: { bend: { semitones: 1, release: true }, accent: true } } })]);
+		expect(fingerpickPatternToScheduleEvents(v2, 120)[0].effects).toEqual({ bend: { semitones: 1, release: true }, accent: true });
+		const plain = fingerpickPatternToScheduleEvents(pattern(120, [slot("s0", "quarter", { 2: { fret: 7 } })]), 120);
+		expect("effects" in plain[0]).toBe(false);
+	});
+});
 
 describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)", () => {
 	it("a slide with a live origin voice creates NO new source and ramps the origin in place", () => {
@@ -1774,7 +1928,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
 		voices.set(2, origin as unknown as SlideActiveVoice);
 
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, link: { kind: "slide" } }), 1);
 
 		expect(ctx.createBufferSource).not.toHaveBeenCalled();
 		expect(origin.source.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalledTimes(1);
@@ -1788,7 +1942,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
 		voices.set(2, origin as unknown as SlideActiveVoice);
 
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, link: { kind: "slide" } }), 1);
 
 		const rampArg = origin.source.playbackRate.exponentialRampToValueAtTime.mock.calls[0][0];
 		expect(rampArg).toBeCloseTo(rateFor(62));
@@ -1812,7 +1966,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		// Slide up 5 semitones (A5 → fret 5, midi 50).
 		scheduleFingerpickNote(
 			makeDeps(ctx, voices, { resolveNoteData: flatResolver }),
-			noteEvent({ midi: 50, technique: "slide-up" }),
+			noteEvent({ midi: 50, link: { kind: "slide" } }),
 			1,
 		);
 
@@ -1826,7 +1980,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		const ctx = mockCtx(0);
 		const voices = new Map<number, SlideActiveVoice>();
 
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, link: { kind: "slide" } }), 1);
 
 		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
 		// Fallback = ordinary pluck: NORMAL gain, no lowpass filter.
@@ -1840,7 +1994,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		// stopTime 0.5 is before the slide's beat (when = 1) → origin is dead.
 		voices.set(2, makeLiveVoice({ currentMidi: 60, stopTime: 0.5 }) as unknown as SlideActiveVoice);
 
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, link: { kind: "slide" } }), 1);
 
 		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
 	});
@@ -1852,7 +2006,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		voices.set(2, origin as unknown as SlideActiveVoice);
 
 		// interval |60 - 40| = 20 > default max 12 → fallback.
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 60, technique: "slide-up" }), 1);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 60, link: { kind: "slide" } }), 1);
 
 		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
 		// A retrigger steals the ringing origin (fade + stop via stealVoice).
@@ -1865,7 +2019,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
 		voices.set(2, origin as unknown as SlideActiveVoice);
 
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, technique: "slide-up" }), 1);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, link: { kind: "slide" } }), 1);
 
 		expect(origin.source.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalled();
 		expect(origin.source.playbackRate.linearRampToValueAtTime).not.toHaveBeenCalled();
@@ -1880,7 +2034,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 
 		scheduleFingerpickNote(
 			makeDeps(ctx, voices),
-			noteEvent({ midi: 62, technique: "slide-up", duration: 0.5 }),
+			noteEvent({ midi: 62, link: { kind: "slide" }, duration: 0.5 }),
 			1,
 		);
 
@@ -1896,13 +2050,13 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		voices.set(2, origin as unknown as SlideActiveVoice);
 
 		// First slide 60 → 64.
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 64, technique: "slide-up" }), 1);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 64, link: { kind: "slide" } }), 1);
 		expect(origin.currentMidi).toBe(64);
 		expect(origin.currentRate).toBeCloseTo(rateFor(64));
 
 		// Second slide 64 → 60: interval must be measured from 64 (=4), and the ramp anchored
 		// at the current rate. A 24-semitone max still permits it; verify the from-rate anchor.
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 60, technique: "slide-down" }), 2);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 60, link: { kind: "slide" } }), 2);
 		const secondRamp = origin.source.playbackRate.exponentialRampToValueAtTime.mock.calls[1][0];
 		expect(secondRamp).toBeCloseTo(rateFor(60));
 		const secondFromAnchor = origin.source.playbackRate.setValueAtTime.mock.calls[1][0];
@@ -1920,7 +2074,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, minGainRatio: 0.9 };
 		scheduleFingerpickNote(
 			makeDeps(ctx, voices, { slideParams: params }),
-			noteEvent({ midi: 62, technique: "slide-up" }),
+			noteEvent({ midi: 62, link: { kind: "slide" } }),
 			1,
 		);
 
@@ -1937,7 +2091,7 @@ describe("scheduleFingerpickNote — slide handoff vs fallback (no silent drop)"
 		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, minGainRatio: 0 };
 		scheduleFingerpickNote(
 			makeDeps(ctx, voices, { slideParams: params }),
-			noteEvent({ midi: 62, technique: "slide-up" }),
+			noteEvent({ midi: 62, link: { kind: "slide" } }),
 			1,
 		);
 
@@ -1971,7 +2125,7 @@ describe("scheduleFingerpickNote — no-slide behaviour unchanged (regression gu
 	it("hammer-on in 'current' treatment: technique gain + 2 kHz lowpass (production default)", () => {
 		const ctx = mockCtx(0);
 		const deps = makeDeps(ctx, new Map(), { legatoTreatment: "current" });
-		scheduleFingerpickNote(deps, noteEvent({ midi: 62, technique: "hammer-on" }), 1);
+		scheduleFingerpickNote(deps, noteEvent({ midi: 62, link: { kind: "hammer" } }), 1);
 
 		expect(ctx.createBiquadFilter).toHaveBeenCalledTimes(1);
 		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.technique, 1);
@@ -1981,7 +2135,7 @@ describe("scheduleFingerpickNote — no-slide behaviour unchanged (regression gu
 	it("hammer-on in 'gain-only': technique gain, NO filter", () => {
 		const ctx = mockCtx(0);
 		const deps = makeDeps(ctx, new Map(), { legatoTreatment: "gain-only" });
-		scheduleFingerpickNote(deps, noteEvent({ midi: 62, technique: "hammer-on" }), 1);
+		scheduleFingerpickNote(deps, noteEvent({ midi: 62, link: { kind: "hammer" } }), 1);
 
 		expect(ctx.createBiquadFilter).not.toHaveBeenCalled();
 		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.technique, 1);
@@ -1990,7 +2144,7 @@ describe("scheduleFingerpickNote — no-slide behaviour unchanged (regression gu
 	it("hammer-on in 'dry': NORMAL gain, NO filter (identical to a plucked note)", () => {
 		const ctx = mockCtx(0);
 		const deps = makeDeps(ctx, new Map(), { legatoTreatment: "dry" });
-		scheduleFingerpickNote(deps, noteEvent({ midi: 62, technique: "hammer-on" }), 1);
+		scheduleFingerpickNote(deps, noteEvent({ midi: 62, link: { kind: "hammer" } }), 1);
 
 		expect(ctx.createBiquadFilter).not.toHaveBeenCalled();
 		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.normal, 1);
@@ -1999,7 +2153,7 @@ describe("scheduleFingerpickNote — no-slide behaviour unchanged (regression gu
 	it("trill keeps technique gain + filter regardless of treatment (dry) — A/B is HO/PO only", () => {
 		const ctx = mockCtx(0);
 		const deps = makeDeps(ctx, new Map(), { legatoTreatment: "dry" });
-		scheduleFingerpickNote(deps, noteEvent({ midi: 62, technique: "trill" }), 1);
+		scheduleFingerpickNote(deps, noteEvent({ midi: 62, effects: { trill: {} } }), 1);
 
 		expect(ctx.createBiquadFilter).toHaveBeenCalledTimes(1);
 		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.technique, 1);
@@ -2019,7 +2173,7 @@ describe("resolveSlide — decision + ramp geometry", () => {
 	};
 
 	it("hands off when a live origin voice exists, targeting the target pitch's rate", () => {
-		const r = resolveSlide({ technique: "slide-up", origin, ...base });
+		const r = resolveSlide({ link: { kind: "slide" }, origin, ...base });
 		expect(r.action).toBe("handoff");
 		if (r.action !== "handoff") return;
 		expect(r.plan.targetRate).toBeCloseTo(rateFor(62));
@@ -2028,14 +2182,14 @@ describe("resolveSlide — decision + ramp geometry", () => {
 
 	it("finish-on-target: the ramp ENDS on the beat and starts one ramp-duration earlier", () => {
 		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, anchor: "finish-on-target" };
-		const r = resolveSlide({ technique: "slide-up", origin, ...base, params });
+		const r = resolveSlide({ link: { kind: "slide" }, origin, ...base, params });
 		if (r.action !== "handoff") throw new Error("expected handoff");
 		expect(r.plan.rampEndTime).toBeCloseTo(1);
 		expect(r.plan.rampStartTime).toBeCloseTo(1 - params.rampDurationS);
 	});
 
 	it("start-on-target (the default): the ramp STARTS on the beat", () => {
-		const r = resolveSlide({ technique: "slide-up", origin, ...base });
+		const r = resolveSlide({ link: { kind: "slide" }, origin, ...base });
 		if (r.action !== "handoff") throw new Error("expected handoff");
 		expect(DEFAULT_SLIDE_PARAMS.anchor).toBe("start-on-target");
 		expect(r.plan.rampStartTime).toBeCloseTo(1);
@@ -2051,7 +2205,7 @@ describe("resolveSlide — decision + ramp geometry", () => {
 		};
 		// 5-fret slide: 60 → 65, interval 5 → ramp = 5 × 0.03 = 0.15 s.
 		const r = resolveSlide({
-			technique: "slide-up",
+			link: { kind: "slide" },
 			origin,
 			...base,
 			targetMidi: 65,
@@ -2065,7 +2219,7 @@ describe("resolveSlide — decision + ramp geometry", () => {
 	it("clamps a finish-on-target ramp so it never starts before `now`", () => {
 		// now = 0.98 leaves only 0.02 s before the beat at 1 — less than the 0.08 default ramp.
 		const params: SlideParams = { ...DEFAULT_SLIDE_PARAMS, anchor: "finish-on-target" };
-		const r = resolveSlide({ technique: "slide-up", origin, ...base, now: 0.98, params });
+		const r = resolveSlide({ link: { kind: "slide" }, origin, ...base, now: 0.98, params });
 		if (r.action !== "handoff") throw new Error("expected handoff");
 		expect(r.plan.rampStartTime).toBeCloseTo(0.98);
 		expect(r.plan.rampEndTime).toBeCloseTo(1);
@@ -2073,31 +2227,35 @@ describe("resolveSlide — decision + ramp geometry", () => {
 
 	it("extends the stop time to cover the target note", () => {
 		const shortOrigin = { ...origin, stopTime: 1.1 };
-		const r = resolveSlide({ technique: "slide-up", origin: shortOrigin, ...base });
+		const r = resolveSlide({ link: { kind: "slide" }, origin: shortOrigin, ...base });
 		if (r.action !== "handoff") throw new Error("expected handoff");
 		expect(r.plan.newStopTime).toBeCloseTo(1 + 0.5 + 0.05);
 	});
 
-	it("falls back (not-a-slide) for a non-slide technique", () => {
-		const r = resolveSlide({ technique: "hammer-on", origin, ...base });
+	it("falls back (not-a-slide) for a non-slide link, and for a picked (shift) slide", () => {
+		const r = resolveSlide({ link: { kind: "hammer" }, origin, ...base });
 		expect(r).toEqual({ action: "fallback", reason: "not-a-slide" });
+		const picked = resolveSlide({ link: { kind: "slide", picked: true }, origin, ...base });
+		expect(picked).toEqual({ action: "fallback", reason: "not-a-slide" });
+		const none = resolveSlide({ link: undefined, origin, ...base });
+		expect(none).toEqual({ action: "fallback", reason: "not-a-slide" });
 	});
 
 	it("falls back (no-origin-voice) when there is no live voice", () => {
-		const r = resolveSlide({ technique: "slide-up", origin: undefined, ...base });
+		const r = resolveSlide({ link: { kind: "slide" }, origin: undefined, ...base });
 		expect(r).toEqual({ action: "fallback", reason: "no-origin-voice" });
 	});
 
 	it("falls back (origin-not-ringing) when the origin has already stopped", () => {
 		const dead = { ...origin, stopTime: 0.5 }; // < when (1)
-		const r = resolveSlide({ technique: "slide-up", origin: dead, ...base });
+		const r = resolveSlide({ link: { kind: "slide" }, origin: dead, ...base });
 		expect(r).toEqual({ action: "fallback", reason: "origin-not-ringing" });
 	});
 
 	it("falls back (interval-too-wide) beyond maxIntervalSemitones", () => {
 		// 60 → 80 = 20 semitones > default 12.
 		const r = resolveSlide({
-			technique: "slide-up",
+			link: { kind: "slide" },
 			origin,
 			...base,
 			targetMidi: 80,
@@ -2155,5 +2313,420 @@ describe("applySlideToVoice — ramp + envelope extension on a live voice", () =
 		expect(calls[0][1]).toBeCloseTo(0.96); // at the ramp midpoint
 		expect(calls[1][0]).toBeCloseTo(0.8); // recover to the sustain level
 		expect(calls[1][1]).toBeCloseTo(1.0); // by the ramp end
+	});
+});
+
+// ─── Model v2: spans, hits, links read off the registry's model ──────────────
+
+describe("fingerpickPatternToScheduleEvents — model v2 reads", () => {
+	it("a tie is a link: the held note lengthens, nothing re-attacks", () => {
+		const p: FingerpickPattern = {
+			...pattern(120, [slot("s1", "quarter", { 0: { fret: 5 } }), slot("s2", "quarter", { 0: { fret: 5, link: { kind: "tie" } } })]),
+			schemaVersion: 2,
+		};
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(1);
+		expect(events[0].duration).toBeCloseTo(1);
+	});
+
+	it("letRing and palmMute come from the spans, per string", () => {
+		const p: FingerpickPattern = {
+			...pattern(120, [slot("s1", "quarter", { 0: { fret: 3 }, 4: { fret: 0 } }), slot("s2", "quarter", { 4: { fret: 0 } })]),
+			schemaVersion: 2,
+			spans: [
+				{ id: "lr", kind: "letRing", from: "s1", to: "s1", strings: [0] },
+				{ id: "pm", kind: "palmMute", from: "s1", to: "s2", strings: [4] },
+			],
+		};
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events.map((e) => [e.stringIndex, e.letRing === true, e.palmMute === true])).toEqual([
+			[0, true, false],
+			[4, false, true],
+			[4, false, true],
+		]);
+	});
+
+
+	it("a hit strikes its strings dead, skipping the strings the slot already strikes, with one landing under them", () => {
+		const slap = { ...pattern(120, [{ ...slot("s1", "quarter", { 4: { fret: 0 } }), percussion: { kind: "slap" as const } }]), schemaVersion: 2 };
+		const events = fingerpickPatternToScheduleEvents(slap, 120);
+		expect(events).toHaveLength(7);
+		const strikes = events.filter((e) => e.percussion && !e.slapNoise);
+		expect(strikes.map((e) => e.stringIndex)).toEqual([0, 1, 2, 3, 5]);
+		expect(strikes.every((e) => e.muted && e.time === 0)).toBe(true);
+		// The hand lands once: the noise event carries the hit (for its accent) and the strings it landed on.
+		expect(events.filter((e) => e.slapNoise)).toMatchObject([{ stringIndex: 5, muted: true, time: 0, slapStrings: [0, 1, 2, 3, 5], percussion: { kind: "slap" } }]);
+		const thumb = { ...pattern(120, [{ ...slot("s1", "quarter"), percussion: { kind: "thumbSlap" as const, accent: true } }]), schemaVersion: 2 };
+		const thumbEvents = fingerpickPatternToScheduleEvents(thumb, 120);
+		expect(thumbEvents.filter((e) => !e.slapNoise).map((e) => e.stringIndex)).toEqual([...PERCUSSION_STRINGS.thumbSlap]);
+		expect(thumbEvents.filter((e) => e.slapNoise)).toMatchObject([{ slapStrings: [3, 4, 5], percussion: { kind: "thumbSlap", accent: true } }]);
+		const tap = { ...pattern(120, [{ ...slot("s1", "quarter"), percussion: { kind: "bodyTap" as const } }]), schemaVersion: 2 };
+		// A body tap is one knock, filed under the low E, nothing struck and no landing of its own.
+		expect(fingerpickPatternToScheduleEvents(tap, 120)).toMatchObject([{ stringIndex: 5, muted: true, percussion: { kind: "bodyTap" } }]);
+		expect(fingerpickPatternToScheduleEvents(tap, 120).some((e) => e.slapNoise)).toBe(false);
+	});
+
+	it("an x is a slap on its string, sounding with the slot's other notes, and the slot gets one landing however many x's it has", () => {
+		const one = pattern(120, [slot("s1", "quarter", { 5: { muted: true }, 2: { fret: 2 } })]);
+		const events = fingerpickPatternToScheduleEvents(one, 120);
+		expect(events.filter((e) => !e.slapNoise)).toMatchObject([
+			{ stringIndex: 2, midi: OPEN_STRING_MIDI[2] + 2, muted: false, time: 0 },
+			{ stringIndex: 5, midi: OPEN_STRING_MIDI[5], muted: true, time: 0 },
+		]);
+		expect(events.filter((e) => e.slapNoise)).toMatchObject([{ stringIndex: 5, muted: true, time: 0, slapStrings: [5] }]);
+		expect(events.filter((e) => e.slapNoise)[0].percussion).toBeUndefined();
+		const three = pattern(120, [slot("s1", "quarter", { 3: { muted: true }, 4: { muted: true }, 5: { muted: true } })]);
+		expect(fingerpickPatternToScheduleEvents(three, 120).filter((e) => e.slapNoise)).toHaveLength(1);
+		const none = pattern(120, [slot("s1", "quarter", { 2: { fret: 2 } })]);
+		expect(fingerpickPatternToScheduleEvents(none, 120).some((e) => e.slapNoise)).toBe(false);
+	});
+
+	it("a shift (picked) slide is not a glide: its origin is not promoted", () => {
+		const p = {
+			...pattern(120, [slot("s1", "quarter", { 2: { fret: 5 } }), slot("s2", "quarter", { 2: { fret: 7, link: { kind: "slide", picked: true } } })]),
+			schemaVersion: 2,
+		};
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events[0].letRing).toBeUndefined();
+		expect(isGlide(events[1].link)).toBe(false);
+		expect(isGlide({ kind: "slide" })).toBe(true);
+	});
+});
+
+describe("scheduleFingerpickNote — model v2 voices", () => {
+	it("noteGain: hits, ghosts, links and effects read the tables; accent, palm mute and roll multiply", () => {
+		expect(noteGain(noteEvent(), TEST_GAINS, "current")).toBe(TEST_GAINS.normal);
+		expect(noteGain(noteEvent({ link: { kind: "pull" } }), TEST_GAINS, "current")).toBe(TEST_GAINS.technique);
+		expect(noteGain(noteEvent({ link: { kind: "pull" } }), TEST_GAINS, "dry")).toBe(TEST_GAINS.normal);
+		expect(noteGain(noteEvent({ effects: { tap: true } }), TEST_GAINS, "current")).toBe(TEST_GAINS.tapping);
+		expect(noteGain(noteEvent({ effects: { ghost: true, tap: true } }), TEST_GAINS, "current")).toBe(TEST_GAINS.ghost);
+		expect(noteGain(noteEvent({ percussion: { kind: "slap", accent: true } }), TEST_GAINS, "current")).toBeCloseTo(TEST_GAINS.slap * TEST_GAINS.accentMultiplier);
+		// An x is a slap on its string, hit or not: never the normal gain.
+		expect(noteGain(noteEvent({ muted: true }), TEST_GAINS, "current")).toBe(TEST_GAINS.slap);
+		expect(noteGain(noteEvent({ effects: { accent: true }, palmMute: true, rollGain: 0.5 }), TEST_GAINS, "current")).toBeCloseTo(
+			TEST_GAINS.normal * TEST_GAINS.accentMultiplier * TEST_GAINS.palmMute * 0.5,
+		);
+	});
+
+	it("a palm-muted note is quieter, duller and short, and never rings on", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map(), { forceLetRing: true });
+		scheduleFingerpickNote(deps, noteEvent({ palmMute: true, duration: 1, letRing: true }), 1);
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(expect.closeTo(TEST_GAINS.normal * TEST_GAINS.palmMute, 6), 1);
+		expect(ctx._filters[0].frequency.value).toBe(900);
+		const tc = ctx._gains[0].gain.setTargetAtTime.mock.calls[0][2] as number;
+		expect(tc).toBeLessThanOrEqual(TEST_ENV.palmMuteDecayTc);
+		// Not a letRing voice: its stop is the note's end, not the long lifetime.
+		expect(ctx._sources[0].stop).toHaveBeenCalledWith(1 + 1 + TEST_ENV.sourceStopBuffer);
+	});
+
+	it("a palm-muted hammer-on takes the lower of the two cutoffs", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ palmMute: true, link: { kind: "hammer" } }), 1);
+		expect(ctx.createBiquadFilter).toHaveBeenCalledTimes(1);
+		expect(ctx._filters[0].frequency.value).toBe(900);
+	});
+
+	it("a slap is the string's own sample at the slap gain, cut off at the strike window, registering no voice", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const resolve = vi.fn((midi: number) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) }));
+		scheduleFingerpickNote(makeDeps(ctx, voices, { resolveNoteData: resolve, forceLetRing: true }), noteEvent({ muted: true, percussion: { kind: "slap" }, duration: 0.5 }), 1);
+		expect(resolve).toHaveBeenCalledWith(62);
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.slap, 1);
+		expect(ctx._gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(0, 1, DEFAULT_SLAP_PARAMS.strikeTc);
+		// Even under let-ring, the strike ends at the window: no ring, no voice to slide from.
+		expect(ctx._sources[0].stop).toHaveBeenCalledWith(expect.closeTo(1 + DEFAULT_SLAP_PARAMS.strikeS + TEST_ENV.sourceStopBuffer, 9));
+		expect(voices.size).toBe(0);
+		// An x alone (no hit) is the same strike.
+		const x = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(x, new Map()), noteEvent({ muted: true, duration: 0.5 }), 1);
+		expect(x._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.slap, 1);
+		expect(x._sources[0].stop).toHaveBeenCalledWith(expect.closeTo(1 + DEFAULT_SLAP_PARAMS.strikeS + TEST_ENV.sourceStopBuffer, 9));
+		// The lab's parameters take over the window.
+		const lab = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(lab, new Map(), { slapParams: { ...DEFAULT_SLAP_PARAMS, strikeS: 0.1, strikeTc: 0.03 } }), noteEvent({ muted: true, duration: 0.5 }), 1);
+		expect(lab._gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(0, 1, 0.03);
+		expect(lab._sources[0].stop).toHaveBeenCalledWith(expect.closeTo(1.1 + TEST_ENV.sourceStopBuffer, 9));
+	});
+
+	it("a slap's landing is a clack of noise on the frets and a thud under it, the thud mostly on the bass strings, registering no voice", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ muted: true, slapNoise: true, slapStrings: [5] }), 1);
+		const p = DEFAULT_SLAP_PARAMS;
+		// Two noise sources and the sine; no sample.
+		expect(ctx._sources).toHaveLength(2);
+		expect(ctx._oscillators).toHaveLength(1);
+		expect(ctx._filters[0]).toMatchObject({ type: "bandpass" });
+		expect(ctx._filters[0].frequency.value).toBe(p.clackHz);
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(p.clackGain, 1);
+		expect(ctx._gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(0, 1, p.clackTc);
+		expect(ctx._filters[1]).toMatchObject({ type: "lowpass" });
+		expect(ctx._filters[1].frequency.value).toBe(p.thudHz);
+		expect(ctx._gains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(p.thudGain, 9), 1.002);
+		expect(ctx._oscillators[0].frequency.setValueAtTime).toHaveBeenCalledWith(p.thudToneFromHz, 1);
+		expect(ctx._oscillators[0].frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(p.thudToneToHz, expect.closeTo(1 + p.thudTc * 2, 9));
+		expect(voices.size).toBe(0);
+		// On the treble strings alone the thud is mostly gone; an accented hit is louder.
+		const treble = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(treble, new Map()), noteEvent({ muted: true, slapNoise: true, slapStrings: [0, 1], percussion: { kind: "slap", accent: true } }), 1);
+		expect(treble._gains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(p.thudGain * p.trebleThud * TEST_GAINS.accentMultiplier, 9), 1.002);
+		expect(treble._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(expect.closeTo(p.clackGain * TEST_GAINS.accentMultiplier, 9), 1);
+		// Without a noise buffer the landing is silent, not an error.
+		const silent = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(silent, new Map(), { noiseBuffer: null }), noteEvent({ muted: true, slapNoise: true, slapStrings: [5] }), 1);
+		expect(silent._sources).toHaveLength(0);
+	});
+
+	it("a shift slide re-plucks even with a live origin voice", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const origin = makeLiveVoice({ currentMidi: 60, stopTime: 100 });
+		voices.set(2, origin as unknown as SlideActiveVoice);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ midi: 62, link: { kind: "slide", picked: true } }), 1);
+		expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
+		expect(origin.source.playbackRate.exponentialRampToValueAtTime).not.toHaveBeenCalled();
+	});
+
+	it("a bend and a vibrato on one note compose into one curve, the vibrato riding the bend's peak", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { bend: { semitones: 2 }, vibrato: {} }, duration: 1 }), 0);
+		const src = ctx._sources[0];
+		expect(src.detune.setValueCurveAtTime).toHaveBeenCalledTimes(1);
+		const values = src.detune.setValueCurveAtTime.mock.calls[0][0] as Float32Array;
+		let hi = -Infinity;
+		for (const v of values) hi = Math.max(hi, v);
+		expect(values[0]).toBe(0);
+		expect(hi).toBeGreaterThan(200);
+		expect(hi).toBeLessThanOrEqual(200 + DEFAULT_VIBRATO_PARAMS.depthCents + 1e-6);
+	});
+
+	it("a staccato effect shortens the note", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { staccato: true }, duration: 1 }), 0);
+		expect(ctx._sources[0].stop).toHaveBeenCalledWith(0.2 + TEST_ENV.sourceStopBuffer);
+	});
+});
+
+describe("fingerpickPatternToScheduleEvents — tremolo picking", () => {
+	it("tremoloStrokes spaces the strokes evenly so they always add up to the slot", () => {
+		const quarter = 0.5; // 120 BPM
+		expect(tremoloStrokes(0.5, "16th", quarter)).toEqual([
+			{ offset: 0, duration: 0.125 },
+			{ offset: 0.125, duration: 0.125 },
+			{ offset: 0.25, duration: 0.125 },
+			{ offset: 0.375, duration: 0.125 },
+		]);
+		expect(tremoloStrokes(0.5, "8th", quarter)).toHaveLength(2);
+		expect(tremoloStrokes(0.5, "32nd", quarter)).toHaveLength(8);
+		// A dotted quarter at 16ths: six strokes, no spill.
+		const dotted = tremoloStrokes(0.75, "16th", quarter);
+		expect(dotted).toHaveLength(6);
+		expect(dotted.reduce((sum, s) => sum + s.duration, 0)).toBeCloseTo(0.75);
+		// A slot shorter than a stroke is one stroke the slot's length.
+		expect(tremoloStrokes(0.05, "8th", quarter)).toEqual([{ offset: 0, duration: 0.05 }]);
+	});
+
+	it("a quarter at 120 BPM with a 16th tremolo emits four strokes, every second one softer", () => {
+		const p = pattern(120, [slot("s1", "quarter", { 2: { fret: 7, effects: { tremolo: { speed: "16th" }, accent: true } } })]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events).toHaveLength(4);
+		expect(events.map((e) => e.time)).toEqual([0, 0.125, 0.25, 0.375]);
+		expect(events.every((e) => e.duration === 0.125 && e.midi === OPEN_STRING_MIDI[2] + 7)).toBe(true);
+		expect(events.map((e) => e.altStroke === true)).toEqual([false, true, false, true]);
+		// The tremolo itself is taken off the strokes; the other effects stay.
+		expect(events.every((e) => e.effects?.tremolo === undefined && e.effects?.accent === true)).toBe(true);
+		expect(events.every((e) => e.measureIndex === 0 && e.slotIndex === 0)).toBe(true);
+	});
+
+	it("a tie after a tremolo lengthens its last stroke only", () => {
+		const p = pattern(120, [
+			slot("s1", "quarter", { 2: { fret: 7, effects: { tremolo: { speed: "8th" } } } }),
+			slot("s2", "quarter", { 2: { fret: 7, link: { kind: "tie" } } }),
+		]);
+		const events = fingerpickPatternToScheduleEvents(p, 120);
+		expect(events.map((e) => e.duration)).toEqual([0.25, 0.75]);
+	});
+
+	it("a plain tremolo stroke plays at the normal gain, an alternate one softer", () => {
+		expect(noteGain(noteEvent({}), TEST_GAINS, "current")).toBe(TEST_GAINS.normal);
+		expect(noteGain(noteEvent({ altStroke: true }), TEST_GAINS, "current")).toBeCloseTo(TEST_GAINS.normal * TEST_GAINS.tremoloAltGain);
+	});
+});
+
+// ─── #332–#339: the rest of the registry ─────────────────────────────────────
+
+describe("fingerpickPatternToScheduleEvents — trill, harmonic, slur, body tap", () => {
+	it("a trill alternates the note with its upper neighbour at a hand's speed, the strokes hammered and pulled", () => {
+		const p = pattern(60, [slot("s1", "quarter", { 2: { fret: 7, effects: { trill: {}, accent: true } } })]);
+		const events = fingerpickPatternToScheduleEvents(p, 60);
+		expect(events).toHaveLength(10);
+		expect(events.map((e) => e.midi - OPEN_STRING_MIDI[2])).toEqual([7, 8, 7, 8, 7, 8, 7, 8, 7, 8]);
+		expect(events.map((e) => e.link?.kind)).toEqual([undefined, "hammer", "pull", "hammer", "pull", "hammer", "pull", "hammer", "pull", "hammer"]);
+		expect(events.every((e) => e.effects?.trill === undefined && e.effects?.accent === true && e.duration === 0.1)).toBe(true);
+		expect(trillStrokes(0.25)).toHaveLength(3);
+		const wide = fingerpickPatternToScheduleEvents(pattern(60, [slot("s1", "quarter", { 2: { fret: 7, effects: { trill: { fret: 9 } } } })]), 60);
+		expect(wide[1].midi - OPEN_STRING_MIDI[2]).toBe(9);
+	});
+
+	it("a natural harmonic sounds the open string's partial; an artificial or pinch one the fretted note's", () => {
+		const at = (effects: NonNullable<StringFret["effects"]>, fret = 12) =>
+			fingerpickPatternToScheduleEvents(pattern(120, [slot("s1", "quarter", { 2: { fret, effects } })]), 120)[0].midi - OPEN_STRING_MIDI[2];
+		expect(at({ harmonic: { type: "natural" } }, 12)).toBe(12);
+		expect(at({ harmonic: { type: "natural" } }, 7)).toBe(19);
+		expect(at({ harmonic: { type: "natural" } }, 5)).toBe(24);
+		expect(at({ harmonic: { type: "natural" } }, 8)).toBe(12);
+		expect(at({ harmonic: { type: "artificial", touchFret: 17 } }, 5)).toBe(5 + 12);
+		expect(at({ harmonic: { type: "pinch" } }, 7)).toBe(7 + 12);
+	});
+
+	it("notes inside a slur after its first are marked slurred", () => {
+		const p = {
+			...pattern(120, [slot("a", "quarter", { 2: { fret: 5 } }), slot("b", "quarter", { 2: { fret: 7 } }), slot("c", "quarter", { 2: { fret: 8 } }), slot("d", "quarter", { 2: { fret: 7 } })]),
+			schemaVersion: 2,
+			spans: [{ id: "s", kind: "slur" as const, from: "a", to: "c" }],
+		};
+		expect(fingerpickPatternToScheduleEvents(p, 120).map((e) => e.slurred === true)).toEqual([false, true, true, false]);
+	});
+});
+
+describe("scheduleFingerpickNote — the rest of the registry", () => {
+	it("a harmonic is the sample at its partial, lighter, with a quiet octave under it and no filter", () => {
+		const ctx = mockCtx(0);
+		const resolve = vi.fn((midi: number) => ({ buffer: {} as AudioBuffer, playbackRate: rateFor(midi) }));
+		scheduleFingerpickNote(makeDeps(ctx, new Map(), { resolveNoteData: resolve }), noteEvent({ midi: 74, effects: { harmonic: { type: "natural" } }, duration: 2 }), 1);
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.harmonic, 1);
+		expect(ctx._filters).toHaveLength(0);
+		expect(resolve).toHaveBeenCalledWith(62);
+		expect(ctx._sources).toHaveLength(2);
+		expect(ctx._sources[1].playbackRate.value).toBe(rateFor(62));
+		expect(ctx._gains[1].gain.value).toBe(TEST_GAINS.harmonicBody);
+		expect(ctx._sources[1].stop).toHaveBeenCalledWith(ctx._sources[0].stop.mock.calls[0][0]);
+		expect(ctx._gains[0].gain.setTargetAtTime.mock.calls[0][2]).toBeLessThanOrEqual(TEST_ENV.harmonicDecayTc);
+	});
+
+	it("a tapped note starts past the pick transient, eases in, and takes the legato lowpass", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { tap: true } }), 1);
+		expect(ctx._sources[0].start).toHaveBeenCalledWith(1, TAP_SKIP_S);
+		expect(ctx._gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(TEST_GAINS.tapping, 1.005);
+		expect(ctx._filters.map((f) => f.type)).toEqual(["lowpass"]);
+	});
+
+	it("a slide in ramps the rate up from two frets below; a slide out leaves at the note's end and fades", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map());
+		scheduleFingerpickNote(deps, noteEvent({ effects: { slideIn: { from: "below" } }, duration: 0.5, stringIndex: 0 }), 1);
+		const inSrc = ctx._sources[0];
+		const fromRate = rateFor(62) * Math.pow(2, -SLIDE_IN_OUT_SEMITONES / 12);
+		expect(inSrc.playbackRate.setValueAtTime).toHaveBeenCalledWith(expect.closeTo(fromRate, 9), 1);
+		expect(inSrc.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalledWith(rateFor(62), 1 + DEFAULT_SLIDE_PARAMS.rampDurationS);
+		scheduleFingerpickNote(deps, noteEvent({ effects: { slideOut: { to: "above" } }, duration: 0.5, stringIndex: 1 }), 1);
+		const outSrc = ctx._sources[1];
+		const outStart = 1.5 - DEFAULT_SLIDE_PARAMS.rampDurationS;
+		expect(outSrc.playbackRate.setValueAtTime).toHaveBeenCalledWith(rateFor(62), expect.closeTo(outStart, 9));
+		expect(outSrc.playbackRate.exponentialRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(rateFor(62) * Math.pow(2, SLIDE_IN_OUT_SEMITONES / 12), 9), expect.closeTo(1.5, 9));
+		const fade = ctx._gains[1].gain.setTargetAtTime.mock.calls.at(-1) as [number, number, number];
+		expect(fade[1]).toBeCloseTo(outStart);
+	});
+
+	it("a whammy dive is a detune curve down a tone over three quarters of the note, back up by its end when released", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ effects: { whammy: { kind: "dive" } }, duration: 1 }), 0);
+		const values = ctx._sources[0].detune.setValueCurveAtTime.mock.calls[0][0] as Float32Array;
+		expect(values[0]).toBe(0);
+		expect(values[Math.round(values.length * 0.375)]).toBeCloseTo(-100, 0);
+		expect(values[Math.round(values.length * 0.75)]).toBeCloseTo(-200, 0);
+		expect(values[values.length - 1]).toBe(-200);
+		const released = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(released, new Map()), noteEvent({ effects: { whammy: { kind: "pull", semitones: 1, release: true } }, duration: 1 }), 0);
+		const back = released._sources[0].detune.setValueCurveAtTime.mock.calls[0][0] as Float32Array;
+		expect(Math.max(...back)).toBe(100);
+		expect(back[back.length - 1]).toBe(0);
+	});
+
+	it("a slurred note plays legato: the technique gain through the lowpass", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ slurred: true }), 1);
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.technique, 1);
+		expect(ctx._filters.map((f) => f.type)).toEqual(["lowpass"]);
+		expect(noteGain(noteEvent({ slurred: true }), TEST_GAINS, "dry")).toBe(TEST_GAINS.normal);
+	});
+
+	it("a pick scrape is a noise sweep, no sample and no voice", () => {
+		const ctx = mockCtx(0);
+		const voices = new Map<number, SlideActiveVoice>();
+		const resolve = vi.fn(() => ({ buffer: {} as AudioBuffer, playbackRate: 1 }));
+		scheduleFingerpickNote(makeDeps(ctx, voices, { resolveNoteData: resolve }), noteEvent({ effects: { scrape: true }, duration: 0.5 }), 1);
+		expect(resolve).not.toHaveBeenCalled();
+		expect(ctx._sources).toHaveLength(1);
+		expect(ctx._filters[0].type).toBe("bandpass");
+		expect(ctx._filters[0].frequency.setValueAtTime).toHaveBeenCalledWith(3000, 1);
+		expect(ctx._filters[0].frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(400, 1.5);
+		expect(ctx._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(TEST_GAINS.scrape, 1);
+		expect(voices.size).toBe(0);
+	});
+
+	it("a body tap is a low thump with a tone under it, louder when accented", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map()), noteEvent({ muted: true, percussion: { kind: "bodyTap", accent: true } }), 1);
+		expect(ctx._filters[0].type).toBe("lowpass");
+		expect(ctx._filters[0].frequency.value).toBe(150);
+		expect(ctx._oscillators).toHaveLength(1);
+		expect(ctx._oscillators[0].frequency.value).toBe(80);
+		expect(ctx._gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(TEST_GAINS.bodyTap * TEST_GAINS.accentMultiplier, 9), 1.002);
+	});
+
+	it("a stop reaches every node a slap or a body tap scheduled ahead, the sines under them included", () => {
+		const ctx = mockCtx(0);
+		const deps = makeDeps(ctx, new Map());
+		scheduleFingerpickNote(deps, noteEvent({ muted: true, slapNoise: true, slapStrings: [5] }), 5);
+		scheduleFingerpickNote(deps, noteEvent({ muted: true, percussion: { kind: "bodyTap" } }), 6);
+		expect(deps.allSources.size).toBe(ctx._sources.length + ctx._oscillators.length);
+		_shutdownEngine(new Map(), [], deps.allSources);
+		for (const node of [...ctx._sources, ...ctx._oscillators]) expect(node.stop).toHaveBeenLastCalledWith();
+		expect(deps.allSources.size).toBe(0);
+	});
+
+	it("without a noise buffer a scrape and a body tap are silent, not errors", () => {
+		const ctx = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(ctx, new Map(), { noiseBuffer: null }), noteEvent({ effects: { scrape: true } }), 1);
+		expect(ctx._sources).toHaveLength(0);
+	});
+
+	it("noiseBufferFor makes one buffer per context", () => {
+		const ctx = mockCtx(0) as unknown as AudioContext;
+		expect(noiseBufferFor(ctx)).toBe(noiseBufferFor(ctx));
+	});
+});
+
+describe("computeSlotStarts / slotAtTime", () => {
+	// 4/4 at 60 bpm: a quarter is a second. Bar 1: a half, then two quarters; bar 2: four quarters.
+	const pattern = makeDefaultPattern();
+	pattern.bpm = 60;
+	pattern.measures[0].slots = pattern.measures[0].slots.slice(0, 3).map((slot, i) => ({ ...slot, duration: i === 0 ? "half" : "quarter" }));
+	pattern.measures.push({ ...makeDefaultPattern().measures[0], id: "m2" });
+	const starts = computeSlotStarts(pattern, 60);
+
+	it("starts every slot, empty ones too, at its place in time", () => {
+		expect(starts.map((s) => [s.measureIndex, s.slotIndex, s.time])).toEqual([
+			[0, 0, 0],
+			[0, 1, 2],
+			[0, 2, 3],
+			[1, 0, 4],
+			[1, 1, 5],
+			[1, 2, 6],
+			[1, 3, 7],
+		]);
+	});
+
+	it("finds the slot sounding at a time, through slots with nothing struck", () => {
+		expect(slotAtTime(starts, -0.1)).toBeNull();
+		expect(slotAtTime(starts, 0)).toMatchObject({ measureIndex: 0, slotIndex: 0 });
+		expect(slotAtTime(starts, 1.9)).toMatchObject({ measureIndex: 0, slotIndex: 0 });
+		expect(slotAtTime(starts, 2.5)).toMatchObject({ measureIndex: 0, slotIndex: 1 });
+		expect(slotAtTime(starts, 5.2)).toMatchObject({ measureIndex: 1, slotIndex: 1 });
+		expect(slotAtTime(starts, 99)).toMatchObject({ measureIndex: 1, slotIndex: 3 });
 	});
 });

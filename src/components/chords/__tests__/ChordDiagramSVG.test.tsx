@@ -1,8 +1,5 @@
-// Characterization snapshots for ChordDiagramSVG. The component has no other
-// tests, and its open-string / note-name tables are being moved to a shared
-// module: these pin the rendered markup so that move can be shown not to
-// change a single pixel. Cover every mode and every size, plus the three
-// shapes that exercise different code paths (open chord, barre, high position).
+// Snapshots of ChordDiagramSVG in every mode and size, over the three shapes
+// that take different code paths (open chord, barre, high position).
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -19,6 +16,9 @@ const SHAPES = {
 	// A-shape C at fret 3: startFret > 1 shows the fret number instead of the nut.
 	highC: { frets: [-1, 3, 5, 5, 5, 3], fingers: [0, 1, 3, 3, 3, 1], startFret: 3, barreFret: 3, rootMidi: 48 },
 } as const;
+
+// The corner radius only the root marker carries (DOT_R × 0.45).
+const ROOT_SQUARE = 'rx="3.6"';
 
 const MODES: readonly DiagramMode[] = ["fingers", "noteNames", "fretboard"];
 const SIZES: readonly DiagramSize[] = ["compact", "regular", "large"];
@@ -50,7 +50,62 @@ describe("ChordDiagramSVG markup", () => {
 		const html = renderToStaticMarkup(
 			<ChordDiagramSVG frets={[...openC.frets]} fingers={[...openC.fingers]} startFret={1} mode="noteNames" />,
 		);
-		expect(html).not.toContain("#4A6FA5");
+		expect(html).not.toContain(ROOT_SQUARE);
 		expect(html).toMatchSnapshot();
+	});
+
+	it("draws the root as a rounded square when rootMidi is given", () => {
+		const { openC } = SHAPES;
+		const html = renderToStaticMarkup(
+			<ChordDiagramSVG {...openC} frets={[...openC.frets]} fingers={[...openC.fingers]} />,
+		);
+		// Open C's root sounds twice: the A string at fret 3 and the B string at fret 1.
+		expect(html.split(ROOT_SQUARE).length - 1).toBe(2);
+	});
+
+	it("draws in theme tokens, never fixed colours", () => {
+		const { barreF } = SHAPES;
+		const html = renderToStaticMarkup(
+			<ChordDiagramSVG {...barreF} frets={[...barreF.frets]} fingers={[...barreF.fingers]} mode="fretboard" />,
+		);
+		expect(html).not.toMatch(/(fill|stroke)="#/);
+	});
+});
+
+describe("ChordDiagramSVG root tone and plucks", () => {
+	const { openC } = SHAPES;
+	const draw = (extra: object) =>
+		renderToStaticMarkup(<ChordDiagramSVG {...openC} frets={[...openC.frets]} fingers={[...openC.fingers]} {...extra} />);
+
+	it("paints the root in the module's colour only when asked", () => {
+		expect(draw({})).not.toContain("fill-gp-m-500");
+		expect(draw({ rootTone: true })).toContain("fill-gp-m-500");
+	});
+
+	it("plucks each sounding string in turn, low first, muted ones skipped", () => {
+		const html = draw({ pluck: { run: 1, gapS: 0.32 } });
+		const delays = [...html.matchAll(/cd-pluck-string[^>]*animation-delay:([\d.]+)s/g)].map((m) => Number(m[1]));
+		expect(delays).toEqual([0, 0.32, 0.64, 0.96, 1.28]);
+		expect(html.match(/cd-pluck-ring/g)).toHaveLength(5);
+	});
+
+	it("shakes a string from the held note down, and an open one whole", () => {
+		const html = draw({ pluck: { run: 1, gapS: 0.32 } });
+		// Open C, low string first: A at 3, D at 2, G open, B at 1, e open.
+		const [a, d, g, b, e] = [...html.matchAll(/cd-pluck-string[^>]*y1="([\d.]+)"/g)].map((m) => Number(m[1]));
+		expect(a).toBeGreaterThan(d);
+		expect(d).toBeGreaterThan(b);
+		expect(b).toBeGreaterThan(g);
+		expect(e).toBe(g);
+	});
+
+	it("plucks every string at once for a strum", () => {
+		const html = draw({ pluck: { run: 1, gapS: 0 } });
+		const delays = [...html.matchAll(/cd-pluck-string[^>]*animation-delay:([\d.]+)s/g)].map((m) => Number(m[1]));
+		expect(delays).toEqual([0, 0, 0, 0, 0]);
+	});
+
+	it("draws no plucks while nothing plays", () => {
+		expect(draw({})).not.toContain("cd-pluck");
 	});
 });

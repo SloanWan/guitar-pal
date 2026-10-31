@@ -1,0 +1,984 @@
+/* =====================================================================================
+   The fretboard page (#363 step 11): the instruments on the stage, the settings in one
+   panel beside it from 960px and in a sheet below that. Widths are the page's own (a
+   container query).
+   ===================================================================================== */
+@layer components {
+	.fbx {
+		container: fbx / inline-size;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		background: var(--gp-page);
+		color: var(--gp-ink);
+		font-family: var(--gp-f-body);
+	}
+	.fbx-shell {
+		display: grid;
+		flex: 1 1 0;
+		grid-template-columns: minmax(0, 1fr) 356px;
+		grid-template-rows: minmax(0, 1fr);
+		min-height: 0;
+	}
+	.fbx-stage {
+		min-width: 0;
+		min-height: 0;
+		overflow-y: auto;
+		padding: 24px 24px 48px 32px;
+	}
+	.fbx-stage-in {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		max-width: 1040px;
+		margin: 0 auto;
+	}
+	/* The panel is a card of its own, clear of the header, the window's foot and its edge. */
+	.fbx-panel {
+		min-height: 0;
+		margin: 24px 24px 24px 0;
+		overflow-y: auto;
+		padding: 2px 20px 4px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		overscroll-behavior: contain;
+	}
+
+	/* ── Type ─────────────────────────────────────────────────────────────── */
+	.fbx-head {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin-bottom: 4px;
+	}
+	.fbx-head-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	/* The cards that can be put away, one icon each, at the title's end. */
+	.fbx-cardtoggles {
+		display: flex;
+		gap: 8px;
+		margin-left: auto;
+	}
+	.fbx-cardtoggle {
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		padding: 0;
+	}
+	.fbx-cardtoggle svg {
+		width: 18px;
+		height: 18px;
+	}
+	.fbx-title {
+		margin: 0;
+		font-size: 30px;
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		line-height: 1.1;
+	}
+	.fbx-h {
+		margin: 0;
+		font-size: 16px;
+		font-weight: 650;
+		line-height: 1.3;
+	}
+	.fbx-meta {
+		margin: 0;
+		color: var(--gp-ink-3);
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 1.45;
+	}
+	.fbx-lbl {
+		color: var(--gp-ink-2);
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	/* ── Cards ────────────────────────────────────────────────────────────── */
+	.fbx-card {
+		padding: 16px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+	}
+	.fbx-chead {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		min-height: 36px;
+		margin: -4px 0 10px;
+	}
+	.fbx-chead-icon {
+		display: grid;
+		flex: none;
+		color: var(--gp-ink-3);
+	}
+	.fbx-chead-icon svg {
+		width: 18px;
+		height: 18px;
+		transition:
+			color var(--gp-d-state) var(--gp-ease-state),
+			fill var(--gp-d-state) var(--gp-ease-state);
+	}
+	/* The card in use: its icon fills in the module colour and squashes once, the way the
+	   nav marks the current page. */
+	.fbx-card[data-current] .fbx-chead-icon {
+		color: var(--gp-m-500);
+		animation: gp-squash 260ms var(--gp-spring-press);
+	}
+	.fbx-card[data-current] .fbx-chead-icon svg {
+		fill: var(--gp-m-100);
+	}
+	.fbx-h {
+		flex: none;
+	}
+	.fbx-chead-hint {
+		flex: 1 1 auto;
+		min-width: 0;
+		margin-left: 4px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* A control of the card's own (the neck's tuning), at the heading's end; on a phone it
+	   takes a row of its own under the name rather than squeezing it. */
+	.fbx-chead-control {
+		flex: none;
+		margin-left: auto;
+	}
+	.fbx-x {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		margin-left: auto;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		cursor: pointer;
+		transition:
+			color var(--gp-d-state) linear,
+			background-color var(--gp-d-state) linear;
+	}
+	.fbx-x svg {
+		width: 16px;
+		height: 16px;
+	}
+	.fbx-x:hover {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+	}
+
+	/* ── What is showing ──────────────────────────────────────────────────── */
+	/* Above the cards after it: every card rises in its own layer, and the chord field's
+	   list of matches drops across the piano. */
+	.fbx-now {
+		position: relative;
+		z-index: 3;
+	}
+	.fbx-now-key {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 12px;
+	}
+	.fbx-key {
+		margin: 0;
+		font-size: 26px;
+		font-weight: 750;
+		letter-spacing: -0.01em;
+		line-height: 1.15;
+	}
+	.fbx-tag {
+		display: inline-flex;
+		align-items: center;
+		height: 26px;
+		padding: 0 10px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-well);
+		color: var(--gp-ink-2);
+		font-size: 13px;
+		font-weight: 600;
+	}
+	/* The scale's formula: one block a step, as wide as the step, half steps tinted. */
+	.fbx-steps {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 3px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.fbx-steps li {
+		display: grid;
+		place-items: center;
+		width: calc(var(--n, 2) * 15px + 14px);
+		height: 24px;
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-well);
+		color: var(--gp-ink-2);
+		font-size: 11.5px;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.fbx-steps li[data-half] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.fbx-readout-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 10px;
+		margin-top: 10px;
+	}
+	/* Both fields one size: the chord heard and the shape held are read side by side. */
+	.fbx-readout .csel {
+		--csel-size: 17px;
+	}
+	.fbx-num {
+		display: inline-grid;
+		place-items: center;
+		min-width: 32px;
+		height: 30px;
+		padding: 0 8px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+		font-size: 15px;
+		font-weight: 750;
+	}
+	.fbx-shape {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.fbx-tones {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 12px 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.fbx-tones li {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		height: 28px;
+		padding: 0 10px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-well);
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+	}
+	.fbx-tones b {
+		font-weight: 700;
+	}
+	.fbx-tones span {
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 600;
+	}
+	.fbx-tones li[data-root] {
+		background: var(--gp-m-500);
+		color: var(--gp-m-on);
+	}
+	.fbx-tones li[data-root] span {
+		color: var(--gp-m-on);
+		opacity: 0.85;
+	}
+
+	/* ── The neck's legend ────────────────────────────────────────────────── */
+	.fbx-legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px 16px;
+		margin: 12px 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.fbx-legend li {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		color: var(--gp-ink-2);
+		font-size: 12.5px;
+		font-weight: 500;
+	}
+
+	/* ── Circle of fifths ─────────────────────────────────────────────────── */
+	.fbx-cof-body {
+		display: grid;
+		grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+		align-items: center;
+		gap: 28px;
+	}
+	.fbx-cof {
+		position: relative;
+		width: 100%;
+		max-width: 360px;
+		aspect-ratio: 1;
+		margin: 0 auto;
+		border-radius: 50%;
+		background: var(--gp-well);
+	}
+	.fbx-cof-wedge {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		transition: transform 480ms var(--gp-spring-land);
+	}
+	.fbx-cof-wedge path {
+		fill: var(--gp-m-100);
+	}
+	/* The inner disc: the wedge stops at its edge, the diminished ring sits on it. */
+	.fbx-cof-hub {
+		position: absolute;
+		inset: 27.5%;
+		border-radius: 50%;
+		background: var(--gp-card);
+	}
+	/* Placed by margins, not a transform: the press moves the transform. */
+	.fbx-cof-cell {
+		position: absolute;
+		z-index: 1;
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		margin: -22px 0 0 -22px;
+		border-radius: 50%;
+		font: 650 14px/1 var(--gp-f-body);
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.fbx-cof-cell[data-ring="minor"] {
+		width: 38px;
+		height: 38px;
+		margin: -19px 0 0 -19px;
+		font-size: 12.5px;
+	}
+	.fbx-cof-cell[data-ring="dim"] {
+		width: 28px;
+		height: 28px;
+		margin: -14px 0 0 -14px;
+		font-size: 10.5px;
+	}
+	/* Outside the key: flat, a label you can still press to move there. */
+	.fbx-cof-cell[aria-pressed="false"]:not([data-in]) {
+		--o: 0px;
+		background-color: transparent;
+		box-shadow: none;
+		color: var(--gp-ink-2);
+	}
+	.fbx-cof-cell[aria-pressed="false"]:not([data-in]):hover,
+	.fbx-cof-cell[aria-pressed="false"]:not([data-in]).is-down {
+		background-color: var(--gp-card);
+		color: var(--gp-ink);
+	}
+	span.fbx-cof-cell {
+		color: var(--gp-ink-3);
+		cursor: default;
+	}
+	span.fbx-cof-cell[data-in] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	/* A diminished chord in reach of a finger: the circle is small, its hit is not. */
+	button.fbx-cof-cell[data-ring="dim"]::after {
+		content: "";
+		position: absolute;
+		inset: -8px;
+		border-radius: 50%;
+	}
+	.fbx-cof-side {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.fbx-cof-lead {
+		margin: 0;
+		color: var(--gp-ink-2);
+		font-size: 15px;
+		line-height: 1.5;
+	}
+	.fbx-cof-key {
+		display: grid;
+		gap: 8px;
+		margin: 0;
+	}
+	.fbx-cof-key div {
+		display: grid;
+		grid-template-columns: 64px minmax(0, 1fr);
+		gap: 8px;
+	}
+	.fbx-cof-key dt {
+		font-size: 13px;
+		font-weight: 650;
+	}
+	.fbx-cof-key dd {
+		margin: 0;
+		color: var(--gp-ink-3);
+		font-size: 13.5px;
+		line-height: 1.45;
+	}
+
+	/* ── Progression (in the panel, Chords mode) ──────────────────────────── */
+	/* Four bars a row, whatever the panel's width: a bar of 4/4 reads in fours. */
+	.fbx-strip {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		align-items: stretch;
+		gap: 8px;
+		min-height: 56px;
+	}
+	.fbx-strip > .fbx-meta {
+		grid-column: 1 / -1;
+		align-self: center;
+	}
+	.fbx-bar {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 0;
+		padding: 8px 4px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+		transition:
+			transform var(--gp-d-rise) var(--gp-e-rise),
+			box-shadow var(--gp-d-rise) var(--gp-e-rise),
+			background-color var(--gp-d-state) linear;
+	}
+	.fbx-bar[data-current] {
+		background: var(--gp-m-500);
+		box-shadow:
+			var(--gp-ring-m),
+			3px 3px 0 0 var(--gp-m-sh);
+		color: var(--gp-m-on);
+		transform: translate(-1px, -1px);
+	}
+	/* The remove cross sits in the bar's corner, so the bar is the chord's width, not the cross's. */
+	.fbx-bar-x {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-3);
+		cursor: pointer;
+		opacity: 0.7;
+	}
+	.fbx-bar-x svg {
+		width: 13px;
+		height: 13px;
+	}
+	.fbx-bar-x:hover {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+		opacity: 1;
+	}
+	.fbx-bar[data-current] .fbx-bar-x {
+		color: inherit;
+	}
+	.fbx-bar-n {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+		max-width: 100%;
+	}
+	.fbx-bar-n span {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.fbx-bar-n b {
+		font-size: 15px;
+		font-weight: 700;
+	}
+	.fbx-bar-n span {
+		font-size: 12px;
+		font-weight: 500;
+		opacity: 0.8;
+	}
+	.fbx-prow {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.fbx-prow [data-outside] {
+		color: var(--gp-ink-3);
+	}
+	.fbx-transport {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px 16px;
+	}
+	.fbx-clear {
+		margin-left: auto;
+	}
+
+	/* ── The panel ────────────────────────────────────────────────────────── */
+	.fbx-sec {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 18px 0;
+		box-shadow: inset 0 -1px 0 var(--gp-line);
+	}
+	.fbx-sec:last-child {
+		box-shadow: none;
+	}
+	.fbx-sheet .fbx-sec:first-child {
+		padding-top: 4px;
+	}
+	.fbx-keys {
+		display: grid;
+		grid-template-columns: repeat(6, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.fbx-choice {
+		justify-content: center;
+		height: 40px;
+		padding: 0;
+	}
+	:is(.fbx, .fbx-sheet) .fbx-choice[aria-checked="false"] {
+		--o: 0px;
+		background-color: transparent;
+		box-shadow: inset 0 0 0 1px var(--gp-edge);
+		color: var(--gp-ink-2);
+		transform: none;
+	}
+	:is(.fbx, .fbx-sheet) .fbx-choice[aria-checked="false"].is-down {
+		background-color: var(--gp-well);
+	}
+	.fbx-fl {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.fbx-select {
+		cursor: pointer;
+	}
+	.fbx-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.fbx-deg b {
+		font-weight: 700;
+	}
+	.fbx-deg small,
+	.fbx-deg .fbx-deg-name {
+		font-size: 12px;
+		font-weight: 500;
+		opacity: 0.8;
+	}
+	.fbx-deg[data-outside] {
+		height: 30px;
+		padding: 0 10px;
+		font-size: 12.5px;
+	}
+	.fbx-line {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+	.fbx-vol {
+		display: grid;
+		grid-template-columns: 56px minmax(0, 1fr);
+		align-items: center;
+		gap: 12px;
+		min-height: 44px;
+	}
+
+	/* ── The dock (below 960px) ───────────────────────────────────────────── */
+	.fbx-dock {
+		display: none;
+		flex: none;
+		align-items: center;
+		gap: 12px;
+		padding: 10px 16px;
+		background: var(--gp-card);
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+	.fbx-dock-sum {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+	.fbx-dock-sum b,
+	.fbx-dock-sum span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.fbx-dock-sum b {
+		font-size: 15px;
+		font-weight: 650;
+	}
+	.fbx-dock-sum span {
+		color: var(--gp-ink-3);
+		font-size: 12.5px;
+		font-weight: 500;
+	}
+
+	@container fbx (max-width: 959px) {
+		.fbx-shell {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.fbx-panel {
+			display: none;
+		}
+		.fbx-dock {
+			display: flex;
+		}
+		.fbx-stage {
+			padding: 20px 24px 32px;
+		}
+	}
+	@container fbx (max-width: 719px) {
+		.fbx-stage {
+			padding: 14px 16px 24px;
+		}
+		.fbx-stage-in {
+			gap: 12px;
+		}
+		.fbx-title {
+			font-size: 24px;
+		}
+		.fbx-key {
+			font-size: 22px;
+		}
+		.fbx-card {
+			padding: 14px 12px;
+		}
+		.fbx-chead-hint {
+			display: none;
+		}
+		.fbx-cof-body {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 16px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.fbx-cof-wedge,
+		.fbx-bar {
+			transition: none;
+		}
+		.fbx-card[data-current] .fbx-chead-icon {
+			animation: none;
+		}
+		.fbx-bar[data-current] {
+			transform: none;
+		}
+	}
+}
+
+/* =====================================================================================
+   The instruments in Candy. Unlayered on purpose: the v3 rules they override (globals.css,
+   `.fb-*` / `.pk-*`) are unlayered, and no layered rule beats an unlayered one. Scoped to
+   the page (`.fbx`) and to `.fb-candy`, which the landing's neck wears; the /dev pages
+   that draw the instruments keep the v3 look.
+   ===================================================================================== */
+:is(.fbx, .fb-candy) .fp-thin-scroll {
+	scrollbar-color: var(--gp-edge) transparent;
+}
+:is(.fbx, .fb-candy) .fp-thin-scroll::-webkit-scrollbar-thumb {
+	border-radius: 2px;
+	background: var(--gp-edge);
+}
+
+/* ── The neck ─────────────────────────────────────────────────────────── */
+:is(.fbx, .fb-candy) .fb-board {
+	fill: var(--gp-neck);
+}
+:is(.fbx, .fb-candy) .fb-wire {
+	stroke: var(--gp-neck-fret);
+	stroke-width: 2px;
+}
+:is(.fbx, .fb-candy) .fb-nut {
+	stroke: var(--gp-neck-nut);
+	stroke-width: 5px;
+}
+:is(.fbx, .fb-candy) .fb-string {
+	stroke: var(--gp-neck-string);
+}
+:is(.fbx, .fb-candy) .fb-inlay {
+	fill: var(--gp-neck-fret);
+}
+:is(.fbx, .fb-candy) .fb-sname,
+:is(.fbx, .fb-candy) .fb-fnum {
+	fill: var(--gp-ink-3);
+	font-family: var(--gp-f-body);
+	font-weight: 650;
+}
+:is(.fbx, .fb-candy) .fb-label {
+	fill: var(--gp-on-role);
+	font-family: var(--gp-f-body);
+	font-weight: 700;
+}
+:is(.fbx, .fb-candy) .fb-dot {
+	fill: var(--gp-role-x);
+	stroke: var(--gp-role-x);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="root"] {
+	filter: none;
+}
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="root"] .fb-dot {
+	fill: var(--gp-m-500);
+	stroke: var(--gp-m-500);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="root"] .fb-label {
+	fill: var(--gp-m-on);
+}
+/* The root's hard shadow, the way a pressable carries one. */
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="root"] .fb-ring {
+	opacity: 1;
+	fill: var(--gp-m-sh);
+	stroke: none;
+	r: 8px;
+	transform: translate(1.5px, 1.5px);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="chordTone"] .fb-dot {
+	fill: var(--gp-role-x);
+	stroke: var(--gp-role-x);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="chordTone"] .fb-label,
+:is(.fbx, .fb-candy) .fb-mark[data-tone] .fb-label {
+	fill: var(--gp-on-role);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-tone="third"] .fb-dot {
+	fill: var(--gp-role-3);
+	stroke: var(--gp-role-3);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-tone="fifth"] .fb-dot {
+	fill: var(--gp-role-5);
+	stroke: var(--gp-role-5);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-tone="seventh"] .fb-dot {
+	fill: var(--gp-role-7);
+	stroke: var(--gp-role-7);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-tone="extension"] .fb-dot {
+	fill: var(--gp-role-x);
+	stroke: var(--gp-ink-3);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="muted"] .fb-dot {
+	fill: var(--gp-ink-mute);
+	stroke: var(--gp-ink-mute);
+}
+/* A run's notes: tinted with the module, darker the lower the octave. */
+:is(.fbx, .fb-candy) .fb-mark[data-run] .fb-dot {
+	stroke: var(--gp-m-500);
+}
+:is(.fbx, .fb-candy) .fb-mark[data-run="0"] .fb-dot {
+	fill: color-mix(in oklab, var(--gp-m-500) 45%, var(--gp-card));
+}
+:is(.fbx, .fb-candy) .fb-mark[data-run="1"] .fb-dot {
+	fill: color-mix(in oklab, var(--gp-m-500) 30%, var(--gp-card));
+}
+:is(.fbx, .fb-candy) .fb-mark[data-run="2"] .fb-dot {
+	fill: color-mix(in oklab, var(--gp-m-500) 18%, var(--gp-card));
+}
+:is(.fbx, .fb-candy) .fb-mark[data-run="3"] .fb-dot {
+	fill: color-mix(in oklab, var(--gp-m-500) 10%, var(--gp-card));
+}
+:is(.fbx, .fb-candy) .fb-mark[data-run] .fb-label {
+	fill: var(--gp-ink);
+}
+:is(.fbx, .fb-candy) .fb-hover,
+:is(.fbx, .fb-candy) .fb-pop {
+	stroke: var(--gp-m-500);
+}
+:is(.fbx, .fb-candy) .fb-string-play-bg {
+	fill: var(--gp-m-100);
+	stroke: var(--gp-m-300);
+}
+:is(.fbx, .fb-candy) .fb-string-play path,
+:is(.fbx, .fb-candy) .fb-string-play rect {
+	fill: var(--gp-m-700);
+}
+:is(.fbx, .fb-candy) .fb-string-play:hover .fb-string-play-bg,
+:is(.fbx, .fb-candy) .fb-string-play:focus-visible .fb-string-play-bg,
+:is(.fbx, .fb-candy) .fb-string-play[data-playing] .fb-string-play-bg {
+	fill: var(--gp-m-500);
+	stroke: var(--gp-m-500);
+}
+:is(.fbx, .fb-candy) .fb-string-play:hover path,
+:is(.fbx, .fb-candy) .fb-string-play:hover rect,
+:is(.fbx, .fb-candy) .fb-string-play:focus-visible path,
+:is(.fbx, .fb-candy) .fb-string-play:focus-visible rect,
+:is(.fbx, .fb-candy) .fb-string-play[data-playing] path,
+:is(.fbx, .fb-candy) .fb-string-play[data-playing] rect {
+	fill: var(--gp-m-on);
+}
+:is(.fbx, .fb-candy) .fb-position {
+	stroke: var(--gp-m-700);
+	stroke-width: 1.5;
+}
+:is(.fbx, .fb-candy) .fb-box-btn svg {
+	color: var(--gp-m-700);
+}
+:is(.fbx, .fb-candy) .fb-box-btn:hover > rect:first-child,
+:is(.fbx, .fb-candy) .fb-box-btn:focus-visible > rect:first-child {
+	fill: var(--gp-m-100);
+}
+:is(.fbx, .fb-candy) .fb-capo-shade {
+	fill: var(--gp-card);
+}
+:is(.fbx, .fb-candy) .fb-capo-bar {
+	fill: var(--gp-ink-fill);
+	stroke: none;
+}
+:is(.fbx, .fb-candy) .fb-capo:hover .fb-capo-ripple,
+:is(.fbx, .fb-candy) .fb-capo:focus-visible .fb-capo-ripple {
+	stroke: var(--gp-m-500);
+}
+:is(.fbx, .fb-candy) .fb-capo:hover .fb-capo-bar,
+:is(.fbx, .fb-candy) .fb-capo:focus-visible .fb-capo-bar {
+	fill: var(--gp-ink);
+}
+:is(.fbx, .fb-candy) .fb-capo:focus-visible .fb-capo-bar {
+	fill: var(--gp-m-500);
+	stroke: none;
+}
+
+/* ── The keyboard ─────────────────────────────────────────────────────── */
+:is(.fbx, .fb-candy) .pk-key {
+	border: 0;
+	font-family: var(--gp-f-body);
+}
+:is(.fbx, .fb-candy) .pk-white {
+	border-radius: 0 0 6px 6px;
+	background: var(--gp-face);
+	box-shadow: inset 0 0 0 1px var(--gp-line);
+	color: var(--gp-ink-3);
+}
+:is(.fbx, .fb-candy) .pk-black {
+	border-radius: 0 0 4px 4px;
+	background: var(--gp-key-black);
+	box-shadow: 1.5px 1.5px 0 0 var(--gp-key-black-sh);
+	color: var(--gp-on-key-black);
+}
+:is(.fbx, .fb-candy) .pk-white:hover {
+	background: var(--gp-m-100);
+	color: var(--gp-m-700);
+}
+:is(.fbx, .fb-candy) .pk-black:hover {
+	background: color-mix(in oklab, var(--gp-key-black), var(--gp-ink-3) 30%);
+}
+:is(.fbx, .fb-candy) .pk-key[data-selected] {
+	background: var(--gp-m-500);
+	box-shadow: none;
+	color: var(--gp-m-on);
+}
+:is(.fbx, .fb-candy) .pk-key[data-dimmed][data-selected],
+:is(.fbx, .fb-candy) .pk-key[data-outside][data-selected] {
+	background: var(--gp-face);
+	box-shadow: inset 0 0 0 2px var(--gp-m-500);
+	color: var(--gp-m-700);
+}
+:is(.fbx, .fb-candy) .pk-black[data-dimmed][data-selected],
+:is(.fbx, .fb-candy) .pk-black[data-outside][data-selected] {
+	background: var(--gp-key-black);
+	color: var(--gp-on-key-black);
+}
+:is(.fbx, .fb-candy) .pk-dot {
+	background: var(--gp-m-500);
+}
+:is(.fbx, .fb-candy) .pk-black .pk-dot {
+	background: var(--gp-m-300);
+}
+:is(.fbx, .fb-candy) .pk-white[data-tone] {
+	color: var(--gp-m-700);
+}
+:is(.fbx, .fb-candy) .pk-key[data-hover="self"] {
+	box-shadow: inset 0 0 0 2px var(--gp-m-500);
+	color: var(--gp-m-700);
+}
+:is(.fbx, .fb-candy) .pk-key[data-hover="octave"] {
+	box-shadow: inset 0 0 0 1px var(--gp-m-500);
+}
+:is(.fbx, .fb-candy) .pk-key[data-selected][data-hover] {
+	color: var(--gp-m-on);
+}
+:is(.fbx, .fb-candy) .pk-key[data-struck] {
+	animation-name: fbx-pk-strike;
+}
+:is(.fbx, .fb-candy) .pk-key[data-selected][data-struck] {
+	animation-name: fbx-pk-strike-selected;
+}
+@keyframes fbx-pk-strike {
+	0% {
+		transform: translateY(2px);
+		background-color: var(--gp-m-500);
+		color: var(--gp-m-on);
+	}
+	30% {
+		transform: translateY(2px);
+	}
+	100% {
+		transform: translateY(0);
+	}
+}
+@keyframes fbx-pk-strike-selected {
+	0% {
+		transform: translateY(2px);
+		background-color: var(--gp-m-700);
+	}
+	30% {
+		transform: translateY(2px);
+	}
+	100% {
+		transform: translateY(0);
+	}
+}
+:is(.fbx, .fb-candy) .pk-label {
+	font-family: var(--gp-f-body);
+	font-size: 10px;
+	font-weight: 650;
+	letter-spacing: 0;
+}
+:is(.fbx, .fb-candy) .pk-band {
+	border-top-color: var(--gp-m-500);
+}
+:is(.fbx, .fb-candy) .pk-band::before,
+:is(.fbx, .fb-candy) .pk-band::after {
+	background: var(--gp-m-500);
+}
+/* One line tall even with an accidental in it (MusicalText draws ♭ as an inline block),
+   so a tuned-down range is not cut off at the keyboard's foot. */
+:is(.fbx, .fb-candy) .pk-band-label,
+:is(.fbx, .fb-candy) .pk-band-label * {
+	line-height: 1;
+}
+:is(.fbx, .fb-candy) .pk-band-label {
+	top: 1px;
+	background: var(--gp-card);
+	color: var(--gp-ink-3);
+	font-family: var(--gp-f-body);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: none;
+}

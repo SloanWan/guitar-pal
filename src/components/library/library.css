@@ -1,0 +1,194 @@
+/* =====================================================================================
+   A practice page's library (Strum's patterns, Tab's tabs): beside the stage from 960px
+   and folding away to a floating expand control, in a sheet below that, reached by the
+   page's own button (`.lib-btn`). The page's root names its container `gp-page`, so the
+   breakpoint is the page's width. The rows are ListRows with a favourite pick beside them.
+   ===================================================================================== */
+@layer components {
+	.lib-shell {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 296px;
+		grid-template-rows: minmax(0, 1fr);
+		height: 100%;
+		transition: grid-template-columns var(--gp-d-rise) var(--gp-e-rise);
+	}
+	.lib-shell[data-lib="closed"] {
+		grid-template-columns: minmax(0, 1fr) 0px;
+	}
+	/* A shared snapshot has no library: the stage takes the width. */
+	.lib-shell[data-lib="none"] {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.lib-aside {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-width: 0;
+		min-height: 0;
+		padding: 16px 14px 16px 16px;
+		overflow: hidden;
+		box-shadow: -1px 0 0 var(--gp-line);
+	}
+	.lib-shell[data-lib="closed"] .lib-aside {
+		visibility: hidden;
+		padding: 0;
+	}
+	.lib-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-height: 0;
+		margin: 0 -4px;
+		padding: 4px;
+		overflow-y: auto;
+	}
+	/* The expand control while the library is folded away: a floating icon, no rail, on
+	   the spot the aside's own fold button takes (its padding), so the toggle never moves. */
+	.lib-fab {
+		position: absolute;
+		top: 16px;
+		right: 14px;
+		z-index: 6;
+		animation: lib-pop var(--gp-d-pop) var(--gp-spring-pop);
+	}
+	/* Scoped to the shell so they outrank the page's own icon and button classes,
+	   whichever stylesheet loads last. */
+	.lib-shell .lib-btn {
+		display: none;
+	}
+	/* A group: the player's own, or the presets. Its head folds it away. */
+	.lib-group {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.lib-group + .lib-group {
+		margin-top: 8px;
+	}
+	.lib-group-head {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		height: 32px;
+		padding: 0 8px 0 6px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-2);
+		cursor: pointer;
+		transition: background-color var(--gp-d-state) linear;
+	}
+	.lib-group-head:hover {
+		background: var(--gp-well);
+	}
+	.lib-group-head svg {
+		flex: none;
+		width: 16px;
+		height: 16px;
+		color: var(--gp-ink-3);
+		transition: rotate var(--gp-d-state) var(--gp-ease-state);
+	}
+	.lib-group-head[aria-expanded="false"] svg {
+		rotate: -90deg;
+	}
+	.lib-group-title {
+		flex: 1;
+		font-size: 13px;
+		font-weight: 700;
+		text-align: left;
+	}
+	.lib-group-count {
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 600;
+	}
+	.lib-group-empty {
+		margin: 2px 8px 6px 28px;
+		color: var(--gp-ink-3);
+		font-size: 13px;
+	}
+	.lib-row {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+	.lib-row > .gp-row {
+		flex: 1;
+		min-width: 0;
+	}
+	/* The open item — what plays — is tinted the module's light, not only lifted, so it
+	   reads from across the list (both themes; beats the dark Lift's face). */
+	.lib-list .lib-row > .gp-row.gp-hop[aria-current="true"] {
+		background: var(--gp-m-100);
+	}
+	/* The aside is a height-capped flex column, so a long list shrank the filter: its
+	   36px is only a specified size, and a flex item may shrink to its content (~21px).
+	   Held at a 44px touch target here, with columns that stay equal (minmax(0, …)) so
+	   "Favourites" can neither widen its column past the thumb nor wrap. */
+	.gp-seg.lib-filter {
+		flex: none;
+		grid-auto-columns: minmax(0, 1fr);
+		height: 44px;
+	}
+	.gp-seg.lib-filter > button {
+		padding: 0 6px;
+		font-size: 14px;
+	}
+
+	/* A filter change re-keys the list; its rows rise and pop in one after another.
+	   --i is the row's index, the stagger stops at the tenth (spec: ≤ 400ms in all). */
+	.lib-list[data-pop] .lib-row {
+		animation: lib-rise var(--gp-d-pop) var(--gp-spring-pop) both;
+		animation-delay: calc(min(var(--i, 0), 10) * var(--gp-stagger));
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.lib-list[data-pop] .lib-row,
+		.lib-fab {
+			animation: lib-fade 150ms linear both;
+			animation-delay: 0ms;
+		}
+	}
+
+	/* Below 960px the library is a sheet, opened by the page's button. */
+	@container gp-page (max-width: 959px) {
+		.lib-shell,
+		.lib-shell[data-lib="closed"] {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.lib-aside,
+		.lib-shell .lib-fab,
+		.lib-shell .lib-fold {
+			display: none;
+		}
+		.lib-shell .lib-btn {
+			display: inline-flex;
+		}
+	}
+
+	@keyframes lib-rise {
+		0% {
+			opacity: 0;
+			transform: translateY(10px) scale(0.94);
+		}
+		60% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	@keyframes lib-pop {
+		0% {
+			opacity: 0;
+			transform: scale(0.92);
+		}
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	@keyframes lib-fade {
+		0% {
+			opacity: 0;
+		}
+	}
+}

@@ -18,107 +18,41 @@ import TabStaveRow, {
 } from "@/components/fingerpick/TabStaveRow";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
-import type { FingerpickPattern, Measure, StringFret } from "@/lib/fingerpickTypes";
+import type { FingerpickPattern, LinkKind, Measure, NoteEffects, Span, StringFret } from "@/lib/fingerpickTypes";
+import { indexPattern } from "@/lib/fingerpickIndex";
 import { MONO_FAMILY } from "@/app/fonts/fonts";
 
 // ── StringFret factories ──────────────────────────────────────────────────────
-
-const S = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
-const N = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false });
-const Hn = (fret: number): StringFret => ({
-	fret,
-	technique: "hammer-on",
-	tied: false,
-	muted: false,
-});
-const Po = (fret: number): StringFret => ({
-	fret,
-	technique: "pull-off",
-	tied: false,
-	muted: false,
-});
-const Su = (fret: number): StringFret => ({
-	fret,
-	technique: "slide-up",
-	tied: false,
-	muted: false,
-});
-const Sd = (fret: number): StringFret => ({
-	fret,
-	technique: "slide-down",
-	tied: false,
-	muted: false,
-});
-const Ti = (fret: number): StringFret => ({ fret, technique: null, tied: true, muted: false });
-const Sta = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	staccato: true,
-});
-const Acc = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	accent: true,
-});
-const Pd = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	pickStroke: "down",
-});
-const Pu = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	pickStroke: "up",
-});
-const Tr8 = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	tremoloPickingSpeed: "8th",
-});
-const Tr16 = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	tremoloPickingSpeed: "16th",
-});
-const Tr32 = (fret: number): StringFret => ({
-	fret,
-	technique: null,
-	tied: false,
-	muted: false,
-	tremoloPickingSpeed: "32nd",
-});
-const Vib = (fret: number): StringFret => ({
-	fret,
-	technique: "vibrato",
-	tied: false,
-	muted: false,
-});
-const VibW = (fret: number): StringFret => ({
-	fret,
-	technique: "vibrato-wide",
-	tied: false,
-	muted: false,
-});
-const Tap = (fret: number): StringFret => ({
-	fret,
-	technique: "tapping",
-	tied: false,
-	muted: false,
-});
-const Trl = (fret: number): StringFret => ({ fret, technique: "trill", tied: false, muted: false });
-
+const S = (): StringFret => ({ fret: null, muted: false });
+const N = (fret: number): StringFret => ({ fret, muted: false });
+const withLink = (fret: number, kind: LinkKind): StringFret => ({ fret, muted: false, link: { kind } });
+const withEffects = (fret: number, effects: NoteEffects): StringFret => ({ fret, muted: false, effects });
+const Hn = (fret: number): StringFret => withLink(fret, "hammer");
+const Po = (fret: number): StringFret => withLink(fret, "pull");
+const Su = (fret: number): StringFret => withLink(fret, "slide");
+const Sd = (fret: number): StringFret => withLink(fret, "slide");
+const Sta = (fret: number): StringFret => withEffects(fret, { staccato: true });
+const Acc = (fret: number): StringFret => withEffects(fret, { accent: true });
+const Pd = (fret: number): StringFret => withEffects(fret, { pick: { direction: "down" } });
+const Pu = (fret: number): StringFret => withEffects(fret, { pick: { direction: "up" } });
+const Tr8 = (fret: number): StringFret => withEffects(fret, { tremolo: { speed: "8th" } });
+const Tr16 = (fret: number): StringFret => withEffects(fret, { tremolo: { speed: "16th" } });
+const Tr32 = (fret: number): StringFret => withEffects(fret, { tremolo: { speed: "32nd" } });
+const Vib = (fret: number): StringFret => withEffects(fret, { vibrato: {} });
+const VibW = (fret: number): StringFret => withEffects(fret, { vibrato: { wide: true } });
+const Tap = (fret: number): StringFret => withEffects(fret, { tap: true });
+const Trl = (fret: number): StringFret => withEffects(fret, { trill: {} });
+const Bend = (fret: number, semitones: number, shape: "pre" | "release" | "pre-release" | "" = ""): StringFret =>
+	withEffects(fret, {
+		bend: {
+			semitones,
+			...(shape.startsWith("pre") ? { pre: true } : {}),
+			...(shape.endsWith("release") ? { release: true } : {}),
+		},
+	});
+// Palm mute and let ring are spans on the pattern (see the groups below), so these are plain notes.
+const PM = N;
+const LR = N;
 // ── Measure definitions ───────────────────────────────────────────────────────
 // Strings index: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5]
 
@@ -199,6 +133,46 @@ const VIBRATO_MEASURE: Measure = {
 	slots: [
 		{ id: "vib1", duration: "half", strings: [Vib(5), S(), S(), S(), S(), S()] },
 		{ id: "vib2", duration: "half", strings: [VibW(5), S(), S(), S(), S(), S()] },
+	],
+};
+
+// Bend family on the G string: the named heights, a release, then the pre-bends.
+const BEND_M1: Measure = {
+	id: "bend-m1",
+	slots: [
+		{ id: "bd1", duration: "quarter", strings: [S(), S(), Bend(7, 2), S(), S(), S()] },
+		{ id: "bd2", duration: "quarter", strings: [S(), S(), Bend(7, 1), S(), S(), S()] },
+		{ id: "bd3", duration: "quarter", strings: [S(), S(), Bend(7, 0.5), S(), S(), S()] },
+		{ id: "bd4", duration: "quarter", strings: [S(), S(), Bend(7, 2, "release"), S(), S(), S()] },
+	],
+};
+const BEND_M2: Measure = {
+	id: "bend-m2",
+	slots: [
+		{ id: "bd5", duration: "half", strings: [S(), S(), Bend(7, 1, "pre"), S(), S(), S()] },
+		{ id: "bd6", duration: "half", strings: [S(), S(), Bend(7, 2, "pre-release"), S(), S(), S()] },
+	],
+};
+
+// Brackets: a palm-muted run on the A string, then a let-ring run broken by a plain note.
+const BRACKET_M1: Measure = {
+	id: "bracket-m1",
+	slots: [
+		{ id: "pm1", duration: "eighth", strings: [S(), S(), S(), S(), PM(0), S()] },
+		{ id: "pm2", duration: "eighth", strings: [S(), S(), S(), S(), PM(0), S()] },
+		{ id: "pm3", duration: "eighth", strings: [S(), S(), S(), S(), PM(2), S()] },
+		{ id: "pm4", duration: "eighth", strings: [S(), S(), S(), S(), PM(2), S()] },
+		{ id: "pm5", duration: "quarter", strings: [S(), S(), S(), S(), N(0), S()] },
+		{ id: "pm6", duration: "quarter", strings: [S(), S(), S(), S(), PM(3), S()] },
+	],
+};
+const BRACKET_M2: Measure = {
+	id: "bracket-m2",
+	slots: [
+		{ id: "lr1", duration: "quarter", strings: [S(), S(), S(), S(), S(), LR(3)] },
+		{ id: "lr2", duration: "quarter", strings: [S(), LR(3), S(), S(), S(), S()] },
+		{ id: "lr3", duration: "quarter", strings: [LR(0), S(), S(), S(), S(), S()] },
+		{ id: "lr4", duration: "quarter", strings: [S(), S(), N(0), S(), S(), S()] },
 	],
 };
 
@@ -502,7 +476,7 @@ const STRESS_M4: Measure = {
 
 // ── Groups ────────────────────────────────────────────────────────────────────
 
-const GROUPS: { label: string; measures: Measure[] }[] = [
+const GROUPS: { label: string; measures: Measure[]; spans?: Span[] }[] = [
 	{ label: "Grace Note (grace note before regular note)", measures: [GRACE_NOTE_MEASURE] },
 	{ label: "Staccato (·) and Accent (>) — notes 2 and 3", measures: [STACCATO_ACCENT_MEASURE] },
 	{ label: "Pick Stroke: Down (⊓) and Up (V) alternating", measures: [PICK_STROKE_MEASURE] },
@@ -511,6 +485,16 @@ const GROUPS: { label: string; measures: Measure[] }[] = [
 		measures: [TREMOLO_MEASURE],
 	},
 	{ label: "Vibrato (half 1) and Vibrato-Wide (half 2)", measures: [VIBRATO_MEASURE] },
+	{ label: "Bend family: full · ½ · ¼ · release | pre-bend · pre-bend-release", measures: [BEND_M1, BEND_M2] },
+	{
+		label: "Brackets: palm mute (P.M.) and let ring",
+		measures: [BRACKET_M1, BRACKET_M2],
+		spans: [
+			{ id: "palmMute:pm1", kind: "palmMute", from: "pm1", to: "pm4" },
+			{ id: "palmMute:pm6", kind: "palmMute", from: "pm6", to: "pm6" },
+			{ id: "letRing:lr1", kind: "letRing", from: "lr1", to: "lr3" },
+		],
+	},
 	{ label: "Techniques: Hammer-On, Pull-Off", measures: [HAMMER_PULL_MEASURE] },
 	{ label: "Techniques: Tapping", measures: [TAPPING_MEASURE] },
 	{ label: "Techniques: Trill", measures: [TRILL_MEASURE] },
@@ -568,9 +552,19 @@ const GROUP_METAS: Record<string, GroupMeta> = {
 		zh: "震音拨弦指快速重复同一音符。斜线数量表示速度：1 条=八分音符，2 条=十六分，3 条=三十二分。",
 	},
 	"Vibrato (half 1) and Vibrato-Wide (half 2)": {
-		status: "⏳ Not yet implemented",
-		en: "Vibrato is a repeated small pitch fluctuation that makes a note sing. Wide vibrato is an exaggerated version. Audio simulation is planned for a future issue.",
-		zh: "颤音是对音符音高进行小幅反复波动，让音符更有歌唱感。大幅颤音是其夸张版本。音频模拟计划在后续 issue 中实现。",
+		status: "✅ Rendered; audio as a detune curve on the sounding note (#316)",
+		en: "Vibrato is a repeated small pitch fluctuation that makes a note sing. Wide vibrato is an exaggerated version. Audio: the note's own detune is wobbled above the fretted pitch only (30¢ at 5.5 Hz; wide 80¢ at 5 Hz), starting 150 ms after the pluck — parameters chosen in /dev/bend-lab.",
+		zh: "颤音是对音符音高进行小幅反复波动，让音符更有歌唱感。大幅颤音是其夸张版本。音频：在正在响的那个音上做只往上的音高摆动（30 音分 5.5 Hz；大幅 80 音分 5 Hz），弹响 150 ms 后开始——参数在 /dev/bend-lab 定的。",
+	},
+	"Bend family: full · ½ · ¼ · release | pre-bend · pre-bend-release": {
+		status: "✅ Rendered with VexFlow's Bend (arrow + height); audio as a detune curve (#316)",
+		en: "A bend pushes the string sideways to raise the pitch: full = a whole tone, ½ = a semitone, ¼ = a quarter tone. A release lets it back down (up-then-down arrow). A pre-bend is bent before the pick, so the note starts at the target — written 'PB' with the height; pre-bend-release then lets it down. Audio: the sounding note's detune rises over 150 ms (slow then fast), holds, and for the release variants comes back over 150 ms.",
+		zh: "推弦是把弦横向推开让音升高：full = 全音，½ = 半音，¼ = 四分之一音。回落是推上去再放回来（上下箭头）。预推弦是先推好再弹，音一出来就是目标音——写作 'PB' 加高度；预推弦回落再放回来。音频：在正在响的那个音上 150 ms 推到顶（先慢后快）、保持，回落类再用 150 ms 放回来。",
+	},
+	"Brackets: palm mute (P.M.) and let ring": {
+		status: "✅ Rendered (dashed bracket over the span); audio: let ring sustains, palm mute damped and dulled",
+		en: "A dashed bracket covers each span. P.M. = rest the picking hand on the strings for a damped sound. Let ring = let the notes sustain into each other. The plain note between the two P.M. spans is outside both, so measure 1 shows two brackets.",
+		zh: "虚线括号覆盖每一段 span。P.M.（手掌闷音）= 右手掌搭在弦上让声音闷。Let ring = 让音互相延续。两段 P.M. 之间的普通音不在任何 span 内，所以第 1 小节有两段括号。",
 	},
 	"Techniques: Hammer-On, Pull-Off": {
 		status: "⚡ Partially implemented — needs further refinement",
@@ -662,6 +656,8 @@ const GROUP_BPM: Record<string, number> = {
 /** Chinese section label shown when lang = "zh". */
 const GROUP_LABEL_ZH: Record<string, string> = {
 	Slide: "滑音",
+	"Bend family: full · ½ · ¼ · release | pre-bend · pre-bend-release": "推弦家族：全音 · ½ · ¼ · 回落 | 预推弦 · 预推弦回落",
+	"Brackets: palm mute (P.M.) and let ring": "括号：手掌闷音（P.M.）和延音",
 	"Stress Test — Dense Mixed Techniques": "压力测试 — 密集混合技法",
 };
 
@@ -673,7 +669,7 @@ function techniqueConnectorCount(measure: Measure): number {
 	return measure.slots.reduce(
 		(count, slot) =>
 			count +
-			slot.strings.filter((sf) => sf.technique === "hammer-on" || sf.technique === "pull-off")
+			slot.strings.filter((sf) => sf.link?.kind === "hammer" || sf.link?.kind === "pull")
 				.length,
 		0,
 	);
@@ -683,7 +679,7 @@ function computeGroupWidths(measures: Measure[], containerWidth: number): number
 	const staveSpace = containerWidth - CLEF_WIDTH - ROW_TRAILING_PAD;
 	const renderData = measures.map((m) => fingerpickToVexFlow(m));
 	const minWidths = renderData.map((rd, i) =>
-		computeMeasureMinWidth(rd.notes, i === 0, techniqueConnectorCount(measures[i])),
+		computeMeasureMinWidth(rd.notes, i === 0, techniqueConnectorCount(measures[i]), 0, 0, 0, 0, [], rd.expression),
 	);
 	const totalMin = minWidths.reduce((a, b) => a + b, 0);
 	const scale = Math.max(1, staveSpace / totalMin);
@@ -906,9 +902,9 @@ export default function TabNotationDevPage() {
 	const { isPlaying } = engine;
 
 	// Preload audio presets once on mount so the first Play click is instant.
-	// eslint-disable-next-line react-hooks/exhaustive-deps
 	useEffect(() => {
 		void engine.load();
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount; the engine object is new every render
 	}, []);
 
 	// Derive the effective playing section from both state and the engine's isPlaying flag.
@@ -946,10 +942,12 @@ export default function TabNotationDevPage() {
 
 	const groups = useMemo(() => {
 		if (containerWidth === 0) return [];
-		return GROUPS.map(({ label, measures }) => ({
+		return GROUPS.map(({ label, measures, spans }) => ({
 			label,
 			measures,
 			widths: computeGroupWidths(measures, containerWidth),
+			// The group's spans, for the brackets: a dev page has no pattern of its own.
+			renderContext: spans ? { index: indexPattern({ id: label, name: label, bpm: 0, timeSignature: [4, 4], measures, spans }) } : undefined,
 		}));
 	}, [containerWidth]);
 
@@ -972,7 +970,7 @@ export default function TabNotationDevPage() {
 
 			<StrokeVerificationSection lang={lang} />
 
-			{groups.map(({ label, measures, widths }) => {
+			{groups.map(({ label, measures, widths, renderContext }) => {
 				const meta = GROUP_METAS[label];
 				const sectionLabel = lang === "en" ? label : (GROUP_LABEL_ZH[label] ?? label);
 				return (
@@ -996,7 +994,7 @@ export default function TabNotationDevPage() {
 							</p>
 						)}
 						<div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-							<TabStaveRow measures={measures} measureWidths={widths} />
+							<TabStaveRow measures={measures} measureWidths={widths} renderContext={renderContext} />
 						</div>
 					</section>
 				);

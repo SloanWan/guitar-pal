@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { makeEmptySlot } from "@/lib/fingerpickEdit";
 import {
+	harmonicShift,
 	JIANPU_DOT_ABOVE,
 	JIANPU_DOT_BELOW,
 	OPEN_STRING_MIDI,
@@ -30,8 +31,12 @@ describe("soundingMidi", () => {
 });
 
 describe("pitchLabel", () => {
-	it("writes MIDI as the number", () => {
-		expect(pitchLabel(64, "midi")).toBe("64");
+	it("sings fixed-do solfège, the accidental first, no octave", () => {
+		expect(OPEN_STRING_MIDI.map((m) => pitchLabel(m, "solfege"))).toEqual(["mi", "ti", "so", "re", "la", "mi"]);
+		expect(pitchLabel(60, "solfege")).toBe("do");
+		expect(pitchLabel(61, "solfege")).toBe("♯do");
+		expect(pitchLabel(63, "solfege")).toBe("♭mi");
+		expect(pitchLabel(70, "solfege")).toBe("♭ti");
 	});
 
 	it("spells names the way the chord library spells its roots", () => {
@@ -100,7 +105,9 @@ describe("isPitchLabelStyle", () => {
 	it("accepts the four styles and nothing else", () => {
 		expect(isPitchLabelStyle("name")).toBe(true);
 		expect(isPitchLabelStyle("scientific")).toBe(true);
-		expect(isPitchLabelStyle("midi")).toBe(true);
+		expect(isPitchLabelStyle("solfege")).toBe(true);
+		// Retired: a stored "midi" falls back to the default.
+		expect(isPitchLabelStyle("midi")).toBe(false);
 		expect(isPitchLabelStyle("jianpu")).toBe(true);
 		expect(isPitchLabelStyle("E4")).toBe(false);
 		expect(isPitchLabelStyle(null)).toBe(false);
@@ -113,9 +120,9 @@ describe("slotPitchLabels", () => {
 
 	it("labels every played string in string order, high e first", () => {
 		const slot = makeEmptySlot("quarter");
-		slot.strings[5] = { fret: 3, technique: null, tied: false, muted: false };
-		slot.strings[1] = { fret: 1, technique: null, tied: false, muted: false };
-		slot.strings[0] = { fret: 0, technique: null, tied: false, muted: false };
+		slot.strings[5] = { fret: 3, muted: false };
+		slot.strings[1] = { fret: 1, muted: false };
+		slot.strings[0] = { fret: 0, muted: false };
 		expect(slotPitchLabels(slot, scientific)).toEqual([
 			{ stringIndex: 0, text: "E4", tied: false },
 			{ stringIndex: 1, text: "C4", tied: false },
@@ -125,26 +132,50 @@ describe("slotPitchLabels", () => {
 
 	it("skips muted strings and strings not in play", () => {
 		const slot = makeEmptySlot("quarter");
-		slot.strings[5] = { fret: null, technique: null, tied: false, muted: true };
-		slot.strings[4] = { fret: 2, technique: null, tied: false, muted: true };
-		slot.strings[2] = { fret: 0, technique: null, tied: false, muted: false };
+		slot.strings[5] = { fret: null, muted: true };
+		slot.strings[4] = { fret: 2, muted: true };
+		slot.strings[2] = { fret: 0, muted: false };
 		expect(slotPitchLabels(slot, scientific)).toEqual([{ stringIndex: 2, text: "G3", tied: false }]);
 	});
 
 	it("keeps a tied string, marked as tied", () => {
 		const slot = makeEmptySlot("quarter");
-		slot.strings[3] = { fret: 2, technique: null, tied: true, muted: false };
+		slot.strings[3] = { fret: 2, link: { kind: "tie" }, muted: false };
 		expect(slotPitchLabels(slot, scientific)).toEqual([{ stringIndex: 3, text: "E3", tied: true }]);
 	});
 
 	it("gives a rest or a grace slot nothing", () => {
 		const rest = makeEmptySlot("quarter");
 		rest.isRest = true;
-		rest.strings[5] = { fret: 3, technique: null, tied: false, muted: false };
+		rest.strings[5] = { fret: 3, muted: false };
 		expect(slotPitchLabels(rest, scientific)).toEqual([]);
 		const grace = makeEmptySlot("eighth");
 		grace.isGraceNote = true;
-		grace.strings[5] = { fret: 3, technique: null, tied: false, muted: false };
+		grace.strings[5] = { fret: 3, muted: false };
 		expect(slotPitchLabels(grace, scientific)).toEqual([]);
+	});
+});
+
+describe("harmonicShift", () => {
+	it("reads the node table for a natural harmonic and the touch fret for an artificial one", () => {
+		// Relative to the fret's own pitch: a natural harmonic is the open string's partial.
+		expect(harmonicShift({ type: "natural" }, 12)).toBe(0);
+		expect(harmonicShift({ type: "natural" }, 7)).toBe(12);
+		expect(harmonicShift({ type: "natural" }, 5)).toBe(19);
+		expect(harmonicShift({ type: "natural" }, 8)).toBe(4);
+		expect(harmonicShift({ type: "artificial", touchFret: 12 }, 5)).toBe(19);
+		expect(harmonicShift({ type: "artificial" }, 5)).toBe(12);
+		expect(harmonicShift({ type: "pinch" }, 5)).toBe(12);
+	});
+
+	it("labels a harmonic by the pitch it sounds", () => {
+		const slot = makeEmptySlot("quarter");
+		slot.strings[2] = { fret: 12, muted: false, effects: { harmonic: { type: "natural" } } };
+		const shifts: number[] = [];
+		slotPitchLabels(slot, (_s, _f, shift) => {
+			shifts.push(shift ?? 0);
+			return "";
+		});
+		expect(shifts).toEqual([0]);
 	});
 });

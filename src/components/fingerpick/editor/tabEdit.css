@@ -1,0 +1,1691 @@
+/* =====================================================================================
+   The tab editor, a page of its own (#358, scheme A): the tab on a card is the editing
+   surface, with a status line under it, the fretboard docked at the foot and the
+   inspector beside it from 960px. The stave and its card are the reader's (tab.css),
+   so the tab being edited looks like the tab being read. Widths are the page's own
+   (a container query).
+   ===================================================================================== */
+@layer components {
+	/* The phone tab bar gives the editor its room: the dock is the editor's foot. */
+	:root:has(.te-page) {
+		--gp-tabbar-h: 0px;
+	}
+	:root:has(.te-page) .gp-tabbar {
+		display: none;
+	}
+
+	/* The grid's washes and marks, tuned per theme: on the dark card a module tint
+	   reads stronger and greyer, so the washes step back and what is picked (the
+	   cursor, an offered fret) steps forward; the sweeps take their lighter hues. */
+	.te-page {
+		--te-wash-beat: 6%;
+		--te-wash-sub: 9%;
+		--te-wash-line: 14%;
+		--te-wash-sel: 16%;
+		--te-wash-cross: 26%;
+		--te-wash-play: 30%;
+		--te-pick: var(--gp-m-100);
+		--te-hint-edge: var(--gp-m-300);
+		--te-roll: #f59e0b;
+		--te-brush: #22c55e;
+		--te-sweep-k: 1;
+	}
+	:root[data-theme="dark"] .te-page {
+		--te-wash-beat: 4%;
+		--te-wash-sub: 6%;
+		--te-wash-line: 8%;
+		--te-wash-sel: 12%;
+		--te-wash-cross: 14%;
+		--te-wash-play: 24%;
+		--te-pick: color-mix(in srgb, var(--gp-m-500) 32%, var(--gp-card));
+		--te-hint-edge: color-mix(in srgb, var(--gp-m-500) 70%, transparent);
+		--te-roll: var(--gp-a2);
+		--te-brush: var(--gp-strum-500);
+		--te-sweep-k: 1;
+	}
+	.te-page {
+		container: te gp-page / inline-size;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		background: var(--gp-page);
+		color: var(--gp-ink);
+		font-family: var(--gp-f-body);
+	}
+	/* source page (a book's draft) · the tab · the inspector */
+	.te-body {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+	}
+	.te-main {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+	}
+	.te-stage {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		--te-stage-top: 18px;
+		padding: var(--te-stage-top) 32px 28px;
+	}
+	.te-stage-in {
+		--te-stack-gap: 12px;
+		--te-bleed: 16px;
+		display: flex;
+		flex-direction: column;
+		gap: var(--te-stack-gap);
+		max-width: 1120px;
+		margin: 0 auto;
+	}
+
+	/* ── Notice: where a handed-over tab came from ──────────────────────── */
+	.te-notice {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 12px 14px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-m-100);
+	}
+	.te-notice-top {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 10px;
+	}
+	.te-notice b {
+		font-size: 14px;
+	}
+	.te-notice p,
+	.te-notice ul {
+		margin: 0;
+		color: var(--gp-ink-2);
+		font-size: 13px;
+		line-height: 1.45;
+	}
+	.te-notice ul {
+		padding-left: 18px;
+	}
+	.te-warnchip {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		height: 26px;
+		padding: 0 9px;
+		border-radius: var(--gp-r-pill);
+		background: color-mix(in oklab, var(--gp-warn) 14%, var(--gp-card));
+		color: var(--gp-warn);
+		font-size: 12px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.te-warnchip svg {
+		width: 13px;
+		height: 13px;
+	}
+
+	/* ── Title row ──────────────────────────────────────────────────────── */
+	/* The meta line on top; the name and the actions share the second line. */
+	.te-titlerow {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		column-gap: 12px;
+		padding: 0 6px;
+	}
+	.te-meta {
+		display: flex;
+		grid-column: 1 / -1;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		height: 22px;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+	.te-meta > .pb-lab {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	/* Always there, shown only with edits, so the line never shifts. */
+	.te-unsaved {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		height: 20px;
+		padding: 0 8px;
+		border-radius: var(--gp-r-pill);
+		background: color-mix(in oklab, var(--gp-warn) 14%, var(--gp-card));
+		color: var(--gp-warn);
+		font-size: 11.5px;
+		font-weight: 700;
+	}
+	.te-unsaved[hidden] {
+		display: inline-flex;
+		visibility: hidden;
+	}
+	.te-savewhy {
+		color: var(--gp-warn);
+		font-size: 12px;
+		font-weight: 600;
+	}
+	/* The name opens the tab's settings. */
+	.te-name {
+		display: block;
+		grid-column: 1;
+		max-width: 100%;
+		overflow: hidden;
+		font-size: 28px;
+		font-weight: 780;
+		letter-spacing: -0.02em;
+		line-height: 1.2;
+		text-align: left;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.te-name[data-empty] {
+		color: var(--gp-ink-mute);
+	}
+	.te-name:hover {
+		text-decoration: underline;
+		text-decoration-color: var(--gp-edge);
+		text-underline-offset: 5px;
+	}
+	.te-acts {
+		display: flex;
+		grid-column: 2;
+		align-items: center;
+		gap: 6px;
+	}
+	.te-vsep {
+		flex: none;
+		width: 1px;
+		height: 24px;
+		margin: 0 4px;
+		background: var(--gp-line);
+	}
+
+	/* ── Toolbar (#361) ─────────────────────────────────────────────────── */
+	/* Stays at the top of the stage while the tab scrolls under it. The bay is what
+	   sticks: it reaches up to the stage's very top (past its padding) on the page's
+	   colour, taking the gap above the toolbar as its own and a little either side (the
+	   card's edge), so nothing scrolling by shows around the toolbar. It sits over the
+	   playhead (10), as the reader's does. */
+	.te-toolbay {
+		position: sticky;
+		z-index: 12;
+		top: calc(-1 * var(--te-stage-top));
+		/* Wide enough to cover the cursor bar's glow (14px) as it scrolls under. */
+		margin: calc(-1 * var(--te-stack-gap)) calc(-1 * var(--te-bleed)) 0;
+		padding: var(--te-stack-gap) var(--te-bleed) 0;
+		background: var(--gp-page);
+	}
+	.te-tool {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 8px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c), var(--gp-shadow-pop);
+	}
+	.te-seg {
+		display: inline-grid;
+		flex: none;
+		grid-auto-columns: 1fr;
+		grid-auto-flow: column;
+		box-sizing: border-box;
+		height: 34px;
+		padding: 3px 5px 5px 3px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-well);
+	}
+	.te-seg button {
+		display: grid;
+		place-items: center;
+		padding: 0 5px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		cursor: pointer;
+	}
+	.te-seg button svg {
+		width: 20px;
+		height: 20px;
+	}
+	.te-seg button[aria-pressed="true"] {
+		background: var(--gp-face);
+		box-shadow: var(--gp-ring-n), var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-sh-n);
+		color: var(--gp-ink);
+	}
+	.te-seg button:disabled {
+		color: var(--gp-edge);
+		cursor: default;
+	}
+	.te-tbtn {
+		display: grid;
+		flex: none;
+		place-items: center;
+		box-sizing: border-box;
+		min-width: 32px;
+		height: 32px;
+		padding: 0 6px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		font-size: 13.5px;
+		font-weight: 750;
+		cursor: pointer;
+	}
+	.te-tbtn svg {
+		width: 19px;
+		height: 19px;
+	}
+	.te-tbtn:not(:disabled):hover {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+	}
+	.te-tbtn[aria-pressed="true"] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.te-tbtn:disabled {
+		color: var(--gp-edge);
+		cursor: default;
+	}
+	.te-fill {
+		overflow: hidden;
+		color: var(--gp-warn);
+		font-size: 12.5px;
+		font-weight: 650;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.te-fill[data-kind="over"] {
+		color: var(--gp-bad);
+	}
+	.te-barbtn {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 4px;
+		height: 32px;
+		padding: 0 8px 0 10px;
+		border-radius: var(--gp-r-s);
+		font-size: 13px;
+		font-weight: 700;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.te-barbtn:hover,
+	.te-barbtn[aria-expanded="true"] {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.te-barbtn svg {
+		width: 15px;
+		height: 15px;
+	}
+	.te-menu {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 8px;
+	}
+	.te-menu > button {
+		display: flex;
+		align-items: center;
+		box-sizing: border-box;
+		width: 100%;
+		height: 36px;
+		padding: 0 10px;
+		border-radius: var(--gp-r-s);
+		font-size: 13.5px;
+		font-weight: 650;
+		text-align: left;
+		cursor: pointer;
+	}
+	.te-menu > button:not(:disabled):hover {
+		background: var(--gp-well);
+	}
+	.te-menu > button:disabled {
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.te-menu > button[data-bad] {
+		color: var(--gp-bad);
+	}
+	.te-menu-sep {
+		height: 1px;
+		margin: 4px 6px;
+		background: var(--gp-line);
+	}
+	.te-menu-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 2px 4px;
+	}
+	/* The repeat count's − / + fit beside the two repeat chips. */
+	.te-menu-row .pb-icon {
+		width: 28px;
+		height: 28px;
+	}
+	.te-chip {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 30px;
+		padding: 0 9px;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-face);
+		box-shadow: var(--gp-ring-n), var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-sh-n);
+		font-size: 12.5px;
+		font-weight: 650;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.te-chip[aria-pressed="true"] {
+		background: var(--gp-m-500);
+		box-shadow: var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-m-sh);
+		color: var(--gp-m-on);
+	}
+	.te-times {
+		min-width: 30px;
+		font-weight: 780;
+		text-align: center;
+	}
+	.te-keys h3 {
+		margin: 0 0 8px;
+		font-size: 14px;
+		font-weight: 750;
+	}
+	.te-keys dl {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 6px 12px;
+		margin: 0 0 12px;
+		color: var(--gp-ink-2);
+		font-size: 12.5px;
+		line-height: 1.35;
+	}
+	.te-keys dt {
+		padding: 1px 6px;
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-well);
+		color: var(--gp-ink);
+		font-size: 11.5px;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.te-keys dd {
+		margin: 0;
+	}
+	.te-keys p {
+		margin: 0;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		line-height: 1.4;
+	}
+
+	/* ── The tab as a grid of bar blocks (#362) ──────────────────────────── */
+	/* The grid takes the keys; its focus ring is the cursor's cell, not a box. */
+	.te-sheet {
+		outline: none;
+	}
+	.te-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(304px, 1fr));
+		gap: 14px;
+	}
+	.te-mb {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 0;
+		padding: 10px 12px 12px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+		transition: box-shadow var(--gp-d-state) ease;
+		user-select: none;
+	}
+	/* The cursor's bar: the block a copy or a move lands on is the cursor's too. */
+	.te-mb[data-cur] {
+		box-shadow:
+			0 0 0 2px var(--gp-m-500),
+			0 0 14px color-mix(in srgb, var(--gp-m-500) 28%, transparent);
+	}
+	.te-mb[data-nudge="left"] {
+		animation: te-nudge-from-right 0.22s ease-out;
+	}
+	.te-mb[data-nudge="right"] {
+		animation: te-nudge-from-left 0.22s ease-out;
+	}
+	@keyframes te-nudge-from-right {
+		from {
+			transform: translateX(14px);
+		}
+	}
+	@keyframes te-nudge-from-left {
+		from {
+			transform: translateX(-14px);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.te-mb[data-nudge] {
+			animation: none;
+		}
+	}
+	.te-mb-head,
+	.te-mb-row {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		min-height: 28px;
+	}
+	.te-mb-head {
+		justify-content: space-between;
+	}
+	.te-mb-tools {
+		display: flex;
+		align-items: center;
+		gap: 1px;
+	}
+	.te-mb-lab {
+		flex: none;
+		margin-right: 2px;
+		color: var(--gp-ink-3);
+		font-family: var(--gp-f-num);
+		font-size: 10.5px;
+		font-weight: 750;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		white-space: nowrap;
+	}
+	.te-mb-div {
+		width: 1px;
+		height: 16px;
+		margin: 0 4px;
+		background: var(--gp-line);
+	}
+	.te-mb-ic {
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-3);
+		cursor: pointer;
+	}
+	.te-mb-ic svg {
+		width: 14px;
+		height: 14px;
+	}
+	.te-mb-ic:hover:not(:disabled) {
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+	}
+	.te-mb-ic[data-danger]:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--gp-bad) 12%, transparent);
+		color: var(--gp-bad);
+	}
+	.te-mb-ic:disabled {
+		opacity: 0.32;
+		cursor: not-allowed;
+	}
+
+	/* The grid: the string names · the slot columns (scrolling sideways when a bar
+	   is cut fine) · each row's snap. */
+	.te-mb-body {
+		display: flex;
+		align-items: flex-start;
+		gap: 2px;
+	}
+	.te-mb-side {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		gap: 2px;
+		width: 20px;
+	}
+	.te-mb-chordrow {
+		position: relative;
+		height: 16px;
+	}
+	.te-mb-name {
+		position: relative;
+		display: grid;
+		place-items: center;
+		height: 28px;
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 10.5px;
+		font-weight: 700;
+	}
+	.te-mb-name[data-on] {
+		color: var(--gp-m-700);
+	}
+	/* A row's clear (at its left, in the block's padding) and its snap: there while
+	   the row is hovered, laid out always so nothing shifts. */
+	.te-mb-clear {
+		position: absolute;
+		top: 50%;
+		left: -14px;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-mute);
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(-50%);
+		transition: opacity 0.1s;
+		cursor: pointer;
+	}
+	.te-mb-side:last-child .te-mb-clear {
+		left: 2px;
+	}
+	.te-mb-clear svg {
+		width: 12px;
+		height: 12px;
+	}
+	.te-mb-clear[data-shown] {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.te-mb-clear:hover:not(:disabled) {
+		color: var(--gp-bad);
+	}
+	.te-mb-side:last-child .te-mb-clear:hover:not(:disabled) {
+		color: var(--gp-m-700);
+	}
+	.te-mb-clear:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+	.te-mb-side:last-child .te-mb-clear:disabled:not([data-shown]) {
+		opacity: 0;
+	}
+	.te-mb-scroll {
+		flex: 1;
+		min-width: 0;
+		overflow-x: auto;
+		overflow-y: hidden;
+		padding-bottom: 4px;
+		scrollbar-width: thin;
+	}
+	.te-mb-beats {
+		display: flex;
+		align-items: flex-start;
+		gap: 2px;
+	}
+	/* The hovered beat: a faint wash over its columns, cells and labels alike. */
+	.te-mb-beat {
+		display: flex;
+		flex-basis: 0;
+		flex-grow: 1;
+		gap: 2px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-mb-beat[data-on] {
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-beat), transparent);
+	}
+	.te-mb-col {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 20px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-mb-col[data-rest] {
+		background: var(--gp-well);
+	}
+	.te-mb-col[data-sub] {
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-sub), transparent);
+	}
+	.te-mb-col[data-sel] {
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-sel), transparent);
+	}
+	/* The slot sounding while the tab plays from the cursor (set by the playhead). */
+	.te-mb-col[data-playing] {
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-play), transparent);
+	}
+	.te-mb-cell {
+		position: relative;
+		display: grid;
+		place-items: center;
+		height: 28px;
+		min-width: 0;
+		overflow: hidden;
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-2);
+		font-family: var(--gp-f-num);
+		font-size: 12.5px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		cursor: pointer;
+		touch-action: manipulation;
+	}
+	.te-mb-cell[data-empty] {
+		color: var(--gp-ink-mute);
+		font-weight: 500;
+	}
+	.te-mb-cell:hover {
+		background: color-mix(in oklab, var(--gp-ink) 6%, transparent);
+	}
+	/* The cross under the pointer: its column and its row, summing on the cell. */
+	.te-mb-cell[data-h="1"] {
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-line), transparent);
+	}
+	.te-mb-cell[data-h="2"] {
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-cross), transparent);
+	}
+	/* The chord shape's fret, offered in an empty cell; "/" for a string it leaves out. */
+	.te-mb-cell[data-hint=""] {
+		background: var(--te-pick);
+		outline: 1.5px dashed var(--te-hint-edge);
+		outline-offset: -1.5px;
+		color: var(--gp-m-500);
+		font-weight: 750;
+	}
+	.te-mb-cell[data-hint="off"] {
+		color: var(--gp-ink-mute);
+	}
+	.te-mb-cell[data-cur] {
+		background: var(--te-pick);
+		box-shadow: inset 0 0 0 2px var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	.te-sheet:not(:focus-within) .te-mb-cell[data-cur] {
+		box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gp-m-500) 55%, transparent);
+	}
+	.te-mb-glyph {
+		position: absolute;
+		top: 1px;
+		right: 2px;
+		color: var(--gp-m-700);
+		font-size: 8.5px;
+		line-height: 1;
+	}
+	.te-mb-tie {
+		position: absolute;
+		top: 1px;
+		left: 50%;
+		width: 12px;
+		height: 6px;
+		border-top: 2px solid;
+		border-radius: 6px 6px 0 0;
+		transform: translateX(-50%);
+		pointer-events: none;
+	}
+	.te-mb-span {
+		position: absolute;
+		right: 3px;
+		bottom: 1px;
+		left: 3px;
+		border-bottom: 1.5px dashed var(--gp-m-500);
+		pointer-events: none;
+	}
+	.te-mb-span[data-kind="letRing"] {
+		border-bottom-style: dotted;
+	}
+	/* The chord row: a symbol where a chord changes (or runs into the bar), a + to add one. */
+	.te-mb-chord {
+		position: absolute;
+		top: 0;
+		left: 0;
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 10.5px;
+		font-weight: 780;
+		line-height: 16px;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.te-mb-chord[data-own] {
+		color: var(--gp-m-700);
+	}
+	.te-mb-chord:hover,
+	.te-mb-chord[data-open] {
+		color: var(--gp-m-500);
+	}
+	.te-mb-addchord {
+		position: absolute;
+		top: 0;
+		left: 50%;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		border: 1px dashed var(--gp-edge);
+		border-radius: var(--gp-r-xs);
+		color: var(--gp-ink-mute);
+		transform: translateX(-50%);
+		cursor: pointer;
+	}
+	.te-mb-addchord svg {
+		width: 10px;
+		height: 10px;
+	}
+	.te-mb-addchord:hover,
+	.te-mb-addchord[data-open] {
+		border-color: var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	/* The bar's chord popover: one column with room between its parts — the title,
+	   the search with Hear beside it (the matches open under the field, Hear stays
+	   put), the held shape, its actions. */
+	.te-quickchord {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		width: 320px;
+		padding: 16px 16px 18px;
+	}
+	.te-quickchord h3 {
+		margin: 0;
+		font-size: 15px;
+		font-weight: 750;
+		letter-spacing: -0.01em;
+	}
+	.te-quickchord .te-irow {
+		flex-wrap: nowrap;
+	}
+	.te-quickchord .te-irow .csel {
+		flex: 1;
+		min-width: 0;
+	}
+	.te-quickchord .te-irow .csel-field {
+		align-self: stretch;
+	}
+	.te-quickchord .te-irow .csel-input {
+		flex: 1;
+		width: auto;
+		min-width: 0;
+	}
+	.te-quickchord .te-irow .csel-list {
+		width: 100%;
+		margin-top: 8px;
+	}
+	.te-quickchord .te-irow > .te-chip {
+		height: 26px;
+	}
+	.te-quickchord .te-why {
+		line-height: 1.5;
+	}
+	.te-quickchord .te-chordbox {
+		gap: 16px;
+		padding: 12px 16px 12px 10px;
+	}
+	.te-quickchord .te-chips {
+		gap: 8px;
+	}
+	.te-mb-trip {
+		height: 12px;
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 8.5px;
+		line-height: 12px;
+		text-align: center;
+	}
+	.te-mb-trip[data-role] {
+		border-top: 1px solid var(--gp-ink-mute);
+	}
+	.te-mb-trip[data-role="start"] {
+		border-left: 1px solid var(--gp-ink-mute);
+	}
+	.te-mb-trip[data-role="end"] {
+		border-right: 1px solid var(--gp-ink-mute);
+	}
+	.te-mb-dur {
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 9.5px;
+		line-height: 1;
+		text-align: center;
+	}
+	.te-mb-colsel-row {
+		display: flex;
+		justify-content: center;
+		padding-top: 3px;
+	}
+	.te-mb-colsel {
+		width: 14px;
+		height: 14px;
+		border-radius: 4px;
+		box-shadow: inset 0 0 0 1.5px var(--gp-edge);
+		cursor: pointer;
+	}
+	.te-mb-colsel:hover {
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+	}
+	.te-mb-colsel[aria-pressed="true"] {
+		background: var(--gp-m-500);
+		box-shadow: none;
+	}
+	.te-mb-count {
+		padding-top: 3px;
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-num);
+		font-size: 10px;
+		font-weight: 650;
+		line-height: 1;
+		text-align: center;
+	}
+	.te-mb-count[data-beat] {
+		color: var(--gp-ink-3);
+		font-weight: 780;
+	}
+	.te-mb-hit {
+		margin-right: 1px;
+		color: var(--gp-m-700);
+	}
+	/* The footer: one-value fills, the repeat barlines and their count, the pick sequence. */
+	.te-mb-foot {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding-top: 8px;
+		border-top: 1px solid var(--gp-line);
+	}
+	.te-mb-fill {
+		display: inline-grid;
+		grid-auto-flow: column;
+		place-items: center;
+		width: 30px;
+		height: 28px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink-3);
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+		font-size: 12px;
+		font-weight: 750;
+		cursor: pointer;
+	}
+	.te-mb-fill svg {
+		width: 18px;
+		height: 18px;
+	}
+	.te-mb-fill sup {
+		margin-left: -2px;
+		font-size: 8px;
+	}
+	.te-mb-fill:hover {
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	.te-mb-fill[aria-pressed="true"] {
+		background: var(--gp-m-100);
+		box-shadow: inset 0 0 0 1.5px var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+	.te-mb-times {
+		display: inline-flex;
+		align-items: center;
+		color: var(--gp-ink-2);
+		font-size: 12px;
+		font-weight: 750;
+	}
+	.te-mb-times[data-off] {
+		visibility: hidden;
+	}
+	.te-mb-foot .te-irow {
+		margin: 0;
+	}
+	.te-mb-add {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		min-height: 160px;
+		border: 1.5px dashed var(--gp-edge);
+		border-radius: var(--gp-r-l);
+		color: var(--gp-ink-3);
+		font-size: 13.5px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.te-mb-add svg {
+		width: 16px;
+		height: 16px;
+	}
+	.te-mb-add:hover {
+		border-color: var(--gp-m-500);
+		color: var(--gp-m-700);
+	}
+
+	/* ── Status line ────────────────────────────────────────────────────── */
+	.te-status {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 12px;
+		height: 44px;
+		padding: 0 18px;
+		background: var(--gp-card);
+		box-shadow: 0 -1px 0 var(--gp-line);
+		white-space: nowrap;
+	}
+	.te-status-pos {
+		font-size: 13px;
+		font-weight: 750;
+	}
+	.te-status-note {
+		min-width: 0;
+		overflow: hidden;
+		color: var(--gp-ink-2);
+		font-size: 13px;
+		font-weight: 600;
+		text-overflow: ellipsis;
+	}
+	.te-status-note[data-pending] {
+		color: var(--gp-m-700);
+	}
+	.te-play {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+		background: var(--gp-m-500);
+		box-shadow: var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-m-sh);
+		color: var(--gp-m-on);
+		cursor: pointer;
+	}
+	.te-play svg {
+		width: 15px;
+		height: 15px;
+		fill: currentColor;
+	}
+	.te-play:disabled {
+		background: var(--gp-well);
+		box-shadow: none;
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+
+	/* ── Fretboard dock (#359) ──────────────────────────────────────────── */
+	/* The neck is a neutral pressable surface; written notes are Tab module objects,
+	   the shape's frets faint hints. 26px rows on a desktop, 30 on a tablet, 36 on a
+	   phone (five frets a page there). */
+	.te-dock {
+		--te-row: 26px;
+		--te-open: 40px;
+		flex: none;
+		padding: 4px 16px 12px;
+		background: var(--gp-card);
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+	.te-dock:not([data-open]) {
+		padding-bottom: 4px;
+	}
+	.te-dock-head {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		height: 44px;
+		white-space: nowrap;
+	}
+	.te-dock-title {
+		font-size: 14px;
+		font-weight: 750;
+	}
+	.te-dock-hint {
+		min-width: 0;
+		overflow: hidden;
+		color: var(--gp-ink-mute);
+		font-size: 12px;
+		font-weight: 600;
+		text-overflow: ellipsis;
+	}
+	.te-dock-fold svg {
+		transition: transform var(--gp-d-state) var(--gp-ease-state);
+	}
+	.te-dock:not([data-open]) .te-dock-fold svg {
+		transform: rotate(180deg);
+	}
+	.te-pager {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.te-pdots {
+		display: flex;
+		gap: 4px;
+	}
+	.te-pdots i {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--gp-edge);
+	}
+	.te-pdots i[data-on] {
+		background: var(--gp-m-500);
+	}
+	.te-neck {
+		display: flex;
+		flex-direction: column;
+		padding: 2px 8px 2px 0;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-face);
+		box-shadow: var(--gp-ring-n), var(--gp-o-btn) var(--gp-o-btn) 0 0 var(--gp-sh-n);
+		touch-action: pan-y;
+	}
+	.te-frow,
+	.te-inl,
+	.te-nrow {
+		display: flex;
+	}
+	.te-frow {
+		height: 16px;
+	}
+	.te-inl {
+		height: 12px;
+	}
+	.te-nrow {
+		height: var(--te-row);
+	}
+	.te-sname {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 30px;
+		color: var(--gp-ink-mute);
+		font-size: 11.5px;
+		font-weight: 750;
+	}
+	.te-nrow[data-on] .te-sname {
+		color: var(--gp-m-700);
+	}
+	.te-fn,
+	.te-il,
+	.te-fc {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+	.te-fn[data-open],
+	.te-il[data-open],
+	.te-fc[data-open] {
+		flex: 0 0 var(--te-open);
+	}
+	.te-fn {
+		color: var(--gp-ink-mute);
+		font-size: 10px;
+		font-weight: 700;
+		line-height: 16px;
+		text-align: center;
+	}
+	.te-il {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+	}
+	.te-il i {
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+		background: var(--gp-edge);
+	}
+	/* A fret: the string runs through it, the fret wire is its right edge. */
+	.te-fc {
+		position: relative;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-right: 1.5px solid var(--gp-edge);
+		background: linear-gradient(var(--gp-ink-3), var(--gp-ink-3)) center / 100% 1px no-repeat;
+		cursor: pointer;
+	}
+	.te-fc[data-open] {
+		border-right: 4px solid var(--gp-ink-2);
+		background-image: linear-gradient(var(--gp-ink-mute), var(--gp-ink-mute));
+	}
+	.te-nrow[data-on] .te-fc {
+		background-color: color-mix(in oklab, var(--gp-m-100) 45%, transparent);
+	}
+	.te-fc:hover {
+		background-color: var(--gp-well);
+	}
+	.te-fc:focus-visible {
+		z-index: 1;
+		outline: none;
+	}
+	.te-fc span {
+		display: grid;
+		place-items: center;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 4px;
+		box-sizing: border-box;
+		border-radius: var(--gp-r-pill);
+		font-family: var(--gp-f-num);
+		font-size: 11px;
+		font-weight: 700;
+	}
+	.te-fc[data-note] span {
+		background: var(--gp-m-500);
+		box-shadow: var(--gp-o-chip) var(--gp-o-chip) 0 0 var(--gp-m-sh);
+		color: var(--gp-m-on);
+	}
+	.te-fc[data-hint] span {
+		background: var(--te-pick);
+		color: var(--gp-m-700);
+		outline: 1.5px dashed var(--te-hint-edge);
+		outline-offset: -1.5px;
+	}
+	.te-fc span[data-faint] {
+		background: var(--gp-face);
+		color: var(--gp-ink-mute);
+		font-family: var(--gp-f-body);
+		font-size: 10px;
+		font-weight: 650;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.te-fc[data-note] span {
+			animation: te-land var(--gp-d-pop) var(--gp-spring-pop, ease-out);
+		}
+	}
+	@keyframes te-land {
+		from {
+			transform: scale(0.6);
+		}
+	}
+
+	/* ── Inspector (≥ 960px beside the tab) ─────────────────────────────── */
+	.te-insp {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		width: var(--gp-inspector);
+		min-height: 0;
+		overflow-y: auto;
+		padding: 6px 16px 28px;
+		box-shadow: -1px 0 0 var(--gp-line);
+	}
+
+	.te-insp-in {
+		display: flex;
+		flex-direction: column;
+	}
+	.te-grp {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 14px 0 16px;
+		border-bottom: 1px solid var(--gp-line);
+	}
+	.te-grp:last-child {
+		border-bottom: 0;
+	}
+	.te-grp h2 {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		margin: 0;
+		font-size: 15px;
+		font-weight: 780;
+	}
+	.te-grp h3 {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 4px 0 0;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 700;
+	}
+	.te-irow {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.te-rl {
+		flex: none;
+		width: 48px;
+		font-size: 13px;
+		font-weight: 650;
+	}
+	.te-irow > .gp-seg {
+		flex: 1;
+	}
+	/* The chord search on Candy at the old editor's size: an 11px field the width of a
+	   chord name, its matches in flow under it (the inspector and the popover scroll). */
+	.te-irow:has(.csel) {
+		align-items: flex-start;
+	}
+	.te-irow .csel {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	.te-irow .csel-field {
+		height: 26px;
+		gap: 5px;
+		padding: 0 3px 0 8px;
+		border-radius: var(--gp-r-s);
+	}
+	.te-irow .csel-icon {
+		width: 11px;
+		height: 11px;
+	}
+	.te-irow .csel-input {
+		width: 96px;
+		font: 650 11px / 1 var(--gp-f-body);
+		letter-spacing: 0;
+	}
+	.te-irow .csel-input::placeholder {
+		font-size: 11px;
+		font-weight: 400;
+	}
+	.te-irow .csel-clear {
+		width: 18px;
+		height: 18px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-irow .csel-clear svg {
+		width: 10px;
+		height: 10px;
+	}
+	.te-irow .csel-list {
+		width: 236px;
+		max-height: 236px;
+		margin-top: 4px;
+		padding: 4px;
+		border-radius: var(--gp-r-s);
+	}
+	.te-irow .csel-opt {
+		min-height: 28px;
+		padding: 0 8px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-irow .csel-name {
+		font-size: 11px;
+		font-weight: 650;
+	}
+	.te-irow .csel-cat {
+		font-size: 9px;
+	}
+	.te-irow .csel-note {
+		padding: 8px;
+		font-size: 10px;
+	}
+	.te-irow .csel-create {
+		font-size: 11px;
+	}
+	.te-irow .csel-sec {
+		padding: 6px 6px 4px;
+		font-size: 9px;
+	}
+	.te-irow .csel-chips {
+		padding: 0 4px 6px;
+	}
+	.te-irow .csel-chip {
+		height: 22px;
+		padding: 0 8px;
+		font-size: 11px;
+	}
+	.te-irow .csel-row {
+		padding-left: 4px;
+		border-radius: var(--gp-r-xs);
+	}
+	.te-irow .csel-row .csel-opt {
+		min-height: 38px;
+		padding-left: 4px;
+	}
+	.te-irow .csel-play {
+		width: 20px;
+		height: 20px;
+	}
+	.te-irow .csel-play svg {
+		width: 8px;
+		height: 8px;
+	}
+	.te-irow .csel-shape {
+		width: 40px;
+	}
+	.te-indent {
+		padding-left: 56px;
+	}
+	.te-stp {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.te-stp output {
+		min-width: 28px;
+		font-size: 15px;
+		font-weight: 780;
+		text-align: center;
+	}
+	.te-why {
+		margin: 0;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		line-height: 1.4;
+	}
+	.te-why:empty {
+		display: none;
+	}
+	.te-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.te-chip:disabled {
+		background: transparent;
+		box-shadow: inset 0 0 0 1px var(--gp-line);
+		color: var(--gp-ink-mute);
+		cursor: default;
+	}
+	.te-chip[data-bad] {
+		color: var(--gp-bad);
+	}
+	.te-chip kbd {
+		margin-left: 5px;
+		padding: 0 4px;
+		border-radius: 4px;
+		background: var(--gp-well);
+		color: var(--gp-ink-3);
+		font-family: inherit;
+		font-size: 10px;
+	}
+	.te-chip[aria-pressed="true"] kbd {
+		background: rgba(255, 255, 255, 0.22);
+		color: inherit;
+	}
+	.te-ib2,
+	.te-ib3 {
+		display: grid;
+		gap: 6px;
+	}
+	.te-ib2 {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.te-ib3 {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.te-fillnote {
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 650;
+	}
+	.te-fillnote[data-kind="short"] {
+		color: var(--gp-warn);
+	}
+	.te-fillnote[data-kind="over"] {
+		color: var(--gp-bad);
+	}
+	.te-chip-ic {
+		width: 13px;
+		height: 13px;
+		margin-right: 4px;
+		vertical-align: -2px;
+	}
+	/* The chord held here: its diagram on a well, which of its shapes beside it with
+	   the frets that shape plays. */
+	.te-chordbox {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 10px 8px 6px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-well);
+	}
+	/* The chord page's diagram (the root square, in the module's colour), at a fixed width. */
+	.te-chordshape {
+		display: block;
+		flex: none;
+		width: 112px;
+	}
+	.te-chordshape svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	.te-chordside {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		min-width: 0;
+	}
+	/* Name, shape and frets start on one left edge; the steppers trail the count,
+	   inside the well. */
+	.te-chordname {
+		font-size: 20px;
+		font-weight: 800;
+		line-height: 1.1;
+		color: var(--gp-ink);
+	}
+	.te-chordstep {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--gp-ink-2);
+	}
+	/* Fixed, so the arrows stay put from "1 of 4" to "12 of 12". */
+	.te-chordstep .pb-num {
+		min-width: 4.5em;
+	}
+	.te-chordstep .pb-icon {
+		width: 26px;
+		height: 26px;
+	}
+	.te-chordstep .pb-icon svg {
+		width: 16px;
+		height: 16px;
+	}
+	/* A hover wash would be the well's own colour: the arrow darkens instead. */
+	.te-chordstep .pb-icon:not(:disabled):hover {
+		background: transparent;
+		color: var(--gp-ink);
+	}
+	.te-chordfrets {
+		font-size: 11px;
+		letter-spacing: 0.04em;
+		color: var(--gp-ink-3);
+	}
+	.te-nowrap {
+		flex-wrap: nowrap;
+	}
+	.te-mono {
+		font-family: var(--gp-f-num);
+	}
+	.te-notes {
+		margin: 0;
+		padding-left: 16px;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		line-height: 1.4;
+	}
+	.te-notes[data-kind="error"] {
+		color: var(--gp-bad);
+		font-weight: 650;
+	}
+	.te-sheet-tools {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	/* ── Source page (a book's draft) ───────────────────────────────────── */
+	.te-src {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		width: 340px;
+		gap: 10px;
+		min-height: 0;
+		padding: 14px 16px;
+		overflow: hidden;
+		box-shadow: 1px 0 0 var(--gp-line);
+	}
+	.te-src-head {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 14px;
+		font-weight: 750;
+	}
+	.te-src-img {
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+
+	/* ── Settings sheet ─────────────────────────────────────────────────── */
+	.te-fields {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.te-fld {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.te-fld-head {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.te-ask {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 10px 12px;
+		border-radius: var(--gp-r-m);
+		background: color-mix(in oklab, var(--gp-warn) 12%, var(--gp-card));
+		font-size: 12.5px;
+		line-height: 1.4;
+	}
+	.te-ask-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.te-desc {
+		min-height: 72px;
+		padding: 8px 12px;
+		resize: none;
+		line-height: 1.4;
+	}
+
+	/* ── The leave dialog ───────────────────────────────────────────────── */
+	.te-leave p {
+		margin: 0;
+		color: var(--gp-ink-2);
+		font-size: 14px;
+		line-height: 1.45;
+	}
+	.te-leave-row {
+		display: flex;
+		justify-content: flex-end;
+		gap: 8px;
+	}
+
+	.te-phone-only {
+		display: none;
+	}
+
+	/* Below 1024px the page folds out of the notice instead (`.te-srcfold`). */
+	.te-srcfold-btn {
+		display: none;
+	}
+	.te-srcfold {
+		max-height: 40vh;
+		overflow: auto;
+		border-radius: var(--gp-r-s);
+		background: var(--gp-card);
+	}
+	@container te (max-width: 1023px) {
+		.te-src {
+			display: none;
+		}
+		.te-srcfold-btn {
+			display: inline-flex;
+		}
+	}
+	@container te (max-width: 1199px) {
+		.te-dock {
+			--te-row: 30px;
+		}
+	}
+	@container te (max-width: 959px) {
+		.te-insp {
+			display: none;
+		}
+		.te-stage {
+			--te-stage-top: 16px;
+			padding: var(--te-stage-top) 24px 24px;
+		}
+	}
+	@container te (max-width: 719px) {
+		.te-mid-up {
+			display: none;
+		}
+		.te-phone-only {
+			display: inline-flex;
+		}
+		.te-stage {
+			--te-stage-top: 10px;
+			padding: var(--te-stage-top) 10px 16px;
+		}
+		.te-stage-in {
+			--te-stack-gap: 10px;
+			--te-bleed: 10px;
+		}
+		.te-titlerow {
+			column-gap: 6px;
+			padding: 0 2px;
+		}
+		.te-tool {
+			gap: 2px;
+			padding: 4px;
+			overflow-x: auto;
+		}
+		.te-seg button {
+			padding: 0 3px;
+		}
+		.te-seg button svg {
+			width: 18px;
+			height: 18px;
+		}
+		.te-name {
+			font-size: 20px;
+		}
+		.te-meta {
+			height: 18px;
+		}
+		.te-status {
+			gap: 8px;
+			padding: 0 10px;
+		}
+		.te-dock {
+			--te-row: 36px;
+			padding: 2px 8px 10px;
+		}
+		.te-dock-head {
+			gap: 8px;
+		}
+		.te-fc span {
+			min-width: 24px;
+			height: 24px;
+			font-size: 12.5px;
+		}
+	}
+}

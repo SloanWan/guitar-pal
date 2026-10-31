@@ -1,60 +1,17 @@
 import { useState, useEffect } from "react";
-import type { Bar, ChordProgression } from "@/lib/strumPatterns";
-import { validateBars, normalizeBars, normalizeBpm } from "@/lib/strumBars";
-import { normalizeCapo, normalizeProgressionSync } from "@/lib/strumProgressions";
+import type { ChordProgression } from "@/lib/strumPatterns";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
-import { progressionColumns, STRUM_PROGRESSIONS_STORAGE_KEY } from "@/lib/strumStorage";
+import {
+	migrateGuestStrumStorage,
+	progressionColumns,
+	progressionFromRow,
+	type ProgressionRow,
+	readStoredProgressions,
+	STRUM_PROGRESSIONS_STORAGE_KEY,
+} from "@/lib/strumStorage";
 
 const STORAGE_KEY = STRUM_PROGRESSIONS_STORAGE_KEY;
-
-/** A Supabase row from `user_pattern_progressions`; the table is not code-generated. */
-interface ProgressionRow {
-	id: string;
-	pattern_id: string;
-	bars: unknown;
-	order_index: number | null;
-	name: string | null;
-	bpm: number | null;
-	capo: number | null;
-	/** All absent on rows written before the reconcile prompt existed. */
-	synced_beats?: unknown;
-	follows_pattern?: unknown;
-	sync_notice_dismissed?: unknown;
-}
-
-/** Drop rows whose bars no longer validate — a bad row must not break the list. */
-function rowToProgression(row: ProgressionRow): ChordProgression | null {
-	if (!validateBars(row.bars).ok) return null;
-	return {
-		id: row.id,
-		patternId: row.pattern_id,
-		bars: normalizeBars(row.bars as Bar[]),
-		orderIndex: row.order_index ?? 0,
-		name: row.name ?? "",
-		// Null means "no tempo of its own" — the pattern's tempo is used instead.
-		bpm: row.bpm === null ? undefined : normalizeBpm(row.bpm),
-		capo: normalizeCapo(row.capo),
-		...normalizeProgressionSync({
-			syncedBeats: row.synced_beats,
-			followsPattern: row.follows_pattern,
-			syncNoticeDismissed: row.sync_notice_dismissed,
-		}),
-	};
-}
-
-function readStored(): ChordProgression[] {
-	try {
-		const saved = localStorage.getItem(STORAGE_KEY);
-		if (!saved) return [];
-		return (JSON.parse(saved) as ChordProgression[])
-			.filter((p) => validateBars(p.bars).ok)
-			// Local storage is as untrusted as the database; the same guard applies.
-			.map((p) => ({ ...p, bars: normalizeBars(p.bars), ...normalizeProgressionSync(p) }));
-	} catch {
-		return [];
-	}
-}
 
 function writeStored(progressions: ChordProgression[]) {
 	localStorage.setItem(STORAGE_KEY, JSON.stringify(progressions));
@@ -74,25 +31,28 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 
 	useEffect(() => {
 		if (loading || user) return;
-		const local = readStored();
+		migrateGuestStrumStorage();
+		const local = readStoredProgressions();
 		queueMicrotask(() => {
 			setProgressions(local);
 			setProgressionsLoading(false);
 		});
 	}, [user, loading]);
 
+	const userId = user?.id;
 	useEffect(() => {
-		if (!user) return;
-		const currentUser = user;
+		if (!userId) return;
+		const currentUserId = userId;
 
 		async function mergeAndReload() {
 			const supabase = createClient();
-			const local = readStored();
+			migrateGuestStrumStorage();
+			const local = readStoredProgressions();
 			if (local.length > 0) {
 				try {
 					const { error } = await supabase
 						.from("user_pattern_progressions")
-						.upsert(local.map((p) => progressionColumns(p, currentUser.id)));
+						.upsert(local.map((p) => progressionColumns(p, currentUserId)));
 					if (error) throw new Error(error.message);
 					localStorage.removeItem(STORAGE_KEY);
 				} catch (e) {
@@ -105,20 +65,21 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 				// select("*"), as useStrumPatterns does: an explicit column list is a
 				// second place to remember a new column, and forgetting it is silent —
 				// the field writes fine and simply never comes back, which is how the
-				// reconcile fields were dead on arrival until this was noticed.
+				// reconcile fields of an earlier model were dead on arrival until
+				// this was noticed.
 				.select("*")
-				.eq("user_id", currentUser.id);
+				.eq("user_id", currentUserId);
 			if (error) console.error("[useChordProgressions] load failed:", error.message);
 			setProgressions(
 				(data ?? [])
-					.map((row) => rowToProgression(row as ProgressionRow))
+					.map((row) => progressionFromRow(row as ProgressionRow))
 					.filter((p): p is ChordProgression => p !== null),
 			);
 			setProgressionsLoading(false);
 		}
 
 		mergeAndReload();
-	}, [user?.id]);
+	}, [userId]);
 
 	function persist(next: ChordProgression[]) {
 		setProgressions(next);

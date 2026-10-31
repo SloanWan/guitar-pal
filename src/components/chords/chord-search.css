@@ -1,0 +1,112 @@
+/* The ⌘K chord palette (ChordSearchDialog, ChordSearchResults), on the chords module.
+   The dialog hangs from a fixed line near the top of the window, so typing only ever
+   moves its bottom edge. */
+@layer components {
+	.ck-head {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		height: 60px;
+		padding: 0 12px 0 18px;
+		box-shadow: inset 0 -1px 0 var(--gp-line);
+	}
+	.ck-glass {
+		flex: none;
+		width: 20px;
+		height: 20px;
+		color: var(--gp-ink-3);
+	}
+	.ck-input {
+		flex: 1;
+		min-width: 0;
+		height: 100%;
+		background: transparent;
+		color: var(--gp-ink);
+		font-size: 16px;
+		font-weight: 550;
+		outline: none;
+	}
+	.ck-input::placeholder {
+		color: var(--gp-ink-3);
+		font-weight: 450;
+	}
+	.ck-list {
+		padding: 6px 6px 8px;
+		scroll-padding-block: 6px;
+	}
+	.ck-foot {
+		display: flex;
+		align-items: center;
+		gap: 18px;
+		height: 40px;
+		padding: 0 18px;
+		box-shadow: inset 0 1px 0 var(--gp-line);
+		color: var(--gp-ink-3);
+		font-size: 12px;
+	}
+	.ck-foot span {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	/* A key, or a query typed as an example: a small well, figures that line up. */
+	.ck-kbd {
+		display: inline-grid;
+		place-items: center;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 5px;
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-well);
+		color: var(--gp-ink-2);
+		font: 600 11.5px/1 var(--gp-f-body);
+		font-variant-numeric: tabular-nums;
+	}
+	.ck-example {
+		height: 22px;
+		padding: 0 7px;
+		font-size: 12.5px;
+		letter-spacing: 0.06em;
+	}
+
+	.ck-name {
+		color: var(--gp-ink);
+		font-size: 15px;
+		font-weight: 650;
+	}
+	[data-selected="true"] .ck-name {
+		color: var(--gp-m-700);
+	}
+	.ck-meta {
+		flex: none;
+		margin-left: auto;
+		color: var(--gp-ink-3);
+		font-size: 12.5px;
+	}
+	.ck-frets {
+		color: var(--gp-ink-3);
+		font-size: 12.5px;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.1em;
+	}
+	.ck-mine {
+		flex: none;
+		padding: 1px 6px;
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-m-100);
+		color: var(--gp-m-700);
+		font-size: 11px;
+		font-weight: 700;
+	}
+	/* The row's own edit icon: smaller than a title row's, the same hover. */
+	.ck-list .pb-icon {
+		width: 28px;
+		height: 28px;
+		margin: -4px 0;
+	}
+	.ck-list .pb-icon svg {
+		width: 15px;
+		height: 15px;
+	}
+}

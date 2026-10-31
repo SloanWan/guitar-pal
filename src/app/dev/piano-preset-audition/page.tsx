@@ -17,10 +17,10 @@ import { GUITAR_RANGE } from "@/components/fretboard/FretboardExplorer";
 import {
 	_decodeZone,
 	findZoneForMidi,
-	parsePresetFromJs,
 	SOURCE_STOP_BUFFER_S,
 	type WafPreset,
 } from "@/components/strum/useGuitarSampleLoader";
+import { parsePresetFromJs } from "@/app/dev/_lib/parsePresetFromJs";
 import { PIANO_61, pitchClassOf } from "@/lib/piano/keys";
 
 const WAF_BASE_URL = "https://surikov.github.io/webaudiofontdata/sound/";

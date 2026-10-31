@@ -24,7 +24,7 @@ interface SlotAnchor extends SlotTarget {
 }
 
 const CHIP =
-	"absolute top-1 -translate-x-1/2 select-none whitespace-nowrap border px-1.5 py-0.5 font-mono text-[11px] tracking-[0.04em] focus-visible:outline-2 focus-visible:outline-denim-accent focus-visible:outline-offset-1";
+	"gp-focus absolute top-1 -translate-x-1/2 select-none whitespace-nowrap rounded-gp-xs px-2 py-0.5 text-[12px] font-bold";
 
 /**
  * Read every drawn note's slot and x from the stave's tags, in slot order.
@@ -116,14 +116,14 @@ export default function ChordDragStrip({
 
 	return (
 		<div
-			className="relative h-8 border-t border-line"
+			className="relative h-8"
 			aria-label={pick(lang, "Chord marks — drag one to another slot", "和弦标记——拖到别的格")}
 		>
 			{/* While a chip is in hand, its landing slot is marked. */}
 			{drag && (
 				<span
 					aria-hidden="true"
-					className={`absolute top-0 h-full w-px ${taken(drag.over) && !same(drag.over, drag.from) ? "bg-destructive" : "bg-denim"}`}
+					className={`absolute top-0 h-full w-px ${taken(drag.over) && !same(drag.over, drag.from) ? "bg-gp-bad" : "bg-gp-m-500"}`}
 					style={{ left: anchors.find((a) => same(a, drag.over))?.x ?? 0 }}
 				/>
 			)}
@@ -143,8 +143,8 @@ export default function ChordDragStrip({
 						style={{ left: x }}
 						className={`${CHIP} cursor-grab touch-none ${
 							inHand
-								? "z-10 cursor-grabbing border-denim bg-denim text-on-denim"
-								: "border-denim/60 bg-surface text-denim-accent transition-[left] duration-150 ease-out hover:border-denim"
+								? "z-10 cursor-grabbing bg-gp-m-500 text-gp-m-on"
+								: "bg-gp-m-100 text-gp-m-700 transition-[left] duration-150 ease-out"
 						}`}
 						onPointerDown={(e) => {
 							// Capture keeps the moves coming once the pointer leaves the

@@ -338,3 +338,187 @@ Findings and what changed:
 Still open: a tab page **without** a jianpu row (Western books), and one
 with hammer-ons, slides or chords stacked in a slot — none on hand. The
 technique fields of `ImportedTabDraft` stay unexercised until one turns up.
+
+## 7. Knowledge points carry their pages (#245)
+
+Every note of the sample chapter (§6's p204–207, parsed 2026-09-19) came
+back with `pages: []`, though the notes call already saw the text with
+`[Page N]` markers and the schema had a `pages` field. Two things let the
+model skip it: the field had a default, so the SDK's strict schema did not
+list it under `required`; and the prompt asked for pages "as labelled in
+the text", which on a scan is as likely to mean the book's printed
+`204`–`207` — then dropped by the in-chapter filter — as the marker's
+`1`–`4`. Fixed by making `pages` required and telling the prompt what a
+page reference is (the marker's N, never a printed number).
+
+`python -m app.graph … --pages 1-4 --ocr --notes-only` runs the notes
+call alone, 2026-09-21, opus-5 medium:
+
+| run | in / out tokens | cost | notes | with pages | on the page their text sits on |
+|---|---|---|---|---|---|
+| before (2026-09-19 parse, full) | (part of $0.81) | — | 9 | 0 | — |
+| after, notes only | 3860 / 1223 | **$0.0499** | 11 | **11** | **11** (checked by hand against the OCR text) |
+
+Read-outs:
+
+- Page attribution is right on every note: the five method tips and the two
+  scales on p1, the tab scale on p2, the grouped string exercises spanning
+  p2–3, the three combination exercises and the bass exercise on p3–4, each
+  with the page whose OCR text holds its sentences. Two notes span two
+  pages and say so, first page first.
+- Count moved 9 → 11 (§5 already noted the count varies run to run; the
+  content is the same tips with the exercises split finer).
+- The out-of-chapter filter in `note_pages` now logs what the model cited
+  when it drops everything, so a book that makes the model reach for its
+  printed numbering shows up in the parse log rather than silently as `[]`.
+- The sample export (`materials/samples/sanyuetong-dense-tab/parse.json`)
+  took these notes in place of the empty-paged ones (`notes_rerun` records
+  the run); the drafts and chunks are still the 2026-09-19 parse's. The
+  fixture was rebuilt with `scripts/build-book-sample.mjs`.
+
+## 8. Chapter Q&A: what each provider can actually read (#203)
+
+The first build of the ask graph answered every question with "I can't see
+this chapter". The cause was a rule that looked reasonable and was wrong:
+`cite` treated *an answer with no citations* as *not from the book*, and
+sent it to a general step that is deliberately never shown the chapter.
+
+Probed by hand, 2026-09-23, same prompt, one variable at a time:
+
+| document sent | provider | citations back | answer |
+|---|---|---|---|
+| 三月通 p1–4 as PDF (**scan**, no text layer) | claude-opus-5 | **0** | correct and detailed — read by vision |
+| SongWriting p3–5 as PDF (typeset, text layer) | claude-opus-5 | **5** × `page_location` | correct, pages map correctly |
+| two text `document` blocks | deepseek-flash | **0** | "提供的文档无法读取" — the blocks are not read at all |
+| one scanned page as an `image` block | deepseek-flash | n/a | correct and detailed |
+| `messages.parse(output_format=…)` | deepseek-flash | n/a | ignores the schema, answers in prose (SDK raises) |
+
+Read-outs:
+
+- **PDF citations come from the PDF's text layer.** A scan has none, so no
+  answer about a scanned chapter can ever carry one — on any provider. Since
+  scanned method books are the case this whole feature exists for, the
+  citation gate failed 100% of the time on the only book on hand.
+- **An uncited answer says nothing about coverage.** Coverage is now an
+  explicit signal from the answer step (`NOT_IN_CHAPTER`), and an answer
+  without citations is still the chapter's.
+- **Pages, when the API cannot cite, come from what was sent.** A scanned or
+  DeepSeek chapter goes over as `[Page N]` blocks and the reply ends with a
+  `PAGES:` line; the app keeps only numbers it actually sent (a reply naming
+  p.999 gets none of it) and falls back to every page sent. The model picks
+  among identifiers; it never supplies one.
+- **deepseek-flash needs `effort: low` and room to think.** At its default
+  (`high`) with 300 output tokens it spent the entire budget reasoning and
+  returned empty text — which looks exactly like a broken endpoint. Caps are
+  now 1024 (intent) and 2048 (answer); a cap is not a charge.
+
+Live, the three questions that had failed, through the real graph on the
+scanned chapter (4 pages of OCR, `long_context`):
+
+| question | anthropic (opus-5) | deepseek-flash |
+|---|---|---|
+| "what does this chapter say about the left hand?" | `book`, p1/3/4, 1201 tok | `book`, p1/4, 3564 tok |
+| "这一章哪一部分涉及了音阶练习？" | `book`, p1–4, 1194 tok | `book`, p1/2/4, 711 tok |
+| "什么是 Dorian 调式？" | `general`, no pages, 1740 tok | `general`, no pages, 1028 tok |
+| total | 4135 tok | 5303 tok |
+
+Both answer the two chapter questions correctly from the OCR text and route
+the theory question out of the book. DeepSeek's tokens include its thinking;
+its second question is cheap because the chapter prefix was a cache read.
+**DeepSeek is not in `PRICE_PER_MTOK`**, so a parse or ask run on it records
+tokens with `$0` — the figure is not a claim that it was free.
+
+## 9. Chapter Q&A: Claude vs DeepSeek on the sample chapter (#203 C3)
+
+`python -m evals.ask.sample` — nine questions on the exported 三月通 chapter
+(4 scanned pages, OCR text, `long_context`), 2026-09-23, one run each. Gold
+pages are §7's hand-checked note attributions; the injection line is the one
+hand-made part (no page of the real book addresses the model). The judge is
+`claude-sonnet-5` for both sides, so the grade is about the answer and not
+the grader.
+
+| | claude-opus-5 | deepseek-flash |
+|---|---|---|
+| routing (factual→book, theory→general, off-book→decline) | 7/7 | 7/7 |
+| page recall | 5/5 | 5/5 |
+| faithfulness (judged) | 4/5 | 5/5 |
+| draft lookup | 1/1 | 1/1 |
+| injection resistance | 1/1 | 1/1 |
+| first question (cold) | $0.0291 | $0.0013 |
+| later questions (warm, mean) | $0.0095 | $0.0005 |
+| nine questions | **$0.1047** | **$0.0055** |
+| tokens | 10744 | 9162 |
+| latency p50 | 7.2 s | 3.1 s |
+
+Read-outs:
+
+- **DeepSeek is ~19× cheaper and ~2.3× faster here, and lost nothing.** On
+  a scanned chapter neither provider can use PDF citations, so both run the
+  identical labelled-pages path and the comparison is like for like.
+- **The 4/5 is the judge, not the answer.** Re-running that one question
+  judged it faithful, with the reason spelling out that it was allowing for
+  OCR garbling (`人@@ 弦一人@@弦`, `5 调` for `C调`). One run per question is
+  not enough to separate a grade from noise — #203 says two, and this is why.
+- **Page precision is loose, recall is not.** Both sometimes name every page
+  they were shown (`p[1,2,3,4]` for a question answered on p1). The `PAGES:`
+  line is a filter against pages actually sent, not a relevance ranking; a
+  four-page chapter has little to rank. Worth revisiting on a 40-page one.
+- The dollar figures are the graph's own calls. The judge's calls are extra
+  (~$0.01 per provider) and are not part of what a player's question costs.
+- DeepSeek prices are its peak rates; off-peak halves them again.
+
+## 10. The parse on DeepSeek, and the C3 fixtures it made (#203)
+
+2026-09-25. 《吉他自学三月通》 (the full book: 338 scanned pages, no
+outline, no text layer), first part chapters 1–5 — PDF p10–44, printed
+page + 1 — and *Chord & Songwriting Cheat Sheet* ch 3.1 (9 pages, text
+layer). Parsed with `python -m app.graph --provider deepseek --export`, no
+Claude call anywhere; OCR is `tessdata_fast` chi_sim+eng.
+
+| chapter | pages | notes | drafts | parse $ |
+|---|---|---|---|---|
+| ch1 认识吉他 | 10–16 (7) | 12 | 0 | 0.024 |
+| ch2 演奏知识详解 | 17–28 (12) | 12 | 11 of 18 read (p28) | 0.389 + 0.029 notes |
+| ch3 乐理知识详解 | 29–32 (4) | 11 | 0 | 0.022 |
+| ch4 简谱、六线谱与和弦图 | 33–42 (10) | 12 | 2 | 0.102 |
+| ch5 调式 | 43–44 (2) | 11 | 0 | 0.008 |
+| songwriting 3.1 | 1–9 (9) | 10 | 0 (progression maps: B4) | 0.021 |
+
+What it took:
+
+- **Thinking room.** deepseek-flash spends its reasoning inside
+  `max_tokens`. At the Anthropic caps, classification (4k), the notes call
+  (16k on ch2) and tab reads (16k) ended `max_tokens` with the answer
+  unwritten. `Provider.thinking_tokens` (24k for DeepSeek) now rides on
+  top of every structured call's cap; Anthropic's caps are unchanged.
+- **Streaming.** The ch2 notes call (12 pages of OCR) was cut twice
+  mid-response on a plain request; streamed, it finishes.
+- **Tab reading is slow and costly on DeepSeek.** p28's 24 short
+  finger-combination exercises: 18 segmented, 11 drafts, 7 dropped (4
+  empty readings, 3 unfinished), $0.39 and ~10 min — output tokens are
+  almost all thinking. Not graded against the page; the drafts only feed
+  the draft questions here.
+
+Fixtures (`evals/ask/fixtures/syt-ch1…5.json`, `songwriting.json`): five
+factual questions each, gold pages checked against the page's OCR text
+(a question whose answer OCR lost was rewritten), one general, one
+decline naming a later chapter's topic, a draft request where the parse
+made drafts, and the injection line on one page. Written from the notes,
+not by the owner.
+
+Eval — `evals.ask.sample --providers deepseek --judge deepseek --repeat 2`,
+`long_context` only (the other strategies need the database):
+
+| fixture | routing | recall | faithful | draft | injection | $ total | p50 |
+|---|---|---|---|---|---|---|---|
+| syt-ch1 | 14/14 | 10/10 | 10/10 | — | 2/2 | 0.0106 | 4.1 s |
+| syt-ch2 | 14/14 | 10/10 | 10/10 | 2/2 | 2/2 | 0.0115 | 3.9 s |
+| syt-ch3 | 14/14 | 10/10 | 8/10 | — | 2/2 | 0.0085 | 3.5 s |
+| syt-ch4 | 14/14 | 10/10 | 9/10 | 2/2 | 2/2 | 0.0088 | 3.1 s |
+| syt-ch5 | 14/14 | 10/10 | 9/10 | — | 2/2 | 0.0074 | 2.8 s |
+| songwriting | 14/14 | 10/10 | 9/10 | — | 2/2 | 0.0093 | 3.3 s |
+
+Every faithfulness miss is one run of two on the same question, with the
+right page cited — the judge reading garbled OCR, most likely, not the
+answer. None of these chapters is long: the ~40-page fixture #203 asks for
+is still missing, and it is where `long_context` and `rag` would part.

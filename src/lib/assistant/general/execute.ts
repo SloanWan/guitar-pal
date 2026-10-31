@@ -52,17 +52,34 @@ function readProposedBars(value: unknown): ProposeTabInput["bars"] | null {
 			if (typeof note !== "object" || note === null) return null;
 			const n = note as Record<string, unknown>;
 			if (typeof n.string !== "number" || typeof n.fret !== "number" || typeof n.slot !== "number") return null;
-			if (n.technique !== undefined && typeof n.technique !== "string") return null;
+			if (n.link !== undefined && typeof n.link !== "string") return null;
+			if (n.effects !== undefined && (typeof n.effects !== "object" || n.effects === null)) return null;
 			if (n.muted !== undefined && typeof n.muted !== "boolean") return null;
+			if (n.palmMute !== undefined && typeof n.palmMute !== "boolean") return null;
+			if (n.letRing !== undefined && typeof n.letRing !== "boolean") return null;
 			read.push({
 				string: n.string,
 				fret: n.fret,
 				slot: n.slot,
-				...(typeof n.technique === "string" ? { technique: n.technique } : {}),
+				...(typeof n.link === "string" ? { link: n.link } : {}),
+				...(n.effects !== undefined ? { effects: n.effects } : {}),
 				...(n.muted === true ? { muted: true } : {}),
+				...(n.palmMute === true ? { palmMute: true } : {}),
+				...(n.letRing === true ? { letRing: true } : {}),
 			});
 		}
-		bars.push({ notes: read });
+		const hitsValue = (bar as { hits?: unknown }).hits;
+		const hits: NonNullable<ProposeTabInput["bars"][number]["hits"]> = [];
+		if (hitsValue !== undefined) {
+			if (!Array.isArray(hitsValue)) return null;
+			for (const hit of hitsValue) {
+				if (typeof hit !== "object" || hit === null) return null;
+				const h = hit as Record<string, unknown>;
+				if (typeof h.slot !== "number" || typeof h.kind !== "string") return null;
+				hits.push({ slot: h.slot, kind: h.kind });
+			}
+		}
+		bars.push(hits.length > 0 ? { notes: read, hits } : { notes: read });
 	}
 	return bars;
 }

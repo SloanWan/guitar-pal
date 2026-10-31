@@ -23,6 +23,9 @@ app/
   graph/       the parse as a LangGraph: classify pages, knowledge points, route to extractors
   extract/     the type-specific readers; tab.py (six-line tab + jianpu → fingerpick drafts)
   validate.py  the one draft validator, called on the Next.js side
+  ask/         chapter Q&A (#203): the graph (intent → retrieve → answer | general |
+               draft), the strategies (long_context, lexical, rag), the CJK tokeniser
+               behind lexical search, the per-player limit
 alembic/       migrations for user_books, book_chapters, book_pages, and the parse tables
 docs/          calibration.md — every number behind a rule, from real books
 materials/     gitignored; real textbook excerpts the ingest tests run against
@@ -137,15 +140,17 @@ another user's book is a 404, the same as no book.
 | route | what |
 |---|---|
 | `POST /books` `{title}` | the row and its `storage_path` (`{user_id}/{book_id}.pdf`). The browser then uploads the PDF straight to the `books` bucket at that path with its own session. |
-| `POST /books/{id}/scan` | starts the whole-book pass in the background; 202 with the row, 409 if already scanning. Rescanning a `ready` or `failed` book is allowed and replaces its pages and chapters. |
+| `POST /books/{id}/scan` | starts the whole-book pass in the background; 202 with the row, 409 if already scanning. Rescanning a `ready` or `failed` book is allowed and replaces its pages and chapters — and, right before the new rows land, clears the old chapters' crops and the page images beside the PDF (#246). |
 | `GET /books` | the player's books, newest first |
 | `PATCH /books/{id}` `{title}` | rename |
 | `GET /books/{id}` | the book with `status`, `scanned_pages` / `page_count` for progress, `error`, and its chapters with `exercise_hint_count` |
 | `PUT /books/{id}/chapters` `{chapters: [{title, page_start, page_end}]}` | the player's own ranges: sorted, inside the book, non-overlapping (gaps allowed). `toc_source` becomes `manual`; hint counts are recomputed from the tagged pages. |
 | `DELETE /books/{id}` | the PDF (as the player), the page images and every chapter's crops beside it (#243), and every row under the book |
-| `POST /books/{id}/chapters/{chapter_id}/parse` | starts the chapter parse (#202) in the background; 202, 409 if already parsing, 422 over the 40-page cap. Re-parsing replaces what the chapter had. |
+| `POST /books/{id}/chapters/{chapter_id}/parse` | starts the chapter parse (#202) in the background; 202, 409 if already parsing, 422 over the 40-page cap. Re-parsing replaces what the chapter had, crops included: the chapter's crop folder is emptied before the graph runs (#246). |
 | `GET /books/{id}/chapters/{chapter_id}/parse` | the chapter with its `parse_status`, `parse_error`, `parse_cost` and `parse_warnings`, and once ready its `notes` (knowledge points) and `exercises` (drafts, each with the crop it was read from). Poll this. |
 | `GET /books/{id}/pages/{page}/image` | `{path}` of the page as a JPEG (#240): rendered from the PDF at 150 dpi on the first request and kept in Storage under `<user>/pages/<book>/`, `image_path` on `book_pages`; any page of a scanned book. The PDF just fetched stays in memory for ten minutes so the next page of the same book does not download it again. The browser signs the path like a crop's. |
+| `GET /books/{id}/pages/{page}/text` | `{page, text, text_source}` as the scan read it (#228): what the chapter card's text-tab reader starts from when the parse skipped a page whose tab was in the text layer (`TEXT_TAB_SKIPPED` in `parse_warnings`). |
+| `POST /books/{id}/chapters/{chapter_id}/ask` `{messages}` | ask the open chapter (#203): `{message, source, pages, draft?, model, cost, strategy}`. `source: book` is answered from the chapter with the pages its citations named; `general` is general knowledge, plainly not the book's, or a decline naming chapters that look relevant, and cites nothing. A request for an exercise answers with a draft the parse already made — no vision here. The chapter must be parsed; 40 questions an hour per player; 503 until a strategy is configured. |
 | `PATCH /books/{id}/exercises/{exercise_id}` `{status}` | `proposed` → `taken` when the draft was opened in its editor (or `dismissed`); the card shows what was used |
 
 A scan reads the PDF with the session token from the request that started
@@ -157,6 +162,12 @@ worth of work); others queue behind it while their status already says
 Without `NEXT_PUBLIC_SUPABASE_ANON_KEY` on the service there is no Storage
 client and the scan and delete routes answer 503, like the book routes do
 without a database.
+
+Folders left behind before those sweeps existed — or by a sweep that
+Storage refused — are found by `scripts/sweep-orphan-crops.py` at the repo
+root: it lists a player's `crops/*` and `pages/*` folders, prints the ones
+whose chapter or book is gone from the database, and removes them with
+`--delete`. Its docstring says how to run it.
 
 The whole flow against the real project is `tests/test_live_books.py`,
 opt-in with a session token (its docstring says how). It uploads the typeset
@@ -182,8 +193,58 @@ as two independent readings — the six-line tab and, when the book prints
 one, the jianpu row under it — which the service compares note by note.
 Frets are the tab's; a disagreement is a warning that names both readings.
 The crop it read goes beside the PDF in Storage (`crop_path`). Tab in a
-PDF's text layer is not read (#228). The numbers behind every choice here
+PDF's text layer is not read here: it carries no durations, so the page is
+skipped with a `TEXT_TAB_SKIPPED` warning and the chapter card offers it
+to the player to read by ear — every rhythm the columns allow, played, and
+the one they pick taken to the fingerpick editor (#228). The numbers behind every choice here
 are in `docs/calibration.md` §6.
+
+## Chapter Q&A
+
+`app/ask/graph.py` answers a question about the open chapter and nothing
+else: a small structured call reads the intent, the strategy retrieves,
+and only when retrieval found something usable is the answer written.
+Its pages come off the API's citation blocks where the chapter can be cited,
+or are the pages that were sent (below) — never off the prose. Only an
+answer step that says `NOT_IN_CHAPTER` hands the question to the general
+route, which never sees the chapter: it answers as a teacher would,
+labelled `general`, or declines and names other chapters by title. A request for an exercise is a lookup
+over `book_exercises`.
+
+Which model answers is `BOOK_ASK_PROVIDER`: `anthropic` (default), or
+`deepseek` — DeepSeek-V4.1-Flash over its Anthropic-compatible endpoint,
+`DEEPSEEK_API_KEY`. They differ in ways the graph branches on
+(`app/ask/provider.py`, measured in `docs/calibration.md` §8): DeepSeek reads
+no `document` blocks and ignores `output_format`, so there the chapter goes
+over as labelled `[Page N]` text and the two structured steps ask for JSON in
+the prompt (`app/ask/json_out.py`). It does read images, and reads a scanned
+page well. Its runs are costed at DeepSeek's peak rates, with a cache hit at
+a fiftieth of a miss (`PRICE_PER_MTOK` / `CACHE_FACTORS` in
+`app/ingest/model.py`).
+
+The parse picks its model the same way, `BOOK_PARSE_PROVIDER`
+(`anthropic` by default). On `deepseek` every structured call asks for JSON
+in the prompt and gets `Provider.thinking_tokens` of room on top of its cap;
+`python -m app.graph --provider deepseek` is the same thing by hand
+(`docs/calibration.md` §10).
+
+How the chapter reaches the model is `BOOK_ASK_STRATEGY`:
+
+| strategy | the chapter reaches the model as | pages from |
+|---|---|---|
+| `long_context` (default until the eval says otherwise) | the chapter's pages cut out of the PDF as one cited, cached document — **only** when the provider reads documents and every page has a text layer. Otherwise (every scan, every DeepSeek call) the chapter's own text, `[Page N]` at a time. | `page_location` citations, or the pages that were sent |
+| `lexical` | the top chunks of a Postgres full-text search, one text document each; the tokeniser in `app/ask/lexical.py` splits CJK into bigrams, which `simple` cannot | the cited document's page |
+| `rag` | the nearest chunks by pgvector, same answer step; needs `VOYAGE_API_KEY` (`BOOK_EMBEDDING_MODEL`, `BOOK_EMBEDDING_DIMENSION` must match migration 0007's column). Not exercised live yet. | the cited document's page |
+
+Whether the chapter was covered is never inferred from whether the answer
+carried a citation — a scanned chapter's pages carry none, on any provider.
+The answer step says `NOT_IN_CHAPTER` or it does not, and only that sends a
+question to the general step, which is the one step never shown the chapter.
+
+Chunks parsed before migration 0007 get their search column from
+`scripts/backfill_chunks.py` (`--embed` for vectors). The eval that picks
+the default — three chapters, every strategy, the rule written in #203 —
+is `evals/ask/` (its README says how; never in CI).
 
 ## Database
 
@@ -220,3 +281,12 @@ Why two ports on the same pooler host: 6543 is transaction mode, fine for the se
 Row-level security is not what keeps one user out of another's books here. The service connects as one role for everyone, so it filters by the `user_id` read from a **verified** JWT on every query — that check is the whole model. RLS is still on, with a single policy for `book_service`, and the grants Supabase gives `anon` / `authenticated` on new public tables are revoked, so the browser's PostgREST path sees nothing.
 
 Storage works the other way round: the browser uploads straight to the `books` bucket with the player's own session, and this service reads the file back with the same token the proxy forwards. The bucket's policies compare the path's first folder to `auth.uid()`. No service-role key on the server.
+
+## What leaves the server
+
+Page text and short page excerpts go to the model API for chapter finding
+and classification, page images for reading notation, and — when a chapter
+is asked a question under `long_context` — the chapter's pages as a PDF
+(or, for a scan or a DeepSeek call, the chapter's text). Under `rag`, chunk
+text goes to Voyage for embedding. The PDFs themselves otherwise never leave
+Supabase Storage.

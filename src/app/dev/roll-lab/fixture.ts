@@ -2,8 +2,8 @@ import type { BeatSlot, FingerpickPattern, StringFret, Stroke, Duration } from "
 
 // ── StringFret factories ─────────────────────────────────────────────────────
 // String index order: [e(high), B, G, D, A, E(low)] = [0, 1, 2, 3, 4, 5].
-const S = (): StringFret => ({ fret: null, technique: null, tied: false, muted: false });
-const N = (fret: number): StringFret => ({ fret, technique: null, tied: false, muted: false });
+const S = (): StringFret => ({ fret: null, muted: false });
+const N = (fret: number): StringFret => ({ fret, muted: false });
 
 type Six = [StringFret, StringFret, StringFret, StringFret, StringFret, StringFret];
 

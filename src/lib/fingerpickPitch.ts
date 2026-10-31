@@ -1,5 +1,5 @@
 import { pitchClassRoot } from "@/lib/chordIdentify";
-import type { BeatSlot } from "@/lib/fingerpickTypes";
+import type { BeatSlot, NoteEffects } from "@/lib/fingerpickTypes";
 
 /**
  * The pitch a written fret sounds, and how to write it.
@@ -19,14 +19,33 @@ import type { BeatSlot } from "@/lib/fingerpickTypes";
 export const OPEN_STRING_MIDI: readonly number[] = [64, 59, 55, 50, 45, 40];
 
 /** How a sounding pitch is written under its fret. */
-export type PitchLabelStyle = "name" | "scientific" | "midi" | "jianpu";
+export type PitchLabelStyle = "name" | "scientific" | "solfege" | "jianpu";
 
 export const PITCH_LABEL_STYLES: readonly PitchLabelStyle[] = [
 	"name",
 	"scientific",
-	"midi",
+	"solfege",
 	"jianpu",
 ];
+
+/**
+ * Solfège, fixed-do (C is do whatever the key), do re mi fa so la ti:
+ * the accidental before the syllable as jianpu writes it, no octave.
+ */
+const SOLFEGE: Readonly<Record<string, string>> = {
+	C: "do",
+	"C#": "♯do",
+	D: "re",
+	Eb: "♭mi",
+	E: "mi",
+	F: "fa",
+	"F#": "♯fa",
+	G: "so",
+	Ab: "♭la",
+	A: "la",
+	Bb: "♭ti",
+	B: "ti",
+};
 
 /**
  * Jianpu (numbered notation), fixed-do in C: the degree 1–7, an accidental
@@ -68,17 +87,48 @@ export function soundingMidi(stringIndex: number, fret: number, capo: number): n
 	return OPEN_STRING_MIDI[stringIndex] + capo + fret;
 }
 
+/** The partial a natural harmonic at a fret sounds, in semitones above the open string. */
+const NATURAL_HARMONIC_NODES: Record<number, number> = {
+	12: 12,
+	7: 19,
+	19: 19,
+	5: 24,
+	24: 24,
+	4: 28,
+	9: 28,
+	16: 28,
+	3: 31,
+};
+
+/**
+ * How far above the pitch written at the fret a harmonic sounds — the same
+ * reading TuxGuitar and alphaTab play. A natural harmonic is the OPEN
+ * string's partial: the node at fret 12 sounds the open string an octave up,
+ * fret 7 a twelfth up, fret 5 two octaves up — so relative to the fret's own
+ * pitch the shift is `node − fret` (an unlisted fret rings the octave). An
+ * artificial harmonic is touched `touchFret` above the fretted note and
+ * sounds the fretted note plus that node's interval (an octave when unsaid);
+ * a pinch harmonic sounds the octave.
+ */
+export function harmonicShift(harmonic: NonNullable<NoteEffects["harmonic"]>, fret: number): number {
+	if (harmonic.type === "natural") return (NATURAL_HARMONIC_NODES[fret] ?? 12) - fret;
+	if (harmonic.type === "artificial" && harmonic.touchFret !== undefined) {
+		return NATURAL_HARMONIC_NODES[harmonic.touchFret - fret] ?? 12;
+	}
+	return 12;
+}
+
 /**
  * A pitch written in the chosen style: the note name alone (`F#`, spelt as the
  * chord library spells its roots, so the label under a fret agrees with the
- * chord symbol over it), scientific pitch (`F#4`, middle C = C4 = 60), or the
- * MIDI number.
+ * chord symbol over it), scientific pitch (`F#4`, middle C = C4 = 60), the
+ * solfège syllable, or the jianpu degree.
  */
 export function pitchLabel(midi: number, style: PitchLabelStyle): string {
 	const octave = Math.floor(midi / 12) - 1;
 	switch (style) {
-		case "midi":
-			return String(midi);
+		case "solfege":
+			return SOLFEGE[pitchClassRoot(midi % 12)];
 		case "name":
 			return pitchClassRoot(midi % 12);
 		case "scientific":
@@ -127,13 +177,15 @@ export interface SlotPitchLabel {
  */
 export function slotPitchLabels(
 	slot: Pick<BeatSlot, "strings" | "isRest" | "isGraceNote">,
-	label: (stringIndex: number, fret: number) => string,
+	label: (stringIndex: number, fret: number, shift?: number) => string,
 ): SlotPitchLabel[] {
 	if (slot.isRest || slot.isGraceNote) return [];
 	const labels: SlotPitchLabel[] = [];
 	slot.strings.forEach((sf, stringIndex) => {
 		if (sf.fret === null || sf.muted) return;
-		labels.push({ stringIndex, text: label(stringIndex, sf.fret), tied: sf.tied });
+		// A harmonic's label is the partial it sounds, the same shift the scheduler plays.
+		const shift = sf.effects?.harmonic ? harmonicShift(sf.effects.harmonic, sf.fret) : 0;
+		labels.push({ stringIndex, text: label(stringIndex, sf.fret, shift), tied: sf.link?.kind === "tie" });
 	});
 	return labels;
 }

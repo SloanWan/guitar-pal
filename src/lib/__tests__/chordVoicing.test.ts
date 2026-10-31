@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   voicingToDiagramShape,
   decodeVoicingStrings,
-  selectStandardVoicing,
   type ChordVoicing,
 } from "@/lib/chordVoicing";
+import { selectStandardVoicing } from "@/lib/selectStandardVoicing";
 
 function voicing(overrides: Partial<ChordVoicing>): ChordVoicing {
   return {

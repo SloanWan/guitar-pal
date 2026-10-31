@@ -22,7 +22,7 @@ export function SongSource({ className = "" }: { className?: string }) {
 			href={SONG.source.url}
 			target="_blank"
 			rel="noopener noreferrer"
-			className={`gp-focus rounded-gp-xs text-(length:--gp-t-cap) text-gp-ink-3 underline decoration-gp-edge underline-offset-4 transition-colors duration-(--gp-d-state) hover:text-gp-ink ${className}`}
+			className={`gp-focus rounded-xs text-(length:--gp-t-cap) text-ink-3 underline decoration-edge underline-offset-4 transition-colors duration-(--gp-d-state) hover:text-ink ${className}`}
 		>
 			Chords after {SONG.source.label} · YouTube
 		</a>
@@ -32,7 +32,7 @@ export function SongSource({ className = "" }: { className?: string }) {
 /** "Capo 2", as the strum and tab pages show it. */
 export function CapoTag() {
 	return (
-		<span className="inline-flex h-6 items-center rounded-gp-pill bg-gp-well px-2.5 text-(length:--gp-t-cap) font-semibold text-gp-ink-2">
+		<span className="inline-flex h-6 items-center rounded-pill bg-well px-2.5 text-(length:--gp-t-cap) font-semibold text-ink-2">
 			Capo {SONG.capo}
 		</span>
 	);
@@ -63,18 +63,18 @@ export default function SongCard() {
 
 	return (
 		// The card wears the module of whatever is playing it: Strum's green, or Tab's blue when picked.
-		<div data-m={mode === "pick" ? "tab" : "strum"} className="rounded-gp-xl bg-gp-card p-5 max-sm:p-4">
-			<p className="text-(length:--gp-t-cap) text-gp-ink-3">
+		<div data-m={mode === "pick" ? "tab" : "strum"} className="rounded-xl bg-card p-5 max-sm:p-4">
+			<p className="text-(length:--gp-t-cap) text-ink-3">
 				{SONG.artist} · {SONG.year} · {SONG.meter[0]}/{SONG.meter[1]} · ♩ = {SONG.bpm} · sounds in D major
 			</p>
-			<h2 className="mt-1 font-gp-display text-(length:--gp-t-l) leading-(--gp-lh-head) font-bold text-gp-ink">
+			<h2 className="mt-1 font-display text-(length:--gp-t-l) leading-(--gp-lh-head) font-bold text-ink">
 				{SONG.title}
 			</h2>
 			<SongSource className="mt-1 inline-block" />
 
 			<div className="mt-4 flex flex-wrap items-center gap-2.5">
 				<CapoTag />
-				<span className="text-(length:--gp-t-cap) text-gp-ink-3">Shapes as you hold them, the sounding chord under each</span>
+				<span className="text-(length:--gp-t-cap) text-ink-3">Shapes as you hold them, the sounding chord under each</span>
 			</div>
 
 			<ol className="mt-3 grid grid-cols-4 gap-2" aria-label="Bars">
@@ -86,14 +86,14 @@ export default function SongCard() {
 							key={b}
 							aria-current={now ? "true" : undefined}
 							// The Strum page's chord tiles (strum.css `.st-tile`): the bar sounding is lifted.
-							className={`flex h-14 flex-col items-center justify-center rounded-gp-md text-gp-ink transition-[translate,background-color,box-shadow] duration-(--gp-d-rise) ease-(--gp-e-rise) ${
+							className={`flex h-14 flex-col items-center justify-center rounded-md text-ink transition-[translate,background-color,box-shadow] duration-(--gp-d-rise) ease-(--gp-e-rise) ${
 								now
-									? "-translate-y-0.5 bg-gp-card shadow-[inset_0_0_0_1px_var(--gp-m-300),3px_3px_0_0_var(--gp-m-sh)]"
-									: "bg-gp-page shadow-(--gp-ring-c)"
+									? "-translate-y-0.5 bg-card shadow-[inset_0_0_0_1px_var(--gp-m-300),3px_3px_0_0_var(--gp-m-sh)]"
+									: "bg-page shadow-(--gp-ring-c)"
 							}`}
 						>
 							<span className="text-[16px] leading-none font-[750]">{shape.name}</span>
-							<span className={`mt-1 text-[11.5px] leading-none ${now ? "text-gp-m-700" : "text-gp-ink-3"}`}>
+							<span className={`mt-1 text-[11.5px] leading-none ${now ? "text-m-700" : "text-ink-3"}`}>
 								sounds {shape.sounds}
 							</span>
 						</li>
@@ -111,8 +111,8 @@ export default function SongCard() {
 					/>
 				</span>
 				<div className="min-w-0 flex-1">
-					<p className="font-semibold text-gp-ink">{playing ? (preparing ? "Tuning up…" : "Playing") : "Play the song"}</p>
-					<p className="text-(length:--gp-t-cap) text-gp-ink-3" aria-live="polite">
+					<p className="font-semibold text-ink">{playing ? (preparing ? "Tuning up…" : "Playing") : "Play the song"}</p>
+					<p className="text-(length:--gp-t-cap) text-ink-3" aria-live="polite">
 						{dropped
 							? "Dropped my pick. Happens to everyone."
 							: mode === "strum"

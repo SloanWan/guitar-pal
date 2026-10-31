@@ -41,7 +41,7 @@ export default function ErrorScreen({ error, retry }: ErrorScreenProps) {
 					<Link href="/">Back to Guitar Pal</Link>
 				</Button>
 			</div>
-			{error.digest && <p className={`${FORM_HELP} font-gp-num`}>Error ID {error.digest}</p>}
+			{error.digest && <p className={`${FORM_HELP} font-num`}>Error ID {error.digest}</p>}
 		</StatusScreen>
 	);
 }

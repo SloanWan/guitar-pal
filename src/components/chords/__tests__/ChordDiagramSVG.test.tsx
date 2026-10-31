@@ -78,8 +78,8 @@ describe("ChordDiagramSVG root tone and plucks", () => {
 		renderToStaticMarkup(<ChordDiagramSVG {...openC} frets={[...openC.frets]} fingers={[...openC.fingers]} {...extra} />);
 
 	it("paints the root in the module's colour only when asked", () => {
-		expect(draw({})).not.toContain("fill-gp-m-500");
-		expect(draw({ rootTone: true })).toContain("fill-gp-m-500");
+		expect(draw({})).not.toContain("fill-m-500");
+		expect(draw({ rootTone: true })).toContain("fill-m-500");
 	});
 
 	it("plucks each sounding string in turn, low first, muted ones skipped", () => {

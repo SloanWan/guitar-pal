@@ -16,7 +16,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const ITEM = "flex h-10 cursor-pointer items-center gap-2.5 rounded-gp-sm px-2.5 font-gp-body text-[14px] font-medium text-gp-ink focus:bg-gp-well [&_svg]:size-[18px] [&_svg]:text-gp-ink-2";
+const ITEM = "flex h-10 cursor-pointer items-center gap-2.5 rounded-sm px-2.5 font-body text-[14px] font-medium text-ink focus:bg-well [&_svg]:size-[18px] [&_svg]:text-ink-2";
 
 /**
  * The signed-in account control, rightmost in the header from 720px (a phone has the Me
@@ -39,13 +39,13 @@ export default function UserMenu({ profile, className }: { profile: Profile; cla
 			<DropdownMenuContent
 				align="end"
 				sideOffset={10}
-				className="w-64 rounded-gp-lg border-0 bg-gp-sheet p-1.5 text-gp-ink shadow-[var(--gp-shadow-pop)]"
+				className="w-64 rounded-lg border-0 bg-sheet p-1.5 text-ink shadow-[var(--gp-shadow-pop)]"
 			>
 				<div className="px-2.5 py-2">
 					<UserIdentity profile={profile} />
 				</div>
 
-				<DropdownMenuSeparator className="mx-1 bg-gp-line" />
+				<DropdownMenuSeparator className="mx-1 bg-line" />
 
 				{/* Classes go on the item, not the link: the item runs them through
 				    tailwind-merge against its defaults, while asChild's Slot would only
@@ -62,7 +62,7 @@ export default function UserMenu({ profile, className }: { profile: Profile; cla
 					<ThemeSwitch />
 				</div>
 
-				<DropdownMenuSeparator className="mx-1 bg-gp-line" />
+				<DropdownMenuSeparator className="mx-1 bg-line" />
 
 				<DropdownMenuItem className={ITEM} disabled={loading} onSelect={() => void logout()}>
 					<LogOut aria-hidden />

@@ -77,7 +77,7 @@ export function StatusTab({
 	return (
 		<svg
 			viewBox={`0 0 ${WIDTH} ${height}`}
-			className="status-tab h-auto w-[236px] max-w-full text-gp-ink"
+			className="status-tab h-auto w-[236px] max-w-full text-ink"
 			role="group"
 			aria-label="A short TAB staff"
 		>

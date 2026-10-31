@@ -44,7 +44,7 @@ export function anchoredScroll(args: {
 }
 
 const TOOL =
-	"flex size-8 items-center justify-center rounded-gp-sm text-gp-ink-2 transition-colors duration-(--gp-d-state) hover:text-gp-ink disabled:opacity-35 disabled:hover:text-gp-ink-2 aria-pressed:bg-gp-m-500 aria-pressed:text-gp-m-on aria-pressed:hover:text-gp-m-on [&_svg]:size-4";
+	"flex size-8 items-center justify-center rounded-sm text-ink-2 transition-colors duration-(--gp-d-state) hover:text-ink disabled:opacity-35 disabled:hover:text-ink-2 aria-pressed:bg-m-500 aria-pressed:text-m-on aria-pressed:hover:text-m-on [&_svg]:size-4";
 
 export default function ZoomableImage({
 	src,
@@ -99,8 +99,8 @@ export default function ZoomableImage({
 
 	return (
 		<div className="flex min-h-0 flex-col">
-			<div className="flex h-10 flex-none items-center gap-1 border-b border-gp-line px-2">
-				<span className="min-w-0 flex-1 truncate px-1 text-(length:--gp-t-cap) font-semibold text-gp-ink-2">
+			<div className="flex h-10 flex-none items-center gap-1 border-b border-line px-2">
+				<span className="min-w-0 flex-1 truncate px-1 text-(length:--gp-t-cap) font-semibold text-ink-2">
 					{title ?? alt}
 				</span>
 				<button
@@ -114,7 +114,7 @@ export default function ZoomableImage({
 				>
 					<Minus aria-hidden />
 				</button>
-				<span className="w-11 text-center text-(length:--gp-t-cap) font-semibold tabular-nums text-gp-ink-2">
+				<span className="w-11 text-center text-(length:--gp-t-cap) font-semibold tabular-nums text-ink-2">
 					{Math.round(scale * 100)}%
 				</span>
 				<button

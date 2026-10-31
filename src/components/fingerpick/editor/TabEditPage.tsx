@@ -325,7 +325,7 @@ export default function TabEditPage({ id }: { id: string }) {
 							{!ready ? (
 								<div className="flex flex-col gap-4" aria-busy="true">
 									<Skeleton className="h-13 w-60" />
-									<Skeleton className="h-96 w-full rounded-gp-xl" />
+									<Skeleton className="h-96 w-full rounded-xl" />
 								</div>
 							) : (
 								<>

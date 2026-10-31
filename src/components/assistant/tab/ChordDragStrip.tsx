@@ -24,7 +24,7 @@ interface SlotAnchor extends SlotTarget {
 }
 
 const CHIP =
-	"gp-focus absolute top-1 -translate-x-1/2 select-none whitespace-nowrap rounded-gp-xs px-2 py-0.5 text-[12px] font-bold";
+	"gp-focus absolute top-1 -translate-x-1/2 select-none whitespace-nowrap rounded-xs px-2 py-0.5 text-[12px] font-bold";
 
 /**
  * Read every drawn note's slot and x from the stave's tags, in slot order.
@@ -123,7 +123,7 @@ export default function ChordDragStrip({
 			{drag && (
 				<span
 					aria-hidden="true"
-					className={`absolute top-0 h-full w-px ${taken(drag.over) && !same(drag.over, drag.from) ? "bg-gp-bad" : "bg-gp-m-500"}`}
+					className={`absolute top-0 h-full w-px ${taken(drag.over) && !same(drag.over, drag.from) ? "bg-bad" : "bg-m-500"}`}
 					style={{ left: anchors.find((a) => same(a, drag.over))?.x ?? 0 }}
 				/>
 			)}
@@ -143,8 +143,8 @@ export default function ChordDragStrip({
 						style={{ left: x }}
 						className={`${CHIP} cursor-grab touch-none ${
 							inHand
-								? "z-10 cursor-grabbing bg-gp-m-500 text-gp-m-on"
-								: "bg-gp-m-100 text-gp-m-700 transition-[left] duration-150 ease-out"
+								? "z-10 cursor-grabbing bg-m-500 text-m-on"
+								: "bg-m-100 text-m-700 transition-[left] duration-150 ease-out"
 						}`}
 						onPointerDown={(e) => {
 							// Capture keeps the moves coming once the pointer leaves the

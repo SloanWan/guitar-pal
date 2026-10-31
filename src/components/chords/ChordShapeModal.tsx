@@ -154,14 +154,14 @@ export default function ChordShapeModal({
 				    dialog under the player's cursor. */}
 				<div className="flex min-h-16 items-start gap-3 px-6 pt-5">
 					<div className="min-w-0 flex-1">
-						<span className="text-[12px] font-semibold text-gp-ink-3">{naming ? "A new chord" : "My own shape"}</span>
+						<span className="text-[12px] font-semibold text-ink-3">{naming ? "A new chord" : "My own shape"}</span>
 						<DialogTitle className="mt-0.5 text-[19px] leading-tight font-bold break-words">{label}</DialogTitle>
 						<DialogDescription className="sr-only">Draw the shape; it is kept with your shapes and used here.</DialogDescription>
 					</div>
 					<span className="flex h-8 shrink-0 items-center gap-1.5">
 						{discardConfirm ? (
 							<>
-								<span className="text-[12px] font-semibold text-gp-ink-3">Discard changes?</span>
+								<span className="text-[12px] font-semibold text-ink-3">Discard changes?</span>
 								<Button variant="danger" size="xs" onClick={onClose}>
 									Discard
 								</Button>

@@ -121,7 +121,7 @@ export default function SongTab({
 			<div
 				ref={cursor}
 				aria-hidden="true"
-				className="ld-tab-playhead pointer-events-none absolute left-0 z-10 w-0.5 rounded-full bg-gp-m-500"
+				className="ld-tab-playhead pointer-events-none absolute left-0 z-10 w-0.5 rounded-full bg-m-500"
 				style={{ opacity: 0 }}
 			/>
 		</div>

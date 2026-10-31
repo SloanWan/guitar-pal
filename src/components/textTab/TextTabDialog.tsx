@@ -14,7 +14,7 @@ export default function TextTabDialog({ open, onClose }: { open: boolean; onClos
 			<DialogContent data-m="tab" className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 p-0 sm:max-w-2xl">
 				<DialogHeader className="gap-1.5 px-5 pt-5 pb-4 pr-12 text-left">
 					<DialogTitle className="text-(length:--gp-t-h) font-semibold">Paste a text tab</DialogTitle>
-					<DialogDescription className="text-(length:--gp-t-cap) text-gp-ink-2">
+					<DialogDescription className="text-(length:--gp-t-cap) text-ink-2">
 						Text tab carries frets and order, not rhythm. Listen to each reading and take the one that sounds
 						like the recording.
 					</DialogDescription>

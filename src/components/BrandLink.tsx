@@ -57,7 +57,7 @@ export default function BrandLink({ className }: { className?: string }) {
 			onClick={onClick}
 		>
 			<PickMark ref={markRef} className="size-7 flex-none" />
-			<span className="hidden font-gp-display text-[17px] font-bold tracking-[-0.01em] nav:block">Guitar Pal</span>
+			<span className="hidden font-display text-[17px] font-bold tracking-[-0.01em] nav:block">Guitar Pal</span>
 		</Link>
 	);
 }

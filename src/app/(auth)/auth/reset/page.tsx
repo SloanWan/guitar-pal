@@ -121,7 +121,7 @@ function ResetPageInner() {
 			<div className={`w-full ${PAGE_GUTTER}`}>
 				<div className="gp-rise mx-auto max-w-110">
 					<Panel className="p-7 max-sm:p-5" aria-busy={stage === "verifying" || undefined}>
-						<h1 className="mb-5 font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-gp-ink">
+						<h1 className="mb-5 font-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-ink">
 							{TITLE[stage]}
 						</h1>
 
@@ -166,11 +166,11 @@ function ResetPageInner() {
 						{stage === "sent" && (
 							<div className="flex flex-col gap-5">
 								<div className="flex items-start gap-3">
-									<span className="flex size-10 flex-none items-center justify-center rounded-gp-md bg-gp-well text-gp-ink">
+									<span className="flex size-10 flex-none items-center justify-center rounded-md bg-well text-ink">
 										<MailCheck className="size-5" strokeWidth={1.75} aria-hidden="true" />
 									</span>
 									<p className={FORM_LEAD}>
-										If <span className="font-semibold break-all text-gp-ink">{email.trim()}</span> has an
+										If <span className="font-semibold break-all text-ink">{email.trim()}</span> has an
 										account, a reset link is on its way. Open it in this browser to choose
 										a new password.
 									</p>
@@ -282,7 +282,7 @@ function UpdateForm({ email, onDone }: { email: string; onDone: () => void }) {
 	return (
 		<form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
 			<p className={FORM_LEAD}>
-				Signed in as <span className="font-semibold break-all text-gp-ink">{email}</span>.
+				Signed in as <span className="font-semibold break-all text-ink">{email}</span>.
 			</p>
 			<fieldset disabled={busy} className="flex flex-col gap-5">
 				<div className="gp-field">

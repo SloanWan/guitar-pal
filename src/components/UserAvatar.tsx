@@ -68,7 +68,7 @@ export default function UserAvatar({
 		<span
 			aria-hidden="true"
 			className={cn(
-				"flex size-9.5 shrink-0 select-none items-center justify-center font-gp-display text-[15px] font-bold leading-none",
+				"flex size-9.5 shrink-0 select-none items-center justify-center font-display text-[15px] font-bold leading-none",
 				COLOR_CLASS[profile.color],
 				className,
 			)}

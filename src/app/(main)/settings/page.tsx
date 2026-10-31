@@ -53,7 +53,7 @@ export default function SettingsPage() {
 		/* One column of panels at every width: every section is a set of controls,
 		   and a settings page is read top to bottom, not scanned side by side. */
 		<div className={`gp-rise mx-auto box-content flex max-w-160 flex-col gap-4 py-8 max-sm:py-6 ${PAGE_GUTTER}`}>
-			<h1 className="mb-2 font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-gp-ink min-[960px]:text-(length:--gp-t-xl-lg)">
+			<h1 className="mb-2 font-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold tracking-[-0.015em] text-ink min-[960px]:text-(length:--gp-t-xl-lg)">
 				Settings
 			</h1>
 
@@ -64,7 +64,7 @@ export default function SettingsPage() {
 			{loading || !user ? (
 				// The proxy guards /settings, so a resolved null user is only ever a
 				// sign-out mid-visit; the skeleton is the right thing either way.
-				<Skeleton className="h-[560px] rounded-gp-lg" />
+				<Skeleton className="h-[560px] rounded-lg" />
 			) : (
 				<>
 					<IdentityCard user={user} />
@@ -124,7 +124,7 @@ function Current({ label, children }: { label: string; children: React.ReactNode
 	return (
 		<div className="flex min-w-0 flex-col gap-1">
 			<span className="gp-field-label">{label}</span>
-			<span className="truncate text-(length:--gp-t-body) text-gp-ink">{children}</span>
+			<span className="truncate text-(length:--gp-t-body) text-ink">{children}</span>
 		</div>
 	);
 }
@@ -150,7 +150,7 @@ function Choice({
 			title={label}
 			onClick={onSelect}
 			className={`gp-focus rounded-full outline-offset-2 transition-[outline-color,opacity] duration-(--gp-d-state) hover:opacity-90 ${
-				selected ? "outline-2 outline-gp-ink" : ""
+				selected ? "outline-2 outline-ink" : ""
 			}`}
 		>
 			{children}
@@ -227,7 +227,7 @@ function IdentityCard({ user }: { user: User }) {
 						label="Nickname"
 						help={
 							<>
-								Shown as <span className="font-semibold text-gp-ink-2">{preview.displayName}</span>. Empty falls
+								Shown as <span className="font-semibold text-ink-2">{preview.displayName}</span>. Empty falls
 								back to your account name. {nickname.length}/{NICKNAME_MAX_LENGTH}
 							</>
 						}
@@ -297,7 +297,7 @@ function IdentityCard({ user }: { user: User }) {
 							onSelect={() => setColor(null)}
 							label={`Auto (${hashed})`}
 						>
-							<span className="flex size-9 items-center justify-center rounded-full bg-gp-well text-[11.5px] font-semibold text-gp-ink-2">
+							<span className="flex size-9 items-center justify-center rounded-full bg-well text-[11.5px] font-semibold text-ink-2">
 								Auto
 							</span>
 						</Choice>
@@ -424,15 +424,15 @@ function EmailCard({ user }: { user: User }) {
 				)}
 
 				{pendingTo && (
-					<p className="rounded-gp-md bg-gp-well px-3.5 py-3 text-(length:--gp-t-ui) leading-(--gp-lh-body) text-gp-ink-2">
-						Confirmation links are on their way to both <span className="font-semibold text-gp-ink">{email}</span>{" "}
-						and <span className="font-semibold text-gp-ink">{pendingTo}</span>. The change completes once you
+					<p className="rounded-md bg-well px-3.5 py-3 text-(length:--gp-t-ui) leading-(--gp-lh-body) text-ink-2">
+						Confirmation links are on their way to both <span className="font-semibold text-ink">{email}</span>{" "}
+						and <span className="font-semibold text-ink">{pendingTo}</span>. The change completes once you
 						click both.
 					</p>
 				)}
 
 				{mode === "change" && (
-					<form onSubmit={handleChange} className="flex flex-col gap-4 border-t border-gp-line pt-5">
+					<form onSubmit={handleChange} className="flex flex-col gap-4 border-t border-line pt-5">
 						<Field label="New email" help="We'll send a confirmation link to both addresses.">
 							{(control) => (
 								<Input
@@ -454,7 +454,7 @@ function EmailCard({ user }: { user: User }) {
 				)}
 
 				{mode === "unlink" && (
-					<div className="flex flex-col gap-4 border-t border-gp-line pt-5">
+					<div className="flex flex-col gap-4 border-t border-line pt-5">
 						<p className={FORM_LEAD}>
 							You&apos;ll no longer be able to sign in with {email} and a password.
 							Your other sign-in method keeps working.
@@ -555,10 +555,10 @@ function PasswordCard({ email }: { email: string | undefined }) {
 					</div>
 
 					{step === "confirm" && (
-						<div className="flex flex-col gap-4 border-t border-gp-line pt-5">
+						<div className="flex flex-col gap-4 border-t border-line pt-5">
 							<p className={FORM_LEAD}>
 								Changing your password needs a one-time code. We&apos;ll email it to{" "}
-								<span className="font-semibold text-gp-ink">{email}</span>. Send it now?
+								<span className="font-semibold text-ink">{email}</span>. Send it now?
 							</p>
 							<ErrorLine message={error} />
 							<div className="flex gap-2">
@@ -586,7 +586,7 @@ function PasswordCard({ email }: { email: string | undefined }) {
 									value={code}
 									onChange={(e) => setCode(e.target.value)}
 									placeholder="123456"
-									className="max-w-40 font-gp-num tabular-nums"
+									className="max-w-40 font-num tabular-nums"
 								/>
 								<Button variant="secondary" onClick={sendCode} disabled={busy || cooldown > 0}>
 									{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend"}
@@ -737,7 +737,7 @@ function DeleteCard({ user }: { user: User }) {
 							</div>
 
 							{open === scope && (
-								<form onSubmit={handleDelete} className="flex flex-col gap-4 border-t border-gp-line pt-5">
+								<form onSubmit={handleDelete} className="flex flex-col gap-4 border-t border-line pt-5">
 									<p className={FORM_LEAD}>{copy.warning}</p>
 									{hasPassword ? (
 										<div className="gp-field">

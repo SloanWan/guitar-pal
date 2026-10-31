@@ -79,7 +79,7 @@ export default function ChordSearchDialog() {
 				data-m="chords"
 				showCloseButton={false}
 				// Hung from a fixed line, not centred: typing moves only the bottom edge.
-				className="top-[12dvh] translate-y-0 gap-0 overflow-hidden rounded-gp-xl p-0 sm:max-w-[560px]"
+				className="top-[12dvh] translate-y-0 gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[560px]"
 			>
 				<DialogTitle className="sr-only">Chord search</DialogTitle>
 				<DialogDescription className="sr-only">

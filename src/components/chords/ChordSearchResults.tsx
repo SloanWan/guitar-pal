@@ -62,7 +62,7 @@ function PaletteNote({ children }: { children: React.ReactNode }) {
 
 /** The lead sentence of a note. */
 function NoteLead({ children }: { children: React.ReactNode }) {
-	return <p className="py-2.5 text-[13.5px] leading-snug text-gp-ink-2">{children}</p>;
+	return <p className="py-2.5 text-[13.5px] leading-snug text-ink-2">{children}</p>;
 }
 
 /**
@@ -71,8 +71,8 @@ function NoteLead({ children }: { children: React.ReactNode }) {
  */
 function NoteRow({ ask, example }: { ask: string; example: string }) {
 	return (
-		<div className="flex items-center justify-between gap-4 border-t border-gp-line py-2.5 first:border-t-0">
-			<span className="min-w-0 text-[13px] leading-snug text-gp-ink-2">{ask}</span>
+		<div className="flex items-center justify-between gap-4 border-t border-line py-2.5 first:border-t-0">
+			<span className="min-w-0 text-[13px] leading-snug text-ink-2">{ask}</span>
 			<kbd className="ck-kbd ck-example shrink-0">{example}</kbd>
 		</div>
 	);
@@ -207,7 +207,7 @@ export default function ChordSearchResults({
 				<PaletteNote>
 					<NoteLead>
 						No chord in the library is held like{" "}
-						<span className="ck-frets text-gp-ink">{trimmed}</span>.
+						<span className="ck-frets text-ink">{trimmed}</span>.
 					</NoteLead>
 					<NoteRow ask="Frets are read first string first" example={SHAPE_EXAMPLE} />
 				</PaletteNote>
@@ -222,7 +222,7 @@ export default function ChordSearchResults({
 							<span className="ck-name">Create this chord?</span>
 							<span className="ck-frets">{trimmed}</span>
 						</span>
-						<ArrowRightIcon className="ml-auto size-4 text-gp-ink-3" />
+						<ArrowRightIcon className="ml-auto size-4 text-ink-3" />
 					</CommandItem>
 				</CommandGroup>
 			)}
@@ -254,7 +254,7 @@ export default function ChordSearchResults({
 									? "Put these on the board"
 									: `Put ${batch.resolvedCount} chord${batch.resolvedCount === 1 ? "" : "s"} on the board`}
 							</span>
-							<span className="flex flex-wrap gap-x-1.5 text-[12.5px] text-gp-ink-3">
+							<span className="flex flex-wrap gap-x-1.5 text-[12.5px] text-ink-3">
 								{batch.tokens.map((t) =>
 									t.status === "resolved" ? (
 										// Stored spelling, so the user can see that Db resolved
@@ -264,14 +264,14 @@ export default function ChordSearchResults({
 											text={chordDisplayName(t.root, t.suffix)}
 										/>
 									) : (
-										<span key={t.key} className="text-gp-ink-mute line-through">
+										<span key={t.key} className="text-ink-mute line-through">
 											{t.token}
 										</span>
 									),
 								)}
 							</span>
 						</span>
-						<ArrowRightIcon className="ml-auto size-4 text-gp-ink-3" />
+						<ArrowRightIcon className="ml-auto size-4 text-ink-3" />
 					</CommandItem>
 				</CommandGroup>
 			)}
@@ -298,7 +298,7 @@ export default function ChordSearchResults({
 								`Show all ${shortcut.category}${/chord/i.test(shortcut.category) ? "s" : " chords"}`
 							)}
 						</span>
-						<ArrowRightIcon className="ml-auto size-4 text-gp-ink-3" />
+						<ArrowRightIcon className="ml-auto size-4 text-ink-3" />
 					</CommandItem>
 				</CommandGroup>
 			)}
@@ -314,10 +314,10 @@ export default function ChordSearchResults({
 			{!batch.shouldOffer && !isShape && trimmed !== "" && results.length === 0 && (
 				<PaletteNote>
 					<NoteLead>
-						No chord found for “<span className="font-semibold text-gp-ink">{trimmed}</span>”.
+						No chord found for “<span className="font-semibold text-ink">{trimmed}</span>”.
 					</NoteLead>
 					{/* Keyed on the query so a new search always gets a fresh button. */}
-					<div className="border-t border-gp-line py-2.5">
+					<div className="border-t border-line py-2.5">
 						<ChordRequestButton key={trimmed} query={trimmed} />
 					</div>
 				</PaletteNote>

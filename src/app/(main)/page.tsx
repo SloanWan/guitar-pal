@@ -67,7 +67,7 @@ const CREDITS: readonly { lead: string; href: string; label: string; tail?: stri
 ];
 
 const FOOTER_LINK =
-	"gp-focus rounded-gp-xs text-gp-ink-2 transition-colors duration-(--gp-d-state) hover:text-gp-ink";
+	"gp-focus rounded-xs text-ink-2 transition-colors duration-(--gp-d-state) hover:text-ink";
 
 export default function Home() {
 	// `/` is public and static: no auth read here, so nothing per request blocks it.
@@ -80,15 +80,15 @@ export default function Home() {
 				<div className={WRAP}>
 					<section className="gp-rise grid items-center gap-8 pt-14 pb-12 max-sm:pt-8 max-sm:pb-8 min-[960px]:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] min-[960px]:gap-14 min-[960px]:pt-20 min-[960px]:pb-16">
 						<div className="flex flex-col items-start gap-5">
-							<h1 className="font-gp-display text-(length:--gp-t-hero) leading-[1.04] font-bold tracking-[-0.025em] text-balance text-gp-ink min-[960px]:text-(length:--gp-t-hero-lg)">
+							<h1 className="font-display text-(length:--gp-t-hero) leading-[1.04] font-bold tracking-[-0.025em] text-balance text-ink min-[960px]:text-(length:--gp-t-hero-lg)">
 								One song, all the way to your hands.
 							</h1>
-							<p className="max-w-[46ch] text-[17px] leading-(--gp-lh-body) text-gp-ink-2">
-								Take <b className="font-semibold text-gp-ink">Birds of a Feather</b>: four shapes behind a capo on 2, one
+							<p className="max-w-[46ch] text-[17px] leading-(--gp-lh-body) text-ink-2">
+								Take <b className="font-semibold text-ink">Birds of a Feather</b>: four shapes behind a capo on 2, one
 								strum, one picking pattern. Guitar Pal walks it from a sentence to the shapes, the neck, the strum and the
 								picking. Press play, and every step below follows along.
 							</p>
-							<LateNightLine className="-mt-2 text-(length:--gp-t-ui) text-gp-ink-3" />
+							<LateNightLine className="-mt-2 text-(length:--gp-t-ui) text-ink-3" />
 							<div className="flex flex-wrap gap-3">
 								<Button asChild>
 									<Link href="/strum">
@@ -109,34 +109,34 @@ export default function Home() {
 			</SongPlayerProvider>
 
 			<div className={WRAP}>
-				<ul className="flex flex-wrap gap-x-8 gap-y-2 border-t border-gp-line py-8 text-(length:--gp-t-ui) text-gp-ink-3">
+				<ul className="flex flex-wrap gap-x-8 gap-y-2 border-t border-line py-8 text-(length:--gp-t-ui) text-ink-3">
 					{FACTS.map(({ value, label }) => (
 						<li key={label} className="whitespace-nowrap">
-							<b className="font-semibold text-gp-ink">{value}</b> {label}
+							<b className="font-semibold text-ink">{value}</b> {label}
 						</li>
 					))}
 				</ul>
 
-				<section className="border-t border-gp-line py-14 max-sm:py-10">
-					<h2 className="font-gp-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold text-gp-ink min-[960px]:text-(length:--gp-t-xl-lg)">
+				<section className="border-t border-line py-14 max-sm:py-10">
+					<h2 className="font-display text-(length:--gp-t-xl) leading-(--gp-lh-head) font-bold text-ink min-[960px]:text-(length:--gp-t-xl-lg)">
 						Keep the song.
 					</h2>
-					<p className="mt-2 max-w-[52ch] text-(length:--gp-t-body) text-gp-ink-2">
+					<p className="mt-2 max-w-[52ch] text-(length:--gp-t-body) text-ink-2">
 						Every step above works without an account. Signing in keeps what you make.
 					</p>
 					<ul className="mt-7 grid gap-4 min-[720px]:grid-cols-3">
 						{PERKS.map(({ icon: Icon, title, text }) => (
-							<li key={title} className="flex flex-col gap-2 rounded-gp-lg bg-gp-card p-5">
-								<Icon className="size-5 text-gp-ink-3" aria-hidden />
-								<h3 className="font-gp-display text-[17px] font-bold text-gp-ink">{title}</h3>
-								<p className="text-(length:--gp-t-ui) leading-(--gp-lh-body) text-gp-ink-2">{text}</p>
+							<li key={title} className="flex flex-col gap-2 rounded-lg bg-card p-5">
+								<Icon className="size-5 text-ink-3" aria-hidden />
+								<h3 className="font-display text-[17px] font-bold text-ink">{title}</h3>
+								<p className="text-(length:--gp-t-ui) leading-(--gp-lh-body) text-ink-2">{text}</p>
 							</li>
 						))}
 					</ul>
 				</section>
 
-				<section className="border-t border-gp-line py-16 max-sm:py-10">
-					<h2 className="max-w-[16ch] font-gp-display text-(length:--gp-t-hero) leading-[1.06] font-bold tracking-[-0.02em] text-gp-ink">
+				<section className="border-t border-line py-16 max-sm:py-10">
+					<h2 className="max-w-[16ch] font-display text-(length:--gp-t-hero) leading-[1.06] font-bold tracking-[-0.02em] text-ink">
 						Free. In the browser. No streaks.
 					</h2>
 					<div className="mt-7 flex flex-wrap gap-3">
@@ -153,17 +153,17 @@ export default function Home() {
 				</section>
 			</div>
 
-			<footer className="mt-auto border-t border-gp-line text-(length:--gp-t-ui)">
+			<footer className="mt-auto border-t border-line text-(length:--gp-t-ui)">
 				<div className={`${WRAP} grid gap-10 py-12 min-[720px]:grid-cols-[1.4fr_1fr_1.3fr] max-sm:py-10`}>
 					<div className="flex flex-col gap-3">
-						<span className="flex items-center gap-2 text-gp-ink [--mk-gap:var(--gp-page)]">
+						<span className="flex items-center gap-2 text-ink [--mk-gap:var(--gp-page)]">
 							<PickMark className="size-7 flex-none" />
-							<span className="font-gp-display text-[17px] font-bold">Guitar Pal</span>
+							<span className="font-display text-[17px] font-bold">Guitar Pal</span>
 						</span>
-						<p className="max-w-[30ch] text-gp-ink-3">A practice studio in the browser for self-taught guitarists.</p>
+						<p className="max-w-[30ch] text-ink-3">A practice studio in the browser for self-taught guitarists.</p>
 					</div>
 					<nav aria-label="Product">
-						<h2 className="mb-3 text-(length:--gp-t-cap) font-semibold text-gp-ink-3">Product</h2>
+						<h2 className="mb-3 text-(length:--gp-t-cap) font-semibold text-ink-3">Product</h2>
 						<ul className="flex flex-col gap-2.5">
 							{FOOTER_PRODUCT.map(({ href, label, external }) => (
 								<li key={href}>
@@ -190,8 +190,8 @@ export default function Home() {
 						</ul>
 					</nav>
 					<div>
-						<h2 className="mb-3 text-(length:--gp-t-cap) font-semibold text-gp-ink-3">Built with</h2>
-						<ul className="flex flex-col gap-2.5 text-gp-ink-3">
+						<h2 className="mb-3 text-(length:--gp-t-cap) font-semibold text-ink-3">Built with</h2>
+						<ul className="flex flex-col gap-2.5 text-ink-3">
 							{CREDITS.map(({ lead, href, label, tail }) => (
 								<li key={href}>
 									{lead}{" "}
@@ -204,8 +204,8 @@ export default function Home() {
 						</ul>
 					</div>
 				</div>
-				<div className="border-t border-gp-line">
-					<p className={`${WRAP} py-5 text-gp-ink-3`}>© 2026 Guitar Pal</p>
+				<div className="border-t border-line">
+					<p className={`${WRAP} py-5 text-ink-3`}>© 2026 Guitar Pal</p>
 				</div>
 			</footer>
 		</div>

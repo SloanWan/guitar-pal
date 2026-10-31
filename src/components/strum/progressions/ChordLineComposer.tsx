@@ -178,10 +178,10 @@ export default function ChordLineComposer({ onCreate, onCancel, userVoicings }: 
 				</div>
 			)}
 			{error ? (
-				<p className="st-lab text-gp-bad">{error}</p>
+				<p className="st-lab text-bad">{error}</p>
 			) : asking ? (
 				<div className="flex flex-col gap-1.5">
-					<span className="st-lab text-gp-bad">
+					<span className="st-lab text-bad">
 						{unwritten.length === parsed.unmatched.length
 							? `Nothing is held like ${parsed.unmatched.join(", ")}.`
 							: `${parsed.unmatched.join(", ")} not in the chord library.`}

@@ -239,7 +239,7 @@ export default function PatternComposer({ editing, existingPatterns, user, onSav
 							spellCheck={false}
 							autoComplete="off"
 						/>
-						<span id="strum-strokes-help" className={typedError ? "st-lab text-gp-bad" : "st-lab"}>
+						<span id="strum-strokes-help" className={typedError ? "st-lab text-bad" : "st-lab"}>
 							{typedError ?? "D down, U up, X muted, a space for a cell nobody strikes, | between bars."}
 						</span>
 					</div>
@@ -308,7 +308,7 @@ export default function PatternComposer({ editing, existingPatterns, user, onSav
 							aria-label="Pattern name"
 							aria-invalid={nameError ? true : undefined}
 						/>
-						{nameError && <span className="st-lab text-gp-bad">{nameError}</span>}
+						{nameError && <span className="st-lab text-bad">{nameError}</span>}
 					</label>
 					{askSignIn && (
 						<p className="st-lab m-0" role="status">

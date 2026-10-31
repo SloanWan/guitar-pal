@@ -21,7 +21,7 @@ export default function DeleteBookDialog({
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && !busy && onClose()}>
 			<DialogContent data-m="books" showCloseButton={false} className="gap-3">
 				<DialogTitle className="pr-6 text-(length:--gp-t-h) font-semibold">Delete “{title}”?</DialogTitle>
-				<DialogDescription className="text-gp-ink-2">
+				<DialogDescription className="text-ink-2">
 					The PDF and everything read from it are removed. This cannot be undone.
 				</DialogDescription>
 				<div className="mt-2 flex justify-end gap-2">

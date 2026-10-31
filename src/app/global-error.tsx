@@ -22,7 +22,7 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
 
 	return (
 		<html lang="en" className={`${mono.variable} ${figtree.variable} h-full antialiased`}>
-			<body className="h-full bg-gp-page">
+			<body className="h-full bg-page">
 				<title>Something went wrong · Guitar Pal</title>
 				<StatusScreen
 					art={<StatusTab notes={MUTES} snapped={3} />}

@@ -176,7 +176,7 @@ export default function AssistantLauncher() {
 					{pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <MessageCircle aria-hidden="true" />}
 					<span className="gp-wide-only">Ask</span>
 					{unread && (
-						<span aria-hidden="true" className="absolute right-1.5 top-1.5 size-2 rounded-full bg-gp-a2" />
+						<span aria-hidden="true" className="absolute right-1.5 top-1.5 size-2 rounded-full bg-a2" />
 					)}
 				</Button>
 			</PopoverTrigger>

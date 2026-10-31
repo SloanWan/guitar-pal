@@ -48,7 +48,7 @@ const PasswordField = forwardRef<
 					onClick={() => setShown((v) => !v)}
 					aria-label={shown ? "Hide password" : "Show password"}
 					aria-pressed={shown}
-					className="gp-focus absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-gp-md text-gp-ink-3 transition-colors duration-(--gp-d-state) hover:text-gp-ink"
+					className="gp-focus absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-ink-3 transition-colors duration-(--gp-d-state) hover:text-ink"
 				>
 					{shown ? (
 						<EyeOff className="size-4.5" strokeWidth={1.75} aria-hidden="true" />

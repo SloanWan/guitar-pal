@@ -86,10 +86,10 @@ export default function PrimitivesPage() {
 	}, [theme]);
 
 	return (
-		<div data-m={module} className="min-h-screen bg-gp-page px-4 py-8 font-gp-body text-gp-ink sm:px-8">
+		<div data-m={module} className="min-h-screen bg-page px-4 py-8 font-body text-ink sm:px-8">
 			<div className="mx-auto flex max-w-240 flex-col gap-10">
 				<header className="flex flex-col gap-4">
-					<h1 className="font-gp-display text-[28px] font-bold tracking-[-0.01em]">Primitives</h1>
+					<h1 className="font-display text-[28px] font-bold tracking-[-0.01em]">Primitives</h1>
 					<div className="flex flex-wrap gap-3">
 						<Segmented label="Module" options={MODULES} value={module} onChange={setModule} dense />
 						<Segmented label="Theme" options={THEMES} value={theme} onChange={setTheme} dense />
@@ -100,7 +100,7 @@ export default function PrimitivesPage() {
 					<div className="flex flex-col gap-4">
 						{STATES.map((state) => (
 							<div key={state} role="group" aria-label={state} className="flex flex-wrap items-center gap-4">
-								<span className="w-20 text-[13px] font-semibold text-gp-ink-3">{state}</span>
+								<span className="w-20 text-[13px] font-semibold text-ink-3">{state}</span>
 								{BUTTONS.map((b) => (
 									<Button key={b.variant} variant={b.variant} disabled={state === "Disabled"} loading={state === "Loading"}>
 										{b.icon}
@@ -113,7 +113,7 @@ export default function PrimitivesPage() {
 							</div>
 						))}
 						<div role="group" aria-label="Sizes" className="flex flex-wrap items-center gap-4">
-							<span className="w-20 text-[13px] font-semibold text-gp-ink-3">Sizes</span>
+							<span className="w-20 text-[13px] font-semibold text-ink-3">Sizes</span>
 							<Button>Medium</Button>
 							<Button size="sm">Small</Button>
 							<Button size="xs">Extra small</Button>
@@ -216,7 +216,7 @@ export default function PrimitivesPage() {
 				<Section title="Pick toggle">
 					<div className="flex items-center gap-2">
 						<PickToggle pressed={kept} onPressedChange={setKept} label="Favourite Am7" />
-						<span className="text-sm text-gp-ink-3">{kept ? "kept" : "not kept"}</span>
+						<span className="text-sm text-ink-3">{kept ? "kept" : "not kept"}</span>
 					</div>
 				</Section>
 
@@ -225,7 +225,7 @@ export default function PrimitivesPage() {
 						{CARDS.map((c) => (
 							<NavCard key={c.id} selected={card === c.id} onClick={() => setCard(c.id)} className="p-4">
 								<span className="gp-title text-[15px] font-semibold">{c.title}</span>
-								<span className="mt-1 block text-[13px] text-gp-ink-3">{c.meta}</span>
+								<span className="mt-1 block text-[13px] text-ink-3">{c.meta}</span>
 							</NavCard>
 						))}
 					</div>
@@ -270,7 +270,7 @@ export default function PrimitivesPage() {
 							snap={{ points: [60, 90, 120, 180], within: 3 }}
 							valueText={(v) => `${v} BPM`}
 						/>
-						<span className="text-[13px] text-gp-ink-3">{tempo} BPM — snaps to the ticks</span>
+						<span className="text-[13px] text-ink-3">{tempo} BPM — snaps to the ticks</span>
 						<Slider label="Volume (disabled)" value={40} onChange={() => {}} disabled />
 					</div>
 				</Section>
@@ -314,7 +314,7 @@ export default function PrimitivesPage() {
 function Section({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<section aria-label={title} className="flex flex-col gap-4">
-			<h2 className="font-gp-display text-[19px] font-bold">{title}</h2>
+			<h2 className="font-display text-[19px] font-bold">{title}</h2>
 			{children}
 		</section>
 	);

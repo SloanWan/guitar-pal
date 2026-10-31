@@ -33,8 +33,8 @@ export default function DocLangSwitch({ lang }: { lang: DocLang }) {
 						href={`?lang=${option}`}
 						aria-current={current ? "page" : undefined}
 						hrefLang={option}
-						className={`gp-focus relative z-1 flex items-center justify-center rounded-gp-sm px-2.5 text-[13px] leading-none font-semibold whitespace-nowrap transition-colors duration-(--gp-d-state) ${
-							current ? "text-gp-ink" : "text-gp-ink-3 hover:text-gp-ink-2"
+						className={`gp-focus relative z-1 flex items-center justify-center rounded-sm px-2.5 text-[13px] leading-none font-semibold whitespace-nowrap transition-colors duration-(--gp-d-state) ${
+							current ? "text-ink" : "text-ink-3 hover:text-ink-2"
 						}`}
 					>
 						{LABELS[option]}

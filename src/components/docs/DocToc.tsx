@@ -29,12 +29,12 @@ function List({ entries, active }: { entries: readonly TocEntry[]; active: strin
 					<a
 						href={`#${entry.id}`}
 						aria-current={active === entry.id ? "location" : undefined}
-						className={`gp-focus block rounded-gp-sm px-2.5 py-1 leading-snug transition-colors duration-(--gp-d-state) hover:text-gp-ink ${
+						className={`gp-focus block rounded-sm px-2.5 py-1 leading-snug transition-colors duration-(--gp-d-state) hover:text-ink ${
 							active === entry.id
-								? "bg-gp-well font-semibold text-gp-ink"
+								? "bg-well font-semibold text-ink"
 								: entry.depth === 3
-									? "text-gp-ink-3"
-									: "font-medium text-gp-ink-2"
+									? "text-ink-3"
+									: "font-medium text-ink-2"
 						}`}
 					>
 						{entry.text}
@@ -82,11 +82,11 @@ export default function DocToc({ entries, label }: { entries: readonly TocEntry[
 
 	return (
 		<>
-			<details className="group mb-6 rounded-gp-lg bg-gp-card px-4 py-3 min-[960px]:hidden">
-				<summary className="gp-focus flex cursor-pointer list-none items-center justify-between rounded-gp-sm text-(length:--gp-t-ui) font-semibold text-gp-ink [&::-webkit-details-marker]:hidden">
+			<details className="group mb-6 rounded-lg bg-card px-4 py-3 min-[960px]:hidden">
+				<summary className="gp-focus flex cursor-pointer list-none items-center justify-between rounded-sm text-(length:--gp-t-ui) font-semibold text-ink [&::-webkit-details-marker]:hidden">
 					{label}
 					<ChevronDown
-						className="size-4 text-gp-ink-3 transition-transform duration-(--gp-d-state) group-open:rotate-180"
+						className="size-4 text-ink-3 transition-transform duration-(--gp-d-state) group-open:rotate-180"
 						aria-hidden="true"
 					/>
 				</summary>
@@ -98,7 +98,7 @@ export default function DocToc({ entries, label }: { entries: readonly TocEntry[
 				aria-label={label}
 				className="sticky top-6 hidden w-60 flex-none self-start text-[13.5px] min-[960px]:block"
 			>
-				<p className="mb-2 px-2.5 text-(length:--gp-t-cap) font-semibold text-gp-ink-3">{label}</p>
+				<p className="mb-2 px-2.5 text-(length:--gp-t-cap) font-semibold text-ink-3">{label}</p>
 				<List entries={entries} active={active} />
 			</nav>
 		</>

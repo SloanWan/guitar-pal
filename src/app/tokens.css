@@ -11,9 +11,8 @@
                                          on <main> (ModuleScope), re-points the --gp-m-*
                                          "current module" aliases for that subtree
 
-   Utilities: globals.css exposes these under an INTERIM `gp-` namespace in @theme inline
-   (bg-gp-page, text-gp-ink-3, bg-gp-m-500, rounded-gp-lg, ease-gp-spring, …). The v3
-   tokens that held the bare names are gone (#363 cleanup); the rename is its own step.
+   Utilities: globals.css exposes these in @theme inline under their bare names (bg-page,
+   text-ink-3, bg-m-500, rounded-lg, ease-spring, …); the custom properties keep --gp-.
 
    Layer order (lowest → highest):
      1. neutral ramp      — page, card, well, field, line, ink (by data-theme)

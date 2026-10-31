@@ -91,29 +91,29 @@ function Step({
 	broad?: boolean;
 }) {
 	const linkClass =
-		"gp-focus inline-flex items-center gap-1.5 rounded-gp-xs font-semibold text-gp-ink underline decoration-gp-edge underline-offset-4 transition-[text-decoration-color] duration-(--gp-d-state) hover:decoration-gp-ink";
+		"gp-focus inline-flex items-center gap-1.5 rounded-xs font-semibold text-ink underline decoration-edge underline-offset-4 transition-[text-decoration-color] duration-(--gp-d-state) hover:decoration-ink";
 	return (
 		<li
 			data-m={module}
-			className={`ld-step grid items-start gap-6 border-t border-gp-line py-12 max-sm:py-9 min-[960px]:gap-12 ${
+			className={`ld-step grid items-start gap-6 border-t border-line py-12 max-sm:py-9 min-[960px]:gap-12 ${
 				broad
 					? "min-[960px]:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]"
 					: "min-[960px]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]"
 			}`}
 		>
 			<div className="flex flex-col items-start gap-3">
-				<span className="flex items-center gap-2 text-(length:--gp-t-ui) font-semibold text-gp-ink-2">
-					<span className="font-gp-num text-gp-ink-3 tabular-nums">{n}</span>
+				<span className="flex items-center gap-2 text-(length:--gp-t-ui) font-semibold text-ink-2">
+					<span className="font-num text-ink-3 tabular-nums">{n}</span>
 					<ModuleBadge icon={icon} />
 					{tool}
 					{tag && (
-						<span className="rounded-gp-pill bg-gp-well px-2 py-0.5 text-[11.5px] font-semibold text-gp-ink-3">{tag}</span>
+						<span className="rounded-pill bg-well px-2 py-0.5 text-[11.5px] font-semibold text-ink-3">{tag}</span>
 					)}
 				</span>
-				<h2 className="font-gp-display text-(length:--gp-t-l) leading-(--gp-lh-head) font-bold text-balance text-gp-ink min-[960px]:text-(length:--gp-t-l-lg)">
+				<h2 className="font-display text-(length:--gp-t-l) leading-(--gp-lh-head) font-bold text-balance text-ink min-[960px]:text-(length:--gp-t-l-lg)">
 					{title}
 				</h2>
-				<div className="max-w-[46ch] text-(length:--gp-t-body) leading-(--gp-lh-body) text-gp-ink-2">{children}</div>
+				<div className="max-w-[46ch] text-(length:--gp-t-body) leading-(--gp-lh-body) text-ink-2">{children}</div>
 				{link.external ? (
 					<a href={link.href} target="_blank" rel="noopener noreferrer" className={linkClass}>
 						{link.label}
@@ -126,7 +126,7 @@ function Step({
 					</Link>
 				)}
 			</div>
-			<div className="min-w-0 rounded-gp-lg bg-gp-card p-5 max-sm:p-4">{demo}</div>
+			<div className="min-w-0 rounded-lg bg-card p-5 max-sm:p-4">{demo}</div>
 		</li>
 	);
 }
@@ -134,7 +134,7 @@ function Step({
 /** A line under a previewing demo: what is moving is a walk-through, the sound is one press away. */
 function PreviewNote({ on }: { on: boolean }) {
 	return (
-		<p className={`text-(length:--gp-t-cap) text-gp-ink-3 transition-opacity duration-(--gp-d-state) ${on ? "" : "opacity-0"}`}>
+		<p className={`text-(length:--gp-t-cap) text-ink-3 transition-opacity duration-(--gp-d-state) ${on ? "" : "opacity-0"}`}>
 			A silent walk-through — press play on the song to hear it.
 		</p>
 	);
@@ -268,12 +268,12 @@ function Shapes() {
 					<li
 						key={s.name}
 						aria-current={now === i ? "true" : undefined}
-						className={`flex flex-col items-center gap-1 rounded-gp-md bg-gp-page px-1.5 pt-3 pb-2 transition-shadow duration-(--gp-d-state) ease-linear ${
+						className={`flex flex-col items-center gap-1 rounded-md bg-page px-1.5 pt-3 pb-2 transition-shadow duration-(--gp-d-state) ease-linear ${
 							now === i ? "shadow-[0_0_0_2px_var(--gp-m-500)]" : ""
 						}`}
 					>
-						<span className="text-[24px] font-extrabold tracking-[-0.02em] text-gp-ink">{s.name}</span>
-						<span className="-mt-1 text-[12px] leading-3.75 font-[650] text-gp-m-700">sounds {s.sounds}</span>
+						<span className="text-[24px] font-extrabold tracking-[-0.02em] text-ink">{s.name}</span>
+						<span className="-mt-1 text-[12px] leading-3.75 font-[650] text-m-700">sounds {s.sounds}</span>
 						<ChordDiagramSVG
 							{...voicingToDiagramShape(s.voicing)}
 							size="compact"
@@ -321,7 +321,7 @@ function Neck() {
 	);
 	return (
 		<div ref={ref} className="flex flex-col gap-3">
-			<p className="text-(length:--gp-t-cap) text-gp-ink-3">
+			<p className="text-(length:--gp-t-cap) text-ink-3">
 				Frets counted from the capo · C major, {SONG_SHAPES[shown].name} on top
 			</p>
 			<div>
@@ -434,13 +434,13 @@ function FromBook() {
 	const phase = useSequence(inView, [150, 1200, 500]);
 	return (
 		<div ref={ref} className="flex flex-col gap-4">
-			<div className={`w-full max-w-90 rounded-gp-md bg-white ${phase >= 1 ? "ld-scan" : ""}`}>
+			<div className={`w-full max-w-90 rounded-md bg-white ${phase >= 1 ? "ld-scan" : ""}`}>
 				{/* eslint-disable-next-line @next/next/no-img-element -- a static sample crop, shown at its own size */}
 				<img src={BOOK_CROP} alt="An exercise cropped from page 3 of the sample book" className="w-full" />
 			</div>
 			<div className="grid min-w-0">
 				<span
-					className={`ld-dots col-start-1 row-start-1 self-center text-(length:--gp-t-cap) text-gp-ink-3 ${
+					className={`ld-dots col-start-1 row-start-1 self-center text-(length:--gp-t-cap) text-ink-3 ${
 						phase === 1 || phase === 2 ? "" : "invisible"
 					}`}
 					aria-hidden
@@ -452,16 +452,16 @@ function FromBook() {
 				</span>
 				{/* The chapter card's draft row (Books, DraftRow): the crop, the name, the page and the facts. */}
 				<div
-					className={`col-start-1 row-start-1 flex items-center gap-3.5 rounded-gp-md bg-gp-card p-2 shadow-(--gp-ring-c) max-sm:gap-2.5 ${arrive(phase >= 3)}`}
+					className={`col-start-1 row-start-1 flex items-center gap-3.5 rounded-md bg-card p-2 shadow-(--gp-ring-c) max-sm:gap-2.5 ${arrive(phase >= 3)}`}
 				>
-					<span className="h-11.5 w-37.5 flex-none overflow-hidden rounded-gp-sm bg-white shadow-(--gp-ring-c) max-sm:h-10 max-sm:w-24">
+					<span className="h-11.5 w-37.5 flex-none overflow-hidden rounded-sm bg-white shadow-(--gp-ring-c) max-sm:h-10 max-sm:w-24">
 						{/* eslint-disable-next-line @next/next/no-img-element -- the same static crop, as the row's thumbnail */}
 						<img src={BOOK_CROP} alt="" className="size-full object-cover object-[0_50%]" />
 					</span>
 					<span className="flex min-w-0 flex-col gap-0.75">
-						<b className="truncate text-(length:--gp-t-row) font-[650] text-gp-ink">⑤弦:A-B-C</b>
-						<span className="flex flex-wrap items-center gap-x-1.5 text-(length:--gp-t-cap) font-medium text-gp-ink-3 tabular-nums">
-							<span className="inline-flex h-6 items-center rounded-gp-xs bg-gp-s2 px-1.75 text-[12.5px] font-semibold text-gp-ink-2">
+						<b className="truncate text-(length:--gp-t-row) font-[650] text-ink">⑤弦:A-B-C</b>
+						<span className="flex flex-wrap items-center gap-x-1.5 text-(length:--gp-t-cap) font-medium text-ink-3 tabular-nums">
+							<span className="inline-flex h-6 items-center rounded-xs bg-s2 px-1.75 text-[12.5px] font-semibold text-ink-2">
 								p.3
 							</span>
 							Tab · 4 bars · ♩=120
@@ -486,14 +486,14 @@ function InYourChat() {
 			role="img"
 			aria-label="An example AI chat: a photo of a riff's tab goes in, Guitar Pal reads it and hands back a link that plays it"
 		>
-			<span className="flex items-center gap-1.5 text-(length:--gp-t-cap) text-gp-ink-3">
+			<span className="flex items-center gap-1.5 text-(length:--gp-t-cap) text-ink-3">
 				<MessageCircle className="size-3.5" aria-hidden />
 				Your AI chat
 			</span>
 			<div
-				className={`flex max-w-[85%] flex-col gap-2 self-end rounded-gp-lg rounded-br-gp-xs bg-gp-ink p-2.5 text-gp-on-ink ${arrive(phase >= 1)}`}
+				className={`flex max-w-[85%] flex-col gap-2 self-end rounded-lg rounded-br-xs bg-ink p-2.5 text-on-ink ${arrive(phase >= 1)}`}
 			>
-				<span className="flex items-center gap-2 rounded-gp-sm bg-white/12 px-2.5 py-2 text-(length:--gp-t-cap)">
+				<span className="flex items-center gap-2 rounded-sm bg-white/12 px-2.5 py-2 text-(length:--gp-t-cap)">
 					<ImageIcon className="size-4" aria-hidden />
 					riff-from-the-video.jpg
 				</span>
@@ -501,24 +501,24 @@ function InYourChat() {
 			</div>
 			<div className="flex max-w-[90%] flex-col gap-2.5">
 				<span
-					className={`inline-flex items-center gap-1.5 self-start rounded-gp-pill bg-gp-well px-2.5 py-1 text-(length:--gp-t-cap) text-gp-ink-2 ${arrive(phase >= 2)}`}
+					className={`inline-flex items-center gap-1.5 self-start rounded-pill bg-well px-2.5 py-1 text-(length:--gp-t-cap) text-ink-2 ${arrive(phase >= 2)}`}
 				>
 					<Plug className="size-3.5" aria-hidden />
-					Guitar Pal · <code className="font-gp-num">import_tab</code>
+					Guitar Pal · <code className="font-num">import_tab</code>
 					<span className={`ld-dots ${phase === 2 ? "" : "hidden"}`} aria-hidden>
 						<i />
 						<i />
 						<i />
 					</span>
 				</span>
-				<span className={`text-(length:--gp-t-ui) text-gp-ink-2 ${arrive(phase >= 3)}`}>
+				<span className={`text-(length:--gp-t-ui) text-ink-2 ${arrive(phase >= 3)}`}>
 					Read it: four bars, capo 2. Here it is, ready to play:
 				</span>
-				<span className={`flex items-center gap-3 rounded-gp-md bg-gp-well p-3 ${arrive(phase >= 3)}`}>
-					<ListMusic className="size-5 flex-none text-gp-ink-3" aria-hidden />
+				<span className={`flex items-center gap-3 rounded-md bg-well p-3 ${arrive(phase >= 3)}`}>
+					<ListMusic className="size-5 flex-none text-ink-3" aria-hidden />
 					<span className="flex min-w-0 flex-col">
-						<span className="truncate font-semibold text-gp-ink">Your riff — open in Guitar Pal</span>
-						<span className="text-(length:--gp-t-cap) text-gp-ink-3">Plays without an account · import it to keep it</span>
+						<span className="truncate font-semibold text-ink">Your riff — open in Guitar Pal</span>
+						<span className="text-(length:--gp-t-cap) text-ink-3">Plays without an account · import it to keep it</span>
 					</span>
 				</span>
 			</div>

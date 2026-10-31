@@ -45,7 +45,7 @@ function noteCenterY(visualFret: number): number {
 
 /** A sounding note: a disc, or a rounded square when it is the chord's root (in the module's colour with `tone`). */
 function NoteDot({ cx, cy, root, tone }: { cx: number; cy: number; root: boolean; tone: boolean }) {
-  const shared = { className: root && tone ? "fill-gp-m-500 stroke-gp-card" : "fill-gp-ink stroke-gp-card", strokeWidth: 1.5 };
+  const shared = { className: root && tone ? "fill-m-500 stroke-card" : "fill-ink stroke-card", strokeWidth: 1.5 };
   return root ? (
     <rect x={cx - DOT_R} y={cy - DOT_R} width={DOT_R * 2} height={DOT_R * 2} rx={DOT_R * 0.45} {...shared} />
   ) : (
@@ -164,9 +164,9 @@ export default function ChordDiagramSVG({
   }
 
   /** The text on a dot: the card colour, or what reads on the module's colour for a toned root. */
-  const labelFill = (root: boolean) => (root && rootTone ? "fill-gp-m-on" : "fill-gp-card");
+  const labelFill = (root: boolean) => (root && rootTone ? "fill-m-on" : "fill-card");
   /** A name on a light (unplayed) cell: the root's in the module's colour. */
-  const ghostFill = (s: number, fret: number) => (rootTone && isRoot(s, fret) ? "fill-gp-m-700" : "fill-gp-ink-3");
+  const ghostFill = (s: number, fret: number) => (rootTone && isRoot(s, fret) ? "fill-m-700" : "fill-ink-3");
 
   const gridRight = strX(5);
   const nutY = fretLineY(0);
@@ -179,11 +179,11 @@ export default function ChordDiagramSVG({
     <svg viewBox={`0 0 ${W} ${H}`} width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg">
       {/* Nut: thick filled rect when startFret===1; thin line + fret number otherwise */}
       {startFret === 1 ? (
-        <rect x={LEFT} y={nutY - 5} width={5 * STR_SPACING} height={5} className="fill-gp-ink" rx={1} />
+        <rect x={LEFT} y={nutY - 5} width={5 * STR_SPACING} height={5} className="fill-ink" rx={1} />
       ) : (
         <>
-          <line x1={LEFT} y1={nutY} x2={gridRight} y2={nutY} className="stroke-gp-ink-3" strokeWidth={1.5} />
-          <text x={LEFT - 12} y={nutY + FRET_H / 2 + 4} textAnchor="end" fontSize={10} className="fill-gp-ink-3">
+          <line x1={LEFT} y1={nutY} x2={gridRight} y2={nutY} className="stroke-ink-3" strokeWidth={1.5} />
+          <text x={LEFT - 12} y={nutY + FRET_H / 2 + 4} textAnchor="end" fontSize={10} className="fill-ink-3">
             {startFret}
           </text>
         </>
@@ -191,12 +191,12 @@ export default function ChordDiagramSVG({
 
       {/* Fret lines 1–5 */}
       {Array.from({ length: NUM_FRETS }, (_, i) => i + 1).map(n => (
-        <line key={n} x1={LEFT} y1={fretLineY(n)} x2={gridRight} y2={fretLineY(n)} className="stroke-gp-ink-3" strokeWidth={1} />
+        <line key={n} x1={LEFT} y1={fretLineY(n)} x2={gridRight} y2={fretLineY(n)} className="stroke-ink-3" strokeWidth={1} />
       ))}
 
       {/* String lines */}
       {Array.from({ length: 6 }, (_, s) => (
-        <line key={s} x1={strX(s)} y1={nutY} x2={strX(s)} y2={fretLineY(NUM_FRETS)} className="stroke-gp-ink" strokeWidth={1.5} />
+        <line key={s} x1={strX(s)} y1={nutY} x2={strX(s)} y2={fretLineY(NUM_FRETS)} className="stroke-ink" strokeWidth={1.5} />
       ))}
 
       {/* Ghost dots (fretboard mode) — rendered before barre and main dots */}
@@ -206,7 +206,7 @@ export default function ChordDiagramSVG({
         const name = NOTE_NAMES[pitchClass(s, absoluteFret)];
         return (
           <g key={`ghost-${s}-${visualFret}`}>
-            <circle cx={x} cy={cy} r={DOT_R} className="fill-gp-card" />
+            <circle cx={x} cy={cy} r={DOT_R} className="fill-card" />
             <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} className={ghostFill(s, absoluteFret)} fontWeight="bold">{name}</text>
           </g>
         );
@@ -222,7 +222,7 @@ export default function ChordDiagramSVG({
         const width = shown ? strX(barreMax) - strX(barreMin) + DOT_R * 2 : 0;
         return (
           <g className="cd-move" style={{ transform: `translate(${x0}px, ${y0}px)`, opacity: shown ? 1 : 0 }}>
-            <rect x={0} y={0} width={width} height={DOT_R * 2} rx={DOT_R} className="fill-gp-ink" style={{ width }} />
+            <rect x={0} y={0} width={width} height={DOT_R * 2} rx={DOT_R} className="fill-ink" style={{ width }} />
           </g>
         );
       })()}
@@ -236,7 +236,7 @@ export default function ChordDiagramSVG({
         const name = NOTE_NAMES[pitchClass(s, barreAbsoluteFret)];
         return (
           <g key={`barre-row-${s}`}>
-            <circle cx={x} cy={cy} r={DOT_R} className="fill-gp-card" />
+            <circle cx={x} cy={cy} r={DOT_R} className="fill-card" />
             <text x={x} y={cy + 7 * 0.42} textAnchor="middle" fontSize={7} className={ghostFill(s, barreAbsoluteFret)} fontWeight="bold">{name}</text>
           </g>
         );
@@ -258,9 +258,9 @@ export default function ChordDiagramSVG({
 
         return (
           <g key={s}>
-            <text className="cd-move fill-gp-ink-3" x={x} y={nutY - 9} textAnchor="middle" fontSize={13} style={{ opacity: muted ? 1 : 0 }}>×</text>
+            <text className="cd-move fill-ink-3" x={x} y={nutY - 9} textAnchor="middle" fontSize={13} style={{ opacity: muted ? 1 : 0 }}>×</text>
             {mode === "fingers" ? (
-              <text className={`cd-move ${rootTone && root ? "fill-gp-m-500" : "fill-gp-ink-3"}`} x={x} y={nutY - 9} textAnchor="middle" fontSize={12} fontWeight={rootTone && root ? "bold" : undefined} style={{ opacity: open ? 1 : 0 }}>○</text>
+              <text className={`cd-move ${rootTone && root ? "fill-m-500" : "fill-ink-3"}`} x={x} y={nutY - 9} textAnchor="middle" fontSize={12} fontWeight={rootTone && root ? "bold" : undefined} style={{ opacity: open ? 1 : 0 }}>○</text>
             ) : (
               // noteNames / fretboard: dark filled circle above nut row with open-string note name
               <g className="cd-move" style={{ opacity: open ? 1 : 0 }}>
@@ -296,8 +296,8 @@ export default function ChordDiagramSVG({
               const delay = { animationDelay: `${k * pluck.gapS}s` };
               return (
                 <g key={s}>
-                  <line className="cd-pluck-string stroke-gp-m-500" x1={x} y1={from} x2={x} y2={fretLineY(NUM_FRETS)} strokeWidth={2.5} style={delay} />
-                  <circle className="cd-pluck-ring stroke-gp-m-500" cx={x} cy={cy} r={DOT_R + 1} fill="none" strokeWidth={2} style={delay} />
+                  <line className="cd-pluck-string stroke-m-500" x1={x} y1={from} x2={x} y2={fretLineY(NUM_FRETS)} strokeWidth={2.5} style={delay} />
+                  <circle className="cd-pluck-ring stroke-m-500" cx={x} cy={cy} r={DOT_R + 1} fill="none" strokeWidth={2} style={delay} />
                 </g>
               );
             })}
@@ -306,7 +306,7 @@ export default function ChordDiagramSVG({
 
       {/* String labels */}
       {STRING_LABELS.map((lbl, s) => (
-        <text key={s} x={strX(s)} y={fretLineY(NUM_FRETS) + 14} textAnchor="middle" fontSize={10} className="fill-gp-ink-3">
+        <text key={s} x={strX(s)} y={fretLineY(NUM_FRETS) + 14} textAnchor="middle" fontSize={10} className="fill-ink-3">
           {lbl}
         </text>
       ))}

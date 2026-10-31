@@ -53,7 +53,7 @@ export default function NotFoundVideo() {
 
 	return (
 		<div className="flex w-full max-w-110 flex-col items-center gap-2.5">
-			<div className="relative aspect-video w-full overflow-hidden rounded-gp-lg bg-gp-well">
+			<div className="relative aspect-video w-full overflow-hidden rounded-lg bg-well">
 				{source ? (
 					<iframe
 						key={source}
@@ -72,7 +72,7 @@ export default function NotFoundVideo() {
 				<button
 					type="button"
 					onClick={() => setSource(other)}
-					className="gp-focus rounded-gp-xs text-(length:--gp-t-cap) text-gp-ink-3 underline decoration-gp-edge underline-offset-4 transition-colors duration-(--gp-d-state) hover:text-gp-ink"
+					className="gp-focus rounded-xs text-(length:--gp-t-cap) text-ink-3 underline decoration-edge underline-offset-4 transition-colors duration-(--gp-d-state) hover:text-ink"
 				>
 					Not playing? Watch on {SOURCES[other].name}
 				</button>

@@ -11,11 +11,11 @@ export default function UserIdentity({ profile }: { profile: Profile }) {
 		<div className="flex min-w-0 items-center gap-2.5">
 			<UserAvatar profile={profile} />
 			<div className="flex min-w-0 flex-col gap-0.5">
-				<span className="truncate font-gp-body text-[14px] font-semibold text-gp-ink">
+				<span className="truncate font-body text-[14px] font-semibold text-ink">
 					{profile.displayName}
 				</span>
 				{profile.email && (
-					<span className="truncate font-gp-body text-[12.5px] text-gp-ink-3">
+					<span className="truncate font-body text-[12.5px] text-ink-3">
 						{profile.email}
 					</span>
 				)}

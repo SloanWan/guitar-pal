@@ -33,7 +33,7 @@ export default function ChordRequestButton({ query, label = "Report this chord a
 	}, [query]);
 
 	if (typeof state === "object" && "done" in state) {
-		return <p className="m-0 text-sm text-gp-ink-2">{REPORT_MESSAGES[state.done]}</p>;
+		return <p className="m-0 text-sm text-ink-2">{REPORT_MESSAGES[state.done]}</p>;
 	}
 
 	return (

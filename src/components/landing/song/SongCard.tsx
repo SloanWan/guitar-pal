@@ -85,14 +85,17 @@ export default function SongCard() {
 						<li
 							key={b}
 							aria-current={now ? "true" : undefined}
-							className={`flex h-14 flex-col items-center justify-center rounded-gp-md transition-[background-color,color,opacity,box-shadow] duration-(--gp-d-state) ${
+							// The Strum page's chord tiles (strum.css `.st-tile`): the bar sounding is lifted.
+							className={`flex h-14 flex-col items-center justify-center rounded-gp-md text-gp-ink transition-[translate,background-color,box-shadow] duration-(--gp-d-rise) ease-(--gp-e-rise) ${
 								now
-									? "bg-gp-m-100 text-gp-m-700 shadow-[inset_0_0_0_1.5px_var(--gp-m-500)]"
-									: "bg-gp-well text-gp-ink"
+									? "-translate-y-0.5 bg-gp-card shadow-[inset_0_0_0_1px_var(--gp-m-300),3px_3px_0_0_var(--gp-m-sh)]"
+									: "bg-gp-page shadow-(--gp-ring-c)"
 							}`}
 						>
-							<span className="font-gp-display text-[17px] leading-none font-bold">{shape.name}</span>
-							<span className={`mt-1 text-[11.5px] leading-none ${now ? "" : "text-gp-ink-3"}`}>sounds {shape.sounds}</span>
+							<span className="text-[16px] leading-none font-[750]">{shape.name}</span>
+							<span className={`mt-1 text-[11.5px] leading-none ${now ? "text-gp-m-700" : "text-gp-ink-3"}`}>
+								sounds {shape.sounds}
+							</span>
 						</li>
 					);
 				})}

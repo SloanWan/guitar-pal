@@ -105,7 +105,7 @@ export default function SongTab({
 	}, [rows, slot, preview]);
 
 	return (
-		<div ref={container} className="relative min-h-[150px] w-full">
+		<div ref={container} className="ld-tab relative min-h-[150px] w-full">
 			<div className="flex flex-col">
 				{rows.map((row) => (
 					<TabStaveRow
@@ -121,7 +121,7 @@ export default function SongTab({
 			<div
 				ref={cursor}
 				aria-hidden="true"
-				className="pointer-events-none absolute left-0 z-10 w-0.5 rounded-full bg-gp-m-500"
+				className="ld-tab-playhead pointer-events-none absolute left-0 z-10 w-0.5 rounded-full bg-gp-m-500"
 				style={{ opacity: 0 }}
 			/>
 		</div>

@@ -51,7 +51,17 @@ import PianoKeyboard, { type PianoKeyboardHandle } from "@/components/fretboard/
 import { useNoteSound, type NoteVoice } from "@/components/fretboard/useNoteSound";
 import { useSequencePlayer } from "@/components/fretboard/useSequencePlayer";
 import ChordSearchSelect from "@/components/strum/ChordSearchSelect";
-import { CardHead, CardToggle, ChoiceChip, ScaleSteps, StripBar, ToneList, TuningPicker } from "@/components/fretboard/parts";
+import {
+	CardHead,
+	CardToggle,
+	ChoiceChip,
+	NeckLegend,
+	ScaleSteps,
+	StripBar,
+	ToneList,
+	TuningPicker,
+	type LegendItem,
+} from "@/components/fretboard/parts";
 import MusicalText from "@/components/MusicalText";
 import { Button, PlayPick } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -191,12 +201,7 @@ const RUN_VOICE: NoteVoice = "guitar";
 /** A tempo held still this long restarts a playing strip at it, so a held step button restarts once. */
 const TEMPO_SETTLE_MS = 350;
 
-const LEGEND: readonly {
-	emphasis: FretMark["emphasis"];
-	tone?: FretMark["tone"];
-	label: string;
-	mode: ExplorerMode | "both";
-}[] = [
+const LEGEND: readonly (LegendItem & { mode: ExplorerMode | "both" })[] = [
 	{ emphasis: "root", label: "Root", mode: "both" },
 	{ emphasis: "chordTone", tone: "third", label: "3rd", mode: "chords" },
 	{ emphasis: "chordTone", tone: "fifth", label: "5th", mode: "chords" },
@@ -1414,19 +1419,7 @@ export default function FretboardExplorer({
 									onSlotHover={handleSlotHover}
 									pressable={soundOn}
 								/>
-								<ul className="fbx-legend" aria-hidden="true">
-									{LEGEND.filter((l) => l.mode === "both" || l.mode === mode).map(({ emphasis, tone, label }) => (
-										<li key={label}>
-											<svg width="18" height="18" viewBox="0 0 18 18">
-												<g className="fb-mark" data-emphasis={emphasis} data-tone={tone}>
-													<circle className="fb-ring" cx="9" cy="9" r="8" />
-													<circle className="fb-dot" cx="9" cy="9" r="6.5" strokeWidth={1.25} />
-												</g>
-											</svg>
-											{label}
-										</li>
-									))}
-								</ul>
+								<NeckLegend items={LEGEND.filter((l) => l.mode === "both" || l.mode === mode)} />
 							</div>
 						</section>
 

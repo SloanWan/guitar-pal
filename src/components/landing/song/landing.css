@@ -183,3 +183,27 @@
 		}
 	}
 }
+
+/* The song's stave in the Tab page's colours (tab.css `.tb-sheet`): TabStaveRow reads
+   `--tab-*`, and its fret-number halo is the demo card it sits on. The playhead wears
+   the page's cap; a row of headroom keeps the cap clear of the step's edge. */
+@layer components {
+	.ld-tab {
+		--tab-ink: var(--gp-ink);
+		--tab-dim: var(--gp-ink-3);
+		--tab-faint: var(--gp-ink-3);
+		--tab-line: var(--gp-edge);
+		--tab-paper: var(--gp-card);
+		--tab-chord: var(--gp-m-700);
+		padding-top: 8px;
+	}
+	.ld-tab-playhead::before {
+		position: absolute;
+		top: -6px;
+		left: -4px;
+		border-top: 6px solid var(--gp-m-500);
+		border-right: 5px solid transparent;
+		border-left: 5px solid transparent;
+		content: "";
+	}
+}

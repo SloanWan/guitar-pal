@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import {
 	ArrowDownUp,
 	ArrowRight,
+	ArrowUpRight,
 	BookOpen,
 	Grid3x3,
 	Hash,
@@ -15,17 +16,22 @@ import {
 	type LucideIcon,
 } from "lucide-react";
 import Link from "@/components/AppLink";
+import HearButton from "@/components/assistant/HearButton";
 import ChordDiagramSVG from "@/components/chords/ChordDiagramSVG";
 import Fretboard from "@/components/fretboard/Fretboard";
+import { NeckLegend, type LegendItem } from "@/components/fretboard/parts";
 import RhythmGrid, { type RhythmPosition } from "@/components/strum/stage/RhythmGrid";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { ModuleBadge } from "@/components/ui/list-row";
+import { Pick } from "@/components/ui/pick";
 import { patternHandoff, stashHandoff } from "@/lib/assistant/handoff";
+import type { AssistantProposal } from "@/lib/assistant/types";
 import { voicingToDiagramShape } from "@/lib/chordVoicing";
 import { chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
 import { scaleMarks, scaleRootPitchClass, type ScaleSpec } from "@/lib/fretboard/scales";
 import type { FretWindow } from "@/lib/fretboard/types";
+import { chordAbbreviation } from "@/lib/strumProgressions";
 import {
 	SONG,
 	SONG_BAR_SHAPES,
@@ -42,6 +48,7 @@ import { useInView, useSequence, useTicker, useTypewriter } from "./motion";
 import { useAirStrum } from "./Eggs";
 import { strumFromSweep } from "@/lib/landing/eggs";
 import "@/components/strum/strum.css";
+import "@/components/assistant/assistant.css";
 import "./landing.css";
 import { useNavRouter } from "@/components/nav-progress";
 
@@ -135,8 +142,60 @@ function PreviewNote({ on }: { on: boolean }) {
 
 /* ---- 1 · Say it: the sentence is typed, then read ---------------------- */
 
-function SayIt() {
+/**
+ * The assistant's proposal card as the panel draws it (`ProposalPreview`), but
+ * played by the page's one player: Hear it strums the song, so the card's grid
+ * and chord line follow the same bar as every other step, and no second engine
+ * or chord lookup is started for a demo.
+ */
+function SongProposalCard({ proposal, shown }: { proposal: AssistantProposal; shown: boolean }) {
 	const router = useNavRouter();
+	const { mode, playing, preparing, toggle, playAs, bar, rhythmPosition } = useSongPlayer();
+	const strumming = playing && mode === "strum";
+	return (
+		// Unseen until it arrives, which also keeps its buttons out of the tab order.
+		<div className={`as-card ${shown ? "" : "invisible"}`} data-m="strum">
+			<div className="as-card-h">
+				<span className="as-card-t">{proposal.name}</span>
+				<span className="as-card-meta">
+					{proposal.capo !== null && <span>capo {proposal.capo}</span>}
+					{proposal.bpm !== null && <span>{proposal.bpm} BPM</span>}
+				</span>
+			</div>
+			<div className="as-card-b">
+				<div className="as-chordline">
+					{proposal.chords.map((chord, i) => (
+						<span key={i} data-on={strumming && bar === i ? "" : undefined}>
+							{chordAbbreviation(chord)}
+						</span>
+					))}
+				</div>
+				<div className="as-rhythm">
+					<RhythmGrid rhythm={SONG_RHYTHM} meter={SONG.meter} position={strumming ? rhythmPosition : null} />
+				</div>
+			</div>
+			<div className="as-card-f">
+				<HearButton
+					playing={strumming}
+					preparing={strumming && preparing}
+					onClick={() => (strumming ? toggle() : playAs("strum"))}
+				/>
+				<Button
+					size="sm"
+					onClick={() => {
+						stashHandoff(patternHandoff(proposal));
+						router.push("/strum");
+					}}
+				>
+					Open in Strum
+					<ArrowUpRight aria-hidden />
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+function SayIt() {
 	const ref = useRef<HTMLDivElement>(null);
 	const inView = useInView(ref);
 	const typed = useTypewriter(SONG_SENTENCE, inView);
@@ -144,49 +203,44 @@ function SayIt() {
 	// After the last key: the assistant thinks, answers, then its card arrives.
 	const phase = useSequence(done, [350, 700, 450]);
 	const proposal = SONG_TURN.proposal;
+	// The panel's pieces blow up as they mount, so each one mounts again as it
+	// arrives; until then it holds its place unseen and the card keeps its size.
 	return (
-		<div ref={ref} className="flex flex-col gap-3">
-			<p className="relative max-w-[85%] self-end rounded-gp-lg rounded-br-gp-xs bg-gp-ink px-3.5 py-2.5 text-(length:--gp-t-ui) text-gp-on-ink">
+		<div ref={ref} className="flex flex-col gap-3.5">
+			<p className="as-you relative">
 				{/* The whole sentence holds the bubble's size; the typed part is drawn over it. */}
 				<span className="invisible" aria-hidden>
 					{SONG_SENTENCE}
 				</span>
-				<span className={`absolute inset-x-3.5 top-2.5 ${done ? "" : "ld-caret"}`} aria-hidden>
+				<span className={`absolute inset-x-[13px] top-[9px] ${done ? "" : "ld-caret"}`} aria-hidden>
 					{SONG_SENTENCE.slice(0, typed)}
 				</span>
 				<span className="sr-only">{SONG_SENTENCE}</span>
 			</p>
-			<div className="grid text-(length:--gp-t-ui) text-gp-ink-2">
-				<span className={`ld-dots col-start-1 row-start-1 ${phase === 1 ? "" : "invisible"}`} aria-hidden>
-					Reading
-					<i />
-					<i />
-					<i />
-				</span>
-				<span className={`col-start-1 row-start-1 ${arrive(phase >= 2)}`}>{SONG_TURN.text}</span>
-			</div>
-			{proposal && (
-				<div data-m="strum" className={`flex flex-col gap-3 rounded-gp-md bg-gp-well p-3.5 ${arrive(phase >= 3)}`}>
-					<div className="flex flex-wrap items-baseline justify-between gap-2">
-						<span className="font-semibold text-gp-ink">{proposal.name}</span>
-						<span className="text-(length:--gp-t-cap) text-gp-ink-3">
-							Capo {proposal.capo} · {proposal.bpm} BPM
-						</span>
+			<div className="as-reply" data-m="strum">
+				<div className="as-row">
+					<Pick className={`as-who ${phase >= 1 ? "" : "invisible"}`} />
+					<div className="as-stack">
+						<div className="grid w-full justify-items-start">
+							<div key={`typing-${phase === 1}`} className={`as-bub col-start-1 row-start-1 self-start ${phase === 1 ? "" : "invisible"}`}>
+								<span className="as-typing" aria-label="Writing a reply">
+									<i />
+									<i />
+									<i />
+								</span>
+							</div>
+							<div
+								key={`said-${phase >= 2}`}
+								className={`as-bub col-start-1 row-start-1 ${phase >= 2 ? "" : "invisible"}`}
+								data-pos={proposal ? "top" : undefined}
+							>
+								{SONG_TURN.text}
+							</div>
+						</div>
+						{proposal && <SongProposalCard key={`card-${phase >= 3}`} proposal={proposal} shown={phase >= 3} />}
 					</div>
-					<code className="font-gp-num text-(length:--gp-t-ui) tracking-[0.12em] text-gp-ink-2">{proposal.rhythm}</code>
-					<Button
-						size="sm"
-						className="self-start"
-						tabIndex={phase >= 3 ? undefined : -1}
-						onClick={() => {
-							stashHandoff(patternHandoff(proposal));
-							router.push("/strum");
-						}}
-					>
-						Open in Strum
-					</Button>
 				</div>
-			)}
+			</div>
 		</div>
 	);
 }
@@ -207,22 +261,24 @@ function Shapes() {
 				<CapoTag />
 				<SongSource />
 			</div>
+			{/* The Chords board's cards (hub.css): the name, what it sounds behind the capo, the
+			    shape; the one sounding wears the module's ring. */}
 			<ul className="grid grid-cols-4 gap-3 max-sm:grid-cols-2">
 				{SONG_SHAPES.map((s, i) => (
 					<li
 						key={s.name}
 						aria-current={now === i ? "true" : undefined}
-						className={`flex flex-col items-center gap-1 rounded-gp-md p-2 transition-[background-color,box-shadow] duration-(--gp-d-state) ${
-							now === i ? "bg-gp-m-100 shadow-[inset_0_0_0_1.5px_var(--gp-m-500)]" : ""
+						className={`flex flex-col items-center gap-1 rounded-gp-md bg-gp-page px-1.5 pt-3 pb-2 transition-shadow duration-(--gp-d-state) ease-linear ${
+							now === i ? "shadow-[0_0_0_2px_var(--gp-m-500)]" : ""
 						}`}
 					>
+						<span className="text-[24px] font-extrabold tracking-[-0.02em] text-gp-ink">{s.name}</span>
+						<span className="-mt-1 text-[12px] leading-3.75 font-[650] text-gp-m-700">sounds {s.sounds}</span>
 						<ChordDiagramSVG
 							{...voicingToDiagramShape(s.voicing)}
 							size="compact"
 							pluck={now === i ? { run, gapS: 0.05 } : null}
 						/>
-						<span className="font-gp-display text-[17px] font-bold text-gp-ink">{s.name}</span>
-						<span className="text-(length:--gp-t-cap) text-gp-ink-3">sounds {s.sounds}</span>
 					</li>
 				))}
 			</ul>
@@ -235,6 +291,14 @@ function Shapes() {
 const KEY: ScaleSpec = { root: "C", scale: "major" };
 const NECK: FretWindow = { fromFret: 0, toFret: 12 };
 const SCALE = scaleMarks(KEY, NECK, "note");
+/** The Fretboard page's key in Chords mode, with the scale the chord sits on. */
+const NECK_LEGEND: readonly LegendItem[] = [
+	{ emphasis: "root", label: "Root" },
+	{ emphasis: "chordTone", tone: "third", label: "3rd" },
+	{ emphasis: "chordTone", tone: "fifth", label: "5th" },
+	{ emphasis: "chordTone", tone: "seventh", label: "7th" },
+	{ emphasis: "scaleTone", label: "Scale tone" },
+];
 
 function Neck() {
 	const ref = useRef<HTMLDivElement>(null);
@@ -260,21 +324,25 @@ function Neck() {
 			<p className="text-(length:--gp-t-cap) text-gp-ink-3">
 				Frets counted from the capo · C major, {SONG_SHAPES[shown].name} on top
 			</p>
-			<div className="overflow-x-auto">
-				<div className="min-w-[560px]">
-					<Fretboard
-						marks={marks}
-						fromFret={NECK.fromFret}
-						toFret={NECK.toFret}
-						pressable={false}
-						label={`C major with ${SONG_SHAPES[shown].name} on the neck`}
-					/>
+			{/* The Fretboard page's neck: its wood, frets and chord-tone roles (fretboard-page.css). */}
+			<div className="fb-candy">
+				<div className="overflow-x-auto">
+					<div className="min-w-[560px]">
+						<Fretboard
+							marks={marks}
+							fromFret={NECK.fromFret}
+							toFret={NECK.toFret}
+							pressable={false}
+							label={`C major with ${SONG_SHAPES[shown].name} on the neck`}
+						/>
+					</div>
 				</div>
+				<NeckLegend items={NECK_LEGEND} />
 			</div>
 			<div className="flex flex-wrap gap-2" role="group" aria-label="Song chords">
 				{SONG_SHAPES.map((s, i) => (
 					<Chip key={s.name} pressed={shown === i} onPressedChange={() => setChosen(i)}>
-						{s.name} <span className="font-normal text-gp-ink-3">{s.numeral}</span>
+						{s.name} <span className="font-normal opacity-70">{s.numeral}</span>
 					</Chip>
 				))}
 			</div>
@@ -358,20 +426,22 @@ function PickIt() {
 
 /* ---- 6 · Books: a page is read, an exercise comes out ------------------ */
 
+/** The sample book's page-3 exercise, cut by its parse (`lib/books/sample/sanyuetong.json`). */
+const BOOK_CROP = "/samples/sanyuetong/p0003-1.png";
+
 function FromBook() {
 	const ref = useRef<HTMLDivElement>(null);
 	const inView = useInView(ref);
 	const phase = useSequence(inView, [150, 1200, 500]);
 	return (
-		<div ref={ref} className="flex flex-col gap-4 min-[720px]:flex-row min-[720px]:items-center">
-			<div className={`w-full max-w-70 rounded-gp-md bg-white ${phase >= 1 ? "ld-scan" : ""}`}>
-				{/* A crop the sample book's parse cut from page 3. */}
+		<div ref={ref} className="flex flex-col gap-4">
+			<div className={`w-full max-w-90 rounded-gp-md bg-white ${phase >= 1 ? "ld-scan" : ""}`}>
 				{/* eslint-disable-next-line @next/next/no-img-element -- a static sample crop, shown at its own size */}
-				<img src="/samples/sanyuetong/p0003-1.png" alt="An exercise cropped from page 3 of the sample book" className="w-full" />
+				<img src={BOOK_CROP} alt="An exercise cropped from page 3 of the sample book" className="w-full" />
 			</div>
 			<div className="grid min-w-0">
 				<span
-					className={`ld-dots col-start-1 row-start-1 text-(length:--gp-t-cap) text-gp-ink-3 ${
+					className={`ld-dots col-start-1 row-start-1 self-center text-(length:--gp-t-cap) text-gp-ink-3 ${
 						phase === 1 || phase === 2 ? "" : "invisible"
 					}`}
 					aria-hidden
@@ -381,10 +451,23 @@ function FromBook() {
 					<i />
 					<i />
 				</span>
-				<div className={`col-start-1 row-start-1 flex flex-col gap-1 ${arrive(phase >= 3)}`}>
-					<span className="text-(length:--gp-t-cap) text-gp-ink-3">吉他自学三月通 · p. 3</span>
-					<span className="font-semibold text-gp-ink">⑤弦:A-B-C</span>
-					<span className="text-(length:--gp-t-cap) text-gp-ink-3">4 bars · ♩ = 120 · a pattern you can play</span>
+				{/* The chapter card's draft row (Books, DraftRow): the crop, the name, the page and the facts. */}
+				<div
+					className={`col-start-1 row-start-1 flex items-center gap-3.5 rounded-gp-md bg-gp-card p-2 shadow-(--gp-ring-c) max-sm:gap-2.5 ${arrive(phase >= 3)}`}
+				>
+					<span className="h-11.5 w-37.5 flex-none overflow-hidden rounded-gp-sm bg-white shadow-(--gp-ring-c) max-sm:h-10 max-sm:w-24">
+						{/* eslint-disable-next-line @next/next/no-img-element -- the same static crop, as the row's thumbnail */}
+						<img src={BOOK_CROP} alt="" className="size-full object-cover object-[0_50%]" />
+					</span>
+					<span className="flex min-w-0 flex-col gap-0.75">
+						<b className="truncate text-(length:--gp-t-row) font-[650] text-gp-ink">⑤弦:A-B-C</b>
+						<span className="flex flex-wrap items-center gap-x-1.5 text-(length:--gp-t-cap) font-medium text-gp-ink-3 tabular-nums">
+							<span className="inline-flex h-6 items-center rounded-gp-xs bg-gp-s2 px-1.75 text-[12.5px] font-semibold text-gp-ink-2">
+								p.3
+							</span>
+							Tab · 4 bars · ♩=120
+						</span>
+					</span>
 				</div>
 			</div>
 		</div>
@@ -470,7 +553,7 @@ export default function SongSteps() {
 				link={{ href: "/chords", label: "Open Chords" }}
 			>
 				C, Am7, Dm7 and G — all open shapes. With the capo on 2 they sound as D, Bm7, Em7 and A. The shape playing is the
-				one lifted.
+				one outlined.
 			</Step>
 			<Step
 				n={3}

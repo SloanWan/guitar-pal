@@ -14,6 +14,7 @@ import { usePress } from "@/components/ui/press";
 import { Chip } from "@/components/ui/chip";
 import { Segmented } from "@/components/ui/segmented";
 import { scaleSteps, stepName, type ScaleType } from "@/lib/fretboard/scales";
+import type { FretMark } from "@/lib/fretboard/types";
 import { TUNINGS, type Tuning } from "@/lib/fretboard/tuning";
 import { cn } from "@/lib/utils";
 
@@ -182,5 +183,31 @@ export function StripBar({
 				<X aria-hidden />
 			</button>
 		</div>
+	);
+}
+
+/** One entry of the neck's key: a dot drawn the way the neck draws it, and its name. */
+export interface LegendItem {
+	emphasis: FretMark["emphasis"];
+	tone?: FretMark["tone"];
+	label: string;
+}
+
+/** What the neck's dots mean, under the neck (the page, and the landing's neck). */
+export function NeckLegend({ items }: { items: readonly LegendItem[] }) {
+	return (
+		<ul className="fbx-legend" aria-hidden="true">
+			{items.map(({ emphasis, tone, label }) => (
+				<li key={label}>
+					<svg width="18" height="18" viewBox="0 0 18 18">
+						<g className="fb-mark" data-emphasis={emphasis} data-tone={tone}>
+							<circle className="fb-ring" cx="9" cy="9" r="8" />
+							<circle className="fb-dot" cx="9" cy="9" r="6.5" strokeWidth={1.25} />
+						</g>
+					</svg>
+					{label}
+				</li>
+			))}
+		</ul>
 	);
 }

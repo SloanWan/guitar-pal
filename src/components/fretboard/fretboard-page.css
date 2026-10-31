@@ -697,234 +697,235 @@
 /* =====================================================================================
    The instruments in Candy. Unlayered on purpose: the v3 rules they override (globals.css,
    `.fb-*` / `.pk-*`) are unlayered, and no layered rule beats an unlayered one. Scoped to
-   `.fbx`, so the landing's neck and keyboard keep their look until that page migrates.
+   the page (`.fbx`) and to `.fb-candy`, which the landing's neck wears; the /dev pages
+   that draw the instruments keep the v3 look.
    ===================================================================================== */
-.fbx .fp-thin-scroll {
+:is(.fbx, .fb-candy) .fp-thin-scroll {
 	scrollbar-color: var(--gp-edge) transparent;
 }
-.fbx .fp-thin-scroll::-webkit-scrollbar-thumb {
+:is(.fbx, .fb-candy) .fp-thin-scroll::-webkit-scrollbar-thumb {
 	border-radius: 2px;
 	background: var(--gp-edge);
 }
 
 /* ── The neck ─────────────────────────────────────────────────────────── */
-.fbx .fb-board {
+:is(.fbx, .fb-candy) .fb-board {
 	fill: var(--gp-neck);
 }
-.fbx .fb-wire {
+:is(.fbx, .fb-candy) .fb-wire {
 	stroke: var(--gp-neck-fret);
 	stroke-width: 2px;
 }
-.fbx .fb-nut {
+:is(.fbx, .fb-candy) .fb-nut {
 	stroke: var(--gp-neck-nut);
 	stroke-width: 5px;
 }
-.fbx .fb-string {
+:is(.fbx, .fb-candy) .fb-string {
 	stroke: var(--gp-neck-string);
 }
-.fbx .fb-inlay {
+:is(.fbx, .fb-candy) .fb-inlay {
 	fill: var(--gp-neck-fret);
 }
-.fbx .fb-sname,
-.fbx .fb-fnum {
+:is(.fbx, .fb-candy) .fb-sname,
+:is(.fbx, .fb-candy) .fb-fnum {
 	fill: var(--gp-ink-3);
 	font-family: var(--gp-f-body);
 	font-weight: 650;
 }
-.fbx .fb-label {
+:is(.fbx, .fb-candy) .fb-label {
 	fill: var(--gp-on-role);
 	font-family: var(--gp-f-body);
 	font-weight: 700;
 }
-.fbx .fb-dot {
+:is(.fbx, .fb-candy) .fb-dot {
 	fill: var(--gp-role-x);
 	stroke: var(--gp-role-x);
 }
-.fbx .fb-mark[data-emphasis="root"] {
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="root"] {
 	filter: none;
 }
-.fbx .fb-mark[data-emphasis="root"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="root"] .fb-dot {
 	fill: var(--gp-m-500);
 	stroke: var(--gp-m-500);
 }
-.fbx .fb-mark[data-emphasis="root"] .fb-label {
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="root"] .fb-label {
 	fill: var(--gp-m-on);
 }
 /* The root's hard shadow, the way a pressable carries one. */
-.fbx .fb-mark[data-emphasis="root"] .fb-ring {
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="root"] .fb-ring {
 	opacity: 1;
 	fill: var(--gp-m-sh);
 	stroke: none;
 	r: 8px;
 	transform: translate(1.5px, 1.5px);
 }
-.fbx .fb-mark[data-emphasis="chordTone"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="chordTone"] .fb-dot {
 	fill: var(--gp-role-x);
 	stroke: var(--gp-role-x);
 }
-.fbx .fb-mark[data-emphasis="chordTone"] .fb-label,
-.fbx .fb-mark[data-tone] .fb-label {
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="chordTone"] .fb-label,
+:is(.fbx, .fb-candy) .fb-mark[data-tone] .fb-label {
 	fill: var(--gp-on-role);
 }
-.fbx .fb-mark[data-tone="third"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-tone="third"] .fb-dot {
 	fill: var(--gp-role-3);
 	stroke: var(--gp-role-3);
 }
-.fbx .fb-mark[data-tone="fifth"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-tone="fifth"] .fb-dot {
 	fill: var(--gp-role-5);
 	stroke: var(--gp-role-5);
 }
-.fbx .fb-mark[data-tone="seventh"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-tone="seventh"] .fb-dot {
 	fill: var(--gp-role-7);
 	stroke: var(--gp-role-7);
 }
-.fbx .fb-mark[data-tone="extension"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-tone="extension"] .fb-dot {
 	fill: var(--gp-role-x);
 	stroke: var(--gp-ink-3);
 }
-.fbx .fb-mark[data-emphasis="muted"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-emphasis="muted"] .fb-dot {
 	fill: var(--gp-ink-mute);
 	stroke: var(--gp-ink-mute);
 }
 /* A run's notes: tinted with the module, darker the lower the octave. */
-.fbx .fb-mark[data-run] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-run] .fb-dot {
 	stroke: var(--gp-m-500);
 }
-.fbx .fb-mark[data-run="0"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-run="0"] .fb-dot {
 	fill: color-mix(in oklab, var(--gp-m-500) 45%, var(--gp-card));
 }
-.fbx .fb-mark[data-run="1"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-run="1"] .fb-dot {
 	fill: color-mix(in oklab, var(--gp-m-500) 30%, var(--gp-card));
 }
-.fbx .fb-mark[data-run="2"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-run="2"] .fb-dot {
 	fill: color-mix(in oklab, var(--gp-m-500) 18%, var(--gp-card));
 }
-.fbx .fb-mark[data-run="3"] .fb-dot {
+:is(.fbx, .fb-candy) .fb-mark[data-run="3"] .fb-dot {
 	fill: color-mix(in oklab, var(--gp-m-500) 10%, var(--gp-card));
 }
-.fbx .fb-mark[data-run] .fb-label {
+:is(.fbx, .fb-candy) .fb-mark[data-run] .fb-label {
 	fill: var(--gp-ink);
 }
-.fbx .fb-hover,
-.fbx .fb-pop {
+:is(.fbx, .fb-candy) .fb-hover,
+:is(.fbx, .fb-candy) .fb-pop {
 	stroke: var(--gp-m-500);
 }
-.fbx .fb-string-play-bg {
+:is(.fbx, .fb-candy) .fb-string-play-bg {
 	fill: var(--gp-m-100);
 	stroke: var(--gp-m-300);
 }
-.fbx .fb-string-play path,
-.fbx .fb-string-play rect {
+:is(.fbx, .fb-candy) .fb-string-play path,
+:is(.fbx, .fb-candy) .fb-string-play rect {
 	fill: var(--gp-m-700);
 }
-.fbx .fb-string-play:hover .fb-string-play-bg,
-.fbx .fb-string-play:focus-visible .fb-string-play-bg,
-.fbx .fb-string-play[data-playing] .fb-string-play-bg {
+:is(.fbx, .fb-candy) .fb-string-play:hover .fb-string-play-bg,
+:is(.fbx, .fb-candy) .fb-string-play:focus-visible .fb-string-play-bg,
+:is(.fbx, .fb-candy) .fb-string-play[data-playing] .fb-string-play-bg {
 	fill: var(--gp-m-500);
 	stroke: var(--gp-m-500);
 }
-.fbx .fb-string-play:hover path,
-.fbx .fb-string-play:hover rect,
-.fbx .fb-string-play:focus-visible path,
-.fbx .fb-string-play:focus-visible rect,
-.fbx .fb-string-play[data-playing] path,
-.fbx .fb-string-play[data-playing] rect {
+:is(.fbx, .fb-candy) .fb-string-play:hover path,
+:is(.fbx, .fb-candy) .fb-string-play:hover rect,
+:is(.fbx, .fb-candy) .fb-string-play:focus-visible path,
+:is(.fbx, .fb-candy) .fb-string-play:focus-visible rect,
+:is(.fbx, .fb-candy) .fb-string-play[data-playing] path,
+:is(.fbx, .fb-candy) .fb-string-play[data-playing] rect {
 	fill: var(--gp-m-on);
 }
-.fbx .fb-position {
+:is(.fbx, .fb-candy) .fb-position {
 	stroke: var(--gp-m-700);
 	stroke-width: 1.5;
 }
-.fbx .fb-box-btn svg {
+:is(.fbx, .fb-candy) .fb-box-btn svg {
 	color: var(--gp-m-700);
 }
-.fbx .fb-box-btn:hover > rect:first-child,
-.fbx .fb-box-btn:focus-visible > rect:first-child {
+:is(.fbx, .fb-candy) .fb-box-btn:hover > rect:first-child,
+:is(.fbx, .fb-candy) .fb-box-btn:focus-visible > rect:first-child {
 	fill: var(--gp-m-100);
 }
-.fbx .fb-capo-shade {
+:is(.fbx, .fb-candy) .fb-capo-shade {
 	fill: var(--gp-card);
 }
-.fbx .fb-capo-bar {
+:is(.fbx, .fb-candy) .fb-capo-bar {
 	fill: var(--gp-ink-fill);
 	stroke: none;
 }
-.fbx .fb-capo:hover .fb-capo-ripple,
-.fbx .fb-capo:focus-visible .fb-capo-ripple {
+:is(.fbx, .fb-candy) .fb-capo:hover .fb-capo-ripple,
+:is(.fbx, .fb-candy) .fb-capo:focus-visible .fb-capo-ripple {
 	stroke: var(--gp-m-500);
 }
-.fbx .fb-capo:hover .fb-capo-bar,
-.fbx .fb-capo:focus-visible .fb-capo-bar {
+:is(.fbx, .fb-candy) .fb-capo:hover .fb-capo-bar,
+:is(.fbx, .fb-candy) .fb-capo:focus-visible .fb-capo-bar {
 	fill: var(--gp-ink);
 }
-.fbx .fb-capo:focus-visible .fb-capo-bar {
+:is(.fbx, .fb-candy) .fb-capo:focus-visible .fb-capo-bar {
 	fill: var(--gp-m-500);
 	stroke: none;
 }
 
 /* ── The keyboard ─────────────────────────────────────────────────────── */
-.fbx .pk-key {
+:is(.fbx, .fb-candy) .pk-key {
 	border: 0;
 	font-family: var(--gp-f-body);
 }
-.fbx .pk-white {
+:is(.fbx, .fb-candy) .pk-white {
 	border-radius: 0 0 6px 6px;
 	background: var(--gp-face);
 	box-shadow: inset 0 0 0 1px var(--gp-line);
 	color: var(--gp-ink-3);
 }
-.fbx .pk-black {
+:is(.fbx, .fb-candy) .pk-black {
 	border-radius: 0 0 4px 4px;
 	background: var(--gp-key-black);
 	box-shadow: 1.5px 1.5px 0 0 var(--gp-key-black-sh);
 	color: var(--gp-on-key-black);
 }
-.fbx .pk-white:hover {
+:is(.fbx, .fb-candy) .pk-white:hover {
 	background: var(--gp-m-100);
 	color: var(--gp-m-700);
 }
-.fbx .pk-black:hover {
+:is(.fbx, .fb-candy) .pk-black:hover {
 	background: color-mix(in oklab, var(--gp-key-black), var(--gp-ink-3) 30%);
 }
-.fbx .pk-key[data-selected] {
+:is(.fbx, .fb-candy) .pk-key[data-selected] {
 	background: var(--gp-m-500);
 	box-shadow: none;
 	color: var(--gp-m-on);
 }
-.fbx .pk-key[data-dimmed][data-selected],
-.fbx .pk-key[data-outside][data-selected] {
+:is(.fbx, .fb-candy) .pk-key[data-dimmed][data-selected],
+:is(.fbx, .fb-candy) .pk-key[data-outside][data-selected] {
 	background: var(--gp-face);
 	box-shadow: inset 0 0 0 2px var(--gp-m-500);
 	color: var(--gp-m-700);
 }
-.fbx .pk-black[data-dimmed][data-selected],
-.fbx .pk-black[data-outside][data-selected] {
+:is(.fbx, .fb-candy) .pk-black[data-dimmed][data-selected],
+:is(.fbx, .fb-candy) .pk-black[data-outside][data-selected] {
 	background: var(--gp-key-black);
 	color: var(--gp-on-key-black);
 }
-.fbx .pk-dot {
+:is(.fbx, .fb-candy) .pk-dot {
 	background: var(--gp-m-500);
 }
-.fbx .pk-black .pk-dot {
+:is(.fbx, .fb-candy) .pk-black .pk-dot {
 	background: var(--gp-m-300);
 }
-.fbx .pk-white[data-tone] {
+:is(.fbx, .fb-candy) .pk-white[data-tone] {
 	color: var(--gp-m-700);
 }
-.fbx .pk-key[data-hover="self"] {
+:is(.fbx, .fb-candy) .pk-key[data-hover="self"] {
 	box-shadow: inset 0 0 0 2px var(--gp-m-500);
 	color: var(--gp-m-700);
 }
-.fbx .pk-key[data-hover="octave"] {
+:is(.fbx, .fb-candy) .pk-key[data-hover="octave"] {
 	box-shadow: inset 0 0 0 1px var(--gp-m-500);
 }
-.fbx .pk-key[data-selected][data-hover] {
+:is(.fbx, .fb-candy) .pk-key[data-selected][data-hover] {
 	color: var(--gp-m-on);
 }
-.fbx .pk-key[data-struck] {
+:is(.fbx, .fb-candy) .pk-key[data-struck] {
 	animation-name: fbx-pk-strike;
 }
-.fbx .pk-key[data-selected][data-struck] {
+:is(.fbx, .fb-candy) .pk-key[data-selected][data-struck] {
 	animation-name: fbx-pk-strike-selected;
 }
 @keyframes fbx-pk-strike {
@@ -952,26 +953,26 @@
 		transform: translateY(0);
 	}
 }
-.fbx .pk-label {
+:is(.fbx, .fb-candy) .pk-label {
 	font-family: var(--gp-f-body);
 	font-size: 10px;
 	font-weight: 650;
 	letter-spacing: 0;
 }
-.fbx .pk-band {
+:is(.fbx, .fb-candy) .pk-band {
 	border-top-color: var(--gp-m-500);
 }
-.fbx .pk-band::before,
-.fbx .pk-band::after {
+:is(.fbx, .fb-candy) .pk-band::before,
+:is(.fbx, .fb-candy) .pk-band::after {
 	background: var(--gp-m-500);
 }
 /* One line tall even with an accidental in it (MusicalText draws ♭ as an inline block),
    so a tuned-down range is not cut off at the keyboard's foot. */
-.fbx .pk-band-label,
-.fbx .pk-band-label * {
+:is(.fbx, .fb-candy) .pk-band-label,
+:is(.fbx, .fb-candy) .pk-band-label * {
 	line-height: 1;
 }
-.fbx .pk-band-label {
+:is(.fbx, .fb-candy) .pk-band-label {
 	top: 1px;
 	background: var(--gp-card);
 	color: var(--gp-ink-3);

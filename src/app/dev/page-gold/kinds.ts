@@ -18,4 +18,5 @@ export const NOTATION_LABEL: Record<Notation, string> = {
 	staff: "Staff (five lines)",
 	strum: "Strum strokes",
 	chord_diagrams: "Chord diagrams",
+	fretboard: "Fretboard map",
 };

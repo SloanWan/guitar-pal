@@ -24,6 +24,7 @@ def write_verdict(ref_root, page, kind, regions=()):
 def test_the_notation_a_verdict_implies():
     assert implied_notation("tab", []) == ["tab"]
     assert implied_notation("mixed", ["prose", "chord_diagrams", "tab"]) == ["tab", "chord_diagrams"]
+    assert implied_notation("fretboard_diagram", []) == ["fretboard"]
     assert implied_notation("other", []) == []
 
 

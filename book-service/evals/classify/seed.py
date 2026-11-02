@@ -65,6 +65,7 @@ NOTATION_OF_KIND = {
     "tab": "tab",
     "strum_notation": "strum",
     "chord_diagrams": "chord_diagrams",
+    "fretboard_diagram": "fretboard",
 }
 
 

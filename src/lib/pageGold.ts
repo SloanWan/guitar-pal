@@ -31,7 +31,7 @@ export type PageKind = (typeof PAGE_KINDS)[number];
  * reads (a `tab` page, or a `mixed` page's tab regions); jianpu and staff the
  * classifier has no kind for.
  */
-export const NOTATIONS = ["tab", "jianpu", "staff", "strum", "chord_diagrams"] as const;
+export const NOTATIONS = ["tab", "jianpu", "staff", "strum", "chord_diagrams", "fretboard"] as const;
 export type Notation = (typeof NOTATIONS)[number];
 
 /** More than any page of the sample holds; a typo guard, not a rule about books. */

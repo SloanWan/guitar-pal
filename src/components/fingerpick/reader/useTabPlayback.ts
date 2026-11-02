@@ -8,6 +8,7 @@ import { DEFAULT_SPEED_TRAINER, trainerBpm, trainerPercent, type SpeedTrainer } 
 import { useFingerpickAudioEngine, type MetronomeSubdivision } from "@/components/fingerpick/useFingerpickAudioEngine";
 import { usePlaybackCursor } from "@/components/fingerpick/usePlaybackCursor";
 import { useClickToSeek } from "@/components/fingerpick/useClickToSeek";
+import { useCountIn } from "@/components/playback/useCountIn";
 import type { MeasureRect } from "@/components/fingerpick/useMeasureGeometry";
 import type { SectionRange } from "@/components/fingerpick/sectionSelection";
 import type { MeasureRow } from "@/components/fingerpick/fingerpickLayout";
@@ -134,14 +135,19 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 		startAt(pattern, trainerBpm(bpm, trainerOn ? trainer.start : 100), pending ? cursor.startOffsetFor(pending) : 0);
 	}
 
+	// The wait before a start from the beginning; a resume after a pause plays at once.
+	const countIn = useCountIn(play);
+
 	function togglePlay() {
 		navigator.vibrate?.(10);
-		if (engine.isPlaying) engine.pause();
+		if (countIn.remaining !== null) countIn.cancel();
+		else if (engine.isPlaying) engine.pause();
 		else if (engine.isPaused) engine.resume();
-		else play();
+		else countIn.begin(engine.prime);
 	}
 
 	function stop() {
+		countIn.cancel();
 		engine.stop();
 		seek.clearPendingSeek();
 		resetRun();
@@ -150,6 +156,7 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 
 	/** Another tab opens: silence, its own tempo, the cursor at its start. */
 	function open(next: FingerpickPattern) {
+		countIn.cancel();
 		engine.stop();
 		seek.clearPendingSeek();
 		resetRun();
@@ -190,6 +197,7 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 		isLoaded: engine.isLoaded,
 		isPlaying: engine.isPlaying,
 		isPaused: engine.isPaused,
+		countIn: { setting: countIn.setting, onSetting: countIn.onSetting, remaining: countIn.remaining },
 		togglePlay,
 		stop,
 		open,

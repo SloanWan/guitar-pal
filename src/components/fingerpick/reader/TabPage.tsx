@@ -317,7 +317,8 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 						canPlay={playback.isLoaded}
 						onTogglePlay={playback.togglePlay}
 						onStop={playback.stop}
-						canStop={playback.isPlaying || playback.isPaused}
+						canStop={playback.isPlaying || playback.isPaused || playback.countIn.remaining !== null}
+						countIn={playback.countIn}
 						tempo={{
 							bpm: playback.bpm,
 							onBpm: playback.setBpm,

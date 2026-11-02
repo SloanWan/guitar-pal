@@ -638,6 +638,16 @@ export function useFingerpickAudioEngine() {
 
 	// ─── Public API ──────────────────────────────────────────────────────────
 
+	/**
+	 * For a play that comes later than the press (a count-in): the context is woken
+	 * now, inside the gesture — a browser lets audio begin only from one, and a wait
+	 * of seconds is longer than it stays honoured.
+	 */
+	function prime(): void {
+		const ctx = ensureContext();
+		if (ctx.state === "suspended") void ctx.resume();
+	}
+
 	function play(pattern: FingerpickPattern, options: PlayOptions = {}, startOffset: number = 0): void {
 		if (!isLoaded) return;
 		if (isPlayingRef.current || isPaused) {
@@ -1194,6 +1204,7 @@ export function useFingerpickAudioEngine() {
 		playOnce,
 		setPlayOnce,
 		load,
+		prime,
 		play,
 		pause,
 		resume,

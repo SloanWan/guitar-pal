@@ -35,6 +35,7 @@ import { loadVoicings } from "@/lib/chordVoicingCache";
 import { withUserVoicings } from "@/lib/userChordVoicings";
 import type { SharedStrum } from "@/lib/sharedItems";
 import { usePlayerDock } from "@/components/playback/usePlayerDock";
+import { useCountIn } from "@/components/playback/useCountIn";
 import { usePlayKey } from "@/components/playback/usePlayKey";
 
 /** Per-viewer: whether the library beside the stage is folded away. */
@@ -83,8 +84,15 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 		lookupVoicings,
 		voicingsKey,
 	});
+	// The wait before the first pass; the loop's own passes are spaced by its gap.
+	const countIn = useCountIn(() => {
+		if (canPlay) playback.start();
+	});
 	useEffect(() => {
-		stopRef.current = playback.stop;
+		stopRef.current = () => {
+			countIn.cancel();
+			playback.stop();
+		};
 	});
 
 	const shareState = useStrumShare({
@@ -100,8 +108,9 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 
 	function togglePlay() {
 		navigator.vibrate?.(10);
-		if (playback.isPlaying) playback.stop();
-		else if (canPlay) playback.start();
+		if (countIn.remaining !== null) stop();
+		else if (playback.isPlaying) playback.stop();
+		else if (canPlay) countIn.begin(playback.prime);
 	}
 	const pickRef = useRef<HTMLButtonElement>(null);
 	usePlayKey(pickRef, togglePlay);
@@ -298,6 +307,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					preparing={playback.isPreparing}
 					canPlay={canPlay}
 					onTogglePlay={togglePlay}
+					countIn={{ setting: countIn.setting, onSetting: countIn.onSetting, remaining: countIn.remaining }}
 					tempo={{
 						bpm: session.bpm,
 						onBpm: session.setBpm,

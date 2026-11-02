@@ -31,6 +31,7 @@ from app.graph.chapter import ChapterParseGraph
 from app.graph.prompts import CLASSIFY_SYSTEM, NOTES_SYSTEM, NotesOut, PageClassOut, RegionOut
 from app.parse import ParsePage, ParseTools
 from app.validate import Verdict
+from tests.conftest import structured_message
 from tests.test_graph import BOOK, CHAPTER
 
 # ⑥弦:E–F–G from 《吉他自学三月通》 p206, as Opus 5 read it (39/39 against the page).
@@ -250,6 +251,9 @@ class FakeModel:
         else:
             raise AssertionError("unexpected system prompt")
         return SimpleNamespace(stop_reason="end_turn", parsed_output=out, usage=usage)
+
+    async def create(self, **kwargs: object) -> object:
+        return structured_message(await self.parse(**kwargs))
 
 
 @dataclass

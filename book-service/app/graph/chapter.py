@@ -63,6 +63,7 @@ NOTES_TEXT_CHARS = 160_000
 CLASSIFY_CONCURRENCY = 4
 # Caps for the answer; a reasoning provider adds its thinking room on top.
 CLASSIFY_MAX_TOKENS = 1024
+CLASSIFY_ATTEMPTS = 2
 NOTES_MAX_TOKENS = 8192
 
 KINDS: frozenset[str] = frozenset(
@@ -185,24 +186,42 @@ class ChapterParseGraph:
             # Nothing to judge by: a blank scan page. No call.
             return {"classified": [PageClass(page.page, "other", (), "blank page")], "usage": []}
 
-        async with self._classify_slots:
-            out, usage = await structured_call(
-                self._provider,
-                system=CLASSIFY_SYSTEM,
-                messages=[{"role": "user", "content": content}],
-                output=PageClassOut,
-                max_tokens=CLASSIFY_MAX_TOKENS,
-                effort="low",
-                small=True,
-            )
+        # Twice at most: a reply that loops to max_tokens (#385) is chance, and
+        # the second try costs one more small call; a page still unread is
+        # said on the chapter rather than filed silently as "other".
+        usages: list[CallUsage] = []
+        out = None
+        for _ in range(CLASSIFY_ATTEMPTS):
+            async with self._classify_slots:
+                out, usage = await structured_call(
+                    self._provider,
+                    system=CLASSIFY_SYSTEM,
+                    messages=[{"role": "user", "content": content}],
+                    output=PageClassOut,
+                    max_tokens=CLASSIFY_MAX_TOKENS,
+                    effort="low",
+                    small=True,
+                )
+            usages.append(usage)
+            if out is not None:
+                break
         if out is None:
             classified = PageClass(page.page, "other", (), "classification did not finish")
-        else:
-            regions = tuple(
-                Region(_kind(r.kind), _bbox(r.bbox)) for r in out.regions if len(r.bbox) == 4
-            )
-            classified = PageClass(page.page, _kind(out.kind), regions, out.note.strip())
-        return {"classified": [classified], "usage": [usage]}
+            return {
+                "classified": [classified],
+                "usage": usages,
+                **_skipped(
+                    page.page,
+                    "the page could not be classified, so its exercises were not read — "
+                    "re-parse the chapter to try again",
+                    code="PAGE_UNCLASSIFIED",
+                ),
+            }
+        regions = tuple(
+            Region(_kind(r.kind), _bbox(r.bbox)) for r in out.regions if len(r.bbox) == 4
+        )
+        classified = PageClass(page.page, _kind(out.kind), regions, out.note.strip())
+        return {"classified": [classified], "usage": usages}
 
     async def notes(self, state: ChapterState) -> dict[str, object]:
         text = _chapter_text(state["pages"])

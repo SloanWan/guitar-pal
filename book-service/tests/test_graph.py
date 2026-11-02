@@ -26,7 +26,7 @@ from app.ingest.pdf import OcrConfig, extract_pages, open_pdf
 from app.ingest.tag import tag_text
 from app.parse import ParsePage, Parser, page_needs_image
 from app.repo import BookRow, ChapterRow, NoteRecord, PageRow, Usage
-from tests.conftest import needs_materials, needs_ocr
+from tests.conftest import needs_materials, needs_ocr, structured_message
 from tests.test_scan import FakeStorage
 
 BOOK = BookRow(
@@ -85,6 +85,9 @@ class FakeMessages:
         else:
             raise AssertionError("unexpected system prompt")
         return SimpleNamespace(stop_reason="end_turn", parsed_output=out, usage=usage)
+
+    async def create(self, **kwargs: object) -> object:
+        return structured_message(await self.parse(**kwargs))
 
 
 def _client(kinds: dict[int, str]) -> SimpleNamespace:

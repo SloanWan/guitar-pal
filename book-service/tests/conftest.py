@@ -9,6 +9,7 @@ absent — CI has no materials and runs the rest.
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pymupdf
 import pytest
@@ -81,3 +82,16 @@ def bookmarked_pdf(tmp_path: Path) -> Path:
     doc.save(path)
     doc.close()
     return path
+
+
+def structured_message(reply: object) -> object:
+    """
+    A fake's `parse`-style reply (stop_reason, parsed_output, usage) as the
+    message `messages.create` returns for a structured call: the parsed model
+    written back as JSON text, which `structured_call` validates itself (#385).
+    """
+    parsed = getattr(reply, "parsed_output", None)
+    text = parsed.model_dump_json() if parsed is not None else getattr(reply, "text", "")
+    block = SimpleNamespace(type="text", text=text)
+    stop = reply.stop_reason  # type: ignore[attr-defined]
+    return SimpleNamespace(stop_reason=stop, content=[block], usage=reply.usage)  # type: ignore[attr-defined]

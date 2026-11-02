@@ -34,9 +34,9 @@ const hrefOf = (key: string): string => {
 };
 
 /**
- * One page: the page on the left, the answer on the right — its kind (the
+ * One page: the page on the left, the answer beside it — its kind (the
  * model's to start with), the notation printed on it, and how many tab
- * exercises it holds. Save keeps the answer and moves to the next unchecked
+ * exercises it holds — and on a wide window the rubric in a third column. Save keeps the answer and moves to the next unchecked
  * page; Enter does the same from anywhere but the note.
  */
 export default function PageGoldReview({ set, id }: { set: string; id: string }) {
@@ -191,21 +191,9 @@ export default function PageGoldReview({ set, id }: { set: string; id: string })
 								</Chip>
 							))}
 						</div>
-						<details className="pg-rules">
+						<details className="pg-rules pg-fold">
 							<summary>How to choose</summary>
-							<dl>
-								{PAGE_KINDS.map((k) => (
-									<div key={k}>
-										<dt>{KIND_LABEL[k].label}</dt>
-										<dd>{KIND_LABEL[k].help}</dd>
-									</div>
-								))}
-							</dl>
-							<p>
-								Headings, captions and a line or two of instruction belong to what they label. A page is
-								Mixed only when it has two areas that would each be a kind on their own — a block of
-								explanation and a tab example, or tab beside chord diagrams.
-							</p>
+							<Rubric />
 						</details>
 					</fieldset>
 
@@ -222,21 +210,23 @@ export default function PageGoldReview({ set, id }: { set: string; id: string })
 
 					<label className="pg-field pg-count">
 						<span className="bk-lbl">Tab exercises on the page</span>
-						<Input
-							type="number"
-							inputMode="numeric"
-							min={0}
-							max={MAX_EXERCISES}
-							value={hasTab ? exercises : "0"}
-							disabled={!hasTab}
-							autoFocus={hasTab && record.exercises === null}
-							onChange={(e) => setExercises(e.target.value)}
-							aria-describedby="pg-count-help"
-						/>
-						<span id="pg-count-help" className="tg-meta">
-							{hasTab
-								? "A heading with the tab staves under it is one; a staff with no heading belongs to the one above, and one carried over from the last page counts here."
-								: "No tab on the page, so none."}
+						<span className="pg-count-row">
+							<Input
+								type="number"
+								inputMode="numeric"
+								min={0}
+								max={MAX_EXERCISES}
+								value={hasTab ? exercises : "0"}
+								disabled={!hasTab}
+								autoFocus={hasTab && record.exercises === null}
+								onChange={(e) => setExercises(e.target.value)}
+								aria-describedby="pg-count-help"
+							/>
+							<span id="pg-count-help" className="tg-meta">
+								{hasTab
+									? "A heading with the tab staves under it is one; a staff with no heading belongs to the one above, and one carried over from the last page counts here."
+									: "No tab on the page, so none."}
+							</span>
 						</span>
 					</label>
 
@@ -263,7 +253,33 @@ export default function PageGoldReview({ set, id }: { set: string; id: string })
 						</Button>
 					</div>
 				</form>
+
+				<aside className="pg-rules pg-guide" aria-label="How to choose">
+					<h2 className="bk-lbl">How to choose</h2>
+					<Rubric />
+				</aside>
 			</div>
 		</main>
+	);
+}
+
+/** The kinds as the classifier's prompt defines them, and where one area ends. */
+function Rubric() {
+	return (
+		<>
+			<dl>
+				{PAGE_KINDS.map((k) => (
+					<div key={k}>
+						<dt>{KIND_LABEL[k].label}</dt>
+						<dd>{KIND_LABEL[k].help}</dd>
+					</div>
+				))}
+			</dl>
+			<p>
+				Headings, captions and a line or two of instruction belong to what they label. A page is Mixed only
+				when it has two areas that would each be a kind on their own — a block of explanation and a tab
+				example, or tab beside chord diagrams.
+			</p>
+		</>
 	);
 }

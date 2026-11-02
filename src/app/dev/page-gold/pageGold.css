@@ -14,33 +14,33 @@
 		background: #fff;
 		box-shadow: var(--gp-ring-c);
 	}
+	/* The rubric is a fold in the answer until a window is wide enough for it
+	   to stand in its own column. */
+	.pg-guide {
+		display: none;
+	}
 	/* From 960px the review fills the window and never scrolls: the page stands
-	   still on the left, the answer beside it scrolls on its own. The image box
-	   fits the page's width, so it is made as wide as a whole page is tall at
-	   the box's height (the window less the dev banner, the nav, the paddings
-	   and the zoom bar: 168px); every sample book is about √2 (1.38–1.42). The
-	   nav and the two columns are centred together. */
+	   still on the left and the columns beside it take the rest of the width.
+	   The image box fits the page's width, so it is made as wide as a whole page
+	   is tall at the box's height (the window less the dev banner, the nav, the
+	   paddings and the zoom bar: 168px); every sample book is about √2
+	   (1.38–1.42). A column taller than the window scrolls on its own. */
 	@media (min-width: 960px) {
 		.pg-review {
 			--pg-w: calc((100vh - 168px) / 1.42);
-			--pg-panel-w: 400px;
 			display: flex;
 			flex-direction: column;
+			max-width: 1760px;
 			height: calc(100vh - 32px);
 			padding-bottom: 16px;
 			overflow: hidden;
-		}
-		.pg-review > .tg-nav,
-		.pg-body {
-			width: min(100%, calc(var(--pg-w) + 24px + var(--pg-panel-w)));
-			margin-inline: auto;
 		}
 		.pg-body {
 			flex: 1;
 			min-height: 0;
 			display: grid;
-			grid-template-columns: minmax(0, var(--pg-w)) var(--pg-panel-w);
-			gap: 24px;
+			grid-template-columns: minmax(0, var(--pg-w)) minmax(400px, 1fr);
+			gap: 28px;
 		}
 		.pg-page,
 		.pg-page > div {
@@ -51,25 +51,52 @@
 			flex: 1;
 			height: auto;
 		}
-		.pg-panel {
+		.pg-panel,
+		.pg-guide {
 			height: 100%;
 			overflow-y: auto;
 			/* Room for the scrollbar and the chips' raised shadows. */
-			padding: 2px 8px 16px 2px;
+			padding: 2px 8px 8px 2px;
 		}
+	}
+	@media (min-width: 1280px) {
+		.pg-body {
+			grid-template-columns: minmax(0, var(--pg-w)) minmax(420px, 1fr) minmax(260px, 0.7fr);
+		}
+		.pg-guide {
+			display: block;
+		}
+		.pg-fold {
+			display: none;
+		}
+	}
+	.pg-guide h2 {
+		margin: 4px 0 8px;
+	}
+	.pg-guide dl {
+		margin-top: 0;
 	}
 	.pg-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: 12px;
 		min-width: 0;
 	}
+	/* The note stays its own height; the actions follow it, not the window's foot. */
+	.pg-panel .tg-note {
+		flex: none;
+	}
+	/* The page number, its status and the book on one line. */
 	.pg-panel .tg-head {
 		margin: 0;
 	}
+	.pg-panel .tg-head .tg-meta {
+		flex-basis: auto;
+		order: 0;
+	}
 	.pg-model {
 		margin: 0;
-		padding: 8px 12px;
+		padding: 6px 12px;
 		border-radius: var(--gp-r-m);
 		background: var(--gp-page);
 		box-shadow: var(--gp-ring-n);
@@ -132,11 +159,19 @@
 	.pg-rules p {
 		margin: 0;
 	}
-	.pg-count .gp-input {
-		width: 7em;
+	/* The count and how to count side by side; the help keeps two lines' room,
+	   so the panel does not move as tab comes and goes. */
+	.pg-count-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
 	}
-	/* The help line keeps two lines' room, so the panel does not move as tab comes and goes. */
+	.pg-count .gp-input {
+		flex: none;
+		width: 6em;
+	}
 	.pg-count .tg-meta {
 		min-height: 2.8em;
+		font-size: var(--gp-t-small);
 	}
 }

@@ -22,7 +22,8 @@ from app.graph.prompts import (
     PageClassOut,
     RegionOut,
 )
-from app.ingest.pdf import OcrConfig, extract_pages, open_pdf
+from app.ingest.ocr import PageOcr
+from app.ingest.pdf import extract_pages, open_pdf
 from app.ingest.tag import tag_text
 from app.parse import ParsePage, Parser, page_needs_image
 from app.repo import BookRow, ChapterRow, NoteRecord, PageRow, Usage
@@ -94,7 +95,7 @@ def _client(kinds: dict[int, str]) -> SimpleNamespace:
     return SimpleNamespace(messages=FakeMessages(kinds))
 
 
-def _pages(path: Path, ocr: OcrConfig | None = None) -> list[PageRow]:
+def _pages(path: Path, ocr: PageOcr | None = None) -> list[PageRow]:
     with open_pdf(path) as doc:
         return [
             PageRow(p.page, p.text, p.text_source, tag_text(p.text).may_have_exercise)
@@ -151,7 +152,7 @@ async def test_graph_classifies_every_page_and_writes_notes(typeset_pdf: Path) -
 @needs_materials
 @needs_ocr
 @pytest.mark.asyncio
-async def test_scanned_pages_are_all_looked_at(scanned_pdf: Path, ocr: OcrConfig) -> None:
+async def test_scanned_pages_are_all_looked_at(scanned_pdf: Path, ocr: PageOcr) -> None:
     rows = _pages(scanned_pdf, ocr)
     assert all(page_needs_image(r) for r in rows)
     client = _client({})

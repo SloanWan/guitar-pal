@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # The book service for local development, wired the way `npm run dev` expects:
-# the repo's .env.local for Supabase and the model key, Tesseract data fetched
+# the repo's .env.local for Supabase and the model key, the OCR models fetched
 # on first run, uvicorn on 8000 with reload. Run as `npm run dev:books`.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,10 +21,9 @@ else
   echo "no .env.local at the repo root; the service will boot without a database" >&2
 fi
 
-if [ -z "${TESSDATA_PREFIX:-}" ]; then
-  [ -f "$here/tessdata/chi_sim.traineddata" ] || sh "$here/tools/fetch-tessdata.sh" "$here/tessdata"
-  export TESSDATA_PREFIX="$here/tessdata"
-fi
+# The OCR models (#417), downloaded on first run; the service never fetches them itself.
+(cd "$here" && .venv/bin/python -m app.ingest.ocr >/dev/null 2>&1) \
+  || (cd "$here" && .venv/bin/python -m app.ingest.ocr --fetch)
 
 cd "$here"
 exec .venv/bin/uvicorn app.main:create_app --factory --port "${BOOK_SERVICE_PORT:-8000}" --reload

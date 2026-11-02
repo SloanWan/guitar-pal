@@ -76,7 +76,7 @@ Then send it a photo of a tab and say "bring this into Guitar Pal". Other client
 - **Data and auth:** Supabase (Postgres, Auth, Storage) through thin query functions in `src/lib/`. No ORM. A guest's work stays in their browser.
 - **Audio:** Web Audio with a lookahead scheduler. Every string is its own sampled voice, scheduled ahead and left to ring.
 - **Assistant:** rule-based readers for strum and tab sentences (`src/lib/assistant/`). General mode runs a model (DeepSeek or Claude) that calls those same readers as tools, so the model does the talking and the readers make every card. An offline eval set keeps it honest.
-- **Book import:** `book-service/`, a Python sidekick (FastAPI, asyncpg, LangGraph, PyMuPDF, Tesseract) the app proxies to. Its [README](book-service/README.md) has the rest.
+- **Book import:** `book-service/`, a Python sidekick (FastAPI, asyncpg, LangGraph, PyMuPDF, PP-OCR) the app proxies to. Its [README](book-service/README.md) has the rest.
 - **Tests and CI:** Vitest, a Playwright smoke suite and pytest, run by GitHub Actions on every PR alongside CodeQL. A green `main` ships itself to the server in Docker.
 
 ## Repo layout

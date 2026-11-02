@@ -14,13 +14,10 @@ from types import SimpleNamespace
 import pymupdf
 import pytest
 
-from app.ingest.pdf import OcrConfig
+from app.ingest.ocr import PageOcr, models_ready
 
 BOOK_SERVICE = Path(__file__).resolve().parent.parent
 MATERIALS = BOOK_SERVICE / "materials"
-# `tools/fetch-tessdata.sh` puts the language files here; a deployment names
-# its own directory in TESSDATA_PREFIX.
-TESSDATA = Path(os.environ.get("TESSDATA_PREFIX", BOOK_SERVICE / "tessdata"))
 TYPESET_PDF = MATERIALS / "SongWritingFromMajorKeys.pdf"
 SCANNED_PDF = MATERIALS / "吉他自学三月通-和弦部分.pdf"
 
@@ -30,8 +27,8 @@ needs_materials = pytest.mark.skipif(
 )
 
 needs_ocr = pytest.mark.skipif(
-    bool(OcrConfig(TESSDATA).missing_languages()),
-    reason="Tesseract language data not present (tools/fetch-tessdata.sh)",
+    not models_ready(),
+    reason="OCR models not present (python -m app.ingest.ocr --fetch)",
 )
 
 # The live model call costs money; opt in per run.
@@ -51,9 +48,10 @@ def scanned_pdf() -> Path:
     return SCANNED_PDF
 
 
-@pytest.fixture
-def ocr() -> OcrConfig:
-    return OcrConfig(TESSDATA)
+@pytest.fixture(scope="session")
+def ocr() -> PageOcr:
+    # One engine for the run, as the service keeps one per process.
+    return PageOcr()
 
 
 @pytest.fixture

@@ -522,3 +522,89 @@ Every faithfulness miss is one run of two on the same question, with the
 right page cited — the judge reading garbled OCR, most likely, not the
 answer. None of these chapters is long: the ~40-page fixture #203 asks for
 is still missing, and it is where `long_context` and `rag` would part.
+
+## 14. What the scan ships: PP-OCRv6 tiny + the CDLA mask (#417)
+
+2026-11-01. §12 picked V3 and named CDLA as the fallback "if the extra
+0.7 s a page matters". The scan ships CDLA, for size rather than time:
+
+| layout model | F1 (§12) | s/page with OCR | model file |
+|---|---|---|---|
+| PP-DocLayoutV3 | 94.3% | 1.41 | 130 MB |
+| CDLA | 93.5% | 0.74 | 7 MB |
+
+The book service runs on one small cloud box beside the app. 0.8 F1 does not
+buy 123 MB more on disk and a few hundred MB more resident.
+Everything the scan loads is ~14 MB of models:
+- PP-OCRv6 tiny det + rec
+- the v2.0 direction classifier
+- CDLA
+
+They are fetched at build time (`python -m app.ingest.ocr --fetch` in the
+Dockerfile's deps stage). Building the engines takes under a second.
+
+On `吉他自学三月通-和弦部分` (the OCR tests' scan), page by page against
+Tesseract `fast`:
+
+| page | PP-OCR + mask | PP-OCR, unmasked | Tesseract |
+|---|---|---|---|
+| p1 | 722 | 777 | 786 |
+| p2 | 779 | 785 | 782 |
+| p3 | 169 | 194 | 438 |
+| p4 | 437 | 793 | 931 |
+| p6 | 638 | 727 | 1018 |
+| p8 | 966 | 1026 | 1189 |
+| p10 | 310 | 319 | 421 |
+
+(characters read; p5, p7, p9 alike.)
+
+- **Fewer characters is the point.** p3 is three chord definitions over nine
+  chord diagrams and a cartoon. The masked reading has all three
+  definitions, word for word, "大三和弦" included (Tesseract: "大三和艾").
+  Tesseract's extra ~270 characters are the diagrams read as text:
+  `BEEKY`, `|| [| |`, `LTT TT |`.
+- p4 drops 140 of 162 lines: an A-minor scale chart across the page, all
+  degree numbers.
+- **The OCR tests were recalibrated, not loosened.** `> 300 characters a
+  page` held only because Tesseract's noise counted. It is now:
+  - more than 150 characters a page;
+  - p3's three definitions present;
+  - its diagram noise absent.
+
+  The tag and TOC assertions pass unchanged.
+- **Deployment.** rapid-layout asks for `opencv-python`, which needs libGL
+  on `python:3.12-slim`. The image installs rapid-layout with `--no-deps`
+  and keeps RapidOCR's `opencv-python-headless`.
+- **RapidOCR downloads late.** Building `RapidOCR(...)` fetches only the
+  direction classifier. The detector comes on the first detection, the
+  recogniser on the first line found. A fetch that only built the engine
+  left det and rec missing, and `models_ready()` would have switched OCR
+  off in production. `--fetch` therefore reads one drawn line
+  ("Guitar Pal 123") and fails if it reads nothing.
+
+  Checked from empty model folders in a clean venv installed the
+  Dockerfile's way:
+  - only `opencv-python-headless` installed;
+  - all four models land;
+  - exit 0, or 1 with one missing;
+  - p3 reads the same.
+- **The image, built for linux/amd64** (Docker Desktop, emulated, 2026-11-01):
+  - `--fetch` in the deps stage landed all four models;
+  - the app imports cv2 5.0 (headless only) and onnxruntime 1.31 as user
+    `book`;
+  - `page_ocr()` comes up on;
+  - the scan's ten pages read to exactly the characters they read on macOS.
+
+  The OCR stack is ~300 MB uncompressed in site-packages:
+  - OpenCV headless ~150 MB;
+  - numpy ~70 MB, new to the service;
+  - onnxruntime 68 MB;
+  - RapidOCR with its models 39 MB.
+
+  3.1 s a page there is emulation; native is the 0.74 above.
+- **ONNX Runtime's Linux wheel has a telemetry client** (1DS: "Failed to
+  persist telemetry device ID" at import). `no_telemetry()` turns its
+  events off before any session is built.
+- **Gone from the service:** `TESSDATA_PREFIX`, `BOOK_SERVICE_OCR_LANGUAGES`
+  and the in-process Tesseract that segfaulted on one sample page (§11).
+  `tools/fetch-tessdata.sh` stays for the eval's baseline.

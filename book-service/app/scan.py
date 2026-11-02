@@ -18,8 +18,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from app.ingest.ocr import PageOcr
 from app.ingest.pdf import (
-    OcrConfig,
     OutlineEntry,
     PageText,
     UnreadablePdf,
@@ -75,7 +75,7 @@ class ScanStore(Protocol):
 class Scanner:
     storage: StorageClient
     store: ScanStore
-    ocr: OcrConfig | None
+    ocr: PageOcr | None
     read_text_toc: TextTocReader | None
     read_vision_toc: VisionTocReader | None
     worker: asyncio.Semaphore
@@ -170,7 +170,7 @@ class _ScanFailed(Exception):
 
 def _read_book(
     pdf: bytes,
-    ocr: OcrConfig | None,
+    ocr: PageOcr | None,
     report: Callable[[int, int], None],
     want_thumbnails: bool,
 ) -> tuple[list[OutlineEntry], list[PageText], dict[int, bytes]]:

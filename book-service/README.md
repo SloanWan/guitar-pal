@@ -29,7 +29,7 @@ app/
 alembic/       migrations for user_books, book_chapters, book_pages, and the parse tables
 docs/          calibration.md — every number behind a rule, from real books
 materials/     gitignored; real textbook excerpts the ingest tests run against
-tessdata/      gitignored; Tesseract language data (tools/fetch-tessdata.sh)
+tessdata/      gitignored; Tesseract data, only for the OCR eval's baseline (tools/fetch-tessdata.sh)
 tests/         pytest; nothing here needs a database, and the network only on opt-in
 ```
 
@@ -51,7 +51,7 @@ npm run dev:books
 That is `tools/dev.sh`: it loads the repo's `.env.local` (the same
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
 `BOOK_SERVICE_DATABASE_URL` and `ANTHROPIC_API_KEY` the Next.js side uses),
-fetches the Tesseract data on first run, and starts `uvicorn` on port 8000
+fetches the OCR models on first run, and starts `uvicorn` on port 8000
 with reload. `.env.local` also needs `BOOK_SERVICE_URL=http://localhost:8000`
 so the Next.js proxy finds it. `BOOK_SERVICE_PORT` overrides the port.
 
@@ -59,7 +59,8 @@ By hand, the same thing is:
 
 ```bash
 cd book-service && set -a && . ../.env.local && set +a
-TESSDATA_PREFIX=$PWD/tessdata .venv/bin/uvicorn app.main:create_app --factory --reload
+.venv/bin/python -m app.ingest.ocr --fetch   # once: the OCR models
+.venv/bin/uvicorn app.main:create_app --factory --reload
 ```
 
 Without `BOOK_SERVICE_DATABASE_URL` the process still boots and `/health` answers; the book routes return 503.
@@ -85,7 +86,7 @@ Storage), and to recalibrate the rules against a new book:
 
 ```bash
 python -m app.ingest book.pdf          # outline, tags per rule, no model call
-python -m app.ingest book.pdf --ocr    # OCR pages without a text layer (needs TESSDATA_PREFIX)
+python -m app.ingest book.pdf --ocr    # OCR pages without a text layer (models fetched)
 python -m app.ingest book.pdf --ask    # plus the text-TOC call; logs its token usage
 python -m app.ingest book.pdf --tags   # every tagged page with the rules that fired
 ```
@@ -107,12 +108,16 @@ in it points there.
 
 ## Scanned books
 
-A page without a text layer is OCR'd with Tesseract (the library PyMuPDF's
-wheel already carries; only the language files are needed —
-`tools/fetch-tessdata.sh` locally, the Dockerfile in the image). About
-2.5 s a page on one core, so a 300-page scan is a ~12-minute background
-job. OCR keeps the prose (~85–90% of characters on the calibration book) and
-loses decorative headings, diagrams and notation, which is why chapter
+A page without a text layer is OCR'd with PP-OCRv6 tiny (RapidOCR on ONNX
+Runtime, CPU), behind a layout model (CDLA) whose figure, table and equation
+regions drop the lines that do not read as prose — so tab digits and chord
+names stay out of the text (`app/ingest/ocr.py`, #417). The models (~14 MB)
+are fetched once with `python -m app.ingest.ocr --fetch` — `tools/dev.sh`
+locally, the Dockerfile's deps stage in the image — and never on a request:
+without them the service logs it and scans without OCR. About 0.75 s a page,
+so a 300-page scan is a ~4-minute background job. On the 26 calibration
+pages it reads 93% of the prose characters at 95% precision (Tesseract,
+before it: ~83% at 60%), and still loses some decorative headings, which is why chapter
 finding on a scan may still fall through to vision, and why the chapter
 parse (#202) must treat `has_text_layer = false` as "look at the page" rather
 than trusting the tag rules. `book_pages.text_source` records `layer`,

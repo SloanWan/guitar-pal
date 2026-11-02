@@ -27,7 +27,6 @@ import { fetchPage, fetchPageSets, pageHref, pageSrc, putPageReview } from "./pa
 function flatten(sets: readonly PageGoldSet[]): TabGoldItem[] {
 	return sets.flatMap((set) => set.items.map((item) => ({ ...item, id: `${set.name}/${item.id}` })));
 }
-
 const hrefOf = (key: string): string => {
 	const [set, id] = key.split("/");
 	return pageHref(set, id);
@@ -36,7 +35,7 @@ const hrefOf = (key: string): string => {
 /**
  * One page: the page on the left, the answer beside it — its kind (the
  * model's to start with), the notation printed on it, and how many tab
- * exercises it holds — and on a wide window the rubric in a third column. Save keeps the answer and moves to the next unchecked
+ * exercises it holds. Save keeps the answer and moves to the next unchecked
  * page; Enter does the same from anywhere but the note.
  */
 export default function PageGoldReview({ set, id }: { set: string; id: string }) {
@@ -121,12 +120,10 @@ export default function PageGoldReview({ set, id }: { set: string; id: string })
 			setBusy(false);
 		}
 	}
-
 	function onSubmit(e: FormEvent) {
 		e.preventDefault();
 		if (canSave) void send("answer", true);
 	}
-
 	const toggle = (n: Notation, on: boolean) =>
 		setNotation((current) => NOTATIONS.filter((x) => (x === n ? on : current.includes(x))));
 
@@ -180,7 +177,6 @@ export default function PageGoldReview({ set, id }: { set: string; id: string })
 					</p>
 
 					{error && <p className="tg-error">{error}</p>}
-
 					<fieldset className="pg-field">
 						<legend className="bk-lbl">Kind</legend>
 						<div className="pg-kinds">
@@ -191,9 +187,21 @@ export default function PageGoldReview({ set, id }: { set: string; id: string })
 								</Chip>
 							))}
 						</div>
-						<details className="pg-rules pg-fold">
+						<details className="pg-rules">
 							<summary>How to choose</summary>
-							<Rubric />
+							<dl>
+								{PAGE_KINDS.map((k) => (
+									<div key={k}>
+										<dt>{KIND_LABEL[k].label}</dt>
+										<dd>{KIND_LABEL[k].help}</dd>
+									</div>
+								))}
+							</dl>
+							<p>
+								Headings, captions and a line or two of instruction belong to what they label. A page is
+								Mixed only when it has two areas that would each be a kind on their own — a block of
+								explanation and a tab example, or tab beside chord diagrams.
+							</p>
 						</details>
 					</fieldset>
 
@@ -253,33 +261,7 @@ export default function PageGoldReview({ set, id }: { set: string; id: string })
 						</Button>
 					</div>
 				</form>
-
-				<aside className="pg-rules pg-guide" aria-label="How to choose">
-					<h2 className="bk-lbl">How to choose</h2>
-					<Rubric />
-				</aside>
 			</div>
 		</main>
-	);
-}
-
-/** The kinds as the classifier's prompt defines them, and where one area ends. */
-function Rubric() {
-	return (
-		<>
-			<dl>
-				{PAGE_KINDS.map((k) => (
-					<div key={k}>
-						<dt>{KIND_LABEL[k].label}</dt>
-						<dd>{KIND_LABEL[k].help}</dd>
-					</div>
-				))}
-			</dl>
-			<p>
-				Headings, captions and a line or two of instruction belong to what they label. A page is Mixed only
-				when it has two areas that would each be a kind on their own — a block of explanation and a tab
-				example, or tab beside chord diagrams.
-			</p>
-		</>
 	);
 }

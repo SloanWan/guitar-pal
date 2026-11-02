@@ -14,17 +14,12 @@
 		background: #fff;
 		box-shadow: var(--gp-ring-c);
 	}
-	/* The rubric is a fold in the answer until a window is wide enough for it
-	   to stand in its own column. */
-	.pg-guide {
-		display: none;
-	}
 	/* From 960px the review fills the window and never scrolls: the page stands
-	   still on the left and the columns beside it take the rest of the width.
+	   still on the left and the answer beside it takes the rest of the width.
 	   The image box fits the page's width, so it is made as wide as a whole page
 	   is tall at the box's height (the window less the dev banner, the nav, the
 	   paddings and the zoom bar: 168px); every sample book is about √2
-	   (1.38–1.42). A column taller than the window scrolls on its own. */
+	   (1.38–1.42). An answer taller than the window scrolls on its own. */
 	@media (min-width: 960px) {
 		.pg-review {
 			--pg-w: calc((100vh - 168px) / 1.42);
@@ -51,30 +46,12 @@
 			flex: 1;
 			height: auto;
 		}
-		.pg-panel,
-		.pg-guide {
+		.pg-panel {
 			height: 100%;
 			overflow-y: auto;
 			/* Room for the scrollbar and the chips' raised shadows. */
 			padding: 2px 8px 8px 2px;
 		}
-	}
-	@media (min-width: 1280px) {
-		.pg-body {
-			grid-template-columns: minmax(0, var(--pg-w)) minmax(420px, 1fr) minmax(260px, 0.7fr);
-		}
-		.pg-guide {
-			display: block;
-		}
-		.pg-fold {
-			display: none;
-		}
-	}
-	.pg-guide h2 {
-		margin: 4px 0 8px;
-	}
-	.pg-guide dl {
-		margin-top: 0;
 	}
 	.pg-panel {
 		display: flex;

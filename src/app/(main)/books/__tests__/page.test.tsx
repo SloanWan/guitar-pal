@@ -92,4 +92,21 @@ describe("BooksPage (#262)", () => {
 		unmount();
 		host.remove();
 	});
+
+	it("signing in resolves: the shelf waits for this user's list, never says it is empty", async () => {
+		useUser.mockReturnValue({ user: null, loading: true });
+		listBooks.mockReturnValue(new Promise(() => {}));
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		await act(async () => root.render(<BooksPage />));
+		useUser.mockReturnValue({ user: { id: "u1" }, loading: false });
+		await act(async () => root.render(<BooksPage />));
+		expect(listBooks).toHaveBeenCalledTimes(1);
+		expect(host.textContent).toContain("Your books");
+		expect(host.textContent).not.toContain("No books yet");
+		expect(host.querySelector(".gp-skeleton")).not.toBeNull();
+		act(() => root.unmount());
+		host.remove();
+	});
 });

@@ -646,6 +646,41 @@ dropped** (CDLA if the extra 0.7 s a page matters). A side effect worth
 having: the regions are where the notation is, which is what
 `may_have_exercise` guesses today with regexes.
 
+## 13. Can a layout model let the parse skip classifying a page? (#375)
+
+2026-10-23. The parse sends every scanned page to the classifier (Sonnet 5,
+100 dpi + text, ~$0.007 a page) to find what an extractor should read. If a
+free detector could say "no notation here", that call could be skipped.
+Reference: the classifier itself, on 135 pages — the four samples, 三月通
+p10–44 and p100–119, its chord section, 15 pages of the English rock method,
+20 of the translated electric-guitar method, and the text-layer
+songwriting chapter ($1.01, cached in `materials/notation-ref/`). It finds
+notation on 98 (86 mixed, 12 tab) and prose on 37, so skipping can save at
+most 27% of the calls.
+
+| detector | calls saved | notation pages kept | missed | s/page |
+|---|---|---|---|---|
+| classify every page (today) | 0% | 100% | 0 | — |
+| PP-DocLayoutV3, any image/chart region | 5% | 100% | 0 | 0.82 |
+| PP-DocLayoutV3, regions ≥ 3% of the page | 30% | 86% | 14 | 0.82 |
+| CDLA layout | 4% | 99% | 1 | 0.07 |
+| tag rules on PP-OCR text | 37% | 69% | 30 | 0.58 |
+| V3 (≥ 3%) or tag rules | 14% | 93% | 7 | 1.40 |
+
+- **Nothing here can gate the parse.** The safe detectors save ~5% (V3 finds
+  a region on 30 of the 37 prose pages: illustrations, ornaments); the ones
+  that save more miss notation pages — chord diagrams and short examples
+  printed small, which a size threshold throws away. A missed page is an
+  exercise never read, against ~$0.007 saved. Keep classifying every page.
+- Layout masking's value is §12's clean OCR text, not skipping calls.
+- **A parse bug it turned up:** on one page (三月通 p35) the classifier's
+  reply looped (`》》》…`) until max_tokens. `messages.parse` raises on the
+  truncated JSON before `structured_call` reads `stop_reason`, so in the
+  parse the exception fails the whole chapter instead of one page. It
+  passed on retry; not reproducible on demand.
+
+Run: `evals/notation/results/` (suite "Notation pages" on `/dev/evals`).
+
 ## 14. What the scan ships: PP-OCRv6 tiny + the CDLA mask (#417)
 
 2026-11-01. §12 picked V3 and named CDLA as the fallback "if the extra

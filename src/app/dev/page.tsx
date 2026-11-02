@@ -109,6 +109,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		label: "tab-gold",
 		description: "Check the tab extractor's readings against their crops; confirm or correct them into the eval's gold set.",
 	},
+	{
+		href: "/dev/page-gold",
+		label: "page-gold",
+		description: "Check each sample page's kind, the notation printed on it and its tab exercises: the page classifier's gold set.",
+	},
 ];
 
 export default function DevIndexPage() {

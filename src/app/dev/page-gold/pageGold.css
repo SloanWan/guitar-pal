@@ -1,0 +1,121 @@
+/* /dev/page-gold: the page classifier's gold set (#422), on tab-gold's base styles. */
+@layer components {
+	.pg-total {
+		margin: -8px 0 0;
+	}
+	/* The page is portrait: it takes the height, the answer sits beside it. */
+	.pg-body {
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+	@media (min-width: 960px) {
+		.pg-body {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) 380px;
+			align-items: start;
+		}
+		.pg-panel {
+			position: sticky;
+			top: 48px;
+		}
+	}
+	.pg-img {
+		height: 70vh;
+		border-radius: var(--gp-r-m);
+		background: #fff;
+		box-shadow: var(--gp-ring-c);
+	}
+	/* The image box fits the page's width, so it is as wide as a whole page is
+	   tall: every sample book is about √2 (1.38–1.42), A-series. */
+	@media (min-width: 960px) {
+		.pg-page {
+			justify-self: end;
+			width: min(100%, calc((100vh - 180px) / 1.42));
+		}
+		.pg-img {
+			height: calc(100vh - 140px);
+		}
+	}
+	.pg-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		min-width: 0;
+	}
+	.pg-panel .tg-head {
+		margin: 0;
+	}
+	.pg-model {
+		margin: 0;
+		padding: 8px 12px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-page);
+		box-shadow: var(--gp-ring-n);
+		color: var(--gp-ink-2);
+	}
+	.pg-model b {
+		color: var(--gp-ink);
+	}
+	.pg-model-note {
+		display: block;
+		margin-top: 4px;
+		font-size: var(--gp-t-small);
+		color: var(--gp-ink-3);
+	}
+	.pg-field {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		min-width: 0;
+	}
+	.pg-field legend {
+		margin-bottom: 6px;
+		padding: 0;
+	}
+	.pg-kinds {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	/* The model's own answer, marked on its chip so a change is a choice. */
+	.pg-was {
+		margin-left: 4px;
+		font-weight: 800;
+	}
+	.pg-rules {
+		font-size: var(--gp-t-small);
+		color: var(--gp-ink-2);
+	}
+	.pg-rules summary {
+		cursor: pointer;
+		color: var(--gp-ink-3);
+	}
+	.pg-rules dl {
+		margin: 8px 0;
+	}
+	.pg-rules dl div {
+		display: grid;
+		grid-template-columns: 8.5em 1fr;
+		gap: 8px;
+		padding: 2px 0;
+	}
+	.pg-rules dt {
+		font-weight: 650;
+		color: var(--gp-ink);
+	}
+	.pg-rules dd,
+	.pg-rules p {
+		margin: 0;
+	}
+	.pg-count .gp-input {
+		width: 7em;
+	}
+	/* The help line keeps two lines' room, so the panel does not move as tab comes and goes. */
+	.pg-count .tg-meta {
+		min-height: 2.8em;
+	}
+}

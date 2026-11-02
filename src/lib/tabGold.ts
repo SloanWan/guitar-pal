@@ -35,7 +35,10 @@ export interface TabGoldRecord {
 	model: {
 		source: string;
 		exportedAt?: string | null;
-		/** The extractor's draft as the parse stored it (an ImportedTabDraft). */
+		/**
+		 * The extractor's draft as the parse stored it (an ImportedTabDraft); null
+		 * when the parse segmented the exercise and dropped it (#420).
+		 */
 		draft: unknown;
 		warnings: ParseIssue[];
 	};
@@ -102,6 +105,11 @@ export function readReview(body: unknown): { review: TabGoldReview } | { error: 
 		return { error: `The gold tab is not valid: ${errors.map((e) => e.message).join("; ") || "no pattern"}` };
 	}
 	return { review: { status: status as TabGoldStatus, gold: pattern, jianpu: jianpu ?? null, note: note ?? "" } };
+}
+
+/** The parse lost this exercise: there is a crop and no draft, so the gold is written by hand. */
+export function isDropped(record: Pick<TabGoldRecord, "model">): boolean {
+	return record.model.draft === null || record.model.draft === undefined;
 }
 
 /** The model's draft as the editor and the staves take it, or why it cannot be. */

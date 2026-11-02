@@ -292,10 +292,13 @@ class ChapterParseGraph:
         ) -> tuple[list[ExerciseRecord], list[CallUsage], list[dict[str, object]]]:
             box = pad_region(within(region, segment.region) if region else segment.region)
             png = await tools.renderer.render(page.page, box, READ_DPI)
+            # Kept before the reading (#420): an exercise the parse loses can
+            # still be looked at, by the player and by the tab eval.
+            crop_path = await tools.crops.save(f"{stem}-{index}.png", png)
             record, usage, dropped = await self._tab.extract_exercise(png, page.page, segment)
             if record is None:
-                return [], usage, dropped
-            crop_path = await tools.crops.save(f"{stem}-{index}.png", png)
+                lost = {"crop_path": crop_path, "page": page.page, "heading": segment.heading}
+                return [], usage, [{**w, **lost} for w in dropped]
             record = replace(record, crop_path=crop_path)
             log.info(
                 "parse p%d %r: %d bars, %d warning(s)",

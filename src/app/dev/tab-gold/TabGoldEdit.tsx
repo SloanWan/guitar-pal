@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "@/components/AppLink";
 import TabEditPage from "@/components/fingerpick/editor/TabEditPage";
 import { makeDefaultPattern } from "@/lib/fingerpickEdit";
-import { modelPattern, unplacedChords, type TabGoldRecord } from "@/lib/tabGold";
+import { isDropped, modelPattern, unplacedChords, type TabGoldRecord } from "@/lib/tabGold";
 import type { EditorTarget } from "@/lib/tabEditorEntry";
 import { cropSrc, fetchRecord, putReview, reviewHref } from "./tabGoldApi";
 
@@ -32,7 +32,9 @@ export default function TabGoldEdit({ set, id }: { set: string; id: string }) {
 			notice: {
 				title: record.name,
 				text:
-					"Fix what the model misread — frets, strings, durations, rests, bars — then Save. The tab you save is this exercise's gold." +
+					(isDropped(record)
+						? "The parse lost this exercise, so there is no reading to start from: write the tab from the crop, then Save. The tab you save is this exercise's gold."
+						: "Fix what the model misread — frets, strings, durations, rests, bars — then Save. The tab you save is this exercise's gold.") +
 					(chords.length > 0
 						? ` The page prints chords the model read but did not place (${chords.join(" ")}): select the note each starts on and pick it under Slot → Chord.`
 						: ""),

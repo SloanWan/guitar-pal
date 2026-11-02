@@ -14,6 +14,8 @@ are told apart by their place in the run of grace notes before an onset.
                       (a slot with no note sounds nothing, so it counts as a rest)
     bars              exercises read with the gold's number of bars
     exact             exercises read without a single difference
+    drafted           exercises the parse made a draft for; one it dropped (#420)
+                      is scored as an empty reading, every gold note missed
     chord names       printed chord names in order (repeats folded), against
                       the reading's placed chords or, when it places none, the
                       names the extractor kept in the draft's description
@@ -112,6 +114,13 @@ METRICS = [
         "direction": "higher",
         "format": "percent",
         "description": "Exercises read without a single difference.",
+    },
+    {
+        "key": "drafted",
+        "label": "Drafted",
+        "direction": "higher",
+        "format": "percent",
+        "description": "Exercises the parse made a draft for; a dropped one misses every note.",
     },
     {
         "key": "chord_names",
@@ -229,6 +238,7 @@ class Score:
     matched_slots: int = 0
     bars_match: bool = False
     exact: bool = False
+    drafted: bool = True
     has_chords: bool = False
     chord_names_match: bool = False
     gold_chords: int = 0
@@ -267,10 +277,13 @@ def flagged_onsets(read: dict, warnings: list[dict]) -> set[Onset]:
     return out
 
 
-def score_reading(read: dict, gold: dict, warnings: list[dict] | None = None) -> Score:
-    """One reading against its gold."""
+def score_reading(read: dict | None, gold: dict, warnings: list[dict] | None = None) -> Score:
+    """One reading against its gold; None when the parse dropped the exercise."""
+    sc = Score(drafted=read is not None)
+    if read is None:
+        read = {"measures": []}
+        sc.differences.append("no draft: the parse dropped this exercise")
     r_slots, g_slots = slots_of(read), slots_of(gold)
-    sc = Score()
 
     r_notes, g_notes = note_set(r_slots), note_set(g_slots)
     sc.read_notes, sc.gold_notes = len(r_notes), len(g_notes)
@@ -370,6 +383,7 @@ def summarise(scores: list[Score]) -> dict[str, float]:
         "rhythm": ratio(total.matched_slots, total.gold_slots),
         "bars": ratio(sum(s.bars_match for s in scores), len(scores)),
         "exact": ratio(sum(s.exact for s in scores), len(scores)),
+        "drafted": ratio(sum(s.drafted for s in scores), len(scores)),
         "chord_names": ratio(sum(s.chord_names_match for s in chordful), len(chordful)),
         "chords_placed": ratio(total.placed_chords, total.gold_chords),
         "flag_precision": ratio(total.flagged_wrong, total.flagged),

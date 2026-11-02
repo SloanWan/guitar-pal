@@ -94,7 +94,11 @@ export default function BookShelf({ state, books }: { state: ShelfState; books: 
 								) : null}
 							</div>
 							{state === "loading" ? (
-								<Skeleton className="bk-shelf-skeleton" />
+								<div className="bk-shelf" aria-busy="true" aria-label="Loading">
+									<Skeleton className="bk-sk-cover" />
+									<Skeleton className="bk-sk-cover" />
+									<Skeleton className="bk-sk-cover" />
+								</div>
 							) : state === "failed" ? (
 								<p className="bk-empty">Could not load your books. Reload the page to try again.</p>
 							) : books.length === 0 ? (

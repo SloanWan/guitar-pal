@@ -47,6 +47,31 @@ import { useNavRouter } from "@/components/nav-progress";
 /** Per-viewer: whether the library beside the stage is folded away. */
 const LIBRARY_FOLDED_KEY = "tabLibraryFolded";
 
+/** The stage's frame while the tab is restored: the title, the toolbar, the sheet with its staves to come. */
+function TabSkeleton() {
+	return (
+		<>
+			<div className="tb-titlerow" aria-busy="true" aria-label="Loading">
+				<Skeleton className="tb-sk-meta" />
+				<Skeleton className="tb-sk-name" />
+			</div>
+			<div className="tb-tool" aria-hidden>
+				<Skeleton className="tb-sk-tool" />
+			</div>
+			<section className="tb-sheet" aria-hidden>
+				<div className="tb-sk-rows">
+					{[0, 1, 2].map((row) => (
+						<div key={row} className="tb-sk-row">
+							<Skeleton className="tb-sk-chords" />
+							<Skeleton className="tb-sk-stave" />
+						</div>
+					))}
+				</div>
+			</section>
+		</>
+	);
+}
+
 /**
  * The Tab page. On /tab it opens the player's library; given `shared`, it
  * opens that snapshot instead (/p/[id]): the library and every save path are gone,
@@ -219,12 +244,9 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 						</button>
 					)}
 					<main ref={stageRef} className="tb-stage">
-						<div ref={stageInRef} className={session.restored ? "tb-stage-in gp-rise" : "tb-stage-in"}>
+						<div ref={stageInRef} className="tb-stage-in gp-rise">
 							{!session.restored ? (
-								<div className="flex flex-col gap-4" aria-busy="true">
-									<Skeleton className="h-13 w-60" />
-									<Skeleton className="h-96 w-full rounded-gp-xl" />
-								</div>
+								<TabSkeleton />
 							) : (
 								<>
 									<TabHeader

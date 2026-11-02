@@ -1247,6 +1247,13 @@
 		transform: translateX(-100%);
 		animation: gp-shimmer var(--gp-d-skeleton) linear infinite;
 	}
+	/* the first 300ms: the space is held, nothing is drawn */
+	.gp-skeleton[data-wait] {
+		background: transparent;
+	}
+	.gp-skeleton[data-wait]::after {
+		display: none;
+	}
 	@keyframes gp-shimmer {
 		to {
 			transform: translateX(100%);

@@ -240,6 +240,47 @@
 		position: relative;
 		cursor: pointer;
 	}
+
+	/* While the tab is restored: the title, the toolbar and the sheet as they will sit,
+	   with the meta line, the name, the controls and the staves waiting in them. */
+	.tb-sk-meta {
+		grid-column: 1;
+		width: 170px;
+		height: 14px;
+		margin-block: 8px;
+		border-radius: 6px;
+	}
+	.tb-sk-name {
+		grid-column: 1;
+		width: min(260px, 70%);
+		height: 30px;
+		margin-block: 2px;
+		border-radius: 6px;
+	}
+	.tb-sk-tool {
+		flex: 1;
+		max-width: 620px;
+		height: 36px;
+		border-radius: var(--gp-r-m);
+	}
+	.tb-sk-rows {
+		display: grid;
+		gap: 44px;
+		padding-top: 8px;
+	}
+	.tb-sk-row {
+		display: grid;
+		gap: 12px;
+	}
+	.tb-sk-chords {
+		width: 45%;
+		height: 14px;
+		border-radius: 6px;
+	}
+	.tb-sk-stave {
+		height: 112px;
+		border-radius: var(--gp-r-m);
+	}
 	/* Headroom for the playhead's cap over the first row. */
 	.tb-rows {
 		display: flex;
@@ -350,6 +391,15 @@
 		}
 		.tb-meta {
 			height: 22px;
+		}
+		.tb-sk-meta {
+			margin-block: 4px;
+		}
+		.tb-sk-name {
+			height: 22px;
+		}
+		.tb-sk-tool {
+			height: 34px;
 		}
 		.tb-titlerow h1 {
 			font-size: 20px;

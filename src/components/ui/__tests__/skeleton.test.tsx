@@ -21,12 +21,14 @@ afterEach(() => {
 const block = () => host.querySelector(".gp-skeleton");
 
 describe("Skeleton", () => {
-	it("shows nothing for a short wait, then the block", async () => {
+	it("holds its place at once, and draws its fill after a short wait", async () => {
 		await act(() => root.render(<Skeleton className="h-10" />));
-		await act(() => vi.advanceTimersByTime(SKELETON_DELAY_MS - 1));
-		expect(block()).toBeNull();
-		await act(() => vi.advanceTimersByTime(1));
 		expect(block()).not.toBeNull();
+		expect(block()?.hasAttribute("data-wait")).toBe(true);
+		await act(() => vi.advanceTimersByTime(SKELETON_DELAY_MS - 1));
+		expect(block()?.hasAttribute("data-wait")).toBe(true);
+		await act(() => vi.advanceTimersByTime(1));
+		expect(block()?.hasAttribute("data-wait")).toBe(false);
 		await act(async () => root.unmount());
 	});
 

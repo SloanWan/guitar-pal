@@ -97,13 +97,16 @@ export default function TabEditPage({ id }: { id: string }) {
 		}
 		openedRef.current = true;
 		// A one-shot read of storage and the async library, as the reader's restore does.
-		/* eslint-disable react-hooks/set-state-in-effect */
-		if (next) {
-			reset(next);
-			setPristine(JSON.stringify(next));
-		}
-		setOpened(state);
-		/* eslint-enable react-hooks/set-state-in-effect */
+		// Out of the effect: this one runs while the page's Suspense boundary hydrates, and
+		// an update made there gets idle priority, so the blank tab waited behind every
+		// library read (~2.5s signed in) before it showed.
+		queueMicrotask(() => {
+			if (next) {
+				reset(next);
+				setPristine(JSON.stringify(next));
+			}
+			setOpened(state);
+		});
 	}, [entry, library.isLoading, library.customPatterns, reset]);
 
 	const ready = opened.status === "ready";
@@ -323,10 +326,16 @@ export default function TabEditPage({ id }: { id: string }) {
 					<div className="te-stage">
 						<div className="te-stage-in gp-rise">
 							{!ready ? (
-								<div className="flex flex-col gap-4" aria-busy="true">
-									<Skeleton className="h-13 w-60" />
-									<Skeleton className="h-96 w-full rounded-gp-xl" />
-								</div>
+								<>
+									<div className="te-titlerow" aria-busy="true" aria-label="Loading">
+										<Skeleton className="te-sk-meta" />
+										<Skeleton className="te-sk-name" />
+									</div>
+									<div className="te-toolbay" aria-hidden>
+										<Skeleton className="te-sk-tool" />
+									</div>
+									<Skeleton className="te-sk-bar" />
+								</>
 							) : (
 								<>
 									{notice && (
@@ -509,7 +518,9 @@ export default function TabEditPage({ id }: { id: string }) {
 							</Button>
 						)}
 					</div>
-					{ready && (
+					{/* An instrument with nothing to load: there from the start, and only
+					    taking clicks once the tab is open. */}
+					<div className="contents" inert={!ready}>
 						<FretboardDock
 							pattern={working}
 							cursor={cursor}
@@ -524,18 +535,27 @@ export default function TabEditPage({ id }: { id: string }) {
 							onOpen={prefs.setDockOpen}
 							onHit={dockHit}
 						/>
-					)}
+					</div>
 				</div>
-				{ready && !narrow && (
+				{!narrow && (
 					<aside ref={inspectorRef} className="te-insp gp-rise" aria-label="Inspector">
-						<EditorInspector
-							working={working}
-							commit={commit}
-							cursor={cursor}
-							slots={selectedSlots(working, cursor, selection)}
-							onCursor={(cell) => tabCursor.moveTo(cell, selection)}
-							chordTools={chordTools}
-						/>
+						{ready ? (
+							<EditorInspector
+								working={working}
+								commit={commit}
+								cursor={cursor}
+								slots={selectedSlots(working, cursor, selection)}
+								onCursor={(cell) => tabCursor.moveTo(cell, selection)}
+								chordTools={chordTools}
+							/>
+						) : (
+							<div className="te-sk-insp" aria-hidden>
+								<Skeleton className="te-sk-meta" />
+								<Skeleton className="te-sk-chips" />
+								<Skeleton className="te-sk-chips" />
+								<Skeleton className="te-sk-panel" />
+							</div>
+						)}
 					</aside>
 				)}
 			</div>

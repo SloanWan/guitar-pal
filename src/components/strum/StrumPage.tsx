@@ -179,9 +179,23 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					)}
 				<main className="st-stage">
 					{!session.patternRestored || !selectedPattern ? (
-						<div className="st-stage-in" aria-busy="true">
-							<Skeleton className="h-13 w-60" />
-							<Skeleton className="h-60 w-full rounded-gp-xl" />
+						<div className="st-stage-in gp-rise" aria-busy="true" aria-label="Loading">
+							<div className="st-titlerow">
+								<div className="st-sk-title">
+									<Skeleton className="st-sk-meta" />
+									<Skeleton className="st-sk-name" />
+								</div>
+							</div>
+							<div className="st-sk-now">
+								<Skeleton />
+							</div>
+							<div className="st-prog-slot">
+								<div className="st-sk-prog">
+									<Skeleton className="st-sk-head" />
+									<Skeleton className="st-sk-row" />
+									<Skeleton className="st-sk-row" />
+								</div>
+							</div>
 						</div>
 					) : pending ? (
 						<div className="st-stage-in gp-rise">

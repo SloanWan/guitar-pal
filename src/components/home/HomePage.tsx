@@ -35,6 +35,38 @@ function readOpenProgression(): string | null {
 	}
 }
 
+/** The song card's frame while the load is out: its title lines, a bar of chords, the grid, the controls. */
+function SongCardSkeleton() {
+	return (
+		<div className="hm-cont" aria-busy="true" aria-label="Loading">
+			<div className="hm-cont-top">
+				<Skeleton className="hm-sk-line hm-sk-mod" />
+				<Skeleton className="hm-sk-line hm-sk-name" />
+				<Skeleton className="hm-sk-line hm-sk-meta" />
+			</div>
+			<Skeleton className="hm-sk-bars" />
+			<Skeleton className="hm-sk-grid" />
+			<Skeleton className="hm-sk-ctl" />
+		</div>
+	);
+}
+
+/** The panel's frame while the load is out: a heading and a few rows. */
+function SideSkeleton() {
+	return (
+		<aside className="hm-side" aria-busy="true" aria-label="Loading">
+			<div className="hm-blk">
+				<Skeleton className="hm-sk-line hm-sk-h" />
+				<div className="hm-sk-rows">
+					<Skeleton className="hm-sk-row" />
+					<Skeleton className="hm-sk-row" />
+					<Skeleton className="hm-sk-row" />
+				</div>
+			</div>
+		</aside>
+	);
+}
+
 /**
  * /home, signed in (#363 step 13): a greeting that asks what we are playing and
  * the assistant to answer it with; the song last strummed, ready to play, and
@@ -103,16 +135,18 @@ export default function HomePage() {
 								<LatestTiles tab={data.tab} chords={data.chords} shapes={data.shapes} book={data.book} now={now} />
 							</div>
 						) : (
-							<Skeleton className="hm-sk" />
+							<SongCardSkeleton />
 						)}
 					</section>
 				</div>
 
-				{data && (
-					<div className="hm-arrive gp-rise">
+				<div className="hm-arrive gp-rise">
+					{data ? (
 						<HomeSide week={data.week} kept={data.kept} opened={data.opened} links={data.links} now={now} onKeep={keep} />
-					</div>
-				)}
+					) : (
+						<SideSkeleton />
+					)}
+				</div>
 			</div>
 		</div>
 	);

@@ -63,8 +63,21 @@ export default function SettingsPage() {
 
 			{loading || !user ? (
 				// The proxy guards /settings, so a resolved null user is only ever a
-				// sign-out mid-visit; the skeleton is the right thing either way.
-				<Skeleton className="h-[560px] rounded-gp-lg" />
+				// sign-out mid-visit; the skeletons are the right thing either way.
+				<>
+					<Section icon={<UserRound />} anim="profile" title="Profile">
+						<Skeleton className="h-[288px] rounded-gp-md max-sm:h-[397px]" />
+					</Section>
+					<Section icon={<Mail />} anim="email" title="Email">
+						<Skeleton className="h-[61px] rounded-gp-md max-sm:h-[130px]" />
+					</Section>
+					<Section icon={<KeyRound />} anim="password" title="Password">
+						<Skeleton className="h-[23px] rounded-gp-md" />
+					</Section>
+					<Section icon={<Trash2 />} anim="delete" title="Delete">
+						<Skeleton className="h-[77px] rounded-gp-md max-sm:h-[198px]" />
+					</Section>
+				</>
 			) : (
 				<>
 					<IdentityCard user={user} />

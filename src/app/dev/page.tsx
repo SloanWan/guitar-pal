@@ -45,6 +45,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "Candy primitives — every button, chip, segmented, switch and stepper variant and state.",
 	},
 	{
+		href: "/dev/evals",
+		label: "evals",
+		description: "Eval runs for every suite — assistant, chapter Q&A, OCR — following a run live as it writes.",
+	},
+	{
 		href: "/dev/fretboard-lab",
 		label: "fretboard-lab",
 		description: "Scale + chord-tone fretboard — roots, scale types, degree labels, position window.",

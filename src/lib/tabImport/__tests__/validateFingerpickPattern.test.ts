@@ -443,4 +443,17 @@ describe("validateFingerpickPattern — technique model v2", () => {
 		const { pattern } = validateFingerpickPattern(raw);
 		expect(pattern!.spans).toEqual([{ id: "letRing:a", kind: "letRing", from: "a", to: "a" }]);
 	});
+
+	it("keeps a share's reference links and drops the ones that are not web links", () => {
+		const raw = makePattern({
+			references: [
+				{ id: "yt", url: "https://youtu.be/abc", label: "Video" },
+				{ id: "js", url: "javascript:alert(1)" },
+			],
+		});
+		const { pattern, warnings } = validateFingerpickPattern(raw);
+		expect(pattern!.references).toEqual([{ id: "yt", url: "https://youtu.be/abc", label: "Video" }]);
+		expect(warnings).toEqual([]);
+		expect(validateFingerpickPattern(makePattern()).pattern).not.toHaveProperty("references");
+	});
 });

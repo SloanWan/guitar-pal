@@ -49,4 +49,15 @@ describe("a signed-in player's tabs", () => {
 		const [loaded] = await loadUserFingerpickPatterns(supabase, user);
 		expect(loaded.spans).toEqual(tab.spans);
 	});
+
+	it("come back with their reference links, and without any when none were kept", async () => {
+		const preset = PRESET_FINGERPICK_PATTERNS[0];
+		const references = [{ id: "r1", url: "https://youtu.be/abc", label: "Official video" }];
+		const supabase = fakeTable();
+		await saveUserFingerpickPattern(supabase, user, { ...preset, id: "linked", references });
+		await saveUserFingerpickPattern(supabase, user, { ...preset, id: "bare", references: [] });
+		const loaded = await loadUserFingerpickPatterns(supabase, user);
+		expect(loaded.find((p) => p.id === "linked")?.references).toEqual(references);
+		expect(loaded.find((p) => p.id === "bare")).not.toHaveProperty("references");
+	});
 });

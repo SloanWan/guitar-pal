@@ -5,6 +5,7 @@ import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import { setPatternCapo } from "@/lib/fingerpickChords";
 import { saveLastPattern } from "@/lib/lastPattern";
 import type { SharedFingerpick } from "@/lib/sharedItems";
+import type { TabReference } from "@/lib/tabReferences";
 import { createClient } from "@/lib/supabase";
 import { useFingerpickPatterns } from "@/components/fingerpick/useFingerpickPatterns";
 import { readLastPatternId, writeLastPatternId } from "@/components/fingerpick/useFingerpickPrefs";
@@ -62,6 +63,14 @@ export function useTabSession({ shared, user, loading, onOpen, onChanged }: Args
 		library.saveCustomPattern({ ...selected, bpm });
 	}
 
+	/** The player's own tab's reference links; nothing that plays changes, so nothing restarts. */
+	function setReferences(references: TabReference[]) {
+		if (!owned) return;
+		const { references: _old, ...rest } = selected;
+		void _old;
+		library.saveCustomPattern(references.length > 0 ? { ...rest, references } : rest);
+	}
+
 	function remove(id: string) {
 		if (id === selected.id) onOpen(PRESET_FINGERPICK_PATTERNS[0]);
 		library.deleteCustomPattern(id);
@@ -111,6 +120,7 @@ export function useTabSession({ shared, user, loading, onOpen, onChanged }: Args
 		select,
 		save,
 		saveTempo,
+		setReferences,
 		remove,
 		setCapo,
 	};

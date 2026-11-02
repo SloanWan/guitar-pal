@@ -3,6 +3,7 @@ import type { FingerpickPattern, Measure, Span } from "./fingerpickTypes";
 import { normalizeLoadedPattern } from "./fingerpickEdit";
 import { patternCapo } from "./fingerpickChords";
 import { sortPatternsByNewest } from "./strumBars";
+import { readReferences } from "./tabReferences";
 
 // localStorage key for guest (logged-out) custom fingerpick patterns.
 export const LOCAL_FINGERPICK_PATTERNS_KEY = "customFingerpickPatterns";
@@ -23,10 +24,13 @@ type FingerpickPatternRow = {
 	capo: number | null;
 	/** Palm-mute / let-ring runs; null for rows written before the column existed, and for none. */
 	spans: Span[] | null;
+	/** Reference links (#434); null for rows written before the column existed, and for none. */
+	reference_links: unknown;
 	created_at: string;
 };
 
 function rowToPattern(row: FingerpickPatternRow): FingerpickPattern {
+	const references = readReferences(row.reference_links);
 	// Migrate any legacy `duration: "rest"` slots to the isRest-flag model on load.
 	return normalizeLoadedPattern({
 		id: row.pattern_id,
@@ -37,6 +41,7 @@ function rowToPattern(row: FingerpickPatternRow): FingerpickPattern {
 		measures: row.measures,
 		...(row.spans && row.spans.length > 0 ? { spans: row.spans } : {}),
 		...(row.capo ? { capo: row.capo } : {}),
+		...(references ? { references } : {}),
 		createdAt: row.created_at,
 	});
 }
@@ -52,6 +57,7 @@ function patternToRow(user: User, pattern: FingerpickPattern) {
 		measures: pattern.measures,
 		spans: pattern.spans && pattern.spans.length > 0 ? pattern.spans : null,
 		capo: patternCapo(pattern) || null,
+		reference_links: pattern.references && pattern.references.length > 0 ? pattern.references : null,
 	};
 }
 
@@ -82,7 +88,7 @@ export async function loadUserFingerpickPatterns(
 
 	const { data, error } = await supabase
 		.from("user_fingerpick_patterns")
-		.select("pattern_id, name, description, bpm, time_signature, measures, capo, spans, created_at")
+		.select("pattern_id, name, description, bpm, time_signature, measures, capo, spans, reference_links, created_at")
 		.eq("user_id", user.id);
 	if (error) throw new Error(error.message);
 	return sortPatternsByNewest(

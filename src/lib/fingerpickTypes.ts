@@ -1,4 +1,5 @@
 import type { ChordRef } from "@/lib/strumPatterns";
+import type { TabReference } from "@/lib/tabReferences";
 
 export type Duration =
 	| "whole"
@@ -153,5 +154,7 @@ export type FingerpickPattern = {
 	 * first; presets and patterns stored before the stamp have none.
 	 */
 	createdAt?: string;
+	/** Where the tab came from: links to a video, a track, a page (#434). Absent = none. */
+	references?: TabReference[];
 };
 

@@ -7,6 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import "@/components/playback/icons.css";
 import CapoStepper from "@/components/playback/CapoStepper";
 import { ImportCopy, SharedBadge } from "@/components/share/SharedSnapshot";
+import type { TabReference } from "@/lib/tabReferences";
+import TabReferences from "./TabReferences";
 
 interface Props {
 	name: string;
@@ -32,6 +34,9 @@ interface Props {
 	owned?: boolean;
 	/** On a share page: a badge leads the meta line and Import takes the actions' place. */
 	shared?: { onImport: () => void; importing: boolean; disabled: boolean };
+	/** The tab's reference links, beside its name; changed only on the player's own. */
+	references: TabReference[];
+	onReferences: (next: TabReference[]) => void;
 }
 
 /**
@@ -51,6 +56,8 @@ export default function TabHeader({
 	onDelete,
 	owned = false,
 	shared,
+	references,
+	onReferences,
 }: Props) {
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	return (
@@ -70,7 +77,10 @@ export default function TabHeader({
 					<PanelRightOpen aria-hidden />
 				</button>
 			)}
-			<h1>{name}</h1>
+			<div className="tb-name">
+				<h1>{name}</h1>
+				<TabReferences references={references} editable={owned && !shared} onChange={onReferences} />
+			</div>
 			<div className="tb-pact">
 				<CapoStepper capo={capo} onCapo={onCapo} className="tb-capo" />
 				{shared && <ImportCopy {...shared} />}

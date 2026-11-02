@@ -32,6 +32,7 @@ import { indexPattern } from "@/lib/fingerpickIndex";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
 import type { SharedFingerpick } from "@/lib/sharedItems";
+import type { TabReference } from "@/lib/tabReferences";
 import { editorHref, type EditorEntry } from "@/lib/tabEditorEntry";
 import TabHeader from "./TabHeader";
 import TabSheet from "./TabSheet";
@@ -43,6 +44,8 @@ import { TAB_TICK_LEVELS, tabBpm, useTabPlayback } from "./useTabPlayback";
 import { useTabSession } from "./useTabSession";
 import { useTabShare } from "./useTabShare";
 import { useNavRouter } from "@/components/nav-progress";
+
+const NO_REFERENCES: TabReference[] = [];
 
 /** Per-viewer: whether the library beside the stage is folded away. */
 const LIBRARY_FOLDED_KEY = "tabLibraryFolded";
@@ -260,6 +263,8 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 										sharing={shareState.sharing}
 										onDelete={isShared ? undefined : () => session.remove(pattern.id)}
 										owned={session.owned}
+										references={pattern.references ?? NO_REFERENCES}
+										onReferences={session.setReferences}
 										shared={
 											isShared
 												? {

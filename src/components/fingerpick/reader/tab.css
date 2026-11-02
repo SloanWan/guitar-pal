@@ -82,8 +82,16 @@
 		width: 18px;
 		height: 18px;
 	}
-	.tb-titlerow h1 {
+	/* The name, with the reference links' key right after it however long it is. */
+	.tb-name {
+		display: flex;
 		grid-column: 1;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+	}
+	.tb-titlerow h1 {
+		min-width: 0;
 		margin: 0;
 		overflow: hidden;
 		font-size: 28px;
@@ -101,6 +109,116 @@
 	}
 	.tb-capo {
 		margin-right: 8px;
+	}
+
+	/* ── Reference links (#434) ─────────────────────────────────────────── */
+	.tb-refs-key.pb-icon {
+		display: flex;
+		gap: 3px;
+		width: auto;
+		min-width: 36px;
+		padding: 0 8px;
+		font-size: 13px;
+		font-weight: 650;
+	}
+	.tb-refs {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.tb-refs-list {
+		display: flex;
+		flex-direction: column;
+		margin: 0 -8px;
+		padding: 0;
+		list-style: none;
+	}
+	.tb-ref {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+	}
+	.tb-ref-link {
+		display: flex;
+		flex: 1 1 auto;
+		align-items: center;
+		gap: 10px;
+		min-width: 0;
+		padding: 7px 8px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-ink);
+		text-decoration: none;
+		transition: background-color var(--gp-d-state) linear;
+	}
+	.tb-ref-link:hover {
+		background: var(--gp-well);
+	}
+	.tb-ref-link > svg {
+		flex: none;
+		width: 18px;
+		height: 18px;
+		color: var(--gp-m-700);
+	}
+	.tb-ref-text {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.tb-ref-title,
+	.tb-ref-url {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.tb-ref-title {
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.tb-ref-url {
+		color: var(--gp-ink-3);
+		font-size: 12.5px;
+	}
+	.tb-ref-remove.pb-icon {
+		width: 30px;
+		height: 30px;
+	}
+	.tb-ref-remove svg {
+		width: 16px;
+		height: 16px;
+	}
+	.tb-refs-empty {
+		margin: 0;
+		color: var(--gp-ink-3);
+		font-size: 13px;
+		line-height: 1.4;
+	}
+	.tb-refs-add {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.tb-refs-row {
+		display: flex;
+		gap: 8px;
+	}
+	.tb-refs-row .gp-input {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.tb-refs-row .gp-btn {
+		flex: none;
+		align-self: center;
+	}
+	.tb-refs-note {
+		min-height: 1.4em;
+		margin: 0;
+		color: var(--gp-ink-3);
+		font-size: 12.5px;
+		line-height: 1.4;
+	}
+	.tb-refs-note[data-error] {
+		color: var(--gp-bad);
 	}
 	/* under the title row, on its inset */
 	.tb-page .sh-note {

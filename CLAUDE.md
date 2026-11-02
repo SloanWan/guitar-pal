@@ -12,6 +12,7 @@ npm run build    # Production build
 npm run lint     # Run ESLint
 npm test         # Run Vitest test suite
 npm run test:e2e # Build, serve on 3100, run the Playwright smoke suite (e2e/README.md)
+npm run balance  # DeepSeek's and Alibaba Cloud's balance, before and after a paid eval run (docs/balance.md)
 ```
 
 A pre-commit hook (`.husky/pre-commit`) runs `tsc --noEmit`, `npm run lint`, and `npm test` before every commit — fix all three before pushing. The hook does not run the e2e suite (it builds and drives a browser); CI does.

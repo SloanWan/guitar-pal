@@ -104,6 +104,17 @@ def test_summarise_pools_notes_and_counts_exercises():
     assert rates["exercises"] == 2
 
 
+def test_a_dropped_exercise_misses_every_gold_note():
+    dropped = score_reading(None, tab(BAR))
+    assert not dropped.drafted and not dropped.exact
+    assert (dropped.read_notes, dropped.gold_notes, dropped.matched_notes) == (0, 4, 0)
+    assert dropped.differences[0] == "no draft: the parse dropped this exercise"
+    rates = summarise([score_reading(tab(BAR), tab(BAR)), dropped])
+    assert rates["note_recall"] == 0.5
+    assert rates["note_precision"] == 1.0
+    assert rates["drafted"] == 0.5
+
+
 def record(rid, status, gold):
     return {
         "version": 1,

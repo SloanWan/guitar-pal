@@ -82,4 +82,13 @@ export const SUITES: EvalSuite[] = [
 		primary: "skip_rate",
 		scatter: { x: "recall", y: "skip_rate" },
 	},
+	{
+		id: "tab-extraction",
+		title: "Tab extraction",
+		description:
+			"Tab exercises read off book crops against the gold set reviewed on /dev/tab-gold: notes matched by onset, rhythm, chords, and how well the jianpu cross-check flags the wrong notes.",
+		runDirs: ["book-service/evals/tab/results"],
+		primary: "note_f1",
+		cellMetric: "note_f1",
+	},
 ];

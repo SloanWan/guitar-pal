@@ -41,6 +41,26 @@ export interface EditorDraft {
 	book?: EditorBookSource;
 }
 
+/**
+ * A tab opened from, and saved to, somewhere other than the player's library —
+ * the tab-gold review (`/dev/tab-gold`), which keeps a corrected reading as an
+ * eval's ground truth. Close and Save go back to `back`.
+ */
+export interface EditorTarget {
+	pattern: FingerpickPattern;
+	notice: EditorNotice;
+	/**
+	 * The image the tab was read from, shown beside the editor — or, when `wide`
+	 * (an exercise's strip rather than a page), across the notice above the tab.
+	 */
+	source?: { src: string; page: number | null; wide?: boolean };
+	/** The Save button's tooltip: where the tab goes. */
+	saveTitle: string;
+	/** Rejects with the reason when the tab could not be kept. */
+	save: (pattern: FingerpickPattern) => Promise<void>;
+	back: string;
+}
+
 export type EditorEntry =
 	| { kind: "new"; from?: EditorReturn }
 	| { kind: "edit"; id: string; from?: EditorReturn }

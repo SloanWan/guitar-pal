@@ -35,6 +35,7 @@ import {
 	returnHref,
 	type EditorBookSource,
 	type EditorNotice,
+	type EditorTarget,
 } from "@/lib/tabEditorEntry";
 import { selectedSlots } from "@/lib/tabEditorCursor";
 import { patternCapo, type FretHint } from "@/lib/fingerpickChords";
@@ -63,9 +64,10 @@ type Opened =
  * `/fingerpick/edit/new` for a blank one or a handed-over draft. The tab is
  * edited as a grid of bar blocks, a row a string. Saving goes through the library's own save (a
  * guest's tab to the browser, a player's to the account) and back to where the
- * editor was opened from; leaving with unsaved edits asks first.
+ * editor was opened from; leaving with unsaved edits asks first. Given a
+ * `target`, it opens that tab instead and saves through the target's own save.
  */
-export default function TabEditPage({ id }: { id: string }) {
+export default function TabEditPage({ id, target }: { id: string; target?: EditorTarget }) {
 	const router = useNavRouter();
 	const search = useSearchParams();
 	const entry = useMemo(() => readEditorEntry(id, search), [id, search]);
@@ -85,7 +87,10 @@ export default function TabEditPage({ id }: { id: string }) {
 		if (openedRef.current) return;
 		let next: FingerpickPattern | null = null;
 		let state: Opened;
-		if (entry.kind === "edit") {
+		if (target) {
+			next = target.pattern;
+			state = { status: "ready", isNew: false, notice: target.notice };
+		} else if (entry.kind === "edit") {
 			if (library.isLoading) return;
 			const own = library.customPatterns.find((p) => p.id === entry.id);
 			if (own) next = clonePatternForEdit(own);
@@ -104,12 +109,12 @@ export default function TabEditPage({ id }: { id: string }) {
 		}
 		setOpened(state);
 		/* eslint-enable react-hooks/set-state-in-effect */
-	}, [entry, library.isLoading, library.customPatterns, reset]);
+	}, [target, entry, library.isLoading, library.customPatterns, reset]);
 
 	const ready = opened.status === "ready";
 	const dirty = ready && isEditorDirty(pristine, working);
 	const guard = useLeaveGuard(dirty, router);
-	const back = returnHref(entry.from);
+	const back = target?.back ?? returnHref(entry.from);
 
 	// ⌘Z / ⌘⇧Z, never in a text field (the field undoes its own typing).
 	const historyRef = useRef({ undo, redo });
@@ -132,9 +137,10 @@ export default function TabEditPage({ id }: { id: string }) {
 	const [warningsOpen, setWarningsOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 
+	// A target keeps its tab apart from the library, so the library's names are not taken.
 	const takenNames = useMemo(
-		() => library.patterns.filter((p) => p.id !== working.id).map((p) => p.name),
-		[library.patterns, working.id],
+		() => (target ? [] : library.patterns.filter((p) => p.id !== working.id).map((p) => p.name)),
+		[target, library.patterns, working.id],
 	);
 	const named = working.name.trim().length > 0;
 
@@ -151,11 +157,19 @@ export default function TabEditPage({ id }: { id: string }) {
 			return;
 		}
 		setSaving(true);
-		const { pattern: stored, written } = library.saveCustomPattern({
-			...working,
-			name: working.name.trim(),
-			bpm: clampBpmToMeter(working.bpm, working.timeSignature),
-		});
+		const tab = { ...working, name: working.name.trim(), bpm: clampBpmToMeter(working.bpm, working.timeSignature) };
+		if (target) {
+			try {
+				await target.save(tab);
+			} catch (e) {
+				toast.error(e instanceof Error ? e.message : "The tab could not be saved.");
+				setSaving(false);
+				return;
+			}
+			guard.leave(target.back);
+			return;
+		}
+		const { pattern: stored, written } = library.saveCustomPattern(tab);
 		clearEditorDraft();
 		const book = opened.book;
 		if (book) {
@@ -264,8 +278,11 @@ export default function TabEditPage({ id }: { id: string }) {
 	const statusNote = pending ? `${pending.digit}… type a second digit for ${pending.digit}0–${Math.min(24, pending.digit * 10 + 9)}` : run > 1 ? `${run} slots selected` : noteText(cursorSlot, cursor.stringIndex);
 
 	// A book's page, signed once for the column beside the editor and the fold-out below 1024px.
+	// A target's image needs no signing.
 	const cropPath = ready ? (opened.book?.cropPath ?? null) : null;
-	const [crop, setCrop] = useState<string | null>(null);
+	const [signedCrop, setCrop] = useState<string | null>(null);
+	const crop = target?.source?.src ?? signedCrop;
+	const wideSource = target?.source?.wide === true;
 	const [cropOpen, setCropOpen] = useState(false);
 	useEffect(() => {
 		if (!cropPath) return;
@@ -305,13 +322,13 @@ export default function TabEditPage({ id }: { id: string }) {
 		`${bars} bar${bars === 1 ? "" : "s"}`,
 	].join(" · ");
 	const heading = named ? working.name : (notice?.title ?? "New tab");
-	const page = ready ? opened.book?.page : undefined;
+	const page = target ? target.source?.page : ready ? opened.book?.page : undefined;
 	const leaveName = named ? `“${working.name.trim()}”` : "this tab";
 
 	return (
 		<div className="te-page" data-m="tab">
 			<div className="te-body">
-				{crop && (
+				{crop && !wideSource && (
 					<aside className="te-src" aria-label="Source page">
 						<div className="te-src-head">Page {page}</div>
 						<div className="te-src-img">
@@ -345,7 +362,7 @@ export default function TabEditPage({ id }: { id: string }) {
 													</button>
 												)}
 												<span className="tb-grow" />
-												{crop && (
+												{crop && !wideSource && (
 													<Button
 														variant="secondary"
 														size="xs"
@@ -358,6 +375,11 @@ export default function TabEditPage({ id }: { id: string }) {
 												)}
 											</div>
 											<p>{notice.text}</p>
+											{crop && wideSource && (
+												<div className="te-srcwide">
+													<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
+												</div>
+											)}
 											{warningsOpen && notice.warnings && (
 												<ul>
 													{notice.warnings.map((w) => (
@@ -436,9 +458,15 @@ export default function TabEditPage({ id }: { id: string }) {
 												size="xs"
 												onClick={() => void save()}
 												loading={saving}
-												disabled={!named || library.isLoading}
+												disabled={!named || (!target && library.isLoading)}
 												title={
-													!named ? "Name the tab to save it" : library.isLoading ? "Loading your tabs…" : "Save to your tabs"
+													!named
+														? "Name the tab to save it"
+														: target
+															? target.saveTitle
+															: library.isLoading
+																? "Loading your tabs…"
+																: "Save to your tabs"
 												}
 											>
 												Save

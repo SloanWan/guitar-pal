@@ -104,6 +104,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		label: "tab-notation",
 		description: "VexFlow TAB rendering audit using real fingerpick patterns.",
 	},
+	{
+		href: "/dev/tab-gold",
+		label: "tab-gold",
+		description: "Check the tab extractor's readings against their crops; confirm or correct them into the eval's gold set.",
+	},
 ];
 
 export default function DevIndexPage() {

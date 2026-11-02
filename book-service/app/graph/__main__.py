@@ -236,6 +236,7 @@ def _export(
                 "source": e.source,
                 "draft": e.draft,
                 "warnings": e.warnings,
+                "crop_path": e.crop_path,
             }
             for i, e in enumerate(result.exercises)
         ],

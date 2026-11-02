@@ -82,7 +82,7 @@ export async function loadUserFingerpickPatterns(
 
 	const { data, error } = await supabase
 		.from("user_fingerpick_patterns")
-		.select("pattern_id, name, description, bpm, time_signature, measures, capo, created_at")
+		.select("pattern_id, name, description, bpm, time_signature, measures, capo, spans, created_at")
 		.eq("user_id", user.id);
 	if (error) throw new Error(error.message);
 	return sortPatternsByNewest(

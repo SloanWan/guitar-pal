@@ -48,7 +48,7 @@ import { useNavRouter } from "@/components/nav-progress";
 const LIBRARY_FOLDED_KEY = "tabLibraryFolded";
 
 /**
- * The Tab page. On /fingerpick it opens the player's library; given `shared`, it
+ * The Tab page. On /tab it opens the player's library; given `shared`, it
  * opens that snapshot instead (/p/[id]): the library and every save path are gone,
  * the snapshot is what plays, and the one way to change it is to import a copy.
  */

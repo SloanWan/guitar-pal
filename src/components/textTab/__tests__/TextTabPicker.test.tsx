@@ -131,7 +131,7 @@ describe("TextTabPicker", () => {
 		act(() => button("Open in Tab").click());
 		expect(engine.stop).toHaveBeenCalled();
 		expect(onTaken).toHaveBeenCalledTimes(1);
-		expect(push).toHaveBeenCalledWith("/fingerpick");
+		expect(push).toHaveBeenCalledWith("/tab");
 		const handoff = takeHandoff("fingerpick");
 		if (handoff?.kind !== "fingerpick") throw new Error("no fingerpick handoff stashed");
 		expect(handoff.pattern.name).toBe("Book p.12");

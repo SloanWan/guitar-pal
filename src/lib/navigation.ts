@@ -16,7 +16,7 @@ export interface NavItem<K extends string> {
 export const NAV_ITEMS: readonly NavItem<NavKey>[] = [
 	{ key: "home", label: "Home", href: "/", module: "home" },
 	{ key: "strum", label: "Strum", href: "/strum", module: "strum" },
-	{ key: "tab", label: "Tab", href: "/fingerpick", module: "tab" },
+	{ key: "tab", label: "Tab", href: "/tab", module: "tab" },
 	{ key: "chords", label: "Chords", href: "/chords", module: "chords" },
 	{ key: "fretboard", label: "Fretboard", href: "/fretboard", module: "fb" },
 	{ key: "books", label: "Books", href: "/books", module: "books" },
@@ -26,7 +26,7 @@ export const NAV_ITEMS: readonly NavItem<NavKey>[] = [
 export const TAB_ITEMS: readonly NavItem<TabKey>[] = [
 	{ key: "home", label: "Home", href: "/", module: "home" },
 	{ key: "strum", label: "Strum", href: "/strum", module: "strum" },
-	{ key: "tab", label: "Tab", href: "/fingerpick", module: "tab" },
+	{ key: "tab", label: "Tab", href: "/tab", module: "tab" },
 	{ key: "chords", label: "Chords", href: "/chords", module: "chords" },
 	{ key: "me", label: "Me", href: "/settings", module: "home" },
 ];
@@ -37,8 +37,8 @@ const under = (pathname: string, prefix: string) => pathname === prefix || pathn
 export function navKeyForPath(pathname: string): NavKey | null {
 	if (pathname === "/" || pathname === "/home") return "home";
 	if (under(pathname, "/strum")) return "strum";
-	// the tab reader and, once it is its own page, the tab editor (/fingerpick/edit/…)
-	if (under(pathname, "/fingerpick")) return "tab";
+	// the tab reader and, once it is its own page, the tab editor (/tab/edit/…)
+	if (under(pathname, "/tab")) return "tab";
 	if (under(pathname, "/chords")) return "chords";
 	if (under(pathname, "/fretboard")) return "fretboard";
 	if (under(pathname, "/books")) return "books";

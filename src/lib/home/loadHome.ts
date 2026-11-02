@@ -182,7 +182,7 @@ export async function loadHome(
 		module: "tab",
 		title: p.name,
 		subline: `Tab · ${isCustomTab.has(p.id) ? "Yours" : "Preset"} · ${p.timeSignature[0]}/${p.timeSignature[1]}`,
-		href: `/fingerpick?pattern=${encodeURIComponent(p.id)}`,
+		href: `/tab?pattern=${encodeURIComponent(p.id)}`,
 		createdAt,
 		keep: { target: { kind: "tab", id: p.id }, kept: favTabIds.has(p.id) },
 	});
@@ -250,7 +250,7 @@ export async function loadHome(
 				case "tab": {
 					const p = tabById.get(row.target);
 					return p
-						? { module: "tab", title: p.name, label: `Tab · ${isCustomTab.has(p.id) ? "Yours" : "Preset"}`, href: href("/fingerpick", p.id) }
+						? { module: "tab", title: p.name, label: `Tab · ${isCustomTab.has(p.id) ? "Yours" : "Preset"}`, href: href("/tab", p.id) }
 						: null;
 				}
 				case "chord": {

@@ -90,11 +90,11 @@ describe("TabProposalPreview", () => {
 		const handoff = takeHandoff("fingerpick");
 		expect(handoff?.pattern.name).toBe(proposal.pattern.name);
 		expect(handoff?.pattern.measures).toHaveLength(1);
-		expect(push).toHaveBeenCalledWith("/fingerpick");
+		expect(push).toHaveBeenCalledWith("/tab");
 	});
 
 	it("does not navigate when already on the fingerpick page", async () => {
-		pathname = "/fingerpick";
+		pathname = "/tab";
 		const proposal = proposalOf([chord("A", "minor", "Am")]);
 		await act(async () => root.render(<TabProposalPreview proposal={proposal} />));
 		const button = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Open in Tab"));

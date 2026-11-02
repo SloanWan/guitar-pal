@@ -84,7 +84,7 @@ export function useTabShare({ user, pattern, shared, takenNames, loading, stop }
 					description: "Sign in to keep it on your account.",
 					action: { label: "Sign in", onClick: () => router.push("/auth?redirect=/fingerpick") },
 				});
-			router.push(`/fingerpick?pattern=${copy.id}`);
+			router.push(`/tab?pattern=${copy.id}`);
 		} catch (e) {
 			console.error(e);
 			toast.error("Couldn't save the tab — try again.");

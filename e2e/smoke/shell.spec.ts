@@ -28,7 +28,7 @@ test.describe("on a phone", () => {
 		await expect(page.getByRole("navigation", { name: "Tabs" }).locator('[aria-current="page"]')).toHaveCount(0);
 	});
 
-	for (const path of ["/", "/strum", "/fingerpick", "/chords", "/fretboard", "/books", "/auth"]) {
+	for (const path of ["/", "/strum", "/tab", "/chords", "/fretboard", "/books", "/auth"]) {
 		test(`${path} has no horizontal scroll at 400px`, async ({ page }) => {
 			await page.goto(path);
 			// polled: a page still loading its samples can be wider for a frame

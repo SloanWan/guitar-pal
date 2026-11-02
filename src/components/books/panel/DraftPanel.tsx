@@ -33,7 +33,7 @@ import { useNavRouter } from "@/components/nav-progress";
  * been used.
  */
 
-const TAB_PATH = "/fingerpick";
+const TAB_PATH = "/tab";
 
 export interface OpenDraft {
 	/** The chapter the draft was read in — the source panel's page range. */

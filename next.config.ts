@@ -16,6 +16,11 @@ const nextConfig: NextConfig = {
 	outputFileTracingIncludes: {
 		"/docs/assistant-grammar": ["./docs/assistant-grammar.md", "./docs/assistant-grammar.zh.md"],
 	},
+	// The Tab page lived at /fingerpick; links and bookmarks from then still land.
+	// The query (?pattern=…, ?draft=…) is carried across.
+	async redirects() {
+		return [{ source: "/fingerpick/:path*", destination: "/tab/:path*", permanent: true }];
+	},
 };
 
 export default nextConfig;

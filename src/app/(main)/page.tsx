@@ -47,7 +47,7 @@ const PERKS: readonly { icon: typeof House; title: string; text: string }[] = [
    the MCP connector's the guide to adding it (it has no page of its own). */
 const FOOTER_PRODUCT: readonly { href: string; label: string; external?: boolean }[] = [
 	{ href: "/strum", label: "Strum" },
-	{ href: "/fingerpick", label: "Tab" },
+	{ href: "/tab", label: "Tab" },
 	{ href: "/chords", label: "Chords" },
 	{ href: "/fretboard", label: "Fretboard" },
 	{ href: "/docs/assistant-grammar", label: "Assistant" },

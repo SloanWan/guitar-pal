@@ -59,8 +59,8 @@ type Opened =
 	| { status: "ready"; isNew: boolean; notice?: EditorNotice; book?: EditorBookSource };
 
 /**
- * The tab editor (#358): `/fingerpick/edit/<id>` for one of the player's tabs,
- * `/fingerpick/edit/new` for a blank one or a handed-over draft. The tab is
+ * The tab editor (#358): `/tab/edit/<id>` for one of the player's tabs,
+ * `/tab/edit/new` for a blank one or a handed-over draft. The tab is
  * edited as a grid of bar blocks, a row a string. Saving goes through the library's own save (a
  * guest's tab to the browser, a player's to the account) and back to where the
  * editor was opened from; leaving with unsaved edits asks first.

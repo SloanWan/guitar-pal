@@ -33,16 +33,16 @@ describe("editorHref / readEditorEntry", () => {
 	});
 
 	it("leaves the reader out of the address, since it is where the editor goes back to anyway", () => {
-		expect(editorHref({ kind: "new", from: "/fingerpick" })).toBe("/fingerpick/edit/new");
-		expect(editorHref({ kind: "edit", id: "x" })).toBe("/fingerpick/edit/x");
-		expect(editorHref({ kind: "draft", token: "t" })).toBe("/fingerpick/edit/new?draft=t");
+		expect(editorHref({ kind: "new", from: "/tab" })).toBe("/tab/edit/new");
+		expect(editorHref({ kind: "edit", id: "x" })).toBe("/tab/edit/x");
+		expect(editorHref({ kind: "draft", token: "t" })).toBe("/tab/edit/new?draft=t");
 	});
 });
 
 describe("returnHref", () => {
 	it("goes back to the reader by default, opened on what was saved", () => {
-		expect(returnHref(undefined)).toBe("/fingerpick");
-		expect(returnHref(undefined, "p-7")).toBe("/fingerpick?pattern=p-7");
+		expect(returnHref(undefined)).toBe("/tab");
+		expect(returnHref(undefined, "p-7")).toBe("/tab?pattern=p-7");
 	});
 
 	it("goes back to a book's page as it was, saved or not", () => {
@@ -51,9 +51,9 @@ describe("returnHref", () => {
 	});
 
 	it("never leaves the site", () => {
-		expect(returnHref("//evil.test")).toBe("/fingerpick");
-		expect(returnHref("https://evil.test")).toBe("/fingerpick");
-		expect(returnHref("/\\evil.test", "p")).toBe("/fingerpick?pattern=p");
+		expect(returnHref("//evil.test")).toBe("/tab");
+		expect(returnHref("https://evil.test")).toBe("/tab");
+		expect(returnHref("/\\evil.test", "p")).toBe("/tab?pattern=p");
 	});
 });
 

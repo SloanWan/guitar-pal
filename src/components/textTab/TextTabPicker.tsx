@@ -28,7 +28,7 @@ import { useNavRouter } from "@/components/nav-progress";
  * the text to start from and learns when a candidate has left.
  */
 
-const FINGERPICK_PATH = "/fingerpick";
+const FINGERPICK_PATH = "/tab";
 const DEFAULT_BPM = 90;
 
 export default function TextTabPicker({

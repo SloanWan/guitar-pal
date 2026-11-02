@@ -196,7 +196,7 @@ describe("DraftPanel", () => {
 		expect(engine.stop).toHaveBeenCalled();
 		expect(onTaken).toHaveBeenCalledTimes(1);
 		expect(api.setExerciseStatus).toHaveBeenCalledWith("b1", "e1", "taken");
-		expect(push).toHaveBeenCalledWith("/fingerpick");
+		expect(push).toHaveBeenCalledWith("/tab");
 		expect(container.textContent).toContain("Used");
 		const handoff = takeHandoff("fingerpick");
 		if (handoff?.kind !== "fingerpick") throw new Error("expected a fingerpick handoff");
@@ -212,7 +212,7 @@ describe("DraftPanel", () => {
 		expect(engine.stop).toHaveBeenCalled();
 		expect(push).toHaveBeenCalledTimes(1);
 		const url = new URL(push.mock.calls[0][0] as string, "https://x.test");
-		expect(url.pathname).toBe("/fingerpick/edit/new");
+		expect(url.pathname).toBe("/tab/edit/new");
 		expect(url.searchParams.get("from")).toBe("/books/b1");
 		const draft = readEditorDraft(url.searchParams.get("draft")!);
 		expect(draft?.pattern.name).toBe("Exercise 3");

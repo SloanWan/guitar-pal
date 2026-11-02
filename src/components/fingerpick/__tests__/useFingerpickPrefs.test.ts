@@ -37,7 +37,7 @@ describe("clampShapeWidth", () => {
 describe("last pattern id", () => {
 	beforeEach(() => {
 		localStorage.clear();
-		window.history.replaceState(null, "", "/fingerpick");
+		window.history.replaceState(null, "", "/tab");
 	});
 	it("is null when nothing was stored", () => {
 		expect(readLastPatternId()).toBeNull();
@@ -48,7 +48,7 @@ describe("last pattern id", () => {
 	});
 	it("prefers a ?pattern= deep link over the stored id", () => {
 		writeLastPatternId("waltz");
-		window.history.replaceState(null, "", "/fingerpick?pattern=travis");
+		window.history.replaceState(null, "", "/tab?pattern=travis");
 		expect(readLastPatternId()).toBe("travis");
 	});
 });

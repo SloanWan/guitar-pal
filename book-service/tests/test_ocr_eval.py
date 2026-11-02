@@ -55,3 +55,12 @@ def test_mark_checked_adds_and_removes_once():
     assert meta == {"checked": ["p01", "p02"], "pdf": "x"}
     assert mark_checked(meta, "p01", True)["checked"] == ["p01", "p02"]
     assert mark_checked(meta, "p02", False)["checked"] == ["p01"]
+
+
+def test_the_review_server_stays_inside_its_folders(tmp_path):
+    from evals.ocr.review import under
+
+    assert under(tmp_path, "book", "p01.txt") == tmp_path / "book" / "p01.txt"
+    for parts in (("..", "secret.txt"), ("book", "../../x"), ("/etc", "passwd")):
+        with pytest.raises(ValueError):
+            under(tmp_path, *parts)

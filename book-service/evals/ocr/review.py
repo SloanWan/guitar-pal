@@ -21,6 +21,7 @@ outside `materials/`.
 import argparse
 import difflib
 import json
+import os
 import sys
 from functools import cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -108,27 +109,43 @@ def pages() -> list[dict]:
     return sorted(out, key=lambda p: -p["disputed"])
 
 
+def under(root: Path, *parts: str) -> Path:
+    """
+    `root/parts…`, refused unless it stays inside `root`. The handler only
+    passes names it found in the gold folder; this keeps a request's path
+    from climbing out even if that check is ever loosened.
+    """
+    base = os.path.normpath(root)
+    path = os.path.normpath(os.path.join(base, *parts))
+    if not path.startswith(base + os.sep):
+        raise ValueError(f"outside {root}: {'/'.join(parts)}")
+    return Path(path)
+
+
 def page_detail(stem: str, page_id: str, engines: list[str]) -> dict:
-    folder = GOLD_ROOT / stem
-    reference = (folder / f"{page_id}.txt").read_text()
-    second = (folder / f"{page_id}.second.txt").read_text()
-    first = (folder / f"{page_id}.opus.txt").read_text()
+    reference = under(GOLD_ROOT, stem, f"{page_id}.txt").read_text()
+    second = under(GOLD_ROOT, stem, f"{page_id}.second.txt").read_text()
+    first = under(GOLD_ROOT, stem, f"{page_id}.opus.txt").read_text()
     reads = latest_reads()
     readings = [{"label": "Opus (first transcription)", "diff": diff_segments(reference, first)}]
     readings.append(
         {"label": "Sonnet (second transcription)", "diff": diff_segments(reference, second)}
     )
     for engine in engines:
-        path = reads.get(engine, Path("/nonexistent")) / stem / f"{page_id}.txt"
+        root = reads.get(engine)
+        if root is None:
+            continue
+        path = under(root, stem, f"{page_id}.txt")
         if path.exists():
             readings.append({"label": engine, "diff": diff_segments(reference, path.read_text())})
     return {"stem": stem, "page_id": page_id, "reference": reference, "readings": readings}
 
 
 def save(stem: str, page_id: str, text: str, checked: bool) -> None:
-    folder = GOLD_ROOT / stem
-    (folder / f"{page_id}.txt").write_text(text if text.endswith("\n") else text + "\n")
-    meta_path = folder / "meta.json"
+    under(GOLD_ROOT, stem, f"{page_id}.txt").write_text(
+        text if text.endswith("\n") else text + "\n"
+    )
+    meta_path = under(GOLD_ROOT, stem, "meta.json")
     meta = mark_checked(json.loads(meta_path.read_text()), page_id, checked)
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n")
 

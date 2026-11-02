@@ -12,6 +12,7 @@ import {
 	resetMeasure,
 	setFret,
 	setInactive,
+	setSlotsRest,
 	toggleMuted,
 	withMeasures,
 	type Cell,
@@ -125,6 +126,7 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 	const spans = spanOptions(working, slots);
 	const stroke = strokeOf(working, slots);
 	const { hit, accent } = hitOf(working, slots);
+	const restAll = slots.length > 0 && slots.every((t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.isRest === true);
 	const fill = measure ? barFill(measure, working.timeSignature) : null;
 	// The shape's frets under each slot of the cursor's bar, for snapping to them.
 	const hintFor = (slotIndex: number) => chordTools.hintsAt(m, slotIndex);
@@ -515,6 +517,16 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 							}}
 						>
 							One whole note
+						</button>
+						<button
+							type="button"
+							className="te-chip"
+							aria-pressed={restAll}
+							title="Rest: keeps the length, clears the notes"
+							onClick={() => commit((p) => setSlotsRest(p, [...slots], !restAll))}
+						>
+							Rest
+							<kbd>R</kbd>
 						</button>
 					</div>
 					{wholeAsk && (

@@ -130,6 +130,18 @@ found the book becomes one `manual` chapter spanning all of it, so the
 player can open and parse it as is or split it by hand. It is never an
 empty list.
 
+Why that engine: `evals/ocr/` scores Tesseract against PP-OCRv5/v6
+(RapidOCR, CPU) on the scanned samples in `materials/` (#369), and PP-OCR
+with a layout mask, a vision re-read or a text correction on top
+(`pipeline.py`, #375).
+`python -m evals.ocr.gold` writes a reference transcription per page
+(Opus, with a second model's reading to show which pages to check by
+hand); `python -m evals.ocr.run` reads every page with every engine and
+writes `evals/ocr/results/<run>.json` as it goes. `python -m evals.ocr.review`
+serves a local page (127.0.0.1:8765) to check references against the page
+image and save corrections; `--rescore <run>` afterwards. The Tesseract baseline needs
+`tools/fetch-tessdata.sh`, and `tessdata/best/` for the `best` engine. Numbers in `docs/calibration.md`.
+
 What the text-TOC call costs: ~5 lines per page go to the model, so roughly
 120 tokens a page — a 40-page book is ~6k input tokens, a 300-page one ~35k
 (the digest caps itself there). Once per upload, never per chapter.

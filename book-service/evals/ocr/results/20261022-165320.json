@@ -1,0 +1,2428 @@
+{
+ "suite": "ocr",
+ "title": "OCR engines on scanned guitar books",
+ "issue": 369,
+ "run_id": "20261022-165320",
+ "status": "done",
+ "started_at": "2026-10-22T16:53:20.544507+00:00",
+ "finished_at": "2026-10-22T17:27:50.087348+00:00",
+ "git_sha": "3262765",
+ "machine": "Apple M2, 8 cores, Darwin",
+ "config": {
+  "dpi": 150,
+  "pdfs": [
+   {
+    "name": "sample-tab-乐理-编曲-10p.pdf",
+    "pages": 10
+   },
+   {
+    "name": "sample-text-tab-scanned-3p.pdf",
+    "pages": 3
+   },
+   {
+    "name": "sample-text-tab-scanned-6p.pdf",
+    "pages": 6
+   },
+   {
+    "name": "sample-乐理-和声语汇-7p.pdf",
+    "pages": 7
+   }
+  ],
+  "reference": "claude-opus-5 transcription per page; 'checked' once read by hand"
+ },
+ "progress": {
+  "done": 130,
+  "total": 130
+ },
+ "metrics": [
+  {
+   "key": "cer",
+   "label": "CER",
+   "direction": "lower",
+   "unit": "ratio",
+   "format": "percent",
+   "description": "Edit distance over the reference length, whitespace removed."
+  },
+  {
+   "key": "char_recall",
+   "label": "Char recall",
+   "direction": "higher",
+   "unit": "ratio",
+   "format": "percent",
+   "description": "Share of the reference's characters the read found, order ignored."
+  },
+  {
+   "key": "char_precision",
+   "label": "Char precision",
+   "direction": "higher",
+   "unit": "ratio",
+   "format": "percent",
+   "description": "Share of the read's characters that are in the reference; notation read as text lowers it."
+  },
+  {
+   "key": "char_f1",
+   "label": "Char F1",
+   "direction": "higher",
+   "unit": "ratio",
+   "format": "percent",
+   "description": "Harmonic mean of the two."
+  },
+  {
+   "key": "seconds_per_page",
+   "label": "s / page",
+   "direction": "lower",
+   "unit": "s",
+   "format": "fixed2",
+   "description": "Wall time to read one page at 150 dpi, model load excluded."
+  },
+  {
+   "key": "cost_usd_per_page",
+   "label": "$ / page",
+   "direction": "lower",
+   "unit": "usd",
+   "format": "usd",
+   "description": "API spend per page; the local engines cost nothing."
+  }
+ ],
+ "subjects": [
+  {
+   "status": "done",
+   "summary": {
+    "cer": 1.1141,
+    "char_recall": 0.8752,
+    "char_precision": 0.5871,
+    "char_f1": 0.6734,
+    "seconds_per_page": 49.989,
+    "cost_usd_per_page": 0.0
+   },
+   "id": "tesseract-best",
+   "label": "Tesseract best",
+   "group": "Tesseract",
+   "notes": "tessdata_best chi_sim+eng",
+   "pages": 26,
+   "pages_scored": 26,
+   "load_seconds": 0.43,
+   "spread": {
+    "cer": 1.374
+   },
+   "crashes": 0,
+   "breakdown": {
+    "sample-tab-乐理-编曲-10p": {
+     "cer": 1.4886,
+     "char_recall": 0.8653,
+     "char_precision": 0.5652,
+     "char_f1": 0.6438
+    },
+    "sample-text-tab-scanned-3p": {
+     "cer": 0.7633,
+     "char_recall": 0.9358,
+     "char_precision": 0.5785,
+     "char_f1": 0.7146
+    },
+    "sample-text-tab-scanned-6p": {
+     "cer": 1.4153,
+     "char_recall": 0.9892,
+     "char_precision": 0.4947,
+     "char_f1": 0.6444
+    },
+    "sample-乐理-和声语汇-7p": {
+     "cer": 0.4711,
+     "char_recall": 0.7656,
+     "char_precision": 0.7012,
+     "char_f1": 0.7229
+    }
+   }
+  },
+  {
+   "status": "done",
+   "summary": {
+    "cer": 0.7868,
+    "char_recall": 0.9231,
+    "char_precision": 0.7201,
+    "char_f1": 0.7821,
+    "seconds_per_page": 14.5632,
+    "cost_usd_per_page": 0.0
+   },
+   "id": "ppocrv5-server",
+   "label": "PP-OCRv5 server",
+   "group": "PP-OCR (RapidOCR)",
+   "notes": "ONNX Runtime, CPU",
+   "pages": 26,
+   "pages_scored": 26,
+   "load_seconds": 1.18,
+   "spread": {
+    "cer": 1.2408
+   },
+   "crashes": 0,
+   "breakdown": {
+    "sample-tab-乐理-编曲-10p": {
+     "cer": 1.2601,
+     "char_recall": 0.9885,
+     "char_precision": 0.6711,
+     "char_f1": 0.7556
+    },
+    "sample-text-tab-scanned-3p": {
+     "cer": 0.4595,
+     "char_recall": 0.7997,
+     "char_precision": 0.7704,
+     "char_f1": 0.7831
+    },
+    "sample-text-tab-scanned-6p": {
+     "cer": 0.8323,
+     "char_recall": 0.8096,
+     "char_precision": 0.6014,
+     "char_f1": 0.6684
+    },
+    "sample-乐理-和声语汇-7p": {
+     "cer": 0.2119,
+     "char_recall": 0.9799,
+     "char_precision": 0.8702,
+     "char_f1": 0.9169
+    }
+   }
+  },
+  {
+   "status": "done",
+   "summary": {
+    "cer": 0.5627,
+    "char_recall": 0.966,
+    "char_precision": 0.7624,
+    "char_f1": 0.8327,
+    "seconds_per_page": 0.6233,
+    "cost_usd_per_page": 0.0
+   },
+   "id": "ppocrv6-tiny",
+   "label": "PP-OCRv6 tiny",
+   "group": "PP-OCR (RapidOCR)",
+   "notes": "ONNX Runtime, CPU",
+   "pages": 26,
+   "pages_scored": 26,
+   "load_seconds": 1.04,
+   "spread": {
+    "cer": 0.8796
+   },
+   "crashes": 0,
+   "breakdown": {
+    "sample-tab-乐理-编曲-10p": {
+     "cer": 0.8228,
+     "char_recall": 0.9684,
+     "char_precision": 0.7445,
+     "char_f1": 0.8082
+    },
+    "sample-text-tab-scanned-3p": {
+     "cer": 0.3758,
+     "char_recall": 0.8756,
+     "char_precision": 0.7546,
+     "char_f1": 0.8102
+    },
+    "sample-text-tab-scanned-6p": {
+     "cer": 0.6737,
+     "char_recall": 0.9865,
+     "char_precision": 0.6469,
+     "char_f1": 0.7695
+    },
+    "sample-乐理-和声语汇-7p": {
+     "cer": 0.1762,
+     "char_recall": 0.9837,
+     "char_precision": 0.8902,
+     "char_f1": 0.9315
+    }
+   }
+  },
+  {
+   "status": "done",
+   "summary": {
+    "cer": 0.684,
+    "char_recall": 0.9666,
+    "char_precision": 0.7401,
+    "char_f1": 0.8134,
+    "seconds_per_page": 2.3199,
+    "cost_usd_per_page": 0.0
+   },
+   "id": "ppocrv6-small",
+   "label": "PP-OCRv6 small",
+   "group": "PP-OCR (RapidOCR)",
+   "notes": "ONNX Runtime, CPU — RapidOCR's default",
+   "pages": 26,
+   "pages_scored": 26,
+   "load_seconds": 0.71,
+   "spread": {
+    "cer": 1.093
+   },
+   "crashes": 0,
+   "breakdown": {
+    "sample-tab-乐理-编曲-10p": {
+     "cer": 1.0668,
+     "char_recall": 0.9759,
+     "char_precision": 0.7055,
+     "char_f1": 0.7765
+    },
+    "sample-text-tab-scanned-3p": {
+     "cer": 0.3726,
+     "char_recall": 0.8288,
+     "char_precision": 0.7641,
+     "char_f1": 0.7931
+    },
+    "sample-text-tab-scanned-6p": {
+     "cer": 0.7627,
+     "char_recall": 0.9982,
+     "char_precision": 0.6298,
+     "char_f1": 0.7582
+    },
+    "sample-乐理-和声语汇-7p": {
+     "cer": 0.2031,
+     "char_recall": 0.9855,
+     "char_precision": 0.8737,
+     "char_f1": 0.9223
+    }
+   }
+  },
+  {
+   "status": "done",
+   "summary": {
+    "cer": 0.7732,
+    "char_recall": 0.9761,
+    "char_precision": 0.7136,
+    "char_f1": 0.7982,
+    "seconds_per_page": 11.8839,
+    "cost_usd_per_page": 0.0
+   },
+   "id": "ppocrv6-medium",
+   "label": "PP-OCRv6 medium",
+   "group": "PP-OCR (RapidOCR)",
+   "notes": "ONNX Runtime, CPU",
+   "pages": 26,
+   "pages_scored": 26,
+   "load_seconds": 1.04,
+   "spread": {
+    "cer": 1.1622
+   },
+   "crashes": 0,
+   "breakdown": {
+    "sample-tab-乐理-编曲-10p": {
+     "cer": 1.1421,
+     "char_recall": 0.9881,
+     "char_precision": 0.6755,
+     "char_f1": 0.7614
+    },
+    "sample-text-tab-scanned-3p": {
+     "cer": 0.4664,
+     "char_recall": 0.8838,
+     "char_precision": 0.731,
+     "char_f1": 0.7953
+    },
+    "sample-text-tab-scanned-6p": {
+     "cer": 0.9787,
+     "char_recall": 0.9886,
+     "char_precision": 0.5809,
+     "char_f1": 0.7151
+    },
+    "sample-乐理-和声语汇-7p": {
+     "cer": 0.2013,
+     "char_recall": 0.9879,
+     "char_precision": 0.8744,
+     "char_f1": 0.9232
+    }
+   }
+  }
+ ],
+ "cases": [
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p01",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 40.092,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2932,
+    "char_recall": 0.756,
+    "char_precision": 0.7723,
+    "char_f1": 0.7641
+   },
+   "chars_read": 1087,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p02",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 47.594,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.5856,
+    "char_recall": 0.8527,
+    "char_precision": 0.6084,
+    "char_f1": 0.7101
+   },
+   "chars_read": 902,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p03",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 47.589,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.5494,
+    "char_recall": 0.8509,
+    "char_precision": 0.6418,
+    "char_f1": 0.7317
+   },
+   "chars_read": 951,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p04",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 53.544,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2283,
+    "char_recall": 0.9143,
+    "char_precision": 0.8114,
+    "char_f1": 0.8597
+   },
+   "chars_read": 1049,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p05",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 51.484,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3845,
+    "char_recall": 0.9185,
+    "char_precision": 0.7316,
+    "char_f1": 0.8145
+   },
+   "chars_read": 1074,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p06",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 52.293,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2629,
+    "char_recall": 0.9217,
+    "char_precision": 0.8268,
+    "char_f1": 0.8716
+   },
+   "chars_read": 1180,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p07",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 31.54,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4379,
+    "char_recall": 0.8245,
+    "char_precision": 0.679,
+    "char_f1": 0.7447
+   },
+   "chars_read": 932,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p08",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p08",
+   "metrics": {
+    "seconds_per_page": 55.562,
+    "cost_usd_per_page": 0.0,
+    "cer": 3.4659,
+    "char_recall": 0.8523,
+    "char_precision": 0.2119,
+    "char_f1": 0.3394
+   },
+   "chars_read": 485,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p09",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p09",
+   "metrics": {
+    "seconds_per_page": 55.158,
+    "cost_usd_per_page": 0.0,
+    "cer": 5.8108,
+    "char_recall": 0.8784,
+    "char_precision": 0.1318,
+    "char_f1": 0.2293
+   },
+   "chars_read": 746,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-tab-乐理-编曲-10p/p10",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p10",
+   "metrics": {
+    "seconds_per_page": 60.779,
+    "cost_usd_per_page": 0.0,
+    "cer": 2.8677,
+    "char_recall": 0.8836,
+    "char_precision": 0.2365,
+    "char_f1": 0.3732
+   },
+   "chars_read": 941,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-3p/p01",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 59.15,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.9751,
+    "char_recall": 0.8355,
+    "char_precision": 0.4946,
+    "char_f1": 0.6214
+   },
+   "chars_read": 1371,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-3p/p02",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 49.302,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.7088,
+    "char_recall": 0.9878,
+    "char_precision": 0.5912,
+    "char_f1": 0.7397
+   },
+   "chars_read": 1677,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-3p/p03",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 55.185,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.6061,
+    "char_recall": 0.9842,
+    "char_precision": 0.6496,
+    "char_f1": 0.7827
+   },
+   "chars_read": 1650,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-6p/p01",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 48.803,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.0718,
+    "char_recall": 0.9885,
+    "char_precision": 0.4964,
+    "char_f1": 0.6609
+   },
+   "chars_read": 932,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-6p/p02",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 29.542,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.258,
+    "char_recall": 0.9823,
+    "char_precision": 0.4641,
+    "char_f1": 0.6304
+   },
+   "chars_read": 806,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-6p/p03",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 56.226,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.0076,
+    "char_recall": 0.9829,
+    "char_precision": 0.5318,
+    "char_f1": 0.6902
+   },
+   "chars_read": 1272,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-6p/p04",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 67.582,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.7737,
+    "char_recall": 0.991,
+    "char_precision": 0.5745,
+    "char_f1": 0.7274
+   },
+   "chars_read": 1716,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-6p/p05",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 57.602,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4389,
+    "char_recall": 0.9903,
+    "char_precision": 0.6972,
+    "char_f1": 0.8183
+   },
+   "chars_read": 2065,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-text-tab-scanned-6p/p06",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 110.053,
+    "cost_usd_per_page": 0.0,
+    "cer": 3.9418,
+    "char_recall": 1.0,
+    "char_precision": 0.2042,
+    "char_f1": 0.3391
+   },
+   "chars_read": 1823,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-乐理-和声语汇-7p/p01",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 46.313,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1748,
+    "char_recall": 0.9312,
+    "char_precision": 0.8742,
+    "char_f1": 0.9018
+   },
+   "chars_read": 1012,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-乐理-和声语汇-7p/p02",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 37.756,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3971,
+    "char_recall": 0.6782,
+    "char_precision": 0.6859,
+    "char_f1": 0.682
+   },
+   "chars_read": 1117,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-乐理-和声语汇-7p/p03",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 34.681,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2414,
+    "char_recall": 0.7992,
+    "char_precision": 0.8157,
+    "char_f1": 0.8074
+   },
+   "chars_read": 1076,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-乐理-和声语汇-7p/p04",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 33.362,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.5792,
+    "char_recall": 0.4749,
+    "char_precision": 0.6212,
+    "char_f1": 0.5383
+   },
+   "chars_read": 944,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-乐理-和声语汇-7p/p05",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 34.186,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2889,
+    "char_recall": 0.8996,
+    "char_precision": 0.787,
+    "char_f1": 0.8395
+   },
+   "chars_read": 932,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-乐理-和声语汇-7p/p06",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 33.216,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3581,
+    "char_recall": 0.826,
+    "char_precision": 0.7338,
+    "char_f1": 0.7772
+   },
+   "chars_read": 916,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "tesseract-best",
+   "case": "sample-乐理-和声语汇-7p/p07",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 51.119,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.2579,
+    "char_recall": 0.75,
+    "char_precision": 0.3909,
+    "char_f1": 0.514
+   },
+   "chars_read": 954,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p01",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 12.965,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0783,
+    "char_recall": 0.997,
+    "char_precision": 0.9386,
+    "char_f1": 0.9669
+   },
+   "chars_read": 1142,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p02",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 14.392,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4125,
+    "char_recall": 1.0,
+    "char_precision": 0.7388,
+    "char_f1": 0.8498
+   },
+   "chars_read": 893,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p03",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 11.036,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2301,
+    "char_recall": 0.9919,
+    "char_precision": 0.8281,
+    "char_f1": 0.9027
+   },
+   "chars_read": 821,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p04",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 13.809,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1896,
+    "char_recall": 0.9964,
+    "char_precision": 0.8549,
+    "char_f1": 0.9202
+   },
+   "chars_read": 1066,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p05",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 13.463,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1875,
+    "char_recall": 0.9878,
+    "char_precision": 0.8483,
+    "char_f1": 0.9127
+   },
+   "chars_read": 968,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p06",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 13.546,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1298,
+    "char_recall": 0.9979,
+    "char_precision": 0.9199,
+    "char_f1": 0.9573
+   },
+   "chars_read": 1102,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p07",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 10.537,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1537,
+    "char_recall": 0.9814,
+    "char_precision": 0.8778,
+    "char_f1": 0.9267
+   },
+   "chars_read": 780,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p08",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p08",
+   "metrics": {
+    "seconds_per_page": 16.743,
+    "cost_usd_per_page": 0.0,
+    "cer": 4.2614,
+    "char_recall": 1.0,
+    "char_precision": 0.2061,
+    "char_f1": 0.3417
+   },
+   "chars_read": 654,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p09",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p09",
+   "metrics": {
+    "seconds_per_page": 19.461,
+    "cost_usd_per_page": 0.0,
+    "cer": 5.027,
+    "char_recall": 0.9324,
+    "char_precision": 0.1575,
+    "char_f1": 0.2695
+   },
+   "chars_read": 733,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-tab-乐理-编曲-10p/p10",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p10",
+   "metrics": {
+    "seconds_per_page": 18.818,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.9312,
+    "char_recall": 1.0,
+    "char_precision": 0.3412,
+    "char_f1": 0.5087
+   },
+   "chars_read": 823,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-3p/p01",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 14.417,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4867,
+    "char_recall": 0.8256,
+    "char_precision": 0.702,
+    "char_f1": 0.7588
+   },
+   "chars_read": 882,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-3p/p02",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 17.627,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.498,
+    "char_recall": 0.7673,
+    "char_precision": 0.75,
+    "char_f1": 0.7586
+   },
+   "chars_read": 1003,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-3p/p03",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 13.579,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3939,
+    "char_recall": 0.8061,
+    "char_precision": 0.8592,
+    "char_f1": 0.8318
+   },
+   "chars_read": 945,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-6p/p01",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 12.814,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4655,
+    "char_recall": 0.9224,
+    "char_precision": 0.707,
+    "char_f1": 0.8005
+   },
+   "chars_read": 633,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-6p/p02",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 13.639,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.7633,
+    "char_recall": 0.6714,
+    "char_precision": 0.4897,
+    "char_f1": 0.5663
+   },
+   "chars_read": 546,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-6p/p03",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 15.778,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.592,
+    "char_recall": 0.9051,
+    "char_precision": 0.6643,
+    "char_f1": 0.7663
+   },
+   "chars_read": 898,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-6p/p04",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 19.22,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.5345,
+    "char_recall": 0.7788,
+    "char_precision": 0.6692,
+    "char_f1": 0.7199
+   },
+   "chars_read": 1130,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-6p/p05",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 16.929,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.6133,
+    "char_recall": 0.5947,
+    "char_precision": 0.7475,
+    "char_f1": 0.6624
+   },
+   "chars_read": 1082,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-text-tab-scanned-6p/p06",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 28.212,
+    "cost_usd_per_page": 0.0,
+    "cer": 2.0255,
+    "char_recall": 0.9855,
+    "char_precision": 0.3305,
+    "char_f1": 0.495
+   },
+   "chars_read": 1175,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-乐理-和声语汇-7p/p01",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 13.298,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1725,
+    "char_recall": 1.0,
+    "char_precision": 0.8845,
+    "char_f1": 0.9387
+   },
+   "chars_read": 1051,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-乐理-和声语汇-7p/p02",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 13.128,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1324,
+    "char_recall": 0.9939,
+    "char_precision": 0.8954,
+    "char_f1": 0.9421
+   },
+   "chars_read": 1193,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-乐理-和声语汇-7p/p03",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 12.253,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0872,
+    "char_recall": 0.998,
+    "char_precision": 0.9416,
+    "char_f1": 0.969
+   },
+   "chars_read": 1116,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-乐理-和声语汇-7p/p04",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 11.122,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1139,
+    "char_recall": 0.8909,
+    "char_precision": 0.9968,
+    "char_f1": 0.9409
+   },
+   "chars_read": 956,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-乐理-和声语汇-7p/p05",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 9.716,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1568,
+    "char_recall": 0.9931,
+    "char_precision": 0.8914,
+    "char_f1": 0.9395
+   },
+   "chars_read": 865,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-乐理-和声语汇-7p/p06",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 12.248,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.184,
+    "char_recall": 0.9886,
+    "char_precision": 0.8431,
+    "char_f1": 0.91
+   },
+   "chars_read": 917,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv5-server",
+   "case": "sample-乐理-和声语汇-7p/p07",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 9.893,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.6368,
+    "char_recall": 0.9947,
+    "char_precision": 0.6385,
+    "char_f1": 0.7778
+   },
+   "chars_read": 661,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p01",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 0.623,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0462,
+    "char_recall": 0.992,
+    "char_precision": 0.9639,
+    "char_f1": 0.9777
+   },
+   "chars_read": 1091,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p02",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 0.53,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2302,
+    "char_recall": 0.9945,
+    "char_precision": 0.8504,
+    "char_f1": 0.9168
+   },
+   "chars_read": 740,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p03",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 0.436,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1135,
+    "char_recall": 0.9919,
+    "char_precision": 0.9175,
+    "char_f1": 0.9533
+   },
+   "chars_read": 708,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p04",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 0.517,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0785,
+    "char_recall": 0.9928,
+    "char_precision": 0.9448,
+    "char_f1": 0.9682
+   },
+   "chars_read": 909,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p05",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 0.503,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1087,
+    "char_recall": 0.9674,
+    "char_precision": 0.9295,
+    "char_f1": 0.9481
+   },
+   "chars_read": 826,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p06",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 0.527,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0762,
+    "char_recall": 0.9946,
+    "char_precision": 0.9656,
+    "char_f1": 0.9799
+   },
+   "chars_read": 1012,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p07",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 0.453,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0947,
+    "char_recall": 0.9798,
+    "char_precision": 0.9279,
+    "char_f1": 0.9532
+   },
+   "chars_read": 729,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p08",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p08",
+   "metrics": {
+    "seconds_per_page": 0.734,
+    "cost_usd_per_page": 0.0,
+    "cer": 2.7045,
+    "char_recall": 0.9545,
+    "char_precision": 0.2907,
+    "char_f1": 0.4456
+   },
+   "chars_read": 459,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p09",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p09",
+   "metrics": {
+    "seconds_per_page": 0.913,
+    "cost_usd_per_page": 0.0,
+    "cer": 3.6486,
+    "char_recall": 0.8378,
+    "char_precision": 0.1879,
+    "char_f1": 0.3069
+   },
+   "chars_read": 562,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-tab-乐理-编曲-10p/p10",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p10",
+   "metrics": {
+    "seconds_per_page": 0.8,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.127,
+    "char_recall": 0.9788,
+    "char_precision": 0.4672,
+    "char_f1": 0.6325
+   },
+   "chars_read": 588,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-3p/p01",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 0.592,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4684,
+    "char_recall": 0.7342,
+    "char_precision": 0.6577,
+    "char_f1": 0.6939
+   },
+   "chars_read": 892,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-3p/p02",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 0.707,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4857,
+    "char_recall": 0.9034,
+    "char_precision": 0.7297,
+    "char_f1": 0.8073
+   },
+   "chars_read": 1231,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-3p/p03",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 0.536,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1733,
+    "char_recall": 0.9891,
+    "char_precision": 0.8765,
+    "char_f1": 0.9294
+   },
+   "chars_read": 1163,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-6p/p01",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 0.639,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4368,
+    "char_recall": 1.0,
+    "char_precision": 0.6988,
+    "char_f1": 0.8227
+   },
+   "chars_read": 711,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-6p/p02",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 0.579,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.6643,
+    "char_recall": 1.0,
+    "char_precision": 0.6008,
+    "char_f1": 0.7507
+   },
+   "chars_read": 660,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-6p/p03",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 0.584,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3833,
+    "char_recall": 1.0,
+    "char_precision": 0.7229,
+    "char_f1": 0.8392
+   },
+   "chars_read": 955,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-6p/p04",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 0.789,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3824,
+    "char_recall": 0.9271,
+    "char_precision": 0.7094,
+    "char_f1": 0.8038
+   },
+   "chars_read": 1350,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-6p/p05",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 0.689,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2407,
+    "char_recall": 0.992,
+    "char_precision": 0.8059,
+    "char_f1": 0.8893
+   },
+   "chars_read": 1776,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-text-tab-scanned-6p/p06",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 1.145,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.9345,
+    "char_recall": 1.0,
+    "char_precision": 0.3433,
+    "char_f1": 0.5112
+   },
+   "chars_read": 1185,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-乐理-和声语汇-7p/p01",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 0.648,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1772,
+    "char_recall": 1.0,
+    "char_precision": 0.8702,
+    "char_f1": 0.9306
+   },
+   "chars_read": 1054,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-乐理-和声语汇-7p/p02",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 0.599,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0703,
+    "char_recall": 0.9929,
+    "char_precision": 0.9411,
+    "char_f1": 0.9663
+   },
+   "chars_read": 1113,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-乐理-和声语汇-7p/p03",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 0.587,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1217,
+    "char_recall": 0.9665,
+    "char_precision": 0.9675,
+    "char_f1": 0.967
+   },
+   "chars_read": 1059,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-乐理-和声语汇-7p/p04",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 0.536,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.056,
+    "char_recall": 0.9604,
+    "char_precision": 0.994,
+    "char_f1": 0.9769
+   },
+   "chars_read": 1018,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-乐理-和声语汇-7p/p05",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 0.482,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1541,
+    "char_recall": 0.9972,
+    "char_precision": 0.894,
+    "char_f1": 0.9428
+   },
+   "chars_read": 877,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-乐理-和声语汇-7p/p06",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 0.572,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1327,
+    "char_recall": 0.99,
+    "char_precision": 0.8818,
+    "char_f1": 0.9328
+   },
+   "chars_read": 868,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-tiny",
+   "case": "sample-乐理-和声语汇-7p/p07",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 0.486,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.5211,
+    "char_recall": 0.9789,
+    "char_precision": 0.6826,
+    "char_f1": 0.8043
+   },
+   "chars_read": 622,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p01",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 1.974,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0402,
+    "char_recall": 0.992,
+    "char_precision": 0.9686,
+    "char_f1": 0.9802
+   },
+   "chars_read": 1078,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p02",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 2.309,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3094,
+    "char_recall": 1.0,
+    "char_precision": 0.7927,
+    "char_f1": 0.8844
+   },
+   "chars_read": 836,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p03",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 1.597,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1556,
+    "char_recall": 0.9919,
+    "char_precision": 0.8831,
+    "char_f1": 0.9344
+   },
+   "chars_read": 761,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p04",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 1.723,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1196,
+    "char_recall": 0.9964,
+    "char_precision": 0.9096,
+    "char_f1": 0.951
+   },
+   "chars_read": 997,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p05",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 1.868,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1427,
+    "char_recall": 0.9321,
+    "char_precision": 0.8944,
+    "char_f1": 0.9128
+   },
+   "chars_read": 853,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p06",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 2.246,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1094,
+    "char_recall": 0.9957,
+    "char_precision": 0.9364,
+    "char_f1": 0.9652
+   },
+   "chars_read": 1077,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p07",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 1.588,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1211,
+    "char_recall": 0.9814,
+    "char_precision": 0.9041,
+    "char_f1": 0.9412
+   },
+   "chars_read": 755,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p08",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p08",
+   "metrics": {
+    "seconds_per_page": 2.949,
+    "cost_usd_per_page": 0.0,
+    "cer": 3.7159,
+    "char_recall": 0.9773,
+    "char_precision": 0.2269,
+    "char_f1": 0.3683
+   },
+   "chars_read": 604,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p09",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p09",
+   "metrics": {
+    "seconds_per_page": 3.491,
+    "cost_usd_per_page": 0.0,
+    "cer": 4.2027,
+    "char_recall": 0.8919,
+    "char_precision": 0.176,
+    "char_f1": 0.294
+   },
+   "chars_read": 657,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-tab-乐理-编曲-10p/p10",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p10",
+   "metrics": {
+    "seconds_per_page": 3.589,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.7513,
+    "char_recall": 1.0,
+    "char_precision": 0.3635,
+    "char_f1": 0.5331
+   },
+   "chars_read": 818,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-3p/p01",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 2.202,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4834,
+    "char_recall": 0.6246,
+    "char_precision": 0.669,
+    "char_f1": 0.646
+   },
+   "chars_read": 795,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-3p/p02",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 2.592,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3374,
+    "char_recall": 0.9429,
+    "char_precision": 0.7839,
+    "char_f1": 0.8561
+   },
+   "chars_read": 1206,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-3p/p03",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 2.04,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.297,
+    "char_recall": 0.9188,
+    "char_precision": 0.8394,
+    "char_f1": 0.8773
+   },
+   "chars_read": 1168,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-6p/p01",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 1.809,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.342,
+    "char_recall": 1.0,
+    "char_precision": 0.7468,
+    "char_f1": 0.855
+   },
+   "chars_read": 656,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-6p/p02",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 2.111,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.8092,
+    "char_recall": 1.0,
+    "char_precision": 0.5527,
+    "char_f1": 0.7119
+   },
+   "chars_read": 729,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-6p/p03",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 2.452,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.5028,
+    "char_recall": 0.9981,
+    "char_precision": 0.665,
+    "char_f1": 0.7982
+   },
+   "chars_read": 1059,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-6p/p04",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 2.76,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3939,
+    "char_recall": 0.9974,
+    "char_precision": 0.7169,
+    "char_f1": 0.8342
+   },
+   "chars_read": 1443,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-6p/p05",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 2.564,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2664,
+    "char_recall": 0.9938,
+    "char_precision": 0.7908,
+    "char_f1": 0.8808
+   },
+   "chars_read": 1836,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-text-tab-scanned-6p/p06",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 4.767,
+    "cost_usd_per_page": 0.0,
+    "cer": 2.2618,
+    "char_recall": 1.0,
+    "char_precision": 0.3066,
+    "char_f1": 0.4693
+   },
+   "chars_read": 1342,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-乐理-和声语汇-7p/p01",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 2.258,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1807,
+    "char_recall": 1.0,
+    "char_precision": 0.8711,
+    "char_f1": 0.9311
+   },
+   "chars_read": 1065,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-乐理-和声语汇-7p/p02",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 2.498,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1426,
+    "char_recall": 0.9633,
+    "char_precision": 0.9114,
+    "char_f1": 0.9366
+   },
+   "chars_read": 1150,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-乐理-和声语汇-7p/p03",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 2.036,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0892,
+    "char_recall": 0.9959,
+    "char_precision": 0.9415,
+    "char_f1": 0.968
+   },
+   "chars_read": 1122,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-乐理-和声语汇-7p/p04",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 1.919,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0531,
+    "char_recall": 0.9556,
+    "char_precision": 0.998,
+    "char_f1": 0.9763
+   },
+   "chars_read": 1019,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-乐理-和声语汇-7p/p05",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 1.586,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1609,
+    "char_recall": 0.9931,
+    "char_precision": 0.8914,
+    "char_f1": 0.9395
+   },
+   "chars_read": 891,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-乐理-和声语汇-7p/p06",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 1.971,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.174,
+    "char_recall": 0.9957,
+    "char_precision": 0.8554,
+    "char_f1": 0.9202
+   },
+   "chars_read": 902,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-small",
+   "case": "sample-乐理-和声语汇-7p/p07",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 1.419,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.6211,
+    "char_recall": 0.9947,
+    "char_precision": 0.6473,
+    "char_f1": 0.7842
+   },
+   "chars_read": 665,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p01",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 9.995,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0713,
+    "char_recall": 0.994,
+    "char_precision": 0.942,
+    "char_f1": 0.9673
+   },
+   "chars_read": 1135,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p02",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 12.537,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4788,
+    "char_recall": 1.0,
+    "char_precision": 0.7006,
+    "char_f1": 0.824
+   },
+   "chars_read": 963,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p03",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 8.204,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.2269,
+    "char_recall": 0.9968,
+    "char_precision": 0.8345,
+    "char_f1": 0.9084
+   },
+   "chars_read": 835,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p04",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 8.841,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.151,
+    "char_recall": 0.9964,
+    "char_precision": 0.8842,
+    "char_f1": 0.937
+   },
+   "chars_read": 1045,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p05",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 9.38,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1576,
+    "char_recall": 0.9878,
+    "char_precision": 0.8707,
+    "char_f1": 0.9255
+   },
+   "chars_read": 945,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p06",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 10.06,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1438,
+    "char_recall": 0.9979,
+    "char_precision": 0.9082,
+    "char_f1": 0.9509
+   },
+   "chars_read": 1135,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p07",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 7.724,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1724,
+    "char_recall": 0.986,
+    "char_precision": 0.8675,
+    "char_f1": 0.923
+   },
+   "chars_read": 814,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p08",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p08",
+   "metrics": {
+    "seconds_per_page": 12.547,
+    "cost_usd_per_page": 0.0,
+    "cer": 3.8068,
+    "char_recall": 1.0,
+    "char_precision": 0.2262,
+    "char_f1": 0.369
+   },
+   "chars_read": 623,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p09",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p09",
+   "metrics": {
+    "seconds_per_page": 15.858,
+    "cost_usd_per_page": 0.0,
+    "cer": 4.2973,
+    "char_recall": 0.9324,
+    "char_precision": 0.1792,
+    "char_f1": 0.3007
+   },
+   "chars_read": 671,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-tab-乐理-编曲-10p/p10",
+   "pdf": "sample-tab-乐理-编曲-10p",
+   "page_id": "p10",
+   "metrics": {
+    "seconds_per_page": 17.274,
+    "cost_usd_per_page": 0.0,
+    "cer": 1.9153,
+    "char_recall": 0.9894,
+    "char_precision": 0.3419,
+    "char_f1": 0.5082
+   },
+   "chars_read": 864,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-3p/p01",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 12.25,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4983,
+    "char_recall": 0.985,
+    "char_precision": 0.6693,
+    "char_f1": 0.797
+   },
+   "chars_read": 1215,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-3p/p02",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 13.257,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4245,
+    "char_recall": 0.8857,
+    "char_precision": 0.7449,
+    "char_f1": 0.8092
+   },
+   "chars_read": 1196,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-3p/p03",
+   "pdf": "sample-text-tab-scanned-3p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 11.412,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4764,
+    "char_recall": 0.7806,
+    "char_precision": 0.7787,
+    "char_f1": 0.7797
+   },
+   "chars_read": 1075,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-6p/p01",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 9.692,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.3851,
+    "char_recall": 1.0,
+    "char_precision": 0.725,
+    "char_f1": 0.8406
+   },
+   "chars_read": 679,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-6p/p02",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 11.449,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.9046,
+    "char_recall": 1.0,
+    "char_precision": 0.525,
+    "char_f1": 0.6886
+   },
+   "chars_read": 762,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-6p/p03",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 14.555,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.6698,
+    "char_recall": 1.0,
+    "char_precision": 0.5989,
+    "char_f1": 0.7491
+   },
+   "chars_read": 1187,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-6p/p04",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 14.555,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.413,
+    "char_recall": 0.9348,
+    "char_precision": 0.6975,
+    "char_f1": 0.7989
+   },
+   "chars_read": 1387,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-6p/p05",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 17.914,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.4451,
+    "char_recall": 0.9965,
+    "char_precision": 0.6912,
+    "char_f1": 0.8162
+   },
+   "chars_read": 2140,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-text-tab-scanned-6p/p06",
+   "pdf": "sample-text-tab-scanned-6p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 28.833,
+    "cost_usd_per_page": 0.0,
+    "cer": 3.0545,
+    "char_recall": 1.0,
+    "char_precision": 0.2477,
+    "char_f1": 0.3971
+   },
+   "chars_read": 1636,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-乐理-和声语汇-7p/p01",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p01",
+   "metrics": {
+    "seconds_per_page": 10.275,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.169,
+    "char_recall": 0.9988,
+    "char_precision": 0.8817,
+    "char_f1": 0.9366
+   },
+   "chars_read": 1050,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-乐理-和声语汇-7p/p02",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p02",
+   "metrics": {
+    "seconds_per_page": 11.2,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1008,
+    "char_recall": 0.998,
+    "char_precision": 0.9193,
+    "char_f1": 0.957
+   },
+   "chars_read": 1172,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-乐理-和声语汇-7p/p03",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p03",
+   "metrics": {
+    "seconds_per_page": 9.912,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0862,
+    "char_recall": 0.997,
+    "char_precision": 0.9434,
+    "char_f1": 0.9694
+   },
+   "chars_read": 1119,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-乐理-和声语汇-7p/p04",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p04",
+   "metrics": {
+    "seconds_per_page": 8.697,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.0724,
+    "char_recall": 0.9353,
+    "char_precision": 0.999,
+    "char_f1": 0.9661
+   },
+   "chars_read": 999,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-乐理-和声语汇-7p/p05",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p05",
+   "metrics": {
+    "seconds_per_page": 7.175,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1541,
+    "char_recall": 0.9986,
+    "char_precision": 0.893,
+    "char_f1": 0.9429
+   },
+   "chars_read": 892,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-乐理-和声语汇-7p/p06",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p06",
+   "metrics": {
+    "seconds_per_page": 8.946,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.1769,
+    "char_recall": 0.9929,
+    "char_precision": 0.8509,
+    "char_f1": 0.9164
+   },
+   "chars_read": 907,
+   "reference": "unchecked"
+  },
+  {
+   "subject": "ppocrv6-medium",
+   "case": "sample-乐理-和声语汇-7p/p07",
+   "pdf": "sample-乐理-和声语汇-7p",
+   "page_id": "p07",
+   "metrics": {
+    "seconds_per_page": 6.44,
+    "cost_usd_per_page": 0.0,
+    "cer": 0.65,
+    "char_recall": 0.9947,
+    "char_precision": 0.6332,
+    "char_f1": 0.7738
+   },
+   "chars_read": 676,
+   "reference": "unchecked"
+  }
+ ],
+ "rescored_at": "2026-10-23T13:24:27.484537+00:00",
+ "findings": [
+  "On the two Chinese books Tesseract fast finds 72–80% of the text; every PP-OCR model finds 97–99%.",
+  "PP-OCRv6 tiny is the pick: as accurate as anything here, the best precision, and 0.62 s/page — a 300-page scan drops from ~12 minutes to ~3. Larger models buy a point of recall for 4–20× the time.",
+  "English is not a clean win: on the 3-page rock excerpt PP-OCR finds 88% to Tesseract's 96%; on the 6-page one they tie.",
+  "Tesseract crashed its process on one page (arranging p09, a segfault in get_textpage_ocr). The scan runs OCR in-process, so that page would take book-service down.",
+  "tessdata_best is again slower and no better (~50 s/page with chi_sim_vert).",
+  "References are Opus 5 transcriptions (Sonnet 5 a second reading, $1.44), not yet checked by hand. Calibration §11."
+ ],
+ "findings_zh": [
+  "两本中文书上，Tesseract fast 只读到 72–80% 的字；PP-OCR 各个尺寸都在 97–99%。",
+  "PP-OCRv6 tiny 最合适：准确度和最好的持平、精确率最高、每页 0.62 秒——300 页的扫描从约 12 分钟降到约 3 分钟。更大的模型多一个点召回，要多花 4–20 倍时间。",
+  "英文不是全胜：3 页那本英文书上 PP-OCR 召回 88%、Tesseract 96%（那几页有倒印的文字）；6 页那本两者持平。",
+  "Tesseract 在编曲 p09 上把整个进程弄崩了（get_textpage_ocr 里的段错误）。扫描是在服务进程里跑 OCR 的，遇到这一页整个 book-service 会挂掉。",
+  "tessdata_best 又一次更慢且不更准（带上竖排模型后每页约 50 秒）。",
+  "标准答案是 Opus 5 转写的（Sonnet 5 第二遍，共 $1.44），还没人工核对。详见 calibration §11。"
+ ]
+}

@@ -3,22 +3,10 @@
 	.pg-total {
 		margin: -8px 0 0;
 	}
-	/* The page is portrait: it takes the height, the answer sits beside it. */
 	.pg-body {
 		display: flex;
 		flex-direction: column;
 		gap: 20px;
-	}
-	@media (min-width: 960px) {
-		.pg-body {
-			display: grid;
-			grid-template-columns: minmax(0, 1fr) 380px;
-			align-items: start;
-		}
-		.pg-panel {
-			position: sticky;
-			top: 48px;
-		}
 	}
 	.pg-img {
 		height: 70vh;
@@ -26,15 +14,48 @@
 		background: #fff;
 		box-shadow: var(--gp-ring-c);
 	}
-	/* The image box fits the page's width, so it is as wide as a whole page is
-	   tall: every sample book is about √2 (1.38–1.42), A-series. */
+	/* From 960px the review fills the window and never scrolls: the page stands
+	   still on the left, the answer beside it scrolls on its own. The image box
+	   fits the page's width, so it is made as wide as a whole page is tall at
+	   the box's height (the window less the dev banner, the nav, the paddings
+	   and the zoom bar: 168px); every sample book is about √2 (1.38–1.42). The
+	   nav and the two columns are centred together. */
 	@media (min-width: 960px) {
-		.pg-page {
-			justify-self: end;
-			width: min(100%, calc((100vh - 180px) / 1.42));
+		.pg-review {
+			--pg-w: calc((100vh - 168px) / 1.42);
+			--pg-panel-w: 400px;
+			display: flex;
+			flex-direction: column;
+			height: calc(100vh - 32px);
+			padding-bottom: 16px;
+			overflow: hidden;
+		}
+		.pg-review > .tg-nav,
+		.pg-body {
+			width: min(100%, calc(var(--pg-w) + 24px + var(--pg-panel-w)));
+			margin-inline: auto;
+		}
+		.pg-body {
+			flex: 1;
+			min-height: 0;
+			display: grid;
+			grid-template-columns: minmax(0, var(--pg-w)) var(--pg-panel-w);
+			gap: 24px;
+		}
+		.pg-page,
+		.pg-page > div {
+			height: 100%;
+			min-height: 0;
 		}
 		.pg-img {
-			height: calc(100vh - 140px);
+			flex: 1;
+			height: auto;
+		}
+		.pg-panel {
+			height: 100%;
+			overflow-y: auto;
+			/* Room for the scrollbar and the chips' raised shadows. */
+			padding: 2px 8px 16px 2px;
 		}
 	}
 	.pg-panel {

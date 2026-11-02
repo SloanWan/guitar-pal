@@ -1,6 +1,9 @@
 """
 Seed the tab extractor's gold set from parsed chapters (#202): one record per
-exercise the parse read, waiting to be checked on `/dev/tab-gold`.
+exercise the parse segmented, waiting to be checked on `/dev/tab-gold`. An
+exercise whose draft was dropped (`DRAFT_DROPPED`, which names its crop since
+#420) is seeded with no draft, so its gold is written by hand and the scorer
+counts it as missed rather than leaving it out.
 
 Every export under `materials/samples/<name>/` (a `parse.json` and the
 `crops/` the extractor read) becomes a set at `materials/tab-gold/<name>/`:
@@ -49,11 +52,28 @@ def seed_sample(sample: Path, out_root: Path) -> tuple[int, int, list[str]]:
     skipped: list[str] = []
 
     chapters = {c["id"]: c for c in export.get("chapters", [])}
+    # (crop path, name, page, draft, warnings): the drafts the parse made, then
+    # the exercises it segmented and lost (#420), which have a crop and no draft.
+    found: list[tuple[str, str | None, int | None, dict | None, list[dict]]] = []
     for exercise in export.get("exercises", []):
         crop_path = exercise.get("crop_path")
         if exercise.get("kind") != "tab" or not exercise.get("draft") or not crop_path:
             skipped.append(f"{exercise.get('id')}: not a tab draft with a crop")
             continue
+        draft = exercise["draft"]
+        warnings = exercise.get("warnings", [])
+        found.append((crop_path, draft.get("name"), exercise.get("page"), draft, warnings))
+    for warning in export.get("warnings", []):
+        if warning.get("code") != "DRAFT_DROPPED":
+            continue
+        if not warning.get("crop_path"):
+            skipped.append(f"{warning.get('path')}: dropped before crops were kept (#420)")
+            continue
+        found.append(
+            (warning["crop_path"], warning.get("heading"), warning.get("page"), None, [warning])
+        )
+
+    for crop_path, name, page, draft, warnings in found:
         ident = exercise_id(crop_path)
         crop = crops / f"{ident}.png"
         if not crop.exists():
@@ -70,15 +90,16 @@ def seed_sample(sample: Path, out_root: Path) -> tuple[int, int, list[str]]:
             "version": RECORD_VERSION,
             "id": ident,
             "set": sample.name,
-            "name": exercise["draft"].get("name") or ident,
-            "page": exercise.get("page"),
+            "name": name or ident,
+            "page": page,
             "crop": crop.name,
             "jianpu": None,
             "model": {
                 "source": f"materials/samples/{sample.name}/parse.json",
                 "exportedAt": export.get("exported_at"),
-                "draft": exercise["draft"],
-                "warnings": exercise.get("warnings", []),
+                # None: the parse lost this exercise, so its gold is written by hand.
+                "draft": draft,
+                "warnings": warnings,
             },
             "status": "unchecked",
             "gold": None,

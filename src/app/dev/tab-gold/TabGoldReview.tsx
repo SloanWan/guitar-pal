@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { useNavRouter } from "@/components/nav-progress";
 import {
+	isDropped,
 	modelPattern,
 	neighbours,
 	nextUnchecked,
@@ -194,6 +195,11 @@ export default function TabGoldReview({ set, id }: { set: string; id: string }) 
 
 					{shown ? (
 						<GoldStave key={`${view}-${record.reviewedAt}`} pattern={shown} />
+					) : isDropped(record) ? (
+						<p className="tg-error">
+							The parse lost this exercise: it was cropped, but no reading of it validated. Write its tab
+							from the crop with Edit; the score counts it as missed.
+						</p>
 					) : (
 						<div className="tg-error">
 							<p>The model&apos;s draft is not a valid tab, so it cannot be drawn:</p>
@@ -243,7 +249,9 @@ export default function TabGoldReview({ set, id }: { set: string; id: string }) 
 								onClick={() => void review("confirmed", model.pattern, true)}
 								disabled={busy || !model.pattern || chords.length > 0}
 								title={
-									chords.length > 0
+									isDropped(record)
+										? "The parse made no reading of this exercise: write it with Edit"
+										: chords.length > 0
 										? "The page prints chords the reading does not place: mark them with Edit"
 										: "The model's reading matches the page note for note: keep it as the answer"
 								}

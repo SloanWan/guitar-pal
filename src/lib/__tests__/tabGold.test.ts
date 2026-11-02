@@ -3,6 +3,7 @@ import { makeDefaultPattern } from "@/lib/fingerpickEdit";
 import {
 	compareItems,
 	countStatuses,
+	isDropped,
 	isTabGoldCrop,
 	isTabGoldSlug,
 	modelPattern,
@@ -67,6 +68,13 @@ describe("modelPattern", () => {
 		const broken = modelPattern({ model: { source: "", draft: { measures: [] }, warnings: [] } });
 		expect(broken.pattern).toBeNull();
 		expect(broken.errors.length).toBeGreaterThan(0);
+	});
+});
+
+describe("isDropped", () => {
+	it("is a record the parse cropped but made no draft for", () => {
+		expect(isDropped({ model: { source: "", draft: null, warnings: [] } })).toBe(true);
+		expect(isDropped({ model: { source: "", draft: makeDefaultPattern(), warnings: [] } })).toBe(false);
 	});
 });
 

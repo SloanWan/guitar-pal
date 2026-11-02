@@ -3,7 +3,7 @@ import json
 from evals.tab.seed import exercise_id, seed_sample
 
 
-def write_sample(root, exercises):
+def write_sample(root, exercises, warnings=()):
     sample = root / "samples" / "demo"
     (sample / "crops").mkdir(parents=True)
     export = {
@@ -11,6 +11,7 @@ def write_sample(root, exercises):
         "book": {"title": "Demo book"},
         "chapters": [{"id": "c1", "title": "Chapter one"}],
         "exercises": exercises,
+        "warnings": list(warnings),
     }
     (sample / "parse.json").write_text(json.dumps(export))
     return sample
@@ -82,3 +83,26 @@ def test_seed_skips_what_it_cannot_review(tmp_path):
     assert added == 0
     assert len(skipped) == 3
     assert not (tmp_path / "tab-gold" / "demo").exists()
+
+
+def test_a_dropped_exercise_is_seeded_with_no_draft(tmp_path):
+    dropped = {
+        "code": "DRAFT_DROPPED",
+        "path": "page 4",
+        "message": "p4 'Riff': the tab could not be read into a valid draft",
+        "crop_path": "user/crops/c1/p0004-2.png",
+        "page": 4,
+        "heading": "Riff",
+    }
+    before_420 = {"code": "DRAFT_DROPPED", "path": "page 5", "message": "p5 'Old': …"}
+    sample = write_sample(tmp_path, [], [dropped, before_420])
+    (sample / "crops" / "p0004-2.png").write_bytes(b"png")
+
+    added, _, skipped = seed_sample(sample, tmp_path / "tab-gold")
+
+    assert added == 1
+    assert skipped == ["page 5: dropped before crops were kept (#420)"]
+    record = json.loads((tmp_path / "tab-gold" / "demo" / "p0004-2.json").read_text())
+    assert (record["name"], record["page"], record["status"]) == ("Riff", 4, "unchecked")
+    assert record["model"]["draft"] is None
+    assert record["model"]["warnings"] == [dropped]

@@ -130,6 +130,7 @@ describe("editorKeyAction", () => {
 		expect(editorKeyAction(key("b"))).toEqual({ kind: "bend" });
 		expect(editorKeyAction(key("V"))).toEqual({ kind: "vibrato" });
 		expect(editorKeyAction(key("s"))).toEqual({ kind: "slap" });
+		expect(editorKeyAction(key("R"))).toEqual({ kind: "rest" });
 		expect(editorKeyAction(key("x"))).toEqual({ kind: "mute" });
 	});
 
@@ -195,5 +196,23 @@ describe("applyNoteEdit", () => {
 		const off = applyNoteEdit(slap.pattern, at(0, 3), run, { kind: "slap" });
 		if (!("pattern" in off)) throw new Error("blocked");
 		expect(off.pattern.measures[0].slots[3].percussion).toBeUndefined();
+	});
+
+	it("rests every slot of the run, and lets them sound again", () => {
+		const run = [
+			{ measureIndex: 0, slotIndex: 0 },
+			{ measureIndex: 0, slotIndex: 1 },
+		];
+		const p = setFret(tab(), at(0, 0), 3);
+		const rest = applyNoteEdit(p, at(0, 0), run, { kind: "rest" });
+		if (!("pattern" in rest)) throw new Error("blocked");
+		expect(rest.pattern.measures[0].slots[0].isRest).toBe(true);
+		expect(rest.pattern.measures[0].slots[1].isRest).toBe(true);
+		expect(rest.pattern.measures[0].slots[0].strings.every((sf) => sf.fret === null)).toBe(true);
+		expect(rest.pattern.measures[0].slots[0].duration).toBe(p.measures[0].slots[0].duration);
+		const back = applyNoteEdit(rest.pattern, at(0, 0), run, { kind: "rest" });
+		if (!("pattern" in back)) throw new Error("blocked");
+		expect(back.pattern.measures[0].slots[0].isRest).toBeUndefined();
+		expect(back.pattern.measures[0].slots[1].isRest).toBeUndefined();
 	});
 });

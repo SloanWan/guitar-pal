@@ -34,9 +34,6 @@ class Settings(BaseSettings):
     # The same key the Next.js strum assistant uses. Optional: without it the
     # text-TOC step is skipped and an unbookmarked book lands on manual ranges.
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
-    # Tesseract language data for scanned uploads (`tools/fetch-tessdata.sh`).
-    # Optional: without it a scan's pages stay textless and its chapters come
-    # from vision or the player's own ranges.
     # The Next.js side, for the internal validate endpoint (#202): the one
     # implementation of the draft errors/warnings contract. Compose sets the
     # URL to http://web:3000; a local uvicorn points at the dev server.
@@ -61,8 +58,6 @@ class Settings(BaseSettings):
     embedding_model: str = Field(default="voyage-3.5-lite", validation_alias="BOOK_EMBEDDING_MODEL")
     # Must match migration 0007's `vector(N)`.
     embedding_dimension: int = Field(default=1024, validation_alias="BOOK_EMBEDDING_DIMENSION")
-    tessdata_prefix: str | None = Field(default=None, validation_alias="TESSDATA_PREFIX")
-    ocr_languages: str = Field(default="chi_sim+eng", validation_alias="BOOK_SERVICE_OCR_LANGUAGES")
 
     @property
     def storage_url(self) -> str:

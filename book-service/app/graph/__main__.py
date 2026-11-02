@@ -33,10 +33,9 @@ from anthropic import AsyncAnthropic
 
 from app.ask.provider import Provider, anthropic_provider, deepseek_provider
 from app.graph.chapter import ChapterParseGraph
+from app.ingest.ocr import PageOcr, models_ready
 from app.ingest.pdf import (
     CLASSIFY_RENDER_DPI,
-    OCR_DEFAULT_LANGUAGES,
-    OcrConfig,
     extract_page,
     open_pdf,
     render_page_png,
@@ -83,10 +82,9 @@ async def main() -> int:
     first, last = (int(n) for n in args.pages.split("-"))
     ocr = None
     if args.ocr:
-        tessdata = os.environ.get("TESSDATA_PREFIX")
-        if tessdata is None:
-            sys.exit("--ocr needs TESSDATA_PREFIX")
-        ocr = OcrConfig(Path(tessdata), languages=OCR_DEFAULT_LANGUAGES)
+        if not models_ready():
+            sys.exit("--ocr needs the OCR models: python -m app.ingest.ocr --fetch")
+        ocr = PageOcr()
 
     pages: list[ParsePage] = []
     with open_pdf(args.pdf) as doc:
@@ -238,6 +236,7 @@ def _export(
                 "source": e.source,
                 "draft": e.draft,
                 "warnings": e.warnings,
+                "crop_path": e.crop_path,
             }
             for i, e in enumerate(result.exercises)
         ],

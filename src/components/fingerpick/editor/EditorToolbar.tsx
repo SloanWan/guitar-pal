@@ -146,7 +146,7 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 				className="te-tbtn"
 				aria-label="Rest"
 				aria-pressed={isRest}
-				title="Rest: keeps the length, clears the notes"
+				title="Rest (R): keeps the length, clears the notes"
 				onClick={() => commit((p) => setSlotsRest(p, [...slots], !isRest))}
 			>
 				<svg viewBox="0 0 24 24" aria-hidden>

@@ -16,6 +16,12 @@ dependencies = [
     "pymupdf>=1.25",
     "anthropic>=1.0",
     "langgraph>=1.0",
+    # OCR for scanned pages (#417): PP-OCRv6 tiny + the CDLA layout mask, CPU.
+    # rapid-layout asks for opencv-python, which needs libGL; the Dockerfile
+    # installs it without dependencies and keeps RapidOCR's headless OpenCV.
+    "rapidocr>=3.10",
+    "rapid-layout>=1.2",
+    "onnxruntime>=1.20",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +29,7 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
+    "rapidfuzz>=3.9",
 ]
 
 [build-system]

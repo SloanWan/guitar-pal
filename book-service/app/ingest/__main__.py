@@ -4,7 +4,7 @@ it found. No database, no Storage — the same functions the scan endpoint
 (A3) runs, on a file on disk. Numbers worth keeping go to docs/calibration.md.
 
     python -m app.ingest book.pdf            # outline + tags, no model call
-    python -m app.ingest book.pdf --ocr      # OCR pages without a text layer (TESSDATA_PREFIX)
+    python -m app.ingest book.pdf --ocr      # OCR pages without a text layer (models fetched)
     python -m app.ingest book.pdf --ask      # also the text-TOC model call
     python -m app.ingest book.pdf --tags     # list every tagged page with reasons
 """
@@ -12,16 +12,12 @@ it found. No database, no Storage — the same functions the scan endpoint
 import argparse
 import asyncio
 import logging
-import os
 import sys
 import time
 from collections import Counter
-from pathlib import Path
 
+from app.ingest.ocr import OCR_DPI, PageOcr, models_ready
 from app.ingest.pdf import (
-    OCR_DEFAULT_DPI,
-    OCR_DEFAULT_LANGUAGES,
-    OcrConfig,
     extract_page,
     open_pdf,
     read_outline,
@@ -30,20 +26,12 @@ from app.ingest.tag import tag_text
 from app.ingest.toc import find_chapters, is_scanned
 
 
-def ocr_config(args: argparse.Namespace) -> OcrConfig | None:
+def page_ocr(args: argparse.Namespace) -> PageOcr | None:
     if not args.ocr:
         return None
-    # Read the environment directly: the CLI needs no database or Supabase settings.
-    tessdata = args.tessdata or os.environ.get("TESSDATA_PREFIX")
-    if tessdata is None:
-        sys.exit("--ocr needs --tessdata or TESSDATA_PREFIX (see tools/fetch-tessdata.sh)")
-    languages = args.languages or os.environ.get(
-        "BOOK_SERVICE_OCR_LANGUAGES", OCR_DEFAULT_LANGUAGES
-    )
-    config = OcrConfig(Path(tessdata), languages=languages, dpi=args.dpi)
-    if missing := config.missing_languages():
-        sys.exit(f"missing under {config.tessdata}: {', '.join(missing)}.traineddata")
-    return config
+    if not models_ready():
+        sys.exit("--ocr needs the OCR models: python -m app.ingest.ocr --fetch")
+    return PageOcr(dpi=args.dpi)
 
 
 async def main() -> int:
@@ -52,11 +40,7 @@ async def main() -> int:
     parser.add_argument("--ask", action="store_true", help="make the text-TOC model call")
     parser.add_argument("--tags", action="store_true", help="print every tagged page")
     parser.add_argument("--ocr", action="store_true", help="OCR pages without a text layer")
-    parser.add_argument("--tessdata", help="tessdata directory (default: TESSDATA_PREFIX)")
-    parser.add_argument(
-        "--languages", help="Tesseract languages (default: BOOK_SERVICE_OCR_LANGUAGES)"
-    )
-    parser.add_argument("--dpi", type=int, default=OCR_DEFAULT_DPI, help="OCR render dpi")
+    parser.add_argument("--dpi", type=int, default=OCR_DPI, help="OCR render dpi")
     args = parser.parse_args()
     # So the model call's token usage shows up beside the result.
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
@@ -67,7 +51,7 @@ async def main() -> int:
         from app.ingest.model import AnthropicTextTocReader
 
         read_text_toc = AnthropicTextTocReader()
-    ocr = ocr_config(args)
+    ocr = page_ocr(args)
 
     with open_pdf(args.pdf) as doc:
         outline = read_outline(doc)

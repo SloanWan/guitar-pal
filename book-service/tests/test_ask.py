@@ -34,7 +34,7 @@ from app.ask.types import AskContext, AskTurn
 from app.extract.tab import SegmentsOut, TabReadingOut
 from app.ingest.pdf import open_pdf
 from app.repo import BookRow, ChapterRow, ChunkRow, ExerciseRow, PageRow
-from tests.conftest import needs_materials
+from tests.conftest import needs_materials, structured_message
 from tests.test_scan import FakeStorage
 
 # --- the tokeniser -------------------------------------------------------------
@@ -183,6 +183,8 @@ class FakeModel:
         return SimpleNamespace(stop_reason="end_turn", parsed_output=out, usage=usage)
 
     async def create(self, **kwargs: object) -> object:
+        if "format" in (kwargs.get("output_config") or {}):  # type: ignore[operator]
+            return structured_message(await self.parse(**kwargs))
         self.requests.append(kwargs)
         system = str(kwargs["system"])
         if system.startswith(ANSWER_SYSTEM):

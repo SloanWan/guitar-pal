@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
-# Tesseract language data for OCR on scanned uploads, into ./tessdata
-# (gitignored). The Dockerfile does the same for the image. `tessdata_fast`
-# on purpose: docs/calibration.md has the fast-vs-best numbers.
+# Tesseract language data, into ./tessdata (gitignored), for the OCR eval's
+# Tesseract baseline (evals/ocr). The scan itself reads with PP-OCR since #417
+# and needs none of this.
 set -eu
 dir="${1:-$(dirname "$0")/../tessdata}"
 mkdir -p "$dir"

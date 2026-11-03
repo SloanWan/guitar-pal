@@ -11,7 +11,8 @@ parse files it — `other`, so not sent — and counted.
 The page text is the notation eval's (the text layer when the page has one,
 else PP-OCRv6 tiny lines), cached in `<set>/inputs/`; each model's verdicts
 are cached in `<set>/verdicts/<vendor>-<model>/`, so a rerun only pays for
-what is new. A model stops when its new spending reaches `--max-usd`.
+what is new. The models run side by side, each a few pages at a time; one
+stops when its new spending reaches `--max-usd`.
 
     cd book-service && set -a && . ../.env.local && set +a
     .venv/bin/python -m evals.classify.run --model bailian:qwen3-vl-plus --limit 3   # a probe
@@ -305,6 +306,8 @@ async def run_model(
     finally:
         for doc in docs.values():
             doc.close()
+        # Inside the loop that used it, or its connections are closed after the loop is.
+        await provider.client.close()
     subject["status"] = "done"
     subject["summary"] = subject_summary(scores, verdicts)
     by_set: dict[str, list[PageScore]] = {}
@@ -316,6 +319,13 @@ async def run_model(
     subject["breakdown"] = {name: summarise(s) for name, s in by_set.items()}
     subject["spent_usd"] = round(spent, 4)
     write_run(run, out)
+
+
+async def run_models(
+    specs: list[str], pages: list[Page], inputs: Inputs, run: dict, out: Path, max_usd: float
+) -> None:
+    """Every model at once: the time is spent waiting on the vendors, each its own."""
+    await asyncio.gather(*(run_model(spec, pages, inputs, run, out, max_usd) for spec in specs))
 
 
 def stored_subject(run: dict, pages: list[Page]) -> None:
@@ -402,8 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"run {run['run_id']} → {out.relative_to(SERVICE)}  ({len(pages)} pages)")
 
     inputs = Inputs(args.gold)
-    for spec in args.models:
-        asyncio.run(run_model(spec, pages, inputs, run, out, args.max_usd))
+    asyncio.run(run_models(args.models, pages, inputs, run, out, args.max_usd))
 
     finish(run)
     write_run(run, out)

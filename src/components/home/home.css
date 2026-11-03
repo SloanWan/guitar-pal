@@ -529,9 +529,60 @@
 		color: var(--gp-ink-3);
 	}
 
-	/* the one skeleton: where the song card will be */
-	.hm-sk {
-		height: 320px;
-		border-radius: 18px;
+	/* ---- while the load is out: the song card's and the panel's frames ------- */
+	.hm-sk-line {
+		border-radius: 6px;
+	}
+	.hm-sk-mod {
+		width: 132px;
+		height: 28px;
+	}
+	.hm-sk-name {
+		width: min(320px, 70%);
+		height: 29px;
+	}
+	.hm-sk-meta {
+		width: min(300px, 60%);
+		height: 15px;
+	}
+	@container home (min-width: 720px) {
+		.hm-sk-name {
+			height: 33px;
+		}
+	}
+	/* eight bars: two rows of four on a phone, one row from 560px */
+	.hm-sk-bars {
+		height: 106px;
+		border-radius: 12px;
+	}
+	@container home (min-width: 560px) {
+		.hm-sk-bars {
+			height: 50px;
+		}
+	}
+	@container home (min-width: 720px) {
+		.hm-sk-bars {
+			height: 54px;
+		}
+	}
+	.hm-sk-grid {
+		height: 196px;
+		border-radius: 12px;
+	}
+	.hm-sk-ctl {
+		height: 56px;
+		border-radius: 12px;
+	}
+	.hm-sk-h {
+		width: 120px;
+		height: 18px;
+	}
+	.hm-sk-rows {
+		display: grid;
+		gap: 4px;
+	}
+	.hm-sk-row {
+		height: 56px;
+		border-radius: 12px;
 	}
 }

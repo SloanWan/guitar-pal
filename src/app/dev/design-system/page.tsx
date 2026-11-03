@@ -13,7 +13,7 @@
  *    "gp-theme" + document.documentElement.dataset.theme (see src/app/layout.tsx
  *    boot script + src/components/ThemeToggle.tsx).
  *  - Fader / Rocker / Segmented: the fingerpick refactor's v3 primitives live as
- *    LOCAL (un-exported) functions inside src/app/(main)/fingerpick/page.tsx.
+ *    LOCAL (un-exported) functions inside src/app/(main)/tab/page.tsx.
  *    They cannot be imported without modifying that page (out of scope), so the
  *    exact implementations are reproduced verbatim below and clearly marked —
  *    this audits the real shared markup, not an idealised mock.
@@ -84,7 +84,7 @@ function ThemeSegmented(): React.JSX.Element {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// v3 PRIMITIVES — reproduced VERBATIM from src/app/(main)/fingerpick/page.tsx
+// v3 PRIMITIVES — reproduced VERBATIM from src/app/(main)/tab/page.tsx
 // (local un-exported Fader / Rocker / Segmented; auditing the real markup).
 // ════════════════════════════════════════════════════════════════════════════
 

@@ -6,7 +6,7 @@ import { expect, playAndStop, test } from "../fixtures";
  * only ever checked here.
  */
 test("fingerpick renders a tab stave and plays", async ({ page }) => {
-	await page.goto("/fingerpick");
+	await page.goto("/tab");
 
 	const stave = page.locator("svg .vf-stave").first();
 	await expect(stave).toBeVisible();
@@ -19,9 +19,9 @@ test("fingerpick renders a tab stave and plays", async ({ page }) => {
  * browser, so nothing here is written anywhere but this test's storage.
  */
 test("New opens the editor; a named tab saves and the reader opens on it", async ({ page }) => {
-	await page.goto("/fingerpick");
+	await page.goto("/tab");
 	await page.getByRole("button", { name: "New", exact: true }).click();
-	await expect(page).toHaveURL(/\/fingerpick\/edit\/new$/);
+	await expect(page).toHaveURL(/\/tab\/edit\/new$/);
 	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 
 	await page.getByRole("button", { name: "Tab settings" }).click();
@@ -29,24 +29,24 @@ test("New opens the editor; a named tab saves and the reader opens on it", async
 	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: "Save", exact: true }).click();
 
-	await expect(page).toHaveURL(/\/fingerpick\?pattern=/);
+	await expect(page).toHaveURL(/\/tab\?pattern=/);
 	await expect(page.getByRole("heading", { name: "Smoke tab" })).toBeVisible();
 });
 
 test("the progress bar runs, in the tab colour, while the editor loads", async ({ page }) => {
-	await page.goto("/fingerpick");
+	await page.goto("/tab");
 	// Hold the route's payload back so the bar outlives its show delay.
-	await page.route("**/fingerpick/edit/new*", async (route) => {
+	await page.route("**/tab/edit/new*", async (route) => {
 		if (route.request().headers()["rsc"]) await new Promise((done) => setTimeout(done, 1200));
 		await route.continue();
 	});
 	await page.getByRole("button", { name: "New", exact: true }).click();
 	await expect(page.locator('.nav-progress[data-m="tab"]')).toBeVisible();
-	await expect(page).toHaveURL(/\/fingerpick\/edit\/new$/);
+	await expect(page).toHaveURL(/\/tab\/edit\/new$/);
 });
 
 test("leaving the editor with unsaved edits asks first", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await page.getByRole("button", { name: "Tab settings" }).click();
 	await page.getByRole("textbox", { name: "Name" }).fill("Half done");
 	await page.keyboard.press("Escape");
@@ -56,16 +56,16 @@ test("leaving the editor with unsaved edits asks first", async ({ page }) => {
 	const confirm = page.getByRole("alertdialog", { name: "Discard changes?" });
 	await expect(confirm).toBeVisible();
 	await confirm.getByRole("button", { name: "Keep editing" }).click();
-	await expect(page).toHaveURL(/\/fingerpick\/edit\/new$/);
+	await expect(page).toHaveURL(/\/tab\/edit\/new$/);
 
 	// …and so is Close, until the edits are discarded.
 	await page.getByRole("button", { name: "Close", exact: true }).click();
 	await confirm.getByRole("button", { name: "Discard" }).click();
-	await expect(page).toHaveURL(/\/fingerpick$/);
+	await expect(page).toHaveURL(/\/tab$/);
 });
 
 test("the grid is the editing surface: click, type a fret, add a hammer-on, undo", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
@@ -86,7 +86,7 @@ test("the grid is the editing surface: click, type a fret, add a hammer-on, undo
 });
 
 test("the fretboard writes at the cursor, clears on a second click, and Shift gives an x", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 	const dock = page.getByRole("region", { name: "Fretboard" });
 
@@ -105,7 +105,7 @@ test("the fretboard writes at the cursor, clears on a second click, and Shift gi
 });
 
 test("the toolbar splits a note so the bar still adds up, and the bar menu copies a bar", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 
@@ -122,7 +122,7 @@ test("the toolbar splits a note so the bar still adds up, and the bar menu copie
 });
 
 test("the inspector writes a link and says why the others cannot go on", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 	await page.keyboard.type("5");
@@ -138,7 +138,7 @@ test("the inspector writes a link and says why the others cannot go on", async (
 });
 
 test("a chord marked from the inspector frets a typed pick sequence", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 	const inspector = page.getByRole("complementary", { name: "Inspector" });
@@ -158,7 +158,7 @@ test("a chord marked from the inspector frets a typed pick sequence", async ({ p
 });
 
 test("in a bar with a chord, an empty cell offers the shape's fret, and a row clears in one click", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 	const inspector = page.getByRole("complementary", { name: "Inspector" });
 	await inspector.getByRole("combobox", { name: "Chord at bar 1, slot 1" }).fill("C");
@@ -181,13 +181,13 @@ test("in a bar with a chord, an empty cell offers the shape's fret, and a row cl
 });
 
 test("a bar fills with one note value from its footer", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await page.getByRole("button", { name: "Fill bar 1 with eighth notes" }).click();
 	await expect(page.getByRole("button", { name: "Bar 1, slot 8, B string: empty" })).toBeAttached();
 });
 
 test("the chord search offers the tab's chords and hears a match without taking it", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 	const inspector = page.getByRole("complementary", { name: "Inspector" });
 	await inspector.getByRole("combobox", { name: "Chord at bar 1, slot 1" }).fill("C");
@@ -208,7 +208,7 @@ test("the chord search offers the tab's chords and hears a match without taking 
 });
 
 test("a new shape for the held chord asks before throwing an edit away, and applies", async ({ page }) => {
-	await page.goto("/fingerpick/edit/new");
+	await page.goto("/tab/edit/new");
 	await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).click();
 	const inspector = page.getByRole("complementary", { name: "Inspector" });
 	await inspector.getByRole("combobox", { name: "Chord at bar 1, slot 1" }).fill("C");

@@ -4,8 +4,8 @@ import { moduleForHref, moduleForPath } from "../moduleForPath";
 describe("moduleForPath", () => {
 	it("maps each module route and its sub-routes", () => {
 		expect(moduleForPath("/strum")).toBe("strum");
-		expect(moduleForPath("/fingerpick")).toBe("tab");
-		expect(moduleForPath("/fingerpick/edit/new")).toBe("tab");
+		expect(moduleForPath("/tab")).toBe("tab");
+		expect(moduleForPath("/tab/edit/new")).toBe("tab");
 		expect(moduleForPath("/chords")).toBe("chords");
 		expect(moduleForPath("/chords/c/major")).toBe("chords");
 		expect(moduleForPath("/fretboard")).toBe("fb");
@@ -34,13 +34,13 @@ describe("moduleForPath", () => {
 describe("moduleForHref", () => {
 	it("reads the path past a query or hash", () => {
 		expect(moduleForHref("/strum?pattern=abc", "/home")).toBe("strum");
-		expect(moduleForHref("/fingerpick#top", "/home")).toBe("tab");
+		expect(moduleForHref("/tab#top", "/home")).toBe("tab");
 		expect(moduleForHref("/chords/create?frets=x32010", "/strum")).toBe("chords");
 	});
 
 	it("resolves a relative href against the page it is followed from", () => {
 		expect(moduleForHref("?pattern=abc", "/strum")).toBe("strum");
-		expect(moduleForHref("edit/new", "/fingerpick/")).toBe("tab");
+		expect(moduleForHref("edit/new", "/tab/")).toBe("tab");
 	});
 
 	it("is the page itself without an href", () => {

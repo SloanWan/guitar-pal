@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type Ref } from "react";
-import { GripHorizontal, GripVertical, Repeat, SlidersHorizontal, Square } from "lucide-react";
+import { Bell, BellOff, GripHorizontal, GripVertical, Repeat, SlidersHorizontal, Square } from "lucide-react";
 import { Button, PlayPick } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -16,6 +16,7 @@ import {
 	trainerBpm,
 	type SpeedTrainer,
 } from "@/lib/speedTrainer";
+import { COUNT_INS, type CountInSetting } from "@/lib/countIn";
 import type { TickLevel } from "@/lib/strumMetronome";
 import type { ModuleKey } from "@/lib/moduleForPath";
 import type { PlayerDock } from "@/lib/playerDock";
@@ -40,6 +41,13 @@ export interface SpeedUpProps {
 	progress: { pass: number; percent: number } | null;
 }
 
+/** The wait before the first pass (`useCountIn`): its setting, and the seconds left of one under way. */
+export interface CountInProps {
+	setting: CountInSetting;
+	onSetting: (next: CountInSetting) => void;
+	remaining: number | null;
+}
+
 export interface PlayBarProps {
 	/** The page's module, re-applied inside the tray it portals out. */
 	module: ModuleKey;
@@ -53,7 +61,9 @@ export interface PlayBarProps {
 	playing: boolean;
 	preparing: boolean;
 	canPlay: boolean;
+	/** Starts (through the count-in), stops, or cancels a count-in under way. */
 	onTogglePlay: () => void;
+	countIn: CountInProps;
 	/**
 	 * Back to the start. Given, the play key pauses rather than stops and a stop key
 	 * sits beside it, disabled while there is nothing to stop.
@@ -98,6 +108,7 @@ export default function PlayBar({
 	preparing,
 	canPlay,
 	onTogglePlay,
+	countIn,
 	onStop,
 	canStop = false,
 	tempo,
@@ -123,6 +134,8 @@ export default function PlayBar({
 	// While the trainer runs, the pill says the tempo this pass plays at.
 	const training = speedUp?.on && speedUp.progress ? speedUp.progress : null;
 	const shownBpm = training ? trainerBpm(tempo.bpm, training.percent) : tempo.bpm;
+	const counting = countIn.remaining !== null;
+	const { setting: countInSetting, onSetting: onCountIn } = countIn;
 
 	return (
 		<>
@@ -144,14 +157,21 @@ export default function PlayBar({
 								{dock === "left" ? <GripHorizontal aria-hidden /> : <GripVertical aria-hidden />}
 							</button>
 						)}
-						<div className="pb-pill-now">
-							<span className="pb-lab pb-num">
-								Bar {status.bar} of {status.bars}
-							</span>
-							<span className="pb-bar-now">
-								{status.now ?? status.idle ?? "Rhythm"} {status.next !== null && <small>→ {status.next}</small>}
-							</span>
-						</div>
+						{counting ? (
+							<div className="pb-pill-now" role="status">
+								<span className="pb-lab">Starting in</span>
+								<span className="pb-bar-now pb-num">{countIn.remaining} s</span>
+							</div>
+						) : (
+							<div className="pb-pill-now">
+								<span className="pb-lab pb-num">
+									Bar {status.bar} of {status.bars}
+								</span>
+								<span className="pb-bar-now">
+									{status.now ?? status.idle ?? "Rhythm"} {status.next !== null && <small>→ {status.next}</small>}
+								</span>
+							</div>
+						)}
 						<button
 							type="button"
 							className="pb-icon pb-pill-loop"
@@ -170,12 +190,18 @@ export default function PlayBar({
 						<PlayPick
 							ref={pickRef}
 							className="pb-pill-play"
-							playing={playing}
+							playing={playing || counting}
 							size="sm"
 							onClick={onTogglePlay}
 							disabled={!canPlay}
-							// PlayPick names itself Play / Stop; a pausing key and the wait for samples say so instead.
-							{...(preparing ? { "aria-label": "Loading samples" } : onStop && playing ? { "aria-label": "Pause" } : {})}
+							// PlayPick names itself Play / Stop; a count-in, a pausing key and the wait for samples say so instead.
+							{...(counting
+								? { "aria-label": "Cancel the count-in" }
+								: preparing
+									? { "aria-label": "Loading samples" }
+									: onStop && playing
+										? { "aria-label": "Pause" }
+										: {})}
 						/>
 						<Button variant="icon" size="xs" className="pb-pill-faster" aria-label="Faster" onClick={() => step(1)}>
 							+
@@ -239,6 +265,41 @@ export default function PlayBar({
 							channel={click}
 							extra={<SubdivisionPicker meter={tempo.meter} value={tickLevel} onChange={onTickLevel} levels={tickLevels} />}
 						/>
+						{/* The wait before the first pass, with its cue beside it; the loop's own
+						    passes are spaced by the gap below, not by this. */}
+						<div className="pb-mix-row" role="group" aria-label="Count-in">
+							<Switch
+								checked={countInSetting.on}
+								onCheckedChange={(on) => onCountIn({ ...countInSetting, on })}
+								aria-label="Count in before the first pass"
+							/>
+							<span className="pb-mix-name">Count-in</span>
+							<span className="pb-mix-extra">
+								<button
+									type="button"
+									className="pb-icon"
+									aria-pressed={countInSetting.cue}
+									aria-label="Cue each second"
+									title={countInSetting.cue ? "Cue each second: on" : "Cue each second: off"}
+									disabled={!countInSetting.on}
+									onClick={() => onCountIn({ ...countInSetting, cue: !countInSetting.cue })}
+								>
+									{countInSetting.cue ? <Bell aria-hidden /> : <BellOff aria-hidden />}
+								</button>
+							</span>
+							<Slider
+								value={Math.max(0, COUNT_INS.indexOf(countInSetting.seconds))}
+								onChange={(i) => onCountIn({ ...countInSetting, seconds: COUNT_INS[i] ?? countInSetting.seconds })}
+								label="Seconds before the first pass"
+								min={0}
+								max={COUNT_INS.length - 1}
+								step={1}
+								ticks={COUNT_INS.map((_, i) => i)}
+								valueText={(i) => `${COUNT_INS[i] ?? countInSetting.seconds} seconds`}
+								disabled={!countInSetting.on}
+							/>
+							<span className="pb-lab pb-num pb-mix-val">{countInSetting.seconds} s</span>
+						</div>
 						<div className="pb-mix-row" role="group" aria-label="Loop">
 							<Switch checked={loop} onCheckedChange={onLoop} aria-label="Loop" />
 							<span className="pb-mix-name">Loop</span>

@@ -9,6 +9,7 @@ import type { ValidationIssue } from "./types";
 import { migratePattern } from "./migratePattern";
 import { FINGERPICK_SCHEMA_VERSION } from "@/lib/fingerpickTypes";
 import { normalizeCapo } from "@/lib/strumProgressions";
+import { readReferences } from "@/lib/tabReferences";
 import {
 	effectsSchema,
 	isEffectKind,
@@ -533,5 +534,8 @@ export function validateFingerpickPattern(raw: unknown): {
 	if (capo > 0) pattern.capo = capo;
 	const spans = validateSpans(obj.spans, measures, warnings);
 	if (spans !== undefined) pattern.spans = spans;
+	// Links that are not web links are dropped in silence: they are notes, not music.
+	const references = readReferences(obj.references);
+	if (references) pattern.references = references;
 	return { pattern, errors, warnings };
 }

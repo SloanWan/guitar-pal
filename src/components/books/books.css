@@ -181,9 +181,16 @@
 		color: var(--gp-ink-2);
 		text-align: center;
 	}
-	.bk-shelf-skeleton {
-		height: 300px;
-		border-radius: var(--gp-r-l);
+	/* While the list is out: covers on the shelf, the shape the books will take */
+	.bk-sk-cover {
+		aspect-ratio: 3 / 4;
+		border-radius: var(--gp-r-m);
+	}
+	/* two to a row on a phone: one row of them, not a row and a half */
+	@container books (max-width: 719px) {
+		.bk-sk-cover:nth-child(n + 3) {
+			display: none;
+		}
 	}
 
 	/* ── Covers ───────────────────────────────────────────────────────────── */
@@ -440,8 +447,27 @@
 		max-width: 960px;
 		gap: 0;
 	}
-	.bk-book-skeleton {
-		height: 360px;
+	/* While the book is out: its header and the first chapters' cards */
+	.bk-sk-back {
+		width: 72px;
+		height: 18px;
+		border-radius: 6px;
+	}
+	.bk-sk-title {
+		width: min(420px, 80%);
+		height: 34px;
+		border-radius: 6px;
+	}
+	.bk-sk-meta {
+		width: min(260px, 60%);
+		height: 14px;
+		border-radius: 6px;
+	}
+	.bk-wrap-book .bk-chs:has(> .bk-sk-ch) {
+		margin-top: 24px;
+	}
+	.bk-sk-ch {
+		height: 60px;
 		border-radius: var(--gp-r-l);
 	}
 	.bk-row {

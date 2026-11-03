@@ -74,13 +74,13 @@ describe("useLeaveGuard", () => {
 
 	it("asks before Close with edits, and closes straight away without", () => {
 		const clean = setup(false);
-		act(() => clean.result.current.request("/fingerpick"));
-		expect(clean.navigate.replace).toHaveBeenCalledWith("/fingerpick");
+		act(() => clean.result.current.request("/tab"));
+		expect(clean.navigate.replace).toHaveBeenCalledWith("/tab");
 		clean.unmount();
 
 		const dirty = setup(true);
-		act(() => dirty.result.current.request("/fingerpick"));
-		expect(dirty.result.current.attempt).toEqual({ kind: "close", href: "/fingerpick" });
+		act(() => dirty.result.current.request("/tab"));
+		expect(dirty.result.current.attempt).toEqual({ kind: "close", href: "/tab" });
 		expect(dirty.navigate.replace).not.toHaveBeenCalled();
 	});
 

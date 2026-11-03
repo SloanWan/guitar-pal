@@ -82,7 +82,18 @@ export default function BookPage({ params }: { params: Promise<{ id: string }> }
 								{isServiceDown(error) ? BOOKS_NOT_OPEN : "Could not load the book."}
 							</p>
 						) : (
-							<Skeleton className="bk-book-skeleton" />
+							<div className="gp-rise" aria-busy="true" aria-label="Loading">
+								<div className="bk-bh">
+									<Skeleton className="bk-sk-back" />
+									<Skeleton className="bk-sk-title" />
+									<Skeleton className="bk-sk-meta" />
+								</div>
+								<div className="bk-chs">
+									<Skeleton className="bk-sk-ch" />
+									<Skeleton className="bk-sk-ch" />
+									<Skeleton className="bk-sk-ch" />
+								</div>
+							</div>
 						)}
 					</div>
 				) : (

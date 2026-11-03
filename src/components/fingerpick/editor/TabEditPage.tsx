@@ -60,8 +60,8 @@ type Opened =
 	| { status: "ready"; isNew: boolean; notice?: EditorNotice; book?: EditorBookSource };
 
 /**
- * The tab editor (#358): `/fingerpick/edit/<id>` for one of the player's tabs,
- * `/fingerpick/edit/new` for a blank one or a handed-over draft. The tab is
+ * The tab editor (#358): `/tab/edit/<id>` for one of the player's tabs,
+ * `/tab/edit/new` for a blank one or a handed-over draft. The tab is
  * edited as a grid of bar blocks, a row a string. Saving goes through the library's own save (a
  * guest's tab to the browser, a player's to the account) and back to where the
  * editor was opened from; leaving with unsaved edits asks first. Given a
@@ -102,13 +102,16 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 		}
 		openedRef.current = true;
 		// A one-shot read of storage and the async library, as the reader's restore does.
-		/* eslint-disable react-hooks/set-state-in-effect */
-		if (next) {
-			reset(next);
-			setPristine(JSON.stringify(next));
-		}
-		setOpened(state);
-		/* eslint-enable react-hooks/set-state-in-effect */
+		// Out of the effect: this one runs while the page's Suspense boundary hydrates, and
+		// an update made there gets idle priority, so the blank tab waited behind every
+		// library read (~2.5s signed in) before it showed.
+		queueMicrotask(() => {
+			if (next) {
+				reset(next);
+				setPristine(JSON.stringify(next));
+			}
+			setOpened(state);
+		});
 	}, [target, entry, library.isLoading, library.customPatterns, reset]);
 
 	const ready = opened.status === "ready";
@@ -340,10 +343,16 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 					<div className="te-stage">
 						<div className="te-stage-in gp-rise">
 							{!ready ? (
-								<div className="flex flex-col gap-4" aria-busy="true">
-									<Skeleton className="h-13 w-60" />
-									<Skeleton className="h-96 w-full rounded-gp-xl" />
-								</div>
+								<>
+									<div className="te-titlerow" aria-busy="true" aria-label="Loading">
+										<Skeleton className="te-sk-meta" />
+										<Skeleton className="te-sk-name" />
+									</div>
+									<div className="te-toolbay" aria-hidden>
+										<Skeleton className="te-sk-tool" />
+									</div>
+									<Skeleton className="te-sk-bar" />
+								</>
 							) : (
 								<>
 									{notice && (
@@ -537,7 +546,9 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 							</Button>
 						)}
 					</div>
-					{ready && (
+					{/* An instrument with nothing to load: there from the start, and only
+					    taking clicks once the tab is open. */}
+					<div className="contents" inert={!ready}>
 						<FretboardDock
 							pattern={working}
 							cursor={cursor}
@@ -552,18 +563,27 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 							onOpen={prefs.setDockOpen}
 							onHit={dockHit}
 						/>
-					)}
+					</div>
 				</div>
-				{ready && !narrow && (
+				{!narrow && (
 					<aside ref={inspectorRef} className="te-insp gp-rise" aria-label="Inspector">
-						<EditorInspector
-							working={working}
-							commit={commit}
-							cursor={cursor}
-							slots={selectedSlots(working, cursor, selection)}
-							onCursor={(cell) => tabCursor.moveTo(cell, selection)}
-							chordTools={chordTools}
-						/>
+						{ready ? (
+							<EditorInspector
+								working={working}
+								commit={commit}
+								cursor={cursor}
+								slots={selectedSlots(working, cursor, selection)}
+								onCursor={(cell) => tabCursor.moveTo(cell, selection)}
+								chordTools={chordTools}
+							/>
+						) : (
+							<div className="te-sk-insp" aria-hidden>
+								<Skeleton className="te-sk-meta" />
+								<Skeleton className="te-sk-chips" />
+								<Skeleton className="te-sk-chips" />
+								<Skeleton className="te-sk-panel" />
+							</div>
+						)}
 					</aside>
 				)}
 			</div>

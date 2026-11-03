@@ -4,14 +4,14 @@ import { validateFingerpickPattern } from "@/lib/tabImport/validateFingerpickPat
 
 /**
  * The tab editor's ways in and out (#358). The editor is a page of its own:
- * `/fingerpick/edit/<id>` opens one of the player's tabs, `/fingerpick/edit/new`
- * a blank one, and `/fingerpick/edit/new?draft=<token>` a tab handed over to be
+ * `/tab/edit/<id>` opens one of the player's tabs, `/tab/edit/new`
+ * a blank one, and `/tab/edit/new?draft=<token>` a tab handed over to be
  * checked — by the assistant, a pasted text tab or a book's page — which waits
  * in sessionStorage under that token. `from` is where Close and Save go back to.
  */
 
-export const READER_PATH = "/fingerpick";
-const EDITOR_PATH = "/fingerpick/edit";
+export const READER_PATH = "/tab";
+const EDITOR_PATH = "/tab/edit";
 export const NEW_TAB_ID = "new";
 
 /** Where the editor was opened from, which is where it goes back to. */

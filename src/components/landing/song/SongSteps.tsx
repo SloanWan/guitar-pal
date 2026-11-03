@@ -585,7 +585,7 @@ export default function SongSteps() {
 				tool="Tab"
 				title="Then pick it."
 				demo={<PickIt />}
-				link={{ href: "/fingerpick", label: "Open Tab" }}
+				link={{ href: "/tab", label: "Open Tab" }}
 				broad
 			>
 				Guitar Pal&apos;s own arrangement, a bar for each chord above: thumb on the bass, fingers on the top strings.

@@ -35,6 +35,7 @@ import { loadVoicings } from "@/lib/chordVoicingCache";
 import { withUserVoicings } from "@/lib/userChordVoicings";
 import type { SharedStrum } from "@/lib/sharedItems";
 import { usePlayerDock } from "@/components/playback/usePlayerDock";
+import { useCountIn } from "@/components/playback/useCountIn";
 import { usePlayKey } from "@/components/playback/usePlayKey";
 
 /** Per-viewer: whether the library beside the stage is folded away. */
@@ -83,8 +84,15 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 		lookupVoicings,
 		voicingsKey,
 	});
+	// The wait before the first pass; the loop's own passes are spaced by its gap.
+	const countIn = useCountIn(() => {
+		if (canPlay) playback.start();
+	});
 	useEffect(() => {
-		stopRef.current = playback.stop;
+		stopRef.current = () => {
+			countIn.cancel();
+			playback.stop();
+		};
 	});
 
 	const shareState = useStrumShare({
@@ -100,8 +108,9 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 
 	function togglePlay() {
 		navigator.vibrate?.(10);
-		if (playback.isPlaying) playback.stop();
-		else if (canPlay) playback.start();
+		if (countIn.remaining !== null) stop();
+		else if (playback.isPlaying) playback.stop();
+		else if (canPlay) countIn.begin(playback.prime);
 	}
 	const pickRef = useRef<HTMLButtonElement>(null);
 	usePlayKey(pickRef, togglePlay);
@@ -179,9 +188,23 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					)}
 				<main className="st-stage">
 					{!session.patternRestored || !selectedPattern ? (
-						<div className="st-stage-in" aria-busy="true">
-							<Skeleton className="h-13 w-60" />
-							<Skeleton className="h-60 w-full rounded-gp-xl" />
+						<div className="st-stage-in gp-rise" aria-busy="true" aria-label="Loading">
+							<div className="st-titlerow">
+								<div className="st-sk-title">
+									<Skeleton className="st-sk-meta" />
+									<Skeleton className="st-sk-name" />
+								</div>
+							</div>
+							<div className="st-sk-now">
+								<Skeleton />
+							</div>
+							<div className="st-prog-slot">
+								<div className="st-sk-prog">
+									<Skeleton className="st-sk-head" />
+									<Skeleton className="st-sk-row" />
+									<Skeleton className="st-sk-row" />
+								</div>
+							</div>
 						</div>
 					) : pending ? (
 						<div className="st-stage-in gp-rise">
@@ -284,6 +307,7 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 					preparing={playback.isPreparing}
 					canPlay={canPlay}
 					onTogglePlay={togglePlay}
+					countIn={{ setting: countIn.setting, onSetting: countIn.onSetting, remaining: countIn.remaining }}
 					tempo={{
 						bpm: session.bpm,
 						onBpm: session.setBpm,

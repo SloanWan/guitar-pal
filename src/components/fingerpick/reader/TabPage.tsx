@@ -32,6 +32,7 @@ import { indexPattern } from "@/lib/fingerpickIndex";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
 import type { SharedFingerpick } from "@/lib/sharedItems";
+import type { TabReference } from "@/lib/tabReferences";
 import { editorHref, type EditorEntry } from "@/lib/tabEditorEntry";
 import TabHeader from "./TabHeader";
 import TabSheet from "./TabSheet";
@@ -44,11 +45,38 @@ import { useTabSession } from "./useTabSession";
 import { useTabShare } from "./useTabShare";
 import { useNavRouter } from "@/components/nav-progress";
 
+const NO_REFERENCES: TabReference[] = [];
+
 /** Per-viewer: whether the library beside the stage is folded away. */
 const LIBRARY_FOLDED_KEY = "tabLibraryFolded";
 
+/** The stage's frame while the tab is restored: the title, the toolbar, the sheet with its staves to come. */
+function TabSkeleton() {
+	return (
+		<>
+			<div className="tb-titlerow" aria-busy="true" aria-label="Loading">
+				<Skeleton className="tb-sk-meta" />
+				<Skeleton className="tb-sk-name" />
+			</div>
+			<div className="tb-tool" aria-hidden>
+				<Skeleton className="tb-sk-tool" />
+			</div>
+			<section className="tb-sheet" aria-hidden>
+				<div className="tb-sk-rows">
+					{[0, 1, 2].map((row) => (
+						<div key={row} className="tb-sk-row">
+							<Skeleton className="tb-sk-chords" />
+							<Skeleton className="tb-sk-stave" />
+						</div>
+					))}
+				</div>
+			</section>
+		</>
+	);
+}
+
 /**
- * The Tab page. On /fingerpick it opens the player's library; given `shared`, it
+ * The Tab page. On /tab it opens the player's library; given `shared`, it
  * opens that snapshot instead (/p/[id]): the library and every save path are gone,
  * the snapshot is what plays, and the one way to change it is to import a copy.
  */
@@ -219,12 +247,9 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 						</button>
 					)}
 					<main ref={stageRef} className="tb-stage">
-						<div ref={stageInRef} className={session.restored ? "tb-stage-in gp-rise" : "tb-stage-in"}>
+						<div ref={stageInRef} className="tb-stage-in gp-rise">
 							{!session.restored ? (
-								<div className="flex flex-col gap-4" aria-busy="true">
-									<Skeleton className="h-13 w-60" />
-									<Skeleton className="h-96 w-full rounded-gp-xl" />
-								</div>
+								<TabSkeleton />
 							) : (
 								<>
 									<TabHeader
@@ -238,6 +263,8 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 										sharing={shareState.sharing}
 										onDelete={isShared ? undefined : () => session.remove(pattern.id)}
 										owned={session.owned}
+										references={pattern.references ?? NO_REFERENCES}
+										onReferences={session.setReferences}
 										shared={
 											isShared
 												? {
@@ -295,7 +322,8 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 						canPlay={playback.isLoaded}
 						onTogglePlay={playback.togglePlay}
 						onStop={playback.stop}
-						canStop={playback.isPlaying || playback.isPaused}
+						canStop={playback.isPlaying || playback.isPaused || playback.countIn.remaining !== null}
+						countIn={playback.countIn}
 						tempo={{
 							bpm: playback.bpm,
 							onBpm: playback.setBpm,

@@ -102,7 +102,7 @@ export default function LatestTiles({ tab, chords, shapes, book, now }: Props) {
 		tiles.push(
 			<Tile
 				key="tab"
-				href={`/fingerpick?pattern=${encodeURIComponent(tab.pattern.id)}`}
+				href={`/tab?pattern=${encodeURIComponent(tab.pattern.id)}`}
 				module="tab"
 				icon={ListMusic}
 				kind="Tab"

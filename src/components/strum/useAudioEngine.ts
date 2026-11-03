@@ -99,6 +99,8 @@ export function useAudioEngine(
 	meter: Meter = DEFAULT_METER,
 ) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
+	/** A context made inside the press for a start that comes later; see `prime`. */
+	const primedRef = useRef<{ ctx: AudioContext; ready: Promise<void> } | null>(null);
 	const schedulerRef = useRef<number | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
 	/** True between the press and the first sound: the samples are on their way. */
@@ -204,8 +206,32 @@ export function useAudioEngine(
 				}
 				audioCtxRef.current = null;
 			}
+			void primedRef.current?.ctx.close().catch(() => {});
+			primedRef.current = null;
 		};
 	}, []);
+
+	/**
+	 * For a start that comes later than the press (a count-in): the context is made
+	 * now, inside the gesture — a browser lets audio begin only from one, and a wait
+	 * of seconds is longer than it stays honoured — and the samples load meanwhile.
+	 * The next `start` plays on it.
+	 */
+	function prime() {
+		if (primedRef.current) return;
+		const ctx = new AudioContext();
+		const ready = preloadStrumPresets(ctx);
+		// start() reports a failed load; until then, nobody is waiting on it.
+		ready.catch(() => {});
+		primedRef.current = { ctx, ready };
+	}
+
+	/** A primed context nobody started on (the count-in was stopped). */
+	function releasePrimed() {
+		const primed = primedRef.current;
+		primedRef.current = null;
+		if (primed) void primed.ctx.close().catch(() => {});
+	}
 
 	function start() {
 		// Every start gets a token. The samples are fetched before the first note
@@ -225,14 +251,16 @@ export function useAudioEngine(
 				// already closed
 			}
 		}
-		audioCtxRef.current = new AudioContext();
+		const primed = primedRef.current;
+		primedRef.current = null;
+		audioCtxRef.current = primed?.ctx ?? new AudioContext();
 		const ctx = audioCtxRef.current;
 
 		// Nothing sounds until the samples are here. The metronome used to start
 		// against silence while they downloaded, which reads as a broken pattern
 		// rather than as a wait.
 		setIsPreparing(true);
-		preloadStrumPresets(ctx)
+		(primed?.ready ?? preloadStrumPresets(ctx))
 			.catch((err: unknown) => {
 				console.error("[useAudioEngine] Failed to preload strum presets:", err);
 			})
@@ -387,6 +415,7 @@ export function useAudioEngine(
 		// Retires any load still in flight, so it cannot start playing after this.
 		startTokenRef.current += 1;
 		setIsPreparing(false);
+		releasePrimed();
 		if (schedulerRef.current) {
 			window.clearTimeout(schedulerRef.current as number);
 		}
@@ -433,6 +462,7 @@ export function useAudioEngine(
 		currCell,
 		currBar,
 		start,
+		prime,
 		stop,
 		strumEnabled,
 		setStrumEnabled: handleSetStrumEnabled,

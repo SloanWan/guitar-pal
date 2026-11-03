@@ -69,7 +69,7 @@ import { validateFingerpickPattern } from "@/lib/tabImport";
  */
 
 const STRUM_PATH = "/strum";
-const TAB_PATH = "/fingerpick";
+const TAB_PATH = "/tab";
 
 /** The mode a thread opens in on this page. */
 export function domainForPath(pathname: string | null): AssistantDomain {

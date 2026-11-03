@@ -26,7 +26,7 @@ import { useNavRouter } from "@/components/nav-progress";
  * preset is copied there, never changed.
  */
 
-const FINGERPICK_PATH = "/fingerpick";
+const FINGERPICK_PATH = "/tab";
 
 export default function TabEditCard({
 	edit,

@@ -25,7 +25,7 @@ import { useNavRouter } from "@/components/nav-progress";
  * hand-drawn pattern is saved.
  */
 
-const FINGERPICK_PATH = "/fingerpick";
+const FINGERPICK_PATH = "/tab";
 
 export default function TabProposalPreview({ proposal }: { proposal: TabProposal }) {
 	const router = useNavRouter();

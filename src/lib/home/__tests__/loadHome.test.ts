@@ -161,7 +161,7 @@ describe("loadHome", () => {
 		const { opened } = await loadHome(client, USER, null, NOW);
 		expect(opened.map((o) => [o.module, o.title, o.href])).toEqual([
 			["strum", "Late train", "/strum?pattern=late"],
-			["tab", TAB_PRESET.name, `/fingerpick?pattern=${encodeURIComponent(TAB_PRESET.id)}`],
+			["tab", TAB_PRESET.name, `/tab?pattern=${encodeURIComponent(TAB_PRESET.id)}`],
 			["chords", "Am7", "/chords/a/m7"],
 			["books", "Folk Book", "/books/bk"],
 		]);

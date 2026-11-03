@@ -29,7 +29,7 @@ export function useTabShare({ user, pattern, shared, takenNames, loading, stop }
 	const [importing, setImporting] = useState(false);
 
 	function askToSignIn(message: string) {
-		toast(message, { action: { label: "Sign in", onClick: () => router.push("/auth?redirect=/fingerpick") } });
+		toast(message, { action: { label: "Sign in", onClick: () => router.push("/auth?redirect=/tab") } });
 	}
 
 	// The link goes on the clipboard first, inside the click — Safari refuses a
@@ -82,9 +82,9 @@ export function useTabShare({ user, pattern, shared, takenNames, loading, stop }
 			else
 				toast(`Saved "${name}" to this browser.`, {
 					description: "Sign in to keep it on your account.",
-					action: { label: "Sign in", onClick: () => router.push("/auth?redirect=/fingerpick") },
+					action: { label: "Sign in", onClick: () => router.push("/auth?redirect=/tab") },
 				});
-			router.push(`/fingerpick?pattern=${copy.id}`);
+			router.push(`/tab?pattern=${copy.id}`);
 		} catch (e) {
 			console.error(e);
 			toast.error("Couldn't save the tab — try again.");

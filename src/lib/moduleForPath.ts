@@ -7,7 +7,7 @@ export type ModuleKey = "strum" | "tab" | "chords" | "fb" | "books" | "home";
 
 const PREFIXES: readonly (readonly [string, ModuleKey])[] = [
 	["/strum", "strum"],
-	["/fingerpick", "tab"],
+	["/tab", "tab"],
 	["/chords", "chords"],
 	["/fretboard", "fb"],
 	["/books", "books"],

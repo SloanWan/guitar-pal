@@ -89,7 +89,9 @@ def record_for(slug: str, page: int, ref: dict) -> dict:
         "page": page,
         "image": f"{page_id(page)}.png",
         "model": {
-            "source": "the parse's classifier (claude-sonnet-5, 100 dpi + text), materials/notation-ref",
+            "source": (
+                "the parse's classifier (claude-sonnet-5, 100 dpi + text), materials/notation-ref"
+            ),
             "kind": kind,
             "regions": ref.get("regions", []),
             "note": ref.get("note", ""),
@@ -155,7 +157,10 @@ def main(argv: list[str] | None = None) -> int:
             missing += 1
             continue
         added, kept, skipped = seed_book(pdf, SLUGS[name], first, last, out_root)
-        print(f"{SLUGS[name]} p{first}–{last}: {added} added, {kept} already there, {len(skipped)} skipped")
+        print(
+            f"{SLUGS[name]} p{first}–{last}: {added} added, {kept} already there,"
+            f" {len(skipped)} skipped"
+        )
         for reason in skipped:
             print(f"  skipped {reason}")
     return 1 if missing == len(PAGES) else 0

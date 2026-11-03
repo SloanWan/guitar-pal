@@ -29,7 +29,9 @@ export type PageKind = (typeof PAGE_KINDS)[number];
 /**
  * What is printed on the page, whatever its kind. `tab` is what the parse
  * reads (a `tab` page, or a `mixed` page's tab regions); jianpu and staff the
- * classifier has no kind for.
+ * classifier has no kind for. Staff and jianpu are marked when they stand
+ * beside a tab too — the same music written a second way, not a page area of
+ * their own — so they say which tab pages a second reading could check.
  */
 export const NOTATIONS = ["tab", "jianpu", "staff", "strum", "chord_diagrams", "fretboard"] as const;
 export type Notation = (typeof NOTATIONS)[number];

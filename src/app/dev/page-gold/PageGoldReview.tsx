@@ -214,6 +214,7 @@ export default function PageGoldReview({ set, id }: { set: string; id: string })
 								</Chip>
 							))}
 						</div>
+						<span className="tg-meta">Mark what is printed, staff or jianpu beside a tab included.</span>
 					</fieldset>
 
 					<label className="pg-field pg-count">

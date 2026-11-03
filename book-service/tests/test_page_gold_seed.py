@@ -18,12 +18,17 @@ def write_book(root, pages):
 def write_verdict(ref_root, page, kind, regions=()):
     path = ref_root / "Demo book" / f"{page_id(page)}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"kind": kind, "regions": list(regions), "note": "n", "cost_usd": 0.01}))
+    path.write_text(
+        json.dumps({"kind": kind, "regions": list(regions), "note": "n", "cost_usd": 0.01})
+    )
 
 
 def test_the_notation_a_verdict_implies():
     assert implied_notation("tab", []) == ["tab"]
-    assert implied_notation("mixed", ["prose", "chord_diagrams", "tab"]) == ["tab", "chord_diagrams"]
+    assert implied_notation("mixed", ["prose", "chord_diagrams", "tab"]) == [
+        "tab",
+        "chord_diagrams",
+    ]
     assert implied_notation("fretboard_diagram", []) == ["fretboard"]
     assert implied_notation("other", []) == []
 

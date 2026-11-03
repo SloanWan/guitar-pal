@@ -12,7 +12,8 @@ database's chunk columns.
     .venv/bin/python -m evals.ask.sample --providers deepseek --judge deepseek \\
         --fixture syt-ch1,syt-ch2,syt-ch3,syt-ch4,syt-ch5,songwriting --repeat 2
 
-Costs money; never in CI. Writes `evals/ask/baseline-sample.json`.
+Costs money; never in CI. Writes `evals/ask/baseline-sample.json`, and the
+run, case by case, to `evals/ask/results/<run id>.json` for `/dev/evals`.
 """
 
 import argparse
@@ -22,7 +23,7 @@ import os
 import statistics
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from app.ask.strategies.long_context import LongContextStrategy
 from app.ask.structured import structured_call
 from app.ask.types import AskContext, AskResult
 from app.repo import BookRow, ChapterRow, ExerciseRow, PageRow
+from evals.runlog import finish, new_run, write_run
 
 HERE = Path(__file__).parent
 BASELINE = HERE / "baseline-sample.json"
@@ -153,6 +155,43 @@ class Grades:
         }
 
 
+# The run file's metrics (#370), mirrored by CHAPTER_QA_METRICS in src/lib/evals/suites.ts.
+METRICS = [
+    {"key": "routing", "label": "Routing", "direction": "higher", "format": "percent"},
+    {"key": "page_recall", "label": "Page recall", "direction": "higher", "format": "percent"},
+    {"key": "faithfulness", "label": "Faithful", "direction": "higher", "format": "percent"},
+    {"key": "draft", "label": "Draft", "direction": "higher", "format": "percent"},
+    {"key": "injection", "label": "Injection held", "direction": "higher", "format": "percent"},
+    {"key": "cold_usd", "label": "$ cold", "direction": "lower", "format": "usd"},
+    {"key": "warm_usd", "label": "$ warm", "direction": "lower", "format": "usd"},
+    {"key": "usd_total", "label": "$ total", "direction": "lower", "format": "usd"},
+    {"key": "latency_p50_s", "label": "p50", "direction": "lower", "format": "s"},
+]
+RESULTS = HERE / "results"
+
+
+def numeric_summary(grades: Grades) -> dict[str, float]:
+    """The summary as numbers, for the run file: rates as fractions, absent when not graded."""
+    out: dict[str, float] = {}
+    for key, xs in (
+        ("routing", grades.routing),
+        ("page_recall", grades.recall),
+        ("faithfulness", grades.faithful),
+        ("draft", grades.draft),
+        ("injection", grades.injection),
+    ):
+        if xs:
+            out[key] = round(sum(xs) / len(xs), 4)
+    if grades.cold_usd:
+        out["cold_usd"] = round(statistics.mean(grades.cold_usd), 5)
+    if grades.warm_usd:
+        out["warm_usd"] = round(statistics.mean(grades.warm_usd), 5)
+    out["usd_total"] = round(sum(grades.cold_usd) + sum(grades.warm_usd), 5)
+    if grades.latency:
+        out["latency_p50_s"] = round(statistics.median(grades.latency), 2)
+    return out
+
+
 async def judge(judge_by: Provider, pages_text: str, answer: str) -> bool:
     """One judge for every provider, so the grade is about the answer, not the grader."""
     out, _ = await structured_call(
@@ -174,13 +213,14 @@ async def run_provider(
     exercises: list[ExerciseRow],
     fixture: dict,
     repeat: int,
+    on_case: Callable[[dict], None] = lambda case: None,
 ) -> Grades:
     strategy = LongContextStrategy(provider, None, asyncio.Semaphore(1))  # type: ignore[arg-type]
     graph = AskGraph(provider, strategy, Drafts(exercises))
     text_of = {p.page: p.text for p in ctx.pages}
     marker = fixture["injection"]["marker"]
     grades = Grades()
-    for _ in range(repeat):
+    for attempt in range(repeat):
         for i, q in enumerate(fixture["questions"]):
             started = time.perf_counter()
             result: AskResult = await graph(ctx, q["text"])
@@ -189,6 +229,8 @@ async def run_provider(
             grades.tokens.append(sum(u.input_tokens + u.output_tokens for u in result.usage))
             (grades.cold_usd if i == 0 else grades.warm_usd).append(usd)
             kind, ok = q["kind"], "?"
+            passed: bool | None = None
+            failures: list[str] = []
             if kind == "factual":
                 routed = result.source == "book"
                 grades.routing.append(routed)
@@ -198,26 +240,61 @@ async def run_provider(
                 faithful = routed and await judge(judge_by, cited, result.message)
                 grades.faithful.append(faithful)
                 ok = f"routed={routed} recall={hit} faithful={faithful}"
+                passed = routed and hit and faithful
+                failures = [
+                    f
+                    for f, bad in (
+                        ("answered as general", not routed),
+                        (f"no gold page {q['gold_pages']} cited", not hit),
+                        ("judge: not supported by the cited pages", routed and not faithful),
+                    )
+                    if bad
+                ]
             elif kind == "general":
                 got = result.source == "general" and not result.pages
                 grades.routing.append(got)
                 ok = f"general={got}"
+                passed, failures = got, ([] if got else ["not answered as general"])
             elif kind == "decline":
                 got = result.source == "general" and not result.pages
                 grades.routing.append(got)
                 ok = f"declined={got}"
+                passed, failures = got, ([] if got else ["answered from the book"])
             elif kind == "draft":
                 name = str(result.draft.draft.get("name", "")) if result.draft else ""
                 got = name == q["exercise_name"]
                 grades.draft.append(got)
                 ok = f"draft={name!r} ok={got}"
+                passed, failures = got, ([] if got else [f"draft {name or 'none'!r}"])
             elif kind == "injection":
                 clean = marker.lower() not in result.message.lower()
                 grades.injection.append(clean)
                 ok = f"clean={clean}"
+                passed, failures = clean, ([] if clean else ["LEAK: said the injected marker"])
             print(
                 f"  [{kind:9}] {q['text'][:26]:28} {result.source:7}"
                 f" p{list(result.pages)} ${usd:.4f}  {ok}"
+            )
+            # The question is the fixture's; the answer is left out (it quotes the book).
+            on_case(
+                {
+                    "case": f"q{i + 1}-{kind}",
+                    "repeat": attempt + 1,
+                    **({"pass": passed} if passed is not None else {}),
+                    "metrics": {
+                        "cost_usd": round(usd, 5),
+                        "latency_s": round(grades.latency[-1], 2),
+                        "tokens": grades.tokens[-1],
+                    },
+                    "failures": failures,
+                    "detail": {
+                        "kind": kind,
+                        "question": q["text"],
+                        "source": result.source,
+                        "pages": list(result.pages),
+                        "gold_pages": q.get("gold_pages"),
+                    },
+                }
             )
     return grades
 
@@ -242,7 +319,29 @@ async def main() -> int:
         print(f"judge {args.judge}: no API key", file=sys.stderr)
         return 2
     baseline: dict[str, object] = json.loads(BASELINE.read_text()) if BASELINE.exists() else {}
-    for fixture_name in args.fixture.split(","):
+    fixtures = args.fixture.split(",")
+    providers = [n for n in args.providers.split(",") if provider_named(n) is not None]
+    question_counts = {
+        f: len(json.loads((HERE / "fixtures" / f"{f}.json").read_text())["questions"])
+        for f in fixtures
+    }
+    run = new_run(
+        suite="chapter-qa",
+        title="Chapter Q&A on exported chapters",
+        issue=203,
+        metrics=METRICS,
+        subjects=[
+            {"id": f"{n}:{f}", "label": f, "group": provider_named(n).model}  # type: ignore[union-attr]
+            for f in fixtures
+            for n in providers
+        ],
+        total=sum(question_counts[f] for f in fixtures) * len(providers) * args.repeat,
+        config={"strategy": "long_context", "repeat": args.repeat, "judge": judge_by.small_model},
+    )
+    run_path = RESULTS / f"{run['run_id']}.json"
+    write_run(run, run_path)
+    print(f"run {run['run_id']} → {run_path.relative_to(HERE.parent.parent)}")
+    for fixture_name in fixtures:
         fixture = json.loads((HERE / "fixtures" / f"{fixture_name}.json").read_text())
         export = Path(fixture["export"])
         if not export.exists():
@@ -257,7 +356,20 @@ async def main() -> int:
                 print(f"{name}: no API key, skipped")
                 continue
             print(f"\n########## {name} ({provider.model}) × {fixture_name}")
-            grades = await run_provider(provider, judge_by, ctx, exercises, fixture, args.repeat)
+            subject = next(s for s in run["subjects"] if s["id"] == f"{name}:{fixture_name}")
+            subject["status"] = "running"
+
+            def on_case(case: dict, subject: dict = subject) -> None:
+                run["cases"].append({"subject": subject["id"], **case})
+                run["progress"]["done"] += 1
+                write_run(run, run_path)
+
+            grades = await run_provider(
+                provider, judge_by, ctx, exercises, fixture, args.repeat, on_case
+            )
+            subject["summary"] = numeric_summary(grades)
+            subject["status"] = "done"
+            write_run(run, run_path)
             summary = grades.summary()
             baseline[f"{name}:{fixture_name}"] = {
                 "model": provider.model,
@@ -266,6 +378,8 @@ async def main() -> int:
             }
             print(f"  → {json.dumps(summary, ensure_ascii=False)}")
 
+    finish(run)
+    write_run(run, run_path)
     BASELINE.write_text(json.dumps(baseline, indent=1, ensure_ascii=False) + "\n")
     print(f"\nwritten {BASELINE}")
     return 0

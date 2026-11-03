@@ -522,3 +522,247 @@ Every faithfulness miss is one run of two on the same question, with the
 right page cited — the judge reading garbled OCR, most likely, not the
 answer. None of these chapters is long: the ~40-page fixture #203 asks for
 is still missing, and it is where `long_context` and `rag` would part.
+
+## 11. OCR engines on our scans: Tesseract vs PP-OCR (#369)
+
+2026-10-23. The four `materials/sample-*.pdf` excerpts: 26 scanned pages, no
+text layer — two Chinese method-book chapters (arranging, 10 pages; harmony,
+7 pages) and two English rock-guitar excerpts (3 and 6 pages), notation on
+25 of the 26 pages. Every engine reads the page at the scan's 150 dpi.
+Machine: Apple M2, 8 cores. Tesseract runs as the scan runs it (PyMuPDF's
+library, one thread); PP-OCR through RapidOCR 3.10 on ONNX Runtime, CPU,
+its default thread pool.
+
+Reference: Claude Opus 5 transcribes each page (prose, headings, captions;
+notation regions marked `[notation]`, not transcribed), and Sonnet 5 a
+second time to show where to look. One page (arranging p04) Opus wrote in
+traditional characters on a simplified page; the reference there is
+Sonnet's, and `gold.py` now catches that. Reference cost: $1.44. **No page
+has been checked by hand yet** — the numbers below are against model
+references.
+
+Metrics: character recall (how much of the page's text the engine found,
+order ignored — what the TOC digest, the classifier and Q&A depend on),
+character precision (drops when an engine reads notation the reference
+leaves out), and CER. CER is reported in the run files but is not the
+headline here: with notation on 25 of 26 pages, it mostly measures how
+much tab an engine read as text and in which order it read the columns.
+
+| engine | recall | precision | F1 | s/page | crashes |
+|---|---|---|---|---|---|
+| Tesseract fast (today) | 82.7% | 60.5% | 68.2% | 2.70 | **1** |
+| Tesseract best | 87.5% | 58.7% | 67.3% | 50.0 | 0 |
+| PP-OCRv5 mobile | 96.7% | 75.9% | 83.1% | 3.97 | 0 |
+| PP-OCRv5 server | 92.3% | 72.0% | 78.2% | 14.6 | 0 |
+| **PP-OCRv6 tiny** | **96.6%** | **76.2%** | **83.3%** | **0.62** | 0 |
+| PP-OCRv6 small | 96.7% | 74.0% | 81.3% | 2.32 | 0 |
+| PP-OCRv6 medium | 97.6% | 71.4% | 79.8% | 11.9 | 0 |
+
+By book (recall / precision):
+
+| engine | arranging (zh, 10) | harmony (zh, 7) | rock 3p (en) | rock 6p (en) |
+|---|---|---|---|---|
+| Tesseract fast | 72% / 55% | 80% / 69% | 96% / 69% | 97% / 55% |
+| PP-OCRv6 tiny | 97% / 74% | 98% / 89% | 88% / 75% | 99% / 65% |
+| PP-OCRv6 medium | 99% / 68% | 99% / 87% | 88% / 73% | 99% / 58% |
+
+Read-outs:
+
+- **On the Chinese books Tesseract loses a fifth to a quarter of the text;
+  every PP-OCR model keeps 97–99%.** That is the books this service is for.
+- **PP-OCRv6 tiny is the pick**: as accurate as anything here, the best
+  precision, and 0.62 s a page — a 300-page scan drops from ~12 minutes to
+  ~3. Bigger models buy a point of recall for 4–20× the time.
+- **English is not a clean win.** On the 3-page rock excerpt PP-OCR finds
+  88% to Tesseract's 96%; on the 6-page one they tie. Three pages; worth a
+  look at what it drops before switching for English books too.
+- **Tesseract crashed the process** on one page (arranging p09):
+  `get_textpage_ocr` segfaults inside `fz_write_pixmap_as_pdfocr`. The scan
+  runs OCR in a thread of the service process, so on that page the whole
+  book-service would go down. Seen on macOS; not yet tried in the Linux
+  image. The eval reads each engine in a child process for this reason.
+- `tessdata_best` is again slower and no better (as in §3); with
+  `chi_sim_vert` present it takes ~50 s a page.
+- Thread counts differ (Tesseract one, ONNX Runtime all cores). Under the
+  scan's one-job `Semaphore(1)` that is what each would actually get.
+
+Runs: `evals/ocr/results/20261022-160203.json` (Tesseract fast, PP-OCRv5
+mobile; stopped at a model download) and `20261022-165320.json` (the rest,
+Tesseract best with `chi_sim_vert`). Both are on `/dev/evals`.
+
+## 12. PP-OCR with layers: layout masking, re-reading, correction (#375)
+
+2026-10-23. Same 26 pages and references as §11; every variant is
+PP-OCRv6 tiny with something added. Run `evals/ocr/results/20261023-055035.json`.
+
+- **A — layout masking.** A layout model (RapidLayout 1.2, ONNX, CPU) finds
+  regions; OCR lines in the classes notation lands in are dropped. Its
+  classes have no music notation, but on these pages tab, staff and numbered
+  notation all come out as `image` (PP-DocLayoutV3) or `figure`/`table`
+  (CDLA). Those boxes also hold prose — a "旋律音位置：" label, a TIP
+  paragraph printed inside the example — so `drop notation lines` keeps a
+  line in a region if it reads as prose (2+ CJK characters or 2+ words of
+  3+ letters); `drop regions` drops them all.
+- **B — re-read.** Lines PP-OCR scored under 0.85 are cropped at 300 dpi
+  and read again by a vision model, all of a page's in one call.
+- **C — correction.** The page's text goes to a text model told to fix only
+  obvious OCR errors.
+
+| variant | recall | precision | F1 | CER | s/page | $/page |
+|---|---|---|---|---|---|---|
+| PP-OCRv6 tiny (§11) | 96.6% | 76.2% | 83.3% | 56.3% | 0.65 | 0 |
+| A: + V3 layout, drop regions | 87.7% | 95.8% | 90.2% | 17.4% | 1.42 | 0 |
+| **A: + V3 layout, drop notation lines** | **93.5%** | **95.7%** | **94.3%** | **13.6%** | 1.41 | 0 |
+| A: + CDLA layout, drop notation lines | 93.2% | 95.0% | 93.5% | 15.3% | **0.74** | 0 |
+| B: A + re-read, Sonnet 5 | 93.5% | 95.6% | 94.2% | 13.6% | 2.76 | 0.0007 |
+| B: A + re-read, deepseek-flash | 93.9% | 96.0% | 94.6% | 12.9% | 10.3 | 0.0017 |
+| C: A + correction, deepseek-flash | 89.6% | 91.7% | 90.3% | 17.4% | 33.6 | 0.0064 |
+
+Read-outs:
+
+- **A is the win, and it is free.** Precision 76% → 96% and CER 56% → 14%:
+  the notation's digits and chord names stop landing in the prose. On the
+  arranging chapter alone CER goes 82% → 10%. Keeping prose lines inside a
+  region is worth six points of recall over dropping the region.
+- **The recall A gives up is mostly score text.** Of the reference lines it
+  drops, nearly all are directions printed in the notation ("A blues",
+  "Riff 2", "D.S. al Coda", "BEAT:") that the reference chose to transcribe.
+  For the TOC digest, tagging and Q&A they carry nothing.
+- **CDLA is the cheap layout model**: half the time of V3 (0.74 vs 1.41 s a
+  page with OCR), within a point of it.
+- **B barely moves anything.** Only 62 lines on 26 pages are unsure.
+  DeepSeek fixed the one page that needed it (an upside-down paragraph
+  PP-OCR read as `'Áeqd noÁ se Áipeeis'`) and made one worse; Sonnet changed
+  37 lines and made 3 pages worse — and **refused** one call (`stop_reason:
+  refusal`, nothing written) on that upside-down paragraph. +0.3 F1 for
+  $0.0017 a page and 10 s; not worth it in the scan.
+- **C makes pages worse.** Better on 1 page, worse on 5; on the arranging
+  chapter recall falls 95% → 86% — the "correction" drops lines. A text
+  model without the image cannot tell an OCR error from the book, which is
+  the §11 Opus traditional-script lesson again. Not for the scan.
+
+Pick for the scan: **PP-OCRv6 tiny + PP-DocLayoutV3, notation lines
+dropped** (CDLA if the extra 0.7 s a page matters). A side effect worth
+having: the regions are where the notation is, which is what
+`may_have_exercise` guesses today with regexes.
+
+## 13. Can a layout model let the parse skip classifying a page? (#375)
+
+2026-10-23. The parse sends every scanned page to the classifier (Sonnet 5,
+100 dpi + text, ~$0.007 a page) to find what an extractor should read. If a
+free detector could say "no notation here", that call could be skipped.
+Reference: the classifier itself, on 135 pages — the four samples, 三月通
+p10–44 and p100–119, its chord section, 15 pages of the English rock method,
+20 of the translated electric-guitar method, and the text-layer
+songwriting chapter ($1.01, cached in `materials/notation-ref/`). It finds
+notation on 98 (86 mixed, 12 tab) and prose on 37, so skipping can save at
+most 27% of the calls.
+
+| detector | calls saved | notation pages kept | missed | s/page |
+|---|---|---|---|---|
+| classify every page (today) | 0% | 100% | 0 | — |
+| PP-DocLayoutV3, any image/chart region | 5% | 100% | 0 | 0.82 |
+| PP-DocLayoutV3, regions ≥ 3% of the page | 30% | 86% | 14 | 0.82 |
+| CDLA layout | 4% | 99% | 1 | 0.07 |
+| tag rules on PP-OCR text | 37% | 69% | 30 | 0.58 |
+| V3 (≥ 3%) or tag rules | 14% | 93% | 7 | 1.40 |
+
+- **Nothing here can gate the parse.** The safe detectors save ~5% (V3 finds
+  a region on 30 of the 37 prose pages: illustrations, ornaments); the ones
+  that save more miss notation pages — chord diagrams and short examples
+  printed small, which a size threshold throws away. A missed page is an
+  exercise never read, against ~$0.007 saved. Keep classifying every page.
+- Layout masking's value is §12's clean OCR text, not skipping calls.
+- **A parse bug it turned up:** on one page (三月通 p35) the classifier's
+  reply looped (`》》》…`) until max_tokens. `messages.parse` raises on the
+  truncated JSON before `structured_call` reads `stop_reason`, so in the
+  parse the exception fails the whole chapter instead of one page. It
+  passed on retry; not reproducible on demand.
+
+Run: `evals/notation/results/` (suite "Notation pages" on `/dev/evals`).
+
+## 14. What the scan ships: PP-OCRv6 tiny + the CDLA mask (#417)
+
+2026-11-01. §12 picked V3 and named CDLA as the fallback "if the extra
+0.7 s a page matters". The scan ships CDLA, for size rather than time:
+
+| layout model | F1 (§12) | s/page with OCR | model file |
+|---|---|---|---|
+| PP-DocLayoutV3 | 94.3% | 1.41 | 130 MB |
+| CDLA | 93.5% | 0.74 | 7 MB |
+
+The book service runs on one small cloud box beside the app. 0.8 F1 does not
+buy 123 MB more on disk and a few hundred MB more resident.
+Everything the scan loads is ~14 MB of models:
+- PP-OCRv6 tiny det + rec
+- the v2.0 direction classifier
+- CDLA
+
+They are fetched at build time (`python -m app.ingest.ocr --fetch` in the
+Dockerfile's deps stage). Building the engines takes under a second.
+
+On `吉他自学三月通-和弦部分` (the OCR tests' scan), page by page against
+Tesseract `fast`:
+
+| page | PP-OCR + mask | PP-OCR, unmasked | Tesseract |
+|---|---|---|---|
+| p1 | 722 | 777 | 786 |
+| p2 | 779 | 785 | 782 |
+| p3 | 169 | 194 | 438 |
+| p4 | 437 | 793 | 931 |
+| p6 | 638 | 727 | 1018 |
+| p8 | 966 | 1026 | 1189 |
+| p10 | 310 | 319 | 421 |
+
+(characters read; p5, p7, p9 alike.)
+
+- **Fewer characters is the point.** p3 is three chord definitions over nine
+  chord diagrams and a cartoon. The masked reading has all three
+  definitions, word for word, "大三和弦" included (Tesseract: "大三和艾").
+  Tesseract's extra ~270 characters are the diagrams read as text:
+  `BEEKY`, `|| [| |`, `LTT TT |`.
+- p4 drops 140 of 162 lines: an A-minor scale chart across the page, all
+  degree numbers.
+- **The OCR tests were recalibrated, not loosened.** `> 300 characters a
+  page` held only because Tesseract's noise counted. It is now:
+  - more than 150 characters a page;
+  - p3's three definitions present;
+  - its diagram noise absent.
+
+  The tag and TOC assertions pass unchanged.
+- **Deployment.** rapid-layout asks for `opencv-python`, which needs libGL
+  on `python:3.12-slim`. The image installs rapid-layout with `--no-deps`
+  and keeps RapidOCR's `opencv-python-headless`.
+- **RapidOCR downloads late.** Building `RapidOCR(...)` fetches only the
+  direction classifier. The detector comes on the first detection, the
+  recogniser on the first line found. A fetch that only built the engine
+  left det and rec missing, and `models_ready()` would have switched OCR
+  off in production. `--fetch` therefore reads one drawn line
+  ("Guitar Pal 123") and fails if it reads nothing.
+
+  Checked from empty model folders in a clean venv installed the
+  Dockerfile's way:
+  - only `opencv-python-headless` installed;
+  - all four models land;
+  - exit 0, or 1 with one missing;
+  - p3 reads the same.
+- **The image, built for linux/amd64** (Docker Desktop, emulated, 2026-11-01):
+  - `--fetch` in the deps stage landed all four models;
+  - the app imports cv2 5.0 (headless only) and onnxruntime 1.31 as user
+    `book`;
+  - `page_ocr()` comes up on;
+  - the scan's ten pages read to exactly the characters they read on macOS.
+
+  The OCR stack is ~300 MB uncompressed in site-packages:
+  - OpenCV headless ~150 MB;
+  - numpy ~70 MB, new to the service;
+  - onnxruntime 68 MB;
+  - RapidOCR with its models 39 MB.
+
+  3.1 s a page there is emulation; native is the 0.74 above.
+- **ONNX Runtime's Linux wheel has a telemetry client** (1DS: "Failed to
+  persist telemetry device ID" at import). `no_telemetry()` turns its
+  events off before any session is built.
+- **Gone from the service:** `TESSDATA_PREFIX`, `BOOK_SERVICE_OCR_LANGUAGES`
+  and the in-process Tesseract that segfaulted on one sample page (§11).
+  `tools/fetch-tessdata.sh` stays for the eval's baseline.

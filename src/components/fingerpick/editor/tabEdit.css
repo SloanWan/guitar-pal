@@ -1644,6 +1644,14 @@
 	.te-srcfold-btn {
 		display: none;
 	}
+	/* A wide source (an exercise's strip), always open above the tab. */
+	.te-srcwide {
+		max-height: 40vh;
+		margin-top: 10px;
+		overflow: auto;
+		border-radius: var(--gp-r-s);
+		background: #fff;
+	}
 	.te-srcfold {
 		max-height: 40vh;
 		overflow: auto;

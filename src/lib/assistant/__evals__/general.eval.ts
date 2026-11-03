@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
@@ -17,6 +17,9 @@ import { resolveTabTurn } from "@/lib/assistant/tab/turn";
 import { INDEX, voicingFor } from "@/lib/assistant/tab/__tests__/fixtures";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
+import { assistantSummary } from "@/lib/evals/assistantSummary";
+import { RunLog } from "@/lib/evals/runLog";
+import { ASSISTANT_METRICS } from "@/lib/evals/suites";
 
 /**
  * The General assistant, end to end, over every eval case — the loop the
@@ -36,7 +39,8 @@ import { PRESET_STRUM_PATTERNS } from "@/lib/strumPatterns";
  * and not others is reported as flaky, separately from one that never passed.
  *
  * Writes `baseline.json` beside this file, one entry per model, so two runs
- * can be read against each other before the orchestrator is chosen.
+ * can be read against each other before the orchestrator is chosen; and the
+ * run itself, case by case, to `runs/` for `/dev/evals` to follow (#370).
  */
 
 /** Times each case is run; the pass rate is over all of them. */
@@ -119,6 +123,8 @@ interface CaseRun {
 
 const runs: CaseRun[] = [];
 let client: Anthropic;
+let log: RunLog | undefined;
+const CASE_COUNT = EVAL_CASES.filter((c) => c.input.trim() !== "").length + TAB_EVAL_CASES.length;
 
 async function turn(input: string, context: readonly { role: "user" | "assistant"; content: string }[] = []) {
 	const attempts: ModelAttempt[] = [];
@@ -138,7 +144,7 @@ async function turn(input: string, context: readonly { role: "user" | "assistant
 }
 
 function record(id: string, run: number, domain: "strum" | "tab", input: string, r: { outcome: GeneralTurnOutcome; attempts: ModelAttempt[]; latencyMs: number }, failures: string[]) {
-	runs.push({
+	const caseRun: CaseRun = {
 		id,
 		run,
 		domain,
@@ -151,6 +157,16 @@ function record(id: string, run: number, domain: "strum" | "tab", input: string,
 		failures,
 		text: r.outcome.text,
 		trace: r.outcome.trace,
+	};
+	runs.push(caseRun);
+	log?.add({
+		subject: MODEL,
+		case: id,
+		repeat: run,
+		pass: caseRun.pass,
+		metrics: { latency_ms: caseRun.latencyMs, cost_usd: caseRun.costUsd, calls: caseRun.calls },
+		failures,
+		detail: { domain, input, tools_used: caseRun.toolsUsed, reply: caseRun.text, trace: caseRun.trace },
 	});
 }
 
@@ -163,7 +179,22 @@ describe(`General assistant eval set — ${MODEL}`, () => {
 			throw new Error(`${vendorFor(MODEL).keyName} is not set; the model evals spend real money and will not guess a key.`);
 		}
 		client = createAssistantClient(MODEL);
+		log = new RunLog(
+			path.join(__dirname, "runs"),
+			{
+				suite: "assistant",
+				title: "General assistant eval",
+				metrics: ASSISTANT_METRICS,
+				subject: { id: MODEL, label: MODEL },
+				total: CASE_COUNT * RUNS,
+				config: { repeats: RUNS, cases: CASE_COUNT },
+			},
+			assistantSummary,
+		);
 	});
+
+	// A run cut short (a thrown case, ^C) is marked failed rather than left "running".
+	afterAll(() => log?.finish());
 
 	for (const c of EVAL_CASES.filter((c) => c.input.trim() !== "")) {
 		it(`strum "${c.input}"  (${c.id})`, async () => {
@@ -295,6 +326,6 @@ describe(`General assistant eval set — ${MODEL}`, () => {
 				...(RUNS > 1 ? [`  never passed: ${never.join(", ") || "-"}`, `  flaky: ${flaky.join(", ") || "-"}`] : []),
 			].join("\n") + "\n",
 		);
-		expect(runs.length).toBe((EVAL_CASES.filter((c) => c.input.trim() !== "").length + TAB_EVAL_CASES.length) * RUNS);
+		expect(runs.length).toBe(CASE_COUNT * RUNS);
 	});
 });

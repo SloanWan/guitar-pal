@@ -31,6 +31,7 @@ from app.graph.chapter import ChapterParseGraph
 from app.graph.prompts import CLASSIFY_SYSTEM, NOTES_SYSTEM, NotesOut, PageClassOut, RegionOut
 from app.parse import ParsePage, ParseTools
 from app.validate import Verdict
+from tests.conftest import structured_message
 from tests.test_graph import BOOK, CHAPTER
 
 # ⑥弦:E–F–G from 《吉他自学三月通》 p206, as Opus 5 read it (39/39 against the page).
@@ -251,6 +252,9 @@ class FakeModel:
             raise AssertionError("unexpected system prompt")
         return SimpleNamespace(stop_reason="end_turn", parsed_output=out, usage=usage)
 
+    async def create(self, **kwargs: object) -> object:
+        return structured_message(await self.parse(**kwargs))
+
 
 @dataclass
 class FakeValidator:
@@ -335,13 +339,18 @@ async def test_rejected_draft_is_repaired_once_then_dropped() -> None:
     )
 
     model, validator = FakeModel({1: "tab"}), FakeValidator(reject=2)
+    crops = FakeCrops()
     result = await _graph(model, validator)(
-        BOOK, CHAPTER, [_page(1)], ParseTools(FakeRenderer(), FakeCrops())
+        BOOK, CHAPTER, [_page(1)], ParseTools(FakeRenderer(), crops)
     )
     assert result.exercises == []
     assert [w["code"] for w in result.warnings] == ["DRAFT_DROPPED"]
     assert "'ex1'" in result.warnings[0]["message"]
     assert len([r for r in model.requests if r["system"] == READ_SYSTEM]) == 2
+    # The lost exercise keeps its crop, and the warning says where it is (#420).
+    assert crops.saved == ["p0001-1.png"]
+    assert result.warnings[0]["crop_path"] == "u/crops/c/p0001-1.png"
+    assert (result.warnings[0]["page"], result.warnings[0]["heading"]) == (1, "ex1")
 
 
 @pytest.mark.asyncio

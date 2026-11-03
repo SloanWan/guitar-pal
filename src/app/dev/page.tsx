@@ -45,6 +45,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		description: "Candy primitives — every button, chip, segmented, switch and stepper variant and state.",
 	},
 	{
+		href: "/dev/evals",
+		label: "evals",
+		description: "Eval runs for every suite — assistant, chapter Q&A, OCR — following a run live as it writes.",
+	},
+	{
 		href: "/dev/fretboard-lab",
 		label: "fretboard-lab",
 		description: "Scale + chord-tone fretboard — roots, scale types, degree labels, position window.",
@@ -98,6 +103,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		href: "/dev/tab-notation",
 		label: "tab-notation",
 		description: "VexFlow TAB rendering audit using real fingerpick patterns.",
+	},
+	{
+		href: "/dev/tab-gold",
+		label: "tab-gold",
+		description: "Check the tab extractor's readings against their crops; confirm or correct them into the eval's gold set.",
 	},
 ];
 

@@ -11,7 +11,6 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI
@@ -27,7 +26,7 @@ from app.books import router as books_router
 from app.config import Settings, get_settings
 from app.db import close_pool, fail_stale_scans, open_pool
 from app.ingest.model import AnthropicTextTocReader, AnthropicVisionTocReader
-from app.ingest.pdf import OcrConfig
+from app.ingest.ocr import PageOcr, models_ready
 from app.pages import PageImages, PdfCache
 from app.parse import ChapterGraph, Parser, text_only_graph
 from app.repo import BookRepo
@@ -80,7 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.scanner = Scanner(
                 storage=app.state.storage,
                 store=repo,
-                ocr=ocr_config(settings),
+                ocr=page_ocr(),
                 read_text_toc=AnthropicTextTocReader(client) if client else None,
                 read_vision_toc=AnthropicVisionTocReader(client) if client else None,
                 worker=worker,
@@ -135,16 +134,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-def ocr_config(settings: Settings) -> OcrConfig | None:
-    """OCR only when every configured language file is present; else say so once."""
-    if settings.tessdata_prefix is None:
-        log.warning("TESSDATA_PREFIX unset: scanned uploads will not be OCR'd")
+def page_ocr() -> PageOcr | None:
+    """
+    OCR only when its models are on disk — never downloaded on a request; else
+    say so once. The engine loads on the first scanned page.
+    """
+    if not models_ready():
+        log.warning(
+            "OCR models missing (python -m app.ingest.ocr --fetch):"
+            " scanned uploads will not be OCR'd"
+        )
         return None
-    config = OcrConfig(Path(settings.tessdata_prefix), languages=settings.ocr_languages)
-    if missing := config.missing_languages():
-        log.warning("OCR disabled: missing %s under %s", ", ".join(missing), config.tessdata)
-        return None
-    return config
+    return PageOcr()
 
 
 def model_client(settings: Settings) -> AsyncAnthropic | None:

@@ -1,5 +1,5 @@
 import type { FingerpickPattern, LinkKind, SpanKind } from "@/lib/fingerpickTypes";
-import { MAX_FRET, setInactive, toggleMuted, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
+import { MAX_FRET, setInactive, setSlotsRest, toggleMuted, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
 import {
 	nextBend,
 	nextVibrato,
@@ -144,6 +144,7 @@ export type EditorKeyAction =
 	| { kind: "vibrato" }
 	| { kind: "span"; span: SpanKind }
 	| { kind: "slap" }
+	| { kind: "rest" }
 	| { kind: "escape" }
 	| { kind: "play" }
 	| { kind: "undo" }
@@ -194,6 +195,7 @@ export function editorKeyAction(e: KeyPress): EditorKeyAction | null {
 	if (lower === "b") return { kind: "bend" };
 	if (lower === "v") return { kind: "vibrato" };
 	if (lower === "s") return { kind: "slap" };
+	if (lower === "r") return { kind: "rest" };
 	const link = LINK_KEYS.get(lower);
 	if (link && isLinkKind(link)) return { kind: "link", link };
 	const span = SPAN_KEYS.get(lower);
@@ -217,7 +219,7 @@ export const BLOCK_REASON: Record<AvailabilityBlock, string> = {
 
 export type NoteEdit = Extract<
 	EditorKeyAction,
-	{ kind: "clear" | "mute" | "link" | "bend" | "vibrato" | "span" | "slap" }
+	{ kind: "clear" | "mute" | "link" | "bend" | "vibrato" | "span" | "slap" | "rest" }
 >;
 
 export type EditResult = { pattern: FingerpickPattern } | { blocked: string };
@@ -235,7 +237,7 @@ function clearSlots(pattern: FingerpickPattern, slots: readonly SlotTarget[]): F
 
 /**
  * A key's edit at the cursor. Clear empties the note, or every slot of a run;
- * spans and the slap go over the run; a link, bend or vibrato goes on the note,
+ * spans, the slap and the rest go over the run; a link, bend or vibrato goes on the note,
  * or comes back blocked with the reason when the note cannot take it.
  */
 export function applyNoteEdit(
@@ -274,6 +276,11 @@ export function applyNoteEdit(
 			let next = pattern;
 			for (const t of slots) next = setPercussion(next, t, all ? undefined : { kind: "slap" });
 			return { pattern: next };
+		}
+		case "rest": {
+			// The same rule: rests when any slot of the run still sounds.
+			const all = slots.every((t) => pattern.measures[t.measureIndex]?.slots[t.slotIndex]?.isRest === true);
+			return { pattern: setSlotsRest(pattern, [...slots], !all) };
 		}
 	}
 }

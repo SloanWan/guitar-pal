@@ -1,0 +1,566 @@
+{
+ "suite": "tab-extraction",
+ "title": "Tab extraction against the reviewed gold",
+ "issue": null,
+ "run_id": "20261101-062229",
+ "status": "done",
+ "started_at": "2026-11-01T06:22:29.594595+00:00",
+ "finished_at": "2026-11-01T06:22:29.624632+00:00",
+ "git_sha": "5f54935",
+ "machine": "Apple M2, 8 cores, Darwin",
+ "config": {
+  "gold": "tab-gold",
+  "skipped": {}
+ },
+ "progress": {
+  "done": 16,
+  "total": 16
+ },
+ "metrics": [
+  {
+   "key": "note_f1",
+   "label": "Note F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Bar, onset, string and fret all right."
+  },
+  {
+   "key": "note_precision",
+   "label": "Note P",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Notes the reading wrote that are in the gold."
+  },
+  {
+   "key": "note_recall",
+   "label": "Note R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold notes the reading has."
+  },
+  {
+   "key": "fret_f1",
+   "label": "Fret F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Note F1 with the string left out: the gap is digits on the wrong line."
+  },
+  {
+   "key": "rhythm",
+   "label": "Rhythm",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold slots whose onset, value and rest the reading has."
+  },
+  {
+   "key": "bars",
+   "label": "Bars",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Exercises read with the gold's number of bars."
+  },
+  {
+   "key": "exact",
+   "label": "Exact",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Exercises read without a single difference."
+  },
+  {
+   "key": "chord_names",
+   "label": "Chord names",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Chord exercises whose printed names the reading has in order."
+  },
+  {
+   "key": "chords_placed",
+   "label": "Chords placed",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold chord changes the reading puts on the same note."
+  },
+  {
+   "key": "flag_precision",
+   "label": "Flag P",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Notes the jianpu cross-check flagged that are wrong."
+  },
+  {
+   "key": "flag_recall",
+   "label": "Flag R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Wrong notes the jianpu cross-check flagged."
+  },
+  {
+   "key": "exercises",
+   "label": "Exercises",
+   "direction": "higher",
+   "format": "fixed0"
+  }
+ ],
+ "subjects": [
+  {
+   "status": "done",
+   "summary": {
+    "note_precision": 0.9192825112107623,
+    "note_recall": 0.9213483146067416,
+    "note_f1": 0.920314253647587,
+    "fret_f1": 0.9966329966329966,
+    "rhythm": 0.9692982456140351,
+    "bars": 1.0,
+    "exact": 0.1875,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_precision": 1.0,
+    "flag_recall": 0.9444444444444444,
+    "exercises": 16.0
+   },
+   "id": "stored",
+   "label": "Stored readings",
+   "notes": "materials/samples/sanyuetong-dense-tab/parse.json",
+   "breakdown": {
+    "sanyuetong-dense-tab": {
+     "note_precision": 0.9192825112107623,
+     "note_recall": 0.9213483146067416,
+     "note_f1": 0.920314253647587,
+     "fret_f1": 0.9966329966329966,
+     "rhythm": 0.9692982456140351,
+     "bars": 1.0,
+     "exact": 0.1875,
+     "chord_names": 1.0,
+     "chords_placed": 0.0,
+     "flag_precision": 1.0,
+     "flag_recall": 0.9444444444444444,
+     "exercises": 16.0
+    }
+   }
+  }
+ ],
+ "cases": [
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0001-r1-1",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "status": "confirmed",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0001-r1-2",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "status": "confirmed",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0002-r1-1",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "status": "confirmed",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0002-r2-1",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 7 changes placed"
+   ],
+   "detail": {
+    "page": 2,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0002-r2-2",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 3 changes placed"
+   ],
+   "detail": {
+    "page": 2,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0002-r2-3",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 0.8,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "bar 5 @72: read —, gold quarter rest",
+    "bar 6 @72: read —, gold quarter rest",
+    "bar 8 @0: read half G0, gold quarter G0",
+    "bar 8 @24: read —, gold quarter rest",
+    "bar 8 @48: read —, gold quarter rest",
+    "bar 8 @72: read —, gold quarter rest",
+    "chords: 0 of 12 changes placed"
+   ],
+   "detail": {
+    "page": 2,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0002-r2-4",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 4 changes placed"
+   ],
+   "detail": {
+    "page": 2,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0003-1",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 6 changes placed"
+   ],
+   "detail": {
+    "page": 3,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0003-2",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 10 changes placed"
+   ],
+   "detail": {
+    "page": 3,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0003-3",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 6 changes placed"
+   ],
+   "detail": {
+    "page": 3,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0003-4",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 21 changes placed"
+   ],
+   "detail": {
+    "page": 3,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0003-5",
+   "metrics": {
+    "note_precision": 0.0,
+    "note_recall": 0.0,
+    "note_f1": 0.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_precision": 1.0,
+    "flag_recall": 1.0
+   },
+   "failures": [
+    "bar 1 @0: read quarter B0, gold quarter G0",
+    "bar 1 @24: read quarter e1, gold quarter B1",
+    "bar 1 @48: read quarter e0, gold quarter B0",
+    "bar 1 @72: read quarter e1, gold quarter B1",
+    "bar 2 @0: read quarter e3, gold quarter B3",
+    "bar 2 @24: read quarter B2, gold quarter G2",
+    "bar 2 @48: read half e3, gold half B3",
+    "bar 3 @0: read quarter e1, gold quarter B1",
+    "bar 3 @24: read quarter e0, gold quarter B0",
+    "bar 3 @48: read quarter B2, gold quarter G2",
+    "bar 3 @72: read quarter e0, gold quarter B0",
+    "bar 4 @0: read half e1, gold half B1",
+    "bar 4 @48: read half B0, gold half G0",
+    "bar 5 @0: read quarter B0, gold quarter G0",
+    "bar 5 @24: read quarter e1, gold quarter B1",
+    "bar 5 @48: read quarter e0, gold quarter B0",
+    "bar 5 @72: read quarter e1, gold quarter B1",
+    "bar 6 @0: read quarter e3, gold quarter B3",
+    "bar 6 @24: read quarter B2, gold quarter G2",
+    "bar 6 @48: read half e3, gold half B3",
+    "bar 7 @0: read quarter e1, gold quarter B1",
+    "bar 7 @24: read quarter e0, gold quarter B0",
+    "bar 7 @48: read quarter B2, gold quarter G2",
+    "bar 7 @72: read quarter e0, gold quarter B0",
+    "bar 8 @0: read whole e1, gold whole B1",
+    "chords: 0 of 7 changes placed"
+   ],
+   "detail": {
+    "page": 3,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0004-1",
+   "metrics": {
+    "note_precision": 0.9565217391304348,
+    "note_recall": 0.9565217391304348,
+    "note_f1": 0.9565217391304348,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_precision": 1.0,
+    "flag_recall": 1.0
+   },
+   "failures": [
+    "bar 3 @0: read quarter B0, gold quarter e0",
+    "chords: 0 of 6 changes placed"
+   ],
+   "detail": {
+    "page": 4,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0004-2",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 8 changes placed"
+   ],
+   "detail": {
+    "page": 4,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0004-3",
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0
+   },
+   "failures": [
+    "chords: 0 of 9 changes placed"
+   ],
+   "detail": {
+    "page": 4,
+    "status": "corrected",
+    "jianpu": true
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sanyuetong-dense-tab/p0004-4",
+   "metrics": {
+    "note_precision": 0.803921568627451,
+    "note_recall": 0.82,
+    "note_f1": 0.8118811881188118,
+    "fret_f1": 0.9702970297029702,
+    "rhythm": 0.8571428571428571,
+    "bars": 1.0,
+    "exact": 0.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_precision": 1.0,
+    "flag_recall": 0.8
+   },
+   "failures": [
+    "bar 1 @0: read quarter E3, gold quarter rest",
+    "bar 1 @24: read —, gold quarter rest",
+    "bar 1 @48: read —, gold quarter rest",
+    "bar 1 @72: read —, gold quarter E3",
+    "bar 3 @0: read eighth A2, gold eighth D2",
+    "bar 3 @12: read eighth A2, gold eighth D2",
+    "bar 3 @24: read eighth A2, gold eighth D2",
+    "bar 3 @36: read eighth A0, gold eighth D0",
+    "bar 7 @0: read eighth A2, gold eighth D2",
+    "bar 7 @12: read eighth A2, gold eighth D2",
+    "bar 7 @24: read eighth A2, gold eighth D2",
+    "bar 7 @36: read eighth A0, gold eighth D0",
+    "bar 9 @0: read half A3, gold quarter A3",
+    "bar 9 @24: read —, gold quarter rest",
+    "bar 9 @48: read quarter A3, gold quarter rest",
+    "bar 9 @72: read —, gold quarter rest",
+    "chords: 0 of 6 changes placed"
+   ],
+   "detail": {
+    "page": 4,
+    "status": "corrected",
+    "jianpu": true
+   }
+  }
+ ],
+ "findings_zh": [
+  "Opus 5（9 月 19 日解析存下的读谱）在 16 道三月通密集 tab 上：445 个音对了 410 个，音符 F1 92%；品位 F1 99.7%，差的几乎全是「数字对、弦写错」。",
+  "读错的 34 个弦位分布在 3 道练习里（p0003-5 整首错一根弦、p0004-4、p0004-1），34 条简谱冲突警告全是真错误、零误报；冲突时简谱给的音 34/34 对（8 个差一个八度）。",
+  "离线模拟「保留品位数字、按简谱音名选弦、两根都符合时选离原弦最近的」：34 个全部改对。这条规则是在同一批题上发现的，要用新题再验。",
+  "漏网的是休止和时值（p0002-r2-3、p0004-4），没有任何警告；和弦名和顺序 13/13 对，但流水线丢了位置，和弦位置 0%。"
+ ],
+ "findings": [
+  "Opus 5 (stored 2026-09-19 parse) on 16 dense-tab exercises: 410 of 445 notes, note F1 92%; fret F1 99.7% — nearly every miss is a right digit on the wrong string.",
+  "The 34 wrong strings sit in 3 exercises; all 34 TAB_JIANPU_MISMATCH flags were real errors with no false alarms, and the jianpu pitch was right 34/34 (8 an octave off).",
+  "Offline: keep the fret, pick the string the jianpu pitch names (mod 12, nearest string on a tie) fixes 34/34 — found and tested on the same 16, needs a held-out set.",
+  "Uncaught: rests and durations (p0002-r2-3, p0004-4). Chord names 13/13 in order, but the pipeline drops their positions: chords placed 0%."
+ ]
+}

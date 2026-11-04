@@ -81,10 +81,14 @@ export function useTabCursor({ working, commit, autoAdvance, onPlay, onBlocked, 
 		moveTo(cell, null, { anchor: block?.anchor ?? cursor, head: cell });
 	}
 
-	/** A click on a column's square: the cursor to that slot, or with Shift the run of slots up to there. */
+	/**
+	 * A click on a column's square: that slot selected (the square shows it pressed),
+	 * or with Shift the run of slots up to there.
+	 */
 	function pickSlot(cell: Cell, shift: boolean) {
 		if (!shift) {
-			moveTo(cell);
+			const slot = { measureIndex: cell.measureIndex, slotIndex: cell.slotIndex };
+			moveTo(cell, { anchor: slot, head: slot });
 			return;
 		}
 		const next = selectTo(cursor, selection, cell);

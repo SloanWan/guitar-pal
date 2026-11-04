@@ -139,8 +139,11 @@ describe("useTabCursor", () => {
 		expect(result.current.block).toBeNull();
 	});
 
-	it("selects a run of slots from the columns' squares with Shift", () => {
+	it("selects one slot from its square, a run with Shift on another's", () => {
 		render(false);
+		act(() => result.current.pickSlot({ measureIndex: 0, slotIndex: 1, stringIndex: 0 }, false));
+		expect(result.current.selection).toEqual({ anchor: { measureIndex: 0, slotIndex: 1 }, head: { measureIndex: 0, slotIndex: 1 } });
+		act(() => result.current.pickSlot({ measureIndex: 0, slotIndex: 0, stringIndex: 0 }, false));
 		act(() => result.current.pickSlot({ measureIndex: 0, slotIndex: 2, stringIndex: 0 }, true));
 		expect(result.current.selection).toEqual({ anchor: { measureIndex: 0, slotIndex: 0 }, head: { measureIndex: 0, slotIndex: 2 } });
 		expect(result.current.block).toBeNull();

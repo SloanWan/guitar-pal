@@ -73,6 +73,7 @@ async def structured_call[M: BaseModel](
         system=system + json_instruction(output),
         messages=messages,  # type: ignore[arg-type]
         output_config=provider.config(effort),  # type: ignore[arg-type]
+        **({} if provider.thinking else {"thinking": {"type": "disabled"}}),
     ) as stream:
         response = await stream.get_final_message()
     text = "".join(getattr(block, "text", "") for block in response.content)

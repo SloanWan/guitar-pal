@@ -37,7 +37,7 @@ import {
 	type EditorNotice,
 	type EditorTarget,
 } from "@/lib/tabEditorEntry";
-import { blockCells, selectedSlots } from "@/lib/tabEditorCursor";
+import { blockCells, blockNotes, selectedSlots } from "@/lib/tabEditorCursor";
 import { patternCapo, type FretHint } from "@/lib/fingerpickChords";
 import { dockWrite } from "@/lib/fretboardDock";
 import { noteText } from "./MeasureBlock";
@@ -283,6 +283,9 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	const run = selection ? selectedSlots(working, cursor, selection).length : 1;
 	const statusPos = `Bar ${cursor.measureIndex + 1} · slot ${cursor.slotIndex + 1} · ${STRING_LABELS[cursor.stringIndex]} string`;
 	const picked = block ? blockCells(working, block).length : 0;
+	// What a note's edit in the inspector goes on: a block's notes, or the cursor's cell (#437).
+	const blockNoteCells = block ? blockNotes(working, block) : [];
+	const editNotes = blockNoteCells.length > 0 ? blockNoteCells : [cursor];
 	const statusNote = pending
 		? `${pending.digit}… type a second digit for ${pending.digit}0–${Math.min(24, pending.digit * 10 + 9)}`
 		: picked > 1
@@ -532,6 +535,7 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 											onBar={(measureIndex) =>
 												tabCursor.moveTo({ measureIndex, slotIndex: 0, stringIndex: cursor.stringIndex })
 											}
+											onMerged={(at) => tabCursor.pickSlot({ ...at, stringIndex: cursor.stringIndex }, false)}
 										/>
 									</div>
 									{pinned && (
@@ -632,6 +636,8 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 								commit={commit}
 								cursor={cursor}
 								slots={selectedSlots(working, cursor, selection)}
+								notes={editNotes}
+								onSkipped={(message) => toast(message)}
 								onCursor={(cell) => tabCursor.moveTo(cell, selection)}
 								chordTools={chordTools}
 							/>
@@ -666,6 +672,8 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 							commit={commit}
 							cursor={cursor}
 							slots={selectedSlots(working, cursor, selection)}
+							notes={editNotes}
+							onSkipped={(message) => toast(message)}
 							onCursor={(cell) => tabCursor.moveTo(cell, selection)}
 							chordTools={chordTools}
 							only={toolsTab}

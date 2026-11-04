@@ -1,9 +1,10 @@
-import type { FingerpickPattern, LinkKind, SpanKind } from "@/lib/fingerpickTypes";
+import type { EffectKind, FingerpickPattern, Link, LinkKind, NoteEffects, SpanKind } from "@/lib/fingerpickTypes";
 import { MAX_FRET, makeEmptyStringFret, setInactive, setSlotsRest, toggleDot, toggleMuted, withMeasures, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
 import {
 	nextBend,
 	nextVibrato,
 	setEffect,
+	setLink,
 	setPercussion,
 	slotOf,
 	techniqueBlock,
@@ -168,6 +169,102 @@ export function moveBlock(
 	});
 	const keep = (cell: Cell) => shift(cell) ?? cell;
 	return { pattern: { ...pattern, measures }, block: { anchor: keep(block.anchor), head: keep(block.head) }, cursor: keep(cursor) };
+}
+
+/** The block's cells that hold a note (a fret or an x). */
+export function blockNotes(pattern: FingerpickPattern, block: CellBlock): Cell[] {
+	return blockCells(pattern, block).filter((c) => sounds(pattern, c));
+}
+
+/** The slots a block spans, in order: what a slot edit (a span, a rest, a hit) acts on. */
+export function blockSlots(pattern: FingerpickPattern, block: CellBlock): SlotTarget[] {
+	const seen = new Set<string>();
+	return blockCells(pattern, block).flatMap((c) => {
+		const key = `${c.measureIndex}:${c.slotIndex}`;
+		if (seen.has(key)) return [];
+		seen.add(key);
+		return [slotOf(c)];
+	});
+}
+
+/** An edit on several notes: the tab, and how many notes it could not go on. */
+export interface NotesEdit {
+	pattern: FingerpickPattern;
+	skipped: number;
+}
+
+/** A link on every note (null takes it off); a note it is not available to is left as it is (#437). */
+export function linkOnNotes(pattern: FingerpickPattern, cells: readonly Cell[], link: Link | null): NotesEdit {
+	let skipped = 0;
+	const next = cells.reduce((p, c) => {
+		if (link && techniqueBlock(p, c, link.kind)) {
+			skipped++;
+			return p;
+		}
+		return setLink(p, c, link);
+	}, pattern);
+	return { pattern: next, skipped };
+}
+
+/** An effect on every note (null takes it off); a note it is not available to is left as it is (#437). */
+export function effectOnNotes<K extends EffectKind>(
+	pattern: FingerpickPattern,
+	cells: readonly Cell[],
+	kind: K,
+	value: NoteEffects[K] | null,
+): NotesEdit {
+	let skipped = 0;
+	const semitones = kind === "bend" && value ? (value as NonNullable<NoteEffects["bend"]>).semitones : undefined;
+	const next = cells.reduce((p, c) => {
+		if (value !== null && techniqueBlock(p, c, kind, semitones)) {
+			skipped++;
+			return p;
+		}
+		return setEffect(p, c, kind, value);
+	}, pattern);
+	return { pattern: next, skipped };
+}
+
+/**
+ * A key's edit over a block (#437): a note's edit goes on every note in it, on
+ * or off as the lead note (the cursor's, else the first) has it; an x goes on
+ * every cell; a slot's edit (a span, a hit, a rest, a dot) on the block's slots.
+ */
+export function applyBlockEdit(
+	pattern: FingerpickPattern,
+	block: CellBlock,
+	cursor: Cell,
+	edit: NoteEdit,
+): (EditResult & { skipped?: number }) {
+	const notes = blockNotes(pattern, block);
+	const lead = notes.find((c) => c.measureIndex === cursor.measureIndex && c.slotIndex === cursor.slotIndex && c.stringIndex === cursor.stringIndex) ?? notes[0];
+	const leadNote = lead ? noteAt(pattern, lead) : undefined;
+	const settle = (done: NotesEdit): EditResult & { skipped?: number } =>
+		done.skipped === notes.length && notes.length > 0 ? { blocked: "None of the selected notes can take it" } : done;
+	switch (edit.kind) {
+		case "clear":
+			return { pattern: clearBlock(pattern, block) };
+		case "mute": {
+			const cells = blockCells(pattern, block);
+			const allX = cells.every((c) => noteAt(pattern, c)?.muted === true);
+			// All x already: they go; else every cell becomes an x (a note's fret gives way to it).
+			return { pattern: cells.reduce((p, c) => (allX ? setInactive(p, c) : noteAt(p, c)?.muted ? p : toggleMuted(p, c)), pattern) };
+		}
+		case "link": {
+			if (!leadNote) return { blocked: "No notes in the selection" };
+			if (leadNote.link?.kind === edit.link)
+				return linkOnNotes(pattern, notes.filter((c) => noteAt(pattern, c)?.link?.kind === edit.link), null);
+			return settle(linkOnNotes(pattern, notes, { kind: edit.link }));
+		}
+		case "bend":
+			if (!leadNote) return { blocked: "No notes in the selection" };
+			return settle(effectOnNotes(pattern, notes, "bend", nextBend(leadNote.effects?.bend)));
+		case "vibrato":
+			if (!leadNote) return { blocked: "No notes in the selection" };
+			return settle(effectOnNotes(pattern, notes, "vibrato", nextVibrato(leadNote.effects?.vibrato)));
+		default:
+			return applyNoteEdit(pattern, cursor, blockSlots(pattern, block), edit);
+	}
 }
 
 /** Every cell of the block emptied: Backspace over a block. */

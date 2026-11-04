@@ -36,6 +36,8 @@ interface Props {
 	onBlocked: (reason: string) => void;
 	/** A bar was added, copied or moved: the cursor goes to its first slot. */
 	onBar: (measureIndex: number) => void;
+	/** A run merged into one note: that note's slot is what stays selected. */
+	onMerged: (at: SlotTarget) => void;
 }
 
 const VALUE_NAMES: Record<Duration, string> = {
@@ -71,8 +73,8 @@ const REPEAT_TIMES_MAX = 16;
  * merged, so the bar still adds up), triplet and rest; the quick marks; the
  * cursor's bar and what can be done to it; and the keys. Everything is a commit.
  */
-export default function EditorToolbar({ working, commit, cursor, slots, onBlocked, onBar }: Props) {
-	const [mergeAsk, setMergeAsk] = useState<{ pattern: FingerpickPattern; dropped: number; dot?: boolean } | null>(null);
+export default function EditorToolbar({ working, commit, cursor, slots, onBlocked, onBar, onMerged }: Props) {
+	const [mergeAsk, setMergeAsk] = useState<{ pattern: FingerpickPattern; dropped: number; dot?: boolean; landOn?: SlotTarget } | null>(null);
 	const [barOpen, setBarOpen] = useState(false);
 	const choices = durationChoices(working, cursor);
 	const triplet = tripletChoice(working, cursor);
@@ -98,11 +100,16 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 		else commit(() => edit.pattern);
 	}
 
+	// A merged run leaves its one note selected, not the slots that were (#437).
 	function mergeRun() {
 		const edit = applyRunMerge(working, slots);
 		if (!edit) return;
-		if (edit.type === "confirm") setMergeAsk(edit);
-		else commit(() => edit.pattern);
+		const landOn = slots.reduce((a, t) => (t.slotIndex < a.slotIndex ? t : a));
+		if (edit.type === "confirm") setMergeAsk({ ...edit, landOn });
+		else {
+			commit(() => edit.pattern);
+			onMerged(landOn);
+		}
 	}
 
 	function bar(edit: (p: FingerpickPattern) => FingerpickPattern, landOn?: number) {
@@ -410,7 +417,10 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 						<Button
 							size="sm"
 							onClick={() => {
-								if (mergeAsk) commit(() => mergeAsk.pattern);
+								if (mergeAsk) {
+									commit(() => mergeAsk.pattern);
+									if (mergeAsk.landOn) onMerged(mergeAsk.landOn);
+								}
 								setMergeAsk(null);
 							}}
 						>

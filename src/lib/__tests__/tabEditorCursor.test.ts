@@ -6,8 +6,11 @@ import {
 	TWO_DIGIT_WINDOW_MS,
 	applyNoteEdit,
 	clampCell,
+	applyBlockEdit,
 	blockCells,
+	blockNotes,
 	clearBlock,
+	effectOnNotes,
 	editorKeyAction,
 	growBlock,
 	inSelection,
@@ -257,5 +260,44 @@ describe("a block of cells (#437)", () => {
 		const cleared = clearBlock(notes(), { anchor: at(0, 3, 0), head: at(1, 0, 5) });
 		expect(fret(cleared, at(0, 3, 1))).toBeNull();
 		expect(fret(cleared, at(1, 0, 2))).toBeNull();
+	});
+});
+
+describe("an edit over a block's notes (#437)", () => {
+	const note = (p: FingerpickPattern, c: Cell) => p.measures[c.measureIndex].slots[c.slotIndex].strings[c.stringIndex];
+	// Three notes on the G string, the middle one higher: a hammer reaches it, not the last.
+	const run = () => {
+		let p = tab();
+		p = setFret(p, at(0, 0), 5);
+		p = setFret(p, at(0, 1), 7);
+		p = setFret(p, at(0, 2), 5);
+		return p;
+	};
+	const block = { anchor: at(0, 0), head: at(0, 2) };
+
+	it("puts an effect on every note, and takes it off all when the lead has it", () => {
+		const on = applyBlockEdit(run(), block, at(0, 0), { kind: "vibrato" });
+		if (!("pattern" in on)) throw new Error(on.blocked);
+		expect(blockNotes(on.pattern, block).every((c) => note(on.pattern, c).effects?.vibrato)).toBe(true);
+		const accent = effectOnNotes(run(), blockNotes(run(), block), "accent", true);
+		expect(accent.skipped).toBe(0);
+		expect(blockNotes(accent.pattern, block).every((c) => note(accent.pattern, c).effects?.accent)).toBe(true);
+	});
+
+	it("leaves out a note a link cannot reach, and says how many", () => {
+		const done = applyBlockEdit(run(), block, at(0, 1), { kind: "link", link: "hammer" });
+		if (!("pattern" in done)) throw new Error(done.blocked);
+		expect(note(done.pattern, at(0, 1)).link).toEqual({ kind: "hammer" });
+		expect(note(done.pattern, at(0, 0)).link).toBeUndefined();
+		expect(done.skipped).toBe(2);
+	});
+
+	it("writes an x on every cell, and clears them when all are x already", () => {
+		const x = applyBlockEdit(tab(), { anchor: at(0, 0, 4), head: at(0, 1, 5) }, at(0, 0, 4), { kind: "mute" });
+		if (!("pattern" in x)) throw new Error(x.blocked);
+		expect(blockCells(x.pattern, { anchor: at(0, 0, 4), head: at(0, 1, 5) }).every((c) => note(x.pattern, c).muted)).toBe(true);
+		const off = applyBlockEdit(x.pattern, { anchor: at(0, 0, 4), head: at(0, 1, 5) }, at(0, 0, 4), { kind: "mute" });
+		if (!("pattern" in off)) throw new Error(off.blocked);
+		expect(note(off.pattern, at(0, 1, 5)).muted).toBe(false);
 	});
 });

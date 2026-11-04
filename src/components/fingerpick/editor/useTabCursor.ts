@@ -3,9 +3,9 @@ import { setFret, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import {
 	TWO_DIGIT_WINDOW_MS,
+	applyBlockEdit,
 	applyNoteEdit,
 	clampCell,
-	clearBlock,
 	editorKeyAction,
 	growBlock,
 	moveBlock,
@@ -171,13 +171,15 @@ export function useTabCursor({ working, commit, autoAdvance, onPlay, onBlocked, 
 			default: {
 				clearTimer();
 				setPending(null);
-				if (block && action.kind === "clear") {
-					commit((p) => clearBlock(p, block));
-					return;
-				}
-				const result = applyNoteEdit(working, cursor, selectedSlots(working, cursor, selection), action);
+				// Over a block a key's edit goes on every note in it (#437).
+				const result = block
+					? applyBlockEdit(working, block, cursor, action)
+					: applyNoteEdit(working, cursor, selectedSlots(working, cursor, selection), action);
 				if ("blocked" in result) onBlocked(result.blocked);
-				else commit(() => result.pattern);
+				else {
+					commit(() => result.pattern);
+					if ("skipped" in result && result.skipped) onBlocked(`${result.skipped} of the selected notes could not take it`);
+				}
 			}
 		}
 	}

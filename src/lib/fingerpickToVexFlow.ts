@@ -19,6 +19,7 @@ import {
 } from "vexflow";
 
 import {
+	type BeatSlot,
 	type Measure,
 	type Duration,
 	type EffectKind,
@@ -332,6 +333,15 @@ function spanSegments(
 		close();
 	}
 	return out;
+}
+
+// A tab has no note heads, so an open head is drawn as a ring round the number:
+// a stem and a ring is a half, a ring alone a whole (no stem), a stem alone a quarter.
+const RINGED: ReadonlySet<Duration> = new Set<Duration>(["whole", "dotted-half", "half"]);
+
+/** Whether the slot's numbers are ringed for an open note head (a half or a whole, not a rest). */
+export function ringedHeads(slot: BeatSlot): boolean {
+	return RINGED.has(slot.duration) && !slot.isRest;
 }
 
 /** Whether a palm-mute span reaches into this measure: the row reserves its line under the stave (#437). */

@@ -20,6 +20,7 @@ import { tripletGroups } from "@/lib/fingerpickEdit";
 import {
 	beamGroupsFor,
 	palmMuteIn,
+	ringedHeads,
 	bendHeightLabel,
 	bendMarkForEffect,
 	bracketSpans,
@@ -867,6 +868,12 @@ describe("fingerpickToVexFlow — model v2", () => {
 		const second = fingerpickToVexFlow(p.measures[1], ctx(p));
 		expect(first.brackets).toEqual([{ kind: "palm-mute", fromNoteIndex: 1, toNoteIndex: 1, continuesAfter: true }]);
 		expect(second.brackets).toEqual([{ kind: "palm-mute", fromNoteIndex: 0, toNoteIndex: 0, continuesBefore: true }]);
+	});
+
+	it("rings the numbers of a half or a whole, never a quarter or a rest (#437)", () => {
+		expect(["whole", "dotted-half", "half"].every((d) => ringedHeads(beatSlot("a", d as Duration)))).toBe(true);
+		expect(["dotted-quarter", "quarter", "eighth"].some((d) => ringedHeads(beatSlot("a", d as Duration)))).toBe(false);
+		expect(ringedHeads({ ...beatSlot("a", "half"), isRest: true })).toBe(false);
 	});
 
 	it("says which measures a palm mute reaches, for the line under the tab (#437)", () => {

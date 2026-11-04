@@ -17,6 +17,7 @@ import {
 	beamGroupsFor,
 	fingerpickToVexFlow,
 	palmMuteIn,
+	ringedHeads,
 	joinCrowdedBrackets,
 	type ChordLabel,
 	type RollMark,
@@ -108,6 +109,10 @@ const HOLD_LINE_RISE = 30;
 // A vibrato's wave runs over the stave from its note to the next note or rest (#437).
 const VIBRATO_RISE = 9;
 const VIBRATO_START = 10;
+// An open note head on a tab: one ring round the slot's numbers, wider for two digits.
+const HEAD_RING_RX = 6.2;
+const HEAD_RING_PER_CHAR = 3.4;
+const HEAD_RING_RY = 6;
 const HOLD_LINE_START = 28;
 const LEAD_IN_REACH = 14;
 // A slide into / out of a note: a short slanted line beside the number.
@@ -527,6 +532,24 @@ function drawHit(svgEl: SVGSVGElement, x: number, y: number, label: string): voi
 }
 
 /** A held bend: a dashed line at the arrow's height from the bent note to the next. */
+/**
+ * One ring round all of a slot's numbers, standing in for an open note head (a
+ * half, a whole): from the top number to the bottom one, as wide as the widest.
+ */
+function drawHeadRing(svgEl: SVGSVGElement, x: number, yTop: number, yBottom: number, widest: number): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const ring = document.createElementNS(ns, "ellipse");
+	ring.setAttribute("class", "vf-head-ring");
+	ring.setAttribute("cx", String(x));
+	ring.setAttribute("cy", String((yTop + yBottom) / 2));
+	ring.setAttribute("rx", String(HEAD_RING_RX + Math.max(0, widest - 1) * HEAD_RING_PER_CHAR));
+	ring.setAttribute("ry", String((yBottom - yTop) / 2 + HEAD_RING_RY));
+	ring.setAttribute("fill", "none");
+	ring.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
+	ring.setAttribute("stroke-width", "1");
+	svgEl.appendChild(ring);
+}
+
 /** A vibrato's wave from x1 to x2, a wide one deeper and slower. */
 function drawVibrato(svgEl: SVGSVGElement, x1: number, x2: number, y: number, wide: boolean): void {
 	const half = wide ? 4.5 : 3;
@@ -948,7 +971,15 @@ export default function TabStaveRow({
 					drawBracket(svgEl, b.x1, b.x2, below ? palmMuteY : bracketY, BRACKET_LABELS[b.kind], b.continued, b.open, barlines);
 				});
 			}
-			drawn.forEach(({ notes, hits, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, stave }) => {
+			drawn.forEach(({ measure, notes, noteSlots, noteStrings, hits, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, stave }) => {
+				// A half or a whole: the slot's numbers ringed together, the open head a tab has no other way to show.
+				notes.forEach((note, j) => {
+					const slot = measure.slots[noteSlots[j]];
+					const strings = noteStrings[j] ?? [];
+					if (!slot || !ringedHeads(slot) || strings.length === 0) return;
+					const widest = Math.max(...strings.map((i) => (slot.strings[i].fret === null ? 1 : String(slot.strings[i].fret).length)));
+					drawHeadRing(svgEl, note.getAbsoluteX(), stave.getYForLine(Math.min(...strings)), stave.getYForLine(Math.max(...strings)), widest);
+				});
 				const hitY = stave.getYForLine(0) - HIT_BASELINE_OFFSET;
 				hits.forEach(({ noteIndex, label }) => {
 					drawHit(svgEl, notes[noteIndex].getAbsoluteX() + 4, hitY, label);

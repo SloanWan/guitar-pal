@@ -1,0 +1,7261 @@
+{
+ "suite": "page-classification",
+ "title": "Page classifiers against the reviewed pages",
+ "issue": 422,
+ "run_id": "20261104-003509",
+ "status": "failed",
+ "started_at": "2026-11-04T00:35:09.087825+00:00",
+ "finished_at": "2026-11-04T00:37:38.034540+00:00",
+ "git_sha": "305e3f3",
+ "machine": "Apple M2, 8 cores, Darwin",
+ "config": {
+  "pages": 135,
+  "image_dpi": 100,
+  "text": "text layer, else PP-OCRv6 tiny",
+  "max_usd_per_model": 0.5,
+  "cny_per_usd": 7.1,
+  "prompt": "a00e43ad"
+ },
+ "progress": {
+  "done": 259,
+  "total": 675
+ },
+ "metrics": [
+  {
+   "key": "tab_page_recall",
+   "label": "Tab page R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pages with tab printed that are sent to the tab reader: a tab page, or a tab region of a mixed one."
+  },
+  {
+   "key": "tab_exercise_recall",
+   "label": "Tab exercise R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Reviewed tab exercises on the pages sent, over all of them: the most the parse can read after this step."
+  },
+  {
+   "key": "missed_exercises",
+   "label": "Missed exercises",
+   "direction": "lower",
+   "format": "fixed0",
+   "description": "Tab exercises on pages that are not sent."
+  },
+  {
+   "key": "tab_page_precision",
+   "label": "Tab page P",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pages sent to the tab reader that have tab: a wrong one costs a segment call."
+  },
+  {
+   "key": "kind_accuracy",
+   "label": "Kind",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pages given the reviewer's kind."
+  },
+  {
+   "key": "marks_f1",
+   "label": "Marks F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Tab, strum, chord diagrams and fretboard maps the verdict implies, against the review's marks."
+  },
+  {
+   "key": "pages",
+   "label": "Pages",
+   "direction": "higher",
+   "format": "fixed0"
+  },
+  {
+   "key": "unanswered",
+   "label": "Unanswered",
+   "direction": "lower",
+   "format": "fixed0",
+   "description": "Pages the model did not answer twice; the parse files them as other."
+  },
+  {
+   "key": "cost_per_page_usd",
+   "label": "$ / page",
+   "direction": "lower",
+   "format": "usd"
+  },
+  {
+   "key": "seconds_per_page",
+   "label": "s / page",
+   "direction": "lower",
+   "format": "fixed2"
+  }
+ ],
+ "subjects": [
+  {
+   "status": "done",
+   "summary": {
+    "tab_page_recall": 0.9538461538461539,
+    "tab_exercise_recall": 0.9597701149425287,
+    "missed_exercises": 7,
+    "tab_page_precision": 0.9841269841269841,
+    "kind_accuracy": 1.0,
+    "marks_f1": 0.9254901960784314,
+    "pages": 135,
+    "unanswered": 0,
+    "cost_per_page_usd": 0.0074682222222222224
+   },
+   "id": "stored",
+   "label": "claude-sonnet-5 (stored)",
+   "notes": "the verdicts the review started from"
+  },
+  {
+   "status": "failed",
+   "summary": {
+    "tab_page_recall": 0.9487179487179487,
+    "tab_exercise_recall": 0.9396551724137931,
+    "missed_exercises": 7,
+    "tab_page_precision": 1.0,
+    "kind_accuracy": 0.775,
+    "marks_f1": 0.8909090909090909,
+    "pages": 40,
+    "unanswered": 0,
+    "cost_per_page_usd": 0.0027671749999999998,
+    "seconds_per_page": 11.331
+   },
+   "id": "bailian:kimi-k2.6",
+   "label": "kimi-k2.6",
+   "group": "bailian",
+   "error": "stopped by hand"
+  },
+  {
+   "status": "failed",
+   "summary": {
+    "tab_page_recall": 1.0,
+    "tab_exercise_recall": 1.0,
+    "missed_exercises": 0,
+    "tab_page_precision": 1.0,
+    "kind_accuracy": 0.71875,
+    "marks_f1": 0.9647058823529412,
+    "pages": 32,
+    "unanswered": 0,
+    "cost_per_page_usd": 0.00196,
+    "seconds_per_page": 14.2878125
+   },
+   "id": "bailian:kimi-k2.5",
+   "label": "kimi-k2.5",
+   "group": "bailian",
+   "error": "stopped by hand"
+  },
+  {
+   "status": "failed",
+   "summary": {
+    "tab_page_recall": 1.0,
+    "tab_exercise_recall": 1.0,
+    "missed_exercises": 0,
+    "tab_page_precision": 1.0,
+    "kind_accuracy": 0.71875,
+    "marks_f1": 0.9767441860465116,
+    "pages": 32,
+    "unanswered": 0,
+    "cost_per_page_usd": 0.0006033125,
+    "seconds_per_page": 11.268125
+   },
+   "id": "bailian:deepseek-v4.1-flash+nothink",
+   "label": "deepseek-v4.1-flash+nothink",
+   "group": "bailian",
+   "error": "stopped by hand"
+  },
+  {
+   "status": "failed",
+   "summary": {
+    "tab_page_recall": 0.95,
+    "tab_exercise_recall": 0.9402985074626866,
+    "missed_exercises": 4,
+    "tab_page_precision": 1.0,
+    "kind_accuracy": 0.65,
+    "marks_f1": 0.8461538461538461,
+    "pages": 20,
+    "unanswered": 0,
+    "cost_per_page_usd": 0.0007144,
+    "seconds_per_page": 17.585
+   },
+   "id": "bailian:qwen3.6-flash+nothink",
+   "label": "qwen3.6-flash+nothink",
+   "group": "bailian",
+   "error": "stopped by hand"
+  }
+ ],
+ "cases": [
+  {
+   "subject": "stored",
+   "case": "electric-365/p020",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.008452
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows multiple tab exercises with fret numbers and hammer-on/pull-off notation for weekly practice.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.01016
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Weekly practice page with tab exercises and a prose section with photos on hammer-on/pull-off technique.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p022",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.006578
+   },
+   "failures": [],
+   "detail": {
+    "page": 22,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows standard notation with tab staves for scale position exercises (each with fret numbers and finger markings).",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.0089
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Page with prose intro, three days of scale tab exercises, and a Sunday fretboard position-shape chart.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.008116
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Exercise pages combining tab notation with fretboard finger-position diagrams and instructional text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p025",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.01105
+   },
+   "failures": [],
+   "detail": {
+    "page": 25,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "fretboard_diagram",
+     "prose",
+     "tab",
+     "fretboard_diagram",
+     "prose",
+     "tab",
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Weekly practice page mixing tab exercises with fretboard finger-fixing diagrams and prose explanations.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p026",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.007362
+   },
+   "failures": [],
+   "detail": {
+    "page": 26,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows standard notation with tablature lines and picking directions for weekly guitar exercises.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p027",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.009646
+   },
+   "failures": [],
+   "detail": {
+    "page": 27,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Tab exercises with strumming annotations for Thu-Sat, plus prose comparison table on Sunday.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p028",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.007432
+   },
+   "failures": [],
+   "detail": {
+    "page": 28,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows multiple tab exercises with fret numbers and finger annotations for finger-stretching training.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p029",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.009136
+   },
+   "failures": [],
+   "detail": {
+    "page": 29,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Page mixes explanatory prose with multiple guitar tab exercises and a photo of hand position.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p030",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.0066
+   },
+   "failures": [],
+   "detail": {
+    "page": 30,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows multiple tab/notation exercises with muting technique riffs in standard+tab notation.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p031",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.00845
+   },
+   "failures": [],
+   "detail": {
+    "page": 31,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page mixes explanatory prose with multiple tab exercises for right-hand muting techniques, plus a photo.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p032",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.006764
+   },
+   "failures": [],
+   "detail": {
+    "page": 32,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows standard notation with tab lines for left-hand joint exercises.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p033",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.009142
+   },
+   "failures": [],
+   "detail": {
+    "page": 33,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Page mixes notation/tab exercises with surrounding prose explanations and hand-stretch photos.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p034",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.006876
+   },
+   "failures": [],
+   "detail": {
+    "page": 34,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows standard notation with tab staves for daily/weekly picking exercises.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p035",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.008264
+   },
+   "failures": [],
+   "detail": {
+    "page": 35,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Weekly practice page with tab notation for strumming dynamics and prose explanations plus amp diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p036",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.007096
+   },
+   "failures": [
+    "strum printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 36,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows multiple tab staves with chord names for minor pentatonic scale exercises across days of the week.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "strum"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p037",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.008416
+   },
+   "failures": [],
+   "detail": {
+    "page": 37,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Page shows explanatory text, scale tab exercises for several days, and fretboard diagrams for pentatonic scale positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p038",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.007324
+   },
+   "failures": [],
+   "detail": {
+    "page": 38,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows guitar tab notation with standard notation for pentatonic scale exercises across the neck.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p039",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.008774
+   },
+   "failures": [],
+   "detail": {
+    "page": 39,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Page mixes tab exercises for minor pentatonic scales with a fretboard position chart at the bottom.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007484
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text about amp tone/EQ and effects, with knob diagrams illustrating settings, no tab or chord notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p011",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.008036
+   },
+   "failures": [],
+   "detail": {
+    "page": 11,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "prose"
+    ],
+    "note": "Page explains tab notation with a tab staff diagram and photos of hand positions, mostly prose with a small tab example.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p012",
+   "pass": true,
+   "metrics": {
+    "exercises": 5,
+    "missed_exercises": 0,
+    "cost_usd": 0.009062
+   },
+   "failures": [],
+   "detail": {
+    "page": 12,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "fretboard_diagram"
+    ],
+    "note": "Explains rhythm notation with tab staff examples of note durations, then a fretboard grid diagram for chords.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p013",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.008088
+   },
+   "failures": [],
+   "detail": {
+    "page": 13,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose"
+    ],
+    "note": "Page shows an E5 power chord diagram, a photo, a tab line with downstrokes, and surrounding prose explanation.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p014",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.007006
+   },
+   "failures": [],
+   "detail": {
+    "page": 14,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab"
+    ],
+    "note": "Page explains power chord shapes with photos, chord diagrams, and a tab staff.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p015",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.007314
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab"
+    ],
+    "note": "Explanatory prose about note values followed by two tab examples with chord names and beat counts.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p016",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.00814
+   },
+   "failures": [],
+   "detail": {
+    "page": 16,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "tab",
+     "prose",
+     "prose",
+     "tab"
+    ],
+    "note": "Page mixes explanatory prose, a fretboard note chart, and guitar tab with power chord diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p017",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.008292
+   },
+   "failures": [],
+   "detail": {
+    "page": 17,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose"
+    ],
+    "note": "Page shows power chord diagrams and corresponding tab for fifth-string shapes, with prose explanation.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p018",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.008708
+   },
+   "failures": [],
+   "detail": {
+    "page": 18,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "fretboard_diagram",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page mixes prose explanation, a note-name fretboard chart, and multiple tab/power-chord examples.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p019",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.007722
+   },
+   "failures": [],
+   "detail": {
+    "page": 19,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page shows explanatory prose with multiple tab staff examples of power chord switching and eighth note strumming.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p020",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.007906
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page shows explanatory text and two sections of guitar tablature with chord names and beat counts.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.007116
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Page has intro prose plus a full tablature transcription of 'Whips and Chains' with chord names over tab staves.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p022",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.008468
+   },
+   "failures": [],
+   "detail": {
+    "page": 22,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "tab"
+    ],
+    "note": "Page mixes explanatory prose, chord diagrams, and tab lines for expanded power chords.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.00763
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page mixes prose explanation with tab notation examples showing economy fingering.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.008356
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "tab"
+    ],
+    "note": "Page explains sharps/flats with fretboard note-name diagrams plus a tab riff example.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.00834
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Text explaining accompaniment theory with two tab-like interval diagrams at bottom.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 6,
+    "missed_exercises": 0,
+    "cost_usd": 0.00841
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page mixes prose explanations with multiple tab-based interval/scale diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.010214
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "strum_notation",
+     "prose"
+    ],
+    "note": "Page mixes prose explanation with chord diagrams, tab-style bass lines, and strum arrow notation.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "strum",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.007908
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Mostly prose explanation with tab examples of melody and rhythm at the bottom.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.009112
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "chord_diagrams"
+    ],
+    "note": "Page mixes prose explanation with tab notation and chord diagrams illustrating arrangement techniques.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p006",
+   "pass": false,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.009032
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 6,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page mixes explanatory prose with two tab notation examples.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p007",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.007826
+   },
+   "failures": [],
+   "detail": {
+    "page": 7,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page mixes prose explanation with a guitar tab excerpt and a cartoon illustration.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p008",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.006258
+   },
+   "failures": [],
+   "detail": {
+    "page": 8,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Guitar arrangement of 'Greensleeves' shown as tab staves with chord names above each measure.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p009",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.006398
+   },
+   "failures": [],
+   "detail": {
+    "page": 9,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Guitar tab arrangement of Greensleeves with chord names above TAB staves.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.007092
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "prose"
+    ],
+    "note": "Guitar tab arrangement of a melody with explanatory prose below.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007604
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Theory text with tables explaining scale degrees, no notation to play.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007702
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Theory text on scale-degree chords with a numbered-notation table, no tab or diagrams.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00763
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text page with a table of chord-tone degrees and explanation of harmonic function; no diagrams or tab.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007752
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Music theory text on harmonic function and chord progression logic, using roman numeral diagrams but no playable notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007158
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining cadences with numbered-notation melody examples and chord labels, not tab or diagrams.",
+    "reviewed_kind": "prose",
+    "notation": [
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p006",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.008822
+   },
+   "failures": [],
+   "detail": {
+    "page": 6,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "prose",
+     "chord_diagrams",
+     "strum_notation",
+     "prose"
+    ],
+    "note": "Theory text on chord root-motion connections with example notation, chord diagrams, and a strum/rhythm notation block.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "strum",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p007",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.009656
+   },
+   "failures": [],
+   "detail": {
+    "page": 7,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "progression_map",
+     "chord_diagrams",
+     "strum_notation",
+     "prose",
+     "progression_map",
+     "chord_diagrams",
+     "strum_notation",
+     "prose"
+    ],
+    "note": "Page mixes prose explanation with chord diagrams, progression maps in numeral/chord form, and strum notation grids.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "strum",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-3p/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.007674
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Guitar method page with tab notation for power chords and eighth notes, interspersed with explanatory text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-3p/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.008038
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page with explanatory prose text interleaved with guitar tab riffs showing rests and slides.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-3p/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.007026
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Page has intro prose plus a full guitar tab transcription of 'Whips and Chains'.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.008278
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "tab",
+     "prose",
+     "fretboard_diagram",
+     "tab"
+    ],
+    "note": "Page shows fretboard diagrams of blues scale positions plus corresponding tab notation for ascending/descending runs.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.00617
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page shows tab notation for blues scale riffs with fretboard numbers and strumming marks.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.006982
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Page with explanatory prose and TIP box followed by multiple tab exercises with power chords.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.00753
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "A prose explanation of rhythmic patterns followed by several guitar tab examples with palm-mute markings.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.00773
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Page has explanatory prose at top and guitar tablature with chord names for 'As Darkness Gathers' below.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p006",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.007958
+   },
+   "failures": [],
+   "detail": {
+    "page": 6,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "prose"
+    ],
+    "note": "Page of guitar tab riffs with chord names and strum marks, ending in closing prose.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.0056
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Chapter title page for Songwriting Cheat Sheets, decorative with no notation content.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.008172
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Intro text explaining upcoming chord map cheat sheets, no diagrams on this page.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007512
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "verdict": "mixed",
+    "regions": [
+     "progression_map",
+     "chord_diagrams",
+     "progression_map",
+     "prose"
+    ],
+    "note": "Page combines progression maps, chord diagrams, and directions/prose for key of C major.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007174
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "verdict": "mixed",
+    "regions": [
+     "progression_map",
+     "chord_diagrams",
+     "prose"
+    ],
+    "note": "A page combining a chord progression map, chord diagrams, and directions/song example text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007622
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "verdict": "mixed",
+    "regions": [
+     "progression_map",
+     "chord_diagrams",
+     "progression_map",
+     "prose"
+    ],
+    "note": "Cheat sheet page mixing a progression map, chord diagrams, song example progressions, and directions text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p006",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007236
+   },
+   "failures": [],
+   "detail": {
+    "page": 6,
+    "verdict": "mixed",
+    "regions": [
+     "progression_map",
+     "chord_diagrams",
+     "prose"
+    ],
+    "note": "Chord progression map with arrows, chord diagrams for each scale degree, and written directions/song examples.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p007",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007644
+   },
+   "failures": [],
+   "detail": {
+    "page": 7,
+    "verdict": "mixed",
+    "regions": [
+     "progression_map",
+     "chord_diagrams",
+     "progression_map",
+     "prose"
+    ],
+    "note": "Key of G Major cheat sheet combining a progression map diagram, chord diagrams, song example progressions, and instructional text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p008",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007558
+   },
+   "failures": [],
+   "detail": {
+    "page": 8,
+    "verdict": "mixed",
+    "regions": [
+     "progression_map",
+     "chord_diagrams",
+     "progression_map",
+     "prose"
+    ],
+    "note": "Key of A Major cheat sheet combining progression maps, chord diagrams, and directions text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p009",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007562
+   },
+   "failures": [],
+   "detail": {
+    "page": 9,
+    "verdict": "mixed",
+    "regions": [
+     "progression_map",
+     "chord_diagrams",
+     "progression_map",
+     "prose"
+    ],
+    "note": "Key of B Major cheat sheet combining progression map, chord diagrams, and directions text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006436
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "verdict": "prose",
+    "regions": [],
+    "note": "History of the guitar text with illustrative photos of historical guitar types; no notation present.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p011",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005098
+   },
+   "failures": [],
+   "detail": {
+    "page": 11,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining types of guitars, no notation present.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p012",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006264
+   },
+   "failures": [],
+   "detail": {
+    "page": 12,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Page describes guitar parts (headstock, neck, tuners, fretboard) with labeled photos, not notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p013",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005936
+   },
+   "failures": [],
+   "detail": {
+    "page": 13,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Explains guitar parts with labeled photos (not diagrams for playing), mostly descriptive text.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p014",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007412
+   },
+   "failures": [],
+   "detail": {
+    "page": 14,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text and photos explaining guitar construction and setup, no notation or diagrams to play.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p015",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005736
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Instructional text with photos on guitar maintenance and string installation; no notation present.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p016",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00554
+   },
+   "failures": [],
+   "detail": {
+    "page": 16,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text about guitar care and hand position photos, no notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p017",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005964
+   },
+   "failures": [],
+   "detail": {
+    "page": 17,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining guitar holding posture with photos of sitting positions, no notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p018",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007252
+   },
+   "failures": [],
+   "detail": {
+    "page": 18,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "other"
+    ],
+    "note": "Page with prose on tuning, a fretboard note-position diagram, and a piano keyboard reference image.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p019",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007096
+   },
+   "failures": [],
+   "detail": {
+    "page": 19,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "other",
+     "prose"
+    ],
+    "note": "Tuning page with a harmonica-style fretboard reference diagram, photos of tuners, and explanatory prose.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p020",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00789
+   },
+   "failures": [
+    "sent to the tab reader with no tab printed"
+   ],
+   "detail": {
+    "page": 20,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page mixes tuning explanation text with harmonic diagrams and tab-like fretboard sketches.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007748
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram"
+    ],
+    "note": "Tuning method explanation with a photo and small fretboard diagrams illustrating string checks.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p022",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005468
+   },
+   "failures": [],
+   "detail": {
+    "page": 22,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining right-hand picking techniques with illustrative photos, no notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005716
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Page with photos of hand positions and text explaining right-hand picking technique; no notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005614
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining right-hand picking position/timbre and left-hand fingering with illustrative photos, no notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p025",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006704
+   },
+   "failures": [],
+   "detail": {
+    "page": 25,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Page explains left-hand thumb and finger pressing technique with photos illustrating hand posture, no chord/tab notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p026",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.008108
+   },
+   "failures": [],
+   "detail": {
+    "page": 26,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram"
+    ],
+    "note": "Chinese text explaining vibrato, bending, muting techniques with small fretboard illustrations.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p027",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007374
+   },
+   "failures": [],
+   "detail": {
+    "page": 27,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining guitar techniques (harmonics, hammer-on, pull-off, slide, flatpicking) with illustrative photos, no notation/tab/chords shown.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p028",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.006502
+   },
+   "failures": [],
+   "detail": {
+    "page": 28,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Page has explanatory text and a table, followed by multiple tab staff exercises for finger combinations.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p029",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00626
+   },
+   "failures": [],
+   "detail": {
+    "page": 29,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining music theory basics; no notation or diagrams present.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p030",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006598
+   },
+   "failures": [],
+   "detail": {
+    "page": 30,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Music theory text about pitch standards and piano keyboard, with a table and keyboard diagram, no tab or chord notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p031",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00613
+   },
+   "failures": [],
+   "detail": {
+    "page": 31,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Music theory text on solfege, octave groups, and equal temperament, with piano keyboard diagram illustrating note groups.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p032",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00684
+   },
+   "failures": [],
+   "detail": {
+    "page": 32,
+    "verdict": "mixed",
+    "regions": [
+     "fretboard_diagram",
+     "prose",
+     "fretboard_diagram"
+    ],
+    "note": "Page shows a fretboard note-position diagram, prose on accidentals/enharmonics, and an enharmonic note chart.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p033",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00643
+   },
+   "failures": [],
+   "detail": {
+    "page": 33,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Explanatory text on numbered notation (jianpu) theory with a piano/keyboard diagram, no tab or chord diagrams.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p034",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00671
+   },
+   "failures": [],
+   "detail": {
+    "page": 34,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining note values, dotted notes, ties, tuplets, and beat/meter strength with tables; no tab or chord diagrams.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p035",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.006146
+   },
+   "failures": [],
+   "detail": {
+    "page": 35,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "prose"
+    ],
+    "note": "Page shows tab-like notation examples for syncopation and rests, plus prose explanation and a rest-value table.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p036",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005412
+   },
+   "failures": [],
+   "detail": {
+    "page": 36,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Page explains rhythm sight-singing exercises with X-notation and clap symbols, no chord/tab diagrams.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p037",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006778
+   },
+   "failures": [],
+   "detail": {
+    "page": 37,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram"
+    ],
+    "note": "Page explains sight-singing rhythms with text/symbols and introduces TAB with a guitar neck diagram at bottom.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p038",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00592
+   },
+   "failures": [],
+   "detail": {
+    "page": 38,
+    "verdict": "mixed",
+    "regions": [
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Page shows a fretboard/keyboard/notation comparison chart plus tables explaining note and rest values in staff/tab notation.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p039",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.005974
+   },
+   "failures": [],
+   "detail": {
+    "page": 39,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab"
+    ],
+    "note": "Tables of note/rest notation plus tab examples illustrating note durations.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p040",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.007448
+   },
+   "failures": [],
+   "detail": {
+    "page": 40,
+    "verdict": "mixed",
+    "regions": [
+     "chord_diagrams",
+     "tab",
+     "strum_notation",
+     "prose",
+     "prose"
+    ],
+    "note": "Page shows chord diagrams, tab-like fingering notation, strum arrow notation, and prose explanations combined.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "strum",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p041",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005516
+   },
+   "failures": [],
+   "detail": {
+    "page": 41,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Tables explaining repeat symbols and tab technique symbols, no actual notation to play.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p042",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006698
+   },
+   "failures": [],
+   "detail": {
+    "page": 42,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams"
+    ],
+    "note": "Page explaining chord diagram notation with example chord diagrams and finger photos.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p043",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00607
+   },
+   "failures": [],
+   "detail": {
+    "page": 43,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Theory text about modes and scales, with numeric scale sequences but no tab/chord diagrams/strum notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p044",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005278
+   },
+   "failures": [],
+   "detail": {
+    "page": 44,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining minor scale theory with number notation tables, no tab or chord diagrams.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p100",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006662
+   },
+   "failures": [],
+   "detail": {
+    "page": 100,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Scale/theory explanation with fretboard note-position diagrams for B major and G# minor scales.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p101",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006128
+   },
+   "failures": [],
+   "detail": {
+    "page": 101,
+    "verdict": "mixed",
+    "regions": [
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Fretboard note-position diagrams for G minor scale followed by tables of note names and chords.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p102",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.008166
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 102,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "prose"
+    ],
+    "note": "Page shows chord fingering diagrams for B, C#m, D#m chords interspersed with explanatory prose text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p103",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.008104
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 103,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams"
+    ],
+    "note": "Page shows multiple chord diagrams (E, #F, #Gm, #Adim) interspersed with fingering explanation text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p104",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006436
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 104,
+    "verdict": "mixed",
+    "regions": [
+     "chord_diagrams",
+     "prose"
+    ],
+    "note": "Page shows F7 and D7 chord diagrams with fretboard photos plus explanatory prose text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p105",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.005436
+   },
+   "failures": [],
+   "detail": {
+    "page": 105,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining capo usage with photos of installation steps; no notation present.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p106",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.007818
+   },
+   "failures": [],
+   "detail": {
+    "page": 106,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page mixes capo explanation text with fretboard diagrams and a tab/notation example.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p107",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006802
+   },
+   "failures": [],
+   "detail": {
+    "page": 107,
+    "verdict": "mixed",
+    "regions": [
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Page shows fretboard diagrams for capo positions plus prose explaining capo usage and a capo chart table.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p108",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006896
+   },
+   "failures": [],
+   "detail": {
+    "page": 108,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining metronome use, a speed table, and pick technique, with small photos but no notation to play.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p109",
+   "pass": false,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 1,
+    "cost_usd": 0.006894
+   },
+   "failures": [
+    "tab printed (1 exercise) but not sent: mixed [prose, prose, prose, strum_notation]",
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 109,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "prose",
+     "prose",
+     "strum_notation"
+    ],
+    "note": "Page explains pick grip/technique with photos and ends with a strum direction notation example.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p110",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 4,
+    "cost_usd": 0.006098
+   },
+   "failures": [
+    "tab printed (4 exercises) but not sent: mixed [prose, strum_notation, prose]",
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 110,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "strum_notation",
+     "prose"
+    ],
+    "note": "Page shows pitch notation with up/down strum pick direction markings plus explanatory prose text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p111",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006634
+   },
+   "failures": [],
+   "detail": {
+    "page": 111,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining bass line and melody voicing concepts in harmony arrangement, no notation present.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p112",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006674
+   },
+   "failures": [],
+   "detail": {
+    "page": 112,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining accompaniment textures and song form, no notation present.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p113",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006584
+   },
+   "failures": [],
+   "detail": {
+    "page": 113,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text explaining music theory/form with numbered cipher notation examples, not guitar tab or chord diagrams.",
+    "reviewed_kind": "prose",
+    "notation": [
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p114",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007556
+   },
+   "failures": [],
+   "detail": {
+    "page": 114,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text-heavy page discussing chord arrangement theory for songs, no notation present.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p115",
+   "pass": false,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 2,
+    "cost_usd": 0.007338
+   },
+   "failures": [
+    "tab printed (2 exercises) but not sent: mixed [prose, fretboard_diagram]",
+    "fretboard in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 115,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram"
+    ],
+    "note": "Mostly text explaining arrangement theory with fretboard diagrams for octave/fifth interval scales at bottom.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p116",
+   "pass": true,
+   "metrics": {
+    "exercises": 6,
+    "missed_exercises": 0,
+    "cost_usd": 0.009214
+   },
+   "failures": [],
+   "detail": {
+    "page": 116,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose"
+    ],
+    "note": "Interval scale diagrams in tab form plus chord diagram and prose explanation of bass voicing techniques.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p117",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.007918
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 117,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Page mixes tab excerpts for arrangement examples with prose discussion on bass lines and arranging solos.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p118",
+   "pass": false,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.007534
+   },
+   "failures": [
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 118,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "strum_notation",
+     "tab"
+    ],
+    "note": "Mostly prose about arranging guitar solos, with tab/number notation and a rhythm pattern example at bottom.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p119",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.007846
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 119,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page mixes explanatory prose about arranging techniques with guitar tab examples for song excerpts.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.006932
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Theory text explaining chord concepts and triad construction with numbered notation examples, no diagrams or tab.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007676
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams"
+    ],
+    "note": "Page explains chord theory in prose with three chord diagrams (A, D, E) at the bottom.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00676
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "other"
+    ],
+    "note": "Page shows chord diagrams for minor, augmented, diminished chords with explanatory text and a cartoon illustration.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.008272
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Page shows fretboard note-position diagrams and scale charts alongside explanatory prose text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.008914
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "verdict": "mixed",
+    "regions": [
+     "fretboard_diagram",
+     "prose",
+     "progression_map",
+     "chord_diagrams",
+     "prose"
+    ],
+    "note": "Page mixes a fretboard scale diagram, explanatory prose, a chord-scale progression table, and chord diagrams with a photo.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p006",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.014154
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict",
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 6,
+    "verdict": "mixed",
+    "regions": [],
+    "note": "Chord fingering instructions with hand photos and chord diagrams for Dm, Em, F. ; mixed prose and chord diagrams page.1row diagrams plus text.2 ; combined region listing follows.3 ; prose with embedded chord diagrams.4 ; final.5 ; six.6 ; seven.7 ; eight.8 ; nine.9 ; ten.10 ; eleven.11 ; twelve.12 ; end.13 ; done.14 ; fin.15 ; z.16 ; zz.17 ; zzz.18 ; a.19 ; b.20 ; c.21 ; d.22 ; e.23 ; f.24 ; g.25 ; h.26 ; i.27 ; j.28 ; k.29 ; l.30 ; m.31 ; n.32 ; o.33 ; p.34 ; q.35 ; r.36 ; s.37 ; t.38 ; u.39 ; v.40 ; w.41 ; x.42 ; y.43 ; z2.44 ; z3.45 ; z4.46 ; z5.47 ; z6.48 ; z7.49 ; z8.50 ; z9.51 ; z10.52 ; z11.53 ; z12.54 ; z13.55 ; z14.56 ; z15.57 ; z16.58 ; z17.59 ; z18.60 ; z19.61 ; z20.62 ; z21.63 ; z22.64 ; z23.65 ; z24.66 ; z25.67 ; z26.68 ; z27.69 ; z28.70 ; z29.71 ; z30.72 ; z31.73 ; z32.74 ; z33.75 ; z34.76 ; z35.77 ; z36.78 ; z37.79 ; z38.80 ; z39.81 ; z40.82 ; z41.83 ; z42.84 ; z43.85 ; z44.86 ; z45.87 ; z46.88 ; z47.89 ; z48.90 ; z49.91 ; z50.92 ; z51.93 ; z52.94 ; z53.95 ; z54.96 ; z55.97 ; z56.98 ; z57.99 ; z58.100.end.final.done.okay.stop.enough.that's all.(end)",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p007",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.009406
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 7,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams",
+     "prose"
+    ],
+    "note": "Chord theory text interspersed with chord diagram photos/grids for G, Am, and B- chords.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p008",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.009258
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 8,
+    "verdict": "mixed",
+    "regions": [
+     "chord_diagrams",
+     "chord_diagrams",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Page shows two chord diagrams (G7, E7) with fretboard photos amid prose explanations about chord theory.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p009",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.008424
+   },
+   "failures": [],
+   "detail": {
+    "page": 9,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "chord_diagrams"
+    ],
+    "note": "Page mixes prose explanation of chord-change techniques with chord diagrams for C/Am and F/G.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.007364
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "other"
+    ],
+    "note": "Page shows hand-position photos and a chord diagram for F with instructional text, plus a cartoon illustration.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p020",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000982,
+    "seconds": 14.65
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 20,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Guitar textbook page with four tab exercises for hammer-on and pull-off practice, each with a prose description above or below.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.001096,
+    "seconds": 11.64
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Practice page with guitar tab examples for hammer-on and pull-off exercises across four days, plus explanatory prose.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p022",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000768,
+    "seconds": 12.34
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 22,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page shows four major scale position exercises as guitar tab with prose headings and explanations.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000649,
+    "seconds": 11.51
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Scale practice page with three tab examples for C major positions plus seven fretboard position diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p020",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.004239,
+    "seconds": 14.22
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 20,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Page 20 of a daily guitar practice book showing four tablature exercises for hammer-ons and pull-offs with standard notation above, plus Chinese instructional text. Each exercise is in a separate horizontal section with tab notation and explanatory prose below.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.003349,
+    "seconds": 16.24
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page with three guitar tab exercises (Thursday-Saturday) for hammer-on/pull-off techniques, plus instructional prose and photos of hand positions for Sunday.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p022",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002402,
+    "seconds": 13.58
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 22,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Page 22 of a Chinese guitar textbook showing four daily major scale exercises in standard notation with guitar tablature, including fingerings and fret positions for different scale positions.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002811,
+    "seconds": 15.95
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Page contains introductory prose about scale practice, three days of guitar tablature exercises (Thursday-Saturday) with standard notation above, and seven fretboard diagram patterns for scale positions at the bottom (Sunday section).",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p020",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002598,
+    "seconds": 18.63
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 20,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page 20 of a daily guitar practice book showing hammer-on and pull-off exercises for electric guitar, with four sections of guitar tablature (standard notation + 6-line tab) for daily drills Monday-Wednesday, plus explanatory prose and finger instructions in Chinese.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.00234,
+    "seconds": 11.9
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Page with three guitar tab exercises for hammer-ons and pull-offs (Thursday, Friday, Saturday sections) plus explanatory prose and hand-position photos at bottom (Sunday section).",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p022",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002107,
+    "seconds": 17.32
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 22,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Four daily major scale position exercises with standard notation and guitar tablature for Monday through Wednesday, plus Chinese explanatory text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002237,
+    "seconds": 15.56
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Page shows three C major scale exercises in tablature (Thursday, Friday, Saturday sections) and seven fretboard scale position diagrams at bottom (Sunday section), with explanatory Chinese prose at top.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p020",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000832,
+    "seconds": 17.23
+   },
+   "failures": [
+    "kind mixed, reviewed tab",
+    "chord_diagrams in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 20,
+    "verdict": "mixed",
+    "regions": [
+     "chord_diagrams",
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Guitar exercise page featuring standard notation and tablature for hammer-on/pull-off drills with fingering labels.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000871,
+    "seconds": 24.36
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "prose",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "A page of guitar tablature for hammer-on and pull-off exercises across three musical examples.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p022",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000642,
+    "seconds": 15.05
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 22,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "This page contains daily exercises for major scale positions, featuring standard notation and guitar tablature (six-line staff with fret numbers).",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p023",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000707,
+    "seconds": 9.7
+   },
+   "failures": [
+    "chord_diagrams in the verdict, not printed",
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 23,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "chord_diagrams"
+    ],
+    "note": "Page features a mix of instructional text, three sections of guitar tablature for scale exercises, and a grid of fretboard diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000739,
+    "seconds": 7.93
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Finger-independence exercises with tab and neck charts.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p025",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000737,
+    "seconds": 5.77
+   },
+   "failures": [],
+   "detail": {
+    "page": 25,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "prose",
+     "other"
+    ],
+    "note": "A page combining three tab examples of finger-fixing exercises with small fretboard diagrams, plus prose and a photo about pencil training.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p026",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000497,
+    "seconds": 19.08
+   },
+   "failures": [],
+   "detail": {
+    "page": 26,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page of cross-string picking exercises written as guitar tab with pick-direction marks and chord symbols.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p027",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000639,
+    "seconds": 15.23
+   },
+   "failures": [],
+   "detail": {
+    "page": 27,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Page of tab exercises for cross-string picking with three tab examples and surrounding Japanese prose, including a comparison table.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002272,
+    "seconds": 20.81
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Page 20 of a 365-day electric guitar training book, showing Monday-Wednesday exercises for left-hand finger independence with standard notation plus tab and fretboard position diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p025",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.001855,
+    "seconds": 17.44
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 25,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Four days of left-hand guitar exercises: Thursday through Saturday show hammer-on/pull-off tab exercises with finger position diagrams, Sunday is prose explaining a pencil grip exercise for finger independence.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p026",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002285,
+    "seconds": 24.71
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 26,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Week 9 cross-string picking exercises with four daily tab examples including standard notation, pick direction marks, and fingerings.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p027",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002404,
+    "seconds": 21.76
+   },
+   "failures": [],
+   "detail": {
+    "page": 27,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "prose"
+    ],
+    "note": "Page with three electric guitar tab exercises (Thursday, Friday, Saturday) using cross-string technique with hammer-ons, pull-offs, and pick direction marks, plus prose explanations and a comparison table of cross-string vs sweep picking techniques.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.003686,
+    "seconds": 15.58
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "prose",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Daily guitar exercises for week 8: finger independence training with tab notation and fretboard diagrams for left-hand strengthening, featuring hammer-ons and pull-offs.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p025",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.003335,
+    "seconds": 31.06
+   },
+   "failures": [
+    "chord_diagrams in the verdict, not printed",
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 25,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "chord_diagrams",
+     "tab",
+     "chord_diagrams",
+     "tab",
+     "chord_diagrams",
+     "prose",
+     "other"
+    ],
+    "note": "Page contains four daily guitar exercises (Thu-Sun) with standard notation/tab staves, chord diagrams, and a photo showing pencil finger independence exercise.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p026",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002801,
+    "seconds": 13.15
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 26,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Page 26 of a daily guitar exercise book showing four tablature exercises with standard notation and pick-direction marks, focusing on cross-string picking with a pick.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p027",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.003066,
+    "seconds": 19.29
+   },
+   "failures": [],
+   "detail": {
+    "page": 27,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "prose"
+    ],
+    "note": "Page 27 of a Chinese-translated guitar textbook showing three daily practice exercises (Thursday-Saturday) with guitar tablature notation for cross-string string-skipping licks, and Sunday section with prose explanation comparing cross-string and sweep-picking techniques in a table format.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p028",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000491,
+    "seconds": 8.67
+   },
+   "failures": [],
+   "detail": {
+    "page": 28,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Finger-stretching exercises page with four multi-system guitar tab examples and Chinese instructional text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p029",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.000649,
+    "seconds": 7.69
+   },
+   "failures": [],
+   "detail": {
+    "page": 29,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "mixed"
+    ],
+    "note": "Practice page with three tab examples for finger stretching plus a written section on left-hand thumb position.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p030",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000607,
+    "seconds": 9.76
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 30,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "A lesson page on palm muting with four staff-tab riff exercises and explanatory text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p031",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000663,
+    "seconds": 14.35
+   },
+   "failures": [
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 31,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "strum_notation",
+     "prose"
+    ],
+    "note": "A page from a guitar method with two tab examples of palm-muted solo lines, a muted strumming pattern example, and explanatory prose plus a photo.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000731,
+    "seconds": 10.62
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "A page of guitar finger independence exercises containing tablature with standard notation and chord diagrams for Monday through Wednesday.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p025",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000875,
+    "seconds": 25.55
+   },
+   "failures": [
+    "chord_diagrams in the verdict, not printed",
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 25,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "chord_diagrams",
+     "tab",
+     "chord_diagrams",
+     "tab",
+     "chord_diagrams",
+     "prose",
+     "other"
+    ],
+    "note": "A page of guitar practice exercises featuring six-line tablature with pick-direction marks and accompanying chord diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p026",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000541,
+    "seconds": 9.96
+   },
+   "failures": [],
+   "detail": {
+    "page": 26,
+    "verdict": "tab",
+    "regions": [
+     "tab"
+    ],
+    "note": "A page of guitar practice exercises containing six-line tablature with fret numbers and standard notation, covering Monday through Wednesday.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p027",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000713,
+    "seconds": 14.69
+   },
+   "failures": [],
+   "detail": {
+    "page": 27,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "A page with three sections of guitar tablature (Thursday through Saturday) and a comparison table in prose (Sunday).",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p032",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000589,
+    "seconds": 12.95
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 32,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Left-hand technique page with three tab examples alternating chord names and explanatory text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p033",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000481,
+    "seconds": 12.08
+   },
+   "failures": [
+    "kind tab, reviewed mixed"
+   ],
+   "detail": {
+    "page": 33,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page of guitar exercises with standard notation and tab staff for Thursday, Friday and Saturday joint licks, plus Sunday text and finger photos.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p034",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000597,
+    "seconds": 16.14
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 34,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Page of four right-hand picking exercises shown as tab with pick-direction marks, each headed by a title and short Japanese explanation.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p035",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000592,
+    "seconds": 12.73
+   },
+   "failures": [],
+   "detail": {
+    "page": 35,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "other"
+    ],
+    "note": "Exercises page with three tab examples (chord tones, bends, power chords) plus instructional prose and amp-setting graphs.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p028",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002961,
+    "seconds": 17.92
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 28,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Page 28 from a daily guitar practice book showing four exercises for left-hand finger stretching, each with tablature and standard notation, plus Chinese instructional text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p029",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.002854,
+    "seconds": 15.93
+   },
+   "failures": [],
+   "detail": {
+    "page": 29,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "other"
+    ],
+    "note": "Page contains three tab exercises for finger stretching (Thursday to Saturday), prose explanation at top and bottom left, and a photo of left-hand thumb position at bottom right.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p030",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.00323,
+    "seconds": 15.6
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 30,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "prose"
+    ],
+    "note": "Page 30 of a guitar method book showing four daily exercises (Monday-Wednesday plus daily) for palm muting techniques, each with guitar tablature in standard notation and six-line tab staff with palm mute markings.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p031",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002885,
+    "seconds": 15.45
+   },
+   "failures": [],
+   "detail": {
+    "page": 31,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "other"
+    ],
+    "note": "Page contains three tablature exercises for palm muting techniques (Thursday, Friday, Saturday) with Chinese explanatory text, plus a Sunday section with text and a photo of right-hand palm muting posture.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p028",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002423,
+    "seconds": 13.25
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 28,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "prose"
+    ],
+    "note": "Page 28 from a daily electric guitar training book, showing four days of left-hand stretching exercises (Monday-Wednesday plus daily warmup) with guitar tablature and Chinese explanatory text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p029",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.001817,
+    "seconds": 15.21
+   },
+   "failures": [],
+   "detail": {
+    "page": 29,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Left-hand stretching exercises with three tablature examples for Thursday, Friday and Saturday, plus prose explanation on Sunday about left-hand thumb positioning with a photo.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p030",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002201,
+    "seconds": 13.28
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 30,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "prose"
+    ],
+    "note": "Week 11 of electric guitar training: palm muting exercises with four riffs in guitar tablature notation with standard notation above.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p031",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.001973,
+    "seconds": 22.9
+   },
+   "failures": [],
+   "detail": {
+    "page": 31,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "other"
+    ],
+    "note": "A textbook page covering palm muting techniques with explanatory text at top, three days of exercises in guitar tablature notation (Thursday solo phrases, Friday thumb muting, Saturday muted strumming), and Sunday section with prose instructions and a photo demonstrating proper hand position.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p032",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002221,
+    "seconds": 11.92
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 32,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Four daily exercise sections with guitar tablature showing joint (legato/connecting) exercises across strings, with standard notation above each tab staff.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p033",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002872,
+    "seconds": 11.01
+   },
+   "failures": [],
+   "detail": {
+    "page": 33,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "other"
+    ],
+    "note": "Page showing three guitar tab exercises for 'joint' technique (Thursday-Saturday) plus prose explanation and hand-stretching photos for Sunday.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p034",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.003237,
+    "seconds": 11.09
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 34,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page 34 of a 365-day electric guitar practice book showing four daily exercises on dynamic control and accenting, each with standard notation and guitar tablature, plus Chinese explanatory text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p035",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.00261,
+    "seconds": 11.11
+   },
+   "failures": [],
+   "detail": {
+    "page": 35,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Page has three guitar tab examples (Thursday-Saturday) with standard notation above and pick-direction marks below, plus explanatory prose sections at top and bottom including tone curve diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p032",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002182,
+    "seconds": 15.49
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 32,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Four daily exercises showing guitar tablature with standard notation above for left-hand 'joint' (barre/hybrid) technique training, with Chinese explanatory text between exercises.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p033",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.001914,
+    "seconds": 15.65
+   },
+   "failures": [],
+   "detail": {
+    "page": 33,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "other"
+    ],
+    "note": "Three tab exercises for 'joint' technique with standard notation above, plus prose explanation and hand stretching exercise photos.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p034",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002518,
+    "seconds": 17.03
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 34,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "prose",
+     "tab",
+     "prose",
+     "prose",
+     "tab",
+     "prose",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Weekly practice page for right-hand dynamics with four guitar tab exercises for accent control, each with standard notation above and Chinese fingerings below.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p035",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.00185,
+    "seconds": 16.09
+   },
+   "failures": [],
+   "detail": {
+    "page": 35,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "mixed"
+    ],
+    "note": "Three daily practice exercises with guitar tablature (Thursday, Friday, Saturday) showing dynamics exercises, plus Sunday section with explanatory text and EQ/dynamics diagrams. Note: The Sunday section contains prose and what appear to be waveform/EQ curve diagrams (fretboard_diagram or other), requiring further subdivision if precise cropping is needed.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p036",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002565,
+    "seconds": 8.11
+   },
+   "failures": [
+    "kind mixed, reviewed tab",
+    "strum printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 36,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Four exercises of A minor pentatonic scale positions and licks in guitar tablature with standard notation above, including slides and position shifts.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "strum"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p037",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002767,
+    "seconds": 9.49
+   },
+   "failures": [],
+   "detail": {
+    "page": 37,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Page contains three tablature exercises (Thursday, Friday, Saturday) with notation and fingerings, plus fretboard diagrams at bottom showing A minor pentatonic positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p038",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.003262,
+    "seconds": 12.32
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 38,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Daily guitar exercises with four tablature exercises: open string minor pentatonic scale on 6th string, then Monday-Wednesday position studies with standard notation and tablature for Am, Dm, and higher fret positions.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "electric-365/p039",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002693,
+    "seconds": 10.31
+   },
+   "failures": [],
+   "detail": {
+    "page": 39,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Four practice sections (Thu-Sat) with standard notation and tab, plus Sunday fretboard diagram showing five pentatonic positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p036",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002254,
+    "seconds": 14.1
+   },
+   "failures": [
+    "kind mixed, reviewed tab",
+    "strum printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 36,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page 36 shows four daily exercise sections (Monday through Wednesday) for A minor pentatonic scale practice, each with standard notation and guitar tablature, plus explanatory text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "strum"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p037",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.001851,
+    "seconds": 13.44
+   },
+   "failures": [],
+   "detail": {
+    "page": 37,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "A study page showing three days of A minor pentatonic exercises with tabs for Thursday, Friday, and Saturday, plus Sunday's visual fretboard diagrams for scale positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p038",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.001985,
+    "seconds": 12.08
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 38,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Daily A minor pentatonic scale exercises in multiple positions with tablature for Monday through Wednesday, including hammer-ons, pull-offs, and position shift practice at various frets.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "electric-365/p039",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.001812,
+    "seconds": 7.76
+   },
+   "failures": [],
+   "detail": {
+    "page": 39,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Daily practice exercises for A minor pentatonic scale with three tablature sections and a fretboard diagram showing five scale positions across the neck.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.00211,
+    "seconds": 5.67
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text page explaining guitar tone controls (bass, middle, treble, presence) and effects (reverb, delay, flange, chorus) with knob-setting diagrams, no playable notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p011",
+   "pass": false,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.002523,
+    "seconds": 5.35
+   },
+   "failures": [
+    "chord_diagrams in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 11,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "prose"
+    ],
+    "note": "Instructional page explaining tablature reading with a small tab example and three fretboard grid photos showing finger positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p012",
+   "pass": false,
+   "metrics": {
+    "exercises": 5,
+    "missed_exercises": 5,
+    "cost_usd": 0.00206,
+    "seconds": 4.4
+   },
+   "failures": [
+    "tab printed (5 exercises) but not sent: mixed [prose]",
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 12,
+    "verdict": "mixed",
+    "regions": [
+     "prose"
+    ],
+    "note": "This page contains extensive explanatory text about rhythm notation and grid diagrams, with embedded images of standard music notation (time signatures, note values) and a fretboard diagram. However, the actual musical notation and fretboard images are illustrative graphics embedded within the prose, not standalone playable notation. The page is primarily instructional prose explaining concepts rather than presenting material to be played directly.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p013",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.002947,
+    "seconds": 7.97
+   },
+   "failures": [],
+   "detail": {
+    "page": 13,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "tab",
+     "prose",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Page explaining E5 power chord with chord diagram, tab notation with rhythm stems and downstroke symbols, and interval theory text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p028",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000702,
+    "seconds": 53.25
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 28,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Page contains instructional text and four separate regions of guitar tablature for daily finger-stretching exercises.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p029",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.000687,
+    "seconds": 18.6
+   },
+   "failures": [],
+   "detail": {
+    "page": 29,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "prose"
+    ],
+    "note": "A page of guitar exercises featuring three sections of tablature with finger placement guides and a prose section explaining left-hand thumb position.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p030",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000818,
+    "seconds": 18.0
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 30,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "A page of guitar exercises focusing on palm muting techniques, presenting daily riffs in tab and standard notation with chord names and instructional text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p031",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000815,
+    "seconds": 15.25
+   },
+   "failures": [
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 31,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "strum_notation",
+     "prose",
+     "prose"
+    ],
+    "note": "The page mixes prose explanations of muting techniques with tablature and strumming patterns for Thursday and Friday, plus a photo caption.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p014",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.00207,
+    "seconds": 6.34
+   },
+   "failures": [],
+   "detail": {
+    "page": 14,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab"
+    ],
+    "note": "Page explains power chord shapes with photos, then shows three chord diagrams (F5, G5, A5) and a tab example with fret numbers for these power chords.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p015",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.002296,
+    "seconds": 5.21
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page explains whole, half, and quarter notes with two guitar tab examples showing power chord rhythms, including repeat signs and ties.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p016",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.002414,
+    "seconds": 5.56
+   },
+   "failures": [],
+   "detail": {
+    "page": 16,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page shows a fretboard diagram of notes on the low E string, two tab exercises (power chord riffs), and explanatory prose about dotted half notes and position shifting.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p017",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.002737,
+    "seconds": 7.7
+   },
+   "failures": [],
+   "detail": {
+    "page": 17,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose"
+    ],
+    "note": "Page explains power chords on the fifth string with chord diagrams, two tab examples (exercises 16 and 17), and photos of hand positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p036",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000557,
+    "seconds": 7.49
+   },
+   "failures": [
+    "kind mixed, reviewed tab",
+    "strum printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 36,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Page of minor pentatonic scale exercises, with four tab examples and Chinese explanations.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "strum"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p037",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000605,
+    "seconds": 8.92
+   },
+   "failures": [],
+   "detail": {
+    "page": 37,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "Page with tab exercises for Thursday through Saturday plus Sunday fretboard scale-position diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p038",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000496,
+    "seconds": 43.39
+   },
+   "failures": [],
+   "detail": {
+    "page": 38,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Scale practice page with guitar tab for A minor pentatonic positions across six strings, including hammer-ons and pull-offs.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "electric-365/p039",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000754,
+    "seconds": 8.12
+   },
+   "failures": [],
+   "detail": {
+    "page": 39,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "fretboard_diagram"
+    ],
+    "note": "Page with three tab exercises for shifting minor pentatonic positions and a five-position fretboard map below.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.001298,
+    "seconds": 3.92
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Page explaining amp tone controls (EQ) and guitar effects (reverb, delay, flange, chorus) with knob diagrams but no playable notation",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p011",
+   "pass": false,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.001464,
+    "seconds": 6.12
+   },
+   "failures": [
+    "chord_diagrams in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 11,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "prose"
+    ],
+    "note": "Explanation of tablature notation with examples showing fret numbers on string lines and three chord diagrams below",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p012",
+   "pass": true,
+   "metrics": {
+    "exercises": 5,
+    "missed_exercises": 0,
+    "cost_usd": 0.002155,
+    "seconds": 10.58
+   },
+   "failures": [],
+   "detail": {
+    "page": 12,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Instructional page explaining rhythm notation with tab examples of note values and a fretboard grid diagram for chord shapes.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p013",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.001713,
+    "seconds": 11.35
+   },
+   "failures": [],
+   "detail": {
+    "page": 13,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page introduces power chords with E5, showing a chord diagram, tablature with downstroke symbols, and explanatory text about intervals.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p018",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002918,
+    "seconds": 8.19
+   },
+   "failures": [],
+   "detail": {
+    "page": 18,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "fretboard_diagram",
+     "tab",
+     "prose",
+     "tab",
+     "tab"
+    ],
+    "note": "Page with explanatory text, fretboard note diagram, and multiple guitar tab examples (18, 19, 20) showing power chord progressions in different positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p019",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002661,
+    "seconds": 7.01
+   },
+   "failures": [],
+   "detail": {
+    "page": 19,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page with instructional text and three guitar tab examples (Ex. 21-23) on switching between sixth and fifth string power chords, followed by an eighth notes explanation and tab example (Ex. 24).",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p020",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.002682,
+    "seconds": 7.57
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "prose",
+     "tab",
+     "tab"
+    ],
+    "note": "Page explaining rests and sliding techniques with multiple guitar tab examples showing power chords, rests, repeat signs, and slide notation in a heavy metal rhythm guitar context.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.002061,
+    "seconds": 6.95
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Song page with explanatory text at top and full guitar tablature below showing 'Whips and Chains' with standard notation, tab lines, chord names, and pick scrape notation.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0,
+    "cost_usd": 0.000465,
+    "seconds": 3.07
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "verdict": "prose",
+    "regions": [],
+    "note": "Text page explaining amp tone/EQ controls and effects, with knob-setting photos; no music notation.",
+    "reviewed_kind": "prose",
+    "notation": []
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p011",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.000548,
+    "seconds": 11.65
+   },
+   "failures": [],
+   "detail": {
+    "page": 11,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "prose"
+    ],
+    "note": "Page explaining the book's tab system, with an introductory tab example showing fret numbers on string lines.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p012",
+   "pass": true,
+   "metrics": {
+    "exercises": 5,
+    "missed_exercises": 0,
+    "cost_usd": 0.000555,
+    "seconds": 8.87
+   },
+   "failures": [],
+   "detail": {
+    "page": 12,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "other",
+     "tab",
+     "fretboard_diagram",
+     "prose"
+    ],
+    "note": "Page explains rhythm notation with staff examples, note-value tab fragments, and a fretboard grid diagram.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p013",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.00049,
+    "seconds": 8.61
+   },
+   "failures": [],
+   "detail": {
+    "page": 13,
+    "verdict": "mixed",
+    "regions": [
+     "chord_diagrams",
+     "tab",
+     "progression_map"
+    ],
+    "note": "Page explains sixth-string power chords with an E5 chord diagram, a tab example with downstroke marks, and a fifth-interval chart.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p032",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.0007,
+    "seconds": 13.56
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 32,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Guitar exercises with standard notation and corresponding tablature for jointing fingers.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p033",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000678,
+    "seconds": 7.82
+   },
+   "failures": [],
+   "detail": {
+    "page": 33,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "A page of instructional text and tab exercises for a guitar technique called 'joint', covering Thursday through Sunday.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p034",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000628,
+    "seconds": 10.44
+   },
+   "failures": [],
+   "detail": {
+    "page": 34,
+    "verdict": "tab",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "A guitar practice page for Week 13 featuring three exercises with standard notation and tablature.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p035",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000827,
+    "seconds": 16.91
+   },
+   "failures": [],
+   "detail": {
+    "page": 35,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "tab",
+     "prose",
+     "prose",
+     "other"
+    ],
+    "note": "A page of a guitar textbook with mixed text, tablature, and diagrams.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p022",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.002857,
+    "seconds": 6.84
+   },
+   "failures": [],
+   "detail": {
+    "page": 22,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose"
+    ],
+    "note": "Chapter introduction to expanded three-string power chords with E5/A5 chord diagrams, photos of finger positions, and two tab examples (27 and 28) showing power chord progressions on sixth and fifth strings.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002658,
+    "seconds": 10.13
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Page on economy fingering for power chords with three tab examples (29, 30, 31) showing fret numbers on string lines with chord names and fingering indications, interspersed with explanatory text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "heavy-metal/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.002257,
+    "seconds": 8.66
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "fretboard_diagram",
+     "prose",
+     "tab"
+    ],
+    "note": "Page explains sharps and flats with fretboard note diagrams, then shows a heavy metal riff in tablature with power chords and repeat endings.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "sample-arranging/p001",
+   "pass": false,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 2,
+    "cost_usd": 0.002481,
+    "seconds": 10.03
+   },
+   "failures": [
+    "tab printed (2 exercises) but not sent: mixed [prose, fretboard_diagram, fretboard_diagram]",
+    "fretboard in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 1,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "fretboard_diagram"
+    ],
+    "note": "Chapter opening page on arranging guitar solos, with two fretboard diagrams showing octave and fifth interval scales at the bottom.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p014",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.001587,
+    "seconds": 7.98
+   },
+   "failures": [],
+   "detail": {
+    "page": 14,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "prose",
+     "prose",
+     "chord_diagrams",
+     "tab"
+    ],
+    "note": "Power chord instruction with fretboard photos, chord diagrams for F5/G5/A5, and tablature example 11 showing power chord positions on strings 6 and 5.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p015",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.00154,
+    "seconds": 10.2
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page explaining note values with two tab examples showing power chord rhythms; Example 12 uses whole/half notes, Example 13 uses quarter notes and ties.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p016",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.001782,
+    "seconds": 17.0
+   },
+   "failures": [],
+   "detail": {
+    "page": 16,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "tab",
+     "prose",
+     "prose",
+     "tab"
+    ],
+    "note": "Page shows a fretboard diagram of notes on the low E string, two guitar tab examples with power chords (one ascending/descending, one a heavier riff with dotted half notes), and explanatory text about memorizing power chord positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p017",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.00157,
+    "seconds": 16.88
+   },
+   "failures": [],
+   "detail": {
+    "page": 17,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose"
+    ],
+    "note": "Power chord instruction with chord diagrams, tab exercises, and technique photos for A5, B5, C5, D5 on fifth string.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p014",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.000551,
+    "seconds": 6.32
+   },
+   "failures": [],
+   "detail": {
+    "page": 14,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "other",
+     "prose",
+     "other",
+     "chord_diagrams",
+     "tab"
+    ],
+    "note": "Page explains power chord shapes with photos, chord diagrams, and a short tab example.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p015",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.000515,
+    "seconds": 4.14
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Instructional text explaining note values with two rhythm guitar notation examples using power chords.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p016",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.00055,
+    "seconds": 7.69
+   },
+   "failures": [],
+   "detail": {
+    "page": 16,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page explains low-E-string notes and power chords, with a fretboard map, two tab examples of power-chord riffs, and prose.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p017",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.000588,
+    "seconds": 15.97
+   },
+   "failures": [],
+   "detail": {
+    "page": 17,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "chord_diagrams",
+     "tab",
+     "prose"
+    ],
+    "note": "Page explains fifth-string power chords with fretboard diagrams and two short tab examples, plus photos.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p018",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.001867,
+    "seconds": 12.3
+   },
+   "failures": [],
+   "detail": {
+    "page": 18,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "fretboard_diagram",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Three power chord exercises in tab with a fretboard note chart and explanatory text.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p019",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.001604,
+    "seconds": 11.88
+   },
+   "failures": [],
+   "detail": {
+    "page": 19,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Heavy metal rhythm guitar exercises: power chord string switching examples 21-23 with rhythmic notation, plus eighth-note strumming exercise 24 with chord charts and pick-direction marks.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p020",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.001914,
+    "seconds": 14.51
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "prose",
+     "tab",
+     "tab",
+     "prose"
+    ],
+    "note": "Page explains rests and sliding techniques with prose sections and two tab examples showing punk metal riffs with power chords, rests, and repeat signs.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.5",
+   "case": "heavy-metal/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.001348,
+    "seconds": 10.08
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Song introduction and full guitar tablature for 'Whips and Chains' with power chord riffs, section labels A/B, pick scrape notation, and repeat markings.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "sample-arranging/p002",
+   "pass": false,
+   "metrics": {
+    "exercises": 6,
+    "missed_exercises": 0,
+    "cost_usd": 0.00337,
+    "seconds": 11.49
+   },
+   "failures": [
+    "fretboard in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 2,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "fretboard_diagram",
+     "fretboard_diagram",
+     "prose",
+     "fretboard_diagram",
+     "fretboard_diagram",
+     "fretboard_diagram",
+     "prose",
+     "tab",
+     "prose"
+    ],
+    "note": "Music theory page explaining intervals and bass voice accompaniment techniques, with fretboard diagrams showing 2nd/7th/3rd/6th/4th intervals and a tab example for bass accompaniment with chord shapes.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "sample-arranging/p003",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.00284,
+    "seconds": 16.67
+   },
+   "failures": [
+    "strum printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 3,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "chord_diagrams",
+     "tab",
+     "prose",
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "Page explains flowing bass and chromatic bass techniques with three musical examples: first is tab with chord diagram for '青春舞曲', second is chord diagrams with tab for '萍聚', third is chord diagrams with tab for '人们的梦', followed by prose on arrangement steps.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "strum",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "sample-arranging/p004",
+   "pass": false,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0,
+    "cost_usd": 0.002458,
+    "seconds": 8.96
+   },
+   "failures": [
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 4,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "strum_notation",
+     "tab"
+    ],
+    "note": "Text explaining how to arrange guitar solos, with examples showing melody positions in tab, a strumming pattern, and a full arrangement tab for 'Two Tigers'",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:kimi-k2.6",
+   "case": "sample-arranging/p005",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.002441,
+    "seconds": 13.21
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 5,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "prose",
+     "tab"
+    ],
+    "note": "Page explains guitar arrangement techniques with prose and two tablature examples showing low-melody/high-accompaniment and high-melody/low-accompaniment patterns.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p018",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000575,
+    "seconds": 9.08
+   },
+   "failures": [],
+   "detail": {
+    "page": 18,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "fretboard_diagram",
+     "tab",
+     "tab",
+     "tab"
+    ],
+    "note": "Rhythm guitar page with power-chord tab examples plus a note-name chart on the A string.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p019",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000393,
+    "seconds": 7.54
+   },
+   "failures": [
+    "kind tab, reviewed mixed"
+   ],
+   "detail": {
+    "page": 19,
+    "verdict": "tab",
+    "regions": [],
+    "note": "A lesson page with tab examples 21–24 showing power chords switched between strings and eighth-note rhythms.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p020",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.00042,
+    "seconds": 9.08
+   },
+   "failures": [
+    "kind tab, reviewed mixed"
+   ],
+   "detail": {
+    "page": 20,
+    "verdict": "tab",
+    "regions": [],
+    "note": "Page of guitar tablature examples with beat counts, demonstrating rests and slide techniques in punk metal riffs.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:deepseek-v4.1-flash+nothink",
+   "case": "heavy-metal/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0,
+    "cost_usd": 0.000468,
+    "seconds": 8.12
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab"
+    ],
+    "note": "Page opens with prose about song structure, then full guitar tab for 'Whips and Chains' with chords, rhythm stems, and pick scrapes.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p036",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 4,
+    "cost_usd": 0.000595,
+    "seconds": 25.67
+   },
+   "failures": [
+    "tab printed (4 exercises) but not sent: mixed [prose, prose, prose]",
+    "kind mixed, reviewed tab",
+    "strum printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 36,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "prose",
+     "prose"
+    ],
+    "note": "A page of guitar tab and standard notation exercises for a minor pentatonic scale with instructional text.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "strum"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p037",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.0007,
+    "seconds": 20.04
+   },
+   "failures": [],
+   "detail": {
+    "page": 37,
+    "verdict": "mixed",
+    "regions": [
+     "prose",
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "A guitar practice page featuring tab notation for scale exercises and fretboard diagrams showing minor pentatonic positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p038",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0,
+    "cost_usd": 0.000575,
+    "seconds": 11.83
+   },
+   "failures": [
+    "kind mixed, reviewed tab"
+   ],
+   "detail": {
+    "page": 38,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab"
+    ],
+    "note": "This page features guitar tablature for minor pentatonic scale exercises across different positions.",
+    "reviewed_kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ]
+   }
+  },
+  {
+   "subject": "bailian:qwen3.6-flash+nothink",
+   "case": "electric-365/p039",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0,
+    "cost_usd": 0.000651,
+    "seconds": 13.17
+   },
+   "failures": [],
+   "detail": {
+    "page": 39,
+    "verdict": "mixed",
+    "regions": [
+     "tab",
+     "tab",
+     "tab",
+     "fretboard_diagram"
+    ],
+    "note": "A page of guitar exercises containing tab staffs for scale patterns and a fretboard diagram showing minor pentatonic scale positions.",
+    "reviewed_kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ]
+   }
+  }
+ ],
+ "error": "stopped by hand on 2026-11-04 (classifier screen paused)"
+}

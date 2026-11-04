@@ -31,7 +31,7 @@ export interface ProposedNote {
 	palmMute?: boolean;
 	/** Let ring — likewise. */
 	letRing?: boolean;
-	/** An x: a slap on the string, a percussive hit. The fret is ignored. */
+	/** An x: a dead note on the string, struck and pitchless. The fret is ignored. */
 	muted?: boolean;
 }
 

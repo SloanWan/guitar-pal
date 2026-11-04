@@ -205,13 +205,13 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 									{fret !== null
 										? `Sounds ${pitchLabel(soundingMidi(cursor.stringIndex, fret, capo), "scientific")}${capo ? ` with the capo at ${capo}` : ""}`
 										: note?.muted
-											? "An x: a slap on the string"
+											? "An x: a dead note — a slap under the slot's S hit"
 											: "No note on this string"}
 								</span>
 							</div>
 							<div className="te-ib3">
 								<button type="button" className="te-chip" aria-pressed={note?.muted === true} onClick={() => commit((p) => toggleMuted(p, cursor))}>
-									x slap
+									x dead note
 								</button>
 								<button
 									type="button"

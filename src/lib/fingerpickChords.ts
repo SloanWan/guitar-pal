@@ -152,7 +152,7 @@ export function setPatternCapo(pattern: FingerpickPattern, capo: number): Finger
 
 /**
  * What a string plays in a chord shape: its fret, or `"/"` for a string the
- * shape leaves out. Not `"x"` — in the editor that is a slap on the string, a
+ * shape leaves out. Not `"x"` — in the editor that is a dead note on the string, a
  * different thing from a string that simply is not part of the chord.
  */
 export type FretHint = number | "/";

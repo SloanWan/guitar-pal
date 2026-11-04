@@ -310,12 +310,13 @@ export function computeRollOffsets(
  *    written length, not the first slot's.
  *  - Pitch is always derived from `fret` when non-null (even for muted strings —
  *    the `muted` flag only sets the strike's gain and length). Falls back to
- *    open-string MIDI when `fret === null` (an x: a slap on the string).
- *  - An x is a slap, not a silent dead note: the string's own sample at full
- *    velocity, cut off as the hand lands (`SlapParams.strikeS`, the way TuxGuitar,
- *    alphaTab and MuseScore play a dead note), plus one `slapNoise` event a slot
- *    — the strings hitting the frets and the body under them, which a MIDI
- *    engine cannot make — sounding with the slot's other notes.
+ *    open-string MIDI when `fret === null` (an x on the string).
+ *  - An x is a dead note, struck and pitchless, never silent: the string's own
+ *    sample at full velocity, cut off as the hand lands (`SlapParams.strikeS`, the
+ *    way TuxGuitar, alphaTab and MuseScore play one), plus one `slapNoise` event a
+ *    slot — the strings clacking on the frets. Under a slot's slap hit (the S over
+ *    the column) the x's are a slap on those strings, and the noise adds the thud
+ *    of the body (#437). Either sounds with the slot's other notes.
  *  - A slot without a `stroke` behaves exactly as before: all its events share the same
  *    `time`, `measureIndex`, `slotIndex`, and carry no `rollGain`. When a slot HAS a
  *    `stroke`, its per-string events are staggered (arpeggiated) per `rollParams`; the
@@ -1236,6 +1237,8 @@ export const DEFAULT_SLAP_PARAMS: SlapParams = {
 
 /** Attack ramp for the thud (s), so it does not click. */
 const SLAP_THUD_ATTACK_S = 0.002;
+/** How much of a slap's clack a dead note (an x with no hit over it) keeps. */
+export const DEAD_NOTE_CLACK = 0.6;
 /** Strings whose slap carries the whole thud (the bass side). */
 const SLAP_BASS_FROM_STRING = 3;
 
@@ -1350,6 +1353,9 @@ export function scheduleSlapNoise(deps: FingerpickNoteSchedulerDeps, event: Sche
 	const accent = event.percussion?.accent ? gains.accentMultiplier : 1;
 	const bass = (event.slapStrings ?? []).some((i) => i >= SLAP_BASS_FROM_STRING);
 
+	// An x with no hit over it is a dead note: the clack alone, lighter, no body (#437).
+	const slapped = event.percussion?.kind === "slap" || event.percussion?.kind === "thumbSlap";
+
 	// The clack: strings on the frets.
 	const clack = ctx.createBufferSource();
 	clack.buffer = buffer;
@@ -1359,12 +1365,13 @@ export function scheduleSlapNoise(deps: FingerpickNoteSchedulerDeps, event: Sche
 	clackFilter.frequency.value = p.clackHz;
 	clackFilter.Q.value = p.clackQ;
 	const clackGain = ctx.createGain();
-	clackGain.gain.setValueAtTime(p.clackGain * accent, when);
+	clackGain.gain.setValueAtTime(p.clackGain * (slapped ? 1 : DEAD_NOTE_CLACK) * accent, when);
 	clackGain.gain.setTargetAtTime(0, when, p.clackTc);
 	clack.connect(clackFilter).connect(clackGain).connect(target);
 	clack.start(when);
 	clack.stop(when + p.clackTc * 6);
 	trackSource(allSources, clack);
+	if (!slapped) return;
 
 	// The thud: the hand on the body, with a sine dropping under it.
 	const thud = ctx.createBufferSource();

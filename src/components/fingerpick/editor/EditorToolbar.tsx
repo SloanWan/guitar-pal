@@ -61,7 +61,7 @@ const QUICK: readonly { label: string; name: string; edit: NoteEdit; kind?: stri
 	{ label: "S", name: "Slide", edit: { kind: "link", link: "slide" }, kind: "slide" },
 	{ label: "B", name: "Bend", edit: { kind: "bend" }, kind: "bend" },
 	{ label: "V", name: "Vibrato", edit: { kind: "vibrato" }, kind: "vibrato" },
-	{ label: "x", name: "x (a slap on the string)", edit: { kind: "mute" } },
+	{ label: "x", name: "x (a dead note; a slap under the slot's S)", edit: { kind: "mute" } },
 ];
 
 const REPEAT_TIMES_MAX = 16;
@@ -374,7 +374,7 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 						<dt>⌫</dt>
 						<dd>Clear the note (a run: every note in it).</dd>
 						<dt>X</dt>
-						<dd>An x: a slap on that string.</dd>
+						<dd>An x: a dead note on that string — a slap when the slot has an S hit over it.</dd>
 						<dt>T H P S</dt>
 						<dd>Tie, hammer-on, pull-off, slide (also /) from the string&apos;s note before.</dd>
 						<dt>B V</dt>

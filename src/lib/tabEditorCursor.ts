@@ -287,11 +287,11 @@ export function editorKeyAction(e: KeyPress): EditorKeyAction | null {
 /** Why a technique cannot go on the note, said in full where the player sees it. */
 export const BLOCK_REASON: Record<AvailabilityBlock, string> = {
 	"no-note": "Needs a note",
-	muted: "An x is a slap: there is no pitch to shape",
+	muted: "An x is a dead note: there is no pitch to shape",
 	"open-string": "An open string cannot be bent or shaken",
 	"off-neck": "The bend would run off the neck",
 	"no-previous-note": "No previous note on this string",
-	"previous-muted": "The previous note on this string is a slap",
+	"previous-muted": "The previous note on this string is a dead note (x)",
 	"wrong-direction": "Not valid for this fret movement",
 	"different-fret": "Not valid for this fret movement",
 };

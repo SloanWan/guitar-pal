@@ -10,14 +10,16 @@ parse files it — `other`, so not sent — and counted.
 
 The page text is the notation eval's (the text layer when the page has one,
 else PP-OCRv6 tiny lines), cached in `<set>/inputs/`; each model's verdicts
-are cached in `<set>/verdicts/<vendor>-<model>/`, so a rerun only pays for
-what is new. The models run side by side, each a few pages at a time; one
+are cached in `<set>/verdicts/<vendor>-<model>/<prompt>/`, the prompt's
+id being the start of its hash, so a rerun only pays for what is new and an
+edited prompt is asked afresh. The models run side by side, each a few pages at a time; one
 stops when its new spending reaches `--max-usd`.
 
     cd book-service && set -a && . ../.env.local && set +a
     .venv/bin/python -m evals.classify.run --model bailian:qwen3-vl-plus --limit 3   # a probe
     .venv/bin/python -m evals.classify.run --model bailian:qwen3-vl-plus \
         --model deepseek:deepseek-flash
+    .venv/bin/python -m evals.classify.run --model bailian:qwen3.7-plus --page syt/p109
 
 Vendors: `anthropic` (ANTHROPIC_API_KEY), `deepseek` (DEEPSEEK_API_KEY),
 `bailian` (DASHSCOPE_API_KEY). Writes `evals/classify/results/<run>.json`.
@@ -25,6 +27,7 @@ Vendors: `anthropic` (ANTHROPIC_API_KEY), `deepseek` (DEEPSEEK_API_KEY),
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -37,6 +40,7 @@ from anthropic import AsyncAnthropic
 
 from app.ask.provider import Provider, anthropic_provider, bailian_provider, deepseek_provider
 from app.graph.chapter import ChapterParseGraph
+from app.graph.prompts import CLASSIFY_SYSTEM
 from app.ingest.model import CallUsage
 from app.ingest.pdf import CLASSIFY_RENDER_DPI, MIN_TEXT_LAYER_CHARS
 from app.parse import ParsePage
@@ -65,10 +69,17 @@ BAILIAN_CNY_PER_MTOK: dict[str, tuple[float, float]] = {
     "qwen3.7-flash": (0.2, 0.8),
     "qwen3.8-flash": (0.8, 2.7),
     "kimi-k2.5": (4.0, 21.0),
+    # Not on the price page yet: developer.aliyun.com/article/1763163, 2026-11-04.
+    "kimi-k2.6": (6.5, 27.0),
+    # Busy-hour rates; off-peak is half.
+    "deepseek-v4.1-flash": (2.0, 8.0),
+    "qwen3.6-flash": (1.2, 7.2),
 }
 CNY_PER_USD = 7.1
 # Pages in flight at once, per model.
 BATCH = 4
+# Which prompt a cached verdict answered.
+PROMPT_ID = hashlib.sha256(CLASSIFY_SYSTEM.encode()).hexdigest()[:8]
 
 RUN_METRICS = [
     *METRICS,
@@ -89,7 +100,9 @@ def provider_for(spec: str) -> Provider:
     if not model:
         raise SystemExit(f"{spec!r}: name a model as vendor:model")
     if vendor == "bailian":
-        return bailian_provider(_key("DASHSCOPE_API_KEY"), model)
+        # `+nothink` asks a Qwen 3.x model to answer without reasoning first.
+        model, _, flag = model.partition("+")
+        return bailian_provider(_key("DASHSCOPE_API_KEY"), model, thinking=flag != "nothink")
     if vendor == "deepseek":
         return replace(deepseek_provider(_key("DEEPSEEK_API_KEY")), small_model=model)
     if vendor == "anthropic":
@@ -260,7 +273,7 @@ async def run_model(
     docs: dict[Path, pymupdf.Document] = {}
 
     def cache_path(page: Page) -> Path:
-        return inputs.gold / page.set / "verdicts" / folder / f"{page.stem}.json"
+        return inputs.gold / page.set / "verdicts" / folder / PROMPT_ID / f"{page.stem}.json"
 
     try:
         for start in range(0, len(pages), BATCH):
@@ -360,6 +373,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gold", type=Path, default=GOLD_ROOT)
     parser.add_argument("--limit", type=int, help="only the first N pages (a probe)")
     parser.add_argument(
+        "--page", action="append", dest="pages", help="only this page, set/pNNN (repeatable)"
+    )
+    parser.add_argument(
         "--max-usd", type=float, default=0.5, help="stop a model at this new spend (default 0.5)"
     )
     args = parser.parse_args(argv)
@@ -370,6 +386,11 @@ def main(argv: list[str] | None = None) -> int:
         for name, record in load_records(args.gold)
         if record.get("status") in SCORED and name in pdfs
     ]
+    if args.pages:
+        wanted = set(args.pages)
+        pages = [p for p in pages if f"{p.set}/{p.stem}" in wanted]
+        if missing := wanted - {f"{p.set}/{p.stem}" for p in pages}:
+            parser.error(f"no reviewed page {', '.join(sorted(missing))}")
     if args.limit:
         # Spread over the books, so a probe sees scans and the text-layer book alike.
         by_set: dict[str, list[Page]] = {}
@@ -403,9 +424,10 @@ def main(argv: list[str] | None = None) -> int:
             "text": "text layer, else PP-OCRv6 tiny",
             "max_usd_per_model": args.max_usd,
             "cny_per_usd": CNY_PER_USD,
+            "prompt": PROMPT_ID,
         },
     )
-    out = RESULTS / f"{run['run_id']}{'-probe' if args.limit else ''}.json"
+    out = RESULTS / f"{run['run_id']}{'-probe' if args.limit or args.pages else ''}.json"
     stored_subject(run, pages)
     run["progress"]["done"] = len(pages)
     write_run(run, out)

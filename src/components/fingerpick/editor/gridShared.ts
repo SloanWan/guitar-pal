@@ -17,12 +17,14 @@ import { BEND_HEIGHT_LABEL } from "@/lib/techniqueEditDefaults";
 // rest keeps its real duration, so it shows the value it stands in for.
 export const DURATION_ABBREV: Record<Duration, string> = {
 	whole: "W",
+	"dotted-half": "H.",
 	half: "H",
 	quarter: "Q",
 	"dotted-quarter": "Q.",
 	eighth: "E",
 	"dotted-eighth": "E.",
 	"eighth-triplet": "E³",
+	"dotted-sixteenth": "S.",
 	sixteenth: "S",
 	"sixteenth-triplet": "S³",
 	"32nd": "T",

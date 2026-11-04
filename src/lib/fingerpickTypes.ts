@@ -3,12 +3,14 @@ import type { TabReference } from "@/lib/tabReferences";
 
 export type Duration =
 	| "whole"
+	| "dotted-half"
 	| "half"
 	| "quarter"
 	| "dotted-quarter"
 	| "eighth"
 	| "dotted-eighth"
 	| "eighth-triplet"
+	| "dotted-sixteenth"
 	| "sixteenth"
 	| "sixteenth-triplet"
 	| "32nd";

@@ -12,6 +12,10 @@
 			padding-inline: var(--gp-gutter-desktop);
 		}
 	}
+	/* The editor gets the window under the dev banner (2rem): its stage and inspector scroll on their own. */
+	.tg-editor {
+		height: calc(100dvh - 2rem);
+	}
 	.tg-title {
 		margin: 0;
 		font-family: var(--gp-f-disp);

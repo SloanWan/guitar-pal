@@ -107,12 +107,14 @@ export const VOICE_STEAL_STOP_BUFFER = 0.05;
 /** Length of each Duration in quarter notes. */
 const DURATION_QUARTERS: Record<Duration, number> = {
 	whole: 4,
+	"dotted-half": 3,
 	half: 2,
 	quarter: 1,
 	"dotted-quarter": 1.5,
 	eighth: 0.5,
 	"dotted-eighth": 0.75,
 	"eighth-triplet": 1 / 3,
+	"dotted-sixteenth": 0.375,
 	sixteenth: 0.25,
 	"sixteenth-triplet": 1 / 6,
 	"32nd": 0.125,

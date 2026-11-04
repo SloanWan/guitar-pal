@@ -19,6 +19,7 @@ import {
 import { tripletGroups } from "@/lib/fingerpickEdit";
 import {
 	beamGroupsFor,
+	palmMuteIn,
 	bendHeightLabel,
 	bendMarkForEffect,
 	bracketSpans,
@@ -814,7 +815,9 @@ describe("fingerpickToVexFlow — model v2", () => {
 			beatSlot("s3", "quarter", { 0: { fret: 7, link: { kind: "tie" } }, 2: { fret: 5, link: { kind: "pull" } } }),
 		]);
 		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
-		expect(rd.connectors.map((c) => c.constructor.name)).toEqual(["TabTie", "TabSlide", "TabTie", "TabTie"]);
+		// A hammer and a pull are TabTies that write their letter over their own arc (#437).
+		expect(rd.connectors.map((c) => c.constructor.name)).toEqual(["LinkTie", "TabSlide", "TabTie", "LinkTie"]);
+		expect(rd.connectors.every((c) => c instanceof TabTie || c instanceof TabSlide)).toBe(true);
 		expect(rd.leadIns).toEqual([]);
 	});
 
@@ -866,12 +869,63 @@ describe("fingerpickToVexFlow — model v2", () => {
 		expect(second.brackets).toEqual([{ kind: "palm-mute", fromNoteIndex: 0, toNoteIndex: 0, continuesBefore: true }]);
 	});
 
+	it("says which measures a palm mute reaches, for the line under the tab (#437)", () => {
+		const p = v2([beatSlot("a", "half", { 0: { fret: 3 } }), beatSlot("b", "half", { 0: { fret: 5 } })], {
+			spans: [{ id: "pm", kind: "palmMute", from: "a", to: "b" }],
+		});
+		expect(palmMuteIn(p.measures[0], ctx(p))).toBe(true);
+		const lr = v2([beatSlot("a", "whole", { 0: { fret: 3 } })], { spans: [{ id: "lr", kind: "letRing", from: "a", to: "a" }] });
+		expect(palmMuteIn(lr.measures[0], ctx(lr))).toBe(false);
+		expect(palmMuteIn(p.measures[0])).toBe(false);
+	});
+
 	it("a span over some strings only brackets the notes on them", () => {
 		const p = v2([beatSlot("a", "quarter", { 0: { fret: 3 }, 4: { fret: 0 } }), beatSlot("b", "quarter", { 4: { fret: 0 } })], {
 			spans: [{ id: "lr", kind: "letRing", from: "a", to: "b", strings: [0] }],
 		});
 		const rd = fingerpickToVexFlow(p.measures[0], ctx(p));
 		expect(rd.brackets).toEqual([{ kind: "let-ring", fromNoteIndex: 0, toNoteIndex: 0 }]);
+	});
+
+	it("a vibrato's wave runs to the next note or rest, else to the bar's end (#437)", () => {
+		const v = { fret: 3, effects: { vibrato: {} } };
+		const { vibratoLines } = fingerpickToVexFlow(
+			measure([
+				beatSlot("s1", "eighth", { 2: v }),
+				beatSlot("s2", "eighth"),
+				beatSlot("s3", "quarter", { 0: { fret: 0 } }),
+				beatSlot("s4", "half", { 1: { fret: 5, effects: { vibrato: { wide: true } } } }),
+			])
+		);
+		expect(vibratoLines).toEqual([
+			{ noteIndex: 0, untilNoteIndex: 2, wide: false },
+			{ noteIndex: 3, untilNoteIndex: null, wide: true },
+		]);
+	});
+
+	it("a link reaches the string's previous note across slots where the string is silent (#437)", () => {
+		const { connectors } = fingerpickToVexFlow(
+			measure([
+				beatSlot("s1", "eighth", { 2: { fret: 3 } }),
+				beatSlot("s2", "eighth", { 0: { fret: 0 } }),
+				beatSlot("s3", "quarter", { 2: { fret: 5, link: { kind: "slide" } } }),
+			])
+		);
+		expect(connectors).toHaveLength(1);
+		expect(connectors[0]).toBeInstanceOf(TabSlide);
+	});
+
+	it("a link with no earlier note on its string in the measure is a lead-in, even past the first note (#437)", () => {
+		const p: FingerpickPattern = {
+			...v2([]),
+			measures: [
+				{ id: "m1", slots: [beatSlot("a", "whole", { 2: { fret: 5 } })] },
+				{ id: "m2", slots: [beatSlot("b", "half", { 0: { fret: 0 } }), beatSlot("c", "half", { 2: { fret: 7, link: { kind: "slide" } } })] },
+			],
+		};
+		const second = fingerpickToVexFlow(p.measures[1], ctx(p));
+		expect(second.connectors).toEqual([]);
+		expect(second.leadIns).toEqual([{ noteIndex: 1, stringIndex: 2, kind: "slide" }]);
 	});
 
 	it("a link on a measure's first note reaches back across the barline as a lead-in", () => {

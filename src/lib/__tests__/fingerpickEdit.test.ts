@@ -14,7 +14,7 @@ import {
 	toggleMuted,
 	setStroke,
 	moveCell,
-	previousSlotFret,
+	previousNoteOnString,
 	hasPreviousNoteOnString,
 	setSlotsRest,
 	splitTargetsForSlot,
@@ -56,6 +56,7 @@ import {
 } from "@/lib/fingerpickEdit";
 import { fingerpickToVexFlow } from "@/lib/fingerpickToVexFlow";
 import { setLink } from "@/lib/fingerpickTechniqueEdit";
+import { lengthenSlot, toggleDot } from "@/lib/fingerpickEdit";
 import {
 	fingerpickPatternToScheduleEvents,
 	getTotalPatternDuration,
@@ -201,7 +202,7 @@ describe("previous-note lookup", () => {
 		let p = twoMeasurePattern();
 		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 5 }, 3);
 		const cell: Cell = { measureIndex: 0, slotIndex: 1, stringIndex: 5 };
-		expect(previousSlotFret(p, cell)?.fret).toBe(3);
+		expect(previousNoteOnString(p, cell)?.fret).toBe(3);
 		expect(hasPreviousNoteOnString(p, cell)).toBe(true);
 	});
 
@@ -214,10 +215,20 @@ describe("previous-note lookup", () => {
 
 	it("returns false at the start of the pattern", () => {
 		const p = twoMeasurePattern();
-		expect(previousSlotFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 0 })).toBeNull();
+		expect(previousNoteOnString(p, { measureIndex: 0, slotIndex: 0, stringIndex: 0 })).toBeNull();
 		expect(hasPreviousNoteOnString(p, { measureIndex: 0, slotIndex: 0, stringIndex: 0 })).toBe(
 			false,
 		);
+	});
+
+	it("passes over slots where the string is silent, within a measure and across a barline (#437)", () => {
+		let p = twoMeasurePattern();
+		p = setFret(p, { measureIndex: 0, slotIndex: 0, stringIndex: 2 }, 5);
+		p = setFret(p, { measureIndex: 0, slotIndex: 1, stringIndex: 0 }, 1); // another string sounds between
+		expect(previousNoteOnString(p, { measureIndex: 0, slotIndex: 2, stringIndex: 2 })?.fret).toBe(5);
+		expect(previousNoteOnString(p, { measureIndex: 1, slotIndex: 1, stringIndex: 2 })?.fret).toBe(5);
+		p = setFret(p, { measureIndex: 1, slotIndex: 0, stringIndex: 2 }, 7); // a nearer note on the string wins
+		expect(previousNoteOnString(p, { measureIndex: 1, slotIndex: 1, stringIndex: 2 })?.fret).toBe(7);
 	});
 
 	it("returns false when the previous note is muted or inactive", () => {
@@ -699,6 +710,69 @@ describe("splitSlot", () => {
 		const out = splitSlot(measures, 0, 0, "dotted-quarter", [4, 4]);
 		expect(out).toEqual(measures);
 		expect(out[0].slots).toHaveLength(1);
+	});
+});
+
+describe("toggleDot (#437)", () => {
+	const values = (m: Measure[]) => m[0].slots.map((s) => s.duration);
+
+	it("takes the half it adds from the next note, which keeps its notes", () => {
+		const res = toggleDot(measuresOf([slotWith("quarter", 2), slotWith("quarter", 5), makeEmptySlot("half")]), 0, 0, [4, 4]);
+		expect(res.type).toBe("ok");
+		if (res.type !== "ok") return;
+		expect(values(res.measures)).toEqual(["dotted-quarter", "eighth", "half"]);
+		expect(res.measures[0].slots[1].strings[0].fret).toBe(5);
+	});
+
+	it("swallows a whole slot that fits, and asks when it holds notes", () => {
+		const res = toggleDot(measuresOf([slotWith("quarter", 2), slotWith("eighth", 7), makeEmptySlot("eighth"), makeEmptySlot("half")]), 0, 0, [4, 4]);
+		expect(res.type).toBe("confirm");
+		if (res.type !== "confirm") return;
+		expect(res.dropped).toBe(1);
+		expect(values(res.measures)).toEqual(["dotted-quarter", "eighth", "half"]);
+	});
+
+	it("makes a dotted half and a dotted sixteenth", () => {
+		const half = toggleDot(measuresOf([makeEmptySlot("half"), makeEmptySlot("half")]), 0, 0, [4, 4]);
+		expect(half.type === "ok" && values(half.measures)).toEqual(["dotted-half", "quarter"]);
+		const six = toggleDot(measuresOf([makeEmptySlot("sixteenth"), makeEmptySlot("sixteenth"), makeEmptySlot("eighth"), makeEmptySlot("quarter"), makeEmptySlot("half")]), 0, 0, [4, 4]);
+		expect(six.type === "ok" && values(six.measures).slice(0, 2)).toEqual(["dotted-sixteenth", "32nd"]);
+	});
+
+	it("lengthens into a bar written short, then dots into it (the E blues bar 4)", () => {
+		// Five eighths, the last note an eighth, an empty sixteenth: 78 of 96 ticks.
+		const bar = measuresOf([
+			...[0, 0, 5, 6, 5].map((f) => slotWith("eighth", f)),
+			slotWith("eighth", 3),
+			makeEmptySlot("sixteenth"),
+		]);
+		const quarter = lengthenSlot(bar, 0, 5, "quarter", [4, 4]);
+		expect(quarter.type).toBe("ok");
+		if (quarter.type !== "ok") return;
+		expect(values(quarter.measures)).toEqual(["eighth", "eighth", "eighth", "eighth", "eighth", "quarter"]);
+		const dotted = toggleDot(quarter.measures, 0, 5, [4, 4]);
+		expect(dotted.type === "ok" && values(dotted.measures).at(-1)).toBe("dotted-quarter");
+		expect(dotted.type === "ok" && dotted.measures[0].slots[5].strings[0].fret).toBe(3);
+		// A full bar has no room past its last note.
+		expect(toggleDot(dotted.type === "ok" ? dotted.measures : bar, 0, 4, [4, 4]).type).toBe("blocked");
+	});
+
+	it("gives the half back as an empty slot when the dot comes off", () => {
+		const res = toggleDot(measuresOf([slotWith("dotted-quarter", 2), makeEmptySlot("eighth"), makeEmptySlot("half")]), 0, 0, [4, 4]);
+		expect(res.type === "ok" && values(res.measures)).toEqual(["quarter", "eighth", "eighth", "half"]);
+	});
+
+	it("refuses what has no dotted value, no room, or a triplet after it", () => {
+		expect(toggleDot(measuresOf([makeEmptySlot("whole")]), 0, 0, [4, 4]).type).toBe("blocked");
+		expect(toggleDot(measuresOf([makeEmptySlot("half"), makeEmptySlot("quarter"), makeEmptySlot("quarter")]), 0, 2, [4, 4]).type).toBe("blocked");
+		const triplets = measuresOf([makeEmptySlot("quarter"), makeEmptySlot("eighth-triplet"), makeEmptySlot("eighth-triplet"), makeEmptySlot("eighth-triplet"), makeEmptySlot("half")]);
+		expect(toggleDot(triplets, 0, 0, [4, 4])).toEqual({ type: "blocked", reason: "A triplet after this note can't give up time" });
+	});
+
+	it("plays the dotted values for their length", () => {
+		const p = { ...twoMeasurePattern(), measures: measuresOf([slotWith("dotted-half", 3), slotWith("quarter", 5)]) };
+		const events = fingerpickPatternToScheduleEvents(p, 100);
+		expect(events[1].time - events[0].time).toBeCloseTo(3 * (60 / 100));
 	});
 });
 

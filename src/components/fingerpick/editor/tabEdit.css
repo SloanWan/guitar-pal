@@ -697,6 +697,12 @@
 	.te-mb-cell[data-hint="off"] {
 		color: var(--gp-ink-mute);
 	}
+	/* A block of cells (#437): Shift-clicked, the arrows move their notes. */
+	.te-mb-cell[data-picked] {
+		background: color-mix(in srgb, var(--gp-m-500) var(--te-wash-cross), transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gp-m-500) 60%, transparent);
+		color: var(--gp-m-700);
+	}
 	.te-mb-cell[data-cur] {
 		background: var(--te-pick);
 		box-shadow: inset 0 0 0 2px var(--gp-m-500);
@@ -1644,10 +1650,16 @@
 	.te-srcfold-btn {
 		display: none;
 	}
-	/* A wide source (an exercise's strip), always open above the tab. */
+	/* A wide source (an exercise's strip), pinned over the tab while the bars scroll under it (#437). */
+	.te-srcpin {
+		position: sticky;
+		z-index: 11; /* under the toolbar's bay (12), over the playhead (10) */
+		margin: calc(-1 * var(--te-stack-gap)) calc(-1 * var(--te-bleed)) 0;
+		padding: 8px var(--te-bleed) 10px;
+		background: var(--gp-page);
+	}
 	.te-srcwide {
-		max-height: 40vh;
-		margin-top: 10px;
+		max-height: 34vh;
 		overflow: auto;
 		border-radius: var(--gp-r-s);
 		background: #fff;

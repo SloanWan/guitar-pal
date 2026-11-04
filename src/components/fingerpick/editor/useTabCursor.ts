@@ -5,13 +5,16 @@ import {
 	TWO_DIGIT_WINDOW_MS,
 	applyNoteEdit,
 	clampCell,
+	clearBlock,
 	editorKeyAction,
-	extendSelection,
+	growBlock,
+	moveBlock,
 	selectTo,
 	selectedSlots,
 	stepSlot,
 	stepString,
 	typeDigit,
+	type CellBlock,
 	type PendingDigit,
 	type Selection,
 } from "@/lib/tabEditorCursor";
@@ -34,14 +37,16 @@ const START: Cell = { measureIndex: 0, slotIndex: 0, stringIndex: 0 };
 
 /**
  * The editor's cursor over the stave (#360): a click puts it on a slot and a
- * string, Shift-click and Shift+arrows select a run of slots, and the keys
- * edit at it — digits with the 800ms two-digit window, the registry's
+ * string; Shift-click on a column's square selects a run of slots, Shift-click
+ * on cells (or Shift+arrows) a block of cells whose notes the arrows move
+ * (#437); and the keys edit at it — digits with the 800ms two-digit window, the registry's
  * technique keys, x, Backspace. One key handler, for the tab's own element.
  * The two-digit and auto-advance timer is cleared on every move and on unmount.
  */
 export function useTabCursor({ working, commit, autoAdvance, onPlay, onBlocked, onWrote }: Args) {
 	const [rawCursor, setCursor] = useState<Cell>(START);
 	const [selection, setSelection] = useState<Selection | null>(null);
+	const [block, setBlock] = useState<CellBlock | null>(null);
 	const [pending, setPending] = useState<PendingDigit | null>(null);
 	// Kept on the tab whatever an edit removed under it.
 	const cursor = clampCell(working, rawCursor);
@@ -59,21 +64,50 @@ export function useTabCursor({ working, commit, autoAdvance, onPlay, onBlocked, 
 		workingRef.current = working;
 	});
 
-	function moveTo(next: Cell, nextSelection: Selection | null = null) {
+	function moveTo(next: Cell, nextSelection: Selection | null = null, nextBlock: CellBlock | null = null) {
 		clearTimer();
 		setPending(null);
 		setCursor(next);
 		setSelection(nextSelection);
+		setBlock(nextBlock);
 	}
 
-	/** A click on the stave: the cursor there, or with Shift the run up to there. */
+	/** A click on a cell: the cursor there, or with Shift the block of cells up to there. */
 	function pick(cell: Cell, shift: boolean) {
+		if (!shift) {
+			moveTo(cell);
+			return;
+		}
+		moveTo(cell, null, { anchor: block?.anchor ?? cursor, head: cell });
+	}
+
+	/** A click on a column's square: the cursor to that slot, or with Shift the run of slots up to there. */
+	function pickSlot(cell: Cell, shift: boolean) {
 		if (!shift) {
 			moveTo(cell);
 			return;
 		}
 		const next = selectTo(cursor, selection, cell);
 		moveTo(next.cursor, next.selection);
+	}
+
+	/** An arrow: the cursor a step; over a block, its notes move a step (Shift grows the block instead). */
+	function arrow(axis: "slot" | "string", delta: -1 | 1, extend: boolean) {
+		if (extend) {
+			const next = growBlock(working, cursor, block, axis, delta);
+			moveTo(next.head, null, next);
+			return;
+		}
+		if (block) {
+			const moved = moveBlock(working, block, cursor, axis, delta);
+			if ("blocked" in moved) onBlocked(moved.blocked);
+			else {
+				commit(() => moved.pattern);
+				moveTo(moved.cursor, null, moved.block);
+			}
+			return;
+		}
+		moveTo(axis === "slot" ? stepSlot(working, cursor, delta) : stepString(cursor, delta), axis === "string" ? selection : null);
 	}
 
 	function advance(from: Cell) {
@@ -110,15 +144,11 @@ export function useTabCursor({ working, commit, autoAdvance, onPlay, onBlocked, 
 		if (!action || action.kind === "undo" || action.kind === "redo") return;
 		e.preventDefault();
 		switch (action.kind) {
-			case "slot": {
-				if (action.extend) {
-					const next = extendSelection(working, cursor, selection, action.delta);
-					moveTo(next.cursor, next.selection);
-				} else moveTo(stepSlot(working, cursor, action.delta));
+			case "slot":
+				arrow("slot", action.delta, action.extend);
 				return;
-			}
 			case "string":
-				moveTo(stepString(cursor, action.delta), selection);
+				arrow("string", action.delta, action.extend);
 				return;
 			case "digit":
 				typeAt(action.digit);
@@ -126,8 +156,9 @@ export function useTabCursor({ working, commit, autoAdvance, onPlay, onBlocked, 
 			case "escape":
 				clearTimer();
 				setPending(null);
-				// The selection goes first; then the tab lets go of the keys.
-				if (selection) setSelection(null);
+				// A block or the selection goes first; then the tab lets go of the keys.
+				if (block) setBlock(null);
+				else if (selection) setSelection(null);
 				else (e.currentTarget as HTMLElement).blur();
 				return;
 			case "play":
@@ -136,6 +167,10 @@ export function useTabCursor({ working, commit, autoAdvance, onPlay, onBlocked, 
 			default: {
 				clearTimer();
 				setPending(null);
+				if (block && action.kind === "clear") {
+					commit((p) => clearBlock(p, block));
+					return;
+				}
 				const result = applyNoteEdit(working, cursor, selectedSlots(working, cursor, selection), action);
 				if ("blocked" in result) onBlocked(result.blocked);
 				else commit(() => result.pattern);
@@ -149,5 +184,5 @@ export function useTabCursor({ working, commit, autoAdvance, onPlay, onBlocked, 
 		if (wroteNote) advance(cell);
 	}
 
-	return { cursor, selection, pending, pick, writeAt, wroteAt, onKeyDown, moveTo };
+	return { cursor, selection, block, pending, pick, pickSlot, writeAt, wroteAt, onKeyDown, moveTo };
 }

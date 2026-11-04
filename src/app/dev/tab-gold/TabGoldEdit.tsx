@@ -58,5 +58,10 @@ export default function TabGoldEdit({ set, id }: { set: string; id: string }) {
 		);
 	}
 	if (!target) return <main className="tg tg-meta">Loading…</main>;
-	return <TabEditPage id="new" target={target} />;
+	// The editor fills the window under the dev banner, so its stage and inspector scroll on their own.
+	return (
+		<div className="tg-editor">
+			<TabEditPage id="new" target={target} />
+		</div>
+	);
 }

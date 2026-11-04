@@ -6,9 +6,12 @@ import {
 	TWO_DIGIT_WINDOW_MS,
 	applyNoteEdit,
 	clampCell,
+	blockCells,
+	clearBlock,
 	editorKeyAction,
-	extendSelection,
+	growBlock,
 	inSelection,
+	moveBlock,
 	selectTo,
 	selectedSlots,
 	slotAtOrder,
@@ -65,21 +68,6 @@ describe("slots in order", () => {
 });
 
 describe("selection", () => {
-	it("grows with Shift across a barline, from where it started", () => {
-		const p = tab();
-		let state = extendSelection(p, at(0, 2), null, 1);
-		state = extendSelection(p, state.cursor, state.selection, 1);
-		expect(state.cursor).toEqual(at(1, 0));
-		expect(selectedSlots(p, state.cursor, state.selection)).toEqual([
-			{ measureIndex: 0, slotIndex: 2 },
-			{ measureIndex: 0, slotIndex: 3 },
-			{ measureIndex: 1, slotIndex: 0 },
-		]);
-		// Back past the start, the run turns the other way.
-		state = extendSelection(p, at(0, 2), { anchor: { measureIndex: 0, slotIndex: 2 }, head: { measureIndex: 0, slotIndex: 2 } }, -1);
-		expect(selectedSlots(p, state.cursor, state.selection).map((s) => s.slotIndex)).toEqual([1, 2]);
-	});
-
 	it("Shift-click runs from the cursor to the clicked slot; no selection is the cursor's slot", () => {
 		const p = tab();
 		const { selection } = selectTo(at(1, 1), null, at(0, 3, 4));
@@ -118,7 +106,8 @@ describe("editorKeyAction", () => {
 		expect(editorKeyAction(key("ArrowLeft", { shiftKey: true }))).toEqual({ kind: "slot", delta: -1, extend: true });
 		expect(editorKeyAction(key("Tab"))).toEqual({ kind: "slot", delta: 1, extend: false });
 		expect(editorKeyAction(key("Tab", { shiftKey: true }))).toEqual({ kind: "slot", delta: -1, extend: false });
-		expect(editorKeyAction(key("ArrowUp"))).toEqual({ kind: "string", delta: -1 });
+		expect(editorKeyAction(key("ArrowUp"))).toEqual({ kind: "string", delta: -1, extend: false });
+		expect(editorKeyAction(key("ArrowDown", { shiftKey: true }))).toEqual({ kind: "string", delta: 1, extend: true });
 	});
 
 	it("reads the registry's technique keys", () => {
@@ -129,8 +118,10 @@ describe("editorKeyAction", () => {
 		expect(editorKeyAction(key("l"))).toEqual({ kind: "span", span: "letRing" });
 		expect(editorKeyAction(key("b"))).toEqual({ kind: "bend" });
 		expect(editorKeyAction(key("V"))).toEqual({ kind: "vibrato" });
-		expect(editorKeyAction(key("s"))).toEqual({ kind: "slap" });
+		expect(editorKeyAction(key("s"))).toEqual({ kind: "link", link: "slide" });
+		expect(editorKeyAction(key("t"))).toEqual({ kind: "link", link: "tie" });
 		expect(editorKeyAction(key("R"))).toEqual({ kind: "rest" });
+		expect(editorKeyAction(key("."))).toEqual({ kind: "dot" });
 		expect(editorKeyAction(key("x"))).toEqual({ kind: "mute" });
 	});
 
@@ -214,5 +205,57 @@ describe("applyNoteEdit", () => {
 		if (!("pattern" in back)) throw new Error("blocked");
 		expect(back.pattern.measures[0].slots[0].isRest).toBeUndefined();
 		expect(back.pattern.measures[0].slots[1].isRest).toBeUndefined();
+	});
+});
+
+describe("a block of cells (#437)", () => {
+	const fret = (p: FingerpickPattern, c: Cell) => p.measures[c.measureIndex].slots[c.slotIndex].strings[c.stringIndex].fret;
+	const notes = () => {
+		let p = tab();
+		p = setFret(p, at(0, 3, 1), 5);
+		p = setFret(p, at(1, 0, 2), 7);
+		return p;
+	};
+
+	it("is the strings × slots between two cells, across a barline", () => {
+		const cells = blockCells(tab(), { anchor: at(0, 3, 2), head: at(1, 0, 1) });
+		expect(cells).toEqual([at(0, 3, 1), at(0, 3, 2), at(1, 0, 1), at(1, 0, 2)]);
+	});
+
+	it("grows from where it started with Shift+arrows", () => {
+		const b = growBlock(tab(), at(0, 1), null, "string", 1);
+		expect(b).toEqual({ anchor: at(0, 1), head: at(0, 1, 3) });
+		expect(growBlock(tab(), b.head, b, "slot", 1)).toEqual({ anchor: at(0, 1), head: at(0, 2, 3) });
+	});
+
+	it("moves its notes a string together, frets as written, block and cursor with them", () => {
+		const block = { anchor: at(0, 3, 1), head: at(1, 0, 2) };
+		const moved = moveBlock(notes(), block, at(1, 0, 2), "string", 1);
+		if ("blocked" in moved) throw new Error(moved.blocked);
+		expect(fret(moved.pattern, at(0, 3, 2))).toBe(5);
+		expect(fret(moved.pattern, at(1, 0, 3))).toBe(7);
+		expect(fret(moved.pattern, at(0, 3, 1))).toBeNull();
+		expect(moved.block).toEqual({ anchor: at(0, 3, 2), head: at(1, 0, 3) });
+		expect(moved.cursor).toEqual(at(1, 0, 3));
+	});
+
+	it("moves its notes a slot across a barline", () => {
+		const moved = moveBlock(notes(), { anchor: at(0, 3, 1), head: at(0, 3, 1) }, at(0, 3, 1), "slot", 1);
+		if ("blocked" in moved) throw new Error(moved.blocked);
+		expect(fret(moved.pattern, at(1, 0, 1))).toBe(5);
+		expect(fret(moved.pattern, at(0, 3, 1))).toBeNull();
+	});
+
+	it("refuses a move off the tab or onto a note left behind", () => {
+		const p = setFret(notes(), at(0, 3, 0), 1);
+		expect(moveBlock(p, { anchor: at(0, 3, 0), head: at(0, 3, 0) }, at(0, 3, 0), "string", -1)).toEqual({ blocked: "A note is already on the high e string" });
+		expect(moveBlock(p, { anchor: at(0, 3, 1), head: at(0, 3, 1) }, at(0, 3, 1), "string", -1)).toEqual({ blocked: "A note that is not selected is in the way" });
+		expect(moveBlock(tab(), { anchor: at(0, 0), head: at(0, 1) }, at(0, 0), "slot", 1)).toEqual({ blocked: "No notes in the selection to move" });
+	});
+
+	it("is emptied by Backspace", () => {
+		const cleared = clearBlock(notes(), { anchor: at(0, 3, 0), head: at(1, 0, 5) });
+		expect(fret(cleared, at(0, 3, 1))).toBeNull();
+		expect(fret(cleared, at(1, 0, 2))).toBeNull();
 	});
 });

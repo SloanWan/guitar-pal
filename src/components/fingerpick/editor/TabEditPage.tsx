@@ -37,7 +37,7 @@ import {
 	type EditorNotice,
 	type EditorTarget,
 } from "@/lib/tabEditorEntry";
-import { selectedSlots } from "@/lib/tabEditorCursor";
+import { blockCells, selectedSlots } from "@/lib/tabEditorCursor";
 import { patternCapo, type FretHint } from "@/lib/fingerpickChords";
 import { dockWrite } from "@/lib/fretboardDock";
 import { noteText } from "./MeasureBlock";
@@ -217,8 +217,12 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 		onBlocked: (reason) => toast(reason),
 		onWrote: (cell, fret) => playback.preview(cell.stringIndex, fret),
 	});
-	const { cursor, selection, pending } = tabCursor;
+	const { cursor, selection, block, pending } = tabCursor;
 	const inspectorRef = useRef<HTMLElement>(null);
+	const stageRef = useRef<HTMLDivElement>(null);
+	const pinRef = useRef<HTMLDivElement>(null);
+	const toolbayRef = useRef<HTMLDivElement>(null);
+	const keysOnTab = useRef(false);
 	// The tools for what was just picked: the sheet on that tab when narrow, else that section in view.
 	function showTools(tab: InspectorTab) {
 		if (narrow) {
@@ -241,7 +245,7 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	}
 	function gridColumn(target: SlotTarget, shift: boolean) {
 		focusTab();
-		tabCursor.pick({ ...target, stringIndex: cursor.stringIndex }, shift);
+		tabCursor.pickSlot({ ...target, stringIndex: cursor.stringIndex }, shift);
 		showTools("slot");
 	}
 	function gridMenu() {
@@ -278,7 +282,14 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	}
 	const run = selection ? selectedSlots(working, cursor, selection).length : 1;
 	const statusPos = `Bar ${cursor.measureIndex + 1} · slot ${cursor.slotIndex + 1} · ${STRING_LABELS[cursor.stringIndex]} string`;
-	const statusNote = pending ? `${pending.digit}… type a second digit for ${pending.digit}0–${Math.min(24, pending.digit * 10 + 9)}` : run > 1 ? `${run} slots selected` : noteText(cursorSlot, cursor.stringIndex);
+	const picked = block ? blockCells(working, block).length : 0;
+	const statusNote = pending
+		? `${pending.digit}… type a second digit for ${pending.digit}0–${Math.min(24, pending.digit * 10 + 9)}`
+		: picked > 1
+			? `${picked} cells selected · the arrows move their notes`
+			: run > 1
+				? `${run} slots selected`
+				: noteText(cursorSlot, cursor.stringIndex);
 
 	// A book's page, signed once for the column beside the editor and the fold-out below 1024px.
 	// A target's image needs no signing.
@@ -286,6 +297,40 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	const [signedCrop, setCrop] = useState<string | null>(null);
 	const crop = target?.source?.src ?? signedCrop;
 	const wideSource = target?.source?.wide === true;
+
+	// A wide source stays pinned under the toolbar (#437): the bars scroll beneath both,
+	// so the pin sticks where the toolbar's bay ends and a bar brought into view clears them.
+	const pinned = ready && !!crop && wideSource;
+	useEffect(() => {
+		const stage = stageRef.current;
+		const pin = pinRef.current;
+		const bay = toolbayRef.current;
+		if (!stage || !pin || !bay) return;
+		const place = () => {
+			const top = bay.offsetHeight + (parseFloat(getComputedStyle(bay).top) || 0);
+			pin.style.top = `${top}px`;
+			// A sticky offset counts from the stage's content edge, its scroll padding from the padding edge.
+			const pad = parseFloat(getComputedStyle(stage).paddingTop) || 0;
+			stage.style.scrollPaddingTop = `${pad + top + pin.offsetHeight + 8}px`;
+		};
+		const observer = new ResizeObserver(place);
+		observer.observe(pin);
+		observer.observe(bay);
+		return () => {
+			observer.disconnect();
+			stage.style.scrollPaddingTop = "";
+		};
+	}, [pinned]);
+
+	// Under a pinned source the cursor's cell stays in view as the keys move it — its row,
+	// not the whole bar, which can be taller than the room left under the source.
+	const cursorMeasureId = working.measures[cursor.measureIndex]?.id;
+	useEffect(() => {
+		if (!pinned || !cursorMeasureId) return;
+		const bar = stageRef.current?.querySelector(`[data-measure-id="${cursorMeasureId}"]`);
+		(bar?.querySelector("[data-cur]") ?? bar)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+	}, [pinned, cursorMeasureId, cursor.slotIndex, cursor.stringIndex]);
+
 	const [cropOpen, setCropOpen] = useState(false);
 	useEffect(() => {
 		if (!cropPath) return;
@@ -340,7 +385,7 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 					</aside>
 				)}
 				<div className="te-main">
-					<div className="te-stage">
+					<div className="te-stage" ref={stageRef}>
 						<div className="te-stage-in gp-rise">
 							{!ready ? (
 								<>
@@ -384,11 +429,6 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 												)}
 											</div>
 											<p>{notice.text}</p>
-											{crop && wideSource && (
-												<div className="te-srcwide">
-													<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
-												</div>
-											)}
 											{warningsOpen && notice.warnings && (
 												<ul>
 													{notice.warnings.map((w) => (
@@ -482,7 +522,7 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 											</Button>
 										</div>
 									</div>
-									<div className="te-toolbay">
+									<div className="te-toolbay" ref={toolbayRef}>
 										<EditorToolbar
 											working={working}
 											commit={commit}
@@ -494,6 +534,24 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 											}
 										/>
 									</div>
+									{pinned && (
+										<div
+											className="te-srcpin"
+											ref={pinRef}
+											// Panning or zooming the source must not take the keys from the tab.
+											onPointerDown={() => {
+												const tab = tabRef.current;
+												keysOnTab.current = !!tab && tab.contains(document.activeElement);
+											}}
+											onPointerUp={() => {
+												if (keysOnTab.current) tabRef.current?.focus({ preventScroll: true });
+											}}
+										>
+											<div className="te-srcwide">
+												<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
+											</div>
+										</div>
+									)}
 									<div
 										ref={tabRef}
 										className="te-sheet"
@@ -508,6 +566,7 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 											commit={commit}
 											cursor={cursor}
 											selection={selection}
+											block={block}
 											chordTools={chordTools}
 											countEighths={prefs.countEighths}
 											onPick={gridPick}

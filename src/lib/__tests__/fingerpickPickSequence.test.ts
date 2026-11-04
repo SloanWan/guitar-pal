@@ -1,3 +1,4 @@
+import { NO_CHORD } from "@/lib/fingerpickChords";
 import { describe, it, expect } from "vitest";
 import { parsePickSequence, applyPickSequence, foldHolds } from "@/lib/fingerpickPickSequence";
 import { makeEmptySlot, setFret, tripletGroups, usedUnits, measureCapacity } from "@/lib/fingerpickEdit";
@@ -321,6 +322,13 @@ describe("applyPickSequence", () => {
 		const p = pattern([measure("a", [C, undefined, undefined, undefined])]);
 		const { pattern: out } = applyPickSequence(p, 0, ok("3-1-"), voicingFor);
 		expect(out.measures[0].slots.map((s) => !!s.isRest)).toEqual([false, true, false, true]);
+	});
+
+	it("writes open strings under N.C., as with no chord at all (#437)", () => {
+		const p = pattern([measure("a", [NO_CHORD, undefined, undefined, undefined])]);
+		const { pattern: out, warnings } = applyPickSequence(p, 0, ok("3212"), voicingFor);
+		expect(out.measures[0].slots[0].strings[2].fret).toBe(0);
+		expect(warnings).toEqual(["No chord in effect here — open strings written. Add a chord to fret them."]);
 	});
 
 	it("writes open strings and warns when no chord is in effect", () => {

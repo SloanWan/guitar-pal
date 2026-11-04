@@ -132,6 +132,7 @@ export const TECHNIQUES: readonly TechniqueDef[] = [
 		render: true,
 		audio: true,
 		available: sameFret,
+		key: "T",
 	},
 	{
 		kind: "hammer",
@@ -167,7 +168,7 @@ export const TECHNIQUES: readonly TechniqueDef[] = [
 		render: true,
 		audio: true,
 		available: moving,
-		key: "/",
+		key: "S",
 	},
 	// effects — what is done to the note
 	{

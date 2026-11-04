@@ -11,7 +11,7 @@ import type {
 } from "./fingerpickTypes";
 import {
 	MAX_FRET,
-	previousSlotFret,
+	previousNoteOnString,
 	updateStringFret,
 	type Cell,
 	type SlotTarget,
@@ -35,7 +35,7 @@ function noteAt(pattern: FingerpickPattern, cell: Cell): StringFret | null {
 export function noteContext(pattern: FingerpickPattern, cell: Cell): NoteContext | null {
 	const sf = noteAt(pattern, cell);
 	if (!sf) return null;
-	const prev = previousSlotFret(pattern, cell);
+	const prev = previousNoteOnString(pattern, cell);
 	return {
 		fret: sf.fret,
 		muted: sf.muted,

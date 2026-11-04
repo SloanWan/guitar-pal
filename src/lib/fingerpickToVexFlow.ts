@@ -15,7 +15,6 @@ import {
 	Annotation,
 	AnnotationVerticalJustify,
 	Tremolo,
-	Vibrato,
 	Bend,
 } from "vexflow";
 
@@ -58,6 +57,7 @@ class SilentNote extends GhostNote {
 
 export const VEX_DURATION: Record<Duration, string> = {
 	whole: "w",
+	"dotted-half": "hd",
 	half: "h",
 	quarter: "q",
 	"dotted-quarter": "qd",
@@ -66,6 +66,7 @@ export const VEX_DURATION: Record<Duration, string> = {
 	// Tuplet notes use the underlying undivided duration; the Tuplet wrapper
 	// adjusts tick values for correct Formatter spacing and draws the bracket.
 	"eighth-triplet": "8",
+	"dotted-sixteenth": "16d",
 	sixteenth: "16",
 	"sixteenth-triplet": "16",
 	"32nd": "32",
@@ -333,6 +334,12 @@ function spanSegments(
 	return out;
 }
 
+/** Whether a palm-mute span reaches into this measure: the row reserves its line under the stave (#437). */
+export function palmMuteIn(measure: Measure, context?: RenderContext): boolean {
+	if (!context || measure.slots.length === 0) return false;
+	return spansTouching(measure, context.index).some((span) => span.kind === "palmMute");
+}
+
 /** The spans with a member in this measure, in the pattern's order. */
 function spansTouching(measure: Measure, index: PatternIndex): PatternIndex["spansByMeasure"][number] {
 	const pos = index.slotPos.get(measure.slots[0].id);
@@ -353,19 +360,11 @@ const aboveMono = (text: string): Annotation => above(text).setFont(MARK_FONT, 1
  * a bend and the ghost note are handled apart, as they touch the number.
  */
 const EFFECT_MARKS: Partial<Record<EffectKind, (note: TabNote, effects: NoteEffects, counts: ExpressionCounts) => void>> = {
-	vibrato: (note, effects, counts) => {
-		const wide = effects.vibrato?.wide === true;
-		if (wide) counts.wideVibratos++;
+	// The wave itself is the renderer's (`vibratoLines`), drawn for the note's whole
+	// length (#437); the count keeps the room a wave needs at the least.
+	vibrato: (_note, effects, counts) => {
+		if (effects.vibrato?.wide === true) counts.wideVibratos++;
 		else counts.vibratos++;
-		// Vibrato's constructor measures its glyph through the canvas API; without
-		// one (jsdom / SSR) the mark is skipped — it draws in a browser.
-		try {
-			const vib = new Vibrato();
-			if (wide) vib.setVibratoWidth(40);
-			note.addModifier(vib);
-		} catch {
-			// No canvas context.
-		}
 	},
 	harmonic: (note, effects) => {
 		const type = effects.harmonic?.type;
@@ -414,11 +413,30 @@ class ShiftSlide extends TabSlide {
 	}
 }
 
+/**
+ * A hammer-on / pull-off: its H or P written just over its own arc, not at the
+ * stave's top where the chord line runs (#437).
+ */
+class LinkTie extends TabTie {
+	renderTieText(firstX: number, lastX: number): void {
+		const firstY = this.getFirstYs()[this.notes.firstIndexes?.[0] ?? 0];
+		const lastY = this.getLastYs()[this.notes.lastIndexes?.[0] ?? 0];
+		if (!this.text || firstY === undefined || lastY === undefined) return super.renderTieText(firstX, lastX);
+		const o = this.renderOptions;
+		// The arc's outer edge peaks half its control point above the strings it joins.
+		const rise = o.yShift + (Math.abs(lastX - firstX) < o.shortTieCutoff ? o.cp2Short : o.cp2) / 2;
+		const ctx = this.checkContext();
+		ctx.setFont(this.fontInfo);
+		const width = ctx.measureText(this.text).width;
+		ctx.fillText(this.text, (firstX + lastX) / 2 - width / 2 + o.textShiftX, (firstY + lastY) / 2 - rise - 2);
+	}
+}
+
 /** The connector a link draws from the previous note on its string. */
 const LINK_CONNECTORS: Record<LinkKind, (notes: TieNotes, sf: StringFret, prevFret: number | null) => TabTie | TabSlide> = {
 	tie: (notes) => new TabTie(notes),
-	hammer: (notes) => TabTie.createHammeron(notes),
-	pull: (notes) => TabTie.createPulloff(notes),
+	hammer: (notes) => new LinkTie(notes, "H"),
+	pull: (notes) => new LinkTie(notes, "P"),
 	slide: (notes, sf, prevFret) => {
 		const down = prevFret !== null && sf.fret !== null && sf.fret < prevFret;
 		if (sf.link?.kind === "slide" && sf.link.picked) return new ShiftSlide(notes, down ? TabSlide.SLIDE_DOWN : TabSlide.SLIDE_UP);
@@ -453,6 +471,13 @@ export interface HitMark {
 	label: string;
 }
 
+/** A vibrato's wave over the note's length, as the page writes it: on to the next note or rest. */
+export interface VibratoLine {
+	noteIndex: number;
+	untilNoteIndex: number | null;
+	wide: boolean;
+}
+
 /** A link into the measure's first note from the note before the barline, drawn as a half arc. */
 export interface LeadIn {
 	noteIndex: number;
@@ -483,6 +508,8 @@ export interface VexFlowRenderData {
 	slideMarks: SlideMark[];
 	/** Whammy-bar dives and pulls, drawn as dashed lines from the note. */
 	whammies: WhammyMark[];
+	/** Vibrato waves, each from its note to the next note or rest (null: the bar's end). */
+	vibratoLines: VibratoLine[];
 	/** Notes with a pick scrape: a heavy diagonal across the strings at the note. */
 	scrapes: number[];
 	/** Slur spans' segments, drawn as one curve each over their notes. */
@@ -527,6 +554,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 	const holds: number[] = [];
 	const slideMarks: SlideMark[] = [];
 	const whammies: WhammyMark[] = [];
+	const vibratoAt: { noteIndex: number; slotIdx: number; wide: boolean }[] = [];
 	const scrapes: number[] = [];
 	const expression: ExpressionCounts = { bends: 0, vibratos: 0, wideVibratos: 0 };
 	// A chord marked on a grace-note slot has no note of its own to sit over; it
@@ -663,6 +691,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 				continue;
 			}
 			EFFECT_MARKS[kind]?.(tabNote, effects, expression);
+			if (kind === "vibrato") vibratoAt.push({ noteIndex: notes.length, slotIdx, wide: effects.vibrato?.wide === true });
 			if (kind === "whammy") {
 				const w = effects.whammy!;
 				const semitones = w.semitones ?? WHAMMY_SEMITONES;
@@ -682,64 +711,64 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 		writeChordOver(noteIdx);
 	}
 
+	// Each vibrato runs on to the next slot that strikes or rests; past the last, to the bar's end.
+	const vibratoLines: VibratoLine[] = vibratoAt.map(({ noteIndex, slotIdx, wide }) => {
+		let until: number | null = null;
+		for (let j = slotIdx + 1; j < measure.slots.length && until === null; j++) {
+			const next = measure.slots[j];
+			const n = slotNoteIndex[j];
+			if (next.isGraceNote || n === null || n === undefined) continue;
+			if (next.isRest || next.percussion || next.strings.some((sf) => sf.fret !== null || sf.muted)) until = n;
+		}
+		return { noteIndex, untilNoteIndex: until, wide };
+	});
+
 	const connectors: Array<TabTie | TabSlide> = [];
 	const leadIns: LeadIn[] = [];
 
-	// A link on the measure's first note reaches back across the barline: there
-	// is no note here to tie it to, so the renderer draws a half arc into it.
-	const firstNoteSlot = measure.slots.findIndex((slot, i) => !slot.isRest && !slot.isGraceNote && slotNoteIndex[i] !== null);
-	if (firstNoteSlot >= 0 && context) {
-		const slot = measure.slots[firstNoteSlot];
-		const at = index.slotOrder.indexOf(slot.id);
-		const before = at > 0 && !measure.slots.some((s) => s.id === index.slotOrder[at - 1]);
-		const noteIdx = slotNoteIndex[firstNoteSlot];
-		if (before && noteIdx !== null && noteIdx !== undefined) {
-			slot.strings.forEach((sf, stringIndex) => {
-				if (sf.link && (sf.fret !== null || sf.muted) && posIndexMaps[noteIdx].has(stringIndex)) {
-					leadIns.push({ noteIndex: noteIdx, stringIndex, kind: sf.link.kind });
-				}
-			});
-		}
-	}
-
-	for (let i = 1; i < measure.slots.length; i++) {
-		const slot = measure.slots[i];
-		if (slot.isRest || slot.isGraceNote) continue;
-
+	// A link reaches back to the string's previous note, however many slots where the
+	// string is silent lie between (#437): the nearest earlier slot here with a note on
+	// that string. With none in this measure the note it comes from is across the
+	// barline — no note here to tie it to — so the renderer draws a half arc into it.
+	const firstSlot = measure.slots[0];
+	const at = firstSlot ? index.slotOrder.indexOf(firstSlot.id) : -1;
+	const somethingBefore = context !== undefined && at > 0;
+	measure.slots.forEach((slot, i) => {
+		if (slot.isRest || slot.isGraceNote) return;
 		const currNoteIdx = slotNoteIndex[i];
-		if (currNoteIdx === null || currNoteIdx === undefined) continue;
-
-		// Walk back to find the nearest preceding non-grace slot.
-		let prevSlotIdx = i - 1;
-		while (prevSlotIdx >= 0 && slotNoteIndex[prevSlotIdx] === null) prevSlotIdx--;
-		if (prevSlotIdx < 0) continue;
-		const prevNoteIdx = slotNoteIndex[prevSlotIdx];
-		if (prevNoteIdx === null || prevNoteIdx === undefined) continue;
-
-		const prevNote = notes[prevNoteIdx];
+		if (currNoteIdx === null || currNoteIdx === undefined) return;
 		const currNote = notes[currNoteIdx];
-		const prevPosMap = posIndexMaps[prevNoteIdx];
 		const currPosMap = posIndexMaps[currNoteIdx];
 
 		slot.strings.forEach((sf, stringIdx) => {
 			if (!sf.link || (sf.fret === null && !sf.muted)) return;
+			const currIdx = currPosMap.get(stringIdx);
+			if (currIdx === undefined) return;
+
+			let prevSlotIdx = i - 1;
+			while (prevSlotIdx >= 0) {
+				const n = slotNoteIndex[prevSlotIdx];
+				if (n !== null && n !== undefined && !measure.slots[prevSlotIdx].isGraceNote && posIndexMaps[n].has(stringIdx)) break;
+				prevSlotIdx--;
+			}
+			if (prevSlotIdx < 0) {
+				if (somethingBefore) leadIns.push({ noteIndex: currNoteIdx, stringIndex: stringIdx, kind: sf.link.kind });
+				return;
+			}
 			// Inside a slur the curve says legato: a hammer or pull draws no arc of its own.
 			if ((sf.link.kind === "hammer" || sf.link.kind === "pull") && slurredInside(index, slot.id, stringIdx)) return;
 
-			const prevIdx = prevPosMap.get(stringIdx);
-			const currIdx = currPosMap.get(stringIdx);
-			if (prevIdx === undefined || currIdx === undefined) return;
-
+			const prevNoteIdx = slotNoteIndex[prevSlotIdx]!;
 			const tieNotes: TieNotes = {
-				firstNote: prevNote,
+				firstNote: notes[prevNoteIdx],
 				lastNote: currNote,
-				firstIndexes: [prevIdx],
+				firstIndexes: [posIndexMaps[prevNoteIdx].get(stringIdx)!],
 				lastIndexes: [currIdx],
 			};
 			const prevFret = measure.slots[prevSlotIdx].strings[stringIdx].fret;
 			connectors.push(LINK_CONNECTORS[sf.link.kind](tieNotes, sf, prevFret));
 		});
-	}
+	});
 
 	// A slur: one arc over the numbers from the segment's first note to its
 	// last, drawn the way a tie is — between the positions, inside the tab —
@@ -806,6 +835,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 		leadIns,
 		slideMarks,
 		whammies,
+		vibratoLines,
 		scrapes,
 		slurs,
 		expression,

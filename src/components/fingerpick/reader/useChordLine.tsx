@@ -8,6 +8,7 @@ import {
 	chordToneNames,
 	effectiveChords,
 	heldButUnplucked,
+	isNoChord,
 	offShapeStrings,
 	patternCapo,
 	patternHasChords,
@@ -47,7 +48,7 @@ export function useChordLine(pattern: FingerpickPattern, prefs: FingerpickPrefs,
 	// The player's own shapes and the library's, for every chord the tab names.
 	const { voicings: userVoicings } = useUserChordVoicings(showDiagrams ? user : null, loading || !showDiagrams);
 	const chordRefs = useMemo(
-		() => (showDiagrams ? pattern.measures.flatMap((m) => m.slots.flatMap((slot) => (slot.chord ? [slot.chord] : []))) : []),
+		() => (showDiagrams ? pattern.measures.flatMap((m) => m.slots.flatMap((slot) => (slot.chord && !isNoChord(slot.chord) ? [slot.chord] : []))) : []),
 		[pattern.measures, showDiagrams],
 	);
 	const voicingsFor = useChordVoicings(chordRefs, userVoicings);

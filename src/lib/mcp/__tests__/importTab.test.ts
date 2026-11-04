@@ -69,6 +69,15 @@ describe("toImportedTabDraft", () => {
 		});
 	});
 
+	it("reads N.C. as the no-chord mark (#437)", () => {
+		const { draft, warnings } = toImportedTabDraft(
+			input({ bars: [{ ...AM_BAR, slots: [{ ...AM_BAR.slots[0], chord: "N.C." }, ...AM_BAR.slots.slice(1)] }] }),
+			INDEX,
+		);
+		expect((draft.measures as { slots: { chord?: unknown }[] }[])[0].slots[0].chord).toEqual({ root: "N.C.", suffix: "" });
+		expect(warnings).toEqual([]);
+	});
+
 	it("is an error when a bar overflows its meter, a warning when it runs short", () => {
 		const long = toImportedTabDraft(
 			input({ bars: [{ slots: [...AM_BAR.slots, { duration: "quarter", notes: [{ string: 1, fret: 3 }] }] }] }),

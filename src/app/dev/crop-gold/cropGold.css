@@ -1,0 +1,168 @@
+/* /dev/crop-gold: the tab reader's crops, boxed by hand (#424). Built on tabGold.css. */
+@layer components {
+	.cg-review {
+		max-width: 1600px;
+	}
+	.cg-count[data-off] {
+		color: var(--gp-warn);
+		font-weight: 650;
+	}
+
+	/* The page beside its boxes: the page as tall as the window allows. */
+	.cg-body {
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+	@media (min-width: 1100px) {
+		.cg-body {
+			flex-direction: row;
+			align-items: flex-start;
+		}
+		/* The whole page in view: the window less the dev banner, the nav and header, and the hint line. */
+		.cg-left {
+			flex: none;
+			width: min(60%, calc((100vh - 230px) * var(--cg-ar)));
+			position: sticky;
+			top: 40px;
+		}
+		.cg-right {
+			flex: 1;
+			min-width: 0;
+		}
+	}
+	.cg-left .tg-meta {
+		margin: 8px 0 0;
+	}
+	.cg-right {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.cg-canvas {
+		position: relative;
+		touch-action: none;
+		user-select: none;
+		cursor: crosshair;
+		border-radius: var(--gp-r-m);
+		overflow: hidden;
+		background: #fff;
+		box-shadow: var(--gp-ring-c);
+	}
+	.cg-page {
+		display: block;
+		width: 100%;
+		height: auto;
+		pointer-events: none;
+	}
+	.cg-box {
+		position: absolute;
+		border: 2px solid;
+		cursor: move;
+		background: transparent;
+	}
+	/* Boxes often overlap: the chosen one and its handles sit on top, so a handle is never under a neighbour. */
+	.cg-box[data-selected] {
+		z-index: 2;
+		border-width: 3px;
+		background: rgb(255 255 255 / 0.08);
+	}
+	.cg-box[data-off] {
+		border-style: dashed;
+		opacity: 0.55;
+	}
+	.cg-ghost {
+		border: 2px dashed #555;
+		pointer-events: none;
+	}
+	.cg-box-n {
+		position: absolute;
+		top: -2px;
+		left: -2px;
+		min-width: 18px;
+		padding: 0 4px;
+		color: #fff;
+		font: 700 12px/18px var(--gp-f-num);
+		text-align: center;
+	}
+	.cg-handle {
+		position: absolute;
+		width: 12px;
+		height: 12px;
+		border: 2px solid;
+		background: #fff;
+	}
+	.cg-handle[data-handle="n"] { top: -7px; left: calc(50% - 6px); cursor: ns-resize; }
+	.cg-handle[data-handle="s"] { bottom: -7px; left: calc(50% - 6px); cursor: ns-resize; }
+	.cg-handle[data-handle="e"] { right: -7px; top: calc(50% - 6px); cursor: ew-resize; }
+	.cg-handle[data-handle="w"] { left: -7px; top: calc(50% - 6px); cursor: ew-resize; }
+	.cg-handle[data-handle="ne"] { top: -7px; right: -7px; cursor: nesw-resize; }
+	.cg-handle[data-handle="sw"] { bottom: -7px; left: -7px; cursor: nesw-resize; }
+	.cg-handle[data-handle="nw"] { top: -7px; left: -7px; cursor: nwse-resize; }
+	.cg-handle[data-handle="se"] { bottom: -7px; right: -7px; cursor: nwse-resize; }
+
+	/* The chosen crop, at the reader's resolution, scaled to the column. */
+	.cg-preview {
+		position: relative;
+		width: 100%;
+		max-height: 55vh;
+		overflow: hidden;
+		border-radius: var(--gp-r-m);
+		background: #fff;
+		box-shadow: var(--gp-ring-c);
+	}
+	.cg-preview img {
+		position: absolute;
+		max-width: none;
+		height: auto;
+	}
+	.cg-preview-empty {
+		height: 120px;
+	}
+
+	.cg-boxes {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.cg-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 4px;
+		border-top: 1px solid var(--gp-line);
+		cursor: pointer;
+	}
+	.cg-row[data-selected] {
+		background: var(--gp-page);
+	}
+	.cg-row-n {
+		flex: none;
+		width: 22px;
+		height: 22px;
+		border-radius: var(--gp-r-s);
+		color: #fff;
+		font: 700 12px/22px var(--gp-f-num);
+		text-align: center;
+	}
+	.cg-row-heading {
+		flex: 1;
+		min-width: 0;
+	}
+	.cg-change {
+		flex: none;
+		width: 8.5em;
+		font-size: var(--gp-t-small);
+		color: var(--gp-ink-3);
+	}
+	.cg-change[data-change="adjusted"],
+	.cg-change[data-change="added"] {
+		color: var(--gp-m-700);
+		font-weight: 600;
+	}
+	.cg-change[data-change="removed"] {
+		color: var(--gp-bad);
+		font-weight: 600;
+	}
+}

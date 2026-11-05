@@ -115,6 +115,117 @@ def test_a_dropped_exercise_misses_every_gold_note():
     assert rates["drafted"] == 0.5
 
 
+def marked(s, **marks):
+    """`B={"link": {"kind": "hammer"}}` → the slot with those fields on that string's note."""
+    for name, fields in marks.items():
+        s["strings"]["eBGDAE".index(name)].update(fields)
+    return s
+
+
+def test_a_mark_counts_on_its_onset_string_and_kind():
+    gold = tab(
+        [
+            slot(A=0),
+            marked(slot(A=2), A={"link": {"kind": "hammer"}}),
+            marked(slot(G=0), G={"effects": {"vibrato": {}, "pick": {"direction": "down"}}}),
+            slot(B=1),
+        ]
+    )
+    read = tab(
+        [
+            slot(A=0),
+            marked(slot(A=2), A={"link": {"kind": "pull"}}),
+            marked(slot(G=0), G={"effects": {"vibrato": {}, "pick": {"direction": "up"}}}),
+            slot(B=1),
+        ]
+    )
+    sc = score_reading(read, gold)
+    assert (sc.gold_links, sc.read_links, sc.matched_links) == (1, 1, 0)
+    assert (sc.gold_effects, sc.read_effects, sc.matched_effects) == (2, 2, 1)
+    assert sc.kinds["pick down"] == [1, 0, 0] and sc.kinds["vibrato"] == [1, 1, 1]
+    assert "bar 1 @24 A: missed hammer" in sc.differences
+    assert "bar 1 @48: extra pick up" in sc.differences
+    assert not sc.exact  # the notes are all right; the marks are not
+    rates = summarise([sc])
+    assert rates["note_f1"] == 1.0
+    assert rates["link_f1"] == 0.0
+    assert rates["effect_f1"] == 0.5
+
+
+def test_a_pick_stroke_and_an_accent_are_the_column_s_counted_once():
+    down = {"effects": {"pick": {"direction": "down"}, "accent": True}}
+    gold = tab(
+        [marked(slot(A=0, G=0, B=1), A=down, G=down, B=down), slot(D=2), slot(G=0), slot(B=1)]
+    )
+    read = tab([marked(slot(A=0, G=0, B=1), B=down), slot(D=2), slot(G=0), slot(B=1)])
+    sc = score_reading(read, gold)
+    assert (sc.gold_effects, sc.read_effects, sc.matched_effects) == (2, 2, 2)
+    assert sc.exact
+
+
+def test_a_reading_with_no_marks_scores_zero_and_a_tab_with_none_scores_nothing():
+    gold = tab([slot(A=0), marked(slot(A=2), A={"link": {"kind": "slide"}}), slot(G=0), slot(B=1)])
+    assert summarise([score_reading(tab(BAR), gold)])["link_f1"] == 0.0
+    rates = summarise([score_reading(tab(BAR), tab(BAR))])
+    assert "link_f1" not in rates and "span_f1" not in rates
+
+
+def test_the_parse_v1_marks_are_read_as_v2():
+    gold = tab(
+        [
+            slot("half", A=0),
+            marked(slot(A=0), A={"link": {"kind": "tie"}}),
+            marked(
+                slot(G=2),
+                G={
+                    "link": {"kind": "slide"},
+                    "effects": {"accent": True, "bend": {"semitones": 1}},
+                },
+            ),
+        ]
+    )
+    read = tab(
+        [
+            slot("half", A=0),
+            marked(slot(A=0), A={"tied": True, "technique": None}),
+            marked(slot(G=2), G={"technique": "slide-up", "accent": True}),
+        ]
+    )
+    sc = score_reading(read, gold)
+    assert sc.matched_links == 2
+    # v1 cannot hold a slide and a bend on one note
+    assert (sc.gold_effects, sc.matched_effects) == (2, 1)
+    v1_bend = tab(
+        [slot("half", A=0), slot(A=0), marked(slot(G=2), G={"technique": "pre-bend-release"})]
+    )
+    assert sc.kinds["bend"][0] == 1
+    assert score_reading(v1_bend, gold).kinds["bend"] == [1, 1, 1]
+
+
+def test_a_span_covers_the_sounding_slots_from_its_first_to_its_last_across_bars():
+    first = [dict(slot(A=0), id="a"), dict(slot(A=0), id="b"), slot(rest=True), slot(A=3)]
+    second = [dict(slot(A=0), id="c"), slot(A=0), slot(A=0), slot(A=0)]
+    gold = tab(first, second)
+    gold["spans"] = [{"id": "pm", "kind": "palmMute", "from": "b", "to": "c"}]
+    read = tab(
+        [slot(A=0), marked(slot(A=0), A={"palmMute": True}), slot(rest=True), slot(A=3)],
+        second,
+    )
+    sc = score_reading(read, gold)
+    assert sc.gold_spans == 3  # b, the A3 and c: the rest between them is not under the mute
+    assert (sc.read_spans, sc.matched_spans) == (1, 1)
+
+
+def test_a_dotted_half_moves_the_onsets_after_it():
+    read = tab([slot("dotted-half", A=0), slot(B=1)])
+    gold = tab([slot("dotted-half", A=0), slot(B=1)])
+    sc = score_reading(read, gold)
+    assert sc.exact
+    assert sc.differences == []
+    shifted = score_reading(tab([slot("half", A=0), slot(B=1)]), gold)
+    assert shifted.matched_notes == 1  # the B1 is read on beat 3, the gold's is on beat 4
+
+
 def record(rid, status, gold):
     return {
         "version": 1,

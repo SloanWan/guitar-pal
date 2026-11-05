@@ -114,6 +114,11 @@ const DEV_ROUTES: readonly DevRoute[] = [
 		label: "page-gold",
 		description: "Check each sample page's kind, the notation printed on it and its tab exercises: the page classifier's gold set.",
 	},
+	{
+		href: "/dev/crop-gold",
+		label: "crop-gold",
+		description: "Check the boxes the segmenter drew round each page's exercises before any model reads them; drag to fix, draw what it missed.",
+	},
 ];
 
 export default function DevIndexPage() {

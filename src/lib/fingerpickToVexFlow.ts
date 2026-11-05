@@ -16,6 +16,7 @@ import {
 	AnnotationVerticalJustify,
 	Tremolo,
 	Bend,
+	Dot,
 } from "vexflow";
 
 import {
@@ -31,7 +32,7 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
-import { TRIPLET_GROUP_SIZE, tripletGroups } from "@/lib/fingerpickEdit";
+import { TRIPLET_GROUP_SIZE, isDottedDuration, tripletGroups } from "@/lib/fingerpickEdit";
 import { indexPattern, slurredInside, type PatternIndex } from "@/lib/fingerpickIndex";
 import { WHAMMY_SEMITONES } from "@/lib/fingerpickExpression";
 import { isCompound, type Meter } from "@/lib/strumMeter";
@@ -72,6 +73,22 @@ export const VEX_DURATION: Record<Duration, string> = {
 	"sixteenth-triplet": "16",
 	"32nd": "32",
 };
+
+// VexFlow sizes its glyphs (30pt) for a 10px line space; a tab stave's is 13px.
+const REST_FONT_SIZE = 30 * (13 / 10);
+
+/**
+ * A rest drawn at the tab stave's scale, so a half rest on its line and a whole
+ * rest under its line read apart. VexFlow rebuilds the heads on every reset, so
+ * the size goes back on there.
+ */
+class TabRest extends StaveNote {
+	reset(): this {
+		super.reset();
+		for (const head of this.noteHeads) head.setFontSize(REST_FONT_SIZE);
+		return this;
+	}
+}
 
 /**
  * A chord symbol to write above the stave, at the note where the chord changes.
@@ -620,8 +637,15 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 			// stave a StaveNote rest draws the standard rest symbol; the "b/4" key parks it
 			// mid-stave. The rest keeps the slot's real duration, so the symbol matches the
 			// note value it replaces (VexFlow appends "r" to the duration/dots string, e.g.
-			// "8r" for an eighth rest, "qdr" for a dotted-quarter rest).
-			notes.push(new StaveNote({ keys: ["b/4"], duration: `${duration}r` }));
+			// "8r" for an eighth rest, "qdr" for a dotted-quarter rest) — except a rest that
+			// is the bar's only slot: a bar's rest is written as a whole rest in the middle
+			// of the bar, whatever the meter (a 3/4 bar's is not a dotted half).
+			const barRest = measure.slots.every((other, i) => i === slotIdx || other.isGraceNote);
+			const rest = barRest
+				? new TabRest({ keys: ["b/4"], duration: "wr", alignCenter: true })
+				: new TabRest({ keys: ["b/4"], duration: `${duration}r` });
+			if (!barRest && isDottedDuration(slot.duration)) Dot.buildAndAttach([rest]);
+			notes.push(rest);
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
 			writeChordOver(noteIdx);
@@ -660,7 +684,10 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 			continue;
 		}
 
-		const tabNote = new TabNote({ positions, duration }, true);
+		// Every value has a stem but the whole: its ring alone says whole (`ringedHeads`).
+		const tabNote = new TabNote({ positions, duration }, slot.duration !== "whole");
+		// The dot sits beside the stem, as a dotted note is written in tab.
+		if (isDottedDuration(slot.duration)) Dot.buildAndAttach([tabNote]);
 		if (pendingGraceNotes.length > 0) {
 			tabNote.addModifier(new GraceNoteGroup(pendingGraceNotes));
 			pendingGraceNotes = [];

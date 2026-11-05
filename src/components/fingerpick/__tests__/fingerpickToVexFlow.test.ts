@@ -14,6 +14,7 @@ import {
 	Vibrato,
 	Stroke,
 	TabStave,
+	Dot,
 } from "vexflow";
 
 import { tripletGroups } from "@/lib/fingerpickEdit";
@@ -104,9 +105,9 @@ describe("fingerpickToVexFlow — empty / silent", () => {
 
 	it("rest slot becomes a visible rest StaveNote keeping its own duration", () => {
 		const { notes } = fingerpickToVexFlow(
-			measure([{ ...beatSlot("s1", "eighth", { 0: { fret: 5 } }), isRest: true }])
+			measure([{ ...beatSlot("s1", "eighth", { 0: { fret: 5 } }), isRest: true }, beatSlot("s2", "eighth")])
 		);
-		expect(notes).toHaveLength(1);
+		expect(notes).toHaveLength(2);
 		// A rest renders a visible glyph (StaveNote rest), not an invisible GhostNote spacer,
 		// and it keeps the slot's own rhythmic value (an eighth rest → duration "8").
 		expect(notes[0]).toBeInstanceOf(StaveNote);
@@ -114,16 +115,33 @@ describe("fingerpickToVexFlow — empty / silent", () => {
 		expect(notes[0].getDuration()).toBe("8");
 	});
 
-	it("a dotted-quarter rest constructs without throwing (VexFlow accepts the 'qdr' string)", () => {
-		// The dotted-note duration string ("qd") plus the rest suffix → "qdr". VexFlow
-		// parses it to a quarter rest; the dot glyph itself isn't rendered here (this
-		// codebase never attaches Dot modifiers — dotted NOTES behave the same way).
+	it("a dotted rest or note carries its dot (#437)", () => {
+		// "qd" plus the rest suffix → "qdr", which VexFlow parses to a quarter rest;
+		// the dot is a modifier of its own.
 		const { notes } = fingerpickToVexFlow(
-			measure([{ ...beatSlot("s1", "dotted-quarter"), isRest: true }])
+			measure([
+				{ ...beatSlot("s1", "dotted-quarter"), isRest: true },
+				beatSlot("s2", "dotted-quarter", { 0: { fret: 0 } }),
+				beatSlot("s3", "quarter", { 0: { fret: 0 } }),
+			])
 		);
-		expect(notes).toHaveLength(1);
 		expect(notes[0]).toBeInstanceOf(StaveNote);
 		expect(notes[0].getDuration()).toBe("q");
+		expect(notes.map((n) => Dot.getDots(n).length)).toEqual([1, 1, 0]);
+	});
+
+	it("a rest alone in its bar is a whole rest in the bar's middle, whatever the meter (#437)", () => {
+		for (const duration of ["whole", "dotted-half", "half"] as const) {
+			const { notes } = fingerpickToVexFlow(measure([{ ...beatSlot("r", duration), isRest: true }]));
+			expect(notes[0].getDuration()).toBe("w");
+			expect(notes[0].isCenterAligned()).toBe(true);
+			expect(Dot.getDots(notes[0])).toHaveLength(0);
+		}
+		const { notes } = fingerpickToVexFlow(
+			measure([{ ...beatSlot("r", "half"), isRest: true }, beatSlot("n", "half", { 0: { fret: 0 } })])
+		);
+		expect(notes[0].getDuration()).toBe("h");
+		expect(notes[0].isCenterAligned()).toBe(false);
 	});
 });
 
@@ -868,6 +886,18 @@ describe("fingerpickToVexFlow — model v2", () => {
 		const second = fingerpickToVexFlow(p.measures[1], ctx(p));
 		expect(first.brackets).toEqual([{ kind: "palm-mute", fromNoteIndex: 1, toNoteIndex: 1, continuesAfter: true }]);
 		expect(second.brackets).toEqual([{ kind: "palm-mute", fromNoteIndex: 0, toNoteIndex: 0, continuesBefore: true }]);
+	});
+
+	it("a whole has no stem; a half and a dotted half keep theirs, the dotted one with its dot (#437)", () => {
+		const { notes } = fingerpickToVexFlow(
+			measure([beatSlot("w", "whole", { 0: { fret: 0 } })])
+		);
+		expect(notes[0].hasStem()).toBe(false);
+		const { notes: halves } = fingerpickToVexFlow(
+			measure([beatSlot("d", "dotted-half", { 0: { fret: 0 } }), beatSlot("q", "quarter", { 0: { fret: 0 } })])
+		);
+		expect(halves[0].hasStem()).toBe(true);
+		expect(Dot.getDots(halves[0])).toHaveLength(1);
 	});
 
 	it("rings the numbers of a half or a whole, never a quarter or a rest (#437)", () => {

@@ -34,16 +34,20 @@ import { BEND_HEIGHTS_SEMITONES } from "@/lib/techniqueRegistry";
 import { BEND_HEIGHT_LABEL, DEFAULT_PARAMS, VARIANTS } from "@/lib/techniqueEditDefaults";
 import {
 	INSPECTOR_HITS,
+	applyPick,
 	applySweep,
 	replaceWithShape,
 	effectOptions,
 	hitOf,
 	linkOptions,
+	pickOf,
+	runSounds,
 	sectionsFor,
 	spanOptions,
 	strokeOf,
 	type InspectorOption,
 	type InspectorTab,
+	type PickDirection,
 } from "@/lib/tabEditorInspector";
 import { barFill } from "@/lib/tabEditorTools";
 import { Button } from "@/components/ui/button";
@@ -78,6 +82,13 @@ const STROKES: readonly { value: Stroke | "none"; label: string }[] = [
 	{ value: "roll-up", label: "Roll ↑" },
 	{ value: "brush-down", label: "Brush ↓" },
 	{ value: "brush-up", label: "Brush ↑" },
+];
+
+// The pick stroke printed over a column: ⊓ down, V up (#440).
+const PICKS: readonly { value: PickDirection | "none"; label: string }[] = [
+	{ value: "none", label: "Off" },
+	{ value: "down", label: "Down ⊓" },
+	{ value: "up", label: "Up V" },
 ];
 
 const SIMPLE_FILLS: readonly { value: Duration; label: string }[] = [
@@ -135,6 +146,8 @@ export default function EditorInspector({ working, commit, cursor, slots, notes,
 	const spans = spanOptions(working, slots);
 	const stroke = strokeOf(working, slots);
 	const { hit, accent } = hitOf(working, slots);
+	const pick = pickOf(working, slots);
+	const pickable = runSounds(working, slots);
 	const restAll = slots.length > 0 && slots.every((t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.isRest === true);
 	const fill = measure ? barFill(measure, working.timeSignature) : null;
 	// The shape's frets under each slot of the cursor's bar, for snapping to them.
@@ -490,6 +503,21 @@ export default function EditorInspector({ working, commit, cursor, slots, notes,
 							</div>
 						</div>
 					)}
+					<h3>Pick stroke {pick.kind === "mixed" && <span className="pb-lab">mixed</span>}</h3>
+					<div className="te-chips" role="group" aria-label="Pick stroke">
+						{PICKS.map((o) => (
+							<button
+								key={o.value}
+								type="button"
+								className="te-chip"
+								disabled={!pickable}
+								aria-pressed={pickable && pick.kind === "one" && pick.value === o.value}
+								onClick={() => commit((p) => applyPick(p, slots, o.value === "none" ? null : o.value))}
+							>
+								{o.label}
+							</button>
+						))}
+					</div>
 					<h3>Hit {hit.kind === "mixed" && <span className="pb-lab">mixed</span>}</h3>
 					<div className="te-chips" role="group" aria-label="Hit">
 						{[{ kind: "none", label: "Off" }, ...INSPECTOR_HITS.map((t) => ({ kind: t.kind, label: t.label.en }))].map((o) => (

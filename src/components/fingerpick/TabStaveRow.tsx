@@ -24,6 +24,9 @@ import {
 	type BracketSpan,
 	type ExpressionCounts,
 	type HitMark,
+	type ColumnMark,
+	type ColumnMarkKind,
+	columnMarksOf,
 	type LeadIn,
 	type RenderContext,
 	type SlideMark,
@@ -103,6 +106,13 @@ const PALM_MUTE_BAND = 14;
 // A hit's letter (S, T, B) over its column, above the bracket line; a held
 // bend's dashed line runs at the arrow's height to the next note; a lead-in
 // arc reaches into the row's first note from the barline.
+// A column's pick stroke (⊓ / V) and accent (>) over the stave, the pick nearest, every
+// column on the same rows, as the books print them (#440); chord symbols move up over them.
+const COLUMN_MARK_RISE = 8;
+const COLUMN_MARK_STEP = 10;
+const COLUMN_MARK_HALF_WIDTH = 4;
+const COLUMN_MARK_HEIGHT = 6;
+const CHORD_OVER_MARKS = 5;
 const HIT_FONT_SIZE = 10;
 const HIT_BASELINE_OFFSET = 30;
 const HOLD_LINE_RISE = 30;
@@ -515,6 +525,34 @@ function drawRoll(
 	svgEl.appendChild(g);
 }
 
+/** A column mark centred over its column, its foot at `y`: ⊓ down (the bar heavier, as printed), V up, > accent. */
+function drawColumnMark(svgEl: SVGSVGElement, x: number, y: number, mark: ColumnMarkKind): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	const l = x - COLUMN_MARK_HALF_WIDTH;
+	const r = x + COLUMN_MARK_HALF_WIDTH;
+	const top = y - COLUMN_MARK_HEIGHT;
+	const shape = {
+		down: `M ${l} ${y} L ${l} ${top} L ${r} ${top} L ${r} ${y}`,
+		up: `M ${l} ${top} L ${x} ${y} L ${r} ${top}`,
+		accent: `M ${l} ${top} L ${r} ${(top + y) / 2} L ${l} ${y}`,
+	};
+	path.setAttribute("class", `vf-column-mark vf-column-mark-${mark}`);
+	path.setAttribute("d", shape[mark]);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
+	path.setAttribute("stroke-width", "1.1");
+	path.setAttribute("stroke-linejoin", "miter");
+	svgEl.appendChild(path);
+	if (mark === "down") {
+		const bar = document.createElementNS(ns, "path");
+		bar.setAttribute("d", `M ${l} ${top + 0.9} L ${r} ${top + 0.9}`);
+		bar.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
+		bar.setAttribute("stroke-width", "1.8");
+		svgEl.appendChild(bar);
+	}
+}
+
 /** A hit's letter centred over its column. */
 function drawHit(svgEl: SVGSVGElement, x: number, y: number, label: string): void {
 	const ns = "http://www.w3.org/2000/svg";
@@ -740,8 +778,14 @@ export default function TabStaveRow({
 
 			// Room above the stave's top line that VexFlow gives for free, against
 			// what the strips, their gap and the symbol need; the shortfall is headroom.
+			// Column marks take rows over the stave; the chord symbols sit over the tallest stack of them.
+			const markRows = Math.max(0, ...measures.flatMap((m) => m.slots.map((slot) => (slot.isGraceNote ? 0 : columnMarksOf(slot).length))));
+			const chordOffset =
+				markRows > 0
+					? Math.max(CHORD_BASELINE_OFFSET, COLUMN_MARK_RISE + (markRows - 1) * COLUMN_MARK_STEP + COLUMN_MARK_HEIGHT + CHORD_OVER_MARKS)
+					: CHORD_BASELINE_OFFSET;
 			const freeAbove =
-				new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y - CHORD_BASELINE_OFFSET;
+				new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y - chordOffset;
 			const stackHeight = diagramHeight * lanes + CHORD_DIAGRAM_LANE_GAP * (lanes - 1);
 			const wanted =
 				stackHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
@@ -831,6 +875,7 @@ export default function TabStaveRow({
 				rolls: RollMark[];
 				brackets: BracketSpan[];
 				hits: HitMark[];
+				columnMarks: ColumnMark[];
 				holds: number[];
 				leadIns: LeadIn[];
 				slideMarks: SlideMark[];
@@ -840,9 +885,9 @@ export default function TabStaveRow({
 				stave: TabStave;
 			}[] = [];
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, noteStrings, noteSlots } =
+				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, columnMarks, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, noteStrings, noteSlots } =
 					fingerpickToVexFlow(measure, renderContext);
-				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, stave: staves[i] });
+				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, columnMarks, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, stave: staves[i] });
 				const voice = new Voice({ numBeats: timeSignature[0], beatValue: timeSignature[1] }).setMode(
 					Voice.Mode.SOFT,
 				);
@@ -904,7 +949,7 @@ export default function TabStaveRow({
 				return;
 			}
 			if (placed.length > 0) {
-				const baseline = staves[0].getYForLine(0) - CHORD_BASELINE_OFFSET;
+				const baseline = staves[0].getYForLine(0) - chordOffset;
 				ctx.save();
 				ctx.setFont(CHORD_FONT);
 				ctx.openGroup("chord-label");
@@ -971,7 +1016,7 @@ export default function TabStaveRow({
 					drawBracket(svgEl, b.x1, b.x2, below ? palmMuteY : bracketY, BRACKET_LABELS[b.kind], b.continued, b.open, barlines);
 				});
 			}
-			drawn.forEach(({ measure, notes, noteSlots, noteStrings, hits, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, stave }) => {
+			drawn.forEach(({ measure, notes, noteSlots, noteStrings, hits, columnMarks, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, stave }) => {
 				// A half or a whole: the slot's numbers ringed together, the open head a tab has no other way to show.
 				notes.forEach((note, j) => {
 					const slot = measure.slots[noteSlots[j]];
@@ -983,6 +1028,12 @@ export default function TabStaveRow({
 				const hitY = stave.getYForLine(0) - HIT_BASELINE_OFFSET;
 				hits.forEach(({ noteIndex, label }) => {
 					drawHit(svgEl, notes[noteIndex].getAbsoluteX() + 4, hitY, label);
+				});
+				columnMarks.forEach(({ noteIndex, marks }) => {
+					marks.forEach((mark, row) => {
+						const y = stave.getYForLine(0) - COLUMN_MARK_RISE - row * COLUMN_MARK_STEP;
+						drawColumnMark(svgEl, notes[noteIndex].getAbsoluteX() + 4, y, mark);
+					});
 				});
 				const holdY = stave.getYForLine(0) - HOLD_LINE_RISE;
 				holds.forEach((noteIndex) => {

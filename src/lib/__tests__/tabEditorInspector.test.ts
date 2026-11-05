@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { makeEmptySlot, setFret, setStroke } from "@/lib/fingerpickEdit";
-import { setPercussion, toggleSpanOver } from "@/lib/fingerpickTechniqueEdit";
+import { setEffect, setPercussion, toggleSpanOver } from "@/lib/fingerpickTechniqueEdit";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { EFFECT_DEFS, LINK_DEFS, PERCUSSION_DEFS, SPAN_DEFS } from "@/lib/techniqueRegistry";
 import { BLOCK_REASON } from "@/lib/tabEditorCursor";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 import {
 	INSPECTOR_HITS,
+	applyPick,
 	applySweep,
 	replaceWithShape,
 	effectOptions,
 	hitOf,
 	linkOptions,
+	pickOf,
+	runSounds,
 	sectionsFor,
 	spanOptions,
 	strokeOf,
@@ -80,6 +83,46 @@ describe("a run's shared state", () => {
 		expect(spanOptions(half, run).find((o) => o.kind === "palmMute")?.on).toBe(false);
 		const whole = toggleSpanOver(tab(), "palmMute", run);
 		expect(spanOptions(whole, run).find((o) => o.kind === "palmMute")?.on).toBe(true);
+	});
+});
+
+describe("a slot's pick stroke (#440)", () => {
+	const chord = (p: FingerpickPattern, slotIndex: number) => setFret(setFret(p, at(slotIndex, 1), 1), at(slotIndex, 4), 3);
+	const notesOf = (p: FingerpickPattern, slotIndex: number) => p.measures[0].slots[slotIndex].strings;
+
+	it("goes on every sounding note of each slot of the run, and comes off the same way", () => {
+		const p = applyPick(chord(chord(tab(), 0), 1), run, "down");
+		for (const slot of [0, 1]) {
+			expect(notesOf(p, slot).map((sf) => sf.effects?.pick?.direction)).toEqual([undefined, "down", undefined, undefined, "down", undefined]);
+		}
+		expect(pickOf(p, run)).toEqual({ kind: "one", value: "down" });
+		const off = applyPick(p, run, null);
+		expect(notesOf(off, 0).every((sf) => sf.effects === undefined)).toBe(true);
+		expect(pickOf(off, run)).toEqual({ kind: "one", value: "none" });
+	});
+
+	it("turns one direction into the other and keeps a note's other effects", () => {
+		const vibrato = setEffect(chord(tab(), 0), at(0, 1), "vibrato", {});
+		const p = applyPick(applyPick(vibrato, [run[0]], "up"), [run[0]], "down");
+		expect(notesOf(p, 0)[1].effects).toEqual({ vibrato: {}, pick: { direction: "down" } });
+		expect(notesOf(applyPick(p, [run[0]], null), 0)[1].effects).toEqual({ vibrato: {} });
+	});
+
+	it("reads one marked note as the column's mark, and a run of two directions as a mix", () => {
+		const one = setFret(chord(tab(), 0), at(0, 2), 0);
+		const marked = applyPick(one, [run[0]], "up");
+		const lone = setFret(marked, at(0, 3), 2); // written after: carries no mark, the column still does
+		expect(pickOf(lone, [run[0]])).toEqual({ kind: "one", value: "up" });
+		const mixed = applyPick(chord(lone, 1), [run[1]], "down");
+		expect(pickOf(mixed, run)).toEqual({ kind: "mixed" });
+	});
+
+	it("leaves out a slot with nothing sounding, and has nothing to mark on a silent run", () => {
+		const p = applyPick(chord(tab(), 0), run, "down");
+		expect(notesOf(p, 1).every((sf) => sf.effects === undefined)).toBe(true);
+		expect(pickOf(p, run)).toEqual({ kind: "one", value: "down" });
+		expect(runSounds(tab(), run)).toBe(false);
+		expect(pickOf(tab(), run)).toEqual({ kind: "one", value: "none" });
 	});
 });
 

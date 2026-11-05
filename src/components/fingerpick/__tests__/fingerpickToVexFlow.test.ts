@@ -25,6 +25,7 @@ import {
 	bendHeightLabel,
 	bendMarkForEffect,
 	bracketSpans,
+	columnMarksOf,
 	fingerpickToVexFlow,
 	RENDER_KINDS,
 	VEX_DURATION,
@@ -619,25 +620,33 @@ describe("fingerpickToVexFlow — note modifiers", () => {
 		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
 	});
 
-	it("accent: true attaches an Annotation modifier to the TabNote", () => {
-		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { accent: true } } })])
-		);
-		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
+	it("an accent is the column's: reported over its note, not an annotation (#440)", () => {
+		const rd = fingerpickToVexFlow(measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { accent: true } } })]));
+		expect(rd.columnMarks).toEqual([{ noteIndex: 0, marks: ["accent"] }]);
+		expect(rd.notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(false);
 	});
 
-	it("pickStroke: 'down' attaches an Annotation modifier to the TabNote", () => {
-		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { pick: { direction: "down" } } } })])
-		);
-		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
+	it("a column with a pick stroke and an accent stacks them, the pick nearest the stave", () => {
+		const slot = beatSlot("s1", "quarter", { 1: { fret: 1, effects: { accent: true } }, 4: { fret: 3, effects: { pick: { direction: "up" } } } });
+		expect(columnMarksOf(slot)).toEqual(["up", "accent"]);
+		expect(columnMarksOf({ ...slot, isRest: true })).toEqual([]);
+		expect(columnMarksOf(beatSlot("s2", "quarter", { 2: { fret: 0 } }))).toEqual([]);
 	});
 
-	it("pickStroke: 'up' attaches an Annotation modifier to the TabNote", () => {
-		const { notes } = fingerpickToVexFlow(
-			measure([beatSlot("s1", "quarter", { 0: { fret: 5, effects: { pick: { direction: "up" } } } })])
+	it("a pick stroke is the column's: reported once over its note, whichever strings carry it, not an annotation (#440)", () => {
+		const down = { effects: { pick: { direction: "down" as const } } };
+		const rd = fingerpickToVexFlow(
+			measure([
+				beatSlot("s1", "quarter", { 1: { fret: 1, ...down }, 4: { fret: 3, ...down } }),
+				beatSlot("s2", "quarter", { 2: { fret: 0 } }),
+				beatSlot("s3", "quarter", { 3: { fret: 2, effects: { pick: { direction: "up" } } } }),
+			])
 		);
-		expect(notes[0].getModifiers().some((m) => m instanceof Annotation)).toBe(true);
+		expect(rd.columnMarks).toEqual([
+			{ noteIndex: 0, marks: ["down"] },
+			{ noteIndex: 2, marks: ["up"] },
+		]);
+		expect(rd.notes.some((n) => n.getModifiers().some((m) => m instanceof Annotation))).toBe(false);
 	});
 
 	it("tremoloPickingSpeed: '8th' attaches a Tremolo(1) modifier", () => {
@@ -852,7 +861,7 @@ describe("fingerpickToVexFlow — model v2", () => {
 		expect(rd.holds).toEqual([0]);
 		const texts = (i: number) =>
 			(rd.notes[i] as TabNote).getModifiers().filter((m) => m instanceof Annotation).map((m) => (m as Annotation).getText());
-		expect(texts(0)).toContain(">");
+		expect(rd.columnMarks).toEqual([{ noteIndex: 0, marks: ["accent"] }]);
 		expect((rd.notes[1] as TabNote).getPositions()[0].fret).toBe("(7)");
 		expect(texts(2)).toContain("N.H.");
 		expect(rd.notes[3].getModifiers().some((m) => m instanceof Tremolo)).toBe(true);

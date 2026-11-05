@@ -403,8 +403,6 @@ const EFFECT_MARKS: Partial<Record<EffectKind, (note: TabNote, effects: NoteEffe
 		const speed = effects.tremolo?.speed;
 		note.addModifier(new Tremolo(speed === "8th" ? 1 : speed === "16th" ? 2 : 3));
 	},
-	pick: (note, effects) => note.addModifier(above(effects.pick?.direction === "up" ? "V" : "⊓")),
-	accent: (note) => note.addModifier(above(">")),
 	staccato: (note) => note.addModifier(above(".")),
 	whammy: (note, effects, counts) => {
 		// "w/bar" over the note; the dashed dive / pull line is the renderer's (`whammies`).
@@ -482,6 +480,8 @@ export const RENDER_KINDS: ReadonlySet<string> = new Set([
 	"bend",
 	"ghost",
 	...Object.keys(EFFECT_MARKS),
+	"pick",
+	"accent",
 	"slideIn",
 	"slideOut",
 	...Object.keys(BRACKET_OF_SPAN),
@@ -496,6 +496,28 @@ export interface HitMark {
 	noteIndex: number;
 	kind: PercussionKind;
 	label: string;
+}
+
+/** A mark over a column: its pick stroke (⊓ down, V up) or its accent. */
+export type ColumnMarkKind = "down" | "up" | "accent";
+
+/** A column's marks, drawn by the renderer over the stave nearest first, every column on the same rows (#440). */
+export interface ColumnMark {
+	noteIndex: number;
+	marks: ColumnMarkKind[];
+}
+
+/**
+ * The marks a slot's column carries over the stave, nearest the stave first:
+ * the pick stroke, then the accent. They are the column's, not a note's, so
+ * any sounding string carrying one marks the column once (#440).
+ */
+export function columnMarksOf(slot: BeatSlot): ColumnMarkKind[] {
+	if (slot.isRest) return [];
+	const sounding = slot.strings.filter((sf) => sf.fret !== null || sf.muted);
+	const pick = sounding.map((sf) => sf.effects?.pick?.direction).find((d) => d !== undefined);
+	const accent = sounding.some((sf) => sf.effects?.accent === true);
+	return [...(pick ? [pick] : []), ...(accent ? (["accent"] as const) : [])];
 }
 
 /** A vibrato's wave over the note's length, as the page writes it: on to the next note or rest. */
@@ -527,6 +549,8 @@ export interface VexFlowRenderData {
 	brackets: BracketSpan[];
 	/** Hits (slap, thumb slap, body tap), drawn by the renderer over their notes. */
 	hits: HitMark[];
+	/** Pick strokes and accents, once a column whichever string carries them, drawn by the renderer over the stave. */
+	columnMarks: ColumnMark[];
 	/** Notes whose bend is held into the next note: a dashed line from each to the note after. */
 	holds: number[];
 	/** Links into the measure's first note from across the barline, drawn as half arcs. */
@@ -578,6 +602,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 	const chordLabels: ChordLabel[] = [];
 	const rolls: RollMark[] = [];
 	const hits: HitMark[] = [];
+	const columnMarks: ColumnMark[] = [];
 	const holds: number[] = [];
 	const slideMarks: SlideMark[] = [];
 	const whammies: WhammyMark[] = [];
@@ -703,6 +728,8 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 				if (value !== undefined && effects[kind] === undefined) (effects as Record<string, unknown>)[kind] = value;
 			}
 		});
+		const marks = columnMarksOf(slot);
+		if (marks.length > 0) columnMarks.push({ noteIndex: notes.length, marks });
 		for (const kind of EFFECT_STACK_ORDER) {
 			if (effects[kind] === undefined) continue;
 			if (kind === "bend") {
@@ -868,6 +895,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 		rolls,
 		brackets: bracketSpans(measure, slotNoteIndex, index),
 		hits,
+		columnMarks,
 		holds,
 		leadIns,
 		slideMarks,

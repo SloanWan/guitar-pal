@@ -10,12 +10,29 @@ import { shapeNoteNames } from "./chordIdentify";
 import { MUTED, type ShapeFret } from "./chordShape";
 
 /**
+ * "N.C." — no chord (#437): a mark like any other, so it ends the chord before it
+ * and runs on to the next, but it has no shape — nothing is fretted, hinted or
+ * drawn from it. Stored as a chord reference so every mark reader carries it.
+ */
+export const NO_CHORD: ChordRef = { root: "N.C.", suffix: "" };
+
+export function isNoChord(ref: ChordRef | null | undefined): boolean {
+	return ref?.root === NO_CHORD.root;
+}
+
+/** How a lead sheet or a model may write no chord. */
+export function isNoChordWord(word: string): boolean {
+	return /^n\.?\s*c\.?$/i.test(word.trim());
+}
+
+/**
  * The chord in effect at every slot, index-aligned with `measures[i].slots[j]`.
  *
  * A mark holds until the next one, across measure boundaries — a lead sheet
  * writes a chord once and lets it run — so `null` only ever appears before the
  * first mark. This is the single read path for "which chord is this slot
- * under"; nothing else should walk the marks itself.
+ * under"; nothing else should walk the marks itself. An N.C. mark is in effect
+ * like a chord (`isNoChord` says it has no shape).
  */
 export function effectiveChords(measures: readonly Measure[]): (ChordRef | null)[][] {
 	let current: ChordRef | null = null;
@@ -37,7 +54,7 @@ export function chordsUsed(measures: readonly Measure[]): ChordRef[] {
 	for (const measure of measures) {
 		for (const slot of measure.slots) {
 			const chord = slot.chord;
-			if (chord && !seen.has(`${chord.root} ${chord.suffix}`)) seen.set(`${chord.root} ${chord.suffix}`, chord);
+			if (chord && !isNoChord(chord) && !seen.has(`${chord.root} ${chord.suffix}`)) seen.set(`${chord.root} ${chord.suffix}`, chord);
 		}
 	}
 	return [...seen.values()];
@@ -135,7 +152,7 @@ export function setPatternCapo(pattern: FingerpickPattern, capo: number): Finger
 
 /**
  * What a string plays in a chord shape: its fret, or `"/"` for a string the
- * shape leaves out. Not `"x"` — in the editor that is a slap on the string, a
+ * shape leaves out. Not `"x"` — in the editor that is a dead note on the string, a
  * different thing from a string that simply is not part of the chord.
  */
 export type FretHint = number | "/";

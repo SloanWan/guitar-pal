@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Keyboard } from "lucide-react";
+import { ChevronDown, Combine, Keyboard } from "lucide-react";
 import type { Duration, FingerpickPattern } from "@/lib/fingerpickTypes";
 import {
 	canShiftMeasureStrings,
 	cloneMeasureInPattern,
 	addMeasure,
 	deleteMeasure,
+	isDottedDuration,
 	setSlotsRest,
 	shiftMeasureStrings,
 	swapMeasures,
+	undottedValue,
 	withMeasures,
 	type Cell,
 	type SlotTarget,
@@ -18,7 +20,7 @@ import {
 import { techniqueBlock } from "@/lib/fingerpickTechniqueEdit";
 import { DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
 import { BLOCK_REASON, applyNoteEdit, type NoteEdit } from "@/lib/tabEditorCursor";
-import { applyDuration, barFill, durationChoices, tripletChoice } from "@/lib/tabEditorTools";
+import { applyDot, applyDuration, applyRunMerge, barFill, dotChoice, durationChoices, runMergeChoice, tripletChoice } from "@/lib/tabEditorTools";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -34,16 +36,20 @@ interface Props {
 	onBlocked: (reason: string) => void;
 	/** A bar was added, copied or moved: the cursor goes to its first slot. */
 	onBar: (measureIndex: number) => void;
+	/** A run merged into one note: that note's slot is what stays selected. */
+	onMerged: (at: SlotTarget) => void;
 }
 
 const VALUE_NAMES: Record<Duration, string> = {
 	whole: "Whole",
+	"dotted-half": "Dotted half",
 	half: "Half",
 	"dotted-quarter": "Dotted quarter",
 	quarter: "Quarter",
 	"dotted-eighth": "Dotted eighth",
 	eighth: "Eighth",
 	"eighth-triplet": "Eighth triplet",
+	"dotted-sixteenth": "Dotted sixteenth",
 	sixteenth: "Sixteenth",
 	"sixteenth-triplet": "Sixteenth triplet",
 	"32nd": "Thirty-second",
@@ -51,12 +57,13 @@ const VALUE_NAMES: Record<Duration, string> = {
 
 /** The toolbar's quick marks: the registry's keys, on the note at the cursor. */
 const QUICK: readonly { label: string; name: string; edit: NoteEdit; kind?: string }[] = [
+	{ label: "T", name: "Tie", edit: { kind: "link", link: "tie" }, kind: "tie" },
 	{ label: "H", name: "Hammer-on", edit: { kind: "link", link: "hammer" }, kind: "hammer" },
 	{ label: "P", name: "Pull-off", edit: { kind: "link", link: "pull" }, kind: "pull" },
-	{ label: "/", name: "Slide", edit: { kind: "link", link: "slide" }, kind: "slide" },
+	{ label: "S", name: "Slide", edit: { kind: "link", link: "slide" }, kind: "slide" },
 	{ label: "B", name: "Bend", edit: { kind: "bend" }, kind: "bend" },
 	{ label: "V", name: "Vibrato", edit: { kind: "vibrato" }, kind: "vibrato" },
-	{ label: "x", name: "x (a slap on the string)", edit: { kind: "mute" } },
+	{ label: "x", name: "x (a dead note; a slap under the slot's S)", edit: { kind: "mute" } },
 ];
 
 const REPEAT_TIMES_MAX = 16;
@@ -66,11 +73,13 @@ const REPEAT_TIMES_MAX = 16;
  * merged, so the bar still adds up), triplet and rest; the quick marks; the
  * cursor's bar and what can be done to it; and the keys. Everything is a commit.
  */
-export default function EditorToolbar({ working, commit, cursor, slots, onBlocked, onBar }: Props) {
-	const [mergeAsk, setMergeAsk] = useState<{ pattern: FingerpickPattern; dropped: number } | null>(null);
+export default function EditorToolbar({ working, commit, cursor, slots, onBlocked, onBar, onMerged }: Props) {
+	const [mergeAsk, setMergeAsk] = useState<{ pattern: FingerpickPattern; dropped: number; dot?: boolean; landOn?: SlotTarget } | null>(null);
 	const [barOpen, setBarOpen] = useState(false);
 	const choices = durationChoices(working, cursor);
 	const triplet = tripletChoice(working, cursor);
+	const dot = dotChoice(working, cursor);
+	const runMerge = runMergeChoice(working, slots);
 	const measure = working.measures[cursor.measureIndex];
 	const slot = measure?.slots[cursor.slotIndex];
 	const note = slot?.strings[cursor.stringIndex];
@@ -78,10 +87,29 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 	const bars = working.measures.length;
 	const m = cursor.measureIndex;
 
-	function setValue(duration: Duration, kind: "split" | "merge") {
+	function setValue(duration: Duration, kind: "split" | "merge" | "grow") {
 		const edit = applyDuration(working, cursor, duration, kind);
 		if (edit.type === "confirm") setMergeAsk(edit);
 		else commit(() => edit.pattern);
+	}
+
+	function toggleDotHere() {
+		const edit = applyDot(working, cursor);
+		if (edit.type === "blocked") onBlocked(edit.reason);
+		else if (edit.type === "confirm") setMergeAsk({ ...edit, dot: true });
+		else commit(() => edit.pattern);
+	}
+
+	// A merged run leaves its one note selected, not the slots that were (#437).
+	function mergeRun() {
+		const edit = applyRunMerge(working, slots);
+		if (!edit) return;
+		const landOn = slots.reduce((a, t) => (t.slotIndex < a.slotIndex ? t : a));
+		if (edit.type === "confirm") setMergeAsk({ ...edit, landOn });
+		else {
+			commit(() => edit.pattern);
+			onMerged(landOn);
+		}
 	}
 
 	function bar(edit: (p: FingerpickPattern) => FingerpickPattern, landOn?: number) {
@@ -91,6 +119,8 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 	}
 
 	const isRest = slot?.isRest === true;
+	// The value buttons are the plain values; a dotted note lights its plain value and the dot.
+	const written = slot ? undottedValue(slot.duration) : null;
 	return (
 		<div
 			className="te-tool"
@@ -102,27 +132,35 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 			}}
 		>
 			<span className="te-seg" role="group" aria-label="Note value">
-				{choices.map((c) => (
-					<button
-						key={c.duration}
-						type="button"
-						aria-label={VALUE_NAMES[c.duration]}
-						title={
-							c.kind === "off"
-								? `${VALUE_NAMES[c.duration]}: ${c.reason}`
-								: c.kind === "split"
-									? `Split into ${c.count} ${VALUE_NAMES[c.duration].toLowerCase()}s`
-									: c.kind === "merge"
-										? `Merge ${c.count} notes into a ${VALUE_NAMES[c.duration].toLowerCase()}`
-										: VALUE_NAMES[c.duration]
-						}
-						aria-pressed={c.kind === "current"}
-						disabled={c.kind === "off"}
-						onClick={() => c.kind !== "current" && c.kind !== "off" && setValue(c.duration, c.kind)}
-					>
-						<NoteGlyph duration={c.duration} />
-					</button>
-				))}
+				{choices
+					.filter((c) => !isDottedDuration(c.duration))
+					.map((c) => {
+						const lit = c.kind === "current" || c.duration === written;
+						const name = VALUE_NAMES[c.duration];
+						const title =
+							lit
+								? name
+								: c.kind === "off"
+									? `${name}: ${c.reason}`
+									: c.kind === "split"
+										? `Split into ${c.count} ${name.toLowerCase()}s`
+										: c.kind === "grow"
+											? `Lengthen to a ${name.toLowerCase()}, taking the time after it`
+											: `Merge ${c.count} notes into a ${name.toLowerCase()}`;
+						return (
+							<button
+								key={c.duration}
+								type="button"
+								aria-label={name}
+								title={title}
+								aria-pressed={lit}
+								disabled={c.kind === "off" && !lit}
+								onClick={() => !lit && (c.kind === "split" || c.kind === "merge" || c.kind === "grow") && setValue(c.duration, c.kind)}
+							>
+								<NoteGlyph duration={c.duration} />
+							</button>
+						);
+					})}
 			</span>
 			{triplet.kind !== "hidden" && (
 				<button
@@ -141,6 +179,37 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 					3
 				</button>
 			)}
+			<button
+				type="button"
+				className="te-tbtn"
+				aria-label="Dot"
+				aria-pressed={dot.kind === "off"}
+				disabled={dot.kind === "blocked"}
+				title={
+					dot.kind === "blocked"
+						? `Dot: ${dot.reason}`
+						: dot.kind === "off"
+							? "Dot (.): take it off, the half it added comes back as a slot"
+							: "Dot (.): half as long again, taken from the notes after"
+				}
+				onClick={toggleDotHere}
+			>
+				<span aria-hidden>•</span>
+			</button>
+			<button
+				type="button"
+				className="te-tbtn"
+				aria-label="Merge the selected slots"
+				disabled={runMerge.kind === "off"}
+				title={
+					runMerge.kind === "on"
+						? `Merge the ${runMerge.count} selected slots into one ${VALUE_NAMES[runMerge.duration].toLowerCase()}`
+						: `Merge: ${runMerge.reason}`
+				}
+				onClick={mergeRun}
+			>
+				<Combine aria-hidden />
+			</button>
 			<button
 				type="button"
 				className="te-tbtn"
@@ -302,21 +371,27 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 						<dt>0–24</dt>
 						<dd>Type a fret. Two digits within a moment make one number up to 24.</dd>
 						<dt>← →</dt>
-						<dd>Previous / next slot, across bars. Shift selects a run.</dd>
+						<dd>Previous / next slot, across bars.</dd>
 						<dt>↑ ↓</dt>
 						<dd>String up / down.</dd>
+						<dt>⇧ click</dt>
+						<dd>On cells: a block, whose notes the arrows move (⇧ arrows grow it). On the squares under the columns: a run of slots.</dd>
 						<dt>Tab</dt>
 						<dd>Next slot (Shift+Tab: previous).</dd>
 						<dt>⌫</dt>
 						<dd>Clear the note (a run: every note in it).</dd>
 						<dt>X</dt>
-						<dd>An x: a slap on that string.</dd>
-						<dt>H P /</dt>
-						<dd>Hammer-on, pull-off, slide from the note before.</dd>
+						<dd>An x: a dead note on that string — a slap when the slot has an S hit over it.</dd>
+						<dt>T H P S</dt>
+						<dd>Tie, hammer-on, pull-off, slide (also /) from the string&apos;s note before.</dd>
 						<dt>B V</dt>
 						<dd>Cycle a bend · cycle vibrato.</dd>
-						<dt>M L S</dt>
-						<dd>Palm mute · let ring over the run · slap the slot.</dd>
+						<dt>.</dt>
+						<dd>Dot the note: half as long again, taken from the notes after (again: off).</dd>
+						<dt>R</dt>
+						<dd>Rest: keeps the length, clears the notes.</dd>
+						<dt>M L</dt>
+						<dd>Palm mute · let ring over the run.</dd>
 						<dt>⌘Z</dt>
 						<dd>Undo (⌘⇧Z redo).</dd>
 						<dt>Space</dt>
@@ -329,10 +404,11 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 
 			<Dialog open={mergeAsk !== null} onOpenChange={(open) => (open ? undefined : setMergeAsk(null))}>
 				<DialogContent role="alertdialog" data-m="tab" showCloseButton={false} className="te-leave sm:max-w-90">
-					<DialogTitle>Merge and drop notes?</DialogTitle>
+					<DialogTitle>{mergeAsk?.dot ? "Dot and drop notes?" : "Merge and drop notes?"}</DialogTitle>
 					<DialogDescription>
-						{mergeAsk?.dropped === 1 ? "A slot being merged has notes" : `${mergeAsk?.dropped} slots being merged have notes`}. The longer
-						note keeps only the first slot&apos;s.
+						{mergeAsk?.dot
+							? `${mergeAsk.dropped === 1 ? "A slot" : `${mergeAsk.dropped} slots`} the dot takes the time of ${mergeAsk.dropped === 1 ? "has" : "have"} notes. They go.`
+							: `${mergeAsk?.dropped === 1 ? "A slot being merged has notes" : `${mergeAsk?.dropped} slots being merged have notes`}. The longer note keeps only the first slot's.`}
 					</DialogDescription>
 					<div className="te-leave-row">
 						<Button variant="secondary" size="sm" onClick={() => setMergeAsk(null)}>
@@ -341,11 +417,14 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 						<Button
 							size="sm"
 							onClick={() => {
-								if (mergeAsk) commit(() => mergeAsk.pattern);
+								if (mergeAsk) {
+									commit(() => mergeAsk.pattern);
+									if (mergeAsk.landOn) onMerged(mergeAsk.landOn);
+								}
 								setMergeAsk(null);
 							}}
 						>
-							Merge
+							{mergeAsk?.dot ? "Dot" : "Merge"}
 						</Button>
 					</div>
 				</DialogContent>

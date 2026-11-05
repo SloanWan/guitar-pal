@@ -7,7 +7,7 @@ import { blankSpan } from "@/lib/assistant/strum/readPhrase";
  *
  * The fourth thing a player can type that needs no chord and no model — the
  * frets are in the sentence, so nothing is looked up. The two lists pair
- * up in order and must be the same length; `x` in the frets is a slap on the string.
+ * up in order and must be the same length; `x` in the frets is a dead note on the string.
  * String numbers are single digits and may run together. Frets may too —
  * `fret:5768` is four frets — with a two-digit fret in parentheses,
  * `5768(11)(12)`, or the list written with separators, `8-11-10-8`.
@@ -24,7 +24,7 @@ import { blankSpan } from "@/lib/assistant/strum/readPhrase";
 export interface NoteToken {
 	/** Fingerpick order, 0 = high e. */
 	stringIndex: number;
-	/** A fret, or an x (a slap on the string). */
+	/** A fret, or an x (a dead note on the string). */
 	fret: number | "x";
 }
 

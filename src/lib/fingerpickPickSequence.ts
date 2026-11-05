@@ -10,7 +10,7 @@ import {
 	toggleMuted,
 } from "./fingerpickEdit";
 import { setLink } from "./fingerpickTechniqueEdit";
-import { chordFretHints, chordRootString, chordSymbolLabel, effectiveChords } from "./fingerpickChords";
+import { chordFretHints, chordRootString, chordSymbolLabel, effectiveChords, isNoChord } from "./fingerpickChords";
 import { isCompound } from "./strumMeter";
 import type { ChordRef } from "./strumPatterns";
 import type { ChordVoicing } from "./chordVoicing";
@@ -145,9 +145,14 @@ export function tokenizePickSequence(input: string): PickTokenize {
 	return { ok: true, tokens };
 }
 
+// The values an even grid or a pick sequence's hold is written in. The editor's dotted
+// half and dotted sixteenth (#437) are left out: eight dotted sixteenths are no grid
+// anyone writes a bar of 3/4 in.
+const GRID_VALUES: readonly Duration[] = NOTE_LADDER.filter((d) => d !== "dotted-half" && d !== "dotted-sixteenth");
+
 /** The plain or dotted value weighing exactly `ticks`, if there is one; triplet values are never returned. */
 export function plainDurationForTicks(ticks: number): Duration | null {
-	return NOTE_LADDER.find((d) => slotDurationUnits(d) === ticks) ?? null;
+	return GRID_VALUES.find((d) => slotDurationUnits(d) === ticks) ?? null;
 }
 
 /** One cell of a sequence before its holds are folded: whether it is a hold, and its length in ticks. */
@@ -309,7 +314,8 @@ export function applyPickSequence(
 		measures: pattern.measures.map((m, mi) => (mi === measureIndex ? { ...m, slots } : m)),
 	};
 
-	const chords = effectiveChords(next.measures)[measureIndex];
+	// Under N.C. there is no chord to fret from: the strings are written open.
+	const chords = effectiveChords(next.measures)[measureIndex].map((ref) => (isNoChord(ref) ? null : ref));
 	const warnings: string[] = [];
 	const leftOut = new Map<string, Set<number>>();
 	const noShape = new Set<string>();

@@ -16,15 +16,21 @@ import {
 	BRACKET_MIN_LINE,
 	beamGroupsFor,
 	fingerpickToVexFlow,
+	palmMuteIn,
+	ringedHeads,
 	joinCrowdedBrackets,
 	type ChordLabel,
 	type RollMark,
 	type BracketSpan,
 	type ExpressionCounts,
 	type HitMark,
+	type ColumnMark,
+	type ColumnMarkKind,
+	columnMarksOf,
 	type LeadIn,
 	type RenderContext,
 	type SlideMark,
+	type VibratoLine,
 	type WhammyMark
 } from "@/lib/fingerpickToVexFlow";
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
@@ -93,12 +99,30 @@ const BRACKET_GAP = 6;
 // A bracket's line breaks this far either side of a barline, clear of its measure number.
 const MEASURE_NUMBER_CLEAR = 9;
 const BRACKET_LABELS: Record<BracketSpan["kind"], string> = { "palm-mute": "P.M.", "let-ring": "let ring" };
+// A palm mute is written under the tab, past the stems and beams, where it keeps
+// clear of the chord line (#437); a row that has one sets its pitch column lower.
+const PALM_MUTE_BASELINE = 54;
+const PALM_MUTE_BAND = 14;
 // A hit's letter (S, T, B) over its column, above the bracket line; a held
 // bend's dashed line runs at the arrow's height to the next note; a lead-in
 // arc reaches into the row's first note from the barline.
+// A column's pick stroke (⊓ / V) and accent (>) over the stave, the pick nearest, every
+// column on the same rows, as the books print them (#440); chord symbols move up over them.
+const COLUMN_MARK_RISE = 8;
+const COLUMN_MARK_STEP = 10;
+const COLUMN_MARK_HALF_WIDTH = 4;
+const COLUMN_MARK_HEIGHT = 6;
+const CHORD_OVER_MARKS = 5;
 const HIT_FONT_SIZE = 10;
 const HIT_BASELINE_OFFSET = 30;
 const HOLD_LINE_RISE = 30;
+// A vibrato's wave runs over the stave from its note to the next note or rest (#437).
+const VIBRATO_RISE = 9;
+const VIBRATO_START = 10;
+// An open note head on a tab: one ring round the slot's numbers, wider for two digits.
+const HEAD_RING_RX = 6.2;
+const HEAD_RING_PER_CHAR = 3.4;
+const HEAD_RING_RY = 6;
 const HOLD_LINE_START = 28;
 const LEAD_IN_REACH = 14;
 // A slide into / out of a note: a short slanted line beside the number.
@@ -501,6 +525,34 @@ function drawRoll(
 	svgEl.appendChild(g);
 }
 
+/** A column mark centred over its column, its foot at `y`: ⊓ down (the bar heavier, as printed), V up, > accent. */
+function drawColumnMark(svgEl: SVGSVGElement, x: number, y: number, mark: ColumnMarkKind): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	const l = x - COLUMN_MARK_HALF_WIDTH;
+	const r = x + COLUMN_MARK_HALF_WIDTH;
+	const top = y - COLUMN_MARK_HEIGHT;
+	const shape = {
+		down: `M ${l} ${y} L ${l} ${top} L ${r} ${top} L ${r} ${y}`,
+		up: `M ${l} ${top} L ${x} ${y} L ${r} ${top}`,
+		accent: `M ${l} ${top} L ${r} ${(top + y) / 2} L ${l} ${y}`,
+	};
+	path.setAttribute("class", `vf-column-mark vf-column-mark-${mark}`);
+	path.setAttribute("d", shape[mark]);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
+	path.setAttribute("stroke-width", "1.1");
+	path.setAttribute("stroke-linejoin", "miter");
+	svgEl.appendChild(path);
+	if (mark === "down") {
+		const bar = document.createElementNS(ns, "path");
+		bar.setAttribute("d", `M ${l} ${top + 0.9} L ${r} ${top + 0.9}`);
+		bar.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
+		bar.setAttribute("stroke-width", "1.8");
+		svgEl.appendChild(bar);
+	}
+}
+
 /** A hit's letter centred over its column. */
 function drawHit(svgEl: SVGSVGElement, x: number, y: number, label: string): void {
 	const ns = "http://www.w3.org/2000/svg";
@@ -518,6 +570,40 @@ function drawHit(svgEl: SVGSVGElement, x: number, y: number, label: string): voi
 }
 
 /** A held bend: a dashed line at the arrow's height from the bent note to the next. */
+/**
+ * One ring round all of a slot's numbers, standing in for an open note head (a
+ * half, a whole): from the top number to the bottom one, as wide as the widest.
+ */
+function drawHeadRing(svgEl: SVGSVGElement, x: number, yTop: number, yBottom: number, widest: number): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const ring = document.createElementNS(ns, "ellipse");
+	ring.setAttribute("class", "vf-head-ring");
+	ring.setAttribute("cx", String(x));
+	ring.setAttribute("cy", String((yTop + yBottom) / 2));
+	ring.setAttribute("rx", String(HEAD_RING_RX + Math.max(0, widest - 1) * HEAD_RING_PER_CHAR));
+	ring.setAttribute("ry", String((yBottom - yTop) / 2 + HEAD_RING_RY));
+	ring.setAttribute("fill", "none");
+	ring.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
+	ring.setAttribute("stroke-width", "1");
+	svgEl.appendChild(ring);
+}
+
+/** A vibrato's wave from x1 to x2, a wide one deeper and slower. */
+function drawVibrato(svgEl: SVGSVGElement, x1: number, x2: number, y: number, wide: boolean): void {
+	const half = wide ? 4.5 : 3;
+	const depth = wide ? 3.4 : 2.2;
+	let d = `M ${x1} ${y}`;
+	for (let x = x1, up = true; x + half <= x2; x += half, up = !up) d += ` Q ${x + half / 2} ${up ? y - depth : y + depth} ${x + half} ${y}`;
+	const ns = "http://www.w3.org/2000/svg";
+	const path = document.createElementNS(ns, "path");
+	path.setAttribute("class", "vf-vibrato");
+	path.setAttribute("d", d);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
+	path.setAttribute("stroke-width", wide ? "1.5" : "1.3");
+	svgEl.appendChild(path);
+}
+
 function drawHold(svgEl: SVGSVGElement, x1: number, x2: number, y: number): void {
 	const ns = "http://www.w3.org/2000/svg";
 	const line = document.createElementNS(ns, "path");
@@ -692,8 +778,14 @@ export default function TabStaveRow({
 
 			// Room above the stave's top line that VexFlow gives for free, against
 			// what the strips, their gap and the symbol need; the shortfall is headroom.
+			// Column marks take rows over the stave; the chord symbols sit over the tallest stack of them.
+			const markRows = Math.max(0, ...measures.flatMap((m) => m.slots.map((slot) => (slot.isGraceNote ? 0 : columnMarksOf(slot).length))));
+			const chordOffset =
+				markRows > 0
+					? Math.max(CHORD_BASELINE_OFFSET, COLUMN_MARK_RISE + (markRows - 1) * COLUMN_MARK_STEP + COLUMN_MARK_HEIGHT + CHORD_OVER_MARKS)
+					: CHORD_BASELINE_OFFSET;
 			const freeAbove =
-				new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y - CHORD_BASELINE_OFFSET;
+				new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y - chordOffset;
 			const stackHeight = diagramHeight * lanes + CHORD_DIAGRAM_LANE_GAP * (lanes - 1);
 			const wanted =
 				stackHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
@@ -713,7 +805,8 @@ export default function TabStaveRow({
 				}),
 			);
 			const pitchLineHeight = dotted ? PITCH_LINE_HEIGHT_DOTTED : PITCH_LINE_HEIGHT;
-			const pitchBaselineOffset = dotted ? PITCH_FIRST_BASELINE_DOTTED : PITCH_FIRST_BASELINE;
+			const palmMuteBelow = measures.some((m) => palmMuteIn(m, renderContext));
+			const pitchBaselineOffset = (dotted ? PITCH_FIRST_BASELINE_DOTTED : PITCH_FIRST_BASELINE) + (palmMuteBelow ? PALM_MUTE_BAND : 0);
 			const pitchFirstBaseline =
 				new TabStave(0, 0, 100).getYForLine(5) + STAVE_Y + pitchBaselineOffset;
 			const footroom =
@@ -782,17 +875,19 @@ export default function TabStaveRow({
 				rolls: RollMark[];
 				brackets: BracketSpan[];
 				hits: HitMark[];
+				columnMarks: ColumnMark[];
 				holds: number[];
 				leadIns: LeadIn[];
 				slideMarks: SlideMark[];
 				whammies: WhammyMark[];
+				vibratoLines: VibratoLine[];
 				scrapes: number[];
 				stave: TabStave;
 			}[] = [];
 			measures.forEach((measure, i) => {
-				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, noteStrings, noteSlots } =
+				const { notes, connectors, tuplets, chordLabels, rolls, brackets, hits, columnMarks, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, noteStrings, noteSlots } =
 					fingerpickToVexFlow(measure, renderContext);
-				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, holds, leadIns, slideMarks, whammies, scrapes, stave: staves[i] });
+				drawn.push({ measure, notes, noteStrings, noteSlots, rolls, brackets, hits, columnMarks, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, stave: staves[i] });
 				const voice = new Voice({ numBeats: timeSignature[0], beatValue: timeSignature[1] }).setMode(
 					Voice.Mode.SOFT,
 				);
@@ -854,7 +949,7 @@ export default function TabStaveRow({
 				return;
 			}
 			if (placed.length > 0) {
-				const baseline = staves[0].getYForLine(0) - CHORD_BASELINE_OFFSET;
+				const baseline = staves[0].getYForLine(0) - chordOffset;
 				ctx.save();
 				ctx.setFont(CHORD_FONT);
 				ctx.openGroup("chord-label");
@@ -912,14 +1007,33 @@ export default function TabStaveRow({
 				})),
 			);
 			const bracketY = staves[0].getYForLine(0) - BRACKET_BASELINE_OFFSET;
+			const palmMuteY = staves[0].getYForLine(5) + PALM_MUTE_BASELINE;
 			const barlines = staves.slice(1).map((stave) => stave.getX());
-			joinCrowdedBrackets(bracketRuns, (kind) => bracketLabelRoom(BRACKET_LABELS[kind]), BRACKET_GAP).forEach((b) => {
-				drawBracket(svgEl, b.x1, b.x2, bracketY, BRACKET_LABELS[b.kind], b.continued, b.open, barlines);
-			});
-			drawn.forEach(({ notes, hits, holds, leadIns, slideMarks, whammies, scrapes, stave }) => {
+			// Let ring over the stave, palm mute under it: each line joins its own crowded runs.
+			for (const below of [false, true]) {
+				const runs = bracketRuns.filter((r) => (r.kind === "palm-mute") === below);
+				joinCrowdedBrackets(runs, (kind) => bracketLabelRoom(BRACKET_LABELS[kind]), BRACKET_GAP).forEach((b) => {
+					drawBracket(svgEl, b.x1, b.x2, below ? palmMuteY : bracketY, BRACKET_LABELS[b.kind], b.continued, b.open, barlines);
+				});
+			}
+			drawn.forEach(({ measure, notes, noteSlots, noteStrings, hits, columnMarks, holds, leadIns, slideMarks, whammies, vibratoLines, scrapes, stave }) => {
+				// A half or a whole: the slot's numbers ringed together, the open head a tab has no other way to show.
+				notes.forEach((note, j) => {
+					const slot = measure.slots[noteSlots[j]];
+					const strings = noteStrings[j] ?? [];
+					if (!slot || !ringedHeads(slot) || strings.length === 0) return;
+					const widest = Math.max(...strings.map((i) => (slot.strings[i].fret === null ? 1 : String(slot.strings[i].fret).length)));
+					drawHeadRing(svgEl, note.getAbsoluteX(), stave.getYForLine(Math.min(...strings)), stave.getYForLine(Math.max(...strings)), widest);
+				});
 				const hitY = stave.getYForLine(0) - HIT_BASELINE_OFFSET;
 				hits.forEach(({ noteIndex, label }) => {
 					drawHit(svgEl, notes[noteIndex].getAbsoluteX() + 4, hitY, label);
+				});
+				columnMarks.forEach(({ noteIndex, marks }) => {
+					marks.forEach((mark, row) => {
+						const y = stave.getYForLine(0) - COLUMN_MARK_RISE - row * COLUMN_MARK_STEP;
+						drawColumnMark(svgEl, notes[noteIndex].getAbsoluteX() + 4, y, mark);
+					});
 				});
 				const holdY = stave.getYForLine(0) - HOLD_LINE_RISE;
 				holds.forEach((noteIndex) => {
@@ -943,6 +1057,13 @@ export default function TabStaveRow({
 					// Stop short of the next stem so the depth label has room before it.
 					const x2 = next ? next.getAbsoluteX() - 26 : stave.getNoteEndX() - 26;
 					if (x2 > x1) drawWhammy(svgEl, x1, x2, mark.kind === "dive" ? whammyY : whammyY + WHAMMY_LINE_DROP, mark);
+				});
+				const vibratoY = stave.getYForLine(0) - VIBRATO_RISE;
+				vibratoLines.forEach(({ noteIndex, untilNoteIndex, wide }) => {
+					const x1 = notes[noteIndex].getAbsoluteX() + VIBRATO_START;
+					const until = untilNoteIndex === null ? null : notes[untilNoteIndex];
+					const x2 = Math.max(x1 + 12, until ? until.getAbsoluteX() - 4 : stave.getNoteEndX() - 2);
+					drawVibrato(svgEl, x1, x2, vibratoY, wide);
 				});
 				scrapes.forEach((noteIndex) => {
 					drawScrape(svgEl, notes[noteIndex].getAbsoluteX(), stave.getYForLine(0), stave.getYForLine(5));

@@ -9,6 +9,8 @@ import {
 	chordSymbolLabel,
 	clearLeftOutStrings,
 	fillColumnFromChord,
+	NO_CHORD,
+	isNoChord,
 	setChordOnSlots,
 	setSlotChord,
 } from "@/lib/fingerpickChords";
@@ -144,6 +146,14 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 						}}
 						ariaLabel={`Chord for the ${slots.length} selected slots`}
 					/>
+					<button
+						type="button"
+						className="te-chip"
+						title={`N.C. over all ${slots.length}: no chord, the melody alone`}
+						onClick={() => commit((p) => setChordOnSlots(p, [...slots], NO_CHORD))}
+					>
+						N.C.
+					</button>
 					{chordHere && (
 						<button
 							type="button"
@@ -169,7 +179,20 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 							onCreate={(query) => setShapeCreate({ target: single, query })}
 							ariaLabel={`Chord at bar ${single.measureIndex + 1}, slot ${single.slotIndex + 1}`}
 						/>
-						{ownChord && (
+						<button
+							type="button"
+							className="te-chip"
+							aria-pressed={isNoChord(ownChord)}
+							title={
+								isNoChord(ownChord)
+									? "Take N.C. away: the chord before runs on through here"
+									: "N.C.: no chord from here, the melody alone until the next chord"
+							}
+							onClick={() => markChord(single, isNoChord(ownChord) ? null : NO_CHORD)}
+						>
+							N.C.
+						</button>
+						{ownChord && !isNoChord(ownChord) && (
 							<button
 								type="button"
 								className="te-chip"
@@ -181,7 +204,7 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 								Hear
 							</button>
 						)}
-						{!ownChord && chordHere && (
+						{!ownChord && chordHere && !isNoChord(chordHere) && (
 							<button
 								type="button"
 								className="te-chip"
@@ -194,8 +217,11 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 						)}
 					</div>
 					{!chordHere && <p className="te-why">No chord here yet. A chord marked on a slot runs on until the next one.</p>}
+					{isNoChord(chordHere) && (
+						<p className="te-why">N.C. — no chord here: nothing is fretted or drawn as a shape until the next chord.</p>
+					)}
 					{chordHere && state?.status === "loading" && <p className="te-why">Loading shapes…</p>}
-					{chordHere && state?.status === "ready" && !voicing && (
+					{chordHere && !isNoChord(chordHere) && state?.status === "ready" && !voicing && (
 						<p className="te-why">No shape in the library for {chordSymbolLabel(chordHere)}.</p>
 					)}
 					{chordHere && voicing && (

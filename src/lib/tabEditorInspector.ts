@@ -2,7 +2,7 @@ import type { EffectKind, FingerpickPattern, LinkKind, PercussionKind, SpanKind,
 import { setInactive, setStroke, slotHasStringData, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
 import { chordFretHints, fillColumnFromChord, offShapeStrings } from "@/lib/fingerpickChords";
 import type { ChordVoicing } from "@/lib/chordVoicing";
-import { spanCoversSlot, techniqueBlock } from "@/lib/fingerpickTechniqueEdit";
+import { setEffect, spanCoversSlot, techniqueBlock } from "@/lib/fingerpickTechniqueEdit";
 import { EFFECT_DEFS, LINK_DEFS, PERCUSSION_DEFS, SPAN_DEFS, type TechniqueDef } from "@/lib/techniqueRegistry";
 import { BLOCK_REASON } from "@/lib/tabEditorCursor";
 
@@ -96,6 +96,52 @@ export function hitOf(
 		hit: shared(slots.map((s) => s.percussion?.kind ?? "none")),
 		accent: shared(slots.filter((s) => s.percussion).map((s) => s.percussion?.accent === true)),
 	};
+}
+
+export type PickDirection = "down" | "up";
+
+/** The strings of a slot that sound: a fret or an x, the slot not a rest. */
+function soundingStrings(pattern: FingerpickPattern, target: SlotTarget): number[] {
+	const slot = pattern.measures[target.measureIndex]?.slots[target.slotIndex];
+	if (!slot || slot.isRest) return [];
+	return slot.strings.flatMap((sf, i) => (sf.fret !== null || sf.muted ? [i] : []));
+}
+
+/**
+ * The run's pick stroke (⊓ / V, #440). It is a column's mark: a slot takes the
+ * direction any of its sounding notes carries, and the stave draws it once over
+ * the column. Slots with nothing sounding are left out; "none" when no slot sounds.
+ */
+export function pickOf(pattern: FingerpickPattern, targets: readonly SlotTarget[]): Shared<PickDirection | "none"> {
+	const values = targets.flatMap((t): (PickDirection | "none")[] => {
+		const strings = soundingStrings(pattern, t);
+		if (strings.length === 0) return [];
+		const slot = pattern.measures[t.measureIndex].slots[t.slotIndex];
+		const marked = strings.map((i) => slot.strings[i].effects?.pick?.direction).find((d) => d !== undefined);
+		return [marked ?? "none"];
+	});
+	return values.length > 0 ? shared(values) : { kind: "one", value: "none" };
+}
+
+/** Whether any slot of the run sounds, so a pick stroke has a note to go on. */
+export function runSounds(pattern: FingerpickPattern, targets: readonly SlotTarget[]): boolean {
+	return targets.some((t) => soundingStrings(pattern, t).length > 0);
+}
+
+/** The pick stroke on every sounding note of each slot of the run, or off with null. */
+export function applyPick(
+	pattern: FingerpickPattern,
+	targets: readonly SlotTarget[],
+	direction: PickDirection | null,
+): FingerpickPattern {
+	return targets.reduce(
+		(p, t) =>
+			soundingStrings(p, t).reduce(
+				(q, stringIndex) => setEffect(q, { ...t, stringIndex }, "pick", direction ? { direction } : null),
+				p,
+			),
+		pattern,
+	);
 }
 
 export type InspectorTab = "note" | "effects" | "slot" | "bar";

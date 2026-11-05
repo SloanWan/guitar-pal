@@ -18,7 +18,8 @@ import {
 	type Cell,
 	type SlotTarget,
 } from "@/lib/fingerpickEdit";
-import { clearNoteMarks, setEffect, setLink, setPercussion, toggleLink, toggleSpanOver } from "@/lib/fingerpickTechniqueEdit";
+import { clearNoteMarks, setLink, setPercussion, toggleSpanOver } from "@/lib/fingerpickTechniqueEdit";
+import { effectOnNotes, linkOnNotes, type NotesEdit } from "@/lib/tabEditorCursor";
 import { pitchLabel, soundingMidi } from "@/lib/fingerpickPitch";
 import {
 	clearString,
@@ -33,16 +34,20 @@ import { BEND_HEIGHTS_SEMITONES } from "@/lib/techniqueRegistry";
 import { BEND_HEIGHT_LABEL, DEFAULT_PARAMS, VARIANTS } from "@/lib/techniqueEditDefaults";
 import {
 	INSPECTOR_HITS,
+	applyPick,
 	applySweep,
 	replaceWithShape,
 	effectOptions,
 	hitOf,
 	linkOptions,
+	pickOf,
+	runSounds,
 	sectionsFor,
 	spanOptions,
 	strokeOf,
 	type InspectorOption,
 	type InspectorTab,
+	type PickDirection,
 } from "@/lib/tabEditorInspector";
 import { barFill } from "@/lib/tabEditorTools";
 import { Button } from "@/components/ui/button";
@@ -59,6 +64,10 @@ interface Props {
 	cursor: Cell;
 	/** The run edits act on: the selection, or the cursor's slot. */
 	slots: readonly SlotTarget[];
+	/** The notes a note's edit goes on: a block's notes (#437), or the cursor's cell. */
+	notes: readonly Cell[];
+	/** Some of the notes could not take an edit: said where the player sees it. */
+	onSkipped: (message: string) => void;
 	/** The cursor to another string, or to a slot an edit made. */
 	onCursor: (cell: Cell) => void;
 	/** The chords in effect, their shapes and the search's index. */
@@ -73,6 +82,13 @@ const STROKES: readonly { value: Stroke | "none"; label: string }[] = [
 	{ value: "roll-up", label: "Roll ↑" },
 	{ value: "brush-down", label: "Brush ↓" },
 	{ value: "brush-up", label: "Brush ↑" },
+];
+
+// The pick stroke printed over a column: ⊓ down, V up (#440).
+const PICKS: readonly { value: PickDirection | "none"; label: string }[] = [
+	{ value: "none", label: "Off" },
+	{ value: "down", label: "Down ⊓" },
+	{ value: "up", label: "Up V" },
 ];
 
 const SIMPLE_FILLS: readonly { value: Duration; label: string }[] = [
@@ -109,7 +125,7 @@ function Reasons<K extends string>({ options }: { options: readonly InspectorOpt
  * technique registry's, every blocked choice disabled with its reason written
  * out. Writes go through the lib's edits and `commit`, so each is one undo.
  */
-export default function EditorInspector({ working, commit, cursor, slots, onCursor, chordTools, only }: Props) {
+export default function EditorInspector({ working, commit, cursor, slots, notes, onSkipped, onCursor, chordTools, only }: Props) {
 	const [fillAsk, setFillAsk] = useState<{ duration: Duration; cleared: FingerpickPattern } | null>(null);
 	const [wholeAsk, setWholeAsk] = useState<FingerpickPattern | null>(null);
 	// Swept slots holding notes outside the shape: replace them with it?
@@ -121,11 +137,17 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 	const note = measure?.slots[cursor.slotIndex]?.strings[cursor.stringIndex];
 	const capo = patternCapo(working);
 	const fret = note?.fret ?? null;
-	const links = linkOptions(working, cursor);
-	const effects = effectOptions(working, cursor);
+	// A block's edits follow its lead note: the cursor's, else the block's first.
+	const sfAt = (c: Cell) => working.measures[c.measureIndex]?.slots[c.slotIndex]?.strings[c.stringIndex];
+	const lead = notes.find((c) => c.measureIndex === cursor.measureIndex && c.slotIndex === cursor.slotIndex && c.stringIndex === cursor.stringIndex) ?? notes[0] ?? cursor;
+	const leadNote = sfAt(lead);
+	const links = linkOptions(working, lead);
+	const effects = effectOptions(working, lead);
 	const spans = spanOptions(working, slots);
 	const stroke = strokeOf(working, slots);
 	const { hit, accent } = hitOf(working, slots);
+	const pick = pickOf(working, slots);
+	const pickable = runSounds(working, slots);
 	const restAll = slots.length > 0 && slots.every((t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.isRest === true);
 	const fill = measure ? barFill(measure, working.timeSignature) : null;
 	// The shape's frets under each slot of the cursor's bar, for snapping to them.
@@ -134,14 +156,23 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 	const rowHasNotes = measure?.slots.some((slot) => slot.strings[cursor.stringIndex].fret !== null || slot.strings[cursor.stringIndex].muted) ?? false;
 	const barOff = measure ? measureDiffersFromHints(measure, hintFor) : false;
 	const stringName = STRING_LABELS[cursor.stringIndex];
-	const where = slots.length > 1 ? `${slots.length} slots` : `bar ${m + 1} · slot ${cursor.slotIndex + 1}`;
+	const where = slots.length > 1 ? `${slots.length} slots` : notes.length > 1 ? `${notes.length} notes` : `bar ${m + 1} · slot ${cursor.slotIndex + 1}`;
 
+	// A note's edit goes on every note of a block; the ones that cannot take it are counted.
+	function onNotes(done: NotesEdit) {
+		commit(() => done.pattern);
+		if (done.skipped) onSkipped(`${done.skipped} of the ${notes.length} selected notes could not take it`);
+	}
+	const having = (kind: EffectKind) => notes.filter((c) => sfAt(c)?.effects?.[kind] !== undefined);
 	function toggleEffect(kind: EffectKind, on: boolean) {
-		commit((p) => setEffect(p, cursor, kind, on ? null : (DEFAULT_PARAMS[kind] as NoteEffects[typeof kind])));
+		onNotes(effectOnNotes(working, on ? having(kind) : notes, kind, on ? null : (DEFAULT_PARAMS[kind] as NoteEffects[typeof kind])));
 	}
 	function setBend(next: Partial<NonNullable<NoteEffects["bend"]>>) {
-		const bend = note?.effects?.bend;
-		if (bend) commit((p) => setEffect(p, cursor, "bend", { ...bend, ...next }));
+		const bend = leadNote?.effects?.bend;
+		if (bend) onNotes(effectOnNotes(working, having("bend"), "bend", { ...bend, ...next }));
+	}
+	function forNotes(edit: (p: FingerpickPattern, c: Cell) => FingerpickPattern) {
+		commit((p) => notes.reduce(edit, p));
 	}
 	function forRun(edit: (p: FingerpickPattern, t: SlotTarget) => FingerpickPattern) {
 		commit((p) => slots.reduce(edit, p));
@@ -205,27 +236,35 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 									{fret !== null
 										? `Sounds ${pitchLabel(soundingMidi(cursor.stringIndex, fret, capo), "scientific")}${capo ? ` with the capo at ${capo}` : ""}`
 										: note?.muted
-											? "An x: a slap on the string"
+											? "An x: a dead note — a slap under the slot's S hit"
 											: "No note on this string"}
 								</span>
 							</div>
 							<div className="te-ib3">
-								<button type="button" className="te-chip" aria-pressed={note?.muted === true} onClick={() => commit((p) => toggleMuted(p, cursor))}>
-									x slap
+								<button
+									type="button"
+									className="te-chip"
+									aria-pressed={leadNote?.muted === true}
+									onClick={() => {
+										const allX = notes.every((c) => sfAt(c)?.muted === true);
+										forNotes((p, c) => (allX ? setInactive(p, c) : sfAt(c)?.muted ? p : toggleMuted(p, c)));
+									}}
+								>
+									x dead note
 								</button>
 								<button
 									type="button"
 									className="te-chip"
-									disabled={fret === null && !note?.muted}
-									onClick={() => commit((p) => setInactive(p, cursor))}
+									disabled={fret === null && !note?.muted && notes.length <= 1}
+									onClick={() => forNotes(setInactive)}
 								>
 									Clear
 								</button>
 								<button
 									type="button"
 									className="te-chip"
-									disabled={!note?.link && !note?.effects}
-									onClick={() => commit((p) => clearNoteMarks(p, cursor))}
+									disabled={notes.every((c) => !sfAt(c)?.link && !sfAt(c)?.effects)}
+									onClick={() => forNotes(clearNoteMarks)}
 								>
 									No marks
 								</button>
@@ -258,8 +297,8 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 								<button
 									type="button"
 									className="te-chip"
-									aria-pressed={!note?.link}
-									onClick={() => commit((p) => setLink(p, cursor, null))}
+									aria-pressed={!leadNote?.link}
+									onClick={() => onNotes(linkOnNotes(working, notes, null))}
 								>
 									None
 								</button>
@@ -270,7 +309,13 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 										className="te-chip"
 										aria-pressed={o.on}
 										disabled={o.reason !== null}
-										onClick={() => commit((p) => toggleLink(p, cursor, o.kind))}
+										onClick={() =>
+											onNotes(
+												o.on
+													? linkOnNotes(working, notes.filter((c) => sfAt(c)?.link?.kind === o.kind), null)
+													: linkOnNotes(working, notes, { kind: o.kind }),
+											)
+										}
 									>
 										{o.label}
 										{o.key && <kbd>{o.key}</kbd>}
@@ -280,9 +325,15 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 							<Reasons options={links} />
 							<Switch
 								label="Shift slide: pick the second note again"
-								checked={note?.link?.kind === "slide" && note.link.picked === true}
-								disabled={note?.link?.kind !== "slide"}
-								onCheckedChange={(on) => commit((p) => setLink(p, cursor, { kind: "slide", ...(on ? { picked: true } : {}) }))}
+								checked={leadNote?.link?.kind === "slide" && leadNote.link.picked === true}
+								disabled={leadNote?.link?.kind !== "slide"}
+								onCheckedChange={(on) =>
+									commit((p) =>
+										notes
+											.filter((c) => sfAt(c)?.link?.kind === "slide")
+											.reduce((q, c) => setLink(q, c, { kind: "slide", ...(on ? { picked: true } : {}) }), p),
+									)
+								}
 							/>
 						</>
 					)}
@@ -312,7 +363,7 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 								))}
 							</div>
 							<Reasons options={effects} />
-							{note?.effects?.bend && (
+							{leadNote?.effects?.bend && (
 								<>
 									<div className="te-irow">
 										<span className="te-rl">Bend</span>
@@ -322,7 +373,7 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 													key={h}
 													type="button"
 													className="te-chip"
-													aria-pressed={note.effects?.bend?.semitones === h}
+													aria-pressed={leadNote.effects?.bend?.semitones === h}
 													disabled={fret !== null && fret + Math.ceil(h) > MAX_FRET}
 													onClick={() => setBend({ semitones: h })}
 												>
@@ -337,8 +388,8 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 												key={flag}
 												type="button"
 												className="te-chip"
-												aria-pressed={note.effects?.bend?.[flag] === true}
-												onClick={() => setBend({ [flag]: !note.effects?.bend?.[flag] })}
+												aria-pressed={leadNote.effects?.bend?.[flag] === true}
+												onClick={() => setBend({ [flag]: !leadNote.effects?.bend?.[flag] })}
 											>
 												{flag === "pre" ? "Pre-bend" : flag === "release" ? "Release" : "Hold"}
 											</button>
@@ -346,7 +397,7 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 									</div>
 								</>
 							)}
-							{note?.effects?.vibrato && (
+							{leadNote?.effects?.vibrato && (
 								<div className="te-irow">
 									<span className="te-rl">Vibrato</span>
 									<Segmented
@@ -356,8 +407,8 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 											{ value: "normal", label: "Normal" },
 											{ value: "wide", label: "Wide" },
 										]}
-										value={note.effects.vibrato.wide ? "wide" : "normal"}
-										onChange={(v) => commit((p) => setEffect(p, cursor, "vibrato", v === "wide" ? { wide: true } : {}))}
+										value={leadNote.effects.vibrato.wide ? "wide" : "normal"}
+										onChange={(v) => onNotes(effectOnNotes(working, having("vibrato"), "vibrato", v === "wide" ? { wide: true } : {}))}
 									/>
 								</div>
 							)}
@@ -373,8 +424,8 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 													type="button"
 													className="te-chip"
 													title={v.title}
-													aria-pressed={JSON.stringify(note?.effects?.[o.kind]) === JSON.stringify(v.params)}
-													onClick={() => commit((p) => setEffect(p, cursor, o.kind, v.params as NoteEffects[typeof o.kind]))}
+													aria-pressed={JSON.stringify(leadNote?.effects?.[o.kind]) === JSON.stringify(v.params)}
+													onClick={() => onNotes(effectOnNotes(working, having(o.kind), o.kind, v.params as NoteEffects[typeof o.kind]))}
 												>
 													{v.label}
 												</button>
@@ -452,6 +503,21 @@ export default function EditorInspector({ working, commit, cursor, slots, onCurs
 							</div>
 						</div>
 					)}
+					<h3>Pick stroke {pick.kind === "mixed" && <span className="pb-lab">mixed</span>}</h3>
+					<div className="te-chips" role="group" aria-label="Pick stroke">
+						{PICKS.map((o) => (
+							<button
+								key={o.value}
+								type="button"
+								className="te-chip"
+								disabled={!pickable}
+								aria-pressed={pickable && pick.kind === "one" && pick.value === o.value}
+								onClick={() => commit((p) => applyPick(p, slots, o.value === "none" ? null : o.value))}
+							>
+								{o.label}
+							</button>
+						))}
+					</div>
 					<h3>Hit {hit.kind === "mixed" && <span className="pb-lab">mixed</span>}</h3>
 					<div className="te-chips" role="group" aria-label="Hit">
 						{[{ kind: "none", label: "Off" }, ...INSPECTOR_HITS.map((t) => ({ kind: t.kind, label: t.label.en }))].map((o) => (

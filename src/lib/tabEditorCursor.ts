@@ -1,9 +1,10 @@
-import type { FingerpickPattern, LinkKind, SpanKind } from "@/lib/fingerpickTypes";
-import { MAX_FRET, setInactive, setSlotsRest, toggleMuted, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
+import type { EffectKind, FingerpickPattern, Link, LinkKind, NoteEffects, SpanKind } from "@/lib/fingerpickTypes";
+import { MAX_FRET, makeEmptyStringFret, setInactive, setSlotsRest, toggleDot, toggleMuted, withMeasures, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
 import {
 	nextBend,
 	nextVibrato,
 	setEffect,
+	setLink,
 	setPercussion,
 	slotOf,
 	techniqueBlock,
@@ -76,18 +77,7 @@ export function selectedSlots(pattern: FingerpickPattern, cursor: Cell, selectio
 	return out;
 }
 
-/** Shift+arrow: the cursor moves and the run grows (or shrinks) from where it started. */
-export function extendSelection(
-	pattern: FingerpickPattern,
-	cursor: Cell,
-	selection: Selection | null,
-	delta: number,
-): { cursor: Cell; selection: Selection } {
-	const next = stepSlot(pattern, cursor, delta);
-	return { cursor: next, selection: { anchor: selection?.anchor ?? slotOf(cursor), head: slotOf(next) } };
-}
-
-/** Shift-click: the run from where it started (or the cursor) to the clicked slot. */
+/** Shift-click on a column's square: the run from where it started (or the cursor) to the clicked slot. */
 export function selectTo(cursor: Cell, selection: Selection | null, target: Cell): { cursor: Cell; selection: Selection } {
 	return { cursor: target, selection: { anchor: selection?.anchor ?? slotOf(cursor), head: slotOf(target) } };
 }
@@ -98,6 +88,190 @@ export function inSelection(pattern: FingerpickPattern, selection: Selection | n
 	const a = slotOrder(pattern, selection.anchor);
 	const b = slotOrder(pattern, selection.head);
 	return n >= Math.min(a, b) && n <= Math.max(a, b);
+}
+
+// ── A block of cells (#437) ──────────────────────────────────────────────────
+
+/** Shift-clicked cells: the strings × slots between two cells, across barlines. */
+export interface CellBlock {
+	anchor: Cell;
+	head: Cell;
+}
+
+/** Every cell of the block, slot by slot, high string first. */
+export function blockCells(pattern: FingerpickPattern, block: CellBlock): Cell[] {
+	const a = slotOrder(pattern, block.anchor);
+	const b = slotOrder(pattern, block.head);
+	const top = Math.min(block.anchor.stringIndex, block.head.stringIndex);
+	const bottom = Math.max(block.anchor.stringIndex, block.head.stringIndex);
+	const out: Cell[] = [];
+	for (let n = Math.min(a, b); n <= Math.max(a, b); n++)
+		for (let stringIndex = top; stringIndex <= bottom; stringIndex++) out.push({ ...slotAtOrder(pattern, n), stringIndex });
+	return out;
+}
+
+/** Shift+arrow over a block: its head (and the cursor) a slot or a string on; the anchor stays. */
+export function growBlock(pattern: FingerpickPattern, cursor: Cell, block: CellBlock | null, axis: "slot" | "string", delta: -1 | 1): CellBlock {
+	const head = axis === "slot" ? stepSlot(pattern, cursor, delta) : stepString(cursor, delta);
+	return { anchor: block?.anchor ?? cursor, head };
+}
+
+const sounds = (pattern: FingerpickPattern, cell: Cell): boolean => {
+	const sf = noteAt(pattern, cell);
+	return !!sf && (sf.fret !== null || sf.muted);
+};
+
+/**
+ * The block's notes a string up or down, or a slot back or on, together — the
+ * frets as written, every mark with them. The block and the cursor go with
+ * them. Refused when a note would leave the tab or land on a note that stays.
+ */
+export function moveBlock(
+	pattern: FingerpickPattern,
+	block: CellBlock,
+	cursor: Cell,
+	axis: "slot" | "string",
+	delta: -1 | 1,
+): { pattern: FingerpickPattern; block: CellBlock; cursor: Cell } | { blocked: string } {
+	const last = slotOrder(pattern, { measureIndex: pattern.measures.length - 1, slotIndex: pattern.measures.at(-1)!.slots.length - 1 });
+	const shift = (cell: Cell): Cell | null => {
+		if (axis === "string") {
+			const stringIndex = cell.stringIndex + delta;
+			return stringIndex < 0 || stringIndex > 5 ? null : { ...cell, stringIndex };
+		}
+		const n = slotOrder(pattern, cell) + delta;
+		return n < 0 || n > last ? null : { ...slotAtOrder(pattern, n), stringIndex: cell.stringIndex };
+	};
+	const key = (c: Cell) => `${c.measureIndex}:${c.slotIndex}:${c.stringIndex}`;
+	const notes = blockCells(pattern, block).filter((c) => sounds(pattern, c));
+	if (notes.length === 0) return { blocked: "No notes in the selection to move" };
+	const moving = new Set(notes.map(key));
+	const targets: Cell[] = [];
+	for (const note of notes) {
+		const to = shift(note);
+		if (!to)
+			return {
+				blocked:
+					axis === "string"
+						? delta < 0 ? "A note is already on the high e string" : "A note is already on the low E string"
+						: delta < 0 ? "A note is already in the first slot" : "A note is already in the last slot",
+			};
+		if (sounds(pattern, to) && !moving.has(key(to))) return { blocked: "A note that is not selected is in the way" };
+		targets.push(to);
+	}
+	const measures = pattern.measures.map((m) => ({ ...m, slots: m.slots.map((s) => ({ ...s, strings: [...s.strings] as typeof s.strings })) }));
+	const taken = notes.map((c) => measures[c.measureIndex].slots[c.slotIndex].strings[c.stringIndex]);
+	for (const c of notes) measures[c.measureIndex].slots[c.slotIndex].strings[c.stringIndex] = makeEmptyStringFret();
+	targets.forEach((c, i) => {
+		const slot = measures[c.measureIndex].slots[c.slotIndex];
+		slot.strings[c.stringIndex] = taken[i];
+		if (slot.isRest) delete slot.isRest;
+	});
+	const keep = (cell: Cell) => shift(cell) ?? cell;
+	return { pattern: { ...pattern, measures }, block: { anchor: keep(block.anchor), head: keep(block.head) }, cursor: keep(cursor) };
+}
+
+/** The block's cells that hold a note (a fret or an x). */
+export function blockNotes(pattern: FingerpickPattern, block: CellBlock): Cell[] {
+	return blockCells(pattern, block).filter((c) => sounds(pattern, c));
+}
+
+/** The slots a block spans, in order: what a slot edit (a span, a rest, a hit) acts on. */
+export function blockSlots(pattern: FingerpickPattern, block: CellBlock): SlotTarget[] {
+	const seen = new Set<string>();
+	return blockCells(pattern, block).flatMap((c) => {
+		const key = `${c.measureIndex}:${c.slotIndex}`;
+		if (seen.has(key)) return [];
+		seen.add(key);
+		return [slotOf(c)];
+	});
+}
+
+/** An edit on several notes: the tab, and how many notes it could not go on. */
+export interface NotesEdit {
+	pattern: FingerpickPattern;
+	skipped: number;
+}
+
+/** A link on every note (null takes it off); a note it is not available to is left as it is (#437). */
+export function linkOnNotes(pattern: FingerpickPattern, cells: readonly Cell[], link: Link | null): NotesEdit {
+	let skipped = 0;
+	const next = cells.reduce((p, c) => {
+		if (link && techniqueBlock(p, c, link.kind)) {
+			skipped++;
+			return p;
+		}
+		return setLink(p, c, link);
+	}, pattern);
+	return { pattern: next, skipped };
+}
+
+/** An effect on every note (null takes it off); a note it is not available to is left as it is (#437). */
+export function effectOnNotes<K extends EffectKind>(
+	pattern: FingerpickPattern,
+	cells: readonly Cell[],
+	kind: K,
+	value: NoteEffects[K] | null,
+): NotesEdit {
+	let skipped = 0;
+	const semitones = kind === "bend" && value ? (value as NonNullable<NoteEffects["bend"]>).semitones : undefined;
+	const next = cells.reduce((p, c) => {
+		if (value !== null && techniqueBlock(p, c, kind, semitones)) {
+			skipped++;
+			return p;
+		}
+		return setEffect(p, c, kind, value);
+	}, pattern);
+	return { pattern: next, skipped };
+}
+
+/**
+ * A key's edit over a block (#437): a note's edit goes on every note in it, on
+ * or off as the lead note (the cursor's, else the first) has it; an x goes on
+ * every cell; a slot's edit (a span, a hit, a rest, a dot) on the block's slots.
+ */
+export function applyBlockEdit(
+	pattern: FingerpickPattern,
+	block: CellBlock,
+	cursor: Cell,
+	edit: NoteEdit,
+): (EditResult & { skipped?: number }) {
+	const notes = blockNotes(pattern, block);
+	const lead = notes.find((c) => c.measureIndex === cursor.measureIndex && c.slotIndex === cursor.slotIndex && c.stringIndex === cursor.stringIndex) ?? notes[0];
+	const leadNote = lead ? noteAt(pattern, lead) : undefined;
+	const settle = (done: NotesEdit): EditResult & { skipped?: number } =>
+		done.skipped === notes.length && notes.length > 0 ? { blocked: "None of the selected notes can take it" } : done;
+	switch (edit.kind) {
+		case "clear":
+			return { pattern: clearBlock(pattern, block) };
+		case "mute": {
+			const cells = blockCells(pattern, block);
+			const allX = cells.every((c) => noteAt(pattern, c)?.muted === true);
+			// All x already: they go; else every cell becomes an x (a note's fret gives way to it).
+			return { pattern: cells.reduce((p, c) => (allX ? setInactive(p, c) : noteAt(p, c)?.muted ? p : toggleMuted(p, c)), pattern) };
+		}
+		case "link": {
+			if (!leadNote) return { blocked: "No notes in the selection" };
+			if (leadNote.link?.kind === edit.link)
+				return linkOnNotes(pattern, notes.filter((c) => noteAt(pattern, c)?.link?.kind === edit.link), null);
+			return settle(linkOnNotes(pattern, notes, { kind: edit.link }));
+		}
+		case "bend":
+			if (!leadNote) return { blocked: "No notes in the selection" };
+			return settle(effectOnNotes(pattern, notes, "bend", nextBend(leadNote.effects?.bend)));
+		case "vibrato":
+			if (!leadNote) return { blocked: "No notes in the selection" };
+			return settle(effectOnNotes(pattern, notes, "vibrato", nextVibrato(leadNote.effects?.vibrato)));
+		default:
+			return applyNoteEdit(pattern, cursor, blockSlots(pattern, block), edit);
+	}
+}
+
+/** Every cell of the block emptied: Backspace over a block. */
+export function clearBlock(pattern: FingerpickPattern, block: CellBlock): FingerpickPattern {
+	let next = pattern;
+	for (const cell of blockCells(pattern, block)) if (sounds(next, cell)) next = setInactive(next, cell);
+	return next;
 }
 
 // ── Two-digit frets ──────────────────────────────────────────────────────────
@@ -135,7 +309,7 @@ export function typeDigit(
 
 export type EditorKeyAction =
 	| { kind: "slot"; delta: -1 | 1; extend: boolean }
-	| { kind: "string"; delta: -1 | 1 }
+	| { kind: "string"; delta: -1 | 1; extend: boolean }
 	| { kind: "digit"; digit: number }
 	| { kind: "clear" }
 	| { kind: "mute" }
@@ -145,6 +319,7 @@ export type EditorKeyAction =
 	| { kind: "span"; span: SpanKind }
 	| { kind: "slap" }
 	| { kind: "rest" }
+	| { kind: "dot" }
 	| { kind: "escape" }
 	| { kind: "play" }
 	| { kind: "undo" }
@@ -158,7 +333,7 @@ export interface KeyPress {
 	altKey: boolean;
 }
 
-// H, P and / toggle a link; M and L a span — the registry's keys.
+// T, H, P and S toggle a link (`/` a slide too); M and L a span — the registry's keys.
 const LINK_KEYS = new Map(LINK_DEFS.filter((t) => t.key).map((t) => [t.key!.toLowerCase(), t.kind]));
 const SPAN_KEYS = new Map(SPAN_DEFS.filter((t) => t.key).map((t) => [t.key!.toLowerCase(), t.kind]));
 
@@ -178,9 +353,9 @@ export function editorKeyAction(e: KeyPress): EditorKeyAction | null {
 		case "Tab":
 			return { kind: "slot", delta: e.shiftKey ? -1 : 1, extend: false };
 		case "ArrowUp":
-			return { kind: "string", delta: -1 };
+			return { kind: "string", delta: -1, extend: e.shiftKey };
 		case "ArrowDown":
-			return { kind: "string", delta: 1 };
+			return { kind: "string", delta: 1, extend: e.shiftKey };
 		case "Backspace":
 		case "Delete":
 			return { kind: "clear" };
@@ -194,8 +369,9 @@ export function editorKeyAction(e: KeyPress): EditorKeyAction | null {
 	if (lower === "x") return { kind: "mute" };
 	if (lower === "b") return { kind: "bend" };
 	if (lower === "v") return { kind: "vibrato" };
-	if (lower === "s") return { kind: "slap" };
 	if (lower === "r") return { kind: "rest" };
+	if (e.key === ".") return { kind: "dot" };
+	if (e.key === "/") return { kind: "link", link: "slide" };
 	const link = LINK_KEYS.get(lower);
 	if (link && isLinkKind(link)) return { kind: "link", link };
 	const span = SPAN_KEYS.get(lower);
@@ -208,18 +384,18 @@ export function editorKeyAction(e: KeyPress): EditorKeyAction | null {
 /** Why a technique cannot go on the note, said in full where the player sees it. */
 export const BLOCK_REASON: Record<AvailabilityBlock, string> = {
 	"no-note": "Needs a note",
-	muted: "An x is a slap: there is no pitch to shape",
+	muted: "An x is a dead note: there is no pitch to shape",
 	"open-string": "An open string cannot be bent or shaken",
 	"off-neck": "The bend would run off the neck",
 	"no-previous-note": "No previous note on this string",
-	"previous-muted": "The previous note on this string is a slap",
+	"previous-muted": "The previous note on this string is a dead note (x)",
 	"wrong-direction": "Not valid for this fret movement",
 	"different-fret": "Not valid for this fret movement",
 };
 
 export type NoteEdit = Extract<
 	EditorKeyAction,
-	{ kind: "clear" | "mute" | "link" | "bend" | "vibrato" | "span" | "slap" | "rest" }
+	{ kind: "clear" | "mute" | "link" | "bend" | "vibrato" | "span" | "slap" | "rest" | "dot" }
 >;
 
 export type EditResult = { pattern: FingerpickPattern } | { blocked: string };
@@ -276,6 +452,14 @@ export function applyNoteEdit(
 			let next = pattern;
 			for (const t of slots) next = setPercussion(next, t, all ? undefined : { kind: "slap" });
 			return { pattern: next };
+		}
+		case "dot": {
+			// The dot at the cursor's slot; one that would swallow notes is the toolbar's, which asks first.
+			const dot = toggleDot(pattern.measures, cursor.measureIndex, cursor.slotIndex, pattern.timeSignature);
+			if (dot.type === "blocked") return { blocked: dot.reason };
+			if (dot.type === "confirm")
+				return { blocked: `The dot would drop the notes after it: use the toolbar's dot to confirm` };
+			return { pattern: withMeasures(pattern, dot.measures) };
 		}
 		case "rest": {
 			// The same rule: rests when any slot of the run still sounds.

@@ -47,12 +47,14 @@ export const TICKS_PER_WHOLE = 96;
 
 export const DURATION_TICKS: Record<Duration, number> = {
 	whole: 96,
+	"dotted-half": 72,
 	half: 48,
 	quarter: 24,
 	"dotted-quarter": 36,
 	eighth: 12,
 	"dotted-eighth": 18,
 	"eighth-triplet": 8,
+	"dotted-sixteenth": 9,
 	sixteenth: 6,
 	"sixteenth-triplet": 4,
 	"32nd": 3,
@@ -143,11 +145,13 @@ export function expandTripletGroups(
 // as a rung a slot can be tiled with.
 export const NOTE_LADDER: Duration[] = [
 	"whole", // 96
+	"dotted-half", // 72
 	"half", // 48
 	"dotted-quarter", // 36
 	"quarter", // 24
 	"dotted-eighth", // 18
 	"eighth", // 12
+	"dotted-sixteenth", // 9
 	"sixteenth", // 6
 	"32nd", // 3
 ];
@@ -308,25 +312,25 @@ export function toggleMuted(pattern: FingerpickPattern, cell: Cell): FingerpickP
 	);
 }
 
-// The StringFret occupying the same string in the slot immediately before `cell`
-// (previous slot in the measure, or last slot of the previous measure). null at
-// the very start of the pattern.
-export function previousSlotFret(pattern: FingerpickPattern, cell: Cell): StringFret | null {
-	const { measureIndex, slotIndex, stringIndex } = cell;
-	if (slotIndex > 0) {
-		return pattern.measures[measureIndex].slots[slotIndex - 1].strings[stringIndex];
-	}
-	if (measureIndex > 0) {
-		const prevSlots = pattern.measures[measureIndex - 1].slots;
-		return prevSlots[prevSlots.length - 1].strings[stringIndex];
+// The note a link on `cell` reaches back to: the nearest earlier note on the same
+// string — a fret or an x — across slots where that string is silent and across
+// barlines, whatever the values between (#437). null when the string has none.
+export function previousNoteOnString(pattern: FingerpickPattern, cell: Cell): StringFret | null {
+	const { stringIndex } = cell;
+	for (let m = cell.measureIndex; m >= 0; m--) {
+		const slots = pattern.measures[m].slots;
+		for (let s = (m === cell.measureIndex ? cell.slotIndex : slots.length) - 1; s >= 0; s--) {
+			const sf = slots[s].strings[stringIndex];
+			if (sf && (sf.fret !== null || sf.muted)) return sf;
+		}
 	}
 	return null;
 }
 
-// A technique (hammer-on / pull-off / slide) needs a sounding note on the same
-// string in the previous slot to connect from.
+// A link (tie / hammer-on / pull-off / slide) needs a sounding note on the same
+// string earlier to connect from.
 export function hasPreviousNoteOnString(pattern: FingerpickPattern, cell: Cell): boolean {
-	const sf = previousSlotFret(pattern, cell);
+	const sf = previousNoteOnString(pattern, cell);
 	return !!sf && sf.fret !== null && !sf.muted;
 }
 
@@ -1226,6 +1230,131 @@ export function mergeTargetsForSlot(measure: Measure, slotIndex: number): Durati
 		if (duration) results.push({ duration, count });
 	}
 	return results;
+}
+
+// ── Dots (#437) ───────────────────────────────────────────────────────────────
+
+// A dot lengthens a plain value by half. There is no dotted whole or dotted 32nd.
+const DOTTED: Partial<Record<Duration, Duration>> = {
+	half: "dotted-half",
+	quarter: "dotted-quarter",
+	eighth: "dotted-eighth",
+	sixteenth: "dotted-sixteenth",
+};
+const UNDOTTED: Partial<Record<Duration, Duration>> = Object.fromEntries(
+	Object.entries(DOTTED).map(([plain, dotted]) => [dotted, plain]),
+);
+
+export function isDottedDuration(duration: Duration): boolean {
+	return UNDOTTED[duration] !== undefined;
+}
+
+/** The plain value a dotted one is written on; a plain value is its own. */
+export function undottedValue(duration: Duration): Duration {
+	return UNDOTTED[duration] ?? duration;
+}
+
+export type DotResult =
+	| { type: "ok"; measures: Measure[] }
+	/** Adding the dot swallows slots that hold notes: applied only once the player agrees. */
+	| { type: "confirm"; measures: Measure[]; dropped: number }
+	| { type: "blocked"; reason: string };
+
+/**
+ * `need` ticks taken from the slots after `slotIndex`: whole slots are swallowed
+ * and the last one is cut short, keeping its notes, when what is left of it is a
+ * plain value; past the bar's last slot the time comes from the bar's free room
+ * (a bar written short). The slots after, as they stand, and the ones swallowed.
+ */
+function takeAfter(
+	measure: Measure,
+	slotIndex: number,
+	need: number,
+	timeSignature: Meter,
+): { after: BeatSlot[]; swallowed: BeatSlot[] } | { blocked: string } {
+	let end = slotIndex + 1;
+	while (need > 0) {
+		const next = measure.slots[end];
+		if (!next) {
+			const room = measureCapacity(timeSignature) - usedUnits(measure.slots);
+			return need <= room
+				? { after: [], swallowed: measure.slots.slice(slotIndex + 1) }
+				: { blocked: "No room left in the bar after this note" };
+		}
+		if (isTripletDuration(next.duration)) return { blocked: "A triplet after this note can't give up time" };
+		const units = slotDurationUnits(next.duration);
+		if (units <= need) {
+			need -= units;
+			end++;
+			continue;
+		}
+		const left = DURATION_BY_UNITS.get(units - need);
+		if (!left) return { blocked: "The note after this one can't be shortened to a plain value" };
+		return { after: [{ ...next, duration: left }, ...measure.slots.slice(end + 1)], swallowed: measure.slots.slice(slotIndex + 1, end) };
+	}
+	return { after: measure.slots.slice(end), swallowed: measure.slots.slice(slotIndex + 1, end) };
+}
+
+export type LengthenResult = DotResult;
+
+/**
+ * The slot made `duration` long, the time taken from the notes after it and, in
+ * a bar written short, from its free room (#437). A swallowed slot's chord mark
+ * moves onto the note when it has none; notes swallowed ask first.
+ */
+export function lengthenSlot(
+	measures: Measure[],
+	measureIndex: number,
+	slotIndex: number,
+	duration: Duration,
+	timeSignature: Meter,
+): LengthenResult {
+	const measure = measures[measureIndex];
+	const slot = measure?.slots[slotIndex];
+	if (!measure || !slot) return { type: "blocked", reason: "No slot here" };
+	if (isTripletDuration(slot.duration) || isTripletDuration(duration)) return { type: "blocked", reason: "A triplet changes as a group" };
+	const need = slotDurationUnits(duration) - slotDurationUnits(slot.duration);
+	if (need <= 0) return { type: "blocked", reason: "Not longer than the note" };
+	const taken = takeAfter(measure, slotIndex, need, timeSignature);
+	if ("blocked" in taken) return { type: "blocked", reason: taken.blocked };
+	const chord = slot.chord ?? taken.swallowed.find((s) => s.chord)?.chord;
+	const slots = [
+		...measure.slots.slice(0, slotIndex),
+		{ ...slot, duration, ...(chord !== undefined ? { chord } : {}) },
+		...taken.after,
+	];
+	const next = measures.map((m, i) => (i === measureIndex ? { ...m, slots } : m));
+	const dropped = taken.swallowed.filter(slotHasStringData).length;
+	return dropped > 0 ? { type: "confirm", measures: next, dropped } : { type: "ok", measures: next };
+}
+
+/**
+ * The slot's dot on or off, the bar still adding up. On, the half it adds is
+ * taken as `lengthenSlot` takes time; off, the half comes back as an empty slot
+ * after the note.
+ */
+export function toggleDot(measures: Measure[], measureIndex: number, slotIndex: number, timeSignature: Meter): DotResult {
+	const measure = measures[measureIndex];
+	const slot = measure?.slots[slotIndex];
+	if (!measure || !slot) return { type: "blocked", reason: "No slot here" };
+	if (isTripletDuration(slot.duration)) return { type: "blocked", reason: "A triplet note can't be dotted" };
+
+	const plain = UNDOTTED[slot.duration];
+	if (plain) {
+		const freed = slotDurationUnits(slot.duration) - slotDurationUnits(plain);
+		const back = DURATION_BY_UNITS.get(freed)!;
+		const slots = [
+			...measure.slots.slice(0, slotIndex),
+			{ ...slot, duration: plain },
+			makeEmptySlot(back),
+			...measure.slots.slice(slotIndex + 1),
+		];
+		return { type: "ok", measures: measures.map((m, i) => (i === measureIndex ? { ...m, slots } : m)) };
+	}
+
+	const dotted = DOTTED[slot.duration];
+	if (!dotted) return { type: "blocked", reason: `A ${slot.duration === "whole" ? "whole" : "32nd"} note has no dotted value` };
+	return lengthenSlot(measures, measureIndex, slotIndex, dotted, timeSignature);
 }
 
 // ── Time signature change ─────────────────────────────────────────────────────

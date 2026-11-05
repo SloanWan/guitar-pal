@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChordRef } from "@/lib/strumPatterns";
+import { isNoChord } from "@/lib/fingerpickChords";
 import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
@@ -41,7 +42,8 @@ export function useChordVoicings(
 	// identity — a re-render with the same chords must not refetch.
 	const wantedKey = useMemo(() => {
 		const seen = new Map<string, ChordRef>();
-		for (const ref of refs) seen.set(keyOf(ref), ref);
+		// N.C. has no shapes to look up.
+		for (const ref of refs) if (!isNoChord(ref)) seen.set(keyOf(ref), ref);
 		return JSON.stringify([...seen.values()].map(({ root, suffix }) => ({ root, suffix })));
 	}, [refs]);
 
@@ -69,6 +71,7 @@ export function useChordVoicings(
 
 	return useCallback(
 		(ref: ChordRef): ChordVoicingsState => {
+			if (isNoChord(ref)) return { status: "ready", voicings: [] };
 			const cached = peekVoicings(ref.root, ref.suffix);
 			const mine = userVoicings.filter((v) => v.root === ref.root && v.suffix === ref.suffix);
 			if (cached === null && mine.length === 0) {

@@ -23,6 +23,9 @@ import {
 	replaceRowWithHints,
 	measureDiffersFromHints,
 	replaceMeasureWithHints,
+	NO_CHORD,
+	isNoChord,
+	isNoChordWord,
 } from "@/lib/fingerpickChords";
 import { makeEmptySlot, setFret, toggleMuted } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
@@ -85,6 +88,29 @@ describe("effectiveChords", () => {
 		const measures = [measure("a", [undefined, C, undefined]), measure("b", [Am, undefined])];
 		const out = effectiveChords(measures);
 		expect(out.map((row) => row.length)).toEqual(measures.map((m) => m.slots.length));
+	});
+});
+
+describe("N.C. (#437)", () => {
+	it("ends the chord before it and runs on to the next mark", () => {
+		const out = effectiveChords([measure("a", [C, undefined, NO_CHORD, undefined]), measure("b", [undefined, G7])]);
+		expect(out).toEqual([
+			[C, C, NO_CHORD, NO_CHORD],
+			[NO_CHORD, G7],
+		]);
+		expect(isNoChord(out[1][0])).toBe(true);
+	});
+
+	it("is written N.C., is not one of the tab's chords, and still draws a chord line", () => {
+		const measures = [measure("a", [C, NO_CHORD, Am])];
+		expect(chordSymbolLabel(NO_CHORD)).toBe("N.C.");
+		expect(chordsUsed(measures)).toEqual([C, Am]);
+		expect(patternHasChords([measure("a", [NO_CHORD])])).toBe(true);
+	});
+
+	it("is read from the ways a page writes it", () => {
+		for (const w of ["N.C.", "NC", "n.c", "N. C."]) expect(isNoChordWord(w)).toBe(true);
+		for (const w of ["C", "Nc7", "N"]) expect(isNoChordWord(w)).toBe(false);
 	});
 });
 

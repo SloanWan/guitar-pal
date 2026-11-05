@@ -126,12 +126,26 @@ describe("useTabCursor", () => {
 		expect(onBlocked).toHaveBeenCalledWith("No previous note on this string");
 	});
 
-	it("selects with Shift, and Escape lets the selection go first", () => {
+	it("grows a block of cells with Shift+arrows, and Escape lets it go first (#437)", () => {
 		render(false);
 		press("ArrowRight", { shiftKey: true });
 		press("ArrowRight", { shiftKey: true });
-		expect(result.current.selection).toEqual({ anchor: { measureIndex: 0, slotIndex: 0 }, head: { measureIndex: 0, slotIndex: 2 } });
-		press("Escape");
 		expect(result.current.selection).toBeNull();
+		expect(result.current.block).toEqual({
+			anchor: { measureIndex: 0, slotIndex: 0, stringIndex: 0 },
+			head: { measureIndex: 0, slotIndex: 2, stringIndex: 0 },
+		});
+		press("Escape");
+		expect(result.current.block).toBeNull();
+	});
+
+	it("selects one slot from its square, a run with Shift on another's", () => {
+		render(false);
+		act(() => result.current.pickSlot({ measureIndex: 0, slotIndex: 1, stringIndex: 0 }, false));
+		expect(result.current.selection).toEqual({ anchor: { measureIndex: 0, slotIndex: 1 }, head: { measureIndex: 0, slotIndex: 1 } });
+		act(() => result.current.pickSlot({ measureIndex: 0, slotIndex: 0, stringIndex: 0 }, false));
+		act(() => result.current.pickSlot({ measureIndex: 0, slotIndex: 2, stringIndex: 0 }, true));
+		expect(result.current.selection).toEqual({ anchor: { measureIndex: 0, slotIndex: 0 }, head: { measureIndex: 0, slotIndex: 2 } });
+		expect(result.current.block).toBeNull();
 	});
 });

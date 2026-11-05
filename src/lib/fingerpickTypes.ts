@@ -3,12 +3,14 @@ import type { TabReference } from "@/lib/tabReferences";
 
 export type Duration =
 	| "whole"
+	| "dotted-half"
 	| "half"
 	| "quarter"
 	| "dotted-quarter"
 	| "eighth"
 	| "dotted-eighth"
 	| "eighth-triplet"
+	| "dotted-sixteenth"
 	| "sixteenth"
 	| "sixteenth-triplet"
 	| "32nd";
@@ -91,7 +93,7 @@ export const FINGERPICK_SCHEMA_VERSION = 2;
 
 export type StringFret = {
 	fret: number | null;   // null = string not in play for this slot
-	muted: boolean;        // render as "x": a slap on this string, sounding with the slot's other notes
+	muted: boolean;        // render as "x": a dead note on this string (a slap under the slot's S hit), sounding with the slot's other notes
 	/** How the note is reached from the previous note on its string. */
 	link?: Link;
 	/** What is done to the note itself, keyed by kind. */

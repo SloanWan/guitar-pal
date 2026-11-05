@@ -5,6 +5,7 @@ import { exactChord } from "@/lib/assistant/chordAsk";
 import type { BeatSlot, Duration, FingerpickPattern, Link, Measure, NoteEffects } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
 import { indexPattern, spanCovers } from "@/lib/fingerpickIndex";
+import { NO_CHORD, isNoChordWord } from "@/lib/fingerpickChords";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import { isSupportedMeter, meterLabel, SUPPORTED_METERS, type Meter } from "@/lib/strumMeter";
@@ -48,7 +49,7 @@ export const IMPORT_SLOT_SCHEMA = z.object({
 	duration: z.enum(DURATIONS).describe("The written note value of this slot."),
 	notes: z.array(IMPORT_NOTE_SCHEMA).max(6).describe("The strings struck together in this slot; empty with rest: true for a rest."),
 	rest: z.boolean().optional().describe("A rest of this duration."),
-	chord: z.string().max(20).optional().describe("A chord name printed above this slot, as printed."),
+	chord: z.string().max(20).optional().describe('A chord name printed above this slot, as printed; "N.C." for no chord (the melody alone until the next chord).'),
 	hit: PERCUSSION_INPUT.optional(),
 });
 
@@ -95,6 +96,7 @@ export function parseMeter(text: string): Meter | null {
  * "Am7" and "a minor 7" both land. Null when the library has nothing for it.
  */
 function resolveChord(word: string, index: readonly ChordIndexEntry[]): ChordRef | null {
+	if (isNoChordWord(word)) return NO_CHORD;
 	const exact = exactChord(word, index);
 	if (exact) return exact;
 	const first = searchChords(index, word, 1)[0];

@@ -6,7 +6,7 @@ import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { addMeasure, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
 import { indexPattern } from "@/lib/fingerpickIndex";
 import { patternHasChords, type FretHint } from "@/lib/fingerpickChords";
-import { inSelection, type Selection } from "@/lib/tabEditorCursor";
+import { blockCells, inSelection, type CellBlock, type Selection } from "@/lib/tabEditorCursor";
 import type { CommitPattern } from "@/components/fingerpick/useEditHistory";
 import MeasureBlock, { type HoveredCell } from "./MeasureBlock";
 import { useHasFinePointer } from "./gridShared";
@@ -17,6 +17,8 @@ interface Props {
 	commit: CommitPattern;
 	cursor: Cell;
 	selection: Selection | null;
+	/** Shift-clicked cells, whose notes the arrows move (#437). */
+	block: CellBlock | null;
 	chordTools: ChordTools;
 	countEighths: boolean;
 	onPick: (cell: Cell, shift: boolean, take: number | null) => void;
@@ -33,7 +35,7 @@ interface Props {
  * reason. The element is the playhead's: each slot column carries `data-col`.
  */
 const MeasureGrid = forwardRef<HTMLDivElement, Props>(function MeasureGrid(props, ref) {
-	const { working, commit, cursor, selection, chordTools, countEighths } = props;
+	const { working, commit, cursor, selection, block, chordTools, countEighths } = props;
 	const [hover, setHover] = useState<HoveredCell | null>(null);
 	const finePointer = useHasFinePointer();
 	const spanIndex = useMemo(() => indexPattern(working), [working]);
@@ -50,6 +52,12 @@ const MeasureGrid = forwardRef<HTMLDivElement, Props>(function MeasureGrid(props
 			),
 		[working, selection],
 	);
+	// Per bar, the block's cells as "slot:string,…" (a string, so an unchanged block keeps the bar memoized).
+	const pickedByBar = useMemo(() => {
+		const out: string[][] = working.measures.map(() => []);
+		if (block) for (const c of blockCells(working, block)) out[c.measureIndex].push(`${c.slotIndex}:${c.stringIndex}`);
+		return out.map((cells) => cells.join(","));
+	}, [working, block]);
 
 	// The page's handlers, latest each render, behind stable callbacks.
 	const handlers = useRef(props);
@@ -78,6 +86,7 @@ const MeasureGrid = forwardRef<HTMLDivElement, Props>(function MeasureGrid(props
 					hover={hover?.measureIndex === measureIndex ? hover : null}
 					cursor={cursor.measureIndex === measureIndex ? cursor : null}
 					selected={selectedByBar[measureIndex] ?? ""}
+					picked={pickedByBar[measureIndex] ?? ""}
 					hints={hintsByBar[measureIndex] ?? []}
 					chords={chordsInEffect[measureIndex] ?? []}
 					spanIndex={spanIndex}

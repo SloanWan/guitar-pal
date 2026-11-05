@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { chordFretHints, chordsUsed, effectiveChords, type FretHint } from "@/lib/fingerpickChords";
+import { chordFretHints, chordsUsed, effectiveChords, isNoChord, type FretHint } from "@/lib/fingerpickChords";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { getChordIndex } from "@/lib/chords";
@@ -31,7 +31,7 @@ export function useChordTools(
 	const { voicings: userVoicings, saveVoicing } = useUserChordVoicings(user, loading);
 	const chordsInEffect = useMemo(() => effectiveChords(pattern.measures), [pattern.measures]);
 	const refs = useMemo(
-		() => pattern.measures.flatMap((m) => m.slots.flatMap((slot) => (slot.chord ? [slot.chord] : []))),
+		() => pattern.measures.flatMap((m) => m.slots.flatMap((slot) => (slot.chord && !isNoChord(slot.chord) ? [slot.chord] : []))),
 		[pattern.measures],
 	);
 	const voicingsFor = useChordVoicings(refs, userVoicings);

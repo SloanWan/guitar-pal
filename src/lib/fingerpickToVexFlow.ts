@@ -15,11 +15,12 @@ import {
 	Annotation,
 	AnnotationVerticalJustify,
 	Tremolo,
-	Vibrato,
 	Bend,
+	Dot,
 } from "vexflow";
 
 import {
+	type BeatSlot,
 	type Measure,
 	type Duration,
 	type EffectKind,
@@ -31,7 +32,7 @@ import {
 	type Stroke,
 } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel } from "@/lib/fingerpickChords";
-import { TRIPLET_GROUP_SIZE, tripletGroups } from "@/lib/fingerpickEdit";
+import { TRIPLET_GROUP_SIZE, isDottedDuration, tripletGroups } from "@/lib/fingerpickEdit";
 import { indexPattern, slurredInside, type PatternIndex } from "@/lib/fingerpickIndex";
 import { WHAMMY_SEMITONES } from "@/lib/fingerpickExpression";
 import { isCompound, type Meter } from "@/lib/strumMeter";
@@ -58,6 +59,7 @@ class SilentNote extends GhostNote {
 
 export const VEX_DURATION: Record<Duration, string> = {
 	whole: "w",
+	"dotted-half": "hd",
 	half: "h",
 	quarter: "q",
 	"dotted-quarter": "qd",
@@ -66,10 +68,27 @@ export const VEX_DURATION: Record<Duration, string> = {
 	// Tuplet notes use the underlying undivided duration; the Tuplet wrapper
 	// adjusts tick values for correct Formatter spacing and draws the bracket.
 	"eighth-triplet": "8",
+	"dotted-sixteenth": "16d",
 	sixteenth: "16",
 	"sixteenth-triplet": "16",
 	"32nd": "32",
 };
+
+// VexFlow sizes its glyphs (30pt) for a 10px line space; a tab stave's is 13px.
+const REST_FONT_SIZE = 30 * (13 / 10);
+
+/**
+ * A rest drawn at the tab stave's scale, so a half rest on its line and a whole
+ * rest under its line read apart. VexFlow rebuilds the heads on every reset, so
+ * the size goes back on there.
+ */
+class TabRest extends StaveNote {
+	reset(): this {
+		super.reset();
+		for (const head of this.noteHeads) head.setFontSize(REST_FONT_SIZE);
+		return this;
+	}
+}
 
 /**
  * A chord symbol to write above the stave, at the note where the chord changes.
@@ -333,6 +352,21 @@ function spanSegments(
 	return out;
 }
 
+// A tab has no note heads, so an open head is drawn as a ring round the number:
+// a stem and a ring is a half, a ring alone a whole (no stem), a stem alone a quarter.
+const RINGED: ReadonlySet<Duration> = new Set<Duration>(["whole", "dotted-half", "half"]);
+
+/** Whether the slot's numbers are ringed for an open note head (a half or a whole, not a rest). */
+export function ringedHeads(slot: BeatSlot): boolean {
+	return RINGED.has(slot.duration) && !slot.isRest;
+}
+
+/** Whether a palm-mute span reaches into this measure: the row reserves its line under the stave (#437). */
+export function palmMuteIn(measure: Measure, context?: RenderContext): boolean {
+	if (!context || measure.slots.length === 0) return false;
+	return spansTouching(measure, context.index).some((span) => span.kind === "palmMute");
+}
+
 /** The spans with a member in this measure, in the pattern's order. */
 function spansTouching(measure: Measure, index: PatternIndex): PatternIndex["spansByMeasure"][number] {
 	const pos = index.slotPos.get(measure.slots[0].id);
@@ -353,19 +387,11 @@ const aboveMono = (text: string): Annotation => above(text).setFont(MARK_FONT, 1
  * a bend and the ghost note are handled apart, as they touch the number.
  */
 const EFFECT_MARKS: Partial<Record<EffectKind, (note: TabNote, effects: NoteEffects, counts: ExpressionCounts) => void>> = {
-	vibrato: (note, effects, counts) => {
-		const wide = effects.vibrato?.wide === true;
-		if (wide) counts.wideVibratos++;
+	// The wave itself is the renderer's (`vibratoLines`), drawn for the note's whole
+	// length (#437); the count keeps the room a wave needs at the least.
+	vibrato: (_note, effects, counts) => {
+		if (effects.vibrato?.wide === true) counts.wideVibratos++;
 		else counts.vibratos++;
-		// Vibrato's constructor measures its glyph through the canvas API; without
-		// one (jsdom / SSR) the mark is skipped — it draws in a browser.
-		try {
-			const vib = new Vibrato();
-			if (wide) vib.setVibratoWidth(40);
-			note.addModifier(vib);
-		} catch {
-			// No canvas context.
-		}
 	},
 	harmonic: (note, effects) => {
 		const type = effects.harmonic?.type;
@@ -377,8 +403,6 @@ const EFFECT_MARKS: Partial<Record<EffectKind, (note: TabNote, effects: NoteEffe
 		const speed = effects.tremolo?.speed;
 		note.addModifier(new Tremolo(speed === "8th" ? 1 : speed === "16th" ? 2 : 3));
 	},
-	pick: (note, effects) => note.addModifier(above(effects.pick?.direction === "up" ? "V" : "⊓")),
-	accent: (note) => note.addModifier(above(">")),
 	staccato: (note) => note.addModifier(above(".")),
 	whammy: (note, effects, counts) => {
 		// "w/bar" over the note; the dashed dive / pull line is the renderer's (`whammies`).
@@ -414,11 +438,30 @@ class ShiftSlide extends TabSlide {
 	}
 }
 
+/**
+ * A hammer-on / pull-off: its H or P written just over its own arc, not at the
+ * stave's top where the chord line runs (#437).
+ */
+class LinkTie extends TabTie {
+	renderTieText(firstX: number, lastX: number): void {
+		const firstY = this.getFirstYs()[this.notes.firstIndexes?.[0] ?? 0];
+		const lastY = this.getLastYs()[this.notes.lastIndexes?.[0] ?? 0];
+		if (!this.text || firstY === undefined || lastY === undefined) return super.renderTieText(firstX, lastX);
+		const o = this.renderOptions;
+		// The arc's outer edge peaks half its control point above the strings it joins.
+		const rise = o.yShift + (Math.abs(lastX - firstX) < o.shortTieCutoff ? o.cp2Short : o.cp2) / 2;
+		const ctx = this.checkContext();
+		ctx.setFont(this.fontInfo);
+		const width = ctx.measureText(this.text).width;
+		ctx.fillText(this.text, (firstX + lastX) / 2 - width / 2 + o.textShiftX, (firstY + lastY) / 2 - rise - 2);
+	}
+}
+
 /** The connector a link draws from the previous note on its string. */
 const LINK_CONNECTORS: Record<LinkKind, (notes: TieNotes, sf: StringFret, prevFret: number | null) => TabTie | TabSlide> = {
 	tie: (notes) => new TabTie(notes),
-	hammer: (notes) => TabTie.createHammeron(notes),
-	pull: (notes) => TabTie.createPulloff(notes),
+	hammer: (notes) => new LinkTie(notes, "H"),
+	pull: (notes) => new LinkTie(notes, "P"),
 	slide: (notes, sf, prevFret) => {
 		const down = prevFret !== null && sf.fret !== null && sf.fret < prevFret;
 		if (sf.link?.kind === "slide" && sf.link.picked) return new ShiftSlide(notes, down ? TabSlide.SLIDE_DOWN : TabSlide.SLIDE_UP);
@@ -437,6 +480,8 @@ export const RENDER_KINDS: ReadonlySet<string> = new Set([
 	"bend",
 	"ghost",
 	...Object.keys(EFFECT_MARKS),
+	"pick",
+	"accent",
 	"slideIn",
 	"slideOut",
 	...Object.keys(BRACKET_OF_SPAN),
@@ -451,6 +496,35 @@ export interface HitMark {
 	noteIndex: number;
 	kind: PercussionKind;
 	label: string;
+}
+
+/** A mark over a column: its pick stroke (⊓ down, V up) or its accent. */
+export type ColumnMarkKind = "down" | "up" | "accent";
+
+/** A column's marks, drawn by the renderer over the stave nearest first, every column on the same rows (#440). */
+export interface ColumnMark {
+	noteIndex: number;
+	marks: ColumnMarkKind[];
+}
+
+/**
+ * The marks a slot's column carries over the stave, nearest the stave first:
+ * the pick stroke, then the accent. They are the column's, not a note's, so
+ * any sounding string carrying one marks the column once (#440).
+ */
+export function columnMarksOf(slot: BeatSlot): ColumnMarkKind[] {
+	if (slot.isRest) return [];
+	const sounding = slot.strings.filter((sf) => sf.fret !== null || sf.muted);
+	const pick = sounding.map((sf) => sf.effects?.pick?.direction).find((d) => d !== undefined);
+	const accent = sounding.some((sf) => sf.effects?.accent === true);
+	return [...(pick ? [pick] : []), ...(accent ? (["accent"] as const) : [])];
+}
+
+/** A vibrato's wave over the note's length, as the page writes it: on to the next note or rest. */
+export interface VibratoLine {
+	noteIndex: number;
+	untilNoteIndex: number | null;
+	wide: boolean;
 }
 
 /** A link into the measure's first note from the note before the barline, drawn as a half arc. */
@@ -475,6 +549,8 @@ export interface VexFlowRenderData {
 	brackets: BracketSpan[];
 	/** Hits (slap, thumb slap, body tap), drawn by the renderer over their notes. */
 	hits: HitMark[];
+	/** Pick strokes and accents, once a column whichever string carries them, drawn by the renderer over the stave. */
+	columnMarks: ColumnMark[];
 	/** Notes whose bend is held into the next note: a dashed line from each to the note after. */
 	holds: number[];
 	/** Links into the measure's first note from across the barline, drawn as half arcs. */
@@ -483,6 +559,8 @@ export interface VexFlowRenderData {
 	slideMarks: SlideMark[];
 	/** Whammy-bar dives and pulls, drawn as dashed lines from the note. */
 	whammies: WhammyMark[];
+	/** Vibrato waves, each from its note to the next note or rest (null: the bar's end). */
+	vibratoLines: VibratoLine[];
 	/** Notes with a pick scrape: a heavy diagonal across the strings at the note. */
 	scrapes: number[];
 	/** Slur spans' segments, drawn as one curve each over their notes. */
@@ -524,9 +602,11 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 	const chordLabels: ChordLabel[] = [];
 	const rolls: RollMark[] = [];
 	const hits: HitMark[] = [];
+	const columnMarks: ColumnMark[] = [];
 	const holds: number[] = [];
 	const slideMarks: SlideMark[] = [];
 	const whammies: WhammyMark[] = [];
+	const vibratoAt: { noteIndex: number; slotIdx: number; wide: boolean }[] = [];
 	const scrapes: number[] = [];
 	const expression: ExpressionCounts = { bends: 0, vibratos: 0, wideVibratos: 0 };
 	// A chord marked on a grace-note slot has no note of its own to sit over; it
@@ -582,8 +662,15 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 			// stave a StaveNote rest draws the standard rest symbol; the "b/4" key parks it
 			// mid-stave. The rest keeps the slot's real duration, so the symbol matches the
 			// note value it replaces (VexFlow appends "r" to the duration/dots string, e.g.
-			// "8r" for an eighth rest, "qdr" for a dotted-quarter rest).
-			notes.push(new StaveNote({ keys: ["b/4"], duration: `${duration}r` }));
+			// "8r" for an eighth rest, "qdr" for a dotted-quarter rest) — except a rest that
+			// is the bar's only slot: a bar's rest is written as a whole rest in the middle
+			// of the bar, whatever the meter (a 3/4 bar's is not a dotted half).
+			const barRest = measure.slots.every((other, i) => i === slotIdx || other.isGraceNote);
+			const rest = barRest
+				? new TabRest({ keys: ["b/4"], duration: "wr", alignCenter: true })
+				: new TabRest({ keys: ["b/4"], duration: `${duration}r` });
+			if (!barRest && isDottedDuration(slot.duration)) Dot.buildAndAttach([rest]);
+			notes.push(rest);
 			posIndexMaps.push(new Map());
 			slotNoteIndex.push(noteIdx);
 			writeChordOver(noteIdx);
@@ -622,7 +709,10 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 			continue;
 		}
 
-		const tabNote = new TabNote({ positions, duration }, true);
+		// Every value has a stem but the whole: its ring alone says whole (`ringedHeads`).
+		const tabNote = new TabNote({ positions, duration }, slot.duration !== "whole");
+		// The dot sits beside the stem, as a dotted note is written in tab.
+		if (isDottedDuration(slot.duration)) Dot.buildAndAttach([tabNote]);
 		if (pendingGraceNotes.length > 0) {
 			tabNote.addModifier(new GraceNoteGroup(pendingGraceNotes));
 			pendingGraceNotes = [];
@@ -638,6 +728,8 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 				if (value !== undefined && effects[kind] === undefined) (effects as Record<string, unknown>)[kind] = value;
 			}
 		});
+		const marks = columnMarksOf(slot);
+		if (marks.length > 0) columnMarks.push({ noteIndex: notes.length, marks });
 		for (const kind of EFFECT_STACK_ORDER) {
 			if (effects[kind] === undefined) continue;
 			if (kind === "bend") {
@@ -663,6 +755,7 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 				continue;
 			}
 			EFFECT_MARKS[kind]?.(tabNote, effects, expression);
+			if (kind === "vibrato") vibratoAt.push({ noteIndex: notes.length, slotIdx, wide: effects.vibrato?.wide === true });
 			if (kind === "whammy") {
 				const w = effects.whammy!;
 				const semitones = w.semitones ?? WHAMMY_SEMITONES;
@@ -682,64 +775,64 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 		writeChordOver(noteIdx);
 	}
 
+	// Each vibrato runs on to the next slot that strikes or rests; past the last, to the bar's end.
+	const vibratoLines: VibratoLine[] = vibratoAt.map(({ noteIndex, slotIdx, wide }) => {
+		let until: number | null = null;
+		for (let j = slotIdx + 1; j < measure.slots.length && until === null; j++) {
+			const next = measure.slots[j];
+			const n = slotNoteIndex[j];
+			if (next.isGraceNote || n === null || n === undefined) continue;
+			if (next.isRest || next.percussion || next.strings.some((sf) => sf.fret !== null || sf.muted)) until = n;
+		}
+		return { noteIndex, untilNoteIndex: until, wide };
+	});
+
 	const connectors: Array<TabTie | TabSlide> = [];
 	const leadIns: LeadIn[] = [];
 
-	// A link on the measure's first note reaches back across the barline: there
-	// is no note here to tie it to, so the renderer draws a half arc into it.
-	const firstNoteSlot = measure.slots.findIndex((slot, i) => !slot.isRest && !slot.isGraceNote && slotNoteIndex[i] !== null);
-	if (firstNoteSlot >= 0 && context) {
-		const slot = measure.slots[firstNoteSlot];
-		const at = index.slotOrder.indexOf(slot.id);
-		const before = at > 0 && !measure.slots.some((s) => s.id === index.slotOrder[at - 1]);
-		const noteIdx = slotNoteIndex[firstNoteSlot];
-		if (before && noteIdx !== null && noteIdx !== undefined) {
-			slot.strings.forEach((sf, stringIndex) => {
-				if (sf.link && (sf.fret !== null || sf.muted) && posIndexMaps[noteIdx].has(stringIndex)) {
-					leadIns.push({ noteIndex: noteIdx, stringIndex, kind: sf.link.kind });
-				}
-			});
-		}
-	}
-
-	for (let i = 1; i < measure.slots.length; i++) {
-		const slot = measure.slots[i];
-		if (slot.isRest || slot.isGraceNote) continue;
-
+	// A link reaches back to the string's previous note, however many slots where the
+	// string is silent lie between (#437): the nearest earlier slot here with a note on
+	// that string. With none in this measure the note it comes from is across the
+	// barline — no note here to tie it to — so the renderer draws a half arc into it.
+	const firstSlot = measure.slots[0];
+	const at = firstSlot ? index.slotOrder.indexOf(firstSlot.id) : -1;
+	const somethingBefore = context !== undefined && at > 0;
+	measure.slots.forEach((slot, i) => {
+		if (slot.isRest || slot.isGraceNote) return;
 		const currNoteIdx = slotNoteIndex[i];
-		if (currNoteIdx === null || currNoteIdx === undefined) continue;
-
-		// Walk back to find the nearest preceding non-grace slot.
-		let prevSlotIdx = i - 1;
-		while (prevSlotIdx >= 0 && slotNoteIndex[prevSlotIdx] === null) prevSlotIdx--;
-		if (prevSlotIdx < 0) continue;
-		const prevNoteIdx = slotNoteIndex[prevSlotIdx];
-		if (prevNoteIdx === null || prevNoteIdx === undefined) continue;
-
-		const prevNote = notes[prevNoteIdx];
+		if (currNoteIdx === null || currNoteIdx === undefined) return;
 		const currNote = notes[currNoteIdx];
-		const prevPosMap = posIndexMaps[prevNoteIdx];
 		const currPosMap = posIndexMaps[currNoteIdx];
 
 		slot.strings.forEach((sf, stringIdx) => {
 			if (!sf.link || (sf.fret === null && !sf.muted)) return;
+			const currIdx = currPosMap.get(stringIdx);
+			if (currIdx === undefined) return;
+
+			let prevSlotIdx = i - 1;
+			while (prevSlotIdx >= 0) {
+				const n = slotNoteIndex[prevSlotIdx];
+				if (n !== null && n !== undefined && !measure.slots[prevSlotIdx].isGraceNote && posIndexMaps[n].has(stringIdx)) break;
+				prevSlotIdx--;
+			}
+			if (prevSlotIdx < 0) {
+				if (somethingBefore) leadIns.push({ noteIndex: currNoteIdx, stringIndex: stringIdx, kind: sf.link.kind });
+				return;
+			}
 			// Inside a slur the curve says legato: a hammer or pull draws no arc of its own.
 			if ((sf.link.kind === "hammer" || sf.link.kind === "pull") && slurredInside(index, slot.id, stringIdx)) return;
 
-			const prevIdx = prevPosMap.get(stringIdx);
-			const currIdx = currPosMap.get(stringIdx);
-			if (prevIdx === undefined || currIdx === undefined) return;
-
+			const prevNoteIdx = slotNoteIndex[prevSlotIdx]!;
 			const tieNotes: TieNotes = {
-				firstNote: prevNote,
+				firstNote: notes[prevNoteIdx],
 				lastNote: currNote,
-				firstIndexes: [prevIdx],
+				firstIndexes: [posIndexMaps[prevNoteIdx].get(stringIdx)!],
 				lastIndexes: [currIdx],
 			};
 			const prevFret = measure.slots[prevSlotIdx].strings[stringIdx].fret;
 			connectors.push(LINK_CONNECTORS[sf.link.kind](tieNotes, sf, prevFret));
 		});
-	}
+	});
 
 	// A slur: one arc over the numbers from the segment's first note to its
 	// last, drawn the way a tie is — between the positions, inside the tab —
@@ -802,10 +895,12 @@ export function fingerpickToVexFlow(measure: Measure, context?: RenderContext): 
 		rolls,
 		brackets: bracketSpans(measure, slotNoteIndex, index),
 		hits,
+		columnMarks,
 		holds,
 		leadIns,
 		slideMarks,
 		whammies,
+		vibratoLines,
 		scrapes,
 		slurs,
 		expression,

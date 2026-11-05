@@ -54,6 +54,8 @@ export interface MeasureBlockProps {
 	cursor: Cell | null;
 	/** The selected slots of this bar, as "0,1,2" (a string, so an unchanged run keeps the block memoized). */
 	selected: string;
+	/** The block's cells in this bar, as "slot:string,…" (#437). */
+	picked: string;
 	/** The shape's frets under each slot of this bar (null where no chord, or its shapes not here yet). */
 	hints: readonly (FretHint[] | null)[];
 	/** The chord in effect at each slot of this bar. */
@@ -65,7 +67,7 @@ export interface MeasureBlockProps {
 	finePointer: boolean;
 	chordTools: ChordTools;
 	onHover: (cell: HoveredCell | null) => void;
-	/** A cell clicked: the cursor there (Shift: the run to there); `take` is the shape's fret it offered. */
+	/** A cell clicked: the cursor there (Shift: the block of cells to there); `take` is the shape's fret it offered. */
 	onPick: (cell: Cell, shift: boolean, take: number | null) => void;
 	/** A column's square: the slot selected, for the Slot tools. */
 	onColumn: (target: SlotTarget, shift: boolean) => void;
@@ -97,6 +99,7 @@ function MeasureBlock({
 	hover,
 	cursor,
 	selected,
+	picked,
 	hints,
 	chords,
 	spanIndex,
@@ -115,6 +118,7 @@ function MeasureBlock({
 	const [nudge, setNudge] = useState<"left" | "right" | null>(null);
 	const ts = working.timeSignature;
 	const selectedSet = new Set(selected ? selected.split(",").map(Number) : []);
+	const pickedSet = new Set(picked ? picked.split(",") : []);
 	const beatLabels = computeBeatLabels(measure.slots, ts, countEighths ? "eighths" : "beats");
 	const beatGroups = computeBeatGroups(measure.slots, ts);
 	// Where each slot sits under a `3` bracket: drawn column by column (left cap,
@@ -301,6 +305,7 @@ function MeasureBlock({
 														tabIndex={-1}
 														className="te-mb-cell"
 														data-cur={isCursor ? "" : undefined}
+														data-picked={pickedSet.has(`${slotIndex}:${stringIndex}`) ? "" : undefined}
 														data-h={axes > 0 ? axes : undefined}
 														data-empty={isEmpty ? "" : undefined}
 														data-hint={hint !== null ? (hint === "/" ? "off" : "") : undefined}

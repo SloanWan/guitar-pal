@@ -6,6 +6,7 @@ const FLAGS: Partial<Record<Duration, number>> = {
 	"dotted-quarter": 0,
 	eighth: 1,
 	"dotted-eighth": 1,
+	"dotted-sixteenth": 2,
 	sixteenth: 2,
 	"32nd": 3,
 };

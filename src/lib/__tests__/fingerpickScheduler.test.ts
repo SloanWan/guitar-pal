@@ -19,6 +19,7 @@ import {
 	tremoloStrokes,
 	trillStrokes,
 	TAP_SKIP_S,
+	DEAD_NOTE_CLACK,
 	DEFAULT_SLAP_PARAMS,
 	SLIDE_IN_OUT_SEMITONES,
 	noiseBufferFor,
@@ -2453,7 +2454,7 @@ describe("scheduleFingerpickNote — model v2 voices", () => {
 	it("a slap's landing is a clack of noise on the frets and a thud under it, the thud mostly on the bass strings, registering no voice", () => {
 		const ctx = mockCtx(0);
 		const voices = new Map<number, SlideActiveVoice>();
-		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ muted: true, slapNoise: true, slapStrings: [5] }), 1);
+		scheduleFingerpickNote(makeDeps(ctx, voices), noteEvent({ muted: true, slapNoise: true, slapStrings: [5], percussion: { kind: "slap" } }), 1);
 		const p = DEFAULT_SLAP_PARAMS;
 		// Two noise sources and the sine; no sample.
 		expect(ctx._sources).toHaveLength(2);
@@ -2473,6 +2474,12 @@ describe("scheduleFingerpickNote — model v2 voices", () => {
 		scheduleFingerpickNote(makeDeps(treble, new Map()), noteEvent({ muted: true, slapNoise: true, slapStrings: [0, 1], percussion: { kind: "slap", accent: true } }), 1);
 		expect(treble._gains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(expect.closeTo(p.thudGain * p.trebleThud * TEST_GAINS.accentMultiplier, 9), 1.002);
 		expect(treble._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(expect.closeTo(p.clackGain * TEST_GAINS.accentMultiplier, 9), 1);
+		// An x with no hit over it is a dead note (#437): a lighter clack, no thud.
+		const dead = mockCtx(0);
+		scheduleFingerpickNote(makeDeps(dead, new Map()), noteEvent({ muted: true, slapNoise: true, slapStrings: [5] }), 1);
+		expect(dead._sources).toHaveLength(1);
+		expect(dead._oscillators).toHaveLength(0);
+		expect(dead._gains[0].gain.setValueAtTime).toHaveBeenCalledWith(expect.closeTo(p.clackGain * DEAD_NOTE_CLACK, 9), 1);
 		// Without a noise buffer the landing is silent, not an error.
 		const silent = mockCtx(0);
 		scheduleFingerpickNote(makeDeps(silent, new Map(), { noiseBuffer: null }), noteEvent({ muted: true, slapNoise: true, slapStrings: [5] }), 1);

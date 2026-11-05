@@ -25,8 +25,8 @@ const ALL_STROKES = new Set<Stroke>(["roll-down", "roll-up", "brush-down", "brus
 // ─── Duration helpers ─────────────────────────────────────────────────────────
 
 const ALL_DURATIONS = new Set<Duration>([
-	"whole", "half", "quarter", "dotted-quarter", "eighth", "dotted-eighth",
-	"eighth-triplet", "sixteenth", "sixteenth-triplet", "32nd",
+	"whole", "dotted-half", "half", "quarter", "dotted-quarter", "eighth", "dotted-eighth",
+	"eighth-triplet", "dotted-sixteenth", "sixteenth", "sixteenth-triplet", "32nd",
 ]);
 
 // Legacy patterns encoded a rest as `duration: "rest"` (a fixed quarter-weight value).
@@ -41,11 +41,13 @@ function isValidDuration(v: unknown): v is Duration {
 // Ticks in 32nd-note units for durations with clean integer values.
 const DURATION_TICKS: Array<[Duration, number]> = [
 	["whole",          32],
+	["dotted-half",    24],
 	["half",           16],
 	["dotted-quarter", 12],
 	["quarter",         8],
 	["dotted-eighth",   6],
 	["eighth",          4],
+	["dotted-sixteenth", 3],
 	["sixteenth",       2],
 	["32nd",            1],
 ];

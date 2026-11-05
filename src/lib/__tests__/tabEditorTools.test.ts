@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeEmptySlot, setFret } from "@/lib/fingerpickEdit";
 import type { Duration, FingerpickPattern } from "@/lib/fingerpickTypes";
-import { applyDuration, barFill, durationChoices, lengthInWords, tripletChoice } from "@/lib/tabEditorTools";
+import { applyDuration, applyRunMerge, barFill, durationChoices, lengthInWords, runMergeChoice, tripletChoice } from "@/lib/tabEditorTools";
 
 function tab(durations: Duration[], ts: [number, number] = [4, 4]): FingerpickPattern {
 	return { id: "t", name: "T", bpm: 90, timeSignature: ts, measures: [{ id: "m", slots: durations.map((d) => makeEmptySlot(d)) }] };
@@ -18,9 +18,15 @@ describe("durationChoices", () => {
 		expect(k.sixteenth).toBe("split");
 		expect(k.half).toBe("merge");
 		expect(k.whole).toBe("merge");
-		// 24 ticks do not split into 18s, nor do 24 + 24 make 36.
+		// 24 ticks do not split into 18s; a dotted quarter takes an eighth from the next quarter (#437).
 		expect(k["dotted-eighth"]).toBe("off");
-		expect(k["dotted-quarter"]).toBe("off");
+		expect(k["dotted-quarter"]).toBe("grow");
+	});
+
+	it("lengthens into a bar written short (#437)", () => {
+		const k = kinds(tab(["eighth", "eighth", "eighth"]));
+		expect(k.quarter).toBe("merge");
+		expect(durationChoices(tab(["eighth", "eighth", "eighth"]), { measureIndex: 0, slotIndex: 2 }).find((c) => c.duration === "half")).toMatchObject({ kind: "grow" });
 	});
 
 	it("says why a value is out of reach", () => {
@@ -74,5 +80,23 @@ describe("barFill", () => {
 		expect(barFill(tab(["half", "quarter", "eighth"]).measures[0], [4, 4])).toEqual({ kind: "short", text: "Short by an eighth" });
 		expect(barFill(tab(["whole", "quarter"]).measures[0], [3, 4]).text).toBe("Over by a half");
 		expect(lengthInWords(36)).toBe("a quarter and an eighth");
+	});
+});
+
+describe("merging a selected run (#437)", () => {
+	const run = (...slots: number[]) => slots.map((slotIndex) => ({ measureIndex: 0, slotIndex }));
+
+	it("makes the run the one value it adds up to, dotted ones too", () => {
+		const p = tab(["eighth", "eighth", "quarter", "half"]);
+		expect(runMergeChoice(p, run(0, 1, 2))).toEqual({ kind: "on", duration: "half", count: 3 });
+		expect(runMergeChoice(p, run(1, 2))).toEqual({ kind: "on", duration: "dotted-quarter", count: 2 });
+		const merged = applyRunMerge(p, run(1, 2));
+		expect(merged?.type === "ok" && merged.pattern.measures[0].slots.map((s) => s.duration)).toEqual(["eighth", "dotted-quarter", "half"]);
+	});
+
+	it("says why a run cannot be one note", () => {
+		const p = tab(["eighth", "sixteenth", "32nd", "32nd", "quarter", "half"]);
+		expect(runMergeChoice(p, run(0))).toMatchObject({ kind: "off" });
+		expect(runMergeChoice(p, run(0, 1, 2))).toMatchObject({ kind: "off", reason: expect.stringMatching(/not one note value/) });
 	});
 });

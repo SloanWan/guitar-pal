@@ -91,4 +91,12 @@ export const SUITES: EvalSuite[] = [
 		primary: "note_f1",
 		cellMetric: "note_f1",
 	},
+	{
+		id: "page-classification",
+		title: "Page classification",
+		description:
+			"The parse's page classifier against the pages reviewed on /dev/page-gold: whether the pages with tab are sent to the tab reader, how many of their exercises that keeps, and the kinds and printed notation (#422).",
+		runDirs: ["book-service/evals/classify/results"],
+		primary: "tab_exercise_recall",
+	},
 ];

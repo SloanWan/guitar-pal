@@ -1,0 +1,154 @@
+/* /dev/page-gold: the page classifier's gold set (#422), on tab-gold's base styles. */
+@layer components {
+	.pg-total {
+		margin: -8px 0 0;
+	}
+	.pg-body {
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+	.pg-img {
+		height: 70vh;
+		border-radius: var(--gp-r-m);
+		background: #fff;
+		box-shadow: var(--gp-ring-c);
+	}
+	/* From 960px the review fills the window and never scrolls: the page stands
+	   still on the left and the answer beside it takes the rest of the width.
+	   The image box fits the page's width, so it is made as wide as a whole page
+	   is tall at the box's height (the window less the dev banner, the nav, the
+	   paddings and the zoom bar: 168px); every sample book is about √2
+	   (1.38–1.42). An answer taller than the window scrolls on its own. */
+	@media (min-width: 960px) {
+		.pg-review {
+			--pg-w: calc((100vh - 168px) / 1.42);
+			display: flex;
+			flex-direction: column;
+			max-width: 1760px;
+			height: calc(100vh - 32px);
+			padding-bottom: 16px;
+			overflow: hidden;
+		}
+		.pg-body {
+			flex: 1;
+			min-height: 0;
+			display: grid;
+			grid-template-columns: minmax(0, var(--pg-w)) minmax(400px, 1fr);
+			gap: 28px;
+		}
+		.pg-page,
+		.pg-page > div {
+			height: 100%;
+			min-height: 0;
+		}
+		.pg-img {
+			flex: 1;
+			height: auto;
+		}
+		.pg-panel {
+			height: 100%;
+			overflow-y: auto;
+			/* Room for the scrollbar and the chips' raised shadows. */
+			padding: 2px 8px 8px 2px;
+		}
+	}
+	.pg-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-width: 0;
+	}
+	/* The note stays its own height; the actions follow it, not the window's foot. */
+	.pg-panel .tg-note {
+		flex: none;
+	}
+	/* The page number, its status and the book on one line. */
+	.pg-panel .tg-head {
+		margin: 0;
+	}
+	.pg-panel .tg-head .tg-meta {
+		flex-basis: auto;
+		order: 0;
+	}
+	.pg-model {
+		margin: 0;
+		padding: 6px 12px;
+		border-radius: var(--gp-r-m);
+		background: var(--gp-page);
+		box-shadow: var(--gp-ring-n);
+		color: var(--gp-ink-2);
+	}
+	.pg-model b {
+		color: var(--gp-ink);
+	}
+	.pg-model-note {
+		display: block;
+		margin-top: 4px;
+		font-size: var(--gp-t-small);
+		color: var(--gp-ink-3);
+	}
+	.pg-field {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		min-width: 0;
+	}
+	.pg-field legend {
+		margin-bottom: 6px;
+		padding: 0;
+	}
+	.pg-kinds {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	/* The model's own answer, marked on its chip so a change is a choice. */
+	.pg-was {
+		margin-left: 4px;
+		font-weight: 800;
+	}
+	.pg-rules {
+		font-size: var(--gp-t-small);
+		color: var(--gp-ink-2);
+	}
+	.pg-rules summary {
+		cursor: pointer;
+		color: var(--gp-ink-3);
+	}
+	.pg-rules dl {
+		margin: 8px 0;
+	}
+	.pg-rules dl div {
+		display: grid;
+		grid-template-columns: 8.5em 1fr;
+		gap: 8px;
+		padding: 2px 0;
+	}
+	.pg-rules dt {
+		font-weight: 650;
+		color: var(--gp-ink);
+	}
+	.pg-rules dd,
+	.pg-rules p {
+		margin: 0;
+	}
+	/* The count and how to count side by side; the help keeps two lines' room,
+	   so the panel does not move as tab comes and goes. */
+	.pg-count-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
+	}
+	.pg-count .gp-input {
+		flex: none;
+		width: 6em;
+	}
+	.pg-count .tg-meta {
+		min-height: 2.8em;
+		font-size: var(--gp-t-small);
+	}
+}

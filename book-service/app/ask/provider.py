@@ -1,10 +1,11 @@
 """
 Which model answers a chapter question, and what that model can do.
 
-Two providers, one SDK: DeepSeek speaks the Anthropic Messages shape at
-`https://api.deepseek.com/anthropic`, so the same `AsyncAnthropic` client
-talks to both and only the base URL, the model names and the capabilities
-differ. Measured on 2026-09-23 (numbers in docs/calibration.md §8):
+Providers, one SDK: DeepSeek speaks the Anthropic Messages shape at
+`https://api.deepseek.com/anthropic` (and Alibaba Cloud Bailian at its own
+URL, so far only for evals), so the same `AsyncAnthropic` client talks to all
+of them and only the base URL, the model names and the capabilities differ.
+Measured on 2026-09-23 (numbers in docs/calibration.md §8):
 
 |                        | Anthropic        | deepseek-flash |
 |------------------------|------------------|----------------|
@@ -37,6 +38,10 @@ DEEPSEEK_EFFORT = "low"
 # `medium` has used 16k on thinking alone (2026-09-25, 《三月通》 p28).
 DEEPSEEK_THINKING_TOKENS = 24_576
 
+BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com/apps/anthropic"
+# Its thinking models count their reasoning inside the cap, as DeepSeek's do.
+BAILIAN_THINKING_TOKENS = 8_192
+
 
 @dataclass(frozen=True)
 class Provider:
@@ -57,6 +62,8 @@ class Provider:
     # thinking inside `max_tokens`, so a cap sized for the answer alone ends
     # with the answer unwritten (stop_reason max_tokens, empty text).
     thinking_tokens: int = 0
+    # False asks a hybrid reasoning model (Qwen 3.x) to answer without thinking first.
+    thinking: bool = True
 
     def config(self, effort: str | None = None) -> dict[str, object]:
         return {"effort": effort or self.effort}
@@ -84,6 +91,28 @@ def deepseek_provider(api_key: str) -> Provider:
         structured_output=False,
         effort=DEEPSEEK_EFFORT,
         thinking_tokens=DEEPSEEK_THINKING_TOKENS,
+    )
+
+
+def bailian_provider(api_key: str, model: str, thinking: bool = True) -> Provider:
+    """One model on Alibaba Cloud Bailian, which speaks the Messages shape too (#422).
+
+    Bailian hosts Qwen beside other vendors' models, and not every one of
+    them keeps to a schema sent as `output_config.format` (qwen3.7-plus once
+    wrapped its object in an array; deepseek-v4.1-flash refuses the field),
+    so the schema goes in the prompt and the reply is read leniently, as for
+    DeepSeek. One model plays both roles: an eval names the one it measures.
+    """
+    return Provider(
+        name="bailian",
+        client=AsyncAnthropic(api_key=api_key, base_url=BAILIAN_BASE_URL),
+        model=model,
+        small_model=model,
+        documents=False,
+        structured_output=False,
+        effort="low",
+        thinking_tokens=BAILIAN_THINKING_TOKENS if thinking else 0,
+        thinking=thinking,
     )
 
 

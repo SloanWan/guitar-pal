@@ -1,0 +1,2780 @@
+{
+ "suite": "page-classification",
+ "title": "Page classification against the reviewed pages",
+ "issue": 422,
+ "run_id": "20261103-010119",
+ "status": "done",
+ "started_at": "2026-11-03T01:01:19.802776+00:00",
+ "finished_at": "2026-11-03T01:01:19.947703+00:00",
+ "git_sha": "282e868",
+ "machine": "Apple M2, 8 cores, Darwin",
+ "config": {
+  "gold": "materials/page-gold",
+  "skipped": {},
+  "tab_pages_with_staff_or_jianpu": 30
+ },
+ "progress": {
+  "done": 135,
+  "total": 135
+ },
+ "metrics": [
+  {
+   "key": "tab_page_recall",
+   "label": "Tab page R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pages with tab printed that are sent to the tab reader: a tab page, or a tab region of a mixed one."
+  },
+  {
+   "key": "tab_exercise_recall",
+   "label": "Tab exercise R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Reviewed tab exercises on the pages sent, over all of them: the most the parse can read after this step."
+  },
+  {
+   "key": "missed_exercises",
+   "label": "Missed exercises",
+   "direction": "lower",
+   "format": "fixed0",
+   "description": "Tab exercises on pages that are not sent."
+  },
+  {
+   "key": "tab_page_precision",
+   "label": "Tab page P",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pages sent to the tab reader that have tab: a wrong one costs a segment call."
+  },
+  {
+   "key": "kind_accuracy",
+   "label": "Kind",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pages given the reviewer's kind."
+  },
+  {
+   "key": "marks_f1",
+   "label": "Marks F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Tab, strum, chord diagrams and fretboard maps the verdict implies, against the review's marks."
+  },
+  {
+   "key": "pages",
+   "label": "Pages",
+   "direction": "higher",
+   "format": "fixed0"
+  }
+ ],
+ "subjects": [
+  {
+   "status": "done",
+   "summary": {
+    "tab_page_recall": 0.9538461538461539,
+    "tab_exercise_recall": 0.9597701149425287,
+    "missed_exercises": 7,
+    "tab_page_precision": 0.9841269841269841,
+    "kind_accuracy": 1.0,
+    "marks_f1": 0.9254901960784314,
+    "pages": 135
+   },
+   "id": "stored",
+   "label": "Stored verdicts",
+   "notes": "the parse's classifier (claude-sonnet-5, 100 dpi + text), materials/notation-ref",
+   "breakdown": {
+    "electric-365": {
+     "tab_page_recall": 1.0,
+     "tab_exercise_recall": 1.0,
+     "missed_exercises": 0,
+     "tab_page_precision": 1.0,
+     "kind_accuracy": 1.0,
+     "marks_f1": 0.9803921568627451,
+     "pages": 20
+    },
+    "heavy-metal": {
+     "tab_page_recall": 1.0,
+     "tab_exercise_recall": 1.0,
+     "missed_exercises": 0,
+     "tab_page_precision": 1.0,
+     "kind_accuracy": 1.0,
+     "marks_f1": 1.0,
+     "pages": 15
+    },
+    "sample-arranging": {
+     "tab_page_recall": 1.0,
+     "tab_exercise_recall": 1.0,
+     "missed_exercises": 0,
+     "tab_page_precision": 1.0,
+     "kind_accuracy": 1.0,
+     "marks_f1": 0.962962962962963,
+     "pages": 10
+    },
+    "sample-harmony": {
+     "tab_page_recall": 0.0,
+     "tab_exercise_recall": 0.0,
+     "missed_exercises": 0,
+     "tab_page_precision": 0.0,
+     "kind_accuracy": 1.0,
+     "marks_f1": 1.0,
+     "pages": 7
+    },
+    "sample-text-tab-3p": {
+     "tab_page_recall": 1.0,
+     "tab_exercise_recall": 1.0,
+     "missed_exercises": 0,
+     "tab_page_precision": 1.0,
+     "kind_accuracy": 1.0,
+     "marks_f1": 1.0,
+     "pages": 3
+    },
+    "sample-text-tab-6p": {
+     "tab_page_recall": 1.0,
+     "tab_exercise_recall": 1.0,
+     "missed_exercises": 0,
+     "tab_page_precision": 1.0,
+     "kind_accuracy": 1.0,
+     "marks_f1": 1.0,
+     "pages": 6
+    },
+    "songwriting": {
+     "tab_page_recall": 0.0,
+     "tab_exercise_recall": 0.0,
+     "missed_exercises": 0,
+     "tab_page_precision": 0.0,
+     "kind_accuracy": 1.0,
+     "marks_f1": 1.0,
+     "pages": 9
+    },
+    "syt": {
+     "tab_page_recall": 0.75,
+     "tab_exercise_recall": 0.7586206896551724,
+     "missed_exercises": 7,
+     "tab_page_precision": 0.9,
+     "kind_accuracy": 1.0,
+     "marks_f1": 0.8115942028985507,
+     "pages": 55
+    },
+    "syt-chords": {
+     "tab_page_recall": 0.0,
+     "tab_exercise_recall": 0.0,
+     "missed_exercises": 0,
+     "tab_page_precision": 0.0,
+     "kind_accuracy": 1.0,
+     "marks_f1": 0.8181818181818181,
+     "pages": 10
+    }
+   }
+  }
+ ],
+ "cases": [
+  {
+   "subject": "stored",
+   "case": "electric-365/p020",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p022",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 22,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p025",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 25,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p026",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 26,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p027",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 27,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p028",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 28,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p029",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 29,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p030",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 30,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p031",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 31,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p032",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 32,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p033",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 33,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p034",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 34,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p035",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 35,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p036",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "strum printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 36,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "strum"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p037",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 37,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p038",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 38,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "staff"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "electric-365/p039",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 39,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "staff",
+     "fretboard"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p011",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 11,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p012",
+   "pass": true,
+   "metrics": {
+    "exercises": 5,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 12,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ],
+    "exercises": 5
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p013",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 13,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p014",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 14,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p015",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p016",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 16,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p017",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 17,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p018",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 18,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p019",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 19,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p020",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p022",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 22,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "heavy-metal/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "fretboard"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 6,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 6
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "strum",
+     "chord_diagrams"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p006",
+   "pass": false,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 6,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p007",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 7,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p008",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 8,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "jianpu"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p009",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 9,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab",
+     "jianpu"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-arranging/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [
+     "jianpu"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p006",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 6,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "strum",
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-harmony/p007",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 7,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "strum",
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-3p/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-3p/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-3p/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu",
+     "fretboard"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "status": "confirmed",
+    "kind": "tab",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "sample-text-tab-6p/p006",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 6,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p006",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 6,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p007",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 7,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p008",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 8,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "songwriting/p009",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 9,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p011",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 11,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p012",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 12,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p013",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 13,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p014",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 14,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p015",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p016",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 16,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p017",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 17,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p018",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 18,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p019",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 19,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p020",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "sent to the tab reader with no tab printed"
+   ],
+   "detail": {
+    "page": 20,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p021",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 21,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p022",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 22,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p023",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 23,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p024",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 24,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p025",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 25,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p026",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 26,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p027",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 27,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p028",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 28,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p029",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 29,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p030",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 30,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p031",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 31,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p032",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 32,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p033",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 33,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p034",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 34,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p035",
+   "pass": true,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 35,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p036",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 36,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p037",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 37,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p038",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 38,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "staff",
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p039",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 39,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p040",
+   "pass": true,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 40,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "strum",
+     "chord_diagrams"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p041",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 41,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p042",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 42,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p043",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 43,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p044",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 44,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p100",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 100,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p101",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 101,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p102",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 102,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p103",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 103,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p104",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 104,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p105",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 105,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p106",
+   "pass": true,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 106,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu",
+     "fretboard"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p107",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 107,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p108",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 108,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p109",
+   "pass": false,
+   "metrics": {
+    "exercises": 1,
+    "missed_exercises": 1
+   },
+   "failures": [
+    "tab printed (1 exercise) but not sent: mixed [prose, prose, prose, strum_notation]",
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 109,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 1
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p110",
+   "pass": false,
+   "metrics": {
+    "exercises": 4,
+    "missed_exercises": 4
+   },
+   "failures": [
+    "tab printed (4 exercises) but not sent: mixed [prose, strum_notation, prose]",
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 110,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 4
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p111",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 111,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p112",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 112,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p113",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 113,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [
+     "jianpu"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p114",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 114,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p115",
+   "pass": false,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 2
+   },
+   "failures": [
+    "tab printed (2 exercises) but not sent: mixed [prose, fretboard_diagram]",
+    "fretboard in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 115,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p116",
+   "pass": true,
+   "metrics": {
+    "exercises": 6,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 116,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "chord_diagrams"
+    ],
+    "exercises": 6
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p117",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 117,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu",
+     "chord_diagrams"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p118",
+   "pass": false,
+   "metrics": {
+    "exercises": 2,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "strum in the verdict, not printed"
+   ],
+   "detail": {
+    "page": 118,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab"
+    ],
+    "exercises": 2
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt/p119",
+   "pass": false,
+   "metrics": {
+    "exercises": 3,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 119,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "tab",
+     "jianpu",
+     "chord_diagrams"
+    ],
+    "exercises": 3
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p001",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "status": "confirmed",
+    "kind": "prose",
+    "notation": [],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p002",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 2,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p003",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 3,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p004",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 4,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p005",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 5,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p006",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "chord_diagrams printed, not in the verdict",
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 6,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p007",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 7,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p008",
+   "pass": false,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [
+    "fretboard printed, not in the verdict"
+   ],
+   "detail": {
+    "page": 8,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams",
+     "fretboard"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p009",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 9,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "syt-chords/p010",
+   "pass": true,
+   "metrics": {
+    "exercises": 0,
+    "missed_exercises": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 10,
+    "status": "confirmed",
+    "kind": "mixed",
+    "notation": [
+     "chord_diagrams"
+    ],
+    "exercises": 0
+   }
+  }
+ ],
+ "findings": [
+  "Sonnet 5 sends 62 of the 65 pages with tab to the tab reader; the 3 it misses are 三月通 p109, p110 and p115, holding 7 of the 174 reviewed exercises (96.0% kept).",
+  "Two of the misses (p109, p110) are tab read as strum notation: pages about the pick's direction, where the tab shows the strokes. The third (p115) is tab read as a fretboard map.",
+  "One page is sent with no tab on it (三月通 p20): a wasted segment call, not a lost exercise.",
+  "Kind agreement is 135 of 135, but the review started from these verdicts and 'mixed' covers 86 pages, so it says little; route and marks are the measures to compare models on.",
+  "Staff or jianpu stands beside the tab on 30 tab pages — the pages a second reading (#425, #426) could check."
+ ],
+ "findings_zh": [
+  "Sonnet 5 把 65 页有 Tab 的页里的 62 页送进了读谱器；漏掉的 3 页是三月通第 109、110、115 页，上面有 174 条练习中的 7 条（保住 96.0%）。",
+  "漏掉的 3 页里，第 109、110 页是把 Tab 看成了扫弦谱（讲拨片方向的页，用 Tab 表示拨弦方向）；第 115 页是把 Tab 看成了指板图。",
+  "只有 1 页没有 Tab 却被送去读谱（三月通第 20 页）：多花一次切分调用，不丢练习。",
+  "类别 135 页全部一致，但审核是从这些答案出发的，而且 86 页都是 mixed，说明不了什么；比较模型要看送没送对和记号。",
+  "30 页 Tab 旁边印了五线谱或简谱——这些页可以用第二种读法来核对（#425、#426）。"
+ ]
+}

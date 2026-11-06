@@ -7,6 +7,8 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        # Set by the deploy (`git rev-parse`); unset by hand, which is fine.
+        BUILD_SHA: ${BUILD_SHA:-}
     # Textbook import (#200) is not open for use: without BOOK_SERVICE_URL the
     # /books pages say so and show the sample, and nothing else changes. To
     # open it, put BOOK_SERVICE_URL=http://book-service:8000 in .env and bring

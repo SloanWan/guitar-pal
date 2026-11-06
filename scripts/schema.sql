@@ -345,6 +345,61 @@ COMMENT ON COLUMN public.shared_items.expires_at IS 'After this the link no long
 
 
 --
+-- Name: telemetry_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.telemetry_events (
+    id bigint NOT NULL,
+    at timestamp with time zone DEFAULT now() NOT NULL,
+    kind text NOT NULL,
+    source text,
+    name text,
+    value double precision,
+    rating text,
+    message text,
+    stack text,
+    digest text,
+    route text NOT NULL,
+    viewport text,
+    build text,
+    user_agent text,
+    CONSTRAINT telemetry_events_build_check CHECK ((char_length(build) <= 64)),
+    CONSTRAINT telemetry_events_check CHECK ((((kind = 'error'::text) AND (source IS NOT NULL) AND (message IS NOT NULL) AND (name IS NULL) AND (value IS NULL)) OR ((kind = 'vital'::text) AND (name IS NOT NULL) AND (value IS NOT NULL) AND (rating IS NOT NULL) AND (source IS NULL)))),
+    CONSTRAINT telemetry_events_digest_check CHECK ((char_length(digest) <= 64)),
+    CONSTRAINT telemetry_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'vital'::text]))),
+    CONSTRAINT telemetry_events_message_check CHECK ((char_length(message) <= 300)),
+    CONSTRAINT telemetry_events_name_check CHECK ((name = ANY (ARRAY['LCP'::text, 'INP'::text, 'CLS'::text, 'FCP'::text, 'TTFB'::text]))),
+    CONSTRAINT telemetry_events_rating_check CHECK ((rating = ANY (ARRAY['good'::text, 'needs-improvement'::text, 'poor'::text]))),
+    CONSTRAINT telemetry_events_route_check CHECK (((char_length(route) >= 1) AND (char_length(route) <= 120))),
+    CONSTRAINT telemetry_events_source_check CHECK ((source = ANY (ARRAY['window'::text, 'rejection'::text, 'boundary'::text, 'component'::text, 'server'::text]))),
+    CONSTRAINT telemetry_events_stack_check CHECK ((char_length(stack) <= 2000)),
+    CONSTRAINT telemetry_events_user_agent_check CHECK ((char_length(user_agent) <= 200)),
+    CONSTRAINT telemetry_events_viewport_check CHECK ((viewport = ANY (ARRAY['phone'::text, 'desktop'::text])))
+);
+
+
+--
+-- Name: TABLE telemetry_events; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.telemetry_events IS 'Error reports and Web Vitals the site sends about itself (#447); written by the service role only.';
+
+
+--
+-- Name: telemetry_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.telemetry_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.telemetry_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: user_assistant_chats; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -431,16 +486,6 @@ COMMENT ON COLUMN public.user_chord_voicings.category IS 'Browse category the pl
 
 
 --
--- Name: user_favourite_fingerpick_patterns; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.user_favourite_fingerpick_patterns (
-    user_id uuid NOT NULL,
-    pattern_id text NOT NULL
-);
-
-
---
 -- Name: user_favourite_chords; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -457,6 +502,16 @@ CREATE TABLE public.user_favourite_chords (
 --
 
 COMMENT ON TABLE public.user_favourite_chords IS 'Chords a player keeps, by name (root + suffix) so a favourite outlives any voicing change.';
+
+
+--
+-- Name: user_favourite_fingerpick_patterns; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_favourite_fingerpick_patterns (
+    user_id uuid NOT NULL,
+    pattern_id text NOT NULL
+);
 
 
 --
@@ -486,6 +541,7 @@ CREATE TABLE public.user_fingerpick_patterns (
     created_at timestamp with time zone DEFAULT now(),
     capo smallint,
     spans jsonb,
+    reference_links jsonb,
     CONSTRAINT user_fingerpick_patterns_capo_range CHECK (((capo IS NULL) OR ((capo >= 0) AND (capo <= 12))))
 );
 
@@ -502,6 +558,13 @@ COMMENT ON COLUMN public.user_fingerpick_patterns.capo IS 'Capo fret (0-12) the 
 --
 
 COMMENT ON COLUMN public.user_fingerpick_patterns.spans IS 'Technique model v2 spans: [{id, kind: palmMute|letRing|slur, from, to, strings?}], anchored on slot ids in `measures`. Null = none.';
+
+
+--
+-- Name: COLUMN user_fingerpick_patterns.reference_links; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_fingerpick_patterns.reference_links IS 'Reference links (#434): [{id, url, label?}], http(s) URLs only, at most 10. Null = none.';
 
 
 --
@@ -774,6 +837,14 @@ ALTER TABLE ONLY public.shared_items
 
 
 --
+-- Name: telemetry_events telemetry_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telemetry_events
+    ADD CONSTRAINT telemetry_events_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: user_assistant_chats user_assistant_chats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -798,19 +869,19 @@ ALTER TABLE ONLY public.user_chord_voicings
 
 
 --
--- Name: user_favourite_fingerpick_patterns user_favourite_fingerpick_patterns_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_favourite_fingerpick_patterns
-    ADD CONSTRAINT user_favourite_fingerpick_patterns_pkey PRIMARY KEY (user_id, pattern_id);
-
-
---
 -- Name: user_favourite_chords user_favourite_chords_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_favourite_chords
     ADD CONSTRAINT user_favourite_chords_pkey PRIMARY KEY (user_id, root, suffix);
+
+
+--
+-- Name: user_favourite_fingerpick_patterns user_favourite_fingerpick_patterns_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_favourite_fingerpick_patterns
+    ADD CONSTRAINT user_favourite_fingerpick_patterns_pkey PRIMARY KEY (user_id, pattern_id);
 
 
 --
@@ -895,6 +966,20 @@ CREATE INDEX shared_items_expires_idx ON public.shared_items USING btree (expire
 --
 
 CREATE INDEX shared_items_owner_idx ON public.shared_items USING btree (owner_id, created_at DESC);
+
+
+--
+-- Name: telemetry_events_kind_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX telemetry_events_kind_at_idx ON public.telemetry_events USING btree (kind, at DESC);
+
+
+--
+-- Name: telemetry_events_vitals_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX telemetry_events_vitals_idx ON public.telemetry_events USING btree (name, route, at DESC) WHERE (kind = 'vital'::text);
 
 
 --
@@ -1085,19 +1170,19 @@ ALTER TABLE ONLY public.user_chord_voicings
 
 
 --
--- Name: user_favourite_fingerpick_patterns user_favourite_fingerpick_patterns_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_favourite_fingerpick_patterns
-    ADD CONSTRAINT user_favourite_fingerpick_patterns_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-
-
---
 -- Name: user_favourite_chords user_favourite_chords_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_favourite_chords
     ADD CONSTRAINT user_favourite_chords_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_favourite_fingerpick_patterns user_favourite_fingerpick_patterns_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_favourite_fingerpick_patterns
+    ADD CONSTRAINT user_favourite_fingerpick_patterns_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 
 --
@@ -1170,27 +1255,6 @@ CREATE POLICY "Users can manage their own favourites" ON public.user_favourite_f
 
 
 --
--- Name: user_favourite_chords own favourite chords are deletable; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "own favourite chords are deletable" ON public.user_favourite_chords FOR DELETE USING ((auth.uid() = user_id));
-
-
---
--- Name: user_favourite_chords own favourite chords are insertable; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "own favourite chords are insertable" ON public.user_favourite_chords FOR INSERT WITH CHECK ((auth.uid() = user_id));
-
-
---
--- Name: user_favourite_chords own favourite chords are readable; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "own favourite chords are readable" ON public.user_favourite_chords FOR SELECT USING ((auth.uid() = user_id));
-
-
---
 -- Name: user_favourite_patterns Users can manage their own favourites; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1223,27 +1287,6 @@ CREATE POLICY "Users manage own last pattern" ON public.user_last_pattern USING 
 --
 
 CREATE POLICY "anyone can report a missing chord" ON public.chord_requests FOR INSERT TO authenticated, anon WITH CHECK (true);
-
-
---
--- Name: user_visits insert own visits; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "insert own visits" ON public.user_visits FOR INSERT TO authenticated WITH CHECK ((auth.uid() = user_id));
-
-
---
--- Name: user_visits read own visits; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "read own visits" ON public.user_visits FOR SELECT TO authenticated USING ((auth.uid() = user_id));
-
-
---
--- Name: user_visits update own visits; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "update own visits" ON public.user_visits FOR UPDATE TO authenticated USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
 
 
 --
@@ -1312,34 +1355,6 @@ CREATE POLICY "book_service owns the rows" ON public.book_pages TO book_service 
 
 
 --
--- Name: user_assistant_chats own assistant chats are deletable; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "own assistant chats are deletable" ON public.user_assistant_chats FOR DELETE USING ((auth.uid() = user_id));
-
-
---
--- Name: user_assistant_chats own assistant chats are insertable; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "own assistant chats are insertable" ON public.user_assistant_chats FOR INSERT WITH CHECK ((auth.uid() = user_id));
-
-
---
--- Name: user_assistant_chats own assistant chats are readable; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "own assistant chats are readable" ON public.user_assistant_chats FOR SELECT USING ((auth.uid() = user_id));
-
-
---
--- Name: user_assistant_chats own assistant chats are updatable; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "own assistant chats are updatable" ON public.user_assistant_chats FOR UPDATE USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
-
-
---
 -- Name: user_books book_service owns the rows; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1405,6 +1420,62 @@ CREATE POLICY "insert own shared items" ON public.shared_items FOR INSERT TO aut
 
 
 --
+-- Name: user_visits insert own visits; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "insert own visits" ON public.user_visits FOR INSERT TO authenticated WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_assistant_chats own assistant chats are deletable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own assistant chats are deletable" ON public.user_assistant_chats FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
+-- Name: user_assistant_chats own assistant chats are insertable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own assistant chats are insertable" ON public.user_assistant_chats FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_assistant_chats own assistant chats are readable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own assistant chats are readable" ON public.user_assistant_chats FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
+-- Name: user_assistant_chats own assistant chats are updatable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own assistant chats are updatable" ON public.user_assistant_chats FOR UPDATE USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_favourite_chords own favourite chords are deletable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own favourite chords are deletable" ON public.user_favourite_chords FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
+-- Name: user_favourite_chords own favourite chords are insertable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own favourite chords are insertable" ON public.user_favourite_chords FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_favourite_chords own favourite chords are readable; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "own favourite chords are readable" ON public.user_favourite_chords FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
 -- Name: user_chord_voicings own voicings are deletable; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1446,6 +1517,13 @@ CREATE POLICY "read own progressions" ON public.user_pattern_progressions FOR SE
 
 
 --
+-- Name: user_visits read own visits; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "read own visits" ON public.user_visits FOR SELECT TO authenticated USING ((auth.uid() = user_id));
+
+
+--
 -- Name: shared_items read shared item by id; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1471,10 +1549,23 @@ ALTER TABLE public.routines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shared_items ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: telemetry_events; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.telemetry_events ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: user_pattern_progressions update own progressions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "update own progressions" ON public.user_pattern_progressions FOR UPDATE TO authenticated USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: user_visits update own visits; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "update own visits" ON public.user_visits FOR UPDATE TO authenticated USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
 
 
 --
@@ -1496,16 +1587,16 @@ ALTER TABLE public.user_books ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_chord_voicings ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: user_favourite_fingerpick_patterns; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.user_favourite_fingerpick_patterns ENABLE ROW LEVEL SECURITY;
-
---
 -- Name: user_favourite_chords; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.user_favourite_chords ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_favourite_fingerpick_patterns; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_favourite_fingerpick_patterns ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: user_favourite_patterns; Type: ROW SECURITY; Schema: public; Owner: -
@@ -1538,17 +1629,16 @@ ALTER TABLE public.user_pattern_progressions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_strum_patterns ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: exercise_logs users can manage their own exercise_logs; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "users can manage their own exercise_logs" ON public.exercise_logs USING ((auth.uid() = user_id));
-
-
---
 -- Name: user_visits; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.user_visits ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: exercise_logs users can manage their own exercise_logs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "users can manage their own exercise_logs" ON public.exercise_logs USING ((auth.uid() = user_id));
 
 
 --
@@ -1732,6 +1822,22 @@ GRANT ALL ON TABLE public.shared_items TO service_role;
 
 
 --
+-- Name: TABLE telemetry_events; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.telemetry_events TO service_role;
+
+
+--
+-- Name: SEQUENCE telemetry_events_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.telemetry_events_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.telemetry_events_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.telemetry_events_id_seq TO service_role;
+
+
+--
 -- Name: TABLE user_assistant_chats; Type: ACL; Schema: public; Owner: -
 --
 
@@ -1758,21 +1864,21 @@ GRANT ALL ON TABLE public.user_chord_voicings TO service_role;
 
 
 --
--- Name: TABLE user_favourite_fingerpick_patterns; Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO anon;
-GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO authenticated;
-GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO service_role;
-
-
---
 -- Name: TABLE user_favourite_chords; Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON TABLE public.user_favourite_chords TO anon;
 GRANT ALL ON TABLE public.user_favourite_chords TO authenticated;
 GRANT ALL ON TABLE public.user_favourite_chords TO service_role;
+
+
+--
+-- Name: TABLE user_favourite_fingerpick_patterns; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO anon;
+GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO authenticated;
+GRANT ALL ON TABLE public.user_favourite_fingerpick_patterns TO service_role;
 
 
 --

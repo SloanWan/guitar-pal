@@ -74,6 +74,10 @@ BAILIAN_CNY_PER_MTOK: dict[str, tuple[float, float]] = {
     # Busy-hour rates; off-peak is half.
     "deepseek-v4.1-flash": (2.0, 8.0),
     "qwen3.6-flash": (1.2, 7.2),
+    # Vendor-prefixed: reached at the OpenAI-compatible endpoint (#424).
+    "MiniMax/MiniMax-M3.1-Flash": (1.0, 4.0),
+    # Not on Bailian's price page yet; Zhipu's own rate in China, 2026-11-06.
+    "ZHIPU/GLM-5.3-FlashX": (2.0, 7.0),
 }
 CNY_PER_USD = 7.1
 # Pages in flight at once, per model.

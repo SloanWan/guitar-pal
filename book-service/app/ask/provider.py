@@ -18,6 +18,10 @@ PDF carries a text layer goes over as one cited PDF and the pages come off
 the API's citations; without it — every DeepSeek call, and every scanned
 chapter on either provider — the chapter goes over as labelled pages and
 the pages come from what was sent.
+
+Bailian's vendor-prefixed models (`ZHIPU/…`, `MiniMax/…`) are not on its
+Anthropic endpoint; for those `ChatCompletionsClient` stands in for the SDK on
+the streamed structured path, so far only for evals.
 """
 
 import logging
@@ -25,6 +29,7 @@ from dataclasses import dataclass
 
 from anthropic import AsyncAnthropic
 
+from app.ask.chat_compat import ChatCompletionsClient
 from app.ingest.model import CLASSIFY_MODEL, MODEL
 
 log = logging.getLogger("book-service")
@@ -39,6 +44,7 @@ DEEPSEEK_EFFORT = "low"
 DEEPSEEK_THINKING_TOKENS = 24_576
 
 BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com/apps/anthropic"
+BAILIAN_CHAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 # Its thinking models count their reasoning inside the cap, as DeepSeek's do.
 BAILIAN_THINKING_TOKENS = 8_192
 
@@ -48,7 +54,8 @@ class Provider:
     """One model family, and what the ask graph may ask of it."""
 
     name: str
-    client: AsyncAnthropic
+    # A chat completions client only behind `structured_call`'s streamed path.
+    client: AsyncAnthropic | ChatCompletionsClient
     # The chapter answer and the general answer.
     model: str
     # The intent call: cheap and frequent.
@@ -104,10 +111,17 @@ def bailian_provider(api_key: str, model: str, thinking: bool | None = None) -> 
     wrapped its object in an array; deepseek-v4.1-flash refuses the field),
     so the schema goes in the prompt and the reply is read leniently, as for
     DeepSeek. One model plays both roles: an eval names the one it measures.
+    A vendor-prefixed model (`ZHIPU/GLM-5.3-FlashX`) is served only at the
+    OpenAI-compatible endpoint, and is reached through it (#424).
     """
+    client: AsyncAnthropic | ChatCompletionsClient = (
+        ChatCompletionsClient(api_key, BAILIAN_CHAT_URL)
+        if "/" in model
+        else AsyncAnthropic(api_key=api_key, base_url=BAILIAN_BASE_URL)
+    )
     return Provider(
         name="bailian",
-        client=AsyncAnthropic(api_key=api_key, base_url=BAILIAN_BASE_URL),
+        client=client,
         model=model,
         small_model=model,
         documents=False,

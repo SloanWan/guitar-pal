@@ -14,9 +14,12 @@ leans the gold, and is not a fair entrant).
 its luck; the cases carry `repeat`. Each reading is cached in
 `<set>/readings/<vendor>-<model>/<prompt>/<exercise>.r<n>.json`, the prompt's
 id being the start of the hash of what the reader is told, so a rerun only
-pays for what is new and an edited prompt is read afresh. The models run side
-by side; one stops starting readings when its new spending reaches
-`--max-usd`.
+pays for what is new and an edited prompt is read afresh. A cached reading
+keeps the model's replies, and a rerun plays them back through today's
+reconcile and validator instead of trusting the draft stored with them: a
+change on the Python or validator side is scored again for nothing. A reading
+cached before the replies were kept is read again. The models run side by
+side; one stops starting readings when its new spending reaches `--max-usd`.
 
 The validator is the Next.js side's (`/api/internal/validate`): a dev server
 of this checkout, on `--validator` or `BOOK_SERVICE_VALIDATE_URL`.
@@ -40,6 +43,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -143,26 +147,80 @@ def reader_for(spec: str) -> Provider:
     return provider
 
 
-async def read(extractor: TabExtractor, provider: Provider, ex: Exercise) -> dict:
+class Recorder(TabExtractor):
+    """The parse's reader, keeping each model reply — or, given replies, playing
+    them back in order instead of calling the model."""
+
+    def __init__(
+        self, provider: Provider, validator: ValidatorClient, replay: list | None = None
+    ) -> None:
+        super().__init__(provider, validator)
+        self.replies: list[dict | None] = []
+        self._replay = None if replay is None else list(replay)
+        # Set when today's code asks for a repair the cached reading never made.
+        self.short = False
+
+    async def read(
+        self, png: bytes, repair: tuple[TabReadingOut, Sequence[dict[str, object]]] | None = None
+    ) -> tuple[TabReadingOut | None, CallUsage]:
+        if self._replay is None:
+            out, usage = await super().read(png, repair)
+            self.replies.append(out.model_dump() if out else None)
+            return out, usage
+        free = CallUsage(0, 0, self._provider.model)
+        if not self._replay:
+            self.short = True
+            return None, free
+        reply = self._replay.pop(0)
+        return (TabReadingOut.model_validate(reply) if reply else None), free
+
+
+async def extract(extractor: TabExtractor, ex: Exercise) -> tuple:
+    # The heading only names the draft when the model reads none; the name is not scored.
+    return await extractor.extract_exercise(
+        ex.crop.read_bytes(), ex.record.get("page") or 0, Segment("", 1, (0.0, 0.0, 1.0, 1.0))
+    )
+
+
+def outcome(record: object, dropped: list[dict]) -> dict:
+    return {
+        "draft": record.draft if record else None,  # type: ignore[attr-defined]
+        "warnings": (record.warnings if record else []) + dropped,  # type: ignore[attr-defined]
+        "dropped": record is None,
+    }
+
+
+async def read(provider: Provider, validator: ValidatorClient, ex: Exercise) -> dict:
     """One reading of one crop, with what it cost; `error` when a call itself broke."""
-    png = ex.crop.read_bytes()
+    recorder = Recorder(provider, validator)
     tick = time.perf_counter()
     try:
-        # The heading only names the draft when the model reads none; the name is not scored.
-        record, usage, dropped = await extractor.extract_exercise(
-            png, ex.record.get("page") or 0, Segment("", 1, (0.0, 0.0, 1.0, 1.0))
-        )
+        record, usage, dropped = await extract(recorder, ex)
     except ValidatorError:
         raise  # the validator is down: every later reading would fail the same way
     except Exception as e:  # a rate limit, a refused field: said, and not cached
         return {"error": f"{type(e).__name__}: {str(e)[:300]}"}
     return {
-        "draft": record.draft if record else None,
-        "warnings": (record.warnings if record else []) + dropped,
-        "dropped": record is None,
+        **outcome(record, dropped),
+        "replies": recorder.replies,
         **usage_fields(provider, usage),
         "seconds": round(time.perf_counter() - tick, 2),
     }
+
+
+async def replay(
+    provider: Provider, validator: ValidatorClient, ex: Exercise, cached: dict
+) -> dict:
+    """A cached reading's replies through today's reconcile and validator, at no cost;
+    what the reading cost and how its calls ended stay as they were."""
+    recorder = Recorder(provider, validator, cached["replies"])
+    record, _, dropped = await extract(recorder, ex)
+    out = {**cached, **outcome(record, dropped), "cached": True}
+    if recorder.short:
+        out["warnings"] = out["warnings"] + [
+            {"code": "REPLAY_SHORT", "message": "today's code asks for a repair never read"}
+        ]
+    return out
 
 
 def usage_fields(provider: Provider, usage: list[CallUsage]) -> dict:
@@ -257,7 +315,6 @@ async def run_model(
     max_usd: float,
 ) -> None:
     provider = reader_for(spec)
-    extractor = TabExtractor(provider, validator)
     folder = spec.replace(":", "-").replace("/", "-")
     subject = next(s for s in run["subjects"] if s["id"] == spec)
     subject["status"] = "running"
@@ -273,12 +330,13 @@ async def run_model(
     async def job(ex: Exercise, repeat: int) -> tuple[Exercise, int, dict]:
         nonlocal spent
         path = cache_path(ex, repeat)
-        if path.exists():
-            return ex, repeat, {**json.loads(path.read_text()), "cached": True}
+        cached = json.loads(path.read_text()) if path.exists() else {}
+        if "replies" in cached:
+            return ex, repeat, await replay(provider, validator, ex, cached)
         async with slots:
             if spent >= max_usd:
                 return ex, repeat, {"error": f"not read: --max-usd {max_usd} reached"}
-            reading = await read(extractor, provider, ex)
+            reading = await read(provider, validator, ex)
         if "error" not in reading:
             spent += reading["cost_usd"]
             path.parent.mkdir(parents=True, exist_ok=True)

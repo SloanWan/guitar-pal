@@ -1,9 +1,23 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from evals.tab.run import PROMPT_ID, Exercise, add_case, finish_subject, reader_for, subject_summary
+from app.extract.tab import TabExtractor
+from app.ingest.model import CallUsage
+from app.validate import Verdict
+from evals.tab.run import (
+    PROMPT_ID,
+    Exercise,
+    add_case,
+    finish_subject,
+    read,
+    reader_for,
+    replay,
+    subject_summary,
+)
 from evals.tab.score import score_reading
+from tests.test_extract_tab import STRING_SIX
 from tests.test_tab_score import BAR, slot, tab
 
 
@@ -96,3 +110,51 @@ def test_a_reading_cut_off_by_the_cap_counts_as_truncated_and_older_readings_say
     add_case(run, "m", exercise(), 2, cached[0])
     assert run["cases"][0]["metrics"]["truncated"] == 1
     assert "truncated" not in run["cases"][1]["metrics"]
+
+
+class Validator:
+    """Accepts every draft, echoing it as the pattern; rejects the first `reject`."""
+
+    def __init__(self, reject: int = 0) -> None:
+        self.reject = reject
+        self.drafts: list[dict] = []
+
+    async def tab(self, draft: dict, repeats: list | None = None) -> Verdict:
+        self.drafts.append(draft)
+        if len(self.drafts) <= self.reject:
+            return Verdict(ok=False, errors=[{"code": "BAD", "path": "measures", "message": "no"}])
+        return Verdict(ok=True, pattern=draft)
+
+
+def crop(tmp_path: Path) -> Exercise:
+    png = tmp_path / "c.png"
+    png.write_bytes(b"png")
+    return Exercise("books-batch1", {"id": "syt-p106-1", "page": 106, "gold": tab(BAR)}, png)
+
+
+async def test_a_reading_s_replies_are_kept_and_played_back_without_the_model(
+    tmp_path, monkeypatch
+):
+    provider = SimpleNamespace(model="m", name="bailian", small_model="m")
+    calls: list[object] = []
+
+    async def model_read(self, png, repair=None):  # noqa: ANN001
+        calls.append(repair)
+        return STRING_SIX, CallUsage(1000, 500, "m")
+
+    monkeypatch.setattr(TabExtractor, "read", model_read)
+    monkeypatch.setattr("evals.tab.run.cost_usd", lambda provider, usage: 0.01)
+    ex = crop(tmp_path)
+    reading = await read(provider, Validator(), ex)  # type: ignore[arg-type]
+    assert reading["replies"] == [STRING_SIX.model_dump()] and reading["calls"] == 1
+    assert len(calls) == 1
+
+    played = await replay(provider, Validator(), ex, reading)  # type: ignore[arg-type]
+    assert len(calls) == 1  # no model call
+    assert played["draft"] == reading["draft"] and played["cached"] is True
+    assert played["cost_usd"] == 0.01  # what the reading cost stays
+
+    # Today's validator rejects the first draft: the repair was never read.
+    short = await replay(provider, Validator(reject=1), ex, reading)  # type: ignore[arg-type]
+    assert short["dropped"] is True
+    assert short["warnings"][-1]["code"] == "REPLAY_SHORT"

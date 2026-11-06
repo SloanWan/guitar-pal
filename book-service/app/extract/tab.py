@@ -54,7 +54,8 @@ PAD_BELOW = 0.01
 READ_CONCURRENCY = 3
 # Caps for the answer; a reasoning provider adds its thinking room on top.
 SEGMENT_MAX_TOKENS = 2048
-READ_MAX_TOKENS = 8192
+# A dense page written with its marks runs past 8k (books-batch1, 6p p005, #441).
+READ_MAX_TOKENS = 16384
 # One repair round trip, as in askModel.ts.
 MAX_REPAIRS = 1
 # Index 0 = high e (string ①), as fingerpickScheduler.ts holds it.
@@ -146,12 +147,21 @@ READ_SYSTEM = (
     "- Before a note's fret, how it is reached from the note before it on that string —"
     " always on the second note, the one the arc or line ends on: `h` hammer-on (an arc"
     " with H), `p` pull-off (an arc with P), `s` slide (a slanted line between the two"
-    " notes, or an arc with S), `^` an arc with no letter. E.g. `3:5/e 3:h7/e 3:p5/e`.\n"
+    " notes, or an arc with S), `^` an arc with no letter — between two notes of the same"
+    " fret it is a tie, and a tie often crosses a barline. E.g. `3:5/e 3:h7/e 3:p5/e`.\n"
     "- After a note's fret: `~` vibrato (a wavy line over the note), `~~` a wide one.\n"
     "- After the duration, for the whole slot: `@D` a down-pick mark over it (⊓, or ∧ or ↓"
     " in some books), `@U` an up-pick mark (V or ↑), `@>` an accent, `@PM` the slot lies"
     " under a P.M. (palm mute) bracket — write it on every slot the bracket covers.\n"
     "E.g. `6:0/q@D 5:7/e@D 6:h7/e 5:5+4:7/e@PM@>`.\n"
+    "A mark never costs a note: read every bar and every note, however dense; where the"
+    " marks are too small or crowded to be sure of, leave the marks out, never the bars.\n\n"
+    "Transcribe every bar of the exercise, on every system of the crop. A passage that is"
+    " hard to read is still written, as your best reading with `?` for the digits you"
+    " cannot make out, and named in `unclear`: a bar left out is worse than a bar read"
+    " imperfectly, because the player corrects a wrong digit but cannot see a missing bar."
+    " When two guitar parts are printed to be played together (Gtr. 1 and Gtr. 2 staves"
+    " under one another), read Gtr. 1 only and say so in `unclear`."
     "Chords: one entry per printed chord name, as `bar.note:Name` with 1-based indices,"
     " e.g. `1.1:C 4.3:G7`."
 )

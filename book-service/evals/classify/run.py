@@ -74,6 +74,10 @@ BAILIAN_CNY_PER_MTOK: dict[str, tuple[float, float]] = {
     # Busy-hour rates; off-peak is half.
     "deepseek-v4.1-flash": (2.0, 8.0),
     "qwen3.6-flash": (1.2, 7.2),
+    # Vendor-prefixed: reached at the OpenAI-compatible endpoint (#424).
+    "MiniMax/MiniMax-M3.1-Flash": (1.0, 4.0),
+    # Not on Bailian's price page yet; Zhipu's own rate in China, 2026-11-06.
+    "ZHIPU/GLM-5.3-FlashX": (2.0, 7.0),
 }
 CNY_PER_USD = 7.1
 # Pages in flight at once, per model.
@@ -100,9 +104,13 @@ def provider_for(spec: str) -> Provider:
     if not model:
         raise SystemExit(f"{spec!r}: name a model as vendor:model")
     if vendor == "bailian":
-        # `+nothink` asks a Qwen 3.x model to answer without reasoning first.
+        # `+nothink` asks a Qwen 3.x model to answer without reasoning first, `+think`
+        # to reason first; without either the model does as it does by default.
         model, _, flag = model.partition("+")
-        return bailian_provider(_key("DASHSCOPE_API_KEY"), model, thinking=flag != "nothink")
+        if flag not in ("", "think", "nothink"):
+            raise SystemExit(f"{spec!r}: +think or +nothink")
+        thinking = {"think": True, "nothink": False}.get(flag)
+        return bailian_provider(_key("DASHSCOPE_API_KEY"), model, thinking=thinking)
     if vendor == "deepseek":
         return replace(deepseek_provider(_key("DEEPSEEK_API_KEY")), small_model=model)
     if vendor == "anthropic":

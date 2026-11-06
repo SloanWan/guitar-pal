@@ -266,3 +266,29 @@ def test_only_reviewed_records_are_scored_and_the_run_file_carries_no_names(tmp_
     written = json.loads(out.read_text())
     assert written["subjects"][0]["summary"]["exercises"] == 2
     assert "…" not in out.read_text()
+
+
+def test_an_exercise_read_with_no_notes_scores_zero_not_nothing():
+    rates = summarise([score_reading(tab([slot(rest=True)]), tab(BAR))])
+    assert rates["note_f1"] == 0.0 and rates["fret_f1"] == 0.0
+
+
+def test_each_mark_kind_is_scored_on_its_own():
+    hammer = {"link": {"kind": "hammer"}}
+    gold = tab([slot(A=0), marked(slot(A=2), A=hammer), slot(G=0), marked(slot(G=2), G=hammer)])
+    read = tab([slot(A=0), marked(slot(A=2), A=hammer), slot(G=0), slot(G=2)])
+    rates = summarise([score_reading(read, gold)])
+    assert rates["hammer_f1"] == 2 / 3  # one of two hammers, none extra
+    assert "pull_f1" not in rates  # neither side has any
+
+
+def test_a_chord_line_placed_in_part_is_checked_by_its_names():
+    gold = tab(
+        [slot(A=0, chord=("C", "major")), slot(D=2), slot(G=0, chord=("A", "minor")), slot(B=1)]
+    )
+    # The validator placed C and left Am, a name it could not resolve, in the description.
+    read = tab([slot(A=0, chord=("C", "major")), slot(D=2), slot(G=0), slot(B=1)], description="Am")
+    sc = score_reading(read, gold)
+    assert sc.chord_names_match and sc.placed_chords == 1
+    wrong = tab([slot(A=0, chord=("C", "major")), slot(D=2), slot(G=0), slot(B=1)], description="G")
+    assert not score_reading(wrong, gold).chord_names_match

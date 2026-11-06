@@ -13,6 +13,7 @@ import {
   displayCategory,
   suffixRank,
 } from "@/lib/chordSuffixes";
+import type { ChordRef } from "@/lib/strumPatterns";
 
 /** `uk-` followed by a shape: frets, mutes and the dashes between them. */
 const UNKNOWN_NAME = new RegExp(`^${UNKNOWN_PREFIX}[0-9x-]+$`);
@@ -168,6 +169,19 @@ export function normalizeChordName(raw: string): ChordIndexEntry | null {
   const { root, normalizedSuffix } = parseQuery(raw);
   if (root === null) return null;
   return { root, suffix: normalizeSlashBass(normalizedSuffix) };
+}
+
+/**
+ * The chord a word names, exactly. Spelling is normalised the way the search
+ * box normalises it (Cmaj7 and Cmajor7 are one chord; D# and Eb are one
+ * root) but the result has to be a chord the library holds under that name
+ * — no nearest match.
+ */
+export function exactChord(word: string, index: readonly ChordIndexEntry[]): ChordRef | null {
+  const name = normalizeChordName(word);
+  if (name === null || name.root === UNKNOWN_ROOT) return null;
+  const hit = index.find((e) => e.root === name.root && e.suffix === name.suffix);
+  return hit ? { root: hit.root, suffix: hit.suffix, voicingId: null } : null;
 }
 
 export function parseQuery(raw: string): ParsedQuery {

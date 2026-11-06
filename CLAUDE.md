@@ -145,6 +145,15 @@ Types defined in `src/types/database.ts`.
 - **All code, comments, and commit messages must be in English** — no Chinese identifiers, comments, or commit messages, regardless of what language the requirement was discussed in.
 - **Animation: CSS first, framer-motion for state-driven only** — pure hover/visual interactions use plain CSS `:hover` + `transition`, not `framer-motion`. Reserve `framer-motion` for animations that must be orchestrated by React state or data changes (list enter/exit, value-driven transitions). Reaching for a JS animation library for static hover effects is over-engineering.
 
+## Task Breakdown and Parallel Work
+
+- On receiving a task, first split it into subtasks and mark which are independent and which depend on another.
+- Independent read-only subtasks (reading code, research, reviews, running analyses) go to subagents in parallel by default.
+- Never parallelise subtasks that modify the same files or that depend on one another.
+- Brief every subagent with its goal, scope, the evidence it must bring back, and the file path to write its output to.
+- When all subagents are done, merge and cross-check their results yourself before reporting.
+- Before changing code, present a plan and wait for approval.
+
 ## Development Principles
 
 - **Issue-driven:** confirm a GitHub issue exists before writing code for a new feature. Ask if one doesn't appear to exist.

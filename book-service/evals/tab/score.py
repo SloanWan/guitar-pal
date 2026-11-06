@@ -96,6 +96,19 @@ LEGACY_FLAGS = {"staccato": "staccato", "accent": "accent", "ghostNote": "ghost"
 LEGACY_SPANS = ("palmMute", "letRing")
 # Marks printed over a column: one per slot, whichever of its notes carries them (#440).
 COLUMN_MARKS = ("pick down", "pick up", "accent")
+# The marks the books print, each scored on its own (#441): one total would let
+# the 181 hammers and pulls hide the ties and slides. Metric key → (kind, label).
+MARK_KINDS = {
+    "hammer_f1": ("hammer", "Hammer"),
+    "pull_f1": ("pull", "Pull"),
+    "tie_f1": ("tie", "Tie"),
+    "slide_f1": ("slide", "Slide"),
+    "palm_mute_f1": ("palmMute", "Palm mute"),
+    "vibrato_f1": ("vibrato", "Vibrato"),
+    "accent_f1": ("accent", "Accent"),
+    "pick_down_f1": ("pick down", "Pick down"),
+    "pick_up_f1": ("pick up", "Pick up"),
+}
 SLOT_PATH = re.compile(r"^measures\[(\d+)\]\.slots\[(\d+)\]")
 
 METRICS = [
@@ -204,6 +217,16 @@ METRICS = [
         "format": "percent",
         "description": "Notes under a palm mute, let ring or slur.",
     },
+    *(
+        {
+            "key": key,
+            "label": label,
+            "direction": "higher",
+            "format": "percent",
+            "description": f"{label} marks on the right note, or a column's on the right column.",
+        }
+        for key, (_, label) in MARK_KINDS.items()
+    ),
     {"key": "exercises", "label": "Exercises", "direction": "higher", "format": "fixed0"},
 ]
 
@@ -471,10 +494,16 @@ def score_reading(read: dict | None, gold: dict, warnings: list[dict] | None = N
     compare_marks(sc, "spans", span_set(read, r_slots), span_set(gold, g_slots))
 
     g_names = fold_repeats([s.chord for s in g_slots if s.chord])
-    r_placed = [s.chord for s in r_slots if s.chord]
-    r_names = fold_repeats(r_placed or described_chords(read))
+    r_placed = fold_repeats([s.chord for s in r_slots if s.chord])
+    r_described = fold_repeats(described_chords(read))
+    r_names = r_placed + r_described
     sc.has_chords = bool(g_names or r_names)
-    sc.chord_names_match = g_names == r_names
+    # Names the validator could not place stay in the description (#427), where
+    # their order among the placed ones is lost: then only which names it read counts.
+    if r_placed and r_described:
+        sc.chord_names_match = Counter(g_names) == Counter(r_names)
+    else:
+        sc.chord_names_match = g_names == r_names
     gold_changes = {(s.onset, s.chord) for s in g_slots if s.chord}
     sc.gold_chords = len(gold_changes)
     sc.placed_chords = len(gold_changes & {(s.onset, s.chord) for s in r_slots if s.chord})
@@ -509,12 +538,6 @@ def dice(matched: int, read: int, gold: int) -> float | None:
     return 2 * matched / (read + gold) if read + gold else None
 
 
-def f1(p: float | None, r: float | None) -> float | None:
-    if p is None or r is None:
-        return None
-    return 2 * p * r / (p + r) if p + r else 0.0
-
-
 def summarise(scores: list[Score]) -> dict[str, float]:
     """Rates over a list of exercises: notes pooled, exercises counted."""
     total = Score()
@@ -543,14 +566,19 @@ def summarise(scores: list[Score]) -> dict[str, float]:
             setattr(total, key, getattr(total, key) + getattr(s, key))
     p = ratio(total.matched_notes, total.read_notes)
     r = ratio(total.matched_notes, total.gold_notes)
-    fp = ratio(total.matched_frets, total.read_frets)
-    fr = ratio(total.matched_frets, total.gold_frets)
+    kinds: dict[str, list[int]] = {}
+    for sc in scores:
+        for kind, counts in sc.kinds.items():
+            pooled = kinds.setdefault(kind, [0, 0, 0])
+            for i, n in enumerate(counts):
+                pooled[i] += n
     chordful = [s for s in scores if s.has_chords]
     out = {
         "note_precision": p,
         "note_recall": r,
-        "note_f1": f1(p, r),
-        "fret_f1": f1(fp, fr),
+        # From the counts, so a reading that wrote nothing scores 0, not nothing.
+        "note_f1": dice(total.matched_notes, total.read_notes, total.gold_notes),
+        "fret_f1": dice(total.matched_frets, total.read_frets, total.gold_frets),
         "rhythm": ratio(total.matched_slots, total.gold_slots),
         "bars": ratio(sum(s.bars_match for s in scores), len(scores)),
         "exact": ratio(sum(s.exact for s in scores), len(scores)),
@@ -562,6 +590,11 @@ def summarise(scores: list[Score]) -> dict[str, float]:
         "link_f1": dice(total.matched_links, total.read_links, total.gold_links),
         "effect_f1": dice(total.matched_effects, total.read_effects, total.gold_effects),
         "span_f1": dice(total.matched_spans, total.read_spans, total.gold_spans),
+        **{
+            key: dice(matched, read, gold)
+            for key, (kind, _) in MARK_KINDS.items()
+            for gold, read, matched in [kinds.get(kind, [0, 0, 0])]
+        },
         "exercises": float(len(scores)),
     }
     return {k: v for k, v in out.items() if v is not None}

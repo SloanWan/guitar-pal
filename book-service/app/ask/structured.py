@@ -73,7 +73,7 @@ async def structured_call[M: BaseModel](
         system=system + json_instruction(output),
         messages=messages,  # type: ignore[arg-type]
         output_config=provider.config(effort),  # type: ignore[arg-type]
-        **({} if provider.thinking else {"thinking": {"type": "disabled"}}),
+        **thinking_param(provider),
     ) as stream:
         response = await stream.get_final_message()
     text = "".join(getattr(block, "text", "") for block in response.content)
@@ -88,3 +88,12 @@ async def structured_call[M: BaseModel](
             text[:160],
         )
     return parsed, usage_of(response, model)
+
+
+def thinking_param(provider: Provider) -> dict[str, object]:
+    """The `thinking` field a streamed call sends: none when the model is left to its default."""
+    if provider.thinking is None:
+        return {}
+    if not provider.thinking:
+        return {"thinking": {"type": "disabled"}}
+    return {"thinking": {"type": "enabled", "budget_tokens": provider.thinking_tokens}}

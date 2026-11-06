@@ -69,6 +69,14 @@ describe("toImportedTabDraft", () => {
 		});
 	});
 
+	it("takes a bare number for no chord, not its nearest suffix", () => {
+		const { warnings } = toImportedTabDraft(
+			input({ bars: [{ ...AM_BAR, slots: [{ ...AM_BAR.slots[0], chord: "5" }, ...AM_BAR.slots.slice(1)] }] }),
+			INDEX,
+		);
+		expect(warnings.map((w) => w.code)).toEqual(["UNKNOWN_CHORD"]);
+	});
+
 	it("reads N.C. as the no-chord mark (#437)", () => {
 		const { draft, warnings } = toImportedTabDraft(
 			input({ bars: [{ ...AM_BAR, slots: [{ ...AM_BAR.slots[0], chord: "N.C." }, ...AM_BAR.slots.slice(1)] }] }),

@@ -228,6 +228,7 @@ def parse_reading(out: TabReadingOut) -> tuple[list[list[Note]], list[dict[str, 
             )
         )
     bars: list[list[Note]] = []
+    placed: set[tuple[int, int]] = set()
     for bi, tab_bar in enumerate(out.tab_bars, start=1):
         tab_tokens = tab_bar.split()
         jianpu_tokens = out.jianpu_bars[bi - 1].split() if bi <= len(out.jianpu_bars) else []
@@ -242,6 +243,8 @@ def parse_reading(out: TabReadingOut) -> tuple[list[list[Note]], list[dict[str, 
             )
             jianpu_tokens = []
         notes: list[Note] = []
+        # A chord over a token that is dropped waits for the bar's next note.
+        waiting: tuple[int, int] | None = None
         for ni, token in enumerate(tab_tokens, start=1):
             struck, duration = _parse_tab_token(token)
             if duration is None:
@@ -252,7 +255,22 @@ def parse_reading(out: TabReadingOut) -> tuple[list[list[Note]], list[dict[str, 
                         f"bar {bi} note {ni}: could not read {token!r}; dropped",
                     )
                 )
+                if (bi, ni) in chords:
+                    waiting = (bi, ni)
                 continue
+            at = (bi, ni) if (bi, ni) in chords else waiting
+            if at is not None and at != (bi, ni) and (bi, ni) not in chords:
+                warnings.append(
+                    _issue(
+                        "TAB_CHORD_MOVED",
+                        f"measures[{bi - 1}].slots[{len(notes)}]",
+                        f"bar {bi}: {chords[at]} was over note {at[1]}, which could not be"
+                        f" read; it starts on note {ni}",
+                    )
+                )
+            if at is not None:
+                placed.add(at)
+            waiting = None
             degree, octave, accidental = None, 0, ""
             if jianpu_tokens:
                 m = JIANPU_TOKEN.match(jianpu_tokens[ni - 1])
@@ -260,8 +278,19 @@ def parse_reading(out: TabReadingOut) -> tuple[list[list[Note]], list[dict[str, 
                     accidental = m.group(1)
                     degree = None if m.group(2) == "?" else int(m.group(2))
                     octave = {"+": 1, "-": -1, "": 0}[m.group(3)]
-            notes.append(Note(struck, duration, degree, octave, accidental, chords.get((bi, ni))))
+            chord = chords[at] if at is not None else None
+            notes.append(Note(struck, duration, degree, octave, accidental, chord))
         bars.append(notes)
+    for at, name in chords.items():
+        if at not in placed:
+            # Kept for the description, so the player still sees the name.
+            lost = _issue(
+                "TAB_CHORD_LOST",
+                f"measures[{at[0] - 1}]",
+                f"bar {at[0]}: {name} was over note {at[1]}, and no note after it in the"
+                " bar could be read; it is not placed",
+            )
+            warnings.append({**lost, "original": name})
     return bars, warnings
 
 
@@ -354,6 +383,9 @@ def reconcile(out: TabReadingOut, bars: Sequence[Sequence[Note]], heading: str =
                 slot: dict[str, object] = {"duration": duration, "strings": held}
                 if rest:
                     slot["isRest"] = True
+                # The page's name; the validate route resolves it to a chord (#427).
+                if note.chord and i == 0:
+                    slot["chordName"] = note.chord
                 slots.append(slot)
         if slots:
             measures.append({"slots": slots})
@@ -390,9 +422,18 @@ def _fret_for(midi: int, string: int) -> int | None:
     return frets[0] if frets else None
 
 
-def chord_line(bars: Sequence[Sequence[Note]]) -> str:
-    """The printed chord names in order — for the draft's description, not its frets."""
-    return " ".join(n.chord for bar in bars for n in bar if n.chord)
+# The warnings that carry a printed chord name no slot ended up with.
+UNPLACED_CHORD_CODES = ("TAB_CHORD_LOST", "UNKNOWN_CHORD")
+
+
+def unplaced_chords(warnings: Sequence[dict[str, object]]) -> str:
+    """The printed chord names the draft could not put on a note, for its
+    description: one over no readable note, or one the chord library lacks."""
+    return " ".join(
+        str(w["original"])
+        for w in warnings
+        if w.get("code") in UNPLACED_CHORD_CODES and isinstance(w.get("original"), str)
+    )
 
 
 def _parse_tab_token(token: str) -> tuple[tuple[Struck, ...], str | None]:
@@ -528,7 +569,7 @@ class TabExtractor:
             if verdict.ok and verdict.pattern is not None:
                 warnings = parse_warnings + reconciled.warnings + list(verdict.warnings)
                 pattern = dict(verdict.pattern)
-                if chords := chord_line(bars):
+                if chords := unplaced_chords(warnings):
                     pattern.setdefault("description", chords)
                 record = ExerciseRecord(
                     page=page,

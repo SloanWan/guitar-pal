@@ -16,19 +16,22 @@ from app.extract.tab import (
     READ_SYSTEM,
     SEGMENT_SYSTEM,
     Note,
+    Segment,
     Struck,
+    TabExtractor,
     TabReadingOut,
-    chord_line,
     looks_like_text_tab,
     midi_from_jianpu,
     midi_from_tab,
     pad_region,
     parse_reading,
     reconcile,
+    unplaced_chords,
     within,
 )
 from app.graph.chapter import ChapterParseGraph
 from app.graph.prompts import CLASSIFY_SYSTEM, NOTES_SYSTEM, NotesOut, PageClassOut, RegionOut
+from app.ingest.model import CallUsage
 from app.parse import ParsePage, ParseTools
 from app.validate import Verdict
 from tests.conftest import structured_message
@@ -67,7 +70,6 @@ def test_reading_parses_into_notes_with_chords() -> None:
     first = bars[0][0]
     assert first == Note((Struck(6, 0),), "quarter", 3, -1, "", "C")
     assert bars[3][0].duration == "half" and bars[3][1].chord == "G7"
-    assert chord_line(bars) == "C G7 C F G7"
 
 
 def test_jianpu_and_tab_land_on_the_same_midi() -> None:
@@ -156,7 +158,11 @@ def test_a_stack_is_not_checked_against_the_jianpu() -> None:
 
 def test_misaligned_jianpu_is_dropped_per_bar_and_bad_tokens_are_dropped() -> None:
     out = STRING_SIX.model_copy(
-        update={"tab_bars": ["6:0/q 6:x/q 6:1/q", "6:3/w"], "jianpu_bars": ["3-/q 4-/q"]}
+        update={
+            "tab_bars": ["6:0/q 6:x/q 6:1/q", "6:3/w"],
+            "jianpu_bars": ["3-/q 4-/q"],
+            "chords": "",
+        }
     )
     bars, warnings = parse_reading(out)
     assert [len(b) for b in bars] == [2, 1]
@@ -181,6 +187,40 @@ def test_a_dotted_half_is_a_half_tied_to_a_quarter() -> None:
     assert [s["strings"][4]["tied"] for s in slots] == [False, True, False]
     assert [s["strings"][4]["fret"] for s in slots] == [3, 3, 0]
     assert slots[1]["strings"][0]["tied"] is False  # only the sounding string ties
+
+
+def test_a_chord_goes_on_its_note_s_slot_and_on_the_first_piece_of_a_split() -> None:
+    bars, _ = parse_reading(STRING_SIX)
+    slots = reconcile(STRING_SIX, bars).draft["measures"][3]["slots"]
+    assert [s.get("chordName") for s in slots] == ["F", "G7", None]
+    out = STRING_SIX.model_copy(
+        update={"tab_bars": ["5:3/h. 5:0/q"], "jianpu_bars": [], "chords": "1.1:C"}
+    )
+    bars, _ = parse_reading(out)
+    split = reconcile(out, bars).draft["measures"][0]["slots"]
+    assert [s.get("chordName") for s in split] == ["C", None, None]
+
+
+def test_a_chord_over_an_unreadable_token_starts_on_the_bar_s_next_note() -> None:
+    out = STRING_SIX.model_copy(
+        update={"tab_bars": ["6:0/q 6:zz/q 6:3/h"], "jianpu_bars": [], "chords": "1.2:Am"}
+    )
+    bars, warnings = parse_reading(out)
+    assert [n.chord for n in bars[0]] == [None, "Am"]
+    assert [w["code"] for w in warnings] == ["TAB_TOKEN", "TAB_CHORD_MOVED"]
+    assert warnings[1]["path"] == "measures[0].slots[1]"
+
+
+def test_a_chord_with_no_readable_note_after_it_is_kept_for_the_description() -> None:
+    out = STRING_SIX.model_copy(
+        update={"tab_bars": ["6:0/h 6:zz/h"], "jianpu_bars": [], "chords": "1.1:C 1.2:G 1.9:D"}
+    )
+    bars, warnings = parse_reading(out)
+    assert [n.chord for n in bars[0]] == ["C"]
+    lost = [w for w in warnings if w["code"] == "TAB_CHORD_LOST"]
+    assert [w["original"] for w in lost] == ["G", "D"]
+    validator_says = [{"code": "UNKNOWN_CHORD", "path": "x", "message": "m", "original": "Hm7"}]
+    assert unplaced_chords(warnings + validator_says) == "G D Hm7"
 
 
 def test_odd_tempo_and_meter_are_left_to_the_validator() -> None:
@@ -310,7 +350,9 @@ async def test_tab_page_yields_one_literal_draft_per_exercise() -> None:
 
     assert [(e.page, e.kind, e.source) for e in result.exercises] == [(1, "tab", "literal")] * 2
     first = result.exercises[0]
-    assert first.draft["name"] == "⑥弦:E–F–G" and first.draft["description"] == "C G7 C F G7"
+    assert first.draft["name"] == "⑥弦:E–F–G" and "description" not in first.draft
+    # The fake validator echoes the draft: the names wait on their slots for the real one.
+    assert first.draft["measures"][3]["slots"][1]["chordName"] == "G7"
     assert first.warnings == [{"code": "CAPPED", "path": "measures", "message": "cut"}]
     assert sorted(e.crop_path for e in result.exercises) == [
         "u/crops/c/p0001-1.png",
@@ -418,3 +460,37 @@ async def test_reads_run_concurrently_but_bounded() -> None:
     )
     assert len(result.exercises) == 6
     assert 1 < peak <= tab_module.READ_CONCURRENCY
+
+
+@dataclass
+class ChordValidator(FakeValidator):
+    """Places every chord but the ones in `unknown`, as the validate route does."""
+
+    unknown: tuple[str, ...] = ()
+
+    async def tab(self, draft: dict, repeats: list | None = None) -> Verdict:
+        self.drafts.append(draft)
+        warnings: list[dict[str, object]] = []
+        for mi, measure in enumerate(draft["measures"]):
+            for si, slot in enumerate(measure["slots"]):
+                name = slot.pop("chordName", None)
+                if name in self.unknown:
+                    path = f"measures[{mi}].slots[{si}].chordName"
+                    warnings.append({"code": "UNKNOWN_CHORD", "path": path, "original": name})
+                elif name:
+                    slot["chord"] = {"root": name, "suffix": ""}
+        return Verdict(ok=True, warnings=warnings, pattern=draft)
+
+
+@pytest.mark.asyncio
+async def test_only_the_names_no_slot_took_stay_in_the_description() -> None:
+    extractor = TabExtractor(object(), ChordValidator(unknown=("F",)))  # type: ignore[arg-type]
+
+    async def read(png: bytes, repair: object = None) -> tuple[TabReadingOut, object]:
+        return STRING_SIX, CallUsage(0, 0)
+
+    extractor.read = read  # type: ignore[method-assign]
+    record, _, _ = await extractor.extract_exercise(b"png", 206, Segment("", 1, (0, 0, 1, 1)))
+    assert record is not None
+    assert record.draft["description"] == "F"
+    assert record.draft["measures"][0]["slots"][0]["chord"] == {"root": "C", "suffix": ""}

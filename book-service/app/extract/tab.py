@@ -67,18 +67,24 @@ KEY_OFFSET = {
 # Guitar jianpu is written an octave above sounding: a plain "1" in 1=C is
 # C3 (MIDI 48); string ⑥ open prints as 3 with a dot below.
 JIANPU_BASE_MIDI = 48
-# The editor has no dotted half: it is a half tied to a quarter (`TIED`).
-TIED = {"dotted-half": ("half", "quarter")}
 DURATIONS = {
     "w": "whole",
-    "h": "half",
     "h.": "dotted-half",
-    "q": "quarter",
+    "h": "half",
     "q.": "dotted-quarter",
-    "e": "eighth",
+    "q": "quarter",
     "e.": "dotted-eighth",
+    "e": "eighth",
+    "s.": "dotted-sixteenth",
     "s": "sixteenth",
 }
+# The marks a tab token may carry (#441). A link goes before the fret of the
+# note it reaches; `^` is an arc printed with no letter, settled by the frets.
+LINK_MARKS = {"h": "hammer", "p": "pull", "s": "slide", "^": "arc"}
+# After the fret: vibrato, `~~` a wide one.
+VIBRATO_MARKS = {"~": False, "~~": True}
+# After the duration, the slot's: a pick stroke, an accent, a palm mute.
+SLOT_TAGS = {"D": "pick down", "U": "pick up", ">": "accent", "PM": "palmMute"}
 
 Region = tuple[float, float, float, float]
 
@@ -132,9 +138,20 @@ READ_SYSTEM = (
     " separate tokens joined with `+`, e.g. `1:0+2:1/q`.\n\n"
     "Write each bar as two strings, one token per note, the same order and count in both. A"
     ' jianpu "–" is never a token of its own: it lengthens the note before it.\n'
-    "- tab: `string:fret/dur`, e.g. `1:0/q 1:3/h 6:?/e`. dur is w h h. q q. e e. s.\n"
+    "- tab: `string:fret/dur`, e.g. `1:0/q 1:3/h 6:?/e`. dur is w h. h q. q e. e s. s —"
+    " a dotted note is its dotted value, never a note tied to a shorter one.\n"
     "- jianpu: `[#|b]degree[+|-]/dur`, e.g. `3+/q #1+/q 5-/e ?/q` — `+` one dot above,"
-    " `-` one dot below.\n"
+    " `-` one dot below.\n\n"
+    "Playing marks: write each mark the page prints, and none it does not.\n"
+    "- Before a note's fret, how it is reached from the note before it on that string —"
+    " always on the second note, the one the arc or line ends on: `h` hammer-on (an arc"
+    " with H), `p` pull-off (an arc with P), `s` slide (a slanted line between the two"
+    " notes, or an arc with S), `^` an arc with no letter. E.g. `3:5/e 3:h7/e 3:p5/e`.\n"
+    "- After a note's fret: `~` vibrato (a wavy line over the note), `~~` a wide one.\n"
+    "- After the duration, for the whole slot: `@D` a down-pick mark over it (⊓, or ∧ or ↓"
+    " in some books), `@U` an up-pick mark (V or ↑), `@>` an accent, `@PM` the slot lies"
+    " under a P.M. (palm mute) bracket — write it on every slot the bracket covers.\n"
+    "E.g. `6:0/q@D 5:7/e@D 6:h7/e 5:5+4:7/e@PM@>`.\n"
     "Chords: one entry per printed chord name, as `bar.note:Name` with 1-based indices,"
     " e.g. `1.1:C 4.3:G7`."
 )
@@ -153,8 +170,10 @@ class TabReadingOut(BaseModel):
 
 # --- the pure part: tokens → notes → draft ---------------------------------------
 
-STRING_FRET = re.compile(r"^([1-6]):(\d{1,2}|\?)$")
-JIANPU_TOKEN = re.compile(r"^([#b]?)([1-7]|\?)([+-]?)/(w|h|q\.|q|e\.|e|s)$")
+# `string:fret`, the link before the fret and anything after it read apart, so
+# a mark that cannot be read costs the mark and not the note.
+NOTE_TOKEN = re.compile(r"^([1-6]):([hps^]?)(\d{1,2}|\?)(.*)$")
+JIANPU_TOKEN = re.compile(r"^([#b]?)([1-7]|\?)([+-]?)/(w|h\.|h|q\.|q|e\.|e|s\.|s)$")
 CHORD_TOKEN = re.compile(r"^(\d+)\.(\d+):(\S+)$")
 TIME_SIGNATURE = re.compile(r"^(\d{1,2})/(\d{1,2})$")
 # A tab that lives in the text layer: string letter, bar, then dashes and frets.
@@ -167,6 +186,8 @@ class Struck:
 
     string: int  # 1 = high e … 6 = low E
     fret: int | None  # None = the digit could not be read
+    link: str | None = None  # a LINK_MARKS kind, "arc" until the frets settle it
+    vibrato: bool | None = None  # True a wide one; None none
 
 
 @dataclass(frozen=True)
@@ -179,6 +200,7 @@ class Note:
     octave: int
     accidental: str
     chord: str | None
+    tags: frozenset[str] = frozenset()  # SLOT_TAGS kinds printed over the slot
 
 
 @dataclass
@@ -246,7 +268,16 @@ def parse_reading(out: TabReadingOut) -> tuple[list[list[Note]], list[dict[str, 
         # A chord over a token that is dropped waits for the bar's next note.
         waiting: tuple[int, int] | None = None
         for ni, token in enumerate(tab_tokens, start=1):
-            struck, duration = _parse_tab_token(token)
+            struck, duration, tags, unread = _parse_tab_token(token)
+            if duration is not None and unread:
+                warnings.append(
+                    _issue(
+                        "TAB_MARK",
+                        f"measures[{bi - 1}].slots[{len(notes)}]",
+                        f"bar {bi} note {ni}: could not read {' '.join(unread)!r} in"
+                        f" {token!r}; the mark dropped, the note kept",
+                    )
+                )
             if duration is None:
                 warnings.append(
                     _issue(
@@ -279,7 +310,7 @@ def parse_reading(out: TabReadingOut) -> tuple[list[list[Note]], list[dict[str, 
                     degree = None if m.group(2) == "?" else int(m.group(2))
                     octave = {"+": 1, "-": -1, "": 0}[m.group(3)]
             chord = chords[at] if at is not None else None
-            notes.append(Note(struck, duration, degree, octave, accidental, chord))
+            notes.append(Note(struck, duration, degree, octave, accidental, chord, tags))
         bars.append(notes)
     for at, name in chords.items():
         if at not in placed:
@@ -336,9 +367,7 @@ def reconcile(out: TabReadingOut, bars: Sequence[Sequence[Note]], heading: str =
         for ni, note in enumerate(bar):
             path = f"measures[{bi}].slots[{ni}]"
             where = f"bar {bi + 1} note {ni + 1}"
-            strings: list[dict[str, object]] = [
-                {"fret": None, "technique": None, "tied": False, "muted": False} for _ in range(6)
-            ]
+            strings: list[dict[str, object]] = [{"fret": None, "muted": False} for _ in range(6)]
             expected = midi_from_jianpu(note, out.key)
             for struck in note.struck:
                 if not 1 <= struck.string <= 6:
@@ -369,8 +398,23 @@ def reconcile(out: TabReadingOut, bars: Sequence[Sequence[Note]], heading: str =
                                 f" (MIDI {read}), jianpu says MIDI {expected}; tab kept",
                             )
                         )
-                if fret is not None:
-                    strings[struck.string - 1]["fret"] = fret
+                if fret is None:
+                    if struck.link:
+                        warnings.append(
+                            _issue(
+                                "TAB_LINK",
+                                path,
+                                f"{where}: string {struck.string} has a {struck.link} mark but"
+                                " no fret; the mark dropped",
+                            )
+                        )
+                    continue
+                cell = strings[struck.string - 1]
+                cell["fret"] = fret
+                if struck.link:
+                    cell["link"] = {"kind": struck.link}
+                if struck.vibrato is not None:
+                    cell["effects"] = {"vibrato": {"wide": True} if struck.vibrato else {}}
             rest = all(s["fret"] is None for s in strings)
             if rest:
                 warnings.append(
@@ -378,17 +422,27 @@ def reconcile(out: TabReadingOut, bars: Sequence[Sequence[Note]], heading: str =
                         "TAB_NOTE_UNREAD", path, f"{where}: no fret could be read; left as a rest"
                     )
                 )
-            for i, duration in enumerate(TIED.get(note.duration, (note.duration,))):
-                held = [dict(s, tied=i > 0 and s["fret"] is not None) for s in strings]
-                slot: dict[str, object] = {"duration": duration, "strings": held}
-                if rest:
-                    slot["isRest"] = True
-                # The page's name; the validate route resolves it to a chord (#427).
-                if note.chord and i == 0:
-                    slot["chordName"] = note.chord
-                slots.append(slot)
+            if not rest:
+                _tag_slot(strings, note.tags)
+            elif note.tags:
+                warnings.append(
+                    _issue(
+                        "TAB_MARK",
+                        path,
+                        f"{where}: {', '.join(sorted(note.tags))} over a slot with no"
+                        " readable note; dropped",
+                    )
+                )
+            slot: dict[str, object] = {"duration": note.duration, "strings": strings}
+            if rest:
+                slot["isRest"] = True
+            # The page's name; the validate route resolves it to a chord (#427).
+            if note.chord:
+                slot["chordName"] = note.chord
+            slots.append(slot)
         if slots:
             measures.append({"slots": slots})
+    warnings.extend(_settle_links(measures))
     if octave_slips:
         shown = ", ".join(octave_slips[:4]) + (", …" if len(octave_slips) > 4 else "")
         warnings.append(
@@ -436,18 +490,108 @@ def unplaced_chords(warnings: Sequence[dict[str, object]]) -> str:
     )
 
 
-def _parse_tab_token(token: str) -> tuple[tuple[Struck, ...], str | None]:
-    """`1:0/q`, or a stack `1:0+2:1/q` — the duration rides on the last string."""
-    head, _, dur = token.rpartition("/")
-    if not head or dur not in DURATIONS:
-        return (), None
+def _parse_tab_token(
+    token: str,
+) -> tuple[tuple[Struck, ...], str | None, frozenset[str], list[str]]:
+    """
+    `1:0/q`, a stack `1:0+2:1/q`, with marks: `3:h7~/e@D@PM`. The duration
+    rides on the last string, the slot's tags after it. No duration, or a
+    string and fret that cannot be read, drops the token (duration None); a
+    mark that cannot be read is listed and only it is dropped.
+    """
+    head, _, tail = token.rpartition("/")
+    dur = next((d for d in DURATIONS if tail.startswith(d)), None)
+    if not head or dur is None:
+        return (), None, frozenset(), []
+    unread: list[str] = []
+    tags: set[str] = set()
+    rest = tail[len(dur) :]
+    if rest and not rest.startswith("@"):
+        unread.append(rest)
+    else:
+        for tag in rest.split("@")[1:]:
+            if tag.upper() in SLOT_TAGS:
+                tags.add(SLOT_TAGS[tag.upper()])
+            else:
+                unread.append("@" + tag)
     struck: list[Struck] = []
     for part in head.split("+"):
-        m = STRING_FRET.match(part)
+        m = NOTE_TOKEN.match(part)
         if not m:
-            return (), None
-        struck.append(Struck(int(m.group(1)), None if m.group(2) == "?" else int(m.group(2))))
-    return tuple(struck), DURATIONS[dur]
+            return (), None, frozenset(), []
+        after = m.group(4)
+        if after and after not in VIBRATO_MARKS:
+            unread.append(after)
+        struck.append(
+            Struck(
+                int(m.group(1)),
+                None if m.group(3) == "?" else int(m.group(3)),
+                LINK_MARKS.get(m.group(2)),
+                VIBRATO_MARKS.get(after),
+            )
+        )
+    return tuple(struck), DURATIONS[dur], frozenset(tags), unread
+
+
+def _tag_slot(strings: list[dict[str, object]], tags: frozenset[str]) -> None:
+    """A slot's printed marks onto its sounding notes: a pick stroke and an
+    accent are the column's (the stave draws them once over it), a palm mute
+    a per-note flag the validator folds into a span."""
+    for cell in strings:
+        if cell["fret"] is None:
+            continue
+        effects = dict(cell.get("effects") or {})
+        if "pick down" in tags or "pick up" in tags:
+            effects["pick"] = {"direction": "down" if "pick down" in tags else "up"}
+        if "accent" in tags:
+            effects["accent"] = True
+        if effects:
+            cell["effects"] = effects
+        if "palmMute" in tags:
+            cell["palmMute"] = True
+
+
+def _settle_links(measures: list[dict[str, object]]) -> list[dict[str, object]]:
+    """
+    Each link against the note before it on its string, across slots and
+    barlines (how v2 reads a link): an unlettered arc becomes a tie, hammer or
+    pull by the frets; a hammer that falls is a pull and a pull that rises a
+    hammer; a link with no earlier note, or between equal frets other than a
+    tie, cannot hold and is dropped. Each change is said.
+    """
+    warnings: list[dict[str, object]] = []
+    last: list[int | None] = [None] * 6
+    for mi, measure in enumerate(measures):
+        for si, slot in enumerate(measure["slots"]):  # type: ignore[index]
+            for string, cell in enumerate(slot["strings"]):
+                fret = cell["fret"]
+                if fret is None:
+                    continue
+                link = cell.pop("link", None)
+                before, last[string] = last[string], fret
+                if link is None:
+                    continue
+                kind = link["kind"]
+                where = f"bar {mi + 1}, string {string + 1}, fret {fret}"
+                path = f"measures[{mi}].slots[{si}].strings[{string}]"
+                if before is None:
+                    settled, why = None, "no note before it on the string"
+                elif kind == "arc":
+                    settled = "tie" if fret == before else "hammer" if fret > before else "pull"
+                    why = ""
+                elif fret == before:
+                    settled, why = None, f"the note before it is the same fret {before}"
+                elif kind == "hammer" and fret < before or kind == "pull" and fret > before:
+                    settled = "pull" if kind == "hammer" else "hammer"
+                    why = f"from fret {before} it {'falls' if fret < before else 'rises'}"
+                else:
+                    settled, why = kind, ""
+                if settled is not None:
+                    cell["link"] = {"kind": settled}
+                if why:
+                    said = f"read as {settled}" if settled else "dropped"
+                    warnings.append(_issue("TAB_LINK", path, f"{where}: {kind} {said} — {why}"))
+    return warnings
 
 
 def _issue(code: str, path: str, message: str) -> dict[str, object]:

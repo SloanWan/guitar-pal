@@ -179,26 +179,89 @@ def test_a_lost_heading_falls_back_to_the_segmenters() -> None:
     assert reconcile(out, bars).draft["name"] == "Book exercise"
 
 
-def test_a_dotted_half_is_a_half_tied_to_a_quarter() -> None:
-    out = STRING_SIX.model_copy(update={"tab_bars": ["5:3/h. 5:0/q"], "jianpu_bars": []})
-    bars, _ = parse_reading(out)
-    slots = reconcile(out, bars).draft["measures"][0]["slots"]
-    assert [s["duration"] for s in slots] == ["half", "quarter", "quarter"]
-    assert [s["strings"][4]["tied"] for s in slots] == [False, True, False]
-    assert [s["strings"][4]["fret"] for s in slots] == [3, 3, 0]
-    assert slots[1]["strings"][0]["tied"] is False  # only the sounding string ties
+def test_dotted_values_are_written_whole() -> None:
+    out = STRING_SIX.model_copy(
+        update={
+            "tab_bars": ["5:3/h. 5:0/q", "4:2/s. 4:0/s 4:2/q. 4:0/e 4:2/h"],
+            "jianpu_bars": [],
+            "chords": "",
+        }
+    )
+    bars, warnings = parse_reading(out)
+    assert warnings == []
+    measures = reconcile(out, bars).draft["measures"]
+    assert [s["duration"] for s in measures[0]["slots"]] == ["dotted-half", "quarter"]
+    assert measures[1]["slots"][0]["duration"] == "dotted-sixteenth"
+    assert all("tied" not in c and "technique" not in c for c in measures[0]["slots"][0]["strings"])
 
 
-def test_a_chord_goes_on_its_note_s_slot_and_on_the_first_piece_of_a_split() -> None:
+def test_a_chord_goes_on_its_note_s_slot() -> None:
     bars, _ = parse_reading(STRING_SIX)
     slots = reconcile(STRING_SIX, bars).draft["measures"][3]["slots"]
     assert [s.get("chordName") for s in slots] == ["F", "G7", None]
-    out = STRING_SIX.model_copy(
-        update={"tab_bars": ["5:3/h. 5:0/q"], "jianpu_bars": [], "chords": "1.1:C"}
-    )
-    bars, _ = parse_reading(out)
-    split = reconcile(out, bars).draft["measures"][0]["slots"]
-    assert [s.get("chordName") for s in split] == ["C", None, None]
+
+
+def marks_of(tab_bars: list[str]) -> tuple[list[dict], list[dict]]:
+    """The draft's slots and every warning, for a reading of these bars alone."""
+    out = STRING_SIX.model_copy(update={"tab_bars": tab_bars, "jianpu_bars": [], "chords": ""})
+    bars, warnings = parse_reading(out)
+    reconciled = reconcile(out, bars)
+    slots = [s for m in reconciled.draft["measures"] for s in m["slots"]]
+    return slots, warnings + reconciled.warnings
+
+
+def test_links_go_on_the_note_they_reach() -> None:
+    slots, warnings = marks_of(["3:5/e 3:h7/e 3:p5/e 3:s9/e 3:^9/q 3:^7/q"])
+    links = [s["strings"][2].get("link") for s in slots]
+    kinds = [None, "hammer", "pull", "slide", "tie", "pull"]
+    assert [link and link["kind"] for link in links] == kinds
+    assert warnings == []
+
+
+def test_an_arc_with_no_letter_reaches_back_across_a_barline_and_a_rest() -> None:
+    slots, _ = marks_of(["2:3/h 6:0/h", "2:^5/w"])
+    assert slots[2]["strings"][1]["link"] == {"kind": "hammer"}
+
+
+def test_a_link_the_frets_contradict_is_turned_or_dropped_with_a_warning() -> None:
+    slots, warnings = marks_of(["1:7/q 1:h5/q 1:p8/q 1:s8/q", "2:h3/w"])
+    assert [s["strings"][0].get("link") for s in slots[:4]] == [
+        None,
+        {"kind": "pull"},
+        {"kind": "hammer"},
+        None,
+    ]
+    assert "link" not in slots[4]["strings"][1]  # no note before it on string 2
+    assert [w["code"] for w in warnings] == ["TAB_LINK"] * 4
+
+
+def test_vibrato_and_the_slot_s_marks() -> None:
+    slots, warnings = marks_of(["3:7~/h@D 3:5~~+2:5/q@U@> 6:0/q@PM"])
+    assert warnings == []
+    assert slots[0]["strings"][2]["effects"] == {"vibrato": {}, "pick": {"direction": "down"}}
+    second = slots[1]["strings"]
+    assert second[2]["effects"] == {
+        "vibrato": {"wide": True},
+        "pick": {"direction": "up"},
+        "accent": True,
+    }
+    assert second[1]["effects"] == {"pick": {"direction": "up"}, "accent": True}
+    assert slots[2]["strings"][5]["palmMute"] is True
+    assert "palmMute" not in slots[2]["strings"][0]  # only the sounding notes
+
+
+def test_a_mark_that_cannot_be_read_costs_the_mark_not_the_note() -> None:
+    slots, warnings = marks_of(["3:7x/q 3:5/q@Z 3:h?/q 3:5/qq"])
+    assert [s["strings"][2]["fret"] for s in slots] == [7, 5, None, 5]
+    codes = [w["code"] for w in warnings]
+    assert codes.count("TAB_MARK") == 3 and "TAB_LINK" in codes
+    assert "TAB_TOKEN" not in codes
+
+
+def test_a_mark_over_a_slot_with_no_readable_note_is_dropped() -> None:
+    slots, warnings = marks_of(["3:?/q@D 3:5/h."])
+    assert slots[0]["isRest"] is True
+    assert "TAB_MARK" in [w["code"] for w in warnings]
 
 
 def test_a_chord_over_an_unreadable_token_starts_on_the_bar_s_next_note() -> None:

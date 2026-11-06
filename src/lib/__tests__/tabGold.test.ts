@@ -85,10 +85,12 @@ describe("unplacedChords", () => {
 		expect(unplacedChords(record, makeDefaultPattern())).toEqual(["C", "F", "G7"]);
 	});
 
-	it("is empty once a slot carries a chord, or when nothing was read", () => {
+	it("leaves out the names a slot carries, and is empty when nothing was read", () => {
 		const draft = { ...makeDefaultPattern(), description: "C F" };
 		const placed = makeDefaultPattern();
 		placed.measures[0].slots[0].chord = { root: "C", suffix: "major", voicingId: null };
+		expect(unplacedChords({ model: { source: "", draft, warnings: [] } }, placed)).toEqual(["F"]);
+		placed.measures[0].slots[1].chord = { root: "F", suffix: "major", voicingId: null };
 		expect(unplacedChords({ model: { source: "", draft, warnings: [] } }, placed)).toEqual([]);
 		expect(unplacedChords({ model: { source: "", draft: makeDefaultPattern(), warnings: [] } }, null)).toEqual([]);
 	});

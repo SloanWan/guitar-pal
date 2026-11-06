@@ -1,8 +1,10 @@
-import { normalizeChordName, type ChordIndexEntry } from "@/lib/chordSearch";
-import { UNKNOWN_ROOT } from "@/lib/chordSuffixes";
+import { exactChord, type ChordIndexEntry } from "@/lib/chordSearch";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { pick, type Lang } from "@/lib/assistant/lang";
+
+// Lives beside the search normalisation now, so the tab importer need not reach into assistant/.
+export { exactChord } from "@/lib/chordSearch";
 
 /**
  * A question about chord shapes — "how do I play F#m7", "C和弦怎么按",
@@ -70,19 +72,6 @@ const ZH_WITH_CLAUSE = new RegExp(String.raw`^${ZH_POLITE}${CHORD_RUN}\s*(?:和�
 const ZH_HOW_FIRST = new RegExp(String.raw`^${ZH_POLITE}${ZH_HOW}\s*${CHORD_RUN}\s*(?:和弦|这几个和弦|这些和弦)?${ZH_TAIL}$`);
 
 const FORMS: readonly RegExp[] = [EN_WITH_LEAD, EN_WITH_NOUN, ZH_WITH_LOOK, ZH_WITH_CLAUSE, ZH_HOW_FIRST];
-
-/**
- * The chord a word names, exactly. Spelling is normalised the way the search
- * box normalises it (Cmaj7 and Cmajor7 are one chord; D# and Eb are one
- * root) but the result has to be a chord the library holds under that name
- * — no nearest match.
- */
-export function exactChord(word: string, index: readonly ChordIndexEntry[]): ChordRef | null {
-	const name = normalizeChordName(word);
-	if (name === null || name.root === UNKNOWN_ROOT) return null;
-	const hit = index.find((e) => e.root === name.root && e.suffix === name.suffix);
-	return hit ? { root: hit.root, suffix: hit.suffix, voicingId: null } : null;
-}
 
 /**
  * The chords one sentence asks the shapes of, or null when it asks nothing

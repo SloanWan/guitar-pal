@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { parseRhythm } from "@/lib/assistant/strum/parseRhythm";
-import { normalizeImportedPattern } from "@/lib/tabImport";
+import { getChordIndex } from "@/lib/chordsData";
+import type { ChordIndexEntry } from "@/lib/chordSearch";
+import { hasChordNames, normalizeImportedPattern, resolveDraftChordNames } from "@/lib/tabImport";
 import type { RepeatDirective, ValidationIssue } from "@/lib/tabImport";
 
 /**
@@ -23,6 +25,12 @@ export interface ValidateStrumRequest {
 
 export interface ValidateTabRequest {
 	kind: "tab";
+	/**
+	 * The draft as the importers write it. A slot may name its chord as the
+	 * page prints it (`chordName: "Am"`, #427): it is resolved here, and a name
+	 * the library does not hold comes back as an `UNKNOWN_CHORD` warning with
+	 * the word as its `original`.
+	 */
 	draft: unknown;
 	repeats?: RepeatDirective[];
 }
@@ -85,10 +93,32 @@ export function validateStrum(request: ValidateStrumRequest): ValidateResponse {
 	return { ok: true, errors: [], warnings };
 }
 
-export function validateTab(request: ValidateTabRequest): ValidateResponse {
+export async function validateTab(
+	request: ValidateTabRequest,
+	chordIndex: () => Promise<readonly ChordIndexEntry[]> = getChordIndex,
+): Promise<ValidateResponse> {
 	const repeats = Array.isArray(request.repeats) ? request.repeats.filter(isRepeat) : [];
-	const { pattern, errors, warnings } = normalizeImportedPattern(request.draft, repeats);
-	return { ok: pattern !== null, errors, warnings, ...(pattern ? { pattern } : {}) };
+	const named: ValidationIssue[] = [];
+	let draft = request.draft;
+	if (hasChordNames(draft)) {
+		// The chords are labels: with the library out of reach the tab still
+		// validates, and every name comes back unplaced rather than the draft failing.
+		let index: readonly ChordIndexEntry[] = [];
+		try {
+			index = await chordIndex();
+		} catch {
+			named.push({
+				code: "CHORDS_UNAVAILABLE",
+				path: "measures",
+				message: "The chord library could not be read; the chord names were left off the slots.",
+			});
+		}
+		const resolved = resolveDraftChordNames(draft, index);
+		draft = resolved.draft;
+		named.push(...resolved.warnings);
+	}
+	const { pattern, errors, warnings } = normalizeImportedPattern(draft, repeats);
+	return { ok: pattern !== null, errors, warnings: [...named, ...warnings], ...(pattern ? { pattern } : {}) };
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -114,7 +144,7 @@ export async function POST(request: Request): Promise<Response> {
 	}
 	if (req.kind === "tab" && "draft" in req) {
 		return json(
-			validateTab({ kind: "tab", draft: req.draft, repeats: req.repeats as RepeatDirective[] }),
+			await validateTab({ kind: "tab", draft: req.draft, repeats: req.repeats as RepeatDirective[] }),
 			200,
 		);
 	}

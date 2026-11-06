@@ -1,5 +1,6 @@
 import type { ParseIssue } from "@/lib/books/types";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import { chordAbbreviation } from "@/lib/strumProgressions";
 import { normalizeImportedPattern } from "@/lib/tabImport/normalizeImportedPattern";
 import { validateFingerpickPattern } from "@/lib/tabImport/validateFingerpickPattern";
 import type { ValidationIssue } from "@/lib/tabImport/types";
@@ -122,17 +123,21 @@ export function modelPattern(record: Pick<TabGoldRecord, "model">): {
 }
 
 /**
- * The chord names the model read off the page but could not place: the
- * extractor keeps them, in order, as the draft's description and puts none on
- * a slot. Empty when the page has none or the tab already places them.
+ * The chord names the model read off the page but did not place, less those
+ * `pattern` (the reading, or the gold as reviewed) now carries on a slot. The
+ * extractor keeps them, in order, as the draft's description: before #427
+ * every name read, since only the ones the library did not know — so a
+ * reading that placed some chords still lists the rest.
  */
 export function unplacedChords(record: Pick<TabGoldRecord, "model">, pattern: FingerpickPattern | null): string[] {
 	const draft = record.model.draft;
 	if (typeof draft !== "object" || draft === null) return [];
 	const description = (draft as { description?: unknown }).description;
 	if (typeof description !== "string") return [];
-	if (pattern?.measures.some((m) => m.slots.some((slot) => slot.chord))) return [];
-	return description.split(/\s+/).filter(Boolean);
+	const placed = new Set(
+		(pattern?.measures ?? []).flatMap((m) => m.slots.flatMap((slot) => (slot.chord ? [chordAbbreviation(slot.chord)] : []))),
+	);
+	return description.split(/\s+/).filter((name) => name !== "" && !placed.has(name));
 }
 
 /** How many of each status, for the index's progress line. */

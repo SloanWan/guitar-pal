@@ -78,6 +78,16 @@ RUN_METRICS = [
         "description": "Readings the validator sent back once before they passed or were dropped.",
     },
     {
+        "key": "truncated",
+        "label": "Truncated",
+        "direction": "lower",
+        "format": "fixed0",
+        "description": (
+            "Readings a call of which hit the token cap, mostly while still thinking:"
+            " the reply was never written, which is not the same as misread."
+        ),
+    },
+    {
         "key": "cost_per_exercise_usd",
         "label": "$ / exercise",
         "direction": "lower",
@@ -158,6 +168,7 @@ async def read(extractor: TabExtractor, provider: Provider, ex: Exercise) -> dic
 def usage_fields(provider: Provider, usage: list[CallUsage]) -> dict:
     return {
         "calls": len(usage),
+        "stop_reasons": [u.stop_reason for u in usage],
         "input_tokens": sum(u.input_tokens for u in usage),
         "output_tokens": sum(u.output_tokens for u in usage),
         "cost_usd": round(cost_usd(provider, usage), 6),
@@ -168,11 +179,20 @@ def subject_summary(scores: list[Score], readings: list[dict]) -> dict[str, floa
     out: dict[str, float] = summarise(scores)
     done = [r for r in readings if "error" not in r]
     out["repaired"] = sum(r.get("calls", 1) > 1 for r in done)
+    # Readings cached before the stop reasons were kept say nothing either way.
+    told = [r for r in done if "stop_reasons" in r]
+    if told:
+        out["truncated"] = sum(truncated(r) for r in told)
     priced = [r for r in done if "cost_usd" in r]
     if priced:
         out["cost_per_exercise_usd"] = sum(r["cost_usd"] for r in priced) / len(priced)
         out["seconds_per_exercise"] = sum(r["seconds"] for r in priced) / len(priced)
     return out
+
+
+def truncated(reading: dict) -> bool:
+    """Whether a call of the reading ran out of tokens: unwritten rather than misread."""
+    return "max_tokens" in reading.get("stop_reasons", [])
 
 
 def add_case(
@@ -190,6 +210,8 @@ def add_case(
     for key in ("cost_usd", "seconds", "calls"):
         if key in reading:
             metrics[key] = reading[key]
+    if "stop_reasons" in reading:
+        metrics["truncated"] = int(truncated(reading))
     run["cases"].append(
         {
             **case,

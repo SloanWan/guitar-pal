@@ -78,3 +78,21 @@ def test_a_subject_is_summarised_per_book_and_per_repeat():
     assert subject["by_repeat"]["1"]["exact"] == 1.0
     assert subject["by_repeat"]["2"]["exact"] == 0.0
     assert subject["summary"]["exercises"] == 3
+
+
+def test_a_reading_cut_off_by_the_cap_counts_as_truncated_and_older_readings_say_nothing():
+    gold = tab(BAR)
+    readings = [
+        {"draft": None, "dropped": True, "calls": 1, "stop_reasons": ["max_tokens"]},
+        {"draft": gold, "calls": 2, "stop_reasons": ["end_turn", "end_turn"]},
+    ]
+    scores = [score_reading(r["draft"], gold) for r in readings]
+    assert subject_summary(scores, readings)["truncated"] == 1
+    cached = [{"draft": gold, "calls": 1}]
+    assert "truncated" not in subject_summary([score_reading(gold, gold)], cached)
+
+    run = {"cases": []}
+    add_case(run, "m", exercise(), 1, readings[0])
+    add_case(run, "m", exercise(), 2, cached[0])
+    assert run["cases"][0]["metrics"]["truncated"] == 1
+    assert "truncated" not in run["cases"][1]["metrics"]

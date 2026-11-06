@@ -144,3 +144,9 @@ async def test_a_bailian_model_told_to_think_is_given_the_thinking_room_as_its_b
     [request] = messages.requests
     assert request["thinking"] == {"type": "enabled", "budget_tokens": BAILIAN_THINKING_TOKENS}
     assert request["max_tokens"] == 1024 + BAILIAN_THINKING_TOKENS
+
+
+async def test_the_usage_says_when_the_cap_ended_the_reply() -> None:
+    p, _ = provider(("max_tokens", LOOPED))
+    _, usage = await call(p)
+    assert usage.stop_reason == "max_tokens"

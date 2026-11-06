@@ -15,7 +15,7 @@ import {
 	Stroke,
 	TabStave,
 	Dot,
-} from "vexflow";
+} from "vexflow/bravura";
 
 import { tripletGroups } from "@/lib/fingerpickEdit";
 import {

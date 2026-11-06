@@ -313,6 +313,7 @@ async def run_model(
     run: dict,
     out: Path,
     max_usd: float,
+    prompt: str = PROMPT_ID,
 ) -> None:
     provider = reader_for(spec)
     folder = spec.replace(":", "-").replace("/", "-")
@@ -325,7 +326,7 @@ async def run_model(
     done: list[tuple[Exercise, int | None, dict, Score | None]] = []
 
     def cache_path(ex: Exercise, repeat: int) -> Path:
-        return GOLD_ROOT / ex.set / "readings" / folder / PROMPT_ID / f"{ex.id}.r{repeat}.json"
+        return GOLD_ROOT / ex.set / "readings" / folder / prompt / f"{ex.id}.r{repeat}.json"
 
     async def job(ex: Exercise, repeat: int) -> tuple[Exercise, int, dict]:
         nonlocal spent
@@ -379,10 +380,11 @@ async def run_models(
     run: dict,
     out: Path,
     max_usd: float,
+    prompt: str = PROMPT_ID,
 ) -> None:
     """Every model at once: the time is spent waiting on the vendors, each its own."""
     await asyncio.gather(
-        *(run_model(s, exercises, runs, validator, run, out, max_usd) for s in specs)
+        *(run_model(s, exercises, runs, validator, run, out, max_usd, prompt) for s in specs)
     )
 
 
@@ -423,11 +425,22 @@ def main(argv: list[str] | None = None) -> int:
         "--max-usd", type=float, default=3.0, help="stop a model at this new spend (default 3)"
     )
     parser.add_argument(
+        "--replay-prompt",
+        metavar="ID",
+        help="play back the readings cached under an earlier prompt through today's code;"
+        " reads nothing new",
+    )
+    parser.add_argument(
         "--validator",
         default=os.environ.get("BOOK_SERVICE_VALIDATE_URL"),
         help="the Next.js dev server (default BOOK_SERVICE_VALIDATE_URL)",
     )
     args = parser.parse_args(argv)
+    # Replies to an earlier prompt, through today's reconcile and validator: what a
+    # code change does on its own, before a new prompt is paid for.
+    prompt = args.replay_prompt or PROMPT_ID
+    if args.replay_prompt:
+        args.max_usd = 0.0
 
     secret = os.environ.get("BOOK_SERVICE_INTERNAL_SECRET")
     if not args.validator or not secret:
@@ -475,7 +488,7 @@ def main(argv: list[str] | None = None) -> int:
             "sets": sorted({ex.set for ex in exercises}),
             "exercises": len(exercises),
             "runs": args.runs,
-            "prompt": PROMPT_ID,
+            "prompt": prompt,
             "max_usd_per_model": args.max_usd,
             "cny_per_usd": CNY_PER_USD,
         },
@@ -487,7 +500,9 @@ def main(argv: list[str] | None = None) -> int:
     write_run(run, out)
     print(f"run {run['run_id']} → {out.relative_to(SERVICE)}  ({len(exercises)} exercises)")
 
-    asyncio.run(run_models(args.models, exercises, args.runs, validator, run, out, args.max_usd))
+    asyncio.run(
+        run_models(args.models, exercises, args.runs, validator, run, out, args.max_usd, prompt)
+    )
 
     finish(run)
     write_run(run, out)

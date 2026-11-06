@@ -440,6 +440,13 @@
 			bottom: 10px;
 		}
 	}
+	/* The narrowest phones: a pill with a stop key still ends on screen (#446). */
+	@container gp-page (max-width: 359px) {
+		.pb-pill {
+			gap: 4px;
+			padding-left: 8px;
+		}
+	}
 	@keyframes pb-fade {
 		0% {
 			opacity: 0;

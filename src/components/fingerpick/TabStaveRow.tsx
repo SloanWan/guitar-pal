@@ -10,7 +10,7 @@ import {
 	Beam,
 	Barline,
 	StemmableNote,
-} from "vexflow";
+} from "vexflow/bravura";
 
 import { Measure } from "@/lib/fingerpickTypes";
 import {

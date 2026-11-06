@@ -72,6 +72,16 @@
 			height: auto;
 		}
 	}
+	/* The frame while the panel's code is still on its way (#445). */
+	.as-panel-loading {
+		align-items: center;
+		justify-content: center;
+		color: var(--gp-ink-3);
+	}
+	.as-panel-loading > svg {
+		width: 20px;
+		height: 20px;
+	}
 	.as-modes {
 		flex: none;
 		padding: 0 12px;

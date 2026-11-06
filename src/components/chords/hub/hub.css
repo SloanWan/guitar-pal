@@ -663,4 +663,18 @@
 			width: 100%;
 		}
 	}
+
+	/* ── Narrowest phones: Adjust keeps its icon, so Play through stays on the card (#446) ── */
+	@container hub (max-width: 359px) {
+		.hb-adjust-lab {
+			display: none;
+		}
+		.hb-board-head {
+			gap: 6px;
+		}
+		/* five views to a row: the columns stay equal, the padding gives */
+		.hb-library-head .gp-seg > button {
+			padding: 0 6px;
+		}
+	}
 }

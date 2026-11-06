@@ -22,7 +22,8 @@ export default function NoFocusZoom() {
 		const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
 		if (!meta) return;
 		const before = meta.content;
-		meta.content = "width=device-width, initial-scale=1, maximum-scale=1";
+		// Added to what the layout set, so `viewport-fit=cover` survives (#446).
+		meta.content = `${before}, maximum-scale=1`;
 		return () => {
 			meta.content = before;
 		};

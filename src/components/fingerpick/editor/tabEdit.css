@@ -1733,17 +1733,32 @@
 			gap: 8px;
 			padding: 0 10px;
 		}
+		/* The page has no tab bar, so the dock is what meets the home indicator. */
 		.te-dock {
 			--te-row: 36px;
-			padding: 2px 8px 10px;
+			padding: 2px 8px calc(10px + env(safe-area-inset-bottom));
 		}
+		.te-dock:not([data-open]) {
+			padding-bottom: calc(4px + env(safe-area-inset-bottom));
+		}
+		/* One row that fits a phone: the section is already named Fretboard (#446). */
 		.te-dock-head {
 			gap: 8px;
+		}
+		.te-dock-title {
+			display: none;
 		}
 		.te-fc span {
 			min-width: 24px;
 			height: 24px;
 			font-size: 12.5px;
+		}
+	}
+
+	/* The narrowest phones: the pager keeps its arrows, the fold key stays on screen (#446). */
+	@container te (max-width: 359px) {
+		.te-pdots {
+			display: none;
 		}
 	}
 }

@@ -152,9 +152,9 @@ export default function PatternHeader({
 						</Popover>
 					)}
 					{onOpenLibrary && (
-						<Button variant="secondary" size="sm" className="lib-btn" onClick={onOpenLibrary}>
+						<Button variant="secondary" size="sm" className="lib-btn" aria-label="Patterns" onClick={onOpenLibrary}>
 							<ListMusic aria-hidden />
-							Patterns
+							<span className="st-lib-lab">Patterns</span>
 						</Button>
 					)}
 				</div>

@@ -1100,8 +1100,16 @@
 			flex: none;
 			max-height: 46vh;
 		}
+		/* The name shares its row with the pattern's actions: it wraps onto a
+		   second line rather than losing all but its first word (#446). */
 		.st-title h1 {
+			display: -webkit-box;
 			font-size: 20px;
+			line-height: 1.2;
+			white-space: normal;
+			overflow-wrap: anywhere;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
 		}
 		.st-titlerow {
 			min-height: 46px;
@@ -1233,6 +1241,13 @@
 		}
 		.st-tile .st-dg {
 			width: min(64px, 90%);
+		}
+	}
+
+	/* The narrowest phones: Patterns keeps its icon, so the name keeps room for two lines (#446). */
+	@container strum (max-width: 359px) {
+		.st-lib-lab {
+			display: none;
 		}
 	}
 }

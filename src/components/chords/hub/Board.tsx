@@ -208,7 +208,7 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 					trigger={
 						<Button variant="secondary" size="sm" className="hb-adjust" aria-label="Transpose, capo and tempo">
 							<SlidersHorizontal aria-hidden />
-							Adjust
+							<span className="hb-adjust-lab">Adjust</span>
 							{(transpose !== 0 || capo !== 0) && <span className="hb-adjust-dot" aria-hidden />}
 						</Button>
 					}

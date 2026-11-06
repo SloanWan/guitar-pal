@@ -100,9 +100,13 @@ def provider_for(spec: str) -> Provider:
     if not model:
         raise SystemExit(f"{spec!r}: name a model as vendor:model")
     if vendor == "bailian":
-        # `+nothink` asks a Qwen 3.x model to answer without reasoning first.
+        # `+nothink` asks a Qwen 3.x model to answer without reasoning first, `+think`
+        # to reason first; without either the model does as it does by default.
         model, _, flag = model.partition("+")
-        return bailian_provider(_key("DASHSCOPE_API_KEY"), model, thinking=flag != "nothink")
+        if flag not in ("", "think", "nothink"):
+            raise SystemExit(f"{spec!r}: +think or +nothink")
+        thinking = {"think": True, "nothink": False}.get(flag)
+        return bailian_provider(_key("DASHSCOPE_API_KEY"), model, thinking=thinking)
     if vendor == "deepseek":
         return replace(deepseek_provider(_key("DEEPSEEK_API_KEY")), small_model=model)
     if vendor == "anthropic":

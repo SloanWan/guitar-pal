@@ -62,8 +62,10 @@ class Provider:
     # thinking inside `max_tokens`, so a cap sized for the answer alone ends
     # with the answer unwritten (stop_reason max_tokens, empty text).
     thinking_tokens: int = 0
-    # False asks a hybrid reasoning model (Qwen 3.x) to answer without thinking first.
-    thinking: bool = True
+    # Whether a hybrid reasoning model (Qwen 3.x) thinks first: None leaves it to
+    # the model (qwen3.7-plus thinks, qwen3-vl-plus does not), True asks it to
+    # within `thinking_tokens`, False asks it not to.
+    thinking: bool | None = None
 
     def config(self, effort: str | None = None) -> dict[str, object]:
         return {"effort": effort or self.effort}
@@ -94,7 +96,7 @@ def deepseek_provider(api_key: str) -> Provider:
     )
 
 
-def bailian_provider(api_key: str, model: str, thinking: bool = True) -> Provider:
+def bailian_provider(api_key: str, model: str, thinking: bool | None = None) -> Provider:
     """One model on Alibaba Cloud Bailian, which speaks the Messages shape too (#422).
 
     Bailian hosts Qwen beside other vendors' models, and not every one of
@@ -111,7 +113,7 @@ def bailian_provider(api_key: str, model: str, thinking: bool = True) -> Provide
         documents=False,
         structured_output=False,
         effort="low",
-        thinking_tokens=BAILIAN_THINKING_TOKENS if thinking else 0,
+        thinking_tokens=0 if thinking is False else BAILIAN_THINKING_TOKENS,
         thinking=thinking,
     )
 

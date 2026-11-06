@@ -1,3 +1,5 @@
+// The Bravura entry: the same default fonts (Bravura + Academico) as `vexflow`,
+// without the three others it embeds as base64 — about 300 KB a page (#445).
 import {
 	TabNote,
 	TabNotePosition,
@@ -17,7 +19,7 @@ import {
 	Tremolo,
 	Bend,
 	Dot,
-} from "vexflow";
+} from "vexflow/bravura";
 
 import {
 	type BeatSlot,

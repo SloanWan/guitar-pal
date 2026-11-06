@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { BookOpen, ClipboardList, History, Loader2, MessageCircle, Plus, X } from "lucide-react";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import { toast } from "sonner";
@@ -9,7 +9,6 @@ import { exportMisses, readMisses } from "@/lib/assistant/missLog";
 import { modeModule } from "@/lib/assistant/panelView";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button, buttonClasses } from "@/components/ui/button";
-import AssistantPanel from "./AssistantPanel";
 import { useAssistant } from "./useAssistant";
 import { ASSISTANT_ASK_EVENT, ASSISTANT_CLOSE_EVENT, HANDOFF_EVENT, opensOnly, type AssistantAsk } from "@/lib/assistant/handoff";
 import "./assistant.css";
@@ -28,6 +27,15 @@ import "./assistant.css";
  * panel: closing the popover is putting the assistant away, not ending the
  * talk, and a reply that was in flight when it closed still lands.
  */
+/**
+ * The panel's code is fetched when it is wanted, not with every page (#445):
+ * its tab cards draw staves, and VexFlow alone is most of a page's first load
+ * on pages that never draw one. A hover, focus or press on Ask starts the
+ * fetch, so by the click it is usually in; `import()` fetches once.
+ */
+const loadPanel = () => import("./AssistantPanel");
+const AssistantPanel = lazy(loadPanel);
+
 /** How tall the conversation may be, in px. The panel floats over content it does not own. */
 const MIN_PANEL_HEIGHT = 240;
 const MAX_PANEL_HEIGHT = 720;
@@ -168,7 +176,15 @@ export default function AssistantLauncher() {
 		<Popover open={open} onOpenChange={setPanelOpen}>
 			<PopoverTrigger asChild>
 				{/* Ask: a secondary button, worded from 720px and an icon on a phone's app bar */}
-				<Button variant="secondary" size="sm" aria-label={label} className="max-[719.98px]:aspect-square max-[719.98px]:px-0">
+				<Button
+					variant="secondary"
+					size="sm"
+					aria-label={label}
+					className="max-[719.98px]:aspect-square max-[719.98px]:px-0"
+					onPointerEnter={() => void loadPanel()}
+					onPointerDown={() => void loadPanel()}
+					onFocus={() => void loadPanel()}
+				>
 					{/* The icon says what the conversation is doing while the panel is
 					    shut: turning while a reply is being written, and wearing a dot
 					    once one has landed unseen. Plain CSS animation — this is state
@@ -256,7 +272,19 @@ export default function AssistantLauncher() {
 						</Button>
 					</PopoverPrimitive.Close>
 				</div>
-				{open && <AssistantPanel assistant={assistant} height={height} view={view} onView={setView} />}
+				{open && (
+					// Until the code is in, the panel's own frame at its own height,
+					// so nothing below it moves when the thread arrives.
+					<Suspense
+						fallback={
+							<div className="as-panel as-panel-loading" style={{ "--as-h": `${height}px` } as React.CSSProperties} aria-busy="true">
+								<Loader2 className="animate-spin" aria-hidden="true" />
+							</div>
+						}
+					>
+						<AssistantPanel assistant={assistant} height={height} view={view} onView={setView} />
+					</Suspense>
+				)}
 				{/* The grip: the panel's bottom edge, draggable. touch-action none so a
 				    finger dragging it resizes the panel rather than scrolling the page.
 				    A phone's panel fills the window and has none. */}

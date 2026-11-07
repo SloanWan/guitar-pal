@@ -79,6 +79,12 @@ export function createReporter(deps: ReporterDeps): Reporter {
 	/** By metric id: a vital reported twice (CLS growing) keeps its latest value. */
 	const vitals = new Map<string, VitalEvent>();
 	const seen = new Set<string>();
+	/**
+	 * Errors already reported, by identity: a failure reported where it is caught
+	 * (a sample load, as `audio`) and then left unhandled reaches the window's
+	 * listener as the same object, and is one failure, not two.
+	 */
+	const reported = new WeakSet<object>();
 	let sent = 0;
 	let timer = false;
 
@@ -107,6 +113,10 @@ export function createReporter(deps: ReporterDeps): Reporter {
 	return {
 		error(thrown, source, extra) {
 			if (sent + errors.length >= PAGE_CAP) return;
+			if (typeof thrown === "object" && thrown !== null) {
+				if (reported.has(thrown)) return;
+				reported.add(thrown);
+			}
 			const { message, stack } = describeError(thrown);
 			const event: TelemetryEvent = {
 				kind: "error",

@@ -71,6 +71,16 @@ describe("createReporter: errors", () => {
 		expect(batches).toHaveLength(1);
 	});
 
+	it("reports one failure once, where it was caught first, when it is then left unhandled", () => {
+		const { reporter, batches, tick } = harness();
+		const failure = new Error("HTTP 404 fetching preset");
+		reporter.error(failure, "audio");
+		reporter.error(failure, "rejection");
+		reporter.error(new Error("HTTP 404 fetching preset"), "rejection");
+		tick();
+		expect(batches[0].map((e) => e.kind === "error" && e.source)).toEqual(["audio", "rejection"]);
+	});
+
 	it("carries a boundary's digest", () => {
 		const { reporter, batches, tick } = harness();
 		reporter.error(new Error("render"), "boundary", { digest: "1234567890" });

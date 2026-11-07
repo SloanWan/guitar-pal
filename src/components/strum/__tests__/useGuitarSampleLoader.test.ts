@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+vi.mock("@/lib/telemetry/client", () => ({ reportError: vi.fn() }));
+
+import { reportError } from "@/lib/telemetry/client";
+
 import {
 	fetchPreset,
 	findZoneForMidi,
@@ -22,6 +26,7 @@ import {
 	_resetFingerpickCachesForTesting,
 	_setReadyFingerpickPresetForTesting,
 	_pcmSampleToBuffer,
+	_decodeZone,
 	SampleLoadError,
 } from "@/components/strum/useGuitarSampleLoader";
 import type { WafPreset, WafZone } from "@/components/strum/useGuitarSampleLoader";
@@ -192,6 +197,7 @@ describe("parsePreset", () => {
 });
 
 describe("fetchPreset", () => {
+	beforeEach(() => vi.mocked(reportError).mockClear());
 	afterEach(() => vi.unstubAllGlobals());
 
 	it("reads the bundled JSON from our own origin", async () => {
@@ -202,6 +208,7 @@ describe("fetchPreset", () => {
 		await expect(fetchPreset("0250_Test")).resolves.toEqual(preset);
 		expect(fetchMock).toHaveBeenCalledWith(`${PRESET_BASE_URL}0250_Test.json`);
 		expect(PRESET_BASE_URL.startsWith("/")).toBe(true);
+		expect(reportError).not.toHaveBeenCalled();
 	});
 
 	it.each([
@@ -213,6 +220,27 @@ describe("fetchPreset", () => {
 		vi.stubGlobal("fetch", vi.fn(respond));
 		await expect(fetchPreset("0250_Test")).rejects.toThrow(SampleLoadError);
 		await expect(fetchPreset("0250_Test")).rejects.toThrow(message);
+	});
+
+	it("reports a failed load as audio, and still throws it to the caller", async () => {
+		vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404 })));
+		const failure = await fetchPreset("0250_Test").catch((err: unknown) => err);
+		expect(failure).toBeInstanceOf(SampleLoadError);
+		expect(reportError).toHaveBeenCalledTimes(1);
+		expect(reportError).toHaveBeenCalledWith(failure, "audio");
+	});
+});
+
+describe("_decodeZone", () => {
+	beforeEach(() => vi.mocked(reportError).mockClear());
+
+	it("reports a sample the browser cannot decode as audio, and still throws it", async () => {
+		const ctx = { decodeAudioData: vi.fn(() => Promise.reject(new DOMException("bad data", "EncodingError"))) };
+		const failure = await _decodeZone(makeZone({ file: btoa("not audio") }), ctx as unknown as AudioContext).catch(
+			(err: unknown) => err,
+		);
+		expect(failure).toBeInstanceOf(SampleLoadError);
+		expect(reportError).toHaveBeenCalledWith(failure, "audio");
 	});
 });
 

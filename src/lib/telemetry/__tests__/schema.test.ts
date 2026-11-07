@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { ERROR_SOURCES, VITAL_NAMES, VITAL_RATINGS } from "../events";
 import { telemetryBatch } from "../schema";
 
 const error = { kind: "error", source: "window", message: "Error: x", route: "/tab", viewport: "phone" };
@@ -27,5 +30,24 @@ describe("telemetryBatch", () => {
 		expect(telemetryBatch.safeParse({ events: [{ ...error, route: "" }] }).success).toBe(false);
 		expect(telemetryBatch.safeParse({ events: [{ ...vital, value: -1 }] }).success).toBe(false);
 		expect(telemetryBatch.safeParse({ events: [{ ...vital, value: 4_000_000 }] }).success).toBe(false);
+	});
+});
+
+describe("the table's checks", () => {
+	const sql = readFileSync(path.resolve(__dirname, "../../../../scripts/create-telemetry-events.sql"), "utf8");
+	/** Every `<column> in (...)` list the SQL writes for a column, read as values. */
+	const listsFor = (column: string) =>
+		[...sql.matchAll(new RegExp(`\\b${column} in \\(([^)]*)\\)`, "g"))].map((m) =>
+			[...m[1].matchAll(/'([^']+)'/g)].map((v) => v[1]),
+		);
+
+	it.each([
+		["source", ERROR_SOURCES],
+		["name", VITAL_NAMES],
+		["rating", VITAL_RATINGS],
+	] as const)("lists the same %s values as the client", (column, values) => {
+		const lists = listsFor(column);
+		expect(lists.length).toBeGreaterThan(0);
+		for (const list of lists) expect(list).toEqual([...values]);
 	});
 });

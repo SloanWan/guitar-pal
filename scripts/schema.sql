@@ -371,7 +371,7 @@ CREATE TABLE public.telemetry_events (
     CONSTRAINT telemetry_events_name_check CHECK ((name = ANY (ARRAY['LCP'::text, 'INP'::text, 'CLS'::text, 'FCP'::text, 'TTFB'::text]))),
     CONSTRAINT telemetry_events_rating_check CHECK ((rating = ANY (ARRAY['good'::text, 'needs-improvement'::text, 'poor'::text]))),
     CONSTRAINT telemetry_events_route_check CHECK (((char_length(route) >= 1) AND (char_length(route) <= 120))),
-    CONSTRAINT telemetry_events_source_check CHECK ((source = ANY (ARRAY['window'::text, 'rejection'::text, 'boundary'::text, 'component'::text, 'server'::text]))),
+    CONSTRAINT telemetry_events_source_check CHECK ((source = ANY (ARRAY['window'::text, 'rejection'::text, 'boundary'::text, 'component'::text, 'audio'::text, 'server'::text]))),
     CONSTRAINT telemetry_events_stack_check CHECK ((char_length(stack) <= 2000)),
     CONSTRAINT telemetry_events_user_agent_check CHECK ((char_length(user_agent) <= 200)),
     CONSTRAINT telemetry_events_viewport_check CHECK ((viewport = ANY (ARRAY['phone'::text, 'desktop'::text])))

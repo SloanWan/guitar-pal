@@ -18,7 +18,12 @@ export const MAX_MESSAGE_CHARS = 300;
 export const MAX_STACK_CHARS = 2000;
 export const MAX_ROUTE_CHARS = 120;
 
-export const ERROR_SOURCES = ["window", "rejection", "boundary", "component", "server"] as const;
+/**
+ * Where an error was caught: the window's listeners, an error screen, a
+ * component's boundary, a sample that would not load or decode (`audio`, which
+ * the callers mostly swallow), or the server's `onRequestError`.
+ */
+export const ERROR_SOURCES = ["window", "rejection", "boundary", "component", "audio", "server"] as const;
 export type ErrorSource = (typeof ERROR_SOURCES)[number];
 
 export const VITAL_NAMES = ["LCP", "INP", "CLS", "FCP", "TTFB"] as const;

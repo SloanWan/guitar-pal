@@ -111,7 +111,7 @@ class StreamedMessages:
         return SimpleNamespace(stop_reason="end_turn", content=[block], usage=usage)
 
 
-def bailian(thinking: bool):  # noqa: ANN201 - the fake stands in for AsyncAnthropic
+def bailian(thinking: bool | None):  # noqa: ANN201 - the fake stands in for AsyncAnthropic
     messages = StreamedMessages(VALID)
     p = replace(
         bailian_provider("key", "qwen3.7-plus", thinking=thinking),
@@ -129,9 +129,24 @@ async def test_a_bailian_model_told_not_to_think_gets_no_thinking_room() -> None
     assert request["max_tokens"] == 1024
 
 
-async def test_a_bailian_model_thinks_by_default_inside_a_larger_cap() -> None:
-    p, messages = bailian(thinking=True)
+async def test_a_bailian_model_left_to_its_default_is_sent_no_thinking_field() -> None:
+    p, messages = bailian(thinking=None)
     await call(p)
     [request] = messages.requests
     assert "thinking" not in request
     assert request["max_tokens"] == 1024 + BAILIAN_THINKING_TOKENS
+
+
+async def test_a_bailian_model_told_to_think_is_given_the_thinking_room_as_its_budget() -> None:
+    # qwen3-vl-plus answers without thinking unless it is asked to (2026-11-06).
+    p, messages = bailian(thinking=True)
+    await call(p)
+    [request] = messages.requests
+    assert request["thinking"] == {"type": "enabled", "budget_tokens": BAILIAN_THINKING_TOKENS}
+    assert request["max_tokens"] == 1024 + BAILIAN_THINKING_TOKENS
+
+
+async def test_the_usage_says_when_the_cap_ended_the_reply() -> None:
+    p, _ = provider(("max_tokens", LOOPED))
+    _, usage = await call(p)
+    assert usage.stop_reason == "max_tokens"

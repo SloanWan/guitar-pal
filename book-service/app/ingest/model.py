@@ -68,6 +68,9 @@ class CallUsage:
     model: str = MODEL
     cache_write_tokens: int = 0
     cache_read_tokens: int = 0
+    # `max_tokens` when the cap ended the reply: a thinking model can spend it
+    # all before writing a word, which reads as no answer, not a wrong one.
+    stop_reason: str | None = None
 
     @property
     def cost_usd(self) -> float:
@@ -89,6 +92,7 @@ def usage_of(response: Message, model: str = MODEL) -> CallUsage:
         model,
         cache_write_tokens=getattr(usage, "cache_creation_input_tokens", None) or 0,
         cache_read_tokens=getattr(usage, "cache_read_input_tokens", None) or 0,
+        stop_reason=getattr(response, "stop_reason", None),
     )
 
 

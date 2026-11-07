@@ -9,6 +9,7 @@ export { migratePattern, migrateLoadedPattern } from "./migratePattern";
 export { expandRepeats } from "./expandRepeats";
 export { MAX_MEASURES, capMeasures } from "./capMeasures";
 export { normalizeImportedPattern } from "./normalizeImportedPattern";
+export { hasChordNames, resolveChordName, resolveDraftChordNames } from "./resolveChord";
 export {
 	EFFECTS_INPUT,
 	LINK_INPUT,

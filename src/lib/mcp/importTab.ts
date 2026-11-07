@@ -1,15 +1,17 @@
 import * as z from "zod";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import { searchChords } from "@/lib/chordSearch";
-import { exactChord } from "@/lib/assistant/chordAsk";
 import type { BeatSlot, Duration, FingerpickPattern, Link, Measure, NoteEffects } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
 import { indexPattern, spanCovers } from "@/lib/fingerpickIndex";
-import { NO_CHORD, isNoChordWord } from "@/lib/fingerpickChords";
-import type { ChordRef } from "@/lib/strumPatterns";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import { isSupportedMeter, meterLabel, SUPPORTED_METERS, type Meter } from "@/lib/strumMeter";
-import { MAX_MEASURES, NOTE_MARKS_SHAPE, PERCUSSION_INPUT, normalizeImportedPattern } from "@/lib/tabImport";
+import {
+	MAX_MEASURES,
+	NOTE_MARKS_SHAPE,
+	PERCUSSION_INPUT,
+	normalizeImportedPattern,
+	resolveChordName,
+} from "@/lib/tabImport";
 import type { ImportedTabDraft, ValidationIssue } from "@/lib/tabImport";
 
 /**
@@ -91,18 +93,6 @@ export function parseMeter(text: string): Meter | null {
 	return isSupportedMeter(meter) ? meter : null;
 }
 
-/**
- * The chord a printed word names: exactly, or the picker's best match, so
- * "Am7" and "a minor 7" both land. Null when the library has nothing for it.
- */
-function resolveChord(word: string, index: readonly ChordIndexEntry[]): ChordRef | null {
-	if (isNoChordWord(word)) return NO_CHORD;
-	const exact = exactChord(word, index);
-	if (exact) return exact;
-	const first = searchChords(index, word, 1)[0];
-	return first ? { root: first.root, suffix: first.suffix, voicingId: null } : null;
-}
-
 function silent(): BeatSlot["strings"][number] {
 	return { fret: null, muted: false };
 }
@@ -179,7 +169,7 @@ export function toImportedTabDraft(
 				out.isRest = true;
 			}
 			if (slot.chord !== undefined && slot.chord.trim() !== "") {
-				const chord = resolveChord(slot.chord, index);
+				const chord = resolveChordName(slot.chord, index);
 				if (chord) out.chord = chord;
 				else {
 					warnings.push(

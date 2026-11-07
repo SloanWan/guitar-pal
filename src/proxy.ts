@@ -85,6 +85,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
 	matcher: [
-		"/((?!_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+		// A report (#447) needs no session: skipping it here spares every beacon a round trip to Supabase.
+		"/((?!_next/static|_next/image|favicon.ico|icon.svg|api/telemetry|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
 	],
 };

@@ -3,6 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { NavProgressProvider, NavProgressBar } from "@/components/nav-progress";
 import NoFocusZoom from "@/components/NoFocusZoom";
+import WebVitals from "@/components/WebVitals";
 import { GrainDefs } from "@/components/ui/grain";
 import { figtree, mono } from "./fonts/fonts";
 
@@ -48,6 +49,7 @@ export default function RootLayout({
         </NavProgressProvider>
         <Toaster />
         <NoFocusZoom />
+        <WebVitals />
       </body>
     </html>
   );

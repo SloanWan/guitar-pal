@@ -7,6 +7,7 @@ import StatusScreen, { StatusTab } from "@/components/status/StatusScreen";
 import { MUTES } from "@/components/status/ErrorScreen";
 import { restoreSavedTheme } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
+import { reportError } from "@/lib/telemetry/client";
 
 /**
  * The last resort: the root layout itself threw, so this replaces the whole
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 export default function GlobalError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
 	useEffect(() => {
 		console.error(error);
+		reportError(error, "boundary", { digest: error.digest });
 		restoreSavedTheme();
 	}, [error]);
 

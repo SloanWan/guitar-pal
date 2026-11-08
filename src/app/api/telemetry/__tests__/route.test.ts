@@ -22,11 +22,11 @@ import { POST } from "@/app/api/telemetry/route";
 const ENV = { NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "service" };
 
 let ipSeq = 0;
-function post(body: string, ip = `198.51.100.${++ipSeq}`): Promise<Response> {
+function post(body: string, ip = `198.51.100.${++ipSeq}`, userAgent = "Mozilla/5.0 (iPhone)"): Promise<Response> {
 	return POST(
 		new Request("https://guitarpal.test/api/telemetry", {
 			method: "POST",
-			headers: { "content-type": "application/json", "x-forwarded-for": ip, "user-agent": "Mozilla/5.0 (iPhone)" },
+			headers: { "content-type": "application/json", "x-forwarded-for": ip, "user-agent": userAgent },
 			body,
 		}),
 	);
@@ -78,6 +78,24 @@ describe("POST /api/telemetry", () => {
 		expect(mocks.insert).toHaveBeenCalledTimes(30);
 		// another address is not held up by it
 		expect((await post(body, "203.0.113.100")).status).toBe(204);
+	});
+
+	it.each([
+		"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Reflectionbot/1.0; +https://reflectionbot.example)",
+		"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+		"Mozilla/5.0 (compatible; bingbot/2.0)",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36 Chrome-Lighthouse",
+	])("accepts and drops a crawler's batch: %s", async (userAgent) => {
+		expect((await post(JSON.stringify({ events: [vital] }), undefined, userAgent)).status).toBe(204);
+		expect(mocks.insert).not.toHaveBeenCalled();
+	});
+
+	it("still writes a browser's batch, and one sent without a user agent", async () => {
+		const chrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
+		expect((await post(JSON.stringify({ events: [vital] }), undefined, chrome)).status).toBe(204);
+		expect((await post(JSON.stringify({ events: [vital] }), undefined, "")).status).toBe(204);
+		expect(mocks.insert).toHaveBeenCalledTimes(2);
 	});
 
 	it("accepts and drops a batch where the service role is not configured", async () => {

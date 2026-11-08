@@ -221,6 +221,14 @@ export default function InspectorChord({ working, commit, slots, tools }: Props)
 						<p className="te-why">N.C. — no chord here: nothing is fretted or drawn as a shape until the next chord.</p>
 					)}
 					{chordHere && state?.status === "loading" && <p className="te-why">Loading shapes…</p>}
+					{chordHere && state?.status === "failed" && (
+						<p className="te-why">
+							Couldn&apos;t load the shapes.{" "}
+							<button type="button" className="te-why-retry" onClick={state.retry}>
+								Try again
+							</button>
+						</p>
+					)}
 					{chordHere && !isNoChord(chordHere) && state?.status === "ready" && !voicing && (
 						<p className="te-why">No shape in the library for {chordSymbolLabel(chordHere)}.</p>
 					)}

@@ -118,7 +118,25 @@ describe("useChordVoicings", () => {
 		await act(async () => {
 			pendingLoads.get("C major")!.reject(new Error("offline"));
 		});
-		expect(latest!(C)).toEqual({ status: "failed" });
+		expect(latest!(C).status).toBe("failed");
+		errorSpy.mockRestore();
+	});
+
+	it("looks a failed chord up again on retry, and is loading until it answers (#463)", async () => {
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		await mount([C]);
+		await act(async () => {
+			pendingLoads.get("C major")!.reject(new Error("timed out"));
+		});
+		const failed = latest!(C);
+		if (failed.status !== "failed") throw new Error("expected a failure");
+		await act(async () => failed.retry());
+		expect(loadCalls).toEqual(["C major", "C major"]);
+		expect(latest!(C)).toEqual({ status: "loading" });
+		await act(async () => {
+			pendingLoads.get("C major")!.resolve([voicing("c1")]);
+		});
+		expect(latest!(C)).toEqual({ status: "ready", voicings: [voicing("c1")] });
 		errorSpy.mockRestore();
 	});
 

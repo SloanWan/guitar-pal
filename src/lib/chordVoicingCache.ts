@@ -1,5 +1,12 @@
-import { createClient } from "@/lib/supabase";
 import type { ChordVoicing } from "@/lib/chordVoicing";
+import {
+	chordParam,
+	MAX_CHORDS_PER_REQUEST,
+	voicingCacheKey,
+	VOICINGS_ENDPOINT,
+	VOICINGS_TIMEOUT_MS,
+	type ChordKey,
+} from "@/lib/chordVoicingsApi";
 
 // One client-side cache for `chord_voicings` reads, shared by everything that
 // resolves a `ChordRef`: the strum engine's pitch lookup and the chord-diagram
@@ -9,14 +16,17 @@ import type { ChordVoicing } from "@/lib/chordVoicing";
 // Voicings are public reference data that only changes with a migration, so the
 // cache also persists to localStorage: a reload, or tomorrow's practice
 // session, redraws the same chords without touching the network.
+//
+// They come from our own origin (#463), not from Supabase: the server answers
+// from its cached copy of the library, so a visitor whose link to Supabase is
+// slow or blocked still sees them, and the chords asked for at once go out as
+// one request.
 
 /** Bump when the stored shape changes; old entries are then simply ignored. */
 const STORAGE_VERSION = "v3";
 const STORAGE_PREFIX = `chordVoicings:${STORAGE_VERSION}:`;
 
-export function voicingCacheKey(root: string, suffix: string): string {
-	return `${root} ${suffix}`;
-}
+export { voicingCacheKey };
 
 /** The slice of `Storage` the cache uses; injected so tests can fake it. */
 export interface VoicingStorage {
@@ -104,27 +114,65 @@ export function createVoicingCache(
 	return { peek, load };
 }
 
-/** The live fetcher: one chord's voicings, straight from Supabase. */
-const fetchFromDatabase: VoicingFetcher = async (root, suffix) => {
-	const { data, error } = await createClient()
-		.from("chords")
-		.select("chord_voicings(id, label, start_fret, barre_fret, capo, frets, fingers)")
-		// Ordered as `chordsData` orders them, so shape n is the same shape on every page.
-		.order("label", { referencedTable: "chord_voicings" })
-		.eq("root", root)
-		.eq("suffix", suffix)
-		// maybeSingle, not single: a chord the library does not carry is an empty
-		// answer to cache, not an error to retry forever.
-		.maybeSingle();
-	if (error) throw new Error(error.message);
-	return (data as { chord_voicings: ChordVoicing[] } | null)?.chord_voicings ?? [];
+/** Several chords' voicings in one go, keyed by `voicingCacheKey`. */
+export type VoicingBatchFetcher = (chords: readonly ChordKey[]) => Promise<Record<string, ChordVoicing[]>>;
+
+/**
+ * A one-chord fetcher over a many-chord one: the chords asked for in the same
+ * tick (a search's dropdown drawing ten shapes) go out together, at most
+ * `maxPerBatch` to a request. A chord missing from the answer is one the
+ * library lacks; a failed request fails every chord in it.
+ */
+export function batchVoicingFetches(fetchMany: VoicingBatchFetcher, maxPerBatch = MAX_CHORDS_PER_REQUEST): VoicingFetcher {
+	type Waiter = { resolve: (voicings: ChordVoicing[]) => void; reject: (err: unknown) => void };
+	let queue = new Map<string, { chord: ChordKey; waiters: Waiter[] }>();
+
+	function flush() {
+		const entries = [...queue.entries()];
+		queue = new Map();
+		for (let i = 0; i < entries.length; i += maxPerBatch) {
+			const batch = entries.slice(i, i + maxPerBatch);
+			fetchMany(batch.map(([, entry]) => entry.chord)).then(
+				(answer) => {
+					for (const [key, entry] of batch) for (const waiter of entry.waiters) waiter.resolve(answer[key] ?? []);
+				},
+				(err: unknown) => {
+					for (const [, entry] of batch) for (const waiter of entry.waiters) waiter.reject(err);
+				},
+			);
+		}
+	}
+
+	return (root, suffix) =>
+		new Promise<ChordVoicing[]>((resolve, reject) => {
+			if (queue.size === 0) queueMicrotask(flush);
+			const key = voicingCacheKey(root, suffix);
+			const entry = queue.get(key) ?? { chord: { root, suffix }, waiters: [] };
+			entry.waiters.push({ resolve, reject });
+			queue.set(key, entry);
+		});
+}
+
+/**
+ * The live batch fetcher: our own route. It gives up after `VOICINGS_TIMEOUT_MS`,
+ * so a request stuck on a bad link fails (and can be retried) instead of
+ * leaving a shape loading for good.
+ */
+const fetchFromServer: VoicingBatchFetcher = async (chords) => {
+	const query = new URLSearchParams(chords.map((chord) => ["c", chordParam(chord)]));
+	const res = await fetch(`${VOICINGS_ENDPOINT}?${query}`, { signal: AbortSignal.timeout(VOICINGS_TIMEOUT_MS) });
+	if (!res.ok) throw new Error(`chord shapes: HTTP ${res.status}`);
+	const body: unknown = await res.json();
+	const voicings = (body as { voicings?: unknown } | null)?.voicings;
+	if (typeof voicings !== "object" || voicings === null) throw new Error("chord shapes: unexpected answer");
+	return voicings as Record<string, ChordVoicing[]>;
 };
 
 const browserStorage: VoicingStorage | undefined =
 	typeof window === "undefined" ? undefined : window.localStorage;
 
 /** The app-wide instance. Module-level, so it survives component remounts. */
-export const voicingCache = createVoicingCache(fetchFromDatabase, browserStorage);
+export const voicingCache = createVoicingCache(batchVoicingFetches(fetchFromServer), browserStorage);
 
 export const peekVoicings = voicingCache.peek;
 export const loadVoicings = voicingCache.load;

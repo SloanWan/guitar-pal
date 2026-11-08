@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+	batchVoicingFetches,
 	createVoicingCache,
 	voicingCacheKey,
+	type VoicingBatchFetcher,
 	type VoicingStorage,
 } from "@/lib/chordVoicingCache";
 import type { ChordVoicing } from "@/lib/chordVoicing";
@@ -133,5 +135,49 @@ describe("createVoicingCache", () => {
 		expect(await cache.load("H", "major")).toEqual([]);
 		expect(cache.peek("H", "major")).toEqual([]);
 		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("batchVoicingFetches", () => {
+	it("sends the chords asked for in one tick as one request, each answered from it", async () => {
+		const fetchMany = vi.fn<VoicingBatchFetcher>(async (chords) =>
+			Object.fromEntries(chords.map(({ root, suffix }) => [voicingCacheKey(root, suffix), [{ ...C_MAJOR, id: `${root}-${suffix}` }]])),
+		);
+		const fetchOne = batchVoicingFetches(fetchMany);
+		const [c, am, c2] = await Promise.all([fetchOne("C", "major"), fetchOne("A", "minor"), fetchOne("C", "major")]);
+		expect(fetchMany).toHaveBeenCalledTimes(1);
+		expect(fetchMany.mock.calls[0][0]).toEqual([
+			{ root: "C", suffix: "major" },
+			{ root: "A", suffix: "minor" },
+		]);
+		expect(c[0].id).toBe("C-major");
+		expect(am[0].id).toBe("A-minor");
+		expect(c2).toBe(c);
+	});
+
+	it("splits a long batch, and starts a new one on a later tick", async () => {
+		const fetchMany = vi.fn<VoicingBatchFetcher>(async () => ({}));
+		const fetchOne = batchVoicingFetches(fetchMany, 2);
+		await Promise.all(["C", "D", "E"].map((root) => fetchOne(root, "major")));
+		expect(fetchMany.mock.calls.map(([chords]) => chords.length)).toEqual([2, 1]);
+		await fetchOne("F", "major");
+		expect(fetchMany).toHaveBeenCalledTimes(3);
+	});
+
+	it("answers a chord missing from the reply with an empty list", async () => {
+		const fetchOne = batchVoicingFetches(async () => ({}));
+		expect(await fetchOne("G", "add11")).toEqual([]);
+	});
+
+	it("fails every chord of a failed request, and the cache retries them next time", async () => {
+		const fetchMany = vi
+			.fn<VoicingBatchFetcher>()
+			.mockRejectedValueOnce(new Error("timed out"))
+			.mockResolvedValueOnce({ "C major": [C_MAJOR] });
+		const cache = createVoicingCache(batchVoicingFetches(fetchMany));
+		const results = await Promise.allSettled([cache.load("C", "major"), cache.load("A", "minor")]);
+		expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"]);
+		expect(await cache.load("C", "major")).toEqual([C_MAJOR]);
+		expect(fetchMany).toHaveBeenCalledTimes(2);
 	});
 });

@@ -220,6 +220,9 @@ export function useAudioEngine(
 	function prime() {
 		if (primedRef.current) return;
 		const ctx = new AudioContext();
+		// The start comes after the count-in, when the press no longer counts:
+		// a suspended context has to be woken here (#457).
+		if (ctx.state === "suspended") void ctx.resume();
 		const ready = preloadStrumPresets(ctx);
 		// start() reports a failed load; until then, nobody is waiting on it.
 		ready.catch(() => {});

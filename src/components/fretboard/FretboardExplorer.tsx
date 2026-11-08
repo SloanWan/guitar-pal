@@ -131,6 +131,7 @@ import { voicingNearest } from "@/lib/fretboard/voicingRegister";
 import { STRUM_CAPO_MAX, type ChordRef } from "@/lib/strumPatterns";
 import { hasCoarsePointer } from "@/lib/pointer";
 import { chordAbbreviation } from "@/lib/strumProgressions";
+import ShapesRetry, { useVoicingRetries } from "@/components/chords/ShapesRetry";
 
 /** A 22-fret neck, the common electric; acoustics simply never use the top frets. */
 export const NECK: FretWindow = { fromFret: 0, toFret: 22 };
@@ -365,9 +366,10 @@ export default function FretboardExplorer({
 		return shownFromKeyChords(sounding, shape);
 	}, [inChords, playingBar, held, spec, shift, rootPc, chordInterval]);
 
-	// The fingered chord's voicing, fetched when it changes: the grip that was
-	// written, else the standard one. A stale answer (the chord moved on while
-	// it loaded) is dropped.
+	// The fingered chord's voicing, fetched when it changes, or again on Try
+	// again (#463): the grip that was written, else the standard one. A stale
+	// answer (the chord moved on while it loaded) is dropped.
+	const shapeRetries = useVoicingRetries();
 	useEffect(() => {
 		if (!named) return;
 		const target = named.shape;
@@ -388,7 +390,7 @@ export default function FretboardExplorer({
 		return () => {
 			live = false;
 		};
-	}, [named, held, chordKeyMidi, shift]);
+	}, [named, held, chordKeyMidi, shift, shapeRetries]);
 	// A sounding bar brings its own voicing, resolved before play began; a
 	// shape picked from a position stands in while it is that chord's.
 	const shapeVoicing = playingBar
@@ -1352,6 +1354,7 @@ export default function FretboardExplorer({
 								}
 								control={<TuningPicker value={tuning} onChange={setTuning} />}
 							/>
+							<ShapesRetry chords={named ? [named.shape] : []} />
 							<div className="select-none">
 								<Fretboard
 									ref={fretboard}

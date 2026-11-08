@@ -49,6 +49,19 @@ export interface VoicingCache {
 	 * A failed fetch is not cached, so the next call retries.
 	 */
 	load(root: string, suffix: string): Promise<ChordVoicing[]>;
+	/** Whether this chord's last lookup failed (and has not been retried or loaded since). */
+	isFailed(root: string, suffix: string): boolean;
+	/**
+	 * Forget every failure and tell the lookups to run again (#463): the one
+	 * "Try again" behind every surface's notice. Bumps `retries`.
+	 */
+	retryFailed(): void;
+	/** How many retries were asked for; a lookup keyed on it runs again on each. */
+	retries(): number;
+	/** Called on every change to the failures or the retries; returns the unsubscribe. */
+	subscribe(listener: () => void): () => void;
+	/** The failed chords by `voicingCacheKey`: a new set on each change, for `useSyncExternalStore`. */
+	failures(): ReadonlySet<string>;
 }
 
 export function createVoicingCache(
@@ -57,6 +70,14 @@ export function createVoicingCache(
 ): VoicingCache {
 	const memory = new Map<string, ChordVoicing[]>();
 	const inFlight = new Map<string, Promise<ChordVoicing[]>>();
+	const failed = new Set<string>();
+	const listeners = new Set<() => void>();
+	let retryCount = 0;
+	let failureSnapshot: ReadonlySet<string> = new Set();
+	function changed() {
+		failureSnapshot = new Set(failed);
+		for (const listener of listeners) listener();
+	}
 
 	// Storage is best-effort throughout: Safari's private mode throws on both
 	// reads and writes, and a corrupt entry must never take the page down.
@@ -98,12 +119,22 @@ export function createVoicingCache(
 		const pending = inFlight.get(key);
 		if (pending) return pending;
 
+		// Asked again: no longer failed while this attempt runs.
+		if (failed.delete(key)) changed();
 		const request = fetchVoicings(root, suffix)
-			.then((voicings) => {
-				memory.set(key, voicings);
-				writeStored(key, voicings);
-				return voicings;
-			})
+			.then(
+				(voicings) => {
+					memory.set(key, voicings);
+					writeStored(key, voicings);
+					if (failed.delete(key)) changed();
+					return voicings;
+				},
+				(err: unknown) => {
+					failed.add(key);
+					changed();
+					throw err;
+				},
+			)
 			.finally(() => {
 				inFlight.delete(key);
 			});
@@ -111,7 +142,24 @@ export function createVoicingCache(
 		return request;
 	}
 
-	return { peek, load };
+	return {
+		peek,
+		load,
+		isFailed: (root, suffix) => failed.has(voicingCacheKey(root, suffix)),
+		retryFailed() {
+			failed.clear();
+			retryCount++;
+			changed();
+		},
+		retries: () => retryCount,
+		subscribe(listener) {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
+		failures: () => failureSnapshot,
+	};
 }
 
 /** Several chords' voicings in one go, keyed by `voicingCacheKey`. */
@@ -176,3 +224,4 @@ export const voicingCache = createVoicingCache(batchVoicingFetches(fetchFromServ
 
 export const peekVoicings = voicingCache.peek;
 export const loadVoicings = voicingCache.load;
+export const retryFailedVoicings = voicingCache.retryFailed;

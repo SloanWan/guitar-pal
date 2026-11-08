@@ -44,6 +44,7 @@ import { TAB_TICK_LEVELS, tabBpm, useTabPlayback } from "./useTabPlayback";
 import { useTabSession } from "./useTabSession";
 import { useTabShare } from "./useTabShare";
 import { useNavRouter } from "@/components/nav-progress";
+import ShapesRetry from "@/components/chords/ShapesRetry";
 
 const NO_REFERENCES: TabReference[] = [];
 
@@ -287,6 +288,7 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 										onSectionMode={toggleSectionMode}
 										autoScroll={{ on: autoScroll, toggle: () => setAutoScroll((on) => !on) }}
 									/>
+									<ShapesRetry chords={chordLine.shapeChords} />
 									<TabSheet
 										rows={rows}
 										timeSignature={pattern.timeSignature}

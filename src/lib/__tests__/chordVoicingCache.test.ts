@@ -181,3 +181,46 @@ describe("batchVoicingFetches", () => {
 		expect(fetchMany).toHaveBeenCalledTimes(2);
 	});
 });
+
+describe("failures and Try again (#463)", () => {
+	it("records a failed chord, forgets it when it loads, and tells subscribers each time", async () => {
+		const fetcher = vi.fn<(root: string, suffix: string) => Promise<ChordVoicing[]>>()
+			.mockRejectedValueOnce(new Error("timed out"))
+			.mockResolvedValueOnce([C_MAJOR]);
+		const cache = createVoicingCache(fetcher);
+		const heard = vi.fn();
+		const unsubscribe = cache.subscribe(heard);
+
+		await expect(cache.load("C", "major")).rejects.toThrow("timed out");
+		expect(cache.isFailed("C", "major")).toBe(true);
+		const afterFailure = cache.failures();
+		expect([...afterFailure]).toEqual(["C major"]);
+
+		await cache.load("C", "major");
+		expect(cache.isFailed("C", "major")).toBe(false);
+		expect(cache.failures()).not.toBe(afterFailure);
+		expect(heard).toHaveBeenCalled();
+
+		unsubscribe();
+		heard.mockClear();
+		cache.retryFailed();
+		expect(heard).not.toHaveBeenCalled();
+	});
+
+	it("clears every failure and counts the retry", async () => {
+		const cache = createVoicingCache(async () => {
+			throw new Error("offline");
+		});
+		await Promise.allSettled([cache.load("C", "major"), cache.load("A", "minor")]);
+		expect(cache.failures().size).toBe(2);
+		expect(cache.retries()).toBe(0);
+		cache.retryFailed();
+		expect(cache.failures().size).toBe(0);
+		expect(cache.retries()).toBe(1);
+	});
+
+	it("keeps the same failure set between changes, so a store reading it settles", () => {
+		const cache = createVoicingCache(async () => [C_MAJOR]);
+		expect(cache.failures()).toBe(cache.failures());
+	});
+});

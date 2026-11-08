@@ -159,7 +159,7 @@ def test_a_stack_is_not_checked_against_the_jianpu() -> None:
 def test_misaligned_jianpu_is_dropped_per_bar_and_bad_tokens_are_dropped() -> None:
     out = STRING_SIX.model_copy(
         update={
-            "tab_bars": ["6:0/q 6:x/q 6:1/q", "6:3/w"],
+            "tab_bars": ["6:0/q 6:y/q 6:1/q", "6:3/w"],
             "jianpu_bars": ["3-/q 4-/q"],
             "chords": "",
         }
@@ -262,6 +262,45 @@ def test_a_mark_over_a_slot_with_no_readable_note_is_dropped() -> None:
     slots, warnings = marks_of(["3:?/q@D 3:5/h."])
     assert slots[0]["isRest"] is True
     assert "TAB_MARK" in [w["code"] for w in warnings]
+
+
+def test_a_rhythm_pattern_s_cross_waits_for_the_chord_and_a_dead_note_is_muted() -> None:
+    out = STRING_SIX.model_copy(
+        update={
+            "tab_bars": ["5:*+3:*/e@D 1:*~/e 2:3/q 6:x/q"],
+            # The jianpu is the melody: it must not fill a ×'s fret.
+            "jianpu_bars": ["1/e 3/e 2/q 5/q"],
+            "chords": "1.1:C",
+        }
+    )
+    bars, warnings = parse_reading(out)
+    reconciled = reconcile(out, bars)
+    slots = reconciled.draft["measures"][0]["slots"]
+    first = slots[0]["strings"]
+    assert first[4] == {
+        "fret": None,
+        "muted": False,
+        "chordTone": True,
+        "effects": {"pick": {"direction": "down"}},
+    }
+    assert first[2]["chordTone"] is True
+    assert slots[0]["chordName"] == "C" and "isRest" not in slots[0]
+    assert slots[1]["strings"][0] == {
+        "fret": None,
+        "muted": False,
+        "chordTone": True,
+        "effects": {"vibrato": {}},
+    }
+    assert slots[3]["strings"][5] == {"fret": None, "muted": True}
+    codes = [w["code"] for w in warnings + reconciled.warnings]
+    assert "TAB_FRET_FROM_JIANPU" not in codes and "TAB_NOTE_UNREAD" not in codes
+
+
+def test_a_link_onto_or_after_a_cross_is_dropped() -> None:
+    slots, warnings = marks_of(["3:5/q 3:h*/q 3:h7/q 3:x/q"])
+    assert slots[1]["strings"][2] == {"fret": None, "muted": False, "chordTone": True}
+    assert "link" not in slots[2]["strings"][2]  # the note before it is a × of no known fret
+    assert [w["code"] for w in warnings] == ["TAB_LINK", "TAB_LINK"]
 
 
 def test_a_chord_over_an_unreadable_token_starts_on_the_bar_s_next_note() -> None:

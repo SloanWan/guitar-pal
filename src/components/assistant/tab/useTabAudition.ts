@@ -11,7 +11,7 @@ import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickA
  * no audio until one is heard. Hearing one card silences any other.
  */
 export function useTabAudition(pattern: FingerpickPattern) {
-	const { isLoaded, isPlaying, load, play, stop } = useFingerpickAudioEngine();
+	const { isLoaded, loadFailed, isPlaying, load, play, stop } = useFingerpickAudioEngine();
 	const [asked, setAsked] = useState(false);
 	const pendingRef = useRef(false);
 	const releaseRef = useRef<(() => void) | null>(null);
@@ -30,7 +30,8 @@ export function useTabAudition(pattern: FingerpickPattern) {
 	}, [isPlaying]);
 	useEffect(() => () => releaseRef.current?.(), []);
 
-	const isPreparing = asked && !isLoaded;
+	// A failed load stops the wait; the next press loads again (#455).
+	const isPreparing = asked && !isLoaded && !loadFailed;
 
 	function toggle() {
 		if (isPlaying || isPreparing) {

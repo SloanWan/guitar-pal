@@ -14,6 +14,7 @@ import { barLabel, defaultProgressionName, progressionCapo, progressionDisplayNa
 import { balancedPerRow } from "@/lib/balancedRows";
 import { prefersReducedMotion } from "@/lib/motion";
 import CapoStepper from "@/components/playback/CapoStepper";
+import ShapesRetry from "@/components/chords/ShapesRetry";
 import ChordTile from "./ChordTile";
 
 /** How the open progression's chords are shown: a chart line of names, or a tile each with its shape. */
@@ -195,6 +196,8 @@ export default function ProgressionEditor({
 				)
 			)}
 
+			{/* A bar whose shapes failed shows its name; this says so and offers the shared Try again (#463). */}
+			{view === "shapes" && <ShapesRetry chords={bars.flatMap((bar) => (bar.chord ? [bar.chord] : []))} />}
 			<div ref={measure} className="st-chords-scroll">
 				{view === "shapes" ? (
 					<div className="st-tiles" style={columns}>

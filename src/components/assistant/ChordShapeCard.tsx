@@ -111,7 +111,16 @@ function Shape({
 							<ChordDiagramSVG {...voicingToDiagramShape(shown)} size="compact" />
 						</span>
 					) : state.status === "failed" ? (
-						pick(lang, "Could not load its shapes", "指法加载失败")
+						<span>
+							{pick(lang, "Could not load its shapes", "指法加载失败")}{" "}
+							<button
+								type="button"
+								className="text-gp-ink-2 underline decoration-gp-edge underline-offset-[3px]"
+								onClick={state.retry}
+							>
+								{pick(lang, "Try again", "重试")}
+							</button>
+						</span>
 					) : state.status === "ready" ? (
 						pick(lang, "No shape in the library", "库里没有它的指法")
 					) : (

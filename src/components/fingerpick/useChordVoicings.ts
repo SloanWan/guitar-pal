@@ -3,18 +3,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { isNoChord } from "@/lib/fingerpickChords";
-import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
+import { loadVoicings, peekVoicings, retryFailedVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
+import { useFailedShapes, useVoicingRetries } from "@/components/chords/ShapesRetry";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**
  * The shapes a chord can be held in, or the fact that they are still on their
- * way. `failed` means the lookup errored; the cache keeps no failure, so the
- * next mount retries.
+ * way. `failed` means the lookup errored or timed out; `retry` is the shared
+ * Try again, which asks again for every chord that failed (#463).
  */
 export type ChordVoicingsState =
 	| { status: "loading" }
-	| { status: "failed" }
+	| { status: "failed"; retry: () => void }
 	| { status: "ready"; voicings: ChordVoicing[] };
 
 const keyOf = (ref: ChordRef): string => voicingCacheKey(ref.root, ref.suffix);
@@ -33,10 +34,11 @@ export function useChordVoicings(
 	/** The player's own shapes, merged after the library's so the standard voicing stays the library's. */
 	userVoicings: readonly UserChordVoicing[] = [],
 ): (ref: ChordRef) => ChordVoicingsState {
-	// Which lookups have settled. The voicings live in the shared cache; this
-	// only records outcomes, so a resolved fetch re-renders and a failed one
-	// stops its chord waiting forever.
-	const [outcomes, setOutcomes] = useState<Record<string, "ok" | "failed">>({});
+	// What this hook's lookups brought back, so a resolved fetch re-renders. A
+	// failure is the cache's to keep: it is what every surface's Try again clears.
+	const [loaded, setLoaded] = useState<Record<string, ChordVoicing[]>>({});
+	const failures = useFailedShapes();
+	const retries = useVoicingRetries();
 
 	// Serialized so the effect keys on the chord identities, not on the array's
 	// identity — a re-render with the same chords must not refetch.
@@ -56,32 +58,31 @@ export function useChordVoicings(
 		for (const ref of wanted) {
 			const key = keyOf(ref);
 			loadVoicings(ref.root, ref.suffix)
-				.then(() => {
-					if (!cancelled) setOutcomes((prev) => ({ ...prev, [key]: "ok" }));
+				.then((voicings) => {
+					if (!cancelled) setLoaded((prev) => ({ ...prev, [key]: voicings }));
 				})
 				.catch((err: unknown) => {
-					if (!cancelled) setOutcomes((prev) => ({ ...prev, [key]: "failed" }));
 					console.error("[useChordVoicings] voicing lookup failed:", err);
 				});
 		}
 		return () => {
 			cancelled = true;
 		};
-	}, [wantedKey]);
+	}, [wantedKey, retries]);
 
 	return useCallback(
 		(ref: ChordRef): ChordVoicingsState => {
 			if (isNoChord(ref)) return { status: "ready", voicings: [] };
-			const cached = peekVoicings(ref.root, ref.suffix);
+			const cached = loaded[keyOf(ref)] ?? peekVoicings(ref.root, ref.suffix);
 			const mine = userVoicings.filter((v) => v.root === ref.root && v.suffix === ref.suffix);
 			if (cached === null && mine.length === 0) {
-				return outcomes[keyOf(ref)] === "failed" ? { status: "failed" } : { status: "loading" };
+				return failures.has(keyOf(ref)) ? { status: "failed", retry: retryFailedVoicings } : { status: "loading" };
 			}
 			return {
 				status: "ready",
 				voicings: mergeVoicings(cached ?? [], userVoicings, ref.root, ref.suffix),
 			};
 		},
-		[outcomes, userVoicings],
+		[loaded, failures, userVoicings],
 	);
 }

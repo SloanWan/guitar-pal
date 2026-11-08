@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Bar, ChordRef } from "@/lib/strumPatterns";
 import { chordRefToDiagram } from "@/lib/strumBars";
 import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
+import { useFailedShapes, useVoicingRetries } from "@/components/chords/ShapesRetry";
 import type { ChordVoicing, DiagramShape } from "@/lib/chordVoicing";
 import { mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
@@ -36,10 +37,12 @@ export function useBarChordDiagrams(
 	 */
 	userVoicings: readonly UserChordVoicing[] = [],
 ): (BarChordDiagram | null)[] {
-	// Which lookups have settled. The voicings themselves live in the shared
-	// cache; this only records the outcome, so a resolved fetch re-renders and a
-	// failed one stops the bar waiting forever.
-	const [outcomes, setOutcomes] = useState<Record<string, "ok" | "failed">>({});
+	// Loads that landed, so a resolved fetch re-renders. A failure is the
+	// cache's to keep (the shared Try again clears it, #463); a failed bar falls
+	// back to its chord name rather than spin.
+	const [loaded, setLoaded] = useState<Record<string, ChordVoicing[]>>({});
+	const failures = useFailedShapes();
+	const retries = useVoicingRetries();
 
 	// Serialized so the effect keys on the chords themselves, not on the bars
 	// array's identity — a re-render with the same chords must not refetch.
@@ -65,31 +68,28 @@ export function useBarChordDiagrams(
 		for (const ref of refs) {
 			const key = keyOf(ref);
 			loadVoicings(ref.root, ref.suffix)
-				.then(() => {
-					if (!cancelled) setOutcomes((prev) => ({ ...prev, [key]: "ok" }));
+				.then((voicings) => {
+					if (!cancelled) setLoaded((prev) => ({ ...prev, [key]: voicings }));
 				})
 				.catch((err: unknown) => {
-					// Let the bar fall back to its chord name rather than spin; the
-					// cache keeps no failure, so switching views retries.
-					if (!cancelled) setOutcomes((prev) => ({ ...prev, [key]: "failed" }));
 					console.error("[useBarChordDiagrams] voicing lookup failed:", err);
 				});
 		}
 		return () => {
 			cancelled = true;
 		};
-	}, [wantedKey]);
+	}, [wantedKey, retries]);
 
 	return useMemo(
 		() =>
 			bars.map((bar) => {
 				if (!enabled || !bar.chord) return null;
-				const cached = peekVoicings(bar.chord.root, bar.chord.suffix);
+				const cached = loaded[keyOf(bar.chord)] ?? peekVoicings(bar.chord.root, bar.chord.suffix);
 				const mine = userVoicings.filter(
 					(v) => v.root === bar.chord!.root && v.suffix === bar.chord!.suffix,
 				);
 				if (cached === null && mine.length === 0) {
-					return outcomes[keyOf(bar.chord)] === "failed" ? null : { status: "loading" };
+					return failures.has(keyOf(bar.chord)) ? null : { status: "loading" };
 				}
 				// A chord the library has nothing for still draws, if the player has
 				// written a shape for it.
@@ -102,6 +102,6 @@ export function useBarChordDiagrams(
 				const def = chordRefToDiagram(bar.chord, available);
 				return def ? { status: "ready", def } : null;
 			}),
-		[bars, enabled, outcomes, userVoicings],
+		[bars, enabled, loaded, failures, userVoicings],
 	);
 }

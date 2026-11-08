@@ -31,6 +31,7 @@ import { prefersReducedMotion } from "@/lib/motion";
 import { STRUM_BPM_MAX, STRUM_BPM_MIN } from "@/lib/strumPatterns";
 import CornerButton from "./CornerButton";
 import type { BoardCard } from "./useBoard";
+import ShapesRetry from "@/components/chords/ShapesRetry";
 import { useNavRouter } from "@/components/nav-progress";
 
 /** Beats each chord is held for when the board is played through. */
@@ -231,6 +232,7 @@ export default function Board({ items, cards, transpose, capo, onChange, onTrans
 					</span>
 				</Button>
 			</div>
+			<ShapesRetry chords={cards.flatMap((card) => (card.status === "found" ? [card] : []))} />
 			<div className="hb-cards" ref={cardsRef}>
 				{cards.length === 0 && (
 					<p className="hb-meta hb-board-empty">

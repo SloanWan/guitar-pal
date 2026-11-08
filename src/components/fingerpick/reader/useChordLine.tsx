@@ -140,5 +140,7 @@ export function useChordLine(pattern: FingerpickPattern, prefs: FingerpickPrefs,
 		chordDiagramSize: size,
 		offShapeAt: showOffShape ? offShapeAt : undefined,
 		pitchLabel: prefs.pitchLabelsOn ? pitchLabelAt : undefined,
+		/** The chords drawn as shapes, for the sheet's Try again (#463); none while names are shown. */
+		shapeChords: chordRefs,
 	};
 }

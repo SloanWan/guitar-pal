@@ -43,7 +43,7 @@ Everything else is public.
 **Two Supabase clients:**
 
 - `src/lib/supabase.ts` — `createClient()` via `createBrowserClient`, used in client components and all lib query functions
-- `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components and route handlers (`(main)/p/[id]/page.tsx`, `api/assistant/route.ts`, `api/books/[...path]/route.ts`). Note the chord pages are **not** on this path: they read through `chordsData.ts`, which uses a cookie-free `@supabase/supabase-js` client so `unstable_cache` can wrap the reads
+- `src/lib/supabase-server.ts` — `createSupabaseServer()` via `createServerClient` + `cookies()`, used only in server components and route handlers (`(main)/p/[id]/page.tsx`, `api/assistant/route.ts`, `api/books/[...path]/route.ts`). Note the chord pages are **not** on this path: they read through `chordsData.ts`, which uses a cookie-free `@supabase/supabase-js` client so `unstable_cache` can wrap the reads. The browser's chord-shape cache (`chordVoicingCache.ts`) reads the same cached library through `/api/chords/voicings` (#463): several chords a request, an 8 s timeout, the session proxy skipped — never Supabase directly; the player's own shapes (`user_chord_voicings`) still go through RLS
 
 Never mix the two clients — `createSupabaseServer()` throws at runtime in client components.
 

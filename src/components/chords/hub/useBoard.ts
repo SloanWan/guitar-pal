@@ -16,6 +16,7 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { chordSymbol } from "@/lib/chordSuffixes";
 import type { ChordVoicing } from "@/lib/chordVoicing";
 import { loadVoicings, peekVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
+import { useVoicingRetries } from "@/components/chords/ShapesRetry";
 import { chordIndexWithUser, mergeVoicings, type UserChordVoicing } from "@/lib/userChordVoicings";
 
 /**
@@ -95,6 +96,8 @@ export function useBoard(initial: BoardParams | null, index: readonly ChordIndex
 		() => [...new Map(held.flatMap((chord) => (chord ? [[voicingCacheKey(chord.root, chord.suffix), chord] as const] : []))).values()],
 		[held],
 	);
+	// A press of Try again (#463) runs the lookups again for what never loaded.
+	const retries = useVoicingRetries();
 	useEffect(() => {
 		let cancelled = false;
 		for (const { root, suffix } of wanted) {
@@ -111,7 +114,7 @@ export function useBoard(initial: BoardParams | null, index: readonly ChordIndex
 		return () => {
 			cancelled = true;
 		};
-	}, [wanted, loaded]);
+	}, [wanted, loaded, retries]);
 
 	const cards: BoardCard[] = items.map((item, i) => {
 		const chord = held[i];

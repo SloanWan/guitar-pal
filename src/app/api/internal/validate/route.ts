@@ -1,8 +1,18 @@
 import { timingSafeEqual } from "node:crypto";
 import { parseRhythm } from "@/lib/assistant/strum/parseRhythm";
-import { getChordIndex } from "@/lib/chordsData";
+import { getChord, getChordIndex } from "@/lib/chordsData";
 import type { ChordIndexEntry } from "@/lib/chordSearch";
-import { hasChordNames, normalizeImportedPattern, resolveDraftChordNames } from "@/lib/tabImport";
+import type { ChordVoicing } from "@/lib/chordVoicing";
+import { chordFretHints, type FretHint } from "@/lib/fingerpickChords";
+import type { ChordRef } from "@/lib/strumPatterns";
+import { selectRefVoicing } from "@/lib/strumBars";
+import {
+	chordToneChords,
+	hasChordNames,
+	normalizeImportedPattern,
+	resolveDraftChordNames,
+	resolveDraftChordTones,
+} from "@/lib/tabImport";
 import type { RepeatDirective, ValidationIssue } from "@/lib/tabImport";
 
 /**
@@ -29,7 +39,9 @@ export interface ValidateTabRequest {
 	 * The draft as the importers write it. A slot may name its chord as the
 	 * page prints it (`chordName: "Am"`, #427): it is resolved here, and a name
 	 * the library does not hold comes back as an `UNKNOWN_CHORD` warning with
-	 * the word as its `original`.
+	 * the word as its `original`. A string may be a rhythm pattern's ×
+	 * (`{ fret: null, chordTone: true }`, #439): it is fretted here from the
+	 * chord in effect at its slot.
 	 */
 	draft: unknown;
 	repeats?: RepeatDirective[];
@@ -93,9 +105,40 @@ export function validateStrum(request: ValidateStrumRequest): ValidateResponse {
 	return { ok: true, errors: [], warnings };
 }
 
+/** What `validateTab` reads from the chord library; the tests stand in for it. */
+export interface ChordLibrary {
+	index: () => Promise<readonly ChordIndexEntry[]>;
+	/** A chord's voicings, null when the library has no such chord. */
+	voicings: (root: string, suffix: string) => Promise<readonly ChordVoicing[] | null>;
+}
+
+const CHORD_LIBRARY: ChordLibrary = {
+	index: getChordIndex,
+	voicings: async (root, suffix) => (await getChord(root, suffix))?.chord_voicings ?? null,
+};
+
+const chordKey = (chord: ChordRef) => `${chord.root} ${chord.suffix} ${chord.voicingId ?? ""}`;
+
+/** The shape each chord the draft's × stand under holds; a chord the library cannot give is left out. */
+async function chordToneShapes(chords: ChordRef[], library: ChordLibrary): Promise<Map<string, FretHint[]>> {
+	const shapes = new Map<string, FretHint[]>();
+	await Promise.all(
+		chords.map(async (chord) => {
+			try {
+				const voicings = await library.voicings(chord.root, chord.suffix);
+				const voicing = voicings ? selectRefVoicing(chord, [...voicings]) : null;
+				if (voicing) shapes.set(chordKey(chord), chordFretHints(voicing));
+			} catch {
+				// No shape: the × under it are written open, each with a warning.
+			}
+		}),
+	);
+	return shapes;
+}
+
 export async function validateTab(
 	request: ValidateTabRequest,
-	chordIndex: () => Promise<readonly ChordIndexEntry[]> = getChordIndex,
+	library: ChordLibrary = CHORD_LIBRARY,
 ): Promise<ValidateResponse> {
 	const repeats = Array.isArray(request.repeats) ? request.repeats.filter(isRepeat) : [];
 	const named: ValidationIssue[] = [];
@@ -105,7 +148,7 @@ export async function validateTab(
 		// validates, and every name comes back unplaced rather than the draft failing.
 		let index: readonly ChordIndexEntry[] = [];
 		try {
-			index = await chordIndex();
+			index = await library.index();
 		} catch {
 			named.push({
 				code: "CHORDS_UNAVAILABLE",
@@ -117,6 +160,20 @@ export async function validateTab(
 		draft = resolved.draft;
 		named.push(...resolved.warnings);
 	}
+	// After the names, so a × reads the chord the page printed over it; before
+	// the repeats, so a repeated bar keeps the chord it was printed under.
+	const toneChords = chordToneChords(draft);
+	const shapes = await chordToneShapes(toneChords, library);
+	const toned = resolveDraftChordTones(draft, (chord) => shapes.get(chordKey(chord)) ?? null);
+	if (toned.draft !== draft && named.some((w) => w.code === "UNKNOWN_CHORD" || w.code === "CHORDS_UNAVAILABLE")) {
+		named.push({
+			code: "TAB_CHORD_TONE",
+			path: "measures",
+			message: "Some chord names were not placed, so the × under them were fretted from the chord before them, or open.",
+		});
+	}
+	draft = toned.draft;
+	named.push(...toned.warnings);
 	const { pattern, errors, warnings } = normalizeImportedPattern(draft, repeats);
 	return { ok: pattern !== null, errors, warnings: [...named, ...warnings], ...(pattern ? { pattern } : {}) };
 }

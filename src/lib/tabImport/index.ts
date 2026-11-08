@@ -10,6 +10,7 @@ export { expandRepeats } from "./expandRepeats";
 export { MAX_MEASURES, capMeasures } from "./capMeasures";
 export { normalizeImportedPattern } from "./normalizeImportedPattern";
 export { hasChordNames, resolveChordName, resolveDraftChordNames } from "./resolveChord";
+export { chordToneChords, resolveDraftChordTones, type ChordShapeOf } from "./resolveChordTones";
 export {
 	EFFECTS_INPUT,
 	LINK_INPUT,

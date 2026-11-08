@@ -23,6 +23,7 @@ vi.mock("@/lib/books/api", () => api);
 
 const engine = vi.hoisted(() => ({
 	isLoaded: true,
+	loadFailed: false,
 	isPlaying: false,
 	isPaused: false,
 	playOnce: true,
@@ -137,6 +138,8 @@ beforeEach(() => {
 	engine.play.mockReset();
 	engine.stop.mockReset();
 	engine.load.mockClear();
+	engine.isLoaded = true;
+	engine.loadFailed = false;
 	sessionStorage.clear();
 });
 
@@ -185,6 +188,20 @@ describe("DraftPanel", () => {
 		expect(options.loop).toBe(true);
 		expect(onTaken).not.toHaveBeenCalled();
 		expect(api.setExerciseStatus).not.toHaveBeenCalled();
+	});
+
+	it("keeps play off while the samples load, and on once they failed, so a press can load them again", async () => {
+		engine.isLoaded = false;
+		render();
+		await settle();
+		expect(button("Loading samples").disabled).toBe(true);
+		act(() => root?.unmount());
+		container.remove();
+		engine.loadFailed = true;
+		render();
+		await settle();
+		act(() => button("Play").click());
+		expect(engine.play).toHaveBeenCalledTimes(1);
 	});
 
 	it("sends an unsaved draft to the Tab page by handoff, under a fresh id, and marks the row used", async () => {

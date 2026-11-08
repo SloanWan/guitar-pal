@@ -125,6 +125,8 @@ export function useEditorPlayback({ pattern, gridRef }: Args) {
 
 	return {
 		isLoaded: engine.isLoaded,
+		/** The samples did not load; a play loads them again (#455). */
+		loadFailed: engine.loadFailed,
 		/** The tab is playing (not a previewed note). */
 		isPlaying: tabPlaying,
 		playFrom,

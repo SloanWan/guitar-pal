@@ -62,7 +62,7 @@ export default function TextTabPicker({
 	// again if an edit to the text took the chosen one away.
 	const candidate = candidates.find((c) => c.id === chosen) ?? candidates[0] ?? null;
 
-	const { isLoaded, isPlaying, load, play, stop } = useFingerpickAudioEngine();
+	const { isLoaded, loadFailed, isPlaying, load, play, stop } = useFingerpickAudioEngine();
 	// Samples on mount: the host opened on a click, so the context may open now.
 	useEffect(() => {
 		void load();
@@ -191,9 +191,10 @@ export default function TextTabPicker({
 										<Button
 											variant="icon"
 											size="sm"
-											onClick={() => (isLoaded ? listen(c) : undefined)}
-											disabled={!isLoaded}
-											aria-label={!isLoaded ? "Loading samples" : sounding ? `Stop ${c.label}` : `Play ${c.label}`}
+											onClick={() => listen(c)}
+											// After a failed load a press loads again (#455).
+											disabled={!isLoaded && !loadFailed}
+											aria-label={!isLoaded && !loadFailed ? "Loading samples" : sounding ? `Stop ${c.label}` : `Play ${c.label}`}
 										>
 											{sounding ? <Square fill="currentColor" aria-hidden /> : <Play aria-hidden />}
 										</Button>

@@ -318,8 +318,8 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 							idle: "No chords",
 						}}
 						playing={playback.isPlaying}
-						preparing={!playback.isLoaded}
-						canPlay={playback.isLoaded}
+						preparing={!playback.isLoaded && !playback.loadFailed}
+						canPlay={playback.isLoaded || playback.loadFailed}
 						onTogglePlay={playback.togglePlay}
 						onStop={playback.stop}
 						canStop={playback.isPlaying || playback.isPaused || playback.countIn.remaining !== null}

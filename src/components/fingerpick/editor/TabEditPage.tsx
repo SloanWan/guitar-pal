@@ -589,7 +589,7 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 							type="button"
 							className="te-play"
 							onClick={() => togglePlay(cursor)}
-							disabled={!ready || !playback.isLoaded}
+							disabled={!ready || !(playback.isLoaded || playback.loadFailed)}
 							aria-label={playback.isPlaying ? "Stop" : "Play from the cursor"}
 							title={playback.isPlaying ? "Stop (Space)" : "Play from the cursor (Space)"}
 						>

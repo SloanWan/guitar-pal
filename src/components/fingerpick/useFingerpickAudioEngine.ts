@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
 
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { beatDivision } from "@/lib/fingerpickEdit";
@@ -224,7 +225,8 @@ function computeBeatOnsets(pattern: FingerpickPattern, bpm: number): number[] {
  *
  * Lifecycle:
  *  1. Mount the consumer component.
- *  2. Call load() once to preload presets (await it or check isLoaded).
+ *  2. Call load() once to preload presets (await it or check isLoaded). It never
+ *     rejects: a failure sets loadFailed, and a play() after it loads again.
  *  3. Call play(pattern, options) on user action — creates AudioContext lazily.
  *  4. Call pause() to freeze playback with position saved; call resume() to continue.
  *  5. Call stop() to halt and reset position entirely.
@@ -253,6 +255,8 @@ function computeBeatOnsets(pattern: FingerpickPattern, bpm: number): number[] {
  */
 export function useFingerpickAudioEngine() {
 	const [isLoaded, setIsLoaded] = useState(false);
+	const [loadFailed, setLoadFailed] = useState(false);
+	const loadingRef = useRef<Promise<boolean> | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [isPaused, setIsPaused] = useState(false);
 	const [playOnce, setPlayOnce] = useState(true);
@@ -396,10 +400,30 @@ export function useFingerpickAudioEngine() {
 
 	// ─── Preset loading ──────────────────────────────────────────────────────
 
-	async function load(): Promise<void> {
-		const ctx = ensureContext();
-		await preloadFingerpickPresets(ctx);
-		setIsLoaded(true);
+	/**
+	 * Resolves whether the samples are in, and never rejects: callers fire it from
+	 * effects and presses, and the failure is already reported where it happened
+	 * (the sample loader, #447). The player is told once a failed attempt (#455).
+	 */
+	function load(): Promise<boolean> {
+		if (loadingRef.current) return loadingRef.current;
+		setLoadFailed(false);
+		const attempt = (async () => {
+			try {
+				await preloadFingerpickPresets(ensureContext());
+				setIsLoaded(true);
+				return true;
+			} catch (err) {
+				console.error("[useFingerpickAudioEngine] Failed to load samples:", err);
+				setLoadFailed(true);
+				toast.error("Couldn't load the guitar sound — check your connection and press play again.");
+				return false;
+			} finally {
+				loadingRef.current = null;
+			}
+		})();
+		loadingRef.current = attempt;
+		return attempt;
 	}
 
 	// ─── Note scheduling ─────────────────────────────────────────────────────
@@ -649,7 +673,11 @@ export function useFingerpickAudioEngine() {
 	}
 
 	function play(pattern: FingerpickPattern, options: PlayOptions = {}, startOffset: number = 0): void {
-		if (!isLoaded) return;
+		if (!isLoaded) {
+			// A press after a failed load is the player asking again (#455).
+			if (loadFailed) void load();
+			return;
+		}
 		if (isPlayingRef.current || isPaused) {
 			// Clear any existing playback/pause before starting fresh.
 			clearTimers();
@@ -1199,6 +1227,7 @@ export function useFingerpickAudioEngine() {
 
 	return {
 		isLoaded,
+		loadFailed,
 		isPlaying,
 		isPaused,
 		playOnce,

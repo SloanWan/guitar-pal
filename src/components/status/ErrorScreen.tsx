@@ -6,6 +6,7 @@ import StatusScreen, { StatusTab } from "@/components/status/StatusScreen";
 import { Button } from "@/components/ui/button";
 import { FORM_HELP } from "@/components/auth/formText";
 import { restoreSavedTheme } from "@/components/ThemeToggle";
+import { reportError } from "@/lib/telemetry/client";
 
 /* A muted string on either side of the break. */
 export const MUTES = [
@@ -26,6 +27,7 @@ export interface ErrorScreenProps {
 export default function ErrorScreen({ error, retry }: ErrorScreenProps) {
 	useEffect(() => {
 		console.error(error);
+		reportError(error, "boundary", { digest: error.digest });
 		restoreSavedTheme();
 	}, [error]);
 

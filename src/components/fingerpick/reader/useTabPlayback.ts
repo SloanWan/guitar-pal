@@ -143,6 +143,8 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 		if (countIn.remaining !== null) countIn.cancel();
 		else if (engine.isPlaying) engine.pause();
 		else if (engine.isPaused) engine.resume();
+		// After a failed load a press loads again, without a count-in (#455).
+		else if (engine.loadFailed) void engine.load();
 		else countIn.begin(engine.prime);
 	}
 
@@ -195,6 +197,7 @@ export function useTabPlayback({ pattern, rows, viewerRef, geometry, sectionRang
 
 	return {
 		isLoaded: engine.isLoaded,
+		loadFailed: engine.loadFailed,
 		isPlaying: engine.isPlaying,
 		isPaused: engine.isPaused,
 		countIn: { setting: countIn.setting, onSetting: countIn.onSetting, remaining: countIn.remaining },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import ReportedBoundary from "@/components/status/ReportedBoundary";
 import {
 	Renderer,
 	TabStave,
@@ -746,7 +747,23 @@ function drawBracket(
 	svgEl.appendChild(g);
 }
 
-export default function TabStaveRow({
+/**
+ * One row of staves, drawn by VexFlow. A row that fails to draw gives way to a
+ * line saying so and is reported (#447); the rows around it, the cursor and
+ * playback carry on. New props are a new attempt.
+ */
+export default function TabStaveRow(props: TabStaveRowProps) {
+	return (
+		<ReportedBoundary
+			resetKeys={[props.measures, props.measureWidths, props.timeSignature, props.renderContext]}
+			fallback={<p className="py-6 text-center text-sm text-gp-ink-3">This line of the tab could not be drawn.</p>}
+		>
+			<StaveRow {...props} />
+		</ReportedBoundary>
+	);
+}
+
+function StaveRow({
 	measures,
 	timeSignature = DEFAULT_TIME_SIGNATURE,
 	startMeasureNumber,
@@ -760,6 +777,10 @@ export default function TabStaveRow({
 }: TabStaveRowProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [anchors, setAnchors] = useState<ChordAnchor[]>([]);
+	// VexFlow draws in a frame callback, outside React's reach: a failure there is
+	// rethrown on the next render, where the row's boundary can catch it.
+	const [drawFailure, setDrawFailure] = useState<{ error: unknown } | null>(null);
+	if (drawFailure) throw drawFailure.error;
 	const showDiagrams = chordDiagram !== undefined;
 	const diagramHeight = showDiagrams ? (chordDiagramSize?.height ?? 0) : 0;
 
@@ -1135,7 +1156,13 @@ export default function TabStaveRow({
 
 		// Everything drawn comes from the props (the widths are the layout pass's), so
 		// a new render is a new set of props: the container's own size is not watched.
-		const rafId = requestAnimationFrame(() => render());
+		const rafId = requestAnimationFrame(() => {
+			try {
+				render();
+			} catch (error) {
+				setDrawFailure({ error });
+			}
+		});
 		return () => {
 			cancelAnimationFrame(rafId);
 			div.innerHTML = "";

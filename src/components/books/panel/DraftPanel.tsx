@@ -156,8 +156,9 @@ export default function DraftPanel({
 				<PlayPick
 					size="sm"
 					playing={engine.isPlaying}
-					disabled={!engine.isLoaded}
-					aria-label={!engine.isLoaded ? "Loading samples" : engine.isPlaying ? "Pause" : "Play"}
+					// After a failed load a press loads again (#455).
+					disabled={!engine.isLoaded && !engine.loadFailed}
+					aria-label={!engine.isLoaded && !engine.loadFailed ? "Loading samples" : engine.isPlaying ? "Pause" : "Play"}
 					onClick={playback.playPause}
 				/>
 				<Button

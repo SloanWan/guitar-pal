@@ -16,6 +16,7 @@ vi.mock("@/components/nav-progress", () => ({ useNavRouter: () => ({ push }) }))
 
 const engine = vi.hoisted(() => ({
 	isLoaded: true,
+	loadFailed: false,
 	isPlaying: false,
 	load: vi.fn(async () => {}),
 	play: vi.fn(),
@@ -81,6 +82,8 @@ beforeEach(() => {
 	engine.stop.mockReset();
 	engine.load.mockClear();
 	engine.isPlaying = false;
+	engine.isLoaded = true;
+	engine.loadFailed = false;
 	staveProps.length = 0;
 	sessionStorage.clear();
 });
@@ -123,6 +126,19 @@ describe("TextTabPicker", () => {
 		expect(options.loop).toBe(true);
 		const checked = container.querySelector('[role="radio"][aria-checked="true"]');
 		expect(checked?.textContent).toContain("Swung eighths");
+	});
+
+	it("waits on the samples with its play keys off, and lets a press through once they failed to load", () => {
+		engine.isLoaded = false;
+		render({ initialText: TIGHT });
+		expect(button("Loading samples").disabled).toBe(true);
+		act(() => root?.unmount());
+		container.remove();
+		engine.loadFailed = true;
+		render({ initialText: TIGHT });
+		act(() => button("Play Swung eighths").click());
+		// The engine loads again on that press (#455).
+		expect(engine.play).toHaveBeenCalledTimes(1);
 	});
 
 	it("hands the chosen reading to fingerpick with the by-ear warning first, and goes there when asked", () => {

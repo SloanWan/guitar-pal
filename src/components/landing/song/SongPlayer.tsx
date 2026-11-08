@@ -70,12 +70,13 @@ export function SongPlayerProvider({ children }: { children: React.ReactNode }) 
 	// The fingerpick engine plays only once its samples are in; a press before
 	// then waits here and starts when they land.
 	const [pickPending, setPickPending] = useState(false);
-	const { isLoaded: pickLoaded, play: pickPlay } = pick;
+	const { isLoaded: pickLoaded, loadFailed: pickFailed, play: pickPlay } = pick;
 	useEffect(() => {
-		if (!pickPending || !pickLoaded) return;
-		pickPlay(PICKED, PICK_OPTIONS);
+		if (!pickPending || !(pickLoaded || pickFailed)) return;
+		// A failed load stops the wait; the next press loads again (#455).
+		if (pickLoaded) pickPlay(PICKED, PICK_OPTIONS);
 		queueMicrotask(() => setPickPending(false));
-	}, [pickPending, pickLoaded, pickPlay]);
+	}, [pickPending, pickLoaded, pickFailed, pickPlay]);
 
 	// The stave cursor follows the engine's clock, read once a frame and only
 	// handed on when the sounding note changes.

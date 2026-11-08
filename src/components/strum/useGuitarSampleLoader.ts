@@ -44,6 +44,8 @@
  *   src/app/dev/_lib.
  */
 
+import { reportError } from "@/lib/telemetry/client";
+
 // ─── Public types ──────────────────────────────────────────────────────────────
 
 export type StrumSoundType = "down" | "up" | "muted";
@@ -220,8 +222,20 @@ export function parsePreset(value: unknown, key: string): WafPreset {
 	return value as WafPreset;
 }
 
-/** Fetch and check one bundled preset by its webaudiofontdata name. Shared with the piano loader. */
+/**
+ * Fetch and check one bundled preset by its webaudiofontdata name. Shared with the piano loader.
+ * Every load passes here, and most callers meet a failure with silence, so it is reported here (#447).
+ */
 export async function fetchPreset(key: string): Promise<WafPreset> {
+	try {
+		return await readPreset(key);
+	} catch (err) {
+		reportError(err, "audio");
+		throw err;
+	}
+}
+
+async function readPreset(key: string): Promise<WafPreset> {
 	const url = `${PRESET_BASE_URL}${key}.json`;
 	let response: Response;
 	try {
@@ -288,10 +302,12 @@ export async function _decodeZone(zone: WafZone, ctx: AudioContext): Promise<Aud
 		try {
 			return await ctx.decodeAudioData(arrayBuffer);
 		} catch (err) {
-			throw new SampleLoadError(
+			const failure = new SampleLoadError(
 				`AudioContext.decodeAudioData failed for zone at originalPitch=${zone.originalPitch}`,
 				err,
 			);
+			reportError(failure, "audio");
+			throw failure;
 		}
 	}
 	throw new SampleLoadError(

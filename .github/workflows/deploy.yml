@@ -41,7 +41,7 @@ jobs:
                     cd ~/dev/guitar-pal
                     git fetch --prune origin main
                     git checkout -f -B main origin/main
-                    docker compose up --build -d --remove-orphans
+                    BUILD_SHA="$(git rev-parse --short=12 HEAD)" docker compose up --build -d --remove-orphans
                     docker image prune -f
                     docker compose ps
                   REMOTE

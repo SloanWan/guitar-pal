@@ -21,9 +21,10 @@ export const MAX_ROUTE_CHARS = 120;
 /**
  * Where an error was caught: the window's listeners, an error screen, a
  * component's boundary, a sample that would not load or decode (`audio`, which
- * the callers mostly swallow), or the server's `onRequestError`.
+ * the callers mostly swallow), a request to Supabase that got no answer or a
+ * server error (`supabase`), or the server's `onRequestError`.
  */
-export const ERROR_SOURCES = ["window", "rejection", "boundary", "component", "audio", "server"] as const;
+export const ERROR_SOURCES = ["window", "rejection", "boundary", "component", "audio", "supabase", "server"] as const;
 export type ErrorSource = (typeof ERROR_SOURCES)[number];
 
 export const VITAL_NAMES = ["LCP", "INP", "CLS", "FCP", "TTFB"] as const;

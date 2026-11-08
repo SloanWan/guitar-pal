@@ -86,6 +86,10 @@ LINK_MARKS = {"h": "hammer", "p": "pull", "s": "slide", "^": "arc"}
 VIBRATO_MARKS = {"~": False, "~~": True}
 # After the duration, the slot's: a pick stroke, an accent, a palm mute.
 SLOT_TAGS = {"D": "pick down", "U": "pick up", ">": "accent", "PM": "palmMute"}
+# A × in place of the fret (#439). `*` a rhythm pattern's: the frets left for
+# the chord of the bar, which the validate route fills in (the open string
+# under no chord). `x` a dead note: struck, pitchless.
+CROSS_MARKS = {"*": "chordTone", "x": "dead"}
 
 Region = tuple[float, float, float, float]
 
@@ -156,12 +160,22 @@ READ_SYSTEM = (
     "E.g. `6:0/q@D 5:7/e@D 6:h7/e 5:5+4:7/e@PM@>`.\n"
     "A mark never costs a note: read every bar and every note, however dense; where the"
     " marks are too small or crowded to be sure of, leave the marks out, never the bars.\n\n"
+    "A × on a tab line, in place of a digit, is one of two things; tell them apart by"
+    " what is around it.\n"
+    "- Many × together — most of the notes in the bar or the exercise, perhaps with a few"
+    " digits among them — are a rhythm pattern: the page marks where the right hand plucks"
+    " and leaves the frets to the chord of the bar (often under a 节奏型 heading, or under"
+    " chord names). Write each such × as `*` in place of the fret, e.g. `5:*+3:*/e`, and"
+    " every digit as printed. Do not work out the fret and never write it as a dead note:"
+    " the app takes the fret from the chord.\n"
+    "- A single × standing among digits is a dead note (muted or slapped): write `x` in"
+    " place of the fret, e.g. `6:x/q`.\n\n"
     "Transcribe every bar of the exercise, on every system of the crop. A passage that is"
     " hard to read is still written, as your best reading with `?` for the digits you"
     " cannot make out, and named in `unclear`: a bar left out is worse than a bar read"
     " imperfectly, because the player corrects a wrong digit but cannot see a missing bar."
     " When two guitar parts are printed to be played together (Gtr. 1 and Gtr. 2 staves"
-    " under one another), read Gtr. 1 only and say so in `unclear`."
+    " under one another), read Gtr. 1 only and say so in `unclear`.\n\n"
     "Chords: one entry per printed chord name, as `bar.note:Name` with 1-based indices,"
     " e.g. `1.1:C 4.3:G7`."
 )
@@ -182,7 +196,7 @@ class TabReadingOut(BaseModel):
 
 # `string:fret`, the link before the fret and anything after it read apart, so
 # a mark that cannot be read costs the mark and not the note.
-NOTE_TOKEN = re.compile(r"^([1-6]):([hps^]?)(\d{1,2}|\?)(.*)$")
+NOTE_TOKEN = re.compile(r"^([1-6]):([hps^]?)(\d{1,2}|\?|\*|x)(.*)$")
 JIANPU_TOKEN = re.compile(r"^([#b]?)([1-7]|\?)([+-]?)/(w|h\.|h|q\.|q|e\.|e|s\.|s)$")
 CHORD_TOKEN = re.compile(r"^(\d+)\.(\d+):(\S+)$")
 TIME_SIGNATURE = re.compile(r"^(\d{1,2})/(\d{1,2})$")
@@ -195,9 +209,10 @@ class Struck:
     """One string struck in a slot, as the tab printed it."""
 
     string: int  # 1 = high e … 6 = low E
-    fret: int | None  # None = the digit could not be read
+    fret: int | None  # None = the digit could not be read, or a CROSS_MARKS ×
     link: str | None = None  # a LINK_MARKS kind, "arc" until the frets settle it
     vibrato: bool | None = None  # True a wide one; None none
+    cross: str | None = None  # a CROSS_MARKS kind when the line holds a ×
 
 
 @dataclass(frozen=True)
@@ -382,6 +397,10 @@ def reconcile(out: TabReadingOut, bars: Sequence[Sequence[Note]], heading: str =
             for struck in note.struck:
                 if not 1 <= struck.string <= 6:
                     continue
+                if struck.cross:
+                    # No fret yet, so nothing for the jianpu to vouch for or fill.
+                    _write_cross(strings[struck.string - 1], struck, path, where, warnings)
+                    continue
                 fret = struck.fret
                 read = midi_from_tab(struck)
                 # The jianpu can only vouch for a single note, not a stack.
@@ -425,7 +444,7 @@ def reconcile(out: TabReadingOut, bars: Sequence[Sequence[Note]], heading: str =
                     cell["link"] = {"kind": struck.link}
                 if struck.vibrato is not None:
                     cell["effects"] = {"vibrato": {"wide": True} if struck.vibrato else {}}
-            rest = all(s["fret"] is None for s in strings)
+            rest = not any(_sounds(s) for s in strings)
             if rest:
                 warnings.append(
                     _issue(
@@ -532,12 +551,14 @@ def _parse_tab_token(
         after = m.group(4)
         if after and after not in VIBRATO_MARKS:
             unread.append(after)
+        fret = m.group(3)
         struck.append(
             Struck(
                 int(m.group(1)),
-                None if m.group(3) == "?" else int(m.group(3)),
+                int(fret) if fret.isdigit() else None,
                 LINK_MARKS.get(m.group(2)),
                 VIBRATO_MARKS.get(after),
+                CROSS_MARKS.get(fret),
             )
         )
     return tuple(struck), DURATIONS[dur], frozenset(tags), unread
@@ -548,7 +569,7 @@ def _tag_slot(strings: list[dict[str, object]], tags: frozenset[str]) -> None:
     accent are the column's (the stave draws them once over it), a palm mute
     a per-note flag the validator folds into a span."""
     for cell in strings:
-        if cell["fret"] is None:
+        if not _sounds(cell):
             continue
         effects = dict(cell.get("effects") or {})
         if "pick down" in tags or "pick up" in tags:
@@ -559,6 +580,37 @@ def _tag_slot(strings: list[dict[str, object]], tags: frozenset[str]) -> None:
             cell["effects"] = effects
         if "palmMute" in tags:
             cell["palmMute"] = True
+
+
+def _sounds(cell: dict[str, object]) -> bool:
+    """Whether a draft string is struck: a fret, a dead note or a chord's ×."""
+    return cell["fret"] is not None or bool(cell.get("muted")) or bool(cell.get("chordTone"))
+
+
+def _write_cross(
+    cell: dict[str, object],
+    struck: Struck,
+    path: str,
+    where: str,
+    warnings: list[dict[str, object]],
+) -> None:
+    """A × onto its draft string. A link cannot be told from frets not yet
+    known, so it is dropped and said; a chord's × keeps a vibrato."""
+    if struck.cross == "dead":
+        cell["muted"] = True
+    else:
+        cell["chordTone"] = True
+        if struck.vibrato is not None:
+            cell["effects"] = {"vibrato": {"wide": True} if struck.vibrato else {}}
+    if struck.link:
+        warnings.append(
+            _issue(
+                "TAB_LINK",
+                path,
+                f"{where}: string {struck.string} has a {struck.link} mark on a ×;"
+                " the mark dropped",
+            )
+        )
 
 
 def _settle_links(measures: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -576,6 +628,9 @@ def _settle_links(measures: list[dict[str, object]]) -> list[dict[str, object]]:
             for string, cell in enumerate(slot["strings"]):
                 fret = cell["fret"]
                 if fret is None:
+                    if _sounds(cell):
+                        # A × is the string's note, but its fret is not known here.
+                        last[string] = None
                     continue
                 link = cell.pop("link", None)
                 before, last[string] = last[string], fret

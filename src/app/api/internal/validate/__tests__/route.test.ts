@@ -11,6 +11,13 @@ vi.mock("@/lib/chordsData", async () => {
 			chordIndex.calls += 1;
 			return INDEX;
 		},
+		// The library's standard shapes for the chords the × tests stand under.
+		getChord: async (root: string, suffix: string) => {
+			const frets = ({ "C major": "x32010", "G major": "320003" } as Record<string, string>)[`${root} ${suffix}`];
+			if (!frets) return null;
+			const voicing = { id: `${root}-std`, label: "Standard", start_fret: 1, barre_fret: null, capo: false, frets, fingers: "000000" };
+			return { id: root, root, suffix, chord_voicings: [voicing] };
+		},
 	};
 });
 
@@ -132,13 +139,39 @@ describe("POST /api/internal/validate", () => {
 		const down = async () => {
 			throw new Error("supabase down");
 		};
-		const body = await validateTab({ kind: "tab", draft: namedDraft("Am", "Zm") }, down);
+		const body = await validateTab({ kind: "tab", draft: namedDraft("Am", "Zm") }, { index: down, voicings: async () => null });
 		expect(body.ok).toBe(true);
 		expect(body.warnings.map((w) => w.code)).toEqual(["CHORDS_UNAVAILABLE", "UNKNOWN_CHORD"]);
 		// A name spelled as a chord of a known kind still lands; the rest wait in the description.
 		const slots = (body.pattern as { measures: { slots: { chord?: unknown }[] }[] }).measures[0].slots;
 		expect(slots[0].chord).toEqual({ root: "A", suffix: "minor", voicingId: null });
 		expect(slots[1].chord).toBeUndefined();
+	});
+
+	it("frets a rhythm pattern's × from the printed chord over it, before repeats (#439)", async () => {
+		const draft = namedDraft("C", undefined, "G") as { measures: { slots: { strings: Record<string, unknown>[] }[] }[] };
+		const tone = { fret: null, muted: false, chordTone: true };
+		const [s1, s2, s3, s4] = draft.measures[0].slots;
+		s1.strings[4] = tone; // A under C: 3
+		s2.strings[5] = tone; // low E under C: not in the shape, open
+		s3.strings[0] = tone; // high e under G: 3
+		s4.strings[0] = { fret: 0, muted: true }; // a dead note stays one
+		const body = await (await post({ kind: "tab", draft, repeats: [{ range: [0, 0], times: 2 }] })).json();
+		expect(body.ok).toBe(true);
+		for (const measure of body.pattern.measures) {
+			const strings = measure.slots.map((s: { strings: { fret: number | null; muted: boolean }[] }) => s.strings);
+			expect([strings[0][4].fret, strings[1][5].fret, strings[2][0].fret]).toEqual([3, 0, 3]);
+			expect(strings[3][0].muted).toBe(true);
+		}
+		expect(body.warnings).toEqual([expect.objectContaining({ code: "TAB_CHORD_TONE", path: "measures[0].slots[1]" })]);
+	});
+
+	it("says the × under a chord name it could not place took the chord before", async () => {
+		const draft = namedDraft("C", "Zm") as { measures: { slots: { strings: Record<string, unknown>[] }[] }[] };
+		draft.measures[0].slots[1].strings[4] = { fret: null, muted: false, chordTone: true };
+		const body = await (await post({ kind: "tab", draft })).json();
+		expect(body.pattern.measures[0].slots[1].strings[4].fret).toBe(3);
+		expect(body.warnings.map((w: { code: string }) => w.code)).toEqual(["UNKNOWN_CHORD", "TAB_CHORD_TONE"]);
 	});
 
 	it("keeps a note's v2 marks and folds per-note palm-mute flags into a span", async () => {

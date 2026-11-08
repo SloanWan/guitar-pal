@@ -32,9 +32,12 @@ export function isNoChordWord(word: string): boolean {
  * writes a chord once and lets it run — so `null` only ever appears before the
  * first mark. This is the single read path for "which chord is this slot
  * under"; nothing else should walk the marks itself. An N.C. mark is in effect
- * like a chord (`isNoChord` says it has no shape).
+ * like a chord (`isNoChord` says it has no shape). It reads only the marks, so
+ * an import draft's bars can be asked before they are a `Measure`.
  */
-export function effectiveChords(measures: readonly Measure[]): (ChordRef | null)[][] {
+export function effectiveChords(
+	measures: readonly { readonly slots: readonly Pick<BeatSlot, "chord">[] }[],
+): (ChordRef | null)[][] {
 	let current: ChordRef | null = null;
 	return measures.map((measure) =>
 		measure.slots.map((slot) => {

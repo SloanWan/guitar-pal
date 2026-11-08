@@ -1,0 +1,308 @@
+/* The monitor dashboard (#458), mon-*. Laid out by its own `monitor` container. */
+
+/* The errors chart's four series: the dataviz reference palette's first four slots,
+   validated on --gp-card in both themes (light: CVD ΔE 9.1, normal 22.9; slots 3 and 4
+   sit under 3:1 on white, so the chart ships its table view; dark: all checks pass). */
+.mon {
+	--mon-s1: #2a78d6;
+	--mon-s2: #eb6834;
+	--mon-s3: #1baf7a;
+	--mon-s4: #eda100;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .mon {
+		--mon-s1: #3987e5;
+		--mon-s2: #d95926;
+		--mon-s3: #199e70;
+		--mon-s4: #c98500;
+	}
+}
+:root[data-theme="dark"] .mon {
+	--mon-s1: #3987e5;
+	--mon-s2: #d95926;
+	--mon-s3: #199e70;
+	--mon-s4: #c98500;
+}
+
+.mon {
+	container: monitor / inline-size;
+	max-width: 1120px;
+	margin: 0 auto;
+	padding: 24px var(--gp-gutter-phone) 48px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	color: var(--gp-ink);
+}
+@media (min-width: 720px) {
+	.mon {
+		padding-inline: var(--gp-gutter-tablet);
+	}
+}
+@media (min-width: 1120px) {
+	.mon {
+		padding-inline: var(--gp-gutter-desktop);
+	}
+}
+
+.mon-head h1 {
+	margin: 0;
+	font: 700 26px/1.2 var(--gp-f-disp);
+}
+.mon-head p {
+	margin: 4px 0 0;
+	color: var(--gp-ink-3);
+	font-size: 14px;
+}
+
+/* Filters: one row, above everything they scope. */
+.mon-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: center;
+}
+.mon-note {
+	margin: 0;
+	color: var(--gp-ink-3);
+	font-size: 13px;
+}
+.mon-note[data-tone="warn"] {
+	color: var(--gp-warn);
+}
+
+/* A refetch keeps the frame, dimmed, rather than flashing a skeleton. */
+.mon-body {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	transition: opacity 160ms ease;
+}
+.mon-body[data-pending] {
+	opacity: 0.55;
+}
+
+.mon-tiles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 12px;
+}
+.mon-tile {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 14px 16px;
+	border-radius: var(--gp-r-l);
+	background: var(--gp-card);
+}
+.mon-tile-label {
+	color: var(--gp-ink-3);
+	font-size: 13px;
+}
+.mon-tile-value {
+	font: 600 26px/1.15 var(--gp-f-num);
+}
+.mon-tile-sub {
+	min-height: 18px;
+	color: var(--gp-ink-3);
+	font-size: 12px;
+}
+
+.mon-card {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	border-radius: var(--gp-r-l);
+	background: var(--gp-card);
+	min-width: 0;
+}
+.mon-card h2 {
+	margin: 0;
+	font: 600 16px/1.3 var(--gp-f-disp);
+}
+.mon-card-sub {
+	margin: -8px 0 0;
+	color: var(--gp-ink-3);
+	font-size: 13px;
+}
+
+/* A rating: icon and word, never colour alone. */
+.mon-rating {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+.mon-rating svg {
+	width: 14px;
+	height: 14px;
+}
+.mon-rating[data-rating="good"] {
+	color: var(--gp-ok);
+}
+.mon-rating[data-rating="needs-improvement"] {
+	color: var(--gp-warn);
+}
+.mon-rating[data-rating="poor"] {
+	color: var(--gp-bad);
+}
+
+.mon-scroll {
+	overflow-x: auto;
+}
+.mon-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+.mon-table th {
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--gp-line);
+	color: var(--gp-ink-3);
+	font-weight: 600;
+	text-align: left;
+	white-space: nowrap;
+}
+.mon-table td {
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--gp-line);
+	vertical-align: top;
+}
+.mon-table tr:last-child td {
+	border-bottom: 0;
+}
+.mon-num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.mon-table th.mon-num {
+	text-align: right;
+}
+.mon-route {
+	font-family: var(--gp-f-mono);
+	font-size: 12px;
+	white-space: nowrap;
+}
+.mon-msg {
+	max-width: 420px;
+	overflow-wrap: anywhere;
+}
+.mon-cell {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 2px;
+}
+.mon-cell[data-few] {
+	opacity: 0.5;
+}
+.mon-n {
+	color: var(--gp-ink-3);
+	font-size: 11px;
+}
+.mon-empty {
+	margin: 0;
+	color: var(--gp-ink-3);
+	font-size: 14px;
+}
+
+/* The errors chart. */
+.mon-chart {
+	position: relative;
+}
+.mon-chart svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	overflow: visible;
+}
+.mon-grid {
+	stroke: var(--gp-line);
+	stroke-width: 1;
+}
+.mon-axis {
+	fill: var(--gp-ink-3);
+	font: 11px var(--gp-f-body);
+	font-variant-numeric: tabular-nums;
+}
+.mon-hit {
+	fill: transparent;
+	outline: none;
+}
+.mon-hit:hover,
+.mon-hit:focus-visible {
+	fill: var(--gp-ink);
+	fill-opacity: 0.04;
+}
+.mon-tip {
+	position: absolute;
+	top: 0;
+	z-index: 1;
+	min-width: 150px;
+	padding: 8px 10px;
+	border-radius: var(--gp-r-m, 10px);
+	background: var(--gp-sheet, var(--gp-card));
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
+	font-size: 12px;
+	pointer-events: none;
+}
+.mon-tip-head {
+	margin-bottom: 4px;
+	color: var(--gp-ink-3);
+}
+.mon-tip-row {
+	display: grid;
+	grid-template-columns: 12px 1fr auto;
+	align-items: center;
+	gap: 6px;
+}
+.mon-tip-row b {
+	font-variant-numeric: tabular-nums;
+}
+.mon-key {
+	width: 12px;
+	height: 2px;
+	border-radius: 1px;
+}
+.mon-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	color: var(--gp-ink-2);
+	font-size: 12px;
+}
+.mon-legend li {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+.mon-swatch {
+	width: 10px;
+	height: 10px;
+	border-radius: 2px;
+}
+.mon-details summary {
+	color: var(--gp-ink-2);
+	font-size: 13px;
+	cursor: pointer;
+}
+.mon-details[open] summary {
+	margin-bottom: 8px;
+}
+
+.mon-split {
+	display: grid;
+	gap: 20px;
+}
+@container monitor (min-width: 880px) {
+	.mon-split {
+		grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+	}
+}

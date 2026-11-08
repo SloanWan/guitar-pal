@@ -68,6 +68,26 @@ export function telemetryClient(env: NodeJS.ProcessEnv = process.env): SupabaseC
 	return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
+/** A stored row as the monitor reads it back (#458): the row, and when it landed. */
+export type StoredEvent = TelemetryRow & { at: string };
+
+/** Rows one dashboard view reads at most; past it the view says it is partial. */
+export const READ_LIMIT = 10_000;
+const READ_COLUMNS = "at, kind, source, name, value, rating, message, stack, digest, route, viewport, build, user_agent";
+
+/** The rows since `since`, newest first, and whether there were more than `READ_LIMIT`. */
+export async function readEvents(client: SupabaseClient, since: Date, limit = READ_LIMIT): Promise<{ events: StoredEvent[]; truncated: boolean }> {
+	const { data, error } = await client
+		.from("telemetry_events")
+		.select(READ_COLUMNS)
+		.gte("at", since.toISOString())
+		.order("at", { ascending: false })
+		.limit(limit + 1);
+	if (error) throw new Error(`telemetry read failed: ${error.message}`);
+	const rows = (data ?? []) as StoredEvent[];
+	return { events: rows.slice(0, limit), truncated: rows.length > limit };
+}
+
 export async function insertRows(client: SupabaseClient, rows: TelemetryRow[]): Promise<void> {
 	// Spelled out, so the schema snapshot test sees the table this queries.
 	const { error } = await client.from("telemetry_events").insert(rows);

@@ -220,6 +220,9 @@ export function useAudioEngine(
 	function prime() {
 		if (primedRef.current) return;
 		const ctx = new AudioContext();
+		// The start comes after the count-in, when the press no longer counts:
+		// a suspended context has to be woken here (#457).
+		if (ctx.state === "suspended") void ctx.resume();
 		const ready = preloadStrumPresets(ctx);
 		// start() reports a failed load; until then, nobody is waiting on it.
 		ready.catch(() => {});
@@ -255,6 +258,9 @@ export function useAudioEngine(
 		primedRef.current = null;
 		audioCtxRef.current = primed?.ctx ?? new AudioContext();
 		const ctx = audioCtxRef.current;
+		// A context made in a press can still start suspended (Safari, iOS); asked
+		// now, while the press counts, it runs before the first note (#457).
+		if (ctx.state === "suspended") void ctx.resume();
 
 		// Nothing sounds until the samples are here. The metronome used to start
 		// against silence while they downloaded, which reads as a broken pattern

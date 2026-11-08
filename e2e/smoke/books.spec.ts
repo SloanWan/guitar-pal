@@ -5,7 +5,7 @@ import { expect, test } from "../fixtures";
  * path through the shelf, a chapter, a draft beside the book and the page it
  * was read from — and back from the page to the draft.
  */
-test("the sample opens a chapter, a draft beside it, and the draft's page", async ({ page }) => {
+test("the sample opens a chapter, a draft beside it, and the draft's page", { tag: "@phone" }, async ({ page }) => {
 	await page.goto("/books");
 	await expect(page.getByRole("heading", { name: "Books", exact: true, level: 1 })).toBeVisible();
 	await page.getByRole("link", { name: /吉他自学三月通/ }).click();

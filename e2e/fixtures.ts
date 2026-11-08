@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 
 /**
  * The base test for every spec here.
@@ -6,14 +6,23 @@ import { test as base, expect, type Page } from "@playwright/test";
  * Each one fails if the page threw an uncaught exception, which is most of
  * what a smoke test is for: a component that throws on mount still renders a
  * shell, so an assertion on the markup alone can pass over a broken page.
- * `console.error` is deliberately not watched — React and the CDN the sample
- * loader reads from are noisy there, and a warning is not a failure.
+ * `console.error` is deliberately not watched — React is noisy there, and a
+ * warning is not a failure.
+ *
+ * One page error is not the page's: WebKit raises the router's link prefetches
+ * (`?_rsc=`) that a full navigation cuts off as uncaught "access control"
+ * failures, where Chromium drops them quietly (#457).
  */
+const ABORTED_PREFETCH = /Fetch API cannot load .+[?&]_rsc=\S+ due to access control checks/;
+
 export const test = base.extend<{ failOnPageError: void }>({
 	failOnPageError: [
 		async ({ page }, use) => {
 			const errors: string[] = [];
-			page.on("pageerror", (error) => errors.push(String(error)));
+			page.on("pageerror", (error) => {
+				const text = String(error);
+				if (!ABORTED_PREFETCH.test(text)) errors.push(text);
+			});
 			await use();
 			expect(errors, "uncaught exceptions on the page").toEqual([]);
 		},
@@ -23,7 +32,18 @@ export const test = base.extend<{ failOnPageError: void }>({
 
 export { expect };
 
-/** The samples come from a CDN, so "playing" can take a while on a cold cache. */
+/**
+ * Wait until React has taken this element over. Text typed into a server-rendered
+ * field before then is wiped when the page hydrates (#461), which WebKit, slower
+ * to hydrate, runs into now and then.
+ */
+export async function hydrated(field: Locator): Promise<void> {
+	await expect
+		.poll(() => field.evaluate((el) => Object.keys(el).some((key) => key.startsWith("__reactFiber"))))
+		.toBe(true);
+}
+
+/** The samples are downloaded and decoded on the first press, so "playing" can take a while. */
 export const PLAYBACK_TIMEOUT = 30_000;
 
 /**

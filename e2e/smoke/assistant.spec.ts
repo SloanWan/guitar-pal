@@ -6,7 +6,7 @@ import { expect, test } from "../fixtures";
  * purpose: a guest's turns are counted against a daily budget, and the offline
  * evals (`npm run evals`) already cover the model path.
  */
-test("the strum assistant proposes a pattern and hands it over", async ({ page }) => {
+test("the strum assistant proposes a pattern and hands it over", { tag: "@phone" }, async ({ page }) => {
 	await page.goto("/strum");
 
 	await page.getByRole("button", { name: /assistant/i }).first().click();

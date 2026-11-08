@@ -188,6 +188,9 @@ export function useNoteSound(): NoteSound {
 	const ensureVoice = useCallback(async (voice: NoteVoice, wait = false): Promise<AudioContext | null> => {
 		if (!ctxRef.current) ctxRef.current = new AudioContext();
 		const ctx = ctxRef.current;
+		// Asked inside the press: once the download has been awaited, Safari no
+		// longer counts the gesture, and a resume from there stays suspended (#457).
+		if (ctx.state === "suspended") void ctx.resume();
 		if (!ready.current.has(voice)) {
 			const running = preloads.current.get(voice);
 			if (running) {

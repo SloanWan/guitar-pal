@@ -5,7 +5,7 @@ import { expect, playAndStop, test } from "../fixtures";
  * cannot do (no Canvas for its text metrics), so that it renders at all is
  * only ever checked here.
  */
-test("fingerpick renders a tab stave and plays", async ({ page }) => {
+test("fingerpick renders a tab stave and plays", { tag: "@phone" }, async ({ page }) => {
 	await page.goto("/tab");
 
 	const stave = page.locator("svg .vf-stave").first();
@@ -148,7 +148,8 @@ test("a chord marked from the inspector frets a typed pick sequence", async ({ p
 	await page.getByRole("option", { name: /^C\b/ }).first().click();
 	await expect(page.getByRole("button", { name: "C at bar 1 slot 1" })).toBeVisible();
 	// Its shapes arrive from the chord library; until then a sequence is refused, with the reason.
-	await expect(inspector.getByRole("button", { name: "Fill the slot" })).toBeVisible();
+	// They are fetched from Supabase itself, which takes several seconds from a slow network.
+	await expect(inspector.getByRole("button", { name: "Fill the slot" })).toBeVisible({ timeout: 15_000 });
 
 	await inspector.getByRole("textbox", { name: "Pick sequence for bar 1" }).fill("5321");
 	await inspector.getByRole("button", { name: "Write", exact: true }).click();

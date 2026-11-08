@@ -4,7 +4,7 @@ import { expect, test } from "../fixtures";
  * The Candy shell (#356): the header from 720px, the phone app bar and tab bar under it,
  * and light as the default theme. Signed out, like the rest of smoke.
  */
-test.describe("on a phone", () => {
+test.describe("on a phone", { tag: "@phone" }, () => {
 	test.use({ viewport: { width: 400, height: 800 } });
 
 	test("the tab bar navigates and marks the current tab", async ({ page }) => {

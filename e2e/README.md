@@ -9,8 +9,17 @@ One short path per page, signed out. Progressions live in localStorage without
 an account, so nothing here writes a row and there is nothing to clean up.
 
 ```bash
-npm run test:e2e            # builds, serves on 3100, runs smoke + account
+npm run test:e2e            # builds, serves on 3100, runs every project
+npx playwright install webkit   # once, for the WebKit and iPhone projects
 ```
+
+It runs on three browsers (#457), each its own CI job by engine:
+
+- `smoke`: Chromium, every spec.
+- `smoke-webkit`: WebKit (Desktop Safari), every spec. In CI this is the Linux build of Safari's engine, not Safari itself.
+- `smoke-iphone`: WebKit on an iPhone profile (touch, the phone layout), only the specs tagged `@phone`. Tag a spec when it means something on a phone; most of the editor's specs assume the desktop layout and stay off it.
+
+One page error is ignored: WebKit raises the router's `?_rsc=` prefetches that a full navigation cuts off as uncaught "access control" failures (`e2e/fixtures.ts`).
 
 Iterating is faster against a server you already have:
 

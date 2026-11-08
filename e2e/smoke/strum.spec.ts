@@ -6,7 +6,7 @@ import { expect, playAndStop, test } from "../fixtures";
  * and has nothing to clean up.
  */
 test.describe("strum machine", () => {
-	test("plays a pattern and stops again", async ({ page }) => {
+	test("plays a pattern and stops again", { tag: "@phone" }, async ({ page }) => {
 		await page.goto("/strum");
 		await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
 		await playAndStop(page, "Stop");

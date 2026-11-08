@@ -8,7 +8,7 @@ import { expect, test } from "../fixtures";
  */
 const SHARE_ID = process.env.E2E_SHARE_ID;
 
-test("a share link opens the player signed out", async ({ page, context }) => {
+test("a share link opens the player signed out", { tag: "@phone" }, async ({ page, context }) => {
 	test.skip(!SHARE_ID, "set E2E_SHARE_ID to a public share in this project");
 	await context.clearCookies();
 

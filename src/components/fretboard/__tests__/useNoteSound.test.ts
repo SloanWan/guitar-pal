@@ -31,11 +31,19 @@ interface FakeGain {
 const gains: FakeGain[] = [];
 
 class FakeAudioContext {
-	state = "running";
+	/** What a new context starts as: Safari can hand one out suspended even in a press. */
+	static startState = "running";
+	static made: FakeAudioContext[] = [];
+	state = FakeAudioContext.startState;
 	destination = { id: "destination" };
 	currentTime = 1.5;
 	close = vi.fn(async () => undefined);
-	resume = vi.fn(async () => undefined);
+	resume = vi.fn(async () => {
+		this.state = "running";
+	});
+	constructor() {
+		FakeAudioContext.made.push(this);
+	}
 	createGain = vi.fn((): FakeGain => {
 		const node: FakeGain = {
 			gain: { value: 1, setTargetAtTime: vi.fn() },
@@ -81,6 +89,8 @@ beforeEach(() => {
 	piano.triggerPianoNote.mockReset();
 	piano.cancelPianoNotes.mockReset();
 	gains.length = 0;
+	FakeAudioContext.startState = "running";
+	FakeAudioContext.made.length = 0;
 	localStorage.clear();
 });
 
@@ -122,6 +132,26 @@ describe("useNoteSound", () => {
 		});
 		expect(loader.triggerChordPreview).toHaveBeenCalledTimes(3);
 		expect(loader.preloadFingerpickPresets).toHaveBeenCalledTimes(1);
+		unmount();
+	});
+
+	it("resumes a suspended context inside the press, before the samples land (#457)", async () => {
+		FakeAudioContext.startState = "suspended";
+		const load = deferred();
+		loader.preloadFingerpickPresets.mockReturnValue(load.promise);
+		const { hook, unmount } = mount();
+		let first!: Promise<void>;
+		await act(async () => {
+			first = hook().play(45);
+		});
+		const ctx = FakeAudioContext.made[0];
+		expect(ctx.resume).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			load.resolve();
+			await first;
+		});
+		expect(ctx.resume).toHaveBeenCalledTimes(1);
+		expect(loader.triggerChordPreview).toHaveBeenCalledTimes(1);
 		unmount();
 	});
 

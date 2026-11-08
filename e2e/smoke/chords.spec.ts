@@ -1,4 +1,4 @@
-import { expect, test } from "../fixtures";
+import { expect, hydrated, test } from "../fixtures";
 
 /**
  * The chords hub and a chord's page. The diagrams are drawn from the shared
@@ -28,7 +28,7 @@ test("the hub opens a chord, and the chord page moves to the next", async ({ pag
 	await expect(page.getByRole("heading", { name: "Cm", level: 1 })).toBeVisible();
 });
 
-test("the chord page arpeggiates and shows the chord on the neck", async ({ page }) => {
+test("the chord page arpeggiates and shows the chord on the neck", { tag: "@phone" }, async ({ page }) => {
 	await page.goto("/chords/c/major");
 	await expect(page.getByRole("button", { name: "Arpeggio" })).toBeVisible();
 	const neck = page.getByRole("region", { name: "On the neck" });
@@ -42,7 +42,9 @@ test("the chord page arpeggiates and shows the chord on the neck", async ({ page
 
 test("several chords typed go on the board, and the board is in the address", async ({ page }) => {
 	await page.goto("/chords");
-	await page.getByRole("textbox", { name: "Look up chords" }).fill("C Am F G");
+	const search = page.getByRole("textbox", { name: "Look up chords" });
+	await hydrated(search);
+	await search.fill("C Am F G");
 	await page.getByRole("button", { name: "Put 4 on the board" }).click();
 
 	const board = page.getByRole("region", { name: "Board" });

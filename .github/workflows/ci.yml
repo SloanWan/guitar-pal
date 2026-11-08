@@ -67,8 +67,21 @@ jobs:
               run: pytest -q
 
     e2e:
-        name: End-to-end (Playwright)
+        name: End-to-end (${{ matrix.engine }})
         runs-on: ubuntu-latest
+        # One job an engine (#457), so a WebKit failure never hides behind, or
+        # holds up, a Chromium result. The CI WebKit is the Linux build of
+        # Safari's engine, not Safari itself.
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - engine: Chromium
+                      browser: chromium
+                      projects: --project=smoke --project=account
+                    - engine: WebKit
+                      browser: webkit
+                      projects: --project=smoke-webkit --project=smoke-iphone
 
         steps:
             - name: Checkout
@@ -83,14 +96,29 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            - name: Install Chromium
-              run: npx playwright install --with-deps chromium
+            # The browser download is the slow part; it changes only with the
+            # Playwright version the lock file pins.
+            - name: Cache the browser
+              id: browser-cache
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: playwright-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('package-lock.json') }}
+
+            - name: Install the browser
+              if: steps.browser-cache.outputs.cache-hit != 'true'
+              run: npx playwright install --with-deps ${{ matrix.browser }}
+
+            # A cached browser still needs its system libraries on a fresh runner.
+            - name: Install the browser's system libraries
+              if: steps.browser-cache.outputs.cache-hit == 'true'
+              run: npx playwright install-deps ${{ matrix.browser }}
 
             # Builds the app, serves it on 3100 and walks one short path per
             # page. The account and share specs skip themselves when their
             # secrets are missing, so a fork's PR still runs the rest.
             - name: Test
-              run: npm run test:e2e
+              run: npm run test:e2e -- ${{ matrix.projects }}
               env:
                   NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
                   NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
@@ -102,6 +130,6 @@ jobs:
               if: failure()
               uses: actions/upload-artifact@v4
               with:
-                  name: playwright-report
+                  name: playwright-report-${{ matrix.browser }}
                   path: playwright-report/
                   retention-days: 7

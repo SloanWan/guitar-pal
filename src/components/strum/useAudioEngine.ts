@@ -255,6 +255,9 @@ export function useAudioEngine(
 		primedRef.current = null;
 		audioCtxRef.current = primed?.ctx ?? new AudioContext();
 		const ctx = audioCtxRef.current;
+		// A context made in a press can still start suspended (Safari, iOS); asked
+		// now, while the press counts, it runs before the first note (#457).
+		if (ctx.state === "suspended") void ctx.resume();
 
 		// Nothing sounds until the samples are here. The metronome used to start
 		// against silence while they downloaded, which reads as a broken pattern

@@ -9,7 +9,10 @@ loadEnv({ path: ".env.local", quiet: true });
 /**
  * End-to-end tests (#259). Two tiers, kept apart by what they need:
  *
- * - `smoke` — one short path per page, signed out. This is what CI runs.
+ * - `smoke` — one short path per page, signed out. This is what CI runs, on
+ *   Chromium, on WebKit (`smoke-webkit`, Safari's engine — the Linux build in
+ *   CI, not Safari itself) and, for the specs tagged `@phone`, on an iPhone
+ *   profile (`smoke-iphone`: WebKit, touch, the phone layout) (#457).
  * - `account` — the sign-in flow. Needs `E2E_EMAIL` / `E2E_PASSWORD` for a
  *   throwaway user in the Supabase project; the specs skip themselves without
  *   them, so a fresh checkout still passes.
@@ -52,6 +55,8 @@ export default defineConfig({
 	},
 	projects: [
 		{ name: "smoke", testDir: "e2e/smoke", use: chromium },
+		{ name: "smoke-webkit", testDir: "e2e/smoke", use: devices["Desktop Safari"] },
+		{ name: "smoke-iphone", testDir: "e2e/smoke", use: devices["iPhone 15"], grep: /@phone/ },
 		{ name: "account", testDir: "e2e/account", use: chromium },
 		...(process.env.E2E_BOOKS ? [{ name: "books", testDir: "e2e/books", use: chromium }] : []),
 	],

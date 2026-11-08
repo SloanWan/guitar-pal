@@ -1,7 +1,7 @@
 import { SlidingWindowLimiter } from "@/lib/assistant/rateLimit";
 import { MAX_BATCH_BYTES } from "@/lib/telemetry/events";
 import { telemetryBatch } from "@/lib/telemetry/schema";
-import { insertRows, telemetryClient, toRow } from "@/lib/telemetry/store";
+import { insertRows, isCrawler, telemetryClient, toRow } from "@/lib/telemetry/store";
 
 /**
  * The browser's reports (#447): a batch of errors and Web Vitals from
@@ -33,6 +33,10 @@ function clientIp(request: Request): string {
 const empty = (status: number, headers?: HeadersInit) => new Response(null, { status, headers });
 
 export async function POST(request: Request): Promise<Response> {
+	const userAgent = request.headers.get("user-agent");
+	// A crawler's reports are accepted and dropped, unread (#453).
+	if (isCrawler(userAgent)) return empty(204);
+
 	const perIp = ipLimiter.check(clientIp(request));
 	if (!perIp.allowed) return empty(429, { "Retry-After": String(perIp.retryAfterSeconds) });
 
@@ -55,7 +59,6 @@ export async function POST(request: Request): Promise<Response> {
 	const client = telemetryClient();
 	// Not configured here: accepted and dropped, so a browser never retries.
 	if (!client) return empty(204);
-	const userAgent = request.headers.get("user-agent");
 	try {
 		await insertRows(client, batch.data.events.map((event) => toRow(event, userAgent)));
 	} catch (error) {

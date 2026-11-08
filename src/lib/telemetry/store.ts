@@ -10,6 +10,17 @@ import type { TelemetryEvent } from "./events";
 
 const MAX_USER_AGENT_CHARS = 200;
 
+/**
+ * A crawler that runs the page's script (Reflectionbot, Googlebot), or a lab
+ * run (Lighthouse, headless Chrome): its numbers are not a visitor's, and with
+ * little traffic they would weigh on every percentile (#453).
+ */
+const CRAWLER = /bot|crawl|spider|slurp|headless|lighthouse/i;
+
+export function isCrawler(userAgent: string | null): boolean {
+	return userAgent !== null && CRAWLER.test(userAgent);
+}
+
 export interface TelemetryRow {
 	kind: "error" | "vital";
 	source: string | null;

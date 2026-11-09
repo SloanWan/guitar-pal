@@ -158,3 +158,42 @@ async def test_a_reading_s_replies_are_kept_and_played_back_without_the_model(
     short = await replay(provider, Validator(reject=1), ex, reading)  # type: ignore[arg-type]
     assert short["dropped"] is True
     assert short["warnings"][-1]["code"] == "REPLAY_SHORT"
+
+
+async def test_a_repair_the_cache_lacks_is_read_live_when_resuming_and_only_it_is_paid(
+    tmp_path, monkeypatch
+):
+    from tests.test_extract_tab import FIXED, OVERFULL
+
+    provider = SimpleNamespace(model="m", name="bailian", small_model="m")
+    calls: list[object] = []
+
+    async def model_read(self, png, repair=None):  # noqa: ANN001
+        calls.append(repair)
+        return FIXED, CallUsage(1000, 500, "m")
+
+    monkeypatch.setattr(TabExtractor, "read", model_read)
+    monkeypatch.setattr("evals.tab.run.cost_usd", lambda provider, usage: 0.002)
+    ex = crop(tmp_path)
+    # Read before #464, when an overfull bar was not sent back: one reply.
+    cached = {
+        "replies": [OVERFULL.model_dump()],
+        "calls": 1,
+        "stop_reasons": ["end_turn"],
+        "input_tokens": 5000,
+        "output_tokens": 900,
+        "cost_usd": 0.01,
+        "seconds": 100.0,
+    }
+
+    free = await replay(provider, Validator(), ex, cached)  # type: ignore[arg-type]
+    assert calls == [] and "resumed" not in free
+    assert free["warnings"][-1]["code"] == "REPLAY_SHORT"
+    assert [len(m["slots"]) for m in free["draft"]["measures"]] == [3, 1]
+
+    resumed = await replay(provider, Validator(), ex, cached, resume=True)  # type: ignore[arg-type]
+    assert len(calls) == 1 and calls[0] is not None  # the repair, and only it
+    assert resumed["replies"] == [OVERFULL.model_dump(), FIXED.model_dump()]
+    assert (resumed["calls"], resumed["cost_usd"], resumed["resumed"]) == (2, 0.012, 0.002)
+    assert len(resumed["stop_reasons"]) == 2
+    assert [len(m["slots"]) for m in resumed["draft"]["measures"]] == [2, 1]

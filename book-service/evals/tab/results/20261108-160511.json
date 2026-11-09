@@ -1,0 +1,5092 @@
+{
+ "suite": "tab-extraction",
+ "title": "Tab readers on the reviewed crops",
+ "issue": 424,
+ "run_id": "20261108-160511",
+ "status": "done",
+ "started_at": "2026-11-08T16:05:11.933606+00:00",
+ "finished_at": "2026-11-08T16:05:12.967583+00:00",
+ "git_sha": "296b0ab",
+ "machine": "Apple M2, 8 cores, Darwin",
+ "config": {
+  "sets": [
+   "books-batch1"
+  ],
+  "exercises": 20,
+  "runs": 3,
+  "prompt": "2510912a",
+  "max_usd_per_model": 0.0,
+  "cny_per_usd": 7.1
+ },
+ "progress": {
+  "done": 80,
+  "total": 80
+ },
+ "metrics": [
+  {
+   "key": "note_f1",
+   "label": "Note F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Bar, onset, string and fret all right."
+  },
+  {
+   "key": "note_precision",
+   "label": "Note P",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Notes the reading wrote that are in the gold."
+  },
+  {
+   "key": "note_recall",
+   "label": "Note R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold notes the reading has."
+  },
+  {
+   "key": "fret_f1",
+   "label": "Fret F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Note F1 with the string left out: the gap is digits on the wrong line."
+  },
+  {
+   "key": "rhythm",
+   "label": "Rhythm",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold slots whose onset, value and rest the reading has."
+  },
+  {
+   "key": "bars",
+   "label": "Bars",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Exercises read with the gold's number of bars."
+  },
+  {
+   "key": "exact",
+   "label": "Exact",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Exercises read without a single difference."
+  },
+  {
+   "key": "drafted",
+   "label": "Drafted",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Exercises the parse made a draft for; a dropped one misses every note."
+  },
+  {
+   "key": "chord_names",
+   "label": "Chord names",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Chord exercises whose printed names the reading has in order."
+  },
+  {
+   "key": "chords_placed",
+   "label": "Chords placed",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold chord changes the reading puts on the same note."
+  },
+  {
+   "key": "flag_precision",
+   "label": "Flag P",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Notes the jianpu cross-check flagged that are wrong."
+  },
+  {
+   "key": "flag_recall",
+   "label": "Flag R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Wrong notes the jianpu cross-check flagged."
+  },
+  {
+   "key": "link_f1",
+   "label": "Links F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Ties, hammers, pulls and slides on the right note."
+  },
+  {
+   "key": "effect_f1",
+   "label": "Effects F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Bends, vibrato, accents, pick direction and the rest, on the right note."
+  },
+  {
+   "key": "span_f1",
+   "label": "Spans F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Notes under a palm mute, let ring or slur."
+  },
+  {
+   "key": "hammer_f1",
+   "label": "Hammer",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Hammer marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "pull_f1",
+   "label": "Pull",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pull marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "tie_f1",
+   "label": "Tie",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Tie marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "slide_f1",
+   "label": "Slide",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Slide marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "palm_mute_f1",
+   "label": "Palm mute",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Palm mute marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "vibrato_f1",
+   "label": "Vibrato",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Vibrato marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "accent_f1",
+   "label": "Accent",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Accent marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "pick_down_f1",
+   "label": "Pick down",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pick down marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "pick_up_f1",
+   "label": "Pick up",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pick up marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "exercises",
+   "label": "Exercises",
+   "direction": "higher",
+   "format": "fixed0"
+  },
+  {
+   "key": "repaired",
+   "label": "Repaired",
+   "direction": "lower",
+   "format": "fixed0",
+   "description": "Readings the validator sent back once before they passed or were dropped."
+  },
+  {
+   "key": "truncated",
+   "label": "Truncated",
+   "direction": "lower",
+   "format": "fixed0",
+   "description": "Readings a call of which hit the token cap, mostly while still thinking: the reply was never written, which is not the same as misread."
+  },
+  {
+   "key": "cost_per_exercise_usd",
+   "label": "$ / exercise",
+   "direction": "lower",
+   "format": "usd"
+  },
+  {
+   "key": "seconds_per_exercise",
+   "label": "s / exercise",
+   "direction": "lower",
+   "format": "fixed2"
+  }
+ ],
+ "subjects": [
+  {
+   "status": "done",
+   "summary": {
+    "note_precision": 0.8506493506493507,
+    "note_recall": 0.7872596153846154,
+    "note_f1": 0.8177278401997503,
+    "fret_f1": 0.8539325842696629,
+    "rhythm": 0.8487544483985765,
+    "bars": 0.9,
+    "exact": 0.1,
+    "drafted": 1.0,
+    "chord_names": 0.9,
+    "chords_placed": 0.0,
+    "flag_precision": 1.0,
+    "flag_recall": 0.06422018348623854,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0,
+    "tie_f1": 0.0,
+    "slide_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "accent_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "exercises": 20.0,
+    "repaired": 0
+   },
+   "id": "stored",
+   "label": "seed reading (stored)",
+   "notes": "the reading the review corrected; the gold leans its way",
+   "breakdown": {
+    "electric-365": {
+     "note_precision": 1.0,
+     "note_recall": 1.0,
+     "note_f1": 1.0,
+     "fret_f1": 1.0,
+     "rhythm": 1.0,
+     "bars": 1.0,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "link_f1": 0.0,
+     "hammer_f1": 0.0,
+     "pull_f1": 0.0,
+     "slide_f1": 0.0,
+     "exercises": 4.0
+    },
+    "heavy-metal": {
+     "note_precision": 1.0,
+     "note_recall": 1.0,
+     "note_f1": 1.0,
+     "fret_f1": 1.0,
+     "rhythm": 1.0,
+     "bars": 1.0,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.0,
+     "link_f1": 0.0,
+     "effect_f1": 0.0,
+     "tie_f1": 0.0,
+     "pick_down_f1": 0.0,
+     "exercises": 4.0
+    },
+    "sample-arranging": {
+     "note_precision": 0.8552631578947368,
+     "note_recall": 0.6435643564356436,
+     "note_f1": 0.7344632768361582,
+     "fret_f1": 0.768361581920904,
+     "rhythm": 0.6964285714285714,
+     "bars": 0.75,
+     "exact": 0.25,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.0,
+     "flag_precision": 1.0,
+     "flag_recall": 0.4375,
+     "link_f1": 0.0,
+     "slide_f1": 0.0,
+     "exercises": 4.0
+    },
+    "sample-text-tab-6p": {
+     "note_precision": 0.8386167146974063,
+     "note_recall": 0.833810888252149,
+     "note_f1": 0.8362068965517241,
+     "fret_f1": 0.8764367816091954,
+     "rhythm": 0.9202453987730062,
+     "bars": 1.0,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "chord_names": 0.75,
+     "chords_placed": 0.0,
+     "flag_recall": 0.0,
+     "link_f1": 0.0,
+     "effect_f1": 0.0,
+     "span_f1": 0.0,
+     "hammer_f1": 0.0,
+     "tie_f1": 0.0,
+     "slide_f1": 0.0,
+     "palm_mute_f1": 0.0,
+     "vibrato_f1": 0.0,
+     "accent_f1": 0.0,
+     "pick_down_f1": 0.0,
+     "exercises": 4.0
+    },
+    "syt": {
+     "note_precision": 0.5051546391752577,
+     "note_recall": 0.3712121212121212,
+     "note_f1": 0.4279475982532751,
+     "fret_f1": 0.5327510917030568,
+     "rhythm": 0.5338983050847458,
+     "bars": 0.75,
+     "exact": 0.25,
+     "drafted": 1.0,
+     "flag_recall": 0.0,
+     "link_f1": 0.0,
+     "hammer_f1": 0.0,
+     "exercises": 4.0
+    }
+   }
+  },
+  {
+   "status": "done",
+   "summary": {
+    "note_precision": 0.4151992585727525,
+    "note_recall": 0.43264123611781746,
+    "note_f1": 0.42374083707732324,
+    "fret_f1": 0.5410262473397967,
+    "rhythm": 0.6801959412176347,
+    "bars": 0.8727272727272727,
+    "exact": 0.09090909090909091,
+    "drafted": 1.0,
+    "chord_names": 0.8518518518518519,
+    "chords_placed": 0.3888888888888889,
+    "flag_precision": 1.0,
+    "flag_recall": 0.011689691817215728,
+    "link_f1": 0.4662309368191721,
+    "effect_f1": 0.3031674208144796,
+    "span_f1": 0.5769230769230769,
+    "hammer_f1": 0.4568764568764569,
+    "pull_f1": 0.4856396866840731,
+    "tie_f1": 0.1,
+    "slide_f1": 0.8695652173913043,
+    "palm_mute_f1": 0.5769230769230769,
+    "vibrato_f1": 0.0,
+    "accent_f1": 0.0,
+    "pick_down_f1": 0.3101851851851852,
+    "exercises": 55.0,
+    "repaired": 0,
+    "truncated": 0,
+    "cost_per_exercise_usd": 0.010431745454545454,
+    "seconds_per_exercise": 151.45163636363637
+   },
+   "id": "bailian:qwen3.7-plus",
+   "label": "qwen3.7-plus",
+   "group": "bailian",
+   "breakdown": {
+    "electric-365": {
+     "note_precision": 0.491869918699187,
+     "note_recall": 0.47265625,
+     "note_f1": 0.4820717131474104,
+     "fret_f1": 0.6454183266932271,
+     "rhythm": 0.798828125,
+     "bars": 1.0,
+     "exact": 0.2727272727272727,
+     "drafted": 1.0,
+     "flag_recall": 0.0,
+     "link_f1": 0.5168539325842697,
+     "hammer_f1": 0.49604221635883905,
+     "pull_f1": 0.4881889763779528,
+     "slide_f1": 0.975609756097561,
+     "exercises": 11.0
+    },
+    "heavy-metal": {
+     "note_precision": 0.6650246305418719,
+     "note_recall": 0.7758620689655172,
+     "note_f1": 0.7161803713527851,
+     "fret_f1": 0.7745358090185677,
+     "rhythm": 0.7676767676767676,
+     "bars": 0.75,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "chord_names": 0.9166666666666666,
+     "chords_placed": 0.7083333333333334,
+     "flag_recall": 0.0,
+     "link_f1": 0.0,
+     "effect_f1": 0.7349397590361446,
+     "tie_f1": 0.0,
+     "pick_down_f1": 0.7349397590361446,
+     "exercises": 12.0
+    },
+    "sample-arranging": {
+     "note_precision": 0.6677852348993288,
+     "note_recall": 0.708185053380783,
+     "note_f1": 0.687392055267703,
+     "fret_f1": 0.7392055267702936,
+     "rhythm": 0.84,
+     "bars": 0.8181818181818182,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.8461538461538461,
+     "flag_precision": 1.0,
+     "flag_recall": 0.038461538461538464,
+     "link_f1": 0.0,
+     "slide_f1": 0.0,
+     "exercises": 11.0
+    },
+    "sample-text-tab-6p": {
+     "note_precision": 0.21718931475029035,
+     "note_recall": 0.2388250319284802,
+     "note_f1": 0.22749391727493917,
+     "fret_f1": 0.36739659367396593,
+     "rhythm": 0.5653333333333334,
+     "bars": 0.8,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "chord_names": 0.7,
+     "chords_placed": 0.21008403361344538,
+     "flag_recall": 0.0,
+     "link_f1": 0.14432989690721648,
+     "effect_f1": 0.043478260869565216,
+     "span_f1": 0.5769230769230769,
+     "hammer_f1": 0.21052631578947367,
+     "pull_f1": 0.0,
+     "tie_f1": 0.1111111111111111,
+     "slide_f1": 0.0,
+     "palm_mute_f1": 0.5769230769230769,
+     "vibrato_f1": 0.0,
+     "accent_f1": 0.0,
+     "pick_down_f1": 0.045112781954887216,
+     "exercises": 10.0
+    },
+    "syt": {
+     "note_precision": 0.4375,
+     "note_recall": 0.4143302180685358,
+     "note_f1": 0.4256,
+     "fret_f1": 0.5056,
+     "rhythm": 0.5085324232081911,
+     "bars": 1.0,
+     "exact": 0.18181818181818182,
+     "drafted": 1.0,
+     "flag_precision": 1.0,
+     "flag_recall": 0.064,
+     "link_f1": 0.0,
+     "hammer_f1": 0.0,
+     "exercises": 11.0
+    }
+   },
+   "by_repeat": {
+    "1": {
+     "note_precision": 0.5420944558521561,
+     "note_recall": 0.4888888888888889,
+     "note_f1": 0.5141187925998053,
+     "fret_f1": 0.5803310613437196,
+     "rhythm": 0.6127450980392157,
+     "bars": 0.8888888888888888,
+     "exact": 0.16666666666666666,
+     "drafted": 1.0,
+     "chord_names": 0.8888888888888888,
+     "chords_placed": 0.627906976744186,
+     "flag_precision": 1.0,
+     "flag_recall": 0.04017857142857143,
+     "link_f1": 0.45384615384615384,
+     "effect_f1": 0.40625,
+     "span_f1": 0.5769230769230769,
+     "hammer_f1": 0.4409448818897638,
+     "pull_f1": 0.42857142857142855,
+     "tie_f1": 0.0,
+     "slide_f1": 0.875,
+     "palm_mute_f1": 0.5769230769230769,
+     "vibrato_f1": 0.0,
+     "pick_down_f1": 0.416,
+     "exercises": 18.0
+    },
+    "2": {
+     "note_precision": 0.30327868852459017,
+     "note_recall": 0.3197530864197531,
+     "note_f1": 0.3112980769230769,
+     "fret_f1": 0.49158653846153844,
+     "rhythm": 0.7150735294117647,
+     "bars": 0.8947368421052632,
+     "exact": 0.05263157894736842,
+     "drafted": 1.0,
+     "chord_names": 0.6666666666666666,
+     "chords_placed": 0.3194444444444444,
+     "flag_recall": 0.0,
+     "link_f1": 0.32867132867132864,
+     "effect_f1": 0.15,
+     "span_f1": 0.6610169491525424,
+     "hammer_f1": 0.2962962962962963,
+     "pull_f1": 0.3333333333333333,
+     "tie_f1": 0.20689655172413793,
+     "slide_f1": 0.8571428571428571,
+     "palm_mute_f1": 0.6610169491525424,
+     "vibrato_f1": 0.0,
+     "accent_f1": 0.0,
+     "pick_down_f1": 0.15384615384615385,
+     "exercises": 19.0
+    },
+    "3": {
+     "note_precision": 0.4565483476132191,
+     "note_recall": 0.5173370319001387,
+     "note_f1": 0.4850455136540962,
+     "fret_f1": 0.5682704811443433,
+     "rhythm": 0.6981132075471698,
+     "bars": 0.8333333333333334,
+     "exact": 0.05555555555555555,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.3076923076923077,
+     "flag_precision": 1.0,
+     "flag_recall": 0.006153846153846154,
+     "link_f1": 0.5806451612903226,
+     "effect_f1": 0.37662337662337664,
+     "span_f1": 0.5070422535211268,
+     "hammer_f1": 0.5988023952095808,
+     "pull_f1": 0.6257668711656442,
+     "tie_f1": 0.0,
+     "slide_f1": 0.875,
+     "palm_mute_f1": 0.5070422535211268,
+     "vibrato_f1": 0.0,
+     "accent_f1": 0.0,
+     "pick_down_f1": 0.3841059602649007,
+     "exercises": 18.0
+    }
+   },
+   "spent_usd": 0.0,
+   "notes": "stopped starting readings at $0.000: --max-usd 0.0"
+  }
+ ],
+ "cases": [
+  {
+   "subject": "stored",
+   "case": "books-batch1/electric-365-p020-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @12 G: missed hammer",
+    "bar 1 @18 G: missed pull",
+    "bar 1 @24 G: missed hammer",
+    "bar 1 @30 G: missed pull",
+    "bar 1 @36 G: missed hammer",
+    "bar 1 @42 G: missed pull",
+    "bar 1 @48 G: missed hammer",
+    "bar 1 @54 G: missed pull",
+    "bar 1 @6 G: missed pull",
+    "bar 1 @60 G: missed hammer",
+    "bar 1 @66 G: missed pull",
+    "bar 1 @72 G: missed hammer",
+    "bar 1 @78 G: missed pull",
+    "bar 1 @84 G: missed hammer",
+    "bar 1 @90 G: missed pull",
+    "bar 2 @0 G: missed hammer",
+    "bar 2 @12 G: missed hammer",
+    "bar 2 @18 G: missed pull",
+    "bar 2 @24 G: missed hammer",
+    "bar 2 @30 G: missed pull",
+    "bar 2 @36 G: missed hammer",
+    "bar 2 @42 G: missed pull",
+    "bar 2 @48 G: missed hammer",
+    "bar 2 @54 G: missed pull",
+    "bar 2 @6 G: missed pull",
+    "bar 2 @60 G: missed hammer",
+    "bar 2 @66 G: missed pull",
+    "bar 2 @72 G: missed hammer",
+    "bar 2 @78 G: missed pull",
+    "bar 2 @84 G: missed hammer",
+    "bar 2 @90 G: missed pull",
+    "bar 3 @0 G: missed hammer",
+    "bar 3 @12 G: missed hammer",
+    "bar 3 @18 G: missed pull",
+    "bar 3 @24 G: missed hammer",
+    "bar 3 @30 G: missed pull",
+    "bar 3 @36 G: missed hammer",
+    "bar 3 @42 G: missed pull",
+    "bar 3 @48 G: missed hammer",
+    "bar 3 @54 G: missed pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      32,
+      0,
+      0
+     ],
+     "hammer": [
+      31,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/electric-365-p020-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @12 E: missed hammer",
+    "bar 1 @24 E: missed hammer",
+    "bar 1 @36 E: missed hammer",
+    "bar 1 @60 A: missed hammer",
+    "bar 1 @72 A: missed hammer",
+    "bar 1 @84 A: missed hammer",
+    "bar 2 @12 D: missed hammer",
+    "bar 2 @24 D: missed hammer",
+    "bar 2 @36 D: missed hammer",
+    "bar 2 @60 G: missed hammer",
+    "bar 2 @72 G: missed hammer",
+    "bar 2 @84 G: missed hammer",
+    "bar 3 @12 G: missed pull",
+    "bar 3 @24 G: missed pull",
+    "bar 3 @36 G: missed pull",
+    "bar 3 @60 D: missed pull",
+    "bar 3 @72 D: missed pull",
+    "bar 3 @84 D: missed pull",
+    "bar 4 @12 A: missed pull",
+    "bar 4 @24 A: missed pull",
+    "bar 4 @36 A: missed pull",
+    "bar 4 @60 E: missed pull",
+    "bar 4 @72 E: missed pull",
+    "bar 4 @84 E: missed pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      0,
+      0
+     ],
+     "hammer": [
+      12,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/electric-365-p020-3",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @12 e: missed hammer",
+    "bar 1 @18 e: missed hammer",
+    "bar 1 @24 e: missed pull",
+    "bar 1 @30 e: missed pull",
+    "bar 1 @36 e: missed pull",
+    "bar 1 @42 e: missed hammer",
+    "bar 1 @48 e: missed hammer",
+    "bar 1 @54 e: missed hammer",
+    "bar 1 @6 e: missed hammer",
+    "bar 1 @60 e: missed pull",
+    "bar 1 @66 e: missed pull",
+    "bar 1 @72 e: missed pull",
+    "bar 1 @78 e: missed hammer",
+    "bar 1 @84 e: missed hammer",
+    "bar 1 @90 e: missed hammer",
+    "bar 2 @12 B: missed hammer",
+    "bar 2 @18 B: missed hammer",
+    "bar 2 @24 B: missed pull",
+    "bar 2 @30 B: missed pull",
+    "bar 2 @36 B: missed pull",
+    "bar 2 @42 B: missed hammer",
+    "bar 2 @48 B: missed hammer",
+    "bar 2 @54 B: missed hammer",
+    "bar 2 @6 B: missed hammer",
+    "bar 2 @60 B: missed pull",
+    "bar 2 @66 B: missed pull",
+    "bar 2 @72 B: missed pull",
+    "bar 2 @78 B: missed hammer",
+    "bar 2 @84 B: missed hammer",
+    "bar 2 @90 B: missed hammer",
+    "bar 3 @12 G: missed hammer",
+    "bar 3 @18 G: missed hammer",
+    "bar 3 @24 G: missed pull",
+    "bar 3 @30 G: missed pull",
+    "bar 3 @36 G: missed pull",
+    "bar 3 @42 G: missed hammer",
+    "bar 3 @48 G: missed hammer",
+    "bar 3 @54 G: missed hammer",
+    "bar 3 @6 G: missed hammer",
+    "bar 3 @60 G: missed pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      36,
+      0,
+      0
+     ],
+     "pull": [
+      24,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/electric-365-p020-4",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0,
+    "slide_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @12 G: missed hammer",
+    "bar 1 @24 G: missed hammer",
+    "bar 1 @36 G: missed hammer",
+    "bar 1 @48 G: missed slide",
+    "bar 1 @60 G: missed pull",
+    "bar 1 @72 G: missed pull",
+    "bar 1 @84 G: missed pull",
+    "bar 2 @0 G: missed slide",
+    "bar 2 @12 G: missed hammer",
+    "bar 2 @24 G: missed hammer",
+    "bar 2 @36 G: missed hammer",
+    "bar 2 @48 G: missed slide",
+    "bar 2 @60 G: missed pull",
+    "bar 2 @72 G: missed pull",
+    "bar 2 @84 G: missed pull",
+    "bar 3 @0 G: missed slide",
+    "bar 3 @12 G: missed hammer",
+    "bar 3 @24 G: missed hammer",
+    "bar 3 @36 G: missed hammer",
+    "bar 3 @48 G: missed slide",
+    "bar 3 @60 G: missed pull",
+    "bar 3 @72 G: missed pull",
+    "bar 3 @84 G: missed pull",
+    "bar 4 @0 G: missed slide",
+    "bar 4 @12 G: missed hammer",
+    "bar 4 @24 G: missed hammer",
+    "bar 4 @36 G: missed hammer",
+    "bar 4 @48 G: missed slide",
+    "bar 4 @60 G: missed pull",
+    "bar 4 @72 G: missed pull",
+    "bar 4 @84 G: missed pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      0,
+      0
+     ],
+     "hammer": [
+      12,
+      0,
+      0
+     ],
+     "slide": [
+      7,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/heavy-metal-p013-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @48: missed pick down",
+    "chords: 0 of 1 changes placed"
+   ],
+   "detail": {
+    "page": 13,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/heavy-metal-p014-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "chords: 0 of 3 changes placed"
+   ],
+   "detail": {
+    "page": 14,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      9,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/heavy-metal-p015-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 4 @0: missed pick down",
+    "chords: 0 of 4 changes placed"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "pick down": [
+      5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/heavy-metal-p015-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "tie_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 6 @0 A: missed tie",
+    "bar 6 @0 E: missed tie",
+    "bar 1 @0: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 4 @0: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @72: missed pick down",
+    "bar 5 @0: missed pick down",
+    "chords: 0 of 8 changes placed"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "tie": [
+      2,
+      0,
+      0
+     ],
+     "pick down": [
+      13,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-arranging-p001-1",
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "confirmed",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-arranging-p001-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9545454545454546,
+    "note_recall": 0.9545454545454546,
+    "note_f1": 0.9545454545454546,
+    "fret_f1": 0.9545454545454546,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0
+   },
+   "failures": [
+    "bar 2 @0: read quarter B3 D5, gold quarter B3 G0"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-arranging-p006-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.13636363636363635,
+    "note_f1": 0.17647058823529413,
+    "fret_f1": 0.29411764705882354,
+    "rhythm": 0.3888888888888889,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_precision": 1.0,
+    "flag_recall": 0.6363636363636364,
+    "link_f1": 0.0,
+    "slide_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read dotted-eighth E3, gold eighth e0 A3",
+    "bar 1 @12: read —, gold sixteenth G0",
+    "bar 1 @18: read sixteenth D2, gold sixteenth e0",
+    "bar 1 @24: read eighth G3, gold eighth e0",
+    "bar 1 @36: read eighth D0, gold eighth B3",
+    "bar 1 @48: read dotted-quarter e3, gold eighth e3 E3",
+    "bar 1 @60: read —, gold eighth B0",
+    "bar 1 @72: read —, gold eighth G0",
+    "bar 2 @0: read eighth D0, gold eighth B3 D0",
+    "bar 2 @12: read eighth e3, gold sixteenth B3",
+    "bar 2 @18: read —, gold sixteenth B5",
+    "bar 2 @24: read quarter e3, gold eighth B1",
+    "bar 2 @36: read —, gold eighth G2",
+    "bar 2 @48: read eighth e5, gold eighth G0 E3",
+    "bar 2 @60: read eighth e1, gold eighth D0",
+    "bar 2 @72: read half B2, gold eighth G0",
+    "bar 2 @84: read —, gold eighth B0",
+    "bar 2 @18 B: missed slide",
+    "chords: 0 of 2 changes placed"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "slide": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-arranging-p006-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9615384615384616,
+    "note_recall": 0.6097560975609756,
+    "note_f1": 0.746268656716418,
+    "fret_f1": 0.7761194029850746,
+    "rhythm": 0.6842105263157895,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read quarter B3 E3, gold quarter B3 G0 E3",
+    "bar 2 @0: read eighth e2 B0, gold eighth e2 B0 D0",
+    "bar 2 @24: read eighth e5 G0, gold eighth e5 B0",
+    "bar 3 @0: read quarter e2 D0, gold quarter e2 B0 D0",
+    "bar 4 @0: read half rest, gold quarter e3 B0 E3",
+    "bar 4 @24: read —, gold quarter B0 G0",
+    "bar 4 @48: read quarter rest, gold quarter B0 G0",
+    "bar 5 @0: read —, gold quarter D0",
+    "bar 5 @24: read —, gold quarter B0 G0",
+    "bar 5 @48: read —, gold quarter B0 G0",
+    "chords: 0 of 3 changes placed"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-text-tab-6p-p002-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.6551724137931034,
+    "note_recall": 0.6551724137931034,
+    "note_f1": 0.6551724137931034,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "hammer_f1": 0.0,
+    "tie_f1": 0.0,
+    "slide_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @48: read eighth A5, gold eighth E5",
+    "bar 1 @60: read eighth A7, gold eighth E7",
+    "bar 2 @48: read eighth A5, gold eighth E5",
+    "bar 2 @60: read eighth A7, gold eighth E7",
+    "bar 3 @48: read eighth A5, gold eighth E5",
+    "bar 3 @60: read eighth A7, gold eighth E7",
+    "bar 4 @24: read eighth A5, gold eighth E5",
+    "bar 4 @36: read eighth A6, gold eighth E6",
+    "bar 4 @48: read eighth A5, gold eighth E5",
+    "bar 4 @60: read dotted-quarter A3, gold dotted-quarter E3",
+    "bar 1 @60 E: missed hammer",
+    "bar 2 @0 E: missed tie",
+    "bar 2 @60 E: missed hammer",
+    "bar 3 @0 E: missed tie",
+    "bar 3 @60 E: missed hammer",
+    "bar 4 @0 E: missed tie",
+    "bar 4 @36 E: missed hammer",
+    "bar 4 @60 E: missed slide",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @36: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 1 @84: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 2 @72: missed pick down",
+    "bar 2 @84: missed pick down",
+    "bar 3 @12: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @36: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 3 @84: missed pick down",
+    "bar 4 @12: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @48: missed pick down",
+    "bar 4 @60: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      0,
+      0
+     ],
+     "tie": [
+      3,
+      0,
+      0
+     ],
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-text-tab-6p-p002-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.0,
+    "hammer_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @60 D: missed hammer",
+    "bar 2 @36 D: missed hammer",
+    "bar 3 @60 D: missed hammer",
+    "bar 4 @36 D: missed hammer",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 1 @72 A: missed vibrato",
+    "bar 2 @0: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 2 @72: missed pick down",
+    "bar 2 @84: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 3 @72 A: missed vibrato",
+    "bar 4 @0: missed pick down",
+    "bar 4 @12: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @36: missed pick down",
+    "bar 4 @48: missed pick down",
+    "bar 4 @72: missed pick down",
+    "bar 4 @84: missed pick down",
+    "bar 2 @0: missed palmMute",
+    "bar 2 @12: missed palmMute",
+    "bar 2 @72: missed palmMute",
+    "bar 2 @84: missed palmMute",
+    "bar 4 @0: missed palmMute",
+    "bar 4 @12: missed palmMute",
+    "bar 4 @72: missed palmMute",
+    "bar 4 @84: missed palmMute",
+    "chords: 0 of 9 changes placed"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      0,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      2,
+      0,
+      0
+     ],
+     "palmMute": [
+      8,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-text-tab-6p-p002-3",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5185185185185185,
+    "note_recall": 0.5,
+    "note_f1": 0.509090909090909,
+    "fret_f1": 0.5818181818181818,
+    "rhythm": 0.65,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @36: read eighth e3 B0 G0 D0 E3, gold eighth D2 A2 E0",
+    "bar 1 @48: read quarter D2 A2 E0, gold quarter e3 B0 G0 D0 E3",
+    "bar 1 @72: read quarter D2 A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @84: read —, gold eighth D2 A2 E0",
+    "bar 2 @24: read eighth D2 A0, gold eighth D3 A1",
+    "bar 3 @36: read eighth e3 B0 G0 D0 E3, gold eighth D2 A2 E0",
+    "bar 3 @48: read quarter D2 A2 E0, gold quarter e3 B0 G0 D0 E3",
+    "bar 3 @72: read quarter D2 A2 E0, gold eighth D2 A2 E0",
+    "bar 3 @84: read —, gold eighth D2 A2 E0",
+    "bar 4 @0: read eighth D4 A2, gold quarter D4 A2",
+    "bar 4 @12: read eighth D3 A1, gold —",
+    "bar 4 @24: read eighth D2 A0, gold half D3 A1",
+    "bar 4 @36: read eighth D2 A0, gold —",
+    "bar 4 @48: read half D2 A0, gold —",
+    "bar 4 @72: read —, gold quarter D2 A0",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 4 @0: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @72: missed pick down",
+    "bar 1 @24: missed palmMute",
+    "bar 1 @36: missed palmMute",
+    "bar 1 @72: missed palmMute",
+    "bar 1 @84: missed palmMute",
+    "bar 2 @12: missed palmMute",
+    "bar 2 @36: missed palmMute",
+    "bar 3 @24: missed palmMute",
+    "bar 3 @36: missed palmMute",
+    "bar 3 @72: missed palmMute"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      16,
+      0,
+      0
+     ],
+     "palmMute": [
+      10,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-text-tab-6p-p005-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9122807017543859,
+    "note_recall": 0.9122807017543859,
+    "note_f1": 0.9122807017543859,
+    "fret_f1": 0.9122807017543859,
+    "rhythm": 0.9333333333333333,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 0.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.0,
+    "tie_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "accent_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 5 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 5 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 5 @60: read eighth E0, gold —",
+    "bar 5 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 5 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 6 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 6 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 6 @60: read eighth E0, gold —",
+    "bar 6 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 6 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 7 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 7 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 7 @60: read eighth E0, gold —",
+    "bar 7 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 7 @84: read eighth E0, gold eighth D5 A5 E3",
+    "bar 9 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 9 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 9 @60: read eighth E0, gold —",
+    "bar 9 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 9 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 10 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 10 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 10 @60: read eighth E0, gold —",
+    "bar 10 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 10 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 11 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 11 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 11 @60: read eighth E0, gold —",
+    "bar 11 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 11 @84: read eighth E0, gold eighth D5 A5 E3",
+    "bar 11 @0 D: missed tie",
+    "bar 11 @0 A: missed tie",
+    "bar 11 @0 E: missed tie",
+    "bar 12 @0 D: missed tie",
+    "bar 12 @0 A: missed tie",
+    "bar 12 @0 E: missed tie",
+    "bar 5 @0 D: missed tie",
+    "bar 5 @0 A: missed tie",
+    "bar 5 @0 E: missed tie",
+    "bar 7 @0 D: missed tie"
+   ],
+   "detail": {
+    "page": 5,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "tie": [
+      21,
+      0,
+      0
+     ],
+     "pick down": [
+      51,
+      0,
+      0
+     ],
+     "accent": [
+      1,
+      0,
+      0
+     ],
+     "palmMute": [
+      48,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/syt-p106-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7647058823529411,
+    "note_recall": 0.7647058823529411,
+    "note_f1": 0.7647058823529411,
+    "fret_f1": 0.7647058823529411,
+    "rhythm": 0.6470588235294118,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A3, gold eighth A3",
+    "bar 1 @6: read sixteenth D0, gold —",
+    "bar 1 @12: read eighth D2, gold sixteenth D0",
+    "bar 1 @18: read —, gold sixteenth D2",
+    "bar 2 @0: read sixteenth A3, gold eighth A3",
+    "bar 2 @6: read sixteenth D0, gold —",
+    "bar 2 @12: read eighth D2, gold sixteenth D0",
+    "bar 2 @18: read —, gold sixteenth D2",
+    "bar 1 @18 D: missed hammer",
+    "bar 2 @18 D: missed hammer"
+   ],
+   "detail": {
+    "page": 106,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "hammer": [
+      2,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/syt-p118-1",
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0
+   },
+   "failures": [],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "confirmed",
+    "jianpu": null,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/syt-p118-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.0,
+    "note_recall": 0.0,
+    "note_f1": 0.0,
+    "fret_f1": 0.6666666666666666,
+    "rhythm": 1.0,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read eighth E0, gold eighth A0",
+    "bar 1 @12: read eighth D0, gold eighth G0",
+    "bar 1 @24: read eighth G0, gold eighth B0",
+    "bar 1 @36: read eighth B0, gold eighth G0",
+    "bar 1 @48: read eighth E0, gold eighth e0",
+    "bar 1 @60: read eighth D0, gold eighth G0",
+    "bar 1 @72: read eighth G0, gold eighth B0",
+    "bar 1 @84: read eighth B0, gold eighth G0",
+    "bar 2 @0: read eighth E0, gold —",
+    "bar 2 @12: read eighth D0, gold —",
+    "bar 2 @24: read eighth G0, gold —",
+    "bar 2 @36: read eighth B0, gold —",
+    "bar 2 @48: read eighth E0, gold —",
+    "bar 2 @60: read eighth D0, gold —",
+    "bar 2 @72: read eighth G0, gold —",
+    "bar 2 @84: read eighth B0, gold —"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/syt-p118-3",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.125,
+    "note_recall": 0.05333333333333334,
+    "note_f1": 0.07476635514018691,
+    "fret_f1": 0.14953271028037382,
+    "rhythm": 0.19672131147540983,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read eighth A3, gold eighth B1 A3",
+    "bar 1 @12: read eighth D0, gold eighth G0",
+    "bar 1 @24: read quarter D2, gold eighth B3",
+    "bar 1 @36: read —, gold eighth G0",
+    "bar 1 @48: read quarter A3, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B1",
+    "bar 1 @84: read —, gold eighth G0",
+    "bar 2 @0: read eighth A3, gold eighth B1 A3",
+    "bar 2 @12: read eighth D0, gold eighth G0",
+    "bar 2 @24: read quarter D2, gold eighth B3",
+    "bar 2 @36: read —, gold eighth G0",
+    "bar 2 @48: read quarter A3, gold eighth e0",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @72: read —, gold eighth B1",
+    "bar 2 @84: read —, gold eighth G0",
+    "bar 3 @0: read eighth D2, gold eighth e0 A3",
+    "bar 3 @12: read eighth D3, gold eighth G0",
+    "bar 3 @24: read half G0, gold eighth e1",
+    "bar 3 @36: read —, gold eighth G0",
+    "bar 3 @48: read —, gold eighth e3 E3",
+    "bar 3 @60: read —, gold eighth D0",
+    "bar 3 @72: read —, gold eighth G0",
+    "bar 3 @84: read —, gold eighth B0",
+    "bar 4 @0: read eighth D2, gold eighth e0 A3",
+    "bar 4 @12: read eighth D3, gold eighth G0",
+    "bar 4 @24: read half G0, gold eighth e1",
+    "bar 4 @36: read —, gold eighth G0",
+    "bar 4 @48: read —, gold eighth e3 E3",
+    "bar 4 @60: read —, gold eighth D0",
+    "bar 4 @72: read —, gold eighth G0",
+    "bar 4 @84: read —, gold eighth B0",
+    "bar 5 @0: read sixteenth G0, gold eighth e3 D0",
+    "bar 5 @6: read sixteenth G2, gold —",
+    "bar 5 @12: read sixteenth G0, gold eighth e5",
+    "bar 5 @18: read sixteenth D3, gold —",
+    "bar 5 @24: read quarter D2, gold eighth e3",
+    "bar 5 @36: read —, gold eighth e1",
+    "bar 5 @48: read quarter A3, gold eighth e0",
+    "bar 5 @60: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-3",
+   "repeat": 1,
+   "error": "not read: --max-usd 0.0 reached",
+   "metrics": {}
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p006-1",
+   "repeat": 2,
+   "error": "not read: --max-usd 0.0 reached",
+   "metrics": {}
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-2",
+   "repeat": 3,
+   "error": "not read: --max-usd 0.0 reached",
+   "metrics": {}
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p005-1",
+   "repeat": 1,
+   "error": "not read: --max-usd 0.0 reached",
+   "metrics": {}
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-3",
+   "repeat": 3,
+   "error": "not read: --max-usd 0.0 reached",
+   "metrics": {}
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p001-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9375,
+    "note_recall": 0.9375,
+    "note_f1": 0.9375,
+    "fret_f1": 0.9375,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.012925,
+    "seconds": 184.4,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @72: read quarter e0 G5, gold quarter e8 G5"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "confirmed",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-4",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.967741935483871,
+    "hammer_f1": 1.0,
+    "pull_f1": 0.96,
+    "slide_f1": 0.9230769230769231,
+    "cost_usd": 0.013786,
+    "seconds": 208.35,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 3 @48 G: extra pull",
+    "bar 3 @48 G: missed slide"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      13,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ],
+     "slide": [
+      7,
+      6,
+      6
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p106-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.11764705882352941,
+    "note_recall": 0.11764705882352941,
+    "note_f1": 0.11764705882352941,
+    "fret_f1": 0.11764705882352941,
+    "rhythm": 0.11764705882352941,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "cost_usd": 0.016814,
+    "seconds": 239.38,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A3, gold eighth A3",
+    "bar 1 @6: read sixteenth D0, gold —",
+    "bar 1 @12: read sixteenth D2, gold sixteenth D0",
+    "bar 1 @18: read eighth G0, gold sixteenth D2",
+    "bar 1 @24: read —, gold eighth G0",
+    "bar 1 @30: read eighth B1, gold —",
+    "bar 1 @36: read —, gold eighth B1",
+    "bar 1 @42: read eighth D3, gold —",
+    "bar 1 @48: read —, gold eighth D3",
+    "bar 1 @54: read eighth G0, gold —",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @66: read eighth B1, gold —",
+    "bar 1 @72: read —, gold eighth B1",
+    "bar 1 @78: read eighth e0, gold —",
+    "bar 1 @84: read —, gold eighth e0",
+    "bar 2 @0: read sixteenth A3, gold eighth A3",
+    "bar 2 @6: read sixteenth D0, gold —",
+    "bar 2 @12: read sixteenth D2, gold sixteenth D0",
+    "bar 2 @18: read eighth G0, gold sixteenth D2",
+    "bar 2 @24: read —, gold eighth G0",
+    "bar 2 @30: read eighth B1, gold —",
+    "bar 2 @36: read —, gold eighth B1",
+    "bar 2 @42: read eighth D3, gold —",
+    "bar 2 @48: read —, gold eighth D3",
+    "bar 2 @54: read eighth G0, gold —",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @66: read quarter B1, gold —",
+    "bar 2 @72: read —, gold quarter B1",
+    "bar 1 @12 D: extra hammer",
+    "bar 1 @18 D: missed hammer",
+    "bar 2 @12 D: extra hammer",
+    "bar 2 @18 D: missed hammer"
+   ],
+   "detail": {
+    "page": 106,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "hammer": [
+      2,
+      2,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-3",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.17647058823529413,
+    "note_recall": 0.24,
+    "note_f1": 0.2033898305084746,
+    "fret_f1": 0.3389830508474576,
+    "rhythm": 0.26229508196721313,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.01106,
+    "seconds": 203.28,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth e0 B3 G0, gold eighth B1 A3",
+    "bar 1 @12: read eighth e1 B3 G0, gold eighth G0",
+    "bar 1 @24: read eighth e3 B1 G0, gold eighth B3",
+    "bar 1 @36: read eighth e0 B3 G0, gold eighth G0",
+    "bar 1 @48: read —, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B1",
+    "bar 1 @84: read —, gold eighth G0",
+    "bar 2 @0: read eighth e0 B3 G0, gold eighth B1 A3",
+    "bar 2 @12: read eighth e1 B3 G0, gold eighth G0",
+    "bar 2 @24: read eighth e3 B1 G0, gold eighth B3",
+    "bar 2 @36: read eighth e0 B3 G0, gold eighth G0",
+    "bar 2 @48: read —, gold eighth e0",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @72: read —, gold eighth B1",
+    "bar 2 @84: read —, gold eighth G0",
+    "bar 3 @0: read eighth e0 B1 G0, gold eighth e0 A3",
+    "bar 3 @12: read eighth e1 B1 G0, gold eighth G0",
+    "bar 3 @24: read eighth e3 B1 G0, gold eighth e1",
+    "bar 3 @36: read eighth e0 B1 G0, gold eighth G0",
+    "bar 3 @48: read —, gold eighth e3 E3",
+    "bar 3 @60: read —, gold eighth D0",
+    "bar 3 @72: read —, gold eighth G0",
+    "bar 3 @84: read —, gold eighth B0",
+    "bar 4 @0: read eighth e0 B1 G0, gold eighth e0 A3",
+    "bar 4 @12: read eighth e1 B1 G0, gold eighth G0",
+    "bar 4 @24: read eighth e3 B1 G0, gold eighth e1",
+    "bar 4 @36: read eighth e0 B1 G0, gold eighth G0",
+    "bar 4 @48: read —, gold eighth e3 E3",
+    "bar 4 @60: read —, gold eighth D0",
+    "bar 4 @72: read —, gold eighth G0",
+    "bar 4 @84: read —, gold eighth B0",
+    "bar 5 @0: read sixteenth e3 B3 G0, gold eighth e3 D0",
+    "bar 5 @6: read sixteenth e5 B3 G0, gold —",
+    "bar 5 @12: read sixteenth e3 B3 G0, gold eighth e5",
+    "bar 5 @18: read sixteenth e1 B3 G0, gold —",
+    "bar 5 @24: read quarter e0 B1 G0, gold eighth e3",
+    "bar 5 @36: read —, gold eighth e1",
+    "bar 5 @48: read quarter e1 B3 G0, gold eighth e0",
+    "bar 5 @60: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-2",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "cost_usd": 0.010215,
+    "seconds": 145.41,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p015-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7647058823529411,
+    "note_recall": 0.9285714285714286,
+    "note_f1": 0.8387096774193549,
+    "fret_f1": 0.8387096774193549,
+    "rhythm": 0.6428571428571429,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.8275862068965517,
+    "tie_f1": 0.0,
+    "pick_down_f1": 0.8275862068965517,
+    "cost_usd": 0.007713,
+    "seconds": 108.43,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter A2 E0, gold half A2 E0",
+    "bar 1 @24: read quarter A2 E0, gold —",
+    "bar 2 @0: read quarter A5 E3, gold half A5 E3",
+    "bar 2 @24: read quarter A5 E3, gold —",
+    "bar 2 @48: read quarter A7 E5, gold half A7 E5",
+    "bar 2 @72: read quarter A7 E5, gold —",
+    "bar 4 @24: read quarter A7 E5, gold half A7 E5",
+    "bar 4 @48: read quarter A7 E5, gold —",
+    "bar 6 @0: read —, gold whole A2 E0",
+    "bar 6 @0 A: missed tie",
+    "bar 6 @0 E: missed tie",
+    "bar 1 @24: extra pick down",
+    "bar 2 @24: extra pick down",
+    "bar 2 @72: extra pick down",
+    "bar 4 @48: extra pick down",
+    "bar 5 @0: missed pick down"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "tie": [
+      2,
+      0,
+      0
+     ],
+     "pick down": [
+      13,
+      16,
+      12
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-3",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.15517241379310345,
+    "note_recall": 0.16071428571428573,
+    "note_f1": 0.15789473684210525,
+    "fret_f1": 0.2807017543859649,
+    "rhythm": 0.6,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.4166666666666667,
+    "flag_recall": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.5,
+    "palm_mute_f1": 0.5,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.004979,
+    "seconds": 70.93,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth E0, gold quarter D2 A2 E0",
+    "bar 1 @12: read eighth A2, gold —",
+    "bar 1 @24: read eighth D2, gold eighth D2 A2 E0",
+    "bar 1 @36: read eighth E0, gold eighth D2 A2 E0",
+    "bar 1 @48: read eighth A2, gold quarter e3 B0 G0 D0 E3",
+    "bar 1 @60: read eighth D2, gold —",
+    "bar 1 @72: read eighth E0, gold eighth D2 A2 E0",
+    "bar 1 @84: read eighth A0, gold eighth D2 A2 E0",
+    "bar 1 @96: read eighth D0, gold —",
+    "bar 1 @108: read eighth G0, gold —",
+    "bar 1 @120: read eighth A2, gold —",
+    "bar 1 @132: read eighth D2, gold —",
+    "bar 1 @144: read eighth B0, gold —",
+    "bar 2 @0: read eighth D2, gold eighth D4 A2",
+    "bar 2 @12: read eighth G1, gold eighth D3 A1",
+    "bar 2 @24: read eighth B1, gold eighth D3 A1",
+    "bar 2 @36: read eighth D2, gold eighth D2 A0",
+    "bar 2 @48: read eighth G1, gold half D2 A0",
+    "bar 2 @60: read eighth B1, gold —",
+    "bar 2 @72: read eighth D1, gold —",
+    "bar 2 @84: read eighth G3, gold —",
+    "bar 2 @96: read eighth B3, gold —",
+    "bar 2 @108: read eighth D1, gold —",
+    "bar 2 @120: read eighth G3, gold —",
+    "bar 2 @132: read eighth B3, gold —",
+    "bar 2 @144: read eighth A0, gold —",
+    "bar 2 @156: read eighth D2, gold —",
+    "bar 2 @168: read eighth G2, gold —",
+    "bar 2 @180: read eighth B0, gold —",
+    "bar 3 @0: read eighth E0, gold quarter D2 A2 E0",
+    "bar 3 @12: read eighth A2, gold —",
+    "bar 3 @24: read eighth D2, gold eighth D2 A2 E0",
+    "bar 3 @36: read eighth E0, gold eighth D2 A2 E0",
+    "bar 3 @48: read eighth A2, gold quarter e3 B0 G0 D0 E3",
+    "bar 3 @60: read eighth D2, gold —",
+    "bar 3 @72: read eighth E0, gold eighth D2 A2 E0",
+    "bar 3 @84: read eighth A0, gold eighth D2 A2 E0",
+    "bar 3 @96: read eighth D0, gold —",
+    "bar 3 @108: read eighth G0, gold —",
+    "bar 3 @120: read eighth A2, gold —"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      16,
+      0,
+      0
+     ],
+     "palmMute": [
+      10,
+      14,
+      6
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.4642857142857143,
+    "note_recall": 0.4482758620689655,
+    "note_f1": 0.45614035087719296,
+    "fret_f1": 0.9473684210526315,
+    "rhythm": 0.8620689655172413,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "hammer_f1": 0.0,
+    "tie_f1": 0.0,
+    "slide_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.00961,
+    "seconds": 135.48,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @24: read eighth E7, gold eighth A7",
+    "bar 1 @48: read eighth A5, gold eighth E5",
+    "bar 1 @60: read eighth A7, gold eighth E7",
+    "bar 1 @72: read quarter E5, gold eighth A5",
+    "bar 1 @84: read —, gold eighth E0",
+    "bar 2 @24: read eighth E7, gold eighth A7",
+    "bar 2 @48: read eighth A5, gold eighth E5",
+    "bar 2 @60: read eighth A7, gold eighth E7",
+    "bar 2 @72: read eighth E5, gold eighth A5",
+    "bar 3 @24: read eighth E7, gold eighth A7",
+    "bar 3 @48: read eighth A5, gold eighth E5",
+    "bar 3 @60: read eighth A7, gold eighth E7",
+    "bar 3 @72: read eighth E5, gold eighth A5",
+    "bar 4 @24: read eighth A5, gold eighth E5",
+    "bar 4 @36: read eighth A6, gold eighth E6",
+    "bar 4 @48: read quarter E5, gold eighth E5",
+    "bar 4 @60: read —, gold dotted-quarter E3",
+    "bar 4 @72: read quarter E3, gold —",
+    "bar 1 @60 A: extra hammer",
+    "bar 1 @60 E: missed hammer",
+    "bar 2 @0 E: missed tie",
+    "bar 2 @60 A: extra hammer",
+    "bar 2 @60 E: missed hammer",
+    "bar 3 @0 E: missed tie",
+    "bar 3 @60 A: extra hammer",
+    "bar 3 @60 E: missed hammer",
+    "bar 4 @0 E: missed tie",
+    "bar 4 @36 A: extra hammer",
+    "bar 4 @36 E: missed hammer",
+    "bar 4 @60 E: missed slide",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @36: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 1 @84: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      0
+     ],
+     "tie": [
+      3,
+      0,
+      0
+     ],
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.25,
+    "note_f1": 0.25,
+    "fret_f1": 0.5,
+    "rhythm": 0.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.008139,
+    "seconds": 120.1,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A0, gold eighth A0",
+    "bar 1 @6: read sixteenth D0, gold —",
+    "bar 1 @12: read sixteenth B0, gold eighth G0",
+    "bar 1 @18: read sixteenth e0, gold —",
+    "bar 1 @24: read sixteenth e0, gold eighth B0",
+    "bar 1 @30: read sixteenth B0, gold —",
+    "bar 1 @36: read sixteenth G0, gold eighth G0",
+    "bar 1 @42: read sixteenth B0, gold —",
+    "bar 1 @48: read —, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B0",
+    "bar 1 @84: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p014-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 0.6666666666666666,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.009574,
+    "seconds": 135.35,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read half A3 E1, gold quarter A3 E1",
+    "bar 2 @48: read half A5 E3, gold quarter A5 E3",
+    "bar 3 @48: read half A7 E5, gold quarter A7 E5",
+    "chords: 0 of 3 changes placed"
+   ],
+   "detail": {
+    "page": 14,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      9,
+      9,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.975609756097561,
+    "hammer_f1": 0.9491525423728814,
+    "pull_f1": 1.0,
+    "cost_usd": 0.003913,
+    "seconds": 56.6,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @0 G: missed hammer",
+    "bar 3 @0 G: missed hammer",
+    "bar 4 @0 G: missed hammer"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      32,
+      32,
+      32
+     ],
+     "hammer": [
+      31,
+      28,
+      28
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p006-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7551020408163265,
+    "note_recall": 0.9024390243902439,
+    "note_f1": 0.8222222222222222,
+    "fret_f1": 0.8888888888888888,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.016514,
+    "seconds": 237.3,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter e3 B0 D0 E3, gold quarter B3 G0 E3",
+    "bar 3 @24: read quarter e0 B0 D0, gold quarter e0 B0",
+    "bar 4 @0: read quarter e3 B0 G0, gold quarter e3 B0 E3",
+    "bar 4 @24: read quarter e3 B0 G0, gold quarter B0 G0",
+    "bar 4 @48: read quarter e3 B0 G0, gold quarter B0 G0",
+    "bar 5 @0: read quarter e3 B0 G0, gold quarter D0",
+    "bar 5 @24: read quarter e3 B0 G0, gold quarter B0 G0",
+    "bar 5 @48: read quarter e3 B0 G0, gold quarter B0 G0"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7931034482758621,
+    "note_recall": 0.7931034482758621,
+    "note_f1": 0.7931034482758621,
+    "fret_f1": 1.0,
+    "rhythm": 0.9655172413793104,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.6666666666666666,
+    "effect_f1": 0.0,
+    "hammer_f1": 1.0,
+    "tie_f1": 0.0,
+    "slide_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.009134,
+    "seconds": 130.31,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @24: read eighth E7, gold eighth A7",
+    "bar 1 @72: read eighth E5, gold eighth A5",
+    "bar 2 @24: read eighth E7, gold eighth A7",
+    "bar 2 @72: read eighth E5, gold eighth A5",
+    "bar 3 @24: read eighth E7, gold eighth A7",
+    "bar 3 @72: read eighth E5, gold eighth A5",
+    "bar 4 @60: read half E3, gold dotted-quarter E3",
+    "bar 2 @0 E: missed tie",
+    "bar 3 @0 E: missed tie",
+    "bar 4 @0 E: missed tie",
+    "bar 4 @60 E: missed slide",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @36: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 1 @84: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 2 @72: missed pick down",
+    "bar 2 @84: missed pick down",
+    "bar 3 @12: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @36: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 3 @84: missed pick down",
+    "bar 4 @12: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @48: missed pick down",
+    "bar 4 @60: missed pick down",
+    "bar 4 @60 E: missed vibrato"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      4
+     ],
+     "tie": [
+      3,
+      0,
+      0
+     ],
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-3",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.125,
+    "note_recall": 0.05333333333333334,
+    "note_f1": 0.07476635514018691,
+    "fret_f1": 0.18691588785046728,
+    "rhythm": 0.29508196721311475,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_precision": 1.0,
+    "flag_recall": 0.25,
+    "cost_usd": 0.012259,
+    "seconds": 176.01,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth G0, gold eighth B1 A3",
+    "bar 1 @12: read eighth B1, gold eighth G0",
+    "bar 1 @24: read eighth e0, gold eighth B3",
+    "bar 1 @36: read eighth B1, gold eighth G0",
+    "bar 1 @48: read —, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B1",
+    "bar 1 @84: read —, gold eighth G0",
+    "bar 2 @0: read eighth G0, gold eighth B1 A3",
+    "bar 2 @12: read eighth B1, gold eighth G0",
+    "bar 2 @24: read eighth e0, gold eighth B3",
+    "bar 2 @36: read eighth B1, gold eighth G0",
+    "bar 2 @48: read —, gold eighth e0",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @72: read —, gold eighth B1",
+    "bar 2 @84: read —, gold eighth G0",
+    "bar 3 @0: read eighth e0, gold eighth e0 A3",
+    "bar 3 @12: read eighth e1, gold eighth G0",
+    "bar 3 @24: read eighth e3, gold eighth e1",
+    "bar 3 @36: read —, gold eighth G0",
+    "bar 3 @48: read —, gold eighth e3 E3",
+    "bar 3 @60: read —, gold eighth D0",
+    "bar 3 @72: read —, gold eighth G0",
+    "bar 3 @84: read —, gold eighth B0",
+    "bar 4 @0: read eighth e0, gold eighth e0 A3",
+    "bar 4 @12: read eighth e1, gold eighth G0",
+    "bar 4 @24: read eighth e3, gold eighth e1",
+    "bar 4 @36: read —, gold eighth G0",
+    "bar 4 @48: read —, gold eighth e3 E3",
+    "bar 4 @60: read —, gold eighth D0",
+    "bar 4 @72: read —, gold eighth G0",
+    "bar 4 @84: read —, gold eighth B0",
+    "bar 5 @0: read sixteenth G0, gold eighth e3 D0",
+    "bar 5 @6: read sixteenth G2, gold —",
+    "bar 5 @12: read sixteenth G0, gold eighth e5",
+    "bar 5 @18: read sixteenth D3, gold —",
+    "bar 5 @24: read eighth e0, gold eighth e3",
+    "bar 5 @36: read eighth B1, gold eighth e1",
+    "bar 5 @48: read —, gold eighth e0",
+    "bar 5 @60: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.25,
+    "note_f1": 0.25,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.25,
+    "hammer_f1": 0.25,
+    "pull_f1": 0.25,
+    "cost_usd": 0.012093,
+    "seconds": 174.03,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read eighth E5, gold eighth A5",
+    "bar 1 @60: read eighth E6, gold eighth A6",
+    "bar 1 @72: read eighth E7, gold eighth A7",
+    "bar 1 @84: read eighth E8, gold eighth A8",
+    "bar 2 @0: read eighth A5, gold eighth D5",
+    "bar 2 @12: read eighth A6, gold eighth D6",
+    "bar 2 @24: read eighth A7, gold eighth D7",
+    "bar 2 @36: read eighth A8, gold eighth D8",
+    "bar 2 @48: read eighth A5, gold eighth G5",
+    "bar 2 @60: read eighth A6, gold eighth G6",
+    "bar 2 @72: read eighth A7, gold eighth G7",
+    "bar 2 @84: read eighth A8, gold eighth G8",
+    "bar 3 @0: read eighth D8, gold eighth G8",
+    "bar 3 @12: read eighth D7, gold eighth G7",
+    "bar 3 @24: read eighth D6, gold eighth G6",
+    "bar 3 @36: read eighth D5, gold eighth G5",
+    "bar 4 @0: read eighth G8, gold eighth A8",
+    "bar 4 @12: read eighth G7, gold eighth A7",
+    "bar 4 @24: read eighth G6, gold eighth A6",
+    "bar 4 @36: read eighth G5, gold eighth A5",
+    "bar 4 @48: read eighth G8, gold eighth E8",
+    "bar 4 @60: read eighth G7, gold eighth E7",
+    "bar 4 @72: read eighth G6, gold eighth E6",
+    "bar 4 @84: read eighth G5, gold eighth E5",
+    "bar 1 @60 A: missed hammer",
+    "bar 1 @60 E: extra hammer",
+    "bar 1 @72 A: missed hammer",
+    "bar 1 @72 E: extra hammer",
+    "bar 1 @84 A: missed hammer",
+    "bar 1 @84 E: extra hammer",
+    "bar 2 @12 D: missed hammer",
+    "bar 2 @12 A: extra hammer",
+    "bar 2 @24 D: missed hammer",
+    "bar 2 @24 A: extra hammer",
+    "bar 2 @36 D: missed hammer",
+    "bar 2 @36 A: extra hammer",
+    "bar 2 @60 G: missed hammer",
+    "bar 2 @60 A: extra hammer",
+    "bar 2 @72 G: missed hammer",
+    "bar 2 @72 A: extra hammer"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      3
+     ],
+     "hammer": [
+      12,
+      12,
+      3
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.4166666666666667,
+    "note_recall": 0.2777777777777778,
+    "note_f1": 0.3333333333333333,
+    "fret_f1": 0.5333333333333333,
+    "rhythm": 0.5,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.5555555555555556,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.5555555555555556,
+    "hammer_f1": 0.0,
+    "palm_mute_f1": 0.5555555555555556,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.011629,
+    "seconds": 165.02,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter A0, gold quarter D2 A0",
+    "bar 1 @24: read quarter A0, gold quarter D2 A0",
+    "bar 1 @48: read eighth A0, gold eighth D0",
+    "bar 1 @60: read eighth A1, gold eighth D1",
+    "bar 1 @72: read quarter E3, gold quarter A3",
+    "bar 2 @0: read sixteenth A0, gold eighth D2 A0",
+    "bar 2 @6: read sixteenth A0, gold —",
+    "bar 2 @12: read sixteenth A0, gold eighth D2 A0",
+    "bar 2 @18: read sixteenth A1, gold —",
+    "bar 2 @24: read quarter E3, gold eighth D0",
+    "bar 2 @36: read —, gold eighth D1",
+    "bar 2 @48: read quarter A0, gold quarter A3",
+    "bar 2 @72: read quarter A0, gold eighth D2 A0",
+    "bar 2 @84: read —, gold eighth D2 A0",
+    "bar 3 @0: read quarter A0, gold quarter D2 A0",
+    "bar 3 @24: read quarter A0, gold quarter D2 A0",
+    "bar 3 @48: read eighth A0, gold eighth D0",
+    "bar 3 @60: read eighth A1, gold eighth D1",
+    "bar 3 @72: read quarter E3, gold quarter A3",
+    "bar 4 @0: read sixteenth A0, gold eighth D2 A0",
+    "bar 4 @6: read sixteenth A0, gold —",
+    "bar 4 @12: read sixteenth A0, gold eighth D2 A0",
+    "bar 4 @18: read sixteenth A1, gold —",
+    "bar 4 @24: read quarter E3, gold eighth D0",
+    "bar 4 @36: read —, gold eighth D1",
+    "bar 4 @48: read quarter A0, gold quarter A3",
+    "bar 4 @72: read quarter A0, gold eighth D2 A0",
+    "bar 4 @84: read —, gold eighth D2 A0",
+    "bar 1 @60 D: missed hammer",
+    "bar 1 @60 A: extra hammer",
+    "bar 2 @18 A: extra hammer",
+    "bar 2 @36 D: missed hammer",
+    "bar 3 @60 D: missed hammer",
+    "bar 3 @60 A: extra hammer",
+    "bar 4 @18 A: extra hammer",
+    "bar 4 @36 D: missed hammer",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      2,
+      0,
+      0
+     ],
+     "palmMute": [
+      8,
+      10,
+      5
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9375,
+    "note_recall": 0.9375,
+    "note_f1": 0.9375,
+    "fret_f1": 0.9375,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.011006,
+    "seconds": 155.94,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 7 @12: read eighth e3, gold eighth G0",
+    "bar 8 @12: read eighth e3, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "confirmed",
+    "jianpu": null,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p015-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.005285,
+    "seconds": 73.87,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 4 @0: missed pick down"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "pick down": [
+      5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p001-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5,
+    "note_recall": 0.5,
+    "note_f1": 0.5,
+    "fret_f1": 0.5,
+    "rhythm": 0.5,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.013596,
+    "seconds": 197.45,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @96: read quarter e3 G0, gold —",
+    "bar 1 @120: read quarter e5 G2, gold —",
+    "bar 1 @144: read quarter e7 G4, gold —",
+    "bar 1 @168: read quarter e0 G5, gold —",
+    "bar 2 @0: read —, gold quarter e3 G0",
+    "bar 2 @24: read —, gold quarter e5 G2",
+    "bar 2 @48: read —, gold quarter e7 G4",
+    "bar 2 @72: read —, gold quarter e8 G5"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "confirmed",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p005-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.04240282685512368,
+    "note_recall": 0.05263157894736842,
+    "note_f1": 0.046966731898238745,
+    "fret_f1": 0.2896281800391389,
+    "rhythm": 0.9333333333333333,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 0.0,
+    "chords_placed": 0.03225806451612903,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.8,
+    "tie_f1": 0.0,
+    "palm_mute_f1": 0.8,
+    "accent_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.003195,
+    "seconds": 48.09,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 1 @12: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 1 @24: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 1 @36: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 1 @48: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 1 @60: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 1 @72: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 1 @84: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 2 @0: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 2 @12: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 2 @24: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 2 @36: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 2 @48: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 2 @60: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 2 @72: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 2 @84: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 3 @0: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 3 @12: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 3 @24: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 3 @36: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 3 @48: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 3 @60: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 3 @72: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 3 @84: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 4 @0: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 4 @12: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 4 @24: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 4 @36: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 4 @48: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 4 @60: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 4 @72: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 4 @84: read eighth D0 A0, gold eighth D2 A2 E0",
+    "bar 5 @0: read eighth G4 D4 A2, gold eighth D2 A2 E0",
+    "bar 5 @12: read eighth D0 A0, gold eighth E0",
+    "bar 5 @24: read eighth D0 A0, gold eighth D4 A2",
+    "bar 5 @36: read eighth D0 A0, gold eighth E0",
+    "bar 5 @48: read eighth G4 D4 A2, gold quarter D5 A5 E3",
+    "bar 5 @60: read eighth D0 A0, gold —",
+    "bar 5 @72: read eighth D0 A0, gold eighth E0",
+    "bar 5 @84: read eighth D0 A0, gold eighth D2 A2 E0"
+   ],
+   "detail": {
+    "page": 5,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "tie": [
+      21,
+      0,
+      0
+     ],
+     "pick down": [
+      51,
+      0,
+      0
+     ],
+     "accent": [
+      1,
+      0,
+      0
+     ],
+     "palmMute": [
+      48,
+      32,
+      32
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p001-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9090909090909091,
+    "note_recall": 0.9090909090909091,
+    "note_f1": 0.9090909090909091,
+    "fret_f1": 0.9090909090909091,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.015608,
+    "seconds": 226.58,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @48: read quarter e1 G4, gold quarter e1 B0",
+    "bar 2 @72: read quarter e3 G5, gold quarter e3 B1"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p014-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.8,
+    "note_recall": 1.0,
+    "note_f1": 0.8888888888888888,
+    "fret_f1": 0.8888888888888888,
+    "rhythm": 0.6666666666666666,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.012767,
+    "seconds": 175.82,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read half D3 A3 E1, gold quarter A3 E1",
+    "bar 2 @48: read half D5 A5 E3, gold quarter A5 E3",
+    "bar 3 @48: read half D7 A7 E5, gold quarter A7 E5",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "chords: 0 of 3 changes placed"
+   ],
+   "detail": {
+    "page": 14,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      9,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p006-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.15384615384615385,
+    "note_recall": 0.18181818181818182,
+    "note_f1": 0.16666666666666666,
+    "fret_f1": 0.375,
+    "rhythm": 0.5555555555555556,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.5,
+    "flag_precision": 1.0,
+    "flag_recall": 0.14285714285714285,
+    "link_f1": 0.0,
+    "slide_f1": 0.0,
+    "cost_usd": 0.003537,
+    "seconds": 51.95,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth e0 B1 G0, gold eighth e0 A3",
+    "bar 1 @12: read eighth e0 B1 G0, gold sixteenth G0",
+    "bar 1 @18: read —, gold sixteenth e0",
+    "bar 1 @24: read quarter A3, gold eighth e0",
+    "bar 1 @36: read —, gold eighth B3",
+    "bar 1 @48: read eighth e0, gold eighth e3 E3",
+    "bar 1 @60: read eighth e0 B1 G0, gold eighth B0",
+    "bar 1 @72: read eighth e0 B1 G0, gold eighth G0",
+    "bar 1 @84: read —, gold eighth e0",
+    "bar 2 @0: read eighth D3, gold eighth B3 D0",
+    "bar 2 @12: read eighth D3, gold sixteenth B3",
+    "bar 2 @18: read —, gold sixteenth B5",
+    "bar 2 @24: read eighth G5, gold eighth B1",
+    "bar 2 @36: read eighth B1, gold eighth G2",
+    "bar 2 @48: read eighth G2, gold eighth G0 E3",
+    "bar 2 @60: read eighth e3 B0 G0, gold eighth D0",
+    "bar 2 @72: read eighth e3 B0 G0, gold eighth G0",
+    "bar 2 @84: read quarter A0, gold eighth B0",
+    "bar 2 @18 B: missed slide",
+    "chords: 1 of 2 changes placed"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "slide": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p001-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9090909090909091,
+    "note_recall": 0.9090909090909091,
+    "note_f1": 0.9090909090909091,
+    "fret_f1": 0.9090909090909091,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.015434,
+    "seconds": 222.45,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 3 @48: read quarter e0 B7, gold quarter e8 B6"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.125,
+    "note_recall": 0.125,
+    "note_f1": 0.125,
+    "fret_f1": 0.125,
+    "rhythm": 0.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.06504065040650407,
+    "hammer_f1": 0.13559322033898305,
+    "pull_f1": 0.0,
+    "cost_usd": 0.004598,
+    "seconds": 65.73,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter G5, gold sixteenth G5",
+    "bar 1 @6: read —, gold sixteenth G4",
+    "bar 1 @12: read —, gold sixteenth G5",
+    "bar 1 @18: read —, gold sixteenth G4",
+    "bar 1 @24: read quarter G4, gold sixteenth G5",
+    "bar 1 @30: read —, gold sixteenth G4",
+    "bar 1 @36: read —, gold sixteenth G5",
+    "bar 1 @42: read —, gold sixteenth G4",
+    "bar 1 @48: read quarter G5, gold sixteenth G5",
+    "bar 1 @54: read —, gold sixteenth G4",
+    "bar 1 @60: read —, gold sixteenth G5",
+    "bar 1 @66: read —, gold sixteenth G4",
+    "bar 1 @72: read quarter G4, gold sixteenth G5",
+    "bar 1 @78: read —, gold sixteenth G4",
+    "bar 1 @84: read —, gold sixteenth G5",
+    "bar 1 @90: read —, gold sixteenth G4",
+    "bar 1 @96: read quarter G5, gold —",
+    "bar 1 @120: read quarter G4, gold —",
+    "bar 1 @144: read quarter G5, gold —",
+    "bar 1 @168: read quarter G4, gold —",
+    "bar 1 @192: read quarter G5, gold —",
+    "bar 1 @216: read quarter G4, gold —",
+    "bar 1 @240: read quarter G5, gold —",
+    "bar 1 @264: read quarter G4, gold —",
+    "bar 1 @288: read quarter G5, gold —",
+    "bar 1 @312: read quarter G4, gold —",
+    "bar 1 @336: read quarter G5, gold —",
+    "bar 1 @360: read quarter G4, gold —",
+    "bar 2 @0: read quarter G6, gold sixteenth G6",
+    "bar 2 @6: read —, gold sixteenth G4",
+    "bar 2 @12: read —, gold sixteenth G6",
+    "bar 2 @18: read —, gold sixteenth G4",
+    "bar 2 @24: read quarter G4, gold sixteenth G6",
+    "bar 2 @30: read —, gold sixteenth G4",
+    "bar 2 @36: read —, gold sixteenth G6",
+    "bar 2 @42: read —, gold sixteenth G4",
+    "bar 2 @48: read quarter G6, gold sixteenth G6",
+    "bar 2 @54: read —, gold sixteenth G4",
+    "bar 2 @60: read —, gold sixteenth G6",
+    "bar 2 @66: read —, gold sixteenth G4"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      32,
+      32,
+      0
+     ],
+     "hammer": [
+      31,
+      28,
+      4
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p015-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.4074074074074074,
+    "note_recall": 0.7857142857142857,
+    "note_f1": 0.5365853658536586,
+    "fret_f1": 0.5609756097560976,
+    "rhythm": 0.7142857142857143,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.75,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.782608695652174,
+    "tie_f1": 0.0,
+    "pick_down_f1": 0.782608695652174,
+    "cost_usd": 0.002619,
+    "seconds": 37.18,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter D2 A2 E0, gold half A2 E0",
+    "bar 1 @24: read quarter D2 A2 E0, gold —",
+    "bar 1 @48: read quarter D2 A2 E0, gold quarter A2 E0",
+    "bar 1 @72: read quarter D2 A2 E0, gold quarter A2 E0",
+    "bar 2 @0: read half D5 A5 E3, gold half A5 E3",
+    "bar 2 @48: read half D5 A5 E3, gold half A7 E5",
+    "bar 2 @96: read half D7 A7 E5, gold —",
+    "bar 2 @144: read half D7 A7 E5, gold —",
+    "bar 3 @0: read quarter D2 A2 E0, gold quarter A2 E0",
+    "bar 3 @24: read quarter D2 A2 E0, gold quarter A2 E0",
+    "bar 3 @48: read quarter D2 A2 E0, gold quarter A2 E0",
+    "bar 3 @72: read quarter D2 A2 E0, gold quarter A2 E0",
+    "bar 4 @0: read quarter D5 A5 E3, gold quarter A5 E3",
+    "bar 4 @24: read quarter D7 A7 E5, gold half A7 E5",
+    "bar 4 @48: read half D5 A5 E3, gold —",
+    "bar 4 @72: read —, gold quarter A5 E3",
+    "bar 4 @96: read half D5 A5 E3, gold —",
+    "bar 5 @0: read whole D2 A2 E0, gold whole A2 E0",
+    "bar 5 @96: read whole D2 A2 E0, gold —",
+    "bar 6 @0: read —, gold whole A2 E0",
+    "bar 6 @0 A: missed tie",
+    "bar 6 @0 E: missed tie",
+    "bar 1 @24: extra pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 4 @72: missed pick down",
+    "bar 5 @0: missed pick down",
+    "chords: 6 of 8 changes placed"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "tie": [
+      2,
+      0,
+      0
+     ],
+     "pick down": [
+      13,
+      10,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.375,
+    "note_recall": 0.375,
+    "note_f1": 0.375,
+    "fret_f1": 0.5,
+    "rhythm": 0.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.010804,
+    "seconds": 153.85,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A0, gold eighth A0",
+    "bar 1 @6: read sixteenth D0, gold —",
+    "bar 1 @12: read sixteenth G0, gold eighth G0",
+    "bar 1 @18: read sixteenth B0, gold —",
+    "bar 1 @24: read sixteenth e0, gold eighth B0",
+    "bar 1 @30: read sixteenth B0, gold —",
+    "bar 1 @36: read sixteenth G0, gold eighth G0",
+    "bar 1 @42: read sixteenth B0, gold —",
+    "bar 1 @48: read —, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B0",
+    "bar 1 @84: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p106-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.23529411764705882,
+    "note_recall": 0.23529411764705882,
+    "note_f1": 0.23529411764705882,
+    "fret_f1": 0.35294117647058826,
+    "rhythm": 0.29411764705882354,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "cost_usd": 0.011887,
+    "seconds": 168.65,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter A3, gold eighth A3",
+    "bar 1 @12: read —, gold sixteenth D0",
+    "bar 1 @18: read —, gold sixteenth D2",
+    "bar 1 @24: read eighth D0, gold eighth G0",
+    "bar 1 @36: read eighth D2, gold eighth B1",
+    "bar 1 @48: read quarter G0, gold eighth D3",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read quarter B1, gold eighth B1",
+    "bar 1 @84: read —, gold eighth e0",
+    "bar 1 @96: read quarter D3, gold —",
+    "bar 1 @120: read quarter G0, gold —",
+    "bar 1 @144: read quarter B1, gold —",
+    "bar 1 @168: read quarter e0, gold —",
+    "bar 2 @0: read quarter A3, gold eighth A3",
+    "bar 2 @12: read —, gold sixteenth D0",
+    "bar 2 @18: read —, gold sixteenth D2",
+    "bar 2 @24: read eighth D0, gold eighth G0",
+    "bar 2 @36: read eighth D2, gold eighth B1",
+    "bar 2 @48: read quarter G0, gold eighth D3",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @96: read quarter D3, gold —",
+    "bar 2 @120: read quarter G0, gold —",
+    "bar 2 @144: read half B1, gold —",
+    "bar 1 @18 D: missed hammer",
+    "bar 1 @36 D: extra hammer",
+    "bar 2 @18 D: missed hammer",
+    "bar 2 @36 D: extra hammer"
+   ],
+   "detail": {
+    "page": 106,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "hammer": [
+      2,
+      2,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p013-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5,
+    "note_recall": 0.125,
+    "note_f1": 0.2,
+    "fret_f1": 0.2,
+    "rhythm": 0.0,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 0.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.001813,
+    "seconds": 29.38,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read whole E0, gold half E0",
+    "bar 1 @48: read —, gold half A2",
+    "bar 1 @96: read half D2, gold —",
+    "bar 2 @0: read —, gold quarter A2 E0",
+    "bar 2 @24: read —, gold quarter A2 E0",
+    "bar 2 @48: read —, gold quarter A2 E0",
+    "bar 1 @0: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @48: missed pick down",
+    "chords: read —, gold E5",
+    "chords: 0 of 1 changes placed"
+   ],
+   "detail": {
+    "page": 13,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-3",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.21153846153846154,
+    "note_recall": 0.19642857142857142,
+    "note_f1": 0.2037037037037037,
+    "fret_f1": 0.2222222222222222,
+    "rhythm": 0.6,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 0.0,
+    "chords_placed": 0.3333333333333333,
+    "flag_recall": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.5882352941176471,
+    "palm_mute_f1": 0.5882352941176471,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.013483,
+    "seconds": 192.12,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth E0, gold quarter D2 A2 E0",
+    "bar 1 @12: read eighth D2 A2, gold —",
+    "bar 1 @24: read eighth E0, gold eighth D2 A2 E0",
+    "bar 1 @36: read eighth D2 A2, gold eighth D2 A2 E0",
+    "bar 1 @48: read eighth E3, gold quarter e3 B0 G0 D0 E3",
+    "bar 1 @60: read eighth D5 Ax, gold —",
+    "bar 1 @72: read eighth E3, gold eighth D2 A2 E0",
+    "bar 1 @84: read eighth D5 Ax, gold eighth D2 A2 E0",
+    "bar 2 @0: read eighth E0, gold eighth D4 A2",
+    "bar 2 @12: read eighth D2 A2, gold eighth D3 A1",
+    "bar 2 @24: read eighth E0, gold eighth D3 A1",
+    "bar 2 @36: read eighth D2 A2, gold eighth D2 A0",
+    "bar 2 @48: read eighth D4 A2, gold half D2 A0",
+    "bar 2 @60: read eighth D3 A1, gold —",
+    "bar 2 @72: read eighth D3 A1, gold —",
+    "bar 2 @84: read half D2 A0, gold —",
+    "bar 3 @0: read eighth E0, gold quarter D2 A2 E0",
+    "bar 3 @12: read eighth D2 A2, gold —",
+    "bar 3 @24: read eighth E0, gold eighth D2 A2 E0",
+    "bar 3 @36: read eighth D2 A2, gold eighth D2 A2 E0",
+    "bar 3 @48: read eighth E3, gold quarter e3 B0 G0 D0 E3",
+    "bar 3 @60: read eighth D5 Ax, gold —",
+    "bar 3 @72: read eighth E3, gold eighth D2 A2 E0",
+    "bar 3 @84: read eighth D5 Ax, gold eighth D2 A2 E0",
+    "bar 4 @0: read eighth E0, gold quarter D4 A2",
+    "bar 4 @12: read eighth D2 A2, gold —",
+    "bar 4 @24: read eighth E0, gold half D3 A1",
+    "bar 4 @36: read eighth D2 A2, gold —",
+    "bar 4 @48: read eighth D4 A2, gold —",
+    "bar 4 @60: read eighth D3 A1, gold —",
+    "bar 4 @72: read eighth D3 A1, gold quarter D2 A0",
+    "bar 4 @84: read half D2 A0, gold —",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      16,
+      0,
+      0
+     ],
+     "palmMute": [
+      10,
+      24,
+      10
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.40625,
+    "note_recall": 0.203125,
+    "note_f1": 0.2708333333333333,
+    "fret_f1": 0.2708333333333333,
+    "rhythm": 0.390625,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.06060606060606061,
+    "hammer_f1": 0.12121212121212122,
+    "pull_f1": 0.0,
+    "cost_usd": 0.010505,
+    "seconds": 149.83,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @6: read half G5, gold sixteenth G4",
+    "bar 1 @12: read —, gold sixteenth G5",
+    "bar 1 @18: read —, gold sixteenth G4",
+    "bar 1 @24: read —, gold sixteenth G5",
+    "bar 1 @30: read —, gold sixteenth G4",
+    "bar 1 @36: read —, gold sixteenth G5",
+    "bar 1 @42: read —, gold sixteenth G4",
+    "bar 1 @48: read —, gold sixteenth G5",
+    "bar 1 @54: read half G5, gold sixteenth G4",
+    "bar 1 @60: read —, gold sixteenth G5",
+    "bar 1 @66: read —, gold sixteenth G4",
+    "bar 1 @72: read —, gold sixteenth G5",
+    "bar 1 @78: read —, gold sixteenth G4",
+    "bar 1 @84: read —, gold sixteenth G5",
+    "bar 1 @90: read —, gold sixteenth G4",
+    "bar 1 @102: read half G5, gold —",
+    "bar 1 @150: read half G5, gold —",
+    "bar 1 @198: read half G5, gold —",
+    "bar 1 @246: read half G5, gold —",
+    "bar 1 @294: read half G5, gold —",
+    "bar 2 @6: read sixteenth G6, gold sixteenth G4",
+    "bar 2 @18: read sixteenth G6, gold sixteenth G4",
+    "bar 2 @30: read sixteenth G6, gold sixteenth G4",
+    "bar 2 @42: read sixteenth G6, gold sixteenth G4",
+    "bar 2 @48: read —, gold sixteenth G6",
+    "bar 2 @54: read —, gold sixteenth G4",
+    "bar 2 @60: read —, gold sixteenth G6",
+    "bar 2 @66: read —, gold sixteenth G4",
+    "bar 2 @72: read —, gold sixteenth G6",
+    "bar 2 @78: read —, gold sixteenth G4",
+    "bar 2 @84: read —, gold sixteenth G6",
+    "bar 2 @90: read —, gold sixteenth G4",
+    "bar 3 @6: read sixteenth G7, gold sixteenth G4",
+    "bar 3 @18: read sixteenth G7, gold sixteenth G4",
+    "bar 3 @30: read sixteenth G7, gold sixteenth G4",
+    "bar 3 @42: read sixteenth G7, gold sixteenth G4",
+    "bar 3 @48: read —, gold sixteenth G7",
+    "bar 3 @54: read —, gold sixteenth G4",
+    "bar 3 @60: read —, gold sixteenth G7",
+    "bar 3 @66: read —, gold sixteenth G4"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      32,
+      1,
+      0
+     ],
+     "hammer": [
+      31,
+      2,
+      2
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-3",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.0,
+    "note_recall": 0.0,
+    "note_f1": 0.0,
+    "fret_f1": 0.25,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.1414141414141414,
+    "hammer_f1": 0.125,
+    "pull_f1": 0.1568627450980392,
+    "cost_usd": 0.029288,
+    "seconds": 415.84,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth G6, gold sixteenth e5",
+    "bar 1 @6: read sixteenth G7, gold sixteenth e6",
+    "bar 1 @12: read sixteenth G8, gold sixteenth e7",
+    "bar 1 @18: read sixteenth G7, gold sixteenth e8",
+    "bar 1 @24: read sixteenth G6, gold sixteenth e7",
+    "bar 1 @30: read sixteenth G5, gold sixteenth e6",
+    "bar 1 @36: read sixteenth G6, gold sixteenth e5",
+    "bar 1 @42: read sixteenth G7, gold sixteenth e6",
+    "bar 1 @48: read sixteenth G8, gold sixteenth e7",
+    "bar 1 @54: read sixteenth G7, gold sixteenth e8",
+    "bar 1 @60: read sixteenth G6, gold sixteenth e7",
+    "bar 1 @66: read sixteenth G5, gold sixteenth e6",
+    "bar 1 @72: read sixteenth G6, gold sixteenth e5",
+    "bar 1 @78: read sixteenth G7, gold sixteenth e6",
+    "bar 1 @84: read sixteenth G8, gold sixteenth e7",
+    "bar 1 @90: read sixteenth G7, gold sixteenth e8",
+    "bar 2 @0: read sixteenth G6, gold sixteenth B5",
+    "bar 2 @6: read sixteenth G7, gold sixteenth B6",
+    "bar 2 @12: read sixteenth G8, gold sixteenth B7",
+    "bar 2 @18: read sixteenth G7, gold sixteenth B8",
+    "bar 2 @24: read sixteenth G6, gold sixteenth B7",
+    "bar 2 @30: read sixteenth G5, gold sixteenth B6",
+    "bar 2 @36: read sixteenth G6, gold sixteenth B5",
+    "bar 2 @42: read sixteenth G7, gold sixteenth B6",
+    "bar 2 @48: read sixteenth G8, gold sixteenth B7",
+    "bar 2 @54: read sixteenth G7, gold sixteenth B8",
+    "bar 2 @60: read sixteenth G6, gold sixteenth B7",
+    "bar 2 @66: read sixteenth G5, gold sixteenth B6",
+    "bar 2 @72: read sixteenth G6, gold sixteenth B5",
+    "bar 2 @78: read sixteenth G7, gold sixteenth B6",
+    "bar 2 @84: read sixteenth G8, gold sixteenth B7",
+    "bar 2 @90: read sixteenth G7, gold sixteenth B8",
+    "bar 3 @0: read sixteenth G6, gold sixteenth G5",
+    "bar 3 @6: read sixteenth G7, gold sixteenth G6",
+    "bar 3 @12: read sixteenth G8, gold sixteenth G7",
+    "bar 3 @18: read sixteenth G7, gold sixteenth G8",
+    "bar 3 @24: read sixteenth G6, gold sixteenth G7",
+    "bar 3 @30: read sixteenth G5, gold sixteenth G6",
+    "bar 3 @36: read sixteenth G6, gold sixteenth G5",
+    "bar 3 @42: read sixteenth G7, gold sixteenth G6"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      36,
+      12,
+      3
+     ],
+     "pull": [
+      24,
+      27,
+      4
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-3",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.15789473684210525,
+    "note_recall": 0.10714285714285714,
+    "note_f1": 0.1276595744680851,
+    "fret_f1": 0.19148936170212766,
+    "rhythm": 0.2,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.08333333333333333,
+    "flag_recall": 0.0,
+    "effect_f1": 0.5454545454545454,
+    "span_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "pick_down_f1": 0.5454545454545454,
+    "cost_usd": 0.011938,
+    "seconds": 173.64,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @24: read quarter G5 D5 Ax E3, gold eighth D2 A2 E0",
+    "bar 1 @36: read —, gold eighth D2 A2 E0",
+    "bar 1 @48: read quarter D2 A2 E0, gold quarter e3 B0 G0 D0 E3",
+    "bar 1 @72: read eighth G4 D4 A2, gold eighth D2 A2 E0",
+    "bar 1 @84: read eighth G3 D3 A1, gold eighth D2 A2 E0",
+    "bar 1 @96: read quarter G2 D2 A0, gold —",
+    "bar 2 @0: read quarter D2 A2 E0, gold eighth D4 A2",
+    "bar 2 @12: read —, gold eighth D3 A1",
+    "bar 2 @24: read quarter G5 D5 Ax E3, gold eighth D3 A1",
+    "bar 2 @36: read —, gold eighth D2 A0",
+    "bar 2 @48: read quarter D2 A2 E0, gold half D2 A0",
+    "bar 2 @72: read eighth G4 D4 A2, gold —",
+    "bar 2 @84: read eighth G3 D3 A1, gold —",
+    "bar 2 @96: read quarter G2 D2 A0, gold —",
+    "bar 3 @0: read —, gold quarter D2 A2 E0",
+    "bar 3 @24: read —, gold eighth D2 A2 E0",
+    "bar 3 @36: read —, gold eighth D2 A2 E0",
+    "bar 3 @48: read —, gold quarter e3 B0 G0 D0 E3",
+    "bar 3 @72: read —, gold eighth D2 A2 E0",
+    "bar 3 @84: read —, gold eighth D2 A2 E0",
+    "bar 4 @0: read —, gold quarter D4 A2",
+    "bar 4 @24: read —, gold half D3 A1",
+    "bar 4 @72: read —, gold quarter D2 A0",
+    "bar 1 @72: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 4 @0: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @72: missed pick down",
+    "bar 1 @0: extra palmMute",
+    "bar 1 @24: missed palmMute",
+    "bar 1 @36: missed palmMute",
+    "bar 1 @48: extra palmMute",
+    "bar 1 @72: missed palmMute",
+    "bar 1 @84: missed palmMute",
+    "bar 2 @0: extra palmMute"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      16,
+      6,
+      6
+     ],
+     "palmMute": [
+      10,
+      4,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-1",
+   "repeat": 2,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "cost_usd": 0.008814,
+    "seconds": 126.86,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "confirmed",
+    "jianpu": null,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-4",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "slide_f1": 1.0,
+    "cost_usd": 0.012295,
+    "seconds": 173.71,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ],
+     "slide": [
+      7,
+      7,
+      7
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p015-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.003383,
+    "seconds": 47.27,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 4 @0: missed pick down"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "pick down": [
+      5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p001-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5,
+    "note_recall": 0.5,
+    "note_f1": 0.5,
+    "fret_f1": 0.5,
+    "rhythm": 0.5,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.014075,
+    "seconds": 199.37,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @96: read quarter e3 G0, gold —",
+    "bar 1 @120: read quarter e5 G2, gold —",
+    "bar 1 @144: read quarter e7 G4, gold —",
+    "bar 1 @168: read quarter e0 B5, gold —",
+    "bar 2 @0: read —, gold quarter e3 G0",
+    "bar 2 @24: read —, gold quarter e5 G2",
+    "bar 2 @48: read —, gold quarter e7 G4",
+    "bar 2 @72: read —, gold quarter e8 G5"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "confirmed",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p014-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.75,
+    "note_recall": 0.75,
+    "note_f1": 0.75,
+    "fret_f1": 0.75,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "effect_f1": 0.8571428571428571,
+    "pick_down_f1": 0.8571428571428571,
+    "cost_usd": 0.004025,
+    "seconds": 51.98,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read quarter A3, gold quarter A3 E1",
+    "bar 1 @72: read quarter E1, gold —",
+    "bar 2 @48: read quarter A5, gold quarter A5 E3",
+    "bar 2 @72: read quarter E3, gold —",
+    "bar 3 @48: read quarter A7, gold quarter A7 E5",
+    "bar 3 @72: read quarter E5, gold —",
+    "bar 1 @72: extra pick down",
+    "bar 2 @72: extra pick down",
+    "bar 3 @72: extra pick down",
+    "chords: 0 of 3 changes placed"
+   ],
+   "detail": {
+    "page": 14,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      9,
+      12,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p015-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.32142857142857145,
+    "note_recall": 0.32142857142857145,
+    "note_f1": 0.32142857142857145,
+    "fret_f1": 0.6071428571428571,
+    "rhythm": 0.8571428571428571,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.75,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.9230769230769231,
+    "tie_f1": 0.0,
+    "pick_down_f1": 0.9230769230769231,
+    "cost_usd": 0.004206,
+    "seconds": 58.32,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read half D2 A2, gold half A2 E0",
+    "bar 1 @48: read quarter D2 A2, gold quarter A2 E0",
+    "bar 1 @72: read quarter D2 A2, gold quarter A2 E0",
+    "bar 2 @0: read half D5 A3, gold half A5 E3",
+    "bar 2 @48: read half D7 A5, gold half A7 E5",
+    "bar 3 @0: read quarter D2 A2, gold quarter A2 E0",
+    "bar 3 @24: read quarter D2 A2, gold quarter A2 E0",
+    "bar 3 @48: read quarter D2 A2, gold quarter A2 E0",
+    "bar 3 @72: read quarter D2 A2, gold quarter A2 E0",
+    "bar 4 @0: read quarter D5 A3, gold quarter A5 E3",
+    "bar 4 @24: read quarter D7 A5, gold half A7 E5",
+    "bar 4 @48: read half D5 A3, gold —",
+    "bar 4 @72: read —, gold quarter A5 E3",
+    "bar 5 @0: read whole D2 A2, gold whole A2 E0",
+    "bar 6 @0: read whole D2 A2, gold whole A2 E0",
+    "bar 6 @0 A: missed tie",
+    "bar 6 @0 E: missed tie",
+    "bar 4 @48: extra pick down",
+    "bar 4 @72: missed pick down",
+    "chords: 6 of 8 changes placed"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "tie": [
+      2,
+      0,
+      0
+     ],
+     "pick down": [
+      13,
+      13,
+      12
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p006-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.14285714285714285,
+    "note_recall": 0.13636363636363635,
+    "note_f1": 0.13953488372093023,
+    "fret_f1": 0.32558139534883723,
+    "rhythm": 0.7777777777777778,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.5,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "slide_f1": 0.0,
+    "cost_usd": 0.010133,
+    "seconds": 156.75,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth E0, gold eighth e0 A3",
+    "bar 1 @12: read eighth A3, gold sixteenth G0",
+    "bar 1 @18: read —, gold sixteenth e0",
+    "bar 1 @24: read eighth D2, gold eighth e0",
+    "bar 1 @36: read eighth G0, gold eighth B3",
+    "bar 1 @48: read eighth B1, gold eighth e3 E3",
+    "bar 1 @60: read eighth e0, gold eighth B0",
+    "bar 1 @72: read eighth E0, gold eighth G0",
+    "bar 1 @84: read eighth A3, gold eighth e0",
+    "bar 1 @96: read eighth D2, gold —",
+    "bar 1 @108: read eighth G0, gold —",
+    "bar 1 @120: read eighth B1, gold —",
+    "bar 1 @132: read eighth e0, gold —",
+    "bar 2 @0: read eighth B3, gold eighth B3 D0",
+    "bar 2 @12: read eighth B3, gold sixteenth B3",
+    "bar 2 @18: read —, gold sixteenth B5",
+    "bar 2 @24: read eighth B5, gold eighth B1",
+    "bar 2 @36: read eighth B1, gold eighth G2",
+    "bar 2 @48: read eighth G0, gold eighth G0 E3",
+    "bar 2 @60: read eighth G2, gold eighth D0",
+    "bar 2 @72: read eighth B0, gold eighth G0",
+    "bar 2 @84: read eighth e3, gold eighth B0",
+    "bar 2 @96: read eighth E3, gold —",
+    "bar 2 @18 B: missed slide",
+    "chords: 1 of 2 changes placed"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "slide": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p006-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.6818181818181818,
+    "note_recall": 0.7317073170731707,
+    "note_f1": 0.7058823529411765,
+    "fret_f1": 0.7764705882352941,
+    "rhythm": 0.8421052631578947,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.012434,
+    "seconds": 181.31,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter G0 D0, gold quarter B3 G0 E3",
+    "bar 2 @0: read eighth e2 B0, gold eighth e2 B0 D0",
+    "bar 2 @24: read eighth e0 B5, gold eighth e5 B0",
+    "bar 3 @0: read quarter B0 D0, gold quarter e2 B0 D0",
+    "bar 3 @24: read eighth e0 B0, gold quarter e0 B0",
+    "bar 3 @36: read eighth e2 B0, gold —",
+    "bar 3 @48: read quarter e0 B0, gold eighth e2 B0",
+    "bar 3 @60: read —, gold eighth e5 B0",
+    "bar 4 @0: read quarter e3 B0 G0, gold quarter e3 B0 E3",
+    "bar 4 @24: read quarter e3 B0 G0, gold quarter B0 G0",
+    "bar 4 @48: read quarter e3 B0 G0, gold quarter B0 G0",
+    "bar 5 @0: read quarter e3 B0 G0, gold quarter D0",
+    "bar 5 @24: read quarter e3 B0 G0, gold quarter B0 G0",
+    "bar 5 @48: read quarter e3 B0 G0, gold quarter B0 G0"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.4074074074074074,
+    "note_recall": 0.3793103448275862,
+    "note_f1": 0.39285714285714285,
+    "fret_f1": 0.6428571428571429,
+    "rhythm": 0.7586206896551724,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.35294117647058826,
+    "effect_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0,
+    "tie_f1": 1.0,
+    "slide_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.005475,
+    "seconds": 76.74,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @24: read eighth E7, gold eighth A7",
+    "bar 1 @48: read eighth A5, gold eighth E5",
+    "bar 1 @60: read eighth A7, gold eighth E7",
+    "bar 2 @0: read quarter E0, gold eighth E0",
+    "bar 2 @12: read —, gold eighth E0",
+    "bar 2 @24: read eighth E0, gold eighth A7",
+    "bar 2 @36: read eighth E7, gold eighth E0",
+    "bar 2 @48: read eighth A5, gold eighth E5",
+    "bar 2 @60: read eighth A7, gold eighth E7",
+    "bar 3 @0: read quarter E0, gold eighth E0",
+    "bar 3 @12: read —, gold eighth E0",
+    "bar 3 @24: read eighth E0, gold eighth A7",
+    "bar 3 @36: read eighth E7, gold eighth E0",
+    "bar 3 @48: read eighth A5, gold eighth E5",
+    "bar 3 @60: read eighth A7, gold eighth E7",
+    "bar 4 @0: read quarter E0, gold eighth E0",
+    "bar 4 @12: read —, gold eighth E0",
+    "bar 4 @24: read eighth E0, gold eighth E5",
+    "bar 4 @36: read eighth E5, gold eighth E6",
+    "bar 4 @48: read eighth A6, gold eighth E5",
+    "bar 4 @60: read eighth A5, gold dotted-quarter E3",
+    "bar 4 @72: read quarter E3, gold —",
+    "bar 1 @60 A: extra hammer",
+    "bar 1 @60 E: missed hammer",
+    "bar 2 @60 A: extra hammer",
+    "bar 2 @60 E: missed hammer",
+    "bar 2 @84 E: extra pull",
+    "bar 3 @60 A: extra hammer",
+    "bar 3 @60 E: missed hammer",
+    "bar 3 @84 E: extra pull",
+    "bar 4 @36 E: missed hammer",
+    "bar 4 @48 A: extra hammer",
+    "bar 4 @60 E: missed slide",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @36: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 1 @84: missed pick down",
+    "bar 2 @12: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      0
+     ],
+     "tie": [
+      3,
+      3,
+      3
+     ],
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "pull": [
+      0,
+      2,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p106-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.23529411764705882,
+    "note_f1": 0.24242424242424243,
+    "fret_f1": 0.24242424242424243,
+    "rhythm": 0.7058823529411765,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "cost_usd": 0.016401,
+    "seconds": 232.85,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @12: read eighth D0, gold sixteenth D0",
+    "bar 1 @18: read —, gold sixteenth D2",
+    "bar 1 @24: read eighth D2, gold eighth G0",
+    "bar 1 @36: read eighth G0, gold eighth B1",
+    "bar 1 @48: read eighth B1, gold eighth D3",
+    "bar 1 @60: read eighth D3, gold eighth G0",
+    "bar 1 @72: read eighth G0, gold eighth B1",
+    "bar 1 @84: read eighth B1, gold eighth e0",
+    "bar 2 @12: read eighth D0, gold sixteenth D0",
+    "bar 2 @18: read —, gold sixteenth D2",
+    "bar 2 @24: read eighth D2, gold eighth G0",
+    "bar 2 @36: read eighth G0, gold eighth B1",
+    "bar 2 @48: read eighth B1, gold eighth D3",
+    "bar 2 @60: read eighth D3, gold eighth G0",
+    "bar 2 @72: read eighth G0, gold quarter B1",
+    "bar 2 @84: read eighth B1, gold —",
+    "bar 1 @18 D: missed hammer",
+    "bar 1 @24 D: extra hammer",
+    "bar 2 @18 D: missed hammer",
+    "bar 2 @24 D: extra hammer"
+   ],
+   "detail": {
+    "page": 106,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "hammer": [
+      2,
+      2,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p013-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.875,
+    "note_recall": 0.875,
+    "note_f1": 0.875,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.008495,
+    "seconds": 119.82,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read half E2, gold half A2"
+   ],
+   "detail": {
+    "page": 13,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      5,
+      5,
+      5
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-4",
+   "repeat": 3,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "slide_f1": 1.0,
+    "cost_usd": 0.008535,
+    "seconds": 121.79,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ],
+     "slide": [
+      7,
+      7,
+      7
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p001-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9545454545454546,
+    "note_recall": 0.9545454545454546,
+    "note_f1": 0.9545454545454546,
+    "fret_f1": 0.9545454545454546,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.019065,
+    "seconds": 313.96,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @48: read quarter e1 G3, gold quarter e1 B0"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5,
+    "note_recall": 0.5,
+    "note_f1": 0.5,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.5,
+    "hammer_f1": 0.5,
+    "pull_f1": 0.5,
+    "cost_usd": 0.015312,
+    "seconds": 219.39,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read eighth E5, gold eighth A5",
+    "bar 1 @60: read eighth E6, gold eighth A6",
+    "bar 1 @72: read eighth E7, gold eighth A7",
+    "bar 1 @84: read eighth E8, gold eighth A8",
+    "bar 2 @0: read eighth G5, gold eighth D5",
+    "bar 2 @12: read eighth G6, gold eighth D6",
+    "bar 2 @24: read eighth G7, gold eighth D7",
+    "bar 2 @36: read eighth G8, gold eighth D8",
+    "bar 3 @48: read eighth G8, gold eighth D8",
+    "bar 3 @60: read eighth G7, gold eighth D7",
+    "bar 3 @72: read eighth G6, gold eighth D6",
+    "bar 3 @84: read eighth G5, gold eighth D5",
+    "bar 4 @0: read eighth E8, gold eighth A8",
+    "bar 4 @12: read eighth E7, gold eighth A7",
+    "bar 4 @24: read eighth E6, gold eighth A6",
+    "bar 4 @36: read eighth E5, gold eighth A5",
+    "bar 1 @60 A: missed hammer",
+    "bar 1 @60 E: extra hammer",
+    "bar 1 @72 A: missed hammer",
+    "bar 1 @72 E: extra hammer",
+    "bar 1 @84 A: missed hammer",
+    "bar 1 @84 E: extra hammer",
+    "bar 2 @12 G: extra hammer",
+    "bar 2 @12 D: missed hammer",
+    "bar 2 @24 G: extra hammer",
+    "bar 2 @24 D: missed hammer",
+    "bar 2 @36 G: extra hammer",
+    "bar 2 @36 D: missed hammer",
+    "bar 3 @60 G: extra pull",
+    "bar 3 @60 D: missed pull",
+    "bar 3 @72 G: extra pull",
+    "bar 3 @72 D: missed pull",
+    "bar 3 @84 G: extra pull",
+    "bar 3 @84 D: missed pull",
+    "bar 4 @12 A: missed pull",
+    "bar 4 @12 E: extra pull",
+    "bar 4 @24 A: missed pull",
+    "bar 4 @24 E: extra pull",
+    "bar 4 @36 A: missed pull",
+    "bar 4 @36 E: extra pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      6
+     ],
+     "hammer": [
+      12,
+      12,
+      6
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.25,
+    "note_f1": 0.25,
+    "fret_f1": 0.5,
+    "rhythm": 0.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.006122,
+    "seconds": 86.84,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth G0, gold eighth A0",
+    "bar 1 @6: read sixteenth B0, gold —",
+    "bar 1 @12: read sixteenth G0, gold eighth G0",
+    "bar 1 @18: read sixteenth B0, gold —",
+    "bar 1 @24: read sixteenth e0, gold eighth B0",
+    "bar 1 @30: read sixteenth B0, gold —",
+    "bar 1 @36: read sixteenth G0, gold eighth G0",
+    "bar 1 @42: read sixteenth B0, gold —",
+    "bar 1 @48: read —, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B0",
+    "bar 1 @84: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/electric-365-p020-3",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.06578947368421052,
+    "note_recall": 0.078125,
+    "note_f1": 0.07142857142857142,
+    "fret_f1": 0.44285714285714284,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0,
+    "cost_usd": 0.015706,
+    "seconds": 223.17,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth e6, gold sixteenth e5",
+    "bar 1 @18: read sixteenth e7, gold sixteenth e8",
+    "bar 1 @24: read sixteenth e8, gold sixteenth e7",
+    "bar 1 @30: read sixteenth e7, gold sixteenth e6",
+    "bar 1 @36: read sixteenth e6, gold sixteenth e5",
+    "bar 1 @48: read sixteenth e6, gold sixteenth e7",
+    "bar 1 @54: read sixteenth e7, gold sixteenth e8",
+    "bar 1 @66: read sixteenth e7, gold sixteenth e6",
+    "bar 1 @72: read sixteenth e6, gold sixteenth e5",
+    "bar 1 @84: read sixteenth e6, gold sixteenth e7",
+    "bar 1 @90: read sixteenth e7, gold sixteenth e8",
+    "bar 1 @96: read sixteenth e7, gold —",
+    "bar 1 @102: read sixteenth e8, gold —",
+    "bar 2 @0: read sixteenth e6, gold sixteenth B5",
+    "bar 2 @6: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @12: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @18: read sixteenth e7, gold sixteenth B8",
+    "bar 2 @24: read sixteenth e8, gold sixteenth B7",
+    "bar 2 @30: read sixteenth e7, gold sixteenth B6",
+    "bar 2 @36: read sixteenth e6, gold sixteenth B5",
+    "bar 2 @42: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @48: read sixteenth e6, gold sixteenth B7",
+    "bar 2 @54: read sixteenth e7, gold sixteenth B8",
+    "bar 2 @60: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @66: read sixteenth e7, gold sixteenth B6",
+    "bar 2 @72: read sixteenth e6, gold sixteenth B5",
+    "bar 2 @78: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @84: read sixteenth e6, gold sixteenth B7",
+    "bar 2 @90: read sixteenth e7, gold sixteenth B8",
+    "bar 2 @96: read sixteenth e7, gold —",
+    "bar 2 @102: read sixteenth e8, gold —",
+    "bar 3 @0: read sixteenth e6, gold sixteenth G5",
+    "bar 3 @6: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @12: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @18: read sixteenth e7, gold sixteenth G8",
+    "bar 3 @24: read sixteenth e8, gold sixteenth G7",
+    "bar 3 @30: read sixteenth e7, gold sixteenth G6",
+    "bar 3 @36: read sixteenth e6, gold sixteenth G5",
+    "bar 3 @42: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @48: read sixteenth e6, gold sixteenth G7"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      36,
+      0,
+      0
+     ],
+     "pull": [
+      24,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p015-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.003058,
+    "seconds": 42.94,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 4 @0: missed pick down"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "pick down": [
+      5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/syt-p118-1",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "cost_usd": 0.010206,
+    "seconds": 173.74,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "confirmed",
+    "jianpu": null,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p005-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.27631578947368424,
+    "note_recall": 0.3684210526315789,
+    "note_f1": 0.3157894736842105,
+    "fret_f1": 0.3308270676691729,
+    "rhythm": 0.06666666666666667,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0967741935483871,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.5625,
+    "tie_f1": 0.0,
+    "palm_mute_f1": 0.5625,
+    "accent_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.013381,
+    "seconds": 197.32,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @6: read sixteenth A2 E0, gold —",
+    "bar 1 @12: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @18: read sixteenth A2 E0, gold —",
+    "bar 1 @24: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @30: read sixteenth A2 E0, gold —",
+    "bar 1 @36: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @42: read sixteenth A2 E0, gold —",
+    "bar 1 @48: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @54: read sixteenth A2 E0, gold —",
+    "bar 1 @60: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @66: read sixteenth A2 E0, gold —",
+    "bar 1 @72: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @78: read sixteenth A2 E0, gold —",
+    "bar 1 @84: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @90: read sixteenth A2 E0, gold —",
+    "bar 2 @0: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 2 @6: read sixteenth A2 E0, gold —",
+    "bar 2 @12: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 2 @18: read sixteenth A2 E0, gold —",
+    "bar 2 @24: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 2 @30: read sixteenth A2 E0, gold —",
+    "bar 2 @36: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 2 @42: read sixteenth A2 E0, gold —",
+    "bar 2 @48: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 2 @54: read sixteenth A2 E0, gold —",
+    "bar 2 @60: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 2 @66: read sixteenth A2 E0, gold —",
+    "bar 2 @72: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 2 @78: read sixteenth A2 E0, gold —",
+    "bar 2 @84: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 2 @90: read sixteenth A2 E0, gold —",
+    "bar 3 @0: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 3 @6: read sixteenth A2 E0, gold —",
+    "bar 3 @12: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 3 @18: read sixteenth A2 E0, gold —",
+    "bar 3 @24: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 3 @30: read sixteenth A2 E0, gold —",
+    "bar 3 @36: read sixteenth A2 E0, gold eighth D2 A2 E0",
+    "bar 3 @42: read sixteenth A2 E0, gold —"
+   ],
+   "detail": {
+    "page": 5,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "tie": [
+      21,
+      0,
+      0
+     ],
+     "pick down": [
+      51,
+      0,
+      0
+     ],
+     "accent": [
+      1,
+      1,
+      0
+     ],
+     "palmMute": [
+      48,
+      80,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-arranging-p006-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.75,
+    "note_recall": 0.8048780487804879,
+    "note_f1": 0.7764705882352941,
+    "fret_f1": 0.7764705882352941,
+    "rhythm": 0.9473684210526315,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_precision": 1.0,
+    "flag_recall": 0.09090909090909091,
+    "cost_usd": 0.012499,
+    "seconds": 182.3,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter E3, gold quarter B3 G0 E3",
+    "bar 2 @0: read eighth e2 B0, gold eighth e2 B0 D0",
+    "bar 3 @0: read quarter D0, gold quarter e2 B0 D0",
+    "bar 3 @24: read eighth e2 B0, gold quarter e0 B0",
+    "bar 3 @36: read eighth e0 B0, gold —",
+    "bar 4 @0: read quarter B0 G0 D0, gold quarter e3 B0 E3",
+    "bar 4 @24: read quarter B0 G0 D0, gold quarter B0 G0",
+    "bar 4 @48: read quarter B0 G0 D0, gold quarter B0 G0",
+    "bar 5 @0: read quarter B0 G0 D0, gold quarter D0",
+    "bar 5 @24: read quarter B0 G0 D0, gold quarter B0 G0",
+    "bar 5 @48: read quarter B0 G0 D0, gold quarter B0 G0"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/heavy-metal-p013-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.875,
+    "note_recall": 0.875,
+    "note_f1": 0.875,
+    "fret_f1": 1.0,
+    "rhythm": 0.8,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.008027,
+    "seconds": 114.61,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read half E2, gold half A2",
+    "bar 2 @48: read half A2 E0, gold quarter A2 E0"
+   ],
+   "detail": {
+    "page": 13,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      5,
+      5,
+      5
+     ]
+    }
+   }
+  },
+  {
+   "subject": "bailian:qwen3.7-plus",
+   "case": "books-batch1/sample-text-tab-6p-p002-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.4444444444444444,
+    "note_recall": 0.2222222222222222,
+    "note_f1": 0.2962962962962963,
+    "fret_f1": 0.48148148148148145,
+    "rhythm": 0.2916666666666667,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 0.0,
+    "chords_placed": 0.3333333333333333,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.14285714285714285,
+    "hammer_f1": 0.0,
+    "palm_mute_f1": 0.14285714285714285,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "cost_usd": 0.014379,
+    "seconds": 200.05,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read half D2 A0, gold quarter D2 A0",
+    "bar 1 @24: read —, gold quarter D2 A0",
+    "bar 1 @48: read half D2 A0, gold eighth D0",
+    "bar 1 @60: read —, gold eighth D1",
+    "bar 1 @72: read —, gold quarter A3",
+    "bar 2 @0: read eighth E0, gold eighth D2 A0",
+    "bar 2 @12: read eighth E1, gold eighth D2 A0",
+    "bar 2 @24: read dotted-half E3, gold eighth D0",
+    "bar 2 @36: read —, gold eighth D1",
+    "bar 2 @48: read —, gold quarter A3",
+    "bar 2 @72: read —, gold eighth D2 A0",
+    "bar 2 @84: read —, gold eighth D2 A0",
+    "bar 3 @48: read eighth E0, gold eighth D0",
+    "bar 3 @60: read eighth E1, gold eighth D1",
+    "bar 3 @72: read quarter E3, gold quarter A3",
+    "bar 4 @0: read half D2 A0, gold eighth D2 A0",
+    "bar 4 @12: read —, gold eighth D2 A0",
+    "bar 4 @24: read —, gold eighth D0",
+    "bar 4 @36: read —, gold eighth D1",
+    "bar 4 @48: read half D2 A0, gold quarter A3",
+    "bar 4 @72: read —, gold eighth D2 A0",
+    "bar 4 @84: read —, gold eighth D2 A0",
+    "bar 1 @60 D: missed hammer",
+    "bar 2 @12 E: extra hammer",
+    "bar 2 @36 D: missed hammer",
+    "bar 3 @60 D: missed hammer",
+    "bar 3 @60 E: extra hammer",
+    "bar 4 @36 D: missed hammer",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 1 @72 A: missed vibrato",
+    "bar 2 @0: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 2 @72: missed pick down",
+    "bar 2 @84: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      2,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      2,
+      0,
+      0
+     ],
+     "palmMute": [
+      8,
+      6,
+      1
+     ]
+    }
+   }
+  }
+ ]
+}

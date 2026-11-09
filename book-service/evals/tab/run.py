@@ -17,8 +17,11 @@ id being the start of the hash of what the reader is told, so a rerun only
 pays for what is new and an edited prompt is read afresh. A cached reading
 keeps the model's replies, and a rerun plays them back through today's
 reconcile and validator instead of trusting the draft stored with them: a
-change on the Python or validator side is scored again for nothing. A reading
-cached before the replies were kept is read again. The models run side by
+change on the Python or validator side is scored again for nothing. When
+today's code asks for a repair the cached replies do not hold (#464), the
+reading resumes: the cached replies play back, the repair is read live and
+paid for, and its reply joins the cache. `--replay-prompt` never resumes. A
+reading cached before the replies were kept is read again. The models run side by
 side; one stops starting readings when its new spending reaches `--max-usd`.
 
 The validator is the Next.js side's (`/api/internal/validate`): a dev server
@@ -149,30 +152,41 @@ def reader_for(spec: str) -> Provider:
 
 class Recorder(TabExtractor):
     """The parse's reader, keeping each model reply — or, given replies, playing
-    them back in order instead of calling the model."""
+    them back in order instead of calling the model; with `resume`, calling it
+    for what the replies run out before."""
 
     def __init__(
-        self, provider: Provider, validator: ValidatorClient, replay: list | None = None
+        self,
+        provider: Provider,
+        validator: ValidatorClient,
+        replay: list | None = None,
+        resume: bool = False,
     ) -> None:
         super().__init__(provider, validator)
         self.replies: list[dict | None] = []
         self._replay = None if replay is None else list(replay)
+        self._resume = resume
         # Set when today's code asks for a repair the cached reading never made.
         self.short = False
+        # The calls a resumed reading made past its cached replies.
+        self.paid: list[CallUsage] = []
 
     async def read(
         self, png: bytes, repair: tuple[TabReadingOut, Sequence[dict[str, object]]] | None = None
     ) -> tuple[TabReadingOut | None, CallUsage]:
-        if self._replay is None:
-            out, usage = await super().read(png, repair)
-            self.replies.append(out.model_dump() if out else None)
-            return out, usage
-        free = CallUsage(0, 0, self._provider.model)
-        if not self._replay:
+        if self._replay:
+            reply = self._replay.pop(0)
+            self.replies.append(reply)
+            out = TabReadingOut.model_validate(reply) if reply else None
+            return out, CallUsage(0, 0, self._provider.model)
+        if self._replay is not None and not self._resume:
             self.short = True
-            return None, free
-        reply = self._replay.pop(0)
-        return (TabReadingOut.model_validate(reply) if reply else None), free
+            return None, CallUsage(0, 0, self._provider.model)
+        out, usage = await super().read(png, repair)
+        self.replies.append(out.model_dump() if out else None)
+        if self._replay is not None:
+            self.paid.append(usage)
+        return out, usage
 
 
 async def extract(extractor: TabExtractor, ex: Exercise) -> tuple:
@@ -209,13 +223,27 @@ async def read(provider: Provider, validator: ValidatorClient, ex: Exercise) -> 
 
 
 async def replay(
-    provider: Provider, validator: ValidatorClient, ex: Exercise, cached: dict
+    provider: Provider, validator: ValidatorClient, ex: Exercise, cached: dict, resume: bool = False
 ) -> dict:
     """A cached reading's replies through today's reconcile and validator, at no cost;
-    what the reading cost and how its calls ended stay as they were."""
-    recorder = Recorder(provider, validator, cached["replies"])
+    what the reading cost and how its calls ended stay as they were. With `resume`,
+    a repair the replies do not hold is read live, and `resumed` says what it cost."""
+    recorder = Recorder(provider, validator, cached["replies"], resume)
+    tick = time.perf_counter()
     record, _, dropped = await extract(recorder, ex)
     out = {**cached, **outcome(record, dropped), "cached": True}
+    if recorder.paid:
+        new = usage_fields(provider, recorder.paid)
+        out.update(
+            replies=recorder.replies,
+            calls=cached.get("calls", 1) + new["calls"],
+            stop_reasons=cached.get("stop_reasons", []) + new["stop_reasons"],
+            input_tokens=cached.get("input_tokens", 0) + new["input_tokens"],
+            output_tokens=cached.get("output_tokens", 0) + new["output_tokens"],
+            cost_usd=round(cached.get("cost_usd", 0.0) + new["cost_usd"], 6),
+            seconds=round(cached.get("seconds", 0.0) + time.perf_counter() - tick, 2),
+            resumed=new["cost_usd"],
+        )
     if recorder.short:
         out["warnings"] = out["warnings"] + [
             {"code": "REPLAY_SHORT", "message": "today's code asks for a repair never read"}
@@ -333,7 +361,24 @@ async def run_model(
         path = cache_path(ex, repeat)
         cached = json.loads(path.read_text()) if path.exists() else {}
         if "replies" in cached:
-            return ex, repeat, await replay(provider, validator, ex, cached)
+            if spent >= max_usd:
+                return ex, repeat, await replay(provider, validator, ex, cached)
+            async with slots:
+                try:
+                    reading = await replay(provider, validator, ex, cached, resume=spent < max_usd)
+                except ValidatorError:
+                    raise
+                except Exception as e:  # the repair call broke: scored as cached, said
+                    reading = await replay(provider, validator, ex, cached)
+                    reading["warnings"] = reading["warnings"] + [
+                        {"code": "RESUME_FAILED", "message": f"{type(e).__name__}: {str(e)[:200]}"}
+                    ]
+            resumed = reading.pop("resumed", None)
+            if resumed is not None:
+                spent += resumed
+                del reading["cached"]  # partly read today: printed and stored as new
+                path.write_text(json.dumps(reading, ensure_ascii=False) + "\n")
+            return ex, repeat, reading
         async with slots:
             if spent >= max_usd:
                 return ex, repeat, {"error": f"not read: --max-usd {max_usd} reached"}

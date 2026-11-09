@@ -1,0 +1,4841 @@
+{
+ "suite": "tab-extraction",
+ "title": "Tab readers on the reviewed crops",
+ "issue": 424,
+ "run_id": "20261108-160513",
+ "status": "done",
+ "started_at": "2026-11-08T16:05:13.992473+00:00",
+ "finished_at": "2026-11-08T16:05:14.742124+00:00",
+ "git_sha": "296b0ab",
+ "machine": "Apple M2, 8 cores, Darwin",
+ "config": {
+  "sets": [
+   "books-batch1"
+  ],
+  "exercises": 20,
+  "runs": 3,
+  "prompt": "2510912a",
+  "max_usd_per_model": 0.0,
+  "cny_per_usd": 7.1
+ },
+ "progress": {
+  "done": 80,
+  "total": 80
+ },
+ "metrics": [
+  {
+   "key": "note_f1",
+   "label": "Note F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Bar, onset, string and fret all right."
+  },
+  {
+   "key": "note_precision",
+   "label": "Note P",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Notes the reading wrote that are in the gold."
+  },
+  {
+   "key": "note_recall",
+   "label": "Note R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold notes the reading has."
+  },
+  {
+   "key": "fret_f1",
+   "label": "Fret F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Note F1 with the string left out: the gap is digits on the wrong line."
+  },
+  {
+   "key": "rhythm",
+   "label": "Rhythm",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold slots whose onset, value and rest the reading has."
+  },
+  {
+   "key": "bars",
+   "label": "Bars",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Exercises read with the gold's number of bars."
+  },
+  {
+   "key": "exact",
+   "label": "Exact",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Exercises read without a single difference."
+  },
+  {
+   "key": "drafted",
+   "label": "Drafted",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Exercises the parse made a draft for; a dropped one misses every note."
+  },
+  {
+   "key": "chord_names",
+   "label": "Chord names",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Chord exercises whose printed names the reading has in order."
+  },
+  {
+   "key": "chords_placed",
+   "label": "Chords placed",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Gold chord changes the reading puts on the same note."
+  },
+  {
+   "key": "flag_precision",
+   "label": "Flag P",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Notes the jianpu cross-check flagged that are wrong."
+  },
+  {
+   "key": "flag_recall",
+   "label": "Flag R",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Wrong notes the jianpu cross-check flagged."
+  },
+  {
+   "key": "link_f1",
+   "label": "Links F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Ties, hammers, pulls and slides on the right note."
+  },
+  {
+   "key": "effect_f1",
+   "label": "Effects F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Bends, vibrato, accents, pick direction and the rest, on the right note."
+  },
+  {
+   "key": "span_f1",
+   "label": "Spans F1",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Notes under a palm mute, let ring or slur."
+  },
+  {
+   "key": "hammer_f1",
+   "label": "Hammer",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Hammer marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "pull_f1",
+   "label": "Pull",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pull marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "tie_f1",
+   "label": "Tie",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Tie marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "slide_f1",
+   "label": "Slide",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Slide marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "palm_mute_f1",
+   "label": "Palm mute",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Palm mute marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "vibrato_f1",
+   "label": "Vibrato",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Vibrato marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "accent_f1",
+   "label": "Accent",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Accent marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "pick_down_f1",
+   "label": "Pick down",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pick down marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "pick_up_f1",
+   "label": "Pick up",
+   "direction": "higher",
+   "format": "percent",
+   "description": "Pick up marks on the right note, or a column's on the right column."
+  },
+  {
+   "key": "exercises",
+   "label": "Exercises",
+   "direction": "higher",
+   "format": "fixed0"
+  },
+  {
+   "key": "repaired",
+   "label": "Repaired",
+   "direction": "lower",
+   "format": "fixed0",
+   "description": "Readings the validator sent back once before they passed or were dropped."
+  },
+  {
+   "key": "truncated",
+   "label": "Truncated",
+   "direction": "lower",
+   "format": "fixed0",
+   "description": "Readings a call of which hit the token cap, mostly while still thinking: the reply was never written, which is not the same as misread."
+  },
+  {
+   "key": "cost_per_exercise_usd",
+   "label": "$ / exercise",
+   "direction": "lower",
+   "format": "usd"
+  },
+  {
+   "key": "seconds_per_exercise",
+   "label": "s / exercise",
+   "direction": "lower",
+   "format": "fixed2"
+  }
+ ],
+ "subjects": [
+  {
+   "status": "done",
+   "summary": {
+    "note_precision": 0.8506493506493507,
+    "note_recall": 0.7872596153846154,
+    "note_f1": 0.8177278401997503,
+    "fret_f1": 0.8539325842696629,
+    "rhythm": 0.8487544483985765,
+    "bars": 0.9,
+    "exact": 0.1,
+    "drafted": 1.0,
+    "chord_names": 0.9,
+    "chords_placed": 0.0,
+    "flag_precision": 1.0,
+    "flag_recall": 0.06422018348623854,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0,
+    "tie_f1": 0.0,
+    "slide_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "accent_f1": 0.0,
+    "pick_down_f1": 0.0,
+    "exercises": 20.0,
+    "repaired": 0
+   },
+   "id": "stored",
+   "label": "seed reading (stored)",
+   "notes": "the reading the review corrected; the gold leans its way",
+   "breakdown": {
+    "electric-365": {
+     "note_precision": 1.0,
+     "note_recall": 1.0,
+     "note_f1": 1.0,
+     "fret_f1": 1.0,
+     "rhythm": 1.0,
+     "bars": 1.0,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "link_f1": 0.0,
+     "hammer_f1": 0.0,
+     "pull_f1": 0.0,
+     "slide_f1": 0.0,
+     "exercises": 4.0
+    },
+    "heavy-metal": {
+     "note_precision": 1.0,
+     "note_recall": 1.0,
+     "note_f1": 1.0,
+     "fret_f1": 1.0,
+     "rhythm": 1.0,
+     "bars": 1.0,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.0,
+     "link_f1": 0.0,
+     "effect_f1": 0.0,
+     "tie_f1": 0.0,
+     "pick_down_f1": 0.0,
+     "exercises": 4.0
+    },
+    "sample-arranging": {
+     "note_precision": 0.8552631578947368,
+     "note_recall": 0.6435643564356436,
+     "note_f1": 0.7344632768361582,
+     "fret_f1": 0.768361581920904,
+     "rhythm": 0.6964285714285714,
+     "bars": 0.75,
+     "exact": 0.25,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.0,
+     "flag_precision": 1.0,
+     "flag_recall": 0.4375,
+     "link_f1": 0.0,
+     "slide_f1": 0.0,
+     "exercises": 4.0
+    },
+    "sample-text-tab-6p": {
+     "note_precision": 0.8386167146974063,
+     "note_recall": 0.833810888252149,
+     "note_f1": 0.8362068965517241,
+     "fret_f1": 0.8764367816091954,
+     "rhythm": 0.9202453987730062,
+     "bars": 1.0,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "chord_names": 0.75,
+     "chords_placed": 0.0,
+     "flag_recall": 0.0,
+     "link_f1": 0.0,
+     "effect_f1": 0.0,
+     "span_f1": 0.0,
+     "hammer_f1": 0.0,
+     "tie_f1": 0.0,
+     "slide_f1": 0.0,
+     "palm_mute_f1": 0.0,
+     "vibrato_f1": 0.0,
+     "accent_f1": 0.0,
+     "pick_down_f1": 0.0,
+     "exercises": 4.0
+    },
+    "syt": {
+     "note_precision": 0.5051546391752577,
+     "note_recall": 0.3712121212121212,
+     "note_f1": 0.4279475982532751,
+     "fret_f1": 0.5327510917030568,
+     "rhythm": 0.5338983050847458,
+     "bars": 0.75,
+     "exact": 0.25,
+     "drafted": 1.0,
+     "flag_recall": 0.0,
+     "link_f1": 0.0,
+     "hammer_f1": 0.0,
+     "exercises": 4.0
+    }
+   }
+  },
+  {
+   "status": "done",
+   "summary": {
+    "note_precision": 0.7832618025751072,
+    "note_recall": 0.7311698717948718,
+    "note_f1": 0.756319933692499,
+    "fret_f1": 0.8367177786987153,
+    "rhythm": 0.8576512455516014,
+    "bars": 0.9333333333333333,
+    "exact": 0.3,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.8153153153153153,
+    "flag_precision": 1.0,
+    "flag_recall": 0.00425531914893617,
+    "link_f1": 0.717163577759871,
+    "effect_f1": 0.8348214285714286,
+    "span_f1": 0.8746803069053708,
+    "hammer_f1": 0.6976744186046512,
+    "pull_f1": 0.775,
+    "tie_f1": 0.5045045045045045,
+    "slide_f1": 0.875,
+    "palm_mute_f1": 0.8746803069053708,
+    "vibrato_f1": 0.5,
+    "accent_f1": 0.6,
+    "pick_down_f1": 0.8421052631578947,
+    "exercises": 60.0,
+    "repaired": 0,
+    "truncated": 0,
+    "cost_per_exercise_usd": 0.07314841666666667,
+    "seconds_per_exercise": 33.899166666666666
+   },
+   "id": "anthropic:claude-opus-5",
+   "label": "claude-opus-5",
+   "group": "anthropic",
+   "breakdown": {
+    "electric-365": {
+     "note_precision": 0.75,
+     "note_recall": 0.75,
+     "note_f1": 0.75,
+     "fret_f1": 1.0,
+     "rhythm": 1.0,
+     "bars": 1.0,
+     "exact": 0.5833333333333334,
+     "drafted": 1.0,
+     "flag_recall": 0.0,
+     "link_f1": 0.7401129943502824,
+     "hammer_f1": 0.6888888888888889,
+     "pull_f1": 0.775,
+     "slide_f1": 1.0,
+     "exercises": 12.0
+    },
+    "heavy-metal": {
+     "note_precision": 0.9885057471264368,
+     "note_recall": 0.9885057471264368,
+     "note_f1": 0.9885057471264368,
+     "fret_f1": 0.9942528735632183,
+     "rhythm": 0.9191919191919192,
+     "bars": 1.0,
+     "exact": 0.6666666666666666,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 1.0,
+     "flag_recall": 0.0,
+     "link_f1": 1.0,
+     "effect_f1": 0.9895833333333334,
+     "tie_f1": 1.0,
+     "pick_down_f1": 0.9895833333333334,
+     "exercises": 12.0
+    },
+    "sample-arranging": {
+     "note_precision": 0.6976744186046512,
+     "note_recall": 0.594059405940594,
+     "note_f1": 0.6417112299465241,
+     "fret_f1": 0.6702317290552585,
+     "rhythm": 0.6190476190476191,
+     "bars": 0.6666666666666666,
+     "exact": 0.16666666666666666,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.9333333333333333,
+     "flag_recall": 0.0,
+     "link_f1": 0.0,
+     "tie_f1": 0.0,
+     "slide_f1": 0.0,
+     "exercises": 12.0
+    },
+    "sample-text-tab-6p": {
+     "note_precision": 0.8312796208530806,
+     "note_recall": 0.8376313276026743,
+     "note_f1": 0.8344433872502379,
+     "fret_f1": 0.8534728829686014,
+     "rhythm": 0.9447852760736196,
+     "bars": 1.0,
+     "exact": 0.0,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.7484276729559748,
+     "flag_recall": 0.0,
+     "link_f1": 0.6133333333333333,
+     "effect_f1": 0.7926136363636364,
+     "span_f1": 0.8746803069053708,
+     "hammer_f1": 0.96,
+     "tie_f1": 0.4536082474226804,
+     "slide_f1": 0.0,
+     "palm_mute_f1": 0.8746803069053708,
+     "vibrato_f1": 0.5,
+     "accent_f1": 0.6,
+     "pick_down_f1": 0.8005865102639296,
+     "exercises": 12.0
+    },
+    "syt": {
+     "note_precision": 0.6142322097378277,
+     "note_recall": 0.41414141414141414,
+     "note_f1": 0.4947209653092006,
+     "fret_f1": 0.5580693815987934,
+     "rhythm": 0.6016949152542372,
+     "bars": 1.0,
+     "exact": 0.08333333333333333,
+     "drafted": 1.0,
+     "flag_precision": 1.0,
+     "flag_recall": 0.01652892561983471,
+     "link_f1": 0.0,
+     "hammer_f1": 0.0,
+     "exercises": 12.0
+    }
+   },
+   "by_repeat": {
+    "1": {
+     "note_precision": 0.7363057324840764,
+     "note_recall": 0.6947115384615384,
+     "note_f1": 0.7149041434755721,
+     "fret_f1": 0.8002473716759431,
+     "rhythm": 0.8612099644128114,
+     "bars": 0.9,
+     "exact": 0.3,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.7702702702702703,
+     "flag_precision": 1.0,
+     "flag_recall": 0.01098901098901099,
+     "link_f1": 0.7027027027027027,
+     "effect_f1": 0.8121212121212121,
+     "span_f1": 0.7741935483870968,
+     "hammer_f1": 0.6934673366834171,
+     "pull_f1": 0.775,
+     "tie_f1": 0.3125,
+     "slide_f1": 0.875,
+     "palm_mute_f1": 0.7741935483870968,
+     "vibrato_f1": 0.5,
+     "accent_f1": 1.0,
+     "pick_down_f1": 0.8148148148148148,
+     "exercises": 20.0
+    },
+    "2": {
+     "note_precision": 0.7908496732026143,
+     "note_recall": 0.7271634615384616,
+     "note_f1": 0.7576706324358171,
+     "fret_f1": 0.8365685660613651,
+     "rhythm": 0.8594306049822064,
+     "bars": 0.95,
+     "exact": 0.25,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.7567567567567568,
+     "flag_recall": 0.0,
+     "link_f1": 0.7255369928400954,
+     "effect_f1": 0.851063829787234,
+     "span_f1": 0.9393939393939394,
+     "hammer_f1": 0.6934673366834171,
+     "pull_f1": 0.775,
+     "tie_f1": 0.6363636363636364,
+     "slide_f1": 0.875,
+     "palm_mute_f1": 0.9393939393939394,
+     "vibrato_f1": 0.5,
+     "accent_f1": 0.5,
+     "pick_down_f1": 0.8613138686131386,
+     "exercises": 20.0
+    },
+    "3": {
+     "note_precision": 0.823076923076923,
+     "note_recall": 0.7716346153846154,
+     "note_f1": 0.7965260545905707,
+     "fret_f1": 0.8734491315136477,
+     "rhythm": 0.8523131672597865,
+     "bars": 0.95,
+     "exact": 0.35,
+     "drafted": 1.0,
+     "chord_names": 1.0,
+     "chords_placed": 0.918918918918919,
+     "flag_recall": 0.0,
+     "link_f1": 0.7228915662650602,
+     "effect_f1": 0.8450704225352113,
+     "span_f1": 0.9037037037037037,
+     "hammer_f1": 0.7058823529411765,
+     "pull_f1": 0.775,
+     "tie_f1": 0.5142857142857142,
+     "slide_f1": 0.875,
+     "palm_mute_f1": 0.9037037037037037,
+     "vibrato_f1": 0.5,
+     "accent_f1": 0.5,
+     "pick_down_f1": 0.855072463768116,
+     "exercises": 20.0
+    }
+   },
+   "spent_usd": 0.0,
+   "notes": "stopped starting readings at $0.000: --max-usd 0.0"
+  }
+ ],
+ "cases": [
+  {
+   "subject": "stored",
+   "case": "books-batch1/electric-365-p020-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @12 G: missed hammer",
+    "bar 1 @18 G: missed pull",
+    "bar 1 @24 G: missed hammer",
+    "bar 1 @30 G: missed pull",
+    "bar 1 @36 G: missed hammer",
+    "bar 1 @42 G: missed pull",
+    "bar 1 @48 G: missed hammer",
+    "bar 1 @54 G: missed pull",
+    "bar 1 @6 G: missed pull",
+    "bar 1 @60 G: missed hammer",
+    "bar 1 @66 G: missed pull",
+    "bar 1 @72 G: missed hammer",
+    "bar 1 @78 G: missed pull",
+    "bar 1 @84 G: missed hammer",
+    "bar 1 @90 G: missed pull",
+    "bar 2 @0 G: missed hammer",
+    "bar 2 @12 G: missed hammer",
+    "bar 2 @18 G: missed pull",
+    "bar 2 @24 G: missed hammer",
+    "bar 2 @30 G: missed pull",
+    "bar 2 @36 G: missed hammer",
+    "bar 2 @42 G: missed pull",
+    "bar 2 @48 G: missed hammer",
+    "bar 2 @54 G: missed pull",
+    "bar 2 @6 G: missed pull",
+    "bar 2 @60 G: missed hammer",
+    "bar 2 @66 G: missed pull",
+    "bar 2 @72 G: missed hammer",
+    "bar 2 @78 G: missed pull",
+    "bar 2 @84 G: missed hammer",
+    "bar 2 @90 G: missed pull",
+    "bar 3 @0 G: missed hammer",
+    "bar 3 @12 G: missed hammer",
+    "bar 3 @18 G: missed pull",
+    "bar 3 @24 G: missed hammer",
+    "bar 3 @30 G: missed pull",
+    "bar 3 @36 G: missed hammer",
+    "bar 3 @42 G: missed pull",
+    "bar 3 @48 G: missed hammer",
+    "bar 3 @54 G: missed pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      31,
+      0,
+      0
+     ],
+     "pull": [
+      32,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/electric-365-p020-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @12 E: missed hammer",
+    "bar 1 @24 E: missed hammer",
+    "bar 1 @36 E: missed hammer",
+    "bar 1 @60 A: missed hammer",
+    "bar 1 @72 A: missed hammer",
+    "bar 1 @84 A: missed hammer",
+    "bar 2 @12 D: missed hammer",
+    "bar 2 @24 D: missed hammer",
+    "bar 2 @36 D: missed hammer",
+    "bar 2 @60 G: missed hammer",
+    "bar 2 @72 G: missed hammer",
+    "bar 2 @84 G: missed hammer",
+    "bar 3 @12 G: missed pull",
+    "bar 3 @24 G: missed pull",
+    "bar 3 @36 G: missed pull",
+    "bar 3 @60 D: missed pull",
+    "bar 3 @72 D: missed pull",
+    "bar 3 @84 D: missed pull",
+    "bar 4 @12 A: missed pull",
+    "bar 4 @24 A: missed pull",
+    "bar 4 @36 A: missed pull",
+    "bar 4 @60 E: missed pull",
+    "bar 4 @72 E: missed pull",
+    "bar 4 @84 E: missed pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      0,
+      0
+     ],
+     "hammer": [
+      12,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/electric-365-p020-3",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @12 e: missed hammer",
+    "bar 1 @18 e: missed hammer",
+    "bar 1 @24 e: missed pull",
+    "bar 1 @30 e: missed pull",
+    "bar 1 @36 e: missed pull",
+    "bar 1 @42 e: missed hammer",
+    "bar 1 @48 e: missed hammer",
+    "bar 1 @54 e: missed hammer",
+    "bar 1 @6 e: missed hammer",
+    "bar 1 @60 e: missed pull",
+    "bar 1 @66 e: missed pull",
+    "bar 1 @72 e: missed pull",
+    "bar 1 @78 e: missed hammer",
+    "bar 1 @84 e: missed hammer",
+    "bar 1 @90 e: missed hammer",
+    "bar 2 @12 B: missed hammer",
+    "bar 2 @18 B: missed hammer",
+    "bar 2 @24 B: missed pull",
+    "bar 2 @30 B: missed pull",
+    "bar 2 @36 B: missed pull",
+    "bar 2 @42 B: missed hammer",
+    "bar 2 @48 B: missed hammer",
+    "bar 2 @54 B: missed hammer",
+    "bar 2 @6 B: missed hammer",
+    "bar 2 @60 B: missed pull",
+    "bar 2 @66 B: missed pull",
+    "bar 2 @72 B: missed pull",
+    "bar 2 @78 B: missed hammer",
+    "bar 2 @84 B: missed hammer",
+    "bar 2 @90 B: missed hammer",
+    "bar 3 @12 G: missed hammer",
+    "bar 3 @18 G: missed hammer",
+    "bar 3 @24 G: missed pull",
+    "bar 3 @30 G: missed pull",
+    "bar 3 @36 G: missed pull",
+    "bar 3 @42 G: missed hammer",
+    "bar 3 @48 G: missed hammer",
+    "bar 3 @54 G: missed hammer",
+    "bar 3 @6 G: missed hammer",
+    "bar 3 @60 G: missed pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      24,
+      0,
+      0
+     ],
+     "hammer": [
+      36,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/electric-365-p020-4",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "pull_f1": 0.0,
+    "slide_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @12 G: missed hammer",
+    "bar 1 @24 G: missed hammer",
+    "bar 1 @36 G: missed hammer",
+    "bar 1 @48 G: missed slide",
+    "bar 1 @60 G: missed pull",
+    "bar 1 @72 G: missed pull",
+    "bar 1 @84 G: missed pull",
+    "bar 2 @0 G: missed slide",
+    "bar 2 @12 G: missed hammer",
+    "bar 2 @24 G: missed hammer",
+    "bar 2 @36 G: missed hammer",
+    "bar 2 @48 G: missed slide",
+    "bar 2 @60 G: missed pull",
+    "bar 2 @72 G: missed pull",
+    "bar 2 @84 G: missed pull",
+    "bar 3 @0 G: missed slide",
+    "bar 3 @12 G: missed hammer",
+    "bar 3 @24 G: missed hammer",
+    "bar 3 @36 G: missed hammer",
+    "bar 3 @48 G: missed slide",
+    "bar 3 @60 G: missed pull",
+    "bar 3 @72 G: missed pull",
+    "bar 3 @84 G: missed pull",
+    "bar 4 @0 G: missed slide",
+    "bar 4 @12 G: missed hammer",
+    "bar 4 @24 G: missed hammer",
+    "bar 4 @36 G: missed hammer",
+    "bar 4 @48 G: missed slide",
+    "bar 4 @60 G: missed pull",
+    "bar 4 @72 G: missed pull",
+    "bar 4 @84 G: missed pull"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      0,
+      0
+     ],
+     "hammer": [
+      12,
+      0,
+      0
+     ],
+     "slide": [
+      7,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/heavy-metal-p013-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @48: missed pick down",
+    "chords: 0 of 1 changes placed"
+   ],
+   "detail": {
+    "page": 13,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/heavy-metal-p014-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "chords: 0 of 3 changes placed"
+   ],
+   "detail": {
+    "page": 14,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      9,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/heavy-metal-p015-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "effect_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 4 @0: missed pick down",
+    "chords: 0 of 4 changes placed"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "pick down": [
+      5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/heavy-metal-p015-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "tie_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 6 @0 A: missed tie",
+    "bar 6 @0 E: missed tie",
+    "bar 1 @0: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 4 @0: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @72: missed pick down",
+    "bar 5 @0: missed pick down",
+    "chords: 0 of 8 changes placed"
+   ],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "tie": [
+      2,
+      0,
+      0
+     ],
+     "pick down": [
+      13,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-arranging-p001-1",
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "confirmed",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-arranging-p001-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9545454545454546,
+    "note_recall": 0.9545454545454546,
+    "note_f1": 0.9545454545454546,
+    "fret_f1": 0.9545454545454546,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0
+   },
+   "failures": [
+    "bar 2 @0: read quarter B3 D5, gold quarter B3 G0"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-arranging-p006-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.13636363636363635,
+    "note_f1": 0.17647058823529413,
+    "fret_f1": 0.29411764705882354,
+    "rhythm": 0.3888888888888889,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_precision": 1.0,
+    "flag_recall": 0.6363636363636364,
+    "link_f1": 0.0,
+    "slide_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read dotted-eighth E3, gold eighth e0 A3",
+    "bar 1 @12: read —, gold sixteenth G0",
+    "bar 1 @18: read sixteenth D2, gold sixteenth e0",
+    "bar 1 @24: read eighth G3, gold eighth e0",
+    "bar 1 @36: read eighth D0, gold eighth B3",
+    "bar 1 @48: read dotted-quarter e3, gold eighth e3 E3",
+    "bar 1 @60: read —, gold eighth B0",
+    "bar 1 @72: read —, gold eighth G0",
+    "bar 2 @0: read eighth D0, gold eighth B3 D0",
+    "bar 2 @12: read eighth e3, gold sixteenth B3",
+    "bar 2 @18: read —, gold sixteenth B5",
+    "bar 2 @24: read quarter e3, gold eighth B1",
+    "bar 2 @36: read —, gold eighth G2",
+    "bar 2 @48: read eighth e5, gold eighth G0 E3",
+    "bar 2 @60: read eighth e1, gold eighth D0",
+    "bar 2 @72: read half B2, gold eighth G0",
+    "bar 2 @84: read —, gold eighth B0",
+    "bar 2 @18 B: missed slide",
+    "chords: 0 of 2 changes placed"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "slide": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-arranging-p006-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9615384615384616,
+    "note_recall": 0.6097560975609756,
+    "note_f1": 0.746268656716418,
+    "fret_f1": 0.7761194029850746,
+    "rhythm": 0.6842105263157895,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read quarter B3 E3, gold quarter B3 G0 E3",
+    "bar 2 @0: read eighth e2 B0, gold eighth e2 B0 D0",
+    "bar 2 @24: read eighth e5 G0, gold eighth e5 B0",
+    "bar 3 @0: read quarter e2 D0, gold quarter e2 B0 D0",
+    "bar 4 @0: read half rest, gold quarter e3 B0 E3",
+    "bar 4 @24: read —, gold quarter B0 G0",
+    "bar 4 @48: read quarter rest, gold quarter B0 G0",
+    "bar 5 @0: read —, gold quarter D0",
+    "bar 5 @24: read —, gold quarter B0 G0",
+    "bar 5 @48: read —, gold quarter B0 G0",
+    "chords: 0 of 3 changes placed"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-text-tab-6p-p002-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.6551724137931034,
+    "note_recall": 0.6551724137931034,
+    "note_f1": 0.6551724137931034,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "hammer_f1": 0.0,
+    "tie_f1": 0.0,
+    "slide_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @48: read eighth A5, gold eighth E5",
+    "bar 1 @60: read eighth A7, gold eighth E7",
+    "bar 2 @48: read eighth A5, gold eighth E5",
+    "bar 2 @60: read eighth A7, gold eighth E7",
+    "bar 3 @48: read eighth A5, gold eighth E5",
+    "bar 3 @60: read eighth A7, gold eighth E7",
+    "bar 4 @24: read eighth A5, gold eighth E5",
+    "bar 4 @36: read eighth A6, gold eighth E6",
+    "bar 4 @48: read eighth A5, gold eighth E5",
+    "bar 4 @60: read dotted-quarter A3, gold dotted-quarter E3",
+    "bar 1 @60 E: missed hammer",
+    "bar 2 @0 E: missed tie",
+    "bar 2 @60 E: missed hammer",
+    "bar 3 @0 E: missed tie",
+    "bar 3 @60 E: missed hammer",
+    "bar 4 @0 E: missed tie",
+    "bar 4 @36 E: missed hammer",
+    "bar 4 @60 E: missed slide",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @36: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 1 @84: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 2 @72: missed pick down",
+    "bar 2 @84: missed pick down",
+    "bar 3 @12: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @36: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 3 @84: missed pick down",
+    "bar 4 @12: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @48: missed pick down",
+    "bar 4 @60: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      0,
+      0
+     ],
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "tie": [
+      3,
+      0,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-text-tab-6p-p002-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.0,
+    "hammer_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @60 D: missed hammer",
+    "bar 2 @36 D: missed hammer",
+    "bar 3 @60 D: missed hammer",
+    "bar 4 @36 D: missed hammer",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 1 @72 A: missed vibrato",
+    "bar 2 @0: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 2 @72: missed pick down",
+    "bar 2 @84: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 3 @72 A: missed vibrato",
+    "bar 4 @0: missed pick down",
+    "bar 4 @12: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @36: missed pick down",
+    "bar 4 @48: missed pick down",
+    "bar 4 @72: missed pick down",
+    "bar 4 @84: missed pick down",
+    "bar 2 @0: missed palmMute",
+    "bar 2 @12: missed palmMute",
+    "bar 2 @72: missed palmMute",
+    "bar 2 @84: missed palmMute",
+    "bar 4 @0: missed palmMute",
+    "bar 4 @12: missed palmMute",
+    "bar 4 @72: missed palmMute",
+    "bar 4 @84: missed palmMute",
+    "chords: 0 of 9 changes placed"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      0,
+      0
+     ],
+     "pick down": [
+      22,
+      0,
+      0
+     ],
+     "vibrato": [
+      2,
+      0,
+      0
+     ],
+     "palmMute": [
+      8,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-text-tab-6p-p002-3",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5185185185185185,
+    "note_recall": 0.5,
+    "note_f1": 0.509090909090909,
+    "fret_f1": 0.5818181818181818,
+    "rhythm": 0.65,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @36: read eighth e3 B0 G0 D0 E3, gold eighth D2 A2 E0",
+    "bar 1 @48: read quarter D2 A2 E0, gold quarter e3 B0 G0 D0 E3",
+    "bar 1 @72: read quarter D2 A2 E0, gold eighth D2 A2 E0",
+    "bar 1 @84: read —, gold eighth D2 A2 E0",
+    "bar 2 @24: read eighth D2 A0, gold eighth D3 A1",
+    "bar 3 @36: read eighth e3 B0 G0 D0 E3, gold eighth D2 A2 E0",
+    "bar 3 @48: read quarter D2 A2 E0, gold quarter e3 B0 G0 D0 E3",
+    "bar 3 @72: read quarter D2 A2 E0, gold eighth D2 A2 E0",
+    "bar 3 @84: read —, gold eighth D2 A2 E0",
+    "bar 4 @0: read eighth D4 A2, gold quarter D4 A2",
+    "bar 4 @12: read eighth D3 A1, gold —",
+    "bar 4 @24: read eighth D2 A0, gold half D3 A1",
+    "bar 4 @36: read eighth D2 A0, gold —",
+    "bar 4 @48: read half D2 A0, gold —",
+    "bar 4 @72: read —, gold quarter D2 A0",
+    "bar 1 @0: missed pick down",
+    "bar 1 @24: missed pick down",
+    "bar 1 @48: missed pick down",
+    "bar 1 @72: missed pick down",
+    "bar 2 @0: missed pick down",
+    "bar 2 @12: missed pick down",
+    "bar 2 @24: missed pick down",
+    "bar 2 @36: missed pick down",
+    "bar 2 @48: missed pick down",
+    "bar 3 @0: missed pick down",
+    "bar 3 @24: missed pick down",
+    "bar 3 @48: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 4 @0: missed pick down",
+    "bar 4 @24: missed pick down",
+    "bar 4 @72: missed pick down",
+    "bar 1 @24: missed palmMute",
+    "bar 1 @36: missed palmMute",
+    "bar 1 @72: missed palmMute",
+    "bar 1 @84: missed palmMute",
+    "bar 2 @12: missed palmMute",
+    "bar 2 @36: missed palmMute",
+    "bar 3 @24: missed palmMute",
+    "bar 3 @36: missed palmMute",
+    "bar 3 @72: missed palmMute"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      16,
+      0,
+      0
+     ],
+     "palmMute": [
+      10,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/sample-text-tab-6p-p005-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9122807017543859,
+    "note_recall": 0.9122807017543859,
+    "note_f1": 0.9122807017543859,
+    "fret_f1": 0.9122807017543859,
+    "rhythm": 0.9333333333333333,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 0.0,
+    "chords_placed": 0.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.0,
+    "span_f1": 0.0,
+    "tie_f1": 0.0,
+    "palm_mute_f1": 0.0,
+    "accent_f1": 0.0,
+    "pick_down_f1": 0.0
+   },
+   "failures": [
+    "bar 5 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 5 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 5 @60: read eighth E0, gold —",
+    "bar 5 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 5 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 6 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 6 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 6 @60: read eighth E0, gold —",
+    "bar 6 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 6 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 7 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 7 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 7 @60: read eighth E0, gold —",
+    "bar 7 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 7 @84: read eighth E0, gold eighth D5 A5 E3",
+    "bar 9 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 9 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 9 @60: read eighth E0, gold —",
+    "bar 9 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 9 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 10 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 10 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 10 @60: read eighth E0, gold —",
+    "bar 10 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 10 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 11 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 11 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 11 @60: read eighth E0, gold —",
+    "bar 11 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 11 @84: read eighth E0, gold eighth D5 A5 E3",
+    "bar 11 @0 D: missed tie",
+    "bar 11 @0 A: missed tie",
+    "bar 11 @0 E: missed tie",
+    "bar 12 @0 D: missed tie",
+    "bar 12 @0 A: missed tie",
+    "bar 12 @0 E: missed tie",
+    "bar 5 @0 D: missed tie",
+    "bar 5 @0 A: missed tie",
+    "bar 5 @0 E: missed tie",
+    "bar 7 @0 D: missed tie"
+   ],
+   "detail": {
+    "page": 5,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "tie": [
+      21,
+      0,
+      0
+     ],
+     "pick down": [
+      51,
+      0,
+      0
+     ],
+     "accent": [
+      1,
+      0,
+      0
+     ],
+     "palmMute": [
+      48,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/syt-p106-1",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7647058823529411,
+    "note_recall": 0.7647058823529411,
+    "note_f1": 0.7647058823529411,
+    "fret_f1": 0.7647058823529411,
+    "rhythm": 0.6470588235294118,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A3, gold eighth A3",
+    "bar 1 @6: read sixteenth D0, gold —",
+    "bar 1 @12: read eighth D2, gold sixteenth D0",
+    "bar 1 @18: read —, gold sixteenth D2",
+    "bar 2 @0: read sixteenth A3, gold eighth A3",
+    "bar 2 @6: read sixteenth D0, gold —",
+    "bar 2 @12: read eighth D2, gold sixteenth D0",
+    "bar 2 @18: read —, gold sixteenth D2",
+    "bar 1 @18 D: missed hammer",
+    "bar 2 @18 D: missed hammer"
+   ],
+   "detail": {
+    "page": 106,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "hammer": [
+      2,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/syt-p118-1",
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0
+   },
+   "failures": [],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "confirmed",
+    "jianpu": null,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/syt-p118-2",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.0,
+    "note_recall": 0.0,
+    "note_f1": 0.0,
+    "fret_f1": 0.6666666666666666,
+    "rhythm": 1.0,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read eighth E0, gold eighth A0",
+    "bar 1 @12: read eighth D0, gold eighth G0",
+    "bar 1 @24: read eighth G0, gold eighth B0",
+    "bar 1 @36: read eighth B0, gold eighth G0",
+    "bar 1 @48: read eighth E0, gold eighth e0",
+    "bar 1 @60: read eighth D0, gold eighth G0",
+    "bar 1 @72: read eighth G0, gold eighth B0",
+    "bar 1 @84: read eighth B0, gold eighth G0",
+    "bar 2 @0: read eighth E0, gold —",
+    "bar 2 @12: read eighth D0, gold —",
+    "bar 2 @24: read eighth G0, gold —",
+    "bar 2 @36: read eighth B0, gold —",
+    "bar 2 @48: read eighth E0, gold —",
+    "bar 2 @60: read eighth D0, gold —",
+    "bar 2 @72: read eighth G0, gold —",
+    "bar 2 @84: read eighth B0, gold —"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "stored",
+   "case": "books-batch1/syt-p118-3",
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.125,
+    "note_recall": 0.05333333333333334,
+    "note_f1": 0.07476635514018691,
+    "fret_f1": 0.14953271028037382,
+    "rhythm": 0.19672131147540983,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0
+   },
+   "failures": [
+    "bar 1 @0: read eighth A3, gold eighth B1 A3",
+    "bar 1 @12: read eighth D0, gold eighth G0",
+    "bar 1 @24: read quarter D2, gold eighth B3",
+    "bar 1 @36: read —, gold eighth G0",
+    "bar 1 @48: read quarter A3, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B1",
+    "bar 1 @84: read —, gold eighth G0",
+    "bar 2 @0: read eighth A3, gold eighth B1 A3",
+    "bar 2 @12: read eighth D0, gold eighth G0",
+    "bar 2 @24: read quarter D2, gold eighth B3",
+    "bar 2 @36: read —, gold eighth G0",
+    "bar 2 @48: read quarter A3, gold eighth e0",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @72: read —, gold eighth B1",
+    "bar 2 @84: read —, gold eighth G0",
+    "bar 3 @0: read eighth D2, gold eighth e0 A3",
+    "bar 3 @12: read eighth D3, gold eighth G0",
+    "bar 3 @24: read half G0, gold eighth e1",
+    "bar 3 @36: read —, gold eighth G0",
+    "bar 3 @48: read —, gold eighth e3 E3",
+    "bar 3 @60: read —, gold eighth D0",
+    "bar 3 @72: read —, gold eighth G0",
+    "bar 3 @84: read —, gold eighth B0",
+    "bar 4 @0: read eighth D2, gold eighth e0 A3",
+    "bar 4 @12: read eighth D3, gold eighth G0",
+    "bar 4 @24: read half G0, gold eighth e1",
+    "bar 4 @36: read —, gold eighth G0",
+    "bar 4 @48: read —, gold eighth e3 E3",
+    "bar 4 @60: read —, gold eighth D0",
+    "bar 4 @72: read —, gold eighth G0",
+    "bar 4 @84: read —, gold eighth B0",
+    "bar 5 @0: read sixteenth G0, gold eighth e3 D0",
+    "bar 5 @6: read sixteenth G2, gold —",
+    "bar 5 @12: read sixteenth G0, gold eighth e5",
+    "bar 5 @18: read sixteenth D3, gold —",
+    "bar 5 @24: read quarter D2, gold eighth e3",
+    "bar 5 @36: read —, gold eighth e1",
+    "bar 5 @48: read quarter A3, gold eighth e0",
+    "bar 5 @60: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p015-2",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "link_f1": 1.0,
+    "effect_f1": 1.0,
+    "tie_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.038425,
+    "seconds": 13.97,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "tie": [
+      2,
+      2,
+      2
+     ],
+     "pick down": [
+      13,
+      13,
+      13
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-2",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "cost_usd": 0.043185,
+    "seconds": 15.22,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7931034482758621,
+    "note_recall": 0.7931034482758621,
+    "note_f1": 0.7931034482758621,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.9333333333333333,
+    "effect_f1": 0.9387755102040817,
+    "hammer_f1": 1.0,
+    "tie_f1": 1.0,
+    "slide_f1": 0.0,
+    "vibrato_f1": 1.0,
+    "pick_down_f1": 0.9361702127659575,
+    "cost_usd": 0.052125,
+    "seconds": 21.52,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @24: read eighth E7, gold eighth A7",
+    "bar 1 @72: read eighth E5, gold eighth A5",
+    "bar 2 @24: read eighth E7, gold eighth A7",
+    "bar 2 @72: read eighth E5, gold eighth A5",
+    "bar 3 @24: read eighth E7, gold eighth A7",
+    "bar 3 @72: read eighth E5, gold eighth A5",
+    "bar 4 @60 E: missed slide",
+    "bar 2 @0: extra pick down",
+    "bar 3 @0: extra pick down",
+    "bar 4 @0: extra pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      4
+     ],
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "tie": [
+      3,
+      3,
+      3
+     ],
+     "pick down": [
+      22,
+      25,
+      22
+     ],
+     "vibrato": [
+      1,
+      1,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-3",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.10666666666666667,
+    "note_f1": 0.14953271028037382,
+    "fret_f1": 0.18691588785046728,
+    "rhythm": 0.32786885245901637,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.084575,
+    "seconds": 41.58,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth B1, gold eighth B1 A3",
+    "bar 1 @12: read eighth B3, gold eighth G0",
+    "bar 1 @24: read eighth e0, gold eighth B3",
+    "bar 1 @36: read eighth A3, gold eighth G0",
+    "bar 1 @48: read —, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B1",
+    "bar 1 @84: read —, gold eighth G0",
+    "bar 2 @0: read eighth B1, gold eighth B1 A3",
+    "bar 2 @12: read eighth B3, gold eighth G0",
+    "bar 2 @24: read eighth e0, gold eighth B3",
+    "bar 2 @36: read eighth A3, gold eighth G0",
+    "bar 2 @48: read —, gold eighth e0",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @72: read —, gold eighth B1",
+    "bar 2 @84: read —, gold eighth G0",
+    "bar 3 @0: read eighth e0, gold eighth e0 A3",
+    "bar 3 @12: read eighth e1, gold eighth G0",
+    "bar 3 @24: read quarter e3, gold eighth e1",
+    "bar 3 @36: read —, gold eighth G0",
+    "bar 3 @48: read —, gold eighth e3 E3",
+    "bar 3 @60: read —, gold eighth D0",
+    "bar 3 @72: read —, gold eighth G0",
+    "bar 3 @84: read —, gold eighth B0",
+    "bar 4 @0: read eighth e0, gold eighth e0 A3",
+    "bar 4 @12: read eighth e1, gold eighth G0",
+    "bar 4 @24: read quarter e3, gold eighth e1",
+    "bar 4 @36: read —, gold eighth G0",
+    "bar 4 @48: read —, gold eighth e3 E3",
+    "bar 4 @60: read —, gold eighth D0",
+    "bar 4 @72: read —, gold eighth G0",
+    "bar 4 @84: read —, gold eighth B0",
+    "bar 5 @0: read sixteenth e3, gold eighth e3 D0",
+    "bar 5 @6: read sixteenth e5, gold —",
+    "bar 5 @12: read sixteenth e3, gold eighth e5",
+    "bar 5 @18: read sixteenth e1, gold —",
+    "bar 5 @24: read eighth e0, gold eighth e3",
+    "bar 5 @36: read eighth B1, gold eighth e1",
+    "bar 5 @48: read —, gold eighth e0",
+    "bar 5 @60: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.625,
+    "note_recall": 0.625,
+    "note_f1": 0.625,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.031975,
+    "seconds": 13.43,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @36: read eighth e0, gold eighth G0",
+    "bar 1 @48: read eighth A0, gold eighth e0",
+    "bar 1 @84: read eighth e0, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p006-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.8235294117647058,
+    "note_recall": 0.6829268292682927,
+    "note_f1": 0.7466666666666667,
+    "fret_f1": 0.7733333333333333,
+    "rhythm": 0.8421052631578947,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.09452,
+    "seconds": 47.2,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter B3 E3, gold quarter B3 G0 E3",
+    "bar 2 @0: read eighth e2 B0, gold eighth e2 B0 D0",
+    "bar 2 @24: read quarter e5 G0, gold eighth e5 B0",
+    "bar 2 @36: read —, gold eighth e2 B0",
+    "bar 2 @48: read eighth e2 B0, gold quarter e3 B0",
+    "bar 2 @60: read eighth e3 B0, gold —",
+    "bar 4 @0: read quarter e3 E3, gold quarter e3 B0 E3",
+    "bar 4 @24: read quarter B0, gold quarter B0 G0",
+    "bar 4 @48: read quarter B0, gold quarter B0 G0",
+    "bar 5 @24: read quarter e3, gold quarter B0 G0",
+    "bar 5 @48: read quarter e3, gold quarter B0 G0"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p001-1",
+   "repeat": 2,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "cost_usd": 0.11374,
+    "seconds": 61.12,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "confirmed",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-4",
+   "repeat": 2,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "slide_f1": 1.0,
+    "cost_usd": 0.084515,
+    "seconds": 40.37,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ],
+     "slide": [
+      7,
+      7,
+      7
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p106-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7647058823529411,
+    "note_recall": 0.7647058823529411,
+    "note_f1": 0.7647058823529411,
+    "fret_f1": 0.7647058823529411,
+    "rhythm": 0.6470588235294118,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "cost_usd": 0.0547,
+    "seconds": 23.32,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A3, gold eighth A3",
+    "bar 1 @6: read sixteenth D0, gold —",
+    "bar 1 @12: read eighth D2, gold sixteenth D0",
+    "bar 1 @18: read —, gold sixteenth D2",
+    "bar 2 @0: read sixteenth A3, gold eighth A3",
+    "bar 2 @6: read sixteenth D0, gold —",
+    "bar 2 @12: read eighth D2, gold sixteenth D0",
+    "bar 2 @18: read —, gold sixteenth D2",
+    "bar 1 @12 D: extra hammer",
+    "bar 1 @18 D: missed hammer",
+    "bar 2 @12 D: extra hammer",
+    "bar 2 @18 D: missed hammer"
+   ],
+   "detail": {
+    "page": 106,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "hammer": [
+      2,
+      2,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-1",
+   "repeat": 3,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "cost_usd": 0.04731,
+    "seconds": 15.92,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      31,
+      31,
+      31
+     ],
+     "pull": [
+      32,
+      32,
+      32
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-3",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9629629629629629,
+    "note_recall": 0.9285714285714286,
+    "note_f1": 0.9454545454545454,
+    "fret_f1": 0.9454545454545454,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "effect_f1": 1.0,
+    "span_f1": 1.0,
+    "palm_mute_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.122295,
+    "seconds": 61.52,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read quarter G0 D0 Ax E3, gold quarter e3 B0 G0 D0 E3",
+    "bar 3 @48: read quarter G0 D0 Ax E3, gold quarter e3 B0 G0 D0 E3"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      16,
+      16,
+      16
+     ],
+     "palmMute": [
+      10,
+      10,
+      10
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p014-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 0.6666666666666666,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.02323,
+    "seconds": 6.34,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read half A3 E1, gold quarter A3 E1",
+    "bar 2 @48: read half A5 E3, gold quarter A5 E3",
+    "bar 3 @48: read half A7 E5, gold quarter A7 E5"
+   ],
+   "detail": {
+    "page": 14,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      9,
+      9,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.975609756097561,
+    "hammer_f1": 0.9491525423728814,
+    "pull_f1": 1.0,
+    "cost_usd": 0.046735,
+    "seconds": 15.93,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @0 G: missed hammer",
+    "bar 3 @0 G: missed hammer",
+    "bar 4 @0 G: missed hammer"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      31,
+      28,
+      28
+     ],
+     "pull": [
+      32,
+      32,
+      32
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p015-1",
+   "repeat": 3,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.024025,
+    "seconds": 5.97,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "pick down": [
+      5,
+      5,
+      5
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p013-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.875,
+    "note_recall": 0.875,
+    "note_f1": 0.875,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.02514,
+    "seconds": 8.47,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read half E2, gold half A2"
+   ],
+   "detail": {
+    "page": 13,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      5,
+      5,
+      5
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p001-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.36363636363636365,
+    "note_recall": 0.36363636363636365,
+    "note_f1": 0.36363636363636365,
+    "fret_f1": 0.36363636363636365,
+    "rhythm": 0.36363636363636365,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.113305,
+    "seconds": 56.54,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @96: read quarter B3 G0, gold —",
+    "bar 1 @120: read quarter e0 G2, gold —",
+    "bar 1 @144: read quarter e1 B0, gold —",
+    "bar 1 @168: read quarter e3 B1, gold —",
+    "bar 1 @192: read quarter e5 B3, gold —",
+    "bar 1 @216: read quarter e7 B5, gold —",
+    "bar 1 @240: read quarter e8 B6, gold —",
+    "bar 2 @0: read —, gold quarter B3 G0",
+    "bar 2 @24: read —, gold quarter e0 G2",
+    "bar 2 @48: read —, gold quarter e1 B0",
+    "bar 2 @72: read —, gold quarter e3 B1",
+    "bar 3 @0: read —, gold quarter e5 B3",
+    "bar 3 @24: read —, gold quarter e7 B5",
+    "bar 3 @48: read —, gold quarter e8 B6"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p001-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5,
+    "note_recall": 0.5,
+    "note_f1": 0.5,
+    "fret_f1": 0.5,
+    "rhythm": 0.5,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.06589,
+    "seconds": 32.86,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @96: read quarter e3 G0, gold —",
+    "bar 1 @120: read quarter e5 G2, gold —",
+    "bar 1 @144: read quarter e7 B0, gold —",
+    "bar 1 @168: read quarter e8 B1, gold —",
+    "bar 2 @0: read —, gold quarter e3 G0",
+    "bar 2 @24: read —, gold quarter e5 G2",
+    "bar 2 @48: read —, gold quarter e7 G4",
+    "bar 2 @72: read —, gold quarter e8 G5"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "confirmed",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "link_f1": 1.0,
+    "effect_f1": 0.8571428571428571,
+    "span_f1": 1.0,
+    "hammer_f1": 1.0,
+    "palm_mute_f1": 1.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.9,
+    "cost_usd": 0.11297,
+    "seconds": 56.63,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @72: missed pick down",
+    "bar 1 @72 A: missed vibrato",
+    "bar 2 @36: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 3 @72 A: missed vibrato",
+    "bar 4 @36: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      4
+     ],
+     "pick down": [
+      22,
+      18,
+      18
+     ],
+     "vibrato": [
+      2,
+      0,
+      0
+     ],
+     "palmMute": [
+      8,
+      8,
+      8
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7931034482758621,
+    "note_recall": 0.7931034482758621,
+    "note_f1": 0.7931034482758621,
+    "fret_f1": 1.0,
+    "rhythm": 0.9655172413793104,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.9333333333333333,
+    "effect_f1": 0.9777777777777777,
+    "hammer_f1": 1.0,
+    "tie_f1": 1.0,
+    "slide_f1": 0.0,
+    "vibrato_f1": 1.0,
+    "pick_down_f1": 0.9767441860465116,
+    "cost_usd": 0.063275,
+    "seconds": 27.17,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @24: read eighth E7, gold eighth A7",
+    "bar 1 @72: read eighth E5, gold eighth A5",
+    "bar 2 @24: read eighth E7, gold eighth A7",
+    "bar 2 @72: read eighth E5, gold eighth A5",
+    "bar 3 @24: read eighth E7, gold eighth A7",
+    "bar 3 @72: read eighth E5, gold eighth A5",
+    "bar 4 @60: read quarter E3, gold dotted-quarter E3",
+    "bar 4 @60 E: missed slide",
+    "bar 4 @60: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      4
+     ],
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "tie": [
+      3,
+      3,
+      3
+     ],
+     "pick down": [
+      22,
+      21,
+      21
+     ],
+     "vibrato": [
+      1,
+      1,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-3",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.25,
+    "note_f1": 0.25,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.25,
+    "hammer_f1": 0.25,
+    "pull_f1": 0.25,
+    "cost_usd": 0.050285,
+    "seconds": 19.02,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @0: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @6: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @12: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @18: read sixteenth e8, gold sixteenth B8",
+    "bar 2 @24: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @30: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @36: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @42: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @48: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @54: read sixteenth e8, gold sixteenth B8",
+    "bar 2 @60: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @66: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @72: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @78: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @84: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @90: read sixteenth e8, gold sixteenth B8",
+    "bar 3 @0: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @6: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @12: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @18: read sixteenth e8, gold sixteenth G8",
+    "bar 3 @24: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @30: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @36: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @42: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @48: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @54: read sixteenth e8, gold sixteenth G8",
+    "bar 3 @60: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @66: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @72: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @78: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @84: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @90: read sixteenth e8, gold sixteenth G8",
+    "bar 4 @0: read sixteenth e5, gold sixteenth D5",
+    "bar 4 @6: read sixteenth e6, gold sixteenth D6",
+    "bar 4 @12: read sixteenth e7, gold sixteenth D7",
+    "bar 4 @18: read sixteenth e8, gold sixteenth D8",
+    "bar 4 @24: read sixteenth e7, gold sixteenth D7",
+    "bar 4 @30: read sixteenth e6, gold sixteenth D6",
+    "bar 4 @36: read sixteenth e5, gold sixteenth D5",
+    "bar 4 @42: read sixteenth e6, gold sixteenth D6"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      24,
+      24,
+      6
+     ],
+     "hammer": [
+      36,
+      36,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p005-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7837837837837838,
+    "note_recall": 0.7631578947368421,
+    "note_f1": 0.7733333333333333,
+    "fret_f1": 0.7733333333333333,
+    "rhythm": 0.8888888888888888,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.41935483870967744,
+    "flag_recall": 0.0,
+    "link_f1": 0.5454545454545454,
+    "effect_f1": 0.6326530612244898,
+    "span_f1": 0.9166666666666666,
+    "tie_f1": 0.5454545454545454,
+    "palm_mute_f1": 0.9166666666666666,
+    "accent_f1": 0.5,
+    "pick_down_f1": 0.6382978723404256,
+    "cost_usd": 0.136575,
+    "seconds": 54.77,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 5 @48: read eighth D5 A5, gold quarter D5 A5 E3",
+    "bar 5 @60: read eighth E3, gold —",
+    "bar 6 @48: read eighth D5 A5, gold quarter D5 A5 E3",
+    "bar 6 @60: read eighth E3, gold —",
+    "bar 7 @48: read eighth D5 A5, gold quarter D5 A5 E3",
+    "bar 7 @60: read eighth E3, gold —",
+    "bar 8 @0: read eighth D4 A4 E2, gold eighth D5 A5 E3",
+    "bar 8 @12: read eighth D5 A5 E3, gold eighth D4 A4 E2",
+    "bar 8 @24: read eighth D4 A4 E2, gold eighth D5 A5 E3",
+    "bar 8 @36: read eighth D5 A5 E3, gold eighth D4 A4 E2",
+    "bar 8 @48: read eighth D4 A4 E2, gold eighth D5 A5 E3",
+    "bar 8 @60: read eighth D5 A5 E3, gold eighth D4 A4 E2",
+    "bar 8 @72: read quarter D2 A2 E0, gold eighth D5 A5 E3",
+    "bar 8 @84: read —, gold eighth D2 A2 E0",
+    "bar 9 @48: read eighth D5 A5, gold quarter D5 A5 E3",
+    "bar 9 @60: read eighth E3, gold —",
+    "bar 10 @48: read eighth D5 A5, gold quarter D5 A5 E3",
+    "bar 10 @60: read eighth E3, gold —",
+    "bar 11 @48: read eighth D5 A5, gold quarter D5 A5 E3",
+    "bar 11 @60: read eighth E3, gold —",
+    "bar 12 @0: read eighth D4 A4 E2, gold eighth D5 A5 E3",
+    "bar 12 @12: read eighth D5 A5 E3, gold eighth D4 A4 E2",
+    "bar 12 @24: read eighth D4 A4 E2, gold eighth D5 A5 E3",
+    "bar 12 @36: read eighth D5 A5 E3, gold eighth D4 A4 E2",
+    "bar 12 @48: read eighth D4 A4 E2, gold eighth D5 A5 E3",
+    "bar 12 @60: read eighth D5 A5 E3, gold eighth D4 A4 E2",
+    "bar 12 @72: read quarter D2 A2 E0, gold eighth D5 A5 E3",
+    "bar 12 @84: read —, gold eighth D2 A2 E0",
+    "bar 12 @0 D: missed tie",
+    "bar 12 @0 A: missed tie",
+    "bar 12 @0 E: missed tie",
+    "bar 5 @0 D: missed tie",
+    "bar 5 @0 A: missed tie",
+    "bar 5 @0 E: missed tie",
+    "bar 6 @0 D: extra tie",
+    "bar 6 @0 A: extra tie",
+    "bar 6 @0 E: extra tie",
+    "bar 8 @0 D: missed tie",
+    "bar 8 @0 A: missed tie",
+    "bar 8 @0 E: missed tie"
+   ],
+   "detail": {
+    "page": 5,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "tie": [
+      21,
+      12,
+      9
+     ],
+     "pick down": [
+      51,
+      43,
+      30
+     ],
+     "accent": [
+      1,
+      3,
+      1
+     ],
+     "palmMute": [
+      48,
+      48,
+      44
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-1",
+   "repeat": 3,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "cost_usd": 0.071125,
+    "seconds": 34.35,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "confirmed",
+    "jianpu": null,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-3",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.125,
+    "note_recall": 0.05333333333333334,
+    "note_f1": 0.07476635514018691,
+    "fret_f1": 0.14953271028037382,
+    "rhythm": 0.32786885245901637,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.0554,
+    "seconds": 23.25,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth A3, gold eighth B1 A3",
+    "bar 1 @12: read eighth D0, gold eighth G0",
+    "bar 1 @24: read eighth D2, gold eighth B3",
+    "bar 1 @36: read eighth A3, gold eighth G0",
+    "bar 1 @48: read —, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B1",
+    "bar 1 @84: read —, gold eighth G0",
+    "bar 2 @0: read eighth A3, gold eighth B1 A3",
+    "bar 2 @12: read eighth D0, gold eighth G0",
+    "bar 2 @24: read eighth D2, gold eighth B3",
+    "bar 2 @36: read eighth A3, gold eighth G0",
+    "bar 2 @48: read —, gold eighth e0",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @72: read —, gold eighth B1",
+    "bar 2 @84: read —, gold eighth G0",
+    "bar 3 @0: read eighth D2, gold eighth e0 A3",
+    "bar 3 @12: read eighth D3, gold eighth G0",
+    "bar 3 @24: read quarter G0, gold eighth e1",
+    "bar 3 @36: read —, gold eighth G0",
+    "bar 3 @48: read —, gold eighth e3 E3",
+    "bar 3 @60: read —, gold eighth D0",
+    "bar 3 @72: read —, gold eighth G0",
+    "bar 3 @84: read —, gold eighth B0",
+    "bar 4 @0: read eighth D2, gold eighth e0 A3",
+    "bar 4 @12: read eighth D3, gold eighth G0",
+    "bar 4 @24: read quarter G0, gold eighth e1",
+    "bar 4 @36: read —, gold eighth G0",
+    "bar 4 @48: read —, gold eighth e3 E3",
+    "bar 4 @60: read —, gold eighth D0",
+    "bar 4 @72: read —, gold eighth G0",
+    "bar 4 @84: read —, gold eighth B0",
+    "bar 5 @0: read sixteenth G0, gold eighth e3 D0",
+    "bar 5 @6: read sixteenth G2, gold —",
+    "bar 5 @12: read sixteenth G0, gold eighth e5",
+    "bar 5 @18: read sixteenth D3, gold —",
+    "bar 5 @24: read eighth D2, gold eighth e3",
+    "bar 5 @36: read eighth A3, gold eighth e1",
+    "bar 5 @48: read —, gold eighth e0",
+    "bar 5 @60: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p006-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5714285714285714,
+    "note_recall": 0.36363636363636365,
+    "note_f1": 0.4444444444444444,
+    "fret_f1": 0.5555555555555556,
+    "rhythm": 0.3333333333333333,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.5,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "slide_f1": 0.0,
+    "cost_usd": 0.117565,
+    "seconds": 67.99,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read dotted-eighth e0 E3, gold eighth e0 A3",
+    "bar 1 @12: read —, gold sixteenth G0",
+    "bar 1 @18: read sixteenth B1, gold sixteenth e0",
+    "bar 1 @36: read eighth B1, gold eighth B3",
+    "bar 1 @48: read dotted-quarter e3, gold eighth e3 E3",
+    "bar 1 @60: read —, gold eighth B0",
+    "bar 1 @72: read —, gold eighth G0",
+    "bar 2 @0: read sixteenth B3 E0, gold eighth B3 D0",
+    "bar 2 @6: read sixteenth B3, gold —",
+    "bar 2 @12: read eighth B5, gold sixteenth B3",
+    "bar 2 @18: read —, gold sixteenth B5",
+    "bar 2 @48: read half G0, gold eighth G0 E3",
+    "bar 2 @60: read —, gold eighth D0",
+    "bar 2 @72: read —, gold eighth G0",
+    "bar 2 @84: read —, gold eighth B0",
+    "bar 2 @18 B: missed slide",
+    "chords: 1 of 2 changes placed"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "slide": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "link_f1": 0.975609756097561,
+    "hammer_f1": 0.9491525423728814,
+    "pull_f1": 1.0,
+    "cost_usd": 0.04516,
+    "seconds": 15.61,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @0 G: missed hammer",
+    "bar 3 @0 G: missed hammer",
+    "bar 4 @0 G: missed hammer"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      31,
+      28,
+      28
+     ],
+     "pull": [
+      32,
+      32,
+      32
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p015-2",
+   "repeat": 3,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "link_f1": 1.0,
+    "effect_f1": 1.0,
+    "tie_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.04045,
+    "seconds": 15.09,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "tie": [
+      2,
+      2,
+      2
+     ],
+     "pick down": [
+      13,
+      13,
+      13
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-4",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "slide_f1": 1.0,
+    "cost_usd": 0.05074,
+    "seconds": 19.04,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ],
+     "slide": [
+      7,
+      7,
+      7
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-3",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.8888888888888888,
+    "note_recall": 0.8571428571428571,
+    "note_f1": 0.8727272727272727,
+    "fret_f1": 0.9090909090909091,
+    "rhythm": 0.9,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.9166666666666666,
+    "flag_recall": 0.0,
+    "effect_f1": 0.9375,
+    "span_f1": 0.8,
+    "palm_mute_f1": 0.8,
+    "pick_down_f1": 0.9375,
+    "cost_usd": 0.140495,
+    "seconds": 75.46,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read quarter B3 G0 Dx E3, gold quarter e3 B0 G0 D0 E3",
+    "bar 3 @48: read quarter B3 G0 Dx E3, gold quarter e3 B0 G0 D0 E3",
+    "bar 4 @24: read quarter D3 A1, gold half D3 A1",
+    "bar 4 @48: read half D2 A0, gold —",
+    "bar 4 @72: read —, gold quarter D2 A0",
+    "bar 4 @48: extra pick down",
+    "bar 4 @72: missed pick down",
+    "bar 2 @12: missed palmMute",
+    "bar 2 @24: extra palmMute",
+    "bar 2 @36: missed palmMute",
+    "bar 2 @48: extra palmMute",
+    "chords: 11 of 12 changes placed"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      16,
+      16,
+      15
+     ],
+     "palmMute": [
+      10,
+      10,
+      8
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p006-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.8571428571428571,
+    "note_recall": 0.5454545454545454,
+    "note_f1": 0.6666666666666666,
+    "fret_f1": 0.6666666666666666,
+    "rhythm": 0.5,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "tie_f1": 0.0,
+    "slide_f1": 0.0,
+    "cost_usd": 0.162265,
+    "seconds": 93.64,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read dotted-eighth e0 A3, gold eighth e0 A3",
+    "bar 1 @12: read —, gold sixteenth G0",
+    "bar 1 @18: read sixteenth B1, gold sixteenth e0",
+    "bar 1 @36: read eighth e0, gold eighth B3",
+    "bar 1 @48: read dotted-quarter e3, gold eighth e3 E3",
+    "bar 1 @60: read —, gold eighth B0",
+    "bar 1 @72: read —, gold eighth G0",
+    "bar 2 @48: read half G0, gold eighth G0 E3",
+    "bar 2 @60: read —, gold eighth D0",
+    "bar 2 @72: read —, gold eighth G0",
+    "bar 2 @84: read —, gold eighth B0",
+    "bar 2 @12 B: extra tie",
+    "bar 2 @18 B: missed slide"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "tie": [
+      0,
+      1,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-2",
+   "repeat": 3,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "cost_usd": 0.039885,
+    "seconds": 12.78,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p013-1",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.027215,
+    "seconds": 10.09,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 13,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      5,
+      5,
+      5
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.625,
+    "note_recall": 0.625,
+    "note_f1": 0.625,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.0273,
+    "seconds": 11.28,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @36: read eighth e0, gold eighth G0",
+    "bar 1 @48: read eighth A0, gold eighth e0",
+    "bar 1 @84: read eighth e0, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p106-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7647058823529411,
+    "note_recall": 0.7647058823529411,
+    "note_f1": 0.7647058823529411,
+    "fret_f1": 0.7647058823529411,
+    "rhythm": 0.6470588235294118,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "cost_usd": 0.044425,
+    "seconds": 18.08,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A3, gold eighth A3",
+    "bar 1 @6: read sixteenth D0, gold —",
+    "bar 1 @12: read eighth D2, gold sixteenth D0",
+    "bar 1 @18: read —, gold sixteenth D2",
+    "bar 2 @0: read sixteenth A3, gold eighth A3",
+    "bar 2 @6: read sixteenth D0, gold —",
+    "bar 2 @12: read eighth D2, gold sixteenth D0",
+    "bar 2 @18: read —, gold sixteenth D2",
+    "bar 1 @12 D: extra hammer",
+    "bar 1 @18 D: missed hammer",
+    "bar 2 @12 D: extra hammer",
+    "bar 2 @18 D: missed hammer"
+   ],
+   "detail": {
+    "page": 106,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "hammer": [
+      2,
+      2,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p014-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 0.6666666666666666,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.024005,
+    "seconds": 6.69,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read half A3 E1, gold quarter A3 E1",
+    "bar 2 @48: read half A5 E3, gold quarter A5 E3",
+    "bar 3 @48: read half A7 E5, gold quarter A7 E5"
+   ],
+   "detail": {
+    "page": 14,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      9,
+      9,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p015-1",
+   "repeat": 2,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.0226,
+    "seconds": 5.07,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "pick down": [
+      5,
+      5,
+      5
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p001-1",
+   "repeat": 3,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "cost_usd": 0.094165,
+    "seconds": 47.32,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "confirmed",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-3",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.25,
+    "note_f1": 0.25,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.25,
+    "hammer_f1": 0.25,
+    "pull_f1": 0.25,
+    "cost_usd": 0.048235,
+    "seconds": 15.89,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @0: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @6: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @12: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @18: read sixteenth e8, gold sixteenth B8",
+    "bar 2 @24: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @30: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @36: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @42: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @48: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @54: read sixteenth e8, gold sixteenth B8",
+    "bar 2 @60: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @66: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @72: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @78: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @84: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @90: read sixteenth e8, gold sixteenth B8",
+    "bar 3 @0: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @6: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @12: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @18: read sixteenth e8, gold sixteenth G8",
+    "bar 3 @24: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @30: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @36: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @42: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @48: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @54: read sixteenth e8, gold sixteenth G8",
+    "bar 3 @60: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @66: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @72: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @78: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @84: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @90: read sixteenth e8, gold sixteenth G8",
+    "bar 4 @0: read sixteenth e5, gold sixteenth D5",
+    "bar 4 @6: read sixteenth e6, gold sixteenth D6",
+    "bar 4 @12: read sixteenth e7, gold sixteenth D7",
+    "bar 4 @18: read sixteenth e8, gold sixteenth D8",
+    "bar 4 @24: read sixteenth e7, gold sixteenth D7",
+    "bar 4 @30: read sixteenth e6, gold sixteenth D6",
+    "bar 4 @36: read sixteenth e5, gold sixteenth D5",
+    "bar 4 @42: read sixteenth e6, gold sixteenth D6"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      24,
+      24,
+      6
+     ],
+     "hammer": [
+      36,
+      36,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p005-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.675,
+    "note_recall": 0.7105263157894737,
+    "note_f1": 0.6923076923076923,
+    "fret_f1": 0.6923076923076923,
+    "rhythm": 0.9333333333333333,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.4838709677419355,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "effect_f1": 0.6433566433566433,
+    "span_f1": 0.7272727272727273,
+    "tie_f1": 0.0,
+    "palm_mute_f1": 0.7272727272727273,
+    "accent_f1": 1.0,
+    "pick_down_f1": 0.6382978723404256,
+    "cost_usd": 0.129175,
+    "seconds": 54.15,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 5 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 5 @12: read eighth A4 E2, gold eighth E0",
+    "bar 5 @24: read eighth A5 E3, gold eighth D4 A2",
+    "bar 5 @36: read eighth D2 A2 E0, gold eighth E0",
+    "bar 5 @48: read eighth D2 A2 E0, gold quarter D5 A5 E3",
+    "bar 5 @60: read eighth A4 E2, gold —",
+    "bar 5 @72: read eighth A5 E3, gold eighth E0",
+    "bar 6 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 6 @12: read eighth A4 E2, gold eighth E0",
+    "bar 6 @24: read eighth A5 E3, gold eighth D4 A2",
+    "bar 6 @36: read eighth D2 A2 E0, gold eighth E0",
+    "bar 6 @48: read eighth D2 A2 E0, gold quarter D5 A5 E3",
+    "bar 6 @60: read eighth A4 E2, gold —",
+    "bar 6 @72: read eighth A5 E3, gold eighth E0",
+    "bar 7 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 7 @12: read eighth A4 E2, gold eighth E0",
+    "bar 7 @24: read eighth A5 E3, gold eighth D4 A2",
+    "bar 7 @36: read eighth D2 A2 E0, gold eighth E0",
+    "bar 7 @48: read eighth D2 A2 E0, gold quarter D5 A5 E3",
+    "bar 7 @60: read eighth A4 E2, gold —",
+    "bar 7 @72: read eighth A5 E3, gold eighth E0",
+    "bar 7 @84: read eighth A5 E3, gold eighth D5 A5 E3",
+    "bar 8 @0: read eighth A5 E3, gold eighth D5 A5 E3",
+    "bar 8 @12: read eighth A4 E2, gold eighth D4 A4 E2",
+    "bar 8 @24: read eighth A5 E3, gold eighth D5 A5 E3",
+    "bar 8 @36: read eighth A4 E2, gold eighth D4 A4 E2",
+    "bar 8 @48: read eighth A5 E3, gold eighth D5 A5 E3",
+    "bar 8 @60: read eighth A4 E2, gold eighth D4 A4 E2",
+    "bar 8 @72: read eighth A5 E3, gold eighth D5 A5 E3",
+    "bar 8 @84: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 9 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 9 @12: read eighth A4 E2, gold eighth E0",
+    "bar 9 @24: read eighth A5 E3, gold eighth D4 A2",
+    "bar 9 @36: read eighth D2 A2 E0, gold eighth E0",
+    "bar 9 @48: read eighth D2 A2 E0, gold quarter D5 A5 E3",
+    "bar 9 @60: read eighth A4 E2, gold —",
+    "bar 9 @72: read eighth A5 E3, gold eighth E0",
+    "bar 10 @0: read eighth A2 E0, gold eighth D2 A2 E0",
+    "bar 10 @12: read eighth A4 E2, gold eighth E0",
+    "bar 10 @24: read eighth A5 E3, gold eighth D4 A2"
+   ],
+   "detail": {
+    "page": 5,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "tie": [
+      21,
+      0,
+      0
+     ],
+     "pick down": [
+      51,
+      90,
+      45
+     ],
+     "accent": [
+      1,
+      1,
+      1
+     ],
+     "palmMute": [
+      48,
+      40,
+      32
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p006-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.8787878787878788,
+    "note_recall": 0.7073170731707317,
+    "note_f1": 0.7837837837837838,
+    "fret_f1": 0.8108108108108109,
+    "rhythm": 0.8421052631578947,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.10087,
+    "seconds": 50.32,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter B3 E3, gold quarter B3 G0 E3",
+    "bar 2 @0: read eighth e2 B0, gold eighth e2 B0 D0",
+    "bar 2 @24: read quarter e5 G0, gold eighth e5 B0",
+    "bar 2 @36: read —, gold eighth e2 B0",
+    "bar 2 @48: read eighth e2 B0, gold quarter e3 B0",
+    "bar 2 @60: read eighth e3 B0, gold —",
+    "bar 3 @0: read quarter e2 D0, gold quarter e2 B0 D0",
+    "bar 4 @0: read quarter e3 E3, gold quarter e3 B0 E3",
+    "bar 4 @24: read quarter B0, gold quarter B0 G0",
+    "bar 4 @48: read quarter B0, gold quarter B0 G0",
+    "bar 5 @24: read quarter B0, gold quarter B0 G0",
+    "bar 5 @48: read quarter B0, gold quarter B0 G0"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p001-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.36363636363636365,
+    "note_recall": 0.36363636363636365,
+    "note_f1": 0.36363636363636365,
+    "fret_f1": 0.36363636363636365,
+    "rhythm": 0.36363636363636365,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.11008,
+    "seconds": 55.22,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @96: read quarter B3 G0, gold —",
+    "bar 1 @120: read quarter e0 G2, gold —",
+    "bar 1 @144: read quarter e1 B0, gold —",
+    "bar 1 @168: read quarter e3 B1, gold —",
+    "bar 1 @192: read quarter e5 B3, gold —",
+    "bar 1 @216: read quarter e7 B5, gold —",
+    "bar 1 @240: read quarter e8 B6, gold —",
+    "bar 2 @0: read —, gold quarter B3 G0",
+    "bar 2 @24: read —, gold quarter e0 G2",
+    "bar 2 @48: read —, gold quarter e1 B0",
+    "bar 2 @72: read —, gold quarter e3 B1",
+    "bar 3 @0: read —, gold quarter e5 B3",
+    "bar 3 @24: read —, gold quarter e7 B5",
+    "bar 3 @48: read —, gold quarter e8 B6"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-2",
+   "repeat": 2,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "cost_usd": 0.036885,
+    "seconds": 12.13,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-3",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9285714285714286,
+    "note_recall": 0.9285714285714286,
+    "note_f1": 0.9285714285714286,
+    "fret_f1": 0.9285714285714286,
+    "rhythm": 0.9,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.9166666666666666,
+    "flag_recall": 0.0,
+    "effect_f1": 0.9375,
+    "span_f1": 0.9,
+    "palm_mute_f1": 0.9,
+    "pick_down_f1": 0.9375,
+    "cost_usd": 0.195245,
+    "seconds": 104.45,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @48: read quarter e3 G0 D0 Ax E3, gold quarter e3 B0 G0 D0 E3",
+    "bar 3 @48: read quarter e3 G0 D0 Ax E3, gold quarter e3 B0 G0 D0 E3",
+    "bar 4 @24: read quarter D3 A1, gold half D3 A1",
+    "bar 4 @48: read half D2 A0, gold —",
+    "bar 4 @72: read —, gold quarter D2 A0",
+    "bar 4 @48: extra pick down",
+    "bar 4 @72: missed pick down",
+    "bar 2 @12: missed palmMute",
+    "bar 2 @24: extra palmMute",
+    "chords: 11 of 12 changes placed"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      16,
+      16,
+      15
+     ],
+     "palmMute": [
+      10,
+      10,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7931034482758621,
+    "note_recall": 0.7931034482758621,
+    "note_f1": 0.7931034482758621,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.9333333333333333,
+    "effect_f1": 1.0,
+    "hammer_f1": 1.0,
+    "tie_f1": 1.0,
+    "slide_f1": 0.0,
+    "vibrato_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.055425,
+    "seconds": 23.53,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @24: read eighth E7, gold eighth A7",
+    "bar 1 @72: read eighth E5, gold eighth A5",
+    "bar 2 @24: read eighth E7, gold eighth A7",
+    "bar 2 @72: read eighth E5, gold eighth A5",
+    "bar 3 @24: read eighth E7, gold eighth A7",
+    "bar 3 @72: read eighth E5, gold eighth A5",
+    "bar 4 @60 E: missed slide"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      4
+     ],
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "tie": [
+      3,
+      3,
+      3
+     ],
+     "pick down": [
+      22,
+      22,
+      22
+     ],
+     "vibrato": [
+      1,
+      1,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-3",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.10666666666666667,
+    "note_f1": 0.14953271028037382,
+    "fret_f1": 0.18691588785046728,
+    "rhythm": 0.32786885245901637,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.0783,
+    "seconds": 37.61,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read eighth B1, gold eighth B1 A3",
+    "bar 1 @12: read eighth B3, gold eighth G0",
+    "bar 1 @24: read eighth e0, gold eighth B3",
+    "bar 1 @36: read eighth B1, gold eighth G0",
+    "bar 1 @48: read —, gold eighth e0",
+    "bar 1 @60: read —, gold eighth G0",
+    "bar 1 @72: read —, gold eighth B1",
+    "bar 1 @84: read —, gold eighth G0",
+    "bar 2 @0: read eighth B1, gold eighth B1 A3",
+    "bar 2 @12: read eighth B3, gold eighth G0",
+    "bar 2 @24: read eighth e0, gold eighth B3",
+    "bar 2 @36: read eighth B1, gold eighth G0",
+    "bar 2 @48: read —, gold eighth e0",
+    "bar 2 @60: read —, gold eighth G0",
+    "bar 2 @72: read —, gold eighth B1",
+    "bar 2 @84: read —, gold eighth G0",
+    "bar 3 @0: read eighth e0, gold eighth e0 A3",
+    "bar 3 @12: read eighth e1, gold eighth G0",
+    "bar 3 @24: read quarter e3, gold eighth e1",
+    "bar 3 @36: read —, gold eighth G0",
+    "bar 3 @48: read —, gold eighth e3 E3",
+    "bar 3 @60: read —, gold eighth D0",
+    "bar 3 @72: read —, gold eighth G0",
+    "bar 3 @84: read —, gold eighth B0",
+    "bar 4 @0: read eighth e0, gold eighth e0 A3",
+    "bar 4 @12: read eighth e1, gold eighth G0",
+    "bar 4 @24: read quarter e3, gold eighth e1",
+    "bar 4 @36: read —, gold eighth G0",
+    "bar 4 @48: read —, gold eighth e3 E3",
+    "bar 4 @60: read —, gold eighth D0",
+    "bar 4 @72: read —, gold eighth G0",
+    "bar 4 @84: read —, gold eighth B0",
+    "bar 5 @0: read sixteenth e3, gold eighth e3 D0",
+    "bar 5 @6: read sixteenth e5, gold —",
+    "bar 5 @12: read sixteenth e3, gold eighth e5",
+    "bar 5 @18: read sixteenth e1, gold —",
+    "bar 5 @24: read eighth e0, gold eighth e3",
+    "bar 5 @36: read eighth B1, gold eighth e1",
+    "bar 5 @48: read —, gold eighth e0",
+    "bar 5 @60: read —, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-3",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.25,
+    "note_recall": 0.25,
+    "note_f1": 0.25,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.25,
+    "hammer_f1": 0.25,
+    "pull_f1": 0.25,
+    "cost_usd": 0.045035,
+    "seconds": 14.94,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 2 @0: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @6: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @12: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @18: read sixteenth e8, gold sixteenth B8",
+    "bar 2 @24: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @30: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @36: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @42: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @48: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @54: read sixteenth e8, gold sixteenth B8",
+    "bar 2 @60: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @66: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @72: read sixteenth e5, gold sixteenth B5",
+    "bar 2 @78: read sixteenth e6, gold sixteenth B6",
+    "bar 2 @84: read sixteenth e7, gold sixteenth B7",
+    "bar 2 @90: read sixteenth e8, gold sixteenth B8",
+    "bar 3 @0: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @6: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @12: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @18: read sixteenth e8, gold sixteenth G8",
+    "bar 3 @24: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @30: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @36: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @42: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @48: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @54: read sixteenth e8, gold sixteenth G8",
+    "bar 3 @60: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @66: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @72: read sixteenth e5, gold sixteenth G5",
+    "bar 3 @78: read sixteenth e6, gold sixteenth G6",
+    "bar 3 @84: read sixteenth e7, gold sixteenth G7",
+    "bar 3 @90: read sixteenth e8, gold sixteenth G8",
+    "bar 4 @0: read sixteenth e5, gold sixteenth D5",
+    "bar 4 @6: read sixteenth e6, gold sixteenth D6",
+    "bar 4 @12: read sixteenth e7, gold sixteenth D7",
+    "bar 4 @18: read sixteenth e8, gold sixteenth D8",
+    "bar 4 @24: read sixteenth e7, gold sixteenth D7",
+    "bar 4 @30: read sixteenth e6, gold sixteenth D6",
+    "bar 4 @36: read sixteenth e5, gold sixteenth D5",
+    "bar 4 @42: read sixteenth e6, gold sixteenth D6"
+   ],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      24,
+      24,
+      6
+     ],
+     "hammer": [
+      36,
+      36,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p015-2",
+   "repeat": 2,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "link_f1": 1.0,
+    "effect_f1": 1.0,
+    "tie_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.04095,
+    "seconds": 15.15,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "tie": [
+      2,
+      2,
+      2
+     ],
+     "pick down": [
+      13,
+      13,
+      13
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p006-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.5,
+    "note_recall": 0.3181818181818182,
+    "note_f1": 0.3888888888888889,
+    "fret_f1": 0.5555555555555556,
+    "rhythm": 0.3333333333333333,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "tie_f1": 0.0,
+    "slide_f1": 0.0,
+    "cost_usd": 0.18299,
+    "seconds": 103.42,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read dotted-eighth e0 E3, gold eighth e0 A3",
+    "bar 1 @12: read —, gold sixteenth G0",
+    "bar 1 @18: read sixteenth B1, gold sixteenth e0",
+    "bar 1 @48: read dotted-quarter e3, gold eighth e3 E3",
+    "bar 1 @60: read —, gold eighth B0",
+    "bar 1 @72: read —, gold eighth G0",
+    "bar 2 @0: read eighth B3 A0, gold eighth B3 D0",
+    "bar 2 @12: read eighth B3, gold sixteenth B3",
+    "bar 2 @18: read —, gold sixteenth B5",
+    "bar 2 @24: read eighth B5, gold eighth B1",
+    "bar 2 @36: read sixteenth B1, gold eighth G2",
+    "bar 2 @42: read sixteenth G2, gold —",
+    "bar 2 @48: read half e3, gold eighth G0 E3",
+    "bar 2 @60: read —, gold eighth D0",
+    "bar 2 @72: read —, gold eighth G0",
+    "bar 2 @84: read —, gold eighth B0",
+    "bar 2 @12 B: extra tie",
+    "bar 2 @18 B: missed slide"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "slide": [
+      1,
+      0,
+      0
+     ],
+     "tie": [
+      0,
+      1,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p001-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.36363636363636365,
+    "note_recall": 0.36363636363636365,
+    "note_f1": 0.36363636363636365,
+    "fret_f1": 0.36363636363636365,
+    "rhythm": 0.36363636363636365,
+    "bars": 0.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.14813,
+    "seconds": 76.42,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @96: read quarter B3 G0, gold —",
+    "bar 1 @120: read quarter e0 G2, gold —",
+    "bar 1 @144: read quarter e1 B0, gold —",
+    "bar 1 @168: read quarter e3 B1, gold —",
+    "bar 1 @192: read quarter e5 B3, gold —",
+    "bar 1 @216: read quarter e7 B5, gold —",
+    "bar 1 @240: read quarter e8 B6, gold —",
+    "bar 2 @0: read —, gold quarter B3 G0",
+    "bar 2 @24: read —, gold quarter e0 G2",
+    "bar 2 @48: read —, gold quarter e1 B0",
+    "bar 2 @72: read —, gold quarter e3 B1",
+    "bar 3 @0: read —, gold quarter e5 B3",
+    "bar 3 @24: read —, gold quarter e7 B5",
+    "bar 3 @48: read —, gold quarter e8 B6"
+   ],
+   "detail": {
+    "page": 1,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-1",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9375,
+    "note_recall": 0.9375,
+    "note_f1": 0.9375,
+    "fret_f1": 0.9375,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.0588,
+    "seconds": 25.55,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 7 @12: read eighth e3, gold eighth G0",
+    "bar 8 @12: read eighth e3, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "confirmed",
+    "jianpu": null,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-2",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "link_f1": 1.0,
+    "effect_f1": 0.8571428571428571,
+    "span_f1": 1.0,
+    "hammer_f1": 1.0,
+    "palm_mute_f1": 1.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.9,
+    "cost_usd": 0.11342,
+    "seconds": 59.78,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @72: missed pick down",
+    "bar 1 @72 A: missed vibrato",
+    "bar 2 @36: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 3 @72 A: missed vibrato",
+    "bar 4 @36: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      4
+     ],
+     "pick down": [
+      22,
+      18,
+      18
+     ],
+     "vibrato": [
+      2,
+      0,
+      0
+     ],
+     "palmMute": [
+      8,
+      8,
+      8
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p106-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.7647058823529411,
+    "note_recall": 0.7647058823529411,
+    "note_f1": 0.7647058823529411,
+    "fret_f1": 0.7647058823529411,
+    "rhythm": 0.6470588235294118,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "link_f1": 0.0,
+    "hammer_f1": 0.0,
+    "cost_usd": 0.0498,
+    "seconds": 20.93,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read sixteenth A3, gold eighth A3",
+    "bar 1 @6: read sixteenth D0, gold —",
+    "bar 1 @12: read eighth D2, gold sixteenth D0",
+    "bar 1 @18: read —, gold sixteenth D2",
+    "bar 2 @0: read sixteenth A3, gold eighth A3",
+    "bar 2 @6: read sixteenth D0, gold —",
+    "bar 2 @12: read eighth D2, gold sixteenth D0",
+    "bar 2 @18: read —, gold sixteenth D2",
+    "bar 1 @12 D: extra hammer",
+    "bar 1 @18 D: missed hammer",
+    "bar 2 @12 D: extra hammer",
+    "bar 2 @18 D: missed hammer"
+   ],
+   "detail": {
+    "page": 106,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "hammer": [
+      2,
+      2,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p005-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.905982905982906,
+    "note_recall": 0.9298245614035088,
+    "note_f1": 0.9177489177489178,
+    "fret_f1": 0.9177489177489178,
+    "rhythm": 0.9333333333333333,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 0.8709677419354839,
+    "flag_recall": 0.0,
+    "link_f1": 0.2962962962962963,
+    "effect_f1": 0.6732673267326733,
+    "span_f1": 0.8888888888888888,
+    "hammer_f1": 0.0,
+    "tie_f1": 0.32,
+    "palm_mute_f1": 0.8888888888888888,
+    "accent_f1": 0.5,
+    "pick_down_f1": 0.6804123711340206,
+    "cost_usd": 0.16335,
+    "seconds": 74.81,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 5 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 5 @60: read eighth E0, gold —",
+    "bar 5 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 5 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 6 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 6 @60: read eighth E0, gold —",
+    "bar 6 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 6 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 7 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 7 @60: read eighth E0, gold —",
+    "bar 7 @72: read eighth D5 A5 E3, gold eighth E0",
+    "bar 7 @84: read eighth E0, gold eighth D5 A5 E3",
+    "bar 9 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 9 @60: read eighth E0, gold —",
+    "bar 9 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 9 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 10 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 10 @60: read eighth E0, gold —",
+    "bar 10 @72: read eighth D2 A2 E0, gold eighth E0",
+    "bar 10 @84: read eighth E0, gold eighth D2 A2 E0",
+    "bar 11 @48: read eighth D5 A5 E3, gold quarter D5 A5 E3",
+    "bar 11 @60: read eighth E0, gold —",
+    "bar 11 @72: read eighth D5 A5 E3, gold eighth E0",
+    "bar 11 @84: read eighth E0, gold eighth D5 A5 E3",
+    "bar 11 @0 D: missed tie",
+    "bar 11 @0 A: missed tie",
+    "bar 11 @0 E: missed tie",
+    "bar 12 @0 E: extra hammer",
+    "bar 12 @0 E: missed tie",
+    "bar 5 @0 D: missed tie",
+    "bar 5 @0 A: missed tie",
+    "bar 5 @0 E: missed tie",
+    "bar 7 @0 D: missed tie",
+    "bar 7 @0 A: missed tie",
+    "bar 7 @0 E: missed tie",
+    "bar 8 @0 E: extra hammer",
+    "bar 8 @0 E: missed tie",
+    "bar 9 @0 D: missed tie",
+    "bar 9 @0 A: missed tie",
+    "bar 9 @0 E: missed tie"
+   ],
+   "detail": {
+    "page": 5,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "tie": [
+      21,
+      4,
+      4
+     ],
+     "hammer": [
+      0,
+      2,
+      0
+     ],
+     "pick down": [
+      51,
+      46,
+      33
+     ],
+     "accent": [
+      1,
+      3,
+      1
+     ],
+     "palmMute": [
+      48,
+      51,
+      44
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p015-1",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.0261,
+    "seconds": 7.14,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 15,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {
+     "pick down": [
+      5,
+      5,
+      5
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.375,
+    "note_recall": 0.375,
+    "note_f1": 0.375,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.030325,
+    "seconds": 13.54,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @24: read eighth e0, gold eighth B0",
+    "bar 1 @36: read eighth B0, gold eighth G0",
+    "bar 1 @48: read eighth A0, gold eighth e0",
+    "bar 1 @72: read eighth e0, gold eighth B0",
+    "bar 1 @84: read eighth B0, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p013-1",
+   "repeat": 3,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.875,
+    "note_recall": 0.875,
+    "note_f1": 0.875,
+    "fret_f1": 0.875,
+    "rhythm": 0.6,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "effect_f1": 0.8,
+    "pick_down_f1": 0.8,
+    "cost_usd": 0.027065,
+    "seconds": 9.45,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter E0, gold half E0",
+    "bar 1 @24: read quarter A2, gold —",
+    "bar 1 @48: read —, gold half A2",
+    "bar 1 @24: extra pick down",
+    "bar 1 @48: missed pick down"
+   ],
+   "detail": {
+    "page": 13,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      5,
+      5,
+      4
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/heavy-metal-p014-1",
+   "repeat": 1,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "effect_f1": 1.0,
+    "pick_down_f1": 1.0,
+    "cost_usd": 0.025055,
+    "seconds": 6.8,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 14,
+    "book": "heavy-metal",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pick down": [
+      9,
+      9,
+      9
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-arranging-p006-2",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9142857142857143,
+    "note_recall": 0.7804878048780488,
+    "note_f1": 0.8421052631578947,
+    "fret_f1": 0.868421052631579,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "flag_recall": 0.0,
+    "cost_usd": 0.107195,
+    "seconds": 53.82,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @0: read quarter B3 E3, gold quarter B3 G0 E3",
+    "bar 2 @0: read eighth e2 B0 G0, gold eighth e2 B0 D0",
+    "bar 4 @0: read quarter e3 E3, gold quarter e3 B0 E3",
+    "bar 4 @24: read quarter B0, gold quarter B0 G0",
+    "bar 4 @48: read quarter B0, gold quarter B0 G0",
+    "bar 5 @24: read quarter e3, gold quarter B0 G0",
+    "bar 5 @48: read quarter e3, gold quarter B0 G0"
+   ],
+   "detail": {
+    "page": 6,
+    "book": "sample-arranging",
+    "status": "corrected",
+    "jianpu": true,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/syt-p118-1",
+   "repeat": 1,
+   "pass": false,
+   "metrics": {
+    "note_precision": 0.9375,
+    "note_recall": 0.9375,
+    "note_f1": 0.9375,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "flag_precision": 1.0,
+    "flag_recall": 1.0,
+    "cost_usd": 0.054825,
+    "seconds": 23.13,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 7 @12: read eighth B0, gold eighth G0",
+    "bar 8 @12: read eighth B0, gold eighth G0"
+   ],
+   "detail": {
+    "page": 118,
+    "book": "syt",
+    "status": "confirmed",
+    "jianpu": null,
+    "marks": {}
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/sample-text-tab-6p-p002-2",
+   "repeat": 2,
+   "pass": false,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 0.0,
+    "drafted": 1.0,
+    "chord_names": 1.0,
+    "chords_placed": 1.0,
+    "link_f1": 1.0,
+    "effect_f1": 0.8571428571428571,
+    "span_f1": 1.0,
+    "hammer_f1": 1.0,
+    "palm_mute_f1": 1.0,
+    "vibrato_f1": 0.0,
+    "pick_down_f1": 0.9,
+    "cost_usd": 0.123245,
+    "seconds": 64.14,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [
+    "bar 1 @72: missed pick down",
+    "bar 1 @72 A: missed vibrato",
+    "bar 2 @36: missed pick down",
+    "bar 3 @72: missed pick down",
+    "bar 3 @72 A: missed vibrato",
+    "bar 4 @36: missed pick down"
+   ],
+   "detail": {
+    "page": 2,
+    "book": "sample-text-tab-6p",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "hammer": [
+      4,
+      4,
+      4
+     ],
+     "pick down": [
+      22,
+      18,
+      18
+     ],
+     "vibrato": [
+      2,
+      0,
+      0
+     ],
+     "palmMute": [
+      8,
+      8,
+      8
+     ]
+    }
+   }
+  },
+  {
+   "subject": "anthropic:claude-opus-5",
+   "case": "books-batch1/electric-365-p020-4",
+   "repeat": 3,
+   "pass": true,
+   "metrics": {
+    "note_precision": 1.0,
+    "note_recall": 1.0,
+    "note_f1": 1.0,
+    "fret_f1": 1.0,
+    "rhythm": 1.0,
+    "bars": 1.0,
+    "exact": 1.0,
+    "drafted": 1.0,
+    "link_f1": 1.0,
+    "hammer_f1": 1.0,
+    "pull_f1": 1.0,
+    "slide_f1": 1.0,
+    "cost_usd": 0.046815,
+    "seconds": 17.02,
+    "calls": 1,
+    "truncated": 0
+   },
+   "failures": [],
+   "detail": {
+    "page": 20,
+    "book": "electric-365",
+    "status": "corrected",
+    "jianpu": false,
+    "marks": {
+     "pull": [
+      12,
+      12,
+      12
+     ],
+     "hammer": [
+      12,
+      12,
+      12
+     ],
+     "slide": [
+      7,
+      7,
+      7
+     ]
+    }
+   }
+  }
+ ]
+}

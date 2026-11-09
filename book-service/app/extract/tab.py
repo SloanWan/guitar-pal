@@ -20,7 +20,10 @@ The reading is then an `ImportedTabDraft` for `POST /api/internal/validate`.
 Frets come from the tab — the one place a fret legitimately comes from the
 model — and the validator bounds them. A rejected draft goes back to the
 model once with the errors (the repair loop of `askModel.ts`); a second
-rejection drops the draft and leaves a warning on the chapter.
+rejection drops the draft and leaves a warning on the chapter. A valid draft
+goes back too when the reading holds a bar longer than its meter or notes it
+wrote past the grammar (#464); the repair replaces it only with a reading
+that has fewer such problems.
 
 Tab that sits in a PDF's text layer (`e|--0--3--|`) carries no durations
 and is not read here; it is #228's, and the page gets a chapter warning.
@@ -30,6 +33,7 @@ import asyncio
 import base64
 import logging
 import re
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -79,6 +83,20 @@ DURATIONS = {
     "s.": "dotted-sixteenth",
     "s": "sixteenth",
 }
+# Each value in ticks, 96 to a whole note, as `DURATION_TICKS` holds them.
+VALUE_TICKS = {
+    "whole": 96,
+    "dotted-half": 72,
+    "half": 48,
+    "dotted-quarter": 36,
+    "quarter": 24,
+    "dotted-eighth": 18,
+    "eighth": 12,
+    "dotted-sixteenth": 9,
+    "sixteenth": 6,
+}
+# A meter's lower number, as the value a bar is counted in.
+BEAT_NAMES = {2: "halves", 4: "quarters", 8: "eighths", 16: "sixteenths"}
 # The marks a tab token may carry (#441). A link goes before the fret of the
 # note it reaches; `^` is an arc printed with no letter, settled by the frets.
 LINK_MARKS = {"h": "hammer", "p": "pull", "s": "slide", "^": "arc"}
@@ -137,10 +155,16 @@ READ_SYSTEM = (
     " and the app compares them. Do not make one agree with the other. If a tab digit is"
     " unreadable write `?` for the fret; if a jianpu symbol is unreadable write `?` for the"
     " degree; if the page prints no jianpu row, give every jianpu token as `?`.\n\n"
-    "Duration comes from the jianpu underlines and dashes first, the tab stems second."
-    " Bars are separated by barlines; list every bar, every note, in order; a whole-bar note"
-    " is one note of duration w. Two or more notes struck together (stacked in the tab) are"
-    " separate tokens joined with `+`, e.g. `1:0+2:1/q`.\n\n"
+    "Each row's durations come from its own marks, and the app compares the two: the tab's"
+    " from its stems, beams and flags (a stem alone is a quarter, one beam or flag an"
+    " eighth, two a sixteenth), the jianpu's from its underlines, dashes and dots. A bar's"
+    " values add up to its time signature; only a pickup bar may fall short. Bars are"
+    " separated by barlines; list every bar, every note, in order; a whole-bar note is one"
+    " note of duration w.\n\n"
+    "Copy the tab column by column. Digits stacked in one column are struck together: one"
+    " token, joined with `+`, e.g. `1:0+2:1/q` — never split a column into notes one after"
+    " another, and never add a note the page does not print (a bass note, a filled-in"
+    " chord tone).\n\n"
     "Write each bar as two strings, one token per note, the same order and count in both. A"
     ' jianpu "–" is never a token of its own: it lengthens the note before it.\n'
     "- tab: `string:fret/dur`, e.g. `1:0/q 1:3/h 6:?/e`. dur is w h. h q. q e. e s. s —"
@@ -506,6 +530,106 @@ def _fret_for(midi: int, string: int) -> int | None:
 
 
 # The warnings that carry a printed chord name no slot ended up with.
+MEASURE_PATH = re.compile(r"^measures\[(\d+)\]")
+# The `reading_problems` the parse does not already warn about.
+NEW_PROBLEM_CODES = ("TAB_BAR_OVERFULL", "TAB_JIANPU_RHYTHM")
+
+
+def reading_problems(
+    out: TabReadingOut, bars: Sequence[Sequence[Note]], warnings: Sequence[dict[str, object]]
+) -> list[dict[str, object]]:
+    """
+    What a valid draft can still hold that a second look at the page fixes
+    (#464): a bar longer than its meter, notes dropped as tokens that could
+    not be read, and a bar where the tab and the jianpu disagree on how many
+    notes there are or how long they last. A short bar is left alone: it may
+    be a pickup.
+    """
+    problems: list[dict[str, object]] = []
+    m = TIME_SIGNATURE.match(out.time_signature.strip())
+    top, bottom = (int(m.group(1)), int(m.group(2))) if m else (4, 4)
+    if bottom in BEAT_NAMES:
+        unit = 96 // bottom
+        for bi, notes in enumerate(bars):
+            ticks = sum(VALUE_TICKS[n.duration] for n in notes)
+            if ticks > top * unit:
+                beats = f"{ticks / unit:g}"
+                problems.append(
+                    _issue(
+                        "TAB_BAR_OVERFULL",
+                        f"measures[{bi}]",
+                        f"bar {bi + 1} adds up to {beats} {BEAT_NAMES[bottom]}, and a"
+                        f" {top}/{bottom} bar holds {top}; check each note's value against its"
+                        " beams and flags",
+                    )
+                )
+    # A page with no jianpu row is read as all `?`: nothing to compare.
+    printed = any(
+        not token.lstrip("#b").startswith("?") for bar in out.jianpu_bars for token in bar.split()
+    )
+    for w in warnings:
+        if w.get("code") == "TAB_TOKEN":
+            problems.append(
+                {
+                    **w,
+                    "message": f"{w.get('message', '')}. A note is string:fret/value, any link"
+                    " letter before the fret (e.g. `3:p4/s`)",
+                }
+            )
+        elif w.get("code") in ("TAB_JIANPU_BARS", "TAB_JIANPU_COUNT") and printed:
+            problems.append(
+                {**w, "message": f"{w.get('message', '')}; count the notes of both rows again"}
+            )
+    for bi, (tab_bar, jianpu_bar) in enumerate(
+        zip(out.tab_bars, out.jianpu_bars, strict=False), start=1
+    ):
+        tab_tokens, jianpu_tokens = tab_bar.split(), jianpu_bar.split()
+        if len(tab_tokens) != len(jianpu_tokens):
+            continue  # TAB_JIANPU_COUNT, above
+        apart = [
+            f"note {ni}: tab {tab}, jianpu {jianpu}"
+            for ni, (t, j) in enumerate(zip(tab_tokens, jianpu_tokens, strict=True), start=1)
+            # A jianpu symbol not read, or no jianpu row, says nothing of the value.
+            if not j.lstrip("#b").startswith("?")
+            and (tab := _value(t)) is not None
+            and (jianpu := _value(j)) is not None
+            and tab != jianpu
+        ]
+        if apart:
+            problems.append(
+                _issue(
+                    "TAB_JIANPU_RHYTHM",
+                    f"measures[{bi - 1}]",
+                    f"bar {bi}: the rows disagree on the values ({'; '.join(apart)}); read the"
+                    " tab's beams and the jianpu's underlines again",
+                )
+            )
+    # One note off the jianpu may be a misprint; two in a bar is a digit on the wrong line.
+    pitched = Counter(
+        int(m.group(1))
+        for w in warnings
+        if w.get("code") == "TAB_JIANPU_MISMATCH"
+        and (m := MEASURE_PATH.match(str(w.get("path", "")))) is not None
+    )
+    for bi, count in sorted(pitched.items()):
+        if count >= 2:
+            problems.append(
+                _issue(
+                    "TAB_JIANPU_PITCH",
+                    f"measures[{bi}]",
+                    f"bar {bi + 1}: {count} tab notes sound other pitches than the jianpu under"
+                    " them; check which line each digit sits on, and the key",
+                )
+            )
+    return problems
+
+
+def _value(token: str) -> str | None:
+    """The duration a reading token is written with, as a `DURATIONS` key."""
+    tail = token.rsplit("/", 1)[1] if "/" in token else ""
+    return next((d for d in DURATIONS if tail.startswith(d)), None)
+
+
 UNPLACED_CHORD_CODES = ("TAB_CHORD_LOST", "UNKNOWN_CHORD")
 
 
@@ -725,7 +849,7 @@ class TabExtractor:
     async def read(
         self, png: bytes, repair: tuple[TabReadingOut, Sequence[dict[str, object]]] | None = None
     ) -> tuple[TabReadingOut | None, CallUsage]:
-        """One reading; with `repair`, the previous reading and the validator's errors."""
+        """One reading; with `repair`, the previous reading and what was wrong with it."""
         messages: list[dict[str, object]] = [
             {
                 "role": "user",
@@ -740,7 +864,7 @@ class TabExtractor:
                 {
                     "role": "user",
                     "content": (
-                        "The app rejected this reading:\n"
+                        "The app found these problems in the reading:\n"
                         f"{listed}\n\n"
                         "Read the exercise again from the image, fix only what the errors"
                         " name, and return the whole reading."
@@ -763,10 +887,16 @@ class TabExtractor:
     async def extract_exercise(
         self, png: bytes, page: int, segment: Segment
     ) -> tuple[ExerciseRecord | None, list[CallUsage], list[dict[str, object]]]:
-        """Read → reconcile → validate, with one repair. None when the draft was dropped."""
+        """
+        Read → reconcile → validate, with one repair: of a rejected draft, or of
+        a valid one whose reading has `reading_problems`. None when the draft
+        was dropped.
+        """
         usage: list[CallUsage] = []
         repair: tuple[TabReadingOut, Sequence[dict[str, object]]] | None = None
         verdict: Verdict | None = None
+        # The valid draft with the fewest problems so far, and their count.
+        kept: tuple[ExerciseRecord, int] | None = None
         for _attempt in range(MAX_REPAIRS + 1):
             out, used = await self.read(png, repair)
             usage.append(used)
@@ -775,8 +905,14 @@ class TabExtractor:
             bars, parse_warnings = parse_reading(out)
             reconciled = reconcile(out, bars, segment.heading)
             verdict = await self._validator.tab(reconciled.draft)
-            if verdict.ok and verdict.pattern is not None:
-                warnings = parse_warnings + reconciled.warnings + list(verdict.warnings)
+            if not verdict.ok or verdict.pattern is None:
+                repair = (out, verdict.errors)
+                continue
+            problems = reading_problems(out, bars, parse_warnings + reconciled.warnings)
+            if kept is None or len(problems) < kept[1]:
+                # The dropped tokens and the jianpu counts are parse warnings already.
+                found = [p for p in problems if p["code"] in NEW_PROBLEM_CODES]
+                warnings = parse_warnings + reconciled.warnings + found + list(verdict.warnings)
                 pattern = dict(verdict.pattern)
                 if chords := unplaced_chords(warnings):
                     pattern.setdefault("description", chords)
@@ -788,8 +924,12 @@ class TabExtractor:
                     warnings=warnings,
                     crop_path=None,
                 )
-                return record, usage, []
-            repair = (out, verdict.errors)
+                kept = (record, len(problems))
+            if not problems:
+                break
+            repair = (out, problems)
+        if kept is not None:
+            return kept[0], usage, []
         dropped = _issue(
             "DRAFT_DROPPED",
             f"page {page}",

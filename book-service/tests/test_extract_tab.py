@@ -25,6 +25,7 @@ from app.extract.tab import (
     midi_from_tab,
     pad_region,
     parse_reading,
+    reading_problems,
     reconcile,
     unplaced_chords,
     within,
@@ -478,7 +479,7 @@ async def test_rejected_draft_is_repaired_once_then_dropped() -> None:
     assert len(result.exercises) == 1 and len(validator.drafts) == 2
     repair = [r for r in model.requests if r["system"] == READ_SYSTEM][1]
     assert (
-        "rejected" in repair["messages"][2]["content"]
+        "problems" in repair["messages"][2]["content"]
         and "measures[0]: no" in repair["messages"][2]["content"]
     )
 
@@ -596,3 +597,125 @@ async def test_only_the_names_no_slot_took_stay_in_the_description() -> None:
     assert record is not None
     assert record.draft["description"] == "F"
     assert record.draft["measures"][0]["slots"][0]["chord"] == {"root": "C", "suffix": ""}
+
+
+def _reading(*bars: str, time_signature: str = "4/4") -> TabReadingOut:
+    return STRING_SIX.model_copy(
+        update={
+            "tab_bars": list(bars),
+            "jianpu_bars": [],
+            "chords": "",
+            "time_signature": time_signature,
+        }
+    )
+
+
+def test_an_overfull_bar_and_a_dropped_token_are_problems_and_a_short_bar_is_not() -> None:
+    out = _reading("6:0/q 6:0/q 6:0/q 6:0/q 6:0/e", "6:0/h", "3:5/s 3:4/p 6:0/h.")
+    bars, warnings = parse_reading(out)
+    problems = reading_problems(out, bars, warnings)
+    assert [(p["code"], p["path"]) for p in problems] == [
+        ("TAB_BAR_OVERFULL", "measures[0]"),
+        ("TAB_TOKEN", "measures[2].slots[1]"),
+    ]
+    assert "adds up to 4.5 quarters, and a 4/4 bar holds 4" in problems[0]["message"]
+    assert "'3:4/p'" in problems[1]["message"] and "`3:p4/s`" in problems[1]["message"]
+
+    # Counted in the meter's own value: a 6/8 bar holds six eighths.
+    compound = _reading("5:2/q. 5:2/q.", "5:2/q. 5:2/q. 5:2/e", time_signature="6/8")
+    bars, warnings = parse_reading(compound)
+    assert [p["message"].split(",")[0] for p in reading_problems(compound, bars, warnings)] == [
+        "bar 2 adds up to 7 eighths"
+    ]
+
+
+class ScriptedRead:
+    """Hands out `readings` in turn, keeping what each repair was told."""
+
+    def __init__(self, *readings: TabReadingOut) -> None:
+        self.readings = list(readings)
+        self.repairs: list[object] = []
+
+    async def __call__(self, png: bytes, repair: object = None) -> tuple[TabReadingOut, object]:
+        self.repairs.append(repair)
+        return self.readings.pop(0), CallUsage(0, 0)
+
+
+WHOLE = Segment("", 1, (0, 0, 1, 1))
+OVERFULL = _reading("6:0/h 6:0/h 6:0/q", "6:3/w")
+FIXED = _reading("6:0/h 6:0/h", "6:3/w")
+
+
+@pytest.mark.asyncio
+async def test_a_valid_reading_with_an_overfull_bar_is_repaired_and_the_fix_kept() -> None:
+    extractor = TabExtractor(object(), FakeValidator())  # type: ignore[arg-type]
+    extractor.read = reader = ScriptedRead(OVERFULL, FIXED)  # type: ignore[method-assign]
+    record, usage, dropped = await extractor.extract_exercise(b"png", 1, WHOLE)
+    assert record is not None and dropped == [] and len(usage) == 2
+    assert [len(m["slots"]) for m in record.draft["measures"]] == [2, 1]
+    told = reader.repairs[1][1]  # type: ignore[index]
+    assert [p["code"] for p in told] == ["TAB_BAR_OVERFULL"]
+    assert all(w["code"] != "TAB_BAR_OVERFULL" for w in record.warnings)
+
+    # A reading with nothing wrong is not sent back.
+    extractor.read = reader = ScriptedRead(FIXED)  # type: ignore[method-assign]
+    record, usage, _ = await extractor.extract_exercise(b"png", 1, WHOLE)
+    assert len(usage) == 1 and reader.repairs == [None]
+
+
+@pytest.mark.asyncio
+async def test_a_repair_that_is_rejected_or_no_better_leaves_the_first_reading() -> None:
+    # The repair is rejected: the first, valid reading stays, its bar flagged.
+    extractor = TabExtractor(object(), RejectSecond())  # type: ignore[arg-type]
+    extractor.read = ScriptedRead(OVERFULL, FIXED)  # type: ignore[method-assign]
+    record, usage, dropped = await extractor.extract_exercise(b"png", 1, WHOLE)
+    assert record is not None and dropped == [] and len(usage) == 2
+    assert [len(m["slots"]) for m in record.draft["measures"]] == [3, 1]
+    assert sum(w["code"] == "TAB_BAR_OVERFULL" for w in record.warnings) == 1
+
+    # The repair overruns two bars: worse, so the first stays.
+    worse = _reading("6:0/w 6:0/q", "6:3/w 6:3/q")
+    extractor = TabExtractor(object(), FakeValidator())  # type: ignore[arg-type]
+    extractor.read = ScriptedRead(OVERFULL, worse)  # type: ignore[method-assign]
+    record, _, _ = await extractor.extract_exercise(b"png", 1, WHOLE)
+    assert record is not None
+    assert [len(m["slots"]) for m in record.draft["measures"]] == [3, 1]
+
+
+class RejectSecond(FakeValidator):
+    """Accepts the first draft and rejects every later one."""
+
+    async def tab(self, draft: dict, repeats: list | None = None) -> Verdict:
+        if self.drafts:
+            self.drafts.append(draft)
+            return Verdict(ok=False, errors=[{"code": "BAD", "path": "measures", "message": "no"}])
+        return await super().tab(draft, repeats)
+
+
+def test_the_tab_and_jianpu_disagreeing_on_count_or_values_are_problems() -> None:
+    out = _reading("1:0/e 1:1/s 1:3/s 1:0/q 1:1/h", "1:0/q 1:1/q 1:3/h", "1:0/w")
+    out = out.model_copy(update={"jianpu_bars": ["3/e 4/e 5/e 3/q 4/h", "?/e 4/q", "3/w"]})
+    bars, warnings = parse_reading(out)
+    problems = reading_problems(out, bars, warnings)
+    assert [(p["code"], p["path"]) for p in problems] == [
+        ("TAB_JIANPU_COUNT", "measures[1]"),
+        ("TAB_JIANPU_RHYTHM", "measures[0]"),
+    ]
+    assert "note 2: tab s, jianpu e; note 3: tab s, jianpu e" in problems[1]["message"]
+
+    # An unread jianpu symbol says nothing of the value; no jianpu row, nothing at all.
+    unread = out.model_copy(update={"jianpu_bars": ["3/e ?/e ?/e 3/q 4/h", "3/q 4/q 5/h", "3/w"]})
+    assert reading_problems(unread, *parse_reading(unread)) == []
+    none = out.model_copy(update={"jianpu_bars": ["?/e ?/e", "?/q ?/q ?/h", "?/w"]})
+    assert reading_problems(none, *parse_reading(none)) == []
+
+
+def test_two_tab_notes_in_a_bar_off_the_jianpu_s_pitch_are_a_problem_and_one_is_not() -> None:
+    # p106's opening read a line low throughout: the jianpu 1 2 3 5 says so.
+    out = _reading("6:3/q 6:0/q 6:2/q 6:0/q", "5:3/q 4:0/q 4:2/q 4:0/q")
+    out = out.model_copy(update={"jianpu_bars": ["1/q 2/q 3/q 5/q", "1/q 2/q 3/q 6/q"]})
+    bars, parsed = parse_reading(out)
+    warnings = parsed + reconcile(out, bars).warnings
+    problems = reading_problems(out, bars, warnings)
+    assert [(p["code"], p["path"]) for p in problems] == [("TAB_JIANPU_PITCH", "measures[0]")]
+    assert problems[0]["message"].startswith("bar 1: 4 tab notes sound other pitches")

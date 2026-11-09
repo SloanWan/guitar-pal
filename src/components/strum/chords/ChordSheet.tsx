@@ -21,6 +21,7 @@ import { chordIndexWithUser, isUserVoicingId, mergeVoicings, type UserChordVoici
 import CustomShapeEditor, { CustomShapeFooter, startDraft, type ShapeDraft } from "./CustomShapeEditor";
 import { useChordPreview } from "@/components/chords/useChordPreview";
 import { voicingPitches } from "@/lib/chordVoicingToMidi";
+import ShapesRetry from "@/components/chords/ShapesRetry";
 import "./chords.css";
 
 /** How many chords the search offers at once. */
@@ -200,6 +201,7 @@ function ChordChooser({
 					})}
 				</div>
 				{query.trim() !== "" && results.length === 0 && <p className="st-lab m-0">No chord called “{query.trim()}”.</p>}
+				<ShapesRetry chords={results} />
 			</section>
 		</div>
 	);

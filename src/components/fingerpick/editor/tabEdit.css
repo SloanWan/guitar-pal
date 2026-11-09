@@ -1418,6 +1418,18 @@
 	.te-why:empty {
 		display: none;
 	}
+	/* A retry inside a reason line, the line's own size, so the line keeps its height (#463). */
+	.te-why-retry {
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--gp-ink-2);
+		font: inherit;
+		text-decoration: underline;
+		text-decoration-color: var(--gp-edge);
+		text-underline-offset: 3px;
+		cursor: pointer;
+	}
 	.te-chips {
 		display: flex;
 		flex-wrap: wrap;

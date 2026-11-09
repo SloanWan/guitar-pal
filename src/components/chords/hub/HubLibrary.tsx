@@ -20,7 +20,8 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { chordHref } from "@/lib/chordSlug";
 import { CHORD_SUFFIX_CATEGORIES, ROOT_CHROMATIC_ORDER, chordSymbol, isSlashChord } from "@/lib/chordSuffixes";
 import { voicingToDiagramShape, type ChordVoicing, type DiagramShape } from "@/lib/chordVoicing";
-import { loadVoicings } from "@/lib/chordVoicingCache";
+import { loadVoicings, voicingCacheKey } from "@/lib/chordVoicingCache";
+import ShapesRetry, { useFailedShapes, useVoicingRetries } from "@/components/chords/ShapesRetry";
 import { rootPitchClass } from "@/lib/chordVoicingToMidi";
 import type { ChordWithVoicings } from "@/lib/chordsData";
 import { hubCategoryId, hubQualityHref, hubRootHref, hubViewHref, qualityLabel, type HubView } from "@/lib/chordsHub";
@@ -62,6 +63,9 @@ interface Card {
  */
 function useStandardShapes(chords: readonly FavouriteChord[], userVoicings: readonly UserChordVoicing[], active: boolean) {
 	const [library, setLibrary] = useState<Record<string, ChordVoicing[]>>({});
+	// A failed read is not kept, so Try again (#463) reads it again.
+	const retries = useVoicingRetries();
+	const failures = useFailedShapes();
 	useEffect(() => {
 		if (!active) return;
 		const missing = chords.filter((c) => library[favouriteKey(c.root, c.suffix)] === undefined);
@@ -69,20 +73,23 @@ function useStandardShapes(chords: readonly FavouriteChord[], userVoicings: read
 		let cancelled = false;
 		Promise.all(
 			missing.map((c) =>
-				loadVoicings(c.root, c.suffix)
-					.catch(() => [])
-					.then((voicings) => [favouriteKey(c.root, c.suffix), voicings] as const),
+				loadVoicings(c.root, c.suffix).then(
+					(voicings) => [favouriteKey(c.root, c.suffix), voicings] as const,
+					() => null,
+				),
 			),
 		).then((read) => {
-			if (!cancelled) setLibrary((prev) => ({ ...prev, ...Object.fromEntries(read) }));
+			const landed = read.filter((entry) => entry !== null);
+			if (!cancelled && landed.length > 0) setLibrary((prev) => ({ ...prev, ...Object.fromEntries(landed) }));
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [active, chords, library]);
+	}, [active, chords, library, retries]);
 	return (root: string, suffix: string): DiagramShape | null | undefined => {
 		const read = library[favouriteKey(root, suffix)];
-		if (read === undefined) return undefined;
+		// Failed: no shape drawn (the view's notice offers Try again), not a load that never ends.
+		if (read === undefined) return failures.has(voicingCacheKey(root, suffix)) ? null : undefined;
 		const voicing = selectStandardVoicing(mergeVoicings(read, userVoicings, root, suffix));
 		return voicing ? voicingToDiagramShape(voicing) : null;
 	};
@@ -210,6 +217,7 @@ export default function HubLibrary({ view, root, quality, chords, index, userVoi
 		) : (
 			<section className="hb-group" aria-label="Favourites">
 				<h3>Chords you keep</h3>
+				<ShapesRetry chords={kept} />
 				<div className="hb-grid">{kept.map((c) => card({ root: c.root, suffix: c.suffix, def: keptShape(c.root, c.suffix) }))}</div>
 			</section>
 		);

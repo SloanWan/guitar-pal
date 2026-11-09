@@ -85,7 +85,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
 	matcher: [
-		// A report (#447) needs no session: skipping it here spares every beacon a round trip to Supabase.
-		"/((?!_next/static|_next/image|favicon.ico|icon.svg|api/telemetry|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+		// A report (#447) and the shared chord shapes (#463) need no session: skipping them here spares
+		// each a round trip to Supabase, which the shapes' route exists to avoid.
+		"/((?!_next/static|_next/image|favicon.ico|icon.svg|api/telemetry|api/chords/voicings|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
 	],
 };

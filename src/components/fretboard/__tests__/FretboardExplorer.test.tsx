@@ -92,10 +92,16 @@ vi.mock("@/components/chords/useChordShapeMatches", () => ({
 			chord_voicings,
 		})),
 }));
-vi.mock("@/lib/chordVoicingCache", () => ({
-	peekVoicings: (root: string, suffix: string) => LIBRARY[`${root} ${suffix}`] ?? [],
-	loadVoicings: async (root: string, suffix: string) => LIBRARY[`${root} ${suffix}`] ?? [],
-}));
+vi.mock("@/lib/chordVoicingCache", () => {
+	const none: ReadonlySet<string> = new Set();
+	return {
+		voicingCacheKey: (root: string, suffix: string) => `${root} ${suffix}`,
+		peekVoicings: (root: string, suffix: string) => LIBRARY[`${root} ${suffix}`] ?? [],
+		loadVoicings: async (root: string, suffix: string) => LIBRARY[`${root} ${suffix}`] ?? [],
+		// Nothing fails here: no Try again to show.
+		voicingCache: { subscribe: () => () => undefined, retries: () => 0, failures: () => none, retryFailed: () => undefined },
+	};
+});
 
 function mount(props: React.ComponentProps<typeof FretboardExplorer>) {
 	const host = document.createElement("div");

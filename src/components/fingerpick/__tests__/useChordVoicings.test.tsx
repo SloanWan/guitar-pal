@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ChordVoicing } from "@/lib/chordVoicing";
@@ -11,6 +11,25 @@ import type { UserChordVoicing } from "@/lib/userChordVoicings";
 const cache = new Map<string, ChordVoicing[]>();
 const pendingLoads = new Map<string, { resolve: (v: ChordVoicing[]) => void; reject: (e: Error) => void }>();
 const loadCalls: string[] = [];
+// The cache's failure record and retry count, as the real cache keeps them (#463).
+const store = vi.hoisted(() => {
+	const listeners = new Set<() => void>();
+	const state = { failed: new Set<string>() as ReadonlySet<string>, retries: 0 };
+	const notify = () => listeners.forEach((listener) => listener());
+	return {
+		state,
+		listeners,
+		setFailed(next: ReadonlySet<string>) {
+			state.failed = next;
+			notify();
+		},
+		retryFailed() {
+			state.failed = new Set();
+			state.retries++;
+			notify();
+		},
+	};
+});
 vi.mock("@/lib/chordVoicingCache", () => ({
 	voicingCacheKey: (root: string, suffix: string) => `${root} ${suffix}`,
 	peekVoicings: (root: string, suffix: string) => cache.get(`${root} ${suffix}`) ?? null,
@@ -23,9 +42,22 @@ vi.mock("@/lib/chordVoicingCache", () => ({
 					cache.set(key, v);
 					resolve(v);
 				},
-				reject,
+				reject: (e) => {
+					store.setFailed(new Set([...store.state.failed, key]));
+					reject(e);
+				},
 			});
 		});
+	},
+	retryFailedVoicings: store.retryFailed,
+	voicingCache: {
+		subscribe: (listener: () => void) => {
+			store.listeners.add(listener);
+			return () => store.listeners.delete(listener);
+		},
+		retries: () => store.state.retries,
+		failures: () => store.state.failed,
+		retryFailed: store.retryFailed,
 	},
 }));
 
@@ -71,6 +103,8 @@ function Probe({
 const capture = (lookup: (ref: ChordRef) => ChordVoicingsState) => {
 	latest = lookup;
 };
+// Every root mounted, unmounted after each test: a hook left mounted would answer the next test's retry too.
+const mounted: Root[] = [];
 async function mount(refs: ChordRef[], user: UserChordVoicing[] = []): Promise<Root> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
@@ -79,14 +113,21 @@ async function mount(refs: ChordRef[], user: UserChordVoicing[] = []): Promise<R
 		root = createRoot(host);
 		root.render(<Probe refs={refs} user={user} onLookup={capture} />);
 	});
+	mounted.push(root);
 	return root;
 }
+
+afterEach(() => {
+	act(() => mounted.splice(0).forEach((root) => root.unmount()));
+});
 
 beforeEach(() => {
 	cache.clear();
 	pendingLoads.clear();
 	loadCalls.length = 0;
 	latest = null;
+	store.state.failed = new Set();
+	store.state.retries = 0;
 });
 
 describe("useChordVoicings", () => {
@@ -118,7 +159,25 @@ describe("useChordVoicings", () => {
 		await act(async () => {
 			pendingLoads.get("C major")!.reject(new Error("offline"));
 		});
-		expect(latest!(C)).toEqual({ status: "failed" });
+		expect(latest!(C).status).toBe("failed");
+		errorSpy.mockRestore();
+	});
+
+	it("looks a failed chord up again on the shared retry, and is loading until it answers (#463)", async () => {
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		await mount([C]);
+		await act(async () => {
+			pendingLoads.get("C major")!.reject(new Error("timed out"));
+		});
+		const failed = latest!(C);
+		if (failed.status !== "failed") throw new Error("expected a failure");
+		await act(async () => failed.retry());
+		expect(loadCalls).toEqual(["C major", "C major"]);
+		expect(latest!(C)).toEqual({ status: "loading" });
+		await act(async () => {
+			pendingLoads.get("C major")!.resolve([voicing("c1")]);
+		});
+		expect(latest!(C)).toEqual({ status: "ready", voicings: [voicing("c1")] });
 		errorSpy.mockRestore();
 	});
 

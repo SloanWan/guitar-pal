@@ -3,7 +3,7 @@
 --
 -- Shape:
 --   * One row per event. `kind` is 'error' or 'vital':
---       error → source ('window' | 'rejection' | 'boundary' | 'component' | 'audio' | 'server'),
+--       error → source ('window' | 'rejection' | 'boundary' | 'component' | 'audio' | 'supabase' | 'server'),
 --               message, stack (trimmed), digest (the id the error screen shows)
 --       vital → name ('LCP' | 'INP' | 'CLS' | 'FCP' | 'TTFB'), value, rating
 --   * `route` is the route's pattern (/chords/[rootSlug]/[suffixSlug]), never a URL
@@ -19,7 +19,7 @@ create table if not exists public.telemetry_events (
   id          bigint generated always as identity primary key,
   at          timestamptz not null default now(),
   kind        text not null check (kind in ('error', 'vital')),
-  source      text check (source in ('window', 'rejection', 'boundary', 'component', 'audio', 'server')),
+  source      text check (source in ('window', 'rejection', 'boundary', 'component', 'audio', 'supabase', 'server')),
   name        text check (name in ('LCP', 'INP', 'CLS', 'FCP', 'TTFB')),
   value       double precision,
   rating      text check (rating in ('good', 'needs-improvement', 'poor')),
@@ -40,7 +40,7 @@ create table if not exists public.telemetry_events (
 -- first made; a table from before takes it here.
 alter table public.telemetry_events drop constraint if exists telemetry_events_source_check;
 alter table public.telemetry_events add constraint telemetry_events_source_check
-  check (source in ('window', 'rejection', 'boundary', 'component', 'audio', 'server'));
+  check (source in ('window', 'rejection', 'boundary', 'component', 'audio', 'supabase', 'server'));
 
 create index if not exists telemetry_events_kind_at_idx
   on public.telemetry_events (kind, at desc);

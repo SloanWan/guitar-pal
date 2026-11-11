@@ -66,6 +66,30 @@ jobs:
             - name: Test
               run: pytest -q
 
+    api-service:
+        name: API service (Maven verify)
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: api-service
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Java
+              uses: actions/setup-java@v4
+              with:
+                  distribution: temurin
+                  java-version: "21"
+                  cache: maven
+                  cache-dependency-path: api-service/pom.xml
+
+            # Compiles and runs every test; the database tests start Postgres
+            # through Testcontainers on the runner's own Docker.
+            - name: Test
+              run: ./mvnw -B verify
+
     e2e:
         name: End-to-end (${{ matrix.engine }})
         runs-on: ubuntu-latest

@@ -67,6 +67,12 @@ test.describe("offline", () => {
 		await context.setOffline(true);
 		await page.goto("/settings");
 		await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
-		await expect(page.getByRole("link", { name: "Strum" })).toHaveAttribute("href", "/strum");
+		await expect(page.getByText("The pages below show only what's cached on this device.")).toBeVisible();
+		// One button a tool page (#473).
+		const pages = page.getByRole("navigation", { name: "Pages" });
+		for (const [name, href] of [["Strum", "/strum"], ["Tab", "/tab"], ["Chords", "/chords"], ["Fretboard", "/fretboard"]]) {
+			await expect(pages.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);
+		}
+		await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 	});
 });
